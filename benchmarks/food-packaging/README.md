@@ -31,7 +31,7 @@ Every cell is the score of that solver's final solution under the **Timefold qui
 
 | Instance | Size | optimaru engine | OR-Tools CP-SAT | Timefold 2.6.0 |
 | --- | --- | --- | --- | --- |
-| demo | Java quickstart demo plant | **0hard/0medium/-95221284soft** | — (no solution in time) | 0hard/0medium/-99536920soft |
+| demo | Java quickstart demo plant | **0hard/0medium/-95221284soft** | — (no solution in time) | 0hard/0medium/-99403198soft |
 
 Measured 2026-10-29 on one Apple Silicon Mac (16 cores), 30 s per solver and instance, seed 1. The engine and Timefold run single-threaded; CP-SAT uses 8 workers and its time includes model construction. Single runs — treat small differences as noise.
 <!-- results:end -->

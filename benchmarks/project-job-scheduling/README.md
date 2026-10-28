@@ -30,13 +30,12 @@ JVM start-up.
 <!-- results:start -->
 ## Results
 
-Every cell is the score of that solver's final solution under the **Timefold quickstart's `ConstraintProvider`** (the referee), so all three are judged by the same rules. Higher is better; ties are all bold.
+Patterson `Pat1` (32 tasks, 4 resources, critical path 20) through the public runner. Lower makespan is better.
 
-| Instance | Size | optimaru engine | OR-Tools CP-SAT | Timefold 2.6.0 |
-| --- | --- | --- | --- | --- |
-| demo | 24 jobs / 2 projects / 7 res | **0hard/0medium/-7soft** | **0hard/0medium/-7soft** | **0hard/0medium/-7soft** |
-| medium | 72 jobs / 4 projects / 13 res | **0hard/-9medium/-20soft** | **0hard/-9medium/-20soft** | 0hard/-9medium/-24soft |
-| large | 156 jobs / 6 projects / 19 res | 0hard/-1medium/-35soft | **0hard/-1medium/-28soft** | 0hard/-1medium/-38soft |
+| Solver | Makespan | Resource excess | Time |
+| --- | --- | --- | --- |
+| engine | 65 | 0 | 30.0 s |
+| CP-SAT | **62** | 0 | 18.2 s |
 
-Measured 2026-10-29 on one Apple Silicon Mac (16 cores), 30 s per solver and instance, seed 1. The engine and Timefold run single-threaded; CP-SAT uses 8 workers and its time includes model construction. Single runs — treat small differences as noise.
+Measured 2026-10-29 on one Apple Silicon Mac (16 cores), 30 s per solver and instance. The engine runs single-threaded; CP-SAT uses 8 workers and its time includes model construction. Single runs — a snapshot, not a statistical study.
 <!-- results:end -->

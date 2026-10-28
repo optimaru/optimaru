@@ -19,3 +19,16 @@ CP-SAT formulation notes: [`cpsat/README.md`](cpsat/README.md).
 
 The engine runs single-threaded; CP-SAT gets `--workers` search workers and
 its time includes model construction.
+
+<!-- results:start -->
+## Results
+
+Li & Lim PDPTW `lc101`, first 10 of 53 requests (the public runner's default). Every route is re-verified independently.
+
+| Solver | Vehicles | Distance | Time |
+| --- | --- | --- | --- |
+| engine | 2 | **156.000** | 30.0 s |
+| CP-SAT | 2 | **156.000** | 3.1 s |
+
+Both reach the same plan; CP-SAT proves it first. Measured 2026-10-29 on one Apple Silicon Mac (16 cores), 30 s per solver and instance. The engine runs single-threaded; CP-SAT uses 8 workers and its time includes model construction. Single runs — a snapshot, not a statistical study.
+<!-- results:end -->

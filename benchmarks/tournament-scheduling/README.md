@@ -31,9 +31,9 @@ Every cell is the score of that solver's final solution under the **Timefold qui
 
 | Instance | Size | optimaru engine | OR-Tools CP-SAT | Timefold 2.6.0 |
 | --- | --- | --- | --- | --- |
-| demo | 72 slots / 7 teams / 18 days | **0hard/0medium/-1.54919soft** | 0hard/-1.19523medium/-4.53557soft | 0hard/-1.19523medium/-2.56348soft |
-| large | — | — (run failed) | — (run failed) | — (run failed) |
-| xlarge | — | — (run failed) | — (run failed) | — (run failed) |
+| demo | 72 slots / 7 teams / 18 days | **0hard/0medium/-1.54919soft** | **0hard/0medium/-1.54919soft** | 0hard/-1.19523medium/-2.56348soft |
+| large | 180 slots / 10 teams / 36 days | **0hard/0medium/0soft** | 0hard/0medium/-2soft | 0hard/0medium/-2.44949soft |
+| xlarge | 800 slots / 20 teams / 100 days | **0hard/0medium/-6.06977soft** | -981hard/-60.4318medium/-109.639soft | 0hard/0medium/-9.73869soft |
 
 Measured 2026-10-29 on one Apple Silicon Mac (16 cores), 30 s per solver and instance, seed 1. The engine and Timefold run single-threaded; CP-SAT uses 8 workers and its time includes model construction. Single runs — treat small differences as noise.
 <!-- results:end -->
