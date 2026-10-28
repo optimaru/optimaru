@@ -20,3 +20,35 @@ jobs:
         run: cmake --build build -j4
       - name: Test
         run: ctest --test-dir build --output-on-failure
+
+  vehicle-routing-cpp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S use-cases/vehicle-routing/cpp -B build-vrp -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build build-vrp -j4
+      - name: Test
+        run: ctest --test-dir build-vrp --output-on-failure
+
+  vehicle-routing-python:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        project:
+          - use-cases/cpsat-common
+          - use-cases/vehicle-routing/python
+          - use-cases/vehicle-routing/alternatives/cpsat
+          - benchmarks/vehicle-routing
+    defaults:
+      run:
+        working-directory: ${{ matrix.project }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Install
+        run: uv sync --python 3.12 --all-extras --all-groups
+      - name: Test
+        run: uv run --python 3.12 pytest -q

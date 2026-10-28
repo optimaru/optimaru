@@ -1,0 +1,112 @@
+# CVRPLIB Set X, this engine beside PyVRP, on every version.
+#
+# Same instances, fleet sizes, rounded integer distances, wall-clock budget
+# and independent rescoring for both solvers; the instances and the BKS come
+# from the PyVRP/Instances mirror, i.e. exactly PyVRP's own benchmark inputs.
+# Report, not a gate, on solution quality (gaps move with the runner); the
+# only failure is the engine leaving a customer unassigned.
+name: vrp-public-bench
+
+on:
+  push:
+    branches:
+      - main
+    # Only commits that can move the numbers: the engine, the VRP use case
+    # (calculator, solver, bindings), the harness and this workflow.
+    paths:
+      - "include/**"
+      - "use-cases/vehicle-routing/**"
+      - "use-cases/cpsat-common/**"
+      - "benchmarks/vehicle-routing/**"
+      - ".github/workflows/vrp-public-bench.yml"
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      seconds:
+        description: "Solve budget per instance per solver (seconds)"
+        default: "60"
+      limit_per_bucket:
+        description: "Instances per Hexaly size bucket (0 = all 100, ~200 min for two backends at 60s)"
+        default: "1"
+      backends:
+        description: "Comma-separated backends (engine,cpsat,pyvrp)"
+        default: "engine,pyvrp"
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    # One instance per bucket x two backends x 60s is ~10 minutes of solving;
+    # all 100 instances (limit_per_bucket 0) is ~200.
+    timeout-minutes: 350
+    env:
+      SECONDS_BUDGET: ${{ github.event.inputs.seconds || '60' }}
+      LIMIT_PER_BUCKET: ${{ github.event.inputs.limit_per_bucket || '1' }}
+      BACKENDS: ${{ github.event.inputs.backends || 'engine,pyvrp' }}
+    defaults:
+      run:
+        working-directory: benchmarks/vehicle-routing
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: benchmarks/vehicle-routing/uv.lock
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Cache C++ compilation
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: vrp-public-bench-${{ runner.os }}
+
+      - name: Install the benchmark project (builds the pybind extension)
+        run: uv sync --python 3.12 --extra bench --extra dev
+        env:
+          CC: ccache cc
+          CXX: ccache c++
+
+      # Instance files only; --refresh-catalog re-reads the BKS every run so a
+      # best-known-solution update in PyVRP/Instances is picked up.
+      - name: Cache Set X instances
+        uses: actions/cache@v4
+        with:
+          path: benchmarks/vehicle-routing/.bench-cache
+          key: cvrplib-set-x-${{ hashFiles('benchmarks/vehicle-routing/vrp_benchmark/cvrplib.py') }}
+
+      # --fail-on-unassigned inspects engine results and is refused without
+      # the engine backend, so a dispatch of pyvrp/cpsat alone runs as a report.
+      - name: Run Set X (engine vs PyVRP)
+        run: |
+          fail_on_unassigned=""
+          # parse_backends strips blanks around the names; match the same way.
+          case ",$(printf '%s' "$BACKENDS" | tr -d ' ')," in
+            *,engine,*|*,both,*|*,all,*) fail_on_unassigned="--fail-on-unassigned" ;;
+          esac
+          uv run --python 3.12 --extra bench \
+            python -m vrp_benchmark.public_benchmark \
+            --series x --limit-per-bucket "$LIMIT_PER_BUCKET" \
+            --seconds "$SECONDS_BUDGET" --workers 1 --seed 0 \
+            --backend "$BACKENDS" --catalog-source pyvrp-mirror --refresh-catalog \
+            --cache-dir .bench-cache \
+            --out bench/set-x.json --summary-markdown bench/set-x.md \
+            $fail_on_unassigned
+
+      - name: Publish summary
+        if: always()
+        run: |
+          if [ -f bench/set-x.md ]; then
+            cat bench/set-x.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No benchmark results were produced." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vrp-set-x-${{ github.sha }}
+          path: benchmarks/vehicle-routing/bench/

@@ -3,3 +3,14 @@ cmake-build-*/
 .idea/
 .vscode/
 .DS_Store
+
+# Python / uv
+.venv/
+__pycache__/
+*.egg-info/
+*.so
+.pytest_cache/
+
+# benchmark downloads and results
+.bench-cache/
+benchmarks/**/bench/

@@ -1,0 +1,16 @@
+[project]
+name = "cpsat-plugins"
+version = "0.1.0"
+description = "Shared constraint/objective plugin contract for CP-SAT alternatives."
+requires-python = ">=3.9"
+dependencies = ["ortools>=9.10"]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[tool.setuptools]
+packages = ["cpsat_plugins"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"

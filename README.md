@@ -3,36 +3,44 @@
 A dependency-free, header-only C++17 metaheuristic solver engine for
 real-world combinatorial optimization — scheduling, routing and assignment.
 
-The architecture and API are modelled on
-[Timefold Solver](https://github.com/TimefoldAI/timefold-solver) (Apache-2.0):
-the directory layout mirrors the upstream Java packages
-(`ai.timefold.solver.core.{api,config,impl,preview}`), with the same class
-names and one header per class. The engine contains **no domain code** —
-problems consume it as a library. optimaru is an independent project and is
-not affiliated with or endorsed by Timefold.
+The engine contains **no domain code** — problems consume it as a library.
+Worked use cases live in [`use-cases/`](use-cases) and public benchmark
+harnesses in [`benchmarks/`](benchmarks).
 
 optimaru comes in a free edition and a paid edition; this repository is the
 free, open-source edition.
 
-## Layout (mirrors `ai/timefold/solver/core/`)
+## Repository layout
+
+```
+include/optimaru/     the engine (header-only, one header per class)
+test/                 engine tests
+use-cases/            problems built on the engine
+├── vehicle-routing/  C++ domain + solver, pybind11 package, CP-SAT reference
+└── cpsat-common/     shared CP-SAT constraint-plugin contract
+benchmarks/           public benchmark harnesses
+└── vehicle-routing/  CVRPLIB Set X: engine vs CP-SAT vs PyVRP
+```
+
+## Engine layout
 
 ```
 include/optimaru/
 ├── optimaru.hpp                       umbrella include for consumers
 ├── api/
-│   ├── domain/solution_descriptor.hpp             @Planning* annotations analog
-│   │                                              (VariableKind::BASIC | LIST)
+│   ├── domain/solution_descriptor.hpp             planning variable description
+│   │                                              (VariableKind::BASIC | LIST | CHAINED)
 │   ├── domain/variable/variable_listener.hpp      shadow variables
-│   ├── score/calculator/chained_incremental_score_calculator.hpp
 │   ├── score/buildin/hard_soft_score.hpp          HardSoftScore
 │   ├── score/calculator/incremental_score_calculator.hpp
+│   ├── score/calculator/chained_incremental_score_calculator.hpp
 │   ├── score/calculator/composite_incremental_score_calculator.hpp
 │   │                                              cost components, weighted sum
 │   ├── score/director/score_director.hpp          + EnvironmentMode::FULL_ASSERT
-│   ├── score/analysis/score_analysis.hpp           ScoreAnalysis / ConstraintAnalysis
+│   ├── score/analysis/score_analysis.hpp          ScoreAnalysis / ConstraintAnalysis
 │   └── solver/{solver.hpp, solver_factory.hpp,
 │               solution_manager.hpp, solver_manager.hpp}
-├── config/                            SolverConfig as plain structs (no XML)
+├── config/                            SolverConfig as plain structs
 │   ├── solver/solver_config.hpp
 │   ├── solver/termination/termination_config.hpp
 │   ├── constructionheuristic/construction_heuristic_config.hpp
@@ -52,7 +60,7 @@ include/optimaru/
 │   ├── localsearch/solution_snapshot.hpp          whole and list-wise restore
 │   ├── localsearch/strategy/                      Descent, EjectionChain,
 │   │                                              IteratedLocalSearch, ...
-│   ├── localsearch/decider/acceptor/              one class per subdir, as upstream:
+│   ├── localsearch/decider/acceptor/              one class per subdirectory:
 │   │   ├── acceptor.hpp                           hillclimbing/ lateacceptance/
 │   │   │                                          tabu/ simulatedannealing/
 │   │   │                                          greatdeluge/ stepcountinghillclimbing/
@@ -65,42 +73,47 @@ include/optimaru/
                                                    for a use case's calculator tests
 ```
 
-Deviations from upstream, for a header-only C++ engine: `optimaru::` is one
-flat namespace (directories mirror the packages, namespaces don't);
-`Solver` is an alias of `DefaultSolver` instead of an interface; the
-termination classes share one header; configs are structs, not XML.
+`optimaru::` is one flat namespace; the directories organize the headers,
+the namespaces don't.
 
-## Mapping from Timefold
+## Features
 
-| Java (`ai.timefold.solver.core`) | C++ |
-| --- | --- |
-| `@PlanningSolution` / `@PlanningVariable` / `@PlanningListVariable` | `SolutionDescriptor<Solution>` specialization (BASIC / LIST) |
-| `@ShadowVariable` / `VariableListener` | `VariableListener<Solution>` via `Solver::addVariableListener()`; FULL_ASSERT also catches stale shadows |
-| chained `@PlanningVariable` (previous pointers, anchors) | `VariableKind::CHAINED` + `ChainedIncrementalScoreCalculator`; solved through a synchronized list view (`ChainedWorkingSolution`), full move repertoire applies |
-| `HardSoftBigDecimalScore` | `HardSoftScore` (int64 hard, double soft) |
-| `IncrementalScoreCalculator` | same name; list hooks added |
-| composed/weighted constraints | `CompositeIncrementalScoreCalculator` (cost components) |
-| `ScoreDirector`, `EnvironmentMode.FULL_ASSERT` | same names; corruption throws `ScoreCorruptionError` |
-| `SolverFactory`, `Solver`, `SolverConfig` | same names |
-| `SolverManager` / `SolverJob` / `SolverStatus` / `Solver.terminateEarly()` | same names (async background solve) |
-| `SolutionManager.analyze()` → `ScoreAnalysis` / `ConstraintAnalysis` | same names; per-constraint breakdown via named `CompositeIncrementalScoreCalculator` components |
-| acceptors: Hill Climbing, Late Acceptance, Entity Tabu, Simulated Annealing, Great Deluge, Step Counting Hill Climbing | same class names, upstream subdirectories |
-| terminations: spent / unimproved-spent / step count / unimproved-step-count / best score, OR-composed | same class names |
-| CH: First Fit, First Fit Decreasing; list construction | `DefaultConstructionHeuristicPhase` (+ cheapest insertion) |
-| move selector composition (union selector with weights) | `MoveSelectorConfig` weights: change/swap (BASIC); relocate / swap / 2-opt / **Or-opt** / **2-opt\* tail swap** (LIST) |
-| nearby selection (`NearbyDistanceMeter`) | `NearbySelectionConfig::distanceMeter` → k-NN move bias |
-| ruin & recreate | adaptive ALNS: random/related/worst ruin + greedy (nearby-restricted) recreate + polish, roulette-wheel weights |
-| multithreaded solving | `solveMultiStart()` (N independent starts, best wins) |
-| custom moves | `preview/api/move`: `addMoveOperator` / `addRuinOperator` / `setAcceptorFactory` |
+- **Planning variables**: BASIC (entity → value), LIST (ordered lists of
+  elements) and CHAINED (previous pointers/anchors, solved through a
+  synchronized list view so the full LIST move repertoire applies).
+- **Shadow variables** via `VariableListener<Solution>`
+  (`Solver::addVariableListener()`); FULL_ASSERT also catches stale shadows.
+- **Scoring**: `HardSoftScore` (int64 hard, double soft); constraints are
+  written as an `IncrementalScoreCalculator` (list hooks included) or composed
+  from named cost components with `CompositeIncrementalScoreCalculator`.
+  Move evaluation stays incremental (O(delta)).
+- **Score analysis**: `SolutionManager::analyze()` → `ScoreAnalysis` /
+  `ConstraintAnalysis`, a per-constraint breakdown over the named components.
+- **Verification**: `ScoreDirector` with `EnvironmentMode::FULL_ASSERT`;
+  score corruption throws `ScoreCorruptionError`.
+- **Construction heuristics**: First Fit, First Fit Decreasing, cheapest
+  insertion for list variables.
+- **Acceptors**: Hill Climbing, Late Acceptance, Entity Tabu, Simulated
+  Annealing, Great Deluge, Step Counting Hill Climbing.
+- **Terminations**: spent / unimproved-spent / step count /
+  unimproved-step-count / best score, OR-composed.
+- **Moves**: change/swap (BASIC); relocate / swap / 2-opt / Or-opt / 2-opt\*
+  tail swap (LIST), mixed by weight in `MoveSelectorConfig`.
+- **Nearby selection**: `NearbySelectionConfig::distanceMeter` biases moves
+  toward k-nearest neighbors.
+- **Ruin & recreate**: adaptive ALNS — random/related/worst ruin + greedy
+  (nearby-restricted) recreate + polish, roulette-wheel operator weights.
+- **Solving**: `SolverFactory` / `Solver` / `SolverConfig`; async background
+  solving with `SolverManager` / `SolverJob` / `SolverStatus` and
+  `terminateEarly()`; `solveMultiStart()` (N independent starts, best wins).
+- **Custom moves** (`preview/api/move`): `addMoveOperator` /
+  `addRuinOperator` / `setAcceptorFactory`.
 
-Not included: Constraint Streams (Bavet) — constraints are written as an
-`IncrementalScoreCalculator` (also an official Timefold API), which keeps move
-evaluation incremental (O(delta)) without a Bavet-style node network.
-Multithreaded MOVE evaluation is deliberately excluded: it only pays when a
+Multithreaded *move* evaluation is deliberately excluded: it only pays when a
 single score calculation is expensive (ms-scale); at this engine's ~200ns
 moves, per-step thread synchronization would cost more than it saves — use
 `solveMultiStart()` to occupy cores instead. Also out of scope:
-exhaustive/partitioned search, benchmarker, REST layers.
+exhaustive/partitioned search and REST layers.
 
 ## Using it
 
@@ -114,7 +127,7 @@ target_link_libraries(my_app PRIVATE optimaru::optimaru)
 ```cpp
 #include "optimaru/optimaru.hpp"
 
-// 1. Describe the planning variable (the "annotations"):
+// 1. Describe the planning variable:
 template <>
 struct optimaru::SolutionDescriptor<MySolution> {
     static constexpr optimaru::VariableKind kind = optimaru::VariableKind::BASIC;
@@ -143,6 +156,9 @@ MyCalculator calculator;
 solver.solve(solution, calculator);
 ```
 
+For a complete, production-shaped example see
+[`use-cases/vehicle-routing`](use-cases/vehicle-routing).
+
 ## Performance features
 
 - **Nearby selection**: on spatial problems a distant relocate/swap is almost
@@ -154,6 +170,27 @@ solver.solve(solution, calculator);
 - Measured on 100-city random TSP (5-seed sweep): nearby + LNS beats plain
   local search on every seed even with HALF the outer step budget
   (mean tour 2514 → 2409).
+
+## Use cases
+
+| Use case | What's in it |
+| --- | --- |
+| [`vehicle-routing`](use-cases/vehicle-routing) | Capacitated VRP with time windows, optional visits and open/closed routes: C++ domain and solver, full and incremental score calculators, per-constraint plugins, the `vrp_routing` pybind11/Pydantic package and an OR-Tools CP-SAT reference model with parity tests. |
+
+```sh
+# C++
+cmake -S use-cases/vehicle-routing/cpp -B build-vrp && cmake --build build-vrp
+ctest --test-dir build-vrp
+
+# Python (uv)
+cd use-cases/vehicle-routing/python && uv sync --all-groups && uv run pytest
+```
+
+## Benchmarks
+
+| Benchmark | What it measures |
+| --- | --- |
+| [`vehicle-routing`](benchmarks/vehicle-routing) | CVRPLIB Set X (100–1000 customers) against best-known solutions, with PyVRP and the CP-SAT model run on the same instances, distances, budget and independent rescoring. Runs in CI on every push to `main` (`vrp-public-bench` workflow). |
 
 ## Tests
 
