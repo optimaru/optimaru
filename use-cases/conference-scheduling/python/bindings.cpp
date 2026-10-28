@@ -27,7 +27,7 @@ PYBIND11_MODULE(_core, m)
     m.doc() = "Conference scheduling — Timefold engine-backed C++ wrapper "
               "exposed to Python";
 
-    py::class_<Score>(m, "Score")
+    py::class_<Score>(m, "Score", py::module_local())
         .def_readonly("hard", &Score::hard)
         .def_readonly("soft", &Score::soft)
         .def("is_feasible", &Score::isFeasible)
@@ -35,7 +35,7 @@ PYBIND11_MODULE(_core, m)
         .def("__repr__",
              [](const Score &s) { return "<Score " + s.toString() + ">"; });
 
-    py::class_<Timeslot>(m, "Timeslot")
+    py::class_<Timeslot>(m, "Timeslot", py::module_local())
         .def(py::init(
                  [](std::string id,
                     std::int64_t startMinute,
@@ -63,7 +63,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("tags", &Timeslot::tags)
         .def("duration_in_minutes", &Timeslot::durationInMinutes);
 
-    py::class_<Room>(m, "Room")
+    py::class_<Room>(m, "Room", py::module_local())
         .def(py::init(
                  [](std::string id,
                     std::string name,
@@ -94,7 +94,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("unavailable_timeslots", &Room::unavailableTimeslots)
         .def_readwrite("tags", &Room::tags);
 
-    py::class_<Speaker>(m, "Speaker")
+    py::class_<Speaker>(m, "Speaker", py::module_local())
         .def(py::init(
                  [](std::string id,
                     std::string name,
@@ -149,7 +149,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("prohibited_room_tags", &Speaker::prohibitedRoomTags)
         .def_readwrite("undesired_room_tags", &Speaker::undesiredRoomTags);
 
-    py::class_<Talk>(m, "Talk")
+    py::class_<Talk>(m, "Talk", py::module_local())
         .def(py::init(
                  [](std::string code,
                     std::string title,
@@ -257,7 +257,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("slot_room", &Talk::slotRoom)
         .def_readwrite("pinned", &Talk::pinned);
 
-    py::class_<ConferenceSchedule>(m, "ConferenceSchedule")
+    py::class_<ConferenceSchedule>(m, "ConferenceSchedule", py::module_local())
         .def(py::init(
                  [](std::string name,
                     std::vector<std::string> talkTypes,
@@ -337,7 +337,7 @@ PYBIND11_MODULE(_core, m)
             },
             py::arg("assignment"));
 
-    py::class_<Breakdown>(m, "Breakdown")
+    py::class_<Breakdown>(m, "Breakdown", py::module_local())
         .def_readonly("talk_type_compatibility",
                       &Breakdown::talkTypeCompatibility)
         .def_readonly("room_unavailable_timeslot",
@@ -422,7 +422,7 @@ PYBIND11_MODULE(_core, m)
           "Normalize the instance in place (idempotent; also run by "
           "calculate_score / compute_breakdown / Solver.solve).");
 
-    py::class_<Solver::Config> config(m, "SolverConfig");
+    py::class_<Solver::Config> config(m, "SolverConfig", py::module_local());
     config.def(py::init<>())
         .def_property(
             "spent_limit_seconds",
@@ -556,7 +556,7 @@ PYBIND11_MODULE(_core, m)
         // engine's multi-start worker threads too.
         .def_readwrite("on_new_best", &Solver::Config::onNewBest);
 
-    py::class_<Solver>(m, "Solver")
+    py::class_<Solver>(m, "Solver", py::module_local())
         .def(py::init<>())
         .def(py::init<Solver::Config>(), py::arg("config"))
         // Solves in place: sets talk.slot_room and schedule.score. The GIL is

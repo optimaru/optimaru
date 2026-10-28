@@ -26,7 +26,7 @@ PYBIND11_MODULE(_core, m)
 {
     m.doc() = "Vehicle routing — C++ core exposed to Python";
 
-    py::class_<Score>(m, "Score")
+    py::class_<Score>(m, "Score", py::module_local())
         .def_readonly("hard", &Score::hard)
         .def_readonly("medium", &Score::medium)
         .def_readonly("soft", &Score::soft)
@@ -35,7 +35,7 @@ PYBIND11_MODULE(_core, m)
         .def("__repr__",
              [](const Score &s) { return "<Score " + s.toString() + ">"; });
 
-    py::class_<Location>(m, "Location")
+    py::class_<Location>(m, "Location", py::module_local())
         .def(py::init(
                  [](double latitude, double longitude)
                  {
@@ -50,7 +50,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("longitude", &Location::longitude)
         .def_readonly("index", &Location::index);
 
-    py::class_<Visit>(m, "Visit")
+    py::class_<Visit>(m, "Visit", py::module_local())
         .def(py::init(
                  [](std::string id,
                     std::string name,
@@ -97,7 +97,7 @@ PYBIND11_MODULE(_core, m)
         .def_readonly("vehicle_index", &Visit::vehicleIndex)
         .def_readonly("arrival_time", &Visit::arrivalTime);
 
-    py::class_<Vehicle>(m, "Vehicle")
+    py::class_<Vehicle>(m, "Vehicle", py::module_local())
         .def(py::init(
                  [](std::string id,
                     int capacity,
@@ -158,7 +158,7 @@ PYBIND11_MODULE(_core, m)
         // The planning list variable: the ordered visit indices of the route.
         .def_readwrite("visit_indices", &Vehicle::visitIndices);
 
-    py::class_<VehicleRoutePlan>(m, "VehicleRoutePlan")
+    py::class_<VehicleRoutePlan>(m, "VehicleRoutePlan", py::module_local())
         .def(py::init(
                  [](std::string name,
                     std::vector<Location> locations,
@@ -258,7 +258,7 @@ PYBIND11_MODULE(_core, m)
         "HardMediumSoft score (also stores plan.score).");
 
     // The acceptance criteria the engine offers.
-    py::enum_<optimaru::AcceptorType>(m, "AcceptorType")
+    py::enum_<optimaru::AcceptorType>(m, "AcceptorType", py::module_local())
         .value("HILL_CLIMBING", optimaru::AcceptorType::HILL_CLIMBING)
         .value("LATE_ACCEPTANCE", optimaru::AcceptorType::LATE_ACCEPTANCE)
         .value("ENTITY_TABU", optimaru::AcceptorType::ENTITY_TABU)
@@ -271,7 +271,7 @@ PYBIND11_MODULE(_core, m)
                optimaru::AcceptorType::RECORD_TO_RECORD_TRAVEL);
 
     // The adaptive operator-selection schemes.
-    py::enum_<optimaru::OperatorSelectionType>(m, "OperatorSelectionType")
+    py::enum_<optimaru::OperatorSelectionType>(m, "OperatorSelectionType", py::module_local())
         .value("ROULETTE_WHEEL",
                optimaru::OperatorSelectionType::ROULETTE_WHEEL)
         .value("SEGMENTED_ROULETTE_WHEEL",
@@ -279,7 +279,7 @@ PYBIND11_MODULE(_core, m)
         .value("ALPHA_UCB", optimaru::OperatorSelectionType::ALPHA_UCB)
         .value("RANDOM", optimaru::OperatorSelectionType::RANDOM);
 
-    py::class_<Solver::Config>(m, "SolverConfig")
+    py::class_<Solver::Config>(m, "SolverConfig", py::module_local())
         .def(py::init<>())
         .def_property(
             "spent_limit_seconds",
@@ -419,7 +419,7 @@ PYBIND11_MODULE(_core, m)
                        &Solver::Config::drivingTimeNearbyProbability)
         .def_readwrite("on_new_best", &Solver::Config::onNewBest);
 
-    py::class_<Solver>(m, "Solver")
+    py::class_<Solver>(m, "Solver", py::module_local())
         .def(py::init<>())
         .def(py::init<Solver::Config>(), py::arg("config"))
         // Solves in place: fills vehicle.visit_indices, the visits' shadow

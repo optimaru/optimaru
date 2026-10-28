@@ -29,7 +29,7 @@ PYBIND11_MODULE(_core, m)
 
     m.attr("MEDIUM_SCALE") = kMediumScale;
 
-    py::class_<Score>(m, "Score")
+    py::class_<Score>(m, "Score", py::module_local())
         .def_readonly("hard", &Score::hard)
         .def_readonly("soft", &Score::soft)
         .def("is_feasible", &Score::isFeasible)
@@ -37,7 +37,7 @@ PYBIND11_MODULE(_core, m)
         .def("__repr__",
              [](const Score &s) { return "<Score " + s.toString() + ">"; });
 
-    py::class_<Team>(m, "Team")
+    py::class_<Team>(m, "Team", py::module_local())
         .def(py::init(
                  [](std::string name)
                  {
@@ -48,7 +48,7 @@ PYBIND11_MODULE(_core, m)
              py::arg("name"))
         .def_readwrite("name", &Team::name);
 
-    py::class_<Day>(m, "Day")
+    py::class_<Day>(m, "Day", py::module_local())
         .def(py::init(
                  [](int dateIndex)
                  {
@@ -59,7 +59,7 @@ PYBIND11_MODULE(_core, m)
              py::arg("date_index"))
         .def_readwrite("date_index", &Day::dateIndex);
 
-    py::class_<UnavailabilityPenalty>(m, "UnavailabilityPenalty")
+    py::class_<UnavailabilityPenalty>(m, "UnavailabilityPenalty", py::module_local())
         .def(py::init(
                  [](int team, int day)
                  {
@@ -73,7 +73,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("team", &UnavailabilityPenalty::team)
         .def_readwrite("day", &UnavailabilityPenalty::day);
 
-    py::class_<TeamAssignment>(m, "TeamAssignment")
+    py::class_<TeamAssignment>(m, "TeamAssignment", py::module_local())
         .def(py::init(
                  [](std::int64_t id,
                     int day,
@@ -100,7 +100,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("team", &TeamAssignment::team)
         .def_readwrite("pinned", &TeamAssignment::pinned);
 
-    py::class_<TournamentSchedule>(m, "TournamentSchedule")
+    py::class_<TournamentSchedule>(m, "TournamentSchedule", py::module_local())
         .def(py::init(
                  [](std::vector<Team> teams,
                     std::vector<Day> days,
@@ -165,7 +165,7 @@ PYBIND11_MODULE(_core, m)
           "Timefold LoadBalance::unfairness of the given loads (6 s.f., "
           "HALF_EVEN).");
 
-    py::class_<Solver::Config>(m, "SolverConfig")
+    py::class_<Solver::Config>(m, "SolverConfig", py::module_local())
         .def(py::init<>())
         .def_property(
             "spent_limit_seconds",
@@ -285,7 +285,7 @@ PYBIND11_MODULE(_core, m)
         // engine's multi-start worker threads too.
         .def_readwrite("on_new_best", &Solver::Config::onNewBest);
 
-    py::class_<Solver>(m, "Solver")
+    py::class_<Solver>(m, "Solver", py::module_local())
         .def(py::init<>())
         .def(py::init<Solver::Config>(), py::arg("config"))
         // Solves in place: sets team_assignments[*].team and schedule.score.

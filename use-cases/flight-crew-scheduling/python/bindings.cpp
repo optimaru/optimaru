@@ -27,7 +27,7 @@ PYBIND11_MODULE(_core, m)
     m.doc() = "Flight crew scheduling — Timefold engine-backed C++ wrapper "
               "exposed to Python";
 
-    py::class_<Score>(m, "Score")
+    py::class_<Score>(m, "Score", py::module_local())
         .def_readonly("hard", &Score::hard)
         .def_readonly("soft", &Score::soft)
         .def("is_feasible", &Score::isFeasible)
@@ -35,7 +35,7 @@ PYBIND11_MODULE(_core, m)
         .def("__repr__",
              [](const Score &s) { return "<Score " + s.toString() + ">"; });
 
-    py::class_<Airport>(m, "Airport")
+    py::class_<Airport>(m, "Airport", py::module_local())
         .def(py::init(
                  [](std::string code,
                     std::string name,
@@ -58,7 +58,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("latitude", &Airport::latitude)
         .def_readwrite("longitude", &Airport::longitude);
 
-    py::class_<Employee>(m, "Employee")
+    py::class_<Employee>(m, "Employee", py::module_local())
         .def(py::init(
                  [](std::string id,
                     std::string name,
@@ -87,7 +87,7 @@ PYBIND11_MODULE(_core, m)
         // Calendar-day indices (floor(minutes / 1440)).
         .def_readwrite("unavailable_days", &Employee::unavailableDays);
 
-    py::class_<Flight>(m, "Flight")
+    py::class_<Flight>(m, "Flight", py::module_local())
         .def(py::init(
                  [](std::string flightNumber,
                     int departureAirport,
@@ -115,7 +115,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("arrival_airport", &Flight::arrivalAirport)
         .def_readwrite("arrival_utc", &Flight::arrivalUTC);
 
-    py::class_<FlightAssignment>(m, "FlightAssignment")
+    py::class_<FlightAssignment>(m, "FlightAssignment", py::module_local())
         .def(py::init(
                  [](std::string id,
                     int flight,
@@ -147,7 +147,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("employee", &FlightAssignment::employee)
         .def_readwrite("pinned", &FlightAssignment::pinned);
 
-    py::class_<FlightCrewSchedule>(m, "FlightCrewSchedule")
+    py::class_<FlightCrewSchedule>(m, "FlightCrewSchedule", py::module_local())
         .def(py::init(
                  [](std::vector<Airport> airports,
                     std::vector<Employee> employees,
@@ -205,7 +205,7 @@ PYBIND11_MODULE(_core, m)
           py::arg("schedule"),
           "Full recompute of the HardSoftScore (also stores schedule.score).");
 
-    py::class_<Solver::Config>(m, "SolverConfig")
+    py::class_<Solver::Config>(m, "SolverConfig", py::module_local())
         .def(py::init<>())
         .def_property(
             "spent_limit_seconds",
@@ -313,7 +313,7 @@ PYBIND11_MODULE(_core, m)
         // engine's multi-start worker threads too.
         .def_readwrite("on_new_best", &Solver::Config::onNewBest);
 
-    py::class_<Solver>(m, "Solver")
+    py::class_<Solver>(m, "Solver", py::module_local())
         .def(py::init<>())
         .def(py::init<Solver::Config>(), py::arg("config"))
         // Solves in place: sets flight_assignments[*].employee and

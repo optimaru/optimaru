@@ -1,0 +1,57 @@
+# The `optimaru` Python distribution: every use case under use-cases/ as a
+# subpackage (optimaru.vehicle_routing, optimaru.school_timetabling, …).
+# Extensions are assembled by setup.py from each use case's own setup.py.
+[build-system]
+requires = ["setuptools>=77", "pybind11>=2.13.6"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "optimaru"
+version = "0.1.0"
+description = "Metaheuristic optimization engine for routing, scheduling, timetabling and allocation — 21 ready-to-use models."
+readme = "python/README.md"
+requires-python = ">=3.14"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{ name = "optimaru" }]
+keywords = [
+  "optimization", "combinatorial-optimization", "metaheuristics", "scheduling",
+  "vehicle-routing", "timetabling", "operations-research", "solver",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Science/Research",
+  "Operating System :: MacOS",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: C++",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Scientific/Engineering :: Mathematics",
+  "Typing :: Typed",
+]
+# The pure-Python use cases need pydantic for their models; the extension
+# packages use it for their optional serialization mirrors.
+dependencies = ["pydantic>=2.5"]
+
+[project.urls]
+Homepage = "https://optimaru.com"
+Source = "https://github.com/optimaru/optimaru"
+Issues = "https://github.com/optimaru/optimaru/issues"
+
+[tool.setuptools]
+# Packages, package_dir and ext_modules come from setup.py.
+include-package-data = false
+
+[tool.cibuildwheel]
+build = "cp314-*"
+skip = "*-win32 *-manylinux_i686 *-musllinux_i686"
+build-verbosity = 1
+# Smoke test: every subpackage (and its compiled _core) imports from the installed wheel.
+test-command = "python -c \"import optimaru; optimaru._import_all(); print(len(optimaru.__all__), 'use cases OK')\""
+
+[tool.cibuildwheel.macos]
+# Separate native builds per arch (arm64 runner, x86_64 runner).
+archs = ["native"]
+environment = { MACOSX_DEPLOYMENT_TARGET = "11.0" }

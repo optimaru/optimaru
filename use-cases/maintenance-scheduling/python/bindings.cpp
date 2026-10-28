@@ -66,7 +66,7 @@ PYBIND11_MODULE(_core, m)
     m.doc() = "Maintenance scheduling — Timefold engine-backed C++ wrapper "
               "exposed to Python";
 
-    py::class_<Score>(m, "Score")
+    py::class_<Score>(m, "Score", py::module_local())
         .def_readonly("hard", &Score::hard)
         .def_readonly("soft", &Score::soft)
         .def("is_feasible", &Score::isFeasible)
@@ -74,7 +74,7 @@ PYBIND11_MODULE(_core, m)
         .def("__repr__",
              [](const Score &s) { return "<Score " + s.toString() + ">"; });
 
-    py::class_<Crew>(m, "Crew")
+    py::class_<Crew>(m, "Crew", py::module_local())
         .def(py::init(
                  [](std::string id, std::string name)
                  {
@@ -88,7 +88,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("id", &Crew::id)
         .def_readwrite("name", &Crew::name);
 
-    py::class_<Job> job(m, "Job");
+    py::class_<Job> job(m, "Job", py::module_local());
     job.def(py::init(
                 [](std::string id,
                    std::string name,
@@ -134,7 +134,7 @@ PYBIND11_MODULE(_core, m)
                     &Job::idealEndDate,
                     "Exclusive epoch day; None = no ideal end.");
 
-    py::class_<MaintenanceSchedule>(m, "MaintenanceSchedule")
+    py::class_<MaintenanceSchedule>(m, "MaintenanceSchedule", py::module_local())
         .def(py::init(
                  [](std::int64_t fromDate,
                     std::int64_t toDate,
@@ -283,7 +283,7 @@ PYBIND11_MODULE(_core, m)
         "replica). from_date defaults to the next Monday, like the Java "
         "demo; pass a fixed Monday epoch day for reproducibility.");
 
-    py::class_<Solver::Config> config(m, "SolverConfig");
+    py::class_<Solver::Config> config(m, "SolverConfig", py::module_local());
     config.def(py::init<>())
         .def_property(
             "spent_limit_seconds",
@@ -401,7 +401,7 @@ PYBIND11_MODULE(_core, m)
         // from the engine's multi-start worker threads too.
         .def_readwrite("on_new_best", &Solver::Config::onNewBest);
 
-    py::class_<Solver>(m, "Solver")
+    py::class_<Solver>(m, "Solver", py::module_local())
         .def(py::init<>())
         .def(py::init<Solver::Config>(), py::arg("config"))
         // Solves in place: sets job.crew_date and schedule.score. The GIL is

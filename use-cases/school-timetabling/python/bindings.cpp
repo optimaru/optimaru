@@ -253,7 +253,7 @@ void allowedSlotFromPython(cn::Lesson &lesson, const std::vector<bool> &table)
 
 void bindCanon(py::module_ &canon)
 {
-    py::class_<cn::ObjectiveWeights>(canon, "ObjectiveWeights")
+    py::class_<cn::ObjectiveWeights>(canon, "ObjectiveWeights", py::module_local())
         .def(py::init(
                  [](int teacherGap,
                     int teacherWorkday,
@@ -286,7 +286,7 @@ void bindCanon(py::module_ &canon)
         .def_readwrite("non_preferred_period",
                        &cn::ObjectiveWeights::nonPreferredPeriod);
 
-    py::class_<cn::Lesson>(canon, "Lesson")
+    py::class_<cn::Lesson>(canon, "Lesson", py::module_local())
         .def(py::init(
                  [](std::string id,
                     int classGroupId,
@@ -331,7 +331,7 @@ void bindCanon(py::module_ &canon)
         .def_readwrite("pinned", &cn::Lesson::pinned)
         .def_readwrite("slot", &cn::Lesson::slot);
 
-    py::class_<cn::Timetable>(canon, "Timetable")
+    py::class_<cn::Timetable>(canon, "Timetable", py::module_local())
         .def(py::init(
                  [](std::vector<int> dayOfSlot,
                     std::vector<int> periodOfSlot,
@@ -400,7 +400,7 @@ void bindCanon(py::module_ &canon)
 
     // Per-constraint violation counts (the exact semantics of the CP-SAT
     // package's validate.py: hard H1~H10 counts and raw soft S1~S6 counts).
-    py::class_<cn::Breakdown>(canon, "Breakdown")
+    py::class_<cn::Breakdown>(canon, "Breakdown", py::module_local())
         .def_readonly("unassigned", &cn::Breakdown::unassigned)
         .def_readonly("class_conflicts", &cn::Breakdown::classConflicts)
         .def_readonly("teacher_conflicts", &cn::Breakdown::teacherConflicts)
@@ -457,7 +457,7 @@ void bindCanon(py::module_ &canon)
     // ------------------------------------------------------------------
     py::class_<cn::DecomposedCalculator>(
         canon,
-        "DecomposedCalculator",
+        "DecomposedCalculator", py::module_local(),
         "Pluggable score calculator: assemble canonical constraints — either "
         "from an iterable of constraint specs (see st_timetabling."
         "constraints) or incrementally via add(name, ...) — then pass to "
@@ -579,7 +579,7 @@ void bindCanon(py::module_ &canon)
         "CP-SAT ObjectiveWeights defaults). With weights == table.weights it "
         "scores bit-for-bit like canon.calculate_score.");
 
-    py::class_<cn::Solver::Config> config(canon, "SolverConfig");
+    py::class_<cn::Solver::Config> config(canon, "SolverConfig", py::module_local());
     bindSolverConfigCommon(config);
     // S1~S6 weights, copied onto the Timetable at the start of solve().
     config.def_readwrite("weights", &cn::Solver::Config::weights);
@@ -601,7 +601,7 @@ void bindCanon(py::module_ &canon)
     config.def_readwrite("reassign_candidates",
                          &cn::Solver::Config::reassignCandidates);
 
-    py::class_<cn::Solver>(canon, "Solver")
+    py::class_<cn::Solver>(canon, "Solver", py::module_local())
         .def(py::init<>())
         .def(py::init<cn::Solver::Config>(), py::arg("config"))
         // Solves in place: sets lesson.slot and table.score. The GIL is
@@ -630,7 +630,7 @@ PYBIND11_MODULE(_core, m)
     m.doc() = "School timetabling — Timefold engine-backed C++ wrapper "
               "exposed to Python";
 
-    py::class_<Score>(m, "Score")
+    py::class_<Score>(m, "Score", py::module_local())
         .def_readonly("hard", &Score::hard)
         .def_readonly("soft", &Score::soft)
         .def("is_feasible", &Score::isFeasible)
@@ -638,7 +638,7 @@ PYBIND11_MODULE(_core, m)
         .def("__repr__",
              [](const Score &s) { return "<Score " + s.toString() + ">"; });
 
-    py::class_<Timeslot>(m, "Timeslot")
+    py::class_<Timeslot>(m, "Timeslot", py::module_local())
         .def(py::init(
                  [](int day, int period)
                  {
@@ -652,7 +652,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("day", &Timeslot::day)
         .def_readwrite("period", &Timeslot::period);
 
-    py::class_<Room>(m, "Room")
+    py::class_<Room>(m, "Room", py::module_local())
         .def(py::init(
                  [](std::string name, std::string type)
                  {
@@ -666,7 +666,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("name", &Room::name)
         .def_readwrite("type", &Room::type);
 
-    py::class_<Lesson>(m, "Lesson")
+    py::class_<Lesson>(m, "Lesson", py::module_local())
         .def(py::init(
                  [](std::string id,
                     std::string subject,
@@ -691,7 +691,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("slot_room", &Lesson::slotRoom)
         .def_readwrite("pinned", &Lesson::pinned);
 
-    py::class_<Timetable>(m, "Timetable")
+    py::class_<Timetable>(m, "Timetable", py::module_local())
         .def(py::init(
                  [](std::vector<Timeslot> timeslots,
                     std::vector<Room> rooms,
@@ -756,14 +756,14 @@ PYBIND11_MODULE(_core, m)
           py::arg("table"),
           "Full recompute of the HardSoftScore (also stores table.score).");
 
-    py::class_<Solver::Config> config(m, "SolverConfig");
+    py::class_<Solver::Config> config(m, "SolverConfig", py::module_local());
     bindSolverConfigCommon(config);
     // Same-group nearby swap bias (see st/solver.hpp).
     config.def_readwrite("same_group_nearby", &Solver::Config::sameGroupNearby);
     config.def_readwrite("same_group_nearby_probability",
                          &Solver::Config::sameGroupNearbyProbability);
 
-    py::class_<Solver>(m, "Solver")
+    py::class_<Solver>(m, "Solver", py::module_local())
         .def(py::init<>())
         .def(py::init<Solver::Config>(), py::arg("config"))
         // Solves in place: sets lesson.slot_room and table.score. The GIL is

@@ -1,0 +1,13 @@
+# sdist for the `optimaru` Python distribution: the engine headers and, per use
+# case, the C++ sources its extension compiles plus the Python package.
+include LICENSE NOTICE pyproject.toml setup.py python/README.md
+recursive-include python/optimaru *.py
+recursive-include include *.hpp *.h
+recursive-include use-cases/*/cpp/include *.hpp *.h
+recursive-include use-cases/*/cpp/src *.cpp *.hpp *.h
+include use-cases/*/python/setup.py use-cases/*/python/bindings.cpp
+recursive-include use-cases/*/python *.py *.pyi py.typed
+prune use-cases/*/python/tests
+prune use-cases/*/python/build
+prune use-cases/*/python/.venv
+global-exclude *.so *.pyd __pycache__ *.pyc

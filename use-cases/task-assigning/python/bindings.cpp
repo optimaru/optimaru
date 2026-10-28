@@ -80,7 +80,7 @@ PYBIND11_MODULE(_core, m)
     m.doc() = "Task assigning (skill-based task queues per employee) — "
               "Timefold engine-backed C++ wrapper exposed to Python";
 
-    py::class_<Score>(m, "Score")
+    py::class_<Score>(m, "Score", py::module_local())
         .def_readonly("hard", &Score::hard)
         .def_readonly("soft0", &Score::soft0)
         .def_readonly("soft1", &Score::soft1)
@@ -90,18 +90,18 @@ PYBIND11_MODULE(_core, m)
         .def("__repr__",
              [](const Score &s) { return "<Score " + s.toString() + ">"; });
 
-    py::enum_<Affinity>(m, "Affinity")
+    py::enum_<Affinity>(m, "Affinity", py::module_local())
         .value("NONE", Affinity::NONE)
         .value("LOW", Affinity::LOW)
         .value("MEDIUM", Affinity::MEDIUM)
         .value("HIGH", Affinity::HIGH);
 
-    py::enum_<Priority>(m, "Priority")
+    py::enum_<Priority>(m, "Priority", py::module_local())
         .value("MINOR", Priority::MINOR)
         .value("MAJOR", Priority::MAJOR)
         .value("CRITICAL", Priority::CRITICAL);
 
-    py::class_<Customer>(m, "Customer")
+    py::class_<Customer>(m, "Customer", py::module_local())
         .def(py::init(
                  [](std::string id, std::string name)
                  {
@@ -115,7 +115,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("id", &Customer::id)
         .def_readwrite("name", &Customer::name);
 
-    py::class_<TaskType>(m, "TaskType")
+    py::class_<TaskType>(m, "TaskType", py::module_local())
         .def(py::init(
                  [](std::string code,
                     std::string title,
@@ -139,7 +139,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("base_duration", &TaskType::baseDuration)
         .def_readwrite("required_skills", &TaskType::requiredSkills);
 
-    py::class_<Task>(m, "Task")
+    py::class_<Task>(m, "Task", py::module_local())
         .def(py::init(
                  [](std::string id,
                     int taskType,
@@ -178,7 +178,7 @@ PYBIND11_MODULE(_core, m)
         .def_readonly("employee", &Task::employee)
         .def_readonly("start_time", &Task::startTime);
 
-    py::class_<Employee>(m, "Employee")
+    py::class_<Employee>(m, "Employee", py::module_local())
         .def(py::init(
                  [](std::string id,
                     std::string fullName,
@@ -209,7 +209,7 @@ PYBIND11_MODULE(_core, m)
         // TaskAssigningSolution.set_task_lists for bulk writes.
         .def_readwrite("tasks", &Employee::tasks);
 
-    py::class_<TaskAssigningSolution>(m, "TaskAssigningSolution")
+    py::class_<TaskAssigningSolution>(m, "TaskAssigningSolution", py::module_local())
         .def(py::init(
                  [](std::vector<TaskType> taskTypes,
                     std::vector<Customer> customers,
@@ -272,7 +272,7 @@ PYBIND11_MODULE(_core, m)
           "Full recompute of the Bendable score (re-derives the task shadow "
           "variables and stores solution.score).");
 
-    py::class_<Solver::Config>(m, "SolverConfig")
+    py::class_<Solver::Config>(m, "SolverConfig", py::module_local())
         .def(py::init<>())
         .def_property(
             "spent_limit_seconds",
@@ -397,7 +397,7 @@ PYBIND11_MODULE(_core, m)
         // from the engine's multi-start worker threads too.
         .def_readwrite("on_new_best", &Solver::Config::onNewBest);
 
-    py::class_<Solver>(m, "Solver")
+    py::class_<Solver>(m, "Solver", py::module_local())
         .def(py::init<>())
         .def(py::init<Solver::Config>(), py::arg("config"))
         // Solves in place: reorders employees[*].tasks, re-derives the task

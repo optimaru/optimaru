@@ -1,6 +1,7 @@
 #ifndef ST_CANONICAL_SCORE_CALCULATOR_HPP
 #define ST_CANONICAL_SCORE_CALCULATOR_HPP
 
+#include "st/bit_ops.hpp"
 #include <cstdint>
 #include <utility>
 #include <vector>
@@ -111,9 +112,9 @@ public:
     {
         if (mask == 0)
             return 0;
-        const int hi = 31 - __builtin_clz(mask);
-        const int lo = __builtin_ctz(mask);
-        return hi - lo + 1 - __builtin_popcount(mask);
+        const int hi = 31 - st::bits::clz(mask);
+        const int lo = st::bits::ctz(mask);
+        return hi - lo + 1 - st::bits::popcount(mask);
     }
 
     // H10 excess of one day's busy-period mask: sum over maximal 1-runs of
@@ -123,8 +124,8 @@ public:
         std::int64_t excess = 0;
         while (mask != 0)
         {
-            mask >>= __builtin_ctz(mask);          // skip to the next run
-            const int run = __builtin_ctz(~mask);  // its length
+            mask >>= st::bits::ctz(mask);          // skip to the next run
+            const int run = st::bits::ctz(~mask);  // its length
             if (run > limit)
                 excess += run - limit;
             mask >>= run;

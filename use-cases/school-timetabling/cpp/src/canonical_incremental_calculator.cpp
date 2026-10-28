@@ -1,3 +1,4 @@
+#include "st/bit_ops.hpp"
 #include "st/canonical_incremental_calculator.hpp"
 
 #include <cstddef>
@@ -98,8 +99,8 @@ void CanonicalIncrementalScoreCalculator::setTeacherDayMask(
 
     const int maxPerDay = table_->teacherMaxPerDay[teacher];
     const int maxConsecutive = table_->teacherMaxConsecutive[teacher];
-    const int oldBusy = __builtin_popcount(oldMask);
-    const int newBusy = __builtin_popcount(newMask);
+    const int oldBusy = st::bits::popcount(oldMask);
+    const int newBusy = st::bits::popcount(newMask);
 
     const std::int64_t newDaily = ScoreCalculator::max0(newBusy - maxPerDay);
     const std::int64_t newRun
@@ -498,7 +499,7 @@ bool CanonicalIncrementalScoreCalculator::hotSetsConsistent() const
             const std::size_t cell = dayOffset(t, day);
             const unsigned mask = teacherDayMask_[cell];
             const bool expected
-                = ScoreCalculator::max0(__builtin_popcount(mask)
+                = ScoreCalculator::max0(st::bits::popcount(mask)
                                         - table_->teacherMaxPerDay[t])
                       > 0
                   || ScoreCalculator::runExcessOf(

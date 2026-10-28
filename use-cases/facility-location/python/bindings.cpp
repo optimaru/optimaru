@@ -27,7 +27,7 @@ PYBIND11_MODULE(_core, m)
     m.doc() = "Facility location — Timefold engine-backed C++ wrapper "
               "exposed to Python";
 
-    py::class_<Score>(m, "Score")
+    py::class_<Score>(m, "Score", py::module_local())
         .def_readonly("hard", &Score::hard)
         .def_readonly("soft", &Score::soft)
         .def("is_feasible", &Score::isFeasible)
@@ -35,7 +35,7 @@ PYBIND11_MODULE(_core, m)
         .def("__repr__",
              [](const Score &s) { return "<Score " + s.toString() + ">"; });
 
-    py::class_<Location>(m, "Location")
+    py::class_<Location>(m, "Location", py::module_local())
         .def(py::init(
                  [](double latitude, double longitude)
                  {
@@ -51,7 +51,7 @@ PYBIND11_MODULE(_core, m)
         // Java Location.getDistanceTo: ceil(Euclidean degrees * 111 km).
         .def("distance_to", &Location::distanceTo, py::arg("other"));
 
-    py::class_<Facility>(m, "Facility")
+    py::class_<Facility>(m, "Facility", py::module_local())
         .def(py::init(
                  [](std::string id,
                     Location location,
@@ -74,7 +74,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("setup_cost", &Facility::setupCost)
         .def_readwrite("capacity", &Facility::capacity);
 
-    py::class_<Consumer>(m, "Consumer")
+    py::class_<Consumer>(m, "Consumer", py::module_local())
         .def(py::init(
                  [](std::string id, Location location, std::int64_t demand)
                  {
@@ -95,7 +95,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("facility", &Consumer::facility)
         .def("is_assigned", &Consumer::isAssigned);
 
-    py::class_<FacilityLocationProblem>(m, "FacilityLocationProblem")
+    py::class_<FacilityLocationProblem>(m, "FacilityLocationProblem", py::module_local())
         .def(py::init(
                  [](std::vector<Facility> facilities,
                     std::vector<Consumer> consumers,
@@ -167,7 +167,7 @@ PYBIND11_MODULE(_core, m)
           py::arg("problem"),
           "Full recompute of the HardSoftScore (also stores problem.score).");
 
-    py::class_<Solver::Config>(m, "SolverConfig")
+    py::class_<Solver::Config>(m, "SolverConfig", py::module_local())
         .def(py::init<>())
         .def_property(
             "spent_limit_seconds",
@@ -306,7 +306,7 @@ PYBIND11_MODULE(_core, m)
         // engine's multi-start worker threads too.
         .def_readwrite("on_new_best", &Solver::Config::onNewBest);
 
-    py::class_<Solver>(m, "Solver")
+    py::class_<Solver>(m, "Solver", py::module_local())
         .def(py::init<>())
         .def(py::init<Solver::Config>(), py::arg("config"))
         // Solves in place: sets consumer.facility and problem.score. The GIL

@@ -1,6 +1,7 @@
 #ifndef ST_CONSTRAINTS_TEACHER_TEACHER_MASK_HUB_HPP
 #define ST_CONSTRAINTS_TEACHER_TEACHER_MASK_HUB_HPP
 
+#include "st/bit_ops.hpp"
 #include "st/constraints/global/global_constraint.hpp"
 
 namespace st::canon
@@ -127,8 +128,8 @@ private:
                      std::uint16_t newMask)
     {
         const TeacherLimits &limits = limits_[teacher];
-        const int oldBusy = __builtin_popcount(oldMask);
-        const int newBusy = __builtin_popcount(newMask);
+        const int oldBusy = st::bits::popcount(oldMask);
+        const int newBusy = st::bits::popcount(newMask);
         totals_[kLoadLimit]
             += ScoreCalculator::max0(newBusy - limits.maxPerDay)
                - ScoreCalculator::max0(oldBusy - limits.maxPerDay);

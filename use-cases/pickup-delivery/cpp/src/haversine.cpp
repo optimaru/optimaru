@@ -13,7 +13,10 @@ struct CartesianCoordinate
     double x, y, z;
 };
 
-double toRadians(double degrees) { return degrees * M_PI / 180.0; }
+// Same value as POSIX M_PI, which MSVC's <cmath> does not define by default.
+constexpr double kPi = 3.14159265358979323846;
+
+double toRadians(double degrees) { return degrees * kPi / 180.0; }
 
 // Java's Math.round(double): floor(x + 0.5), returned as long. All inputs here
 // are non-negative, for which std::llround (round-half-away-from-zero) agrees.

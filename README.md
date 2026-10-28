@@ -10,6 +10,24 @@ harnesses in [`benchmarks/`](benchmarks).
 optimaru comes in a free edition and a paid edition; this repository is the
 free, open-source edition.
 
+## Install (Python)
+
+```bash
+pip install optimaru
+```
+
+One package with every use case as a subpackage — `optimaru.vehicle_routing`,
+`optimaru.school_timetabling`, … — compiled for Linux, macOS and Windows
+(Python 3.14+). See [`python/README.md`](python/README.md) for an example.
+The distribution is built from this repository by [`setup.py`](setup.py), which
+reuses each use case's own `python/setup.py`.
+
+**Releasing:** bump `version` in [`pyproject.toml`](pyproject.toml) in a PR and
+merge it. On the push to `main`, [`wheels.yml`](.github/workflows/wheels.yml)
+builds the wheels and sdist and — only if there is no `v<version>` tag yet —
+uploads them to PyPI, then creates the `v<version>` tag and GitHub release.
+An unchanged version publishes nothing.
+
 ## Repository layout
 
 ```

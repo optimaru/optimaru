@@ -28,7 +28,7 @@ PYBIND11_MODULE(_core, m)
 {
     m.doc() = "Pickup and delivery (PDPTW) — C++ core exposed to Python";
 
-    py::class_<Score>(m, "Score")
+    py::class_<Score>(m, "Score", py::module_local())
         .def_readonly("hard", &Score::hard)
         .def_readonly("medium", &Score::medium)
         .def_readonly("soft", &Score::soft)
@@ -37,7 +37,7 @@ PYBIND11_MODULE(_core, m)
         .def("__repr__",
              [](const Score &s) { return "<Score " + s.toString() + ">"; });
 
-    py::class_<Location>(m, "Location")
+    py::class_<Location>(m, "Location", py::module_local())
         .def(py::init(
                  [](double latitude, double longitude)
                  {
@@ -52,7 +52,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("longitude", &Location::longitude)
         .def_readonly("index", &Location::index);
 
-    py::class_<Node>(m, "Node")
+    py::class_<Node>(m, "Node", py::module_local())
         .def(py::init(
                  [](std::string id,
                     int locationIndex,
@@ -90,7 +90,7 @@ PYBIND11_MODULE(_core, m)
         .def_readonly("vehicle_index", &Node::vehicleIndex)
         .def_readonly("arrival_time", &Node::arrivalTime);
 
-    py::class_<Delivery>(m, "Delivery")
+    py::class_<Delivery>(m, "Delivery", py::module_local())
         .def(py::init(
                  [](std::string id, int pickupNode, int dropoffNode, int demand)
                  {
@@ -110,7 +110,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("dropoff_node_index", &Delivery::dropoffNodeIndex)
         .def_readwrite("demand", &Delivery::demand);
 
-    py::class_<Vehicle>(m, "Vehicle")
+    py::class_<Vehicle>(m, "Vehicle", py::module_local())
         .def(py::init(
                  [](std::string id,
                     int capacity,
@@ -171,7 +171,7 @@ PYBIND11_MODULE(_core, m)
         // The planning list variable: the ordered stop sequence.
         .def_readwrite("node_indices", &Vehicle::nodeIndices);
 
-    py::class_<PdpRoutePlan>(m, "PdpRoutePlan")
+    py::class_<PdpRoutePlan>(m, "PdpRoutePlan", py::module_local())
         .def(py::init(
                  [](std::string name,
                     std::vector<Location> locations,
@@ -279,7 +279,7 @@ PYBIND11_MODULE(_core, m)
           py::arg("seed") = 0,
           "A randomly generated PDPTW instance, for demos and benchmarks.");
 
-    py::enum_<optimaru::AcceptorType>(m, "AcceptorType")
+    py::enum_<optimaru::AcceptorType>(m, "AcceptorType", py::module_local())
         .value("HILL_CLIMBING", optimaru::AcceptorType::HILL_CLIMBING)
         .value("LATE_ACCEPTANCE", optimaru::AcceptorType::LATE_ACCEPTANCE)
         .value("ENTITY_TABU", optimaru::AcceptorType::ENTITY_TABU)
@@ -291,7 +291,7 @@ PYBIND11_MODULE(_core, m)
         .value("RECORD_TO_RECORD_TRAVEL",
                optimaru::AcceptorType::RECORD_TO_RECORD_TRAVEL);
 
-    py::enum_<optimaru::OperatorSelectionType>(m, "OperatorSelectionType")
+    py::enum_<optimaru::OperatorSelectionType>(m, "OperatorSelectionType", py::module_local())
         .value("ROULETTE_WHEEL",
                optimaru::OperatorSelectionType::ROULETTE_WHEEL)
         .value("SEGMENTED_ROULETTE_WHEEL",
@@ -299,7 +299,7 @@ PYBIND11_MODULE(_core, m)
         .value("ALPHA_UCB", optimaru::OperatorSelectionType::ALPHA_UCB)
         .value("RANDOM", optimaru::OperatorSelectionType::RANDOM);
 
-    py::class_<Solver::Config>(m, "SolverConfig")
+    py::class_<Solver::Config>(m, "SolverConfig", py::module_local())
         .def(py::init<>())
         .def_property(
             "spent_limit_seconds",
@@ -429,7 +429,7 @@ PYBIND11_MODULE(_core, m)
                        &Solver::Config::drivingTimeNearbyProbability)
         .def_readwrite("on_new_best", &Solver::Config::onNewBest);
 
-    py::class_<Solver>(m, "Solver")
+    py::class_<Solver>(m, "Solver", py::module_local())
         .def(py::init<>())
         .def(py::init<Solver::Config>(), py::arg("config"))
         .def(

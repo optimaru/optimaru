@@ -30,7 +30,7 @@ PYBIND11_MODULE(_core, m)
     m.doc() = "Project job scheduling (multi-project RCPSP with execution "
               "modes) — Timefold engine-backed C++ wrapper exposed to Python";
 
-    py::class_<Score>(m, "Score")
+    py::class_<Score>(m, "Score", py::module_local())
         .def_readonly("hard", &Score::hard)
         .def_readonly("medium", &Score::medium)
         .def_readonly("soft", &Score::soft)
@@ -39,12 +39,12 @@ PYBIND11_MODULE(_core, m)
         .def("__repr__",
              [](const Score &s) { return "<Score " + s.toString() + ">"; });
 
-    py::enum_<JobType>(m, "JobType")
+    py::enum_<JobType>(m, "JobType", py::module_local())
         .value("SOURCE", JobType::SOURCE)
         .value("STANDARD", JobType::STANDARD)
         .value("SINK", JobType::SINK);
 
-    py::class_<Project>(m, "Project")
+    py::class_<Project>(m, "Project", py::module_local())
         .def(py::init(
                  [](std::string id, int releaseDate, int criticalPathDuration)
                  {
@@ -62,7 +62,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("critical_path_duration", &Project::criticalPathDuration)
         .def("critical_path_end_date", &Project::criticalPathEndDate);
 
-    py::class_<Resource>(m, "Resource")
+    py::class_<Resource>(m, "Resource", py::module_local())
         .def(py::init(
                  [](std::string id, int capacity, bool renewable, int project)
                  {
@@ -84,7 +84,7 @@ PYBIND11_MODULE(_core, m)
         // Index into ProjectJobSchedule.projects, -1 = global (informational).
         .def_readwrite("project", &Resource::project);
 
-    py::class_<ResourceRequirement>(m, "ResourceRequirement")
+    py::class_<ResourceRequirement>(m, "ResourceRequirement", py::module_local())
         .def(py::init(
                  [](int resource, int requirement)
                  {
@@ -99,7 +99,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("resource", &ResourceRequirement::resource)
         .def_readwrite("requirement", &ResourceRequirement::requirement);
 
-    py::class_<ExecutionMode>(m, "ExecutionMode")
+    py::class_<ExecutionMode>(m, "ExecutionMode", py::module_local())
         .def(py::init(
                  [](std::string id,
                     int duration,
@@ -120,7 +120,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("resource_requirements",
                        &ExecutionMode::resourceRequirements);
 
-    py::class_<Job>(m, "Job")
+    py::class_<Job>(m, "Job", py::module_local())
         .def(py::init(
                  [](std::string id,
                     int project,
@@ -144,7 +144,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("job_type", &Job::jobType)
         .def_readwrite("execution_modes", &Job::executionModes);
 
-    py::class_<Allocation>(m, "Allocation")
+    py::class_<Allocation>(m, "Allocation", py::module_local())
         .def(py::init(
                  [](std::string id,
                     int job,
@@ -184,7 +184,7 @@ PYBIND11_MODULE(_core, m)
         .def_readonly("start_date", &Allocation::startDate)
         .def_readonly("end_date", &Allocation::endDate);
 
-    py::class_<ProjectJobSchedule>(m, "ProjectJobSchedule")
+    py::class_<ProjectJobSchedule>(m, "ProjectJobSchedule", py::module_local())
         .def(py::init(
                  [](std::vector<Project> projects,
                     std::vector<Resource> resources,
@@ -278,7 +278,7 @@ PYBIND11_MODULE(_core, m)
           "Full recompute of the HardMediumSoft score; also refreshes every "
           "allocation's derived dates and stores schedule.score.");
 
-    py::class_<Solver::Config>(m, "SolverConfig")
+    py::class_<Solver::Config>(m, "SolverConfig", py::module_local())
         .def(py::init<>())
         .def_property(
             "spent_limit_seconds",
@@ -391,7 +391,7 @@ PYBIND11_MODULE(_core, m)
         // engine's multi-start worker threads too.
         .def_readwrite("on_new_best", &Solver::Config::onNewBest);
 
-    py::class_<Solver>(m, "Solver")
+    py::class_<Solver>(m, "Solver", py::module_local())
         .def(py::init<>())
         .def(py::init<Solver::Config>(), py::arg("config"))
         // Solves in place: sets allocation.mode_delay, the derived dates and

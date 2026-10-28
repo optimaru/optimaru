@@ -1,0 +1,167 @@
+# Builds the `optimaru` Python distribution (sdist + wheels for Linux, macOS,
+# Windows) on every PR and main push that touches it.
+#
+# Releasing is driven by the version in pyproject.toml. On a push to main, if
+# there is no `v<version>` tag yet, the publish job:
+#   1. uploads the sdist + wheels to PyPI, then
+#   2. creates the `v<version>` tag on that commit and a GitHub release with the
+#      same files attached.
+# If the tag already exists (version unchanged), nothing is published. PRs and
+# other branches never publish. So to release: bump `version` in pyproject.toml
+# in a PR and merge it.
+#
+# PyPI upload uses Trusted Publishing (OIDC) — there is no API token. The PyPI
+# project lists this repository as a trusted publisher:
+#   owner: optimaru · repository: optimaru · workflow: wheels.yml · environment: pypi
+# and the GitHub Environment `pypi` must exist (add required reviewers there to
+# gate uploads).
+name: wheels
+
+on:
+  pull_request:
+    paths:
+      - pyproject.toml
+      - setup.py
+      - MANIFEST.in
+      - python/**
+      - include/**
+      - use-cases/*/cpp/include/**
+      - use-cases/*/cpp/src/**
+      - use-cases/*/python/**
+      - .github/workflows/wheels.yml
+  push:
+    branches: [main]
+    paths:
+      - pyproject.toml
+      - setup.py
+      - MANIFEST.in
+      - python/**
+      - include/**
+      - use-cases/*/cpp/include/**
+      - use-cases/*/cpp/src/**
+      - use-cases/*/python/**
+      - .github/workflows/wheels.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One release attempt at a time per ref; never cancel a publish half-way.
+concurrency:
+  group: wheels-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  version:
+    name: version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      release: ${{ steps.v.outputs.release }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version and check for an existing tag
+        id: v
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          if git ls-remote --exit-code --tags origin "refs/tags/v${version}" >/dev/null; then
+            exists=true
+          else
+            exists=false
+          fi
+          # Publish only for a push to main with a version that has no tag yet.
+          if [ "${GITHUB_EVENT_NAME}" = "push" ] && [ "${GITHUB_REF}" = "refs/heads/main" ] && [ "${exists}" = "false" ]; then
+            release=true
+          else
+            release=false
+          fi
+          echo "release=${release}" >> "$GITHUB_OUTPUT"
+          echo "### optimaru ${version}" >> "$GITHUB_STEP_SUMMARY"
+          echo "tag v${version} exists: ${exists} · publish: ${release}" >> "$GITHUB_STEP_SUMMARY"
+
+  wheels:
+    name: wheels (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Native runners per architecture: no QEMU emulation, no cross-compiling.
+        os:
+          - ubuntu-latest      # manylinux / musllinux x86_64
+          - ubuntu-24.04-arm   # manylinux / musllinux aarch64
+          - macos-latest       # arm64
+          - macos-15-intel     # x86_64
+          - windows-latest     # AMD64
+    steps:
+      - uses: actions/checkout@v4
+
+      # Settings (cp314 only, smoke-test import of all 21 use cases) live in
+      # pyproject.toml [tool.cibuildwheel]. v3.1 still shipped CPython 3.14.0rc2,
+      # on which current pydantic fails to import (typing._eval_type signature).
+      - uses: pypa/cibuildwheel@v4.3.1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.os }}
+          path: wheelhouse/*.whl
+
+  sdist:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      - name: Build sdist
+        run: pipx run build --sdist
+
+      # The sdist must build on its own (all C++ sources included via MANIFEST.in).
+      - name: Build a wheel from the sdist
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip wheel --no-deps -w sdist-check dist/*.tar.gz
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+
+  publish:
+    name: publish v${{ needs.version.outputs.version }}
+    if: needs.version.outputs.release == 'true'
+    needs: [version, wheels, sdist]
+    runs-on: ubuntu-latest
+    # Must match the environment registered as the trusted publisher on PyPI.
+    environment:
+      name: pypi
+      url: https://pypi.org/project/optimaru/${{ needs.version.outputs.version }}/
+    permissions:
+      id-token: write   # PyPI Trusted Publishing
+      contents: write   # tag + GitHub release
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      # PyPI first: if the upload fails, no tag or release is created and the
+      # next push to main retries.
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+      - name: Tag and GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          gh release create "v${VERSION}" dist/* \
+            --repo "${GITHUB_REPOSITORY}" \
+            --target "${GITHUB_SHA}" \
+            --title "optimaru ${VERSION}" \
+            --generate-notes \
+            --notes "pip install optimaru==${VERSION} — https://pypi.org/project/optimaru/${VERSION}/"

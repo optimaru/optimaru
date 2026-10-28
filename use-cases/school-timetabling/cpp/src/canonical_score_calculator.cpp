@@ -1,3 +1,4 @@
+#include "st/bit_ops.hpp"
 #include "st/canonical_score_calculator.hpp"
 
 #include <algorithm>
@@ -280,7 +281,7 @@ Breakdown ScoreCalculator::computeBreakdown(Timetable &table)
             const unsigned mask = teacherDayMask[base + day];
             if (mask == 0)
                 continue;
-            const int busy = __builtin_popcount(mask);
+            const int busy = st::bits::popcount(mask);
             weekly += busy;
             b.teacherDailyExcess += max0(busy - table.teacherMaxPerDay[t]);
             b.consecutiveExcess
