@@ -1,1 +1,1 @@
-"""CVRPLIB benchmark harness for the vehicle-routing use case."""
+"""CVRP benchmark harness: optimaru vs OR-Tools Routing vs Timefold Solver."""

@@ -124,8 +124,7 @@ class VehicleMetrics(_Model):
     """Per-vehicle figures derived from a finished route (post-processing).
 
     Nothing here is scored. The numbers are recomputed from the reported stop
-    order and arrival times with the request's driving matrix, so the C++ and
-    CP-SAT backends report them identically for the same routes.
+    order and arrival times with the request's driving matrix.
     """
 
     stops: int = 0

@@ -34,21 +34,33 @@ jobs:
 
   vehicle-routing-python:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        project:
-          - use-cases/cpsat-common
-          - use-cases/vehicle-routing/python
-          - use-cases/vehicle-routing/alternatives/cpsat
-          - benchmarks/vehicle-routing
     defaults:
       run:
-        working-directory: ${{ matrix.project }}
+        working-directory: use-cases/vehicle-routing/python
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
       - name: Install
         run: uv sync --python 3.12 --all-extras --all-groups
+      - name: Test
+        run: uv run --python 3.12 pytest -q
+
+  vehicle-routing-benchmark:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: benchmarks/vehicle-routing
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: Build the Timefold runner
+        run: mvn -B -q -f timefold/pom.xml package
+      - name: Install
+        run: uv sync --python 3.12 --extra dev
       - name: Test
         run: uv run --python 3.12 pytest -q

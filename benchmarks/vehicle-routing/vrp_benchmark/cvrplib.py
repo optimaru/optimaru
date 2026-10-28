@@ -1,12 +1,12 @@
 """CVRPLIB Set X catalog and instance downloader.
 
 Two sources carry the same 100 instances and the same best-known solutions:
-the official CVRPLIB catalog page, and the PyVRP/Instances mirror that
-PyVRP's own benchmarks read (its `.sol` files carry the CVRPLIB BKS, rounded
-to the nearest integer like the instances). `load_x_catalog` reads the
-official page by default and falls back to the mirror when the host is
-unreachable; `source="pyvrp-mirror"` forces the mirror, which is what the CI
-benchmark uses so a run compares against exactly PyVRP's inputs.
+the official CVRPLIB catalog page, and the PyVRP/Instances GitHub mirror
+(its `.sol` files carry the CVRPLIB BKS, rounded to the nearest integer like
+the instances). `load_x_catalog` reads the official page by default and falls
+back to the mirror when the host is unreachable; `source="mirror"` forces the
+mirror, which is what the CI benchmark uses because GitHub is the more
+reliable host.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from urllib.parse import urljoin
 
 CATALOG_URL = "https://galgos.inf.puc-rio.br/cvrplib/index.php/en/instances/1"
 MIRROR_BASE_URL = "https://raw.githubusercontent.com/PyVRP/Instances/main/CVRP/"
-CATALOG_SOURCES = ("auto", "cvrplib", "pyvrp-mirror")
+CATALOG_SOURCES = ("auto", "cvrplib", "mirror")
 # The 100 Set X instances of Uchoa et al. (2017); the set has been frozen
 # since publication, so listing it here avoids needing a directory index.
 SET_X_NAMES = (
@@ -328,7 +328,7 @@ def load_x_catalog(
             f"unknown catalog source {source!r}; expected one of {CATALOG_SOURCES}"
         )
     cache_dir.mkdir(parents=True, exist_ok=True)
-    if source == "pyvrp-mirror":
+    if source == "mirror":
         return _load_mirror_catalog(cache_dir, refresh=refresh)
     cached = cache_dir / "cvrplib-catalog.html"
     if refresh or not cached.exists():

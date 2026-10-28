@@ -13,4 +13,4 @@ __pycache__/
 
 # benchmark downloads and results
 .bench-cache/
-benchmarks/**/bench/
+benchmarks/*/bench/

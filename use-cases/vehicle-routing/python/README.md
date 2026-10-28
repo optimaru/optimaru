@@ -10,8 +10,8 @@ possible. Routes are open by default — a vehicle ends its day at its last
 visit; set `return_to_depot=True` on a vehicle to charge and time the leg
 back to its depot. `RouteSolution.vehicle_metrics` reports per-vehicle stops,
 load, driving / waiting / service seconds and the route end time; these are
-post-processed from the finished routes (`vehicle_metrics()`), never scored,
-and both backends compute them the same way.
+post-processed from the finished routes (`vehicle_metrics()`) and never
+scored.
 
 ## Build & run
 

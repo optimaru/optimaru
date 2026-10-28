@@ -78,8 +78,8 @@ public:
     // whose calculator previews a move by re-costing the candidate routes per
     // component (O(route) rather than O(1), always served). Adding a term
     // here means adding it to evaluateElements, previewRuns / previewInsert
-    // (falling back to the walk when it is not a prefix sum), the plugin and
-    // the CP-SAT reference together.
+    // (falling back to the walk when it is not a prefix sum) and the plugin
+    // together.
     bool previewSegmentMove(int fromList, int start, int len, int toList, int insertAt,
                             optimaru::HardSoftScore &out) override;
     bool previewSwap(int l1, int p1, int l2, int p2, optimaru::HardSoftScore &out) override;

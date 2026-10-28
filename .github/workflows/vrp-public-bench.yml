@@ -1,10 +1,9 @@
-# CVRPLIB Set X, this engine beside PyVRP, on every version.
+# CVRPLIB Set X: the engine beside OR-Tools Routing and Timefold Solver.
 #
 # Same instances, fleet sizes, rounded integer distances, wall-clock budget
-# and independent rescoring for both solvers; the instances and the BKS come
-# from the PyVRP/Instances mirror, i.e. exactly PyVRP's own benchmark inputs.
-# Report, not a gate, on solution quality (gaps move with the runner); the
-# only failure is the engine leaving a customer unassigned.
+# and independent rescoring for every backend. Report, not a gate, on
+# solution quality (gaps move with the runner); the only failure is the
+# engine returning an incomplete plan.
 name: vrp-public-bench
 
 on:
@@ -12,11 +11,10 @@ on:
     branches:
       - main
     # Only commits that can move the numbers: the engine, the VRP use case
-    # (calculator, solver, bindings), the harness and this workflow.
+    # and the benchmark itself.
     paths:
       - "include/**"
       - "use-cases/vehicle-routing/**"
-      - "use-cases/cpsat-common/**"
       - "benchmarks/vehicle-routing/**"
       - ".github/workflows/vrp-public-bench.yml"
     tags:
@@ -27,22 +25,21 @@ on:
         description: "Solve budget per instance per solver (seconds)"
         default: "60"
       limit_per_bucket:
-        description: "Instances per Hexaly size bucket (0 = all 100, ~200 min for two backends at 60s)"
+        description: "Instances per size bucket (0 = all 100, ~300 min for three backends at 60s)"
         default: "1"
       backends:
-        description: "Comma-separated backends (engine,cpsat,pyvrp)"
-        default: "engine,pyvrp"
+        description: "Comma-separated backends (engine,ortools,timefold) or all"
+        default: "all"
 
 jobs:
   bench:
     runs-on: ubuntu-latest
-    # One instance per bucket x two backends x 60s is ~10 minutes of solving;
-    # all 100 instances (limit_per_bucket 0) is ~200.
+    # One instance per bucket x three backends x 60s is ~15 minutes of solving.
     timeout-minutes: 350
     env:
       SECONDS_BUDGET: ${{ github.event.inputs.seconds || '60' }}
       LIMIT_PER_BUCKET: ${{ github.event.inputs.limit_per_bucket || '1' }}
-      BACKENDS: ${{ github.event.inputs.backends || 'engine,pyvrp' }}
+      BACKENDS: ${{ github.event.inputs.backends || 'all' }}
     defaults:
       run:
         working-directory: benchmarks/vehicle-routing
@@ -55,8 +52,12 @@ jobs:
           enable-cache: true
           cache-dependency-glob: benchmarks/vehicle-routing/uv.lock
 
-      - name: Set up Python 3.12
-        run: uv python install 3.12
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
 
       - name: Cache C++ compilation
         uses: hendrikmuhs/ccache-action@v1.2
@@ -64,36 +65,37 @@ jobs:
           key: vrp-public-bench-${{ runner.os }}
 
       - name: Install the benchmark project (builds the pybind extension)
-        run: uv sync --python 3.12 --extra bench --extra dev
+        run: uv sync --python 3.12 --extra dev
         env:
           CC: ccache cc
           CXX: ccache c++
 
+      - name: Build the Timefold runner
+        run: mvn -B -q -f timefold/pom.xml package
+
       # Instance files only; --refresh-catalog re-reads the BKS every run so a
-      # best-known-solution update in PyVRP/Instances is picked up.
+      # best-known-solution update is picked up.
       - name: Cache Set X instances
         uses: actions/cache@v4
         with:
           path: benchmarks/vehicle-routing/.bench-cache
           key: cvrplib-set-x-${{ hashFiles('benchmarks/vehicle-routing/vrp_benchmark/cvrplib.py') }}
 
-      # --fail-on-unassigned inspects engine results and is refused without
-      # the engine backend, so a dispatch of pyvrp/cpsat alone runs as a report.
-      - name: Run Set X (engine vs PyVRP)
+      # --fail-on-incomplete inspects engine results and is refused without
+      # the engine backend, so a dispatch without it runs as a report.
+      - name: Run Set X
         run: |
-          fail_on_unassigned=""
-          # parse_backends strips blanks around the names; match the same way.
+          fail_on_incomplete=""
           case ",$(printf '%s' "$BACKENDS" | tr -d ' ')," in
-            *,engine,*|*,both,*|*,all,*) fail_on_unassigned="--fail-on-unassigned" ;;
+            *,engine,*|*,all,*) fail_on_incomplete="--fail-on-incomplete" ;;
           esac
-          uv run --python 3.12 --extra bench \
-            python -m vrp_benchmark.public_benchmark \
+          uv run --python 3.12 python -m vrp_benchmark \
             --series x --limit-per-bucket "$LIMIT_PER_BUCKET" \
-            --seconds "$SECONDS_BUDGET" --workers 1 --seed 0 \
-            --backend "$BACKENDS" --catalog-source pyvrp-mirror --refresh-catalog \
+            --seconds "$SECONDS_BUDGET" --seed 0 \
+            --backend "$BACKENDS" --catalog-source mirror --refresh-catalog \
             --cache-dir .bench-cache \
             --out bench/set-x.json --summary-markdown bench/set-x.md \
-            $fail_on_unassigned
+            $fail_on_incomplete
 
       - name: Publish summary
         if: always()

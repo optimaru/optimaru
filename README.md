@@ -16,10 +16,9 @@ free, open-source edition.
 include/optimaru/     the engine (header-only, one header per class)
 test/                 engine tests
 use-cases/            problems built on the engine
-├── vehicle-routing/  C++ domain + solver, pybind11 package, CP-SAT reference
-└── cpsat-common/     shared CP-SAT constraint-plugin contract
-benchmarks/           public benchmark harnesses
-└── vehicle-routing/  CVRPLIB Set X: engine vs CP-SAT vs PyVRP
+└── vehicle-routing/  C++ domain + solver, pybind11 package
+benchmarks/           benchmark harnesses (competing solvers live only here)
+└── vehicle-routing/  CVRPLIB Set X: engine vs OR-Tools Routing vs Timefold
 ```
 
 ## Engine layout
@@ -175,7 +174,7 @@ For a complete, production-shaped example see
 
 | Use case | What's in it |
 | --- | --- |
-| [`vehicle-routing`](use-cases/vehicle-routing) | Capacitated VRP with time windows, optional visits and open/closed routes: C++ domain and solver, full and incremental score calculators, per-constraint plugins, the `vrp_routing` pybind11/Pydantic package and an OR-Tools CP-SAT reference model with parity tests. |
+| [`vehicle-routing`](use-cases/vehicle-routing) | Capacitated VRP with time windows, optional visits and open/closed routes: C++ domain and solver, full and incremental score calculators, per-constraint plugins, and the `vrp_routing` pybind11/Pydantic package. |
 
 ```sh
 # C++
@@ -190,7 +189,7 @@ cd use-cases/vehicle-routing/python && uv sync --all-groups && uv run pytest
 
 | Benchmark | What it measures |
 | --- | --- |
-| [`vehicle-routing`](benchmarks/vehicle-routing) | CVRPLIB Set X (100–1000 customers) against best-known solutions, with PyVRP and the CP-SAT model run on the same instances, distances, budget and independent rescoring. Runs in CI on every push to `main` (`vrp-public-bench` workflow). |
+| [`vehicle-routing`](benchmarks/vehicle-routing) | CVRPLIB Set X (100–1000 customers) against best-known solutions, with the OR-Tools Routing solver and Timefold Solver (open-source edition) run on the same instances, distances, budget and independent rescoring. Runs in CI on every push to `main` (`vrp-public-bench` workflow). |
 
 ## Tests
 
