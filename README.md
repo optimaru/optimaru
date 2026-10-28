@@ -15,10 +15,12 @@ free, open-source edition.
 ```
 include/optimaru/     the engine (header-only, one header per class)
 test/                 engine tests
-use-cases/            problems built on the engine
-└── vehicle-routing/  C++ domain + solver, pybind11 package
-benchmarks/           benchmark harnesses (competing solvers live only here)
-└── vehicle-routing/  CVRPLIB Set X: engine vs OR-Tools Routing vs Timefold
+use-cases/<slug>/     21 problems built on the engine: C++ domain + solver
+                      and a pybind11 package (or a small pure-Python model)
+benchmarks/<slug>/    the same problems against OR-Tools (CP-SAT, or the
+                      Routing solver for VRP) and, where available, Timefold;
+                      competing solvers live only here
+benchmarks/cpsat-common/  shared CP-SAT constraint-plugin contract
 ```
 
 ## Engine layout
@@ -172,24 +174,37 @@ For a complete, production-shaped example see
 
 ## Use cases
 
-| Use case | What's in it |
-| --- | --- |
-| [`vehicle-routing`](use-cases/vehicle-routing) | Capacitated VRP with time windows, optional visits and open/closed routes: C++ domain and solver, full and incremental score calculators, per-constraint plugins, and the `vrp_routing` pybind11/Pydantic package. |
+[`use-cases/README.md`](use-cases/README.md) lists all 21 use cases and
+explains how to extend one — adding a move, changing the construction
+heuristic, adding a hard or soft cost. Each use case's README has a short
+usage example and the same guide with its own file names.
+
+Scheduling: bed allocation, conference, flight crew, food packaging,
+maintenance, meeting, project-job (RCPSP), school timetabling, semiconductor
+fab, sports league, task assigning, tournament. Routing: vehicle routing
+(CVRPTW), pickup & delivery (PDPTW), order picking. Assignment and packing:
+facility location, bin packing, knapsack, quadratic assignment, max-cut,
+assembly-line balancing.
 
 ```sh
 # C++
-cmake -S use-cases/vehicle-routing/cpp -B build-vrp && cmake --build build-vrp
-ctest --test-dir build-vrp
+cmake -S use-cases/<slug>/cpp -B build/<slug> && cmake --build build/<slug> -j
+ctest --test-dir build/<slug>
 
 # Python (uv)
-cd use-cases/vehicle-routing/python && uv sync --all-groups && uv run pytest
+cd use-cases/<slug>/python && uv sync --all-groups --all-extras && uv run pytest
 ```
 
 ## Benchmarks
 
-| Benchmark | What it measures |
-| --- | --- |
-| [`vehicle-routing`](benchmarks/vehicle-routing) | CVRPLIB Set X (100–1000 customers) against best-known solutions, with the OR-Tools Routing solver and Timefold Solver (open-source edition) run on the same instances, distances, budget and independent rescoring. Runs in CI on every push to `main` (`vrp-public-bench` workflow). |
+[`benchmarks/README.md`](benchmarks/README.md) lists every comparison. In
+short: every use case is compared with OR-Tools CP-SAT on the same instances
+and rescored by the use case's own evaluator; vehicle routing is compared with
+the OR-Tools Routing solver and Timefold Solver on CVRPLIB Set X, and school
+timetabling three ways (engine / CP-SAT / Timefold). Pickup & delivery,
+project-job scheduling, bin packing, quadratic assignment and assembly-line
+balancing also run on public instance sets (Li & Lim, Patterson, Hexaly BPP,
+QAPLIB, SALBP).
 
 ## Tests
 

@@ -1,0 +1,19 @@
+[project]
+name = "semiconductor-scheduling"
+version = "0.1.0"
+description = "Semiconductor fab scheduling metaheuristic use case"
+requires-python = ">=3.14,<4.0"
+dependencies = ["pydantic>=2.5"]
+[dependency-groups]
+dev = ["pytest", "ruff"]
+[tool.setuptools.packages.find]
+include = ["semiconductor_scheduling*"]
+[tool.ruff]
+line-length = 120
+[tool.ruff.lint]
+extend-select = ["I"]
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"

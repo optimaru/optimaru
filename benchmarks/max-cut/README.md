@@ -1,0 +1,17 @@
+# Max cut benchmark
+
+The [`max-cut`](../../use-cases/max-cut) use case against **OR-Tools CP-SAT**
+([`cpsat/`](cpsat), package `max_cut_cpsat`). The CP-SAT model implements the
+same constraints under the same names and units, so both answers are
+rescored by the use case's own evaluator; parity tests in `cpsat/tests`
+keep the two cost definitions identical.
+
+```sh
+cd benchmarks/max-cut/cpsat
+uv sync --all-groups --all-extras      # builds the engine extension too
+uv run pytest -q                       # CP-SAT model + parity tests
+uv run max-cut-compare --seconds 10 --workers 8   # engine vs CP-SAT table (--markdown, --json)
+```
+
+The engine runs single-threaded; CP-SAT gets `--workers` search workers and
+its time includes model construction.

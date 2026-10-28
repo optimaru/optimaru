@@ -1,0 +1,29 @@
+[project]
+name = "knapsack-cpsat"
+version = "0.1.0"
+description = "Exact CP-SAT backend for knapsack"
+requires-python = ">=3.14,<4.0"
+dependencies = ["cpsat-plugins>=0.1.0", "knapsack", "ortools>=9.10", "pydantic>=2.5"]
+
+[dependency-groups]
+dev = ["pytest", "ruff"]
+
+[project.scripts]
+knapsack-compare = "knapsack_cpsat.benchmark:main"
+
+[tool.uv.sources]
+cpsat-plugins = { path = "../../cpsat-common", editable = true }
+knapsack = { path = "../../../use-cases/knapsack/python", editable = true }
+
+[tool.setuptools.packages.find]
+include = ["knapsack_cpsat*"]
+
+[tool.ruff]
+line-length = 120
+[tool.ruff.lint]
+extend-select = ["I"]
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"

@@ -1,0 +1,22 @@
+[project]
+name = "conference-scheduling-cpsat"
+version = "0.1.0"
+description = "OR-Tools CP-SAT backend for conference scheduling."
+requires-python = ">=3.14,<4.0"
+dependencies = ["conference_scheduling[models]", "cpsat-plugins>=0.1.0", "ortools>=9.10", "pydantic>=2"]
+
+[project.scripts]
+conference-scheduling-compare = "conference_scheduling_cpsat.benchmark:main"
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[tool.setuptools]
+packages = ["conference_scheduling_cpsat"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.uv.sources]
+conference_scheduling = { path = "../../../use-cases/conference-scheduling/python", editable = true }
+cpsat-plugins = { path = "../../cpsat-common", editable = true }

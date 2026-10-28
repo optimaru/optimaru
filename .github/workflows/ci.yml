@@ -6,7 +6,7 @@ on:
   pull_request:
 
 jobs:
-  test:
+  engine:
     strategy:
       fail-fast: false
       matrix:
@@ -21,29 +21,140 @@ jobs:
       - name: Test
         run: ctest --test-dir build --output-on-failure
 
-  vehicle-routing-cpp:
+  use-case-cpp:
+    name: ${{ matrix.use_case }} (C++)
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        use_case:
+          - bed-allocation
+          - conference-scheduling
+          - facility-location
+          - flight-crew-scheduling
+          - food-packaging
+          - maintenance-scheduling
+          - meeting-scheduling
+          - order-picking
+          - pickup-delivery
+          - project-job-scheduling
+          - school-timetabling
+          - sports-league-scheduling
+          - task-assigning
+          - tournament-scheduling
+          - vehicle-routing
     steps:
       - uses: actions/checkout@v4
+      - uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: cpp-${{ matrix.use_case }}
       - name: Configure
-        run: cmake -S use-cases/vehicle-routing/cpp -B build-vrp -DCMAKE_BUILD_TYPE=Release
+        run: >-
+          cmake -S use-cases/${{ matrix.use_case }}/cpp -B build -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
       - name: Build
-        run: cmake --build build-vrp -j4
+        run: cmake --build build -j4
       - name: Test
-        run: ctest --test-dir build-vrp --output-on-failure
+        run: ctest --test-dir build --output-on-failure
 
-  vehicle-routing-python:
+  use-case-python:
+    name: ${{ matrix.use_case }} (Python)
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        use_case:
+          - assembly-line-balancing
+          - bed-allocation
+          - bin-packing
+          - conference-scheduling
+          - facility-location
+          - flight-crew-scheduling
+          - food-packaging
+          - knapsack
+          - maintenance-scheduling
+          - max-cut
+          - meeting-scheduling
+          - order-picking
+          - pickup-delivery
+          - project-job-scheduling
+          - quadratic-assignment
+          - school-timetabling
+          - semiconductor-scheduling
+          - sports-league-scheduling
+          - task-assigning
+          - tournament-scheduling
+          - vehicle-routing
     defaults:
       run:
-        working-directory: use-cases/vehicle-routing/python
+        working-directory: use-cases/${{ matrix.use_case }}/python
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
-      - name: Install
-        run: uv sync --python 3.14 --all-extras --all-groups
+        with:
+          enable-cache: true
+      - uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: py-${{ matrix.use_case }}
+      - name: Install (builds the C++ extension)
+        run: uv sync --python 3.14 --all-groups --all-extras
+        env:
+          CC: ccache cc
+          CXX: ccache c++
       - name: Test
-        run: uv run --python 3.14 pytest -q
+        run: uv run --python 3.14 --with pytest python -m pytest -q tests
+
+  benchmark-cpsat:
+    name: ${{ matrix.benchmark }} (CP-SAT benchmark)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        benchmark:
+          - cpsat-common
+          - assembly-line-balancing
+          - bed-allocation
+          - bin-packing
+          - conference-scheduling
+          - facility-location
+          - flight-crew-scheduling
+          - food-packaging
+          - knapsack
+          - maintenance-scheduling
+          - max-cut
+          - meeting-scheduling
+          - order-picking
+          - pickup-delivery
+          - project-job-scheduling
+          - quadratic-assignment
+          - school-timetabling
+          - semiconductor-scheduling
+          - sports-league-scheduling
+          - task-assigning
+          - tournament-scheduling
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: bench-${{ matrix.benchmark }}
+      - name: Locate the project
+        run: |
+          if [ -f benchmarks/${{ matrix.benchmark }}/cpsat/pyproject.toml ]; then
+            echo "PROJECT=benchmarks/${{ matrix.benchmark }}/cpsat" >> "$GITHUB_ENV"
+          else
+            echo "PROJECT=benchmarks/${{ matrix.benchmark }}" >> "$GITHUB_ENV"
+          fi
+      - name: Install (builds the engine extension)
+        run: uv sync --project "$PROJECT" --python 3.14 --all-groups --all-extras
+        env:
+          CC: ccache cc
+          CXX: ccache c++
+      - name: Test
+        working-directory: ${{ env.PROJECT }}
+        run: uv run --python 3.14 --with pytest python -m pytest -q tests
 
   vehicle-routing-benchmark:
     runs-on: ubuntu-latest

@@ -1,0 +1,31 @@
+[project]
+name = "tournament-scheduling-cpsat"
+version = "0.1.0"
+description = "OR-Tools CP-SAT backend for tournament scheduling."
+requires-python = ">=3.14,<4.0"
+dependencies = [
+    "cpsat-plugins",
+    "tournament_scheduling",
+    "ortools>=9.10",
+    "pydantic>=2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+tournament-scheduling-compare = "tournament_scheduling_cpsat.benchmark:main"
+
+[tool.uv.sources]
+tournament_scheduling = { path = "../../../use-cases/tournament-scheduling/python", editable = true }
+cpsat-plugins = { path = "../../cpsat-common", editable = true }
+
+[tool.setuptools]
+packages = ["tournament_scheduling_cpsat"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"

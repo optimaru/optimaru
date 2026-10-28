@@ -1,0 +1,22 @@
+[project]
+name = "meeting-scheduling-cpsat"
+version = "0.1.0"
+description = "OR-Tools CP-SAT backend for meeting scheduling."
+requires-python = ">=3.14,<4.0"
+dependencies = ["meeting_scheduling[models]", "cpsat-plugins>=0.1.0", "ortools>=9.10", "pydantic>=2"]
+
+[project.scripts]
+meeting-scheduling-compare = "meeting_scheduling_cpsat.benchmark:main"
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[tool.setuptools]
+packages = ["meeting_scheduling_cpsat"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.uv.sources]
+meeting_scheduling = { path = "../../../use-cases/meeting-scheduling/python", editable = true }
+cpsat-plugins = { path = "../../cpsat-common", editable = true }
