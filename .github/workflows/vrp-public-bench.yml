@@ -65,7 +65,7 @@ jobs:
           key: vrp-public-bench-${{ runner.os }}
 
       - name: Install the benchmark project (builds the pybind extension)
-        run: uv sync --python 3.12 --extra dev
+        run: uv sync --python 3.14 --extra dev
         env:
           CC: ccache cc
           CXX: ccache c++
@@ -89,7 +89,7 @@ jobs:
           case ",$(printf '%s' "$BACKENDS" | tr -d ' ')," in
             *,engine,*|*,all,*) fail_on_incomplete="--fail-on-incomplete" ;;
           esac
-          uv run --python 3.12 python -m vrp_benchmark \
+          uv run --python 3.14 python -m vrp_benchmark \
             --series x --limit-per-bucket "$LIMIT_PER_BUCKET" \
             --seconds "$SECONDS_BUDGET" --seed 0 \
             --backend "$BACKENDS" --catalog-source mirror --refresh-catalog \
