@@ -1,4 +1,9 @@
-from pickup_delivery_cpsat.public_benchmark import make_request, parse_instance
+from pickup_delivery_cpsat.public_benchmark import (
+    make_request,
+    parse_instance,
+    rescore,
+    synthetic_instance,
+)
 
 SAMPLE = """\
 2 10 1
@@ -23,3 +28,21 @@ def test_parse_and_scale_hexaly_pdptw() -> None:
     assert delivery.pickup.max_end_time == 22
     assert delivery.dropoff.max_end_time == 43
     assert pairs[0][0].delivery_id == pairs[0][1].id
+
+
+def test_synthetic_instance_is_seeded_and_servable_one_request_per_route() -> None:
+    instance = synthetic_instance(40, seed=3)
+    assert instance == synthetic_instance(40, seed=3)
+    assert instance != synthetic_instance(40, seed=4)
+    assert len(instance.requests) == 40
+    assert instance.vehicle_count == 14
+    # Every request fits a route of its own: the generator's feasibility promise.
+    for pickup, dropoff in instance.requests:
+        routes = {"V1": [_Stop(pickup.id), _Stop(dropoff.id)]}
+        used, distance = rescore(instance, ((pickup, dropoff),), routes)
+        assert used == 1 and distance > 0
+
+
+class _Stop:
+    def __init__(self, stop_id: int) -> None:
+        self.stop_id = str(stop_id)
