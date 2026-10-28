@@ -1,4 +1,4 @@
-"""pydantic 미러 직렬화/검증 테스트."""
+"""pydantic mirror serialization/validation tests."""
 
 import pytest
 from pydantic import ValidationError
@@ -26,7 +26,7 @@ def test_to_core_from_core_round_trip():
     assert len(core.tasks) == 28
     assert len(core.employees) == 8
     restored = TaskAssigningSolutionModel.from_core(core)
-    # 점수는 아직 계산되지 않았다 (0 초기값이 그대로 실린다); 구조 비교만.
+    # Scores are not computed yet (the initial 0 is carried as-is); compare structure only.
     assert [t.id for t in restored.tasks] == [t.id for t in model.tasks]
     assert [e.full_name for e in restored.employees] == [e.full_name for e in model.employees]
     assert restored.employees[0].customer_to_affinity == model.employees[0].customer_to_affinity
@@ -54,7 +54,7 @@ def test_unknown_customer_rejected():
 
 
 def test_duplicate_assignment_rejected():
-    with pytest.raises(ValidationError, match="두 직원 이상"):
+    with pytest.raises(ValidationError, match="more than one employee"):
         TaskAssigningSolutionModel(
             **_tiny_kwargs(
                 employees=[
@@ -81,9 +81,9 @@ def test_core_validates_task_lists():
     model = generate_demo_data()
     core = model.to_core()
     with pytest.raises(ValueError):
-        core.set_task_lists([[0]] * len(core.employees))  # 중복 배정
+        core.set_task_lists([[0]] * len(core.employees))  # duplicate assignment
     with pytest.raises(ValueError):
-        core.set_task_lists([[0]])  # 직원 수 불일치
+        core.set_task_lists([[0]])  # employee count mismatch
     lists = core.task_lists()
     lists[0] = [0, 1]
     core.set_task_lists(lists)

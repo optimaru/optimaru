@@ -161,12 +161,11 @@ def solve_request(
         objective,
     )
 
-    objective.minimize()
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = request.timelimit
     solver.parameters.random_seed = request.random_seed
     solver.parameters.num_search_workers = request.num_workers
-    status = solver.solve(model)
+    status = objective.solve(solver)
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         raise RuntimeError(
             f"CP-SAT did not find a solution (status={solver.status_name(status)})"

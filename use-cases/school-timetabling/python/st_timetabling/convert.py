@@ -1,36 +1,42 @@
-"""canonical `TimetableProblem` JSON(dict) <-> st::canon 도메인 변환 (풀-패리티).
+"""Canonical `TimetableProblem` JSON (dict) <-> st::canon domain conversion (full parity).
 
-API_SPEC.md 의 canonical 문제 JSON 을 캐노니컬 C++ 도메인(`_core.canon`)으로
-옮긴다. st::canon 은 CP-SAT 레퍼런스 패키지(benchmarks/school-timetabling/cpsat 의
-teacher_scheduling)의 하드 H1~H10 / 소프트 S1~S6 을 validate.py 의미론
-그대로 구현하므로, 이 변환을 거치면 엔진 백엔드도 canonical 제약 전부를
-그대로 반영한다 — quickstart 근사 변환은 `st_timetabling.quickstart` 로 옮겼다.
+Moves the canonical problem JSON of API_SPEC.md into the canonical C++
+domain (`_core.canon`). st::canon implements hard H1–H10 / soft S1–S6 of the
+CP-SAT reference package (teacher_scheduling in benchmarks/school-timetabling/cpsat)
+with validate.py's semantics, so through this conversion the engine backend
+honours every canonical constraint as well — the approximate quickstart
+conversion lives in `st_timetabling.quickstart`.
 
-변환 규칙
----------
-- 점유 단위(occupancy group): `parallel_group` 이 같은 강좌들은 하나의 병합
-  그룹, 나머지는 강좌 하나가 그룹 하나. 그룹은 주당 시수만큼의 엔진 Lesson
-  ("{키}#k")이 되고, 교사는 멤버 강좌 teacher_ids 의 이어붙임(중복 유지 —
-  같은 교사가 두 분반을 동시에 맡는 모순을 하드로 드러낸다), 특별실 수요는
-  멤버 합, 학급 점유는 1이다 (cpsat 의 Course.occupancy_key 와 동일). H5
-  (분반 동시 진행)는 병합 자체로 성립한다.
-- S5/S6(과목 기피/선호 교시)은 Lesson.preference_units 로 멤버 강좌마다
-  1단위씩 계수되어 validate.py 의 per-lesson 카운트와 정확히 일치한다.
-- `fixed_slots` -> pinned Lesson (H2: 엔진이 아예 움직이지 않는다).
-- `forbidden_slots` + 학급/교사 `unavailable` -> per-lesson allowed_slot
-  테이블 (H5 하드).
-- `block_periods` >= 2 -> 그룹의 마지막 block_periods 개 Lesson 에 blockGroup
-  부여 (H8: 같은 요일 연속 교시).
-- `required_room_type` -> roomTypeDemand + roomCapacityByType (H6 하드).
-  구체적인 방 배정은 cpsat 처럼 사후 그리디(convert_solution)로 정한다 —
-  H6 이 하드라 hard 0 해에서는 항상 성공한다.
-- 교사별 시수 상한(max_periods_per_week/day, max_consecutive_periods)과
-  preferred_free_days, 강좌 일일 상한(max_periods_per_day)도 전부 전달된다.
+Conversion rules
+----------------
+- Occupancy group: courses sharing a `parallel_group` form one merged group;
+  every other course is a group of its own. A group becomes as many engine
+  Lessons ("{key}#k") as its weekly periods; its teachers are the concatenated
+  teacher_ids of the member courses (duplicates kept — a teacher taking two
+  parallel sections at once then shows up as a hard clash), its special-room
+  demand is the members' sum and its class occupancy is 1 (same as cpsat's
+  Course.occupancy_key). H5 (parallel sections run together) holds by the
+  merge itself.
+- S5/S6 (avoided/preferred periods per subject) count one unit per member
+  course through Lesson.preference_units, matching validate.py's per-lesson
+  counts exactly.
+- `fixed_slots` -> pinned Lesson (H2: the engine never moves it).
+- `forbidden_slots` + class/teacher `unavailable` -> per-lesson allowed_slot
+  table (H5, hard).
+- `block_periods` >= 2 -> blockGroup on the group's last block_periods Lessons
+  (H8: consecutive periods on one day).
+- `required_room_type` -> roomTypeDemand + roomCapacityByType (H6, hard).
+  Concrete rooms are chosen afterwards by a greedy pass (convert_solution), as
+  in cpsat — H6 being hard, it always succeeds on a hard-0 solution.
+- Per-teacher caps (max_periods_per_week/day, max_consecutive_periods),
+  preferred_free_days and the per-course daily cap (max_periods_per_day) are
+  all passed through.
 
-입력 오류(없는 과목/학급/교사/특별실, 모순된 고정 시간 등)는 ValueError 로
-올린다 — canonical pydantic 검증(HTTP 422)과 같은 계층의 실패다. 분반 그룹이
-서로 다른 학급에 걸치는 입력만은 병합 표현이 불가능해 역시 ValueError 다
-(분반의 정의상 한 학급을 나누는 것이므로 정상 입력에서는 나오지 않는다).
+Input errors (unknown subject/class/teacher/special room, contradictory fixed
+times, ...) raise ValueError — the same layer of failure as the canonical
+pydantic validation (HTTP 422). A parallel group spanning different classes
+cannot be expressed as a merge and also raises ValueError (by definition a
+parallel group splits one class, so valid input never has one).
 """
 
 from dataclasses import dataclass, field
@@ -48,20 +54,20 @@ __all__ = [
 
 @dataclass
 class OccupancyGroup:
-    """엔진 Lesson 들로 펼쳐진 점유 단위 하나 (분반 그룹 또는 단독 강좌)."""
+    """One occupancy group spread over engine Lessons (a parallel group or a single course)."""
 
-    key: str  # parallel_group 이름 또는 강좌 id
-    course_ids: list[str]  # 멤버 강좌 (분반이 아니면 1개)
+    key: str  # parallel_group name or course id
+    course_ids: list[str]  # member courses (one unless it is a parallel group)
     class_group_id: str
     periods_per_week: int
-    block_periods: int  # 0/1 = 연강 없음
-    fixed: list[tuple[int, int]]  # 정렬된 고정 (day, period); 앞쪽 Lesson 부터 pinned
-    lesson_indices: list[int]  # 엔진 lesson index ("#1" 부터 순서대로)
+    block_periods: int  # 0/1 = no block
+    fixed: list[tuple[int, int]]  # sorted fixed (day, period); pinned from the first Lesson on
+    lesson_indices: list[int]  # engine lesson indices (from "#1" in order)
 
 
 @dataclass
 class ConvertedProblem:
-    """convert_problem 의 결과: 엔진 solution + 역변환에 필요한 메타데이터."""
+    """Result of convert_problem: the engine solution + the metadata the reverse conversion needs."""
 
     table: "canon.Timetable"
     timeslots: list[tuple[int, int]]  # slot index -> (day, period)
@@ -69,7 +75,7 @@ class ConvertedProblem:
     groups: list[OccupancyGroup]
     courses_by_id: dict[str, dict]
     subjects_by_id: dict[str, dict]
-    room_ids_by_type: dict[str, list[str]]  # room_type -> canonical room id 목록
+    room_ids_by_type: dict[str, list[str]]  # room_type -> canonical room ids
     notes: list[str] = field(default_factory=list)
 
 
@@ -78,7 +84,7 @@ def _slot_key(slot: dict) -> tuple[int, int]:
 
 
 def _period_mask(periods) -> int:
-    """1-base 교시 목록 -> 16비트 마스크 (범위 밖 교시는 캘린더상 불가능하므로 무시)."""
+    """1-based periods -> 16-bit mask (periods outside the calendar are impossible and ignored)."""
     mask = 0
     for period in periods or ():
         if 1 <= int(period) <= 16:
@@ -87,12 +93,12 @@ def _period_mask(periods) -> int:
 
 
 def convert_problem(problem: dict) -> ConvertedProblem:
-    """canonical TimetableProblem dict 를 st::canon Timetable 로 변환한다."""
-    # --- timeslots: 요일별 교시 수 -> (day, period) 그리드 ---
+    """Converts a canonical TimetableProblem dict into an st::canon Timetable."""
+    # --- timeslots: periods per weekday -> (day, period) grid ---
     periods_per_day = {int(day): int(count) for day, count in problem["calendar"]["periods_per_day"].items()}
     if max(periods_per_day.values()) > 16 or max(periods_per_day) > 7:
-        # st::canon 은 교시<=16, 요일<8 비트마스크 설계다 (prepare 가 거부한다).
-        raise ValueError("캘린더가 엔진 한계를 넘는다 (교시 <= 16, 요일 index < 8)")
+        # st::canon is designed around bitmasks of periods <= 16, weekdays < 8 (prepare rejects more).
+        raise ValueError("the calendar exceeds the engine limits (periods <= 16, weekday index < 8)")
     timeslots = [(day, period) for day in sorted(periods_per_day) for period in range(1, periods_per_day[day] + 1)]
     slot_index = {slot: i for i, slot in enumerate(timeslots)}
 
@@ -107,20 +113,20 @@ def convert_problem(problem: dict) -> ConvertedProblem:
     def required_room_type(course: dict) -> str | None:
         subject = subjects_by_id.get(course["subject_id"])
         if subject is None:
-            raise ValueError(f"[{course['id']}] 존재하지 않는 과목: {course['subject_id']}")
+            raise ValueError(f"[{course['id']}] unknown subject: {course['subject_id']}")
         return subject.get("required_room_type")
 
-    # --- 특별실 타입 -> dense index, 보유 수 (H6) ---
+    # --- special-room types -> dense index, room counts (H6) ---
     needed_types = sorted({rt for c in courses if (rt := required_room_type(c)) is not None})
     room_ids_by_type: dict[str, list[str]] = {}
     for room in problem.get("rooms", []):
         room_ids_by_type.setdefault(room["room_type"], []).append(room["id"])
     for room_type in needed_types:
         if not room_ids_by_type.get(room_type):
-            raise ValueError(f"필요한 특별실이 없습니다: {room_type}")
+            raise ValueError(f"no room of the required type: {room_type}")
     room_type_index = {room_type: i for i, room_type in enumerate(needed_types)}
 
-    # --- 교사 배정 불가 시간 + 시수 상한 (H4 확장 / H9 / H10 / S3) ---
+    # --- teacher unavailability + period caps (H4 extension / H9 / H10 / S3) ---
     teacher_blocked: list[set[int]] = []
     max_per_day: list[int] = []
     max_per_week: list[int] = []
@@ -141,14 +147,14 @@ def convert_problem(problem: dict) -> ConvertedProblem:
         for cg in class_groups
     ]
 
-    # --- 점유 단위: parallel_group 병합, 나머지는 강좌 1개 = 그룹 1개 ---
+    # --- occupancy groups: merge parallel_group, every other course is a group of one ---
     members_by_key: dict[str, list[dict]] = {}
     for course in courses:
         if course["class_group_id"] not in class_index:
-            raise ValueError(f"[{course['id']}] 존재하지 않는 학급: {course['class_group_id']}")
+            raise ValueError(f"[{course['id']}] unknown class: {course['class_group_id']}")
         for teacher_id in course["teacher_ids"]:
             if teacher_id not in teacher_index:
-                raise ValueError(f"[{course['id']}] 존재하지 않는 교사: {teacher_id}")
+                raise ValueError(f"[{course['id']}] unknown teacher: {teacher_id}")
         key = course.get("parallel_group") or course["id"]
         members_by_key.setdefault(key, []).append(course)
 
@@ -158,28 +164,28 @@ def convert_problem(problem: dict) -> ConvertedProblem:
     block_group_count = 0
     for group_key, members in members_by_key.items():
         if len({c["class_group_id"] for c in members}) > 1:
-            raise ValueError(f"분반 그룹 {group_key} 의 학급이 서로 다릅니다 (분반은 한 학급을 나눈다)")
+            raise ValueError(f"parallel group {group_key} spans different classes (a parallel group splits one class)")
         if len({int(c["periods_per_week"]) for c in members}) > 1:
-            raise ValueError(f"분반 그룹 {group_key} 의 주당 시수가 서로 다릅니다")
+            raise ValueError(f"parallel group {group_key} has differing weekly periods")
         if len({int(c.get("block_periods", 0)) for c in members}) > 1:
-            raise ValueError(f"분반 그룹 {group_key} 의 블록 시수가 서로 다릅니다")
+            raise ValueError(f"parallel group {group_key} has differing block periods")
 
         class_id = members[0]["class_group_id"]
         ppw = int(members[0]["periods_per_week"])
         block = int(members[0].get("block_periods", 0))
 
-        # 교사: 멤버 teacher_ids 이어붙임 (중복 유지 — 위 docstring 참고).
+        # Teachers: concatenated member teacher_ids (duplicates kept — see the docstring above).
         group_teachers = [teacher_index[t] for c in members for t in c["teacher_ids"]]
 
-        # 특별실 수요: 멤버 합 (H6).
+        # Special-room demand: the members' sum (H6).
         demand = [0] * len(needed_types)
         for course in members:
             room_type = required_room_type(course)
             if room_type is not None:
                 demand[room_type_index[room_type]] += 1
 
-        # allowed_slot: 금지/불가 시간의 합집합을 걷어낸다 (H5). cpsat 의
-        # _course_allowed_slots + 분반 교집합과 동일.
+        # allowed_slot: removes the union of forbidden/unavailable times (H5). Same as
+        # cpsat's _course_allowed_slots + the intersection over parallel sections.
         blocked: set[int] = set(class_blocked[class_index[class_id]])
         for course in members:
             blocked.update(
@@ -189,22 +195,22 @@ def convert_problem(problem: dict) -> ConvertedProblem:
                 blocked.update(teacher_blocked[teacher_index[teacher_id]])
         allowed = [i not in blocked for i in range(len(timeslots))]
 
-        # fixed_slots: 멤버 합집합, (day, period) 정렬 -> 앞쪽 Lesson 부터 pinned.
+        # fixed_slots: union over members, sorted by (day, period) -> pinned from the first Lesson on.
         fixed = sorted({_slot_key(s) for c in members for s in c.get("fixed_slots", [])})
         for slot in fixed:
             if slot not in slot_index:
-                raise ValueError(f"[{group_key}] 캘린더에 없는 fixed_slot: {slot}")
+                raise ValueError(f"[{group_key}] fixed_slot not in the calendar: {slot}")
             if not allowed[slot_index[slot]]:
-                # cpsat _add_fixed_slots 와 같은 실패: 고정 시간이 금지/불가와 모순.
-                raise ValueError(f"[{group_key}] 고정 시간 {slot} 이 금지/불가 시간과 충돌합니다")
+                # Same failure as cpsat _add_fixed_slots: a fixed time contradicts a forbidden/unavailable one.
+                raise ValueError(f"[{group_key}] fixed time {slot} clashes with a forbidden/unavailable time")
         if len(fixed) > ppw:
-            raise ValueError(f"분반 그룹 {group_key} 의 고정 시간이 주당 시수보다 많습니다")
+            raise ValueError(f"group {group_key} has more fixed times than weekly periods")
 
-        # H7: 멤버별 유효 일일 상한(max(개별 상한, 블록 크기))의 최소값. 병합
-        # 그룹은 하루 배치 수가 멤버 모두에게 동일하므로 최소값이 곧 전체 조건.
+        # H7: minimum over members of the effective daily cap (max(own cap, block size)). A
+        # merged group places the same count per day for every member, so the minimum is the whole condition.
         daily_limits.append(min(max(int(c.get("max_periods_per_day", 1)), block) for c in members))
 
-        # S5/S6: 멤버 과목마다 (기피, 선호) 마스크 1단위.
+        # S5/S6: one (avoided, preferred) mask unit per member subject.
         units = []
         for course in members:
             subject = subjects_by_id[course["subject_id"]]
@@ -267,36 +273,37 @@ def convert_problem(problem: dict) -> ConvertedProblem:
 
 
 def inject_solution(converted: ConvertedProblem, lessons: list[dict]) -> None:
-    """외부 백엔드(cpsat 등)가 만든 canonical 배정을 엔진 lesson 슬롯에 주입한다.
+    """Injects a canonical assignment produced by an external backend (cpsat, ...) into the engine lesson slots.
 
-    ``lessons`` 는 canonical `Timetable.lessons` 형태의 dict 목록(course_id +
-    slot). 그룹의 슬롯 집합은 첫 멤버 강좌에서 읽는다 (유효한 해에서는 분반
-    멤버 전원이 같은 슬롯이다 — H5). pinned Lesson 은 자기 고정 슬롯을,
-    blockGroup Lesson 들은 한 요일의 연속 창(입력 해가 유효하면 H8 보장상
-    반드시 존재)을 받고, 나머지는 (day, period) 정렬 순으로 배정된다. 패리티
-    검증(엔진 breakdown vs cpsat validate)과 warm start 양쪽에 쓴다.
+    ``lessons`` is a list of dicts shaped like canonical `Timetable.lessons`
+    (course_id + slot). A group's slot set is read from its first member course
+    (in a valid solution every parallel section shares the slots — H5). Pinned
+    Lessons get their own fixed slot, blockGroup Lessons a consecutive window on
+    one day (guaranteed to exist by H8 when the input solution is valid), and
+    the rest are assigned in (day, period) order. Used both for the parity
+    check (engine breakdown vs cpsat validate) and for warm starts.
     """
     slot_index = converted.slot_index
     by_course: dict[str, list[int]] = {}
     for lesson in lessons:
         key = _slot_key(lesson["slot"])
         if key not in slot_index:
-            raise ValueError(f"[{lesson['course_id']}] 캘린더에 없는 슬롯: {key}")
+            raise ValueError(f"[{lesson['course_id']}] slot not in the calendar: {key}")
         by_course.setdefault(lesson["course_id"], []).append(slot_index[key])
 
-    assignment = converted.table.assignment()  # pinned 슬롯이 이미 들어 있다
+    assignment = converted.table.assignment()  # already holds the pinned slots
     for group in converted.groups:
         pool = sorted(by_course.get(group.course_ids[0], []))
         n = len(group.lesson_indices)
-        placed: dict[int, int] = {}  # 그룹 내 위치 -> slot
+        placed: dict[int, int] = {}  # position within the group -> slot
 
-        # 1) pinned (#1..#f): 자기 고정 슬롯 그대로.
+        # 1) pinned (#1..#f): their own fixed slot.
         for k, slot in enumerate(group.fixed):
             placed[k] = slot_index[slot]
             if placed[k] in pool:
                 pool.remove(placed[k])
 
-        # 2) blockGroup (마지막 block_periods 개): 한 요일의 연속 창.
+        # 2) blockGroup (the last block_periods): a consecutive window on one day.
         block = group.block_periods if group.block_periods >= 2 else 0
         block_positions = [k for k in range(n) if block and k >= n - block]
         unpinned_block = [k for k in block_positions if k not in placed]
@@ -308,9 +315,9 @@ def inject_solution(converted: ConvertedProblem, lessons: list[dict]) -> None:
                 for k, slot in zip(unpinned_block, free_window):
                     placed[k] = slot
                     pool.remove(slot)
-            # 창을 못 찾으면(입력 해가 이미 H8 위반) 아래 잔여 배정으로 넘긴다.
+            # No window (the input already violates H8): leave it to the remaining assignment below.
 
-        # 3) 나머지: 정렬 순. 슬롯이 모자라면(시수 미달 해) 미배정(-1)이 된다.
+        # 3) the rest: in sorted order. Missing slots (an under-filled solution) stay unassigned (-1).
         rest = [k for k in range(n) if k not in placed]
         for k, slot in zip(rest, pool):
             placed[k] = slot
@@ -323,8 +330,8 @@ def inject_solution(converted: ConvertedProblem, lessons: list[dict]) -> None:
 def _find_block_window(
     converted: ConvertedProblem, pool: list[int], pinned_slots: set[int], size: int
 ) -> list[int] | None:
-    """pool ∪ pinned_slots 안에서 pinned_slots 를 전부 포함하는, 한 요일의
-    연속 교시 창(slot index 목록, 크기 size)을 찾는다."""
+    """Finds a window of consecutive periods on one day (slot indices, of the
+    given size) inside pool ∪ pinned_slots that contains every pinned slot."""
     candidates = set(pool) | pinned_slots
     by_day: dict[int, dict[int, int]] = {}
     for slot in candidates:
@@ -347,41 +354,44 @@ def convert_solution(
     wall_time_seconds: float = 0.0,
     unassigned_weight: float | None = None,
 ) -> dict:
-    """엔진 배정(`converted.table` 의 slot 들)을 canonical Timetable JSON(dict)
-    으로 되돌린다. 병합 그룹은 멤버 강좌별 canonical lesson 으로 다시 풀리고
-    teacher_ids 는 원본 강좌의 전체 튜플이 복원된다.
+    """Turns the engine assignment (the slots of `converted.table`) back into a
+    canonical Timetable JSON (dict). Merged groups unfold into one canonical
+    lesson per member course, and teacher_ids get each source course's full
+    tuple back.
 
-    특별실 배정: cpsat 의 rooms.assign_rooms 와 같은 사후 그리디 — (타입,
-    시간)별로 같은 강좌가 쓰던 방을 우선 유지하고 나머지는 빈 방 순서대로.
-    H6 이 하드 제약이라 hard 0 해에서는 항상 성공하며, hard 위반이 남은 해
-    (UNKNOWN)에서만 room_id=null + notes 로 보고될 수 있다.
+    Special rooms: the same greedy pass as cpsat's rooms.assign_rooms — per
+    (type, time) keep the room a course used before, otherwise take free rooms
+    in order. H6 being hard, it always succeeds on a hard-0 solution; only a
+    solution with hard violations left (UNKNOWN) can report room_id=null plus a
+    note.
 
-    penalties 는 엔진 breakdown 의 S1~S6 원시 카운트(validate.py
-    compute_penalties 와 동일 의미), objective_value 는 table.weights 를 적용한
-    가중 벌점 합이다 — cpsat 백엔드와 같은 단위.
+    penalties are the engine breakdown's raw S1–S6 counts (same meaning as
+    validate.py's compute_penalties); objective_value is the weighted penalty
+    sum under table.weights — the same unit as the cpsat backend.
 
-    ``unassigned_weight`` 는 H1 을 soft 로 내린 조립(= 부분 편성)에서만 준다:
-    미배정이 **탐색 실패가 아니라 결과**가 되므로 하드 합계에서 빠지고
-    (status 는 나머지 하드로만 정해진다), 못 채운 시수는 cpsat 과 같은 이름
-    (`weekly_period_counts`)으로 penalties 에 실리며 objective_value 에
-    `unassigned_weight` 배로 더해진다 — cpsat 의 완화 모드와 같은 단위다."""
+    ``unassigned_weight`` is passed only by an assembly that demotes H1 to soft
+    (partial timetabling): unassigned periods are then **a result, not a search
+    failure**, so they leave the hard total (status is decided by the other hard
+    constraints only), the unfilled periods appear in penalties under the same
+    name as cpsat (`weekly_period_counts`), and they add `unassigned_weight`
+    times to objective_value — the same unit as cpsat's relaxed mode."""
     table = converted.table
     breakdown = canon.compute_breakdown(table)
     partial = unassigned_weight is not None
-    # 부분 편성에서는 H1 이 하드가 아니다: 미배정은 모델이 고른 결과라 status
-    # 를 UNKNOWN 으로 만들면 안 된다 (cpsat 완화 모드는 OPTIMAL/FEASIBLE 이다).
+    # In partial timetabling H1 is not hard: unassigned lessons are the model's
+    # choice and must not make the status UNKNOWN (cpsat's relaxed mode reports OPTIMAL/FEASIBLE).
     hard_total = breakdown.hard_total() - (breakdown.unassigned if partial else 0)
     notes: list[str] = list(converted.notes)
     assignment = table.assignment()
 
     lessons_out: list[dict] = []
-    special: dict[tuple[str, int], list[int]] = {}  # (room_type, slot) -> 출력 인덱스
+    special: dict[tuple[str, int], list[int]] = {}  # (room_type, slot) -> output indices
     for group in converted.groups:
         for lesson_index in group.lesson_indices:
             slot = assignment[lesson_index]
             if slot < 0:
                 if not partial:
-                    notes.append(f"{group.key}: 미배정 수업이 남았다 (탐색 실패)")
+                    notes.append(f"{group.key}: unassigned lessons left (search failure)")
                 continue
             day, period = converted.timeslots[slot]
             for course_id in group.course_ids:
@@ -400,18 +410,18 @@ def convert_solution(
                     }
                 )
 
-    # 특별실 사후 배정 (cpsat rooms.assign_rooms 의 그리디와 동일한 규칙).
-    preferred: dict[str, str] = {}  # 강좌가 마지막으로 쓴 방
+    # Special rooms afterwards (same greedy rule as cpsat rooms.assign_rooms).
+    preferred: dict[str, str] = {}  # the room a course used last
     for (room_type, slot), indices in sorted(special.items(), key=lambda kv: (kv[0][0], kv[0][1])):
         remaining = sorted(indices, key=lambda i: lessons_out[i]["course_id"])
         free = list(converted.room_ids_by_type[room_type])
-        for index in list(remaining):  # 1차: 전에 쓰던 방이 비어 있으면 유지
+        for index in list(remaining):  # pass 1: keep the previous room when it is free
             room_id = preferred.get(lessons_out[index]["course_id"])
             if room_id in free:
                 free.remove(room_id)
                 remaining.remove(index)
                 lessons_out[index]["room_id"] = room_id
-        for index in remaining:  # 2차: 빈 방 순서대로; H6 하드 위반 해에서만 모자란다
+        for index in remaining:  # pass 2: free rooms in order; short only on a solution violating H6
             if free:
                 room_id = free.pop(0)
                 preferred[lessons_out[index]["course_id"]] = room_id
@@ -419,23 +429,23 @@ def convert_solution(
             else:
                 day, period = converted.timeslots[slot]
                 notes.append(
-                    f"{lessons_out[index]['course_id']}: 특별실({room_type}) 배정 실패 "
-                    f"(day {day} period {period}) — hard 위반이 남은 해"
+                    f"{lessons_out[index]['course_id']}: no special room ({room_type}) "
+                    f"(day {day} period {period}) — the solution still has hard violations"
                 )
 
-    # local search 는 최적성/비가능성을 증명하지 못한다: hard 0 이면 FEASIBLE,
-    # 아니면 UNKNOWN (배정은 그대로 내려 주고 notes 로 설명).
+    # Local search proves neither optimality nor infeasibility: hard 0 is FEASIBLE,
+    # anything else UNKNOWN (the assignment is still returned, explained in notes).
     feasible = hard_total == 0
     if not feasible:
-        notes.append(f"hard 위반이 남았다: {hard_total}")
+        notes.append(f"hard violations left: {hard_total}")
     penalties = {name: int(count) for name, count in breakdown.penalties().items()}
     objective = float(breakdown.soft_penalty(table.weights))
     if unassigned_weight is not None:
-        # cpsat 완화 모드와 같은 이름·같은 단위: 못 채운 시수 자체가 벌점 항이다.
+        # Same name and unit as cpsat's relaxed mode: the unfilled periods are the penalty term.
         penalties["weekly_period_counts"] = int(breakdown.unassigned)
         objective += unassigned_weight * breakdown.unassigned
         if breakdown.unassigned:
-            notes.append(f"미배정 {breakdown.unassigned} 시수 (H1 완화 — 나머지는 배정한 부분해다)")
+            notes.append(f"{breakdown.unassigned} periods unassigned (H1 relaxed — the rest is a partial solution)")
     return {
         "status": "FEASIBLE" if feasible else "UNKNOWN",
         "lessons": lessons_out,

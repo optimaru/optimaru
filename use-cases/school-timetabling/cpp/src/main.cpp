@@ -32,16 +32,16 @@ struct SubjectHours
 
 // Weekly hours per class; sums to 35 == DAYS * PERIODS_PER_DAY.
 const std::vector<SubjectHours> CURRICULUM = {
-    {"국어", 5},
-    {"수학", 5},
-    {"영어", 4},
-    {"과학", 4},
-    {"사회", 4},
-    {"체육", 3},
-    {"음악", 3},
-    {"미술", 3},
-    {"도덕", 2},
-    {"역사", 2},
+    {"Korean", 5},
+    {"Math", 5},
+    {"English", 4},
+    {"Science", 4},
+    {"Social", 4},
+    {"PE", 3},
+    {"Music", 3},
+    {"Art", 3},
+    {"Ethics", 2},
+    {"History", 2},
 };
 
 const std::vector<std::string> GROUPS
@@ -52,23 +52,23 @@ const std::vector<std::string> GROUPS
 std::string teacherFor(const std::string &subject, const std::string &group)
 {
     const bool firstHalf = (group == "1-1" || group == "1-2" || group == "2-1");
-    if (subject == "국어")
-        return firstHalf ? "김국어" : "이국어";
-    if (subject == "수학")
-        return firstHalf ? "박수학" : "최수학";
-    if (subject == "영어")
-        return firstHalf ? "정영어" : "강영어";
-    if (subject == "과학")
-        return firstHalf ? "조과학" : "윤과학";
-    if (subject == "사회")
-        return "장사회";
-    if (subject == "체육")
-        return "임체육";
-    if (subject == "음악")
-        return "한음악";
-    if (subject == "미술")
-        return "오미술";
-    return "서인문";  // 도덕 + 역사
+    if (subject == "Korean")
+        return firstHalf ? "Kim (Korean)" : "Lee (Korean)";
+    if (subject == "Math")
+        return firstHalf ? "Park (Math)" : "Choi (Math)";
+    if (subject == "English")
+        return firstHalf ? "Jung (English)" : "Kang (English)";
+    if (subject == "Science")
+        return firstHalf ? "Cho (Science)" : "Yoon (Science)";
+    if (subject == "Social")
+        return "Jang (Social)";
+    if (subject == "PE")
+        return "Lim (PE)";
+    if (subject == "Music")
+        return "Han (Music)";
+    if (subject == "Art")
+        return "Oh (Art)";
+    return "Seo (Humanities)";  // Ethics + History
 }
 
 Timetable buildDemoSchool()
@@ -80,10 +80,10 @@ Timetable buildDemoSchool()
             t.timeslots.push_back({d, p});
     }
     for (const std::string &group : GROUPS)
-        t.rooms.push_back({group + "교실", "일반"});
-    t.rooms.push_back({"과학실", "과학실"});  // room index 6
-    t.rooms.push_back({"체육관", "체육관"});  // room index 7
-    t.rooms.push_back({"음악실", "음악실"});  // room index 8
+        t.rooms.push_back({group + " room", "regular"});
+    t.rooms.push_back({"Science lab", "science"});  // room index 6
+    t.rooms.push_back({"Gym", "gym"});              // room index 7
+    t.rooms.push_back({"Music room", "music"});     // room index 8
 
     for (const std::string &group : GROUPS)
     {
@@ -102,17 +102,17 @@ Timetable buildDemoSchool()
     }
 
     // A few teacher unavailabilities (hard 4).
-    t.teacherUnavailable["김국어"]
-        = {slotOf(0, 1), slotOf(0, 2)};  // Mon 1-2교시
-    t.teacherUnavailable["임체육"]
-        = {slotOf(4, 6), slotOf(4, 7)};               // Fri 6-7교시
-    t.teacherUnavailable["장사회"] = {slotOf(2, 1)};  // Wed 1교시
+    t.teacherUnavailable["Kim (Korean)"]
+        = {slotOf(0, 1), slotOf(0, 2)};  // Mon periods 1-2
+    t.teacherUnavailable["Lim (PE)"]
+        = {slotOf(4, 6), slotOf(4, 7)};                   // Fri periods 6-7
+    t.teacherUnavailable["Jang (Social)"] = {slotOf(2, 1)};  // Wed period 1
 
     // Pin 1-1's first PE lesson to Wednesday period 5 in the gym: the solver
     // must schedule everything else around it.
     for (Lesson &lesson : t.lessons)
     {
-        if (lesson.id == "1-1-체육-1")
+        if (lesson.id == "1-1-PE-1")
         {
             lesson.slotRoom = t.slotRoomOf(slotOf(2, 5), /*gym*/ 7);
             lesson.pinned = true;
@@ -126,7 +126,7 @@ Timetable buildDemoSchool()
 // room/teacher listing for class 1-1, and the per-teacher load summary.
 // -------------------------------------------------------------------------
 
-const char *DAY_NAMES[DAYS] = {"월", "화", "수", "목", "금"};
+const char *DAY_NAMES[DAYS] = {"Mon", "Tue", "Wed", "Thu", "Fri"};
 
 void printTimetable(const Timetable &t)
 {
@@ -149,11 +149,11 @@ void printTimetable(const Timetable &t)
 
     for (std::size_t g = 0; g < GROUPS.size(); ++g)
     {
-        std::printf("  [%s]      월    화    수    목    금\n",
+        std::printf("  [%s]      Mon   Tue   Wed   Thu   Fri\n",
                     GROUPS[g].c_str());
         for (int p = 1; p <= PERIODS_PER_DAY; ++p)
         {
-            std::printf("    %d교시", p);
+            std::printf("    P%d    ", p);
             for (int d = 0; d < DAYS; ++d)
             {
                 const std::vector<int> &lessons = cell[g][slotOf(d, p)];
@@ -173,7 +173,7 @@ void printTimetable(const Timetable &t)
         std::printf("\n");
     }
 
-    std::printf("  [1-1 상세: 교시  과목  교사  교실]\n");
+    std::printf("  [1-1 detail: period  subject  teacher  room]\n");
     for (int d = 0; d < DAYS; ++d)
     {
         for (int p = 1; p <= PERIODS_PER_DAY; ++p)
@@ -182,13 +182,13 @@ void printTimetable(const Timetable &t)
             {
                 const Lesson &lesson = t.lessons[i];
                 std::printf(
-                    "    %s %d교시  %s  %s  %s%s\n",
+                    "    %s P%d  %s  %s  %s%s\n",
                     DAY_NAMES[d],
                     p,
                     lesson.subject.c_str(),
                     lesson.teacher.c_str(),
                     t.rooms[t.roomIndexOf(lesson.slotRoom)].name.c_str(),
-                    lesson.pinned ? "  (고정)" : "");
+                    lesson.pinned ? "  (pinned)" : "");
             }
         }
     }
@@ -215,7 +215,7 @@ void printTeacherLoads(const Timetable &t)
         if (lesson.slotRoom >= 0)
             ++loads[i];
     }
-    std::printf("  교사 주당 시수:");
+    std::printf("  Teacher hours per week:");
     for (std::size_t i = 0; i < names.size(); ++i)
     {
         std::printf(" %s=%d", names[i].c_str(), loads[i]);
@@ -230,8 +230,8 @@ int main(int argc, char **argv)
     const int seconds = (argc > 1) ? std::atoi(argv[1]) : 10;
 
     Timetable table = buildDemoSchool();
-    std::printf("== 데모 학교 시간표 (%d일 x %d교시, 학급 %zu개, 수업 %zu개, "
-                "교실 %zu개, %d초) ==\n",
+    std::printf("== Demo school timetable (%d days x %d periods, %zu classes, %zu "
+                "lessons, %zu rooms, %ds) ==\n",
                 DAYS,
                 PERIODS_PER_DAY,
                 GROUPS.size(),
@@ -266,14 +266,14 @@ int main(int argc, char **argv)
             pinnedKept = false;
         }
     }
-    std::printf("  고정 수업 유지: %s\n", pinnedKept ? "OK" : "FAIL");
+    std::printf("  Pinned lesson kept: %s\n", pinnedKept ? "OK" : "FAIL");
 
     if (table.score.hard == 0 && pinnedKept)
     {
-        std::printf("  hard 0 도달: OK\n");
+        std::printf("  Reached hard 0: OK\n");
         return 0;
     }
-    std::printf("  hard 0 도달 실패 (hard=%lld)\n",
+    std::printf("  Did not reach hard 0 (hard=%lld)\n",
                 static_cast<long long>(table.score.hard));
     return 1;
 }

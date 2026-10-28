@@ -1,17 +1,17 @@
 [project]
 name = "st-bench"
 version = "0.0.0"
-description = "school-timetabling 3-way 벤치마크 하네스 (C++ 엔진 vs OR-Tools CP-SAT vs Java Timefold)"
+description = "school-timetabling three-way benchmark harness (C++ engine vs OR-Tools CP-SAT vs Java Timefold)"
 requires-python = ">=3.14,<4.0"
 dependencies = [
-    # 트랙1 CP-SAT 모델 + 트랙2 teacher_scheduling(benchmarks/school-timetabling/cpsat) 의존성.
+    # Track 1 CP-SAT model + track 2 teacher_scheduling (benchmarks/school-timetabling/cpsat) dependencies.
     "ortools>=9.15,<10",
     "pydantic>=2.13.2,<3",
     "pydantic-settings>=2.4.0,<3",
 ]
 
 [tool.uv]
-# 스크립트 모음이라 패키지로 설치하지 않는다 (uv run 이 venv 만 관리).
+# A collection of scripts, not installed as a package (uv run only manages the venv).
 package = false
 
 [tool.ruff]
@@ -22,5 +22,5 @@ ignore = ["E741"]
 extend-select = ["I"]
 
 [tool.ruff.lint.isort]
-# 같은 디렉터리의 스크립트 모듈들 (isort 가 서드파티로 오인하지 않게).
+# Script modules in the same directory (so isort does not mistake them for third-party).
 known-first-party = ["cpsat_quickstart", "evaluate", "gen_canonical", "run_bench"]

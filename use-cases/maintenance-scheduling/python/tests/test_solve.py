@@ -1,10 +1,10 @@
-"""데모 solve 검증: SMALL 데모가 feasible 에 도달하고 배정이 일관적인지."""
+"""Demo solve checks: the SMALL demo reaches feasible with a consistent assignment."""
 
 from itertools import pairwise
 
 import maintenance_scheduling as mnt
 
-# 고정 월요일 (2021-02-01) 로 Java 데모 인스턴스를 재현한다.
+# Reproduce the Java demo instance on a fixed Monday (2021-02-01).
 MONDAY = 18659
 
 
@@ -19,7 +19,7 @@ def test_demo_data_matches_java_shape():
     assert large.crew_count() == 5
     assert len(large.jobs) == 48
 
-    # 데모 작업의 min/max/ideal 윈도우는 일관적이어야 한다.
+    # The min/max/ideal windows of the demo jobs must be consistent.
     for i, job in enumerate(small.jobs):
         assert 1 <= job.duration_in_days <= 10
         assert job.min_start_date is not None
@@ -44,11 +44,11 @@ def test_demo_solve_reaches_feasible():
     assert schedule.score.hard == 0
     assert steps  # on_new_best fired
 
-    # 전 작업 배정 + 배정값이 값 범위 안.
+    # Every job assigned + values within the value range.
     assignment = schedule.assignment()
     assert all(0 <= v < schedule.crew_date_count() for v in assignment)
 
-    # hard 0 검증: crew 별로 [start, end) 가 겹치지 않고, min/max 창 안.
+    # Check hard 0: [start, end) never overlaps per crew and stays within the min/max window.
     by_crew: dict[int, list[tuple[int, int]]] = {}
     for i, job in enumerate(schedule.jobs):
         start = schedule.job_start_date(i)
@@ -66,7 +66,7 @@ def test_demo_solve_reaches_feasible():
 
 def test_pinned_job_is_kept():
     schedule = mnt.generate_demo_data("SMALL", MONDAY)
-    # job 0 을 자기 윈도우 안 첫 시작일, Gamma crew 에 고정한다.
+    # Pin job 0 to the first start date in its window on the Gamma crew.
     job0 = schedule.jobs[0]
     starts = schedule.start_dates()
     date_index = next(

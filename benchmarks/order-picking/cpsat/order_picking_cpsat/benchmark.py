@@ -96,6 +96,60 @@ def solve_cpsat(problem: Any, seconds: float, seed: int, workers: int) -> Any:
     return problem
 
 
+
+# --- Timefold quickstart (benchmarks/timefold-quickstarts) ---------------------
+
+TIMEFOLD = "order-picking"
+
+
+def to_timefold(problem: Any) -> dict:
+    orders, tasks = problem.orders, problem.pick_tasks
+
+    def location(loc: Any) -> dict:
+        return {"shelvingId": loc.shelving_id, "side": loc.side.name, "row": loc.row}
+
+    return {
+        "trolleys": [
+            {
+                "id": t.id,
+                "bucketCount": t.bucket_count,
+                "bucketCapacity": t.bucket_capacity,
+                "location": location(t.location),
+                "pickTasks": [],
+            }
+            for t in problem.trolleys
+        ],
+        "pickTasks": [
+            {
+                "id": task.id,
+                "orderItem": {
+                    # "<order id>/<index>": the runner rebuilds the orders from it.
+                    "id": f"{orders[task.order_index].id}/{i}",
+                    "product": {
+                        "id": task.id,
+                        "name": task.product_name,
+                        "volume": task.volume,
+                        "location": location(task.location),
+                    },
+                },
+            }
+            for i, task in enumerate(tasks)
+        ],
+        "__lists": {
+            "Trolley": {t.id: {"pickTasks": [tasks[i].id for i in t.pick_task_indices]} for t in problem.trolleys}
+        },
+    }
+
+
+def from_timefold(problem: Any, result: dict) -> None:
+    index = {task.id: i for i, task in enumerate(problem.pick_tasks)}
+    chosen = result["assignment"]["Trolley"]
+    trolleys = problem.trolleys
+    for trolley in trolleys:
+        trolley.pick_task_indices = [index[task] for task in chosen[trolley.id]["pickTasks"]]
+    problem.trolleys = trolleys
+
+
 def main(argv: list[str] | None = None) -> int:
     return run_cli(sys.modules[__name__], argv)
 

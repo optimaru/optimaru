@@ -1,10 +1,10 @@
-"""Sports league scheduling — Timefold engine 기반 C++ 솔버의 Python 래퍼.
+"""Sports league scheduling — Python wrapper of the C++ solver on the optimaru engine.
 
 `Team`/`Round`/`Match`/`LeagueSchedule`/`Score`/`Breakdown`/`Solver`/
-`SolverConfig`/`calculate_score`/`compute_breakdown` 는 컴파일된 C++ 코어
-(`_core`)에서 온다. `Match.round` 가 planning variable (-1 == 미배정,
-값은 `LeagueSchedule.rounds` 의 위치)이고, solve 는 그것과 `score` 를
-in place 로 바꾼다::
+`SolverConfig`/`calculate_score`/`compute_breakdown` come from the compiled C++ core
+(`_core`). `Match.round` is the planning variable (-1 == unassigned; the value is a
+position in `LeagueSchedule.rounds`), and solve changes it and `score`
+in place::
 
     import sports_league as sl
 
@@ -13,7 +13,7 @@ in place 로 바꾼다::
              stop_at_first_feasible=True)
     print(schedule.score, schedule.assignment())
 
-pydantic 미러(직렬화용)는 `sports_league.models` 에 있다 (선택 의존성).
+The pydantic mirror (for serialization) is in `sports_league.models` (optional dependency).
 """
 
 from ._core import (
@@ -61,18 +61,18 @@ def solve(
     config: SolverConfig | None = None,
     constraints=None,
 ) -> LeagueSchedule:
-    """`LeagueSchedule` 을 in place 로 풀어 그대로 돌려주는 고수준 API.
+    """High-level API that solves a `LeagueSchedule` in place and returns it.
 
-    ``config`` 가 기본 설정이 된다 (`_core.SolverConfig`, 또는 `to_core()` 를
-    가진 객체 — `models.SolveConfig`). None 이면 엔진 기본값(30초 예산).
-    명시한 키워드 인자가 config 위에 덮어쓴다.
+    ``config`` becomes the base settings (`_core.SolverConfig`, or an object with
+    `to_core()` — `models.SolveConfig`). None = engine defaults (30 s budget).
+    Explicit keyword arguments override config.
 
-    ``stop_at_first_feasible`` 은 hard 0 에 도달하는 즉시 종료한다
+    ``stop_at_first_feasible`` stops as soon as hard 0 is reached
     (best_score_limit=(0, -1e18)).
 
-    ``constraints`` 로 비용 함수를 직접 고를 수 있다
-    (`sports_league.constraints` 참고). 준 목록의 제약만 채점되고, None
-    이면 기본 열 제약 전부를 쓴다::
+    ``constraints`` picks the cost function directly
+    (see `sports_league.constraints`). Only the listed constraints are scored; None
+    uses all ten default constraints::
 
         from sports_league.constraints import get_constraints
         sls.solve(schedule, constraints=get_constraints())
@@ -84,7 +84,7 @@ def solve(
     elif hasattr(config, "to_core"):
         cfg = config.to_core()
     else:
-        raise ValueError("config 는 SolverConfig 또는 to_core() 를 가진 객체여야 한다")
+        raise ValueError("config must be a SolverConfig or an object with to_core()")
     if time_limit_seconds is not None:
         cfg.spent_limit_seconds = time_limit_seconds
     if random_seed is not None:

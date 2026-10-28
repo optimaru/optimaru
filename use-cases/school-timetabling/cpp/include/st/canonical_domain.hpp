@@ -26,7 +26,7 @@
 //     trivial post-processing step outside the solver).
 //   - One Lesson = one weekly period of one course (a course with
 //     periods_per_week = 3 becomes 3 lessons sharing one courseKey).
-//   - Parallel groups (분반) do NOT exist in this domain. The conversion
+//   - Parallel groups (split classes) do NOT exist in this domain. The conversion
 //     layer merges each parallel group into ONE "merged lesson" per weekly
 //     period: teachers = union of the member courses' teachers, roomTypeDemand
 //     = sum of the members' demands, and the merged lesson occupies exactly
@@ -97,7 +97,7 @@ struct Lesson
     // period masks (the plain, unmerged case).
     std::vector<std::pair<std::uint16_t, std::uint16_t>> preferenceUnits;
 
-    // Block (연강) group id, -1 = none. All lessons sharing a blockGroup must
+    // Block (consecutive periods) group id, -1 = none. All lessons sharing a blockGroup must
     // sit on one day in consecutive periods (H8).
     int blockGroup = -1;
 
@@ -112,7 +112,7 @@ struct Lesson
 // Timetable  (@PlanningSolution)
 // ---------------------------------------------------------------------------
 // Slots are enumerated (day, period) pairs: dayOfSlot[s] is the 0-based day,
-// periodOfSlot[s] the 1-based period (교시). Days may differ in length (e.g.
+// periodOfSlot[s] the 1-based period of the day. Days may differ in length (e.g.
 // Fri has 6 periods while Mon~Thu have 7) — simply enumerate the slots that
 // exist. Periods must fit a 16-bit mask (period <= 16) and days a byte mask
 // (day < 8).

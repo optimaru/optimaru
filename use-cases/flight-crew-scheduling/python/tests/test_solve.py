@@ -1,4 +1,4 @@
-"""데모 규모 축소판 solve: feasible 도달 + 고수준 solve() + 고정 좌석 유지."""
+"""Scaled-down demo solve: reaches feasible + high-level solve() + pinned seats kept."""
 
 from datetime import date, datetime, timedelta
 
@@ -20,10 +20,10 @@ DAY0 = datetime(2026, 8, 10)
 
 
 def _mini_problem() -> FlightCrewScheduleModel:
-    """이틀 x (ICN->NRT, NRT->ICN) 왕복 2세트, 편당 조종사 1 + 객실승무원 1.
+    """Two days x (ICN->NRT, NRT->ICN) round trips, one pilot + one flight attendant per flight.
 
-    ICN 소속 조종사 2 + 객실승무원 2 이 각자 하루 왕복을 맡으면
-    0hard/0soft 완전해가 존재한다.
+    With 2 ICN-based pilots + 2 flight attendants each taking one day's round trip,
+    a perfect 0hard/0soft solution exists.
     """
     airports = [AirportModel(code="ICN"), AirportModel(code="NRT")]
     employees = [
@@ -77,9 +77,9 @@ def _mini_problem() -> FlightCrewScheduleModel:
 def test_solve_mini_feasible():
     result = fc.solve(_mini_problem(), time_limit_seconds=3.0, random_seed=42, stop_at_first_feasible=False)
     assert result.score_hard == 0
-    assert result.score_soft == 0  # 완전해: 전원 홈 출발/홈 도착
+    assert result.score_soft == 0  # perfect: everyone departs from and arrives at home
     assert all(a.employee is not None for a in result.flight_assignments)
-    # 스킬 매칭: 조종사 좌석엔 조종사만.
+    # Skill matching: only pilots in pilot seats.
     employee_by_id = {e.id: e for e in result.employees}
     for a in result.flight_assignments:
         assert a.required_skill in employee_by_id[a.employee].skills
@@ -105,7 +105,7 @@ def test_solve_core_in_place():
 
 def test_pinned_assignment_survives_solve():
     model = _mini_problem()
-    # C2 를 OUT0 의 객실 좌석(A2)에 고정: 최적해(각자 하루 왕복)와 다른 배정.
+    # Pin C2 to OUT0's cabin seat (A2): an assignment different from the optimum (one day's round trip each).
     model.flight_assignments[1].employee = "C2"
     model.flight_assignments[1].pinned = True
     result = fc.solve(model, time_limit_seconds=2.0, random_seed=3)
@@ -117,8 +117,8 @@ def test_pinned_assignment_survives_solve():
 
 def test_unavailability_affects_score():
     model = _mini_problem()
-    # 전원 이틀 중 첫날 불가로 만들면 첫날 왕복(좌석 4)이 반드시 불가일 배정.
+    # Making everyone unavailable on the first of the two days forces the first day's round trip (4 seats) onto unavailable days.
     for employee in model.employees:
         employee.unavailable_days = [date(2026, 8, 10)]
     result = fc.solve(model, time_limit_seconds=2.0, random_seed=5)
-    assert result.score_hard == -40  # 좌석 4 x -10
+    assert result.score_hard == -40  # 4 seats x -10

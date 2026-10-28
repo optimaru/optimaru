@@ -11,8 +11,8 @@
 namespace st::canon
 {
 
-// canonical_solver.cpp 에서 그대로 옮겨 왔다 — 연산자 하나에 파일 하나,
-// 엔진 generic/ruin 배치의 도메인 쪽 짝이다.
+// Moved verbatim out of canonical_solver.cpp — one operator per file, the
+// domain-side counterpart of the engine's generic/ruin layout.
 
 // Unassign move (only registered when the assembly demotes H1 to soft): take
 // one assigned lesson out of the timetable. The BASIC move mix only ever
@@ -51,7 +51,7 @@ public:
         if (!removable(table, a))
             return false;
 
-        // A block (연강) leaves as a whole or not at all: half a block is not
+        // A block (consecutive periods) leaves as a whole or not at all: half a block is not
         // a block, and H8 prices it as such. Taking the group out together is
         // what keeps "drop it" reachable for block lessons at all.
         last_.clear();

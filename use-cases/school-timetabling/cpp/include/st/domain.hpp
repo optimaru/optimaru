@@ -24,7 +24,7 @@ using Score = optimaru::HardSoftScore;
 // Timeslot  (problem fact)
 // ---------------------------------------------------------------------------
 // The quickstart's Timeslot (dayOfWeek + LocalTime start/end), remodeled as a
-// (day, period) pair: Korean schools schedule by numbered periods (교시), not
+// (day, period) pair: Korean schools schedule by numbered periods, not
 // clock times. day 0 = Monday; period is 1-based. Two periods are consecutive
 // when they share a day and differ by exactly 1 — the quickstart's
 // getTime()-arithmetic in TimeTableConstraintProvider reduces to that.
@@ -32,13 +32,13 @@ using Score = optimaru::HardSoftScore;
 struct Timeslot
 {
     int day = 0;     // 0=Mon .. 4=Fri (5=Sat allowed)
-    int period = 1;  // 1-based period-of-day (교시)
+    int period = 1;  // 1-based period of the day
 };
 
 // ---------------------------------------------------------------------------
 // Room  (problem fact)
 // ---------------------------------------------------------------------------
-// `type` is informational only (일반/과학실/체육관/...): like the quickstart,
+// `type` is informational only (regular/science lab/gym/...): like the quickstart,
 // no hard constraint restricts which lessons a room may host.
 struct Room
 {

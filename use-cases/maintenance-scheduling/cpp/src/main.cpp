@@ -85,8 +85,8 @@ int main(int argc, char **argv)
 
     const std::int64_t fromDate = nextMonday(todayEpochDay());
     MaintenanceSchedule schedule = generateDemoData(size, fromDate);
-    std::printf("== 유지보수 일정 데모 (%s: crew %d, job %zu, %s ~ %s, "
-                "%d초) ==\n",
+    std::printf("== maintenance scheduling demo (%s: %d crews, %zu jobs, %s ~ %s, "
+                "%d s) ==\n",
                 size == DemoData::LARGE ? "LARGE" : "SMALL",
                 schedule.crewCount(),
                 schedule.jobs.size(),
@@ -117,14 +117,14 @@ int main(int argc, char **argv)
         if (job.crewDate < 0)
             allAssigned = false;
     }
-    std::printf("  모든 작업 배정: %s\n", allAssigned ? "OK" : "FAIL");
+    std::printf("  all jobs assigned: %s\n", allAssigned ? "OK" : "FAIL");
 
     if (schedule.score.hard == 0 && allAssigned)
     {
-        std::printf("  hard 0 도달: OK\n");
+        std::printf("  reached hard 0: OK\n");
         return 0;
     }
-    std::printf("  hard 0 도달 실패 (hard=%lld)\n",
+    std::printf("  failed to reach hard 0 (hard=%lld)\n",
                 static_cast<long long>(schedule.score.hard));
     return 1;
 }

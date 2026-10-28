@@ -1,7 +1,7 @@
-"""pdp_routing.constraints — 비용 함수를 선언으로 고르는 API.
+"""pdp_routing.constraints — an API for picking the cost function declaratively.
 
-"어떤 제약을 켤지" 를 고르는 선택 경로만 본다. 제약별 채점값은
-`test_pdp.py` 와 C++ 테스트가 맡는다.
+"Which constraints are on" is the only path covered here. Per-constraint values
+are covered by `test_pdp.py` and the C++ tests.
 """
 
 import pdp_routing as pdp
@@ -57,8 +57,8 @@ def solve(constraints=None, seconds=0.4, seed=1):
 
 
 def test_list_constraints_matches_the_spec_names():
-    """스펙이 들고 있는 이름은 코어가 실제로 아는 이름이어야 한다."""
-    # unit 제약이 먼저, global 제약(커플링 세 항 + 미배정)이 뒤.
+    """Names carried by specs must be names the core actually knows."""
+    # Unit constraints first, global constraints (the three coupling terms + unassigned) after.
     available = pdp.list_constraints()
     assert available == [
         "vehicle_capacity",
@@ -108,7 +108,7 @@ def test_route_policy_costs_are_exposed():
 
 
 def test_default_constraints_reproduce_the_monolithic_cost_function():
-    """기본 스펙 전부로 조립한 비용 함수는 모놀리식 채점과 같은 값을 내야 한다."""
+    """A cost function assembled from all default specs must equal the monolithic scoring."""
     plan = solve(get_constraints())
     recomputed = pdp.calculate_score(plan)
     assert plan.score.hard == recomputed.hard
@@ -117,7 +117,7 @@ def test_default_constraints_reproduce_the_monolithic_cost_function():
 
 
 def test_picking_a_subset_drops_the_other_terms():
-    """목록에 없는 제약은 채점되지 않는다 — 주행시간 항이 통째로 사라진다."""
+    """Unlisted constraints are not scored — the travel-time term disappears entirely."""
     baseline = solve(get_constraints()).score
     assert baseline.soft < 0
 
@@ -126,36 +126,36 @@ def test_picking_a_subset_drops_the_other_terms():
 
 
 def test_reweighting_one_constraint_scales_only_that_term():
-    """주행시간 가중치만 올리면 소프트만 커지고 하드는 그대로."""
+    """Raising only the travel-time weight grows soft only; hard stays put."""
     picks = [vehicle_capacity, paired_request, same_vehicle, unassigned_requests]
     base = solve([*picks, minimize_travel_time]).score
     heavier = solve([*picks, MinimizeTravelTime(weight=10)]).score
     assert heavier.hard == base.hard
-    assert heavier.soft < base.soft  # 벌점이므로 더 음수
+    assert heavier.soft < base.soft  # penalty, so more negative
 
 
 def test_level_can_be_flipped():
-    """레벨을 올리면 솔버의 트레이드오프가 뒤집힌다.
+    """Raising the level flips the solver's trade-off.
 
-    주행시간이 소프트면 요청을 다 실어 나르고 그 대가를 소프트로 치른다.
-    하드로 올리면 주행 자체가 하드 비용이 되고 미배정은 미디엄에 그치므로 —
-    레벨이 사전식으로 우선하니 — 솔버는 아예 차를 세워 둔다."""
+    With soft travel time, every request gets carried and the cost is paid in soft.
+    Promoted to hard, driving itself becomes a hard cost while unassigned stays
+    medium — levels are lexicographic — so the solver parks the vehicles."""
     picks = [paired_request, same_vehicle, unassigned_requests]
 
     soft_level = solve([*picks, minimize_travel_time]).score
-    assert soft_level.medium == 0  # 요청을 다 실어 나른다
+    assert soft_level.medium == 0  # carries every request
     assert soft_level.soft < 0
 
     hard_level = solve([*picks, MinimizeTravelTime(hard=True)]).score
-    assert hard_level.medium < 0  # 대신 요청을 포기한다
+    assert hard_level.medium < 0  # gives up requests instead
     assert hard_level.soft == 0
 
 
 def test_unknown_constraint_name_raises():
-    """오타가 비용 함수를 조용히 그대로 두면 안 된다."""
+    """A typo must not silently leave the cost function unchanged."""
 
     class Typo:
-        name = "same_vehicles"  # 뒤에 s
+        name = "same_vehicles"  # trailing s
         weight = None
         hard = None
         exponent = 1.0
@@ -165,7 +165,7 @@ def test_unknown_constraint_name_raises():
 
 
 def test_empty_constraint_list_is_rejected():
-    """빈 목록은 '아무것도 채점하지 않음'이라 실수일 가능성이 높다."""
+    """An empty list means 'score nothing', which is most likely a mistake."""
     with pytest.raises(ValueError, match="must not be empty"):
         solve([])
 
@@ -178,29 +178,29 @@ def test_spec_subclass_must_name_a_constraint():
 
 
 def test_default_instance_carries_no_overrides():
-    """모듈 상위 인스턴스는 기본값 그대로여야 한다 (weight=None)."""
+    """Module-level instances must keep the defaults (weight=None)."""
     assert minimize_travel_time.weight is None
     assert minimize_travel_time.hard is None
     assert minimize_travel_time.exponent == 1.0
 
 
-# --- 순수 파이썬 채점 (constraint_costs -> score) ---------------------------
+# --- Pure-Python scoring (constraint_costs -> score) ------------------------
 
 
 def _raw():
-    """한 번 푼 해의 제약별 원본 cost."""
+    """Raw per-constraint costs of one solved solution."""
     plan = solve(get_constraints())
     return pdp.constraint_costs(plan), plan
 
 
 def test_score_reproduces_the_engine_hard_level():
-    """기본 스펙으로 매긴 파이썬 점수의 하드 레벨은 엔진과 같아야 한다."""
+    """The hard level of the Python score at default specs must match the engine."""
     raw, solution = _raw()
     assert score(raw).hard == pdp.calculate_score(solution).hard
 
 
 def test_score_is_additive_over_the_picked_constraints():
-    """전체 점수는 제약별 점수의 합이다 — 목록에 없는 항은 그대로 빠진다."""
+    """The total score is the sum of per-constraint scores — unlisted terms simply drop out."""
     raw, _ = _raw()
     specs = get_constraints()
     full = score(raw, specs)
@@ -210,7 +210,7 @@ def test_score_is_additive_over_the_picked_constraints():
 
 
 def test_score_reweighting_is_linear_without_rescoring():
-    """가중치만 바꾸면 그 항이 선형으로 스케일한다 — 재채점 없이."""
+    """Changing only the weight scales that term linearly — no rescoring."""
     raw, _ = _raw()
     base = score(raw, [minimize_travel_time])
     ten = score(raw, [MinimizeTravelTime(weight=10)])
@@ -222,7 +222,7 @@ def test_score_reweighting_is_linear_without_rescoring():
 
 
 def test_score_rejects_an_unknown_constraint_name():
-    """이름이 틀린 스펙(예: 이름 바뀐 컴포넌트)은 조용히 무시되면 안 된다."""
+    """A spec with a wrong name (e.g. a renamed component) must not be silently ignored."""
     raw, _ = _raw()
 
     class Renamed(Constraint):

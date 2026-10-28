@@ -33,7 +33,7 @@ fails the byte-identical gate.
    in this repo):
 
    ```sh
-   git clone --depth 1 https://github.com/TimefoldAI/timefold-quickstarts.git
+   git clone --depth 1 -b v2.6.0 https://github.com/TimefoldAI/timefold-quickstarts.git
    ```
 
 2. Copy these files into its test source tree:

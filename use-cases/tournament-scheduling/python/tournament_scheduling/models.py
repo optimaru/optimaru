@@ -1,21 +1,21 @@
-"""엔진 도메인의 pydantic v2 미러 — JSON 직렬화/역직렬화용.
+"""Pydantic v2 mirror of the engine domain — for JSON serialization/deserialization.
 
-`_core` 의 Team/Day/UnavailabilityPenalty/TeamAssignment/TournamentSchedule 을
-1:1 로 미러링한다. 팀/일자는 리스트 인덱스로 참조한다 (Java 의 객체 참조 대신;
-Team 의 @PlanningId == teams 인덱스, Day 의 dateIndex == days 인덱스가 관례).
+Mirrors `_core`'s Team/Day/UnavailabilityPenalty/TeamAssignment/TournamentSchedule
+1:1. Teams/days are referenced by list index (instead of Java's object references; by
+convention Team's @PlanningId == teams index and Day's dateIndex == days index).
 
-점수 매핑 (Java HardMediumSoftBigDecimalScore -> 엔진 HardSoftScore):
-``score_hard`` 는 Java hard 그대로, ``score_soft`` 는
-``-(medium 불공정도 * 1e6 + soft 불공정도)`` — medium(팀별 배정 수 균형)이
-soft(대결 수 균형)를 항상 지배하도록 1e6 오프셋으로 접었다::
+Score mapping (Java HardMediumSoftBigDecimalScore -> engine HardSoftScore):
+``score_hard`` is the Java hard as-is, ``score_soft`` is
+``-(medium unfairness * 1e6 + soft unfairness)`` — folded with a 1e6 offset so medium
+(per-team assignment balance) always dominates soft (head-to-head balance)::
 
     from tournament_scheduling.models import TournamentScheduleModel, demo_data
 
-    model = demo_data()                          # Java DemoDataGenerator 재현
+    model = demo_data()                          # reproduces Java DemoDataGenerator
     clone = TournamentScheduleModel.model_validate_json(model.model_dump_json())
-    schedule = clone.to_core()                   # pydantic -> 엔진
+    schedule = clone.to_core()                   # pydantic -> engine
 
-`pydantic` 은 선택 의존성이다 (`pip install tournament_scheduling[models]`).
+`pydantic` is an optional dependency (`pip install tournament_scheduling[models]`).
 """
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -33,7 +33,7 @@ __all__ = [
 
 
 class TeamModel(BaseModel):
-    """참가 팀. 리스트 인덱스가 Java 의 @PlanningId 역할을 한다."""
+    """A participating team. The list index plays the role of Java's @PlanningId."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -41,7 +41,7 @@ class TeamModel(BaseModel):
 
 
 class DayModel(BaseModel):
-    """경기 일자. date_index 는 정보용 (참조는 days 리스트 인덱스로)."""
+    """A match day. date_index is informational (references use the days list index)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -49,7 +49,7 @@ class DayModel(BaseModel):
 
 
 class UnavailabilityPenaltyModel(BaseModel):
-    """불가일: (team, day) 에 배정이 하나라도 있으면 하드 1점."""
+    """Unavailability: one hard point when (team, day) has at least one assignment."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -58,8 +58,8 @@ class UnavailabilityPenaltyModel(BaseModel):
 
 
 class TeamAssignmentModel(BaseModel):
-    """planning entity: 일자의 경기 슬롯 하나. team 이 planning variable
-    (None == 미배정); id 는 유일해야 한다 (Java @PlanningId)."""
+    """Planning entity: one match slot of a day. team is the planning variable
+    (None == unassigned); ids must be unique (Java @PlanningId)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -71,7 +71,7 @@ class TeamAssignmentModel(BaseModel):
 
 
 class TournamentScheduleModel(BaseModel):
-    """planning solution 미러. score 는 읽기 전용 결과라 별도 필드로 둔다."""
+    """Planning solution mirror. score is a read-only result, kept as a separate field."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -83,7 +83,7 @@ class TournamentScheduleModel(BaseModel):
     score_soft: float | None = None
 
     def to_core(self) -> "_core.TournamentSchedule":
-        """pydantic -> 엔진 객체 (score 필드는 엔진이 다시 계산하므로 무시)."""
+        """pydantic -> engine object (the score field is ignored; the engine recomputes it)."""
         return _core.TournamentSchedule(
             [_core.Team(t.name) for t in self.teams],
             [_core.Day(d.date_index) for d in self.days],
@@ -102,7 +102,7 @@ class TournamentScheduleModel(BaseModel):
 
     @classmethod
     def from_core(cls, schedule: "_core.TournamentSchedule") -> "TournamentScheduleModel":
-        """엔진 객체 -> pydantic (현재 배정과 score 포함)."""
+        """engine object -> pydantic (including the current assignment and score)."""
         return cls(
             teams=[TeamModel(name=t.name) for t in schedule.teams],
             days=[DayModel(date_index=d.date_index) for d in schedule.days],
@@ -125,7 +125,7 @@ class TournamentScheduleModel(BaseModel):
 
 
 class _JavaRandom:
-    """java.util.Random (48-bit LCG) 재현 — Java 데모 데이터와 동일한 난수."""
+    """Reproduction of java.util.Random (48-bit LCG) — the same random numbers as the Java demo data."""
 
     _MULTIPLIER = 0x5DEECE66D
     _ADDEND = 0xB
@@ -149,8 +149,8 @@ class _JavaRandom:
 
 
 def demo_data() -> TournamentScheduleModel:
-    """Java quickstart 의 DemoDataGenerator 재현: 팀 7, 18일 x 슬롯 4 = 배정
-    72, 불가일 12 (java.util.Random(0) 과 같은 추첨)."""
+    """Reproduction of the Java quickstart DemoDataGenerator: 7 teams, 18 days x 4 slots = 72
+    assignments, 12 unavailable days (the same draws as java.util.Random(0))."""
     random = _JavaRandom(0)
     teams = ["Maarten", "Geoffrey", "Lukas", "Chris", "Fred", "Radek", "Maciej"]
     day_count = 18

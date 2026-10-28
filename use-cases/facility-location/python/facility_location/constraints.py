@@ -1,38 +1,38 @@
-"""제약 조립 스펙 — 비용 함수를 선언으로 고르는 API.
+"""Constraint assembly specs — an API for picking the cost function declaratively.
 
-기본 경로(`fl.solve(problem)`)는 세 제약을 quickstart 가중치로 전부 켠다.
-이 모듈은 그 옆의 선택 경로다: 제약을 골라 담고, 가중치를 바꾸고,
-하드/소프트를 뒤집은 목록을 `solve(problem, constraints=...)` 에 넘긴다.
+The default path (`fl.solve(problem)`) enables all three constraints at the quickstart weights.
+This module is the alternative path next to it: pick constraints, change weights, flip
+hard/soft, and pass the list to `solve(problem, constraints=...)`.
 
-가장 짧은 사용법은 :func:`get_constraints` 다. 기본 목록을 그대로 돌려주니
-"기본에서 조금 바꾸는" 선언이 한 줄로 끝난다::
+The shortest route is :func:`get_constraints`. It returns the default list, so
+a "default with a small tweak" declaration fits on one line::
 
     import facility_location as fl
     from facility_location.constraints import (
         DistanceFromFacility, capacity, get_constraints,
     )
 
-    fl.solve(problem, constraints=get_constraints())              # 기본 그대로
-    fl.solve(problem, constraints=get_constraints([              # 골라 담기
+    fl.solve(problem, constraints=get_constraints())              # defaults as-is
+    fl.solve(problem, constraints=get_constraints([              # picked
         capacity, DistanceFromFacility(weight=10),
     ]))
 
-모듈 상위에 기본 인스턴스(`capacity`, `setup_cost`, `distance`)가 있으니
-그중 몇 개만 골라 리스트로 넘겨도 된다. 목록에 넣은 제약만 채점된다 —
-빼면 그 항은 점수에서 사라진다.
+Default instances (`capacity`, `setup_cost`, `distance`) live at module level, so
+you can also pass a list of just a few. Only listed constraints are scored — leave
+one out and its term disappears from the score.
 
-모든 스펙은 ``(weight=None, hard=None, exponent=1.0)`` 를 받는다:
+Every spec takes ``(weight=None, hard=None, exponent=1.0)``:
 
-- ``weight``   제약 비용의 선형 배수. ``None`` 은 컴포넌트 기본값
-               (facilityCapacity 1, setup cost 2, distance 6 — distance 의
-               6 은 Java 솔루션의 ConstraintWeightOverrides 값이다).
-- ``hard``     ``True``/``False`` 로 기본 레벨을 뒤집는다; ``None`` 은 유지.
-- ``exponent`` 부호 보존 거듭제곱 셰이핑: ``weight * sign(c) * |c| **
-               exponent``. 2.0 = 제곱이라 몰린 위반이 기하급수로 비싸진다.
+- ``weight``   linear multiplier on the constraint cost. ``None`` = component default
+               (facilityCapacity 1, setup cost 2, distance 6 — the distance 6
+               is the ConstraintWeightOverrides value of the Java solution).
+- ``hard``     ``True``/``False`` flips the default level; ``None`` keeps it.
+- ``exponent`` sign-preserving power shaping: ``weight * sign(c) * |c| **
+               exponent``. 2.0 = squared, so concentrated violations grow much costlier.
 
-이름(`name`)은 C++ 컴포넌트 이름을 snake_case 로 옮긴 것이다. 코어가
-기계적으로 유도하니 손으로 관리하는 별칭 표는 없다 —
-`fl.list_constraints()` 로 확인할 수 있다.
+Names (`name`) are the C++ component names in snake_case. The core derives them
+mechanically, so there is no hand-maintained alias table — check them with
+`fl.list_constraints()`.
 """
 
 import math
@@ -55,10 +55,10 @@ __all__ = [
 
 @dataclass(frozen=True)
 class Constraint:
-    """제약 하나를 고르는 스펙: 가중치 / 레벨 / 셰이핑."""
+    """Spec selecting one constraint: weight / level / shaping."""
 
-    weight: float | None = None  # None = 컴포넌트 기본 가중치
-    hard: bool | None = None  # None = 컴포넌트 기본 레벨
+    weight: float | None = None  # None = component default weight
+    hard: bool | None = None  # None = component default level
     exponent: float = 1.0
     name: ClassVar[str] = ""
 
@@ -69,82 +69,82 @@ class Constraint:
 
 
 class FacilityCapacity(Constraint):
-    """사용 중인 시설이 용량을 넘긴 수요. 기본: 하드, 가중치 1."""
+    """Demand above capacity at a facility in use. Default: hard, weight 1."""
 
     name = "facility_capacity"
 
 
 class FacilitySetupCost(Constraint):
-    """수요처를 하나라도 받은 시설의 설치비. 기본: 소프트, 가중치 2.
+    """Setup cost of every facility serving at least one consumer. Default: soft, weight 2.
 
-    "이 시설을 쓰는가"의 계단 함수라 수요처 하나를 옮기는 것으로는 넘을 수
-    없다 — 그래서 도메인이 CloseFacilityMove 를 따로 들고 있다."""
+    A step function of "is this facility used", so moving one consumer cannot
+    cross it — that is why the domain carries a separate CloseFacilityMove."""
 
     name = "facility_setup_cost"
 
 
 class DistanceFromFacility(Constraint):
-    """배정된 수요처가 시설까지 떨어진 거리(m). 기본: 소프트, 가중치 6."""
+    """Distance (m) from each assigned consumer to its facility. Default: soft, weight 6."""
 
     name = "distance_from_facility"
 
 
-#: 기본 가중치로 만들어 둔 인스턴스. 골라 담을 때 그대로 참조하면 된다.
+#: Instances at the default weights. Reference them directly when picking.
 capacity = FacilityCapacity()
 setup_cost = FacilitySetupCost()
 distance = DistanceFromFacility()
 
 
 def get_constraints(constraints: list[Constraint] | None = None) -> list[Constraint]:
-    """비용 함수를 돌려준다. 인자가 없으면 기본 세 제약 전부.
+    """Return the cost function. Without arguments, all three default constraints.
 
-    `constraints` 를 주면 그 목록을 그대로 쓴다 — 목록에 있는 제약만
-    채점된다. 기본에서 하나만 바꾸고 싶으면 기본 인스턴스를 섞어 쓴다::
+    When `constraints` is given, that list is used as-is — only the listed
+    constraints are scored. To change just one default, mix in the default instances::
 
         get_constraints([capacity, setup_cost, DistanceFromFacility(weight=10)])
     """
     if constraints is None:
         return [capacity, setup_cost, distance]
     if not constraints:
-        # C++ applyConstraints 와 같은 계약: 빈 목록은 "아무것도 채점하지
-        # 않음" 이라 실수일 가능성이 높다. 필터 결과가 우연히 비었을 때
-        # 조용히 "전부 채점" 으로 뒤집히면 안 된다.
+        # Same contract as C++ applyConstraints: an empty list means "score
+        # nothing", which is most likely a mistake. A filter that happens to come
+        # out empty must not silently flip to "score everything".
         raise ValueError("constraints must not be empty (pass None for the defaults)")
     return list(constraints)
 
 
 class Score(NamedTuple):
-    """`score()` 가 돌려주는 (hard, soft). 둘 다 벌점이라 0 이하다."""
+    """(hard, soft) returned by `score()`. Both are penalties, so <= 0."""
 
     hard: int
     soft: float
 
 
 def _shape(cost: float, exponent: float) -> float:
-    """부호 보존 거듭제곱. 보상(음수 cost)이 벌점으로 뒤집히지 않는다."""
+    """Sign-preserving power. Rewards (negative costs) never flip into penalties."""
     if exponent == 1.0 or cost == 0.0:
         return cost
     return -((-cost) ** exponent) if cost < 0.0 else cost**exponent
 
 
 def score(costs: dict, constraints: list[Constraint] | None = None) -> Score:
-    """제약 원본 cost 에 스펙을 적용해 점수를 낸다 — 순수 파이썬.
+    """Apply specs to raw constraint costs and produce a score — pure Python.
 
-    ``costs`` 는 `fl.constraint_costs(problem)` 가 돌려준 것이다: 제약마다
-    unit 별 **원본** cost (가중치도 exponent 도 레벨 반올림도 적용되기 전).
-    한 번 받아두면 가중치를 바꿔가며 재채점 없이 계산할 수 있다::
+    ``costs`` is what `fl.constraint_costs(problem)` returns: per constraint, the
+    **raw** cost of each unit (before weight, exponent and level rounding).
+    Fetch it once and rescore with different weights without re-solving::
 
         raw = fl.constraint_costs(problem)
-        score(raw)                                    # 기본 세트
+        score(raw)                                    # default set
         score(raw, [capacity, DistanceFromFacility(weight=10)])
 
-    솔버도 탐색 알고리즘도 거치지 않는다. 계산 규칙은 엔진과 같다 —
-    unit 마다 ``weight * shape(cost, exponent)`` 를 구하고, 하드는 unit
-    기여분을 **각각 반올림**해서 더한다 (엔진의 applyRaw 와 같은 순서;
-    합계를 뒤에 반올림하면 값이 달라진다).
+    No solver and no search are involved. The arithmetic matches the engine —
+    each unit contributes ``weight * shape(cost, exponent)`` and hard
+    contributions are **rounded per unit** before summing (the same order as the
+    engine's applyRaw; rounding the total afterwards gives different values).
 
-    ``constraints`` 를 주면 그 목록의 제약만 채점된다 — `get_constraints`
-    와 같은 의미론이다. 모르는 이름은 ValueError.
+    When ``constraints`` is given, only those constraints are scored — the same
+    semantics as `get_constraints`. Unknown names raise ValueError.
     """
     hard = 0
     soft = 0.0
@@ -160,8 +160,8 @@ def score(costs: dict, constraints: list[Constraint] | None = None) -> Score:
         for cost in entry["costs"]:
             value = weight * _shape(cost, exponent)
             if is_hard:
-                # 엔진과 같이 unit 기여분마다 반올림한다 (banker's rounding 이
-                # 아니라 llround 와 같은 half-away-from-zero).
+                # Round per unit contribution like the engine (half-away-from-zero
+                # like llround, not banker's rounding).
                 hard += int(math.floor(value + 0.5) if value >= 0 else math.ceil(value - 0.5))
             else:
                 soft += value

@@ -26,7 +26,7 @@ from project_job.models import (
 from .solve import solve as solve_cpsat
 
 ARCHIVE_URL = "https://www.hexaly.com/examples/rcpsp.zip"
-ARCHIVE_SHA256 = "0cffcf0d2dbeed2dc5396885e9113297dece275cd8c88ab99ab60c1ce9ca6600"
+ARCHIVE_SHA256 = "71c5012250ed5e2a7c02da701211144bb0a2b22935ae94e4a02bbb8d06b9f17b"
 DEFAULT_INSTANCE = "Pat1"
 
 

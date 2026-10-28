@@ -147,6 +147,13 @@ jobs:
           else
             echo "PROJECT=benchmarks/${{ matrix.benchmark }}" >> "$GITHUB_ENV"
           fi
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: Build the Timefold quickstart models
+        run: mvn -B -q -f benchmarks/timefold-quickstarts/pom.xml package
       - name: Install (builds the engine extension)
         run: uv sync --project "$PROJECT" --python 3.14 --all-groups --all-extras
         env:
@@ -155,6 +162,12 @@ jobs:
       - name: Test
         working-directory: ${{ env.PROJECT }}
         run: uv run --python 3.14 --with pytest python -m pytest -q tests
+      - name: Engine vs CP-SAT (vs Timefold) smoke run
+        working-directory: ${{ env.PROJECT }}
+        run: |
+          runner=$(ls *_cpsat/benchmark.py 2>/dev/null | head -1)
+          if [ -z "$runner" ]; then echo "no comparison runner"; exit 0; fi
+          uv run --python 3.14 python -m "$(dirname "$runner").benchmark" --seconds 1 --workers 2
 
   vehicle-routing-benchmark:
     runs-on: ubuntu-latest

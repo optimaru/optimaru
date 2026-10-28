@@ -1,7 +1,7 @@
-"""테스트용 소형 문제 빌더.
+"""Small problem builders for the tests.
 
-과목/학급을 강좌 정의에서 자동 생성해서, 각 테스트가 검증하려는 제약만
-도드라지게 적을 수 있게 한다.
+Subjects and classes are generated from the course definitions, so each test
+can spell out just the constraint it checks.
 """
 
 from teacher_scheduling.domain.entities import ClassGroup, Course, Room, Subject, Teacher, TimeSlot
@@ -10,7 +10,7 @@ from teacher_scheduling.domain.problem import SchoolCalendar, TimetableProblem
 from teacher_scheduling.solver.config import ObjectiveWeights, SolverConfig
 from teacher_scheduling.solver.solver import solve
 
-# 하드 제약 테스트는 목적함수 없이 순수 만족 문제로 푼다.
+# Hard-constraint tests solve as a pure satisfaction problem, without an objective.
 NO_WEIGHTS = ObjectiveWeights(
     teacher_gap=0,
     teacher_workday=0,

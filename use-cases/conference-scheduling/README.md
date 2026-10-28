@@ -1,79 +1,80 @@
-# Conference Scheduling (Timefold quickstart 포팅)
+# Conference Scheduling (Timefold quickstart port)
 
 Timefold quickstart [conference-scheduling](https://github.com/TimefoldAI/timefold-quickstarts/tree/stable/use-cases/conference-scheduling)
-을 `include/optimaru/` 의 C++ 엔진 위에 포팅한 use case. 발표(`Talk`)마다 시간대와
-발표장을 동시에 배정한다 — Java 의 두 `@PlanningVariable` (timeslot, room)
-을 `slotRoom = timeslotIndex * roomCount + roomIndex` 합성 BASIC 변수 하나로
-인코딩했다 (school-timetabling 과 같은 패턴).
+ported onto the C++ engine in `include/optimaru/`. Every talk (`Talk`) gets a timeslot
+and a room at once — Java's two `@PlanningVariable`s (timeslot, room) are encoded as
+one composite BASIC variable `slotRoom = timeslotIndex * roomCount + roomIndex`
+(the same pattern as school-timetabling).
 
-- `cpp/` — 도메인(`cs::ConferenceSchedule`), full-recompute
-  `ScoreCalculator`(+ 제약별 `Breakdown`), O(delta) 인크리멘털 계산기,
-  ALNS 솔버 래퍼, Java `DemoDataGenerator` 재현 데모(`cs_demo`),
-  테스트(`cs_test`).
-- `python/` — pybind11 패키지 `conference_scheduling`
-  (`_core` 확장 + pydantic 미러 + 데모 + pytest). 제약 목록/점수 매핑/
-  value-range 대체(합성 `talkTypeCompatibility` hard 제약)의 자세한 설명은
-  [python/README.md](python/README.md) 참고.
+- `cpp/` — domain (`cs::ConferenceSchedule`), full-recompute
+  `ScoreCalculator` (+ per-constraint `Breakdown`), O(delta) incremental calculator,
+  ALNS solver wrapper, a demo reproducing the Java `DemoDataGenerator` (`cs_demo`),
+  tests (`cs_test`).
+- `python/` — pybind11 package `conference_scheduling`
+  (`_core` extension + pydantic mirror + demo + pytest). For the constraint list,
+  score mapping and value-range replacement (the synthetic `talkTypeCompatibility`
+  hard constraint) see [python/README.md](python/README.md).
 
 ```sh
 cd cpp && cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j4
 ./build/cs_test && ./build/cs_demo 10
 ```
 
-## 품질 벤치마크와 솔버 기본값 (2026-08)
+## Quality benchmark and solver defaults (2026-08)
 
 `cpp/bench/quality_bench.cpp` (`cs_quality_bench <demo|scaled:N> <seed> <seconds>
-[knobs]`) 가 데모형 스케일 인스턴스(고정 14슬롯 x 9룸 = 126칸, talk 수 가변)를
-고정 wall-clock 예산으로 풀고 최종 `hard/soft`, 궤적, 제약별 breakdown,
-moves/s 추정을 찍는다. N >= ~63 은 구조적으로 infeasible (랩 talk 수 > 랩 칸
-수) 이라 hard 가 1차 지표, 45/60 은 feasible 이라 soft 가 지표다. 엔진 수치는
-모놀리식 인크리멘털 계산기(fast path) 기준이다 (school-timetabling 과 같은
-관례).
+[knobs]`) solves demo-like scaled instances (a fixed 14 slots x 9 rooms = 126 cells,
+variable talk count) on a fixed wall-clock budget and prints the final `hard/soft`, the
+trajectory, the per-constraint breakdown and a moves/s estimate. N >= ~63 is structurally
+infeasible (lab talks > lab cells), so hard is the primary metric there; 45/60 are
+feasible, so soft is the metric. Engine figures use the monolithic incremental
+calculator (fast path), the same convention as school-timetabling.
 
-측정 (Apple Silicon macOS 단일 머신, 10초/런, seed 1-6 평균, 인터리브 A/B —
-절대치는 머신에 따라 다르다):
+Measurements (one Apple Silicon macOS machine, 10 s per run, mean of seeds 1-6,
+interleaved A/B — absolute values depend on the machine):
 
-| 인스턴스 | 튜닝 전 (hard / soft) | 튜닝 후 (hard / soft) | 시드별 승-패 |
+| Instance | Before tuning (hard / soft) | After tuning (hard / soft) | Per-seed win-loss |
 | --- | --- | --- | --- |
 | scaled:45 | 0 / -672575 | 0 / **-669730** (+0.4%) | 4-2 |
 | scaled:60 | 0 / -1360055 | 0 / **-1348210** (+0.9%) | 4-2 |
 | scaled:120 | -2783640 / -6978823 | **-2783333** / -6735535 (soft +3.5%) | 5-1 |
 | scaled:200 | -10669418 / -24258323 | **-10667343** / -22919260 (soft +5.5%) | **6-0** |
 
-바뀐 기본값/구조 두 가지:
+Two changed defaults / structures:
 
-- **인크리멘털 pairwise 델타의 집계화** — 예전에는 insert/retract 마다 모든
-  talk 을 훑는 O(n) 스윕이었다 (change 무브당 2n, swap 당 4n). 지금은 슬롯별
-  태그 점유 카운트(theme/sector/audience/content/mutex + theme x audience 조인트
-  + (slot,room)별 theme + content x level + level/언어), (slot,room) 점유
-  그리드(roomConflict), 용량 클래스별 favorite-rank Fenwick 트리(popularTalks),
-  그리고 진짜 희소한 관계(연사 공유, prerequisite)만 인접 리스트로 남긴 정확
-  집계 질의다. 모든 합이 정수라 점수는 비트 동일하고 (full-vs-incremental
-  3000-무브 랜덤워크 / FULL_ASSERT / 플러그인 동등성 게이트로 고정), moves/s
-  는 scaled:200 에서 ~7-10배, 품질은 위 표의 특히 120/200 이득의 대부분을
-  만든다.
-- **`ruinRecreateAsMoveWeight` 자동 기본값** — 파괴-재구성을 acceptor 판정을
-  받는 평범한 무브로도 돌린다 (엔진 `RuinRecreateConfig::asMoveWeight`). 기본
-  음수 = 자동 `0.2 / slotRoomCount` (benchmarks/school-timetabling/RESULTS.md 의 예산
-  점유율 규칙; 이 도메인 126칸에서 1.6e-3). scaled:120 에서 가중치를 흔들면
-  0.8e-3 / 3e-3 은 지고 1.6e-3 만 이겨 규칙값이 봉우리다. 단독 6시드 A/B 로
-  네 크기 모두 soft +0.9~1.4%, 회귀 없음. `0` 을 주면 끈다.
+- **Aggregated incremental pairwise deltas** — previously every insert/retract was an
+  O(n) sweep over all talks (2n per change move, 4n per swap). Now they are exact
+  aggregate queries: per-slot tag occupancy counts (theme/sector/audience/content/mutex +
+  the theme x audience joint + per-(slot,room) theme + content x level + level/language),
+  a (slot,room) occupancy grid (roomConflict), per-capacity-class favorite-rank Fenwick
+  trees (popularTalks), and adjacency lists only for the truly sparse relations (shared
+  speakers, prerequisites). Every sum is an integer, so scores are bit-identical (pinned
+  by the full-vs-incremental 3000-move random walk / FULL_ASSERT / plugin equivalence
+  gates); moves/s go up ~7-10x at scaled:200, which accounts for most of the quality gain
+  in the table above, especially at 120/200.
+- **Automatic `ruinRecreateAsMoveWeight` default** — ruin & recreate also runs as an
+  ordinary move judged by the acceptor (engine `RuinRecreateConfig::asMoveWeight`). The
+  default negative value = automatic `0.2 / slotRoomCount` (the budget-share rule of
+  benchmarks/school-timetabling/RESULTS.md; 1.6e-3 for this domain's 126 cells). Sweeping
+  the weight at scaled:120, 0.8e-3 / 3e-3 lose and only 1.6e-3 wins, so the rule value is
+  the peak. A standalone 6-seed A/B gives soft +0.9-1.4% at all four sizes, no
+  regressions. `0` turns it off.
 
-측정만 하고 기본값은 끈 노브 (bench 키 = config 필드):
+Knobs that were measured but stay off by default (bench key = config field):
 
-- `hot=` / `hotTalkProbability` — 하드 위반을 지닌 talk(타입 비호환 칸, 태그
-  위반, 연사/룸 불가, 칸 공유 — O(1) 판정)을 rejection-sampling 으로 겨냥.
-  scaled:120 에서 hard 4-2 승이지만 scaled:200 에서 1-5 패 (hot 집합이 talk
-  의 70%+ 라 바이어스가 무뎌짐), 45/60 은 무승부. 크기별 규칙을 세우기엔
-  측정점이 부족해 기본 0. feasibility 도달 자체는 빨라진다 (60 에서 84->19ms).
-- `descent=` / `descentWeight` — ST 와 같은 이유로 기본 0 (미측정 아님:
-  ST 에서 BASIC 하강은 as-move 보다 약했고, 여기서는 as-move 채택으로 대체).
-- `la=` (`lateAcceptanceSize`) — 집계화로 스루풋이 3-10배 뛴 뒤에도
-  480/2000(@120), 3200/6400(@200) 모두 자동값 `clamp(8 x talk, 800, 3200)` 을
-  못 이겼다. 자동 유지.
+- `hot=` / `hotTalkProbability` — targets talks with hard violations (type-incompatible
+  cell, tag violations, speaker/room unavailable, shared cell — O(1) checks) via rejection
+  sampling. Wins hard 4-2 at scaled:120 but loses 1-5 at scaled:200 (the hot set is 70%+
+  of talks, so the bias goes blunt); 45/60 tie. Too few data points for a per-size rule,
+  so the default is 0. It does reach feasibility faster (84->19 ms at 60).
+- `descent=` / `descentWeight` — default 0 for the same reason as ST (not unmeasured: in ST
+  BASIC descent was weaker than as-move, and here as-move replaces it).
+- `la=` (`lateAcceptanceSize`) — even after aggregation raised throughput 3-10x,
+  480/2000 (@120) and 3200/6400 (@200) all failed to beat the automatic value
+  `clamp(8 x talk, 800, 3200)`. Kept automatic.
 
-원시 데이터/프로토콜: 캠페인 로그 (6시드 인터리브 A/B, 시드별 승패는
-lexicographic hard-then-soft 비교).
+Raw data / protocol: campaign logs (6-seed interleaved A/B; per-seed win/loss is a
+lexicographic hard-then-soft comparison).
 
 <!-- usage-and-extending -->
 
@@ -135,5 +136,6 @@ solver's `solve` before the engine runs — the engine only fills what is still 
 
 ## Benchmark
 
-[`benchmarks/conference-scheduling`](../../benchmarks/conference-scheduling) compares this use case with
-OR-Tools CP-SAT on the same instances, rescored by the same evaluator.
+[`benchmarks/conference-scheduling`](../../benchmarks/conference-scheduling) compares this use case with OR-Tools CP-SAT and Timefold Solver 2.6.0 on the same instances. Every solution is rescored by the Timefold quickstart's `ConstraintProvider`, so all three are judged by the same rules.
+
+Latest run (30 s per solver, 1 instance): best score by the engine on 1, CP-SAT on 1, Timefold on 0 (ties count for each). Full table: [benchmarks/conference-scheduling/README.md](../../benchmarks/conference-scheduling/README.md#results).

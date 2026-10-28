@@ -1,15 +1,16 @@
-"""제약 DTO — API 로 주고받는 제약 표현.
+"""Constraint DTOs — the constraint representation exchanged through an API.
 
-`registry.CONSTRAINT_TYPES` 의 각 제약 클래스에서 pydantic 모델을 **런타임에**
-만든다. 제약의 데이터클래스 필드가 그대로 DTO 필드가 되고, `type` 이 어느
-제약인지 가리키는 판별자다. 코드 생성 파일이 따로 없으니 제약에 파라미터를
-하나 추가하면 API 스키마가 그 자리에서 따라온다 — 두 곳이 어긋날 일이 없다.
+Builds a pydantic model **at runtime** from each constraint class in
+`registry.CONSTRAINT_TYPES`. A constraint's dataclass fields become the DTO
+fields, and `type` is the discriminator naming the constraint. There is no
+generated code file, so adding a parameter to a constraint updates the API
+schema on the spot — the two cannot drift apart.
 
     {"type": "weekly_period_counts", "hard": false, "weight": 10000}
     {"type": "teacher_gap", "weight": 20}
 
-서버는 받은 DTO 목록을 `to_constraint()` 로 풀어 `solve(constraints=...)` 에
-그대로 넘긴다. 기본 제약 위에 얹으려면 `registry.merge` 를 쓴다.
+A caller unpacks the received DTO list with `to_constraint()` and passes it to
+`solve(constraints=...)` as is. To build on top of the defaults use `registry.merge`.
 """
 
 from __future__ import annotations
@@ -30,7 +31,7 @@ from teacher_scheduling.solver.registry import (
 
 
 class ConstraintDtoBase(BaseModel):
-    """제약 DTO 공통 몸통. `type` 으로 제약 클래스를 찾아 그대로 되살린다."""
+    """Common body of the constraint DTOs. Finds the constraint class by `type` and rebuilds it as is."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -41,7 +42,7 @@ class ConstraintDtoBase(BaseModel):
 
 
 def _dto_for(constraint_type: type[Constraint]) -> type[ConstraintDtoBase]:
-    """제약 클래스 하나 -> pydantic DTO 하나. 데이터클래스 필드가 곧 DTO 필드다."""
+    """One constraint class -> one pydantic DTO. The dataclass fields are the DTO fields."""
     hints = get_type_hints(constraint_type)
     fields: dict[str, Any] = {"type": (Literal[constraint_type.name], ...)}
     for field in constraint_type.__dataclass_fields__.values():
@@ -49,20 +50,20 @@ def _dto_for(constraint_type: type[Constraint]) -> type[ConstraintDtoBase]:
     return create_model(f"{constraint_type.__name__}Dto", __base__=ConstraintDtoBase, **fields)
 
 
-#: 제약 클래스별 DTO. 순서는 `CONSTRAINT_TYPES` 와 같다.
+#: DTO per constraint class. Same order as `CONSTRAINT_TYPES`.
 CONSTRAINT_DTOS: tuple[type[ConstraintDtoBase], ...] = tuple(_dto_for(c) for c in CONSTRAINT_TYPES)
 
-#: 판별자 union. pydantic 이 `type` 을 보고 알맞은 DTO 로 검증한다.
+#: Discriminated union. pydantic validates against the right DTO by looking at `type`.
 ConstraintDto = Annotated[reduce(or_, CONSTRAINT_DTOS), Field(discriminator="type")]
 
 
 def to_constraints(dtos: list[ConstraintDtoBase]) -> tuple[Constraint, ...]:
-    """DTO 목록 -> 제약 목록."""
+    """DTO list -> constraint list."""
     return tuple(dto.to_constraint() for dto in dtos)
 
 
 def catalog() -> tuple[ConstraintSpec, ...]:
-    """등록된 제약의 카탈로그. 서버가 목록을 손으로 베끼지 않게 하는 원본."""
+    """The catalog of registered constraints. The source that keeps callers from copying the list by hand."""
     return constraint_specs()
 
 

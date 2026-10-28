@@ -1,51 +1,52 @@
-# Facility Location (설비 입지 선정)
+# Facility Location
 
 Timefold quickstart [facility-location](https://github.com/TimefoldAI/timefold-quickstarts/tree/stable/use-cases/facility-location)
-(Java/Quarkus) 를 이 레포의 C++ 엔진(`include/optimaru/`) 위에 포팅한 use case.
-수요처(Consumer)마다 시설(Facility) 하나를 고르는 고전 FLP 다.
+(Java/Quarkus) ported onto this repository's C++ engine (`include/optimaru/`).
+The classic FLP: pick one facility for every consumer.
 
-## 도메인 (BASIC 변수)
+## Domain (BASIC variable)
 
-- `Consumer.facility` — 유일한 planning variable. `facilities` 인덱스,
-  `-1` = 미배정 (Java 의 `@PlanningVariable Facility facility` null).
-- `Facility` — Java 에선 `@InverseRelationShadowVariable(consumers)` 를 가진
-  shadow entity 지만, 여기서는 집계(배정 수요·수요처 수)를 score calculator
-  가 유지하므로 순수 problem fact 다.
-- 거리 = `ceil(유클리드 도(degree) 거리 x 111km)` (Java `Location.getDistanceTo`).
+- `Consumer.facility` — the only planning variable. An index into `facilities`,
+  `-1` = unassigned (Java's `@PlanningVariable Facility facility` null).
+- `Facility` — a shadow entity with `@InverseRelationShadowVariable(consumers)` in Java,
+  but here the score calculator maintains the aggregates (assigned demand, consumer
+  count), so it is a plain problem fact.
+- Distance = `ceil(Euclidean degree distance x 111 km)` (Java `Location.getDistanceTo`).
 
-## 제약 (HardSoftScore — 엔진 점수형 그대로, 매핑 불필요)
+## Constraints (HardSoftScore — the engine score type as-is, no mapping)
 
-| 제약 | 수준 | 내용 |
+| Constraint | Level | What it measures |
 |---|---|---|
-| facility capacity | hard | 사용 시설별 `max(0, 배정 수요 합 - capacity)` 페널티 |
-| facility setup cost | soft x2 | 수요처가 1개 이상 배정된 시설의 설치비 |
-| distance from facility | soft x6 | 배정 수요처-시설 거리(m) |
+| facility capacity | hard | `max(0, assigned demand - capacity)` per used facility |
+| facility setup cost | soft x2 | setup cost of facilities with at least one consumer |
+| distance from facility | soft x6 | consumer-to-facility distance (m) |
 
-거리 가중치 **6** 은 Java 솔루션의 `ConstraintWeightOverrides` 데모 값이다
-(provider 선언은 `ofSoft(5)`, 솔루션이 `{"distance from facility": ofSoft(6)}`
-으로 오버라이드). `FacilityLocationProblem.distanceFromFacilityWeight` /
-`setupCostWeight` 필드로 조정할 수 있다 (기본 6 / 2 = quickstart 유효값).
+The distance weight **6** is the `ConstraintWeightOverrides` demo value of the Java
+solution (the provider declares `ofSoft(5)`; the solution overrides it with
+`{"distance from facility": ofSoft(6)}`). Adjust it with the
+`FacilityLocationProblem.distanceFromFacilityWeight` / `setupCostWeight` fields
+(default 6 / 2 = the effective quickstart values).
 
 ## cpp/
 
-- `include/fl/domain.hpp` — 도메인 + `optimaru::SolutionDescriptor` 특수화
-- `score_calculator` — full recompute (정답 기준)
-- `incremental_calculator` — before/after 훅, 무브당 O(1)
-- `solver` — 엔진 래퍼 (CH + Late Acceptance + adaptive ruin&recreate)
-- `src/main.cpp` — Java `DemoDataGenerator` 규모 재현 데모
-  (시설 30 x 용량 150, 수요처 60 x 수요 15, 런던 박스, 설치비 N(50000, 10000²))
+- `include/fl/domain.hpp` — domain + `optimaru::SolutionDescriptor` specialization
+- `score_calculator` — full recompute (the reference)
+- `incremental_calculator` — before/after hooks, O(1) per move
+- `solver` — engine wrapper (CH + Late Acceptance + adaptive ruin & recreate)
+- `src/main.cpp` — demo reproducing the Java `DemoDataGenerator` scale
+  (30 facilities x capacity 150, 60 consumers x demand 15, London box, setup cost N(50000, 10000²))
 
 ```bash
 cd cpp
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j4
-./build/fl_test      # 제약별 손계산 + 3000 랜덤 무브 증분==풀 + FULL_ASSERT solve
-./build/fl_demo 10   # 10초 solve; hard 0 + 전 수요처 배정 확인 (exit 0)
+./build/fl_test      # per-constraint hand checks + 3000 random moves incremental==full + FULL_ASSERT solve
+./build/fl_demo 10   # 10 s solve; checks hard 0 + every consumer assigned (exit 0)
 ```
 
 ## python/
 
-pybind11 패키지 `facility_location` (모듈 `facility_location._core`).
+pybind11 package `facility_location` (module `facility_location._core`).
 
 ```bash
 cd python
@@ -61,7 +62,7 @@ fl.solve(problem, time_limit_seconds=5.0, random_seed=42)
 print(problem.score, problem.used_facility_count(), problem.total_cost())
 ```
 
-pydantic v2 직렬화 미러는 `facility_location.models`
+The pydantic v2 serialization mirror is `facility_location.models`
 (`FacilityLocationProblemModel.from_core / to_core`).
 
 <!-- usage-and-extending -->
@@ -131,5 +132,6 @@ solver's `solve` before the engine runs — the engine only fills what is still 
 
 ## Benchmark
 
-[`benchmarks/facility-location`](../../benchmarks/facility-location) compares this use case with
-OR-Tools CP-SAT on the same instances, rescored by the same evaluator.
+[`benchmarks/facility-location`](../../benchmarks/facility-location) compares this use case with OR-Tools CP-SAT and Timefold Solver 2.6.0 on the same instances. Every solution is rescored by the Timefold quickstart's `ConstraintProvider`, so all three are judged by the same rules.
+
+Latest run (30 s per solver, 3 instances): best score by the engine on 1, CP-SAT on 3, Timefold on 0 (ties count for each). Full table: [benchmarks/facility-location/README.md](../../benchmarks/facility-location/README.md#results).

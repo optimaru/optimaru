@@ -1,30 +1,34 @@
-"""제약 카탈로그 — 제약 하나가 클래스 하나인 플러그인 레지스트리.
+"""Constraint catalog — a plugin registry with one class per constraint.
 
-클래스의 필드가 곧 그 제약의 파라미터이고, `name` 이 API 에서 쓰는 식별자다.
-`solve()` 는 이 객체들의 목록 하나만 받는다 — 하드 목록과 소프트 목록을 따로
-넘기지 않고, 제약이 스스로 `model.add()` 로 막을지(하드) 벌점 식을 돌려줄지
-(소프트) 정한다. `build()` 가 None 을 돌려주면 하드로만 동작한 것이고,
-식을 돌려주면 그 식이 `name` 이름의 벌점 항목이 된다.
+A class's fields are the constraint's parameters and `name` is its API
+identifier. `solve()` takes a single list of these objects — no separate hard
+and soft lists; each constraint decides itself whether to block with
+`model.add()` (hard) or return a penalty expression (soft). When `build()`
+returns None it acted as a hard constraint only; an expression it returns
+becomes the penalty term named `name`.
 
     from teacher_scheduling.solver.registry import WeeklyPeriodCounts, default_constraints, merge
 
-    # 못 채운 시수를 INFEASIBLE 대신 아주 비싼 벌점으로 (= solve_partial)
+    # Turn unfillable periods into a very expensive penalty instead of INFEASIBLE (= solve_partial)
     timetable = solve(
         problem,
         config,
         constraints=merge(default_constraints(), WeeklyPeriodCounts(hard=False, weight=10_000)),
     )
 
-가중치는 제약 인스턴스의 `weight` 필드가 원본이다. `weight` 가 없는 커스텀
-제약은 `ObjectiveWeights.weight_for(name)` 로 찾고, 거기에도 없으면 1 로 본다.
+Weights come from the constraint instance's `weight` field. A custom
+constraint without `weight` is looked up with `ObjectiveWeights.weight_for(name)`,
+and defaults to 1 if not found there either.
 
-카탈로그(`CONSTRAINT_TYPES` / `constraint_specs()`)는 서버가 "어떤 제약을 어떤
-파라미터로 켤 수 있는가" 를 그대로 읽어 가는 단일 원본이다. 서버가 이름을
-따로 관리하면 솔버와 갈라지므로, 목록을 손으로 베끼지 말고 여기서 읽는다.
+The catalog (`CONSTRAINT_TYPES` / `constraint_specs()`) is the single source a
+caller reads to learn "which constraints can be switched on, with which
+parameters". A separately maintained list of names would drift from the
+solver, so read it from here rather than copying it by hand.
 
-주의: `validate.validate_timetable` / `compute_penalties` 는 기본 구성
-(하드 H1~H10, 소프트 S1~S6) 기준으로만 검사한다. 제약을 완화하거나 커스텀
-제약을 주입해 얻은 해에서 그 규칙이 지켜졌는지의 검증은 호출자 몫이다.
+Note: `validate.validate_timetable` / `compute_penalties` check against the
+default configuration (hard H1–H10, soft S1–S6) only. Whether a solution
+obtained with relaxed or injected custom constraints respects those rules is
+for the caller to verify.
 """
 
 from collections.abc import Iterable, Sequence
@@ -38,17 +42,18 @@ from teacher_scheduling.solver import objective
 from teacher_scheduling.solver.config import ObjectiveWeights
 from teacher_scheduling.solver.variables import TimetableVariables
 
-#: 미배정 1시간의 기본 벌점. 다른 소프트 항목 합보다 확실히 크게 잡는다.
+#: Default penalty per unassigned period. Clearly larger than the sum of the other soft terms.
 UNASSIGNED_WEIGHT = 10_000
 
 
 @runtime_checkable
 class Constraint(Protocol):
-    """제약 플러그인.
+    """A constraint plugin.
 
-    `build()` 는 모델에 하드 제약을 걸고, 벌점으로 셀 것이 있으면 그 선형식을
-    돌려준다. 돌려준 식은 `Timetable.penalties[name]` 으로 보고되고 `weight`
-    가중치로 목적함수에 더해진다.
+    `build()` adds hard constraints to the model and, if there is something to
+    count as a penalty, returns that linear expression. The returned expression
+    is reported as `Timetable.penalties[name]` and added to the objective with
+    weight `weight`.
     """
 
     name: str
@@ -56,21 +61,22 @@ class Constraint(Protocol):
     def build(self, model: cp_model.CpModel, variables: TimetableVariables) -> cp_model.LinearExpr | None: ...
 
 
-# ---------------------------------------------------------------- 하드 제약 (H1~H10)
+# ---------------------------------------------------------------- hard constraints (H1–H10)
 
 
 @dataclass(frozen=True)
 class WeeklyPeriodCounts:
-    """H1: 강좌별 주당 시수.
+    """H1: weekly periods per course.
 
-    `hard=True` 면 정확히 맞추고, `hard=False` 면 '이하' 로 완화한 뒤 못 채운
-    시수를 벌점으로 돌린다 — 컴시간의 [미배정 목록] 이 이 모드다. 완화 모드의
-    `weight` 를 다른 소프트 항목 합보다 크게 두면 채울 수 있는 시수는 전부
-    채우고 정말 불가능한 것만 미배정으로 남는다.
+    `hard=True` matches them exactly; `hard=False` relaxes to "at most" and
+    turns unfilled periods into a penalty — Comcigan's "unassigned list" works
+    this way. With the relaxed mode's `weight` above the sum of the other soft
+    terms, every period that can be filled is filled and only the truly
+    impossible ones stay unassigned.
     """
 
     name: ClassVar[str] = "weekly_period_counts"
-    label: ClassVar[str] = "주당 시수 충족"
+    label: ClassVar[str] = "Weekly periods met"
 
     hard: bool = True
     weight: int = UNASSIGNED_WEIGHT
@@ -82,9 +88,10 @@ class WeeklyPeriodCounts:
 
         for course in variables.problem.courses:
             model.add(sum(variables.course_vars(course.id)) <= course.periods_per_week)
-        # 분반 그룹은 대표 강좌 하나만 센다. H5 로 그룹 전원이 같은 시간에 묶여
-        # 있어 미배정 시수도 항상 같은데, 전원을 세면 한 칸 못 채운 것에 그룹
-        # 크기만큼 벌점이 붙어 분반이 일반 강좌보다 부당하게 우선된다.
+        # A parallel group counts only its representative course. H5 ties the whole
+        # group to the same times, so its unassigned periods are always equal; counting
+        # every member would charge one missing cell group-size times and unfairly
+        # favour parallel groups over ordinary courses.
         terms = [
             course.periods_per_week - sum(variables.course_vars(course.id))
             for course in variables.occupancy_representatives()
@@ -94,107 +101,107 @@ class WeeklyPeriodCounts:
 
 @dataclass(frozen=True)
 class _HardOnly:
-    """파라미터 없이 켜고 끄기만 하는 하드 제약의 공통 몸통."""
+    """Common body of hard constraints that are only switched on or off, without parameters."""
 
     def build(self, model: cp_model.CpModel, variables: TimetableVariables) -> None:
-        """벌점 식을 안 돌려주므로(None) 하드로만 동작한다."""
+        """Returns no penalty expression (None), so it acts as a hard constraint only."""
         self._impl(model, variables)
 
     @staticmethod
-    def _impl(model: cp_model.CpModel, variables: TimetableVariables) -> None:  # pragma: no cover - 하위에서 지정
+    def _impl(model: cp_model.CpModel, variables: TimetableVariables) -> None:  # pragma: no cover - set by subclasses
         raise NotImplementedError
 
 
 @dataclass(frozen=True)
 class FixedSlots(_HardOnly):
-    """H2: 고정 시간 배정."""
+    """H2: fixed-time placement."""
 
     name: ClassVar[str] = "fixed_slots"
-    label: ClassVar[str] = "고정 배치 / 금지 시간"
+    label: ClassVar[str] = "Fixed placements / forbidden times"
     _impl = staticmethod(hard_impl._add_fixed_slots)
 
 
 @dataclass(frozen=True)
 class ParallelGroups(_HardOnly):
-    """H5: 분반 동시 진행."""
+    """H5: parallel sections run together."""
 
     name: ClassVar[str] = "parallel_groups"
-    label: ClassVar[str] = "분반 동시 배치"
+    label: ClassVar[str] = "Parallel sections together"
     _impl = staticmethod(hard_impl._add_parallel_groups)
 
 
 @dataclass(frozen=True)
 class ClassGroupConflicts(_HardOnly):
-    """H3: 학급 충돌 금지."""
+    """H3: no class clashes."""
 
     name: ClassVar[str] = "class_group_conflicts"
-    label: ClassVar[str] = "학급 중복 배정 금지"
+    label: ClassVar[str] = "No double-booked class"
     _impl = staticmethod(hard_impl._add_class_group_conflicts)
 
 
 @dataclass(frozen=True)
 class TeacherConflicts(_HardOnly):
-    """H4: 교사 충돌 금지."""
+    """H4: no teacher clashes."""
 
     name: ClassVar[str] = "teacher_conflicts"
-    label: ClassVar[str] = "교사 중복 배정 금지"
+    label: ClassVar[str] = "No double-booked teacher"
     _impl = staticmethod(hard_impl._add_teacher_conflicts)
 
 
 @dataclass(frozen=True)
 class RoomCapacity(_HardOnly):
-    """H6: 특별실 수용량."""
+    """H6: special-room capacity."""
 
     name: ClassVar[str] = "room_capacity"
-    label: ClassVar[str] = "특별실 수용량"
+    label: ClassVar[str] = "Special-room capacity"
     _impl = staticmethod(hard_impl._add_room_capacity)
 
 
 @dataclass(frozen=True)
 class DailyCourseLimits(_HardOnly):
-    """H7: 강좌 일일 최대 시수."""
+    """H7: daily maximum periods per course."""
 
     name: ClassVar[str] = "daily_course_limits"
-    label: ClassVar[str] = "강좌 일일 시수 상한"
+    label: ClassVar[str] = "Daily periods per course"
     _impl = staticmethod(hard_impl._add_daily_course_limits)
 
 
 @dataclass(frozen=True)
 class BlockPeriods(_HardOnly):
-    """H8: 블록타임(연강)."""
+    """H8: block time (consecutive periods)."""
 
     name: ClassVar[str] = "block_periods"
-    label: ClassVar[str] = "연강 배치"
+    label: ClassVar[str] = "Consecutive blocks"
     _impl = staticmethod(hard_impl._add_block_periods)
 
 
 @dataclass(frozen=True)
 class TeacherWorkload(_HardOnly):
-    """H9: 교사 일일/주당 최대 시수."""
+    """H9: daily/weekly maximum periods per teacher."""
 
     name: ClassVar[str] = "teacher_workload"
-    label: ClassVar[str] = "교사 시수 상한"
+    label: ClassVar[str] = "Teacher period caps"
     _impl = staticmethod(hard_impl._add_teacher_workload)
 
 
 @dataclass(frozen=True)
 class TeacherConsecutiveLimits(_HardOnly):
-    """H10: 교사 연속 수업 제한."""
+    """H10: teacher consecutive-lessons limit."""
 
     name: ClassVar[str] = "teacher_consecutive_limits"
-    label: ClassVar[str] = "교사 연속 수업 제한"
+    label: ClassVar[str] = "Teacher consecutive lessons"
     _impl = staticmethod(hard_impl._add_teacher_consecutive_limits)
 
 
-# ---------------------------------------------------------------- 소프트 항목 (S1~S6)
+# ---------------------------------------------------------------- soft terms (S1–S6)
 
 
 @dataclass(frozen=True)
 class TeacherGap:
-    """S1: 교사 하루 일과 중간의 공강 수."""
+    """S1: idle periods in the middle of a teacher's day."""
 
     name: ClassVar[str] = "teacher_gap"
-    label: ClassVar[str] = "교사 공강 최소화"
+    label: ClassVar[str] = "Minimise teacher gaps"
 
     weight: int = 20
 
@@ -204,10 +211,10 @@ class TeacherGap:
 
 @dataclass(frozen=True)
 class TeacherWorkday:
-    """S2: 교사 출근일 수."""
+    """S2: number of teacher working days."""
 
     name: ClassVar[str] = "teacher_workday"
-    label: ClassVar[str] = "교사 출근일 최소화"
+    label: ClassVar[str] = "Minimise teacher working days"
 
     weight: int = 3
 
@@ -217,10 +224,10 @@ class TeacherWorkday:
 
 @dataclass(frozen=True)
 class TeacherFreeDay:
-    """S3: 희망 공강일에 수업이 잡힌 횟수."""
+    """S3: lessons placed on a requested free day."""
 
     name: ClassVar[str] = "teacher_free_day"
-    label: ClassVar[str] = "교사 희망 공강일"
+    label: ClassVar[str] = "Teacher requested free days"
 
     weight: int = 30
 
@@ -231,10 +238,10 @@ class TeacherFreeDay:
 
 @dataclass(frozen=True)
 class ClassGap:
-    """S4: 학급 하루 일과 중간의 공강 수."""
+    """S4: idle periods in the middle of a class's day."""
 
     name: ClassVar[str] = "class_gap"
-    label: ClassVar[str] = "학급 공강 최소화"
+    label: ClassVar[str] = "Minimise class gaps"
 
     weight: int = 10
 
@@ -244,10 +251,10 @@ class ClassGap:
 
 @dataclass(frozen=True)
 class AvoidedPeriod:
-    """S5: 과목 기피 교시 배치 횟수."""
+    """S5: lessons placed in a subject's avoided periods."""
 
     name: ClassVar[str] = "avoided_period"
-    label: ClassVar[str] = "기피 교시 회피"
+    label: ClassVar[str] = "Avoid avoided periods"
 
     weight: int = 5
 
@@ -257,10 +264,10 @@ class AvoidedPeriod:
 
 @dataclass(frozen=True)
 class NonPreferredPeriod:
-    """S6: 과목 선호 교시를 벗어난 배치 횟수."""
+    """S6: lessons placed outside a subject's preferred periods."""
 
     name: ClassVar[str] = "non_preferred_period"
-    label: ClassVar[str] = "선호 교시 우대"
+    label: ClassVar[str] = "Favour preferred periods"
 
     weight: int = 1
 
@@ -268,11 +275,11 @@ class NonPreferredPeriod:
         return objective._sum_or_none(objective._period_preference_vars(variables, avoided=False))
 
 
-# ---------------------------------------------------------------- 카탈로그
+# ---------------------------------------------------------------- catalog
 
-#: 등록된 제약 전부. 순서가 곧 기본 조립 순서다(하드 H1~H10 -> 소프트 S1~S6).
-#: 여기에 클래스를 추가하면 DTO(`teacher_scheduling.api`)와 서버 카탈로그에
-#: 자동으로 따라 붙는다.
+#: Every registered constraint. The order is the default assembly order (hard H1–H10 -> soft S1–S6).
+#: A class added here appears automatically in the DTOs (`teacher_scheduling.api`)
+#: and in the catalog.
 CONSTRAINT_TYPES: tuple[type[Constraint], ...] = (
     WeeklyPeriodCounts,  # H1
     FixedSlots,  # H2
@@ -297,7 +304,7 @@ CONSTRAINT_TYPE_BY_NAME: dict[str, type[Constraint]] = {c.name: c for c in CONST
 
 @dataclass(frozen=True)
 class ConstraintParam:
-    """제약이 받는 파라미터 하나 (= 데이터클래스 필드 하나)."""
+    """One parameter a constraint takes (= one dataclass field)."""
 
     name: str
     type_name: str
@@ -306,12 +313,12 @@ class ConstraintParam:
 
 @dataclass(frozen=True)
 class ConstraintSpec:
-    """카탈로그 한 줄. 서버가 "무엇을 어떻게 켤 수 있는가" 를 이걸로 그린다."""
+    """One catalog row: what can be switched on, and how."""
 
     name: str
     label: str
-    #: `"hard"` 는 끄거나 완화할 수 없는 제약, `"soft"` 는 가중치만 있는 벌점,
-    #: `"either"` 는 `hard` 파라미터로 두 모드를 다 구현한 제약이다.
+    #: `"hard"` cannot be switched off or relaxed, `"soft"` is a weighted penalty only,
+    #: `"either"` implements both modes through its `hard` parameter.
     kind: str
     params: tuple[ConstraintParam, ...]
 
@@ -331,7 +338,7 @@ def _params_of(constraint_type: type[Constraint]) -> tuple[ConstraintParam, ...]
 
 
 def constraint_specs() -> tuple[ConstraintSpec, ...]:
-    """등록된 제약의 이름/라벨/파라미터. 손으로 베낀 목록 대신 이걸 읽는다."""
+    """Names/labels/parameters of the registered constraints. Read this instead of a hand-copied list."""
     specs = []
     for constraint_type in CONSTRAINT_TYPES:
         params = _params_of(constraint_type)
@@ -347,11 +354,12 @@ def constraint_specs() -> tuple[ConstraintSpec, ...]:
 
 
 def default_constraints(weights: ObjectiveWeights | None = None) -> tuple[Constraint, ...]:
-    """기본 구성(하드 H1~H10 + 소프트 S1~S6)을 기본 파라미터로 조립한다.
+    """Assembles the default configuration (hard H1–H10 + soft S1–S6) with default parameters.
 
-    `weights` 를 주면 거기에 **실제로 들어 있는 이름만** 골라 `weight` 를 덮어쓴다
-    — `ObjectiveWeights` 로만 가중치를 주던 기존 호출을 그대로 받기 위한 것이다.
-    모르는 이름에 `weight_for` 의 기본값 1 이 끼어들면 안 되므로 존재 여부를 본다.
+    Given `weights`, overrides `weight` only for the names **actually present
+    there** — so that existing calls passing weights via `ObjectiveWeights` keep
+    working. `weight_for`'s default of 1 must not leak in for unknown names,
+    hence the presence check.
     """
     given = weights.model_dump() if weights is not None else {}
     built = []
@@ -365,9 +373,9 @@ def default_constraints(weights: ObjectiveWeights | None = None) -> tuple[Constr
 
 
 def merge(base: Sequence[Constraint], *overrides: Constraint) -> tuple[Constraint, ...]:
-    """`base` 에서 같은 이름을 `overrides` 로 갈아끼우고, 새 이름은 뒤에 붙인다.
+    """Replaces same-named entries of `base` with `overrides` and appends new names.
 
-    조립 순서(= 변수 생성 순서)를 건드리지 않으려고 자리를 그대로 지킨다.
+    Keeps positions so the assembly order (= variable creation order) does not change.
     """
     replacement = {constraint.name: constraint for constraint in overrides}
     merged = [replacement.pop(constraint.name, constraint) for constraint in base]
@@ -376,7 +384,7 @@ def merge(base: Sequence[Constraint], *overrides: Constraint) -> tuple[Constrain
 
 
 def weight_of(constraint: Constraint, weights: ObjectiveWeights) -> int:
-    """제약의 가중치. 인스턴스의 `weight` 가 원본이고, 없으면 `weights` 에서 찾는다."""
+    """A constraint's weight. The instance's `weight` is the source; otherwise looked up in `weights`."""
     own = getattr(constraint, "weight", None)
     return weights.weight_for(constraint.name) if own is None else own
 
@@ -386,7 +394,7 @@ def build_all(
     variables: TimetableVariables,
     constraints: Iterable[Constraint],
 ) -> objective.PenaltyTerms:
-    """제약들을 순서대로 조립하고, 벌점 식을 돌려준 것만 이름별로 모은다."""
+    """Assembles the constraints in order and collects, by name, the ones that returned a penalty expression."""
     penalties: objective.PenaltyTerms = {}
     for constraint in constraints:
         expr = constraint.build(model, variables)

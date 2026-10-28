@@ -1,4 +1,4 @@
-"""시간표 편성 문제 입력 정의."""
+"""Input definition of the timetabling problem."""
 
 from collections import defaultdict
 from functools import cached_property
@@ -10,7 +10,7 @@ from teacher_scheduling.domain.enums import Weekday
 
 
 class SchoolCalendar(BaseModel):
-    """요일별 교시 수. 금요일만 6교시처럼 요일마다 다르게 줄 수 있다."""
+    """Periods per weekday. Can differ by weekday, e.g. only 6 periods on Friday."""
 
     periods_per_day: dict[Weekday, int] = Field(min_length=1)
 
@@ -40,7 +40,7 @@ class SchoolCalendar(BaseModel):
 
 
 class TimetableProblem(BaseModel):
-    """편성에 필요한 모든 입력의 묶음."""
+    """Every input the scheduling needs, bundled."""
 
     calendar: SchoolCalendar
     subjects: tuple[Subject, ...]
@@ -106,21 +106,21 @@ class TimetableProblem(BaseModel):
         errors.extend(self._check_parallel_groups())
         errors.extend(self._check_slot_validity())
         if errors:
-            raise ValueError("입력 데이터 오류:\n- " + "\n- ".join(errors))
+            raise ValueError("invalid input data:\n- " + "\n- ".join(errors))
         return self
 
     def _check_duplicate_ids(self) -> list[str]:
         errors = []
         for label, ids in (
-            ("과목", [s.id for s in self.subjects]),
-            ("교사", [t.id for t in self.teachers]),
-            ("학급", [c.id for c in self.class_groups]),
-            ("교실", [r.id for r in self.rooms]),
-            ("강좌", [c.id for c in self.courses]),
+            ("subject", [s.id for s in self.subjects]),
+            ("teacher", [t.id for t in self.teachers]),
+            ("class", [c.id for c in self.class_groups]),
+            ("room", [r.id for r in self.rooms]),
+            ("course", [c.id for c in self.courses]),
         ):
             duplicates = {i for i in ids if ids.count(i) > 1}
             if duplicates:
-                errors.append(f"{label} id 중복: {sorted(duplicates)}")
+                errors.append(f"duplicate {label} ids: {sorted(duplicates)}")
         return errors
 
     def _check_course_references(self) -> list[str]:
@@ -131,20 +131,20 @@ class TimetableProblem(BaseModel):
         room_types = {r.room_type for r in self.rooms}
         for course in self.courses:
             if course.subject_id not in subject_ids:
-                errors.append(f"[{course.id}] 존재하지 않는 과목: {course.subject_id}")
+                errors.append(f"[{course.id}] unknown subject: {course.subject_id}")
                 continue
             if course.class_group_id not in class_ids:
-                errors.append(f"[{course.id}] 존재하지 않는 학급: {course.class_group_id}")
+                errors.append(f"[{course.id}] unknown class: {course.class_group_id}")
             for teacher_id in course.teacher_ids:
                 if teacher_id not in teacher_ids:
-                    errors.append(f"[{course.id}] 존재하지 않는 교사: {teacher_id}")
+                    errors.append(f"[{course.id}] unknown teacher: {teacher_id}")
                     continue
                 allowed = self.teacher_by_id[teacher_id].subject_ids
                 if allowed and course.subject_id not in allowed:
-                    errors.append(f"[{course.id}] {teacher_id} 는 {course.subject_id} 담당이 아닙니다")
+                    errors.append(f"[{course.id}] {teacher_id} does not teach {course.subject_id}")
             room_type = self.subject_by_id[course.subject_id].required_room_type
             if room_type is not None and room_type not in room_types:
-                errors.append(f"[{course.id}] 필요한 특별실이 없습니다: {room_type}")
+                errors.append(f"[{course.id}] no room of the required type: {room_type}")
         return errors
 
     def _check_parallel_groups(self) -> list[str]:
@@ -152,22 +152,22 @@ class TimetableProblem(BaseModel):
         for group, courses in self.courses_by_parallel_group.items():
             periods = {c.periods_per_week for c in courses}
             if len(periods) > 1:
-                errors.append(f"분반 그룹 {group} 의 주당 시수가 서로 다릅니다: {sorted(periods)}")
+                errors.append(f"parallel group {group} has differing weekly periods: {sorted(periods)}")
             blocks = {c.block_periods for c in courses}
             if len(blocks) > 1:
-                errors.append(f"분반 그룹 {group} 의 블록 시수가 서로 다릅니다: {sorted(blocks)}")
+                errors.append(f"parallel group {group} has differing block periods: {sorted(blocks)}")
         return errors
 
     def _check_slot_validity(self) -> list[str]:
         errors = []
         sources: list[tuple[str, frozenset[TimeSlot]]] = [
-            *((f"교사 {t.id} unavailable", t.unavailable) for t in self.teachers),
-            *((f"학급 {c.id} unavailable", c.unavailable) for c in self.class_groups),
-            *((f"강좌 {c.id} fixed_slots", c.fixed_slots) for c in self.courses),
-            *((f"강좌 {c.id} forbidden_slots", c.forbidden_slots) for c in self.courses),
+            *((f"teacher {t.id} unavailable", t.unavailable) for t in self.teachers),
+            *((f"class {c.id} unavailable", c.unavailable) for c in self.class_groups),
+            *((f"course {c.id} fixed_slots", c.fixed_slots) for c in self.courses),
+            *((f"course {c.id} forbidden_slots", c.forbidden_slots) for c in self.courses),
         ]
         for label, slots in sources:
             invalid = [str(s) for s in slots if not self.calendar.contains(s)]
             if invalid:
-                errors.append(f"{label}: 캘린더에 없는 시간 {sorted(invalid)}")
+                errors.append(f"{label}: times not in the calendar {sorted(invalid)}")
         return errors

@@ -1,11 +1,12 @@
-"""편성 결과 검증.
+"""Timetable validation.
 
-솔버와 독립적으로, 결과 시간표가 하드 제약 H1~H10 을 지키는지 다시 확인하고
-소프트 벌점을 손으로 다시 계산한다. 테스트와 CLI 가 함께 쓴다.
+Independently of the solver, checks again that a timetable respects the hard
+constraints H1–H10 and recomputes the soft penalties by hand. Used by the tests
+and the CLI.
 
-기본 레지스트리(하드 H1~H10, 소프트 S1~S6) 기준의 검증이다. `solve()` 에
-커스텀 hard_constraints / soft_terms 를 주입했더라도 그 커스텀 규칙은 여기서
-검사하지 않는다 — 커스텀 제약의 검증은 호출자 몫이다.
+Validation against the default registry (hard H1–H10, soft S1–S6). Custom
+hard_constraints / soft_terms injected into `solve()` are not checked here —
+validating custom constraints is up to the caller.
 """
 
 from collections import Counter, defaultdict
@@ -17,7 +18,7 @@ from teacher_scheduling.domain.solution import ScheduledLesson, Timetable
 
 
 def validate_timetable(problem: TimetableProblem, timetable: Timetable) -> list[str]:
-    """하드 제약 위반 메시지 목록을 돌려준다. 비어 있으면 유효한 시간표다."""
+    """Returns the hard-violation messages. Empty means a valid timetable."""
     checks = (
         _check_slot_validity,
         _check_weekly_counts,  # H1
@@ -25,7 +26,7 @@ def validate_timetable(problem: TimetableProblem, timetable: Timetable) -> list[
         _check_class_conflicts,  # H3
         _check_teacher_conflicts,  # H4
         _check_parallel_groups,  # H5
-        _check_rooms,  # H6 + 배정 일관성
+        _check_rooms,  # H6 + placement consistency
         _check_daily_course_limits,  # H7
         _check_blocks,  # H8
         _check_teacher_workload,  # H9
@@ -38,7 +39,7 @@ def validate_timetable(problem: TimetableProblem, timetable: Timetable) -> list[
 
 
 def compute_penalties(problem: TimetableProblem, timetable: Timetable) -> dict[str, int]:
-    """소프트 벌점(S1~S6)을 결과 시간표에서 직접 다시 센다. 솔버 보고값 검증용."""
+    """Recounts the soft penalties (S1–S6) directly from the timetable. For checking what the solver reports."""
     teacher_periods = _busy_periods(timetable, by_teacher=True)
     class_periods = _busy_periods(timetable, by_teacher=False)
 
@@ -52,7 +53,7 @@ def compute_penalties(problem: TimetableProblem, timetable: Timetable) -> dict[s
 
     return {
         "teacher_gap": sum(_gap_count(periods) for periods in teacher_periods.values()),
-        "teacher_workday": len(teacher_periods),  # 키는 수업이 있는 (교사, 요일)만 생긴다
+        "teacher_workday": len(teacher_periods),  # keys exist only for (teacher, weekday) pairs with lessons
         "teacher_free_day": sum(
             1 for (teacher_id, day) in teacher_periods if day in problem.teacher_by_id[teacher_id].preferred_free_days
         ),
@@ -62,11 +63,11 @@ def compute_penalties(problem: TimetableProblem, timetable: Timetable) -> dict[s
     }
 
 
-# ---------------------------------------------------------------- 공용 집계
+# ---------------------------------------------------------------- shared aggregation
 
 
 def _busy_periods(timetable: Timetable, *, by_teacher: bool) -> dict[tuple[str, Weekday], set[int]]:
-    """(교사|학급, 요일) -> 수업이 있는 교시 집합."""
+    """(teacher|class, weekday) -> set of periods with lessons."""
     busy: dict[tuple[str, Weekday], set[int]] = defaultdict(set)
     for lesson in timetable.lessons:
         owners = lesson.teacher_ids if by_teacher else (lesson.class_group_id,)
@@ -93,24 +94,24 @@ def _lessons_of_course(timetable: Timetable, course_id: str) -> list[ScheduledLe
     return [lesson for lesson in timetable.lessons if lesson.course_id == course_id]
 
 
-# ---------------------------------------------------------------- 개별 검사
+# ---------------------------------------------------------------- individual checks
 
 
 def _check_slot_validity(problem: TimetableProblem, timetable: Timetable) -> list[str]:
-    """수업 칸이 캘린더 안에 있고, 금지/불가 시간과 겹치지 않는지."""
+    """Lesson cells lie in the calendar and do not overlap forbidden/unavailable times."""
     violations = []
     for lesson in timetable.lessons:
         course = problem.course_by_id[lesson.course_id]
         slot = lesson.slot
         if not problem.calendar.contains(slot):
-            violations.append(f"[{course.id}] 캘린더에 없는 시간 {slot}")
+            violations.append(f"[{course.id}] time {slot} not in the calendar")
         if slot in course.forbidden_slots:
-            violations.append(f"[{course.id}] 금지 시간 {slot} 에 배정")
+            violations.append(f"[{course.id}] placed in forbidden time {slot}")
         if slot in problem.class_group_by_id[course.class_group_id].unavailable:
-            violations.append(f"[{course.id}] 학급 불가 시간 {slot} 에 배정")
+            violations.append(f"[{course.id}] placed in class-unavailable time {slot}")
         for teacher_id in lesson.teacher_ids:
             if slot in problem.teacher_by_id[teacher_id].unavailable:
-                violations.append(f"[{course.id}] 교사 {teacher_id} 불가 시간 {slot} 에 배정")
+                violations.append(f"[{course.id}] placed in time {slot} unavailable to teacher {teacher_id}")
     return violations
 
 
@@ -119,7 +120,7 @@ def _check_weekly_counts(problem: TimetableProblem, timetable: Timetable) -> lis
     for course in problem.courses:
         count = len(_lessons_of_course(timetable, course.id))
         if count != course.periods_per_week:
-            violations.append(f"[{course.id}] 주당 시수 {course.periods_per_week} 인데 {count}시간 배정")
+            violations.append(f"[{course.id}] {count} periods placed for {course.periods_per_week} weekly periods")
     return violations
 
 
@@ -129,12 +130,12 @@ def _check_fixed_slots(problem: TimetableProblem, timetable: Timetable) -> list[
         scheduled = {lesson.slot for lesson in _lessons_of_course(timetable, course.id)}
         for slot in course.fixed_slots:
             if slot not in scheduled:
-                violations.append(f"[{course.id}] 고정 시간 {slot} 이 비어 있음")
+                violations.append(f"[{course.id}] fixed time {slot} is empty")
     return violations
 
 
 def _check_class_conflicts(problem: TimetableProblem, timetable: Timetable) -> list[str]:
-    """같은 학급, 같은 시간에는 하나의 점유 단위(분반 그룹은 통째로 하나)만 허용."""
+    """One occupancy unit per class and time (a parallel group counts as one)."""
     violations = []
     occupied: dict[tuple[str, TimeSlot], set[str]] = defaultdict(set)
     for lesson in timetable.lessons:
@@ -142,7 +143,7 @@ def _check_class_conflicts(problem: TimetableProblem, timetable: Timetable) -> l
         occupied[lesson.class_group_id, lesson.slot].add(course.occupancy_key)
     for (class_id, slot), keys in occupied.items():
         if len(keys) > 1:
-            violations.append(f"학급 {class_id} 이 {slot} 에 수업 {sorted(keys)} 중복")
+            violations.append(f"class {class_id} has lessons {sorted(keys)} at the same time {slot}")
     return violations
 
 
@@ -154,7 +155,7 @@ def _check_teacher_conflicts(problem: TimetableProblem, timetable: Timetable) ->
             load[teacher_id, lesson.slot] += 1
     for (teacher_id, slot), count in load.items():
         if count > 1:
-            violations.append(f"교사 {teacher_id} 가 {slot} 에 수업 {count}개")
+            violations.append(f"teacher {teacher_id} has {count} lessons at {slot}")
     return violations
 
 
@@ -167,7 +168,7 @@ def _check_parallel_groups(problem: TimetableProblem, timetable: Timetable) -> l
         reference = slot_sets[courses[0].id]
         for course_id, slots in slot_sets.items():
             if slots != reference:
-                violations.append(f"분반 그룹 {group} 의 {course_id} 가 다른 시간에 진행")
+                violations.append(f"{course_id} of parallel group {group} runs at a different time")
     return violations
 
 
@@ -180,24 +181,24 @@ def _check_rooms(problem: TimetableProblem, timetable: Timetable) -> list[str]:
         required = problem.required_room_type(problem.course_by_id[lesson.course_id])
         if required is None:
             if lesson.room_id is not None:
-                violations.append(f"[{lesson.course_id}] 특별실이 필요 없는데 {lesson.room_id} 배정")
+                violations.append(f"[{lesson.course_id}] needs no special room but got {lesson.room_id}")
             continue
         demand[required, lesson.slot] += 1
         if lesson.room_id is None:
-            violations.append(f"[{lesson.course_id}] {lesson.slot} 에 {required} 미배정")
+            violations.append(f"[{lesson.course_id}] no {required} assigned at {lesson.slot}")
             continue
         room = room_by_id.get(lesson.room_id)
         if room is None or room.room_type != required:
-            violations.append(f"[{lesson.course_id}] {lesson.slot} 에 잘못된 특별실 {lesson.room_id}")
+            violations.append(f"[{lesson.course_id}] wrong special room {lesson.room_id} at {lesson.slot}")
             continue
         usage[lesson.room_id, lesson.slot] += 1
     for (room_id, slot), count in usage.items():
         if count > 1:
-            violations.append(f"특별실 {room_id} 이 {slot} 에 {count}번 사용")
+            violations.append(f"special room {room_id} used {count} times at {slot}")
     for (room_type, slot), count in demand.items():
         capacity = len(problem.rooms_by_type.get(room_type, ()))
         if count > capacity:
-            violations.append(f"{slot} 의 {room_type} 수요 {count} > 보유 {capacity}")
+            violations.append(f"{room_type} demand {count} > {capacity} rooms at {slot}")
     return violations
 
 
@@ -208,12 +209,12 @@ def _check_daily_course_limits(problem: TimetableProblem, timetable: Timetable) 
         limit = course.effective_max_periods_per_day
         for day, count in per_day.items():
             if count > limit:
-                violations.append(f"[{course.id}] {day.label}요일에 {count}시간 (일일 상한 {limit})")
+                violations.append(f"[{course.id}] {count} periods on {day.label} (daily cap {limit})")
     return violations
 
 
 def _check_blocks(problem: TimetableProblem, timetable: Timetable) -> list[str]:
-    """블록타임 강좌는 어느 하루에 block_periods 이상의 연속 배치가 있어야 한다."""
+    """A block course needs block_periods or more consecutive periods on some day."""
     violations = []
     for course in problem.courses:
         if not course.has_block:
@@ -222,7 +223,7 @@ def _check_blocks(problem: TimetableProblem, timetable: Timetable) -> list[str]:
         for lesson in _lessons_of_course(timetable, course.id):
             by_day[lesson.slot.day].add(lesson.slot.period)
         if not any(_max_consecutive_run(periods) >= course.block_periods for periods in by_day.values()):
-            violations.append(f"[{course.id}] {course.block_periods}연강이 없음")
+            violations.append(f"[{course.id}] no block of {course.block_periods} consecutive periods")
     return violations
 
 
@@ -233,11 +234,11 @@ def _check_teacher_workload(problem: TimetableProblem, timetable: Timetable) -> 
         days = {day: periods for (teacher_id, day), periods in busy.items() if teacher_id == teacher.id}
         total = sum(len(periods) for periods in days.values())
         if teacher.max_periods_per_week is not None and total > teacher.max_periods_per_week:
-            violations.append(f"교사 {teacher.id} 주당 {total}시간 (상한 {teacher.max_periods_per_week})")
+            violations.append(f"teacher {teacher.id} has {total} periods a week (cap {teacher.max_periods_per_week})")
         for day, periods in days.items():
             if len(periods) > teacher.max_periods_per_day:
                 violations.append(
-                    f"교사 {teacher.id} {day.label}요일 {len(periods)}시간 (상한 {teacher.max_periods_per_day})"
+                    f"teacher {teacher.id} has {len(periods)} periods on {day.label} (cap {teacher.max_periods_per_day})"
                 )
     return violations
 
@@ -248,7 +249,7 @@ def _check_teacher_consecutive(problem: TimetableProblem, timetable: Timetable) 
         limit = problem.teacher_by_id[teacher_id].max_consecutive_periods
         run = _max_consecutive_run(periods)
         if run > limit:
-            violations.append(f"교사 {teacher_id} {day.label}요일 연속 {run}시간 (상한 {limit})")
+            violations.append(f"teacher {teacher_id} has {run} consecutive periods on {day.label} (cap {limit})")
     return violations
 
 

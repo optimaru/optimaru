@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import time
-
 from ortools.sat.python import cp_model
 
 from cpsat_plugins import ConstraintConfig
@@ -249,24 +247,8 @@ def solve(
     solver = cp_model.CpSolver()
     solver.parameters.random_seed = random_seed
     solver.parameters.num_search_workers = max(1, num_workers)
-    deadline = time.monotonic() + time_limit_seconds
-    status = cp_model.UNKNOWN
-    solved_level = False
-    for level in objective.levels:
-        terms = objective.terms[level]
-        if not terms:
-            continue
-        expression = sum(terms)
-        model.minimize(expression)
-        solver.parameters.max_time_in_seconds = max(0.01, deadline - time.monotonic())
-        status = solver.solve(model)
-        if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-            break
-        model.add(expression == int(solver.value(expression)))
-        solved_level = True
-    if not solved_level:
-        solver.parameters.max_time_in_seconds = max(0.01, deadline - time.monotonic())
-        status = solver.solve(model)
+    solver.parameters.max_time_in_seconds = time_limit_seconds
+    status = objective.solve(solver)
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         raise RuntimeError(
             f"CP-SAT did not find a solution (status={solver.status_name(status)})"

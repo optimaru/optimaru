@@ -63,5 +63,6 @@ solver's `solve` before the engine runs — the engine only fills what is still 
 
 ## Benchmark
 
-[`benchmarks/bed-allocation`](../../benchmarks/bed-allocation) compares this use case with
-OR-Tools CP-SAT on the same instances, rescored by the same evaluator.
+[`benchmarks/bed-allocation`](../../benchmarks/bed-allocation) compares this use case with OR-Tools CP-SAT and Timefold Solver 2.6.0 on the same instances. Every solution is rescored by the Timefold quickstart's `ConstraintProvider`, so all three are judged by the same rules.
+
+Latest run (30 s per solver, 3 instances): best score by the engine on 2, CP-SAT on 1, Timefold on 0 (ties count for each). Full table: [benchmarks/bed-allocation/README.md](../../benchmarks/bed-allocation/README.md#results).

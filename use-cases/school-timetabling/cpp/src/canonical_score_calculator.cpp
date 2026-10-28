@@ -62,7 +62,7 @@ void ScoreCalculator::prepare(Timetable &table)
         if (day < 0)
             fail("dayOfSlot must be >= 0");
         if (period < 1)
-            fail("periodOfSlot must be >= 1 (1-based 교시)");
+            fail("periodOfSlot must be >= 1 (1-based period of the day)");
         table.dayCount = std::max(table.dayCount, day + 1);
         table.maxPeriod = std::max(table.maxPeriod, period);
     }

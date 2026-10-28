@@ -1,36 +1,35 @@
-"""`project_job._core` 타입 스텁 — project-job-scheduling C++ 솔버.
+"""Type stubs for `project_job._core` — the project-job-scheduling C++ solver.
 
-컴파일된 모듈은 `use-cases/project-job-scheduling/cpp` 의 C++ 도메인 구현을
-감싼다; 그 구현은 `include/optimaru` 의 범용 엔진을 임포트한다.
+The compiled module wraps the C++ domain in `use-cases/project-job-scheduling/cpp`,
+which imports the generic engine in `include/optimaru`.
 
-planning variable 은 `Allocation.mode_delay` 하나다 (BASIC int) — Java
-quickstart 의 변수 2개 (executionMode, delay∈[0, delay_range_size)) 의 합성
-인코딩::
+The only planning variable is `Allocation.mode_delay` (BASIC int) — a composite
+encoding of the Java quickstart's two variables (executionMode, delay∈[0, delay_range_size))::
 
-    -1                                  미초기화 (자원 사용 없음,
-                                        날짜는 delay 0/duration 0 통과)
-    delay * max_mode_count + mode_slot  실제 mode index = mode_slot %
-                                        해당 job 의 mode 수 — 전역 값
-                                        범위의 어떤 값도 모든 job 에
-                                        유효하다 (Java 의 per-entity
-                                        value range 의미론 보존)
+    -1                                  uninitialized (no resource use;
+                                        dates pass through with delay 0/duration 0)
+    delay * max_mode_count + mode_slot  real mode index = mode_slot %
+                                        the job's mode count — every value of
+                                        the global range is valid for every
+                                        job (preserving Java's per-entity
+                                        value range semantics)
 
-Java 의 shadow variable 체인 (predecessorsDoneDate → startDate → endDate)
-은 파생 상태다: `calculate_score` / `Solver.solve` 가 위상 정렬 순서로
-재계산해 채운다.
+Java's shadow variable chain (predecessorsDoneDate → startDate → endDate) is
+derived state: `calculate_score` / `Solver.solve` recompute and fill it in
+topological order.
 
-점수 규약 (HardMediumSoftScore, Java quickstart 그대로; 전부 벌점):
-  hard 1.  nonRenewableResourceCapacity  non-renewable 자원별 전체 사용 합이
-                                         용량 초과: -(초과량)
-  hard 2.  renewableResourceCapacity     renewable 자원별 x 일자별 사용 합이
-                                         용량 초과: -(초과량)
-  medium 3. totalProjectDelay            SINK 종료일 - critical path 종료일
-                                         (양수만): -(지연 합)
-  soft 4.  totalMakespan                 -(최대 SINK 종료일)
+Score convention (HardMediumSoftScore, as in the Java quickstart; all penalties):
+  hard 1.  nonRenewableResourceCapacity  total use per non-renewable resource
+                                         above capacity: -(excess)
+  hard 2.  renewableResourceCapacity     use per renewable resource x day
+                                         above capacity: -(excess)
+  medium 3. totalProjectDelay            SINK end date - critical path end date
+                                         (positive only): -(sum of delays)
+  soft 4.  totalMakespan                 -(latest SINK end date)
 
-엔진 내부는 HardSoftScore(int64 hard, double soft) 이고
-`engine.soft = medium * 10**9 + soft` 로 매핑된다 (|soft| < 10**9 에서
-레벨 우선순위 보존; 자세한 규칙은 cpp/include/pjs/domain.hpp).
+Internally the engine uses HardSoftScore(int64 hard, double soft), mapped as
+`engine.soft = medium * 10**9 + soft` (level priority holds while |soft| < 10**9;
+see cpp/include/pjs/domain.hpp for the exact rules).
 """
 
 from collections.abc import Callable, Iterable
@@ -38,7 +37,7 @@ from enum import Enum
 from typing import Any
 
 class Score:
-    """HardMediumSoft 점수. hard 0 == feasible. 사전식 비교(hard 우선)."""
+    """HardMediumSoft score. hard 0 == feasible. Lexicographic comparison (hard first)."""
     @property
     def hard(self) -> int: ...
     @property
@@ -46,7 +45,7 @@ class Score:
     @property
     def soft(self) -> int: ...
     def is_feasible(self) -> bool:
-        """hard >= 0 이면 True."""
+        """True if hard >= 0."""
 
 class JobType(Enum):
     SOURCE = ...
@@ -54,8 +53,8 @@ class JobType(Enum):
     SINK = ...
 
 class Project:
-    """problem fact: 프로젝트. release_date 는 'Total project delay' 제약의
-    기준에만 쓰인다 (시작일을 강제하지 않는다 — Java quickstart 그대로)."""
+    """Problem fact: a project. release_date is only the reference of the 'Total project
+    delay' constraint (it does not force the start — as in the Java quickstart)."""
     def __init__(self, id: str, release_date: int = 0, critical_path_duration: int = 0) -> None: ...
     id: str
     release_date: int
@@ -64,9 +63,9 @@ class Project:
         """release_date + critical_path_duration."""
 
 class Resource:
-    """problem fact: 자원. renewable 이면 용량이 일자별, 아니면 전체 기간
-    기준. `project` 는 ProjectJobSchedule.projects 인덱스, -1 == 글로벌
-    (정보용 — 제약은 capacity/renewable 만 본다)."""
+    """Problem fact: a resource. Renewable capacity is per day, otherwise for the whole
+    horizon. `project` is an index into ProjectJobSchedule.projects, -1 == global
+    (informational — constraints only look at capacity/renewable)."""
     def __init__(self, id: str, capacity: int, renewable: bool = True, project: int = -1) -> None: ...
     id: str
     capacity: int
@@ -74,22 +73,22 @@ class Resource:
     project: int
 
 class ResourceRequirement:
-    """실행 모드의 자원 요구량. `resource` 는 ProjectJobSchedule.resources
-    인덱스."""
+    """Resource demand of an execution mode. `resource` is an index into
+    ProjectJobSchedule.resources."""
     def __init__(self, resource: int, requirement: int) -> None: ...
     resource: int
     requirement: int
 
 class ExecutionMode:
-    """job 의 실행 방식 하나 (기간 + 자원 요구량)."""
+    """One execution mode of a job (duration + resource demand)."""
     def __init__(self, id: str, duration: int = 0, resource_requirements: list[ResourceRequirement] = ...) -> None: ...
     id: str
     duration: int
     resource_requirements: list[ResourceRequirement]
 
 class Job:
-    """problem fact: 작업. `project` 는 인덱스; 모든 job 은 실행 모드가 1개
-    이상 필요하다 (SOURCE/SINK 는 기간 0 모드 1개 — Java quickstart 관례)."""
+    """Problem fact: a job. `project` is an index; every job needs at least one
+    execution mode (SOURCE/SINK have one zero-duration mode — the Java quickstart convention)."""
     def __init__(
         self, id: str, project: int, job_type: JobType = ..., execution_modes: list[ExecutionMode] = ...
     ) -> None: ...
@@ -99,10 +98,10 @@ class Job:
     execution_modes: list[ExecutionMode]
 
 class Allocation:
-    """planning entity: job 하나의 할당 (job 과 1:1). `mode_delay` 가
-    planning variable (모듈 docstring 의 인코딩 참고); 솔버가 쓴다.
-    `predecessor_allocations` 는 선행 할당 인덱스 (비순환이어야 한다).
-    SOURCE/SINK 할당은 항상 pinned; `pinned` 는 STANDARD 도 고정한다."""
+    """Planning entity: the allocation of one job (1:1 with jobs). `mode_delay` is the
+    planning variable (see the encoding in the module docstring), written by the solver.
+    `predecessor_allocations` are predecessor allocation indices (must be acyclic).
+    SOURCE/SINK allocations are always pinned; `pinned` also fixes a STANDARD one."""
     def __init__(
         self,
         id: str,
@@ -124,12 +123,12 @@ class Allocation:
     def end_date(self) -> int: ...
 
 class ProjectJobSchedule:
-    """planning solution. 생성자가 인스턴스를 검증한다 (인덱스 범위, 모드
-    없는 job, 선행 그래프 사이클 -> ValueError) . solve 는 allocations 의
-    `mode_delay` 와 파생 날짜, `score` 를 in place 로 바꾼다.
+    """Planning solution. The constructor validates the instance (index ranges, jobs
+    without modes, predecessor graph cycles -> ValueError). solve changes the allocations'
+    `mode_delay`, the derived dates and `score` in place.
 
-    주의: `allocations` 등 리스트 속성 접근은 복사본을 돌려주므로, 배정을
-    바꾸려면 `set_assignment` 를 써야 한다."""
+    Note: list attributes such as `allocations` return copies, so use
+    `set_assignment` to change assignments."""
     def __init__(
         self,
         projects: list[Project],
@@ -154,24 +153,23 @@ class ProjectJobSchedule:
     def max_mode_count(self) -> int: ...
     def allocation_count(self) -> int: ...
     def value_count(self) -> int:
-        """delay_range_size * max_mode_count (BASIC 값 범위 크기)."""
+        """delay_range_size * max_mode_count (size of the BASIC value range)."""
     def encode_value(self, delay: int, mode_slot: int) -> int:
-        """delay * max_mode_count + mode_slot. job 의 mode index 는 항상
-        유효한 slot 이다."""
+        """delay * max_mode_count + mode_slot. A job's mode index is always a
+        valid slot."""
     def delay_of_value(self, value: int) -> int: ...
     def mode_slot_of_value(self, value: int) -> int: ...
     def execution_mode_index_of_value(self, allocation: int, value: int) -> int:
-        """slot % 해당 job 의 mode 수 (합성 값 -> 실제 mode index)."""
+        """slot % the job's mode count (composite value -> real mode index)."""
     def assignment(self) -> list[int]:
-        """allocation 별 현재 mode_delay 값 (해)."""
+        """Current mode_delay value per allocation (the solution)."""
     def set_assignment(self, assignment: list[int]) -> None:
-        """planning variable 일괄 쓰기 (`allocations` 접근은 복사본이라
-        개별 쓰기는 반영되지 않는다)."""
+        """Bulk-write the planning variable (`allocations` returns copies, so writing
+        individual elements has no effect)."""
 
 def calculate_score(schedule: ProjectJobSchedule) -> Score:
-    """HardMediumSoft 점수의 full recompute; 파생 날짜
-    (predecessors_done_date/start_date/end_date)도 갱신한다 (schedule.score
-    에도 저장)."""
+    """Full recompute of the HardMediumSoft score; also refreshes the derived dates
+    (predecessors_done_date/start_date/end_date) (also stored in schedule.score)."""
 
 class SolverConfig:
     def __init__(self) -> None: ...
@@ -182,10 +180,10 @@ class SolverConfig:
     random_seed: int
     parallel_solver_count: int
     late_acceptance_size: int
-    """0 = 자동: clamp(8 * allocation 수, 400, 3200)."""
+    """0 = automatic: clamp(8 * allocations, 400, 3200)."""
     full_assert: bool
-    """FULL_ASSERT: 매 무브마다 인크리멘털 점수를 full recompute 와 대조
-    (디버깅용; 매우 느림)."""
+    """FULL_ASSERT: compares the incremental score to a full recompute after every move
+    (for debugging; very slow)."""
     ruin_recreate: bool
     ruin_recreate_unimproved_step_trigger: int
     ruin_recreate_min_ruin_fraction: float
@@ -197,30 +195,30 @@ class SolverConfig:
     change_move_weight: float
     swap_move_weight: float
     best_score_limit: tuple[int, int, int]
-    """(hard, medium, soft) 이상에 도달하면 조기 종료. 예: (0, -(2**62),
-    -(2**62)) 는 첫 feasible 해에서 멈춘다."""
+    """Stop early once (hard, medium, soft) is reached. E.g. (0, -(2**62),
+    -(2**62)) stops at the first feasible solution."""
     on_new_best: Callable[[int, Score], None] | None
-    """새 best 해마다 (step, score) 로 호출."""
+    """Called with (step, score) on every new best solution."""
 
 class Solver:
     def __init__(self, config: SolverConfig = ...) -> None: ...
     def solve(self, schedule: ProjectJobSchedule) -> None:
-        """in place 로 푼다: allocations[*].mode_delay, 파생 날짜와
-        schedule.score 를 채운다. pinned 할당(모든 SOURCE/SINK + 사용자
-        지정 STANDARD)은 값이 유지되고, 미초기화 pinned 할당은 (첫 mode,
-        delay 0) 으로 먼저 고정된다."""
+        """Solves in place: fills allocations[*].mode_delay, the derived dates and
+        schedule.score. Pinned allocations (every SOURCE/SINK + user-pinned STANDARD)
+        keep their values, and uninitialized pinned allocations are first fixed to
+        (first mode, delay 0)."""
 
     def solve_with_constraints(self, schedule: ProjectJobSchedule, constraints: Iterable[Any] | None = ...) -> None:
-        """같은 solve 를 호출자가 고른 제약 세트로 채점한다
-        (project_job.constraints 참고). 준 목록이 기본 세트를 대체하고, None 이면
-        기본 세트를 그대로 쓴다."""
+        """Score the same solve with a caller-chosen constraint set
+        (see project_job.constraints). The given list replaces the default set; None
+        keeps the default set."""
 
 def list_constraints() -> list[str]:
-    """이 도메인이 채점하는 제약 이름들 (기본 조립 순서, snake_case).
-    project_job.constraints 가 쓰는 이름과 같다."""
+    """Constraint names scored by this domain (default assembly order, snake_case).
+    The same names project_job.constraints uses."""
 
 def constraint_costs(solution, /) -> dict[str, dict]:
-    """제약별 unit 별 **원본** cost — 가중치/exponent/레벨 반올림 전.
-    `project_job.constraints.score()` 가 이걸 받아 점수를 낸다.
+    """Per-constraint, per-unit **raw** costs — before weight/exponent/level rounding.
+    `project_job.constraints.score()` takes these and produces a score.
     {name: {"costs": [...], "weight": w, "exponent": e,
             "hard": bool, "global": bool}}."""

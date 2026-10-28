@@ -54,5 +54,6 @@ This is a pure Python reference implementation (simulated annealing in
 
 ## Benchmark
 
-[`benchmarks/max-cut`](../../benchmarks/max-cut) compares this use case with
-OR-Tools CP-SAT on public instances.
+[`benchmarks/max-cut`](../../benchmarks/max-cut) compares this use case with OR-Tools CP-SAT on the same instances, rescored by the same evaluator.
+
+Latest run (30 s per solver, 3 instances): best score by the engine on 0, CP-SAT on 3 (ties count for each). Full table: [benchmarks/max-cut/README.md](../../benchmarks/max-cut/README.md#results).

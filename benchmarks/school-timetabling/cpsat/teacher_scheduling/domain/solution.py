@@ -1,4 +1,4 @@
-"""편성 결과 정의."""
+"""Definition of the timetabling result."""
 
 from collections import defaultdict
 from enum import StrEnum
@@ -21,7 +21,7 @@ class SolveStatus(StrEnum):
 
 
 class ScheduledLesson(BaseModel):
-    """시간표에 꽂힌 한 칸."""
+    """One cell placed in the timetable."""
 
     course_id: str
     class_group_id: str
@@ -32,15 +32,15 @@ class ScheduledLesson(BaseModel):
 
 
 class Timetable(BaseModel):
-    """편성 결과 + 품질 지표."""
+    """The timetabling result + quality measures."""
 
     status: SolveStatus
     lessons: tuple[ScheduledLesson, ...] = ()
     objective_value: float | None = None
     best_objective_bound: float | None = None
     wall_time_seconds: float = 0.0
-    penalties: dict[str, int] = Field(default_factory=dict, description="소프트 제약별 위반량(가중치 적용 전)")
-    notes: list[str] = Field(default_factory=list, description="백엔드가 남기는 안내 (예: 변환 과정에서 빠진 제약)")
+    penalties: dict[str, int] = Field(default_factory=dict, description="Violation amount per soft constraint (before weighting)")
+    notes: list[str] = Field(default_factory=list, description="Notes left by the backend (e.g. constraints dropped in a conversion)")
 
     @property
     def is_solved(self) -> bool:

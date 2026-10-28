@@ -13,8 +13,8 @@
 namespace st::canon
 {
 
-// canonical_solver.cpp 에서 그대로 옮겨 왔다 — 연산자 하나에 파일 하나,
-// 엔진 generic/ruin 배치의 도메인 쪽 짝이다.
+// Moved verbatim out of canonical_solver.cpp — one operator per file, the
+// domain-side counterpart of the engine's generic/ruin layout.
 
 // Re-assign move — the way back in, and the reason partial solving converges
 // at all (only registered together with UnassignMove).

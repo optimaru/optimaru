@@ -1,7 +1,7 @@
-"""Java quickstart `DemoDataGenerator` 재현 — cpp/src/main.cpp 와 같은 데이터.
+"""Reproduction of the Java quickstart `DemoDataGenerator` — the same data as cpp/src/main.cpp.
 
-랜덤 테마/섹터/청중/콘텐츠 태그까지 java.util.Random(0) 의 드로우 시퀀스를
-그대로 따라간다 (아래 `JavaRandom`)."""
+Even the random theme/sector/audience/content tags follow the java.util.Random(0) draw
+sequence exactly (`JavaRandom` below)."""
 
 from ._core import ConferenceSchedule, Room, Speaker, Talk, Timeslot
 
@@ -19,7 +19,7 @@ CONTENT_TAGS = ["Timefold", "Constraints", "Metaheuristics", "Kubernetes"]
 
 
 class JavaRandom:
-    """java.util.Random 의 48-bit LCG (nextInt(bound) 만 필요한 만큼)."""
+    """java.util.Random's 48-bit LCG (only as much nextInt(bound) as needed)."""
 
     def __init__(self, seed: int):
         self._seed = (seed ^ 0x5DEECE66D) & _MASK
@@ -35,7 +35,7 @@ class JavaRandom:
             return (bound * r) >> 31
         u = r
         r = u % bound
-        # int32 오버플로 검사(자바의 모듈로 바이어스 제거 루프).
+        # int32 overflow check (Java's modulo-bias rejection loop).
         while ((u - r + m) & 0xFFFFFFFF) >> 31:
             u = self._next(31)
             r = u % bound
@@ -43,7 +43,7 @@ class JavaRandom:
 
 
 def demo_conference() -> ConferenceSchedule:
-    """Java DemoDataGenerator 인스턴스: 15 talks / 6 timeslots / 5 rooms."""
+    """Java DemoDataGenerator instance: 15 talks / 6 timeslots / 5 rooms."""
     random = JavaRandom(0)
 
     def slot(sid, sh, sm, eh, em, talk_type, tags=()):
@@ -103,7 +103,7 @@ def demo_conference() -> ConferenceSchedule:
             crowd_control_risk=risk,
         )
 
-    # 생성(= 랜덤 드로우) 순서는 Java 제너레이터와 동일해야 한다.
+    # The creation (= random draw) order must match the Java generator.
     talks = [
         talk("S01", "Talk One", LAB, ["Amy Cole", "Beth Fox"], 2, 551, 1),
         talk("S02", "Talk Two", LAB, ["Carl Green"], 3, 528, 0),
@@ -124,7 +124,7 @@ def demo_conference() -> ConferenceSchedule:
         talk("S11", "Talk Eleven", BREAKOUT, ["Dan Jones", "Elsa King"], 1, 39, 0),
         talk("S12", "Talk Twelve", BREAKOUT, ["Flo Li", "Gus Poe"], 3, 977, 0),
     ]
-    # S11 의 mutex 태그는 Java 에서 S12 생성 뒤에 드로우된다.
+    # S11's mutex tag is drawn after S12 is created in Java.
     talks[10].mutually_exclusive_talks_tags = [CONTENT_TAGS[random.next_int(4)]]
     talks += [
         talk("S13", "Talk Thirteen", BREAKOUT, ["Hugo Rye"], 3, 494, 0),

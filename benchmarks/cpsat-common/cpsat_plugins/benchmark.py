@@ -17,6 +17,8 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
+from . import timefold
+
 
 @dataclass(frozen=True, order=True)
 class Score:
@@ -39,6 +41,9 @@ class SolverRun:
     seconds: float
     status: str = ""
     self_report: tuple[float, ...] | None = None
+    # The same solution scored by the Timefold quickstart's own
+    # ConstraintProvider (cases that define to_timefold), as a referee.
+    timefold_score: str | None = None
 
     @property
     def crosscheck(self) -> str:
@@ -102,6 +107,7 @@ def run_instance(
     seconds: float,
     seed: int,
     workers: int,
+    include_timefold: bool = True,
 ) -> InstanceResult:
     engine_problem = factory()
     started = time.perf_counter()
@@ -133,15 +139,44 @@ def run_instance(
             "FEASIBLE",
         )
 
+    runs = [engine_run, cpsat_run]
+    solutions = [engine_problem, None if cpsat_run.score is None else solved]
+    if include_timefold and _has_timefold(case):
+        timefold_problem = factory()
+        started = time.perf_counter()
+        result = timefold.solve(
+            case.TIMEFOLD, case.to_timefold(timefold_problem), seconds, seed
+        )
+        case.from_timefold(timefold_problem, result)
+        runs.append(
+            SolverRun(
+                "timefold",
+                score_solution(case.PACKAGE, timefold_problem),
+                time.perf_counter() - started,
+                "FEASIBLE",
+            )
+        )
+        solutions.append(timefold_problem)
+    if include_timefold and _has_timefold(case):
+        for run, solution in zip(runs, solutions, strict=True):
+            if solution is not None:
+                run.timefold_score = timefold.score(
+                    case.TIMEFOLD, case.to_timefold(solution)
+                )["score"]
+
     return InstanceResult(
         case=case.NAME,
         instance=instance,
         size=case.describe(engine_problem),
         budget=seconds,
-        runs=[engine_run, cpsat_run],
+        runs=runs,
         exact=getattr(case, "CPSAT_EXACT", True),
         caveat=getattr(case, "CPSAT_CAVEAT", ""),
     )
+
+
+def _has_timefold(case: Any) -> bool:
+    return hasattr(case, "to_timefold") and timefold.available()
 
 
 def _run(result: dict, solver: str) -> dict | None:
@@ -157,33 +192,32 @@ def _score_text(run: dict | None) -> str:
 
 
 def _verdict(result: dict) -> str:
-    engine, cpsat = _run(result, "engine"), _run(result, "cp-sat")
-    if not engine or not cpsat:
+    """The best solver by the use case's own score; ties are named together."""
+    scored = [run for run in result.get("runs", []) if run.get("score") is not None]
+    if not scored:
         return "—"
-    if cpsat.get("score") is None:
-        return f"engine (cp-sat {cpsat.get('status', '?')})"
-    if engine.get("score") is None:
-        return "cp-sat"
-    left, right = tuple(engine["score"]), tuple(cpsat["score"])
-    return "tie" if left == right else ("cp-sat" if right > left else "engine")
+    best = max(tuple(run["score"]) for run in scored)
+    winners = [run["solver"] for run in scored if tuple(run["score"]) == best]
+    return "tie" if len(winners) == len(result["runs"]) > 1 else " = ".join(winners)
 
 
-def _gap(result: dict) -> str:
-    engine, cpsat = _run(result, "engine"), _run(result, "cp-sat")
+def _gap(result: dict, solver: str = "engine", reference: str = "cp-sat") -> str:
+    """The engine's last-level gap to `reference`, when the higher levels tie."""
+    engine, other = _run(result, solver), _run(result, reference)
     if (
         not engine
-        or not cpsat
+        or not other
         or engine.get("score") is None
-        or cpsat.get("score") is None
+        or other.get("score") is None
     ):
         return ""
-    left, right = list(engine["score"]), list(cpsat["score"])
+    left, right = list(engine["score"]), list(other["score"])
     if left[:-1] != right[:-1]:
         return ""
-    reference = abs(right[-1])
-    if reference < 1e-9:
+    base = abs(right[-1])
+    if base < 1e-9:
         return "" if abs(left[-1]) < 1e-9 else "n/a"
-    return f"{(abs(left[-1]) - reference) / reference * 100:+.2f}%"
+    return f"{(abs(left[-1]) - base) / base * 100:+.2f}%"
 
 
 def _as_dict(result: InstanceResult) -> dict:
@@ -198,6 +232,7 @@ def _as_dict(result: InstanceResult) -> dict:
                 "seconds": run.seconds,
                 "status": run.status,
                 "self_report": run.self_report,
+                "timefold_score": run.timefold_score,
                 "crosscheck": run.crosscheck,
             }
         )
@@ -212,56 +247,80 @@ def _as_dict(result: InstanceResult) -> dict:
     }
 
 
+def _solvers(results: list[dict]) -> list[str]:
+    names: list[str] = []
+    for result in results:
+        for run in result.get("runs", []):
+            if run["solver"] not in names:
+                names.append(run["solver"])
+    return names or ["engine", "cp-sat"]
+
+
 def render_console(results: list[dict], seconds: float, workers: int, seed: int) -> str:
+    solvers = _solvers(results)
     lines = [
-        f"engine vs CP-SAT — {seconds:g}s solve budget each, seed {seed}",
+        f"{' vs '.join(solvers)} — {seconds:g}s solve budget each, seed {seed}",
         f"engine: 1 thread   cp-sat: {workers} workers (time includes model build)",
         "",
-        f"{'instance':<10} {'size':<28} {'engine':>22} {'cp-sat':>22} {'status':>10} {'gap':>8}  verdict",
-        "-" * 120,
+        f"{'instance':<10} {'size':<28} " + " ".join(f"{name:>24}" for name in solvers) + "  verdict",
+        "-" * (42 + 25 * len(solvers) + 10),
     ]
     for result in results:
         if "error" in result:
-            lines.append(
-                f"{result['instance']:<10} FAILED — {result['error'].splitlines()[-1]}"
-            )
+            lines.append(f"{result['instance']:<10} FAILED — {result['error'].splitlines()[-1]}")
             continue
-        engine, cpsat = _run(result, "engine"), _run(result, "cp-sat")
-        lines.append(
-            f"{result['instance']:<10} {result['size']:<28} "
-            f"{_score_text(engine):>22} {_score_text(cpsat):>22} "
-            f"{(cpsat or {}).get('status', '—'):>10} {_gap(result):>8}  {_verdict(result)}"
-        )
+        cells = " ".join(f"{_score_text(_run(result, name)):>24}" for name in solvers)
+        lines.append(f"{result['instance']:<10} {result['size']:<28} {cells}  {_verdict(result)}")
+        referee = [
+            f"{name}={run['timefold_score']}"
+            for name in solvers
+            if (run := _run(result, name)) and run.get("timefold_score")
+        ]
+        if referee:
+            lines.append("  Timefold model: " + "  ".join(referee))
         if result.get("caveat"):
             lines.append(f"  note: {result['caveat']}")
+        engine = _run(result, "engine")
         if engine and engine.get("crosscheck"):
             lines.append(f"  crosscheck: {engine['crosscheck']}")
     return "\n".join(lines)
 
 
-def render_markdown(
-    results: list[dict], seconds: float, workers: int, seed: int
-) -> str:
+def render_markdown(results: list[dict], seconds: float, workers: int, seed: int) -> str:
+    solvers = _solvers(results)
     lines = [
         (
-            f"Both solver APIs got a **{seconds:g}s** solve budget, seed {seed}. "
-            f"The engine uses one thread; CP-SAT uses {workers} workers and its "
-            "reported time includes model construction."
+            f"Every solver got a **{seconds:g}s** budget, seed {seed}. The engine and "
+            f"Timefold use one thread; CP-SAT uses {workers} workers and its time "
+            "includes model construction. Scores are the use case's own evaluator "
+            "(higher is better, levels compared left to right)."
         ),
         "",
-        "| instance | size | engine | cp-sat | status | soft gap | verdict |",
-        "| --- | --- | --- | --- | --- | --- | --- |",
+        "| instance | size | " + " | ".join(solvers) + " | best |",
+        "| --- | --- | " + " | ".join("---" for _ in solvers) + " | --- |",
     ]
+    referee_rows = []
     for result in results:
         if "error" in result:
-            lines.append(f"| {result['instance']} | — | — | FAILED | — | — | — |")
+            lines.append(f"| {result['instance']} | — | " + " | ".join("FAILED" for _ in solvers) + " | — |")
             continue
-        engine, cpsat = _run(result, "engine"), _run(result, "cp-sat")
-        lines.append(
-            f"| {result['instance']} | {result['size']} | {_score_text(engine)} "
-            f"| {_score_text(cpsat)} | {(cpsat or {}).get('status', '—')} "
-            f"| {_gap(result) or '—'} | {_verdict(result)} |"
-        )
+        cells = " | ".join(_score_text(_run(result, name)) for name in solvers)
+        lines.append(f"| {result['instance']} | {result['size']} | {cells} | {_verdict(result)} |")
+        if any((run := _run(result, name)) and run.get("timefold_score") for name in solvers):
+            referee_rows.append(
+                f"| {result['instance']} | "
+                + " | ".join((_run(result, name) or {}).get("timefold_score") or "—" for name in solvers)
+                + " |"
+            )
+    if referee_rows:
+        lines += [
+            "",
+            "The same solutions scored by the Timefold quickstart's own ConstraintProvider:",
+            "",
+            "| instance | " + " | ".join(solvers) + " |",
+            "| --- | " + " | ".join("---" for _ in solvers) + " |",
+            *referee_rows,
+        ]
     return "\n".join(lines)
 
 
@@ -273,6 +332,11 @@ def run_cli(case: BenchmarkCase, argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--json", action="store_true", dest="as_json")
     parser.add_argument("--markdown", action="store_true")
+    parser.add_argument(
+        "--no-timefold",
+        action="store_true",
+        help="skip the Timefold column even when the quickstart jar is built",
+    )
     args = parser.parse_args(argv)
 
     wanted = set(args.instance) if args.instance else None
@@ -286,7 +350,13 @@ def run_cli(case: BenchmarkCase, argv: Sequence[str] | None = None) -> int:
             results.append(
                 _as_dict(
                     run_instance(
-                        case, name, factory, args.seconds, args.seed, args.workers
+                        case,
+                        name,
+                        factory,
+                        args.seconds,
+                        args.seed,
+                        args.workers,
+                        include_timefold=not args.no_timefold,
                     )
                 )
             )
@@ -306,7 +376,8 @@ def run_cli(case: BenchmarkCase, argv: Sequence[str] | None = None) -> int:
         print(render_markdown(results, args.seconds, args.workers, args.seed))
     else:
         print(render_console(results, args.seconds, args.workers, args.seed))
-    return 0
+    # A broken instance is still reported above, but fails the run.
+    return 1 if any("error" in result for result in results) else 0
 
 
 class JavaRandom:

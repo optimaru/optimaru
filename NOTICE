@@ -8,3 +8,11 @@ Copyright Timefold BV and contributors.
 
 optimaru is an independent C++ implementation and is not affiliated with or
 endorsed by Timefold BV. "Timefold" is a trademark of Timefold BV.
+
+benchmarks/timefold-quickstarts contains the domain models and constraint
+providers of twelve Timefold quickstarts (timefold-quickstarts v2.6.0,
+https://github.com/TimefoldAI/timefold-quickstarts), licensed under the
+Apache License, Version 2.0, and used for benchmarking only. Timefold
+Quickstarts is a derivative work of OptaPlanner Quickstarts, Copyright Red
+Hat, Inc., affiliates, and contributors. Modifications are listed in
+benchmarks/timefold-quickstarts/README.md.

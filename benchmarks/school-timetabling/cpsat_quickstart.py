@@ -1,22 +1,25 @@
-"""트랙1 CP-SAT 솔버: quickstart 6제약을 OR-Tools CP-SAT 로 푼다.
+"""Track-1 CP-SAT solver: solves the quickstart's six constraints with OR-Tools CP-SAT.
 
-C++ `st_quality_bench` 가 덤프한 인스턴스 JSON 을 읽어 lesson → (timeslot, room)
-배정을 찾는다. 스코어 척도는 세 솔버가 공유하는 quickstart 6제약 그대로:
+Reads the instance JSON dumped by the C++ `st_quality_bench` and looks for a
+lesson → (timeslot, room) assignment. The score scale is the quickstart's six
+constraints, shared by all three solvers:
 
-- hard 3종(roomConflict/teacherConflict/studentGroupConflict)은 CP-SAT 의
-  하드 제약으로 강제한다 → 해가 나오면 항상 hard == 0.
-- soft 3종은 목적함수: maximize efficiency - stability - variety.
-  * teacherRoomStability: 교사별 수업 쌍 중 다른 교실 쌍 수. 쌍마다
-    same_room[i][j] ↔ (room_i == room_j) 를 reify 해서 전체쌍 - 같은교실쌍.
-  * teacherTimeEfficiency: 교사가 인접 교시(같은 날 Δperiod == 1)를 점유한
-    쌍 수. 교사×슬롯 점유는 하드 제약 덕에 0/1 이라 인접 쌍 = AND.
-  * studentGroupSubjectVariety: (학급, 과목)이 인접 교시를 점유한 쌍 수.
+- the 3 hard ones (roomConflict/teacherConflict/studentGroupConflict) are CP-SAT
+  hard constraints → any solution found has hard == 0.
+- the 3 soft ones are the objective: maximize efficiency - stability - variety.
+  * teacherRoomStability: per teacher, the lesson pairs in different rooms. Each
+    pair reifies same_room[i][j] ↔ (room_i == room_j): all pairs - same-room pairs.
+  * teacherTimeEfficiency: pairs of adjacent periods (same day, Δperiod == 1)
+    a teacher occupies. Teacher×slot occupancy is 0/1 thanks to the hard
+    constraints, so an adjacent pair is an AND.
+  * studentGroupSubjectVariety: pairs of adjacent periods a (class, subject) occupies.
 
-출력 형식은 C++/Java 와 같은 척도의
-"QBENCH_CPSAT_FINAL score=Xhard/Ysoft" (+ best 궤적 / first_feasible) 이고,
-해는 <instance 이름>.solution_cpsat.json 으로 덤프해 evaluate.py 재채점에 쓴다.
+The output uses the same scale as C++/Java,
+"QBENCH_CPSAT_FINAL score=Xhard/Ysoft" (+ the best trajectory / first_feasible),
+and the solution is dumped to <instance name>.solution_cpsat.json for
+evaluate.py's rescoring.
 
-사용:
+Usage:
     uv run cpsat_quickstart.py <instance.json> <seconds> [--seed N] [--workers N]
 """
 
@@ -40,12 +43,12 @@ def _next_slot_table(timeslots: list[dict]) -> list[int]:
 
 
 class _Progress(cp_model.CpSolverSolutionCallback):
-    """best 궤적과 최초 feasible 시각을 C++/Java 와 같은 형식으로 찍는다."""
+    """Prints the best trajectory and the first-feasible time in the same format as C++/Java."""
 
     def __init__(self, t0: float, offset: int) -> None:
         super().__init__()
         self._t0 = t0
-        self._offset = offset  # 목적함수의 상수항 (교사별 전체 쌍 수)
+        self._offset = offset  # the objective's constant term (all pairs per teacher)
         self.first_feasible_ms: int | None = None
 
     def on_solution_callback(self) -> None:
@@ -60,7 +63,7 @@ class _Progress(cp_model.CpSolverSolutionCallback):
 def solve_instance(
     instance: dict, seconds: float, *, seed: int = 0, workers: int = 8
 ) -> tuple[list[tuple[int, int]] | None, str, dict]:
-    """인스턴스를 풀어 (assignment, status 문자열, 메타) 를 돌려준다."""
+    """Solves the instance and returns (assignment, status string, metadata)."""
     timeslots = instance["timeslots"]
     rooms = instance["rooms"]
     lessons = instance["lessons"]
@@ -80,8 +83,8 @@ def solve_instance(
     slot = [model.new_int_var(0, slot_count - 1, f"slot_{i}") for i in range(len(lessons))]
     room = [model.new_int_var(0, room_count - 1, f"room_{i}") for i in range(len(lessons))]
 
-    # hard 1 roomConflict: (timeslot, room) 셀은 수업 하나만. 합성 셀 값으로
-    # AllDifferent (C++ 의 slotRoom 인코딩과 동일).
+    # hard 1 roomConflict: one lesson per (timeslot, room) cell. AllDifferent over
+    # the composite cell value (the same as the C++ slotRoom encoding).
     cell = []
     for i in range(len(lessons)):
         c = model.new_int_var(0, slot_count * room_count - 1, f"cell_{i}")
@@ -89,7 +92,7 @@ def solve_instance(
         cell.append(c)
     model.add_all_different(cell)
 
-    # hard 2 + 3: 같은 교사/학급의 수업은 서로 다른 timeslot.
+    # hard 2 + 3: lessons of the same teacher/class take different timeslots.
     for members in by_teacher.values():
         if len(members) > 1:
             model.add_all_different([slot[i] for i in members])
@@ -97,7 +100,7 @@ def solve_instance(
         if len(members) > 1:
             model.add_all_different([slot[i] for i in members])
 
-    # x[i][s] ↔ (slot_i == s): soft 제약의 점유 지표.
+    # x[i][s] ↔ (slot_i == s): occupancy indicators for the soft constraints.
     x = {}
     for i in range(len(lessons)):
         for s in range(slot_count):
@@ -107,9 +110,9 @@ def solve_instance(
             x[i, s] = b
 
     objective: list = []
-    offset = 0  # 상수항: 교사별 전체 쌍 수 (stability = 상수 - 같은교실쌍)
+    offset = 0  # constant term: all pairs per teacher (stability = constant - same-room pairs)
 
-    # soft: teacherRoomStability. maximize Σ same_room 으로 뒤집는다.
+    # soft: teacherRoomStability, flipped into maximize Σ same_room.
     for members in by_teacher.values():
         offset += len(members) * (len(members) - 1) // 2
         for a in range(len(members)):
@@ -120,8 +123,8 @@ def solve_instance(
                 model.add(room[i] != room[j]).only_enforce_if(~same)
                 objective.append(same)
 
-    # soft: teacherTimeEfficiency (보상). 하드 제약 때문에 교사×슬롯 점유는
-    # 0/1 → 인접 쌍은 AND. 보상이므로 상한(≤)만 걸면 솔버가 끌어올린다.
+    # soft: teacherTimeEfficiency (a reward). Teacher×slot occupancy is 0/1 thanks to the
+    # hard constraints → an adjacent pair is an AND. As a reward only the upper bound (≤) is needed; the solver pushes it up.
     for teacher, members in by_teacher.items():
         for s in range(slot_count):
             nxt = next_slot[s]
@@ -134,7 +137,7 @@ def solve_instance(
             model.add(adj <= occ_next)
             objective.append(adj)
 
-    # soft: studentGroupSubjectVariety (벌점). 벌점이므로 하한(≥)만 건다.
+    # soft: studentGroupSubjectVariety (a penalty). As a penalty only the lower bound (≥) is needed.
     for (group, subject), members in by_group_subject.items():
         for s in range(slot_count):
             nxt = next_slot[s]
@@ -172,7 +175,7 @@ def solve_instance(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("instance", help="st_quality_bench 가 덤프한 인스턴스 JSON")
+    parser.add_argument("instance", help="instance JSON dumped by st_quality_bench")
     parser.add_argument("seconds", type=float)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--workers", type=int, default=8)
@@ -189,7 +192,7 @@ def main() -> int:
         print(f"QBENCH_CPSAT_FINAL score=n/a status={status}")
         return 1
 
-    # 자기 목적함수 값 대신 공유 평가기로 재채점한 값을 보고한다 (셀프체크).
+    # Reports the value rescored by the shared evaluator instead of its own objective (self-check).
     result = score_assignment(instance, assignment)
     out_path = Path(args.instance).with_suffix("").as_posix() + ".solution_cpsat.json"
     with open(out_path, "w", encoding="utf-8") as f:

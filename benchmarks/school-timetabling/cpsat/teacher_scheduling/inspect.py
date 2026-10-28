@@ -1,15 +1,16 @@
-"""배정검색 — 컴시간 [배정검색 및 조정] 화면에 대응하는 편성 품질 리포트.
+"""Assignment inspection — a timetable quality report matching Comcigan's "search and adjust assignments" screen.
 
-컴시간은 검색조건마다 "문제가 있는 교사 수" 를 세어 보여주고, 항목을 누르면
-해당 교사/요일로 이동한다. 여기서는 같은 검색조건들을 계산해 조건별로
+For each search condition Comcigan shows "how many teachers have a problem",
+and clicking an item jumps to that teacher/day. This computes the same search
+conditions and returns, per condition,
 
-    (조건 id, 이름, 문제 건수, 대상 목록)
+    (condition id, name, problem count, affected items)
 
-을 돌려준다. `validate.validate_timetable` 이 하드 위반(있으면 안 되는 것)을
-보는 것과 달리, 이쪽은 "편성은 됐지만 손보면 좋은 것" 을 본다.
+`validate.validate_timetable` looks at hard violations (things that must not
+happen); this looks at "scheduled, but worth touching up".
 
-컴시간의 [문제점만 검색] 처럼 어쩔 수 없는 항목을 숨기는 필터는 두지 않고,
-호출자가 `severity` 로 판단하도록 한다.
+There is no filter hiding unavoidable items like Comcigan's "problems only"
+search; the caller decides from `severity`.
 """
 
 from __future__ import annotations
@@ -29,18 +30,18 @@ Severity = Literal["error", "warning", "info"]
 
 
 class InspectOptions(BaseModel):
-    """검색 기준. 컴시간의 [이동 및 검색기준] 패널에 해당한다."""
+    """Search criteria. Matches Comcigan's "move and search criteria" panel."""
 
-    lunch_after_period: int | None = Field(default=4, ge=1, description="점심시간 직전 교시. None 이면 점심 검사 생략")
-    max_periods_per_day: int = Field(default=5, ge=1, description="이 시수를 넘게 배정된 교사를 찾는다")
-    max_subjects_per_day: int = Field(default=3, ge=1, description="교사가 하루에 맡는 서로 다른 과목 수 상한")
-    long_run: int = Field(default=4, ge=2, description="'연속 N시간' 으로 셀 기준")
-    medium_run: int = Field(default=3, ge=2, description="'연속 N시간' 2차 기준")
-    workload_spread: int = Field(default=3, ge=1, description="교사의 요일별 시수 최대-최소 허용 폭")
+    lunch_after_period: int | None = Field(default=4, ge=1, description="Period right before lunch. None skips the lunch check")
+    max_periods_per_day: int = Field(default=5, ge=1, description="Finds teachers with more periods than this in a day")
+    max_subjects_per_day: int = Field(default=3, ge=1, description="Cap on distinct subjects a teacher teaches in a day")
+    long_run: int = Field(default=4, ge=2, description="Threshold counted as 'N consecutive periods'")
+    medium_run: int = Field(default=3, ge=2, description="Second threshold for 'N consecutive periods'")
+    workload_spread: int = Field(default=3, ge=1, description="Allowed max-min spread of a teacher's periods per weekday")
 
 
 class Finding(BaseModel):
-    """검색조건 하나에 걸린 대상 한 건."""
+    """One item caught by a search condition."""
 
     subject_type: Literal["teacher", "class_group", "course"]
     subject_id: str
@@ -50,7 +51,7 @@ class Finding(BaseModel):
 
 
 class InspectionItem(BaseModel):
-    """검색조건 한 줄."""
+    """One search-condition row."""
 
     id: str
     name: str
@@ -60,7 +61,7 @@ class InspectionItem(BaseModel):
 
 
 class InspectionReport(BaseModel):
-    """배정검색 결과 전체."""
+    """The whole inspection result."""
 
     items: tuple[InspectionItem, ...] = ()
     hard_violations: tuple[str, ...] = ()
@@ -72,22 +73,22 @@ class InspectionReport(BaseModel):
         return not self.hard_violations and all(item.severity != "error" or item.count == 0 for item in self.items)
 
 
-# ---------------------------------------------------------------- 집계 헬퍼
+# ---------------------------------------------------------------- aggregation helpers
 
 
 @dataclass
 class _Index:
-    """리포트 계산에 쓰는 사전 집계."""
+    """Pre-aggregations used to compute the report."""
 
     problem: TimetableProblem
     timetable: Timetable
-    # (교사, 요일) -> 교시 집합
+    # (teacher, weekday) -> set of periods
     teacher_periods: dict[tuple[str, Weekday], set[int]] = field(default_factory=lambda: defaultdict(set))
-    # (학급, 요일) -> 교시 집합
+    # (class, weekday) -> set of periods
     class_periods: dict[tuple[str, Weekday], set[int]] = field(default_factory=lambda: defaultdict(set))
-    # (교사, 요일) -> 과목 집합
+    # (teacher, weekday) -> set of subjects
     teacher_subjects: dict[tuple[str, Weekday], set[str]] = field(default_factory=lambda: defaultdict(set))
-    # (학급, 요일, 과목) -> 횟수
+    # (class, weekday, subject) -> count
     class_subject_day: Counter = field(default_factory=Counter)
 
     def __post_init__(self) -> None:
@@ -108,14 +109,14 @@ class _Index:
         return group.name if group else class_id
 
     def available_periods(self, class_id: str, day: Weekday) -> list[int]:
-        """그 학급이 그 요일에 실제로 수업을 받는 교시들 (학년별 요일 시수 반영)."""
+        """The periods in which the class actually has lessons that weekday (per-grade periods per weekday applied)."""
         blocked = {slot.period for slot in self.problem.class_group_by_id[class_id].unavailable if slot.day == day}
         total = self.problem.calendar.periods_per_day.get(day, 0)
         return [period for period in range(1, total + 1) if period not in blocked]
 
 
 def _runs(periods: set[int]) -> list[int]:
-    """연속 구간 길이 목록."""
+    """Lengths of consecutive runs."""
     lengths: list[int] = []
     current = 0
     previous: int | None = None
@@ -135,7 +136,7 @@ def _gap_count(periods: set[int]) -> int:
     return max(periods) - min(periods) + 1 - len(periods)
 
 
-# ---------------------------------------------------------------- 검색조건
+# ---------------------------------------------------------------- search conditions
 
 
 def _unassigned(index: _Index, _: InspectOptions) -> InspectionItem:
@@ -145,20 +146,20 @@ def _unassigned(index: _Index, _: InspectOptions) -> InspectionItem:
             subject_type="course",
             subject_id=row.course_id,
             subject_name=f"{row.class_group_name} {row.subject_id}",
-            detail=f"{row.required}시간 중 {row.missing}시간 미배정 ({', '.join(row.teacher_names)})",
+            detail=f"{row.missing} of {row.required} periods unassigned ({', '.join(row.teacher_names)})",
         )
         for row in rows
     )
-    return InspectionItem(id="unassigned", name="미배정 시수", severity="error", count=len(findings), findings=findings)
+    return InspectionItem(id="unassigned", name="Unassigned periods", severity="error", count=len(findings), findings=findings)
 
 
 def _same_subject_twice_a_day(index: _Index, _: InspectOptions) -> InspectionItem:
-    """컴시간 [요일별 동일과목] — 한 학급이 같은 날 같은 과목을 두 번 이상."""
+    """Comcigan's "same subject per weekday" — a class has the same subject twice or more in one day."""
     findings = []
     for (class_id, day, subject_id), count in sorted(index.class_subject_day.items()):
         if count < 2:
             continue
-        # 연강(block)이나 하루 2시간이 정상인 강좌는 제외한다.
+        # Courses for which a block or two periods a day is normal are excluded.
         limit = max(
             (
                 course.effective_max_periods_per_day
@@ -175,12 +176,12 @@ def _same_subject_twice_a_day(index: _Index, _: InspectOptions) -> InspectionIte
                 subject_id=class_id,
                 subject_name=index.class_name(class_id),
                 day=int(day),
-                detail=f"{Weekday(day).label}요일 {subject_id} {count}시간 (허용 {limit})",
+                detail=f"{Weekday(day).label} {subject_id} {count} periods (allowed {limit})",
             )
         )
     return InspectionItem(
         id="same_subject_twice_a_day",
-        name="요일별 동일과목 중복",
+        name="Same subject repeated in a day",
         severity="warning",
         count=len(findings),
         findings=tuple(findings),
@@ -194,14 +195,14 @@ def _teacher_daily_overload(index: _Index, options: InspectOptions) -> Inspectio
             subject_id=teacher_id,
             subject_name=index.teacher_name(teacher_id),
             day=int(day),
-            detail=f"{Weekday(day).label}요일 {len(periods)}시간",
+            detail=f"{Weekday(day).label} {len(periods)} periods",
         )
         for (teacher_id, day), periods in sorted(index.teacher_periods.items())
         if len(periods) > options.max_periods_per_day
     ]
     return InspectionItem(
         id="teacher_daily_overload",
-        name=f"{options.max_periods_per_day}시간 초과 배정 교사",
+        name=f"Teachers with more than {options.max_periods_per_day} periods",
         severity="warning",
         count=len(findings),
         findings=tuple(findings),
@@ -215,14 +216,14 @@ def _teacher_many_subjects(index: _Index, options: InspectOptions) -> Inspection
             subject_id=teacher_id,
             subject_name=index.teacher_name(teacher_id),
             day=int(day),
-            detail=f"{Weekday(day).label}요일 {len(subjects)}과목 ({', '.join(sorted(subjects))})",
+            detail=f"{Weekday(day).label} {len(subjects)} subjects ({', '.join(sorted(subjects))})",
         )
         for (teacher_id, day), subjects in sorted(index.teacher_subjects.items())
         if len(subjects) >= options.max_subjects_per_day
     ]
     return InspectionItem(
         id="teacher_many_subjects",
-        name=f"같은 요일 {options.max_subjects_per_day}과목 이상",
+        name=f"{options.max_subjects_per_day}+ subjects on one day",
         severity="info",
         count=len(findings),
         findings=tuple(findings),
@@ -241,12 +242,12 @@ def _consecutive(index: _Index, options: InspectOptions, length: int, item_id: s
                 subject_id=teacher_id,
                 subject_name=index.teacher_name(teacher_id),
                 day=int(day),
-                detail=f"{Weekday(day).label}요일 연속 {max(runs)}시간 ({len(runs)}회)",
+                detail=f"{Weekday(day).label} {max(runs)} consecutive periods ({len(runs)} times)",
             )
         )
     return InspectionItem(
         id=item_id,
-        name=f"연속 {length}시간 이상 배정",
+        name=f"{length}+ consecutive periods",
         severity="warning" if length >= options.long_run else "info",
         count=len(findings),
         findings=tuple(findings),
@@ -254,9 +255,9 @@ def _consecutive(index: _Index, options: InspectOptions, length: int, item_id: s
 
 
 def _lunch_adjacent(index: _Index, options: InspectOptions) -> InspectionItem:
-    """점심시간 전후로 이어지는 연속 수업 (컴시간 [점심시간 전후 연속배정])."""
+    """Consecutive lessons across lunch (Comcigan's "consecutive around lunch")."""
     if options.lunch_after_period is None:
-        return InspectionItem(id="lunch_adjacent", name="점심 전후 연속배정", severity="info", count=0)
+        return InspectionItem(id="lunch_adjacent", name="Consecutive around lunch", severity="info", count=0)
     before, after = options.lunch_after_period, options.lunch_after_period + 1
     findings = [
         Finding(
@@ -264,14 +265,14 @@ def _lunch_adjacent(index: _Index, options: InspectOptions) -> InspectionItem:
             subject_id=teacher_id,
             subject_name=index.teacher_name(teacher_id),
             day=int(day),
-            detail=f"{Weekday(day).label}요일 {before}-{after}교시 연속",
+            detail=f"{Weekday(day).label} periods {before}-{after} consecutive",
         )
         for (teacher_id, day), periods in sorted(index.teacher_periods.items())
         if before in periods and after in periods
     ]
     return InspectionItem(
         id="lunch_adjacent",
-        name="점심 전후 연속배정",
+        name="Consecutive around lunch",
         severity="info",
         count=len(findings),
         findings=tuple(findings),
@@ -285,18 +286,18 @@ def _teacher_gaps(index: _Index, _: InspectOptions) -> InspectionItem:
             subject_id=teacher_id,
             subject_name=index.teacher_name(teacher_id),
             day=int(day),
-            detail=f"{Weekday(day).label}요일 공강 {gaps}칸",
+            detail=f"{Weekday(day).label} {gaps} gap periods",
         )
         for (teacher_id, day), periods in sorted(index.teacher_periods.items())
         if (gaps := _gap_count(periods))
     ]
     return InspectionItem(
-        id="teacher_gap", name="교사 중간 공강", severity="info", count=len(findings), findings=tuple(findings)
+        id="teacher_gap", name="Teacher gaps", severity="info", count=len(findings), findings=tuple(findings)
     )
 
 
 def _class_gaps(index: _Index, _: InspectOptions) -> InspectionItem:
-    """학급 시간표에 빈 칸이 생긴 경우. 학년별 요일 시수를 반영해 센다."""
+    """Empty cells in a class timetable. Counted with the per-grade periods per weekday."""
     findings = []
     for group in index.problem.class_groups:
         for day in index.problem.calendar.days:
@@ -312,12 +313,12 @@ def _class_gaps(index: _Index, _: InspectOptions) -> InspectionItem:
                         subject_id=group.id,
                         subject_name=group.name,
                         day=int(day),
-                        detail=f"{Weekday(day).label}요일 {', '.join(f'{p}교시' for p in missing)} 비어 있음",
+                        detail=f"{Weekday(day).label} {', '.join(f'P{p}' for p in missing)} empty",
                     )
                 )
     return InspectionItem(
         id="class_empty_period",
-        name="학급 빈 교시",
+        name="Empty class periods",
         severity="error",
         count=len(findings),
         findings=tuple(findings),
@@ -325,7 +326,7 @@ def _class_gaps(index: _Index, _: InspectOptions) -> InspectionItem:
 
 
 def _workload_spread(index: _Index, options: InspectOptions) -> InspectionItem:
-    """컴시간 [교사별 시수적작화] — 요일별 시수가 들쭉날쭉한 교사."""
+    """Comcigan's "teacher load balance" — teachers whose periods per weekday vary a lot."""
     findings = []
     for teacher in index.problem.teachers:
         per_day = [len(index.teacher_periods.get((teacher.id, day), set())) for day in index.problem.calendar.days]
@@ -338,12 +339,12 @@ def _workload_spread(index: _Index, options: InspectOptions) -> InspectionItem:
                     subject_type="teacher",
                     subject_id=teacher.id,
                     subject_name=teacher.name,
-                    detail=f"요일별 {per_day} (최대-최소 {spread})",
+                    detail=f"per weekday {per_day} (max-min {spread})",
                 )
             )
     return InspectionItem(
         id="workload_spread",
-        name="교사 요일별 시수 편차",
+        name="Teacher load spread across weekdays",
         severity="info",
         count=len(findings),
         findings=tuple(findings),
@@ -357,7 +358,7 @@ def _free_day_broken(index: _Index, _: InspectOptions) -> InspectionItem:
             subject_id=teacher.id,
             subject_name=teacher.name,
             day=int(day),
-            detail=f"{Weekday(day).label}요일 희망 공강인데 {len(index.teacher_periods[teacher.id, day])}시간",
+            detail=f"{Weekday(day).label} is a requested free day but has {len(index.teacher_periods[teacher.id, day])} periods",
         )
         for teacher in index.problem.teachers
         for day in sorted(teacher.preferred_free_days)
@@ -365,7 +366,7 @@ def _free_day_broken(index: _Index, _: InspectOptions) -> InspectionItem:
     ]
     return InspectionItem(
         id="free_day_broken",
-        name="희망 공강일 위반",
+        name="Requested free day violated",
         severity="info",
         count=len(findings),
         findings=tuple(findings),
@@ -377,7 +378,7 @@ def inspect_timetable(
     timetable: Timetable,
     options: InspectOptions | None = None,
 ) -> InspectionReport:
-    """편성 결과를 검색조건별로 훑어 리포트를 만든다."""
+    """Runs every search condition over the timetable and builds the report."""
     from teacher_scheduling.validate import validate_timetable
 
     options = options or InspectOptions()
@@ -397,9 +398,9 @@ def inspect_timetable(
         _free_day_broken(index, options),
     ]
 
-    # 미배정을 허용한 부분해에서는 H1 위반이 당연히 뜨므로 그 메시지는 걸러낸다
-    # (같은 내용을 `unassigned` 항목이 이미 구조화해서 보여준다).
-    violations = tuple(v for v in validate_timetable(problem, timetable) if "주당 시수" not in v)
+    # A partial solution that allows unassigned lessons naturally shows H1 violations, so
+    # those messages are filtered out (the `unassigned` item already shows the same, structured).
+    violations = tuple(v for v in validate_timetable(problem, timetable) if "weekly periods" not in v)
 
     return InspectionReport(
         items=tuple(items),

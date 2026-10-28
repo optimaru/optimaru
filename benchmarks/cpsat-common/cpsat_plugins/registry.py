@@ -3,9 +3,13 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 import math
+import time
 from typing import Any, Protocol, TypeAlias
 
 from ortools.sat.python import cp_model
+
+# Folded objective coefficients must stay inside int64 with headroom.
+_FOLD_LIMIT = 2**62
 
 
 @dataclass(frozen=True)
@@ -17,9 +21,7 @@ class ConstraintSpec:
     level: str
     weight: int = 1
     description: str = ""
-    label_ko: str = ""
     label_en: str = ""
-    description_ko: str = ""
     description_en: str = ""
 
     def as_dict(self) -> dict[str, Any]:
@@ -27,9 +29,7 @@ class ConstraintSpec:
             "name": self.name,
             "label": self.label,
             "description": self.description,
-            "label_ko": self.label_ko,
             "label_en": self.label_en,
-            "description_ko": self.description_ko,
             "description_en": self.description_en,
             "kind": "hard" if self.level == "hard" else "soft",
             "default_enabled": True,
@@ -175,6 +175,13 @@ class ObjectiveBuilder:
         """Add a non-negative reward (represented as a negative penalty)."""
         self.add(name, -magnitude, bound=bound)
 
+    def folds(self) -> bool:
+        """Whether all levels fit one int64 objective (see `minimize`)."""
+        span = 1
+        for level in self.levels:
+            span *= self.bounds[level] + 1
+        return span < _FOLD_LIMIT
+
     def minimize(self) -> None:
         """Install one integer objective preserving the declared level order."""
         multiplier = 1
@@ -183,6 +190,49 @@ class ObjectiveBuilder:
             expressions.append(multiplier * sum(self.terms[level]))
             multiplier *= self.bounds[level] + 1
         self.model.minimize(sum(expressions))
+
+    def solve(self, solver: cp_model.CpSolver) -> int:
+        """Minimize lexicographically within the solver's time limit.
+
+        When the folded objective fits int64 this is one `minimize` + solve.
+        Otherwise CP-SAT would reject the model (MODEL_INVALID), so the levels
+        are optimized one after another: each stage minimizes one level, then
+        that level is capped at the value reached and the incumbent is hinted
+        to the next stage. Every stage gets an equal share of the time left.
+        """
+        if self.folds():
+            self.minimize()
+            return solver.solve(self.model)
+        budget = solver.parameters.max_time_in_seconds
+        deadline = time.monotonic() + budget
+        stages = [level for level in self.levels if self.terms[level]]
+        solved = optimal = False
+        for index, level in enumerate(stages):
+            left = max(deadline - time.monotonic(), 0.01)
+            solver.parameters.max_time_in_seconds = left / (len(stages) - index)
+            total = sum(self.terms[level])
+            self.model.minimize(total)
+            status = solver.solve(self.model)
+            if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+                if not solved:
+                    solver.parameters.max_time_in_seconds = budget
+                    return status
+                # Out of time on a later level: restore the last incumbent so
+                # the caller can still read it from the solver.
+                solver.parameters.fix_variables_to_their_hinted_value = True
+                solver.solve(self.model)
+                solver.parameters.fix_variables_to_their_hinted_value = False
+                optimal = False
+                break
+            optimal = (optimal or not solved) and status == cp_model.OPTIMAL
+            solved = True
+            self.model.add(total <= int(solver.objective_value))
+            self.model.clear_hints()
+            for var_index in range(len(self.model.proto.variables)):
+                var = self.model.get_int_var_from_proto_index(var_index)
+                self.model.add_hint(var, solver.value(var))
+        solver.parameters.max_time_in_seconds = budget
+        return cp_model.OPTIMAL if optimal else cp_model.FEASIBLE
 
     def score(self, solver: cp_model.CpSolver) -> dict[str, int]:
         """Return negative penalty totals for the solver's current solution."""

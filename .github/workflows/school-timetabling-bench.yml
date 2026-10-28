@@ -6,7 +6,7 @@
 #      incremental-vs-full and hot-set consistency checks).
 #   2. Score-calculator parity: the fixed cross-check instance must produce a
 #      byte-identical score on the C++ side and on the stock Java
-#      TimetableConstraintProvider (catches upstream constraint drift).
+#      TimetableConstraintProvider of timefold-quickstarts v2.6.0.
 # Report (not a gate), published to the job summary:
 #   Track 1 — the quickstart's six constraints, identical instances solved by
 #     this repo's C++ engine, OR-Tools CP-SAT and the real Timefold (Java);
@@ -14,7 +14,7 @@
 #   Track 2 — the canonical full-constraint model (H1~H10 + S1~S6), the C++
 #     canonical solver (st_timetabling) vs CP-SAT (teacher_scheduling); both
 #     solutions are re-scored by the CP-SAT package's validate.py.
-#   Track 3 — the same model with H1 relaxed (부분 편성): a day is removed so
+#   Track 3 — the same model with H1 relaxed (partial timetabling): a day is removed so
 #     the periods no longer fit, and both solvers may leave lessons
 #     unassigned. Track 2 asks "who packs a solvable instance better", track 3
 #     asks "who gives up better" — the two regimes rank the solvers
@@ -41,10 +41,6 @@ on:
       - "use-cases/school-timetabling/**"
       - "benchmarks/school-timetabling/**"
       - ".github/workflows/school-timetabling-bench.yml"
-  schedule:
-    # Weekly drift canary (Monday 20:17 UTC): catches quickstarts/toolchain
-    # changes even when this repo is quiet.
-    - cron: "17 20 * * 1"
 
 jobs:
   bench:
@@ -99,7 +95,7 @@ jobs:
         # The quickstarts repo ships no Maven wrapper; bootstrap the official
         # only-script wrapper (same procedure as benchmarks/school-timetabling/timefold/README.md).
         run: |
-          git clone --depth 1 https://github.com/TimefoldAI/timefold-quickstarts.git "$QUICKSTARTS"
+          git clone --depth 1 -b v2.6.0 https://github.com/TimefoldAI/timefold-quickstarts.git "$QUICKSTARTS"
           cd "$QUICKSTARTS/use-cases/school-timetabling"
           mkdir -p .mvn/wrapper
           curl -fsSL -o mvnw https://raw.githubusercontent.com/apache/maven-wrapper/maven-wrapper-3.3.4/maven-wrapper-distribution/src/resources/only-mvnw

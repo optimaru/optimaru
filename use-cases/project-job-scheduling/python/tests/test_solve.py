@@ -1,4 +1,4 @@
-"""데모 인스턴스 solve 테스트: feasible(hard 0) 도달과 결과 일관성."""
+"""Demo instance solve test: reaching feasible (hard 0) and result consistency."""
 
 import project_job as pj
 from project_job.demo import generate_demo_data
@@ -11,14 +11,14 @@ def test_demo_solve_reaches_feasible():
 
     assert isinstance(result, ProjectJobScheduleModel)
     assert result.score_hard == 0
-    # 모든 할당이 초기화되어 있고, SOURCE/SINK 고정값은 유지된다.
+    # Every allocation is initialized and the SOURCE/SINK fixed values are kept.
     for job, allocation in zip(result.jobs, result.allocations):
         assert allocation.execution_mode_id is not None
         assert allocation.delay is not None
         if job.job_type != "STANDARD":
             assert allocation.execution_mode_id == job.execution_modes[0].id
             assert allocation.delay == 0
-    # 결과 점수는 재채점과 일치해야 한다.
+    # The result score must match a rescoring.
     replan = result.to_core()
     score = pj.calculate_score(replan)
     assert (score.hard, score.medium, score.soft) == (
@@ -35,7 +35,7 @@ def test_solve_core_schedule_in_place():
     assert schedule.score.is_feasible()
     value_count = schedule.value_count()
     assert all(0 <= value < value_count for value in schedule.assignment())
-    # 파생 날짜가 채워져 있고 선행 관계를 지킨다.
+    # Derived dates are filled in and respect precedence.
     allocations = schedule.allocations
     for allocation in allocations:
         assert allocation.end_date >= allocation.start_date >= 0

@@ -20,8 +20,8 @@ dev = [
 line-length = 120
 
 [tool.ruff.lint]
-# 룰셋을 명시적으로 고정한다 (ruff 기본 룰셋 드리프트 방지; naive datetime
-# == UTC 관례라 DTZ 계열은 이 패키지에 맞지 않다).
+# Pin the rule set explicitly (prevents ruff default rule set drift; the naive datetime
+# == UTC convention means the DTZ rules do not fit this package).
 select = ["E4", "E7", "E9", "F", "I"]
 ignore = ["E741"]
 

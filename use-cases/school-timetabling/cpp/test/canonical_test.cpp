@@ -101,7 +101,7 @@ int addLesson(Timetable &t,
 
 // -------------------------------------------------------------------------
 // (a) Hard constraints in isolation. Grid: 2 days x 5 periods (slots 0..4 =
-// Mon 1~5교시, 5..9 = Tue). Weights are zero, so soft must stay 0.
+// Mon periods 1-5, 5..9 = Tue). Weights are zero, so soft must stay 0.
 // -------------------------------------------------------------------------
 const std::vector<int> kGrid25{5, 5};
 
@@ -228,7 +228,7 @@ void verifyHardConstraints()
         blockCase({{0, 1}, {0, 3}, {1, 1}}, 2, "H8 triple fully scattered");
     }
     // H8 vs partial assignment. CP-SAT's _check_blocks asks whether SOME day
-    // holds a run of block_periods, so half of a 2연강 is "2연강이 없음" there
+    // holds a run of block_periods, so half of a 2-period block is "no 2-period block" there
     // — half a block is charged here too, or partial solving could buy its
     // way out of a block by dropping one member. Dropping the WHOLE group is
     // the deliberate exception: H1 is what prices that.
@@ -663,7 +663,7 @@ Solver::Config quickSolveConfig(std::uint64_t seed)
 
 void verifyBlockScenario()
 {
-    std::printf("== (d1) Block (연강) scenario ==\n");
+    std::printf("== (d1) Block (consecutive periods) scenario ==\n");
     const std::vector<int> ppd{4, 4};
     Timetable t = makeGrid(ppd);
     // Course 0: a 2-period block; courses 1..3 one filler each; course 4 two
@@ -692,7 +692,7 @@ void verifyBlockScenario()
 
 void verifyMergedLessonScenario()
 {
-    std::printf("== (d2) Merged-lesson (분반 병합) scenario ==\n");
+    std::printf("== (d2) Merged-lesson (parallel groups) scenario ==\n");
     const std::vector<int> ppd{3, 3};
     Timetable t = makeGrid(ppd);
     t.roomCapacityByType = {1};
@@ -869,21 +869,21 @@ DemoSchool buildDemoSchool()
     for (int c = 0; c < 6; ++c)
     {
         addCourse(c, {KOR[c]}, 5, 1, -1, 0, 0, false);
-        addCourse(c, {MATH[c]}, 5, 1, -1, 0, 0x000F, false);  // 오전 선호
+        addCourse(c, {MATH[c]}, 5, 1, -1, 0, 0x000F, false);  // prefers mornings
         addCourse(c, {ENG[c]}, c == 2 ? 4 : 5, 1, -1, 0, 0, false);
         addCourse(c, {SCI[c]}, 4, 1, /*SCI*/ 0, 0, 0, false);
         addCourse(c, {SOC[c]}, 4, 1, -1, 0, 0, false);
         addCourse(c, {SOC[c]}, 1, 1, -1, 0, 0, false);  // ETH, same teacher
         addCourse(
-            c, {10}, 3, 1, /*GYM*/ 3, 0x0001, 0, false);  // PE, 1교시 기피
+            c, {10}, 3, 1, /*GYM*/ 3, 0x0001, 0, false);  // PE, avoids period 1
         addCourse(c, {11}, 2, 1, /*MUS*/ 1, 0, 0, false);
         d.artBlocks.push_back(
-            addCourse(c, {12}, 2, 2, /*ART*/ 2, 0, 0, true));  // 2연강
+            addCourse(c, {12}, 2, 2, /*ART*/ 2, 0, 0, true));  // 2-period block
         if (c == 0)
             d.mergedTech = addCourse(0, {13, 14}, 2, 1, -1, 0, 0, false);
         else
             addCourse(c, {TECH[c]}, 2, 1, -1, 0, 0, false);
-        // Homeroom hour (창체): pinned to Monday period 1.
+        // Homeroom hour (creative activities): pinned to Monday period 1.
         const std::vector<int> hr
             = addCourse(c, {HOMEROOM[c]}, 1, 1, -1, 0, 0, false);
         d.t.lessons[hr[0]].pinned = true;

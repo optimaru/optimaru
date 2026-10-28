@@ -1,17 +1,17 @@
-"""엔진 도메인의 pydantic v2 미러 — JSON 직렬화/역직렬화용.
+"""Pydantic v2 mirror of the engine domain — for JSON serialization/deserialization.
 
-`_core` 의 Crew/Job/MaintenanceSchedule 을 1:1 로 미러링하되 날짜는
-`datetime.date` 로 다룬다 (엔진 쪽은 epoch day 정수). 배정은 crew_date
-합성값 대신 사람이 읽는 (crew_id, start_date) 쌍으로 저장하고, end_date
-(주말 제외 shadow)는 결과 전용 필드다::
+Mirrors `_core`'s Crew/Job/MaintenanceSchedule 1:1, but dates are handled as
+`datetime.date` (epoch day integers on the engine side). Assignments are stored as a
+human-readable (crew_id, start_date) pair instead of the composite crew_date, and end_date
+(the weekend-skipping shadow) is a result-only field::
 
     from maintenance_scheduling.models import MaintenanceScheduleModel
 
-    model = MaintenanceScheduleModel.from_core(schedule)  # 엔진 -> pydantic
+    model = MaintenanceScheduleModel.from_core(schedule)  # engine -> pydantic
     clone = MaintenanceScheduleModel.model_validate_json(model.model_dump_json())
-    schedule2 = clone.to_core()                           # pydantic -> 엔진
+    schedule2 = clone.to_core()                           # pydantic -> engine
 
-`pydantic` 은 선택 의존성이다 (`pip install maintenance_scheduling[models]`).
+`pydantic` is an optional dependency (`pip install maintenance_scheduling[models]`).
 """
 
 from datetime import date, timedelta
@@ -50,7 +50,7 @@ def _opt_to_date(epoch_day: int | None) -> date | None:
 
 
 class CrewModel(BaseModel):
-    """작업 조. 한 crew 는 같은 날 최대 하나의 작업만 수행할 수 있다."""
+    """A crew. One crew can do at most one job per day."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -59,8 +59,8 @@ class CrewModel(BaseModel):
 
 
 class JobModel(BaseModel):
-    """planning entity. crew_id/start_date 가 배정(둘 다 채워져야 배정),
-    end_date 는 주말 제외 shadow(결과 전용, to_core 에서 무시)."""
+    """Planning entity. crew_id/start_date are the assignment (both set means assigned),
+    end_date is the weekend-skipping shadow (result only, ignored by to_core)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -78,7 +78,7 @@ class JobModel(BaseModel):
 
 
 class MaintenanceScheduleModel(BaseModel):
-    """planning solution 미러. score 는 읽기 전용 결과라 별도 필드로 둔다."""
+    """Planning solution mirror. score is a read-only result, kept as a separate field."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -90,8 +90,8 @@ class MaintenanceScheduleModel(BaseModel):
     score_soft: float | None = None
 
     def to_core(self) -> "_core.MaintenanceSchedule":
-        """pydantic -> 엔진 객체. crew_id/start_date 배정은 crew_date 합성값
-        으로 인코딩한다 (start_date 는 달력 범위 안의 주중이어야 한다)."""
+        """pydantic -> engine object. The crew_id/start_date assignment is encoded as the
+        composite crew_date value (start_date must be a weekday within the calendar)."""
         schedule = _core.MaintenanceSchedule(
             date_to_epoch(self.from_date),
             date_to_epoch(self.to_date),
@@ -134,7 +134,7 @@ class MaintenanceScheduleModel(BaseModel):
 
     @classmethod
     def from_core(cls, schedule: "_core.MaintenanceSchedule") -> "MaintenanceScheduleModel":
-        """엔진 객체 -> pydantic (현재 배정, shadow end_date, score 포함)."""
+        """engine object -> pydantic (including the current assignment, the end_date shadow and score)."""
         crews = [CrewModel(id=c.id, name=c.name) for c in schedule.crews]
         jobs = []
         for i, job in enumerate(schedule.jobs):

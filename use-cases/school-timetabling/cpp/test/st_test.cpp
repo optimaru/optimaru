@@ -63,7 +63,7 @@ Timetable makeBase(int days, int periodsPerDay, int roomCount)
     }
     for (int r = 0; r < roomCount; ++r)
     {
-        t.rooms.push_back({"R" + std::to_string(r), "일반"});
+        t.rooms.push_back({"R" + std::to_string(r), "regular"});
     }
     return t;
 }
@@ -87,7 +87,7 @@ void addLesson(Timetable &t,
 
 // -------------------------------------------------------------------------
 // (a) Each constraint in isolation, full recompute vs hand-computed scores.
-// Base grid: 2 days x 3 periods (slots 0..5; 0,1,2 = Mon 1-3교시), 3 rooms.
+// Base grid: 2 days x 3 periods (slots 0..5; 0,1,2 = Mon periods 1-3), 3 rooms.
 // -------------------------------------------------------------------------
 void verifyConstraints()
 {
@@ -96,17 +96,17 @@ void verifyConstraints()
     // hard 1: roomConflict — same timeslot, same room, otherwise unrelated.
     {
         Timetable t = makeBase(2, 3, 3);
-        addLesson(t, "수학", "TA", "G1", 0, 0);
-        addLesson(t, "영어", "TB", "G2", 0, 0);
+        addLesson(t, "Math", "TA", "G1", 0, 0);
+        addLesson(t, "English", "TB", "G2", 0, 0);
         checkScore(
             "roomConflict pair", ScoreCalculator::calculateScore(t), -1, 0);
     }
     // hard 1: three lessons in one cell -> C(3,2) = 3 pairs.
     {
         Timetable t = makeBase(2, 3, 3);
-        addLesson(t, "수학", "TA", "G1", 0, 0);
-        addLesson(t, "영어", "TB", "G2", 0, 0);
-        addLesson(t, "과학", "TC", "G3", 0, 0);
+        addLesson(t, "Math", "TA", "G1", 0, 0);
+        addLesson(t, "English", "TB", "G2", 0, 0);
+        addLesson(t, "Science", "TC", "G3", 0, 0);
         checkScore(
             "roomConflict triple", ScoreCalculator::calculateScore(t), -3, 0);
     }
@@ -114,8 +114,8 @@ void verifyConstraints()
     // The pair is also a different-room pair of one teacher: stability -1.
     {
         Timetable t = makeBase(2, 3, 3);
-        addLesson(t, "수학", "TA", "G1", 0, 0);
-        addLesson(t, "영어", "TA", "G2", 0, 1);
+        addLesson(t, "Math", "TA", "G1", 0, 0);
+        addLesson(t, "English", "TA", "G2", 0, 1);
         checkScore("teacherConflict (+stability)",
                    ScoreCalculator::calculateScore(t),
                    -1,
@@ -125,8 +125,8 @@ void verifyConstraints()
     // teachers/rooms/subjects.
     {
         Timetable t = makeBase(2, 3, 3);
-        addLesson(t, "수학", "TA", "G1", 0, 0);
-        addLesson(t, "영어", "TB", "G1", 0, 1);
+        addLesson(t, "Math", "TA", "G1", 0, 0);
+        addLesson(t, "English", "TB", "G1", 0, 1);
         checkScore(
             "studentGroupConflict", ScoreCalculator::calculateScore(t), -1, 0);
     }
@@ -134,7 +134,7 @@ void verifyConstraints()
     {
         Timetable t = makeBase(2, 3, 3);
         t.teacherUnavailable["TA"] = {0};
-        addLesson(t, "수학", "TA", "G1", 0, 0);
+        addLesson(t, "Math", "TA", "G1", 0, 0);
         checkScore("teacherUnavailable hit",
                    ScoreCalculator::calculateScore(t),
                    -1,
@@ -144,7 +144,7 @@ void verifyConstraints()
     {
         Timetable t = makeBase(2, 3, 3);
         t.teacherUnavailable["TA"] = {0};
-        addLesson(t, "수학", "TA", "G1", 3, 0);
+        addLesson(t, "Math", "TA", "G1", 3, 0);
         checkScore("teacherUnavailable miss",
                    ScoreCalculator::calculateScore(t),
                    0,
@@ -154,8 +154,8 @@ void verifyConstraints()
     // rooms -> -1; same room -> 0.
     {
         Timetable t = makeBase(2, 3, 3);
-        addLesson(t, "수학", "TA", "G1", 0, 0);
-        addLesson(t, "국어", "TA", "G2", 3, 1);
+        addLesson(t, "Math", "TA", "G1", 0, 0);
+        addLesson(t, "Korean", "TA", "G2", 3, 1);
         checkScore("teacherRoomStability differ",
                    ScoreCalculator::calculateScore(t),
                    0,
@@ -163,8 +163,8 @@ void verifyConstraints()
     }
     {
         Timetable t = makeBase(2, 3, 3);
-        addLesson(t, "수학", "TA", "G1", 0, 0);
-        addLesson(t, "국어", "TA", "G2", 3, 0);
+        addLesson(t, "Math", "TA", "G1", 0, 0);
+        addLesson(t, "Korean", "TA", "G2", 3, 0);
         checkScore("teacherRoomStability same",
                    ScoreCalculator::calculateScore(t),
                    0,
@@ -173,10 +173,10 @@ void verifyConstraints()
     // soft 5: rooms [A, A, B] -> C(3,2) - C(2,2) = 2 different-room pairs.
     {
         Timetable t = makeBase(2, 3, 3);
-        addLesson(t, "수학", "TA", "G1", 0, 0);
+        addLesson(t, "Math", "TA", "G1", 0, 0);
         addLesson(
-            t, "국어", "TA", "G2", 2, 0);  // periods 1 and 3: not adjacent
-        addLesson(t, "영어", "TA", "G3", 3, 1);
+            t, "Korean", "TA", "G2", 2, 0);  // periods 1 and 3: not adjacent
+        addLesson(t, "English", "TA", "G3", 3, 1);
         checkScore("teacherRoomStability [A,A,B]",
                    ScoreCalculator::calculateScore(t),
                    0,
@@ -186,8 +186,8 @@ void verifyConstraints()
     // periods, same room -> +1 reward.
     {
         Timetable t = makeBase(2, 3, 3);
-        addLesson(t, "수학", "TA", "G1", 0, 0);
-        addLesson(t, "국어", "TA", "G2", 1, 0);
+        addLesson(t, "Math", "TA", "G1", 0, 0);
+        addLesson(t, "Korean", "TA", "G2", 1, 0);
         checkScore("teacherTimeEfficiency adjacent",
                    ScoreCalculator::calculateScore(t),
                    0,
@@ -196,8 +196,8 @@ void verifyConstraints()
     // soft 6: periods 1 and 3 are not consecutive -> no reward.
     {
         Timetable t = makeBase(2, 3, 3);
-        addLesson(t, "수학", "TA", "G1", 0, 0);
-        addLesson(t, "국어", "TA", "G2", 2, 0);
+        addLesson(t, "Math", "TA", "G1", 0, 0);
+        addLesson(t, "Korean", "TA", "G2", 2, 0);
         checkScore("teacherTimeEfficiency gap",
                    ScoreCalculator::calculateScore(t),
                    0,
@@ -207,8 +207,8 @@ void verifyConstraints()
     // even though their timeslot indices are adjacent.
     {
         Timetable t = makeBase(2, 3, 3);
-        addLesson(t, "수학", "TA", "G1", 2, 0);
-        addLesson(t, "국어", "TA", "G2", 3, 0);
+        addLesson(t, "Math", "TA", "G1", 2, 0);
+        addLesson(t, "Korean", "TA", "G2", 3, 0);
         checkScore("teacherTimeEfficiency day border",
                    ScoreCalculator::calculateScore(t),
                    0,
@@ -218,8 +218,8 @@ void verifyConstraints()
     // periods (different teachers, to isolate) -> -1.
     {
         Timetable t = makeBase(2, 3, 3);
-        addLesson(t, "수학", "TA", "G1", 0, 0);
-        addLesson(t, "수학", "TB", "G1", 1, 1);
+        addLesson(t, "Math", "TA", "G1", 0, 0);
+        addLesson(t, "Math", "TB", "G1", 1, 1);
         checkScore("studentGroupSubjectVariety",
                    ScoreCalculator::calculateScore(t),
                    0,
@@ -229,8 +229,8 @@ void verifyConstraints()
     // efficiency +1, stability 0 (same room) -> net 0.
     {
         Timetable t = makeBase(2, 3, 3);
-        addLesson(t, "수학", "TA", "G1", 0, 0);
-        addLesson(t, "수학", "TA", "G1", 1, 0);
+        addLesson(t, "Math", "TA", "G1", 0, 0);
+        addLesson(t, "Math", "TA", "G1", 1, 0);
         checkScore("double period (efficiency+variety)",
                    ScoreCalculator::calculateScore(t),
                    0,
@@ -240,8 +240,8 @@ void verifyConstraints()
     {
         Timetable t = makeBase(2, 3, 3);
         t.teacherUnavailable["TA"] = {0};
-        addLesson(t, "수학", "TA", "G1", 0, 0);
-        addLesson(t, "영어", "TA", "G1");  // unassigned
+        addLesson(t, "Math", "TA", "G1", 0, 0);
+        addLesson(t, "English", "TA", "G1");  // unassigned
         // Only the assigned lesson counts: teacherUnavailable -1, nothing else.
         checkScore("unassigned contributes nothing",
                    ScoreCalculator::calculateScore(t),
@@ -251,9 +251,9 @@ void verifyConstraints()
     // Pinned lessons are scored like any other lesson.
     {
         Timetable t = makeBase(2, 3, 3);
-        addLesson(t, "수학", "TA", "G1", 0, 0);
+        addLesson(t, "Math", "TA", "G1", 0, 0);
         t.lessons.back().pinned = true;
-        addLesson(t, "영어", "TB", "G2", 0, 0);
+        addLesson(t, "English", "TB", "G2", 0, 0);
         checkScore("pinned lesson still scored",
                    ScoreCalculator::calculateScore(t),
                    -1,
@@ -271,7 +271,7 @@ Timetable buildRandomInstance(int lessonCount, std::uint64_t seed)
     const std::vector<std::string> teachers = {"TA", "TB", "TC", "TD"};
     const std::vector<std::string> groups = {"GA", "GB", "GC"};
     const std::vector<std::string> subjects
-        = {"국어", "수학", "영어", "과학", "체육"};
+        = {"Korean", "Math", "English", "Science", "PE"};
     std::mt19937_64 rng(seed);
     for (int i = 0; i < lessonCount; ++i)
     {

@@ -1,56 +1,56 @@
 # Maintenance Scheduling (C++ / Python)
 
 Timefold quickstart [maintenance-scheduling](https://github.com/TimefoldAI/timefold-quickstarts/tree/stable/use-cases/maintenance-scheduling)
-의 포트: 유지보수 작업(Job)에 작업 조(Crew)와 시작일을 배정해 조기/지연
-유지보수를 최소화한다. `include/optimaru/` 의 범용 엔진(late acceptance + ALNS) 위에
-C++ 도메인을 얹고, pybind11 로 Python 패키지(`maintenance_scheduling`)를
-제공한다.
+port: assigns a crew (Crew) and a start date to maintenance jobs (Job) to minimize early/late
+maintenance. A C++ domain on top of the generic engine in `include/optimaru/` (late acceptance
++ ALNS), with a Python package (`maintenance_scheduling`) via pybind11.
 
-## 도메인 인코딩
+## Domain encoding
 
-Java 원본의 `Job` 은 planning variable 이 2개다 — `crew` 와 `startDate`
-(주말 제외 TimeGrain 패턴) — 그리고 shadow variable `endDate` 를 가진다.
-엔진은 entity 당 BASIC int 변수 1개를 지원하므로 school-timetabling 의
-합성 인코딩 패턴을 따른다:
+The Java original's `Job` has two planning variables — `crew` and `startDate`
+(a TimeGrain pattern excluding weekends) — plus the shadow variable `endDate`.
+The engine supports one BASIC int variable per entity, so it follows the
+composite encoding pattern of school-timetabling:
 
 ```
-crewDate = startDateIndex * crewCount + crewIndex     # -1 == 미배정
+crewDate = startDateIndex * crewCount + crewIndex     # -1 == unassigned
 ```
 
-- `startDateIndex` 는 달력 `[fromDate, toDate)` 의 주중(월~금) 목록
-  (`MaintenanceSchedule::startDates`, Java `createStartDateList()`) 인덱스.
-- shadow `endDate` 는 `(duration, startDateIndex)` 의 순수 함수라 리스너
-  없이 prepare 단계에서 표(`endDateByDur`)로 선계산한다. Java
-  `Job.calculateEndDate` 와 동일하게 주말을 건너뛴 exclusive 종료일이다.
-- 날짜는 전부 epoch day (Java `LocalDate.toEpochDay`).
+- `startDateIndex` indexes the list of weekdays (Mon-Fri) of the calendar `[fromDate, toDate)`
+  (`MaintenanceSchedule::startDates`, Java `createStartDateList()`).
+- The shadow `endDate` is a pure function of `(duration, startDateIndex)`, so it is
+  precomputed into a table (`endDateByDur`) in the prepare step without listeners. Like Java
+  `Job.calculateEndDate`, it is the exclusive end date skipping weekends.
+- All dates are epoch days (Java `LocalDate.toEpochDay`).
 
-## 제약 (Java ConstraintProvider 전수 이식)
+## Constraints (full port of the Java ConstraintProvider)
 
-| 제약 | 레벨 | 벌점 (Java 와 동일 의미론) |
+| Constraint | Level | Penalty (same semantics as Java) |
 |---|---|---|
-| crewConflict | Hard | 같은 crew 의 겹치는 작업쌍마다 -겹친 달력 일수 |
-| minStartDate | Hard | minStartDate 보다 일찍 시작한 일수만큼 -1 |
-| maxEndDate | Hard | maxEndDate 보다 늦게 끝난 일수만큼 -1 |
-| beforeIdealEndDate | Soft | idealEndDate 보다 일찍 끝난 일수만큼 -1 |
-| afterIdealEndDate | Soft | idealEndDate 보다 늦게 끝난 일수만큼 -1,000,000 |
-| tagConflict | Soft | 겹치는 작업쌍의 공유 태그 수 x 겹친 일수만큼 -1,000 |
+| crewConflict | Hard | -overlapping calendar days per overlapping job pair on the same crew |
+| minStartDate | Hard | -1 per day started before minStartDate |
+| maxEndDate | Hard | -1 per day ended after maxEndDate |
+| beforeIdealEndDate | Soft | -1 per day ended before idealEndDate |
+| afterIdealEndDate | Soft | -1,000,000 per day ended after idealEndDate |
+| tagConflict | Soft | -1,000 per shared tag x overlapping day of overlapping job pairs |
 
-점수 매핑: Java 원본이 이미 `HardSoftScore` 라 엔진의
-HardSoftScore(int64 hard, double soft)에 1:1 로 매핑되며 soft 가중치
-(1 / 1,000 / 1,000,000)는 원본 그대로다. 두 pairwise 제약은 per-day
-점유 카운트의 C(n,2) 합으로 환원되어 (구간이 연속이므로 쌍별 겹침 일수
-합과 동치) 무브당 O(작업 달력 길이)로 증분 채점된다.
+Score mapping: the Java original already uses `HardSoftScore`, so it maps 1:1 onto the
+engine's HardSoftScore(int64 hard, double soft), and the soft weights
+(1 / 1,000 / 1,000,000) are the original ones. The two pairwise constraints reduce to sums
+of C(n,2) over per-day occupancy counts (equivalent to summing pairwise overlapping days,
+since the intervals are contiguous) and are scored incrementally in O(job calendar length)
+per move.
 
-원본에 없는 확장: `Job::pinned` (엔진의 pinning 훅) — 점수에는 반영되지만
-솔버가 절대 움직이지 않는다.
+An extension not in the original: `Job::pinned` (the engine's pinning hook) — counts in
+the score, but the solver never moves it.
 
-## 빌드 / 실행
+## Build / run
 
 ```sh
 cd use-cases/maintenance-scheduling/cpp
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j4
-./build/mnt_test          # 제약 손계산 + incremental==full + FULL_ASSERT
-./build/mnt_demo          # Java 데모(SMALL) 재현, 10초, hard 0 도달 검증
+./build/mnt_test          # constraint hand checks + incremental==full + FULL_ASSERT
+./build/mnt_demo          # reproduces the Java demo (SMALL), 10 s, checks hard 0
 ./build/mnt_demo 15 --large
 
 cd ../python
@@ -58,9 +58,9 @@ uv venv && uv pip install -e . pytest pydantic
 uv run pytest -q
 ```
 
-데모 데이터는 Java `DemoDataGenerator` 를 `java.util.Random(17)` 재현체로
-비트 동일하게 재현한다 (SMALL: crew 3/8주/작업 14, LARGE: crew 5/16주/작업
-48; 시작일은 다음 월요일). SMALL/LARGE 모두 수 초 안에 hard 0 에 도달한다.
+The demo data reproduces the Java `DemoDataGenerator` bit for bit with a
+`java.util.Random(17)` replica (SMALL: 3 crews/8 weeks/14 jobs, LARGE: 5 crews/16 weeks/
+48 jobs; starting next Monday). Both SMALL and LARGE reach hard 0 within seconds.
 
 <!-- usage-and-extending -->
 
@@ -122,5 +122,6 @@ solver's `solve` before the engine runs — the engine only fills what is still 
 
 ## Benchmark
 
-[`benchmarks/maintenance-scheduling`](../../benchmarks/maintenance-scheduling) compares this use case with
-OR-Tools CP-SAT on the same instances, rescored by the same evaluator.
+[`benchmarks/maintenance-scheduling`](../../benchmarks/maintenance-scheduling) compares this use case with OR-Tools CP-SAT and Timefold Solver 2.6.0 on the same instances. Every solution is rescored by the Timefold quickstart's `ConstraintProvider`, so all three are judged by the same rules.
+
+Latest run (30 s per solver, 2 instances): best score by the engine on 0, CP-SAT on 1, Timefold on 1 (ties count for each). Full table: [benchmarks/maintenance-scheduling/README.md](../../benchmarks/maintenance-scheduling/README.md#results).

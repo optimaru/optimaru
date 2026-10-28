@@ -58,5 +58,6 @@ This is a pure Python reference implementation (simulated annealing in
 
 ## Benchmark
 
-[`benchmarks/semiconductor-scheduling`](../../benchmarks/semiconductor-scheduling) compares this use case with
-OR-Tools CP-SAT on public instances.
+[`benchmarks/semiconductor-scheduling`](../../benchmarks/semiconductor-scheduling) compares this use case with OR-Tools CP-SAT on the same instances, rescored by the same evaluator.
+
+Latest run (30 s per solver, 2 instances): best score by the engine on 0, CP-SAT on 2 (ties count for each). Full table: [benchmarks/semiconductor-scheduling/README.md](../../benchmarks/semiconductor-scheduling/README.md#results).

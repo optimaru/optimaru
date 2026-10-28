@@ -654,21 +654,21 @@ DemoSchool buildDemoSchool()
     for (int c = 0; c < 6; ++c)
     {
         addCourse(c, {KOR[c]}, 5, 1, -1, 0, 0, false);
-        addCourse(c, {MATH[c]}, 5, 1, -1, 0, 0x000F, false);  // 오전 선호
+        addCourse(c, {MATH[c]}, 5, 1, -1, 0, 0x000F, false);  // prefers mornings
         addCourse(c, {ENG[c]}, c == 2 ? 4 : 5, 1, -1, 0, 0, false);
         addCourse(c, {SCI[c]}, 4, 1, /*SCI*/ 0, 0, 0, false);
         addCourse(c, {SOC[c]}, 4, 1, -1, 0, 0, false);
         addCourse(c, {SOC[c]}, 1, 1, -1, 0, 0, false);  // ETH, same teacher
         addCourse(
-            c, {10}, 3, 1, /*GYM*/ 3, 0x0001, 0, false);  // PE, 1교시 기피
+            c, {10}, 3, 1, /*GYM*/ 3, 0x0001, 0, false);  // PE, avoids period 1
         addCourse(c, {11}, 2, 1, /*MUS*/ 1, 0, 0, false);
         d.artBlocks.push_back(
-            addCourse(c, {12}, 2, 2, /*ART*/ 2, 0, 0, true));  // 2연강
+            addCourse(c, {12}, 2, 2, /*ART*/ 2, 0, 0, true));  // 2-period block
         if (c == 0)
             d.mergedTech = addCourse(0, {13, 14}, 2, 1, -1, 0, 0, false);
         else
             addCourse(c, {TECH[c]}, 2, 1, -1, 0, 0, false);
-        // Homeroom hour (창체): pinned to Monday period 1.
+        // Homeroom hour (creative activities): pinned to Monday period 1.
         const std::vector<int> hr
             = addCourse(c, {HOMEROOM[c]}, 1, 1, -1, 0, 0, false);
         d.t.lessons[hr[0]].pinned = true;

@@ -1,4 +1,4 @@
-"""pydantic 미러 (models.py) 의 직렬화/역직렬화와 데모 데이터 재현 검증."""
+"""Serialization/deserialization of the pydantic mirror (models.py) and demo data reproduction checks."""
 
 from tournament_scheduling.models import (
     TeamAssignmentModel,
@@ -21,10 +21,10 @@ def test_demo_data_shape():
     assert len(model.days) == 18
     assert len(model.unavailability_penalties) == 12
     assert len(model.team_assignments) == 72
-    # (team, day) 쌍은 유일해야 한다 (Java 생성기의 dedupe).
+    # (team, day) pairs must be unique (the Java generator's dedupe).
     pairs = {(p.team, p.day) for p in model.unavailability_penalties}
     assert len(pairs) == 12
-    # 하루 4 슬롯, id 유일.
+    # 4 slots per day, unique ids.
     ids = {a.id for a in model.team_assignments}
     assert len(ids) == 72
     for d in range(18):
@@ -47,7 +47,7 @@ def test_core_round_trip():
     assert core.day_count() == 18
     assert core.assignment()[5] == 2
     back = TournamentScheduleModel.from_core(core)
-    # from_core 는 (아직 계산 전인) score 0 을 채운다; 그 외엔 동일해야 한다.
+    # from_core fills score 0 (not computed yet); everything else must match.
     assert back.score_hard == 0
     back2 = back.model_copy(update={"score_hard": None, "score_soft": None})
     assert back2 == model

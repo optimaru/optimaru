@@ -170,7 +170,7 @@ def test_request_uses_explicit_driving_matrix():
 
 
 def test_json_vehicles_default_to_twenty_stops_and_open_routes():
-    """JSON 계약의 기본값: 경유지 20개 한도, 편도. C++ 차량은 둘 다 꺼짐."""
+    """JSON contract defaults: 20-stop limit, one-way. C++ vehicles have both off."""
     vehicle = models.VehicleModel(id="V", capacity=1, home=(0, 0))
     assert vehicle.max_stops == 20
     assert vehicle.return_to_depot is False
@@ -182,7 +182,7 @@ def test_json_vehicles_default_to_twenty_stops_and_open_routes():
 
 
 def test_routes_are_open_unless_the_vehicle_returns_to_depot():
-    """기본은 편도: 드랍오프에서 끝나고 복귀 구간은 채점되지 않는다."""
+    """One-way by default: the route ends at the dropoff and no return leg is scored."""
 
     def solve(return_to_depot: bool):
         request = models.PdpRequest(

@@ -1,13 +1,15 @@
-"""특별실 사후 배정.
+"""Assigning special rooms after solving.
 
-기본 CP-SAT 모델은 H6 으로 "(특별실 종류, 시간)별 수요 <= 보유 수"를 보장하고,
-어느 수업이 몇 번 방을 쓰는지는 풀고 난 뒤 여기서 정한다. 같은 종류의 방은
-서로 대체 가능하므로 시간별 그리디 배정이 항상 성공한다. 플러그인 조립에서
-H6 를 뺀 경우에는 같은 방을 재사용해 위반 해도 직렬화할 수 있게 한다. 제약을
-껐다는 이유로 후처리가 실패하면 선택형 제약 API가 실제로는 동작하지 않기 때문이다.
+The default CP-SAT model guarantees "demand <= rooms per (special-room type,
+time)" through H6, and which lesson uses which room is decided here after
+solving. Rooms of one type are interchangeable, so a per-time greedy pass
+always succeeds. When a plugin assembly drops H6, rooms are reused so even a
+violating solution can be serialized — otherwise switching a constraint off
+would make the post-processing fail, and the optional-constraint API would not
+really work.
 
-같은 강좌는 가능하면 매번 같은 방을 쓰도록, 이미 그 강좌가 썼던 방을
-우선 배정한다(소프트한 선호일 뿐 실패 조건은 아니다).
+The same course preferably gets the same room every time: rooms it already
+used are tried first (a soft preference only, never a failure condition).
 """
 
 from collections import defaultdict
@@ -18,8 +20,8 @@ from teacher_scheduling.domain.solution import ScheduledLesson
 
 
 def assign_rooms(problem: TimetableProblem, lessons: list[ScheduledLesson]) -> list[ScheduledLesson]:
-    """특별실이 필요한 수업에 room_id 를 채운 새 수업 목록을 돌려준다."""
-    # (특별실 종류, 시간)별로 배정 대상 수업의 인덱스를 모은다.
+    """Returns a new lesson list with room_id filled for lessons needing a special room."""
+    # Collect the indices of the lessons to place per (special-room type, time).
     demands: dict[tuple[str, TimeSlot], list[int]] = defaultdict(list)
     for index, lesson in enumerate(lessons):
         room_type = problem.required_room_type(problem.course_by_id[lesson.course_id])
@@ -27,23 +29,24 @@ def assign_rooms(problem: TimetableProblem, lessons: list[ScheduledLesson]) -> l
             demands[room_type, lesson.slot].append(index)
 
     assigned = list(lessons)
-    preferred: dict[str, str] = {}  # 강좌가 마지막으로 쓴 방. 다음에도 같은 방을 먼저 시도한다.
+    preferred: dict[str, str] = {}  # the room a course used last; tried first next time
     for (room_type, _slot), indices in sorted(
         demands.items(), key=lambda kv: (kv[0][0], kv[0][1].day, kv[0][1].period)
     ):
         rooms = [room.id for room in problem.rooms_by_type[room_type]]
         remaining = sorted(indices, key=lambda i: assigned[i].course_id)
         free = list(rooms)
-        # 1차: 전에 쓰던 방이 비어 있으면 그대로 유지.
+        # Pass 1: keep the previous room when it is free.
         for index in list(remaining):
             room_id = preferred.get(assigned[index].course_id)
             if room_id in free:
                 free.remove(room_id)
                 remaining.remove(index)
                 assigned[index] = assigned[index].model_copy(update={"room_id": room_id})
-        # 2차: 남은 수업은 남은 방에 순서대로. H6 를 조립에서 뺐다면 free 가
-        # 먼저 바닥날 수 있으므로 그 뒤에는 방 목록을 순환한다. 그러면 같은
-        # 시간/방 충돌이 결과에 그대로 남고, 호출자가 끈 제약의 의미도 보존된다.
+        # Pass 2: the remaining lessons take the remaining rooms in order. If H6 was dropped
+        # from the assembly, free can run out first, so the room list is cycled after that.
+        # Same-time/room clashes then remain visible in the result, preserving the meaning
+        # of the constraint the caller switched off.
         choices = free + [rooms[i % len(rooms)] for i in range(max(0, len(remaining) - len(free)))] if rooms else []
         for index, room_id in zip(remaining, choices, strict=False):
             preferred[assigned[index].course_id] = room_id

@@ -1,16 +1,16 @@
-"""엔진 도메인의 pydantic v2 미러 — JSON 직렬화/역직렬화용.
+"""Pydantic v2 mirror of the engine domain — for JSON serialization/deserialization.
 
-`_core` 의 Location/Facility/Consumer/FacilityLocationProblem 을 1:1 로
-미러링한다. 엔진 형태 그대로를 저장/전송할 때(디버그 덤프, 회귀 스냅샷 등)
-쓴다::
+Mirrors `_core`'s Location/Facility/Consumer/FacilityLocationProblem 1:1. Use it
+to store or transfer the engine shape as-is (debug dumps, regression snapshots,
+...)::
 
     from facility_location.models import FacilityLocationProblemModel
 
-    model = FacilityLocationProblemModel.from_core(problem)  # 엔진 -> pydantic
+    model = FacilityLocationProblemModel.from_core(problem)  # engine -> pydantic
     clone = FacilityLocationProblemModel.model_validate_json(model.model_dump_json())
-    problem2 = clone.to_core()                               # pydantic -> 엔진
+    problem2 = clone.to_core()                               # pydantic -> engine
 
-`pydantic` 은 선택 의존성이다 (`pip install facility_location[models]`).
+`pydantic` is an optional dependency (`pip install facility_location[models]`).
 """
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -26,7 +26,7 @@ __all__ = [
 
 
 class LocationModel(BaseModel):
-    """위경도(도 단위). 거리는 1도 = 111 km 유클리드 근사."""
+    """Latitude/longitude (degrees). Distance uses the 1 degree = 111 km Euclidean approximation."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -42,7 +42,7 @@ class LocationModel(BaseModel):
 
 
 class FacilityModel(BaseModel):
-    """설치 후보 시설: 설치비와 용량을 가진 problem fact."""
+    """Candidate facility: a problem fact with a setup cost and a capacity."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -53,7 +53,7 @@ class FacilityModel(BaseModel):
 
 
 class ConsumerModel(BaseModel):
-    """planning entity. facility 는 시설 인덱스(-1 = 미배정)."""
+    """Planning entity. facility is a facility index (-1 = unassigned)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -64,7 +64,7 @@ class ConsumerModel(BaseModel):
 
 
 class FacilityLocationProblemModel(BaseModel):
-    """planning solution 미러. score 는 읽기 전용 결과라 별도 필드로 둔다."""
+    """Planning solution mirror. score is a read-only result, kept as a separate field."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -72,15 +72,15 @@ class FacilityLocationProblemModel(BaseModel):
     consumers: list[ConsumerModel]
     south_west_corner: LocationModel = Field(default_factory=lambda: LocationModel(latitude=-90.0, longitude=-180.0))
     north_east_corner: LocationModel = Field(default_factory=lambda: LocationModel(latitude=90.0, longitude=180.0))
-    # Java 솔루션의 ConstraintWeightOverrides 미러: 거리 가중 기본 6 (provider
-    # 기본 5 를 솔루션이 6 으로 오버라이드), 설치비 가중은 provider 고정 2.
+    # Mirrors the Java solution's ConstraintWeightOverrides: distance weight defaults
+    # to 6 (the solution overrides the provider's 5); setup cost weight is the provider's fixed 2.
     setup_cost_weight: int = Field(default=2, ge=0)
     distance_from_facility_weight: int = Field(default=6, ge=0)
     score_hard: int | None = None
     score_soft: float | None = None
 
     def to_core(self) -> "_core.FacilityLocationProblem":
-        """pydantic -> 엔진 객체 (score 필드는 엔진이 다시 계산하므로 무시)."""
+        """pydantic -> engine object (the score field is ignored; the engine recomputes it)."""
         problem = _core.FacilityLocationProblem(
             [_core.Facility(f.id, f.location.to_core(), f.setup_cost, f.capacity) for f in self.facilities],
             [self._consumer_to_core(c) for c in self.consumers],
@@ -99,7 +99,7 @@ class FacilityLocationProblemModel(BaseModel):
 
     @classmethod
     def from_core(cls, problem: "_core.FacilityLocationProblem") -> "FacilityLocationProblemModel":
-        """엔진 객체 -> pydantic (현재 배정과 score 포함)."""
+        """engine object -> pydantic (including the current assignment and score)."""
         return cls(
             facilities=[
                 FacilityModel(

@@ -1,4 +1,4 @@
-"""pydantic 미러(models.py) 직렬화/브리지 검증."""
+"""Pydantic mirrors (models.py): serialization and the bridge to the engine."""
 
 import pytest
 
@@ -17,19 +17,19 @@ from st_timetabling.models import (
 def _small_table_model() -> TimetableModel:
     return TimetableModel(
         timeslots=[TimeslotModel(day=0, period=1), TimeslotModel(day=0, period=2)],
-        rooms=[RoomModel(name="1-1교실", type="일반")],
+        rooms=[RoomModel(name="Room 1-1", type="regular")],
         lessons=[
-            LessonModel(id="L1", subject="수학", teacher="박수학", student_group="1-1"),
+            LessonModel(id="L1", subject="Math", teacher="Park (Math)", student_group="1-1"),
             LessonModel(
                 id="L2",
-                subject="국어",
-                teacher="김국어",
+                subject="Korean",
+                teacher="Kim (Korean)",
                 student_group="1-2",
                 slot_room=0,
                 pinned=True,
             ),
         ],
-        teacher_unavailable={"김국어": [1]},
+        teacher_unavailable={"Kim (Korean)": [1]},
     )
 
 
@@ -44,7 +44,7 @@ def test_to_core_from_core_round_trip():
     table = model.to_core()
     assert table.timeslot_count() == 2
     assert table.room_count() == 1
-    assert table.teacher_unavailable == {"김국어": {1}}
+    assert table.teacher_unavailable == {"Kim (Korean)": {1}}
     assert table.assignment() == [-1, 0]
     assert [l.pinned for l in table.lessons] == [False, True]
 
@@ -53,11 +53,11 @@ def test_to_core_from_core_round_trip():
     assert back.rooms == model.rooms
     assert back.lessons == model.lessons
     assert back.teacher_unavailable == model.teacher_unavailable
-    assert back.score_hard == 0  # 아직 점수 계산 전 (기본값)
+    assert back.score_hard == 0  # not scored yet (default)
 
 
 def test_calculate_score_via_core_bridge():
-    # 같은 교사 두 수업을 같은 칸(같은 교실)에 두면 room + teacher 충돌 = -2hard.
+    # Two lessons of the same teacher in the same cell (same room): room + teacher clash = -2hard.
     model = _small_table_model()
     table = model.to_core()
     table.set_assignment([0, 0])
@@ -68,8 +68,8 @@ def test_calculate_score_via_core_bridge():
         timeslots=model.timeslots,
         rooms=model.rooms,
         lessons=[
-            LessonModel(id="L1", subject="수학", teacher="김국어", student_group="1-1"),
-            LessonModel(id="L2", subject="국어", teacher="김국어", student_group="1-2"),
+            LessonModel(id="L1", subject="Math", teacher="Kim (Korean)", student_group="1-1"),
+            LessonModel(id="L2", subject="Korean", teacher="Kim (Korean)", student_group="1-2"),
         ],
     ).to_core()
     table2.set_assignment([0, 0])
@@ -118,7 +118,7 @@ def test_solve_config_validation():
     with pytest.raises(ValueError):
         SolveConfig(ruin_recreate_rewards=[1.0, 2.0, 3.0])
     cfg = st.SolverConfig()
-    cfg.late_acceptance_size = 0  # 0 = 자동 (인스턴스 크기 기반)
+    cfg.late_acceptance_size = 0  # 0 = auto (from the instance size)
     with pytest.raises(ValueError, match="auto"):
         cfg.late_acceptance_size = -1
     with pytest.raises(ValueError, match="positive"):
@@ -127,14 +127,14 @@ def test_solve_config_validation():
         cfg.ruin_recreate_rewards = [1.0, 2.0, 3.0]
 
 
-# ------------------------------------------------------- 목적함수는 레지스트리에서 온다
+# ------------------------------------------------------- the objective comes from the registry
 
 
 def test_objective_weights_are_generated_from_the_constraint_registry():
-    """가중치 필드를 손으로 적지 않는다 — 소프트 제약이 곧 목적함수의 항이다.
+    """The weight fields are not written by hand — the soft constraints are the terms of the objective.
 
-    두 목록을 따로 들고 있으면 제약을 추가할 때 반드시 갈라진다. 이름도
-    기본값도 스펙에서 나오는지 고정한다.
+    Two separately kept lists drift apart as soon as a constraint is added. This
+    pins that both the names and the defaults come from the specs.
     """
     from st_timetabling.constraints import default_weights, soft_specs
     from st_timetabling.models import ObjectiveWeightsModel
@@ -144,14 +144,14 @@ def test_objective_weights_are_generated_from_the_constraint_registry():
 
 
 def test_a_new_soft_constraint_gets_a_weight_field_by_itself():
-    """소프트 제약을 하나 더 등록하면 목적함수 항이 저절로 따라온다."""
+    """Registering one more soft constraint brings its objective term along automatically."""
     from pydantic import Field, create_model
 
     from st_timetabling.constraints import Constraint
     from st_timetabling.models import _ObjectiveWeightsBase
 
     class FirstPeriodLoad(Constraint):
-        """S7 (가상): 1교시 배정당 1점."""
+        """S7 (hypothetical): 1 point per lesson in period 1."""
 
         name = "first_period_load"
         default_hard = False
@@ -164,5 +164,5 @@ def test_a_new_soft_constraint_gets_a_weight_field_by_itself():
         **{s.name: (int, Field(default=int(s.default_weight), ge=0)) for s in specs},
     )
     assert generated().model_dump() == {"first_period_load": 7}
-    # 모놀리식 구조체가 모르는 항은 to_core 에서 조용히 빠진다 (조립 경로가 쓴다).
+    # A term the monolithic struct does not know is silently left out by to_core (the assembly path uses it).
     assert "first_period_load" not in generated().to_core().__dir__()

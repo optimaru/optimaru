@@ -167,7 +167,7 @@ def test_request_uses_explicit_driving_matrix():
 
 
 def test_routes_are_open_unless_the_vehicle_returns_to_depot():
-    """기본은 편도: 마지막 방문지에서 끝나고 복귀 구간은 채점되지 않는다."""
+    """One-way by default: the route ends at the last visit and no return leg is scored."""
 
     def solve(return_to_depot: bool):
         request = models.RoutePlanRequest(

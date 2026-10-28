@@ -54,8 +54,8 @@ int main(int argc, char **argv)
     const int seconds = (argc > 1) ? std::atoi(argv[1]) : 10;
 
     TaskAssigningSolution solution = demo::generateDemoData();
-    std::printf("== 태스크 배정 데모 (task type %zu, customer %zu, "
-                "employee %zu, task %zu, %d초) ==\n",
+    std::printf("== task assigning demo (%zu task types, %zu customers, "
+                "%zu employees, %zu tasks, %d s) ==\n",
                 solution.taskTypes.size(),
                 solution.customers.size(),
                 solution.employees.size(),
@@ -81,10 +81,10 @@ int main(int argc, char **argv)
 
     if (solution.score.hard == 0 && solution.score.soft0 == 0)
     {
-        std::printf("  hard 0 + 전 태스크 배정 도달: OK\n");
+        std::printf("  reached hard 0 + every task assigned: OK\n");
         return 0;
     }
-    std::printf("  hard 0 도달 실패 (hard=%lld, unassigned=%lld)\n",
+    std::printf("  failed to reach hard 0 (hard=%lld, unassigned=%lld)\n",
                 static_cast<long long>(solution.score.hard),
                 static_cast<long long>(-solution.score.soft0));
     return 1;

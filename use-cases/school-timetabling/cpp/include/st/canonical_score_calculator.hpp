@@ -139,8 +139,8 @@ public:
     //
     // The missing-member charge is what keeps a HALF-placed block from being
     // free: adjacency alone scores a lone survivor at 0 (k=1 needs no
-    // neighbour) while the CP-SAT reference calls the same timetable "2연강이
-    // 없음". `groupSize` is the group's full member count; pass
+    // neighbour) while the CP-SAT reference calls the same timetable "no 2-period
+    // block". `groupSize` is the group's full member count; pass
     // dayPeriods.size() when the caller knows every member is assigned.
     //
     // A group with NOTHING assigned stays at 0 on purpose — that is the one

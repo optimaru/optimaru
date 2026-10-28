@@ -1,42 +1,44 @@
-"""제약 조립 스펙 — 비용 함수를 선언으로 고르는 API.
+"""Constraint assembly specs — an API for picking the cost function declaratively.
 
-기본 경로(`ms.solve(schedule)`)는 열두 제약을 provider 가중치로 전부 켠다.
-이 모듈은 그 옆의 선택 경로다: 제약을 골라 담고, 가중치를 바꾸고,
-하드/소프트를 뒤집은 목록을 `solve(schedule, constraints=...)` 에 넘긴다.
+The default path (`ms.solve(schedule)`) enables all twelve constraints at the provider weights.
+This module is the alternative path next to it: pick constraints, change weights, flip
+hard/soft, and pass the list to `solve(schedule, constraints=...)`.
 
-가장 짧은 사용법은 :func:`get_constraints` 다. 기본 목록을 그대로 돌려주니
-"기본에서 조금 바꾸는" 선언이 한 줄로 끝난다::
+The shortest route is :func:`get_constraints`. It returns the default list, so
+a "default with a small tweak" declaration fits on one line::
 
     import meeting_scheduling as ms
     from meeting_scheduling.constraints import (
         OverlappingMeetings, get_constraints, room_conflict,
     )
 
-    ms.solve(schedule, constraints=get_constraints())           # 기본 그대로
-    ms.solve(schedule, constraints=get_constraints([            # 골라 담기
+    ms.solve(schedule, constraints=get_constraints())           # defaults as-is
+    ms.solve(schedule, constraints=get_constraints([            # picked
         room_conflict, OverlappingMeetings(weight=100),
     ]))
 
-모듈 상위에 제약마다 기본 인스턴스가 있으니 그중 몇 개만 골라 리스트로
-넘겨도 된다. 목록에 넣은 제약만 채점된다 — 빼면 그 항은 점수에서 사라진다.
+Each constraint has a default instance at module level, so you can also pass a
+list of just a few. Only listed constraints are scored — leave one out and its
+term disappears from the score.
 
-모든 스펙은 ``(weight=None, hard=None, exponent=1.0)`` 를 받는다:
+Every spec takes ``(weight=None, hard=None, exponent=1.0)``:
 
-- ``weight``   제약 비용의 선형 배수. ``None`` 은 컴포넌트 기본값.
-- ``hard``     ``True``/``False`` 로 기본 레벨을 뒤집는다; ``None`` 은 유지.
-               **이 도메인의 미디엄 제약은 이 손잡이로 표현할 수 없다** —
-               ``hard=False`` 는 소프트로 접어 미디엄 의미가 사라진다.
-               미디엄 항은 ``None`` 으로 두는 게 맞다.
-- ``exponent`` 부호 보존 거듭제곱 셰이핑: ``weight * sign(c) * |c| **
-               exponent``. 2.0 = 제곱이라 몰린 위반이 기하급수로 비싸진다.
+- ``weight``   linear multiplier on the constraint cost. ``None`` = component default.
+- ``hard``     ``True``/``False`` flips the default level; ``None`` keeps it.
+               **Medium constraints in this domain cannot be expressed with
+               this knob** — ``hard=False`` folds them into soft and the medium
+               meaning is lost. Leave medium terms at ``None``.
+- ``exponent`` sign-preserving power shaping: ``weight * sign(c) * |c| **
+               exponent``. 2.0 = squared, so concentrated violations grow much costlier.
 
-참석 충돌은 세 항으로 나뉜다: 둘 다 **필수**면 하드, 한쪽만 필수거나
-둘 다 선호면 미디엄이다 — 불가능한 일정과 아쉬운 일정을 레벨로 가른다.
+Attendance conflicts split into three terms: hard when both are **required**, medium
+when only one is required or both are preferred — levels separate impossible schedules
+from merely regrettable ones.
 
-이름(`name`)은 C++ 컴포넌트 이름을 snake_case 로 옮긴 것이다. 코어가
-기계적으로 유도하니 손으로 관리하는 별칭 표는 없다 —
-`ms.list_constraints()` 로 확인할 수 있다. 모듈 상위 인스턴스 이름도 같은
-snake_case 라 `list_constraints()` 가 찍는 문자열과 그대로 대응한다.
+Names (`name`) are the C++ component names in snake_case. The core derives them
+mechanically, so there is no hand-maintained alias table — check them with
+`ms.list_constraints()`. Module-level instance names use the same snake_case,
+so they match the strings `list_constraints()` prints.
 """
 
 import math
@@ -77,10 +79,10 @@ __all__ = [
 
 @dataclass(frozen=True)
 class Constraint:
-    """제약 하나를 고르는 스펙: 가중치 / 레벨 / 셰이핑."""
+    """Spec selecting one constraint: weight / level / shaping."""
 
-    weight: float | None = None  # None = 컴포넌트 기본 가중치
-    hard: bool | None = None  # None = 컴포넌트 기본 레벨
+    weight: float | None = None  # None = component default weight
+    hard: bool | None = None  # None = component default level
     exponent: float = 1.0
     name: ClassVar[str] = ""
 
@@ -91,108 +93,108 @@ class Constraint:
 
 
 class AvoidOvertime(Constraint):
-    """달력 끝을 넘겨 끝나는 회의. 기본: 하드, 가중치 1.
+    """Meetings ending past the end of the calendar. Default: hard, weight 1.
 
-    마지막 grain 인덱스에 TimeGrain 팩트가 없는 경우다. 벌점이 그 인덱스라
-    더 많이 넘길수록 비싸다."""
+    The case where no TimeGrain fact exists at the last grain index. The penalty is
+    that index, so running further over costs more."""
 
     name = "avoid_overtime"
 
 
 class RequiredRoomCapacity(Constraint):
-    """배정된 방이 참석 인원을 감당하기에 모자란 수. 기본: 하드, 가중치 1."""
+    """Seats missing in the assigned room for the attendees. Default: hard, weight 1."""
 
     name = "required_room_capacity"
 
 
 class StartAndEndOnSameDay(Constraint):
-    """마지막 grain 이 첫 grain 과 다른 날에 떨어지는 회의. 기본: 하드, 가중치 1.
+    """Meetings whose last grain falls on a different day than the first. Default: hard, weight 1.
 
-    다른 날에 있는 마지막 인덱스의 TimeGrain 팩트마다 센다 (Java join 의
-    모양). 달력을 아예 넘겨버린 경우는 0 이다 — 그건 `avoid_overtime` 이
-    값매김한다."""
+    Counted per TimeGrain fact at the last index on another day (the shape of the
+    Java join). Running off the calendar entirely gives 0 — `avoid_overtime`
+    values that."""
 
     name = "start_and_end_on_same_day"
 
 
 class RoomConflict(Constraint):
-    """두 회의가 같은 방을 같은 시간에 쓴 grain 수. 기본: 하드, 가중치 1."""
+    """Grains in which two meetings use the same room at the same time. Default: hard, weight 1."""
 
     name = "room_conflict"
 
 
 class RequiredAttendanceConflict(Constraint):
-    """**둘 다 필수** 참석인 사람의 겹친 grain 수. 기본: 하드, 가중치 1.
+    """Overlapping grains of a person **required in both** meetings. Default: hard, weight 1.
 
-    두 회의에 동시에 반드시 들어가야 하는 사람이 있으면 일정 자체가 불가능해
-    하드다. 한 회의가 같은 사람을 필수로 두 번 적은 경우도 여기에 접혀 있다."""
+    Someone who must be in two meetings at once makes the schedule impossible, so it
+    is hard. A meeting listing the same person as required twice folds in here too."""
 
     name = "required_attendance_conflict"
 
 
 class RequiredAndPreferredAttendanceConflict(Constraint):
-    """한쪽은 필수, 다른 쪽은 선호인 사람의 겹친 grain 수. 기본: 미디엄, 가중치 MEDIUM_SCALE.
+    """Overlapping grains of a person required in one and preferred in the other. Default: medium, weight MEDIUM_SCALE.
 
-    양방향을 다 센다 — 간선이 정방향/역방향 가중치를 따로 들고 컴포넌트가
-    그 둘을 더하는 이유다."""
+    Both directions count — which is why an edge carries separate forward/backward
+    weights and the component adds them."""
 
     name = "required_and_preferred_attendance_conflict"
 
 
 class PreferredAttendanceConflict(Constraint):
-    """**둘 다 선호** 참석인 사람의 겹친 grain 수. 기본: 미디엄, 가중치 MEDIUM_SCALE.
+    """Overlapping grains of a person **preferred in both**. Default: medium, weight MEDIUM_SCALE.
 
-    불가능한 게 아니라 아쉬운 것이라, 하드 규칙 아래이면서 모든 소프트 편의
-    항 위인 미디엄에 앉는다."""
+    Regrettable rather than impossible, so it sits at medium: below the hard rules
+    and above every soft convenience term."""
 
     name = "preferred_attendance_conflict"
 
 
 class DoMeetingsAsSoonAsPossible(Constraint):
-    """회의마다 자기 마지막 grain 인덱스. 기본: 소프트, 가중치 1.
+    """Each meeting's own last grain index. Default: soft, weight 1.
 
-    일정 전체를 달력 앞쪽으로 당긴다."""
+    Pulls the whole schedule toward the front of the calendar."""
 
     name = "do_meetings_as_soon_as_possible"
 
 
 class AssignLargerRoomsFirst(Constraint):
-    """배정된 방보다 엄격히 큰 방마다 그 정원 차이. 기본: 소프트, 가중치 1.
+    """For every room strictly larger than the assigned one, the capacity difference. Default: soft, weight 1.
 
-    큰 방부터 채워서 작은 방은 거기밖에 못 들어가는 회의에 남겨 둔다.
-    방별 합계는 `ScoreCalculator::prepare` 가 미리 계산한다."""
+    Fills big rooms first and leaves small rooms for meetings that only fit there.
+    Per-room totals are precomputed by `ScoreCalculator::prepare`."""
 
     name = "assign_larger_rooms_first"
 
 
 class OneBreakBetweenConsecutiveMeetings(Constraint):
-    """사이에 grain 하나 없이 붙어 있는 두 회의. 기본: 소프트, 가중치 100.
+    """Two meetings back to back without a single grain between. Default: soft, weight 100.
 
-    provider 의 소프트 항 중 가장 비싸다 — 틈 없는 회의로 가득한 하루가
-    참석자가 실제로 불평하는 것이다."""
+    The most expensive soft term of the provider — a day packed with gapless meetings
+    is what attendees actually complain about."""
 
     name = "one_break_between_consecutive_meetings"
 
 
 class OverlappingMeetings(Constraint):
-    """아무 두 회의가 동시에 도는 grain 수. 기본: 소프트, 가중치 10.
+    """Grains in which any two meetings run at once. Default: soft, weight 10.
 
-    방도 참석자도 무관하다. 둘 다 들어가고 싶을 수 있는 회의가 겹치지
-    않도록 달력을 펴 준다."""
+    Regardless of room or attendees. Spreads the calendar so meetings someone might
+    want to attend both of do not overlap."""
 
     name = "overlapping_meetings"
 
 
 class RoomStability(Constraint):
-    """다음 회의가 두 grain 안에 시작하는데 방이 다른 공유 참석자. 기본: 소프트, 가중치 1.
+    """Shared attendees whose next meeting starts within two grains in a different room. Default: soft, weight 1.
 
-    앞의 세 충돌 규칙과 달리 이건 겹침에 대한 게 아니다 — 회의가 많이
-    겹치지 **않을** 때 정확히 발동한다 (짐 싸서 걸어가야 하니까)."""
+    Unlike the three conflict rules above, this is not about overlap — it fires
+    precisely when meetings do **not** overlap much (people have to pack up and walk)."""
 
     name = "room_stability"
 
 
-#: 기본 가중치로 만들어 둔 인스턴스. 골라 담을 때 그대로 참조하면 된다.
+#: Instances at the default weights. Reference them directly when picking.
 avoid_overtime = AvoidOvertime()
 required_room_capacity = RequiredRoomCapacity()
 start_and_end_on_same_day = StartAndEndOnSameDay()
@@ -206,7 +208,7 @@ one_break_between_consecutive_meetings = OneBreakBetweenConsecutiveMeetings()
 overlapping_meetings = OverlappingMeetings()
 room_stability = RoomStability()
 
-#: 기본 세트 — `ms.list_constraints()` 와 같은 순서 (unit 먼저, global 나중).
+#: Default set — same order as `ms.list_constraints()` (unit first, global after).
 _DEFAULTS: list[Constraint] = [
     avoid_overtime,
     required_room_capacity,
@@ -224,59 +226,59 @@ _DEFAULTS: list[Constraint] = [
 
 
 def get_constraints(constraints: list[Constraint] | None = None) -> list[Constraint]:
-    """비용 함수를 돌려준다. 인자가 없으면 기본 열두 제약 전부.
+    """Return the cost function. Without arguments, all twelve default constraints.
 
-    `constraints` 를 주면 그 목록을 그대로 쓴다 — 목록에 있는 제약만
-    채점된다. 기본에서 하나만 바꾸고 싶으면 기본 인스턴스를 섞어 쓴다::
+    When `constraints` is given, that list is used as-is — only the listed
+    constraints are scored. To change just one default, mix in the default instances::
 
         get_constraints([room_conflict, OverlappingMeetings(weight=100)])
     """
     if constraints is None:
         return list(_DEFAULTS)
     if not constraints:
-        # C++ applyConstraints 와 같은 계약: 빈 목록은 "아무것도 채점하지
-        # 않음" 이라 실수일 가능성이 높다. 필터 결과가 우연히 비었을 때
-        # 조용히 "전부 채점" 으로 뒤집히면 안 된다.
+        # Same contract as C++ applyConstraints: an empty list means "score
+        # nothing", which is most likely a mistake. A filter that happens to come
+        # out empty must not silently flip to "score everything".
         raise ValueError("constraints must not be empty (pass None for the defaults)")
     return list(constraints)
 
 
 class Score(NamedTuple):
-    """`score()` 가 돌려주는 (hard, soft). 둘 다 벌점이라 0 이하다."""
+    """(hard, soft) returned by `score()`. Both are penalties, so <= 0."""
 
     hard: int
     soft: float
 
 
 def _shape(cost: float, exponent: float) -> float:
-    """부호 보존 거듭제곱. 보상(음수 cost)이 벌점으로 뒤집히지 않는다."""
+    """Sign-preserving power. Rewards (negative costs) never flip into penalties."""
     if exponent == 1.0 or cost == 0.0:
         return cost
     return -((-cost) ** exponent) if cost < 0.0 else cost**exponent
 
 
 def score(costs: dict, constraints: list[Constraint] | None = None) -> Score:
-    """제약 원본 cost 에 스펙을 적용해 점수를 낸다 — 순수 파이썬.
+    """Apply specs to raw constraint costs and produce a score — pure Python.
 
-    ``costs`` 는 `ms.constraint_costs(schedule)` 가 돌려준 것이다: 제약마다
-    unit 별 **원본** cost (가중치도 exponent 도 레벨 반올림도 적용되기 전).
-    한 번 받아두면 가중치를 바꿔가며 재채점 없이 계산할 수 있다::
+    ``costs`` is what `ms.constraint_costs(schedule)` returns: per constraint, the
+    **raw** cost of each unit (before weight, exponent and level rounding).
+    Fetch it once and rescore with different weights without re-solving::
 
         raw = ms.constraint_costs(schedule)
-        score(raw)                     # 기본 세트
-        score(raw, picked)             # 골라 담은 목록
+        score(raw)                     # default set
+        score(raw, picked)             # picked list
 
-    솔버도 탐색 알고리즘도 거치지 않는다. 계산 규칙은 엔진과 같다 —
-    unit 마다 ``weight * shape(cost, exponent)`` 를 구하고, 하드는 unit
-    기여분을 **각각 반올림**해서 더한다 (엔진의 applyRaw 와 같은 순서;
-    합계를 뒤에 반올림하면 값이 달라진다).
+    No solver and no search are involved. The arithmetic matches the engine —
+    each unit contributes ``weight * shape(cost, exponent)`` and hard
+    contributions are **rounded per unit** before summing (the same order as the
+    engine's applyRaw; rounding the total afterwards gives different values).
 
-    ``constraints`` 를 주면 그 목록의 제약만 채점된다 — `get_constraints`
-    와 같은 의미론이다. 모르는 이름은 ValueError.
+    When ``constraints`` is given, only those constraints are scored — the same
+    semantics as `get_constraints`. Unknown names raise ValueError.
 
-    돌려주는 값은 **엔진 레벨**의 (hard, soft) 다. 이 도메인은 medium 을
-    엔진 soft 에 MEDIUM_SCALE 배수로 접어 넣으므로, `solution.score` 의 분해된
-    레벨과 견주려면 같은 방식으로 접어서 비교해야 한다.
+    The returned value is the **engine-level** (hard, soft). This domain folds
+    medium into engine soft as multiples of MEDIUM_SCALE, so to compare with the
+    split levels of `solution.score`, fold the same way first.
     """
     hard = 0
     soft = 0.0
@@ -292,8 +294,8 @@ def score(costs: dict, constraints: list[Constraint] | None = None) -> Score:
         for cost in entry["costs"]:
             value = weight * _shape(cost, exponent)
             if is_hard:
-                # 엔진과 같이 unit 기여분마다 반올림한다 (llround 와 같은
-                # half-away-from-zero; 파이썬 round 는 banker's rounding).
+                # Round per unit contribution like the engine (half-away-from-zero
+                # like llround; Python's round is banker's rounding).
                 hard += int(math.floor(value + 0.5) if value >= 0 else math.ceil(value - 0.5))
             else:
                 soft += value

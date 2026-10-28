@@ -145,16 +145,16 @@ class Solver:
     def __init__(self, config: SolverConfig = ...) -> None: ...
     def solve(self, schedule: PackagingSchedule) -> None: ...
     def solve_with_constraints(self, schedule: PackagingSchedule, constraints: Iterable[Any] | None = ...) -> None:
-        """같은 solve 를 호출자가 고른 제약 세트로 채점한다
-        (food_packaging.constraints 참고). 준 목록이 기본 세트를 대체하고, None 이면
-        기본 세트를 그대로 쓴다."""
+        """Score the same solve with a caller-chosen constraint set
+        (see food_packaging.constraints). The given list replaces the default set; None
+        keeps the default set."""
 
 def list_constraints() -> list[str]:
-    """이 도메인이 채점하는 제약 이름들 (기본 조립 순서, snake_case).
-    food_packaging.constraints 가 쓰는 이름과 같다."""
+    """Constraint names scored by this domain (default assembly order, snake_case).
+    The same names food_packaging.constraints uses."""
 
 def constraint_costs(solution, /) -> dict[str, dict]:
-    """제약별 unit 별 **원본** cost — 가중치/exponent/레벨 반올림 전.
-    `food_packaging.constraints.score()` 가 이걸 받아 점수를 낸다.
+    """Per-constraint, per-unit **raw** costs — before weight/exponent/level rounding.
+    `food_packaging.constraints.score()` takes these and produces a score.
     {name: {"costs": [...], "weight": w, "exponent": e,
             "hard": bool, "global": bool}}."""

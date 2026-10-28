@@ -1,4 +1,4 @@
-"""데모 학교 문제를 풀어 시간표 리포트를 출력하는 CLI.
+"""CLI that solves the demo school and prints a timetable report.
 
 python -m teacher_scheduling [--time-limit N] [--backend cpsat]
 """
@@ -13,9 +13,9 @@ from teacher_scheduling.validate import validate_timetable
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(prog="python -m teacher_scheduling", description="데모 학교 시간표 편성")
-    parser.add_argument("--time-limit", type=float, default=None, metavar="N", help="탐색 제한 시간(초)")
-    parser.add_argument("--backend", choices=["cpsat"], default="cpsat", help="사용할 솔버 백엔드")
+    parser = argparse.ArgumentParser(prog="python -m teacher_scheduling", description="Demo school timetabling")
+    parser.add_argument("--time-limit", type=float, default=None, metavar="N", help="search time limit (seconds)")
+    parser.add_argument("--backend", choices=["cpsat"], default="cpsat", help="solver backend to use")
     args = parser.parse_args()
 
     config = SolverConfig() if args.time_limit is None else SolverConfig(time_limit_seconds=args.time_limit)
@@ -28,11 +28,11 @@ def main() -> int:
 
     violations = validate_timetable(problem, timetable)
     if violations:
-        print("\n하드 제약 위반:")
+        print("\nhard-constraint violations:")
         for violation in violations:
             print(f"  - {violation}")
         return 1
-    print(f"\n하드 제약 위반 없음 (수업 {len(timetable.lessons)}칸 검증)")
+    print(f"\nno hard-constraint violations ({len(timetable.lessons)} lesson cells checked)")
     return 0
 
 

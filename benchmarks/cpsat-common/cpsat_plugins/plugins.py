@@ -44,9 +44,7 @@ class ConstraintPlugin(ABC, Generic[ContextT]):
                 getattr(type(self), "description_en", "")
                 or (type(self).__doc__ or "").strip()
             ),
-            label_ko=getattr(type(self), "label_ko", ""),
             label_en=getattr(type(self), "label_en", ""),
-            description_ko=getattr(type(self), "description_ko", ""),
             description_en=getattr(type(self), "description_en", ""),
         )
 

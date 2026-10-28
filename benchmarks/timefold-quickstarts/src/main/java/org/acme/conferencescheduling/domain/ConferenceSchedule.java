@@ -1,0 +1,106 @@
+package org.acme.conferencescheduling.domain;
+
+import java.util.Set;
+
+import ai.timefold.solver.core.api.domain.solution.ConstraintWeightOverrides;
+import ai.timefold.solver.core.api.domain.solution.PlanningEntityCollectionProperty;
+import ai.timefold.solver.core.api.domain.solution.PlanningScore;
+import ai.timefold.solver.core.api.domain.solution.PlanningSolution;
+import ai.timefold.solver.core.api.domain.solution.ProblemFactCollectionProperty;
+import ai.timefold.solver.core.api.domain.solution.ProblemFactProperty;
+import ai.timefold.solver.core.api.score.HardMediumSoftScore;
+
+
+@PlanningSolution
+public class ConferenceSchedule {
+
+    private String name;
+
+    @ProblemFactProperty
+    private ConferenceConstraintProperties constraintProperties;
+
+    @ProblemFactCollectionProperty
+    private Set<TalkType> talkTypes;
+
+    @ProblemFactCollectionProperty
+    private Set<Timeslot> timeslots;
+
+    @ProblemFactCollectionProperty
+    private Set<Room> rooms;
+
+    @ProblemFactCollectionProperty
+    private Set<Speaker> speakers;
+
+    @PlanningEntityCollectionProperty
+    private Set<Talk> talks;
+
+    @PlanningScore
+    private HardMediumSoftScore score;
+
+    private ConstraintWeightOverrides<HardMediumSoftScore> constraintWeightOverrides = ConstraintWeightOverrides.none();
+
+    public ConferenceSchedule() {
+    }
+
+    public ConferenceSchedule(String name, Set<TalkType> talkTypes, Set<Timeslot> timeslots, Set<Room> rooms,
+            Set<Speaker> speakers, Set<Talk> talks) {
+        this.name = name;
+        this.talkTypes = talkTypes;
+        this.timeslots = timeslots;
+        this.rooms = rooms;
+        this.speakers = speakers;
+        this.talks = talks;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public ConferenceConstraintProperties getConstraintProperties() {
+        return constraintProperties;
+    }
+
+    public void setConstraintProperties(ConferenceConstraintProperties constraintProperties) {
+        this.constraintProperties = constraintProperties;
+    }
+
+    public Set<TalkType> getTalkTypes() {
+        return talkTypes;
+    }
+
+    public Set<Timeslot> getTimeslots() {
+        return timeslots;
+    }
+
+    public Set<Room> getRooms() {
+        return rooms;
+    }
+
+    public Set<Speaker> getSpeakers() {
+        return speakers;
+    }
+
+    public Set<Talk> getTalks() {
+        return talks;
+    }
+
+    public HardMediumSoftScore getScore() {
+        return score;
+    }
+
+    public void setScore(HardMediumSoftScore score) {
+        this.score = score;
+    }
+
+    public ConstraintWeightOverrides<HardMediumSoftScore> getConstraintWeightOverrides() {
+        return constraintWeightOverrides;
+    }
+
+    public void setConstraintWeightOverrides(ConstraintWeightOverrides<HardMediumSoftScore> constraintWeightOverrides) {
+        this.constraintWeightOverrides = constraintWeightOverrides;
+    }
+
+    
+
+    
+}

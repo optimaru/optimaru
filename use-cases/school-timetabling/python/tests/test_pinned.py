@@ -1,4 +1,4 @@
-"""fixed_slots -> pinned 변환(H2)과 solve 후 고정 유지 검증 (canonical 도메인)."""
+"""fixed_slots -> pinned conversion (H2) and pins kept after solve (canonical domain)."""
 
 import st_timetabling as st
 from st_timetabling import canon, convert_problem
@@ -10,7 +10,7 @@ def test_fixed_slot_becomes_pinned_lesson(problem):
     pe1 = next(l for l in lessons if l.id == "C1-PE#1")
     assert pe1.pinned
     assert pe1.slot == conv.slot_index[(2, 3)]
-    # 나머지 체육 수업은 자유 배정(미배정 시작).
+    # The other PE lessons are free (they start unassigned).
     pe2 = next(l for l in lessons if l.id == "C1-PE#2")
     assert not pe2.pinned
     assert pe2.slot == -1
@@ -24,12 +24,12 @@ def test_pinned_lesson_survives_solve(problem):
     cfg = canon.SolverConfig()
     cfg.spent_limit_seconds = 10.0
     cfg.random_seed = 7
-    cfg.best_score_limit = (0, -1e18)  # 첫 feasible 에서 종료
+    cfg.best_score_limit = (0, -1e18)  # stop at the first feasible solution
     canon.Solver(cfg).solve(conv.table)
 
     assert conv.table.assignment()[pinned_index] == expected
 
-    # canonical 출력에도 그 칸이 그대로 나타난다 (체육관 매칭 -> room_id 채움).
+    # The cell shows up in the canonical output too (gym matched -> room_id filled).
     result = st.convert_solution(conv)
     pe = [l for l in result["lessons"] if l["course_id"] == "C1-PE"]
     assert {"day": 2, "period": 3} in [l["slot"] for l in pe]

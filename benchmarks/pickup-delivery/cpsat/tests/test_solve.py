@@ -12,8 +12,8 @@ from pickup_delivery_cpsat import catalog, solve_request
 
 def test_catalog_exposes_route_policies() -> None:
     rows = catalog()
-    assert all(row["label_ko"] and row["label_en"] for row in rows)
-    assert all(row["description_ko"] and row["description_en"] for row in rows)
+    assert all(row["label_en"] for row in rows)
+    assert all(row["description_en"] for row in rows)
     assert {row["name"] for row in rows} == {
         "vehicle_capacity",
         "service_finished_after_max_end_time",

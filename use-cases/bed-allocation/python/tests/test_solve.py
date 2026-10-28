@@ -1,4 +1,4 @@
-"""데모 인스턴스 solve 테스트: feasible(hard 0) 도달과 결과 일관성."""
+"""Demo instance solve test: reaching feasible (hard 0) and result consistency."""
 
 import bed_allocation as ba
 from bed_allocation.demo import generate_demo_data
@@ -11,7 +11,7 @@ def test_demo_solve_reaches_feasible():
 
     assert isinstance(result, BedPlanModel)
     assert result.score_hard == 0
-    # 결과 점수는 재채점과 일치해야 한다.
+    # The result score must match a rescoring.
     replan = result.to_core()
     score = ba.calculate_score(replan)
     assert (score.hard, score.medium, score.soft) == (
@@ -26,7 +26,7 @@ def test_solve_core_plan_in_place():
     returned = ba.solve(plan, time_limit_seconds=2.0, random_seed=7, stop_at_first_feasible=True)
     assert returned is plan
     assert plan.score.is_feasible()
-    # 모든 stay 가 초기화되어 있어야 한다 (실제 병상 또는 no-bed 센티널).
+    # Every stay must be initialized (a real bed or the no-bed sentinel).
     no_bed = plan.no_bed_value()
     assert all(0 <= value <= no_bed for value in plan.assignment())
 

@@ -1,5 +1,5 @@
-"""제약 스팟체크: Java MeetingSchedulingConstraintProviderTest 의 대표
-케이스를 compute_breakdown 으로 재현한다."""
+"""Constraint spot checks: reproduces representative cases of Java
+MeetingSchedulingConstraintProviderTest with compute_breakdown."""
 
 import meeting_scheduling as ms
 
@@ -40,12 +40,12 @@ def make_schedule(days, grains_per_day, capacities, meetings_spec):
 
 
 def test_room_conflict():
-    # Java roomConflictPenalized: dur 4 @0 과 dur 4 @2, 같은 방 -> 2.
+    # Java roomConflictPenalized: dur 4 @0 and dur 4 @2, same room -> 2.
     s = make_schedule(1, 12, [5, 5], [(4, [], [], 0, 0), (4, [], [], 2, 0)])
     b = ms.compute_breakdown(s)
     assert b.room_conflict_grains == 2
     assert b.overlapping_meeting_grains == 2
-    # 붙여 배치하면 (dur 4 @0, @4) 방 충돌 0, 연속 쌍 1.
+    # Placed back to back (dur 4 @0, @4): room conflict 0, one adjacent pair.
     s = make_schedule(1, 12, [5, 5], [(4, [], [], 0, 0), (4, [], [], 4, 0)])
     b = ms.compute_breakdown(s)
     assert b.room_conflict_grains == 0
@@ -53,7 +53,7 @@ def test_room_conflict():
 
 
 def test_avoid_overtime():
-    # 그레인 0..3 만 존재; dur 4 @2 는 마지막 인덱스 5 가 없다 -> 5.
+    # Only grains 0..3 exist; dur 4 @2 has no last index 5 -> 5.
     s = make_schedule(1, 4, [5], [(4, [], [], 2, 0)])
     assert ms.compute_breakdown(s).overtime_sum == 5
     s = make_schedule(1, 4, [5], [(4, [], [], 0, 0)])
@@ -61,43 +61,43 @@ def test_avoid_overtime():
 
 
 def test_attendance_conflicts():
-    # Java requiredAttendanceConflictPenalized: 겹침 2.
+    # Java requiredAttendanceConflictPenalized: overlap 2.
     s = make_schedule(1, 12, [5, 5], [(4, [0], [], 0, 0), (4, [0], [], 2, 1)])
     assert ms.compute_breakdown(s).required_conflict_grains == 2
-    # Java requiredAndPreferredAttendanceConflictPenalized: 완전 겹침 4.
+    # Java requiredAndPreferredAttendanceConflictPenalized: full overlap 4.
     s = make_schedule(1, 12, [5, 5], [(4, [0], [], 0, 0), (4, [], [0], 0, 1)])
     assert ms.compute_breakdown(s).required_preferred_conflict_grains == 4
-    # Java preferredAttendanceConflictPenalized: 완전 겹침 4.
+    # Java preferredAttendanceConflictPenalized: full overlap 4.
     s = make_schedule(1, 12, [5, 5], [(4, [], [0], 0, 0), (4, [], [0], 0, 1)])
     assert ms.compute_breakdown(s).preferred_conflict_grains == 4
 
 
 def test_room_capacity_and_larger_rooms():
-    # Java requiredRoomCapacityPenalized: 필수 1 + 선호 1 > 수용량 1 -> 1.
+    # Java requiredRoomCapacityPenalized: 1 required + 1 preferred > capacity 1 -> 1.
     s = make_schedule(1, 12, [1], [(4, [0], [1], 0, 0)])
     assert ms.compute_breakdown(s).room_capacity_shortage == 1
-    # Java assignLargerRoomsFirstPenalized: 수용량 1 방 사용, 2 인 방 존재 -> 1.
+    # Java assignLargerRoomsFirstPenalized: uses a capacity-1 room while a 2-seat room exists -> 1.
     s = make_schedule(1, 12, [1, 2], [(4, [], [], 0, 0)])
     assert ms.compute_breakdown(s).larger_room_capacity_sum == 1
 
 
 def test_room_stability():
-    # Java roomStabilityPenalized: 같은 참석자, 다른 방, 간격 0 그레인 -> 1.
+    # Java roomStabilityPenalized: same attendee, different room, gap of 0 grains -> 1.
     s = make_schedule(1, 16, [5, 5], [(4, [0], [], 0, 0), (4, [0], [], 4, 1)])
     assert ms.compute_breakdown(s).room_stability_violations == 1
-    # Java roomStabilityUnpenalized: 간격 4 그레인 -> 0.
+    # Java roomStabilityUnpenalized: gap of 4 grains -> 0.
     s = make_schedule(1, 16, [5, 5], [(4, [0], [], 0, 0), (4, [0], [], 8, 1)])
     assert ms.compute_breakdown(s).room_stability_violations == 0
 
 
 def test_score_mapping():
-    # hard = -(hard 합), soft = -(medium * 1e6 + raw soft).
+    # hard = -(sum of hard), soft = -(medium * 1e6 + raw soft).
     s = make_schedule(1, 12, [5, 5], [(4, [0], [1], 0, 0), (4, [0], [1], 2, 0)])
     b = ms.compute_breakdown(s)
     score = ms.calculate_score(s)
     assert score.hard == -b.hard_total()
     assert score.soft == -(b.medium_total() * ms.MEDIUM_SCALE + b.soft_total())
-    assert b.medium_total() > 0  # medium 이 실제로 접혔는지
+    assert b.medium_total() > 0  # medium really got folded
 
 
 def test_unassigned_contributes_nothing():
@@ -108,13 +108,13 @@ def test_unassigned_contributes_nothing():
 
 
 def test_duplicate_assignment_rejected():
-    # 미팅:배정 1:1 위반은 ValueError (std::invalid_argument).
+    # Violating meeting:assignment 1:1 is a ValueError (std::invalid_argument).
     people, grains, rooms = make_base(1, 12, [5])
     meetings = [ms.Meeting("0", duration_in_grains=4)]
     assignments = [ms.MeetingAssignment("0", 0), ms.MeetingAssignment("1", 0)]
     s = ms.MeetingSchedule(people, grains, rooms, meetings, assignments)
     try:
         ms.calculate_score(s)
-        raise AssertionError("중복 배정이 거부되지 않았다")
+        raise AssertionError("duplicate assignment was not rejected")
     except ValueError:
         pass

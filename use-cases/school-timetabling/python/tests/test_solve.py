@@ -1,4 +1,4 @@
-"""고수준 solve() 검증: canonical(기본)/quickstart 모드와 config/weights 인자."""
+"""High-level solve(): canonical (default) / quickstart modes and the config/weights arguments."""
 
 import pytest
 
@@ -18,10 +18,10 @@ def test_demo_problem_solves_feasible(problem):
     assert result["wall_time_seconds"] > 0.0
     assert result["best_objective_bound"] is None
     assert len(result["lessons"]) == 40
-    # canonical 모드는 풀-패리티라 미지원 notes 가 없다.
+    # Canonical mode has full parity, so there are no 'unsupported' notes.
     assert result["notes"] == []
 
-    # H3/H4: 학급/교사(팀티칭 부교사 포함)는 같은 시간에 수업 하나만 갖는다.
+    # H3/H4: a class / a teacher (team-teaching co-teachers included) has one lesson at a time.
     class_slots = set()
     teacher_slots = set()
     for lesson in result["lessons"]:
@@ -32,19 +32,19 @@ def test_demo_problem_solves_feasible(problem):
             assert (teacher_id, slot) not in teacher_slots
             teacher_slots.add((teacher_id, slot))
 
-    # H5 확장: 김국어(T_KOR)는 월요일 1교시 불가.
+    # H5 extension: Kim (T_KOR) is unavailable Monday period 1.
     for lesson in result["lessons"]:
         if "T_KOR" in lesson["teacher_ids"]:
             assert (lesson["slot"]["day"], lesson["slot"]["period"]) != (0, 1)
 
-    # H1: 강좌별 시수가 보존된다.
+    # H1: the periods of every course are kept.
     per_course: dict[str, int] = {}
     for lesson in result["lessons"]:
         per_course[lesson["course_id"]] = per_course.get(lesson["course_id"], 0) + 1
     for course in problem["courses"]:
         assert per_course[course["id"]] == course["periods_per_week"]
 
-    # H6: 특별실 수업은 전부 교실을 받는다 (hard 0 이면 사후 그리디가 항상 성공).
+    # H6: every special-room lesson gets a room (on hard 0 the greedy pass always succeeds).
     for lesson in result["lessons"]:
         if lesson["subject_id"] == "SCI":
             assert lesson["room_id"] == "R_SCI"
@@ -53,7 +53,7 @@ def test_demo_problem_solves_feasible(problem):
         else:
             assert lesson["room_id"] is None
 
-    # penalties 는 S1~S6 원시 카운트, objective_value 는 기본 가중치 가중 합.
+    # penalties are the raw S1–S6 counts, objective_value the sum weighted by the defaults.
     assert set(result["penalties"]) == {
         "teacher_gap",
         "teacher_workday",
@@ -85,13 +85,13 @@ def test_solve_quickstart_mode(problem):
     )
     assert result["status"] in ("FEASIBLE", "UNKNOWN")
     assert len(result["lessons"]) == 40
-    # quickstart 근사 변환의 한계는 notes 로 남는다 (penalties 는 비어 있다).
+    # The limits of the approximate quickstart conversion are left in notes (penalties are empty).
     assert any("soft" in note for note in result["notes"])
     assert result["penalties"] == {}
 
 
 def test_solve_accepts_config_objects(problem):
-    # models.SolveConfig 는 두 모드 모두에서 config 로 쓸 수 있다.
+    # models.SolveConfig works as config in both modes.
     model_cfg = SolveConfig(late_acceptance_size=100)
     result = st.solve(
         problem,
@@ -103,7 +103,7 @@ def test_solve_accepts_config_objects(problem):
     assert result["status"] in ("FEASIBLE", "UNKNOWN")
     assert len(result["lessons"]) == 40
 
-    # 모드별 _core config 를 직접 줄 수도 있다.
+    # A mode's _core config can be passed directly too.
     cfg = st.canon.SolverConfig()
     cfg.late_acceptance_size = 100
     result = st.solve(
@@ -115,7 +115,7 @@ def test_solve_accepts_config_objects(problem):
     )
     assert result["status"] in ("FEASIBLE", "UNKNOWN")
 
-    # 모드와 config 타입이 어긋나면 명확한 ValueError.
+    # A config type that does not fit the mode is a clear ValueError.
     with pytest.raises(ValueError, match="config"):
         st.solve(problem, config=st.SolverConfig())
     with pytest.raises(ValueError, match="config"):
@@ -131,7 +131,7 @@ def test_solve_weights_override(problem):
         stop_at_first_feasible=True,
         weights=weights,
     )
-    # 명시하지 않은 키는 cpsat 기본값을 유지한다.
+    # Keys not given keep the cpsat defaults.
     effective = {
         "teacher_gap": 0,
         "teacher_workday": 1,

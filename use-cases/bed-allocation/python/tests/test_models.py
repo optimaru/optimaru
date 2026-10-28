@@ -1,4 +1,4 @@
-"""pydantic 모델 직렬화/역직렬화와 엔진 변환 왕복 테스트."""
+"""pydantic model serialization/deserialization and engine conversion round-trip tests."""
 
 import pytest
 from pydantic import ValidationError
@@ -22,12 +22,12 @@ def test_to_core_from_core_round_trip():
 
     ba.calculate_score(plan)
     back = BedPlanModel.from_core(plan)
-    # 점수 필드 외에는 원본과 같아야 한다 (배정 전이라 bed_id 전부 None).
+    # Everything but the score fields must match the original (unassigned, so every bed_id is None).
     assert back.model_dump(exclude={"score_hard", "score_medium", "score_soft"}) == model.model_dump(
         exclude={"score_hard", "score_medium", "score_soft"}
     )
     assert back.score_hard == 0
-    assert back.score_medium == 0  # bed_id None == 미초기화(-1): 기여 없음
+    assert back.score_medium == 0  # bed_id None == uninitialized (-1): no contribution
     assert back.score_soft == 0
 
 
@@ -35,7 +35,7 @@ def test_from_core_maps_bed_values_to_ids():
     model = generate_demo_data()
     plan = model.to_core()
     assignment = [i % plan.bed_count() for i in range(len(model.stays))]
-    assignment[0] = plan.no_bed_value()  # "no bed" 센티널 -> bed_id None
+    assignment[0] = plan.no_bed_value()  # "no bed" sentinel -> bed_id None
     plan.set_assignment(assignment)
     ba.calculate_score(plan)
 

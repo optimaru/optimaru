@@ -1,7 +1,8 @@
-"""편성 결과를 터미널용 텍스트 리포트로 렌더링.
+"""Renders a timetabling result as a text report for the terminal.
 
-학급별/교사별 시간표를 요일(열) x 교시(행) 그리드로 그리고,
-벌점 요약을 붙인다. 한글은 터미널에서 두 칸을 차지하므로 표시 폭 기준으로 정렬한다.
+Draws per-class and per-teacher timetables as weekday (columns) x period (rows)
+grids and appends a penalty summary. Wide characters take two terminal cells,
+so alignment uses display width.
 """
 
 import unicodedata
@@ -16,7 +17,7 @@ _MIN_CELL_WIDTH = 4
 
 
 def render_report(problem: TimetableProblem, timetable: Timetable, weights: ObjectiveWeights | None = None) -> str:
-    """요약 + 학급별 그리드 + 교사별 그리드를 하나의 문자열로 묶는다."""
+    """Bundles the summary + per-class grids + per-teacher grids into one string."""
     sections = [render_summary(timetable, weights)]
     if timetable.is_solved:
         sections.append(render_class_grids(problem, timetable))
@@ -25,17 +26,17 @@ def render_report(problem: TimetableProblem, timetable: Timetable, weights: Obje
 
 
 def render_summary(timetable: Timetable, weights: ObjectiveWeights | None = None) -> str:
-    lines = [f"상태: {timetable.status}  (탐색 {timetable.wall_time_seconds:.2f}초)"]
+    lines = [f"status: {timetable.status}  (search {timetable.wall_time_seconds:.2f} s)"]
     if timetable.objective_value is not None:
-        lines.append(f"목적함수: {timetable.objective_value:.0f}  (하한 {timetable.best_objective_bound:.0f})")
+        lines.append(f"objective: {timetable.objective_value:.0f}  (bound {timetable.best_objective_bound:.0f})")
     if timetable.penalties:
-        lines.append("벌점(가중치 적용 전 횟수):")
+        lines.append("penalties (counts before weighting):")
         for name, count in timetable.penalties.items():
             weight = weights.weight_for(name) if weights is not None else None
             suffix = f" x {weight} = {count * weight}" if weight is not None else ""
             lines.append(f"  - {name}: {count}{suffix}")
     for note in timetable.notes:
-        lines.append(f"참고: {note}")
+        lines.append(f"note: {note}")
     return "\n".join(lines)
 
 
@@ -44,7 +45,7 @@ def render_class_grids(problem: TimetableProblem, timetable: Timetable) -> str:
     by_class = timetable.by_class_group()
     for class_group in problem.class_groups:
         cells = {slot: _class_cell(problem, lessons) for slot, lessons in by_class.get(class_group.id, {}).items()}
-        grids.append(_render_grid(problem.calendar, f"{class_group.name} 시간표", cells))
+        grids.append(_render_grid(problem.calendar, f"{class_group.name} timetable", cells))
     return "\n\n".join(grids)
 
 
@@ -55,15 +56,15 @@ def render_teacher_grids(problem: TimetableProblem, timetable: Timetable) -> str
         if teacher.id not in by_teacher:
             continue
         cells = {slot: _teacher_cell(problem, lessons) for slot, lessons in by_teacher[teacher.id].items()}
-        grids.append(_render_grid(problem.calendar, f"{teacher.name} 시간표", cells))
+        grids.append(_render_grid(problem.calendar, f"{teacher.name} timetable", cells))
     return "\n\n".join(grids)
 
 
-# ---------------------------------------------------------------- 셀 내용
+# ---------------------------------------------------------------- cell contents
 
 
 def _class_cell(problem: TimetableProblem, lessons: list[ScheduledLesson]) -> str:
-    """학급 뷰 한 칸: 과목(교사)@특별실. 분반이면 교사를 / 로 나열한다."""
+    """One cell of the class view: subject(teacher)@room. Parallel sections list teachers with /."""
     lessons = sorted(lessons, key=lambda lesson: lesson.course_id)
     subjects = _unique([problem.subject_by_id[lesson.subject_id].name for lesson in lessons])
     teachers = _unique(
@@ -75,7 +76,7 @@ def _class_cell(problem: TimetableProblem, lessons: list[ScheduledLesson]) -> st
 
 
 def _teacher_cell(problem: TimetableProblem, lessons: list[ScheduledLesson]) -> str:
-    """교사 뷰 한 칸: 학급 과목@특별실."""
+    """One cell of the teacher view: class subject@room."""
     parts = []
     for lesson in sorted(lessons, key=lambda lesson: lesson.course_id):
         class_name = problem.class_group_by_id[lesson.class_group_id].name
@@ -98,7 +99,7 @@ def _unique(items: list[str]) -> list[str]:
     return list(dict.fromkeys(items))
 
 
-# ---------------------------------------------------------------- 그리드
+# ---------------------------------------------------------------- grid
 
 
 def _render_grid(calendar: SchoolCalendar, title: str, cells: dict[TimeSlot, str]) -> str:
@@ -108,7 +109,7 @@ def _render_grid(calendar: SchoolCalendar, title: str, cells: dict[TimeSlot, str
     lines.append(header)
     lines.append("-" * _display_width(header))
     for period in range(1, calendar.max_periods + 1):
-        row = _pad(f"{period}교시", _ROW_LABEL_WIDTH)
+        row = _pad(f"P{period}", _ROW_LABEL_WIDTH)
         for day in calendar.days:
             slot = TimeSlot(day=day, period=period)
             text = cells.get(slot, "") if calendar.contains(slot) else "-"
@@ -118,7 +119,7 @@ def _render_grid(calendar: SchoolCalendar, title: str, cells: dict[TimeSlot, str
 
 
 def _display_width(text: str) -> int:
-    """터미널 표시 폭. 한글 등 전각 문자는 2칸으로 센다."""
+    """Terminal display width. Wide (East Asian) characters count as 2 cells."""
     return sum(2 if unicodedata.east_asian_width(char) in "WF" else 1 for char in text)
 
 

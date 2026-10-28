@@ -1,21 +1,21 @@
-"""엔진 도메인의 pydantic v2 미러 — JSON 직렬화/역직렬화용.
+"""Pydantic v2 mirror of the engine domain — for JSON serialization/deserialization.
 
-`_core` 의 Person/TimeGrain/Room/Meeting/MeetingAssignment/MeetingSchedule 을
-1:1 로 미러링한다. 사람/미팅/타임그레인/회의실은 리스트 인덱스로 참조한다
-(Java 의 객체 참조 대신). 미팅과 배정은 1:1 이다 (quickstart 데모 모델).
+Mirrors `_core`'s Person/TimeGrain/Room/Meeting/MeetingAssignment/MeetingSchedule
+1:1. People/meetings/time grains/rooms are referenced by list index (instead of
+Java's object references). Meetings and assignments are 1:1 (the quickstart demo model).
 
-점수 매핑 (Java HardMediumSoftScore -> 엔진 HardSoftScore):
-``score_hard`` 는 Java hard 그대로, ``score_soft`` 는
-``-(medium 벌점 * 1e6 + soft 벌점)`` — medium(필수+선호/선호 참석 충돌)이
-soft 를 항상 지배하도록 1e6 오프셋으로 접었다::
+Score mapping (Java HardMediumSoftScore -> engine HardSoftScore):
+``score_hard`` is the Java hard as-is, ``score_soft`` is
+``-(medium penalty * 1e6 + soft penalty)`` — folded with a 1e6 offset so medium
+(required+preferred / preferred attendance conflicts) always dominates soft::
 
     from meeting_scheduling.models import MeetingScheduleModel, demo_data
 
-    model = demo_data()                          # Java DemoDataGenerator 재현
+    model = demo_data()                          # reproduces Java DemoDataGenerator
     clone = MeetingScheduleModel.model_validate_json(model.model_dump_json())
-    schedule = clone.to_core()                   # pydantic -> 엔진
+    schedule = clone.to_core()                   # pydantic -> engine
 
-`pydantic` 은 선택 의존성이다 (`pip install meeting_scheduling[models]`).
+`pydantic` is an optional dependency (`pip install meeting_scheduling[models]`).
 """
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -34,7 +34,7 @@ __all__ = [
 
 
 class PersonModel(BaseModel):
-    """참석자. 참조는 people 리스트 인덱스로 한다."""
+    """An attendee. Referenced by index into the people list."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -43,8 +43,8 @@ class PersonModel(BaseModel):
 
 
 class TimeGrainModel(BaseModel):
-    """15분 단위 타임그레인. grain_index 는 duration/overlap 이 계산되는
-    단위 (Java grainIndex; 데모는 1-base 연속)."""
+    """A 15-minute time grain. grain_index is the unit duration/overlap is computed in
+    (Java grainIndex; consecutive and 1-based in the demo)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -55,7 +55,7 @@ class TimeGrainModel(BaseModel):
 
 
 class RoomModel(BaseModel):
-    """회의실. capacity 가 required room capacity 하드 제약에 쓰인다."""
+    """A meeting room. capacity feeds the required room capacity hard constraint."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -65,8 +65,8 @@ class RoomModel(BaseModel):
 
 
 class MeetingModel(BaseModel):
-    """미팅 (problem fact). required/preferred_attendees 는 people 인덱스
-    리스트 — 원소 하나가 Java Attendance fact 하나다."""
+    """A meeting (problem fact). required/preferred_attendees are lists of people
+    indices — one element is one Java Attendance fact."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -79,8 +79,8 @@ class MeetingModel(BaseModel):
 
 
 class MeetingAssignmentModel(BaseModel):
-    """planning entity. grain_room 은 time_grain_pos * room_count +
-    room_index 합성 변수 (None == 미배정); meeting 은 meetings 인덱스."""
+    """Planning entity. grain_room is the composite variable time_grain_pos * room_count +
+    room_index (None == unassigned); meeting is a meetings index."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -91,7 +91,7 @@ class MeetingAssignmentModel(BaseModel):
 
 
 class MeetingScheduleModel(BaseModel):
-    """planning solution 미러. score 는 읽기 전용 결과라 별도 필드로 둔다."""
+    """Planning solution mirror. score is a read-only result, kept as a separate field."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -104,7 +104,7 @@ class MeetingScheduleModel(BaseModel):
     score_soft: float | None = None
 
     def to_core(self) -> "_core.MeetingSchedule":
-        """pydantic -> 엔진 객체 (score 필드는 엔진이 다시 계산하므로 무시)."""
+        """pydantic -> engine object (the score field is ignored; the engine recomputes it)."""
         return _core.MeetingSchedule(
             [_core.Person(p.id, p.full_name) for p in self.people],
             [_core.TimeGrain(g.id, g.grain_index, g.day_of_year, g.starting_minute_of_day) for g in self.time_grains],
@@ -133,7 +133,7 @@ class MeetingScheduleModel(BaseModel):
 
     @classmethod
     def from_core(cls, schedule: "_core.MeetingSchedule") -> "MeetingScheduleModel":
-        """엔진 객체 -> pydantic (현재 배정과 score 포함)."""
+        """engine object -> pydantic (including the current assignment and score)."""
         return cls(
             people=[PersonModel(id=p.id, full_name=p.full_name) for p in schedule.people],
             time_grains=[
@@ -172,7 +172,7 @@ class MeetingScheduleModel(BaseModel):
 
 
 def demo_data() -> MeetingScheduleModel:
-    """Java quickstart 의 DemoDataGenerator 재현 (java.util.Random(0) 과 같은
-    추첨; C++ `ms::buildDemoData` 를 그대로 노출): 사람 20, 타임그레인 160
-    (4일 x 40), 회의실 3 (30/20/16석), 미팅 24 (8/12/16 그레인)."""
+    """Reproduces the Java quickstart DemoDataGenerator (the same draws as
+    java.util.Random(0); exposes C++ `ms::buildDemoData` as-is): 20 people, 160 time
+    grains (4 days x 40), 3 rooms (30/20/16 seats), 24 meetings (8/12/16 grains)."""
     return MeetingScheduleModel.from_core(_core.demo_data())

@@ -182,6 +182,67 @@ def solve_cpsat(problem: Any, seconds: float, seed: int, workers: int) -> Any:
     return solved.to_core()
 
 
+
+# --- Timefold quickstart (benchmarks/timefold-quickstarts) ---------------------
+
+TIMEFOLD = "flight-crew-scheduling"
+
+
+def to_timefold(problem: Any) -> dict:
+    from flight_crew.models import _day_to_date, minutes_to_datetime
+
+    airports, employees, flights = problem.airports, problem.employees, problem.flights
+
+    def when(minutes: int) -> str:
+        return minutes_to_datetime(minutes).isoformat(timespec="seconds")
+
+    return {
+        # No constraint reads taxi times, so the map stays empty.
+        "airports": [
+            {"code": a.code, "name": a.name, "latitude": a.latitude, "longitude": a.longitude, "taxiTimeInMinutes": {}}
+            for a in airports
+        ],
+        "employees": [
+            {
+                "id": e.id,
+                "name": e.name,
+                "homeAirport": airports[e.home_airport].code,
+                "skills": list(e.skills),
+                "unavailableDays": sorted(_day_to_date(day).isoformat() for day in e.unavailable_days),
+            }
+            for e in employees
+        ],
+        "flights": [
+            {
+                "flightNumber": f.flight_number,
+                "departureAirport": airports[f.departure_airport].code,
+                "departureUTCDateTime": when(f.departure_utc),
+                "arrivalAirport": airports[f.arrival_airport].code,
+                "arrivalUTCDateTime": when(f.arrival_utc),
+            }
+            for f in flights
+        ],
+        "flightAssignments": [
+            {
+                "id": a.id,
+                "flight": flights[a.flight].flight_number,
+                "indexInFlight": a.index_in_flight,
+                "requiredSkill": a.required_skill,
+                "employee": employees[a.employee].id if a.employee >= 0 else None,
+            }
+            for a in problem.flight_assignments
+        ],
+    }
+
+
+def from_timefold(problem: Any, result: dict) -> None:
+    index = {e.id: i for i, e in enumerate(problem.employees)}
+    chosen = result["assignment"]["FlightAssignment"]
+    problem.set_assignment(
+        [index[chosen[a.id]["employee"]] if chosen[a.id]["employee"] else -1 for a in problem.flight_assignments]
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     return run_cli(sys.modules[__name__], argv)
 

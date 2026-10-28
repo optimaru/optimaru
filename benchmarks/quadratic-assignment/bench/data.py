@@ -12,7 +12,7 @@ from pathlib import Path
 from quadratic_assignment import QuadraticAssignmentProblemModel
 
 HEXALY_QAP_URL = "https://www.hexaly.com/examples/qap.zip"
-HEXALY_QAP_SHA256 = "16fc0a8b0ab048074a9f23728c1c98c5b01d98f3c61118b6f205f3865f1c0de9"
+HEXALY_QAP_SHA256 = "6ee4f072c2697b26781b1ab488a8323a8d75ebef3b1a37f70d7d0567c4b780c1"
 QAPLIB_SOLUTIONS_URL = (
     "https://coral.ise.lehigh.edu/wp-content/uploads/2014/07/qapsoln.tar.gz"
 )

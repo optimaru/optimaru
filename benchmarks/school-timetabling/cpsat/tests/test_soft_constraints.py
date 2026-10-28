@@ -1,4 +1,4 @@
-"""소프트 제약: 솔버가 보고한 벌점이 결과 시간표에서 손으로 센 값과 일치하는지."""
+"""Soft constraints: do the penalties the solver reports match the values counted by hand from the timetable?"""
 
 from helpers import NO_WEIGHTS, course, make_problem, quick_solve, slot, teacher
 
@@ -10,11 +10,11 @@ from teacher_scheduling.validate import compute_penalties, validate_timetable
 def _assert_penalties_match_hand_count(problem, timetable):
     hand = compute_penalties(problem, timetable)
     for name, count in timetable.penalties.items():
-        assert count == hand[name], f"{name}: 솔버 {count} != 손계산 {hand[name]}"
+        assert count == hand[name], f"{name}: solver {count} != hand count {hand[name]}"
 
 
 def test_forced_gap_matches_hand_count():
-    """1교시와 5교시에 고정하면 사이 3칸이 교사/학급 공강으로 잡힌다."""
+    """Fixed to periods 1 and 5, the 3 cells between count as teacher/class gaps."""
     problem = make_problem(
         [course(periods_per_week=2, max_periods_per_day=2, fixed_slots=frozenset({slot(0, 1), slot(0, 5)}))],
         [teacher()],
@@ -42,7 +42,7 @@ def test_workday_penalty_packs_lessons_into_one_day():
     problem = make_problem([course(periods_per_week=2, max_periods_per_day=2)], [teacher()], days=2, periods=4)
     timetable = quick_solve(problem, weights=NO_WEIGHTS.model_copy(update={"teacher_workday": 1}))
     assert timetable.status.has_solution
-    assert timetable.penalties["teacher_workday"] == 1  # 이틀이 아니라 하루에 몰아넣는다
+    assert timetable.penalties["teacher_workday"] == 1  # packed into one day instead of two
     assert len({lesson.slot.day for lesson in timetable.lessons}) == 1
     _assert_penalties_match_hand_count(problem, timetable)
 
@@ -85,7 +85,7 @@ def test_period_preferences_steer_placement():
     assert timetable.penalties["non_preferred_period"] == 0
     assert [lesson.slot.period for lesson in timetable.lessons] == [2]
 
-    # 1교시에 고정하면 두 벌점이 모두 잡힌다.
+    # Fixed to period 1, both penalties are caught.
     forced = make_problem(
         [course(periods_per_week=1, fixed_slots=frozenset({slot(0, 1)}))],
         [teacher()],

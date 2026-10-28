@@ -1,9 +1,10 @@
-"""CP-SAT 결정변수 생성.
+"""Creating the CP-SAT decision variables.
 
-핵심 변수는 `x[(course_id, slot)]` 하나뿐이다. "강좌 c 를 시간 s 에 배치하는가".
-교사/학급 점유 여부(`teacher_busy`, `class_busy`)는 x 로부터 파생되는 보조 불리언으로,
-공강·연강 같은 제약을 쓰기 쉽게 만들기 위해 미리 선언해 둔다.
-x 와 묶는 등식은 하드 제약(H3/H4)에서 걸며, 그 등식이 곧 충돌 금지 제약이 된다.
+The core variable is just `x[(course_id, slot)]`: "is course c placed at time s".
+Teacher/class occupancy (`teacher_busy`, `class_busy`) are auxiliary booleans
+derived from x, declared up front to make constraints like gaps and blocks easy
+to write. The equalities tying them to x are posted by the hard constraints
+(H3/H4), and those equalities are the no-clash constraints themselves.
 """
 
 from collections import defaultdict
@@ -33,15 +34,15 @@ class TimetableVariables:
         self.teacher_busy = self._declare_busy_vars(self.teacher_lessons, "teacher_busy")
         self.class_busy = self._declare_busy_vars(self.class_lessons, "class_busy")
 
-        # 하루 모양(DaySpan) 보조 변수는 여러 제약이 나눠 쓰므로 모델당 한 번만
-        # 만든다. TimetableVariables 는 solve 마다 새로 생기니 캐시 수명이 곧 모델 수명이다.
+        # The per-day shape (DaySpan) auxiliaries are shared by several constraints, so they
+        # are created once per model. TimetableVariables is new for every solve, so the cache lives exactly as long as the model.
         self._teacher_spans: DaySpans | None = None
         self._class_spans: DaySpans | None = None
 
-    # ------------------------------------------------------------------ 슬롯 후보
+    # ------------------------------------------------------------------ slot candidates
 
     def _course_allowed_slots(self, course: Course) -> set[TimeSlot]:
-        """하드하게 불가능한 시간을 미리 걷어낸다. 변수 자체를 안 만들어야 모델이 가벼워진다."""
+        """Removes hard-impossible times up front. Not creating the variables at all keeps the model light."""
         blocked = set(course.forbidden_slots)
         blocked |= set(self.problem.class_group_by_id[course.class_group_id].unavailable)
         for teacher_id in course.teacher_ids:
@@ -51,7 +52,7 @@ class TimetableVariables:
     def _build_allowed_slots(self) -> dict[str, tuple[TimeSlot, ...]]:
         allowed = {course.id: self._course_allowed_slots(course) for course in self.problem.courses}
 
-        # 분반(parallel group)은 항상 같은 시간에 움직이므로 후보 슬롯도 교집합으로 맞춘다.
+        # A parallel group always moves together, so its candidate slots are intersected too.
         for courses in self.problem.courses_by_parallel_group.values():
             shared = set.intersection(*(allowed[c.id] for c in courses))
             for course in courses:
@@ -61,7 +62,7 @@ class TimetableVariables:
             course_id: tuple(sorted(slots, key=lambda s: (s.day, s.period))) for course_id, slots in allowed.items()
         }
 
-    # ------------------------------------------------------------------ 변수
+    # ------------------------------------------------------------------ variables
 
     def _build_assignment_vars(self) -> dict[tuple[str, TimeSlot], cp_model.IntVar]:
         variables = {}
@@ -79,7 +80,7 @@ class TimetableVariables:
         return dict(terms)
 
     def _collect_class_lessons(self) -> dict[tuple[str, TimeSlot], list[cp_model.IntVar]]:
-        """분반 그룹은 대표 강좌 하나만 세야 한 칸을 나눠 쓰는 것으로 계산된다."""
+        """A parallel group must count only its representative course to share one cell."""
         terms: dict[tuple[str, TimeSlot], list[cp_model.IntVar]] = defaultdict(list)
         for course in self.occupancy_representatives():
             for slot in self.allowed_slots[course.id]:
@@ -91,31 +92,31 @@ class TimetableVariables:
     ) -> dict[tuple[str, TimeSlot], cp_model.IntVar]:
         return {key: self.model.new_bool_var(f"{prefix}[{key[0]},{key[1]}]") for key in lessons}
 
-    # ------------------------------------------------------------------ 하루 모양 (지연 생성)
+    # ------------------------------------------------------------------ per-day shape (created lazily)
 
     def teacher_day_spans(self) -> DaySpans:
-        """(교사, 요일) -> DaySpan. 처음 물어본 제약이 만들고 나머지는 그걸 나눠 쓴다."""
+        """(teacher, weekday) -> DaySpan. The first constraint asking creates it; the rest share it."""
         if self._teacher_spans is None:
             self._teacher_spans = self._objective()._build_teacher_day_spans(self.model, self)
         return self._teacher_spans
 
     def class_day_spans(self) -> DaySpans:
-        """(학급, 요일) -> DaySpan."""
+        """(class, weekday) -> DaySpan."""
         if self._class_spans is None:
             self._class_spans = self._objective()._build_class_day_spans(self.model, self)
         return self._class_spans
 
     @staticmethod
     def _objective():
-        """objective 가 이 모듈을 임포트하므로(역방향 의존) 지연 임포트한다."""
+        """Imported lazily because objective imports this module (reverse dependency)."""
         from teacher_scheduling.solver import objective
 
         return objective
 
-    # ------------------------------------------------------------------ 조회 헬퍼
+    # ------------------------------------------------------------------ lookup helpers
 
     def occupancy_representatives(self) -> tuple[Course, ...]:
-        """학급 점유 계산에 쓸 대표 강좌. 분반 그룹은 그룹당 하나만 센다."""
+        """Representative courses for class occupancy. A parallel group counts once."""
         seen: set[str] = set()
         representatives = []
         for course in self.problem.courses:

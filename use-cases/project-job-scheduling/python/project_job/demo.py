@@ -1,11 +1,11 @@
-"""Java quickstart `DemoDataGenerator` 의 Python 재현.
+"""Python reproduction of the Java quickstart `DemoDataGenerator`.
 
-같은 규모/분포의 데모 인스턴스를 만든다: 프로젝트 2개 (release 0/4,
-critical path 10/19), 자원 7개 (글로벌 renewable 용량 16 + 프로젝트별
-renewable 1개 / non-renewable 2개), 프로젝트당 잡 12개 (SOURCE + STANDARD
-10 + SINK), STANDARD 잡은 실행 모드 3개 (기간 1..5, 자원 요구 1..3종 x
-1..5), 후행 잡 1(54%)/2(27%)/3(19%)개. Java 의 java.util.Random 스트림까지
-재현하지는 않는다 — 분포와 규모가 기준이다.
+Builds a demo instance of the same scale and distributions: 2 projects (release 0/4,
+critical path 10/19), 7 resources (global renewable with capacity 16 + per project one
+renewable / two non-renewable), 12 jobs per project (SOURCE + 10 STANDARD + SINK),
+STANDARD jobs with 3 execution modes (duration 1..5, demand on 1..3 resources x 1..5),
+1 (54%) / 2 (27%) / 3 (19%) successor jobs. Java's java.util.Random stream is not
+reproduced — distributions and scale are the reference.
 """
 
 import random
@@ -26,7 +26,7 @@ JOBS_PER_PROJECT = 12
 
 
 def _draw_index(rng: random.Random, cumulative: list[float]) -> int:
-    """단위 난수 하나로 누적 분포표의 인덱스를 뽑는다 (Java 의 Pair 테이블)."""
+    """Pick an index from a cumulative distribution table with one unit random draw (Java's Pair table)."""
     draw = rng.random()
     for i, threshold in enumerate(cumulative):
         if draw <= threshold:
@@ -35,9 +35,9 @@ def _draw_index(rng: random.Random, cumulative: list[float]) -> int:
 
 
 def generate_demo_data(seed: int = 0) -> ProjectJobScheduleModel:
-    """데모 `ProjectJobScheduleModel` 을 만든다 (STANDARD 할당은 전부
-    미초기화 — 풀기 전 상태; SOURCE/SINK 할당은 기간 0 모드 + delay 0 으로
-    고정된다)."""
+    """Build the demo `ProjectJobScheduleModel` (every STANDARD allocation
+    uninitialized — the unsolved state; SOURCE/SINK allocations are fixed to the
+    zero-duration mode + delay 0)."""
     rng = random.Random(seed)
 
     projects = [
@@ -58,19 +58,19 @@ def generate_demo_data(seed: int = 0) -> ProjectJobScheduleModel:
     mode_counter = 0
     for p, project in enumerate(projects):
         base = p * JOBS_PER_PROJECT
-        # 이 프로젝트가 뽑는 자원 풀: [글로벌, 로컬 renewable, 로컬 non x2].
+        # The resource pool this project draws from: [global, local renewable, local non x2].
         pool = ["0", str(3 * p + 1), str(3 * p + 2), str(3 * p + 3)]
         project_jobs: list[JobModel] = []
         for i in range(JOBS_PER_PROJECT):
             job_type = "SOURCE" if i == 0 else "SINK" if i == JOBS_PER_PROJECT - 1 else "STANDARD"
             if job_type == "STANDARD":
-                # 요구 자원 수는 잡당 한 번 뽑는다 (Java 그대로).
+                # The number of required resources is drawn once per job (as in Java).
                 requirements_size = rng.randint(1, 3)
                 modes = []
                 for _ in range(3):
                     requirements: list[ResourceRequirementModel] = []
                     while len(requirements) < requirements_size:
-                        # 40% 글로벌, 20%/15%/25% 로컬.
+                        # 40% global, 20%/15%/25% local.
                         resource_id = pool[_draw_index(rng, [0.4, 0.6, 0.75, 1.0])]
                         if all(req.resource_id != resource_id for req in requirements):
                             requirements.append(
@@ -88,8 +88,8 @@ def generate_demo_data(seed: int = 0) -> ProjectJobScheduleModel:
             project_jobs.append(
                 JobModel(id=str(base + i), project_id=project.id, job_type=job_type, execution_modes=modes)
             )
-        # 후행 잡: SOURCE 는 첫 STANDARD 3개, 그 외에는 1(54%)/2(27%)/3(19%)
-        # 개의 뒤쪽 잡, 마지막 STANDARD 는 SINK, SINK 는 없음 (Java 그대로).
+        # Successors: SOURCE gets the first 3 STANDARD jobs, others get 1 (54%) / 2 (27%) / 3 (19%)
+        # later jobs, the last STANDARD gets SINK, SINK gets none (as in Java).
         project_jobs[0].successor_job_ids = [str(base + 1), str(base + 2), str(base + 3)]
         for i in range(1, JOBS_PER_PROJECT):
             count = min(_draw_index(rng, [0.54, 0.81, 1.0]) + 1, JOBS_PER_PROJECT - i - 1)
@@ -107,7 +107,7 @@ def generate_demo_data(seed: int = 0) -> ProjectJobScheduleModel:
         AllocationModel(
             id=job.id,
             job_id=job.id,
-            # SOURCE/SINK 는 (기간 0 모드, delay 0) 고정 — Java 데모 그대로.
+            # SOURCE/SINK are fixed to (zero-duration mode, delay 0) — as in the Java demo.
             execution_mode_id=None if job.job_type == "STANDARD" else job.execution_modes[0].id,
             delay=None if job.job_type == "STANDARD" else 0,
         )

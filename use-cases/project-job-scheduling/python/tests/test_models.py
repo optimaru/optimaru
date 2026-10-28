@@ -1,4 +1,4 @@
-"""pydantic 모델 직렬화/검증/엔진 변환 테스트."""
+"""pydantic model serialization/validation/engine conversion tests."""
 
 import pytest
 from pydantic import ValidationError
@@ -27,14 +27,14 @@ def test_to_core_from_core_roundtrip():
     core = model.to_core()
     pj.calculate_score(core)
     solved = ProjectJobScheduleModel.from_core(core)
-    # 구조 필드는 그대로 살아 돌아온다 (successor 리스트 포함; 순서 무관).
+    # Structural fields come back intact (including successor lists; order-insensitive).
     assert [p.id for p in solved.projects] == [p.id for p in model.projects]
     assert [r.id for r in solved.resources] == [r.id for r in model.resources]
     assert [j.id for j in solved.jobs] == [j.id for j in model.jobs]
     for original, restored in zip(model.jobs, solved.jobs):
         assert sorted(original.successor_job_ids) == sorted(restored.successor_job_ids)
         assert [m.id for m in original.execution_modes] == [m.id for m in restored.execution_modes]
-    # SOURCE/SINK 는 고정값 (첫 mode, delay 0) 그대로.
+    # SOURCE/SINK keep their fixed values (first mode, delay 0).
     for job, allocation in zip(solved.jobs, solved.allocations):
         if job.job_type != "STANDARD":
             assert allocation.execution_mode_id == job.execution_modes[0].id
@@ -49,12 +49,12 @@ def test_mode_delay_encoding():
     value = core.encode_value(7, 2)
     assert core.delay_of_value(value) == 7
     assert core.mode_slot_of_value(value) == 2
-    # SOURCE (mode 1개) 잡: slot 2 -> mode index 2 % 1 == 0.
+    # SOURCE (one mode) job: slot 2 -> mode index 2 % 1 == 0.
     assert core.execution_mode_index_of_value(0, value) == 0
     with pytest.raises(ValueError):
-        core.encode_value(500, 0)  # delay 범위 밖
+        core.encode_value(500, 0)  # delay out of range
     with pytest.raises(ValueError):
-        core.encode_value(0, 3)  # slot 범위 밖
+        core.encode_value(0, 3)  # slot out of range
 
 
 def _minimal_kwargs():
@@ -86,7 +86,7 @@ def _minimal_kwargs():
 
 def test_validation_rejects_bad_references():
     kwargs = _minimal_kwargs()
-    ProjectJobScheduleModel(**kwargs)  # 기준: 유효
+    ProjectJobScheduleModel(**kwargs)  # baseline: valid
 
     bad = _minimal_kwargs()
     bad["jobs"][1].project_id = "NOPE"
@@ -94,12 +94,12 @@ def test_validation_rejects_bad_references():
         ProjectJobScheduleModel(**bad)
 
     bad = _minimal_kwargs()
-    bad["allocations"] = bad["allocations"][:1]  # job 과 1:1 이 아님
+    bad["allocations"] = bad["allocations"][:1]  # not 1:1 with jobs
     with pytest.raises(ValidationError):
         ProjectJobScheduleModel(**bad)
 
     bad = _minimal_kwargs()
-    bad["allocations"][1].execution_mode_id = "m0"  # 다른 job 의 mode
+    bad["allocations"][1].execution_mode_id = "m0"  # another job's mode
     with pytest.raises(ValidationError):
         ProjectJobScheduleModel(**bad)
 
@@ -111,7 +111,7 @@ def test_global_resource_must_be_renewable():
 
 def test_cycle_rejected_by_core():
     kwargs = _minimal_kwargs()
-    kwargs["jobs"][1].successor_job_ids = ["s"]  # s -> t -> s 사이클
+    kwargs["jobs"][1].successor_job_ids = ["s"]  # s -> t -> s cycle
     model = ProjectJobScheduleModel(**kwargs)
     with pytest.raises(ValueError):
         model.to_core()

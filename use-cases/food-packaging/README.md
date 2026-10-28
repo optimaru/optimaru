@@ -1,30 +1,30 @@
 # Food Packaging (C++ / Python)
 
-Timefold quickstart [food-packaging](https://github.com/TimefoldAI/timefold-quickstarts/tree/stable/use-cases/food-packaging)의 C++ 엔진 포트.
-포장 작업(Job)을 생산 라인(Line)에 **순서대로** 배정한다 — 제품이 바뀔 때마다
-직전 제품에 따라 달라지는 청소(cleanup) 시간이 끼어들고, 같은 operator 가 맡은
-라인들의 청소 구간은 겹치면 안 된다.
+A C++ engine port of the Timefold quickstart [food-packaging](https://github.com/TimefoldAI/timefold-quickstarts/tree/stable/use-cases/food-packaging).
+Assigns packaging jobs (Job) to production lines (Line) **in order** — every product change
+inserts a cleanup time that depends on the previous product, and the cleaning windows of
+lines run by the same operator must not overlap.
 
-- `cpp/` — 도메인 + 제약(full/incremental) + 솔버 래퍼 + 데모/테스트.
-  엔진은 `include/`(header-only)를 그대로 사용한다.
-- `python/` — pybind11 바인딩(`food_packaging._core`)과 pydantic v2 미러.
+- `cpp/` — domain + constraints (full/incremental) + solver wrapper + demo/tests.
+  Uses the engine in `include/` (header-only) as-is.
+- `python/` — pybind11 bindings (`food_packaging._core`) and the pydantic v2 mirror.
 
-## 모델 요약
+## Model summary
 
-| Java | 포트 |
+| Java | Port |
 |---|---|
-| `Line.jobs` `@PlanningListVariable(allowsUnassignedValues=true)` | 엔진 LIST 변수. 미배정은 엔진에 리스트 하나로 더 노출되는 unassigned pool |
-| `Line.operator` `@PlanningVariable` | 솔버 래퍼가 엔진 레그 사이에 힐클라이밍으로 재배정 (교대 최적화) |
-| `Job` shadow 체인 (`startCleaning/startProduction/end`) | 리스트 위치에서 파생, 라인 단위 O(길이) 증분 재계산 |
-| `@PlanningPin` | 라인의 pinned prefix 를 엔진 뷰에서 숨기는 구조적 고정 |
-| `HardMediumSoftScore` | `engine.soft = medium * 10^10 + soft` 매핑 (도메인 헤더 주석 참고) |
+| `Line.jobs` `@PlanningListVariable(allowsUnassignedValues=true)` | engine LIST variable. Unassigned is an unassigned pool exposed to the engine as one more list |
+| `Line.operator` `@PlanningVariable` | reassigned by the solver wrapper with hill climbing between engine legs (alternating optimization) |
+| `Job` shadow chain (`startCleaning/startProduction/end`) | derived from list positions, O(length) incremental recompute per line |
+| `@PlanningPin` | structural pinning that hides the line's pinned prefix from the engine view |
+| `HardMediumSoftScore` | `engine.soft = medium * 10^10 + soft` mapping (see the domain header comments) |
 
-## 빌드/실행
+## Build/run
 
 ```sh
 cd cpp && cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j4
-./build/fp_test          # 제약 손계산 + incremental==full + FULL_ASSERT + 데모 feasible
-./build/fp_demo [초]     # Java 데모(라인 5, 작업 100) 재현, 기본 10초
+./build/fp_test          # constraint hand checks + incremental==full + FULL_ASSERT + demo feasible
+./build/fp_demo [sec]    # reproduces the Java demo (5 lines, 100 jobs), default 10 s
 
 cd ../python && uv venv && uv pip install -e . pytest pydantic && uv run pytest -q
 ```
@@ -89,5 +89,6 @@ solver's `solve` before the engine runs — the engine only fills what is still 
 
 ## Benchmark
 
-[`benchmarks/food-packaging`](../../benchmarks/food-packaging) compares this use case with
-OR-Tools CP-SAT on the same instances, rescored by the same evaluator.
+[`benchmarks/food-packaging`](../../benchmarks/food-packaging) compares this use case with OR-Tools CP-SAT and Timefold Solver 2.6.0 on the same instances. Every solution is rescored by the Timefold quickstart's `ConstraintProvider`, so all three are judged by the same rules.
+
+Latest run (30 s per solver, 1 instance): best score by the engine on 1, CP-SAT on 0, Timefold on 0 (ties count for each). Full table: [benchmarks/food-packaging/README.md](../../benchmarks/food-packaging/README.md#results).
