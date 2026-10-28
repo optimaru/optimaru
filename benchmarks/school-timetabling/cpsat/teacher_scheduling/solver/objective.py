@@ -1,15 +1,16 @@
-"""소프트 제약이 쓰는 벌점 식 구현.
+"""Penalty expressions used by the soft constraints.
 
-지키면 좋지만 못 지켜도 시간표는 돌아가는 규칙들을 벌점으로 환산한다. 어떤
-항목을 어떤 가중치로 쓸지는 `registry` 의 제약 클래스가 정하고, 여기서는 그
-클래스들이 부르는 식만 만든다.
+Rules that are good to keep but leave the timetable usable when broken are
+turned into penalties. Which terms are used with which weights is decided by
+the constraint classes in `registry`; this module only builds the expressions
+they call.
 
-S1 교사 공강 최소화        하루 첫 수업과 마지막 수업 사이의 빈 교시
-S2 교사 출근일 최소화      수업 없는 날을 만들어 주기
-S3 교사 희망 공강일 존중
-S4 학급 공강 최소화        학급 시간표 중간이 비지 않게
-S5 과목 기피 교시 회피     예: 체육 1교시, 5교시(점심 직후) 회피
-S6 과목 선호 교시 유도     예: 국영수는 오전
+S1 minimise teacher gaps        idle periods between a day's first and last lesson
+S2 minimise teacher workdays    give teachers days without lessons
+S3 respect requested free days
+S4 minimise class gaps          no holes in the middle of a class's day
+S5 avoid avoided periods        e.g. PE not in period 1 or period 5 (right after lunch)
+S6 favour preferred periods     e.g. core subjects in the morning
 """
 
 from dataclasses import dataclass
@@ -23,7 +24,7 @@ PenaltyTerms = dict[str, cp_model.LinearExpr]
 
 @dataclass(frozen=True)
 class DaySpan:
-    """하루치 시간표의 모양. working=그날 수업이 있는지, gap=첫 수업~마지막 수업 사이 빈 칸 수."""
+    """Shape of one day's timetable. working = any lesson that day, gap = empty cells between the first and last lesson."""
 
     working: cp_model.IntVar
     gap: cp_model.IntVar
@@ -33,7 +34,7 @@ def _sum_or_none(terms: list) -> cp_model.LinearExpr | None:
     return cp_model.LinearExpr.sum(terms) if terms else None
 
 
-# ---------------------------------------------------------------- 하루 단위 모양
+# ---------------------------------------------------------------- per-day shape
 
 
 def _build_teacher_day_spans(model: cp_model.CpModel, variables: TimetableVariables) -> dict[tuple[str, int], DaySpan]:
@@ -59,13 +60,14 @@ def _build_class_day_spans(model: cp_model.CpModel, variables: TimetableVariable
 
 
 def _day_span(model: cp_model.CpModel, busy_by_period: dict[int, cp_model.IntVar], name: str) -> DaySpan | None:
-    """공강 수 = (마지막 교시 - 첫 교시 + 1) - 실제 수업 수.
+    """gaps = (last period - first period + 1) - actual lessons.
 
-    개인 사정 등으로 배정 후보에서 빠진 교시가 첫/마지막 수업 사이에 끼면 그 칸도
-    공강으로 센다(실제 시간표에서도 비는 칸이므로).
+    A period excluded from the candidates (personal reasons, say) that falls
+    between the first and last lesson is counted as a gap too — it is an empty
+    cell in the real timetable as well.
     """
     periods = sorted(busy_by_period)
-    if not periods:  # 이날은 배정 가능한 칸이 없다
+    if not periods:  # no assignable cell on this day
         return None
 
     busy_vars = [busy_by_period[period] for period in periods]
@@ -74,7 +76,7 @@ def _day_span(model: cp_model.CpModel, busy_by_period: dict[int, cp_model.IntVar
     working = model.new_bool_var(f"{name}_working")
     model.add_max_equality(working, busy_vars)
 
-    if last_period - periods[0] < 2:  # 후보 교시 폭이 두 칸 이하면 중간 공강이 생길 수 없다
+    if last_period - periods[0] < 2:  # a candidate span of two cells or less cannot have a gap in the middle
         return DaySpan(working=working, gap=model.new_constant(0))
 
     first = model.new_int_var(0, last_period + 1, f"{name}_first")
@@ -91,7 +93,7 @@ def _day_span(model: cp_model.CpModel, busy_by_period: dict[int, cp_model.IntVar
     return DaySpan(working=working, gap=gap)
 
 
-# ---------------------------------------------------------------- 개별 벌점 항목
+# ---------------------------------------------------------------- individual penalty terms
 
 
 def _free_day_violations(variables: TimetableVariables, spans: dict[tuple[str, int], DaySpan]) -> list[cp_model.IntVar]:
@@ -103,7 +105,7 @@ def _free_day_violations(variables: TimetableVariables, spans: dict[tuple[str, i
 
 
 def _period_preference_vars(variables: TimetableVariables, *, avoided: bool) -> list[cp_model.IntVar]:
-    """avoided=True 면 기피 교시 배치, False 면 선호 교시를 벗어난 배치를 모은다."""
+    """avoided=True collects placements in avoided periods, False placements outside the preferred periods."""
     problem = variables.problem
     collected = []
     for course in problem.courses:

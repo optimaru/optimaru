@@ -1,25 +1,25 @@
-"""엔진 도메인의 pydantic v2 미러 — JSON 직렬화/역직렬화용.
+"""Pydantic v2 mirror of the engine domain — for JSON serialization/deserialization.
 
-`_core` 의 Project/Resource/Job(ExecutionMode)/Allocation/ProjectJobSchedule
-을 1:1 로 미러링하되, Java quickstart 의 REST 표현처럼 참조는 id 문자열
-(`project_id`/`resource_id`/`job_id`/`execution_mode_id`)로 두고, Java 의
-Job.successorJobs 처럼 선행 관계도 job 의 `successor_job_ids` 로 둔다. 엔진
-변환(`to_core`)이 id 를 인덱스로, successor 리스트를 allocation 의
-predecessor 리스트로, (execution_mode_id, delay) 를 합성 planning 값으로
-옮긴다::
+Mirrors `_core`'s Project/Resource/Job(ExecutionMode)/Allocation/ProjectJobSchedule
+1:1, but like the REST shape of the Java quickstart, references are id strings
+(`project_id`/`resource_id`/`job_id`/`execution_mode_id`), and like Java's
+Job.successorJobs, precedence lives in each job's `successor_job_ids`. The engine
+conversion (`to_core`) turns ids into indices, successor lists into the allocations'
+predecessor lists, and (execution_mode_id, delay) into the composite planning
+value::
 
     from project_job.models import ProjectJobScheduleModel
 
     model = ProjectJobScheduleModel.model_validate_json(payload)
-    schedule = model.to_core()                          # pydantic -> 엔진
+    schedule = model.to_core()                          # pydantic -> engine
     ...solve...
-    solved = ProjectJobScheduleModel.from_core(schedule)  # 엔진 -> pydantic
+    solved = ProjectJobScheduleModel.from_core(schedule)  # engine -> pydantic
 
-할당(allocation)은 job 과 1:1 이어야 한다 (Java DemoDataGenerator 의 규약).
-`allocations[i].execution_mode_id` 가 None 이면 미초기화다 (delay 도 None
-이어야 한다); 솔버가 (mode, delay) 를 결정한다. SOURCE/SINK 할당은 항상
-pinned 이고, 미초기화로 넘기면 솔버가 (첫 mode, delay 0) 으로 고정한다.
-`pydantic` 은 선택 의존성이다 (`pip install project_job[models]`).
+Allocations must be 1:1 with jobs (the Java DemoDataGenerator convention).
+`allocations[i].execution_mode_id` None means uninitialized (delay must be None
+too); the solver decides (mode, delay). SOURCE/SINK allocations are always
+pinned, and when passed uninitialized the solver fixes them to (first mode, delay 0).
+`pydantic` is an optional dependency (`pip install project_job[models]`).
 """
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -45,9 +45,9 @@ class _Model(BaseModel):
 
 
 class ProjectModel(_Model):
-    """프로젝트. release_date 는 'Total project delay' 제약의 기준
-    (critical_path_end = release_date + critical_path_duration)에만 쓰이고,
-    Java quickstart 그대로 시작일을 강제하지는 않는다."""
+    """A project. release_date is only the reference of the 'Total project delay'
+    constraint (critical_path_end = release_date + critical_path_duration) and, as in
+    the Java quickstart, does not force the start."""
 
     id: str
     release_date: int = 0
@@ -55,8 +55,8 @@ class ProjectModel(_Model):
 
 
 class ResourceModel(_Model):
-    """자원. renewable 이면 용량이 '일자별', 아니면 '전체 기간 합' 기준이다.
-    project_id None == 글로벌 자원 (Java 의 GlobalResource; 항상 renewable)."""
+    """A resource. Renewable capacity is 'per day', otherwise 'summed over the whole horizon'.
+    project_id None == global resource (Java's GlobalResource; always renewable)."""
 
     id: str
     capacity: int = Field(ge=0)
@@ -66,19 +66,19 @@ class ResourceModel(_Model):
     @model_validator(mode="after")
     def _global_is_renewable(self):
         if self.project_id is None and not self.renewable:
-            raise ValueError("글로벌 자원(project_id None)은 renewable 이어야 한다 (Java GlobalResource)")
+            raise ValueError("a global resource (project_id None) must be renewable (Java GlobalResource)")
         return self
 
 
 class ResourceRequirementModel(_Model):
-    """실행 모드 하나가 자원 하나를 쓰는 양."""
+    """How much of one resource one execution mode uses."""
 
     resource_id: str
     requirement: int = Field(ge=0)
 
 
 class ExecutionModeModel(_Model):
-    """job 의 실행 방식 하나 (기간 + 자원 요구량)."""
+    """One execution mode of a job (duration + resource demand)."""
 
     id: str
     duration: int = Field(default=0, ge=0)
@@ -86,9 +86,9 @@ class ExecutionModeModel(_Model):
 
 
 class JobModel(_Model):
-    """작업. SOURCE/SINK 는 프로젝트의 시작/종료 마일스톤으로, 실행 모드
-    하나(기간 0)를 갖는 관례다 (Java quickstart). `successor_job_ids` 가
-    선행 관계를 정의한다 (이 job 이 끝나야 후속 job 이 시작 가능)."""
+    """A job. SOURCE/SINK are the project's start/end milestones, by convention with one
+    execution mode (duration 0) (Java quickstart). `successor_job_ids` defines
+    precedence (successor jobs can start once this job ends)."""
 
     id: str
     project_id: str
@@ -99,19 +99,19 @@ class JobModel(_Model):
     @model_validator(mode="after")
     def _valid(self):
         if self.job_type not in JOB_TYPES:
-            raise ValueError(f"job_type 은 {JOB_TYPES} 중 하나여야 한다: {self.job_type!r}")
+            raise ValueError(f"job_type must be one of {JOB_TYPES}: {self.job_type!r}")
         if not self.execution_modes:
-            raise ValueError(f"job {self.id!r} 은 실행 모드가 최소 1개 필요하다 (SOURCE/SINK 는 기간 0 모드)")
+            raise ValueError(f"job {self.id!r} needs at least one execution mode (SOURCE/SINK use a zero-duration mode)")
         mode_ids = {m.id for m in self.execution_modes}
         if len(mode_ids) != len(self.execution_modes):
-            raise ValueError(f"job {self.id!r} 의 execution mode id 가 중복된다")
+            raise ValueError(f"job {self.id!r} has duplicate execution mode ids")
         return self
 
 
 class AllocationModel(_Model):
-    """planning entity: job 하나의 할당 (job 과 1:1).
-    (execution_mode_id, delay) 가 planning variable 쌍이다 (둘 다 None ==
-    미초기화). start_date/end_date 는 읽기 전용 결과 (Java shadow variable)."""
+    """Planning entity: the allocation of one job (1:1 with jobs).
+    (execution_mode_id, delay) is the planning variable pair (both None ==
+    uninitialized). start_date/end_date are read-only results (Java shadow variables)."""
 
     id: str
     job_id: str
@@ -124,12 +124,12 @@ class AllocationModel(_Model):
     @model_validator(mode="after")
     def _valid(self):
         if self.execution_mode_id is None and self.delay is not None:
-            raise ValueError(f"allocation {self.id!r}: execution_mode_id 없이 delay 만 지정할 수 없다")
+            raise ValueError(f"allocation {self.id!r}: delay cannot be set without execution_mode_id")
         return self
 
 
 class ProjectJobScheduleModel(_Model):
-    """planning solution 미러. score_* 는 읽기 전용 결과라 별도 필드로 둔다."""
+    """Planning solution mirror. score_* are read-only results, kept as separate fields."""
 
     projects: list[ProjectModel]
     resources: list[ResourceModel]
@@ -146,48 +146,48 @@ class ProjectJobScheduleModel(_Model):
         resource_ids = {r.id for r in self.resources}
         job_ids = {j.id for j in self.jobs}
         if len(project_ids) != len(self.projects):
-            raise ValueError("project id 가 중복된다")
+            raise ValueError("duplicate project id")
         if len(resource_ids) != len(self.resources):
-            raise ValueError("resource id 가 중복된다")
+            raise ValueError("duplicate resource id")
         if len(job_ids) != len(self.jobs):
-            raise ValueError("job id 가 중복된다")
+            raise ValueError("duplicate job id")
         if len({a.id for a in self.allocations}) != len(self.allocations):
-            raise ValueError("allocation id 가 중복된다")
+            raise ValueError("duplicate allocation id")
         for resource in self.resources:
             if resource.project_id is not None and resource.project_id not in project_ids:
-                raise ValueError(f"resource {resource.id!r} 의 project_id {resource.project_id!r} 가 없다")
+                raise ValueError(f"resource {resource.id!r} has unknown project_id {resource.project_id!r}")
         for job in self.jobs:
             if job.project_id not in project_ids:
-                raise ValueError(f"job {job.id!r} 의 project_id {job.project_id!r} 가 없다")
+                raise ValueError(f"job {job.id!r} has unknown project_id {job.project_id!r}")
             for successor in job.successor_job_ids:
                 if successor not in job_ids:
-                    raise ValueError(f"job {job.id!r} 의 successor {successor!r} 가 없다")
+                    raise ValueError(f"job {job.id!r} has unknown successor {successor!r}")
             for mode in job.execution_modes:
                 for req in mode.resource_requirements:
                     if req.resource_id not in resource_ids:
-                        raise ValueError(f"mode {mode.id!r} 의 resource_id {req.resource_id!r} 가 없다")
-        # 할당은 job 과 1:1 (Java DemoDataGenerator 의 규약).
+                        raise ValueError(f"mode {mode.id!r} has unknown resource_id {req.resource_id!r}")
+        # Allocations are 1:1 with jobs (the Java DemoDataGenerator convention).
         allocated_jobs = [a.job_id for a in self.allocations]
         if sorted(allocated_jobs) != sorted(job_ids):
-            raise ValueError("allocation 은 모든 job 과 정확히 1:1 이어야 한다")
+            raise ValueError("allocations must be exactly 1:1 with jobs")
         for allocation in self.allocations:
             job = next(j for j in self.jobs if j.id == allocation.job_id)
             if allocation.execution_mode_id is not None:
                 mode_ids = {m.id for m in job.execution_modes}
                 if allocation.execution_mode_id not in mode_ids:
                     raise ValueError(
-                        f"allocation {allocation.id!r} 의 execution_mode_id {allocation.execution_mode_id!r} 는 "
-                        f"job {job.id!r} 의 모드가 아니다"
+                        f"allocation {allocation.id!r} execution_mode_id {allocation.execution_mode_id!r} is "
+                        f"not a mode of job {job.id!r}"
                     )
             if allocation.delay is not None and allocation.delay >= self.delay_range_size:
-                raise ValueError(f"allocation {allocation.id!r} 의 delay 는 delay_range_size 미만이어야 한다")
+                raise ValueError(f"allocation {allocation.id!r} delay must be below delay_range_size")
         return self
 
     def to_core(self) -> "_core.ProjectJobSchedule":
-        """pydantic -> 엔진 객체: id 참조를 인덱스로, job 의 successor 리스트를
-        allocation 의 predecessor 리스트로, (execution_mode_id, delay) 를 합성
-        planning 값으로 옮긴다 (선행 그래프에 사이클이 있으면 ValueError).
-        score/start/end 필드는 엔진이 다시 계산하므로 무시한다."""
+        """pydantic -> engine object: id references to indices, job successor lists to
+        allocation predecessor lists, (execution_mode_id, delay) to the composite planning
+        value (ValueError if the predecessor graph has a cycle). score/start/end fields
+        are ignored since the engine recomputes them."""
         project_index = {p.id: i for i, p in enumerate(self.projects)}
         resource_index = {r.id: i for i, r in enumerate(self.resources)}
         job_index = {j.id: i for i, j in enumerate(self.jobs)}
@@ -233,7 +233,7 @@ class ProjectJobScheduleModel(_Model):
                     a.id,
                     job_index[a.job_id],
                     predecessors[i],
-                    -1,  # 합성 값은 아래에서 encode_value 로 채운다
+                    -1,  # the composite value is filled below with encode_value
                     a.pinned,
                 )
                 for i, a in enumerate(self.allocations)
@@ -253,9 +253,9 @@ class ProjectJobScheduleModel(_Model):
 
     @classmethod
     def from_core(cls, schedule: "_core.ProjectJobSchedule") -> "ProjectJobScheduleModel":
-        """엔진 객체 -> pydantic (현재 배정, 파생 날짜, score 포함). 미초기화
-        (-1) 할당은 execution_mode_id/delay None 이 된다. job 의
-        successor_job_ids 는 allocation predecessor 리스트를 역변환해 채운다."""
+        """engine object -> pydantic (including the current assignment, derived dates and
+        score). Uninitialized (-1) allocations get execution_mode_id/delay None. Each job's
+        successor_job_ids are filled by inverting the allocation predecessor lists."""
         successor_ids: dict[int, list[str]] = {i: [] for i in range(len(schedule.jobs))}
         allocations = schedule.allocations
         for allocation in allocations:

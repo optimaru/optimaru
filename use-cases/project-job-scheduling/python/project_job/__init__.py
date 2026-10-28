@@ -1,32 +1,32 @@
-"""Project job scheduling (다중 프로젝트 RCPSP) — Timefold engine 기반 C++
-솔버의 Python 래퍼.
+"""Project job scheduling (multi-project RCPSP) — Python wrapper of the C++
+solver on the optimaru engine.
 
 `Project`/`Resource`/`ResourceRequirement`/`ExecutionMode`/`Job`/`Allocation`/
-`ProjectJobSchedule`/`JobType`/`Score`/`Solver`/`SolverConfig` 와
-`calculate_score` 는 컴파일된 C++ 코어(`_core`)에서 온다.
+`ProjectJobSchedule`/`JobType`/`Score`/`Solver`/`SolverConfig` and
+`calculate_score` come from the compiled C++ core (`_core`).
 
-Java quickstart 의 planning variable 2개 (executionMode, delay∈[0, 500)) 는
-합성 인코딩된 BASIC 변수 `Allocation.mode_delay` 하나로 포팅됐다::
+The Java quickstart's two planning variables (executionMode, delay∈[0, 500)) are
+ported as one composite-encoded BASIC variable `Allocation.mode_delay`::
 
-    -1                                  미초기화 (자원 사용 없음,
-                                        날짜는 delay 0/duration 0 통과)
-    delay * max_mode_count + mode_slot  (실제 mode index = mode_slot %
-                                        해당 job 의 mode 수)
+    -1                                  uninitialized (no resource use;
+                                        dates pass through with delay 0/duration 0)
+    delay * max_mode_count + mode_slot  (real mode index = mode_slot %
+                                        the job's mode count)
 
-Java 의 shadow variable 체인 (predecessorsDoneDate → startDate → endDate)
-은 파생 상태로 재현된다: `calculate_score` / `Solver.solve` 가 위상 정렬
-순서로 재계산해 `Allocation.start_date`/`end_date` 에 채운다. SOURCE/SINK
-할당은 항상 pinned (Java 의 @PlanningPin + setPinned 그대로) 이고, 풀기 전에
-미초기화 상태면 (첫 mode, delay 0) 으로 고정된다.
+Java's shadow variable chain (predecessorsDoneDate → startDate → endDate) is
+reproduced as derived state: `calculate_score` / `Solver.solve` recompute it in
+topological order and fill `Allocation.start_date`/`end_date`. SOURCE/SINK
+allocations are always pinned (exactly Java's @PlanningPin + setPinned), and if
+uninitialized before solving they are fixed to (first mode, delay 0).
 
-점수 규약 (HardMediumSoftScore, Java quickstart 그대로): hard 는 자원 용량
-위반 (0 == feasible; non-renewable 은 전체 합, renewable 은 일자별), medium
-은 프로젝트별 지연(sink 종료 − critical path 종료, 양수만)의 합, soft 는
-makespan (최대 sink 종료일). 사전식 비교(hard 우선). 엔진 내부적으로는
-HardSoftScore(int64, double)에 `engine.soft = medium * 10**9 + soft` 로
-매핑된다 (레벨 순서 보존).
+Score convention (HardMediumSoftScore, as in the Java quickstart): hard is resource capacity
+violations (0 == feasible; non-renewable over the total, renewable per day), medium
+is the sum of per-project delays (sink end − critical path end, positive only), soft is
+the makespan (latest sink end date). Lexicographic comparison (hard first). Internally it
+maps onto HardSoftScore(int64, double) as `engine.soft = medium * 10**9 + soft`
+(level order preserved).
 
-고수준 진입점은 `solve` 다::
+The high-level entry point is `solve`::
 
     import project_job as pj
     from project_job.demo import generate_demo_data
@@ -35,7 +35,7 @@ HardSoftScore(int64, double)에 `engine.soft = medium * 10**9 + soft` 로
     result = pj.solve(schedule, time_limit_seconds=10.0, random_seed=42)
     print(result.score_hard, result.score_medium, result.score_soft)
 
-pydantic 미러(직렬화용)는 `project_job.models` 에 있다 (선택 의존성).
+The pydantic mirror (for serialization) is in `project_job.models` (optional dependency).
 """
 
 from ._core import (
@@ -92,7 +92,7 @@ def _build_config(
     if parallel_solver_count is not None:
         cfg.parallel_solver_count = parallel_solver_count
     if stop_at_first_feasible:
-        # hard 0 도달 즉시 종료 (medium/soft 는 사실상 -inf 하한).
+        # Stop as soon as hard 0 is reached (medium/soft have an effectively -inf floor).
         cfg.best_score_limit = (0, -(2**62), -(2**62))
     if full_assert:
         cfg.full_assert = True
@@ -113,20 +113,20 @@ def solve(
     config=None,
     constraints=None,
 ):
-    """프로젝트 잡 스케줄링 문제를 풀어 같은 형태로 돌려주는 고수준 API.
+    """High-level API that solves a project job scheduling problem and returns it in the same shape.
 
-    ``schedule`` 은 `_core.ProjectJobSchedule` (in place 로 풀고 그대로
-    반환) 또는 `models.ProjectJobScheduleModel` (엔진 형태로 변환해 풀고
-    결과를 새 `ProjectJobScheduleModel` 로 반환; pydantic 필요) 를 받는다.
+    ``schedule`` is a `_core.ProjectJobSchedule` (solved in place and
+    returned) or a `models.ProjectJobScheduleModel` (converted to the engine shape,
+    solved, and returned as a new `ProjectJobScheduleModel`; needs pydantic).
 
-    ``config`` 가 기본 설정이 된다 (`SolverConfig`; None 이면 엔진 기본값
-    30초 예산). 명시한 키워드 인자가 config 위에 덮어쓴다.
-    ``stop_at_first_feasible`` 은 hard 0 에 도달하는 즉시 종료한다.
-    ``on_new_best`` 는 새 best 마다 ``(step, Score)`` 로 불린다.
+    ``config`` becomes the base settings (`SolverConfig`; None = engine default
+    30 s budget). Explicit keyword arguments override config.
+    ``stop_at_first_feasible`` stops as soon as hard 0 is reached.
+    ``on_new_best`` is called with ``(step, Score)`` on every new best.
 
-    ``constraints`` 로 비용 함수를 직접 고를 수 있다
-    (`project_job.constraints` 참고). 준 목록의 제약만 채점되고, None 이면
-    기본 네 제약 전부를 쓴다::
+    ``constraints`` picks the cost function directly
+    (see `project_job.constraints`). Only the listed constraints are scored; None
+    uses all four default constraints::
 
         from project_job.constraints import get_constraints
         pjs.solve(schedule, constraints=get_constraints())
@@ -151,12 +151,12 @@ def solve(
         _solve(schedule)
         return schedule
 
-    # pydantic 모델 경로 (지연 임포트: pydantic 은 선택 의존성).
+    # pydantic model path (lazy import: pydantic is an optional dependency).
     from .models import ProjectJobScheduleModel
 
     if not isinstance(schedule, ProjectJobScheduleModel):
         raise TypeError(
-            f"schedule 은 ProjectJobSchedule 또는 models.ProjectJobScheduleModel 이어야 한다: {type(schedule)!r}"
+            f"schedule must be a ProjectJobSchedule or a models.ProjectJobScheduleModel: {type(schedule)!r}"
         )
     core_schedule = schedule.to_core()
     _solve(core_schedule)

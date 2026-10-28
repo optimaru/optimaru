@@ -1,16 +1,16 @@
-"""엔진 도메인의 pydantic v2 미러 — JSON 직렬화/역직렬화용.
+"""Pydantic v2 mirror of the engine domain — for JSON serialization/deserialization.
 
-`_core` 의 Team/Round/Match/LeagueSchedule 과 SolverConfig 를 1:1 로
-미러링한다. 엔진 형태 그대로를 저장/전송할 때(디버그 덤프, 회귀 스냅샷
-등) 쓴다::
+Mirrors `_core`'s Team/Round/Match/LeagueSchedule and SolverConfig 1:1. Use it to
+store or transfer the engine shape as-is (debug dumps, regression snapshots,
+...)::
 
     from sports_league.models import LeagueScheduleModel, SolveConfig
 
-    model = LeagueScheduleModel.from_core(schedule)   # 엔진 -> pydantic
+    model = LeagueScheduleModel.from_core(schedule)   # engine -> pydantic
     clone = LeagueScheduleModel.model_validate_json(model.model_dump_json())
-    schedule2 = clone.to_core()                       # pydantic -> 엔진
+    schedule2 = clone.to_core()                       # pydantic -> engine
 
-`pydantic` 은 선택 의존성이다 (`pip install sports_league[models]`).
+`pydantic` is an optional dependency (`pip install sports_league[models]`).
 """
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -27,7 +27,7 @@ __all__ = [
 
 
 class TeamModel(BaseModel):
-    """problem fact: 팀. 경기의 home/away 는 팀 리스트의 위치로 참조한다."""
+    """Problem fact: a team. A match's home/away reference positions in the team list."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -36,9 +36,9 @@ class TeamModel(BaseModel):
 
 
 class RoundModel(BaseModel):
-    """problem fact 이자 planning 값: 라운드. index 는 제약이 쓰는 라운드
-    번호(같은 날/다음 날/처음/마지막 판정), weekend_or_holiday 는 클래식
-    경기 소프트 제약용."""
+    """Problem fact and planning value: a round. index is the round number the
+    constraints use (same day / next day / first / last checks), weekend_or_holiday feeds
+    the classic-match soft constraint."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -47,7 +47,7 @@ class RoundModel(BaseModel):
 
 
 class MatchModel(BaseModel):
-    """planning entity. round 는 rounds 리스트의 위치(-1 = 미배정)."""
+    """Planning entity. round is a position in the rounds list (-1 = unassigned)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -59,7 +59,7 @@ class MatchModel(BaseModel):
 
 
 class LeagueScheduleModel(BaseModel):
-    """planning solution 미러. score 는 읽기 전용 결과라 별도 필드로 둔다."""
+    """Planning solution mirror. score is a read-only result, kept as a separate field."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -71,7 +71,7 @@ class LeagueScheduleModel(BaseModel):
     score_soft: float | None = None
 
     def to_core(self) -> "_core.LeagueSchedule":
-        """pydantic -> 엔진 객체 (score 필드는 엔진이 다시 계산하므로 무시)."""
+        """pydantic -> engine object (the score field is ignored; the engine recomputes it)."""
         return _core.LeagueSchedule(
             [_core.Team(t.id, t.name) for t in self.teams],
             [_core.Round(r.index, r.weekend_or_holiday) for r in self.rounds],
@@ -90,7 +90,7 @@ class LeagueScheduleModel(BaseModel):
 
     @classmethod
     def from_core(cls, schedule: "_core.LeagueSchedule") -> "LeagueScheduleModel":
-        """엔진 객체 -> pydantic (현재 배정과 score 포함)."""
+        """engine object -> pydantic (including the current assignment and score)."""
         return cls(
             teams=[TeamModel(id=t.id, name=t.name) for t in schedule.teams],
             rounds=[RoundModel(index=r.index, weekend_or_holiday=r.weekend_or_holiday) for r in schedule.rounds],
@@ -111,14 +111,14 @@ class LeagueScheduleModel(BaseModel):
 
 
 class SolveConfig(BaseModel):
-    """`_core.SolverConfig` 의 직렬화 가능한 미러 (`solve(config=...)` 용)."""
+    """Serializable mirror of `_core.SolverConfig` (for `solve(config=...)`)."""
 
     model_config = ConfigDict(extra="forbid")
 
     time_limit_seconds: float = Field(default=30.0, ge=0)
     random_seed: int = 0
     parallel_solver_count: int = Field(default=1, ge=1)
-    # 0 = 자동 (clamp(8 * 경기 수, 400, 3200)). 양수를 주면 그대로 쓴다.
+    # 0 = automatic (clamp(8 * matches, 400, 3200)). A positive value is used as-is.
     late_acceptance_size: int = Field(default=0, ge=0)
     stop_at_first_feasible: bool = False
     best_score_limit: tuple[int, float] | None = None
@@ -154,7 +154,7 @@ class SolveConfig(BaseModel):
         cfg.spent_limit_seconds = self.time_limit_seconds
         cfg.random_seed = self.random_seed
         cfg.parallel_solver_count = self.parallel_solver_count
-        cfg.late_acceptance_size = self.late_acceptance_size  # 0 = 자동
+        cfg.late_acceptance_size = self.late_acceptance_size  # 0 = auto
         cfg.unimproved_spent_limit_seconds = self.unimproved_spent_limit_seconds
         cfg.step_count_limit = self.step_count_limit
         cfg.unimproved_step_count_limit = self.unimproved_step_count_limit

@@ -1,7 +1,7 @@
-"""meeting_scheduling.constraints — 비용 함수를 선언으로 고르는 API.
+"""meeting_scheduling.constraints — an API for picking the cost function declaratively.
 
-제약 하나하나의 채점값 스팟체크는 `test_constraints.py` 가 맡는다. 여기서는
-"어떤 제약을 켤지" 를 고르는 선택 경로만 본다.
+Spot checks of individual constraint values live in `test_constraints.py`. This
+file only covers the selection path that picks "which constraints are on".
 """
 
 import pytest
@@ -41,8 +41,8 @@ def solve(constraints=None):
 
 
 def test_list_constraints_matches_the_spec_names():
-    """스펙이 들고 있는 이름은 코어가 실제로 아는 이름이어야 한다."""
-    # unit 제약이 먼저, global 제약이 뒤 — emplace 순서와 다르다.
+    """Names carried by specs must be names the core actually knows."""
+    # Unit constraints first, global constraints after — differs from emplace order.
     available = ms.list_constraints()
     assert available == [
         "avoid_overtime",
@@ -67,7 +67,7 @@ def test_get_constraints_defaults_to_the_full_set():
 
 
 def test_default_constraints_reproduce_the_monolithic_cost_function():
-    """기본 스펙 전부로 조립한 비용 함수는 모놀리식 채점과 같은 값을 내야 한다."""
+    """A cost function assembled from all default specs must equal the monolithic scoring."""
     schedule = build_schedule()
     ms.solve(schedule, time_limit_seconds=0.6, random_seed=1, constraints=get_constraints())
     recomputed = ms.calculate_score(schedule)
@@ -76,7 +76,7 @@ def test_default_constraints_reproduce_the_monolithic_cost_function():
 
 
 def test_picking_a_subset_drops_the_other_terms():
-    """목록에 없는 제약은 채점되지 않는다 — 소프트 항이 통째로 사라진다."""
+    """Unlisted constraints are not scored — the soft term disappears entirely."""
     baseline = solve()
     assert baseline.soft < 0
 
@@ -85,18 +85,18 @@ def test_picking_a_subset_drops_the_other_terms():
 
 
 def test_reweighting_one_constraint_scales_only_that_term():
-    """겹침 가중치만 올리면 소프트만 커지고 하드는 그대로."""
+    """Raising only the overlap weight grows soft only; hard stays put."""
     base = solve([*HARD_PICKS, overlapping_meetings])
     heavier = solve([*HARD_PICKS, OverlappingMeetings(weight=10_000)])
     assert heavier.hard == base.hard
-    assert heavier.soft < base.soft  # 벌점이므로 더 음수
+    assert heavier.soft < base.soft  # penalty, so more negative
 
 
 def test_level_can_be_flipped():
-    """소프트 제약을 하드로 올리면 그 벌점이 하드 레벨로 옮겨간다.
+    """Promoting a soft constraint to hard moves its penalty to the hard level.
 
-    회의는 달력 어딘가에 놓여야 하므로 마지막 grain 인덱스 합은 0 이 될 수
-    없다 — 레벨을 올리면 반드시 하드에 잡힌다."""
+    Meetings must sit somewhere on the calendar, so the sum of last grain indices
+    can never be 0 — raising the level always lands on hard."""
     soft_level = solve([*HARD_PICKS, do_meetings_as_soon_as_possible])
     assert soft_level.hard == 0 and soft_level.soft < 0
 
@@ -106,10 +106,10 @@ def test_level_can_be_flipped():
 
 
 def test_unknown_constraint_name_raises():
-    """오타가 비용 함수를 조용히 그대로 두면 안 된다."""
+    """A typo must not silently leave the cost function unchanged."""
 
     class Typo:
-        name = "room_conflicts"  # 뒤에 s
+        name = "room_conflicts"  # trailing s
         weight = None
         hard = None
         exponent = 1.0
@@ -119,7 +119,7 @@ def test_unknown_constraint_name_raises():
 
 
 def test_empty_constraint_list_is_rejected():
-    """빈 목록은 '아무것도 채점하지 않음'이라 실수일 가능성이 높다."""
+    """An empty list means 'score nothing', which is most likely a mistake."""
     with pytest.raises(ValueError, match="must not be empty"):
         ms.solve(build_schedule(), time_limit_seconds=0.2, constraints=[])
 
@@ -132,28 +132,28 @@ def test_spec_subclass_must_name_a_constraint():
 
 
 def test_default_instance_carries_no_overrides():
-    """모듈 상위 인스턴스는 기본값 그대로여야 한다 (weight=None)."""
+    """Module-level instances must keep the defaults (weight=None)."""
     assert overlapping_meetings.weight is None
     assert overlapping_meetings.hard is None
     assert overlapping_meetings.exponent == 1.0
 
 
-# --- 순수 파이썬 채점 (constraint_costs -> score) ---------------------------
+# --- Pure-Python scoring (constraint_costs -> score) ------------------------
 
 
 def _raw():
-    """한 번 푼 해의 제약별 원본 cost."""
+    """Raw per-constraint costs of one solved solution."""
     schedule = build_schedule()
     ms.solve(schedule, time_limit_seconds=0.4, random_seed=1)
     return ms.constraint_costs(schedule), schedule
 
 
 def test_score_reproduces_the_engine_score_exactly():
-    """파이썬 채점은 엔진과 hard/soft 가 정확히 같아야 한다.
+    """Python scoring must match the engine's hard/soft exactly.
 
-    이 도메인은 레벨이 둘뿐이라 접힘 없이 그대로 견줄 수 있다. 이 단언이
-    `score()` 가 엔진의 applyRaw 산술(가중치·셰이핑·unit 별 하드 반올림)을
-    제대로 재현하는지 이 패키지에서 고정한다."""
+    This domain has only two levels, so the comparison needs no folding. This
+    assertion pins down, in this package, that `score()` reproduces the engine's
+    applyRaw arithmetic (weights, shaping, per-unit hard rounding)."""
     raw, solution = _raw()
     engine = ms.calculate_score(solution)
     python = score(raw)
@@ -162,10 +162,11 @@ def test_score_reproduces_the_engine_score_exactly():
 
 
 def test_score_is_additive_over_the_picked_constraints():
-    """전체 점수는 제약별 점수의 합이다 — 목록에 없는 항은 그대로 빠진다.
+    """The total score is the sum of per-constraint scores — unlisted terms simply drop out.
 
-    하드 반올림이 unit 기여분마다 일어나므로 제약별로 나눠 더해도 값이
-    같다. "이 항이 점수에 얼마를 보태는가" 를 재채점 없이 읽을 수 있다."""
+    Hard rounding happens per unit contribution, so splitting by constraint and
+    summing gives the same value. "How much does this term add to the score"
+    can be read without rescoring."""
     raw, _ = _raw()
     specs = get_constraints()
     full = score(raw, specs)
@@ -175,7 +176,7 @@ def test_score_is_additive_over_the_picked_constraints():
 
 
 def test_score_reweighting_is_linear_without_rescoring():
-    """가중치만 바꾸면 그 항이 선형으로 스케일한다 — 재채점 없이."""
+    """Changing only the weight scales that term linearly — no rescoring."""
     raw, _ = _raw()
     base = score(raw, [overlapping_meetings])
     ten = score(raw, [OverlappingMeetings(weight=10)])
@@ -188,7 +189,7 @@ def test_score_reweighting_is_linear_without_rescoring():
 
 
 def test_score_rejects_an_unknown_constraint_name():
-    """이름이 틀린 스펙(예: 이름 바뀐 컴포넌트)은 조용히 무시되면 안 된다."""
+    """A spec with a wrong name (e.g. a renamed component) must not be silently ignored."""
     raw, _ = _raw()
 
     class Renamed(Constraint):

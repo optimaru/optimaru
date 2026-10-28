@@ -1,8 +1,8 @@
-"""제약 스팟체크: C++ full recompute(calculate_score)를 손계산 값과 대조.
+"""Constraint spot checks: the C++ full recompute (calculate_score) against hand-computed values.
 
-Java BedAllocationConstraintProviderTest 의 6박(penalizesBy 6) 케이스에
-제약 가중치를 곱한 기대값이다. 전체 제약별 검증은 C++ 테스트
-(cpp/test/ba_test.cpp)가 담당한다.
+The expected values are the 6-night (penalizesBy 6) cases of Java
+BedAllocationConstraintProviderTest times the constraint weights. Full per-constraint
+verification lives in the C++ tests (cpp/test/ba_test.cpp).
 """
 
 import bed_allocation as ba
@@ -21,7 +21,7 @@ def make_stay(index, bed, *, gender=ba.Gender.MALE, specialty="default", **kwarg
         gender,
         30,
         0,
-        5,  # 6박: Java 테스트의 ZERO_NIGHT..FIVE_NIGHT
+        5,  # 6 nights: ZERO_NIGHT..FIVE_NIGHT of the Java test
         specialty,
         bed=bed,
         **kwargs,
@@ -67,8 +67,8 @@ def test_uninitialized_contributes_nothing():
 
 
 def test_required_equipment_counts_present_ones():
-    """Java 원본의 유닛테스트로 고정된 의미론: 병실에 '있는' 필수 장비 수로
-    가중한다 — 부분 보유는 벌점, 전무하면 0."""
+    """Semantics pinned by the Java original's unit test: weighted by the required
+    equipment the room HAS — partial coverage is penalized, none at all is 0."""
     room_partial = ba.Room("r0", "r0", equipment=["telemetry"])
     room_none = ba.Room("r1", "r1")
     plan = make_plan(
@@ -99,12 +99,12 @@ def test_department_specialty_and_priority():
         [ba.Room("r0", "r0", capacity=3)],
         [ba.Bed("b0", 0), ba.Bed("b1", 0), ba.Bed("b2", 0)],
         [
-            make_stay(0, 0, specialty="spec1"),  # 우선순위 2 -> -60 soft
-            make_stay(1, 1, specialty="spec2"),  # 우선순위 1 -> 0
-            make_stay(2, 2, specialty="spec3"),  # 미제공 -> -60 soft
+            make_stay(0, 0, specialty="spec1"),  # priority 2 -> -60 soft
+            make_stay(1, 1, specialty="spec2"),  # priority 1 -> 0
+            make_stay(2, 2, specialty="spec3"),  # not offered -> -60 soft
         ],
         departments=departments,
     )
-    # 재원 3건이 같은 병실(정원 3, ANY_GENDER)의 서로 다른 병상: hard 0.
+    # Three stays on different beds of the same room (capacity 3, ANY_GENDER): hard 0.
     score = ba.calculate_score(plan)
     assert (score.hard, score.medium, score.soft) == (0, 0, -120)

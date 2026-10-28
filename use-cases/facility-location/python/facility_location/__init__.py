@@ -1,16 +1,16 @@
-"""Facility location — Timefold engine 기반 C++ 솔버의 Python 래퍼.
+"""Facility location — Python wrapper of the C++ solver on the optimaru engine.
 
-Timefold quickstart facility-location 포팅: 수요처(Consumer)마다 시설
-(Facility) 하나를 고르는 BASIC planning variable (`Consumer.facility`,
-시설 인덱스, -1 = 미배정) 하나로 푼다.
+A port of the Timefold quickstart facility-location: one BASIC planning variable
+(`Consumer.facility`, a facility index, -1 = unassigned) picks one facility
+per consumer.
 
 Score (HardSoftScore):
-  hard = -(사용 시설별 max(0, 배정 수요 - 용량) 합)          # 시설 용량
-  soft = -(2 x 사용 시설 설치비 합 + 6 x 수요처-시설 거리 합)  # 설치비 + 거리
-거리 가중치 6 은 Java 솔루션의 ConstraintWeightOverrides 값이다 (provider
-기본은 5); `problem.distance_from_facility_weight` 로 바꿀 수 있다.
+  hard = -(sum over used facilities of max(0, assigned demand - capacity))  # capacity
+  soft = -(2 x setup cost of used facilities + 6 x consumer-facility distance)  # setup + distance
+The distance weight 6 is the ConstraintWeightOverrides value of the Java solution (the
+provider default is 5); change it with `problem.distance_from_facility_weight`.
 
-기본 사용::
+Basic usage::
 
     import facility_location as fl
 
@@ -18,7 +18,7 @@ Score (HardSoftScore):
     fl.solve(problem, time_limit_seconds=5.0, random_seed=42)
     print(problem.score, problem.total_cost(), problem.total_distance_meters())
 
-pydantic 미러(직렬화용)는 `facility_location.models` 에 있다 (선택 의존성).
+The pydantic mirror (for serialization) is in `facility_location.models` (optional dependency).
 """
 
 from ._core import (
@@ -60,15 +60,15 @@ def solve(
     config: SolverConfig | None = None,
     constraints=None,
 ) -> Score:
-    """`problem` 을 제자리에서 풀고 최종 `Score` 를 돌려주는 고수준 API.
+    """High-level API that solves `problem` in place and returns the final `Score`.
 
-    ``config`` 가 기본 설정이 된다 (None 이면 엔진 기본값: 30초 예산, ALNS
-    켜짐). 명시한 키워드 인자가 config 위에 덮어쓴다.
-    ``stop_at_first_feasible`` 은 hard 0 에 도달하는 즉시 종료한다.
+    ``config`` becomes the base settings (None = engine defaults: 30 s budget, ALNS
+    on). Explicit keyword arguments override config.
+    ``stop_at_first_feasible`` stops as soon as hard 0 is reached.
 
-    ``constraints`` 로 비용 함수를 직접 고를 수 있다
-    (`facility_location.constraints` 참고). 준 목록의 제약만 채점되고,
-    None 이면 기본 세 제약 전부를 쓴다::
+    ``constraints`` picks the cost function directly
+    (see `facility_location.constraints`). Only the listed constraints are scored;
+    None uses all three default constraints::
 
         from facility_location.constraints import get_constraints
         fl.solve(problem, constraints=get_constraints())

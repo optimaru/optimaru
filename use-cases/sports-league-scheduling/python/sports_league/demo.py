@@ -1,9 +1,9 @@
-"""Java quickstart 의 DemoDataGenerator 재현 — 남미 14팀, 32라운드, 182경기.
+"""Reproduction of the Java quickstart DemoDataGenerator — 14 South American teams, 32 rounds, 182 matches.
 
-클래식 경기 추첨은 java.util.Random(0) 의 48-bit LCG 를 그대로 구현해
-Java/C++ 데모와 비트 단위로 같은 인스턴스를 만든다. 유일한 차이: Java 는
-LocalDate.now() 로 주말 라운드를 정하지만 여기서는 결정론을 위해 round 0
-을 수요일로 고정한다 (C++ 데모와 동일).
+The classic-match draw implements java.util.Random(0)'s 48-bit LCG exactly, giving a
+bit-identical instance to the Java/C++ demos. The only difference: Java picks weekend rounds
+with LocalDate.now(), while here round 0 is pinned to a Wednesday for determinism (the
+same as the C++ demo).
 """
 
 from ._core import LeagueSchedule, Match, Round, Team
@@ -45,13 +45,13 @@ _DISTANCE_IN_KM = [
 ]
 
 _ROUNDS = 32
-# Java 는 LocalDate.now() 의 토/일을 주말로 표시한다; 여기서는 round 0 을
-# 수요일(0=월 .. 6=일)로 고정한다.
+# Java marks Saturdays/Sundays from LocalDate.now() as weekends; here round 0 is
+# pinned to a Wednesday (0=Mon .. 6=Sun).
 _FIRST_ROUND_DAY_OF_WEEK = 2
 
 
 class JavaRandom:
-    """java.util.Random 의 48-bit LCG (nextInt(bound) 만 구현)."""
+    """java.util.Random's 48-bit LCG (only nextInt(bound) is implemented)."""
 
     _MULTIPLIER = 0x5DEECE66D
     _ADDEND = 0xB
@@ -77,7 +77,7 @@ class JavaRandom:
 
 
 def demo_schedule() -> LeagueSchedule:
-    """Java DemoDataGenerator.generateDemoData() 와 같은 인스턴스."""
+    """The same instance as Java DemoDataGenerator.generateDemoData()."""
     random = JavaRandom(0)
 
     rounds = [Round(i, weekend_or_holiday=((_FIRST_ROUND_DAY_OF_WEEK + i) % 7) >= 5) for i in range(_ROUNDS)]
@@ -90,8 +90,8 @@ def demo_schedule() -> LeagueSchedule:
         if i != j
     ]
 
-    # 5% 클래식 추첨 (Java applyRandomValue: 남은 비클래식 중 nextInt(size)
-    # 번째를 고르고 size 를 하나 줄인다).
+    # 5% classic draw (Java applyRandomValue: pick the nextInt(size)-th remaining
+    # non-classic match and shrink size by one).
     picks = int(len(matches) * 0.05)
     size = len(matches)
     for _ in range(picks):
@@ -106,7 +106,7 @@ def demo_schedule() -> LeagueSchedule:
                 break
             skip -= 1
         size -= 1
-    # 대칭 폐포: 역방향 경기가 클래식이면 클래식.
+    # Symmetric closure: a match is classic if its reverse fixture is.
     classic_pairs = {(m.home_team, m.away_team) for m in matches if m.classic_match}
     for match in matches:
         if (match.away_team, match.home_team) in classic_pairs:

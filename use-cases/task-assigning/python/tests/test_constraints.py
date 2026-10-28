@@ -1,5 +1,5 @@
-"""제약 스팟체크: Java TaskAssigningConstraintProviderTest 케이스를
-`calculate_score` (full recompute) 로 재현한다."""
+"""Constraint spot checks: reproduces Java TaskAssigningConstraintProviderTest cases
+with `calculate_score` (full recompute)."""
 
 import task_assigning as ta
 
@@ -14,8 +14,8 @@ def _solution(task_types, employees, tasks, customers=1):
 
 
 def test_no_missing_skills():
-    # 직원 스킬 {"3"}; 필수 스킬 {1,2} / {3} / {5} 인 task 3건 전부 배정
-    # -> 빠진 스킬 총 3.
+    # Employee skills {"3"}; three tasks requiring {1,2} / {3} / {5}, all assigned
+    # -> 3 missing skills in total.
     solution = _solution(
         task_types=[
             ta.TaskType("1", base_duration=1, required_skills=["1", "2"]),
@@ -33,7 +33,7 @@ def test_no_missing_skills():
 
 
 def test_minimize_unassigned_tasks():
-    # task 3건 중 1건만 배정 -> soft0 == -2.
+    # Only 1 of 3 tasks assigned -> soft0 == -2.
     solution = _solution(
         task_types=[ta.TaskType("T", base_duration=1)],
         employees=[ta.Employee("e0", tasks=[2])],
@@ -84,14 +84,14 @@ def test_minimize_makespan_and_shadows():
 
 
 def test_score_is_lexicographic():
-    # hard 가 soft 레벨을 지배하고, soft0 > soft1 > soft2 순서로 우선한다
-    # (Score 는 사전식 문자열이 아니라 실제 레벨 비교로 노출된다).
+    # hard dominates the soft levels, and soft0 > soft1 > soft2 in priority
+    # (Score is exposed as a real level comparison, not a lexicographic string).
     solution = _solution(
         task_types=[ta.TaskType("T", base_duration=10, required_skills=["x"])],
         employees=[ta.Employee("e0", tasks=[0])],
         tasks=[ta.Task("1", task_type=0, customer=0)],
     )
     score = ta.calculate_score(solution)
-    assert score.hard == -1  # 스킬 "x" 없음
+    assert score.hard == -1  # lacks skill "x"
     assert not score.is_feasible()
     assert str(score) == "[-1]hard/[0/-1600/-40]soft"  # NONE x4: end 40

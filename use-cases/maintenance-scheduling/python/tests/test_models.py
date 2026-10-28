@@ -1,4 +1,4 @@
-"""pydantic 미러 검증: 직렬화 라운드트립과 엔진 <-> 모델 변환."""
+"""pydantic mirror checks: serialization round trip and engine <-> model conversion."""
 
 from datetime import date
 
@@ -56,7 +56,7 @@ def test_to_core_and_back():
 
     assert schedule.crew_count() == 2
     assert schedule.from_date == 18659
-    # job 1 은 (2021-02-02, crew "1") 로 배정되어 있다.
+    # job 1 is assigned to (2021-02-02, crew "1").
     assert schedule.job_start_date(0) == 18660
     assert schedule.crew_index_of(schedule.jobs[0].crew_date) == 0
     assert schedule.jobs[0].crew_date >= 0
@@ -71,7 +71,7 @@ def test_to_core_and_back():
     job = back.jobs[0]
     assert job.crew_id == "1"
     assert job.start_date == date(2021, 2, 2)
-    # end_date shadow: 화 + 3 business days = 금 (exclusive).
+    # end_date shadow: Tue + 3 business days = Fri (exclusive).
     assert job.end_date == date(2021, 2, 5)
     assert back.jobs[1].crew_id is None
     assert back.jobs[1].pinned
@@ -86,7 +86,7 @@ def test_to_core_rejects_bad_assignment():
         model.to_core()
 
     model = make_model()
-    model.jobs[0].start_date = date(2021, 2, 6)  # 토요일
+    model.jobs[0].start_date = date(2021, 2, 6)  # Saturday
     with pytest.raises(ValueError, match="not a weekday"):
         model.to_core()
 

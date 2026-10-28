@@ -2,7 +2,7 @@ from enum import IntEnum, StrEnum
 
 
 class Weekday(IntEnum):
-    """수업이 편성되는 요일. 값은 월요일=0 기준 인덱스."""
+    """Weekday a lesson is scheduled on. Values are indices with Monday = 0."""
 
     MON = 0
     TUE = 1
@@ -17,24 +17,24 @@ class Weekday(IntEnum):
 
 
 _WEEKDAY_LABELS: dict[Weekday, str] = {
-    Weekday.MON: "월",
-    Weekday.TUE: "화",
-    Weekday.WED: "수",
-    Weekday.THU: "목",
-    Weekday.FRI: "금",
-    Weekday.SAT: "토",
+    Weekday.MON: "Mon",
+    Weekday.TUE: "Tue",
+    Weekday.WED: "Wed",
+    Weekday.THU: "Thu",
+    Weekday.FRI: "Fri",
+    Weekday.SAT: "Sat",
 }
 
 
 class RoomType(StrEnum):
-    """특별실 종류. `Room.room_type` 은 문자열이므로 여기 없는 값도 그대로 쓸 수 있다."""
+    """Special-room types. `Room.room_type` is a string, so values not listed here work as well."""
 
-    HOMEROOM = "일반교실"
-    SCIENCE_LAB = "과학실"
-    COMPUTER_LAB = "컴퓨터실"
-    MUSIC_ROOM = "음악실"
-    ART_ROOM = "미술실"
-    GYM = "체육관"
-    LANGUAGE_LAB = "어학실"
-    HOME_ECONOMICS = "가사실"
-    TECH_LAB = "기술실"
+    HOMEROOM = "homeroom"
+    SCIENCE_LAB = "science lab"
+    COMPUTER_LAB = "computer lab"
+    MUSIC_ROOM = "music room"
+    ART_ROOM = "art room"
+    GYM = "gym"
+    LANGUAGE_LAB = "language lab"
+    HOME_ECONOMICS = "home economics room"
+    TECH_LAB = "tech room"

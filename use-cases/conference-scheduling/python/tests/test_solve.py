@@ -1,4 +1,4 @@
-"""데모 인스턴스 solve: feasible(hard 0) 도달 + 배정/핀 보존 검증."""
+"""Demo instance solve: reaches feasible (hard 0) and keeps assignments/pins."""
 
 import conference_scheduling as cs
 
@@ -9,13 +9,13 @@ def test_demo_data_shape():
     assert schedule.timeslot_count() == 6
     assert schedule.room_count() == 5
     assert len(schedule.speakers) == 12
-    # java.util.Random(0) 드로우 재현: S01 의 테마/콘텐츠 태그가 결정적이다.
+    # Reproduces the java.util.Random(0) draws: S01's theme/content tags are deterministic.
     assert schedule.talks[0].theme_track_tags[0] in ("Optimization", "AI", "Cloud")
     codes = [t.code for t in schedule.talks]
     assert codes[0] == "S01" and codes[-1] == "S15"
-    # S05 는 S02 를 선행 조건으로 가진다.
+    # S05 has S02 as a prerequisite.
     assert schedule.talks[4].prerequisite_talks == [1]
-    # S11 은 Recorded 방을 요구한다.
+    # S11 requires a Recorded room.
     assert schedule.talks[10].required_room_tags == ["Recorded"]
 
 
@@ -32,11 +32,11 @@ def test_demo_solve_feasible():
     assert schedule.score.hard == 0
     assert all(v >= 0 for v in schedule.assignment())
     assert best, "on_new_best should fire at least once"
-    # 최종 스코어는 full recompute 와 일치한다.
+    # The final score matches a full recompute.
     recomputed = cs.calculate_score(schedule)
     assert recomputed.hard == schedule.score.hard
     assert recomputed.soft == schedule.score.soft
-    # 타입 호환: Lab 토크는 Lab 슬롯/룸에만 있다 (synthetic hard 0 의 의미).
+    # Type compatibility: Lab talks sit only in Lab slots/rooms (what synthetic hard 0 means).
     b = cs.compute_breakdown(schedule)
     assert b.talk_type_compatibility == 0
     assert b.room_conflict == 0
@@ -66,9 +66,9 @@ def test_solve_config_mirror():
 
 
 def test_parallel_solver_count_workers():
-    """parallelSolverCount>1 은 엔진 내장 multiStart 가 아니라 도메인 레벨
-    팬아웃으로 처리된다 (restartSegments 구간 예산을 도메인이 몰기 때문).
-    워커별 solve 가 정상 종료하고 best 가 채택되는지 확인한다."""
+    """parallelSolverCount>1 is handled by a domain-level fan-out rather than the engine's
+    built-in multiStart (the domain drives the restartSegments budget). Checks that each
+    worker's solve ends normally and the best is adopted."""
     for workers in (2, 4):
         schedule = cs.demo_conference()
         cs.solve(

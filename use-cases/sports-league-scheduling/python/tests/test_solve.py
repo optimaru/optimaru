@@ -1,4 +1,4 @@
-"""고수준 solve() 검증: 데모 인스턴스가 feasible(hard 0)에 도달한다."""
+"""High-level solve() checks: the demo instance reaches feasible (hard 0)."""
 
 import pytest
 
@@ -19,7 +19,7 @@ def test_demo_solve_feasible():
     assert schedule.score.hard == 0
     assert all(m.round >= 0 for m in schedule.matches)
 
-    # hard 1 재확인: 어떤 팀도 같은 라운드에 두 경기를 뛰지 않는다.
+    # Re-check hard 1: no team plays two matches in the same round.
     seen: set[tuple[int, int]] = set()
     for m in schedule.matches:
         ri = schedule.rounds[m.round].index
@@ -27,7 +27,7 @@ def test_demo_solve_feasible():
             assert (team, ri) not in seen
             seen.add((team, ri))
 
-    # 풀린 결과도 pydantic 미러로 왕복된다.
+    # The solved result also round-trips through the pydantic mirror.
     model = LeagueScheduleModel.from_core(schedule)
     clone = LeagueScheduleModel.model_validate_json(model.model_dump_json())
     assert clone.to_core().assignment() == schedule.assignment()
@@ -54,15 +54,15 @@ def test_on_new_best_callback():
         random_seed=0,
         on_new_best=lambda step, score: bests.append((score.hard, score.soft)),
     )
-    assert bests, "on_new_best 가 한 번도 호출되지 않았다"
-    # best 점수는 단조 개선된다 (hard 우선 사전식).
+    assert bests, "on_new_best was never called"
+    # Best scores improve monotonically (lexicographic, hard first).
     assert bests == sorted(bests)
 
 
 def test_parallel_solver_count_workers():
-    """parallelSolverCount>1 은 엔진 내장 multiStart 가 아니라 워커별 단일
-    스타트로 팬아웃한다 (가이드 훅이 워커의 working solution/계산기에
-    바인딩되므로). 각 워커가 정상 종료하고 best 가 채택되는지 확인한다."""
+    """parallelSolverCount>1 fans out to single-start workers rather than the engine's
+    built-in multiStart (the guidance hooks bind to each worker's working solution/calculator).
+    Checks that each worker ends normally and the best is adopted."""
     for workers in (2, 4):
         schedule = sl.demo_schedule()
         sl.solve(

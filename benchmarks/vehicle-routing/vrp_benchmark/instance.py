@@ -14,7 +14,7 @@ from pathlib import Path
 
 # Augerat sets A/B/P with their optimum in the instance comment.
 ARCHIVE_URL = "https://www.hexaly.com/examples/cvrp.zip"
-ARCHIVE_SHA256 = "97dec11d7a05d915b07e2fef3caaa21a1760cfecc5db6874b63cc835657a9511"
+ARCHIVE_SHA256 = "8deedef8bee61002c0a8b3c176a6f8d41db8a9b283ef51f9411776ae850c2474"
 
 
 @dataclass(frozen=True)

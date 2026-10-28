@@ -1,5 +1,5 @@
-"""제약 스팟체크: full recompute (`calculate_score`/`compute_breakdown`) 를
-C++ 테스트의 손계산 케이스 일부와 대조한다."""
+"""Constraint spot checks: the full recompute (`calculate_score`/`compute_breakdown`)
+against some hand-computed cases of the C++ tests."""
 
 import sports_league as sl
 
@@ -11,7 +11,7 @@ def make_base(team_count: int, round_count: int, distance=None) -> "sl.LeagueSch
 
 
 def with_matches(schedule: "sl.LeagueSchedule", matches) -> "sl.LeagueSchedule":
-    # 리스트 속성 대입은 통째로만 가능하다 (원소 접근은 복사본).
+    # List attributes can only be assigned wholesale (element access returns copies).
     return sl.LeagueSchedule(schedule.teams, schedule.rounds, matches, schedule.distance_to_team)
 
 
@@ -25,7 +25,7 @@ def test_matches_on_same_day():
         [sl.Match("a", 0, 1, round=0), sl.Match("b", 0, 1, round=0), sl.Match("c", 0, 1)],
     )
     score = sl.calculate_score(s)
-    assert score.hard == -1  # 미배정 세 번째 경기는 기여하지 않는다
+    assert score.hard == -1  # the unassigned third match contributes nothing
     assert score.soft == 0
     assert sl.compute_breakdown(s).matches_on_same_day == 1
 
@@ -79,8 +79,8 @@ def test_classic_matches():
     teams = [sl.Team(str(t)) for t in range(4)]
     rounds = [sl.Round(0), sl.Round(1, weekend_or_holiday=True)]
     matches = [
-        sl.Match("a", 0, 1, classic_match=True, round=0),  # 평일: -1000
-        sl.Match("b", 2, 3, classic_match=True, round=1),  # 주말: 0
+        sl.Match("a", 0, 1, classic_match=True, round=0),  # weekday: -1000
+        sl.Match("b", 2, 3, classic_match=True, round=1),  # weekend: 0
     ]
     s = sl.LeagueSchedule(teams, rounds, matches)
     score = sl.calculate_score(s)
@@ -95,6 +95,6 @@ def test_demo_schedule_shape():
     assert s.round_count() == 32
     assert s.match_count() == 14 * 13
     classic = sum(1 for m in s.matches if m.classic_match)
-    # 9개 추첨 + 대칭 폐포 (java.util.Random(0) 재현으로 결정론).
+    # 9 drawn + symmetric closure (deterministic via the java.util.Random(0) reproduction).
     assert classic == 18
     assert all(m.round == -1 for m in s.matches)

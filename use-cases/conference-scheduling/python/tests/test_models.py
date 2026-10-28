@@ -1,4 +1,4 @@
-"""pydantic 미러 직렬화 round-trip 검증."""
+"""Round-trip check of the pydantic mirror serialization."""
 
 import conference_scheduling as cs
 from conference_scheduling.models import ConferenceScheduleModel, SolveConfig
@@ -6,7 +6,7 @@ from conference_scheduling.models import ConferenceScheduleModel, SolveConfig
 
 def test_roundtrip_preserves_score_semantics():
     schedule = cs.demo_conference()
-    # 일부만 배정된 상태도 그대로 살아남아야 한다.
+    # A partially assigned state must survive as well.
     assignment = [-1] * schedule.talk_count()
     assignment[0] = schedule.slot_room_of(0, 4)
     assignment[2] = schedule.slot_room_of(1, 0)

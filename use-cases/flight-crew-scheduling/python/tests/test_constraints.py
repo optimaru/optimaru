@@ -1,4 +1,4 @@
-"""제약 스팟체크: calculate_score 가 Java ConstraintProvider 의미론과 일치."""
+"""Constraint spot checks: calculate_score matches the Java ConstraintProvider semantics."""
 
 import flight_crew as fc
 
@@ -21,7 +21,7 @@ def _with(schedule: fc.FlightCrewSchedule, flights, assignments) -> fc.FlightCre
 
 
 def test_required_skill():
-    # Java requiredSkill 테스트: 스킬 불일치 -100 (+ 마지막 배정 홈 미도착 -1000).
+    # Java requiredSkill test: skill mismatch -100 (+ last assignment not arriving home -1000).
     s = _base()
     s = _with(s, [(0, 0, 1, 60)], [(0, 0, "1")])
     score = fc.calculate_score(s)
@@ -31,21 +31,21 @@ def test_required_skill():
 
 
 def test_flight_conflict():
-    # Java flightConflict 테스트: [0,10) x [1,11) 겹침 -> -10 (홈 왕복이라 soft 0).
+    # Java flightConflict test: [0,10) x [1,11) overlap -> -10 (a home round trip, so soft 0).
     s = _base()
     s = _with(s, [(0, 0, 0, 10), (0, 1, 0, 11)], [(0, 0, "Pilot"), (1, 0, "Pilot")])
     score = fc.calculate_score(s)
     assert (score.hard, score.soft) == (-10, 0)
-    # 맞닿기만 하면([0,10) 뒤 [10,20)) 겹침이 아니다.
+    # Merely touching ([10,20) after [0,10)) is not an overlap.
     s = _base()
     s = _with(s, [(0, 0, 0, 10), (0, 10, 0, 20)], [(0, 0, "Pilot"), (1, 0, "Pilot")])
     assert fc.calculate_score(s).hard == 0
 
 
 def test_transfer_between_two_flights():
-    # Java transferBetweenTwoFlights 테스트: 출발 0, 11, 13 의 0->1 세 편
-    # -> 연속 쌍 (1,2), (2,3) 둘 다 공항이 안 이어져 -2
-    # (+ 마지막 배정 홈 미도착 -1000).
+    # Java transferBetweenTwoFlights test: three 0->1 flights departing 0, 11, 13
+    # -> consecutive pairs (1,2), (2,3) both disconnected: -2
+    # (+ last assignment not arriving home -1000).
     s = _base()
     s = _with(
         s,
@@ -54,7 +54,7 @@ def test_transfer_between_two_flights():
     )
     score = fc.calculate_score(s)
     assert (score.hard, score.soft) == (-2, -1000)
-    # 이어지는 체인 0->1, 1->0 은 무벌점.
+    # A connected chain 0->1, 1->0 has no penalty.
     s = _base()
     s = _with(s, [(0, 0, 1, 10), (1, 20, 0, 30)], [(0, 0, "Pilot"), (1, 0, "Pilot")])
     score = fc.calculate_score(s)
@@ -62,7 +62,7 @@ def test_transfer_between_two_flights():
 
 
 def test_employee_unavailability():
-    # Java employeeUnavailability 테스트: 출발일/비행 중 불가 -10, 하루 뒤는 0.
+    # Java employeeUnavailability test: unavailable on the departure day/in flight -10, a day later 0.
     day = 5
     for dep_day, expected in ((5, -10), (4, -10), (6, 0)):
         airports = [fc.Airport("A0")]
@@ -75,9 +75,9 @@ def test_employee_unavailability():
 
 
 def test_first_last_not_home():
-    # Java lastAssignmentNotArrivingAtHome 테스트: 직원0(홈0) 1->2, 2->3
-    # (첫 배정 홈 미출발 -1000, 마지막 홈 미도착 -1000); 직원1(홈1) 1->2,
-    # 2->1 은 무벌점.
+    # Java lastAssignmentNotArrivingAtHome test: employee 0 (home 0) 1->2, 2->3
+    # (first assignment not departing home -1000, last not arriving home -1000); employee 1
+    # (home 1) 1->2, 2->1 has no penalty.
     airports = [fc.Airport(f"A{i}") for i in range(4)]
     employees = [
         fc.Employee("1", "E0", 0, ["Pilot"], set()),

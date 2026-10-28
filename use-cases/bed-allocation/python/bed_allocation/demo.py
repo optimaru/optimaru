@@ -1,9 +1,10 @@
-"""Java quickstart `DemoDataGenerator` 의 Python 재현.
+"""Python reproduction of the Java quickstart `DemoDataGenerator`.
 
-같은 규모/분포의 데모 인스턴스를 만든다: 부서 1개(전문과목 3개), SAME_GENDER
-병실 10개(정원 8x1 + 1x2 + 1x3 = 병상 13), 28박, 병실 타임라인당 순차 재원
-~75건 (성별 50/50, 연령 버킷, 선호 정원, 필수/선호 장비 분포). Java 의
-java.util.Random 스트림까지 재현하지는 않는다 — 분포와 규모가 기준이다.
+Builds a demo instance of the same scale and distributions: 1 department (3 specialties),
+10 SAME_GENDER rooms (capacity 8x1 + 1x2 + 1x3 = 13 beds), 28 nights, ~75 sequential
+stays per room timeline (gender 50/50, age buckets, preferred capacity, required/preferred
+equipment distributions). Java's java.util.Random stream is not reproduced — distributions
+and scale are the reference.
 """
 
 import random
@@ -16,12 +17,12 @@ __all__ = ["generate_demo_data"]
 SPECIALTIES = ("Specialty1", "Specialty2", "Specialty3")
 EQUIPMENT_TYPES = ("telemetry", "television", "oxygen", "nitrogen")
 
-# 재현성을 위한 고정 기준일 (Java 는 이번 달 첫 월요일을 쓴다).
+# Fixed reference date for reproducibility (Java uses the first Monday of the current month).
 BASE_DATE = date(2026, 8, 3)
 
 
 def _draw_index(rng: random.Random, cumulative: list[float]) -> int:
-    """단위 난수 하나로 누적 분포표의 인덱스를 뽑는다 (Java 의 Pair 테이블)."""
+    """Pick an index from a cumulative distribution table with one unit random draw (Java's Pair table)."""
     draw = rng.random()
     for i, threshold in enumerate(cumulative):
         if draw <= threshold:
@@ -39,7 +40,7 @@ def _distinct_equipment(rng: random.Random, cumulative: list[float], count: int)
 
 
 def generate_demo_data(seed: int = 0) -> BedPlanModel:
-    """데모 `BedPlanModel` 을 만든다 (bed_id 는 전부 None — 풀기 전 상태)."""
+    """Build the demo `BedPlanModel` (every bed_id None — the unsolved state)."""
     rng = random.Random(seed)
 
     departments = [
@@ -50,7 +51,7 @@ def generate_demo_data(seed: int = 0) -> BedPlanModel:
         )
     ]
 
-    # 병실 10개, 전부 SAME_GENDER; 정원 80% -> 1, 10% -> 2, 10% -> 3.
+    # 10 rooms, all SAME_GENDER; capacity 80% -> 1, 10% -> 2, 10% -> 3.
     room_count = 10
     capacities = [1] * 8 + [2, 3]
     rng.shuffle(capacities)
@@ -64,7 +65,7 @@ def generate_demo_data(seed: int = 0) -> BedPlanModel:
         )
         for r in range(room_count)
     ]
-    # 76% 의 병실에 장비: 개수 분포 11% 1개 / 16% 2개 / 42% 3개 / 31% 4개.
+    # Equipment in 76% of rooms: count distribution 11% one / 16% two / 42% three / 31% four.
     for room in rng.sample(rooms, int(0.76 * room_count)):
         equipment_count = _draw_index(rng, [0.11, 0.27, 0.69, 1.0]) + 1
         room.equipment = rng.sample(EQUIPMENT_TYPES, equipment_count)
@@ -75,8 +76,8 @@ def generate_demo_data(seed: int = 0) -> BedPlanModel:
         for i in range(room.capacity)
     ]
 
-    # 재원: 병실 타임라인마다 28박(일 0..27)을 순차 재원으로 채운다.
-    # 길이 5% 1박 / 25% 2박 / 65% 3박 / 5% 4박, 재원 사이 1일 공백.
+    # Stays: fill 28 nights (days 0..27) per room timeline with sequential stays.
+    # Length 5% 1 night / 25% 2 / 65% 3 / 5% 4, with a 1-day gap between stays.
     last_day = 27
     stays: list[StayModel] = []
     for _ in range(room_count):
@@ -125,7 +126,7 @@ def _draw_age(rng: random.Random) -> int:
 
 
 def _draw_required(rng: random.Random) -> list[str]:
-    """필수 장비: 12% 없음 / 47% 1개 / 41% 2개."""
+    """Required equipment: 12% none / 47% one / 41% two."""
     count = _draw_index(rng, [0.12, 0.59, 1.0])
     if count == 0:
         return []
@@ -135,6 +136,6 @@ def _draw_required(rng: random.Random) -> list[str]:
 
 
 def _draw_preferred(rng: random.Random) -> list[str]:
-    """선호 장비: 29% 1개 / 53% 2개 / 16% 3개 / 2% 4개."""
+    """Preferred equipment: 29% one / 53% two / 16% three / 2% four."""
     count = _draw_index(rng, [0.29, 0.82, 0.98, 1.0]) + 1
     return _distinct_equipment(rng, [0.32, 0.62, 0.90, 1.0], count)

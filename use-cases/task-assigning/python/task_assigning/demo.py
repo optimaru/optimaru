@@ -1,5 +1,5 @@
-"""Java quickstart 의 DemoDataGenerator 재현: task type 4, customer 4,
-employee 8, task 28 인스턴스를 pydantic 모델로 돌려준다."""
+"""Reproduction of the Java quickstart DemoDataGenerator: returns a 4 task type, 4 customer,
+8 employee, 28 task instance as a pydantic model."""
 
 from .models import CustomerModel, EmployeeModel, TaskAssigningSolutionModel, TaskModel, TaskTypeModel
 
@@ -57,7 +57,7 @@ _EMPLOYEES = [
 ]
 
 # (task_type_code, index_in_task_type, customer_id, priority) — Java
-# DemoDataGenerator.generateTasks 의 28건, 같은 순서 (id 1..28).
+# The 28 tasks of DemoDataGenerator.generateTasks, in the same order (ids 1..28).
 _TASKS = [
     ("SV", 1, "2", "MINOR"),
     ("AL", 1, "4", "MAJOR"),
@@ -91,7 +91,7 @@ _TASKS = [
 
 
 def generate_demo_data() -> TaskAssigningSolutionModel:
-    """Java DemoDataGenerator 와 같은 데모 인스턴스 (전 태스크 미배정)."""
+    """The same demo instance as Java DemoDataGenerator (every task unassigned)."""
     return TaskAssigningSolutionModel(
         task_types=[
             TaskTypeModel(code=code, title=title, base_duration=duration, required_skills=skills)

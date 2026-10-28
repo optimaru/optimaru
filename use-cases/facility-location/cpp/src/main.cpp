@@ -82,7 +82,7 @@ void printSummary(const FacilityLocationProblem &problem)
             ++consumerCnt[consumer.facility];
         }
     }
-    std::printf("  사용 시설 (%d/%d):\n",
+    std::printf("  facilities used (%d/%d):\n",
                 problem.usedFacilityCount(),
                 problem.facilityCount());
     for (std::size_t f = 0; f < problem.facilities.size(); ++f)
@@ -90,17 +90,17 @@ void printSummary(const FacilityLocationProblem &problem)
         if (consumerCnt[f] == 0)
             continue;
         const Facility &facility = problem.facilities[f];
-        std::printf("    시설 %-3s 설치비 $%-6lld 용량 %lld/%lld  수요처 %d\n",
+        std::printf("    facility %-3s setup $%-6lld capacity %lld/%lld  consumers %d\n",
                     facility.id.c_str(),
                     static_cast<long long>(facility.setupCost),
                     static_cast<long long>(usedDemand[f]),
                     static_cast<long long>(facility.capacity),
                     consumerCnt[f]);
     }
-    std::printf("\n  총 설치비: $%lld (전체 시설 잠재 비용 $%lld)\n",
+    std::printf("\n  total setup cost: $%lld (all facilities would cost $%lld)\n",
                 static_cast<long long>(problem.totalCost()),
                 static_cast<long long>(problem.potentialCost()));
-    std::printf("  총 이동 거리: %lld km\n",
+    std::printf("  total travel distance: %lld km\n",
                 static_cast<long long>(problem.totalDistanceMeters() / 1000));
 }
 
@@ -111,8 +111,8 @@ int main(int argc, char **argv)
     const int seconds = (argc > 1) ? std::atoi(argv[1]) : 10;
 
     FacilityLocationProblem problem = buildDemoProblem();
-    std::printf("== 설비 입지 데모 (시설 %d개 x 용량 %lld, 수요처 %d개 x 수요 "
-                "%lld, %d초) ==\n",
+    std::printf("== facility location demo (%d facilities x capacity %lld, %d consumers x demand "
+                "%lld, %d s) ==\n",
                 problem.facilityCount(),
                 static_cast<long long>(kTotalCapacity / kFacilityCount),
                 problem.consumerCount(),
@@ -142,14 +142,14 @@ int main(int argc, char **argv)
         if (!consumer.isAssigned())
             allAssigned = false;
     }
-    std::printf("\n  전 수요처 배정: %s\n", allAssigned ? "OK" : "FAIL");
+    std::printf("\n  all consumers assigned: %s\n", allAssigned ? "OK" : "FAIL");
 
     if (problem.score.hard == 0 && allAssigned)
     {
-        std::printf("  hard 0 도달: OK\n");
+        std::printf("  reached hard 0: OK\n");
         return 0;
     }
-    std::printf("  hard 0 도달 실패 (hard=%lld)\n",
+    std::printf("  failed to reach hard 0 (hard=%lld)\n",
                 static_cast<long long>(problem.score.hard));
     return 1;
 }

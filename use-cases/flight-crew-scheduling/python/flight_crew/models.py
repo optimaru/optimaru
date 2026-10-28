@@ -1,18 +1,18 @@
-"""엔진 도메인의 pydantic v2 미러 — JSON 직렬화/역직렬화용.
+"""Pydantic v2 mirror of the engine domain — for JSON serialization/deserialization.
 
-`_core` 의 Airport/Employee/Flight/FlightAssignment/FlightCrewSchedule 과
-SolverConfig 를 1:1 로 미러링하되, 참조는 인덱스 대신 Java quickstart 처럼
-식별자(공항 code, 항공편 flight_number, 승무원 id)로 표현하고, 시각은
-`datetime`(naive == UTC), 날짜는 `date` 로 표현한다. 엔진 쪽 단위는 Unix
-epoch 기준 분(minute)/일(day) 인덱스다::
+Mirrors `_core`'s Airport/Employee/Flight/FlightAssignment/FlightCrewSchedule and
+SolverConfig 1:1, but like the Java quickstart, references are identifiers instead of
+indices (airport code, flight flight_number, employee id), times are
+`datetime` (naive == UTC) and dates are `date`. The engine-side units are minute/day
+indices from the Unix epoch::
 
     from flight_crew.models import FlightCrewScheduleModel
 
     model = FlightCrewScheduleModel.model_validate(problem_dict)
-    schedule = model.to_core()                    # pydantic -> 엔진
-    solved = FlightCrewScheduleModel.from_core(schedule)  # 엔진 -> pydantic
+    schedule = model.to_core()                    # pydantic -> engine
+    solved = FlightCrewScheduleModel.from_core(schedule)  # engine -> pydantic
 
-`pydantic` 은 선택 의존성이다 (`pip install flight_crew[models]`).
+`pydantic` is an optional dependency (`pip install flight_crew[models]`).
 """
 
 from datetime import date, datetime, timedelta, timezone
@@ -37,14 +37,14 @@ _EPOCH_DATETIME = datetime(1970, 1, 1)
 
 
 def datetime_to_minutes(value: datetime) -> int:
-    """naive(=UTC) 또는 tz-aware datetime -> epoch 기준 분."""
+    """naive (=UTC) or tz-aware datetime -> minutes from the epoch."""
     if value.tzinfo is not None:
         value = value.astimezone(timezone.utc).replace(tzinfo=None)
     return int((value - _EPOCH_DATETIME) // timedelta(minutes=1))
 
 
 def minutes_to_datetime(minutes: int) -> datetime:
-    """epoch 기준 분 -> naive(=UTC) datetime."""
+    """minutes from the epoch -> naive (=UTC) datetime."""
     return _EPOCH_DATETIME + timedelta(minutes=minutes)
 
 
@@ -57,7 +57,7 @@ def _day_to_date(day: int) -> date:
 
 
 class AirportModel(BaseModel):
-    """공항. code(IATA)가 식별자다."""
+    """An airport. code (IATA) is the identifier."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -68,7 +68,7 @@ class AirportModel(BaseModel):
 
 
 class EmployeeModel(BaseModel):
-    """승무원(value range). home_airport 는 공항 code 참조."""
+    """A crew member (value range). home_airport references an airport code."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -80,7 +80,7 @@ class EmployeeModel(BaseModel):
 
 
 class FlightModel(BaseModel):
-    """항공편. 시각은 UTC (naive datetime == UTC 로 해석)."""
+    """A flight. Times are UTC (a naive datetime is read as UTC)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -92,8 +92,8 @@ class FlightModel(BaseModel):
 
 
 class FlightAssignmentModel(BaseModel):
-    """planning entity: 항공편의 승무원 좌석 하나. employee 가 planning
-    variable (None == 미배정, 승무원 id 참조)."""
+    """Planning entity: one crew seat of a flight. employee is the planning
+    variable (None == unassigned; references a crew member id)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -106,7 +106,7 @@ class FlightAssignmentModel(BaseModel):
 
 
 class FlightCrewScheduleModel(BaseModel):
-    """planning solution 미러. score 는 읽기 전용 결과라 별도 필드로 둔다."""
+    """Planning solution mirror. score is a read-only result, kept as a separate field."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -130,7 +130,7 @@ class FlightCrewScheduleModel(BaseModel):
         return self
 
     def to_core(self) -> "_core.FlightCrewSchedule":
-        """pydantic -> 엔진 객체 (score 필드는 엔진이 다시 계산하므로 무시)."""
+        """pydantic -> engine object (the score field is ignored; the engine recomputes it)."""
         airport_index = {a.code: i for i, a in enumerate(self.airports)}
         employee_index = {e.id: i for i, e in enumerate(self.employees)}
         flight_index = {f.flight_number: i for i, f in enumerate(self.flights)}
@@ -185,7 +185,7 @@ class FlightCrewScheduleModel(BaseModel):
 
     @classmethod
     def from_core(cls, schedule: "_core.FlightCrewSchedule") -> "FlightCrewScheduleModel":
-        """엔진 객체 -> pydantic (현재 배정과 score 포함)."""
+        """engine object -> pydantic (including the current assignment and score)."""
         return cls(
             airports=[
                 AirportModel(code=a.code, name=a.name, latitude=a.latitude, longitude=a.longitude)
@@ -228,14 +228,14 @@ class FlightCrewScheduleModel(BaseModel):
 
 
 class SolveConfig(BaseModel):
-    """`_core.SolverConfig` 의 직렬화 가능한 미러."""
+    """Serializable mirror of `_core.SolverConfig`."""
 
     model_config = ConfigDict(extra="forbid")
 
     time_limit_seconds: float = Field(default=30.0, ge=0)
     random_seed: int = 0
     parallel_solver_count: int = Field(default=1, ge=1)
-    # 0 = 자동 (clamp(4 * 좌석 수, 400, 3200)). 양수를 주면 그 값을 쓴다.
+    # 0 = automatic (clamp(4 * seats, 400, 3200)). A positive value is used as-is.
     late_acceptance_size: int = Field(default=0, ge=0)
     stop_at_first_feasible: bool = False
     best_score_limit: tuple[int, float] | None = None
@@ -271,7 +271,7 @@ class SolveConfig(BaseModel):
         cfg.spent_limit_seconds = self.time_limit_seconds
         cfg.random_seed = self.random_seed
         cfg.parallel_solver_count = self.parallel_solver_count
-        cfg.late_acceptance_size = self.late_acceptance_size  # 0 = 자동
+        cfg.late_acceptance_size = self.late_acceptance_size  # 0 = auto
         cfg.unimproved_spent_limit_seconds = self.unimproved_spent_limit_seconds
         cfg.step_count_limit = self.step_count_limit
         cfg.unimproved_step_count_limit = self.unimproved_step_count_limit

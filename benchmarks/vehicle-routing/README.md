@@ -7,7 +7,7 @@ widely used open-source solvers on the classic capacitated VRP:
 | --- | --- | --- |
 | `engine` | optimaru, `vrp_routing` | default configuration, 1 worker |
 | `ortools` | [Google OR-Tools](https://developers.google.com/optimization/routing) Routing solver (`pywrapcp`) | PATH_CHEAPEST_ARC + guided local search, the library's recommended VRP setup |
-| `timefold` | [Timefold Solver](https://github.com/TimefoldAI/timefold-solver) open-source edition, 2.7.1 | default configuration (construction heuristic + local search), Constraint Streams, list variable |
+| `timefold` | [Timefold Solver](https://github.com/TimefoldAI/timefold-solver) open-source edition, 2.6.0 | default configuration (construction heuristic + local search), Constraint Streams, list variable |
 
 OR-Tools and Timefold live here only; they are not part of the use case.
 
@@ -79,18 +79,20 @@ timefold/               Maven project: Timefold CVRP model and a main that reads
 tests/
 ```
 
-## Sample result
+## Results
 
-One median instance per bucket, 10 s per run, seed 0, Apple Silicon macOS
-(2026-10-29). A short local smoke run, not a published comparison:
+One median instance per bucket, 30 s per run, seed 0, single-threaded, one
+Apple Silicon Mac (16 cores), 2026-10-29. Timefold Solver 2.6.0 (open source,
+default configuration). Gap to the best-known solution; every route is
+re-verified by the harness. Single runs — a snapshot, not a statistical study.
 
 | Instance | Customers | engine | ortools | timefold |
 |---|---:|---:|---:|---:|
-| X-n153-k22 | 152 | 1.46% | 1 unassigned | 4.86% |
-| X-n289-k60 | 288 | 3.02% | 2 unassigned | 25.70% |
-| X-n491-k59 | 490 | 2.27% | 9.39% | 73.81% |
-| X-n701-k44 | 700 | 2.26% | 8.94% | 78.82% |
-| X-n895-k37 | 894 | 6.08% | 5 unassigned | 289.34% |
+| X-n153-k22 | 152 | **1.25%** | 1 unassigned | 2.35% |
+| X-n289-k60 | 288 | **2.58%** | 2 unassigned | 9.19% |
+| X-n491-k59 | 490 | **2.07%** | 9.39% | 48.97% |
+| X-n701-k44 | 700 | **1.92%** | 8.94% | 60.18% |
+| X-n895-k37 | 894 | **5.52%** | 5 unassigned | 255.43% |
 
 Nearby selection, which Timefold recommends for routing at this scale, is
 not part of its open-source edition, so the `timefold` column runs without

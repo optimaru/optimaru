@@ -1,40 +1,40 @@
-"""Food packaging — Timefold engine 기반 C++ 솔버의 Python 래퍼.
+"""Food packaging — Python wrapper of the C++ solver on the optimaru engine.
 
-Timefold quickstart `food-packaging` 의 포트다: 포장 작업(Job)을 생산 라인
-(Line)에 순서대로 배정한다. Java 도메인의 Line.jobs
-(@PlanningListVariable, allowsUnassignedValues=true)는 엔진의 LIST 변수로
-1:1 매핑되고, "미배정"은 엔진에 추가로 노출되는 unassigned pool 리스트로
-표현된다. Java 의 shadow 변수 체인은 리스트 위치에서 파생된다::
+A port of the Timefold quickstart `food-packaging`: assigns packaging jobs (Job) to
+production lines (Line) in order. The Java domain's Line.jobs
+(@PlanningListVariable, allowsUnassignedValues=true) maps 1:1 onto the engine's LIST
+variable, and "unassigned" is an extra unassigned pool list exposed to the engine.
+Java's shadow variable chain is derived from list positions::
 
-    startCleaning(첫 작업)  = line.start          # 청소 구간 길이 0
-    startCleaning(그 외)    = 직전 작업의 end
-    startProduction         = startCleaning + cleanup(직전 제품 -> 제품)
+    startCleaning(first job)  = line.start          # zero-length cleaning window
+    startCleaning(otherwise)  = end of the previous job
+    startProduction           = startCleaning + cleanup(previous product -> product)
     end                     = startProduction + duration
 
-Java 의 두 번째 planning variable 인 Line.operator 는 (엔진이 해 하나당
-변수 모델 1개만 지원하므로) 솔버 래퍼가 엔진 레그 사이에 힐클라이밍으로
-재배정하는 교대 방식으로 최적화된다. operator >= line 이면 단사 배정으로
-충돌 제약이 항상 0 이라 한 번의 엔진 실행과 완전히 동치다.
+Java's second planning variable, Line.operator, is optimized by alternation: the solver
+wrapper reassigns it by hill climbing between engine legs (the engine supports one
+variable model per solution). With operators >= lines the assignment is injective and
+the conflict constraint is always 0, so it is exactly equivalent to one engine run.
 
-시간은 공통 기준으로부터의 "분"(int64)으로 주고받는다 (데모 인스턴스는
-월요일 00:00 == 0분; pydantic 미러 `food_packaging.models` 는 epoch 분과
-`datetime.datetime` 을 변환한다).
+Times are exchanged as "minutes" (int64) from a shared origin (the demo instance has
+Monday 00:00 == minute 0; the pydantic mirror `food_packaging.models` converts between
+epoch minutes and `datetime.datetime`).
 
-제약 (Java 는 HardMediumSoftScore; 엔진 HardSoftScore 로의 매핑은
-engine.soft = medium * 10^10 + soft, 순위 보존은 |soft| < 10^10 그리고
-|medium| < 9*10^5 일 때 정확):
-  hard   1. maxEndDateTime           maxEndTime 초과 분만큼 -1
-  hard   2. operatorCleaningConflict 같은 operator 라인의 청소 구간
-                                     [startCleaning, startProduction) 이
-                                     겹치는 작업쌍마다 -겹친 분
-  medium 3. idealEndDateTime         idealEndTime 초과 분만큼 -1
-  medium 4. maximizeJobsAssigned     미배정 작업마다 -duration 분
-  soft   5. minimizeMakespan         라인 마지막 작업마다 -(end - line
-                                     start)^2
-(minStartTime 과 priority 는 Java 와 동일하게 어떤 제약도 읽지 않는
-데이터 필드다.)
+Constraints (Java uses HardMediumSoftScore; the mapping onto engine HardSoftScore is
+engine.soft = medium * 10^10 + soft, and the order is preserved exactly while
+|soft| < 10^10 and |medium| < 9*10^5):
+  hard   1. maxEndDateTime           -1 per minute past maxEndTime
+  hard   2. operatorCleaningConflict for job pairs on lines of the same operator whose
+                                     cleaning windows [startCleaning, startProduction)
+                                     overlap, -overlapping minutes
+  medium 3. idealEndDateTime         -1 per minute past idealEndTime
+  medium 4. maximizeJobsAssigned     -duration minutes per unassigned job
+  soft   5. minimizeMakespan         -(end - line start)^2 per last job
+                                     of a line
+(minStartTime and priority are data fields no constraint reads, the same as in
+Java.)
 
-사용::
+Usage::
 
     import food_packaging as fp
 
@@ -94,16 +94,16 @@ def solve(
     config: SolverConfig | None = None,
     constraints=None,
 ) -> PackagingSchedule:
-    """`PackagingSchedule` 을 in place 로 풀고 그대로 돌려주는 고수준 API.
+    """High-level API that solves a `PackagingSchedule` in place and returns it.
 
-    ``config`` 가 기본 설정이 된다 (None 이면 엔진 기본값: 30초 예산, ALNS
-    켜짐). 명시한 키워드 인자가 config 위에 덮어쓴다.
-    ``stop_at_first_feasible`` 은 hard 0 에 도달하는 즉시 종료한다
+    ``config`` becomes the base settings (None = engine defaults: 30 s budget, ALNS
+    on). Explicit keyword arguments override config.
+    ``stop_at_first_feasible`` stops as soon as hard 0 is reached
     (best_score_limit=(0, -1e18)).
 
-    ``constraints`` 로 비용 함수를 직접 고를 수 있다
-    (`food_packaging.constraints` 참고). 준 목록의 제약만 채점되고, None
-    이면 기본 다섯 제약 전부를 쓴다::
+    ``constraints`` picks the cost function directly
+    (see `food_packaging.constraints`). Only the listed constraints are scored; None
+    uses all five default constraints::
 
         from food_packaging.constraints import get_constraints
         fp.solve(schedule, constraints=get_constraints())

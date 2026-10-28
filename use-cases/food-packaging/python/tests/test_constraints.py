@@ -1,15 +1,15 @@
-"""제약 스팟체크: C++ 테스트의 손계산 케이스를 _core 로 재검증한다."""
+"""Constraint spot checks: re-verifies the hand-computed cases of the C++ tests through _core."""
 
 import pytest
 
 import food_packaging as fp
 
 BIG = 1_000_000_000
-PA_S, PA_L, PB = 0, 1, 2  # Java 테스트의 제품 3종 (A large 는 행렬 유지용)
+PA_S, PA_L, PB = 0, 1, 2  # the three products of the Java test (A large keeps the matrix shape)
 
 
 def make_schedule(operator_count, lines, loose_jobs=(), pooled_jobs=()):
-    """Java ConstraintProviderTest 의 제품/청소 행렬로 스케줄을 만든다.
+    """Build a schedule with the product/cleaning matrix of Java ConstraintProviderTest.
 
     lines: [(operator_index, [(product, duration, ideal_end, max_end), ...])]
     """
@@ -39,14 +39,14 @@ def make_schedule(operator_count, lines, loose_jobs=(), pooled_jobs=()):
 
 
 def test_max_end_date_time():
-    # J1 은 200 에 딱 맞게, J2 는 350 에 끝나 maxEnd 250 대비 100분 지각.
+    # J1 fits 200 exactly; J2 ends at 350, 100 minutes late against maxEnd 250.
     schedule = make_schedule(1, [(0, [(PA_S, 200, BIG, 200), (PA_S, 150, BIG, 250)])])
     assert fp.calculate_score(schedule) == fp.Score(-100, 0, -(350 * 350))
     assert fp.analyze(schedule).max_end_date_time == 100
 
 
 def test_cleanup_chain_shadows():
-    # B -> A small 청소 60분: J1 은 [100,160) 청소 후 160..260 생산.
+    # B -> A small cleaning 60 minutes: J1 cleans [100,160) then produces 160..260.
     schedule = make_schedule(1, [(0, [(PB, 100, BIG, BIG), (PA_S, 100, BIG, BIG)])])
     schedule.update_shadow_variables()
     j1 = schedule.jobs[1]
@@ -57,7 +57,7 @@ def test_cleanup_chain_shadows():
 
 
 def test_operator_cleaning_conflict():
-    # 라인 0/1 이 operator 0 공유: 청소 구간 [10,70) 과 [30,90) 이 40분 겹침.
+    # Lines 0/1 share operator 0: cleaning windows [10,70) and [30,90) overlap 40 minutes.
     schedule = make_schedule(
         2,
         [
@@ -72,7 +72,7 @@ def test_operator_cleaning_conflict():
 
 
 def test_maximize_jobs_assigned():
-    # 루즈 작업(리스트 밖)과 풀에 담긴 작업 모두 미배정으로 계산된다.
+    # Both loose jobs (outside any list) and jobs in the pool count as unassigned.
     schedule = make_schedule(
         1,
         [(0, [(PA_S, 100, BIG, BIG)])],
@@ -83,7 +83,7 @@ def test_maximize_jobs_assigned():
 
 
 def test_minimize_makespan():
-    # 라인 0: 100분. 라인 1: 200 + 청소 40 + 1000 = 1240 에 종료.
+    # Line 0: 100 minutes. Line 1: ends at 200 + cleaning 40 + 1000 = 1240.
     schedule = make_schedule(
         2,
         [(0, [(PA_S, 100, BIG, BIG)]), (1, [(PA_S, 200, BIG, BIG), (PB, 1000, BIG, BIG)])],
@@ -95,14 +95,14 @@ def test_minimize_makespan():
 def test_missing_cleanup_raises_like_java():
     schedule = make_schedule(1, [(0, [(PB, 100, BIG, BIG), (PA_S, 100, BIG, BIG)])])
     cleanup = schedule.cleanup_minutes
-    cleanup[PB * 3 + PA_S] = -1  # 항목 제거 (Java: map 에 키 없음)
+    cleanup[PB * 3 + PA_S] = -1  # remove the entry (Java: key missing from the map)
     schedule.cleanup_minutes = cleanup
     with pytest.raises(ValueError, match="Cleanup duration"):
         fp.calculate_score(schedule)
 
 
 def test_operator_helpers():
-    # 라인 0/1 공유 청소 구간이 58분 겹침; 힐클라임이 분리해 0 으로.
+    # The shared cleaning windows of lines 0/1 overlap 58 minutes; hill climbing separates them to 0.
     schedule = make_schedule(
         2,
         [

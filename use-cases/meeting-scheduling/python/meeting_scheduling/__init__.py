@@ -1,22 +1,22 @@
-"""Meeting scheduling — Timefold engine 기반 C++ 솔버의 Python 래퍼.
+"""Meeting scheduling — Python wrapper of the C++ solver on the optimaru engine.
 
-Java quickstart "meeting-scheduling" 의 포팅이다: 미팅에 시작 타임그레인
-(15분 단위)과 회의실을 배정한다. Java 엔티티의 planning variable 두 개
-(startingTimeGrain, room)는 합성 인코딩 ``grain_room = time_grain_pos *
-room_count + room_index`` 로 하나의 BASIC 변수가 된다 (-1 == 미배정).
-제약은 Java ConstraintProvider 와 동일 의미론 (하드 5 + medium 2 + soft 5;
-HardMediumSoftScore 는 ``soft = -(medium * MEDIUM_SCALE + raw soft)`` 로
-접는다, MEDIUM_SCALE == 1e6)::
+A port of the Java quickstart "meeting-scheduling": assigns meetings a starting time
+grain (15-minute units) and a room. The Java entity's two planning variables
+(startingTimeGrain, room) become one BASIC variable via the composite encoding
+``grain_room = time_grain_pos * room_count + room_index`` (-1 == unassigned).
+Constraints have the same semantics as the Java ConstraintProvider (5 hard + 2 medium +
+5 soft; HardMediumSoftScore is folded as ``soft = -(medium * MEDIUM_SCALE + raw soft)``,
+MEDIUM_SCALE == 1e6)::
 
     import meeting_scheduling as ms
 
-    schedule = ms.demo_data()  # Java DemoDataGenerator 재현 (미팅 24개)
+    schedule = ms.demo_data()  # reproduces Java DemoDataGenerator (24 meetings)
     result = ms.solve(schedule, time_limit_seconds=10.0, random_seed=42)
     print(result.score.hard, result.score.soft)
 
-`solve` 는 `_core.MeetingSchedule` (in place 로 풀고 그대로 반환)과 pydantic
-미러 `models.MeetingScheduleModel` (변환해 풀고 새 모델로 반환) 둘 다 받는다.
-pydantic 미러(직렬화용)는 `meeting_scheduling.models` 에 있다 (선택 의존성).
+`solve` accepts both a `_core.MeetingSchedule` (solved in place and returned) and the
+pydantic mirror `models.MeetingScheduleModel` (converted, solved, returned as a new model).
+The pydantic mirror (for serialization) is in `meeting_scheduling.models` (optional dependency).
 """
 
 from ._core import (
@@ -72,18 +72,18 @@ def solve(
     config: SolverConfig | None = None,
     constraints=None,
 ):
-    """스케줄을 풀어 돌려주는 고수준 API.
+    """High-level API that solves a schedule and returns it.
 
-    ``schedule`` 은 `_core.MeetingSchedule` (in place 로 풀고 그대로 반환)
-    또는 `models.MeetingScheduleModel` (변환해 풀고 새 모델로 반환).
+    ``schedule`` is a `_core.MeetingSchedule` (solved in place and returned)
+    or a `models.MeetingScheduleModel` (converted, solved, returned as a new model).
 
-    ``config`` 가 기본 설정이 된다 (None 이면 엔진 기본값: 30초 예산);
-    명시한 키워드 인자가 config 위에 덮어쓴다. ``stop_at_first_feasible``
-    은 hard 0 도달 즉시 종료한다 (best_score_limit=(0, -1e18)).
+    ``config`` becomes the base settings (None = engine defaults: 30 s budget);
+    explicit keyword arguments override config. ``stop_at_first_feasible``
+    stops as soon as hard 0 is reached (best_score_limit=(0, -1e18)).
 
-    ``constraints`` 로 비용 함수를 직접 고를 수 있다
-    (`meeting_scheduling.constraints` 참고). 준 목록의 제약만 채점되고,
-    None 이면 기본 열두 제약 전부를 쓴다::
+    ``constraints`` picks the cost function directly
+    (see `meeting_scheduling.constraints`). Only the listed constraints are scored;
+    None uses all twelve default constraints::
 
         from meeting_scheduling.constraints import get_constraints
         ms.solve(schedule, constraints=get_constraints())
@@ -110,11 +110,11 @@ def solve(
         _solve(schedule)
         return schedule
 
-    # pydantic 미러 (선택 의존성이라 지연 임포트).
+    # pydantic mirror (lazy import: optional dependency).
     from .models import MeetingScheduleModel
 
     if isinstance(schedule, MeetingScheduleModel):
         core = schedule.to_core()
         _solve(core)
         return MeetingScheduleModel.from_core(core)
-    raise TypeError(f"schedule 은 MeetingSchedule 또는 MeetingScheduleModel 이어야 한다: {type(schedule)!r}")
+    raise TypeError(f"schedule must be a MeetingSchedule or a MeetingScheduleModel: {type(schedule)!r}")

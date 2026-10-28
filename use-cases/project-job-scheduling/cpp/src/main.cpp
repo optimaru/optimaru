@@ -174,7 +174,7 @@ ProjectJobSchedule generateDemoData()
 
 void printSummary(const ProjectJobSchedule &schedule)
 {
-    std::printf("  [프로젝트별 완료]\n");
+    std::printf("  [completion per project]\n");
     for (int a = 0; a < schedule.allocationCount(); ++a)
     {
         if (schedule.jobTypeOf(a) != JobType::SINK)
@@ -184,15 +184,15 @@ void printSummary(const ProjectJobSchedule &schedule)
                   .projects[schedule.jobs[schedule.allocations[a].job].project];
         const int endDate = schedule.allocations[a].endDate;
         const int criticalPathEnd = project.criticalPathEndDate();
-        std::printf("    프로젝트 %s: 완료일 %d (critical path 종료 %d, "
-                    "지연 %d)\n",
+        std::printf("    project %s: completed day %d (critical path end %d, "
+                    "delay %d)\n",
                     project.id.c_str(),
                     endDate,
                     criticalPathEnd,
                     std::max(0, endDate - criticalPathEnd));
     }
 
-    std::printf("  [할당 상세: 처음 12건]\n");
+    std::printf("  [allocations: first 12]\n");
     for (int a = 0; a < schedule.allocationCount() && a < 12; ++a)
     {
         const Allocation &allocation = schedule.allocations[a];
@@ -202,7 +202,7 @@ void printSummary(const ProjectJobSchedule &schedule)
                                                           : "STD   ";
         if (allocation.modeDelay < 0)
         {
-            std::printf("    Job %-2s %s  (미배정)\n", job.id.c_str(), type);
+            std::printf("    Job %-2s %s  (unassigned)\n", job.id.c_str(), type);
             continue;
         }
         std::printf("    Job %-2s %s  mode %d  delay %-3d  day %3d-%3d\n",
@@ -229,8 +229,8 @@ int main(int argc, char **argv)
         if (job.jobType == JobType::STANDARD)
             ++standardJobs;
     }
-    std::printf("== 프로젝트 잡 스케줄링 데모 (프로젝트 %zu, 리소스 %zu, "
-                "잡 %zu (STANDARD %d), delay 0..%d, %d초) ==\n",
+    std::printf("== project job scheduling demo (%zu projects, %zu resources, "
+                "%zu jobs (%d STANDARD), delay 0..%d, %d s) ==\n",
                 schedule.projects.size(),
                 schedule.resources.size(),
                 schedule.jobs.size(),
@@ -257,10 +257,10 @@ int main(int argc, char **argv)
 
     if (schedule.score.hard == 0)
     {
-        std::printf("  hard 0 도달: OK\n");
+        std::printf("  reached hard 0: OK\n");
         return 0;
     }
-    std::printf("  hard 0 도달 실패 (hard=%lld)\n",
+    std::printf("  failed to reach hard 0 (hard=%lld)\n",
                 static_cast<long long>(schedule.score.hard));
     return 1;
 }

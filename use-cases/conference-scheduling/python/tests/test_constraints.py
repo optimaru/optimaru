@@ -1,10 +1,10 @@
-"""제약 스팟체크: C++ 테스트(a)의 손계산 케이스 일부를 Python 바인딩으로 재검증."""
+"""Constraint spot checks: re-verifies some hand-computed cases of the C++ tests (a) through the Python bindings."""
 
 import conference_scheduling as cs
 
 
 def make_base() -> cs.ConferenceSchedule:
-    """cpp/test/cs_test.cpp 의 makeBase 와 같은 베이스 인스턴스."""
+    """The same base instance as makeBase in cpp/test/cs_test.cpp."""
 
     def slot(sid, start, end):
         return cs.Timeslot(id=sid, start_minute=start, end_minute=end, talk_types=[0])

@@ -1,5 +1,5 @@
-"""제약 스팟체크: Java ProjectJobSchedulingConstraintProviderTest 의 손계산
-케이스를 pydantic 모델 -> 엔진 변환 경로로 재현한다."""
+"""Constraint spot checks: reproduces the hand-computed cases of Java
+ProjectJobSchedulingConstraintProviderTest through the pydantic model -> engine conversion."""
 
 import project_job as pj
 from project_job.models import (
@@ -25,7 +25,7 @@ def _job(job_id, duration, requirement, successors=(), job_type="STANDARD"):
 
 
 def _schedule(jobs, delays, renewable, critical_path_duration=0, capacity=10):
-    """단일 자원/프로젝트 스케줄. delays[job_id] 가 None 이면 미초기화."""
+    """Single-resource/project schedule. delays[job_id] None means uninitialized."""
     allocations = [
         AllocationModel(
             id=j.id,
@@ -46,7 +46,7 @@ def _schedule(jobs, delays, renewable, critical_path_duration=0, capacity=10):
 
 
 def test_non_renewable_resource_capacity():
-    # Java: 요구량 7 + 6, 용량 10 (non-renewable, 날짜 무관) -> hard -3.
+    # Java: demand 7 + 6, capacity 10 (non-renewable, date-independent) -> hard -3.
     model = _schedule(
         [_job("1", 10, 7), _job("2", 10, 6)],
         {"1": 100, "2": 100},
@@ -57,8 +57,8 @@ def test_non_renewable_resource_capacity():
 
 
 def test_renewable_resource_capacity():
-    # Java: predecessorsDoneDate 1/2 (여기서는 기간 1/2 의 선행 잡), delay
-    # 100, 기간 10, 요구량 7/5, 용량 10 -> 겹침 9일 x 2 = hard -18.
+    # Java: predecessorsDoneDate 1/2 (here predecessor jobs of duration 1/2), delay
+    # 100, duration 10, demand 7/5, capacity 10 -> 9 overlapping days x 2 = hard -18.
     model = _schedule(
         [
             _job("p1", 1, 0, successors=["1"]),
@@ -72,7 +72,7 @@ def test_renewable_resource_capacity():
     core = model.to_core()
     score = pj.calculate_score(core)
     assert (score.hard, score.medium, score.soft) == (-18, 0, 0)
-    # 포팅된 shadow 체인: predecessorsDoneDate -> startDate -> endDate.
+    # The ported shadow chain: predecessorsDoneDate -> startDate -> endDate.
     solved = type(model).from_core(core)
     by_id = {a.id: a for a in solved.allocations}
     assert (by_id["1"].start_date, by_id["1"].end_date) == (101, 111)
@@ -80,9 +80,9 @@ def test_renewable_resource_capacity():
 
 
 def test_total_project_delay_and_makespan():
-    # Java totalProjectDelay: SINK 종료 111/112, critical path 종료 100 ->
-    # medium -(11 + 12) = -23; totalMakespan: soft -112; renewable 겹침은
-    # 위와 같이 hard -18.
+    # Java totalProjectDelay: SINK end 111/112, critical path end 100 ->
+    # medium -(11 + 12) = -23; totalMakespan: soft -112; renewable overlap is
+    # hard -18 as above.
     model = _schedule(
         [
             _job("p1", 1, 0, successors=["1"]),
@@ -99,8 +99,8 @@ def test_total_project_delay_and_makespan():
 
 
 def test_project_delay_not_positive():
-    # Java totalMakespan 케이스 (criticalPathDuration 155): 지연이 음수면
-    # medium 벌점 없음, makespan 은 그대로.
+    # Java totalMakespan case (criticalPathDuration 155): a negative delay gives
+    # no medium penalty; the makespan stays.
     model = _schedule(
         [
             _job("p1", 1, 0, successors=["1"]),
@@ -117,8 +117,8 @@ def test_project_delay_not_positive():
 
 
 def test_unassigned_contributes_nothing():
-    # 미초기화 할당은 자원을 쓰지 않고 날짜만 통과시킨다 (Java 의 null
-    # executionMode/delay 의미론).
+    # Uninitialized allocations use no resources and only pass dates through (Java's null
+    # executionMode/delay semantics).
     model = _schedule(
         [_job("a", 2, 1, successors=["b"]), _job("b", 5, 9), _job("c", 3, 9)],
         {"a": 1, "b": None, "c": None},

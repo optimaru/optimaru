@@ -1,5 +1,5 @@
-"""데모 solve 검증: Java 데모 인스턴스가 feasible 에 도달하고 배정이
-일관적인지, pinned 작업과 unassigned pool 이 지켜지는지."""
+"""Demo solve checks: the Java demo instance reaches feasible with a consistent
+assignment, and pinned jobs and the unassigned pool are respected."""
 
 import food_packaging as fp
 
@@ -47,8 +47,8 @@ def test_demo_solve_reaches_feasible():
     assert schedule.score.hard == 0
     assert steps  # on_new_best fired
 
-    # 배정 일관성: 모든 작업이 정확히 한 리스트에 있고, shadow 체인이
-    # 순차적이며, hard 제약이 실제로 만족된다.
+    # Assignment consistency: every job is in exactly one list, the shadow chain is
+    # sequential, and the hard constraints really hold.
     membership = [0] * len(schedule.jobs)
     for line in schedule.lines:
         for j in line.jobs:
@@ -69,14 +69,14 @@ def test_demo_solve_reaches_feasible():
             assert job.end_minute <= job.max_end_minute  # hard 0
             previous_end = job.end_minute
 
-    # 데모는 operator 5 : line 5 이므로 단사 배정이어야 충돌 0 이 보장된다.
+    # The demo has operators 5 : lines 5, so only an injective assignment guarantees 0 conflicts.
     operator_indices = [line.operator_index for line in schedule.lines]
     assert sorted(operator_indices) == [0, 1, 2, 3, 4]
 
 
 def test_pinned_jobs_are_kept():
     schedule = fp.generate_demo_data(line_count=3, job_count=18)
-    # 작업 0 을 라인 0 의 맨 앞에 고정하고, 작업 1 은 미배정으로 고정한다.
+    # Pin job 0 to the front of line 0 and pin job 1 as unassigned.
     jobs = schedule.jobs
     jobs[0].pinned = True
     jobs[1].pinned = True
@@ -91,7 +91,7 @@ def test_pinned_jobs_are_kept():
     assert schedule.jobs[0].line_index == 0
     assert schedule.jobs[1].line_index == -1
     assert 1 in schedule.unassigned_jobs
-    # pinned 미배정 작업의 duration 이 medium 페널티에 남는다.
+    # The pinned unassigned job's duration remains in the medium penalty.
     assert fp.analyze(schedule).maximize_jobs_assigned >= schedule.jobs[1].duration_minutes
 
 

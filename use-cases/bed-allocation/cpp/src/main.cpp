@@ -201,7 +201,7 @@ void printSummary(const BedPlan &plan)
         else
             ++staysPerRoom[plan.beds[stay.bed].room];
     }
-    std::printf("  방별 배정 stay 수:");
+    std::printf("  stays per room:");
     for (std::size_t r = 0; r < plan.rooms.size(); ++r)
     {
         std::printf(" %s=%d(x%d)",
@@ -210,14 +210,14 @@ void printSummary(const BedPlan &plan)
                     plan.rooms[r].capacity);
     }
     std::printf(
-        "\n  미배정(no bed) stay: %d / %zu\n\n", unassigned, plan.stays.size());
+        "\n  unassigned (no bed) stays: %d / %zu\n\n", unassigned, plan.stays.size());
 
-    std::printf("  [환자 배정 상세: 처음 8건]\n");
+    std::printf("  [patient assignments: first 8]\n");
     for (std::size_t s = 0; s < plan.stays.size() && s < 8; ++s)
     {
         const Stay &stay = plan.stays[s];
         const bool assigned = stay.bed >= 0 && stay.bed < plan.bedCount();
-        std::printf("    %s  %c/%3d세  day %2d-%2d  %s  -> %s\n",
+        std::printf("    %s  %c/%3d y  day %2d-%2d  %s  -> %s\n",
                     stay.patientName.c_str(),
                     stay.patientGender == Gender::MALE ? 'M' : 'F',
                     stay.patientAge,
@@ -236,8 +236,8 @@ int main(int argc, char **argv)
     const int seconds = (argc > 1) ? std::atoi(argv[1]) : 10;
 
     BedPlan plan = generateDemoData();
-    std::printf("== 병상 배정 데모 (부서 %zu, 방 %zu, 병상 %d, 28박, "
-                "stay %zu건, %d초) ==\n",
+    std::printf("== bed allocation demo (%zu departments, %zu rooms, %d beds, 28 nights, "
+                "%zu stays, %d s) ==\n",
                 plan.departments.size(),
                 plan.rooms.size(),
                 plan.bedCount(),
@@ -263,10 +263,10 @@ int main(int argc, char **argv)
 
     if (plan.score.hard == 0)
     {
-        std::printf("  hard 0 도달: OK\n");
+        std::printf("  reached hard 0: OK\n");
         return 0;
     }
-    std::printf("  hard 0 도달 실패 (hard=%lld)\n",
+    std::printf("  failed to reach hard 0 (hard=%lld)\n",
                 static_cast<long long>(plan.score.hard));
     return 1;
 }

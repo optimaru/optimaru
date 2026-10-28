@@ -1,4 +1,4 @@
-"""pydantic 미러의 직렬화 왕복과 demo_data 재현 검증."""
+"""Serialization round-trip of the pydantic mirror and demo_data reproduction."""
 
 import meeting_scheduling as ms
 from meeting_scheduling.models import MeetingScheduleModel, demo_data
@@ -7,15 +7,15 @@ from meeting_scheduling.models import MeetingScheduleModel, demo_data
 def test_demo_data_matches_java_generator_shape():
     model = demo_data()
     assert len(model.people) == 20
-    assert len(model.time_grains) == 160  # 4일 x 40 (08:00-17:45, 15분)
+    assert len(model.time_grains) == 160  # 4 days x 40 (08:00-17:45, 15 min)
     assert [r.capacity for r in model.rooms] == [30, 20, 16]
     assert len(model.meetings) == 24
     assert len(model.meeting_assignments) == 24
     durations = sorted(m.duration_in_grains for m in model.meetings)
     assert durations == [8] * 10 + [12] * 7 + [16] * 7
-    # 그레인 인덱스는 Java 생성기처럼 1-base 연속이다.
+    # Grain indices are consecutive and 1-based like the Java generator.
     assert [g.grain_index for g in model.time_grains] == list(range(1, 161))
-    # 필수/선호 참석자는 사람 인덱스 범위 안, 미팅 내 중복 없음.
+    # Required/preferred attendees are within the people index range, no duplicates within a meeting.
     for meeting in model.meetings:
         assert len(set(meeting.required_attendees)) == len(meeting.required_attendees)
         assert len(set(meeting.preferred_attendees)) == len(meeting.preferred_attendees)
@@ -31,7 +31,7 @@ def test_json_round_trip():
     assert core.time_grain_count() == 160
     assert core.grain_room_count() == 480
     back = MeetingScheduleModel.from_core(core)
-    # score 는 채점 전 (0, 0) 이므로 배정/사실만 비교.
+    # score is (0, 0) before scoring, so compare only assignments/facts.
     assert back.meetings == model.meetings
     assert back.meeting_assignments == model.meeting_assignments
     assert back.people == model.people

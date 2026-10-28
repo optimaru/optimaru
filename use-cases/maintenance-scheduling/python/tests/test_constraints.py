@@ -1,17 +1,17 @@
-"""제약 스팟체크: calculate_score 를 손계산 케이스와 대조한다 (Java
-MaintenanceSchedulingConstraintProviderTest 의 대표 케이스; 전수 이식은
-cpp/test/mnt_test.cpp 에 있다)."""
+"""Constraint spot checks: calculate_score against hand-computed cases (representative
+cases of Java MaintenanceSchedulingConstraintProviderTest; the full port is in
+cpp/test/mnt_test.cpp)."""
 
 import maintenance_scheduling as mnt
 
-# 2021-02-01 (월요일) == epoch day 18659, Java 테스트의 DAY_1.
+# 2021-02-01 (Monday) == epoch day 18659, DAY_1 of the Java test.
 DAY_1 = 18659
 DAY_2 = DAY_1 + 1
 DAY_3 = DAY_1 + 2
 
 
 def schedule_of(jobs_and_assignments):
-    """[(Job, crew_index, start_epoch|None)] -> 채점된 MaintenanceSchedule."""
+    """[(Job, crew_index, start_epoch|None)] -> a scored MaintenanceSchedule."""
     jobs = [job for job, _, _ in jobs_and_assignments]
     schedule = mnt.MaintenanceSchedule(
         DAY_1,
@@ -32,7 +32,7 @@ def schedule_of(jobs_and_assignments):
 
 
 def test_crew_conflict_overlap_days():
-    # [월,목) vs [화,금) 같은 crew: 겹침 화+수 = 2일 -> hard -2.
+    # [Mon,Thu) vs [Tue,Fri) on the same crew: overlap Tue+Wed = 2 days -> hard -2.
     schedule = schedule_of(
         [
             (mnt.Job("1", "Downtown tunnel", 3), 0, DAY_1),
@@ -42,7 +42,7 @@ def test_crew_conflict_overlap_days():
     assert schedule.score.hard == -2
     assert schedule.score.soft == 0
 
-    # 다른 crew 면 겹쳐도 무벌점.
+    # Different crews overlap without penalty.
     schedule = schedule_of(
         [
             (mnt.Job("1", "Downtown tunnel", 3), 0, DAY_1),
@@ -53,29 +53,29 @@ def test_crew_conflict_overlap_days():
 
 
 def test_min_start_and_max_end():
-    # minStartDate 2일 위반 + (dur 1 @ 월) end=화 <= max 수: max 는 무벌점.
+    # minStartDate violated by 2 days + (dur 1 @ Mon) end=Tue <= max Wed: no max penalty.
     schedule = schedule_of([(mnt.Job("1", "j", 1, min_start_date=DAY_3, max_end_date=DAY_3), 0, DAY_1)])
     assert schedule.score.hard == -2
 
-    # dur 4 @ 월 -> end 금(=DAY_1+4); max 수 보다 2일 늦음.
+    # dur 4 @ Mon -> end Fri (=DAY_1+4); 2 days later than max Wed.
     schedule = schedule_of([(mnt.Job("1", "j", 4, max_end_date=DAY_3), 0, DAY_1)])
     assert schedule.score.hard == -2
 
 
 def test_ideal_end_date_soft_weights():
-    # dur 1 @ 화 -> end 수; ideal 화 보다 1일 늦음 -> soft -1'000'000.
+    # dur 1 @ Tue -> end Wed; 1 day later than ideal Tue -> soft -1'000'000.
     schedule = schedule_of([(mnt.Job("1", "j", 1, ideal_end_date=DAY_2), 0, DAY_2)])
     assert schedule.score.hard == 0
     assert schedule.score.soft == -1_000_000
 
-    # dur 0 @ 월 -> end 월; ideal 수 보다 2일 이름 -> soft -2.
+    # dur 0 @ Mon -> end Mon; 2 days earlier than ideal Wed -> soft -2.
     schedule = schedule_of([(mnt.Job("1", "j", 0, ideal_end_date=DAY_3), 0, DAY_1)])
     assert schedule.score.soft == -2
 
 
 def test_tag_conflict():
-    # 같은 날 1일 겹침, 공유 태그 {Downtown} 1개 -> soft -1'000
-    # (같은 crew 라 crewConflict hard -1 도 함께).
+    # 1-day overlap on the same day, 1 shared tag {Downtown} -> soft -1'000
+    # (same crew, so crewConflict hard -1 as well).
     schedule = schedule_of(
         [
             (mnt.Job("1", "t", 1, tags=["Downtown"]), 0, DAY_1),
@@ -85,7 +85,7 @@ def test_tag_conflict():
     assert schedule.score.hard == -1
     assert schedule.score.soft == -1_000
 
-    # 겹치지만 공유 태그가 없으면 tagConflict 무벌점.
+    # Overlapping but without shared tags: no tagConflict penalty.
     schedule = schedule_of(
         [
             (mnt.Job("1", "t", 1, tags=["Downtown"]), 0, DAY_1),
@@ -96,7 +96,7 @@ def test_tag_conflict():
 
 
 def test_end_date_skips_weekends():
-    # 월요일 + 5 business days = 토요일(exclusive), +6 = 다음 화요일.
+    # Monday + 5 business days = Saturday (exclusive), +6 = the next Tuesday.
     assert mnt.plus_business_days(DAY_1, 5) == DAY_1 + 5
     assert mnt.plus_business_days(DAY_1, 6) == DAY_1 + 8
 

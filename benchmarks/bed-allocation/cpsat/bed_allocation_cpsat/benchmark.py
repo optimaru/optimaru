@@ -191,6 +191,83 @@ def solve_cpsat(problem: Any, seconds: float, seed: int, workers: int) -> Any:
     return core
 
 
+
+# --- Timefold quickstart (benchmarks/timefold-quickstarts) ---------------------
+
+TIMEFOLD = "bed-allocation"
+_DAY_ZERO = "2026-01-01"
+
+
+def _date(day: int) -> str:
+    import datetime
+
+    return (datetime.date.fromisoformat(_DAY_ZERO) + datetime.timedelta(days=day)).isoformat()
+
+
+def to_timefold(problem: Any) -> dict:
+    departments, rooms, beds = problem.departments, problem.rooms, problem.beds
+    no_bed = problem.no_bed_value()
+    department_json = []
+    for d_index, department in enumerate(departments):
+        room_json = []
+        for r_index, room in enumerate(rooms):
+            if room.department != d_index:
+                continue
+            room_json.append(
+                {
+                    "id": room.id,
+                    "name": room.name,
+                    "department": department.id,
+                    "capacity": room.capacity,
+                    "genderLimitation": room.gender_limitation.name,
+                    "equipments": list(room.equipment),
+                    "beds": [
+                        {"id": bed.id, "room": room.id, "indexInRoom": bed.index_in_room}
+                        for bed in beds
+                        if bed.room == r_index
+                    ],
+                }
+            )
+        department_json.append(
+            {
+                "id": department.id,
+                "name": department.name,
+                "specialtyToPriority": dict(department.specialty_to_priority),
+                "minimumAge": department.minimum_age,
+                "maximumAge": department.maximum_age,
+                "rooms": room_json,
+            }
+        )
+    return {
+        "departments": department_json,
+        "stays": [
+            {
+                "id": stay.id,
+                "patientName": stay.patient_name,
+                "patientGender": stay.patient_gender.name,
+                "patientAge": stay.patient_age,
+                "patientPreferredMaximumRoomCapacity": stay.patient_preferred_maximum_room_capacity,
+                "patientRequiredEquipments": list(stay.patient_required_equipment),
+                "patientPreferredEquipments": list(stay.patient_preferred_equipment),
+                "arrivalDate": _date(stay.arrival_day),
+                "departureDate": _date(stay.departure_day),
+                "specialty": stay.specialty,
+                "bed": beds[stay.bed].id if 0 <= stay.bed < no_bed else None,
+            }
+            for stay in problem.stays
+        ],
+    }
+
+
+def from_timefold(problem: Any, result: dict) -> None:
+    index = {bed.id: i for i, bed in enumerate(problem.beds)}
+    chosen = result["assignment"]["Stay"]
+    no_bed = problem.no_bed_value()
+    problem.set_assignment(
+        [index[chosen[s.id]["bed"]] if chosen[s.id]["bed"] is not None else no_bed for s in problem.stays]
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     return run_cli(sys.modules[__name__], argv)
 

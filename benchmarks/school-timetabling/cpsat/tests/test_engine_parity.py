@@ -1,18 +1,20 @@
-"""패리티 게이트: st::canon 엔진 스코어 == cpsat validate.py (ground truth).
+"""Parity gate: st::canon engine score == cpsat validate.py (ground truth).
 
-같은 canonical 문제를 (i) CP-SAT(teacher_scheduling)으로 풀어 그 해를
-st::canon 도메인에 주입해 엔진 breakdown 을 계산하고, (ii) cpsat 의
-validate_timetable(하드 H1~H10) + compute_penalties(소프트 S1~S6)와 대조한다.
+The same canonical problem is (i) solved with CP-SAT (teacher_scheduling), the
+solution injected into the st::canon domain to compute the engine breakdown,
+and (ii) compared with cpsat's validate_timetable (hard H1–H10) +
+compute_penalties (soft S1–S6).
 
-게이트 조건 (문제마다):
-- 하드 위반 수가 정확히 일치: cpsat 해는 validate 상 위반 0 이어야 하고,
-  엔진 hard_total() 도 0 이어야 한다.
-- 소프트 원시 카운트(S1~S6)가 key 별로 정확히 일치.
-- 가중 벌점 합이 정확히 일치: 엔진 soft_penalty(weights) == validate 가중 합
-  == cpsat 이 보고한 objective_value.
+Gate conditions (per problem):
+- hard-violation counts match exactly: the cpsat solution has 0 violations
+  under validate, and the engine's hard_total() is 0 too.
+- raw soft counts (S1–S6) match key by key.
+- weighted penalty sums match exactly: engine soft_penalty(weights) ==
+  validate's weighted sum == the objective_value cpsat reports.
 
-반대 방향(엔진 solve -> cpsat validate)도 검증해 변환/역변환까지 포함한
-파이프라인 전체의 의미론이 같음을 고정한다.
+The reverse direction (engine solve -> cpsat validate) is checked as well, so
+the semantics of the whole pipeline, conversion and reverse conversion
+included, are pinned down.
 """
 
 import pytest
@@ -29,8 +31,8 @@ import st_timetabling as st
 from st_timetabling import canon
 from st_timetabling.constraints import Assembly
 
-# 문제 3: 분반(선호/기피 마스크가 서로 다른 멤버) + 연강 + 금지 시간 +
-# 학급 불가 시간 + 교사 연속 상한/희망 공강일까지 켠 소형 인스턴스.
+# Problem 3: a small instance with parallel sections (members with different preferred/avoided
+# masks) + a block + forbidden times + class unavailability + a teacher consecutive cap and a free day.
 _FEATURE_WEIGHTS = {
     "teacher_gap": 7,
     "teacher_workday": 2,
@@ -45,27 +47,27 @@ def feature_problem() -> dict:
     return {
         "calendar": {"periods_per_day": {"0": 5, "1": 5, "2": 5, "3": 5, "4": 5}},
         "subjects": [
-            {"id": "MATH", "name": "수학", "preferred_periods": [1, 2]},
-            {"id": "KOR", "name": "국어"},
-            {"id": "SCI", "name": "과학", "required_room_type": "과학실", "avoided_periods": [5]},
-            {"id": "TECH", "name": "기술", "required_room_type": "기술실", "avoided_periods": [4]},
-            {"id": "HOME", "name": "가정", "preferred_periods": [3, 4]},
-            {"id": "ART", "name": "미술", "avoided_periods": [1]},
-            {"id": "HR", "name": "창체"},
+            {"id": "MATH", "name": "Math", "preferred_periods": [1, 2]},
+            {"id": "KOR", "name": "Korean"},
+            {"id": "SCI", "name": "Science", "required_room_type": "science lab", "avoided_periods": [5]},
+            {"id": "TECH", "name": "Technology", "required_room_type": "tech room", "avoided_periods": [4]},
+            {"id": "HOME", "name": "Home economics", "preferred_periods": [3, 4]},
+            {"id": "ART", "name": "Art", "avoided_periods": [1]},
+            {"id": "HR", "name": "Homeroom"},
         ],
         "teachers": [
-            {"id": "T1", "name": "김수학", "max_consecutive_periods": 2},
-            {"id": "T2", "name": "이국어", "unavailable": [{"day": 0, "period": 1}], "preferred_free_days": [4]},
-            {"id": "T3", "name": "박과학"},
-            {"id": "T4", "name": "권기술"},
-            {"id": "T5", "name": "송가정"},
-            {"id": "T6", "name": "구미술"},
-            {"id": "T7", "name": "담임"},
+            {"id": "T1", "name": "Kim (Math)", "max_consecutive_periods": 2},
+            {"id": "T2", "name": "Lee (Korean)", "unavailable": [{"day": 0, "period": 1}], "preferred_free_days": [4]},
+            {"id": "T3", "name": "Park (Science)"},
+            {"id": "T4", "name": "Kwon (Technology)"},
+            {"id": "T5", "name": "Song (Home economics)"},
+            {"id": "T6", "name": "Koo (Art)"},
+            {"id": "T7", "name": "Homeroom teacher"},
         ],
-        "class_groups": [{"id": "C1", "name": "1학년 1반", "grade": 1, "unavailable": [{"day": 4, "period": 5}]}],
+        "class_groups": [{"id": "C1", "name": "Grade 1 Class 1", "grade": 1, "unavailable": [{"day": 4, "period": 5}]}],
         "rooms": [
-            {"id": "R_SCI", "name": "과학실", "room_type": "과학실"},
-            {"id": "R_TECH", "name": "기술실", "room_type": "기술실"},
+            {"id": "R_SCI", "name": "Science lab", "room_type": "science lab"},
+            {"id": "R_TECH", "name": "Tech room", "room_type": "tech room"},
         ],
         "courses": [
             {
@@ -83,7 +85,7 @@ def feature_problem() -> dict:
                 "periods_per_week": 3,
                 "forbidden_slots": [{"day": 1, "period": 1}],
             },
-            # 팀티칭: 두 교사가 함께 들어간다.
+            # Team teaching: two teachers together.
             {
                 "id": "C1-SCI",
                 "class_group_id": "C1",
@@ -91,14 +93,14 @@ def feature_problem() -> dict:
                 "teacher_ids": ["T3", "T7"],
                 "periods_per_week": 3,
             },
-            # 분반: 기피/선호 마스크가 서로 다른 두 강좌가 같은 시간에 진행된다.
+            # Parallel sections: two courses with different avoided/preferred masks at the same time.
             {
                 "id": "C1-TECH",
                 "class_group_id": "C1",
                 "subject_id": "TECH",
                 "teacher_ids": ["T4"],
                 "periods_per_week": 2,
-                "parallel_group": "C1-분반",
+                "parallel_group": "C1-split",
             },
             {
                 "id": "C1-HOME",
@@ -106,9 +108,9 @@ def feature_problem() -> dict:
                 "subject_id": "HOME",
                 "teacher_ids": ["T5"],
                 "periods_per_week": 2,
-                "parallel_group": "C1-분반",
+                "parallel_group": "C1-split",
             },
-            # 주 1회 2연강.
+            # One 2-period block a week.
             {
                 "id": "C1-ART",
                 "class_group_id": "C1",
@@ -134,30 +136,30 @@ def _weighted(penalties: dict[str, int], weights: dict[str, int]) -> int:
 
 
 def _assert_parity(problem_dict: dict, cpsat_result: Timetable, weights: dict[str, int]) -> None:
-    """cpsat 해를 엔진에 주입해 하드/소프트가 validate.py 와 일치하는지 본다."""
+    """Injects the cpsat solution into the engine and checks hard/soft against validate.py."""
     problem = TimetableProblem.model_validate(problem_dict)
 
-    # ground truth: cpsat validate 의 하드 위반 목록 + 소프트 원시 카운트.
+    # Ground truth: cpsat validate's hard violations + raw soft counts.
     violations = validate_timetable(problem, cpsat_result)
     truth_penalties = compute_penalties(problem, cpsat_result)
 
-    # 엔진: 같은 해를 st::canon 에 주입해 breakdown 을 recompute.
+    # Engine: inject the same solution into st::canon and recompute the breakdown.
     converted = st.convert_problem(problem_dict)
     converted.table.weights = canon.ObjectiveWeights(**weights)
     st.inject_solution(converted, [lesson.model_dump(mode="json") for lesson in cpsat_result.lessons])
     breakdown = canon.compute_breakdown(converted.table)
 
-    # 하드 위반 수가 정확히 일치 (유효한 cpsat 해 => 양쪽 다 0).
+    # Hard-violation counts match exactly (a valid cpsat solution => 0 on both sides).
     assert violations == []
     assert breakdown.hard_total() == 0
 
-    # 소프트: 원시 카운트 key 별 일치 + 가중 합 일치 (cpsat 보고값 포함).
+    # Soft: raw counts match per key + the weighted sums match (cpsat's reported value included).
     assert dict(breakdown.penalties()) == dict(truth_penalties)
     engine_soft = breakdown.soft_penalty(canon.ObjectiveWeights(**weights))
     assert engine_soft == _weighted(truth_penalties, weights)
     assert engine_soft == cpsat_result.objective_value
 
-    # score 경로도 같은 값을 내야 한다 (calculate_score == breakdown).
+    # The score path must give the same value too (calculate_score == breakdown).
     score = canon.calculate_score(converted.table)
     assert score.hard == 0
     assert -score.soft == engine_soft
@@ -172,35 +174,35 @@ def _solve_and_assert(problem_dict: dict, *, weights: dict[str, int] | None = No
 
 
 def test_parity_sample_problem():
-    """cpsat 데모 학교 (34칸 완전 밀집, 연강/분반/팀티칭/고정/상한 전부)."""
+    """The cpsat demo school (34 cells fully packed: blocks, parallel sections, team teaching, fixed times, caps)."""
     _solve_and_assert(build_sample_problem().model_dump(mode="json"))
 
 
 def test_parity_demo_fixture(problem):
-    """python 데모 문제 (20칸 완전 밀집, 팀티칭/특별실/고정/불가 시간)."""
+    """The python demo problem (20 cells fully packed: team teaching, special rooms, fixed and unavailable times)."""
     _solve_and_assert(problem, time_limit=10.0)
 
 
 def test_parity_feature_problem_with_custom_weights():
-    """소형 종합 인스턴스 + 비기본 가중치 — 가중 합 패리티까지 확인."""
+    """Small all-features instance + non-default weights — checks weighted-sum parity too."""
     _solve_and_assert(feature_problem(), weights=_FEATURE_WEIGHTS, time_limit=10.0)
 
 
 def test_parity_partial_solution(problem):
-    """부분 편성(H1 완화)도 같은 계약이다 — cpsat solve_partial 이 ground truth.
+    """Partial timetabling (H1 relaxed) follows the same contract — cpsat solve_partial is the ground truth.
 
-    미배정 수를 맞출 수는 없다(local search 는 최적성을 증명하지 못한다). 고정
-    하는 것은 **의미론**이다: 미배정은 하드 위반이 아니고(FEASIBLE), 배정한
-    부분은 하드 제약을 전부 지키며, 미배정 시수는 cpsat 과 같은 이름의 벌점
-    항으로 보고되고 그 수만큼 cpsat 의 최적값보다 나쁠 수는 있어도 좋을 수는
-    없다.
+    The unassigned count cannot be matched (local search proves no optimality).
+    What is pinned down is the **semantics**: unassigned lessons are not a hard
+    violation (FEASIBLE), the placed part respects every hard constraint, and the
+    unassigned periods are reported as the penalty term with cpsat's name — they
+    can be worse than cpsat's optimum by that much, never better.
     """
     from teacher_scheduling.partial import solve_partial
 
-    problem["calendar"]["periods_per_day"]["4"] = 0  # 금요일을 지운다: 20시수 / 16칸
+    problem["calendar"]["periods_per_day"]["4"] = 0  # remove Friday: 20 periods / 16 cells
     required = sum(course["periods_per_week"] for course in problem["courses"])
 
-    # ground truth: cpsat 완화 모드의 최적 부분해.
+    # Ground truth: the optimal partial solution of cpsat's relaxed mode.
     optimum = solve_partial(
         TimetableProblem.model_validate(problem),
         CpsatConfig(time_limit_seconds=10.0, num_workers=8, random_seed=7),
@@ -214,15 +216,15 @@ def test_parity_partial_solution(problem):
         random_seed=7,
     )
 
-    # 미배정은 탐색 실패가 아니라 결과다.
+    # Unassigned lessons are a result, not a search failure.
     assert result["status"] == "FEASIBLE"
     assert result["penalties"]["weekly_period_counts"] == required - len(result["lessons"])
-    # 최적해보다 더 채울 수는 없다 (cpsat 은 최적성을 증명한다).
+    # It cannot fill more than the optimum (cpsat proves optimality).
     assert 0 < len(result["lessons"]) <= len(optimum.lessons)
 
-    # 배정한 부분은 하드 제약을 전부 지킨다 — 주당 시수를 실제 배정된 수로
-    # 줄인 문제로 보면 cpsat validate 가 위반을 하나도 못 찾아야 한다
-    # (H1 만 빼고 그대로 검사하는 것과 같다).
+    # The placed part respects every hard constraint — viewed as the problem with the
+    # weekly periods reduced to the placed counts, cpsat validate must find no
+    # violation (the same as checking everything but H1).
     timetable = Timetable.model_validate(result)
     scheduled: dict[str, int] = {}
     for lesson in timetable.lessons:
@@ -235,14 +237,14 @@ def test_parity_partial_solution(problem):
 
 
 def test_parity_engine_solution_backwards():
-    """반대 방향: 엔진 canonical solve 결과를 cpsat validate 로 재검증."""
+    """Reverse direction: re-validate the engine's canonical solve result with cpsat validate."""
     problem_dict = build_sample_problem().model_dump(mode="json")
     result = st.solve(
         problem_dict,
         time_limit_seconds=15.0,
         random_seed=42,
         parallel_solver_count=4,
-        stop_at_first_feasible=True,  # 패리티는 해 품질과 무관하다 — 첫 hard 0 이면 충분
+        stop_at_first_feasible=True,  # parity does not depend on quality — the first hard 0 is enough
     )
     assert result["status"] == "FEASIBLE"
     assert result["notes"] == []

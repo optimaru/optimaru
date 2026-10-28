@@ -115,8 +115,8 @@ int main(int argc, char **argv)
     const int seconds = (argc > 1) ? std::atoi(argv[1]) : 10;
 
     MeetingSchedule schedule = buildDemoData();
-    std::printf("== 미팅 스케줄링 데모 (사람 %zu, 타임그레인 %zu (4일 x 40), "
-                "회의실 %zu, 미팅 %zu, %d초) ==\n",
+    std::printf("== meeting scheduling demo (%zu people, %zu time grains (4 days x 40), "
+                "%zu rooms, %zu meetings, %d s) ==\n",
                 schedule.people.size(),
                 schedule.timeGrains.size(),
                 schedule.rooms.size(),
@@ -147,14 +147,14 @@ int main(int argc, char **argv)
         if (assignment.grainRoom < 0)
             allAssigned = false;
     }
-    std::printf("  전 미팅 배정: %s\n", allAssigned ? "OK" : "FAIL");
+    std::printf("  all meetings assigned: %s\n", allAssigned ? "OK" : "FAIL");
 
     if (schedule.score.hard == 0 && allAssigned)
     {
-        std::printf("  hard 0 도달: OK\n");
+        std::printf("  reached hard 0: OK\n");
         return 0;
     }
-    std::printf("  hard 0 도달 실패 (hard=%lld)\n",
+    std::printf("  failed to reach hard 0 (hard=%lld)\n",
                 static_cast<long long>(schedule.score.hard));
     return 1;
 }

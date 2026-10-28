@@ -1,13 +1,15 @@
-"""미배정을 허용하는 부분 편성.
+"""Partial timetabling that allows unassigned lessons.
 
-컴시간은 못 채운 시수를 [미배정 목록] 으로 남기고 나머지는 배정한 채로 보여준다.
-기본 구성은 H1(주당 시수 충족)이 하드라서 한 칸이라도 안 들어가면 통째로
-INFEASIBLE 이 되는데, 그러면 "무엇 때문에 안 되는지" 를 사용자가 알 수 없다.
+Comcigan leaves unfillable periods in an "unassigned list" and shows the rest
+placed. In the default configuration H1 (weekly periods met) is hard, so a
+single cell that does not fit makes the whole problem INFEASIBLE — and the user
+cannot see why.
 
-여기서 하는 일은 H1 제약 하나를 완화 모드로 갈아끼우는 것뿐이다 —
-`WeeklyPeriodCounts(hard=False)` 가 '정확히' 를 '이하' 로 바꾸고 못 채운 시수를
-벌점으로 돌린다. 가중치가 다른 소프트 항목 합보다 훨씬 크므로 채울 수 있는
-시수는 전부 채우고, 정말 불가능한 것만 미배정으로 남는다.
+All this does is swap the H1 constraint for its relaxed mode —
+`WeeklyPeriodCounts(hard=False)` turns "exactly" into "at most" and the
+unfilled periods into a penalty. Its weight is far above the sum of the other
+soft terms, so every period that can be filled is filled and only the truly
+impossible ones stay unassigned.
 """
 
 from __future__ import annotations
@@ -27,7 +29,7 @@ from teacher_scheduling.solver.registry import (
 
 @dataclass(frozen=True)
 class UnassignedCourse:
-    """미배정이 남은 강좌 한 건."""
+    """One course with unassigned periods left."""
 
     course_id: str
     class_group_id: str
@@ -44,10 +46,10 @@ class UnassignedCourse:
 
 
 def solve_partial(problem: TimetableProblem, config: SolverConfig | None = None) -> Timetable:
-    """미배정을 허용해 푼다. 채울 수 있는 시수는 모두 채운 부분해를 돌려준다.
+    """Solves allowing unassigned lessons. Returns a partial solution with every fillable period filled.
 
-    미배정 시수는 `Timetable.penalties["weekly_period_counts"]` 로 보고된다.
-    벌점 크기는 `config.weights` 에 같은 이름으로 지정할 수 있다.
+    Unassigned periods are reported as `Timetable.penalties["weekly_period_counts"]`.
+    The penalty size can be set in `config.weights` under the same name.
     """
     from teacher_scheduling.solver.solver import solve
 
@@ -58,7 +60,7 @@ def solve_partial(problem: TimetableProblem, config: SolverConfig | None = None)
 
 
 def unassigned_courses(problem: TimetableProblem, timetable: Timetable) -> list[UnassignedCourse]:
-    """컴시간 [미배정 목록] 에 해당하는, 시수를 못 채운 강좌 목록."""
+    """Courses whose periods could not all be filled — Comcigan's "unassigned list"."""
     scheduled: dict[str, int] = {}
     for lesson in timetable.lessons:
         scheduled[lesson.course_id] = scheduled.get(lesson.course_id, 0) + 1

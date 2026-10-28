@@ -1,11 +1,11 @@
-"""pydantic 미러의 직렬화/역직렬화와 엔진 객체 왕복 검증."""
+"""Serialization/deserialization of the pydantic mirror and engine object round trips."""
 
 from datetime import date, datetime, timedelta
 
 import food_packaging as fp
 from food_packaging.models import PackagingScheduleModel, datetime_to_minute, minute_to_datetime
 
-MONDAY = datetime(2021, 2, 1)  # 재현 가능한 기준 시각
+MONDAY = datetime(2021, 2, 1)  # reproducible reference time
 
 
 def sample_model() -> PackagingScheduleModel:
@@ -69,15 +69,15 @@ def sample_model() -> PackagingScheduleModel:
 
 
 def test_minute_datetime_roundtrip():
-    assert datetime_to_minute(MONDAY) == 18659 * 1440  # 2021-02-01 epoch 분
+    assert datetime_to_minute(MONDAY) == 18659 * 1440  # 2021-02-01 in epoch minutes
     assert minute_to_datetime(datetime_to_minute(MONDAY)) == MONDAY
 
 
 def test_to_core_and_score():
     schedule = sample_model().to_core()
     score = fp.calculate_score(schedule)
-    # 체인: j0 는 0..100분(라인 시작 기준), j1 은 청소(B->A) 60분 뒤
-    # 160..360분. j0 는 ideal 100 에 딱 맞고, j2(50분)는 미배정.
+    # Chain: j0 runs 0..100 minutes (from the line start), j1 after 60 minutes of cleaning
+    # (B->A) runs 160..360. j0 hits ideal 100 exactly, and j2 (50 minutes) is unassigned.
     base = datetime_to_minute(MONDAY)
     jobs = schedule.jobs
     assert jobs[0].end_minute == base + 100
@@ -102,7 +102,7 @@ def test_json_roundtrip_preserves_score_and_assignment():
     clone = PackagingScheduleModel.model_validate_json(exported.model_dump_json())
     assert clone == exported
 
-    # 다시 엔진으로 보내도 점수가 동일해야 한다.
+    # Sending it back to the engine must give the same score.
     schedule2 = clone.to_core()
     assert fp.calculate_score(schedule2) == fp.Score(0, -50, -(360 * 360))
 
@@ -114,6 +114,6 @@ def test_from_core_on_demo():
     assert len(model.products) == 60
     assert len(model.jobs) == 100
     assert len(model.lines) == 5
-    # 데모는 전부 미배정으로 시작한다.
+    # The demo starts fully unassigned.
     assert all(job.line_id is None for job in model.jobs)
     assert (model.to_date - model.from_date).days == 14

@@ -239,7 +239,7 @@ void printSchedule(const FlightCrewSchedule &schedule)
                 continue;
             if (assignment.employee < 0)
             {
-                std::printf("  (미배정)");
+                std::printf("  (unassigned)");
                 continue;
             }
             const Employee &employee = schedule.employees[assignment.employee];
@@ -287,8 +287,8 @@ int main(int argc, char **argv)
     const int seconds = (argc > 1) ? std::atoi(argv[1]) : 10;
 
     FlightCrewSchedule schedule = generateDemoData(/*seed*/ 0);
-    std::printf("== 항공 승무원 스케줄링 데모 (공항 %zu, 항공편 %zu, 좌석 %zu, "
-                "승무원 %zu, %d초) ==\n",
+    std::printf("== flight crew scheduling demo (%zu airports, %zu flights, %zu seats, "
+                "%zu crew, %d s) ==\n",
                 schedule.airports.size(),
                 schedule.flights.size(),
                 schedule.flightAssignments.size(),
@@ -315,14 +315,14 @@ int main(int argc, char **argv)
     bool allAssigned = true;
     for (const FlightAssignment &assignment : schedule.flightAssignments)
         allAssigned = allAssigned && assignment.employee >= 0;
-    std::printf("  전 좌석 배정: %s\n", allAssigned ? "OK" : "FAIL");
+    std::printf("  all seats assigned: %s\n", allAssigned ? "OK" : "FAIL");
 
     if (schedule.score.hard == 0 && allAssigned)
     {
-        std::printf("  hard 0 도달: OK\n");
+        std::printf("  reached hard 0: OK\n");
         return 0;
     }
-    std::printf("  hard 0 도달 실패 (hard=%lld)\n",
+    std::printf("  failed to reach hard 0 (hard=%lld)\n",
                 static_cast<long long>(schedule.score.hard));
     return 1;
 }

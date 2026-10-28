@@ -1,32 +1,32 @@
-"""Task assigning (태스크 배정) — Timefold engine 기반 C++ 솔버의 Python 래퍼.
+"""Task assigning — Python wrapper of the C++ solver on the optimaru engine.
 
 `Customer`/`TaskType`/`Task`/`Employee`/`TaskAssigningSolution`/`Score`/
-`Solver`/`SolverConfig` 와 `calculate_score` 는 컴파일된 C++ 코어(`_core`)에서
-온다. planning variable 은 각 `Employee.tasks` — 그 직원이 연달아 수행할
-task 인덱스의 순서 있는 리스트다 (Java 원본의
-`@PlanningListVariable(allowsUnassignedValues = true)`). 어느 리스트에도
-없는 task 는 미배정이다.
+`Solver`/`SolverConfig` and `calculate_score` come from the compiled C++ core (`_core`).
+The planning variable is each `Employee.tasks` — the ordered list of task indices the
+employee performs back to back (the Java original's
+`@PlanningListVariable(allowsUnassignedValues = true)`). A task in no list is
+unassigned.
 
-shadow variable 은 Java 원본과 같은 규칙으로 유도된다
-(`calculate_score`/`Solver.solve` 가 다시 계산):
+Shadow variables are derived by the same rules as the Java original
+(recomputed by `calculate_score`/`Solver.solve`):
 
-    task.employee    == 리스트 소유 직원 인덱스 (-1 == 미배정)
-    task.start_time  == 첫 task 는 자신의 min_start_time,
-                        이후 task 는 max(이전 task 의 end, min_start_time)
-    duration         == base_duration x affinity 배수 (HIGH 1 / MEDIUM 2 /
+    task.employee    == index of the employee owning the list (-1 == unassigned)
+    task.start_time  == the first task gets its own min_start_time,
+                        later tasks max(end of the previous task, min_start_time)
+    duration         == base_duration x affinity multiplier (HIGH 1 / MEDIUM 2 /
                         LOW 3 / NONE 4)
 
-점수 규약 (BendableScore [1]hard/[3]soft, Java quickstart 그대로; 전부 벌점):
-  hard[0]  noMissingSkills              직원에게 없는 필수 스킬 수
-  soft[0]  minimizeUnassignedTasks      미배정 task 1건당 1
-  soft[1]  minimizeMakespan             직원별 endTime^2
+Score convention (BendableScore [1]hard/[3]soft, as in the Java quickstart; all penalties):
+  hard[0]  noMissingSkills              required skills the employee lacks
+  soft[0]  minimizeUnassignedTasks      1 per unassigned task
+  soft[1]  minimizeMakespan             endTime^2 per employee
   soft[2]  {critical|major|minor}PriorityTaskEndTime
                                         endTime x 4 / x 2 / x 1
-엔진 내부적으로는 HardSoftScore(int64, double)에
+Internally it maps onto HardSoftScore(int64, double) as
 `engine.hard = hard * 10**9 + soft0`, `engine.soft = soft1 * 10**7 + soft2`
-로 매핑된다 (레벨 순서 보존; 자세한 규칙은 cpp/include/ta/domain.hpp).
+(level order preserved; see cpp/include/ta/domain.hpp for the exact rules).
 
-고수준 진입점은 `solve` 다::
+The high-level entry point is `solve`::
 
     import task_assigning as ta
     from task_assigning.demo import generate_demo_data
@@ -35,7 +35,7 @@ shadow variable 은 Java 원본과 같은 규칙으로 유도된다
     result = ta.solve(solution, time_limit_seconds=10.0, random_seed=42)
     print(result.score_hard, result.score_soft0, result.score_soft1, result.score_soft2)
 
-pydantic 미러(직렬화용)는 `task_assigning.models` 에 있다 (선택 의존성).
+The pydantic mirror (for serialization) is in `task_assigning.models` (optional dependency).
 """
 
 from ._core import (
@@ -90,8 +90,8 @@ def _build_config(
     if parallel_solver_count is not None:
         cfg.parallel_solver_count = parallel_solver_count
     if stop_at_first_feasible:
-        # hard 0 + 전 태스크 배정 도달 즉시 종료 (soft1/soft2 는 사실상
-        # -inf 하한).
+        # Stop as soon as hard 0 + every task assigned is reached (soft1/soft2 have an
+        # effectively -inf floor).
         cfg.best_score_limit = (0, 0, -(2**62), -(2**62))
     if full_assert:
         cfg.full_assert = True
@@ -112,20 +112,20 @@ def solve(
     config=None,
     constraints=None,
 ):
-    """태스크 배정 문제를 풀어 같은 형태로 돌려주는 고수준 API.
+    """High-level API that solves a task assigning problem and returns it in the same shape.
 
-    ``solution`` 은 `_core.TaskAssigningSolution` (in place 로 풀고 그대로
-    반환) 또는 `models.TaskAssigningSolutionModel` (엔진 형태로 변환해 풀고
-    결과를 새 `TaskAssigningSolutionModel` 로 반환; pydantic 필요) 를 받는다.
+    ``solution`` is a `_core.TaskAssigningSolution` (solved in place and
+    returned) or a `models.TaskAssigningSolutionModel` (converted to the engine shape,
+    solved, and returned as a new `TaskAssigningSolutionModel`; needs pydantic).
 
-    ``config`` 가 기본 설정이 된다 (`SolverConfig`; None 이면 엔진 기본값
-    30초 예산). 명시한 키워드 인자가 config 위에 덮어쓴다.
-    ``stop_at_first_feasible`` 은 hard 0 (미배정 0 포함) 에 도달하는 즉시
-    종료한다. ``on_new_best`` 는 새 best 마다 ``(step, Score)`` 로 불린다.
+    ``config`` becomes the base settings (`SolverConfig`; None = engine default
+    30 s budget). Explicit keyword arguments override config.
+    ``stop_at_first_feasible`` stops as soon as hard 0 (including 0 unassigned) is
+    reached. ``on_new_best`` is called with ``(step, Score)`` on every new best.
 
-    ``constraints`` 로 비용 함수를 직접 고를 수 있다
-    (`task_assigning.constraints` 참고). 준 목록의 제약만 채점되고, None
-    이면 기본 여섯 제약 전부를 쓴다::
+    ``constraints`` picks the cost function directly
+    (see `task_assigning.constraints`). Only the listed constraints are scored; None
+    uses all six default constraints::
 
         from task_assigning.constraints import get_constraints
         ta.solve(solution, constraints=get_constraints())
@@ -150,12 +150,12 @@ def solve(
         _solve(solution)
         return solution
 
-    # pydantic 모델 경로 (지연 임포트: pydantic 은 선택 의존성).
+    # pydantic model path (lazy import: pydantic is an optional dependency).
     from .models import TaskAssigningSolutionModel
 
     if not isinstance(solution, TaskAssigningSolutionModel):
         raise TypeError(
-            f"solution 은 TaskAssigningSolution 또는 models.TaskAssigningSolutionModel 이어야 한다: {type(solution)!r}"
+            f"solution must be a TaskAssigningSolution or a models.TaskAssigningSolutionModel: {type(solution)!r}"
         )
     core_solution = solution.to_core()
     _solve(core_solution)

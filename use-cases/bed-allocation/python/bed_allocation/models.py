@@ -1,19 +1,19 @@
-"""엔진 도메인의 pydantic v2 미러 — JSON 직렬화/역직렬화용.
+"""Pydantic v2 mirror of the engine domain — for JSON serialization/deserialization.
 
-`_core` 의 Department/Room/Bed/Stay/BedPlan 을 1:1 로 미러링하되, Java
-quickstart 의 REST 표현처럼 참조는 id 문자열(`department_id`/`room_id`/
-`bed_id`)로, 날짜는 `datetime.date` 로 둔다. 엔진 변환(`to_core`)이 id 를
-인덱스로, 날짜를 정수 일(day ordinal)로 옮긴다::
+Mirrors `_core`'s Department/Room/Bed/Stay/BedPlan 1:1, but like the REST shape of the
+Java quickstart, references are id strings (`department_id`/`room_id`/`bed_id`) and
+dates are `datetime.date`. The engine conversion (`to_core`) turns ids into indices and
+dates into integer days (day ordinals)::
 
     from bed_allocation.models import BedPlanModel
 
     model = BedPlanModel.model_validate_json(payload)   # JSON -> pydantic
-    plan = model.to_core()                              # pydantic -> 엔진
+    plan = model.to_core()                              # pydantic -> engine
     ...solve...
-    solved = BedPlanModel.from_core(plan)               # 엔진 -> pydantic
+    solved = BedPlanModel.from_core(plan)               # engine -> pydantic
 
-`stays[i].bed_id` 는 배정된 병상 id, 미배정("no bed" 포함)이면 None 이다.
-`pydantic` 은 선택 의존성이다 (`pip install bed_allocation[models]`).
+`stays[i].bed_id` is the assigned bed id, or None when unassigned (including "no bed").
+`pydantic` is an optional dependency (`pip install bed_allocation[models]`).
 """
 
 from datetime import date
@@ -41,8 +41,8 @@ class _Model(BaseModel):
 
 
 class DepartmentModel(_Model):
-    """진료 부서. specialty_to_priority 는 부서가 제공하는 전문과목과 그
-    우선순위(1 == 최우선)."""
+    """A department. specialty_to_priority holds the specialties the department offers
+    and their priority (1 == highest)."""
 
     id: str
     name: str = ""
@@ -52,8 +52,8 @@ class DepartmentModel(_Model):
 
 
 class RoomModel(_Model):
-    """병실. gender_limitation: ANY_GENDER / MALE_ONLY / FEMALE_ONLY /
-    SAME_GENDER (한 병실의 동시 재원 환자는 같은 성별이어야 함)."""
+    """A room. gender_limitation: ANY_GENDER / MALE_ONLY / FEMALE_ONLY /
+    SAME_GENDER (concurrent patients in one room must share a gender)."""
 
     id: str
     name: str = ""
@@ -65,12 +65,12 @@ class RoomModel(_Model):
     @model_validator(mode="after")
     def _valid_limitation(self):
         if self.gender_limitation not in GENDER_LIMITATIONS:
-            raise ValueError(f"gender_limitation 은 {GENDER_LIMITATIONS} 중 하나여야 한다: {self.gender_limitation!r}")
+            raise ValueError(f"gender_limitation must be one of {GENDER_LIMITATIONS}: {self.gender_limitation!r}")
         return self
 
 
 class BedModel(_Model):
-    """병상 (planning value)."""
+    """A bed (planning value)."""
 
     id: str
     room_id: str
@@ -78,8 +78,8 @@ class BedModel(_Model):
 
 
 class StayModel(_Model):
-    """planning entity: 환자의 재원 한 건. `bed_id` 가 planning variable
-    (None == 미배정)."""
+    """Planning entity: one patient stay. `bed_id` is the planning variable
+    (None == unassigned)."""
 
     id: str
     patient_name: str = ""
@@ -96,14 +96,14 @@ class StayModel(_Model):
     @model_validator(mode="after")
     def _valid(self):
         if self.patient_gender not in GENDERS:
-            raise ValueError(f"patient_gender 는 {GENDERS} 중 하나여야 한다: {self.patient_gender!r}")
+            raise ValueError(f"patient_gender must be one of {GENDERS}: {self.patient_gender!r}")
         if self.departure_date < self.arrival_date:
-            raise ValueError("departure_date 는 arrival_date 보다 빠를 수 없다")
+            raise ValueError("departure_date cannot be before arrival_date")
         return self
 
 
 class BedPlanModel(_Model):
-    """planning solution 미러. score_* 는 읽기 전용 결과라 별도 필드로 둔다."""
+    """Planning solution mirror. score_* are read-only results, kept as separate fields."""
 
     departments: list[DepartmentModel]
     rooms: list[RoomModel]
@@ -119,26 +119,26 @@ class BedPlanModel(_Model):
         room_ids = {r.id for r in self.rooms}
         bed_ids = {b.id for b in self.beds}
         if len(department_ids) != len(self.departments):
-            raise ValueError("department id 가 중복된다")
+            raise ValueError("duplicate department id")
         if len(room_ids) != len(self.rooms):
-            raise ValueError("room id 가 중복된다")
+            raise ValueError("duplicate room id")
         if len(bed_ids) != len(self.beds):
-            raise ValueError("bed id 가 중복된다")
+            raise ValueError("duplicate bed id")
         for room in self.rooms:
             if room.department_id not in department_ids:
-                raise ValueError(f"room {room.id!r} 의 department_id {room.department_id!r} 가 없다")
+                raise ValueError(f"room {room.id!r} has unknown department_id {room.department_id!r}")
         for bed in self.beds:
             if bed.room_id not in room_ids:
-                raise ValueError(f"bed {bed.id!r} 의 room_id {bed.room_id!r} 가 없다")
+                raise ValueError(f"bed {bed.id!r} has unknown room_id {bed.room_id!r}")
         for stay in self.stays:
             if stay.bed_id is not None and stay.bed_id not in bed_ids:
-                raise ValueError(f"stay {stay.id!r} 의 bed_id {stay.bed_id!r} 가 없다")
+                raise ValueError(f"stay {stay.id!r} has unknown bed_id {stay.bed_id!r}")
         return self
 
     def to_core(self) -> "_core.BedPlan":
-        """pydantic -> 엔진 객체 (id 참조를 인덱스로, 날짜를 day ordinal 로;
-        score 필드는 엔진이 다시 계산하므로 무시). bed_id None 은 미초기화
-        (-1) 로 옮긴다 — 솔버가 배정을 결정한다."""
+        """pydantic -> engine object (id references to indices, dates to day ordinals;
+        the score field is ignored since the engine recomputes it). bed_id None becomes
+        uninitialized (-1) — the solver decides the assignment."""
         department_index = {d.id: i for i, d in enumerate(self.departments)}
         room_index = {r.id: i for i, r in enumerate(self.rooms)}
         bed_index = {b.id: i for i, b in enumerate(self.beds)}
@@ -185,8 +185,8 @@ class BedPlanModel(_Model):
 
     @classmethod
     def from_core(cls, plan: "_core.BedPlan") -> "BedPlanModel":
-        """엔진 객체 -> pydantic (현재 배정과 score 포함). 실제 병상이 아닌
-        값(-1 미초기화, "no bed" 센티널)은 bed_id None 이 된다."""
+        """engine object -> pydantic (including the current assignment and score). Values that
+        are not real beds (-1 uninitialized, the "no bed" sentinel) become bed_id None."""
         bed_count = plan.bed_count()
         return cls(
             departments=[

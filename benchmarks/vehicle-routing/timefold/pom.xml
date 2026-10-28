@@ -13,7 +13,7 @@
   <properties>
     <maven.compiler.release>21</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <version.ai.timefold.solver>2.7.1</version.ai.timefold.solver>
+    <version.ai.timefold.solver>2.6.0</version.ai.timefold.solver>
     <version.org.slf4j>2.0.17</version.org.slf4j>
   </properties>
 

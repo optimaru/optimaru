@@ -1,5 +1,5 @@
-"""데모 인스턴스 solve 테스트: feasible(hard 0, 전 태스크 배정) 도달과 결과
-일관성."""
+"""Demo instance solve test: reaching feasible (hard 0, every task assigned) and result
+consistency."""
 
 import task_assigning as ta
 from task_assigning.demo import generate_demo_data
@@ -12,11 +12,11 @@ def test_demo_solve_reaches_feasible():
 
     assert isinstance(result, TaskAssigningSolutionModel)
     assert result.score_hard == 0
-    assert result.score_soft0 == 0  # 전 태스크 배정
-    # 모든 task 가 정확히 한 직원에게 배정되어 있다.
+    assert result.score_soft0 == 0  # every task assigned
+    # Every task is assigned to exactly one employee.
     assigned = [task_id for employee in result.employees for task_id in employee.tasks]
     assert sorted(assigned) == sorted(t.id for t in result.tasks)
-    # 결과 점수는 재채점과 일치해야 한다.
+    # The result score must match a rescoring.
     resolution = result.to_core()
     score = ta.calculate_score(resolution)
     assert (score.hard, score.soft0, score.soft1, score.soft2) == (
@@ -33,7 +33,7 @@ def test_solve_core_solution_in_place():
     assert returned is solution
     assert solution.score.is_feasible()
     assert solution.score.soft0 == 0
-    # start_time shadow 가 채워져 있어야 한다 (첫 task 는 min_start_time).
+    # The start_time shadow must be filled in (the first task gets min_start_time).
     for task in solution.tasks:
         assert task.employee >= 0
         assert task.start_time >= 0

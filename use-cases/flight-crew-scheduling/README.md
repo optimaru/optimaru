@@ -1,65 +1,65 @@
 # Flight Crew Scheduling (C++ / Python)
 
 Timefold quickstart [flight-crew-scheduling](https://github.com/TimefoldAI/timefold-quickstarts)
-을 이 레포의 C++ 엔진(`include/optimaru/`) 위에 포팅한 것이다. 항공편의 승무원
-좌석(`FlightAssignment`)마다 승무원(`employee`)을 고르는 **BASIC 변수** 문제.
+ported onto this repository's C++ engine (`include/optimaru/`). A **BASIC variable** problem
+that picks a crew member (`employee`) for every crew seat of a flight (`FlightAssignment`).
 
-## 점수 매핑
+## Score mapping
 
-Java 원본이 `HardSoftScore`(정수 2레벨)라 엔진의
-`HardSoftScore(int64 hard, double soft)` 에 **그대로(identity)** 매핑된다.
-레벨 접기 없음. 제약 가중치도 Java `ConstraintProvider` 그대로:
+The Java original uses `HardSoftScore` (two integer levels), so it maps onto the engine's
+`HardSoftScore(int64 hard, double soft)` **as-is (identity)**. No level folding. The
+constraint weights are also exactly those of the Java `ConstraintProvider`:
 
-| 제약 | 레벨 | 벌점 |
+| Constraint | Level | Penalty |
 |---|---|---|
-| requiredSkill | hard | 배정당 -100 |
-| flightConflict | hard | 겹치는 같은 승무원 배정 쌍당 -10 |
-| transferBetweenTwoFlights | hard | 끊긴 연속 배정 쌍당 -1 |
-| employeeUnavailability | hard | 불가일 배정당 -10 |
+| requiredSkill | hard | -100 per assignment |
+| flightConflict | hard | -10 per overlapping same-crew assignment pair |
+| transferBetweenTwoFlights | hard | -1 per disconnected consecutive assignment pair |
+| employeeUnavailability | hard | -10 per assignment on an unavailable day |
 | firstAssignmentNotDepartingFromHome | soft | -1000 |
 | lastAssignmentNotArrivingAtHome | soft | -1000 |
 
-"연속" 의미론은 Java 스트림과 동일하다: 쌍 (a, b) 는 dep(a) < dep(b) 이고
-같은 승무원의 다른 배정 c 가 dep(a) <= dep(c) < dep(b) 를 만족하지 않을 때
-연속이다 — 출발시각이 동률인 배정이 있으면 그 시각의 배정은 쌍의 앞자리가
-될 수 없고, 뒷자리 동률은 전부 센다. first/last 도 동률을 전부 센다.
+"Consecutive" follows the Java stream semantics: a pair (a, b) is consecutive when
+dep(a) < dep(b) and no other assignment c of the same crew member satisfies
+dep(a) <= dep(c) < dep(b) — with tied departure times, assignments at that time cannot
+start a pair, and all ties at the later end count. first/last also count all ties.
 
-## 빌드/실행
+## Build/run
 
 ```bash
 cd cpp
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j4
-./build/fcs_test      # 제약별 손계산 + 랜덤 워크 + FULL_ASSERT + pinned
-./build/fcs_demo 10   # Java DemoDataGenerator 규모 재현, 10초 solve
+./build/fcs_test      # per-constraint hand checks + random walk + FULL_ASSERT + pinned
+./build/fcs_demo 10   # reproduces the Java DemoDataGenerator scale, 10 s solve
 
 cd ../python
 uv venv && uv pip install -e . pytest pydantic
 uv run pytest -q
 ```
 
-데모는 Java 데모와 같은 규모(공항 6, 5일, 항공편 14, 좌석 ~60, 승무원
-~50)를 생성하고 10초 안에 feasible(hard 0)에 도달한다.
+The demo generates the same scale as the Java demo (6 airports, 5 days, 14 flights, ~60
+seats, ~50 crew members) and reaches feasible (hard 0) within 10 s.
 
-## 구성
+## Layout
 
-- `cpp/include/fcs/domain.hpp` — 도메인 + `SolutionDescriptor` 특수화
-  (pinned 확장 포함)
-- `cpp/src/score_calculator.cpp` — 전체 재계산 (정답 기준)
-- `cpp/src/incremental_calculator.cpp` — before/after 훅, 승무원 단위
-  O(delta) 증분 계산
-- `cpp/src/solver.cpp` — 엔진 래퍼 (LA + ALNS)
-- `python/` — pybind11 패키지 `flight_crew` (pydantic v2 미러 포함,
-  자세한 사용법은 `python/README.md`)
+- `cpp/include/fcs/domain.hpp` — domain + `SolutionDescriptor` specialization
+  (including the pinned extension)
+- `cpp/src/score_calculator.cpp` — full recompute (the reference)
+- `cpp/src/incremental_calculator.cpp` — before/after hooks, per-crew-member
+  O(delta) incremental scoring
+- `cpp/src/solver.cpp` — engine wrapper (LA + ALNS)
+- `python/` — pybind11 package `flight_crew` (with the pydantic v2 mirror;
+  see `python/README.md` for usage)
 
-## 원본과의 차이 (caveat)
+## Differences from the original (caveat)
 
-- Java `Airport.taxiTimeInMinutes` 는 원본에서도 어떤 제약/데모에도 쓰이지
-  않는 필드라 생략했다.
-- 데모 데이터는 Java 와 같은 생성 로직/규모지만 RNG 가 달라(std::mt19937_64
-  vs java.util.Random) 인스턴스가 바이트 단위로 같지는 않다.
-- `pinned` 는 이 포트의 확장이다 (원본 quickstart 에는 없음; es/st 포트와
-  동일 패턴).
+- Java `Airport.taxiTimeInMinutes` is a field no constraint or demo uses even in the
+  original, so it was omitted.
+- The demo data uses the same generation logic and scale as Java, but the RNG differs
+  (std::mt19937_64 vs java.util.Random), so the instances are not byte-identical.
+- `pinned` is an extension of this port (not in the original quickstart; the same pattern
+  as the es/st ports).
 
 <!-- usage-and-extending -->
 
@@ -142,5 +142,6 @@ solver's `solve` before the engine runs — the engine only fills what is still 
 
 ## Benchmark
 
-[`benchmarks/flight-crew-scheduling`](../../benchmarks/flight-crew-scheduling) compares this use case with
-OR-Tools CP-SAT on the same instances, rescored by the same evaluator.
+[`benchmarks/flight-crew-scheduling`](../../benchmarks/flight-crew-scheduling) compares this use case with OR-Tools CP-SAT and Timefold Solver 2.6.0 on the same instances. Every solution is rescored by the Timefold quickstart's `ConstraintProvider`, so all three are judged by the same rules.
+
+Latest run (30 s per solver, 3 instances): best score by the engine on 3, CP-SAT on 1, Timefold on 0 (ties count for each). Full table: [benchmarks/flight-crew-scheduling/README.md](../../benchmarks/flight-crew-scheduling/README.md#results).

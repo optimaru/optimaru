@@ -120,7 +120,7 @@ void printSchedule(const TournamentSchedule &schedule)
         unavailable[penalty.team][penalty.day] = 1;
     }
 
-    std::printf("  [일자별 대진]  (! = 불가일 위반)\n");
+    std::printf("  [fixtures per day]  (! = unavailability violated)\n");
     for (int d = 0; d < schedule.dayCount(); ++d)
     {
         std::printf("    Day %2d:", d);
@@ -140,7 +140,7 @@ void printSchedule(const TournamentSchedule &schedule)
         std::printf("\n");
     }
 
-    std::printf("\n  [팀별 배정 수]");
+    std::printf("\n  [assignments per team]");
     std::vector<int> loads(teamCount, 0);
     for (const TeamAssignment &assignment : schedule.teamAssignments)
     {
@@ -152,7 +152,7 @@ void printSchedule(const TournamentSchedule &schedule)
         std::printf(" %s=%d", schedule.teams[t].name.c_str(), loads[t]);
     }
 
-    std::printf("\n\n  [팀 쌍별 대결 수]\n");
+    std::printf("\n\n  [head-to-heads per team pair]\n");
     std::vector<std::vector<int>> perDay(
         teamCount, std::vector<int>(schedule.dayCount(), 0));
     for (const TeamAssignment &assignment : schedule.teamAssignments)
@@ -187,8 +187,8 @@ int main(int argc, char **argv)
     const int seconds = (argc > 1) ? std::atoi(argv[1]) : 10;
 
     TournamentSchedule schedule = generateDemoData();
-    std::printf("== 토너먼트 스케줄링 데모 (팀 %d, %d일 x 슬롯 %d = 배정 %zu, "
-                "불가일 %zu, %d초) ==\n",
+    std::printf("== tournament scheduling demo (%d teams, %d days x %d slots = %zu assignments, "
+                "%zu unavailable, %d s) ==\n",
                 schedule.teamCount(),
                 DAY_COUNT,
                 ASSIGNMENTS_PER_DAY,
@@ -241,7 +241,7 @@ int main(int argc, char **argv)
                     confrontations.push_back(count);
             }
         }
-        std::printf("  (Java 점수 레벨로: %lldhard/-%.6fmedium/-%.6fsoft)\n\n",
+        std::printf("  (at Java score levels: %lldhard/-%.6fmedium/-%.6fsoft)\n\n",
                     static_cast<long long>(schedule.score.hard),
                     ScoreCalculator::unfairness(loads),
                     ScoreCalculator::unfairness(confrontations));
@@ -254,14 +254,14 @@ int main(int argc, char **argv)
         if (assignment.team < 0)
             allAssigned = false;
     }
-    std::printf("  전 배정 완료: %s\n", allAssigned ? "OK" : "FAIL");
+    std::printf("  all assignments made: %s\n", allAssigned ? "OK" : "FAIL");
 
     if (schedule.score.hard == 0 && allAssigned)
     {
-        std::printf("  hard 0 (feasible) 도달: OK\n");
+        std::printf("  reached hard 0 (feasible): OK\n");
         return 0;
     }
-    std::printf("  hard 0 도달 실패 (hard=%lld)\n",
+    std::printf("  failed to reach hard 0 (hard=%lld)\n",
                 static_cast<long long>(schedule.score.hard));
     return 1;
 }

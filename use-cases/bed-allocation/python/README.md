@@ -1,10 +1,10 @@
-# bed_allocation — 병상 배정 (Timefold quickstart 포트)
+# bed_allocation — bed allocation (Timefold quickstart port)
 
 Timefold quickstart [bed-allocation](https://github.com/TimefoldAI/timefold-quickstarts)
-(병원 병상 배정, PAS)을 `include/optimaru/`의 범용 C++ 엔진 위에 포팅한 `../cpp` 구현의
-pybind11 패키지. 재원(Stay)마다 병상(Bed) 하나를 고르는 BASIC 변수 도메인이다.
+(hospital bed allocation, PAS): the pybind11 package of the `../cpp` implementation ported
+onto the generic C++ engine in `include/optimaru/`. A BASIC-variable domain that picks one bed (Bed) per stay (Stay).
 
-## 설치 / 테스트
+## Install / test
 
 ```bash
 cd use-cases/bed-allocation/python
@@ -12,83 +12,84 @@ uv venv && uv pip install -e . pytest pydantic
 uv run pytest -q
 ```
 
-## 사용
+## Usage
 
 ```python
 import bed_allocation as ba
 from bed_allocation.demo import generate_demo_data
 
-plan = generate_demo_data()          # pydantic BedPlanModel (부서 1, 병실 10, 병상 13, 재원 ~75)
+plan = generate_demo_data()          # pydantic BedPlanModel (1 department, 10 rooms, 13 beds, ~75 stays)
 result = ba.solve(plan, time_limit_seconds=10.0, random_seed=42)
 print(result.score_hard, result.score_medium, result.score_soft)
 print([s.bed_id for s in result.stays][:5])
 ```
 
-`_core.BedPlan` 을 직접 만들어 넘기면 in place 로 풀린다. JSON 직렬화는
-`bed_allocation.models.BedPlanModel` (pydantic v2) 사용.
+Passing a hand-built `_core.BedPlan` solves it in place. For JSON serialization use
+`bed_allocation.models.BedPlanModel` (pydantic v2).
 
-## 도메인과 planning variable
+## Domain and planning variables
 
-`Stay.bed` 하나가 planning variable 이다 (엔진 BASIC 인코딩):
+`Stay.bed` is the only planning variable (engine BASIC encoding):
 
-| 값 | 의미 |
+| Value | Meaning |
 |---|---|
-| `-1` | 미초기화 — 점수 기여 없음 (입력 상태) |
-| `0..bed_count()-1` | 실제 병상 인덱스 |
-| `bed_count()` (= `no_bed_value()`) | **"no bed" 센티널** — quickstart 의 null 병상 |
+| `-1` | uninitialized — no score contribution (input state) |
+| `0..bed_count()-1` | real bed index |
+| `bed_count()` (= `no_bed_value()`) | **"no bed" sentinel** — the quickstart's null bed |
 
-Java 원본의 `@PlanningVariable(allowsUnassigned = true)` 는 값 범위에
-센티널 하나를 추가해 재현했다: 탐색이 재원을 "no bed" 로 옮길 수 있고,
-그 재원은 medium 레벨로 박수만큼 벌점을 받는다. 그래서 hard 0 은 항상
-도달 가능하다 (모든 hard 위반은 배정을 포기하는 것으로 풀 수 있으므로).
+The Java original's `@PlanningVariable(allowsUnassigned = true)` is reproduced by
+adding one sentinel to the value range: the search can move a stay to "no bed", and
+that stay is penalized per night at the medium level. So hard 0 is always reachable
+(every hard violation can be resolved by giving up the assignment).
 
-## 점수 매핑 (HardMediumSoftScore -> 엔진 HardSoftScore)
+## Score mapping (HardMediumSoftScore -> engine HardSoftScore)
 
-원본 점수형은 `HardMediumSoftScore`, 엔진은 `HardSoftScore(int64 hard,
-double soft)` 뿐이다. 매핑 규칙 (`cpp/include/ba/domain.hpp`):
+The original score type is `HardMediumSoftScore`; the engine only has `HardSoftScore(int64 hard,
+double soft)`. The mapping rule (`cpp/include/ba/domain.hpp`):
 
 ```
 engine.hard = hard
-engine.soft = medium * 10^9 + soft      # 전 제약이 벌점(<= 0)이고 정수
+engine.soft = medium * 10^9 + soft      # every constraint is a penalty (<= 0) and an integer
 ```
 
-`|soft| < 10^9` 인 한 double(2^53 까지 정확) 안에서 medium 이 soft 를
-사전식으로 지배한다 — soft 합의 상한은 약 `228 x 총 재원박수` 라서 수백만
-재원박수 규모까지 정확하다. Python `Score` 는 3레벨 그대로 노출된다.
+While `|soft| < 10^9`, medium dominates soft lexicographically within a double (exact up
+to 2^53) — the soft sum is bounded by about `228 x total stay-nights`, so it stays exact up
+to millions of stay-nights. The Python `Score` exposes all three levels as-is.
 
-## 제약 (Java `BedAllocationConstraintProvider` 와 동일 의미론, 12개)
+## Constraints (same semantics as Java `BedAllocationConstraintProvider`, 12 of them)
 
-| 레벨 | 제약 | 벌점 |
+| Level | Constraint | Penalty |
 |---|---|---|
-| hard | sameBedInSameNight | 겹침 박수 x 1000 |
-| hard | femaleInMaleRoom / maleInFemaleRoom | 박수 x 50 |
-| hard | differentGenderInSameGenderRoomInSameNight | 겹침 박수 x 1000 |
-| hard | departmentMinimumAge / departmentMaximumAge | 박수 x 100 |
-| hard | requiredPatientEquipment | 박수 x (병실에 **있는** 필수 장비 수) x 50 |
-| medium | assignEveryPatientToABed | "no bed" 재원의 박수 x 1 |
-| soft | preferredMaximumRoomCapacity | 박수 x 8 |
-| soft | departmentSpecialty | 박수 x 10 |
-| soft | departmentSpecialtyNotFirstPriority | 박수 x (우선순위-1) x 10 |
-| soft | preferredPatientEquipment | 박수 x (없는 선호 장비 수) x 50 |
+| hard | sameBedInSameNight | overlapping nights x 1000 |
+| hard | femaleInMaleRoom / maleInFemaleRoom | nights x 50 |
+| hard | differentGenderInSameGenderRoomInSameNight | overlapping nights x 1000 |
+| hard | departmentMinimumAge / departmentMaximumAge | nights x 100 |
+| hard | requiredPatientEquipment | nights x (required equipment the room **has**) x 50 |
+| medium | assignEveryPatientToABed | nights of "no bed" stays x 1 |
+| soft | preferredMaximumRoomCapacity | nights x 8 |
+| soft | departmentSpecialty | nights x 10 |
+| soft | departmentSpecialtyNotFirstPriority | nights x (priority-1) x 10 |
+| soft | preferredPatientEquipment | nights x (missing preferred equipment) x 50 |
 
-주의점 (원본 그대로 유지한 것):
+Caveats (kept exactly as in the original):
 
-- **requiredPatientEquipment 는 병실에 '있는' 필수 장비 수로 가중한다.**
-  필수 장비가 하나라도 모자라면 필터가 켜지고, 매치 가중치는 '없는' 수가
-  아니라 '있는' 수다 — 전무한 병실은 벌점 0. 직관과 다르지만 Java 원본의
-  유닛테스트(`penalizesBy(6)`)가 이 의미론을 고정하고 있어 그대로 포팅했다.
-- departmentSpecialtyNotFirstPriority 는 부서가 그 전문과목을 제공할 때만
-  적용된다. (Java 는 미제공이면 `getSpecialtyPriority()` 가 NPE 를 던지는
-  코드라 그 경로의 의미론이 정의되어 있지 않다 — 여기서는 건너뛰고, 미제공은
-  departmentSpecialty 벌점만 받는다.)
-- 날짜는 정수 일 인덱스다 (`models` 는 `datetime.date.toordinal()` 사용).
-  `night_count = departure - arrival + 1` (원본의 `+ 1` 유지).
+- **requiredPatientEquipment weighs by the required equipment the room HAS.**
+  The filter fires when any required equipment is missing, and the match weight is the
+  count present, not the count missing — a room with none costs 0. Counterintuitive, but
+  the Java original's unit test (`penalizesBy(6)`) pins these semantics, so they were
+  ported as-is.
+- departmentSpecialtyNotFirstPriority applies only when the department offers that
+  specialty. (In Java, `getSpecialtyPriority()` throws an NPE when it is not offered, so
+  that path has no defined semantics — here it is skipped, and a missing specialty only
+  gets the departmentSpecialty penalty.)
+- Dates are integer day indices (`models` uses `datetime.date.toordinal()`).
+  `night_count = departure - arrival + 1` (the original's `+ 1` is kept).
 
-## 데모
+## Demo
 
-`bed_allocation.demo.generate_demo_data()` 는 Java `DemoDataGenerator` 를
-재현한다: 부서 1개(전문과목 3개), 전부 SAME_GENDER 인 병실 10개(병상 13),
-28박, 병실 타임라인당 순차 재원 ~75건, 원본과 같은 성별/연령/장비 분포.
-(java.util.Random 스트림까지 동일하지는 않다 — 분포와 규모 기준.)
-C++ 데모(`cpp/build/ba_demo`)는 10초 안에 hard 0 / medium 0 (전원 배정)에
-도달한다.
+`bed_allocation.demo.generate_demo_data()` reproduces the Java `DemoDataGenerator`:
+1 department (3 specialties), 10 rooms, all SAME_GENDER (13 beds), 28 nights, ~75
+sequential stays per room timeline, with the original's gender/age/equipment
+distributions. (The java.util.Random stream itself is not identical — distributions and
+scale are the reference.) The C++ demo (`cpp/build/ba_demo`) reaches hard 0 / medium 0
+(everyone assigned) within 10 s.

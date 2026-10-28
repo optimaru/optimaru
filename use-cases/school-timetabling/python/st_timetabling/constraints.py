@@ -1,13 +1,13 @@
-"""캐노니컬 제약 조립 스펙 — 플러그인 방식으로 비용 함수를 만드는 API.
+"""Canonical constraint assembly specs — an API to build the cost function from plugins.
 
-기본 fast path(모놀리식 인크리멘털 계산기)는 H1~H10/S1~S6 전부를 하드코딩된
-구성으로 계산한다. 이 모듈은 그 옆의 선택 경로다: 제약을 하나씩 골라 weight
-를 바꾸고, 하드/소프트 레벨을 뒤집고, 일부를 빼는 조립을 선언한 뒤
-``solve(problem, constraints=...)`` 또는 ``canon.DecomposedCalculator`` 에
-넘긴다 .
+The default fast path (the monolithic incremental calculator) scores all of
+H1–H10/S1–S6 in a hard-coded configuration. This module is the optional path
+next to it: declare an assembly that picks constraints one by one, changes
+their weights, flips hard/soft levels and drops some, then pass it to
+``solve(problem, constraints=...)`` or ``canon.DecomposedCalculator``.
 
-가장 짧은 사용법은 :class:`Assembly` 다 — 기본값은 캐노니컬 15개 전부라
-"기본에서 조금 바꾸는" 선언이 한 줄로 끝난다::
+The shortest form is :class:`Assembly` — it starts from all 15 canonical
+constraints, so "the defaults with a small change" is a one-liner::
 
     from st_timetabling.constraints import Assembly
 
@@ -16,28 +16,29 @@
         constraints=Assembly().add("teacher_gap", weight=40).drop("teacher_workday"),
     )
 
-es 처럼 스펙 인스턴스 리스트로 처음부터 조립할 수도 있다::
+An assembly can also be built from scratch as a list of spec instances::
 
     from st_timetabling.constraints import ClassConflict, TeacherConflict, TeacherGap
 
     constraints = [ClassConflict(), TeacherConflict(), TeacherGap(weight=40)]
     result = st.solve(problem, constraints=constraints)
 
-모든 스펙은 ``(weight=None, hard=None, exponent=1.0)`` 를 받는다:
+Every spec takes ``(weight=None, hard=None, exponent=1.0)``:
 
-- ``weight``   제약 비용의 선형 배수. ``None`` 은 컴포넌트 기본값
-               (하드 H* = 1, 소프트 S* = cpsat ``ObjectiveWeights`` 기본
-               가중치 — solve() 경로에서는 ``weights`` 인자가 그 기본을
-               대신한다).
-- ``hard``     ``True``/``False`` 로 기본 하드/소프트 레벨을 뒤집는다
-               (각 클래스 docstring 의 "기본: 하드/소프트" 참고);
-               ``None`` 은 기본 유지.
-- ``exponent`` 부호 보존 거듭제곱 셰이핑: ``weight * sign(c) * |c| **
-               exponent``. 2.0 = 제곱 — 몰린 위반이 기하급수로 비싸진다.
+- ``weight``   linear multiplier of the constraint cost. ``None`` is the
+               component default (hard H* = 1, soft S* = the cpsat
+               ``ObjectiveWeights`` default — on the solve() path the
+               ``weights`` argument replaces that default).
+- ``hard``     ``True``/``False`` flips the default hard/soft level
+               (see "Default: hard/soft" in each class docstring);
+               ``None`` keeps the default.
+- ``exponent`` sign-preserving power shaping: ``weight * sign(c) * |c| **
+               exponent``. 2.0 = squared — concentrated violations get
+               disproportionately expensive.
 
-스펙은 순수 데이터 홀더다; C++ 코어가 ``.name`` / ``.weight`` / ``.hard`` /
-``.exponent`` 를 읽는다. H2(고정 시간)는 스펙이 없다 — pinned 레슨으로
-엔진이 아예 움직이지 않아 채점 대상이 아니다.
+Specs are plain data holders; the C++ core reads ``.name`` / ``.weight`` /
+``.hard`` / ``.exponent``. H2 (fixed time) has no spec — pinned lessons are
+never moved by the engine and are not scored.
 """
 
 from dataclasses import dataclass
@@ -75,97 +76,99 @@ __all__ = [
 
 
 def list_constraints() -> tuple[str, ...]:
-    """조립에 쓸 수 있는 제약 이름 전부 (C++ 레지스트리와 같은 순서)."""
+    """Every constraint name an assembly accepts (same order as the C++ registry)."""
     return tuple(canon.CONSTRAINT_NAMES)
 
 
 @dataclass(frozen=True)
 class Constraint:
-    """기본 스펙: 제약 선택 + weight / level / shaping 메타데이터."""
+    """Base spec: constraint choice + weight / level / shaping metadata."""
 
-    weight: float | None = None  # None = 컴포넌트 기본 가중치 유지
-    hard: bool | None = None  # None = 컴포넌트 기본 레벨 유지
+    weight: float | None = None  # None = keep the component's default weight
+    hard: bool | None = None  # None = keep the component's default level
     exponent: float = 1.0
     name: ClassVar[str] = ""
-    #: 컴포넌트 기본 레벨/가중치. 이 둘이 목적함수의 원본이다 — 소프트 항의
-    #: 가중치 목록을 따로 손으로 들고 있으면 제약을 추가할 때 반드시 갈라진다
-    #: (`soft_specs()` / `default_weights()` 가 여기서 나온다).
+    #: The component's default level/weight. These two are the source of the
+    #: objective — a separately hand-kept list of soft weights would drift as
+    #: soon as a constraint is added (`soft_specs()` / `default_weights()` derive from here).
     default_hard: ClassVar[bool] = True
     default_weight: ClassVar[float] = 1.0
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
         if not cls.name:
-            raise TypeError(f"{cls.__name__} 는 registry `name` 을 설정해야 한다")
+            raise TypeError(f"{cls.__name__} must set the registry `name`")
 
 
 class UnassignedLesson(Constraint):
-    """H1: 미배정 수업당 1점. 기본: 하드, weight 1.
+    """H1: 1 point per unassigned lesson. Default: hard, weight 1.
 
-    `hard=False` 로 내리면 **부분 편성**이 된다 (cpsat 의
-    `WeeklyPeriodCounts(hard=false)` 와 같은 계약): 탐색에 미배정 무브가 붙어
-    "배정하지 않는다" 가 선택지가 되고, 못 채운 시수는 하드 위반이 아니라
-    `penalties["weekly_period_counts"]` 로 보고된다. 그때 `weight` 가 미배정
-    1시간의 값이므로 다른 소프트 항 합보다 크게 둔다 (cpsat 기본 10000) —
-    작게 두면 공강 몇 개를 아끼려고 수업을 빼 버린다."""
+    Demoting it with `hard=False` gives **partial timetabling** (the same
+    contract as cpsat's `WeeklyPeriodCounts(hard=false)`): the search gains
+    unassign moves, so "leave it out" becomes an option, and unfilled periods
+    are reported as `penalties["weekly_period_counts"]` instead of a hard
+    violation. `weight` is then the price of one unassigned period, so keep it
+    above the sum of the other soft terms (cpsat default 10000) — set too low,
+    lessons get dropped to save a few gaps."""
 
     name = "unassigned_lesson"
 
 
 class ClassConflict(Constraint):
-    """H3: 같은 시간의 동일 학급 수업 쌍당 1점. 기본: 하드, weight 1."""
+    """H3: 1 point per pair of same-class lessons at the same time. Default: hard, weight 1."""
 
     name = "class_conflict"
 
 
 class TeacherConflict(Constraint):
-    """H4: 같은 시간의 수업 쌍이 공유하는 교사당 1점 (팀티칭 포함).
-    기본: 하드, weight 1."""
+    """H4: 1 point per teacher shared by a pair of lessons at the same time
+    (team teaching included). Default: hard, weight 1."""
 
     name = "teacher_conflict"
 
 
 class SlotNotAllowed(Constraint):
-    """H5: allowed_slot 테이블 밖 배정당 1점 (금지 시간 + 교사/학급 불가
-    시간이 변환 단계에서 그 테이블로 접힌다). 기본: 하드, weight 1."""
+    """H5: 1 point per placement outside the allowed_slot table (forbidden
+    times and teacher/class unavailability are folded into that table by the
+    conversion). Default: hard, weight 1."""
 
     name = "slot_not_allowed"
 
 
 class RoomCapacity(Constraint):
-    """H6: (특별실 타입, 시간)별 max(0, 수요 - 보유 수)의 합.
-    기본: 하드, weight 1."""
+    """H6: sum over (special-room type, time) of max(0, demand - rooms).
+    Default: hard, weight 1."""
 
     name = "room_capacity"
 
 
 class CourseDailyLimit(Constraint):
-    """H7: (강좌, 요일)별 max(0, 배정 수 - 일일 상한)의 합.
-    기본: 하드, weight 1."""
+    """H7: sum over (course, weekday) of max(0, placed - daily cap).
+    Default: hard, weight 1."""
 
     name = "course_daily_limit"
 
 
 class BlockAdjacency(Constraint):
-    """H8: 연강 그룹의 같은 요일 연속 교시가 끊긴 만큼. 기본: 하드, weight 1."""
+    """H8: how far a block group's consecutive periods on one day are broken. Default: hard, weight 1."""
 
     name = "block_adjacency"
 
 
 class TeacherLoadLimit(Constraint):
-    """H9: 교사별 일일/주간 수업 교시 상한 초과의 합. 기본: 하드, weight 1."""
+    """H9: sum of each teacher's excess over the daily/weekly period caps. Default: hard, weight 1."""
 
     name = "teacher_load_limit"
 
 
 class TeacherConsecutiveLimit(Constraint):
-    """H10: 교사별 연속 수업 상한 초과의 합. 기본: 하드, weight 1."""
+    """H10: sum of each teacher's excess over the consecutive-lessons cap. Default: hard, weight 1."""
 
     name = "teacher_consecutive_limit"
 
 
 class TeacherGap(Constraint):
-    """S1: 교사의 하루 안에 낀 공강 교시 수. 기본: 소프트, weight 20."""
+    """S1: idle periods inside a teacher's day. Default: soft, weight 20."""
 
     name = "teacher_gap"
     default_hard = False
@@ -173,7 +176,7 @@ class TeacherGap(Constraint):
 
 
 class TeacherWorkday(Constraint):
-    """S2: 수업이 있는 (교사, 요일)당 1점. 기본: 소프트, weight 3."""
+    """S2: 1 point per (teacher, weekday) with lessons. Default: soft, weight 3."""
 
     name = "teacher_workday"
     default_hard = False
@@ -181,8 +184,8 @@ class TeacherWorkday(Constraint):
 
 
 class TeacherFreeDay(Constraint):
-    """S3: 희망 공강일에 수업이 있는 (교사, 요일)당 1점.
-    기본: 소프트, weight 30."""
+    """S3: 1 point per (teacher, weekday) with lessons on a requested free day.
+    Default: soft, weight 30."""
 
     name = "teacher_free_day"
     default_hard = False
@@ -190,7 +193,7 @@ class TeacherFreeDay(Constraint):
 
 
 class ClassGap(Constraint):
-    """S4: 학급의 하루 안에 낀 공강 교시 수. 기본: 소프트, weight 10."""
+    """S4: idle periods inside a class's day. Default: soft, weight 10."""
 
     name = "class_gap"
     default_hard = False
@@ -198,8 +201,8 @@ class ClassGap(Constraint):
 
 
 class AvoidedPeriod(Constraint):
-    """S5: 기피 교시에 배정된 수업당 1점 (분반은 멤버 과목마다 계수).
-    기본: 소프트, weight 5."""
+    """S5: 1 point per lesson in an avoided period (parallel groups count per
+    member subject). Default: soft, weight 5."""
 
     name = "avoided_period"
     default_hard = False
@@ -207,8 +210,8 @@ class AvoidedPeriod(Constraint):
 
 
 class NonPreferredPeriod(Constraint):
-    """S6: 선호 교시가 있는데 그 밖에 배정된 수업당 1점.
-    기본: 소프트, weight 1."""
+    """S6: 1 point per lesson placed outside its preferred periods, when it has
+    some. Default: soft, weight 1."""
 
     name = "non_preferred_period"
     default_hard = False
@@ -235,12 +238,13 @@ _SPEC_CLASSES: tuple[type[Constraint], ...] = (
 
 _SPEC_BY_NAME: dict[str, type[Constraint]] = {cls.name: cls for cls in _SPEC_CLASSES}
 
-#: cpsat(`teacher_scheduling.solver.registry`) 이름 -> 엔진 이름.
+#: cpsat (`teacher_scheduling.solver.registry`) name -> engine name.
 #:
-#: 같은 제약을 두 백엔드가 다른 이름으로 부르고 있었다. 방향이 이쪽인 이유는
-#: cpsat 이 제약 의미론의 레퍼런스이기 때문이다 (패리티 테스트가 그걸 고정한다).
-#: 덕분에 같은 조립 선언을 두 백엔드에 그대로 보낼 수 있다 — 성능 비교의 전제다.
-#: `room_capacity` 와 소프트 6종은 이름이 이미 같아 여기 없다.
+#: The two backends called the same constraints by different names. This
+#: direction because cpsat is the reference for the constraint semantics (the
+#: parity tests pin that). It lets the same assembly declaration go to both
+#: backends unchanged — the premise of a performance comparison.
+#: `room_capacity` and the six soft constraints already share names and are not listed.
 CPSAT_ALIASES: dict[str, str] = {
     "weekly_period_counts": "unassigned_lesson",
     "class_group_conflicts": "class_conflict",
@@ -251,55 +255,58 @@ CPSAT_ALIASES: dict[str, str] = {
     "teacher_consecutive_limits": "teacher_consecutive_limit",
 }
 
-#: cpsat 에는 제약이지만 엔진에서는 변환 단계가 구조적으로 보장하는 것들.
-#: 분반은 하나의 점유 단위로 병합되고(convert.py), 고정 배치는 pinned Lesson 이라
-#: 엔진이 아예 움직이지 않는다. 끄거나 조절할 대상이 없으므로 조립에 넣지 않는다.
+#: Constraints in cpsat that the conversion step guarantees structurally in the engine.
+#: Parallel sections are merged into one occupancy unit (convert.py) and fixed
+#: placements are pinned Lessons the engine never moves. There is nothing to
+#: switch off or tune, so they never enter an assembly.
 STRUCTURAL_IN_ENGINE: frozenset[str] = frozenset({"fixed_slots", "parallel_groups"})
 
-#: 반대로 엔진에만 스펙이 있는 것. cpsat 은 불가능한 슬롯의 변수를 아예 만들지
-#: 않아(variables.py) 채점 대상이 없다.
+#: Conversely, specs that exist only in the engine. cpsat never creates
+#: variables for impossible slots (variables.py), so it has nothing to score.
 ENGINE_ONLY: frozenset[str] = frozenset({"slot_not_allowed"})
 
 
 def soft_specs() -> tuple[type[Constraint], ...]:
-    """기본이 소프트인 제약들 (레지스트리 순서). 목적함수의 항이 이것이다."""
+    """Constraints that are soft by default (registry order) — the terms of the objective."""
     return tuple(cls for cls in _SPEC_CLASSES if not cls.default_hard)
 
 
 def default_weights() -> dict[str, float]:
-    """소프트 항 이름 -> 기본 가중치. 제약을 추가하면 여기가 저절로 따라온다."""
+    """Soft term name -> default weight. Follows automatically when a constraint is added."""
     return {cls.name: cls.default_weight for cls in soft_specs()}
 
 
 def resolve_name(name: str) -> str:
-    """cpsat 이름을 엔진 이름으로 바꾼다. 엔진 이름은 그대로 통과한다.
+    """Maps a cpsat name to the engine name. Engine names pass through unchanged.
 
-    엔진이 구조적으로 보장하는 제약(`STRUCTURAL_IN_ENGINE`)은 조립 대상이
-    아니므로 ValueError 다 — 두 백엔드를 잇는 쪽에서 걸러야 한다.
+    Constraints the engine guarantees structurally (`STRUCTURAL_IN_ENGINE`)
+    cannot be assembled, so they raise ValueError — the side bridging the two
+    backends has to filter them.
     """
     if name in STRUCTURAL_IN_ENGINE:
         raise ValueError(
-            f"{name!r} 은 엔진에서 변환 단계가 보장하므로 조립에 넣을 수 없다 "
-            "(분반은 점유 단위 병합, 고정 배치는 pinned Lesson)"
+            f"{name!r} is guaranteed by the conversion step in the engine and cannot be assembled "
+            "(parallel sections merge into one occupancy unit, fixed placements are pinned Lessons)"
         )
     return CPSAT_ALIASES.get(name, name)
 
 
 class Assembly:
-    """캐노니컬 제약 조립 빌더. 기본은 15개 전부 — 모놀리식 기본 경로와 같은
-    구성 — 이라 "기본에서 조금 바꾸는" 선언이 짧다.
+    """Canonical constraint assembly builder. It starts from all 15 — the same
+    configuration as the monolithic default path — so "the defaults with a small
+    change" stays short.
 
-    ``add`` 는 이름(또는 스펙 인스턴스)으로 제약을 넣되 **같은 이름이 이미
-    있으면 교체**한다 (오버라이드 의미론; 중복 합산이 필요하면
-    ``canon.DecomposedCalculator.add`` 를 직접 쓴다). ``drop`` 은 이름의
-    제약을 뺀다. 둘 다 self 를 돌려줘 체이닝이 된다::
+    ``add`` inserts a constraint by name (or spec instance) and **replaces one
+    with the same name** (override semantics; for summed duplicates use
+    ``canon.DecomposedCalculator.add`` directly). ``drop`` removes the named
+    constraint. Both return self for chaining::
 
         Assembly().add("teacher_gap", weight=40).drop("teacher_workday")
 
-    ``Assembly(constraints)`` 로 스펙 인스턴스/이름의 iterable 을 주면 기본
-    세트 대신 그 목록에서 시작한다 (es 의 리스트 조립과 동일). Assembly 는
-    스펙의 iterable 이라 ``canon.DecomposedCalculator(assembly)`` 에 바로
-    넘어간다.
+    ``Assembly(constraints)`` with an iterable of spec instances/names starts
+    from that list instead of the default set (like a plain list assembly).
+    An Assembly is an iterable of specs, so it goes straight into
+    ``canon.DecomposedCalculator(assembly)``.
     """
 
     def __init__(self, constraints=None):
@@ -318,24 +325,24 @@ class Assembly:
         hard: bool | None = None,
         exponent: float = 1.0,
     ) -> "Assembly":
-        """제약을 추가한다 (같은 이름이 이미 있으면 교체). 이름을 주면
-        weight/hard/exponent 로 스펙을 만들고, 스펙 인스턴스를 주면 그대로
-        쓴다 (인스턴스와 키워드 오버라이드를 섞으면 ValueError). 알 수 없는
-        이름은 ValueError.
+        """Adds a constraint (replacing one with the same name). A name builds a
+        spec from weight/hard/exponent; a spec instance is used as is (mixing an
+        instance with keyword overrides raises ValueError). Unknown names raise
+        ValueError.
 
-        cpsat 이름(`CPSAT_ALIASES`)도 받는다 — 같은 조립 선언을 두 백엔드에
-        그대로 보낼 수 있게 하려는 것이다."""
+        cpsat names (`CPSAT_ALIASES`) are accepted too, so the same assembly
+        declaration can go to both backends unchanged."""
         if isinstance(constraint, str):
             spec_class = _SPEC_BY_NAME.get(resolve_name(constraint))
             if spec_class is None:
-                raise ValueError(f"알 수 없는 제약 이름: {constraint!r} (list_constraints() 참고)")
+                raise ValueError(f"unknown constraint name: {constraint!r} (see list_constraints())")
             spec = spec_class(weight=weight, hard=hard, exponent=exponent)
         elif isinstance(constraint, Constraint):
             if weight is not None or hard is not None or exponent != 1.0:
-                raise ValueError("스펙 인스턴스에는 weight/hard/exponent 를 함께 줄 수 없다 (인스턴스에 담아라)")
+                raise ValueError("a spec instance cannot be combined with weight/hard/exponent (put them in the instance)")
             spec = constraint
         else:
-            raise TypeError(f"제약 이름(str) 또는 Constraint 스펙이어야 한다: {constraint!r}")
+            raise TypeError(f"expected a constraint name (str) or a Constraint spec: {constraint!r}")
         for i, existing in enumerate(self._specs):
             if existing.name == spec.name:
                 self._specs[i] = spec
@@ -344,13 +351,13 @@ class Assembly:
         return self
 
     def drop(self, name: str) -> "Assembly":
-        """이름의 제약을 조립에서 뺀다. 조립에 없으면 ValueError (오타 방지).
+        """Removes the named constraint from the assembly. ValueError if absent (guards against typos).
 
-        `add` 와 마찬가지로 cpsat 이름도 받는다."""
+        Like `add`, cpsat names are accepted too."""
         resolved = resolve_name(name)
         remaining = [spec for spec in self._specs if spec.name != resolved]
         if len(remaining) == len(self._specs):
-            raise ValueError(f"조립에 없는 제약이라 뺄 수 없다: {name!r}")
+            raise ValueError(f"cannot drop a constraint that is not in the assembly: {name!r}")
         self._specs = remaining
         return self
 
@@ -370,27 +377,27 @@ class Assembly:
 def get_constraints(
     constraints: list[Constraint] | None = None,
 ) -> list[Constraint]:
-    """비용 함수를 스펙 목록으로 돌려준다. 인자가 없으면 기본 열다섯 제약 전부.
+    """Returns the cost function as a list of specs. Without an argument, all fifteen default constraints.
 
-    레포의 다른 열다섯 use case 와 같은 진입점이라 "기본에서 조금 바꾸는"
-    선언이 어디서나 같은 모양으로 읽힌다::
+    The same entry point as every other use case in the repository, so "the
+    defaults with a small change" reads the same everywhere::
 
         from st_timetabling.constraints import TeacherGap, get_constraints
 
-        canon.DecomposedCalculator(get_constraints())          # 기본 그대로
-        canon.DecomposedCalculator(get_constraints([           # 골라 담기
+        canon.DecomposedCalculator(get_constraints())          # defaults as is
+        canon.DecomposedCalculator(get_constraints([           # pick and choose
             ClassConflict(), TeacherGap(weight=40),
         ]))
 
-    `constraints` 를 주면 그 목록을 그대로 쓴다 — 목록에 있는 제약만
-    채점된다. 기본 세트는 :class:`Assembly` 가 인자 없이 만드는 것과 같다;
-    이름으로 넣고 빼는 체이닝이 필요하면 그쪽을 쓰면 된다.
+    Given `constraints`, that list is used as is — only the listed constraints
+    are scored. The default set equals what :class:`Assembly` builds without
+    arguments; use it when you want name-based add/drop chaining.
     """
     if constraints is None:
         return [cls() for cls in _SPEC_CLASSES]
     if not constraints:
-        # C++ applyConstraints 와 같은 계약: 빈 목록은 "아무것도 채점하지
-        # 않음" 이라 실수일 가능성이 높다. 필터 결과가 우연히 비었을 때
-        # 조용히 "전부 채점" 으로 뒤집히면 안 된다.
+        # Same contract as C++ applyConstraints: an empty list means "score
+        # nothing", which is most likely a mistake. A filter that happens to
+        # come out empty must not silently flip to "score everything".
         raise ValueError("constraints must not be empty (pass None for the defaults)")
     return list(constraints)

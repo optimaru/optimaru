@@ -1,10 +1,10 @@
-"""Conference scheduling — Timefold engine 기반 C++ 솔버의 Python 래퍼.
+"""Conference scheduling — Python wrapper of the C++ solver on the optimaru engine.
 
 `Timeslot`/`Room`/`Speaker`/`Talk`/`ConferenceSchedule`/`Score`/`Breakdown`/
-`Solver`/`SolverConfig`/`calculate_score`/`compute_breakdown` 는 컴파일된
-C++ 코어(`_core`)에서 온다. `Talk.slot_room` 이 planning variable
-(-1 == 미배정, 값은 timeslot_index * room_count + room_index 합성 인코딩)이고,
-solve 는 그것과 `score` 를 in place 로 바꾼다::
+`Solver`/`SolverConfig`/`calculate_score`/`compute_breakdown` come from the compiled
+C++ core (`_core`). `Talk.slot_room` is the planning variable
+(-1 == unassigned; the value is the composite encoding timeslot_index * room_count + room_index),
+and solve changes it and `score` in place::
 
     import conference_scheduling as cs
 
@@ -12,8 +12,8 @@ solve 는 그것과 `score` 를 in place 로 바꾼다::
     cs.solve(schedule, time_limit_seconds=10.0, random_seed=42)
     print(schedule.score, schedule.assignment())
 
-pydantic 미러(직렬화용)는 `conference_scheduling.models` 에 있다
-(선택 의존성).
+The pydantic mirror (for serialization) is in `conference_scheduling.models`
+(optional dependency).
 """
 
 from ._core import (
@@ -65,13 +65,13 @@ def solve(
     config: SolverConfig | None = None,
     constraints=None,
 ) -> ConferenceSchedule:
-    """`ConferenceSchedule` 을 in place 로 풀어 그대로 돌려주는 고수준 API.
+    """High-level API that solves a `ConferenceSchedule` in place and returns it.
 
-    ``config`` 가 기본 설정이 된다 (`_core.SolverConfig`, 또는 `to_core()` 를
-    가진 객체 — `models.SolveConfig`). None 이면 엔진 기본값(30초 예산).
-    명시한 키워드 인자가 config 위에 덮어쓴다.
+    ``config`` becomes the base settings (`_core.SolverConfig`, or an object with
+    `to_core()` — `models.SolveConfig`). None = engine defaults (30 s budget).
+    Explicit keyword arguments override config.
 
-    ``stop_at_first_feasible`` 은 hard 0 에 도달하는 즉시 종료한다
+    ``stop_at_first_feasible`` stops as soon as hard 0 is reached
     (best_score_limit=(0, -1e18)).
     """
     if config is None:
@@ -81,7 +81,7 @@ def solve(
     elif hasattr(config, "to_core"):
         cfg = config.to_core()
     else:
-        raise ValueError("config 는 SolverConfig 또는 to_core() 를 가진 객체여야 한다")
+        raise ValueError("config must be a SolverConfig or an object with to_core()")
     if time_limit_seconds is not None:
         cfg.spent_limit_seconds = time_limit_seconds
     if random_seed is not None:

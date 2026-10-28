@@ -17,7 +17,7 @@ def _add_unfairness_surrogate(
     loads: list[Any],
     max_load: int,
 ) -> None:
-    """Minimize the exact variance over positive loads.
+    """Minimize the variance over positive loads.
 
     Timefold's LoadBalance ignores zero-load items and reports the square root
     of the variance numerator.  The square root is monotone, so CP-SAT can
@@ -50,7 +50,13 @@ def _add_unfairness_surrogate(
     sum_squares = model.new_int_var(0, item_count * max_load**2, f"{name}_sum_squares")
     model.add(sum_squares == sum(squares))
 
-    scale = math.lcm(*range(1, item_count + 1))
+    # The exact common denominator lcm(1..n) grows like e^n and leaves int64
+    # once there are a few dozen items (team pairs grow quadratically). Cap the
+    # scale so every product below stays inside int64; for counts that do not
+    # divide the scale the variance is rounded up to a multiple of 1/scale,
+    # which can only merge near-ties. Reported scores are rescored exactly.
+    cap = max(1, 2**50 // (item_count * (item_count * max(1, max_load)) ** 2))
+    scale = min(math.lcm(*range(1, item_count + 1)), cap)
     bound = scale * item_count * max_load**2
     variance = model.new_int_var(0, bound, f"{name}_scaled_variance")
     choices = []
@@ -59,9 +65,13 @@ def _add_unfairness_surrogate(
         model.add(active_count == count).only_enforce_if(chosen)
         if count == 0:
             model.add(variance == 0).only_enforce_if(chosen)
-        else:
+        elif scale % count == 0:
             model.add(
                 variance == scale * sum_squares - (scale // count) * total_square
+            ).only_enforce_if(chosen)
+        else:
+            model.add(
+                count * variance >= scale * (count * sum_squares - total_square)
             ).only_enforce_if(chosen)
         choices.append(chosen)
     model.add_exactly_one(choices)

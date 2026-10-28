@@ -1,7 +1,7 @@
-"""제약 카탈로그(플러그인) 조립: 기본 구성 동등성 + 커스텀 제약 주입 예제.
+"""Constraint catalog (plugins) assembly: default-configuration equivalence + custom-constraint examples.
 
-커스텀 제약은 validate.validate_timetable 의 검증 범위 밖이므로,
-여기서는 결과 시간표를 직접 확인한다.
+Custom constraints are outside validate.validate_timetable's scope, so these
+tests check the resulting timetable directly.
 """
 
 from dataclasses import dataclass
@@ -24,14 +24,14 @@ from teacher_scheduling.solver.solver import solve
 from teacher_scheduling.solver.variables import TimetableVariables
 from teacher_scheduling.validate import validate_timetable
 
-# ---------------------------------------------------------------- 커스텀 플러그인 예제
+# ---------------------------------------------------------------- custom plugin examples
 
 
 @dataclass(frozen=True)
 class NoLateFriday:
-    """커스텀 하드 예제: 지정 교사는 금요일 late_from 교시부터 수업 금지.
+    """Custom hard example: the given teacher has no lessons from period late_from on Fridays.
 
-    벌점 식을 안 돌려주므로(None) 순수 하드 제약으로만 동작한다.
+    Returns no penalty expression (None), so it acts purely as a hard constraint.
     """
 
     teacher_id: str
@@ -46,7 +46,7 @@ class NoLateFriday:
 
 @dataclass(frozen=True)
 class FirstPeriodLoad:
-    """커스텀 소프트 예제: 1교시에 배정된 수업 총량을 벌점으로 센다."""
+    """Custom soft example: counts the total lessons placed in period 1 as a penalty."""
 
     name: str = "first_period_load"
 
@@ -57,7 +57,7 @@ class FirstPeriodLoad:
 
 @dataclass(frozen=True)
 class WeightedFirstPeriodLoad(FirstPeriodLoad):
-    """가중치를 스스로 들고 있는 커스텀 소프트 예제."""
+    """Custom soft example that carries its own weight."""
 
     weight: int = 1
 
@@ -68,12 +68,12 @@ def _solve(problem, *, weights=NO_WEIGHTS, constraints=None):
 
 
 def _with(weights, *extra):
-    """기본 구성에 커스텀 제약을 얹는다."""
+    """Puts custom constraints on top of the default configuration."""
     return (*default_constraints(weights), *extra)
 
 
 def _friday_only_problem(periods_per_week: int):
-    """월~목이 통째로 막혀 금요일(6교시)에만 배정할 수 있는 학급 하나짜리 문제."""
+    """A one-class problem with Mon–Thu fully blocked, so only Friday (6 periods) is available."""
     unavailable = frozenset(slot(day, period) for day in range(4) for period in range(1, 7))
     return make_problem(
         [course(periods_per_week=periods_per_week, max_periods_per_day=periods_per_week)],
@@ -84,11 +84,11 @@ def _friday_only_problem(periods_per_week: int):
     )
 
 
-# ---------------------------------------------------------------- 기본 레지스트리 동등성
+# ---------------------------------------------------------------- default registry equivalence
 
 
 def test_explicit_default_constraints_match_default_solve():
-    """기본 구성을 명시적으로 주입해도 기본 solve 와 완전히 같은 결과."""
+    """Injecting the default configuration explicitly gives exactly the default solve result."""
     problem = make_problem(
         [course(periods_per_week=2, max_periods_per_day=2, fixed_slots=frozenset({slot(0, 1), slot(0, 5)}))],
         [teacher()],
@@ -107,43 +107,43 @@ def test_explicit_default_constraints_match_default_solve():
 
 
 def test_examples_satisfy_the_protocol():
-    """하드든 소프트든 같은 프로토콜 하나를 만족한다."""
+    """Hard or soft, they satisfy the same single protocol."""
     assert isinstance(NoLateFriday("T1"), Constraint)
     assert isinstance(FirstPeriodLoad(), Constraint)
     assert all(isinstance(constraint, Constraint) for constraint in default_constraints())
 
 
-# ---------------------------------------------------------------- 커스텀 하드 주입
+# ---------------------------------------------------------------- custom hard injection
 
 
 def test_custom_hard_blocks_late_friday_slots():
-    """금요일에만 3시간을 넣어야 할 때, 커스텀 하드가 5교시 이후를 막는다."""
+    """With 3 periods to place only on Friday, the custom hard constraint blocks period 5 and later."""
     problem = _friday_only_problem(periods_per_week=3)
     baseline = _solve(problem)
-    assert baseline.status.has_solution  # 커스텀 없이는 6교시까지 자유롭게 쓴다
+    assert baseline.status.has_solution  # without it, periods up to 6 are free
 
     timetable = _solve(problem, constraints=_with(NO_WEIGHTS, NoLateFriday("T1")))
     assert timetable.status.has_solution
-    assert validate_timetable(problem, timetable) == []  # 기본 하드 10종은 여전히 지킨다
+    assert validate_timetable(problem, timetable) == []  # the 10 default hard constraints still hold
     assert all(lesson.slot.day == Weekday.FRI for lesson in timetable.lessons)
     assert all(lesson.slot.period < 5 for lesson in timetable.lessons)
 
 
 def test_custom_hard_makes_overfull_friday_infeasible():
-    """금요일 5시간 수업은 커스텀 하드(1~4교시만 허용) 아래에서는 불가능해진다."""
+    """5 Friday periods become impossible under the custom hard constraint (periods 1–4 only)."""
     problem = _friday_only_problem(periods_per_week=5)
-    assert _solve(problem).status.has_solution  # 커스텀 없이는 가능
+    assert _solve(problem).status.has_solution  # possible without it
 
     infeasible = _solve(problem, constraints=_with(NO_WEIGHTS, NoLateFriday("T1")))
     assert infeasible.status == SolveStatus.INFEASIBLE
     assert infeasible.lessons == ()
 
 
-# ---------------------------------------------------------------- 커스텀 소프트 주입
+# ---------------------------------------------------------------- custom soft injection
 
 
 def test_custom_soft_steers_away_from_first_period():
-    """1교시 벌점을 주면 수업이 2교시 이후로 밀리고, 벌점이 0 으로 보고된다."""
+    """A period-1 penalty pushes lessons to period 2 and later, and the penalty is reported as 0."""
     problem = make_problem([course(periods_per_week=2, max_periods_per_day=2)], [teacher()], days=1, periods=3)
     weights = ObjectiveWeights(**dict.fromkeys(NO_WEIGHTS.model_dump(), 0), first_period_load=1)
 
@@ -151,12 +151,12 @@ def test_custom_soft_steers_away_from_first_period():
     assert timetable.status.has_solution
     assert {lesson.slot.period for lesson in timetable.lessons} == {2, 3}
     assert timetable.penalties["first_period_load"] == 0
-    # 기본 항목도 그대로 보고된다 (셀 대상이 없는 항목은 원래부터 생략된다).
+    # Default terms are reported as well (terms with nothing to count are omitted as before).
     assert {"teacher_gap", "teacher_workday", "class_gap"} <= set(timetable.penalties)
 
 
 def test_custom_soft_counts_forced_first_period():
-    """1교시에 고정된 수업은 커스텀 벌점 1 로 집계된다."""
+    """A lesson fixed to period 1 counts as custom penalty 1."""
     problem = make_problem(
         [course(periods_per_week=1, fixed_slots=frozenset({slot(0, 1)}))],
         [teacher()],
@@ -172,7 +172,7 @@ def test_custom_soft_counts_forced_first_period():
 
 
 def test_unspecified_custom_weight_defaults_to_one():
-    """가중치를 지정하지 않은 커스텀 항목은 가중치 1 로 목적함수에 들어간다."""
+    """A custom term without a weight enters the objective with weight 1."""
     problem = make_problem([course(periods_per_week=2, max_periods_per_day=2)], [teacher()], days=1, periods=3)
 
     timetable = _solve(problem, constraints=_with(NO_WEIGHTS, FirstPeriodLoad()))
@@ -181,42 +181,42 @@ def test_unspecified_custom_weight_defaults_to_one():
     assert timetable.penalties["first_period_load"] == 0
 
 
-# ---------------------------------------------------------------- 가중치 매핑
+# ---------------------------------------------------------------- weight mapping
 
 
 def test_weight_for_declared_extra_and_unknown_names():
     weights = ObjectiveWeights(first_period_load=2)
-    assert weights.weight_for("teacher_gap") == 20  # 선언 필드는 기본값 그대로
-    assert weights.weight_for("first_period_load") == 2  # extra 로 지정한 커스텀 항목
-    assert weights.weight_for("unknown_term") == 1  # 미지정 커스텀 항목은 1
+    assert weights.weight_for("teacher_gap") == 20  # declared fields keep their defaults
+    assert weights.weight_for("first_period_load") == 2  # a custom term given as an extra
+    assert weights.weight_for("unknown_term") == 1  # an unspecified custom term is 1
 
 
 def test_invalid_extra_weight_rejected():
-    with pytest.raises(ValueError, match="0 이상의 정수"):
+    with pytest.raises(ValueError, match="non-negative integer"):
         ObjectiveWeights(first_period_load=-1)
-    with pytest.raises(ValueError, match="0 이상의 정수"):
+    with pytest.raises(ValueError, match="non-negative integer"):
         ObjectiveWeights(first_period_load="heavy")
 
 
 def test_instance_weight_wins_over_objective_weights():
-    """제약 인스턴스가 가중치를 들고 있으면 그게 원본이다."""
+    """When a constraint instance carries a weight, that is the source."""
     problem = make_problem(
         [course(periods_per_week=1, fixed_slots=frozenset({slot(0, 1)}))], [teacher()], days=1, periods=3
     )
     weights = ObjectiveWeights(**dict.fromkeys(NO_WEIGHTS.model_dump(), 0), first_period_load=1)
 
-    # ObjectiveWeights 는 1 이라고 하지만 인스턴스가 5 를 들고 있다.
+    # ObjectiveWeights says 1, but the instance carries 5.
     timetable = _solve(problem, weights=weights, constraints=_with(weights, WeightedFirstPeriodLoad(weight=5)))
     assert timetable.penalties["first_period_load"] == 1
     assert timetable.objective_value == 5
 
 
-# ---------------------------------------------------------------- H1 완화 (하드 <-> 소프트)
+# ---------------------------------------------------------------- relaxing H1 (hard <-> soft)
 
 
 def test_weekly_period_counts_can_be_relaxed_into_a_penalty():
-    """같은 제약을 hard=False 로 주면 미배정을 허용하고 벌점으로 센다."""
-    # 하루 2교시뿐인데 3시수 -> 하드로는 불가능, 완화하면 1시수 미배정
+    """The same constraint with hard=False allows unassigned lessons and counts them as a penalty."""
+    # 3 periods but only 2 periods a day -> impossible as hard, 1 period unassigned when relaxed
     problem = make_problem([course(periods_per_week=3, max_periods_per_day=3)], [teacher()], days=1, periods=2)
 
     assert _solve(problem).status == SolveStatus.INFEASIBLE
@@ -230,7 +230,7 @@ def test_weekly_period_counts_can_be_relaxed_into_a_penalty():
 
 
 def test_merge_replaces_in_place_and_appends_new_names():
-    """merge 는 같은 이름을 제자리에서 갈아끼우고 새 이름만 뒤에 붙인다."""
+    """merge replaces same-named entries in place and appends only new names."""
     base = default_constraints()
     merged = merge(base, WeeklyPeriodCounts(hard=False), NoLateFriday("T1"))
 

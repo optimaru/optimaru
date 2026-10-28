@@ -1,20 +1,20 @@
-"""`flight_crew._core` 타입 스텁 — flight-crew-scheduling C++ 솔버.
+"""Type stubs for `flight_crew._core` — the flight-crew-scheduling C++ solver.
 
-컴파일된 모듈은 `use-cases/flight-crew-scheduling/cpp` 의 C++ 도메인 구현을
-감싼다; 그 구현은 `include/optimaru` 의 범용 엔진을 임포트한다.
+The compiled module wraps the C++ domain in `use-cases/flight-crew-scheduling/cpp`,
+which imports the generic engine in `include/optimaru`.
 
-도메인: 항공편의 승무원 좌석(FlightAssignment)마다 승무원(employee 인덱스)
-을 고르는 BASIC 변수 문제. 공항/승무원/항공편 참조는 전부 리스트 인덱스다
-(pydantic 미러 `flight_crew.models` 는 code/id 문자열 참조를 쓴다).
+Domain: a BASIC-variable problem picking a crew member (employee index) for every crew
+seat of a flight (FlightAssignment). Airport/employee/flight references are all list
+indices (the pydantic mirror `flight_crew.models` uses code/id string references).
 
-시간 단위: 기준 epoch(모델은 Unix)에서의 분(minute). 날짜는
-floor(minutes / 1440) 로 얻는 day 인덱스.
+Time unit: minutes from a reference epoch (Unix in the model). Dates are day indices
+obtained as floor(minutes / 1440).
 
-점수 규약: HardSoftScore — Java quickstart 와 동일한 가중치.
-  hard 1. requiredSkill               스킬 없는 배정마다 -100
-  hard 2. flightConflict              같은 승무원의 겹치는 배정 쌍마다 -10
-  hard 3. transferBetweenTwoFlights   끊긴 연속 배정 쌍마다 -1
-  hard 4. employeeUnavailability      불가일 배정마다 -10
+Score convention: HardSoftScore — the same weights as the Java quickstart.
+  hard 1. requiredSkill               -100 per assignment without the skill
+  hard 2. flightConflict              -10 per overlapping assignment pair of one crew member
+  hard 3. transferBetweenTwoFlights   -1 per disconnected consecutive assignment pair
+  hard 4. employeeUnavailability      -10 per assignment on an unavailable day
   soft 5. firstAssignmentNotDepartingFromHome  -1000
   soft 6. lastAssignmentNotArrivingAtHome      -1000
 """
@@ -23,17 +23,17 @@ from collections.abc import Callable, Iterable
 from typing import Any
 
 class Score:
-    """HardSoft 점수. `hard` 는 위반 가중 합(0 == feasible); `soft` 는
-    목적식. 사전식 비교(hard 우선). 덜 음수일수록 좋다."""
+    """HardSoft score. `hard` is the weighted violation sum (0 == feasible); `soft` is
+    the objective. Lexicographic comparison (hard first). Less negative is better."""
     @property
     def hard(self) -> int: ...
     @property
     def soft(self) -> float: ...
     def is_feasible(self) -> bool:
-        """hard >= 0 이면 True."""
+        """True if hard >= 0."""
 
 class Airport:
-    """problem fact: 공항. 다른 객체는 이 리스트의 인덱스로 참조한다."""
+    """Problem fact: an airport. Other objects reference it by index into this list."""
     def __init__(
         self,
         code: str,
@@ -47,7 +47,7 @@ class Airport:
     longitude: float
 
 class Employee:
-    """problem fact(value range): 승무원."""
+    """Problem fact (value range): a crew member."""
     def __init__(
         self,
         id: str,
@@ -59,13 +59,13 @@ class Employee:
     id: str
     name: str
     home_airport: int
-    """airports 리스트 인덱스."""
+    """Index into the airports list."""
     skills: list[str]
     unavailable_days: set[int]
-    """불가한 날의 day 인덱스 집합 (floor(minutes / 1440))."""
+    """Set of day indices of unavailable days (floor(minutes / 1440))."""
 
 class Flight:
-    """problem fact: 항공편. 시각은 기준 epoch 에서의 분(UTC)."""
+    """Problem fact: a flight. Times are minutes from the reference epoch (UTC)."""
     def __init__(
         self,
         flight_number: str,
@@ -81,8 +81,8 @@ class Flight:
     arrival_utc: int
 
 class FlightAssignment:
-    """planning entity: 항공편의 승무원 좌석 하나. `employee` 가 planning
-    variable (-1 == 미배정); 솔버가 쓴다."""
+    """Planning entity: one crew seat of a flight. `employee` is the planning
+    variable (-1 == unassigned), written by the solver."""
     def __init__(
         self,
         id: str,
@@ -97,16 +97,16 @@ class FlightAssignment:
     index_in_flight: int
     required_skill: str
     employee: int
-    """employees 리스트 인덱스; -1 == 미배정."""
+    """Index into the employees list; -1 == unassigned."""
     pinned: bool
-    """True 면 employee 를 고정 (점수엔 반영되지만 절대 움직이지 않는다)."""
+    """If True, employee is fixed (it counts in the score but never moves)."""
 
 class FlightCrewSchedule:
-    """planning solution. solve 는 flight_assignments 의 `employee` 와
-    `score` 를 in place 로 바꾼다.
+    """Planning solution. solve changes the flight_assignments' `employee` and
+    `score` in place.
 
-    주의: `flight_assignments` 등 리스트 속성 접근은 복사본을 돌려주므로,
-    배정을 바꾸려면 `set_assignment` 를 써야 한다."""
+    Note: list attributes such as `flight_assignments` return copies, so use
+    `set_assignment` to change assignments."""
     def __init__(
         self,
         airports: list[Airport],
@@ -123,12 +123,12 @@ class FlightCrewSchedule:
     @property
     def prepared(self) -> bool: ...
     def assignment(self) -> list[int]:
-        """좌석별 현재 employee 인덱스 (-1 == 미배정)."""
+        """Current employee index per seat (-1 == unassigned)."""
     def set_assignment(self, assignment: list[int]) -> None:
-        """planning variable 일괄 쓰기 (길이 == 좌석 수)."""
+        """Bulk-write the planning variable (length == number of seats)."""
 
 def calculate_score(schedule: FlightCrewSchedule) -> Score:
-    """전체 재계산 (schedule.score 에도 저장)."""
+    """Full recalculation (also stored in schedule.score)."""
 
 class SolverConfig:
     def __init__(self) -> None: ...
@@ -139,7 +139,7 @@ class SolverConfig:
     random_seed: int
     parallel_solver_count: int
     late_acceptance_size: int
-    """0 = 자동: clamp(4 * 좌석 수, 400, 3200)."""
+    """0 = automatic: clamp(4 * seats, 400, 3200)."""
     full_assert: bool
     ruin_recreate: bool
     ruin_recreate_unimproved_step_trigger: int
@@ -152,26 +152,26 @@ class SolverConfig:
     change_move_weight: float
     swap_move_weight: float
     best_score_limit: tuple[int, float]
-    """이 점수 이상이면 조기 종료. (0, -1e18) 이면 첫 feasible 에서 멈춘다."""
+    """Stop early at or above this score. (0, -1e18) stops at the first feasible."""
     on_new_best: Callable[[int, Score], None] | None
 
 class Solver:
     def __init__(self, config: SolverConfig = ...) -> None: ...
     def solve(self, schedule: FlightCrewSchedule) -> None:
-        """in place 로 푼다: employee 배정과 score 를 채운다. 고정(pinned)
-        좌석은 유지된다."""
+        """Solves in place: fills the employee assignments and score. Pinned
+        seats are kept."""
 
     def solve_with_constraints(self, schedule: FlightCrewSchedule, constraints: Iterable[Any] | None = ...) -> None:
-        """같은 solve 를 호출자가 고른 제약 세트로 채점한다
-        (flight_crew.constraints 참고). 준 목록이 기본 세트를 대체하고, None 이면
-        기본 세트를 그대로 쓴다."""
+        """Score the same solve with a caller-chosen constraint set
+        (see flight_crew.constraints). The given list replaces the default set; None
+        keeps the default set."""
 
 def list_constraints() -> list[str]:
-    """이 도메인이 채점하는 제약 이름들 (기본 조립 순서, snake_case).
-    flight_crew.constraints 가 쓰는 이름과 같다."""
+    """Constraint names scored by this domain (default assembly order, snake_case).
+    The same names flight_crew.constraints uses."""
 
 def constraint_costs(solution, /) -> dict[str, dict]:
-    """제약별 unit 별 **원본** cost — 가중치/exponent/레벨 반올림 전.
-    `flight_crew.constraints.score()` 가 이걸 받아 점수를 낸다.
+    """Per-constraint, per-unit **raw** costs — before weight/exponent/level rounding.
+    `flight_crew.constraints.score()` takes these and produces a score.
     {name: {"costs": [...], "weight": w, "exponent": e,
             "hard": bool, "global": bool}}."""

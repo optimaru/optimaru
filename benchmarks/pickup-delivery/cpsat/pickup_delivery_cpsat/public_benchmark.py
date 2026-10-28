@@ -36,7 +36,7 @@ from pdp_routing.models import (
 from .solve import solve_request as solve_cpsat_request
 
 ARCHIVE_URL = "https://www.hexaly.com/examples/pdptw.zip"
-ARCHIVE_SHA256 = "c46647f7f05c06b36bc7d3ed4d86782250c654fefa50e08994a386b97b19cf49"
+ARCHIVE_SHA256 = "d396d712e879edb73adcdaa420e2c13bcc6b086d83f790a404692faae49dd26e"
 DEFAULT_INSTANCE = "lc101"
 # Li & Lim uses continuous Euclidean distance while both local solver
 # contracts are integral. Nearest-unit travel is the shared comparison metric;

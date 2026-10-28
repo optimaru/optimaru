@@ -1,25 +1,25 @@
-"""school-timetabling 3-way 벤치마크 오케스트레이션.
+"""Orchestrates the school-timetabling three-way benchmark.
 
-트랙1 (quickstart 6제약, 기본): 같은 인스턴스를
-  (1) 이 레포 C++ 엔진(`st_quality_bench`),
-  (2) OR-Tools CP-SAT(`cpsat_quickstart.py`),
-  (3) Java Timefold 원본(quickstarts 의 stock provider + benchmarks/school-timetabling/timefold 테스트)
-로 풀어 마크다운 표(hard/soft, 최초 feasible 시각, moves/s)로 비교한다.
-실행 전 크로스체크 게이트: C++ 와 Java 의 고정 인스턴스 스코어가
-byte-identical 해야 벤치를 진행한다. 모든 해는 evaluate.py 로 재채점해서
-self-report 와 대조한다.
+Track 1 (the quickstart's six constraints, default): the same instances are solved by
+  (1) this repository's C++ engine (`st_quality_bench`),
+  (2) OR-Tools CP-SAT (`cpsat_quickstart.py`),
+  (3) the original Java Timefold (the quickstart's stock provider + the tests in benchmarks/school-timetabling/timefold)
+and compared in a Markdown table (hard/soft, first-feasible time, moves/s).
+Cross-check gate first: the C++ and Java scores of a fixed instance must be
+byte-identical before the benchmark proceeds. Every solution is rescored with
+evaluate.py and compared with its self-report.
 
-트랙2 (--track2, canonical 전제약): gen_canonical.py 의 S/M/L canonical 문제를
-CP-SAT(teacher_scheduling.solve)와 C++ 캐노니컬 엔진(st_timetabling.solve,
-import 실패 시 "pending")으로 풀고, 두 결과 모두 cpsat validate.py 로
-재채점한다 (같은 time limit, 같은 문제).
+Track 2 (--track2, full canonical constraints): the S/M/L canonical problems of
+gen_canonical.py are solved by CP-SAT (teacher_scheduling.solve) and by the C++
+canonical engine (st_timetabling.solve; "pending" if the import fails), and
+both results are rescored with cpsat's validate.py (same time limit, same problem).
 
-사용 예:
-    uv run run_bench.py --sizes S,M --seconds 10 --quickstarts <clone 경로>
+Example:
+    uv run run_bench.py --sizes S,M --seconds 10 --quickstarts <clone path>
     uv run run_bench.py --track2 --sizes S,M,L --seconds 10
 
-Java 트랙은 timefold-quickstarts 클론이 필요하다 (benchmarks/school-timetabling/timefold/README.md 의
-mvnw 부트스트랩 참고). --quickstarts 를 생략하면 Java 는 건너뛴다.
+The Java track needs a timefold-quickstarts clone (see the mvnw bootstrap in
+benchmarks/school-timetabling/timefold/README.md). Without --quickstarts, Java is skipped.
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ BENCH_DIR = Path(__file__).resolve().parent
 REPO_ROOT = BENCH_DIR.parents[1]
 ST_DIR = REPO_ROOT / "use-cases" / "school-timetabling"
 
-# 트랙1 크기 프리셋: (학급, 교사, 교실). st_quality_bench.cpp 의 문서와 동일.
+# Track-1 size presets: (classes, teachers, rooms). Same as documented in st_quality_bench.cpp.
 PRESETS: dict[str, tuple[int, int, int]] = {
     "S": (6, 12, 7),
     "M": (12, 20, 13),
@@ -54,7 +54,7 @@ def _run(cmd: list[str], **kwargs) -> subprocess.CompletedProcess:
 
 
 def ensure_cpp_bin(explicit: str | None) -> Path:
-    """st_quality_bench 바이너리를 찾거나 cmake 로 빌드한다."""
+    """Finds the st_quality_bench binary or builds it with cmake."""
     if explicit:
         return Path(explicit)
     build_dir = REPO_ROOT / "build" / "st-bench"
@@ -64,15 +64,15 @@ def ensure_cpp_bin(explicit: str | None) -> Path:
     return binary
 
 
-# ---------------------------------------------------------------- Java 공통
+# ---------------------------------------------------------------- Java common
 
 
 def _mvnw(quickstarts: Path, extra: list[str], m2: str | None, timeout: float) -> str:
     module = quickstarts / "use-cases" / "school-timetabling"
     mvnw = module / "mvnw"
     if not mvnw.exists():
-        raise SystemExit(f"{mvnw} 가 없다 — benchmarks/school-timetabling/timefold/README.md 의 mvnw 부트스트랩을 먼저 실행")
-    # benchmarks/school-timetabling/timefold 의 테스트 2개를 quickstart 테스트 트리로 복사 (CI 와 동일).
+        raise SystemExit(f"{mvnw} is missing — run the mvnw bootstrap of benchmarks/school-timetabling/timefold/README.md first")
+    # Copy the two tests of benchmarks/school-timetabling/timefold into the quickstart's test tree (same as CI).
     test_dir = module / "src/test/java/org/acme/schooltimetabling/solver"
     for java in (BENCH_DIR / "timefold").glob("*.java"):
         shutil.copy(java, test_dir / java.name)
@@ -83,29 +83,29 @@ def _mvnw(quickstarts: Path, extra: list[str], m2: str | None, timeout: float) -
     proc = subprocess.run(cmd, cwd=module, text=True, capture_output=True, timeout=timeout, check=False)
     if proc.returncode != 0:
         sys.stderr.write(proc.stdout[-4000:] + proc.stderr[-2000:])
-        raise SystemExit("mvnw test 실패")
+        raise SystemExit("mvnw test failed")
     return proc.stdout
 
 
-# ---------------------------------------------------------------- 크로스체크
+# ---------------------------------------------------------------- cross-check
 
 
 def crosscheck_gate(cpp_bin: Path, quickstarts: Path | None, out_dir: Path, m2: str | None) -> None:
-    """C++ 와 Java 스코어 계산기의 byte-identical 파리티 게이트."""
+    """Byte-identical parity gate between the C++ and Java score calculators."""
     crosscheck_json = out_dir / "crosscheck.json"
     proc = _run([cpp_bin, "crosscheck", crosscheck_json], capture_output=True)
     cpp_score = re.search(r"CROSSCHECK_SCORE=\S+", proc.stdout).group(0)
     print(f"C++ : {cpp_score}")
 
-    # 덤프된 고정 할당을 evaluate.py 로도 재채점 (3중 체크).
+    # Rescore the dumped fixed assignment with evaluate.py too (triple check).
     instance = load_json(crosscheck_json)
     eval_score = format_score(score_assignment(instance, [(l["timeslot"], l["room"]) for l in instance["lessons"]]))
     if cpp_score != f"CROSSCHECK_SCORE={eval_score}":
-        raise SystemExit(f"evaluate.py 불일치: {eval_score}")
+        raise SystemExit(f"evaluate.py disagrees: {eval_score}")
     print(f"eval: CROSSCHECK_SCORE={eval_score}")
 
     if quickstarts is None:
-        print("Java: skipped (--quickstarts 미지정)")
+        print("Java: skipped (no --quickstarts)")
         return
     stdout = _mvnw(
         quickstarts,
@@ -116,11 +116,11 @@ def crosscheck_gate(cpp_bin: Path, quickstarts: Path | None, out_dir: Path, m2: 
     java_score = re.search(r"CROSSCHECK_SCORE=\S+", stdout).group(0)
     print(f"Java: {java_score}")
     if cpp_score != java_score:
-        raise SystemExit(f"크로스체크 게이트 실패: C++ {cpp_score} != Java {java_score}")
-    print("크로스체크 게이트: OK (byte-identical)")
+        raise SystemExit(f"cross-check gate failed: C++ {cpp_score} != Java {java_score}")
+    print("cross-check gate: OK (byte-identical)")
 
 
-# ---------------------------------------------------------------- 트랙1 러너
+# ---------------------------------------------------------------- track-1 runners
 
 
 def run_cpp(cpp_bin: Path, size: str, seed: int, seconds: int, out_dir: Path) -> dict:
@@ -165,7 +165,7 @@ def run_cpsat(size: str, seed: int, seconds: int, out_dir: Path, workers: int) -
         )
     return {
         "score": format_score(result),
-        "moves_per_sec": None,  # CP-SAT 는 move 개념이 없다
+        "moves_per_sec": None,  # CP-SAT has no notion of moves
         "first_feasible_ms": meta["first_feasible_ms"],
         "solution": solution_path,
     }
@@ -203,14 +203,14 @@ def run_java(quickstarts: Path, sizes: list[str], seconds: int, out_dir: Path, m
 
 
 def rescore(out_dir: Path, size: str, row: dict) -> str:
-    """공유 평가기로 재채점해 self-report 와 대조한다."""
+    """Rescores with the shared evaluator and compares with the self-report."""
     if not row.get("solution") or not Path(row["solution"]).exists():
         return "n/a"
     instance = load_json(out_dir / f"instance_{size}.json")
     solution = load_json(row["solution"])
     rescored = format_score(score_assignment(instance, assignment_from_solution(instance, solution)))
     if rescored != row["score"]:
-        rescored += " (self-report 불일치!)"
+        rescored += " (self-report mismatch!)"
     return rescored
 
 
@@ -221,12 +221,12 @@ def track1(args) -> None:
     quickstarts = Path(args.quickstarts).resolve() if args.quickstarts else None
     cpp_bin = ensure_cpp_bin(args.cpp_bin)
 
-    print("\n== 크로스체크 게이트 ==")
+    print("\n== cross-check gate ==")
     crosscheck_gate(cpp_bin, quickstarts, out_dir, args.m2)
 
     rows: dict[tuple[str, str], dict] = {}
     for size in sizes:
-        print(f"\n== C++ 엔진: instance_{size} ({args.seconds}s) ==")
+        print(f"\n== C++ engine: instance_{size} ({args.seconds}s) ==")
         rows[size, "cpp"] = run_cpp(cpp_bin, size, args.seed, args.seconds, out_dir)
         print(f"== CP-SAT: instance_{size} ({args.seconds}s, workers={args.workers}) ==")
         rows[size, "cpsat"] = run_cpsat(size, args.seed, args.seconds, out_dir, args.workers)
@@ -236,14 +236,14 @@ def track1(args) -> None:
             rows[size, "java"] = row
 
     lines = [
-        f"## 트랙1: quickstart 6제약 3-way ({args.seconds}s, seed {args.seed}, 단일 시드 — 방향성 참고용)",
+        f"## Track 1: quickstart six constraints, three-way ({args.seconds}s, seed {args.seed}, single seed — indicative only)",
         "",
-        "| instance | solver | final (self-report) | final (재채점) | 최초 feasible | moves/s |",
+        "| instance | solver | final (self-report) | final (rescored) | first feasible | moves/s |",
         "| --- | --- | --- | --- | --- | --- |",
     ]
     for size in sizes:
         classes, teachers, rooms = PRESETS[size]
-        label = f"{size}: {classes}학급/{teachers}교사/{rooms}교실"
+        label = f"{size}: {classes} classes/{teachers} teachers/{rooms} rooms"
         for solver in ("cpp", "cpsat", "java"):
             row = rows.get((size, solver))
             if row is None:
@@ -257,21 +257,21 @@ def track1(args) -> None:
             )
     lines += [
         "",
-        "- moves/s: C++ 는 개선 궤적 추정(스텝당 1 move), Java 는 솔버 자체 카운터. CP-SAT 는 해당 없음.",
-        f"- CP-SAT 는 {args.workers} worker 병렬(포트폴리오), C++/Java 는 단일 스레드.",
-        "- 재채점: evaluate.py (quickstart 6제약 공유 평가기).",
+        "- moves/s: C++ estimated from the improvement trajectory (one move per step), Java from the solver's own counter. Not applicable to CP-SAT.",
+        f"- CP-SAT runs {args.workers} parallel workers (portfolio); C++/Java run single-threaded.",
+        "- Rescoring: evaluate.py (the shared evaluator of the quickstart's six constraints).",
     ]
     report = "\n".join(lines)
     print("\n" + report)
     (out_dir / "RESULTS_track1.md").write_text(report + "\n", encoding="utf-8")
 
 
-# ---------------------------------------------------------------- 트랙2
+# ---------------------------------------------------------------- track 2
 
 
 def _load_engine_solver():
-    """st_timetabling canonical 진입점 (`st_timetabling.solve`, 기본 mode
-    canonical). 확장 모듈 미빌드 등으로 import 가 실패하면 None."""
+    """The st_timetabling canonical entry point (`st_timetabling.solve`, default mode
+    canonical). None when the import fails (extension not built, say)."""
     if str(ST_DIR / "python") not in sys.path:
         sys.path.insert(0, str(ST_DIR / "python"))
     try:
@@ -282,7 +282,7 @@ def _load_engine_solver():
 
 
 def _load_engine_assembly():
-    """`st_timetabling.constraints.Assembly` (미빌드/구버전이면 None)."""
+    """`st_timetabling.constraints.Assembly` (None when not built / an older version)."""
     if str(ST_DIR / "python") not in sys.path:
         sys.path.insert(0, str(ST_DIR / "python"))
     try:
@@ -293,13 +293,14 @@ def _load_engine_assembly():
 
 
 def _drop_day(problem: dict, day: int) -> int:
-    """요일 하나를 지워 인스턴스를 못 채우게 만든다. 사라진 학급당 칸 수를 돌려준다.
+    """Removes one weekday so the instance cannot be filled. Returns the cells lost per class.
 
-    시수는 그대로 두고 칸만 줄이므로 부족분이 정확히 계산된다 — 어느 백엔드도
-    전부 배정할 수 없고, "얼마나 채웠나" 가 그대로 비교 대상이 된다.
+    The periods stay and only cells go, so the shortfall is exact — no backend
+    can place everything, and "how much was filled" becomes the comparison itself.
 
-    그 요일을 가리키던 시간 참조(교사/학급 불가시간, 고정·금지 배치)도 같이
-    지운다 — 캘린더에 없는 시간은 입력 검증이 거부한다.
+    Time references to that weekday (teacher/class unavailability, fixed and
+    forbidden placements) are removed too — input validation rejects times not
+    in the calendar.
     """
     per_day = problem["calendar"]["periods_per_day"]
     lost = int(per_day.get(str(day), 0))
@@ -320,16 +321,18 @@ def _drop_day(problem: dict, day: int) -> int:
 
 
 def track3(args) -> None:
-    """트랙3: 부분 편성 — 못 채우는 인스턴스를 두 백엔드가 얼마나 채우는가.
+    """Track 3: partial timetabling — how much of an unfillable instance each backend fills.
 
-    트랙2 인스턴스에서 요일 하나를 지워 시수 > 칸 으로 만든 뒤, 양쪽 다 H1(주당
-    시수)을 완화해서 푼다 — CP-SAT 은 `solve_partial`, 엔진은 같은 뜻의 조립
-    (`weekly_period_counts` hard=false). 둘 다 "못 채운 시수는 하드 위반이 아니라
-    벌점" 이라는 같은 계약이므로, 비교 대상은 **얼마나 채웠는가**(배정 시수)와
-    그렇게 채운 결과의 소프트 품질이다.
+    A track-2 instance loses one weekday so that periods > cells, and both sides
+    solve with H1 (weekly periods) relaxed — CP-SAT with `solve_partial`, the
+    engine with the equivalent assembly (`weekly_period_counts` hard=false). Both
+    follow the same contract, "unfilled periods are a penalty, not a hard
+    violation", so the comparison is **how much was filled** (placed periods) and
+    the soft quality of the result.
 
-    두 결과 모두 cpsat 의 validate.py 로 재채점하되 H1 위반은 따로 센다 — 여기서
-    그건 결함이 아니라 의도한 부족분이고, 나머지 하드 위반이 0 이어야 한다.
+    Both results are rescored with cpsat's validate.py, with H1 violations counted
+    separately — here they are the intended shortfall, not a defect, and the
+    other hard violations must be 0.
     """
     sys.path.insert(0, str(BENCH_DIR / "cpsat"))
     from pydantic import ValidationError
@@ -347,16 +350,18 @@ def track3(args) -> None:
     engine_solve = _load_engine_solver()
     Assembly = _load_engine_assembly()
     if engine_solve is None or Assembly is None:
-        print("engine: pending (st_timetabling canonical 미탑재 — CP-SAT 만 실행)")
+        print("engine: pending (st_timetabling canonical not installed — running CP-SAT only)")
 
     def evaluate_result(problem, problem_dict, timetable) -> dict:
-        """공통 재채점. H1(부족분)과 나머지 하드를 갈라서 본다.
+        """Shared rescoring. Separates H1 (the shortfall) from the other hard constraints.
 
-        나머지 하드는 **배정한 부분만** 놓고 본다 — 주당 시수를 실제 배정된 수로
-        줄인 문제로 다시 검증하고, 한 칸도 못 넣은 강좌는 아예 뺀다. validate.py
-        는 완성된 시간표를 전제로 쓰여서, 통째로 뺀 연강 강좌에도 "2연강이 없음"
-        을 붙이기 때문이다 — 부분 편성에서 그건 위반이 아니라 의도한 부족분이다.
-        반대로 2연강 중 1칸만 남기는 건 여기서 그대로 위반으로 잡힌다.
+        The other hard constraints are checked on **the placed part only** — the
+        problem is re-validated with the weekly periods reduced to the placed counts,
+        and courses with nothing placed are dropped. validate.py assumes a complete
+        timetable and would report "no 2-period block" even for a block course
+        dropped as a whole — in partial timetabling that is the intended shortfall,
+        not a violation. Leaving only one cell of a 2-period block, on the other
+        hand, is still caught as a violation here.
         """
         missing = sum(item.missing for item in unassigned_courses(problem, timetable))
         scheduled = Counter(lesson.course_id for lesson in timetable.lessons)
@@ -371,9 +376,9 @@ def track3(args) -> None:
         try:
             others = validate_timetable(TimetableProblem.model_validate(shrunk), timetable)
         except ValidationError as exc:
-            # 줄인 문제 자체가 성립하지 않는다 = 배정 형태가 깨졌다 (예: 2연강
-            # 강좌에 1칸만 남김). 위반으로 그대로 드러낸다.
-            others = [f"부분 배정이 모델로 성립하지 않는다: {exc}"]
+            # The reduced problem itself does not hold = the placement shape is broken (e.g. a
+            # 2-period block course with only one cell left). Surface it as a violation.
+            others = [f"the partial assignment does not form a valid model: {exc}"]
         penalties = compute_penalties(problem, timetable)
         return {
             "placed": len(timetable.lessons),
@@ -393,7 +398,7 @@ def track3(args) -> None:
         problem = TimetableProblem.model_validate(problem_dict)
         capacity = sum(problem_dict["calendar"]["periods_per_day"].values()) * len(problem_dict["class_groups"])
         print(
-            f"\n== partial_{size}: 시수 {required}, 칸 {capacity} (요일 {args.drop_day} 삭제로 학급당 {lost}칸 감소) =="
+            f"\n== partial_{size}: {required} periods, {capacity} cells (weekday {args.drop_day} removed: {lost} cells fewer per class) =="
         )
 
         print(f"== CP-SAT partial_{size} ({args.seconds}s) ==")
@@ -439,14 +444,14 @@ def track3(args) -> None:
         print(f"== engine partial_{size} ({args.seconds}s) ==")
         t0 = time.perf_counter()
         try:
-            # cpsat 의 완화 모드와 같은 계약: 미배정 1시간 = UNASSIGNED_WEIGHT.
+            # Same contract as cpsat's relaxed mode: one unassigned period = UNASSIGNED_WEIGHT.
             result = engine_solve(
                 problem_dict,
                 time_limit_seconds=float(args.seconds),
                 random_seed=args.seed,
                 constraints=Assembly().add("weekly_period_counts", hard=False, weight=UNASSIGNED_WEIGHT),
             )
-        except Exception as e:  # noqa: BLE001 — 백엔드 실패를 표에 그대로 드러낸다
+        except Exception as e:  # noqa: BLE001 — show backend failures in the table as they are
             rows.append(
                 {
                     "size": size,
@@ -478,12 +483,12 @@ def track3(args) -> None:
         )
 
     lines = [
-        f"## 트랙3: 부분 편성 — C++ 캐노니컬 vs CP-SAT ({args.seconds}s, seed {args.seed})",
+        f"## Track 3: partial timetabling — C++ canonical vs CP-SAT ({args.seconds}s, seed {args.seed})",
         "",
-        f"요일 {args.drop_day} 를 지워 시수 > 칸 으로 만든 인스턴스. 양쪽 다 H1 완화"
+        f"Instances made unfillable (periods > cells) by removing weekday {args.drop_day}. Both sides relax H1"
         f" (CP-SAT `solve_partial`, engine `weekly_period_counts hard=false weight={UNASSIGNED_WEIGHT}`).",
         "",
-        "| instance | backend | status | 배정/시수 | 미배정 | 남은 hard | 소프트 벌점 | 총 목적값 | wall |",
+        "| instance | backend | status | placed/required | unassigned | hard left | soft penalty | total objective | wall |",
         "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
     for row in rows:
@@ -492,7 +497,7 @@ def track3(args) -> None:
         hard = "-" if row["status"] == "pending" else str(len(row["violations"]))
         weighted = row["weighted"]
         wall = f"{row['wall']:.1f}s" if row["wall"] is not None else "-"
-        # 두 솔버가 실제로 최소화하는 값: 미배정 벌점 + 소프트 벌점.
+        # The value both solvers actually minimise: the unassigned penalty + the soft penalty.
         objective = "-" if weighted is None else str(row["missing"] * UNASSIGNED_WEIGHT + weighted)
         lines.append(
             f"| partial_{row['size']} | {row['backend']} | {row['status']} | {placed} "
@@ -500,16 +505,16 @@ def track3(args) -> None:
         )
     lines += [
         "",
-        "- **총 목적값**(미배정×10000 + 소프트)이 두 솔버가 실제로 최소화하는 값이다 — 낮은 쪽이 낫다.",
-        "- **배정/시수** 는 그 목적값의 지배항이다. 한 칸 더 채우는 것이 소프트 10000점만큼 값나간다.",
-        "- **남은 hard** 는 미배정을 뺀 하드 위반이다. 0 이 아니면 부분해가 아니라 그냥 깨진 해다.",
-        "- 가중 벌점은 배정한 부분에 대한 S1~S6 (기본 가중치) — 덜 채우면 낮아지므로 배정 수와 같이 본다.",
-        "- 두 status 는 축이 다르다: CP-SAT 은 완화 모델을 증명해 OPTIMAL/FEASIBLE, engine 은 미배정을"
-        " 뺀 하드가 0 이면 FEASIBLE 이다.",
+        "- The **total objective** (unassigned×10000 + soft) is what both solvers actually minimise — lower is better.",
+        "- **placed/required** dominates that objective: one more placed cell is worth 10000 soft points.",
+        "- **hard left** are the hard violations besides unassigned lessons. Anything above 0 is a broken solution, not a partial one.",
+        "- The weighted penalty is S1–S6 (default weights) over the placed part — it drops when less is placed, so read it with the placed count.",
+        "- The two statuses use different axes: CP-SAT proves the relaxed model (OPTIMAL/FEASIBLE), the engine is FEASIBLE when the hard"
+        " constraints besides unassigned lessons are 0.",
     ]
     for row in rows:
         if row["violations"]:
-            lines += ["", f"### partial_{row['size']} / {row['backend']} 남은 hard 위반"]
+            lines += ["", f"### partial_{row['size']} / {row['backend']} remaining hard violations"]
             lines += [f"- {v}" for v in row["violations"][:20]]
     report = "\n".join(lines)
     print("\n" + report)
@@ -530,7 +535,7 @@ def track2(args) -> None:
     weights = ObjectiveWeights()
     engine_solve = _load_engine_solver()
     if engine_solve is None:
-        print("engine: pending (st_timetabling canonical 미탑재 — CP-SAT 만 실행)")
+        print("engine: pending (st_timetabling canonical not installed — running CP-SAT only)")
 
     def evaluate_result(problem, timetable) -> dict:
         violations = validate_timetable(problem, timetable)
@@ -584,7 +589,7 @@ def track2(args) -> None:
         t0 = time.perf_counter()
         try:
             result = engine_solve(problem_dict, time_limit_seconds=float(args.seconds), random_seed=args.seed)
-        except Exception as e:  # noqa: BLE001 — 백엔드 실패를 표에 그대로 드러낸다
+        except Exception as e:  # noqa: BLE001 — show backend failures in the table as they are
             rows.append(
                 {
                     "size": size,
@@ -605,9 +610,9 @@ def track2(args) -> None:
         rows.append({"size": size, "backend": "engine", "status": str(timetable.status), "wall": wall, **checked})
 
     lines = [
-        f"## 트랙2: canonical 전제약 — C++ 캐노니컬 vs CP-SAT ({args.seconds}s, seed {args.seed})",
+        f"## Track 2: full canonical constraints — C++ canonical vs CP-SAT ({args.seconds}s, seed {args.seed})",
         "",
-        "| instance | backend | status | hard 위반 | 가중 벌점 | wall |",
+        "| instance | backend | status | hard violations | weighted penalty | wall |",
         "| --- | --- | --- | --- | --- | --- |",
     ]
     for row in rows:
@@ -620,12 +625,12 @@ def track2(args) -> None:
         )
     lines += [
         "",
-        "- 두 백엔드 모두 cpsat validate.py 로 재채점 (hard 위반 목록 + S1~S6 벌점 × 기본 가중치).",
-        "- engine 은 st_timetabling canonical 백엔드 (단일 스레드; import 실패 시 pending).",
+        "- Both backends are rescored with cpsat validate.py (hard-violation list + S1–S6 penalties × default weights).",
+        "- engine is the st_timetabling canonical backend (single thread; pending if the import fails).",
     ]
     for row in rows:
         if row["violations"]:
-            lines += ["", f"### canonical_{row['size']} / {row['backend']} hard 위반 상세"]
+            lines += ["", f"### canonical_{row['size']} / {row['backend']} hard violation details"]
             lines += [f"- {v}" for v in row["violations"][:20]]
     report = "\n".join(lines)
     print("\n" + report)
@@ -634,22 +639,22 @@ def track2(args) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--track2", action="store_true", help="canonical 전제약 트랙 실행")
-    parser.add_argument("--track3", action="store_true", help="부분 편성(H1 완화) 트랙 실행")
+    parser.add_argument("--track2", action="store_true", help="run the full canonical-constraints track")
+    parser.add_argument("--track3", action="store_true", help="run the partial-timetabling track (H1 relaxed)")
     parser.add_argument(
         "--drop-day",
         type=int,
         default=4,
-        help="트랙3에서 지울 요일 (0=월). 시수는 그대로 두고 칸만 줄여 못 채우게 만든다",
+        help="weekday removed in track 3 (0=Mon). Periods stay and only cells go, so it cannot be filled",
     )
-    parser.add_argument("--sizes", default="S,M", help="쉼표 구분 (트랙1: S,M,L 프리셋)")
+    parser.add_argument("--sizes", default="S,M", help="comma-separated (track 1: the S,M,L presets)")
     parser.add_argument("--seconds", type=int, default=10)
     parser.add_argument("--seed", type=int, default=1)
-    parser.add_argument("--workers", type=int, default=8, help="CP-SAT worker 수")
+    parser.add_argument("--workers", type=int, default=8, help="CP-SAT worker count")
     parser.add_argument("--out-dir", default="out")
-    parser.add_argument("--cpp-bin", help="st_quality_bench 경로 (기본: cmake 로 빌드)")
-    parser.add_argument("--quickstarts", help="timefold-quickstarts 클론 경로 (Java 트랙)")
-    parser.add_argument("--m2", help="-Dmaven.repo.local 로 쓸 Maven 캐시 경로")
+    parser.add_argument("--cpp-bin", help="path of st_quality_bench (default: built with cmake)")
+    parser.add_argument("--quickstarts", help="path of a timefold-quickstarts clone (Java track)")
+    parser.add_argument("--m2", help="Maven cache path passed as -Dmaven.repo.local")
     args = parser.parse_args()
 
     if args.track3:

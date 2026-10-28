@@ -1,32 +1,32 @@
 # Sports League Scheduling (C++ / Python)
 
 Timefold quickstart [sports-league-scheduling](https://github.com/TimefoldAI/timefold-quickstarts/tree/stable/use-cases/sports-league-scheduling)
-을 `include/optimaru/` 의 범용 C++ 엔진 위에 포팅한 유스케이스. 리그의 모든 경기
-(`Match`)에 라운드(`Round`)를 배정한다 (BASIC 변수 1개: `Match::round`).
+ported onto the generic C++ engine in `include/optimaru/`. Assigns a round (`Round`) to
+every match (`Match`) of the league (one BASIC variable: `Match::round`).
 
-- `cpp/` — 도메인(`sls::LeagueSchedule`), full-recompute 채점기, O(delta)
-  인크리멘털 채점기, 얇은 솔버 래퍼(LA + ALNS), 데모(`sls_demo`),
-  테스트(`sls_test`).
-- `python/` — pybind11 패키지 `sports_league` (pydantic 미러, 데모 생성기,
-  타입 스텁 포함). 상세는 `python/README.md`.
+- `cpp/` — domain (`sls::LeagueSchedule`), full-recompute scorer, O(delta)
+  incremental scorer, a thin solver wrapper (LA + ALNS), demo (`sls_demo`),
+  tests (`sls_test`).
+- `python/` — pybind11 package `sports_league` (with the pydantic mirror, demo generator
+  and type stubs). Details in `python/README.md`.
 
-## 빌드 / 검증
+## Build / verify
 
 ```sh
 cd cpp && cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j4
-./build/sls_test      # 제약 손계산 + incremental==full 3000무브 + FULL_ASSERT solve
-./build/sls_demo 10   # Java 데모 재현(14팀/32라운드/182경기), 10초 solve, 0hard 도달 확인
+./build/sls_test      # constraint hand checks + incremental==full over 3000 moves + FULL_ASSERT solve
+./build/sls_demo 10   # reproduces the Java demo (14 teams/32 rounds/182 matches), 10 s solve, checks 0hard
 
 cd ../python && uv venv && uv pip install -e . pytest pydantic && uv run pytest -q
 ```
 
-## 점수 매핑
+## Score mapping
 
-Java 원본이 이미 `HardSoftScore` 라 엔진의 `HardSoftScore(int64 hard,
-double soft)` 로 항등 매핑 (soft 는 정수 값 그대로 double 에 저장).
-제약 10개의 의미론은 Java `SportsLeagueSchedulingConstraintProvider` 와
-동일하다 — 목록은 `python/README.md` 또는 `cpp/include/sls/
-score_calculator.hpp` 주석 참고.
+The Java original already uses `HardSoftScore`, so it maps identically onto the engine's
+`HardSoftScore(int64 hard, double soft)` (soft stored as an integer value in the double).
+The 10 constraints have the same semantics as Java `SportsLeagueSchedulingConstraintProvider`
+— for the list see `python/README.md` or the comments in `cpp/include/sls/
+score_calculator.hpp`.
 
 <!-- usage-and-extending -->
 
@@ -88,5 +88,6 @@ solver's `solve` before the engine runs — the engine only fills what is still 
 
 ## Benchmark
 
-[`benchmarks/sports-league-scheduling`](../../benchmarks/sports-league-scheduling) compares this use case with
-OR-Tools CP-SAT on the same instances, rescored by the same evaluator.
+[`benchmarks/sports-league-scheduling`](../../benchmarks/sports-league-scheduling) compares this use case with OR-Tools CP-SAT and Timefold Solver 2.6.0 on the same instances. Every solution is rescored by the Timefold quickstart's `ConstraintProvider`, so all three are judged by the same rules.
+
+Latest run (30 s per solver, 1 instance): best score by the engine on 1, CP-SAT on 0, Timefold on 0 (ties count for each). Full table: [benchmarks/sports-league-scheduling/README.md](../../benchmarks/sports-league-scheduling/README.md#results).

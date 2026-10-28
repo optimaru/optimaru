@@ -8,7 +8,7 @@ from pathlib import Path
 from bin_packing.models import BinPackingProblemModel, ItemModel
 
 HEXALY_BPP_URL = "https://www.hexaly.com/examples/bin_packing.zip"
-HEXALY_BPP_SHA256 = "6d9418b739225844eb46f292fd2f97421ceac02016d9f38a814be3bd2c788085"
+HEXALY_BPP_SHA256 = "0809c65a30d435d05ea54f5635c04cf6660a3a167452fe60c2babdb36f0d5273"
 
 
 def _download(destination: Path) -> Path:

@@ -1,19 +1,19 @@
-"""Tournament scheduling — Timefold engine 기반 C++ 솔버의 Python 래퍼.
+"""Tournament scheduling — Python wrapper of the C++ solver on the optimaru engine.
 
-Java quickstart "tournament-scheduling" 의 포팅이다: 팀을 일자별 경기 슬롯
-(TeamAssignment)에 배정한다. 제약은 Java ConstraintProvider 와 동일 의미론
-(하드 2 + medium 1 + soft 1; 점수 매핑은 models/_core 문서 참고)::
+A port of the Java quickstart "tournament-scheduling": assigns teams to daily match slots
+(TeamAssignment). Constraints have the same semantics as the Java ConstraintProvider
+(2 hard + 1 medium + 1 soft; for the score mapping see the models/_core docs)::
 
     import tournament_scheduling as ts
     from tournament_scheduling.models import demo_data
 
-    schedule = demo_data()  # Java DemoDataGenerator 재현 (팀 7, 18일 x 4슬롯)
+    schedule = demo_data()  # reproduces Java DemoDataGenerator (7 teams, 18 days x 4 slots)
     result = ts.solve(schedule, time_limit_seconds=5.0, random_seed=42)
     print(result.score_hard, result.score_soft)
 
-`solve` 는 pydantic 미러(`models.TournamentScheduleModel`)와 `_core`
-객체(`TournamentSchedule`) 둘 다 받는다. pydantic 미러(직렬화용)는
-`tournament_scheduling.models` 에 있다 (선택 의존성).
+`solve` accepts both the pydantic mirror (`models.TournamentScheduleModel`) and `_core`
+objects (`TournamentSchedule`). The pydantic mirror (for serialization) is in
+`tournament_scheduling.models` (optional dependency).
 """
 
 from ._core import (
@@ -61,18 +61,18 @@ def solve(
     config: SolverConfig | None = None,
     constraints=None,
 ):
-    """스케줄을 풀어 돌려주는 고수준 API.
+    """High-level API that solves a schedule and returns it.
 
-    ``schedule`` 은 `_core.TournamentSchedule` (in place 로 풀고 그대로 반환)
-    또는 `models.TournamentScheduleModel` (변환해 풀고 새 모델로 반환).
+    ``schedule`` is a `_core.TournamentSchedule` (solved in place and returned)
+    or a `models.TournamentScheduleModel` (converted, solved, returned as a new model).
 
-    ``config`` 가 기본 설정이 된다 (None 이면 엔진 기본값: 30초 예산);
-    명시한 키워드 인자가 config 위에 덮어쓴다. ``stop_at_first_feasible``
-    은 hard 0 도달 즉시 종료한다 (best_score_limit=(0, -1e18)).
+    ``config`` becomes the base settings (None = engine defaults: 30 s budget);
+    explicit keyword arguments override config. ``stop_at_first_feasible``
+    stops as soon as hard 0 is reached (best_score_limit=(0, -1e18)).
 
-    ``constraints`` 로 비용 함수를 직접 고를 수 있다
-    (`tournament_scheduling.constraints` 참고). 준 목록의 제약만 채점되고,
-    None 이면 기본 네 제약 전부를 쓴다::
+    ``constraints`` picks the cost function directly
+    (see `tournament_scheduling.constraints`). Only the listed constraints are scored;
+    None uses all four default constraints::
 
         from tournament_scheduling.constraints import get_constraints
         ts.solve(schedule, constraints=get_constraints())
@@ -99,11 +99,11 @@ def solve(
         _solve(schedule)
         return schedule
 
-    # pydantic 미러 (선택 의존성이라 지연 임포트).
+    # pydantic mirror (lazy import: optional dependency).
     from .models import TournamentScheduleModel
 
     if isinstance(schedule, TournamentScheduleModel):
         core = schedule.to_core()
         _solve(core)
         return TournamentScheduleModel.from_core(core)
-    raise TypeError(f"schedule 은 TournamentSchedule 또는 TournamentScheduleModel 이어야 한다: {type(schedule)!r}")
+    raise TypeError(f"schedule must be a TournamentSchedule or a TournamentScheduleModel: {type(schedule)!r}")

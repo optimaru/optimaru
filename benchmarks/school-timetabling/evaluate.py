@@ -1,16 +1,18 @@
-"""트랙1 공유 평가기: quickstart 6제약 스코어를 인스턴스 JSON + 할당에서 재계산.
+"""Track-1 shared evaluator: recomputes the quickstart's six-constraint score from the instance JSON + an assignment.
 
-세 솔버(C++ 엔진 / Java Timefold / CP-SAT)의 해를 전부 같은 함수로 재채점해서
-각 솔버의 self-report 점수와 대조한다. 계산 규칙은 Java quickstart 의
-``TimetableConstraintProvider`` (= C++ ``score_calculator.cpp``)와 동일하다:
+Rescores the solutions of all three solvers (C++ engine / Java Timefold /
+CP-SAT) with the same function and compares them with each solver's
+self-reported score. The rules are identical to the Java quickstart's
+``TimetableConstraintProvider`` (= C++ ``score_calculator.cpp``):
 
 - hard: roomConflict / teacherConflict / studentGroupConflict —
-  같은 키 셀을 공유하는 수업 쌍 수 C(c, 2) 의 합에 -1 배.
-- soft: teacherTimeEfficiency(보상) - teacherRoomStability(벌점)
-  - studentGroupSubjectVariety(벌점). "연속 교시" 는 같은 날 |Δperiod| == 1
-  (Java 쪽은 시각 매핑으로 같은 의미가 되도록 크로스체크로 고정).
+  -1 times the sum of C(c, 2) over the lessons sharing a cell of that key.
+- soft: teacherTimeEfficiency (reward) - teacherRoomStability (penalty)
+  - studentGroupSubjectVariety (penalty). "Consecutive periods" means
+  |Δperiod| == 1 on the same day (pinned on the Java side, which uses a time
+  mapping with the same meaning, by the cross-check).
 
-사용:
+Usage:
     uv run evaluate.py <instance.json> <solution.json>
 """
 
@@ -34,14 +36,14 @@ def _pairs(n: int) -> int:
 
 
 def score_assignment(instance: dict, assignment: list[tuple[int, int]]) -> dict:
-    """``assignment[i] = (timeslot index, room index)`` (미배정은 (-1, -1)) 를
-    quickstart 6제약으로 채점한다. 반환 dict 은 hard/soft 와 제약별 내역."""
+    """Scores ``assignment[i] = (timeslot index, room index)`` (unassigned is (-1, -1))
+    with the quickstart's six constraints. Returns a dict with hard/soft and the per-constraint breakdown."""
     timeslots = instance["timeslots"]
     lessons = instance["lessons"]
     if len(assignment) != len(lessons):
-        raise ValueError(f"assignment 길이 {len(assignment)} != lessons {len(lessons)}")
+        raise ValueError(f"assignment length {len(assignment)} != lessons {len(lessons)}")
 
-    # 같은 날 period+1 인접 timeslot (C++ 의 nextSlot 과 동일).
+    # The adjacent timeslot with period+1 on the same day (same as C++'s nextSlot).
     index_of = {(ts["day"], ts["period"]): i for i, ts in enumerate(timeslots)}
     next_slot = [index_of.get((ts["day"], ts["period"] + 1), -1) for ts in timeslots]
 
@@ -54,7 +56,7 @@ def score_assignment(instance: dict, assignment: list[tuple[int, int]]) -> dict:
 
     for lesson, (ts, room) in zip(lessons, assignment):
         if ts < 0 or room < 0:
-            continue  # 미배정 수업은 아무 기여도 없다 (Java forEach 와 동일)
+            continue  # an unassigned lesson contributes nothing (same as Java's forEach)
         cell_cnt[(ts, room)] += 1
         teacher_slot[(lesson["teacher"], ts)] += 1
         group_slot[(lesson["studentGroup"], ts)] += 1
@@ -66,13 +68,13 @@ def score_assignment(instance: dict, assignment: list[tuple[int, int]]) -> dict:
     teacher_conflict = sum(_pairs(c) for c in teacher_slot.values())
     group_conflict = sum(_pairs(c) for c in group_slot.values())
 
-    # teacherRoomStability: 교사별 전체 쌍 - 같은 교실 쌍.
+    # teacherRoomStability: all pairs per teacher - same-room pairs.
     same_room_pairs: Counter[str] = Counter()
     for (teacher, _), c in teacher_room.items():
         same_room_pairs[teacher] += _pairs(c)
     stability = sum(_pairs(n) - same_room_pairs[t] for t, n in teacher_lessons.items())
 
-    # 연속 교시 쌍 = 인접 셀 점유 수의 곱 (쌍마다 1회).
+    # Consecutive-period pairs = product of the occupancy counts of adjacent cells (once per pair).
     efficiency = sum(
         c * teacher_slot[(teacher, next_slot[ts])] for (teacher, ts), c in teacher_slot.items() if next_slot[ts] >= 0
     )
@@ -97,18 +99,18 @@ def score_assignment(instance: dict, assignment: list[tuple[int, int]]) -> dict:
 
 
 def format_score(result: dict) -> str:
-    """C++ ``HardSoftScore::toString`` / Java ``HardSoftScore#toString`` 과 같은
-    "Xhard/Ysoft" 문자열."""
+    """The "Xhard/Ysoft" string, same as C++ ``HardSoftScore::toString`` / Java
+    ``HardSoftScore#toString``."""
     return f"{result['hard']}hard/{result['soft']}soft"
 
 
 def assignment_from_solution(instance: dict, solution: dict) -> list[tuple[int, int]]:
-    """solution JSON({"assignment": [{"id", "timeslot", "room"}, ...]}) 을 인스턴스의
-    lesson 순서에 맞춘 (timeslot, room) 리스트로 바꾼다. id 로 매칭한다."""
+    """Turns a solution JSON ({"assignment": [{"id", "timeslot", "room"}, ...]}) into a
+    (timeslot, room) list in the instance's lesson order, matched by id."""
     by_id = {entry["id"]: (entry["timeslot"], entry["room"]) for entry in solution["assignment"]}
     missing = [lesson["id"] for lesson in instance["lessons"] if lesson["id"] not in by_id]
     if missing:
-        raise ValueError(f"solution 에 없는 lesson id: {missing[:5]} ...")
+        raise ValueError(f"lesson ids missing from the solution: {missing[:5]} ...")
     return [by_id[lesson["id"]] for lesson in instance["lessons"]]
 
 

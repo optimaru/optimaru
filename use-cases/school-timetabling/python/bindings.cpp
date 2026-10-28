@@ -597,7 +597,7 @@ void bindCanon(py::module_ &canon)
     config.def_readwrite("smart_class_swap_candidates",
                          &cn::Solver::Config::smartClassSwapCandidates);
     // Best-of-k width of the re-assign move — only in play when the assembly
-    // demotes H1 to soft (부분 편성; see canonical_solver.hpp for the sweep).
+    // demotes H1 to soft (partial timetabling; see canonical_solver.hpp for the sweep).
     config.def_readwrite("reassign_candidates",
                          &cn::Solver::Config::reassignCandidates);
 

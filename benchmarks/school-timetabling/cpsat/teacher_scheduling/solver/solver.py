@@ -1,4 +1,4 @@
-"""문제 입력 -> CP-SAT 모델 -> 편성 결과로 이어지는 실행 진입점."""
+"""Entry point: problem input -> CP-SAT model -> timetabling result."""
 
 from collections.abc import Sequence
 
@@ -27,13 +27,13 @@ def solve(
     *,
     constraints: Sequence[Constraint] | None = None,
 ) -> Timetable:
-    """모델을 만들고(변수 -> 제약) CP-SAT 로 푼 뒤 Timetable 로 변환한다.
+    """Builds the model (variables -> constraints), solves it with CP-SAT and converts the result to a Timetable.
 
-    constraints 가 None 이면 기본 구성(하드 H1~H10, 소프트 S1~S6)을
-    `config.weights` 가중치로 조립한다. 제약을 직접 주면 그 목록이 전부다 —
-    기본 제약을 남기려면 `registry.merge(default_constraints(), ...)` 를 쓴다.
-    제약을 완화하거나 커스텀 제약을 주입한 해는 `validate.validate_timetable`
-    의 검증 범위 밖이다 (`teacher_scheduling.solver.registry` docstring 참고).
+    With constraints None, assembles the default configuration (hard H1–H10, soft
+    S1–S6) with the `config.weights` weights. A given constraint list is the whole
+    list — to keep the defaults use `registry.merge(default_constraints(), ...)`.
+    Solutions obtained with relaxed or injected custom constraints are outside the
+    scope of `validate.validate_timetable` (see the `teacher_scheduling.solver.registry` docstring).
     """
     config = config or SolverConfig()
 
@@ -66,10 +66,10 @@ def _minimize(
     constraints: Sequence[Constraint],
     config: SolverConfig,
 ) -> None:
-    """벌점 식들의 가중합을 최소화한다. 가중치 0 인 항목은 목적함수에서 빠진다.
+    """Minimises the weighted sum of the penalty expressions. Terms with weight 0 leave the objective.
 
-    벌점 식은 가중치가 0 이어도 `penalties` 에 그대로 남는다 — 목적함수에서
-    빼는 것과 결과에서 안 보여주는 것은 다르기 때문이다.
+    A penalty expression stays in `penalties` even with weight 0 — removing it
+    from the objective is not the same as hiding it from the result.
     """
     weights = {constraint.name: weight_of(constraint, config.weights) for constraint in constraints}
     objective = [weights[name] * expr for name, expr in penalties.items() if weights[name]]
@@ -89,7 +89,7 @@ def _make_solver(config: SolverConfig) -> cp_model.CpSolver:
 
 
 def _extract_lessons(solver: cp_model.CpSolver, variables: TimetableVariables) -> list[ScheduledLesson]:
-    """켜진 x 변수를 시간표 칸으로 옮긴다. 특별실 배정은 이후 단계."""
+    """Moves the x variables that are on into timetable cells. Special rooms come later."""
     lessons = []
     for course in variables.problem.courses:
         for slot in variables.allowed_slots[course.id]:

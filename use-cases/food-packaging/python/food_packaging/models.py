@@ -1,19 +1,19 @@
-"""엔진 도메인의 pydantic v2 미러 — JSON 직렬화/역직렬화용.
+"""Pydantic v2 mirror of the engine domain — for JSON serialization/deserialization.
 
-`_core` 의 Product/Operator/Line/Job/PackagingSchedule 을 1:1 로 미러링하되
-시간은 `datetime.datetime`(naive, epoch 분으로 변환), 청소 시간은 Java 처럼
-"직전 제품 id -> timedelta" 맵으로 다룬다. 배정은 라인의 `job_ids` 순서가
-원본이고, 각 작업의 line_id / start_cleaning_date_time /
-start_production_date_time / end_date_time 은 결과 전용 필드다
-(`to_core` 에서 무시)::
+Mirrors `_core`'s Product/Operator/Line/Job/PackagingSchedule 1:1, but times are
+`datetime.datetime` (naive, converted to epoch minutes) and cleaning times are a
+"previous product id -> timedelta" map as in Java. The line's `job_ids` order is the
+source of truth for the assignment, and each job's line_id / start_cleaning_date_time /
+start_production_date_time / end_date_time are result-only fields
+(ignored by `to_core`)::
 
     from food_packaging.models import PackagingScheduleModel
 
-    model = PackagingScheduleModel.from_core(schedule)  # 엔진 -> pydantic
+    model = PackagingScheduleModel.from_core(schedule)  # engine -> pydantic
     clone = PackagingScheduleModel.model_validate_json(model.model_dump_json())
-    schedule2 = clone.to_core()                         # pydantic -> 엔진
+    schedule2 = clone.to_core()                         # pydantic -> engine
 
-`pydantic` 은 선택 의존성이다 (`pip install food_packaging[models]`).
+`pydantic` is an optional dependency (`pip install food_packaging[models]`).
 """
 
 from datetime import date, datetime, timedelta
@@ -36,12 +36,12 @@ _EPOCH = datetime(1970, 1, 1)
 
 
 def datetime_to_minute(value: datetime) -> int:
-    """naive datetime -> epoch 분 (1970-01-01T00:00 기준)."""
+    """naive datetime -> epoch minutes (from 1970-01-01T00:00)."""
     return int((value - _EPOCH).total_seconds()) // 60
 
 
 def minute_to_datetime(minute: int) -> datetime:
-    """epoch 분 -> naive datetime."""
+    """epoch minutes -> naive datetime."""
     return _EPOCH + timedelta(minutes=minute)
 
 
@@ -50,9 +50,9 @@ def _opt_to_datetime(minute: int | None) -> datetime | None:
 
 
 class ProductModel(BaseModel):
-    """제품. cleaning_durations 는 Java 의 Map<Product, Duration> 미러:
-    key 는 라인에서 '직전'에 생산된 제품의 id. 항목이 없는 (직전, 현재)
-    쌍이 실제로 연달아 배치되면 Java 처럼 에러가 난다."""
+    """A product. cleaning_durations mirrors Java's Map<Product, Duration>:
+    keys are the id of the product made on the line 'just before'. When a (previous,
+    current) pair without an entry actually ends up adjacent, it errors as in Java."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -68,10 +68,10 @@ class OperatorModel(BaseModel):
 
 
 class JobModel(BaseModel):
-    """planning entity (LIST 변수의 원소). 배정은 LineModel.job_ids 가
-    원본이고, line_id 와 start_cleaning/start_production/end 는 결과 전용
-    shadow 필드다 (to_core 에서 무시). min_start_time 과 priority 는 Java
-    와 동일하게 어떤 제약도 읽지 않는다."""
+    """Planning entity (an element of the LIST variable). LineModel.job_ids is the source
+    of truth for the assignment; line_id and start_cleaning/start_production/end are
+    result-only shadow fields (ignored by to_core). min_start_time and priority are read
+    by no constraint, the same as in Java."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -92,8 +92,8 @@ class JobModel(BaseModel):
 
 
 class LineModel(BaseModel):
-    """planning entity. job_ids 가 @PlanningListVariable(순서 유의),
-    operator_id 가 Java 의 basic @PlanningVariable Line.operator."""
+    """Planning entity. job_ids is the @PlanningListVariable (order matters),
+    operator_id is Java's basic @PlanningVariable Line.operator."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -105,10 +105,10 @@ class LineModel(BaseModel):
 
 
 class PackagingScheduleModel(BaseModel):
-    """planning solution 미러. score 는 읽기 전용 결과라 별도 필드로 둔다.
-    어떤 라인의 job_ids 에도 없는 작업은 미배정이다 (pinned 미배정 작업은
-    솔버가 그대로 두고, 나머지는 재solve 시 배정될 수 있다 — Java 와
-    동일)."""
+    """Planning solution mirror. score is a read-only result, kept as a separate field.
+    Jobs in no line's job_ids are unassigned (the solver leaves pinned unassigned
+    jobs alone, and the rest can get assigned on a re-solve — the same as
+    Java)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -123,7 +123,7 @@ class PackagingScheduleModel(BaseModel):
     score_soft: int | None = None
 
     def to_core(self) -> "_core.PackagingSchedule":
-        """pydantic -> 엔진 객체."""
+        """pydantic -> engine object."""
         product_index = {p.id: i for i, p in enumerate(self.products)}
         operator_index = {o.id: i for i, o in enumerate(self.operators)}
         job_index = {j.id: i for i, j in enumerate(self.jobs)}
@@ -187,10 +187,10 @@ class PackagingScheduleModel(BaseModel):
 
     @classmethod
     def from_core(cls, schedule: "_core.PackagingSchedule") -> "PackagingScheduleModel":
-        """엔진 객체 -> pydantic (현재 배정, shadow, score 포함)."""
+        """engine object -> pydantic (including the current assignment, shadows and score)."""
         schedule.update_shadow_variables()
-        # pybind 의 vector 필드 접근은 리스트 전체를 복사하므로 한 번만
-        # 읽어 둔다.
+        # Accessing a pybind vector field copies the whole list, so read it
+        # only once.
         core_products = schedule.products
         core_operators = schedule.operators
         core_lines = schedule.lines

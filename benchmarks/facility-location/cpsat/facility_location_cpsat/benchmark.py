@@ -112,6 +112,44 @@ def solve_cpsat(problem: Any, seconds: float, seed: int, workers: int) -> Any:
     return solved.to_core()
 
 
+
+# --- Timefold quickstart (benchmarks/timefold-quickstarts) ---------------------
+
+TIMEFOLD = "facility-location"
+
+
+def to_timefold(problem: Any) -> dict:
+    def location(loc: Any) -> list[float]:
+        return [loc.latitude, loc.longitude]
+
+    facilities = problem.facilities
+    return {
+        "facilities": [
+            {"id": f.id, "location": location(f.location), "setupCost": f.setup_cost, "capacity": f.capacity}
+            for f in facilities
+        ],
+        "consumers": [
+            {
+                "id": c.id,
+                "location": location(c.location),
+                "demand": c.demand,
+                "facility": {"id": facilities[c.facility].id} if c.facility >= 0 else None,
+            }
+            for c in problem.consumers
+        ],
+        "southWestCorner": location(problem.south_west_corner),
+        "northEastCorner": location(problem.north_east_corner),
+    }
+
+
+def from_timefold(problem: Any, result: dict) -> None:
+    index = {f.id: i for i, f in enumerate(problem.facilities)}
+    chosen = result["assignment"]["Consumer"]
+    problem.set_assignment(
+        [index[chosen[c.id]["facility"]] if chosen[c.id]["facility"] else -1 for c in problem.consumers]
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     return run_cli(sys.modules[__name__], argv)
 

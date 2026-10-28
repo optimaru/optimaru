@@ -1,16 +1,16 @@
-"""엔진 도메인의 pydantic v2 미러 — JSON 직렬화/역직렬화용.
+"""Pydantic v2 mirror of the engine domain — for JSON serialization/deserialization.
 
-`_core` 의 Timeslot/Room/Speaker/Talk/ConferenceSchedule 과 SolverConfig 를
-1:1 로 미러링한다. 엔진 형태 그대로를 저장/전송할 때(디버그 덤프, 회귀
-스냅샷 등) 쓴다::
+Mirrors `_core`'s Timeslot/Room/Speaker/Talk/ConferenceSchedule and SolverConfig
+1:1. Use it to store or transfer the engine shape as-is (debug dumps, regression
+snapshots, ...)::
 
     from conference_scheduling.models import ConferenceScheduleModel
 
-    model = ConferenceScheduleModel.from_core(schedule)  # 엔진 -> pydantic
+    model = ConferenceScheduleModel.from_core(schedule)  # engine -> pydantic
     clone = ConferenceScheduleModel.model_validate_json(model.model_dump_json())
-    schedule2 = clone.to_core()                          # pydantic -> 엔진
+    schedule2 = clone.to_core()                          # pydantic -> engine
 
-`pydantic` 은 선택 의존성이다 (`pip install conference-scheduling[models]`).
+`pydantic` is an optional dependency (`pip install conference-scheduling[models]`).
 """
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -28,7 +28,7 @@ __all__ = [
 
 
 class TimeslotModel(BaseModel):
-    """시간 칸. 분 단위(공통 기준점, 자정 경계는 1440 의 배수)."""
+    """A time slot. In minutes (shared origin; midnight boundaries are multiples of 1440)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -40,7 +40,7 @@ class TimeslotModel(BaseModel):
 
 
 class RoomModel(BaseModel):
-    """발표장. unavailable_timeslots 는 timeslot 인덱스."""
+    """A room. unavailable_timeslots are timeslot indices."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -69,7 +69,7 @@ class SpeakerModel(BaseModel):
 
 
 class TalkModel(BaseModel):
-    """planning entity. slot_room 은 timeslot*room 합성 변수(-1 = 미배정)."""
+    """Planning entity. slot_room is the composite timeslot*room variable (-1 = unassigned)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -100,7 +100,7 @@ class TalkModel(BaseModel):
 
 
 class ConferenceScheduleModel(BaseModel):
-    """planning solution 미러. score 는 읽기 전용 결과라 별도 필드로 둔다."""
+    """Planning solution mirror. score is a read-only result, kept as a separate field."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -115,7 +115,7 @@ class ConferenceScheduleModel(BaseModel):
     score_soft: float | None = None
 
     def to_core(self) -> "_core.ConferenceSchedule":
-        """pydantic -> 엔진 객체 (score 필드는 엔진이 다시 계산하므로 무시)."""
+        """pydantic -> engine object (the score field is ignored; the engine recomputes it)."""
         return _core.ConferenceSchedule(
             name=self.name,
             talk_types=list(self.talk_types),
@@ -128,7 +128,7 @@ class ConferenceScheduleModel(BaseModel):
 
     @classmethod
     def from_core(cls, schedule: "_core.ConferenceSchedule") -> "ConferenceScheduleModel":
-        """엔진 객체 -> pydantic (현재 배정과 score 포함)."""
+        """engine object -> pydantic (including the current assignment and score)."""
         return cls(
             name=schedule.name,
             talk_types=list(schedule.talk_types),
@@ -205,17 +205,17 @@ class ConferenceScheduleModel(BaseModel):
 
 
 class SolveConfig(BaseModel):
-    """`_core.SolverConfig` 의 직렬화 가능한 미러."""
+    """Serializable mirror of `_core.SolverConfig`."""
 
     model_config = ConfigDict(extra="forbid")
 
     time_limit_seconds: float = Field(default=30.0, ge=0)
     random_seed: int = 0
     parallel_solver_count: int = Field(default=1, ge=1)
-    # 0 = 자동 (clamp(8 * talk 수, 800, 3200)). 양수면 그 값을 그대로 쓴다.
+    # 0 = automatic (clamp(8 * talk count, 800, 3200)). A positive value is used as-is.
     late_acceptance_size: int = Field(default=0, ge=0)
-    # 하나의 time limit 을 나눠 쓰는 연속 local search 실행 횟수
-    # (각 구간은 직전 구간의 best 에서 재시작; cs/solver.hpp 참고).
+    # Number of consecutive local search runs sharing one time limit
+    # (each segment restarts from the previous segment's best; see cs/solver.hpp).
     restart_segments: int = Field(default=8, ge=1)
     stop_at_first_feasible: bool = False
     best_score_limit: tuple[int, float] | None = None
@@ -236,21 +236,21 @@ class SolveConfig(BaseModel):
         max_length=4,
     )
     ruin_recreate_polish_steps: int = Field(default=5000, ge=0)
-    # 파괴-재구성을 acceptor 판정을 받는 평범한 무브로도 쓰는 확률.
-    # 음수 = 자동 (0.2 / slotRoomCount, 예산 점유율 규칙 — benchmarks/school-timetabling/RESULTS.md 참고),
-    # 0 = 끔.
+    # Probability of also using ruin & recreate as an ordinary move judged by the acceptor.
+    # Negative = automatic (0.2 / slotRoomCount, the budget-share rule — see benchmarks/school-timetabling/RESULTS.md),
+    # 0 = off.
     ruin_recreate_as_move_weight: float = Field(default=-1.0)
     ruin_recreate_as_move_max_ruin: int = Field(default=12, ge=1)
-    # nearby 짝 하나에 대한 best-improvement 하강 확률 (기본 0 = 끔).
+    # Probability of a best-improvement descent over one nearby pair (default 0 = off).
     descent_weight: float = Field(default=0.0, ge=0)
-    # 하드 위반을 지닌 talk 을 겨냥해 무브 대상을 뽑는 확률 (0 = 끔).
-    # 측정상 scaled:120 급에서만 이득이라 기본은 끔 — README 참고.
+    # Probability of picking move targets among talks with hard violations (0 = off).
+    # Measured to help only around scaled:120, so off by default — see the README.
     hot_talk_probability: float = Field(default=0.0, ge=0, le=1)
 
     change_move_weight: float = Field(default=0.75, ge=0)
     swap_move_weight: float = Field(default=0.25, ge=0)
-    # 타입 호환 (timeslot, room) 셀로 change move 를 몰아주는 확률
-    # (Java 의 TalkType별 value range 대체; cs/solver.hpp 참고).
+    # Probability of steering change moves to type-compatible (timeslot, room) cells
+    # (replaces Java's per-TalkType value range; see cs/solver.hpp).
     compatible_value_probability: float = Field(default=0.9, ge=0, le=1)
 
     def to_core(self) -> "_core.SolverConfig":
@@ -258,7 +258,7 @@ class SolveConfig(BaseModel):
         cfg.spent_limit_seconds = self.time_limit_seconds
         cfg.random_seed = self.random_seed
         cfg.parallel_solver_count = self.parallel_solver_count
-        cfg.late_acceptance_size = self.late_acceptance_size  # 0 = 자동
+        cfg.late_acceptance_size = self.late_acceptance_size  # 0 = auto
         cfg.restart_segments = self.restart_segments
         cfg.unimproved_spent_limit_seconds = self.unimproved_spent_limit_seconds
         cfg.step_count_limit = self.step_count_limit

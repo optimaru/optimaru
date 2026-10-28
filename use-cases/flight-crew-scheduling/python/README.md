@@ -1,10 +1,10 @@
 # flight_crew
 
-Timefold quickstart flight-crew-scheduling 의 C++ 포트(`../cpp`)를 pybind11
-로 감싼 Python 패키지. 항공편의 승무원 좌석마다 승무원을 고르는 BASIC 변수
-문제를 late-acceptance local search + ALNS 로 푼다.
+The Python package wrapping, with pybind11, the C++ port (`../cpp`) of the Timefold quickstart
+flight-crew-scheduling. Solves the BASIC-variable problem of picking a crew member for every
+crew seat of a flight with late-acceptance local search + ALNS.
 
-## 설치
+## Install
 
 ```bash
 uv venv
@@ -12,10 +12,10 @@ uv pip install -e . pytest pydantic
 uv run pytest -q
 ```
 
-## 사용
+## Usage
 
-고수준 API 는 `solve` 하나다. pydantic 모델(또는 같은 형태의 dict)을 받아
-풀린 모델을 돌려준다:
+The high-level API is the single `solve`. It takes a pydantic model (or a dict of the same
+shape) and returns the solved model:
 
 ```python
 from datetime import datetime
@@ -53,24 +53,24 @@ for a in result.flight_assignments:
     print(a.id, a.flight, a.employee)
 ```
 
-- 시각은 UTC 다: naive `datetime` 은 UTC 로 해석하고, tz-aware 는 UTC 로
-  변환한다. 불가일(`unavailable_days`)은 `date` 리스트.
-- `pinned=True` 인 좌석은 배정이 고정된다 (점수엔 반영, 이동은 안 함).
-- 엔진 객체(`fc.FlightCrewSchedule`, 인덱스 참조)를 직접 만들어
-  `fc.Solver`/`fc.calculate_score` 를 쓰는 저수준 경로도 있다 — 이 경로는
-  pydantic 이 필요 없다. 타입/필드는 `flight_crew/_core.pyi` 참고.
-- 세부 설정은 `models.SolveConfig`(직렬화 가능) 또는 `fc.SolverConfig` 로:
+- Times are UTC: a naive `datetime` is read as UTC, and a tz-aware one is converted to
+  UTC. Unavailable days (`unavailable_days`) are a list of `date`.
+- Seats with `pinned=True` keep their assignment (counted in the score, never moved).
+- There is also a low-level path that builds engine objects (`fc.FlightCrewSchedule`,
+  index references) directly and uses `fc.Solver`/`fc.calculate_score` — it needs no
+  pydantic. For types/fields see `flight_crew/_core.pyi`.
+- Fine-grained settings go through `models.SolveConfig` (serializable) or `fc.SolverConfig`:
   `fc.solve(problem, config=SolveConfig(time_limit_seconds=10, parallel_solver_count=4))`.
 
-## 제약 (Java ConstraintProvider 그대로, HardSoftScore)
+## Constraints (the Java ConstraintProvider as-is, HardSoftScore)
 
-| 제약 | 레벨 | 벌점 |
+| Constraint | Level | Penalty |
 |---|---|---|
-| requiredSkill | hard | 스킬 없는 배정당 -100 |
-| flightConflict | hard | 시간 겹치는 같은 승무원 배정 쌍당 -10 |
-| transferBetweenTwoFlights | hard | 공항이 안 이어지는 연속 배정 쌍당 -1 |
-| employeeUnavailability | hard | 불가일 배정당 -10 |
+| requiredSkill | hard | -100 per assignment without the skill |
+| flightConflict | hard | -10 per time-overlapping same-crew assignment pair |
+| transferBetweenTwoFlights | hard | -1 per consecutive assignment pair whose airports do not connect |
+| employeeUnavailability | hard | -10 per assignment on an unavailable day |
 | firstAssignmentNotDepartingFromHome | soft | -1000 |
 | lastAssignmentNotArrivingAtHome | soft | -1000 |
 
-점수는 원본과 동일한 `HardSoftScore` 그대로다 (레벨 접기 없음).
+The score is the original `HardSoftScore` as-is (no level folding).

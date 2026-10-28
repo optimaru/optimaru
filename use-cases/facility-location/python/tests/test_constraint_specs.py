@@ -1,4 +1,4 @@
-"""facility_location.constraints — 비용 함수를 선언으로 고르는 API."""
+"""facility_location.constraints — an API for picking the cost function declaratively."""
 
 import pytest
 
@@ -16,7 +16,7 @@ from facility_location.constraints import (
 
 
 def build_problem():
-    """설치비 싼 먼 시설 vs 비싼 가까운 시설. 어떤 제약을 켜느냐로 답이 갈린다."""
+    """A cheap far facility vs an expensive near one. Which constraints are on decides the answer."""
     return fl.FacilityLocationProblem(
         [
             fl.Facility("near", fl.Location(0.0, 0.0), 1000, 5),
@@ -33,7 +33,7 @@ def solve(constraints=None):
 
 
 def test_list_constraints_matches_the_spec_names():
-    """스펙이 들고 있는 이름은 코어가 실제로 아는 이름이어야 한다."""
+    """Names carried by specs must be names the core actually knows."""
     available = fl.list_constraints()
     assert available == [
         "facility_capacity",
@@ -49,7 +49,7 @@ def test_get_constraints_defaults_to_the_full_set():
 
 
 def test_default_solve_equals_explicit_default_constraints():
-    """`constraints=get_constraints()` 는 기본 경로와 같은 점수여야 한다."""
+    """`constraints=get_constraints()` must score the same as the default path."""
     plain = solve()
     explicit = solve(get_constraints())
     assert plain.hard == explicit.hard
@@ -57,23 +57,23 @@ def test_default_solve_equals_explicit_default_constraints():
 
 
 def test_picking_a_subset_drops_the_other_terms():
-    """목록에 없는 제약은 채점되지 않는다 — 소프트 항이 통째로 사라진다."""
+    """Unlisted constraints are not scored — the soft term disappears entirely."""
     hard_only = solve([capacity])
     assert hard_only.soft == 0.0
 
 
 def test_reweighting_one_constraint_scales_only_that_term():
-    """거리 가중치만 10배: 소프트가 커지되 하드는 그대로."""
+    """Distance weight x10 only: soft grows while hard stays put."""
     base = solve([capacity, distance])
     heavier = solve([capacity, DistanceFromFacility(weight=60)])
     assert heavier.hard == base.hard
-    assert heavier.soft < base.soft  # 벌점이므로 더 음수
+    assert heavier.soft < base.soft  # penalty, so more negative
 
 
 def test_level_can_be_flipped():
-    """하드 제약을 소프트로 내리면 하드 레벨이 비워진다."""
+    """Demoting a hard constraint to soft empties the hard level."""
     problem = build_problem()
-    # 용량 5짜리 시설에 수요 12를 몰아넣어 확실히 위반시킨다.
+    # Push demand 12 into a capacity-5 facility to force a violation.
     for consumer in problem.consumers:
         consumer.facility = 0
     soft_capacity = FacilityCapacity(hard=False)
@@ -83,10 +83,10 @@ def test_level_can_be_flipped():
 
 
 def test_unknown_constraint_name_raises():
-    """오타가 비용 함수를 조용히 그대로 두면 안 된다."""
+    """A typo must not silently leave the cost function unchanged."""
 
     class Typo:
-        name = "facility_setup_costs"  # 뒤에 s
+        name = "facility_setup_costs"  # trailing s
         weight = None
         hard = None
         exponent = 1.0
@@ -96,7 +96,7 @@ def test_unknown_constraint_name_raises():
 
 
 def test_empty_constraint_list_is_rejected():
-    """빈 목록은 '아무것도 채점하지 않음'이라 실수일 가능성이 높다."""
+    """An empty list means 'score nothing', which is most likely a mistake."""
     with pytest.raises(ValueError, match="must not be empty"):
         fl.solve(build_problem(), time_limit_seconds=0.2, constraints=[])
 
@@ -109,7 +109,7 @@ def test_spec_subclass_must_name_a_constraint():
 
 
 def test_setup_cost_instance_is_the_default_weight():
-    """모듈 상위 인스턴스는 기본값 그대로여야 한다 (weight=None)."""
+    """Module-level instances must keep the defaults (weight=None)."""
     assert setup_cost.weight is None
     assert setup_cost.hard is None
     assert setup_cost.exponent == 1.0
@@ -146,7 +146,7 @@ def test_constraint_costs_match_capacity_setup_and_distance_by_hand():
     assert score(raw).soft == pytest.approx(-(2 * 100 + 6 * 777))
 
 
-# --- 순수 파이썬 채점 (constraint_costs -> score) ---------------------------
+# --- Pure-Python scoring (constraint_costs -> score) ------------------------
 
 
 def _solved(constraints=None):
@@ -156,7 +156,7 @@ def _solved(constraints=None):
 
 
 def test_score_equals_the_engine_for_the_default_assembly():
-    """레벨이 둘뿐인 도메인이라 하드/소프트를 그대로 대조할 수 있다."""
+    """A two-level domain, so hard/soft can be compared directly."""
     problem = _solved()
     engine = fl.calculate_score(problem)
     python = score(fl.constraint_costs(problem))
@@ -175,10 +175,10 @@ def test_score_equals_the_engine_for_the_default_assembly():
     ],
 )
 def test_score_matches_the_engine_for_arbitrary_specs(specs):
-    """임의 스펙으로 푼 해를 그 스펙으로 재계산하면 엔진 점수와 같아야 한다.
+    """Rescoring a solution solved with arbitrary specs under those specs must equal the engine score.
 
-    exponent 가 unit 별로 적용되므로 unit 별 원본 cost 를 받아야 재현된다 —
-    합계만으로는 안 된다."""
+    exponent applies per unit, so reproducing it needs the per-unit raw costs —
+    totals alone are not enough."""
     problem = _solved(specs)
     python = score(fl.constraint_costs(problem), specs)
     assert python.hard == problem.score.hard
@@ -196,7 +196,7 @@ def test_score_is_additive_over_the_picked_constraints():
 
 
 def test_score_rejects_an_unknown_constraint_name():
-    """이름이 틀린 스펙(예: 이름 바뀐 컴포넌트)은 조용히 무시되면 안 된다."""
+    """A spec with a wrong name (e.g. a renamed component) must not be silently ignored."""
     raw = fl.constraint_costs(_solved())
 
     class Renamed(Constraint):
@@ -207,10 +207,10 @@ def test_score_rejects_an_unknown_constraint_name():
 
 
 def test_naming_a_constraint_twice_is_rejected():
-    """같은 제약을 두 번 넘기면 뒤엣것이 조용히 이기면 안 된다.
+    """Passing the same constraint twice must not let the later one silently win.
 
-    오타와 같은 부류의 실수라 에러다 — 원하는 메타데이터로 한 번만 적어야
-    한다."""
+    It is the same class of mistake as a typo, so it is an error — write the
+    desired metadata exactly once."""
     with pytest.raises(ValueError, match="picked more than once"):
         fl.solve(
             build_problem(),

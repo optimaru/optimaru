@@ -68,8 +68,8 @@ int main(int argc, char **argv)
         seconds = std::atoi(argv[1]);
 
     PackagingSchedule schedule = generateDemoData();
-    std::printf("== 식품 포장 스케줄링 데모 (line %d, operator %zu, product "
-                "%zu, job %zu, %d초) ==\n",
+    std::printf("== food packaging demo (%d lines, %zu operators, %zu products, "
+                "%zu jobs, %d s) ==\n",
                 schedule.lineCount(),
                 schedule.operators.size(),
                 schedule.products.size(),
@@ -99,14 +99,14 @@ int main(int argc, char **argv)
         if (job.lineIndex >= 0)
             ++assigned;
     }
-    std::printf("  배정된 작업: %d / %zu\n", assigned, schedule.jobs.size());
+    std::printf("  jobs assigned: %d / %zu\n", assigned, schedule.jobs.size());
 
     if (schedule.score.hard == 0)
     {
-        std::printf("  hard 0 도달: OK\n");
+        std::printf("  reached hard 0: OK\n");
         return 0;
     }
-    std::printf("  hard 0 도달 실패 (hard=%lld)\n",
+    std::printf("  failed to reach hard 0 (hard=%lld)\n",
                 static_cast<long long>(schedule.score.hard));
     return 1;
 }

@@ -1,26 +1,33 @@
-"""컴시간(comcigan) 형식 교사별 시수표 엑셀 -> TimetableProblem.
+"""Comcigan-format teacher load workbook (Excel) -> TimetableProblem.
 
-컴시간알리미의 [기초자료]-[교사별시수표 불러오기] 가 받는 엑셀 양식을 그대로
-읽는다. 학교가 이미 쓰고 있는 파일을 그대로 올릴 수 있게 하는 것이 목적이라
-필수 시트는 컴시간과 같은 `교사별시수표` 하나이고, 컴시간이 별도 화면에서
-입력받는 것들(요일별 시수/기본사항/과목등록부/특별실/특별작업)은 선택 시트로
-받는다.
+Reads the workbook layout that Comcigan's (컴시간, a timetabling tool widely
+used in Korean schools) "import teacher load table" accepts, as is. The goal is
+to let a school upload the file it already uses, so the only mandatory load
+sheet is Comcigan's own `교사별시수표` (teacher load table); what Comcigan
+collects on separate screens (periods per weekday / basics / subject register /
+special rooms / special operations) comes in optional sheets.
 
-시트 구성
----------
-- `기본사항`   (필수) 학교명/학년도/학년별 학급수
-- `요일별시수` (필수) 학년 x 요일 -> 교시 수
-- `교사별시수표` (필수) 컴시간 원본 양식
-- `과목`       (선택) 단축과목명별 특별실/복수교사/선호·기피 교시
-- `특별실`     (선택) 특별실명 + 종류
-- `특별작업`   (선택) 연속수업/배정금지/고정배정/분반
+The sheet names, column headers and keywords below are the Korean labels of
+that file format and are matched against the input verbatim.
 
-학년별 요일별 시수
-------------------
-도메인의 `SchoolCalendar` 는 전교 공통이라 학년마다 다른 요일별 시수를 직접
-담지 못한다. 그래서 캘린더에는 요일별 **최대** 교시를 넣고, 그보다 짧은 학년의
-남는 칸은 그 학년 학급들의 `ClassGroup.unavailable` 로 막는다 — 솔버 입장에서는
-"그 학급은 그 시간에 수업이 없다"와 같은 뜻이고, 계약(API_SPEC)도 그대로 둔다.
+Sheets
+------
+- `기본사항`     (basics, required) school name / school year / classes per grade
+- `요일별시수`   (periods per weekday, required) grade x weekday -> periods
+- `교사별시수표` (teacher load table, required) Comcigan's original layout
+- `과목`         (subjects, optional) special room / co-teaching / preferred and
+                 avoided periods per short subject name
+- `특별실`       (special rooms, optional) room name + type
+- `특별작업`     (special operations, optional) consecutive lessons / forbidden
+                 placements / fixed placements / parallel sections
+
+Periods per weekday per grade
+-----------------------------
+The domain's `SchoolCalendar` is school-wide, so it cannot hold different
+periods per weekday for each grade. The calendar therefore holds the
+**maximum** periods per weekday, and the extra cells of shorter grades are
+blocked with their classes' `ClassGroup.unavailable` — for the solver that
+means "this class has no lesson then", and the contract (API_SPEC) stays as is.
 """
 
 from __future__ import annotations
@@ -34,26 +41,27 @@ from teacher_scheduling.domain.entities import ClassGroup, Course, Room, Subject
 from teacher_scheduling.domain.enums import Weekday
 from teacher_scheduling.domain.problem import SchoolCalendar, TimetableProblem
 
-SHEET_BASICS = "기본사항"
-SHEET_DAILY = "요일별시수"
-SHEET_LOAD = "교사별시수표"
-SHEET_SUBJECTS = "과목"
-SHEET_ROOMS = "특별실"
-SHEET_SPECIAL = "특별작업"
+SHEET_BASICS = "기본사항"  # basics
+SHEET_DAILY = "요일별시수"  # periods per weekday
+SHEET_LOAD = "교사별시수표"  # teacher load table
+SHEET_SUBJECTS = "과목"  # subjects
+SHEET_ROOMS = "특별실"  # special rooms
+SHEET_SPECIAL = "특별작업"  # special operations
 
-_DAY_BY_LABEL = {day.label: day for day in Weekday}
-_GRADE_RE = re.compile(r"(\d+)\s*학년")
-# "월1", "월 1교시", "월요일 1교시" 를 모두 받는다.
+# Comcigan writes weekdays as one Korean syllable: 월 Mon, 화 Tue, 수 Wed, 목 Thu, 금 Fri, 토 Sat.
+_DAY_BY_LABEL = dict(zip("월화수목금토", Weekday, strict=True))
+_GRADE_RE = re.compile(r"(\d+)\s*학년")  # "<n>학년" = grade n
+# Accepts "월1", "월 1교시" and "월요일 1교시" (Mon 1 / Mon period 1 / Monday period 1).
 _SLOT_RE = re.compile(r"^\s*([월화수목금토])\s*(?:요일)?\s*(\d+)\s*(?:교시)?\s*$")
 
 
 class ExcelFormatError(ValueError):
-    """엑셀 양식이 계약과 맞지 않을 때. 사용자에게 그대로 보여줄 메시지를 담는다."""
+    """The workbook does not match the contract. Carries a message to show the user as is."""
 
 
 @dataclass
 class SchoolBasics:
-    """컴시간 [기본사항 등록] 에 대응하는 학교 메타데이터."""
+    """School metadata, matching Comcigan's "basics" screen."""
 
     school_name: str = ""
     school_year: int | None = None
@@ -62,20 +70,20 @@ class SchoolBasics:
 
 @dataclass
 class ImportResult:
-    """임포트 결과. `problem` 이 본체이고 나머지는 화면에 그대로 보여주는 부가정보."""
+    """Import result. `problem` is the payload; the rest is extra information shown on screen as is."""
 
     problem: TimetableProblem
     basics: SchoolBasics
-    # 단축과목명 -> 정식과목명들 (NEIS 내보내기에서 쓴다)
+    # short subject name -> official subject names (used by the NEIS export)
     official_subject_names: dict[str, list[str]] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
 
 
-# ---------------------------------------------------------------- 셀 유틸
+# ---------------------------------------------------------------- cell helpers
 
 
 def _norm(value: Any) -> str:
-    """셀 값을 비교 가능한 문자열로. None/공백/숫자를 모두 흡수한다."""
+    """A cell value as a comparable string. Absorbs None, blanks and numbers."""
     if value is None:
         return ""
     if isinstance(value, float) and value.is_integer():
@@ -96,13 +104,13 @@ def _as_int(value: Any) -> int | None:
 def _parse_slot(text: str) -> TimeSlot:
     match = _SLOT_RE.match(text)
     if not match:
-        raise ExcelFormatError(f"시간 표기를 읽을 수 없습니다: {text!r} (예: '월1' 또는 '월 1교시')")
+        raise ExcelFormatError(f"cannot read the time notation: {text!r} (e.g. '월1' or '월 1교시', i.e. Monday period 1)")
     day_label, period = match.groups()
     return TimeSlot(day=_DAY_BY_LABEL[day_label], period=int(period))
 
 
 def _parse_periods(text: str) -> frozenset[int]:
-    """'1,2,3' 또는 '1-4' 형태의 교시 목록."""
+    """Periods written as '1,2,3' or '1-4'."""
     if not text:
         return frozenset()
     periods: set[int] = set()
@@ -121,11 +129,11 @@ def _rows(sheet: Any) -> list[list[Any]]:
     return [list(row) for row in sheet.iter_rows(values_only=True)]
 
 
-# ---------------------------------------------------------------- 시트 파서
+# ---------------------------------------------------------------- sheet parsers
 
 
 def _read_basics(rows: list[list[Any]]) -> SchoolBasics:
-    """`항목 | 값` 2열 형식. 학급수는 'N학년 학급수' 로 적는다."""
+    """Two columns, `item | value`. Classes per grade are written as 'N학년 학급수' (classes in grade N)."""
     basics = SchoolBasics()
     for row in rows:
         if not row:
@@ -133,21 +141,21 @@ def _read_basics(rows: list[list[Any]]) -> SchoolBasics:
         key, value = _norm(row[0]), (row[1] if len(row) > 1 else None)
         if not key:
             continue
-        if key == "학교명":
+        if key == "학교명":  # school name
             basics.school_name = _norm(value)
-        elif key in ("학년도", "학년"):
+        elif key in ("학년도", "학년"):  # school year
             basics.school_year = _as_int(value)
-        elif (match := _GRADE_RE.search(key)) and "학급수" in key:
+        elif (match := _GRADE_RE.search(key)) and "학급수" in key:  # classes in grade N
             count = _as_int(value)
             if count:
                 basics.classes_per_grade[int(match.group(1))] = count
     if not basics.classes_per_grade:
-        raise ExcelFormatError(f"[{SHEET_BASICS}] 시트에서 'N학년 학급수' 를 찾지 못했습니다")
+        raise ExcelFormatError(f"[{SHEET_BASICS}] no 'N학년 학급수' (classes in grade N) found in the sheet")
     return basics
 
 
 def _read_daily_periods(rows: list[list[Any]]) -> dict[int, dict[Weekday, int]]:
-    """`요일별시수` 시트. 첫 행이 요일 헤더, 이후 행이 학년별 교시 수."""
+    """The periods-per-weekday sheet. The first row is the weekday header, then one row of periods per grade."""
     header: list[Weekday | None] = []
     per_grade: dict[int, dict[Weekday, int]] = {}
     for row in rows:
@@ -155,9 +163,9 @@ def _read_daily_periods(rows: list[list[Any]]) -> dict[int, dict[Weekday, int]]:
             continue
         label = _norm(row[0])
         if not header:
-            # 헤더 행: 월~토 라벨이 있는 열 위치를 기억한다.
-            # Weekday.MON 은 0 이라 falsy 다 — `is not None` 으로 봐야 월요일만
-            # 있는 시트도 헤더로 인식된다.
+            # Header row: remember the columns holding the Mon–Sat labels.
+            # Weekday.MON is 0 and therefore falsy — compare with `is not None` so
+            # that a sheet with only Monday is still recognised as a header.
             header = [_DAY_BY_LABEL.get(_norm(cell)) for cell in row]
             if not any(day is not None for day in header):
                 header = []
@@ -176,16 +184,16 @@ def _read_daily_periods(rows: list[list[Any]]) -> dict[int, dict[Weekday, int]]:
         if days:
             per_grade[grade] = days
     if not per_grade:
-        raise ExcelFormatError(f"[{SHEET_DAILY}] 시트에서 학년별 요일 시수를 찾지 못했습니다")
+        raise ExcelFormatError(f"[{SHEET_DAILY}] no periods per weekday per grade found in the sheet")
     return per_grade
 
 
 def _read_subject_meta(rows: list[list[Any]]) -> dict[str, dict[str, Any]]:
-    """`과목` 시트 (선택). 헤더 이름으로 열을 찾는다."""
+    """The subjects sheet (optional). Columns are found by header name."""
     if not rows:
         return {}
     header = {_norm(cell): index for index, cell in enumerate(rows[0])}
-    if "단축과목명" not in header:
+    if "단축과목명" not in header:  # short subject name
         return {}
 
     def cell(row: list[Any], name: str) -> str:
@@ -194,69 +202,73 @@ def _read_subject_meta(rows: list[list[Any]]) -> dict[str, dict[str, Any]]:
 
     meta: dict[str, dict[str, Any]] = {}
     for row in rows[1:]:
-        short = cell(row, "단축과목명")
+        short = cell(row, "단축과목명")  # short subject name
         if not short:
             continue
         meta[short] = {
-            "required_room_type": cell(row, "특별실") or None,
+            "required_room_type": cell(row, "특별실") or None,  # special room
+            # 복수교사 = co-teaching; "복수" = yes
             "team_teaching": cell(row, "복수교사") in ("O", "o", "복수", "Y", "y", "TRUE", "True", "1"),
-            "preferred_periods": _parse_periods(cell(row, "선호교시")),
-            "avoided_periods": _parse_periods(cell(row, "기피교시")),
+            "preferred_periods": _parse_periods(cell(row, "선호교시")),  # preferred periods
+            "avoided_periods": _parse_periods(cell(row, "기피교시")),  # avoided periods
         }
     return meta
 
 
 def _read_rooms(rows: list[list[Any]]) -> list[Room]:
-    """`특별실` 시트 (선택). `특별실명 | 종류`."""
+    """The special-rooms sheet (optional). `room name | type`."""
     rooms: list[Room] = []
     for index, row in enumerate(rows):
         if not row:
             continue
         name, room_type = _norm(row[0]), _norm(row[1]) if len(row) > 1 else ""
-        if not name or name in ("특별실명", "실명"):
+        if not name or name in ("특별실명", "실명"):  # header labels: room name
             continue
         if not room_type:
-            raise ExcelFormatError(f"[{SHEET_ROOMS}] {name}: 종류가 비어 있습니다")
+            raise ExcelFormatError(f"[{SHEET_ROOMS}] {name}: the type is empty")
         rooms.append(Room(id=f"R{index:02d}", name=name, room_type=room_type))
     return rooms
 
 
 @dataclass
 class _LoadRow:
-    """`교사별시수표` 한 줄: 한 (정식과목, 단축과목, 교사) 의 학급별 시수."""
+    """One teacher-load-table row: the periods per class of one (official subject, short subject, teacher)."""
 
     official: str
     short: str
     teacher: str
-    hours: dict[tuple[int, int], int]  # (학년, 반) -> 시수
+    hours: dict[tuple[int, int], int]  # (grade, class number) -> periods
 
 
 def _read_load_table(rows: list[list[Any]]) -> tuple[list[_LoadRow], dict[int, int]]:
-    """컴시간 원본 양식을 읽어 행 목록과 학년별 최대 반 번호를 돌려준다.
+    """Reads Comcigan's original layout; returns the rows and the highest class number per grade.
 
-    헤더는 2행 구조다 — 위 행에 '1학년/2학년/3학년'(병합), 아래 행에 반 번호.
-    병합 셀은 openpyxl 이 첫 칸에만 값을 주므로 왼쪽 값을 이어서 채운다.
+    The header has two rows — grade labels ('1학년/2학년/3학년', merged cells) on top,
+    class numbers below. openpyxl gives a merged cell's value only to its first
+    cell, so the value is carried rightwards.
     """
     header_index = next(
+        # 정식과목명 = official subject name
         (index for index, row in enumerate(rows) if any(_norm(cell) == "정식과목명" for cell in row)),
         None,
     )
     if header_index is None:
-        raise ExcelFormatError(f"[{SHEET_LOAD}] 시트에서 '정식과목명' 헤더를 찾지 못했습니다")
+        raise ExcelFormatError(f"[{SHEET_LOAD}] no '정식과목명' (official subject name) header found in the sheet")
 
     header = rows[header_index]
     columns = {_norm(cell): index for index, cell in enumerate(header)}
+    # official subject name, short subject name, teacher name
     for required in ("정식과목명", "단축과목명", "교사명"):
         if required not in columns:
-            raise ExcelFormatError(f"[{SHEET_LOAD}] 헤더에 '{required}' 열이 없습니다")
+            raise ExcelFormatError(f"[{SHEET_LOAD}] the header has no '{required}' column")
 
-    # 학년 라벨을 오른쪽으로 흘려보내고(병합 보정), 아래 행의 반 번호와 짝짓는다.
+    # Carry the grade labels rightwards (merged-cell fix) and pair them with the class numbers below.
     grade_of_column: dict[int, int] = {}
     current: int | None = None
     for index, cell in enumerate(header):
         if match := _GRADE_RE.search(_norm(cell)):
             current = int(match.group(1))
-        if current is not None and index > columns["교사명"]:
+        if current is not None and index > columns["교사명"]:  # teacher name
             grade_of_column[index] = current
 
     class_row = rows[header_index + 1] if header_index + 1 < len(rows) else []
@@ -270,14 +282,14 @@ def _read_load_table(rows: list[list[Any]]) -> tuple[list[_LoadRow], dict[int, i
         class_of_column[index] = (grade, number)
         max_class[grade] = max(max_class[grade], number)
     if not class_of_column:
-        raise ExcelFormatError(f"[{SHEET_LOAD}] 학년/반 헤더를 읽지 못했습니다 (학년 행 아래에 반 번호가 필요합니다)")
+        raise ExcelFormatError(f"[{SHEET_LOAD}] cannot read the grade/class header (class numbers are needed under the grade row)")
 
-    order_column = columns.get("순")
+    order_column = columns.get("순")  # row number
     entries: list[_LoadRow] = []
     for row in rows[header_index + 2 :]:
         if not row:
             continue
-        # 컴시간 규칙: [순] 번호가 없으면 자료의 끝.
+        # Comcigan rule: the data ends at the first row without a row number.
         if order_column is not None and _as_int(row[order_column] if order_column < len(row) else None) is None:
             break
         official = _norm(row[columns["정식과목명"]]) if columns["정식과목명"] < len(row) else ""
@@ -293,19 +305,21 @@ def _read_load_table(rows: list[list[Any]]) -> tuple[list[_LoadRow], dict[int, i
         if hours:
             entries.append(_LoadRow(official=official or short, short=short, teacher=teacher, hours=hours))
     if not entries:
-        raise ExcelFormatError(f"[{SHEET_LOAD}] 시수 데이터가 한 줄도 없습니다")
+        raise ExcelFormatError(f"[{SHEET_LOAD}] there is not a single row of load data")
     return entries, dict(max_class)
 
 
-#: `특별작업` 시트에서 받는 구분. 이 목록 밖의 값은 표 끝으로 본다.
+#: Kinds accepted in the special-operations sheet; any other value ends the table.
+#: 배정금지 forbidden placement, 이동금지 no move, 특별교사 special teacher,
+#: 연속수업 consecutive lessons, 고정배정 fixed placement, 분반 / 동시수업 parallel sections.
 SPECIAL_KINDS = frozenset({"배정금지", "이동금지", "특별교사", "연속수업", "고정배정", "분반", "동시수업"})
 
 
 def _read_special(rows: list[list[Any]]) -> list[tuple[str, str, str]]:
-    """`특별작업` 시트 (선택). `구분 | 대상 | 값` 3열.
+    """The special-operations sheet (optional). Three columns `kind | target | value`.
 
-    빈 줄을 만나면 거기서 끝낸다 — 표 아래에 사용법 안내를 적어 두는 양식이라
-    안내문이 데이터로 섞이면 안 된다.
+    Stops at the first empty row — the layout keeps usage notes below the table,
+    and those must not be read as data.
     """
     result = []
     for row in rows:
@@ -314,7 +328,7 @@ def _read_special(rows: list[list[Any]]) -> list[tuple[str, str, str]]:
             if result:
                 break
             continue
-        if kind == "구분":
+        if kind == "구분":  # header label: kind
             continue
         if kind not in SPECIAL_KINDS:
             break
@@ -324,7 +338,7 @@ def _read_special(rows: list[list[Any]]) -> list[tuple[str, str, str]]:
     return result
 
 
-# ---------------------------------------------------------------- 조립
+# ---------------------------------------------------------------- assembly
 
 
 def _class_id(grade: int, number: int) -> str:
@@ -336,7 +350,7 @@ def _build_class_groups(
     daily: dict[int, dict[Weekday, int]],
     calendar: SchoolCalendar,
 ) -> list[ClassGroup]:
-    """학년별 요일 시수가 전교 최대보다 짧으면 남는 칸을 학급 불가 시간으로 막는다."""
+    """Blocks the extra cells as class unavailability when a grade has fewer periods per weekday than the school maximum."""
     groups = []
     for grade in sorted(basics.classes_per_grade):
         grade_days = daily.get(grade, {})
@@ -349,6 +363,8 @@ def _build_class_groups(
             groups.append(
                 ClassGroup(
                     id=_class_id(grade, number),
+                    # Comcigan's class name ("<grade>학년 <n>반" = grade g, class n): the special-operations
+                    # sheet and the NEIS export refer to classes by this exact name.
                     name=f"{grade}학년 {number}반",
                     grade=grade,
                     unavailable=blocked,
@@ -369,41 +385,41 @@ def _apply_special(
     subject_ids: set[str],
     warnings: list[str],
 ) -> None:
-    """`특별작업` 시트를 도메인 필드로 옮긴다."""
+    """Moves the special-operations sheet into domain fields."""
     for kind, target, value in operations:
-        if kind in ("배정금지", "이동금지", "특별교사"):
+        if kind in ("배정금지", "이동금지", "특별교사"):  # forbidden placement / no move / special teacher
             teacher_id = teacher_id_by_name.get(target)
             if teacher_id is None:
-                warnings.append(f"[{SHEET_SPECIAL}] 배정금지: 교사 '{target}' 을 시수표에서 찾지 못했습니다")
+                warnings.append(f"[{SHEET_SPECIAL}] forbidden placement: teacher '{target}' not found in the load table")
                 continue
             unavailable[teacher_id].add(_parse_slot(value))
-        elif kind == "연속수업":
+        elif kind == "연속수업":  # consecutive lessons
             if target not in subject_ids:
-                warnings.append(f"[{SHEET_SPECIAL}] 연속수업: 과목 '{target}' 이 없습니다")
+                warnings.append(f"[{SHEET_SPECIAL}] consecutive lessons: no subject '{target}'")
                 continue
             size = _as_int(value) or 2
             for (_, subject_id), course_ids in course_index.items():
                 if subject_id == target:
                     for course_id in course_ids:
                         block_periods[course_id] = size
-        elif kind == "고정배정":
+        elif kind == "고정배정":  # fixed placement
             class_name, _, subject_name = target.partition("/")
             course_ids = course_index.get((class_name.strip(), subject_name.strip()), [])
             if not course_ids:
-                warnings.append(f"[{SHEET_SPECIAL}] 고정배정: 강좌 '{target}' 을 찾지 못했습니다")
+                warnings.append(f"[{SHEET_SPECIAL}] fixed placement: course '{target}' not found")
                 continue
             for course_id in course_ids:
                 fixed_slots[course_id].add(_parse_slot(value))
-        elif kind in ("분반", "동시수업"):
+        elif kind in ("분반", "동시수업"):  # parallel sections
             class_name, _, subject_name = target.partition("/")
             course_ids = course_index.get((class_name.strip(), subject_name.strip()), [])
             if not course_ids:
-                warnings.append(f"[{SHEET_SPECIAL}] 분반: 강좌 '{target}' 을 찾지 못했습니다")
+                warnings.append(f"[{SHEET_SPECIAL}] parallel sections: course '{target}' not found")
                 continue
             for course_id in course_ids:
                 parallel[course_id] = value or target
         else:
-            warnings.append(f"[{SHEET_SPECIAL}] 알 수 없는 구분: {kind}")
+            warnings.append(f"[{SHEET_SPECIAL}] unknown kind: {kind}")
 
 
 def build_problem(
@@ -415,10 +431,10 @@ def build_problem(
     rooms: list[Room],
     special: list[tuple[str, str, str]],
 ) -> ImportResult:
-    """파싱된 시트들을 하나의 `TimetableProblem` 으로 조립한다."""
+    """Assembles the parsed sheets into one `TimetableProblem`."""
     warnings: list[str] = []
 
-    # 캘린더: 요일별로 학년 중 가장 긴 교시 수.
+    # Calendar: per weekday, the longest period count over the grades.
     calendar_days: dict[Weekday, int] = defaultdict(int)
     for grade_days in daily.values():
         for day, periods in grade_days.items():
@@ -429,7 +445,7 @@ def build_problem(
     class_ids = {group.id for group in class_groups}
     class_id_by_name = {group.name: group.id for group in class_groups}
 
-    # 과목: 단축과목명이 편성 단위다 (정식과목명 여러 개가 한 단축명에 붙는다).
+    # Subjects: the short subject name is the scheduling unit (several official names map to one short name).
     official_names: dict[str, list[str]] = defaultdict(list)
     for row in load_rows:
         if row.official not in official_names[row.short]:
@@ -450,19 +466,19 @@ def build_problem(
     for subject in subjects:
         if subject.required_room_type and subject.required_room_type not in room_types:
             raise ExcelFormatError(
-                f"[{SHEET_SUBJECTS}] '{subject.id}' 이 요구하는 특별실 '{subject.required_room_type}' 이"
-                f" [{SHEET_ROOMS}] 시트에 없습니다"
+                f"[{SHEET_SUBJECTS}] special room '{subject.required_room_type}' required by '{subject.id}'"
+                f" is missing from the [{SHEET_ROOMS}] sheet"
             )
 
-    # 교사: 이름 등장 순서로 T01.. 부여.
+    # Teachers: T01.. in order of first appearance.
     teacher_names = list(dict.fromkeys(row.teacher for row in load_rows))
     teacher_id_by_name = {name: f"T{index:02d}" for index, name in enumerate(teacher_names, start=1)}
     teaches: dict[str, set[str]] = defaultdict(set)
     for row in load_rows:
         teaches[teacher_id_by_name[row.teacher]].add(row.short)
 
-    # 강좌: (학급, 단축과목, 교사) 단위로 시수를 합친다.
-    #   같은 셀에 여러 정식과목이 흩어져 있어도(수학7-가/수학7-나) 한 강좌가 된다.
+    # Courses: periods summed per (class, short subject, teacher).
+    #   Official subjects scattered over one cell (e.g. 수학7-가/수학7-나) become one course.
     merged: dict[tuple[str, str, str], int] = defaultdict(int)
     for row in load_rows:
         teacher_id = teacher_id_by_name[row.teacher]
@@ -470,13 +486,13 @@ def build_problem(
             class_id = _class_id(grade, number)
             if class_id not in class_ids:
                 warnings.append(
-                    f"[{SHEET_LOAD}] {row.short}/{row.teacher}: {grade}학년 {number}반은"
-                    f" [{SHEET_BASICS}] 의 학급수를 벗어나 무시합니다"
+                    f"[{SHEET_LOAD}] {row.short}/{row.teacher}: grade {grade} class {number}"
+                    f" is beyond the class count in [{SHEET_BASICS}] and is ignored"
                 )
                 continue
             merged[class_id, row.short, teacher_id] += hours
 
-    # 복수교사 과목은 같은 (학급, 과목) 의 교사들을 한 강좌로 합친다.
+    # A co-taught subject merges the teachers of the same (class, subject) into one course.
     by_class_subject: dict[tuple[str, str], list[tuple[str, int]]] = defaultdict(list)
     for (class_id, short, teacher_id), hours in merged.items():
         by_class_subject[class_id, short].append((teacher_id, hours))
@@ -492,7 +508,7 @@ def build_problem(
         team = subject_meta.get(short, {}).get("team_teaching", False)
         if team and len({hours for _, hours in assignments}) > 1:
             warnings.append(
-                f"[{SHEET_LOAD}] 복수교사 과목 {short}/{class_id} 의 교사별 시수가 달라 최소값으로 맞춥니다"
+                f"[{SHEET_LOAD}] co-taught subject {short}/{class_id}: teachers' periods differ; using the minimum"
             )
         if team:
             hours = min(hours for _, hours in assignments)
@@ -507,7 +523,7 @@ def build_problem(
                 course_specs.append((course_id, class_id, short, (teacher_id,), hours))
                 course_index[class_id, short].append(course_id)
 
-    # `특별작업` 은 학급/과목을 사람이 읽는 이름으로 가리키므로 이름 색인도 만든다.
+    # The special-operations sheet names classes and subjects in human-readable form, so build a name index too.
     named_index: dict[tuple[str, str], list[str]] = defaultdict(list)
     for (class_id, short), course_ids in course_index.items():
         class_name = next(group.name for group in class_groups if group.id == class_id)
@@ -546,7 +562,7 @@ def build_problem(
                 teacher_ids=teacher_ids,
                 periods_per_week=hours,
                 block_periods=min(block, hours),
-                # 주 5일에 담기려면 하루 상한이 최소 ceil(시수/5) 는 돼야 한다.
+                # To fit into 5 days, the daily cap must be at least ceil(periods / 5).
                 max_periods_per_day=max(1, -(-hours // len(calendar.days))),
                 fixed_slots=frozenset(fixed_slots.get(course_id, set())),
                 parallel_group=parallel.get(course_id),
@@ -571,7 +587,7 @@ def build_problem(
 
 
 def _warn_on_capacity(problem: TimetableProblem, class_id_by_name: dict[str, str], warnings: list[str]) -> None:
-    """컴시간의 '요일별시수 계 == 시수표 계' 확인에 해당하는 사전 경고."""
+    """Early warning matching Comcigan's "periods per weekday total == load table total" check."""
     for group in problem.class_groups:
         available = sum(
             1
@@ -581,37 +597,37 @@ def _warn_on_capacity(problem: TimetableProblem, class_id_by_name: dict[str, str
         )
         assigned = sum(course.periods_per_week for course in problem.courses_by_class_group.get(group.id, ()))
         if assigned > available:
-            warnings.append(f"{group.name}: 시수 합 {assigned}시간 > 배정 가능 {available}칸 — 편성 불가")
+            warnings.append(f"{group.name}: {assigned} periods assigned > {available} cells available — cannot be scheduled")
         elif assigned < available:
             warnings.append(
-                f"{group.name}: 시수 합 {assigned}시간 < 배정 가능 {available}칸 — {available - assigned}칸이 빕니다"
+                f"{group.name}: {assigned} periods assigned < {available} cells available — {available - assigned} cells stay empty"
             )
 
 
-# ---------------------------------------------------------------- 진입점
+# ---------------------------------------------------------------- entry point
 
 
 def import_workbook(source: str | IO[bytes]) -> ImportResult:
-    """엑셀 파일(경로 또는 바이너리 스트림)을 읽어 문제로 만든다."""
+    """Reads a workbook (path or binary stream) into a problem."""
     try:
         from openpyxl import load_workbook
-    except ImportError as exc:  # pragma: no cover - 의존성 누락 환경
-        raise ExcelFormatError("openpyxl 이 설치되어 있지 않습니다") from exc
+    except ImportError as exc:  # pragma: no cover - dependency missing
+        raise ExcelFormatError("openpyxl is not installed") from exc
 
-    # .xlsx 는 zip 이라 엑셀이 아닌 파일은 BadZipFile 로 터진다. 사용자가 잘못
-    # 올린 것뿐이므로 양식 오류로 바꿔 준다.
+    # .xlsx is a zip, so a non-Excel file blows up with BadZipFile. It is just a
+    # wrong upload, so turn it into a format error.
     try:
         workbook = load_workbook(source, data_only=True, read_only=True)
     except ExcelFormatError:
         raise
     except Exception as exc:
-        raise ExcelFormatError(f"엑셀 파일(.xlsx)로 읽을 수 없습니다: {exc}") from exc
+        raise ExcelFormatError(f"cannot read the file as an Excel workbook (.xlsx): {exc}") from exc
 
     try:
         available = set(workbook.sheetnames)
         for required in (SHEET_BASICS, SHEET_DAILY, SHEET_LOAD):
             if required not in available:
-                raise ExcelFormatError(f"필수 시트 '{required}' 가 없습니다 (있는 시트: {sorted(available)})")
+                raise ExcelFormatError(f"required sheet '{required}' is missing (sheets present: {sorted(available)})")
 
         basics = _read_basics(_rows(workbook[SHEET_BASICS]))
         daily = _read_daily_periods(_rows(workbook[SHEET_DAILY]))
@@ -622,13 +638,13 @@ def import_workbook(source: str | IO[bytes]) -> ImportResult:
     finally:
         workbook.close()
 
-    # 기본사항의 학급수가 비어 있으면 시수표의 반 번호에서 유추한다.
+    # When the basics sheet has no class counts, infer them from the class numbers in the load table.
     for grade, count in max_class.items():
         basics.classes_per_grade.setdefault(grade, count)
 
     missing = sorted(set(max_class) - set(daily))
     if missing:
-        raise ExcelFormatError(f"[{SHEET_DAILY}] 시트에 {missing} 학년의 요일별 시수가 없습니다")
+        raise ExcelFormatError(f"[{SHEET_DAILY}] the sheet has no periods per weekday for grade {missing}")
 
     return build_problem(
         basics=basics,

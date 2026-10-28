@@ -1,4 +1,4 @@
-"""pydantic 미러(models.py) 직렬화/브리지 검증."""
+"""pydantic mirror (models.py) serialization/bridge checks."""
 
 from datetime import date, datetime, timedelta, timezone
 
@@ -18,7 +18,7 @@ from flight_crew.models import (
     minutes_to_datetime,
 )
 
-DAY0 = datetime(2026, 8, 10)  # 월요일
+DAY0 = datetime(2026, 8, 10)  # Monday
 
 
 def _small_schedule_model() -> FlightCrewScheduleModel:
@@ -71,7 +71,7 @@ def test_datetime_minute_bridge():
     minutes = datetime_to_minutes(dt)
     assert minutes % 60 == 30
     assert minutes_to_datetime(minutes) == dt
-    # tz-aware 입력은 UTC 로 정규화된다.
+    # tz-aware input is normalized to UTC.
     aware = dt.replace(tzinfo=timezone(timedelta(hours=9)))
     assert datetime_to_minutes(aware) == minutes - 9 * 60
 
@@ -86,7 +86,7 @@ def test_to_core_from_core_round_trip():
     assert schedule.flights[0].arrival_utc - schedule.flights[0].departure_utc == 120
     assert schedule.assignment() == [-1, 1]
     assert [a.pinned for a in schedule.flight_assignments] == [False, True]
-    # E2 의 불가일은 비행일 다음 날 (day 인덱스로 하루 차이).
+    # E2's unavailable day is the day after the flight (one day apart by day index).
     unavailable = next(iter(schedule.employees[1].unavailable_days))
     assert unavailable == datetime_to_minutes(DAY0) // 1440 + 1
 
@@ -95,7 +95,7 @@ def test_to_core_from_core_round_trip():
     assert back.employees == model.employees
     assert back.flights == model.flights
     assert back.flight_assignments == model.flight_assignments
-    assert back.score_hard == 0  # 아직 점수 계산 전 (기본값)
+    assert back.score_hard == 0  # score not computed yet (default)
 
 
 def test_reference_validation():

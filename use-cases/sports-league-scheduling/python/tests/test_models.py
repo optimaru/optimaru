@@ -1,4 +1,4 @@
-"""pydantic 미러 (models.py) 의 직렬화/역직렬화 검증."""
+"""Serialization/deserialization checks of the pydantic mirror (models.py)."""
 
 import pytest
 
@@ -33,7 +33,7 @@ def test_roundtrip_json():
     assert core.assignment() == schedule.assignment()
     assert core.matches[0].classic_match is True
     assert core.distance_to_team == schedule.distance_to_team
-    # score 는 엔진이 다시 계산한다 — 같은 배정이므로 같은 점수.
+    # The engine recomputes score — same assignment, same score.
     assert sl.calculate_score(core).hard == schedule.score.hard
     assert sl.calculate_score(core).soft == schedule.score.soft
 

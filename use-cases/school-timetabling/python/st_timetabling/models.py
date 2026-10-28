@@ -1,16 +1,16 @@
-"""엔진 도메인의 pydantic v2 미러 — JSON 직렬화/역직렬화용.
+"""Pydantic v2 mirrors of the engine domain — for JSON serialization.
 
-`_core` 의 Timeslot/Room/Lesson/Timetable 과 SolverConfig 를 1:1 로 미러링한다.
-canonical `TimetableProblem` JSON 은 `convert.py` 가 다루고, 여기 모델들은
-엔진 형태 그대로를 저장/전송할 때(디버그 덤프, 회귀 스냅샷 등) 쓴다::
+Mirrors `_core`'s Timeslot/Room/Lesson/Timetable and SolverConfig 1:1.
+The canonical `TimetableProblem` JSON is handled by `convert.py`; these models
+store or send the engine's own shape (debug dumps, regression snapshots, ...)::
 
     from st_timetabling.models import TimetableModel, SolveConfig
 
-    model = TimetableModel.from_core(table)     # 엔진 -> pydantic
+    model = TimetableModel.from_core(table)     # engine -> pydantic
     clone = TimetableModel.model_validate_json(model.model_dump_json())
-    table2 = clone.to_core()                    # pydantic -> 엔진
+    table2 = clone.to_core()                    # pydantic -> engine
 
-`pydantic` 은 선택 의존성이다 (`pip install st-timetabling[models]`).
+`pydantic` is an optional dependency (`pip install st-timetabling[models]`).
 """
 
 from typing import Any
@@ -31,7 +31,7 @@ __all__ = [
 
 
 class TimeslotModel(BaseModel):
-    """하나의 수업 칸: (요일, 교시). day 0=월, period 는 1-base."""
+    """One lesson cell: (weekday, period). day 0 = Monday, period is 1-based."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -40,7 +40,7 @@ class TimeslotModel(BaseModel):
 
 
 class RoomModel(BaseModel):
-    """교실. type 은 정보용(일반/과학실/...) — 엔진 hard 제약이 아니다."""
+    """A room. type is informational (regular/science lab/...) — not a hard constraint in the engine."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -49,7 +49,7 @@ class RoomModel(BaseModel):
 
 
 class LessonModel(BaseModel):
-    """planning entity. slot_room 은 timeslot*room 합성 변수(-1 = 미배정)."""
+    """Planning entity. slot_room is the timeslot*room composite variable (-1 = unassigned)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -62,7 +62,7 @@ class LessonModel(BaseModel):
 
 
 class TimetableModel(BaseModel):
-    """planning solution 미러. score 는 읽기 전용 결과라 별도 필드로 둔다."""
+    """Planning-solution mirror. The score is a read-only result and has its own field."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -74,7 +74,7 @@ class TimetableModel(BaseModel):
     score_soft: float | None = None
 
     def to_core(self) -> "_core.Timetable":
-        """pydantic -> 엔진 객체 (score 필드는 엔진이 다시 계산하므로 무시)."""
+        """pydantic -> engine objects (the score field is ignored; the engine recomputes it)."""
         return _core.Timetable(
             [_core.Timeslot(t.day, t.period) for t in self.timeslots],
             [_core.Room(r.name, r.type) for r in self.rooms],
@@ -91,7 +91,7 @@ class TimetableModel(BaseModel):
 
     @classmethod
     def from_core(cls, table: "_core.Timetable") -> "TimetableModel":
-        """엔진 객체 -> pydantic (현재 배정과 score 포함)."""
+        """engine objects -> pydantic (with the current assignment and score)."""
         return cls(
             timeslots=[TimeslotModel(day=t.day, period=t.period) for t in table.timeslots],
             rooms=[RoomModel(name=r.name, type=r.type) for r in table.rooms],
@@ -113,22 +113,23 @@ class TimetableModel(BaseModel):
 
 
 class _ObjectiveWeightsBase(BaseModel):
-    """`ObjectiveWeightsModel` 의 몸통. 필드는 제약 레지스트리에서 생성된다."""
+    """Body of `ObjectiveWeightsModel`. The fields are generated from the constraint registry."""
 
     model_config = ConfigDict(extra="forbid")
 
     def to_core(self) -> "_core.canon.ObjectiveWeights":
-        # 모놀리식 fast path 의 ObjectiveWeights 는 고정 구조체라 그것이 아는
-        # 항만 넘긴다. 조립 경로는 이 미러를 안 거치고 컴포넌트의 weight 를
-        # 직접 쓰므로, 레지스트리에만 있는 새 소프트 항도 그쪽에서는 산다.
+        # The monolithic fast path's ObjectiveWeights is a fixed struct, so only the
+        # terms it knows are passed. The assembly path skips this mirror and uses
+        # the components' weights directly, so a soft term only in the registry still works there.
         known = set(_core.canon.ObjectiveWeights().__dir__())
         return _core.canon.ObjectiveWeights(**{k: v for k, v in self.model_dump().items() if k in known})
 
 
-#: canonical soft 가중치 미러. **필드를 손으로 적지 않는다** — 제약 레지스트리의
-#: 소프트 항에서 이름과 기본값을 그대로 가져온다 (플러그인 방식:
-#: 목적함수는 등록된 제약들의 합이지 따로 관리하는 목록이 아니다). 소프트 제약을
-#: 하나 추가하면 그 가중치 필드가 저절로 생기고, 두 목록이 갈라질 자리가 없다.
+#: Canonical soft-weight mirror. **The fields are not written by hand** — names and
+#: defaults come straight from the soft terms of the constraint registry (plugin
+#: style: the objective is the sum of the registered constraints, not a separately
+#: maintained list). Adding a soft constraint creates its weight field automatically,
+#: so the two lists have nowhere to drift apart.
 _objective_weight_fields: dict[str, Any | tuple[Any, Any]] = {
     spec.name: (
         int,
@@ -142,27 +143,27 @@ ObjectiveWeightsModel = _create_model(
     "ObjectiveWeightsModel",
     __base__=_ObjectiveWeightsBase,
     __doc__=(
-        "canonical soft 가중치 미러 (`_core.canon.ObjectiveWeights`). 필드는 "
-        "`st_timetabling.constraints` 의 소프트 제약에서 생성된다."
+        "Canonical soft-weight mirror (`_core.canon.ObjectiveWeights`). The fields are "
+        "generated from the soft constraints of `st_timetabling.constraints`."
     ),
     **_objective_weight_fields,
 )
 
 
 class SolveConfig(BaseModel):
-    """`_core.SolverConfig` / `_core.canon.SolverConfig` 의 직렬화 가능한 미러.
+    """Serializable mirror of `_core.SolverConfig` / `_core.canon.SolverConfig`.
 
-    엔진 공통 필드는 두 모드가 같고, ``weights`` 는 canonical 모드
-    (`to_canon()`)에만 반영된다 — quickstart config (`to_core()`)에는 해당
-    필드가 없다."""
+    The common engine fields are the same in both modes; ``weights`` applies to
+    canonical mode only (`to_canon()`) — the quickstart config (`to_core()`)
+    has no such field."""
 
     model_config = ConfigDict(extra="forbid")
 
     time_limit_seconds: float = Field(default=30.0, ge=0)
     random_seed: int = 0
     parallel_solver_count: int = Field(default=1, ge=1)
-    # 0 = 자동 (canonical: clamp(4 * 레슨 수, 400, 3200), quickstart:
-    # clamp(8 * 레슨 수, 400, 3200)). 양수를 주면 그 값을 그대로 쓴다.
+    # 0 = auto (canonical: clamp(4 * lesson count, 400, 3200), quickstart:
+    # clamp(8 * lesson count, 400, 3200)). A positive value is used as is.
     late_acceptance_size: int = Field(default=0, ge=0)
     stop_at_first_feasible: bool = False
     best_score_limit: tuple[int, float] | None = None
@@ -196,20 +197,20 @@ class SolveConfig(BaseModel):
         return self
 
     def to_canon(self) -> "_core.canon.SolverConfig":
-        """canonical 모드 config (weights 포함)."""
+        """Canonical-mode config (with weights)."""
         cfg = self._apply_common(_core.canon.SolverConfig())
         cfg.weights = self.weights.to_core()
         return cfg
 
     def to_core(self) -> "_core.SolverConfig":
-        """quickstart 모드 config (weights 는 quickstart 도메인에 없어 무시)."""
+        """Quickstart-mode config (weights do not exist in the quickstart domain and are ignored)."""
         return self._apply_common(_core.SolverConfig())
 
     def _apply_common(self, cfg):
         cfg.spent_limit_seconds = self.time_limit_seconds
         cfg.random_seed = self.random_seed
         cfg.parallel_solver_count = self.parallel_solver_count
-        cfg.late_acceptance_size = self.late_acceptance_size  # 0 = 자동
+        cfg.late_acceptance_size = self.late_acceptance_size  # 0 = auto
         cfg.unimproved_spent_limit_seconds = self.unimproved_spent_limit_seconds
         cfg.step_count_limit = self.step_count_limit
         cfg.unimproved_step_count_limit = self.unimproved_step_count_limit

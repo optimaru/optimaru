@@ -190,7 +190,7 @@ def list_constraints() -> list[str]:
     (snake_case) — the names `order_picking.constraints` uses."""
 
 def constraint_costs(solution, /) -> dict[str, dict]:
-    """제약별 unit 별 **원본** cost — 가중치/exponent/레벨 반올림 전.
-    `order_picking.constraints.score()` 가 이걸 받아 점수를 낸다.
+    """Per-constraint, per-unit **raw** costs — before weight/exponent/level rounding.
+    `order_picking.constraints.score()` takes these and produces a score.
     {name: {"costs": [...], "weight": w, "exponent": e,
             "hard": bool, "global": bool}}."""

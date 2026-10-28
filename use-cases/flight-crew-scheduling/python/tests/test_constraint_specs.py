@@ -1,7 +1,7 @@
-"""flight_crew.constraints — 비용 함수를 선언으로 고르는 API.
+"""flight_crew.constraints — an API for picking the cost function declaratively.
 
-제약 하나하나의 채점값 스팟체크는 `test_constraints.py` 가 맡는다. 여기서는
-"어떤 제약을 켤지" 를 고르는 선택 경로만 본다.
+Spot checks of individual constraint values live in `test_constraints.py`. This
+file only covers the selection path that picks "which constraints are on".
 """
 
 import pytest
@@ -20,15 +20,15 @@ from flight_crew.constraints import (
     score,
 )
 
-HOUR = 60  # 분 단위
+HOUR = 60  # in minutes
 
 
 def build_schedule():
-    """NRT 소속 조종사 2명인데 왕복은 전부 ICN 에서 시작해 ICN 으로 끝난다.
+    """Two NRT-based pilots, while every round trip starts and ends at ICN.
 
-    그래서 어떤 배정을 해도 첫 출발과 마지막 도착이 홈 공항이 아니고, 두
-    소프트 항이 반드시 남는다 — 항을 빼거나 값을 바꿨을 때의 차이가 보이는
-    작은 인스턴스다.
+    So whatever the assignment, the first departure and last arrival are not the home
+    airport and both soft terms always remain — a small instance where dropping a term or
+    changing a value shows a difference.
     """
     airports = [
         fc.Airport("ICN", "Incheon", 37.46, 126.44),
@@ -39,7 +39,7 @@ def build_schedule():
         fc.Employee("P2", "Pilot 2", home_airport=1, skills=["Pilot"]),
         fc.Employee("X1", "No skill", home_airport=1, skills=[]),
     ]
-    # 하루차: ICN->NRT, NRT->ICN. 이튿날: 같은 왕복 한 번 더.
+    # Day one: ICN->NRT, NRT->ICN. Day two: the same round trip once more.
     flights = [
         fc.Flight("KE001", 0, 9 * HOUR, 1, 11 * HOUR),
         fc.Flight("KE002", 1, 13 * HOUR, 0, 15 * HOUR),
@@ -57,7 +57,7 @@ def solve(constraints=None):
 
 
 def test_list_constraints_matches_the_spec_names():
-    """스펙이 들고 있는 이름은 코어가 실제로 아는 이름이어야 한다."""
+    """Names carried by specs must be names the core actually knows."""
     available = fc.list_constraints()
     assert available == [
         "required_skill",
@@ -76,7 +76,7 @@ def test_get_constraints_defaults_to_the_full_set():
 
 
 def test_default_solve_equals_explicit_default_constraints():
-    """`constraints=get_constraints()` 는 기본 경로와 같은 점수여야 한다."""
+    """`constraints=get_constraints()` must score the same as the default path."""
     plain = solve()
     explicit = solve(get_constraints())
     assert plain.hard == explicit.hard
@@ -84,7 +84,7 @@ def test_default_solve_equals_explicit_default_constraints():
 
 
 def test_picking_a_subset_drops_the_other_terms():
-    """목록에 없는 제약은 채점되지 않는다 — 홈 공항 항이 통째로 사라진다."""
+    """Unlisted constraints are not scored — the home airport terms disappear entirely."""
     baseline = solve()
     assert baseline.soft < 0
 
@@ -93,27 +93,27 @@ def test_picking_a_subset_drops_the_other_terms():
 
 
 def test_reweighting_one_constraint_scales_only_that_term():
-    """스킬 가중치만 올리면 하드가 커지되 소프트 구성은 그대로."""
+    """Raising only the skill weight grows hard while the soft makeup stays put."""
     picks = [first_assignment_not_departing_from_home]
     base = solve([*picks, required_skill])
     heavier = solve([*picks, RequiredSkill(weight=10_000)])
-    assert heavier.hard <= base.hard  # 벌점이므로 같거나 더 음수
+    assert heavier.hard <= base.hard  # penalty, so equal or more negative
 
 
 def test_level_can_be_flipped():
-    """하드 제약을 소프트로 내리면 그 벌점이 소프트 레벨로 옮겨간다."""
+    """Demoting a hard constraint to soft moves its penalty to the soft level."""
     hard_level = solve([flight_conflict, last_assignment_not_arriving_at_home])
     soft_level = solve([FlightConflict(hard=False), last_assignment_not_arriving_at_home])
-    # 같은 비용이 어느 레벨에 실리는지만 다르다.
+    # Only the level carrying the same cost differs.
     assert hard_level.hard <= 0
     assert soft_level.hard == 0
 
 
 def test_unknown_constraint_name_raises():
-    """오타가 비용 함수를 조용히 그대로 두면 안 된다."""
+    """A typo must not silently leave the cost function unchanged."""
 
     class Typo:
-        name = "required_skills"  # 뒤에 s
+        name = "required_skills"  # trailing s
         weight = None
         hard = None
         exponent = 1.0
@@ -123,7 +123,7 @@ def test_unknown_constraint_name_raises():
 
 
 def test_empty_constraint_list_is_rejected():
-    """빈 목록은 '아무것도 채점하지 않음'이라 실수일 가능성이 높다."""
+    """An empty list means 'score nothing', which is most likely a mistake."""
     with pytest.raises(ValueError, match="must not be empty"):
         fc.solve(build_schedule(), time_limit_seconds=0.2, constraints=[])
 
@@ -136,28 +136,28 @@ def test_spec_subclass_must_name_a_constraint():
 
 
 def test_default_instance_carries_no_overrides():
-    """모듈 상위 인스턴스는 기본값 그대로여야 한다 (weight=None)."""
+    """Module-level instances must keep the defaults (weight=None)."""
     assert required_skill.weight is None
     assert required_skill.hard is None
     assert required_skill.exponent == 1.0
 
 
-# --- 순수 파이썬 채점 (constraint_costs -> score) ---------------------------
+# --- Pure-Python scoring (constraint_costs -> score) ------------------------
 
 
 def _raw():
-    """한 번 푼 해의 제약별 원본 cost."""
+    """Raw per-constraint costs of one solved solution."""
     schedule = build_schedule()
     fc.solve(schedule, time_limit_seconds=0.3, random_seed=1)
     return fc.constraint_costs(schedule), schedule
 
 
 def test_score_reproduces_the_engine_score_exactly():
-    """파이썬 채점은 엔진과 hard/soft 가 정확히 같아야 한다.
+    """Python scoring must match the engine's hard/soft exactly.
 
-    이 도메인은 레벨이 둘뿐이라 접힘 없이 그대로 견줄 수 있다. 이 단언이
-    `score()` 가 엔진의 applyRaw 산술(가중치·셰이핑·unit 별 하드 반올림)을
-    제대로 재현하는지 이 패키지에서 고정한다."""
+    This domain has only two levels, so the comparison needs no folding. This
+    assertion pins down, in this package, that `score()` reproduces the engine's
+    applyRaw arithmetic (weights, shaping, per-unit hard rounding)."""
     raw, solution = _raw()
     engine = fc.calculate_score(solution)
     python = score(raw)
@@ -166,10 +166,11 @@ def test_score_reproduces_the_engine_score_exactly():
 
 
 def test_score_is_additive_over_the_picked_constraints():
-    """전체 점수는 제약별 점수의 합이다 — 목록에 없는 항은 그대로 빠진다.
+    """The total score is the sum of per-constraint scores — unlisted terms simply drop out.
 
-    하드 반올림이 unit 기여분마다 일어나므로 제약별로 나눠 더해도 값이
-    같다. "이 항이 점수에 얼마를 보태는가" 를 재채점 없이 읽을 수 있다."""
+    Hard rounding happens per unit contribution, so splitting by constraint and
+    summing gives the same value. "How much does this term add to the score"
+    can be read without rescoring."""
     raw, _ = _raw()
     specs = get_constraints()
     full = score(raw, specs)
@@ -179,7 +180,7 @@ def test_score_is_additive_over_the_picked_constraints():
 
 
 def test_score_reweighting_is_linear_without_rescoring():
-    """가중치만 바꾸면 그 항이 선형으로 스케일한다 — 재채점 없이."""
+    """Changing only the weight scales that term linearly — no rescoring."""
     raw, _ = _raw()
     base = score(raw, [required_skill])
     ten = score(raw, [RequiredSkill(weight=10)])
@@ -192,7 +193,7 @@ def test_score_reweighting_is_linear_without_rescoring():
 
 
 def test_score_rejects_an_unknown_constraint_name():
-    """이름이 틀린 스펙(예: 이름 바뀐 컴포넌트)은 조용히 무시되면 안 된다."""
+    """A spec with a wrong name (e.g. a renamed component) must not be silently ignored."""
     raw, _ = _raw()
 
     class Renamed(Constraint):

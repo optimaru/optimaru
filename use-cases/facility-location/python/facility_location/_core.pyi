@@ -150,13 +150,13 @@ class Solver:
     def __init__(self, config: SolverConfig = ...) -> None: ...
     def solve(self, problem: FacilityLocationProblem) -> None: ...
     def solve_with_constraints(self, problem: FacilityLocationProblem, constraints: Iterable[Any] | None = ...) -> None:
-        """같은 solve 를 호출자가 고른 제약 세트로 채점한다
-        (facility_location.constraints 참고). 준 목록이 기본 세트를 대체하고, None 이면
-        기본 세트를 그대로 쓴다."""
+        """Score the same solve with a caller-chosen constraint set
+        (see facility_location.constraints). The given list replaces the default set; None
+        keeps the default set."""
 
 def list_constraints() -> list[str]:
-    """이 도메인이 채점하는 제약 이름들 (기본 조립 순서, snake_case).
-    facility_location.constraints 가 쓰는 이름과 같다."""
+    """Constraint names scored by this domain (default assembly order, snake_case).
+    The same names facility_location.constraints uses."""
 
 def constraint_costs(solution, /) -> dict[str, dict]:
     """Return the raw per-constraint cost breakdown."""
