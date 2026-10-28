@@ -48,7 +48,7 @@ PYBIND11_MODULE(_core, m)
     m.doc() = "Food packaging — Timefold engine-backed C++ wrapper exposed "
               "to Python";
 
-    py::class_<Score>(m, "Score")
+    py::class_<Score>(m, "Score", py::module_local())
         .def(py::init(
                  [](std::int64_t hard, std::int64_t medium, std::int64_t soft)
                  { return Score{hard, medium, soft}; }),
@@ -64,7 +64,7 @@ PYBIND11_MODULE(_core, m)
         .def("__repr__",
              [](const Score &s) { return "<Score " + s.toString() + ">"; });
 
-    py::class_<ConstraintBreakdown>(m, "ConstraintBreakdown")
+    py::class_<ConstraintBreakdown>(m, "ConstraintBreakdown", py::module_local())
         .def_readonly("max_end_date_time", &ConstraintBreakdown::maxEndDateTime)
         .def_readonly("operator_cleaning_conflict",
                       &ConstraintBreakdown::operatorCleaningConflict)
@@ -76,7 +76,7 @@ PYBIND11_MODULE(_core, m)
                       &ConstraintBreakdown::minimizeMakespan)
         .def("to_score", &ConstraintBreakdown::toScore);
 
-    py::class_<Product>(m, "Product")
+    py::class_<Product>(m, "Product", py::module_local())
         .def(py::init(
                  [](std::string id, std::string name)
                  {
@@ -90,12 +90,12 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("id", &Product::id)
         .def_readwrite("name", &Product::name);
 
-    py::class_<Operator>(m, "Operator")
+    py::class_<Operator>(m, "Operator", py::module_local())
         .def(py::init([](std::string id) { return Operator{std::move(id)}; }),
              py::arg("id"))
         .def_readwrite("id", &Operator::id);
 
-    py::class_<Job> job(m, "Job");
+    py::class_<Job> job(m, "Job", py::module_local());
     job.def(py::init(
                 [](std::string id,
                    std::string name,
@@ -151,7 +151,7 @@ PYBIND11_MODULE(_core, m)
         .def_property_readonly(
             "end_minute", [](const Job &j) { return timeToPy(j.endDateTime); });
 
-    py::class_<Line>(m, "Line")
+    py::class_<Line>(m, "Line", py::module_local())
         .def(py::init(
                  [](std::string id,
                     std::string name,
@@ -179,7 +179,7 @@ PYBIND11_MODULE(_core, m)
         // The @PlanningListVariable: ordered job indices.
         .def_readwrite("jobs", &Line::jobs);
 
-    py::class_<PackagingSchedule>(m, "PackagingSchedule")
+    py::class_<PackagingSchedule>(m, "PackagingSchedule", py::module_local())
         .def(py::init(
                  [](std::int64_t fromMinute,
                     std::int64_t toMinute,
@@ -266,7 +266,7 @@ PYBIND11_MODULE(_core, m)
           "The Java DemoDataGenerator instance (bit-exact java.util.Random "
           "replica); minute 0 is the demo's Monday 00:00.");
 
-    py::class_<Solver::Config> config(m, "SolverConfig");
+    py::class_<Solver::Config> config(m, "SolverConfig", py::module_local());
     config.def(py::init<>())
         .def_property(
             "spent_limit_seconds",
@@ -392,7 +392,7 @@ PYBIND11_MODULE(_core, m)
         // multi-start worker threads too.
         .def_readwrite("on_new_best", &Solver::Config::onNewBest);
 
-    py::class_<Solver>(m, "Solver")
+    py::class_<Solver>(m, "Solver", py::module_local())
         .def(py::init<>())
         .def(py::init<Solver::Config>(), py::arg("config"))
         // Solves in place: mutates lines[*].jobs / unassigned_jobs (and

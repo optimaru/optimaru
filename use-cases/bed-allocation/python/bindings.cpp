@@ -31,7 +31,7 @@ PYBIND11_MODULE(_core, m)
     m.doc() = "Bed allocation (hospital bed scheduling) — Timefold "
               "engine-backed C++ wrapper exposed to Python";
 
-    py::class_<Score>(m, "Score")
+    py::class_<Score>(m, "Score", py::module_local())
         .def_readonly("hard", &Score::hard)
         .def_readonly("medium", &Score::medium)
         .def_readonly("soft", &Score::soft)
@@ -40,17 +40,17 @@ PYBIND11_MODULE(_core, m)
         .def("__repr__",
              [](const Score &s) { return "<Score " + s.toString() + ">"; });
 
-    py::enum_<Gender>(m, "Gender")
+    py::enum_<Gender>(m, "Gender", py::module_local())
         .value("MALE", Gender::MALE)
         .value("FEMALE", Gender::FEMALE);
 
-    py::enum_<GenderLimitation>(m, "GenderLimitation")
+    py::enum_<GenderLimitation>(m, "GenderLimitation", py::module_local())
         .value("ANY_GENDER", GenderLimitation::ANY_GENDER)
         .value("MALE_ONLY", GenderLimitation::MALE_ONLY)
         .value("FEMALE_ONLY", GenderLimitation::FEMALE_ONLY)
         .value("SAME_GENDER", GenderLimitation::SAME_GENDER);
 
-    py::class_<Department>(m, "Department")
+    py::class_<Department>(m, "Department", py::module_local())
         .def(py::init(
                  [](std::string id,
                     std::string name,
@@ -78,7 +78,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("minimum_age", &Department::minimumAge)
         .def_readwrite("maximum_age", &Department::maximumAge);
 
-    py::class_<Room>(m, "Room")
+    py::class_<Room>(m, "Room", py::module_local())
         .def(py::init(
                  [](std::string id,
                     std::string name,
@@ -110,7 +110,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("gender_limitation", &Room::genderLimitation)
         .def_readwrite("equipment", &Room::equipment);
 
-    py::class_<Bed>(m, "Bed")
+    py::class_<Bed>(m, "Bed", py::module_local())
         .def(py::init(
                  [](std::string id, int room, int indexInRoom)
                  {
@@ -128,7 +128,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("room", &Bed::room)
         .def_readwrite("index_in_room", &Bed::indexInRoom);
 
-    py::class_<Stay>(m, "Stay")
+    py::class_<Stay>(m, "Stay", py::module_local())
         .def(py::init(
                  [](std::string id,
                     std::string patientName,
@@ -190,7 +190,7 @@ PYBIND11_MODULE(_core, m)
         .def("night_count", &Stay::nightCount)
         .def("same_night_count", &Stay::sameNightCount, py::arg("other"));
 
-    py::class_<BedPlan>(m, "BedPlan")
+    py::class_<BedPlan>(m, "BedPlan", py::module_local())
         .def(py::init(
                  [](std::vector<Department> departments,
                     std::vector<Room> rooms,
@@ -251,7 +251,7 @@ PYBIND11_MODULE(_core, m)
           "Full recompute of the HardMediumSoft score (also stores "
           "plan.score).");
 
-    py::class_<Solver::Config>(m, "SolverConfig")
+    py::class_<Solver::Config>(m, "SolverConfig", py::module_local())
         .def(py::init<>())
         .def_property(
             "spent_limit_seconds",
@@ -368,7 +368,7 @@ PYBIND11_MODULE(_core, m)
         // engine's multi-start worker threads too.
         .def_readwrite("on_new_best", &Solver::Config::onNewBest);
 
-    py::class_<Solver>(m, "Solver")
+    py::class_<Solver>(m, "Solver", py::module_local())
         .def(py::init<>())
         .def(py::init<Solver::Config>(), py::arg("config"))
         // Solves in place: sets stay.bed and plan.score. The GIL is released

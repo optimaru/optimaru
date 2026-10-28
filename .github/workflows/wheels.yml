@@ -1,0 +1,121 @@
+# Builds the `optimaru` Python distribution (sdist + wheels for Linux, macOS,
+# Windows) on every PR that touches it, and publishes to PyPI when a GitHub
+# release is published.
+#
+# Publishing uses PyPI Trusted Publishing (OIDC) — there is no API token. The
+# PyPI project must list this repository as a trusted publisher:
+#   owner: optimaru · repository: optimaru · workflow: wheels.yml · environment: pypi
+# and the GitHub Environment `pypi` must exist (add required reviewers there to
+# gate uploads).
+#
+# Release: bump `version` in pyproject.toml, merge, then publish a GitHub
+# release tagged v<version>. The publish job refuses a tag that does not match.
+name: wheels
+
+on:
+  pull_request:
+    paths:
+      - pyproject.toml
+      - setup.py
+      - MANIFEST.in
+      - python/**
+      - include/**
+      - use-cases/*/cpp/include/**
+      - use-cases/*/cpp/src/**
+      - use-cases/*/python/**
+      - .github/workflows/wheels.yml
+  push:
+    branches: [main]
+    paths:
+      - pyproject.toml
+      - setup.py
+      - MANIFEST.in
+      - python/**
+      - include/**
+      - use-cases/*/cpp/include/**
+      - use-cases/*/cpp/src/**
+      - use-cases/*/python/**
+      - .github/workflows/wheels.yml
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  wheels:
+    name: wheels (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Native runners per architecture: no QEMU emulation, no cross-compiling.
+        os:
+          - ubuntu-latest      # manylinux / musllinux x86_64
+          - ubuntu-24.04-arm   # manylinux / musllinux aarch64
+          - macos-latest       # arm64
+          - macos-15-intel     # x86_64
+          - windows-latest     # AMD64
+    steps:
+      - uses: actions/checkout@v4
+
+      # Settings (cp314 only, smoke-test import of all 21 use cases) live in
+      # pyproject.toml [tool.cibuildwheel].
+      - uses: pypa/cibuildwheel@v3.1.4
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.os }}
+          path: wheelhouse/*.whl
+
+  sdist:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      - name: Build sdist
+        run: pipx run build --sdist
+
+      # The sdist must build on its own (all C++ sources included via MANIFEST.in).
+      - name: Build a wheel from the sdist
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip wheel --no-deps -w sdist-check dist/*.tar.gz
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+
+  publish:
+    if: github.event_name == 'release'
+    needs: [wheels, sdist]
+    runs-on: ubuntu-latest
+    # Must match the environment registered as the trusted publisher on PyPI.
+    environment:
+      name: pypi
+      url: https://pypi.org/project/optimaru/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tag matches pyproject version
+        run: |
+          version=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          if [ "${GITHUB_REF_NAME}" != "v${version}" ]; then
+            echo "::error::release tag ${GITHUB_REF_NAME} does not match pyproject version v${version}"
+            exit 1
+          fi
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - uses: pypa/gh-action-pypi-publish@release/v1

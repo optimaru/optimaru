@@ -27,7 +27,7 @@ PYBIND11_MODULE(_core, m)
     m.doc() = "Sports league scheduling — Timefold engine-backed C++ wrapper "
               "exposed to Python";
 
-    py::class_<Score>(m, "Score")
+    py::class_<Score>(m, "Score", py::module_local())
         .def_readonly("hard", &Score::hard)
         .def_readonly("soft", &Score::soft)
         .def("is_feasible", &Score::isFeasible)
@@ -35,7 +35,7 @@ PYBIND11_MODULE(_core, m)
         .def("__repr__",
              [](const Score &s) { return "<Score " + s.toString() + ">"; });
 
-    py::class_<Team>(m, "Team")
+    py::class_<Team>(m, "Team", py::module_local())
         .def(py::init(
                  [](std::string id, std::string name)
                  {
@@ -49,7 +49,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("id", &Team::id)
         .def_readwrite("name", &Team::name);
 
-    py::class_<Round>(m, "Round")
+    py::class_<Round>(m, "Round", py::module_local())
         .def(py::init(
                  [](int index, bool weekendOrHoliday)
                  {
@@ -63,7 +63,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("index", &Round::index)
         .def_readwrite("weekend_or_holiday", &Round::weekendOrHoliday);
 
-    py::class_<Match>(m, "Match")
+    py::class_<Match>(m, "Match", py::module_local())
         .def(py::init(
                  [](std::string id,
                     int homeTeam,
@@ -90,7 +90,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("classic_match", &Match::classicMatch)
         .def_readwrite("round", &Match::round);
 
-    py::class_<LeagueSchedule>(m, "LeagueSchedule")
+    py::class_<LeagueSchedule>(m, "LeagueSchedule", py::module_local())
         .def(py::init(
                  [](std::vector<Team> teams,
                     std::vector<Round> rounds,
@@ -143,7 +143,7 @@ PYBIND11_MODULE(_core, m)
             },
             py::arg("assignment"));
 
-    py::class_<Breakdown>(m, "Breakdown")
+    py::class_<Breakdown>(m, "Breakdown", py::module_local())
         .def_readonly("matches_on_same_day", &Breakdown::matchesOnSameDay)
         .def_readonly("consecutive_home_matches",
                       &Breakdown::consecutiveHomeMatches)
@@ -169,7 +169,7 @@ PYBIND11_MODULE(_core, m)
           py::arg("schedule"),
           "Full per-constraint recompute (the ten quickstart constraints).");
 
-    py::class_<Solver::Config>(m, "SolverConfig")
+    py::class_<Solver::Config>(m, "SolverConfig", py::module_local())
         .def(py::init<>())
         .def_property(
             "spent_limit_seconds",
@@ -285,7 +285,7 @@ PYBIND11_MODULE(_core, m)
         // engine's multi-start worker threads too.
         .def_readwrite("on_new_best", &Solver::Config::onNewBest);
 
-    py::class_<Solver>(m, "Solver")
+    py::class_<Solver>(m, "Solver", py::module_local())
         .def(py::init<>())
         .def(py::init<Solver::Config>(), py::arg("config"))
         // Solves in place: sets match.round and schedule.score. The GIL is

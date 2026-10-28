@@ -31,7 +31,7 @@ PYBIND11_MODULE(_core, m)
     m.attr("MEDIUM_SCALE") = kMediumScale;
     m.attr("GRAIN_LENGTH_IN_MINUTES") = kGrainLengthInMinutes;
 
-    py::class_<Score>(m, "Score")
+    py::class_<Score>(m, "Score", py::module_local())
         .def_readonly("hard", &Score::hard)
         .def_readonly("soft", &Score::soft)
         .def("is_feasible", &Score::isFeasible)
@@ -39,7 +39,7 @@ PYBIND11_MODULE(_core, m)
         .def("__repr__",
              [](const Score &s) { return "<Score " + s.toString() + ">"; });
 
-    py::class_<Person>(m, "Person")
+    py::class_<Person>(m, "Person", py::module_local())
         .def(py::init(
                  [](std::string id, std::string fullName)
                  {
@@ -53,7 +53,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("id", &Person::id)
         .def_readwrite("full_name", &Person::fullName);
 
-    py::class_<TimeGrain>(m, "TimeGrain")
+    py::class_<TimeGrain>(m, "TimeGrain", py::module_local())
         .def(py::init(
                  [](std::string id,
                     int grainIndex,
@@ -77,7 +77,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("starting_minute_of_day",
                        &TimeGrain::startingMinuteOfDay);
 
-    py::class_<Room>(m, "Room")
+    py::class_<Room>(m, "Room", py::module_local())
         .def(py::init(
                  [](std::string id, std::string name, int capacity)
                  {
@@ -94,7 +94,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("name", &Room::name)
         .def_readwrite("capacity", &Room::capacity);
 
-    py::class_<Meeting>(m, "Meeting")
+    py::class_<Meeting>(m, "Meeting", py::module_local())
         .def(py::init(
                  [](std::string id,
                     std::string topic,
@@ -127,7 +127,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("entire_group_meeting", &Meeting::entireGroupMeeting)
         .def("required_capacity", &Meeting::requiredCapacity);
 
-    py::class_<MeetingAssignment>(m, "MeetingAssignment")
+    py::class_<MeetingAssignment>(m, "MeetingAssignment", py::module_local())
         .def(py::init(
                  [](std::string id, int meeting, int grainRoom, bool pinned)
                  {
@@ -149,7 +149,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("grain_room", &MeetingAssignment::grainRoom)
         .def_readwrite("pinned", &MeetingAssignment::pinned);
 
-    py::class_<MeetingSchedule>(m, "MeetingSchedule")
+    py::class_<MeetingSchedule>(m, "MeetingSchedule", py::module_local())
         .def(py::init(
                  [](std::vector<Person> people,
                     std::vector<TimeGrain> timeGrains,
@@ -220,7 +220,7 @@ PYBIND11_MODULE(_core, m)
             },
             py::arg("assignment"));
 
-    py::class_<Breakdown>(m, "Breakdown")
+    py::class_<Breakdown>(m, "Breakdown", py::module_local())
         .def_readonly("room_conflict_grains", &Breakdown::roomConflictGrains)
         .def_readonly("overtime_sum", &Breakdown::overtimeSum)
         .def_readonly("required_conflict_grains",
@@ -260,7 +260,7 @@ PYBIND11_MODULE(_core, m)
           "The Java quickstart's DemoDataGenerator, reproduced draw-for-draw "
           "with java.util.Random(0) (see ms/demo_data.hpp).");
 
-    py::class_<Solver::Config>(m, "SolverConfig")
+    py::class_<Solver::Config>(m, "SolverConfig", py::module_local())
         .def(py::init<>())
         .def_property(
             "spent_limit_seconds",
@@ -387,7 +387,7 @@ PYBIND11_MODULE(_core, m)
         // engine's multi-start worker threads too.
         .def_readwrite("on_new_best", &Solver::Config::onNewBest);
 
-    py::class_<Solver>(m, "Solver")
+    py::class_<Solver>(m, "Solver", py::module_local())
         .def(py::init<>())
         .def(py::init<Solver::Config>(), py::arg("config"))
         // Solves in place: sets meeting_assignments[*].grain_room and

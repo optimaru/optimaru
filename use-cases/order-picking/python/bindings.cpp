@@ -28,7 +28,7 @@ PYBIND11_MODULE(_core, m)
 {
     m.doc() = "Order picking — C++ core exposed to Python";
 
-    py::class_<Score>(m, "Score")
+    py::class_<Score>(m, "Score", py::module_local())
         .def_readonly("hard", &Score::hard)
         .def_readonly("soft", &Score::soft)
         .def("is_feasible", &Score::isFeasible)
@@ -36,11 +36,11 @@ PYBIND11_MODULE(_core, m)
         .def("__repr__",
              [](const Score &s) { return "<Score " + s.toString() + ">"; });
 
-    py::enum_<Side>(m, "Side")
+    py::enum_<Side>(m, "Side", py::module_local())
         .value("LEFT", Side::LEFT)
         .value("RIGHT", Side::RIGHT);
 
-    py::class_<WarehouseLocation>(m, "WarehouseLocation")
+    py::class_<WarehouseLocation>(m, "WarehouseLocation", py::module_local())
         .def(py::init(
                  [](int column, int shelvingRow, Side side, int row)
                  {
@@ -77,12 +77,12 @@ PYBIND11_MODULE(_core, m)
                         + std::to_string(l.row) + ">";
              });
 
-    py::class_<Order>(m, "Order")
+    py::class_<Order>(m, "Order", py::module_local())
         .def(py::init([](std::string id) { return Order{std::move(id)}; }),
              py::arg("id"))
         .def_readwrite("id", &Order::id);
 
-    py::class_<PickTask>(m, "PickTask")
+    py::class_<PickTask>(m, "PickTask", py::module_local())
         .def(py::init(
                  [](std::string id,
                     int orderIndex,
@@ -117,7 +117,7 @@ PYBIND11_MODULE(_core, m)
         .def_readonly("next_pick_task", &PickTask::nextPickTask)
         .def("is_last", &PickTask::isLast);
 
-    py::class_<Trolley>(m, "Trolley")
+    py::class_<Trolley>(m, "Trolley", py::module_local())
         .def(py::init(
                  [](std::string id,
                     int bucketCount,
@@ -148,7 +148,7 @@ PYBIND11_MODULE(_core, m)
         // The planning list variable: the ordered pick-task indices.
         .def_readwrite("pick_task_indices", &Trolley::pickTaskIndices);
 
-    py::class_<OrderPickingSolution>(m, "OrderPickingSolution")
+    py::class_<OrderPickingSolution>(m, "OrderPickingSolution", py::module_local())
         .def(py::init(
                  [](std::vector<Order> orders,
                     std::vector<Trolley> trolleys,
@@ -191,7 +191,7 @@ PYBIND11_MODULE(_core, m)
                  return out;
              });
 
-    py::class_<ConstraintTotals>(m, "ConstraintTotals")
+    py::class_<ConstraintTotals>(m, "ConstraintTotals", py::module_local())
         .def_readonly("required_number_of_buckets",
                       &ConstraintTotals::requiredNumberOfBuckets)
         .def_readonly("distance_from_previous_pick_task",
@@ -258,7 +258,7 @@ PYBIND11_MODULE(_core, m)
           "The Java quickstart's DemoDataGenerator dataset (bit-exact "
           "java.util.Random replay).");
 
-    py::class_<Solver::Config>(m, "SolverConfig")
+    py::class_<Solver::Config>(m, "SolverConfig", py::module_local())
         .def(py::init<>())
         .def_property(
             "spent_limit_seconds",
@@ -372,7 +372,7 @@ PYBIND11_MODULE(_core, m)
         // engine's multi-start worker threads too.
         .def_readwrite("on_new_best", &Solver::Config::onNewBest);
 
-    py::class_<Solver>(m, "Solver")
+    py::class_<Solver>(m, "Solver", py::module_local())
         .def(py::init<>())
         .def(py::init<Solver::Config>(), py::arg("config"))
         // Solves in place: mutates trolleys[*].pick_task_indices, refreshes
