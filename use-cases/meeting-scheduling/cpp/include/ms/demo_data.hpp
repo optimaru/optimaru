@@ -155,7 +155,9 @@ inline MeetingSchedule buildDemoData()
     MeetingSchedule schedule;
 
     // People (two draws per person: first name, then last name).
-    constexpr int kPersonCount = 20;
+    // static: lambdas below read it without capturing; MSVC rejects that for a
+    // non-static local (C3493) even though it is constexpr.
+    static constexpr int kPersonCount = 20;
     for (int i = 0; i < kPersonCount; ++i)
     {
         const std::string first = kFirstNames[random.nextInt(27)];
@@ -165,7 +167,7 @@ inline MeetingSchedule buildDemoData()
 
     // Time grains: 4 days x (08:00 .. 17:45 step 15) = 160, grainIndex 1..160
     // like the Java generator's pre-incremented counter.
-    constexpr int kFirstDayOfYear = 200;
+    static constexpr int kFirstDayOfYear = 200;
     int count = 0;
     for (int day = 0; day < 4; ++day)
     {
@@ -182,7 +184,7 @@ inline MeetingSchedule buildDemoData()
     schedule.rooms.push_back({"R3", "Room 3", 16});
 
     // Meetings.
-    constexpr int kMeetingCount = 24;
+    static constexpr int kMeetingCount = 24;
     for (int i = 0; i < kMeetingCount; ++i)
     {
         Meeting meeting;
