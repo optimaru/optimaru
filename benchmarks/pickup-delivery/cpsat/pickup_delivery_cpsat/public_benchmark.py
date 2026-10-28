@@ -1,4 +1,4 @@
-"""Compare both backends on Hexaly's public Li & Lim PDPTW bundle."""
+"""Compare both backends on Li & Lim PDPTW instances (Hexaly bundle or synthetic)."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import io
 import math
+import random
 import time
 import urllib.request
 import zipfile
@@ -124,6 +125,53 @@ def _download(cache_dir: Path) -> bytes:
     if digest != ARCHIVE_SHA256:
         raise ValueError(f"pdptw.zip checksum mismatch: {digest}")
     return payload
+
+
+def synthetic_instance(request_count: int, seed: int = 0) -> PdptwInstance:
+    """A seeded Li & Lim-shaped instance with ``request_count`` request pairs.
+
+    Customers sit in a 100 x 100 square, half of them in six clusters (like the
+    LRC sets); service time is 90 as in the lc sets. Every request on its own
+    route fits the horizon (each dropoff window opens when the pickup can be
+    served and driven to directly). The fleet is one vehicle per three requests
+    with capacity 200, so the solvers compete on serving everything with fewer
+    vehicles and less distance; the runner reports a plan that drops requests.
+    """
+    if request_count < 1:
+        raise ValueError("request_count must be positive")
+    rng = random.Random(seed)
+    horizon = 1_500 + 4 * request_count
+    centers = [(rng.uniform(15, 85), rng.uniform(15, 85)) for _ in range(6)]
+
+    def point() -> tuple[int, int]:
+        if rng.random() < 0.5:
+            cx, cy = rng.choice(centers)
+            x, y = rng.gauss(cx, 6), rng.gauss(cy, 6)
+        else:
+            x, y = rng.uniform(0, 100), rng.uniform(0, 100)
+        return round(min(max(x, 0), 100)), round(min(max(y, 0), 100))
+
+    depot = Node(0, 50, 50, 0, 0, horizon, 0, 0, 0)
+    nodes: list[Node] = []
+    # Li & Lim lc service time; the unassigned penalty counts whole service
+    # minutes, so a short service would make dropping a request free.
+    service, width = 90, 150
+    for index in range(request_count):
+        pickup_id, dropoff_id = 2 * index + 1, 2 * index + 2
+        (px, py), (dx, dy) = point(), point()
+        demand = rng.randint(10, 40)
+        to_pickup = math.hypot(px - 50, py - 50)
+        direct = math.hypot(px - dx, py - dy)
+        back = math.hypot(dx - 50, dy - 50)
+        latest = int(horizon - back - direct - 2 * service - 2 * width)
+        ready = rng.randint(math.ceil(to_pickup), max(math.ceil(to_pickup), latest))
+        drop_ready = ready + service + math.ceil(direct)
+        nodes.append(Node(pickup_id, px, py, demand, ready, ready + width, service, 0, dropoff_id))
+        nodes.append(
+            Node(dropoff_id, dx, dy, -demand, drop_ready, drop_ready + width, service, pickup_id, 0)
+        )
+    vehicles = max(2, math.ceil(request_count / 3))
+    return PdptwInstance(f"synthetic-{request_count}-s{seed}", vehicles, 200, depot, tuple(nodes))
 
 
 def load_instance(name: str, cache_dir: Path) -> PdptwInstance:
@@ -286,6 +334,13 @@ def main(argv: list[str] | None = None) -> int:
         help="request pairs from the official instance; use 0 for the full file",
     )
     parser.add_argument(
+        "--synthetic",
+        type=int,
+        default=0,
+        metavar="N",
+        help="solve a seeded synthetic instance with N requests instead (all of them)",
+    )
+    parser.add_argument(
         "--backend", choices=("engine", "cpsat", "both"), default="both"
     )
     parser.add_argument(
@@ -293,13 +348,18 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    instance = load_instance(args.instance, args.cache_dir)
+    if args.synthetic:
+        instance = synthetic_instance(args.synthetic, args.seed)
+        limit = None
+    else:
+        instance = load_instance(args.instance, args.cache_dir)
+        limit = args.requests or None
     request, selected = make_request(
         instance,
         seconds=args.seconds,
         seed=args.seed,
         workers=args.workers,
-        request_limit=args.requests or None,
+        request_limit=limit,
     )
     print(
         f"{instance.name}: {len(selected)}/{len(instance.requests)} requests, "
@@ -308,8 +368,16 @@ def main(argv: list[str] | None = None) -> int:
     print("objective: assign every request, then minimize integral distance")
     backends = ("engine", "cpsat") if args.backend == "both" else (args.backend,)
     for backend in backends:
-        solution, elapsed = _run(backend, request)
-        used, distance = rescore(instance, selected, solution.routes)
+        try:
+            solution, elapsed = _run(backend, request)
+        except RuntimeError as exc:  # e.g. CP-SAT found no solution in time
+            print(f"{backend:6} no solution: {exc}")
+            continue
+        try:
+            used, distance = rescore(instance, selected, solution.routes)
+        except ValueError as exc:  # incomplete or rule-breaking plan
+            print(f"{backend:6} rejected: {exc} elapsed={elapsed:.2f}s score={solution.score}")
+            continue
         if solution.total_driving_seconds != distance:
             raise ValueError("solver report and independent distance disagree")
         print(
