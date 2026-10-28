@@ -1,0 +1,22 @@
+[project]
+name = "sports-league-cpsat"
+version = "0.1.0"
+description = "OR-Tools CP-SAT backend for sports league scheduling."
+requires-python = ">=3.14,<4.0"
+dependencies = ["sports_league[models]", "cpsat-plugins>=0.1.0", "ortools>=9.10", "pydantic>=2"]
+
+[project.scripts]
+sports-league-compare = "sports_league_cpsat.benchmark:main"
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[tool.setuptools]
+packages = ["sports_league_cpsat"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.uv.sources]
+sports_league = { path = "../../../use-cases/sports-league-scheduling/python", editable = true }
+cpsat-plugins = { path = "../../cpsat-common", editable = true }

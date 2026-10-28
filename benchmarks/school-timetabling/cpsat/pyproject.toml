@@ -1,0 +1,32 @@
+[project]
+name = "teacher-scheduling"
+version = "0.0.0"
+description = "CP-SAT 기반 중고등학교 교사 시간표 편성(timetabling) 엔진"
+requires-python = ">=3.14,<4.0"
+dependencies = [
+    "ortools>=9.15,<10",
+    "pydantic>=2.13.2,<3",
+    "pydantic-settings>=2.4.0,<3",
+    # 컴시간 교사별시수표 엑셀 읽기/쓰기 (teacher_scheduling.excel / .export)
+    "openpyxl>=3.1,<4",
+]
+
+[dependency-groups]
+precommit = [
+    "pre-commit~=4.0",
+]
+test = [
+    "pytest>=8.3.4",
+    # tests/test_engine_parity.py: the engine's canonical score == validate.py
+    "st_timetabling[models]",
+]
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["teacher_scheduling*"]
+
+[tool.uv.sources]
+st_timetabling = { path = "../../../use-cases/school-timetabling/python", editable = true }

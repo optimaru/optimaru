@@ -227,7 +227,7 @@ def parse_x_catalog(text: str) -> tuple[CatalogEntry, ...]:
 
 
 def _download(url: str) -> bytes:
-    request = urllib.request.Request(url, headers={"User-Agent": "optimization-engine"})
+    request = urllib.request.Request(url, headers={"User-Agent": "optimaru-benchmark/1.0"})
     with urllib.request.urlopen(request, timeout=60) as response:
         return response.read()
 

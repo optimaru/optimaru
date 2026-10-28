@@ -1,0 +1,31 @@
+[project]
+name = "flight-crew-cpsat"
+version = "0.1.0"
+description = "OR-Tools CP-SAT backend for flight crew scheduling."
+requires-python = ">=3.14,<4.0"
+dependencies = [
+    "cpsat-plugins",
+    "flight_crew",
+    "ortools>=9.10",
+    "pydantic>=2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+flight-crew-compare = "flight_crew_cpsat.benchmark:main"
+
+[tool.uv.sources]
+flight_crew = { path = "../../../use-cases/flight-crew-scheduling/python", editable = true }
+cpsat-plugins = { path = "../../cpsat-common", editable = true }
+
+[tool.setuptools]
+packages = ["flight_crew_cpsat"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"

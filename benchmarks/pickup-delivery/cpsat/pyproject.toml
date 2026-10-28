@@ -1,0 +1,26 @@
+[project]
+name = "pickup-delivery-cpsat"
+version = "0.1.0"
+description = "OR-Tools CP-SAT backend for pickup and delivery."
+requires-python = ">=3.14,<4.0"
+dependencies = ["cpsat-plugins", "pdp_routing", "ortools>=9.10", "pydantic>=2"]
+
+[project.scripts]
+pickup-delivery-public-bench = "pickup_delivery_cpsat.public_benchmark:main"
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[tool.setuptools]
+packages = ["pickup_delivery_cpsat"]
+
+[tool.uv.sources]
+cpsat-plugins = { path = "../../cpsat-common", editable = true }
+pdp_routing = { path = "../../../use-cases/pickup-delivery/python", editable = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"

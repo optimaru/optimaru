@@ -1,0 +1,22 @@
+[project]
+name = "order-picking-cpsat"
+version = "0.1.0"
+description = "OR-Tools CP-SAT backend for order picking."
+requires-python = ">=3.14,<4.0"
+dependencies = ["order_picking[models]", "cpsat-plugins>=0.1.0", "ortools>=9.10", "pydantic>=2"]
+
+[project.scripts]
+order-picking-compare = "order_picking_cpsat.benchmark:main"
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[tool.setuptools]
+packages = ["order_picking_cpsat"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.uv.sources]
+order_picking = { path = "../../../use-cases/order-picking/python", editable = true }
+cpsat-plugins = { path = "../../cpsat-common", editable = true }
