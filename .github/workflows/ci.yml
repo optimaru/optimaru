@@ -20,3 +20,47 @@ jobs:
         run: cmake --build build -j4
       - name: Test
         run: ctest --test-dir build --output-on-failure
+
+  vehicle-routing-cpp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S use-cases/vehicle-routing/cpp -B build-vrp -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build build-vrp -j4
+      - name: Test
+        run: ctest --test-dir build-vrp --output-on-failure
+
+  vehicle-routing-python:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: use-cases/vehicle-routing/python
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Install
+        run: uv sync --python 3.14 --all-extras --all-groups
+      - name: Test
+        run: uv run --python 3.14 pytest -q
+
+  vehicle-routing-benchmark:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: benchmarks/vehicle-routing
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: Build the Timefold runner
+        run: mvn -B -q -f timefold/pom.xml package
+      - name: Install
+        run: uv sync --python 3.14 --extra dev
+      - name: Test
+        run: uv run --python 3.14 pytest -q

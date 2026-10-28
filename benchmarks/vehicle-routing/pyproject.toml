@@ -1,0 +1,25 @@
+[project]
+name = "vrp-benchmark"
+version = "0.1.0"
+description = "CVRP benchmark: the optimaru vehicle-routing use case vs OR-Tools Routing vs Timefold Solver."
+requires-python = ">=3.14,<4.0"
+dependencies = ["vrp_routing[models]", "ortools>=9.15,<9.16"]
+
+[project.scripts]
+vrp-bench = "vrp_benchmark.run:main"
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[tool.setuptools]
+packages = ["vrp_benchmark", "vrp_benchmark.solvers"]
+
+[tool.uv.sources]
+vrp_routing = { path = "../../use-cases/vehicle-routing/python", editable = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
