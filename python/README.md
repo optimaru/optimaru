@@ -19,7 +19,7 @@ Requires Python 3.14+. Wheels are published for Linux, macOS and Windows.
 ```python
 from optimaru import vehicle_routing as vrp
 from optimaru.vehicle_routing.constraints import (
-    MinimizeTravelTime, get_constraints, vehicle_capacity,
+    MinimizeTravelTime, get_constraints, maximize_visits_assigned, vehicle_capacity,
 )
 
 locations = [vrp.Location(37.5665, 126.9780)]          # 0: depot
@@ -40,10 +40,14 @@ solver.solve(plan)                                      # default constraints
 print(plan.score, plan.routes())
 
 # Pick constraints and reweight them — the solver itself does not change.
+# Only the listed constraints are scored: leave out maximize_visits_assigned and
+# skipping every visit becomes free.
 solver.solve_with_constraints(plan, get_constraints([
     vehicle_capacity,
+    maximize_visits_assigned,
     MinimizeTravelTime(weight=10),
 ]))
+print(plan.score, plan.routes())
 ```
 
 ## Use cases
