@@ -23,3 +23,15 @@ CP-SAT formulation notes: [`cpsat/README.md`](cpsat/README.md).
 The engine and Timefold run single-threaded; CP-SAT gets `--workers` search
 workers and its time includes model construction. Timefold's time includes
 JVM start-up.
+
+<!-- results:start -->
+## Results
+
+Every cell is the score of that solver's final solution under the **Timefold quickstart's `ConstraintProvider`** (the referee), so all three are judged by the same rules. Higher is better; ties are all bold.
+
+| Instance | Size | optimaru engine | OR-Tools CP-SAT | Timefold 2.6.0 |
+| --- | --- | --- | --- | --- |
+| demo | Java quickstart demo (24 meetings) | **0hard/0medium/-3040soft** | — (no solution in time) | 0hard/0medium/-3081soft |
+
+Measured 2026-10-29 on one Apple Silicon Mac (16 cores), 30 s per solver and instance, seed 1. The engine and Timefold run single-threaded; CP-SAT uses 8 workers and its time includes model construction. Single runs — treat small differences as noise.
+<!-- results:end -->

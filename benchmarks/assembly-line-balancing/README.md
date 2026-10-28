@@ -13,3 +13,17 @@ uv run --project cpsat python -m bench.run_bench --seconds 60
 ```
 
 Recorded results: [`bench/RESULTS.md`](bench/RESULTS.md).
+
+<!-- results:start -->
+## Results
+
+Hexaly example instances. Lower is better; the best value is bold.
+
+| Instance | Tasks | Best known | engine | CP-SAT |
+| --- | --- | --- | --- | --- |
+| instance_n=100_1 | 100 | 23 | 26 | **23** |
+| instance_n=100_10 | 100 | 22 | 25 | **22** |
+| instance_n=100_100 | 100 | 25 | 29 | **25** |
+
+Stations used. Measured 2026-10-29 on one Apple Silicon Mac (16 cores), 30 s per solver and instance. The engine runs single-threaded; CP-SAT uses 8 workers and its time includes model construction. Single runs — a snapshot, not a statistical study.
+<!-- results:end -->
