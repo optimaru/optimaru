@@ -160,7 +160,7 @@ jobs:
         run: |
           runner=$(ls *_cpsat/benchmark.py 2>/dev/null | head -1)
           if [ -z "$runner" ]; then echo "no comparison runner"; exit 0; fi
-          uv run --python 3.14 python -m "$(dirname "$runner").benchmark" --seconds 1 --workers 2
+          uv run --python 3.14 python -m "$(dirname "$runner").benchmark" --seconds 1 --workers 2 --cpsat-grace 20
 
   vehicle-routing-benchmark:
     runs-on: ubuntu-latest

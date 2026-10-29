@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import importlib
 import json
+import multiprocessing
 import sys
 import time
 import traceback
@@ -95,6 +96,77 @@ def _self_report(case: Any, problem: Any) -> tuple[float, ...] | None:
     return tuple(level for level in levels if level is not None)
 
 
+def _solve_cpsat(
+    case: BenchmarkCase, problem: Any, seconds: float, seed: int, workers: int
+) -> SolverRun:
+    started = time.perf_counter()
+    try:
+        solved = case.solve_cpsat(problem, seconds, seed, workers)
+    except RuntimeError as error:
+        message = str(error)
+        if "status=" not in message:
+            raise
+        status = message.split("status=", 1)[1].split(")", 1)[0]
+        return SolverRun("cp-sat", None, time.perf_counter() - started, status)
+    return SolverRun(
+        "cp-sat",
+        score_solution(case.PACKAGE, solved),
+        time.perf_counter() - started,
+        # Public CP-SAT backends return a solution, not CpSolverStatus.
+        "FEASIBLE",
+    )
+
+
+def _cpsat_child(
+    module: str, instance: str, seconds: float, seed: int, workers: int, conn: Any
+) -> None:
+    case = importlib.import_module(module)
+    try:
+        problem = case.instances()[instance]()
+        conn.send(("run", _solve_cpsat(case, problem, seconds, seed, workers)))
+    except BaseException:  # noqa: BLE001 - reported by the parent.
+        conn.send(("error", traceback.format_exc(limit=6)))
+
+
+def _solve_cpsat_bounded(
+    case: Any, instance: str, seconds: float, seed: int, workers: int, deadline: float
+) -> SolverRun:
+    """Run CP-SAT in a child process and stop it at `deadline` seconds.
+
+    CP-SAT's own time limit starts only after the model is built, and some
+    models (pairwise encodings of large instances) take minutes and gigabytes
+    to build. Without a wall-clock bound one such instance stalls or kills
+    the whole run, so a child still going at the deadline is reported as
+    "no solution in time".
+    """
+    context = multiprocessing.get_context("spawn")
+    receive, send = context.Pipe(duplex=False)
+    child = context.Process(
+        target=_cpsat_child,
+        args=(case.__spec__.name, instance, seconds, seed, workers, send),
+        daemon=True,
+    )
+    child.start()
+    send.close()
+    try:
+        if not receive.poll(deadline):
+            return SolverRun("cp-sat", None, deadline, "no solution in time")
+        try:
+            kind, payload = receive.recv()
+        except EOFError:
+            child.join(5)
+            raise RuntimeError(
+                f"CP-SAT child process died (exit code {child.exitcode})"
+            ) from None
+    finally:
+        child.kill()
+        child.join()
+        receive.close()
+    if kind == "error":
+        raise RuntimeError(f"CP-SAT run failed:\n{payload}")
+    return payload
+
+
 def run_instance(
     case: BenchmarkCase,
     instance: str,
@@ -102,6 +174,7 @@ def run_instance(
     seconds: float,
     seed: int,
     workers: int,
+    deadline: float | None = None,
 ) -> InstanceResult:
     engine_problem = factory()
     started = time.perf_counter()
@@ -114,24 +187,13 @@ def run_instance(
         self_report=_self_report(case, engine_problem),
     )
 
-    cpsat_problem = factory()
-    started = time.perf_counter()
-    try:
-        solved = case.solve_cpsat(cpsat_problem, seconds, seed, workers)
-    except RuntimeError as error:
-        message = str(error)
-        if "status=" not in message:
-            raise
-        status = message.split("status=", 1)[1].split(")", 1)[0]
-        cpsat_run = SolverRun("cp-sat", None, time.perf_counter() - started, status)
-    else:
-        cpsat_run = SolverRun(
-            "cp-sat",
-            score_solution(case.PACKAGE, solved),
-            time.perf_counter() - started,
-            # Public CP-SAT backends return a solution, not CpSolverStatus.
-            "FEASIBLE",
+    # Only an importable case module can be rebuilt in a child process.
+    if deadline is not None and getattr(case, "__spec__", None) is not None:
+        cpsat_run = _solve_cpsat_bounded(
+            case, instance, seconds, seed, workers, deadline
         )
+    else:
+        cpsat_run = _solve_cpsat(case, factory(), seconds, seed, workers)
 
     runs = [engine_run, cpsat_run]
 
@@ -273,6 +335,13 @@ def run_cli(case: BenchmarkCase, argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--seconds", type=float, default=10.0)
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--workers", type=int, default=8)
+    parser.add_argument(
+        "--cpsat-grace",
+        type=float,
+        default=60.0,
+        help="seconds past the budget before a CP-SAT run (model build included) "
+        "is stopped and reported as no solution in time",
+    )
     parser.add_argument("--json", action="store_true", dest="as_json")
     parser.add_argument("--markdown", action="store_true")
     args = parser.parse_args(argv)
@@ -294,6 +363,7 @@ def run_cli(case: BenchmarkCase, argv: Sequence[str] | None = None) -> int:
                         args.seconds,
                         args.seed,
                         args.workers,
+                        args.seconds + args.cpsat_grace,
                     )
                 )
             )

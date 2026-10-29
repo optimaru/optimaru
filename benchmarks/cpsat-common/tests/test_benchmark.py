@@ -53,3 +53,15 @@ def test_a_failed_instance_fails_the_run(capsys) -> None:
             raise ValueError("boom")
 
     assert benchmark.run_cli(Broken, ["--json", "--seconds", "0.01"]) == 1
+
+
+def test_a_stalled_cpsat_run_is_stopped_at_the_deadline() -> None:
+    import time
+
+    import _stalled_case
+
+    started = time.perf_counter()
+    run = benchmark._solve_cpsat_bounded(_stalled_case, "only", 0.1, 1, 1, deadline=3.0)
+    assert time.perf_counter() - started < 30
+    assert run.score is None
+    assert run.status == "no solution in time"
