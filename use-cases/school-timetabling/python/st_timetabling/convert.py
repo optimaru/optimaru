@@ -362,7 +362,7 @@ def convert_solution(
     Special rooms: the same greedy pass as cpsat's rooms.assign_rooms — per
     (type, time) keep the room a course used before, otherwise take free rooms
     in order. H6 being hard, it always succeeds on a hard-0 solution; only a
-    solution with hard violations left (UNKNOWN) can report room_id=null plus a
+    solution with hard violations left (INFEASIBLE) can report room_id=null plus a
     note.
 
     penalties are the engine breakdown's raw S1–S6 counts (same meaning as
@@ -379,7 +379,7 @@ def convert_solution(
     breakdown = canon.compute_breakdown(table)
     partial = unassigned_weight is not None
     # In partial timetabling H1 is not hard: unassigned lessons are the model's
-    # choice and must not make the status UNKNOWN (cpsat's relaxed mode reports OPTIMAL/FEASIBLE).
+    # choice and must not make the status INFEASIBLE (cpsat's relaxed mode reports OPTIMAL/FEASIBLE).
     hard_total = breakdown.hard_total() - (breakdown.unassigned if partial else 0)
     notes: list[str] = list(converted.notes)
     assignment = table.assignment()
@@ -433,8 +433,9 @@ def convert_solution(
                     f"(day {day} period {period}) — the solution still has hard violations"
                 )
 
-    # Local search proves neither optimality nor infeasibility: hard 0 is FEASIBLE,
-    # anything else UNKNOWN (the assignment is still returned, explained in notes).
+    # Hard 0 is FEASIBLE; hard violations left at the time limit are reported as
+    # INFEASIBLE (not proven — local search proves neither optimality nor
+    # infeasibility). The best assignment is still returned, explained in notes.
     feasible = hard_total == 0
     if not feasible:
         notes.append(f"hard violations left: {hard_total}")
@@ -447,7 +448,7 @@ def convert_solution(
         if breakdown.unassigned:
             notes.append(f"{breakdown.unassigned} periods unassigned (H1 relaxed — the rest is a partial solution)")
     return {
-        "status": "FEASIBLE" if feasible else "UNKNOWN",
+        "status": "FEASIBLE" if feasible else "INFEASIBLE",
         "lessons": lessons_out,
         "objective_value": objective,
         "best_objective_bound": None,

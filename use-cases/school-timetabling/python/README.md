@@ -28,7 +28,7 @@ uv run pytest -q
 import st_timetabling as st
 
 result = st.solve(problem_dict, time_limit_seconds=10.0, random_seed=42)
-print(result["status"])  # FEASIBLE (hard 0) | UNKNOWN
+print(result["status"])  # FEASIBLE (hard 0) | INFEASIBLE (hard violations left)
 print(result["penalties"])  # raw S1–S6 counts (same keys as cpsat)
 print(result["objective_value"])  # weighted penalty sum (same unit as cpsat)
 for lesson in result["lessons"]:
@@ -90,7 +90,7 @@ Rules:
   assembly's effective S weights (an override takes its value, a dropped term
   0) — hence S weights must be non-negative integers. `status` follows the
   canonical hard rescore too, so an assembly that demotes a hard constraint to
-  soft and ends violating it is UNKNOWN.
+  soft and ends violating it is INFEASIBLE.
 - **H1 (`unassigned_lesson`) is the exception**: demoted to soft, unassigned
   lessons become a **result** instead of a violation (the same contract as
   cpsat's `WeeklyPeriodCounts(hard=false)` = `solve_partial`). The search gains
@@ -145,11 +145,12 @@ Rules:
 With full parity, what remains are properties of the search and the design, not of expressiveness:
 
 - Local search **cannot prove** optimality or infeasibility: status is only
-  FEASIBLE (hard 0) or UNKNOWN, and `best_objective_bound` is always null (use
-  the cpsat backend when you need a proof).
+  FEASIBLE (hard 0) or INFEASIBLE (hard violations left at the time limit —
+  not a proof), and `best_objective_bound` is always null (use the cpsat
+  backend when you need a proof).
 - Bitmask design limits: periods <= 16, weekday index < 8 (a larger calendar
   is rejected with ValueError).
-- A solution with hard violations left (UNKNOWN) may report unassigned lessons
+- A solution with hard violations left (INFEASIBLE) may report unassigned lessons
   or missing special rooms in `notes`. On a hard-0 solution notes are always
   empty.
 

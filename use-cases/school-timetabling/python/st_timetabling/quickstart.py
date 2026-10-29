@@ -329,13 +329,14 @@ def convert_solution(converted: ConvertedProblem, *, wall_time_seconds: float = 
             }
         )
 
-    # Local search proves neither optimality nor infeasibility: hard 0 is FEASIBLE,
-    # anything else UNKNOWN (the assignment is still returned, explained in notes).
+    # Hard 0 is FEASIBLE; hard violations left at the time limit are reported as
+    # INFEASIBLE (not proven — local search proves neither optimality nor
+    # infeasibility). The best assignment is still returned, explained in notes.
     feasible = score.hard == 0
     if not feasible:
         notes.append(f"hard violations left: {score}")
     return {
-        "status": "FEASIBLE" if feasible else "UNKNOWN",
+        "status": "FEASIBLE" if feasible else "INFEASIBLE",
         "lessons": lessons_out,
         # The negated engine soft score (approximates the penalty sum). Its unit
         # differs from the canonical objective — see the soft-objective entry in notes.
