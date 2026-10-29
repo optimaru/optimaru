@@ -101,7 +101,7 @@ struct Breakdown
     }
 };
 
-// Port of the Timefold conference-scheduling
+// Port of the reference conference-scheduling
 // ConferenceSchedulingConstraintProvider (16 hard + 20 soft constraints),
 // plus one synthetic hard constraint replacing the quickstart's per-TalkType
 // value ranges.

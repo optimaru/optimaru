@@ -15,8 +15,8 @@ from setuptools import setup
 from pybind11.setup_helpers import Pybind11Extension, build_ext
 
 CORE = os.path.join("..", "cpp")
-# The header-only generic engine (include/), consumed the way the Java
-# quickstarts consume the ai.timefold.solver dependency.
+# The header-only generic engine (include/), consumed as an external
+# header-only dependency.
 ENGINE = os.path.join("..", "..", "..", "include")
 
 ext_modules = [

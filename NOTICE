@@ -6,13 +6,27 @@ modelled on Timefold Solver (https://github.com/TimefoldAI/timefold-solver),
 which is licensed under the Apache License, Version 2.0.
 Copyright Timefold BV and contributors.
 
+The domain models and constraint definitions of the following use cases are
+C++ translations, with modifications, of the corresponding examples in
+Timefold Quickstarts (https://github.com/TimefoldAI/timefold-quickstarts),
+licensed under the Apache License, Version 2.0. Timefold Quickstarts is a
+derivative work of OptaPlanner Quickstarts, Copyright Red Hat, Inc.,
+affiliates, and contributors.
+
+  use-cases/bed-allocation
+  use-cases/conference-scheduling
+  use-cases/facility-location
+  use-cases/flight-crew-scheduling
+  use-cases/food-packaging
+  use-cases/maintenance-scheduling
+  use-cases/meeting-scheduling
+  use-cases/order-picking
+  use-cases/project-job-scheduling
+  use-cases/school-timetabling
+  use-cases/sports-league-scheduling
+  use-cases/task-assigning
+  use-cases/tournament-scheduling
+  use-cases/vehicle-routing
+
 optimaru is an independent C++ implementation and is not affiliated with or
 endorsed by Timefold BV. "Timefold" is a trademark of Timefold BV.
-
-benchmarks/timefold-quickstarts contains the domain models and constraint
-providers of twelve Timefold quickstarts (timefold-quickstarts v2.6.0,
-https://github.com/TimefoldAI/timefold-quickstarts), licensed under the
-Apache License, Version 2.0, and used for benchmarking only. Timefold
-Quickstarts is a derivative work of OptaPlanner Quickstarts, Copyright Red
-Hat, Inc., affiliates, and contributors. Modifications are listed in
-benchmarks/timefold-quickstarts/README.md.

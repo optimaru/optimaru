@@ -1,4 +1,4 @@
-# CVRPLIB Set X: the engine beside OR-Tools Routing and Timefold Solver.
+# CVRPLIB Set X: the engine beside OR-Tools Routing.
 #
 # Same instances, fleet sizes, rounded integer distances, wall-clock budget
 # and independent rescoring for every backend. Report, not a gate, on
@@ -28,7 +28,7 @@ on:
         description: "Instances per size bucket (0 = all 100, ~300 min for three backends at 60s)"
         default: "1"
       backends:
-        description: "Comma-separated backends (engine,ortools,timefold) or all"
+        description: "Comma-separated backends (engine,ortools) or all"
         default: "all"
 
 jobs:
@@ -52,13 +52,6 @@ jobs:
           enable-cache: true
           cache-dependency-glob: benchmarks/vehicle-routing/uv.lock
 
-      - name: Set up Java 21
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "21"
-          cache: maven
-
       - name: Cache C++ compilation
         uses: hendrikmuhs/ccache-action@v1.2
         with:
@@ -70,8 +63,6 @@ jobs:
           CC: ccache cc
           CXX: ccache c++
 
-      - name: Build the Timefold runner
-        run: mvn -B -q -f timefold/pom.xml package
 
       # Instance files only; --refresh-catalog re-reads the BKS every run so a
       # best-known-solution update is picked up.

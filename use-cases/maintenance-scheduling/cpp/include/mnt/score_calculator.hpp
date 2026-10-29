@@ -8,7 +8,7 @@
 namespace mnt
 {
 
-// Port of the Timefold maintenance-scheduling
+// Port of the reference maintenance-scheduling
 // MaintenanceScheduleConstraintProvider.
 //
 // calculateScore does a full recompute — the reference the incremental

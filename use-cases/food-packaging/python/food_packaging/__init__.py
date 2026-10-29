@@ -1,6 +1,6 @@
 """Food packaging — Python wrapper of the C++ solver on the optimaru engine.
 
-A port of the Timefold quickstart `food-packaging`: assigns packaging jobs (Job) to
+A port of the `food-packaging` example model: assigns packaging jobs (Job) to
 production lines (Line) in order. The Java domain's Line.jobs
 (@PlanningListVariable, allowsUnassignedValues=true) maps 1:1 onto the engine's LIST
 variable, and "unassigned" is an extra unassigned pool list exposed to the engine.

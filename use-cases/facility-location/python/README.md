@@ -1,6 +1,6 @@
 # facility_location (Python)
 
-The pybind11 package of the Timefold quickstart facility-location port (`../cpp`).
+The pybind11 package of the facility-location example-model port (`../cpp`).
 Picks one facility per consumer — `Consumer.facility` is the only
 planning variable (facility index, -1 = unassigned).
 

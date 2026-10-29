@@ -17,7 +17,7 @@ namespace pjs
 // ---------------------------------------------------------------------------
 // Plugin-style constraint components (the school-timetabling pattern)
 // ---------------------------------------------------------------------------
-// The four constraints of the Timefold project-job-scheduling
+// The four constraints of the reference project-job-scheduling
 // ProjectJobSchedulingConstraintProvider, split into one small component each
 // on the engine's DecomposedScoreCalculator — an optional assembly path NEXT
 // TO the monolithic ProjectJobSchedulingIncrementalScoreCalculator, which

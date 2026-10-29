@@ -8,7 +8,7 @@
 namespace st
 {
 
-// Port of the Timefold school-timetabling TimeTableConstraintProvider, plus
+// Port of the reference school-timetabling TimeTableConstraintProvider, plus
 // one extension (teacherUnavailable).
 //
 // calculateScore does a full recompute — the reference the incremental

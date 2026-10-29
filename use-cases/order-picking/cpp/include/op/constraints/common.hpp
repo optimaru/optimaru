@@ -15,7 +15,7 @@ namespace op
 // ---------------------------------------------------------------------------
 // Plugin-style constraint components (the school-timetabling pattern)
 // ---------------------------------------------------------------------------
-// The four constraints of the Timefold order-picking
+// The four constraints of the reference order-picking
 // OrderPickingConstraintProvider, split into one small component each on the
 // engine's DecomposedScoreCalculator — an optional assembly path NEXT TO the
 // monolithic OrderPickingIncrementalScoreCalculator, which stays the tuned

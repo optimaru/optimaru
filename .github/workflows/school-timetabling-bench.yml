@@ -4,12 +4,11 @@
 # Gates:
 #   1. C++ domain tests must pass (st_test + canonical_test, including the
 #      incremental-vs-full and hot-set consistency checks).
-#   2. Score-calculator parity: the fixed cross-check instance must produce a
-#      byte-identical score on the C++ side and on the stock Java
-#      TimetableConstraintProvider of timefold-quickstarts v2.6.0.
+#   2. Score-calculator parity: the fixed cross-check instance must produce the
+#      same score on the C++ side and in the shared evaluator (evaluate.py).
 # Report (not a gate), published to the job summary:
 #   Track 1 — the quickstart's six constraints, identical instances solved by
-#     this repo's C++ engine, OR-Tools CP-SAT and the real Timefold (Java);
+#     this repo's C++ engine and OR-Tools CP-SAT;
 #     every solution is re-scored by the shared evaluator (benchmarks/school-timetabling/evaluate.py).
 #   Track 2 — the canonical full-constraint model (H1~H10 + S1~S6), the C++
 #     canonical solver (st_timetabling) vs CP-SAT (teacher_scheduling); both
@@ -49,7 +48,6 @@ jobs:
     env:
       SECONDS_BUDGET: ${{ github.event.inputs.seconds || '10' }}
       QBENCH_DIR: ${{ github.workspace }}/qbench
-      QUICKSTARTS: ${{ github.workspace }}/timefold-quickstarts
       # Both the bench venv and the in-place pybind extension must use the
       # same interpreter ABI (the extension is imported from the source tree).
       UV_PYTHON: "3.14"
@@ -77,49 +75,6 @@ jobs:
           mkdir -p "$QBENCH_DIR"
           ./build/st/st_quality_bench crosscheck "$QBENCH_DIR/crosscheck.json" | tee cpp_crosscheck.txt
 
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "21"
-
-      - name: Cache Maven repository and wrapper distribution
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.m2/repository
-            ~/.m2/wrapper
-          key: st-bench-m2-${{ runner.os }}-${{ hashFiles('.github/workflows/school-timetabling-bench.yml') }}
-          restore-keys: st-bench-m2-${{ runner.os }}-
-
-      - name: Clone Timefold quickstarts, bootstrap mvnw, install cross-check tests
-        # The quickstarts repo ships no Maven wrapper; bootstrap the official
-        # only-script wrapper (same procedure as benchmarks/school-timetabling/timefold/README.md).
-        run: |
-          git clone --depth 1 -b v2.6.0 https://github.com/TimefoldAI/timefold-quickstarts.git "$QUICKSTARTS"
-          cd "$QUICKSTARTS/use-cases/school-timetabling"
-          mkdir -p .mvn/wrapper
-          curl -fsSL -o mvnw https://raw.githubusercontent.com/apache/maven-wrapper/maven-wrapper-3.3.4/maven-wrapper-distribution/src/resources/only-mvnw
-          chmod +x mvnw
-          printf 'distributionUrl=https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/3.9.11/apache-maven-3.9.11-bin.zip\nwrapperVersion=3.3.4\ndistributionType=only-script\n' \
-            > .mvn/wrapper/maven-wrapper.properties
-          cp "$GITHUB_WORKSPACE"/benchmarks/school-timetabling/timefold/*.java \
-            src/test/java/org/acme/schooltimetabling/solver/
-
-      - name: Java cross-check score (stock TimetableConstraintProvider)
-        working-directory: timefold-quickstarts/use-cases/school-timetabling
-        run: |
-          ./mvnw -q -B test -Dtest=CrossCheckScoreTest -Dsurefire.failIfNoSpecifiedTests=false \
-            -Dcrosscheck.file="$QBENCH_DIR/crosscheck.json" \
-            | tee "$GITHUB_WORKSPACE/java_crosscheck.txt"
-
-      - name: Assert byte-identical cross-check scores
-        run: |
-          cpp=$(grep -o 'CROSSCHECK_SCORE=.*' cpp_crosscheck.txt)
-          java=$(grep -o 'CROSSCHECK_SCORE=.*' java_crosscheck.txt)
-          echo "C++ : $cpp"
-          echo "Java: $java"
-          test -n "$cpp" && test "$cpp" = "$java"
-
       - name: Install uv (with package cache)
         uses: astral-sh/setup-uv@v5
         with:
@@ -146,15 +101,15 @@ jobs:
           CC: ccache cc
           CXX: ccache c++
 
-      - name: Track 1 — quickstart six constraints, 3-way (C++ / CP-SAT / Java)
+      - name: Track 1 — quickstart six constraints (C++ / CP-SAT)
         # Re-runs the cross-check parity gate internally, then solves the
-        # S/M/L instances with all three solvers and re-scores every solution
+        # S/M/L instances with both solvers and re-scores every solution
         # with the shared evaluator.
         working-directory: benchmarks/school-timetabling
         run: |
           uv run run_bench.py --sizes S,M,L --seconds "$SECONDS_BUDGET" \
             --cpp-bin "$GITHUB_WORKSPACE/build/st/st_quality_bench" \
-            --quickstarts "$QUICKSTARTS" --out-dir "$QBENCH_DIR"
+            --out-dir "$QBENCH_DIR"
 
       - name: Track 2 — canonical full-parity model (C++ canonical vs CP-SAT)
         working-directory: benchmarks/school-timetabling
@@ -174,7 +129,7 @@ jobs:
             echo "# school-timetabling quality bench (${SECONDS_BUDGET}s per instance per solver)"
             echo ""
             echo "Cross-check parity: $(grep -o 'CROSSCHECK_SCORE=.*' cpp_crosscheck.txt)" \
-              "(byte-identical: C++ / stock Java provider / evaluate.py)"
+              "(C++ / evaluate.py)"
             echo ""
             cat "$QBENCH_DIR/RESULTS_track1.md"
             echo ""
@@ -191,4 +146,3 @@ jobs:
           path: |
             qbench/
             cpp_crosscheck.txt
-            java_crosscheck.txt

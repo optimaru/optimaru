@@ -3,7 +3,7 @@
 
 // Umbrella header: everything a quickstart needs. The layout under
 // include/optimaru/ mirrors the upstream Java core's package structure
-// (ai.timefold.solver.core.{api,config,impl,preview}).
+// (api, config, impl, preview); see NOTICE.
 
 #include "optimaru/api/domain/solution_descriptor.hpp"
 #include "optimaru/api/domain/variable/variable_listener.hpp"

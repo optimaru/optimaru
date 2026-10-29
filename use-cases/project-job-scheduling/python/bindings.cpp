@@ -28,7 +28,7 @@ namespace tfpy = optimaru::python;
 PYBIND11_MODULE(_core, m)
 {
     m.doc() = "Project job scheduling (multi-project RCPSP with execution "
-              "modes) — Timefold engine-backed C++ wrapper exposed to Python";
+              "modes) — optimaru engine-backed C++ wrapper exposed to Python";
 
     py::class_<Score>(m, "Score", py::module_local())
         .def_readonly("hard", &Score::hard)

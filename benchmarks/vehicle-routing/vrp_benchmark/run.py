@@ -1,4 +1,4 @@
-"""CVRP benchmark: optimaru vs OR-Tools Routing vs Timefold Solver.
+"""CVRP benchmark: optimaru vs OR-Tools Routing.
 
 Every backend gets the same instance, fleet size (`-kN`), rounded integer
 distance matrix, wall-clock budget and seed, runs single-threaded, and its

@@ -16,7 +16,7 @@ namespace ms
 // ---------------------------------------------------------------------------
 // Plugin-style constraint components (the school-timetabling pattern)
 // ---------------------------------------------------------------------------
-// The twelve constraints of the Timefold meeting-scheduling
+// The twelve constraints of the reference meeting-scheduling
 // MeetingSchedulingConstraintProvider, split into one small component each on
 // the engine's DecomposedScoreCalculator — an optional assembly path NEXT TO
 // the monolithic MeetingSchedulingIncrementalScoreCalculator, which stays the

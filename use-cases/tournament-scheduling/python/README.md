@@ -1,6 +1,6 @@
 # tournament_scheduling
 
-Timefold quickstart [tournament-scheduling](https://github.com/TimefoldAI/timefold-quickstarts/tree/stable/use-cases/tournament-scheduling)
+The `tournament-scheduling` example model (Apache-2.0; see the repository NOTICE)
 (Java/Quarkus) ported onto the C++ engine in `include/optimaru/`. Assigns teams to the daily
 match slots (TeamAssignment) — the C++ domain/calculators are in `../cpp`; this package
 holds their pybind11 bindings (`tournament_scheduling._core`) and the pydantic mirror.
@@ -14,7 +14,7 @@ holds their pybind11 bindings (`tournament_scheduling._core`) and the pydantic m
 | fairAssignmentCountPerTeam | Medium | fair assignment counts per team (LoadBalance unfairness) |
 | evenlyConfrontationCount | Soft | even head-to-head counts per team pair (LoadBalance unfairness) |
 
-"Unfairness" is exactly Timefold `LoadBalance::unfairness`:
+"Unfairness" is the load-balance unfairness of the reference model:
 `sqrt(sum(load^2) - sum(load)^2 / n)` rounded to 6 significant digits (HALF_EVEN).
 `n` is the number of items with load ≥ 1 (the Java original has no complement, so teams
 without assignments / pairs without head-to-heads are not counted).

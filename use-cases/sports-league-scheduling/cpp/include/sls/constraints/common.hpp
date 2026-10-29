@@ -18,7 +18,7 @@ namespace sls
 // ---------------------------------------------------------------------------
 // Plugin-style constraint components (the school-timetabling pattern)
 // ---------------------------------------------------------------------------
-// The ten constraints of the Timefold sports-league-scheduling
+// The ten constraints of the reference sports-league-scheduling
 // SportsLeagueSchedulingConstraintProvider, split into one small component
 // each on the engine's DecomposedScoreCalculator — an optional assembly path
 // NEXT TO the monolithic SportsLeagueSchedulingIncrementalScoreCalculator,

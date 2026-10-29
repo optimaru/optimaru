@@ -1,6 +1,6 @@
 # Facility Location
 
-Timefold quickstart [facility-location](https://github.com/TimefoldAI/timefold-quickstarts/tree/stable/use-cases/facility-location)
+The `facility-location` example model (Apache-2.0; see the repository NOTICE)
 (Java/Quarkus) ported onto this repository's C++ engine (`include/optimaru/`).
 The classic FLP: pick one facility for every consumer.
 
@@ -132,6 +132,4 @@ solver's `solve` before the engine runs — the engine only fills what is still 
 
 ## Benchmark
 
-[`benchmarks/facility-location`](../../benchmarks/facility-location) compares this use case with OR-Tools CP-SAT and Timefold Solver 2.6.0 on the same instances. Every solution is rescored by the Timefold quickstart's `ConstraintProvider`, so all three are judged by the same rules.
-
-Latest run (30 s per solver, 3 instances): best score by the engine on 1, CP-SAT on 3, Timefold on 0 (ties count for each). Full table: [benchmarks/facility-location/README.md](../../benchmarks/facility-location/README.md#results).
+[`benchmarks/facility-location`](../../benchmarks/facility-location) compares this use case with OR-Tools CP-SAT on the same instances.

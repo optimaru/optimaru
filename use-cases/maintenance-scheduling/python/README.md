@@ -1,6 +1,6 @@
 # maintenance_scheduling (Python)
 
-The pybind11 package of the Timefold quickstart maintenance-scheduling port (`../cpp`).
+The pybind11 package of the maintenance-scheduling example-model port (`../cpp`).
 For the detailed domain/constraint description see [`../README.md`](../README.md).
 
 ## Install / test

@@ -1,6 +1,6 @@
 # conference_scheduling — Conference Scheduling (C++ engine + pybind11)
 
-Timefold quickstart [conference-scheduling](https://github.com/TimefoldAI/timefold-quickstarts/tree/stable/use-cases/conference-scheduling)
+The `conference-scheduling` example model (Apache-2.0; see the repository NOTICE)
 C++ port (`../cpp`, namespace `cs`) for use from Python.
 Assigns every talk (`Talk`) a (timeslot, room) — `Talk.slot_room` is the
 planning variable (-1 = unassigned; the value is the composite encoding

@@ -16,7 +16,7 @@ namespace fcs
 // ---------------------------------------------------------------------------
 // Plugin-style constraint components (the school-timetabling pattern)
 // ---------------------------------------------------------------------------
-// The six constraints of the Timefold flight-crew-scheduling
+// The six constraints of the reference flight-crew-scheduling
 // FlightCrewSchedulingConstraintProvider, split into one small component each
 // on the engine's DecomposedScoreCalculator — an optional assembly path NEXT
 // TO the monolithic FlightCrewSchedulingIncrementalScoreCalculator, which

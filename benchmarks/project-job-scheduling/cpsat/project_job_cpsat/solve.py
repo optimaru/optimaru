@@ -191,7 +191,7 @@ def solve(
     )
     if _strict_resources:
         # Public RCPSP benchmarks define capacities as mandatory. The normal
-        # API keeps Timefold's score semantics (hard violations may exist in
+        # API keeps the reference model's score semantics (hard violations may exist in
         # an intermediate/final incumbent); this benchmark hook additionally
         # cuts those incumbents from the exact model.
         for resource in problem.resources:

@@ -1,4 +1,4 @@
-"""Order picking — C++ core (Timefold order-picking quickstart port) with Python helpers.
+"""Order picking — C++ core (C++ port of the order-picking example model) with Python helpers.
 
 `Side`, `WarehouseLocation`, `Order`, `PickTask`, `Trolley`,
 `OrderPickingSolution`, `Score`, `ConstraintTotals`, `Solver`, `SolverConfig`

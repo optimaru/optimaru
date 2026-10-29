@@ -55,46 +55,6 @@ def solve_cpsat(problem: Any, seconds: float, seed: int, workers: int) -> Any:
     return solved.to_core()
 
 
-
-# --- Timefold quickstart (benchmarks/timefold-quickstarts) ---------------------
-
-TIMEFOLD = "sports-league-scheduling"
-
-
-def to_timefold(problem: Any) -> dict:
-    teams, rounds = problem.teams, problem.rounds
-    distance = problem.distance_to_team
-    return {
-        "rounds": [{"index": r.index, "weekendOrHoliday": r.weekend_or_holiday} for r in rounds],
-        "teams": [
-            {
-                "id": t.id,
-                "name": t.name,
-                "distanceToTeam": {other.id: distance[i][j] for j, other in enumerate(teams) if j != i},
-            }
-            for i, t in enumerate(teams)
-        ],
-        "matches": [
-            {
-                "id": m.id,
-                "homeTeam": teams[m.home_team].id,
-                "awayTeam": teams[m.away_team].id,
-                "classicMatch": m.classic_match,
-                "round": rounds[m.round].index if m.round >= 0 else None,
-            }
-            for m in problem.matches
-        ],
-    }
-
-
-def from_timefold(problem: Any, result: dict) -> None:
-    index = {str(r.index): i for i, r in enumerate(problem.rounds)}
-    chosen = result["assignment"]["Match"]
-    problem.set_assignment(
-        [index[chosen[m.id]["round"]] if chosen[m.id]["round"] is not None else -1 for m in problem.matches]
-    )
-
-
 def main(argv: list[str] | None = None) -> int:
     return run_cli(sys.modules[__name__], argv)
 

@@ -17,7 +17,7 @@ namespace fp
 // ---------------------------------------------------------------------------
 // Plugin-style constraint components (the school-timetabling pattern)
 // ---------------------------------------------------------------------------
-// The five constraints of the Timefold food-packaging
+// The five constraints of the reference food-packaging
 // FoodPackagingConstraintProvider, split into one small component each on the
 // engine's DecomposedScoreCalculator — an optional assembly path NEXT TO the
 // monolithic FoodPackagingIncrementalScoreCalculator, which stays the tuned

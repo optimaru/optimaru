@@ -1,7 +1,7 @@
 # Vehicle Routing — C++ port
 
-A C++17 port of the optimization **core** of the Timefold `vehicle-routing`
-Java quickstart: the domain model, the scoring (HardMediumSoftScore) and the
+A C++17 port of the optimization **core** of the `vehicle-routing`
+Java example model (Apache-2.0; see the repository NOTICE): the domain model, the scoring (HardMediumSoftScore) and the
 solve, running on the generic engine in [`include/optimaru/`](../../../include/optimaru).
 
 Scope: optimization core only — no REST layer, no web UI.
@@ -18,7 +18,7 @@ cmake -B build && cmake --build build
 
 ## How it maps to the Java code
 
-| Java (Timefold)                                             | C++ port                                        |
+| Java (reference model)                                      | C++ port                                        |
 | ----------------------------------------------------------- | ----------------------------------------------- |
 | `@PlanningSolution VehicleRoutePlan`                        | `struct VehicleRoutePlan` (`domain.hpp`)        |
 | `@PlanningEntity Vehicle` + `@PlanningListVariable visits`  | `struct Vehicle` + `std::vector<int> visitIndices` |
@@ -27,7 +27,7 @@ cmake -B build && cmake --build build
 | `HardMediumSoftScore`                                       | `struct Score` (lexicographic compare)          |
 | `HaversineDrivingTimeCalculator`                            | `haversine.{hpp,cpp}` (identical formula)       |
 | `VehicleRoutingConstraintProvider` (4 constraints)          | `ScoreCalculator` (reference) + `VehicleRoutingIncrementalScoreCalculator` (live) |
-| Timefold engine: Construction Heuristic + Local Search      | `include/optimaru/`'s `optimaru::Solver`, wrapped by `Solver` |
+| Java engine: Construction Heuristic + Local Search          | `include/optimaru/`'s `optimaru::Solver`, wrapped by `Solver` |
 | `termination.spent-limit=30s`                               | `Solver::Config::spentLimit`                    |
 | test `best-score-limit=0hard/0medium/*soft`                 | `Solver::Config::bestScoreLimit = {0,0,min}`    |
 

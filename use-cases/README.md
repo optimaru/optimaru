@@ -2,7 +2,7 @@
 
 Each directory is an independent problem built on the engine in
 [`include/optimaru/`](../include/optimaru). Competing solvers (OR-Tools
-CP-SAT / Routing, Timefold) never live here — they are in
+CP-SAT / Routing) never live here — they are in
 [`benchmarks/`](../benchmarks).
 
 | Use case | Kind | Python package |

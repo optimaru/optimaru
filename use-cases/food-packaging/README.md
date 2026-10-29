@@ -1,6 +1,6 @@
 # Food Packaging (C++ / Python)
 
-A C++ engine port of the Timefold quickstart [food-packaging](https://github.com/TimefoldAI/timefold-quickstarts/tree/stable/use-cases/food-packaging).
+A C++ engine port of the The `food-packaging` example model (Apache-2.0; see the repository NOTICE).
 Assigns packaging jobs (Job) to production lines (Line) **in order** — every product change
 inserts a cleanup time that depends on the previous product, and the cleaning windows of
 lines run by the same operator must not overlap.
@@ -89,6 +89,4 @@ solver's `solve` before the engine runs — the engine only fills what is still 
 
 ## Benchmark
 
-[`benchmarks/food-packaging`](../../benchmarks/food-packaging) compares this use case with OR-Tools CP-SAT and Timefold Solver 2.6.0 on the same instances. Every solution is rescored by the Timefold quickstart's `ConstraintProvider`, so all three are judged by the same rules.
-
-Latest run (30 s per solver, 1 instance): best score by the engine on 1, CP-SAT on 0, Timefold on 0 (ties count for each). Full table: [benchmarks/food-packaging/README.md](../../benchmarks/food-packaging/README.md#results).
+[`benchmarks/food-packaging`](../../benchmarks/food-packaging) compares this use case with OR-Tools CP-SAT on the same instances.

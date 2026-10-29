@@ -1,6 +1,6 @@
 # Maintenance Scheduling (C++ / Python)
 
-Timefold quickstart [maintenance-scheduling](https://github.com/TimefoldAI/timefold-quickstarts/tree/stable/use-cases/maintenance-scheduling)
+The `maintenance-scheduling` example model (Apache-2.0; see the repository NOTICE)
 port: assigns a crew (Crew) and a start date to maintenance jobs (Job) to minimize early/late
 maintenance. A C++ domain on top of the generic engine in `include/optimaru/` (late acceptance
 + ALNS), with a Python package (`maintenance_scheduling`) via pybind11.
@@ -122,6 +122,4 @@ solver's `solve` before the engine runs — the engine only fills what is still 
 
 ## Benchmark
 
-[`benchmarks/maintenance-scheduling`](../../benchmarks/maintenance-scheduling) compares this use case with OR-Tools CP-SAT and Timefold Solver 2.6.0 on the same instances. Every solution is rescored by the Timefold quickstart's `ConstraintProvider`, so all three are judged by the same rules.
-
-Latest run (30 s per solver, 2 instances): best score by the engine on 0, CP-SAT on 1, Timefold on 1 (ties count for each). Full table: [benchmarks/maintenance-scheduling/README.md](../../benchmarks/maintenance-scheduling/README.md#results).
+[`benchmarks/maintenance-scheduling`](../../benchmarks/maintenance-scheduling) compares this use case with OR-Tools CP-SAT on the same instances.

@@ -10,7 +10,7 @@ namespace optimaru {
 // Simulated Annealing: a worse move is accepted with probability
 // exp(delta / temperature), per score level, with the temperature cooling
 // linearly from startingTemperature to ~0 over the solve's time limit
-// (Timefold's default time-gradient cooling).
+// (time-gradient cooling).
 class SimulatedAnnealingAcceptor final : public Acceptor {
 public:
     explicit SimulatedAnnealingAcceptor(const HardSoftScore& startingTemperature)

@@ -111,7 +111,7 @@ def test_explicit_constraint_list_replaces_defaults() -> None:
     assert solved.score_hard == 0  # capacity was not selected
 
 
-def test_accepts_the_same_domain_constraint_object_as_timefold() -> None:
+def test_accepts_the_same_domain_constraint_object_as_the_engine() -> None:
     problem = FacilityLocationProblemModel(
         facilities=[
             FacilityModel(

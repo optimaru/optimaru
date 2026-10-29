@@ -1,6 +1,6 @@
 # Order picking (C++)
 
-Timefold quickstart [order-picking](https://github.com/TimefoldAI/timefold-quickstarts)
+The `order-picking` example model (Apache-2.0; see the repository NOTICE)
 Port: only the domain and constraints are implemented, on top of the generic engine (`../../../include`, header-only).
 
 - `include/op/domain.hpp` — warehouse layout (5 shelf columns x 3 rows, left/right sides, rows 0-10),

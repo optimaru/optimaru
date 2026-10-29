@@ -17,7 +17,7 @@ namespace ts
 // ---------------------------------------------------------------------------
 // Plugin-style constraint components (the school-timetabling pattern)
 // ---------------------------------------------------------------------------
-// The four constraints of the Timefold tournament-scheduling
+// The four constraints of the reference tournament-scheduling
 // TournamentScheduleConstraintProvider, split into one small component each on
 // the engine's DecomposedScoreCalculator — an optional assembly path NEXT TO
 // the monolithic TournamentSchedulingIncrementalScoreCalculator, which stays

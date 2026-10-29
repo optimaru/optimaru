@@ -1,18 +1,17 @@
 # School timetabling benchmark — results and method
 
-Results and methodology of comparing this repository's C++ solver with the real
-Timefold (Java) and OR-Tools CP-SAT on the same instances and the same
-wall-clock budget. The benchmark runs continuously in CI through
+Results and methodology of comparing this repository's C++ solver with
+OR-Tools CP-SAT on the same instances and the same wall-clock budget. The benchmark runs continuously in CI through
 [`.github/workflows/school-timetabling-bench.yml`](../../.github/workflows/school-timetabling-bench.yml)
 (push / PR), and the harness lives in [this directory](./).
 
 ## Method
 
-There are two tracks. Track 1 measures how well the three solvers handle "the
+There are two tracks. Track 1 measures how well the solvers handle "the
 same six constraints" (pure search performance); track 2 measures the quality
 of the C++ canonical solver against CP-SAT on the full real-world model.
 
-### Track 1 — the quickstart's six constraints, three-way
+### Track 1 — the quickstart's six constraints
 
 - **Constraints**: exactly the original Java quickstart's six — roomConflict /
   teacherConflict / studentGroupConflict (hard), teacherRoomStability /
@@ -20,32 +19,26 @@ of the C++ canonical solver against CP-SAT on the full real-world model.
   `teacherUnavailable` extension of this repository's C++ domain gets empty
   data in these instances, so it contributes 0 (fairness).
 - **Instances**: `use-cases/school-timetabling/cpp/bench/st_quality_bench.cpp`
-  generates them deterministically and dumps JSON; all three solvers read the
+  generates them deterministically and dumps JSON; both solvers read the
   same file. 5 days × 8 periods = 40 slots, a 34-period weekly curriculum per
   class. Presets (classes / teachers / rooms): `S: 6/12/7 (204 lessons)`,
   `M: 12/20/13 (408 lessons)`, `L: 24/40/25 (816 lessons)`.
 - **Participants**: (1) this repository's C++ engine (`st_quality_bench`),
-  (2) the original Java Timefold solver (the quickstart's stock
-  `TimetableConstraintProvider`, timefold-quickstarts v2.6.0,
-  `timefold/QualityBenchTest.java`), (3) OR-Tools CP-SAT
+  (2) OR-Tools CP-SAT
   (`cpsat_quickstart.py` — the three hard constraints as constraints, the three
   soft ones as the objective).
 - **Fairness rules**:
-  - All three solvers get the same instance JSON and the same wall-clock
+  - Both solvers get the same instance JSON and the same wall-clock
     budget (10 s by default).
-  - C++/Java run single-threaded, CP-SAT as an 8-worker portfolio (adjustable
+  - C++ runs single-threaded, CP-SAT as an 8-worker portfolio (adjustable
     with `--workers`; same budget, different CPU use — stated in the table
     footnotes).
-  - The (day, period) → stock `Timeslot` mapping is a 09:00 + 55 min × p start
-    with 45-minute lessons, so the stock provider's "0–30 min gap" reward
-    window matches C++'s `|Δperiod| == 1` adjacency exactly (see
-    `timefold/README.md`).
 - **Cross-check gate**: a fixed instance + fixed assignment in which all six
   constraints contribute something non-zero is rescored by C++
-  (`st_quality_bench crosscheck`), the Java stock provider and the shared
-  evaluator (`evaluate.py`); the three must be **byte-identical**
+  (`st_quality_bench crosscheck`) and the shared evaluator (`evaluate.py`);
+  the two must be **identical**
   (`CROSSCHECK_SCORE=-3hard/-3soft`) before the benchmark proceeds.
-- **Rescoring**: every solution of the three solvers is rescored with the
+- **Rescoring**: every solution of both solvers is rescored with the
   shared evaluator `evaluate.py` and compared with its self-report. The table
   shows the rescored score; mismatches are shown as such.
 
@@ -77,12 +70,11 @@ of the C++ canonical solver against CP-SAT on the full real-world model.
   section of
   [`use-cases/school-timetabling/python/README.md`](../../use-cases/school-timetabling/python/README.md).
 
-## Latest measurement (local, 2026-10-29, Timefold 2.6.0)
+## Latest measurement (local, 2026-10-29)
 
 Environment: one Apple Silicon Mac (16 cores), **30 s** per instance per
-solver, seed 1, one run. Java runs the timefold-quickstarts v2.6.0 provider
-(Timefold Solver 2.6.0); CP-SAT is OR-Tools 9.15 (8 workers). The
-cross-check gate passed (C++ and Java score the fixed instance identically).
+solver, seed 1, one run. CP-SAT is OR-Tools 9.15 (8 workers). The
+cross-check gate passed.
 
 ### Track 1 (soft: higher is better; every rescore == self-report)
 
@@ -90,13 +82,10 @@ cross-check gate passed (C++ and Java score the fixed instance identically).
 | --- | --- | --- | --- | --- |
 | S: 6 classes/12 teachers/7 rooms | **cpp** | **0hard/175soft** | 0 ms | 16,128,822 |
 | S | cpsat | 0hard/164soft | 1531 ms | n/a |
-| S | java | 0hard/97soft | 125 ms | 185,192 |
 | M: 12 classes/20 teachers/13 rooms | **cpp** | **0hard/350soft** | 3 ms | 16,237,379 |
 | M | cpsat | 0hard/-16soft | 6313 ms | n/a |
-| M | java | 0hard/-1544soft | 517 ms | 161,465 |
 | L: 24 classes/40 teachers/25 rooms | **cpp** | **0hard/676soft** | 11 ms | 12,304,885 |
 | L | cpsat | n/a (no feasible solution within 30 s, UNKNOWN) | n/a | n/a |
-| L | java | 0hard/-5662soft | 1891 ms | 170,621 |
 
 ### Track 2 (weighted penalty: lower is better; validate.py rescoring)
 
@@ -115,8 +104,7 @@ refers to.
 ## Final measurement (local, 2026-08-12)
 
 Environment: Apple Silicon macOS, 10 s per instance per solver, seed 1, one
-run. Java is a Temurin-family JDK with the timefold-quickstarts stock
-provider; CP-SAT is OR-Tools 9.15 (8 workers). Absolute values depend on the
+run. CP-SAT is OR-Tools 9.15 (8 workers). Absolute values depend on the
 machine (CI runs on ubuntu-latest, 4 vCPUs), and a single seed is indicative
 only.
 
@@ -126,17 +114,14 @@ only.
 | --- | --- | --- | --- | --- |
 | S: 6 classes/12 teachers/7 rooms | **cpp** | **0hard/175soft** | 0 ms | 13,226,204 |
 | S | cpsat | 0hard/78soft | 1566 ms | n/a |
-| S | java | 0hard/-312soft | 132 ms | 177,738 |
 | M: 12 classes/20 teachers/13 rooms | **cpp** | **0hard/348soft** | 3 ms | 12,870,135 |
 | M | cpsat | 0hard/-1377soft | 6424 ms | n/a |
-| M | java | 0hard/-2658soft | 541 ms | 164,180 |
 | L: 24 classes/40 teachers/25 rooms | **cpp** | **0hard/635soft** | 11 ms | 12,273,466 |
 | L | cpsat | n/a (no feasible solution within 10 s, UNKNOWN) | n/a | n/a |
-| L | java | 0hard/-6641soft | 2242 ms | 195,175 |
 
 - moves/s: C++ is estimated from the improvement trajectory (one move per
-  step), Java uses the solver's own counter. Not applicable to CP-SAT.
-- CP-SAT runs 8 parallel workers (portfolio); C++/Java run single-threaded.
+  step). Not applicable to CP-SAT.
+- CP-SAT runs 8 parallel workers (portfolio); C++ runs single-threaded.
 - This table predates the adoption of the automatic as-move default on
   2026-08-18. Since then L cpp averages 684.8 over 6 seeds (+6.1% over
   645.7) and S/M are unchanged — see "Tuning history" (one machine, per-seed
@@ -267,20 +252,15 @@ cmake -S use-cases/school-timetabling/cpp -B build/st -DCMAKE_BUILD_TYPE=Release
 cmake --build build/st -j
 ./build/st/st_test && ./build/st/canonical_test
 
-# 1) Java track setup (once): quickstarts clone + mvnw bootstrap
-#    (the procedure in benchmarks/school-timetabling/timefold/README.md)
-git clone --depth 1 -b v2.6.0 https://github.com/TimefoldAI/timefold-quickstarts.git /tmp/tq
-
-# 2) Track 1: cross-check gate → three-way → rescoring → table (out/RESULTS_track1.md)
+# 1) Track 1: cross-check gate → C++ vs CP-SAT → rescoring → table (out/RESULTS_track1.md)
 cd benchmarks/school-timetabling
 uv run run_bench.py --sizes S,M,L --seconds 10 \
-  --cpp-bin ../../build/st/st_quality_bench --quickstarts /tmp/tq
-# C++ vs CP-SAT only, without Java: leave out --quickstarts
+  --cpp-bin ../../build/st/st_quality_bench
 
-# 3) Track-2 prerequisite: build the pybind extension in place in the source tree
+# 2) Track-2 prerequisite: build the pybind extension in place in the source tree
 ( cd ../../use-cases/school-timetabling/python && uv sync --all-groups && uv run python setup.py build_ext --inplace )
 
-# 4) Track 2: full canonical constraints (out/RESULTS_track2.md)
+# 3) Track 2: full canonical constraints (out/RESULTS_track2.md)
 uv run run_bench.py --track2 --sizes S,M,L --seconds 10
 ```
 
@@ -288,7 +268,7 @@ uv run run_bench.py --track2 --sizes S,M,L --seconds 10
 
 [`school-timetabling-bench.yml`](../../.github/workflows/school-timetabling-bench.yml)
 runs exactly that order: ccache build → `st_test`/`canonical_test` gate →
-C++/Java byte-identical cross-check gate → track-1 three-way → track 2 →
+C++/evaluator cross-check gate → track 1 → track 2 →
 both tables published in the job summary (+ instance/solution JSON uploaded as
 artifacts).
 
@@ -296,24 +276,18 @@ artifacts).
   `benchmarks/school-timetabling/**`, the workflow itself), and
   `workflow_dispatch` (per-instance budget `seconds`, default 10).
 - The runner is ubuntu-latest (4 vCPUs), so absolute values differ from the
-  tables above — the gates (tests / byte-identical) are deterministic and stay
+  tables above — the gates (tests / cross-check) are deterministic and stay
   equally valid.
 
 ## Interpretation — what fits where
 
-- **C++ engine (this repository)**: 12–13M moves/s on a single thread — about
-  70× the throughput of Java Timefold (0.16–0.2M), from the same metaheuristic
-  family — so with budgets of seconds it has the best soft quality at every
-  size, and the first feasible solution comes in milliseconds (11 ms even on
-  L). No JVM warm-up or dependencies means an instant cold start, which suits
+- **C++ engine (this repository)**: 12–13M moves/s on a single thread, so
+  with budgets of seconds it has the best soft quality at every size, and the
+  first feasible solution comes in milliseconds (11 ms even on L). No runtime
+  warm-up or dependencies means an instant cold start, which suits
   **interactive services, short budgets, large instances and rescheduling
   loops**. Limit: it is a search, so it gives no optimality proof or bound
   (`FEASIBLE`/`UNKNOWN` only).
-- **Java Timefold**: writes the same constraints declaratively as
-  ConstraintStreams and has a broad ecosystem, but under this benchmark's
-  short budgets the throughput difference becomes a quality difference. The
-  gap narrows with budgets of minutes. Choose it **to integrate into an
-  existing JVM stack, or when you need Timefold ecosystem features**.
 - **CP-SAT**: exact, so it fits **when you need an optimality proof
   (OPTIMAL/bound) or an infeasibility diagnosis, and when the problem is small
   or the budget is minutes or more**. With this benchmark's 10 s budget it is
@@ -324,6 +298,6 @@ artifacts).
   against the engine's single thread.
 
 In short: short budgets, large problems and embedding in a service — the C++
-engine; small settled schedules that need a proof — CP-SAT; JVM integration
-and ecosystem — Java. That the three implementations score identically is
-guaranteed continuously in CI by the cross-check and parity gates.
+engine; small settled schedules that need a proof — CP-SAT. That both
+implementations score identically is guaranteed continuously in CI by the
+cross-check and parity gates.

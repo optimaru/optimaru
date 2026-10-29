@@ -1,12 +1,11 @@
-"""Orchestrates the school-timetabling three-way benchmark.
+"""Orchestrates the school-timetabling benchmark.
 
 Track 1 (the quickstart's six constraints, default): the same instances are solved by
   (1) this repository's C++ engine (`st_quality_bench`),
   (2) OR-Tools CP-SAT (`cpsat_quickstart.py`),
-  (3) the original Java Timefold (the quickstart's stock provider + the tests in benchmarks/school-timetabling/timefold)
 and compared in a Markdown table (hard/soft, first-feasible time, moves/s).
-Cross-check gate first: the C++ and Java scores of a fixed instance must be
-byte-identical before the benchmark proceeds. Every solution is rescored with
+Cross-check gate first: the C++ score of a fixed instance must match
+evaluate.py before the benchmark proceeds. Every solution is rescored with
 evaluate.py and compared with its self-report.
 
 Track 2 (--track2, full canonical constraints): the S/M/L canonical problems of
@@ -15,11 +14,8 @@ canonical engine (st_timetabling.solve; "pending" if the import fails), and
 both results are rescored with cpsat's validate.py (same time limit, same problem).
 
 Example:
-    uv run run_bench.py --sizes S,M --seconds 10 --quickstarts <clone path>
+    uv run run_bench.py --sizes S,M --seconds 10
     uv run run_bench.py --track2 --sizes S,M,L --seconds 10
-
-The Java track needs a timefold-quickstarts clone (see the mvnw bootstrap in
-benchmarks/school-timetabling/timefold/README.md). Without --quickstarts, Java is skipped.
 """
 
 from __future__ import annotations
@@ -27,7 +23,6 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import shutil
 import subprocess
 import sys
 import time
@@ -64,60 +59,23 @@ def ensure_cpp_bin(explicit: str | None) -> Path:
     return binary
 
 
-# ---------------------------------------------------------------- Java common
-
-
-def _mvnw(quickstarts: Path, extra: list[str], m2: str | None, timeout: float) -> str:
-    module = quickstarts / "use-cases" / "school-timetabling"
-    mvnw = module / "mvnw"
-    if not mvnw.exists():
-        raise SystemExit(f"{mvnw} is missing — run the mvnw bootstrap of benchmarks/school-timetabling/timefold/README.md first")
-    # Copy the two tests of benchmarks/school-timetabling/timefold into the quickstart's test tree (same as CI).
-    test_dir = module / "src/test/java/org/acme/schooltimetabling/solver"
-    for java in (BENCH_DIR / "timefold").glob("*.java"):
-        shutil.copy(java, test_dir / java.name)
-    cmd = ["./mvnw", "-q", "-B", "test", "-Dsurefire.failIfNoSpecifiedTests=false", *extra]
-    if m2:
-        cmd.insert(1, f"-Dmaven.repo.local={m2}")
-    print(f"$ (cd {module}) {' '.join(cmd)}", flush=True)
-    proc = subprocess.run(cmd, cwd=module, text=True, capture_output=True, timeout=timeout, check=False)
-    if proc.returncode != 0:
-        sys.stderr.write(proc.stdout[-4000:] + proc.stderr[-2000:])
-        raise SystemExit("mvnw test failed")
-    return proc.stdout
-
-
 # ---------------------------------------------------------------- cross-check
 
 
-def crosscheck_gate(cpp_bin: Path, quickstarts: Path | None, out_dir: Path, m2: str | None) -> None:
-    """Byte-identical parity gate between the C++ and Java score calculators."""
+def crosscheck_gate(cpp_bin: Path, out_dir: Path) -> None:
+    """Parity gate between the C++ score calculator and evaluate.py."""
     crosscheck_json = out_dir / "crosscheck.json"
     proc = _run([cpp_bin, "crosscheck", crosscheck_json], capture_output=True)
     cpp_score = re.search(r"CROSSCHECK_SCORE=\S+", proc.stdout).group(0)
     print(f"C++ : {cpp_score}")
 
-    # Rescore the dumped fixed assignment with evaluate.py too (triple check).
+    # Rescore the dumped fixed assignment with evaluate.py.
     instance = load_json(crosscheck_json)
     eval_score = format_score(score_assignment(instance, [(l["timeslot"], l["room"]) for l in instance["lessons"]]))
     if cpp_score != f"CROSSCHECK_SCORE={eval_score}":
         raise SystemExit(f"evaluate.py disagrees: {eval_score}")
     print(f"eval: CROSSCHECK_SCORE={eval_score}")
-
-    if quickstarts is None:
-        print("Java: skipped (no --quickstarts)")
-        return
-    stdout = _mvnw(
-        quickstarts,
-        ["-Dtest=CrossCheckScoreTest", f"-Dcrosscheck.file={crosscheck_json}"],
-        m2,
-        timeout=1800,
-    )
-    java_score = re.search(r"CROSSCHECK_SCORE=\S+", stdout).group(0)
-    print(f"Java: {java_score}")
-    if cpp_score != java_score:
-        raise SystemExit(f"cross-check gate failed: C++ {cpp_score} != Java {java_score}")
-    print("cross-check gate: OK (byte-identical)")
+    print("cross-check gate: OK")
 
 
 # ---------------------------------------------------------------- track-1 runners
@@ -171,37 +129,6 @@ def run_cpsat(size: str, seed: int, seconds: int, out_dir: Path, workers: int) -
     }
 
 
-def run_java(quickstarts: Path, sizes: list[str], seconds: int, out_dir: Path, m2: str | None) -> dict[str, dict]:
-    stdout = _mvnw(
-        quickstarts,
-        ["-Dtest=QualityBenchTest", f"-Dqbench.dir={out_dir}", f"-Dqbench.seconds={seconds}"],
-        m2,
-        timeout=seconds * (len(sizes) + 1) + 1800,
-    )
-    results: dict[str, dict] = {}
-    current: str | None = None
-    for line in stdout.splitlines():
-        started = re.match(r"QBENCH_JAVA instance=instance_(\w+)\.json", line)
-        if started:
-            current = started.group(1)
-            results[current] = {"first_feasible_ms": None}
-        feasible = re.match(r"QBENCH_JAVA first_feasible t=(\d+)ms", line)
-        if feasible and current:
-            results[current]["first_feasible_ms"] = int(feasible.group(1))
-        final = re.match(
-            r"QBENCH_JAVA_FINAL instance=instance_(\w+)\.json score=(\S+) "
-            r"feasible=\S+ moves_per_sec=(\d+)",
-            line,
-        )
-        if final:
-            results[final.group(1)].update(
-                score=final.group(2),
-                moves_per_sec=int(final.group(3)),
-                solution=out_dir / f"instance_{final.group(1)}.solution_java.json",
-            )
-    return results
-
-
 def rescore(out_dir: Path, size: str, row: dict) -> str:
     """Rescores with the shared evaluator and compares with the self-report."""
     if not row.get("solution") or not Path(row["solution"]).exists():
@@ -218,11 +145,10 @@ def track1(args) -> None:
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     sizes = [s.strip().upper() for s in args.sizes.split(",")]
-    quickstarts = Path(args.quickstarts).resolve() if args.quickstarts else None
     cpp_bin = ensure_cpp_bin(args.cpp_bin)
 
     print("\n== cross-check gate ==")
-    crosscheck_gate(cpp_bin, quickstarts, out_dir, args.m2)
+    crosscheck_gate(cpp_bin, out_dir)
 
     rows: dict[tuple[str, str], dict] = {}
     for size in sizes:
@@ -230,13 +156,9 @@ def track1(args) -> None:
         rows[size, "cpp"] = run_cpp(cpp_bin, size, args.seed, args.seconds, out_dir)
         print(f"== CP-SAT: instance_{size} ({args.seconds}s, workers={args.workers}) ==")
         rows[size, "cpsat"] = run_cpsat(size, args.seed, args.seconds, out_dir, args.workers)
-    if quickstarts:
-        print(f"\n== Java Timefold: {', '.join(sizes)} ({args.seconds}s) ==")
-        for size, row in run_java(quickstarts, sizes, args.seconds, out_dir, args.m2).items():
-            rows[size, "java"] = row
 
     lines = [
-        f"## Track 1: quickstart six constraints, three-way ({args.seconds}s, seed {args.seed}, single seed — indicative only)",
+        f"## Track 1: quickstart six constraints ({args.seconds}s, seed {args.seed}, single seed — indicative only)",
         "",
         "| instance | solver | final (self-report) | final (rescored) | first feasible | moves/s |",
         "| --- | --- | --- | --- | --- | --- |",
@@ -244,7 +166,7 @@ def track1(args) -> None:
     for size in sizes:
         classes, teachers, rooms = PRESETS[size]
         label = f"{size}: {classes} classes/{teachers} teachers/{rooms} rooms"
-        for solver in ("cpp", "cpsat", "java"):
+        for solver in ("cpp", "cpsat"):
             row = rows.get((size, solver))
             if row is None:
                 continue
@@ -257,8 +179,8 @@ def track1(args) -> None:
             )
     lines += [
         "",
-        "- moves/s: C++ estimated from the improvement trajectory (one move per step), Java from the solver's own counter. Not applicable to CP-SAT.",
-        f"- CP-SAT runs {args.workers} parallel workers (portfolio); C++/Java run single-threaded.",
+        "- moves/s: C++ estimated from the improvement trajectory (one move per step). Not applicable to CP-SAT.",
+        f"- CP-SAT runs {args.workers} parallel workers (portfolio); C++ runs single-threaded.",
         "- Rescoring: evaluate.py (the shared evaluator of the quickstart's six constraints).",
     ]
     report = "\n".join(lines)
@@ -653,8 +575,6 @@ def main() -> int:
     parser.add_argument("--workers", type=int, default=8, help="CP-SAT worker count")
     parser.add_argument("--out-dir", default="out")
     parser.add_argument("--cpp-bin", help="path of st_quality_bench (default: built with cmake)")
-    parser.add_argument("--quickstarts", help="path of a timefold-quickstarts clone (Java track)")
-    parser.add_argument("--m2", help="Maven cache path passed as -Dmaven.repo.local")
     args = parser.parse_args()
 
     if args.track3:

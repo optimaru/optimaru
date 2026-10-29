@@ -24,7 +24,7 @@ namespace tfpy = optimaru::python;
 
 PYBIND11_MODULE(_core, m)
 {
-    m.doc() = "Facility location — Timefold engine-backed C++ wrapper "
+    m.doc() = "Facility location — optimaru engine-backed C++ wrapper "
               "exposed to Python";
 
     py::class_<Score>(m, "Score", py::module_local())

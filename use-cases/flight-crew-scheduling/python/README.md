@@ -1,7 +1,7 @@
 # flight_crew
 
-The Python package wrapping, with pybind11, the C++ port (`../cpp`) of the Timefold quickstart
-flight-crew-scheduling. Solves the BASIC-variable problem of picking a crew member for every
+The Python package wrapping, with pybind11, the C++ port (`../cpp`) of the
+flight-crew-scheduling example model. Solves the BASIC-variable problem of picking a crew member for every
 crew seat of a flight with late-acceptance local search + ALNS.
 
 ## Install

@@ -17,8 +17,6 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
-from . import timefold
-
 
 @dataclass(frozen=True, order=True)
 class Score:
@@ -41,9 +39,6 @@ class SolverRun:
     seconds: float
     status: str = ""
     self_report: tuple[float, ...] | None = None
-    # The same solution scored by the Timefold quickstart's own
-    # ConstraintProvider (cases that define to_timefold), as a referee.
-    timefold_score: str | None = None
 
     @property
     def crosscheck(self) -> str:
@@ -107,7 +102,6 @@ def run_instance(
     seconds: float,
     seed: int,
     workers: int,
-    include_timefold: bool = True,
 ) -> InstanceResult:
     engine_problem = factory()
     started = time.perf_counter()
@@ -140,29 +134,6 @@ def run_instance(
         )
 
     runs = [engine_run, cpsat_run]
-    solutions = [engine_problem, None if cpsat_run.score is None else solved]
-    if include_timefold and _has_timefold(case):
-        timefold_problem = factory()
-        started = time.perf_counter()
-        result = timefold.solve(
-            case.TIMEFOLD, case.to_timefold(timefold_problem), seconds, seed
-        )
-        case.from_timefold(timefold_problem, result)
-        runs.append(
-            SolverRun(
-                "timefold",
-                score_solution(case.PACKAGE, timefold_problem),
-                time.perf_counter() - started,
-                "FEASIBLE",
-            )
-        )
-        solutions.append(timefold_problem)
-    if include_timefold and _has_timefold(case):
-        for run, solution in zip(runs, solutions, strict=True):
-            if solution is not None:
-                run.timefold_score = timefold.score(
-                    case.TIMEFOLD, case.to_timefold(solution)
-                )["score"]
 
     return InstanceResult(
         case=case.NAME,
@@ -173,10 +144,6 @@ def run_instance(
         exact=getattr(case, "CPSAT_EXACT", True),
         caveat=getattr(case, "CPSAT_CAVEAT", ""),
     )
-
-
-def _has_timefold(case: Any) -> bool:
-    return hasattr(case, "to_timefold") and timefold.available()
 
 
 def _run(result: dict, solver: str) -> dict | None:
@@ -232,7 +199,6 @@ def _as_dict(result: InstanceResult) -> dict:
                 "seconds": run.seconds,
                 "status": run.status,
                 "self_report": run.self_report,
-                "timefold_score": run.timefold_score,
                 "crosscheck": run.crosscheck,
             }
         )
@@ -271,13 +237,6 @@ def render_console(results: list[dict], seconds: float, workers: int, seed: int)
             continue
         cells = " ".join(f"{_score_text(_run(result, name)):>24}" for name in solvers)
         lines.append(f"{result['instance']:<10} {result['size']:<28} {cells}  {_verdict(result)}")
-        referee = [
-            f"{name}={run['timefold_score']}"
-            for name in solvers
-            if (run := _run(result, name)) and run.get("timefold_score")
-        ]
-        if referee:
-            lines.append("  Timefold model: " + "  ".join(referee))
         if result.get("caveat"):
             lines.append(f"  note: {result['caveat']}")
         engine = _run(result, "engine")
@@ -290,8 +249,8 @@ def render_markdown(results: list[dict], seconds: float, workers: int, seed: int
     solvers = _solvers(results)
     lines = [
         (
-            f"Every solver got a **{seconds:g}s** budget, seed {seed}. The engine and "
-            f"Timefold use one thread; CP-SAT uses {workers} workers and its time "
+            f"Every solver got a **{seconds:g}s** budget, seed {seed}. The engine "
+            f"uses one thread; CP-SAT uses {workers} workers and its time "
             "includes model construction. Scores are the use case's own evaluator "
             "(higher is better, levels compared left to right)."
         ),
@@ -299,28 +258,12 @@ def render_markdown(results: list[dict], seconds: float, workers: int, seed: int
         "| instance | size | " + " | ".join(solvers) + " | best |",
         "| --- | --- | " + " | ".join("---" for _ in solvers) + " | --- |",
     ]
-    referee_rows = []
     for result in results:
         if "error" in result:
             lines.append(f"| {result['instance']} | — | " + " | ".join("FAILED" for _ in solvers) + " | — |")
             continue
         cells = " | ".join(_score_text(_run(result, name)) for name in solvers)
         lines.append(f"| {result['instance']} | {result['size']} | {cells} | {_verdict(result)} |")
-        if any((run := _run(result, name)) and run.get("timefold_score") for name in solvers):
-            referee_rows.append(
-                f"| {result['instance']} | "
-                + " | ".join((_run(result, name) or {}).get("timefold_score") or "—" for name in solvers)
-                + " |"
-            )
-    if referee_rows:
-        lines += [
-            "",
-            "The same solutions scored by the Timefold quickstart's own ConstraintProvider:",
-            "",
-            "| instance | " + " | ".join(solvers) + " |",
-            "| --- | " + " | ".join("---" for _ in solvers) + " |",
-            *referee_rows,
-        ]
     return "\n".join(lines)
 
 
@@ -332,11 +275,6 @@ def run_cli(case: BenchmarkCase, argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--json", action="store_true", dest="as_json")
     parser.add_argument("--markdown", action="store_true")
-    parser.add_argument(
-        "--no-timefold",
-        action="store_true",
-        help="skip the Timefold column even when the quickstart jar is built",
-    )
     args = parser.parse_args(argv)
 
     wanted = set(args.instance) if args.instance else None
@@ -356,7 +294,6 @@ def run_cli(case: BenchmarkCase, argv: Sequence[str] | None = None) -> int:
                         args.seconds,
                         args.seed,
                         args.workers,
-                        include_timefold=not args.no_timefold,
                     )
                 )
             )

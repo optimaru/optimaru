@@ -1,6 +1,6 @@
 # Flight Crew Scheduling (C++ / Python)
 
-Timefold quickstart [flight-crew-scheduling](https://github.com/TimefoldAI/timefold-quickstarts)
+The `flight-crew-scheduling` example model (Apache-2.0; see the repository NOTICE)
 ported onto this repository's C++ engine (`include/optimaru/`). A **BASIC variable** problem
 that picks a crew member (`employee`) for every crew seat of a flight (`FlightAssignment`).
 
@@ -142,6 +142,4 @@ solver's `solve` before the engine runs — the engine only fills what is still 
 
 ## Benchmark
 
-[`benchmarks/flight-crew-scheduling`](../../benchmarks/flight-crew-scheduling) compares this use case with OR-Tools CP-SAT and Timefold Solver 2.6.0 on the same instances. Every solution is rescored by the Timefold quickstart's `ConstraintProvider`, so all three are judged by the same rules.
-
-Latest run (30 s per solver, 3 instances): best score by the engine on 3, CP-SAT on 1, Timefold on 0 (ties count for each). Full table: [benchmarks/flight-crew-scheduling/README.md](../../benchmarks/flight-crew-scheduling/README.md#results).
+[`benchmarks/flight-crew-scheduling`](../../benchmarks/flight-crew-scheduling) compares this use case with OR-Tools CP-SAT on the same instances.

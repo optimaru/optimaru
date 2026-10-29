@@ -1,7 +1,7 @@
-# School timetabling three-way benchmark
+# School timetabling benchmark
 
-A harness that solves the same instances with three solvers and compares
-them. It runs build → cross-check gate → quality benchmark → table.
+A harness that solves the same instances with the engine and OR-Tools CP-SAT
+and compares them. It runs build → cross-check gate → quality benchmark → table.
 
 | File | Role |
 | --- | --- |
@@ -10,9 +10,8 @@ them. It runs build → cross-check gate → quality benchmark → table.
 | `cpsat_quickstart.py` | Track-1 CP-SAT solver (six constraints: hard as constraints, the three soft ones as the objective) |
 | `gen_canonical.py` | Track-2 generator of S/M/L canonical `TimetableProblem`s (blocks / parallel sections / team teaching / unavailability, with a load check) |
 | `../../use-cases/school-timetabling/cpp/bench/st_quality_bench.cpp` | Track-1 C++ side: builds instances, dumps JSON, solves, cross-check mode |
-| `timefold/` | The two Java-side tests (copied into a quickstarts clone and run there) + the (day, period) → Timeslot mapping |
 
-## Track 1: the quickstart's six constraints, three-way
+## Track 1: the quickstart's six constraints
 
 The shared logic is the original Java quickstart's six constraints
 (roomConflict / teacherConflict / studentGroupConflict hard,
@@ -25,17 +24,12 @@ Size presets (classes / teachers / rooms — same as `st_quality_bench.cpp`):
 The grid is 5 days × 8 periods = 40 slots.
 
 ```sh
-# Java track setup (once): clone + mvnw bootstrap (timefold/README.md)
-git clone --depth 1 -b v2.6.0 https://github.com/TimefoldAI/timefold-quickstarts.git /tmp/tq
-
-# Three-way run (cross-check gate → S/M 10 s each → rescoring → Markdown table)
-uv run run_bench.py --sizes S,M --seconds 10 --quickstarts /tmp/tq
-# C++ vs CP-SAT only, without Java
+# cross-check gate → S/M 10 s each → rescoring → Markdown table
 uv run run_bench.py --sizes S,M --seconds 10
 ```
 
 The result is `out/RESULTS_track1.md`. The cross-check gate passes only when
-the C++ and Java scores of the fixed instance are byte-identical
+the C++ score of the fixed instance matches `evaluate.py`
 (`CROSSCHECK_SCORE=-3hard/-3soft`).
 
 ## Track 2: full canonical constraints, C++ canonical vs CP-SAT
@@ -87,9 +81,9 @@ How to read it:
   `ST_BENCH_NEARBY_PROB` / `ST_BENCH_LA_SIZE`). **Unset, the solver defaults
   apply** — CI and the published tables always run without them. They change
   search knobs only, never the scoring semantics.
-- All three solvers get the same instance JSON and the same wall-clock budget.
-- C++/Java run single-threaded, CP-SAT as an 8-worker portfolio by default (`--workers`).
+- Both solvers get the same instance JSON and the same wall-clock budget.
+- C++ runs single-threaded, CP-SAT as an 8-worker portfolio by default (`--workers`).
 - moves/s: C++ is estimated from the improvement trajectory (one move per
-  step), Java uses the solver's own counter, CP-SAT has none.
+  step); CP-SAT has none.
 - Every solution enters the table through the shared evaluator's rescoring
   (`evaluate.py`, or `validate.py` for track 2), never through its self-reported score.

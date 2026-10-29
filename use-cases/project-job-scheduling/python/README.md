@@ -1,6 +1,6 @@
 # project_job — project job scheduling (multi-project RCPSP) Python package
 
-Timefold quickstart [project-job-scheduling](https://github.com/TimefoldAI/timefold-quickstarts/tree/stable/use-cases/project-job-scheduling)
+The `project-job-scheduling` example model (Apache-2.0; see the repository NOTICE)
 (multi-project / multi-mode RCPSP): pybind11 bindings of the `../cpp` implementation
 ported onto the generic C++ engine in `include/optimaru/`.
 

@@ -17,7 +17,7 @@ namespace mnt
 // ---------------------------------------------------------------------------
 // Plugin-style constraint components (the school-timetabling pattern)
 // ---------------------------------------------------------------------------
-// The six constraints of the Timefold maintenance-scheduling
+// The six constraints of the reference maintenance-scheduling
 // MaintenanceScheduleConstraintProvider, split into one small component each
 // on the engine's DecomposedScoreCalculator — an optional assembly path NEXT
 // TO the monolithic MaintenanceSchedulingIncrementalScoreCalculator, which

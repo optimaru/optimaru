@@ -1,7 +1,7 @@
 [project]
 name = "maintenance_scheduling"
 version = "0.1.0"
-description = "Maintenance-scheduling C++ solver (Timefold quickstart port) with Python bindings"
+description = "Maintenance-scheduling C++ solver (C++ port) with Python bindings"
 requires-python = ">=3.14,<4.0"
 dependencies = []
 

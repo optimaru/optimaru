@@ -36,7 +36,7 @@ test/                 engine tests
 use-cases/<slug>/     21 problems built on the engine: C++ domain + solver
                       and a pybind11 package (or a small pure-Python model)
 benchmarks/<slug>/    the same problems against OR-Tools (CP-SAT, or the
-                      Routing solver for VRP) and, where available, Timefold;
+                      Routing solver for VRP);
                       competing solvers live only here
 benchmarks/cpsat-common/  shared CP-SAT constraint-plugin contract
 ```
@@ -218,8 +218,8 @@ cd use-cases/<slug>/python && uv sync --all-groups --all-extras && uv run pytest
 [`benchmarks/README.md`](benchmarks/README.md) lists every comparison. In
 short: every use case is compared with OR-Tools CP-SAT on the same instances
 and rescored by the use case's own evaluator; vehicle routing is compared with
-the OR-Tools Routing solver and Timefold Solver on CVRPLIB Set X, and school
-timetabling three ways (engine / CP-SAT / Timefold). Pickup & delivery,
+the OR-Tools Routing solver on CVRPLIB Set X, and school
+timetabling with OR-Tools CP-SAT. Pickup & delivery,
 project-job scheduling, bin packing, quadratic assignment and assembly-line
 balancing also run on public instance sets (Li & Lim, Patterson, Hexaly BPP,
 QAPLIB, SALBP).

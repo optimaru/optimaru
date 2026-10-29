@@ -6,7 +6,7 @@
 namespace pjs
 {
 
-// Port of the Timefold ProjectJobSchedulingConstraintProvider.
+// Port of the reference ProjectJobSchedulingConstraintProvider.
 //
 // calculateScore does a full recompute — the reference the incremental
 // calculator is checked against (in the tests and under FULL_ASSERT).

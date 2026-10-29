@@ -1,15 +1,14 @@
 # Vehicle routing benchmark (CVRP)
 
-The [`vehicle-routing`](../../use-cases/vehicle-routing) use case against two
-widely used open-source solvers on the classic capacitated VRP:
+The [`vehicle-routing`](../../use-cases/vehicle-routing) use case against a
+widely used open-source solver on the classic capacitated VRP:
 
 | Backend | Solver | Setup |
 | --- | --- | --- |
 | `engine` | optimaru, `vrp_routing` | default configuration, 1 worker |
 | `ortools` | [Google OR-Tools](https://developers.google.com/optimization/routing) Routing solver (`pywrapcp`) | PATH_CHEAPEST_ARC + guided local search, the library's recommended VRP setup |
-| `timefold` | [Timefold Solver](https://github.com/TimefoldAI/timefold-solver) open-source edition, 2.6.0 | default configuration (construction heuristic + local search), Constraint Streams, list variable |
 
-OR-Tools and Timefold live here only; they are not part of the use case.
+OR-Tools lives here only; it is not part of the use case.
 
 ## Protocol
 
@@ -22,24 +21,22 @@ OR-Tools and Timefold live here only; they are not part of the use case.
   (`-kN`), the vehicle capacity, and the same rounded integer distance
   matrix (CVRPLIB's EUC_2D rule). Routes are round trips from the depot.
 - **Same budget**: wall-clock seconds per run (`--seconds`), same seed,
-  single-threaded. Timefold's time includes JVM start-up (~0.3 s).
+  single-threaded.
 - **Independent rescoring**: the harness rebuilds each plan's distance from
   the matrix, checks capacity and that no customer appears twice, and refuses
   a backend whose own reported distance disagrees.
 - **Gap** = (distance − BKS) / BKS, counted only for complete runs (every
   customer served, no route over capacity). An incomplete run is reported as
   `n unassigned` (OR-Tools may drop a customer at a penalty when it cannot
-  fit it in time) or `infeasible` (Timefold assigns every customer and may
-  end over capacity).
+  fit it in time) or `infeasible` (a route ends over capacity).
 
 ## Running
 
-Requires [uv](https://docs.astral.sh/uv/) and, for Timefold, JDK 21+ and Maven.
+Requires [uv](https://docs.astral.sh/uv/).
 
 ```sh
 cd benchmarks/vehicle-routing
 uv sync --extra dev                          # builds the engine's pybind extension
-mvn -f timefold/pom.xml -q package           # builds timefold/target/timefold-vrp-bench.jar
 
 # one Augerat instance, all backends
 uv run python -m vrp_benchmark --instance A-n32-k5 --seconds 10
@@ -53,8 +50,7 @@ uv run python -m vrp_benchmark --series x --seconds 60 --backend engine,ortools
 ```
 
 `uv run pytest` checks the parser, the rescoring and that every backend finds
-the optimum of a tiny instance (Timefold's case is skipped without a JDK and
-the jar).
+the optimum of a tiny instance.
 
 The [`vrp-public-bench`](../../.github/workflows/vrp-public-bench.yml)
 workflow runs the one-per-bucket sample at 60 s on every push to `main` that
@@ -72,28 +68,20 @@ vrp_benchmark/
 ├── cvrplib.py          Set X catalog + BKS download and cache
 └── solvers/
     ├── engine.py           optimaru via vrp_routing
-    ├── ortools_routing.py  OR-Tools Routing solver
-    └── timefold.py         runs the Java program below as a subprocess
-timefold/               Maven project: Timefold CVRP model and a main that reads
-                        the instance file and prints the routes
+    └── ortools_routing.py  OR-Tools Routing solver
 tests/
 ```
 
 ## Results
 
 One median instance per bucket, 30 s per run, seed 0, single-threaded, one
-Apple Silicon Mac (16 cores), 2026-10-29. Timefold Solver 2.6.0 (open source,
-default configuration). Gap to the best-known solution; every route is
+Apple Silicon Mac (16 cores), 2026-10-29. Gap to the best-known solution; every route is
 re-verified by the harness. Single runs — a snapshot, not a statistical study.
 
-| Instance | Customers | engine | ortools | timefold |
-|---|---:|---:|---:|---:|
-| X-n153-k22 | 152 | **1.25%** | 1 unassigned | 2.35% |
-| X-n289-k60 | 288 | **2.58%** | 2 unassigned | 9.19% |
-| X-n491-k59 | 490 | **2.07%** | 9.39% | 48.97% |
-| X-n701-k44 | 700 | **1.92%** | 8.94% | 60.18% |
-| X-n895-k37 | 894 | **5.52%** | 5 unassigned | 255.43% |
-
-Nearby selection, which Timefold recommends for routing at this scale, is
-not part of its open-source edition, so the `timefold` column runs without
-it.
+| Instance | Customers | engine | ortools |
+|---|---:|---:|---:|
+| X-n153-k22 | 152 | **1.25%** | 1 unassigned |
+| X-n289-k60 | 288 | **2.58%** | 2 unassigned |
+| X-n491-k59 | 490 | **2.07%** | 9.39% |
+| X-n701-k44 | 700 | **1.92%** | 8.94% |
+| X-n895-k37 | 894 | **5.52%** | 5 unassigned |

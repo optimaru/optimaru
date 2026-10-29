@@ -15,7 +15,7 @@ namespace vrp {
 // ---------------------------------------------------------------------------
 // Plugin-style constraint components
 // ---------------------------------------------------------------------------
-// The four constraints of the Timefold vehicle-routing
+// The four constraints of the reference vehicle-routing
 // VehicleRoutingConstraintProvider, split into one small component each on the
 // engine's DecomposedScoreCalculator -- an optional assembly path NEXT TO
 // ScoreCalculator::calculateScore, which stays the default path.

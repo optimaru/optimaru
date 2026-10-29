@@ -23,7 +23,7 @@ double ScoreCalculator::unfairnessFromAggregates(std::int64_t sumOfLoads,
     if (root == 0.0)
         return 0.0;
     // Round to 6 significant figures, HALF_EVEN — the BigDecimal.sqrt
-    // MathContext of Timefold's LoadBalanceImpl. Avoid log10()/pow() in the
+    // MathContext of the reference load-balance implementation. Avoid log10()/pow() in the
     // per-move hot path: the loop finds ceil(log10(root)) with comparisons.
     int digitsBeforePoint = 0;
     double magnitude = 1.0;

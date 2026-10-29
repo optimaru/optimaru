@@ -1,7 +1,7 @@
 [project]
 name = "food_packaging"
 version = "0.1.0"
-description = "Food-packaging C++ solver (Timefold quickstart port) with Python bindings"
+description = "Food-packaging C++ solver (C++ port) with Python bindings"
 requires-python = ">=3.14,<4.0"
 dependencies = []
 

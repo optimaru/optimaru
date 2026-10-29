@@ -7,7 +7,7 @@ namespace vrp {
 
 // Port of org.acme.vehiclerouting.solver.VehicleRoutingConstraintProvider.
 //
-// Unlike Timefold's incremental Constraint Streams engine, this recomputes the
+// Unlike an incremental constraint-stream engine, this recomputes the
 // full score from the current vehicle routes. For the quickstart's problem size
 // (tens of visits) a full O(n) recompute per move is more than fast enough.
 class ScoreCalculator {

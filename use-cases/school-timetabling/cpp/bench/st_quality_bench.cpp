@@ -24,10 +24,9 @@
 //
 //   st_quality_bench crosscheck <out.json>
 //     Dumps a small FIXED instance with a FIXED assignment that exercises all
-//     six constraints, and prints "CROSSCHECK_SCORE=..." — pairs with the Java
-//     CrossCheckScoreTest (benchmarks/school-timetabling/timefold/) which re-scores the same JSON
-//     with the stock TimetableConstraintProvider. The scores must be
-//     byte-identical.
+//     six constraints, and prints "CROSSCHECK_SCORE=..." — pairs with
+//     benchmarks/school-timetabling/evaluate.py, which re-scores the same JSON.
+//     The scores must be identical.
 
 #include <algorithm>
 #include <chrono>
@@ -324,7 +323,7 @@ int main(int argc, char **argv)
     const auto t0 = std::chrono::steady_clock::now();
     // Sustained move-evaluation speed, estimated from the improvement
     // trajectory (each engine step evaluates one move) — comparable with the
-    // "move evaluation speed (N/sec)" figure of the Timefold solver.
+    // "move evaluation speed (N/sec)" figure other local-search solvers report.
     long long lastStep = 0;
     long long lastMs = 0;
     bool feasibleSeen = false;

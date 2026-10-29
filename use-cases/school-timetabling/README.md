@@ -65,4 +65,4 @@ solver's `solve` before the engine runs — the engine only fills what is still 
 ## Benchmark
 
 [`benchmarks/school-timetabling`](../../benchmarks/school-timetabling) compares this use case with
-OR-Tools CP-SAT and Timefold Solver on the same instances, rescored by the same evaluator.
+OR-Tools CP-SAT on the same instances, rescored by the same evaluator.

@@ -55,7 +55,7 @@ namespace optimaru {
 //   BASIC moves: ChangeMove (reassign one entity), SwapMove.
 //   LIST moves:  relocate (move one element), element swap, 2-opt
 //                (reverse a segment within one list).
-// Moves follow the Timefold do/undo protocol: apply through the
+// Moves follow a do/undo protocol: apply through the
 // ScoreDirector, read calculateScore(), and revert when rejected.
 //
 // Anything more elaborate than the random move mix above is a plugin, not a

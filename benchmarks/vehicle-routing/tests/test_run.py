@@ -1,5 +1,4 @@
 import argparse
-import subprocess
 
 import pytest
 
@@ -76,7 +75,7 @@ def test_engine_request_mirrors_the_instance() -> None:
 def test_parse_backends() -> None:
     assert parse_backends("all") == solvers.BACKENDS
     assert parse_backends("engine, ortools") == ("engine", "ortools")
-    assert parse_backends("timefold,engine,timefold") == ("timefold", "engine")
+    assert parse_backends("ortools,engine,ortools") == ("ortools", "engine")
     with pytest.raises(ValueError):
         parse_backends("pyvrp")
 
@@ -90,33 +89,12 @@ def test_usage_errors_come_before_any_download() -> None:
     assert exit_info.value.code == 2
 
 
-def _timefold_ready() -> bool:
-    from vrp_benchmark.solvers import timefold
-
-    try:
-        # macOS ships a /usr/bin/java stub that fails without a JDK installed.
-        subprocess.run([timefold._java(), "-version"], check=True, capture_output=True)
-    except (RuntimeError, OSError, subprocess.CalledProcessError):
-        return False
-    return timefold.JAR.exists()
-
-
 @pytest.mark.parametrize("backend", solvers.BACKENDS)
 def test_every_backend_finds_the_optimum_of_a_tiny_instance(backend: str) -> None:
-    if backend == "timefold" and not _timefold_ready():
-        pytest.skip("Timefold needs a JDK and `mvn -f timefold/pom.xml package`")
     result = benchmark(backend, parse_instance(SAMPLE), seconds=1, seed=0)
     assert result.feasible and result.unassigned == 0
     assert result.distance == OPTIMUM
     assert result.gap == 0
-
-
-def test_timefold_output_parsing() -> None:
-    from vrp_benchmark.solvers.timefold import parse_output
-
-    routes, hard, soft = parse_output("route 1 2\nroute\nroute 3\nscore 0 -14\n")
-    assert routes == [[1, 2], [], [3]]
-    assert (hard, soft) == (0, -14)
 
 
 def test_markdown_summary_explains_missing_gaps() -> None:
@@ -138,11 +116,10 @@ def test_markdown_summary_explains_missing_gaps() -> None:
     results = [
         result("engine", gap=1.5),
         result("ortools", unassigned=3),
-        result("timefold", feasible=False),
     ]
     args = argparse.Namespace(seconds=1, seed=0, limit_per_bucket=0, catalog_source="mirror")
-    backends = ("engine", "ortools", "timefold")
+    backends = ("engine", "ortools")
     rows = bucket_table(results, backends, {label: 1 for label, _, _ in SIZE_BUCKETS})
     table = markdown_summary(results, rows, backends, args)
     row = next(line for line in table.splitlines() if line.startswith("| X-n101"))
-    assert row == "| X-n101-k25 | 100 | 1.50% | 3 unassigned | infeasible |"
+    assert row == "| X-n101-k25 | 100 | 1.50% | 3 unassigned |"

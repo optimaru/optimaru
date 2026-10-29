@@ -1,6 +1,6 @@
 """Maintenance scheduling — Python wrapper of the C++ solver on the optimaru engine.
 
-A port of the Timefold quickstart `maintenance-scheduling`: assigns maintenance jobs (Job)
+A port of the `maintenance-scheduling` example model: assigns maintenance jobs (Job)
 a crew and a start date (TimeGrain excluding weekends). The Java domain's two planning
 variables (crew, startDate) are composite-encoded into one engine BASIC variable::
 

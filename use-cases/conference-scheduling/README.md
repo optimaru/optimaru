@@ -1,6 +1,6 @@
-# Conference Scheduling (Timefold quickstart port)
+# Conference Scheduling (C++ port)
 
-Timefold quickstart [conference-scheduling](https://github.com/TimefoldAI/timefold-quickstarts/tree/stable/use-cases/conference-scheduling)
+The `conference-scheduling` example model (Apache-2.0; see the repository NOTICE)
 ported onto the C++ engine in `include/optimaru/`. Every talk (`Talk`) gets a timeslot
 and a room at once — Java's two `@PlanningVariable`s (timeslot, room) are encoded as
 one composite BASIC variable `slotRoom = timeslotIndex * roomCount + roomIndex`
@@ -136,6 +136,4 @@ solver's `solve` before the engine runs — the engine only fills what is still 
 
 ## Benchmark
 
-[`benchmarks/conference-scheduling`](../../benchmarks/conference-scheduling) compares this use case with OR-Tools CP-SAT and Timefold Solver 2.6.0 on the same instances. Every solution is rescored by the Timefold quickstart's `ConstraintProvider`, so all three are judged by the same rules.
-
-Latest run (30 s per solver, 1 instance): best score by the engine on 1, CP-SAT on 1, Timefold on 0 (ties count for each). Full table: [benchmarks/conference-scheduling/README.md](../../benchmarks/conference-scheduling/README.md#results).
+[`benchmarks/conference-scheduling`](../../benchmarks/conference-scheduling) compares this use case with OR-Tools CP-SAT on the same instances.

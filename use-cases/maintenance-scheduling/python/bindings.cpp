@@ -63,7 +63,7 @@ void defOptionalDate(py::class_<Class> &cls,
 
 PYBIND11_MODULE(_core, m)
 {
-    m.doc() = "Maintenance scheduling — Timefold engine-backed C++ wrapper "
+    m.doc() = "Maintenance scheduling — optimaru engine-backed C++ wrapper "
               "exposed to Python";
 
     py::class_<Score>(m, "Score", py::module_local())

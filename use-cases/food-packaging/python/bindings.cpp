@@ -1,6 +1,6 @@
 // pybind11 bindings for the food-packaging C++ domain wrappers. The Python
 // extension links the existing fp::* implementations and imports the generic
-// Timefold engine from ../../../include; the engine itself is not
+// optimaru engine from ../../../include; the engine itself is not
 // modified here.
 //
 // Times cross the boundary as int64 MINUTES from a common reference (the
@@ -45,7 +45,7 @@ std::optional<std::int64_t> timeToPy(Minutes minute)
 
 PYBIND11_MODULE(_core, m)
 {
-    m.doc() = "Food packaging — Timefold engine-backed C++ wrapper exposed "
+    m.doc() = "Food packaging — optimaru engine-backed C++ wrapper exposed "
               "to Python";
 
     py::class_<Score>(m, "Score", py::module_local())

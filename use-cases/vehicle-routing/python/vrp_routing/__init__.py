@@ -24,7 +24,7 @@ large instances; with it the nearby neighbourhood is 25 visits
 given seed compared with earlier releases; see `Solver::Config` for the
 measurements behind each default.
 
-Score convention (HardMediumSoft, mirroring the Timefold VRP quickstart):
+Score convention (HardMediumSoft, as in the reference VRP example model):
 hard = capacity excess + time-window lateness (0 = feasible), medium =
 -(service minutes of unassigned visits), soft = -(total driving seconds).
 Compared lexicographically: hard dominates medium dominates soft.

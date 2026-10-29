@@ -1,1 +1,1 @@
-"""CVRP benchmark harness: optimaru vs OR-Tools Routing vs Timefold Solver."""
+"""CVRP benchmark harness: optimaru vs OR-Tools Routing."""

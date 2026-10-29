@@ -20,7 +20,7 @@ struct ItineraryStats
     std::int64_t lastNotHome = 0;   // "Last assignment not arriving ..."
 };
 
-// Port of the Timefold FlightCrewSchedulingConstraintProvider.
+// Port of the reference FlightCrewSchedulingConstraintProvider.
 //
 // calculateScore does a full recompute — the reference the incremental
 // calculator is checked against (in the tests and under FULL_ASSERT).

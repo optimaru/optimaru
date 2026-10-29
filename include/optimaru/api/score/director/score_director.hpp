@@ -14,7 +14,7 @@
 
 namespace optimaru {
 
-// Mirrors Timefold's EnvironmentMode: FULL_ASSERT verifies the incremental
+// Environment mode: FULL_ASSERT verifies the incremental
 // score against a full recompute (shadow-variable listeners re-run + calculator
 // resetWorkingSolution + calculateScore) on every calculateScore() call, and
 // throws ScoreCorruptionError on mismatch — this catches both a buggy
@@ -40,7 +40,7 @@ public:
 // ScoreDirector
 // ---------------------------------------------------------------------------
 // Pairs the working solution with its IncrementalScoreCalculator and the
-// shadow-variable listeners, exactly like Timefold's ScoreDirector: every
+// shadow-variable listeners: every
 // planning-variable write goes through one of the mutation methods below,
 // which bracket the write with
 //   calculator.before*Changed  ->  mutation  ->  listeners  ->  calculator.after*Changed

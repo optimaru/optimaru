@@ -8,8 +8,7 @@ namespace optimaru {
 // ---------------------------------------------------------------------------
 // IncrementalScoreCalculator
 // ---------------------------------------------------------------------------
-// Mirrors ai.timefold.solver.core.api.score.calculator.IncrementalScoreCalculator:
-// the domain-side constraint logic, notified around every planning-variable
+// The domain-side constraint logic, notified around every planning-variable
 // change so it can maintain the score incrementally (a move costs O(delta),
 // not O(solution)).
 //
