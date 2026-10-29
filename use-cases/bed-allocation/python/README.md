@@ -1,6 +1,6 @@
-# bed_allocation — bed allocation (Timefold quickstart port)
+# bed_allocation — bed allocation (C++ port)
 
-Timefold quickstart [bed-allocation](https://github.com/TimefoldAI/timefold-quickstarts)
+The `bed-allocation` example model (Apache-2.0; see the repository NOTICE)
 (hospital bed allocation, PAS): the pybind11 package of the `../cpp` implementation ported
 onto the generic C++ engine in `include/optimaru/`. A BASIC-variable domain that picks one bed (Bed) per stay (Stay).
 

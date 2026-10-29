@@ -25,7 +25,7 @@ namespace tfpy = optimaru::python;
 
 PYBIND11_MODULE(_core, m)
 {
-    m.doc() = "Meeting scheduling — Timefold engine-backed C++ wrapper "
+    m.doc() = "Meeting scheduling — optimaru engine-backed C++ wrapper "
               "exposed to Python";
 
     m.attr("MEDIUM_SCALE") = kMediumScale;

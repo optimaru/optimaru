@@ -78,7 +78,7 @@ void validateTaskLists(const TaskAssigningSolution &solution)
 PYBIND11_MODULE(_core, m)
 {
     m.doc() = "Task assigning (skill-based task queues per employee) — "
-              "Timefold engine-backed C++ wrapper exposed to Python";
+              "optimaru engine-backed C++ wrapper exposed to Python";
 
     py::class_<Score>(m, "Score", py::module_local())
         .def_readonly("hard", &Score::hard)

@@ -53,8 +53,8 @@ struct ConstraintTotals
 //   soft 4. minimizeOrderSplitByTrolley
 //
 // Unassigned pick tasks (present in no trolley's list) contribute nothing,
-// mirroring Timefold's forEach(PickTask.class) which only iterates tasks
-// assigned to a trolley: the construction heuristic scores partially
+// as in the reference model, which only iterates tasks assigned to a
+// trolley: the construction heuristic scores partially
 // initialized solutions.
 class ScoreCalculator
 {

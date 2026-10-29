@@ -16,7 +16,7 @@ namespace ba
 // ---------------------------------------------------------------------------
 // Plugin-style constraint components (the school-timetabling pattern)
 // ---------------------------------------------------------------------------
-// The twelve constraints of the Timefold bed-allocation
+// The twelve constraints of the reference bed-allocation
 // BedAllocationConstraintProvider, split into one small component each on the
 // engine's DecomposedScoreCalculator — an optional assembly path NEXT TO the
 // monolithic BedAllocationIncrementalScoreCalculator, which stays the tuned

@@ -1,6 +1,6 @@
-# task_assigning — task assigning (Timefold quickstart port)
+# task_assigning — task assigning (C++ port)
 
-Timefold quickstart [task-assigning](https://github.com/TimefoldAI/timefold-quickstarts)
+The `task-assigning` example model (Apache-2.0; see the repository NOTICE)
 (skill-based task assignment): the pybind11 package of the `../cpp` implementation ported onto
 the generic C++ engine in `include/optimaru/`. A **LIST variable** domain that fills an
 ordered task list per employee (Employee) (Java's `@PlanningListVariable(allowsUnassignedValues = true)`).

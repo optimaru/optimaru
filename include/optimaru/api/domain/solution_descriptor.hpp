@@ -32,8 +32,8 @@ inline bool entityPinned(const Solution& solution, int entity) {
     }
 }
 
-// Which planning-variable shape a solution uses (Timefold's basic
-// @PlanningVariable vs @PlanningListVariable vs chained @PlanningVariable).
+// Which planning-variable shape a solution uses (a basic variable, a list
+// variable or a chained variable).
 enum class VariableKind { BASIC, LIST, CHAINED };
 
 // Encoding helpers for the CHAINED kind's `previous` variable: it points at
@@ -50,8 +50,7 @@ constexpr int anchorIndex(int previous) { return -previous - 1; }
 // ---------------------------------------------------------------------------
 // SolutionDescriptor
 // ---------------------------------------------------------------------------
-// The C++ stand-in for Timefold's @PlanningSolution / @PlanningEntity /
-// @PlanningVariable annotations: it tells the engine how to enumerate the
+// The C++ stand-in for planning solution / entity / variable annotations: it tells the engine how to enumerate the
 // planning entities and read/write their planning variable, without the engine
 // knowing the domain types. A quickstart specializes this template for its
 // solution class and declares which variable kind it uses.
@@ -84,8 +83,8 @@ constexpr int anchorIndex(int previous) { return -previous - 1; }
 //       static void reverseSegment(MySolution&, int listIndex, int first, int last);
 //   };
 //
-// CHAINED — the classic linked-chain model (Timefold's chained
-// @PlanningVariable): every entity's variable points at its predecessor —
+// CHAINED — the classic linked-chain model (a chained planning
+// variable): every entity's variable points at its predecessor —
 // another entity, an anchor (encoded with chained::anchor), or
 // chained::kUnassignedPrevious. Internally the engine works on a materialized
 // list view (ChainedWorkingSolution) and keeps the domain's previous pointers

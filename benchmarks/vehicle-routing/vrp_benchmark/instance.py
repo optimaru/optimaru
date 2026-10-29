@@ -43,8 +43,7 @@ class Rescore:
     distance: int
     unassigned: int
     # False when a route exceeds the vehicle capacity: a backend that cannot
-    # leave a customer out (Timefold's list variable assigns everything)
-    # returns an over-capacity plan instead.
+    # leave a customer out returns an over-capacity plan instead.
     feasible: bool
 
 

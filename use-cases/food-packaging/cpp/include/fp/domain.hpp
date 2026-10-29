@@ -197,7 +197,7 @@ struct Line
 // so its moves can unassign a job by relocating it there. A job in no list
 // at all is engine-uninitialized: the construction heuristic will place it
 // (possibly into the pool, when leaving it unassigned scores best) — the
-// same options Timefold's construction heuristic has in Java.
+// same options as the reference model's construction heuristic.
 struct PackagingSchedule
 {
     Minutes fromMinute = 0;  // work calendar start (inclusive), midnight

@@ -35,7 +35,7 @@ def test_smoke_and_constraint_selection():
     assert len(catalog()) == 4
 
 
-def test_default_score_matches_timefold_on_the_same_nonzero_route():
+def test_default_score_matches_the_engine_on_the_same_nonzero_route():
     origin = LocationModel(column="A", shelving_row=1, side="LEFT", row=0)
     pick = LocationModel(column="B", shelving_row=2, side="RIGHT", row=4)
     request = OrderPickingRequest(

@@ -16,7 +16,7 @@ namespace fl
 // ---------------------------------------------------------------------------
 // Plugin-style constraint components (the school-timetabling pattern)
 // ---------------------------------------------------------------------------
-// The three constraints of the Timefold facility-location
+// The three constraints of the reference facility-location
 // FacilityLocationConstraintProvider, split into one small component each on
 // the engine's DecomposedScoreCalculator — an optional assembly path NEXT TO
 // the monolithic FacilityLocationIncrementalScoreCalculator, which stays the

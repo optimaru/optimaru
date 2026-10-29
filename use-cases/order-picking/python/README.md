@@ -1,6 +1,6 @@
 # order_picking (Python)
 
-The Python package wrapping, with pybind11, the C++ port of the Timefold quickstart
+The Python package wrapping, with pybind11, the C++ port of the example model
 **order-picking** (`../cpp`, on the generic engine `include/optimaru/`).
 
 ## Problem

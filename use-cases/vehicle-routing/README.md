@@ -71,4 +71,4 @@ The CVRP benchmark scores plain distance, so a new cost does not change it.
 ## Benchmark
 
 [`benchmarks/vehicle-routing`](../../benchmarks/vehicle-routing) compares this use case with
-the OR-Tools Routing solver and Timefold Solver on the same instances, rescored by the same evaluator.
+the OR-Tools Routing solver on the same instances, rescored by the same evaluator.

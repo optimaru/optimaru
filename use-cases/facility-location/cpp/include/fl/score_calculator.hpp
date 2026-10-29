@@ -6,7 +6,7 @@
 namespace fl
 {
 
-// Port of the Timefold facility-location FacilityLocationConstraintProvider.
+// Port of the reference facility-location FacilityLocationConstraintProvider.
 //
 // calculateScore does a full recompute — the reference the incremental
 // calculator is checked against (in the tests and under FULL_ASSERT).

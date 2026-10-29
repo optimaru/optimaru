@@ -1,6 +1,6 @@
 # Sports League Scheduling (C++ / Python)
 
-Timefold quickstart [sports-league-scheduling](https://github.com/TimefoldAI/timefold-quickstarts/tree/stable/use-cases/sports-league-scheduling)
+The `sports-league-scheduling` example model (Apache-2.0; see the repository NOTICE)
 ported onto the generic C++ engine in `include/optimaru/`. Assigns a round (`Round`) to
 every match (`Match`) of the league (one BASIC variable: `Match::round`).
 
@@ -88,6 +88,4 @@ solver's `solve` before the engine runs — the engine only fills what is still 
 
 ## Benchmark
 
-[`benchmarks/sports-league-scheduling`](../../benchmarks/sports-league-scheduling) compares this use case with OR-Tools CP-SAT and Timefold Solver 2.6.0 on the same instances. Every solution is rescored by the Timefold quickstart's `ConstraintProvider`, so all three are judged by the same rules.
-
-Latest run (30 s per solver, 1 instance): best score by the engine on 1, CP-SAT on 0, Timefold on 0 (ties count for each). Full table: [benchmarks/sports-league-scheduling/README.md](../../benchmarks/sports-league-scheduling/README.md#results).
+[`benchmarks/sports-league-scheduling`](../../benchmarks/sports-league-scheduling) compares this use case with OR-Tools CP-SAT on the same instances.

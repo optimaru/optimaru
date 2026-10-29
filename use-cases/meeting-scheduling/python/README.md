@@ -1,6 +1,6 @@
 # meeting_scheduling
 
-Timefold quickstart [meeting-scheduling](https://github.com/TimefoldAI/timefold-quickstarts/tree/stable/use-cases/meeting-scheduling)
+The `meeting-scheduling` example model (Apache-2.0; see the repository NOTICE)
 C++ port (`../cpp`, generic engine in `include/optimaru`) with pybind11
 bindings on top.
 

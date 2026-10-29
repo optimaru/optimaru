@@ -627,7 +627,7 @@ void bindCanon(py::module_ &canon)
 
 PYBIND11_MODULE(_core, m)
 {
-    m.doc() = "School timetabling — Timefold engine-backed C++ wrapper "
+    m.doc() = "School timetabling — optimaru engine-backed C++ wrapper "
               "exposed to Python";
 
     py::class_<Score>(m, "Score", py::module_local())

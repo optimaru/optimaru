@@ -284,8 +284,8 @@ struct GlobalConstraint {
     virtual void bindSharedContext(SharedConstraintContext& /*context*/) {}
 };
 
-// One entry of the per-constraint score breakdown (the seed of a Timefold
-// ScoreAnalysis / constraint-match view).
+// One entry of the per-constraint score breakdown (the seed of a score
+// analysis / constraint-match view).
 struct ConstraintTotal {
     std::string name;
     double cost;  // weighted, sign as defined above (positive = penalizing)

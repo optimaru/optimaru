@@ -8,8 +8,8 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif()
 
-# The generic engine (header-only), consumed like the Java quickstarts consume
-# the ai.timefold.solver dependency.
+# The generic engine (header-only), consumed as an external
+# header-only dependency.
 add_library(optimaru INTERFACE)
 target_include_directories(optimaru
     INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/../../../include)

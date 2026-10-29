@@ -1,16 +1,15 @@
 """Track-1 shared evaluator: recomputes the quickstart's six-constraint score from the instance JSON + an assignment.
 
-Rescores the solutions of all three solvers (C++ engine / Java Timefold /
-CP-SAT) with the same function and compares them with each solver's
-self-reported score. The rules are identical to the Java quickstart's
+Rescores the solutions of both solvers (C++ engine / CP-SAT) with the same
+function and compares them with each solver's self-reported score. The rules
+are identical to the Java quickstart's
 ``TimetableConstraintProvider`` (= C++ ``score_calculator.cpp``):
 
 - hard: roomConflict / teacherConflict / studentGroupConflict —
   -1 times the sum of C(c, 2) over the lessons sharing a cell of that key.
 - soft: teacherTimeEfficiency (reward) - teacherRoomStability (penalty)
   - studentGroupSubjectVariety (penalty). "Consecutive periods" means
-  |Δperiod| == 1 on the same day (pinned on the Java side, which uses a time
-  mapping with the same meaning, by the cross-check).
+  |Δperiod| == 1 on the same day.
 
 Usage:
     uv run evaluate.py <instance.json> <solution.json>

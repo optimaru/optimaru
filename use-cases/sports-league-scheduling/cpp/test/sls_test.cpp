@@ -199,7 +199,7 @@ void verifyConstraints()
                    0);
     }
     // hard 2 + hard 1: two home matches on one round index count once in the
-    // run (Timefold's toConsecutiveSequences dedupes the Round values), so
+    // run (the reference model's consecutive-sequence collector dedupes the Round values), so
     // indices {0, 0, 1, 2} form a length-3 run — no consecutive penalty; only
     // the same-round pair costs one.
     {

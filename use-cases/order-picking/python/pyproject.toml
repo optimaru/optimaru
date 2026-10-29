@@ -1,7 +1,7 @@
 [project]
 name = "order_picking"
 version = "0.1.0"
-description = "Order-picking C++ solver (Timefold quickstart port) with Python bindings"
+description = "Order-picking C++ solver (C++ port) with Python bindings"
 requires-python = ">=3.14,<4.0"
 dependencies = []
 

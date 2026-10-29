@@ -23,17 +23,15 @@ Solve = Callable[[CvrpInstance, float, int], SolverOutcome]
 
 
 def get(name: str) -> Solve:
-    """Import an adapter lazily, so a missing optional dependency (Java for
-    Timefold) only matters when that backend is asked for."""
+    """Import an adapter lazily, so a missing optional dependency only
+    matters when that backend is asked for."""
     if name == "engine":
         from .engine import solve
     elif name == "ortools":
         from .ortools_routing import solve
-    elif name == "timefold":
-        from .timefold import solve
     else:
         raise ValueError(f"unknown backend {name!r}; expected one of {BACKENDS}")
     return solve
 
 
-BACKENDS = ("engine", "ortools", "timefold")
+BACKENDS = ("engine", "ortools")

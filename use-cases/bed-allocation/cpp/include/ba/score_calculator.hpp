@@ -8,7 +8,7 @@
 namespace ba
 {
 
-// Port of the Timefold bed-allocation BedAllocationConstraintProvider.
+// Port of the reference bed-allocation BedAllocationConstraintProvider.
 //
 // calculateScore does a full recompute — the reference the incremental
 // calculator is checked against (in the tests and under FULL_ASSERT).

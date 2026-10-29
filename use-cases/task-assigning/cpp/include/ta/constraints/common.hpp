@@ -16,7 +16,7 @@ namespace ta
 // ---------------------------------------------------------------------------
 // Plugin-style constraint components (the school-timetabling pattern)
 // ---------------------------------------------------------------------------
-// The six constraints of the Timefold task-assigning
+// The six constraints of the reference task-assigning
 // TaskAssigningConstraintProvider, split into one small component each on the
 // engine's DecomposedScoreCalculator — an optional assembly path NEXT TO the
 // monolithic TaskAssigningIncrementalScoreCalculator, which stays the tuned

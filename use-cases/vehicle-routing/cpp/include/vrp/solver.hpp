@@ -25,7 +25,7 @@ namespace vrp
 // of the quickstart building a SolverFactory from a SolverConfig.
 //
 // This replaces the hand-written Late Acceptance loop the port shipped with.
-// The engine gives it, in Timefold's phase structure:
+// The engine gives it, in the usual phase structure:
 //
 //   1. Construction heuristic — cheapest insertion of every visit.
 //   2. Local search — one candidate move per step (relocate / swap / 2-opt /

@@ -9,7 +9,7 @@
 namespace ts
 {
 
-// Port of the Timefold tournament-scheduling
+// Port of the reference tournament-scheduling
 // TournamentScheduleConstraintProvider.
 //
 // calculateScore does a full recompute — the reference the incremental
@@ -31,7 +31,7 @@ namespace ts
 //                                        teamId2 (strict: same-team pairs
 //                                        excluded)
 //
-// "unfairness" is Timefold's LoadBalance::unfairness: sqrt(sum(load^2) -
+// "unfairness" is the reference model's load-balance unfairness: sqrt(sum(load^2) -
 // sum(load)^2 / n) over the n currently loaded items, rounded to 6
 // significant figures HALF_EVEN (BigDecimal.sqrt with MathContext(6)).
 // Unassigned assignments (team == -1) contribute nothing: the construction
@@ -46,7 +46,7 @@ public:
     // Unordered pairs among n items: C(n, 2).
     static std::int64_t pairs(std::int64_t n) { return n * (n - 1) / 2; }
 
-    // Timefold LoadBalance::unfairness from the running aggregates:
+    // Load-balance unfairness from the running aggregates:
     // sqrt(sumOfSquares - sumOfLoads^2 / itemCount), 0 when itemCount == 0,
     // rounded to 6 significant figures HALF_EVEN like the BigDecimal sqrt.
     static double unfairnessFromAggregates(std::int64_t sumOfLoads,

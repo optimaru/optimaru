@@ -55,54 +55,6 @@ def solve_cpsat(problem: Any, seconds: float, seed: int, workers: int) -> Any:
     return solved.to_core()
 
 
-
-# --- Timefold quickstart (benchmarks/timefold-quickstarts) ---------------------
-
-TIMEFOLD = "task-assigning"
-
-
-def to_timefold(problem: Any) -> dict:
-    # Task types and customers come first, so later references to them can be
-    # plain ids (the quickstart's @JsonIdentityInfo).
-    task_types, customers, tasks = problem.task_types, problem.customers, problem.tasks
-    return {
-        "taskTypes": [
-            {"code": t.code, "title": t.title, "baseDuration": t.base_duration, "requiredSkills": list(t.required_skills)}
-            for t in task_types
-        ],
-        "customers": [{"id": c.id, "name": c.name} for c in customers],
-        "tasks": [
-            {
-                "id": t.id,
-                "taskType": task_types[t.task_type].code,
-                "indexInTaskType": t.index_in_task_type,
-                "customer": customers[t.customer].id,
-                "minStartTime": t.min_start_time,
-                "priority": t.priority.name,
-            }
-            for t in tasks
-        ],
-        "employees": [
-            {
-                "id": e.id,
-                "fullName": e.full_name,
-                "skills": list(e.skills),
-                "customerToAffinity": {
-                    customers[i].id: affinity.name for i, affinity in enumerate(e.affinity_by_customer)
-                },
-                "tasks": [tasks[i].id for i in e.tasks],
-            }
-            for e in problem.employees
-        ],
-    }
-
-
-def from_timefold(problem: Any, result: dict) -> None:
-    index = {t.id: i for i, t in enumerate(problem.tasks)}
-    chosen = result["assignment"]["Employee"]
-    problem.set_task_lists([[index[task] for task in chosen[e.id]["tasks"]] for e in problem.employees])
-
-
 def main(argv: list[str] | None = None) -> int:
     return run_cli(sys.modules[__name__], argv)
 

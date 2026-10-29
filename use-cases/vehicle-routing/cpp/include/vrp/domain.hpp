@@ -28,7 +28,7 @@ constexpr Seconds NULL_TIME = -1;  // stands in for a null LocalDateTime
 // ---------------------------------------------------------------------------
 // HardMediumSoftScore
 // ---------------------------------------------------------------------------
-// Mirrors ai.timefold.solver.core.api.score.HardMediumSoftScore.
+// A three-level HardMediumSoft score.
 // Constraints *penalize*, so scores are <= 0; higher (closer to zero) is
 // better. Comparison is lexicographic: hard dominates medium dominates soft.
 //
@@ -200,8 +200,8 @@ struct VehicleRoutePlan
     std::vector<Vehicle> vehicles;
     std::vector<Visit> visits;
 
-    // The unassigned pool. Timefold models allowsUnassignedValues by letting a
-    // value belong to no list; the engine's LIST kind instead requires every
+    // The unassigned pool. The reference model allows unassigned values by
+    // letting a value belong to no list; the engine's LIST kind instead requires every
     // element to live in exactly one list, so the pool is materialized as one
     // extra virtual list at index vehicles.size() (see the SolutionDescriptor
     // below). Everything in it is unassigned: it has no route, no arrival

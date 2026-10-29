@@ -12,7 +12,7 @@ Constraints of the Java quickstart (HardMediumSoftBigDecimalScore) and the score
 The engine score is HardSoftScore(hard int, soft float), so medium is folded into
 soft: ``soft = -(medium unfairness * MEDIUM_SCALE + soft unfairness)``
 (MEDIUM_SCALE == 1e6; medium always dominates soft). "Unfairness" is
-Timefold LoadBalance::unfairness — sqrt(sum(load^2) - sum(load)^2 / n) rounded
+load-balance unfairness — sqrt(sum(load^2) - sum(load)^2 / n) rounded
 to 6 significant digits (HALF_EVEN).
 """
 
@@ -98,7 +98,7 @@ def calculate_score(schedule: TournamentSchedule) -> Score:
     """Full recalculation (also stored in schedule.score)."""
 
 def unfairness(loads: Sequence[int]) -> float:
-    """Timefold LoadBalance::unfairness (6 significant digits, HALF_EVEN)."""
+    """Load-balance unfairness (6 significant digits, HALF_EVEN)."""
 
 class SolverConfig:
     """Engine settings. Default: 30 s budget, LA + ALNS, single start."""

@@ -9,8 +9,7 @@ namespace fp
 {
 
 // Per-constraint penalty magnitudes (all >= 0; the score negates them), for
-// tests and the Python bindings — the stand-in for Timefold's
-// SolutionManager.analyze().
+// tests and the Python bindings.
 struct ConstraintBreakdown
 {
     std::int64_t maxEndDateTime = 0;            // hard, minutes late

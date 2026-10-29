@@ -1,6 +1,6 @@
 # Food Packaging — C++ port
 
-The Timefold quickstart `food-packaging` ported onto `include/optimaru/` (the header-only
+The `food-packaging` example model ported onto `include/optimaru/` (the header-only
 engine). Files:
 
 - `include/fp/domain.hpp` — domain structs, the HardMediumSoft↔HardSoft score
@@ -38,7 +38,7 @@ cmake --build build -j4
   the incremental calculator keeps only cross-line pairs (same meaning).
 - Lines without an operator (Java's `operator == null`) are grouped together
   (the same as the null matching of Java's `Joiners.equal`).
-- caveat: `Line.operator` is not co-searched per move as in Timefold but reassigned
+- caveat: `Line.operator` is not co-searched per move as in the reference model but reassigned
   between engine legs. With operators >= lines the assignment is injective and the
   conflict constraint is always 0, so results are exactly equivalent (the demo is this
   case); with operators < lines it is an alternating heuristic.

@@ -10,8 +10,7 @@ namespace optimaru {
 // ---------------------------------------------------------------------------
 // HardSoftScore
 // ---------------------------------------------------------------------------
-// Mirrors ai.timefold.solver.core.api.score.buildin.hardsoftbigdecimal.
-// HardSoftBigDecimalScore. Hard penalties are whole numbers (counts / minutes)
+// A two-level hard/soft score with a decimal soft level. Hard penalties are whole numbers (counts / minutes)
 // so hard stays integer; soft may carry a fractional part (e.g. a load-balance
 // unfairness decimal), modelled with double. Higher is better; hard dominates
 // soft. A solution is feasible when hard >= 0.

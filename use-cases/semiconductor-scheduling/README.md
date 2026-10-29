@@ -10,8 +10,6 @@ metaheuristic solver; `benchmarks/semiconductor-scheduling/cpsat` contains the e
 
 The model combines patterns documented by the official
 [Hexaly Flexible Job Shop example](https://www.hexaly.com/docs/last/exampletour/flexiblejobshop.html),
-[Timefold Task Scheduling constraints](https://docs.timefold.ai/job-scheduling/latest/user-guide/constraints),
-the [Timefold employee-resource model](https://docs.timefold.ai/job-scheduling/latest/machine-resource-constraints/employee-resources),
 the [IBM CP scheduling example library](https://www.ibm.com/docs/en/icos/22.2.0?topic=programming-where-find-cp-examples),
 and [Gurobi's modeling examples](https://github.com/Gurobi/modeling-examples).
 The implementation is original and does not depend on a commercial runtime.
@@ -59,5 +57,3 @@ This is a pure Python reference implementation (simulated annealing in
 ## Benchmark
 
 [`benchmarks/semiconductor-scheduling`](../../benchmarks/semiconductor-scheduling) compares this use case with OR-Tools CP-SAT on the same instances, rescored by the same evaluator.
-
-Latest run (30 s per solver, 2 instances): best score by the engine on 0, CP-SAT on 2 (ties count for each). Full table: [benchmarks/semiconductor-scheduling/README.md](../../benchmarks/semiconductor-scheduling/README.md#results).

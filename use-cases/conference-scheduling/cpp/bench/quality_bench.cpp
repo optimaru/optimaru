@@ -85,7 +85,7 @@ const std::vector<std::string> SECTOR_TAGS = {"Green", "Blue", "Orange"};
 const std::vector<std::string> AUDIENCE_TAGS
     = {"Programmers", "Analysts", "Managers"};
 const std::vector<std::string> CONTENT_TAGS
-    = {"Timefold", "Constraints", "Metaheuristics", "Kubernetes"};
+    = {"Optimization", "Constraints", "Metaheuristics", "Kubernetes"};
 
 int speakerIndex(const ConferenceSchedule &c, const std::string &name)
 {

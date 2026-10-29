@@ -1,6 +1,6 @@
 # food_packaging — Python bindings
 
-The pybind11 package of the Timefold quickstart `food-packaging` C++ port (`../cpp`).
+The pybind11 package of the `food-packaging` example-model C++ port (`../cpp`).
 Times are exchanged as **minutes** (int64) from a shared origin, and the pydantic
 mirror (`food_packaging.models`) handles conversion to and from `datetime`.
 
@@ -24,7 +24,7 @@ print(schedule.score)  # e.g. 0hard/-1298medium/-109664360soft
 for line in schedule.lines:
     print(line.name, [schedule.jobs[j].name for j in line.jobs])
 
-# Per-constraint penalty breakdown (the counterpart of Timefold SolutionManager.analyze)
+# Per-constraint penalty breakdown (one penalty per constraint)
 b = fp.analyze(schedule)
 print(b.max_end_date_time, b.operator_cleaning_conflict, b.minimize_makespan)
 ```

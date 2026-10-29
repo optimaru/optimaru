@@ -39,7 +39,7 @@ struct Breakdown
     }
 };
 
-// Port of the Timefold sports-league-scheduling
+// Port of the reference sports-league-scheduling
 // SportsLeagueSchedulingConstraintProvider.
 //
 // calculateScore does a full recompute — the reference the incremental
@@ -89,9 +89,9 @@ public:
     // Penalty of one team side (home or away): the summed length of every
     // maximal consecutive round-index run covering >= MAX_CONSECUTIVE
     // distinct indices. `cnt` is the per-round-index match count of that
-    // (team, side); only presence matters — Timefold's
-    // toConsecutiveSequences collects the Round values into a set
-    // (ConsecutiveSetTree), so several matches on one round index count
+    // (team, side); only presence matters — the reference
+    // model collects the Round values into a set before finding
+    // consecutive sequences, so several matches on one round index count
     // once, exactly like a duplicated Round fact would.
     static std::int64_t runPenalty(const std::vector<int> &cnt);
 

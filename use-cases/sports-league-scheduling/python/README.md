@@ -1,6 +1,6 @@
 # sports_league — Sports League Scheduling (C++ engine + pybind11)
 
-Timefold quickstart [sports-league-scheduling](https://github.com/TimefoldAI/timefold-quickstarts/tree/stable/use-cases/sports-league-scheduling)
+The `sports-league-scheduling` example model (Apache-2.0; see the repository NOTICE)
 C++ port (`../cpp`, namespace `sls`) for use from Python.
 Assigns a round (`Round`) to every match (`Match`) of the league — `Match.round`
 is the planning variable (-1 = unassigned; the value is a position in the `rounds` list).

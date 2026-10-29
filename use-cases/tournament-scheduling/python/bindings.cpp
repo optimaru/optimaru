@@ -24,7 +24,7 @@ namespace tfpy = optimaru::python;
 
 PYBIND11_MODULE(_core, m)
 {
-    m.doc() = "Tournament scheduling — Timefold engine-backed C++ wrapper "
+    m.doc() = "Tournament scheduling — optimaru engine-backed C++ wrapper "
               "exposed to Python";
 
     m.attr("MEDIUM_SCALE") = kMediumScale;
@@ -162,7 +162,7 @@ PYBIND11_MODULE(_core, m)
     m.def("unfairness",
           &ScoreCalculator::unfairness,
           py::arg("loads"),
-          "Timefold LoadBalance::unfairness of the given loads (6 s.f., "
+          "Load-balance unfairness of the given loads (6 s.f., "
           "HALF_EVEN).");
 
     py::class_<Solver::Config>(m, "SolverConfig", py::module_local())

@@ -1,6 +1,6 @@
 """Flight crew scheduling — Python wrapper of the C++ solver on the optimaru engine.
 
-A port of the Timefold quickstart `flight-crew-scheduling`: a BASIC-variable problem
+A port of the `flight-crew-scheduling` example model: a BASIC-variable problem
 that picks a crew member (employee) for every crew seat of a flight (FlightAssignment).
 
 Constraints (HardSoftScore, with the Java ConstraintProvider's weights as-is):

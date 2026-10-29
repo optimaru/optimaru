@@ -49,7 +49,7 @@ struct Breakdown
     }
 };
 
-// Port of the Timefold meeting-scheduling MeetingSchedulingConstraintProvider.
+// Port of the reference meeting-scheduling MeetingSchedulingConstraintProvider.
 //
 // calculateScore does a full recompute — the reference the incremental
 // calculator is checked against (in the tests and under FULL_ASSERT).

@@ -114,41 +114,6 @@ def solve_cpsat(problem: Any, seconds: float, seed: int, workers: int) -> Any:
     return solved.to_core()
 
 
-
-# --- Timefold quickstart (benchmarks/timefold-quickstarts) ---------------------
-
-TIMEFOLD = "tournament-scheduling"
-
-
-def to_timefold(problem: Any) -> dict:
-    # Teams are identified by their index here (the quickstart uses numeric ids).
-    days = problem.days
-    return {
-        "teams": [{"id": i, "name": team.name} for i, team in enumerate(problem.teams)],
-        "days": [{"dateIndex": day.date_index} for day in days],
-        "unavailabilityPenalties": [
-            {"team": p.team, "day": days[p.day].date_index} for p in problem.unavailability_penalties
-        ],
-        "teamAssignments": [
-            {
-                "id": a.id,
-                "day": days[a.day].date_index,
-                "indexInDate": a.index_in_day,
-                "pinned": a.pinned,
-                "team": a.team if a.team >= 0 else None,
-            }
-            for a in problem.team_assignments
-        ],
-    }
-
-
-def from_timefold(problem: Any, result: dict) -> None:
-    chosen = result["assignment"]["TeamAssignment"]
-    problem.set_assignment(
-        [int(chosen[str(a.id)]["team"]) if chosen[str(a.id)]["team"] is not None else -1 for a in problem.team_assignments]
-    )
-
-
 def main(argv: list[str] | None = None) -> int:
     return run_cli(sys.modules[__name__], argv)
 

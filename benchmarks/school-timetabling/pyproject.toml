@@ -1,7 +1,7 @@
 [project]
 name = "st-bench"
 version = "0.0.0"
-description = "school-timetabling three-way benchmark harness (C++ engine vs OR-Tools CP-SAT vs Java Timefold)"
+description = "school-timetabling benchmark harness (C++ engine vs OR-Tools CP-SAT)"
 requires-python = ">=3.14,<4.0"
 dependencies = [
     # Track 1 CP-SAT model + track 2 teacher_scheduling (benchmarks/school-timetabling/cpsat) dependencies.

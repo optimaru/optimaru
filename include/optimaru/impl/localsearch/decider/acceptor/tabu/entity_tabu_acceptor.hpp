@@ -12,7 +12,7 @@ namespace optimaru {
 // a move touching a tabu entity is rejected unless it beats the best score
 // (aspiration). Among non-tabu moves this behaves like hill climbing — the
 // tabu memory is what forces the search away from recently visited ground.
-// (Timefold's tabu search evaluates a whole neighborhood per step; this is the
+// (Classic tabu search evaluates a whole neighborhood per step; this is the
 // single-candidate-per-step adaptation.)
 class EntityTabuAcceptor final : public Acceptor {
 public:

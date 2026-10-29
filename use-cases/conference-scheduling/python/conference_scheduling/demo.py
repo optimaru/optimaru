@@ -15,7 +15,7 @@ BREAKOUT = 1
 THEME_TAGS = ["Optimization", "AI", "Cloud"]
 SECTOR_TAGS = ["Green", "Blue", "Orange"]
 AUDIENCE_TAGS = ["Programmers", "Analysts", "Managers"]
-CONTENT_TAGS = ["Timefold", "Constraints", "Metaheuristics", "Kubernetes"]
+CONTENT_TAGS = ["Optimization", "Constraints", "Metaheuristics", "Kubernetes"]
 
 
 class JavaRandom:

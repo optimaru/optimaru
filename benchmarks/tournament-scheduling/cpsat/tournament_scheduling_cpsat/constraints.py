@@ -19,7 +19,7 @@ def _add_unfairness_surrogate(
 ) -> None:
     """Minimize the variance over positive loads.
 
-    Timefold's LoadBalance ignores zero-load items and reports the square root
+    The reference LoadBalance ignores zero-load items and reports the square root
     of the variance numerator.  The square root is monotone, so CP-SAT can
     minimize an integer-scaled variance without changing the optimum.
     """

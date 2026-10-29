@@ -151,7 +151,7 @@ def _request(vehicle_fields, demand, case_fields, *, two_vehicles=False) -> PdpR
     )
 
 
-def _timefold_cost(request, routes, name):
+def _engine_cost(request, routes, name):
     plan = to_plan(request.model_input)
     node_by_id = {node.id: i for i, node in enumerate(plan.nodes)}
     for vehicle in plan.vehicles:
@@ -194,12 +194,12 @@ def test_constraint_matches_hand_calculation_and_other_backend(
     request = _request(vehicle_fields, demand, case_fields)
     routes = {"V1": route}
 
-    raw_cost, timefold_score = _timefold_cost(request, routes, name)
+    raw_cost, engine_score = _engine_cost(request, routes, name)
     assert raw_cost == pytest.approx(expected_raw)
-    timefold_penalty = -(
-        timefold_score.hard if level == "hard" else timefold_score.soft
+    engine_penalty = -(
+        engine_score.hard if level == "hard" else engine_score.soft
     )
-    assert timefold_penalty == pytest.approx(expected_score)
+    assert engine_penalty == pytest.approx(expected_score)
 
     exact = solve_request(
         request,
@@ -230,7 +230,7 @@ def test_open_route_skips_the_closing_leg_on_both_backends(
     assert not request.model_input.vehicles[0].return_to_depot
     routes = {"V1": ("P", "D")}
 
-    raw_cost, _ = _timefold_cost(request, routes, name)
+    raw_cost, _ = _engine_cost(request, routes, name)
     assert raw_cost == pytest.approx(expected)
 
     exact = solve_request(
@@ -262,12 +262,12 @@ def test_open_route_skips_the_closing_leg_on_both_backends(
         ("pickup_before_dropoff", {"V1": ("D", "P")}, False),
     ],
 )
-def test_request_coupling_is_scored_by_timefold_and_rejected_by_cpsat(
+def test_request_coupling_is_scored_by_the_engine_and_rejected_by_cpsat(
     name, routes, two_vehicles
 ):
     """The exact model enforces the three unit penalties as invariants."""
     request = _request({}, 3, {}, two_vehicles=two_vehicles)
-    raw_cost, _ = _timefold_cost(request, routes, name)
+    raw_cost, _ = _engine_cost(request, routes, name)
     assert raw_cost == 1  # exactly one broken pickup/dropoff relationship
 
     with pytest.raises(RuntimeError, match="INFEASIBLE"):

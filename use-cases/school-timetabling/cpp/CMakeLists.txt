@@ -8,8 +8,8 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif()
 
-# The generic engine (header-only), consumed like the Java quickstarts consume
-# the ai.timefold.solver dependency.
+# The generic engine (header-only), consumed as an external
+# header-only dependency.
 add_library(optimaru INTERFACE)
 target_include_directories(optimaru
     INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/../../../include)
@@ -55,7 +55,7 @@ add_executable(canonical_plugin_test test/canonical_plugin_test.cpp)
 target_link_libraries(canonical_plugin_test PRIVATE st_canon)
 target_compile_options(canonical_plugin_test PRIVATE -Wall -Wextra)
 
-# Solution-quality benchmark vs the real Timefold and CP-SAT (see
+# Solution-quality benchmark vs CP-SAT (see
 # bench/st_quality_bench.cpp and benchmarks/school-timetabling/run_bench.py).
 add_executable(st_quality_bench bench/st_quality_bench.cpp)
 target_link_libraries(st_quality_bench PRIVATE st_core)

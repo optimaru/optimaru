@@ -17,7 +17,7 @@ namespace cs
 // ---------------------------------------------------------------------------
 // Plugin-style constraint components (the school-timetabling pattern)
 // ---------------------------------------------------------------------------
-// The 36 constraints of the Timefold conference-scheduling
+// The 36 constraints of the reference conference-scheduling
 // ConferenceSchedulingConstraintProvider (16 hard + 20 soft, plus the port's
 // synthetic talkTypeCompatibility), split into one small component each on the
 // engine's DecomposedScoreCalculator — an optional assembly path NEXT TO the

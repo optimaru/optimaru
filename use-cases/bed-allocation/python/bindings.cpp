@@ -28,7 +28,7 @@ namespace tfpy = optimaru::python;
 
 PYBIND11_MODULE(_core, m)
 {
-    m.doc() = "Bed allocation (hospital bed scheduling) — Timefold "
+    m.doc() = "Bed allocation (hospital bed scheduling) — optimaru "
               "engine-backed C++ wrapper exposed to Python";
 
     py::class_<Score>(m, "Score", py::module_local())
