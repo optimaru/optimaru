@@ -4,7 +4,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from bench.data import apply_permutation, parse_qap_data, parse_qap_solution
-
 from quadratic_assignment import constraint_costs
 
 
