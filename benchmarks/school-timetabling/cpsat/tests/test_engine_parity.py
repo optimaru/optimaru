@@ -21,15 +21,15 @@ import pytest
 
 pytest.importorskip("teacher_scheduling")
 
+import st_timetabling as st
+from st_timetabling import canon
+from st_timetabling.constraints import Assembly
+
 from teacher_scheduling import SolverConfig as CpsatConfig
 from teacher_scheduling import Timetable, TimetableProblem
 from teacher_scheduling import solve as solve_cpsat
 from teacher_scheduling.sample import build_sample_problem
 from teacher_scheduling.validate import compute_penalties, validate_timetable
-
-import st_timetabling as st
-from st_timetabling import canon
-from st_timetabling.constraints import Assembly
 
 # Problem 3: a small instance with parallel sections (members with different preferred/avoided
 # masks) + a block + forbidden times + class unavailability + a teacher consecutive cap and a free day.

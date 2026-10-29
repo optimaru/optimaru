@@ -7,6 +7,7 @@ Run: `uv run python -m semiconductor_scheduling_cpsat.benchmark --seconds 10`.
 
 from __future__ import annotations
 
+import random
 import sys
 from collections.abc import Callable
 from typing import Any
@@ -24,11 +25,14 @@ def self_report(problem: Any) -> None:
     # two-level score, so its own report is not level-for-level comparable.
     return None
 
-import random
 
 def _build(lot_count: int, seed: int) -> Any:
     from semiconductor_scheduling.models import (
-        LotModel, MachineModel, MachineOptionModel, OperationModel, SemiconductorScheduleModel,
+        LotModel,
+        MachineModel,
+        MachineOptionModel,
+        OperationModel,
+        SemiconductorScheduleModel,
     )
 
     rng = random.Random(seed)
