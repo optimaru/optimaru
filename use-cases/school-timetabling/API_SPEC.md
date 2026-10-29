@@ -76,7 +76,9 @@ harness exchange the same shape.
 
 - `status`: `OPTIMAL | FEASIBLE | INFEASIBLE | MODEL_INVALID | UNKNOWN`
 - `room_id`: filled only for lessons that need a special room. Regular lessons are `null` (their own room).
-- With `INFEASIBLE`, `lessons` is an empty array.
+- With `INFEASIBLE` from the CP-SAT backend (proven), `lessons` is an empty array. The
+  local search backend reports `INFEASIBLE` when hard violations are left at the time
+  limit; it still returns its best assignment and explains the violations in `notes`.
 - There is no hard/soft score field. The quality measures are `status` · `objective_value` ·
   `best_objective_bound` · `penalties`.
 
@@ -98,5 +100,6 @@ S1–S6 constraint and `weights` apply the same way. The parity is gated by
 `benchmarks/school-timetabling/cpsat/tests/test_engine_parity.py`.
 
 They differ only in how they search. Local search cannot prove optimality or
-infeasibility, so its `status` is `FEASIBLE | UNKNOWN` and
+infeasibility, so its `status` is `FEASIBLE` (hard 0) or `INFEASIBLE` (hard
+violations left at the time limit, not a proof) and
 `best_objective_bound` is always `null`.

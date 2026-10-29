@@ -172,8 +172,8 @@ def test_relaxed_h1_returns_a_partial_timetable(problem):
     strict = st.solve(problem, time_limit_seconds=5.0, random_seed=7)
     partial = st.solve(problem, constraints=relaxed, time_limit_seconds=5.0, random_seed=7)
 
-    # Kept hard, the periods that cannot fit remain hard violations: UNKNOWN, without proof.
-    assert strict["status"] == "UNKNOWN"
+    # Kept hard, the periods that cannot fit remain hard violations: INFEASIBLE, without proof.
+    assert strict["status"] == "INFEASIBLE"
     assert len(strict["lessons"]) == 40, "with H1 hard the search gives every lesson a slot"
 
     # Relaxed, the rest is a partial solution: status is decided without the unassigned lessons.
@@ -215,7 +215,7 @@ def test_h1_stays_hard_without_the_override(problem):
         time_limit_seconds=5.0,
         random_seed=7,
     )
-    assert result["status"] == "UNKNOWN"
+    assert result["status"] == "INFEASIBLE"
     assert len(result["lessons"]) == 40
     assert "weekly_period_counts" not in result["penalties"]
 
@@ -292,4 +292,4 @@ def test_assembly_accepts_cpsat_names_end_to_end(problem):
     assert "weekly_period_counts" in assembly, "__contains__ accepts aliases too"
 
     result = st.solve(problem, constraints=assembly, time_limit_seconds=5.0, random_seed=7)
-    assert result["status"] in ("FEASIBLE", "UNKNOWN")
+    assert result["status"] in ("FEASIBLE", "INFEASIBLE")

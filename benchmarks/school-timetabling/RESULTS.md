@@ -287,7 +287,7 @@ artifacts).
   warm-up or dependencies means an instant cold start, which suits
   **interactive services, short budgets, large instances and rescheduling
   loops**. Limit: it is a search, so it gives no optimality proof or bound
-  (`FEASIBLE`/`UNKNOWN` only).
+  (`FEASIBLE`/`INFEASIBLE` only; INFEASIBLE means hard violations were left, not a proof).
 - **CP-SAT**: exact, so it fits **when you need an optimality proof
   (OPTIMAL/bound) or an infeasibility diagnosis, and when the problem is small
   or the budget is minutes or more**. With this benchmark's 10 s budget it is

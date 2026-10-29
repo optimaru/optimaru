@@ -83,7 +83,7 @@ def test_solve_quickstart_mode(problem):
         random_seed=42,
         stop_at_first_feasible=True,
     )
-    assert result["status"] in ("FEASIBLE", "UNKNOWN")
+    assert result["status"] in ("FEASIBLE", "INFEASIBLE")
     assert len(result["lessons"]) == 40
     # The limits of the approximate quickstart conversion are left in notes (penalties are empty).
     assert any("soft" in note for note in result["notes"])
@@ -100,7 +100,7 @@ def test_solve_accepts_config_objects(problem):
         stop_at_first_feasible=True,
         config=model_cfg,
     )
-    assert result["status"] in ("FEASIBLE", "UNKNOWN")
+    assert result["status"] in ("FEASIBLE", "INFEASIBLE")
     assert len(result["lessons"]) == 40
 
     # A mode's _core config can be passed directly too.
@@ -113,7 +113,7 @@ def test_solve_accepts_config_objects(problem):
         stop_at_first_feasible=True,
         config=cfg,
     )
-    assert result["status"] in ("FEASIBLE", "UNKNOWN")
+    assert result["status"] in ("FEASIBLE", "INFEASIBLE")
 
     # A config type that does not fit the mode is a clear ValueError.
     with pytest.raises(ValueError, match="config"):

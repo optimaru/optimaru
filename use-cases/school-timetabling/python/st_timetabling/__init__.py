@@ -220,7 +220,7 @@ def solve(
     objective_value uses the effective S weights of the assembly (an override
     takes its value, a dropped term 0) — hence S weights must be non-negative
     integers. status also follows the canonical hard rescore (e.g. an assembly
-    that demotes a hard constraint to soft and then violates it is UNKNOWN).
+    that demotes a hard constraint to soft and then violates it is INFEASIBLE).
 
     Only an assembly that demotes H1 (`unassigned_lesson`) to soft accepts
     unassigned lessons as a **result** (the same contract as cpsat's
