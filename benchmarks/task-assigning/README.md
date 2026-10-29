@@ -18,3 +18,14 @@ CP-SAT formulation notes: [`cpsat/README.md`](cpsat/README.md).
 The engine runs single-threaded; CP-SAT gets `--workers` search
 workers and its time includes model construction.
 
+<!-- results:start -->
+## Results
+
+Every cell is the score of that solver's final solution under the use case's own rules. Higher is better; ties are all bold.
+
+| Instance | Size | optimaru engine | OR-Tools CP-SAT |
+| --- | --- | --- | --- |
+| demo | Java quickstart demo | **[0]hard/[0/-1017961/-11485]soft** | **[0]hard/[0/-1017961/-11485]soft** |
+
+Measured 2026-10-29 on one Apple Silicon Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its time includes model construction. Single runs — treat small differences as noise.
+<!-- results:end -->
