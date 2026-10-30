@@ -28,6 +28,7 @@ USE_CASES = {
     "bed-allocation": ("bed_allocation", "bed_allocation"),
     "bin-packing": ("bin_packing", "bin_packing"),
     "conference-scheduling": ("conference_scheduling", "conference_scheduling"),
+    "employee-scheduling": ("employee_scheduling", "es_scheduling"),
     "facility-location": ("facility_location", "facility_location"),
     "flight-crew-scheduling": ("flight_crew_scheduling", "flight_crew"),
     "food-packaging": ("food_packaging", "food_packaging"),

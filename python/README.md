@@ -1,7 +1,7 @@
 # optimaru
 
 A metaheuristic optimization engine for real-world routing, scheduling,
-timetabling and allocation problems — with 21 ready-to-use models.
+timetabling and allocation problems — with 22 ready-to-use models.
 
 The solver core is C++17 and ships compiled in the wheel; you use it from
 Python. Every business rule and preference is a constraint *plugin*: switch it
@@ -55,7 +55,7 @@ print(plan.score, plan.routes())
 | Family | `optimaru.…` |
 | --- | --- |
 | Routing & logistics | `vehicle_routing`, `pickup_delivery`, `order_picking`, `facility_location` |
-| Scheduling | `flight_crew_scheduling`, `maintenance_scheduling`, `project_job_scheduling`, `semiconductor_scheduling`, `food_packaging`, `task_assigning`, `meeting_scheduling` |
+| Scheduling | `employee_scheduling`, `flight_crew_scheduling`, `maintenance_scheduling`, `project_job_scheduling`, `semiconductor_scheduling`, `food_packaging`, `task_assigning`, `meeting_scheduling` |
 | Timetabling | `school_timetabling`, `conference_scheduling`, `sports_league_scheduling`, `tournament_scheduling` |
 | Allocation & packing | `bed_allocation`, `bin_packing`, `knapsack`, `assembly_line_balancing`, `quadratic_assignment`, `max_cut` |
 

@@ -15,6 +15,7 @@ affiliates, and contributors.
 
   use-cases/bed-allocation
   use-cases/conference-scheduling
+  use-cases/employee-scheduling
   use-cases/facility-location
   use-cases/flight-crew-scheduling
   use-cases/food-packaging
