@@ -206,8 +206,8 @@ def solve(
     same contract. Lessons are matched by course id, and neither dict is
     changed. Periods the solution leaves out are placed by construction, and a
     solution holding every period is the exact starting point. `fixed_slots`
-    are problem facts: a solution that moves a fixed lesson is rejected, and a
-    course's slots beyond them must fit its free periods. room_id is
+    are problem facts: they are kept, and a course's other slots must fit its
+    free periods, so a complete solution that moves a fixed lesson is rejected. room_id is
     ignored, as it is recomputed from the result. Raises ValueError on an
     unknown course, a slot outside the calendar, a course given twice at one
     time, more slots than a course has free periods, or parallel sections at
@@ -278,7 +278,7 @@ def solve(
     if weights is not None:
         cfg.weights = canon.ObjectiveWeights(**weights)
 
-    if initial_solution is not None and "lessons" not in initial_solution:
+    if initial_solution is not None and not (isinstance(initial_solution, dict) and "lessons" in initial_solution):
         raise ValueError("initial_solution has no lessons")
 
     if canonical:

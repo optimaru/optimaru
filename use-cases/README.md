@@ -83,7 +83,8 @@ The contract is the same everywhere:
 
 - A complete solution skips construction: the search starts exactly from it.
 - A partial solution keeps what it gives, and only what it leaves out is constructed.
-- Anything a solve returned is accepted back, even a hard-infeasible result.
+- A solve's result is accepted back, even a hard-infeasible one. The exception is
+  pickup-delivery, which refuses a route with a broken pickup and dropoff pair.
 - Entities are matched by id, never by position. Unknown ids and out-of-range values
   raise `ValueError`.
 - `with_initial_solution` returns a new problem and leaves its input untouched.
@@ -96,7 +97,8 @@ The contract is the same everywhere:
 School timetabling takes dicts, so it uses a keyword instead:
 `solve(problem, initial_solution=previous)`. Each use case's README lists its
 exceptions. To stop right after the start, use a zero time limit:
-`step_count_limit = 0` means no limit.
+`step_count_limit = 0` means no limit. The pure-Python use cases keep a minimum
+budget, so they stop with `SolverConfig(max_iterations=0)` instead.
 
 ## Extending a C++ engine use case
 
