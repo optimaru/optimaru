@@ -162,3 +162,15 @@ def test_plain_solve_still_ignores_input_selection():
     solve(fresh, time_limit_seconds=0.05, random_seed=5)
     solve(preset, time_limit_seconds=0.05, random_seed=5)
     assert _selected(fresh) == _selected(preset)
+
+
+def test_a_seed_is_used_once():
+    seeded = with_initial_solution(_problem(), {"items": [{"id": "A", "selected": True}]})
+    assert seeded.warm_start is True
+    solve(seeded, config=_no_search())
+    assert seeded.warm_start is False
+
+
+def test_a_repeated_item_without_a_decision_is_rejected():
+    with pytest.raises(ValueError, match="more than once"):
+        with_initial_solution(_problem(), {"items": [{"id": "A"}, {"id": "A", "selected": True}]})

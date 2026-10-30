@@ -169,3 +169,10 @@ def test_plain_solve_still_ignores_input_partition():
     solve(fresh, time_limit_seconds=0.05, random_seed=5)
     solve(preset, time_limit_seconds=0.05, random_seed=5)
     assert fresh.partition == preset.partition
+
+
+def test_a_seed_is_used_once():
+    seeded = with_initial_solution(_problem(), {"partition": {}})
+    assert seeded.warm_start is True
+    solve(seeded, config=_no_search())
+    assert seeded.warm_start is False

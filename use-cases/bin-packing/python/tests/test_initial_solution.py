@@ -198,3 +198,10 @@ def test_plain_solve_still_ignores_input_bins():
     assert preset.warm_start is False
     assert solve(fresh, time_limit_seconds=0.05, random_seed=5) == solve(preset, time_limit_seconds=0.05, random_seed=5)
     assert _bins(fresh) == _bins(preset)
+
+
+def test_a_seed_is_used_once():
+    seeded = with_initial_solution(_problem(), {"items": [{"id": "A", "bin": 0}]}).to_core()
+    assert seeded.warm_start is True
+    solve(seeded, config=_no_search())
+    assert seeded.warm_start is False

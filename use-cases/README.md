@@ -87,7 +87,11 @@ The contract is the same everywhere:
 - Entities are matched by id, never by position. Unknown ids and out-of-range values
   raise `ValueError`.
 - `with_initial_solution` returns a new problem and leaves its input untouched.
-- Pinned entities are problem facts and keep the value on the problem.
+- Pinned parts are problem facts. Most use cases keep the problem's value and
+  ignore what the solution says. Food packaging, pickup-delivery, max-cut and
+  school timetabling raise `ValueError` when the solution contradicts them.
+- A seed is used once: a result edited and solved again starts from construction
+  unless you pass it through `with_initial_solution` again.
 
 School timetabling takes dicts, so it uses a keyword instead:
 `solve(problem, initial_solution=previous)`. Each use case's README lists its

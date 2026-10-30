@@ -297,3 +297,10 @@ def test_plain_solve_still_ignores_input_assignments():
     solve(fresh, config=SolverConfig(max_iterations=200, random_seed=5))
     solve(preset, config=SolverConfig(max_iterations=200, random_seed=5))
     assert fresh.assignments == preset.assignments
+
+
+def test_a_seed_is_used_once():
+    seeded = with_initial_solution(_queue_problem(), {"assignments": QUEUE_SEED})
+    assert seeded.warm_start is True
+    solve(seeded, config=_no_search())
+    assert seeded.warm_start is False

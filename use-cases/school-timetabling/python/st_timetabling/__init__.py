@@ -206,8 +206,8 @@ def solve(
     same contract. Lessons are matched by course id, and neither dict is
     changed. Periods the solution leaves out are placed by construction, and a
     solution holding every period is the exact starting point. `fixed_slots`
-    are problem facts: a fixed lesson stays pinned whatever the solution says,
-    and a course's slots beyond them must fit its free periods. room_id is
+    are problem facts: a solution that moves a fixed lesson is rejected, and a
+    course's slots beyond them must fit its free periods. room_id is
     ignored, as it is recomputed from the result. Raises ValueError on an
     unknown course, a slot outside the calendar, a course given twice at one
     time, more slots than a course has free periods, or parallel sections at

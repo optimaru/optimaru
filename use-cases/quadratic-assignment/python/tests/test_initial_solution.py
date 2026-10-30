@@ -118,3 +118,12 @@ def test_plain_solve_still_ignores_input_assignment():
     solve(fresh, config=_no_search())
     solve(preset, config=_no_search())
     assert fresh.assignment == preset.assignment == {"L1": "F1", "L2": "F2", "L3": "F3"}
+
+
+def test_a_seed_is_used_once():
+    problem = _problem()
+    solve(problem, config=_no_search())
+    seeded = with_initial_solution(_problem(), problem)
+    assert seeded.warm_start is True
+    solve(seeded, config=_no_search())
+    assert seeded.warm_start is False

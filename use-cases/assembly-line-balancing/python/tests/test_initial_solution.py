@@ -167,3 +167,10 @@ def test_plain_solve_still_ignores_input_stations():
     solve(fresh, time_limit_seconds=0.05, random_seed=5)
     solve(preset, time_limit_seconds=0.05, random_seed=5)
     assert _stations(fresh) == _stations(preset)
+
+
+def test_a_seed_is_used_once():
+    seeded = with_initial_solution(_problem(), {"tasks": [{"id": "A", "station": 0}]})
+    assert seeded.warm_start is True
+    solve(seeded, config=_no_search())
+    assert seeded.warm_start is False

@@ -205,7 +205,7 @@ def to_plan(model_input: RoutingInput) -> "_core.VehicleRoutePlan":
             )
         )
     visit_index = {visit.id: i for i, visit in enumerate(model_input.visits)}
-    for vehicle, model in zip(vehicles, model_input.vehicles):
+    for vehicle, model in zip(vehicles, model_input.vehicles, strict=True):
         vehicle.visit_indices = [visit_index[visit_id] for visit_id in model.initial_route]
     # The pool stays empty on purpose. The constraints= path does not clear it,
     # so a visit parked there would be skipped by construction and stay unrouted.

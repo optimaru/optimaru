@@ -118,4 +118,6 @@ def solve(
         evaluate(best)
     else:
         calculate_score(problem, constraints)
+    # A seed is used once, so a result edited and solved again starts fresh.
+    problem.warm_start = False
     return problem.score_hard, problem.score_soft

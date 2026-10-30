@@ -86,4 +86,6 @@ def solve(
         problem.assignment = {}
         problem.total_cost = 0
         problem.score_hard, problem.score_soft = 0, 0.0
+    # A seed is used once, so a result edited and solved again starts fresh.
+    problem.warm_start = False
     return problem.score_hard, problem.score_soft

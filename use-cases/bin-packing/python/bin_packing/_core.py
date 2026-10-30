@@ -192,6 +192,8 @@ class Solver:
             raise ValueError("item weights must be positive")
         if not problem.items:
             problem.score = Score()
+            # A seed is used once, so a result edited and solved again starts fresh.
+            problem.warm_start = False
             return problem.score
 
         cfg = self.config
@@ -267,4 +269,6 @@ class Solver:
             temperature *= cfg.cooling_rate
 
         _score_assignments(problem, best, constraints)
+        # A seed is used once, so a result edited and solved again starts fresh.
+        problem.warm_start = False
         return problem.score

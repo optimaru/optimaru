@@ -107,12 +107,14 @@ def with_initial_solution(problem, solution):
         raise ValueError("solution must be a problem model or a dict with an 'items' list")
     known = {item.id for item in problem.items}
     decided: dict[str, bool] = {}
+    seen: set[str] = set()
     for entry in solution["items"]:
         if not isinstance(entry, dict) or not isinstance(entry.get("id"), str) or entry["id"] not in known:
             raise ValueError(f"solution references unknown item: {entry!r}")
         item_id = entry["id"]
-        if item_id in decided:
+        if item_id in seen:
             raise ValueError(f"solution lists item {item_id!r} more than once")
+        seen.add(item_id)
         if "selected" not in entry:
             continue
         if not isinstance(entry["selected"], bool):
