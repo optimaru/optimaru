@@ -55,6 +55,22 @@ class VehicleModel(_Model):
             "driven or counted toward the route end time."
         ),
     )
+    initial_route: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Stop ids this vehicle's route starts from. The solve keeps them as its "
+            "starting point instead of constructing them, and places only what no "
+            "route holds. A request's two stops must both be here or both be absent."
+        ),
+    )
+    pinned_stops: int = Field(
+        default=0,
+        ge=0,
+        description=(
+            "How many leading stops of `initial_route` cannot change. The rest may "
+            "be reordered, moved to another vehicle or have stops inserted between."
+        ),
+    )
 
 
 class StopModel(_Model):
@@ -74,6 +90,10 @@ class DeliveryModel(_Model):
             "When the request was placed, on the plan's clock: negative if it has "
             "already been waiting. Only `minimize_lateness` reads it."
         ),
+    )
+    required_vehicle: str | None = Field(
+        default=None,
+        description="The vehicle this request must ride on. Its place on the route stays free.",
     )
     pickup: StopModel
     dropoff: StopModel
@@ -109,7 +129,38 @@ class PdpInput(_Model):
                 )
             if any(value < 0 for row in self.driving_seconds for value in row):
                 raise ValueError("driving_seconds values must be non-negative")
+        self._check_initial_routes()
+        for delivery in self.deliveries:
+            if delivery.required_vehicle and delivery.required_vehicle not in vehicle_ids:
+                raise ValueError(f"request {delivery.id}: unknown vehicle {delivery.required_vehicle!r}")
         return self
+
+    def _check_initial_routes(self) -> None:
+        requests = {
+            stop.id: delivery
+            for delivery in self.deliveries
+            for stop in (delivery.pickup, delivery.dropoff)
+        }
+        seen: set[str] = set()
+        for vehicle in self.vehicles:
+            route = vehicle.initial_route
+            if vehicle.pinned_stops > len(route):
+                raise ValueError(f"vehicle {vehicle.id}: more pinned_stops than initial_route stops")
+            position = {stop_id: index for index, stop_id in enumerate(route)}
+            if len(position) != len(route) or seen.intersection(route):
+                raise ValueError(f"vehicle {vehicle.id}: a stop appears twice in the initial routes")
+            seen.update(route)
+            if unknown := set(route) - requests.keys():
+                raise ValueError(f"vehicle {vehicle.id}: unknown stop {sorted(unknown)}")
+            for stop_id in route:
+                request = requests[stop_id]
+                pickup = position.get(request.pickup.id)
+                dropoff = position.get(request.dropoff.id)
+                if pickup is None or dropoff is None or pickup > dropoff:
+                    raise ValueError(
+                        f"vehicle {vehicle.id}: request {request.id} needs its pickup, "
+                        "then its dropoff, in the same initial route"
+                    )
 
 
 class PdpRequest(_Model):
@@ -178,6 +229,7 @@ def to_plan(model_input: PdpInput, *, name: str = "plan") -> _core.PdpRoutePlan:
         )
         for i, vehicle in enumerate(model_input.vehicles)
     ]
+    vehicle_index = {vehicle.id: i for i, vehicle in enumerate(model_input.vehicles)}
     nodes = []
     deliveries = []
     for d, delivery in enumerate(model_input.deliveries):
@@ -214,11 +266,19 @@ def to_plan(model_input: PdpInput, *, name: str = "plan") -> _core.PdpRoutePlan:
                 dropoff_index,
                 delivery.demand,
                 delivery.order_time,
+                vehicle_index[delivery.required_vehicle] if delivery.required_vehicle else -1,
             )
         )
-    return _core.PdpRoutePlan(
+    node_index = {node.id: index for index, node in enumerate(nodes)}
+    for vehicle, model in zip(vehicles, model_input.vehicles):
+        route = [node_index[stop_id] for stop_id in model.initial_route]
+        vehicle.node_indices = route
+        vehicle.pinned_node_indices = route[: model.pinned_stops]
+    plan = _core.PdpRoutePlan(
         name, locations, vehicles, nodes, deliveries, model_input.driving_seconds
     )
+    plan.rebuild_unassigned_pool()
+    return plan
 
 
 def vehicle_metrics(
@@ -294,8 +354,9 @@ def solve_request(request: PdpRequest, *, constraints=None) -> PdpSolution:
         or v.min_load_ratio
         or v.fixed_cost
         or v.max_route_radius_meters
+        or v.pinned_stops
         for v in request.model_input.vehicles
-    )
+    ) or any(d.required_vehicle for d in request.model_input.deliveries)
     if constraints is None and not has_route_policy:
         solver.solve(plan)
     else:

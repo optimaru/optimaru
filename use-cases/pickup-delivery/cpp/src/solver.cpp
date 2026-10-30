@@ -318,7 +318,10 @@ private:
                 = plan.vehicles[vehicleIndex].nodeIndices;
             const Seconds before
                 = routeTravel(plan, static_cast<int>(vehicleIndex), route);
-            for (int pickupPos = 0; pickupPos <= static_cast<int>(route.size());
+            const auto firstFree = static_cast<int>(
+                plan.vehicles[vehicleIndex].pinnedNodeIndices.size());
+            for (int pickupPos = firstFree;
+                 pickupPos <= static_cast<int>(route.size());
                  ++pickupPos)
             {
                 for (int dropoffPos = pickupPos + 1;
@@ -444,15 +447,27 @@ private:
     std::vector<std::pair<int, std::vector<int>>> saved_;
 };
 
+// Places the requests no route holds yet. Routes already in the plan are the
+// starting point of the solve and stay as they are.
 void constructPairs(PdpRoutePlan &plan, bool decreasing)
 {
-    for (Vehicle &vehicle : plan.vehicles)
-        vehicle.nodeIndices.clear();
+    std::vector<char> routed(plan.nodes.size(), 0);
+    for (const Vehicle &vehicle : plan.vehicles)
+    {
+        for (int nodeIndex : vehicle.nodeIndices)
+            routed[static_cast<std::size_t>(nodeIndex)] = 1;
+    }
     plan.unassignedNodeIndices.clear();
 
-    std::vector<int> order(plan.deliveries.size());
-    for (std::size_t i = 0; i < order.size(); ++i)
-        order[i] = static_cast<int>(i);
+    std::vector<int> order;
+    order.reserve(plan.deliveries.size());
+    for (std::size_t i = 0; i < plan.deliveries.size(); ++i)
+    {
+        const std::size_t pickup
+            = static_cast<std::size_t>(plan.deliveries[i].pickupNodeIndex);
+        if (!routed[pickup])
+            order.push_back(static_cast<int>(i));
+    }
     if (decreasing)
     {
         std::stable_sort(order.begin(),

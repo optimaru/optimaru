@@ -18,6 +18,8 @@
 #include "pdp/constraints/minimize_travel_time.hpp"
 #include "pdp/constraints/paired_request.hpp"
 #include "pdp/constraints/pickup_before_dropoff.hpp"
+#include "pdp/constraints/pinned_stops.hpp"
+#include "pdp/constraints/required_vehicle.hpp"
 #include "pdp/constraints/route_costs.hpp"
 #include "pdp/constraints/route_geometry.hpp"
 #include "pdp/constraints/route_limits.hpp"
@@ -67,6 +69,8 @@ inline ConstraintAssembly defaultConstraints()
     assembly.emplace<MinimizeLatency>();
     assembly.emplace<MinimizeLateness>();
     assembly.emplace<VehicleFixedCost>();
+    assembly.emplace<PinnedStops>();
+    assembly.emplace<RequiredVehicle>();
     return assembly;
 }
 

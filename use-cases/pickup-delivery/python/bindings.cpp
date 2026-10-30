@@ -96,7 +96,8 @@ PYBIND11_MODULE(_core, m)
                     int pickupNode,
                     int dropoffNode,
                     int demand,
-                    Seconds orderTime)
+                    Seconds orderTime,
+                    int requiredVehicleIndex)
                  {
                      Delivery d;
                      d.id = std::move(id);
@@ -104,18 +105,21 @@ PYBIND11_MODULE(_core, m)
                      d.dropoffNodeIndex = dropoffNode;
                      d.demand = demand;
                      d.orderTime = orderTime;
+                     d.requiredVehicleIndex = requiredVehicleIndex;
                      return d;
                  }),
              py::arg("id"),
              py::arg("pickup_node_index"),
              py::arg("dropoff_node_index"),
              py::arg("demand"),
-             py::arg("order_time") = 0)
+             py::arg("order_time") = 0,
+             py::arg("required_vehicle_index") = -1)
         .def_readwrite("id", &Delivery::id)
         .def_readwrite("pickup_node_index", &Delivery::pickupNodeIndex)
         .def_readwrite("dropoff_node_index", &Delivery::dropoffNodeIndex)
         .def_readwrite("demand", &Delivery::demand)
-        .def_readwrite("order_time", &Delivery::orderTime);
+        .def_readwrite("order_time", &Delivery::orderTime)
+        .def_readwrite("required_vehicle_index", &Delivery::requiredVehicleIndex);
 
     py::class_<Vehicle>(m, "Vehicle", py::module_local())
         .def(py::init(
@@ -176,7 +180,8 @@ PYBIND11_MODULE(_core, m)
             &Vehicle::returnToDepot,
             "Whether the route ends back home (default: open route).")
         // The planning list variable: the ordered stop sequence.
-        .def_readwrite("node_indices", &Vehicle::nodeIndices);
+        .def_readwrite("node_indices", &Vehicle::nodeIndices)
+        .def_readwrite("pinned_node_indices", &Vehicle::pinnedNodeIndices);
 
     py::class_<PdpRoutePlan>(m, "PdpRoutePlan", py::module_local())
         .def(py::init(

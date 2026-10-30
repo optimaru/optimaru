@@ -128,6 +128,8 @@ struct Delivery
     // When the request was placed, on the plan's clock: negative if it has
     // already been waiting when the plan starts.
     Seconds orderTime = 0;
+    // The vehicle this request must ride on, or -1 for any.
+    int requiredVehicleIndex = -1;
 };
 
 // ---------------------------------------------------------------------------
@@ -153,6 +155,9 @@ struct Vehicle
     // like a classic round trip.
     bool returnToDepot = false;
     std::vector<int> nodeIndices;  // ordered route of stops
+    // Stops the route must start with, in order. A solve keeps any route already
+    // in nodeIndices as its starting point, so these are normally its prefix.
+    std::vector<int> pinnedNodeIndices;
 
     // The driving seconds from the last stop back home, or 0 for an open
     // route. Every scoring path charges the closing leg through this one
