@@ -27,6 +27,22 @@ cmake -S use-cases/meeting-scheduling/cpp -B build/meeting-scheduling && cmake -
 ctest --test-dir build/meeting-scheduling
 ```
 
+## Starting from an existing solution
+
+`with_initial_solution(problem, solution)` returns a copy of `problem` whose search starts from `solution`, which is the model a solve returned or that model as a JSON dict. It works on the pydantic model, so use `models.demo_data`; `ms.demo_data` is the engine object:
+
+```python
+from meeting_scheduling.models import demo_data
+
+problem = demo_data()
+solved = ms.solve(problem, time_limit_seconds=5.0, random_seed=42)
+seeded = ms.with_initial_solution(problem, solved.model_dump(mode="json"))
+result = ms.solve(seeded, time_limit_seconds=5.0, random_seed=43)
+print(result.score_hard, result.score_soft)
+```
+
+Assignments are matched by id. An assignment the solution leaves out is placed by the construction heuristic, and a complete solution is exactly where the search starts. Pinned assignments keep their value on `problem`, whatever the solution says. `grain_room` is a composite over the positions in `time_grains` and `rooms`, so a solution that lists different ones, or the same ones in another order, raises `ValueError`. So do unknown ids and out-of-range values, before anything reaches the engine, which does not range-check.
+
 ## Extending
 
 Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-c-engine-use-case).

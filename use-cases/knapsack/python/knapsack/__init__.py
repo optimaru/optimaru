@@ -3,7 +3,8 @@ from __future__ import annotations
 from ._core import SolverConfig as SolverConfig
 from .common import anneal, configure
 from .constraints import DEFAULTS, score
-from .models import KnapsackProblemModel
+from .models import KnapsackProblemModel, _greedy_selection
+from .models import with_initial_solution as with_initial_solution
 
 
 def list_constraints() -> list[str]:
@@ -52,15 +53,7 @@ def solve(
     problem, *, time_limit_seconds=None, random_seed=None, parallel_solver_count=None, config=None, constraints=None
 ):
     cfg = configure(config, time_limit_seconds, random_seed, parallel_solver_count)
-    order = sorted(
-        range(len(problem.items)), key=lambda i: problem.items[i].value / problem.items[i].weight, reverse=True
-    )
-    initial = [False] * len(problem.items)
-    load = 0
-    for index in order:
-        if load + problem.items[index].weight <= problem.capacity:
-            initial[index] = True
-            load += problem.items[index].weight
+    initial = [item.selected for item in problem.items] if problem.warm_start else _greedy_selection(problem)
 
     def evaluate(state):
         for item, selected in zip(problem.items, state, strict=True):
@@ -77,4 +70,6 @@ def solve(
         evaluate(best)
     else:
         calculate_score(problem, constraints)
+    # A seed is used once, so a result edited and solved again starts fresh.
+    problem.warm_start = False
     return problem.score_hard, problem.score_soft

@@ -36,6 +36,18 @@ cmake -S use-cases/vehicle-routing/cpp -B build/vehicle-routing && cmake --build
 ctest --test-dir build/vehicle-routing
 ```
 
+## Starting from an existing solution
+
+```python
+from vrp_routing.models import solve_request, with_initial_solution
+
+solution = solve_request(request)                        # request: a RoutePlanRequest
+next_request = with_initial_solution(request, solution)  # or solution.model_dump(mode="json")
+better = solve_request(next_request)
+```
+
+`with_initial_solution` returns a new request whose vehicles carry `initial_route`, a list of visit ids. The solve keeps those routes as its starting point and construction places only the visits in no route, so a partial solution works and the `unassigned` visits get another try. With `timelimit=0` a complete solution comes back as it went in. An unknown id or a visit routed twice raises `ValueError`.
+
 ## Extending
 
 Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-c-engine-use-case).

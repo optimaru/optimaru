@@ -43,11 +43,16 @@ __all__ = [
     "TrolleyModel",
     "solve_request",
     "to_solution",
+    "with_initial_solution",
 ]
 
 
 class _Model(BaseModel):
     model_config = ConfigDict(extra="forbid")
+
+
+def _pick_task_id(order_id: str, item_position: int) -> str:
+    return f"{order_id}-{item_position}"
 
 
 class LocationModel(_Model):
@@ -95,6 +100,14 @@ class TrolleyModel(_Model):
     bucket_count: int = Field(ge=0)
     bucket_capacity: int = Field(gt=0, description="cm3")
     location: LocationModel
+    initial_route: list[str] = Field(
+        default_factory=list,
+        description=(
+            'Pick task ids ("<order>-<item position>") this trolley\'s route starts '
+            "from. The solve keeps them as its starting point instead of constructing "
+            "them, and places only what no route holds."
+        ),
+    )
 
 
 class OrderPickingRequest(_Model):
@@ -115,6 +128,15 @@ class OrderPickingRequest(_Model):
         ):
             if len(ids) != len(set(ids)):
                 raise ValueError(f"duplicate {kind} ids")
+        known = {_pick_task_id(o.id, i) for o in self.orders for i in range(len(o.items))}
+        seen: set[str] = set()
+        for trolley in self.trolleys:
+            for task_id in trolley.initial_route:
+                if task_id not in known:
+                    raise ValueError(f"trolley {trolley.id}: unknown pick task {task_id!r}")
+                if task_id in seen:
+                    raise ValueError(f"trolley {trolley.id}: pick task {task_id!r} appears twice in the initial routes")
+                seen.add(task_id)
         return self
 
 
@@ -146,7 +168,7 @@ def to_solution(request: OrderPickingRequest) -> "_core.OrderPickingSolution":
         for i, item in enumerate(order.items):
             pick_tasks.append(
                 _core.PickTask(
-                    id=f"{order.id}-{i}",
+                    id=_pick_task_id(order.id, i),
                     order_index=order_index,
                     volume=item.volume,
                     location=item.location.to_core(),
@@ -154,6 +176,9 @@ def to_solution(request: OrderPickingRequest) -> "_core.OrderPickingSolution":
                 )
             )
     trolleys = [_core.Trolley(t.id, t.bucket_count, t.bucket_capacity, t.location.to_core()) for t in request.trolleys]
+    task_index = {task.id: i for i, task in enumerate(pick_tasks)}
+    for trolley, model in zip(trolleys, request.trolleys):
+        trolley.pick_task_indices = [task_index[task_id] for task_id in model.initial_route]
     return _core.OrderPickingSolution(orders, trolleys, pick_tasks)
 
 
@@ -204,6 +229,33 @@ def solve_request(request: OrderPickingRequest, *, constraints=None) -> OrderPic
         total_distance=totals.distance_from_previous_pick_task + totals.distance_from_last_pick_task_to_path_origin,
         order_split_count=totals.order_split_by_trolley // 1000,
     )
+
+
+def with_initial_solution(
+    problem: OrderPickingRequest, solution: OrderPickingResponse | dict[str, Any]
+) -> OrderPickingRequest:
+    """Return a copy of `problem` whose search starts from `solution`.
+
+    `solution` is what `solve_request` returned, as the model or as its JSON
+    dict. Each trolley's `initial_route` becomes the pick task ids of its route
+    there, replacing what `problem` had; a trolley the solution leaves out
+    starts empty. Trolleys and pick tasks are matched by id.
+
+    A pick task id is "<order id>-<item position>", so it depends on where the
+    item sits in `order.items`: reorder an order's items and the same id names
+    a different item. Keep the order as it was when `solution` was solved.
+
+    Tasks in no route are placed by construction. A solution that routes every
+    task is the exact starting point. Raises ValueError on an unknown trolley or
+    pick task, or a task routed twice.
+    """
+    routes = OrderPickingResponse.model_validate(solution).routes
+    if unknown := routes.keys() - {trolley.id for trolley in problem.trolleys}:
+        raise ValueError(f"unknown trolley {sorted(unknown)}")
+    data = problem.model_dump()
+    for trolley in data["trolleys"]:
+        trolley["initial_route"] = [stop.pick_task_id for stop in routes.get(trolley["id"], [])]
+    return OrderPickingRequest.model_validate(data)
 
 
 def _apply_solver_parameters(config, parameters: dict[str, Any]) -> None:

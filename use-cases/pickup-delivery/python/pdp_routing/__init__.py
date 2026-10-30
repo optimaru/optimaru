@@ -40,7 +40,7 @@ from ._core import (
     constraint_costs,
     list_constraints,
 )
-from .models import solve_request
+from .models import solve_request, with_initial_solution
 
 __all__ = [
     "AcceptorType",
@@ -58,4 +58,5 @@ __all__ = [
     "list_constraints",
     "constraint_costs",
     "solve_request",
+    "with_initial_solution",
 ]

@@ -38,6 +38,31 @@ print([(a.lot_id, a.operation_id, a.machine_id, a.start) for a in problem.assign
 a full `config` (`SolverConfig`: temperature, cooling rate, stagnation
 limit, …) and `constraints`.
 
+## Starting from an existing solution
+
+`with_initial_solution(problem, solution)` returns a copy of `problem` whose
+search starts from `solution`, a solved model or the same thing as a JSON dict.
+Assignments are matched by lot and operation id. Any result of `solve` is
+accepted, feasible or not. Unknown ids, duplicates, ineligible machines and wrong
+durations raise `ValueError`.
+
+```python
+from semiconductor_scheduling import with_initial_solution
+
+warm = with_initial_solution(problem, problem.model_dump(mode="json"))
+print(solve(warm, time_limit_seconds=2.0, random_seed=42))   # (hard, soft)
+print(warm.makespan, warm.total_weighted_tardiness)
+```
+
+The search works on machine choices and priority ranks that a decoder turns into
+a schedule, and the decoder left-shifts operations and re-derives batches, so
+decoding a seed can give a different schedule, sometimes a worse one. A complete
+seed is therefore scored as supplied: `solve` returns it unchanged unless the
+search finds a strictly better schedule, so the score is never worse than the
+seed's. The search itself is not guaranteed to stay near the seed or to improve
+it. A partial seed cannot be scored, so it is decoded: it keeps its machines and
+relative order, but its start times are recomputed.
+
 ## Extending
 
 This is a pure Python reference implementation (simulated annealing in

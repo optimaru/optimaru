@@ -101,6 +101,22 @@ cmake -S use-cases/conference-scheduling/cpp -B build/conference-scheduling && c
 ctest --test-dir build/conference-scheduling
 ```
 
+## Starting from an existing solution
+
+`with_initial_solution(problem, solution)` returns a copy of `problem` whose search starts from `solution`, which is `ConferenceScheduleModel.from_core(schedule)` or that model as a JSON dict. `solve` takes the engine object, so convert the result with `to_core()`:
+
+```python
+from conference_scheduling.models import ConferenceScheduleModel
+
+problem = ConferenceScheduleModel.from_core(cs.demo_conference())
+solved = ConferenceScheduleModel.from_core(schedule)            # `schedule` solved above
+restart = cs.with_initial_solution(problem, solved).to_core()
+cs.solve(restart, time_limit_seconds=5.0, random_seed=43)
+print(restart.score)
+```
+
+Talks are matched by code. A talk the solution leaves out is placed by the construction heuristic, and a complete solution is exactly where the search starts. Pinned talks keep their value on `problem`, whatever the solution says. `slot_room` is a composite over the timeslot and room lists, so a solution that lists different ones, or the same ones in another order, raises `ValueError`. So do unknown codes and out-of-range values, before anything reaches the engine, which does not range-check.
+
 ## Extending
 
 Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-c-engine-use-case).

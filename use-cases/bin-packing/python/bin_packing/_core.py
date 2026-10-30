@@ -33,6 +33,7 @@ class BinPackingProblem:
     conflict_weight: int = 1
     conflicts: list[tuple[str, str]] = field(default_factory=list)
     score: Score = field(default_factory=Score)
+    warm_start: bool = False
 
     def bins_used(self) -> int:
         return len({item.bin for item in self.items if item.bin >= 0})
@@ -112,10 +113,16 @@ def _compact(assignments: list[int]) -> list[int]:
     return [remap.setdefault(bin_index, len(remap)) for bin_index in assignments]
 
 
-def _first_fit(weights: list[int], capacity: int, order: list[int]) -> list[int]:
-    assignments = [-1] * len(weights)
-    loads: list[int] = []
+def _first_fit(weights: list[int], capacity: int, order: list[int], seed: list[int] | None = None) -> list[int]:
+    """Place every item of `order` that `seed` leaves at -1, around the loads of the items it already holds."""
+    assignments = [-1] * len(weights) if seed is None else seed.copy()
+    loads = [0] * (max(assignments, default=-1) + 1)
+    for item_index, bin_index in enumerate(assignments):
+        if bin_index >= 0:
+            loads[bin_index] += weights[item_index]
     for item_index in order:
+        if assignments[item_index] >= 0:
+            continue
         weight = weights[item_index]
         candidates = [
             (capacity - (load + weight), bin_index) for bin_index, load in enumerate(loads) if load + weight <= capacity
@@ -185,6 +192,8 @@ class Solver:
             raise ValueError("item weights must be positive")
         if not problem.items:
             problem.score = Score()
+            # A seed is used once, so a result edited and solved again starts fresh.
+            problem.warm_start = False
             return problem.score
 
         cfg = self.config
@@ -194,14 +203,20 @@ class Solver:
         descending = sorted(range(len(weights)), key=lambda index: (-weights[index], index))
         best: list[int] | None = None
         best_score: Score | None = None
-        for start in range(max(1, cfg.parallel_solver_count)):
-            order = descending.copy()
-            if start > 0:
-                rng.shuffle(order)
-            candidate = _first_fit(weights, problem.bin_capacity, order)
-            candidate_score = _score_assignments(problem, candidate, constraints)
-            if best_score is None or candidate_score > best_score:
-                best, best_score = candidate.copy(), candidate_score
+        seed: list[int] | None = None
+        if problem.warm_start:
+            # Unassigned items cost nothing and -1 breaks the moves, so complete the seed before the search.
+            seed = _first_fit(weights, problem.bin_capacity, descending, [item.bin for item in problem.items])
+            best, best_score = seed.copy(), _score_assignments(problem, seed, constraints)
+        else:
+            for start in range(max(1, cfg.parallel_solver_count)):
+                order = descending.copy()
+                if start > 0:
+                    rng.shuffle(order)
+                candidate = _first_fit(weights, problem.bin_capacity, order)
+                candidate_score = _score_assignments(problem, candidate, constraints)
+                if best_score is None or candidate_score > best_score:
+                    best, best_score = candidate.copy(), candidate_score
         assert best is not None and best_score is not None
         current = best.copy()
         current_score = _score_assignments(problem, current, constraints)
@@ -212,10 +227,13 @@ class Solver:
             if time.monotonic() >= deadline:
                 break
             if stagnant >= max(1, cfg.stagnation_limit):
-                order = list(range(len(weights)))
-                rng.shuffle(order)
-                order.sort(key=lambda index: -weights[index])
-                current = _first_fit(weights, problem.bin_capacity, order)
+                if seed is not None:
+                    current = seed.copy()
+                else:
+                    order = list(range(len(weights)))
+                    rng.shuffle(order)
+                    order.sort(key=lambda index: -weights[index])
+                    current = _first_fit(weights, problem.bin_capacity, order)
                 current_score = _score_assignments(problem, current, constraints)
                 temperature = max(1e-9, cfg.temperature)
                 stagnant = 0
@@ -251,4 +269,6 @@ class Solver:
             temperature *= cfg.cooling_rate
 
         _score_assignments(problem, best, constraints)
+        # A seed is used once, so a result edited and solved again starts fresh.
+        problem.warm_start = False
         return problem.score

@@ -30,6 +30,7 @@ __all__ = [
     "DepartmentModel",
     "RoomModel",
     "StayModel",
+    "with_initial_solution",
 ]
 
 GENDERS = ("MALE", "FEMALE")
@@ -238,3 +239,58 @@ class BedPlanModel(_Model):
             score_medium=plan.score.medium,
             score_soft=plan.score.soft,
         )
+
+
+def _solution_dict(solution) -> dict:
+    if isinstance(solution, BaseModel):
+        return solution.model_dump()
+    if isinstance(solution, dict):
+        return solution
+    raise ValueError(f"solution must be a solved model or a dict of that shape: {type(solution)!r}")
+
+
+def _entities_by_id(solved: dict, name: str, ids: list, key: str = "id") -> dict:
+    """`solved[name]` by id. Rejects an id repeated on either side and an id outside `ids`."""
+    entities = solved.get(name)
+    if not isinstance(entities, list):
+        raise ValueError(f"solution has no {name!r} list")
+    known = set(ids)
+    if len(known) != len(ids):
+        raise ValueError(f"problem repeats an id in {name!r}: {next(i for i in ids if ids.count(i) > 1)!r}")
+    by_id: dict = {}
+    for entity in entities:
+        entity_id = entity.get(key) if isinstance(entity, dict) else None
+        if not isinstance(entity_id, (str, int)) or entity_id not in known:
+            raise ValueError(f"solution has an unknown id in {name!r}: {entity_id!r}")
+        if entity_id in by_id:
+            raise ValueError(f"solution repeats an id in {name!r}: {entity_id!r}")
+        by_id[entity_id] = entity
+    return by_id
+
+
+def with_initial_solution(problem, solution):
+    """Return a copy of `problem` whose search starts from `solution`.
+
+    `solution` is what a solve returns: a `BedPlanModel`, or a plain dict of that shape
+    (the JSON the API returned). Stays are matched by id. A stay left out becomes
+    unassigned and the construction heuristic places it, and only it, so a complete
+    solution starts the search exactly from it. `problem` is not mutated.
+
+    A "no bed" stay has no bed id, so `from_core` reports it as bed_id None and it
+    comes back here as unassigned: construction places it again, on a bed or on "no
+    bed" whichever scores best.
+
+    Raises ValueError naming the stay for an unknown or repeated stay id and for an
+    unknown bed id (the engine does not range-check).
+    """
+    if not isinstance(problem, BedPlanModel):
+        raise TypeError(f"problem must be a BedPlanModel: {type(problem)!r}")
+    stays = _entities_by_id(_solution_dict(solution), "stays", [s.id for s in problem.stays])
+    bed_ids = {b.id for b in problem.beds}
+    seeded = problem.model_copy(deep=True)
+    seeded.score_hard = seeded.score_medium = seeded.score_soft = None
+    for stay in seeded.stays:
+        stay.bed_id = stays.get(stay.id, {}).get("bed_id")
+        if stay.bed_id is not None and (not isinstance(stay.bed_id, str) or stay.bed_id not in bed_ids):
+            raise ValueError(f"stay {stay.id!r} has unknown bed_id {stay.bed_id!r}")
+    return seeded

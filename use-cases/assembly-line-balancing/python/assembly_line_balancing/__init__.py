@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from collections import defaultdict
+
 from ._core import SolverConfig as SolverConfig
 from .common import anneal, configure
 from .constraints import DEFAULTS, score
 from .models import AssemblyLineBalancingProblemModel
+from .models import with_initial_solution as with_initial_solution
 
 
 def list_constraints() -> list[str]:
@@ -78,18 +81,24 @@ def solve(
         ordered.extend(ready)
         remaining.difference_update(ready)
     by_id = {task.id: index for index, task in enumerate(problem.tasks)}
-    initial = [0] * len(problem.tasks)
+    # A warm start keeps its seeded stations; the construction only places tasks still at -1.
+    initial = [task.station if problem.warm_start else -1 for task in problem.tasks]
+    seeded = {index for index, assigned in enumerate(initial) if assigned >= 0}
+    loads = defaultdict(int)
+    for index in seeded:
+        loads[initial[index]] += problem.tasks[index].duration
     station = 0
-    load = 0
     for task_id in ordered:
         task = problem.tasks[by_id[task_id]]
-        if load and load + task.duration > problem.cycle_time:
+        if by_id[task_id] in seeded:
+            station = max(station, initial[by_id[task_id]])
+            continue
+        while loads[station] and loads[station] + task.duration > problem.cycle_time:
             station += 1
-            load = 0
         initial[by_id[task_id]] = station
-        load += task.duration
+        loads[station] += task.duration
     for index, task in enumerate(problem.tasks):
-        if task.fixed_station is not None:
+        if task.fixed_station is not None and index not in seeded:
             initial[index] = task.fixed_station
 
     def evaluate(state):
@@ -109,4 +118,6 @@ def solve(
         evaluate(best)
     else:
         calculate_score(problem, constraints)
+    # A seed is used once, so a result edited and solved again starts fresh.
+    problem.warm_start = False
     return problem.score_hard, problem.score_soft

@@ -7,6 +7,7 @@ from ._core import SolverConfig as SolverConfig
 from .common import anneal, configure
 from .constraints import DEFAULTS, score
 from .models import AssignmentModel, MachineModel, OperationModel, SemiconductorScheduleModel
+from .models import with_initial_solution as with_initial_solution
 
 
 def list_constraints() -> list[str]:
@@ -426,6 +427,30 @@ def _construct(problem: SemiconductorScheduleModel, choices: list[int], ranks: l
     return assignments
 
 
+def _seed_state(problem: SemiconductorScheduleModel, rows: list, choices: list[int]) -> tuple[list[int], list[int]]:
+    """Convert `problem.assignments` to the (choices, ranks) state that `_construct` decodes.
+
+    Rows without an assignment keep the choice they have in `choices` and rank last.
+    """
+    assignment_by_key = {(item.lot_id, item.operation_id): item for item in problem.assignments}
+    seeded = [assignment_by_key.get((lot.id, operation.id)) for lot, _position, operation in rows]
+    selected = choices.copy()
+    for row, (assignment, (_lot, _position, operation)) in enumerate(zip(seeded, rows, strict=True)):
+        if assignment is not None:
+            options = {
+                (option.machine_id, option.duration): index for index, option in enumerate(operation.eligible_machines)
+            }
+            selected[row] = options.get((assignment.machine_id, assignment.end - assignment.start), selected[row])
+    order = sorted(
+        range(len(rows)),
+        key=lambda row: (seeded[row] is None, seeded[row].start if seeded[row] is not None else 0, row),
+    )
+    ranks = [0] * len(rows)
+    for rank, row in enumerate(order):
+        ranks[row] = rank
+    return selected, ranks
+
+
 def solve(
     problem,
     *,
@@ -448,10 +473,17 @@ def solve(
         for _lot, _position, operation in rows
     ]
     ranks = list(range(len(rows)))
-    initial = (choices, ranks)
+    initial = _seed_state(problem, rows, choices) if problem.warm_start else (choices, ranks)
+    # A complete seed may not survive decoding, so the initial state stands for the assignments as supplied.
+    supplied = None
+    if problem.warm_start and len({(item.lot_id, item.operation_id) for item in problem.assignments}) == len(rows):
+        supplied = problem.assignments
 
     def evaluate(state):
-        problem.assignments = _construct(problem, state[0], state[1])
+        if state is initial and supplied is not None:
+            problem.assignments = supplied
+        else:
+            problem.assignments = _construct(problem, state[0], state[1])
         return calculate_score(problem, constraints)
 
     def neighbor(state, rng):
@@ -468,6 +500,7 @@ def solve(
         return selected, order
 
     best, _best_score = anneal(initial, neighbor, evaluate, cfg)
-    problem.assignments = _construct(problem, best[0], best[1])
-    calculate_score(problem, constraints)
+    evaluate(best)
+    # A seed is used once, so a result edited and solved again starts fresh.
+    problem.warm_start = False
     return problem.score_hard, problem.score_soft

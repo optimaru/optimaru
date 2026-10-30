@@ -46,7 +46,18 @@ __all__ = [
     "solve",
     "list_constraints",
     "constraint_costs",
+    "with_initial_solution",
 ]
+
+
+def with_initial_solution(problem, solution):
+    """Return a copy of `problem` whose search starts from `solution`.
+
+    See `models.with_initial_solution`. Lazy import: pydantic is an optional dependency.
+    """
+    from . import models
+
+    return models.with_initial_solution(problem, solution)
 
 
 def solve(

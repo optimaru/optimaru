@@ -16,7 +16,7 @@ human-readable (crew_id, start_date) pair instead of the composite crew_date, an
 
 from datetime import date, timedelta
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
 from . import _core
 
@@ -26,9 +26,11 @@ __all__ = [
     "MaintenanceScheduleModel",
     "date_to_epoch",
     "epoch_to_date",
+    "with_initial_solution",
 ]
 
 _EPOCH = date(1970, 1, 1)
+_START_DATE = TypeAdapter(date | None)
 
 
 def date_to_epoch(d: date) -> int:
@@ -164,3 +166,67 @@ class MaintenanceScheduleModel(BaseModel):
             score_hard=schedule.score.hard,
             score_soft=schedule.score.soft,
         )
+
+
+def _solution_dict(solution) -> dict:
+    if isinstance(solution, BaseModel):
+        return solution.model_dump()
+    if isinstance(solution, dict):
+        return solution
+    raise ValueError(f"solution must be a solved model or a dict of that shape: {type(solution)!r}")
+
+
+def _entities_by_id(solved: dict, name: str, ids: list, key: str = "id") -> dict:
+    """`solved[name]` by id. Rejects an id repeated on either side and an id outside `ids`."""
+    entities = solved.get(name)
+    if not isinstance(entities, list):
+        raise ValueError(f"solution has no {name!r} list")
+    known = set(ids)
+    if len(known) != len(ids):
+        raise ValueError(f"problem repeats an id in {name!r}: {next(i for i in ids if ids.count(i) > 1)!r}")
+    by_id: dict = {}
+    for entity in entities:
+        entity_id = entity.get(key) if isinstance(entity, dict) else None
+        if not isinstance(entity_id, (str, int)) or entity_id not in known:
+            raise ValueError(f"solution has an unknown id in {name!r}: {entity_id!r}")
+        if entity_id in by_id:
+            raise ValueError(f"solution repeats an id in {name!r}: {entity_id!r}")
+        by_id[entity_id] = entity
+    return by_id
+
+
+def with_initial_solution(problem, solution):
+    """Return a copy of `problem` whose search starts from `solution`.
+
+    `solution` is what a solve returns (`MaintenanceScheduleModel.from_core`), or a plain
+    dict of that shape (the JSON the API returned). Jobs are matched by id. A job left
+    out becomes unassigned and the construction heuristic places it, and only it, so
+    a complete solution starts the search exactly from it. `problem` is not mutated.
+    Pinned jobs keep their crew and start date on `problem`, whatever `solution` says.
+
+    Raises ValueError naming the job for an unknown or repeated id, for a crew_id or
+    start_date set without the other, for an unknown crew and for a start_date that is
+    not a weekday inside the work calendar. `end_date` is a shadow: it is cleared here
+    and the solve fills it in again.
+    """
+    if not isinstance(problem, MaintenanceScheduleModel):
+        raise TypeError(f"problem must be a MaintenanceScheduleModel: {type(problem)!r}")
+    jobs = _entities_by_id(_solution_dict(solution), "jobs", [j.id for j in problem.jobs])
+    crew_ids = {c.id for c in problem.crews}
+    seeded = problem.model_copy(deep=True)
+    seeded.score_hard = seeded.score_soft = None
+    for job in seeded.jobs:
+        if not job.pinned:
+            entity = jobs.get(job.id, {})
+            job.crew_id = entity.get("crew_id")
+            try:
+                job.start_date = _START_DATE.validate_python(entity.get("start_date"))
+            except ValueError as error:
+                raise ValueError(f"job {job.id}: invalid start_date {entity.get('start_date')!r}") from error
+            job.end_date = None
+        if (job.crew_id is None) != (job.start_date is None):
+            raise ValueError(f"job {job.id}: crew_id and start_date must be set together")
+        if job.crew_id is not None and (not isinstance(job.crew_id, str) or job.crew_id not in crew_ids):
+            raise ValueError(f"job {job.id}: unknown crew_id {job.crew_id!r}")
+    seeded.to_core()  # rejects a start_date that is not a weekday inside the work calendar
+    return seeded

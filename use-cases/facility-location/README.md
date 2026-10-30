@@ -97,6 +97,21 @@ cmake -S use-cases/facility-location/cpp -B build/facility-location && cmake --b
 ctest --test-dir build/facility-location
 ```
 
+## Starting from an existing solution
+
+`with_initial_solution(problem, solution)` returns a copy of `problem` whose search starts from `solution`, which is `FacilityLocationProblemModel.from_core(problem)` or that model as a JSON dict. `solve` takes the engine object, so convert the result with `to_core()`:
+
+```python
+from facility_location.models import FacilityLocationProblemModel
+
+solved = FacilityLocationProblemModel.from_core(problem)        # `problem` solved above
+restart = fl.with_initial_solution(solved, solved).to_core()    # same facts, so it can be both arguments
+fl.solve(restart, time_limit_seconds=5.0, random_seed=43)
+print(restart.score, restart.total_cost())
+```
+
+Consumers are matched by id. A consumer the solution leaves out is placed by the construction heuristic, and a complete solution is exactly where the search starts. `facility` is a position in `facilities`, so a solution that lists different facilities, or the same ones in another order, raises `ValueError`. So do unknown ids and out-of-range values, before anything reaches the engine, which does not range-check.
+
 ## Extending
 
 Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-c-engine-use-case).

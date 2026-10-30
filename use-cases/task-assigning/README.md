@@ -28,6 +28,17 @@ cmake -S use-cases/task-assigning/cpp -B build/task-assigning && cmake --build b
 ctest --test-dir build/task-assigning
 ```
 
+## Starting from an existing solution
+
+```python
+problem = generate_demo_data()
+solved = ta.solve(problem, time_limit_seconds=2.0, random_seed=42)
+seeded = ta.with_initial_solution(problem, solved)  # or solved.model_dump(mode="json")
+better = ta.solve(seeded, time_limit_seconds=2.0, random_seed=42)
+```
+
+`with_initial_solution` returns a new problem whose employees carry the solution's `tasks`, replacing the ones the problem had. The solve keeps those lists as its starting point and construction places only the tasks in no list, so a partial solution works. With `time_limit_seconds=0` a complete solution comes back as it went in. An unknown id or a task assigned twice raises `ValueError`.
+
 ## Extending
 
 Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-c-engine-use-case).

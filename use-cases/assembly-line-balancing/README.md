@@ -62,6 +62,24 @@ print({task.id: task.station for task in problem.tasks}, problem.stations_used)
 a full `config` (`SolverConfig`: temperature, cooling rate, stagnation
 limit, …) and `constraints`.
 
+## Starting from an existing solution
+
+`with_initial_solution(problem, solution)` returns a copy of `problem` whose
+search starts from `solution`, a solved model or the same thing as a JSON dict.
+Tasks are matched by id; tasks left out or at station -1 are placed by the
+normal construction, and a complete seed skips it. Any result of `solve` is
+accepted, feasible or not: `max_stations`, station domains and `fixed_station`
+stay hard penalties. Unknown ids, duplicates, stations below -1 and non-integer
+stations raise `ValueError`.
+
+```python
+from assembly_line_balancing import with_initial_solution
+
+warm = with_initial_solution(problem, problem.model_dump(mode="json"))
+solve(warm, time_limit_seconds=1.0, random_seed=42)
+print({task.id: task.station for task in warm.tasks}, warm.stations_used)
+```
+
 ## Extending
 
 This is a pure Python reference implementation (simulated annealing in

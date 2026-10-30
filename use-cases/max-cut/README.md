@@ -36,6 +36,24 @@ print(problem.partition, problem.cut_weight)
 a full `config` (`SolverConfig`: temperature, cooling rate, stagnation
 limit, …) and `constraints`.
 
+## Starting from an existing solution
+
+`with_initial_solution(problem, solution)` returns a copy of `problem` whose
+search starts from `solution`, a solved model or the same thing as a JSON dict.
+Vertices the partition leaves out take the default start. Any result of `solve`
+is accepted, feasible or not. Under exact size bounds the search only swaps
+sides, so a seed of the wrong size keeps that size and its hard penalty. Unknown
+vertices, sides other than 0 or 1 and sides that contradict `fixed_partition`
+raise `ValueError`.
+
+```python
+from max_cut import with_initial_solution
+
+warm = with_initial_solution(problem, problem.model_dump(mode="json"))
+solve(warm, time_limit_seconds=1.0, random_seed=42)
+print(warm.partition, warm.cut_weight)
+```
+
 ## Extending
 
 This is a pure Python reference implementation (simulated annealing in

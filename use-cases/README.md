@@ -66,6 +66,40 @@ uv sync --all-groups --all-extras      # builds the pybind extension
 uv run pytest -q
 ```
 
+## Starting from an existing solution
+
+Every use case can start its search from a solution you already have instead of
+constructing one. Pass what a previous solve returned, as the result model or as
+its JSON:
+
+```python
+from vrp_routing.models import solve_request, with_initial_solution
+
+first = solve_request(request)
+better = solve_request(with_initial_solution(request, first))
+```
+
+The contract is the same everywhere:
+
+- A complete solution skips construction: the search starts exactly from it.
+- A partial solution keeps what it gives, and only what it leaves out is constructed.
+- A solve's result is accepted back, even a hard-infeasible one. The exception is
+  pickup-delivery, which refuses a route with a broken pickup and dropoff pair.
+- Entities are matched by id, never by position. Unknown ids and out-of-range values
+  raise `ValueError`.
+- `with_initial_solution` returns a new problem and leaves its input untouched.
+- Pinned parts are problem facts. Most use cases keep the problem's value and
+  ignore what the solution says. Food packaging, pickup-delivery, max-cut and
+  school timetabling raise `ValueError` when the solution contradicts them.
+- A seed is used once: a result edited and solved again starts from construction
+  unless you pass it through `with_initial_solution` again.
+
+School timetabling takes dicts, so it uses a keyword instead:
+`solve(problem, initial_solution=previous)`. Each use case's README lists its
+exceptions. To stop right after the start, use a zero time limit:
+`step_count_limit = 0` means no limit. The pure-Python use cases keep a minimum
+budget, so they stop with `SolverConfig(max_iterations=0)` instead.
+
 ## Extending a C++ engine use case
 
 ### Adding a move

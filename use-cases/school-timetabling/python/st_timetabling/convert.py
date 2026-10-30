@@ -272,28 +272,66 @@ def convert_problem(problem: dict) -> ConvertedProblem:
     )
 
 
+def slots_by_course(
+    lessons: list[dict], slot_index: dict[tuple[int, int], int], courses_by_id: dict[str, dict]
+) -> dict[str, list[int]]:
+    """Reads a canonical `Timetable.lessons` list into course id -> sorted slot indices.
+
+    Raises ValueError on a malformed entry, an unknown course, a slot outside the
+    calendar, or a course given twice at the same time.
+    """
+    by_course: dict[str, list[int]] = {}
+    for lesson in lessons:
+        try:
+            course_id, key = lesson["course_id"], _slot_key(lesson["slot"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError(f"malformed lesson: {lesson!r}") from exc
+        if course_id not in courses_by_id:
+            raise ValueError(f"unknown course: {course_id}")
+        if key not in slot_index:
+            raise ValueError(f"[{course_id}] slot not in the calendar: {key}")
+        slots = by_course.setdefault(course_id, [])
+        if slot_index[key] in slots:
+            raise ValueError(f"[{course_id}] appears twice at {key}")
+        slots.append(slot_index[key])
+    return {course_id: sorted(slots) for course_id, slots in by_course.items()}
+
+
+def _group_pool(group: OccupancyGroup, by_course: dict[str, list[int]]) -> list[int]:
+    """The slots of one occupancy group. Its parallel sections share one set of
+    Lessons, so they cannot differ: a section may leave slots out (a partial
+    solution), but no section may hold a slot the fullest one lacks."""
+    sections = sorted((by_course.get(course_id, []) for course_id in group.course_ids), key=len)
+    pool = sections[-1]
+    if any(not set(section) <= set(pool) for section in sections):
+        raise ValueError(f"parallel group {group.key}: its courses are at different times")
+    return list(pool)
+
+
 def inject_solution(converted: ConvertedProblem, lessons: list[dict]) -> None:
     """Injects a canonical assignment produced by an external backend (cpsat, ...) into the engine lesson slots.
 
     ``lessons`` is a list of dicts shaped like canonical `Timetable.lessons`
-    (course_id + slot). A group's slot set is read from its first member course
-    (in a valid solution every parallel section shares the slots — H5). Pinned
-    Lessons get their own fixed slot, blockGroup Lessons a consecutive window on
-    one day (guaranteed to exist by H8 when the input solution is valid), and
-    the rest are assigned in (day, period) order. Used both for the parity
-    check (engine breakdown vs cpsat validate) and for warm starts.
+    (course_id + slot; room_id is ignored, `convert_solution` recomputes it).
+    Lessons are matched to courses by id. Pinned Lessons get their own fixed
+    slot, blockGroup Lessons a consecutive window on one day (guaranteed to
+    exist by H8 when the input solution is valid), and the rest are assigned in
+    (day, period) order. Used both for the parity check and for warm starts.
+
+    A course may hold fewer slots than its weekly periods: the Lessons left
+    over stay unassigned (-1) for construction to place. Raises ValueError on
+    what `slots_by_course` refuses, on parallel sections at different times,
+    and on more slots than a course has free Lessons, which is also what a
+    solution moving a fixed lesson comes to. A time the course may not use
+    (`allowed_slot`) is accepted: it scores as a hard violation the search can
+    still repair, so an INFEASIBLE result can be resumed.
     """
     slot_index = converted.slot_index
-    by_course: dict[str, list[int]] = {}
-    for lesson in lessons:
-        key = _slot_key(lesson["slot"])
-        if key not in slot_index:
-            raise ValueError(f"[{lesson['course_id']}] slot not in the calendar: {key}")
-        by_course.setdefault(lesson["course_id"], []).append(slot_index[key])
+    by_course = slots_by_course(lessons, slot_index, converted.courses_by_id)
 
     assignment = converted.table.assignment()  # already holds the pinned slots
     for group in converted.groups:
-        pool = sorted(by_course.get(group.course_ids[0], []))
+        pool = _group_pool(group, by_course)
         n = len(group.lesson_indices)
         placed: dict[int, int] = {}  # position within the group -> slot
 
@@ -302,6 +340,10 @@ def inject_solution(converted: ConvertedProblem, lessons: list[dict]) -> None:
             placed[k] = slot_index[slot]
             if placed[k] in pool:
                 pool.remove(placed[k])
+        if len(pool) > n - len(group.fixed):
+            raise ValueError(
+                f"[{group.key}] {len(pool)} slots besides its fixed ones, for {n - len(group.fixed)} free lessons"
+            )
 
         # 2) blockGroup (the last block_periods): a consecutive window on one day.
         block = group.block_periods if group.block_periods >= 2 else 0

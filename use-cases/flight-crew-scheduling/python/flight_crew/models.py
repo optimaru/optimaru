@@ -30,6 +30,7 @@ __all__ = [
     "SolveConfig",
     "datetime_to_minutes",
     "minutes_to_datetime",
+    "with_initial_solution",
 ]
 
 _EPOCH_DATE = date(1970, 1, 1)
@@ -291,3 +292,57 @@ class SolveConfig(BaseModel):
         if self.best_score_limit is not None:
             cfg.best_score_limit = self.best_score_limit
         return cfg
+
+
+def _solution_dict(solution) -> dict:
+    if isinstance(solution, BaseModel):
+        return solution.model_dump()
+    if isinstance(solution, dict):
+        return solution
+    raise ValueError(f"solution must be a solved model or a dict of that shape: {type(solution)!r}")
+
+
+def _entities_by_id(solved: dict, name: str, ids: list, key: str = "id") -> dict:
+    """`solved[name]` by id. Rejects an id repeated in `solved` and an id outside `ids`."""
+    entities = solved.get(name)
+    if not isinstance(entities, list):
+        raise ValueError(f"solution has no {name!r} list")
+    known = set(ids)
+    by_id: dict = {}
+    for entity in entities:
+        entity_id = entity.get(key) if isinstance(entity, dict) else None
+        if not isinstance(entity_id, (str, int)) or entity_id not in known:
+            raise ValueError(f"solution has an unknown id in {name!r}: {entity_id!r}")
+        if entity_id in by_id:
+            raise ValueError(f"solution repeats an id in {name!r}: {entity_id!r}")
+        by_id[entity_id] = entity
+    return by_id
+
+
+def with_initial_solution(problem, solution):
+    """Return a copy of `problem` whose search starts from `solution`.
+
+    `solution` is what a solve returns: a `FlightCrewScheduleModel`, or a plain dict of
+    that shape (the JSON the API returned). Assignments are matched by id. An
+    assignment left out becomes unassigned and the construction heuristic places it,
+    and only it, so a complete solution starts the search exactly from it. `problem`
+    is not mutated. Pinned assignments keep their employee on `problem`, whatever
+    `solution` says.
+
+    Raises ValueError naming the assignment for an unknown or repeated id and for an
+    unknown employee id (the engine does not range-check).
+    """
+    if not isinstance(problem, FlightCrewScheduleModel):
+        raise TypeError(f"problem must be a FlightCrewScheduleModel: {type(problem)!r}")
+    ids = [a.id for a in problem.flight_assignments]
+    assignments = _entities_by_id(_solution_dict(solution), "flight_assignments", ids)
+    employee_ids = {e.id for e in problem.employees}
+    seeded = problem.model_copy(deep=True)
+    seeded.score_hard = seeded.score_soft = None
+    for assignment in seeded.flight_assignments:
+        if not assignment.pinned:
+            assignment.employee = assignments.get(assignment.id, {}).get("employee")
+        employee = assignment.employee
+        if employee is not None and (not isinstance(employee, str) or employee not in employee_ids):
+            raise ValueError(f"flight assignment {assignment.id!r} has unknown employee {employee!r}")
+    return seeded
