@@ -28,6 +28,19 @@ cmake -S use-cases/tournament-scheduling/cpp -B build/tournament-scheduling && c
 ctest --test-dir build/tournament-scheduling
 ```
 
+## Starting from an existing solution
+
+`with_initial_solution(problem, solution)` returns a copy of `problem` whose search starts from `solution`, which is the model a solve returned or that model as a JSON dict:
+
+```python
+solved = ts.solve(schedule, time_limit_seconds=5.0, random_seed=42)
+seeded = ts.with_initial_solution(schedule, solved.model_dump(mode="json"))
+result = ts.solve(seeded, time_limit_seconds=5.0, random_seed=43)
+print(result.score_hard, result.score_soft)
+```
+
+Assignments are matched by id. An assignment the solution leaves out is placed by the construction heuristic, and a complete solution is exactly where the search starts. Pinned assignments keep their team on `problem`, whatever the solution says. `team` is a position in `teams`, so a solution that lists different teams, or the same ones in another order, raises `ValueError`. So do unknown ids and out-of-range values, before anything reaches the engine, which does not range-check.
+
 ## Extending
 
 Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-c-engine-use-case).

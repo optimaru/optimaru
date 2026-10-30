@@ -66,6 +66,34 @@ uv sync --all-groups --all-extras      # builds the pybind extension
 uv run pytest -q
 ```
 
+## Starting from an existing solution
+
+Every use case can start its search from a solution you already have instead of
+constructing one. Pass what a previous solve returned, as the result model or as
+its JSON:
+
+```python
+from vrp_routing.models import solve_request, with_initial_solution
+
+first = solve_request(request)
+better = solve_request(with_initial_solution(request, first))
+```
+
+The contract is the same everywhere:
+
+- A complete solution skips construction: the search starts exactly from it.
+- A partial solution keeps what it gives, and only what it leaves out is constructed.
+- Anything a solve returned is accepted back, even a hard-infeasible result.
+- Entities are matched by id, never by position. Unknown ids and out-of-range values
+  raise `ValueError`.
+- `with_initial_solution` returns a new problem and leaves its input untouched.
+- Pinned entities are problem facts and keep the value on the problem.
+
+School timetabling takes dicts, so it uses a keyword instead:
+`solve(problem, initial_solution=previous)`. Each use case's README lists its
+exceptions. To stop right after the start, use a zero time limit:
+`step_count_limit = 0` means no limit.
+
 ## Extending a C++ engine use case
 
 ### Adding a move

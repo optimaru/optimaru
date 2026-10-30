@@ -28,6 +28,19 @@ cmake -S use-cases/project-job-scheduling/cpp -B build/project-job-scheduling &&
 ctest --test-dir build/project-job-scheduling
 ```
 
+## Starting from an existing solution
+
+`with_initial_solution(problem, solution)` returns a copy of `problem` whose search starts from `solution`, which is the model a solve returned or that model as a JSON dict:
+
+```python
+solved = pj.solve(schedule, time_limit_seconds=5.0, random_seed=42)
+seeded = pj.with_initial_solution(schedule, solved.model_dump(mode="json"))
+result = pj.solve(seeded, time_limit_seconds=5.0, random_seed=43)
+print(result.score_hard, result.score_medium, result.score_soft)
+```
+
+Allocations are matched by id. An allocation the solution leaves out is placed by the construction heuristic, and a complete solution is exactly where the search starts. Pinned allocations, which always include SOURCE and SINK, keep their value on `problem`, whatever the solution says. `ValueError` is raised for an unknown id, for a mode that is not one of the job's, for a delay without a mode and for a delay outside the delay range, before anything reaches the engine, which does not range-check.
+
 ## Extending
 
 Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-c-engine-use-case).

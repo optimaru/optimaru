@@ -40,6 +40,7 @@ __all__ = [
     "solve_request",
     "to_plan",
     "vehicle_metrics",
+    "with_initial_solution",
 ]
 
 
@@ -65,6 +66,14 @@ class VehicleModel(_Model):
             "Whether the route ends back at the vehicle's start. Off by default: "
             "the route is open and ends at its last stop, so no closing leg is "
             "driven or counted toward the route end time."
+        ),
+    )
+    initial_route: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Visit ids this vehicle's route starts from. The solve keeps them as its "
+            "starting point instead of constructing them, and places only what no "
+            "route holds."
         ),
     )
 
@@ -101,7 +110,19 @@ class RoutingInput(_Model):
                 )
             if any(value < 0 for row in self.driving_seconds for value in row):
                 raise ValueError("driving_seconds values must be non-negative")
+        self._check_initial_routes()
         return self
+
+    def _check_initial_routes(self) -> None:
+        known = {visit.id for visit in self.visits}
+        seen: set[str] = set()
+        for vehicle in self.vehicles:
+            for visit_id in vehicle.initial_route:
+                if visit_id not in known:
+                    raise ValueError(f"vehicle {vehicle.id}: unknown visit {visit_id!r}")
+                if visit_id in seen:
+                    raise ValueError(f"vehicle {vehicle.id}: visit {visit_id!r} appears twice in the initial routes")
+                seen.add(visit_id)
 
 
 class RoutePlanRequest(_Model):
@@ -183,6 +204,11 @@ def to_plan(model_input: RoutingInput) -> "_core.VehicleRoutePlan":
                 visit.unassigned_penalty_minutes,
             )
         )
+    visit_index = {visit.id: i for i, visit in enumerate(model_input.visits)}
+    for vehicle, model in zip(vehicles, model_input.vehicles):
+        vehicle.visit_indices = [visit_index[visit_id] for visit_id in model.initial_route]
+    # The pool stays empty on purpose. The constraints= path does not clear it,
+    # so a visit parked there would be skipped by construction and stay unrouted.
     return _core.VehicleRoutePlan(
         "plan", locations, vehicles, visits, model_input.driving_seconds
     )
@@ -289,6 +315,27 @@ def solve_request(request: RoutePlanRequest, *, constraints=None) -> RouteSoluti
         total_driving_seconds=sum(m.driving_seconds for m in metrics.values()),
         vehicle_metrics=metrics,
     )
+
+
+def with_initial_solution(problem: RoutePlanRequest, solution: RouteSolution | dict[str, Any]) -> RoutePlanRequest:
+    """Return a copy of `problem` whose search starts from `solution`.
+
+    `solution` is what `solve_request` returned, as the model or as its JSON
+    dict. Each vehicle's `initial_route` becomes the visit ids of its route
+    there, replacing what `problem` had; a vehicle the solution leaves out
+    starts empty. Vehicles and visits are matched by id.
+
+    Visits in no route, `unassigned` ones included, are placed by construction.
+    A solution that routes every visit is the exact starting point. Raises
+    ValueError on an unknown vehicle or visit, or a visit routed twice.
+    """
+    routes = RouteSolution.model_validate(solution).routes
+    if unknown := routes.keys() - {vehicle.id for vehicle in problem.model_input.vehicles}:
+        raise ValueError(f"unknown vehicle {sorted(unknown)}")
+    data = problem.model_dump()
+    for vehicle in data["model_input"]["vehicles"]:
+        vehicle["initial_route"] = [stop.visit_id for stop in routes.get(vehicle["id"], [])]
+    return RoutePlanRequest.model_validate(data)
 
 
 def _apply_solver_parameters(config, parameters: dict[str, Any]) -> None:

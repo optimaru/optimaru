@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 
 class TimeWindowModel(BaseModel):
@@ -146,6 +146,10 @@ class SemiconductorScheduleModel(BaseModel):
     total_cycle_time: int | None = None
     score_hard: int | None = None
     score_soft: float | None = None
+    warm_start: bool = Field(
+        default=False,
+        description="Start the search from `assignments`; a complete seed is scored as supplied, not decoded.",
+    )
 
     @model_validator(mode="after")
     def valid_references(self) -> SemiconductorScheduleModel:
@@ -211,3 +215,62 @@ class SemiconductorScheduleModel(BaseModel):
     @classmethod
     def from_core(cls, problem: SemiconductorScheduleModel) -> SemiconductorScheduleModel:
         return problem.model_copy(deep=True)
+
+
+def with_initial_solution(problem, solution):
+    """Return a copy of `problem` whose search starts from `solution`.
+
+    `solution` is a solved problem model or a dict of the same shape; assignments are matched by lot and operation
+    id. Machine eligibility and duration are checked here, against every option of the operation. Anything `solve`
+    returns passes, feasible or not. Everything else, such as overlaps or route order, stays a hard penalty that the
+    seed may break.
+
+    The search state is a machine choice and a priority rank per operation, which `_construct` decodes into a
+    schedule. The seed is converted to that state: the machine gives the choice, the order of the start times gives
+    the rank. The decoder left-shifts operations and re-derives batches, so decoding a seed can give another schedule,
+    worse as well as better, even when the seed came out of a solve.
+
+    Guaranteed for a complete seed, one that assigns every operation: `solve` scores the supplied assignments directly
+    without decoding them, returns them unchanged, batch ids included, unless the search finds a strictly better
+    schedule, and so never returns a score worse than the seed's.
+
+    Not guaranteed: that the search stays close to the seed or can improve it. Every schedule it visits after the seed
+    is decoded, and a seed the decoder cannot reproduce may have no accepted neighbour, in which case it comes back
+    as supplied. A partial seed cannot be scored, so it is decoded from the start: it keeps its machines and relative
+    order, the left-out operations rank last on their default machine, and all start times are recomputed.
+    """
+    if isinstance(solution, BaseModel):
+        solution = solution.model_dump(mode="json")
+    if not isinstance(solution, dict) or not isinstance(solution.get("assignments"), list):
+        raise ValueError("solution must be a problem model or a dict with an 'assignments' list")
+    operations = {(lot.id, operation.id): operation for lot in problem.lots for operation in lot.operations}
+    seeded_by_key: dict[tuple[str, str], AssignmentModel] = {}
+    for entry in solution["assignments"]:
+        try:
+            assignment = AssignmentModel.model_validate(entry)
+        except ValidationError as error:
+            raise ValueError(f"invalid assignment {entry!r}: {error}") from error
+        key = (assignment.lot_id, assignment.operation_id)
+        if key not in operations:
+            raise ValueError(f"solution references unknown operation: {key}")
+        if key in seeded_by_key:
+            raise ValueError(f"solution assigns operation {key} more than once")
+        durations = [
+            option.duration
+            for option in operations[key].eligible_machines
+            if option.machine_id == assignment.machine_id
+        ]
+        if not durations:
+            raise ValueError(f"operation {key} cannot run on machine {assignment.machine_id!r}")
+        if assignment.end - assignment.start not in durations:
+            raise ValueError(
+                f"operation {key} takes {' or '.join(map(str, durations))} on machine {assignment.machine_id!r}, "
+                f"not {assignment.end - assignment.start}"
+            )
+        seeded_by_key[key] = assignment
+    seeded = problem.model_copy(deep=True)
+    seeded.assignments = list(seeded_by_key.values())
+    seeded.makespan = seeded.total_weighted_tardiness = seeded.total_cycle_time = None
+    seeded.score_hard = seeded.score_soft = None
+    seeded.warm_start = True
+    return seeded

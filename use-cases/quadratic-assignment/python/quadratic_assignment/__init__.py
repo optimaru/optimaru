@@ -4,6 +4,7 @@ from ._core import SolverConfig as SolverConfig
 from .common import anneal, configure
 from .constraints import DEFAULTS, score
 from .models import QuadraticAssignmentProblemModel
+from .models import with_initial_solution as with_initial_solution
 
 
 def list_constraints() -> list[str]:
@@ -61,6 +62,9 @@ def solve(
 ):
     cfg = configure(config, time_limit_seconds, random_seed, parallel_solver_count)
     initial = list(range(len(problem.facilities)))
+    if problem.warm_start:
+        facility_index = {facility: index for index, facility in enumerate(problem.facilities)}
+        initial = [facility_index[problem.assignment[location]] for location in problem.locations]
 
     def evaluate(state):
         problem.assignment = {

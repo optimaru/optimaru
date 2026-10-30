@@ -29,6 +29,18 @@ cmake -S use-cases/school-timetabling/cpp -B build/school-timetabling && cmake -
 ctest --test-dir build/school-timetabling
 ```
 
+## Starting from an existing solution
+
+```python
+timetable = st.solve(problem, time_limit_seconds=5.0, random_seed=42)
+better = st.solve(problem, time_limit_seconds=5.0, random_seed=42, initial_solution=timetable)
+print(better["status"], better["objective_value"])
+```
+
+Problems here are dicts, so `solve` takes the earlier `Timetable` dict directly in `initial_solution`, in both modes. Lessons are matched by course id, and construction places only the periods the solution leaves out, so a partial solution works. With `time_limit_seconds=0` a complete solution comes back as it went in. `room_id` is ignored, since it is recomputed from the result.
+
+`fixed_slots` stay pinned, so a course's slots beyond them must fit its free periods. An unknown course, a course given twice at one time, more slots than a course has free periods, or parallel sections at different times raise `ValueError`. A time a course may not use is accepted and scores as a hard violation, so an `INFEASIBLE` result can be resumed.
+
 ## Extending
 
 Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-c-engine-use-case).

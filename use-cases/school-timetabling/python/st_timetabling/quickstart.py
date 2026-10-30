@@ -48,8 +48,9 @@ favour consecutive teacher lessons, spread a class's subjects).
 from dataclasses import dataclass, field
 
 from . import _core
+from .convert import slots_by_course
 
-__all__ = ["ConvertedProblem", "convert_problem", "convert_solution"]
+__all__ = ["ConvertedProblem", "convert_problem", "convert_solution", "inject_solution"]
 
 # room_type of the placeholder home rooms (an internal marker no real special-room type uses).
 CLASS_ROOM_TYPE = "__class_home_room__"
@@ -67,6 +68,7 @@ class ConvertedProblem:
     lesson_courses: list[str]  # lesson index -> course id
     courses_by_id: dict[str, dict]
     subjects_by_id: dict[str, dict]
+    homeroom_index: dict[str, int]  # class id -> room index of its placeholder home room
     notes: list[str] = field(default_factory=list)
 
 
@@ -243,8 +245,58 @@ def convert_problem(problem: dict) -> ConvertedProblem:
         lesson_courses=lesson_courses,
         courses_by_id=courses_by_id,
         subjects_by_id=subjects_by_id,
+        homeroom_index=homeroom_index,
         notes=notes,
     )
+
+
+def inject_solution(converted: ConvertedProblem, lessons: list[dict]) -> None:
+    """Injects a canonical assignment into the quickstart lessons' slotRoom values.
+
+    ``lessons`` is a list of dicts shaped like canonical `Timetable.lessons`,
+    matched to courses by id. Pinned lessons keep their fixed time, and the rest
+    of a course's lessons take its other slots in (day, period) order. room_id
+    is ignored, as `convert_solution` re-matches the rooms: a regular lesson
+    takes its class's home room and a special-room lesson the first free room of
+    its type. Lessons left over stay unassigned (-1) for construction to place.
+
+    Raises ValueError on what `slots_by_course` refuses, and on more slots than
+    a course has free lessons, which is also what a solution moving a fixed
+    lesson comes to.
+    """
+    table = converted.table
+    room_count = len(converted.room_ids)
+    assignment = table.assignment()  # already holds the pinned slotRooms
+    by_course = slots_by_course(lessons, converted.slot_index, converted.courses_by_id)
+
+    free_lessons: dict[str, list[int]] = {}
+    used: set[tuple[int, int]] = set()  # (timeslot index, room index)
+    for index, lesson in enumerate(table.lessons):
+        course_id = converted.lesson_courses[index]
+        if lesson.pinned:
+            timeslot, room = divmod(assignment[index], room_count)
+            used.add((timeslot, room))
+            if timeslot in by_course.get(course_id, []):
+                by_course[course_id].remove(timeslot)
+        else:
+            free_lessons.setdefault(course_id, []).append(index)
+
+    for course_id, slots in by_course.items():
+        indices = free_lessons.get(course_id, [])
+        if len(slots) > len(indices):
+            raise ValueError(f"[{course_id}] {len(slots)} slots besides its fixed ones, for {len(indices)} free lessons")
+        course = converted.courses_by_id[course_id]
+        required = converted.subjects_by_id[course["subject_id"]].get("required_room_type")
+        candidates = (
+            [r for r, room_type in enumerate(converted.room_types) if room_type == required]
+            if required is not None
+            else [converted.homeroom_index[course["class_group_id"]]]
+        )
+        for index, timeslot in zip(indices, slots):
+            room = next((r for r in candidates if (timeslot, r) not in used), candidates[0])
+            used.add((timeslot, room))
+            assignment[index] = timeslot * room_count + room
+    table.set_assignment(assignment)
 
 
 def convert_solution(converted: ConvertedProblem, *, wall_time_seconds: float = 0.0) -> dict:

@@ -87,6 +87,22 @@ cmake -S use-cases/maintenance-scheduling/cpp -B build/maintenance-scheduling &&
 ctest --test-dir build/maintenance-scheduling
 ```
 
+## Starting from an existing solution
+
+`with_initial_solution(problem, solution)` returns a copy of `problem` whose search starts from `solution`, which is `MaintenanceScheduleModel.from_core(schedule)` or that model as a JSON dict. `solve` takes the engine object, so convert the result with `to_core()`:
+
+```python
+from maintenance_scheduling.models import MaintenanceScheduleModel
+
+problem = MaintenanceScheduleModel.from_core(mnt.generate_demo_data())
+solved = MaintenanceScheduleModel.from_core(schedule)           # `schedule` solved above
+restart = mnt.with_initial_solution(problem, solved).to_core()
+mnt.solve(restart, time_limit_seconds=5.0, random_seed=43)
+print(restart.score)
+```
+
+Jobs are matched by id. A job the solution leaves out is placed by the construction heuristic, and a complete solution is exactly where the search starts. Pinned jobs keep their crew and start date on `problem`, whatever the solution says. `ValueError` is raised for an unknown id, for a job with only one of `crew_id` and `start_date`, and for a start date that is not a weekday inside the work calendar.
+
 ## Extending
 
 Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-c-engine-use-case).

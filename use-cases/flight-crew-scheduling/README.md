@@ -107,6 +107,19 @@ cmake -S use-cases/flight-crew-scheduling/cpp -B build/flight-crew-scheduling &&
 ctest --test-dir build/flight-crew-scheduling
 ```
 
+## Starting from an existing solution
+
+`with_initial_solution(problem, solution)` returns a copy of `problem` whose search starts from `solution`, which is the model a solve returned or that model as a JSON dict:
+
+```python
+solved = fc.solve(problem, time_limit_seconds=5.0, random_seed=42)
+seeded = fc.with_initial_solution(problem, solved.model_dump(mode="json"))
+result = fc.solve(seeded, time_limit_seconds=5.0, random_seed=43)
+print(result.score_hard, result.score_soft)
+```
+
+Assignments are matched by id. An assignment the solution leaves out is placed by the construction heuristic, and a complete solution is exactly where the search starts. Pinned assignments keep their employee on `problem`, whatever the solution says. Unknown ids raise `ValueError` before anything reaches the engine, which does not range-check.
+
 ## Extending
 
 Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-c-engine-use-case).

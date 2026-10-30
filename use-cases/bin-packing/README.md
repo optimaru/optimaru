@@ -56,6 +56,25 @@ print(problem.bins_used(), problem.bin_loads())
 a full `config` (`SolverConfig`: temperature, cooling rate, stagnation
 limit, …) and `constraints`.
 
+## Starting from an existing solution
+
+`with_initial_solution(problem, solution)` returns a copy of a
+`BinPackingProblemModel` whose search starts from `solution`, a solved model or
+the same thing as a JSON dict. Items are matched by id; items left out or at
+bin -1 are first-fitted around the seeded bins before the search starts, and a
+complete seed skips construction. Stagnation restarts return to the seed instead
+of a new first fit. Unknown ids, duplicates and bins outside the item count raise
+`ValueError`.
+
+```python
+from bin_packing import with_initial_solution
+from bin_packing.models import BinPackingProblemModel
+
+solved = BinPackingProblemModel.from_core(problem)
+warm = with_initial_solution(solved, solved.model_dump(mode="json")).to_core()
+print(solve(warm, time_limit_seconds=1.0, random_seed=42), warm.bin_loads())
+```
+
 ## Extending
 
 This is a pure Python reference implementation; it does not use the C++

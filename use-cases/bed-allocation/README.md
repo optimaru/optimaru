@@ -28,6 +28,19 @@ cmake -S use-cases/bed-allocation/cpp -B build/bed-allocation && cmake --build b
 ctest --test-dir build/bed-allocation
 ```
 
+## Starting from an existing solution
+
+`with_initial_solution(problem, solution)` returns a copy of `problem` whose search starts from `solution`, which is the model a solve returned or that model as a JSON dict:
+
+```python
+solved = ba.solve(plan, time_limit_seconds=5.0, random_seed=42)
+seeded = ba.with_initial_solution(plan, solved.model_dump(mode="json"))
+result = ba.solve(seeded, time_limit_seconds=5.0, random_seed=43)
+print(result.score_hard, result.score_medium, result.score_soft)
+```
+
+Stays are matched by id. A stay the solution leaves out is placed by the construction heuristic, and a complete solution is exactly where the search starts. A stay with no bed has no bed id to carry, so it comes back unassigned and construction places it again. Unknown ids raise `ValueError` before anything reaches the engine, which does not range-check.
+
 ## Extending
 
 Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-c-engine-use-case).

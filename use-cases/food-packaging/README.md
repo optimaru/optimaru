@@ -54,6 +54,24 @@ cmake -S use-cases/food-packaging/cpp -B build/food-packaging && cmake --build b
 ctest --test-dir build/food-packaging
 ```
 
+## Starting from an existing solution
+
+```python
+from food_packaging.models import PackagingScheduleModel
+
+problem = PackagingScheduleModel.from_core(fp.generate_demo_data())
+solved = PackagingScheduleModel.from_core(fp.solve(problem.to_core(), time_limit_seconds=2.0, random_seed=42))
+seeded = fp.with_initial_solution(problem, solved)  # or solved.model_dump(mode="json")
+better = fp.solve(seeded.to_core(), time_limit_seconds=2.0, random_seed=42)
+```
+
+`with_initial_solution` returns a new problem whose lines carry the solution's `job_ids` and `operator_id`, replacing the ones the problem had. The solve keeps those lists as its starting point and construction places only the jobs in no line, so a partial solution works. Pinned jobs stay as the problem has them: a line in the solution must start with its pinned jobs. An unknown id, a job given twice, a moved pinned job or two neighbouring jobs with no cleaning time between their products raise `ValueError`.
+
+Two things differ from the other use cases, on the default solve only (without `constraints=`):
+
+- Seeded operators can change. `improve_operator_assignment` runs after the search even with no time to search, and reassigns an operator whenever that strictly cuts the cleaning conflict.
+- A time limit of 1 ms or less returns before construction, so left-out jobs stay unassigned. A complete solution comes back as it went in, but to have a partial one filled give it a longer limit.
+
 ## Extending
 
 Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-c-engine-use-case).

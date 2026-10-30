@@ -190,6 +190,7 @@ def solve(
     constraints=None,
     on_new_best=None,
     config=None,
+    initial_solution: dict | None = None,
 ) -> dict:
     """High-level API: solves a canonical `TimetableProblem` dict and returns a
     canonical `Timetable` dict.
@@ -198,6 +199,21 @@ def solve(
     constraint of the CP-SAT reference through the st::canon domain.
     ``mode="quickstart"`` is the approximate quickstart-domain conversion
     (unsupported constraints are reported in notes).
+
+    ``initial_solution`` is where the search starts: a `Timetable` dict, as a
+    solve returned it. Problems here are dicts, so this keyword takes the place
+    of the `with_initial_solution` function of the other use cases, under the
+    same contract. Lessons are matched by course id, and neither dict is
+    changed. Periods the solution leaves out are placed by construction, and a
+    solution holding every period is the exact starting point. `fixed_slots`
+    are problem facts: a fixed lesson stays pinned whatever the solution says,
+    and a course's slots beyond them must fit its free periods. room_id is
+    ignored, as it is recomputed from the result. Raises ValueError on an
+    unknown course, a slot outside the calendar, a course given twice at one
+    time, more slots than a course has free periods, or parallel sections at
+    different times (see `inject_solution`). A time a course may not use is
+    accepted and scores as a hard violation, so an INFEASIBLE result can be
+    resumed.
 
     ``config`` becomes the base configuration: pass the mode's `_core`
     SolverConfig as is, or an object with `to_canon()`/`to_core()`
@@ -262,8 +278,13 @@ def solve(
     if weights is not None:
         cfg.weights = canon.ObjectiveWeights(**weights)
 
+    if initial_solution is not None and "lessons" not in initial_solution:
+        raise ValueError("initial_solution has no lessons")
+
     if canonical:
         converted = convert_problem(problem)
+        if initial_solution is not None:
+            inject_solution(converted, initial_solution["lessons"])
         unassigned_weight = None
         if constraints is None:
             # Default: the monolithic incremental calculator's fast path (unchanged).
@@ -281,6 +302,8 @@ def solve(
         return convert_solution(converted, wall_time_seconds=wall, unassigned_weight=unassigned_weight)
 
     converted = quickstart.convert_problem(problem)
+    if initial_solution is not None:
+        quickstart.inject_solution(converted, initial_solution["lessons"])
     start = time.perf_counter()
     Solver(cfg).solve(converted.table)
     wall = time.perf_counter() - start

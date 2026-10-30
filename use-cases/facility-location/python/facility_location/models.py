@@ -22,6 +22,7 @@ __all__ = [
     "FacilityLocationProblemModel",
     "FacilityModel",
     "LocationModel",
+    "with_initial_solution",
 ]
 
 
@@ -126,3 +127,70 @@ class FacilityLocationProblemModel(BaseModel):
             score_hard=problem.score.hard,
             score_soft=problem.score.soft,
         )
+
+
+def _solution_dict(solution) -> dict:
+    if isinstance(solution, BaseModel):
+        return solution.model_dump()
+    if isinstance(solution, dict):
+        return solution
+    raise ValueError(f"solution must be a solved model or a dict of that shape: {type(solution)!r}")
+
+
+def _entities_by_id(solved: dict, name: str, ids: list, key: str = "id") -> dict:
+    """`solved[name]` by id. Rejects an id repeated on either side and an id outside `ids`."""
+    entities = solved.get(name)
+    if not isinstance(entities, list):
+        raise ValueError(f"solution has no {name!r} list")
+    known = set(ids)
+    if len(known) != len(ids):
+        raise ValueError(f"problem repeats an id in {name!r}: {next(i for i in ids if ids.count(i) > 1)!r}")
+    by_id: dict = {}
+    for entity in entities:
+        entity_id = entity.get(key) if isinstance(entity, dict) else None
+        if not isinstance(entity_id, (str, int)) or entity_id not in known:
+            raise ValueError(f"solution has an unknown id in {name!r}: {entity_id!r}")
+        if entity_id in by_id:
+            raise ValueError(f"solution repeats an id in {name!r}: {entity_id!r}")
+        by_id[entity_id] = entity
+    return by_id
+
+
+def _require_same_order(solved: dict, name: str, ids: list, key: str = "id") -> None:
+    """A positional value only means the same thing over the same list. `solved` may omit the list."""
+    values = solved.get(name)
+    if values is None:
+        return
+    if not isinstance(values, list) or [v.get(key) if isinstance(v, dict) else None for v in values] != ids:
+        raise ValueError(f"solution {name!r} list differs from the problem's (same entries, same order required)")
+
+
+def with_initial_solution(problem, solution):
+    """Return a copy of `problem` whose search starts from `solution`.
+
+    `solution` is what a solve returns (`FacilityLocationProblemModel.from_core`), or a
+    plain dict of that shape (the JSON the API returned). Consumers are matched by id.
+    A consumer left out becomes unassigned and the construction heuristic places it,
+    and only it, so a complete solution starts the search exactly from it. `problem`
+    is not mutated.
+
+    `facility` is a position in `facilities`, so it is only valid for the same
+    facilities in the same order: ValueError if `solution` lists different ones.
+
+    Raises ValueError naming the consumer for an unknown or repeated id and for a
+    `facility` outside -1..facility_count - 1 (the engine does not range-check).
+    """
+    if not isinstance(problem, FacilityLocationProblemModel):
+        raise TypeError(f"problem must be a FacilityLocationProblemModel: {type(problem)!r}")
+    solved = _solution_dict(solution)
+    _require_same_order(solved, "facilities", [f.id for f in problem.facilities])
+    consumers = _entities_by_id(solved, "consumers", [c.id for c in problem.consumers])
+    value_count = len(problem.facilities)
+    seeded = problem.model_copy(deep=True)
+    seeded.score_hard = seeded.score_soft = None
+    for consumer in seeded.consumers:
+        value = consumers.get(consumer.id, {}).get("facility", -1)
+        if not isinstance(value, int) or isinstance(value, bool) or not -1 <= value < value_count:
+            raise ValueError(f"consumer {consumer.id!r}: facility {value!r} is out of range -1..{value_count - 1}")
+        consumer.facility = value
+    return seeded

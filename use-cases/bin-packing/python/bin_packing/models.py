@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from . import _core
 
-__all__ = ["BinPackingProblemModel", "ConflictModel", "ItemModel"]
+__all__ = ["BinPackingProblemModel", "ConflictModel", "ItemModel", "with_initial_solution"]
 
 
 class ItemModel(BaseModel):
@@ -38,6 +38,10 @@ class BinPackingProblemModel(BaseModel):
     score_soft: float | None = Field(default=None, description="Negative weighted bin-count objective score.")
     bins_used: int | None = Field(default=None, ge=0, description="Number of non-empty bins in the solution.")
     bin_loads: list[int] | None = Field(default=None, description="Total item weight in each zero-based bin.")
+    warm_start: bool = Field(
+        default=False,
+        description="Start the search from the bins on `items`; items still at -1 are first-fitted around them.",
+    )
 
     @model_validator(mode="after")
     def validate_ids(self) -> BinPackingProblemModel:
@@ -60,6 +64,7 @@ class BinPackingProblemModel(BaseModel):
             color_weight=self.color_weight,
             conflict_weight=self.conflict_weight,
             conflicts=[(pair.first, pair.second) for pair in self.conflicts],
+            warm_start=self.warm_start,
         )
 
     @classmethod
@@ -76,4 +81,36 @@ class BinPackingProblemModel(BaseModel):
             score_soft=problem.score.soft,
             bins_used=problem.bins_used(),
             bin_loads=problem.bin_loads(),
+            warm_start=problem.warm_start,
         )
+
+
+def with_initial_solution(problem, solution):
+    """Return a copy of `problem` whose search starts from `solution`.
+
+    `solution` is a solved problem model or a dict of the same shape; items are matched by id. An item the solution
+    leaves out, or holds at -1, is first-fitted around the seeded bins before the search starts. Bins run from 0 to
+    one below the item count, which is every bin a solve can return.
+    """
+    if isinstance(solution, BaseModel):
+        solution = solution.model_dump(mode="json")
+    if not isinstance(solution, dict) or not isinstance(solution.get("items"), list):
+        raise ValueError("solution must be a problem model or a dict with an 'items' list")
+    known = {item.id for item in problem.items}
+    bins: dict[str, int] = {}
+    for entry in solution["items"]:
+        if not isinstance(entry, dict) or not isinstance(entry.get("id"), str) or entry["id"] not in known:
+            raise ValueError(f"solution references unknown item: {entry!r}")
+        item_id = entry["id"]
+        if item_id in bins:
+            raise ValueError(f"solution assigns item {item_id!r} more than once")
+        bin_index = entry.get("bin", -1)
+        if type(bin_index) is not int or not -1 <= bin_index < len(problem.items):
+            raise ValueError(f"item {item_id!r} has bin {bin_index!r}, outside -1..{len(problem.items) - 1}")
+        bins[item_id] = bin_index
+    seeded = problem.model_copy(deep=True)
+    for item in seeded.items:
+        item.bin = bins.get(item.id, -1)
+    seeded.bins_used = seeded.bin_loads = seeded.score_hard = seeded.score_soft = None
+    seeded.warm_start = True
+    return seeded

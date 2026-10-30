@@ -20,6 +20,7 @@ __all__ = [
     "solve_request",
     "to_plan",
     "vehicle_metrics",
+    "with_initial_solution",
 ]
 
 
@@ -390,6 +391,38 @@ def solve_request(request: PdpRequest, *, constraints=None) -> PdpSolution:
         total_driving_seconds=sum(m.driving_seconds for m in metrics.values()),
         vehicle_metrics=metrics,
     )
+
+
+def with_initial_solution(problem: PdpRequest, solution: PdpSolution | dict[str, Any]) -> PdpRequest:
+    """Return a copy of `problem` whose search starts from `solution`.
+
+    `solution` is what `solve_request` returned, as the model or as its JSON
+    dict. Each vehicle's `initial_route` becomes the stop ids of its route
+    there, replacing what `problem` had; a vehicle the solution leaves out
+    starts empty. Vehicles and stops are matched by id.
+
+    Stops in no route, the requests in `unassigned` included, are placed by
+    construction. A solution that routes every request is the exact starting
+    point.
+
+    A vehicle's `pinned_stops` stay problem facts: its route in `solution` must
+    start with them. Raises ValueError otherwise, on an unknown vehicle, and on
+    whatever the initial routes refuse: an unknown stop, a stop routed twice, or
+    a request whose pickup and dropoff are not together, pickup first. That
+    last one means a hard-infeasible result with a broken pair cannot be used
+    as a starting point.
+    """
+    routes = PdpSolution.model_validate(solution).routes
+    if unknown := routes.keys() - {vehicle.id for vehicle in problem.model_input.vehicles}:
+        raise ValueError(f"unknown vehicle {sorted(unknown)}")
+    data = problem.model_dump()
+    for vehicle in data["model_input"]["vehicles"]:
+        route = [stop.stop_id for stop in routes.get(vehicle["id"], [])]
+        pinned = vehicle["initial_route"][: vehicle["pinned_stops"]]
+        if route[: len(pinned)] != pinned:
+            raise ValueError(f"vehicle {vehicle['id']}: the route does not start with its pinned stops {pinned}")
+        vehicle["initial_route"] = route
+    return PdpRequest.model_validate(data)
 
 
 def _apply_solver_parameters(config, parameters: dict[str, Any]) -> None:

@@ -35,6 +35,7 @@ __all__ = [
     "ProjectModel",
     "ResourceModel",
     "ResourceRequirementModel",
+    "with_initial_solution",
 ]
 
 JOB_TYPES = ("SOURCE", "STANDARD", "SINK")
@@ -329,3 +330,70 @@ class ProjectJobScheduleModel(_Model):
             score_medium=schedule.score.medium,
             score_soft=schedule.score.soft,
         )
+
+
+def _solution_dict(solution) -> dict:
+    if isinstance(solution, BaseModel):
+        return solution.model_dump()
+    if isinstance(solution, dict):
+        return solution
+    raise ValueError(f"solution must be a solved model or a dict of that shape: {type(solution)!r}")
+
+
+def _entities_by_id(solved: dict, name: str, ids: list, key: str = "id") -> dict:
+    """`solved[name]` by id. Rejects an id repeated in `solved` and an id outside `ids`."""
+    entities = solved.get(name)
+    if not isinstance(entities, list):
+        raise ValueError(f"solution has no {name!r} list")
+    known = set(ids)
+    by_id: dict = {}
+    for entity in entities:
+        entity_id = entity.get(key) if isinstance(entity, dict) else None
+        if not isinstance(entity_id, (str, int)) or entity_id not in known:
+            raise ValueError(f"solution has an unknown id in {name!r}: {entity_id!r}")
+        if entity_id in by_id:
+            raise ValueError(f"solution repeats an id in {name!r}: {entity_id!r}")
+        by_id[entity_id] = entity
+    return by_id
+
+
+def with_initial_solution(problem, solution):
+    """Return a copy of `problem` whose search starts from `solution`.
+
+    `solution` is what a solve returns: a `ProjectJobScheduleModel`, or a plain dict of
+    that shape (the JSON the API returned). A dict may list only some allocations.
+    Allocations are matched by id. An allocation left out becomes unassigned and the
+    construction heuristic places it, and only it, so a complete solution starts the
+    search exactly from it. `problem` is not mutated. Pinned allocations, which always
+    include SOURCE and SINK, keep their value on `problem`, whatever `solution` says.
+
+    Raises ValueError naming the allocation for an unknown or repeated id, for an
+    execution mode that is not one of the job's, for a delay without a mode and for a
+    delay outside 0..delay_range_size - 1 (the engine does not range-check). The
+    start_date/end_date shadows are cleared here and the solve fills them in again.
+    """
+    if not isinstance(problem, ProjectJobScheduleModel):
+        raise TypeError(f"problem must be a ProjectJobScheduleModel: {type(problem)!r}")
+    allocations = _entities_by_id(_solution_dict(solution), "allocations", [a.id for a in problem.allocations])
+    jobs = {j.id: j for j in problem.jobs}
+    seeded = problem.model_copy(deep=True)
+    seeded.score_hard = seeded.score_medium = seeded.score_soft = None
+    for allocation in seeded.allocations:
+        job = jobs[allocation.job_id]
+        if not allocation.pinned and job.job_type == "STANDARD":
+            entity = allocations.get(allocation.id, {})
+            allocation.execution_mode_id = entity.get("execution_mode_id")
+            allocation.delay = entity.get("delay")
+            allocation.start_date = allocation.end_date = None
+        mode_id, delay = allocation.execution_mode_id, allocation.delay
+        if mode_id is None and delay is not None:
+            raise ValueError(f"allocation {allocation.id!r}: delay cannot be set without execution_mode_id")
+        if mode_id is not None and mode_id not in [m.id for m in job.execution_modes]:
+            raise ValueError(f"allocation {allocation.id!r}: {mode_id!r} is not an execution mode of job {job.id!r}")
+        if delay is None:
+            continue
+        if not isinstance(delay, int) or isinstance(delay, bool) or not 0 <= delay < problem.delay_range_size:
+            raise ValueError(
+                f"allocation {allocation.id!r}: delay {delay!r} is out of range 0..{problem.delay_range_size - 1}"
+            )
+    return seeded

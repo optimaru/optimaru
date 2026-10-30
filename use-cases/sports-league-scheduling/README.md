@@ -53,6 +53,22 @@ cmake -S use-cases/sports-league-scheduling/cpp -B build/sports-league-schedulin
 ctest --test-dir build/sports-league-scheduling
 ```
 
+## Starting from an existing solution
+
+`with_initial_solution(problem, solution)` returns a copy of `problem` whose search starts from `solution`, which is `LeagueScheduleModel.from_core(schedule)` or that model as a JSON dict. `solve` takes the engine object, so convert the result with `to_core()`:
+
+```python
+from sports_league.models import LeagueScheduleModel
+
+problem = LeagueScheduleModel.from_core(sl.demo_schedule())
+solved = LeagueScheduleModel.from_core(schedule)                # `schedule` solved above
+restart = sl.with_initial_solution(problem, solved).to_core()
+sl.solve(restart, time_limit_seconds=5.0, random_seed=43)
+print(restart.score)
+```
+
+Matches are matched by id. A match the solution leaves out is placed by the construction heuristic, and a complete solution is exactly where the search starts. `round` is a position in `rounds`, not `Round.index`, so a solution that lists different rounds, or the same ones in another order, raises `ValueError`. So do unknown ids and out-of-range values, before anything reaches the engine, which does not range-check.
+
 ## Extending
 
 Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-c-engine-use-case).

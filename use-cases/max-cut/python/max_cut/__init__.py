@@ -4,6 +4,7 @@ from ._core import SolverConfig as SolverConfig
 from .common import anneal, configure
 from .constraints import DEFAULTS, score
 from .models import MaxCutProblemModel
+from .models import with_initial_solution as with_initial_solution
 
 
 def list_constraints() -> list[str]:
@@ -56,6 +57,9 @@ def solve(
     vertex_index = {vertex: index for index, vertex in enumerate(problem.vertices)}
     for vertex, side in problem.fixed_partition.items():
         initial[vertex_index[vertex]] = side
+    if problem.warm_start:
+        for vertex, side in problem.partition.items():
+            initial[vertex_index[vertex]] = side
 
     def evaluate(state):
         problem.partition = dict(zip(problem.vertices, state, strict=True))

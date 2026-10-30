@@ -58,4 +58,24 @@ __all__ = [
     "calculate_score",
     "list_constraints",
     "constraint_costs",
+    "solve_request",
+    "with_initial_solution",
 ]
+
+
+def solve_request(request, *, constraints=None):
+    """Solve a `models.RoutePlanRequest` end-to-end; see `models.solve_request`."""
+    # Lazy import: pydantic is an optional dependency.
+    from . import models
+
+    return models.solve_request(request, constraints=constraints)
+
+
+def with_initial_solution(problem, solution):
+    """Return a copy of `problem` whose search starts from `solution`.
+
+    See `models.with_initial_solution`.
+    """
+    from . import models
+
+    return models.with_initial_solution(problem, solution)

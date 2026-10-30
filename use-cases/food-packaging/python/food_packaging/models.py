@@ -17,6 +17,7 @@ start_production_date_time / end_date_time are result-only fields
 """
 
 from datetime import date, datetime, timedelta
+from itertools import pairwise
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -30,6 +31,7 @@ __all__ = [
     "ProductModel",
     "datetime_to_minute",
     "minute_to_datetime",
+    "with_initial_solution",
 ]
 
 _EPOCH = datetime(1970, 1, 1)
@@ -246,3 +248,74 @@ class PackagingScheduleModel(BaseModel):
             score_medium=schedule.score.medium,
             score_soft=schedule.score.soft,
         )
+
+
+def with_initial_solution(
+    problem: PackagingScheduleModel, solution: PackagingScheduleModel | dict
+) -> PackagingScheduleModel:
+    """Return a copy of `problem` whose search starts from `solution`.
+
+    `solution` is what a solve returned, as the model or as its JSON dict. Each
+    line's `job_ids` and `operator_id` become the ones it has there, replacing
+    what `problem` had; a line the solution leaves out starts empty, with no
+    operator. Lines and jobs are matched by id. Only those two fields are read:
+    the jobs' pins, the facts and the shadow fields stay as `problem` has them.
+
+    Jobs in no line are placed by construction, which may also leave them in the
+    unassigned pool when that scores best. A solution that assigns every job is
+    the exact starting point of the job lists, with two limits on the default
+    solve (`fp.solve` without `constraints=`):
+
+    - The operators are not fixed. `improve_operator_assignment` runs after the
+      search even with no time to search, and moves a seeded operator whenever
+      that strictly cuts the cleaning conflict. The `constraints=` solve never
+      moves one.
+    - A time limit of 1 ms or less returns before construction, so jobs left out
+      stay unassigned. Give it any longer limit to have them placed.
+
+    Pinned jobs stay problem facts: a line in `solution` must start with the
+    pinned jobs it has in `problem`, and no other pinned job may appear. Raises
+    ValueError otherwise, on an unknown line, job or operator, on a line or job
+    given twice, and on a job following another with no cleaning time between
+    their products, which would otherwise throw in the middle of a solve.
+    """
+    solved: dict[str, LineModel] = {}
+    for line in PackagingScheduleModel.model_validate(solution).lines:
+        if line.id in solved:
+            raise ValueError(f"line {line.id} appears twice in the solution")
+        solved[line.id] = line
+    if unknown := solved.keys() - {line.id for line in problem.lines}:
+        raise ValueError(f"unknown line {sorted(unknown)}")
+    jobs = {job.id: job for job in problem.jobs}
+    products = {product.id: product for product in problem.products}
+    operators = {operator.id for operator in problem.operators}
+    pinned = {job.id for job in problem.jobs if job.pinned}
+
+    result = problem.model_copy(deep=True)
+    seen: set[str] = set()
+    for line in result.lines:
+        seed = solved.get(line.id)
+        job_ids = list(seed.job_ids) if seed else []
+        operator_id = seed.operator_id if seed else None
+        if operator_id is not None and operator_id not in operators:
+            raise ValueError(f"line {line.id}: unknown operator {operator_id!r}")
+        for job_id in job_ids:
+            if job_id not in jobs:
+                raise ValueError(f"line {line.id}: unknown job {job_id!r}")
+            if job_id in seen:
+                raise ValueError(f"line {line.id}: job {job_id!r} appears twice in the solution")
+            seen.add(job_id)
+        prefix = [job_id for job_id in line.job_ids if job_id in pinned]
+        if job_ids[: len(prefix)] != prefix:
+            raise ValueError(f"line {line.id}: the jobs do not start with its pinned jobs {prefix}")
+        if moved := pinned.intersection(job_ids[len(prefix) :]):
+            raise ValueError(f"line {line.id}: pinned job {sorted(moved)} cannot move here")
+        for previous, job_id in pairwise(job_ids):
+            before, after = jobs[previous].product_id, jobs[job_id].product_id
+            if before not in products[after].cleaning_durations:
+                raise ValueError(
+                    f"line {line.id}: no cleaning time from {before!r} to {after!r} between {previous!r} and {job_id!r}"
+                )
+        line.job_ids = job_ids
+        line.operator_id = operator_id
+    return result
