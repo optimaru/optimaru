@@ -343,6 +343,12 @@ PdpRoutePlan tighten(PdpRoutePlan plan, int capacity, Seconds windowMinutes)
 // which is hard-infeasible and therefore always rejected — so without a pair
 // move the set of routed requests is frozen at whatever the construction
 // heuristic produced, and the search can only reorder within it.
+//
+// The check runs on a step budget, not wall clock, and compares the MEDIUM
+// level only. With 4s per solve the outcome depended on the machine: a slow
+// CI runner got 2/3 and failed, twice on soft-level ties of the medium level
+// the claim is about. At 100k steps every seed routes more requests with the
+// pair-aware operators (5/0), and the same seed gives the same result anywhere.
 void testPairOperatorsMatter()
 {
     std::printf(
@@ -359,7 +365,8 @@ void testPairOperatorsMatter()
         PdpRoutePlan with = without;
 
         Solver::Config base;
-        base.spentLimit = std::chrono::seconds(4);
+        base.stepCountLimit = 100'000;
+        base.spentLimit = std::chrono::minutes(1);  // safety net only
         base.randomSeed = static_cast<std::uint64_t>(seed);
 
         Solver::Config withoutConfig = base;
@@ -373,9 +380,9 @@ void testPairOperatorsMatter()
                     seed,
                     without.score.toString().c_str(),
                     with.score.toString().c_str());
-        if (with.score > without.score)
+        if (with.score.medium > without.score.medium)
             ++pairWins;
-        else if (without.score > with.score)
+        else if (without.score.medium > with.score.medium)
             ++builtinWins;
     }
     check(pairWins > builtinWins,
