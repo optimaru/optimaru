@@ -71,6 +71,7 @@ __all__ = [
     "MinCapacityUtilization",
     "MinimizeRouteDuration",
     "MinimizeLatency",
+    "MinimizeLateness",
     "VehicleFixedCost",
     "vehicle_capacity",
     "service_finished_after_max_end_time",
@@ -88,6 +89,7 @@ __all__ = [
     "min_capacity_utilization",
     "minimize_route_duration",
     "minimize_latency",
+    "minimize_lateness",
     "vehicle_fixed_cost",
     "get_constraints",
 ]
@@ -261,6 +263,22 @@ class MinimizeLatency(Constraint):
     description_en = "Minimizes total time from each vehicle's departure to every stop arrival. The default weight is 0."
 
 
+class MinimizeLateness(Constraint):
+    """Squared seconds from each order to its dropoff finishing. Default weight=0, so opt-in.
+
+    Only dropoffs count, and each request counts on its own, so one very late
+    order costs more than several slightly late ones. An unassigned request is
+    charged as if finished an hour into the plan: otherwise leaving out the
+    oldest orders would be the cheapest thing to do."""
+
+    name = "minimize_lateness"
+    label_en = "Minimize Lateness"
+    description_en = (
+        "Minimizes the sum, over requests, of the squared seconds from `order_time` to "
+        "the end of the dropoff. The default weight is 0."
+    )
+
+
 class VehicleFixedCost(Constraint):
     """Fixed cost of every vehicle used at least once."""
 
@@ -288,6 +306,7 @@ minimize_enclosing_circle_radius = MinimizeEnclosingCircleRadius(weight=0)
 min_capacity_utilization = MinCapacityUtilization()
 minimize_route_duration = MinimizeRouteDuration()
 minimize_latency = MinimizeLatency()
+minimize_lateness = MinimizeLateness()
 vehicle_fixed_cost = VehicleFixedCost()
 
 #: Available set — same order as `pdp.list_constraints()`.
@@ -304,6 +323,7 @@ _DEFAULTS: list[Constraint] = [
     min_capacity_utilization,
     minimize_route_duration,
     minimize_latency,
+    minimize_lateness,
     vehicle_fixed_cost,
     paired_request,
     same_vehicle,

@@ -68,6 +68,13 @@ class StopModel(_Model):
 class DeliveryModel(_Model):
     id: str
     demand: int = Field(ge=0)
+    order_time: int = Field(
+        default=0,
+        description=(
+            "When the request was placed, on the plan's clock: negative if it has "
+            "already been waiting. Only `minimize_lateness` reads it."
+        ),
+    )
     pickup: StopModel
     dropoff: StopModel
 
@@ -201,7 +208,13 @@ def to_plan(model_input: PdpInput, *, name: str = "plan") -> _core.PdpRoutePlan:
             )
         )
         deliveries.append(
-            _core.Delivery(delivery.id, pickup_index, dropoff_index, delivery.demand)
+            _core.Delivery(
+                delivery.id,
+                pickup_index,
+                dropoff_index,
+                delivery.demand,
+                delivery.order_time,
+            )
         )
     return _core.PdpRoutePlan(
         name, locations, vehicles, nodes, deliveries, model_input.driving_seconds

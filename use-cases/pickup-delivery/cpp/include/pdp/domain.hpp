@@ -125,6 +125,9 @@ struct Delivery
     int pickupNodeIndex = -1;
     int dropoffNodeIndex = -1;
     int demand = 0;
+    // When the request was placed, on the plan's clock: negative if it has
+    // already been waiting when the plan starts.
+    Seconds orderTime = 0;
 };
 
 // ---------------------------------------------------------------------------
