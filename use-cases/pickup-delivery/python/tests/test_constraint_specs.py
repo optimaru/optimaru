@@ -73,6 +73,7 @@ def test_list_constraints_matches_the_spec_names():
         "min_capacity_utilization",
         "minimize_route_duration",
         "minimize_latency",
+        "minimize_lateness",
         "vehicle_fixed_cost",
         "paired_request",
         "same_vehicle",
@@ -230,3 +231,65 @@ def test_score_rejects_an_unknown_constraint_name():
 
     with pytest.raises(ValueError, match="unknown constraint"):
         score(raw, [Renamed()])
+
+
+def lateness_input(order_times: list[int]) -> pdp.models.PdpInput:
+    """One vehicle at 0, and requests whose stops are all at the same place, 100 s away."""
+    size = 1 + 2 * len(order_times)
+    seconds = [[0 if i == j or (i and j) else 100 for j in range(size)] for i in range(size)]
+    stop = lambda name: pdp.models.StopModel(
+        id=name, location=(37.5, 127.0), max_end_time=10**6, service_duration=10
+    )
+    return pdp.models.PdpInput(
+        vehicles=[pdp.models.VehicleModel(id="v", capacity=5, home=(37.5, 127.0), max_stops=0)],
+        deliveries=[
+            pdp.models.DeliveryModel(
+                id=f"r{i}", demand=1, order_time=order, pickup=stop(f"p{i}"), dropoff=stop(f"d{i}")
+            )
+            for i, order in enumerate(order_times)
+        ],
+        driving_seconds=seconds,
+    )
+
+
+def lateness_cost(model_input, route: list[int]) -> float:
+    plan = pdp.models.to_plan(model_input)
+    plan.vehicles[0].node_indices = route
+    plan.rebuild_unassigned_pool()
+    return sum(pdp.constraint_costs(plan)["minimize_lateness"]["costs"])
+
+
+def test_lateness_measures_each_dropoff_from_its_order():
+    # Pickup ends at 100 + 10; the dropoff is at the same place and ends at 120.
+    assert lateness_cost(lateness_input([0]), [0, 1]) == 120**2
+    assert lateness_cost(lateness_input([-300]), [0, 1]) == 420**2
+
+
+def test_lateness_ignores_where_the_pickups_fall():
+    # Only the dropoffs' finish times differ from a plain sum of arrivals.
+    together = lateness_cost(lateness_input([0, 0]), [0, 2, 1, 3])  # finish at 130, 140
+    assert together == 130**2 + 140**2
+
+
+def test_lateness_squares_per_request_not_per_route():
+    assert lateness_cost(lateness_input([0, 0]), [0, 1, 2, 3]) == 120**2 + 140**2
+
+
+def test_an_unassigned_request_is_charged_more_the_older_it_is():
+    charge = lateness_cost(lateness_input([0]), [])
+    older = lateness_cost(lateness_input([-1000]), [])
+    assert charge == 3600**2
+    assert older == 4600**2
+
+
+def test_solving_for_lateness_serves_the_oldest_order_first():
+    model_input = lateness_input([0, -2000])
+    replaced = {"minimize_travel_time", "minimize_lateness"}
+    constraints = [c for c in pdp.constraints.get_constraints() if c.name not in replaced]
+    constraints.append(pdp.constraints.MinimizeLateness(weight=1))
+    request = pdp.models.PdpRequest(model_input=model_input, timelimit=0.3)
+
+    solution = pdp.models.solve_request(request, constraints=constraints)
+
+    dropoffs = [stop.delivery_id for stop in solution.routes["v"] if not stop.pickup]
+    assert dropoffs == ["r1", "r0"]

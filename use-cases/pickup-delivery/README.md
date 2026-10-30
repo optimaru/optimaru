@@ -41,6 +41,7 @@ cd python && uv run python setup.py build_ext --inplace && uv run pytest
 | hard | `vehicleCapacity` | the **running load** never exceeds the capacity |
 | hard | `serviceFinishedAfterMaxEndTime` | time-window lateness, in whole minutes |
 | medium | `unassignedRequests` | service minutes of the requests left unrouted |
+| soft | `minimizeLateness` (opt-in) | squared seconds from each request's `order_time` to the end of its dropoff |
 | soft | `minimizeTravelTime` | total driving seconds — home → stops, plus the leg back home only when the vehicle's `returnToDepot` is set |
 
 Routes are **open by default**: a vehicle ends its day at its last stop and the

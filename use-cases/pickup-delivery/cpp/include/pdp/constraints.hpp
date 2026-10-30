@@ -14,6 +14,7 @@
 
 #include "pdp/constraints/common.hpp"
 #include "pdp/constraints/load_utilization.hpp"
+#include "pdp/constraints/minimize_lateness.hpp"
 #include "pdp/constraints/minimize_travel_time.hpp"
 #include "pdp/constraints/paired_request.hpp"
 #include "pdp/constraints/pickup_before_dropoff.hpp"
@@ -64,6 +65,7 @@ inline ConstraintAssembly defaultConstraints()
     assembly.emplace<MinCapacityUtilization>();
     assembly.emplace<MinimizeRouteDuration>();
     assembly.emplace<MinimizeLatency>();
+    assembly.emplace<MinimizeLateness>();
     assembly.emplace<VehicleFixedCost>();
     return assembly;
 }
