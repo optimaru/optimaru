@@ -75,6 +75,8 @@ def test_list_constraints_matches_the_spec_names():
         "minimize_latency",
         "minimize_lateness",
         "vehicle_fixed_cost",
+        "pinned_stops",
+        "required_vehicle",
         "paired_request",
         "same_vehicle",
         "pickup_before_dropoff",

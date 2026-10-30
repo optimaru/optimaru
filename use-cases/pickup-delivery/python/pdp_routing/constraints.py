@@ -61,6 +61,8 @@ __all__ = [
     "PairedRequest",
     "SameVehicle",
     "PickupBeforeDropoff",
+    "PinnedStops",
+    "RequiredVehicle",
     "UnassignedRequests",
     "MaxTravelTime",
     "MaxRouteDuration",
@@ -79,6 +81,8 @@ __all__ = [
     "paired_request",
     "same_vehicle",
     "pickup_before_dropoff",
+    "pinned_stops",
+    "required_vehicle",
     "unassigned_requests",
     "max_travel_time",
     "max_route_duration",
@@ -263,6 +267,26 @@ class MinimizeLatency(Constraint):
     description_en = "Minimizes total time from each vehicle's departure to every stop arrival. The default weight is 0."
 
 
+class PinnedStops(Constraint):
+    """Routes that do not start with their vehicle's pinned stops. Default: hard, weight 1000.
+
+    Each misplaced stop counts once. Silent for a vehicle that pins nothing."""
+
+    name = "pinned_stops"
+    label_en = "Pinned Stops"
+    description_en = "Penalizes routes that do not start with the vehicle's pinned stops, in order. Default: **hard**, weight 1000."
+
+
+class RequiredVehicle(Constraint):
+    """Requests off the vehicle they must ride on. Default: hard, weight 1000.
+
+    Unassigned counts as off it. Where on the route the request goes stays free."""
+
+    name = "required_vehicle"
+    label_en = "Required Vehicle"
+    description_en = "Penalizes requests that are not on their `required_vehicle`. Default: **hard**, weight 1000."
+
+
 class MinimizeLateness(Constraint):
     """Squared seconds from each order to its dropoff finishing. Default weight=0, so opt-in.
 
@@ -307,6 +331,8 @@ min_capacity_utilization = MinCapacityUtilization()
 minimize_route_duration = MinimizeRouteDuration()
 minimize_latency = MinimizeLatency()
 minimize_lateness = MinimizeLateness()
+pinned_stops = PinnedStops()
+required_vehicle = RequiredVehicle()
 vehicle_fixed_cost = VehicleFixedCost()
 
 #: Available set — same order as `pdp.list_constraints()`.
@@ -325,6 +351,8 @@ _DEFAULTS: list[Constraint] = [
     minimize_latency,
     minimize_lateness,
     vehicle_fixed_cost,
+    pinned_stops,
+    required_vehicle,
     paired_request,
     same_vehicle,
     pickup_before_dropoff,

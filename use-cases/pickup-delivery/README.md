@@ -31,6 +31,21 @@ cd cpp && cmake -B build && cmake --build build
 cd python && uv run python setup.py build_ext --inplace && uv run pytest
 ```
 
+## Starting from existing routes
+
+A solve keeps any route already on a vehicle as its starting point and places only
+the requests no route holds. In the JSON contract that is `initial_route`, a list
+of stop ids; both stops of a request must be in it, pickup first.
+
+`pinned_stops` fixes that many leading stops. Everything after them can be
+reordered, moved to another vehicle or have stops inserted between. Pinning a
+pickup keeps its request on the vehicle, through `sameVehicle`. Goods already on
+board have no pickup left, so give them a pickup at the vehicle's position with no
+service time and pin it.
+
+`required_vehicle` keeps a request on a vehicle without fixing its place on the
+route, for work that is promised but still free to be reordered.
+
 ## The constraints
 
 | Level | Constraint | |
@@ -38,6 +53,8 @@ cd python && uv run python setup.py build_ext --inplace && uv run pytest
 | hard | `pairedRequest` | a request is routed whole, or not at all |
 | hard | `sameVehicle` | its pickup and dropoff share one vehicle |
 | hard | `pickupBeforeDropoff` | and the pickup comes first in that route |
+| hard | `pinnedStops` | a route starts with its vehicle's `pinned_stops`, in order |
+| hard | `requiredVehicle` | a request stays on its `required_vehicle`, anywhere on the route |
 | hard | `vehicleCapacity` | the **running load** never exceeds the capacity |
 | hard | `serviceFinishedAfterMaxEndTime` | time-window lateness, in whole minutes |
 | medium | `unassignedRequests` | service minutes of the requests left unrouted |

@@ -123,6 +123,7 @@ class Vehicle:
     """Whether the route ends back home. False (the default) leaves the route
     open at its last stop: no closing leg is driven or timed."""
     node_indices: list[int]
+    pinned_node_indices: list[int]
     """The planning list variable: the ordered route (indices into nodes)."""
 
 class PdpRoutePlan:
