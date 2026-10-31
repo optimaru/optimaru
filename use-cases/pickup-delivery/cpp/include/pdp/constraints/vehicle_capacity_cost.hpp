@@ -1,20 +1,25 @@
-#ifndef PDP_CONSTRAINTS_VEHICLE_CAPACITY_HPP
-#define PDP_CONSTRAINTS_VEHICLE_CAPACITY_HPP
+#ifndef PDP_CONSTRAINTS_VEHICLE_CAPACITY_COST_HPP
+#define PDP_CONSTRAINTS_VEHICLE_CAPACITY_COST_HPP
 
 #include "pdp/constraints/common.hpp"
 
 namespace pdp
 {
 
-// Hard (default, weight 1): vehicleCapacity — the running load along a route
+// Hard, weight 1: vehicleCapacityCost — the running load along a route
 // exceeding what the vehicle can carry. Load rises at a pickup and falls at
 // the matching dropoff, so what has to fit is the PEAK in between, not the
 // route total — and the overshoot is charged at every node it persists
-// through, exactly like the full recompute.
-struct VehicleCapacity final : PdpUnitConstraint
+// through, exactly like the full recompute. Raw cost per vehicle = the sum
+// over its nodes of max(0, load after the node - capacity), in demand units;
+// 0 = the load never exceeds the capacity (the pool list costs 0).
+struct VehicleCapacityCost final : PdpUnitConstraint
 {
-    explicit VehicleCapacity(double weight = 1.0)
-        : PdpUnitConstraint("vehicleCapacity", weight, /*hard=*/true)
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
+
+    explicit VehicleCapacityCost(double weight = kDefaultWeight)
+        : PdpUnitConstraint("vehicleCapacityCost", weight, kDefaultLevel)
     {
     }
     double cost(const PdpRoutePlan &plan,
@@ -41,4 +46,4 @@ struct VehicleCapacity final : PdpUnitConstraint
 
 }  // namespace pdp
 
-#endif  // PDP_CONSTRAINTS_VEHICLE_CAPACITY_HPP
+#endif  // PDP_CONSTRAINTS_VEHICLE_CAPACITY_COST_HPP

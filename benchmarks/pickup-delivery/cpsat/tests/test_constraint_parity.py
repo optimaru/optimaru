@@ -27,9 +27,9 @@ RADIUS_OVER_METERS = 2 * 6_371_000 * math.pi * 0.02 / 360 - 2_000
 
 
 CASES = [
-    ("vehicle_capacity", "hard", 2, 2, {"capacity": 10}, 12, {}, ("P", "D")),
+    ("vehicle_capacity_cost", "hard", 2, 2, {"capacity": 10}, 12, {}, ("P", "D")),
     (
-        "service_finished_after_max_end_time",
+        "max_end_time_cost",
         "hard",
         2,
         2,
@@ -39,7 +39,7 @@ CASES = [
         ("P", "D"),
     ),
     (
-        "max_travel_time",
+        "max_travel_time_cost",
         "hard",
         20,
         20,
@@ -49,7 +49,7 @@ CASES = [
         ("P", "D"),
     ),
     (
-        "max_route_duration",
+        "max_route_duration_cost",
         "hard",
         90,
         90,
@@ -59,7 +59,7 @@ CASES = [
         ("P", "D"),
     ),
     (
-        "vehicle_end_time",
+        "vehicle_max_end_time_cost",
         "hard",
         40,
         40,
@@ -68,9 +68,9 @@ CASES = [
         {},
         ("P", "D"),
     ),
-    ("max_stops", "hard", 1, 1, {"max_stops": 1}, 3, {}, ("P", "D")),
+    ("max_stops_cost", "hard", 1, 1, {"max_stops": 1}, 3, {}, ("P", "D")),
     (
-        "max_route_radius",
+        "max_route_radius_cost",
         "hard",
         RADIUS_OVER_METERS,
         224,
@@ -79,9 +79,9 @@ CASES = [
         {},
         ("P", "D"),
     ),
-    ("unassigned_requests", "medium", 2, 2, {}, 3, {}, ()),
+    ("unassigned_requests_cost", "medium", 2, 2, {}, 3, {}, ()),
     (
-        "min_capacity_utilization",
+        "min_capacity_utilization_cost",
         "soft",
         5,
         5,
@@ -91,7 +91,7 @@ CASES = [
         ("P", "D"),
     ),
     (
-        "minimize_travel_time",
+        "travel_time_cost",
         "soft",
         320,
         320,
@@ -101,7 +101,7 @@ CASES = [
         ("P", "D"),
     ),
     (
-        "minimize_route_duration",
+        "route_duration_cost",
         "soft",
         590,
         590,
@@ -110,7 +110,7 @@ CASES = [
         {},
         ("P", "D"),
     ),
-    ("minimize_latency", "soft", 420, 420, {}, 3, {}, ("P", "D")),
+    ("latency_cost", "soft", 420, 420, {}, 3, {}, ("P", "D")),
     ("vehicle_fixed_cost", "soft", 25, 25, {"fixed_cost": 25}, 3, {}, ("P", "D")),
 ]
 
@@ -196,9 +196,13 @@ def test_constraint_matches_hand_calculation_and_other_backend(
 
     raw_cost, engine_score = _engine_cost(request, routes, name)
     assert raw_cost == pytest.approx(expected_raw)
-    engine_penalty = -(
-        engine_score.hard if level == "hard" else engine_score.soft
-    )
+    engine_penalty = -(engine_score.hard if level == "hard" else engine_score.soft)
+    if level == "medium":
+        # The engine score is two-level: it folds medium into soft by the
+        # domain's medium_fold (0.2.0: the weight is in medium units, so the
+        # fold is no longer part of it). Compare in medium units.
+        plan = to_plan(request.model_input)
+        engine_penalty /= pdp.constraint_costs(plan)[name]["medium_fold"]["unit"]
     assert engine_penalty == pytest.approx(expected_score)
 
     exact = solve_request(
@@ -213,12 +217,12 @@ def test_constraint_matches_hand_calculation_and_other_backend(
     "name,vehicle_fields,expected",
     [
         # Open route (the default): depot -> P -> D stops at D, 80 + 80 driven.
-        ("minimize_travel_time", {}, 160),
+        ("travel_time_cost", {}, 160),
         # ... and ends when D's service does: 530 - 100 departure = 430.
-        ("minimize_route_duration", {}, 430),
+        ("route_duration_cost", {}, 430),
         # The 650 end-time limit is met without the 160-second closing leg.
-        ("vehicle_end_time", {"max_end_time": 650}, 0),
-        ("max_travel_time", {"max_travel_time": 300}, 0),
+        ("vehicle_max_end_time_cost", {"max_end_time": 650}, 0),
+        ("max_travel_time_cost", {"max_travel_time": 300}, 0),
     ],
     ids=lambda value: value if isinstance(value, str) else None,
 )
@@ -238,7 +242,11 @@ def test_open_route_skips_the_closing_leg_on_both_backends(
         constraints=[{"name": name, "weight": 1}],
         _fixed_routes=routes,
     )
-    level = "hard" if name in {"vehicle_end_time", "max_travel_time"} else "soft"
+    level = (
+        "hard"
+        if name in {"vehicle_max_end_time_cost", "max_travel_time_cost"}
+        else "soft"
+    )
     assert -_parse_score(exact.score)[level] == expected
     assert exact.total_driving_seconds == 160
     # Post-processed per-vehicle figures. Stop count, load, driving and
@@ -249,7 +257,7 @@ def test_open_route_skips_the_closing_leg_on_both_backends(
     figures = exact.vehicle_metrics["V1"]
     assert (figures.stops, figures.requests, figures.peak_load) == (2, 1, 3)
     assert (figures.driving_seconds, figures.service_seconds) == (160, 150)
-    if name == "minimize_route_duration":
+    if name == "route_duration_cost":
         assert (figures.waiting_seconds, figures.end_time) == (120, 530)
         assert figures.route_duration_seconds == 430
 
@@ -257,9 +265,9 @@ def test_open_route_skips_the_closing_leg_on_both_backends(
 @pytest.mark.parametrize(
     "name,routes,two_vehicles",
     [
-        ("paired_request", {"V1": ("P",)}, False),
-        ("same_vehicle", {"V1": ("P",), "V2": ("D",)}, True),
-        ("pickup_before_dropoff", {"V1": ("D", "P")}, False),
+        ("paired_request_cost", {"V1": ("P",)}, False),
+        ("same_vehicle_cost", {"V1": ("P",), "V2": ("D",)}, True),
+        ("pickup_before_dropoff_cost", {"V1": ("D", "P")}, False),
     ],
 )
 def test_request_coupling_is_scored_by_the_engine_and_rejected_by_cpsat(
@@ -273,6 +281,6 @@ def test_request_coupling_is_scored_by_the_engine_and_rejected_by_cpsat(
     with pytest.raises(RuntimeError, match="INFEASIBLE"):
         solve_request(
             request,
-            constraints=["minimize_travel_time"],
+            constraints=["travel_time_cost"],
             _fixed_routes=routes,
         )

@@ -134,6 +134,8 @@ public:
         int parallelSolverCount = 1;
         optimaru::EnvironmentMode environmentMode
             = optimaru::EnvironmentMode::NON_ASSERT;
+        // Called with each new best score, in the same levels as the final
+        // plan.score of the solve() overload in use.
         std::function<void(std::int64_t, const Score &)> onNewBest;
     };
 
@@ -149,11 +151,12 @@ public:
     // assembly here. The same search applies, the pair-aware move and ruin
     // operators included (they read the plan, not the calculator). Weights
     // come from the assembly, NOT from the defaults. The final plan.score is
-    // computed by THIS calculator (decoded back into the HardMediumSoft
-    // levels) and the calculator is left primed on the final solution, so
-    // constraintTotals() explains exactly that score. Single-start: the
-    // caller-owned calculator cannot be cloned, so parallelSolverCount is
-    // ignored.
+    // computed by THIS calculator, its three levels read before the medium
+    // fold (levelScores()), so a soft total of 10^9 or more stays soft;
+    // onNewBest reports its scores the same way. The calculator is left
+    // primed on the final solution, so constraintTotals() explains exactly
+    // that score. Single-start: the caller-owned calculator cannot be cloned,
+    // so parallelSolverCount is ignored.
     void solve(PdpRoutePlan &plan,
                optimaru::DecomposedScoreCalculator<PdpRoutePlan> &calculator);
 

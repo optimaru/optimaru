@@ -89,7 +89,7 @@ class DeliveryModel(_Model):
         default=0,
         description=(
             "When the request was placed, on the plan's clock: negative if it has "
-            "already been waiting. Only `minimize_lateness` reads it."
+            "already been waiting. Only `squared_order_age_cost` reads it."
         ),
     )
     required_vehicle: str | None = Field(
@@ -132,8 +132,13 @@ class PdpInput(_Model):
                 raise ValueError("driving_seconds values must be non-negative")
         self._check_initial_routes()
         for delivery in self.deliveries:
-            if delivery.required_vehicle and delivery.required_vehicle not in vehicle_ids:
-                raise ValueError(f"request {delivery.id}: unknown vehicle {delivery.required_vehicle!r}")
+            if (
+                delivery.required_vehicle
+                and delivery.required_vehicle not in vehicle_ids
+            ):
+                raise ValueError(
+                    f"request {delivery.id}: unknown vehicle {delivery.required_vehicle!r}"
+                )
         return self
 
     def _check_initial_routes(self) -> None:
@@ -146,13 +151,19 @@ class PdpInput(_Model):
         for vehicle in self.vehicles:
             route = vehicle.initial_route
             if vehicle.pinned_stops > len(route):
-                raise ValueError(f"vehicle {vehicle.id}: more pinned_stops than initial_route stops")
+                raise ValueError(
+                    f"vehicle {vehicle.id}: more pinned_stops than initial_route stops"
+                )
             position = {stop_id: index for index, stop_id in enumerate(route)}
             if len(position) != len(route) or seen.intersection(route):
-                raise ValueError(f"vehicle {vehicle.id}: a stop appears twice in the initial routes")
+                raise ValueError(
+                    f"vehicle {vehicle.id}: a stop appears twice in the initial routes"
+                )
             seen.update(route)
             if unknown := set(route) - requests.keys():
-                raise ValueError(f"vehicle {vehicle.id}: unknown stop {sorted(unknown)}")
+                raise ValueError(
+                    f"vehicle {vehicle.id}: unknown stop {sorted(unknown)}"
+                )
             for stop_id in route:
                 request = requests[stop_id]
                 pickup = position.get(request.pickup.id)
@@ -267,7 +278,9 @@ def to_plan(model_input: PdpInput, *, name: str = "plan") -> _core.PdpRoutePlan:
                 dropoff_index,
                 delivery.demand,
                 delivery.order_time,
-                vehicle_index[delivery.required_vehicle] if delivery.required_vehicle else -1,
+                vehicle_index[delivery.required_vehicle]
+                if delivery.required_vehicle
+                else -1,
             )
         )
     node_index = {node.id: index for index, node in enumerate(nodes)}
@@ -393,7 +406,9 @@ def solve_request(request: PdpRequest, *, constraints=None) -> PdpSolution:
     )
 
 
-def with_initial_solution(problem: PdpRequest, solution: PdpSolution | dict[str, Any]) -> PdpRequest:
+def with_initial_solution(
+    problem: PdpRequest, solution: PdpSolution | dict[str, Any]
+) -> PdpRequest:
     """Return a copy of `problem` whose search starts from `solution`.
 
     `solution` is what `solve_request` returned, as the model or as its JSON
@@ -413,14 +428,18 @@ def with_initial_solution(problem: PdpRequest, solution: PdpSolution | dict[str,
     as a starting point.
     """
     routes = PdpSolution.model_validate(solution).routes
-    if unknown := routes.keys() - {vehicle.id for vehicle in problem.model_input.vehicles}:
+    if unknown := routes.keys() - {
+        vehicle.id for vehicle in problem.model_input.vehicles
+    }:
         raise ValueError(f"unknown vehicle {sorted(unknown)}")
     data = problem.model_dump()
     for vehicle in data["model_input"]["vehicles"]:
         route = [stop.stop_id for stop in routes.get(vehicle["id"], [])]
         pinned = vehicle["initial_route"][: vehicle["pinned_stops"]]
         if route[: len(pinned)] != pinned:
-            raise ValueError(f"vehicle {vehicle['id']}: the route does not start with its pinned stops {pinned}")
+            raise ValueError(
+                f"vehicle {vehicle['id']}: the route does not start with its pinned stops {pinned}"
+            )
         vehicle["initial_route"] = route
     return PdpRequest.model_validate(data)
 

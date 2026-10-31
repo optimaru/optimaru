@@ -1,19 +1,23 @@
-#ifndef PDP_CONSTRAINTS_SERVICE_FINISHED_AFTER_MAX_END_TIME_HPP
-#define PDP_CONSTRAINTS_SERVICE_FINISHED_AFTER_MAX_END_TIME_HPP
+#ifndef PDP_CONSTRAINTS_MAX_END_TIME_COST_HPP
+#define PDP_CONSTRAINTS_MAX_END_TIME_COST_HPP
 
 #include "pdp/constraints/common.hpp"
 
 namespace pdp
 {
 
-// Hard (default, weight 1): serviceFinishedAfterMaxEndTime — the minutes a
-// node's service runs past the end of its time window, rounded up.
-struct ServiceFinishedAfterMaxEndTime final : PdpUnitConstraint
+// Hard, weight 1: maxEndTimeCost — the minutes a node's service runs past the
+// end of its time window (Node::maxEndTime), rounded up. Raw cost per vehicle
+// = the sum over its nodes of ceilToMinutes(arrival + serviceDuration -
+// maxEndTime); 0 = every stop finishes inside its window (the pool list
+// costs 0). The vehicle's own end-of-shift bound is vehicleMaxEndTimeCost.
+struct MaxEndTimeCost final : PdpUnitConstraint
 {
-    explicit ServiceFinishedAfterMaxEndTime(double weight = 1.0)
-        : PdpUnitConstraint("serviceFinishedAfterMaxEndTime",
-                            weight,
-                            /*hard=*/true)
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
+
+    explicit MaxEndTimeCost(double weight = kDefaultWeight)
+        : PdpUnitConstraint("maxEndTimeCost", weight, kDefaultLevel)
     {
     }
     double cost(const PdpRoutePlan &plan,
@@ -42,4 +46,4 @@ struct ServiceFinishedAfterMaxEndTime final : PdpUnitConstraint
 
 }  // namespace pdp
 
-#endif  // PDP_CONSTRAINTS_SERVICE_FINISHED_AFTER_MAX_END_TIME_HPP
+#endif  // PDP_CONSTRAINTS_MAX_END_TIME_COST_HPP

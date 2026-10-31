@@ -399,7 +399,7 @@ constexpr Seconds kLineService = 1000;
 
 struct LineRequest
 {
-    int requiredVehicle;
+    int requiredVehicleIndex;
     Seconds pickupClose;
 };
 
@@ -446,7 +446,7 @@ PdpRoutePlan buildLine(const std::vector<Seconds> &homes,
                                            2 * request + 1,
                                            1,
                                            0,
-                                           requests[r].requiredVehicle});
+                                           requests[r].requiredVehicleIndex});
     }
     plan.drivingSeconds.assign(places.size(),
                                std::vector<Seconds>(places.size(), 0));
@@ -459,10 +459,11 @@ PdpRoutePlan buildLine(const std::vector<Seconds> &homes,
 }
 
 // No search at all, so these are the construction's own decisions. The default
-// score does not read requiredVehicle, so the checks look at the routes.
+// (monolithic) score has no requiredVehicleCost, so the checks look at the
+// routes.
 void testConstructionRespectsRequiredVehicle()
 {
-    std::printf("== Construction and requiredVehicle ==\n");
+    std::printf("== Construction and the required vehicle ==\n");
     Solver::Config config;
     config.spentLimit = std::chrono::milliseconds(0);
 
