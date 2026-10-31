@@ -20,24 +20,26 @@ CPSAT_EXACT = True
 CPSAT_CAVEAT = ""
 
 
-def self_report(problem: Any) -> None:
-    # Compare rescored answers only; the engine folds medium levels into its
-    # two-level score, so its own report is not level-for-level comparable.
-    return None
+def self_report(problem: Any) -> tuple[float, ...]:
+    # The engine's own score of its answer (the model's score fields after
+    # knapsack.solve), cross-checked against the rescored one.
+    return (problem.score_hard, problem.score_soft)
 
 
 def _build(item_count: int, seed: int) -> Any:
     from knapsack.models import ItemModel, KnapsackProblemModel
 
     rng = random.Random(seed)
-    items = [
-        ItemModel(id=f"I{i}", weight=rng.randint(5, 60), value=rng.randint(10, 100)) for i in range(item_count)
-    ]
+    items = [ItemModel(id=f"I{i}", weight=rng.randint(5, 60), value=rng.randint(10, 100)) for i in range(item_count)]
     return KnapsackProblemModel(capacity=sum(item.weight for item in items) // 3, items=items)
 
 
 def instances() -> dict[str, Callable[[], Any]]:
-    return {"n50": lambda: _build(50, seed=0), "n200": lambda: _build(200, seed=1), "n1000": lambda: _build(1000, seed=2)}
+    return {
+        "n50": lambda: _build(50, seed=0),
+        "n200": lambda: _build(200, seed=1),
+        "n1000": lambda: _build(1000, seed=2),
+    }
 
 
 def describe(problem: Any) -> str:
