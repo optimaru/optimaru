@@ -96,7 +96,10 @@ is in medium units (default 1, the same as the CP-SAT reference's). `hard=True`
 charges one hard unit per minute; `hard=False` one soft unit per minute, in both
 solvers; an explicit weight stays in medium units. `constraint_costs()` carries
 `"medium_fold": {"kind": "into_soft", "unit": 1e9}` on every entry, so
-`pdp_routing.constraints.score()` folds exactly like the engine.
+`pdp_routing.constraints.score()` folds exactly like the engine. A solve with
+`constraints=` reports `plan.score` and every `on_new_best` score with the three
+levels read before the fold, so a soft total of 10^9 or more stays on the soft
+level.
 
 **Exponent.** It shapes each unit's raw cost before the weight: per vehicle for
 the unit constraints, on the single total for the four globals.

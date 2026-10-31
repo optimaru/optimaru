@@ -257,6 +257,7 @@ class SolverConfig:
     driving_time_nearby_probability: float
 
     on_new_best: Callable[[int, Score], None] | None
+    """Called with (step, score) on each new best, in the levels of the final plan.score."""
 
 class Solver:
     """Construction heuristic + local search + adaptive ruin & recreate, with
@@ -269,7 +270,8 @@ class Solver:
     ) -> None:
         """Score the same solve with a caller-chosen constraint set
         (see pdp_routing.constraints). The given list replaces the default set;
-        None keeps the default set."""
+        None keeps the default set. plan.score and on_new_best report the three
+        levels unfolded, so a soft total of 10^9 or more stays soft."""
 
 def list_constraints() -> list[str]:
     """Constraint names scored by this domain (default assembly order, snake_case):

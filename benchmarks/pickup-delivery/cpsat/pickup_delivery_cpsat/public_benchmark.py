@@ -167,12 +167,28 @@ def synthetic_instance(request_count: int, seed: int = 0) -> PdptwInstance:
         latest = int(horizon - back - direct - 2 * service - 2 * width)
         ready = rng.randint(math.ceil(to_pickup), max(math.ceil(to_pickup), latest))
         drop_ready = ready + service + math.ceil(direct)
-        nodes.append(Node(pickup_id, px, py, demand, ready, ready + width, service, 0, dropoff_id))
         nodes.append(
-            Node(dropoff_id, dx, dy, -demand, drop_ready, drop_ready + width, service, pickup_id, 0)
+            Node(
+                pickup_id, px, py, demand, ready, ready + width, service, 0, dropoff_id
+            )
+        )
+        nodes.append(
+            Node(
+                dropoff_id,
+                dx,
+                dy,
+                -demand,
+                drop_ready,
+                drop_ready + width,
+                service,
+                pickup_id,
+                0,
+            )
         )
     vehicles = max(2, math.ceil(request_count / 3))
-    return PdptwInstance(f"synthetic-{request_count}-s{seed}", vehicles, 200, depot, tuple(nodes))
+    return PdptwInstance(
+        f"synthetic-{request_count}-s{seed}", vehicles, 200, depot, tuple(nodes)
+    )
 
 
 def load_instance(name: str, cache_dir: Path) -> PdptwInstance:
@@ -377,7 +393,9 @@ def main(argv: list[str] | None = None) -> int:
         try:
             used, distance = rescore(instance, selected, solution.routes)
         except ValueError as exc:  # incomplete or rule-breaking plan
-            print(f"{backend:6} rejected: {exc} elapsed={elapsed:.2f}s score={solution.score}")
+            print(
+                f"{backend:6} rejected: {exc} elapsed={elapsed:.2f}s score={solution.score}"
+            )
             continue
         if solution.total_driving_seconds != distance:
             raise ValueError("solver report and independent distance disagree")

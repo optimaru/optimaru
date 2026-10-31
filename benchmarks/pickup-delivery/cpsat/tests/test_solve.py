@@ -74,10 +74,17 @@ def test_cpsat_defaults_are_the_engine_defaults() -> None:
         assert entry["level_flippable"] == row.level_flippable
         assert entry["reward"] == row.reward
         assert entry["default_enabled"] == row.default_enabled
-        assert entry["kind"] == "either"  # every pickup-delivery constraint is flippable
+        assert (
+            entry["kind"] == "either"
+        )  # every pickup-delivery constraint is flippable
         assert entry["params"] == {"weight": None, "hard": None, "exponent": 1.0}
     assert engine["unassigned_requests_cost"].default_level == "medium"
-    assert next(e for e in entries if e["name"] == "unassigned_requests_cost")["default_weight"] == 1
+    assert (
+        next(e for e in entries if e["name"] == "unassigned_requests_cost")[
+            "default_weight"
+        ]
+        == 1
+    )
 
 
 def test_pickup_precedes_dropoff() -> None:
@@ -210,7 +217,10 @@ def test_demoting_the_medium_constraint_scores_like_the_engine() -> None:
     assert levels == {"hard": 0, "medium": 0, "soft": -20}
     assert sorted(solved.unassigned) == ["d0", "d1"]
     engine = _engine_score(request, solved.routes, selection)
-    assert (engine.hard, engine.soft) == (levels["hard"], levels["soft"] + levels["medium"] * MEDIUM_UNIT)
+    assert (engine.hard, engine.soft) == (
+        levels["hard"],
+        levels["soft"] + levels["medium"] * MEDIUM_UNIT,
+    )
 
 
 def test_default_selection_scores_like_the_engine() -> None:
@@ -221,22 +231,37 @@ def test_default_selection_scores_like_the_engine() -> None:
     levels = _levels(solved.score)
     assert levels["hard"] == 0 and levels["medium"] == 0
     cpsat_names = [entry["name"] for entry in catalog()]
-    selection = [spec for spec in domain.constraints.get_constraints() if spec.name in cpsat_names]
+    selection = [
+        spec
+        for spec in domain.constraints.get_constraints()
+        if spec.name in cpsat_names
+    ]
     engine = _engine_score(request, solved.routes, selection)
-    assert (engine.hard, engine.soft) == (levels["hard"], levels["soft"] + levels["medium"] * MEDIUM_UNIT)
+    assert (engine.hard, engine.soft) == (
+        levels["hard"],
+        levels["soft"] + levels["medium"] * MEDIUM_UNIT,
+    )
 
 
-@pytest.mark.parametrize("spec_class", [PairedRequestCost, SameVehicleCost, PickupBeforeDropoffCost])
 @pytest.mark.parametrize(
-    "knobs", [{"hard": False}, {"weight": 0}, {"weight": 1}], ids=["soft", "weight-0", "weight-1"]
+    "spec_class", [PairedRequestCost, SameVehicleCost, PickupBeforeDropoffCost]
 )
-def test_structural_constraints_refuse_what_the_model_cannot_honour(spec_class, knobs) -> None:
+@pytest.mark.parametrize(
+    "knobs",
+    [{"hard": False}, {"weight": 0}, {"weight": 1}],
+    ids=["soft", "weight-0", "weight-1"],
+)
+def test_structural_constraints_refuse_what_the_model_cannot_honour(
+    spec_class, knobs
+) -> None:
     """The circuit model enforces the coupling rules; it cannot price a violation."""
     with pytest.raises(ValueError, match="enforces it structurally"):
         solve_request(_two_requests(timelimit=1), constraints=[spec_class(**knobs)])
 
 
-@pytest.mark.parametrize("spec_class", [PairedRequestCost, SameVehicleCost, PickupBeforeDropoffCost])
+@pytest.mark.parametrize(
+    "spec_class", [PairedRequestCost, SameVehicleCost, PickupBeforeDropoffCost]
+)
 def test_structural_constraints_accept_their_engine_default(spec_class) -> None:
     for pick in (spec_class(), spec_class(hard=True), spec_class(weight=1000)):
         solved = solve_request(_two_requests(timelimit=1), constraints=[pick])

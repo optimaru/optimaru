@@ -39,10 +39,11 @@ class ScoreCalculator
 public:
     // Penalty weight (in the same whole-minute units as lateness) for each
     // violated coupling rule — the kDefaultWeight of pairedRequestCost,
-    // sameVehicleCost, pickupBeforeDropoffCost and requiredVehicleCost. Any nonzero hard total already means infeasible;
-    // these values only shape the gradient *within* the infeasible region, so
-    // they are set well above a typical lateness so the search fixes broken
-    // pairs before it polishes time windows.
+    // sameVehicleCost, pickupBeforeDropoffCost and requiredVehicleCost. Any
+    // nonzero hard total already means infeasible; these values only shape
+    // the gradient *within* the infeasible region, so they are set well above
+    // a typical lateness so the search fixes broken pairs before it polishes
+    // time windows.
     static constexpr std::int64_t kCouplingPenalty = 1000;
     // Far above what the other hard rules total on any real input (lateness
     // has no ceiling, but it would take 1e12 minutes of it), so no trade between

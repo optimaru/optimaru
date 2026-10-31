@@ -21,9 +21,10 @@ namespace pdp
 //    one walk of a touched route re-derives all three.
 //
 //  - Coupling terms (pairedRequestCost / sameVehicleCost /
-//    pickupBeforeDropoffCost) are NOT per-route: they read both nodes of a request, which may sit in different
-//    lists. They are maintained per *request* instead, in pairPenalty_, and
-//    only the requests touching a changed list are recomputed.
+//    pickupBeforeDropoffCost) are NOT per-route: they read both nodes of a
+//    request, which may sit in different lists. They are maintained per
+//    *request* instead, in pairPenalty_, and only the requests touching a
+//    changed list are recomputed.
 //
 // The bookkeeping that makes the second group work: beforeListChanged snapshots
 // the list's old membership, and afterListChanged compares it with the new one

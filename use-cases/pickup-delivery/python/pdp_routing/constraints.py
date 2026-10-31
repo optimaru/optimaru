@@ -122,8 +122,8 @@ class VehicleCapacityCost(Constraint):
         "over capacity at one stop; 0 means no vehicle is ever overloaded."
     )
     description_ko = (
-        "픽업에서 늘고 하차에서 줄어드는 적재량이 차량 용량을 넘는 만큼을, 초과가 이어지는 정차지마다 "
-        "더합니다. 한 정차지에서 용량을 넘은 수요 1단위가 비용 1이며, 0이면 어떤 차량도 용량을 넘지 않습니다."
+        "픽업에서 늘고 하차에서 줄어드는 적재량이 차량 용량을 넘으면, 초과가 이어지는 정차지마다 그 "
+        "초과량을 더합니다. 한 정차지에서 용량을 넘은 수요 1단위가 비용 1이며, 0이면 어떤 차량도 용량을 넘지 않습니다."
     )
 
 
@@ -135,15 +135,16 @@ class MaxEndTimeCost(Constraint):
 
     name = "max_end_time_cost"
     label_en = "Time window end"
-    label_ko = "시간 창 마감"
+    label_ko = "시간창 마감"
     description_en = (
         "Minutes, rounded up, by which a stop's service (arrival + service duration) finishes after "
         "its time window closes (`max_end_time`). One unit of cost is one late minute at one stop; "
         "0 means every stop finishes in time."
     )
     description_ko = (
-        "정차지의 서비스(도착 시각 + 서비스 시간)가 시간 창 마감(`max_end_time`)을 넘겨 끝나는 시간을 "
-        "분 단위로 올림해 더합니다. 한 정차지에서 늦은 1분이 비용 1이며, 0이면 모든 정차지가 제시간에 끝납니다."
+        "정차지의 서비스 종료 시각(도착 시각 + 서비스 시간)이 시간창 마감(`max_end_time`)보다 늦은 "
+        "시간을 분 단위로 올림해 더합니다. 한 정차지에서 늦은 1분이 비용 1이며, 0이면 모든 정차지의 "
+        "서비스가 제시간에 끝납니다."
     )
 
 
@@ -178,7 +179,7 @@ class MaxTravelTimeCost(Constraint):
         "is within its limit or has none."
     )
     description_ko = (
-        "차량의 운행 시간이 `max_travel_time`을 넘는 초를 더합니다(출발지로 돌아오는 구간은 "
+        "차량의 운행 시간이 `max_travel_time`을 넘는 시간(초)을 더합니다(출발지로 돌아오는 구간은 "
         "`return_to_depot`일 때만 셉니다). 한도를 넘은 1초가 비용 1이며, 0이면 모든 차량이 한도 안에 "
         "있거나 한도가 없습니다."
     )
@@ -197,7 +198,7 @@ class MaxRouteDurationCost(Constraint):
     )
     description_ko = (
         "출발부터 경로가 끝날 때까지 걸린 시간(대기와 서비스 포함, 귀환 구간은 `return_to_depot`일 때만)이 "
-        "차량의 `max_route_duration`을 넘는 초를 더합니다. 넘은 1초가 비용 1이며, 0이면 모든 경로가 한도 "
+        "차량의 `max_route_duration`을 넘는 시간(초)을 더합니다. 넘은 1초가 비용 1이며, 0이면 모든 경로가 한도 "
         "안에 있거나 한도가 없습니다."
     )
 
@@ -215,7 +216,7 @@ class VehicleMaxEndTimeCost(Constraint):
     )
     description_ko = (
         "경로가 끝나는 시각(마지막 정차지 출발, `return_to_depot`이면 출발지 도착)이 차량의 "
-        "`max_end_time`을 넘는 초를 더합니다. 늦은 1초가 비용 1이며, 0이면 모든 차량이 제시간에 끝나거나 "
+        "`max_end_time`을 넘는 시간(초)을 더합니다. 늦은 1초가 비용 1이며, 0이면 모든 차량이 제시간에 끝나거나 "
         "종료 시각이 없습니다."
     )
 
@@ -250,7 +251,7 @@ class MaxRouteRadiusCost(Constraint):
         "stop is inside it or no radius is set."
     )
     description_ko = (
-        "출발지에서 가장 먼 정차지까지의 직선거리가 `max_route_radius_meters`를 넘는 미터를 더합니다. "
+        "출발지에서 가장 먼 정차지까지의 직선거리가 `max_route_radius_meters`를 넘는 거리(미터)를 더합니다. "
         "반경을 벗어난 1미터가 비용 1이며, 0이면 모든 정차지가 반경 안에 있거나 반경이 설정되지 않았습니다."
     )
 
@@ -269,9 +270,9 @@ class EnclosingCircleRadiusCost(Constraint):
         "Opt-in: the default weight is 0."
     )
     description_ko = (
-        "경로마다 정차지(출발지 제외)를 모두 담는 가장 작은 원의 반지름(미터)을 더해, 촘촘한 경로를 "
-        "선호하게 합니다. 1미터가 비용 1이며, 정차지가 둘 미만인 경로는 0입니다. 기본 가중치가 0이라 직접 "
-        "켜야 합니다."
+        "경로마다 정차지(출발지 제외)를 모두 담는 가장 작은 원의 반지름(미터)을 더해, 좁은 범위에 모인 "
+        "경로를 선호하게 합니다. 1미터가 비용 1이며, 정차지가 둘 미만인 경로는 0입니다. 기본 가중치가 "
+        "0이므로 가중치를 주어야 점수에 반영됩니다."
     )
 
 
@@ -307,7 +308,7 @@ class RouteDurationCost(Constraint):
     description_ko = (
         "운행하는 차량마다 출발부터 경로가 끝날 때까지의 시간(대기와 서비스 포함, 귀환 구간은 "
         "`return_to_depot`일 때만)을 더합니다. 1초가 비용 1이며, 운행하는 차량이 없으면 0입니다. 기본 "
-        "가중치가 0이라 직접 켜야 합니다."
+        "가중치가 0이므로 가중치를 주어야 점수에 반영됩니다."
     )
 
 
@@ -323,7 +324,7 @@ class LatencyCost(Constraint):
     )
     description_ko = (
         "차량이 출발한 뒤 각 정차지에 도착하기까지 걸린 시간을 모든 정차지에 대해 더합니다. 1초가 비용 "
-        "1이며, 방문하는 정차지가 없으면 0입니다. 기본 가중치가 0이라 직접 켜야 합니다."
+        "1이며, 방문하는 정차지가 없으면 0입니다. 기본 가중치가 0이므로 가중치를 주어야 점수에 반영됩니다."
     )
 
 
@@ -347,10 +348,10 @@ class SquaredOrderAgeCost(Constraint):
         "only when every dropoff finishes at its order time. Opt-in: the default weight is 0."
     )
     description_ko = (
-        "요청마다 `order_time`부터 하차가 끝날 때까지 걸린 초의 제곱을 더하므로, 아주 오래 기다린 주문 "
-        "하나가 조금씩 기다린 주문 여럿보다 비쌉니다. 배정되지 않은 요청은 계획 시작 1시간 뒤에 하차가 끝난 "
+        "요청마다 `order_time`부터 하차가 끝날 때까지 걸린 시간(초)의 제곱을 더하므로, 아주 오래 기다린 "
+        "주문 하나가 조금씩 기다린 주문 여럿보다 비용이 큽니다. 배정되지 않은 요청은 계획 시작 1시간 뒤에 하차가 끝난 "
         "것으로 계산합니다. 1초의 제곱이 비용 1이며, 모든 하차가 주문 시각에 끝날 때만 0입니다. 기본 "
-        "가중치가 0이라 직접 켜야 합니다."
+        "가중치가 0이므로 가중치를 주어야 점수에 반영됩니다."
     )
 
 
@@ -386,8 +387,8 @@ class PinnedStopsCost(Constraint):
     )
     description_ko = (
         "경로 앞부분에서 차량의 고정 정차지가 정해진 순서대로 놓이지 않은 자리를 셉니다. 어긋난 고정 "
-        "정차지 하나가 비용 1이며, 0이면 모든 경로가 고정 정차지로 시작합니다. 가중치 1e12는 다른 하드 "
-        "규칙끼리의 어떤 맞교환으로도 고정 정차지가 움직이지 않게 합니다."
+        "정차지 하나가 비용 1이며, 0이면 모든 경로가 고정 정차지로 시작합니다. 가중치가 1e12로 매우 커서, "
+        "다른 하드 규칙의 위반을 줄이려고 고정 정차지를 옮기는 일이 생기지 않습니다."
     )
 
 
@@ -406,9 +407,9 @@ class RequiredVehicleCost(Constraint):
         "bound request rides its vehicle."
     )
     description_ko = (
-        "`required_vehicle`에 타지 않은 요청을 셉니다. 배정되지 않으면 1, 다른 차량에 타면 2이므로, 지정 "
-        "차량에 자리가 없는 요청은 다른 차량에 타지 않고 기다립니다. 0이면 지정된 요청이 모두 제 차량에 "
-        "탑니다."
+        "지정 차량(`required_vehicle`)에 배정되지 않은 요청을 셉니다. 미배정이면 1, 다른 차량에 배정되면 "
+        "2이므로, 지정 차량에 자리가 없는 요청은 다른 차량에 배정되지 않고 미배정으로 남습니다. 0이면 "
+        "차량이 지정된 요청이 모두 그 차량에 배정됩니다."
     )
 
 
@@ -427,7 +428,7 @@ class PairedRequestCost(Constraint):
     )
     description_ko = (
         "픽업과 하차 가운데 하나만 경로에 들어간 요청을 셉니다. 반쪽만 배정된 요청 하나가 비용 1이며, "
-        "0이면 모든 요청이 통째로 배정되거나 아예 빠져 있습니다."
+        "0이면 모든 요청의 픽업과 하차가 함께 배정되거나 함께 빠져 있습니다."
     )
 
 
@@ -447,7 +448,7 @@ class SameVehicleCost(Constraint):
     )
     description_ko = (
         "픽업과 하차가 서로 다른 차량에 배정된 요청을 셉니다. 나뉜 요청 하나가 비용 1이며, 0이면 배정된 "
-        "모든 요청이 한 차량에 있습니다."
+        "모든 요청의 픽업과 하차가 같은 차량에 있습니다."
     )
 
 
@@ -487,7 +488,7 @@ class UnassignedRequestsCost(Constraint):
         "half-routed request is counted by `paired_request_cost` instead."
     )
     description_ko = (
-        "경로에 전혀 들어가지 않은 요청의 서비스 시간(픽업과 하차 합, 분 단위 내림)을 미디엄 수준에서 "
+        "경로에 전혀 들어가지 않은 요청의 서비스 시간(픽업과 하차 합, 분 단위 내림)을 중간(medium) 수준에서 "
         "더합니다. 1분이 비용 1이며, 0이면 빠진 요청이 없습니다. 반쪽만 배정된 요청은 "
         "`paired_request_cost`가 셉니다."
     )

@@ -19,6 +19,7 @@ from pdp_routing.constraints import (
     UnassignedRequestsCost,
     get_constraints,
     paired_request_cost,
+    pickup_before_dropoff_cost,
     same_vehicle_cost,
     score,
     travel_time_cost,
@@ -134,13 +135,20 @@ def test_picking_a_subset_drops_the_other_terms():
     baseline = solve(get_constraints()).score
     assert baseline.soft < 0
 
-    without_travel = solve([vehicle_capacity_cost, paired_request_cost, same_vehicle_cost]).score
+    without_travel = solve(
+        [vehicle_capacity_cost, paired_request_cost, same_vehicle_cost]
+    ).score
     assert without_travel.soft == 0
 
 
 def test_reweighting_one_constraint_scales_only_that_term():
     """Raising only the travel-time weight grows soft only; hard stays put."""
-    picks = [vehicle_capacity_cost, paired_request_cost, same_vehicle_cost, unassigned_requests_cost]
+    picks = [
+        vehicle_capacity_cost,
+        paired_request_cost,
+        same_vehicle_cost,
+        unassigned_requests_cost,
+    ]
     base = solve([*picks, travel_time_cost]).score
     heavier = solve([*picks, TravelTimeCost(weight=10)]).score
     assert heavier.hard == base.hard
@@ -194,7 +202,9 @@ def test_default_instance_carries_no_overrides():
     """Module-level instances must keep the defaults (weight=None, hard=None, exponent=1)."""
     for spec in get_constraints():
         assert (spec.weight, spec.hard, spec.exponent) == (None, None, 1.0)
-        assert getattr(specs, spec.name) is spec  # the instance is named after the constraint
+        assert (
+            getattr(specs, spec.name) is spec
+        )  # the instance is named after the constraint
     # The opt-in objectives no longer pass an explicit weight=0: the C++ default is 0.
     assert specs.enclosing_circle_radius_cost.weight is None
 
@@ -257,15 +267,23 @@ def test_score_rejects_an_unknown_constraint_name():
 def order_age_input(order_times: list[int]) -> pdp.models.PdpInput:
     """One vehicle at 0, and requests whose stops are all at the same place, 100 s away."""
     size = 1 + 2 * len(order_times)
-    seconds = [[0 if i == j or (i and j) else 100 for j in range(size)] for i in range(size)]
+    seconds = [
+        [0 if i == j or (i and j) else 100 for j in range(size)] for i in range(size)
+    ]
     stop = lambda name: pdp.models.StopModel(
         id=name, location=(37.5, 127.0), max_end_time=10**6, service_duration=10
     )
     return pdp.models.PdpInput(
-        vehicles=[pdp.models.VehicleModel(id="v", capacity=5, home=(37.5, 127.0), max_stops=0)],
+        vehicles=[
+            pdp.models.VehicleModel(id="v", capacity=5, home=(37.5, 127.0), max_stops=0)
+        ],
         deliveries=[
             pdp.models.DeliveryModel(
-                id=f"r{i}", demand=1, order_time=order, pickup=stop(f"p{i}"), dropoff=stop(f"d{i}")
+                id=f"r{i}",
+                demand=1,
+                order_time=order,
+                pickup=stop(f"p{i}"),
+                dropoff=stop(f"d{i}"),
             )
             for i, order in enumerate(order_times)
         ],
@@ -288,7 +306,9 @@ def test_order_age_measures_each_dropoff_from_its_order():
 
 def test_order_age_ignores_where_the_pickups_fall():
     # Only the dropoffs' finish times differ from a plain sum of arrivals.
-    together = order_age_cost(order_age_input([0, 0]), [0, 2, 1, 3])  # finish at 130, 140
+    together = order_age_cost(
+        order_age_input([0, 0]), [0, 2, 1, 3]
+    )  # finish at 130, 140
     assert together == 130**2 + 140**2
 
 
@@ -306,7 +326,9 @@ def test_an_unassigned_request_is_charged_more_the_older_it_is():
 def test_solving_for_order_age_serves_the_oldest_order_first():
     model_input = order_age_input([0, -2000])
     replaced = {"travel_time_cost", "squared_order_age_cost"}
-    constraints = [c for c in pdp.constraints.get_constraints() if c.name not in replaced]
+    constraints = [
+        c for c in pdp.constraints.get_constraints() if c.name not in replaced
+    ]
     constraints.append(pdp.constraints.SquaredOrderAgeCost(weight=1))
     request = pdp.models.PdpRequest(model_input=model_input, timelimit=0.3)
 
@@ -341,14 +363,22 @@ EXPECTED_INFO = [
     ("pickup_before_dropoff_cost", "hard", 1000.0, True),
     ("unassigned_requests_cost", "medium", 1.0, True),
 ]
-GLOBALS = {"paired_request_cost", "same_vehicle_cost", "pickup_before_dropoff_cost", "unassigned_requests_cost"}
+GLOBALS = {
+    "paired_request_cost",
+    "same_vehicle_cost",
+    "pickup_before_dropoff_cost",
+    "unassigned_requests_cost",
+}
 
 
 def test_constraint_info_reports_the_cpp_defaults():
     """The defaults live in C++ only; constraint_info() reads them off the default assembly."""
     rows = pdp.constraint_info()
     assert [row.name for row in rows] == pdp.list_constraints()
-    assert [(row.name, row.default_level, row.default_weight, row.default_enabled) for row in rows] == EXPECTED_INFO
+    assert [
+        (row.name, row.default_level, row.default_weight, row.default_enabled)
+        for row in rows
+    ] == EXPECTED_INFO
     # Every constraint is flippable in the engine (the coupling rules are structural
     # on the CP-SAT path only) and none is a reward.
     assert all(row.level_flippable and not row.reward for row in rows)
@@ -383,7 +413,11 @@ def test_constraint_info_matches_the_raw_cost_metadata():
             row.default_level,
             row.default_level == "hard",
         )
-        assert (entry["level_flippable"], entry["reward"], entry["global"]) == (True, False, row.name in GLOBALS)
+        assert (entry["level_flippable"], entry["reward"], entry["global"]) == (
+            True,
+            False,
+            row.name in GLOBALS,
+        )
         assert (entry["name"], entry["label"]) == (row.name, "")
         assert entry["medium_fold"] == {"kind": "into_soft", "unit": float(MEDIUM_UNIT)}
 
@@ -406,7 +440,10 @@ def _half_served_plan():
 
 def test_weight_none_means_the_component_default():
     """weight=None scores exactly like the explicit C++ default weights."""
-    explicit = [type(spec)(weight=weight) for spec, (_, _, weight, _) in zip(get_constraints(), EXPECTED_INFO)]
+    explicit = [
+        type(spec)(weight=weight)
+        for spec, (_, _, weight, _) in zip(get_constraints(), EXPECTED_INFO)
+    ]
     plan = _half_served_plan()
     raw = pdp.constraint_costs(plan)
     assert score(raw) == score(raw, explicit)
@@ -420,10 +457,21 @@ def test_the_medium_level_folds_into_soft():
     monolithic = pdp.calculate_score(plan)
     assert (monolithic.hard, monolithic.medium) == (0, -10)
     assert score(raw) == (0, monolithic.soft - 10 * MEDIUM_UNIT)
-    others = [spec for spec in get_constraints() if spec.name != "unassigned_requests_cost"]
-    assert score(raw, [*others, UnassignedRequestsCost(hard=True)]) == (-10, monolithic.soft)
-    assert score(raw, [*others, UnassignedRequestsCost(hard=False)]) == (0, monolithic.soft - 10)
-    assert score(raw, [*others, UnassignedRequestsCost(weight=3)]) == (0, monolithic.soft - 30 * MEDIUM_UNIT)
+    others = [
+        spec for spec in get_constraints() if spec.name != "unassigned_requests_cost"
+    ]
+    assert score(raw, [*others, UnassignedRequestsCost(hard=True)]) == (
+        -10,
+        monolithic.soft,
+    )
+    assert score(raw, [*others, UnassignedRequestsCost(hard=False)]) == (
+        0,
+        monolithic.soft - 10,
+    )
+    assert score(raw, [*others, UnassignedRequestsCost(weight=3)]) == (
+        0,
+        monolithic.soft - 30 * MEDIUM_UNIT,
+    )
 
 
 def test_a_demoted_medium_constraint_is_soft_in_the_engine_too():
@@ -431,11 +479,79 @@ def test_a_demoted_medium_constraint_is_soft_in_the_engine_too():
 
     With driving hard, parking every vehicle wins; the dropped requests then cost
     soft minutes, not medium ones."""
-    picks = [paired_request_cost, same_vehicle_cost, UnassignedRequestsCost(hard=False), TravelTimeCost(hard=True)]
+    picks = [
+        paired_request_cost,
+        same_vehicle_cost,
+        UnassignedRequestsCost(hard=False),
+        TravelTimeCost(hard=True),
+    ]
     plan = solve(picks)
     assert (plan.score.hard, plan.score.medium) == (0, 0)
     assert plan.score.soft == -20  # both requests dropped, 10 minutes each
-    assert score(pdp.constraint_costs(plan), picks) == (plan.score.hard, plan.score.soft)
+    assert score(pdp.constraint_costs(plan), picks) == (
+        plan.score.hard,
+        plan.score.soft,
+    )
+
+
+def _solve_reporting(run):
+    """Solve the tiny plan with `run(solver, plan)`, recording every on_new_best score."""
+    reported = []
+    plan = build_plan()
+    cfg = pdp.SolverConfig()
+    cfg.spent_limit_seconds = 0.4
+    cfg.random_seed = 1
+    cfg.on_new_best = lambda _step, best: reported.append(
+        (best.hard, best.medium, best.soft)
+    )
+    run(pdp.Solver(cfg), plan)
+    return plan, reported
+
+
+def test_the_plugin_solve_reports_each_level_unfolded():
+    """plan.score and on_new_best on the plugin path read the calculator's levels, not a decoded fold.
+
+    With unassigned_requests_cost demoted to soft, nothing is medium, so a soft
+    total of 10^9 or more must stay soft in the final score and in every new best."""
+    weight = 10_000_000
+    picks = [
+        vehicle_capacity_cost,
+        paired_request_cost,
+        same_vehicle_cost,
+        pickup_before_dropoff_cost,
+        UnassignedRequestsCost(hard=False, weight=MEDIUM_UNIT),
+        TravelTimeCost(weight=weight),
+    ]
+    plan, reported = _solve_reporting(
+        lambda solver, plan: solver.solve_with_constraints(plan, picks)
+    )
+    raw = pdp.constraint_costs(plan)
+    travel = sum(raw["travel_time_cost"]["costs"])
+    unrouted = sum(raw["unassigned_requests_cost"]["costs"])
+    final = (plan.score.hard, plan.score.medium, plan.score.soft)
+    assert final == (0, 0, -(weight * travel + MEDIUM_UNIT * unrouted))
+    assert -plan.score.soft >= MEDIUM_UNIT  # the case a decoded fold would misfile
+    assert score(raw, picks) == _engine(plan.score)
+    assert reported and all(medium == 0 for _, medium, _ in reported)
+    assert reported[-1] == final
+
+
+@pytest.mark.parametrize(
+    "run",
+    [
+        pytest.param(lambda solver, plan: solver.solve(plan), id="monolithic"),
+        pytest.param(
+            lambda solver, plan: solver.solve_with_constraints(plan, get_constraints()),
+            id="plugin",
+        ),
+    ],
+)
+def test_on_new_best_ends_on_the_final_score(run):
+    """Each path reports strictly improving new bests in the levels of its final plan.score."""
+    plan, reported = _solve_reporting(run)
+    assert reported[-1] == (plan.score.hard, plan.score.medium, plan.score.soft)
+    folded = [(hard, medium * MEDIUM_UNIT + soft) for hard, medium, soft in reported]
+    assert all(earlier < later for earlier, later in zip(folded, folded[1:]))
 
 
 @pytest.mark.parametrize(
@@ -455,9 +571,16 @@ def test_specs_validate_their_knobs(kwargs, error):
 
 def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     """The C++ side guards too: a duck-typed pick cannot smuggle a negative weight in."""
-    negative = SimpleNamespace(name="travel_time_cost", weight=-2.0, hard=None, exponent=1.0)
-    flat = SimpleNamespace(name="travel_time_cost", weight=None, hard=None, exponent=0.0)
-    for pick, message in ((negative, "weight must be finite and >= 0"), (flat, "exponent must be finite and > 0")):
+    negative = SimpleNamespace(
+        name="travel_time_cost", weight=-2.0, hard=None, exponent=1.0
+    )
+    flat = SimpleNamespace(
+        name="travel_time_cost", weight=None, hard=None, exponent=0.0
+    )
+    for pick, message in (
+        (negative, "weight must be finite and >= 0"),
+        (flat, "exponent must be finite and > 0"),
+    ):
         with pytest.raises(ValueError, match=message):
             solve([pick])
 
@@ -473,10 +596,14 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
 )
 def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
     """The C++ path checks the knob types like _constraint.py: TypeError, the same words."""
-    pick = SimpleNamespace(name="unassigned_requests_cost", weight=None, hard=None, exponent=1.0)
+    pick = SimpleNamespace(
+        name="unassigned_requests_cost", weight=None, hard=None, exponent=1.0
+    )
     for key, value in knobs.items():
         setattr(pick, key, value)
-    with pytest.raises(TypeError, match=f"constraint 'unassigned_requests_cost': {re.escape(message)}"):
+    with pytest.raises(
+        TypeError, match=f"constraint 'unassigned_requests_cost': {re.escape(message)}"
+    ):
         solve([pick])
     with pytest.raises(TypeError, match=re.escape(message)):
         UnassignedRequestsCost(**knobs)
@@ -488,7 +615,9 @@ def test_squared_order_age_is_opt_in():
     raw = pdp.constraint_costs(plan)
     assert sum(raw["squared_order_age_cost"]["costs"]) > 0
     assert score(raw, [specs.squared_order_age_cost]) == (0, 0.0)
-    assert score(raw, [SquaredOrderAgeCost(weight=1)]).soft == -sum(raw["squared_order_age_cost"]["costs"])
+    assert score(raw, [SquaredOrderAgeCost(weight=1)]).soft == -sum(
+        raw["squared_order_age_cost"]["costs"]
+    )
 
 
 # 0.2.0 migration: the pre-0.2.0 catalog names (vehicle_fixed_cost kept its name).

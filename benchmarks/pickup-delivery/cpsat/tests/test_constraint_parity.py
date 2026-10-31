@@ -196,9 +196,7 @@ def test_constraint_matches_hand_calculation_and_other_backend(
 
     raw_cost, engine_score = _engine_cost(request, routes, name)
     assert raw_cost == pytest.approx(expected_raw)
-    engine_penalty = -(
-        engine_score.hard if level == "hard" else engine_score.soft
-    )
+    engine_penalty = -(engine_score.hard if level == "hard" else engine_score.soft)
     if level == "medium":
         # The engine score is two-level: it folds medium into soft by the
         # domain's medium_fold (0.2.0: the weight is in medium units, so the
@@ -244,7 +242,11 @@ def test_open_route_skips_the_closing_leg_on_both_backends(
         constraints=[{"name": name, "weight": 1}],
         _fixed_routes=routes,
     )
-    level = "hard" if name in {"vehicle_max_end_time_cost", "max_travel_time_cost"} else "soft"
+    level = (
+        "hard"
+        if name in {"vehicle_max_end_time_cost", "max_travel_time_cost"}
+        else "soft"
+    )
     assert -_parse_score(exact.score)[level] == expected
     assert exact.total_driving_seconds == 160
     # Post-processed per-vehicle figures. Stop count, load, driving and

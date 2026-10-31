@@ -1,6 +1,7 @@
 #include "pdp/solver.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <exception>
 #include <limits>
@@ -919,6 +920,18 @@ optimaru::SolverConfig buildEngineConfig(const Solver::Config &config,
     return engineConfig;
 }
 
+// The domain Score of a plugin calculator, read from its three accumulators
+// (levelScores(), before the medium fold) rather than decoded from the folded
+// engine soft, which would file a soft total of 10^9 or more under medium.
+Score levelScoreOf(
+    const optimaru::DecomposedScoreCalculator<PdpRoutePlan> &calculator)
+{
+    const auto levels = calculator.levelScores();
+    return {static_cast<std::int64_t>(levels.hard),
+            std::llround(levels.medium),
+            std::llround(levels.soft)};
+}
+
 }  // namespace
 
 void Solver::solve(PdpRoutePlan &plan)
@@ -980,10 +993,23 @@ void Solver::solve(
         constructPairs(plan, config_.firstFitDecreasing);
     if (!plan.nodes.empty() && !plan.vehicles.empty())
     {
+        optimaru::SolverConfig engineConfig = buildEngineConfig(config_, plan);
+        if (config_.onNewBest)
+        {
+            // The engine reports a new best right after the working solution
+            // became it, so the calculator's accumulators hold exactly that
+            // solution: report its levels the same way as the final
+            // plan.score below, not the decoded engine fold.
+            auto callback = config_.onNewBest;
+            engineConfig.onNewBest
+                = [callback, &calculator](std::int64_t step,
+                                          const optimaru::HardSoftScore &)
+            { callback(step, levelScoreOf(calculator)); };
+        }
         // The pair-aware operators only read the plan (which request a node
         // belongs to, where its partner sits), never the calculator, so the
         // plugin path keeps them — they are what makes a PDP search work.
-        optimaru::Solver<PdpRoutePlan> engine(buildEngineConfig(config_, plan));
+        optimaru::Solver<PdpRoutePlan> engine(std::move(engineConfig));
         if (config_.pairMoves)
         {
             engine.addMoveOperator(std::make_unique<PairRelocateMove>(
@@ -1006,7 +1032,7 @@ void Solver::solve(
     // exactly this score.
     ScoreCalculator::updateShadowVariables(plan);
     calculator.resetWorkingSolution(plan);
-    plan.score = fromEngineScore(calculator.calculateScore());
+    plan.score = levelScoreOf(calculator);
 }
 
 }  // namespace pdp
