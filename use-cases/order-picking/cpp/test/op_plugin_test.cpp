@@ -6,13 +6,21 @@
 //   (b) incremental score == full recompute across 2000 random LIST moves
 //       driven through the engine's ScoreDirector protocol (plugin path)
 //   (c) partial assemblies: each component in isolation, hand-computed
-//   (d) weight / isHard overrides
+//   (d) weight / level overrides
 //   (e) constraintTotals() explains exactly the reported score
 //   (f) a 2-second solve(solution, calculator) under FULL_ASSERT
+//   (g) the defaultConstraints() builder: named edits == by-hand assembly
+//   (h) each component's raw cost, hand-calculated: a positive and a zero
+//       case per constraint (raw 0 = no violation; orderSplitByTrolleyCost
+//       counts every (order, trolley) pair, so its zero case has no picks)
+//   (i) the catalog: info() off the default assembly == the components'
+//       kDefaultWeight / kDefaultLevel; the level/weight guards
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <functional>
 #include <memory>
+#include <stdexcept>
 #include <random>
 #include <string>
 #include <utility>
@@ -276,7 +284,7 @@ void verifyPartialAssemblies()
     std::printf("== (c) Single-component assemblies ==\n");
     const WarehouseLocation origin = loc('A', 1, Side::LEFT, 0);
 
-    {  // requiredNumberOfBuckets, the Java test's exact data: trolley1
+    {  // trolleyCapacityCost, the Java test's exact data: trolley1
         // (2 buckets, capacity 5) needs 3, trolley2 (2 buckets, capacity 10)
         // needs 6 -> 1 + 4 short.
         OrderPickingSolution s = makeBase(2);
@@ -293,11 +301,11 @@ void verifyPartialAssemblies()
                                           addPick(s, 1, 10, origin),
                                           addPick(s, 1, 9, origin)};
         DecomposedCalculator calculator;
-        calculator.emplace<RequiredNumberOfBuckets>();
+        calculator.emplace<TrolleyCapacityCost>();
         checkScore(
-            "requiredNumberOfBuckets alone", scoreWith(calculator, s), -5, 0.0);
+            "trolleyCapacityCost alone", scoreWith(calculator, s), -5, 0.0);
     }
-    {  // minimizeDistanceFromPreviousPickTask alone: origin -> A1L2 -> A1L5.
+    {  // distanceFromPreviousPickTaskCost alone: origin -> A1L2 -> A1L5.
         OrderPickingSolution s = makeBase(1);
         const int t = addTrolley(s, 1, 100, origin);
         const WarehouseLocation first = loc('A', 1, Side::LEFT, 2);
@@ -307,13 +315,13 @@ void verifyPartialAssemblies()
         const double expected = calculateDistance(origin, first)
                                 + calculateDistance(first, second);
         DecomposedCalculator calculator;
-        calculator.emplace<MinimizeDistanceFromPreviousPickTask>();
-        checkScore("minimizeDistanceFromPreviousPickTask alone",
+        calculator.emplace<DistanceFromPreviousPickTaskCost>();
+        checkScore("distanceFromPreviousPickTaskCost alone",
                    scoreWith(calculator, s),
                    0,
                    -expected);
     }
-    {  // minimizeDistanceFromLastPickTaskToPathOrigin alone: only the walk
+    {  // distanceFromLastPickTaskToPathOriginCost alone: only the walk
         // back from the final pick counts.
         OrderPickingSolution s = makeBase(1);
         const int t = addTrolley(s, 1, 100, origin);
@@ -322,13 +330,13 @@ void verifyPartialAssemblies()
         s.trolleys[t].pickTaskIndices
             = {addPick(s, 0, 1, first), addPick(s, 0, 1, second)};
         DecomposedCalculator calculator;
-        calculator.emplace<MinimizeDistanceFromLastPickTaskToPathOrigin>();
-        checkScore("minimizeDistanceFromLastPickTaskToPathOrigin alone",
+        calculator.emplace<DistanceFromLastPickTaskToPathOriginCost>();
+        checkScore("distanceFromLastPickTaskToPathOriginCost alone",
                    scoreWith(calculator, s),
                    0,
                    -static_cast<double>(calculateDistance(second, origin)));
     }
-    {  // minimizeOrderSplitByTrolley alone: one order on two trolleys and a
+    {  // orderSplitByTrolleyCost alone: one order on two trolleys and a
         // second order on one -> three (order, trolley) pairs.
         OrderPickingSolution s = makeBase(2);
         const int t1 = addTrolley(s, 10, 100, origin);
@@ -337,8 +345,8 @@ void verifyPartialAssemblies()
             = {addPick(s, 0, 1, origin), addPick(s, 1, 1, origin)};
         s.trolleys[t2].pickTaskIndices = {addPick(s, 0, 1, origin)};
         DecomposedCalculator calculator;
-        calculator.emplace<MinimizeOrderSplitByTrolley>();
-        checkScore("minimizeOrderSplitByTrolley alone",
+        calculator.emplace<OrderSplitByTrolleyCost>();
+        checkScore("orderSplitByTrolleyCost alone",
                    scoreWith(calculator, s),
                    0,
                    -3000.0);
@@ -362,18 +370,18 @@ void verifyOverrides()
 
     {
         DecomposedCalculator calculator;
-        calculator.emplace<RequiredNumberOfBuckets>(10.0);
-        checkScore("requiredNumberOfBuckets re-weighted to 10",
+        calculator.emplace<TrolleyCapacityCost>(10.0);
+        checkScore("trolleyCapacityCost re-weighted to 10",
                    scoreWith(calculator, s),
                    -20,
                    0.0);
     }
     {
         DecomposedCalculator calculator;
-        auto component = std::make_unique<RequiredNumberOfBuckets>();
-        component->isHard = false;
+        auto component = std::make_unique<TrolleyCapacityCost>();
+        component->level = optimaru::Level::Soft;
         calculator.add(std::move(component));
-        checkScore("requiredNumberOfBuckets demoted to soft",
+        checkScore("trolleyCapacityCost demoted to soft",
                    scoreWith(calculator, s),
                    0,
                    -2.0);
@@ -381,10 +389,10 @@ void verifyOverrides()
     {
         // exponent 2 shapes the raw shortage (2) before the weight.
         DecomposedCalculator calculator;
-        auto component = std::make_unique<RequiredNumberOfBuckets>();
+        auto component = std::make_unique<TrolleyCapacityCost>();
         component->exponent = 2.0;
         calculator.add(std::move(component));
-        checkScore("requiredNumberOfBuckets with exponent 2",
+        checkScore("trolleyCapacityCost with exponent 2",
                    scoreWith(calculator, s),
                    -4,
                    0.0);
@@ -461,6 +469,273 @@ void verifyFullAssertSolve()
     std::printf("\n");
 }
 
+// -------------------------------------------------------------------------
+// (g) The defaultConstraints() builder: named edits by registry name.
+// -------------------------------------------------------------------------
+void verifyAssemblyBuilder()
+{
+    std::printf("== (g) defaultConstraints() builder ==\n");
+    OrderPickingSolution s = buildDemoData();
+    std::mt19937_64 rng(17);
+    for (int t = 0; t < static_cast<int>(s.pickTasks.size()); ++t)
+    {
+        const int trolley = static_cast<int>(rng() % s.trolleys.size());
+        s.trolleys[trolley].pickTaskIndices.push_back(t);
+    }
+
+    // By hand: capacity demoted to soft, the split re-weighted to 100, the
+    // return leg dropped.
+    DecomposedCalculator byHand;
+    {
+        auto capacity = std::make_unique<TrolleyCapacityCost>();
+        capacity->level = optimaru::Level::Soft;
+        byHand.add(std::move(capacity));
+        byHand.emplace<DistanceFromPreviousPickTaskCost>();
+        byHand.emplace<OrderSplitByTrolleyCost>(100.0);
+    }
+    const Score expected = scoreWith(byHand, s);
+
+    // By name: same three edits, one expression.
+    DecomposedCalculator built;
+    defaultConstraints()
+        .soft("trolleyCapacityCost")
+        .weight("orderSplitByTrolleyCost", 100)
+        .drop("distanceFromLastPickTaskToPathOriginCost")
+        .into(built);
+    check(sameScore(scoreWith(built, s), expected),
+          "named edits == the same assembly listed by hand");
+
+    // The default assembly, untouched, still matches the monolith.
+    DecomposedCalculator plain;
+    defaultConstraints().into(plain);
+    check(sameScore(scoreWith(plain, s), ScoreCalculator::calculateScore(s)),
+          "defaultConstraints() alone == the monolithic score");
+
+    // A typo must not quietly leave the cost function as it was.
+    bool threw = false;
+    try
+    {
+        defaultConstraints().weight("orderSplitByTrolleysCost", 4);
+    }
+    catch (const std::invalid_argument &)
+    {
+        threw = true;
+    }
+    check(threw,
+          "a misspelled constraint name throws instead of doing nothing");
+
+    // only() isolates a subset: just the split rule, nothing else scored.
+    DecomposedCalculator isolated;
+    defaultConstraints().only({"orderSplitByTrolleyCost"}).into(isolated);
+    const Score splitOnly = scoreWith(isolated, s);
+    check(splitOnly.hard == 0 && splitOnly.soft < 0.0
+              && std::fmod(splitOnly.soft, 1000.0) == 0.0,
+          "only() scores exactly the named constraint");
+    std::printf("\n");
+}
+
+// -------------------------------------------------------------------------
+// (h) Each component's raw cost on hand-built instances: one violating
+// (positive) case and one clean (zero) case per constraint, read through
+// constraintCosts() — the raw per-trolley numbers before weight and level.
+// Same-shelving, same-side distances are the row difference (op_test (a)).
+// -------------------------------------------------------------------------
+std::vector<double> rawCosts(OrderPickingSolution &solution,
+                             const std::string &name)
+{
+    DecomposedCalculator calculator;
+    addDefaultConstraints(calculator);
+    calculator.resetWorkingSolution(solution);
+    calculator.calculateScore();
+    for (const auto &entry : calculator.constraintCosts())
+    {
+        if (entry.name == name)
+            return entry.unitCosts;
+    }
+    return {};
+}
+
+void verifyRawCostsByHand()
+{
+    std::printf("== (h) Raw costs by hand, positive and zero ==\n");
+    const WarehouseLocation origin = loc('A', 1, Side::LEFT, 0);
+    const WarehouseLocation row2 = loc('A', 1, Side::LEFT, 2);
+    const WarehouseLocation row5 = loc('A', 1, Side::LEFT, 5);
+    {
+        // The Java case: trolley1 (2 buckets of 5) carries order1 9 -> 2
+        // buckets and order2 5 -> 1, so 3 - 2 = 1 short; trolley2 (2 of 10)
+        // carries order1 17 -> 2 and order2 33 -> 4, so 6 - 2 = 4 short.
+        OrderPickingSolution s = makeBase(2);
+        const int t1 = addTrolley(s, 2, 5, origin);
+        const int t2 = addTrolley(s, 2, 10, origin);
+        s.trolleys[t1].pickTaskIndices = {addPick(s, 0, 4, origin),
+                                          addPick(s, 0, 5, origin),
+                                          addPick(s, 1, 4, origin),
+                                          addPick(s, 1, 1, origin)};
+        s.trolleys[t2].pickTaskIndices = {addPick(s, 0, 9, origin),
+                                          addPick(s, 0, 8, origin),
+                                          addPick(s, 1, 8, origin),
+                                          addPick(s, 1, 6, origin),
+                                          addPick(s, 1, 10, origin),
+                                          addPick(s, 1, 9, origin)};
+        check(rawCosts(s, "trolleyCapacityCost")
+                  == std::vector<double>{1.0, 4.0},
+              "trolleyCapacityCost: [1, 4] (3 on 2 buckets; 6 on 2)");
+    }
+    {
+        // Exactly enough: order0 10 -> 1 bucket, order1 7 -> 1 bucket on a
+        // 2-bucket trolley of capacity 10; the second trolley is empty.
+        OrderPickingSolution s = makeBase(2);
+        const int t1 = addTrolley(s, 2, 10, origin);
+        addTrolley(s, 1, 10, origin);
+        s.trolleys[t1].pickTaskIndices = {addPick(s, 0, 6, origin),
+                                          addPick(s, 0, 4, origin),
+                                          addPick(s, 1, 7, origin)};
+        check(rawCosts(s, "trolleyCapacityCost")
+                  == std::vector<double>{0.0, 0.0},
+              "trolleyCapacityCost: [0, 0] exactly at bucket count");
+    }
+    {
+        // origin -> A1L2 (2) -> A1L5 (3) on the first trolley; the second is
+        // empty.
+        OrderPickingSolution s = makeBase(1);
+        const int t1 = addTrolley(s, 1, 100, origin);
+        addTrolley(s, 1, 100, origin);
+        s.trolleys[t1].pickTaskIndices
+            = {addPick(s, 0, 1, row2), addPick(s, 0, 1, row5)};
+        check(rawCosts(s, "distanceFromPreviousPickTaskCost")
+                  == std::vector<double>{5.0, 0.0},
+              "distanceFromPreviousPickTaskCost: [5, 0] (2 + 3; empty)");
+        // ... and the walk back A1L5 -> origin is 5.
+        check(rawCosts(s, "distanceFromLastPickTaskToPathOriginCost")
+                  == std::vector<double>{5.0, 0.0},
+              "distanceFromLastPickTaskToPathOriginCost: [5, 0] (5; empty)");
+    }
+    {
+        // Every pick on the trolley's own parking spot: no outbound walk.
+        OrderPickingSolution s = makeBase(1);
+        const int t = addTrolley(s, 1, 100, origin);
+        s.trolleys[t].pickTaskIndices
+            = {addPick(s, 0, 1, origin), addPick(s, 0, 1, origin)};
+        check(rawCosts(s, "distanceFromPreviousPickTaskCost")
+                  == std::vector<double>{0.0},
+              "distanceFromPreviousPickTaskCost: [0] picks on the spot");
+    }
+    {
+        // origin -> A1L2 -> origin: the last pick is back on the parking
+        // spot, so the return leg is 0 (the outbound legs are 2 + 2).
+        OrderPickingSolution s = makeBase(1);
+        const int t = addTrolley(s, 1, 100, origin);
+        s.trolleys[t].pickTaskIndices
+            = {addPick(s, 0, 1, row2), addPick(s, 0, 1, origin)};
+        check(rawCosts(s, "distanceFromLastPickTaskToPathOriginCost")
+                  == std::vector<double>{0.0},
+              "distanceFromLastPickTaskToPathOriginCost: [0] last pick at "
+              "the origin");
+        check(rawCosts(s, "distanceFromPreviousPickTaskCost")
+                  == std::vector<double>{4.0},
+              "... while distanceFromPreviousPickTaskCost is 2 + 2");
+    }
+    {
+        // order0 on both trolleys, order1 on the first: trolley1 carries 2
+        // distinct orders, trolley2 one.
+        OrderPickingSolution s = makeBase(2);
+        const int t1 = addTrolley(s, 10, 100, origin);
+        const int t2 = addTrolley(s, 10, 100, origin);
+        s.trolleys[t1].pickTaskIndices = {addPick(s, 0, 1, origin),
+                                          addPick(s, 1, 1, origin),
+                                          addPick(s, 0, 1, origin)};
+        s.trolleys[t2].pickTaskIndices = {addPick(s, 0, 1, origin)};
+        check(rawCosts(s, "orderSplitByTrolleyCost")
+                  == std::vector<double>{2.0, 1.0},
+              "orderSplitByTrolleyCost: [2, 1] (order, trolley) pairs");
+    }
+    {
+        // No assigned pick: no (order, trolley) pair. (An unsplit order
+        // still costs 1 — the quickstart's definition, kept.)
+        OrderPickingSolution s = makeBase(1);
+        addTrolley(s, 1, 100, origin);
+        addTrolley(s, 1, 100, origin);
+        addPick(s, 0, 1, row2);  // in no list
+        check(rawCosts(s, "orderSplitByTrolleyCost")
+                  == std::vector<double>{0.0, 0.0},
+              "orderSplitByTrolleyCost: [0, 0] without assigned picks");
+    }
+    std::printf("\n");
+}
+
+// -------------------------------------------------------------------------
+// (i) The catalog read off the default assembly is exactly the components'
+// constants, and the level/weight guards hold on the domain's assembly.
+// -------------------------------------------------------------------------
+bool throwsInvalid(const std::function<void()> &edit)
+{
+    try
+    {
+        edit();
+    }
+    catch (const std::invalid_argument &)
+    {
+        return true;
+    }
+    return false;
+}
+
+template <typename Component>
+bool rowIs(const optimaru::ConstraintInfo &row,
+           const char *name,
+           optimaru::Level level,
+           double weight)
+{
+    return row.name == name && row.defaultLevel == Component::kDefaultLevel
+           && row.defaultWeight == Component::kDefaultWeight
+           && row.defaultLevel == level && row.defaultWeight == weight
+           && row.levelFlippable && !row.reward && !row.isGlobal
+           && row.defaultEnabled;
+}
+
+void verifyCatalog()
+{
+    std::printf("== (i) Catalog and guards ==\n");
+    const auto rows = defaultConstraints().info();
+    check(rows.size() == 4
+              && rowIs<TrolleyCapacityCost>(
+                  rows[0], "trolleyCapacityCost", optimaru::Level::Hard, 1.0)
+              && rowIs<DistanceFromPreviousPickTaskCost>(
+                  rows[1],
+                  "distanceFromPreviousPickTaskCost",
+                  optimaru::Level::Soft,
+                  1.0)
+              && rowIs<DistanceFromLastPickTaskToPathOriginCost>(
+                  rows[2],
+                  "distanceFromLastPickTaskToPathOriginCost",
+                  optimaru::Level::Soft,
+                  1.0)
+              && rowIs<OrderSplitByTrolleyCost>(rows[3],
+                                                "orderSplitByTrolleyCost",
+                                                optimaru::Level::Soft,
+                                                1000.0),
+          "info(): capacity hard 1, two distances soft 1, split soft 1000; "
+          "all flippable, no reward, no global, all default-enabled");
+    check(!throwsInvalid(
+              [] { defaultConstraints().soft("trolleyCapacityCost"); })
+              && !throwsInvalid(
+                  [] { defaultConstraints().hard("orderSplitByTrolleyCost"); }),
+          "every level flips both ways");
+    check(throwsInvalid(
+              []
+              {
+                  defaultConstraints().weight("orderSplitByTrolleyCost",
+                                              -1.0);
+              }),
+          "a negative weight is refused");
+    check(throwsInvalid(
+              []
+              { defaultConstraints().exponent("trolleyCapacityCost", 0.0); }),
+          "a non-positive exponent is refused");
+    std::printf("\n");
+}
+
 }  // namespace
 
 int main()
@@ -471,6 +746,9 @@ int main()
     verifyOverrides();
     verifyConstraintTotals();
     verifyFullAssertSolve();
+    verifyAssemblyBuilder();
+    verifyRawCostsByHand();
+    verifyCatalog();
 
     if (failures == 0)
     {

@@ -2,6 +2,34 @@
 
 Domain model, constraints and API details: [`python/`](python/README.md) and [`cpp/`](cpp/README.md).
 
+## Constraints (HardSoftScore — the engine score type as-is, no mapping)
+
+| Constraint (Python name) | C++ component | Default level | Default weight | Raw cost per trolley (0 = no violation) |
+|---|---|---|---|---|
+| `trolley_capacity_cost` | `TrolleyCapacityCost` | hard | 1 | buckets short: `max(0, sum over its orders of ceil(order volume / bucket capacity) - bucket count)` (orders never share a bucket) |
+| `distance_from_previous_pick_task_cost` | `DistanceFromPreviousPickTaskCost` | soft | 1 | warehouse distance (m) start -> first pick -> ... -> last pick |
+| `distance_from_last_pick_task_to_path_origin_cost` | `DistanceFromLastPickTaskToPathOriginCost` | soft | 1 | warehouse distance (m) from the last pick back to the start; 0 for an empty trolley |
+| `order_split_by_trolley_cost` | `OrderSplitByTrolleyCost` | soft | 1000 | distinct orders with a pick on the trolley — summed, the (order, trolley) pairs. **Not** 0 for an unsplit order: an order on one trolley counts 1, so the minimum is the number of orders with assigned picks (the Java quickstart's definition, kept) |
+
+Every constraint is flippable (`hard=True` / `hard=False`), none is a reward and all
+four are scored by default (`default_enabled`); `order_picking.constraint_info()`
+reports exactly this table from the C++ components (`kDefaultLevel` /
+`kDefaultWeight`). `order_picking.constraint_costs(solution)` is the only
+per-constraint surface: the travel distance is the sum of the two distance entries,
+the (order, trolley) pair count the sum of `order_split_by_trolley_cost`
+(`models.solve_request` fills `total_distance` / `order_split_count` from it).
+
+**0.2.0:** the constraints were renamed (`required_number_of_buckets` ->
+`trolley_capacity_cost`, `minimize_distance_from_previous_pick_task` ->
+`distance_from_previous_pick_task_cost`, `minimize_distance_from_last_pick_task_to_path_origin` ->
+`distance_from_last_pick_task_to_path_origin_cost`, `minimize_order_split_by_trolley` ->
+`order_split_by_trolley_cost`; the spec classes, module-level default instances, C++
+structs/headers and registry names follow), and `ConstraintTotals` / `calculate_totals()`
+were removed from the Python API (use `constraint_costs()`; the old
+`order_split_by_trolley` total was weighted x1000, the raw cost is the pair count). The
+C++ `ConstraintTotals` members carry the registry names now and read the components'
+`kDefaultWeight`. Raw costs, weights, levels and the default score are unchanged.
+
 ## Usage
 
 ```sh
@@ -57,20 +85,29 @@ Decreasing ordering, or pre-assign part of the solution in the domain
 solver's `solve` before the engine runs — the engine only fills what is still unassigned.
 
 **Adding a hard or soft cost.** One file per constraint under
-`cpp/include/op/constraints/` (currently `minimize_distance_from_last_pick_task_to_path_origin`, `minimize_distance_from_previous_pick_task`, `minimize_order_split_by_trolley`, `required_number_of_buckets`):
-1. add `constraints/<name>.hpp` (a `UnitConstraint` or `GlobalConstraint`;
-   positive cost = penalty, the level and weight are constructor defaults);
+`cpp/include/op/constraints/` (currently `trolley_capacity_cost`,
+`distance_from_previous_pick_task_cost`, `distance_from_last_pick_task_to_path_origin_cost`,
+`order_split_by_trolley_cost`):
+1. add `constraints/<subject>_cost.hpp` with `struct <Subject>Cost` (a `UnitConstraint` or
+   `GlobalConstraint`; positive raw cost = penalty, 0 = no violation) declaring
+   `static constexpr double kDefaultWeight` and `static constexpr optimaru::Level kDefaultLevel`,
+   an `explicit <Subject>Cost(double weight = kDefaultWeight)` constructor and the registry
+   name `"<subject>Cost"` (the struct name with a lower-case first letter);
 2. include it in `cpp/include/op/constraints.hpp` and `emplace` it in
    `defaultConstraints()` if it belongs to the default set;
 3. for a default constraint, add the same raw cost to
-   `score_calculator` / `incremental_calculator` — `op_plugin_test` checks
-   they agree bit for bit;
-4. add a `Constraint` spec with the snake_case `name` to
-   `python/order_picking/constraints.py`; callers then pick, reweight or flip it:
-   `constraints=get_constraints([..., MyRule(weight=5, hard=True)])`;
+   `score_calculator` / `incremental_calculator`, weighted by the component's
+   `kDefaultWeight` (`kHardWeight<X>` / `kSoftWeight<X>` in `constraints/common.hpp`) —
+   `op_plugin_test` checks they agree bit for bit — and a positive and a zero
+   hand-calculated case to `op_test` / `op_plugin_test`;
+4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
+   `description_en` / `description_ko` to `python/order_picking/constraints.py` (plus its
+   module-level default instance); callers then pick, reweight or flip it:
+   `constraints=get_constraints([..., MyRuleCost(weight=5, hard=True)])`;
 5. mirror it in the CP-SAT model in
-   [`benchmarks/order-picking/cpsat`](../../benchmarks/order-picking/cpsat) so the
-   benchmark stays like for like.
+   [`benchmarks/order-picking/cpsat`](../../benchmarks/order-picking/cpsat) (a plugin
+   subclassing the spec; defaults come from `constraint_info()`) so the benchmark stays like
+   for like.
 
 ## Benchmark
 

@@ -1,9 +1,30 @@
 #include "op/score_calculator.hpp"
 
+#include <cstdint>
 #include <vector>
+
+#include "op/constraints/distance_from_last_pick_task_to_path_origin_cost.hpp"
+#include "op/constraints/distance_from_previous_pick_task_cost.hpp"
+#include "op/constraints/order_split_by_trolley_cost.hpp"
+#include "op/constraints/trolley_capacity_cost.hpp"
 
 namespace op
 {
+
+namespace
+{
+
+// The monolithic totals are the default assembly, so they read the same
+// constants the components carry (integral and on the summed level, checked
+// at compile time by kHardWeight / kSoftWeight).
+constexpr std::int64_t kCapacityWeight = kHardWeight<TrolleyCapacityCost>;
+constexpr std::int64_t kPreviousWeight
+    = kSoftWeight<DistanceFromPreviousPickTaskCost>;
+constexpr std::int64_t kReturnWeight
+    = kSoftWeight<DistanceFromLastPickTaskToPathOriginCost>;
+constexpr std::int64_t kSplitWeight = kSoftWeight<OrderSplitByTrolleyCost>;
+
+}  // namespace
 
 void ScoreCalculator::updateShadowVariables(OrderPickingSolution &solution)
 {
@@ -44,23 +65,25 @@ ScoreCalculator::calculateTotals(OrderPickingSolution &solution)
             continue;  // unassigned: forEach(PickTask) skips it
         const Trolley &trolley = solution.trolleys[task.trolleyIndex];
 
-        // minimizeDistanceFromPreviousPickTask
+        // distanceFromPreviousPickTaskCost
         const WarehouseLocation &previousLocation
             = task.previousPickTask != -1
                   ? solution.pickTasks[task.previousPickTask].location
                   : trolley.location;
-        totals.distanceFromPreviousPickTask
-            += calculateDistance(previousLocation, task.location);
+        totals.distanceFromPreviousPickTaskCost
+            += kPreviousWeight
+               * calculateDistance(previousLocation, task.location);
 
-        // minimizeDistanceFromLastPickTaskToPathOrigin
+        // distanceFromLastPickTaskToPathOriginCost
         if (task.isLast())
         {
-            totals.distanceFromLastPickTaskToPathOrigin
-                += calculateDistance(task.location, trolley.location);
+            totals.distanceFromLastPickTaskToPathOriginCost
+                += kReturnWeight
+                   * calculateDistance(task.location, trolley.location);
         }
     }
 
-    // --- hard: requiredNumberOfBuckets, soft: minimizeOrderSplitByTrolley --
+    // --- hard: trolleyCapacityCost, soft: orderSplitByTrolleyCost ---------
     // volume[trolley][order] = raw total volume of the order's picks on the
     // trolley (the Java groupBy(trolley, order, sum(volume)) table).
     std::vector<std::int64_t> volume(
@@ -93,8 +116,8 @@ ScoreCalculator::calculateTotals(OrderPickingSolution &solution)
             }
         }
         if (requiredBuckets > trolley.bucketCount)
-            totals.requiredNumberOfBuckets
-                += requiredBuckets - trolley.bucketCount;
+            totals.trolleyCapacityCost
+                += kCapacityWeight * (requiredBuckets - trolley.bucketCount);
     }
     for (int o = 0; o < orderCount; ++o)
     {
@@ -104,7 +127,7 @@ ScoreCalculator::calculateTotals(OrderPickingSolution &solution)
             distinctTrolleys
                 += orderOnTrolley[static_cast<std::size_t>(t) * orderCount + o];
         }
-        totals.orderSplitByTrolley += distinctTrolleys * 1000;
+        totals.orderSplitByTrolleyCost += distinctTrolleys * kSplitWeight;
     }
 
     return totals;

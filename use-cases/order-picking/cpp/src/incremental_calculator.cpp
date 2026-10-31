@@ -1,9 +1,35 @@
 #include "op/incremental_calculator.hpp"
 
+#include <cstdint>
+
+#include "op/constraints/distance_from_last_pick_task_to_path_origin_cost.hpp"
+#include "op/constraints/distance_from_previous_pick_task_cost.hpp"
+#include "op/constraints/order_split_by_trolley_cost.hpp"
+#include "op/constraints/trolley_capacity_cost.hpp"
 #include "op/score_calculator.hpp"
 
 namespace op
 {
+
+namespace
+{
+
+// The same constants the components and ScoreCalculator read (integral and
+// level-checked; see constraints/common.hpp).
+constexpr std::int64_t kCapacityWeight = kHardWeight<TrolleyCapacityCost>;
+constexpr std::int64_t kDistanceWeight
+    = kSoftWeight<DistanceFromPreviousPickTaskCost>;
+constexpr std::int64_t kSplitWeight = kSoftWeight<OrderSplitByTrolleyCost>;
+// dist_ keeps each trolley's whole round trip (the outbound legs of
+// distanceFromPreviousPickTaskCost plus the return leg of
+// distanceFromLastPickTaskToPathOriginCost) as ONE number, so both distance
+// constraints must default to the same weight.
+static_assert(kDistanceWeight
+                  == kSoftWeight<DistanceFromLastPickTaskToPathOriginCost>,
+              "the round-trip distance total assumes equal default weights "
+              "for the two distance constraints");
+
+}  // namespace
 
 void OrderPickingIncrementalScoreCalculator::resetWorkingSolution(
     OrderPickingSolution &workingSolution)
@@ -90,8 +116,9 @@ void OrderPickingIncrementalScoreCalculator::afterListChanged(int listIndex)
 
 Score OrderPickingIncrementalScoreCalculator::calculateScore()
 {
-    return {-shortageTotal_,
-            static_cast<double>(-(distTotal_ + splitTotal_ * 1000))};
+    return {-kCapacityWeight * shortageTotal_,
+            static_cast<double>(
+                -(kDistanceWeight * distTotal_ + kSplitWeight * splitTotal_))};
 }
 
 std::int64_t

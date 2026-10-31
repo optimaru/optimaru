@@ -8,37 +8,45 @@
 namespace op
 {
 
-// Per-constraint penalty totals (all counted positive), matching the four
-// constraints of org.acme.orderpicking.solver.OrderPickingConstraintProvider
-// one to one. Used by the tests to assert each constraint against the Java
-// ConstraintVerifier cases, and by the demo output.
+// Per-constraint penalty totals of one full recompute (all counted positive;
+// toScore() applies the signs), matching the four constraints of
+// org.acme.orderpicking.solver.OrderPickingConstraintProvider one to one.
+// Each member is named after its constraint's registry name
+// (op/constraints/<subject>_cost.hpp) and holds that constraint's
+// contribution at its default weight: kDefaultWeight * raw cost, summed over
+// the trolleys (score_calculator.cpp reads the components' constants). At the
+// defaults that is the raw cost itself for the first three and 1000 * the raw
+// (order, trolley) pair count for orderSplitByTrolleyCost. Used by the tests
+// to assert each constraint against the Java ConstraintVerifier cases, and by
+// the demo output; Python reads the raw costs from constraint_costs() instead.
 struct ConstraintTotals
 {
     // Hard: sum over trolleys of max(0, requiredBuckets - bucketCount) where
     // requiredBuckets = sum over orders on the trolley of
     // ceil(orderVolumeOnTrolley / bucketCapacity) — buckets are not shared
-    // between orders ("Required number of buckets").
-    std::int64_t requiredNumberOfBuckets = 0;
+    // between orders (the Java "Required number of buckets").
+    std::int64_t trolleyCapacityCost = 0;
 
     // Soft: distance from the previous pick (or the trolley origin for the
-    // first pick) to each pick ("Minimize the distance from the previous
-    // trolley pick").
-    std::int64_t distanceFromPreviousPickTask = 0;
+    // first pick) to each pick (the Java "Minimize the distance from the
+    // previous trolley pick").
+    std::int64_t distanceFromPreviousPickTaskCost = 0;
 
     // Soft: distance from each trolley's last pick back to the path origin
-    // ("Minimize the distance from last trolley pick to the path origin").
-    std::int64_t distanceFromLastPickTaskToPathOrigin = 0;
+    // (the Java "Minimize the distance from last trolley pick to the path
+    // origin").
+    std::int64_t distanceFromLastPickTaskToPathOriginCost = 0;
 
-    // Soft: 1000 * countDistinct(trolley) per order ("Minimize order split by
-    // trolley").
-    std::int64_t orderSplitByTrolley = 0;
+    // Soft: 1000 * countDistinct(trolley) per order (the Java "Minimize order
+    // split by trolley"; 1000 = OrderSplitByTrolleyCost::kDefaultWeight).
+    std::int64_t orderSplitByTrolleyCost = 0;
 
     Score toScore() const
     {
-        return {-requiredNumberOfBuckets,
-                static_cast<double>(-(distanceFromPreviousPickTask
-                                      + distanceFromLastPickTaskToPathOrigin
-                                      + orderSplitByTrolley))};
+        return {-trolleyCapacityCost,
+                static_cast<double>(-(distanceFromPreviousPickTaskCost
+                                      + distanceFromLastPickTaskToPathOriginCost
+                                      + orderSplitByTrolleyCost))};
     }
 };
 
@@ -46,11 +54,12 @@ struct ConstraintTotals
 // the incremental calculator is checked against (in the tests and under
 // EnvironmentMode::FULL_ASSERT).
 //
-// Constraints (HardSoftScore, matching the Java constraint names):
-//   hard 1. requiredNumberOfBuckets           see ConstraintTotals
-//   soft 2. minimizeDistanceFromPreviousPickTask
-//   soft 3. minimizeDistanceFromLastPickTaskToPathOrigin
-//   soft 4. minimizeOrderSplitByTrolley
+// Constraints (HardSoftScore), the default assembly of op/constraints.hpp at
+// the components' kDefaultWeight (see ConstraintTotals):
+//   hard 1. trolleyCapacityCost                        weight 1
+//   soft 2. distanceFromPreviousPickTaskCost           weight 1
+//   soft 3. distanceFromLastPickTaskToPathOriginCost   weight 1
+//   soft 4. orderSplitByTrolleyCost                    weight 1000
 //
 // Unassigned pick tasks (present in no trolley's list) contribute nothing,
 // as in the reference model, which only iterates tasks assigned to a
@@ -68,8 +77,8 @@ public:
     static void updateShadowVariables(OrderPickingSolution &solution);
 
     // Refreshes the shadow variables, then computes the per-constraint
-    // totals by reading them — a literal transcription of the Java
-    // constraint definitions.
+    // totals (at the default weights) by reading them — a literal
+    // transcription of the Java constraint definitions.
     static ConstraintTotals calculateTotals(OrderPickingSolution &solution);
 
     // calculateTotals folded into the HardSoftScore, stored in solution.score

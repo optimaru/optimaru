@@ -169,7 +169,7 @@ void verifyConstraints()
     std::printf("== (b) Verifying each constraint in isolation ==\n");
     const WarehouseLocation origin = loc('A', 1, Side::LEFT, 0);
 
-    // requiredNumberOfBuckets, the Java test's exact data:
+    // trolleyCapacityCost, the Java test's exact data:
     // order1 volumes 4,5 / 9,8; order2 volumes 4,1 / 8,6,10,9.
     // Trolley1 (2 buckets, capacity 5): order1 9 -> 2, order2 5 -> 1; 3-2=1.
     // Trolley2 (2 buckets, capacity 10): order1 17 -> 2, order2 33 -> 4; 6-2=4.
@@ -191,14 +191,14 @@ void verifyConstraints()
             s.trolleys[t2].pickTaskIndices.push_back(
                 addPick(s, 1, volume, origin));
         const ConstraintTotals totals = ScoreCalculator::calculateTotals(s);
-        check(totals.requiredNumberOfBuckets == 5,
-              "requiredNumberOfBuckets penalizes by 5 (got "
-                  + std::to_string(totals.requiredNumberOfBuckets) + ")");
+        check(totals.trolleyCapacityCost == 5,
+              "trolleyCapacityCost penalizes by 5 (got "
+                  + std::to_string(totals.trolleyCapacityCost) + ")");
         check(totals.toScore().hard == -5,
               "bucket shortage lands on the hard level");
     }
 
-    // minimizeDistanceFromPreviousPickTask: previous at (E,1) RIGHT 3,
+    // distanceFromPreviousPickTaskCost: previous at (E,1) RIGHT 3,
     // current at (C,3) RIGHT 1 -> 34 (the Java case). The trolley parks at
     // the previous pick's location so the first leg is 0.
     {
@@ -210,12 +210,13 @@ void verifyConstraints()
         s.trolleys[t].pickTaskIndices.push_back(addPick(s, 0, 1, previous));
         s.trolleys[t].pickTaskIndices.push_back(addPick(s, 0, 1, current));
         const ConstraintTotals totals = ScoreCalculator::calculateTotals(s);
-        check(totals.distanceFromPreviousPickTask == 34,
-              "minimizeDistanceFromPreviousPickTask penalizes by 34 (got "
-                  + std::to_string(totals.distanceFromPreviousPickTask) + ")");
+        check(totals.distanceFromPreviousPickTaskCost == 34,
+              "distanceFromPreviousPickTaskCost penalizes by 34 (got "
+                  + std::to_string(totals.distanceFromPreviousPickTaskCost)
+                  + ")");
     }
 
-    // minimizeDistanceFromLastPickTaskToPathOrigin: last pick at (D,2) LEFT
+    // distanceFromLastPickTaskToPathOriginCost: last pick at (D,2) LEFT
     // 0, path origin (A,1) LEFT 0 -> 28 (the Java case). All three picks sit
     // on the last pick's spot, so only the return leg is 28.
     {
@@ -226,19 +227,21 @@ void verifyConstraints()
         for (int i = 0; i < 3; ++i)
             s.trolleys[t].pickTaskIndices.push_back(addPick(s, 0, 1, last));
         const ConstraintTotals totals = ScoreCalculator::calculateTotals(s);
-        check(totals.distanceFromLastPickTaskToPathOrigin == 28,
-              "minimizeDistanceFromLastPickTaskToPathOrigin penalizes by 28 "
+        check(totals.distanceFromLastPickTaskToPathOriginCost == 28,
+              "distanceFromLastPickTaskToPathOriginCost penalizes by 28 "
               "(got "
-                  + std::to_string(totals.distanceFromLastPickTaskToPathOrigin)
+                  + std::to_string(
+                      totals.distanceFromLastPickTaskToPathOriginCost)
                   + ")");
         // Sanity on the whole route: origin->last 28, two zero-length legs,
         // return 28.
-        check(totals.distanceFromPreviousPickTask == 28,
+        check(totals.distanceFromPreviousPickTaskCost == 28,
               "previous-pick legs sum to 28 (origin -> first)");
     }
 
-    // minimizeOrderSplitByTrolley, the Java test's exact data: order1 spread
-    // over 3 trolleys, order2 on 1 trolley -> (3 + 1) * 1000.
+    // orderSplitByTrolleyCost, the Java test's exact data: order1 spread
+    // over 3 trolleys, order2 on 1 trolley -> (3 + 1) * 1000 (the totals
+    // carry the default weight 1000).
     {
         OrderPickingSolution s;
         s.orders = {{"order1"}, {"order2"}};
@@ -253,9 +256,9 @@ void verifyConstraints()
         for (int i = 0; i < 4; ++i)
             s.trolleys[t4].pickTaskIndices.push_back(addPick(s, 1, 1, origin));
         const ConstraintTotals totals = ScoreCalculator::calculateTotals(s);
-        check(totals.orderSplitByTrolley == 4000,
-              "minimizeOrderSplitByTrolley penalizes by 4 * 1000 (got "
-                  + std::to_string(totals.orderSplitByTrolley) + ")");
+        check(totals.orderSplitByTrolleyCost == 4000,
+              "orderSplitByTrolleyCost penalizes by 4 * 1000 (got "
+                  + std::to_string(totals.orderSplitByTrolleyCost) + ")");
     }
 
     // Unassigned pick tasks contribute nothing (forEach skips them).

@@ -1,26 +1,32 @@
-#ifndef OP_CONSTRAINTS_MINIMIZE_ORDER_SPLIT_BY_TROLLEY_HPP
-#define OP_CONSTRAINTS_MINIMIZE_ORDER_SPLIT_BY_TROLLEY_HPP
+#ifndef OP_CONSTRAINTS_ORDER_SPLIT_BY_TROLLEY_COST_HPP
+#define OP_CONSTRAINTS_ORDER_SPLIT_BY_TROLLEY_COST_HPP
 
 #include "op/constraints/common.hpp"
 
 namespace op
 {
 
-// Soft (default, weight 1'000): minimizeOrderSplitByTrolley — one point per
-// (order, trolley) pairing, so an order carried by three trolleys costs three
-// times as much as one carried by a single trolley. Expensive against the
-// distance terms on purpose: an order arriving in pieces is a packing problem
+// Soft, weight 1'000: orderSplitByTrolleyCost — one point per (order,
+// trolley) pairing, so an order carried by three trolleys costs three times as
+// much as one carried by a single trolley. Expensive against the distance
+// terms on purpose: an order arriving in pieces is a packing problem
 // downstream.
+//
+// Raw cost per trolley = the number of distinct orders with a pick on it.
+// NOT "0 = no split" (kept as the quickstart defines it): an order carried
+// whole by one trolley still costs 1, so the total is never below the number
+// of orders that have assigned picks; only an empty trolley costs 0.
 //
 // Counted per trolley here (distinct orders on this trolley) rather than per
 // order (distinct trolleys of this order); both sum to the same number of
 // (order, trolley) pairs, and the per-trolley form is the one that decomposes.
-struct MinimizeOrderSplitByTrolley final : OpUnitConstraint
+struct OrderSplitByTrolleyCost final : OpUnitConstraint
 {
-    explicit MinimizeOrderSplitByTrolley(double weight = 1000.0)
-        : OpUnitConstraint("minimizeOrderSplitByTrolley",
-                           weight,
-                           /*hard=*/false)
+    static constexpr double kDefaultWeight = 1000.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
+
+    explicit OrderSplitByTrolleyCost(double weight = kDefaultWeight)
+        : OpUnitConstraint("orderSplitByTrolleyCost", weight, kDefaultLevel)
     {
     }
     void onReset(const OrderPickingSolution &solution) override
@@ -52,4 +58,4 @@ private:
 
 }  // namespace op
 
-#endif  // OP_CONSTRAINTS_MINIMIZE_ORDER_SPLIT_BY_TROLLEY_HPP
+#endif  // OP_CONSTRAINTS_ORDER_SPLIT_BY_TROLLEY_COST_HPP
