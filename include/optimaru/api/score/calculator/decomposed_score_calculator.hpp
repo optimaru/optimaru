@@ -132,6 +132,13 @@ struct ConstraintMetadata {
     // Applied BEFORE the weight: contribution = weight * shapeCost(cost,
     // exponent), per unit for a UnitConstraint, on the total for a global.
     double exponent = 1.0;
+    // Display text for ONE instance of a parametrized constraint that a
+    // domain may add several times under the same registry name
+    // (employee-scheduling "dayPatternCost" for pattern "A,OFF,B"). Empty =
+    // none: the registry name is the label. Never used for lookups: `name`
+    // stays the registry name (the catalog, the Python name, the
+    // ConstraintAssembly key). constraintTotals()/constraintCosts() report it.
+    std::string label;
     // 0.2.0 transition shim: removed once every use case is migrated (it
     // becomes `bool isHard() const { return level == Level::Hard; }`).
     LevelHardFlag isHard{level};
@@ -144,21 +151,26 @@ struct ConstraintMetadata {
         : ConstraintMetadata(std::move(constraintName), constraintWeight,
                              hard ? Level::Hard : Level::Soft) {}
 
-    // Copies rebind the isHard proxy to their own level.
+    // Copies rebind the isHard proxy to their own level. Copying is also how
+    // a wrapper component takes over everything its inner component declares
+    // (employee-scheduling ScopedUnit):
+    //   static_cast<ConstraintMetadata&>(*this) = *inner;
     ConstraintMetadata(const ConstraintMetadata& other)
         : name(other.name),
           weight(other.weight),
           level(other.level),
           reward(other.reward),
           levelFlippable(other.levelFlippable),
-          exponent(other.exponent) {}
+          exponent(other.exponent),
+          label(other.label) {}
     ConstraintMetadata(ConstraintMetadata&& other) noexcept
         : name(std::move(other.name)),
           weight(other.weight),
           level(other.level),
           reward(other.reward),
           levelFlippable(other.levelFlippable),
-          exponent(other.exponent) {}
+          exponent(other.exponent),
+          label(std::move(other.label)) {}
     ConstraintMetadata& operator=(const ConstraintMetadata& other) {
         name = other.name;
         weight = other.weight;
@@ -166,6 +178,7 @@ struct ConstraintMetadata {
         reward = other.reward;
         levelFlippable = other.levelFlippable;
         exponent = other.exponent;
+        label = other.label;
         return *this;
     }
     ConstraintMetadata& operator=(ConstraintMetadata&& other) noexcept {
@@ -175,7 +188,44 @@ struct ConstraintMetadata {
         reward = other.reward;
         levelFlippable = other.levelFlippable;
         exponent = other.exponent;
+        label = std::move(other.label);
         return *this;
+    }
+
+    // --- the knob rules, in ONE place ------------------------------------
+    // Re-state a knob with the checks every client gets: ConstraintAssembly's
+    // weight()/level()/hard()/soft()/exponent() call these, and so do the
+    // Python bindings (python::applyKnobs) for a component a domain factory
+    // builds outside any assembly (employee-scheduling addConstraintByName).
+    // Each throws std::invalid_argument naming the constraint:
+    //   setWeight    finite and >= 0, in units of the level
+    //   setLevel     a reward can never be Hard; a constraint whose
+    //                levelFlippable is false keeps its level (re-stating the
+    //                level it already has is a no-op)
+    //   setExponent  finite and > 0
+    void setWeight(double newWeight) {
+        if (!std::isfinite(newWeight) || newWeight < 0.0) {
+            throw std::invalid_argument("Constraint '" + name + "' weight must be finite and >= 0");
+        }
+        weight = newWeight;
+    }
+    void setLevel(Level newLevel) {
+        if (newLevel == level) return;
+        if (newLevel == Level::Hard && reward) {
+            throw std::invalid_argument("Constraint '" + name +
+                                        "' is a reward (raw cost <= 0) and cannot be hard");
+        }
+        if (!levelFlippable) {
+            throw std::invalid_argument("Constraint '" + name + "' is always " + levelName(level) +
+                                        "; its level cannot be changed");
+        }
+        level = newLevel;
+    }
+    void setExponent(double newExponent) {
+        if (!std::isfinite(newExponent) || newExponent <= 0.0) {
+            throw std::invalid_argument("Constraint '" + name + "' exponent must be finite and > 0");
+        }
+        exponent = newExponent;
     }
 
 protected:
@@ -395,6 +445,7 @@ struct ConstraintTotal {
     double cost;  // weighted, sign as defined above (positive = penalizing)
     bool isHard;  // level == Level::Hard
     Level level = Level::Soft;
+    std::string label;  // ConstraintMetadata::label (empty = none)
 };
 
 template <typename Solution>
@@ -866,11 +917,12 @@ public:
                 sum += level == Level::Hard ? static_cast<double>(cacheHard_[idx])
                                             : cacheSoft_[idx];
             }
-            totals.push_back({unitConstraints_[c]->name, sum, level == Level::Hard, level});
+            totals.push_back({unitConstraints_[c]->name, sum, level == Level::Hard, level,
+                              unitConstraints_[c]->label});
         }
         for (const auto& g : globalConstraints_) {
             totals.push_back({g->name, g->weight * shapeCost(g->cost(), g->exponent),
-                              g->level == Level::Hard, g->level});
+                              g->level == Level::Hard, g->level, g->label});
         }
         return totals;
     }
@@ -899,6 +951,7 @@ public:
         Level level;
         bool reward;
         bool levelFlippable;
+        std::string label;  // ConstraintMetadata::label (empty = none)
     };
     std::vector<ConstraintCosts> constraintCosts() const {
         std::vector<ConstraintCosts> out;
@@ -913,11 +966,12 @@ public:
             }
             out.push_back({constraint.name, constraint.weight, constraint.exponent,
                            constraint.level == Level::Hard, false, std::move(costs),
-                           constraint.level, constraint.reward, constraint.levelFlippable});
+                           constraint.level, constraint.reward, constraint.levelFlippable,
+                           constraint.label});
         }
         for (const auto& g : globalConstraints_) {
             out.push_back({g->name, g->weight, g->exponent, g->level == Level::Hard, true,
-                           {g->cost()}, g->level, g->reward, g->levelFlippable});
+                           {g->cost()}, g->level, g->reward, g->levelFlippable, g->label});
         }
         return out;
     }

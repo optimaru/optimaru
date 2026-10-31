@@ -43,6 +43,12 @@ reported by ``<package>.constraint_info()``; there are no default ClassVars
 here. Domain parameters are extra dataclass fields on a subclass (decorate it
 with ``@dataclass(frozen=True)`` and call ``super().__post_init__()`` from
 its own ``__post_init__``, if it has one).
+
+A domain that may state one parametrized constraint several times
+(employee-scheduling: one ``DayPatternCost`` per pattern, scoped rules) passes
+``repeatable=True`` to ``select``; ``constraint_costs()`` then keys the k-th
+instance of a name ``"<name>#<k>"`` and ``instance_keys`` / ``score_costs``
+follow the same rule.
 """
 
 import math
@@ -51,7 +57,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, fields
 from typing import Any, ClassVar, NamedTuple
 
-__all__ = ["Constraint", "Score", "score_costs", "select", "shape"]
+__all__ = ["Constraint", "Score", "instance_keys", "score_costs", "select", "shape"]
 
 _KNOBS = ("weight", "hard", "exponent")
 
@@ -98,7 +104,7 @@ def _check_knobs(name: str, weight: Any, hard: Any, exponent: Any) -> None:
             raise TypeError(f"constraint {name!r}: weight must be a number or None, not {weight!r}")
         if not math.isfinite(weight) or weight < 0:
             raise ValueError(f"constraint {name!r}: weight must be finite and >= 0, not {weight!r}")
-    if hard is not None and not isinstance(hard, bool):
+    if hard is not None and not _is_bool(hard):
         raise TypeError(f"constraint {name!r}: hard must be True, False or None, not {hard!r}")
     if isinstance(exponent, bool) or not isinstance(exponent, numbers.Real):
         raise TypeError(f"constraint {name!r}: exponent must be a number, not {exponent!r}")
@@ -106,27 +112,67 @@ def _check_knobs(name: str, weight: Any, hard: Any, exponent: Any) -> None:
         raise ValueError(f"constraint {name!r}: exponent must be finite and > 0, not {exponent!r}")
 
 
-def select(constraints: Iterable[Any] | None, defaults: Sequence[Any]) -> list[Any]:
+def _is_bool(value: Any) -> bool:
+    """bool, or numpy's bool scalar (``numpy.bool_``), without importing numpy."""
+    if isinstance(value, bool):
+        return True
+    kind = type(value)
+    return kind.__module__ == "numpy" and kind.__name__ in ("bool_", "bool")
+
+
+def _params_of(spec: Any) -> dict[str, Any]:
+    params = getattr(spec, "params", None)
+    return params() if callable(params) else {}
+
+
+def select(constraints: Iterable[Any] | None, defaults: Sequence[Any], *, repeatable: bool = False) -> list[Any]:
     """The ``get_constraints`` contract: ``None`` = ``defaults``; a list replaces them.
 
     Only the listed constraints are scored. An empty list is an error, not
     "the defaults" (a filter that came back empty is a mistake), and so is
     naming the same constraint twice (the later pick would win in silence).
     The same rules as the C++ ``applyConstraints``.
+
+    ``repeatable=True`` is for a domain whose factory adds a parametrized
+    constraint once per pick (employee-scheduling): the same name may then
+    appear several times as long as the domain parameters (``params()``)
+    differ; the same name with the same parameters twice is still an error.
     """
     if constraints is None:
         return list(defaults)
     picked = list(constraints)
     if not picked:
         raise ValueError("constraints must not be empty (pass None for the defaults)")
-    seen: set[str] = set()
+    seen: set[Any] = set()
     for spec in picked:
-        if spec.name in seen:
+        key = (spec.name, repr(sorted(_params_of(spec).items()))) if repeatable else spec.name
+        if key in seen:
+            if repeatable:
+                raise ValueError(
+                    f"constraint {spec.name!r} picked more than once with the same parameters; "
+                    "state each instance once with the metadata you want"
+                )
             raise ValueError(
                 f"constraint {spec.name!r} picked more than once; state it once with the metadata you want"
             )
-        seen.add(spec.name)
+        seen.add(key)
     return picked
+
+
+def instance_keys(constraints: Iterable[Any]) -> list[str]:
+    """The ``constraint_costs()`` key of each pick, in order.
+
+    The name itself, and ``"<name>#<k>"`` for the k-th pick (k >= 2) of a name
+    that a ``repeatable`` selection states several times: the rule the C++
+    ``constraint_costs()`` (python::instanceKeys) keys its entries by, given
+    the same list in the same order.
+    """
+    seen: dict[str, int] = {}
+    keys = []
+    for spec in constraints:
+        count = seen[spec.name] = seen.get(spec.name, 0) + 1
+        keys.append(spec.name if count == 1 else f"{spec.name}#{count}")
+    return keys
 
 
 class Score(NamedTuple):
@@ -160,8 +206,24 @@ def _level(spec: Any, entry: Mapping[str, Any]) -> str:
     if wanted == "hard" and entry.get("reward", False):
         raise ValueError(f"constraint {spec.name!r} is a reward (raw cost <= 0) and cannot be hard")
     if wanted != default and not entry.get("level_flippable", True):
-        raise ValueError(f"constraint {spec.name!r} is always {default}; hard={spec.hard!r} is not allowed")
+        raise ValueError(f"constraint {spec.name!r} is always {default}; hard={bool(spec.hard)!r} is not allowed")
     return wanted
+
+
+def _domain_fold(costs: Mapping[str, Mapping[str, Any]]) -> tuple[str, float] | None:
+    """The domain's medium fold, which every entry of a medium domain carries."""
+    fold: tuple[str, float] | None = None
+    for name, entry in costs.items():
+        reported = entry.get("medium_fold")
+        if reported is None:
+            continue
+        entry_fold = (str(reported["kind"]), float(reported["unit"]))
+        if entry_fold[0] not in ("into_soft", "below_hard"):
+            raise ValueError(f"constraint {name!r} reports an unknown medium fold {entry_fold[0]!r}")
+        if fold is not None and fold != entry_fold:
+            raise ValueError(f"constraint {name!r} reports a different medium fold")
+        fold = entry_fold
+    return fold
 
 
 def score_costs(costs: Mapping[str, Mapping[str, Any]], constraints: Iterable[Any]) -> Score:
@@ -169,28 +231,36 @@ def score_costs(costs: Mapping[str, Mapping[str, Any]], constraints: Iterable[An
 
     ``costs`` is what ``<package>.constraint_costs(solution)`` returns: per
     constraint the **raw** cost of each unit (before weight, exponent and
-    level), its default weight and level, and for a medium constraint the
-    domain's medium fold. No solver and no search are involved, so one
-    scoring pass answers every "what would this cost at weight 10 / as a soft
-    term" question.
+    level), its default weight and level, and on a domain with a medium level
+    the domain's medium fold (on every entry). No solver and no search are
+    involved, so one scoring pass answers every "what would this cost at
+    weight 10 / as a soft term" question.
 
     The arithmetic is the engine's: each unit contributes
     ``weight * shape(cost, exponent)``; hard contributions are rounded per
-    unit (half away from zero) before summing; medium folds into soft
-    (``into_soft``) or below hard (``below_hard``, rounded per unit too).
-    Every listed spec is scored (pass ``select(...)``'s result); an unknown
-    name raises ValueError.
+    unit (half away from zero) before summing; then the domain's medium fold
+    applies to the whole score, whatever the selection holds: ``into_soft``
+    adds ``medium * unit`` to soft, ``below_hard`` reports
+    ``hard * unit + medium`` (medium rounded per unit too) — so a below_hard
+    domain scores ``hard * unit`` even with no medium constraint selected.
+    Every listed spec is scored (pass ``select(...)``'s result), each looked up
+    under its ``instance_keys`` key; an unknown one raises ValueError.
     """
     hard = 0
     soft = 0.0
     medium = 0.0
-    fold: tuple[str, float] | None = None
-    for spec in constraints:
-        entry = costs.get(spec.name)
+    fold = _domain_fold(costs)
+    picked = list(constraints)
+    for spec, key in zip(picked, instance_keys(picked)):
+        entry = costs.get(key)
         if entry is None:
-            raise ValueError(
-                f"unknown constraint {spec.name!r}; available: " + ", ".join(repr(name) for name in sorted(costs))
-            )
+            if key != spec.name and spec.name in costs:
+                raise ValueError(
+                    f"constraint {spec.name!r} is picked more often than the costs hold it ({key!r} is "
+                    "missing); compute constraint_costs() with the same constraint list"
+                )
+            available = sorted({str(value.get("name", name)) for name, value in costs.items()})
+            raise ValueError(f"unknown constraint {spec.name!r}; available: " + ", ".join(map(repr, available)))
         exponent = 1.0 if spec.exponent is None else spec.exponent
         _check_knobs(spec.name, spec.weight, spec.hard, exponent)
         level = _level(spec, entry)
@@ -199,10 +269,8 @@ def score_costs(costs: Mapping[str, Mapping[str, Any]], constraints: Iterable[An
         if level == "hard":
             hard += sum(_round_half_away(value) for value in values)
         elif level == "medium":
-            entry_fold = (entry["medium_fold"]["kind"], float(entry["medium_fold"]["unit"]))
-            if fold is not None and fold != entry_fold:
-                raise ValueError(f"constraint {spec.name!r} reports a different medium fold")
-            fold = entry_fold
+            if fold is None:
+                raise ValueError(f"constraint {spec.name!r} is medium-level, but the costs carry no medium_fold")
             if fold[0] == "below_hard":
                 medium += sum(_round_half_away(value) for value in values)
             else:

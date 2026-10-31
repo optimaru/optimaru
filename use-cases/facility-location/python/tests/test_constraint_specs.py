@@ -1,6 +1,8 @@
 """facility_location.constraints — an API for picking the cost function declaratively."""
 
 import pickle
+import re
+from types import SimpleNamespace
 
 import pytest
 
@@ -140,10 +142,12 @@ def test_constraint_info_reports_the_cpp_defaults():
     """The defaults live in C++ only; constraint_info() reads them off the default assembly."""
     rows = fl.constraint_info()
     assert [row.name for row in rows] == fl.list_constraints()
-    assert [(row.default_level, row.default_weight, row.level_flippable, row.reward) for row in rows] == [
-        ("hard", 1.0, True, False),
-        ("soft", 2.0, True, False),
-        ("soft", 6.0, True, False),
+    assert [
+        (row.default_level, row.default_weight, row.level_flippable, row.reward, row.default_enabled) for row in rows
+    ] == [
+        ("hard", 1.0, True, False, True),
+        ("soft", 2.0, True, False, True),
+        ("soft", 6.0, True, False, True),
     ]
 
 
@@ -156,6 +160,7 @@ def test_constraint_info_rows_are_plain_values():
         "default_weight": 1.0,
         "level_flippable": True,
         "reward": False,
+        "default_enabled": True,
     }
     assert repr(row).startswith("ConstraintInfo(name='facility_capacity_cost'")
     assert pickle.loads(pickle.dumps(fl.constraint_info())) == fl.constraint_info()
@@ -173,6 +178,7 @@ def test_constraint_info_matches_the_raw_cost_metadata():
             row.default_level == "hard",
         )
         assert (entry["level_flippable"], entry["reward"], entry["global"]) == (True, False, False)
+        assert (entry["name"], entry["label"]) == (row.name, "")  # one instance per name, no label
         assert "medium_fold" not in entry  # no medium level in this domain
 
 
@@ -227,6 +233,35 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     for pick, message in ((Negative(), "weight must be finite and >= 0"), (Flat(), "exponent must be finite and > 0")):
         with pytest.raises(ValueError, match=message):
             fl.solve(build_problem(), time_limit_seconds=0.1, constraints=[pick])
+
+
+@pytest.mark.parametrize(
+    ("knobs", "message"),
+    [
+        ({"weight": True}, "weight must be a number or None, not True"),
+        ({"weight": "2"}, "weight must be a number or None, not '2'"),
+        ({"hard": 1}, "hard must be True, False or None, not 1"),
+        ({"hard": "x"}, "hard must be True, False or None, not 'x'"),
+        ({"exponent": True}, "exponent must be a number, not True"),
+    ],
+)
+def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
+    """The C++ path checks the knob types like _constraint.py: TypeError, the same words."""
+    pick = SimpleNamespace(name="facility_setup_cost", weight=None, hard=None, exponent=1.0)
+    for key, value in knobs.items():
+        setattr(pick, key, value)
+    with pytest.raises(TypeError, match=f"constraint 'facility_setup_cost': {re.escape(message)}"):
+        fl.solve(build_problem(), time_limit_seconds=0.1, constraints=[pick])
+    with pytest.raises(TypeError, match=re.escape(message)):
+        FacilitySetupCost(**knobs)
+
+
+def test_core_accepts_numpy_scalars_like_the_python_base():
+    numpy = pytest.importorskip("numpy")
+    pick = SimpleNamespace(name="facility_capacity_cost", weight=numpy.float64(3.0), hard=numpy.False_, exponent=1.0)
+    problem = _solved([pick])
+    spec = FacilityCapacityCost(weight=numpy.float64(3.0), hard=numpy.False_)
+    assert score(fl.constraint_costs(problem), [spec]) == (problem.score.hard, pytest.approx(problem.score.soft))
 
 
 def test_old_names_are_gone():

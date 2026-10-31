@@ -10,7 +10,10 @@
 //   (f) exponent: per unit for unit constraints, on the total for globals
 //   (g) raw costs: zero = no violation; incremental == fresh recompute on
 //       a random walk for both folds (the medium cells' save/restore too)
-//   (h) pythonName(): registry name -> Python name
+//   (h) pythonName(): registry name -> Python name; instanceKeys()
+//   (i) knob setters on a bare component, labels, wrappers that copy their
+//       inner component's metadata, catalogInfo() for a catalog wider than
+//       the defaults
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -352,6 +355,15 @@ void testMediumKnobs() {
     HardFoldTasks h = assignmentA<HardFoldTasks>();
     check(same(scoreOf(defaults<HardFoldTasks>().soft("overloadCost"), h), {-401, -27.5}),
           "BelowHard: soft() takes the medium term out of the hard level");
+    // The fold applies to the whole score, not only when a medium term is
+    // selected (the Python base's score_costs reproduces both numbers from
+    // the same raw costs: cpsat-common tests/test_constraint_base.py).
+    check(same(scoreOf(defaults<HardFoldTasks>().only({"conflictCost", "forbiddenWorkerCost"}), h),
+               {-400, 0.0}),
+          "BelowHard with no medium constraint selected: hard x 100 all the same");
+    check(same(scoreOf(defaults<HardFoldTasks>().soft("overloadCost").soft("idleWorkerCost"), h),
+               {-400, -28.5}),
+          "BelowHard with both medium terms demoted: hard x 100, medium raw units in soft");
     check(same(scoreOf(defaults<HardFoldTasks>().weight("overloadCost", 0.4), h), {-401, -26.5}),
           "BelowHard rounds each medium unit like hard (0.4 -> 0)");
     std::printf("\n");
@@ -533,6 +545,115 @@ void testPythonName() {
           "the pre-0.2.0 spaced spelling still maps");
     check(pythonName("distanceFromFacilityCost") == "distance_from_facility_cost",
           "distanceFromFacilityCost -> distance_from_facility_cost");
+    using optimaru::python::instanceKeys;
+    check(instanceKeys({"day_pattern_cost", "min_rest_cost", "day_pattern_cost", "day_pattern_cost"}) ==
+                  std::vector<std::string>{"day_pattern_cost", "min_rest_cost", "day_pattern_cost#2",
+                                           "day_pattern_cost#3"},
+          "instanceKeys: a repeated name's k-th instance is '<name>#<k>', a single one keeps its name");
+    std::printf("\n");
+}
+
+// A wrapper in the employee-scheduling ScopedUnit style: it scores its inner
+// component on a subset of the units and takes over ALL of its metadata.
+template <typename S>
+struct OnlyWorkerZero final : optimaru::UnitConstraint<S> {
+    std::unique_ptr<optimaru::UnitConstraint<S>> inner;
+    explicit OnlyWorkerZero(std::unique_ptr<optimaru::UnitConstraint<S>> wrapped)
+        : optimaru::UnitConstraint<S>(wrapped->name, wrapped->weight, wrapped->level),
+          inner(std::move(wrapped)) {
+        static_cast<optimaru::ConstraintMetadata&>(*this) = *inner;
+    }
+    double cost(const S& s, int unit, const std::vector<int>& members) const override {
+        return unit == 0 ? inner->cost(s, unit, members) : 0.0;
+    }
+};
+
+void testComponentsOutsideAnAssembly() {
+    std::printf("== (i) Components outside an assembly, labels, catalogInfo ==\n");
+    {
+        TaskCostCost<SoftFoldTasks> c;
+        check(throwsInvalid([&] { c.setWeight(-1.0); }) && c.weight == 1.0,
+              "setWeight refuses a negative weight and leaves the weight alone");
+        c.setWeight(2.5);
+        check(c.weight == 2.5, "setWeight re-states the weight");
+        check(throwsInvalid([&] { c.setExponent(0.0); }) && c.exponent == 1.0,
+              "setExponent refuses 0");
+        c.setLevel(Level::Hard);
+        check(c.level == Level::Hard, "setLevel moves a flippable constraint");
+        PreferenceReward<SoftFoldTasks> reward;
+        check(throwsInvalid([&] { reward.setLevel(Level::Hard); }), "setLevel(Hard) on a reward throws");
+        ForbiddenWorkerCost<SoftFoldTasks> forbidden;
+        check(throwsInvalid([&] { forbidden.setLevel(Level::Soft); }),
+              "setLevel on a non-flippable constraint throws");
+        forbidden.setLevel(Level::Hard);
+        check(forbidden.level == Level::Hard, "re-stating a non-flippable level is a no-op");
+    }
+    {
+        // Two instances of one name with their own labels, the way a rule
+        // factory adds them; the registry name stays the lookup key.
+        SoftFoldTasks s = assignmentA<SoftFoldTasks>();
+        optimaru::DecomposedScoreCalculator<SoftFoldTasks> calc;
+        auto first = std::make_unique<TaskCostCost<SoftFoldTasks>>();
+        first->label = "task cost (all workers)";
+        auto second = std::make_unique<OnlyWorkerZero<SoftFoldTasks>>(
+                std::make_unique<TaskCostCost<SoftFoldTasks>>(3.0));
+        second->label = "task cost (worker 0)";
+        calc.add(std::move(first));
+        calc.add(std::move(second));
+        calc.resetWorkingSolution(s);
+        const HardSoftScore score = calc.calculateScore();
+        check(same(score, {0, -(28.0 + 3.0 * 15.0)}), "both instances score: 28 + 3 x 15, got " + str(score));
+        const auto totals = calc.constraintTotals();
+        const auto costs = calc.constraintCosts();
+        check(totals.size() == 2 && totals[0].name == "taskCostCost" && totals[1].name == "taskCostCost" &&
+                      totals[0].label == "task cost (all workers)" && totals[1].label == "task cost (worker 0)" &&
+                      totals[1].cost == 45.0,
+              "constraintTotals() report each instance under its registry name with its label");
+        check(costs.size() == 2 && costs[1].label == "task cost (worker 0)" && costs[1].weight == 3.0,
+              "constraintCosts() carry the label and the instance's own weight");
+    }
+    {
+        auto wrapped = std::make_unique<OnlyWorkerZero<SoftFoldTasks>>(
+                std::make_unique<PreferenceReward<SoftFoldTasks>>());
+        check(wrapped->reward && !wrapped->levelFlippable && wrapped->weight == 0.5 &&
+                      wrapped->level == Level::Soft && wrapped->name == "preferenceReward",
+              "a wrapper copying the inner metadata keeps reward / levelFlippable / weight / level");
+        check(throwsInvalid([&] { wrapped->setLevel(Level::Hard); }),
+              "so the reward guard still holds on the wrapper");
+    }
+    {
+        // A catalog wider than the defaults: the defaults hold conflict,
+        // taskCost (and an opt-in weight-0 overload); the catalog adds
+        // forbiddenWorker and restates conflict.
+        optimaru::ConstraintAssembly<SoftFoldTasks> defaultSet;
+        defaultSet.emplace<ConflictCost<SoftFoldTasks>>();
+        defaultSet.emplace<TaskCostCost<SoftFoldTasks>>();
+        defaultSet.emplace<OverloadCost<SoftFoldTasks>>(0.0);
+        optimaru::ConstraintAssembly<SoftFoldTasks> catalog;
+        catalog.emplace<ConflictCost<SoftFoldTasks>>();
+        catalog.emplace<ForbiddenWorkerCost<SoftFoldTasks>>();
+        const auto rows = optimaru::catalogInfo(defaultSet, catalog);
+        check(rows.size() == 4 && rows[0].name == "conflictCost" && rows[1].name == "taskCostCost" &&
+                      rows[2].name == "overloadCost" && rows[3].name == "forbiddenWorkerCost",
+              "catalogInfo: the default rows first, then the catalog-only ones, each name once");
+        check(rows[0].defaultEnabled && rows[1].defaultEnabled && !rows[2].defaultEnabled &&
+                      !rows[3].defaultEnabled,
+              "defaultEnabled: in the defaults at weight > 0 (not an opt-in weight 0, not catalog-only)");
+        check(rows[3].defaultLevel == Level::Hard && !rows[3].levelFlippable,
+              "a catalog-only row carries its component's own defaults");
+        optimaru::ConstraintAssembly<SoftFoldTasks> drifted;
+        drifted.emplace<ConflictCost<SoftFoldTasks>>(5.0);
+        bool threw = false;
+        try {
+            optimaru::catalogInfo(defaultSet, drifted);
+        } catch (const std::logic_error&) {
+            threw = true;
+        }
+        check(threw, "catalogInfo throws when the catalog declares a default differently");
+        const auto plain = defaultSet.info();
+        check(plain[0].defaultEnabled && !plain[2].defaultEnabled,
+              "info() alone: defaultEnabled = weight > 0");
+    }
     std::printf("\n");
 }
 
@@ -547,6 +668,7 @@ int main() {
     testExponent();
     testRawCostsAndIncremental();
     testPythonName();
+    testComponentsOutsideAnAssembly();
     if (failures == 0) {
         std::printf("All constraint-level tests PASSED.\n");
         return 0;

@@ -14,9 +14,12 @@
 
 namespace optimaru {
 
-// One row of a domain's constraint catalog, read off its DEFAULT assembly:
-// the component's registry name and the defaults it was constructed with.
-// What `<pkg>.constraint_info()` reports (python/constraint_binding.hpp).
+// One row of a domain's constraint catalog: the component's registry name and
+// the defaults it was constructed with. What `<pkg>.constraint_info()`
+// reports (python/constraint_binding.hpp). Read off the DEFAULT assembly
+// (ConstraintAssembly::info()), or off the default assembly plus a catalog
+// assembly for a domain that can build more constraints than it scores by
+// default (catalogInfo() below).
 struct ConstraintInfo {
     std::string name;      // the registry name ("facilityCapacityCost")
     Level defaultLevel;
@@ -24,6 +27,12 @@ struct ConstraintInfo {
     bool levelFlippable;
     bool reward;
     bool isGlobal;
+    // Scored when the caller names no constraints: in the default assembly
+    // AND at a default weight > 0. False for an opt-in objective whose
+    // default weight is 0 (vehicle-routing EnclosingCircleRadiusCost) and for
+    // a constraint only a catalog assembly holds (employee-scheduling
+    // MaxConsecutiveDaysCost). The server catalog's default_enabled.
+    bool defaultEnabled = true;
 };
 
 // ---------------------------------------------------------------------------
@@ -108,7 +117,8 @@ public:
     // The level, the weight and the exponent are assembly-time metadata, not
     // part of any cost, which is exactly why they can be re-stated here.
     // Every setter validates what it is given and throws std::invalid_argument
-    // (the Python bindings surface it as ValueError):
+    // (the Python bindings surface it as ValueError); the rules live in
+    // ConstraintMetadata::setWeight/setLevel/setExponent:
     //   weight    finite and >= 0, in units of the constraint's level
     //   exponent  finite and > 0
     //   level     a reward can never be Hard; a constraint whose
@@ -116,10 +126,7 @@ public:
     //             level it already has is accepted as a no-op)
 
     ConstraintAssembly& weight(const std::string& name, double weight) & {
-        if (!std::isfinite(weight) || weight < 0.0) {
-            throw std::invalid_argument("Constraint '" + name + "' weight must be finite and >= 0");
-        }
-        require(name).weight = weight;
+        require(name).setWeight(weight);
         return *this;
     }
     ConstraintAssembly&& weight(const std::string& name, double weight) && {
@@ -130,18 +137,7 @@ public:
     // the calculator throws at reset). Python clients only reach hard() and
     // soft(): medium is a default-only level there.
     ConstraintAssembly& level(const std::string& name, Level level) & {
-        ConstraintMetadata& constraint = require(name);
-        if (level == constraint.level) return *this;
-        if (level == Level::Hard && constraint.reward) {
-            throw std::invalid_argument("Constraint '" + name +
-                                        "' is a reward (raw cost <= 0) and cannot be hard");
-        }
-        if (!constraint.levelFlippable) {
-            throw std::invalid_argument("Constraint '" + name + "' is always " +
-                                        levelName(constraint.level) +
-                                        "; its level cannot be changed");
-        }
-        constraint.level = level;
+        require(name).setLevel(level);
         return *this;
     }
     ConstraintAssembly&& level(const std::string& name, Level level) && {
@@ -167,11 +163,7 @@ public:
     // constraint, on the single total for a global one. 2 makes concentrated
     // violations disproportionately expensive.
     ConstraintAssembly& exponent(const std::string& name, double exponent) & {
-        if (!std::isfinite(exponent) || exponent <= 0.0) {
-            throw std::invalid_argument("Constraint '" + name +
-                                        "' exponent must be finite and > 0");
-        }
-        require(name).exponent = exponent;
+        require(name).setExponent(exponent);
         return *this;
     }
     ConstraintAssembly&& exponent(const std::string& name, double exponent) && {
@@ -244,14 +236,17 @@ public:
     // globals, like names()). Read off a domain's DEFAULT assembly this is its
     // constraint catalog, so every default lives in exactly one place: the
     // component's constructor (kDefaultWeight / kDefaultLevel).
+    // defaultEnabled = weight > 0 (an assembly holds what it scores).
     std::vector<ConstraintInfo> info() const {
         std::vector<ConstraintInfo> rows;
         rows.reserve(size());
         for (const auto& c : units_) {
-            rows.push_back({c->name, c->level, c->weight, c->levelFlippable, c->reward, false});
+            rows.push_back({c->name, c->level, c->weight, c->levelFlippable, c->reward, false,
+                            c->weight > 0.0});
         }
         for (const auto& c : globals_) {
-            rows.push_back({c->name, c->level, c->weight, c->levelFlippable, c->reward, true});
+            rows.push_back({c->name, c->level, c->weight, c->levelFlippable, c->reward, true,
+                            c->weight > 0.0});
         }
         return rows;
     }
@@ -345,6 +340,51 @@ private:
     std::vector<std::unique_ptr<Unit>> units_;
     std::vector<std::unique_ptr<Global>> globals_;
 };
+
+// ---------------------------------------------------------------------------
+// catalogInfo: the catalog of a domain that builds more than its defaults
+// ---------------------------------------------------------------------------
+// Most domains score every constraint they have by default, so their catalog
+// is `defaultConstraints().info()`. A domain whose factory can build
+// constraints that are NOT in the default set (employee-scheduling: eight
+// defaults, about thirty buildable rules) keeps a second assembly,
+// `catalogConstraints()`, holding one instance of every buildable constraint
+// at its default parameters and weight, and reports
+//
+//   catalogInfo(defaultConstraints(), catalogConstraints())
+//
+// = the default rows first (defaults order, defaultEnabled = weight > 0),
+// then each catalog row whose name is not a default (catalog order,
+// defaultEnabled = false). So the catalog starts with list_constraints() and
+// every name the factory accepts has exactly one row. A name in both
+// assemblies must agree on its level, weight, flippability, reward and kind,
+// or this throws std::logic_error: two declarations of one default would be
+// the drift the catalog exists to prevent.
+template <typename Solution>
+std::vector<ConstraintInfo> catalogInfo(const ConstraintAssembly<Solution>& defaults,
+                                        const ConstraintAssembly<Solution>& catalog) {
+    std::vector<ConstraintInfo> rows = defaults.info();
+    const std::size_t defaultCount = rows.size();
+    for (ConstraintInfo& row : catalog.info()) {
+        bool known = false;
+        for (std::size_t i = 0; i < defaultCount; ++i) {
+            const ConstraintInfo& d = rows[i];
+            if (d.name != row.name) continue;
+            known = true;
+            if (d.defaultLevel != row.defaultLevel || d.defaultWeight != row.defaultWeight ||
+                d.levelFlippable != row.levelFlippable || d.reward != row.reward ||
+                d.isGlobal != row.isGlobal) {
+                throw std::logic_error("Constraint '" + row.name +
+                                       "' is declared differently in the default and the "
+                                       "catalog assembly");
+            }
+        }
+        if (known) continue;
+        row.defaultEnabled = false;
+        rows.push_back(std::move(row));
+    }
+    return rows;
+}
 
 }  // namespace optimaru
 

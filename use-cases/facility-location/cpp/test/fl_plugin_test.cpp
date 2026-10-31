@@ -607,7 +607,8 @@ bool rowIs(const optimaru::ConstraintInfo &row,
     return row.name == name && row.defaultLevel == Component::kDefaultLevel
            && row.defaultWeight == Component::kDefaultWeight
            && row.defaultLevel == level && row.defaultWeight == weight
-           && row.levelFlippable && !row.reward && !row.isGlobal;
+           && row.levelFlippable && !row.reward && !row.isGlobal
+           && row.defaultEnabled;
 }
 
 void verifyCatalog()
@@ -624,7 +625,7 @@ void verifyCatalog()
                                                  optimaru::Level::Soft,
                                                  6.0),
           "info(): capacity hard 1, setup soft 2, distance soft 6; all "
-          "flippable, no reward, no global");
+          "flippable, no reward, no global, all default-enabled");
     check(!throwsInvalid([] { defaultConstraints().soft("facilityCapacityCost"); })
               && !throwsInvalid(
                   [] { defaultConstraints().hard("distanceFromFacilityCost"); }),

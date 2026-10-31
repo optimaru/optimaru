@@ -159,8 +159,9 @@ def constraint_costs(problem: FacilityLocationProblem) -> dict[str, dict[str, An
     """Raw per-facility cost of every default constraint, before weight/exponent/level:
     {name: {"costs": [...], "weight": float, "exponent": float, "hard": bool,
     "global": bool, "level": "hard" | "medium" | "soft", "reward": bool,
-    "level_flippable": bool}}. facility_location.constraints.score() turns it into
-    a score."""
+    "level_flippable": bool, "name": str, "label": str}}. facility_location.constraints.score()
+    turns it into a score. (A domain with a medium level adds "medium_fold" to every
+    entry; a name held more than once is keyed "<name>#<k>" from its second instance.)"""
 
 class ConstraintInfo(NamedTuple):
     """One constraint-catalog row, read off the C++ default assembly."""
@@ -170,8 +171,10 @@ class ConstraintInfo(NamedTuple):
     default_weight: float
     level_flippable: bool
     reward: bool
+    default_enabled: bool
 
 def constraint_info() -> list[ConstraintInfo]:
     """The constraint catalog, in list_constraints() order:
     facility_capacity_cost (hard, 1), facility_setup_cost (soft, 2),
-    distance_from_facility_cost (soft, 6); all flippable, none a reward."""
+    distance_from_facility_cost (soft, 6); all flippable, none a reward, all
+    scored by default (default_enabled)."""

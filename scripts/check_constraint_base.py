@@ -61,6 +61,10 @@ def main(argv: list[str] | None = None) -> int:
             targets.append(package / FILENAME)
 
     drifted = [target for target in targets if not target.exists() or target.read_bytes() != canonical]
+    # 0.2.0 transition shim: removed once every use case is migrated. Without
+    # --require-all a package without a copy is allowed (the unmigrated ones);
+    # integration makes CI pass --require-all and then drops the flag's
+    # default-off path.
     missing = [package for package in packages() if not (package / FILENAME).exists() and package / FILENAME not in targets]
 
     status = 0

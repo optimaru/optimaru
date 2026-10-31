@@ -353,7 +353,7 @@ PYBIND11_MODULE(_core, m)
 
     // The constraint catalog, read off the same default assembly:
     // constraint_info() -> [ConstraintInfo(name, default_level,
-    // default_weight, level_flippable, reward), ...] in list_constraints()
-    // order. The defaults live in the C++ components only.
+    // default_weight, level_flippable, reward, default_enabled), ...] in
+    // list_constraints() order. The defaults live in the C++ components only.
     tfpy::bindConstraintInfo(m, [] { return defaultConstraints(); });
 }

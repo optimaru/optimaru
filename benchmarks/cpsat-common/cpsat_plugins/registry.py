@@ -20,7 +20,8 @@ class ConstraintSpec:
     engine's constraint_info() row). ``level_flippable`` False means hard=True
     / hard=False may not move the constraint off its level; ``reward`` means
     the raw cost is <= 0 and hard=True is refused. Both paths reject the same
-    selections.
+    selections. ``default_enabled`` is the row's ``default_enabled`` (None:
+    ``weight > 0``, the rule for a domain whose catalog is its default set).
     """
 
     name: str
@@ -32,21 +33,34 @@ class ConstraintSpec:
     description_en: str = ""
     level_flippable: bool = True
     reward: bool = False
+    default_enabled: bool | None = None
 
     def as_dict(self) -> dict[str, Any]:
+        """The catalog row, in the server's ConstraintInfo vocabulary (knob_plan §5).
+
+        ``kind`` is ``"either"`` when hard=True/False may move the constraint,
+        else its fixed level (a non-flippable constraint is hard or soft: the
+        medium level is default-only and always flippable). ``params`` are
+        the selection knobs at "keep the default" — fed back as a selection
+        they change nothing (``hard: False`` would demote, so it is ``None``).
+        """
+        if self.level_flippable:
+            kind = "either"
+        else:
+            kind = "hard" if self.level == "hard" else "soft"
         return {
             "name": self.name,
             "label": self.label,
             "description": self.description,
             "label_en": self.label_en,
             "description_en": self.description_en,
-            "kind": "hard" if self.level == "hard" else "soft",
-            "default_enabled": True,
+            "kind": kind,
+            "default_enabled": self.weight > 0 if self.default_enabled is None else self.default_enabled,
             "default_level": self.level,
             "default_weight": self.weight,
             "level_flippable": self.level_flippable,
             "reward": self.reward,
-            "params": {"weight": self.weight, "hard": self.level == "hard"},
+            "params": {"weight": None, "hard": None, "exponent": 1.0},
         }
 
 

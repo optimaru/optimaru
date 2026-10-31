@@ -250,9 +250,10 @@ def _fake_domain(monkeypatch, rows):
 
     from cpsat_plugins import plugins
 
-    info = collections.namedtuple(
-        "ConstraintInfo", ["name", "default_level", "default_weight", "level_flippable", "reward"]
-    )
+    fields = ["name", "default_level", "default_weight", "level_flippable", "reward"]
+    if rows and len(rows[0]) == 6:
+        fields.append("default_enabled")
+    info = collections.namedtuple("ConstraintInfo", fields)
     package = types.ModuleType("fakedomain")
     package.constraint_info = lambda: [info(*row) for row in rows]
     monkeypatch.setitem(sys.modules, "fakedomain", package)
@@ -326,3 +327,60 @@ def test_unmigrated_plugin_may_set_its_defaults_per_instance() -> None:
 
     spec = RulePlugin("rule", False, 4).spec
     assert (spec.name, spec.level, spec.weight) == ("rule", "soft", 4)
+
+
+def test_catalog_rows_use_the_server_vocabulary() -> None:
+    """kind / default_enabled / params as knob_plan §5 states them."""
+    radius = ConstraintSpec("radius", "Radius", "soft", 0)
+    catalog = {spec.name: spec.as_dict() for spec in (*LEVELED, radius)}
+    assert {name: row["kind"] for name, row in catalog.items()} == {
+        "capacity": "either",
+        "unassigned": "either",
+        "distance": "either",
+        "bonus": "soft",  # a reward is fixed on soft
+        "pinned": "hard",  # structural
+        "radius": "either",
+    }
+    assert catalog["radius"]["default_enabled"] is False  # an opt-in weight-0 objective
+    assert all(catalog[name]["default_enabled"] for name in ("capacity", "bonus"))
+    # Fed back as a selection, the params change nothing (hard: False would demote).
+    for row in catalog.values():
+        assert row["params"] == {"weight": None, "hard": None, "exponent": 1.0}
+
+
+def test_default_enabled_and_repeated_instances_read_the_engine_row(monkeypatch) -> None:
+    """A catalog-only row (default_enabled False) and a '<name>#<k>' plugin per repeated rule."""
+    spec_class = _fake_domain(
+        monkeypatch,
+        [
+            ("required_skill_cost", "hard", 1.0, True, False, True),
+            ("day_pattern_cost", "soft", 1.0, True, False, False),
+        ],
+    )
+
+    class DayPatternCost(spec_class("day_pattern_cost"), ConstraintPlugin[dict]):
+        def __init__(self, instance_name):
+            self.name = instance_name
+
+        def build(self, context, objective):
+            pass
+
+    class RequiredSkillCost(spec_class("required_skill_cost"), ConstraintPlugin[dict]):
+        def build(self, context, objective):
+            pass
+
+    registry = ConstraintRegistry(
+        [
+            RequiredSkillCost(),
+            DayPatternCost("day_pattern_cost"),
+            DayPatternCost("day_pattern_cost#2"),
+        ]
+    )
+    catalog = registry.catalog()
+    assert [row["name"] for row in catalog] == [
+        "required_skill_cost",
+        "day_pattern_cost",
+        "day_pattern_cost#2",
+    ]
+    assert [row["default_enabled"] for row in catalog] == [True, False, False]
+    assert catalog[2]["default_level"] == "soft"

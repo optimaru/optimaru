@@ -22,7 +22,7 @@ from facility_location.constraints import DistanceFromFacilityCost, get_constrai
 
 fl.constraint_info()
 # [ConstraintInfo(name='facility_capacity_cost', default_level='hard', default_weight=1.0,
-#                 level_flippable=True, reward=False), ...]
+#                 level_flippable=True, reward=False, default_enabled=True), ...]
 fl.solve(problem, constraints=get_constraints(
     [*get_constraints()[:2], DistanceFromFacilityCost(weight=5)]))   # the un-overridden provider
 raw = fl.constraint_costs(problem)        # raw per-facility costs, re-priced in pure Python:

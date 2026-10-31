@@ -72,7 +72,7 @@ class ConstraintPlugin(ABC, Generic[ContextT]):
         name = getattr(self, "name", "")
         if not name:
             raise TypeError(f"{cls.__name__} must inherit a named Constraint")
-        level, weight, flippable, reward = self._defaults(name)
+        level, weight, flippable, reward, enabled = self._defaults(name)
         return ConstraintSpec(
             name=name,
             label=self.label or getattr(cls, "label_en", "") or cls.__name__,
@@ -83,9 +83,10 @@ class ConstraintPlugin(ABC, Generic[ContextT]):
             description_en=getattr(cls, "description_en", ""),
             level_flippable=flippable,
             reward=reward,
+            default_enabled=enabled,
         )
 
-    def _defaults(self, name: str) -> tuple[str, int | float, bool, bool]:
+    def _defaults(self, name: str) -> tuple[str, int | float, bool, bool, bool | None]:
         cls = type(self)
         catalog = engine_constraint_info(cls)
         if catalog is not None:
@@ -95,13 +96,16 @@ class ConstraintPlugin(ABC, Generic[ContextT]):
                         f"{cls.__name__}.{attr} restates an engine default; "
                         f"{name!r} takes it from the domain's constraint_info()"
                     )
-            row = catalog.get(name)
+            # A plugin per instance of a repeated rule is named "<name>#<k>"
+            # (the constraint_costs() key rule); its row is the plain name's.
+            row = catalog.get(name.partition("#")[0])
             if row is None:
                 raise TypeError(f"{cls.__name__}: {name!r} is not in the domain's constraint_info()")
             weight = row.default_weight
             if float(weight).is_integer():
                 weight = int(weight)  # CP-SAT objectives are integral
-            return row.default_level, weight, row.level_flippable, row.reward
+            enabled = getattr(row, "default_enabled", None)
+            return row.default_level, weight, row.level_flippable, row.reward, enabled
         # 0.2.0 transition shim: removed once every use case is migrated. The
         # defaults may be ClassVars or, as employee-scheduling's RulePlugin
         # sets them, instance attributes.
@@ -109,7 +113,7 @@ class ConstraintPlugin(ABC, Generic[ContextT]):
         if level is None:
             raise TypeError(f"{cls.__name__} must declare default_level (its domain has no constraint_info())")
         weight = getattr(self, "default_weight", None)
-        return level, 1 if weight is None else weight, True, False
+        return level, 1 if weight is None else weight, True, False, None
 
     @abstractmethod
     def build(self, context: ContextT, objective: ObjectiveBuilder) -> None:

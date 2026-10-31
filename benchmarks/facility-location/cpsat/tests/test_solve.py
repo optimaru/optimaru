@@ -214,6 +214,9 @@ def test_cpsat_defaults_are_the_engine_defaults() -> None:
         assert entry["default_weight"] == row.default_weight
         assert entry["level_flippable"] == row.level_flippable
         assert entry["reward"] == row.reward
+        assert entry["default_enabled"] == row.default_enabled
+        assert entry["kind"] == "either"  # every facility-location constraint is flippable
+        assert entry["params"] == {"weight": None, "hard": None, "exponent": 1.0}
 
 
 def test_demoting_capacity_scores_like_the_engine() -> None:
