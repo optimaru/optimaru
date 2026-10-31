@@ -20,8 +20,8 @@ namespace bp
 // Thin domain-side wrapper around the generic engine in include/optimaru/:
 // the domain construction (best-fit decreasing, bp/construction.hpp), then
 // optimaru::Solver<BinPackingProblem> with late acceptance over the built-in
-// change/swap moves, the domain's EmptyBinMove and the engine's adaptive
-// ruin-and-recreate (ALNS).
+// change/swap moves, the domain's EmptyBinMove and RepackMove
+// (bp/moves.hpp) and the engine's adaptive ruin-and-recreate (ALNS).
 class Solver
 {
 public:
@@ -92,19 +92,28 @@ public:
         // localSearch.descentWeight). 0 (default) = off.
         double descentWeight = 0.0;
 
-        // Upper gate on how often a step may draw a caller-registered macro
-        // move (EmptyBinMove) instead of the ordinary mix; the adaptive
-        // selector still chooses inside the gate. 1 = unrestricted (engine
-        // default).
+        // Upper gate on how often a step may draw one of the domain's macro
+        // moves (EmptyBinMove, RepackMove) instead of the ordinary mix; the
+        // adaptive selector still chooses inside the gate. 1 = unrestricted
+        // (engine default).
         double customMoveProbability = 1.0;
 
         // EmptyBinMove: empty one light bin in a single move (see
-        // solver.cpp). usedBinsCost is a step function no single-item move
+        // bp/moves.hpp). usedBinsCost is a step function no single-item move
         // can cross, so without it the search rarely closes a bin.
         bool emptyBinMoves = true;
-        // The move empties one of this many lightest non-empty bins (drawn
-        // uniformly; 1 = always the lightest, the 0.1.5 rule).
+        // Both macro moves empty one of this many lightest non-empty bins
+        // (drawn uniformly; 1 = always the lightest, the 0.1.5 rule).
         int emptyBinCandidates = 3;
+
+        // RepackMove (bp/moves.hpp): empty a light bin together with 1 to
+        // repackPartnerBins other light bins and put their items back best
+        // fit decreasing, only where they add no capacity, colour or
+        // conflict violation. EmptyBinMove checks the capacity only, so on
+        // instances with colours or conflicts this is the move that closes
+        // bins. repackPartnerBins 0 = the source bin alone.
+        bool repackMoves = true;
+        int repackPartnerBins = 2;
 
         std::function<void(std::int64_t, const Score &)> onNewBest;
         // Set by solve() on each parallel worker's copy, not by a caller (and

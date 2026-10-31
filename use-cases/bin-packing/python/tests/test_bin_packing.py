@@ -43,6 +43,8 @@ def test_metaheuristic_accepts_all_solver_parameters() -> None:
     config.value_recommender_probability = 0.3
     config.empty_bin_moves = True
     config.empty_bin_candidates = 1
+    config.repack_moves = True
+    config.repack_partner_bins = 1
     config.best_score_limit = (0, -2)
     solve(candidate, config=config)
     assert (candidate.score.hard, candidate.score.soft) == (0, -2.0)

@@ -22,6 +22,11 @@
 //       (n entries per unit constraint, one for usedBinsCost)
 //   (i) the catalog: info() off the default assembly == the components'
 //       kDefaultWeight / kDefaultLevel; the knob guards
+//   (j) the macro moves (bp/moves.hpp) on the plugin path: EmptyBinMove and
+//       RepackMove driven through the engine's move protocol (apply, score,
+//       keep or roll back) on the default and the shaped assembly; after
+//       every apply and every undo the score and every unit cost equal a
+//       fresh assembly's
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -37,6 +42,7 @@
 
 #include "bp/constraints.hpp"
 #include "bp/domain.hpp"
+#include "bp/moves.hpp"
 #include "bp/score_calculator.hpp"
 #include "bp/solver.hpp"
 #include "optimaru/api/score/director/score_director.hpp"
@@ -624,6 +630,85 @@ void verifyCatalog()
     std::printf("\n");
 }
 
+// -------------------------------------------------------------------------
+// (j) the macro moves on the plugin path
+// -------------------------------------------------------------------------
+template <typename Move>
+void walkMacroMove(Move &move, const std::string &label, bool shaped)
+{
+    BinPackingProblem p = randomInstance(40, 43, 5, 30);
+    std::mt19937_64 rng(59);
+    randomize(p, rng, 40, 0.0);
+    ScoreCalculator::prepare(p);
+    DecomposedCalculator calculator;
+    assemble(calculator, shaped);
+    optimaru::ScoreDirector<BinPackingProblem> director(p, calculator);
+    optimaru::NearbyNeighborhoods nearby;
+    std::vector<int> noLists;
+    optimaru::OperatorContext<BinPackingProblem> ctx{director, nearby, noLists, noLists};
+    BinPackingProblem shadow = p;
+    const int n = p.itemCount();
+    std::uniform_real_distribution<double> unit(0.0, 1.0);
+
+    auto agrees = [&]() -> bool
+    {
+        shadow.setAssignment(p.assignment());
+        DecomposedCalculator fresh;
+        assemble(fresh, shaped);
+        const Score full = scoreWith(fresh, shadow);
+        return sameScore(director.calculateScore(), full) && unitCosts(calculator) == unitCosts(fresh);
+    };
+
+    int applied = 0;
+    int undone = 0;
+    int mismatches = 0;
+    std::vector<int> entities;
+    for (int step = 0; step < 3000; ++step)
+    {
+        if (unit(rng) < 0.5)
+        {
+            director.changeVariable(static_cast<int>(rng() % n), static_cast<int>(rng() % n));
+            continue;
+        }
+        entities.clear();
+        director.beginMoveEvaluation();
+        if (!move.apply(ctx, rng, entities))
+        {
+            director.endMoveEvaluation(false);
+            continue;
+        }
+        ++applied;
+        if (!agrees())
+            ++mismatches;
+        const bool keep = unit(rng) < 0.5;
+        if (!keep)
+        {
+            director.beginMoveRollback();
+            move.undoLast(ctx);
+            ++undone;
+        }
+        director.endMoveEvaluation(keep);
+        if (!agrees())
+            ++mismatches;
+    }
+    check(mismatches == 0 && applied > 500 && undone > 150,
+          label + (shaped ? " (shaped)" : " (default)") + ": " + std::to_string(applied) + " applied, "
+              + std::to_string(undone) + " undone, plugin incremental == a fresh assembly after each");
+}
+
+void verifyMacroMoves()
+{
+    std::printf("== (j) macro moves on the plugin path ==\n");
+    for (bool shaped : {false, true})
+    {
+        EmptyBinMove empty(3);
+        walkMacroMove(empty, "EmptyBinMove", shaped);
+        RepackMove repack(3, 2);
+        walkMacroMove(repack, "RepackMove(3, 2)", shaped);
+    }
+    std::printf("\n");
+}
+
 }  // namespace
 
 int main()
@@ -637,6 +722,7 @@ int main()
     verifyAssemblyBuilder();
     verifyRawCostsByHand();
     verifyCatalog();
+    verifyMacroMoves();
     if (failures == 0)
     {
         std::printf("All bin-packing plugin checks PASSED.\n");

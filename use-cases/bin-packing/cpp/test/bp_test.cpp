@@ -21,6 +21,14 @@
 //   (g) the parallel multi-start returns a consistent best solution
 //   (h) compaction is score-neutral and leaves contiguous labels
 //   (i) the fact checks (capacity, ids, weights, conflicts, bin range)
+//   (j) the macro moves (bp/moves.hpp): RepackMove empties a bin that
+//       EmptyBinMove can only empty into a clash, with and without partner
+//       bins; driven by hand through the engine's move protocol for
+//       thousands of applied and undone moves, the incremental score and
+//       every raw total equal a full recompute after each apply and each
+//       undo (no calculator reset in between), an undo restores the
+//       assignment exactly, RepackMove never adds a hard violation, and the
+//       same walk passes under a FULL_ASSERT director
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -37,6 +45,7 @@
 #include "bp/construction.hpp"
 #include "bp/domain.hpp"
 #include "bp/incremental_calculator.hpp"
+#include "bp/moves.hpp"
 #include "bp/score_calculator.hpp"
 #include "bp/solver.hpp"
 #include "optimaru/api/score/director/score_director.hpp"
@@ -642,6 +651,251 @@ void verifyChecks()
     std::printf("\n");
 }
 
+// -------------------------------------------------------------------------
+// (j) the macro moves
+// -------------------------------------------------------------------------
+// One step of the engine's move protocol around a MoveOperator: begin the
+// evaluation, apply, score, then keep it or roll it back with undoLast.
+struct MoveDriver
+{
+    explicit MoveDriver(optimaru::ScoreDirector<BinPackingProblem> &director)
+        : ctx{director, nearby, noLists, noLists}
+    {
+    }
+    optimaru::NearbyNeighborhoods nearby;  // empty: no distance meter
+    std::vector<int> noLists;              // BASIC: no element index
+    optimaru::OperatorContext<BinPackingProblem> ctx;
+    std::vector<int> entities;
+};
+
+// C = 10. bin 0 = A4 (the lightest), bin 1 = B3 C2, bin 2 = D5; A conflicts
+// with B and with D. A fits by capacity into bin 1 and bin 2 (room 1 each),
+// but each holds one of its conflict partners.
+BinPackingProblem conflictedTriple()
+{
+    BinPackingProblem p;
+    p.binCapacity = 10;
+    p.items = {makeItem("A", 4, 0), makeItem("B", 3, 1), makeItem("C", 2, 1), makeItem("D", 5, 2)};
+    p.conflicts = {{"A", "B"}, {"A", "D"}};
+    ScoreCalculator::prepare(p);
+    return p;
+}
+
+void verifyMacroMovesByHand()
+{
+    {
+        // C = 10: bin 0 = A3 red (the lightest), bin 1 = B5 red + C2,
+        // bin 2 = D4. EmptyBinMove takes the best fit by capacity, bin 1
+        // (room 0), and lands A on B's colour; RepackMove skips bin 1 and
+        // takes bin 2 (room 3).
+        auto build = []
+        {
+            BinPackingProblem p;
+            p.binCapacity = 10;
+            p.items = {makeItem("A", 3, 0, "red"), makeItem("B", 5, 1, "red"), makeItem("C", 2, 1),
+                       makeItem("D", 4, 2)};
+            ScoreCalculator::prepare(p);
+            return p;
+        };
+        BinPackingProblem p = build();
+        BinPackingIncrementalScoreCalculator calc;
+        optimaru::ScoreDirector<BinPackingProblem> director(p, calc);
+        MoveDriver driver(director);
+        std::mt19937_64 rng(1);
+        EmptyBinMove empty(1);
+        check(empty.apply(driver.ctx, rng, driver.entities) && binsOf(p) == std::vector<int>{1, 1, 1, 2}
+                  && sameScore(director.calculateScore(), Score{-1, -2.0}),
+              "EmptyBinMove (capacity only): A joins red B in bin 1 -> -1hard/-2soft");
+
+        BinPackingProblem q = build();
+        BinPackingIncrementalScoreCalculator calc2;
+        optimaru::ScoreDirector<BinPackingProblem> director2(q, calc2);
+        MoveDriver driver2(director2);
+        RepackMove repack(1, 0);
+        check(repack.apply(driver2.ctx, rng, driver2.entities) && binsOf(q) == std::vector<int>{2, 1, 1, 2}
+                  && sameScore(director2.calculateScore(), Score{0, -2.0}),
+              "RepackMove (partners 0): A goes to bin 2, clear of red B -> 0hard/-2soft");
+        repack.undoLast(driver2.ctx);
+        check(binsOf(q) == std::vector<int>{0, 1, 1, 2} && sameScore(director2.calculateScore(), Score{0, -3.0}),
+              "RepackMove undo restores the three bins");
+    }
+    {
+        // conflictedTriple: A fits no other bin clear of a conflict, so the
+        // source alone cannot be emptied (no move). With a partner it can,
+        // whichever of the two is drawn, heaviest first into the fullest bin
+        // that takes the item:
+        //   bin 1: A4 -> emptied bin 1, B3 -> bin 2, C2 -> bin 2 (room 0)
+        //          = {1, 2, 2, 2};
+        //   bin 2: D5 -> bin 1 (room 0), A4 -> emptied bin 2 = {2, 1, 1, 1}.
+        // Either way bin 0 ends empty at 0hard/-2soft.
+        BinPackingProblem p = conflictedTriple();
+        BinPackingIncrementalScoreCalculator calc;
+        optimaru::ScoreDirector<BinPackingProblem> director(p, calc);
+        MoveDriver driver(director);
+        std::mt19937_64 rng(5);
+        RepackMove alone(1, 0);
+        check(!alone.apply(driver.ctx, rng, driver.entities) && binsOf(p) == std::vector<int>{0, 1, 1, 2},
+              "RepackMove (partners 0): no clash-free bin for A -> no move");
+
+        RepackMove withPartner(1, 1);
+        int viaBin1 = 0;
+        int viaBin2 = 0;
+        bool resultsOk = true;
+        for (int attempt = 0; attempt < 40; ++attempt)
+        {
+            driver.entities.clear();
+            if (!withPartner.apply(driver.ctx, rng, driver.entities))
+            {
+                resultsOk = false;
+                continue;
+            }
+            const std::vector<int> bins = binsOf(p);
+            if (bins == std::vector<int>{1, 2, 2, 2})
+                ++viaBin1;
+            else if (bins == std::vector<int>{2, 1, 1, 1})
+                ++viaBin2;
+            else
+                resultsOk = false;
+            resultsOk = resultsOk && sameScore(director.calculateScore(), Score{0, -2.0});
+            withPartner.undoLast(driver.ctx);
+            resultsOk = resultsOk && binsOf(p) == std::vector<int>{0, 1, 1, 2}
+                        && sameScore(director.calculateScore(), Score{0, -3.0});
+        }
+        check(viaBin1 > 0 && viaBin2 > 0 && resultsOk,
+              "RepackMove (1 partner): empties bin 0 at 0hard/-2soft with either partner (bin 1 "
+                  + std::to_string(viaBin1) + "x, bin 2 " + std::to_string(viaBin2) + "x); undo restores");
+
+        BinPackingProblem e = conflictedTriple();
+        BinPackingIncrementalScoreCalculator calc2;
+        optimaru::ScoreDirector<BinPackingProblem> director2(e, calc2);
+        MoveDriver driver2(director2);
+        EmptyBinMove empty(1);
+        check(empty.apply(driver2.ctx, rng, driver2.entities) && binsOf(e) == std::vector<int>{1, 1, 1, 2}
+                  && director2.calculateScore().hard == -1,
+              "EmptyBinMove on the same state: A next to its partner B -> -1hard");
+    }
+}
+
+// Random walk: ordinary change moves (to reach infeasible and lopsided
+// states) interleaved with the macro move, half of them kept and half rolled
+// back. NON_ASSERT checks against a shadow full recompute with no
+// calculator reset in between; FULL_ASSERT lets the director check every
+// score itself (a ScoreCorruptionError fails the walk).
+template <typename Move>
+void walkMacroMove(Move &move,
+                   const std::string &label,
+                   optimaru::EnvironmentMode mode,
+                   bool requireHardNoWorse)
+{
+    BinPackingProblem p = randomInstance(40, 41, 5, 30);
+    BinPackingIncrementalScoreCalculator calc;
+    optimaru::ScoreDirector<BinPackingProblem> director(p, calc, mode);
+    MoveDriver driver(director);
+    BinPackingProblem shadow = p;
+    const int n = p.itemCount();
+    std::mt19937_64 rng(97);
+    std::uniform_real_distribution<double> unit(0.0, 1.0);
+
+    auto agrees = [&]() -> bool
+    {
+        shadow.setAssignment(p.assignment());
+        const Score full = ScoreCalculator::calculateScore(shadow);
+        return sameScore(director.calculateScore(), full)
+               && asList(calc.totals()) == asList(ScoreCalculator::rawCosts(shadow));
+    };
+
+    int applied = 0;
+    int kept = 0;
+    int undone = 0;
+    int mismatches = 0;
+    int badUndo = 0;
+    int hardWorse = 0;
+    int infeasibleStarts = 0;
+    bool corrupted = false;
+    try
+    {
+        for (int step = 0; step < 6000; ++step)
+        {
+            if (unit(rng) < 0.5)
+            {
+                const int item = static_cast<int>(rng() % n);
+                director.changeVariable(item, static_cast<int>(rng() % n));
+                if (!agrees())
+                    ++mismatches;
+                continue;
+            }
+            const std::vector<int> before = p.assignment();
+            const Score beforeScore = director.calculateScore();
+            const bool allBinsUsed = p.binsUsed() == n;
+            if (beforeScore.hard < 0)
+                ++infeasibleStarts;
+            driver.entities.clear();
+            director.beginMoveEvaluation();
+            if (!move.apply(driver.ctx, rng, driver.entities))
+            {
+                director.endMoveEvaluation(false);
+                if (p.assignment() != before)
+                    ++badUndo;  // a declined move must leave everything as it was
+                continue;
+            }
+            ++applied;
+            if (!agrees())
+                ++mismatches;
+            const Score afterScore = director.calculateScore();
+            if (requireHardNoWorse && !allBinsUsed && afterScore.hard < beforeScore.hard)
+                ++hardWorse;
+            const bool keep = unit(rng) < 0.5;
+            if (!keep)
+            {
+                director.beginMoveRollback();
+                move.undoLast(driver.ctx);
+                ++undone;
+            }
+            else
+            {
+                ++kept;
+            }
+            director.endMoveEvaluation(keep);
+            if (!agrees())
+                ++mismatches;
+            if (!keep && p.assignment() != before)
+                ++badUndo;
+        }
+    }
+    catch (const optimaru::ScoreCorruptionError &e)
+    {
+        corrupted = true;
+        std::printf("  ScoreCorruptionError: %s\n", e.what());
+    }
+    check(!corrupted && mismatches == 0,
+          label + ": " + std::to_string(applied) + " applied (" + std::to_string(kept) + " kept, "
+              + std::to_string(undone) + " undone), incremental == full recompute and every raw total");
+    check(applied > 1000 && kept > 300 && undone > 300 && infeasibleStarts > 100,
+          label + ": the walk applies and undoes the move often, from infeasible states too ("
+              + std::to_string(infeasibleStarts) + ")");
+    check(badUndo == 0, label + ": undo (and a declined move) leaves the assignment exactly as it was");
+    if (requireHardNoWorse)
+        check(hardWorse == 0, label + ": never adds a hard violation");
+}
+
+void verifyMacroMoves()
+{
+    std::printf("== (j) macro moves ==\n");
+    verifyMacroMovesByHand();
+    for (const optimaru::EnvironmentMode mode :
+         {optimaru::EnvironmentMode::NON_ASSERT, optimaru::EnvironmentMode::FULL_ASSERT})
+    {
+        const std::string tag = mode == optimaru::EnvironmentMode::FULL_ASSERT ? " [FULL_ASSERT]" : "";
+        EmptyBinMove empty(3);
+        walkMacroMove(empty, "EmptyBinMove" + tag, mode, false);
+        RepackMove repack(3, 2);
+        walkMacroMove(repack, "RepackMove(3, 2)" + tag, mode, true);
+        RepackMove alone(1, 0);
+        walkMacroMove(alone, "RepackMove(1, 0)" + tag, mode, true);
+    }
+    std::printf("\n");
+}
+
 }  // namespace
 
 int main()
@@ -655,6 +909,7 @@ int main()
     verifyParallel();
     verifyCompaction();
     verifyChecks();
+    verifyMacroMoves();
     if (failures != 0)
     {
         std::printf("%d check(s) FAILED\n", failures);

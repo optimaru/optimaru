@@ -16,7 +16,7 @@ namespace bp
 // shape each bin's 1 instead. O(1) per move through the member-change fast
 // path: a bin switches on when its first item joins and off when its last
 // item leaves. A step function no single change can cross, which is why the
-// solver ships EmptyBinMove (bp/solver.hpp).
+// solver ships EmptyBinMove and RepackMove (bp/moves.hpp).
 struct UsedBinsCost final : BpGlobalConstraint
 {
     static constexpr double kDefaultWeight = 1.0;
