@@ -1,4 +1,20 @@
-"""Pydantic JSON contract for the bin-packing domain."""
+"""Pydantic JSON contract for the bin-packing domain.
+
+The canonical problem as JSON, mirroring `_core`'s Item / BinPackingProblem::
+
+    from bin_packing.models import BinPackingProblemModel
+
+    model = BinPackingProblemModel.model_validate(data)        # JSON -> pydantic
+    problem = model.to_core()                                  # pydantic -> engine
+    bp.solve(problem, time_limit_seconds=5.0)
+    solved = BinPackingProblemModel.from_core(problem)         # engine -> pydantic (+ outputs)
+
+The canonical problem carries no constraint weights (removed in 0.2.0): weights come
+only from constraint selections, and the defaults (1 each) are the C++ components'
+(``bin_packing.constraint_info()``). The 0.1.x fields ``capacity_weight``,
+``used_bin_weight``, ``color_weight`` and ``conflict_weight`` are refused
+(``extra="forbid"``).
+"""
 
 from __future__ import annotations
 
@@ -14,14 +30,21 @@ class ItemModel(BaseModel):
 
     id: str = Field(min_length=1, description="Unique item identifier.")
     weight: int = Field(gt=0, description="One-dimensional item weight or size.")
-    bin: int = Field(default=-1, ge=-1, description="Assigned zero-based bin index; -1 means unsolved.")
-    color: str | None = Field(default=None, description="Optional color; equal colors may be forbidden in one bin.")
+    bin: int = Field(
+        default=-1,
+        ge=-1,
+        description="Assigned zero-based bin index (0 to one below the item count); -1 means unsolved.",
+    )
+    color: str | None = Field(
+        default=None, description="Optional color; two items of one color should not share a bin."
+    )
 
 
 class ConflictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    first: str
-    second: str
+
+    first: str = Field(description="Id of one item of the pair.")
+    second: str = Field(description="Id of the other item; the two should not share a bin.")
 
 
 class BinPackingProblemModel(BaseModel):
@@ -29,18 +52,22 @@ class BinPackingProblemModel(BaseModel):
 
     bin_capacity: int = Field(gt=0, description="Maximum load of each identical bin.")
     items: list[ItemModel] = Field(description="Items that must each be assigned exactly once.")
-    capacity_weight: int = Field(default=1, ge=0, description="Default weight of the bin_capacity plugin.")
-    used_bin_weight: int = Field(default=1, ge=0, description="Default weight of the minimize_bins plugin.")
-    color_weight: int = Field(default=1, ge=0)
-    conflict_weight: int = Field(default=1, ge=0)
-    conflicts: list[ConflictModel] = Field(default_factory=list)
-    score_hard: int | None = Field(default=None, description="Negative weighted capacity violation score.")
-    score_soft: float | None = Field(default=None, description="Negative weighted bin-count objective score.")
+    conflicts: list[ConflictModel] = Field(
+        default_factory=list,
+        description="Item pairs that should be packed apart; a pair listed twice counts twice.",
+    )
+    score_hard: int | None = Field(
+        default=None, description="Negative weighted hard score (capacity overload, color and item conflicts)."
+    )
+    score_soft: float | None = Field(default=None, description="Negative weighted soft score (bins used).")
     bins_used: int | None = Field(default=None, ge=0, description="Number of non-empty bins in the solution.")
     bin_loads: list[int] | None = Field(default=None, description="Total item weight in each zero-based bin.")
     warm_start: bool = Field(
         default=False,
-        description="Start the search from the bins on `items`; items still at -1 are first-fitted around them.",
+        description=(
+            "Start the search from the bins on `items`; items still at -1 are placed around them by the "
+            "best-fit construction."
+        ),
     )
 
     @model_validator(mode="after")
@@ -56,26 +83,20 @@ class BinPackingProblemModel(BaseModel):
         return self
 
     def to_core(self) -> _core.BinPackingProblem:
+        """pydantic -> engine object (the output fields are ignored; the engine recomputes them)."""
         return _core.BinPackingProblem(
             bin_capacity=self.bin_capacity,
             items=[_core.Item(item.id, item.weight, item.bin, item.color) for item in self.items],
-            capacity_weight=self.capacity_weight,
-            used_bin_weight=self.used_bin_weight,
-            color_weight=self.color_weight,
-            conflict_weight=self.conflict_weight,
             conflicts=[(pair.first, pair.second) for pair in self.conflicts],
             warm_start=self.warm_start,
         )
 
     @classmethod
     def from_core(cls, problem: _core.BinPackingProblem) -> BinPackingProblemModel:
+        """engine object -> pydantic, including the bins, the score and the derived outputs."""
         return cls(
             bin_capacity=problem.bin_capacity,
             items=[ItemModel(id=item.id, weight=item.weight, bin=item.bin, color=item.color) for item in problem.items],
-            capacity_weight=problem.capacity_weight,
-            used_bin_weight=problem.used_bin_weight,
-            color_weight=problem.color_weight,
-            conflict_weight=problem.conflict_weight,
             conflicts=[ConflictModel(first=left, second=right) for left, right in problem.conflicts],
             score_hard=problem.score.hard,
             score_soft=problem.score.soft,
@@ -89,8 +110,8 @@ def with_initial_solution(problem, solution):
     """Return a copy of `problem` whose search starts from `solution`.
 
     `solution` is a solved problem model or a dict of the same shape; items are matched by id. An item the solution
-    leaves out, or holds at -1, is first-fitted around the seeded bins before the search starts. Bins run from 0 to
-    one below the item count, which is every bin a solve can return.
+    leaves out, or holds at -1, is placed around the seeded bins by the best-fit construction before the search
+    starts. Bins run from 0 to one below the item count, which is every bin a solve can return.
     """
     if isinstance(solution, BaseModel):
         solution = solution.model_dump(mode="json")

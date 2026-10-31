@@ -100,7 +100,10 @@ def constraint_costs(problem: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
         if _bin(item) >= 0 and item.get("color") is not None:
             counts = colors_by_bin.setdefault(_bin(item), {})
             counts[item["color"]] = counts.get(item["color"], 0) + 1
-    weight = lambda field: problem.get(field, 1)  # noqa: E731 - the 0.1.5 model default
+
+    def weight(field: str) -> float:
+        return problem.get(field, 1)  # the 0.1.5 model default
+
     return {
         "bin_capacity": {
             "hard": True,

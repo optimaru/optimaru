@@ -1,110 +1,171 @@
-"""Shared class-based score plugins for bin packing."""
+"""Constraint assembly specs — an API for picking the cost function declaratively.
 
-from __future__ import annotations
+The default path (`bp.solve(problem)`) enables all four constraints at their default
+weights. This module is the alternative path next to it: pick constraints, change
+weights, flip hard/soft, and pass the list to `solve(problem, constraints=...)`.
 
-import math
-from dataclasses import dataclass
-from typing import ClassVar, NamedTuple
+The shortest route is :func:`get_constraints`. It returns the default list, so
+a "default with a small tweak" declaration fits on one line::
+
+    import bin_packing as bp
+    from bin_packing.constraints import UsedBinsCost, bin_capacity_cost, get_constraints
+
+    bp.solve(problem, constraints=get_constraints())              # defaults as-is
+    bp.solve(problem, constraints=get_constraints([              # picked
+        bin_capacity_cost, UsedBinsCost(weight=10),
+    ]))
+
+Default instances (`bin_capacity_cost`, `color_conflict_cost`, `item_conflict_cost`,
+`used_bins_cost`) live at module level, so you can also pass a list of just a few.
+Only listed constraints are scored — leave one out and its term disappears from the
+score.
+
+Every spec takes ``(weight=None, hard=None, exponent=1.0)``:
+
+- ``weight``   linear multiplier on the constraint cost. ``None`` = the component
+               default (1 for every bin-packing constraint). The problem carries no
+               weights (the 0.1.x ``capacity_weight`` / ``used_bin_weight`` /
+               ``color_weight`` / ``conflict_weight`` fields are gone);
+               ``bp.constraint_info()`` reports the defaults.
+- ``hard``     ``True`` = hard, ``False`` = soft, ``None`` = the default level.
+- ``exponent`` sign-preserving power shaping: ``weight * sign(c) * |c| ** exponent``.
+               Applied per BIN for the three per-bin constraints, and on the bin
+               count for ``used_bins_cost``. (0.1.x shaped colour excess per
+               (bin, colour) and conflicts per pair; the totals and every
+               exponent-1 score are unchanged.)
+
+Names (`name`) are the C++ component names in snake_case
+(``BinCapacityCost`` -> ``bin_capacity_cost``). The core derives them mechanically,
+so there is no hand-maintained alias table — check them with `bp.list_constraints()`.
+"""
+
+from ._constraint import Constraint, Score, score_costs, select
 
 __all__ = [
-    "BinCapacity",
-    "ColorCompatibility",
     "Constraint",
-    "ItemConflicts",
-    "MinimizeBins",
     "Score",
-    "bin_capacity",
-    "get_constraints",
-    "minimize_bins",
     "score",
+    "BinCapacityCost",
+    "ColorConflictCost",
+    "ItemConflictCost",
+    "UsedBinsCost",
+    "bin_capacity_cost",
+    "color_conflict_cost",
+    "item_conflict_cost",
+    "used_bins_cost",
+    "get_constraints",
 ]
 
 
-@dataclass(frozen=True)
-class Constraint:
-    """One selectable penalty with weight, score level, and shaping."""
+class BinCapacityCost(Constraint):
+    """Load above the bin capacity, per bin. Default: hard, weight 1."""
 
-    weight: float | None = None
-    hard: bool | None = None
-    exponent: float = 1.0
-    name: ClassVar[str] = ""
-
-    def __init_subclass__(cls, **kwargs):
-        super().__init_subclass__(**kwargs)
-        if not cls.name:
-            raise TypeError(f"{cls.__name__} must set a registry name")
-
-
-class BinCapacity(Constraint):
-    """Sum of ``max(0, bin load - capacity)``. Default: hard, weight 1."""
-
-    name = "bin_capacity"
+    name = "bin_capacity_cost"
+    label_en = "Bin capacity"
+    label_ko = "상자 용량"
+    description_en = (
+        "The weight packed into a bin beyond its capacity, summed over the bins. "
+        "One unit of cost is one unit of weight over capacity; 0 means every bin is within its capacity."
+    )
+    description_ko = (
+        "상자마다 담긴 무게 가운데 용량을 넘는 양을 모두 더합니다. "
+        "초과 무게 1단위가 비용 1이며, 0이면 모든 상자가 용량 안에 있습니다."
+    )
 
 
-class MinimizeBins(Constraint):
-    """Number of non-empty bins. Default: soft, weight 1."""
+class ColorConflictCost(Constraint):
+    """Items sharing a bin with another item of the same colour. Default: hard, weight 1.
 
-    name = "minimize_bins"
+    Per bin: every item beyond the first of its colour. The exponent shapes each bin's
+    sum (red x3 + blue x2 in one bin is 3, so exponent 2 gives 9)."""
+
+    name = "color_conflict_cost"
+    label_en = "Color conflict"
+    label_ko = "같은 색 충돌"
+    description_en = (
+        "Items packed into a bin that already holds an item of the same colour: per bin, every item "
+        "beyond the first of its colour counts 1. Items without a colour never count; "
+        "0 means no bin holds two items of one colour."
+    )
+    description_ko = (
+        "같은 색 물건이 이미 들어 있는 상자에 또 담긴 물건의 수입니다. 상자마다 색별로 첫 물건을 뺀 "
+        "나머지가 하나에 1씩입니다. 색이 없는 물건은 세지 않으며, 0이면 같은 색 물건 두 개가 한 상자에 "
+        "들어간 곳이 없습니다."
+    )
 
 
-class ColorCompatibility(Constraint):
-    """Extra items beyond one item of each color in a bin. Default: hard."""
+class ItemConflictCost(Constraint):
+    """Conflict pairs placed in one bin. Default: hard, weight 1.
 
-    name = "color_compatibility"
+    Per bin: the listed pairs with both items in it (a pair listed twice counts twice).
+    The exponent shapes each bin's count."""
+
+    name = "item_conflict_cost"
+    label_en = "Item conflicts"
+    label_ko = "함께 담을 수 없는 물건"
+    description_en = (
+        "Conflict pairs whose two items share a bin, one per listed pair. "
+        "0 means every conflicting pair is packed apart."
+    )
+    description_ko = (
+        "함께 담으면 안 되는 두 물건이 같은 상자에 들어간 쌍의 수입니다. 목록의 쌍마다 1이며, "
+        "0이면 모든 쌍이 서로 다른 상자에 있습니다."
+    )
 
 
-class ItemConflicts(Constraint):
-    """Forbidden item pairs placed in the same bin. Default: hard."""
+class UsedBinsCost(Constraint):
+    """Number of bins in use (the objective). Default: soft, weight 1.
 
-    name = "item_conflicts"
+    One global value; the exponent shapes the count itself (count ** exponent)."""
+
+    name = "used_bins_cost"
+    label_en = "Bins used"
+    label_ko = "사용한 상자 수"
+    description_en = "The number of bins holding at least one item. 0 means no item is packed."
+    description_ko = "물건이 하나라도 담긴 상자의 수입니다. 0이면 담긴 물건이 없습니다."
 
 
-bin_capacity = BinCapacity()
-color_compatibility = ColorCompatibility()
-item_conflicts = ItemConflicts()
-minimize_bins = MinimizeBins()
+#: Instances at the default weights (weight=None). Reference them directly when picking.
+bin_capacity_cost = BinCapacityCost()
+color_conflict_cost = ColorConflictCost()
+item_conflict_cost = ItemConflictCost()
+used_bins_cost = UsedBinsCost()
+
+# The default set, in list_constraints() order.
+_DEFAULTS = (bin_capacity_cost, color_conflict_cost, item_conflict_cost, used_bins_cost)
 
 
 def get_constraints(constraints: list[Constraint] | None = None) -> list[Constraint]:
-    if constraints is None:
-        return [bin_capacity, color_compatibility, item_conflicts, minimize_bins]
-    if not constraints:
-        raise ValueError("constraints must not be empty (pass None for defaults)")
-    return list(constraints)
+    """Return the cost function. Without arguments, all four default constraints.
 
+    When `constraints` is given, that list is used as-is — only the listed
+    constraints are scored. To change just one default, mix in the default instances::
 
-class Score(NamedTuple):
-    hard: int
-    soft: float
+        get_constraints([bin_capacity_cost, color_conflict_cost, item_conflict_cost, UsedBinsCost(weight=10)])
 
-
-def _shape(cost: float, exponent: float) -> float:
-    if exponent <= 0:
-        raise ValueError("constraint exponent must be positive")
-    if exponent == 1.0 or cost == 0:
-        return cost
-    return math.copysign(abs(cost) ** exponent, cost)
-
-
-def _round_half_away(value: float) -> int:
-    return int(math.floor(value + 0.5) if value >= 0 else math.ceil(value - 0.5))
+    Same contract as the C++ applyConstraints: an empty list (most likely a filter
+    that came out empty) and a constraint named twice raise ValueError.
+    """
+    return select(constraints, _DEFAULTS)
 
 
 def score(costs: dict, constraints: list[Constraint] | None = None) -> Score:
-    hard = 0
-    soft = 0.0
-    for spec in get_constraints(constraints):
-        entry = costs.get(spec.name)
-        if entry is None:
-            raise ValueError(
-                f"unknown constraint {spec.name!r}; available: " + ", ".join(repr(name) for name in sorted(costs))
-            )
-        weight = entry["weight"] if spec.weight is None else spec.weight
-        is_hard = entry["hard"] if spec.hard is None else spec.hard
-        for raw in entry["costs"]:
-            value = weight * _shape(raw, spec.exponent)
-            if is_hard:
-                hard += _round_half_away(value)
-            else:
-                soft += value
-    return Score(-hard, -soft if soft else 0.0)
+    """Apply specs to raw constraint costs and produce a score — pure Python.
+
+    ``costs`` is what `bp.constraint_costs(problem)` returns: per constraint, the
+    **raw** cost of each bin (``used_bins_cost``: the one bin count), before weight,
+    exponent and level rounding. Fetch it once and rescore with different weights
+    without re-solving::
+
+        raw = bp.constraint_costs(problem)
+        score(raw)                                    # default set
+        score(raw, [bin_capacity_cost, UsedBinsCost(weight=10)])
+
+    No solver and no search are involved. The arithmetic matches the engine —
+    each bin contributes ``weight * shape(cost, exponent)`` and hard contributions
+    are **rounded per bin** before summing (the same order as the engine).
+
+    When ``constraints`` is given, only those constraints are scored — the same
+    semantics as `get_constraints`. Unknown names raise ValueError.
+    """
+    return score_costs(costs, get_constraints(constraints))

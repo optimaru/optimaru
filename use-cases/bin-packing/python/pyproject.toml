@@ -1,12 +1,19 @@
 [project]
 name = "bin_packing"
 version = "0.1.0"
-description = "Bin-packing model with a local-search solver"
+description = "Bin-packing C++ solver with Python bindings"
 requires-python = ">=3.11,<4.0"
+# The JSON contract (models.py) and with_initial_solution, which __init__
+# re-exports, are pydantic models, so pydantic is a hard dependency here.
 dependencies = ["pydantic>=2.5"]
 
 [dependency-groups]
-dev = ["pytest", "ruff"]
+dev = [
+    "pytest",
+    "ruff",
+    "pybind11>=2.13.6",
+    "setuptools>=61.0",
+]
 
 [tool.ruff]
 line-length = 120
@@ -14,12 +21,19 @@ line-length = 120
 [tool.ruff.lint]
 extend-select = ["I"]
 
-[tool.setuptools]
-packages = ["bin_packing"]
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=61.0", "pybind11>=2.13.6"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["bin_packing*"]
+
+[tool.setuptools.package-data]
+bin_packing = ["*.pyi", "py.typed"]
