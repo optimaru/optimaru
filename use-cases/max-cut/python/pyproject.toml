@@ -2,7 +2,7 @@
 name = "max-cut"
 version = "0.1.0"
 description = "Max-Cut metaheuristic use case"
-requires-python = ">=3.14,<4.0"
+requires-python = ">=3.11,<4.0"
 dependencies = ["pydantic>=2.5"]
 [dependency-groups]
 dev = ["pytest", "ruff"]

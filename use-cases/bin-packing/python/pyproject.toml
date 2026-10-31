@@ -2,7 +2,7 @@
 name = "bin_packing"
 version = "0.1.0"
 description = "Bin-packing model with a local-search solver"
-requires-python = ">=3.14,<4.0"
+requires-python = ">=3.11,<4.0"
 dependencies = ["pydantic>=2.5"]
 
 [dependency-groups]

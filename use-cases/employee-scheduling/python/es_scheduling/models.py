@@ -387,7 +387,7 @@ class LocationRunGapRule(RuleBase):
 
 
 class WorkerLocationCountRule(RuleBase):
-    """Hard by default: per worker having `worker_skill` (empty = all), the count
+    """Soft by default: per worker having `worker_skill` (empty = all), the count
     of `location` shifts over the horizon must be in [min_count, max_count]
     (max_count < 0 = no cap)."""
 
@@ -418,7 +418,7 @@ class TargetDaysOffRule(RuleBase):
 
 
 class WorkerDayCountInRuleRange(RuleBase):
-    """Hard by default (scope to one worker via worker_indices): the count of
+    """Soft by default (scope to one worker via worker_indices): the count of
     distinct worked days in the inclusive day range [lo, hi] must be in
     [min_count, max_count] (max_count < 0 = no cap). Building block for off-count
     windows: "off >= K over a window" == "worked <= windowLen - K", so a caller

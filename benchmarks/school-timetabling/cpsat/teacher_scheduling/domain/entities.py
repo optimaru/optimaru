@@ -7,6 +7,8 @@ Terms follow the practice of Korean middle/high-school timetabling (Comcigan and
 - Parallel group (parallel_group): a class split into groups taught by different teachers at the same time
 """
 
+from __future__ import annotations
+
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from teacher_scheduling.domain.enums import Weekday

@@ -2,7 +2,7 @@
 name = "flight-crew-cpsat"
 version = "0.1.0"
 description = "OR-Tools CP-SAT backend for flight crew scheduling."
-requires-python = ">=3.14,<4.0"
+requires-python = ">=3.11,<4.0"
 dependencies = [
     "cpsat-plugins",
     "flight_crew",
