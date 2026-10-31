@@ -5,10 +5,10 @@ and in its own units. A request may hold several rules of one type with
 different parameters, so a plugin wraps one rule and the registry is assembled
 per request (`registry_for`), not once at import time.
 
-Soft terms are multiplied by `SCALE`, because the balance rules are fractional
-and a CP-SAT objective is not. The objective therefore orders solutions the way
-the engine does, to within 1/SCALE, and the reported score is always the
-engine's own (`constraint_costs`).
+Soft terms are multiplied by `SCALE`, because some are fractional and a CP-SAT
+objective is not. Those terms round to that grid, and `penalize_half_ssd` stands
+in for a root, so the objective is close to the engine's score but not equal to
+it. The reported score is always the engine's own (`constraint_costs`).
 """
 
 from __future__ import annotations
@@ -197,6 +197,14 @@ class ScheduleContext:
             self._pairs[key] = variable
         return self._pairs[key]
 
+    def squares(self, counts: Sequence[Any], top: int) -> list[Any]:
+        result = []
+        for value in counts:
+            square = self.model.new_int_var(0, top**2, "square")
+            self.model.add_multiplication_equality(square, [value, value])
+            result.append(square)
+        return result
+
     def only_at(
         self, worker: int, here: tuple[int, ...], elsewhere: tuple[int, ...]
     ) -> Any:
@@ -298,7 +306,7 @@ class RulePlugin(ConstraintPlugin[ScheduleContext]):
         model.add(per * scaled >= self.scale * excess)
         objective.add(self.name, scaled, bound=bound)
 
-    def penalize_root(
+    def penalize_half_ssd(
         self,
         context: ScheduleContext,
         objective: ObjectiveBuilder,
@@ -306,34 +314,26 @@ class RulePlugin(ConstraintPlugin[ScheduleContext]):
         top: int,
         total_top: int,
     ) -> None:
-        """sqrt(sum(c^2) - sum(c)^2 / n), rounded up to the fixed-point grid.
+        """ssd / 2, where ssd = sum(c^2) - sum(c)^2 / n, for the engine's sqrt(ssd).
 
-        With n = len(counts) and r the penalized variable: n * r^2 >=
-        SCALE^2 * (n * sum(c^2) - sum(c)^2). The engine's rounding of that root
-        to six significant figures is the one part not modelled.
+        ssd / 2 is the root's tangent at ssd = 1, less a constant. Both fall as
+        the counts even out, but this one weighs a large imbalance more heavily
+        against the other soft rules than the engine does.
         """
         model = context.model
         n = len(counts)
         if n < 2 or top == 0:
             return
-        squares = []
-        for value in counts:
-            square = model.new_int_var(0, top**2, "square")
-            model.add_multiplication_equality(square, [value, value])
-            squares.append(square)
         total = model.new_int_var(0, total_top, "total")
         model.add(total == sum(counts))
         total_square = model.new_int_var(0, total_top**2, "total_square")
         model.add_multiplication_equality(total_square, [total, total])
-        # sum(c^2) <= max(c) * sum(c), so this bounds r.
-        bound = math.isqrt(self.scale**2 * top * total_top) + 1
-        root = model.new_int_var(0, bound, "root")
-        root_square = model.new_int_var(0, bound**2, "root_square")
-        model.add_multiplication_equality(root_square, [root, root])
-        model.add(
-            n * root_square >= self.scale**2 * (n * sum(squares) - total_square)
-        )
-        objective.add(self.name, root, bound=bound)
+        # sum(c^2) <= max(c) * sum(c), so this bounds the variable.
+        bound = math.ceil(self.scale * top * total_top / 2)
+        half_ssd = model.new_int_var(0, bound, "half_ssd")
+        squares = sum(context.squares(counts, top))
+        model.add(2 * n * half_ssd >= self.scale * (n * squares - total_square))
+        objective.add(self.name, half_ssd, bound=bound)
 
     def penalize_run_excess(
         self,
@@ -511,9 +511,20 @@ class BalanceAssignments(RulePlugin):
     fractional = True
 
     def build(self, context: ScheduleContext, objective: ObjectiveBuilder) -> None:
+        """sum(load^2) / 2, which is ssd / 2 plus a constant once all shifts are assigned.
+
+        So the sum(c)^2 term of `penalize_half_ssd` can go, and it is the one
+        that costs: as a multiplication over all shifts, it left CP-SAT short of
+        hard 0 on `large` in five of six 30 s runs, against one of four without.
+        """
         loads = [context.load(worker) for worker in range(len(context.workers))]
         top = len(context.shifts)
-        self.penalize_root(context, objective, loads, top, top)
+        if len(loads) < 2 or top == 0:
+            return
+        half = self.scale // 2
+        objective.add(
+            self.name, half * sum(context.squares(loads, top)), bound=half * top**2
+        )
 
 
 class MaxConsecutiveDays(RulePlugin):
@@ -745,18 +756,16 @@ class ShiftCoverage(RulePlugin):
         # This rule scopes itself: unlike ScopedUnit, an empty list means all.
         rule = self.rule
         everyone = range(len(context.workers))
-        workers = [w for w in rule.worker_indices or everyone if w in everyone]
         counted = [
             worker
-            for worker in workers
+            for worker in sorted(set(rule.worker_indices or everyone) & set(everyone))
             if not rule.worker_skill
             or rule.worker_skill in context.workers[worker].skills
         ]
         every_shift = range(len(context.shifts))
         groups: defaultdict[tuple[int, str], list[int]] = defaultdict(list)
-        for shift in rule.shift_indices or every_shift:
-            if shift in every_shift:
-                groups[context.day[shift], context.shifts[shift].location].append(shift)
+        for shift in sorted(set(rule.shift_indices or every_shift) & set(every_shift)):
+            groups[context.day[shift], context.shifts[shift].location].append(shift)
         for shifts in groups.values():
             total = sum(context.x[s, w] for s in shifts for w in counted)
             self.penalize_outside(
@@ -976,7 +985,7 @@ class BalanceLocation(RulePlugin):
         if rule.metric == "gap":
             self.penalize_gap(context, objective, counts, top, rule.tolerance)
         else:
-            self.penalize_root(context, objective, counts, top, total_top)
+            self.penalize_half_ssd(context, objective, counts, top, total_top)
 
 
 class WorkerPairSameShift(RulePlugin):

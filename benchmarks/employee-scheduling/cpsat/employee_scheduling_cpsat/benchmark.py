@@ -21,7 +21,8 @@ PACKAGE = "employee_scheduling_cpsat"
 CPSAT_EXACT = False
 CPSAT_CAVEAT = (
     "unfairness is sqrt(ssd) rounded to 6 significant figures; the CP-SAT objective "
-    "holds it to 0.01, which orders solutions the same way except across a near-tie"
+    "holds half the squared loads instead, so it can weigh balance against the other "
+    "soft rules differently from the engine, whose calculator scores both answers"
 )
 
 

@@ -1,5 +1,6 @@
 import random
 import typing
+from collections import Counter
 
 import pytest
 from es_scheduling import models as domain
@@ -51,6 +52,7 @@ RULES = [
     domain.BalanceWeeklyMinutesGapRule(tolerance_minutes=100),
     domain.ShiftCoverageRule(worker_skill="Skill A", min_count=1, max_count=1),
     domain.ShiftCoverageRule(min_count=2, worker_indices=[0, 1], shift_indices=[0, 2, 3]),
+    domain.ShiftCoverageRule(min_count=1, worker_indices=[1, 1, 99], shift_indices=[0, 0, 2, -1]),
     domain.LocationRunRule(location="Location A", min_run=2, max_run=3),
     domain.LocationRunRule(min_run=3, max_run=0, waive_min_at_end=False),
     domain.RestAfterLocationRunRule(location="Location A", rest_days=2),
@@ -76,7 +78,7 @@ RULES = [
         bucket_locations=["Location B", "Location A"],
         penalty=True,
     ),
-    domain.MaxConsecutiveDaysRule(value=1, worker_indices=[0, 2]),
+    domain.MaxConsecutiveDaysRule(value=1, worker_indices=[0, 2, 2, 99, -1]),
     domain.MinimumRestRule(shift_indices=list(range(0, 24, 2))),
     domain.DesiredDayRule(worker_indices=[]),
     domain.DayPatternRule(pattern="Location A,WORK", worker_indices=[1], shift_indices=list(range(12))),
@@ -131,10 +133,20 @@ def _with_workers(problem: ScheduleRequest, fixed: list[int | None]) -> Schedule
     return candidate
 
 
+def _model_cost(total: dict, fixed: list[int | None]) -> float:
+    """What the model's objective holds for an engine total: no root for sqrt(ssd)."""
+    if total["name"].startswith("Balance employee"):
+        loads = Counter(worker for worker in fixed if worker is not None)
+        return sum(load**2 for load in loads.values()) / 2
+    if total["name"].startswith("Balance[") and total["name"].endswith(" ssd]"):
+        return total["cost"] ** 2 / 2
+    return total["cost"]
+
+
 def _engine_cost(problem: ScheduleRequest, fixed: list[int | None]) -> tuple[bool, float]:
-    """The one rule's weighted cost under `fixed`, from the engine's calculator."""
+    """The one rule's weighted cost under `fixed`, in the model's terms."""
     [total] = constraint_costs(_with_workers(problem, fixed))["totals"]
-    return total["is_hard"], total["cost"]
+    return total["is_hard"], _model_cost(total, fixed)
 
 
 @pytest.mark.parametrize("seed", range(4))
@@ -151,7 +163,7 @@ def test_each_rule_matches_the_engine_on_a_fixed_roster(rule, seed) -> None:
         assert proxy == {"hard": -expected, "soft": 0}
     else:
         assert proxy["hard"] == 0
-        # Fractional terms round up to the 1/SCALE grid, one per week at most.
+        # Fractional terms round up to the 1/SCALE grid, and there are two weeks.
         assert -proxy["soft"] / SCALE == pytest.approx(expected, abs=2 / SCALE + 1e-9)
 
 
@@ -173,8 +185,11 @@ def test_every_rule_at_once_matches_the_engine_on_a_fixed_roster(seed) -> None:
     solve(problem, time_limit_seconds=5, _fixed_workers=fixed, _proxy_score=proxy)
 
     assert proxy["hard"] == expected["hard"]
-    # Each of the three root rules and two weeks of gap rounds up to the grid.
-    assert proxy["soft"] / SCALE == pytest.approx(expected["soft"], abs=5 / SCALE + 1e-9)
+    soft = sum(
+        _model_cost(total, fixed) for total in expected["totals"] if not total["is_hard"]
+    )
+    # Two ssd rules and two weeks of gap round up to the grid.
+    assert -proxy["soft"] / SCALE == pytest.approx(soft, abs=5 / SCALE + 1e-9)
 
 
 def test_mixed_sign_costs_do_not_outweigh_the_hard_level() -> None:
@@ -239,7 +254,7 @@ def test_what_cannot_be_modelled_is_refused() -> None:
     with pytest.raises(ValueError, match="fractional"):
         solve(_problem([domain.BalanceAssignmentsRule(policy="hard")]))
     with pytest.raises(ValueError, match="fractional"):
-        solve(_problem([domain.AssignmentCostRule(policy="hard", cost_per_shift=2.5)]))
+        solve(_problem([domain.AssignmentCostRule(policy="hard", cost_per_shift=2.0)]))
     pinned = _problem([domain.RequiredSkillRule()])
     pinned.model_input.shifts[0].worker = "Worker 0"
     pinned.model_input.shifts[0].pinned = True

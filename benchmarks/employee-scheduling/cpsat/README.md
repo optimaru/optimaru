@@ -38,12 +38,20 @@ shifts.
 | `max_weekly_minutes`, `min_weekly_minutes`, `min_weekly_rest_days`, `target_days_off`, `worker_day_count_in_range`, `worker_location_count`, `shift_coverage` | slack variables on a linear count | exact |
 | `balance_min_max_gap`, `balance_location` with `metric="gap"`, `worker_pair_same_shift` | min and max variables; pair literals | exact |
 | `balance_weekly_minutes_gap` | as above, in hours | to 0.01 per week |
-| `balance_assignments`, `balance_location` with `metric="ssd"` | a fixed-point `sqrt(ssd)` over multiplication constraints | to 0.01, and the engine's rounding to 6 significant figures is not modelled |
+| `balance_assignments`, `balance_location` with `metric="ssd"` | squared counts over multiplication constraints | a stand-in for `sqrt(ssd)`, see below |
 
 Worker and shift scopes (`worker_indices`, `shift_indices`) are modelled.
 
-On `large` the model has 51,661 variables, and presolve takes about 6 of the 30
-seconds.
+The engine scores balance as `sqrt(ssd)`, rounded to 6 significant figures. The
+objective holds `ssd / 2`, the root's tangent at `ssd = 1` less a constant. Both
+fall as loads even out, but `ssd / 2` weighs a large imbalance more heavily
+against the other soft rules. `balance_assignments` also drops `sum(load)^2 / n`,
+a constant once every shift is assigned, so it holds `sum(load^2) / 2`.
+
+Over 30 s runs on `large`, CP-SAT missed hard 0 in three of four with an exact
+fixed-point root, in five of six with `ssd / 2` and that term kept, and in one of
+four as it stands. The model has 51,657 variables on `large`, and presolve takes
+about 5.5 of the 30 seconds.
 
 ## Not modelled
 
@@ -51,10 +59,10 @@ These are refused with a `ValueError`, not approximated:
 
 - `exponent` other than 1. It shapes a cost non-linearly, per unit.
 - A fractional `weight`, as in every CP-SAT backend here.
-- A rule with a fractional cost at the hard level: `assignment_cost`,
-  `balance_assignments`, `balance_weekly_minutes_gap`, and `balance_location` with
-  `metric="ssd"`. Only the soft level has a fixed-point grid, and the engine rounds
-  a hard cost per unit.
+- `assignment_cost`, `balance_assignments`, `balance_weekly_minutes_gap` and
+  `balance_location` with `metric="ssd"` at the hard level, even if this request's
+  values are whole. Only the soft level has a fixed-point grid, and the engine
+  rounds a hard cost per unit.
 - Pinned shifts. The engine exempts pinned-only runs and weeks from several rules.
   That depends on whole runs and does not fit the window literals above.
 
