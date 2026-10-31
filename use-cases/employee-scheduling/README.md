@@ -72,3 +72,10 @@ unassigned, so pre-assigning part of the solution (`ShiftModel.worker`, or
 5. add a `Constraint` spec with the snake_case `name` to
    `python/es_scheduling/constraints.py`, and a rule model to
    `python/es_scheduling/models.py` if it should be reachable from JSON.
+6. mirror it in the CP-SAT model in
+   [`benchmarks/employee-scheduling/cpsat`](../../benchmarks/employee-scheduling/cpsat) so the
+   benchmark stays like for like.
+
+## Benchmark
+
+[`benchmarks/employee-scheduling`](../../benchmarks/employee-scheduling) compares this use case with OR-Tools CP-SAT on the same instances.
