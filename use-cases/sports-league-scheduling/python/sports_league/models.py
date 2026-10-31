@@ -39,7 +39,7 @@ class TeamModel(BaseModel):
 class RoundModel(BaseModel):
     """Problem fact and planning value: a round. index is the round number the
     constraints use (same day / next day / first / last checks), weekend_or_holiday feeds
-    the classic-match soft constraint."""
+    workday_classic_matches_cost."""
 
     model_config = ConfigDict(extra="forbid")
 

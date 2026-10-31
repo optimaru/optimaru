@@ -9,34 +9,31 @@
 namespace sls
 {
 
-// Per-constraint totals of one full recompute (all counted positive; the
+// Per-constraint raw totals of one full recompute (all counted positive; the
 // score applies the signs). Mirrors the ten constraints of the quickstart's
-// SportsLeagueSchedulingConstraintProvider one to one.
+// SportsLeagueSchedulingConstraintProvider one to one; each member is named
+// after its constraint's registry name (sls/constraints/<subject>_cost.hpp).
+// The weights are applied only in hardTotal() / softTotal(), which read each
+// component's kDefaultWeight (score_calculator.cpp).
 struct Breakdown
 {
     // Hard (counts).
-    std::int64_t matchesOnSameDay = 0;
-    std::int64_t consecutiveHomeMatches = 0;  // sum of run lengths >= 4
-    std::int64_t consecutiveAwayMatches = 0;  // sum of run lengths >= 4
-    std::int64_t repeatMatchOnNextDay = 0;
-    // Soft (distance sums in km, plus the classic-match count).
-    std::int64_t startToAwayHop = 0;
-    std::int64_t homeToAwayHop = 0;
-    std::int64_t awayToAwayHop = 0;
-    std::int64_t awayToHomeHop = 0;
-    std::int64_t awayToEndHop = 0;
-    std::int64_t classicMatchCount = 0;  // penalized 1000 each
+    std::int64_t teamConflictCost = 0;
+    std::int64_t consecutiveHomeMatchesCost = 0;  // sum of run lengths >= 4
+    std::int64_t consecutiveAwayMatchesCost = 0;  // sum of run lengths >= 4
+    std::int64_t repeatMatchOnNextDayCost = 0;
+    // Soft (distance sums in km, plus the workday classic-match count).
+    std::int64_t startToAwayHopCost = 0;
+    std::int64_t homeToAwayHopCost = 0;
+    std::int64_t awayToAwayHopCost = 0;
+    std::int64_t awayToHomeHopCost = 0;
+    std::int64_t awayToEndHopCost = 0;
+    std::int64_t workdayClassicMatchesCost = 0;  // weighted 1000 each
 
-    std::int64_t hardTotal() const
-    {
-        return matchesOnSameDay + consecutiveHomeMatches
-               + consecutiveAwayMatches + repeatMatchOnNextDay;
-    }
-    std::int64_t softTotal() const
-    {
-        return startToAwayHop + homeToAwayHop + awayToAwayHop + awayToHomeHop
-               + awayToEndHop + 1000 * classicMatchCount;
-    }
+    // Weighted totals at the components' kDefaultWeight (all integral, so the
+    // sums are exact int64).
+    std::int64_t hardTotal() const;
+    std::int64_t softTotal() const;
 };
 
 // Port of the reference sports-league-scheduling
@@ -45,33 +42,34 @@ struct Breakdown
 // calculateScore does a full recompute — the reference the incremental
 // calculator is checked against (in the tests and under FULL_ASSERT).
 //
-// Constraints (HardSoftScore; round adjacency is by Round::index):
-//   hard 1. matchesOnSameDay        -1 per match pair in the same round
-//                                      sharing at least one team (a pair
-//                                      sharing both teams still counts once)
-//   hard 2. consecutiveHomeMatches  -n per team whose home matches cover a
-//                                      consecutive round-index run of n >= 4
-//                                      distinct indices (several matches on
-//                                      one index count once: the quickstart's
-//                                      toConsecutiveSequences collects the
-//                                      Round values into a set)
-//   hard 3. consecutiveAwayMatches  same for away matches
-//   hard 4. repeatMatchOnNextDay    -1 per match followed on round index + 1
-//                                      by the reversed fixture (ifExists:
-//                                      at most once per match)
-//   soft 5. startToAwayHop          -dist(away, home) per match in a round
-//                                      with no previous round index
-//   soft 6. homeToAwayHop           -dist(m1.home, m2.home) per match pair
-//                                      (m1, m2) on consecutive round indices
-//                                      with m2.away == m1.home
-//   soft 7. awayToAwayHop           -dist(m1.home, m2.home) per pair with
-//                                      m2.away == m1.away
-//   soft 8. awayToHomeHop           -dist(m1.home, m1.away) per pair with
-//                                      m2.home == m1.away
-//   soft 9. awayToEndHop            -dist(home, away) per match in a round
-//                                      with no next round index
-//   soft 10. classicMatches         -1000 per classic match in a round that
-//                                      is not a weekend/holiday
+// Constraints (HardSoftScore; round adjacency is by Round::index), each at
+// its component's default weight:
+//   hard 1. teamConflictCost          -1 per match pair in the same round
+//                                        sharing at least one team (a pair
+//                                        sharing both teams still counts once)
+//   hard 2. consecutiveHomeMatchesCost  -n per team whose home matches cover a
+//                                        consecutive round-index run of n >= 4
+//                                        distinct indices (several matches on
+//                                        one index count once: the quickstart's
+//                                        toConsecutiveSequences collects the
+//                                        Round values into a set)
+//   hard 3. consecutiveAwayMatchesCost  same for away matches
+//   hard 4. repeatMatchOnNextDayCost  -1 per match followed on round index + 1
+//                                        by the reversed fixture (ifExists:
+//                                        at most once per match)
+//   soft 5. startToAwayHopCost        -dist(away, home) per match in a round
+//                                        with no previous round index
+//   soft 6. homeToAwayHopCost         -dist(m1.home, m2.home) per match pair
+//                                        (m1, m2) on consecutive round indices
+//                                        with m2.away == m1.home
+//   soft 7. awayToAwayHopCost         -dist(m1.home, m2.home) per pair with
+//                                        m2.away == m1.away
+//   soft 8. awayToHomeHopCost         -dist(m1.home, m1.away) per pair with
+//                                        m2.home == m1.away
+//   soft 9. awayToEndHopCost          -dist(home, away) per match in a round
+//                                        with no next round index
+//   soft 10. workdayClassicMatchesCost  -1000 per classic match in a round
+//                                        that is not a weekend/holiday
 // Unassigned matches (round == -1) contribute nothing: the construction
 // heuristic scores partially initialized solutions.
 class ScoreCalculator

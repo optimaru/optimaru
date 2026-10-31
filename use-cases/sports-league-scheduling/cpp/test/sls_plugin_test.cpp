@@ -6,15 +6,24 @@
 //   (b) incremental score == full recompute across 3000 random moves driven
 //       through the engine's ScoreDirector protocol (plugin path)
 //   (c) partial assemblies: each component in isolation, hand-computed
-//   (d) weight / isHard overrides
+//   (d) weight / level / exponent overrides
 //   (e) constraintTotals() explains exactly the reported score
 //   (f) a 2-second solve(schedule, calculator) under FULL_ASSERT
+//   (g) the defaultConstraints() builder: named edits (registry names) ==
+//       the same assembly listed by hand
+//   (h) each component's raw cost, hand-calculated: a positive and a zero
+//       case per constraint (raw 0 = no violation), read through
+//       constraintCosts()
+//   (i) the catalog: info() off the default assembly == the components'
+//       kDefaultWeight / kDefaultLevel; the knob guards
 #include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <functional>
 #include <memory>
 #include <random>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -256,35 +265,35 @@ void verifyPartialAssemblies()
 {
     std::printf("== (c) Single-component assemblies ==\n");
 
-    {  // matchesOnSameDay alone: the same fixture twice in one round shares
+    {  // teamConflictCost alone: the same fixture twice in one round shares
         // BOTH teams and still counts once.
         LeagueSchedule s = makeBaseContiguous(4, 2);
         addMatch(s, 0, 1, 0);
         addMatch(s, 0, 1, 0);
         addMatch(s, 0, 1);  // unassigned: contributes nothing
         DecomposedCalculator calculator;
-        calculator.emplace<MatchesOnSameDay>();
-        checkScore("matchesOnSameDay alone", scoreWith(calculator, s), -1, 0.0);
+        calculator.emplace<TeamConflictCost>();
+        checkScore("teamConflictCost alone", scoreWith(calculator, s), -1, 0.0);
     }
     {  // Disjoint teams in one round: silent.
         LeagueSchedule s = makeBaseContiguous(4, 2);
         addMatch(s, 0, 1, 0);
         addMatch(s, 2, 3, 0);
         DecomposedCalculator calculator;
-        calculator.emplace<MatchesOnSameDay>();
-        checkScore("matchesOnSameDay, disjoint teams",
+        calculator.emplace<TeamConflictCost>();
+        checkScore("teamConflictCost, disjoint teams",
                    scoreWith(calculator, s),
                    0,
                    0.0);
     }
-    {  // consecutiveHomeMatches alone: team 0 at home on indices 0..3 is a
+    {  // consecutiveHomeMatchesCost alone: team 0 at home on indices 0..3 is a
         // run of 4 -> penalized by its length.
         LeagueSchedule s = makeBaseContiguous(6, 5);
         for (int r = 0; r < 4; ++r)
             addMatch(s, 0, 1 + r, r);
         DecomposedCalculator calculator;
-        calculator.emplace<ConsecutiveHomeMatches>();
-        checkScore("consecutiveHomeMatches, run of 4",
+        calculator.emplace<ConsecutiveHomeMatchesCost>();
+        checkScore("consecutiveHomeMatchesCost, run of 4",
                    scoreWith(calculator, s),
                    -4,
                    0.0);
@@ -294,113 +303,117 @@ void verifyPartialAssemblies()
         for (int r = 0; r < 3; ++r)
             addMatch(s, 0, 1 + r, r);
         DecomposedCalculator calculator;
-        calculator.emplace<ConsecutiveHomeMatches>();
-        checkScore("consecutiveHomeMatches, run of 3 is free",
+        calculator.emplace<ConsecutiveHomeMatchesCost>();
+        checkScore("consecutiveHomeMatchesCost, run of 3 is free",
                    scoreWith(calculator, s),
                    0,
                    0.0);
     }
-    {  // consecutiveAwayMatches alone: the away mirror.
+    {  // consecutiveAwayMatchesCost alone: the away mirror.
         LeagueSchedule s = makeBaseContiguous(6, 5);
         for (int r = 0; r < 4; ++r)
             addMatch(s, 1 + r, 0, r);
         DecomposedCalculator calculator;
-        calculator.emplace<ConsecutiveAwayMatches>();
-        checkScore("consecutiveAwayMatches, run of 4",
+        calculator.emplace<ConsecutiveAwayMatchesCost>();
+        checkScore("consecutiveAwayMatchesCost, run of 4",
                    scoreWith(calculator, s),
                    -4,
                    0.0);
     }
-    {  // repeatMatchOnNextDay alone: the reversed fixture on the next index.
+    {  // repeatMatchOnNextDayCost alone: the reversed fixture on the next
+        // index.
         LeagueSchedule s = makeBaseContiguous(4, 3);
         addMatch(s, 0, 1, 0);
         addMatch(s, 1, 0, 1);
         DecomposedCalculator calculator;
-        calculator.emplace<RepeatMatchOnNextDay>();
-        checkScore(
-            "repeatMatchOnNextDay alone", scoreWith(calculator, s), -1, 0.0);
+        calculator.emplace<RepeatMatchOnNextDayCost>();
+        checkScore("repeatMatchOnNextDayCost alone",
+                   scoreWith(calculator, s),
+                   -1,
+                   0.0);
     }
     {  // Two rounds apart: silent.
         LeagueSchedule s = makeBaseContiguous(4, 3);
         addMatch(s, 0, 1, 0);
         addMatch(s, 1, 0, 2);
         DecomposedCalculator calculator;
-        calculator.emplace<RepeatMatchOnNextDay>();
-        checkScore("repeatMatchOnNextDay, two rounds apart",
+        calculator.emplace<RepeatMatchOnNextDayCost>();
+        checkScore("repeatMatchOnNextDayCost, two rounds apart",
                    scoreWith(calculator, s),
                    0,
                    0.0);
     }
-    {  // classicMatches alone: a derby off a weekend round costs 1'000.
+    {  // workdayClassicMatchesCost alone: a derby off a weekend round costs
+        // 1'000.
         LeagueSchedule s = makeBaseContiguous(4, 2);
         s.rounds[1].weekendOrHoliday = true;
         addMatch(s, 0, 1, /*round*/ 0, /*classic*/ true);
         DecomposedCalculator calculator;
-        calculator.emplace<ClassicMatches>();
-        checkScore("classicMatches, derby on a weekday",
+        calculator.emplace<WorkdayClassicMatchesCost>();
+        checkScore("workdayClassicMatchesCost, derby on a weekday",
                    scoreWith(calculator, s),
                    0,
                    -1000.0);
 
         s.matches[0].round = 1;  // the weekend round
         DecomposedCalculator weekend;
-        weekend.emplace<ClassicMatches>();
-        checkScore("classicMatches, derby on a weekend",
+        weekend.emplace<WorkdayClassicMatchesCost>();
+        checkScore("workdayClassicMatchesCost, derby on a weekend",
                    scoreWith(weekend, s),
                    0,
                    0.0);
     }
-    {  // startToAwayHop / awayToEndHop alone on a one-round season: the away
-        // team travels in and back out.
+    {  // startToAwayHopCost / awayToEndHopCost alone on a one-round season:
+        // the away team travels in and back out.
         LeagueSchedule s = makeBaseContiguous(4, 1);
         useSyntheticDistances(s);
         addMatch(s, 0, 1, 0);
         DecomposedCalculator start;
-        start.emplace<StartToAwayHop>();
-        checkScore("startToAwayHop alone",
+        start.emplace<StartToAwayHopCost>();
+        checkScore("startToAwayHopCost alone",
                    scoreWith(start, s),
                    0,
                    -static_cast<double>(s.distance(1, 0)));
         DecomposedCalculator end;
-        end.emplace<AwayToEndHop>();
-        checkScore("awayToEndHop alone",
+        end.emplace<AwayToEndHopCost>();
+        checkScore("awayToEndHopCost alone",
                    scoreWith(end, s),
                    0,
                    -static_cast<double>(s.distance(0, 1)));
     }
-    {  // homeToAwayHop alone: team 0 hosts on index 0, visits on index 1.
+    {  // homeToAwayHopCost alone: team 0 hosts on index 0, visits on index 1.
         LeagueSchedule s = makeBaseContiguous(4, 2);
         useSyntheticDistances(s);
         addMatch(s, 0, 1, 0);
         addMatch(s, 2, 0, 1);
         DecomposedCalculator calculator;
-        calculator.emplace<HomeToAwayHop>();
-        checkScore("homeToAwayHop alone",
+        calculator.emplace<HomeToAwayHopCost>();
+        checkScore("homeToAwayHopCost alone",
                    scoreWith(calculator, s),
                    0,
                    -static_cast<double>(s.distance(0, 2)));
     }
-    {  // awayToAwayHop alone: team 1 visits on both indices.
+    {  // awayToAwayHopCost alone: team 1 visits on both indices.
         LeagueSchedule s = makeBaseContiguous(4, 2);
         useSyntheticDistances(s);
         addMatch(s, 0, 1, 0);
         addMatch(s, 2, 1, 1);
         DecomposedCalculator calculator;
-        calculator.emplace<AwayToAwayHop>();
-        checkScore("awayToAwayHop alone",
+        calculator.emplace<AwayToAwayHopCost>();
+        checkScore("awayToAwayHopCost alone",
                    scoreWith(calculator, s),
                    0,
                    -static_cast<double>(s.distance(0, 2)));
     }
-    {  // awayToHomeHop alone: team 1 visits on index 0 and hosts on index 1;
-        // the distance is the EARLIER match's own home-to-away hop.
+    {  // awayToHomeHopCost alone: team 1 visits on index 0 and hosts on index
+        // 1; the distance is the EARLIER match's own home-to-away hop.
         LeagueSchedule s = makeBaseContiguous(4, 2);
         useSyntheticDistances(s);
         addMatch(s, 0, 1, 0);
         addMatch(s, 1, 2, 1);
         DecomposedCalculator calculator;
-        calculator.emplace<AwayToHomeHop>();
-        checkScore("awayToHomeHop alone",
+        calculator.emplace<AwayToHomeHopCost>();
+        checkScore("awayToHomeHopCost alone",
                    scoreWith(calculator, s),
                    0,
                    -static_cast<double>(s.distance(0, 1)));
@@ -420,18 +433,18 @@ void verifyOverrides()
 
     {
         DecomposedCalculator calculator;
-        calculator.emplace<MatchesOnSameDay>(10.0);
-        checkScore("matchesOnSameDay re-weighted to 10",
+        calculator.emplace<TeamConflictCost>(10.0);
+        checkScore("teamConflictCost re-weighted to 10",
                    scoreWith(calculator, s),
                    -10,
                    0.0);
     }
     {
         DecomposedCalculator calculator;
-        auto component = std::make_unique<MatchesOnSameDay>();
-        component->isHard = false;
+        auto component = std::make_unique<TeamConflictCost>();
+        component->level = optimaru::Level::Soft;
         calculator.add(std::move(component));
-        checkScore("matchesOnSameDay demoted to soft",
+        checkScore("teamConflictCost demoted to soft",
                    scoreWith(calculator, s),
                    0,
                    -1.0);
@@ -444,10 +457,10 @@ void verifyOverrides()
         addMatch(three, 0, 1, 0);
         addMatch(three, 0, 1, 0);
         DecomposedCalculator calculator;
-        auto component = std::make_unique<MatchesOnSameDay>();
+        auto component = std::make_unique<TeamConflictCost>();
         component->exponent = 2.0;
         calculator.add(std::move(component));
-        checkScore("matchesOnSameDay with exponent 2",
+        checkScore("teamConflictCost with exponent 2",
                    scoreWith(calculator, three),
                    -9,
                    0.0);
@@ -522,6 +535,376 @@ void verifyFullAssertSolve()
     std::printf("\n");
 }
 
+
+// -------------------------------------------------------------------------
+// (g) The defaultConstraints() builder, by registry name.
+// -------------------------------------------------------------------------
+bool throwsInvalid(const std::function<void()> &edit)
+{
+    try
+    {
+        edit();
+    }
+    catch (const std::invalid_argument &)
+    {
+        return true;
+    }
+    return false;
+}
+
+void verifyAssemblyBuilder()
+{
+    std::printf("== (g) defaultConstraints() named edits ==\n");
+    LeagueSchedule s = buildRandomInstance(/*matches*/ 24, /*seed*/ 21);
+    ScoreCalculator::prepare(s);
+    std::mt19937_64 rng(17);
+    for (Match &match : s.matches)
+        match.round = static_cast<int>(rng() % s.roundCount());
+
+    // By hand: the default set with teamConflictCost demoted to soft, the
+    // derby weight doubled and awayToEndHopCost left out.
+    DecomposedCalculator byHand;
+    {
+        auto teamConflict = std::make_unique<TeamConflictCost>();
+        teamConflict->level = optimaru::Level::Soft;
+        byHand.add(std::move(teamConflict));
+        byHand.emplace<ConsecutiveHomeMatchesCost>();
+        byHand.emplace<ConsecutiveAwayMatchesCost>();
+        byHand.emplace<RepeatMatchOnNextDayCost>();
+        byHand.emplace<StartToAwayHopCost>();
+        byHand.emplace<HomeToAwayHopCost>();
+        byHand.emplace<AwayToAwayHopCost>();
+        byHand.emplace<AwayToHomeHopCost>();
+        byHand.emplace<WorkdayClassicMatchesCost>(
+            2.0 * WorkdayClassicMatchesCost::kDefaultWeight);
+    }
+    const Score expected = scoreWith(byHand, s);
+
+    // By name: the same three edits, one expression.
+    DecomposedCalculator built;
+    defaultConstraints()
+        .soft("teamConflictCost")
+        .weight("workdayClassicMatchesCost",
+                2.0 * WorkdayClassicMatchesCost::kDefaultWeight)
+        .drop("awayToEndHopCost")
+        .into(built);
+    check(sameScore(scoreWith(built, s), expected),
+          "named edits == the same assembly listed by hand");
+
+    // The default assembly, untouched, still matches the monolith.
+    DecomposedCalculator plain;
+    defaultConstraints().into(plain);
+    check(sameScore(scoreWith(plain, s), ScoreCalculator::calculateScore(s)),
+          "defaultConstraints() alone == the monolithic score");
+
+    // A name without the Cost suffix is unknown: a typo must not quietly
+    // leave the cost function as it was.
+    check(throwsInvalid(
+              [] { defaultConstraints().weight("workdayClassicMatches", 2); }),
+          "a registry name without its Cost suffix is unknown (throws)");
+
+    // only() isolates a subset: just the hard rule, nothing else scored.
+    DecomposedCalculator isolated;
+    defaultConstraints().only({"teamConflictCost"}).into(isolated);
+    const Score hardOnly = scoreWith(isolated, s);
+    check(hardOnly.soft == 0.0 && hardOnly.hard != 0,
+          "only() scores exactly the named constraint");
+    std::printf("\n");
+}
+
+// -------------------------------------------------------------------------
+// (h) Each component's raw cost on hand-built instances: one violating
+// (positive) case and one clean (zero) case per constraint, read through
+// constraintCosts() — the raw numbers before weight, exponent and level. The
+// three unit constraints report one cost per round position, the seven
+// globals one total. Distances are the synthetic
+// dist(a, b) = 10 * (a + 1) + (b + 1).
+// -------------------------------------------------------------------------
+std::vector<double> rawCosts(LeagueSchedule &schedule, const std::string &name)
+{
+    ScoreCalculator::prepare(schedule);
+    DecomposedCalculator calculator;
+    addDefaultConstraints(calculator);
+    calculator.resetWorkingSolution(schedule);
+    calculator.calculateScore();
+    for (const auto &entry : calculator.constraintCosts())
+    {
+        if (entry.name == name)
+            return entry.unitCosts;
+    }
+    return {};
+}
+
+void checkRaw(LeagueSchedule &schedule,
+              const std::string &name,
+              const std::vector<double> &expected,
+              const std::string &label)
+{
+    check(rawCosts(schedule, name) == expected, name + ": " + label);
+}
+
+void verifyRawCostsByHand()
+{
+    std::printf("== (h) Raw costs by hand, positive and zero ==\n");
+    {  // (0,1), (0,1), (1,2) on one index: every pair shares a team, the
+        // first pair shares both and still counts once -> 3 pairs.
+        LeagueSchedule s = makeBaseContiguous(4, 2);
+        addMatch(s, 0, 1, 0);
+        addMatch(s, 0, 1, 0);
+        addMatch(s, 1, 2, 0);
+        checkRaw(s, "teamConflictCost", {3.0}, "{3} (three sharing pairs)");
+    }
+    {
+        LeagueSchedule s = makeBaseContiguous(4, 2);
+        addMatch(s, 0, 1, 0);
+        addMatch(s, 2, 3, 0);
+        checkRaw(s, "teamConflictCost", {0.0}, "{0} (disjoint teams)");
+    }
+    {  // Team 0 at home on indices 0..4: one run of 5, charged in full.
+        LeagueSchedule s = makeBaseContiguous(4, 5);
+        addMatch(s, 0, 1, 0);
+        addMatch(s, 0, 2, 1);
+        addMatch(s, 0, 3, 2);
+        addMatch(s, 0, 1, 3);
+        addMatch(s, 0, 2, 4);
+        checkRaw(s,
+                 "consecutiveHomeMatchesCost",
+                 {5.0},
+                 "{5} (the whole run of 5)");
+    }
+    {  // A run of 3 is free.
+        LeagueSchedule s = makeBaseContiguous(4, 5);
+        addMatch(s, 0, 1, 0);
+        addMatch(s, 0, 2, 1);
+        addMatch(s, 0, 3, 2);
+        checkRaw(s, "consecutiveHomeMatchesCost", {0.0}, "{0} (run of 3)");
+    }
+    {  // Team 0 away on indices 0..3: one run of 4.
+        LeagueSchedule s = makeBaseContiguous(4, 5);
+        addMatch(s, 1, 0, 0);
+        addMatch(s, 2, 0, 1);
+        addMatch(s, 3, 0, 2);
+        addMatch(s, 1, 0, 3);
+        checkRaw(s, "consecutiveAwayMatchesCost", {4.0}, "{4} (run of 4)");
+    }
+    {  // Away on 0, 1, 3, 4: the gap on index 2 splits it into two runs of 2.
+        LeagueSchedule s = makeBaseContiguous(4, 5);
+        addMatch(s, 1, 0, 0);
+        addMatch(s, 2, 0, 1);
+        addMatch(s, 3, 0, 3);
+        addMatch(s, 1, 0, 4);
+        checkRaw(s,
+                 "consecutiveAwayMatchesCost",
+                 {0.0},
+                 "{0} (split by a gap)");
+    }
+    {  // (0,1) on 0 is followed by TWO reversed fixtures on 1: once.
+        LeagueSchedule s = makeBaseContiguous(3, 3);
+        addMatch(s, 0, 1, 0);
+        addMatch(s, 1, 0, 1);
+        addMatch(s, 1, 0, 1);
+        checkRaw(s,
+                 "repeatMatchOnNextDayCost",
+                 {1.0},
+                 "{1} (ifExists: once per match)");
+    }
+    {  // The reversed fixture two indices later.
+        LeagueSchedule s = makeBaseContiguous(3, 3);
+        addMatch(s, 0, 1, 0);
+        addMatch(s, 1, 0, 2);
+        checkRaw(s, "repeatMatchOnNextDayCost", {0.0}, "{0} (two apart)");
+    }
+    {  // Two matches on the first index: d(1,0) + d(3,2) = 21 + 43; the
+        // match on index 1 has a previous index.
+        LeagueSchedule s = makeBaseContiguous(4, 3);
+        useSyntheticDistances(s);
+        addMatch(s, 0, 1, 0);
+        addMatch(s, 2, 3, 0);
+        addMatch(s, 0, 2, 1);
+        checkRaw(s,
+                 "startToAwayHopCost",
+                 {64.0, 0.0, 0.0},
+                 "{64, 0, 0} (two matches on index 0)");
+    }
+    {  // Nothing on the first index (it exists, so index 1 has a previous).
+        LeagueSchedule s = makeBaseContiguous(4, 3);
+        useSyntheticDistances(s);
+        addMatch(s, 0, 1, 1);
+        addMatch(s, 2, 3, 2);
+        checkRaw(s,
+                 "startToAwayHopCost",
+                 {0.0, 0.0, 0.0},
+                 "{0, 0, 0} (index 0 empty)");
+    }
+    {  // One match on the last index: d(0,1) = 12.
+        LeagueSchedule s = makeBaseContiguous(4, 3);
+        useSyntheticDistances(s);
+        addMatch(s, 0, 1, 2);
+        checkRaw(s,
+                 "awayToEndHopCost",
+                 {0.0, 0.0, 12.0},
+                 "{0, 0, 12} (match on the last index)");
+    }
+    {
+        LeagueSchedule s = makeBaseContiguous(4, 3);
+        useSyntheticDistances(s);
+        addMatch(s, 0, 1, 0);
+        checkRaw(s,
+                 "awayToEndHopCost",
+                 {0.0, 0.0, 0.0},
+                 "{0, 0, 0} (last index empty)");
+    }
+    {  // Two derbies on the weekday round 0, one on the weekend round 1.
+        LeagueSchedule s = makeBaseContiguous(4, 2);
+        s.rounds[1].weekendOrHoliday = true;
+        addMatch(s, 0, 1, 0, /*classic*/ true);
+        addMatch(s, 2, 3, 0, /*classic*/ true);
+        addMatch(s, 1, 0, 1, /*classic*/ true);
+        checkRaw(s,
+                 "workdayClassicMatchesCost",
+                 {2.0, 0.0},
+                 "{2, 0} (two workday derbies)");
+    }
+    {  // The derby on the weekend, a plain match on the weekday.
+        LeagueSchedule s = makeBaseContiguous(4, 2);
+        s.rounds[1].weekendOrHoliday = true;
+        addMatch(s, 0, 1, 1, /*classic*/ true);
+        addMatch(s, 2, 3, 0, /*classic*/ false);
+        checkRaw(s,
+                 "workdayClassicMatchesCost",
+                 {0.0, 0.0},
+                 "{0, 0} (derby on the weekend)");
+    }
+    {  // Team 0 hosts on 0, visits team 2 on 1: d(0,2) = 13.
+        LeagueSchedule s = makeBaseContiguous(4, 2);
+        useSyntheticDistances(s);
+        addMatch(s, 0, 1, 0);
+        addMatch(s, 2, 0, 1);
+        checkRaw(s, "homeToAwayHopCost", {13.0}, "{13} (home, then away)");
+    }
+    {  // Team 0 hosts on both indices.
+        LeagueSchedule s = makeBaseContiguous(4, 2);
+        useSyntheticDistances(s);
+        addMatch(s, 0, 1, 0);
+        addMatch(s, 0, 2, 1);
+        checkRaw(s, "homeToAwayHopCost", {0.0}, "{0} (home twice)");
+    }
+    {  // Team 1 visits 0, then 2: d(0,2) = 13.
+        LeagueSchedule s = makeBaseContiguous(4, 2);
+        useSyntheticDistances(s);
+        addMatch(s, 0, 1, 0);
+        addMatch(s, 2, 1, 1);
+        checkRaw(s, "awayToAwayHopCost", {13.0}, "{13} (away twice)");
+    }
+    {  // Team 1 visits, then hosts: no away-to-away hop.
+        LeagueSchedule s = makeBaseContiguous(4, 2);
+        useSyntheticDistances(s);
+        addMatch(s, 0, 1, 0);
+        addMatch(s, 1, 2, 1);
+        checkRaw(s, "awayToAwayHopCost", {0.0}, "{0} (away, then home)");
+    }
+    {  // Team 1 visits 0, then hosts: the earlier match's d(0,1) = 12.
+        LeagueSchedule s = makeBaseContiguous(4, 2);
+        useSyntheticDistances(s);
+        addMatch(s, 0, 1, 0);
+        addMatch(s, 1, 2, 1);
+        checkRaw(s, "awayToHomeHopCost", {12.0}, "{12} (away, then home)");
+    }
+    {  // Team 1 visits twice: no away-to-home hop.
+        LeagueSchedule s = makeBaseContiguous(4, 2);
+        useSyntheticDistances(s);
+        addMatch(s, 0, 1, 0);
+        addMatch(s, 2, 1, 1);
+        checkRaw(s, "awayToHomeHopCost", {0.0}, "{0} (away twice)");
+    }
+    std::printf("\n");
+}
+
+// -------------------------------------------------------------------------
+// (i) The catalog read off the default assembly is exactly the components'
+// constants, and the knob guards hold on the domain's assembly.
+// -------------------------------------------------------------------------
+template <typename Component>
+bool rowIs(const optimaru::ConstraintInfo &row,
+           const char *name,
+           optimaru::Level level,
+           double weight,
+           bool isGlobal)
+{
+    return row.name == name && row.defaultLevel == Component::kDefaultLevel
+           && row.defaultWeight == Component::kDefaultWeight
+           && row.defaultLevel == level && row.defaultWeight == weight
+           && row.levelFlippable && !row.reward && row.isGlobal == isGlobal
+           && row.defaultEnabled;
+}
+
+void verifyCatalog()
+{
+    std::printf("== (i) Catalog and guards ==\n");
+    using optimaru::Level;
+    const auto rows = defaultConstraints().info();
+    // Assembly order: the three unit constraints first, then the globals.
+    check(rows.size() == 10
+              && rowIs<StartToAwayHopCost>(
+                  rows[0], "startToAwayHopCost", Level::Soft, 1.0, false)
+              && rowIs<AwayToEndHopCost>(
+                  rows[1], "awayToEndHopCost", Level::Soft, 1.0, false)
+              && rowIs<WorkdayClassicMatchesCost>(rows[2],
+                                                  "workdayClassicMatchesCost",
+                                                  Level::Soft,
+                                                  1000.0,
+                                                  false)
+              && rowIs<TeamConflictCost>(
+                  rows[3], "teamConflictCost", Level::Hard, 1.0, true)
+              && rowIs<ConsecutiveHomeMatchesCost>(rows[4],
+                                                   "consecutiveHomeMatchesCost",
+                                                   Level::Hard,
+                                                   1.0,
+                                                   true)
+              && rowIs<ConsecutiveAwayMatchesCost>(rows[5],
+                                                   "consecutiveAwayMatchesCost",
+                                                   Level::Hard,
+                                                   1.0,
+                                                   true)
+              && rowIs<RepeatMatchOnNextDayCost>(rows[6],
+                                                 "repeatMatchOnNextDayCost",
+                                                 Level::Hard,
+                                                 1.0,
+                                                 true)
+              && rowIs<HomeToAwayHopCost>(
+                  rows[7], "homeToAwayHopCost", Level::Soft, 1.0, true)
+              && rowIs<AwayToAwayHopCost>(
+                  rows[8], "awayToAwayHopCost", Level::Soft, 1.0, true)
+              && rowIs<AwayToHomeHopCost>(
+                  rows[9], "awayToHomeHopCost", Level::Soft, 1.0, true),
+          "info() == the components' constants (10 rows, assembly order)");
+
+    check(throwsInvalid(
+              [] { defaultConstraints().weight("teamConflictCost", -1); }),
+          "a negative weight is refused");
+    check(throwsInvalid(
+              [] { defaultConstraints().exponent("awayToEndHopCost", 0); }),
+          "a zero exponent is refused");
+
+    // Every constraint of this domain flips both ways: the derby rule
+    // promoted to hard keeps its weight in hard units (1 derby -> -1000
+    // hard), and the hard rule demoted to soft costs 1 soft per pair.
+    LeagueSchedule s = makeBaseContiguous(4, 2);
+    addMatch(s, 0, 1, 0, /*classic*/ true);
+    addMatch(s, 0, 2, 0);
+    DecomposedCalculator flipped;
+    defaultConstraints()
+        .hard("workdayClassicMatchesCost")
+        .soft("teamConflictCost")
+        .only({"workdayClassicMatchesCost", "teamConflictCost"})
+        .into(flipped);
+    checkScore("derby rule hard, team conflict soft",
+               scoreWith(flipped, s),
+               -1000,
+               -1.0);
+    std::printf("\n");
+}
+
 }  // namespace
 
 int main()
@@ -532,6 +915,9 @@ int main()
     verifyOverrides();
     verifyConstraintTotals();
     verifyFullAssertSolve();
+    verifyAssemblyBuilder();
+    verifyRawCostsByHand();
+    verifyCatalog();
 
     if (failures == 0)
     {

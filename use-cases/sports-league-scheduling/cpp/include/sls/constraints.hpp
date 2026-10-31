@@ -12,17 +12,17 @@
 // to change. Adding a component is a file plus a line here (and a line in
 // addDefaultConstraints below when it belongs to the default assembly).
 
-#include "sls/constraints/away_to_away_hop.hpp"
-#include "sls/constraints/away_to_end_hop.hpp"
-#include "sls/constraints/away_to_home_hop.hpp"
-#include "sls/constraints/classic_matches.hpp"
+#include "sls/constraints/away_to_away_hop_cost.hpp"
+#include "sls/constraints/away_to_end_hop_cost.hpp"
+#include "sls/constraints/away_to_home_hop_cost.hpp"
 #include "sls/constraints/common.hpp"
-#include "sls/constraints/consecutive_away_matches.hpp"
-#include "sls/constraints/consecutive_home_matches.hpp"
-#include "sls/constraints/home_to_away_hop.hpp"
-#include "sls/constraints/matches_on_same_day.hpp"
-#include "sls/constraints/repeat_match_on_next_day.hpp"
-#include "sls/constraints/start_to_away_hop.hpp"
+#include "sls/constraints/consecutive_away_matches_cost.hpp"
+#include "sls/constraints/consecutive_home_matches_cost.hpp"
+#include "sls/constraints/home_to_away_hop_cost.hpp"
+#include "sls/constraints/repeat_match_on_next_day_cost.hpp"
+#include "sls/constraints/start_to_away_hop_cost.hpp"
+#include "sls/constraints/team_conflict_cost.hpp"
+#include "sls/constraints/workday_classic_matches_cost.hpp"
 
 namespace sls
 {
@@ -30,18 +30,23 @@ namespace sls
 // ---------------------------------------------------------------------------
 // Standard assembly
 // ---------------------------------------------------------------------------
-// The full provider at the quickstart's weights: four hard rules at weight 1,
-// the five travel hops in plain kilometres and classicMatches at x 1'000.
+// The full provider at the quickstart's weights, each component at its own
+// kDefaultWeight / kDefaultLevel: four hard rules at weight 1, the five
+// travel hops in plain kilometres and workdayClassicMatchesCost at x 1'000.
 // This assembly scores bit-for-bit like ScoreCalculator::calculateScore and
-// the monolithic incremental calculator.
+// the monolithic incremental calculator. Its info() is the domain's
+// constraint catalog (the Python constraint_info()); the catalog order is
+// the assembly's: the three unit constraints (startToAwayHopCost,
+// awayToEndHopCost, workdayClassicMatchesCost) first, then the seven globals
+// in emplace order.
 //
 // `defaultConstraints()` hands the whole set back as a ConstraintAssembly,
 // so a caller states only what differs from it:
 //
 //     DecomposedCalculator calc;
 //     defaultConstraints()
-//         .weight("awayToAwayHop", 2)
-//         .drop("awayToEndHop")
+//         .weight("awayToAwayHopCost", 2)
+//         .drop("awayToEndHopCost")
 //         .into(calc);
 //
 // `addDefaultConstraints(calc)` is the same set poured straight into a
@@ -49,16 +54,16 @@ namespace sls
 inline ConstraintAssembly defaultConstraints()
 {
     ConstraintAssembly assembly;
-    assembly.emplace<MatchesOnSameDay>();
-    assembly.emplace<ConsecutiveHomeMatches>();
-    assembly.emplace<ConsecutiveAwayMatches>();
-    assembly.emplace<RepeatMatchOnNextDay>();
-    assembly.emplace<StartToAwayHop>();
-    assembly.emplace<HomeToAwayHop>();
-    assembly.emplace<AwayToAwayHop>();
-    assembly.emplace<AwayToHomeHop>();
-    assembly.emplace<AwayToEndHop>();
-    assembly.emplace<ClassicMatches>();
+    assembly.emplace<TeamConflictCost>();
+    assembly.emplace<ConsecutiveHomeMatchesCost>();
+    assembly.emplace<ConsecutiveAwayMatchesCost>();
+    assembly.emplace<RepeatMatchOnNextDayCost>();
+    assembly.emplace<StartToAwayHopCost>();
+    assembly.emplace<HomeToAwayHopCost>();
+    assembly.emplace<AwayToAwayHopCost>();
+    assembly.emplace<AwayToHomeHopCost>();
+    assembly.emplace<AwayToEndHopCost>();
+    assembly.emplace<WorkdayClassicMatchesCost>();
     return assembly;
 }
 

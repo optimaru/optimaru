@@ -1,7 +1,9 @@
 #include "sls/incremental_calculator.hpp"
 
 #include <cstddef>
+#include <cstdint>
 
+#include "sls/constraints.hpp"
 #include "sls/score_calculator.hpp"
 
 namespace sls
@@ -10,9 +12,24 @@ namespace sls
 namespace
 {
 
+// The same default weights the components and Breakdown's totals read
+// (integral and on the level they are summed into; kHardWeight / kSoftWeight
+// in sls/constraints/common.hpp check both).
+constexpr std::int64_t kTeamConflictWeight = kHardWeight<TeamConflictCost>;
+constexpr std::int64_t kConsecutiveWeight
+    = kHardWeight<ConsecutiveHomeMatchesCost>;
+static_assert(kConsecutiveWeight == kHardWeight<ConsecutiveAwayMatchesCost>,
+              "consecutive_ sums the home and the away runs at one weight");
+constexpr std::int64_t kRepeatWeight = kHardWeight<RepeatMatchOnNextDayCost>;
+constexpr std::int64_t kStartHopWeight = kSoftWeight<StartToAwayHopCost>;
+constexpr std::int64_t kHomeAwayHopWeight = kSoftWeight<HomeToAwayHopCost>;
+constexpr std::int64_t kAwayAwayHopWeight = kSoftWeight<AwayToAwayHopCost>;
+constexpr std::int64_t kAwayHomeHopWeight = kSoftWeight<AwayToHomeHopCost>;
+constexpr std::int64_t kEndHopWeight = kSoftWeight<AwayToEndHopCost>;
 // Soft weight of one classic match outside a weekend/holiday round (the
-// quickstart's 1000-per-match penalty, mirrored by Breakdown::softTotal).
-constexpr std::int64_t CLASSIC_PENALTY = 1000;
+// quickstart's 1000-per-match penalty, workdayClassicMatchesCost's default).
+constexpr std::int64_t kClassicWeight
+    = kSoftWeight<WorkdayClassicMatchesCost>;
 
 // Penalty of the count row segment [l, r] (both inclusive): sum of the
 // lengths of every maximal consecutive run covering >= MAX_CONSECUTIVE
@@ -61,7 +78,7 @@ void SportsLeagueIncrementalScoreCalculator::resetWorkingSolution(
     pairCnt_.assign(
         static_cast<std::size_t>(workingSolution.pairCount) * indexCount_, 0);
 
-    sameDay_ = 0;
+    teamConflict_ = 0;
     consecutive_ = 0;
     repeat_ = 0;
     startHop_ = 0;
@@ -120,7 +137,7 @@ void SportsLeagueIncrementalScoreCalculator::insert(int matchIndex, int round)
         if (o.homeTeam == match.homeTeam || o.homeTeam == match.awayTeam
             || o.awayTeam == match.homeTeam || o.awayTeam == match.awayTeam)
         {
-            ++sameDay_;
+            ++teamConflict_;
         }
     }
 
@@ -136,20 +153,20 @@ void SportsLeagueIncrementalScoreCalculator::insert(int matchIndex, int round)
             {
                 const int d = schedule_->distance(match.homeTeam, y.homeTeam);
                 homeAwayHop_ += d;
-                hop += d;
+                hop += kHomeAwayHopWeight * d;
             }
             if (y.awayTeam == match.awayTeam)
             {
                 const int d = schedule_->distance(match.homeTeam, y.homeTeam);
                 awayAwayHop_ += d;
-                hop += d;
+                hop += kAwayAwayHopWeight * d;
             }
             if (y.homeTeam == match.awayTeam)
             {
                 const int d
                     = schedule_->distance(match.homeTeam, match.awayTeam);
                 awayHomeHop_ += d;
-                hop += d;
+                hop += kAwayHomeHopWeight * d;
             }
             matchCost_[matchIndex] += hop;
             matchCost_[other] += hop;
@@ -166,19 +183,19 @@ void SportsLeagueIncrementalScoreCalculator::insert(int matchIndex, int round)
             {
                 const int d = schedule_->distance(x.homeTeam, match.homeTeam);
                 homeAwayHop_ += d;
-                hop += d;
+                hop += kHomeAwayHopWeight * d;
             }
             if (match.awayTeam == x.awayTeam)
             {
                 const int d = schedule_->distance(x.homeTeam, match.homeTeam);
                 awayAwayHop_ += d;
-                hop += d;
+                hop += kAwayAwayHopWeight * d;
             }
             if (match.homeTeam == x.awayTeam)
             {
                 const int d = schedule_->distance(x.homeTeam, x.awayTeam);
                 awayHomeHop_ += d;
-                hop += d;
+                hop += kAwayHomeHopWeight * d;
             }
             matchCost_[matchIndex] += hop;
             matchCost_[other] += hop;
@@ -207,20 +224,20 @@ void SportsLeagueIncrementalScoreCalculator::insert(int matchIndex, int round)
     {
         const int d = schedule_->distance(match.awayTeam, match.homeTeam);
         startHop_ += d;
-        matchCost_[matchIndex] += d;
+        matchCost_[matchIndex] += kStartHopWeight * d;
     }
     if (ri + 1 >= indexCount_ || !schedule_->roundIndexExists[ri + 1])
     {
         const int d = schedule_->distance(match.homeTeam, match.awayTeam);
         endHop_ += d;
-        matchCost_[matchIndex] += d;
+        matchCost_[matchIndex] += kEndHopWeight * d;
     }
 
     // soft 10: classic match outside weekends/holidays.
     if (match.classicMatch && !schedule_->rounds[round].weekendOrHoliday)
     {
         ++classic_;
-        matchCost_[matchIndex] += CLASSIC_PENALTY;
+        matchCost_[matchIndex] += kClassicWeight;
     }
 
     // hard 2 + 3: consecutive home/away runs.
@@ -251,20 +268,20 @@ void SportsLeagueIncrementalScoreCalculator::retract(int matchIndex, int round)
     if (match.classicMatch && !schedule_->rounds[round].weekendOrHoliday)
     {
         --classic_;
-        matchCost_[matchIndex] -= CLASSIC_PENALTY;
+        matchCost_[matchIndex] -= kClassicWeight;
     }
 
     if (ri == 0 || !schedule_->roundIndexExists[ri - 1])
     {
         const int d = schedule_->distance(match.awayTeam, match.homeTeam);
         startHop_ -= d;
-        matchCost_[matchIndex] -= d;
+        matchCost_[matchIndex] -= kStartHopWeight * d;
     }
     if (ri + 1 >= indexCount_ || !schedule_->roundIndexExists[ri + 1])
     {
         const int d = schedule_->distance(match.homeTeam, match.awayTeam);
         endHop_ -= d;
-        matchCost_[matchIndex] -= d;
+        matchCost_[matchIndex] -= kEndHopWeight * d;
     }
 
     --pairCnt_[pairRoundOffset(match.pairId, ri)];
@@ -287,7 +304,7 @@ void SportsLeagueIncrementalScoreCalculator::retract(int matchIndex, int round)
         if (o.homeTeam == match.homeTeam || o.homeTeam == match.awayTeam
             || o.awayTeam == match.homeTeam || o.awayTeam == match.awayTeam)
         {
-            --sameDay_;
+            --teamConflict_;
         }
     }
 
@@ -301,20 +318,20 @@ void SportsLeagueIncrementalScoreCalculator::retract(int matchIndex, int round)
             {
                 const int d = schedule_->distance(match.homeTeam, y.homeTeam);
                 homeAwayHop_ -= d;
-                hop += d;
+                hop += kHomeAwayHopWeight * d;
             }
             if (y.awayTeam == match.awayTeam)
             {
                 const int d = schedule_->distance(match.homeTeam, y.homeTeam);
                 awayAwayHop_ -= d;
-                hop += d;
+                hop += kAwayAwayHopWeight * d;
             }
             if (y.homeTeam == match.awayTeam)
             {
                 const int d
                     = schedule_->distance(match.homeTeam, match.awayTeam);
                 awayHomeHop_ -= d;
-                hop += d;
+                hop += kAwayHomeHopWeight * d;
             }
             matchCost_[matchIndex] -= hop;
             matchCost_[other] -= hop;
@@ -330,19 +347,19 @@ void SportsLeagueIncrementalScoreCalculator::retract(int matchIndex, int round)
             {
                 const int d = schedule_->distance(x.homeTeam, match.homeTeam);
                 homeAwayHop_ -= d;
-                hop += d;
+                hop += kHomeAwayHopWeight * d;
             }
             if (match.awayTeam == x.awayTeam)
             {
                 const int d = schedule_->distance(x.homeTeam, match.homeTeam);
                 awayAwayHop_ -= d;
-                hop += d;
+                hop += kAwayAwayHopWeight * d;
             }
             if (match.homeTeam == x.awayTeam)
             {
                 const int d = schedule_->distance(x.homeTeam, x.awayTeam);
                 awayHomeHop_ -= d;
-                hop += d;
+                hop += kAwayHomeHopWeight * d;
             }
             matchCost_[matchIndex] -= hop;
             matchCost_[other] -= hop;
@@ -361,7 +378,7 @@ int SportsLeagueIncrementalScoreCalculator::costliestMatch(std::mt19937_64 &rng,
                                                            int sample) const
 {
     const auto matchCount = static_cast<std::uint64_t>(matchCost_.size());
-    if (matchCount == 0 || sameDay_ + consecutive_ + repeat_ > 0)
+    if (matchCount == 0 || teamConflict_ + consecutive_ + repeat_ > 0)
         return -1;
     int best = static_cast<int>(rng() % matchCount);
     for (int i = 1; i < sample; ++i)
@@ -397,12 +414,17 @@ void SportsLeagueIncrementalScoreCalculator::afterVariableChanged(
 Score SportsLeagueIncrementalScoreCalculator::calculateScore()
 {
     Score score;
-    score.hard = -(sameDay_ + consecutive_ + repeat_);
+    score.hard = -(kTeamConflictWeight * teamConflict_
+                   + kConsecutiveWeight * consecutive_
+                   + kRepeatWeight * repeat_);
     // 0.0 - x avoids IEEE negative zero when the soft total is 0.
     score.soft = 0.0
-                 - static_cast<double>(startHop_ + homeAwayHop_ + awayAwayHop_
-                                       + awayHomeHop_ + endHop_
-                                       + CLASSIC_PENALTY * classic_);
+                 - static_cast<double>(kStartHopWeight * startHop_
+                                       + kHomeAwayHopWeight * homeAwayHop_
+                                       + kAwayAwayHopWeight * awayAwayHop_
+                                       + kAwayHomeHopWeight * awayHomeHop_
+                                       + kEndHopWeight * endHop_
+                                       + kClassicWeight * classic_);
     return score;
 }
 

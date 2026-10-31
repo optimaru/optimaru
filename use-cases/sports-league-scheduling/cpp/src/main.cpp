@@ -299,20 +299,24 @@ int main(int argc, char **argv)
     printSchedule(schedule);
 
     const Breakdown b = ScoreCalculator::computeBreakdown(schedule);
-    std::printf("  hard: sameDay=%lld consecutiveHome=%lld "
-                "consecutiveAway=%lld repeatNextDay=%lld\n",
-                static_cast<long long>(b.matchesOnSameDay),
-                static_cast<long long>(b.consecutiveHomeMatches),
-                static_cast<long long>(b.consecutiveAwayMatches),
-                static_cast<long long>(b.repeatMatchOnNextDay));
-    std::printf("  soft: travel km start=%lld homeAway=%lld awayAway=%lld "
-                "awayHome=%lld end=%lld, classic off-weekend=%lld\n",
-                static_cast<long long>(b.startToAwayHop),
-                static_cast<long long>(b.homeToAwayHop),
-                static_cast<long long>(b.awayToAwayHop),
-                static_cast<long long>(b.awayToHomeHop),
-                static_cast<long long>(b.awayToEndHop),
-                static_cast<long long>(b.classicMatchCount));
+    std::printf("  hard: teamConflictCost=%lld "
+                "consecutiveHomeMatchesCost=%lld "
+                "consecutiveAwayMatchesCost=%lld "
+                "repeatMatchOnNextDayCost=%lld\n",
+                static_cast<long long>(b.teamConflictCost),
+                static_cast<long long>(b.consecutiveHomeMatchesCost),
+                static_cast<long long>(b.consecutiveAwayMatchesCost),
+                static_cast<long long>(b.repeatMatchOnNextDayCost));
+    std::printf("  soft: travel km startToAwayHopCost=%lld "
+                "homeToAwayHopCost=%lld awayToAwayHopCost=%lld "
+                "awayToHomeHopCost=%lld awayToEndHopCost=%lld, "
+                "workdayClassicMatchesCost=%lld\n",
+                static_cast<long long>(b.startToAwayHopCost),
+                static_cast<long long>(b.homeToAwayHopCost),
+                static_cast<long long>(b.awayToAwayHopCost),
+                static_cast<long long>(b.awayToHomeHopCost),
+                static_cast<long long>(b.awayToEndHopCost),
+                static_cast<long long>(b.workdayClassicMatchesCost));
 
     bool allAssigned = true;
     for (const Match &match : schedule.matches)
