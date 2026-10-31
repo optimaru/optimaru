@@ -1,3 +1,5 @@
+import pytest
+
 from max_cut import calculate_score, constraint_costs, solve
 from max_cut.models import EdgeModel, MaxCutProblemModel, VertexPairModel
 
@@ -12,13 +14,15 @@ def test_manual_triangle():
         ],
         partition={"A": 0, "B": 1, "C": 0},
     )
-    assert tuple(calculate_score(problem)) == (0, 5.0)
+    result = calculate_score(problem)
+    assert (result.hard, result.soft) == (0, 5.0)
+    assert (problem.cut_weight, problem.score_hard, problem.score_soft) == (5, 0, 5.0)
     solve(problem, time_limit_seconds=0.05)
     assert problem.cut_weight == 7
 
 
-def test_partition_contract_costs_match_manual_values():
-    problem = MaxCutProblemModel(
+def _contract() -> MaxCutProblemModel:
+    return MaxCutProblemModel(
         vertices=["A", "B", "C"],
         edges=[],
         partition={"A": 0, "B": 1, "C": 1},
@@ -28,9 +32,32 @@ def test_partition_contract_costs_match_manual_values():
         min_partition_size=1,
         max_partition_size=2,
     )
-    costs = constraint_costs(problem)
-    assert costs["fixed_partition"] == [1]
-    assert costs["same_partition_pairs"] == [1]
-    assert costs["different_partition_pairs"] == [1]
-    assert costs["partition_size_bounds"] == [0, 0]
-    assert costs["partition_balance"] == [1]
+
+
+def test_partition_contract_costs_match_manual_values():
+    costs = constraint_costs(_contract())
+    # 0.1.x listed one 0/1 term per fixed vertex / pair; 0.2.0 reports [side 0, side 1].
+    assert sum(costs["fixed_partition_cost"]["costs"]) == 1
+    assert sum(costs["same_partition_pairs_cost"]["costs"]) == 1
+    assert sum(costs["different_partition_pairs_cost"]["costs"]) == 1
+    assert costs["fixed_partition_cost"]["costs"] == [1.0, 0.0]  # A sits on side 0
+    assert costs["same_partition_pairs_cost"]["costs"] == [1.0, 0.0]  # charged to A's side
+    assert costs["different_partition_pairs_cost"]["costs"] == [0.0, 1.0]  # B and C on side 1
+    assert costs["partition_size_bounds_cost"]["costs"] == [0.0, 0.0]
+    assert costs["partition_imbalance_cost"]["costs"] == [1.0]
+    assert costs["cut_weight_cost"]["costs"] == [0.0]
+
+
+def test_a_partial_partition_is_not_scored():
+    """0.2.0: scoring needs every vertex on a side (0.1.x scored a missing vertex as its own side)."""
+    problem = _contract()
+    problem.partition = {"A": 0, "B": 1}
+    with pytest.raises(ValueError, match="partition is partial"):
+        calculate_score(problem)
+    with pytest.raises(ValueError, match="partition is partial"):
+        constraint_costs(problem)
+    with pytest.raises(ValueError, match="partition is partial"):
+        constraint_costs(problem.to_core())
+    assert problem.cut_weight is None
+    solve(problem, time_limit_seconds=0)  # solve fills the missing side in
+    assert set(problem.partition) == {"A", "B", "C"}

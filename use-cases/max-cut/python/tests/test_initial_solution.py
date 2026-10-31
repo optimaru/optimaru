@@ -17,7 +17,18 @@ def _problem(**fields) -> MaxCutProblemModel:
 
 
 def _no_search() -> SolverConfig:
-    return SolverConfig(max_iterations=0)
+    """The zero time budget: the solve returns the start partition (or the seed) unchanged."""
+    config = SolverConfig()
+    config.spent_limit_seconds = 0
+    return config
+
+
+def _steps(count: int, seed: int, parallel_solver_count: int = 1) -> SolverConfig:
+    config = SolverConfig()
+    config.step_count_limit = count
+    config.random_seed = seed
+    config.parallel_solver_count = parallel_solver_count
+    return config
 
 
 def test_complete_seed_comes_back_unchanged_with_zero_budget():
@@ -47,7 +58,8 @@ def test_solved_result_feeds_back(as_dict):
 def test_search_from_a_seed_never_scores_below_it():
     seeded = with_initial_solution(_problem(), {"partition": {"A": 0, "B": 0, "C": 0, "D": 0}})
     seed_score = calculate_score(seeded.model_copy(deep=True))
-    assert tuple(solve(seeded, config=SolverConfig(max_iterations=500, random_seed=1))) >= tuple(seed_score)
+    result = solve(seeded, config=_steps(500, seed=1))
+    assert (result.hard, result.soft) >= (seed_score.hard, seed_score.soft)
 
 
 def test_partial_seed_keeps_its_part_and_alternates_the_rest():
@@ -76,7 +88,7 @@ def test_wrong_size_complete_seed_keeps_its_size_and_hard_penalty():
     assert seeded.partition == seed
     assert seeded.score_hard == -2
     searched = with_initial_solution(problem, {"partition": seed})
-    solve(searched, config=SolverConfig(max_iterations=200, random_seed=1))
+    solve(searched, config=_steps(200, seed=1))
     assert sum(searched.partition.values()) == 3
 
 
@@ -87,7 +99,7 @@ def test_right_size_seed_is_kept_and_searched_under_exact_size_bounds():
     solve(seeded, config=_no_search())
     assert seeded.partition == seed
     searched = with_initial_solution(problem, {"partition": seed})
-    solve(searched, config=SolverConfig(max_iterations=200, random_seed=1))
+    solve(searched, config=_steps(200, seed=1))
     assert sum(searched.partition.values()) == 2
 
 
@@ -109,7 +121,7 @@ def test_wrong_size_seed_is_allowed_when_the_bounds_are_a_range():
 def test_hard_infeasible_result_feeds_back_unchanged():
     problem = _problem(fixed_partition={"A": 1, "B": 1, "C": 1}, min_partition_size=2, max_partition_size=2)
     solved = problem.model_copy(deep=True)
-    solve(solved, config=SolverConfig(max_iterations=50, random_seed=1))
+    solve(solved, config=_steps(50, seed=1))
     assert solved.score_hard < 0
     seeded = with_initial_solution(problem, solved.model_dump(mode="json"))
     solve(seeded, config=_no_search())
@@ -120,7 +132,7 @@ def test_hard_infeasible_result_feeds_back_unchanged():
 def test_plain_solve_never_moves_a_fixed_vertex():
     for random_seed in range(5):
         problem = _problem(fixed_partition={"A": 1, "C": 1}, min_partition_size=2, max_partition_size=2)
-        config = SolverConfig(max_iterations=200, random_seed=random_seed, parallel_solver_count=3)
+        config = _steps(200, seed=random_seed, parallel_solver_count=3)
         solve(problem, config=config)
         assert (problem.partition["A"], problem.partition["C"]) == (1, 1)
 

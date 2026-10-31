@@ -74,9 +74,7 @@ def constraint_costs(problem: Mapping[str, Any]) -> dict[str, list]:
     partition = dict(problem.get("partition", {}))
     edges = list(problem.get("edges", []))
     fixed = dict(problem.get("fixed_partition", {}))
-    cut = sum(
-        edge.get("weight", 1) for edge in edges if partition.get(edge["source"]) != partition.get(edge["target"])
-    )
+    cut = sum(edge.get("weight", 1) for edge in edges if partition.get(edge["source"]) != partition.get(edge["target"]))
     side_one = sum(partition.get(vertex, 0) == 1 for vertex in vertices)
     side_zero = len(vertices) - side_one
     min_size = problem.get("min_partition_size")
