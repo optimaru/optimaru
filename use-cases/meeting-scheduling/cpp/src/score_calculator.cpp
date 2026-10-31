@@ -191,13 +191,13 @@ void ScoreCalculator::prepare(MeetingSchedule &schedule)
     }
     schedule.conflictArcs.clear();
     schedule.conflictArcs.reserve(arcByPair.size());
-    schedule.stabilityNeighbors.assign(meetingCount, {});
+    schedule.roomChangeNeighbors.assign(meetingCount, {});
     for (const auto &[key, arc] : arcByPair)
     {
         schedule.conflictArcs.push_back(arc);
-        schedule.stabilityNeighbors[arc.meeting1].push_back(
+        schedule.roomChangeNeighbors[arc.meeting1].push_back(
             {arc.meeting2, arc.attendanceWeight});
-        schedule.stabilityNeighbors[arc.meeting2].push_back(
+        schedule.roomChangeNeighbors[arc.meeting2].push_back(
             {arc.meeting1, arc.attendanceWeight});
     }
 

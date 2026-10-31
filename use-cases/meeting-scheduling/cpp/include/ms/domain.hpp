@@ -25,8 +25,8 @@ namespace ms
 // i.e. the medium level (required+preferred / preferred attendance conflicts)
 // is folded into the engine's soft as an offset of kMediumScale = 1e6 per
 // medium unit, keeping the level priority: for realistic instances the raw
-// soft penalty (grain indices, break/overlap counts, room capacities) stays
-// far below 1e6, so medium always dominates soft. Both penalty sums are
+// soft penalty (grain indices, back-to-back/overlap counts, room capacities)
+// stays far below 1e6, so medium always dominates soft. Both penalty sums are
 // integers, so the double representation is exact up to 2^53.
 //
 // The fold is declared ONCE, here: ScoreCalculator::toScore packs the
@@ -185,7 +185,7 @@ struct MeetingSchedule
     std::vector<ConflictArc> conflictArcs;
     // Adjacency view of conflictArcs' attendanceWeight for the incremental
     // roomChangeCost delta: per meeting, (other meeting, weight).
-    std::vector<std::vector<std::pair<int, std::int64_t>>> stabilityNeighbors;
+    std::vector<std::vector<std::pair<int, std::int64_t>>> roomChangeNeighbors;
     // Same-meeting attendance-pair weights (nonzero only when one person
     // holds several attendance facts of one meeting; Java joins them too).
     std::vector<std::int64_t> selfRequiredPairs;      // per meeting

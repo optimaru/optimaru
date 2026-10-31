@@ -98,12 +98,12 @@ private:
     // position posA, room roomA, meeting meetingA) and another assigned
     // assignment (posB, roomB, meetingB); returns true when the Java
     // constraint matches. Reads only the flat caches above.
-    bool stabilityPairMatches(int posA,
-                              int roomA,
-                              int meetingA,
-                              int posB,
-                              int roomB,
-                              int meetingB) const;
+    bool roomChangePairMatches(int posA,
+                               int roomA,
+                               int meetingA,
+                               int posB,
+                               int roomB,
+                               int meetingB) const;
 
     std::size_t roomGrainOffset(int room, int offset) const
     {

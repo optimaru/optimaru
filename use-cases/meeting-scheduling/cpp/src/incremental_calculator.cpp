@@ -177,17 +177,17 @@ void MeetingSchedulingIncrementalScoreCalculator::insert(int assignmentIndex,
     // soft 12: roomChangeCost against the assigned shared-attendee
     // neighbors of this meeting.
     for (const auto &[otherMeeting, weight] :
-         s.stabilityNeighbors[assignment.meeting])
+         s.roomChangeNeighbors[assignment.meeting])
     {
         const int j = s.assignmentOfMeeting[otherMeeting];
         if (j < 0 || assign_[j] < 0)
             continue;
-        if (stabilityPairMatches(pos,
-                                 room,
-                                 assignment.meeting,
-                                 posOf_[j],
-                                 roomOf_[j],
-                                 otherMeeting))
+        if (roomChangePairMatches(pos,
+                                  room,
+                                  assignment.meeting,
+                                  posOf_[j],
+                                  roomOf_[j],
+                                  otherMeeting))
         {
             roomChangeCost_ += weight;
         }
@@ -212,17 +212,17 @@ void MeetingSchedulingIncrementalScoreCalculator::retract(int assignmentIndex,
     const int lastOffset = startOffset + duration - 1;
 
     for (const auto &[otherMeeting, weight] :
-         s.stabilityNeighbors[assignment.meeting])
+         s.roomChangeNeighbors[assignment.meeting])
     {
         const int j = s.assignmentOfMeeting[otherMeeting];
         if (j < 0 || assign_[j] < 0)
             continue;
-        if (stabilityPairMatches(pos,
-                                 room,
-                                 assignment.meeting,
-                                 posOf_[j],
-                                 roomOf_[j],
-                                 otherMeeting))
+        if (roomChangePairMatches(pos,
+                                  room,
+                                  assignment.meeting,
+                                  posOf_[j],
+                                  roomOf_[j],
+                                  otherMeeting))
         {
             roomChangeCost_ -= weight;
         }
@@ -301,7 +301,7 @@ void MeetingSchedulingIncrementalScoreCalculator::retract(int assignmentIndex,
     largerRoomCapacityCost_ -= s.largerRoomPenalty[room];
 }
 
-bool MeetingSchedulingIncrementalScoreCalculator::stabilityPairMatches(
+bool MeetingSchedulingIncrementalScoreCalculator::roomChangePairMatches(
     int posA, int roomA, int meetingA, int posB, int roomB, int meetingB) const
 {
     if (roomA == roomB)

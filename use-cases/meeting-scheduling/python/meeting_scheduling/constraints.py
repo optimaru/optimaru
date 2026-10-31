@@ -93,16 +93,16 @@ class OvertimeCost(Constraint):
 
     name = "overtime_cost"
     label_en = "Overtime"
-    label_ko = "달력 초과"
+    label_ko = "달력 범위 초과"
     description_en = (
         "Meetings that run past the end of the calendar (no time grain exists at their last grain index). "
         "Such a meeting costs its last grain index, not the length of the overrun, so running further over "
         "costs more; 0 means every meeting ends on an existing time grain."
     )
     description_ko = (
-        "달력 끝을 넘겨 끝나는 회의(마지막 그레인 인덱스에 해당하는 시간 그레인이 없는 회의)를 셉니다. "
-        "이런 회의는 넘친 길이가 아니라 마지막 그레인 인덱스만큼 비용이 들어 더 멀리 넘을수록 비싸집니다. "
-        "0이면 모든 회의가 있는 시간 그레인에서 끝납니다."
+        "달력 끝을 넘겨 끝나는 회의(마지막 그레인 인덱스에 해당하는 시간 그레인이 없는 회의)마다 마지막 "
+        "그레인 인덱스를 비용으로 더합니다. 비용은 넘친 길이가 아니라 마지막 그레인 인덱스이므로 더 멀리 "
+        "넘어갈수록 비용이 커집니다. 0이면 모든 회의가 실제로 존재하는 시간 그레인에서 끝납니다."
     )
 
 
@@ -119,7 +119,7 @@ class RoomCapacityCost(Constraint):
     )
     description_ko = (
         "회의마다 필수·선호 참석자 수가 배정된 회의실의 수용 인원을 넘는 만큼을 모두 더합니다. "
-        "모자란 좌석 1개가 비용 1이며, 0이면 모든 회의가 회의실에 들어갑니다."
+        "모자란 좌석 1개가 비용 1이며, 0이면 모든 회의가 배정된 회의실에 수용됩니다."
     )
 
 
@@ -140,9 +140,10 @@ class DayCrossingCost(Constraint):
         "here; `overtime_cost` prices it."
     )
     description_ko = (
-        "시작한 날과 다른 날에 마지막 시간 그레인이 놓이는 회의를 셉니다. 회의의 마지막 그레인 인덱스에서 "
-        "다른 날에 있는 시간 그레인 하나가 비용 1이며(보통 날을 넘는 회의 하나당 1), 0이면 모든 회의가 같은 "
-        "날 시작하고 끝납니다. 달력 밖으로 나가는 회의는 여기서 0이고 `overtime_cost`가 값을 매깁니다."
+        "시작한 날과 다른 날에 마지막 시간 그레인이 놓이는 회의를 셉니다. 회의의 마지막 그레인 인덱스에 있는 "
+        "시간 그레인 가운데 시작일과 다른 날의 그레인 하나가 비용 1이며(보통 날을 넘는 회의 하나당 1), 0이면 "
+        "모든 회의가 같은 날 시작하고 끝납니다. 달력 밖으로 넘어가는 회의는 여기서 비용이 0이며, 그 비용은 "
+        "`overtime_cost`가 매깁니다."
     )
 
 
@@ -173,7 +174,7 @@ class LargerRoomCapacityCost(Constraint):
 
     name = "larger_room_capacity_cost"
     label_en = "Larger rooms left free"
-    label_ko = "남는 큰 회의실"
+    label_ko = "더 큰 회의실의 남는 좌석"
     description_en = (
         "For each meeting, the capacity of every strictly larger room minus the capacity of its own room, "
         "summed, so the big rooms fill first and the small ones stay free for meetings that only fit there. "
@@ -182,8 +183,8 @@ class LargerRoomCapacityCost(Constraint):
     )
     description_ko = (
         "회의마다 배정된 회의실보다 큰 회의실 각각과의 수용 인원 차이를 더해, 큰 회의실부터 채우고 작은 "
-        "회의실은 그 방에만 맞는 회의에 남겨 둡니다. 좌석 1개가 비용 1이며, 0이면 회의가 가장 큰 회의실에 "
-        "있습니다. 수용 인원 초과를 뜻하지 않습니다(`room_capacity_cost` 참고)."
+        "회의실은 그곳에만 맞는 회의를 위해 남겨 둡니다. 좌석 1개가 비용 1이며, 0이면 회의가 가장 큰 "
+        "회의실에 있습니다. 수용 인원 초과와는 다른 제약입니다(`room_capacity_cost` 참고)."
     )
 
 
@@ -219,7 +220,8 @@ class RequiredAttendanceConflictCost(Constraint):
     )
     description_ko = (
         "겹치는 두 회의에 모두 필수로 참석해야 하는 사람에 대해, 겹치는 그레인 수와 공통 필수 참석자 수의 "
-        "곱을 회의 쌍마다 더합니다. 한 사람의 1그레인이 비용 1이며, 0이면 일정이 겹친 필수 참석자가 없습니다."
+        "곱을 회의 쌍마다 더합니다. 참석자 1명의 1그레인 겹침이 비용 1이며, 0이면 일정이 겹친 필수 참석자가 "
+        "없습니다."
     )
 
 
@@ -240,8 +242,8 @@ class RequiredAndPreferredAttendanceConflictCost(Constraint):
     )
     description_ko = (
         "한 회의에는 필수로, 겹치는 다른 회의에는 선호로 참석하는 사람에 대해 겹치는 그레인 수와 그런 참석자 "
-        "수의 곱을 양방향으로 회의 쌍마다 더하며, 미디엄 수준에서 매깁니다. 한 사람의 1그레인이 비용 1이며, "
-        "0이면 이런 충돌이 없습니다."
+        "수의 곱을 양방향으로 회의 쌍마다 더하며, 미디엄 수준에서 매깁니다. 참석자 1명의 1그레인 겹침이 "
+        "비용 1이며, 0이면 이런 충돌이 없습니다."
     )
 
 
@@ -262,8 +264,8 @@ class PreferredAttendanceConflictCost(Constraint):
     )
     description_ko = (
         "겹치는 두 회의에 모두 선호로 참석하는 사람에 대해 겹치는 그레인 수와 공통 선호 참석자 수의 곱을 "
-        "회의 쌍마다 더하며, 미디엄 수준에서 매깁니다. 한 사람의 1그레인이 비용 1이며, 0이면 이런 충돌이 "
-        "없습니다."
+        "회의 쌍마다 더하며, 미디엄 수준에서 매깁니다. 참석자 1명의 1그레인 겹침이 비용 1이며, 0이면 이런 "
+        "충돌이 없습니다."
     )
 
 
@@ -322,9 +324,9 @@ class RoomChangeCost(Constraint):
         "nobody changes rooms between close meetings."
     )
     description_ko = (
-        "참석자를 공유하는 두 회의에서 나중 회의가 앞 회의가 끝난 뒤 2그레인 안에 다른 회의실에서 시작하면 "
-        "공유 참석 수만큼 더합니다. 참석자 한 명의 회의실 이동이 비용 1이며, 0이면 가까운 회의 사이에 "
-        "회의실을 옮기는 사람이 없습니다."
+        "같은 참석자가 있는 두 회의에서 나중 회의가 앞 회의가 끝난 뒤 2그레인 안에 다른 회의실에서 시작하면, "
+        "두 회의에 공통으로 참석하는 인원수만큼 비용을 더합니다. 참석자 한 명의 회의실 이동이 비용 1이며, "
+        "0이면 가까운 회의 사이에 회의실을 옮기는 사람이 없습니다."
     )
 
 

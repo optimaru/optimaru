@@ -71,7 +71,7 @@ class _UnaryPlugin(ConstraintPlugin[MeetingContext]):
                 + len(meeting.preferred_attendees)
                 - context.problem.rooms[room].capacity,
             )
-        if rule == "same_day":
+        if rule == "day_crossing":
             if last not in context.days_at_index:
                 return 0
             return len(context.days_at_index[last]) - context.days_at_index[last].count(
@@ -100,7 +100,7 @@ class _UnaryPlugin(ConstraintPlugin[MeetingContext]):
                 sum(required[p] * preferred[p] for p in set(required) | set(preferred))
                 * meeting.duration_in_grains
             )
-        if rule == "early":
+        if rule == "end_time":
             return last
         return context.larger_room_penalty[room]
 
@@ -129,11 +129,11 @@ class RoomCapacityCost(domain.RoomCapacityCost, _UnaryPlugin):
 
 
 class DayCrossingCost(domain.DayCrossingCost, _UnaryPlugin):
-    rule = "same_day"
+    rule = "day_crossing"
 
 
 class MeetingEndTimeCost(domain.MeetingEndTimeCost, _UnaryPlugin):
-    rule = "early"
+    rule = "end_time"
 
 
 class LargerRoomCapacityCost(domain.LargerRoomCapacityCost, _UnaryPlugin):
@@ -179,7 +179,7 @@ class _PairPlugin(ConstraintPlugin[MeetingContext]):
                         end_b = start_b + b.duration_in_grains
                         overlap = max(0, min(end_a, end_b) - max(start_a, start_b))
                         consecutive = int(end_a == start_b or end_b == start_a)
-                        stability = 0
+                        room_change = 0
                         if attendance and room_a != room_b:
                             ta = (
                                 context.problem.time_grains[grain_a].day_of_year,
@@ -194,17 +194,17 @@ class _PairPlugin(ConstraintPlugin[MeetingContext]):
                                 ].starting_minute_of_day,
                             )
                             if ta < tb and start_b - end_a <= 2:
-                                stability = attendance
+                                room_change = attendance
                             elif tb < ta and start_a - end_b <= 2:
-                                stability = attendance
+                                room_change = attendance
                         amounts = {
                             "room": overlap * int(room_a == room_b),
                             "required": overlap * required,
                             "preferred": overlap * preferred,
                             "mixed": overlap * mixed,
                             "overlap": overlap,
-                            "break": consecutive,
-                            "stability": stability,
+                            "consecutive": consecutive,
+                            "room_change": room_change,
                         }
                         amount = amounts[rule]
                         if not amount:
@@ -255,7 +255,7 @@ class PreferredAttendanceConflictCost(
 
 
 class ConsecutiveMeetingsCost(domain.ConsecutiveMeetingsCost, _PairPlugin):
-    rule = "break"
+    rule = "consecutive"
 
 
 class MeetingOverlapCost(domain.MeetingOverlapCost, _PairPlugin):
@@ -263,7 +263,7 @@ class MeetingOverlapCost(domain.MeetingOverlapCost, _PairPlugin):
 
 
 class RoomChangeCost(domain.RoomChangeCost, _PairPlugin):
-    rule = "stability"
+    rule = "room_change"
 
 
 # Plugin order = the engine's list_constraints() order (the per-meeting

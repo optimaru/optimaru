@@ -164,44 +164,69 @@ def test_default_score_folds_medium_like_the_engine() -> None:
         > 0
     )
 
-    solved = solve(problem, time_limit_seconds=2, _fixed_grain_rooms=fixed)
+    proxy = {}
+    solved = solve(
+        problem, time_limit_seconds=2, _fixed_grain_rooms=fixed, _proxy_score=proxy
+    )
 
     assert (solved.score_hard, solved.score_soft) == (expected.hard, expected.soft)
+    # The CP-SAT model itself puts the medium terms on its medium level.
+    assert proxy["medium"] < 0
+    assert proxy["hard"] == expected.hard
+    assert proxy["medium"] * domain.MEDIUM_SCALE + proxy["soft"] == pytest.approx(
+        expected.soft
+    )
 
 
 @pytest.mark.parametrize(
-    "selection",
+    ("selection", "expect_medium_empty"),
     [
-        [
-            spec
-            if spec.name
-            not in (
-                "required_and_preferred_attendance_conflict_cost",
-                "preferred_attendance_conflict_cost",
-            )
-            else type(spec)(hard=False)
-            for spec in get_constraints()
-        ],
-        [
-            PreferredAttendanceConflictCost(hard=True),
-            RequiredAndPreferredAttendanceConflictCost(weight=3),
-        ],
+        (
+            [
+                spec
+                if spec.name
+                not in (
+                    "required_and_preferred_attendance_conflict_cost",
+                    "preferred_attendance_conflict_cost",
+                )
+                else type(spec)(hard=False)
+                for spec in get_constraints()
+            ],
+            True,
+        ),
+        (
+            [
+                PreferredAttendanceConflictCost(hard=True),
+                RequiredAndPreferredAttendanceConflictCost(weight=3),
+            ],
+            False,
+        ),
     ],
     ids=["medium-demoted-to-soft", "medium-promoted-and-reweighted"],
 )
-def test_medium_knobs_score_like_the_engine(selection) -> None:
+def test_medium_knobs_score_like_the_engine(selection, expect_medium_empty) -> None:
     """hard=False demotes a medium constraint to soft and hard=True promotes it to
     hard on both solvers (one unit per raw person-grain); an explicit weight stays
     in medium units."""
     problem = _parity_problem()
     fixed = [4, 4, 13]
+    proxy = {}
 
     solved = solve(
         problem,
         time_limit_seconds=2,
         constraints=selection,
         _fixed_grain_rooms=fixed,
+        _proxy_score=proxy,
     )
 
     engine = score(domain.constraint_costs(solved.to_core()), selection)
     assert (solved.score_hard, solved.score_soft) == pytest.approx(tuple(engine))
+    # The CP-SAT model itself puts each demoted/promoted medium term on the
+    # level the engine charges it to, not only the re-derived returned score.
+    assert proxy["hard"] == engine.hard
+    assert proxy["medium"] * domain.MEDIUM_SCALE + proxy["soft"] == pytest.approx(
+        engine.soft
+    )
+    if expect_medium_empty:
+        assert proxy["medium"] == 0
