@@ -2,7 +2,7 @@
 
 Reads the instance JSON dumped by the C++ `st_quality_bench` and looks for a
 lesson → (timeslot, room) assignment. The score scale is the quickstart's six
-constraints, shared by all three solvers:
+constraints, shared by both solvers:
 
 - the 3 hard ones (roomConflict/teacherConflict/studentGroupConflict) are CP-SAT
   hard constraints → any solution found has hard == 0.
@@ -14,7 +14,7 @@ constraints, shared by all three solvers:
     constraints, so an adjacent pair is an AND.
   * studentGroupSubjectVariety: pairs of adjacent periods a (class, subject) occupies.
 
-The output uses the same scale as C++/Java,
+The output uses the same scale as C++ (`st_quality_bench`),
 "QBENCH_CPSAT_FINAL score=Xhard/Ysoft" (+ the best trajectory / first_feasible),
 and the solution is dumped to <instance name>.solution_cpsat.json for
 evaluate.py's rescoring.
@@ -43,7 +43,7 @@ def _next_slot_table(timeslots: list[dict]) -> list[int]:
 
 
 class _Progress(cp_model.CpSolverSolutionCallback):
-    """Prints the best trajectory and the first-feasible time in the same format as C++/Java."""
+    """Prints the best trajectory and the first-feasible time in the same format as C++ (`st_quality_bench`)."""
 
     def __init__(self, t0: float, offset: int) -> None:
         super().__init__()

@@ -13,9 +13,15 @@ gen_canonical.py are solved by CP-SAT (teacher_scheduling.solve) and by the C++
 canonical engine (st_timetabling.solve; "pending" if the import fails), and
 both results are rescored with cpsat's validate.py (same time limit, same problem).
 
+Track 3 (--track3, partial timetabling): a track-2 instance loses one weekday
+(--drop-day) so it cannot be filled, and both backends solve with H1 relaxed
+(CP-SAT solve_partial, the engine with weekly_period_counts hard=false); both
+are rescored with cpsat's validate.py, with H1 shortfall counted separately.
+
 Example:
     uv run run_bench.py --sizes S,M --seconds 10
     uv run run_bench.py --track2 --sizes S,M,L --seconds 10
+    uv run run_bench.py --track3 --sizes S,M --seconds 10
 """
 
 from __future__ import annotations
