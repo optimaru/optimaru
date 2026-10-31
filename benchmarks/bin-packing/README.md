@@ -27,13 +27,15 @@ weights.
 
 Hexaly example instances. Lower is better; the best value is bold.
 
-| Instance | Items | Capacity lower bound | engine | CP-SAT |
+| Instance | Items | Capacity lower bound | engine (0.1.x, pure Python) | CP-SAT |
 | --- | --- | --- | --- | --- |
 | t60_00 | 60 | 20 | **21** | **21** |
 | u120_04 | 120 | 50 | **50** | **50** |
 | u250_03 | 250 | 100 | 101 | not run (size cap) |
 
-Bins used. CP-SAT runs only up to the exact-model size cap (`--exact-max-size`). The engine column is the
-0.1.x pure-Python simulated annealing; the 0.2.0 C++ port has not been re-measured on these instances yet
-(on generated instances of the same families it matches or beats the 0.1.x annealing). Measured 2026-10-29 on one Apple Silicon Mac (16 cores), 30 s per solver and instance. The engine runs single-threaded; CP-SAT uses 8 workers and its time includes model construction. Single runs — a snapshot, not a statistical study.
+Bins used. CP-SAT runs only up to the exact-model size cap (`--exact-max-size`). **The engine column
+holds 0.1.x numbers** (the pure-Python simulated annealing): the 0.2.0 C++ engine has not been
+re-measured on these instances yet, because the Hexaly download was unreachable from the machine
+that did the port (on generated instances of the same families it matches or beats the 0.1.x
+annealing). Measured 2026-10-29 on one Apple Silicon Mac (16 cores), 30 s per solver and instance. The engine runs single-threaded; CP-SAT uses 8 workers and its time includes model construction. Single runs — a snapshot, not a statistical study.
 <!-- results:end -->

@@ -68,10 +68,12 @@ reports exactly this table from the C++ components (`kDefaultLevel` /
   colour per present (bin, colour), conflicts per pair); `used_bins_cost` stays `[count]`.
   Hard costs are rounded per bin, as the engine does (differs from 0.1.x only for
   fractional hard weights).
-- **Stricter core checks.** Scoring or solving a core problem refuses a repeated item
-  id, a weight <= 0, a conflict naming an unknown item or the same item twice, and a bin
-  outside -1..n-1 (`ValueError`; the pydantic model already refused all but the last).
-  A plain solve still ignores the input bins.
+- **Stricter core checks.** Scoring or solving a core problem refuses a `bin_capacity`
+  <= 0, a repeated item id, a weight <= 0, a conflict naming an unknown item or the same
+  item twice, and a bin outside -1..n-1 (`ValueError`; the pydantic model already
+  refused all but the last). 0.1.x checked the first three only in `solve` and the
+  other two nowhere; now `calculate_score` and `constraint_costs` check all five. A
+  plain solve still ignores the input bins.
 - **Construction.** The same best fit decreasing as 0.1.x (`_first_fit`), except that
   an item that fits nowhere when bin n would be next goes to the lowest empty bin (0.1.x
   returned bin n, which `with_initial_solution` then refused). Parallel worker i > 0
@@ -82,7 +84,8 @@ reports exactly this table from the C++ components (`kDefaultLevel` /
   (`parallel_solver_count` is ignored there, as in facility-location).
 - `problem.items[i]` returns a copy (as in every C++ package): write bins with
   `problem.set_assignment([...])`; `problem.assignment()` reads them. `Score` keeps
-  `==`, ordering and hashing; its repr is `<Score 0hard/-2soft>`.
+  `==`, ordering and hashing; its repr is `<Score 0hard/-2soft>`. `problem.score` is
+  read-only (set by `calculate_score` / `solve`); `Item` objects compare by identity.
 
 ## cpp/
 
@@ -108,11 +111,15 @@ ctest --test-dir build/bin-packing --output-on-failure   # bp_test + bp_plugin_t
 ```
 
 `bp_test`: per-constraint hand checks (a positive and a zero case each, monolithic and
-incremental), 5000 random moves incremental == full, the construction against 0.1.x,
-zero-budget / warm-start behaviour, FULL_ASSERT solve, samples, parallel starts,
-compaction, fact checks. `bp_plugin_test`: plugin assembly == monolith, plugin
-incremental == full, partial assemblies, overrides (including the per-bin exponent),
-`constraintTotals()`, FULL_ASSERT plugin solve, raw costs by hand, the catalog.
+incremental), 5000 random moves incremental == full (the score and each constraint's
+raw total after every move, each constraint non-zero during the walk; flat and
+hash-map colour counts), the construction against 0.1.x, zero-budget / warm-start
+behaviour, FULL_ASSERT solve, samples, parallel starts, compaction, fact checks.
+`bp_plugin_test`: plugin assembly == monolith (score and per-constraint totals),
+plugin incremental == full (every unit cost after every move, for the defaults and
+with exponents != 1 and fractional hard weights), partial assemblies, overrides
+(including the per-bin exponent), `constraintTotals()`, FULL_ASSERT plugin solve,
+raw costs by hand, the catalog.
 
 ## Usage
 

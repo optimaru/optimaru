@@ -36,8 +36,8 @@ namespace bp
 // constants). It is also the domain's constraint catalog: constraint_info()
 // reads the defaults off it, so they live in the component constructors and
 // nowhere else. (Before 0.2.0 the problem carried the four default weights
-// as capacityWeight / colorWeight / conflictWeight / usedBinWeight; removed,
-// decision 5.)
+// as capacityWeight / colorWeight / conflictWeight / usedBinWeight; 0.2.0
+// removed them, so a weight comes only from the assembly.)
 //
 // `defaultConstraints()` hands the whole set back as a ConstraintAssembly, so
 // a caller states only what differs from it:

@@ -6,7 +6,10 @@
 //       components' kDefaultWeight (all 1)
 //   (b) incremental score == full recompute across a long random walk of
 //       change / swap / unassign moves driven through the engine's
-//       ScoreDirector protocol, with colours and (duplicated) conflicts
+//       ScoreDirector protocol, with colours and (duplicated) conflicts:
+//       the score and each constraint's raw total after every move, every
+//       constraint non-zero during the walk; once with the flat colour
+//       counts and once with the hash-map fallback
 //   (c) the construction reproduces 0.1.5's best fit (plain, partial seed,
 //       gapped seed) and stays inside the value range where 0.1.5 did not
 //   (d) zero budget: a complete gapped seed comes back unchanged; a plain
@@ -21,6 +24,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <functional>
@@ -193,18 +197,33 @@ BinPackingProblem randomInstance(int n, std::uint64_t seed, int colors, int conf
     return p;
 }
 
-void verifyIncremental()
+// The four raw totals as a list, in catalog order.
+std::vector<std::int64_t> asList(const RawCosts &raw)
 {
-    std::printf("== (b) incremental scoring == full recompute ==\n");
+    return {raw.binCapacity, raw.colorConflict, raw.itemConflict, raw.usedBins};
+}
+
+const char *const kConstraintNames[] = {"binCapacityCost", "colorConflictCost", "itemConflictCost",
+                                        "usedBinsCost"};
+
+// One walk: after every move the incremental score AND each constraint's
+// running raw total must equal the full recompute's, and every constraint
+// must be non-zero at some point (so none of the four is compared at 0 only).
+void walkIncremental(std::size_t maxFlatColorCells, const std::string &label)
+{
     BinPackingProblem p = randomInstance(30, 7, 4, 25);
-    BinPackingIncrementalScoreCalculator calc;
+    BinPackingIncrementalScoreCalculator calc(maxFlatColorCells);
     optimaru::ScoreDirector<BinPackingProblem> director(p, calc);
     BinPackingProblem shadow = p;
+    check(calc.flatColorCounts() == (maxFlatColorCells != 0),
+          label + ": the colour counts use the intended storage");
 
     std::mt19937_64 rng(123);
     const int n = p.itemCount();
     std::uniform_real_distribution<double> unit(0.0, 1.0);
     int mismatches = 0;
+    int costMismatches = 0;
+    int nonZero[4] = {0, 0, 0, 0};
     const int steps = 5000;
     for (int step = 0; step < steps; ++step)
     {
@@ -250,8 +269,37 @@ void verifyIncremental()
                         incremental.toString().c_str(),
                         full.toString().c_str());
         }
+        const std::vector<std::int64_t> expected = asList(ScoreCalculator::rawCosts(shadow));
+        const std::vector<std::int64_t> running = asList(calc.totals());
+        for (int c = 0; c < 4; ++c)
+        {
+            if (running[c] != expected[c] && ++costMismatches <= 3)
+            {
+                std::printf("  COST MISMATCH @step %d: %s incremental=%lld full=%lld\n",
+                            step,
+                            kConstraintNames[c],
+                            static_cast<long long>(running[c]),
+                            static_cast<long long>(expected[c]));
+            }
+            if (expected[c] != 0)
+                ++nonZero[c];
+        }
     }
-    check(mismatches == 0, std::to_string(steps) + " random moves, incremental == full recompute");
+    check(mismatches == 0, label + ": " + std::to_string(steps) + " random moves, incremental == full recompute");
+    check(costMismatches == 0, label + ": every constraint's raw total == the full recompute's after each move");
+    for (int c = 0; c < 4; ++c)
+    {
+        check(nonZero[c] > 0,
+              label + ": " + kConstraintNames[c] + " non-zero at " + std::to_string(nonZero[c]) + " of "
+                  + std::to_string(steps) + " steps");
+    }
+}
+
+void verifyIncremental()
+{
+    std::printf("== (b) incremental scoring == full recompute, per constraint ==\n");
+    walkIncremental(BinPackingIncrementalScoreCalculator::kDefaultMaxFlatColorCells, "flat colour counts");
+    walkIncremental(0, "hash-map colour counts");
     std::printf("\n");
 }
 
@@ -522,6 +570,26 @@ void verifyChecks()
               },
               "bin_capacity must be positive"),
           "solve refuses binCapacity <= 0");
+    check(throwsInvalid(
+              []
+              {
+                  BinPackingProblem p = abcd({0, 0, 1, -1});
+                  p.binCapacity = -3;
+                  ScoreCalculator::calculateScore(p);
+              },
+              "bin_capacity must be positive"),
+          "scoring refuses binCapacity <= 0");
+    check(throwsInvalid(
+              []
+              {
+                  BinPackingProblem p = abcd({0, 0, 1, 1});
+                  ScoreCalculator::prepare(p);
+                  p.binCapacity = 0;  // edited after the lookups were built
+                  BinPackingIncrementalScoreCalculator incremental;
+                  incremental.resetWorkingSolution(p);
+              },
+              "bin_capacity must be positive"),
+          "a capacity edited after prepare() is refused too");
     check(throwsInvalid(
               []
               {

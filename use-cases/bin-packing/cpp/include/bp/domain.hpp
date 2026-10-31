@@ -59,9 +59,9 @@ struct BinPackingProblem
     // or reversed pair counts once per listing (as in 0.1.5).
     std::vector<std::pair<std::string, std::string>> conflicts;
 
-    // No constraint weights here (removed in 0.2.0, decision 5): the
-    // defaults are the components' kDefaultWeight (every one is 1), and a
-    // caller re-weights through a constraint assembly instead.
+    // No constraint weights here (removed in 0.2.0): the defaults are the
+    // components' kDefaultWeight (every one is 1), and a caller re-weights
+    // through a constraint assembly instead.
 
     // true = start the search from items[*].bin (a seed, completed by the
     // construction where an item is still -1); false = a plain solve

@@ -2,14 +2,20 @@
 // non-zero exit on any failure.
 //   (a) the default assembly on the engine's DecomposedScoreCalculator
 //       reproduces the monolithic score bit-for-bit on 500 random
-//       assignments (unassigned items, colours, duplicated conflicts)
-//   (b) incremental score == full recompute across 5000 random moves driven
-//       through the engine's ScoreDirector protocol (plugin path)
+//       assignments (unassigned items, colours, duplicated conflicts), and
+//       each constraint's unit costs sum to the monolith's raw total
+//   (b) incremental == full recompute across 5000 random moves driven
+//       through the engine's ScoreDirector protocol (plugin path), for the
+//       default assembly and for one with exponents != 1 on the delta-path
+//       components and fractional hard weights: after every move the score
+//       and every unit cost equal a fresh assembly's, and every constraint
+//       is non-zero during the walk
 //   (c) partial assemblies: removing one component removes exactly that term
 //   (d) weight / level / exponent overrides against hand calculation,
 //       including the documented per-bin exponent granularity
 //   (e) constraintTotals() explains exactly the reported score
-//   (f) solve(problem, calculator) under FULL_ASSERT
+//   (f) solve(problem, calculator) under FULL_ASSERT, every component shaped
+//       or re-weighted
 //   (g) the defaultConstraints() builder: named edits == by-hand assembly
 //   (h) each component's raw cost, hand-calculated: a positive and a zero
 //       case per constraint (raw 0 = no violation), and the costs shapes
@@ -19,6 +25,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <functional>
@@ -103,6 +110,58 @@ Score scoreWith(DecomposedCalculator &calculator, BinPackingProblem &p)
     return calculator.calculateScore();
 }
 
+const char *const kConstraintNames[] = {"binCapacityCost", "colorConflictCost", "itemConflictCost",
+                                        "usedBinsCost"};
+
+// The raw unit costs of every component, in assembly (catalog) order.
+std::vector<std::vector<double>> unitCosts(const DecomposedCalculator &calculator)
+{
+    std::vector<std::vector<double>> costs;
+    for (const auto &entry : calculator.constraintCosts())
+        costs.push_back(entry.unitCosts);
+    return costs;
+}
+
+// Each component's unit costs summed: the monolith's RawCosts in list form.
+std::vector<double> sums(const std::vector<std::vector<double>> &costs)
+{
+    std::vector<double> out;
+    for (const std::vector<double> &units : costs)
+    {
+        double total = 0.0;
+        for (double cost : units)
+            total += cost;
+        out.push_back(total);
+    }
+    return out;
+}
+
+std::vector<double> asList(const RawCosts &raw)
+{
+    return {static_cast<double>(raw.binCapacity),
+            static_cast<double>(raw.colorConflict),
+            static_cast<double>(raw.itemConflict),
+            static_cast<double>(raw.usedBins)};
+}
+
+// The defaults, or the defaults shaped so that the two delta-path components
+// (colour, conflicts) run at exponent != 1 and two hard weights are
+// fractional (rounded per bin).
+void assemble(DecomposedCalculator &calculator, bool shaped)
+{
+    if (!shaped)
+    {
+        addDefaultConstraints(calculator);
+        return;
+    }
+    defaultConstraints()
+        .weight("binCapacityCost", 0.5)
+        .weight("colorConflictCost", 1.5)
+        .exponent("colorConflictCost", 2.0)
+        .exponent("itemConflictCost", 3.0)
+        .into(calculator);
+}
+
 // -------------------------------------------------------------------------
 // (a) default assembly == monolith
 // -------------------------------------------------------------------------
@@ -112,6 +171,7 @@ void verifyAssemblyParity()
     BinPackingProblem p = randomInstance(24, 3, 4, 20);
     std::mt19937_64 rng(9);
     int mismatches = 0;
+    int costMismatches = 0;
     for (int trial = 0; trial < 500; ++trial)
     {
         randomize(p, rng, 1 + static_cast<int>(rng() % 8), trial % 5 == 0 ? 0.2 : 0.0);
@@ -126,28 +186,33 @@ void verifyAssemblyParity()
                         plugin.toString().c_str(),
                         monolith.toString().c_str());
         }
+        if (sums(unitCosts(calculator)) != asList(ScoreCalculator::rawCosts(p)) && ++costMismatches <= 3)
+            std::printf("  RAW COST MISMATCH trial %d\n", trial);
     }
     check(mismatches == 0, "500 random assignments, plugin == monolith");
+    check(costMismatches == 0, "500 random assignments, each constraint's unit costs sum to the monolith's raw total");
     std::printf("\n");
 }
 
 // -------------------------------------------------------------------------
 // (b) plugin incremental == full recompute
 // -------------------------------------------------------------------------
-void verifyIncremental()
+void walkIncremental(bool shaped)
 {
-    std::printf("== (b) plugin incremental == full recompute ==\n");
+    const std::string label = shaped ? "shaped assembly" : "default assembly";
     BinPackingProblem p = randomInstance(30, 17, 4, 25);
     std::mt19937_64 rng(31);
     randomize(p, rng, 6, 0.0);
     ScoreCalculator::prepare(p);
     DecomposedCalculator calculator;
-    addDefaultConstraints(calculator);
+    assemble(calculator, shaped);
     optimaru::ScoreDirector<BinPackingProblem> director(p, calculator);
     BinPackingProblem shadow = p;
     const int n = p.itemCount();
     std::uniform_real_distribution<double> unit(0.0, 1.0);
     int mismatches = 0;
+    int costMismatches = 0;
+    int nonZero[4] = {0, 0, 0, 0};
     const int steps = 5000;
     for (int step = 0; step < steps; ++step)
     {
@@ -181,17 +246,48 @@ void verifyIncremental()
             director.endVariableChanges();
         }
         shadow.setAssignment(p.assignment());
-        const Score full = ScoreCalculator::calculateScore(shadow);
+        DecomposedCalculator fresh;
+        assemble(fresh, shaped);
+        const Score full = scoreWith(fresh, shadow);
         const Score incremental = director.calculateScore();
-        if (!sameScore(full, incremental) && ++mismatches <= 3)
+        // The default assembly must also match the monolith's full recompute.
+        const bool monolithAgrees = shaped || sameScore(full, ScoreCalculator::calculateScore(shadow));
+        if ((!sameScore(full, incremental) || !monolithAgrees) && ++mismatches <= 3)
         {
             std::printf("  MISMATCH @step %d: incremental=%s full=%s\n",
                         step,
                         incremental.toString().c_str(),
                         full.toString().c_str());
         }
+        const std::vector<std::vector<double>> costs = unitCosts(calculator);
+        const std::vector<std::vector<double>> expected = unitCosts(fresh);
+        bool costsAgree = costs == expected;
+        if (!shaped)
+            costsAgree = costsAgree && sums(costs) == asList(ScoreCalculator::rawCosts(shadow));
+        if (!costsAgree && ++costMismatches <= 3)
+            std::printf("  UNIT COST MISMATCH @step %d\n", step);
+        for (std::size_t c = 0; c < expected.size() && c < 4; ++c)
+        {
+            if (std::any_of(expected[c].begin(), expected[c].end(), [](double cost) { return cost != 0.0; }))
+                ++nonZero[c];
+        }
     }
-    check(mismatches == 0, std::to_string(steps) + " random moves, plugin incremental == full recompute");
+    check(mismatches == 0,
+          label + ": " + std::to_string(steps) + " random moves, plugin incremental == full recompute");
+    check(costMismatches == 0, label + ": every unit cost == a fresh assembly's after each move");
+    for (int c = 0; c < 4; ++c)
+    {
+        check(nonZero[c] > 0,
+              label + ": " + kConstraintNames[c] + " non-zero at " + std::to_string(nonZero[c]) + " of "
+                  + std::to_string(steps) + " steps");
+    }
+}
+
+void verifyIncremental()
+{
+    std::printf("== (b) plugin incremental == full recompute, per unit ==\n");
+    walkIncremental(false);
+    walkIncremental(true);
     std::printf("\n");
 }
 
@@ -341,8 +437,18 @@ void verifyFullAssertSolve()
     std::printf("== (f) FULL_ASSERT plugin solve ==\n");
     BinPackingProblem p = randomInstance(18, 23, 3, 8);
     ScoreCalculator::prepare(p);
+    // Every component off its defaults; the delta-path ones (colour,
+    // conflicts) at exponent != 1.
+    auto shaped = []
+    {
+        return defaultConstraints()
+            .weight("usedBinsCost", 2)
+            .exponent("binCapacityCost", 2.0)
+            .exponent("colorConflictCost", 2.0)
+            .exponent("itemConflictCost", 3.0);
+    };
     DecomposedCalculator calculator;
-    defaultConstraints().weight("usedBinsCost", 2).exponent("binCapacityCost", 2.0).into(calculator);
+    shaped().into(calculator);
     Solver::Config config;
     config.spentLimit = std::chrono::seconds(2);
     config.randomSeed = 3;
@@ -364,7 +470,7 @@ void verifyFullAssertSolve()
     if (!corrupted)
     {
         DecomposedCalculator fresh;
-        defaultConstraints().weight("usedBinsCost", 2).exponent("binCapacityCost", 2.0).into(fresh);
+        shaped().into(fresh);
         check(sameScore(p.score, scoreWith(fresh, p)), "reported score == a fresh assembly on the result");
         check(std::all_of(p.items.begin(), p.items.end(), [](const Item &item) { return item.bin >= 0; }),
               "every item assigned");

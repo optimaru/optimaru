@@ -17,17 +17,14 @@ namespace
 
 // The same constants the components and ScoreCalculator read (integral; see
 // score_calculator.cpp).
-constexpr auto kCapacityWeight
+constexpr auto kBinCapacityWeight
     = static_cast<std::int64_t>(BinCapacityCost::kDefaultWeight);
-constexpr auto kColorWeight
+constexpr auto kColorConflictWeight
     = static_cast<std::int64_t>(ColorConflictCost::kDefaultWeight);
-constexpr auto kConflictWeight
+constexpr auto kItemConflictWeight
     = static_cast<std::int64_t>(ItemConflictCost::kDefaultWeight);
-constexpr auto kUsedBinWeight
+constexpr auto kUsedBinsWeight
     = static_cast<std::int64_t>(UsedBinsCost::kDefaultWeight);
-
-// Above this many (bin, colour class) cells the counts live in a hash map.
-constexpr std::size_t kMaxFlatColorCells = std::size_t{1} << 22;
 
 }  // namespace
 
@@ -42,7 +39,7 @@ void BinPackingIncrementalScoreCalculator::resetWorkingSolution(
     count_.assign(n, 0);
     const std::size_t cells
         = n * static_cast<std::size_t>(workingSolution.colorClassCount);
-    flatColors_ = cells <= kMaxFlatColorCells;
+    flatColors_ = cells <= maxFlatColorCells_;
     colorCountFlat_.assign(flatColors_ ? cells : 0, 0);
     colorCountMap_.clear();
     overCapacity_ = 0;
@@ -139,10 +136,10 @@ void BinPackingIncrementalScoreCalculator::afterVariableChanged(int itemIndex)
 Score BinPackingIncrementalScoreCalculator::calculateScore()
 {
     Score score;
-    score.hard = -(kCapacityWeight * overCapacity_ + kColorWeight * colorExcess_
-                   + kConflictWeight * conflicts_);
+    score.hard = -(kBinCapacityWeight * overCapacity_ + kColorConflictWeight * colorExcess_
+                   + kItemConflictWeight * conflicts_);
     // Negate in integer space so a zero penalty prints as 0, not -0.
-    score.soft = static_cast<double>(-(kUsedBinWeight * usedBins_));
+    score.soft = static_cast<double>(-(kUsedBinsWeight * usedBins_));
     return score;
 }
 

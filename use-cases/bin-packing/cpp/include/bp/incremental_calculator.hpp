@@ -1,11 +1,13 @@
 #ifndef BP_INCREMENTAL_CALCULATOR_HPP
 #define BP_INCREMENTAL_CALCULATOR_HPP
 
+#include <cstddef>
 #include <cstdint>
 #include <unordered_map>
 #include <vector>
 
 #include "bp/domain.hpp"
+#include "bp/score_calculator.hpp"
 #include "optimaru/api/score/calculator/incremental_score_calculator.hpp"
 
 namespace bp
@@ -37,12 +39,40 @@ class BinPackingIncrementalScoreCalculator final
     : public optimaru::IncrementalScoreCalculator<BinPackingProblem>
 {
 public:
+    // Above this many (bin, colour class) cells the colour counts live in a
+    // hash map instead of a flat array.
+    static constexpr std::size_t kDefaultMaxFlatColorCells
+        = std::size_t{1} << 22;
+
+    BinPackingIncrementalScoreCalculator() = default;
+    // A different flat-array limit (0 = always the hash map, so the tests can
+    // cover that path on small instances).
+    explicit BinPackingIncrementalScoreCalculator(std::size_t maxFlatColorCells)
+        : maxFlatColorCells_(maxFlatColorCells)
+    {
+    }
+
     void resetWorkingSolution(BinPackingProblem &workingSolution) override;
     void beforeVariableChanged(int itemIndex) override;
     void afterVariableChanged(int itemIndex) override;
     Score calculateScore() override;
 
+    // The running raw totals calculateScore weighs; equal to
+    // ScoreCalculator::rawCosts on the current assignment.
+    RawCosts totals() const
+    {
+        RawCosts raw;
+        raw.binCapacity = overCapacity_;
+        raw.colorConflict = colorExcess_;
+        raw.itemConflict = conflicts_;
+        raw.usedBins = usedBins_;
+        return raw;
+    }
+    // Whether the last reset chose the flat colour-count array.
+    bool flatColorCounts() const { return flatColors_; }
+
 private:
+    std::size_t maxFlatColorCells_ = kDefaultMaxFlatColorCells;
     BinPackingProblem *problem_ = nullptr;
     std::vector<int> assign_;  // bin per item (-1 == unassigned)
 

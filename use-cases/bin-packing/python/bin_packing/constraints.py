@@ -69,7 +69,7 @@ class BinCapacityCost(Constraint):
     )
     description_ko = (
         "상자마다 담긴 무게 가운데 용량을 넘는 양을 모두 더합니다. "
-        "초과 무게 1단위가 비용 1이며, 0이면 모든 상자가 용량 안에 있습니다."
+        "초과 무게 1단위가 비용 1이며, 0이면 어느 상자도 용량을 넘지 않습니다."
     )
 
 
@@ -81,16 +81,16 @@ class ColorConflictCost(Constraint):
 
     name = "color_conflict_cost"
     label_en = "Color conflict"
-    label_ko = "같은 색 충돌"
+    label_ko = "색상 충돌"
     description_en = (
         "Items packed into a bin that already holds an item of the same colour: per bin, every item "
         "beyond the first of its colour counts 1. Items without a colour never count; "
         "0 means no bin holds two items of one colour."
     )
     description_ko = (
-        "같은 색 물건이 이미 들어 있는 상자에 또 담긴 물건의 수입니다. 상자마다 색별로 첫 물건을 뺀 "
-        "나머지가 하나에 1씩입니다. 색이 없는 물건은 세지 않으며, 0이면 같은 색 물건 두 개가 한 상자에 "
-        "들어간 곳이 없습니다."
+        "같은 색 물건이 이미 담긴 상자에 더 담긴 물건의 수입니다. 상자마다 색별로 첫 번째 물건을 뺀 "
+        "나머지 물건 하나당 1입니다. 색이 없는 물건은 세지 않으며, 0이면 같은 색 물건 두 개가 "
+        "한 상자에 담긴 경우가 없습니다."
     )
 
 
@@ -102,14 +102,14 @@ class ItemConflictCost(Constraint):
 
     name = "item_conflict_cost"
     label_en = "Item conflicts"
-    label_ko = "함께 담을 수 없는 물건"
+    label_ko = "물건 충돌"
     description_en = (
         "Conflict pairs whose two items share a bin, one per listed pair. "
         "0 means every conflicting pair is packed apart."
     )
     description_ko = (
-        "함께 담으면 안 되는 두 물건이 같은 상자에 들어간 쌍의 수입니다. 목록의 쌍마다 1이며, "
-        "0이면 모든 쌍이 서로 다른 상자에 있습니다."
+        "함께 담으면 안 되는 물건 쌍 가운데 두 물건이 같은 상자에 담긴 쌍의 수입니다. 목록에 적힌 "
+        "쌍 하나당 1이며, 0이면 모든 충돌 쌍이 서로 다른 상자에 담겨 있습니다."
     )
 
 

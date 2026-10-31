@@ -7,6 +7,7 @@ import pytest
 from pydantic import ValidationError
 
 import bin_packing as bp
+from bin_packing.constraints import get_constraints
 from bin_packing.models import BinPackingProblemModel, ConflictModel, ItemModel
 
 WEB_DEMO = Path(__file__).parent / "fixtures" / "web_demo.json"
@@ -61,7 +62,7 @@ def test_from_core_reports_the_solved_outputs():
 
 @pytest.mark.parametrize("field", ["capacity_weight", "used_bin_weight", "color_weight", "conflict_weight"])
 def test_the_removed_weight_fields_are_refused(field):
-    """0.2.0 (decision 5): the canonical problem carries no weights; extra="forbid" refuses the old fields."""
+    """Since 0.2.0 the canonical problem carries no weights; extra="forbid" refuses the old fields."""
     data = BinPackingProblemModel.from_core(rich_model().to_core()).model_dump()
     assert field not in data
     data[field] = 2
@@ -102,6 +103,32 @@ def test_the_core_checks_the_facts_the_model_cannot_see():
         bp.calculate_score(bp.BinPackingProblem(10, [bp.Item("A", 3)], conflicts=[("A", "Z")]))
     with pytest.raises(ValueError, match="bin_capacity must be positive"):
         bp.solve(bp.BinPackingProblem(0, [bp.Item("A", 3)]), time_limit_seconds=0.0)
+
+
+@pytest.mark.parametrize("capacity", [0, -3])
+def test_every_scoring_entry_point_refuses_a_non_positive_capacity(capacity):
+    """Core-only construction: scoring checks bin_capacity too, not only solve().
+
+    A negative capacity used to score -7hard through the monolith and -13hard through
+    the plugin assembly (which also charges the empty bins); both now raise.
+    """
+    problem = bp.BinPackingProblem(capacity, [bp.Item("A", 2, 0), bp.Item("B", 2, 0), bp.Item("C", 1)])
+    with pytest.raises(ValueError, match="bin_capacity must be positive"):
+        bp.calculate_score(problem)
+    with pytest.raises(ValueError, match="bin_capacity must be positive"):
+        bp.calculate_score(problem, get_constraints())
+    with pytest.raises(ValueError, match="bin_capacity must be positive"):
+        bp.constraint_costs(problem)
+
+
+def test_a_capacity_edited_after_scoring_is_refused():
+    problem = bp.BinPackingProblem(10, [bp.Item("A", 8, 0), bp.Item("B", 7, 0)])
+    assert bp.calculate_score(problem) == bp.Score(-5, -1.0)
+    problem.bin_capacity = -1  # the derived lookups are already built
+    with pytest.raises(ValueError, match="bin_capacity must be positive"):
+        bp.calculate_score(problem)
+    with pytest.raises(ValueError, match="bin_capacity must be positive"):
+        bp.constraint_costs(problem)
 
 
 def test_a_bin_beyond_the_items_is_accepted_by_the_model_and_ignored_by_a_plain_solve():

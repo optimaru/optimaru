@@ -21,18 +21,18 @@ namespace
 // The monolithic score is the default assembly, so it reads the same
 // constants the components carry. Integral, so both levels are computed in
 // int64 exactly.
-constexpr auto kCapacityWeight
+constexpr auto kBinCapacityWeight
     = static_cast<std::int64_t>(BinCapacityCost::kDefaultWeight);
-constexpr auto kColorWeight
+constexpr auto kColorConflictWeight
     = static_cast<std::int64_t>(ColorConflictCost::kDefaultWeight);
-constexpr auto kConflictWeight
+constexpr auto kItemConflictWeight
     = static_cast<std::int64_t>(ItemConflictCost::kDefaultWeight);
-constexpr auto kUsedBinWeight
+constexpr auto kUsedBinsWeight
     = static_cast<std::int64_t>(UsedBinsCost::kDefaultWeight);
-static_assert(kCapacityWeight == BinCapacityCost::kDefaultWeight
-                  && kColorWeight == ColorConflictCost::kDefaultWeight
-                  && kConflictWeight == ItemConflictCost::kDefaultWeight
-                  && kUsedBinWeight == UsedBinsCost::kDefaultWeight,
+static_assert(kBinCapacityWeight == BinCapacityCost::kDefaultWeight
+                  && kColorConflictWeight == ColorConflictCost::kDefaultWeight
+                  && kItemConflictWeight == ItemConflictCost::kDefaultWeight
+                  && kUsedBinsWeight == UsedBinsCost::kDefaultWeight,
               "the monolithic calculator assumes integral default weights");
 
 }  // namespace
@@ -53,6 +53,10 @@ void ScoreCalculator::requireBinsInRange(const BinPackingProblem &problem)
 
 void ScoreCalculator::prepare(BinPackingProblem &problem)
 {
+    // binCapacity stays writable after construction (Python: bin_capacity)
+    // and `prepared` does not cover it, so it is checked on every call.
+    if (problem.binCapacity <= 0)
+        throw std::invalid_argument("bin_capacity must be positive");
     requireBinsInRange(problem);
     if (problem.prepared)
         return;
@@ -110,7 +114,7 @@ void ScoreCalculator::prepare(BinPackingProblem &problem)
     problem.prepared = true;
 }
 
-Score ScoreCalculator::calculateScore(BinPackingProblem &problem)
+RawCosts ScoreCalculator::rawCosts(BinPackingProblem &problem)
 {
     prepare(problem);
 
@@ -163,11 +167,23 @@ Score ScoreCalculator::calculateScore(BinPackingProblem &problem)
             ++conflicts;
     }
 
+    RawCosts raw;
+    raw.binCapacity = overCapacity;
+    raw.colorConflict = colorExcess;
+    raw.itemConflict = conflicts;
+    raw.usedBins = usedBins;
+    return raw;
+}
+
+Score ScoreCalculator::calculateScore(BinPackingProblem &problem)
+{
+    const RawCosts raw = rawCosts(problem);
     Score score;
-    score.hard = -(kCapacityWeight * overCapacity + kColorWeight * colorExcess
-                   + kConflictWeight * conflicts);
+    score.hard = -(kBinCapacityWeight * raw.binCapacity
+                   + kColorConflictWeight * raw.colorConflict
+                   + kItemConflictWeight * raw.itemConflict);
     // Negate in integer space so a zero penalty prints as 0, not -0.
-    score.soft = static_cast<double>(-(kUsedBinWeight * usedBins));
+    score.soft = static_cast<double>(-(kUsedBinsWeight * raw.usedBins));
     problem.score = score;
     return score;
 }

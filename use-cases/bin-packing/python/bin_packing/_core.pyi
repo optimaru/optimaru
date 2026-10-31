@@ -71,8 +71,8 @@ class BinPackingProblem:
 def calculate_score(problem: BinPackingProblem, constraints: Iterable[Any] | None = ...) -> Score:
     """Full recompute of the HardSoftScore (also stores problem.score). None scores the
     default set; a list scores exactly those picks (see bin_packing.constraints).
-    ValueError for a repeated id, a weight <= 0, a bad conflict or a bin outside
-    -1..item count - 1."""
+    ValueError for a bin_capacity <= 0, a repeated id, a weight <= 0, a bad conflict
+    or a bin outside -1..item count - 1."""
 
 class SolverConfig:
     def __init__(self) -> None: ...
@@ -142,7 +142,8 @@ def constraint_costs(problem: BinPackingProblem) -> dict[str, dict[str, Any]]:
     "global": bool, "level": "hard" | "medium" | "soft", "reward": bool,
     "level_flippable": bool, "name": str, "label": str}}. The three per-bin
     constraints list one cost per bin 0..item count - 1; used_bins_cost (global)
-    lists the one bin count. bin_packing.constraints.score() turns it into a score."""
+    lists the one bin count. bin_packing.constraints.score() turns it into a score.
+    Raises ValueError for the same facts as calculate_score."""
 
 class ConstraintInfo(NamedTuple):
     """One constraint-catalog row, read off the C++ default assembly."""

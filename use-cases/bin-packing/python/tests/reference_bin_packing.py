@@ -36,7 +36,7 @@ from typing import Any
 #: 0.1.5 catalog order (list_constraints()).
 OLD_NAMES = ("bin_capacity", "color_compatibility", "item_conflicts", "minimize_bins")
 
-#: 0.1.5 catalog name -> 0.2.0 name (rename_table.json).
+#: 0.1.5 catalog name -> 0.2.0 name.
 RENAMED = {
     "bin_capacity": "bin_capacity_cost",
     "color_compatibility": "color_conflict_cost",
