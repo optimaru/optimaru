@@ -198,3 +198,24 @@ def test_fab_resource_pin_and_cycle_constraints_match_manual_values():
     costs = fab_costs(problem)
     assert _raw(costs, "auxiliary_resource_unavailability_cost") == 3
     assert _raw(costs, "pinned_assignments_cost") == 1
+
+
+def test_a_raising_on_new_best_stops_every_parallel_worker():
+    """Four workers and a 30 s budget: the callback's exception (worker 0) stops the other
+    workers too, so it reaches the caller at once instead of after their whole budget."""
+    import time
+
+    import pytest
+
+    def boom(_step, _score):
+        raise RuntimeError("boom")
+
+    started = time.monotonic()
+    with pytest.raises(RuntimeError, match="boom"):
+        solve_fab(
+            _fab_problem(with_assignments=False),
+            time_limit_seconds=30.0,
+            parallel_solver_count=4,
+            on_new_best=boom,
+        )
+    assert time.monotonic() - started < 10.0

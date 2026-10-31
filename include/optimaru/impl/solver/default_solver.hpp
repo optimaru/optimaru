@@ -127,8 +127,11 @@ public:
         return inner.solve(working, bridge);
     }
 
-    // Internal: lets a wrapping solver (the CHAINED facade) share its
-    // cooperative-stop flag with the inner solver.
+    // Shares a cooperative-stop flag with this solver: setting it has the
+    // effect of terminateEarly(), and terminateEarly() sets it. The CHAINED
+    // facade hands its flag to its inner solver this way, and a domain's own
+    // parallel worker pool gives every worker's solver one flag, which the
+    // first worker that fails raises so the others stop at their next step.
     void adoptTerminateEarlyFlag(std::shared_ptr<std::atomic<bool>> flag) {
         terminateEarly_ = std::move(flag);
     }

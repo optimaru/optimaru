@@ -333,6 +333,8 @@ void runEngine(
     lns.asMoveMaxRuin = config.ruinRecreateAsMoveMaxRuin;
 
     optimaru::Solver<FacilityLocationProblem> engine(std::move(engineConfig));
+    if (config.stopFlag)
+        engine.adoptTerminateEarlyFlag(config.stopFlag);
     if (preference)
     {
         engine.addMoveOperator(std::make_unique<CloseFacilityMove>(
@@ -369,17 +371,21 @@ void Solver::solve(FacilityLocationProblem &problem)
     {
         std::vector<FacilityLocationProblem> candidates(workerCount, problem);
         std::vector<std::exception_ptr> failures(workerCount);
+        // Raised by the first worker that fails: every worker's engine checks
+        // it once a step, so the others stop instead of using up their budget.
+        auto stop = std::make_shared<std::atomic<bool>>(false);
         std::vector<std::thread> workers;
         workers.reserve(workerCount);
         for (int i = 0; i < workerCount; ++i)
         {
             workers.emplace_back(
-                [this, i, &candidates, &failures]
+                [this, i, &candidates, &failures, &stop]
                 {
                     try
                     {
                         Config workerConfig = config_;
                         workerConfig.parallelSolverCount = 1;
+                        workerConfig.stopFlag = stop;
                         workerConfig.randomSeed
                             += static_cast<std::uint64_t>(i);
                         if (i != 0)
@@ -390,6 +396,7 @@ void Solver::solve(FacilityLocationProblem &problem)
                     catch (...)
                     {
                         failures[i] = std::current_exception();
+                        stop->store(true);
                     }
                 });
         }

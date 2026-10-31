@@ -26,10 +26,16 @@
 // The domain builds its own default assembly and hands it over, so the fact
 // that `defaultConstraints()` takes a problem in one use case, weights in
 // another and nothing in the rest never reaches this header.
+//
+// bindConstraintInfo() also registers the module's translator for the
+// engine's ContributionOverflowError (level.hpp, rule 1), so every package
+// raises it as OverflowError naming the constraint by its Python name, word
+// for word as the Python score() mirror does.
 
 #include <pybind11/pybind11.h>
 
 #include <cmath>
+#include <exception>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -305,6 +311,24 @@ ConstraintAssembly<Solution> applyConstraints(ConstraintAssembly<Solution> assem
     return assembly;
 }
 
+// Rule 1 of "The range of a score" (level.hpp) in Python's words: the
+// constraint's Python name and Python's repr() of the contribution, so a
+// solve and score(constraint_costs(...), picks) refuse the same pick with
+// the same OverflowError text. Module-local: each package's extension
+// translates the exceptions its own copy of the engine throws.
+inline void registerContributionOverflowTranslator() {
+    py::register_local_exception_translator([](std::exception_ptr pending) {
+        try {
+            if (pending) std::rethrow_exception(pending);
+        } catch (const ContributionOverflowError& error) {
+            const std::string shown = py::repr(py::float_(error.value())).cast<std::string>();
+            const std::string text = ContributionOverflowError::message(
+                    pythonName(error.constraint()), shown, error.beyondHardLimit());
+            PyErr_SetString(PyExc_OverflowError, text.c_str());
+        }
+    });
+}
+
 // Binds `<pkg>._core.constraint_info()` and its row type
 // `<pkg>._core.ConstraintInfo`:
 //
@@ -334,6 +358,7 @@ namespace detail {
 
 template <typename Rows>
 void bindInfoRows(py::module_& m, Rows rowsOf) {
+    registerContributionOverflowTranslator();
     py::object namedtuple = py::module_::import("collections").attr("namedtuple");
     py::object rowType = namedtuple(
             "ConstraintInfo",

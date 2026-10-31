@@ -672,3 +672,21 @@ def test_on_new_best_with_two_workers_neither_hangs_nor_aborts():
     cfg.on_new_best = boom
     with pytest.raises(RuntimeError, match="boom"):
         pdp.Solver(cfg).solve(build_plan())
+
+
+def test_a_raising_on_new_best_stops_every_parallel_worker():
+    """Four workers and a 30 s budget: the callback's exception (worker 0) stops the other
+    workers too, so it reaches the caller at once instead of after their whole budget."""
+    import time
+
+    def boom(_step, _score):
+        raise RuntimeError("boom")
+
+    cfg = pdp.SolverConfig()
+    cfg.spent_limit_seconds = 30.0
+    cfg.parallel_solver_count = 4
+    cfg.on_new_best = boom
+    started = time.monotonic()
+    with pytest.raises(RuntimeError, match="boom"):
+        pdp.Solver(cfg).solve(build_plan())
+    assert time.monotonic() - started < 10.0

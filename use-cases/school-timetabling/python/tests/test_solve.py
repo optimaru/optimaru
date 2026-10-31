@@ -1,5 +1,7 @@
 """High-level solve(): canonical (default) / quickstart modes and the config/weights arguments."""
 
+import time
+
 import pytest
 
 import st_timetabling as st
@@ -202,9 +204,10 @@ def _boom(_step, _score):
 
 @pytest.mark.parametrize("mode", ["canonical", "quickstart"])
 def test_a_raising_on_new_best_raises_from_a_multi_start_solve(problem, mode):
-    """Two parallel starts (quickstart: the engine's multi-start): the callback's exception
-    reaches Python instead of aborting the process."""
+    """Four parallel starts (canonical: its own worker pool; quickstart: the engine's
+    multi-start) and a 30 s budget: the callback's exception reaches Python instead of
+    aborting the process, and the other starts stop at once instead of using up the budget."""
+    started = time.monotonic()
     with pytest.raises(RuntimeError, match="boom"):
-        st.solve(
-            problem, mode=mode, time_limit_seconds=5.0, parallel_solver_count=2, on_new_best=_boom
-        )
+        st.solve(problem, mode=mode, time_limit_seconds=30.0, parallel_solver_count=4, on_new_best=_boom)
+    assert time.monotonic() - started < 10.0

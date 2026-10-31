@@ -425,8 +425,32 @@ def test_a_hard_total_beyond_int64_saturates_on_both_paths():
     ids=["hard-beyond-2^62", "soft-not-finite"],
 )
 def test_an_out_of_range_contribution_raises_overflow_error_on_both_paths(pick):
-    """Python (score) and C++ (the solve) refuse the same contribution, naming the constraint."""
-    with pytest.raises(OverflowError, match=pick.name):
+    """Python (score) and C++ (the solve) refuse the same contribution with the same message,
+    naming the constraint by its Python name (the C++ path used to name the registry id)."""
+    with pytest.raises(OverflowError, match=f"^constraint '{pick.name}': ") as in_python:
         score(fl.constraint_costs(_three_overloaded()), [pick])
-    with pytest.raises(OverflowError, match=re.sub(r"_(\w)", lambda m: m.group(1).upper(), pick.name)):
+    with pytest.raises(OverflowError) as in_engine:
         _zero_budget_solve(_three_overloaded(), [pick])
+    assert str(in_engine.value) == str(in_python.value)
+
+
+def test_the_overflow_message_reads_the_same_on_both_paths():
+    hard = [FacilityCapacityCost(weight=1e19)]
+    expected = (
+        "constraint 'facility_capacity_cost': a hard contribution of 3e+19 exceeds the engine's "
+        "limit of 2**62 (about 4.6e18) per unit; lower its weight or exponent"
+    )
+    with pytest.raises(OverflowError) as in_engine:
+        _zero_budget_solve(_three_overloaded(), hard)
+    assert str(in_engine.value) == expected
+    # weight 0 x a cost**exponent beyond a double: nan on both paths, reported as not finite
+    zero = [DistanceFromFacilityCost(weight=0.0, exponent=400)]
+    with pytest.raises(OverflowError) as in_python:
+        score(fl.constraint_costs(_three_overloaded()), zero)
+    with pytest.raises(OverflowError) as in_engine:
+        _zero_budget_solve(_three_overloaded(), zero)
+    expected = (
+        "constraint 'distance_from_facility_cost': its contribution weight * cost^exponent is not "
+        "finite (nan); lower its weight or exponent"
+    )
+    assert str(in_engine.value) == str(in_python.value) == expected

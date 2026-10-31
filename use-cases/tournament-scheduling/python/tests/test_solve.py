@@ -61,3 +61,19 @@ def test_parallel_solver_count_workers():
         ts.solve(core, time_limit_seconds=2.0, random_seed=42, parallel_solver_count=workers)
         assert core.score.is_feasible()
         assert all(t >= 0 for t in core.assignment())
+
+
+def test_a_raising_on_new_best_stops_every_parallel_worker():
+    """Four workers and a 30 s budget: the callback's exception (worker 0) stops the other
+    workers too, so it reaches the caller at once instead of after their whole budget."""
+    import time
+
+    import pytest
+
+    def boom(_step, _score):
+        raise RuntimeError("boom")
+
+    started = time.monotonic()
+    with pytest.raises(RuntimeError, match="boom"):
+        ts.solve(demo_data(), time_limit_seconds=30.0, parallel_solver_count=4, on_new_best=boom)
+    assert time.monotonic() - started < 10.0

@@ -32,17 +32,21 @@ void solveInParallel(const Solver::Config &config, VehicleRoutePlan &plan,
     std::vector<VehicleRoutePlan> candidates(static_cast<std::size_t>(workerCount),
                                              plan);
     std::vector<std::exception_ptr> failures(static_cast<std::size_t>(workerCount));
+    // Raised by the first worker that fails: every worker's engine checks
+    // it once a step, so the others stop instead of using up their budget.
+    auto stop = std::make_shared<std::atomic<bool>>(false);
     std::vector<std::thread> workers;
     workers.reserve(static_cast<std::size_t>(workerCount));
     for (int i = 0; i < workerCount; ++i)
     {
         workers.emplace_back(
-            [&config, i, &candidates, &failures]
+            [&config, i, &candidates, &failures, &stop]
             {
                 try
                 {
                     Solver::Config workerConfig = config;
                     workerConfig.parallelSolverCount = 1;
+                    workerConfig.stopFlag = stop;
                     workerConfig.randomSeed += static_cast<std::uint64_t>(i);
                     if (i != 0)
                         workerConfig.onNewBest = nullptr;  // only worker 0 reports
@@ -52,6 +56,7 @@ void solveInParallel(const Solver::Config &config, VehicleRoutePlan &plan,
                 catch (...)
                 {
                     failures[static_cast<std::size_t>(i)] = std::current_exception();
+                    stop->store(true);
                 }
             });
     }
@@ -277,6 +282,8 @@ void Solver::solve(VehicleRoutePlan &plan)
     optimaru::SolverConfig engineConfig = buildEngineConfig(config_, plan);
     VehicleRoutingIncrementalScoreCalculator calculator;
     optimaru::Solver<VehicleRoutePlan> engine(std::move(engineConfig));
+    if (config_.stopFlag)
+        engine.adoptTerminateEarlyFlag(config_.stopFlag);
     engine.solve(plan, calculator);
 
     // The authoritative final score: a full recompute on the best solution.
@@ -309,6 +316,8 @@ void Solver::solve(
             { callback(step, levelScore(calculator)); };
         }
         optimaru::Solver<VehicleRoutePlan> engine(std::move(engineConfig));
+        if (config_.stopFlag)
+            engine.adoptTerminateEarlyFlag(config_.stopFlag);
         engine.solve(plan, calculator);
     }
 

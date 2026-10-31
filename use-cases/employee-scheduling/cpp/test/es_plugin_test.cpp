@@ -14,10 +14,14 @@
 //       reward keeps reward / levelFlippable and refuses setLevel(Hard)
 //   (e) labels: parametrized instances carry their display label in
 //       constraintTotals() / constraintCosts(); the registry name stays plain
+//   (f) parallel workers: a throwing onNewBest (worker 0) stops the other
+//       workers, so a 30 s, 4-worker solve rethrows at once (Python reaches
+//       no thread pool here: solve_request forks processes for its starts)
 // The hand-calculated positive and zero raw cost of every constraint is
 // checked through the bindings (python/tests/test_constraint_costs.py).
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -31,6 +35,7 @@
 #include "es/constraints.hpp"
 #include "es/domain.hpp"
 #include "es/score_calculator.hpp"
+#include "es/solver.hpp"
 #include "optimaru/api/score/director/score_director.hpp"
 #include "optimaru/python/names.hpp"
 
@@ -391,6 +396,30 @@ void verifyLabels() {
           "two instances of one registry name report the plain name and their own labels");
 }
 
+// ---------------------------------------------------------------------------
+// (f) a failing parallel worker stops the others
+// ---------------------------------------------------------------------------
+void verifyParallelFailureStopsWorkers() {
+    std::printf("== (f) a failing parallel worker stops the others ==\n");
+    EmployeeSchedule s = buildRoster(5);
+    Solver::Config config;
+    config.spentLimit = std::chrono::seconds(30);
+    config.parallelSolverCount = 4;
+    config.onNewBest = [](std::int64_t, const Score&) { throw std::runtime_error("boom"); };
+    const auto started = std::chrono::steady_clock::now();
+    bool raised = false;
+    try {
+        Solver(config).solve(s);
+    } catch (const std::runtime_error& error) {
+        raised = std::string(error.what()) == "boom";
+    }
+    const double seconds =
+            std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
+    check(raised && seconds < 10.0,
+          "4 workers, 30 s budget: worker 0's exception reaches the caller after " +
+                  std::to_string(seconds) + " s");
+}
+
 }  // namespace
 
 int main() {
@@ -399,6 +428,7 @@ int main() {
     verifyIncrementalEqualsFull();
     verifyScopedUnit();
     verifyLabels();
+    verifyParallelFailureStopsWorkers();
     if (failures == 0) {
         std::printf("All plugin checks PASSED.\n");
         return 0;

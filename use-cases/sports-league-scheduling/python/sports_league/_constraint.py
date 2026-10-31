@@ -208,7 +208,9 @@ def _round_half_away(value: float) -> int:
 # The range of a score (the C++ "The range of a score", level.hpp): one
 # contribution must be finite, and a hard one (or a below_hard medium one)
 # below 2**62 in magnitude, or scoring raises OverflowError; the hard total
-# saturates at +-(2**63 - 1) instead of leaving int64.
+# saturates at +-(2**63 - 1) instead of leaving int64. The two messages are
+# word for word the ones a solve raises (ContributionOverflowError, as the
+# bindings translate it), so both paths refuse a pick the same way.
 _MAX_HARD_CONTRIBUTION = 2.0**62
 _HARD_SCORE_LIMIT = 2**63 - 1
 
@@ -217,11 +219,13 @@ def _contribution(name: str, weight: float, cost: float, exponent: float) -> flo
     try:
         value = weight * shape(cost, exponent)
     except OverflowError:
-        value = math.inf
+        # cost**exponent beyond a double, where the engine's pow() gives +-inf
+        # (and weight 0 then gives nan, as 0 * inf does in C++).
+        value = weight * math.copysign(math.inf, cost)
     if not math.isfinite(value):
         raise OverflowError(
-            f"constraint {name!r}: its contribution weight * cost^exponent is not finite "
-            f"(weight {weight!r}, cost {cost!r}, exponent {exponent!r}); lower its weight or exponent"
+            f"constraint {name!r}: its contribution weight * cost^exponent is not finite ({value!r}); "
+            "lower its weight or exponent"
         )
     return value
 

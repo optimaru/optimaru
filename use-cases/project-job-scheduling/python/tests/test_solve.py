@@ -54,3 +54,24 @@ def test_on_new_best_callback_fires():
     )
     assert events
     assert events[-1][1] == schedule.score.hard
+
+
+def test_a_raising_on_new_best_stops_every_parallel_worker():
+    """Four workers and a 30 s budget: the callback's exception (worker 0) stops the other
+    workers too, so it reaches the caller at once instead of after their whole budget."""
+    import time
+
+    import pytest
+
+    def boom(_step, _score):
+        raise RuntimeError("boom")
+
+    started = time.monotonic()
+    with pytest.raises(RuntimeError, match="boom"):
+        pj.solve(
+            generate_demo_data().to_core(),
+            time_limit_seconds=30.0,
+            parallel_solver_count=4,
+            on_new_best=boom,
+        )
+    assert time.monotonic() - started < 10.0

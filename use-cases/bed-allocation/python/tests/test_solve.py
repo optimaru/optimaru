@@ -79,3 +79,55 @@ def test_time_limits_must_be_finite_and_non_negative():
         setattr(config, name, 0.0)  # a zero budget is valid
     with pytest.raises(ValueError, match="spent_limit_seconds must be finite and >= 0"):
         ba.solve(generate_demo_data().to_core(), time_limit_seconds=-1)
+
+
+def test_time_limits_are_at_most_1e9_seconds():
+    """A huge finite limit overflowed the engine's int64 clock arithmetic and read back as a
+    negative budget, so the solve stopped after construction; now it is refused."""
+    import sys
+
+    import pytest
+
+    config = ba.SolverConfig()
+    for name in ("spent_limit_seconds", "unimproved_spent_limit_seconds"):
+        for huge in (1e9 + 1, 1e10, 1e16, float(sys.maxsize), 1e300):
+            with pytest.raises(ValueError, match=f"{name} must be at most 1e9 seconds"):
+                setattr(config, name, huge)
+        setattr(config, name, 1e9)  # the limit itself is valid and reads back exactly
+        assert getattr(config, name) == 1e9
+    with pytest.raises(ValueError, match="spent_limit_seconds must be at most 1e9 seconds"):
+        ba.solve(generate_demo_data().to_core(), time_limit_seconds=sys.maxsize)
+
+    # The largest limit is a real budget: a step-limited solve runs the same steps as under a
+    # 30 s limit instead of stopping after construction.
+    def solved(limit: float) -> list[int]:
+        config = ba.SolverConfig()
+        config.spent_limit_seconds = limit
+        config.step_count_limit = 2000
+        config.random_seed = 3
+        plan = generate_demo_data().to_core()
+        ba.Solver(config).solve(plan)
+        return plan.assignment()
+
+    assert solved(1e9) == solved(30.0) != solved(0.0)
+
+
+def test_a_raising_on_new_best_stops_every_parallel_worker():
+    """Four workers and a 30 s budget: the callback's exception (worker 0) stops the other
+    workers too, so it reaches the caller at once instead of after their whole budget."""
+    import time
+
+    import pytest
+
+    def boom(_step, _score):
+        raise RuntimeError("boom")
+
+    started = time.monotonic()
+    with pytest.raises(RuntimeError, match="boom"):
+        ba.solve(
+            generate_demo_data().to_core(),
+            time_limit_seconds=30.0,
+            parallel_solver_count=4,
+            on_new_best=boom,
+        )
+    assert time.monotonic() - started < 10.0

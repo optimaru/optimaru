@@ -110,3 +110,24 @@ def test_a_zero_soft_score_is_positive_zero():
     assert score.soft == 0.0
     assert math.copysign(1.0, score.soft) == 1.0
     assert "-0soft" not in repr(score)
+
+
+def test_a_raising_on_new_best_stops_every_parallel_worker():
+    """Four workers and a 30 s budget: the callback's exception (worker 0) stops the other
+    workers too, so it reaches the caller at once instead of after their whole budget."""
+    import time
+
+    import pytest
+
+    def boom(_step, _score):
+        raise RuntimeError("boom")
+
+    started = time.monotonic()
+    with pytest.raises(RuntimeError, match="boom"):
+        mnt.solve(
+            mnt.generate_demo_data("SMALL", MONDAY),
+            time_limit_seconds=30.0,
+            parallel_solver_count=4,
+            on_new_best=boom,
+        )
+    assert time.monotonic() - started < 10.0

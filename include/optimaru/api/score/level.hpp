@@ -7,6 +7,7 @@
 #include <limits>
 #include <stdexcept>
 #include <string>
+#include <utility>
 
 #include "optimaru/api/score/buildin/hard_soft_score.hpp"
 
@@ -54,8 +55,10 @@ inline const char* levelName(Level level) {
 //      finite, and a hard one, or a medium one that a below_hard fold lands
 //      in the hard level, must stay below kMaxHardContribution = 2^62
 //      (about 4.6e18) in magnitude. Otherwise the calculator throws
-//      std::overflow_error naming the constraint (Python: OverflowError): a
-//      weight or exponent that large cannot be scored.
+//      ContributionOverflowError (a std::overflow_error) naming the
+//      constraint: a weight or exponent that large cannot be scored. Python
+//      sees OverflowError with the mirror's exact text, the constraint named
+//      by its Python name (python/constraint_binding.hpp).
 //   2. The hard TOTAL, and a below_hard fold hard * unit + medium, is summed
 //      exactly (HardTotal) and SATURATES at +-kHardScoreLimit (INT64_MAX)
 //      instead of wrapping: a penalty beyond int64 reports -INT64_MAX hard,
@@ -97,20 +100,57 @@ inline std::int64_t clampToLimit(std::int64_t value) {
 
 }  // namespace detail
 
-// Rule 1, as the exception the calculator throws. Cold path.
+// Rule 1's exception. constraint() is the registry name, value() the
+// offending contribution; beyondHardLimit() is true for a finite hard (or
+// below_hard medium) contribution of 2^62 or more, false for a non-finite one
+// on any level. what() names the registry id; the Python bindings raise
+// OverflowError with message(pythonName(constraint()), repr(value()), ...),
+// which is word for word the text of the Python mirror (_constraint.py
+// _contribution / _round_hard).
+class ContributionOverflowError : public std::overflow_error {
+public:
+    ContributionOverflowError(std::string constraint, double value, bool beyondHardLimit)
+        : std::overflow_error(message(constraint, shown(value), beyondHardLimit)),
+          constraint_(std::move(constraint)),
+          value_(value),
+          beyondHardLimit_(beyondHardLimit) {}
+
+    const std::string& constraint() const noexcept { return constraint_; }
+    double value() const noexcept { return value_; }
+    bool beyondHardLimit() const noexcept { return beyondHardLimit_; }
+
+    // The text for a constraint and a contribution as the caller's layer
+    // spells them.
+    static std::string message(const std::string& constraint, const std::string& value,
+                               bool beyondHardLimit) {
+        if (beyondHardLimit) {
+            return "constraint '" + constraint + "': a hard contribution of " + value +
+                   " exceeds the engine's limit of 2**62 (about 4.6e18) per unit; lower its "
+                   "weight or exponent";
+        }
+        return "constraint '" + constraint +
+               "': its contribution weight * cost^exponent is not finite (" + value +
+               "); lower its weight or exponent";
+    }
+
+private:
+    static std::string shown(double value) {
+        char text[48];
+        std::snprintf(text, sizeof text, "%.17g", value);
+        return text;
+    }
+
+    std::string constraint_;
+    double value_;
+    bool beyondHardLimit_;
+};
+
+// Rule 1, as the exception the calculator throws. Cold path. A non-finite
+// value is reported as not finite on every level (the Python mirror checks
+// finiteness before the hard limit too).
 [[noreturn]] inline void throwContributionOverflow(const std::string& constraint, double value,
                                                    bool hardLevel) {
-    char shown[48];
-    std::snprintf(shown, sizeof shown, "%.17g", value);
-    if (hardLevel) {
-        throw std::overflow_error("Constraint '" + constraint + "': a hard contribution of " +
-                                  shown +
-                                  " exceeds the engine's limit of 2^62 (about 4.6e18) per unit; "
-                                  "lower its weight or exponent");
-    }
-    throw std::overflow_error("Constraint '" + constraint + "': its contribution weight * "
-                              "cost^exponent is not finite (" + shown +
-                              "); lower its weight or exponent");
+    throw ContributionOverflowError(constraint, value, hardLevel && std::isfinite(value));
 }
 
 // A hard (or below_hard medium) contribution, rounded half away from zero,

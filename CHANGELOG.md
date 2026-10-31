@@ -45,7 +45,9 @@ rules:
 - One contribution (a unit's `weight × shape(cost, exponent)`, or a global
   constraint's) must be finite, and a hard one, or a medium one that a
   `below_hard` fold lands in the hard level, must stay below 2^62 (about
-  4.6e18). Otherwise scoring raises `OverflowError` naming the constraint.
+  4.6e18). Otherwise scoring raises `OverflowError` naming the constraint
+  by its Python name, with the same message from a solve and from
+  `score()`.
   A huge exponent (`cost**200`) or weight used to give `nan` / `-inf` scores
   in the engine and `OverflowError` in Python, or a wrapped hard score.
 - The hard total is summed exactly and saturates at −(2^63 − 1) instead of
@@ -180,16 +182,24 @@ identical.
   knapsack, quadratic-assignment, task-assigning and school-timetabling's
   quickstart mode used to abort the whole process (`std::terminate`); the
   engine's multi-start now catches the first error, stops the other starts
-  and rethrows it.
+  and rethrows it. The 16 use cases with their own worker pool do the same:
+  the first worker that fails stops the others at their next step, so the
+  error reaches the caller at once. Fifteen of them used to wait until every
+  other worker had used up its whole time limit (max-cut already stopped
+  them). employee-scheduling's pool is reached from C++ only; its Python
+  `solve_request` runs parallel starts as processes.
 - vehicle-routing and pickup-delivery `Solver.solve` release the GIL like
   every other package. With `on_new_best` and `parallel_solver_count >= 2`
   they used to deadlock.
 - conference-scheduling calls `on_new_best` on the `constraints=` path too.
 - Time limits (`spent_limit_seconds`, `unimproved_spent_limit_seconds`,
-  employee-scheduling's `no_improvement_limit_seconds`) must be finite and
-  `>= 0` in every package (`ValueError`). Some packages accepted `-1`, and
-  all accepted NaN and infinity (an infinite limit read back as a zero
-  budget).
+  employee-scheduling's `no_improvement_limit_seconds`) must be finite,
+  `>= 0` and at most `1e9` seconds (about 31.7 years) in every package
+  (`ValueError`). Some packages accepted `-1`, and all accepted NaN,
+  infinity and huge finite limits: an infinite limit read back as a zero
+  budget, and one of about `1e10` seconds or more (`1e16`, `sys.maxsize`)
+  overflowed the engine's clock arithmetic, so the solve stopped right after
+  construction.
 - `solve(config=cfg, ...)` applies its keyword arguments to a copy, so a
   time limit, seed, `on_new_best` or `stop_at_first_feasible` no longer leaks
   into `cfg` and later solves that reuse it. `SolverConfig` supports
@@ -231,7 +241,11 @@ identical.
   folds, and preview parity on a LIST-kind domain with a medium level.
 - Score range (see *The range of a score*): `HardTotal` (an exact,
   non-wrapping hard sum), `roundHardContribution` /
-  `checkedSoftContribution` (`std::overflow_error` naming the constraint),
+  `checkedSoftContribution` (`ContributionOverflowError`, a
+  `std::overflow_error` carrying the constraint's registry name and the
+  contribution; the pybind11 helpers register a module-local translator that
+  raises it as `OverflowError` with the Python name and `repr()` of the
+  value, the text of the Python mirror),
   `foldBelowHardSaturating`, and `MediumFold::toEngine`, which now saturates
   the `below_hard` fold. `roundScoreLevel()` is the range-checked rounding
   for a domain's int64 Score level, and `withoutNegativeZero()` keeps a zero
@@ -242,13 +256,19 @@ identical.
   thread is joined and the exception is rethrown on the calling thread.
   `terminateEarly()` now reaches every start, and the acceptor factory is
   shared with them.
+- `DefaultSolver::adoptTerminateEarlyFlag()`, formerly documented as
+  internal to the CHAINED facade, shares one stop flag across solvers. Each
+  domain's own parallel worker pool now gives every worker's engine one flag
+  (through `Solver::Config::stopFlag`, set by `solve()` only and not bound to
+  Python), and the first worker that fails raises it.
 - Simulated annealing cools over the run's step limit when that is further
   along than the time limit (`SolverTermination::timeGradient()`). A
   step-limited run used to stay near its starting temperature because the
   30 s wall-clock limit was far away, and was not repeatable; it now repeats
   whenever its steps lead the clock.
-- `python/solver_config.hpp`: `secondsToMillis()` (the time-limit rule) and
-  `bindConfigCopy()` (`SolverConfig.__copy__` / `__deepcopy__`).
+- `python/solver_config.hpp`: `secondsToMillis()` (the time-limit rule, with
+  `kMaxTimeLimitSeconds = 1e9`) and `bindConfigCopy()`
+  (`SolverConfig.__copy__` / `__deepcopy__`).
 - Removed: the `(name, weight, bool hard)` constructors and the assignable
   `isHard` member.
 

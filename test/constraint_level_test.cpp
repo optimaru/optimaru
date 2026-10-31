@@ -1037,15 +1037,40 @@ void testScoreRange() {
           }),
           "weight 0 x inf (NaN) throws too, like Python's cost**exponent OverflowError");
     std::string message;
+    std::string named;
+    bool beyond = false;
     try {
         optimaru::ConstraintAssembly<Tasks> assembly;
         assembly.emplace<ConflictCost<Tasks>>(1e19);
         scoreOf(std::move(assembly), t);
-    } catch (const std::overflow_error& error) {
+    } catch (const optimaru::ContributionOverflowError& error) {
         message = error.what();
+        named = error.constraint();
+        beyond = error.beyondHardLimit();
     }
-    check(message.find("'conflictCost'") != std::string::npos,
-          "the overflow message names the constraint: " + message);
+    check(message.rfind("constraint 'conflictCost': a hard contribution of ", 0) == 0 &&
+                  named == "conflictCost" && beyond,
+          "the overflow error names the constraint (registry id in C++): " + message);
+    // A non-finite hard contribution is reported as not finite, as in the Python
+    // mirror (which checks finiteness first); the bindings print it with the
+    // Python name and repr(), word for word the mirror's text.
+    message.clear();
+    beyond = true;
+    try {
+        optimaru::ConstraintAssembly<Tasks> assembly;
+        assembly.emplace<ConflictCost<Tasks>>();
+        assembly.exponent("conflictCost", 2000.0);  // worker 0's 3 conflicts: 3^2000 = inf
+        scoreOf(std::move(assembly), t);
+    } catch (const optimaru::ContributionOverflowError& error) {
+        message = error.what();
+        beyond = error.beyondHardLimit();
+    }
+    check(message.find("is not finite (inf)") != std::string::npos && !beyond,
+          "a non-finite hard contribution is reported as not finite: " + message);
+    check(optimaru::ContributionOverflowError::message("conflict_cost", "3e+19", true) ==
+                  "constraint 'conflict_cost': a hard contribution of 3e+19 exceeds the engine's "
+                  "limit of 2**62 (about 4.6e18) per unit; lower its weight or exponent",
+          "the hard-limit message reads like the Python mirror's");
     std::printf("\n");
 }
 
