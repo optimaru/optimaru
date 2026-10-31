@@ -19,7 +19,7 @@ Requires Python 3.11+ (wheels for CPython 3.11–3.14). Wheels are published for
 ```python
 from optimaru import vehicle_routing as vrp
 from optimaru.vehicle_routing.constraints import (
-    MinimizeTravelTime, get_constraints, maximize_visits_assigned, vehicle_capacity,
+    TravelTimeCost, get_constraints, unassigned_visits_cost, vehicle_capacity_cost,
 )
 
 locations = [vrp.Location(37.5665, 126.9780)]          # 0: depot
@@ -40,15 +40,27 @@ solver.solve(plan)                                      # default constraints
 print(plan.score, plan.routes())
 
 # Pick constraints and reweight them — the solver itself does not change.
-# Only the listed constraints are scored: leave out maximize_visits_assigned and
+# Only the listed constraints are scored: leave out unassigned_visits_cost and
 # skipping every visit becomes free.
 solver.solve_with_constraints(plan, get_constraints([
-    vehicle_capacity,
-    maximize_visits_assigned,
-    MinimizeTravelTime(weight=10),
+    vehicle_capacity_cost,
+    unassigned_visits_cost,
+    TravelTimeCost(weight=10),
 ]))
 print(plan.score, plan.routes())
 ```
+
+Output:
+
+```
+0hard/0medium/-966soft {'V1': ['C0', 'C1', 'C2']}
+0hard/0medium/-9660soft {'V1': ['C0', 'C1', 'C2']}
+```
+
+Every constraint takes the same three knobs: `weight` (`None` = its default),
+`hard` (`None` = its default level, `True` = hard, `False` = soft) and
+`exponent`. `constraint_info()` on a use case lists its constraints with their
+default level and weight.
 
 ## Use cases
 
@@ -60,7 +72,8 @@ print(plan.score, plan.routes())
 | Allocation & packing | `bed_allocation`, `bin_packing`, `knapsack`, `assembly_line_balancing`, `quadratic_assignment`, `max_cut` |
 
 Each subpackage is loaded on first use, so `import optimaru` stays cheap.
-`list_constraints()` on a use case shows the constraint plugins it ships with.
+`list_constraints()` on a use case shows the constraint plugins it ships with,
+and `constraint_info()` their defaults.
 
 ## Links
 
