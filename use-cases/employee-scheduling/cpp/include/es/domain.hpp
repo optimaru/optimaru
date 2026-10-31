@@ -27,6 +27,10 @@ using DayIndex = std::int64_t;
 
 constexpr Minutes MINUTES_PER_DAY = 24 * 60;
 
+// The last day a shift may touch, about 100 years out. Per-day tables span the
+// whole horizon, so one far-off shift would otherwise size them all.
+constexpr DayIndex MAX_DAY = 36525;
+
 inline DayIndex dayOf(Minutes m) { return m / MINUTES_PER_DAY; }
 
 // ---------------------------------------------------------------------------

@@ -789,7 +789,9 @@ void greedyHardRepair(const Solver::Config& config, EmployeeSchedule& schedule,
     // to convergence with no time check, so on a many-constraint instance where
     // local search never reaches feasibility it could overshoot the limit many
     // times over (a 3s budget ran 34s; a 20s budget ran 184s). The deadline is
-    // checked between repair scans and inside them (see RepairDeadline).
+    // checked between repair scans and inside them (see RepairDeadline). Only a
+    // strict improvement is applied: two equal repairs could undo each other
+    // until the step limit.
     if (Clock::now() >= deadline) return;
     optimaru::ScoreDirector<EmployeeSchedule> director(schedule, calculator);
     Score current = director.calculateScore();
@@ -805,7 +807,7 @@ void greedyHardRepair(const Solver::Config& config, EmployeeSchedule& schedule,
         if (config.employeeDayRepairMoves) {
             while (steps < maxSteps && Clock::now() < deadline) {
                 RelocationRepair day = bestDayRepair(director, eligible, scanDeadline);
-                if (!day.found || !(day.score >= current)) break;
+                if (!day.found || !(day.score > current)) break;
                 applyRepair(director, day);
                 current = day.score;
                 changed = true;
@@ -822,7 +824,7 @@ void greedyHardRepair(const Solver::Config& config, EmployeeSchedule& schedule,
                 if (relocate.found && (!run.found || relocate.score > run.score)) {
                     run = relocate;
                 }
-                if (!run.found || !(run.score >= current)) break;
+                if (!run.found || !(run.score > current)) break;
                 applyRepair(director, run);
                 current = run.score;
                 changed = true;

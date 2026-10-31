@@ -143,6 +143,12 @@ class ShiftModel(BaseModel):
             raise ValueError(f"shift {self.id!r}: end must be after start, got {self.start} to {self.end}")
         return self
 
+    @model_validator(mode="after")
+    def _pinned_to_a_worker(self):
+        if self.pinned and self.worker is None:
+            raise ValueError(f"shift {self.id!r} is pinned but has no worker")
+        return self
+
 
 # ---------------------------------------------------------------------------
 # Rules (a discriminated union; each rule carries its own policy and
@@ -691,6 +697,14 @@ class SchedulingInput(BaseModel):
             ids = [x.id for x in items]
             if len(ids) != len(set(ids)):
                 raise ValueError(f"duplicate {kind} ids")
+        return self
+
+    @model_validator(mode="after")
+    def _known_workers(self):
+        workers = {worker.id for worker in self.workers}
+        for shift in self.shifts:
+            if shift.worker is not None and shift.worker not in workers:
+                raise ValueError(f"shift {shift.id!r} pre-assigned to unknown worker {shift.worker!r}")
         return self
 
 

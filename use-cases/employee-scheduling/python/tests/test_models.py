@@ -175,6 +175,25 @@ def test_a_shift_needs_times_from_day_0_and_an_end_after_its_start(start, end):
         es.calculate_score(es.EmployeeSchedule([es.Employee("A")], [es.Shift("Shift 1", start, end)]))
 
 
+def test_a_shift_cannot_run_past_the_last_day():
+    start = 36526 * 1440
+    with pytest.raises(ValueError, match="up to day 36525"):
+        es.calculate_score(es.EmployeeSchedule([es.Employee("A")], [es.Shift("Shift 1", start, start + 60)]))
+
+
+def test_a_pinned_shift_without_a_worker_fails_when_built():
+    with pytest.raises(ValueError, match="pinned but has no worker"):
+        ShiftModel(id="Shift 1", start=0, end=60, pinned=True)
+
+
+def test_an_unknown_worker_fails_when_the_input_is_built():
+    with pytest.raises(ValueError, match="unknown worker 'Worker 99'"):
+        SchedulingInput(
+            workers=[WorkerModel(id="Worker 01")],
+            shifts=[ShiftModel(id="Shift 1", start=0, end=60, worker="Worker 99")],
+        )
+
+
 def test_duplicate_ids_rejected():
     with pytest.raises(ValueError, match="duplicate"):
         SchedulingInput(

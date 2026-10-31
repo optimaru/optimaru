@@ -162,7 +162,8 @@ class Shift:
     id: str
     start: int
     """Start time in minutes from day 0 (see `minutes`); solving and scoring
-    raise ValueError unless 0 <= start < end."""
+    raise ValueError unless 0 <= start < end, with end at most about 100 years
+    (36525 days) from day 0."""
     end: int
     location: str
     required_skill: str

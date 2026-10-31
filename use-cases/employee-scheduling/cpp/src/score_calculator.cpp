@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <limits>
 #include <set>
 #include <stdexcept>
 #include <string>
@@ -16,9 +15,9 @@ void ScoreCalculator::prepare(EmployeeSchedule& schedule) {
     std::unordered_map<std::string, int> skillId;
     for (Shift& sh : schedule.shifts) {
         // The rules index per-day tables by these day numbers without a check.
-        if (sh.start < 0 || sh.end <= sh.start ||
-            dayOf(sh.end) > std::numeric_limits<int>::max()) {
-            throw std::invalid_argument("shift '" + sh.id + "': need 0 <= start < end, got start=" +
+        if (sh.start < 0 || sh.end <= sh.start || dayOf(sh.end) > MAX_DAY) {
+            throw std::invalid_argument("shift '" + sh.id + "': need 0 <= start < end up to day " +
+                                        std::to_string(MAX_DAY) + ", got start=" +
                                         std::to_string(sh.start) +
                                         ", end=" + std::to_string(sh.end));
         }

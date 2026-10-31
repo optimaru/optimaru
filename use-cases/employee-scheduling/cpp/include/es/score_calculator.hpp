@@ -21,8 +21,8 @@ public:
     // filling Employee::skillMask, Shift::requiredSkillBit, Shift::startDay/endDay.
     // Idempotent (guarded by EmployeeSchedule::prepared). Must run before
     // scoring; calculateScore/solve call it. Throws std::invalid_argument for a
-    // shift without 0 <= start < end, or for more than 64 distinct required
-    // skills (skills only employees list do not count).
+    // shift without 0 <= start < end up to MAX_DAY, or for more than 64 distinct
+    // required skills (skills only employees list do not count).
     static void prepare(EmployeeSchedule& schedule);
 
     // --- shared per-constraint building blocks ---

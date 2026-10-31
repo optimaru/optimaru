@@ -2,6 +2,7 @@
 
 import copy
 import json
+import time
 
 import pytest
 
@@ -214,6 +215,51 @@ def test_a_heavily_pinned_roster_keeps_every_pinned_shift():
     assert {s.id: s.worker for s in request.model_input.shifts if s.pinned} == {
         s.id: assigned.get(s.id) for s in request.model_input.shifts if s.pinned
     }
+
+
+def test_parallel_starts_each_start_from_the_given_solution(request_):
+    pinned = request_.model_input.shifts[0]
+    pinned.worker, pinned.pinned = request_.model_input.workers[-1].id, True
+    first = solve_request(zero_step(request_))
+    seeded = with_initial_solution(zero_step(request_), first)
+    seeded.num_workers = 2
+
+    candidates = []
+
+    def select(solutions):
+        candidates.extend(solutions)
+        return solutions[0]
+
+    solve_request(seeded, select=select)
+
+    assert [assignment_of(candidate) for candidate in candidates] == [assignment_of(first)] * 2
+
+
+def test_repair_stops_at_the_time_limit_on_a_large_infeasible_roster():
+    """Two blocks of workers each work half the horizon without a day off, so a
+    single repair scan has millions of swaps to score."""
+    days, workers = 60, 300
+    request = generate_demo_data(seed=3, workers=workers, days=days)
+    worker_ids = [worker.id for worker in request.model_input.workers]
+    next_on_day = {}
+    for shift in request.model_input.shifts:
+        day = shift.start // (24 * 60)
+        index = next_on_day.get(day, 0)
+        next_on_day[day] = index + 1
+        shift.worker = worker_ids[index * 2 + (day >= days // 2)]
+    request.timelimit = 1.0
+    request.settings = SolverSettings(
+        step_count_limit=1,
+        greedy_repair_budget_fraction=0.8,
+        employee_run_repair_max_days=1,
+        employee_day_repair_moves=False,
+    )
+
+    started = time.perf_counter()
+    solved = solve_request(request)
+
+    assert solved.score_hard < 0
+    assert time.perf_counter() - started < 6.0
 
 
 def test_a_fully_pinned_roster_comes_back_unchanged(request_):
