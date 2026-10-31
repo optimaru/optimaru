@@ -69,8 +69,19 @@ def test_warehouse_distance_java_cases():
         assert op.calculate_distance(location(*end), location(*start)) == expected
 
 
-def test_required_number_of_buckets_java_case():
-    """The Java requiredNumberOfBucketsWithPenalization case: penalizes by 5."""
+def raw_total(solution, name):
+    """One constraint's raw cost summed over the trolleys (constraint_costs)."""
+    return sum(op.constraint_costs(solution)[name]["costs"])
+
+
+def weighted_total(solution, name):
+    """The same at the constraint's default weight (what the score charges)."""
+    entry = op.constraint_costs(solution)[name]
+    return entry["weight"] * sum(entry["costs"])
+
+
+def test_trolley_capacity_cost_java_case():
+    """The Java bucket-shortage case (OrderPickingConstraintProviderTest): penalizes by 5."""
     origin = location(*ORIGIN_ARGS)
     orders = [op.Order("order1"), op.Order("order2")]
     volumes = {
@@ -88,13 +99,12 @@ def test_required_number_of_buckets_java_case():
     solution.trolleys[0].pick_task_indices = assignment[0]
     solution.trolleys[1].pick_task_indices = assignment[1]
 
-    totals = op.calculate_totals(solution)
-    assert totals.required_number_of_buckets == 5
+    assert raw_total(solution, "trolley_capacity_cost") == 5
     assert op.calculate_score(solution).hard == -5
 
 
 def test_order_split_java_case():
-    """The Java minimizeOrderSplitByTrolley case: (3 + 1) * 1000."""
+    """The Java order-split case: (3 + 1) * 1000 at the default weight."""
     origin = location(*ORIGIN_ARGS)
     orders = [op.Order("order1"), op.Order("order2")]
     picks = [op.PickTask(f"p{i}", 0 if i < 4 else 1, 1, origin) for i in range(8)]
@@ -105,8 +115,8 @@ def test_order_split_java_case():
     solution.trolleys[2].pick_task_indices = [3]
     solution.trolleys[3].pick_task_indices = [4, 5, 6, 7]
 
-    totals = op.calculate_totals(solution)
-    assert totals.order_split_by_trolley == 4000
+    assert weighted_total(solution, "order_split_by_trolley_cost") == 4000
+    assert op.calculate_score(solution).soft == -4000
 
 
 def test_distance_constraints_and_shadows():
@@ -124,9 +134,12 @@ def test_distance_constraints_and_shadows():
     assert solution.pick_tasks[5].trolley_index == -1  # unassigned
 
     # The two distance constraints add up to the round trips.
-    totals = op.calculate_totals(solution)
     round_trips = op.distance_to_travel(solution, 0) + op.distance_to_travel(solution, 1)
-    assert totals.distance_from_previous_pick_task + totals.distance_from_last_pick_task_to_path_origin == round_trips
+    assert (
+        raw_total(solution, "distance_from_previous_pick_task_cost")
+        + raw_total(solution, "distance_from_last_pick_task_to_path_origin_cost")
+        == round_trips
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -243,6 +256,12 @@ def test_pydantic_models_round_trip():
     assert sum(len(stops) for stops in solution.routes.values()) == 10
     assert solution.total_distance > 0
     assert solution.order_split_count >= 2  # at least one trolley per order
+    # Both come from constraint_costs() (raw, default constraints): the round
+    # trips and the (order, trolley) pairs of the returned routes.
+    assert solution.total_distance == sum(solution.distance_by_trolley.values())
+    assert solution.order_split_count == sum(
+        len({stop.order_id for stop in stops}) for stops in solution.routes.values()
+    )
     assert set(solution.distance_by_trolley) == {"1", "2"}
     round_tripped = models.OrderPickingResponse.model_validate_json(solution.model_dump_json())
     assert round_tripped == solution

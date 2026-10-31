@@ -1,20 +1,25 @@
-#ifndef OP_CONSTRAINTS_REQUIRED_NUMBER_OF_BUCKETS_HPP
-#define OP_CONSTRAINTS_REQUIRED_NUMBER_OF_BUCKETS_HPP
+#ifndef OP_CONSTRAINTS_TROLLEY_CAPACITY_COST_HPP
+#define OP_CONSTRAINTS_TROLLEY_CAPACITY_COST_HPP
 
 #include "op/constraints/common.hpp"
 
 namespace op
 {
 
-// Hard (default, weight 1): requiredNumberOfBuckets — how many buckets a
-// trolley is short of. Each ORDER on the trolley rounds its own volume up to a
+// Hard, weight 1: trolleyCapacityCost — how many buckets a trolley is short
+// of (the quickstart's "Required number of buckets" rule). Raw cost per
+// trolley = max(0, required buckets - bucketCount), so 0 = the trolley carries
+// enough buckets. Each ORDER on the trolley rounds its own volume up to a
 // whole number of buckets, because buckets are never shared between orders;
-// that rounding is exactly what makes splitting an order across trolleys waste
-// capacity.
-struct RequiredNumberOfBuckets final : OpUnitConstraint
+// that rounding is exactly what makes splitting an order across trolleys
+// waste capacity.
+struct TrolleyCapacityCost final : OpUnitConstraint
 {
-    explicit RequiredNumberOfBuckets(double weight = 1.0)
-        : OpUnitConstraint("requiredNumberOfBuckets", weight, /*hard=*/true)
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
+
+    explicit TrolleyCapacityCost(double weight = kDefaultWeight)
+        : OpUnitConstraint("trolleyCapacityCost", weight, kDefaultLevel)
     {
     }
     void onReset(const OrderPickingSolution &solution) override
@@ -55,4 +60,4 @@ private:
 
 }  // namespace op
 
-#endif  // OP_CONSTRAINTS_REQUIRED_NUMBER_OF_BUCKETS_HPP
+#endif  // OP_CONSTRAINTS_TROLLEY_CAPACITY_COST_HPP

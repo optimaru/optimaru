@@ -18,13 +18,17 @@ namespace op
 // move touches at most two trolleys, and every constraint decomposes into
 // per-trolley terms plus the per-(order, trolley) presence matrix:
 //   - soft distance: dist_[t] = the trolley's round-trip travel distance
-//     (origin -> picks in order -> origin), the sum of the two Java distance
-//     constraints. Re-derived per touched list, O(list).
-//   - hard buckets: volume_[o][t] and count_[o][t] maintained per element;
-//     the trolley's required buckets = sum over its orders of
-//     ceil(volume / bucketCapacity), re-derived per touched list.
-//   - soft order split: countDistinct(trolley) per order == number of t with
-//     count_[o][t] > 0, maintained on the 0 <-> >0 transitions.
+//     (origin -> picks in order -> origin), the sum of the two distance
+//     constraints (distanceFromPreviousPickTaskCost +
+//     distanceFromLastPickTaskToPathOriginCost). Re-derived per touched list,
+//     O(list).
+//   - hard buckets (trolleyCapacityCost): volume_[o][t] and count_[o][t]
+//     maintained per element; the trolley's required buckets = sum over its
+//     orders of ceil(volume / bucketCapacity), re-derived per touched list.
+//   - soft order split (orderSplitByTrolleyCost): countDistinct(trolley) per
+//     order == number of t with count_[o][t] > 0, maintained on the 0 <-> >0
+//     transitions.
+// calculateScore applies the components' kDefaultWeight (1 / 1 / 1 / 1000).
 //
 // beforeListChanged retracts the trolley's contribution while its list still
 // has the OLD contents; afterListChanged inserts the NEW contents. Pick tasks

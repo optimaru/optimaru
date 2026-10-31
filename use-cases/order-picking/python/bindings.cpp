@@ -191,17 +191,6 @@ PYBIND11_MODULE(_core, m)
                  return out;
              });
 
-    py::class_<ConstraintTotals>(m, "ConstraintTotals", py::module_local())
-        .def_readonly("required_number_of_buckets",
-                      &ConstraintTotals::requiredNumberOfBuckets)
-        .def_readonly("distance_from_previous_pick_task",
-                      &ConstraintTotals::distanceFromPreviousPickTask)
-        .def_readonly("distance_from_last_pick_task_to_path_origin",
-                      &ConstraintTotals::distanceFromLastPickTaskToPathOrigin)
-        .def_readonly("order_split_by_trolley",
-                      &ConstraintTotals::orderSplitByTrolley)
-        .def("to_score", &ConstraintTotals::toScore);
-
     m.def("calculate_distance",
           &calculateDistance,
           py::arg("start"),
@@ -240,13 +229,8 @@ PYBIND11_MODULE(_core, m)
         "Refresh the shadow variables and recompute the HardSoft score "
         "(also stores solution.score).");
 
-    m.def(
-        "calculate_totals",
-        [](OrderPickingSolution &solution)
-        { return ScoreCalculator::calculateTotals(solution); },
-        py::arg("solution"),
-        "Per-constraint penalty totals (all positive), matching the four "
-        "Java constraints one to one.");
+    // No ConstraintTotals / calculate_totals (removed in 0.2.0):
+    // constraint_costs() is the only per-constraint surface.
 
     m.def("build_demo_data",
           &buildDemoData,
@@ -401,9 +385,9 @@ PYBIND11_MODULE(_core, m)
             py::arg("solution"),
             py::arg("constraints") = py::none());
 
-    // The raw per-unit costs of the default assembly on `solution` — the input
-    // order_picking.constraints.score() turns into a score. Scoring once is
-    // enough: re-pricing any assembly is pure Python arithmetic on these.
+    // The raw per-trolley costs of the default assembly on `solution` — the
+    // input order_picking.constraints.score() turns into a score. Scoring once
+    // is enough: re-pricing any assembly is pure Python arithmetic on these.
     m.def(
         "constraint_costs",
         [](OrderPickingSolution &solution)
@@ -413,12 +397,19 @@ PYBIND11_MODULE(_core, m)
             return tfpy::constraintCosts(calculator, solution);
         },
         py::arg("solution"),
-        "Raw per-unit cost of every constraint, before weight/exponent/level.");
+        "Raw per-trolley cost of every default constraint, before "
+        "weight/exponent/level.");
 
     // The constraint names this domain scores, in default-assembly order —
-    // the same strings a score breakdown reports.
+    // the keys of constraint_costs().
     m.def(
         "list_constraints",
         [] { return tfpy::constraintNames(defaultConstraints()); },
         "Constraint names available to order_picking.constraints.");
+
+    // The constraint catalog, read off the same default assembly:
+    // constraint_info() -> [ConstraintInfo(name, default_level,
+    // default_weight, level_flippable, reward, default_enabled), ...] in
+    // list_constraints() order. The defaults live in the C++ components only.
+    tfpy::bindConstraintInfo(m, [] { return defaultConstraints(); });
 }

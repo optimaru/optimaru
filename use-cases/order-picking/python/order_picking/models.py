@@ -155,7 +155,7 @@ class OrderPickingResponse(_Model):
     score: str
     feasible: bool
     total_distance: int  # meters
-    order_split_count: int  # sum of countDistinct(trolley) over orders
+    order_split_count: int  # (order, trolley) pairs = sum of countDistinct(trolley) over orders
 
 
 def to_solution(request: OrderPickingRequest) -> "_core.OrderPickingSolution":
@@ -219,16 +219,25 @@ def solve_request(request: OrderPickingRequest, *, constraints=None) -> OrderPic
         routes[trolley.id] = stops
         distance_by_trolley[trolley.id] = _core.distance_to_travel(solution, trolley_index)
 
-    totals = _core.calculate_totals(solution)
+    # The raw per-trolley costs of the default constraints (the only
+    # per-constraint surface): the travel distance is the outbound legs plus
+    # the walks back, the split count the (order, trolley) pairs.
+    raw = _core.constraint_costs(solution)
     return OrderPickingResponse(
         routes=routes,
         distance_by_trolley=distance_by_trolley,
         unassigned=[task.id for i, task in enumerate(solution.pick_tasks) if i not in assigned],
         score=str(solution.score),
         feasible=solution.score.is_feasible(),
-        total_distance=totals.distance_from_previous_pick_task + totals.distance_from_last_pick_task_to_path_origin,
-        order_split_count=totals.order_split_by_trolley // 1000,
+        total_distance=_raw_total(raw, "distance_from_previous_pick_task_cost")
+        + _raw_total(raw, "distance_from_last_pick_task_to_path_origin_cost"),
+        order_split_count=_raw_total(raw, "order_split_by_trolley_cost"),
     )
+
+
+def _raw_total(raw: dict[str, dict[str, Any]], name: str) -> int:
+    """One constraint's raw cost summed over the trolleys (integral here)."""
+    return int(sum(raw[name]["costs"]))
 
 
 def with_initial_solution(

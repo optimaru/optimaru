@@ -7,7 +7,15 @@ Port: only the domain and constraints are implemented, on top of the generic eng
   `calculateDistance`, domain structs, the LIST-kind `SolutionDescriptor` specialization
   (the trolley's `pickTaskIndices` is the `@PlanningListVariable`).
 - `include/op/score_calculator.hpp` — full recompute + shadow variable
-  (`trolleyIndex`/`previousPickTask`/`nextPickTask`) recalculation + per-constraint breakdown.
+  (`trolleyIndex`/`previousPickTask`/`nextPickTask`) recalculation + per-constraint totals
+  (`ConstraintTotals`, members named after the registry names, at the components'
+  `kDefaultWeight`).
+- `include/op/constraints/` — one component per constraint: `trolley_capacity_cost.hpp`
+  (`TrolleyCapacityCost`, hard 1), `distance_from_previous_pick_task_cost.hpp`
+  (`DistanceFromPreviousPickTaskCost`, soft 1), `distance_from_last_pick_task_to_path_origin_cost.hpp`
+  (`DistanceFromLastPickTaskToPathOriginCost`, soft 1), `order_split_by_trolley_cost.hpp`
+  (`OrderSplitByTrolleyCost`, soft 1000) (+ `common.hpp`); `include/op/constraints.hpp`
+  assembles the default set (`defaultConstraints()`, also the `constraint_info()` catalog).
 - `include/op/incremental_calculator.hpp` — before/afterListChanged hooks for
   per-trolley O(list) incremental scoring (checked against full recompute under FULL_ASSERT).
 - `include/op/solver.hpp` — engine wrapper (LIST move mix + ALNS + warehouse-distance nearby).
@@ -19,6 +27,7 @@ Port: only the domain and constraints are implemented, on top of the generic eng
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j4
-./build/op_test   # per-constraint hand checks + incremental==full + FULL_ASSERT solve
-./build/op_demo   # 10 s solve of the Java demo dataset, reaches feasible (hard 0)
+./build/op_test         # per-constraint hand checks + incremental==full + FULL_ASSERT solve
+./build/op_plugin_test  # plugin assembly == monolith, raw costs by hand, catalog, overrides
+./build/op_demo         # 10 s solve of the Java demo dataset, reaches feasible (hard 0)
 ```

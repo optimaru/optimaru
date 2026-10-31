@@ -5,12 +5,15 @@ The solution is the planning solution: each trolley's ordered
 unassigned. `trolley_index` / `previous_pick_task` / `next_pick_task` on a
 pick task are the shadow variables derived from the lists.
 
-Score (HardSoft, lexicographic): hard = -(missing trolley buckets),
-soft = -(travel distance in meters + 1000 * order-split count).
+Score (HardSoft, lexicographic), at the default weights:
+  hard = -(missing trolley buckets)                 # trolley_capacity_cost
+  soft = -(walk to and between the picks, m         # distance_from_previous_pick_task_cost
+           + walk back to the trolley origin, m     # distance_from_last_pick_task_to_path_origin_cost
+           + 1000 x (order, trolley) pairs)         # order_split_by_trolley_cost
 """
 
 from collections.abc import Callable, Iterable
-from typing import Any
+from typing import Any, Literal, NamedTuple
 
 class Score:
     @property
@@ -106,19 +109,6 @@ class OrderPickingSolution:
     def routes(self) -> dict[str, list[str]]:
         """{trolley id: [pick task ids]} in pick order."""
 
-class ConstraintTotals:
-    """Per-constraint penalty totals (positive), one per Java constraint."""
-
-    @property
-    def required_number_of_buckets(self) -> int: ...
-    @property
-    def distance_from_previous_pick_task(self) -> int: ...
-    @property
-    def distance_from_last_pick_task_to_path_origin(self) -> int: ...
-    @property
-    def order_split_by_trolley(self) -> int: ...
-    def to_score(self) -> Score: ...
-
 def calculate_distance(start: WarehouseLocation, end: WarehouseLocation) -> int:
     """Distance in meters between two locations (Warehouse.calculateDistance)."""
 
@@ -130,9 +120,6 @@ def update_shadow_variables(solution: OrderPickingSolution) -> None:
 
 def calculate_score(solution: OrderPickingSolution) -> Score:
     """Refresh shadows, recompute and store solution.score."""
-
-def calculate_totals(solution: OrderPickingSolution) -> ConstraintTotals:
-    """Per-constraint penalty totals on the current assignment."""
 
 def build_demo_data(
     trolleys_count: int = 5,
@@ -186,11 +173,34 @@ class Solver:
         keeps them."""
 
 def list_constraints() -> list[str]:
-    """The constraint names this domain scores, in default-assembly order
-    (snake_case) — the names `order_picking.constraints` uses."""
+    """Constraint names scored by this domain (default assembly order, snake_case):
+    trolley_capacity_cost, distance_from_previous_pick_task_cost,
+    distance_from_last_pick_task_to_path_origin_cost, order_split_by_trolley_cost.
+    The same names `order_picking.constraints` uses."""
 
-def constraint_costs(solution, /) -> dict[str, dict]:
-    """Per-constraint, per-unit **raw** costs — before weight/exponent/level rounding.
-    `order_picking.constraints.score()` takes these and produces a score.
-    {name: {"costs": [...], "weight": w, "exponent": e,
-            "hard": bool, "global": bool}}."""
+def constraint_costs(solution: OrderPickingSolution) -> dict[str, dict[str, Any]]:
+    """Raw per-trolley cost of every default constraint, before weight/exponent/level:
+    {name: {"costs": [...], "weight": float, "exponent": float, "hard": bool,
+    "global": bool, "level": "hard" | "medium" | "soft", "reward": bool,
+    "level_flippable": bool, "name": str, "label": str}}, one cost per trolley.
+    `order_picking.constraints.score()` turns it into a score. The only
+    per-constraint surface: the travel distance is the sum of the two distance
+    entries' costs, the (order, trolley) pair count the sum of
+    order_split_by_trolley_cost's."""
+
+class ConstraintInfo(NamedTuple):
+    """One constraint-catalog row, read off the C++ default assembly."""
+
+    name: str
+    default_level: Literal["hard", "medium", "soft"]
+    default_weight: float
+    level_flippable: bool
+    reward: bool
+    default_enabled: bool
+
+def constraint_info() -> list[ConstraintInfo]:
+    """The constraint catalog, in list_constraints() order:
+    trolley_capacity_cost (hard, 1), distance_from_previous_pick_task_cost (soft, 1),
+    distance_from_last_pick_task_to_path_origin_cost (soft, 1),
+    order_split_by_trolley_cost (soft, 1000); all flippable, none a reward, all
+    scored by default (default_enabled)."""

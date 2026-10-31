@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <vector>
 
+#include "op/constraints/order_split_by_trolley_cost.hpp"
 #include "op/demo_data.hpp"
 #include "op/domain.hpp"
 #include "op/score_calculator.hpp"
@@ -44,13 +45,16 @@ int main()
     const ConstraintTotals totals = ScoreCalculator::calculateTotals(solution);
     std::printf("\nFinal score: %s\n", solution.score.toString().c_str());
     std::printf("  bucket shortage (hard):    %lld\n",
-                static_cast<long long>(totals.requiredNumberOfBuckets));
-    std::printf(
-        "  travel distance:           %lld m\n",
-        static_cast<long long>(totals.distanceFromPreviousPickTask
-                               + totals.distanceFromLastPickTaskToPathOrigin));
+                static_cast<long long>(totals.trolleyCapacityCost));
+    std::printf("  travel distance:           %lld m\n",
+                static_cast<long long>(
+                    totals.distanceFromPreviousPickTaskCost
+                    + totals.distanceFromLastPickTaskToPathOriginCost));
+    // The totals carry the default weight; the count is the raw cost.
     std::printf("  order splits (x1000):      %lld\n\n",
-                static_cast<long long>(totals.orderSplitByTrolley / 1000));
+                static_cast<long long>(
+                    totals.orderSplitByTrolleyCost
+                    / kSoftWeight<OrderSplitByTrolleyCost>));
 
     for (const Trolley &trolley : solution.trolleys)
     {
