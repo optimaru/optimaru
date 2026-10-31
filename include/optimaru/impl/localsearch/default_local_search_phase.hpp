@@ -85,9 +85,13 @@ public:
     HardSoftScore run(ScoreDirector<Solution>& director, SolverTermination& termination) {
         Solution& solution = director.workingSolution();
         if constexpr (Descriptor::kind == VariableKind::BASIC) {
-            if (Descriptor::entityCount(solution) == 0 || Descriptor::valueCount(solution) == 0 ||
-                allEntitiesPinned(solution)) {
+            if (Descriptor::entityCount(solution) == 0 || Descriptor::valueCount(solution) == 0) {
                 return director.calculateScore();
+            }
+            if (allEntitiesPinned(solution)) {
+                const HardSoftScore score = director.calculateScore();
+                if (config_.onNewBest) config_.onNewBest(0, score);
+                return score;
             }
         } else {
             if (Descriptor::listCount(solution) == 0 || countListElements(solution) == 0) {

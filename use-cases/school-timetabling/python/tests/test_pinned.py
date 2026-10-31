@@ -69,5 +69,7 @@ def test_a_pinned_lesson_without_a_slot_is_refused(problem):
     conv = convert_problem(problem)
     conv.table.lessons[0].pinned = True
     conv.table.lessons[0].slot = -1
+    cfg = canon.SolverConfig()
+    cfg.spent_limit_seconds = 0.1
     with pytest.raises(ValueError, match="is pinned but has no value"):
-        canon.Solver().solve(conv.table)
+        canon.Solver(cfg).solve(conv.table)

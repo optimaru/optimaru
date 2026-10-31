@@ -563,6 +563,16 @@ void testPinnedEntities() {
     check(all.assignment == high, "all pinned: every value kept");
     check(calls == 0, "all pinned: no custom operator runs");
 
+    PinnedTasks reported{6, high, std::vector<char>(high.size(), 1)};
+    optimaru::SolverConfig reporting;
+    std::vector<double> softScores;
+    reporting.onNewBest = [&](std::int64_t, const HardSoftScore& score) {
+        softScores.push_back(score.soft);
+    };
+    PinnedTasksCalculator reportingCalculator;
+    optimaru::Solver<PinnedTasks>(reporting).solve(reported, reportingCalculator);
+    check(softScores == std::vector<double>{-33.0}, "all pinned: on_new_best reports the score once");
+
     std::vector<char> allButOne(high.size(), 1);
     allButOne[3] = 0;
     std::vector<int> oneFree = high;

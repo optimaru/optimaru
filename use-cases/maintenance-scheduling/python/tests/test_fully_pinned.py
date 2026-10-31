@@ -29,8 +29,6 @@ def test_every_pin_holds_with_one_free_job():
 
 def test_a_pinned_entity_without_a_value_is_refused():
     schedule, _ = _reversed_values(lambda index: index == 0)
-    jobs = schedule.jobs
-    jobs[0].crew_date = -1
-    schedule.jobs = jobs
+    schedule.jobs[0].crew_date = -1
     with pytest.raises(ValueError, match="is pinned but has no value"):
         mnt.solve(schedule, time_limit_seconds=0.1)
