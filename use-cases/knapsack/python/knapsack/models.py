@@ -1,6 +1,22 @@
+"""Pydantic models of the knapsack problem — the canonical JSON contract.
+
+`KnapsackProblemModel` is the JSON contract (items by id); `to_core()` builds the
+engine object (`knapsack._core.KnapsackProblem`, items by index) and
+`from_core()` builds the model back, selection and results included::
+
+    core = KnapsackProblemModel.model_validate(data).to_core()
+    knapsack.solve(core, time_limit_seconds=5)
+    result = KnapsackProblemModel.from_core(core)
+
+`knapsack.solve(model)` does the same round trip and writes the result back into
+the model in place.
+"""
+
 from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from . import _core
 
 
 class ItemModel(BaseModel):
@@ -71,27 +87,91 @@ class KnapsackProblemModel(BaseModel):
             raise ValueError("resource usage must be non-negative")
         return self
 
-    def to_core(self) -> KnapsackProblemModel:
-        return self.model_copy(deep=True)
+    def to_core(self) -> _core.KnapsackProblem:
+        """pydantic -> engine object: ids become item indices.
+
+        `resource_capacities` becomes the resource list in dict order (the order of
+        nothing but the declaration), `requires` the item's `required_items`,
+        repeated mandatory / forbidden / required entries stay repeated, a group's
+        `max_selected=None` stays None (the group size). `selected` becomes 1 / 0 and
+        `warm_start` is copied; the result fields are ignored (the engine recomputes
+        them).
+        """
+        self.unique_ids()  # the fields stay mutable after validation
+        index = {item.id: position for position, item in enumerate(self.items)}
+        return _core.KnapsackProblem(
+            self.capacity,
+            [
+                _core.Item(
+                    item.id,
+                    item.weight,
+                    item.value,
+                    dict(item.resource_usage),
+                    [index[required] for required in item.requires],
+                    1 if item.selected else 0,
+                )
+                for item in self.items
+            ],
+            [_core.Resource(resource, capacity) for resource, capacity in self.resource_capacities.items()],
+            [index[item_id] for item_id in self.mandatory_items],
+            [index[item_id] for item_id in self.forbidden_items],
+            [
+                _core.SelectionGroup(
+                    group.id, [index[item_id] for item_id in group.item_ids], group.min_selected, group.max_selected
+                )
+                for group in self.selection_groups
+            ],
+            self.warm_start,
+        )
 
     @classmethod
-    def from_core(cls, problem: KnapsackProblemModel) -> KnapsackProblemModel:
-        return problem.model_copy(deep=True)
+    def from_core(cls, problem: _core.KnapsackProblem) -> KnapsackProblemModel:
+        """engine object -> pydantic: the facts, the selection (an undecided item, -1, is
+        not selected), `warm_start` and the results (`total_weight`, `total_value` from
+        the selection; the score last computed on the core, 0hard/0soft if it was never
+        scored)."""
+        ids = [item.id for item in problem.items]
+        return cls(
+            capacity=problem.capacity,
+            items=[
+                ItemModel(
+                    id=item.id,
+                    weight=item.weight,
+                    value=item.value,
+                    resource_usage=dict(item.resource_usage),
+                    requires=[ids[required] for required in item.required_items],
+                    selected=item.selected == 1,
+                )
+                for item in problem.items
+            ],
+            resource_capacities={resource.id: resource.capacity for resource in problem.resources},
+            mandatory_items=[ids[index] for index in problem.mandatory_items],
+            forbidden_items=[ids[index] for index in problem.forbidden_items],
+            selection_groups=[
+                SelectionGroupModel(
+                    id=group.id,
+                    item_ids=[ids[index] for index in group.items],
+                    min_selected=group.min_selected,
+                    max_selected=group.max_selected,
+                )
+                for group in problem.selection_groups
+            ],
+            total_weight=problem.total_weight(),
+            total_value=problem.total_value(),
+            score_hard=problem.score.hard,
+            score_soft=problem.score.soft,
+            warm_start=problem.warm_start,
+        )
 
-
-def _greedy_selection(problem, decided=None):
-    """Take items by value density while the capacity allows, skipping the ids in `decided`, which are kept as given."""
-    decided = decided or {}
-    order = sorted(
-        range(len(problem.items)), key=lambda i: problem.items[i].value / problem.items[i].weight, reverse=True
-    )
-    selection = [decided.get(item.id, False) for item in problem.items]
-    load = sum(item.weight for item, selected in zip(problem.items, selection, strict=True) if selected)
-    for index in order:
-        if problem.items[index].id not in decided and load + problem.items[index].weight <= problem.capacity:
-            selection[index] = True
-            load += problem.items[index].weight
-    return selection
+    def _update_from_core(self, problem: _core.KnapsackProblem) -> None:
+        """Write a solved core's selection, results and `warm_start` back into this model, in place."""
+        for item, selected in zip(self.items, problem.assignment(), strict=True):
+            item.selected = selected == 1
+        self.total_weight = problem.total_weight()
+        self.total_value = problem.total_value()
+        self.score_hard = problem.score.hard
+        self.score_soft = problem.score.soft
+        self.warm_start = problem.warm_start
 
 
 def with_initial_solution(problem, solution):
@@ -99,7 +179,8 @@ def with_initial_solution(problem, solution):
 
     `solution` is a solved problem model or a dict of the same shape; items are matched by id. An explicit False
     means not selected and stays that way. `selected` cannot express "undecided", so an item the solution leaves out
-    is run through the greedy selection here, around the seeded load, and `solve` then fills in nothing.
+    is run through the greedy selection here (`knapsack._core.greedy_selection`: value density order, weight capacity
+    only), around the seeded load, and `solve` then fills in nothing.
     """
     if isinstance(solution, BaseModel):
         solution = solution.model_dump(mode="json")
@@ -121,7 +202,8 @@ def with_initial_solution(problem, solution):
             raise ValueError(f"item {item_id!r} has invalid selected value {entry['selected']!r}")
         decided[item_id] = entry["selected"]
     seeded = problem.model_copy(deep=True)
-    for item, selected in zip(seeded.items, _greedy_selection(seeded, decided), strict=True):
+    fixed = [int(decided[item.id]) if item.id in decided else -1 for item in seeded.items]
+    for item, selected in zip(seeded.items, _core.greedy_selection(seeded.to_core(), fixed), strict=True):
         item.selected = selected
     seeded.total_weight = seeded.total_value = seeded.score_hard = seeded.score_soft = None
     seeded.warm_start = True

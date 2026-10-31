@@ -1,0 +1,26 @@
+{
+    "capacity": 60,
+    "resource_capacities": { "fragile_slots": 2 },
+    "mandatory_items": ["first-aid"],
+    "selection_groups": [{ "id": "large-gear", "item_ids": ["tent", "drone"], "min_selected": 0, "max_selected": 1 }],
+    "items": [
+        { "id": "camera", "weight": 12, "value": 24, "resource_usage": { "fragile_slots": 1 } },
+        { "id": "laptop", "weight": 18, "value": 38 },
+        { "id": "battery", "weight": 8, "value": 18 },
+        { "id": "tent", "weight": 22, "value": 35 },
+        { "id": "water", "weight": 15, "value": 20 },
+        { "id": "food", "weight": 10, "value": 22 },
+        { "id": "jacket", "weight": 9, "value": 16 },
+        { "id": "first-aid", "weight": 6, "value": 15 },
+        {
+            "id": "drone",
+            "weight": 20,
+            "value": 40,
+            "resource_usage": { "fragile_slots": 2 },
+            "requires": ["battery"]
+        },
+        { "id": "book", "weight": 5, "value": 8 },
+        { "id": "stove", "weight": 11, "value": 21 },
+        { "id": "radio", "weight": 7, "value": 14 }
+    ]
+}
