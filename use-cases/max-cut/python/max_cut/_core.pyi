@@ -138,6 +138,8 @@ class SolverConfig:
     """(hard, soft): stop early once bestScore >= this. (0, -1e18) stops at
     the first feasible solution."""
     on_new_best: Callable[[int, Score], None] | None
+    """Called as on_new_best(step, score) on every new best (by the first parallel start
+    only). An exception it raises stops the solve and is raised by solve()."""
 
 class Solver:
     """Start partition + Late Acceptance local search (+ adaptive

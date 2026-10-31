@@ -32,7 +32,11 @@ CP-SAT reference.
   search only swaps sides (change moves, ruin-and-recreate and descent are
   forced off, whatever `SolverConfig` says), so the side sizes of the start
   partition are kept — a seed of the wrong size keeps that size and its hard
-  penalty. With fewer than two free vertices there is no search.
+  penalty. This holds for an unseeded solve too: when fixed vertices unbalance
+  the `i % 2` start, the result stays infeasible even if a feasible partition
+  exists (as in 0.1.5); seed a partition of the right size with
+  `with_initial_solution` instead. With fewer than two free vertices there is no
+  search.
 - An unassigned vertex (`-1`, transient in the engine's ruin-and-recreate or set
   by a C++ caller) is in no side: it adds nothing to the cut, the sizes, the
   imbalance, `fixed_partition_cost` or `different_partition_pairs_cost`, and a
@@ -144,7 +148,8 @@ other C++ use cases.
 - `incremental_calculator` — O(degree + pair degree of the vertex) per move
 - `solver` — engine wrapper (the 0.1.x start partition + Late Acceptance over flip /
   swap moves + adaptive ruin & recreate; swaps only under exact size bounds;
-  multi-start through the engine)
+  independent parallel starts on worker threads, an exception in one of them is
+  rethrown by `solve()`)
 - `src/main.cpp` — the web demo solved and explained per constraint
 
 ```bash
@@ -157,11 +162,14 @@ ctest --test-dir build/max-cut --output-on-failure --no-tests=error
 `mc_test`: per-constraint hand checks (positive and zero) on the full recompute and
 the incremental calculator, the edge cases (self-loops, parallel and zero-weight
 edges, self-pairs, one-sided bounds, the `-1` rules), incremental == full recompute
-over random flip / swap / unassign / batch moves, FULL_ASSERT solves (ALNS kicks
-and exact size), the exact-size contract, pinning under multi-start, the zero
-budget, an empty graph, brute-force optima, determinism and validation.
-`mc_plugin_test`: default assembly == monolith bit for bit, plugin incremental ==
-full recompute, partial assemblies, overrides (exponent per side, per-side hard
+over random flip / swap / unassign / batch moves (the score and every constraint's
+raw total after each move, each constraint non-zero during the walk), FULL_ASSERT
+solves (ALNS kicks and exact size), the exact-size contract, pinning under
+multi-start, a worker exception rethrown instead of terminating the process, the
+zero budget, an empty graph, brute-force optima, determinism and validation.
+`mc_plugin_test`: default assembly == monolith bit for bit (score and unit costs),
+plugin incremental == full recompute per constraint (with the opt-in imbalance
+switched on too), partial assemblies, overrides (exponent per side, per-side hard
 rounding), `constraintTotals()`, FULL_ASSERT plugin solves, the builder, raw costs
 by hand, the catalog and the reward guards.
 
@@ -233,10 +241,9 @@ The planning variable is **BASIC**; the domain solver that configures the engine
 `ruinRecreateAsMoveWeight > 0`, as an ordinary move — it moves a cluster of vertices
 chained by same-side pairs at once). A new move (a gain-guided Kernighan–Lin flip,
 say) is an `optimaru::MoveOperator<…>` registered with `engine.addMoveOperator(...)`
-in `cpp/src/solver.cpp`; registered operators do not reach the engine's multi-start
-threads, so a solver that registers one runs its own worker threads (see
-facility-location's `CloseFacilityMove`). Under exact size bounds a move must keep
-the side sizes.
+on every engine `cpp/src/solver.cpp` builds: the single start, each parallel worker
+in `searchInParallel()` and the constraint-assembly overload. Under exact size
+bounds a move must keep the side sizes.
 
 **Changing the construction heuristic.** `construct()` in `cpp/src/solver.cpp` gives
 every vertex a side before the engine starts (the 0.1.x alternating start); the

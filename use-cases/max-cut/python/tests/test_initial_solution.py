@@ -111,6 +111,22 @@ def test_partial_seed_that_completes_to_the_wrong_size_is_accepted():
     assert seeded.score_hard == -2
 
 
+def test_unbalanced_default_start_stays_infeasible_under_exact_size_bounds():
+    """Pins the 0.1.5 behaviour: with exact bounds even an unseeded solve keeps the start's sizes.
+
+    The fixed A on side 1 turns the ``i % 2`` start into 1 + 3, so the swap-only search
+    cannot reach a feasible 2 + 2 partition (CP-SAT finds one); a right-size seed does.
+    """
+    problem = _problem(fixed_partition={"A": 1}, min_partition_size=2, max_partition_size=2)
+    plain = problem.model_copy(deep=True)
+    solve(plain, config=_steps(500, seed=1))
+    assert plain.partition == {"A": 1, "B": 1, "C": 0, "D": 1}
+    assert (plain.score_hard, plain.score_soft) == (-2, 7.0)
+    seeded = with_initial_solution(problem, {"partition": {"A": 1, "B": 1, "C": 0, "D": 0}})
+    solve(seeded, config=_steps(500, seed=1))
+    assert (seeded.score_hard, seeded.score_soft) == (0, 9.0)  # A, C | B, D cuts all three edges
+
+
 def test_wrong_size_seed_is_allowed_when_the_bounds_are_a_range():
     problem = _problem(min_partition_size=1, max_partition_size=3)
     seeded = with_initial_solution(problem, {"partition": {"A": 0, "B": 0, "C": 0, "D": 0}})

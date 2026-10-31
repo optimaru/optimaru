@@ -131,6 +131,19 @@ def test_multi_start_returns_a_consistent_best():
     assert (core.score.hard, core.score.soft) == (rescored.hard, rescored.soft)
 
 
+@pytest.mark.parametrize("parallel_solver_count", [1, 2])
+def test_a_raising_on_new_best_raises_from_solve(parallel_solver_count):
+    """The callback's exception reaches the caller, also from a parallel worker thread (no process abort)."""
+
+    def fail(step, score):
+        raise RuntimeError("on_new_best failed")
+
+    problem = demo()
+    problem.min_partition_size = problem.max_partition_size = None  # flips allowed: something improves
+    with pytest.raises(RuntimeError, match="on_new_best failed"):
+        max_cut.solve(problem, time_limit_seconds=5.0, parallel_solver_count=parallel_solver_count, on_new_best=fail)
+
+
 def test_full_assert_solves_without_corruption():
     for exact in (True, False):
         config = steps(3000, seed=3)

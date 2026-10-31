@@ -30,10 +30,27 @@ namespace mc
 class MaxCutIncrementalScoreCalculator final : public optimaru::IncrementalScoreCalculator<MaxCutProblem>
 {
 public:
+    // The raw cost of every default constraint, read from the running
+    // totals: fixed / same / different summed over both sides (the
+    // RawCosts::*Total() of mc/score_calculator.hpp), the size bounds per
+    // side, the imbalance and the cut weight (+cut; cutWeightCost is -cut).
+    // calculateScore() weighs exactly these; the tests compare them with
+    // ScoreCalculator::rawCosts after every move.
+    struct Totals
+    {
+        std::int64_t fixed = 0;
+        std::int64_t same = 0;
+        std::int64_t different = 0;
+        std::int64_t size[kSideCount] = {0, 0};
+        std::int64_t imbalance = 0;
+        std::int64_t cut = 0;
+    };
+
     void resetWorkingSolution(MaxCutProblem &workingSolution) override;
     void beforeVariableChanged(int vertex) override;
     void afterVariableChanged(int vertex) override;
     Score calculateScore() override;
+    Totals totals() const;
 
 private:
     MaxCutProblem *problem_ = nullptr;

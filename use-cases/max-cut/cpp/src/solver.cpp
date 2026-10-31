@@ -2,8 +2,10 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <exception>
 #include <memory>
 #include <stdexcept>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -24,16 +26,15 @@ void requireRewards(const Solver::Config &config)
         throw std::invalid_argument("ruinRecreateRewards must contain exactly 4 values");
 }
 
-// The engine configuration shared by both solve() overloads: late-acceptance
-// local search over the built-in BASIC moves, plus the ALNS kicks. The
-// engine's construction heuristic finds nothing left to place: the start
-// partition assigned every vertex.
-optimaru::SolverConfig engineConfigOf(const Solver::Config &config, const MaxCutProblem &problem, int starts)
+// The engine configuration of one search, shared by both solve() overloads
+// and every parallel start: late-acceptance local search over the built-in
+// BASIC moves, plus the ALNS kicks. The engine's construction heuristic finds
+// nothing left to place: the start partition assigned every vertex.
+optimaru::SolverConfig engineConfigOf(const Solver::Config &config, const MaxCutProblem &problem)
 {
     optimaru::SolverConfig engineConfig;
     engineConfig.randomSeed = config.randomSeed;
     engineConfig.environmentMode = config.environmentMode;
-    engineConfig.multiStartCount = starts;
     engineConfig.onNewBest = config.onNewBest;
     engineConfig.termination.spentLimit = config.spentLimit;
     engineConfig.termination.bestScoreLimit = config.bestScoreLimit;
@@ -97,6 +98,67 @@ bool searchable(const MaxCutProblem &problem)
     return !problem.exactSize() || problem.movableCount() >= 2;
 }
 
+// Independent parallel starts: worker i searches its own copy of the start
+// partition with randomSeed + i and the full budget (only worker 0 reports
+// onNewBest); the best score wins, the lowest index on a tie. This is the
+// search of the engine's solveMultiStart, run on worker threads that catch
+// their own exceptions: a throwing onNewBest, a FULL_ASSERT
+// ScoreCorruptionError or a bad_alloc in one worker stops the others early
+// and is rethrown here once every worker has joined, instead of terminating
+// the process.
+void searchInParallel(const Solver::Config &config, MaxCutProblem &problem, int starts)
+{
+    std::vector<MaxCutProblem> copies(starts, problem);
+    std::vector<optimaru::HardSoftScore> scores(starts);
+    std::vector<std::exception_ptr> failures(starts);
+    // Every engine exists before any worker starts, so a failing worker can
+    // stop all of them (terminateEarly() is thread-safe and sticky).
+    std::vector<std::unique_ptr<optimaru::Solver<MaxCutProblem>>> engines;
+    engines.reserve(starts);
+    for (int i = 0; i < starts; ++i)
+    {
+        optimaru::SolverConfig engineConfig = engineConfigOf(config, problem);
+        engineConfig.randomSeed += static_cast<std::uint64_t>(i);
+        if (i != 0)
+            engineConfig.onNewBest = nullptr;
+        engines.push_back(std::make_unique<optimaru::Solver<MaxCutProblem>>(std::move(engineConfig)));
+    }
+    std::vector<std::thread> workers;
+    workers.reserve(starts);
+    for (int i = 0; i < starts; ++i)
+    {
+        workers.emplace_back(
+            [i, &copies, &scores, &failures, &engines]
+            {
+                try
+                {
+                    MaxCutIncrementalScoreCalculator calculator;
+                    scores[i] = engines[i]->solve(copies[i], calculator);
+                }
+                catch (...)
+                {
+                    failures[i] = std::current_exception();
+                    for (const auto &engine : engines)
+                        engine->terminateEarly();
+                }
+            });
+    }
+    for (std::thread &worker : workers)
+        worker.join();
+    for (const std::exception_ptr &failure : failures)
+    {
+        if (failure)
+            std::rethrow_exception(failure);
+    }
+    int best = 0;
+    for (int i = 1; i < starts; ++i)
+    {
+        if (scores[i] > scores[best])
+            best = i;
+    }
+    problem = std::move(copies[best]);
+}
+
 }  // namespace
 
 void Solver::solve(MaxCutProblem &problem)
@@ -105,12 +167,17 @@ void Solver::solve(MaxCutProblem &problem)
     construct(problem);
     if (searchable(problem))
     {
-        // Independent parallel starts through the engine's own multi-start:
-        // no custom operator or variable listener is registered, so the
-        // worker threads run exactly the same search (seed + i each).
         const int starts = std::max(1, config_.parallelSolverCount);
-        optimaru::Solver<MaxCutProblem> engine(engineConfigOf(config_, problem, starts));
-        engine.solveMultiStart(problem, [] { return std::make_unique<MaxCutIncrementalScoreCalculator>(); });
+        if (starts == 1)
+        {
+            MaxCutIncrementalScoreCalculator calculator;
+            optimaru::Solver<MaxCutProblem> engine(engineConfigOf(config_, problem));
+            engine.solve(problem, calculator);
+        }
+        else
+        {
+            searchInParallel(config_, problem, starts);
+        }
     }
     // The authoritative final score: a full recompute on the best solution.
     ScoreCalculator::calculateScore(problem);
@@ -123,7 +190,7 @@ void Solver::solve(MaxCutProblem &problem, optimaru::DecomposedScoreCalculator<M
     if (searchable(problem))
     {
         // Single-start: the caller-owned calculator cannot be cloned.
-        optimaru::Solver<MaxCutProblem> engine(engineConfigOf(config_, problem, 1));
+        optimaru::Solver<MaxCutProblem> engine(engineConfigOf(config_, problem));
         engine.solve(problem, calculator);
     }
     // Score the final solution with the caller's constraint assembly (custom

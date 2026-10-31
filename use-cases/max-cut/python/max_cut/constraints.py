@@ -75,7 +75,7 @@ class FixedPartitionCost(Constraint):
     description_ko = (
         "fixed_partition으로 고정한 정점이 반대쪽 파티션에 놓인 수를, 정점이 놓인 쪽에서 셉니다. "
         "잘못 놓인 고정 정점 하나가 비용 1이며, 0이면 모든 고정 정점이 제자리에 있습니다. "
-        "탐색은 고정 정점을 옮기지 않으므로 웜 스타트 시드만 이 값을 양수로 만들 수 있습니다."
+        "탐색은 고정 정점을 옮기지 않으므로 웜 스타트로 넣은 초기 분할만 이 값을 0보다 크게 만들 수 있습니다."
     )
 
 
@@ -91,7 +91,7 @@ class SamePartitionPairsCost(Constraint):
     )
     description_ko = (
         "same_partition_pairs의 두 정점이 서로 다른 쪽에 놓인 쌍의 수입니다. 갈라진 쌍은 첫 번째 정점이 놓인 쪽에서 "
-        "한 번만 셉니다. 갈라진 쌍 하나가 비용 1이며, 0이면 모든 쌍이 같은 쪽에 있습니다."
+        "한 번만 셉니다. 갈라진 쌍 하나가 비용 1이며, 0이면 모든 쌍의 두 정점이 같은 쪽에 있습니다."
     )
 
 
@@ -106,8 +106,8 @@ class DifferentPartitionPairsCost(Constraint):
         "One unit of cost is one pair left together; 0 means every pair is split across the cut."
     )
     description_ko = (
-        "different_partition_pairs의 두 정점이 같은 쪽에 놓인 쌍의 수를 그 쪽에서 셉니다. "
-        "함께 놓인 쌍 하나가 비용 1이며, 0이면 모든 쌍이 서로 다른 쪽으로 나뉘었습니다."
+        "different_partition_pairs의 두 정점이 같은 쪽에 놓인 쌍의 수를 그쪽에서 셉니다. "
+        "함께 놓인 쌍 하나가 비용 1이며, 0이면 모든 쌍이 서로 다른 쪽으로 나뉘어 있습니다."
     )
 
 

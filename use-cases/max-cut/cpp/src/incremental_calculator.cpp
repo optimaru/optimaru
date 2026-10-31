@@ -121,19 +121,30 @@ void MaxCutIncrementalScoreCalculator::apply(int v, int sign)
     }
 }
 
-Score MaxCutIncrementalScoreCalculator::calculateScore()
+MaxCutIncrementalScoreCalculator::Totals MaxCutIncrementalScoreCalculator::totals() const
 {
     const MaxCutProblem &p = *problem_;
-    std::int64_t size = 0;
+    Totals totals;
+    totals.fixed = fixed_;
+    totals.same = sameSplit_;
+    totals.different = diffJoined_;
     for (int s = 0; s < kSideCount; ++s)
     {
         const std::int64_t n = count_[s];
-        size += std::max<std::int64_t>(0, p.minSize() - n) + std::max<std::int64_t>(0, n - p.maxSize());
+        totals.size[s] = std::max<std::int64_t>(0, p.minSize() - n) + std::max<std::int64_t>(0, n - p.maxSize());
     }
+    totals.imbalance = std::llabs(count_[0] - count_[1]);
+    totals.cut = cut_;
+    return totals;
+}
+
+Score MaxCutIncrementalScoreCalculator::calculateScore()
+{
+    const Totals t = totals();
     Score score;
-    score.hard = -(kFixedWeight * fixed_ + kSameWeight * sameSplit_ + kDifferentWeight * diffJoined_
-                   + kSizeWeight * size);
-    score.soft = static_cast<double>(kCutWeight * cut_ - kImbalanceWeight * std::llabs(count_[0] - count_[1]));
+    score.hard = -(kFixedWeight * t.fixed + kSameWeight * t.same + kDifferentWeight * t.different
+                   + kSizeWeight * (t.size[0] + t.size[1]));
+    score.soft = static_cast<double>(kCutWeight * t.cut - kImbalanceWeight * t.imbalance);
     return score;
 }
 

@@ -1,9 +1,12 @@
 // Plugin-assembly tests (mc/constraints.hpp), engine test/ style.
 //   (a) monolith vs plugin: the default assembly == ScoreCalculator bit for
-//       bit on random assignments (-1 sides included)
+//       bit on random assignments (-1 sides included), the score and every
+//       unit cost (== ScoreCalculator::rawCosts)
 //   (b) plugin incremental == full recompute: random moves through the
-//       engine's ScoreDirector protocol; the raw costs after the walk equal a
-//       fresh reset's
+//       engine's ScoreDirector protocol, with the defaults and with the
+//       opt-in imbalance switched on; after each move the score and every
+//       unit cost equal the full recompute's, and every constraint is
+//       non-zero at some point of the walk
 //   (c) dropping one component removes exactly its term
 //   (d) weight / level / exponent overrides
 //   (e) constraintTotals() explains the score
@@ -51,6 +54,25 @@ std::vector<std::vector<double>> rawTotals(const DecomposedCalculator &calculato
     return totals;
 }
 
+// The unit costs the default assembly must report for `raw` (the monolith's
+// full recompute), in catalog order: [side 0, side 1] for the four unit
+// constraints, one total for the imbalance and the cut reward (-cut).
+std::vector<std::vector<double>> expectedUnitCosts(const RawCosts &raw)
+{
+    auto sides = [](const std::int64_t (&costs)[kSideCount])
+    { return std::vector<double>{static_cast<double>(costs[0]), static_cast<double>(costs[1])}; };
+    return {sides(raw.fixed),
+            sides(raw.same),
+            sides(raw.different),
+            sides(raw.size),
+            {static_cast<double>(raw.imbalance)},
+            {-static_cast<double>(raw.cut)}};
+}
+
+const char *const kCatalogNames[] = {"fixedPartitionCost",      "samePartitionPairsCost",
+                                     "differentPartitionPairsCost", "partitionSizeBoundsCost",
+                                     "partitionImbalanceCost",  "cutWeightCost"};
+
 // -------------------------------------------------------------------------
 // (a) Monolith vs plugin.
 // -------------------------------------------------------------------------
@@ -58,6 +80,7 @@ void verifyAssemblyParity()
 {
     std::printf("== (a) Default assembly == monolithic score ==\n");
     int mismatches = 0;
+    int costMismatches = 0;
     const int assignments = 500;
     for (int k = 0; k < assignments; ++k)
     {
@@ -71,74 +94,104 @@ void verifyAssemblyParity()
             std::printf("  MISMATCH #%d: plugin=%s monolith=%s\n", k, plugin.toString().c_str(),
                         monolith.toString().c_str());
         }
+        if (rawTotals(calculator) != expectedUnitCosts(ScoreCalculator::rawCosts(p)) && ++costMismatches <= 3)
+            std::printf("  RAW COST MISMATCH #%d\n", k);
     }
     check(mismatches == 0, std::to_string(assignments) + " random assignments (-1 included): plugin == monolith");
+    check(costMismatches == 0,
+          std::to_string(assignments) + " random assignments: every unit cost == ScoreCalculator::rawCosts");
     std::printf("\n");
 }
 
 // -------------------------------------------------------------------------
-// (b) Plugin incremental == full recompute.
+// (b) Plugin incremental == full recompute, per constraint.
 // -------------------------------------------------------------------------
 void verifyIncremental()
 {
-    std::printf("== (b) Plugin incremental == full recompute ==\n");
-    int mismatches = 0;
-    int rawMismatches = 0;
-    int moves = 0;
-    for (std::uint64_t seed = 7; seed < 10; ++seed)
+    std::printf("== (b) Plugin incremental == full recompute, per constraint ==\n");
+    // Two assemblies: the defaults (compared with the monolith's score) and
+    // the opt-in imbalance switched on at weight 1, so its incremental term
+    // also reaches the score: hard -(fixed + same + different + size), soft
+    // cut - imbalance.
+    for (const bool imbalanceOn : {false, true})
     {
-        MaxCutProblem p = randomInstance(40, seed, 0.1);
-        ScoreCalculator::prepare(p);
-        DecomposedCalculator calculator;
-        addDefaultConstraints(calculator);
-        optimaru::ScoreDirector<MaxCutProblem> director(p, calculator);
-        MaxCutProblem shadow = p;
-
-        std::mt19937_64 rng(seed * 123);
-        std::uniform_real_distribution<double> unit(0.0, 1.0);
-        const int n = p.vertexCount();
-        for (int step = 0; step < 1000; ++step, ++moves)
+        int nonZero[6] = {0, 0, 0, 0, 0, 0};
+        int mismatches = 0;
+        int costMismatches = 0;
+        int moves = 0;
+        for (std::uint64_t seed = 7; seed < 10; ++seed)
         {
-            const double u = unit(rng);
-            if (u < 0.6)
-            {
-                const int v = static_cast<int>(rng() % n);
-                const int value = unit(rng) < 0.15 ? kUnassigned : static_cast<int>(rng() % 2);
-                director.changeVariable(v, value);
-            }
+            MaxCutProblem p = randomInstance(40, seed, 0.1);
+            ScoreCalculator::prepare(p);
+            DecomposedCalculator calculator;
+            if (imbalanceOn)
+                defaultConstraints().weight("partitionImbalanceCost", 1).into(calculator);
             else
+                addDefaultConstraints(calculator);
+            optimaru::ScoreDirector<MaxCutProblem> director(p, calculator);
+            MaxCutProblem shadow = p;
+
+            std::mt19937_64 rng(seed * 123);
+            std::uniform_real_distribution<double> unit(0.0, 1.0);
+            const int n = p.vertexCount();
+            for (int step = 0; step < 1000; ++step, ++moves)
             {
-                director.beginVariableChanges();
-                const int a = static_cast<int>(rng() % n);
-                const int b = static_cast<int>(rng() % n);
-                const int va = p.side[a];
-                director.changeVariable(a, p.side[b]);
-                director.changeVariable(b, va);
-                if (u > 0.9)
-                    director.changeVariable(static_cast<int>(rng() % n), static_cast<int>(rng() % 2));
-                director.endVariableChanges();
-            }
-            shadow.side = p.side;
-            const Score full = ScoreCalculator::calculateScore(shadow);
-            const Score incremental = director.calculateScore();
-            if (!sameScore(full, incremental) && ++mismatches <= 3)
-            {
-                std::printf("  MISMATCH seed %llu step %d: incremental=%s full=%s\n",
-                            static_cast<unsigned long long>(seed), step, incremental.toString().c_str(),
-                            full.toString().c_str());
-            }
-            if (step % 100 == 0)
-            {
-                DecomposedCalculator fresh;
-                addDefaultConstraints(fresh);
-                scoreWith(fresh, shadow);
-                if (rawTotals(fresh) != rawTotals(calculator))
-                    ++rawMismatches;
+                const double u = unit(rng);
+                if (u < 0.6)
+                {
+                    const int v = static_cast<int>(rng() % n);
+                    const int value = unit(rng) < 0.15 ? kUnassigned : static_cast<int>(rng() % 2);
+                    director.changeVariable(v, value);
+                }
+                else
+                {
+                    director.beginVariableChanges();
+                    const int a = static_cast<int>(rng() % n);
+                    const int b = static_cast<int>(rng() % n);
+                    const int va = p.side[a];
+                    director.changeVariable(a, p.side[b]);
+                    director.changeVariable(b, va);
+                    if (u > 0.9)
+                        director.changeVariable(static_cast<int>(rng() % n), static_cast<int>(rng() % 2));
+                    director.endVariableChanges();
+                }
+                shadow.side = p.side;
+                Score full = ScoreCalculator::calculateScore(shadow);
+                const RawCosts raw = ScoreCalculator::rawCosts(shadow);
+                if (imbalanceOn)
+                    full.soft = static_cast<double>(raw.cut - raw.imbalance);
+                const Score incremental = director.calculateScore();
+                if (!sameScore(full, incremental) && ++mismatches <= 3)
+                {
+                    std::printf("  MISMATCH seed %llu step %d: incremental=%s full=%s\n",
+                                static_cast<unsigned long long>(seed), step, incremental.toString().c_str(),
+                                full.toString().c_str());
+                }
+                const std::vector<std::vector<double>> costs = rawTotals(calculator);
+                if (costs != expectedUnitCosts(raw) && ++costMismatches <= 3)
+                {
+                    std::printf("  RAW COST MISMATCH seed %llu step %d\n", static_cast<unsigned long long>(seed),
+                                step);
+                }
+                for (std::size_t c = 0; c < costs.size() && c < 6; ++c)
+                {
+                    bool any = false;
+                    for (const double cost : costs[c])
+                        any = any || cost != 0.0;
+                    nonZero[c] += any ? 1 : 0;
+                }
             }
         }
+        const std::string assembly = imbalanceOn ? " (partitionImbalanceCost at weight 1)" : " (defaults)";
+        check(mismatches == 0, std::to_string(moves) + " random moves, incremental == full recompute" + assembly);
+        check(costMismatches == 0,
+              std::to_string(moves) + " random moves, every unit cost == ScoreCalculator::rawCosts" + assembly);
+        for (int c = 0; c < 6; ++c)
+        {
+            check(nonZero[c] > 0, std::string(kCatalogNames[c]) + " non-zero on " + std::to_string(nonZero[c]) + "/"
+                                      + std::to_string(moves) + " moves" + assembly);
+        }
     }
-    check(mismatches == 0, std::to_string(moves) + " random moves, incremental == full recompute");
-    check(rawMismatches == 0, "the raw constraint costs during the walk == a fresh reset's");
     std::printf("\n");
 }
 

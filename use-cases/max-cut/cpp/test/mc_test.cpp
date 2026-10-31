@@ -4,11 +4,14 @@
 //       the incremental calculator: a positive and a zero case per constraint,
 //       plus the edge cases (self-loops, parallel and zero-weight edges,
 //       self-pairs, the -1 rules)
-//   (2) incremental score == full recompute across random flips, swaps and
-//       -1 (unassigned) transitions on random instances using every fact
+//   (2) incremental == full recompute across random flips, swaps and -1
+//       (unassigned) transitions on random instances using every fact: the
+//       score and every constraint's raw total after each move, each
+//       constraint non-zero at some point of the walk
 //   (3) the solver: FULL_ASSERT (ALNS kicks included), the exact-size
-//       contract, pinning under multi-start, the zero budget, an empty graph,
-//       brute-force optima, reproducibility under a step limit, validation
+//       contract, pinning under multi-start, a worker exception rethrown, the
+//       zero budget, an empty graph, brute-force optima, reproducibility
+//       under a step limit, validation
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -175,12 +178,25 @@ void verifyHandCalculated()
 }
 
 // -------------------------------------------------------------------------
-// (2) Incremental == full recompute on random walks.
+// (2) Incremental == full recompute on random walks, per constraint.
 // -------------------------------------------------------------------------
+bool sameTotals(const MaxCutIncrementalScoreCalculator::Totals &totals, const RawCosts &raw)
+{
+    return totals.fixed == raw.fixedTotal() && totals.same == raw.sameTotal()
+           && totals.different == raw.differentTotal() && totals.size[0] == raw.size[0]
+           && totals.size[1] == raw.size[1] && totals.imbalance == raw.imbalance && totals.cut == raw.cut;
+}
+
 void verifyIncrementalWalk()
 {
-    std::printf("== (2) Incremental == full recompute on random walks ==\n");
+    std::printf("== (2) Incremental == full recompute on random walks, per constraint ==\n");
+    // The catalog order; nonZero counts the steps on which each raw cost was
+    // non-zero, so a constraint the walk never exercises fails the test.
+    const char *const names[] = {"fixedPartitionCost",      "samePartitionPairsCost", "differentPartitionPairsCost",
+                                 "partitionSizeBoundsCost", "partitionImbalanceCost", "cutWeightCost"};
+    int nonZero[6] = {0, 0, 0, 0, 0, 0};
     int mismatches = 0;
+    int costMismatches = 0;
     int steps = 0;
     for (std::uint64_t seed = 1; seed <= 12; ++seed)
     {
@@ -216,6 +232,7 @@ void verifyIncrementalWalk()
             }
             shadow.side = p.side;
             const Score full = ScoreCalculator::calculateScore(shadow);
+            const RawCosts raw = ScoreCalculator::rawCosts(shadow);
             const Score incremental = director.calculateScore();
             if (!sameScore(full, incremental) && ++mismatches <= 3)
             {
@@ -223,9 +240,27 @@ void verifyIncrementalWalk()
                             static_cast<unsigned long long>(seed), step, incremental.toString().c_str(),
                             full.toString().c_str());
             }
+            // Per constraint, so opposite errors in two terms cannot cancel
+            // out and the weight-0 imbalance is checked too.
+            if (!sameTotals(calculator.totals(), raw) && ++costMismatches <= 3)
+            {
+                std::printf("  RAW COST MISMATCH seed %llu step %d\n", static_cast<unsigned long long>(seed), step);
+            }
+            const std::int64_t costs[6] = {raw.fixedTotal(), raw.sameTotal(), raw.differentTotal(),
+                                           raw.sizeTotal(),  raw.imbalance,   raw.cut};
+            for (int c = 0; c < 6; ++c)
+                nonZero[c] += costs[c] != 0 ? 1 : 0;
         }
     }
     check(mismatches == 0, std::to_string(steps) + " random moves, incremental == full recompute");
+    check(costMismatches == 0,
+          std::to_string(steps) + " random moves, every constraint's incremental raw total == the full recompute's");
+    for (int c = 0; c < 6; ++c)
+    {
+        check(nonZero[c] > 0,
+              std::string(names[c]) + " non-zero on " + std::to_string(nonZero[c]) + "/" + std::to_string(steps)
+                  + " steps of the walk");
+    }
     std::printf("\n");
 }
 
@@ -324,6 +359,29 @@ void verifySolver()
         for (int v = 0; v < free.vertexCount(); ++v)
             pinned = pinned && (fixedSide[v] < 0 || free.side[v] == fixedSide[v]);
         check(pinned, "random instance: no fixed vertex moved (ALNS kicks, 3 starts)");
+    }
+    {
+        // An exception in a parallel worker (here a throwing onNewBest on
+        // worker 0) is rethrown by solve() once every worker has joined,
+        // instead of terminating the process; it also stops the other
+        // workers, which would otherwise run the whole 30 s budget.
+        MaxCutProblem p = randomInstance(40, 31, 0.0, /*bounds=*/false);
+        Solver::Config config;
+        config.parallelSolverCount = 3;
+        config.onNewBest = [](std::int64_t, const Score &) { throw std::runtime_error("onNewBest failed"); };
+        const auto start = std::chrono::steady_clock::now();
+        bool rethrown = false;
+        try
+        {
+            Solver(config).solve(p);
+        }
+        catch (const std::runtime_error &error)
+        {
+            rethrown = std::string(error.what()) == "onNewBest failed";
+        }
+        check(rethrown, "a throwing onNewBest under 3 parallel starts is rethrown by solve()");
+        check(std::chrono::steady_clock::now() - start < std::chrono::seconds(10),
+              "... and stops the other workers early (budget 30 s)");
     }
     {
         // The zero budget returns the start partition, scored.

@@ -29,7 +29,7 @@ namespace mc
 // swapMoveWeight = 1 and turns ruin-and-recreate (kicks and the as-move),
 // descent off, whatever the Config says; with fewer than two movable vertices
 // it skips the search. A seed of the wrong size keeps that size (and its hard
-// penalty).
+// penalty); so does the default start when fixed vertices unbalance it.
 class Solver
 {
 public:
@@ -54,10 +54,11 @@ public:
         std::size_t lateAcceptanceSize = 0;
         std::uint64_t randomSeed = 0;
 
-        // Independent parallel starts (the engine's multi-start): worker i
-        // searches its own copy of the start partition with randomSeed + i
-        // and the full budget; the best score wins. Ignored by the
-        // constraint-assembly overload.
+        // Independent parallel starts: worker thread i searches its own copy
+        // of the start partition with randomSeed + i and the full budget; the
+        // best score wins. Only worker 0 calls onNewBest. An exception in a
+        // worker (a throwing onNewBest included) stops the other workers and
+        // is rethrown by solve(). Ignored by the constraint-assembly overload.
         int parallelSolverCount = 1;
 
         // FULL_ASSERT re-verifies the incremental score against a full

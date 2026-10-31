@@ -71,7 +71,10 @@ multi-start, ALNS knobs, move weights, the `on_new_best(step, score)` callback,
 `max_cut.solve(problem, config=cfg)`. A zero budget (`spent_limit_seconds = 0`)
 returns the start partition (vertex `i` on side `i % 2`, fixed vertices on their
 side), or a warm-start seed, unchanged. Under exact size bounds
-(`min_partition_size == max_partition_size`) the search only swaps sides.
+(`min_partition_size == max_partition_size`) the search only swaps sides, so the
+start's side sizes are kept, also without a seed: when fixed vertices unbalance the
+`i % 2` start, the result stays infeasible even if a feasible partition exists (as in
+0.1.5). Seed a partition of the right size with `with_initial_solution` instead.
 
 Note: list attributes of the engine object return copies — assign whole lists and
 write the partition in bulk with `core.set_assignment([...])`.

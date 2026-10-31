@@ -43,9 +43,9 @@ inline MaxCutProblem graph(std::vector<std::string> ids, std::vector<Edge> edges
     return problem;
 }
 
-// Fixture H (the port design's hand-calculated instance): A-B 2, B-C 3,
-// C-D 4; A fixed to side 1; same pair (A, B); different pair (B, C); exactly
-// 2 vertices per side.
+// Fixture H (the hand-calculated instance of both C++ tests): A-B 2, B-C 3,
+// C-D 4; A fixed to side 1; same pair (A, B); different pair (B, C);
+// exactly 2 vertices per side.
 //   zero     [1, 1, 0, 0]: every hard cost 0, imbalance 0, cut 3  -> 0hard/3soft
 //   positive [0, 1, 1, 1]: fixed [1, 0], same [1, 0], different [0, 1],
 //            size [1, 1], imbalance 2, cut 2                     -> -5hard/2soft

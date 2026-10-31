@@ -53,7 +53,7 @@ OLD_DEFAULTS = {
     "maximize_cut_weight": (False, 1.0),
 }
 
-#: 0.1.5 catalog name -> 0.2.0 name (/var/tmp/design/rename_table.json, max-cut rows).
+#: 0.1.5 catalog name -> 0.2.0 name, one entry per constraint (0.2.0 keeps no aliases).
 RENAMED = {
     "fixed_partition": "fixed_partition_cost",
     "same_partition_pairs": "same_partition_pairs_cost",
