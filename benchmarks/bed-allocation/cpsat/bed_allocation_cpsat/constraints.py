@@ -1,4 +1,10 @@
-"""Class-based CP-SAT plugins for bed allocation."""
+"""Class-based CP-SAT plugins for bed allocation.
+
+Each plugin subclasses the domain spec of the same name and carries only ``build()``;
+its default level and weight come from ``bed_allocation.constraint_info()`` (the C++
+components' kDefaultLevel / kDefaultWeight), so nothing is restated here. The registry
+keeps the ``list_constraints()`` order (the global ``MixedGenderRoomCost`` last).
+"""
 
 from dataclasses import dataclass, field
 from typing import Any, ClassVar
@@ -33,11 +39,7 @@ class BedContext:
         return (stay.departure_date - stay.arrival_date).days + 1
 
 
-class AssignEveryPatientToABed(
-    domain.AssignEveryPatientToABed, ConstraintPlugin[BedContext]
-):
-    default_level = "medium"
-
+class UnassignedStaysCost(domain.UnassignedStaysCost, ConstraintPlugin[BedContext]):
     def build(self, context: BedContext, objective: ObjectiveBuilder) -> None:
         for stay, stay_data in enumerate(context.problem.stays):
             nights = context.nights(stay_data)
@@ -103,68 +105,51 @@ class _StayRoomPlugin(ConstraintPlugin[BedContext]):
                 )
 
 
-class FemaleInMaleRoom(domain.FemaleInMaleRoom, _StayRoomPlugin):
-    default_level = "hard"
-    default_weight = 50
+class FemaleInMaleRoomCost(domain.FemaleInMaleRoomCost, _StayRoomPlugin):
     rule = "female_in_male"
 
 
-class MaleInFemaleRoom(domain.MaleInFemaleRoom, _StayRoomPlugin):
-    default_level = "hard"
-    default_weight = 50
+class MaleInFemaleRoomCost(domain.MaleInFemaleRoomCost, _StayRoomPlugin):
     rule = "male_in_female"
 
 
-class DepartmentMinimumAge(domain.DepartmentMinimumAge, _StayRoomPlugin):
-    default_level = "hard"
-    default_weight = 100
+class DepartmentMinAgeCost(domain.DepartmentMinAgeCost, _StayRoomPlugin):
     rule = "minimum_age"
 
 
-class DepartmentMaximumAge(domain.DepartmentMaximumAge, _StayRoomPlugin):
-    default_level = "hard"
-    default_weight = 100
+class DepartmentMaxAgeCost(domain.DepartmentMaxAgeCost, _StayRoomPlugin):
     rule = "maximum_age"
 
 
-class RequiredPatientEquipment(domain.RequiredPatientEquipment, _StayRoomPlugin):
-    default_level = "hard"
-    default_weight = 50
+class RequiredPatientEquipmentCost(
+    domain.RequiredPatientEquipmentCost, _StayRoomPlugin
+):
     rule = "required_equipment"
 
 
-class PreferredMaximumRoomCapacity(
-    domain.PreferredMaximumRoomCapacity, _StayRoomPlugin
+class PreferredMaxRoomCapacityCost(
+    domain.PreferredMaxRoomCapacityCost, _StayRoomPlugin
 ):
-    default_level = "soft"
-    default_weight = 8
     rule = "preferred_capacity"
 
 
-class DepartmentSpecialty(domain.DepartmentSpecialty, _StayRoomPlugin):
-    default_level = "soft"
-    default_weight = 10
+class DepartmentSpecialtyCost(domain.DepartmentSpecialtyCost, _StayRoomPlugin):
     rule = "specialty"
 
 
-class DepartmentSpecialtyNotFirstPriority(
-    domain.DepartmentSpecialtyNotFirstPriority, _StayRoomPlugin
+class DepartmentSpecialtyPriorityCost(
+    domain.DepartmentSpecialtyPriorityCost, _StayRoomPlugin
 ):
-    default_level = "soft"
-    default_weight = 10
     rule = "specialty_priority"
 
 
-class PreferredPatientEquipment(domain.PreferredPatientEquipment, _StayRoomPlugin):
-    default_level = "soft"
-    default_weight = 50
+class PreferredPatientEquipmentCost(
+    domain.PreferredPatientEquipmentCost, _StayRoomPlugin
+):
     rule = "preferred_equipment"
 
 
-class SameBedInSameNight(domain.SameBedInSameNight, ConstraintPlugin[BedContext]):
-    default_level = "hard"
-    default_weight = 1_000
-
+class BedConflictCost(domain.BedConflictCost, ConstraintPlugin[BedContext]):
     def build(self, context: BedContext, objective: ObjectiveBuilder) -> None:
         for left in range(len(context.problem.stays)):
             for right in range(left + 1, len(context.problem.stays)):
@@ -186,13 +171,7 @@ class SameBedInSameNight(domain.SameBedInSameNight, ConstraintPlugin[BedContext]
                     objective.add(self.name, overlap * both, bound=overlap)
 
 
-class DifferentGenderInSameGenderRoomInSameNight(
-    domain.DifferentGenderInSameGenderRoomInSameNight,
-    ConstraintPlugin[BedContext],
-):
-    default_level = "hard"
-    default_weight = 1_000
-
+class MixedGenderRoomCost(domain.MixedGenderRoomCost, ConstraintPlugin[BedContext]):
     def build(self, context: BedContext, objective: ObjectiveBuilder) -> None:
         for left in range(len(context.problem.stays)):
             for right in range(left + 1, len(context.problem.stays)):
@@ -239,17 +218,17 @@ class DifferentGenderInSameGenderRoomInSameNight(
 
 REGISTRY = ConstraintRegistry(
     [
-        SameBedInSameNight(),
-        FemaleInMaleRoom(),
-        MaleInFemaleRoom(),
-        DepartmentMinimumAge(),
-        DepartmentMaximumAge(),
-        RequiredPatientEquipment(),
-        AssignEveryPatientToABed(),
-        PreferredMaximumRoomCapacity(),
-        DepartmentSpecialty(),
-        DepartmentSpecialtyNotFirstPriority(),
-        PreferredPatientEquipment(),
-        DifferentGenderInSameGenderRoomInSameNight(),
+        BedConflictCost(),
+        FemaleInMaleRoomCost(),
+        MaleInFemaleRoomCost(),
+        DepartmentMinAgeCost(),
+        DepartmentMaxAgeCost(),
+        RequiredPatientEquipmentCost(),
+        UnassignedStaysCost(),
+        PreferredMaxRoomCapacityCost(),
+        DepartmentSpecialtyCost(),
+        DepartmentSpecialtyPriorityCost(),
+        PreferredPatientEquipmentCost(),
+        MixedGenderRoomCost(),
     ]
 )

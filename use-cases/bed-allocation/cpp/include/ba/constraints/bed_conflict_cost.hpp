@@ -1,19 +1,26 @@
-#ifndef BA_CONSTRAINTS_SAME_BED_IN_SAME_NIGHT_HPP
-#define BA_CONSTRAINTS_SAME_BED_IN_SAME_NIGHT_HPP
+#ifndef BA_CONSTRAINTS_BED_CONFLICT_COST_HPP
+#define BA_CONSTRAINTS_BED_CONFLICT_COST_HPP
 
 #include "ba/constraints/common.hpp"
 
 namespace ba
 {
 
-// Hard (default, weight 1000): sameBedInSameNight — one point per night two
-// stays share the same bed. A sum over the pairs INSIDE one unit, so the
-// exact delta of one stay joining or leaving is its overlap with the other
-// occupants.
-struct SameBedInSameNight final : BaUnitConstraint
+// Hard, weight 1000: bedConflictCost — two stays in one bed on the same
+// night. Raw cost per bed = the summed shared nights over every pair of its
+// stays, so 0 = no bed is double-booked on any night (the "no bed" sentinel
+// is never charged). 0.2.0 migration note: was sameBedInSameNight (the Java
+// quickstart's name).
+//
+// A sum over the pairs INSIDE one unit, so the exact delta of one stay
+// joining or leaving is its overlap with the other occupants.
+struct BedConflictCost final : BaUnitConstraint
 {
-    explicit SameBedInSameNight(double weight = 1000.0)
-        : BaUnitConstraint("sameBedInSameNight", weight, /*hard=*/true)
+    static constexpr double kDefaultWeight = 1000.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
+
+    explicit BedConflictCost(double weight = kDefaultWeight)
+        : BaUnitConstraint("bedConflictCost", weight, kDefaultLevel)
     {
     }
     void onReset(const BedPlan &plan) override
@@ -56,4 +63,4 @@ struct SameBedInSameNight final : BaUnitConstraint
 
 }  // namespace ba
 
-#endif  // BA_CONSTRAINTS_SAME_BED_IN_SAME_NIGHT_HPP
+#endif  // BA_CONSTRAINTS_BED_CONFLICT_COST_HPP

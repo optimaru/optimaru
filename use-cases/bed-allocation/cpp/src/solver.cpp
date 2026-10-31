@@ -1,7 +1,9 @@
 #include "ba/solver.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <cstdlib>
 #include <exception>
 #include <stdexcept>
@@ -198,10 +200,16 @@ void Solver::solve(BedPlan &plan,
         solveSingle(config_, plan, calculator);
 
     // Score the final solution with the caller's constraint assembly (custom
-    // weights included) and leave the calculator primed on it, so
-    // constraintTotals() explains exactly this score.
+    // weights and levels included) and leave the calculator primed on it, so
+    // constraintTotals() explains exactly this score. The three levels come
+    // straight from the calculator's accumulators (levelScores(), before the
+    // medium fold) rather than from decoding the folded engine score, so a
+    // demoted or re-weighted term lands on the level the assembly gave it.
     calculator.resetWorkingSolution(plan);
-    plan.score = fromEngineScore(calculator.calculateScore());
+    const auto levels = calculator.levelScores();
+    plan.score = Score{static_cast<std::int64_t>(levels.hard),
+                       static_cast<std::int64_t>(std::llround(levels.medium)),
+                       static_cast<std::int64_t>(std::llround(levels.soft))};
 }
 
 }  // namespace ba

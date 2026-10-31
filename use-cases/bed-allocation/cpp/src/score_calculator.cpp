@@ -5,8 +5,104 @@
 #include <string>
 #include <vector>
 
+#include "ba/constraints/bed_conflict_cost.hpp"
+#include "ba/constraints/department_max_age_cost.hpp"
+#include "ba/constraints/department_min_age_cost.hpp"
+#include "ba/constraints/department_specialty_cost.hpp"
+#include "ba/constraints/department_specialty_priority_cost.hpp"
+#include "ba/constraints/female_in_male_room_cost.hpp"
+#include "ba/constraints/male_in_female_room_cost.hpp"
+#include "ba/constraints/mixed_gender_room_cost.hpp"
+#include "ba/constraints/preferred_max_room_capacity_cost.hpp"
+#include "ba/constraints/preferred_patient_equipment_cost.hpp"
+#include "ba/constraints/required_patient_equipment_cost.hpp"
+#include "ba/constraints/unassigned_stays_cost.hpp"
+
 namespace ba
 {
+
+namespace
+{
+
+// The monolithic path keeps the quickstart's integer arithmetic, with the
+// weights read off the components (their kDefaultWeight is the only place a
+// default lives). The medium weight is in medium units: toEngineScore folds
+// the medium level into soft with kMediumFold.
+template <typename Component> constexpr std::int64_t integralWeight()
+{
+    constexpr auto weight
+        = static_cast<std::int64_t>(Component::kDefaultWeight);
+    static_assert(static_cast<double>(weight) == Component::kDefaultWeight,
+                  "the monolithic calculator assumes integral default "
+                  "weights");
+    return weight;
+}
+
+constexpr std::int64_t kBedConflictWeight = integralWeight<BedConflictCost>();
+constexpr std::int64_t kFemaleInMaleRoomWeight
+    = integralWeight<FemaleInMaleRoomCost>();
+constexpr std::int64_t kMaleInFemaleRoomWeight
+    = integralWeight<MaleInFemaleRoomCost>();
+constexpr std::int64_t kMixedGenderRoomWeight
+    = integralWeight<MixedGenderRoomCost>();
+constexpr std::int64_t kDepartmentMinAgeWeight
+    = integralWeight<DepartmentMinAgeCost>();
+constexpr std::int64_t kDepartmentMaxAgeWeight
+    = integralWeight<DepartmentMaxAgeCost>();
+constexpr std::int64_t kRequiredEquipmentWeight
+    = integralWeight<RequiredPatientEquipmentCost>();
+constexpr std::int64_t kUnassignedStaysWeight
+    = integralWeight<UnassignedStaysCost>();
+constexpr std::int64_t kPreferredCapacityWeight
+    = integralWeight<PreferredMaxRoomCapacityCost>();
+constexpr std::int64_t kDepartmentSpecialtyWeight
+    = integralWeight<DepartmentSpecialtyCost>();
+constexpr std::int64_t kSpecialtyPriorityWeight
+    = integralWeight<DepartmentSpecialtyPriorityCost>();
+constexpr std::int64_t kPreferredEquipmentWeight
+    = integralWeight<PreferredPatientEquipmentCost>();
+
+// The monolith assigns every term to its component's default level.
+static_assert(BedConflictCost::kDefaultLevel == optimaru::Level::Hard
+                  && FemaleInMaleRoomCost::kDefaultLevel
+                         == optimaru::Level::Hard
+                  && MaleInFemaleRoomCost::kDefaultLevel
+                         == optimaru::Level::Hard
+                  && MixedGenderRoomCost::kDefaultLevel
+                         == optimaru::Level::Hard
+                  && DepartmentMinAgeCost::kDefaultLevel
+                         == optimaru::Level::Hard
+                  && DepartmentMaxAgeCost::kDefaultLevel
+                         == optimaru::Level::Hard
+                  && RequiredPatientEquipmentCost::kDefaultLevel
+                         == optimaru::Level::Hard
+                  && UnassignedStaysCost::kDefaultLevel
+                         == optimaru::Level::Medium
+                  && PreferredMaxRoomCapacityCost::kDefaultLevel
+                         == optimaru::Level::Soft
+                  && DepartmentSpecialtyCost::kDefaultLevel
+                         == optimaru::Level::Soft
+                  && DepartmentSpecialtyPriorityCost::kDefaultLevel
+                         == optimaru::Level::Soft
+                  && PreferredPatientEquipmentCost::kDefaultLevel
+                         == optimaru::Level::Soft,
+              "the monolithic calculator scores every term on its "
+              "component's default level");
+
+}  // namespace
+
+std::int64_t ScoreCalculator::sameBedPairPenalty(const Stay &a, const Stay &b)
+{
+    return kBedConflictWeight * a.sameNightCount(b);
+}
+
+std::int64_t ScoreCalculator::mixedGenderPairPenalty(const Stay &a,
+                                                     const Stay &b)
+{
+    if (a.patientGender == b.patientGender)
+        return 0;
+    return kMixedGenderRoomWeight * a.sameNightCount(b);
+}
 
 void ScoreCalculator::prepare(BedPlan &plan)
 {
@@ -89,33 +185,33 @@ ScoreCalculator::singleStayImpact(const BedPlan &plan, int stayIndex, int value)
 
     if (value == plan.noBedValue())
     {
-        // medium 8: assignEveryPatientToABed.
-        impact.medium += nights;
+        // medium 8: unassignedStaysCost.
+        impact.medium += kUnassignedStaysWeight * nights;
         return impact;
     }
 
     const Room &room = plan.rooms[plan.beds[value].room];
     const Department &department = plan.departments[room.department];
 
-    // hard 2 + 3: femaleInMaleRoom / maleInFemaleRoom.
+    // hard 2 + 3: femaleInMaleRoomCost / maleInFemaleRoomCost.
     if (stay.patientGender == Gender::FEMALE
         && room.genderLimitation == GenderLimitation::MALE_ONLY)
     {
-        impact.hard += 50 * nights;
+        impact.hard += kFemaleInMaleRoomWeight * nights;
     }
     if (stay.patientGender == Gender::MALE
         && room.genderLimitation == GenderLimitation::FEMALE_ONLY)
     {
-        impact.hard += 50 * nights;
+        impact.hard += kMaleInFemaleRoomWeight * nights;
     }
 
-    // hard 5 + 6: departmentMinimumAge / departmentMaximumAge.
+    // hard 5 + 6: departmentMinAgeCost / departmentMaxAgeCost.
     if (department.minimumAge && stay.patientAge < *department.minimumAge)
-        impact.hard += 100 * nights;
+        impact.hard += kDepartmentMinAgeWeight * nights;
     if (department.maximumAge && stay.patientAge > *department.maximumAge)
-        impact.hard += 100 * nights;
+        impact.hard += kDepartmentMaxAgeWeight * nights;
 
-    // hard 7: requiredPatientEquipment — when the room misses at least one
+    // hard 7: requiredPatientEquipmentCost — when the room misses at least one
     // required equipment, weigh by the count of required equipment the room
     // DOES have (the quickstart's exact, test-pinned semantics).
     const int roomIndex = plan.beds[value].room;
@@ -128,24 +224,24 @@ ScoreCalculator::singleStayImpact(const BedPlan &plan, int stayIndex, int value)
     if (requiredPresent
         < static_cast<std::int64_t>(stay.requiredEquipmentIds.size()))
     {
-        impact.hard += 50 * nights * requiredPresent;
+        impact.hard += kRequiredEquipmentWeight * nights * requiredPresent;
     }
 
-    // soft 9: preferredMaximumRoomCapacity.
+    // soft 9: preferredMaxRoomCapacityCost.
     if (stay.patientPreferredMaximumRoomCapacity
         && *stay.patientPreferredMaximumRoomCapacity < room.capacity)
     {
-        impact.soft += 8 * nights;
+        impact.soft += kPreferredCapacityWeight * nights;
     }
 
-    // soft 10 + 11: departmentSpecialty / ...NotFirstPriority.
+    // soft 10 + 11: departmentSpecialtyCost / departmentSpecialtyPriorityCost.
     const int priority = stay.specialtyPriorityByDept[room.department];
     if (priority < 0)
-        impact.soft += 10 * nights;
+        impact.soft += kDepartmentSpecialtyWeight * nights;
     else if (priority > 1)
-        impact.soft += 10 * (priority - 1) * nights;
+        impact.soft += kSpecialtyPriorityWeight * (priority - 1) * nights;
 
-    // soft 12: preferredPatientEquipment — weigh by the count of preferred
+    // soft 12: preferredPatientEquipmentCost — weigh by the count of preferred
     // equipment the room lacks.
     std::int64_t preferredMissing = 0;
     for (const int equipmentId : stay.preferredEquipmentIds)
@@ -153,7 +249,7 @@ ScoreCalculator::singleStayImpact(const BedPlan &plan, int stayIndex, int value)
         if (!plan.roomHasEquipment(roomIndex, equipmentId))
             ++preferredMissing;
     }
-    impact.soft += 50 * nights * preferredMissing;
+    impact.soft += kPreferredEquipmentWeight * nights * preferredMissing;
 
     return impact;
 }

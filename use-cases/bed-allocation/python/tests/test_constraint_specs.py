@@ -1,22 +1,32 @@
 """bed_allocation.constraints — an API for picking the cost function declaratively.
 
-Spot checks of individual constraint values live in `test_constraints.py`. This
-file only covers the selection path that picks "which constraints are on".
+Spot checks of individual constraint values live in `test_constraints.py` and the C++
+tests (one hand-calculated positive and zero case per constraint). This file covers the
+selection path that picks "which constraints are on", the catalog (`constraint_info()`),
+the three knobs and the medium level.
 """
+
+import pickle
+import re
+from types import SimpleNamespace
 
 import pytest
 
 import bed_allocation as ba
+from bed_allocation import constraints as specs
 from bed_allocation.constraints import (
+    BedConflictCost,
     Constraint,
-    PreferredMaximumRoomCapacity,
-    SameBedInSameNight,
-    assign_every_patient_to_a_bed,
+    PreferredMaxRoomCapacityCost,
+    UnassignedStaysCost,
+    bed_conflict_cost,
     get_constraints,
-    preferred_maximum_room_capacity,
-    same_bed_in_same_night,
+    preferred_max_room_capacity_cost,
     score,
+    unassigned_stays_cost,
 )
+
+MEDIUM_UNIT = 1_000_000_000  # the domain's medium fold (into soft)
 
 
 def make_stay(index, bed=-1):
@@ -70,21 +80,21 @@ def solve_crowded(constraints=None):
 def test_list_constraints_matches_the_spec_names():
     """Names carried by specs must be names the core actually knows."""
     # Unit constraints first, global constraints after — the global
-    # different_gender_... goes last.
+    # mixed_gender_room_cost goes last.
     available = ba.list_constraints()
     assert available == [
-        "same_bed_in_same_night",
-        "female_in_male_room",
-        "male_in_female_room",
-        "department_minimum_age",
-        "department_maximum_age",
-        "required_patient_equipment",
-        "assign_every_patient_to_a_bed",
-        "preferred_maximum_room_capacity",
-        "department_specialty",
-        "department_specialty_not_first_priority",
-        "preferred_patient_equipment",
-        "different_gender_in_same_gender_room_in_same_night",
+        "bed_conflict_cost",
+        "female_in_male_room_cost",
+        "male_in_female_room_cost",
+        "department_min_age_cost",
+        "department_max_age_cost",
+        "required_patient_equipment_cost",
+        "unassigned_stays_cost",
+        "preferred_max_room_capacity_cost",
+        "department_specialty_cost",
+        "department_specialty_priority_cost",
+        "preferred_patient_equipment_cost",
+        "mixed_gender_room_cost",
     ]
     for spec in get_constraints():
         assert spec.name in available
@@ -108,7 +118,7 @@ def test_picking_a_subset_drops_the_other_terms():
     baseline = solve()
     assert baseline.medium < 0 and baseline.soft < 0
 
-    hard_only = solve([same_bed_in_same_night])
+    hard_only = solve([bed_conflict_cost])
     assert hard_only.medium == 0
     assert hard_only.soft == 0
 
@@ -116,11 +126,11 @@ def test_picking_a_subset_drops_the_other_terms():
 def test_reweighting_one_constraint_scales_only_that_term():
     """Raising only the preferred-capacity weight grows soft only; hard stays put.
 
-    `assign_every_patient_to_a_bed` must be on too — otherwise unassigned is free, the
+    `unassigned_stays_cost` must be on too — otherwise unassigned is free, the
     solver leaves everyone out of a bed and the soft term itself vanishes."""
-    picks = [same_bed_in_same_night, assign_every_patient_to_a_bed]
-    base = solve([*picks, preferred_maximum_room_capacity])
-    heavier = solve([*picks, PreferredMaximumRoomCapacity(weight=80)])
+    picks = [bed_conflict_cost, unassigned_stays_cost]
+    base = solve([*picks, preferred_max_room_capacity_cost])
+    heavier = solve([*picks, PreferredMaxRoomCapacityCost(weight=80)])
     assert heavier.hard == base.hard
     assert heavier.soft < base.soft  # penalty, so more negative
 
@@ -128,16 +138,16 @@ def test_reweighting_one_constraint_scales_only_that_term():
 def test_level_can_be_flipped():
     """Demoting a hard constraint to soft flips the solver's choice.
 
-    Two overlapping stays for one bed: sharing the bed is same_bed_in_same_night,
-    leaving one out is assign_every_patient_to_a_bed. With the former hard, unassigned
+    Two overlapping stays for one bed: sharing the bed is bed_conflict_cost,
+    leaving one out is unassigned_stays_cost. With the former hard, unassigned
     is cheaper (levels take priority); demoted to soft, sharing becomes cheaper."""
-    plan_picks = [assign_every_patient_to_a_bed]
+    plan_picks = [unassigned_stays_cost]
 
-    hard_default = solve_crowded([same_bed_in_same_night, *plan_picks])
+    hard_default = solve_crowded([bed_conflict_cost, *plan_picks])
     assert hard_default.medium < 0  # leaves one out instead of sharing
     assert hard_default.soft == 0
 
-    flipped = solve_crowded([SameBedInSameNight(hard=False), *plan_picks])
+    flipped = solve_crowded([BedConflictCost(hard=False), *plan_picks])
     assert flipped.medium == 0  # sharing is cheaper now
     assert flipped.soft < 0
 
@@ -146,7 +156,7 @@ def test_unknown_constraint_name_raises():
     """A typo must not silently leave the cost function unchanged."""
 
     class Typo:
-        name = "same_bed_in_same_nights"  # trailing s
+        name = "bed_conflict_costs"  # trailing s
         weight = None
         hard = None
         exponent = 1.0
@@ -170,9 +180,15 @@ def test_spec_subclass_must_name_a_constraint():
 
 def test_default_instance_carries_no_overrides():
     """Module-level instances must keep the defaults (weight=None)."""
-    assert preferred_maximum_room_capacity.weight is None
-    assert preferred_maximum_room_capacity.hard is None
-    assert preferred_maximum_room_capacity.exponent == 1.0
+    for spec in get_constraints():
+        assert (spec.weight, spec.hard, spec.exponent) == (None, None, 1.0), spec.name
+        assert getattr(specs, spec.name) is spec  # the instance is named after the constraint
+
+
+def test_every_spec_has_labels_and_descriptions_in_both_languages():
+    for spec in get_constraints():
+        for attribute in ("label_en", "label_ko", "description_en", "description_ko"):
+            assert getattr(type(spec), attribute).strip(), f"{spec.name}.{attribute}"
 
 
 # --- Pure-Python scoring (constraint_costs -> score) ------------------------
@@ -208,9 +224,9 @@ def test_score_is_additive_over_the_picked_constraints():
 def test_score_reweighting_is_linear_without_rescoring():
     """Changing only the weight scales that term linearly — no rescoring."""
     raw, _ = _raw()
-    base = score(raw, [same_bed_in_same_night])
-    ten = score(raw, [SameBedInSameNight(weight=10)])
-    default_weight = raw[same_bed_in_same_night.name]["weight"]
+    base = score(raw, [bed_conflict_cost])
+    ten = score(raw, [BedConflictCost(weight=10)])
+    default_weight = raw[bed_conflict_cost.name]["weight"]
     factor = 10 / default_weight
     if base.hard:
         assert ten.hard == pytest.approx(base.hard * factor, rel=1e-6)
@@ -227,3 +243,194 @@ def test_score_rejects_an_unknown_constraint_name():
 
     with pytest.raises(ValueError, match="unknown constraint"):
         score(raw, [Renamed()])
+
+
+# --- The catalog: constraint_info() -------------------------------------------
+
+# (name, default level, default weight), in list_constraints() order.
+EXPECTED_INFO = [
+    ("bed_conflict_cost", "hard", 1000.0),
+    ("female_in_male_room_cost", "hard", 50.0),
+    ("male_in_female_room_cost", "hard", 50.0),
+    ("department_min_age_cost", "hard", 100.0),
+    ("department_max_age_cost", "hard", 100.0),
+    ("required_patient_equipment_cost", "hard", 50.0),
+    ("unassigned_stays_cost", "medium", 1.0),
+    ("preferred_max_room_capacity_cost", "soft", 8.0),
+    ("department_specialty_cost", "soft", 10.0),
+    ("department_specialty_priority_cost", "soft", 10.0),
+    ("preferred_patient_equipment_cost", "soft", 50.0),
+    ("mixed_gender_room_cost", "hard", 1000.0),
+]
+
+
+def test_constraint_info_reports_the_cpp_defaults():
+    """The defaults live in C++ only; constraint_info() reads them off the default assembly."""
+    rows = ba.constraint_info()
+    assert [row.name for row in rows] == ba.list_constraints()
+    assert [(row.name, row.default_level, row.default_weight) for row in rows] == EXPECTED_INFO
+    # Every constraint is flippable, none is a reward, and all twelve are on by default.
+    assert all(row.level_flippable and not row.reward and row.default_enabled for row in rows)
+
+
+def test_constraint_info_rows_are_plain_values():
+    row = ba.constraint_info()[6]
+    assert isinstance(row, ba.ConstraintInfo)
+    assert row._asdict() == {
+        "name": "unassigned_stays_cost",
+        "default_level": "medium",
+        "default_weight": 1.0,
+        "level_flippable": True,
+        "reward": False,
+        "default_enabled": True,
+    }
+    assert repr(row).startswith("ConstraintInfo(name='unassigned_stays_cost'")
+    assert pickle.loads(pickle.dumps(ba.constraint_info())) == ba.constraint_info()
+    assert ba.ConstraintInfo.__module__ == ba._core.__name__
+
+
+def test_constraint_info_matches_the_raw_cost_metadata():
+    """constraint_costs() reports the same defaults and carries the domain's medium fold on every entry."""
+    raw = ba.constraint_costs(build_plan())
+    assert list(raw) == ba.list_constraints()
+    for row in ba.constraint_info():
+        entry = raw[row.name]
+        assert (entry["weight"], entry["level"], entry["hard"]) == (
+            row.default_weight,
+            row.default_level,
+            row.default_level == "hard",
+        )
+        assert (entry["level_flippable"], entry["reward"]) == (True, False)
+        assert entry["global"] == (row.name == "mixed_gender_room_cost")
+        assert (entry["name"], entry["label"]) == (row.name, "")
+        assert entry["medium_fold"] == {"kind": "into_soft", "unit": float(MEDIUM_UNIT)}
+
+
+# --- The knobs ------------------------------------------------------------------
+
+
+def _engine(score_):
+    """The engine-level (hard, soft) of a HardMediumSoft plan score (medium folded into soft)."""
+    return score_.hard, score_.medium * MEDIUM_UNIT + score_.soft
+
+
+def _one_stay_without_a_bed():
+    """build_plan() with s0..s2 in the three beds and s3 (6 nights) on the "no bed" sentinel:
+    6 medium nights, and every stay prefers a single room (6 x 8 soft each in a real bed)."""
+    plan = build_plan()
+    plan.set_assignment([0, 1, 2, plan.no_bed_value()])
+    return plan
+
+
+def test_weight_none_means_the_component_default():
+    """weight=None scores exactly like the explicit C++ default weights."""
+    explicit = [type(spec)(weight=weight) for spec, (_, _, weight) in zip(get_constraints(), EXPECTED_INFO)]
+    plan = _one_stay_without_a_bed()
+    raw = ba.constraint_costs(plan)
+    assert score(raw) == score(raw, explicit)
+    assert score(raw) == _engine(ba.calculate_score(plan))
+
+
+def test_the_medium_level_folds_into_soft():
+    plan = _one_stay_without_a_bed()
+    raw = ba.constraint_costs(plan)
+    assert raw["unassigned_stays_cost"]["costs"] == [0.0, 0.0, 0.0, 6.0]  # three beds, then the sentinel
+    monolithic = ba.calculate_score(plan)
+    assert (monolithic.hard, monolithic.medium, monolithic.soft) == (0, -6, -144)
+    assert score(raw) == (0, monolithic.soft - 6 * MEDIUM_UNIT)
+    others = [spec for spec in get_constraints() if spec.name != "unassigned_stays_cost"]
+    assert score(raw, [*others, UnassignedStaysCost(hard=True)]) == (-6, monolithic.soft)
+    assert score(raw, [*others, UnassignedStaysCost(hard=False)]) == (0, monolithic.soft - 6)
+    assert score(raw, [*others, UnassignedStaysCost(weight=3)]) == (0, monolithic.soft - 18 * MEDIUM_UNIT)
+
+
+def test_a_demoted_medium_constraint_is_soft_in_the_engine_too():
+    """hard=False moves unassigned_stays_cost to soft in the solver (it was a no-op before 0.2.0).
+
+    Two overlapping 6-night stays for one bed: sharing costs 6000 hard, so one stay goes
+    without a bed, and its nights now cost soft, not medium."""
+    picks = [bed_conflict_cost, UnassignedStaysCost(hard=False)]
+    plan = build_crowded_plan()
+    ba.solve(plan, time_limit_seconds=0.4, random_seed=1, constraints=picks)
+    assert (plan.score.hard, plan.score.medium, plan.score.soft) == (0, 0, -6)
+    assert score(ba.constraint_costs(plan), picks) == (plan.score.hard, plan.score.soft)
+
+
+def test_a_promoted_medium_constraint_is_one_hard_unit_per_night():
+    """hard=True: unassigned nights cost 1 hard each (not 10^9), still cheaper than sharing a bed."""
+    picks = [bed_conflict_cost, UnassignedStaysCost(hard=True)]
+    plan = build_crowded_plan()
+    ba.solve(plan, time_limit_seconds=0.4, random_seed=1, constraints=picks)
+    assert (plan.score.hard, plan.score.medium, plan.score.soft) == (-6, 0, 0)
+    assert score(ba.constraint_costs(plan), picks) == (plan.score.hard, plan.score.soft)
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "error"),
+    [
+        ({"weight": -1}, ValueError),
+        ({"weight": float("nan")}, ValueError),
+        ({"weight": "2"}, TypeError),
+        ({"exponent": 0}, ValueError),
+        ({"hard": 1}, TypeError),
+    ],
+)
+def test_specs_validate_their_knobs(kwargs, error):
+    with pytest.raises(error):
+        BedConflictCost(**kwargs)
+
+
+def test_core_refuses_invalid_knobs_from_duck_typed_picks():
+    """The C++ side guards too: a duck-typed pick cannot smuggle a negative weight in."""
+    negative = SimpleNamespace(name="bed_conflict_cost", weight=-2.0, hard=None, exponent=1.0)
+    flat = SimpleNamespace(name="bed_conflict_cost", weight=None, hard=None, exponent=0.0)
+    for pick, message in ((negative, "weight must be finite and >= 0"), (flat, "exponent must be finite and > 0")):
+        with pytest.raises(ValueError, match=message):
+            ba.solve(build_plan(), time_limit_seconds=0.1, constraints=[pick])
+
+
+@pytest.mark.parametrize(
+    ("knobs", "message"),
+    [
+        ({"weight": True}, "weight must be a number or None, not True"),
+        ({"hard": 1}, "hard must be True, False or None, not 1"),
+        ({"hard": "x"}, "hard must be True, False or None, not 'x'"),
+        ({"exponent": True}, "exponent must be a number, not True"),
+    ],
+)
+def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
+    """The C++ path checks the knob types like _constraint.py: TypeError, the same words."""
+    pick = SimpleNamespace(name="unassigned_stays_cost", weight=None, hard=None, exponent=1.0)
+    for key, value in knobs.items():
+        setattr(pick, key, value)
+    with pytest.raises(TypeError, match=f"constraint 'unassigned_stays_cost': {re.escape(message)}"):
+        ba.solve(build_plan(), time_limit_seconds=0.1, constraints=[pick])
+    with pytest.raises(TypeError, match=re.escape(message)):
+        UnassignedStaysCost(**knobs)
+
+
+# 0.2.0 migration: the pre-0.2.0 catalog names.
+OLD_NAMES = [
+    "same_bed_in_same_night",
+    "female_in_male_room",
+    "male_in_female_room",
+    "department_minimum_age",
+    "department_maximum_age",
+    "required_patient_equipment",
+    "assign_every_patient_to_a_bed",
+    "preferred_maximum_room_capacity",
+    "department_specialty",
+    "department_specialty_not_first_priority",
+    "preferred_patient_equipment",
+    "different_gender_in_same_gender_room_in_same_night",
+]
+
+
+@pytest.mark.parametrize("old", OLD_NAMES)
+def test_old_names_are_gone(old):
+    """0.2.0 renamed the catalog; the pre-0.2.0 names are unknown now (no aliases)."""
+    pick = SimpleNamespace(name=old, weight=None, hard=None, exponent=1.0)
+    with pytest.raises(ValueError, match="unknown constraint"):
+        ba.solve(build_plan(), time_limit_seconds=0.05, constraints=[pick])
+    with pytest.raises(ValueError, match="unknown constraint"):
+        score(ba.constraint_costs(build_plan()), [pick])

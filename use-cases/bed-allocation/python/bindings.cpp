@@ -220,7 +220,7 @@ PYBIND11_MODULE(_core, m)
              &BedPlan::noBedValue,
              "The \"no bed\" sentinel planning value (== bed_count()); the "
              "quickstart's null bed, penalized per night on the medium "
-             "level.")
+             "level (unassigned_stays_cost).")
         // Convenience: the current bed value per stay (the solution).
         .def("assignment",
              [](const BedPlan &plan)
@@ -397,6 +397,9 @@ PYBIND11_MODULE(_core, m)
     // The raw per-unit costs of the default assembly on `plan` — the input
     // bed_allocation.constraints.score() turns into a score. Scoring once is
     // enough: re-pricing any assembly is pure Python arithmetic on these.
+    // Units are the planning values (beds in order, then the "no bed"
+    // sentinel); a global constraint has one entry. Every entry carries the
+    // domain's medium fold (into_soft, 10^9), which score() applies.
     m.def(
         "constraint_costs",
         [](BedPlan &plan)
@@ -409,10 +412,15 @@ PYBIND11_MODULE(_core, m)
         py::arg("plan"),
         "Raw per-unit cost of every constraint, before weight/exponent/level.");
 
-    // The constraint names this domain scores, in default-assembly order —
-    // the same strings a score breakdown reports.
+    // The constraint names this domain scores, in default-assembly order
+    // (unit constraints first, then the global mixed_gender_room_cost) — the
+    // same strings a score breakdown reports.
     m.def(
         "list_constraints",
         [] { return tfpy::constraintNames(defaultConstraints()); },
         "Constraint names available to bed_allocation.constraints.");
+
+    // The constraint catalog, read off the default assembly: the components'
+    // kDefaultWeight / kDefaultLevel are the only place a default lives.
+    tfpy::bindConstraintInfo(m, [] { return defaultConstraints(); });
 }

@@ -17,10 +17,10 @@ namespace ba
 // A stay's contribution decomposes into
 //   - a per-stay part (hard 2/3/5/6/7, medium 8, soft 9~12): a pure function
 //     of (stay, value), recomputed in O(equipment) on insert/retract;
-//   - pair parts (hard 1 sameBedInSameNight, hard 4
-//     differentGenderInSameGenderRoomInSameNight): both are sums over the
-//     nights two stays share, so they are maintained from per-day occupancy
-//     counters instead of occupant lists:
+//   - pair parts (hard 1 bedConflictCost, hard 4 mixedGenderRoomCost): both
+//     are sums over the nights two stays share, so they are maintained from
+//     per-day occupancy counters instead of occupant lists (1000 = the
+//     components' kDefaultWeight):
 //         hard 1 = 1000 * sum over (bed, night) of C(occupants, 2)
 //         hard 4 = 1000 * sum over (SAME_GENDER room, night) of male * female
 //     Inserting a stay adds 1000 * (the counter's value before the
@@ -33,7 +33,8 @@ namespace ba
 // holds the OLD value; afterVariableChanged inserts the NEW value.
 // Uninitialized stays (bed == -1) contribute nothing, so the construction
 // heuristic can score partially initialized solutions; the "no bed" sentinel
-// contributes only its medium penalty. The full-recompute reference is
+// contributes only its medium penalty (unassignedStaysCost, folded into the
+// engine soft level by toEngineScore). The full-recompute reference is
 // ScoreCalculator::calculateScore (checked in the tests and under
 // EnvironmentMode::FULL_ASSERT).
 class BedAllocationIncrementalScoreCalculator final
