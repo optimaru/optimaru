@@ -270,8 +270,8 @@ class MinimizeLatency(Constraint):
 class PinnedStops(Constraint):
     """Routes that do not start with their vehicle's pinned stops. Default: hard, weight 1e12.
 
-    Each misplaced stop counts once. Silent for a vehicle that pins nothing. The weight is above
-    anything the other hard rules can reach, so no trade between them moves a pinned stop."""
+    Each misplaced stop counts once. Silent for a vehicle that pins nothing. The weight is far above
+    what the other hard rules total on real input, so no trade between them moves a pinned stop."""
 
     name = "pinned_stops"
     label_en = "Pinned Stops"

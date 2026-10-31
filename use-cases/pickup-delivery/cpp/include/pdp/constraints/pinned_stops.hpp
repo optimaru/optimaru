@@ -9,10 +9,10 @@ namespace pdp
 // its vehicle's pinnedNodeIndices, in that order. A move that disturbs them, or
 // slips a stop in among them, simply scores worse, so no move operator has to
 // know about pinning. The weight keeps that true when the route also breaks
-// other hard rules: a solve starts with its pinned stops in place, and nothing
-// it could gain elsewhere makes a best solution give them up. The rest of the
-// route stays free to change. Pinning a pickup also keeps its request on the
-// vehicle, through sameVehicle.
+// other hard rules: a solve starts with its pinned stops in place, and short of
+// 1e12 minutes of lateness nothing it could gain elsewhere makes a best solution
+// give them up. The rest of the route stays free to change. Pinning a pickup
+// also keeps its request on the vehicle, through sameVehicle.
 struct PinnedStops final : PdpUnitConstraint
 {
     PinnedStops()
