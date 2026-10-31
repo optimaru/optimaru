@@ -24,8 +24,10 @@ struct MoveSelectorConfig {
     double tailSwapMoveWeight = 0.0;
     // CROSS-exchange: swap a run of elements in one list with a run in
     // another (the runs may differ in length, and one may be empty, which
-    // makes it a segment relocate). InterExchangeRoute registers it at every length pair from 1x1 to
-    // 3x3 and is the move that rebalances load between routes.
+    // makes it a segment relocate). Each draw takes 0..interExchangeMaxSegment
+    // elements from each side (at least one in total), so the default covers
+    // every length pair up to 3x3. It is the move that rebalances load between
+    // routes.
     //
     // Why the other inter-list moves do not cover it: the tail swap can only
     // cut once per list, so it cannot move work out of the MIDDLE of a route,

@@ -51,7 +51,9 @@ namespace optimaru {
 // search stagnates.
 //   BASIC moves: ChangeMove (reassign one entity), SwapMove.
 //   LIST moves:  relocate (move one element), element swap, 2-opt
-//                (reverse a segment within one list).
+//                (reverse a segment within one list), Or-opt (move a 2-3
+//                element segment), 2-opt* (tail swap) and CROSS-exchange;
+//                mixed by MoveSelectorConfig weights (the last three default to 0).
 // Moves follow a do/undo protocol: apply through the
 // ScoreDirector, read calculateScore(), and revert when rejected.
 //

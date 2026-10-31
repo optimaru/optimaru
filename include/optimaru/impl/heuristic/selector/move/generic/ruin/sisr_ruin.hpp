@@ -30,7 +30,7 @@ namespace optimaru {
 //
 // LIST kind only — a "string" is a run of consecutive positions, which has no
 // meaning for BASIC variables. Requires nearby lists (a configured
-// nearbyDistanceMeter); without either it delegates to the random ruin.
+// localSearch.nearby.distanceMeter); without either it delegates to the random ruin.
 template <typename Solution>
 class SisrRuin final : public RuinOperator<Solution> {
     using Descriptor = SolutionDescriptor<Solution>;

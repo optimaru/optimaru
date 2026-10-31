@@ -15,7 +15,7 @@ namespace optimaru {
 // removes a cluster the recreate can genuinely re-plan together — the ruin
 // that pays off when the domain has a distance meter.
 //
-// Falls back to the random sample when no nearbyDistanceMeter is configured
+// Falls back to the random sample when no localSearch.nearby.distanceMeter is configured
 // (empty neighbour lists), and tops up randomly when the seed has fewer
 // neighbours than the ruin size.
 template <typename Solution>

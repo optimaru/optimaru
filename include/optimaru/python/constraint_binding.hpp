@@ -7,9 +7,9 @@
 // The pybind11 side of the declarative cost function: what every use case's
 // `bindings.cpp` needs to turn a list of Python constraint specs into a
 // ConstraintAssembly. The engine itself does not depend on pybind11 — this
-// header lives under core/include only because every package's setup.py
-// already puts that directory on the include path, and it is pulled in by
-// bindings.cpp alone, never by a C++ target.
+// header lives under the engine's include/ only because every package's
+// setup.py already puts that directory on the include path, and it is
+// pulled in by bindings.cpp alone, never by a C++ target.
 //
 //   ConstraintAssembly assembly = python::applyConstraints(
 //       defaultConstraints(), constraints);   // or defaultConstraints(problem)

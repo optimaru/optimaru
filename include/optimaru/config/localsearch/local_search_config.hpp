@@ -21,10 +21,11 @@ namespace optimaru {
 // RuinRecreateMoveSelector (impl.heuristic.selector.move.generic), with
 // adaptive operator selection. After
 // unimprovedStepTrigger steps without a new best, one kick runs: an
-// adaptively selected ruin operator (random / related / worst / registered
-// customs) removes a fraction of the solution, greedy best-placement rebuilds
-// it, polishSteps hill-climbing moves repair the seams, and the result
-// becomes the new incumbent unconditionally with a fresh acceptor
+// adaptively selected ruin operator (random / related / worst, SISR and route
+// ruins when enabled below, registered customs) removes a fraction of the
+// solution, the repair (regret-k by default, see regretK) rebuilds it,
+// polishSteps hill-climbing moves repair the seams, and the result becomes
+// the new incumbent unconditionally with a fresh acceptor
 // (perturbation-style; the best-solution snapshot is the safety net).
 struct RuinRecreateConfig {
     bool enabled = false;
@@ -163,11 +164,12 @@ struct LocalSearchConfig {
     //
     // What the right weight is depends entirely on how big that neighbourhood
     // is, and for BASIC that is the size of the VALUE RANGE — one sweep costs
-    // ~2 * valueCount score evaluations against an ordinary step's one. With 40
-    // employees (employee-scheduling) a percent-scale weight spends a sensible
-    // slice of the budget and pays for itself; with a 40x25 slot x room grid
-    // (school-timetabling) the same weight spends over 90% of the budget on
-    // descent and starves the move mix. Weight by the value range, and measure.
+    // ~2 * valueCount score evaluations against an ordinary step's one. With a
+    // 40-value range (an employee-rostering domain) a percent-scale weight
+    // spends a sensible slice of the budget and pays for itself; with a 40x25
+    // slot x room grid (school-timetabling) the same weight spends over 90% of
+    // the budget on descent and starves the move mix. Weight by the value
+    // range, and measure.
     double descentWeight = 0.0;
     // Give up on a neighbourhood after this many improving passes, so one
     // application cannot run away on a large pair.

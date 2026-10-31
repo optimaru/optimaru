@@ -14,13 +14,13 @@
 namespace optimaru {
 
 // ---------------------------------------------------------------------------
-// Pluggable operators with a registration API:
-// custom local searches via add_local_search, custom destroys as classes)
+// Pluggable operators: custom moves registered via Solver::addMoveOperator(),
+// custom ruins via Solver::addRuinOperator()
 // ---------------------------------------------------------------------------
 
 // What a custom operator gets to see: the score director (the ONLY way it may
 // mutate the solution), the precomputed nearby lists (empty when no
-// nearbyDistanceMeter is configured), and — for LIST solutions — the engine's
+// localSearch.nearby.distanceMeter is configured), and — for LIST solutions — the engine's
 // live element index (elementList[e] / elementPosition[e] = where element e
 // currently is; -1 = unassigned). The index is read-only for operators; the
 // engine resynchronizes it automatically after a custom move (the director

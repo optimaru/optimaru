@@ -22,6 +22,8 @@
 
 namespace optimaru {
 
+// Builds the configured scheme. `segmentLength` applies to
+// SEGMENTED_ROULETTE_WHEEL, `alpha` to ALPHA_UCB; both are ignored otherwise.
 inline std::unique_ptr<OperatorSelectionScheme> makeOperatorSelectionScheme(
         OperatorSelectionType type, int operatorCount, const std::vector<double>& rewards,
         double decay, std::int64_t segmentLength, double alpha) {
@@ -38,10 +40,6 @@ inline std::unique_ptr<OperatorSelectionScheme> makeOperatorSelectionScheme(
             return std::make_unique<RouletteWheelSelector>(operatorCount, rewards, decay);
     }
 }
-
-
-
-  // OPTIMARU_IMPL_HEURISTIC_SELECTOR_MOVE_GENERIC_RUIN_RECREATE_SELECTOR_HPP
 
 }  // namespace optimaru
 

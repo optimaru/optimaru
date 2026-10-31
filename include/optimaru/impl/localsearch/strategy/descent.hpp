@@ -25,9 +25,8 @@ namespace optimaru {
 // That is enough while the instance is small enough for a random draw to land
 // on an improvement reasonably often; at a thousand elements it is not, and no
 // amount of extra move TYPES fixes it — adding CROSS-exchange to the random
-// mix measurably did nothing (see the vehicle-routing BENCHMARK). What changed
-// the numbers was searching a neighbourhood exhaustively instead of sampling
-// it.
+// mix measurably did nothing. What changed the numbers was searching a
+// neighbourhood exhaustively instead of sampling it.
 //
 // So: pick a nearby pair, then repeatedly apply the single best improving move
 // over it until the pair is locally optimal or the sweep cap hits. This is the
@@ -317,9 +316,6 @@ private:
         return true;
     }
 
-    // One pass: try relocating every element of l1 into every position of l2
-    // and vice versa, keep the best strictly-improving one, apply it.
-    // Returns whether anything was applied.
     // Score every relocation of an element of `from` into `to` and hand each
     // (score, p, q, element) to `visit`. `visit` must not read `from` itself:
     // on the slow path the element is out of the list while it runs. Each
@@ -371,6 +367,9 @@ private:
         }
     }
 
+    // One pass: try relocating every element of l1 into every position of l2
+    // and vice versa, keep the best strictly-improving one, apply it.
+    // Returns whether anything was applied.
     bool bestRelocateBetween(ScoreDirector<Solution>& director, const HardSoftScore& currentScore,
                              int l1, int l2) {
         HardSoftScore best = currentScore;
@@ -530,10 +529,6 @@ private:
         }
     }
 
-    // These two composite operations intentionally mirror the ordinary LIST
-    // move implementation. Each list is bracketed once so incremental
-    // calculators see a coherent route change, and both list indexes are
-    // rebuilt before the next candidate is evaluated.
     // One scan of a route pair is thousands of evaluations; on a calculator
     // whose previews cost O(route) (a decomposed assembly, a plan with
     // waiting) that is long enough to overrun a short time limit, so the
