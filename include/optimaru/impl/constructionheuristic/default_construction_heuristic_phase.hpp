@@ -3,6 +3,8 @@
 
 #include <algorithm>
 #include <functional>
+#include <stdexcept>
+#include <string>
 #include <vector>
 
 #include "optimaru/api/domain/solution_descriptor.hpp"
@@ -32,10 +34,12 @@ struct DefaultConstructionHeuristicPhase {
             if (valueCount == 0) return;
             std::vector<int> uninitialized;
             for (int e = 0; e < entityCount; ++e) {
-                if (Descriptor::getVariable(solution, e) < 0 &&
-                    !entityPinned<Descriptor>(solution, e)) {
-                    uninitialized.push_back(e);
+                if (Descriptor::getVariable(solution, e) >= 0) continue;
+                if (entityPinned<Descriptor>(solution, e)) {
+                    throw std::invalid_argument("entity " + std::to_string(e) +
+                                                " is pinned but has no value");
                 }
+                uninitialized.push_back(e);
             }
             for (int e : initializationOrder(uninitialized, config.entityDifficulty)) {
                 placeBestValue(director, e, valueCount);

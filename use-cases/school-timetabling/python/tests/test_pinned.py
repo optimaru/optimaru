@@ -1,5 +1,6 @@
 """fixed_slots -> pinned conversion (H2) and pins kept after solve (canonical domain)."""
 
+import pytest
 import st_timetabling as st
 from st_timetabling import canon, convert_problem
 
@@ -62,3 +63,11 @@ def test_a_fully_pinned_timetable_is_not_moved(problem):
 def test_every_pin_holds_with_one_free_lesson(problem):
     values, solved = _solved_table(problem, lambda index: index != 0)
     assert solved[1:] == values[1:]
+
+
+def test_a_pinned_lesson_without_a_slot_is_refused(problem):
+    conv = convert_problem(problem)
+    conv.table.lessons[0].pinned = True
+    conv.table.lessons[0].slot = -1
+    with pytest.raises(ValueError, match="is pinned but has no value"):
+        canon.Solver().solve(conv.table)

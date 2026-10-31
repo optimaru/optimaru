@@ -1,6 +1,7 @@
 """A fully pinned schedule comes back unchanged, and most-pinned keeps its pins."""
 
 import flight_crew as fc
+import pytest
 
 HOUR = 60
 
@@ -36,3 +37,10 @@ def test_every_pin_holds_with_one_free_seat():
     fc.solve(schedule, time_limit_seconds=0.2, random_seed=2)
     assert [assignment.employee for assignment in schedule.flight_assignments][1:] == [2, 2, 2]
     assert schedule.flight_assignments[0].employee != 2
+
+
+def test_a_pinned_seat_without_an_employee_is_refused():
+    schedule = _schedule(lambda index: index == 0)
+    schedule.flight_assignments[0].employee = -1
+    with pytest.raises(ValueError, match="is pinned but has no value"):
+        fc.solve(schedule, time_limit_seconds=0.1)

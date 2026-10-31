@@ -11,6 +11,7 @@
 #include <functional>
 #include <memory>
 #include <numeric>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -568,22 +569,20 @@ void testPinnedEntities() {
     check(solvePinned(high, half, nullptr).assignment == expected,
           "half pinned: pins kept, the rest optimal");
 
-    std::vector<int> unassigned = high;
-    unassigned[1] = -1;
-    unassigned[2] = -1;
-    std::vector<char> firstPinned(high.size(), 1);
-    firstPinned[2] = 0;
-    std::vector<int> placed = high;
-    placed[1] = -1;
-    placed[2] = 0;
-    check(solvePinned(unassigned, firstPinned, nullptr).assignment == placed,
-          "construction leaves a pinned unassigned entity alone");
+    std::vector<int> freeUnassigned = high;
+    freeUnassigned[3] = -1;
+    check(solvePinned(freeUnassigned, allButOne, nullptr).assignment == oneFree,
+          "construction places an unassigned entity that is not pinned");
 
-    std::vector<int> noneMovable = high;
-    noneMovable[1] = -1;
-    check(solvePinned(noneMovable, std::vector<char>(high.size(), 1), nullptr).assignment ==
-                  noneMovable,
-          "all pinned, one unassigned: nothing changes");
+    std::vector<int> pinnedUnassigned = high;
+    pinnedUnassigned[1] = -1;
+    bool refused = false;
+    try {
+        solvePinned(pinnedUnassigned, allButOne, nullptr);
+    } catch (const std::invalid_argument& error) {
+        refused = std::string(error.what()) == "entity 1 is pinned but has no value";
+    }
+    check(refused, "a pinned entity with no value is refused");
 }
 
 void testRouletteWheelSelector() {
