@@ -51,6 +51,14 @@ public:
         optimaru::AcceptorType acceptorType = optimaru::AcceptorType::LATE_ACCEPTANCE;
         std::size_t lateAcceptanceSize = 0;
         int entityTabuSize = 7;  // ENTITY_TABU
+        // SIMULATED_ANNEALING's starting temperature (hard, soft). (0, 0), the
+        // default, = auto: hard 0, soft = simulatedAnnealingTemperatureFraction
+        // * |the start's soft score| (at least 1), the semiconductor-scheduling
+        // rule. The engine's own default (0, 0) would make SA reject every
+        // worsening swap, i.e. hill climbing. It cools to 0 over the time
+        // limit, or over stepCountLimit when that is further along.
+        Score simulatedAnnealingStartingTemperature{0, 0.0};
+        double simulatedAnnealingTemperatureFraction = 0.01;
         std::uint64_t randomSeed = 0;
 
         // Independent parallel starts (the engine's multi-start): worker i

@@ -26,7 +26,7 @@ alb.constraint_info()
 #                 level_flippable=True, reward=False, default_enabled=True), ...,
 #  ConstraintInfo(name='workload_imbalance_cost', default_level='soft', default_weight=0.0,
 #                 level_flippable=True, reward=False, default_enabled=False)]
-alb.solve(problem, constraints=[*get_constraints()[:-1], WorkloadImbalanceCost(weight=1)])
+alb.solve(problem, time_limit_seconds=1.0, constraints=[*get_constraints()[:-1], WorkloadImbalanceCost(weight=1)])
 raw = alb.constraint_costs(problem)       # raw costs per station (one total for a global)
 score(raw), score(raw, [UsedStationsCost(exponent=2.0)])
 ```

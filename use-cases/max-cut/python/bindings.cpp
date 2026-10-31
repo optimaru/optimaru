@@ -169,27 +169,18 @@ PYBIND11_MODULE(_core, m)
         "stores problem.score and sets problem.scored). Unassigned vertices "
         "(-1) follow the C++ rule: in no side.");
 
-    py::class_<Solver::Config>(m, "SolverConfig", py::module_local())
+    optimaru::python::bindConfigCopy(py::class_<Solver::Config>(m, "SolverConfig", py::module_local()))
         .def(py::init<>())
         .def_property(
             "spent_limit_seconds",
             [](const Solver::Config &c) { return std::chrono::duration<double>(c.spentLimit).count(); },
             [](Solver::Config &c, double s)
-            {
-                if (s < 0.0)
-                    throw py::value_error("spent_limit_seconds must be non-negative");
-                c.spentLimit = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::duration<double>(s));
-            })
+            { c.spentLimit = optimaru::python::secondsToMillis(s, "spent_limit_seconds"); })
         .def_property(
             "unimproved_spent_limit_seconds",
             [](const Solver::Config &c) { return std::chrono::duration<double>(c.unimprovedSpentLimit).count(); },
             [](Solver::Config &c, double s)
-            {
-                if (s < 0.0)
-                    throw py::value_error("unimproved_spent_limit_seconds must be non-negative");
-                c.unimprovedSpentLimit
-                    = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::duration<double>(s));
-            })
+            { c.unimprovedSpentLimit = optimaru::python::secondsToMillis(s, "unimproved_spent_limit_seconds"); })
         // 0 = no step limit.
         .def_readwrite("step_count_limit", &Solver::Config::stepCountLimit)
         .def_readwrite("unimproved_step_count_limit", &Solver::Config::unimprovedStepCountLimit)

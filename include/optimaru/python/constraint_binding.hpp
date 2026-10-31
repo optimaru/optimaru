@@ -39,6 +39,7 @@
 #include "optimaru/api/score/calculator/constraint_assembly.hpp"
 #include "optimaru/python/level_guard.hpp"
 #include "optimaru/python/names.hpp"
+#include "optimaru/python/solver_config.hpp"  // secondsToMillis, bindConfigCopy
 
 namespace optimaru {
 namespace python {

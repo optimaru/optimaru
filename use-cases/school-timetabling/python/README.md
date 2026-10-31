@@ -100,7 +100,9 @@ result = st.solve(
     constraints=Assembly().add("teacher_gap_cost", weight=40).drop("teacher_workday_cost"),
 )
 # The same entry point as every other use case: None = the defaults, a list replaces them.
-result = st.solve(problem_dict, constraints=get_constraints([class_conflict_cost, TeacherGapCost(weight=40)]))
+result = st.solve(
+    problem_dict, time_limit_seconds=10.0, constraints=get_constraints([class_conflict_cost, TeacherGapCost(weight=40)])
+)
 ```
 
 The low-level `canon.DecomposedCalculator` can score and explain directly:

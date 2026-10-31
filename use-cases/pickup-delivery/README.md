@@ -288,7 +288,7 @@ A vehicle's `pinned_stops` stay as the request has them: its route in the soluti
 
 ## Extending
 
-Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-c-engine-use-case).
+Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-use-case).
 The planning variable is **LIST**; the domain solver that configures the
 engine is `cpp/include/pdp/solver.hpp` + `cpp/src/solver.cpp`.
 

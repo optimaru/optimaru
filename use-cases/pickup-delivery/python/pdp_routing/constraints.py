@@ -488,7 +488,7 @@ class UnassignedRequestsCost(Constraint):
         "half-routed request is counted by `paired_request_cost` instead."
     )
     description_ko = (
-        "경로에 전혀 들어가지 않은 요청의 서비스 시간(픽업과 하차 합, 분 단위 내림)을 중간(medium) 수준에서 "
+        "경로에 전혀 들어가지 않은 요청의 서비스 시간(픽업과 하차 합, 분 단위 내림)을 미디엄 수준에서 "
         "더합니다. 1분이 비용 1이며, 0이면 빠진 요청이 없습니다. 반쪽만 배정된 요청은 "
         "`paired_request_cost`가 셉니다."
     )

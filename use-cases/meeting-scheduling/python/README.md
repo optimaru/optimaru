@@ -85,7 +85,7 @@ Picking the cost function (see `meeting_scheduling.constraints`):
 ```python
 from meeting_scheduling.constraints import MeetingOverlapCost, get_constraints, room_conflict_cost
 
-ms.solve(schedule, constraints=get_constraints([room_conflict_cost, MeetingOverlapCost(weight=100)]))
+ms.solve(schedule, time_limit_seconds=1.0, constraints=get_constraints([room_conflict_cost, MeetingOverlapCost(weight=100)]))
 ```
 
 ## Build / test

@@ -369,3 +369,50 @@ def test_default_enabled_and_repeated_instances_read_the_engine_row(monkeypatch)
     ]
     assert [row["default_enabled"] for row in catalog] == [True, False, False]
     assert catalog[2]["default_level"] == "soft"
+
+
+@pytest.mark.parametrize(
+    ("selection", "error", "message"),
+    [
+        ({"name": "capacity", "hard": "false"}, TypeError, "hard must be True, False or None"),
+        ({"name": "capacity", "hard": 1}, TypeError, "hard must be True, False or None"),
+        ({"name": "capacity", "weight": True}, TypeError, "weight must be a number or None"),
+        ({"name": "capacity", "weight": "2"}, TypeError, "weight must be a number or None"),
+        ({"name": "capacity", "weight": -1}, ValueError, "weight must be finite and >= 0"),
+        ({"name": "capacity", "weight": float("nan")}, ValueError, "weight must be finite and >= 0"),
+        ({"name": "capacity", "exponent": 0}, ValueError, "exponent must be finite and > 0"),
+        ({"name": "capacity", "exponent": 2.0}, ValueError, "exponent is not supported by CP-SAT"),
+        ({"name": "capacity", "enabled": "no"}, TypeError, "enabled must be True or False"),
+        (_DomainConstraint(hard="false"), TypeError, "hard must be True, False or None"),
+    ],
+)
+def test_mapping_selections_get_the_spec_knob_checks(selection, error, message) -> None:
+    """A dict selection is checked like a spec, so the two solvers refuse the same values."""
+    with pytest.raises(error, match=message):
+        resolve(SPECS, [selection])
+
+
+def test_server_selection_shape_and_catalog_params_round_trip() -> None:
+    """{name, enabled, weight, hard, exponent} with exponent 1.0 is a valid selection."""
+    selected = resolve(
+        SPECS,
+        [
+            {"name": "capacity", "enabled": True, "weight": 5, "hard": None, "exponent": 1.0},
+            {"name": "distance", **SPECS[1].as_dict()["params"]},
+        ],
+    )
+    assert selected["capacity"][1].weight == 5
+    assert selected["distance"][1].hard is None
+
+
+def test_score_costs_round_like_llround_at_the_double_edges() -> None:
+    """0.49999999999999994 rounds to 0 and 2**52 + 1 stays put (C++ llround)."""
+    objective = ObjectiveBuilder(
+        cp_model.CpModel(),
+        ("hard", "soft"),
+        [ConstraintSpec("capacity", "Capacity", "hard", 1)],
+    )
+    assert objective.score_costs({"capacity": {"costs": [0.49999999999999994]}})["hard"] == 0
+    assert objective.score_costs({"capacity": {"costs": [-0.49999999999999994]}})["hard"] == 0
+    assert objective.score_costs({"capacity": {"costs": [4503599627370497.0]}})["hard"] == -4503599627370497
+    assert objective.score_costs({"capacity": {"costs": [2.5]}})["hard"] == -3

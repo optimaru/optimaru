@@ -98,3 +98,15 @@ def test_solver_config_roundtrip():
     schedule = mnt.generate_demo_data("SMALL", MONDAY)
     mnt.solve(schedule, config=config)
     assert schedule.score.hard is not None
+
+
+def test_a_zero_soft_score_is_positive_zero():
+    """The unsolved demo has no soft penalty: it scores 0soft, not -0soft (IEEE negative zero)."""
+    import math
+
+    import maintenance_scheduling as _pkg
+
+    score = _pkg.calculate_score(_pkg.generate_demo_data())
+    assert score.soft == 0.0
+    assert math.copysign(1.0, score.soft) == 1.0
+    assert "-0soft" not in repr(score)

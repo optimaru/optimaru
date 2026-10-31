@@ -82,3 +82,19 @@ def test_parallel_solver_count_workers():
         recomputed = cs.calculate_score(schedule)
         assert recomputed.hard == schedule.score.hard
         assert recomputed.soft == schedule.score.soft
+
+
+def test_on_new_best_fires_on_the_constraints_path():
+    """solve(constraints=...) reports progress like the default path (the callback was dropped)."""
+    from conference_scheduling.constraints import RoomConflictCost, SpeakerConflictCost, get_constraints
+
+    for picks in (get_constraints(), [RoomConflictCost(), SpeakerConflictCost(weight=3)]):
+        calls = []
+        cs.solve(
+            cs.demo_conference(),
+            time_limit_seconds=0.5,
+            random_seed=1,
+            constraints=picks,
+            on_new_best=lambda step, score, calls=calls: calls.append(step),
+        )
+        assert calls, "on_new_best should fire on the constraints= path"

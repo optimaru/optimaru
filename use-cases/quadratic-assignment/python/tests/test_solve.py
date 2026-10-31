@@ -2,6 +2,7 @@
 
 import itertools
 import json
+import time
 from pathlib import Path
 
 import pytest
@@ -124,14 +125,17 @@ def test_keyword_arguments_override_the_config():
         on_new_best=lambda step, score: calls.append((step, score.hard, score.soft)),
         config=config,
     )
-    assert (config.spent_limit_seconds, config.random_seed, config.parallel_solver_count) == (2.0, 9, 2)
+    # The overrides applied (on_new_best fired) to a copy: the caller's config is unchanged.
     assert calls and all(isinstance(step, int) for step, _, _ in calls)
+    assert (config.spent_limit_seconds, config.random_seed, config.parallel_solver_count) == (30.0, 5, 1)
+    assert config.step_count_limit == 100 and config.on_new_best is None
 
 
-def test_stop_at_first_feasible_sets_the_score_limit():
+def test_stop_at_first_feasible_leaves_the_callers_config_alone():
     config = qap.SolverConfig()
+    before = config.best_score_limit
     qap.solve(demo(), time_limit_seconds=5.0, stop_at_first_feasible=True, config=config)
-    assert config.best_score_limit == (0, -1e18)
+    assert config.best_score_limit == before  # the score limit went to a copy
 
 
 def test_multi_start_returns_a_consistent_best():
@@ -205,3 +209,53 @@ def test_inputs_of_the_wrong_type_are_refused():
         qap.solve({"facilities": [], "locations": []})
     with pytest.raises(TypeError):
         qap.constraint_costs([])
+
+
+def _boom(_step, _score):
+    raise RuntimeError("boom")
+
+
+def test_a_raising_on_new_best_raises_from_a_multi_start_solve():
+    """Two parallel starts: the callback's exception reaches Python instead of aborting the process,
+    and the other start stops at once instead of running out its 10 s budget."""
+    started = time.monotonic()
+    with pytest.raises(RuntimeError, match="boom"):
+        qap.solve(
+            demo(),
+            time_limit_seconds=10.0,
+            parallel_solver_count=2,
+            on_new_best=_boom,
+        )
+    assert time.monotonic() - started < 8.0
+
+
+def _random_instance(n: int, seed: int) -> QuadraticAssignmentProblemModel:
+    import random
+
+    rng = random.Random(seed)
+    return QuadraticAssignmentProblemModel.model_validate(
+        {
+            "facilities": [f"F{i}" for i in range(n)],
+            "locations": [f"L{i}" for i in range(n)],
+            "flows": [[0 if i == j else rng.randint(0, 9) for j in range(n)] for i in range(n)],
+            "distances": [[0 if i == j else rng.randint(1, 9) for j in range(n)] for i in range(n)],
+        }
+    )
+
+
+def _new_bests(acceptor) -> list:
+    config = steps(3000, seed=7)
+    config.acceptor_type = acceptor
+    calls = []
+    qap.solve(_random_instance(15, 3).to_core(), config=config, on_new_best=lambda step, score: calls.append(step))
+    return calls
+
+
+def test_simulated_annealing_is_not_hill_climbing():
+    """SA gets an automatic starting temperature (the engine default (0, 0) made it hill climbing)."""
+    config = qap.SolverConfig()
+    assert config.simulated_annealing_starting_temperature == (0, 0.0)
+    assert config.simulated_annealing_temperature_fraction == pytest.approx(0.01)
+    with pytest.raises(ValueError):
+        config.simulated_annealing_temperature_fraction = 0
+    assert _new_bests(qap.AcceptorType.SIMULATED_ANNEALING) != _new_bests(qap.AcceptorType.HILL_CLIMBING)

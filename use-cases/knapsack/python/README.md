@@ -23,7 +23,7 @@ knapsack.constraint_info()
 #                 level_flippable=True, reward=False, default_enabled=True), ...,
 #  ConstraintInfo(name='selected_value_cost', default_level='soft', default_weight=1.0,
 #                 level_flippable=False, reward=True, default_enabled=True)]
-knapsack.solve(problem, constraints=[*get_constraints()[:-1], SelectedValueCost(weight=2)])
+knapsack.solve(problem, time_limit_seconds=1.0, constraints=[*get_constraints()[:-1], SelectedValueCost(weight=2)])
 raw = knapsack.constraint_costs(problem)   # {name: {"costs": [total], "weight": ..., ...}}
 score(raw), score(raw, [MandatoryItemsCost(exponent=2.0)])
 ```

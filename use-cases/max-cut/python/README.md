@@ -27,7 +27,11 @@ max_cut.constraint_info()
 #                 level_flippable=True, reward=False, default_enabled=False),
 #  ConstraintInfo(name='cut_weight_cost', default_level='soft', default_weight=1.0,
 #                 level_flippable=False, reward=True, default_enabled=True)]
-max_cut.solve(problem, constraints=[*get_constraints()[:4], PartitionImbalanceCost(weight=2), cut_weight_cost])
+max_cut.solve(
+    problem,
+    time_limit_seconds=1.0,
+    constraints=[*get_constraints()[:4], PartitionImbalanceCost(weight=2), cut_weight_cost],
+)
 raw = max_cut.constraint_costs(problem)   # {name: {"costs": [side 0, side 1] or [total], "weight": ..., ...}}
 score(raw), score(raw, [FixedPartitionCost(exponent=2.0)])
 ```

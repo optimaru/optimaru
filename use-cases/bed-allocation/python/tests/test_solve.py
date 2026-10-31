@@ -42,3 +42,40 @@ def test_on_new_best_callback_fires():
     )
     assert events
     assert events[-1][1] == plan.score.hard
+
+
+def test_solve_leaves_the_callers_config_alone():
+    """The keyword overrides go to a copy of config= (they leaked into later solves)."""
+    import copy
+
+    config = ba.SolverConfig()
+    config.spent_limit_seconds = 5.0
+    config.random_seed = 3
+    before = (config.spent_limit_seconds, config.random_seed, config.best_score_limit)
+    ba.solve(
+        generate_demo_data().to_core(),
+        time_limit_seconds=0,
+        random_seed=77,
+        stop_at_first_feasible=True,
+        on_new_best=lambda step, score: None,
+        config=config,
+    )
+    assert (config.spent_limit_seconds, config.random_seed, config.best_score_limit) == before
+    assert config.on_new_best is None
+    clone = copy.copy(config)
+    clone.random_seed = 9
+    assert config.random_seed == 3 and copy.deepcopy(config).random_seed == 3
+
+
+def test_time_limits_must_be_finite_and_non_negative():
+    """The same rule in every package (some accepted -1, all accepted NaN and inf)."""
+    import pytest
+
+    config = ba.SolverConfig()
+    for name in ("spent_limit_seconds", "unimproved_spent_limit_seconds"):
+        for bad in (-1.0, float("nan"), float("inf")):
+            with pytest.raises(ValueError, match=f"{name} must be finite and >= 0"):
+                setattr(config, name, bad)
+        setattr(config, name, 0.0)  # a zero budget is valid
+    with pytest.raises(ValueError, match="spent_limit_seconds must be finite and >= 0"):
+        ba.solve(generate_demo_data().to_core(), time_limit_seconds=-1)

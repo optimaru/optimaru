@@ -206,7 +206,11 @@ and `constraints`:
 from max_cut.constraints import PartitionImbalanceCost, PartitionSizeBoundsCost, cut_weight_cost, get_constraints, score
 
 max_cut.constraint_info()     # [ConstraintInfo(name='fixed_partition_cost', default_level='hard', ...), ...]
-max_cut.solve(problem, constraints=[*get_constraints()[:4], PartitionImbalanceCost(weight=2), cut_weight_cost])
+max_cut.solve(
+    problem,
+    time_limit_seconds=1.0,
+    constraints=[*get_constraints()[:4], PartitionImbalanceCost(weight=2), cut_weight_cost],
+)
 raw = max_cut.constraint_costs(problem)             # raw costs, re-priced in pure Python:
 score(raw), score(raw, [PartitionSizeBoundsCost(hard=False), cut_weight_cost])
 ```
@@ -232,7 +236,7 @@ print(warm.partition, warm.cut_weight)
 
 ## Extending
 
-Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-c-engine-use-case).
+Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-use-case).
 The planning variable is **BASIC**; the domain solver that configures the engine is
 `cpp/include/mc/solver.hpp` + `cpp/src/solver.cpp`.
 

@@ -101,7 +101,7 @@ better = ta.solve(seeded, time_limit_seconds=2.0, random_seed=42)
 
 ## Extending
 
-Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-c-engine-use-case).
+Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-use-case).
 The planning variable is **LIST**; the domain solver that configures the
 engine is `cpp/include/ta/solver.hpp` + `cpp/src/solver.cpp`.
 

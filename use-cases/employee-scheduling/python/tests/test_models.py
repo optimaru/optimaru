@@ -392,7 +392,7 @@ def test_there_is_one_rule_model_per_spec_in_factory_order():
     for spec in SPEC_CLASSES:
         model = rule_model(spec)
         assert model.spec_class is spec
-        assert model.__name__ == f"{spec.__name__}Rule"
+        assert model.__name__ == f"{spec.__name__}Model"  # no "Rule" suffix in 0.2.0
         assert getattr(models, model.__name__) is model  # picklable by reference
         assert set(model.model_fields) == {"name", "weight", "hard", "exponent", *spec().params()}
         assert model().to_spec() == spec()
@@ -403,10 +403,8 @@ def test_default_rules_are_the_default_specs():
 
 
 def test_spec_instances_and_json_dicts_are_both_rules():
-    model_input = _small_input(
-        rules=[MaxConsecutiveDaysCost(value=2), {"name": "max_consecutive_days_cost", "value": 2}]
-    )
-    first, second = model_input.rules
+    (first,) = _small_input(rules=[MaxConsecutiveDaysCost(value=2)]).rules
+    (second,) = _small_input(rules=[{"name": "max_consecutive_days_cost", "value": 2}]).rules
     assert first == second
     assert first.to_spec() == MaxConsecutiveDaysCost(value=2)
 
@@ -434,8 +432,25 @@ def test_a_rule_may_repeat_with_other_parameters():
         {"name": "required_skill_cost", "weight": -1},
         {"name": "required_skill_cost", "exponent": 0},
         {"name": "required_skill_cost", "hard": "yes"},
+        {"name": "required_skill_cost", "weight": True},  # the spec refuses a bool weight
+        {"name": "required_skill_cost", "weight": "2"},  # ... and a numeric string
+        {"name": "required_skill_cost", "exponent": True},
+        {"name": "required_skill_cost", "exponent": "2"},
     ],
-    ids=["old-name", "policy", "bound", "reward-hard", "global-scope", "weight", "exponent", "hard-type"],
+    ids=[
+        "old-name",
+        "policy",
+        "bound",
+        "reward-hard",
+        "global-scope",
+        "weight",
+        "exponent",
+        "hard-type",
+        "weight-bool",
+        "weight-str",
+        "exponent-bool",
+        "exponent-str",
+    ],
 )
 def test_a_bad_rule_fails_validation(rule):
     with pytest.raises(ValidationError):
@@ -449,3 +464,70 @@ def test_the_json_schema_carries_the_spec_bounds():
     assert schema["properties"]["weight"]["anyOf"][0]["minimum"] == 0
     day_range = rule_model(WorkerDayCountInRangeCost).model_json_schema()["properties"]
     assert day_range["hi"]["minimum"] == -1 and day_range["hi"]["maximum"] == es.MAX_DAY
+
+
+def test_integral_json_knobs_stay_numbers():
+    """weight 2 (a JSON integer) is a number, not a type error."""
+    rule = SchedulingInput.model_validate(
+        {**_small_input().model_dump(), "rules": [{"name": "required_skill_cost", "weight": 2, "exponent": 1}]}
+    ).rules[0]
+    assert rule.to_spec() == RequiredSkillCost(weight=2.0)
+
+
+def test_no_generated_model_is_named_rule():
+    """The per-constraint JSON models end in "Model", never in "Rule" (0.1.5 names do not import)."""
+    assert not [name for name in dir(models) if name.endswith("CostRule")]
+    with pytest.raises(ImportError):
+        exec("from es_scheduling.models import AssignmentCostRule", {})
+    assert "MaxConsecutiveDaysCostModel" in SchedulingInput.model_json_schema()["$defs"]
+
+
+def test_assigning_specs_to_rules_is_validated():
+    """input.rules = [specs] after construction goes through the validators (it skipped them)."""
+    model_input = _small_input()
+    model_input.rules = [RequiredSkillCost(), MaxConsecutiveDaysCost(value=2)]
+    assert [rule.to_spec() for rule in model_input.rules] == [RequiredSkillCost(), MaxConsecutiveDaysCost(value=2)]
+    solution = solve_request(ScheduleRequest(timelimit=0.05, model_input=model_input))
+    assert {total.name for total in solution.rule_totals} == {"required_skill_cost", "max_consecutive_days_cost"}
+    with pytest.raises(ValidationError):
+        model_input.rules = [{"name": "max_consecutive_days_cost", "value": 0}]
+
+
+def test_an_unvalidated_spec_in_rules_still_solves():
+    """An in-place edit bypasses pydantic; the solve still takes a spec found there."""
+    model_input = _small_input()
+    model_input.rules.append(MaxConsecutiveDaysCost(value=2))
+    solution = solve_request(ScheduleRequest(timelimit=0.05, model_input=model_input))
+    assert "max_consecutive_days_cost" in {total.name for total in solution.rule_totals}
+
+
+@pytest.mark.parametrize(
+    "rules",
+    [
+        [],
+        [RequiredSkillCost(), RequiredSkillCost()],
+        [MaxConsecutiveDaysCost(value=2), {"name": "max_consecutive_days_cost", "value": 2}],
+    ],
+    ids=["empty", "same-twice", "spec-and-json-twice"],
+)
+def test_an_empty_or_repeated_rule_list_is_refused(rules):
+    """The get_constraints() rules hold for SchedulingInput.rules too (both were scored)."""
+    with pytest.raises(ValidationError, match="must not be empty|same parameters"):
+        _small_input(rules=rules)
+
+
+def test_the_cpp_calculator_refuses_an_empty_or_repeated_selection():
+    """DecomposedCalculator(list) follows get_constraints(); add() still builds incrementally."""
+    with pytest.raises(ValueError, match="must not be empty"):
+        es.DecomposedCalculator([])
+    with pytest.raises(ValueError, match="same parameters"):
+        es.DecomposedCalculator([MaxConsecutiveDaysCost(value=1), MaxConsecutiveDaysCost(value=1)])
+    schedule = to_schedule(_small_input())
+    with pytest.raises(ValueError, match="same parameters"):
+        es.constraint_costs(schedule, [DayPatternCost(pattern="WORK,WORK")] * 2)
+    # Other knobs alone do not make another instance (select() keys name and parameters) ...
+    with pytest.raises(ValueError, match="same parameters"):
+        es.DecomposedCalculator([MaxConsecutiveDaysCost(value=1), MaxConsecutiveDaysCost(value=1, weight=2)])
+    # ... other parameters (or scope) do.
+    es.DecomposedCalculator([MaxConsecutiveDaysCost(value=1), MaxConsecutiveDaysCost(value=2)])
+    es.DecomposedCalculator([MaxConsecutiveDaysCost(value=1), MaxConsecutiveDaysCost(value=1, worker_indices=(0,))])

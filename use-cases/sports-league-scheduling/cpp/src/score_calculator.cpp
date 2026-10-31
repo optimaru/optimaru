@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "sls/constraints.hpp"
+#include "optimaru/api/score/level.hpp"
 
 namespace sls
 {
@@ -248,8 +249,9 @@ Score ScoreCalculator::calculateScore(LeagueSchedule &schedule)
     const Breakdown b = computeBreakdown(schedule);
     Score score;
     score.hard = -b.hardTotal();
-    // 0.0 - x avoids IEEE negative zero when the soft total is 0.
-    score.soft = 0.0 - static_cast<double>(b.softTotal());
+    // Not `0.0 - x`: GCC folds that into a negation for an integer x, which
+    // gives -0.0 for a zero total.
+    score.soft = optimaru::withoutNegativeZero(-static_cast<double>(b.softTotal()));
     schedule.score = score;
     return score;
 }

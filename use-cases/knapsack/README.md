@@ -183,7 +183,7 @@ and `constraints`:
 from knapsack.constraints import ForbiddenItemsCost, SelectedValueCost, get_constraints, score
 
 knapsack.constraint_info()     # [ConstraintInfo(name='knapsack_capacity_cost', default_level='hard', ...), ...]
-knapsack.solve(problem, constraints=[*get_constraints()[:-1], SelectedValueCost(weight=2)])
+knapsack.solve(problem, time_limit_seconds=1.0, constraints=[*get_constraints()[:-1], SelectedValueCost(weight=2)])
 raw = knapsack.constraint_costs(problem)            # raw totals, re-priced in pure Python:
 score(raw), score(raw, [*get_constraints()[:3], ForbiddenItemsCost(hard=False), *get_constraints()[4:]])
 ```
@@ -208,7 +208,7 @@ print([item.id for item in warm.items if item.selected], warm.total_value)
 
 ## Extending
 
-Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-c-engine-use-case).
+Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-use-case).
 The planning variable is **BASIC**; the domain solver that configures the engine is
 `cpp/include/ks/solver.hpp` + `cpp/src/solver.cpp`.
 

@@ -24,6 +24,8 @@ through a constraint selection (see `sports_league.constraints`).
 The pydantic mirror (for serialization) is in `sports_league.models` (optional dependency).
 """
 
+import copy
+
 from ._core import (
     ConstraintInfo,
     LeagueSchedule,
@@ -99,7 +101,7 @@ def solve(
     if config is None:
         cfg = SolverConfig()
     elif isinstance(config, SolverConfig):
-        cfg = config
+        cfg = copy.copy(config)  # the overrides below must not leak into it
     elif hasattr(config, "to_core"):
         cfg = config.to_core()
     else:

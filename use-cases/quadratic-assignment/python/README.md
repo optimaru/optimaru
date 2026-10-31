@@ -27,7 +27,7 @@ qap.constraint_info()
 #                 level_flippable=True, reward=False, default_enabled=True), ...,
 #  ConstraintInfo(name='flow_distance_cost', default_level='soft', default_weight=1.0,
 #                 level_flippable=True, reward=False, default_enabled=True)]
-qap.solve(problem, constraints=[*get_constraints()[:-1], FlowDistanceCost(weight=2)])
+qap.solve(problem, time_limit_seconds=1.0, constraints=[*get_constraints()[:-1], FlowDistanceCost(weight=2)])
 raw = qap.constraint_costs(problem)   # {name: {"costs": [...], "weight": ..., ...}}
 score(raw), score(raw, [LocationCapacityCost(exponent=2.0)])
 ```

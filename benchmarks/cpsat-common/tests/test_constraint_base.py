@@ -230,6 +230,47 @@ def test_hard_rounds_per_unit_half_away_from_zero():
     assert score_costs(costs_a(INTO_SOFT), [ConflictCost(weight=2.5)]).hard == -(5 + 3)
 
 
+def test_rounding_matches_llround_at_the_double_edges():
+    """value + 0.5 rounds in floating point; the exact formula does not."""
+    round_half_away = base._round_half_away
+    assert round_half_away(0.49999999999999994) == 0
+    assert round_half_away(-0.49999999999999994) == 0
+    assert round_half_away(4503599627370497.0) == 4503599627370497
+    assert round_half_away(-4503599627370497.0) == -4503599627370497
+    assert [round_half_away(v) for v in (0.5, -0.5, 1.5, -2.5, 2.4999)] == [1, -1, 2, -3, 2]
+    # Through score_costs: weight 1/98 on a raw 49 is 0.49999999999999994 -> 0 (the engine's 0).
+    costs = {"conflict_cost": _entry([49.0], level="hard", name="conflict_cost")}
+    assert score_costs(costs, [ConflictCost(weight=1 / 98)]).hard == 0
+
+
+# --- the range of a score (level.hpp "The range of a score") --------------------
+
+
+def test_the_hard_total_saturates_instead_of_wrapping():
+    """Five contributions of 4e18 sum past int64: -(2**63 - 1), never a positive score."""
+    costs = {"conflict_cost": _entry([1.0] * 5, level="hard", name="conflict_cost")}
+    assert score_costs(costs, [ConflictCost(weight=4e18)]).hard == -(2**63 - 1)
+    assert score_costs(costs, [ConflictCost(weight=1e18)]).hard == -5 * 10**18
+
+
+def test_the_below_hard_fold_saturates():
+    """task-assigning's 1e9 fold: 21 hard units at weight 1e9 fold past int64."""
+    costs = {"conflict_cost": _entry([1.0] * 21, level="hard", name="conflict_cost", fold=("below_hard", 1e9))}
+    assert score_costs(costs, [ConflictCost(weight=1e9)]).hard == -(2**63 - 1)
+    assert score_costs(costs, [ConflictCost(weight=1.0)]).hard == -21 * 10**9
+
+
+@pytest.mark.parametrize(
+    ("weight", "exponent", "level"),
+    [(1e19, 1.0, "hard"), (1.0, 200.0, "soft"), (1.0, 200.0, "hard"), (0.0, 400.0, "soft")],
+)
+def test_out_of_range_contributions_raise_overflow_error(weight, exponent, level):
+    """A hard contribution of 2**62 or more, or a non-finite one, cannot be scored."""
+    costs = {"conflict_cost": _entry([1e3], level=level, name="conflict_cost")}
+    with pytest.raises(OverflowError, match="conflict_cost"):
+        score_costs(costs, [ConflictCost(weight=weight, exponent=exponent)])
+
+
 def test_an_unknown_name_is_refused():
     class Typo(Constraint):
         name = "confict_cost"

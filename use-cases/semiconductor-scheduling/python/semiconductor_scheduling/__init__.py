@@ -27,6 +27,8 @@ engine object ``_core.SemiconductorSchedule`` (``problem.to_core()``; solved in 
 
 from __future__ import annotations
 
+import copy
+
 from . import _core
 from ._core import (
     AcceptorType,
@@ -150,7 +152,8 @@ def solve(
     ``constraints`` picks the cost function (see `semiconductor_scheduling.constraints`):
     only the listed constraints are scored, by a single start; None scores all 20 defaults.
     """
-    cfg = config if config is not None else SolverConfig()
+    # A copy: the keyword overrides below must not leak into the caller's config.
+    cfg = copy.copy(config) if config is not None else SolverConfig()
     if time_limit_seconds is not None:
         cfg.spent_limit_seconds = time_limit_seconds
     if random_seed is not None:

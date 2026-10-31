@@ -148,7 +148,7 @@ Assignments are matched by id. An assignment the solution leaves out is placed b
 
 ## Extending
 
-Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-c-engine-use-case).
+Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-use-case).
 The planning variable is **BASIC**; the domain solver that configures the
 engine is `cpp/include/fcs/solver.hpp` + `cpp/src/solver.cpp`.
 

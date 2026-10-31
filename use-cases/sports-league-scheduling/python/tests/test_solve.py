@@ -74,3 +74,15 @@ def test_parallel_solver_count_workers():
         )
         assert schedule.score.hard == 0
         assert all(m.round >= 0 for m in schedule.matches)
+
+
+def test_a_zero_soft_score_is_positive_zero():
+    """The unsolved demo has no soft penalty: it scores 0soft, not -0soft (IEEE negative zero)."""
+    import math
+
+    import sports_league as _pkg
+
+    score = _pkg.calculate_score(_pkg.demo_schedule())
+    assert score.soft == 0.0
+    assert math.copysign(1.0, score.soft) == 1.0
+    assert "-0soft" not in repr(score)

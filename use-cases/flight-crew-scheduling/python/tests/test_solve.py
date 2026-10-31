@@ -1,5 +1,6 @@
 """Scaled-down demo solve: reaches feasible + high-level solve() + pinned seats kept."""
 
+import time
 from datetime import date, datetime, timedelta
 
 import pytest
@@ -122,3 +123,21 @@ def test_unavailability_affects_score():
         employee.unavailable_days = [date(2026, 8, 10)]
     result = fc.solve(model, time_limit_seconds=2.0, random_seed=5)
     assert result.score_hard == -40  # 4 seats x -10
+
+
+def _boom(_step, _score):
+    raise RuntimeError("boom")
+
+
+def test_a_raising_on_new_best_raises_from_a_multi_start_solve():
+    """Two parallel starts: the callback's exception reaches Python instead of aborting the process,
+    and the other start stops at once instead of running out its 10 s budget."""
+    started = time.monotonic()
+    with pytest.raises(RuntimeError, match="boom"):
+        fc.solve(
+            _mini_problem(),
+            time_limit_seconds=10.0,
+            parallel_solver_count=2,
+            on_new_best=_boom,
+        )
+    assert time.monotonic() - started < 8.0

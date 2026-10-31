@@ -100,8 +100,8 @@ Score levelScoreOf(
 {
     const auto levels = calculator.levelScores();
     return Score{static_cast<std::int64_t>(levels.hard),
-                 static_cast<std::int64_t>(std::llround(levels.medium)),
-                 static_cast<std::int64_t>(std::llround(levels.soft))};
+                 optimaru::roundScoreLevel(levels.medium, "medium"),
+                 optimaru::roundScoreLevel(levels.soft, "soft")};
 }
 
 // One single-threaded solve on the monolithic fast path. The calculator

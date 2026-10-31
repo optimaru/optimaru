@@ -252,14 +252,16 @@ QAPLIB, SALBP).
 ## Tests
 
 `test/engine_test.cpp` verifies every feature against brute force on two toy
-domains (BASIC task assignment, LIST TSP): all six acceptors, all four
-terminations, FFD ordering, multi-start, FULL_ASSERT catching a deliberately
+domains (BASIC task assignment, LIST TSP): six of the seven acceptors (all but
+Record-to-Record Travel), all five terminations, FFD ordering, multi-start
+(and its exception safety), FULL_ASSERT catching a deliberately
 corrupted calculator, list moves under FULL_ASSERT, adaptive operator-weight
 convergence, LNS escaping a local optimum that traps hill climbing, and the
 nearby+LNS quality win on 100-city random TSP. `test/constraint_level_test.cpp`
 covers the constraint contract: levels and both medium folds, the knob guards
 (rewards, structural levels, weight and exponent checks), the catalog, exponent
-shaping, and incremental-vs-recompute and preview parity with a medium level.
+shaping, incremental-vs-recompute and preview parity with a medium level, and
+the score range (a saturating hard total, out-of-range contributions).
 
 ```sh
 cmake -B build && cmake --build build && ctest --test-dir build

@@ -52,6 +52,8 @@ Usage::
     print(schedule.score, schedule.score.is_feasible())
 """
 
+import copy
+
 from ._core import (
     ConstraintInfo,
     Job,
@@ -134,7 +136,8 @@ def solve(
 
     The result's score then reports each term on the level the selection gave it.
     """
-    cfg = config if config is not None else SolverConfig()
+    # A copy: the keyword overrides below must not leak into the caller's config.
+    cfg = copy.copy(config) if config is not None else SolverConfig()
     if time_limit_seconds is not None:
         cfg.spent_limit_seconds = time_limit_seconds
     if random_seed is not None:

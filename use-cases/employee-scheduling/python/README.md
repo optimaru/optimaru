@@ -158,7 +158,11 @@ A rule may be picked **several times** with different options (two day patterns,
 one cap per worker group): each instance is scored on its own,
 `constraint_totals()` tells them apart by `label` (`"Day pattern[A,OFF,B]"`), and
 `constraint_costs()` keys the second instance `"day_pattern_cost#2"`. The same
-rule with the same options twice is an error.
+rule with the same options twice (the knobs alone do not make another
+instance), or an empty list, is an error: `get_constraints()`,
+`SchedulingInput.rules`, `DecomposedCalculator(list)` and
+`constraint_costs(schedule, list)` all refuse it. `DecomposedCalculator()` plus
+`add(...)` builds a calculator incrementally and does not check.
 
 **Scope.** Every per-employee rule also takes `worker_indices` / `shift_indices`
 (engine indices; `None` = everyone): `MaxConsecutiveDaysCost(value=4,
@@ -243,17 +247,26 @@ arguments, `weight=None` = the default). `es.list_constraints()` lists every nam
   `_cost` suffix. The C++ structs, headers and registry names follow
   (`"Missing required skill"` → `"requiredSkillCost"`); the parametrized display
   names (`"Day pattern[...]"`) moved to the instance `label`.
-- One class per rule: the pydantic `*Rule` models are generated from the specs
-  (`models.RULE_MODELS`, `models.rule_model(...)`); `SchedulingInput.rules` takes
-  specs or JSON. JSON: `policy: "hard" | "soft"` → `hard: true | false`; `weight`
+- One class per rule, the spec: the hand-written pydantic `*Rule` models are
+  replaced by JSON models generated from the specs (`models.RULE_MODELS`,
+  `models.rule_model(...)`); `SchedulingInput.rules` takes specs or JSON. JSON: `policy: "hard" | "soft"` → `hard: true | false`; `weight`
   defaults to `null` (the rule's default). Old names and `policy` are refused.
-- The generated rule models are named `<SpecClass>Rule`, so 0.1.5 imports such as
-  `from es_scheduling.models import MaxConsecutiveDaysRule` raise `ImportError`:
-  `MaxConsecutiveDaysRule` → `MaxConsecutiveDaysCostRule`, `UnavailableWorkerRule`
-  → `EmployeeUnavailabilityCostRule`, `WorkerDayCountInRuleRange` →
-  `WorkerDayCountInRangeCostRule`, `BalanceAssignmentsRule` →
-  `ShiftCountImbalanceCostRule`, and so on. Prefer `models.rule_model(name)`, or
-  pass the spec instances, over importing the classes.
+- The generated JSON models are named `<SpecClass>Model` (no class ends in
+  `Rule`), so 0.1.5 imports such as
+  `from es_scheduling.models import MaxConsecutiveDaysRule` or `AssignmentCostRule`
+  raise `ImportError`. Pass the spec instances (`MaxConsecutiveDaysRule` →
+  `constraints.MaxConsecutiveDaysCost`, `UnavailableWorkerRule` →
+  `EmployeeUnavailabilityCost`, `WorkerDayCountInRuleRange` →
+  `WorkerDayCountInRangeCost`, `BalanceAssignmentsRule` →
+  `ShiftCountImbalanceCost`, ...) or JSON dicts to `SchedulingInput.rules`; use
+  `models.rule_model(name)` for the model class itself.
+- `SchedulingInput.rules` validates on assignment too
+  (`model_input.rules = [MaxConsecutiveDaysCost(value=5)]`), and a rule model's
+  `weight` / `exponent` refuse a bool or a numeric string, as the spec does.
+- The per-employee specs declare the scope fields `worker_indices` /
+  `shift_indices` before their domain parameters: build them with keyword
+  arguments (`MaxConsecutiveDaysCost(value=5)`, not
+  `MaxConsecutiveDaysCost(None, None, 1.0, 5)`).
 - The scope keys `worker_indices` / `shift_indices` are accepted only on the
   per-employee rules and on `shift_coverage_cost`. The other global rules
   (`unassigned_shifts_cost`, `shift_count_imbalance_cost`, `shift_count_gap_cost`,

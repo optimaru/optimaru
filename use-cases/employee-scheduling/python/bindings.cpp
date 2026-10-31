@@ -5,6 +5,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>  // std::vector / std::set / std::string conversions
 
+#include <algorithm>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -351,9 +352,12 @@ void addConstraintByName(DecomposedCalculator &calc,
 }
 
 // A calculator holding exactly `constraints` (each pick added by the
-// factory), or the default assembly for None.
-std::unique_ptr<DecomposedCalculator> calculatorFor(const py::object &constraints,
-                                                    bool allowEmpty)
+// factory), or the default assembly for None. The selection rules of the
+// Python get_constraints() (select(..., repeatable=True)): an empty list is
+// an error, and so is the same name with the same parameters twice (keyed
+// (name, repr(sorted(params.items()))), as select() keys it); the same name
+// with other parameters or scope is a separate instance.
+std::unique_ptr<DecomposedCalculator> calculatorFor(const py::object &constraints)
 {
     auto calc = std::make_unique<DecomposedCalculator>();
     if (constraints.is_none())
@@ -361,13 +365,25 @@ std::unique_ptr<DecomposedCalculator> calculatorFor(const py::object &constraint
         addDefaultConstraints(*calc);
         return calc;
     }
-    std::size_t count = 0;
+    const py::object sorted = py::module_::import("builtins").attr("sorted");
+    std::vector<std::string> seen;
     for (py::handle pick : constraints)
     {
-        addConstraintByName(*calc, pick, paramsOf(pick));
-        ++count;
+        const py::dict params = paramsOf(pick);
+        const std::string name = pick.attr("name").cast<std::string>();
+        const std::string key
+            = name + '\n' + py::repr(sorted(params.attr("items")())).cast<std::string>();
+        if (std::find(seen.begin(), seen.end(), key) != seen.end())
+        {
+            throw py::value_error(
+                "constraint '" + name
+                + "' picked more than once with the same parameters; state each "
+                  "instance once with the metadata you want");
+        }
+        seen.push_back(key);
+        addConstraintByName(*calc, pick, params);
     }
-    if (count == 0 && !allowEmpty)
+    if (seen.empty())
         throw py::value_error(
             "constraints must not be empty (pass None for the defaults)");
     return calc;
@@ -506,8 +522,11 @@ PYBIND11_MODULE(_core, m)
         // Example: DecomposedCalculator([RequiredSkillCost(weight=2.0), ...]).
         // Duck-typed: each pick needs .name/.weight/.hard/.exponent, plus an
         // optional params() (or .params dict) with the domain parameters.
+        // The get_constraints() rules: no empty list (build an empty
+        // calculator with DecomposedCalculator() and add()), and the same
+        // rule with the same parameters at most once.
         .def(py::init([](const py::iterable &constraints)
-                      { return calculatorFor(constraints, /*allowEmpty=*/true); }),
+                      { return calculatorFor(constraints); }),
              py::arg("constraints"),
              "Assemble from constraint spec objects, e.g.\n"
              "DecomposedCalculator([RequiredSkillCost(), MinRestCost(weight=0.25, "
@@ -604,7 +623,7 @@ PYBIND11_MODULE(_core, m)
         [](EmployeeSchedule &schedule, const py::object &constraints)
         {
             ScoreCalculator::prepare(schedule);
-            auto calc = calculatorFor(constraints, /*allowEmpty=*/false);
+            auto calc = calculatorFor(constraints);
             return tfpy::constraintCosts(*calc, schedule);
         },
         py::arg("schedule"),
@@ -623,18 +642,14 @@ PYBIND11_MODULE(_core, m)
         [] { return defaultConstraints(); },
         [] { return catalogConstraints(); });
 
-    py::class_<Solver::Config>(m, "SolverConfig")
+    optimaru::python::bindConfigCopy(py::class_<Solver::Config>(m, "SolverConfig"))
         .def(py::init<>())
         .def_property(
             "spent_limit_seconds",
             [](const Solver::Config &c)
             { return std::chrono::duration<double>(c.spentLimit).count(); },
             [](Solver::Config &c, double s)
-            {
-                c.spentLimit
-                    = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        std::chrono::duration<double>(s));
-            })
+            { c.spentLimit = optimaru::python::secondsToMillis(s, "spent_limit_seconds"); })
         .def_property(
             "unimproved_spent_limit_seconds",
             [](const Solver::Config &c)
@@ -643,14 +658,7 @@ PYBIND11_MODULE(_core, m)
                     .count();
             },
             [](Solver::Config &c, double s)
-            {
-                if (s < 0.0)
-                    throw py::value_error(
-                        "unimproved_spent_limit_seconds must be non-negative");
-                c.unimprovedSpentLimit
-                    = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        std::chrono::duration<double>(s));
-            })
+            { c.unimprovedSpentLimit = optimaru::python::secondsToMillis(s, "unimproved_spent_limit_seconds"); })
         .def_property(
             "no_improvement_limit_seconds",
             [](const Solver::Config &c)
@@ -659,14 +667,7 @@ PYBIND11_MODULE(_core, m)
                     .count();
             },
             [](Solver::Config &c, double s)
-            {
-                if (s < 0.0)
-                    throw py::value_error(
-                        "no_improvement_limit_seconds must be non-negative");
-                c.unimprovedSpentLimit
-                    = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        std::chrono::duration<double>(s));
-            })
+            { c.unimprovedSpentLimit = optimaru::python::secondsToMillis(s, "no_improvement_limit_seconds"); })
         .def_readwrite("step_count_limit", &Solver::Config::stepCountLimit)
         .def_readwrite("unimproved_step_count_limit",
                        &Solver::Config::unimprovedStepCountLimit)

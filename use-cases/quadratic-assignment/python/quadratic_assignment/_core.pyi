@@ -144,7 +144,13 @@ class SolverConfig:
     late_acceptance_size: int
     """0 = auto: clamp(8 * facility count, 400, 3200)."""
     entity_tabu_size: int
-    """ENTITY_TABU tenure (7 by default)."""
+    """ENTITY_TABU tenure (7 by default). ENTITY_TABU accepts only non-worsening swaps
+    (sideways ones blocked on tabu facilities), so it climbs like HILL_CLIMBING."""
+    simulated_annealing_starting_temperature: tuple[int, float]
+    """SIMULATED_ANNEALING's (hard, soft) starting temperature. (0, 0), the default, = auto:
+    hard 0, soft = simulated_annealing_temperature_fraction x |start soft| (at least 1)."""
+    simulated_annealing_temperature_fraction: float
+    """The auto temperature's fraction of the start's |soft| (0.01 by default; > 0)."""
     full_assert: bool
     best_score_limit: tuple[int, float]
     """(hard, soft): stop early once bestScore >= this. (0, -1e18) stops at

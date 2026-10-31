@@ -34,6 +34,8 @@ There is also a low-level path that builds engine objects (`FlightCrewSchedule`)
 and uses `Solver` (no pydantic needed). The pydantic mirror is in `flight_crew.models`.
 """
 
+import copy
+
 from ._core import (
     Airport,
     ConstraintInfo,
@@ -83,7 +85,7 @@ def _resolve_config(config) -> SolverConfig:
     if config is None:
         return SolverConfig()
     if isinstance(config, SolverConfig):
-        return config
+        return copy.copy(config)  # solve()'s overrides must not leak into it
     if hasattr(config, "to_core"):
         return config.to_core()
     raise ValueError("config must be a SolverConfig or an object with to_core() (models.SolveConfig)")

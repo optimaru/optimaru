@@ -11,6 +11,7 @@
 #include "mnt/constraints/max_end_date_cost.hpp"
 #include "mnt/constraints/min_start_date_cost.hpp"
 #include "mnt/constraints/tag_conflict_cost.hpp"
+#include "optimaru/api/score/level.hpp"
 
 namespace mnt
 {
@@ -192,10 +193,10 @@ Score ScoreCalculator::calculateScore(MaintenanceSchedule &schedule)
     score.hard = -(kCrewWeight * crewOverlap
                    + kMinStartWeight * minStartViolation
                    + kMaxEndWeight * maxEndViolation);
-    score.soft = -static_cast<double>(
+    score.soft = optimaru::withoutNegativeZero(-static_cast<double>(
         kBeforeIdealWeight * beforeIdeal
         + kTagWeight * tagOverlap
-        + kAfterIdealWeight * afterIdeal);
+        + kAfterIdealWeight * afterIdeal));
 
     schedule.score = score;
     return score;

@@ -145,7 +145,7 @@ and `constraints`:
 from bin_packing.constraints import UsedBinsCost, get_constraints, score
 
 bp.constraint_info()                    # the catalog: name, default level / weight, flags
-bp.solve(problem, constraints=[*get_constraints()[:3], UsedBinsCost(weight=2)])
+bp.solve(problem, time_limit_seconds=1.0, constraints=[*get_constraints()[:3], UsedBinsCost(weight=2)])
 raw = bp.constraint_costs(problem)      # raw per-bin costs, re-priced in pure Python
 score(raw), score(raw, [UsedBinsCost(exponent=2.0)])
 ```
@@ -176,7 +176,7 @@ print(bp.solve(warm, time_limit_seconds=1.0, random_seed=42), warm.bin_loads())
 
 ## Extending
 
-Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-c-engine-use-case).
+Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-use-case).
 The planning variable is **BASIC**; the domain solver that configures the
 engine is `cpp/include/bp/solver.hpp` + `cpp/src/solver.cpp`.
 

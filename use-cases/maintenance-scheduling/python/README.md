@@ -41,7 +41,7 @@ from maintenance_scheduling.constraints import TagConflictCost, get_constraints,
 mnt.constraint_info()
 # [ConstraintInfo(name='min_start_date_cost', default_level='hard', default_weight=1.0,
 #                 level_flippable=True, reward=False, default_enabled=True), ...]
-mnt.solve(schedule, constraints=get_constraints(
+mnt.solve(schedule, time_limit_seconds=1.0, constraints=get_constraints(
     [*get_constraints()[:5], TagConflictCost(weight=10_000)]))   # tag conflicts x10
 raw = mnt.constraint_costs(schedule)      # raw costs, re-priced in pure Python:
 score(raw), score(raw, [TagConflictCost(exponent=2.0)])
