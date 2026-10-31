@@ -85,7 +85,8 @@ public:
     HardSoftScore run(ScoreDirector<Solution>& director, SolverTermination& termination) {
         Solution& solution = director.workingSolution();
         if constexpr (Descriptor::kind == VariableKind::BASIC) {
-            if (Descriptor::entityCount(solution) == 0 || Descriptor::valueCount(solution) == 0) {
+            if (Descriptor::entityCount(solution) == 0 || Descriptor::valueCount(solution) == 0 ||
+                allEntitiesPinned(solution)) {
                 return director.calculateScore();
             }
         } else {
@@ -481,8 +482,17 @@ private:
         int entityCount = 0;
     };
 
+    // With nothing movable no move, built-in or custom, has a legal target, so
+    // run() stops here rather than have every selection handle that case.
+    static bool allEntitiesPinned(const Solution& sol) {
+        const int n = Descriptor::entityCount(sol);
+        for (int e = 0; e < n; ++e)
+            if (!entityPinned<Descriptor>(sol, e)) return false;
+        return true;
+    }
+
     // Return a non-pinned entity: keep `e` if movable, otherwise resample (then
-    // scan) for one. Falls back to `e` only in the degenerate all-pinned case.
+    // scan) for one. run() has checked that one exists.
     int movableEntity(const Solution& sol, int e,
                       std::uniform_int_distribution<int>& pick, std::mt19937_64& rng) {
         if (!entityPinned<Descriptor>(sol, e)) return e;

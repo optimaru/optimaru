@@ -32,7 +32,10 @@ struct DefaultConstructionHeuristicPhase {
             if (valueCount == 0) return;
             std::vector<int> uninitialized;
             for (int e = 0; e < entityCount; ++e) {
-                if (Descriptor::getVariable(solution, e) < 0) uninitialized.push_back(e);
+                if (Descriptor::getVariable(solution, e) < 0 &&
+                    !entityPinned<Descriptor>(solution, e)) {
+                    uninitialized.push_back(e);
+                }
             }
             for (int e : initializationOrder(uninitialized, config.entityDifficulty)) {
                 placeBestValue(director, e, valueCount);

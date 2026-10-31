@@ -12,9 +12,11 @@ namespace optimaru {
 // ---------------------------------------------------------------------------
 // A descriptor MAY declare `static bool isPinned(const Solution&, int entity)`
 // to mark an entity as fixed: it keeps its current value, is counted by every
-// constraint, but is never selected for a move, a swap partner, or a ruin. A
-// descriptor that omits it pins nothing (default false) — so existing
-// specializations (and other quickstarts) are unaffected.
+// constraint, but is never selected for a move, a swap partner, or a ruin, and
+// construction leaves it alone even when it is unassigned. A solution with every
+// entity pinned gets no local search at all. A descriptor that omits it pins
+// nothing (default false) — so existing specializations (and other quickstarts)
+// are unaffected.
 namespace detail {
 template <class D, class S, class = void>
 struct has_is_pinned : std::false_type {};

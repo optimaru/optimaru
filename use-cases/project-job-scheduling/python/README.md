@@ -78,9 +78,9 @@ instances). Rule details are in `../cpp/include/pjs/domain.hpp`.
 - **Initialization order / heuristic**: Java's `DelayStrengthComparator` (ascending delay
   strength) is reproduced equivalently by the engine CH scanning values upward from 0
   (no separate port).
-- **Pinned uninitialized allocations**: the engine CH initializes every uninitialized
-  entity without knowing about pinning, so `Solver.solve` first fixes uninitialized pinned
-  allocations to (first mode, delay 0) (the SOURCE/SINK convention of the Java demo).
+- **Pinned uninitialized allocations**: the engine CH leaves a pinned entity unassigned,
+  so `Solver.solve` first fixes uninitialized pinned allocations to (first mode, delay 0)
+  (the SOURCE/SINK convention of the Java demo).
 - **Allocation's sourceAllocation/sinkAllocation fields**: references unused by any Java
   constraint, so not ported (REST shape only).
 - **Demo data**: scale and distributions follow the Java `DemoDataGenerator`, but the
