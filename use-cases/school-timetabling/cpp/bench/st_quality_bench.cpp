@@ -5,15 +5,16 @@
 // teacherRoomStability / teacherTimeEfficiency / studentGroupSubjectVariety
 // soft). This repo's teacherUnavailable extension is deliberately left EMPTY
 // in every generated instance so it contributes 0 and the comparison against
-// the stock Java quickstart and the CP-SAT model stays fair.
+// the CP-SAT model stays fair.
 //
 // Two modes:
 //   st_quality_bench <classes> <teachers> <rooms> <seed> <seconds> <out.json>
 //                    [parallelSolverCount]
 //     Generates a deterministic instance (5 days x 8 periods, fixed subject
 //     curriculum, seed-shuffled subject->teacher split), dumps it as JSON
-//     (Java and CP-SAT read the same file), solves for the wall-clock budget
-//     and prints the trajectory + "QBENCH_CPP_FINAL score=... moves_per_sec=N".
+//     (the CP-SAT model and evaluate.py read the same file), solves for the
+//     wall-clock budget and prints the trajectory +
+//     "QBENCH_CPP_FINAL score=... moves_per_sec=N".
 //     The best assignment is dumped next to the instance as
 //     <out minus .json>.solution_cpp.json for the shared re-scorer.
 //
@@ -192,7 +193,7 @@ Timetable buildCrossCheck()
 }
 
 // -------------------------------------------------------------------------
-// JSON dumps (shared with the Java tests and the CP-SAT model).
+// JSON dumps (shared with the CP-SAT model and evaluate.py).
 // -------------------------------------------------------------------------
 void dumpInstance(const Timetable &t, const std::string &path)
 {

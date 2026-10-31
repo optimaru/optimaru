@@ -33,7 +33,7 @@ target_compile_options(st_test PRIVATE -Wall -Wextra)
 
 # Canonical full-parity domain (st::canon): the CP-SAT package's H1~H10 /
 # S1~S6 on the same engine. Kept as a separate library so the quickstart
-# domain above stays byte-identical for the Java cross-checks.
+# domain above stays byte-identical for the evaluate.py cross-check.
 add_library(st_canon
     src/canonical_score_calculator.cpp
     src/canonical_incremental_calculator.cpp
