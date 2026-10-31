@@ -251,15 +251,16 @@ void verifyPartialAssemblies()
     std::printf("== (c) Single-component assemblies ==\n");
 
     {  // crewConflictCost alone: two 5-business-day jobs on the same crew
-        // and start date overlap on all 7 calendar days they span.
+        // and start date overlap on all 5 calendar days they span
+        // ([Mon, Sat)).
         MaintenanceSchedule s = makeBase();
         addJob(s, 5);
         addJob(s, 5);
         ScoreCalculator::prepare(s);
         s.jobs[0].crewDate = s.crewDateOf(0, 0);
         s.jobs[1].crewDate = s.crewDateOf(0, 0);
-        const std::int64_t days
-            = s.endDateFor(5, 0) - s.startDates[0];  // 5 business days -> 7
+        // 5 business days from a Monday -> 5
+        const std::int64_t days = s.endDateFor(5, 0) - s.startDates[0];
         DecomposedCalculator calculator;
         calculator.emplace<CrewConflictCost>();
         checkScore(

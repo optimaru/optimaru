@@ -75,15 +75,15 @@ class MinStartDateCost(Constraint):
 
     name = "min_start_date_cost"
     label_en = "Earliest start date"
-    label_ko = "최소 시작일"
+    label_ko = "시작 가능일"
     description_en = (
         "Calendar days by which an assigned job starts before its earliest allowed start date "
         "(min_start_date), summed over the jobs. One unit of cost is one day too early; 0 means "
         "every job starts on or after its earliest start date."
     )
     description_ko = (
-        "배정된 작업마다 시작일이 최소 시작일(min_start_date)보다 앞선 날수를 모두 더합니다. "
-        "하루 일찍 시작할 때마다 비용 1이며, 0이면 모든 작업이 최소 시작일 이후에 시작합니다."
+        "배정된 작업마다 시작일이 시작 가능일(min_start_date)보다 앞선 날수를 모두 더합니다. "
+        "하루 일찍 시작할 때마다 비용 1이며, 0이면 모든 작업이 시작 가능일 당일이나 그 뒤에 시작합니다."
     )
 
 
@@ -92,15 +92,15 @@ class MaxEndDateCost(Constraint):
 
     name = "max_end_date_cost"
     label_en = "Latest end date"
-    label_ko = "최대 종료일"
+    label_ko = "종료 기한"
     description_en = (
         "Calendar days by which an assigned job ends after the latest date it may end on "
         "(max_end_date), summed over the jobs. One unit of cost is one day too late; 0 means "
         "every job ends by its latest end date."
     )
     description_ko = (
-        "배정된 작업마다 종료일이 최대 종료일(max_end_date)을 넘긴 날수를 모두 더합니다. "
-        "하루 늦게 끝날 때마다 비용 1이며, 0이면 모든 작업이 최대 종료일 안에 끝납니다."
+        "배정된 작업마다 종료일이 종료 기한(max_end_date)을 넘긴 날수를 모두 더합니다. "
+        "하루 늦게 끝날 때마다 비용 1이며, 0이면 모든 작업이 종료 기한 안에 끝납니다."
     )
 
 
@@ -112,13 +112,13 @@ class BeforeIdealEndDateCost(Constraint):
 
     name = "before_ideal_end_date_cost"
     label_en = "Finished before the ideal date"
-    label_ko = "이상 종료일보다 이른 완료"
+    label_ko = "이상적 종료일보다 이른 완료"
     description_en = (
         "Calendar days by which an assigned job ends before its ideal end date (ideal_end_date), "
         "summed over the jobs. One unit of cost is one day early; 0 means no job ends early."
     )
     description_ko = (
-        "배정된 작업마다 이상 종료일(ideal_end_date)보다 일찍 끝난 날수를 모두 더합니다. "
+        "배정된 작업마다 이상적 종료일(ideal_end_date)보다 일찍 끝난 날수를 모두 더합니다. "
         "하루 일찍 끝날 때마다 비용 1이며, 0이면 일찍 끝나는 작업이 없습니다."
     )
 
@@ -131,13 +131,13 @@ class AfterIdealEndDateCost(Constraint):
 
     name = "after_ideal_end_date_cost"
     label_en = "Finished after the ideal date"
-    label_ko = "이상 종료일보다 늦은 완료"
+    label_ko = "이상적 종료일보다 늦은 완료"
     description_en = (
         "Calendar days by which an assigned job ends after its ideal end date (ideal_end_date), "
         "summed over the jobs. One unit of cost is one day late; 0 means no job ends late."
     )
     description_ko = (
-        "배정된 작업마다 이상 종료일(ideal_end_date)보다 늦게 끝난 날수를 모두 더합니다. "
+        "배정된 작업마다 이상적 종료일(ideal_end_date)보다 늦게 끝난 날수를 모두 더합니다. "
         "하루 늦게 끝날 때마다 비용 1이며, 0이면 늦게 끝나는 작업이 없습니다."
     )
 
@@ -151,15 +151,15 @@ class CrewConflictCost(Constraint):
 
     name = "crew_conflict_cost"
     label_en = "Crew conflict"
-    label_ko = "작업조 중복 배정"
+    label_ko = "정비조 중복 배정"
     description_en = (
         "Calendar days on which two jobs of the same crew overlap, summed over every pair of "
         "jobs on one crew. One unit of cost is one day a pair of same-crew jobs runs at once; "
         "0 means no crew has two jobs on the same day."
     )
     description_ko = (
-        "같은 작업조에 배정된 두 작업이 겹치는 날수를 작업 쌍마다 모두 더합니다. "
-        "같은 작업조의 두 작업이 하루 겹칠 때마다 비용 1이며, 0이면 어느 작업조도 같은 날 두 작업을 맡지 않습니다."
+        "같은 정비조에 배정된 두 작업이 겹치는 날수를 작업 쌍마다 모두 더합니다. "
+        "같은 정비조의 두 작업이 하루 겹칠 때마다 비용 1이며, 0이면 어느 정비조도 같은 날 두 작업을 맡지 않습니다."
     )
 
 

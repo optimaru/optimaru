@@ -17,8 +17,8 @@ namespace mnt
 namespace
 {
 
-// The same constants the components and ScoreCalculator read (integral; see
-// score_calculator.cpp).
+// The same constants the components and ScoreCalculator read. Integral, so
+// both levels are computed in int64 exactly like the full calculator.
 constexpr auto kCrewWeight
     = static_cast<std::int64_t>(CrewConflictCost::kDefaultWeight);
 constexpr auto kMinStartWeight
@@ -31,6 +31,23 @@ constexpr auto kAfterIdealWeight
     = static_cast<std::int64_t>(AfterIdealEndDateCost::kDefaultWeight);
 constexpr auto kTagWeight
     = static_cast<std::int64_t>(TagConflictCost::kDefaultWeight);
+static_assert(
+    kCrewWeight == CrewConflictCost::kDefaultWeight
+        && kMinStartWeight == MinStartDateCost::kDefaultWeight
+        && kMaxEndWeight == MaxEndDateCost::kDefaultWeight
+        && kBeforeIdealWeight == BeforeIdealEndDateCost::kDefaultWeight
+        && kAfterIdealWeight == AfterIdealEndDateCost::kDefaultWeight
+        && kTagWeight == TagConflictCost::kDefaultWeight,
+    "the incremental calculator assumes integral default weights");
+static_assert(CrewConflictCost::kDefaultLevel == optimaru::Level::Hard
+                  && MinStartDateCost::kDefaultLevel == optimaru::Level::Hard
+                  && MaxEndDateCost::kDefaultLevel == optimaru::Level::Hard
+                  && BeforeIdealEndDateCost::kDefaultLevel
+                         == optimaru::Level::Soft
+                  && AfterIdealEndDateCost::kDefaultLevel
+                         == optimaru::Level::Soft
+                  && TagConflictCost::kDefaultLevel == optimaru::Level::Soft,
+              "the incremental calculator assumes the default levels");
 
 }  // namespace
 

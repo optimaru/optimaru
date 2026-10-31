@@ -94,7 +94,6 @@ def solve(
         MaintenanceContext(model, problem, dates, options, x, ends), objective
     )
 
-
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = time_limit_seconds
     solver.parameters.random_seed = random_seed
