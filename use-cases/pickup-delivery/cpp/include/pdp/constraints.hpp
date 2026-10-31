@@ -8,9 +8,8 @@
 // need (the calculator aliases, the route chain walk and the request-coupling
 // global base) and carries the pattern's documentation.
 //
-// Including this header still gives the whole set, so nothing that used it has
-// to change. Adding a component is a file plus a line here (and a line in
-// addDefaultConstraints below when it belongs to the default assembly).
+// Adding a component is a file plus an include here (and an `emplace` in
+// defaultConstraints() below when it belongs to the default assembly).
 
 #include "pdp/constraints/common.hpp"
 #include "pdp/constraints/load_utilization.hpp"

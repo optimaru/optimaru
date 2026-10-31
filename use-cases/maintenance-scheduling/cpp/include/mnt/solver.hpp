@@ -81,8 +81,8 @@ public:
         // RuinRecreateConfig::asMoveWeight): probability that a step is a
         // small ruin + greedy best-placement repair instead of a sampled
         // change/swap; a rejected one is rolled back like any other move.
-        // 0 disables (measured: no win on the demo instances at 10s —
-        // see README), a positive value is the per-step draw probability.
+        // 0 disables (measured: no win on the demo instances at 10s), a
+        // positive value is the per-step draw probability.
         double ruinRecreateAsMoveWeight = 0.0;
         int ruinRecreateAsMoveMaxRuin = 12;
 
@@ -90,7 +90,7 @@ public:
         // LocalSearchConfig::descentWeight): enumerate every crewDate for
         // both jobs plus their swap, apply the best improving one, repeat
         // until the pair is locally optimal. 0 disables (measured: loses
-        // budget on the demo instances at 10s — see README).
+        // budget on the demo instances at 10s).
         double descentWeight = 0.0;
         int descentMaxSweeps = 4;
 

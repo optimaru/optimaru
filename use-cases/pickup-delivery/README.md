@@ -28,7 +28,7 @@ cd cpp && cmake -B build && cmake --build build
 ```
 
 ```sh
-cd python && uv run python setup.py build_ext --inplace && uv run pytest
+cd python && uv sync --all-groups --all-extras && uv run pytest -q
 ```
 
 ## Starting from existing routes
@@ -216,7 +216,7 @@ Decreasing ordering, or pre-assign part of the solution in the domain
 solver's `solve` before the engine runs — the engine only fills what is still unassigned.
 
 **Adding a hard or soft cost.** One file per constraint under
-`cpp/include/pdp/constraints/` (currently `load_utilization`, `minimize_travel_time`, `paired_request`, `pickup_before_dropoff`, `route_costs`, `route_geometry`, `route_limits`, `same_vehicle`, `service_finished_after_max_end_time`, `unassigned_requests`, `vehicle_capacity`):
+`cpp/include/pdp/constraints/` (currently `load_utilization`, `minimize_lateness`, `minimize_travel_time`, `paired_request`, `pickup_before_dropoff`, `pinned_stops`, `required_vehicle`, `route_costs`, `route_geometry`, `route_limits`, `same_vehicle`, `service_finished_after_max_end_time`, `unassigned_requests`, `vehicle_capacity`):
 1. add `constraints/<name>.hpp` (a `UnitConstraint` or `GlobalConstraint`;
    positive cost = penalty, the level and weight are constructor defaults);
 2. include it in `cpp/include/pdp/constraints.hpp` and `emplace` it in

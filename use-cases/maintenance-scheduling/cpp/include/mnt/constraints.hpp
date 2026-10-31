@@ -8,9 +8,8 @@
 // need (the calculator aliases, the per-job base and the day-overlap global
 // base) and carries the pattern's documentation.
 //
-// Including this header still gives the whole set, so nothing that used it has
-// to change. Adding a component is a file plus a line here (and a line in
-// addDefaultConstraints below when it belongs to the default assembly).
+// Adding a component is a file plus an include here (and an `emplace` in
+// defaultConstraints() below when it belongs to the default assembly).
 
 #include "mnt/constraints/after_ideal_end_date.hpp"
 #include "mnt/constraints/before_ideal_end_date.hpp"

@@ -7,9 +7,8 @@
 // One component per file under constraints/; common.hpp holds what all of them
 // need (the calculator aliases) and carries the pattern's documentation.
 //
-// Including this header still gives the whole set, so nothing that used it has
-// to change. Adding a component is a file plus a line here (and a line in
-// addDefaultConstraints below when it belongs to the default assembly).
+// Adding a component is a file plus an include here (and an `emplace` in
+// defaultConstraints() below when it belongs to the default assembly).
 
 #include "op/constraints/common.hpp"
 #include "op/constraints/minimize_distance_from_last_pick_task_to_path_origin.hpp"

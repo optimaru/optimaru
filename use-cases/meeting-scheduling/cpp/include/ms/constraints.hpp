@@ -9,9 +9,8 @@
 // unit, cross-cell pair, attendance arc) and carries the pattern's
 // documentation.
 //
-// Including this header still gives the whole set, so nothing that used it has
-// to change. Adding a component is a file plus a line here (and a line in
-// addDefaultConstraints below when it belongs to the default assembly).
+// Adding a component is a file plus an include here (and an `emplace` in
+// defaultConstraints() below when it belongs to the default assembly).
 
 #include "ms/constraints/assign_larger_rooms_first.hpp"
 #include "ms/constraints/avoid_overtime.hpp"

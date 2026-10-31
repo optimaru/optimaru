@@ -84,12 +84,20 @@ class Delivery:
         pickup_node_index: int,
         dropoff_node_index: int,
         demand: int,
+        order_time: int = 0,
+        required_vehicle_index: int = -1,
     ) -> None: ...
     id: str
     pickup_node_index: int
     dropoff_node_index: int
     demand: int
     """Added to the vehicle's load at the pickup, removed at the dropoff."""
+    order_time: int
+    """When the request was placed, in plan seconds; negative if it was
+    already waiting when the plan starts."""
+    required_vehicle_index: int
+    """Index into PdpRoutePlan.vehicles of the vehicle this request must ride
+    on; -1 == any."""
 
 class Vehicle:
     def __init__(
