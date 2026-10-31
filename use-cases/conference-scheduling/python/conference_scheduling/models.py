@@ -13,7 +13,7 @@ snapshots, ...)::
 `pydantic` is an optional dependency (`pip install conference-scheduling[models]`).
 """
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from . import _core
 
@@ -115,8 +115,30 @@ class ConferenceScheduleModel(BaseModel):
     score_hard: int | None = None
     score_soft: float | None = None
 
+    @model_validator(mode="after")
+    def _check_indices(self):
+        """Raw positions the engine reads without a range check. The positions listed on
+        timeslots, rooms and speakers and in `prerequisite_talks` it skips when out of range."""
+        type_count = len(self.talk_types)
+        speaker_count = len(self.speakers)
+        value_count = len(self.timeslots) * len(self.rooms)
+        for talk in self.talks:
+            if not 0 <= talk.talk_type < type_count:
+                raise ValueError(
+                    f"talk {talk.code!r}: talk_type {talk.talk_type!r} is out of range 0..{type_count - 1}"
+                )
+            for speaker in talk.speakers:
+                if not 0 <= speaker < speaker_count:
+                    raise ValueError(f"talk {talk.code!r}: speaker {speaker!r} is out of range 0..{speaker_count - 1}")
+            if not -1 <= talk.slot_room < value_count:
+                raise ValueError(
+                    f"talk {talk.code!r}: slot_room {talk.slot_room!r} is out of range -1..{value_count - 1}"
+                )
+        return self
+
     def to_core(self) -> "_core.ConferenceSchedule":
         """pydantic -> engine object (the score field is ignored; the engine recomputes it)."""
+        self._check_indices()  # the fields stay mutable after validation
         return _core.ConferenceSchedule(
             name=self.name,
             talk_types=list(self.talk_types),

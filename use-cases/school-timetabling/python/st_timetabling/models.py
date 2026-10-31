@@ -73,8 +73,21 @@ class TimetableModel(BaseModel):
     score_hard: int | None = None
     score_soft: float | None = None
 
+    @model_validator(mode="after")
+    def _check_indices(self):
+        """`slot_room` is a raw value the engine reads without a range check. The slots in
+        `teacher_unavailable` it skips when out of range."""
+        value_count = len(self.timeslots) * len(self.rooms)
+        for lesson in self.lessons:
+            if not -1 <= lesson.slot_room < value_count:
+                raise ValueError(
+                    f"lesson {lesson.id!r}: slot_room {lesson.slot_room!r} is out of range -1..{value_count - 1}"
+                )
+        return self
+
     def to_core(self) -> "_core.Timetable":
         """pydantic -> engine objects (the score field is ignored; the engine recomputes it)."""
+        self._check_indices()  # the fields stay mutable after validation
         return _core.Timetable(
             [_core.Timeslot(t.day, t.period) for t in self.timeslots],
             [_core.Room(r.name, r.type) for r in self.rooms],

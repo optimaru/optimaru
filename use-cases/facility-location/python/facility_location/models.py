@@ -13,7 +13,7 @@ to store or transfer the engine shape as-is (debug dumps, regression snapshots,
 `pydantic` is an optional dependency (`pip install facility_location[models]`).
 """
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from . import _core
 
@@ -80,8 +80,20 @@ class FacilityLocationProblemModel(BaseModel):
     score_hard: int | None = None
     score_soft: float | None = None
 
+    @model_validator(mode="after")
+    def _check_indices(self):
+        """`facility` is a raw position the engine reads without a range check."""
+        value_count = len(self.facilities)
+        for consumer in self.consumers:
+            if not -1 <= consumer.facility < value_count:
+                raise ValueError(
+                    f"consumer {consumer.id!r}: facility {consumer.facility!r} is out of range -1..{value_count - 1}"
+                )
+        return self
+
     def to_core(self) -> "_core.FacilityLocationProblem":
         """pydantic -> engine object (the score field is ignored; the engine recomputes it)."""
+        self._check_indices()  # the fields stay mutable after validation
         problem = _core.FacilityLocationProblem(
             [_core.Facility(f.id, f.location.to_core(), f.setup_cost, f.capacity) for f in self.facilities],
             [self._consumer_to_core(c) for c in self.consumers],

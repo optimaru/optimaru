@@ -71,8 +71,18 @@ class LeagueScheduleModel(BaseModel):
     score_hard: int | None = None
     score_soft: float | None = None
 
+    @model_validator(mode="after")
+    def _check_indices(self):
+        """`round` is a raw position the engine reads without a range check. It refuses bad teams itself."""
+        value_count = len(self.rounds)
+        for match in self.matches:
+            if not -1 <= match.round < value_count:
+                raise ValueError(f"match {match.id!r}: round {match.round!r} is out of range -1..{value_count - 1}")
+        return self
+
     def to_core(self) -> "_core.LeagueSchedule":
         """pydantic -> engine object (the score field is ignored; the engine recomputes it)."""
+        self._check_indices()  # the fields stay mutable after validation
         return _core.LeagueSchedule(
             [_core.Team(t.id, t.name) for t in self.teams],
             [_core.Round(r.index, r.weekend_or_holiday) for r in self.rounds],

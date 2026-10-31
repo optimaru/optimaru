@@ -18,7 +18,7 @@ Score mapping (Java HardMediumSoftBigDecimalScore -> engine HardSoftScore):
 `pydantic` is an optional dependency (`pip install tournament_scheduling[models]`).
 """
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from . import _core
 
@@ -83,8 +83,30 @@ class TournamentScheduleModel(BaseModel):
     score_hard: int | None = None
     score_soft: float | None = None
 
+    @model_validator(mode="after")
+    def _check_indices(self):
+        """Team and day positions the engine reads without a range check."""
+        team_count = len(self.teams)
+        day_count = len(self.days)
+        for penalty in self.unavailability_penalties:
+            if not 0 <= penalty.team < team_count:
+                raise ValueError(f"unavailability penalty: team {penalty.team!r} is out of range 0..{team_count - 1}")
+            if not 0 <= penalty.day < day_count:
+                raise ValueError(f"unavailability penalty: day {penalty.day!r} is out of range 0..{day_count - 1}")
+        for assignment in self.team_assignments:
+            if not 0 <= assignment.day < day_count:
+                raise ValueError(
+                    f"team assignment {assignment.id!r}: day {assignment.day!r} is out of range 0..{day_count - 1}"
+                )
+            if assignment.team is not None and not 0 <= assignment.team < team_count:
+                raise ValueError(
+                    f"team assignment {assignment.id!r}: team {assignment.team!r} is out of range 0..{team_count - 1}"
+                )
+        return self
+
     def to_core(self) -> "_core.TournamentSchedule":
         """pydantic -> engine object (the score field is ignored; the engine recomputes it)."""
+        self._check_indices()  # the fields stay mutable after validation
         return _core.TournamentSchedule(
             [_core.Team(t.name) for t in self.teams],
             [_core.Day(d.date_index) for d in self.days],

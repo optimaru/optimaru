@@ -1,5 +1,7 @@
 """Round-trip check of the pydantic mirror serialization."""
 
+import pytest
+
 import conference_scheduling as cs
 from conference_scheduling.models import ConferenceScheduleModel, SolveConfig
 
@@ -51,3 +53,39 @@ def test_solve_config_to_core():
     assert core.parallel_solver_count == 2
     assert abs(core.compatible_value_probability - 0.5) < 1e-9
     assert core.best_score_limit == (0, -123.0)
+
+
+def _dump_with(field, value):
+    data = ConferenceScheduleModel.from_core(cs.demo_conference()).model_dump()
+    data["talks"][0][field] = value
+    return data
+
+
+@pytest.mark.parametrize(
+    "field, value, message",
+    [
+        ("talk_type", -1, "talk_type -1 is out of range"),
+        ("talk_type", 2, "talk_type 2 is out of range"),
+        ("talk_type", 99999999, "talk_type 99999999 is out of range"),
+        ("speakers", [-1], "speaker -1 is out of range"),
+        ("speakers", [99999999], "speaker 99999999 is out of range"),
+        ("slot_room", -2, "slot_room -2 is out of range"),
+        ("slot_room", 99999999, "slot_room 99999999 is out of range"),
+    ],
+)
+def test_an_index_out_of_range_is_refused_before_the_engine(field, value, message):
+    with pytest.raises(ValueError, match=rf"talk 'S01': {message}"):
+        ConferenceScheduleModel.model_validate(_dump_with(field, value))
+
+
+def test_the_last_slot_room_is_accepted():
+    schedule = cs.demo_conference()
+    last = schedule.slot_room_count() - 1
+    assert ConferenceScheduleModel.model_validate(_dump_with("slot_room", last)).to_core().talks[0].slot_room == last
+
+
+def test_an_index_edited_after_validation_is_refused_by_to_core():
+    model = ConferenceScheduleModel.from_core(cs.demo_conference())
+    model.talks[0].speakers = [99999999]
+    with pytest.raises(ValueError, match="out of range"):
+        model.to_core()
