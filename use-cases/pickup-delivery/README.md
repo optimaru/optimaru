@@ -156,8 +156,6 @@ coupling penalty; `FULL_ASSERT` caught it, and `pdp_test` now covers it
 directly, including the transient half-assigned states the engine passes
 through mid-move.
 
-<!-- usage-and-extending -->
-
 ## Usage
 
 ```sh
