@@ -328,6 +328,19 @@ def test_fractional_hard_weights_now_round_per_unit():
     assert score(raw, [PinnedAssignmentsCost(weight=0.5)]) == (-2, 0.0)
 
 
+def test_a_fractional_exponent_on_a_hard_side_constraint_now_rounds_per_unit():
+    """A shaped per-location value is fractional too: 0.1.5 rounded 2 * sqrt(2) once (-3); the engine
+    rounds each location's sqrt(2) (-2)."""
+    problem = {**_samples()["three"], "facility_demands": {"F1": 3, "F2": 3}, "location_capacities": {"L1": 1, "L2": 1}}
+    data = _with_assignment(problem, ["F1", "F2", "F3"])
+    old = ref.constraint_costs(_dump(data))
+    assert old["location_capacities"] == [2, 2, 0]
+    assert ref.score_costs(old, [("location_capacities", None, None, 0.5)]) == (-3, 0.0)
+    raw = _cpp_costs(data)
+    assert raw["location_capacity_cost"]["costs"] == [2.0, 2.0, 0.0]
+    assert score(raw, [LocationCapacityCost(exponent=0.5)]) == (-2, 0.0)
+
+
 def test_unit_lists_are_per_location_now():
     """0.1.5: one term per FIXED location / per assignment ENTRY; 0.2.0: one per location, in order."""
     data = _with_assignment(_samples()["repeats"], ["A", "B", "C", "D", "E"], order=["z", "y", "x", "w", "v"])

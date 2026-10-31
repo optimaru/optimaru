@@ -32,8 +32,10 @@ holds the exact CP-SAT reference.
   `capacity` (None = no limit). Signs are not validated: negative flows,
   distances or direct costs are scored as given.
 - `warm_start` — start from the assignment, which must then be a full bijection
-  (else `ValueError`); a plain solve ignores the input assignment and starts from
-  the identity. Every solve resets it.
+  (else `ValueError`); a plain solve ignores the input assignment's placements and
+  starts from the identity. Every solve resets it. Even without `warm_start`, a
+  model's assignment must be representable (known ids, no facility twice):
+  `to_core()` raises `ValueError` otherwise, so `solve(model)` does too.
 
 ## Constraints (HardSoftScore — the engine score type as-is, no mapping)
 
@@ -79,16 +81,21 @@ other C++ use cases.
     objectives were one total already, so every exponent scores as in 0.1.5 (at
     the soft level; see the rounding note);
   - hard contributions are rounded per location (0.1.5 rounded the hard total
-    once): different only for fractional hard weights (two broken pins at weight
-    0.5: `-2`, was `-1`);
+    once): different only when a hard constraint's weighted, shaped per-location
+    value is fractional — a fractional hard weight (two broken pins at weight 0.5:
+    `-2`, was `-1`), or an exponent != 1 on `location_capacity_cost` (costs
+    `[2, 2]` at exponent 0.5: `-2`, was `-3`);
   - `constraint_costs()` returns the standard dict
     `{name: {"costs", "weight", "exponent", "hard", "global", "level", "reward",
     "level_flippable", "name", "label"}}`; `"costs"` lists the side constraints per
     location in location order, zeros included (0.1.5: `fixed_assignments` per fixed
     location, `forbidden_assignments` per assignment entry), and one total for the
     objectives;
-  - an assignment that puts one facility on two locations cannot be represented:
-    `to_core()` raises `ValueError` (0.1.5 scored it); on a model,
+  - an assignment that puts one facility on two locations, or names an unknown
+    id, cannot be represented: `to_core()` raises `ValueError` (0.1.5 scored a
+    facility on two locations, and an unknown location key as 0). This holds for
+    a plain `solve(model)` without `warm_start` too (0.1.5 ignored the assignment
+    there); on a model,
     `calculate_score` / `constraint_costs` need every location (`ValueError`
     naming the missing ones; 0.1.5 raised `KeyError`), while the engine object
     scores a partial state;
@@ -115,7 +122,9 @@ other C++ use cases.
   (`parallel_solver_count` is ignored), as in every C++ package.
 - `QuadraticAssignmentProblemModel.to_core()` / `from_core()` convert to and from
   the real engine object (0.1.5: model copies); the JSON input/output schema is
-  unchanged.
+  unchanged. The engine object's `score` is None until it is scored
+  (`calculate_score` or a solve); `from_core()` fills `score_hard` / `score_soft`
+  only from a scored core (`total_cost` whenever the assignment is a bijection).
 - The CP-SAT reference counts a repeated forbidden row once, like the engine
   (0.1.5's CP-SAT model counted it twice).
 
@@ -145,14 +154,16 @@ ctest --test-dir build/quadratic-assignment --output-on-failure --no-tests=error
 `qap_test`: hand-calculated scores (the 0.1.x fixtures), a positive and a zero case
 per constraint plus the edge cases (diagonal flow, repeated forbidden rows, a
 facility pinned twice, missing demand / capacity, negative costs, an empty pinned
-location), `prepare()` validation, incremental == full recompute over random swap /
+location), `prepare()` validation, incremental == full recompute (score and every
+constraint's raw total, each constraint non-zero on some step) over random swap /
 unassign / change sequences, and the solver (zero budget keeps the start, warm-start
 rules, n = 0 / 1, single / parallel / FULL_ASSERT solves stay bijections, brute-force
 optima, determinism). `qap_plugin_test`: default assembly == monolith bit for bit,
-plugin incremental == full recompute with accepted and undone moves, partial
-assemblies, overrides (unit exponent per location, global exponent on the total,
-per-location hard rounding), the cost layout, FULL_ASSERT plugin solves, raw costs by
-hand and the catalog.
+plugin incremental == full recompute with accepted and undone moves (per-constraint
+raw costs, each constraint non-zero on some step), partial assemblies, overrides
+(unit exponent per location, global exponent on the total, per-location hard
+rounding), the cost layout, FULL_ASSERT plugin solves, raw costs by hand and the
+catalog.
 
 ## Usage
 
@@ -229,8 +240,9 @@ The report shows the raw objective and gap to the QAPLIB best-known solution.
 Hexaly's website publishes a 1.1% aggregate gap at 60 seconds, not its
 per-instance assignments, so the script labels that number as an external
 aggregate rather than pretending it is a directly reproduced solver run.
-The checked-in local snapshot is in [`bench/RESULTS.md`](../../benchmarks/quadratic-assignment/bench/RESULTS.md)
-(measured with the 0.1.x pure-Python engine).
+The checked-in local snapshot in [`bench/RESULTS.md`](../../benchmarks/quadratic-assignment/bench/RESULTS.md)
+holds **0.1.x numbers** (the pure-Python engine): it has not been re-measured for the 0.2.0 C++ engine,
+because the QAPLIB archive download was not reachable when 0.2.0 was prepared.
 
 ## Extending
 

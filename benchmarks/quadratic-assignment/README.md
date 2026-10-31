@@ -17,10 +17,14 @@ and one facility per location; `pinned_assignments_cost` = sum over fixed locati
 `forbidden_assignments_cost` = sum of `x` over the **distinct** forbidden pairs (0.2.0 fix: a repeated
 row used to count twice here and once in the engine), `location_capacity_cost` = per capacitated
 location an excess variable `>= demand - capacity`, `assignment_cost` = `sum c[f][l] * x[f, l]` and
-`flow_distance_cost` = `sum flows[a][b] * distances[la][lb] * y` with `y = x[a, la] AND x[b, lb]`
-(O(n^4) pair variables, built only when the constraint is selected; the diagonal `a == b` is `x[a, l]`
-itself). Flows, distances and direct costs may be negative: the objective bounds cover each term's whole
-value range, so the hard level still dominates the soft one.
+`flow_distance_cost` = the diagonal `sum flows[a][a] * distances[l][l] * x[a, l]` plus, per facility pair
+`a < b` and pair of distinct locations, a bool `y[a, b, la, lb]` with the coefficient
+`flows[a][b] * distances[la][lb] + flows[b][a] * distances[lb][la]`. `y` is tied to `x` by linear
+equalities (`sum over lb of y = x[a, la]`, `sum over la of y = x[b, lb]`), which on a permutation
+force `y = x[a, la] AND x[b, lb]` exactly (O(n^4) pair bools and O(n^3) equalities, built only when
+the constraint is selected; 0.1.x used one multiplication constraint per ordered pair, which presolves
+much more slowly). Flows, distances and direct costs may be negative: the objective bounds cover each
+term's whole value range, so the hard level still dominates the soft one.
 
 ```sh
 cd benchmarks/quadratic-assignment/cpsat
@@ -29,8 +33,10 @@ uv run pytest -q                                       # CP-SAT model + engine p
 uv run quadratic-assignment-compare --seconds 10 --workers 8   # engine vs CP-SAT table (--markdown, --json)
 ```
 
-The comparison instances stay small (6, 8 and 10 facilities) because of the O(n^4) pair variables;
-with a 1 s budget CP-SAT is still presolving the 8- and 10-facility models (reported as UNKNOWN).
+The comparison instances stay small (6, 8 and 10 facilities) because of the O(n^4) pair variables.
+With the 1 s CI smoke budget CP-SAT returns an 8-facility answer (not always the optimum) and is still
+presolving the 10-facility model (reported as UNKNOWN); with 2 workers it proves the 8-facility optimum
+in about 1.5 s, and at 10 s it matches the engine on all three instances (table below).
 The engine runs single-threaded; CP-SAT gets `--workers` search workers and its time includes model
 construction.
 
@@ -47,8 +53,9 @@ uv run --project cpsat pytest -q cpsat/tests
 uv run --project cpsat python -m bench.run_bench --seconds 60
 ```
 
-Recorded results: [`bench/RESULTS.md`](bench/RESULTS.md) (measured with the 0.1.x pure-Python engine;
-not re-measured for the 0.2.0 C++ port yet).
+Recorded results: [`bench/RESULTS.md`](bench/RESULTS.md) — **0.1.x numbers** (the pure-Python
+engine); not re-measured for the 0.2.0 C++ engine, because the QAPLIB archive download was not reachable
+when 0.2.0 was prepared.
 
 <!-- results:start -->
 ## Results
@@ -65,11 +72,12 @@ Measured 2026-10-31 with the 0.2.0 C++ engine on a shared 4-core Linux container
 instance, seed 1. The engine runs single-threaded; CP-SAT uses 2 workers and its time includes model
 construction. Single runs — a snapshot, not a statistical study.
 
-QAPLIB (Hexaly example instances; 0.1.x pure-Python engine, 30 s per solver and instance on one Apple
-Silicon Mac, 2026-10-29). Lower is better. CP-SAT runs only up to the exact-model size cap
-(`--exact-max-size`); these n=30 instances are above it.
+QAPLIB (Hexaly example instances). **0.1.x numbers**: measured with the 0.1.x pure-Python engine, 30 s
+per solver and instance on one Apple Silicon Mac, 2026-10-29, and not re-measured for the 0.2.0 C++
+engine (the archive download was not reachable). Lower is better. CP-SAT runs only up to the exact-model
+size cap (`--exact-max-size`); these n=30 instances are above it.
 
-| Instance | Size | QAPLIB best known | engine | CP-SAT |
+| Instance | Size | QAPLIB best known | engine (0.1.x) | CP-SAT |
 | --- | --- | --- | --- | --- |
 | nug30 | 30 | 6124 | 6,156 | not run (size cap) |
 | lipa30a | 30 | 13178 | 13,395 | not run (size cap) |

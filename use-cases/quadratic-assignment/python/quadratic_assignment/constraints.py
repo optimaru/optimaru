@@ -70,9 +70,9 @@ class PinnedAssignmentsCost(Constraint):
         "0 means every fixed location holds its facility."
     )
     description_ko = (
-        "fixed_assignments에 지정된 위치 가운데 지정된 시설이 놓이지 않은 위치의 수이며, 비어 있는 위치도 셉니다. "
-        "같은 시설을 두 위치에 고정하면 비용이 최소 1입니다. 지켜지지 않은 고정 하나가 비용 1이며, "
-        "0이면 모든 고정 위치에 지정된 시설이 놓여 있습니다."
+        "fixed_assignments에 지정된 위치 가운데 해당 시설이 놓이지 않은 위치의 수이며, 비어 있는 위치도 포함합니다. "
+        "같은 시설을 두 위치에 고정하면 비용은 최소 1입니다. 지켜지지 않은 고정 배치 하나가 비용 1이며, "
+        "0이면 모든 고정 위치에 해당 시설이 놓여 있습니다."
     )
 
 
@@ -87,8 +87,8 @@ class ForbiddenAssignmentsCost(Constraint):
         "once. One unit of cost is one forbidden placement; 0 means no forbidden pair is used."
     )
     description_ko = (
-        "forbidden_assignments에 있는 시설-위치 쌍대로 놓인 시설의 수이며, 두 번 나열된 쌍도 한 번만 셉니다. "
-        "금지된 배치 하나가 비용 1이며, 0이면 금지된 쌍이 하나도 쓰이지 않았습니다."
+        "forbidden_assignments가 금지한 위치에 놓인 시설의 수이며, 같은 시설-위치 쌍이 두 번 나열되어도 한 번만 "
+        "셉니다. 금지된 배치 하나가 비용 1이며, 0이면 금지된 배치가 하나도 없습니다."
     )
 
 
@@ -104,8 +104,9 @@ class LocationCapacityCost(Constraint):
         "unit of demand over capacity; 0 means every location is within its capacity."
     )
     description_ko = (
-        "용량이 정해진 위치마다 놓인 시설의 수요가 위치 용량을 넘는 양을 모두 더하며, facility_demands에 없는 "
-        "시설의 수요는 0입니다. 초과 수요 1단위가 비용 1이며, 0이면 모든 위치가 용량 안에 있습니다."
+        "용량이 정해진 위치마다 그 위치에 놓인 시설의 수요가 용량을 넘는 만큼을 모두 더한 값이며, "
+        "facility_demands에 없는 시설의 수요는 0으로 봅니다. 초과 수요 1단위가 비용 1이며, 0이면 모든 위치가 "
+        "용량을 넘지 않습니다."
     )
 
 
@@ -121,8 +122,8 @@ class AssignmentCost(Constraint):
         "negative entries, which lower the cost."
     )
     description_ko = (
-        "각 시설을 놓인 위치에 두는 직접 비용(assignment_costs)을 모든 시설에 대해 더하며, 비용 행렬이 없으면 "
-        "0입니다. 비용 1단위가 비용 1이며, 행렬에 음수 값이 있으면 그만큼 비용이 줄어듭니다."
+        "각 시설을 현재 위치에 두는 직접 비용(assignment_costs)을 모든 시설에 대해 더한 값이며, 비용 행렬이 "
+        "없으면 0입니다. 행렬 값 1이 비용 1이며, 음수 값은 그만큼 비용을 줄입니다."
     )
 
 
@@ -138,8 +139,9 @@ class FlowDistanceCost(Constraint):
         "of distance; 0 means no flow travels any distance."
     )
     description_ko = (
-        "이차 목적 함수입니다. 순서가 있는 모든 시설 쌍에 대해 두 시설 사이의 흐름에 두 위치 사이의 거리를 곱해 "
-        "더합니다. 흐름 1단위가 거리 1단위를 이동할 때마다 비용 1이며, 0이면 거리를 이동하는 흐름이 없습니다."
+        "이차 목적 함수입니다. 순서가 있는 모든 시설 쌍에 대해 두 시설 사이의 흐름과 두 시설이 놓인 위치 사이의 "
+        "거리를 곱해 더합니다. 흐름 1단위가 거리 1단위를 이동할 때마다 비용 1이며, 0이면 어떤 흐름도 거리를 "
+        "이동하지 않습니다."
     )
 
 

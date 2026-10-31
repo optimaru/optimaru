@@ -23,7 +23,10 @@ package README):
   C++ port cannot represent it (``to_core()`` raises ``ValueError``);
 - duplicate ``forbidden_assignments`` rows collapse (a set), as in the C++ port;
 - ``score_costs`` rounds the summed hard total once; the C++ port rounds per
-  unit (identical for integral hard weights).
+  unit (location). They differ only when a hard constraint's weighted, shaped
+  per-location value is fractional: a fractional hard weight, or an exponent
+  != 1 on ``location_capacity_cost`` (costs ``[2, 2]`` at exponent 0.5: ``-2`` in
+  the port, ``-3`` here).
 """
 
 from __future__ import annotations
@@ -50,7 +53,7 @@ OLD_DEFAULTS = {
     "minimize_flow_distance": (False, 1.0),
 }
 
-#: 0.1.5 catalog name -> 0.2.0 name (/var/tmp/design/rename_table.json, quadratic-assignment rows).
+#: 0.1.5 catalog name -> 0.2.0 name (the renames listed in the package README, 0.2.0 section).
 RENAMED = {
     "fixed_assignments": "pinned_assignments_cost",
     "forbidden_assignments": "forbidden_assignments_cost",

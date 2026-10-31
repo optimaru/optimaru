@@ -72,14 +72,14 @@ bool run(const char *title, QuadraticAssignmentProblem problem, int seconds)
     { std::printf("    new best @step %-8lld %s\n", static_cast<long long>(step), score.toString().c_str()); };
     Solver(config).solve(problem);
     std::printf("  final score: %s  total cost %lld  bijection=%s\n",
-                problem.score.toString().c_str(),
+                problem.score->toString().c_str(),
                 static_cast<long long>(problem.totalCost()),
                 problem.isBijection() ? "true" : "false");
     const std::vector<int> assignment = problem.assignment();
     for (int l = 0; l < problem.locationCount() && l < 8; ++l)
         std::printf("    %-8s <- %s\n", problem.locations[l].id.c_str(), problem.facilities[assignment[l]].id.c_str());
     std::printf("\n");
-    return problem.isBijection() && problem.score.isFeasible();
+    return problem.isBijection() && problem.score->isFeasible();
 }
 
 }  // namespace

@@ -86,6 +86,25 @@ def test_from_core_of_a_partial_assignment_leaves_the_results_empty():
     assert (back.total_cost, back.score_hard, back.score_soft) == (None, None, None)
 
 
+def test_from_core_of_an_unscored_core_leaves_the_score_empty():
+    """A core that was never scored has no score (not 0hard/0soft); total_cost comes from the assignment."""
+    model = QuadraticAssignmentProblemModel(
+        facilities=["a", "b"],
+        locations=["x", "y"],
+        flows=[[0, 3], [2, 0]],
+        distances=[[0, 4], [5, 0]],
+        assignment={"x": "a", "y": "b"},
+    )
+    core = model.to_core()
+    assert core.score is None
+    back = QuadraticAssignmentProblemModel.from_core(core)
+    assert (back.total_cost, back.score_hard, back.score_soft) == (22, None, None)
+    qap.calculate_score(core)
+    assert (core.score.hard, core.score.soft) == (0, -22.0)
+    back = QuadraticAssignmentProblemModel.from_core(core)
+    assert (back.total_cost, back.score_hard, back.score_soft) == (22, 0, -22.0)
+
+
 def test_from_core_of_a_solved_core_fills_the_results():
     core = rich().to_core()
     qap.solve(core, time_limit_seconds=0.2, random_seed=1)

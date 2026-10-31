@@ -6,6 +6,7 @@
 
 #include "optimaru/api/score/calculator/incremental_score_calculator.hpp"
 #include "qap/domain.hpp"
+#include "qap/score_calculator.hpp"
 
 namespace qap
 {
@@ -35,6 +36,10 @@ public:
     void beforeVariableChanged(int facilityIndex) override;
     void afterVariableChanged(int facilityIndex) override;
     Score calculateScore() override;
+
+    // The running raw totals, in ScoreCalculator::RawCosts form (the tests
+    // compare them per constraint with a full recompute).
+    ScoreCalculator::RawCosts rawCosts() const;
 
 private:
     QuadraticAssignmentProblem *problem_ = nullptr;

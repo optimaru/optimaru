@@ -138,8 +138,9 @@ class QuadraticAssignmentProblemModel(BaseModel):
     def from_core(cls, problem: _core.QuadraticAssignmentProblem) -> QuadraticAssignmentProblemModel:
         """engine object -> pydantic: the facts, the assignment (in location order;
         an empty location is left out), `warm_start` and — when the assignment is a
-        full bijection — the results (`total_cost` from the assignment, the score
-        last computed on the core)."""
+        full bijection — the results: `total_cost` from the assignment, and
+        `score_hard` / `score_soft` from the score last computed on the core (None
+        while the core has not been scored)."""
         facilities = problem.facilities
         locations = problem.locations
         model = cls(
@@ -176,8 +177,9 @@ class QuadraticAssignmentProblemModel(BaseModel):
         }
         if problem.is_bijection():
             self.total_cost = problem.total_cost()
-            self.score_hard = problem.score.hard
-            self.score_soft = problem.score.soft
+            score = problem.score
+            self.score_hard = None if score is None else score.hard
+            self.score_soft = None if score is None else score.soft
         else:
             self.total_cost = self.score_hard = self.score_soft = None
         self.warm_start = problem.warm_start

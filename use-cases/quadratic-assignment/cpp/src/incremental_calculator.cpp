@@ -143,4 +143,15 @@ Score QuadraticAssignmentIncrementalScoreCalculator::calculateScore()
     return score;
 }
 
+ScoreCalculator::RawCosts QuadraticAssignmentIncrementalScoreCalculator::rawCosts() const
+{
+    ScoreCalculator::RawCosts raw;
+    raw.pinnedAssignmentsCost = pinned_;
+    raw.forbiddenAssignmentsCost = forbidden_;
+    raw.locationCapacityCost = overCapacity_;
+    raw.assignmentCost = direct_;
+    raw.flowDistanceCost = flow_;
+    return raw;
+}
+
 }  // namespace qap

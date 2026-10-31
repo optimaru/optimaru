@@ -180,7 +180,9 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("warm_start", &QuadraticAssignmentProblem::warmStart)
         // No weight fields: weights come only from constraint selections; the
         // defaults are the components' kDefaultWeight (constraint_info()).
-        .def_readonly("score", &QuadraticAssignmentProblem::score)
+        // The score last computed on this problem (a copy): None until
+        // calculate_score() or a solve has scored it.
+        .def_property_readonly("score", [](const QuadraticAssignmentProblem &p) { return p.score; })
         .def("size", &QuadraticAssignmentProblem::size)
         .def("facility_count", &QuadraticAssignmentProblem::facilityCount)
         .def("location_count", &QuadraticAssignmentProblem::locationCount)

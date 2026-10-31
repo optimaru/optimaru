@@ -97,7 +97,10 @@ struct QuadraticAssignmentProblem
     // i at location i). A seed is used once: the solve resets it to false.
     bool warmStart = false;
 
-    Score score;
+    // The score last computed on this problem: nullopt until it is scored
+    // (ScoreCalculator::calculateScore or a solve), then the result of that
+    // call. Not reset by later writes to the assignment or the facts.
+    std::optional<Score> score;
 
     // --- prepared caches (ScoreCalculator::prepare; guarded by `prepared`).
     // Any write to a fact must reset `prepared` (the Python bindings do).

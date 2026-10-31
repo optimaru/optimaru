@@ -115,34 +115,45 @@ class AssignmentCost(domain.AssignmentCost, ConstraintPlugin[QapContext]):
 class FlowDistanceCost(domain.FlowDistanceCost, ConstraintPlugin[QapContext]):
     """sum over facility pairs a, b of flows[a][b] * distances[loc a][loc b], diagonal included.
 
-    y[a, b, la, lb] = x[a, la] AND x[b, lb] for a != b and la != lb (the only
-    combinations a permutation can make); the diagonal a == b is x[a, l] itself
-    with the coefficient flows[a][a] * distances[l][l]. Built only when the
-    constraint is selected: O(n^4) variables."""
+    The diagonal a == b is x[a, l] itself with the coefficient
+    flows[a][a] * distances[l][l]. For each unordered pair a < b with a non-zero
+    term, one bool y[la, lb] per pair of distinct locations stands for
+    "a at la and b at lb"; it carries both directions, flows[a][b] *
+    distances[la][lb] + flows[b][a] * distances[lb][la]. Linear channeling
+    instead of products (Adams-Johnson style):
+
+        sum over lb of y[la, lb] == x[a, la]   for every la
+        sum over la of y[la, lb] == x[b, lb]   for every lb
+
+    On a permutation this forces y[la, lb] == x[a, la] * x[b, lb] exactly, so a
+    pinned permutation gives the engine's raw cost. Built only when the
+    constraint is selected: O(n^4) bools, O(n^3) linear equalities."""
 
     def build(self, context: QapContext, objective: ObjectiveBuilder) -> None:
         problem = context.problem
         flows, distances = problem.flows, problem.distances
         n = context.size
         x = context.assigned
+        model = context.model
         terms = []
         for a in range(n):
             for l in range(n):
                 coefficient = flows[a][a] * distances[l][l]
                 if coefficient:
                     terms.append(coefficient * x[a, l])
+        sites = [(la, lb) for la in range(n) for lb in range(n) if la != lb]
         for a in range(n):
-            for b in range(n):
-                if a == b or not flows[a][b]:
+            for b in range(a + 1, n):
+                coefficients = {
+                    (la, lb): flows[a][b] * distances[la][lb] + flows[b][a] * distances[lb][la] for la, lb in sites
+                }
+                if not any(coefficients.values()):
                     continue
-                for la in range(n):
-                    for lb in range(n):
-                        coefficient = flows[a][b] * distances[la][lb]
-                        if la == lb or not coefficient:
-                            continue
-                        both = context.model.new_bool_var(f"pair_{a}_{b}_{la}_{lb}")
-                        context.model.add_multiplication_equality(both, [x[a, la], x[b, lb]])
-                        terms.append(coefficient * both)
+                y = {site: model.new_bool_var(f"pair_{a}_{b}_{site[0]}_{site[1]}") for site in sites}
+                for l in range(n):
+                    model.add(sum(y[l, lb] for lb in range(n) if lb != l) == x[a, l])
+                    model.add(sum(y[la, l] for la in range(n) if la != l) == x[b, l])
+                terms.extend(coefficient * y[site] for site, coefficient in coefficients.items() if coefficient)
         # Each ordered facility pair (a == b included) contributes exactly one
         # flows[a][b] * distances[la][lb]: its range is within |flow| * the
         # distance span.

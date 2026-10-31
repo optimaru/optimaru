@@ -173,4 +173,6 @@ def solve(
         Solver(cfg).solve_with_constraints(core, constraints)
     if isinstance(problem, QuadraticAssignmentProblemModel):
         problem._update_from_core(core)
-    return core.score
+    score = core.score
+    assert score is not None  # every solve ends by scoring the result
+    return score

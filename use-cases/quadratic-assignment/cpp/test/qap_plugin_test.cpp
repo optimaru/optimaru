@@ -5,7 +5,8 @@
 //       permutations and on partial / doubly-occupied assignments
 //   (b) incremental score == full recompute across 3000 random moves driven
 //       through the engine's ScoreDirector protocol (delta units and the
-//       member-change globals), and the raw costs stay equal to a fresh reset
+//       member-change globals), the per-constraint raw costs stay equal to a
+//       fresh reset, and every constraint is non-zero on some step
 //   (c) partial assemblies: removing one component removes exactly its term
 //   (d) weight / level / exponent overrides (units shape per location,
 //       globals shape their total)
@@ -158,6 +159,11 @@ void verifyIncremental()
     int mismatches = 0;
     int rawMismatches = 0;
     int checks = 0;
+    // Steps on which each constraint had a non-zero raw cost (any unit):
+    // every constraint must take part in the walk, or its incremental path
+    // goes unchecked.
+    const std::vector<std::string> names = defaultConstraints().names();
+    std::vector<int> nonZero(names.size(), 0);
     for (int round = 0; round < 3; ++round)
     {
         const bool shaped = round == 2;
@@ -222,15 +228,22 @@ void verifyIncremental()
                 std::printf("  MISMATCH round %d step %d: incremental=%s full=%s\n", round, step,
                             incremental.toString().c_str(), full.toString().c_str());
             }
-            for (std::size_t c = 0; c < live.size(); ++c)
+            if (live.size() != names.size() || reset.size() != names.size())
+                ++rawMismatches;
+            for (std::size_t c = 0; c < names.size() && c < live.size() && c < reset.size(); ++c)
             {
-                if (live[c].unitCosts != reset[c].unitCosts)
+                const auto &costs = reset[c].unitCosts;
+                if (live[c].name != names[c] || reset[c].name != names[c] || live[c].unitCosts != costs)
                     ++rawMismatches;
+                if (std::any_of(costs.begin(), costs.end(), [](double cost) { return cost != 0.0; }))
+                    ++nonZero[c];
             }
         }
     }
     check(mismatches == 0, std::to_string(checks) + " moves (accepted and undone): incremental score == full");
-    check(rawMismatches == 0, "raw costs after every move == a fresh reset");
+    check(rawMismatches == 0, "per-constraint raw costs after every move == a fresh reset");
+    for (std::size_t k = 0; k < names.size(); ++k)
+        check(nonZero[k] > 0, names[k] + " non-zero on " + std::to_string(nonZero[k]) + " walk steps");
     std::printf("\n");
 }
 
@@ -374,7 +387,7 @@ void verifyFullAssertSolve()
         DecomposedCalculator fresh;
         (shaped ? shapedAssembly() : defaultConstraints()).into(fresh);
         QuadraticAssignmentProblem copy = p;
-        check(ok && p.isBijection() && sameScore(p.score, scoreWith(fresh, copy)),
+        check(ok && p.isBijection() && p.score && sameScore(*p.score, scoreWith(fresh, copy)),
               std::string(shaped ? "shaped" : "default")
                   + " assembly: no corruption, a bijection, score from the caller's assembly");
     }
