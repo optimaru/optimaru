@@ -1,23 +1,29 @@
-#ifndef TA_CONSTRAINTS_MINIMIZE_UNASSIGNED_TASKS_HPP
-#define TA_CONSTRAINTS_MINIMIZE_UNASSIGNED_TASKS_HPP
+#ifndef TA_CONSTRAINTS_UNASSIGNED_TASKS_COST_HPP
+#define TA_CONSTRAINTS_UNASSIGNED_TASKS_COST_HPP
 
 #include "ta/constraints/common.hpp"
 
 namespace ta
 {
 
-// Hard (default, weight 1): minimizeUnassignedTasks — one point per task in
-// no employee's list. The Bendable soft[0] level, which the engine's folded
-// hard level carries BELOW the missing-skill count (see common.hpp), so it
-// stays lexicographically dominated exactly like in Java.
+// Medium, weight 1: unassignedTasksCost — the tasks in no employee's list.
+// Raw cost = the number of unassigned tasks, so 0 = every task is assigned.
+// The Bendable soft[0] level, the domain's medium level: the below-hard fold
+// (domain.hpp, kMediumFold) reports engine.hard = hard * 10^9 + medium, so it
+// stays lexicographically below the missing-skill count exactly like in
+// Java. Its weight is in medium units; hard() makes it 1 hard unit per task,
+// soft() 1 soft unit per task (outside the fold).
 //
 // Global because an unassigned task belongs to no unit (the
-// school-timetabling UnassignedLesson pattern). It tracks each list's size,
-// so a touched list costs O(1).
-struct MinimizeUnassignedTasks final : TaGlobalConstraint
+// school-timetabling UnassignedLessonsCost pattern). It tracks each list's
+// size, so a touched list costs O(1).
+struct UnassignedTasksCost final : TaGlobalConstraint
 {
-    explicit MinimizeUnassignedTasks(double weight = 1.0)
-        : TaGlobalConstraint("minimizeUnassignedTasks", weight, /*hard=*/true)
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Medium;
+
+    explicit UnassignedTasksCost(double weight = kDefaultWeight)
+        : TaGlobalConstraint("unassignedTasksCost", weight, kDefaultLevel)
     {
     }
     void reset(const TaskAssigningSolution &solution,
@@ -54,4 +60,4 @@ private:
 
 }  // namespace ta
 
-#endif  // TA_CONSTRAINTS_MINIMIZE_UNASSIGNED_TASKS_HPP
+#endif  // TA_CONSTRAINTS_UNASSIGNED_TASKS_COST_HPP

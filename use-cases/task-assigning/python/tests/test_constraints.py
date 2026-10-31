@@ -13,7 +13,7 @@ def _solution(task_types, employees, tasks, customers=1):
     )
 
 
-def test_no_missing_skills():
+def test_required_skill_cost():
     # Employee skills {"3"}; three tasks requiring {1,2} / {3} / {5}, all assigned
     # -> 3 missing skills in total.
     solution = _solution(
@@ -32,7 +32,7 @@ def test_no_missing_skills():
     assert ta.calculate_score(solution).hard == -3
 
 
-def test_minimize_unassigned_tasks():
+def test_unassigned_tasks_cost():
     # Only 1 of 3 tasks assigned -> soft0 == -2.
     solution = _solution(
         task_types=[ta.TaskType("T", base_duration=1)],
@@ -42,7 +42,7 @@ def test_minimize_unassigned_tasks():
     assert ta.calculate_score(solution).soft0 == -2
 
 
-def test_priority_task_end_times():
+def test_priority_task_end_time_costs():
     # HIGH affinity (x1), dur 10, minStart 1 -> endTime 11.
     for priority, expected in [
         (ta.Priority.CRITICAL, -44),
@@ -57,7 +57,7 @@ def test_priority_task_end_times():
         assert ta.calculate_score(solution).soft2 == expected
 
 
-def test_minimize_makespan_and_shadows():
+def test_squared_makespan_cost_and_shadows():
     # employee0 (MEDIUM=x2): dur 10 minStart 1 -> end 21; dur 20 minStart 2
     # -> start max(21,2)=21, end 61. employee1 (HIGH=x1): dur 1 -> end 2.
     # soft1 == -(61^2 + 2^2) == -3725.
