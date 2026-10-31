@@ -1,6 +1,7 @@
 #ifndef OPTIMARU_API_SCORE_CALCULATOR_CONSTRAINT_ASSEMBLY_HPP
 #define OPTIMARU_API_SCORE_CALCULATOR_CONSTRAINT_ASSEMBLY_HPP
 
+#include <cmath>
 #include <cstddef>
 #include <initializer_list>
 #include <memory>
@@ -13,6 +14,18 @@
 
 namespace optimaru {
 
+// One row of a domain's constraint catalog, read off its DEFAULT assembly:
+// the component's registry name and the defaults it was constructed with.
+// What `<pkg>.constraint_info()` reports (python/constraint_binding.hpp).
+struct ConstraintInfo {
+    std::string name;      // the registry name ("facilityCapacityCost")
+    Level defaultLevel;
+    double defaultWeight;  // in units of defaultLevel
+    bool levelFlippable;
+    bool reward;
+    bool isGlobal;
+};
+
 // ---------------------------------------------------------------------------
 // ConstraintAssembly
 // ---------------------------------------------------------------------------
@@ -21,18 +34,18 @@ namespace optimaru {
 // in one expression.
 //
 //   DecomposedCalculator calc;
-//   defaultConstraints()                     // every default already in
-//       .weight("facility setup cost", 4)    // ... only what you care about
-//       .soft("facility capacity")
-//       .drop("distance from facility")
+//   defaultConstraints()                         // every default already in
+//       .weight("facilitySetupCost", 4)          // ... only what you care about
+//       .soft("facilityCapacityCost")
+//       .drop("distanceFromFacilityCost")
 //       .into(calc);
 //   solver.solve(problem, calc);
 //
 // Without it the same edit means reaching for the components by type, which
 // costs three lines and a std::move just to flip one level:
 //
-//   auto component = std::make_unique<FacilityCapacity>();
-//   component->isHard = false;
+//   auto component = std::make_unique<FacilityCapacityCost>();
+//   component->level = optimaru::Level::Soft;
 //   calc.add(std::move(component));
 //   calc.emplace<FacilitySetupCost>(4.0);
 //   ...and re-listing every constraint you did NOT want to change.
@@ -94,35 +107,71 @@ public:
     // --- adjusting --------------------------------------------------------
     // The level, the weight and the exponent are assembly-time metadata, not
     // part of any cost, which is exactly why they can be re-stated here.
+    // Every setter validates what it is given and throws std::invalid_argument
+    // (the Python bindings surface it as ValueError):
+    //   weight    finite and >= 0, in units of the constraint's level
+    //   exponent  finite and > 0
+    //   level     a reward can never be Hard; a constraint whose
+    //             levelFlippable is false keeps its level (re-stating the
+    //             level it already has is accepted as a no-op)
 
     ConstraintAssembly& weight(const std::string& name, double weight) & {
-        require(name, [weight](auto& constraint) { constraint.weight = weight; });
+        if (!std::isfinite(weight) || weight < 0.0) {
+            throw std::invalid_argument("Constraint '" + name + "' weight must be finite and >= 0");
+        }
+        require(name).weight = weight;
         return *this;
     }
     ConstraintAssembly&& weight(const std::string& name, double weight) && {
         this->weight(name, weight);  // the parameter shadows the method name
         return std::move(*this);
     }
-    ConstraintAssembly& hard(const std::string& name) & {
-        require(name, [](auto& constraint) { constraint.isHard = true; });
+    // Any level, Medium included (the domain must declare a medium fold, or
+    // the calculator throws at reset). Python clients only reach hard() and
+    // soft(): medium is a default-only level there.
+    ConstraintAssembly& level(const std::string& name, Level level) & {
+        ConstraintMetadata& constraint = require(name);
+        if (level == constraint.level) return *this;
+        if (level == Level::Hard && constraint.reward) {
+            throw std::invalid_argument("Constraint '" + name +
+                                        "' is a reward (raw cost <= 0) and cannot be hard");
+        }
+        if (!constraint.levelFlippable) {
+            throw std::invalid_argument("Constraint '" + name + "' is always " +
+                                        levelName(constraint.level) +
+                                        "; its level cannot be changed");
+        }
+        constraint.level = level;
         return *this;
     }
+    ConstraintAssembly&& level(const std::string& name, Level level) && {
+        this->level(name, level);  // the parameter shadows the method
+        return std::move(*this);
+    }
+    // hard(name) == level(name, Level::Hard): throws for a reward and for a
+    // non-flippable soft constraint. A medium constraint becomes hard at the
+    // same weight (one hard unit per raw unit).
+    ConstraintAssembly& hard(const std::string& name) & { return level(name, Level::Hard); }
     ConstraintAssembly&& hard(const std::string& name) && {
         hard(name);
         return std::move(*this);
     }
-    ConstraintAssembly& soft(const std::string& name) & {
-        require(name, [](auto& constraint) { constraint.isHard = false; });
-        return *this;
-    }
+    // soft(name) == level(name, Level::Soft): demotes a hard or a medium
+    // constraint; throws for a non-flippable hard one.
+    ConstraintAssembly& soft(const std::string& name) & { return level(name, Level::Soft); }
     ConstraintAssembly&& soft(const std::string& name) && {
         soft(name);
         return std::move(*this);
     }
-    // Sign-preserving power shaping applied per unit before the weight; 2 makes
-    // concentrated violations disproportionately expensive.
+    // Sign-preserving power shaping: per unit before the weight for a unit
+    // constraint, on the single total for a global one. 2 makes concentrated
+    // violations disproportionately expensive.
     ConstraintAssembly& exponent(const std::string& name, double exponent) & {
-        require(name, [exponent](auto& constraint) { constraint.exponent = exponent; });
+        if (!std::isfinite(exponent) || exponent <= 0.0) {
+            throw std::invalid_argument("Constraint '" + name +
+                                        "' exponent must be finite and > 0");
+        }
+        require(name).exponent = exponent;
         return *this;
     }
     ConstraintAssembly&& exponent(const std::string& name, double exponent) && {
@@ -182,6 +231,30 @@ public:
     }
     std::size_t size() const { return units_.size() + globals_.size(); }
     bool empty() const { return size() == 0; }
+
+    // The metadata of one component, or nullptr. Read-only: edits go through
+    // the validating setters above.
+    const ConstraintMetadata* find(const std::string& name) const {
+        if (const Unit* unit = findIn(units_, name)) return unit;
+        if (const Global* global = findIn(globals_, name)) return global;
+        return nullptr;
+    }
+
+    // The catalog rows of this assembly, in assembly order (units first, then
+    // globals, like names()). Read off a domain's DEFAULT assembly this is its
+    // constraint catalog, so every default lives in exactly one place: the
+    // component's constructor (kDefaultWeight / kDefaultLevel).
+    std::vector<ConstraintInfo> info() const {
+        std::vector<ConstraintInfo> rows;
+        rows.reserve(size());
+        for (const auto& c : units_) {
+            rows.push_back({c->name, c->level, c->weight, c->levelFlippable, c->reward, false});
+        }
+        for (const auto& c : globals_) {
+            rows.push_back({c->name, c->level, c->weight, c->levelFlippable, c->reward, true});
+        }
+        return rows;
+    }
 
     // --- spending ---------------------------------------------------------
 
@@ -251,19 +324,11 @@ private:
         keepOnly(globals_, names);
     }
 
-    // Applies `apply` to the named constraint, whichever kind it is. The two
-    // constraint types share the metadata field names, so one generic lambda
-    // covers both.
-    template <typename F>
-    void require(const std::string& name, F&& apply) {
-        if (Unit* unit = findIn(units_, name)) {
-            apply(*unit);
-            return;
-        }
-        if (Global* global = findIn(globals_, name)) {
-            apply(*global);
-            return;
-        }
+    // The named constraint's metadata, whichever kind it is (both bases share
+    // ConstraintMetadata). Throws with the available names when it misses.
+    ConstraintMetadata& require(const std::string& name) {
+        if (Unit* unit = findIn(units_, name)) return *unit;
+        if (Global* global = findIn(globals_, name)) return *global;
         throw std::invalid_argument("Constraint '" + name + "' is not in this assembly; it holds " +
                                     nameList());
     }

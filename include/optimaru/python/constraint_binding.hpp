@@ -15,48 +15,29 @@
 //       defaultConstraints(), constraints);   // or defaultConstraints(problem)
 //   assembly.into(calculator);
 //
+//   python::bindConstraintInfo(m, [] { return defaultConstraints(); });
+//   // -> <pkg>.constraint_info() and <pkg>._core.ConstraintInfo
+//
 // The domain builds its own default assembly and hands it over, so the fact
 // that `defaultConstraints()` takes a problem in one use case, weights in
 // another and nothing in the rest never reaches this header.
 
 #include <pybind11/pybind11.h>
 
-#include <cctype>
+#include <cmath>
 #include <string>
 #include <vector>
 
 #include "optimaru/api/score/calculator/constraint_assembly.hpp"
+#include "optimaru/python/names.hpp"
 
 namespace optimaru {
 namespace python {
 
 namespace py = pybind11;
 
-// The Python-facing spelling of a constraint name. The C++ components carry
-// names in the shape their provider used ("facility setup cost",
-// "sameBedInSameNight"); the Python packages are snake_case, so derive one
-// from the other MECHANICALLY rather than hand-writing an alias table that
-// would drift the first time a component is added or renamed.
-//
-// One shape it does not handle: a run of capitals is broken up letter by
-// letter ("HTTPTag" -> "h_t_t_p_tag"), because the rule cannot tell an
-// acronym from adjacent words without a dictionary. No component name has
-// one today; a new constraint that needs an acronym should spell it in the
-// C++ name the way it should read in Python.
-inline std::string pythonName(const std::string& constraintName) {
-    std::string out;
-    for (const char c : constraintName) {
-        if (c == ' ' || c == '-') {
-            if (!out.empty() && out.back() != '_') out += '_';
-        } else if (std::isupper(static_cast<unsigned char>(c))) {
-            if (!out.empty() && out.back() != '_') out += '_';
-            out += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-        } else {
-            out += c;
-        }
-    }
-    return out;
-}
+// pythonName() (names.hpp) is the one mapping between the C++ registry name
+// and the Python name: facilityCapacityCost -> facility_capacity_cost.
 
 // Python name -> the assembly's own name. Throws with the available names
 // when nothing matches, so a typo cannot quietly leave the cost function as
@@ -93,11 +74,17 @@ std::vector<std::string> constraintNames(const ConstraintAssembly<Solution>& ass
 // scoring pass at all.
 //
 // Returns {name: {"costs": [...], "weight": w, "exponent": e, "hard": bool,
-//                 "global": bool}}.
+//                 "global": bool, "level": "hard"|"medium"|"soft",
+//                 "reward": bool, "level_flippable": bool}}.
+// A medium entry also carries "medium_fold": {"kind": "into_soft" |
+// "below_hard", "unit": u}, the domain's MediumFold, so the generic Python
+// score() can produce the engine-level (hard, soft) without knowing the
+// domain. "hard" stays for pre-0.2.0 readers (it is level == "hard").
 template <typename Solution>
 py::dict constraintCosts(DecomposedScoreCalculator<Solution>& calculator, Solution& solution) {
     calculator.resetWorkingSolution(solution);
     calculator.calculateScore();  // primes the per-unit cache
+    constexpr MediumFold fold = DecomposedScoreCalculator<Solution>::kMediumFold;
     py::dict out;
     for (const auto& entry : calculator.constraintCosts()) {
         py::dict info;
@@ -106,6 +93,15 @@ py::dict constraintCosts(DecomposedScoreCalculator<Solution>& calculator, Soluti
         info["exponent"] = entry.exponent;
         info["hard"] = entry.isHard;
         info["global"] = entry.isGlobal;
+        info["level"] = levelName(entry.level);
+        info["reward"] = entry.reward;
+        info["level_flippable"] = entry.levelFlippable;
+        if (entry.level == Level::Medium) {
+            py::dict medium;
+            medium["kind"] = fold.kind == MediumFold::Kind::BelowHard ? "below_hard" : "into_soft";
+            medium["unit"] = fold.unit;
+            info["medium_fold"] = medium;
+        }
         out[py::str(pythonName(entry.name))] = info;
     }
     return out;
@@ -115,7 +111,14 @@ py::dict constraintCosts(DecomposedScoreCalculator<Solution>& calculator, Soluti
 // domain's default assembly: the name of a component plus the metadata to
 // re-state on it. Duck-typed on purpose — any object carrying
 // name/weight/hard/exponent works, which is what lets the spec dataclasses
-// stay plain Python.
+// stay plain Python. The three knobs:
+//   weight    None = the component's kDefaultWeight (in units of its level),
+//             else a finite number >= 0
+//   hard      None = the component's kDefaultLevel (hard, medium or soft),
+//             True = hard, False = soft. A reward refuses True; a constraint
+//             whose level is not flippable refuses any change of level.
+//   exponent  1.0 = no shaping, else finite and > 0
+// Every refusal is a ValueError naming the constraint by its Python name.
 //
 // The picks REPLACE the default set: passing three of them scores exactly
 // those three. Passing None keeps every default; an empty list is an error,
@@ -131,15 +134,30 @@ ConstraintAssembly<Solution> applyConstraints(ConstraintAssembly<Solution> assem
     std::vector<std::string> picked;
     for (py::handle item : constraints) {
         const std::string name = resolveName(assembly, item.attr("name").template cast<std::string>());
+        const std::string shown = pythonName(name);
         const py::object weight = item.attr("weight");
-        if (!weight.is_none()) assembly.weight(name, weight.template cast<double>());
+        if (!weight.is_none()) {
+            const double value = weight.template cast<double>();
+            if (!std::isfinite(value) || value < 0.0) {
+                throw py::value_error("constraint '" + shown + "' weight must be finite and >= 0");
+            }
+            assembly.weight(name, value);
+        }
         const py::object hard = item.attr("hard");
         if (!hard.is_none()) {
-            if (hard.template cast<bool>()) {
-                assembly.hard(name);
-            } else {
-                assembly.soft(name);
+            const ConstraintMetadata& constraint = *assembly.find(name);
+            const Level wanted = hard.template cast<bool>() ? Level::Hard : Level::Soft;
+            if (wanted == Level::Hard && constraint.reward) {
+                throw py::value_error("constraint '" + shown +
+                                      "' is a reward (raw cost <= 0) and cannot be hard");
             }
+            if (wanted != constraint.level && !constraint.levelFlippable) {
+                throw py::value_error("constraint '" + shown + "' is always " +
+                                      levelName(constraint.level) + "; hard=" +
+                                      (wanted == Level::Hard ? "True" : "False") +
+                                      " is not allowed");
+            }
+            assembly.level(name, wanted);
         }
         // Read like weight/hard: the picks are duck-typed, so a spec that
         // leaves the exponent unset (or None) means "no shaping" rather than
@@ -147,6 +165,9 @@ ConstraintAssembly<Solution> applyConstraints(ConstraintAssembly<Solution> assem
         const py::object exponent = item.attr("exponent");
         if (!exponent.is_none()) {
             const double value = exponent.template cast<double>();
+            if (!std::isfinite(value) || value <= 0.0) {
+                throw py::value_error("constraint '" + shown + "' exponent must be finite and > 0");
+            }
             if (value != 1.0) assembly.exponent(name, value);
         }
         // The same constraint twice would let the second pick's metadata win
@@ -166,6 +187,48 @@ ConstraintAssembly<Solution> applyConstraints(ConstraintAssembly<Solution> assem
     }
     assembly.only(picked);
     return assembly;
+}
+
+// Binds `<pkg>._core.constraint_info()` and its row type
+// `<pkg>._core.ConstraintInfo`, read off the domain's DEFAULT assembly:
+//
+//   ConstraintInfo(name='facility_capacity_cost', default_level='hard',
+//                  default_weight=1.0, level_flippable=True, reward=False)
+//
+// one row per constraint, in list_constraints() order. `defaultAssembly` is a
+// callable returning the default ConstraintAssembly (a lambda, so a domain
+// whose factory takes arguments passes a neutral problem). The rows are a
+// collections.namedtuple created here and registered on the module, so they
+// are plain values: attribute access, ==, repr, _asdict() and pickling
+// (by reference to <pkg>._core.ConstraintInfo) all work without a pybind11
+// class, which also keeps them identical in a standalone package and in the
+// optimaru wheel.
+template <typename Factory>
+void bindConstraintInfo(py::module_& m, Factory defaultAssembly) {
+    py::object namedtuple = py::module_::import("collections").attr("namedtuple");
+    py::object rowType = namedtuple(
+            "ConstraintInfo",
+            py::make_tuple("name", "default_level", "default_weight", "level_flippable", "reward"));
+    rowType.attr("__module__") = m.attr("__name__");
+    rowType.attr("__doc__") =
+            "One catalog row: the constraint's Python name, its default level "
+            "('hard' | 'medium' | 'soft'), its default weight (in units of that "
+            "level), whether hard=True/False may change the level, and whether "
+            "it is a reward (raw cost <= 0; hard=True is refused).";
+    m.attr("ConstraintInfo") = rowType;
+    m.def(
+            "constraint_info",
+            [rowType, defaultAssembly]() {
+                py::list rows;
+                for (const ConstraintInfo& row : defaultAssembly().info()) {
+                    rows.append(rowType(pythonName(row.name), levelName(row.defaultLevel),
+                                        row.defaultWeight, row.levelFlippable, row.reward));
+                }
+                return rows;
+            },
+            "The constraint catalog: one ConstraintInfo(name, default_level, "
+            "default_weight, level_flippable, reward) per constraint, in "
+            "list_constraints() order, read off the default assembly.");
 }
 
 }  // namespace python
