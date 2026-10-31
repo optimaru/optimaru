@@ -40,23 +40,34 @@ inside int64; where the active count does not divide `scale`, the term is
   `28 = 6 * 14/3` in CP-SAT (`test_the_imbalance_surrogates_are_not_raw_identical`).
   An explicit weight multiplies the surrogate, `exponent != 1` is refused (as for
   every CP-SAT plugin).
-- **The order agrees only for the term on its own.** `sqrt` and the
-  6-significant-figure rounding are monotone, so the surrogate alone ranks
-  hard-feasible layouts like the engine and has the same minimizers, up to
-  near-ties the rounding merges or the `ceil` (or a capped `scale`) introduces
-  (`test_a_single_imbalance_surrogate_orders_feasible_layouts_like_the_engine`,
-  and `test_each_constraint_matches_brute_force_independently`: each constraint
-  alone reaches the brute-force engine optimum). Summed with other terms on the
-  same level — both imbalance costs demoted or promoted onto one level, an
-  imbalance cost promoted to hard next to `team_conflict_cost`, or under a
-  non-default weight — a sum of squares trades off differently than a sum of
-  square roots, so the CP-SAT optimum need not be the engine optimum.
+- **The order agrees only for the term on its own, and only where both count
+  the same loads.** `sqrt` and the 6-significant-figure rounding are monotone,
+  so the surrogate alone ranks layouts like the engine and has the same
+  minimizers, up to near-ties the rounding merges or the `ceil` (or a capped
+  `scale`) introduces
+  (`test_a_single_imbalance_surrogate_orders_feasible_layouts_like_the_engine`).
+  For `assignment_count_imbalance_cost` the loads are always the same. For
+  `confrontation_count_imbalance_cost` they are the same only on layouts where
+  no team plays twice on a day it shares with another team (next bullet). That
+  holds when `team_conflict_cost` is on the hard level of a hard-feasible
+  instance. Without it, or on a hard-infeasible instance, the CP-SAT optimum
+  need not be the engine optimum
+  (`test_confrontation_alone_can_miss_the_engine_optimum`).
+  `test_each_constraint_matches_brute_force_independently` (each constraint
+  alone reaches the brute-force engine optimum) runs on an instance with two
+  slots a day, where a team that plays twice on a day plays alone, so it cannot
+  show the multiplicity difference. Summed with other terms on the same level —
+  both imbalance costs demoted or promoted onto one level, an imbalance cost
+  promoted to hard next to `team_conflict_cost`, or under a non-default weight —
+  a sum of squares trades off differently than a sum of square roots, so the
+  CP-SAT optimum need not be the engine optimum either.
 - **Confrontation multiplicity.** The CP-SAT confrontation count of a team pair
   is the number of days on which both teams play; the engine counts every
   same-day assignment pair (`count(t1, d) * count(t2, d)`). The two agree
-  whenever no team plays twice on one day (`team_conflict_cost == 0`) and differ
-  otherwise: two assignments of T0 and one of T1 on a day are 2 confrontations
-  in the engine and 1 in CP-SAT
+  whenever no team plays twice on one day (`team_conflict_cost == 0`), and also
+  while a team that plays twice on a day is alone that day; otherwise they can
+  differ: two assignments of T0 and one of T1 on a day are 2 confrontations in
+  the engine and 1 in CP-SAT
   (`test_confrontations_count_once_per_shared_day_on_cpsat`).
 
 The reported score never uses the surrogate: `solve()` rescores the solution

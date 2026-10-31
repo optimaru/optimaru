@@ -292,6 +292,25 @@ def test_old_names_are_gone(old):
     assert old not in ts.list_constraints()
 
 
+NEAR_MISSES = (
+    "team_conflict_costs",
+    "team_unavailability_costs",
+    "assignment_count_imbalance",
+    "confrontation_count_imbalance_costs",
+)
+
+
+@pytest.mark.parametrize("typo", NEAR_MISSES)
+def test_a_near_miss_of_a_name_is_unknown(typo):
+    """A name one suffix off a real one is still unknown, never a silent match."""
+    pick = SimpleNamespace(name=typo, weight=None, hard=None, exponent=1.0)
+    with pytest.raises(ValueError, match="unknown constraint"):
+        ts.solve(build_schedule(), time_limit_seconds=0.1, constraints=[pick])
+    with pytest.raises(ValueError, match="unknown constraint"):
+        score(ts.constraint_costs(build_schedule()), [pick])
+    assert typo not in ts.list_constraints()
+
+
 # --- The medium level -------------------------------------------------------------
 
 

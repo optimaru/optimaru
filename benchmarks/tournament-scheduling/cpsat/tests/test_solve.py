@@ -280,3 +280,35 @@ def test_confrontations_count_once_per_shared_day_on_cpsat() -> None:
         0.707107, abs=1e-12
     )
     assert _cpsat_term(problem, ConfrontationCountImbalanceCost()) == 0
+
+
+def test_confrontation_alone_can_miss_the_engine_optimum() -> None:
+    """Documented non-parity: with team_conflict_cost off, the multiplicity gap moves
+    the optimum. T0 plays twice on D0 next to T1 and T2; T1 plays on D1, where one slot
+    is free. The engine's best team for it is T2 (pair counts {2, 2, 2}, raw 0); CP-SAT
+    counts one confrontation per shared day and prefers T1 (surrogate 0, engine raw
+    0.816497). The reported score is still the engine's raw cost of that answer."""
+    pinned = [(0, 0), (0, 0), (0, 1), (0, 2), (1, 1)]
+    constraint = ConfrontationCountImbalanceCost()
+
+    def problem_with(free_team):
+        problem = _pinned(pinned)
+        return TournamentScheduleModel(
+            teams=problem.teams,
+            days=problem.days,
+            team_assignments=[
+                *problem.team_assignments,
+                TeamAssignmentModel(id=len(pinned), day=1, team=free_team),
+            ],
+        )
+
+    engine = {
+        team: _engine_raw(problem_with(team), constraint.name) for team in range(3)
+    }
+    assert engine == pytest.approx({0: 1.41421, 1: 0.816497, 2: 0.0}, abs=1e-12)
+
+    solved = solve(problem_with(None), time_limit_seconds=2, constraints=[constraint])
+
+    assert solved.team_assignments[-1].team == 1
+    assert (solved.score_hard, solved.score_soft) == pytest.approx((0, -engine[1]))
+    assert -solved.score_soft > min(engine.values())
