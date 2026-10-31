@@ -17,23 +17,19 @@ def _gap(value: int, reference: int | None) -> float | None:
 
 
 def _rescore(problem) -> int:
+    """Stations used, re-scored by the engine's evaluator (raw costs at the default levels)."""
     costs = assembly_line_balancing.constraint_costs(problem)
-    soft = {"minimize_stations", "workload_balance"}
-    hard = sum(
-        sum(value) if isinstance(value, list) else value
-        for name, value in costs.items()
-        if name not in soft
-    )
+    hard = sum(sum(entry["costs"]) for entry in costs.values() if entry["hard"])
     if hard != 0:
         raise AssertionError(f"infeasible SALBP result: raw hard cost {hard}")
-    return int(costs["minimize_stations"][0])
+    return int(costs["used_stations_cost"]["costs"][0])
 
 
 def _run_engine(problem, seconds: float, seed: int) -> dict:
     config = assembly_line_balancing.SolverConfig()
     config.spent_limit_seconds = seconds
     config.random_seed = seed
-    config.max_iterations = 2_147_483_647
+    config.parallel_solver_count = 1
     started = time.perf_counter()
     assembly_line_balancing.solve(problem, config=config)
     elapsed = time.perf_counter() - started
