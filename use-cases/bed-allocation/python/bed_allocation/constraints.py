@@ -90,8 +90,8 @@ class BedConflictCost(Constraint):
         "One unit of cost is one shared night; 0 means no bed is double-booked on any night."
     )
     description_ko = (
-        "같은 병상에 배정된 두 입원이 겹치는 밤을 모든 쌍에 대해 더합니다. "
-        "겹치는 밤 하루가 비용 1이며, 0이면 어느 밤에도 한 병상에 두 환자가 배정되지 않습니다."
+        "같은 병상에 배정된 두 입원의 기간이 겹치는 밤을 모든 입원 쌍에 대해 더합니다. "
+        "비용은 겹치는 밤 1박당 1이며, 0이면 어느 밤에도 한 병상에 두 환자가 배정되지 않습니다."
     )
 
 
@@ -107,7 +107,7 @@ class FemaleInMaleRoomCost(Constraint):
     )
     description_ko = (
         "여성 환자가 남성 전용 병실에서 지내는 밤을 모두 더합니다. "
-        "그런 밤 하루가 비용 1이며, 0이면 남성 전용 병실에 여성 환자가 없습니다."
+        "비용은 그런 밤 1박당 1이며, 0이면 남성 전용 병실에 여성 환자가 없습니다."
     )
 
 
@@ -123,7 +123,7 @@ class MaleInFemaleRoomCost(Constraint):
     )
     description_ko = (
         "남성 환자가 여성 전용 병실에서 지내는 밤을 모두 더합니다. "
-        "그런 밤 하루가 비용 1이며, 0이면 여성 전용 병실에 남성 환자가 없습니다."
+        "비용은 그런 밤 1박당 1이며, 0이면 여성 전용 병실에 남성 환자가 없습니다."
     )
 
 
@@ -141,8 +141,8 @@ class MixedGenderRoomCost(Constraint):
         "holds patients of one gender on each night."
     )
     description_ko = (
-        "동성 병실에서 남성 환자와 여성 환자가 함께 지내는 밤을 그런 입원 쌍마다 더합니다. "
-        "함께 지내는 밤 하루가 비용 1이며, 0이면 모든 동성 병실이 밤마다 한 성별의 환자만 받습니다."
+        "동성 병실에서 남성 환자와 여성 환자가 함께 지내는 밤을 그런 입원 쌍마다 모두 더합니다. "
+        "비용은 함께 지내는 밤 1박당 1이며, 0이면 모든 동성 병실에 밤마다 한 성별의 환자만 있습니다."
     )
 
 
@@ -158,9 +158,9 @@ class DepartmentMinAgeCost(Constraint):
         "One unit of cost is one such night; 0 means every patient is old enough for their department."
     )
     description_ko = (
-        "진료과의 최소 연령보다 어린 환자가 그 진료과에서 지내는 밤을 모두 더합니다"
-        "(최소 연령이 없는 진료과는 세지 않습니다). "
-        "그런 밤 하루가 비용 1이며, 0이면 모든 환자가 진료과의 최소 연령을 충족합니다."
+        "진료과의 최소 연령보다 어린 환자가 그 진료과에서 지내는 밤을 모두 더합니다. "
+        "최소 연령이 없는 진료과는 세지 않습니다. "
+        "비용은 그런 밤 1박당 1이며, 0이면 모든 환자가 진료과의 최소 연령을 충족합니다."
     )
 
 
@@ -176,9 +176,9 @@ class DepartmentMaxAgeCost(Constraint):
         "One unit of cost is one such night; 0 means every patient is young enough for their department."
     )
     description_ko = (
-        "진료과의 최대 연령보다 나이가 많은 환자가 그 진료과에서 지내는 밤을 모두 더합니다"
-        "(최대 연령이 없는 진료과는 세지 않습니다). "
-        "그런 밤 하루가 비용 1이며, 0이면 모든 환자가 진료과의 최대 연령을 넘지 않습니다."
+        "진료과의 최대 연령보다 나이가 많은 환자가 그 진료과에서 지내는 밤을 모두 더합니다. "
+        "최대 연령이 없는 진료과는 세지 않습니다. "
+        "비용은 그런 밤 1박당 1이며, 0이면 모든 환자가 진료과의 최대 연령을 넘지 않습니다."
     )
 
 
@@ -194,12 +194,12 @@ class RequiredPatientEquipmentCost(Constraint):
     label_ko = "필수 장비"
     description_en = (
         "For a stay whose room lacks at least one required equipment item: its nights times the number "
-        "of required items the room does have (the quickstart's rule, so a room with none of the "
-        "required items also costs 0). 0 means every stay's room has all of its required equipment, or none of it."
+        "of required items the room does have (by design, a room with none of the required items also "
+        "costs 0). 0 means every stay's room has all of its required equipment, or none of it."
     )
     description_ko = (
-        "필수 장비가 하나라도 빠진 병실에 배정된 입원마다, 재원 밤 수에 그 병실이 갖춘 필수 장비 수를 곱해 더합니다"
-        "(퀵스타트 규칙이라 필수 장비가 하나도 없는 병실도 0입니다). "
+        "필수 장비가 하나라도 빠진 병실에 배정된 입원마다, 재원 밤 수에 그 병실이 갖춘 필수 장비 수를 곱해 더합니다. "
+        "설계상 필수 장비를 하나도 갖추지 않은 병실도 비용이 0입니다. "
         "0이면 모든 입원의 병실이 필수 장비를 모두 갖추었거나 하나도 갖추지 않았습니다."
     )
 
@@ -220,7 +220,7 @@ class UnassignedStaysCost(Constraint):
     )
     description_ko = (
         "병상을 배정받지 못한 입원(솔버의 '병상 없음' 값)의 재원 밤을 모두 더합니다. "
-        "병상 없이 보내는 밤 하루가 비용 1이며, 0이면 모든 입원이 병상을 배정받았습니다."
+        "비용은 병상 없이 보내는 밤 1박당 1이며, 0이면 모든 입원이 병상을 배정받았습니다."
     )
 
 
@@ -236,9 +236,9 @@ class PreferredMaxRoomCapacityCost(Constraint):
         "One unit of cost is one such night; 0 means every patient's room is small enough."
     )
     description_ko = (
-        "환자가 선호하는 최대 인원보다 정원이 큰 병실에서 지내는 밤을 모두 더합니다"
-        "(선호가 없는 환자는 세지 않습니다). "
-        "그런 밤 하루가 비용 1이며, 0이면 모든 환자의 병실이 선호 규모 이내입니다."
+        "환자가 선호하는 최대 인원보다 정원이 큰 병실에서 지내는 밤을 모두 더합니다. "
+        "선호 인원을 정하지 않은 환자는 세지 않습니다. "
+        "비용은 그런 밤 1박당 1이며, 0이면 모든 환자의 병실 정원이 선호 인원을 넘지 않습니다."
     )
 
 
@@ -247,14 +247,15 @@ class DepartmentSpecialtyCost(Constraint):
 
     name = "department_specialty_cost"
     label_en = "Department specialty"
-    label_ko = "진료과 전문과 불일치"
+    label_ko = "진료과 전문 분야 불일치"
     description_en = (
         "The nights stays spend in a department that does not offer their specialty. "
         "One unit of cost is one such night; 0 means every stay is in a department offering its specialty."
     )
     description_ko = (
-        "입원의 전문과를 다루지 않는 진료과에서 지내는 밤을 모두 더합니다. "
-        "그런 밤 하루가 비용 1이며, 0이면 모든 입원이 자기 전문과를 다루는 진료과에 있습니다."
+        "입원 환자에게 필요한 전문 분야를 다루지 않는 진료과에서 지내는 밤을 모두 더합니다. "
+        "비용은 그런 밤 1박당 1이며, "
+        "0이면 모든 입원 환자가 자신에게 필요한 전문 분야를 다루는 진료과에 있습니다."
     )
 
 
@@ -266,16 +267,17 @@ class DepartmentSpecialtyPriorityCost(Constraint):
 
     name = "department_specialty_priority_cost"
     label_en = "Department specialty priority"
-    label_ko = "진료과 전문과 우선순위"
+    label_ko = "진료과 전문 분야 우선순위"
     description_en = (
         "For a stay in a department that offers its specialty at priority p > 1: (p - 1) times its nights. "
         "0 means every stay is in a department with its specialty at priority 1 "
         "(a department without the specialty is counted by department_specialty_cost instead)."
     )
     description_ko = (
-        "입원의 전문과를 우선순위 p > 1로 다루는 진료과에 있으면 (p - 1)에 재원 밤 수를 곱해 더합니다. "
-        "0이면 모든 입원이 자기 전문과를 1순위로 다루는 진료과에 있습니다"
-        "(전문과를 다루지 않는 진료과는 department_specialty_cost가 셉니다)."
+        "입원 환자가 자신에게 필요한 전문 분야를 우선순위 p > 1로 다루는 진료과에 있으면, "
+        "(p - 1)에 재원 밤 수를 곱해 더합니다. "
+        "0이면 모든 입원 환자가 자신에게 필요한 전문 분야를 1순위로 다루는 진료과에 있습니다. "
+        "그 전문 분야를 아예 다루지 않는 진료과는 여기서 세지 않고 department_specialty_cost가 셉니다."
     )
 
 
@@ -294,7 +296,7 @@ class PreferredPatientEquipmentCost(Constraint):
     )
     description_ko = (
         "입원마다 재원 밤 수에 병실에 없는 선호 장비 수를 곱해 더합니다. "
-        "하룻밤 동안 빠진 선호 장비 하나가 비용 1이며, 0이면 모든 입원의 병실이 선호 장비를 모두 갖추었습니다."
+        "비용은 1박 동안 빠진 선호 장비 1개당 1이며, 0이면 모든 입원의 병실이 선호 장비를 모두 갖추었습니다."
     )
 
 

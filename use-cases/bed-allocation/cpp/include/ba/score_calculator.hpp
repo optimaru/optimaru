@@ -95,7 +95,7 @@ public:
     // sameNightCount for two stays in one bed. Defined in
     // score_calculator.cpp, which reads the component constant (the
     // components include this header, so it cannot include theirs).
-    static std::int64_t sameBedPairPenalty(const Stay &a, const Stay &b);
+    static std::int64_t bedConflictPairPenalty(const Stay &a, const Stay &b);
 
     // hard 4 (mixedGenderRoomCost): MixedGenderRoomCost::kDefaultWeight
     // (1000) * sameNightCount for a mixed-gender pair; both stays must

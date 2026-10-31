@@ -107,10 +107,11 @@ public:
     // selection. Weights and levels come from the assembly (the components'
     // kDefaultWeight / kDefaultLevel unless the caller changed them). The
     // final plan.score is computed by THIS calculator (its three level
-    // accumulators, calculator.levelScores()) and the calculator is left primed
-    // on the final solution, so constraintTotals() explains exactly that
-    // score. Single-start: the caller-owned calculator cannot be cloned, so
-    // parallelSolverCount is ignored.
+    // accumulators, calculator.levelScores()), and onNewBest reports every new
+    // best the same way, so the last reported score equals plan.score. The
+    // calculator is left primed on the final solution, so constraintTotals()
+    // explains exactly that score. Single-start: the caller-owned calculator
+    // cannot be cloned, so parallelSolverCount is ignored.
     void solve(BedPlan &plan,
                optimaru::DecomposedScoreCalculator<BedPlan> &calculator);
 

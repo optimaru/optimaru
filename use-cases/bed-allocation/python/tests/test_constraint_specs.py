@@ -365,6 +365,36 @@ def test_a_promoted_medium_constraint_is_one_hard_unit_per_night():
     assert score(ba.constraint_costs(plan), picks) == (plan.score.hard, plan.score.soft)
 
 
+# --- on_new_best ------------------------------------------------------------------
+
+#: A soft total of 10^9 or more: one stay (6 nights) without a bed is 6 medium, and each
+#: of the other three spends 6 nights in a room above its preferred capacity at 10^8 a
+#: night, so soft is -1.8 * 10^9. Decoding the folded engine score (medium * 10^9 + soft)
+#: would report that as medium -7, soft -8 * 10^8.
+_HEAVY_SOFT = [bed_conflict_cost, unassigned_stays_cost, PreferredMaxRoomCapacityCost(weight=10**8)]
+
+
+@pytest.mark.parametrize("constraints", [None, _HEAVY_SOFT], ids=["default", "heavy-soft"])
+def test_on_new_best_reports_the_levels_of_the_final_score(constraints):
+    """on_new_best and the final plan.score use the same three levels on both solve paths,
+    so the last reported best is exactly the returned score."""
+    events = []
+    plan = build_plan()
+    ba.solve(
+        plan,
+        time_limit_seconds=0.4,
+        random_seed=1,
+        constraints=constraints,
+        on_new_best=lambda step, s: events.append((s.hard, s.medium, s.soft)),
+    )
+    final = (plan.score.hard, plan.score.medium, plan.score.soft)
+    assert events
+    assert events[-1] == final
+    if constraints is not None:
+        assert final == (0, -6, -18 * 10**8)
+        assert score(ba.constraint_costs(plan), constraints) == (0, -6 * MEDIUM_UNIT - 18 * 10**8)
+
+
 @pytest.mark.parametrize(
     ("kwargs", "error"),
     [

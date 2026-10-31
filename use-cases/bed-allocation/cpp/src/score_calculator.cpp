@@ -91,7 +91,8 @@ static_assert(BedConflictCost::kDefaultLevel == optimaru::Level::Hard
 
 }  // namespace
 
-std::int64_t ScoreCalculator::sameBedPairPenalty(const Stay &a, const Stay &b)
+std::int64_t ScoreCalculator::bedConflictPairPenalty(const Stay &a,
+                                                     const Stay &b)
 {
     return kBedConflictWeight * a.sameNightCount(b);
 }
@@ -289,8 +290,8 @@ Score ScoreCalculator::calculateScore(BedPlan &plan)
         {
             for (std::size_t j = i + 1; j < occupants.size(); ++j)
             {
-                hard += sameBedPairPenalty(plan.stays[occupants[i]],
-                                           plan.stays[occupants[j]]);
+                hard += bedConflictPairPenalty(plan.stays[occupants[i]],
+                                               plan.stays[occupants[j]]);
             }
         }
     }

@@ -58,7 +58,7 @@ def test_overlapping_stays_use_distinct_beds() -> None:
     )
 
 
-def test_same_bed_constraint_can_be_removed() -> None:
+def test_bed_conflict_constraint_can_be_removed() -> None:
     problem = BedPlanModel(
         departments=[DepartmentModel(id="d", specialty_to_priority={"cardio": 1})],
         rooms=[RoomModel(id="r", department_id="d", capacity=1)],
@@ -81,9 +81,7 @@ def test_same_bed_constraint_can_be_removed() -> None:
         ],
     )
 
-    solved = solve(
-        problem, time_limit_seconds=2, constraints=["unassigned_stays_cost"]
-    )
+    solved = solve(problem, time_limit_seconds=2, constraints=["unassigned_stays_cost"])
 
     assert [stay.bed_id for stay in solved.stays] == ["a", "a"]
     assert solved.score_hard == 0
@@ -242,7 +240,10 @@ def _engine_score(solved: BedPlanModel, selection) -> tuple[int, float]:
     no_bed = core.no_bed_value()
     ids = [bed.id for bed in solved.beds]
     core.set_assignment(
-        [no_bed if stay.bed_id is None else ids.index(stay.bed_id) for stay in solved.stays]
+        [
+            no_bed if stay.bed_id is None else ids.index(stay.bed_id)
+            for stay in solved.stays
+        ]
     )
     return score(domain.constraint_costs(core), selection)
 
