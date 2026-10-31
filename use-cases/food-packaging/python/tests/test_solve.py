@@ -1,6 +1,10 @@
 """Demo solve checks: the Java demo instance reaches feasible with a consistent
 assignment, and pinned jobs and the unassigned pool are respected."""
 
+import time
+
+import pytest
+
 import food_packaging as fp
 
 
@@ -110,3 +114,21 @@ def test_solver_config_roundtrip():
     schedule = fp.generate_demo_data(line_count=2, job_count=8)
     fp.solve(schedule, config=config)
     assert schedule.score == fp.calculate_score(schedule)
+
+
+def _boom(_step, _score):
+    raise RuntimeError("boom")
+
+
+def test_a_raising_on_new_best_raises_from_a_multi_start_solve():
+    """Two parallel starts: the callback's exception reaches Python instead of aborting the process,
+    and the other start stops at once instead of running out its 10 s budget."""
+    started = time.monotonic()
+    with pytest.raises(RuntimeError, match="boom"):
+        fp.solve(
+            fp.generate_demo_data(line_count=2, job_count=8),
+            time_limit_seconds=10.0,
+            parallel_solver_count=2,
+            on_new_best=_boom,
+        )
+    assert time.monotonic() - started < 8.0

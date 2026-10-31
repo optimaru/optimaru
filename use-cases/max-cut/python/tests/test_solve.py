@@ -112,14 +112,17 @@ def test_keyword_arguments_override_the_config():
         on_new_best=lambda step, score: calls.append((step, score.hard, score.soft)),
         config=config,
     )
-    assert (config.spent_limit_seconds, config.random_seed, config.parallel_solver_count) == (2.0, 9, 2)
+    # The overrides applied (on_new_best fired) to a copy: the caller's config is unchanged.
     assert calls and all(isinstance(step, int) for step, _, _ in calls)
+    assert (config.spent_limit_seconds, config.random_seed, config.parallel_solver_count) == (30.0, 5, 1)
+    assert config.step_count_limit == 100 and config.on_new_best is None
 
 
-def test_stop_at_first_feasible_sets_the_score_limit():
+def test_stop_at_first_feasible_leaves_the_callers_config_alone():
     config = max_cut.SolverConfig()
+    before = config.best_score_limit
     max_cut.solve(demo(), time_limit_seconds=5.0, stop_at_first_feasible=True, config=config)
-    assert config.best_score_limit == (0, -1e18)
+    assert config.best_score_limit == before  # the score limit went to a copy
 
 
 def test_multi_start_returns_a_consistent_best():

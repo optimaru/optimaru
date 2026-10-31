@@ -104,7 +104,7 @@ inline optimaru::HardSoftScore toEngineScore(const Score &s)
 // on both — decodes the two levels exactly.
 inline Score fromEngineScore(const optimaru::HardSoftScore &e)
 {
-    const auto combined = static_cast<std::int64_t>(std::llround(e.soft));
+    const auto combined = optimaru::roundScoreLevel(e.soft, "soft");
     return {e.hard, combined / kMediumUnit, combined % kMediumUnit};
 }
 

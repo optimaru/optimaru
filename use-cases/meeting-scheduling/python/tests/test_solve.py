@@ -48,3 +48,15 @@ def test_stop_at_first_feasible_and_callback():
     )
     assert result.score_hard == 0
     assert events, "the on_new_best callback was never called"
+
+
+def test_a_zero_soft_score_is_positive_zero():
+    """The unsolved demo has no soft penalty: it scores 0soft, not -0soft (IEEE negative zero)."""
+    import math
+
+    import meeting_scheduling as _pkg
+
+    score = _pkg.calculate_score(_pkg.demo_data())
+    assert score.soft == 0.0
+    assert math.copysign(1.0, score.soft) == 1.0
+    assert "-0soft" not in repr(score)

@@ -243,9 +243,11 @@ class DecomposedCalculator:
         """Duck-typed: each item only needs `.name`, `.weight`, `.hard`,
         `.exponent` (plus an optional `params()`) — the `Constraint`
         dataclasses and the pydantic rule models both qualify. Raises
-        ValueError for an unknown name, a reward made hard, a scope on a
-        global rule other than shift_coverage_cost, or an invalid knob value,
-        and TypeError for a knob of the wrong type."""
+        ValueError for an empty list (use ``DecomposedCalculator()`` and
+        ``add()`` to start empty), the same rule with the same parameters
+        twice, an unknown name, a reward made hard, a scope on a global rule
+        other than shift_coverage_cost, or an invalid knob value, and
+        TypeError for a knob of the wrong type."""
     def add(
         self,
         name: str,

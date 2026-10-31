@@ -194,3 +194,17 @@ def test_solve_weights_refuse_non_finite_and_negative_values(problem, bad):
 def test_solve_weights_refuse_bools(problem):
     with pytest.raises(TypeError, match="teacher_gap_cost: weight must be a number, not True"):
         st.solve(problem, time_limit_seconds=0.1, weights={"teacher_gap_cost": True})
+
+
+def _boom(_step, _score):
+    raise RuntimeError("boom")
+
+
+@pytest.mark.parametrize("mode", ["canonical", "quickstart"])
+def test_a_raising_on_new_best_raises_from_a_multi_start_solve(problem, mode):
+    """Two parallel starts (quickstart: the engine's multi-start): the callback's exception
+    reaches Python instead of aborting the process."""
+    with pytest.raises(RuntimeError, match="boom"):
+        st.solve(
+            problem, mode=mode, time_limit_seconds=5.0, parallel_solver_count=2, on_new_best=_boom
+        )

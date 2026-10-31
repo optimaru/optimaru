@@ -122,8 +122,7 @@ inline optimaru::HardSoftScore toEngineScore(const Score &s)
 // integral), so truncating integer division decodes the levels exactly.
 inline Score fromEngineScore(const optimaru::HardSoftScore &e)
 {
-    const std::int64_t combinedSoft
-        = static_cast<std::int64_t>(std::llround(e.soft));
+    const std::int64_t combinedSoft = optimaru::roundScoreLevel(e.soft, "soft");
     return {e.hard / kMissingSkillUnit,
             e.hard % kMissingSkillUnit,
             combinedSoft / kMakespanUnit,

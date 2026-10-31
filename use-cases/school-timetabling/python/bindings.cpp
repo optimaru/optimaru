@@ -52,11 +52,7 @@ template <typename Config> void bindSolverConfigCommon(py::class_<Config> &cls)
             [](const Config &c)
             { return std::chrono::duration<double>(c.spentLimit).count(); },
             [](Config &c, double s)
-            {
-                c.spentLimit
-                    = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        std::chrono::duration<double>(s));
-            })
+            { c.spentLimit = optimaru::python::secondsToMillis(s, "spent_limit_seconds"); })
         .def_property(
             "unimproved_spent_limit_seconds",
             [](const Config &c) {
@@ -64,14 +60,7 @@ template <typename Config> void bindSolverConfigCommon(py::class_<Config> &cls)
                     .count();
             },
             [](Config &c, double s)
-            {
-                if (s < 0.0)
-                    throw py::value_error(
-                        "unimproved_spent_limit_seconds must be non-negative");
-                c.unimprovedSpentLimit
-                    = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        std::chrono::duration<double>(s));
-            })
+            { c.unimprovedSpentLimit = optimaru::python::secondsToMillis(s, "unimproved_spent_limit_seconds"); })
         .def_readwrite("step_count_limit", &Config::stepCountLimit)
         .def_readwrite("unimproved_step_count_limit",
                        &Config::unimprovedStepCountLimit)
@@ -652,6 +641,8 @@ void bindCanon(py::module_ &canon)
 
     py::class_<cn::Solver::Config> config(
         canon, "SolverConfig", py::module_local());
+
+    optimaru::python::bindConfigCopy(config);
     bindSolverConfigCommon(config);
     // The fast path's soft weights (solve(table) only; the model carries
     // none, the plugin path's components carry their own).
@@ -831,6 +822,8 @@ PYBIND11_MODULE(_core, m)
           "Full recompute of the HardSoftScore (also stores table.score).");
 
     py::class_<Solver::Config> config(m, "SolverConfig", py::module_local());
+
+    optimaru::python::bindConfigCopy(config);
     bindSolverConfigCommon(config);
     // Same-group nearby swap bias (see st/solver.hpp).
     config.def_readwrite("same_group_nearby", &Solver::Config::sameGroupNearby);

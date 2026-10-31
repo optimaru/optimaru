@@ -155,8 +155,8 @@ class BatchFamilyConflictCost(Constraint):
     """Overlap time of different recipe families on one batch tool. Default: hard, weight 1."""
 
     name = "batch_family_conflict_cost"
-    label_en = "Batch recipe compatibility"
-    label_ko = "배치 레시피 호환성"
+    label_en = "Batch recipe-family conflict"
+    label_ko = "배치 레시피 계열 충돌"
     description_en = (
         "On every batch tool, the time two lots of different recipe families run at the same time, summed "
         "over the overlapping pairs. One unit is one time unit of mixed families; 0 means every batch run "
@@ -172,8 +172,8 @@ class MissingSetupTimeCost(Constraint):
     """Sequence-dependent setup time missing between consecutive runs. Default: hard, weight 1."""
 
     name = "missing_setup_time_cost"
-    label_en = "Sequence-dependent setup"
-    label_ko = "순서 의존 셋업"
+    label_en = "Missing setup time"
+    label_ko = "부족한 셋업 시간"
     description_en = (
         "Between consecutive runs on a machine that need a setup for their recipe change, the part of the "
         "setup time that does not fit before the next run starts. One unit is one time unit of missing "
@@ -189,8 +189,8 @@ class MachineUnavailabilityCost(Constraint):
     """Processing time inside machine downtime windows. Default: hard, weight 1."""
 
     name = "machine_unavailability_cost"
-    label_en = "Preventive maintenance windows"
-    label_ko = "예방 정비 시간대"
+    label_en = "Equipment unavailability"
+    label_ko = "설비 사용 불가 시간"
     description_en = (
         "The processing time that falls inside a machine's unavailable windows (preventive maintenance or "
         "other downtime). One unit is one time unit of work during downtime; 0 means nothing runs while its "
@@ -239,8 +239,8 @@ class MissingTransportTimeCost(Constraint):
     """Material-handling time missing between consecutive route steps. Default: hard, weight 1."""
 
     name = "missing_transport_time_cost"
-    label_en = "Inter-tool transport"
-    label_ko = "설비 간 반송"
+    label_en = "Missing transport time"
+    label_ko = "부족한 반송 시간"
     description_en = (
         "Between consecutive route steps, the part of the transport time between their equipment groups that "
         "does not fit into the wait (without a transport entry, an overlap of the two steps counts too). One "
@@ -273,8 +273,8 @@ class AuxiliaryResourceUnavailabilityCost(Constraint):
     """Use of an auxiliary resource inside its unavailable windows. Default: hard, weight 1."""
 
     name = "auxiliary_resource_unavailability_cost"
-    label_en = "Auxiliary resource availability"
-    label_ko = "보조 자원 가용 시간"
+    label_en = "Auxiliary resource unavailability"
+    label_ko = "보조 자원 사용 불가 시간"
     description_en = (
         "The time operations use an auxiliary resource inside its unavailable windows. One unit is one "
         "time unit of use while unavailable; 0 means no resource is used while it is unavailable."
@@ -337,8 +337,8 @@ class MinBatchSizeCost(Constraint):
     """Lots missing below a batch tool's preferred minimum run size. Default: soft, weight 1."""
 
     name = "min_batch_size_cost"
-    label_en = "Minimum batch fill"
-    label_ko = "최소 배치 크기 충족"
+    label_en = "Batch below minimum size"
+    label_ko = "최소 배치 크기 미달"
     description_en = (
         "For every batch run (one recipe family and batch id on a batch tool), the lots missing to reach the "
         "tool's minimum batch size. One unit is one missing lot; 0 means every batch run is full enough."
@@ -353,8 +353,8 @@ class MachineLoadImbalanceCost(Constraint):
     """Processing-load range between the tools of each equipment group. Default: soft, weight 1."""
 
     name = "machine_load_imbalance_cost"
-    label_en = "Equipment-group load balance"
-    label_ko = "설비 그룹 부하 균형"
+    label_en = "Equipment-group load imbalance"
+    label_ko = "설비 그룹 부하 불균형"
     description_en = (
         "In every equipment group with two or more machines, the difference between the most and the least "
         "loaded machine, a load being the summed processing time. One unit is one time unit of difference; "

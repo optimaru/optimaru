@@ -1,6 +1,7 @@
 """knapsack.solve / Solver / SolverConfig — the engine surface shared with the other C++ packages."""
 
 import json
+import time
 from pathlib import Path
 
 import pytest
@@ -109,14 +110,17 @@ def test_keyword_arguments_override_the_config():
         on_new_best=lambda step, score: calls.append((step, score.hard, score.soft)),
         config=config,
     )
-    assert (config.spent_limit_seconds, config.random_seed, config.parallel_solver_count) == (2.0, 9, 2)
+    # The overrides applied (on_new_best fired) to a copy: the caller's config is unchanged.
     assert calls and all(isinstance(step, int) for step, _, _ in calls)
+    assert (config.spent_limit_seconds, config.random_seed, config.parallel_solver_count) == (30.0, 5, 1)
+    assert config.step_count_limit == 100 and config.on_new_best is None
 
 
-def test_stop_at_first_feasible_sets_the_score_limit():
+def test_stop_at_first_feasible_leaves_the_callers_config_alone():
     config = knapsack.SolverConfig()
+    before = config.best_score_limit
     knapsack.solve(demo(), time_limit_seconds=5.0, stop_at_first_feasible=True, config=config)
-    assert config.best_score_limit == (0, -1e18)
+    assert config.best_score_limit == before  # the score limit went to a copy
 
 
 def test_multi_start_returns_a_consistent_best():
@@ -176,3 +180,21 @@ def test_inputs_of_the_wrong_type_are_refused():
         knapsack.solve({"capacity": 1, "items": []})
     with pytest.raises(TypeError):
         knapsack.constraint_costs([])
+
+
+def _boom(_step, _score):
+    raise RuntimeError("boom")
+
+
+def test_a_raising_on_new_best_raises_from_a_multi_start_solve():
+    """Two parallel starts: the callback's exception reaches Python instead of aborting the process,
+    and the other start stops at once instead of running out its 10 s budget."""
+    started = time.monotonic()
+    with pytest.raises(RuntimeError, match="boom"):
+        knapsack.solve(
+            demo(),
+            time_limit_seconds=10.0,
+            parallel_solver_count=2,
+            on_new_best=_boom,
+        )
+    assert time.monotonic() - started < 8.0

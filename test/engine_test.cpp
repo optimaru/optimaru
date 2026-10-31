@@ -250,6 +250,20 @@ void testTerminations(const HardSoftScore& optimum) {
         double sec = std::chrono::duration<double>(Clock::now() - t0).count();
         check(sec < 5.0, "unimprovedSpentLimit terminates early (" + std::to_string(sec) + "s)");
     }
+    {   // The cooling gradient follows a step limit when it is further along
+        // than the wall clock (simulated annealing on a step-limited run).
+        optimaru::TerminationConfig termination;
+        termination.spentLimit = std::chrono::seconds(30);
+        termination.stepCountLimit = 1000;
+        optimaru::SolverTermination stepLimited(termination);
+        stepLimited.isTerminated(250, HardSoftScore{0, 0.0}, /*forceTimeCheck=*/true);
+        check(std::fabs(stepLimited.timeGradient() - 0.25) < 0.01,
+              "timeGradient() = step fraction (0.25) on a step-limited run");
+        termination.stepCountLimit = 0;
+        optimaru::SolverTermination timeOnly(termination);
+        timeOnly.isTerminated(250, HardSoftScore{0, 0.0}, /*forceTimeCheck=*/true);
+        check(timeOnly.timeGradient() < 0.01, "timeGradient() = time fraction without a step limit");
+    }
 }
 
 void testEnvironmentMode() {
@@ -300,6 +314,45 @@ void testMultiStartAndFfd(const HardSoftScore& optimum) {
         HardSoftScore result = solver.solveMultiStart(
                 s, [] { return std::make_unique<TaskAssignmentCalculator>(); });
         check(result == optimum && fullScore(s) == optimum, "multi-start (4 threads) optimum");
+    }
+    {   // A start that throws (here: a raising onNewBest, as a Python callback
+        // that raises does): caught on its thread, the siblings stop, and the
+        // exception comes out of solveMultiStart on the calling thread
+        // instead of std::terminate.
+        TaskAssignment s = buildTaskInstance();
+        const TaskAssignment before = s;
+        optimaru::SolverConfig config;
+        config.termination.spentLimit = std::chrono::seconds(30);
+        config.multiStartCount = 3;
+        config.onNewBest = [](std::int64_t, const HardSoftScore&) {
+            throw std::runtime_error("boom");
+        };
+        optimaru::Solver<TaskAssignment> solver(config);
+        const auto start = std::chrono::steady_clock::now();
+        std::string caught;
+        try {
+            solver.solveMultiStart(s, [] { return std::make_unique<TaskAssignmentCalculator>(); });
+        } catch (const std::runtime_error& error) {
+            caught = error.what();
+        }
+        const double seconds =
+                std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+        check(caught == "boom", "multi-start rethrows a start's exception on the calling thread");
+        check(seconds < 10.0, "the other starts stop once one fails (no 30 s wait)");
+        check(s.assignment == before.assignment, "a failed multi-start leaves the solution as it was");
+    }
+    {   // terminateEarly() reaches every start.
+        TaskAssignment s = buildTaskInstance();
+        optimaru::SolverConfig config;
+        config.termination.spentLimit = std::chrono::seconds(30);
+        config.multiStartCount = 3;
+        optimaru::Solver<TaskAssignment> solver(config);
+        solver.terminateEarly();
+        const auto start = std::chrono::steady_clock::now();
+        solver.solveMultiStart(s, [] { return std::make_unique<TaskAssignmentCalculator>(); });
+        const double seconds =
+                std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+        check(seconds < 10.0, "terminateEarly() stops every multi-start start");
     }
     {   // First Fit Decreasing: initialize high-cost tasks first.
         TaskAssignment s = buildSeparableInstance();

@@ -21,6 +21,10 @@
 //   (k) LIST kind with a medium level: every preview (unit cells, a
 //       previewing global, BelowHard rounding) equals the applied score,
 //       which FULL_ASSERT checks against a full recompute
+//   (l) the range of a score: a hard total beyond int64 saturates at
+//       -INT64_MAX (never wraps to a feasible-looking score), the BelowHard
+//       fold saturates too, incremental == fresh across the saturation
+//       boundary, and an out-of-range contribution throws overflow_error
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -910,6 +914,141 @@ void testListMediumPreviews() {
     std::printf("\n");
 }
 
+// (l) A hard unit constraint charging a big constant per busy worker: with
+// a weight near 2^62, two or three busy workers already sum past int64.
+template <typename S>
+struct BusyWorkerCost final : optimaru::UnitConstraint<S> {
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr Level kDefaultLevel = Level::Hard;
+    explicit BusyWorkerCost(double weight = kDefaultWeight)
+        : optimaru::UnitConstraint<S>("busyWorkerCost", weight, kDefaultLevel) {}
+    double cost(const S&, int, const std::vector<int>& members) const override {
+        return members.empty() ? 0.0 : 1.0;
+    }
+};
+
+template <typename S>
+HardSoftScore busyScore(double weight, std::vector<int> assignment) {
+    S s;
+    s.assignment = std::move(assignment);
+    optimaru::ConstraintAssembly<S> assembly;
+    assembly.template emplace<BusyWorkerCost<S>>(weight);
+    return scoreOf(std::move(assembly), s);
+}
+
+bool throwsOverflow(const std::function<void()>& run) {
+    try {
+        run();
+    } catch (const std::overflow_error&) {
+        return true;
+    }
+    return false;
+}
+
+// Incremental == fresh recompute on a random walk whose busy-worker count
+// crosses the saturation boundary both ways.
+template <typename S>
+bool saturatingWalk(double weight, unsigned seed) {
+    S s;
+    s.assignment = {0, 0, 0, 0, 0, 0};
+    optimaru::DecomposedScoreCalculator<S> calc;
+    {
+        optimaru::ConstraintAssembly<S> assembly;
+        assembly.template emplace<BusyWorkerCost<S>>(weight);
+        assembly.template emplace<ConflictCost<S>>();
+        assembly.into(calc);
+    }
+    calc.resetWorkingSolution(s);
+    std::mt19937 rng(seed);
+    bool agree = true;
+    for (int step = 0; step < 400; ++step) {
+        const int task = static_cast<int>(rng() % 6);
+        const int worker = static_cast<int>(rng() % 4);
+        calc.beforeVariableChanged(task);
+        s.assignment[task] = worker;
+        calc.afterVariableChanged(task);
+        optimaru::DecomposedScoreCalculator<S> fresh;
+        optimaru::ConstraintAssembly<S> assembly;
+        assembly.template emplace<BusyWorkerCost<S>>(weight);
+        assembly.template emplace<ConflictCost<S>>();
+        assembly.into(fresh);
+        fresh.resetWorkingSolution(s);
+        agree &= calc.calculateScore() == fresh.calculateScore();
+    }
+    return agree;
+}
+
+void testScoreRange() {
+    std::printf("== (l) The range of a score ==\n");
+    constexpr std::int64_t kLimit = std::numeric_limits<std::int64_t>::max();
+    // Fold-less: 4e18 per busy worker. One and two busy workers fit int64.
+    check(busyScore<Tasks>(4e18, {0, 0, 0, 0, 0, 0}).hard == -4000000000000000000LL,
+          "one busy worker at 4e18: exact");
+    check(busyScore<Tasks>(4e18, {0, 0, 0, 1, 1, 1}).hard == -8000000000000000000LL,
+          "two busy workers at 4e18: exact");
+    const HardSoftScore three = busyScore<Tasks>(4e18, {0, 0, 1, 1, 2, 2});
+    check(three.hard == -kLimit,
+          "three busy workers at 4e18 saturate at -INT64_MAX, got " + str(three));
+    check(busyScore<Tasks>(4e18, {0, 1, 2, 3, 0, 1}).hard == -kLimit,
+          "four busy workers saturate too (worse never looks better)");
+    // BelowHard(100): 4e16 hard units per busy worker; the fold multiplies by 100.
+    check(busyScore<HardFoldTasks>(4e16, {0, 0, 0, 0, 0, 0}).hard == -4000000000000000000LL,
+          "BelowHard: one busy worker at 4e16 folds exactly (x100)");
+    check(busyScore<HardFoldTasks>(4e16, {0, 0, 0, 1, 1, 1}).hard == -8000000000000000000LL,
+          "BelowHard: two busy workers at 4e16 fold exactly (8e18 fits)");
+    const HardSoftScore folded = busyScore<HardFoldTasks>(4e16, {0, 0, 1, 1, 2, 2});
+    check(folded.hard == -kLimit,
+          "BelowHard: three busy workers at 4e16 fold past int64 -> -INT64_MAX, got " + str(folded));
+    check(kHardFold.toEngine(-100000000000000000LL, -5.0, 0.0).hard == -kLimit,
+          "MediumFold::toEngine(BelowHard) saturates like the calculator");
+    check(kHardFold.toEngine(-3, -5.0, 0.0).hard == -305,
+          "MediumFold::toEngine(BelowHard) is exact in range");
+    check(saturatingWalk<Tasks>(3e18, 61), "incremental == fresh across saturation (fold-less)");
+    check(saturatingWalk<HardFoldTasks>(3e16, 67), "incremental == fresh across saturation (BelowHard)");
+
+    // HardTotal: wraps and comes back exactly.
+    optimaru::HardTotal total;
+    for (int i = 0; i < 5; ++i) total.add(4000000000000000000LL);
+    check(!total.fits() && total.saturated() == kLimit && total.positive(),
+          "HardTotal: 5 x 4e18 does not fit and saturates at +INT64_MAX");
+    for (int i = 0; i < 5; ++i) total.subtract(4000000000000000000LL);
+    check(total.isZero() && total.fits(), "HardTotal: subtracting them again is exact (0)");
+
+    // Rule 1: one contribution out of range throws overflow_error naming it.
+    Tasks t = assignmentA<Tasks>();
+    check(throwsOverflow([&] {
+              optimaru::ConstraintAssembly<Tasks> assembly;
+              assembly.emplace<ConflictCost<Tasks>>(1e19);
+              scoreOf(std::move(assembly), t);
+          }),
+          "a hard contribution of 2^62 or more throws overflow_error");
+    check(throwsOverflow([&] {
+              optimaru::ConstraintAssembly<Tasks> assembly;
+              assembly.emplace<TaskCostCost<Tasks>>();
+              assembly.exponent("taskCostCost", 400.0);
+              scoreOf(std::move(assembly), t);
+          }),
+          "a non-finite soft contribution (cost^400) throws overflow_error");
+    check(throwsOverflow([&] {
+              optimaru::ConstraintAssembly<Tasks> assembly;
+              assembly.emplace<TaskCostCost<Tasks>>(0.0);
+              assembly.exponent("taskCostCost", 400.0);
+              scoreOf(std::move(assembly), t);
+          }),
+          "weight 0 x inf (NaN) throws too, like Python's cost**exponent OverflowError");
+    std::string message;
+    try {
+        optimaru::ConstraintAssembly<Tasks> assembly;
+        assembly.emplace<ConflictCost<Tasks>>(1e19);
+        scoreOf(std::move(assembly), t);
+    } catch (const std::overflow_error& error) {
+        message = error.what();
+    }
+    check(message.find("'conflictCost'") != std::string::npos,
+          "the overflow message names the constraint: " + message);
+    std::printf("\n");
+}
+
 }  // namespace
 
 int main() {
@@ -924,6 +1063,7 @@ int main() {
     testComponentsOutsideAnAssembly();
     testBindingLevelGuard();
     testListMediumPreviews();
+    testScoreRange();
     if (failures == 0) {
         std::printf("All constraint-level tests PASSED.\n");
         return 0;

@@ -42,7 +42,10 @@ namespace optimaru {
 // hard costs should be integral), the medium accumulator or the soft one.
 // The calculator keeps the three apart and folds medium into the engine's
 // HardSoftScore with the domain's MediumFoldOf<Solution> (see level.hpp)
-// when it reports a score.
+// when it reports a score. Contributions and totals follow "The range of a
+// score" (level.hpp): a non-finite contribution, or a hard one of 2^62 or
+// more, throws std::overflow_error; the hard total is summed exactly
+// (HardTotal) and saturates at +-INT64_MAX instead of wrapping.
 //
 // By default a touched unit is re-costed from scratch (correct for any
 // cost()). A constraint that also implements the optional deltaCost() —
@@ -481,10 +484,10 @@ public:
         }
         deltaGroupPtrs_.clear();
         for (const auto& group : deltaGroups_) deltaGroupPtrs_.push_back(group.get());
-        hardUnits_ = 0;
+        hardUnits_ = HardTotal();
         mediumUnits_ = 0.0;
         softUnits_ = 0.0;
-        unitHard_.assign(unitCount_, 0);
+        unitHard_.assign(unitCount_, HardTotal());
         penalized_.clear();
         penalizedPos_.assign(unitCount_, -1);
         batchDepth_ = 0;
@@ -589,7 +592,7 @@ public:
             hardUnits_ = savedHardUnitsTotal_;
             mediumUnits_ = savedMediumUnitsTotal_;
             softUnits_ = savedSoftUnitsTotal_;
-            for (int unit : savedUnitList_) setPenalized(unit, unitHard_[unit] > 0);
+            for (int unit : savedUnitList_) setPenalized(unit, unitHard_[unit].positive());
         }
         for (int unit : savedUnitList_) savedUnits_[unit] = 0;
         savedUnitList_.clear();
@@ -615,7 +618,7 @@ public:
                                  entry->constraint->cost(*solution_, unit, members));
                     }
                 }
-                setPenalized(unit, unitHard_[unit] > 0);
+                setPenalized(unit, unitHard_[unit].positive());
             }
             for (GlobalConstraint<Solution>* global : unitChangeGlobals_) {
                 global->onUnitChanged(*solution_, unit, members);
@@ -636,7 +639,7 @@ public:
     }
 
     HardSoftScore calculateScore() override {
-        long long hard = hardUnits_;
+        HardTotal hard = hardUnits_;
         double medium = mediumUnits_;
         double soft = softUnits_;
         for (const GlobalScoreEntry& entry : globalScore_) {
@@ -649,20 +652,23 @@ public:
     // The three accumulators as score levels (penalties negative), BEFORE the
     // medium fold: what calculateScore() folds into its HardSoftScore. The
     // domain's 3-level Score adapter reads this instead of decoding the fold.
+    // The hard level saturates at +-INT64_MAX like calculateScore()'s.
     struct LevelScores {
         long long hard;
         double medium;
         double soft;
     };
     LevelScores levelScores() const {
-        long long hard = hardUnits_;
+        HardTotal hard = hardUnits_;
         double medium = mediumUnits_;
         double soft = softUnits_;
         for (const GlobalScoreEntry& entry : globalScore_) {
             const double c = entry.weight * shapeCost(entry.constraint->cost(), entry.exponent);
             accumulate(entry, c, hard, medium, soft);
         }
-        return {-hard, medium == 0.0 ? 0.0 : -medium, soft == 0.0 ? 0.0 : -soft};
+        checkSoftTotal(medium);
+        checkSoftTotal(soft);
+        return {-hard.saturated(), medium == 0.0 ? 0.0 : -medium, soft == 0.0 ? 0.0 : -soft};
     }
 
     // Previews answer on a LIST domain whenever every global constraint can
@@ -945,31 +951,48 @@ private:
 
     // Folds one weighted contribution into the right accumulator (positive =
     // penalty). Hard rounds per contribution; medium rounds too when the fold
-    // lands it in the hard level.
+    // lands it in the hard level. Both check the range rule of level.hpp.
     template <typename Entry>
-    static void accumulate(const Entry& entry, double value, long long& hard, double& medium,
+    static void accumulate(const Entry& entry, double value, HardTotal& hard, double& medium,
                            double& soft) {
         if (entry.isHard) {
-            hard += std::llround(value);
+            hard.add(roundHardContribution(value, entry.constraint->name));
         } else if (kMediumFold.hasMedium() && entry.isMedium) {
-            medium += kMediumFold.roundsMedium() ? static_cast<double>(std::llround(value)) : value;
+            medium += kMediumFold.roundsMedium()
+                              ? static_cast<double>(
+                                        roundHardContribution(value, entry.constraint->name))
+                              : checkedSoftContribution(value, entry.constraint->name);
         } else {
-            soft += value;
+            soft += checkedSoftContribution(value, entry.constraint->name);
+        }
+    }
+
+    // A soft total of finite contributions can still overflow a double.
+    static void checkSoftTotal(double total) {
+        if (!std::isfinite(total)) {
+            throw std::overflow_error("the soft score is not finite (" + std::to_string(total) +
+                                      "); lower the soft weights or exponents");
         }
     }
 
     // Accumulated penalties -> the engine score, through the domain's medium
-    // fold. Normalizes -0.0 to 0.0: a penalty-free assembly should report the
+    // fold. The hard level saturates at +-INT64_MAX (level.hpp, rule 2).
+    // Normalizes -0.0 to 0.0: a penalty-free assembly should report the
     // same "0soft" a hand-written calculator does, not "-0".
-    static HardSoftScore foldScore(long long hard, double medium, double soft) {
+    static HardSoftScore foldScore(const HardTotal& hard, double medium, double soft) {
+        std::int64_t penalty;
         if constexpr (kMediumFold.kind == MediumFold::Kind::IntoSoft) {
             soft += medium * kMediumFold.unit;
+            penalty = hard.saturated();
         } else if constexpr (kMediumFold.kind == MediumFold::Kind::BelowHard) {
-            hard = hard * static_cast<long long>(kMediumFold.unit) + std::llround(medium);
+            penalty = foldBelowHardSaturating(hard, medium,
+                                              static_cast<std::int64_t>(kMediumFold.unit));
         } else {
             (void)medium;
+            penalty = hard.saturated();
         }
-        return {-hard, soft == 0.0 ? 0.0 : -soft};
+        checkSoftTotal(soft);
+        return {-penalty, soft == 0.0 ? 0.0 : -soft};
     }
 
     // Hands `constraint` the context its key names, creating it on first use.
@@ -1162,20 +1185,22 @@ private:
     void applyRaw(int unit, const UnitDispatchEntry& entry, std::size_t idx, double raw) {
         cacheRaw_[idx] = raw;
         const double value = entry.weight * shapeCost(raw, entry.exponent);
+        const std::string& name = entry.constraint->name;
         if (entry.isHard) {
-            const long long rounded = std::llround(value);
-            hardUnits_ += rounded - cacheHard_[idx];
-            unitHard_[unit] += rounded - cacheHard_[idx];
+            // Both cells are below 2^62 (rule 1), so their difference fits.
+            const long long rounded = roundHardContribution(value, name);
+            hardUnits_.add(rounded - cacheHard_[idx]);
+            unitHard_[unit].add(rounded - cacheHard_[idx]);
             cacheHard_[idx] = rounded;
         } else if (kMediumFold.hasMedium() && entry.isMedium) {
             // Medium cells share cacheSoft_ (a constraint has one level).
             const double medium = kMediumFold.roundsMedium()
-                                          ? static_cast<double>(std::llround(value))
-                                          : value;
+                                          ? static_cast<double>(roundHardContribution(value, name))
+                                          : checkedSoftContribution(value, name);
             mediumUnits_ += medium - cacheSoft_[idx];
             cacheSoft_[idx] = medium;
         } else {
-            softUnits_ += value - cacheSoft_[idx];
+            softUnits_ += checkedSoftContribution(value, name) - cacheSoft_[idx];
             cacheSoft_[idx] = value;
         }
     }
@@ -1190,7 +1215,7 @@ private:
             applyRaw(unit, *entry, base + entry->c,
                      entry->constraint->cost(*solution_, unit, m));
         }
-        setPenalized(unit, unitHard_[unit] > 0);
+        setPenalized(unit, unitHard_[unit].positive());
     }
     void touchUnit(int unit) {
         refreshUnit(unit);
@@ -1236,7 +1261,7 @@ private:
         // Hard totals are integral, so folding the loop's contributions
         // through one local accumulator is exact (unlike the soft doubles,
         // which keep their original accumulation order through applyRaw).
-        long long hardAcc = 0;
+        HardTotal hardAcc;
         for (; entry != end; ++entry) {
             switch (entry->kind) {
                 case kGroupedHardInt: {
@@ -1246,11 +1271,19 @@ private:
                     // beats an unpredictable data-dependent branch here.
                     // (The cell's cacheRaw_ is intentionally left stale: for a
                     // grouped-hard constraint nothing reads it until the next
-                    // reset rebuilds every cell from cost().)
-                    const long long scoreDelta = static_cast<long long>(
-                            entry->weight * (sign * groupedDeltas[entry->c]));
-                    cacheHard[base + entry->c] += scoreDelta;
-                    hardAcc += scoreDelta;
+                    // reset rebuilds every cell from cost().) The cell stays
+                    // below 2^62 (rule 1 of level.hpp), so the cast and the
+                    // two additions are defined.
+                    const double weighted = entry->weight * (sign * groupedDeltas[entry->c]);
+                    long long& cell = cacheHard[base + entry->c];
+                    if (!(std::fabs(static_cast<double>(cell) + weighted) <
+                          kMaxHardContribution)) {
+                        throwContributionOverflow(entry->constraint->name,
+                                                  static_cast<double>(cell) + weighted, true);
+                    }
+                    const long long scoreDelta = static_cast<long long>(weighted);
+                    cell += scoreDelta;
+                    hardAcc.add(scoreDelta);
                     break;
                 }
                 case kGroupedApply: {
@@ -1294,9 +1327,9 @@ private:
                     break;
             }
         }
-        if (hardAcc != 0) {
-            hardUnits_ += hardAcc;
-            unitHard_[unit] += hardAcc;
+        if (!hardAcc.isZero()) {
+            hardUnits_.add(hardAcc);
+            unitHard_[unit].add(hardAcc);
         }
         if constexpr (!Prof) {
             for (GlobalConstraint<Solution>* global : memberChangeGlobals_) {
@@ -1317,7 +1350,7 @@ private:
             }
             return;
         }
-        if (!rollbackActive_) setPenalized(unit, unitHard_[unit] > 0);
+        if (!rollbackActive_) setPenalized(unit, unitHard_[unit].positive());
         if constexpr (!Prof) {
             for (GlobalConstraint<Solution>* global : unitChangeGlobals_) {
                 global->onUnitChanged(*solution_, unit, m);
@@ -1425,7 +1458,7 @@ private:
         for (int i = 0; i < count; ++i) {
             changes[i] = {runs[i].unit, nullptr, runs[i].pieces, runs[i].count};
         }
-        long long hard = hardUnits_;
+        HardTotal hard = hardUnits_;
         double medium = mediumUnits_;
         double soft = softUnits_;
         for (int i = 0; i < count; ++i) {
@@ -1444,15 +1477,16 @@ private:
                     raw = entry->constraint->cost(*solution_, unit, *changes[i].members);
                 }
                 const double value = entry->weight * shapeCost(raw, entry->exponent);
+                const std::string& name = entry->constraint->name;
                 if (entry->isHard) {
-                    hard += std::llround(value) - cacheHard_[idx];
+                    hard.add(roundHardContribution(value, name) - cacheHard_[idx]);
                 } else if (kMediumFold.hasMedium() && entry->isMedium) {
                     medium += (kMediumFold.roundsMedium()
-                                       ? static_cast<double>(std::llround(value))
-                                       : value) -
+                                       ? static_cast<double>(roundHardContribution(value, name))
+                                       : checkedSoftContribution(value, name)) -
                               cacheSoft_[idx];
                 } else {
-                    soft += value - cacheSoft_[idx];
+                    soft += checkedSoftContribution(value, name) - cacheSoft_[idx];
                 }
             }
         }
@@ -1545,10 +1579,10 @@ private:
     std::vector<double> cacheRaw_;           // per (unit, constraint), raw (pre-weight/shape)
     std::vector<long long> cacheHard_;       // per (unit, constraint), weighted + rounded
     std::vector<double> cacheSoft_;          // per (unit, constraint), weighted
-    long long hardUnits_ = 0;
+    HardTotal hardUnits_;                    // exact, never wraps (level.hpp)
     double mediumUnits_ = 0.0;               // medium penalties, BEFORE the fold
     double softUnits_ = 0.0;
-    std::vector<long long> unitHard_;        // per unit: weighted hard total (>= 0 when penalizing)
+    std::vector<HardTotal> unitHard_;        // per unit: weighted hard total (> 0 when penalizing)
     std::vector<int> penalized_;             // units with unitHard_ > 0 (unordered)
     std::vector<int> penalizedPos_;          // index in penalized_, or -1
     int batchDepth_ = 0;
@@ -1561,8 +1595,8 @@ private:
     std::vector<double> savedRaw_;
     std::vector<long long> savedHard_;
     std::vector<double> savedSoft_;
-    std::vector<long long> savedUnitHard_;
-    long long savedHardUnitsTotal_ = 0;
+    std::vector<HardTotal> savedUnitHard_;
+    HardTotal savedHardUnitsTotal_;
     double savedMediumUnitsTotal_ = 0;
     double savedSoftUnitsTotal_ = 0;
 

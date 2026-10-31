@@ -36,6 +36,7 @@ path); `constraints=` selects a plugin assembly instead (see `constraints.py`)::
 Pydantic mirrors (for serialization) live in `st_timetabling.models` (optional dependency).
 """
 
+import copy
 import time
 
 from . import quickstart
@@ -192,12 +193,12 @@ def _resolve_config(config, *, canonical: bool):
         return canon.SolverConfig() if canonical else SolverConfig()
     if canonical:
         if isinstance(config, canon.SolverConfig):
-            return config
+            return copy.copy(config)  # solve()'s overrides must not leak into it
         if hasattr(config, "to_canon"):
             return config.to_canon()
         raise ValueError("a canonical-mode config must be a canon.SolverConfig or an object with to_canon()")
     if isinstance(config, SolverConfig):
-        return config
+        return copy.copy(config)  # solve()'s overrides must not leak into it
     if hasattr(config, "to_core"):
         return config.to_core()
     raise ValueError("a quickstart-mode config must be a SolverConfig or an object with to_core()")

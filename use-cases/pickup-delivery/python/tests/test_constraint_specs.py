@@ -654,3 +654,21 @@ def test_old_names_are_gone(old):
     plan.rebuild_unassigned_pool()
     with pytest.raises(ValueError, match="unknown constraint"):
         score(pdp.constraint_costs(plan), [pick])
+
+
+def test_on_new_best_with_two_workers_neither_hangs_nor_aborts():
+    """Solver.solve releases the GIL, so two workers can call back (and raise) into Python."""
+    cfg = pdp.SolverConfig()
+    cfg.spent_limit_seconds = 0.3
+    cfg.parallel_solver_count = 2
+    calls = []
+    cfg.on_new_best = lambda _step, best: calls.append(best)
+    pdp.Solver(cfg).solve(build_plan())
+    assert calls  # returned (a held GIL deadlocked here)
+
+    def boom(_step, _best):
+        raise RuntimeError("boom")
+
+    cfg.on_new_best = boom
+    with pytest.raises(RuntimeError, match="boom"):
+        pdp.Solver(cfg).solve(build_plan())

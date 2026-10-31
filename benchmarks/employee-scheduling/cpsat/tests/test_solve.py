@@ -23,7 +23,9 @@ DAY = 24 * 60
 # appear more than once where a parameter switches to another code path.
 RULES = [
     domain.RequiredSkillCost(),
-    domain.RequiredSkillCost(weight=3, hard=False),
+    # A second instance needs other parameters (the same rule with the same
+    # parameters twice is refused): a scoped, demoted copy.
+    domain.RequiredSkillCost(weight=3, hard=False, worker_indices=(0, 1)),
     domain.EmployeeUnavailabilityCost(),
     domain.ShiftOverlapCost(),
     domain.MaxOneShiftPerDayCost(),

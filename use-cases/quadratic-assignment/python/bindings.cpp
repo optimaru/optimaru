@@ -7,6 +7,7 @@
 #include <pybind11/stl.h>  // std::vector / std::optional conversions
 
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -211,27 +212,18 @@ PYBIND11_MODULE(_core, m)
         .value("STEP_COUNTING_HILL_CLIMBING", optimaru::AcceptorType::STEP_COUNTING_HILL_CLIMBING)
         .value("RECORD_TO_RECORD_TRAVEL", optimaru::AcceptorType::RECORD_TO_RECORD_TRAVEL);
 
-    py::class_<Solver::Config>(m, "SolverConfig", py::module_local())
+    optimaru::python::bindConfigCopy(py::class_<Solver::Config>(m, "SolverConfig", py::module_local()))
         .def(py::init<>())
         .def_property(
             "spent_limit_seconds",
             [](const Solver::Config &c) { return std::chrono::duration<double>(c.spentLimit).count(); },
             [](Solver::Config &c, double s)
-            {
-                if (s < 0.0)
-                    throw py::value_error("spent_limit_seconds must be non-negative");
-                c.spentLimit = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::duration<double>(s));
-            })
+            { c.spentLimit = optimaru::python::secondsToMillis(s, "spent_limit_seconds"); })
         .def_property(
             "unimproved_spent_limit_seconds",
             [](const Solver::Config &c) { return std::chrono::duration<double>(c.unimprovedSpentLimit).count(); },
             [](Solver::Config &c, double s)
-            {
-                if (s < 0.0)
-                    throw py::value_error("unimproved_spent_limit_seconds must be non-negative");
-                c.unimprovedSpentLimit
-                    = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::duration<double>(s));
-            })
+            { c.unimprovedSpentLimit = optimaru::python::secondsToMillis(s, "unimproved_spent_limit_seconds"); })
         // 0 = no step limit.
         .def_readwrite("step_count_limit", &Solver::Config::stepCountLimit)
         .def_readwrite("unimproved_step_count_limit", &Solver::Config::unimprovedStepCountLimit)
@@ -265,6 +257,30 @@ PYBIND11_MODULE(_core, m)
                 if (size < 0)
                     throw py::value_error("entity_tabu_size must be >= 0");
                 c.entityTabuSize = size;
+            })
+        // SIMULATED_ANNEALING: (0, 0) = auto, soft = the fraction below x
+        // |the start's soft score| (the semiconductor-scheduling rule).
+        .def_property(
+            "simulated_annealing_starting_temperature",
+            [](const Solver::Config &c)
+            {
+                return py::make_tuple(c.simulatedAnnealingStartingTemperature.hard,
+                                      c.simulatedAnnealingStartingTemperature.soft);
+            },
+            [](Solver::Config &c, std::pair<std::int64_t, double> hs)
+            {
+                if (hs.first < 0 || !(hs.second >= 0.0) || !std::isfinite(hs.second))
+                    throw py::value_error("simulated_annealing_starting_temperature must be finite and >= 0");
+                c.simulatedAnnealingStartingTemperature = Score{hs.first, hs.second};
+            })
+        .def_property(
+            "simulated_annealing_temperature_fraction",
+            [](const Solver::Config &c) { return c.simulatedAnnealingTemperatureFraction; },
+            [](Solver::Config &c, double f)
+            {
+                if (!(f > 0.0) || !std::isfinite(f))
+                    throw py::value_error("simulated_annealing_temperature_fraction must be finite and > 0");
+                c.simulatedAnnealingTemperatureFraction = f;
             })
         // FULL_ASSERT re-verifies the incremental score against a full
         // recompute after every move (debugging aid; much slower).

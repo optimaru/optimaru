@@ -27,10 +27,13 @@ the spec's ``name``, its knobs (``weight`` / ``hard`` / ``exponent``) and its
 domain parameters.
 
 There is ONE class per constraint: the spec in `es_scheduling.constraints`.
-The JSON rule models (`RULE_MODELS`, the `Rule` union) are generated from the
-specs' fields and bounds, so they cannot drift from them;
-`SchedulingInput.rules` accepts spec instances and JSON dicts alike, and
-`rule.to_spec()` turns a validated rule back into its spec.
+The JSON rule models (`RULE_MODELS`, the `Rule` union; one generated pydantic
+model per spec, named ``<Spec>Model``, e.g. ``MaxConsecutiveDaysCostModel``)
+are generated from the specs' fields and bounds, so they cannot drift from
+them; `SchedulingInput.rules` accepts spec instances and JSON dicts alike (on
+construction and on assignment), and `rule.to_spec()` turns a validated rule
+back into its spec. The same rule with the same parameters twice, or an empty
+rule list, is refused, as `get_constraints()` refuses it.
 
 Times are integer minutes from day 0, 00:00 (see `es_scheduling.minutes`);
 dates are day indices. Requires the optional `pydantic` dependency
@@ -47,7 +50,17 @@ import typing
 from collections.abc import Callable, Mapping
 from typing import Annotated, Any, ClassVar, Literal, Union
 
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, create_model, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    StrictBool,
+    TypeAdapter,
+    create_model,
+    field_validator,
+    model_validator,
+)
 
 from . import _core
 from . import constraints as _specs
@@ -153,22 +166,35 @@ def _catalog() -> dict[str, Any]:
     return _CATALOG
 
 
+def _a_real_number(value: Any) -> Any:
+    """weight / exponent take numbers only, as the spec does: not a bool, not a numeric string."""
+    if isinstance(value, (bool, str, bytes)):
+        raise ValueError(f"must be a number, not {value!r}")
+    return value
+
+
+_Weight = Annotated[float, Field(ge=0), BeforeValidator(_a_real_number)]
+_Exponent = Annotated[float, Field(gt=0), BeforeValidator(_a_real_number)]
+
+
 class RuleBase(BaseModel):
     """One rule as JSON: the spec's knobs and parameters; `to_spec()` is the spec.
 
     ``weight`` None = the component's default weight; ``hard`` None = its
     default level, True = hard, False = soft; ``exponent`` > 0 shapes the cost.
     A rule is also a valid pick for ``DecomposedCalculator`` (it carries
-    ``name`` / ``weight`` / ``hard`` / ``exponent`` and ``params()``).
+    ``name`` / ``weight`` / ``hard`` / ``exponent`` and ``params()``). The
+    knobs take the values the spec takes: ``weight: true`` or ``"2"`` is
+    refused here as the spec refuses it.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    weight: float | None = Field(default=None, ge=0, description="None = the constraint's default weight")
+    weight: _Weight | None = Field(default=None, description="None = the constraint's default weight")
     hard: StrictBool | None = Field(
         default=None, description="None = the default level; true = hard; false = soft (rewards refuse true)"
     )
-    exponent: float = Field(default=1.0, gt=0, description="sign-preserving power shaping of the cost")
+    exponent: _Exponent = Field(default=1.0, description="sign-preserving power shaping of the cost")
 
     spec_class: ClassVar[type]
 
@@ -210,7 +236,7 @@ def _rule_model(spec_class: type) -> type[RuleBase]:
         else:
             params[spec_field.name] = (annotation, spec_field.default)
     model = create_model(
-        f"{spec_class.__name__}Rule",
+        f"{spec_class.__name__}Model",
         __base__=RuleBase,
         __module__=__name__,
         name=(Literal[spec_class.name], spec_class.name),
@@ -223,12 +249,14 @@ def _rule_model(spec_class: type) -> type[RuleBase]:
 
 #: {constraint name: its JSON rule model}, in factory order (= CONSTRAINT_NAMES).
 RULE_MODELS: dict[str, type[RuleBase]] = {spec.name: _rule_model(spec) for spec in _specs.SPEC_CLASSES}
-# Each model is also a module attribute under its own name (<SpecClass>Rule,
-# e.g. MaxConsecutiveDaysCostRule), so rules pickle (multi-start processes).
+# Each model is also a module attribute under its own name (<SpecClass>Model,
+# e.g. MaxConsecutiveDaysCostModel), so rules pickle (multi-start processes).
+# Build rules from the specs (or JSON) rather than naming these classes.
 globals().update({model.__name__: model for model in RULE_MODELS.values()})
 
 #: A rule as JSON: the union of every rule model, discriminated by ``name``.
 Rule = Annotated[Union[tuple(RULE_MODELS.values())], Field(discriminator="name")]
+_RULE_ADAPTER: TypeAdapter = TypeAdapter(Rule)
 
 
 def rule_model(constraint: "str | type[_specs.Constraint]") -> type[RuleBase]:
@@ -422,11 +450,14 @@ class SolverSettings(BaseModel):
 
 
 class SchedulingInput(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    # validate_assignment: `input.rules = [MaxConsecutiveDaysCost(...)]` after
+    # construction goes through the same validators as the constructor.
+    model_config = ConfigDict(extra="forbid", validate_assignment=True)
 
     workers: list[WorkerModel]
     shifts: list[ShiftModel]
-    # Constraint specs or their JSON form; a rule may repeat (other parameters).
+    # Constraint specs or their JSON form; a rule may repeat (other parameters),
+    # but not with the same parameters, and the list may not be empty.
     rules: list[Rule] = Field(default_factory=default_rules)
 
     @field_validator("rules", mode="before")
@@ -434,6 +465,14 @@ class SchedulingInput(BaseModel):
     def _specs_as_rules(cls, rules):
         if isinstance(rules, (list, tuple)):
             return [_as_rule_data(rule) for rule in rules]
+        return rules
+
+    @field_validator("rules")
+    @classmethod
+    def _a_selection(cls, rules):
+        # get_constraints()'s rules: an empty list is an error, and so is the
+        # same rule with the same parameters twice.
+        _specs.get_constraints([rule.to_spec() for rule in rules])
         return rules
 
     @model_validator(mode="after")
@@ -608,6 +647,24 @@ def with_initial_solution(
     return seeded
 
 
+def _rule_specs(rules: list) -> list[_specs.Constraint]:
+    """The specs of a rule list, also when items reached it without validation.
+
+    ``SchedulingInput`` validates on construction and on assignment, but an
+    in-place edit (``input.rules.append(spec)``) bypasses pydantic; a spec or
+    a JSON dict found there is accepted (and checked) all the same.
+    """
+    specs = []
+    for rule in rules:
+        if isinstance(rule, RuleBase):
+            specs.append(rule.to_spec())
+        elif isinstance(rule, _specs.Constraint):
+            specs.append(rule)
+        else:
+            specs.append(_RULE_ADAPTER.validate_python(rule).to_spec())
+    return _specs.get_constraints(specs)
+
+
 def _build_and_solve(request: ScheduleRequest, seed: int, overrides: dict | None = None) -> ScheduleSolution:
     """One solve at a fixed random seed — the building block for multi-start.
 
@@ -616,7 +673,7 @@ def _build_and_solve(request: ScheduleRequest, seed: int, overrides: dict | None
     different late_acceptance_size / ruin fraction). Applied last, so it wins."""
     model_input = request.model_input
     schedule = to_schedule(model_input)
-    calc = _core.DecomposedCalculator([rule.to_spec() for rule in model_input.rules])
+    calc = _core.DecomposedCalculator(_rule_specs(model_input.rules))
 
     cfg = _core.SolverConfig()
     cfg.spent_limit_seconds = request.timelimit

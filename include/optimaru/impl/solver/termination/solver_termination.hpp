@@ -1,6 +1,7 @@
 #ifndef OPTIMARU_IMPL_SOLVER_TERMINATION_SOLVER_TERMINATION_HPP
 #define OPTIMARU_IMPL_SOLVER_TERMINATION_SOLVER_TERMINATION_HPP
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cstdint>
@@ -26,9 +27,16 @@ namespace optimaru {
 // per-check cost stays proportional to what the caller actually configured.
 class SolverTermination {
 public:
+    // terminateEarlyFlag: Solver::terminateEarly(). stopFlag: a second,
+    // run-scoped stop (a multi-start run raises it when one start fails, so
+    // its siblings end at their next step).
     explicit SolverTermination(const TerminationConfig& config,
-                               const std::atomic<bool>* terminateEarlyFlag = nullptr)
-        : spentLimit_(config.spentLimit), terminateEarlyFlag_(terminateEarlyFlag) {
+                               const std::atomic<bool>* terminateEarlyFlag = nullptr,
+                               const std::atomic<bool>* stopFlag = nullptr)
+        : spentLimit_(config.spentLimit),
+          stepCountLimit_(config.stepCountLimit),
+          terminateEarlyFlag_(terminateEarlyFlag),
+          stopFlag_(stopFlag) {
         children_.push_back(std::make_unique<TimeMillisSpentTermination>(config.spentLimit));
         if (config.unimprovedSpentLimit.count() > 0) {
             children_.push_back(std::make_unique<UnimprovedTimeMillisSpentTermination>(
@@ -51,6 +59,7 @@ public:
         if (terminateEarlyFlag_ && terminateEarlyFlag_->load(std::memory_order_relaxed)) {
             return true;  // Solver::terminateEarly() (used by SolverManager)
         }
+        if (stopFlag_ && stopFlag_->load(std::memory_order_relaxed)) return true;
         // Wall-clock limits are expressed in milliseconds, while a cheap
         // incremental move can complete in tens of nanoseconds. Sampling a
         // platform clock after every such move consumed a material share of
@@ -76,7 +85,13 @@ public:
         context_.lastImprovementStep = step;
     }
 
-    // 0 -> 1 over spentLimit (feeds simulated annealing's cooling schedule).
+    // 0 -> 1 over the run (feeds simulated annealing's cooling schedule): the
+    // fraction of spentLimit used, or, when a stepCountLimit is set, the
+    // fraction of the steps taken if that is further along. A step-limited
+    // run therefore cools over its steps (and, whenever the step fraction
+    // leads, does so identically on every run with the same seed) instead
+    // of staying near its starting temperature because the wall-clock
+    // limit is far away.
     double timeGradient() const {
         // isTerminated() is called once at the head of every local-search
         // step and already sampled the clock into context_.now. Acceptor
@@ -88,13 +103,19 @@ public:
         double total = std::chrono::duration<double>(spentLimit_).count();
         if (total <= 0) return 1.0;
         double g = elapsed / total;
+        if (stepCountLimit_ > 0) {
+            g = std::max(g, static_cast<double>(context_.step) /
+                                    static_cast<double>(stepCountLimit_));
+        }
         return g < 0.0 ? 0.0 : (g > 1.0 ? 1.0 : g);
     }
 
 private:
     using Clock = std::chrono::steady_clock;
     std::chrono::milliseconds spentLimit_;
+    std::int64_t stepCountLimit_;
     const std::atomic<bool>* terminateEarlyFlag_;
+    const std::atomic<bool>* stopFlag_;
     std::vector<std::unique_ptr<Termination>> children_;
     TerminationContext context_;
 };

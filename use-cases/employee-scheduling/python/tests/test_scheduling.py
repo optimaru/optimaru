@@ -113,7 +113,7 @@ def test_solver_config_exposes_engine_knobs():
         cfg.employee_window_max_days = 0
     with pytest.raises(ValueError, match="between 0 and 1"):
         cfg.custom_move_probability = 1.1
-    with pytest.raises(ValueError, match="non-negative"):
+    with pytest.raises(ValueError, match="finite and >= 0"):
         cfg.no_improvement_limit_seconds = -0.1
     with pytest.raises(ValueError, match="non-negative"):
         cfg.no_improvement_step_count_limit = -1

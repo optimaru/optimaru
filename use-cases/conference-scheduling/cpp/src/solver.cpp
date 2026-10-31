@@ -298,8 +298,11 @@ void Solver::solve(
         // One segment, one start: both the segmented restarts and the
         // parallel workers need a calculator of their own, and a
         // caller-assembled plugin cannot be cloned.
+        optimaru::SolverConfig engineConfig = buildEngineConfig(config_, schedule);
+        // The progress callback, as on the segmented default path.
+        engineConfig.onNewBest = config_.onNewBest;
         auto engine = optimaru::SolverFactory<ConferenceSchedule>::create(
-                          buildEngineConfig(config_, schedule))
+                          std::move(engineConfig))
                           .buildSolver();
         engine.solve(schedule, calculator);
     }

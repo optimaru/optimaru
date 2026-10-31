@@ -29,6 +29,7 @@ object (`KnapsackProblem`, `models.KnapsackProblemModel.to_core()`).
 
 from __future__ import annotations
 
+import copy
 from typing import Any
 
 from ._core import (
@@ -134,7 +135,8 @@ def solve(
         from knapsack.constraints import get_constraints
         knapsack.solve(problem, constraints=get_constraints())
     """
-    cfg = config if config is not None else SolverConfig()
+    # A copy: the keyword overrides below must not leak into the caller's config.
+    cfg = copy.copy(config) if config is not None else SolverConfig()
     if time_limit_seconds is not None:
         cfg.spent_limit_seconds = time_limit_seconds
     if random_seed is not None:

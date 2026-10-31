@@ -5,6 +5,7 @@
 
 #include "sls/constraints.hpp"
 #include "sls/score_calculator.hpp"
+#include "optimaru/api/score/level.hpp"
 
 namespace sls
 {
@@ -417,14 +418,14 @@ Score SportsLeagueIncrementalScoreCalculator::calculateScore()
     score.hard = -(kTeamConflictWeight * teamConflict_
                    + kConsecutiveWeight * consecutive_
                    + kRepeatWeight * repeat_);
-    // 0.0 - x avoids IEEE negative zero when the soft total is 0.
-    score.soft = 0.0
-                 - static_cast<double>(kStartHopWeight * startHop_
-                                       + kHomeAwayHopWeight * homeAwayHop_
-                                       + kAwayAwayHopWeight * awayAwayHop_
-                                       + kAwayHomeHopWeight * awayHomeHop_
-                                       + kEndHopWeight * endHop_
-                                       + kClassicWeight * classic_);
+    // Not `0.0 - x` (GCC folds it into a negation: -0.0 for a zero total).
+    score.soft = optimaru::withoutNegativeZero(
+        -static_cast<double>(kStartHopWeight * startHop_
+                             + kHomeAwayHopWeight * homeAwayHop_
+                             + kAwayAwayHopWeight * awayAwayHop_
+                             + kAwayHomeHopWeight * awayHomeHop_
+                             + kEndHopWeight * endHop_
+                             + kClassicWeight * classic_));
     return score;
 }
 

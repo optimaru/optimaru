@@ -383,3 +383,50 @@ def test_naming_a_constraint_twice_is_rejected():
         )
     with pytest.raises(ValueError, match="picked more than once"):
         get_constraints([capacity, capacity])
+
+
+# --- The range of a score (an int64 hard level) ---------------------------------
+
+
+def _three_overloaded():
+    """Three facilities of capacity 1, two consumers of demand 2 on each: raw capacity cost [3, 3, 3]."""
+    problem = fl.FacilityLocationProblem(
+        [fl.Facility(f"f{i}", fl.Location(0.0, 0.0), 0, 1) for i in range(3)],
+        [fl.Consumer(f"c{i}", fl.Location(0.1, 0.0), 2) for i in range(6)],
+    )
+    problem.set_assignment([0, 0, 1, 1, 2, 2])
+    return problem
+
+
+def _zero_budget_solve(problem, picks):
+    config = fl.SolverConfig()
+    config.spent_limit_seconds = 0
+    fl.Solver(config).solve_with_constraints(problem, picks)
+    return problem
+
+
+def test_a_hard_total_beyond_int64_saturates_on_both_paths():
+    """3 x 4.5e18 used to wrap to a positive, feasible-looking hard score; it saturates now."""
+    picks = [FacilityCapacityCost(weight=1.5e18)]
+    assert fl.constraint_costs(_three_overloaded())["facility_capacity_cost"]["costs"] == [3.0, 3.0, 3.0]
+    assert score(fl.constraint_costs(_three_overloaded()), picks).hard == -(2**63 - 1)
+    problem = _zero_budget_solve(_three_overloaded(), picks)
+    assert problem.assignment() == [0, 0, 1, 1, 2, 2]
+    assert problem.score.hard == -(2**63 - 1)
+    assert not problem.score.is_feasible()
+    exact = [FacilityCapacityCost(weight=1e18)]
+    assert _zero_budget_solve(_three_overloaded(), exact).score.hard == -9 * 10**18
+    assert score(fl.constraint_costs(_three_overloaded()), exact).hard == -9 * 10**18
+
+
+@pytest.mark.parametrize(
+    "pick",
+    [FacilityCapacityCost(weight=1e19), DistanceFromFacilityCost(weight=1e300, exponent=50)],
+    ids=["hard-beyond-2^62", "soft-not-finite"],
+)
+def test_an_out_of_range_contribution_raises_overflow_error_on_both_paths(pick):
+    """Python (score) and C++ (the solve) refuse the same contribution, naming the constraint."""
+    with pytest.raises(OverflowError, match=pick.name):
+        score(fl.constraint_costs(_three_overloaded()), [pick])
+    with pytest.raises(OverflowError, match=re.sub(r"_(\w)", lambda m: m.group(1).upper(), pick.name)):
+        _zero_budget_solve(_three_overloaded(), [pick])

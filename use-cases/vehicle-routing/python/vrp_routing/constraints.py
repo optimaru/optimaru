@@ -345,7 +345,7 @@ class UnassignedVisitsCost(Constraint):
     )
     description_ko = (
         "어느 경로에도 들어가지 않은 방문지마다 미배정 페널티(`unassigned_penalty_minutes`, 기본값은 "
-        "서비스 시간을 분 단위로 내림한 값)를 중간(medium) 수준에서 더합니다. 페널티 1분이 비용 1이며, "
+        "서비스 시간을 분 단위로 내림한 값)를 미디엄 수준에서 더합니다. 페널티 1분이 비용 1이며, "
         "0이면 페널티가 있는 방문지가 하나도 빠지지 않았습니다."
     )
 

@@ -194,8 +194,49 @@ def shape(cost: float, exponent: float) -> float:
 
 
 def _round_half_away(value: float) -> int:
-    """llround: half away from zero (Python's round() is banker's rounding)."""
-    return int(math.floor(value + 0.5) if value >= 0 else math.ceil(value - 0.5))
+    """llround: half away from zero (Python's round() is banker's rounding).
+
+    Exact for every finite double: ``value - trunc(value)`` is computed
+    without rounding, where ``value + 0.5`` is not (0.49999999999999994 and
+    odd integers in [2**52, 2**53) would round the wrong way).
+    """
+    whole = math.trunc(value)
+    fraction = value - whole
+    return whole + (1 if fraction >= 0.5 else -1 if fraction <= -0.5 else 0)
+
+
+# The range of a score (the C++ "The range of a score", level.hpp): one
+# contribution must be finite, and a hard one (or a below_hard medium one)
+# below 2**62 in magnitude, or scoring raises OverflowError; the hard total
+# saturates at +-(2**63 - 1) instead of leaving int64.
+_MAX_HARD_CONTRIBUTION = 2.0**62
+_HARD_SCORE_LIMIT = 2**63 - 1
+
+
+def _contribution(name: str, weight: float, cost: float, exponent: float) -> float:
+    try:
+        value = weight * shape(cost, exponent)
+    except OverflowError:
+        value = math.inf
+    if not math.isfinite(value):
+        raise OverflowError(
+            f"constraint {name!r}: its contribution weight * cost^exponent is not finite "
+            f"(weight {weight!r}, cost {cost!r}, exponent {exponent!r}); lower its weight or exponent"
+        )
+    return value
+
+
+def _round_hard(name: str, value: float) -> int:
+    if not abs(value) < _MAX_HARD_CONTRIBUTION:
+        raise OverflowError(
+            f"constraint {name!r}: a hard contribution of {value!r} exceeds the engine's limit of "
+            "2**62 (about 4.6e18) per unit; lower its weight or exponent"
+        )
+    return _round_half_away(value)
+
+
+def _saturate_hard(total: int) -> int:
+    return max(-_HARD_SCORE_LIMIT, min(_HARD_SCORE_LIMIT, total))
 
 
 def _level(spec: Any, entry: Mapping[str, Any]) -> str:
@@ -243,6 +284,9 @@ def score_costs(costs: Mapping[str, Mapping[str, Any]], constraints: Iterable[An
     adds ``medium * unit`` to soft, ``below_hard`` reports
     ``hard * unit + medium`` (medium rounded per unit too) — so a below_hard
     domain scores ``hard * unit`` even with no medium constraint selected.
+    The engine's range rules apply too: a contribution that is not finite, or
+    a hard one of 2**62 or more, raises OverflowError; the hard total
+    saturates at ``-(2**63 - 1)`` (never wraps to a feasible-looking score).
     Every listed spec is scored (pass ``select(...)``'s result), each looked up
     under its ``instance_keys`` key; an unknown one raises ValueError.
     """
@@ -265,14 +309,14 @@ def score_costs(costs: Mapping[str, Mapping[str, Any]], constraints: Iterable[An
         _check_knobs(spec.name, spec.weight, spec.hard, exponent)
         level = _level(spec, entry)
         weight = entry["weight"] if spec.weight is None else spec.weight
-        values = [weight * shape(cost, exponent) for cost in entry["costs"]]
+        values = [_contribution(spec.name, weight, cost, exponent) for cost in entry["costs"]]
         if level == "hard":
-            hard += sum(_round_half_away(value) for value in values)
+            hard += sum(_round_hard(spec.name, value) for value in values)
         elif level == "medium":
             if fold is None:
                 raise ValueError(f"constraint {spec.name!r} is medium-level, but the costs carry no medium_fold")
             if fold[0] == "below_hard":
-                medium += sum(_round_half_away(value) for value in values)
+                medium += sum(_round_hard(spec.name, value) for value in values)
             else:
                 medium += sum(values)
         else:
@@ -283,4 +327,7 @@ def score_costs(costs: Mapping[str, Mapping[str, Any]], constraints: Iterable[An
             hard = hard * int(unit) + _round_half_away(medium)
         else:
             soft += medium * unit
+    if not math.isfinite(soft):
+        raise OverflowError(f"the soft score is not finite ({soft!r}); lower the soft weights or exponents")
+    hard = _saturate_hard(hard)
     return Score(-hard, -soft if soft != 0.0 else 0.0)
