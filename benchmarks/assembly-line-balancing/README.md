@@ -1,7 +1,7 @@
 # Assembly line balancing benchmark
 
 The [`assembly-line-balancing`](../../use-cases/assembly-line-balancing) use case against **OR-Tools CP-SAT**
-([`cpsat/`](cpsat), package `assembly_line_balancing_cpsat`) on SALBP-1 instances (Hexaly archive), downloaded on demand and
+([`cpsat/`](cpsat), package `assembly_line_balancing_cpsat`) on SALBP-1 instances (the Otto et al. SALBP archive from assembly-line-balancing.de, as used by Hexaly), downloaded on demand and
 checksum-verified ([`bench/data.py`](bench/data.py)). Both answers are rescored by
 the use case's own evaluator.
 
@@ -17,7 +17,7 @@ Recorded results: [`bench/RESULTS.md`](bench/RESULTS.md).
 <!-- results:start -->
 ## Results
 
-Hexaly example instances. Lower is better; the best value is bold.
+SALBP large data set (n=100). Lower is better; the best value is bold.
 
 | Instance | Tasks | Best known | engine | CP-SAT |
 | --- | --- | --- | --- | --- |

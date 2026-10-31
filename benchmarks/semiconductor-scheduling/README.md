@@ -8,7 +8,7 @@ keep the two cost definitions identical.
 
 ```sh
 cd benchmarks/semiconductor-scheduling/cpsat
-uv sync --all-groups --all-extras      # builds the engine extension too
+uv sync --all-groups --all-extras
 uv run pytest -q                       # CP-SAT model + parity tests
 uv run semiconductor-scheduling-compare --seconds 10 --workers 8   # engine vs CP-SAT table (--markdown, --json)
 ```
