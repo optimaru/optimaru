@@ -19,10 +19,10 @@ namespace cs
 // ---------------------------------------------------------------------------
 // The 36 constraints of the reference conference-scheduling
 // ConferenceSchedulingConstraintProvider (16 hard + 20 soft, plus the port's
-// synthetic talkTypeCompatibility), split into one small component each on the
-// engine's DecomposedScoreCalculator — an optional assembly path NEXT TO the
-// monolithic ConferenceSchedulingIncrementalScoreCalculator, which stays the
-// tuned default fast path.
+// synthetic talkTypeIncompatibilityCost), split into one small component each
+// on the engine's DecomposedScoreCalculator — an optional assembly path NEXT TO
+// the monolithic ConferenceSchedulingIncrementalScoreCalculator, which stays
+// the tuned default fast path.
 //
 // Decomposition strategy: BY PROJECTION, not by re-derivation.
 // -------------------------------------------------------------------------
@@ -52,10 +52,10 @@ namespace cs
 // want speed, and for this one when you want to change the cost function.
 //
 //   DecomposedCalculator calc;
-//   defaultConstraints()              // the whole default set
-//       .weight("...", 2)            // ... then only what differs
-//       .soft("...")
-//       .drop("...")
+//   defaultConstraints()                        // the whole default set
+//       .weight("contentConflictCost", 500)     // ... then only what differs
+//       .soft("roomConflictCost")
+//       .drop("speakerMakespanCost")
 //       .into(calc);
 //   solver.solve(schedule, calc);
 //
@@ -63,15 +63,26 @@ namespace cs
 // `ConstraintAssembly{}` when you would rather list components from
 // scratch than start from the defaults.
 //
-// The "Hard:"/"Soft:" level and the weight of each component are DEFAULTS —
-// the Java provider's own weights. Override them per instance via the mutable
-// `isHard` / `weight` / `exponent`.
+// Each component declares its defaults once, as static constexpr
+// kDefaultWeight / kDefaultLevel passed to the base constructor — the Java
+// provider's own weights and levels. They are assembly-time metadata, not part
+// of the cost. Override them per instance with the constructor's weight
+// argument or the mutable `level` / `weight` / `exponent`, or by name through
+// ConstraintAssembly. The monolithic calculators (Breakdown::hardTotal() /
+// softPenaltyTotal() / softRewardTotal() and the incremental calculator) read
+// the same kDefaultWeight constants.
+//
+// Registry names are the struct names with a lower-case first letter
+// ("roomConflictCost"); Python sees them through pythonName()
+// ("room_conflict_cost"). Each Breakdown member carries the same name.
 //
 // Cost sign convention (see decomposed_score_calculator.hpp): positive =
-// penalty, NEGATIVE = reward. The three diversity rules are rewards in the
-// Java provider and return negative costs here, which is why an assembly of
-// all 36 components at their default weights reproduces
-// ScoreCalculator::calculateScore bit-for-bit, rewards included.
+// penalty, 0 = no violation, NEGATIVE = reward. The three *DiversityCost rules
+// are rewards in the Java provider and return negative costs here (they are
+// marked `reward = true; levelFlippable = false;`, so hard() and any level
+// change are refused), which is why an assembly of all 37 components at their
+// default weights reproduces ScoreCalculator::calculateScore bit-for-bit,
+// rewards included.
 //
 // Every component requires ScoreCalculator::prepare(schedule) to have run
 // (the solve() overload and the monolithic path both call it).
@@ -81,6 +92,31 @@ using DecomposedCalculator
 using ConstraintAssembly = optimaru::ConstraintAssembly<ConferenceSchedule>;
 using CsUnitConstraint = optimaru::UnitConstraint<ConferenceSchedule>;
 using CsGlobalConstraint = optimaru::GlobalConstraint<ConferenceSchedule>;
+
+// A component's kDefaultWeight as an exact integer, for the monolithic
+// calculators (Breakdown's weighted totals and the incremental calculator),
+// which are the default assembly computed in int64 like the Java long
+// arithmetic. Fails to compile if a default weight stops being integral or if
+// a component leaves the level the monolith sums it into.
+template <typename Component, optimaru::Level kLevel>
+constexpr std::int64_t monolithicWeight()
+{
+    static_assert(Component::kDefaultLevel == kLevel,
+                  "the monolithic calculators sum this constraint into "
+                  "another level");
+    constexpr auto weight
+        = static_cast<std::int64_t>(Component::kDefaultWeight);
+    static_assert(weight == Component::kDefaultWeight,
+                  "the monolithic calculators assume integral default "
+                  "weights");
+    return weight;
+}
+template <typename Component>
+constexpr std::int64_t kHardWeight
+    = monolithicWeight<Component, optimaru::Level::Hard>();
+template <typename Component>
+constexpr std::int64_t kSoftWeight
+    = monolithicWeight<Component, optimaru::Level::Soft>();
 
 // The shared per-score projection: one Breakdown, recomputed lazily and at
 // most once however many components read it. Any notification invalidates it;

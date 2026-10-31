@@ -7,18 +7,87 @@ one composite BASIC variable `slotRoom = timeslotIndex * roomCount + roomIndex`
 (the same pattern as school-timetabling).
 
 - `cpp/` — domain (`cs::ConferenceSchedule`), full-recompute
-  `ScoreCalculator` (+ per-constraint `Breakdown`), O(delta) incremental calculator,
-  ALNS solver wrapper, a demo reproducing the Java `DemoDataGenerator` (`cs_demo`),
-  tests (`cs_test`).
+  `ScoreCalculator` (+ the C++ per-constraint `Breakdown`, one member per registry name),
+  O(delta) incremental calculator, ALNS solver wrapper, a demo reproducing the Java
+  `DemoDataGenerator` (`cs_demo`), tests (`cs_test`, `cs_plugin_test`).
+  `include/cs/constraints/` holds one component per constraint (`<subject>_cost.hpp`, plus
+  `common.hpp`); `include/cs/constraints.hpp` assembles the default set
+  (`defaultConstraints()`).
 - `python/` — pybind11 package `conference_scheduling`
-  (`_core` extension + pydantic mirror + demo + pytest). For the constraint list,
-  score mapping and value-range replacement (the synthetic `talkTypeCompatibility`
-  hard constraint) see [python/README.md](python/README.md).
+  (`_core` extension + pydantic mirror + demo + pytest). For the score mapping and the
+  value-range replacement (the synthetic `talk_type_incompatibility_cost` hard
+  constraint) see [python/README.md](python/README.md).
 
 ```sh
 cd cpp && cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j4
-./build/cs_test && ./build/cs_demo 10
+./build/cs_test         # per-constraint hand checks + incremental==full + FULL_ASSERT solve
+./build/cs_plugin_test  # plugin assembly == monolith, raw costs by hand, catalog, guards
+./build/cs_demo 10
 ```
+
+## Constraints (HardSoftScore — the engine score type as-is)
+
+All 36 constraints of the Java `ConferenceSchedulingConstraintProvider` plus the port's
+synthetic `talk_type_incompatibility_cost`: 17 hard and 20 soft. Every one is global (one
+total per schedule), scored by default and weighed in minutes.
+
+| Constraint (Python name) | C++ component | Default level | Default weight | Raw cost (one global total; 0 = no violation; a reward is <= 0) |
+|---|---|---|---|---|
+| `talk_type_incompatibility_cost` | `TalkTypeIncompatibilityCost` | hard | 100'000 | sum of max(duration, 1) minutes for each talk whose timeslot does not admit its talk type, and again when its room does not |
+| `room_unavailability_cost` | `RoomUnavailabilityCost` | hard | 100'000 | sum of the timeslot's duration in minutes for each talk in a room that is unavailable then |
+| `room_conflict_cost` | `RoomConflictCost` | hard | 1'000 | sum of overlapping minutes for each pair of talks in the same room |
+| `speaker_unavailability_cost` | `SpeakerUnavailabilityCost` | hard | 100 | sum of the timeslot's duration for each unavailable speaker of each talk (speaker-minutes) |
+| `speaker_conflict_cost` | `SpeakerConflictCost` | hard | 10 | sum of shared speakers x overlapping minutes for each pair of overlapping talks |
+| `talk_prerequisite_talks_cost` | `TalkPrerequisiteTalksCost` | hard | 10 | sum of the combined duration of both talks for each prerequisite that ends after its dependent talk starts |
+| `talk_mutually_exclusive_talks_tags_cost` | `TalkMutuallyExclusiveTalksTagsCost` | hard | 1 | sum of shared mutually-exclusive tags x overlapping minutes for each pair of overlapping talks |
+| `consecutive_talks_pause_cost` | `ConsecutiveTalksPauseCost` | hard | 1 | sum of the combined duration of both talks for each pair sharing a speaker without the minimum pause between them |
+| `crowd_control_risk_cost` | `CrowdControlRiskCost` | hard | 1 | sum of the timeslot's duration for each risky talk (crowd_control_risk > 0) in a timeslot holding three or more risky talks |
+| `speaker_required_timeslot_tags_cost` | `SpeakerRequiredTimeslotTagsCost` | hard | 1 | sum of required tags the timeslot lacks x its duration, per speaker of each talk |
+| `speaker_prohibited_timeslot_tags_cost` | `SpeakerProhibitedTimeslotTagsCost` | hard | 1 | sum of prohibited tags the timeslot carries x its duration, per speaker of each talk |
+| `talk_required_timeslot_tags_cost` | `TalkRequiredTimeslotTagsCost` | hard | 1 | sum of required tags the timeslot lacks x its duration, per talk |
+| `talk_prohibited_timeslot_tags_cost` | `TalkProhibitedTimeslotTagsCost` | hard | 1 | sum of prohibited tags the timeslot carries x its duration, per talk |
+| `speaker_required_room_tags_cost` | `SpeakerRequiredRoomTagsCost` | hard | 1 | sum of required tags the room lacks x the timeslot's duration, per speaker of each talk |
+| `speaker_prohibited_room_tags_cost` | `SpeakerProhibitedRoomTagsCost` | hard | 1 | sum of prohibited tags the room carries x the timeslot's duration, per speaker of each talk |
+| `talk_required_room_tags_cost` | `TalkRequiredRoomTagsCost` | hard | 1 | sum of required tags the room lacks x the timeslot's duration, per talk |
+| `talk_prohibited_room_tags_cost` | `TalkProhibitedRoomTagsCost` | hard | 1 | sum of prohibited tags the room carries x the timeslot's duration, per talk |
+| `theme_track_conflict_cost` | `ThemeTrackConflictCost` | soft | 10 | sum of shared theme tracks x overlapping minutes for each pair of overlapping talks |
+| `theme_track_room_change_cost` | `ThemeTrackRoomChangeCost` | soft | 10 | sum of shared theme tracks x the combined duration for each same-day pair of talks in different rooms |
+| `sector_conflict_cost` | `SectorConflictCost` | soft | 10 | sum of shared sectors x overlapping minutes for each pair of overlapping talks |
+| `audience_type_theme_track_conflict_cost` | `AudienceTypeThemeTrackConflictCost` | soft | 1 | sum of shared theme tracks x shared audience types x overlapping minutes for each pair of overlapping talks |
+| `content_audience_level_flow_violation_cost` | `ContentAudienceLevelFlowViolationCost` | soft | 10 | sum of shared content tags x the combined duration for each pair where the lower-level talk ends after the higher-level talk starts |
+| `content_conflict_cost` | `ContentConflictCost` | soft | 100 | sum of shared content tags x overlapping minutes for each pair of overlapping talks |
+| `different_day_talks_cost` | `DifferentDayTalksCost` | soft | 10 | sum of (shared content tags + shared theme tracks) x the combined duration for each related pair on different days |
+| `popular_talks_room_size_cost` | `PopularTalksRoomSizeCost` | soft | 10 | sum of the combined duration for each pair where the talk with fewer favorites has the larger room |
+| `speaker_preferred_timeslot_tags_cost` | `SpeakerPreferredTimeslotTagsCost` | soft | 20 | sum of preferred tags the timeslot lacks x its duration, per speaker of each talk |
+| `speaker_undesired_timeslot_tags_cost` | `SpeakerUndesiredTimeslotTagsCost` | soft | 20 | sum of undesired tags the timeslot carries x its duration, per speaker of each talk |
+| `talk_preferred_timeslot_tags_cost` | `TalkPreferredTimeslotTagsCost` | soft | 20 | sum of preferred tags the timeslot lacks x its duration, per talk |
+| `talk_undesired_timeslot_tags_cost` | `TalkUndesiredTimeslotTagsCost` | soft | 20 | sum of undesired tags the timeslot carries x its duration, per talk |
+| `speaker_preferred_room_tags_cost` | `SpeakerPreferredRoomTagsCost` | soft | 20 | sum of preferred tags the room lacks x the timeslot's duration, per speaker of each talk |
+| `speaker_undesired_room_tags_cost` | `SpeakerUndesiredRoomTagsCost` | soft | 20 | sum of undesired tags the room carries x the timeslot's duration, per speaker of each talk |
+| `talk_preferred_room_tags_cost` | `TalkPreferredRoomTagsCost` | soft | 20 | sum of preferred tags the room lacks x the timeslot's duration, per talk |
+| `talk_undesired_room_tags_cost` | `TalkUndesiredRoomTagsCost` | soft | 20 | sum of undesired tags the room carries x the timeslot's duration, per talk |
+| `speaker_makespan_cost` | `SpeakerMakespanCost` | soft | 20 | sum of (last day - first day - 1) x 480 minutes for each speaker whose talks span more than two consecutive days |
+| `audience_type_diversity_cost` | `AudienceTypeDiversityCost` | soft (reward) | 1 | sum of -(shared audience types x the timeslot's duration) for each pair of talks in the same timeslot |
+| `audience_level_diversity_cost` | `AudienceLevelDiversityCost` | soft (reward) | 1 | sum of -(the timeslot's duration) for each pair of talks in the same timeslot with different audience levels |
+| `language_diversity_cost` | `LanguageDiversityCost` | soft (reward) | 10 | sum of -(the timeslot's duration) for each pair of talks in the same timeslot with different languages |
+
+`conference_scheduling.constraint_info()` reports exactly this table from the C++
+components (`kDefaultLevel` / `kDefaultWeight`), and the monolithic calculators read the
+same constants. The three `*_diversity_cost` rows are **rewards**: their raw cost is <= 0,
+they are never hard (`hard=True` raises `ValueError` on both solvers) and their level is
+not flippable (`level_flippable=False`). Every other constraint flips both ways
+(`hard=True` / `hard=False`). `audience_type_diversity_cost` rewards same-timeslot pairs
+that SHARE an audience type, despite its name; 0.2.0 keeps that arithmetic (rename only).
+`exponent` shapes the one total of each constraint (they are all global).
+
+**0.2.0:** every constraint was renamed to the unified `*_cost` names, in every layer (C++
+struct, header and registry name, the C++ `Breakdown` members, the Python spec classes,
+their module-level default instances, the CP-SAT plugins): `talk_type_compatibility` -> `talk_type_incompatibility_cost`, `room_unavailable_timeslot` -> `room_unavailability_cost`, `room_conflict` -> `room_conflict_cost`, `speaker_unavailable_timeslot` -> `speaker_unavailability_cost`, `speaker_conflict` -> `speaker_conflict_cost`, `talk_prerequisite_talks` -> `talk_prerequisite_talks_cost`, `talk_mutually_exclusive_talks_tags` -> `talk_mutually_exclusive_talks_tags_cost`, `consecutive_talks_pause` -> `consecutive_talks_pause_cost`, `crowd_control` -> `crowd_control_risk_cost`, `speaker_required_timeslot_tags` -> `speaker_required_timeslot_tags_cost`, `speaker_prohibited_timeslot_tags` -> `speaker_prohibited_timeslot_tags_cost`, `talk_required_timeslot_tags` -> `talk_required_timeslot_tags_cost`, `talk_prohibited_timeslot_tags` -> `talk_prohibited_timeslot_tags_cost`, `speaker_required_room_tags` -> `speaker_required_room_tags_cost`, `speaker_prohibited_room_tags` -> `speaker_prohibited_room_tags_cost`, `talk_required_room_tags` -> `talk_required_room_tags_cost`, `talk_prohibited_room_tags` -> `talk_prohibited_room_tags_cost`, `theme_track_conflict` -> `theme_track_conflict_cost`, `theme_track_room_stability` -> `theme_track_room_change_cost`, `sector_conflict` -> `sector_conflict_cost`, `audience_type_theme_track_conflict` -> `audience_type_theme_track_conflict_cost`, `content_audience_level_flow_violation` -> `content_audience_level_flow_violation_cost`, `content_conflict` -> `content_conflict_cost`, `same_day_talks` -> `different_day_talks_cost`, `popular_talks` -> `popular_talks_room_size_cost`, `speaker_preferred_timeslot_tags` -> `speaker_preferred_timeslot_tags_cost`, `speaker_undesired_timeslot_tags` -> `speaker_undesired_timeslot_tags_cost`, `talk_preferred_timeslot_tags` -> `talk_preferred_timeslot_tags_cost`, `talk_undesired_timeslot_tags` -> `talk_undesired_timeslot_tags_cost`, `speaker_preferred_room_tags` -> `speaker_preferred_room_tags_cost`, `speaker_undesired_room_tags` -> `speaker_undesired_room_tags_cost`, `talk_preferred_room_tags` -> `talk_preferred_room_tags_cost`, `talk_undesired_room_tags` -> `talk_undesired_room_tags_cost`, `speaker_makespan` -> `speaker_makespan_cost`, `audience_type_diversity` -> `audience_type_diversity_cost`, `audience_level_diversity` -> `audience_level_diversity_cost`, `language_diversity` -> `language_diversity_cost`. The Python
+classes follow (`RoomConflict` -> `RoomConflictCost`, `SameDayTalks` ->
+`DifferentDayTalksCost`, ...); the old names are unknown now. `compute_breakdown()` and
+the Python `Breakdown` class are gone: `constraint_costs(schedule)` is the one
+per-constraint surface (each reward reported negated, as its raw cost <= 0), and
+`constraint_info()` is the catalog. Raw costs and the default score are unchanged.
 
 ## Quality benchmark and solver defaults (2026-08)
 
@@ -46,8 +115,8 @@ Two changed defaults / structures:
   O(n) sweep over all talks (2n per change move, 4n per swap). Now they are exact
   aggregate queries: per-slot tag occupancy counts (theme/sector/audience/content/mutex +
   the theme x audience joint + per-(slot,room) theme + content x level + level/language),
-  a (slot,room) occupancy grid (roomConflict), per-capacity-class favorite-rank Fenwick
-  trees (popularTalks), and adjacency lists only for the truly sparse relations (shared
+  a (slot,room) occupancy grid (`room_conflict_cost`), per-capacity-class favorite-rank
+  Fenwick trees (`popular_talks_room_size_cost`), and adjacency lists only for the truly sparse relations (shared
   speakers, prerequisites). Every sum is an integer, so scores are bit-identical (pinned
   by the full-vs-incremental 3000-move random walk / FULL_ASSERT / plugin equivalence
   gates); moves/s go up ~7-10x at scaled:200, which accounts for most of the quality gain
@@ -133,20 +202,29 @@ Decreasing ordering, or pre-assign part of the solution in the domain
 solver's `solve` before the engine runs — the engine only fills what is still unassigned.
 
 **Adding a hard or soft cost.** One file per constraint under
-`cpp/include/cs/constraints/` (currently `audience_level_diversity`, `audience_type_diversity`, `audience_type_theme_track_conflict`, `consecutive_talks_pause`, `content_audience_level_flow_violation`, `content_conflict`, `crowd_control`, `language_diversity`, `popular_talks`, `room_conflict`, `room_unavailable_timeslot`, `same_day_talks`, `sector_conflict`, `speaker_conflict`, `speaker_makespan`, `speaker_preferred_room_tags`, `speaker_preferred_timeslot_tags`, `speaker_prohibited_room_tags`, `speaker_prohibited_timeslot_tags`, `speaker_required_room_tags`, `speaker_required_timeslot_tags`, `speaker_unavailable_timeslot`, `speaker_undesired_room_tags`, `speaker_undesired_timeslot_tags`, `talk_mutually_exclusive_talks_tags`, `talk_preferred_room_tags`, `talk_preferred_timeslot_tags`, `talk_prerequisite_talks`, `talk_prohibited_room_tags`, `talk_prohibited_timeslot_tags`, `talk_required_room_tags`, `talk_required_timeslot_tags`, `talk_type_compatibility`, `talk_undesired_room_tags`, `talk_undesired_timeslot_tags`, `theme_track_conflict`, `theme_track_room_stability`):
-1. add `constraints/<name>.hpp` (a `UnitConstraint` or `GlobalConstraint`;
-   positive cost = penalty, the level and weight are constructor defaults);
+`cpp/include/cs/constraints/` (currently `talk_type_incompatibility_cost`, `room_unavailability_cost`, `room_conflict_cost`, `speaker_unavailability_cost`, `speaker_conflict_cost`, `talk_prerequisite_talks_cost`, `talk_mutually_exclusive_talks_tags_cost`, `consecutive_talks_pause_cost`, `crowd_control_risk_cost`, `speaker_required_timeslot_tags_cost`, `speaker_prohibited_timeslot_tags_cost`, `talk_required_timeslot_tags_cost`, `talk_prohibited_timeslot_tags_cost`, `speaker_required_room_tags_cost`, `speaker_prohibited_room_tags_cost`, `talk_required_room_tags_cost`, `talk_prohibited_room_tags_cost`, `theme_track_conflict_cost`, `theme_track_room_change_cost`, `sector_conflict_cost`, `audience_type_theme_track_conflict_cost`, `content_audience_level_flow_violation_cost`, `content_conflict_cost`, `different_day_talks_cost`, `popular_talks_room_size_cost`, `speaker_preferred_timeslot_tags_cost`, `speaker_undesired_timeslot_tags_cost`, `talk_preferred_timeslot_tags_cost`, `talk_undesired_timeslot_tags_cost`, `speaker_preferred_room_tags_cost`, `speaker_undesired_room_tags_cost`, `talk_preferred_room_tags_cost`, `talk_undesired_room_tags_cost`, `speaker_makespan_cost`, `audience_type_diversity_cost`, `audience_level_diversity_cost`, `language_diversity_cost`):
+1. add `constraints/<subject>_cost.hpp` with `struct <Subject>Cost` (a `UnitConstraint` or
+   `GlobalConstraint` — here a `BreakdownConstraint` projecting one `Breakdown` member;
+   positive raw cost = penalty, 0 = no violation, negative = reward) declaring
+   `static constexpr double kDefaultWeight` and `static constexpr optimaru::Level kDefaultLevel`,
+   an `explicit <Subject>Cost(double weight = kDefaultWeight)` constructor and the registry
+   name `"<subject>Cost"` (the struct name with a lower-case first letter); a reward sets
+   `reward = true; levelFlippable = false;` in its constructor;
 2. include it in `cpp/include/cs/constraints.hpp` and `emplace` it in
    `defaultConstraints()` if it belongs to the default set;
-3. for a default constraint, add the same raw cost to
-   `score_calculator` / `incremental_calculator` — `cs_plugin_test` checks
-   they agree bit for bit;
-4. add a `Constraint` spec with the snake_case `name` to
-   `python/conference_scheduling/constraints.py`; callers then pick, reweight or flip it:
-   `constraints=get_constraints([..., MyRule(weight=5, hard=True)])`;
+3. for a default constraint, add the same raw cost to `score_calculator` (a `Breakdown`
+   member of the same name, weighted in `hardTotal()` / `softPenaltyTotal()` /
+   `softRewardTotal()` by the component's `kDefaultWeight`) and `incremental_calculator`
+   — `cs_plugin_test` checks they agree bit for bit — and a positive and a zero
+   hand-calculated case to `cs_test` / `cs_plugin_test`;
+4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
+   `description_en` / `description_ko` to `python/conference_scheduling/constraints.py`
+   (plus its module-level default instance); callers then pick, reweight or flip it:
+   `constraints=get_constraints([..., MyRuleCost(weight=5, hard=True)])`;
 5. mirror it in the CP-SAT model in
-   [`benchmarks/conference-scheduling/cpsat`](../../benchmarks/conference-scheduling/cpsat) so the
-   benchmark stays like for like.
+   [`benchmarks/conference-scheduling/cpsat`](../../benchmarks/conference-scheduling/cpsat) (a
+   plugin subclassing the spec; defaults come from `constraint_info()`) so the benchmark
+   stays like for like.
 
 ## Benchmark
 

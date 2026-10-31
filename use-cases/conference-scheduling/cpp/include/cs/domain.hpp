@@ -36,7 +36,7 @@ struct Timeslot
     std::int64_t endMinute = 0;
     // Indices into ConferenceSchedule::talkTypes: which talk types this slot
     // may host (the quickstart's per-TalkType compatible-timeslot value
-    // range; see the talkTypeCompatibility note on ScoreCalculator).
+    // range; see the talkTypeIncompatibilityCost note on ScoreCalculator).
     std::vector<int> talkTypes;
     std::vector<std::string> tags;
 
@@ -211,8 +211,8 @@ struct ConferenceSchedule
 // ranges to its TalkType's compatible timeslots/rooms (@ValueRangeProvider on
 // the entity). The engine's BASIC variable has one global range, so the port
 // enforces compatibility with the synthetic hard constraint
-// talkTypeCompatibility instead (see cs/score_calculator.hpp) and biases the
-// search toward compatible values (see cs/solver.hpp).
+// talkTypeIncompatibilityCost instead (see cs/score_calculator.hpp) and biases
+// the search toward compatible values (see cs/solver.hpp).
 // ---------------------------------------------------------------------------
 template <> struct optimaru::SolutionDescriptor<cs::ConferenceSchedule>
 {

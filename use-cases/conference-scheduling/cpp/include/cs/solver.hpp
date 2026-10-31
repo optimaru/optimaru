@@ -22,9 +22,9 @@ namespace cs
 // moves and the engine's adaptive ruin-and-recreate (ALNS) it biases value
 // selection toward the talk's type-compatible (timeslot, room) cells — the
 // engine's global value range stands in for the quickstart's per-TalkType
-// value ranges, with the synthetic talkTypeCompatibility hard constraint
-// penalizing the stragglers (see cs/domain.hpp) — and it spends the budget as
-// a sequence of restarted local-search runs (see restartSegments).
+// value ranges, with the synthetic talkTypeIncompatibilityCost hard
+// constraint penalizing the stragglers (see cs/domain.hpp) — and it spends the
+// budget as a sequence of restarted local-search runs (see restartSegments).
 class Solver
 {
 public:

@@ -4,7 +4,8 @@
 // ---------------------------------------------------------------------------
 // Constraint plugins — umbrella header
 // ---------------------------------------------------------------------------
-// One component per file under constraints/; common.hpp holds what all of them
+// One component per file under constraints/ (<subject>_cost.hpp, the struct
+// name in snake_case); common.hpp holds what all of them
 // need (the calculator aliases, the shared breakdown projection and the base
 // every component derives from) and carries the pattern's documentation —
 // including WHY this domain decomposes by projection rather than by
@@ -12,46 +13,46 @@
 //
 // Including this header still gives the whole set, so nothing that used it has
 // to change. Adding a component is a file plus a line here (and a line in
-// addDefaultConstraints below when it belongs to the default assembly).
+// defaultConstraints() below when it belongs to the default assembly).
 
-#include "cs/constraints/audience_level_diversity.hpp"
-#include "cs/constraints/audience_type_diversity.hpp"
-#include "cs/constraints/audience_type_theme_track_conflict.hpp"
+#include "cs/constraints/audience_level_diversity_cost.hpp"
+#include "cs/constraints/audience_type_diversity_cost.hpp"
+#include "cs/constraints/audience_type_theme_track_conflict_cost.hpp"
 #include "cs/constraints/common.hpp"
-#include "cs/constraints/consecutive_talks_pause.hpp"
-#include "cs/constraints/content_audience_level_flow_violation.hpp"
-#include "cs/constraints/content_conflict.hpp"
-#include "cs/constraints/crowd_control.hpp"
-#include "cs/constraints/language_diversity.hpp"
-#include "cs/constraints/popular_talks.hpp"
-#include "cs/constraints/room_conflict.hpp"
-#include "cs/constraints/room_unavailable_timeslot.hpp"
-#include "cs/constraints/same_day_talks.hpp"
-#include "cs/constraints/sector_conflict.hpp"
-#include "cs/constraints/speaker_conflict.hpp"
-#include "cs/constraints/speaker_makespan.hpp"
-#include "cs/constraints/speaker_preferred_room_tags.hpp"
-#include "cs/constraints/speaker_preferred_timeslot_tags.hpp"
-#include "cs/constraints/speaker_prohibited_room_tags.hpp"
-#include "cs/constraints/speaker_prohibited_timeslot_tags.hpp"
-#include "cs/constraints/speaker_required_room_tags.hpp"
-#include "cs/constraints/speaker_required_timeslot_tags.hpp"
-#include "cs/constraints/speaker_unavailable_timeslot.hpp"
-#include "cs/constraints/speaker_undesired_room_tags.hpp"
-#include "cs/constraints/speaker_undesired_timeslot_tags.hpp"
-#include "cs/constraints/talk_mutually_exclusive_talks_tags.hpp"
-#include "cs/constraints/talk_preferred_room_tags.hpp"
-#include "cs/constraints/talk_preferred_timeslot_tags.hpp"
-#include "cs/constraints/talk_prerequisite_talks.hpp"
-#include "cs/constraints/talk_prohibited_room_tags.hpp"
-#include "cs/constraints/talk_prohibited_timeslot_tags.hpp"
-#include "cs/constraints/talk_required_room_tags.hpp"
-#include "cs/constraints/talk_required_timeslot_tags.hpp"
-#include "cs/constraints/talk_type_compatibility.hpp"
-#include "cs/constraints/talk_undesired_room_tags.hpp"
-#include "cs/constraints/talk_undesired_timeslot_tags.hpp"
-#include "cs/constraints/theme_track_conflict.hpp"
-#include "cs/constraints/theme_track_room_stability.hpp"
+#include "cs/constraints/consecutive_talks_pause_cost.hpp"
+#include "cs/constraints/content_audience_level_flow_violation_cost.hpp"
+#include "cs/constraints/content_conflict_cost.hpp"
+#include "cs/constraints/crowd_control_risk_cost.hpp"
+#include "cs/constraints/different_day_talks_cost.hpp"
+#include "cs/constraints/language_diversity_cost.hpp"
+#include "cs/constraints/popular_talks_room_size_cost.hpp"
+#include "cs/constraints/room_conflict_cost.hpp"
+#include "cs/constraints/room_unavailability_cost.hpp"
+#include "cs/constraints/sector_conflict_cost.hpp"
+#include "cs/constraints/speaker_conflict_cost.hpp"
+#include "cs/constraints/speaker_makespan_cost.hpp"
+#include "cs/constraints/speaker_preferred_room_tags_cost.hpp"
+#include "cs/constraints/speaker_preferred_timeslot_tags_cost.hpp"
+#include "cs/constraints/speaker_prohibited_room_tags_cost.hpp"
+#include "cs/constraints/speaker_prohibited_timeslot_tags_cost.hpp"
+#include "cs/constraints/speaker_required_room_tags_cost.hpp"
+#include "cs/constraints/speaker_required_timeslot_tags_cost.hpp"
+#include "cs/constraints/speaker_unavailability_cost.hpp"
+#include "cs/constraints/speaker_undesired_room_tags_cost.hpp"
+#include "cs/constraints/speaker_undesired_timeslot_tags_cost.hpp"
+#include "cs/constraints/talk_mutually_exclusive_talks_tags_cost.hpp"
+#include "cs/constraints/talk_preferred_room_tags_cost.hpp"
+#include "cs/constraints/talk_preferred_timeslot_tags_cost.hpp"
+#include "cs/constraints/talk_prerequisite_talks_cost.hpp"
+#include "cs/constraints/talk_prohibited_room_tags_cost.hpp"
+#include "cs/constraints/talk_prohibited_timeslot_tags_cost.hpp"
+#include "cs/constraints/talk_required_room_tags_cost.hpp"
+#include "cs/constraints/talk_required_timeslot_tags_cost.hpp"
+#include "cs/constraints/talk_type_incompatibility_cost.hpp"
+#include "cs/constraints/talk_undesired_room_tags_cost.hpp"
+#include "cs/constraints/talk_undesired_timeslot_tags_cost.hpp"
+#include "cs/constraints/theme_track_conflict_cost.hpp"
+#include "cs/constraints/theme_track_room_change_cost.hpp"
 
 namespace cs
 {
@@ -59,62 +60,68 @@ namespace cs
 // ---------------------------------------------------------------------------
 // Standard assembly
 // ---------------------------------------------------------------------------
-// All 36 provider constraints plus the port's synthetic talkTypeCompatibility,
-// at the Java weights. This assembly scores bit-for-bit like
-// ScoreCalculator::calculateScore and the monolithic incremental calculator,
-// rewards included.
+// All 36 provider constraints plus the port's synthetic
+// talkTypeIncompatibilityCost, each at its component default (kDefaultWeight /
+// kDefaultLevel = the Java weights and levels). This assembly scores
+// bit-for-bit like ScoreCalculator::calculateScore and the monolithic
+// incremental calculator, rewards included: both read the same constants.
+// The order is the catalog order (list_constraints() / constraint_info()).
 //
 // `defaultConstraints()` hands the whole set back as a ConstraintAssembly,
 // so a caller states only what differs from it:
 //
 //     DecomposedCalculator calc;
 //     defaultConstraints()
-//         .weight("audienceLevelDiversity", 2)
-//         .drop("audienceTypeDiversity")
+//         .weight("audienceLevelDiversityCost", 2)
+//         .soft("roomConflictCost")
+//         .drop("audienceTypeDiversityCost")
 //         .into(calc);
+//
+// The three *DiversityCost rewards refuse .hard(...) and any level change
+// (reward, not level-flippable); every other constraint flips both ways.
 //
 // `addDefaultConstraints(calc)` is the same set poured straight into a
 // calculator, for callers that change nothing.
 inline ConstraintAssembly defaultConstraints()
 {
     ConstraintAssembly assembly;
-    assembly.emplace<TalkTypeCompatibility>();
-    assembly.emplace<RoomUnavailableTimeslot>();
-    assembly.emplace<RoomConflict>();
-    assembly.emplace<SpeakerUnavailableTimeslot>();
-    assembly.emplace<SpeakerConflict>();
-    assembly.emplace<TalkPrerequisiteTalks>();
-    assembly.emplace<TalkMutuallyExclusiveTalksTags>();
-    assembly.emplace<ConsecutiveTalksPause>();
-    assembly.emplace<CrowdControl>();
-    assembly.emplace<SpeakerRequiredTimeslotTags>();
-    assembly.emplace<SpeakerProhibitedTimeslotTags>();
-    assembly.emplace<TalkRequiredTimeslotTags>();
-    assembly.emplace<TalkProhibitedTimeslotTags>();
-    assembly.emplace<SpeakerRequiredRoomTags>();
-    assembly.emplace<SpeakerProhibitedRoomTags>();
-    assembly.emplace<TalkRequiredRoomTags>();
-    assembly.emplace<TalkProhibitedRoomTags>();
-    assembly.emplace<ThemeTrackConflict>();
-    assembly.emplace<ThemeTrackRoomStability>();
-    assembly.emplace<SectorConflict>();
-    assembly.emplace<AudienceTypeThemeTrackConflict>();
-    assembly.emplace<ContentAudienceLevelFlowViolation>();
-    assembly.emplace<ContentConflict>();
-    assembly.emplace<SameDayTalks>();
-    assembly.emplace<PopularTalks>();
-    assembly.emplace<SpeakerPreferredTimeslotTags>();
-    assembly.emplace<SpeakerUndesiredTimeslotTags>();
-    assembly.emplace<TalkPreferredTimeslotTags>();
-    assembly.emplace<TalkUndesiredTimeslotTags>();
-    assembly.emplace<SpeakerPreferredRoomTags>();
-    assembly.emplace<SpeakerUndesiredRoomTags>();
-    assembly.emplace<TalkPreferredRoomTags>();
-    assembly.emplace<TalkUndesiredRoomTags>();
-    assembly.emplace<SpeakerMakespan>();
-    assembly.emplace<AudienceTypeDiversity>();
-    assembly.emplace<AudienceLevelDiversity>();
-    assembly.emplace<LanguageDiversity>();
+    assembly.emplace<TalkTypeIncompatibilityCost>();
+    assembly.emplace<RoomUnavailabilityCost>();
+    assembly.emplace<RoomConflictCost>();
+    assembly.emplace<SpeakerUnavailabilityCost>();
+    assembly.emplace<SpeakerConflictCost>();
+    assembly.emplace<TalkPrerequisiteTalksCost>();
+    assembly.emplace<TalkMutuallyExclusiveTalksTagsCost>();
+    assembly.emplace<ConsecutiveTalksPauseCost>();
+    assembly.emplace<CrowdControlRiskCost>();
+    assembly.emplace<SpeakerRequiredTimeslotTagsCost>();
+    assembly.emplace<SpeakerProhibitedTimeslotTagsCost>();
+    assembly.emplace<TalkRequiredTimeslotTagsCost>();
+    assembly.emplace<TalkProhibitedTimeslotTagsCost>();
+    assembly.emplace<SpeakerRequiredRoomTagsCost>();
+    assembly.emplace<SpeakerProhibitedRoomTagsCost>();
+    assembly.emplace<TalkRequiredRoomTagsCost>();
+    assembly.emplace<TalkProhibitedRoomTagsCost>();
+    assembly.emplace<ThemeTrackConflictCost>();
+    assembly.emplace<ThemeTrackRoomChangeCost>();
+    assembly.emplace<SectorConflictCost>();
+    assembly.emplace<AudienceTypeThemeTrackConflictCost>();
+    assembly.emplace<ContentAudienceLevelFlowViolationCost>();
+    assembly.emplace<ContentConflictCost>();
+    assembly.emplace<DifferentDayTalksCost>();
+    assembly.emplace<PopularTalksRoomSizeCost>();
+    assembly.emplace<SpeakerPreferredTimeslotTagsCost>();
+    assembly.emplace<SpeakerUndesiredTimeslotTagsCost>();
+    assembly.emplace<TalkPreferredTimeslotTagsCost>();
+    assembly.emplace<TalkUndesiredTimeslotTagsCost>();
+    assembly.emplace<SpeakerPreferredRoomTagsCost>();
+    assembly.emplace<SpeakerUndesiredRoomTagsCost>();
+    assembly.emplace<TalkPreferredRoomTagsCost>();
+    assembly.emplace<TalkUndesiredRoomTagsCost>();
+    assembly.emplace<SpeakerMakespanCost>();
+    assembly.emplace<AudienceTypeDiversityCost>();
+    assembly.emplace<AudienceLevelDiversityCost>();
+    assembly.emplace<LanguageDiversityCost>();
     return assembly;
 }
 

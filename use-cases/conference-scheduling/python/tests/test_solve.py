@@ -37,10 +37,10 @@ def test_demo_solve_feasible():
     assert recomputed.hard == schedule.score.hard
     assert recomputed.soft == schedule.score.soft
     # Type compatibility: Lab talks sit only in Lab slots/rooms (what synthetic hard 0 means).
-    b = cs.compute_breakdown(schedule)
-    assert b.talk_type_compatibility == 0
-    assert b.room_conflict == 0
-    assert b.speaker_conflict == 0
+    raw = cs.constraint_costs(schedule)
+    assert raw["talk_type_incompatibility_cost"]["costs"] == [0]
+    assert raw["room_conflict_cost"]["costs"] == [0]
+    assert raw["speaker_conflict_cost"]["costs"] == [0]
 
 
 def test_pinned_talk_survives_solve():
