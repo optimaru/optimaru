@@ -1,8 +1,11 @@
 #include "fcs/score_calculator.hpp"
 
 #include <algorithm>
+#include <cstdint>
 #include <string>
 #include <unordered_map>
+
+#include "monolithic_weights.hpp"
 
 namespace fcs
 {
@@ -138,7 +141,7 @@ ScoreCalculator::itineraryStats(const FlightCrewSchedule &schedule,
     if (n == 0)
         return stats;
 
-    // hard 2: flight conflict — overlapping pairs. Sorted by departure, so
+    // hard 2: flightConflictCost — overlapping pairs. Sorted by departure, so
     // the inner loop stops at the first non-overlapping departure.
     for (int i = 0; i < n; ++i)
     {
@@ -166,10 +169,11 @@ ScoreCalculator::itineraryStats(const FlightCrewSchedule &schedule,
         while (groupEnd < n && schedule.departureOf(sorted[groupEnd]) == dep)
             ++groupEnd;
 
-        // hard 3: transfer — a pair (a, b) is departure-consecutive iff a is
-        // ALONE on its departure time and b is in the very next group (any
-        // other same-time-as-a assignment `c` satisfies dep(a) <= dep(c) <
-        // dep(b), so the Java ifNotExists kills the pair).
+        // hard 3: transferBetweenTwoFlightsCost — a pair (a, b) is
+        // departure-consecutive iff a is ALONE on its departure time and b is
+        // in the very next group (any other same-time-as-a assignment `c`
+        // satisfies dep(a) <= dep(c) < dep(b), so the Java ifNotExists kills
+        // the pair).
         if (prevGroupStart >= 0 && prevGroupEnd - prevGroupStart == 1)
         {
             const int a = sorted[prevGroupStart];
@@ -181,7 +185,8 @@ ScoreCalculator::itineraryStats(const FlightCrewSchedule &schedule,
             }
         }
 
-        // soft 5: every member of the FIRST departure-time group counts.
+        // soft 5: firstAssignmentNotDepartingFromHomeCost — every member of
+        // the FIRST departure-time group counts.
         if (groupStart == 0)
         {
             for (int k = groupStart; k < groupEnd; ++k)
@@ -190,7 +195,8 @@ ScoreCalculator::itineraryStats(const FlightCrewSchedule &schedule,
                     ++stats.firstNotHome;
             }
         }
-        // soft 6: every member of the LAST departure-time group counts.
+        // soft 6: lastAssignmentNotArrivingAtHomeCost — every member of the
+        // LAST departure-time group counts.
         if (groupEnd == n)
         {
             for (int k = groupStart; k < groupEnd; ++k)
@@ -244,12 +250,12 @@ Score ScoreCalculator::calculateScore(FlightCrewSchedule &schedule)
     }
 
     Score score;
-    score.hard = -(REQUIRED_SKILL_WEIGHT * missingSkill
-                   + FLIGHT_CONFLICT_WEIGHT * conflictPairs
-                   + TRANSFER_WEIGHT * transfers
-                   + UNAVAILABILITY_WEIGHT * unavailable);
-    score.soft = -(FIRST_NOT_HOME_WEIGHT * static_cast<double>(firstNotHome)
-                   + LAST_NOT_HOME_WEIGHT * static_cast<double>(lastNotHome));
+    score.hard = -(kRequiredSkillWeight * missingSkill
+                   + kFlightConflictWeight * conflictPairs
+                   + kTransferWeight * transfers
+                   + kUnavailabilityWeight * unavailable);
+    score.soft = -(kFirstNotHomeWeight * static_cast<double>(firstNotHome)
+                   + kLastNotHomeWeight * static_cast<double>(lastNotHome));
     if (score.soft == 0.0)
         score.soft = 0.0;  // normalize -0.0
     schedule.score = score;

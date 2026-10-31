@@ -14,10 +14,10 @@ namespace fcs
 // weights and signs are applied when the score is assembled.
 struct ItineraryStats
 {
-    std::int64_t conflictPairs = 0;       // "Flight conflict"
-    std::int64_t transferMismatches = 0;  // "Transfer between two flights"
-    std::int64_t firstNotHome = 0;  // "First assignment not departing ..."
-    std::int64_t lastNotHome = 0;   // "Last assignment not arriving ..."
+    std::int64_t conflictPairs = 0;       // flightConflictCost
+    std::int64_t transferMismatches = 0;  // transferBetweenTwoFlightsCost
+    std::int64_t firstNotHome = 0;  // firstAssignmentNotDepartingFromHomeCost
+    std::int64_t lastNotHome = 0;   // lastAssignmentNotArrivingAtHomeCost
 };
 
 // Port of the reference FlightCrewSchedulingConstraintProvider.
@@ -25,35 +25,36 @@ struct ItineraryStats
 // calculateScore does a full recompute — the reference the incremental
 // calculator is checked against (in the tests and under FULL_ASSERT).
 //
-// Constraints (HardSoftScore, Java weights verbatim):
-//   hard 1. requiredSkill        -100 per assignment whose employee lacks the
-//                                     required skill
-//   hard 2. flightConflict        -10 per same-employee pair of assignments
-//                                     with time-overlapping flights
-//                                     (aStart < bEnd && bStart < aEnd)
-//   hard 3. transferBetweenTwoFlights
-//                                  -1 per same-employee departure-consecutive
-//                                     pair whose first arrival airport differs
-//                                     from the second departure airport.
-//                                     "Consecutive" follows the Java stream
-//                                     exactly: pair (a, b) with dep(a) <
-//                                     dep(b) and no third assignment c of the
-//                                     employee with dep(a) <= dep(c) < dep(b)
-//                                     — so an `a` sharing its departure time
-//                                     with another assignment never starts a
-//                                     pair, while ties on b all count.
-//   hard 4. employeeUnavailability
-//                                 -10 per assignment whose employee is
-//                                     unavailable on any calendar day of the
-//                                     flight ([depDate, arrDate] inclusive)
-//   soft 5. firstAssignmentNotDepartingFromHome
-//                               -1000 per assignment with the employee's
-//                                     earliest departure time (ties all
-//                                     count) not departing from home
-//   soft 6. lastAssignmentNotArrivingAtHome
-//                               -1000 per assignment with the employee's
-//                                     latest departure time (ties all count)
-//                                     not arriving at home
+// Constraints (HardSoftScore), the default assembly of fcs/constraints.hpp at
+// the components' kDefaultWeight (the Java weights verbatim):
+//   hard 1. requiredSkillCost   -100 per assignment whose employee lacks the
+//                                    required skill
+//   hard 2. flightConflictCost   -10 per same-employee pair of assignments
+//                                    with time-overlapping flights
+//                                    (aStart < bEnd && bStart < aEnd)
+//   hard 3. transferBetweenTwoFlightsCost
+//                                 -1 per same-employee departure-consecutive
+//                                    pair whose first arrival airport differs
+//                                    from the second departure airport.
+//                                    "Consecutive" follows the Java stream
+//                                    exactly: pair (a, b) with dep(a) <
+//                                    dep(b) and no third assignment c of the
+//                                    employee with dep(a) <= dep(c) < dep(b)
+//                                    — so an `a` sharing its departure time
+//                                    with another assignment never starts a
+//                                    pair, while ties on b all count.
+//   hard 4. employeeUnavailabilityCost
+//                                -10 per assignment whose employee is
+//                                    unavailable on any calendar day of the
+//                                    flight ([depDate, arrDate] inclusive)
+//   soft 5. firstAssignmentNotDepartingFromHomeCost
+//                              -1000 per assignment with the employee's
+//                                    earliest departure time (ties all
+//                                    count) not departing from home
+//   soft 6. lastAssignmentNotArrivingAtHomeCost
+//                              -1000 per assignment with the employee's
+//                                    latest departure time (ties all count)
+//                                    not arriving at home
 // Unassigned assignments (employee == -1) contribute nothing: the
 // construction heuristic scores partially initialized solutions.
 class ScoreCalculator
