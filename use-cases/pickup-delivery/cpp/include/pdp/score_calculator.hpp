@@ -33,6 +33,9 @@ public:
     // they are set well above a typical lateness so the search fixes broken
     // pairs before it polishes time windows.
     static constexpr std::int64_t kCouplingPenalty = 1000;
+    // Above any total the other hard rules can reach, so no trade between hard
+    // violations pays for disturbing a pinned stop.
+    static constexpr std::int64_t kPinnedPenalty = 1'000'000'000'000;
 
     // Recomputes every node's shadow variables (vehicleIndex, arrivalTime)
     // from the current vehicle routes.

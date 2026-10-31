@@ -483,6 +483,14 @@ void testConstructionRespectsRequiredVehicle()
               && contested.score.isFeasible(),
           "a bound request is placed before a free one can take its slot");
 
+    // Vehicle 1 is too far away to make the window; vehicle 0 is not.
+    PdpRoutePlan unreachable = buildLine({0, 5000}, {{1, 1200}});
+    Solver(config).solve(unreachable);
+    check(unreachable.vehicles[0].nodeIndices.empty()
+              && unreachable.vehicles[1].nodeIndices.empty()
+              && unreachable.unassignedNodeIndices.size() == 2,
+          "a bound request with no feasible slot stays unassigned");
+
     PdpRoutePlan unknown = buildLine({0}, {{1, 100000}});
     bool refused = false;
     try

@@ -34,6 +34,11 @@ __all__ = [
 ]
 
 
+def _valid_positions(count: int) -> str:
+    """The valid positions among `count`, for an error message."""
+    return f"0..{count - 1}" if count else "(the list is empty)"
+
+
 class PersonModel(BaseModel):
     """An attendee. Referenced by index into the people list."""
 
@@ -109,11 +114,12 @@ class MeetingScheduleModel(BaseModel):
         """`grain_room` is a raw value the engine reads without a range check. It refuses
         bad people and meetings itself."""
         value_count = len(self.time_grains) * len(self.rooms)
+        valid_values = _valid_positions(value_count)
         for assignment in self.meeting_assignments:
             value = assignment.grain_room
             if value is not None and not 0 <= value < value_count:
                 raise ValueError(
-                    f"meeting assignment {assignment.id!r}: grain_room {value!r} is out of range 0..{value_count - 1}"
+                    f"meeting assignment {assignment.id!r}: grain_room {value!r} is out of range {valid_values}"
                 )
         return self
 
@@ -264,7 +270,8 @@ def with_initial_solution(problem, solution):
         if value is None:
             continue
         if not isinstance(value, int) or isinstance(value, bool) or not 0 <= value < value_count:
+            valid_values = _valid_positions(value_count)
             raise ValueError(
-                f"meeting assignment {assignment.id!r}: grain_room {value!r} is out of range 0..{value_count - 1}"
+                f"meeting assignment {assignment.id!r}: grain_room {value!r} is out of range {valid_values}"
             )
     return seeded

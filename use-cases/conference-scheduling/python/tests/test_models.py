@@ -89,3 +89,10 @@ def test_an_index_edited_after_validation_is_refused_by_to_core():
     model.talks[0].speakers = [99999999]
     with pytest.raises(ValueError, match="out of range"):
         model.to_core()
+
+
+def test_an_index_into_an_empty_list_says_the_list_is_empty():
+    data = ConferenceScheduleModel.from_core(cs.demo_conference()).model_dump()
+    data["talk_types"] = []
+    with pytest.raises(ValueError, match=r"talk_type \d+ is out of range \(the list is empty\)"):
+        ConferenceScheduleModel.model_validate(data)

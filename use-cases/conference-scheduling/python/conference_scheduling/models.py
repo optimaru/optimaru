@@ -28,6 +28,11 @@ __all__ = [
 ]
 
 
+def _valid_positions(count: int) -> str:
+    """The valid positions among `count`, for an error message."""
+    return f"0..{count - 1}" if count else "(the list is empty)"
+
+
 class TimeslotModel(BaseModel):
     """A time slot. In minutes (shared origin; midnight boundaries are multiples of 1440)."""
 
@@ -125,11 +130,13 @@ class ConferenceScheduleModel(BaseModel):
         for talk in self.talks:
             if not 0 <= talk.talk_type < type_count:
                 raise ValueError(
-                    f"talk {talk.code!r}: talk_type {talk.talk_type!r} is out of range 0..{type_count - 1}"
+                    f"talk {talk.code!r}: talk_type {talk.talk_type!r} is out of range {_valid_positions(type_count)}"
                 )
             for speaker in talk.speakers:
                 if not 0 <= speaker < speaker_count:
-                    raise ValueError(f"talk {talk.code!r}: speaker {speaker!r} is out of range 0..{speaker_count - 1}")
+                    raise ValueError(
+                        f"talk {talk.code!r}: speaker {speaker!r} is out of range {_valid_positions(speaker_count)}"
+                    )
             if not -1 <= talk.slot_room < value_count:
                 raise ValueError(
                     f"talk {talk.code!r}: slot_room {talk.slot_room!r} is out of range -1..{value_count - 1}"

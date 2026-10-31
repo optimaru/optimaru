@@ -74,3 +74,10 @@ def test_a_grain_room_edited_after_validation_is_refused_by_to_core():
     model.meeting_assignments[0].grain_room = 99999999
     with pytest.raises(ValueError, match="out of range"):
         model.to_core()
+
+
+def test_a_grain_room_with_no_rooms_says_the_list_is_empty():
+    data = _dump_with_grain_room(0)
+    data["rooms"] = []
+    with pytest.raises(ValueError, match=r"grain_room 0 is out of range \(the list is empty\)"):
+        MeetingScheduleModel.model_validate(data)

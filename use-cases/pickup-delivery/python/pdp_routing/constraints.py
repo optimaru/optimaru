@@ -268,19 +268,21 @@ class MinimizeLatency(Constraint):
 
 
 class PinnedStops(Constraint):
-    """Routes that do not start with their vehicle's pinned stops. Default: hard, weight 1000.
+    """Routes that do not start with their vehicle's pinned stops. Default: hard, weight 1e12.
 
-    Each misplaced stop counts once. Silent for a vehicle that pins nothing."""
+    Each misplaced stop counts once. Silent for a vehicle that pins nothing. The weight is above
+    anything the other hard rules can reach, so no trade between them moves a pinned stop."""
 
     name = "pinned_stops"
     label_en = "Pinned Stops"
-    description_en = "Penalizes routes that do not start with the vehicle's pinned stops, in order. Default: **hard**, weight 1000."
+    description_en = "Penalizes routes that do not start with the vehicle's pinned stops, in order. Default: **hard**, weight 1e12."
 
 
 class RequiredVehicle(Constraint):
     """Requests off the vehicle they must ride on. Default: hard, weight 1000.
 
-    Unassigned counts as off it. Where on the route the request goes stays free."""
+    Unassigned counts once and another vehicle twice, so a request with no place on its vehicle waits.
+    Where on the route the request goes stays free."""
 
     name = "required_vehicle"
     label_en = "Required Vehicle"

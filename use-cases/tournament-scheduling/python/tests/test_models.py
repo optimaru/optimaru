@@ -96,3 +96,10 @@ def test_an_index_edited_after_validation_is_refused_by_to_core():
     model.unavailability_penalties[0].day = 99999999
     with pytest.raises(ValueError, match="out of range"):
         model.to_core()
+
+
+def test_an_index_into_an_empty_list_says_the_list_is_empty():
+    data = demo_data().model_dump()
+    data["teams"] = []
+    with pytest.raises(ValueError, match=r"team \d+ is out of range \(the list is empty\)"):
+        TournamentScheduleModel.model_validate(data)

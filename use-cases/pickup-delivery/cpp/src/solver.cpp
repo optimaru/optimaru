@@ -207,10 +207,18 @@ public:
             int pickupPos = greedyPickupPos >= 0
                                 ? greedyPickupPos
                                 : positionAfter(targetList, pickupAnchor);
-            if (pickupPos < 0)
+            // Pinned stops stay in front: a slot among them is no slot at all.
+            const int firstFree = std::min(
+                static_cast<int>(plan.vehicles[static_cast<std::size_t>(target)]
+                                     .pinnedNodeIndices.size()),
+                targetSize);
+            if (pickupPos < 0 || pickupPos < firstFree)
             {
-                pickupPos = static_cast<int>(
-                    rng() % static_cast<std::uint64_t>(targetSize + 1));
+                pickupPos = firstFree
+                            + static_cast<int>(
+                                rng()
+                                % static_cast<std::uint64_t>(
+                                    targetSize - firstFree + 1));
             }
             int dropoffPos = greedyDropoffPos >= 0
                                  ? greedyDropoffPos
@@ -324,6 +332,8 @@ private:
         for (std::size_t vehicleIndex = 0; vehicleIndex < plan.vehicles.size();
              ++vehicleIndex)
         {
+            // A bound request has no other vehicle to fall back on: with no
+            // feasible slot on its own it stays unassigned.
             if (delivery.requiredVehicleIndex >= 0
                 && delivery.requiredVehicleIndex
                        != static_cast<int>(vehicleIndex))
@@ -774,8 +784,9 @@ void checkRequiredVehicles(const PdpRoutePlan &plan)
             || delivery.requiredVehicleIndex >= vehicleCount)
         {
             throw std::invalid_argument(
-                "request " + delivery.id
-                + ": requiredVehicleIndex out of range");
+                "request " + delivery.id + ": requiredVehicleIndex "
+                + std::to_string(delivery.requiredVehicleIndex)
+                + " is out of range -1.." + std::to_string(vehicleCount - 1));
         }
     }
 }

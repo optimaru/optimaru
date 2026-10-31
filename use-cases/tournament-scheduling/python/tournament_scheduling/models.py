@@ -33,6 +33,11 @@ __all__ = [
 ]
 
 
+def _valid_positions(count: int) -> str:
+    """The valid positions among `count`, for an error message."""
+    return f"0..{count - 1}" if count else "(the list is empty)"
+
+
 class TeamModel(BaseModel):
     """A participating team. The list index plays the role of Java's @PlanningId."""
 
@@ -85,26 +90,29 @@ class TournamentScheduleModel(BaseModel):
 
     @model_validator(mode="after")
     def _check_indices(self):
-        """Team and day positions the engine reads without a range check."""
+        """Team and day positions the engine reads without a range check. A penalty has no id, so
+        its errors give its place in the list."""
         team_count = len(self.teams)
         day_count = len(self.days)
+        valid_teams = _valid_positions(team_count)
+        valid_days = _valid_positions(day_count)
         for position, penalty in enumerate(self.unavailability_penalties):
             if not 0 <= penalty.team < team_count:
                 raise ValueError(
-                    f"unavailability penalty {position}: team {penalty.team!r} is out of range 0..{team_count - 1}"
+                    f"unavailability penalty {position}: team {penalty.team!r} is out of range {valid_teams}"
                 )
             if not 0 <= penalty.day < day_count:
                 raise ValueError(
-                    f"unavailability penalty {position}: day {penalty.day!r} is out of range 0..{day_count - 1}"
+                    f"unavailability penalty {position}: day {penalty.day!r} is out of range {valid_days}"
                 )
         for assignment in self.team_assignments:
             if not 0 <= assignment.day < day_count:
                 raise ValueError(
-                    f"team assignment {assignment.id!r}: day {assignment.day!r} is out of range 0..{day_count - 1}"
+                    f"team assignment {assignment.id!r}: day {assignment.day!r} is out of range {valid_days}"
                 )
             if assignment.team is not None and not 0 <= assignment.team < team_count:
                 raise ValueError(
-                    f"team assignment {assignment.id!r}: team {assignment.team!r} is out of range 0..{team_count - 1}"
+                    f"team assignment {assignment.id!r}: team {assignment.team!r} is out of range {valid_teams}"
                 )
         return self
 
@@ -264,5 +272,7 @@ def with_initial_solution(problem, solution):
         if value is None:
             continue
         if not isinstance(value, int) or isinstance(value, bool) or not 0 <= value < value_count:
-            raise ValueError(f"team assignment {assignment.id!r}: team {value!r} is out of range 0..{value_count - 1}")
+            raise ValueError(
+                f"team assignment {assignment.id!r}: team {value!r} is out of range {_valid_positions(value_count)}"
+            )
     return seeded

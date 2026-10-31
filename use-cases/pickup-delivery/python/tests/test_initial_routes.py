@@ -5,7 +5,15 @@ import random
 import pdp_routing as pdp
 import pytest
 from pdp_routing.constraints import MinimizeTravelTime, get_constraints
-from pdp_routing.models import DeliveryModel, PdpInput, PdpRequest, StopModel, VehicleModel, solve_request
+from pdp_routing.models import (
+    DeliveryModel,
+    PdpInput,
+    PdpRequest,
+    StopModel,
+    VehicleModel,
+    solve_request,
+    with_initial_solution,
+)
 
 
 def stop(name: str, service: int = 0) -> StopModel:
@@ -152,6 +160,13 @@ def test_a_required_request_counts_as_a_hard_violation_off_its_vehicle():
     places = {"v": 0, "w": 0, "ap": 1, "ad": 2}
     model_input = line_input([vehicle("v"), vehicle("w", ["ap", "ad"])], [bound("a", "v")], places)
 
+    assert sum(pdp.constraint_costs(pdp.models.to_plan(model_input))["required_vehicle"]["costs"]) == 2
+
+
+def test_an_unassigned_required_request_counts_for_less_than_another_vehicle():
+    places = {"v": 0, "w": 0, "ap": 1, "ad": 2}
+    model_input = line_input([vehicle("v"), vehicle("w")], [bound("a", "v")], places)
+
     assert sum(pdp.constraint_costs(pdp.models.to_plan(model_input))["required_vehicle"]["costs"]) == 1
 
 
@@ -267,6 +282,85 @@ def test_the_search_takes_a_misplaced_required_request_to_its_vehicle():
         assert stops_of(solution, "v39") == ["ap", "ad"]
 
 
+def timed_stop(name: str, opens: int = 0, closes: int = 10**7) -> StopModel:
+    return StopModel(id=name, location=(37.5, 127.0), min_start_time=opens, max_end_time=closes, service_duration=60)
+
+
+def timed_request(name: str, opens: int = 0, closes: int = 10**7, required: str | None = None) -> DeliveryModel:
+    return DeliveryModel(
+        id=name,
+        demand=1,
+        required_vehicle=required,
+        pickup=timed_stop(f"{name}p", opens, closes),
+        dropoff=timed_stop(f"{name}d", opens, closes),
+    )
+
+
+def search(model_input: PdpInput, seed: int = 0):
+    # The steps end the solve; the time limit is only a safety net.
+    return solve_request(
+        PdpRequest(
+            model_input=model_input, timelimit=60, random_seed=seed, solver_parameters={"step_count_limit": 20000}
+        )
+    )
+
+
+ALL_AT_ONE_PLACE = {"v": 0, "w": 0, "ap": 0, "ad": 0, "bp": 0, "bd": 0}
+
+
+def busy_vehicle_and_a_request_bound_to_it(minutes_late: int) -> PdpInput:
+    """`v` is pinned to `a` until 400000 s, so `b` can only reach it that late. `w` could serve `b` on time."""
+    return line_input(
+        [vehicle("v", ["ap", "ad"], pinned=2), vehicle("w")],
+        [timed_request("a", opens=400000), timed_request("b", closes=400000 - 60 * minutes_late, required="v")],
+        ALL_AT_ONE_PLACE,
+    )
+
+
+def test_construction_leaves_a_required_request_with_no_slot_unassigned():
+    solution = construct(busy_vehicle_and_a_request_bound_to_it(minutes_late=100))
+
+    assert solution.unassigned == ["b"]
+    assert stops_of(solution, "w") == []
+
+
+@pytest.mark.parametrize("seed", range(5))
+def test_the_search_does_not_put_a_required_request_on_another_vehicle(seed):
+    solution = search(busy_vehicle_and_a_request_bound_to_it(minutes_late=3000), seed)
+
+    assert solution.unassigned == ["b"]
+    assert stops_of(solution, "v") == ["ap", "ad"]
+    assert stops_of(solution, "w") == []
+
+
+def test_a_required_request_may_run_late_on_its_own_vehicle_when_that_costs_less_than_waiting():
+    solution = search(busy_vehicle_and_a_request_bound_to_it(minutes_late=100))
+
+    assert solution.unassigned == []
+    assert stops_of(solution, "v") == ["ap", "ad", "bp", "bd"]
+
+
+@pytest.mark.parametrize("seed", range(5))
+def test_a_pinned_stop_holds_when_breaking_it_would_save_more_lateness(seed):
+    # `b` is thousands of minutes late behind `a`, while one misplaced stop used to cost only 1000.
+    deliveries = [timed_request("a", opens=400000), timed_request("b", closes=1000, required="v")]
+    model_input = line_input([vehicle("v", ["ap", "ad", "bp", "bd"], pinned=1)], deliveries, ALL_AT_ONE_PLACE)
+
+    solution = search(model_input, seed)
+
+    assert stops_of(solution, "v")[0] == "ap"
+    with_initial_solution(PdpRequest(model_input=model_input), solution)
+
+
+@pytest.mark.parametrize("seed", range(5))
+def test_pinned_stops_keep_their_order_when_they_are_late_themselves(seed):
+    # On time only the other way round, but the order was pinned.
+    deliveries = [timed_request("a", opens=400000), timed_request("b", closes=1000)]
+    model_input = line_input([vehicle("v", ["ap", "bp", "ad", "bd"], pinned=2)], deliveries, ALL_AT_ONE_PLACE)
+
+    assert stops_of(search(model_input, seed), "v")[:2] == ["ap", "bp"]
+
+
 @pytest.mark.parametrize("plugin_path", [False, True])
 def test_a_required_vehicle_outside_the_plan_is_refused_by_the_engine(plugin_path):
     places = {"v": 0, "w": 0, "ap": 1, "ad": 2}
@@ -274,7 +368,7 @@ def test_a_required_vehicle_outside_the_plan_is_refused_by_the_engine(plugin_pat
     plan.vehicles = plan.vehicles[:1]
     solver = pdp._core.Solver(pdp._core.SolverConfig())
 
-    with pytest.raises(ValueError, match="requiredVehicleIndex out of range"):
+    with pytest.raises(ValueError, match=r"requiredVehicleIndex 1 is out of range -1\.\.0"):
         if plugin_path:
             solver.solve_with_constraints(plan, get_constraints())
         else:
