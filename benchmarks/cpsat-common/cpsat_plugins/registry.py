@@ -14,15 +14,24 @@ _FOLD_LIMIT = 2**62
 
 @dataclass(frozen=True)
 class ConstraintSpec:
-    """One catalog entry and its default score semantics."""
+    """One catalog entry and its default score semantics.
+
+    ``level`` and ``weight`` are the defaults (for a migrated domain, the
+    engine's constraint_info() row). ``level_flippable`` False means hard=True
+    / hard=False may not move the constraint off its level; ``reward`` means
+    the raw cost is <= 0 and hard=True is refused. Both paths reject the same
+    selections.
+    """
 
     name: str
     label: str
     level: str
-    weight: int = 1
+    weight: int | float = 1
     description: str = ""
     label_en: str = ""
     description_en: str = ""
+    level_flippable: bool = True
+    reward: bool = False
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -33,6 +42,10 @@ class ConstraintSpec:
             "description_en": self.description_en,
             "kind": "hard" if self.level == "hard" else "soft",
             "default_enabled": True,
+            "default_level": self.level,
+            "default_weight": self.weight,
+            "level_flippable": self.level_flippable,
+            "reward": self.reward,
             "params": {"weight": self.weight, "hard": self.level == "hard"},
         }
 
@@ -133,17 +146,42 @@ class ObjectiveBuilder:
         self.terms: dict[str, list] = {level: [] for level in self.levels}
         self.bounds: dict[str, int] = {level: 0 for level in self.levels}
 
+    def level_of(self, spec: ConstraintSpec, config: ConstraintConfig) -> str:
+        """The level a selection lands on, with the engine's knob rules.
+
+        ``hard=None`` keeps the default level, ``hard=True`` is hard and
+        ``hard=False`` is soft, from a hard OR a medium default (the engine's
+        ``soft()``), so both solvers demote the same way. A reward refuses
+        hard=True; a non-flippable constraint refuses any change of level.
+        """
+        level = spec.level
+        if config.hard is None:
+            return level
+        if config.hard:
+            if spec.reward:
+                raise ValueError(f"constraint {spec.name!r} is a reward and cannot be hard")
+            wanted = "hard"
+        elif "soft" in self.levels:
+            wanted = "soft"
+        else:
+            # 0.2.0 transition shim: removed once every use case is migrated.
+            # Level sets without "soft" (task-assigning's soft0/soft1/soft2)
+            # keep the pre-0.2.0 rule: hard=False moves a hard term to the
+            # first lower level and leaves every other term where it is.
+            wanted = (self.levels[1] if len(self.levels) > 1 else "hard") if level == "hard" else level
+        if wanted != level and not spec.level_flippable:
+            raise ValueError(
+                f"constraint {spec.name!r} is always {level}; hard={config.hard!r} is not allowed"
+            )
+        return wanted
+
     def add(self, name: str, magnitude, *, bound: int) -> None:
         """Add a non-negative raw penalty and a valid magnitude upper bound."""
         selected = self.selected.get(name)
         if selected is None:
             return
         spec, config = selected
-        level = spec.level
-        if config.hard is True:
-            level = "hard"
-        elif config.hard is False and level == "hard":
-            level = self.levels[1] if len(self.levels) > 1 else "hard"
+        level = self.level_of(spec, config)
         if level not in self.terms:
             raise ValueError(
                 f"constraint {name!r} uses unsupported score level {level!r}"
@@ -253,11 +291,7 @@ class ObjectiveBuilder:
         aliases = aliases or {}
         totals: dict[str, int | float] = {level: 0 for level in self.levels}
         for name, (spec, config) in self.selected.items():
-            level = spec.level
-            if config.hard is True:
-                level = "hard"
-            elif config.hard is False and level == "hard":
-                level = self.levels[1] if len(self.levels) > 1 else "hard"
+            level = self.level_of(spec, config)
             weight = spec.weight if config.weight is None else config.weight
             source_names = aliases.get(name, name)
             if isinstance(source_names, str):
