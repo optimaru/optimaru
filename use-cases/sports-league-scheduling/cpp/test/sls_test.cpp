@@ -115,13 +115,14 @@ void verifyConstraints()
 {
     std::printf("== (a) Verifying each constraint ==\n");
 
-    // hard 1: two matches of one team on the same round index.
+    // hard 1: teamConflictCost — two matches of one team on the same round
+    // index.
     {
         LeagueSchedule s = makeBaseContiguous(4, 2);
         addMatch(s, 0, 1, 0);
         addMatch(s, 0, 1, 0);
         addMatch(s, 0, 1);  // unassigned: contributes nothing
-        checkScore("sameDay both teams shared",
+        checkScore("teamConflictCost both teams shared",
                    ScoreCalculator::calculateScore(s),
                    -1,
                    0);
@@ -130,7 +131,7 @@ void verifyConstraints()
         LeagueSchedule s = makeBaseContiguous(4, 2);
         addMatch(s, 0, 1, 0);
         addMatch(s, 1, 2, 0);
-        checkScore("sameDay one team shared",
+        checkScore("teamConflictCost one team shared",
                    ScoreCalculator::calculateScore(s),
                    -1,
                    0);
@@ -140,7 +141,10 @@ void verifyConstraints()
         addMatch(s, 0, 1, 0);
         addMatch(s, 2, 3, 0);
         checkScore(
-            "sameDay disjoint teams", ScoreCalculator::calculateScore(s), 0, 0);
+            "teamConflictCost disjoint teams",
+            ScoreCalculator::calculateScore(s),
+            0,
+            0);
     }
     // hard 1: three matches of one team in a round -> C(3,2) pairs.
     {
@@ -148,10 +152,13 @@ void verifyConstraints()
         addMatch(s, 0, 1, 0);
         addMatch(s, 0, 2, 0);
         addMatch(s, 0, 3, 0);
-        checkScore("sameDay triple", ScoreCalculator::calculateScore(s), -3, 0);
+        checkScore("teamConflictCost triple",
+                   ScoreCalculator::calculateScore(s),
+                   -3,
+                   0);
     }
 
-    // hard 2: four consecutive home matches (opponents rotated so no away
+    // hard 2: consecutiveHomeMatchesCost — four consecutive home matches (opponents rotated so no away
     // run forms) -> penalized by the run length 4.
     {
         LeagueSchedule s = makeBaseContiguous(4, 5);
@@ -228,7 +235,8 @@ void verifyConstraints()
                    0);
     }
 
-    // hard 3: four consecutive away matches (hosts rotated).
+    // hard 3: consecutiveAwayMatchesCost — four consecutive away matches
+    // (hosts rotated).
     {
         LeagueSchedule s = makeBaseContiguous(4, 5);
         addMatch(s, 1, 0, 0);
@@ -241,8 +249,9 @@ void verifyConstraints()
                    0);
     }
 
-    // hard 4: the Java repeatMatchOnTheNextDay case — only the round-0 match
-    // is followed by its reversed fixture on the next round index.
+    // hard 4: repeatMatchOnNextDayCost, the Java repeatMatchOnTheNextDay
+    // case — only the round-0 match is followed by its reversed fixture on
+    // the next round index.
     {
         LeagueSchedule s = makeBaseContiguous(2, 7);
         addMatch(s, 0, 1, 0);
@@ -261,8 +270,8 @@ void verifyConstraints()
         addMatch(s, 0, 1, 0);
         addMatch(s, 1, 0, 1);
         addMatch(s, 1, 0, 1);
-        // repeat: 1 (the round-0 match; ifExists counts once). sameDay: the
-        // two identical round-1 matches pair up once. away run of team 0 at
+        // repeat: 1 (the round-0 match; ifExists counts once). teamConflict:
+        // the two identical round-1 matches pair up once. away run of team 0 at
         // indices {0? no — team 0 is home at 0} — home0@{0}, away1@{0},
         // home1@{1,1}, away0@{1,1}: 2 items < 4. No hops (zero distances).
         checkScore("repeat counted once per match",
@@ -271,7 +280,7 @@ void verifyConstraints()
                    0);
     }
 
-    // soft 5: startToAwayHop — only matches on a round with no previous
+    // soft 5: startToAwayHopCost — only matches on a round with no previous
     // round index pay dist(away, home).
     {
         LeagueSchedule s = makeBaseContiguous(4, 3);
@@ -282,9 +291,9 @@ void verifyConstraints()
         // (no team-sharing across the consecutive rounds; round 2 exists so
         // no end hop).
         checkScore(
-            "startToAwayHop", ScoreCalculator::calculateScore(s), 0, -21);
+            "startToAwayHopCost", ScoreCalculator::calculateScore(s), 0, -21);
     }
-    // soft 6: homeToAwayHop — m2.away == m1.home on consecutive indices pays
+    // soft 6: homeToAwayHopCost — m2.away == m1.home on consecutive indices pays
     // dist(m1.home, m2.home).
     {
         LeagueSchedule s = makeBaseContiguous(4, 2);
@@ -292,43 +301,45 @@ void verifyConstraints()
         addMatch(s, 0, 1, 0);
         addMatch(s, 2, 0, 1);
         // start: d(1,0)=21. homeToAway: d(0,2)=13. end: d(2,0)=31.
-        checkScore("homeToAwayHop (+start/end)",
+        checkScore("homeToAwayHopCost (+start/end)",
                    ScoreCalculator::calculateScore(s),
                    0,
                    -65);
     }
-    // soft 7: awayToAwayHop — m2.away == m1.away pays dist(m1.home, m2.home).
+    // soft 7: awayToAwayHopCost — m2.away == m1.away pays
+    // dist(m1.home, m2.home).
     {
         LeagueSchedule s = makeBaseContiguous(4, 2);
         useSyntheticDistances(s);
         addMatch(s, 0, 1, 0);
         addMatch(s, 2, 1, 1);
         // start: d(1,0)=21. awayToAway: d(0,2)=13. end: d(2,1)=32.
-        checkScore("awayToAwayHop (+start/end)",
+        checkScore("awayToAwayHopCost (+start/end)",
                    ScoreCalculator::calculateScore(s),
                    0,
                    -66);
     }
-    // soft 8: awayToHomeHop — m2.home == m1.away pays dist(m1.home, m1.away).
+    // soft 8: awayToHomeHopCost — m2.home == m1.away pays
+    // dist(m1.home, m1.away).
     {
         LeagueSchedule s = makeBaseContiguous(4, 2);
         useSyntheticDistances(s);
         addMatch(s, 0, 1, 0);
         addMatch(s, 1, 2, 1);
         // start: d(1,0)=21. awayToHome: d(0,1)=12. end: d(1,2)=23.
-        checkScore("awayToHomeHop (+start/end)",
+        checkScore("awayToHomeHopCost (+start/end)",
                    ScoreCalculator::calculateScore(s),
                    0,
                    -56);
     }
-    // soft 9: awayToEndHop — a single round is both first and last.
+    // soft 9: awayToEndHopCost — a single round is both first and last.
     {
         LeagueSchedule s = makeBaseContiguous(4, 1);
         useSyntheticDistances(s);
         addMatch(s, 0, 1, 0);
         addMatch(s, 1, 0);  // unassigned: contributes nothing
         // start: d(1,0)=21; end: d(0,1)=12.
-        checkScore("awayToEndHop on the only round",
+        checkScore("awayToEndHopCost on the only round",
                    ScoreCalculator::calculateScore(s),
                    0,
                    -33);
@@ -345,15 +356,16 @@ void verifyConstraints()
                    -33);
     }
 
-    // soft 10: classic matches off weekends cost 1000 each (Java mirror:
-    // two classic matches on plain rounds, one on a weekend round is free).
+    // soft 10: workdayClassicMatchesCost — classic matches off weekends
+    // cost 1000 each (Java mirror: two classic matches on plain rounds, one
+    // on a weekend round is free).
     {
         LeagueSchedule s = makeBaseContiguous(4, 5);
         s.rounds[1].weekendOrHoliday = true;
         addMatch(s, 0, 1, 0, /*classic*/ true);
         addMatch(s, 2, 3, 1, /*classic*/ true);  // weekend: free
         addMatch(s, 0, 1, 4, /*classic*/ true);
-        checkScore("classic matches off weekend",
+        checkScore("workdayClassicMatchesCost off weekend",
                    ScoreCalculator::calculateScore(s),
                    0,
                    -2000);
@@ -455,8 +467,9 @@ void verifyIncremental()
         // over all matches it is the soft total with the three hop terms
         // counted twice (once per match of each pair).
         const Breakdown b = ScoreCalculator::computeBreakdown(shadow);
-        const std::int64_t expectedCost = b.softTotal() + b.homeToAwayHop
-                                          + b.awayToAwayHop + b.awayToHomeHop;
+        const std::int64_t expectedCost = b.softTotal() + b.homeToAwayHopCost
+                                          + b.awayToAwayHopCost
+                                          + b.awayToHomeHopCost;
         std::int64_t actualCost = 0;
         for (int i = 0; i < matchCount; ++i)
             actualCost += calc.matchCost(i);

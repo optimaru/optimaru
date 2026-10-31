@@ -18,15 +18,22 @@ namespace sls
 //
 // Every constraint couples a match only to matches on the same or an
 // adjacent round index, so a single variable change is O(delta):
-//   - hard 1 (same day) and soft 6-8 (hop pairs): scan the match buckets of
-//     the old/new round index and its two neighbors (roundMatches_).
-//   - hard 2/3 (consecutive home/away runs): the change touches one round
-//     index of one (team, side) count row; the affected maximal run is
-//     re-priced in place (bounded by the run's length).
-//   - hard 4 (repeat next day): ordered-pair-per-round-index counters give
-//     both the match's own predicate and the flips it causes on reversed
-//     fixtures of the previous round index.
-//   - soft 5/9 (start/end hops) and soft 10 (classic): O(1) lookups.
+//   - hard 1 (teamConflictCost) and soft 6-8 (the hop pairs
+//     homeToAwayHopCost / awayToAwayHopCost / awayToHomeHopCost): scan the
+//     match buckets of the old/new round index and its two neighbors
+//     (roundMatches_).
+//   - hard 2/3 (consecutiveHomeMatchesCost / consecutiveAwayMatchesCost):
+//     the change touches one round index of one (team, side) count row; the
+//     affected maximal run is re-priced in place (bounded by the run's
+//     length).
+//   - hard 4 (repeatMatchOnNextDayCost): ordered-pair-per-round-index
+//     counters give both the match's own predicate and the flips it causes
+//     on reversed fixtures of the previous round index.
+//   - soft 5/9 (startToAwayHopCost / awayToEndHopCost) and soft 10
+//     (workdayClassicMatchesCost): O(1) lookups.
+//
+// calculateScore weights the running totals with the components'
+// kDefaultWeight (the default assembly, computed in int64).
 //
 // beforeVariableChanged retracts the match's contribution while `round`
 // still holds the OLD value; afterVariableChanged inserts the NEW value.
@@ -71,16 +78,18 @@ private:
     std::vector<int> awayCnt_;  // team x roundIndex
     std::vector<int> pairCnt_;  // orderedPairId x roundIndex
 
-    // Running totals (all counted positive; signs applied in calculateScore).
-    std::int64_t sameDay_ = 0;      // hard 1
-    std::int64_t consecutive_ = 0;  // hard 2 + 3
-    std::int64_t repeat_ = 0;       // hard 4
-    std::int64_t startHop_ = 0;     // soft 5
-    std::int64_t homeAwayHop_ = 0;  // soft 6
-    std::int64_t awayAwayHop_ = 0;  // soft 7
-    std::int64_t awayHomeHop_ = 0;  // soft 8
-    std::int64_t endHop_ = 0;       // soft 9
-    std::int64_t classic_ = 0;      // soft 10 (count; weighted 1000)
+    // Raw running totals (all counted positive; weights and signs applied in
+    // calculateScore).
+    std::int64_t sameDay_ = 0;      // hard 1, teamConflictCost
+    std::int64_t consecutive_ = 0;  // hard 2 + 3, consecutive*MatchesCost
+    std::int64_t repeat_ = 0;       // hard 4, repeatMatchOnNextDayCost
+    std::int64_t startHop_ = 0;     // soft 5, startToAwayHopCost
+    std::int64_t homeAwayHop_ = 0;  // soft 6, homeToAwayHopCost
+    std::int64_t awayAwayHop_ = 0;  // soft 7, awayToAwayHopCost
+    std::int64_t awayHomeHop_ = 0;  // soft 8, awayToHomeHopCost
+    std::int64_t endHop_ = 0;       // soft 9, awayToEndHopCost
+    std::int64_t classic_ = 0;      // soft 10, workdayClassicMatchesCost
+                                    // (count; weighted 1000)
 
     // Soft penalty each match currently carries: its own start/end hop and
     // classic penalty plus every hop pair it takes part in, credited to both

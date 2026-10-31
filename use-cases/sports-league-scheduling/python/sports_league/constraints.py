@@ -1,195 +1,292 @@
 """Constraint assembly specs — an API for picking the cost function declaratively.
 
-The default path (`sls.solve(schedule)`) enables all ten constraints at the quickstart weights.
-This module is the alternative path next to it: pick constraints, change weights, flip
-hard/soft, and pass the list to `solve(schedule, constraints=...)`.
+The default path (`sl.solve(schedule)`) enables all ten constraints at their default
+weights. This module is the alternative path next to it: pick constraints, change
+weights, flip hard/soft, and pass the list to `solve(schedule, constraints=...)`.
 
 The shortest route is :func:`get_constraints`. It returns the default list, so
 a "default with a small tweak" declaration fits on one line::
 
-    import sports_league as sls
+    import sports_league as sl
     from sports_league.constraints import (
-        ClassicMatches, get_constraints, matches_on_same_day,
+        WorkdayClassicMatchesCost, get_constraints, team_conflict_cost,
     )
 
-    sls.solve(schedule, constraints=get_constraints())          # defaults as-is
-    sls.solve(schedule, constraints=get_constraints([           # picked
-        matches_on_same_day, ClassicMatches(weight=10_000),
+    sl.solve(schedule, constraints=get_constraints())          # defaults as-is
+    sl.solve(schedule, constraints=get_constraints([           # picked
+        team_conflict_cost, WorkdayClassicMatchesCost(weight=10_000),
     ]))
 
-Each constraint has a default instance at module level, so you can also pass a
-list of just a few. Only listed constraints are scored — leave one out and its
-term disappears from the score.
+Each constraint has a default instance at module level (`team_conflict_cost`,
+`workday_classic_matches_cost`, ...), so you can also pass a list of just a few.
+Only listed constraints are scored — leave one out and its term disappears from the
+score.
 
 Every spec takes ``(weight=None, hard=None, exponent=1.0)``:
 
-- ``weight``   linear multiplier on the constraint cost. ``None`` = component default.
-- ``hard``     ``True``/``False`` flips the default level; ``None`` keeps it.
+- ``weight``   linear multiplier on the constraint cost. ``None`` = the component
+               default (1 for every constraint but `workday_classic_matches_cost`,
+               whose default is 1000). ``sl.constraint_info()`` reports the defaults.
+- ``hard``     ``True`` = hard, ``False`` = soft, ``None`` = the default level.
 - ``exponent`` sign-preserving power shaping: ``weight * sign(c) * |c| **
-               exponent``. 2.0 = squared, so concentrated violations grow much costlier.
+               exponent``. 2.0 = squared, so concentrated violations grow much
+               costlier. The three unit constraints (`start_to_away_hop_cost`,
+               `away_to_end_hop_cost`, `workday_classic_matches_cost`) shape the cost
+               of each round; the seven global constraints shape their one total.
 
-The five travel terms (`*_hop`) are all in km, so adding them up makes sense.
-The 1'000 of `classic_matches` is set against those km — expensive enough that the
-search takes long detours to put a derby on a Saturday.
+The five travel terms (`*_hop_cost`) are all in km, so adding them up makes sense.
+The 1'000 of `workday_classic_matches_cost` is set against those km — expensive enough
+that the search takes long detours to put a derby on a Saturday.
 
-Names (`name`) are the C++ component names in snake_case. The core derives them
-mechanically, so there is no hand-maintained alias table — check them with
-`sls.list_constraints()`. Module-level instance names use the same snake_case,
-so they match the strings `list_constraints()` prints.
+Names (`name`) are the C++ component names in snake_case
+(``TeamConflictCost`` -> ``team_conflict_cost``). The core derives them mechanically,
+so there is no hand-maintained alias table — check them with `sl.list_constraints()`.
+Module-level instance names use the same snake_case, so they match the strings
+`list_constraints()` prints.
 """
 
-import math
-from dataclasses import dataclass
-from typing import ClassVar, NamedTuple
+from ._constraint import Constraint, Score, score_costs, select
 
 __all__ = [
     "Constraint",
     "Score",
     "score",
-    "StartToAwayHop",
-    "AwayToEndHop",
-    "ClassicMatches",
-    "MatchesOnSameDay",
-    "ConsecutiveHomeMatches",
-    "ConsecutiveAwayMatches",
-    "RepeatMatchOnNextDay",
-    "HomeToAwayHop",
-    "AwayToAwayHop",
-    "AwayToHomeHop",
-    "start_to_away_hop",
-    "away_to_end_hop",
-    "classic_matches",
-    "matches_on_same_day",
-    "consecutive_home_matches",
-    "consecutive_away_matches",
-    "repeat_match_on_next_day",
-    "home_to_away_hop",
-    "away_to_away_hop",
-    "away_to_home_hop",
+    "StartToAwayHopCost",
+    "AwayToEndHopCost",
+    "WorkdayClassicMatchesCost",
+    "TeamConflictCost",
+    "ConsecutiveHomeMatchesCost",
+    "ConsecutiveAwayMatchesCost",
+    "RepeatMatchOnNextDayCost",
+    "HomeToAwayHopCost",
+    "AwayToAwayHopCost",
+    "AwayToHomeHopCost",
+    "start_to_away_hop_cost",
+    "away_to_end_hop_cost",
+    "workday_classic_matches_cost",
+    "team_conflict_cost",
+    "consecutive_home_matches_cost",
+    "consecutive_away_matches_cost",
+    "repeat_match_on_next_day_cost",
+    "home_to_away_hop_cost",
+    "away_to_away_hop_cost",
+    "away_to_home_hop_cost",
     "get_constraints",
 ]
 
 
-@dataclass(frozen=True)
-class Constraint:
-    """Spec selecting one constraint: weight / level / shaping."""
-
-    weight: float | None = None  # None = component default weight
-    hard: bool | None = None  # None = component default level
-    exponent: float = 1.0
-    name: ClassVar[str] = ""
-
-    def __init_subclass__(cls, **kwargs):
-        super().__init_subclass__(**kwargs)
-        if not cls.name:
-            raise TypeError(f"{cls.__name__} must set a registry `name`")
-
-
-class MatchesOnSameDay(Constraint):
+class TeamConflictCost(Constraint):
     """Pairs of matches in the same round sharing at least one team. Default: hard, weight 1.
 
     A pair sharing **both** teams (a fixture and its return) also counts once."""
 
-    name = "matches_on_same_day"
+    name = "team_conflict_cost"
+    label_en = "Team conflict"
+    label_ko = "팀 일정 충돌"
+    description_en = (
+        "Pairs of matches in the same round that share a team; a pair sharing both teams counts once. "
+        "One unit of cost is one such pair; 0 means no team plays twice in a round."
+    )
+    description_ko = (
+        "같은 라운드에 열리면서 팀을 공유하는 경기 쌍의 수이며, 두 팀을 모두 공유하는 쌍도 한 번만 셉니다. "
+        "그런 쌍 하나가 비용 1이며, 0이면 한 라운드에 두 번 경기하는 팀이 없습니다."
+    )
 
 
-class ConsecutiveHomeMatches(Constraint):
+class ConsecutiveHomeMatchesCost(Constraint):
     """Teams playing at home four or more rounds in a row. Default: hard, weight 1.
 
-    The penalty is the whole run length. Several home matches in one round count
-    once — what makes the run is the round being there at all."""
+    The cost is the whole run length (a run of 4 costs 4, not the excess over 3).
+    Several home matches in one round count once — what makes the run is the round
+    being there at all."""
 
-    name = "consecutive_home_matches"
+    name = "consecutive_home_matches_cost"
+    label_en = "Consecutive home matches"
+    label_ko = "연속 홈 경기"
+    description_en = (
+        "For each team, the full length of every run of four or more consecutive rounds played at home "
+        "(a run of 4 costs 4). One unit of cost is one round of such a run; "
+        "0 means no team plays at home more than three rounds in a row."
+    )
+    description_ko = (
+        "팀마다 네 라운드 이상 연속으로 홈에서 치르는 구간의 길이를 모두 더합니다(4연속이면 4). "
+        "그런 구간의 라운드 하나가 비용 1이며, 0이면 어느 팀도 세 라운드를 넘게 연속으로 홈 경기를 치르지 않습니다."
+    )
 
 
-class ConsecutiveAwayMatches(Constraint):
-    """The away mirror of `consecutive_home_matches`. Default: hard, weight 1.
+class ConsecutiveAwayMatchesCost(Constraint):
+    """The away mirror of `consecutive_home_matches_cost`. Default: hard, weight 1.
 
     This is the one that actually keeps teams from living on the road for weeks."""
 
-    name = "consecutive_away_matches"
+    name = "consecutive_away_matches_cost"
+    label_en = "Consecutive away matches"
+    label_ko = "연속 원정 경기"
+    description_en = (
+        "For each team, the full length of every run of four or more consecutive rounds played away "
+        "(a run of 4 costs 4). One unit of cost is one round of such a run; "
+        "0 means no team plays away more than three rounds in a row."
+    )
+    description_ko = (
+        "팀마다 네 라운드 이상 연속으로 원정을 치르는 구간의 길이를 모두 더합니다(4연속이면 4). "
+        "그런 구간의 라운드 하나가 비용 1이며, 0이면 어느 팀도 세 라운드를 넘게 연속으로 원정 경기를 치르지 않습니다."
+    )
 
 
-class RepeatMatchOnNextDay(Constraint):
+class RepeatMatchOnNextDayCost(Constraint):
     """Matches whose return fixture is played in the very next round. Default: hard, weight 1.
 
     At most 1 point per match however many return fixtures are there (Java's ifExists)."""
 
-    name = "repeat_match_on_next_day"
+    name = "repeat_match_on_next_day_cost"
+    label_en = "Return match in the next round"
+    label_ko = "다음 라운드 리턴 매치"
+    description_en = (
+        "Matches whose return fixture (home and away swapped) is played in the very next round, "
+        "counted at most once per match. One unit of cost is one such match; "
+        "0 means no return fixture follows immediately."
+    )
+    description_ko = (
+        "홈과 원정을 바꾼 리턴 매치가 바로 다음 라운드에 열리는 경기의 수이며, 경기마다 한 번만 셉니다. "
+        "그런 경기 하나가 비용 1이며, 0이면 리턴 매치가 곧바로 이어지는 경우가 없습니다."
+    )
 
 
-class StartToAwayHop(Constraint):
-    """Km the away team travels from its home to a match in the season's **first** round. Default: soft, weight 1."""
+class StartToAwayHopCost(Constraint):
+    """Km the away team travels from its home to a match in the season's **first** round.
+    Default: soft, weight 1."""
 
-    name = "start_to_away_hop"
+    name = "start_to_away_hop_cost"
+    label_en = "Travel to the first round"
+    label_ko = "첫 라운드 원정 이동"
+    description_en = (
+        "Kilometres each away team travels from its home to a match in the season's first round. "
+        "One unit of cost is one kilometre; 0 means no away travel to first-round matches."
+    )
+    description_ko = (
+        "시즌 첫 라운드 경기마다 원정 팀이 연고지에서 경기장까지 이동하는 거리(km)를 더합니다. "
+        "1km가 비용 1이며, 0이면 첫 라운드 경기에 원정 이동이 없습니다."
+    )
 
 
-class HomeToAwayHop(Constraint):
+class HomeToAwayHopCost(Constraint):
     """Km traveled by a team going away in the round after a home match. Default: soft, weight 1.
 
     For pairs (m1 in round i, m2 in i+1) with m2.away == m1.home,
     dist(m1.home, m2.home) is charged."""
 
-    name = "home_to_away_hop"
+    name = "home_to_away_hop_cost"
+    label_en = "Home-to-away travel"
+    label_ko = "홈에서 원정으로 이동"
+    description_en = (
+        "Kilometres a team travels from its home ground to the next host "
+        "when it plays at home in one round and away in the next. "
+        "One unit of cost is one kilometre; 0 means no such trip."
+    )
+    description_ko = (
+        "한 라운드를 홈에서 치르고 다음 라운드를 원정으로 치르는 팀이 연고지에서 다음 상대의 연고지까지 "
+        "이동하는 거리(km)를 더합니다. 1km가 비용 1이며, 0이면 그런 이동이 없습니다."
+    )
 
 
-class AwayToAwayHop(Constraint):
+class AwayToAwayHopCost(Constraint):
     """Km a team on two consecutive away rounds travels from one home ground to the next.
     Default: soft, weight 1."""
 
-    name = "away_to_away_hop"
+    name = "away_to_away_hop_cost"
+    label_en = "Away-to-away travel"
+    label_ko = "원정에서 원정으로 이동"
+    description_en = (
+        "Kilometres a team playing away in two consecutive rounds travels straight from one host's ground "
+        "to the next. One unit of cost is one kilometre; 0 means no such trip."
+    )
+    description_ko = (
+        "두 라운드 연속으로 원정을 치르는 팀이 한 상대의 연고지에서 다음 상대의 연고지로 곧장 이동하는 "
+        "거리(km)를 더합니다. 1km가 비용 1이며, 0이면 그런 이동이 없습니다."
+    )
 
 
-class AwayToHomeHop(Constraint):
+class AwayToHomeHopCost(Constraint):
     """Km a team playing at home after an away round travels back. Default: soft, weight 1.
 
     The distance is dist(m1.home, m1.away) of the **earlier** match — it depends only on
     m1, so the later match contributes the earlier match's distance, not its own."""
 
-    name = "away_to_home_hop"
+    name = "away_to_home_hop_cost"
+    label_en = "Away-to-home travel"
+    label_ko = "원정에서 홈으로 이동"
+    description_en = (
+        "Kilometres a team travels back home when it plays away in one round and at home in the next "
+        "(the distance of the earlier away match). One unit of cost is one kilometre; 0 means no such trip."
+    )
+    description_ko = (
+        "한 라운드를 원정으로 치르고 다음 라운드를 홈에서 치르는 팀이 연고지로 돌아오는 거리(km, 앞선 원정 "
+        "경기의 거리)를 더합니다. 1km가 비용 1이며, 0이면 그런 이동이 없습니다."
+    )
 
 
-class AwayToEndHop(Constraint):
+class AwayToEndHopCost(Constraint):
     """Km the away team travels home after a match in the season's **last** round.
     Default: soft, weight 1."""
 
-    name = "away_to_end_hop"
+    name = "away_to_end_hop_cost"
+    label_en = "Travel home after the last round"
+    label_ko = "마지막 라운드 후 귀환 이동"
+    description_en = (
+        "Kilometres each away team travels home after a match in the season's last round. "
+        "One unit of cost is one kilometre; 0 means no away travel home after last-round matches."
+    )
+    description_ko = (
+        "시즌 마지막 라운드 경기마다 원정 팀이 연고지로 돌아가는 거리(km)를 더합니다. "
+        "1km가 비용 1이며, 0이면 마지막 라운드 경기 뒤에 원정 귀환 이동이 없습니다."
+    )
 
 
-class ClassicMatches(Constraint):
+class WorkdayClassicMatchesCost(Constraint):
     """Derbies played in a round that is neither a weekend nor a holiday. Default: soft, weight 1000.
 
     Expensive enough against the km travel terms that the search takes long detours
     to put a derby on a Saturday."""
 
-    name = "classic_matches"
+    name = "workday_classic_matches_cost"
+    label_en = "Derby on a workday"
+    label_ko = "평일 더비 경기"
+    description_en = (
+        "Classic matches (derbies) played in a round that is neither a weekend nor a holiday. "
+        "One unit of cost is one such derby (default weight 1000); "
+        "0 means every derby is on a weekend or holiday."
+    )
+    description_ko = (
+        "주말도 공휴일도 아닌 라운드에 열리는 더비(클래식 매치)의 수입니다. "
+        "그런 더비 하나가 비용 1(기본 가중치 1000)이며, 0이면 모든 더비가 주말이나 공휴일에 열립니다."
+    )
 
 
-#: Instances at the default weights. Reference them directly when picking.
-start_to_away_hop = StartToAwayHop()
-away_to_end_hop = AwayToEndHop()
-classic_matches = ClassicMatches()
-matches_on_same_day = MatchesOnSameDay()
-consecutive_home_matches = ConsecutiveHomeMatches()
-consecutive_away_matches = ConsecutiveAwayMatches()
-repeat_match_on_next_day = RepeatMatchOnNextDay()
-home_to_away_hop = HomeToAwayHop()
-away_to_away_hop = AwayToAwayHop()
-away_to_home_hop = AwayToHomeHop()
+#: Instances at the default weights (weight=None). Reference them directly when picking.
+start_to_away_hop_cost = StartToAwayHopCost()
+away_to_end_hop_cost = AwayToEndHopCost()
+workday_classic_matches_cost = WorkdayClassicMatchesCost()
+team_conflict_cost = TeamConflictCost()
+consecutive_home_matches_cost = ConsecutiveHomeMatchesCost()
+consecutive_away_matches_cost = ConsecutiveAwayMatchesCost()
+repeat_match_on_next_day_cost = RepeatMatchOnNextDayCost()
+home_to_away_hop_cost = HomeToAwayHopCost()
+away_to_away_hop_cost = AwayToAwayHopCost()
+away_to_home_hop_cost = AwayToHomeHopCost()
 
-#: Default set — same order as `sls.list_constraints()` (unit first, global after).
-_DEFAULTS: list[Constraint] = [
-    start_to_away_hop,
-    away_to_end_hop,
-    classic_matches,
-    matches_on_same_day,
-    consecutive_home_matches,
-    consecutive_away_matches,
-    repeat_match_on_next_day,
-    home_to_away_hop,
-    away_to_away_hop,
-    away_to_home_hop,
-]
+# The default set, in list_constraints() order (unit constraints first, globals after).
+_DEFAULTS = (
+    start_to_away_hop_cost,
+    away_to_end_hop_cost,
+    workday_classic_matches_cost,
+    team_conflict_cost,
+    consecutive_home_matches_cost,
+    consecutive_away_matches_cost,
+    repeat_match_on_next_day_cost,
+    home_to_away_hop_cost,
+    away_to_away_hop_cost,
+    away_to_home_hop_cost,
+)
 
 
 def get_constraints(constraints: list[Constraint] | None = None) -> list[Constraint]:
@@ -198,40 +295,22 @@ def get_constraints(constraints: list[Constraint] | None = None) -> list[Constra
     When `constraints` is given, that list is used as-is — only the listed
     constraints are scored. To change just one default, mix in the default instances::
 
-        get_constraints([matches_on_same_day, ClassicMatches(weight=10_000)])
+        get_constraints([team_conflict_cost, WorkdayClassicMatchesCost(weight=10_000)])
+
+    Same contract as the C++ applyConstraints: an empty list (most likely a filter
+    that came out empty) and a constraint named twice raise ValueError.
     """
-    if constraints is None:
-        return list(_DEFAULTS)
-    if not constraints:
-        # Same contract as C++ applyConstraints: an empty list means "score
-        # nothing", which is most likely a mistake. A filter that happens to come
-        # out empty must not silently flip to "score everything".
-        raise ValueError("constraints must not be empty (pass None for the defaults)")
-    return list(constraints)
-
-
-class Score(NamedTuple):
-    """(hard, soft) returned by `score()`. Both are penalties, so <= 0."""
-
-    hard: int
-    soft: float
-
-
-def _shape(cost: float, exponent: float) -> float:
-    """Sign-preserving power. Rewards (negative costs) never flip into penalties."""
-    if exponent == 1.0 or cost == 0.0:
-        return cost
-    return -((-cost) ** exponent) if cost < 0.0 else cost**exponent
+    return select(constraints, _DEFAULTS)
 
 
 def score(costs: dict, constraints: list[Constraint] | None = None) -> Score:
     """Apply specs to raw constraint costs and produce a score — pure Python.
 
-    ``costs`` is what `sls.constraint_costs(schedule)` returns: per constraint, the
+    ``costs`` is what `sl.constraint_costs(schedule)` returns: per constraint, the
     **raw** cost of each unit (before weight, exponent and level rounding).
     Fetch it once and rescore with different weights without re-solving::
 
-        raw = sls.constraint_costs(schedule)
+        raw = sl.constraint_costs(schedule)
         score(raw)                     # default set
         score(raw, picked)             # picked list
 
@@ -239,27 +318,9 @@ def score(costs: dict, constraints: list[Constraint] | None = None) -> Score:
     each unit contributes ``weight * shape(cost, exponent)`` and hard
     contributions are **rounded per unit** before summing (the same order as the
     engine's applyRaw; rounding the total afterwards gives different values).
+    ``weight=None`` / ``hard=None`` read the entry's default weight and level.
 
     When ``constraints`` is given, only those constraints are scored — the same
     semantics as `get_constraints`. Unknown names raise ValueError.
     """
-    hard = 0
-    soft = 0.0
-    for spec in get_constraints(constraints):
-        entry = costs.get(spec.name)
-        if entry is None:
-            raise ValueError(
-                f"unknown constraint {spec.name!r}; available: " + ", ".join(repr(name) for name in sorted(costs))
-            )
-        weight = entry["weight"] if spec.weight is None else spec.weight
-        is_hard = entry["hard"] if spec.hard is None else spec.hard
-        exponent = spec.exponent
-        for cost in entry["costs"]:
-            value = weight * _shape(cost, exponent)
-            if is_hard:
-                # Round per unit contribution like the engine (half-away-from-zero
-                # like llround; Python's round is banker's rounding).
-                hard += int(math.floor(value + 0.5) if value >= 0 else math.ceil(value - 0.5))
-            else:
-                soft += value
-    return Score(-hard, -soft if soft != 0.0 else 0.0)
+    return score_costs(costs, get_constraints(constraints))

@@ -46,14 +46,14 @@ namespace sls
 //   TeamSideRunConstraint     the consecutive home/away run penalties: a
 //                             per-(team, index) presence table whose one
 //                             touched team row is re-scored in O(indexCount).
-//   (repeat_match_on_next_day carries its own state: its cost is a clamped
-//    per-match indicator, not a pair sum.)
+//   (repeat_match_on_next_day_cost.hpp carries its own state: its cost is a
+//    clamped per-match indicator, not a pair sum.)
 //
 //   DecomposedCalculator calc;
-//   defaultConstraints()              // the whole default set
-//       .weight("...", 2)            // ... then only what differs
-//       .soft("...")
-//       .drop("...")
+//   defaultConstraints()                          // the whole default set
+//       .weight("workdayClassicMatchesCost", 2)  // ... then only what differs
+//       .soft("consecutiveHomeMatchesCost")
+//       .drop("awayToEndHopCost")
 //       .into(calc);
 //   solver.solve(schedule, calc);
 //
@@ -61,16 +61,28 @@ namespace sls
 // `ConstraintAssembly{}` when you would rather list components from
 // scratch than start from the defaults.
 //
-// The "Hard:"/"Soft:" level and the weight of each component are DEFAULTS —
-// assembly-time metadata, not part of the cost. Override them per instance
-// via the mutable `isHard` / `weight` / `exponent`. The travel-hop rules cost
-// plain kilometres at weight 1, and classicMatches carries the quickstart's
-// x 1'000.
+// The pattern every component follows (constraints/<subject>_cost.hpp, one
+// component per header):
+//   - the struct is named <Subject>Cost and its registry name is the struct
+//     name with a lower-case first letter ("teamConflictCost"), which the
+//     Python bindings see as snake_case ("team_conflict_cost");
+//   - its defaults are declared ONCE, as `static constexpr double
+//     kDefaultWeight` and `static constexpr optimaru::Level kDefaultLevel`,
+//     and the constructor takes the weight first (`explicit
+//     X(double weight = kDefaultWeight)`). defaultConstraints().info() —
+//     and so the Python constraint_info() and the CP-SAT reference's
+//     defaults — read them off the components; nothing restates them;
+//   - the level is the `level` member (optimaru::Level::Hard / Soft; this
+//     domain has no medium level), `isHard()` reads it. Weight, level and
+//     exponent are assembly-time metadata, not part of the cost: override
+//     them per instance through the validated setters or the assembly's
+//     named edits. The travel-hop rules cost plain kilometres at weight 1,
+//     and workdayClassicMatchesCost carries the quickstart's x 1'000.
 //
 // Cost sign convention (see decomposed_score_calculator.hpp): positive =
-// penalty; the calculator negates into the score. An assembly of all ten
-// components at their default weights therefore scores bit-for-bit like
-// ScoreCalculator::calculateScore.
+// penalty, 0 = no violation; the calculator negates into the score. An
+// assembly of all ten components at their default weights therefore scores
+// bit-for-bit like ScoreCalculator::calculateScore.
 //
 // Every component requires ScoreCalculator::prepare(schedule) to have run
 // (the solve() overload and the monolithic path both call it).
@@ -80,6 +92,31 @@ using DecomposedCalculator
 using ConstraintAssembly = optimaru::ConstraintAssembly<LeagueSchedule>;
 using SlsUnitConstraint = optimaru::UnitConstraint<LeagueSchedule>;
 using SlsGlobalConstraint = optimaru::GlobalConstraint<LeagueSchedule>;
+
+// A component's kDefaultWeight as an exact integer, for the monolithic
+// calculators (Breakdown's weighted totals and the incremental calculator),
+// which are the default assembly computed in int64. Fails to compile if a
+// default weight stops being integral or if a component leaves the level the
+// monolith sums it into.
+template <typename Component, optimaru::Level kLevel>
+constexpr std::int64_t monolithicWeight()
+{
+    static_assert(Component::kDefaultLevel == kLevel,
+                  "the monolithic calculators sum this constraint into "
+                  "another level");
+    constexpr auto weight
+        = static_cast<std::int64_t>(Component::kDefaultWeight);
+    static_assert(weight == Component::kDefaultWeight,
+                  "the monolithic calculators assume integral default "
+                  "weights");
+    return weight;
+}
+template <typename Component>
+constexpr std::int64_t kHardWeight
+    = monolithicWeight<Component, optimaru::Level::Hard>();
+template <typename Component>
+constexpr std::int64_t kSoftWeight
+    = monolithicWeight<Component, optimaru::Level::Soft>();
 
 namespace detail
 {

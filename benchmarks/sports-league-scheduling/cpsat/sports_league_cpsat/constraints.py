@@ -1,4 +1,12 @@
-"""Class-based CP-SAT plugins for sports league scheduling."""
+"""Class-based CP-SAT plugins for sports league scheduling.
+
+Each plugin subclasses the domain spec of the same name; its default level and
+weight come from the engine's ``sports_league.constraint_info()`` (the C++
+components' kDefaultLevel / kDefaultWeight), so they are not restated here.
+Before 0.2.0 the derby plugin restated only its level and so priced a workday
+derby at weight 1 instead of the engine's 1000; reading the engine's catalog
+removes that mismatch.
+"""
 
 from dataclasses import dataclass, field
 from typing import Any, ClassVar
@@ -30,9 +38,7 @@ class LeagueContext:
         return self._and_cache[key]
 
 
-class MatchesOnSameDay(domain.MatchesOnSameDay, ConstraintPlugin[LeagueContext]):
-    default_level = "hard"
-
+class TeamConflictCost(domain.TeamConflictCost, ConstraintPlugin[LeagueContext]):
     def build(self, context: LeagueContext, objective: ObjectiveBuilder) -> None:
         for left in range(len(context.problem.matches)):
             a = context.problem.matches[left]
@@ -55,11 +61,9 @@ class MatchesOnSameDay(domain.MatchesOnSameDay, ConstraintPlugin[LeagueContext])
                         objective.add(self.name, both, bound=1)
 
 
-class RepeatMatchOnNextDay(
-    domain.RepeatMatchOnNextDay, ConstraintPlugin[LeagueContext]
+class RepeatMatchOnNextDayCost(
+    domain.RepeatMatchOnNextDayCost, ConstraintPlugin[LeagueContext]
 ):
-    default_level = "hard"
-
     def build(self, context: LeagueContext, objective: ObjectiveBuilder) -> None:
         for left in range(len(context.problem.matches)):
             a = context.problem.matches[left]
@@ -124,19 +128,19 @@ class _ConsecutiveSidePlugin(ConstraintPlugin[LeagueContext]):
                 objective.add(self.name, bad, bound=1)
 
 
-class ConsecutiveHomeMatches(domain.ConsecutiveHomeMatches, _ConsecutiveSidePlugin):
-    default_level = "hard"
+class ConsecutiveHomeMatchesCost(
+    domain.ConsecutiveHomeMatchesCost, _ConsecutiveSidePlugin
+):
     side = "home"
 
 
-class ConsecutiveAwayMatches(domain.ConsecutiveAwayMatches, _ConsecutiveSidePlugin):
-    default_level = "hard"
+class ConsecutiveAwayMatchesCost(
+    domain.ConsecutiveAwayMatchesCost, _ConsecutiveSidePlugin
+):
     side = "away"
 
 
-class StartToAwayHop(domain.StartToAwayHop, ConstraintPlugin[LeagueContext]):
-    default_level = "soft"
-
+class StartToAwayHopCost(domain.StartToAwayHopCost, ConstraintPlugin[LeagueContext]):
     def build(self, context: LeagueContext, objective: ObjectiveBuilder) -> None:
         for match, match_data in enumerate(context.problem.matches):
             for round_, round_data in enumerate(context.problem.rounds):
@@ -149,9 +153,7 @@ class StartToAwayHop(domain.StartToAwayHop, ConstraintPlugin[LeagueContext]):
                 objective.add(self.name, value * context.x[match, round_], bound=value)
 
 
-class AwayToEndHop(domain.AwayToEndHop, ConstraintPlugin[LeagueContext]):
-    default_level = "soft"
-
+class AwayToEndHopCost(domain.AwayToEndHopCost, ConstraintPlugin[LeagueContext]):
     def build(self, context: LeagueContext, objective: ObjectiveBuilder) -> None:
         for match, match_data in enumerate(context.problem.matches):
             for round_, round_data in enumerate(context.problem.rounds):
@@ -202,24 +204,21 @@ class _BetweenMatchesPlugin(ConstraintPlugin[LeagueContext]):
                         objective.add(self.name, amount * both, bound=amount)
 
 
-class HomeToAwayHop(domain.HomeToAwayHop, _BetweenMatchesPlugin):
-    default_level = "soft"
+class HomeToAwayHopCost(domain.HomeToAwayHopCost, _BetweenMatchesPlugin):
     transition = "home_to_away"
 
 
-class AwayToAwayHop(domain.AwayToAwayHop, _BetweenMatchesPlugin):
-    default_level = "soft"
+class AwayToAwayHopCost(domain.AwayToAwayHopCost, _BetweenMatchesPlugin):
     transition = "away_to_away"
 
 
-class AwayToHomeHop(domain.AwayToHomeHop, _BetweenMatchesPlugin):
-    default_level = "soft"
+class AwayToHomeHopCost(domain.AwayToHomeHopCost, _BetweenMatchesPlugin):
     transition = "away_to_home"
 
 
-class ClassicMatches(domain.ClassicMatches, ConstraintPlugin[LeagueContext]):
-    default_level = "soft"
-
+class WorkdayClassicMatchesCost(
+    domain.WorkdayClassicMatchesCost, ConstraintPlugin[LeagueContext]
+):
     def build(self, context: LeagueContext, objective: ObjectiveBuilder) -> None:
         for match, match_data in enumerate(context.problem.matches):
             if not match_data.classic_match:
@@ -233,17 +232,18 @@ class ClassicMatches(domain.ClassicMatches, ConstraintPlugin[LeagueContext]):
                 )
 
 
+# Plugin order = sports_league.list_constraints() order (unit constraints first).
 REGISTRY = ConstraintRegistry(
     [
-        MatchesOnSameDay(),
-        ConsecutiveHomeMatches(),
-        ConsecutiveAwayMatches(),
-        RepeatMatchOnNextDay(),
-        StartToAwayHop(),
-        HomeToAwayHop(),
-        AwayToAwayHop(),
-        AwayToHomeHop(),
-        AwayToEndHop(),
-        ClassicMatches(),
+        StartToAwayHopCost(),
+        AwayToEndHopCost(),
+        WorkdayClassicMatchesCost(),
+        TeamConflictCost(),
+        ConsecutiveHomeMatchesCost(),
+        ConsecutiveAwayMatchesCost(),
+        RepeatMatchOnNextDayCost(),
+        HomeToAwayHopCost(),
+        AwayToAwayHopCost(),
+        AwayToHomeHopCost(),
     ]
 )

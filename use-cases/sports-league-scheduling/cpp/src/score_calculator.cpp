@@ -6,6 +6,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include "sls/constraints.hpp"
+
 namespace sls
 {
 
@@ -51,8 +53,8 @@ void ScoreCalculator::prepare(LeagueSchedule &schedule)
         schedule.roundIndexExists[round.index] = 1;
 
     // Intern the ordered (home, away) pairs of the matches into dense ids and
-    // resolve each match's reversed pair (repeatMatchOnNextDay needs "does a
-    // reversed fixture sit on the next round index").
+    // resolve each match's reversed pair (repeatMatchOnNextDayCost needs
+    // "does a reversed fixture sit on the next round index").
     std::unordered_map<int, int> pairIds;
     auto keyOf
         = [teamCount](int home, int away) { return home * teamCount + away; };
@@ -103,6 +105,31 @@ std::int64_t ScoreCalculator::runPenalty(const std::vector<int> &cnt)
     return penalty;
 }
 
+// The monolithic score is the default assembly (sls/constraints.hpp), so the
+// weighted totals read the same kDefaultWeight constants the components carry
+// (kHardWeight / kSoftWeight check that each one is integral and on the level
+// it is summed into).
+std::int64_t Breakdown::hardTotal() const
+{
+    return kHardWeight<TeamConflictCost> * teamConflictCost
+           + kHardWeight<ConsecutiveHomeMatchesCost>
+                 * consecutiveHomeMatchesCost
+           + kHardWeight<ConsecutiveAwayMatchesCost>
+                 * consecutiveAwayMatchesCost
+           + kHardWeight<RepeatMatchOnNextDayCost> * repeatMatchOnNextDayCost;
+}
+
+std::int64_t Breakdown::softTotal() const
+{
+    return kSoftWeight<StartToAwayHopCost> * startToAwayHopCost
+           + kSoftWeight<HomeToAwayHopCost> * homeToAwayHopCost
+           + kSoftWeight<AwayToAwayHopCost> * awayToAwayHopCost
+           + kSoftWeight<AwayToHomeHopCost> * awayToHomeHopCost
+           + kSoftWeight<AwayToEndHopCost> * awayToEndHopCost
+           + kSoftWeight<WorkdayClassicMatchesCost>
+                 * workdayClassicMatchesCost;
+}
+
 Breakdown ScoreCalculator::computeBreakdown(LeagueSchedule &schedule)
 {
     prepare(schedule);
@@ -132,15 +159,16 @@ Breakdown ScoreCalculator::computeBreakdown(LeagueSchedule &schedule)
 
         // soft 5 + 9: first/last round-index hops.
         if (ri == 0 || !schedule.roundIndexExists[ri - 1])
-            b.startToAwayHop
+            b.startToAwayHopCost
                 += schedule.distance(match.awayTeam, match.homeTeam);
         if (ri == schedule.maxRoundIndex || !schedule.roundIndexExists[ri + 1])
-            b.awayToEndHop += schedule.distance(match.homeTeam, match.awayTeam);
+            b.awayToEndHopCost
+                += schedule.distance(match.homeTeam, match.awayTeam);
 
         // soft 10: classic matches outside weekends/holidays.
         if (match.classicMatch
             && !schedule.rounds[match.round].weekendOrHoliday)
-            ++b.classicMatchCount;
+            ++b.workdayClassicMatchesCost;
     }
 
     // hard 1: same-round pairs sharing at least one team (counted once even
@@ -156,7 +184,7 @@ Breakdown ScoreCalculator::computeBreakdown(LeagueSchedule &schedule)
                 if (a.homeTeam == c.homeTeam || a.homeTeam == c.awayTeam
                     || a.awayTeam == c.homeTeam || a.awayTeam == c.awayTeam)
                 {
-                    ++b.matchesOnSameDay;
+                    ++b.teamConflictCost;
                 }
             }
         }
@@ -170,8 +198,8 @@ Breakdown ScoreCalculator::computeBreakdown(LeagueSchedule &schedule)
                               homeCnt.begin() + base + indexCount);
         std::vector<int> away(awayCnt.begin() + base,
                               awayCnt.begin() + base + indexCount);
-        b.consecutiveHomeMatches += runPenalty(home);
-        b.consecutiveAwayMatches += runPenalty(away);
+        b.consecutiveHomeMatchesCost += runPenalty(home);
+        b.consecutiveAwayMatchesCost += runPenalty(away);
     }
 
     // hard 4: reversed fixture on the next round index (once per match).
@@ -186,7 +214,7 @@ Breakdown ScoreCalculator::computeBreakdown(LeagueSchedule &schedule)
                        + ri + 1]
                    > 0)
         {
-            ++b.repeatMatchOnNextDay;
+            ++b.repeatMatchOnNextDayCost;
         }
     }
 
@@ -200,13 +228,13 @@ Breakdown ScoreCalculator::computeBreakdown(LeagueSchedule &schedule)
             {
                 const Match &m2 = schedule.matches[mj];
                 if (m2.awayTeam == m1.homeTeam)
-                    b.homeToAwayHop
+                    b.homeToAwayHopCost
                         += schedule.distance(m1.homeTeam, m2.homeTeam);
                 if (m2.awayTeam == m1.awayTeam)
-                    b.awayToAwayHop
+                    b.awayToAwayHopCost
                         += schedule.distance(m1.homeTeam, m2.homeTeam);
                 if (m2.homeTeam == m1.awayTeam)
-                    b.awayToHomeHop
+                    b.awayToHomeHopCost
                         += schedule.distance(m1.homeTeam, m1.awayTeam);
             }
         }

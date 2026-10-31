@@ -1,19 +1,23 @@
-#ifndef SLS_CONSTRAINTS_HOME_TO_AWAY_HOP_HPP
-#define SLS_CONSTRAINTS_HOME_TO_AWAY_HOP_HPP
+#ifndef SLS_CONSTRAINTS_HOME_TO_AWAY_HOP_COST_HPP
+#define SLS_CONSTRAINTS_HOME_TO_AWAY_HOP_COST_HPP
 
 #include "sls/constraints/common.hpp"
 
 namespace sls
 {
 
-// Soft (default, weight 1): homeToAwayHop — a team hosting on one round index
-// and visiting on the next travels from its own home to the next host's home.
-// The pair is (m1 on index i, m2 on index i + 1) with m2.away == m1.home,
-// costing dist(m1.home, m2.home).
-struct HomeToAwayHop final : RoundIndexPairConstraint
+// Soft, weight 1: homeToAwayHopCost — a team hosting on one round index and
+// visiting on the next travels from its own home to the next host's home. The
+// pair is (m1 on index i, m2 on index i + 1) with m2.away == m1.home. Raw cost
+// (one global total) = the summed dist(m1.home, m2.home) in km; 0 = no such
+// hop.
+struct HomeToAwayHopCost final : RoundIndexPairConstraint
 {
-    explicit HomeToAwayHop(double weight = 1.0)
-        : RoundIndexPairConstraint("homeToAwayHop", weight, /*hard=*/false)
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
+
+    explicit HomeToAwayHopCost(double weight = kDefaultWeight)
+        : RoundIndexPairConstraint("homeToAwayHopCost", weight, kDefaultLevel)
     {
     }
 
@@ -45,4 +49,4 @@ protected:
 
 }  // namespace sls
 
-#endif  // SLS_CONSTRAINTS_HOME_TO_AWAY_HOP_HPP
+#endif  // SLS_CONSTRAINTS_HOME_TO_AWAY_HOP_COST_HPP

@@ -1,16 +1,18 @@
-#ifndef SLS_CONSTRAINTS_REPEAT_MATCH_ON_NEXT_DAY_HPP
-#define SLS_CONSTRAINTS_REPEAT_MATCH_ON_NEXT_DAY_HPP
+#ifndef SLS_CONSTRAINTS_REPEAT_MATCH_ON_NEXT_DAY_COST_HPP
+#define SLS_CONSTRAINTS_REPEAT_MATCH_ON_NEXT_DAY_COST_HPP
 
 #include "sls/constraints/common.hpp"
 
 namespace sls
 {
 
-// Hard (default, weight 1): repeatMatchOnNextDay — a match whose REVERSED
-// fixture is played on the very next round index. At most one point per match
-// however many reversed fixtures sit there (the Java ifExists), which is what
-// keeps this from being a pair sum and gives it its own state instead of the
-// RoundIndexPairConstraint base.
+// Hard, weight 1: repeatMatchOnNextDayCost — a match whose REVERSED fixture is
+// played on the very next round index. Raw cost (one global total) = the
+// number of such matches: at most one per match however many reversed
+// fixtures sit there (the Java ifExists), which is what keeps this from being
+// a pair sum and gives it its own state instead of the
+// RoundIndexPairConstraint base. 0 = no return fixture follows on the next
+// round index.
 //
 // Two counters carry it: how many matches of each ordered team pair sit on
 // each round index, and how many matches whose REVERSE is a given pair sit
@@ -23,10 +25,13 @@ namespace sls
 //     reverse is that pair.
 // Both are evaluated against the pre-state on a join and the post-state on a
 // leave, so the aggregate is exactly reversible.
-struct RepeatMatchOnNextDay final : SlsGlobalConstraint
+struct RepeatMatchOnNextDayCost final : SlsGlobalConstraint
 {
-    explicit RepeatMatchOnNextDay(double weight = 1.0)
-        : SlsGlobalConstraint("repeatMatchOnNextDay", weight, /*hard=*/true)
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
+
+    explicit RepeatMatchOnNextDayCost(double weight = kDefaultWeight)
+        : SlsGlobalConstraint("repeatMatchOnNextDayCost", weight, kDefaultLevel)
     {
     }
 
@@ -132,4 +137,4 @@ private:
 
 }  // namespace sls
 
-#endif  // SLS_CONSTRAINTS_REPEAT_MATCH_ON_NEXT_DAY_HPP
+#endif  // SLS_CONSTRAINTS_REPEAT_MATCH_ON_NEXT_DAY_COST_HPP
