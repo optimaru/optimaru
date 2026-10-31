@@ -6,8 +6,45 @@
 #include <string>
 #include <vector>
 
+#include "pjs/constraints/makespan_cost.hpp"
+#include "pjs/constraints/non_renewable_resource_capacity_cost.hpp"
+#include "pjs/constraints/project_delay_cost.hpp"
+#include "pjs/constraints/renewable_resource_capacity_cost.hpp"
+
 namespace pjs
 {
+
+namespace
+{
+
+// The monolithic score is the default assembly, so it reads the same
+// constants the components carry. Integral, so every level is computed in
+// int64 exactly like the Java long arithmetic. The medium weight is in
+// medium units; toEngineScore folds the medium level (kMediumFold).
+constexpr auto kNonRenewableWeight = static_cast<std::int64_t>(
+    NonRenewableResourceCapacityCost::kDefaultWeight);
+constexpr auto kRenewableWeight
+    = static_cast<std::int64_t>(RenewableResourceCapacityCost::kDefaultWeight);
+constexpr auto kProjectDelayWeight
+    = static_cast<std::int64_t>(ProjectDelayCost::kDefaultWeight);
+constexpr auto kMakespanWeight
+    = static_cast<std::int64_t>(MakespanCost::kDefaultWeight);
+static_assert(
+    kNonRenewableWeight == NonRenewableResourceCapacityCost::kDefaultWeight
+        && kRenewableWeight == RenewableResourceCapacityCost::kDefaultWeight
+        && kProjectDelayWeight == ProjectDelayCost::kDefaultWeight
+        && kMakespanWeight == MakespanCost::kDefaultWeight,
+    "the monolithic calculator assumes integral default weights");
+static_assert(NonRenewableResourceCapacityCost::kDefaultLevel
+                      == optimaru::Level::Hard
+                  && RenewableResourceCapacityCost::kDefaultLevel
+                         == optimaru::Level::Hard
+                  && ProjectDelayCost::kDefaultLevel == optimaru::Level::Medium
+                  && MakespanCost::kDefaultLevel == optimaru::Level::Soft,
+              "the monolithic calculator scores each term on its default "
+              "level");
+
+}  // namespace
 
 void ScoreCalculator::prepare(ProjectJobSchedule &schedule)
 {
@@ -131,9 +168,11 @@ Score ScoreCalculator::calculateScore(ProjectJobSchedule &schedule)
 
     const int resourceCount = static_cast<int>(schedule.resources.size());
 
-    // hard 1: non-renewable — total requirement over the whole horizon.
+    // hard 1 (nonRenewableResourceCapacityCost): non-renewable — total
+    // requirement over the whole horizon.
     std::vector<std::int64_t> nonRenewableUsage(resourceCount, 0);
-    // hard 2: renewable — requirement per (resource, day).
+    // hard 2 (renewableResourceCapacityCost): renewable — requirement per
+    // (resource, day).
     std::vector<std::vector<int>> renewableUsage(resourceCount);
 
     for (int a = 0; a < schedule.allocationCount(); ++a)
@@ -161,26 +200,28 @@ Score ScoreCalculator::calculateScore(ProjectJobSchedule &schedule)
         }
     }
 
-    std::int64_t hard = 0;
+    std::int64_t nonRenewableExcess = 0;
+    std::int64_t renewableExcess = 0;
     for (int r = 0; r < resourceCount; ++r)
     {
         const Resource &resource = schedule.resources[r];
         if (!resource.renewable)
         {
             if (nonRenewableUsage[r] > resource.capacity)
-                hard += nonRenewableUsage[r] - resource.capacity;
+                nonRenewableExcess += nonRenewableUsage[r] - resource.capacity;
         }
         else
         {
             for (int used : renewableUsage[r])
             {
                 if (used > resource.capacity)
-                    hard += used - resource.capacity;
+                    renewableExcess += used - resource.capacity;
             }
         }
     }
 
-    // medium 3: total project delay; soft 4: total makespan (max sink end).
+    // medium 3 (projectDelayCost): the summed project delay; soft 4
+    // (makespanCost): the makespan (max sink end).
     std::int64_t medium = 0;
     std::int64_t makespan = 0;
     bool hasSink = false;
@@ -198,7 +239,10 @@ Score ScoreCalculator::calculateScore(ProjectJobSchedule &schedule)
         hasSink = true;
     }
 
-    schedule.score = Score{-hard, -medium, -makespan};
+    schedule.score = Score{-(kNonRenewableWeight * nonRenewableExcess
+                             + kRenewableWeight * renewableExcess),
+                           -(kProjectDelayWeight * medium),
+                           -(kMakespanWeight * makespan)};
     return schedule.score;
 }
 

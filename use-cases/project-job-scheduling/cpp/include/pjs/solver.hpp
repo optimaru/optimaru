@@ -82,6 +82,8 @@ public:
         // diversity. 0 disables the guidance entirely.
         double nearCurrentDelayProbability = 0.85;
 
+        // Called with each new best score, in the same levels as the final
+        // schedule.score of the solve() overload in use.
         std::function<void(std::int64_t, const Score &)> onNewBest;
     };
 
@@ -99,12 +101,14 @@ public:
     // Solves with a caller-assembled plugin calculator (see
     // pjs/constraints.hpp): pick components and weights, then pass the
     // assembly here. The same search applies, delay-guided value selection
-    // included. Weights come from the assembly, NOT from the quickstart level
-    // defaults. The final schedule.score is computed by THIS calculator
-    // (decoded back into the HardMediumSoft levels) and the calculator is
-    // left primed on the final solution, so constraintTotals() explains
-    // exactly that score. Single-start: the caller-owned calculator cannot be
-    // cloned, so parallelSolverCount is ignored.
+    // included. Weights and levels come from the assembly (the components'
+    // kDefaultWeight / kDefaultLevel unless the caller changed them). The
+    // final schedule.score is computed by THIS calculator (its three level
+    // accumulators, calculator.levelScores()); onNewBest reports its scores
+    // the same way. The calculator is left primed on the final solution, so
+    // constraintTotals() explains exactly that score. Single-start: the
+    // caller-owned calculator cannot be cloned, so parallelSolverCount is
+    // ignored.
     void
     solve(ProjectJobSchedule &schedule,
           optimaru::DecomposedScoreCalculator<ProjectJobSchedule> &calculator);

@@ -11,23 +11,27 @@ namespace pjs
 // calculateScore does a full recompute — the reference the incremental
 // calculator is checked against (in the tests and under FULL_ASSERT).
 //
-// Constraints (HardMediumSoftScore, all penalties):
-//   hard 1. nonRenewableResourceCapacity   per non-renewable resource whose
-//                                          total requirement over all
-//                                          assigned execution modes exceeds
-//                                          its capacity: -(total - capacity)
-//   hard 2. renewableResourceCapacity      per (renewable resource, day)
-//                                          whose total requirement over the
-//                                          allocations busy that day exceeds
-//                                          its capacity: -(total - capacity)
-//   medium 3. totalProjectDelay            per SINK allocation ending after
-//                                          its project's criticalPathEndDate
-//                                          (= releaseDate +
-//                                          criticalPathDuration):
-//                                          -(endDate - criticalPathEndDate)
-//   soft 4. totalMakespan                  -(max SINK endDate) — one penalty
-//                                          for the whole schedule (Java's
-//                                          groupBy(max))
+// Constraints (HardMediumSoftScore, all penalties), at the components'
+// kDefaultWeight (1 each; the medium weight is in medium units):
+//   hard 1. nonRenewableResourceCapacityCost  per non-renewable resource
+//                                             whose total requirement over
+//                                             all assigned execution modes
+//                                             exceeds its capacity:
+//                                             -(total - capacity)
+//   hard 2. renewableResourceCapacityCost     per (renewable resource, day)
+//                                             whose total requirement over
+//                                             the allocations busy that day
+//                                             exceeds its capacity:
+//                                             -(total - capacity)
+//   medium 3. projectDelayCost                per SINK allocation ending
+//                                             after its project's
+//                                             criticalPathEndDate
+//                                             (= releaseDate +
+//                                             criticalPathDuration):
+//                                             -(endDate - criticalPathEndDate)
+//   soft 4. makespanCost                      -(max SINK endDate) — one
+//                                             penalty for the whole schedule
+//                                             (Java's groupBy(max))
 //
 // The Java shadow chain is reproduced as derived dates computed in
 // topological order:

@@ -1,7 +1,10 @@
 #include "pjs/solver.hpp"
 
 #include <algorithm>
+#include <cmath>
+#include <cstdint>
 #include <exception>
+#include <functional>
 #include <random>
 #include <stdexcept>
 #include <thread>
@@ -19,14 +22,31 @@ namespace pjs
 namespace
 {
 
+// The domain Score of a plugin calculator, read from its three accumulators
+// (levelScores(), before the medium fold) rather than decoded from the folded
+// engine soft, which would file a soft total of 10^9 or more (a demoted or
+// heavily re-weighted term) under medium.
+Score levelScoreOf(
+    const optimaru::DecomposedScoreCalculator<ProjectJobSchedule> &calculator)
+{
+    const auto levels = calculator.levelScores();
+    return {static_cast<std::int64_t>(levels.hard),
+            static_cast<std::int64_t>(std::llround(levels.medium)),
+            static_cast<std::int64_t>(std::llround(levels.soft))};
+}
+
 // Shared engine wiring for both solve() overloads: termination, late
 // acceptance, the move mix, the ALNS knobs and the delay-guided value
 // recommender (which reads only the working solution, so it applies to the
 // plugin path too), driven by whichever calculator the caller brought.
+// `reportedScore` turns the engine's new-best score into the domain Score
+// handed to config.onNewBest, in the same levels as the final
+// schedule.score of the calling overload.
 void runEngine(
     const Solver::Config &config,
     ProjectJobSchedule &schedule,
-    optimaru::IncrementalScoreCalculator<ProjectJobSchedule> &calculator)
+    optimaru::IncrementalScoreCalculator<ProjectJobSchedule> &calculator,
+    std::function<Score(const optimaru::HardSoftScore &)> reportedScore)
 {
     optimaru::SolverConfig engineConfig;
     engineConfig.randomSeed = config.randomSeed;
@@ -34,9 +54,10 @@ void runEngine(
     if (config.onNewBest)
     {
         auto onNewBest = config.onNewBest;
-        engineConfig.onNewBest =
-            [onNewBest](std::int64_t step, const optimaru::HardSoftScore &score)
-        { onNewBest(step, fromEngineScore(score)); };
+        engineConfig.onNewBest
+            = [onNewBest, reportedScore = std::move(reportedScore)](
+                  std::int64_t step, const optimaru::HardSoftScore &score)
+        { onNewBest(step, reportedScore(score)); };
     }
     engineConfig.termination.spentLimit = config.spentLimit;
     engineConfig.termination.bestScoreLimit
@@ -143,10 +164,10 @@ void Solver::solve(ProjectJobSchedule &schedule)
             "ruinRecreateRewards must contain exactly 4 values");
     }
 
-    // Multi-start at the domain level 
-    // instead of the engine's solveMultiStart: the guided value selection
-    // below captures the working solution, so every start needs its own
-    // schedule copy AND its own recommender wiring.
+    // Multi-start at the domain level instead of the engine's
+    // solveMultiStart: the guided value selection below captures the working
+    // solution, so every start needs its own schedule copy AND its own
+    // recommender wiring.
     const int workerCount = std::max(1, config_.parallelSolverCount);
     if (workerCount > 1)
     {
@@ -194,7 +215,10 @@ void Solver::solve(ProjectJobSchedule &schedule)
     }
 
     ProjectJobSchedulingIncrementalScoreCalculator calculator;
-    runEngine(config_, schedule, calculator);
+    // The final score below is the monolithic recompute, whose integral
+    // levels the fold decodes exactly (see domain.hpp), so each new best is
+    // reported decoded from the engine score.
+    runEngine(config_, schedule, calculator, fromEngineScore);
 
     // The authoritative final score (and derived dates): a full recompute on
     // the best solution.
@@ -221,15 +245,29 @@ void Solver::solve(
             "ruinRecreateRewards must contain exactly 4 values");
     }
     if (!schedule.allocations.empty())
-        runEngine(config_, schedule, calculator);
+    {
+        // The engine reports a new best right after the working solution
+        // became it, so the calculator's accumulators hold exactly that
+        // solution: report its levels the same way as the final
+        // schedule.score below, not the decoded engine fold.
+        runEngine(config_,
+                  schedule,
+                  calculator,
+                  [&calculator](const optimaru::HardSoftScore &)
+                  { return levelScoreOf(calculator); });
+    }
 
     // Refresh the shadow dates on the best solution (the plugin components
     // derive their own chain and never write these), then score it with the
-    // caller's constraint assembly, leaving the calculator primed on it so
-    // constraintTotals() explains exactly this score.
+    // caller's constraint assembly (custom weights and levels included),
+    // leaving the calculator primed on it so constraintTotals() explains
+    // exactly this score. The three levels come straight from the
+    // calculator's accumulators (levelScores(), before the medium fold)
+    // rather than from decoding the folded engine score, so a demoted or
+    // re-weighted term lands on the level the assembly gave it.
     ScoreCalculator::updateDates(schedule);
     calculator.resetWorkingSolution(schedule);
-    schedule.score = fromEngineScore(calculator.calculateScore());
+    schedule.score = levelScoreOf(calculator);
 }
 
 }  // namespace pjs

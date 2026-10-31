@@ -4,6 +4,10 @@
 #include <functional>
 #include <utility>
 
+#include "pjs/constraints/makespan_cost.hpp"
+#include "pjs/constraints/non_renewable_resource_capacity_cost.hpp"
+#include "pjs/constraints/project_delay_cost.hpp"
+#include "pjs/constraints/renewable_resource_capacity_cost.hpp"
 #include "pjs/score_calculator.hpp"
 
 namespace pjs
@@ -11,6 +15,18 @@ namespace pjs
 
 namespace
 {
+
+// The same constants the components and ScoreCalculator read (integral; see
+// score_calculator.cpp).
+constexpr auto kNonRenewableWeight = static_cast<std::int64_t>(
+    NonRenewableResourceCapacityCost::kDefaultWeight);
+constexpr auto kRenewableWeight
+    = static_cast<std::int64_t>(RenewableResourceCapacityCost::kDefaultWeight);
+constexpr auto kProjectDelayWeight
+    = static_cast<std::int64_t>(ProjectDelayCost::kDefaultWeight);
+constexpr auto kMakespanWeight
+    = static_cast<std::int64_t>(MakespanCost::kDefaultWeight);
+
 inline std::int64_t overCapacity(std::int64_t used, int capacity)
 {
     return used > capacity ? used - capacity : 0;
@@ -262,8 +278,10 @@ ProjectJobSchedulingIncrementalScoreCalculator::calculateScore()
     std::int64_t makespan = 0;
     for (int s : sinkAllocations_)
         makespan = std::max<std::int64_t>(makespan, end_[s]);
-    return toEngineScore(
-        Score{-(hardNonRenewable_ + hardRenewable_), -mediumTotal_, -makespan});
+    return toEngineScore(Score{-(kNonRenewableWeight * hardNonRenewable_
+                                 + kRenewableWeight * hardRenewable_),
+                               -(kProjectDelayWeight * mediumTotal_),
+                               -(kMakespanWeight * makespan)});
 }
 
 }  // namespace pjs

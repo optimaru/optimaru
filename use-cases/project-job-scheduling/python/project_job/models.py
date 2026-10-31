@@ -46,7 +46,7 @@ class _Model(BaseModel):
 
 
 class ProjectModel(_Model):
-    """A project. release_date is only the reference of the 'Total project delay'
+    """A project. release_date is only the reference of the project_delay_cost
     constraint (critical_path_end = release_date + critical_path_duration) and, as in
     the Java quickstart, does not force the start."""
 
@@ -102,7 +102,9 @@ class JobModel(_Model):
         if self.job_type not in JOB_TYPES:
             raise ValueError(f"job_type must be one of {JOB_TYPES}: {self.job_type!r}")
         if not self.execution_modes:
-            raise ValueError(f"job {self.id!r} needs at least one execution mode (SOURCE/SINK use a zero-duration mode)")
+            raise ValueError(
+                f"job {self.id!r} needs at least one execution mode (SOURCE/SINK use a zero-duration mode)"
+            )
         mode_ids = {m.id for m in self.execution_modes}
         if len(mode_ids) != len(self.execution_modes):
             raise ValueError(f"job {self.id!r} has duplicate execution mode ids")
