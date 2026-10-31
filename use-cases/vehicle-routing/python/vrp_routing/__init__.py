@@ -24,14 +24,29 @@ large instances; with it the nearby neighbourhood is 25 visits
 given seed compared with earlier releases; see `Solver::Config` for the
 measurements behind each default.
 
-Score convention (HardMediumSoft, as in the reference VRP example model):
-hard = capacity excess + time-window lateness (0 = feasible), medium =
--(service minutes of unassigned visits), soft = -(total driving seconds).
+Score convention (HardMediumSoft, as in the reference VRP example model), at
+the default weights:
+
+* **hard** — capacity excess (`vehicle_capacity_cost`) + time-window lateness
+  (`max_end_time_cost`), plus the optional route policies
+  (`max_travel_time_cost`, `max_route_duration_cost`,
+  `vehicle_max_end_time_cost`, `max_stops_cost`, `max_route_radius_cost`).
+  0 = feasible.
+* **medium** — -(penalty minutes of unassigned visits)
+  (`unassigned_visits_cost`); the engine folds it into soft as
+  ``medium * 10^9``.
+* **soft** — -(total driving seconds) (`travel_time_cost`), plus
+  `min_capacity_utilization_cost`, `vehicle_fixed_cost` and the opt-in
+  weight-0 objectives.
+
 Compared lexicographically: hard dominates medium dominates soft.
+`constraint_info()` lists every constraint with its default level and weight;
+`vrp_routing.constraints` picks and re-weights them.
 """
 
 from ._core import (
     AcceptorType,
+    ConstraintInfo,
     Location,
     OperatorSelectionType,
     Score,
@@ -42,11 +57,13 @@ from ._core import (
     Visit,
     calculate_score,
     constraint_costs,
+    constraint_info,
     list_constraints,
 )
 
 __all__ = [
     "AcceptorType",
+    "ConstraintInfo",
     "Location",
     "OperatorSelectionType",
     "Visit",
@@ -58,6 +75,7 @@ __all__ = [
     "calculate_score",
     "list_constraints",
     "constraint_costs",
+    "constraint_info",
     "solve_request",
     "with_initial_solution",
 ]

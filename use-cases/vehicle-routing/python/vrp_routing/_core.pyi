@@ -4,14 +4,16 @@ Times are integer seconds from a common day start. The plan is the planning
 solution: each vehicle's ordered `visit_indices` is the planning list
 variable; a visit in no route is unassigned.
 
-Score (HardMediumSoft, lexicographic): hard = capacity excess + time-window
-lateness (0 = feasible), medium = -(service minutes of unassigned visits),
-soft = -(total driving seconds).
+Score (HardMediumSoft, lexicographic), at the default weights: hard =
+capacity excess + time-window lateness (0 = feasible), medium = -(penalty
+minutes of unassigned visits), folded into the engine's soft as
+medium * 10^9; soft = -(total driving seconds). The weights are the C++
+components' defaults (constraint_info()).
 """
 
 import enum
 from collections.abc import Iterable
-from typing import Any, Callable
+from typing import Any, Callable, Literal, NamedTuple
 
 class AcceptorType(enum.Enum):
     """Local-search acceptance criterion."""
@@ -226,6 +228,10 @@ class SolverConfig:
     driving_time_nearby_probability: float
 
     on_new_best: Callable[[int, Score], None] | None
+    """Progress callback (steps, best score). The score has the same three
+    levels as the final plan.score: with solve_with_constraints both come
+    from the chosen constraints' hard / medium / soft totals, so a soft total
+    of 10^9 or more stays on soft instead of spilling into medium."""
 
 class Solver:
     """Construction heuristic + local search + adaptive ruin & recreate
@@ -241,11 +247,36 @@ class Solver:
         None keeps the default set."""
 
 def list_constraints() -> list[str]:
-    """Constraint names scored by this domain (default assembly order, snake_case).
+    """Constraint names scored by this domain (default assembly order, snake_case):
+    the thirteen per-vehicle constraints (vehicle_capacity_cost ... vehicle_fixed_cost),
+    then the global unassigned_visits_cost.
     The same names vrp_routing.constraints uses."""
 
-def constraint_costs(solution, /) -> dict[str, dict]:
+def constraint_costs(plan: VehicleRoutePlan) -> dict[str, dict[str, Any]]:
     """Per-constraint, per-unit **raw** costs — before weight/exponent/level rounding.
-    `vrp_routing.constraints.score()` takes these and produces a score.
-    {name: {"costs": [...], "weight": w, "exponent": e,
-            "hard": bool, "global": bool}}."""
+    A unit is a vehicle (plus the unassigned pool as the last unit); a global
+    constraint reports one cost. `vrp_routing.constraints.score()` takes these and
+    produces a score:
+    {name: {"costs": [...], "weight": float, "exponent": float, "hard": bool,
+    "global": bool, "level": "hard" | "medium" | "soft", "reward": bool,
+    "level_flippable": bool, "name": str, "label": str,
+    "medium_fold": {"kind": "into_soft", "unit": 1e9}}}. The medium fold belongs
+    to the domain, so EVERY entry carries it."""
+
+class ConstraintInfo(NamedTuple):
+    """One constraint-catalog row, read off the C++ default assembly."""
+
+    name: str
+    default_level: Literal["hard", "medium", "soft"]
+    default_weight: float
+    level_flippable: bool
+    reward: bool
+    default_enabled: bool
+
+def constraint_info() -> list[ConstraintInfo]:
+    """The constraint catalog, in list_constraints() order: the default level and
+    weight of each constraint (unassigned_visits_cost is medium at weight 1 in
+    medium units; the route policies hard at 1; travel_time_cost,
+    min_capacity_utilization_cost and vehicle_fixed_cost soft at 1). All
+    flippable, none a reward; default_enabled is False for the opt-in weight-0
+    objectives (enclosing_circle_radius_cost, route_duration_cost, latency_cost)."""

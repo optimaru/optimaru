@@ -3,11 +3,38 @@
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
+#include <cstdint>
 #include <limits>
 #include <vector>
 
+#include "vrp/constraints/max_end_time_cost.hpp"
+#include "vrp/constraints/travel_time_cost.hpp"
+#include "vrp/constraints/unassigned_visits_cost.hpp"
+#include "vrp/constraints/vehicle_capacity_cost.hpp"
+
 namespace vrp
 {
+
+namespace
+{
+
+// The same constants the components and ScoreCalculator read (integral; see
+// score_calculator.cpp).
+constexpr auto kCapacityWeight = static_cast<std::int64_t>(VehicleCapacityCost::kDefaultWeight);
+constexpr auto kTimeWindowWeight = static_cast<std::int64_t>(MaxEndTimeCost::kDefaultWeight);
+constexpr auto kUnassignedWeight = static_cast<std::int64_t>(UnassignedVisitsCost::kDefaultWeight);
+constexpr auto kTravelWeight = static_cast<std::int64_t>(TravelTimeCost::kDefaultWeight);
+
+// The Score of the four raw totals at those weights; every score and preview
+// below goes through it.
+inline Score weightedScore(std::int64_t overload, std::int64_t lateness, std::int64_t unassigned,
+                           std::int64_t driving)
+{
+    return Score{-(kCapacityWeight * overload + kTimeWindowWeight * lateness),
+                 -kUnassignedWeight * unassigned, -kTravelWeight * driving};
+}
+
+}  // namespace
 
 void VehicleRoutingIncrementalScoreCalculator::resetWorkingSolution(
     VehicleRoutePlan &workingSolution)
@@ -162,9 +189,7 @@ std::int64_t VehicleRoutingIncrementalScoreCalculator::unassignedMinutes() const
 
 Score VehicleRoutingIncrementalScoreCalculator::currentScore() const
 {
-    return Score{-(overloadTotal_ + latenessTotal_),
-                 -unassignedTotal_,
-                 -drivingTotal_};
+    return weightedScore(overloadTotal_, latenessTotal_, unassignedTotal_, drivingTotal_);
 }
 
 optimaru::HardSoftScore
@@ -326,7 +351,7 @@ bool VehicleRoutingIncrementalScoreCalculator::previewRunsByWalk(
         lateness += fresh.lateness - old.lateness;
         driving += fresh.driving - old.driving;
     }
-    out = toEngineScore(Score{-(overload + lateness), -unassigned, -driving});
+    out = toEngineScore(weightedScore(overload, lateness, unassigned, driving));
     return true;
 }
 
@@ -406,7 +431,7 @@ bool VehicleRoutingIncrementalScoreCalculator::previewRuns(const Run *runs, int 
             driving += drive;
         }
     }
-    out = toEngineScore(Score{-(overload + lateness), -unassigned, -driving});
+    out = toEngineScore(weightedScore(overload, lateness, unassigned, driving));
     return true;
 }
 
@@ -521,9 +546,9 @@ bool VehicleRoutingIncrementalScoreCalculator::previewInsertByWalk(
     walkScratch_.insert(walkScratch_.begin() + pos, element);
     const RouteTerms &old = terms_[static_cast<std::size_t>(list)];
     const RouteTerms fresh = evaluateElements(list, walkScratch_);
-    out = toEngineScore(Score{-(overloadTotal_ - old.overload + fresh.overload + latenessTotal_
-                                - old.lateness + fresh.lateness),
-                              -unassignedTotal_, -(drivingTotal_ - old.driving + fresh.driving)});
+    out = toEngineScore(weightedScore(overloadTotal_ - old.overload + fresh.overload,
+                                      latenessTotal_ - old.lateness + fresh.lateness,
+                                      unassignedTotal_, drivingTotal_ - old.driving + fresh.driving));
     return true;
 }
 
@@ -537,9 +562,9 @@ bool VehicleRoutingIncrementalScoreCalculator::previewInsert(int list, int pos, 
     const Visit &visit = plan_->visits[static_cast<std::size_t>(element)];
     if (list >= vehicleCount_)
     {
-        out = toEngineScore(Score{-(overloadTotal_ + latenessTotal_),
-                                  -(unassignedTotal_ + visit.unassignedPenalty()),
-                                  -drivingTotal_});
+        out = toEngineScore(weightedScore(overloadTotal_, latenessTotal_,
+                                          unassignedTotal_ + visit.unassignedPenalty(),
+                                          drivingTotal_));
         return true;
     }
     const Vehicle &vehicle = plan_->vehicles[static_cast<std::size_t>(list)];
@@ -578,8 +603,8 @@ bool VehicleRoutingIncrementalScoreCalculator::previewInsert(int list, int pos, 
     const RouteTerms &old = terms_[static_cast<std::size_t>(list)];
     const std::int64_t overload
         = overloadTotal_ - old.overload + std::max<std::int64_t>(0, load - vehicle.capacity);
-    out = toEngineScore(Score{-(overload + latenessTotal_ - old.lateness), -unassignedTotal_,
-                              -(drivingTotal_ - old.driving + drive)});
+    out = toEngineScore(weightedScore(overload, latenessTotal_ - old.lateness, unassignedTotal_,
+                                      drivingTotal_ - old.driving + drive));
     return true;
 }
 

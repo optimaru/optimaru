@@ -1,15 +1,20 @@
-#ifndef VRP_CONSTRAINTS_VEHICLE_CAPACITY_HPP
-#define VRP_CONSTRAINTS_VEHICLE_CAPACITY_HPP
+#ifndef VRP_CONSTRAINTS_VEHICLE_CAPACITY_COST_HPP
+#define VRP_CONSTRAINTS_VEHICLE_CAPACITY_COST_HPP
 
 #include "vrp/constraints/route_sums.hpp"
 
 namespace vrp {
 
-// Hard (default, weight 1): vehicleCapacity -- the demand a vehicle carries
-// beyond what it can hold. Previewed in O(pieces) from the shared load sums.
-struct VehicleCapacity final : detail::SummedUnitConstraint {
-    explicit VehicleCapacity(double weight = 1.0)
-        : SummedUnitConstraint("vehicleCapacity", weight, /*hard=*/true) {}
+// Hard, weight 1: vehicleCapacityCost -- the demand a vehicle carries beyond
+// what it can hold. Raw cost per vehicle = max(0, summed demand of its visits
+// - capacity); 0 = within capacity (the pool list costs 0). Previewed in
+// O(pieces) from the shared load sums.
+struct VehicleCapacityCost final : detail::SummedUnitConstraint {
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
+
+    explicit VehicleCapacityCost(double weight = kDefaultWeight)
+        : SummedUnitConstraint("vehicleCapacityCost", weight, kDefaultLevel) {}
 
     bool piecewiseCost(const VehicleRoutePlan& plan, int unit, const optimaru::ListPiece* pieces,
                        int count, double& out) const override {
@@ -36,4 +41,4 @@ struct VehicleCapacity final : detail::SummedUnitConstraint {
 
 }  // namespace vrp
 
-#endif  // VRP_CONSTRAINTS_VEHICLE_CAPACITY_HPP
+#endif  // VRP_CONSTRAINTS_VEHICLE_CAPACITY_COST_HPP

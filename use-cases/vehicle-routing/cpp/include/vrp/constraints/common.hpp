@@ -15,14 +15,15 @@ namespace vrp {
 // ---------------------------------------------------------------------------
 // Plugin-style constraint components
 // ---------------------------------------------------------------------------
-// The four constraints of the reference vehicle-routing
-// VehicleRoutingConstraintProvider, split into one small component each on the
-// engine's DecomposedScoreCalculator -- an optional assembly path NEXT TO
-// ScoreCalculator::calculateScore, which stays the default path.
+// The constraints of the reference vehicle-routing
+// VehicleRoutingConstraintProvider plus the optional route policies, one small
+// component each on the engine's DecomposedScoreCalculator -- an optional
+// assembly path NEXT TO ScoreCalculator::calculateScore, which stays the
+// default path for the four core rules.
 //
 // Unit choice: with the LIST descriptor the calculator's unit is one LIST,
-// i.e. one vehicle; members are its visits IN ROUTE ORDER. Three rules are
-// per-route sums and run as UnitConstraints. Only maximizeVisitsAssigned
+// i.e. one vehicle; members are its visits IN ROUTE ORDER. Every rule but one
+// is a per-route sum and runs as a UnitConstraint. Only unassignedVisitsCost
 // counts the visits in NO route at all, which belongs to no unit, so it runs
 // as a GlobalConstraint.
 //
@@ -31,20 +32,36 @@ namespace vrp {
 // own member order, which is what makes each cost a pure function of
 // (solution, unit, members) as the engine's contract requires. The LIST path
 // re-costs a touched route whole, so no delta contract is needed. The four
-// default components also answer the engine's move previews in O(pieces)
-// from shared per-route prefix sums (route_sums.hpp); the optional policies
-// are previewed by writing the candidate route out and calling cost().
+// core components also answer the engine's move previews in O(pieces) from
+// shared per-route prefix sums (route_sums.hpp); the optional policies are
+// previewed by writing the candidate route out and calling cost().
 //
-// Score levels: the quickstart scores with HardMediumSoftScore, which this
-// domain folds into the engine's HardSoftScore as
-// `soft = medium * kMediumUnit + soft` (see domain.hpp). The medium-level
-// component therefore carries the kMediumUnit factor in its default weight.
+// Naming: one header per component, named after its struct
+// (MaxTravelTimeCost -> max_travel_time_cost.hpp). The registry name is the
+// struct name with a lower-case first letter ("maxTravelTimeCost"); Python
+// sees it through pythonName() ("max_travel_time_cost"). Helpers that are not
+// components live in route_sums.hpp (the shared prefix sums) and
+// route_geometry.hpp (the enclosing circle).
+//
+// Defaults: each component declares them once, as static constexpr
+// kDefaultWeight / kDefaultLevel passed to the base constructor. They are
+// assembly-time metadata, not part of the cost. Override them per instance
+// with the constructor's weight argument or the mutable `level` / `weight` /
+// `exponent` (validated setters setWeight / setLevel / setExponent), or by
+// name through ConstraintAssembly. Read the level with `isHard()` or `level`.
+//
+// Score levels: the quickstart scores with HardMediumSoftScore. The medium
+// level (unassignedVisitsCost) is folded into the engine's HardSoftScore by
+// the calculator as `soft = medium * kMediumUnit + soft` (kMediumFold in
+// domain.hpp), so a medium weight is in medium units: weight 1 = one medium
+// unit per penalty minute. The opt-in objectives (enclosingCircleRadiusCost,
+// routeDurationCost, latencyCost) default to weight 0.
 //
 //   DecomposedCalculator calc;
-//   defaultConstraints()              // the whole default set
-//       .weight("...", 2)            // ... then only what differs
-//       .soft("...")
-//       .drop("...")
+//   defaultConstraints()                     // the whole default set
+//       .weight("travelTimeCost", 2)         // ... then only what differs
+//       .soft("vehicleCapacityCost")
+//       .drop("maxStopsCost")
 //       .into(calc);
 //   solver.solve(plan, calc);
 //
@@ -52,14 +69,10 @@ namespace vrp {
 // `ConstraintAssembly{}` when you would rather list components from
 // scratch than start from the defaults.
 //
-// The level and the weight of each component are DEFAULTS -- assembly-time
-// metadata, not part of the cost. Override them per instance via the mutable
-// `isHard` / `weight` / `exponent`.
-//
 // Cost sign convention (see decomposed_score_calculator.hpp): positive =
-// penalty; the calculator negates into the score. An assembly of all four
-// components at their default weights therefore scores bit-for-bit like
-// ScoreCalculator::calculateScore.
+// penalty, 0 = no violation; the calculator negates into the score. The
+// default assembly therefore scores bit-for-bit like
+// ScoreCalculator::calculateScore on a plan without route policies.
 
 using DecomposedCalculator = optimaru::DecomposedScoreCalculator<VehicleRoutePlan>;
 using ConstraintAssembly = optimaru::ConstraintAssembly<VehicleRoutePlan>;

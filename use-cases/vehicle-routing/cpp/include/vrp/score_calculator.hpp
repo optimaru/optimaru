@@ -5,7 +5,18 @@
 
 namespace vrp {
 
-// Port of org.acme.vehiclerouting.solver.VehicleRoutingConstraintProvider.
+// Port of org.acme.vehiclerouting.solver.VehicleRoutingConstraintProvider:
+//
+//   HARD   vehicleCapacityCost    route demand over capacity
+//   HARD   maxEndTimeCost         time-window lateness, in whole minutes
+//   MEDIUM unassignedVisitsCost   penalty minutes of the unrouted visits
+//                                 (folded into soft x 10^9 by toEngineScore)
+//   SOFT   travelTimeCost         total driving seconds
+//
+// each at its component's kDefaultWeight (vrp/constraints/*.hpp). The
+// route-policy and opt-in components of the default assembly cost 0 on a plan
+// that sets none of their parameters, which is when the assembly and this
+// calculator agree bit for bit.
 //
 // Unlike an incremental constraint-stream engine, this recomputes the
 // full score from the current vehicle routes. For the quickstart's problem size

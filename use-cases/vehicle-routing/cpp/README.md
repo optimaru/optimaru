@@ -33,15 +33,30 @@ cmake -B build && cmake --build build
 
 ### The four constraints
 
-- **Hard** `vehicleCapacity` — penalize `totalDemand - capacity` when overloaded.
-- **Hard** `serviceFinishedAfterMaxEndTime` — penalize lateness (`arrivalTime +
-  serviceDuration` past `maxEndTime`), rounded up to whole minutes.
-- **Medium** `maximizeVisitsAssigned` — penalize each unassigned visit by
-  `Visit::unassignedPenalty()`, which defaults to its service duration in
-  minutes (the Java rule) but can be set per visit — see below.
-- **Soft** `minimizeTravelTime` — penalize each vehicle's total driving seconds
-  (home → visits, plus the leg back home only when `Vehicle::returnToDepot` is
-  set; routes are open by default and end at their last visit).
+The four rules of the Java `VehicleRoutingConstraintProvider`, under their
+0.2.0 component names (`include/vrp/constraints/<subject>_cost.hpp`; the
+registry name is the struct name with a lower-case first letter):
+
+- **Hard** `VehicleCapacityCost` (`vehicleCapacityCost`) — penalize
+  `totalDemand - capacity` when overloaded.
+- **Hard** `MaxEndTimeCost` (`maxEndTimeCost`) — penalize lateness
+  (`arrivalTime + serviceDuration` past `maxEndTime`), rounded up to whole
+  minutes.
+- **Medium** `UnassignedVisitsCost` (`unassignedVisitsCost`) — penalize each
+  unassigned visit by `Visit::unassignedPenalty()`, which defaults to its
+  service duration in minutes (the Java rule) but can be set per visit — see
+  below. Weight 1 in medium units; the domain folds medium into the engine's
+  soft level as `medium * 10^9` (`kMediumFold` in `domain.hpp`).
+- **Soft** `TravelTimeCost` (`travelTimeCost`) — penalize each vehicle's total
+  driving seconds (home → visits, plus the leg back home only when
+  `Vehicle::returnToDepot` is set; routes are open by default and end at their
+  last visit).
+
+The plugin path adds the optional route policies (`MaxTravelTimeCost`,
+`MaxRouteDurationCost`, `VehicleMaxEndTimeCost`, `MaxStopsCost`,
+`MaxRouteRadiusCost`, `MinCapacityUtilizationCost`, `VehicleFixedCost`) and
+the opt-in weight-0 objectives (`EnclosingCircleRadiusCost`,
+`RouteDurationCost`, `LatencyCost`); see the package README for the table.
 
 ## How it runs on the generic engine
 

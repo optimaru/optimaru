@@ -22,10 +22,12 @@ namespace vrp
 // which is what makes this cheap: a move touches at most two lists, so a step
 // costs O(route length) instead of O(instance).
 //
-//   hard   vehicleCapacity                  -> overload_[v]
-//   hard   serviceFinishedAfterMaxEndTime   -> lateness_[v]  (whole minutes)
-//   soft   minimizeTravelTime               -> driving_[v]   (seconds)
-//   medium maximizeVisitsAssigned           -> unassignedMinutes_
+//   hard   vehicleCapacityCost    -> overload_[v]
+//   hard   maxEndTimeCost         -> lateness_[v]  (whole minutes)
+//   soft   travelTimeCost         -> driving_[v]   (seconds)
+//   medium unassignedVisitsCost   -> unassignedMinutes_
+//
+// each weighted by its component's kDefaultWeight (vrp/constraints/*.hpp).
 //
 // The first three are re-derived for a touched vehicle list in one walk
 // (arrival times propagate along the route, so all three terms fall out of the
