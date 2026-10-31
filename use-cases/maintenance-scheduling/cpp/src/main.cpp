@@ -10,7 +10,6 @@
 
 #include "mnt/demo_data.hpp"
 #include "mnt/domain.hpp"
-#include "mnt/score_calculator.hpp"
 #include "mnt/solver.hpp"
 
 using namespace mnt;

@@ -14,11 +14,6 @@ namespace ms
 namespace
 {
 
-// overlapGrains / compareTimeGrains now live on ScoreCalculator (the plugin
-// components share them); these aliases keep the code below unchanged.
-constexpr auto overlapGrains = &ScoreCalculator::overlapGrains;
-constexpr auto compareTimeGrains = &ScoreCalculator::compareTimeGrains;
-
 std::int64_t pairs(std::int64_t n) { return n * (n - 1) / 2; }
 
 // Attendance multiplicity of one person in one meeting (normally (1, 0) or
