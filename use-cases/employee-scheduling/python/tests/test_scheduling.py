@@ -519,6 +519,61 @@ def test_min_weekly_rest_days_counts_a_day_once():
     assert calc.score(schedule).hard == -(1 + 1)  # day 0 counts once
 
 
+@pytest.mark.parametrize("use_calculator", [False, True], ids=["built-in", "plugin"])
+def test_a_fully_pinned_schedule_is_scored_but_not_searched(use_calculator):
+    schedule = _week_roster()  # A works every day, so moving a shift to B would pay
+    for shift in schedule.shifts:
+        shift.pinned = True
+    expected = es.calculate_score(schedule)
+    cfg = es.SolverConfig()
+    cfg.spent_limit_seconds = 0.1
+    if use_calculator:
+        es.Solver(cfg).solve(schedule, es.default_calculator())
+    else:
+        es.Solver(cfg).solve(schedule)
+    assert {shift.employee_index for shift in schedule.shifts} == {0}
+    assert str(schedule.score) == str(expected)
+
+
+def _skill_roster(required, held):
+    shifts = [
+        es.Shift(f"Shift {i}", es.minutes(i, 9), es.minutes(i, 17), required_skill=s) for i, s in enumerate(required)
+    ]
+    for shift in shifts:
+        shift.employee_index = 0
+    return es.EmployeeSchedule([es.Employee("A", set(held))], shifts)
+
+
+def test_more_than_64_required_skills_are_refused():
+    schedule = _skill_roster([f"Skill {i}" for i in range(65)], [])
+    with pytest.raises(ValueError, match="more than 64"):
+        es.DecomposedCalculator([es.RequiredSkill()]).score(schedule)
+
+
+def test_each_of_64_required_skills_is_checked():
+    skills = [f"Skill {i}" for i in range(64)]
+    schedule = _skill_roster(skills, skills[:-1])
+    assert es.DecomposedCalculator([es.RequiredSkill()]).score(schedule).hard == -1
+
+
+def test_skills_no_shift_requires_do_not_count_towards_the_limit():
+    held = [f"Extra {i}" for i in range(100)] + ["Skill A"]
+    schedule = _skill_roster(["Skill A", "Skill B"], held)
+    assert es.DecomposedCalculator([es.RequiredSkill()]).score(schedule).hard == -1
+
+
+@pytest.mark.parametrize(("pinned_days", "expected"), [(range(7), 0), (range(6), -1)], ids=["all", "all-but-one"])
+def test_min_weekly_rest_days_treats_a_fully_pinned_week_as_history(pinned_days, expected):
+    shifts = []
+    for day in range(7):
+        s = es.Shift(f"Shift {day}", es.minutes(day, 9), es.minutes(day, 17))
+        s.employee_index = 0
+        s.pinned = day in pinned_days
+        shifts.append(s)
+    schedule = es.EmployeeSchedule([es.Employee("A")], shifts)
+    assert es.DecomposedCalculator([es.MinWeeklyRestDays(value=1)]).score(schedule).hard == expected
+
+
 def test_assignment_cost_matrix_and_defaults():
     schedule = _week_roster()
     calc = es.DecomposedCalculator(

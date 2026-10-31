@@ -118,8 +118,8 @@ class ShiftModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     id: str
-    start: int = Field(description="minutes from day 0 00:00")
-    end: int = Field(description="minutes from day 0 00:00")
+    start: int = Field(ge=0, description="minutes from day 0 00:00; day 0 is the first day, history included")
+    end: int = Field(description="minutes from day 0 00:00, after `start`")
     location: str = ""
     required_skill: str = ""
     worker: str | None = Field(
@@ -136,6 +136,12 @@ class ShiftModel(BaseModel):
             "from the previous planning period and for settled assignments; requires `worker`"
         ),
     )
+
+    @model_validator(mode="after")
+    def _ends_after_it_starts(self):
+        if self.end <= self.start:
+            raise ValueError(f"shift {self.id!r}: end must be after start, got {self.start} to {self.end}")
+        return self
 
 
 # ---------------------------------------------------------------------------
@@ -1018,9 +1024,6 @@ def solve_request(
         # Sequential best-of-n, so the feature always works, just without the
         # parallel speedup.
         solutions = [_build_and_solve(r, s, o) for r, s, o in jobs]
-    solutions = [s for s in solutions if s is not None]
-    if not solutions:
-        return _build_and_solve(request, request.settings.random_seed)
     if select is not None:
         return select(solutions)
 

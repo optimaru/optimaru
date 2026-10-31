@@ -50,7 +50,8 @@ print(schedule.score)                    # 0hard means no must-rule is broken
 Three things to know about time:
 
 - A moment is an **integer: minutes since day 0, 00:00**. `es.minutes(day, hour,
-  minute)` builds one, so `es.minutes(1, 9)` is day 1, 09:00.
+  minute)` builds one, so `es.minutes(1, 9)` is day 1, 09:00. Times are never
+  negative: day 0 is the first day of the problem, carried-in history included.
 - A **date is a day number**: `unavailable_dates={2}` means "cannot work day 2".
 - A shift has a `location`. Any rule that talks about a location reads this
   string, so it can equally hold a site, a team or a shift type.
@@ -149,7 +150,7 @@ Every rule takes the same three dials, plus its own options:
 
 | rule | default | counts what |
 |---|---|---|
-| `RequiredSkill()` | hard | shifts given to someone without the needed skill |
+| `RequiredSkill()` | hard | shifts given to someone without the needed skill (at most 64 distinct required skills) |
 | `UnavailableEmployee()` | hard | minutes worked on an unavailable day |
 | `OverlappingShift()` | hard | minutes where two of your shifts overlap |
 | `MaxOneShiftPerDay()` | hard | pairs of same-day shifts for one person |
@@ -208,7 +209,8 @@ for total in calc.constraint_totals():
 `ShiftModel(pinned=True, worker="Worker 01")` fixes an assignment: the shift is
 scored like any other but never moved. Use it to carry in the last days of the
 previous planning period, so week-spanning rules see across the boundary, or for
-assignments that are already settled. A pinned shift requires `worker`.
+assignments that are already settled. A pinned shift requires `worker`. Number the
+days so the carried-in ones come first: day 0 is the first day of history.
 
 - **Per-shift rules** (required skill, availability, one shift per day, rest
   between shifts): a pinned shift is settled history and is not re-judged.

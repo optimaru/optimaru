@@ -163,6 +163,18 @@ def test_preassigned_unknown_worker_raises():
         to_schedule(model_input)
 
 
+@pytest.mark.parametrize(
+    ("start", "end"),
+    [(-60, 60), (-3 * 1440, -3 * 1440 + 60), (60, 60), (120, 60)],
+    ids=["before-day-0", "days-before-day-0", "empty", "reversed"],
+)
+def test_a_shift_needs_times_from_day_0_and_an_end_after_its_start(start, end):
+    with pytest.raises(ValueError):
+        ShiftModel(id="Shift 1", start=start, end=end)
+    with pytest.raises(ValueError, match="need 0 <= start < end"):
+        es.calculate_score(es.EmployeeSchedule([es.Employee("A")], [es.Shift("Shift 1", start, end)]))
+
+
 def test_duplicate_ids_rejected():
     with pytest.raises(ValueError, match="duplicate"):
         SchedulingInput(

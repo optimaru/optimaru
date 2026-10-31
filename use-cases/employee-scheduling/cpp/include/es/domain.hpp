@@ -19,7 +19,9 @@ namespace es {
 // ---------------------------------------------------------------------------
 // A timestamp is int64 minutes from an arbitrary reference (day 0, 00:00), so
 // all arithmetic (overlap, rest gap) is plain integer math. A calendar date is
-// the day index = floor(minutes / MINUTES_PER_DAY).
+// the day index = floor(minutes / MINUTES_PER_DAY). Shift times are never
+// negative (ScoreCalculator::prepare rejects them), so day 0 is the first day
+// of the problem, carried-in history included.
 using Minutes = std::int64_t;
 using DayIndex = std::int64_t;
 

@@ -56,6 +56,13 @@ inline bool pinnedShift(const EmployeeSchedule& schedule, int i) {
     return i >= 0 && schedule.shifts[i].pinned;
 }
 
+// The engine's moves pass over a pinned shift only while another one is movable,
+// so with every shift pinned there must be no search at all.
+inline bool allShiftsPinned(const EmployeeSchedule& schedule) {
+    return std::all_of(schedule.shifts.begin(), schedule.shifts.end(),
+                       [](const Shift& shift) { return shift.pinned; });
+}
+
 int randomShiftFromHotEmployee(const EmployeeSchedule& schedule, const PenalizedGetter& penalized,
                                const ShiftsOfGetter& shiftsOf, std::mt19937_64& rng,
                                double probability) {
@@ -76,7 +83,7 @@ int randomShiftFromHotEmployee(const EmployeeSchedule& schedule, const Penalized
     }
     for (int s = 0; s < n; ++s)
         if (!pinnedShift(schedule, s)) return s;
-    return static_cast<int>(rng() % static_cast<std::uint64_t>(n));  // degenerate: all pinned
+    return -1;  // every shift is pinned
 }
 
 void addCandidate(std::vector<int>& candidates, int employee, int oldEmployee, int limit) {
@@ -960,8 +967,8 @@ void runEngine(const Solver::Config& config, EmployeeSchedule& schedule,
 void Solver::solve(EmployeeSchedule& schedule) {
     const auto solveStart = Clock::now();
     const auto deadline = solveStart + config_.spentLimit;
-    if (schedule.shifts.empty() || schedule.employees.empty()) {
-        ScoreCalculator::calculateScore(schedule);
+    if (schedule.employees.empty() || allShiftsPinned(schedule)) {
+        schedule.score = ScoreCalculator::calculateScore(schedule);
         return;
     }
 
@@ -1023,7 +1030,7 @@ void Solver::solve(EmployeeSchedule& schedule,
     seedDayAwareInitialRoster(config_, schedule);
     logPhase("seed", tSeed);
 
-    if (!schedule.shifts.empty() && !schedule.employees.empty()) {
+    if (!schedule.employees.empty() && !allShiftsPinned(schedule)) {
         // DecomposedScoreCalculator compiles compatible delta constraints into
         // structural groups at reset and leaves all others on the generic path.
         const auto tEngine = Clock::now();

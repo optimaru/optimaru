@@ -2,7 +2,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <set>
+#include <stdexcept>
+#include <string>
 #include <unordered_map>
 #include <vector>
 
@@ -11,28 +14,36 @@ namespace es {
 void ScoreCalculator::prepare(EmployeeSchedule& schedule) {
     if (schedule.prepared) return;
     std::unordered_map<std::string, int> skillId;
-    auto idOf = [&](const std::string& sk) {
-        auto it = skillId.find(sk);
-        if (it != skillId.end()) return it->second;
-        int id = static_cast<int>(skillId.size());
-        skillId.emplace(sk, id);
-        return id;
-    };
+    for (Shift& sh : schedule.shifts) {
+        // The rules index per-day tables by these day numbers without a check.
+        if (sh.start < 0 || sh.end <= sh.start ||
+            dayOf(sh.end) > std::numeric_limits<int>::max()) {
+            throw std::invalid_argument("shift '" + sh.id + "': need 0 <= start < end, got start=" +
+                                        std::to_string(sh.start) +
+                                        ", end=" + std::to_string(sh.end));
+        }
+        // Empty requiredSkill == no skill requirement: bit 0 (matches everyone,
+        // never a miss). Don't intern "" as a phantom skill nobody holds.
+        sh.requiredSkillBit = 0;
+        if (!sh.requiredSkill.empty()) {
+            const int id = skillId.emplace(sh.requiredSkill, static_cast<int>(skillId.size()))
+                                   .first->second;
+            if (id >= 64) {
+                throw std::invalid_argument("shifts require more than 64 distinct skills");
+            }
+            sh.requiredSkillBit = 1ULL << id;
+        }
+        sh.startDay = static_cast<int>(dayOf(sh.start));
+        sh.endDay = static_cast<int>(dayOf(sh.end));
+    }
+    // Only required skills get a bit: one no shift asks for cannot change a score.
     for (Employee& e : schedule.employees) {
         std::uint64_t mask = 0;
         for (const std::string& sk : e.skills) {
-            int id = idOf(sk);
-            if (id < 64) mask |= (1ULL << id);
+            auto it = skillId.find(sk);
+            if (it != skillId.end()) mask |= (1ULL << it->second);
         }
         e.skillMask = mask;
-    }
-    for (Shift& sh : schedule.shifts) {
-        // Empty requiredSkill == no skill requirement: bit 0 (matches everyone,
-        // never a miss). Don't intern "" as a phantom skill nobody holds.
-        int id = sh.requiredSkill.empty() ? -1 : idOf(sh.requiredSkill);
-        sh.requiredSkillBit = (id >= 0 && id < 64) ? (1ULL << id) : 0ULL;
-        sh.startDay = static_cast<int>(dayOf(sh.start));
-        sh.endDay = static_cast<int>(dayOf(sh.end));
     }
     schedule.prepared = true;
 }

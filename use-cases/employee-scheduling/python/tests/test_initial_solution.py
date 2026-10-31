@@ -216,6 +216,17 @@ def test_a_heavily_pinned_roster_keeps_every_pinned_shift():
     }
 
 
+def test_a_fully_pinned_roster_comes_back_unchanged(request_):
+    """All on one worker, so moving any of them would improve the balance rule."""
+    worker = request_.model_input.workers[0].id
+    for shift in request_.model_input.shifts:
+        shift.worker, shift.pinned = worker, True
+    request_.timelimit = 0.2
+    request_.settings = SolverSettings(smart_change_moves=True, custom_move_probability=0.9)
+
+    assert set(assignment_of(solve_request(request_)).values()) == {worker}
+
+
 @pytest.mark.parametrize(
     "bad_solution, message",
     [

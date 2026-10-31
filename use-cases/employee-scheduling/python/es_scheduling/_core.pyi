@@ -161,10 +161,13 @@ class Shift:
     ) -> None: ...
     id: str
     start: int
-    """Start time in minutes from day 0 (see `minutes`)."""
+    """Start time in minutes from day 0 (see `minutes`); solving and scoring
+    raise ValueError unless 0 <= start < end."""
     end: int
     location: str
     required_skill: str
+    """Skill the assignee needs; "" = none. At most 64 distinct values across the
+    shifts of a schedule, else solving and scoring raise ValueError."""
     employee_index: int
     """Index into `EmployeeSchedule.employees`; -1 == unassigned."""
     pinned: bool

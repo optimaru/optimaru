@@ -19,8 +19,10 @@ public:
 
     // Interns skills into integer bit ids and precomputes per-shift day indices,
     // filling Employee::skillMask, Shift::requiredSkillBit, Shift::startDay/endDay.
-    // Idempotent (guarded by EmployeeSchedule::prepared). Supports up to 64
-    // distinct skills. Must run before scoring; calculateScore/solve call it.
+    // Idempotent (guarded by EmployeeSchedule::prepared). Must run before
+    // scoring; calculateScore/solve call it. Throws std::invalid_argument for a
+    // shift without 0 <= start < end, or for more than 64 distinct required
+    // skills (skills only employees list do not count).
     static void prepare(EmployeeSchedule& schedule);
 
     // --- shared per-constraint building blocks ---
