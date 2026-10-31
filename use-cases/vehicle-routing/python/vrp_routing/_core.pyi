@@ -228,6 +228,10 @@ class SolverConfig:
     driving_time_nearby_probability: float
 
     on_new_best: Callable[[int, Score], None] | None
+    """Progress callback (steps, best score). The score has the same three
+    levels as the final plan.score: with solve_with_constraints both come
+    from the chosen constraints' hard / medium / soft totals, so a soft total
+    of 10^9 or more stays on soft instead of spilling into medium."""
 
 class Solver:
     """Construction heuristic + local search + adaptive ruin & recreate

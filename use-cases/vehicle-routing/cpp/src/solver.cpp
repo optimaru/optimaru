@@ -232,6 +232,16 @@ optimaru::SolverConfig buildEngineConfig(const Solver::Config &config,
     return engineConfig;
 }
 
+// The plugin path's Score: the calculator's three accumulators before the
+// medium fold, each level rounded on its own. Decoding the folded engine soft
+// instead would file a soft total of 10^9 or more under medium.
+Score levelScore(const optimaru::DecomposedScoreCalculator<VehicleRoutePlan> &calculator)
+{
+    const auto levels = calculator.levelScores();
+    return Score{static_cast<std::int64_t>(levels.hard), std::llround(levels.medium),
+                 std::llround(levels.soft)};
+}
+
 }  // namespace
 
 void Solver::solve(VehicleRoutePlan &plan)
@@ -284,8 +294,20 @@ void Solver::solve(
     }
     if (!plan.visits.empty() && !plan.vehicles.empty())
     {
-        optimaru::Solver<VehicleRoutePlan> engine(
-            buildEngineConfig(config_, plan));
+        optimaru::SolverConfig engineConfig = buildEngineConfig(config_, plan);
+        if (config_.onNewBest)
+        {
+            // Report the same three levels as the final plan.score below. The
+            // engine calls onNewBest right after the working solution became
+            // the new best, so the calculator's accumulators hold exactly that
+            // solution; the folded engine score it passes is not decoded.
+            auto callback = config_.onNewBest;
+            engineConfig.onNewBest
+                = [callback, &calculator](std::int64_t step,
+                                          const optimaru::HardSoftScore &)
+            { callback(step, levelScore(calculator)); };
+        }
+        optimaru::Solver<VehicleRoutePlan> engine(std::move(engineConfig));
         engine.solve(plan, calculator);
     }
 
@@ -294,15 +316,11 @@ void Solver::solve(
     // these — then score it with the caller's constraint assembly, leaving the
     // calculator primed on it so constraintTotals() explains exactly this
     // score. The three levels come straight from the calculator's
-    // accumulators (levelScores(), before the medium fold) rather than being
-    // decoded from the folded engine soft, which would file a soft total of
-    // 10^9 or more under medium.
+    // accumulators (levelScore() above), like every onNewBest report.
     ScoreCalculator::updateShadowVariables(plan);
     calculator.resetWorkingSolution(plan);
     calculator.calculateScore();
-    const auto levels = calculator.levelScores();
-    plan.score = Score{static_cast<std::int64_t>(levels.hard), std::llround(levels.medium),
-                       std::llround(levels.soft)};
+    plan.score = levelScore(calculator);
 }
 
 }  // namespace vrp

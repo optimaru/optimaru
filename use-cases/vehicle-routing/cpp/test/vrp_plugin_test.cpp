@@ -19,6 +19,7 @@
 //   (l) the medium level: fold, hard() / soft() / weight on
 //       unassignedVisitsCost, and incremental == full and previews ==
 //       applied score with those overrides
+//   (m) onNewBest on the plugin path reports the same levels as plan.score
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -814,6 +815,43 @@ void verifyMediumIncremental() {
     std::printf("\n");
 }
 
+// -------------------------------------------------------------------------
+// (m) onNewBest on the plugin path reports the levels plan.score reports.
+// -------------------------------------------------------------------------
+// With travelTimeCost at weight 10^7 the soft total passes 10^9, which a
+// decoded fold would split into medium + (soft mod 10^9). The last new best
+// is the returned solution, so its report must equal plan.score exactly.
+void verifyPluginCallbackLevels() {
+    std::printf("== (m) Plugin-path onNewBest levels == plan.score ==\n");
+    VehicleRoutePlan plan = buildRandomInstance(25, 4, /*seed=*/9);
+    plan.rebuildUnassignedPool();
+
+    Solver::Config config;
+    config.spentLimit = std::chrono::seconds(10);
+    config.stepCountLimit = 3000;
+    config.randomSeed = 5;
+    std::vector<Score> reports;
+    config.onNewBest = [&](std::int64_t, const Score& best) { reports.push_back(best); };
+
+    constexpr double kWeight = 1e7;
+    DecomposedCalculator calculator;
+    defaultConstraints().weight("travelTimeCost", kWeight).into(calculator);
+    Solver(config).solve(plan, calculator);
+
+    check(!reports.empty(), "onNewBest fired");
+    check(plan.score.soft <= -kMediumUnit, "the final soft total is 10^9 or more");
+    check(!reports.empty() && reports.back() == plan.score,
+          "the last onNewBest score == plan.score (" + plan.score.toString() + ")");
+    // Folded back, the reports are the engine's successive bests: strictly
+    // improving in its (hard, soft) order.
+    bool improving = true;
+    for (std::size_t i = 1; i < reports.size(); ++i)
+        improving = improving && toEngineScore(reports[i - 1]) < toEngineScore(reports[i]);
+    check(improving, std::to_string(reports.size())
+                             + " reports, strictly improving once folded into the engine score");
+    std::printf("\n");
+}
+
 }  // namespace
 
 int main() {
@@ -830,6 +868,7 @@ int main() {
     verifyCatalog();
     verifyMediumLevel();
     verifyMediumIncremental();
+    verifyPluginCallbackLevels();
 
     if (failures == 0) {
         std::printf("All vehicle-routing plugin checks PASSED.\n");

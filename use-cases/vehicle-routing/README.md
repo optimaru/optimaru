@@ -87,8 +87,9 @@ minute; `hard=False` one soft unit per penalty minute; an explicit weight stays 
 medium units. `constraint_costs()` carries
 `"medium_fold": {"kind": "into_soft", "unit": 1e9}` on every entry, so
 `vrp_routing.constraints.score()` folds exactly like the engine. A plugin-path
-solve (`constraints=`) reports `plan.score` from the calculator's three levels
-(`levelScores()`), not by decoding the folded soft.
+solve (`constraints=`) reports `plan.score` and every `on_new_best` score from
+the calculator's three levels (`levelScores()`), not by decoding the folded soft,
+so a soft total of 10^9 or more stays on soft in both.
 
 **Exponent.** It shapes each unit's raw cost before the weight: per vehicle for
 the unit constraints, on the single total for `unassigned_visits_cost`.

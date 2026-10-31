@@ -416,6 +416,31 @@ def test_the_plugin_solve_reports_each_level_unfolded():
     assert score(raw, picks) == _engine(plan.score)
 
 
+def test_on_new_best_reports_the_levels_of_the_final_score():
+    """on_new_best on the plugin path reports the same three levels as plan.score.
+
+    The last new best is the returned solution, so with a soft total of 10^9 or
+    more its report still equals plan.score instead of a decoded fold."""
+    weight = 10_000_000
+    picks = [
+        vehicle_capacity_cost,
+        unassigned_visits_cost,
+        TravelTimeCost(weight=weight),
+    ]
+    reports = []
+    plan = small_plan()
+    cfg = vrp.SolverConfig()
+    cfg.spent_limit_seconds = 0.4
+    cfg.random_seed = 7
+    cfg.on_new_best = lambda _step, best: reports.append(
+        (best.hard, best.medium, best.soft)
+    )
+    vrp.Solver(cfg).solve_with_constraints(plan, picks)
+    final = (plan.score.hard, plan.score.medium, plan.score.soft)
+    assert final[2] <= -MEDIUM_UNIT
+    assert reports and reports[-1] == final
+
+
 @pytest.mark.parametrize(
     ("kwargs", "error"),
     [

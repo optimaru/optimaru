@@ -114,14 +114,14 @@ class MaxEndTimeCost(Constraint):
 
     name = "max_end_time_cost"
     label_en = "Time window end"
-    label_ko = "시간 창 마감"
+    label_ko = "시간창 마감"
     description_en = (
         "Minutes, rounded up, by which a visit's service (arrival + service duration) finishes after "
         "its time window closes (`max_end_time`). One unit of cost is one late minute at one visit; "
         "0 means every visit finishes in time."
     )
     description_ko = (
-        "방문지의 서비스(도착 시각 + 서비스 시간)가 시간 창 마감(`max_end_time`)을 넘겨 끝나는 시간을 "
+        "방문지의 서비스 종료 시각(도착 시각 + 서비스 시간)이 시간창 마감(`max_end_time`)을 넘은 시간을 "
         "분 단위로 올림해 더합니다. 한 방문지에서 늦은 1분이 비용 1이며, 0이면 모든 방문지가 제시간에 "
         "끝납니다."
     )
@@ -159,9 +159,9 @@ class MaxTravelTimeCost(Constraint):
         "is within its limit or has none."
     )
     description_ko = (
-        "차량의 운행 시간이 `max_travel_time`을 넘는 초를 더합니다(출발지로 돌아오는 구간은 "
-        "`return_to_depot`일 때만 셉니다). 한도를 넘은 1초가 비용 1이며, 0이면 모든 차량이 한도 안에 "
-        "있거나 한도가 없습니다."
+        "차량의 운행 시간이 `max_travel_time`을 넘은 시간(초)을 더합니다. 출발지로 돌아오는 구간은 "
+        "`return_to_depot`가 켜져 있을 때만 셉니다. 한도를 넘은 1초가 비용 1이며, 0이면 모든 차량이 "
+        "한도 안에 있거나 한도가 없습니다."
     )
 
 
@@ -177,9 +177,9 @@ class MaxRouteDurationCost(Constraint):
         "One unit of cost is one second over the limit; 0 means every route is within its limit or has none."
     )
     description_ko = (
-        "출발부터 경로가 끝날 때까지 걸린 시간(대기와 서비스 포함, 귀환 구간은 `return_to_depot`일 때만)이 "
-        "차량의 `max_route_duration`을 넘는 초를 더합니다. 넘은 1초가 비용 1이며, 0이면 모든 경로가 한도 "
-        "안에 있거나 한도가 없습니다."
+        "출발부터 경로가 끝날 때까지 걸린 시간(대기와 서비스 포함, 귀환 구간은 `return_to_depot`가 켜져 "
+        "있을 때만)이 차량의 `max_route_duration`을 넘은 시간(초)을 더합니다. 한도를 넘은 1초가 비용 "
+        "1이며, 0이면 모든 경로가 한도 안에 있거나 한도가 없습니다."
     )
 
 
@@ -197,9 +197,9 @@ class VehicleMaxEndTimeCost(Constraint):
         "0 means every vehicle finishes in time or has no end time."
     )
     description_ko = (
-        "경로가 끝나는 시각(마지막 방문지 출발, `return_to_depot`이면 출발지 도착)이 차량의 "
-        "`max_end_time`을 넘는 초를 더합니다. 늦은 1초가 비용 1이며, 0이면 모든 차량이 제시간에 끝나거나 "
-        "종료 시각이 없습니다."
+        "경로가 끝나는 시각(마지막 방문지를 떠나는 시각, `return_to_depot`가 켜져 있으면 출발지에 "
+        "돌아온 시각)이 차량의 `max_end_time`을 넘은 시간(초)을 더합니다. 늦은 1초가 비용 1이며, 0이면 "
+        "모든 차량이 제시간에 끝나거나 종료 시각 제한이 없습니다."
     )
 
 
@@ -231,7 +231,7 @@ class MaxRouteRadiusCost(Constraint):
         "visit is inside it or no radius is set."
     )
     description_ko = (
-        "출발지에서 가장 먼 방문지까지의 직선거리가 `max_route_radius_meters`를 넘는 미터를 더합니다. "
+        "출발지에서 가장 먼 방문지까지의 직선거리가 `max_route_radius_meters`를 넘은 거리(미터)를 더합니다. "
         "반경을 벗어난 1미터가 비용 1이며, 0이면 모든 방문지가 반경 안에 있거나 반경이 설정되지 않았습니다."
     )
 
@@ -251,9 +251,9 @@ class EnclosingCircleRadiusCost(Constraint):
         "visits. Opt-in: the default weight is 0."
     )
     description_ko = (
-        "경로마다 방문지(출발지 제외)를 모두 담는 가장 작은 원의 반지름(미터)을 더해, 촘촘한 경로를 "
-        "선호하게 합니다. 1미터가 비용 1이며, 방문지가 둘 미만인 경로는 0입니다. 기본 가중치가 0이라 직접 "
-        "켜야 합니다."
+        "경로마다 방문지(출발지 제외)를 모두 담는 가장 작은 원의 반지름(미터)을 더해, 방문지가 좁은 "
+        "범위에 모인 경로를 선호하게 합니다. 1미터가 비용 1이며, 방문지가 둘 미만인 경로는 0입니다. 기본 "
+        "가중치가 0이므로 쓰려면 가중치를 직접 지정해야 합니다."
     )
 
 
@@ -288,8 +288,8 @@ class RouteDurationCost(Constraint):
     )
     description_ko = (
         "운행하는 차량마다 출발부터 경로가 끝날 때까지의 시간(대기와 서비스 포함, 귀환 구간은 "
-        "`return_to_depot`일 때만)을 더합니다. 1초가 비용 1이며, 운행하는 차량이 없으면 0입니다. 기본 "
-        "가중치가 0이라 직접 켜야 합니다."
+        "`return_to_depot`가 켜져 있을 때만)을 더합니다. 1초가 비용 1이며, 운행하는 차량이 없으면 0입니다. 기본 "
+        "가중치가 0이므로 쓰려면 가중치를 직접 지정해야 합니다."
     )
 
 
@@ -305,7 +305,8 @@ class LatencyCost(Constraint):
     )
     description_ko = (
         "차량이 출발한 뒤 각 방문지에 도착하기까지 걸린 시간을 모든 방문지에 대해 더합니다. 1초가 비용 "
-        "1이며, 방문하는 곳이 없으면 0입니다. 기본 가중치가 0이라 직접 켜야 합니다."
+        "1이며, 방문하는 곳이 없으면 0입니다. 기본 가중치가 0이므로 쓰려면 가중치를 직접 지정해야 "
+        "합니다."
     )
 
 
@@ -344,8 +345,8 @@ class UnassignedVisitsCost(Constraint):
     )
     description_ko = (
         "어느 경로에도 들어가지 않은 방문지마다 미배정 페널티(`unassigned_penalty_minutes`, 기본값은 "
-        "서비스 시간을 분 단위로 내림한 값)를 미디엄 수준에서 더합니다. 페널티 1분이 비용 1이며, 0이면 "
-        "페널티가 있는 방문지가 하나도 빠지지 않았습니다."
+        "서비스 시간을 분 단위로 내림한 값)를 중간(medium) 수준에서 더합니다. 페널티 1분이 비용 1이며, "
+        "0이면 페널티가 있는 방문지가 하나도 빠지지 않았습니다."
     )
 
 
