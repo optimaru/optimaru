@@ -286,7 +286,7 @@ class RequiredVehicle(Constraint):
 
     name = "required_vehicle"
     label_en = "Required Vehicle"
-    description_en = "Penalizes requests that are not on their `required_vehicle`. Default: **hard**, weight 1000."
+    description_en = "Penalizes requests that are not on their `required_vehicle`: once when unassigned, twice on another vehicle. Default: **hard**, weight 1000."
 
 
 class MinimizeLateness(Constraint):
