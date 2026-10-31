@@ -38,3 +38,7 @@ target_compile_options(fp_test PRIVATE -Wall -Wextra)
 add_executable(fp_plugin_test test/fp_plugin_test.cpp)
 target_link_libraries(fp_plugin_test PRIVATE fp_core)
 target_compile_options(fp_plugin_test PRIVATE -Wall -Wextra)
+
+enable_testing()
+add_test(NAME fp_test COMMAND fp_test)
+add_test(NAME fp_plugin_test COMMAND fp_plugin_test)

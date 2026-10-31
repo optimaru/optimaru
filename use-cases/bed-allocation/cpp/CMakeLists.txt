@@ -43,3 +43,7 @@ target_compile_options(ba_plugin_test PRIVATE -Wall -Wextra)
 add_executable(ba_quality_bench bench/ba_quality_bench.cpp)
 target_link_libraries(ba_quality_bench PRIVATE ba_core)
 target_compile_options(ba_quality_bench PRIVATE -Wall -Wextra)
+
+enable_testing()
+add_test(NAME ba_test COMMAND ba_test)
+add_test(NAME ba_plugin_test COMMAND ba_plugin_test)

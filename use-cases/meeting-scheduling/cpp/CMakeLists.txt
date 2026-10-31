@@ -43,3 +43,7 @@ target_compile_options(ms_quality_bench PRIVATE -Wall -Wextra)
 add_executable(ms_plugin_test test/ms_plugin_test.cpp)
 target_link_libraries(ms_plugin_test PRIVATE ms_core)
 target_compile_options(ms_plugin_test PRIVATE -Wall -Wextra)
+
+enable_testing()
+add_test(NAME ms_test COMMAND ms_test)
+add_test(NAME ms_plugin_test COMMAND ms_plugin_test)

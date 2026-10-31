@@ -37,3 +37,7 @@ target_compile_options(fl_test PRIVATE -Wall -Wextra)
 add_executable(fl_plugin_test test/fl_plugin_test.cpp)
 target_link_libraries(fl_plugin_test PRIVATE fl_core)
 target_compile_options(fl_plugin_test PRIVATE -Wall -Wextra)
+
+enable_testing()
+add_test(NAME fl_test COMMAND fl_test)
+add_test(NAME fl_plugin_test COMMAND fl_plugin_test)
