@@ -12,6 +12,7 @@ dist/
 wheelhouse/
 *.so
 .pytest_cache/
+.ipynb_checkpoints/
 
 # benchmark downloads and results
 .bench-cache/
