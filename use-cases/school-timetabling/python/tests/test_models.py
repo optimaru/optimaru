@@ -166,3 +166,27 @@ def test_a_new_soft_constraint_gets_a_weight_field_by_itself():
     assert generated().model_dump() == {"first_period_load": 7}
     # A term the monolithic struct does not know is silently left out by to_core (the assembly path uses it).
     assert "first_period_load" not in generated().to_core().__dir__()
+
+
+def _dump_with_slot_room(value):
+    data = _small_table_model().model_dump()
+    data["lessons"][0]["slot_room"] = value
+    return data
+
+
+@pytest.mark.parametrize("value", [-2, 2, 5, 99999999])
+def test_a_slot_room_out_of_range_is_refused_before_the_engine(value):
+    with pytest.raises(ValueError, match=rf"lesson 'L1': slot_room {value} is out of range -1\.\.1"):
+        TimetableModel.model_validate(_dump_with_slot_room(value))
+
+
+@pytest.mark.parametrize("value", [-1, 0, 1])
+def test_every_slot_room_in_range_is_accepted(value):
+    assert TimetableModel.model_validate(_dump_with_slot_room(value)).to_core().lessons[0].slot_room == value
+
+
+def test_a_slot_room_edited_after_validation_is_refused_by_to_core():
+    model = _small_table_model()
+    model.lessons[0].slot_room = 99999999
+    with pytest.raises(ValueError, match="out of range"):
+        model.to_core()

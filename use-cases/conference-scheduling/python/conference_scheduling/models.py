@@ -13,7 +13,7 @@ snapshots, ...)::
 `pydantic` is an optional dependency (`pip install conference-scheduling[models]`).
 """
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from . import _core
 
@@ -24,7 +24,13 @@ __all__ = [
     "SpeakerModel",
     "TalkModel",
     "TimeslotModel",
+    "with_initial_solution",
 ]
+
+
+def _valid_positions(count: int) -> str:
+    """The valid positions among `count`, for an error message."""
+    return f"0..{count - 1}" if count else "(the list is empty)"
 
 
 class TimeslotModel(BaseModel):
@@ -114,8 +120,32 @@ class ConferenceScheduleModel(BaseModel):
     score_hard: int | None = None
     score_soft: float | None = None
 
+    @model_validator(mode="after")
+    def _check_indices(self):
+        """Raw positions the engine reads without a range check. The positions listed on
+        timeslots, rooms and speakers and in `prerequisite_talks` it skips when out of range."""
+        type_count = len(self.talk_types)
+        speaker_count = len(self.speakers)
+        value_count = len(self.timeslots) * len(self.rooms)
+        for talk in self.talks:
+            if not 0 <= talk.talk_type < type_count:
+                raise ValueError(
+                    f"talk {talk.code!r}: talk_type {talk.talk_type!r} is out of range {_valid_positions(type_count)}"
+                )
+            for speaker in talk.speakers:
+                if not 0 <= speaker < speaker_count:
+                    raise ValueError(
+                        f"talk {talk.code!r}: speaker {speaker!r} is out of range {_valid_positions(speaker_count)}"
+                    )
+            if not -1 <= talk.slot_room < value_count:
+                raise ValueError(
+                    f"talk {talk.code!r}: slot_room {talk.slot_room!r} is out of range -1..{value_count - 1}"
+                )
+        return self
+
     def to_core(self) -> "_core.ConferenceSchedule":
         """pydantic -> engine object (the score field is ignored; the engine recomputes it)."""
+        self._check_indices()  # the fields stay mutable after validation
         return _core.ConferenceSchedule(
             name=self.name,
             talk_types=list(self.talk_types),
@@ -284,3 +314,73 @@ class SolveConfig(BaseModel):
         if self.best_score_limit is not None:
             cfg.best_score_limit = self.best_score_limit
         return cfg
+
+
+def _solution_dict(solution) -> dict:
+    if isinstance(solution, BaseModel):
+        return solution.model_dump()
+    if isinstance(solution, dict):
+        return solution
+    raise ValueError(f"solution must be a solved model or a dict of that shape: {type(solution)!r}")
+
+
+def _entities_by_id(solved: dict, name: str, ids: list, key: str = "id") -> dict:
+    """`solved[name]` by id. Rejects an id repeated on either side and an id outside `ids`."""
+    entities = solved.get(name)
+    if not isinstance(entities, list):
+        raise ValueError(f"solution has no {name!r} list")
+    known = set(ids)
+    if len(known) != len(ids):
+        raise ValueError(f"problem repeats an id in {name!r}: {next(i for i in ids if ids.count(i) > 1)!r}")
+    by_id: dict = {}
+    for entity in entities:
+        entity_id = entity.get(key) if isinstance(entity, dict) else None
+        if not isinstance(entity_id, (str, int)) or entity_id not in known:
+            raise ValueError(f"solution has an unknown id in {name!r}: {entity_id!r}")
+        if entity_id in by_id:
+            raise ValueError(f"solution repeats an id in {name!r}: {entity_id!r}")
+        by_id[entity_id] = entity
+    return by_id
+
+
+def _require_same_order(solved: dict, name: str, ids: list, key: str = "id") -> None:
+    """A positional value only means the same thing over the same list. `solved` may omit the list."""
+    values = solved.get(name)
+    if values is None:
+        return
+    if not isinstance(values, list) or [v.get(key) if isinstance(v, dict) else None for v in values] != ids:
+        raise ValueError(f"solution {name!r} list differs from the problem's (same entries, same order required)")
+
+
+def with_initial_solution(problem, solution):
+    """Return a copy of `problem` whose search starts from `solution`.
+
+    `solution` is what a solve returns (`ConferenceScheduleModel.from_core`), or a plain
+    dict of that shape (the JSON the API returned). Talks are matched by code. A talk
+    left out becomes unassigned and the construction heuristic places it, and only
+    it, so a complete solution starts the search exactly from it. `problem` is not
+    mutated. Pinned talks keep their value on `problem`, whatever `solution` says.
+
+    `slot_room` is the composite `timeslot_index * room_count + room_index`, so it is
+    only valid for the same timeslots and rooms in the same order: ValueError if
+    `solution` lists different ones.
+
+    Raises ValueError naming the talk for an unknown or repeated code and for a
+    `slot_room` outside -1..slot_room_count - 1 (the engine does not range-check).
+    """
+    if not isinstance(problem, ConferenceScheduleModel):
+        raise TypeError(f"problem must be a ConferenceScheduleModel: {type(problem)!r}")
+    solved = _solution_dict(solution)
+    _require_same_order(solved, "timeslots", [t.id for t in problem.timeslots])
+    _require_same_order(solved, "rooms", [r.id for r in problem.rooms])
+    talks = _entities_by_id(solved, "talks", [t.code for t in problem.talks], key="code")
+    value_count = len(problem.timeslots) * len(problem.rooms)
+    seeded = problem.model_copy(deep=True)
+    seeded.score_hard = seeded.score_soft = None
+    for talk in seeded.talks:
+        if not talk.pinned:
+            talk.slot_room = talks.get(talk.code, {}).get("slot_room", -1)
+        value = talk.slot_room
+        if not isinstance(value, int) or isinstance(value, bool) or not -1 <= value < value_count:
+            raise ValueError(f"talk {talk.code!r}: slot_room {value!r} is out of range -1..{value_count - 1}")
+    return seeded

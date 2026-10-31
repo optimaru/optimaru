@@ -2,7 +2,9 @@
 // calculator against the full recompute, and the engine integration.
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <random>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -390,6 +392,119 @@ void testPairOperatorsMatter()
     std::printf("\n");
 }
 
+// A line, built by hand so each insertion is exact: every stop sits at 0 and
+// each vehicle at its entry of `homes`, one seat each. A request has to be
+// picked up by `pickupClose` and dropped off two service times after that.
+constexpr Seconds kLineService = 1000;
+
+struct LineRequest
+{
+    int requiredVehicle;
+    Seconds pickupClose;
+};
+
+PdpRoutePlan buildLine(const std::vector<Seconds> &homes,
+                       const std::vector<LineRequest> &requests)
+{
+    PdpRoutePlan plan;
+    plan.name = "line";
+    std::vector<Seconds> places = homes;
+    places.push_back(0);
+    for (std::size_t i = 0; i < places.size(); ++i)
+        addLocation(plan, 0.0, 0.0);
+    const int stops = static_cast<int>(homes.size());
+    for (std::size_t v = 0; v < homes.size(); ++v)
+    {
+        plan.vehicles.push_back(
+            Vehicle{std::to_string(v), 1, static_cast<int>(v), 0, {}});
+    }
+    for (std::size_t r = 0; r < requests.size(); ++r)
+    {
+        const int request = static_cast<int>(r);
+        const std::string id = std::to_string(r);
+        const Seconds close = requests[r].pickupClose;
+        plan.nodes.push_back(Node{"p" + id,
+                                  stops,
+                                  0,
+                                  close,
+                                  kLineService,
+                                  request,
+                                  true,
+                                  -1,
+                                  NULL_TIME});
+        plan.nodes.push_back(Node{"d" + id,
+                                  stops,
+                                  0,
+                                  close + 2 * kLineService,
+                                  kLineService,
+                                  request,
+                                  false,
+                                  -1,
+                                  NULL_TIME});
+        plan.deliveries.push_back(Delivery{id,
+                                           2 * request,
+                                           2 * request + 1,
+                                           1,
+                                           0,
+                                           requests[r].requiredVehicle});
+    }
+    plan.drivingSeconds.assign(places.size(),
+                               std::vector<Seconds>(places.size(), 0));
+    for (std::size_t a = 0; a < places.size(); ++a)
+    {
+        for (std::size_t b = 0; b < places.size(); ++b)
+            plan.drivingSeconds[a][b] = std::abs(places[a] - places[b]);
+    }
+    return plan;
+}
+
+// No search at all, so these are the construction's own decisions. The default
+// score does not read requiredVehicle, so the checks look at the routes.
+void testConstructionRespectsRequiredVehicle()
+{
+    std::printf("== Construction and requiredVehicle ==\n");
+    Solver::Config config;
+    config.spentLimit = std::chrono::milliseconds(0);
+
+    // The bound request is right next to vehicle 0 and bound to vehicle 1.
+    PdpRoutePlan detour = buildLine({0, 1000}, {{1, 100000}});
+    Solver(config).solve(detour);
+    check(detour.vehicles[0].nodeIndices.empty()
+              && detour.vehicles[1].nodeIndices == std::vector<int>({0, 1}),
+          "a bound request goes on its vehicle, not on the cheapest one");
+
+    // Vehicle 0 has room for one of the two. The free one has the tighter
+    // window and the shorter trip, so taking the requests in window order
+    // would strand the bound one although vehicle 1 can serve the free one.
+    PdpRoutePlan contested = buildLine({0, 100}, {{-1, 1200}, {0, 1300}});
+    Solver(config).solve(contested);
+    check(contested.vehicles[0].nodeIndices == std::vector<int>({2, 3})
+              && contested.vehicles[1].nodeIndices == std::vector<int>({0, 1})
+              && contested.score.isFeasible(),
+          "a bound request is placed before a free one can take its slot");
+
+    // Vehicle 1 is too far away to make the window; vehicle 0 is not.
+    PdpRoutePlan unreachable = buildLine({0, 5000}, {{1, 1200}});
+    Solver(config).solve(unreachable);
+    check(unreachable.vehicles[0].nodeIndices.empty()
+              && unreachable.vehicles[1].nodeIndices.empty()
+              && unreachable.unassignedNodeIndices.size() == 2,
+          "a bound request with no feasible slot stays unassigned");
+
+    PdpRoutePlan unknown = buildLine({0}, {{1, 100000}});
+    bool refused = false;
+    try
+    {
+        Solver(config).solve(unknown);
+    }
+    catch (const std::invalid_argument &)
+    {
+        refused = true;
+    }
+    check(refused, "a required vehicle outside the plan is refused");
+    std::printf("\n");
+}
+
 }  // namespace
 
 int main()
@@ -399,6 +514,7 @@ int main()
     testSolveIntegrity();
     testFullAssert();
     testPairOperatorsMatter();
+    testConstructionRespectsRequiredVehicle();
 
     if (failures == 0)
     {

@@ -37,14 +37,18 @@ A solve keeps any route already on a vehicle as its starting point and places on
 the requests no route holds. In the JSON contract that is `initial_route`, a list
 of stop ids; both stops of a request must be in it, pickup first.
 
-`pinned_stops` fixes that many leading stops. Everything after them can be
-reordered, moved to another vehicle or have stops inserted between. Pinning a
+`pinned_stops` fixes that many leading stops, even in a hard-infeasible result.
+Everything after them can be reordered, moved to another vehicle or have stops
+inserted between. Pinning a
 pickup keeps its request on the vehicle, through `sameVehicle`. Goods already on
 board have no pickup left, so give them a pickup at the vehicle's position with no
 service time and pin it.
 
 `required_vehicle` keeps a request on a vehicle without fixing its place on the
-route, for work that is promised but still free to be reordered.
+route, for work that is promised but still free to be reordered. A request with no
+feasible slot on that vehicle stays in `unassigned` rather than moving to another
+one, and the result is hard-infeasible. Search may still put it on its own vehicle
+late, when that costs less than waiting.
 
 ## The constraints
 
@@ -54,7 +58,7 @@ route, for work that is promised but still free to be reordered.
 | hard | `sameVehicle` | its pickup and dropoff share one vehicle |
 | hard | `pickupBeforeDropoff` | and the pickup comes first in that route |
 | hard | `pinnedStops` | a route starts with its vehicle's `pinned_stops`, in order |
-| hard | `requiredVehicle` | a request stays on its `required_vehicle`, anywhere on the route |
+| hard | `requiredVehicle` | a request stays on its `required_vehicle`, anywhere on the route: 1 when unassigned, 2 on another vehicle |
 | hard | `vehicleCapacity` | the **running load** never exceeds the capacity |
 | hard | `serviceFinishedAfterMaxEndTime` | time-window lateness, in whole minutes |
 | medium | `unassignedRequests` | service minutes of the requests left unrouted |
@@ -87,7 +91,10 @@ The three coupling rules share one penalty weight,
 `ScoreCalculator::kCouplingPenalty`. Any nonzero hard total already means
 infeasible, so that weight only shapes the gradient *within* the infeasible
 region; it is set well above a typical lateness so the search fixes broken
-pairs before polishing time windows.
+pairs before polishing time windows. `requiredVehicle` uses the same weight.
+`pinnedStops` uses `ScoreCalculator::kPinnedPenalty` (1e12), far above what the
+other hard rules total on real input, so no trade between them moves a pinned
+stop. If a result breaks a pin anyway, its `score` shows it in that unit.
 
 ## Why the pair-aware operators exist
 
@@ -183,6 +190,20 @@ print(plan.score.hard, plan.score.medium, plan.score.soft)
 cmake -S use-cases/pickup-delivery/cpp -B build/pickup-delivery && cmake --build build/pickup-delivery -j
 ctest --test-dir build/pickup-delivery
 ```
+
+## Starting from an existing solution
+
+```python
+from pdp_routing.models import solve_request, with_initial_solution
+
+solution = solve_request(request)                        # request: a PdpRequest
+next_request = with_initial_solution(request, solution)  # or solution.model_dump(mode="json")
+better = solve_request(next_request)
+```
+
+`with_initial_solution` turns a solution into the `initial_route` of each vehicle (see [Starting from existing routes](#starting-from-existing-routes)), replacing the ones the request had. Construction places only the requests in no route, so a partial solution works and the `unassigned` ones get another try. With `timelimit=0` a complete solution comes back as it went in.
+
+A vehicle's `pinned_stops` stay as the request has them: its route in the solution must start with them, or `ValueError` is raised. The same goes for an unknown id, a stop routed twice, or a request whose pickup and dropoff are apart, so a hard-infeasible result with a broken pair cannot be used as a start.
 
 ## Extending
 

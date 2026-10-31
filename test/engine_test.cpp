@@ -11,6 +11,7 @@
 #include <functional>
 #include <memory>
 #include <numeric>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -460,6 +461,171 @@ void testListVariable() {
 // Performance features: adaptive operator selection, LNS, nearby selection
 // ===========================================================================
 namespace {
+
+// A task assignment with pins. Each task costs its worker's index, so every
+// pinned task on a high worker is a move away from a better score.
+struct PinnedTasks {
+    int workerCount = 0;
+    std::vector<int> assignment;
+    std::vector<char> pinned;
+};
+
+}  // namespace
+
+template <>
+struct optimaru::SolutionDescriptor<PinnedTasks> {
+    static constexpr optimaru::VariableKind kind = optimaru::VariableKind::BASIC;
+    static int entityCount(const PinnedTasks& s) { return static_cast<int>(s.assignment.size()); }
+    static int valueCount(const PinnedTasks& s) { return s.workerCount; }
+    static int getVariable(const PinnedTasks& s, int e) { return s.assignment[e]; }
+    static void setVariable(PinnedTasks& s, int e, int v) { s.assignment[e] = v; }
+    static bool isPinned(const PinnedTasks& s, int e) { return s.pinned[e] != 0; }
+};
+
+namespace {
+
+class PinnedTasksCalculator final : public optimaru::IncrementalScoreCalculator<PinnedTasks> {
+public:
+    void resetWorkingSolution(PinnedTasks& solution) override {
+        solution_ = &solution;
+        cost_ = 0;
+        for (int w : solution.assignment) cost_ += std::max(w, 0);
+    }
+    void beforeVariableChanged(int e) override { cost_ -= std::max(solution_->assignment[e], 0); }
+    void afterVariableChanged(int e) override { cost_ += std::max(solution_->assignment[e], 0); }
+    HardSoftScore calculateScore() override { return {0, -static_cast<double>(cost_)}; }
+
+private:
+    PinnedTasks* solution_ = nullptr;
+    long cost_ = 0;
+};
+
+// A caller's operator, as a domain would write one. `calls` shows whether the
+// engine gave it a turn.
+class AnyTaskMove final : public optimaru::MoveOperator<PinnedTasks> {
+public:
+    explicit AnyTaskMove(int& calls) : calls_(calls) {}
+    const char* name() const override { return "anyTask"; }
+    bool apply(optimaru::OperatorContext<PinnedTasks>& ctx, std::mt19937_64& rng,
+               std::vector<int>& entities) override {
+        ++calls_;
+        PinnedTasks& s = ctx.director.workingSolution();
+        task_ = static_cast<int>(rng() % s.assignment.size());
+        if (s.pinned[task_]) return false;
+        previous_ = s.assignment[task_];
+        ctx.director.changeVariable(task_, static_cast<int>(rng() % s.workerCount));
+        entities.push_back(task_);
+        return true;
+    }
+    void undoLast(optimaru::OperatorContext<PinnedTasks>& ctx) override {
+        ctx.director.changeVariable(task_, previous_);
+    }
+
+private:
+    int& calls_;
+    int task_ = 0;
+    int previous_ = 0;
+};
+
+PinnedTasks solvePinned(std::vector<int> assignment, std::vector<char> pinned, int* customCalls) {
+    PinnedTasks s{6, std::move(assignment), std::move(pinned)};
+    optimaru::SolverConfig config;
+    config.termination.stepCountLimit = 4000;
+    config.randomSeed = 3;
+    config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+    config.localSearch.descentWeight = 0.05;
+    config.localSearch.customMoveProbability = 0.3;
+    config.localSearch.ruinRecreate.unimprovedStepTrigger = 20;
+    config.localSearch.ruinRecreate.asMoveWeight = 0.1;
+    optimaru::Solver<PinnedTasks> solver(config);
+    if (customCalls != nullptr) solver.addMoveOperator(std::make_unique<AnyTaskMove>(*customCalls));
+    PinnedTasksCalculator calculator;
+    solver.solve(s, calculator);
+    return s;
+}
+
+template <typename Solve>
+bool refusesPinnedWithoutValue(Solve&& solve) {
+    try {
+        solve();
+    } catch (const std::invalid_argument& error) {
+        return std::string(error.what()) == "entity 1 is pinned but has no value";
+    }
+    return false;
+}
+
+void testPinnedEntities() {
+    std::printf("== BASIC: pinned entities ==\n");
+    const std::vector<int> high{5, 4, 5, 3, 5, 4, 5, 2};
+
+    int calls = 0;
+    PinnedTasks all = solvePinned(high, std::vector<char>(high.size(), 1), &calls);
+    check(all.assignment == high, "all pinned: every value kept");
+    check(calls == 0, "all pinned: no custom operator runs");
+
+    PinnedTasks reported{6, high, std::vector<char>(high.size(), 1)};
+    optimaru::SolverConfig reporting;
+    std::vector<double> softScores;
+    reporting.onNewBest = [&](std::int64_t, const HardSoftScore& score) {
+        softScores.push_back(score.soft);
+    };
+    PinnedTasksCalculator reportingCalculator;
+    optimaru::Solver<PinnedTasks>(reporting).solve(reported, reportingCalculator);
+    check(softScores == std::vector<double>{-33.0}, "all pinned: on_new_best reports the score once");
+
+    std::vector<char> allButOne(high.size(), 1);
+    allButOne[3] = 0;
+    std::vector<int> oneFree = high;
+    oneFree[3] = 0;
+    check(solvePinned(high, allButOne, nullptr).assignment == oneFree,
+          "one free entity: it moves, no pin does");
+
+    std::vector<char> half(high.size(), 0);
+    std::vector<int> expected(high.size(), 0);
+    for (std::size_t e = 0; e < high.size(); e += 2) {
+        half[e] = 1;
+        expected[e] = high[e];
+    }
+    check(solvePinned(high, half, nullptr).assignment == expected,
+          "half pinned: pins kept, the rest optimal");
+
+    std::vector<int> freeUnassigned = high;
+    freeUnassigned[3] = -1;
+    check(solvePinned(freeUnassigned, allButOne, nullptr).assignment == oneFree,
+          "construction places an unassigned entity that is not pinned");
+
+    std::vector<int> pinnedUnassigned = high;
+    pinnedUnassigned[1] = -1;
+    check(refusesPinnedWithoutValue([&] { solvePinned(pinnedUnassigned, allButOne, nullptr); }),
+          "a pinned entity with no value is refused");
+
+    // Off the calling thread an escaping exception would end the process, so
+    // these two must refuse before they start one.
+    PinnedTasks multiStart{6, pinnedUnassigned, allButOne};
+    optimaru::SolverConfig threaded;
+    threaded.multiStartCount = 2;
+    optimaru::Solver<PinnedTasks> multiStartSolver(threaded);
+    check(refusesPinnedWithoutValue([&] {
+              multiStartSolver.solveMultiStart(
+                      multiStart, [] { return std::make_unique<PinnedTasksCalculator>(); });
+          }),
+          "multi-start refuses it on the calling thread");
+
+    PinnedTasks managed{6, pinnedUnassigned, allButOne};
+    PinnedTasksCalculator managedCalculator;
+    check(refusesPinnedWithoutValue([&] {
+              optimaru::SolverManager<PinnedTasks>::solve({}, managed, managedCalculator);
+          }),
+          "SolverManager refuses it on the calling thread");
+
+    PinnedTasks noValues{0, pinnedUnassigned, allButOne};
+    PinnedTasksCalculator noValuesCalculator;
+    check(refusesPinnedWithoutValue([&] {
+              optimaru::Solver<PinnedTasks>(optimaru::SolverConfig{})
+                      .solve(noValues, noValuesCalculator);
+          }),
+          "an empty value range does not skip the check");
+}
 
 void testRouletteWheelSelector() {
     std::printf("== LNS: roulette-wheel operator selection adapts ==\n");
@@ -1705,6 +1871,7 @@ int main() {
     testEnvironmentMode();
     testMultiStartAndFfd(optimum);
     testListVariable();
+    testPinnedEntities();
     testRouletteWheelSelector();
     testCustomMoveProbability();
     testLnsEscapesLocalOptimum(optimum);

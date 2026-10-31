@@ -30,6 +30,7 @@ __all__ = [
     "TaskAssigningSolutionModel",
     "TaskModel",
     "TaskTypeModel",
+    "with_initial_solution",
 ]
 
 AFFINITIES = ("NONE", "LOW", "MEDIUM", "HIGH")
@@ -219,3 +220,26 @@ class TaskAssigningSolutionModel(_Model):
             score_soft1=solution.score.soft1,
             score_soft2=solution.score.soft2,
         )
+
+
+def with_initial_solution(
+    problem: TaskAssigningSolutionModel, solution: TaskAssigningSolutionModel | dict
+) -> TaskAssigningSolutionModel:
+    """Return a copy of `problem` whose search starts from `solution`.
+
+    `solution` is what a solve returned, as the model or as its JSON dict. Each
+    employee's `tasks` become that employee's tasks there, replacing what
+    `problem` had; an employee the solution leaves out starts empty. Employees
+    and tasks are matched by id.
+
+    Tasks in no list are placed by construction. A solution that assigns every
+    task is the exact starting point. Raises ValueError on an unknown employee
+    or task, or a task assigned twice.
+    """
+    solved = {employee.id: employee for employee in TaskAssigningSolutionModel.model_validate(solution).employees}
+    if unknown := solved.keys() - {employee.id for employee in problem.employees}:
+        raise ValueError(f"unknown employee {sorted(unknown)}")
+    data = problem.model_dump()
+    for employee in data["employees"]:
+        employee["tasks"] = list(solved[employee["id"]].tasks) if employee["id"] in solved else []
+    return TaskAssigningSolutionModel.model_validate(data)

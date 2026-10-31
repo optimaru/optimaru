@@ -27,6 +27,20 @@ cmake -S use-cases/order-picking/cpp -B build/order-picking && cmake --build bui
 ctest --test-dir build/order-picking
 ```
 
+## Starting from an existing solution
+
+```python
+from order_picking.models import solve_request, with_initial_solution
+
+solution = solve_request(request)                        # request: an OrderPickingRequest
+next_request = with_initial_solution(request, solution)  # or solution.model_dump(mode="json")
+better = solve_request(next_request)
+```
+
+`with_initial_solution` returns a new request whose trolleys carry `initial_route`, a list of pick task ids. The solve keeps those routes as its starting point and construction places only the tasks in no route, so a partial solution works. With `timelimit=0` a complete solution comes back as it went in. An unknown id or a task routed twice raises `ValueError`.
+
+A pick task id is `<order id>-<item position>`, so keep each order's `items` in the order they were solved in: moved, the same id names a different item.
+
 ## Extending
 
 Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-c-engine-use-case).

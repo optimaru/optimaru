@@ -317,7 +317,8 @@ private:
     }
 
     // Return a non-pinned entity: keep `e` if movable, otherwise resample (then
-    // scan) for one. Falls back to `e` only in the degenerate all-pinned case.
+    // scan) for one. Local search has checked that one exists, so the fallback
+    // to `e` is only a guard.
     static int movableEntity(const Solution& sol, int e,
                              std::uniform_int_distribution<int>& pick, std::mt19937_64& rng) {
         if (!entityPinned<Descriptor>(sol, e)) return e;

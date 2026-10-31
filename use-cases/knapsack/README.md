@@ -38,6 +38,22 @@ print([item.id for item in problem.items if item.selected], problem.total_value)
 a full `config` (`SolverConfig`: temperature, cooling rate, stagnation
 limit, …) and `constraints`.
 
+## Starting from an existing solution
+
+`with_initial_solution(problem, solution)` returns a copy of `problem` whose
+search starts from `solution`, a solved model or the same thing as a JSON dict.
+Items are matched by id. `selected: false` means not selected and is kept as it
+is; items the solution leaves out go through the greedy selection around the
+seeded load. Unknown ids, duplicates and non-boolean values raise `ValueError`.
+
+```python
+from knapsack import with_initial_solution
+
+warm = with_initial_solution(problem, problem.model_dump(mode="json"))
+print(solve(warm, time_limit_seconds=1.0, random_seed=42))
+print([item.id for item in warm.items if item.selected], warm.total_value)
+```
+
 ## Extending
 
 This is a pure Python reference implementation (simulated annealing in

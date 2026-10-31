@@ -27,6 +27,7 @@ class QuadraticAssignmentProblemModel(BaseModel):
     total_cost: int | None = Field(default=None, description="Sum of flow multiplied by assigned distance.")
     score_hard: int | None = None
     score_soft: float | None = None
+    warm_start: bool = Field(default=False, description="Start the search from `assignment`, a full bijection.")
 
     @model_validator(mode="after")
     def square_matrices(self) -> QuadraticAssignmentProblemModel:
@@ -59,3 +60,34 @@ class QuadraticAssignmentProblemModel(BaseModel):
     @classmethod
     def from_core(cls, problem: QuadraticAssignmentProblemModel) -> QuadraticAssignmentProblemModel:
         return problem.model_copy(deep=True)
+
+
+def with_initial_solution(problem, solution):
+    """Return a copy of `problem` whose search starts from `solution`.
+
+    `solution` is a solved problem model or a dict of the same shape. Its `assignment` must map every location to a
+    different facility: the search only swaps facilities, so a partial assignment raises ValueError.
+    """
+    if isinstance(solution, BaseModel):
+        solution = solution.model_dump(mode="json")
+    if not isinstance(solution, dict) or not isinstance(solution.get("assignment"), dict):
+        raise ValueError("solution must be a problem model or a dict with an 'assignment' mapping")
+    assignment = solution["assignment"]
+    facilities = set(problem.facilities)
+    locations = set(problem.locations)
+    seen: dict[str, str] = {}
+    for location, facility in assignment.items():
+        if location not in locations:
+            raise ValueError(f"solution references unknown location: {location!r}")
+        if not isinstance(facility, str) or facility not in facilities:
+            raise ValueError(f"location {location!r} references unknown facility: {facility!r}")
+        if facility in seen:
+            raise ValueError(f"facility {facility!r} is assigned to both {seen[facility]!r} and {location!r}")
+        seen[facility] = location
+    if missing := [location for location in problem.locations if location not in assignment]:
+        raise ValueError(f"assignment must cover every location; missing: {missing}")
+    seeded = problem.model_copy(deep=True)
+    seeded.assignment = dict(assignment)
+    seeded.total_cost = seeded.score_hard = seeded.score_soft = None
+    seeded.warm_start = True
+    return seeded

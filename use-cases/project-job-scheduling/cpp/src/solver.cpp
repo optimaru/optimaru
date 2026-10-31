@@ -121,8 +121,8 @@ void runEngine(
 void Solver::solve(ProjectJobSchedule &schedule)
 {
     ScoreCalculator::prepare(schedule);  // validate + topological order
-    // Pinned allocations must be initialized before solving (the engine's
-    // construction heuristic does not consult pinning): fix stragglers at
+    // Pinned allocations must be initialized before solving (the engine
+    // refuses an unassigned pinned entity): fix stragglers at
     // (first mode, delay 0), like the Java demo data does for SOURCE/SINK.
     using Descriptor = optimaru::SolutionDescriptor<ProjectJobSchedule>;
     for (int a = 0; a < schedule.allocationCount(); ++a)

@@ -1,5 +1,7 @@
 """Serialization/deserialization of the pydantic mirror (models.py) and demo data reproduction checks."""
 
+import pytest
+
 from tournament_scheduling.models import (
     TeamAssignmentModel,
     TournamentScheduleModel,
@@ -66,3 +68,38 @@ def test_assignment_model_defaults():
     assert a.team is None
     assert a.pinned is False
     assert a.index_in_day == 0
+
+
+@pytest.mark.parametrize(
+    "section, field, value, message",
+    [
+        ("unavailability_penalties", "team", 7, r"unavailability penalty 0: team 7 is out of range 0\.\.6"),
+        ("unavailability_penalties", "team", 99999999, "team 99999999 is out of range"),
+        ("unavailability_penalties", "day", 18, r"unavailability penalty 0: day 18 is out of range 0\.\.17"),
+        ("unavailability_penalties", "day", 99999999, "day 99999999 is out of range"),
+        ("team_assignments", "day", 18, r"team assignment 0: day 18 is out of range 0\.\.17"),
+        ("team_assignments", "day", 99999999, "day 99999999 is out of range"),
+        ("team_assignments", "team", -1, r"team assignment 0: team -1 is out of range 0\.\.6"),
+        ("team_assignments", "team", 7, r"team assignment 0: team 7 is out of range 0\.\.6"),
+        ("team_assignments", "team", 99999999, "team 99999999 is out of range"),
+    ],
+)
+def test_an_index_out_of_range_is_refused_before_the_engine(section, field, value, message):
+    data = demo_data().model_dump()
+    data[section][0][field] = value
+    with pytest.raises(ValueError, match=message):
+        TournamentScheduleModel.model_validate(data)
+
+
+def test_an_index_edited_after_validation_is_refused_by_to_core():
+    model = demo_data()
+    model.unavailability_penalties[0].day = 99999999
+    with pytest.raises(ValueError, match="out of range"):
+        model.to_core()
+
+
+def test_an_index_into_an_empty_list_says_the_list_is_empty():
+    data = demo_data().model_dump()
+    data["teams"] = []
+    with pytest.raises(ValueError, match=r"team \d+ is out of range \(the list is empty\)"):
+        TournamentScheduleModel.model_validate(data)

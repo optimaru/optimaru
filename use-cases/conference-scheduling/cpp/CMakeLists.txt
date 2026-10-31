@@ -44,3 +44,7 @@ target_compile_options(cs_quality_bench PRIVATE -Wall -Wextra)
 add_executable(cs_plugin_test test/cs_plugin_test.cpp)
 target_link_libraries(cs_plugin_test PRIVATE cs_core)
 target_compile_options(cs_plugin_test PRIVATE -Wall -Wextra)
+
+enable_testing()
+add_test(NAME cs_test COMMAND cs_test)
+add_test(NAME cs_plugin_test COMMAND cs_plugin_test)

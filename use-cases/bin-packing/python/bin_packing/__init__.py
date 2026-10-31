@@ -10,6 +10,7 @@ from ._core import (
     constraint_costs,
     list_constraints,
 )
+from .models import with_initial_solution
 
 __all__ = [
     "BinPackingProblem",
@@ -21,6 +22,7 @@ __all__ = [
     "constraint_costs",
     "list_constraints",
     "solve",
+    "with_initial_solution",
 ]
 
 

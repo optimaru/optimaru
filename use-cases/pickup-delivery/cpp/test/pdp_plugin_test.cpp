@@ -9,6 +9,8 @@
 //   (d) weight / isHard overrides
 //   (e) constraintTotals() explains exactly the reported score
 //   (f) a 2-second solve(plan, calculator) under FULL_ASSERT
+//   (g) the pair move takes a misplaced bound request to its vehicle
+//   (h) pinned stops and bound requests hold when other hard rules are broken
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -300,6 +302,112 @@ void verifyFullAssertSolve()
     std::printf("\n");
 }
 
+// -------------------------------------------------------------------------
+// (g) The pair move takes a misplaced bound request straight to its vehicle.
+// -------------------------------------------------------------------------
+void verifyRepairHonoursRequiredVehicle()
+{
+    std::printf("== (g) Repair and requiredVehicle ==\n");
+    // A single request, so no stop is routed near it and the pair move falls
+    // back on picking a vehicle. With only that move and a handful of steps, a
+    // pick among all the vehicles would almost never find the right one.
+    const int vehicleCount = 40;
+    int repaired = 0;
+    const int seeds = 5;
+    for (int seed = 0; seed < seeds; ++seed)
+    {
+        PdpRoutePlan plan = buildRandomInstance(1, vehicleCount, /*seed=*/21);
+        plan.deliveries[0].requiredVehicleIndex = vehicleCount - 1;
+        plan.vehicles[0].nodeIndices = {plan.deliveries[0].pickupNodeIndex,
+                                        plan.deliveries[0].dropoffNodeIndex};
+
+        Solver::Config config;
+        config.stepCountLimit = 8;
+        config.spentLimit = std::chrono::minutes(1);  // safety net only
+        config.randomSeed = static_cast<std::uint64_t>(seed);
+        config.pairAssignmentProbability = 0.0;
+        config.relocateMoveWeight = 0.0;
+        config.listSwapMoveWeight = 0.0;
+        config.twoOptMoveWeight = 0.0;
+        config.orOptMoveWeight = 0.0;
+        config.tailSwapMoveWeight = 0.0;
+        config.ruinRecreate = false;
+
+        DecomposedCalculator calculator;
+        addDefaultConstraints(calculator);
+        Solver(config).solve(plan, calculator);
+        if (plan.vehicles[vehicleCount - 1].nodeIndices.size() == 2)
+            ++repaired;
+    }
+    check(repaired == seeds, "a misplaced bound request reaches its vehicle");
+    std::printf("\n");
+}
+
+// -------------------------------------------------------------------------
+// (h) The score keeps pinned stops and bound requests where they belong, even
+// when something else is already broken.
+// -------------------------------------------------------------------------
+Solver::Config stepLimited(std::uint64_t seed)
+{
+    Solver::Config config;
+    config.stepCountLimit = 20000;
+    config.spentLimit = std::chrono::minutes(1);  // safety net only
+    config.randomSeed = seed;
+    return config;
+}
+
+void verifyPinnedAndBoundUnderPressure()
+{
+    std::printf("== (h) Pinned stops and bound requests under pressure ==\n");
+    int pinnedHeld = 0;
+    int stayedOff = 0;
+    const int seeds = 5;
+    for (int seed = 0; seed < seeds; ++seed)
+    {
+        // Both pickups are pinned, the second one days late behind the first.
+        // Swapping them would save far more lateness than it used to cost.
+        PdpRoutePlan late = buildRandomInstance(2, 1, /*seed=*/23);
+        const int first = late.deliveries[0].pickupNodeIndex;
+        const int second = late.deliveries[1].pickupNodeIndex;
+        for (int nodeIndex : {first, late.deliveries[0].dropoffNodeIndex})
+        {
+            late.nodes[nodeIndex].minStartTime = 500000;
+            late.nodes[nodeIndex].maxEndTime = 600000;
+        }
+        for (int nodeIndex : {second, late.deliveries[1].dropoffNodeIndex})
+        {
+            late.nodes[nodeIndex].minStartTime = 0;
+            late.nodes[nodeIndex].maxEndTime = 40000;
+        }
+        late.vehicles[0].nodeIndices = {first,
+                                        second,
+                                        late.deliveries[0].dropoffNodeIndex,
+                                        late.deliveries[1].dropoffNodeIndex};
+        late.vehicles[0].pinnedNodeIndices = {first, second};
+        DecomposedCalculator lateCalculator;
+        addDefaultConstraints(lateCalculator);
+        Solver(stepLimited(seed)).solve(late, lateCalculator);
+        const std::vector<int> &route = late.vehicles[0].nodeIndices;
+        if (route.size() >= 2 && route[0] == first && route[1] == second)
+            ++pinnedHeld;
+
+        // Vehicle 1 cannot reach the request in time and vehicle 0 is not
+        // allowed to take it.
+        PdpRoutePlan bound = buildRandomInstance(1, 2, /*seed=*/23);
+        bound.deliveries[0].requiredVehicleIndex = 1;
+        for (Seconds &seconds : bound.drivingSeconds[1])
+            seconds = 10000000;
+        DecomposedCalculator boundCalculator;
+        addDefaultConstraints(boundCalculator);
+        Solver(stepLimited(seed)).solve(bound, boundCalculator);
+        if (bound.vehicles[0].nodeIndices.empty())
+            ++stayedOff;
+    }
+    check(pinnedHeld == seeds, "lateness never pays for moving a pinned stop");
+    check(stayedOff == seeds, "a bound request does not ride another vehicle");
+    std::printf("\n");
+}
+
 }  // namespace
 
 int main()
@@ -310,6 +418,8 @@ int main()
     verifyOverrides();
     verifyConstraintTotals();
     verifyFullAssertSolve();
+    verifyRepairHonoursRequiredVehicle();
+    verifyPinnedAndBoundUnderPressure();
 
     if (failures == 0)
     {

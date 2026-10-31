@@ -38,3 +38,7 @@ target_compile_options(mnt_test PRIVATE -Wall -Wextra)
 add_executable(mnt_plugin_test test/mnt_plugin_test.cpp)
 target_link_libraries(mnt_plugin_test PRIVATE mnt_core)
 target_compile_options(mnt_plugin_test PRIVATE -Wall -Wextra)
+
+enable_testing()
+add_test(NAME mnt_test COMMAND mnt_test)
+add_test(NAME mnt_plugin_test COMMAND mnt_plugin_test)

@@ -6,6 +6,7 @@
 #include <limits>
 #include <memory>
 #include <stdexcept>
+#include <string>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -150,9 +151,15 @@ public:
         }
         else
         {
+            // A bound request only moves along its own route, which is also
+            // where a repair has to put it back.
+            const int required = delivery.requiredVehicleIndex;
             if (ctx.nearby.enabled())
             {
-                pickupAnchor = routedNeighbor(ctx, plan, pickup, pool, rng);
+                pickupAnchor
+                    = required >= 0
+                          ? routedNeighborIn(ctx, plan, pickup, required, rng)
+                          : routedNeighbor(ctx, plan, pickup, pool, rng);
                 if (pickupAnchor >= 0)
                 {
                     target = ctx.elementList[pickupAnchor];
@@ -165,8 +172,11 @@ public:
             }
             if (target < 0)
             {
-                target = static_cast<int>(
-                    rng() % static_cast<std::uint64_t>(vehicleCount));
+                target = required >= 0
+                             ? required
+                             : static_cast<int>(
+                                   rng()
+                                   % static_cast<std::uint64_t>(vehicleCount));
             }
         }
 
@@ -197,10 +207,18 @@ public:
             int pickupPos = greedyPickupPos >= 0
                                 ? greedyPickupPos
                                 : positionAfter(targetList, pickupAnchor);
-            if (pickupPos < 0)
+            // Pinned stops stay in front: a slot among them is no slot at all.
+            const int firstFree = std::min(
+                static_cast<int>(plan.vehicles[static_cast<std::size_t>(target)]
+                                     .pinnedNodeIndices.size()),
+                targetSize);
+            if (pickupPos < 0 || pickupPos < firstFree)
             {
-                pickupPos = static_cast<int>(
-                    rng() % static_cast<std::uint64_t>(targetSize + 1));
+                pickupPos = firstFree
+                            + static_cast<int>(
+                                rng()
+                                % static_cast<std::uint64_t>(
+                                    targetSize - firstFree + 1));
             }
             int dropoffPos = greedyDropoffPos >= 0
                                  ? greedyDropoffPos
@@ -314,6 +332,12 @@ private:
         for (std::size_t vehicleIndex = 0; vehicleIndex < plan.vehicles.size();
              ++vehicleIndex)
         {
+            // A bound request has no other vehicle to fall back on: with no
+            // feasible slot on its own it stays unassigned.
+            if (delivery.requiredVehicleIndex >= 0
+                && delivery.requiredVehicleIndex
+                       != static_cast<int>(vehicleIndex))
+                continue;
             const std::vector<int> &route
                 = plan.vehicles[vehicleIndex].nodeIndices;
             const Seconds before
@@ -485,6 +509,13 @@ void constructPairs(PdpRoutePlan &plan, bool decreasing)
                              return left.demand > right.demand;
                          });
     }
+    // A bound request has one vehicle to go to, so it goes first: a free
+    // request placed before it could take the only slot that fits.
+    std::stable_partition(
+        order.begin(),
+        order.end(),
+        [&plan](int deliveryIndex)
+        { return plan.deliveries[deliveryIndex].requiredVehicleIndex >= 0; });
 
     for (int deliveryIndex : order)
     {
@@ -742,6 +773,24 @@ void solveInParallel(const Solver::Config &config,
 namespace
 {
 
+// A required vehicle is a raw position in plan.vehicles, and the pair move uses
+// it as a list index, so a bad one has to stop here.
+void checkRequiredVehicles(const PdpRoutePlan &plan)
+{
+    const int vehicleCount = static_cast<int>(plan.vehicles.size());
+    for (const Delivery &delivery : plan.deliveries)
+    {
+        if (delivery.requiredVehicleIndex < -1
+            || delivery.requiredVehicleIndex >= vehicleCount)
+        {
+            throw std::invalid_argument(
+                "request " + delivery.id + ": requiredVehicleIndex "
+                + std::to_string(delivery.requiredVehicleIndex)
+                + " is out of range -1.." + std::to_string(vehicleCount - 1));
+        }
+    }
+}
+
 // Shared engine wiring for both solve() overloads: termination, late
 // acceptance, the LIST move mix, the ALNS knobs and the driving-time nearby
 // selection (all pure problem-fact lookups, so they apply to the plugin path
@@ -874,6 +923,7 @@ optimaru::SolverConfig buildEngineConfig(const Solver::Config &config,
 
 void Solver::solve(PdpRoutePlan &plan)
 {
+    checkRequiredVehicles(plan);
     // Empty pool so the construction heuristic places every stop itself.
     if (config_.pairConstructionHeuristic && !plan.vehicles.empty())
         constructPairs(plan, config_.firstFitDecreasing);
@@ -920,6 +970,7 @@ void Solver::solve(
     PdpRoutePlan &plan,
     optimaru::DecomposedScoreCalculator<PdpRoutePlan> &calculator)
 {
+    checkRequiredVehicles(plan);
     if (config_.ruinRecreateRewards.size() != 4)
     {
         throw std::invalid_argument(

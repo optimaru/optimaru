@@ -18,7 +18,7 @@ Score mapping (Java HardMediumSoftScore -> engine HardSoftScore):
 `pydantic` is an optional dependency (`pip install meeting_scheduling[models]`).
 """
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from . import _core
 
@@ -30,7 +30,13 @@ __all__ = [
     "RoomModel",
     "TimeGrainModel",
     "demo_data",
+    "with_initial_solution",
 ]
+
+
+def _valid_positions(count: int) -> str:
+    """The valid positions among `count`, for an error message."""
+    return f"0..{count - 1}" if count else "(the list is empty)"
 
 
 class PersonModel(BaseModel):
@@ -103,8 +109,23 @@ class MeetingScheduleModel(BaseModel):
     score_hard: int | None = None
     score_soft: float | None = None
 
+    @model_validator(mode="after")
+    def _check_indices(self):
+        """`grain_room` is a raw value the engine reads without a range check. It refuses
+        bad people and meetings itself."""
+        value_count = len(self.time_grains) * len(self.rooms)
+        valid_values = _valid_positions(value_count)
+        for assignment in self.meeting_assignments:
+            value = assignment.grain_room
+            if value is not None and not 0 <= value < value_count:
+                raise ValueError(
+                    f"meeting assignment {assignment.id!r}: grain_room {value!r} is out of range {valid_values}"
+                )
+        return self
+
     def to_core(self) -> "_core.MeetingSchedule":
         """pydantic -> engine object (the score field is ignored; the engine recomputes it)."""
+        self._check_indices()  # the fields stay mutable after validation
         return _core.MeetingSchedule(
             [_core.Person(p.id, p.full_name) for p in self.people],
             [_core.TimeGrain(g.id, g.grain_index, g.day_of_year, g.starting_minute_of_day) for g in self.time_grains],
@@ -176,3 +197,81 @@ def demo_data() -> MeetingScheduleModel:
     java.util.Random(0); exposes C++ `ms::buildDemoData` as-is): 20 people, 160 time
     grains (4 days x 40), 3 rooms (30/20/16 seats), 24 meetings (8/12/16 grains)."""
     return MeetingScheduleModel.from_core(_core.demo_data())
+
+
+def _solution_dict(solution) -> dict:
+    if isinstance(solution, BaseModel):
+        return solution.model_dump()
+    if isinstance(solution, dict):
+        return solution
+    raise ValueError(f"solution must be a solved model or a dict of that shape: {type(solution)!r}")
+
+
+def _entities_by_id(solved: dict, name: str, ids: list, key: str = "id") -> dict:
+    """`solved[name]` by id. Rejects an id repeated on either side and an id outside `ids`."""
+    entities = solved.get(name)
+    if not isinstance(entities, list):
+        raise ValueError(f"solution has no {name!r} list")
+    known = set(ids)
+    if len(known) != len(ids):
+        raise ValueError(f"problem repeats an id in {name!r}: {next(i for i in ids if ids.count(i) > 1)!r}")
+    by_id: dict = {}
+    for entity in entities:
+        entity_id = entity.get(key) if isinstance(entity, dict) else None
+        if not isinstance(entity_id, (str, int)) or entity_id not in known:
+            raise ValueError(f"solution has an unknown id in {name!r}: {entity_id!r}")
+        if entity_id in by_id:
+            raise ValueError(f"solution repeats an id in {name!r}: {entity_id!r}")
+        by_id[entity_id] = entity
+    return by_id
+
+
+def _require_same_order(solved: dict, name: str, ids: list, key: str = "id") -> None:
+    """A positional value only means the same thing over the same list. `solved` may omit the list."""
+    values = solved.get(name)
+    if values is None:
+        return
+    if not isinstance(values, list) or [v.get(key) if isinstance(v, dict) else None for v in values] != ids:
+        raise ValueError(f"solution {name!r} list differs from the problem's (same entries, same order required)")
+
+
+def with_initial_solution(problem, solution):
+    """Return a copy of `problem` whose search starts from `solution`.
+
+    `solution` is what a solve returns: a `MeetingScheduleModel`, or a plain dict of
+    that shape (the JSON the API returned). Assignments are matched by id. An
+    assignment left out becomes unassigned and the construction heuristic places it,
+    and only it, so a complete solution starts the search exactly from it. `problem`
+    is not mutated. Pinned assignments keep their value on `problem`, whatever
+    `solution` says.
+
+    `grain_room` is the composite `time_grain_pos * room_count + room_index` (the
+    position in `time_grains`, not `grain_index`), so it is only valid for the same
+    time grains and rooms in the same order: ValueError if `solution` lists different
+    ones.
+
+    Raises ValueError naming the assignment for an unknown or repeated id and for a
+    `grain_room` outside 0..grain_room_count - 1 (None is unassigned; the engine does
+    not range-check).
+    """
+    if not isinstance(problem, MeetingScheduleModel):
+        raise TypeError(f"problem must be a MeetingScheduleModel: {type(problem)!r}")
+    solved = _solution_dict(solution)
+    _require_same_order(solved, "time_grains", [g.id for g in problem.time_grains])
+    _require_same_order(solved, "rooms", [r.id for r in problem.rooms])
+    assignments = _entities_by_id(solved, "meeting_assignments", [a.id for a in problem.meeting_assignments])
+    value_count = len(problem.time_grains) * len(problem.rooms)
+    seeded = problem.model_copy(deep=True)
+    seeded.score_hard = seeded.score_soft = None
+    for assignment in seeded.meeting_assignments:
+        if not assignment.pinned:
+            assignment.grain_room = assignments.get(assignment.id, {}).get("grain_room")
+        value = assignment.grain_room
+        if value is None:
+            continue
+        if not isinstance(value, int) or isinstance(value, bool) or not 0 <= value < value_count:
+            valid_values = _valid_positions(value_count)
+            raise ValueError(
+                f"meeting assignment {assignment.id!r}: grain_room {value!r} is out of range {valid_values}"
+            )
+    return seeded

@@ -56,6 +56,10 @@ class AssemblyLineBalancingProblemModel(BaseModel):
     station_loads: list[int] | None = Field(default=None, description="Processing-time load of each station.")
     score_hard: int | None = None
     score_soft: float | None = None
+    warm_start: bool = Field(
+        default=False,
+        description="Start the search from the stations on `tasks`; tasks still at -1 go through the construction.",
+    )
 
     @model_validator(mode="after")
     def valid_ids(self) -> AssemblyLineBalancingProblemModel:
@@ -84,3 +88,35 @@ class AssemblyLineBalancingProblemModel(BaseModel):
     @classmethod
     def from_core(cls, problem: AssemblyLineBalancingProblemModel) -> AssemblyLineBalancingProblemModel:
         return problem.model_copy(deep=True)
+
+
+def with_initial_solution(problem, solution):
+    """Return a copy of `problem` whose search starts from `solution`.
+
+    `solution` is a solved problem model or a dict of the same shape; tasks are matched by id. A task the solution
+    leaves out, or holds at -1, is placed by the normal construction. Anything `solve` returns is accepted, feasible
+    or not: `max_stations`, station domains and `fixed_station` stay hard penalties, so a seed may break them, and
+    `solve` itself can return indices at or above the task count or `max_stations`.
+    """
+    if isinstance(solution, BaseModel):
+        solution = solution.model_dump(mode="json")
+    if not isinstance(solution, dict) or not isinstance(solution.get("tasks"), list):
+        raise ValueError("solution must be a problem model or a dict with a 'tasks' list")
+    known = {task.id for task in problem.tasks}
+    stations: dict[str, int] = {}
+    for entry in solution["tasks"]:
+        if not isinstance(entry, dict) or not isinstance(entry.get("id"), str) or entry["id"] not in known:
+            raise ValueError(f"solution references unknown task: {entry!r}")
+        task_id = entry["id"]
+        if task_id in stations:
+            raise ValueError(f"solution assigns task {task_id!r} more than once")
+        station = entry.get("station", -1)
+        if type(station) is not int or station < -1:
+            raise ValueError(f"task {task_id!r} has invalid station {station!r}")
+        stations[task_id] = station
+    seeded = problem.model_copy(deep=True)
+    for task in seeded.tasks:
+        task.station = stations.get(task.id, -1)
+    seeded.stations_used = seeded.station_loads = seeded.score_hard = seeded.score_soft = None
+    seeded.warm_start = True
+    return seeded

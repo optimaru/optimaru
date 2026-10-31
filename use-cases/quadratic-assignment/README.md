@@ -58,6 +58,21 @@ print(problem.assignment, problem.total_cost)
 a full `config` (`SolverConfig`: temperature, cooling rate, stagnation
 limit, …) and `constraints`.
 
+## Starting from an existing solution
+
+`with_initial_solution(problem, solution)` returns a copy of `problem` whose
+search starts from `solution`, a solved model or the same thing as a JSON dict.
+Its `assignment` must be a full bijection from locations to facilities: partial
+assignments, unknown ids and repeated facilities raise `ValueError`.
+
+```python
+from quadratic_assignment import with_initial_solution
+
+warm = with_initial_solution(problem, problem.model_dump(mode="json"))
+solve(warm, time_limit_seconds=1.0, random_seed=42)
+print(warm.assignment, warm.total_cost)
+```
+
 ## Extending
 
 This is a pure Python reference implementation (simulated annealing in
