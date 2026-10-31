@@ -46,7 +46,8 @@ The engine scores balance as `sqrt(ssd)`, rounded to 6 significant figures. The
 objective holds `ssd / 2`, the root's tangent at `ssd = 1` less a constant. Both
 fall as loads even out, but `ssd / 2` weighs a large imbalance more heavily
 against the other soft rules. `balance_assignments` also drops `sum(load)^2 / n`,
-a constant once every shift is assigned, so it holds `sum(load^2) / 2`.
+a constant once every shift is assigned, so it holds `sum(load^2) / 2`. With a
+soft `unassigned_shift` rule that is not so, and it keeps the term.
 
 Over 30 s runs on `large`, CP-SAT missed hard 0 in three of four with an exact
 fixed-point root, in five of six with `ssd / 2` and that term kept, and in one of

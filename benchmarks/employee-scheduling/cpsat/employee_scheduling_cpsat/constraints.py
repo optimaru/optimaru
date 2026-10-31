@@ -25,7 +25,8 @@ from es_scheduling import models as domain
 from es_scheduling.models import ScheduleRequest
 from ortools.sat.python import cp_model
 
-# Fixed-point denominator of the soft level.
+# Fixed-point denominator of the soft level. Even, because `BalanceAssignments`
+# halves it.
 SCALE = 100
 
 
@@ -519,6 +520,14 @@ class BalanceAssignments(RulePlugin):
         """
         loads = [context.load(worker) for worker in range(len(context.workers))]
         top = len(context.shifts)
+        # A soft price on empty shifts is the one case where the total really
+        # varies, and without the term an empty shift would look like a gain.
+        if any(
+            rule.name == "unassigned_shift" and rule.hard is False
+            for rule in context.problem.model_input.rules
+        ):
+            self.penalize_half_ssd(context, objective, loads, top, top)
+            return
         if len(loads) < 2 or top == 0:
             return
         half = self.scale // 2

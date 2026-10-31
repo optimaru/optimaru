@@ -245,6 +245,27 @@ def test_a_shift_stays_empty_only_when_a_rule_prices_it() -> None:
     assert free.model_input.shifts[0].worker == "Worker 1"
 
 
+def test_balance_does_not_buy_an_empty_shift_at_a_soft_price() -> None:
+    problem = ScheduleRequest(
+        model_input=SchedulingInput(
+            workers=[WorkerModel(id="Worker 1"), WorkerModel(id="Worker 2")],
+            shifts=[
+                ShiftModel(id=f"Shift {day}", start=day * DAY, end=day * DAY + 60)
+                for day in range(3)
+            ],
+            rules=[
+                domain.BalanceAssignmentsRule(),
+                domain.UnassignedShiftRule(policy="soft"),
+            ],
+        )
+    )
+
+    solved = solve(problem, time_limit_seconds=2)
+
+    assert all(shift.worker for shift in solved.model_input.shifts)
+    assert constraint_costs(solved)["soft"] == pytest.approx(-(0.5**0.5), abs=1e-5)
+
+
 def test_what_cannot_be_modelled_is_refused() -> None:
     with pytest.raises(ValueError, match="exponent"):
         solve(_problem([domain.RequiredSkillRule(exponent=2.0)]))
