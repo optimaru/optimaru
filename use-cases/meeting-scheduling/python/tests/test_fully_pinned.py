@@ -32,3 +32,5 @@ def test_a_pinned_entity_without_a_value_is_refused():
     schedule.meeting_assignments[0].grain_room = -1
     with pytest.raises(ValueError, match="is pinned but has no value"):
         ms.solve(schedule, time_limit_seconds=0.1)
+    with pytest.raises(ValueError, match="is pinned but has no value"):
+        ms.solve(schedule, time_limit_seconds=0.1, parallel_solver_count=2)

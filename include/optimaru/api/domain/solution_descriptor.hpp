@@ -2,6 +2,8 @@
 #define OPTIMARU_API_DOMAIN_SOLUTION_DESCRIPTOR_HPP
 
 #include <limits>
+#include <stdexcept>
+#include <string>
 #include <type_traits>
 #include <utility>
 
@@ -37,6 +39,22 @@ inline bool entityPinned(const Solution& solution, int entity) {
 // Which planning-variable shape a solution uses (a basic variable, a list
 // variable or a chained variable).
 enum class VariableKind { BASIC, LIST, CHAINED };
+
+// A pinned entity keeps its value, so it needs one. Runs on the calling thread,
+// before any solver thread starts: an exception escaping one ends the process.
+template <class Descriptor, class Solution>
+inline void requirePinnedValues(const Solution& solution) {
+    if constexpr (Descriptor::kind == VariableKind::BASIC &&
+                  detail::has_is_pinned<Descriptor, Solution>::value) {
+        const int n = Descriptor::entityCount(solution);
+        for (int e = 0; e < n; ++e) {
+            if (Descriptor::isPinned(solution, e) && Descriptor::getVariable(solution, e) < 0) {
+                throw std::invalid_argument("entity " + std::to_string(e) +
+                                            " is pinned but has no value");
+            }
+        }
+    }
+}
 
 // Encoding helpers for the CHAINED kind's `previous` variable: it points at
 // either another entity (>= 0), an anchor (encoded negative), or nothing.

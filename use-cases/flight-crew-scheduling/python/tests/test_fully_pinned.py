@@ -44,3 +44,5 @@ def test_a_pinned_seat_without_an_employee_is_refused():
     schedule.flight_assignments[0].employee = -1
     with pytest.raises(ValueError, match="is pinned but has no value"):
         fc.solve(schedule, time_limit_seconds=0.1)
+    with pytest.raises(ValueError, match="is pinned but has no value"):
+        fc.solve(schedule, time_limit_seconds=0.1, parallel_solver_count=2)

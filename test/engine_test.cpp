@@ -544,6 +544,16 @@ PinnedTasks solvePinned(std::vector<int> assignment, std::vector<char> pinned, i
     return s;
 }
 
+template <typename Solve>
+bool refusesPinnedWithoutValue(Solve&& solve) {
+    try {
+        solve();
+    } catch (const std::invalid_argument& error) {
+        return std::string(error.what()) == "entity 1 is pinned but has no value";
+    }
+    return false;
+}
+
 void testPinnedEntities() {
     std::printf("== BASIC: pinned entities ==\n");
     const std::vector<int> high{5, 4, 5, 3, 5, 4, 5, 2};
@@ -576,13 +586,35 @@ void testPinnedEntities() {
 
     std::vector<int> pinnedUnassigned = high;
     pinnedUnassigned[1] = -1;
-    bool refused = false;
-    try {
-        solvePinned(pinnedUnassigned, allButOne, nullptr);
-    } catch (const std::invalid_argument& error) {
-        refused = std::string(error.what()) == "entity 1 is pinned but has no value";
-    }
-    check(refused, "a pinned entity with no value is refused");
+    check(refusesPinnedWithoutValue([&] { solvePinned(pinnedUnassigned, allButOne, nullptr); }),
+          "a pinned entity with no value is refused");
+
+    // Off the calling thread an escaping exception would end the process, so
+    // these two must refuse before they start one.
+    PinnedTasks multiStart{6, pinnedUnassigned, allButOne};
+    optimaru::SolverConfig threaded;
+    threaded.multiStartCount = 2;
+    optimaru::Solver<PinnedTasks> multiStartSolver(threaded);
+    check(refusesPinnedWithoutValue([&] {
+              multiStartSolver.solveMultiStart(
+                      multiStart, [] { return std::make_unique<PinnedTasksCalculator>(); });
+          }),
+          "multi-start refuses it on the calling thread");
+
+    PinnedTasks managed{6, pinnedUnassigned, allButOne};
+    PinnedTasksCalculator managedCalculator;
+    check(refusesPinnedWithoutValue([&] {
+              optimaru::SolverManager<PinnedTasks>::solve({}, managed, managedCalculator);
+          }),
+          "SolverManager refuses it on the calling thread");
+
+    PinnedTasks noValues{0, pinnedUnassigned, allButOne};
+    PinnedTasksCalculator noValuesCalculator;
+    check(refusesPinnedWithoutValue([&] {
+              optimaru::Solver<PinnedTasks>(optimaru::SolverConfig{})
+                      .solve(noValues, noValuesCalculator);
+          }),
+          "an empty value range does not skip the check");
 }
 
 void testRouletteWheelSelector() {
