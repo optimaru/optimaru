@@ -42,6 +42,7 @@ RULES = [
     domain.MaxWeeklyMinutesCost(minutes=600),
     domain.MaxWeeklyMinutesCost(minutes=600, week_anchor=3),
     domain.MinWeeklyMinutesCost(minutes=900),
+    domain.MinWeeklyMinutesCost(minutes=900, week_anchor=3),
     domain.MinWeeklyRestDaysCost(value=5),
     domain.AssignmentCost(
         cost_per_hour=1.5,
@@ -53,8 +54,12 @@ RULES = [
     domain.ShiftCountGapCost(tolerance=1),
     domain.WeeklyMinutesGapCost(tolerance_minutes=100),
     domain.ShiftCoverageCost(worker_skill="Skill A", min_count=1, max_count=1),
-    domain.ShiftCoverageCost(min_count=2, worker_indices=(0, 1), shift_indices=(0, 2, 3)),
-    domain.ShiftCoverageCost(min_count=1, worker_indices=(1, 1, 99), shift_indices=(0, 0, 2, -1)),
+    domain.ShiftCoverageCost(
+        min_count=2, worker_indices=(0, 1), shift_indices=(0, 2, 3)
+    ),
+    domain.ShiftCoverageCost(
+        min_count=1, worker_indices=(1, 1, 99), shift_indices=(0, 0, 2, -1)
+    ),
     domain.LocationRunLengthCost(location="Location A", min_run=2, max_run=3),
     domain.LocationRunLengthCost(min_run=3, max_run=0, waive_min_at_end=False),
     domain.RestAfterLocationRunCost(location="Location A", rest_days=2),
@@ -83,7 +88,9 @@ RULES = [
     domain.MaxConsecutiveDaysCost(value=1, worker_indices=(0, 2, 2, 99, -1)),
     domain.MinRestCost(shift_indices=tuple(range(0, 24, 2))),
     domain.DesiredDayCost(worker_indices=()),
-    domain.DayPatternCost(pattern="Location A,WORK", worker_indices=(1,), shift_indices=tuple(range(12))),
+    domain.DayPatternCost(
+        pattern="Location A,WORK", worker_indices=(1,), shift_indices=tuple(range(12))
+    ),
 ]
 
 
@@ -131,7 +138,9 @@ def _stacked_roster(problem: ScheduleRequest, seed: int) -> list[int | None]:
 def _with_workers(problem: ScheduleRequest, fixed: list[int | None]) -> ScheduleRequest:
     candidate = problem.model_copy(deep=True)
     for shift, worker in zip(candidate.model_input.shifts, fixed, strict=True):
-        shift.worker = None if worker is None else candidate.model_input.workers[worker].id
+        shift.worker = (
+            None if worker is None else candidate.model_input.workers[worker].id
+        )
     return candidate
 
 
@@ -145,7 +154,9 @@ def _model_cost(total: dict, fixed: list[int | None]) -> float:
     return total["cost"]
 
 
-def _engine_cost(problem: ScheduleRequest, fixed: list[int | None]) -> tuple[bool, float]:
+def _engine_cost(
+    problem: ScheduleRequest, fixed: list[int | None]
+) -> tuple[bool, float]:
     """The one rule's weighted cost under `fixed`, in the model's terms."""
     [total] = constraint_costs(_with_workers(problem, fixed))["totals"]
     return total["is_hard"], _model_cost(total, fixed)
@@ -217,7 +228,9 @@ def test_repeated_rules_get_numbered_plugins() -> None:
         "required_skill_cost",
         "day_pattern_cost#2",
     ]
-    assert [spec.name for spec in registry.specs] == [plugin.name for plugin in registry.plugins]
+    assert [spec.name for spec in registry.specs] == [
+        plugin.name for plugin in registry.plugins
+    ]
     assert registry.plugins[2].pattern == "OFF,WORK"
     assert registry.specs[2].level == "soft"  # the plain name's catalog row
 
@@ -251,7 +264,9 @@ def test_every_rule_at_once_matches_the_engine_on_a_fixed_roster(seed) -> None:
 
     assert proxy["hard"] == expected["hard"]
     soft = sum(
-        _model_cost(total, fixed) for total in expected["totals"] if not total["is_hard"]
+        _model_cost(total, fixed)
+        for total in expected["totals"]
+        if not total["is_hard"]
     )
     # Two ssd rules and two weeks of gap round up to the grid.
     assert -proxy["soft"] / SCALE == pytest.approx(soft, abs=5 / SCALE + 1e-9)
@@ -264,7 +279,9 @@ def test_mixed_sign_costs_do_not_outweigh_the_hard_level() -> None:
                 WorkerModel(id="Worker 1"),
                 WorkerModel(id="Worker 2", skills=["Skill A"]),
             ],
-            shifts=[ShiftModel(id="Shift 1", start=0, end=60, required_skill="Skill A")],
+            shifts=[
+                ShiftModel(id="Shift 1", start=0, end=60, required_skill="Skill A")
+            ],
             rules=[
                 domain.RequiredSkillCost(),
                 domain.AssignmentCost(
@@ -310,7 +327,7 @@ def test_a_shift_stays_empty_only_when_a_rule_prices_it() -> None:
     assert free.model_input.shifts[0].worker == "Worker 1"
 
 
-def test_balance_does_not_buy_an_empty_shift_at_a_soft_price() -> None:
+def test_imbalance_does_not_buy_an_empty_shift_at_a_soft_price() -> None:
     problem = ScheduleRequest(
         model_input=SchedulingInput(
             workers=[WorkerModel(id="Worker 1"), WorkerModel(id="Worker 2")],

@@ -719,7 +719,7 @@ def test_assignment_cost_matrix_and_defaults():
     assert score.soft == -(999.0 + 13 * 80.0)
 
 
-def test_unassigned_shift_and_balance_gap():
+def test_unassigned_shifts_cost_and_shift_count_gap_cost():
     schedule = _week_roster()
     schedule.shifts[0].employee_index = -1
     calc = es.DecomposedCalculator(
@@ -733,7 +733,7 @@ def test_unassigned_shift_and_balance_gap():
     assert score.soft == -10
 
 
-def test_balance_weekly_minutes_gap():
+def test_weekly_minutes_gap_cost_in_hours():
     # A works all 14 days (480 min/day -> 3360 min/week); B never works (0).
     # Two 7-day weeks, each gap 3360; tolerance 120 -> 3240 excess min per week.
     # Cost is in hours: 3240 / 60 = 54 h per week, over two weeks.
@@ -742,7 +742,7 @@ def test_balance_weekly_minutes_gap():
     assert calc.score(schedule).soft == pytest.approx(-((3360 - 120) / 60 * 2))
 
 
-def test_balance_weekly_minutes_gap_within_tolerance():
+def test_weekly_minutes_gap_cost_within_tolerance():
     # A and B each work all 14 days (same hours) -> equal weekly minutes, gap 0.
     shifts = []
     for day in range(14):
@@ -890,12 +890,12 @@ def test_max_weekly_minutes_week_anchor_aligns_calendar_weeks():
     assert day0.score(schedule).hard == 0  # split across day-0 /7 blocks
 
 
-def test_worker_pair_same_shift_reward_and_penalty():
-    """WorkerPairingCost over target buckets (day 0 Morning and Evening). REWARD
+def test_worker_pairing_cost_share_and_avoid_modes():
+    """WorkerPairingCost over target buckets (day 0 Morning and Evening). SHARE
     (penalty=False): a bucket where exactly one of the pair works it costs 1 -- so
     both on Morning costs 0, A on Morning & B on Evening costs 2 (each is alone in
-    one bucket), one working & one off costs 1. PENALTY is the mirror: both on the
-    same bucket costs 1."""
+    one bucket), one working & one off costs 1. AVOID (penalty=True) is the mirror:
+    both on the same bucket costs 1."""
 
     def calc(penalty):
         c = es.DecomposedCalculator()
@@ -923,8 +923,8 @@ def test_worker_pair_same_shift_reward_and_penalty():
         sch = es.EmployeeSchedule([es.Employee("A"), es.Employee("B")], shifts)
         return calc(penalty).score(sch).soft
 
-    assert score(0, 1, False) == 0  # both on a Morning slot -> same shift, no reward miss
-    assert score(0, 1, True) == -1  # ... but PENALTY: sharing a shift costs 1
+    assert score(0, 1, False) == 0  # both on a Morning slot -> they share, no cost
+    assert score(0, 1, True) == -1  # ... but AVOID: sharing a shift costs 1
     assert score(0, 2, False) == -2  # A on Morning, B on Evening -> each alone in a bucket
     assert score(0, 2, True) == 0  # ... not sharing -> no penalty
     assert score(0, -1, False) == -1  # A works, B off -> one-sided

@@ -202,7 +202,7 @@ void verifyCatalog() {
     check(optimaru::python::pythonName("maxConsecutiveDaysOffCost") == "max_consecutive_days_off_cost" &&
                   optimaru::python::pythonName("workerDayCountInRangeCost") ==
                           "worker_day_count_in_range_cost",
-          "pythonName maps the registry names to the rename table's snake names");
+          "pythonName maps the registry names to their snake_case Python names");
 
     check(throwsInvalid([] { defaultConstraints().hard("desiredDayCost"); }),
           "hard() on the reward desiredDayCost throws");

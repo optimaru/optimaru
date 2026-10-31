@@ -178,7 +178,7 @@ class RequiredSkillCost(_Scoped):
         "One unit of cost is one such shift; 0 means every shift is staffed by someone with its skill."
     )
     description_ko = (
-        "배정된 근무 가운데 직원에게 필요한 기술이 없는 근무를 셉니다(고정 근무는 다시 따지지 않습니다). "
+        "배정된 근무 가운데 맡은 직원에게 그 근무의 필수 기술이 없는 근무를 셉니다(고정 근무는 다시 따지지 않습니다). "
         "그런 근무 하나가 비용 1이며, 0이면 모든 근무를 그 기술을 가진 사람이 맡습니다."
     )
 
@@ -191,11 +191,11 @@ class EmployeeUnavailabilityCost(_Scoped):
     label_en = "Employee unavailability"
     label_ko = "근무 불가일"
     description_en = (
-        "Minutes of assigned shifts that fall on a day the employee is unavailable. "
+        "Minutes of assigned shifts that fall on a day the employee is unavailable (pinned shifts are not counted). "
         "One unit of cost is one minute; 0 means nobody works on a day they are unavailable."
     )
     description_ko = (
-        "직원이 근무할 수 없는 날에 걸친 배정 근무 시간을 분 단위로 더합니다. "
+        "직원이 근무할 수 없는 날에 걸친 배정 근무 시간을 분 단위로 더합니다(고정 근무는 세지 않습니다). "
         "1분이 비용 1이며, 0이면 아무도 근무 불가일에 일하지 않습니다."
     )
 
@@ -265,11 +265,13 @@ class UndesiredDayCost(_Scoped):
     label_en = "Undesired day"
     label_ko = "기피일 근무"
     description_en = (
-        "Minutes of assigned shifts on a day the employee asked to avoid, or with per_day one per such shift. "
+        "Minutes of assigned shifts on a day the employee asked to avoid, or with per_day one per such shift "
+        "(pinned shifts are not counted). "
         "One unit of cost is one minute (one shift with per_day); 0 means nobody works on a day they wanted off."
     )
     description_ko = (
-        "직원이 피하고 싶다고 한 날에 배정된 근무 시간을 분 단위로 더하고, per_day이면 그런 근무를 하나씩 셉니다. "
+        "직원이 피하고 싶다고 한 날에 배정된 근무 시간을 분 단위로 더하고, per_day이면 그런 근무를 하나씩 셉니다"
+        "(고정 근무는 세지 않습니다). "
         "1분(per_day이면 근무 하나)이 비용 1이며, 0이면 아무도 기피일에 일하지 않습니다."
     )
     per_day: bool = False
@@ -285,12 +287,13 @@ class DesiredDayCost(_Scoped):
     label_ko = "희망일 근무"
     description_en = (
         "A reward: minus the minutes of assigned shifts on a day the employee asked to work, "
-        "or with per_day minus one per such shift. "
+        "or with per_day minus one per such shift (pinned shifts are not counted). "
         "The raw cost is never positive; 0 means no desired day is worked. It cannot be made hard."
     )
     description_ko = (
-        "보상 항목입니다. 직원이 일하고 싶다고 한 날에 배정된 근무 시간(per_day이면 근무 수)을 음수로 셉니다. "
-        "원시 비용은 0 이하이며, 0이면 희망일에 배정된 근무가 없습니다. 하드로 바꿀 수 없습니다."
+        "보상 항목입니다. 직원이 일하고 싶다고 한 날에 배정된 근무 시간(per_day이면 근무 수)을 음수로 셉니다"
+        "(고정 근무는 세지 않습니다). "
+        "원시 비용은 0 이하이며, 0이면 희망일에 배정된 근무가 없습니다. 하드 제약으로 바꿀 수 없습니다."
     )
     per_day: bool = False
 
@@ -312,7 +315,7 @@ class DesiredShiftCost(_Scoped):
     description_ko = (
         "보상 항목입니다. 직원이 desired_shifts로 요청한 날짜와 장소가 모두 맞는 배정 근무마다 -1을 셉니다. "
         "같은 날 다른 장소는 해당하지 않습니다. "
-        "원시 비용은 0 이하이며, 0이면 들어준 요청이 없습니다. 하드로 바꿀 수 없습니다."
+        "원시 비용은 0 이하이며, 0이면 들어준 요청이 없습니다. 하드 제약으로 바꿀 수 없습니다."
     )
 
 
@@ -470,7 +473,7 @@ class MinWeeklyMinutesCost(_Scoped):
     )
     description_ko = (
         "week_anchor(기본 0일)부터 7일씩 나눈 모든 주에서 배정 시간이 minutes(기본 480분)에 못 미치는 분을 "
-        "더합니다. 일이 없는 주는 전부를 셉니다. "
+        "더합니다. 근무가 없는 주는 minutes 전체를 셉니다. "
         "모자란 1분이 비용 1이며, 0이면 모두 주간 최소 시간을 채웁니다."
     )
     bounds = {"minutes": {"ge": 0}}
@@ -494,7 +497,7 @@ class MinWeeklyRestDaysCost(_Scoped):
     description_ko = (
         "0일부터 7일씩 나눈 주마다 근무일이 7 - value일을 넘는 일수, 즉 휴무일이 value(기본 1)일보다 모자란 "
         "일수를 더합니다. 하루에 근무가 여럿이어도 하루로 셉니다. "
-        "초과 근무일 하루가 비용 1이며, 0이면 모든 주에 value일 이상 쉽니다."
+        "한도를 넘은 근무일 하루가 비용 1이며, 0이면 모든 주에 value일 이상 쉽니다."
     )
     bounds = {"value": {"ge": 0, "le": 7}}
     value: int = 1
@@ -553,7 +556,7 @@ class ShiftCountGapCost(_EsConstraint):
     )
     description_ko = (
         "근무가 가장 많은 직원과 가장 적은 직원의 근무 수 차이가 tolerance(기본 0)를 넘는 만큼입니다. "
-        "차이 한 근무가 비용 1이며, 0이면 근무 수가 허용 범위 안에 있습니다."
+        "허용치를 넘는 근무 수 차이 1이 비용 1이며, 0이면 근무 수가 허용 범위 안에 있습니다."
     )
     bounds = {"tolerance": {"ge": 0}}
     tolerance: int = 0
@@ -725,7 +728,7 @@ class DayPatternCost(_Scoped):
     soft, weight 1."""
 
     name = "day_pattern_cost"
-    label_en = "Day pattern"
+    label_en = "Forbidden day pattern"
     label_ko = "금지 근무 패턴"
     description_en = (
         "Occurrences of a forbidden sequence of days in an employee's roster. pattern is a comma-separated list of "
@@ -733,9 +736,10 @@ class DayPatternCost(_Scoped):
         "One unit of cost is one matching window; 0 means the pattern never occurs."
     )
     description_ko = (
-        "직원 근무표에서 금지된 날짜 순서가 나타나는 횟수를 셉니다. pattern은 쉼표로 구분한 토큰 목록이며, "
-        "각 토큰은 장소, OFF(휴무), *(아무 날), WORK(근무한 날), !x(장소 x가 아닌 곳에서 근무한 날) 가운데 "
-        "하나입니다. 일치하는 구간 하나가 비용 1이며, 0이면 패턴이 나타나지 않습니다."
+        "직원 근무표에 금지된 근무 패턴(연이은 날들의 순서)이 나타나는 횟수를 셉니다. "
+        "pattern은 쉼표로 구분한 토큰 목록이며, 각 토큰은 장소, OFF(휴무), *(아무 날), WORK(근무한 날), "
+        "!x(장소 x가 아닌 곳에서 근무한 날) 가운데 하나입니다. "
+        "일치하는 구간 하나가 비용 1이며, 0이면 패턴이 나타나지 않습니다."
     )
     pattern: str = ""
 
@@ -779,8 +783,9 @@ class WorkerDayCountInRangeCost(_Scoped):
         "One unit of cost is one day short or over; 0 means within bounds."
     )
     description_ko = (
-        "직원마다 lo일부터 hi일까지 (location에서, 비우면 어디서든) 일한 서로 다른 날의 수가 min_count에서 "
-        "max_count(-1이면 상한 없음) 사이여야 합니다. 보통 직원 한 명과 기간 하나로 범위를 정해 씁니다. "
+        "직원마다 lo일부터 hi일까지 location(비우면 모든 장소)에서 일한 날 수가 min_count에서 "
+        "max_count(-1이면 상한 없음) 사이여야 하며, 하루에 근무가 여럿이어도 하루로 셉니다. "
+        "보통 직원 한 명과 기간 하나로 범위를 정해 씁니다. "
         "모자라거나 넘는 하루가 비용 1이며, 0이면 범위 안에 있습니다."
     )
     bounds = {

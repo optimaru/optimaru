@@ -247,6 +247,18 @@ arguments, `weight=None` = the default). `es.list_constraints()` lists every nam
   (`models.RULE_MODELS`, `models.rule_model(...)`); `SchedulingInput.rules` takes
   specs or JSON. JSON: `policy: "hard" | "soft"` → `hard: true | false`; `weight`
   defaults to `null` (the rule's default). Old names and `policy` are refused.
+- The generated rule models are named `<SpecClass>Rule`, so 0.1.5 imports such as
+  `from es_scheduling.models import MaxConsecutiveDaysRule` raise `ImportError`:
+  `MaxConsecutiveDaysRule` → `MaxConsecutiveDaysCostRule`, `UnavailableWorkerRule`
+  → `EmployeeUnavailabilityCostRule`, `WorkerDayCountInRuleRange` →
+  `WorkerDayCountInRangeCostRule`, `BalanceAssignmentsRule` →
+  `ShiftCountImbalanceCostRule`, and so on. Prefer `models.rule_model(name)`, or
+  pass the spec instances, over importing the classes.
+- The scope keys `worker_indices` / `shift_indices` are accepted only on the
+  per-employee rules and on `shift_coverage_cost`. The other global rules
+  (`unassigned_shifts_cost`, `shift_count_imbalance_cost`, `shift_count_gap_cost`,
+  `weekly_minutes_gap_cost`, `location_imbalance_cost`, `worker_pairing_cost`)
+  refuse them, even as `null`; in 0.1.5 every rule accepted them.
 - `weight=None` everywhere (also `DecomposedCalculator.add`); the defaults come
   from C++ (`constraint_info()`). The two rewards refuse `hard=True`.
 - New: `constraint_costs(schedule, constraints)`, `constraint_info()`, the 10

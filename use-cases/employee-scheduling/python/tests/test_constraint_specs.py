@@ -38,7 +38,7 @@ from es_scheduling.constraints import (
     score,
 )
 
-#: Every name the factory accepts, in factory order (rename_table order).
+#: Every name the factory accepts, in factory order (= CONSTRAINT_NAMES).
 NAMES = [
     "required_skill_cost",
     "employee_unavailability_cost",

@@ -68,7 +68,9 @@ def solve(
         for s in range(len(shifts))
         for w in range(len(workers))
     }
-    unassigned = [model.new_bool_var(f"shift_{s}_unassigned") for s in range(len(shifts))]
+    unassigned = [
+        model.new_bool_var(f"shift_{s}_unassigned") for s in range(len(shifts))
+    ]
     may_stay_empty = any(rule.name == "unassigned_shifts_cost" for rule in rules)
     for s in range(len(shifts)):
         model.add_exactly_one([*(x[s, w] for w in range(len(workers))), unassigned[s]])
