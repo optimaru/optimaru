@@ -28,7 +28,6 @@ ext_modules = [
             os.path.join(CORE, "src", "incremental_calculator.cpp"),
             os.path.join(CORE, "src", "haversine.cpp"),
             os.path.join(CORE, "src", "solver.cpp"),
-            os.path.join(CORE, "src", "demo_data.cpp"),
         ],
         include_dirs=[os.path.join(CORE, "include"), ENGINE],
         cxx_std=17,
