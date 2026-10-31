@@ -120,35 +120,34 @@ public:
         const int limit = std::min(candidateCount_, employeeCount - (oldEmployee >= 0 ? 1 : 0));
         if (limit <= 0) return false;
 
-        std::vector<int> candidates;
-        candidates.reserve(limit);
+        candidates_.clear();
         if (shift < static_cast<int>(eligible_.size()) && !eligible_[shift].empty()) {
             const std::vector<int>& pool = eligible_[shift];
             if (static_cast<int>(pool.size()) <= limit) {
-                for (int employee : pool) addCandidate(candidates, employee, oldEmployee, limit);
+                for (int employee : pool) addCandidate(candidates_, employee, oldEmployee, limit);
             } else {
                 const int maxAttempts = std::max(12, limit * 6);
                 for (int attempt = 0; attempt < maxAttempts &&
-                                      static_cast<int>(candidates.size()) < limit;
+                                      static_cast<int>(candidates_.size()) < limit;
                      ++attempt) {
-                    addCandidate(candidates, pool[rng() % pool.size()], oldEmployee, limit);
+                    addCandidate(candidates_, pool[rng() % pool.size()], oldEmployee, limit);
                 }
             }
         }
         for (int attempt = 0;
-             static_cast<int>(candidates.size()) < limit && attempt < employeeCount * 2;
+             static_cast<int>(candidates_.size()) < limit && attempt < employeeCount * 2;
              ++attempt) {
-            addCandidate(candidates,
+            addCandidate(candidates_,
                          static_cast<int>(rng() % static_cast<std::uint64_t>(employeeCount)),
                          oldEmployee, limit);
         }
-        if (candidates.empty()) return false;
+        if (candidates_.empty()) return false;
 
         bool initialized = false;
         Score bestScore{std::numeric_limits<std::int64_t>::min(),
                         -std::numeric_limits<double>::infinity()};
-        int bestEmployee = candidates.front();
-        for (int employee : candidates) {
+        int bestEmployee = candidates_.front();
+        for (int employee : candidates_) {
             ctx.director.changeVariable(shift, employee);
             Score score = ctx.director.calculateScore();
             ctx.director.changeVariable(shift, oldEmployee);
@@ -175,6 +174,7 @@ private:
     int candidateCount_;
     PenalizedGetter penalized_;
     ShiftsOfGetter shiftsOf_;
+    std::vector<int> candidates_;
     int lastShift_ = -1;
     int lastOldEmployee_ = -1;
 };
@@ -279,9 +279,7 @@ private:
 // straight at the slots whose emptying tends to improve the score.
 class UnassignMove final : public optimaru::MoveOperator<EmployeeSchedule> {
 public:
-    UnassignMove(const EmployeeSchedule& schedule, PenalizedGetter penalized,
-                 ShiftsOfGetter shiftsOf)
-        : penalized_(std::move(penalized)), shiftsOf_(std::move(shiftsOf)) {
+    explicit UnassignMove(const EmployeeSchedule& schedule) {
         std::map<std::pair<int, std::string>, int> gidx;
         groupOf_.assign(schedule.shifts.size(), -1);
         for (std::size_t i = 0; i < schedule.shifts.size(); ++i) {
@@ -342,8 +340,6 @@ public:
     }
 
 private:
-    PenalizedGetter penalized_;
-    ShiftsOfGetter shiftsOf_;
     std::vector<std::vector<int>> groups_;  // coverage group -> shift indices
     std::vector<int> groupOf_;              // shift -> group
     int lastShift_ = -1;
@@ -610,9 +606,26 @@ void applyRepair(optimaru::ScoreDirector<EmployeeSchedule>& director,
     if (repair.shift2 >= 0) director.endVariableChanges();
 }
 
-template <typename Calculator>
+// Every repair scan scores each candidate, so on a large roster one scan can
+// outlast the budget. A scan polls this after each evaluation and, once it
+// reports expiry, stops with the best repair found so far.
+class RepairDeadline {
+public:
+    explicit RepairDeadline(Clock::time_point deadline) : deadline_(deadline) {}
+
+    bool expired() {
+        return ++evaluations_ % kEvaluationsPerCheck == 0 && Clock::now() >= deadline_;
+    }
+
+private:
+    static constexpr std::uint32_t kEvaluationsPerCheck = 64;
+    Clock::time_point deadline_;
+    std::uint32_t evaluations_ = 0;
+};
+
 RelocationRepair bestDayRepair(optimaru::ScoreDirector<EmployeeSchedule>& director,
-                               const std::vector<std::vector<int>>& eligible) {
+                               const std::vector<std::vector<int>>& eligible,
+                               RepairDeadline& deadline) {
     EmployeeSchedule& schedule = director.workingSolution();
     const int employeeCount = static_cast<int>(schedule.employees.size());
     const int shiftCount = static_cast<int>(schedule.shifts.size());
@@ -640,14 +653,15 @@ RelocationRepair bestDayRepair(optimaru::ScoreDirector<EmployeeSchedule>& direct
                 best.newEmployee = target;
                 best.score = score;
             }
+            if (deadline.expired()) return best;
         }
     }
     return best;
 }
 
-template <typename Calculator>
 RelocationRepair bestRunRepair(optimaru::ScoreDirector<EmployeeSchedule>& director,
-                               const std::vector<std::vector<int>>& eligible, int maxDays) {
+                               const std::vector<std::vector<int>>& eligible, int maxDays,
+                               RepairDeadline& deadline) {
     EmployeeSchedule& schedule = director.workingSolution();
     const int employeeCount = static_cast<int>(schedule.employees.size());
     RelocationRepair best;
@@ -680,6 +694,7 @@ RelocationRepair bestRunRepair(optimaru::ScoreDirector<EmployeeSchedule>& direct
                                 best.newEmployee = target;
                                 best.score = score;
                             }
+                            if (deadline.expired()) return best;
                         }
                     }
                 }
@@ -690,9 +705,9 @@ RelocationRepair bestRunRepair(optimaru::ScoreDirector<EmployeeSchedule>& direct
     return best;
 }
 
-template <typename Calculator>
 RelocationRepair bestRunSwapRepair(optimaru::ScoreDirector<EmployeeSchedule>& director,
-                                   const std::vector<std::vector<int>>& eligible, int maxDays) {
+                                   const std::vector<std::vector<int>>& eligible, int maxDays,
+                                   RepairDeadline& deadline) {
     EmployeeSchedule& schedule = director.workingSolution();
     const int employeeCount = static_cast<int>(schedule.employees.size());
     RelocationRepair best;
@@ -747,6 +762,7 @@ RelocationRepair bestRunSwapRepair(optimaru::ScoreDirector<EmployeeSchedule>& di
                                     best.newEmployee2 = employee;
                                     best.score = score;
                                 }
+                                if (deadline.expired()) return best;
                             }
                         }
                     }
@@ -766,13 +782,14 @@ void greedyHardRepair(const Solver::Config& config, EmployeeSchedule& schedule,
     // to convergence with no time check, so on a many-constraint instance where
     // local search never reaches feasibility it could overshoot the limit many
     // times over (a 3s budget ran 34s; a 20s budget ran 184s). The deadline is
-    // checked between repair scans, so overshoot is bounded by one scan.
+    // checked between repair scans and inside them (see RepairDeadline).
     if (Clock::now() >= deadline) return;
     optimaru::ScoreDirector<EmployeeSchedule> director(schedule, calculator);
     Score current = director.calculateScore();
     if (current.hard >= 0) return;
 
     const std::vector<std::vector<int>> eligible = buildEligibleEmployees(schedule);
+    RepairDeadline scanDeadline(deadline);
     const int maxSteps = static_cast<int>(schedule.shifts.size()) * 2;
     int steps = 0;
     for (int cycle = 0;
@@ -780,7 +797,7 @@ void greedyHardRepair(const Solver::Config& config, EmployeeSchedule& schedule,
         bool changed = false;
         if (config.employeeDayRepairMoves) {
             while (steps < maxSteps && Clock::now() < deadline) {
-                RelocationRepair day = bestDayRepair<Calculator>(director, eligible);
+                RelocationRepair day = bestDayRepair(director, eligible, scanDeadline);
                 if (!day.found || !(day.score >= current)) break;
                 applyRepair(director, day);
                 current = day.score;
@@ -791,12 +808,10 @@ void greedyHardRepair(const Solver::Config& config, EmployeeSchedule& schedule,
         }
         if (config.employeeRunRepairMoves) {
             while (steps < maxSteps && current.hard < 0 && Clock::now() < deadline) {
-                RelocationRepair run =
-                        bestRunSwapRepair<Calculator>(director, eligible,
-                                                      config.employeeRunRepairMaxDays);
-                RelocationRepair relocate =
-                        bestRunRepair<Calculator>(director, eligible,
-                                                  config.employeeRunRepairMaxDays);
+                RelocationRepair run = bestRunSwapRepair(
+                        director, eligible, config.employeeRunRepairMaxDays, scanDeadline);
+                RelocationRepair relocate = bestRunRepair(
+                        director, eligible, config.employeeRunRepairMaxDays, scanDeadline);
                 if (relocate.found && (!run.found || relocate.score > run.score)) {
                     run = relocate;
                 }
@@ -820,7 +835,6 @@ void runEngine(const Solver::Config& config, EmployeeSchedule& schedule,
                Calculator& calculator, PenalizedFn penalized, ShiftsOfFn shiftsOf,
                std::chrono::milliseconds localSearchLimit) {
     const int shiftCount = static_cast<int>(schedule.shifts.size());
-    const int employeeCount = static_cast<int>(schedule.employees.size());
 
     optimaru::SolverConfig engineConfig;
     engineConfig.termination.spentLimit = localSearchLimit;
@@ -865,17 +879,7 @@ void runEngine(const Solver::Config& config, EmployeeSchedule& schedule,
     if (config.guidedMoves) {
         // Axis A precompute: for each shift, the employees that can work it
         // without a hard violation (required skill AND available on the days).
-        eligible.resize(shiftCount);
-        for (int i = 0; i < shiftCount; ++i) {
-            const Shift& sh = schedule.shifts[i];
-            for (int e = 0; e < employeeCount; ++e) {
-                const Employee& emp = schedule.employees[e];
-                if ((sh.requiredSkillBit == 0 || (emp.skillMask & sh.requiredSkillBit) != 0) &&
-                    ScoreCalculator::overlapWithDates(sh, emp.unavailableDates) == 0) {
-                    eligible[i].push_back(e);
-                }
-            }
-        }
+        eligible = buildEligibleEmployees(schedule);
 
         // Axis B: 70% of the time pick a shift belonging to an employee that
         // currently has a hard violation (the "hot spots"). Once feasible there
@@ -946,7 +950,7 @@ void runEngine(const Solver::Config& config, EmployeeSchedule& schedule,
                 config.employeeWindowMaxDays, penalizedRef, shiftsOfRef));
     }
     if (config.employeeUnassignMoves) {
-        engine.addMoveOperator(std::make_unique<UnassignMove>(schedule, penalizedRef, shiftsOfRef));
+        engine.addMoveOperator(std::make_unique<UnassignMove>(schedule));
     }
     engine.solve(schedule, calculator);
 }

@@ -1,14 +1,20 @@
 """Tests for the pydantic request/response layer (es_scheduling.models)."""
 
+import os
+from types import SimpleNamespace
+
 import pytest
 
 pytest.importorskip("pydantic")
 
 import es_scheduling as es  # noqa: E402
+from es_scheduling import models  # noqa: E402
+from es_scheduling.demo import generate_demo_data  # noqa: E402
 from es_scheduling.models import (  # noqa: E402
     AssignmentCostRule,
     MaxConsecutiveDaysRule,
     RequiredSkillRule,
+    RuleTotal,
     ScheduleRequest,
     ScheduleSolution,
     SchedulingInput,
@@ -163,3 +169,154 @@ def test_duplicate_ids_rejected():
             workers=[WorkerModel(id="A"), WorkerModel(id="A")],
             shifts=[ShiftModel(id="Only shift", start=0, end=60)],
         )
+
+
+def _multi_start_request(**settings):
+    return ScheduleRequest(timelimit=0.05, model_input=_small_input(), settings=SolverSettings(**settings))
+
+
+def _start_count(request):
+    """How many candidates `solve_request` hands to `select`."""
+    counts = []
+
+    def select(solutions):
+        counts.append(len(solutions))
+        return solutions[0]
+
+    solve_request(request, select=select)
+    return counts[0]
+
+
+@pytest.mark.parametrize(
+    ("num_workers", "multi_start", "starts"),
+    [(3, 1, 3), (1, 3, 3), (2, 4, 4), (4, 2, 4)],
+)
+def test_starts_are_the_larger_of_num_workers_and_multi_start(num_workers, multi_start, starts):
+    request = _multi_start_request(multi_start=multi_start)
+    request.num_workers = num_workers
+    assert _start_count(request) == starts
+
+
+def test_a_single_start_ignores_select():
+    solution = solve_request(_multi_start_request(), select=lambda solutions: pytest.fail("select was called"))
+    assert isinstance(solution, ScheduleSolution)
+
+
+@pytest.mark.parametrize("key", ["no_such_knob", "spent_limit_seconds", "random_seed", "on_new_best", "__class__"])
+def test_a_bad_portfolio_key_fails_before_any_solve(key):
+    body = {
+        "timelimit": 30,
+        "model_input": _small_input().model_dump(),
+        "settings": {"multi_start": 4, "portfolio": [{"late_acceptance_size": 50}, {key: 1}]},
+    }
+    with pytest.raises(ValueError, match=rf"portfolio\[1\]: .*{key}"):
+        ScheduleRequest.model_validate(body)
+
+
+def test_every_portfolio_key_is_a_solver_config_attribute():
+    config = es.SolverConfig()
+    assert [key for key in models._PORTFOLIO_KEYS if not hasattr(config, key)] == []
+
+
+def test_portfolio_overrides_reach_each_start():
+    request = _multi_start_request(multi_start=2, portfolio=[{"late_acceptance_size": 50}, {"descent_weight": 0.0}])
+    assert _start_count(request) == 2
+
+
+def test_an_error_in_a_start_is_not_retried(monkeypatch, tmp_path):
+    calls = tmp_path / "calls"
+
+    def failing_start(request, seed, overrides=None):
+        with calls.open("a") as log:
+            log.write(".")
+        raise RuntimeError("the start failed")
+
+    monkeypatch.setattr(models, "_build_and_solve", failing_start)
+    with pytest.raises(RuntimeError, match="the start failed"):
+        solve_request(_multi_start_request(multi_start=3))
+    assert calls.read_text() == "..."
+
+
+def _refuse(*args, **kwargs):
+    raise OSError(38, "Function not implemented")
+
+
+def test_starts_run_in_turn_without_fork(monkeypatch):
+    def no_fork(method):
+        raise ValueError(f"cannot find context for {method!r}")
+
+    monkeypatch.setattr("multiprocessing.get_context", no_fork)
+    assert _start_count(_multi_start_request(multi_start=2)) == 2
+
+
+def test_starts_run_in_turn_without_working_semaphores(monkeypatch):
+    monkeypatch.setattr("concurrent.futures.ProcessPoolExecutor", _refuse)
+    assert _start_count(_multi_start_request(multi_start=2)) == 2
+
+
+def test_starts_run_in_turn_when_fork_fails(monkeypatch):
+    monkeypatch.setattr("os.fork", _refuse)
+    assert _start_count(_multi_start_request(multi_start=2)) == 2
+
+
+def test_starts_run_in_turn_in_a_daemonic_process(monkeypatch):
+    monkeypatch.setattr("multiprocessing.current_process", lambda: SimpleNamespace(daemon=True))
+    assert _start_count(_multi_start_request(multi_start=2)) == 2
+
+
+def test_starts_run_in_turn_after_a_worker_dies(monkeypatch):
+    parent = os.getpid()
+    solve = models._build_and_solve
+
+    def die_in_a_worker(*args):
+        if os.getpid() != parent:
+            os._exit(1)
+        return solve(*args)
+
+    monkeypatch.setattr(models, "_build_and_solve", die_in_a_worker)
+    assert _start_count(_multi_start_request(multi_start=2)) == 2
+
+
+def _candidate(score_hard, score_soft, coverage_cost=0.0, is_hard=False):
+    return ScheduleSolution(
+        schedule={},
+        score_hard=score_hard,
+        score_soft=score_soft,
+        feasible=score_hard == 0,
+        rule_totals=[RuleTotal(name="Shift coverage[any 1..]", cost=coverage_cost, is_hard=is_hard)],
+    )
+
+
+def _winning_seed(monkeypatch, candidates, divisor):
+    """The seed `solve_request` picks when start i returns candidates[i]."""
+    monkeypatch.setattr(models, "_build_and_solve", lambda request, seed, overrides=None: candidates[seed])
+    winner = solve_request(_multi_start_request(multi_start=len(candidates), select_coverage_divisor=divisor))
+    return candidates.index(winner)
+
+
+def test_selection_ranks_on_the_reported_score_without_a_divisor(monkeypatch):
+    candidates = [_candidate(0, -100.0, coverage_cost=90.0), _candidate(0, -50.0)]
+    assert _winning_seed(monkeypatch, candidates, divisor=1.0) == 1
+
+
+def test_selection_divides_the_coverage_boost_out(monkeypatch):
+    # Faithful soft: -100 + 90 * (1 - 1/10) = -19 against -50.
+    candidates = [_candidate(0, -100.0, coverage_cost=90.0), _candidate(0, -50.0)]
+    assert _winning_seed(monkeypatch, candidates, divisor=10.0) == 0
+
+
+def test_selection_keeps_hard_ahead_of_faithful_soft(monkeypatch):
+    candidates = [_candidate(-1, -100.0, coverage_cost=100.0), _candidate(0, -50.0)]
+    assert _winning_seed(monkeypatch, candidates, divisor=10.0) == 1
+
+
+def test_selection_leaves_a_hard_coverage_rule_alone(monkeypatch):
+    candidates = [_candidate(0, -100.0, coverage_cost=90.0, is_hard=True), _candidate(0, -50.0)]
+    assert _winning_seed(monkeypatch, candidates, divisor=10.0) == 1
+
+
+def test_selection_finds_the_coverage_rule_by_its_engine_name():
+    request = generate_demo_data(seed=3, workers=8, days=7)
+    request.timelimit = 0.05
+    names = [total.name for total in solve_request(request).rule_totals]
+    assert any(name.startswith("Shift coverage") for name in names), names

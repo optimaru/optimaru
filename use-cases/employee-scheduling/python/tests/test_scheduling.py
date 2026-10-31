@@ -5,10 +5,45 @@ overrides.
 Requires the compiled extension: uv sync --all-groups --all-extras
 """
 
+import threading
+import time
+
 import pytest
 from _reference import REFERENCE_SCORE, reference_schedule
 
 import es_scheduling as es
+
+
+@pytest.mark.parametrize("use_calculator", [False, True], ids=["built-in", "plugin"])
+def test_solve_releases_the_gil_and_on_new_best_still_fires(use_calculator):
+    schedule = es.make_random_roster(days=8, shifts_per_day=6, employees=9, seed=23)
+    steps = []
+    cfg = es.SolverConfig()
+    cfg.spent_limit_seconds = 0.3
+    cfg.on_new_best = lambda step, score: steps.append(step)
+
+    ticks = 0
+    stop = threading.Event()
+
+    def tick():
+        nonlocal ticks
+        while not stop.is_set():
+            ticks += 1
+            time.sleep(0.001)
+
+    ticker = threading.Thread(target=tick)
+    ticker.start()
+    try:
+        if use_calculator:
+            es.Solver(cfg).solve(schedule, es.default_calculator())
+        else:
+            es.Solver(cfg).solve(schedule)
+    finally:
+        stop.set()
+        ticker.join()
+
+    assert steps
+    assert ticks > 10
 
 
 def test_solver_config_exposes_engine_knobs():

@@ -696,16 +696,18 @@ PYBIND11_MODULE(_core, m)
             [](Solver::Config &c, std::pair<std::int64_t, double> hs)
             { c.bestScoreLimit = Score{hs.first, hs.second}; })
         // Callback fired on every new best solution: on_new_best(step, score).
-        // Called with the GIL held (solve() runs on the calling thread).
+        // The pybind11 wrapper re-acquires the GIL, which solve() releases.
         .def_readwrite("on_new_best", &Solver::Config::onNewBest);
 
     py::class_<Solver>(m, "Solver")
         .def(py::init<>())
         .def(py::init<Solver::Config>(), py::arg("config"))
-        // Solves in place: sets shift.employee_index and schedule.score.
+        // Solves in place: sets shift.employee_index and schedule.score. The GIL
+        // is released so other Python threads keep running during the solve.
         .def("solve",
              py::overload_cast<EmployeeSchedule &>(&Solver::solve),
-             py::arg("schedule"))
+             py::arg("schedule"),
+             py::call_guard<py::gil_scoped_release>())
         // Same, but with a caller-assembled plugin calculator: the search and
         // the final schedule.score both use that assembly (custom weights).
         .def("solve",
@@ -714,5 +716,6 @@ PYBIND11_MODULE(_core, m)
                  optimaru::DecomposedScoreCalculator<EmployeeSchedule> &>(
                  &Solver::solve),
              py::arg("schedule"),
-             py::arg("calculator"));
+             py::arg("calculator"),
+             py::call_guard<py::gil_scoped_release>());
 }

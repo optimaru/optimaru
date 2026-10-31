@@ -52,6 +52,10 @@ public:
         // and the full wall-clock budget; the best solution wins. This is
         // generally more scalable than synchronizing candidate evaluation
         // around one mutable incremental score director.
+        // Only solve(schedule) honors this; solve(schedule, calculator) ignores
+        // it and runs one search. Python goes through the calculator overload
+        // and gets its parallel starts from separate processes instead (see
+        // es_scheduling.models.solve_request).
         int parallelSolverCount = 1;
 
         // Guided move selection (A: pick a skill-capable, available target
@@ -173,6 +177,7 @@ public:
     // primed on the final solution so constraintTotals() explains the score.
     // Structurally compatible delta constraints are grouped automatically;
     // unsupported constraints remain on the individual generic delta path.
+    // Always one search: Config::parallelSolverCount is ignored here.
     void solve(EmployeeSchedule& schedule,
                optimaru::DecomposedScoreCalculator<EmployeeSchedule>& calculator);
 

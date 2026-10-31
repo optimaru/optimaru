@@ -12,6 +12,7 @@ from es_scheduling.demo import generate_demo_data  # noqa: E402
 from es_scheduling.models import (  # noqa: E402
     ScheduleSolution,
     ShiftAssignmentModel,
+    SolverSettings,
     solve_request,
     with_initial_solution,
 )
@@ -185,6 +186,34 @@ def test_a_pinned_shift_cannot_be_moved_or_unassigned(request_):
         with_initial_solution(request_, as_solution(request_, {shift.id: other}))
     with pytest.raises(ValueError, match=rf"shift {shift.id!r} is pinned"):
         with_initial_solution(request_, {"schedule": {}, "unassigned": [shift.id]})
+
+
+def test_a_heavily_pinned_roster_keeps_every_pinned_shift():
+    """Every move, ruin and repair path on, and pins that keep the roster
+    infeasible so the repair pass runs too."""
+    request = generate_demo_data(seed=3, workers=12, days=14)
+    seed = round_robin_seed(request)
+    for index, shift in enumerate(request.model_input.shifts):
+        shift.worker = seed[shift.id]
+        shift.pinned = index % 10 != 0
+    request.timelimit = 0.6
+    request.settings = SolverSettings(
+        smart_change_moves=True,
+        employee_unassign_moves=True,
+        custom_move_probability=0.6,
+        ruin_recreate_unimproved_step_trigger=50,
+        ruin_recreate_as_move_weight=0.2,
+        greedy_repair_budget_fraction=0.5,
+        employee_run_repair_max_days=1,
+    )
+
+    solved = solve_request(request)
+
+    assert solved.score_hard < 0
+    assigned = assignment_of(solved)
+    assert {s.id: s.worker for s in request.model_input.shifts if s.pinned} == {
+        s.id: assigned.get(s.id) for s in request.model_input.shifts if s.pinned
+    }
 
 
 @pytest.mark.parametrize(

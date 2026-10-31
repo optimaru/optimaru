@@ -36,10 +36,11 @@ solution)` returns a new request whose `ShiftModel.worker` fields carry that
 result, and construction then fills only the shifts it left out.
 """
 
+import os
 from collections.abc import Callable, Mapping
 from typing import Annotated, Any, Literal, Union
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from . import _core
 
@@ -507,6 +508,45 @@ def default_rules() -> list:
 # ---------------------------------------------------------------------------
 
 
+# The SolverConfig attributes a portfolio entry may override: search knobs only.
+# The time budget, the termination limits, the seed and the callback stay with
+# the request, so a request cannot widen its own budget through a portfolio.
+_PORTFOLIO_KEYS = frozenset(
+    {
+        "guided_moves",
+        "employee_greedy_construction",
+        "greedy_repair_budget_fraction",
+        "late_acceptance_size",
+        "ruin_recreate",
+        "ruin_recreate_unimproved_step_trigger",
+        "ruin_recreate_min_ruin_fraction",
+        "ruin_recreate_max_ruin_fraction",
+        "ruin_recreate_max_ruin_count",
+        "ruin_recreate_operator_decay",
+        "ruin_recreate_rewards",
+        "ruin_recreate_polish_steps",
+        "ruin_recreate_as_move_weight",
+        "ruin_recreate_as_move_max_ruin",
+        "descent_weight",
+        "descent_max_sweeps",
+        "change_move_weight",
+        "swap_move_weight",
+        "nearby_shifts",
+        "nearby_shifts_probability",
+        "smart_change_moves",
+        "smart_change_candidate_count",
+        "employee_day_repair_moves",
+        "employee_run_repair_moves",
+        "employee_run_repair_max_days",
+        "employee_window_moves",
+        "employee_window_max_days",
+        "custom_move_probability",
+        "employee_ruin_moves",
+        "employee_unassign_moves",
+    }
+)
+
+
 class SolverSettings(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -566,17 +606,19 @@ class SolverSettings(BaseModel):
     # Multi-start: run this many independent solves (seed = random_seed + i) in
     # parallel processes and keep the best. The metaheuristic has real
     # run-to-run variance, so best-of-n is a cheap, reliable quality lift.
-    # 1 (default) = a single solve.
+    # 1 (default) = a single solve. `ScheduleRequest.num_workers` asks for the
+    # same thing; the larger of the two applies.
     multi_start: int = Field(default=1, ge=1)
 
     # Portfolio multi-start: per-start SolverConfig overrides, cycled across the
-    # n starts (start i uses portfolio[i % len]). Each dict maps a SolverConfig
-    # attribute to a value, applied for that start only. Diversifying the search
+    # n starts (start i uses portfolio[i % len]). Each dict maps a search knob of
+    # SolverConfig (see _PORTFOLIO_KEYS) to a value, applied for that start only;
+    # any other key is rejected here. Diversifying the search
     # (e.g. late_acceptance_size, ruin_recreate_max_ruin_fraction) makes the
     # starts explore complementary basins instead of n seeds of one config, which
     # -- paired with a true-objective selector -- lifts the hardest instances at
     # no cost to the easy ones. Empty (default) => every start identical.
-    portfolio: list[dict] = Field(default_factory=list)
+    portfolio: list[dict[str, Any]] = Field(default_factory=list)
 
     # Multi-start SELECTION correction. When a caller inflates a constraint's
     # weight for the search (e.g. multiplies the ShiftCoverage weight to prevent
@@ -593,6 +635,15 @@ class SolverSettings(BaseModel):
     two_opt_move_weight: float = Field(default=0.2, ge=0)
     or_opt_move_weight: float = Field(default=0.0, ge=0)
     tail_swap_move_weight: float = Field(default=0.0, ge=0)
+
+    @field_validator("portfolio")
+    @classmethod
+    def _valid_portfolio_keys(cls, portfolio):
+        for index, overrides in enumerate(portfolio):
+            unknown = set(overrides) - _PORTFOLIO_KEYS
+            if unknown:
+                raise ValueError(f"portfolio[{index}]: keys cannot be overridden per start: {sorted(unknown)}")
+        return portfolio
 
     @model_validator(mode="after")
     def _valid_ruin_fraction_range(self):
@@ -642,7 +693,14 @@ class ScheduleRequest(BaseModel):
 
     name: str | None = None
     timelimit: float = Field(default=30.0, ge=0, description="seconds")
-    num_workers: int = Field(default=1, ge=1)
+    num_workers: int = Field(
+        default=1,
+        ge=1,
+        description=(
+            "Independent parallel starts, like `settings.multi_start`: the larger of the two "
+            "applies, they do not multiply. Each start gets the full `timelimit`."
+        ),
+    )
     model_input: SchedulingInput
     settings: SolverSettings = Field(default_factory=SolverSettings)
 
@@ -882,6 +940,39 @@ def _ms_worker(args):
     return _build_and_solve(request, seed, overrides)
 
 
+def _solve_in_processes(jobs: list, max_workers: int) -> list[ScheduleSolution] | None:
+    """Run the starts in forked processes; None if processes cannot be used here.
+
+    Only that one case returns None. An error raised by a start itself, such as a
+    bad configuration, comes straight back to the caller: rerunning it would fail
+    the same way after spending the time budget again."""
+    try:
+        import multiprocessing as mp
+        from concurrent.futures import ProcessPoolExecutor
+        from concurrent.futures.process import BrokenProcessPool
+
+        # A daemonic process (a multiprocessing.Pool worker) may not have children.
+        if mp.current_process().daemon:
+            return None
+        # 'fork' avoids re-running the caller's __main__ (which 'spawn' does,
+        # breaking calls from a REPL/stdin/notebook) and gives true parallelism.
+        # ValueError: no fork on this platform (e.g. Windows). The others: no
+        # working semaphores to build the pool's queues with.
+        pool = ProcessPoolExecutor(max_workers=max_workers, mp_context=mp.get_context("fork"))
+    except (ValueError, OSError, NotImplementedError, ImportError):
+        return None
+
+    with pool:
+        try:
+            futures = [pool.submit(_ms_worker, job) for job in jobs]
+        except (OSError, BrokenProcessPool):  # fork itself failed
+            return None
+        try:
+            return [future.result() for future in futures]
+        except BrokenProcessPool:  # a worker process died
+            return None
+
+
 def solve_request(
     request: ScheduleRequest,
     *,
@@ -889,17 +980,30 @@ def solve_request(
 ) -> ScheduleSolution:
     """Solve a pydantic request end-to-end and return the pydantic solution.
 
-    ``settings.multi_start`` > 1 runs that many independent solves (seeds
-    ``random_seed + i``) in parallel processes and returns the best-scoring
-    one. The metaheuristic has real run-to-run variance, so best-of-n is a
-    cheap, reliable quality lift (and uses the extra cores). 1 (default) is a
-    single solve.
+    ``request.num_workers`` or ``settings.multi_start`` > 1 runs that many
+    independent solves (the larger of the two; seeds ``random_seed + i``) in
+    parallel processes and returns the best-scoring one. Each start gets the
+    full ``timelimit`` and at most one start per core runs at a time. The
+    metaheuristic has real run-to-run variance, so best-of-n is a cheap,
+    reliable quality lift (and uses the extra cores). 1 (default) is a single
+    solve.
+
+    Parallel starts are forked. Forking a process that runs other threads is
+    unsafe: the child gets a copy of any lock another thread held and can hang
+    on it, Python 3.12+ warns with a DeprecationWarning, and macOS system
+    libraries may abort in the child. From a threaded host, call this in a
+    subprocess of its own, or stay at one start. A single start does not fork,
+    and releases the GIL while it solves.
+
+    Where processes cannot be used (no fork, a daemonic process) or a worker
+    dies, the starts run one after another, so the wall time can reach n times
+    ``timelimit``. An error raised by a start is not retried.
 
     ``select`` lets the caller pick the best-of-n candidate itself (given the
     full list of solutions) instead of the built-in faithful-score key -- e.g.
     to rank candidates on an external objective the internal score only
-    approximates. Ignored when multi_start <= 1."""
-    n = request.settings.multi_start
+    approximates. Ignored for a single start."""
+    n = max(request.num_workers, request.settings.multi_start)
     if n <= 1:
         return _build_and_solve(request, request.settings.random_seed)
 
@@ -909,20 +1013,9 @@ def solve_request(
     # n seeds of one identical config). Empty portfolio => all identical.
     port = request.settings.portfolio
     jobs = [(request, request.settings.random_seed + i, port[i % len(port)] if port else {}) for i in range(n)]
-    solutions = None
-    try:
-        import multiprocessing as mp
-        import os
-        from concurrent.futures import ProcessPoolExecutor
-
-        # 'fork' avoids re-running the caller's __main__ (which 'spawn' does,
-        # breaking calls from a REPL/stdin/notebook) and gives true parallelism.
-        ctx = mp.get_context("fork")
-        with ProcessPoolExecutor(max_workers=min(n, os.cpu_count() or 1), mp_context=ctx) as pool:
-            solutions = list(pool.map(_ms_worker, jobs))
-    except Exception:
-        # fork unavailable (e.g. Windows) or a worker died — fall back to a
-        # sequential best-of-n so the feature always works, just without the
+    solutions = _solve_in_processes(jobs, min(n, os.cpu_count() or 1))
+    if solutions is None:
+        # Sequential best-of-n, so the feature always works, just without the
         # parallel speedup.
         solutions = [_build_and_solve(r, s, o) for r, s, o in jobs]
     solutions = [s for s in solutions if s is not None]

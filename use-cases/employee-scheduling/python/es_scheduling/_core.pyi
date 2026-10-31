@@ -374,7 +374,7 @@ class SolverConfig:
     (0, -1e18) stops at the first feasible solution. Default: unreachable."""
     on_new_best: Callable[[int, Score], None] | None
     """Callback fired on every new best solution: on_new_best(step, score).
-    Called with the GIL held, on the calling thread."""
+    Runs on the solving thread and re-acquires the GIL, which solve() releases."""
 
 class Solver:
     """Local-search solver (late acceptance + guided moves + adaptive
