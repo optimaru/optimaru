@@ -1,5 +1,5 @@
 from bin_packing import BinPackingProblem, Item, SolverConfig, calculate_score, constraint_costs, solve
-from bin_packing.constraints import BinCapacity, MinimizeBins, score
+from bin_packing.constraints import BinCapacityCost, UsedBinsCost, score
 from bin_packing.models import BinPackingProblemModel, ConflictModel
 
 
@@ -9,13 +9,14 @@ def problem() -> BinPackingProblem:
 
 def test_constraint_costs_match_hand_calculation() -> None:
     candidate = problem()
-    for item, bin_index in zip(candidate.items, [0, 0, 1, 1], strict=True):
-        item.bin = bin_index
+    # problem.items returns copies: the bins are written in bulk.
+    candidate.set_assignment([0, 0, 1, 1])
     raw = constraint_costs(candidate)
-    assert raw["bin_capacity"]["costs"] == [5, 0]
-    assert raw["minimize_bins"]["costs"] == [2]
+    # One entry per bin 0..n-1 (0.1.x listed bins 0..max bin, i.e. [5, 0]).
+    assert raw["bin_capacity_cost"]["costs"] == [5, 0, 0, 0]
+    assert raw["used_bins_cost"]["costs"] == [2]
     assert score(raw) == (-5, -2.0)
-    assert score(raw, [BinCapacity(hard=False, weight=3), MinimizeBins(hard=True, weight=2)]) == (-4, -15.0)
+    assert score(raw, [BinCapacityCost(hard=False, weight=3), UsedBinsCost(hard=True, weight=2)]) == (-4, -15.0)
 
 
 def test_metaheuristic_finds_two_bin_optimum() -> None:
@@ -28,16 +29,21 @@ def test_metaheuristic_finds_two_bin_optimum() -> None:
 
 def test_metaheuristic_accepts_all_solver_parameters() -> None:
     candidate = problem()
-    config = SolverConfig(
-        spent_limit_seconds=0.1,
-        random_seed=11,
-        parallel_solver_count=3,
-        max_iterations=500,
-        stagnation_limit=20,
-        temperature=1.5,
-        cooling_rate=0.99,
-        best_score_limit=(0, -2),
-    )
+    config = SolverConfig()
+    config.spent_limit_seconds = 0.1
+    config.random_seed = 11
+    config.parallel_solver_count = 3
+    config.step_count_limit = 500
+    config.unimproved_step_count_limit = 200
+    config.late_acceptance_size = 50
+    config.ruin_recreate = True
+    config.ruin_recreate_unimproved_step_trigger = 20
+    config.change_move_weight = 0.6
+    config.swap_move_weight = 0.4
+    config.value_recommender_probability = 0.3
+    config.empty_bin_moves = True
+    config.empty_bin_candidates = 1
+    config.best_score_limit = (0, -2)
     solve(candidate, config=config)
     assert (candidate.score.hard, candidate.score.soft) == (0, -2.0)
 
@@ -71,5 +77,6 @@ def test_color_and_conflict_costs_match_manual_count():
         conflicts=[ConflictModel(first="A", second="C")],
     )
     raw = constraint_costs(model.to_core())
-    assert raw["color_compatibility"]["costs"] == [1, 0]
-    assert raw["item_conflicts"]["costs"] == [1]
+    # Per bin (0.1.x listed colour excess per (bin, colour) [1, 0] and conflicts per pair [1]).
+    assert raw["color_conflict_cost"]["costs"] == [1, 0, 0]
+    assert raw["item_conflict_cost"]["costs"] == [1, 0, 0]

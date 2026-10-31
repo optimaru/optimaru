@@ -1,4 +1,11 @@
-"""Class-based CP-SAT plugins sharing the canonical domain classes."""
+"""Class-based CP-SAT plugins for bin packing.
+
+Each plugin subclasses the domain spec of the same name; its default level and
+weight come from the engine's ``bin_packing.constraint_info()`` (the C++
+components' kDefaultLevel / kDefaultWeight), so they are not restated here.
+Every plugin's term is the engine's raw cost exactly (0 = no violation), summed
+over the bins.
+"""
 
 from dataclasses import dataclass
 from typing import Any
@@ -13,20 +20,16 @@ from ortools.sat.python import cp_model
 class BinPackingContext:
     model: cp_model.CpModel
     problem: BinPackingProblemModel
+    # assignments[item, bin]: item in bin (bins 0..n-1, the engine's value range)
     assignments: dict[tuple[int, int], Any]
-    used: list[Any]
-    overflow: list[Any]
-    color_excess: list[Any]
-    conflict_violations: list[Any]
+    used: list[Any]  # per bin: holds at least one item
+    overflow: list[Any]  # per bin: max(0, load - capacity) at the optimum
+    color_excess: list[Any]  # per (bin, shared colour): max(0, count - 1) at the optimum
+    color_bound: int  # the largest possible total colour excess
+    conflict_violations: list[Any]  # per listed pair: both items in one bin
 
 
-class BinCapacity(domain.BinCapacity, ConstraintPlugin[BinPackingContext]):
-    """Sum of each bin's positive load above capacity."""
-
-    default_level = "hard"
-    default_weight = 1
-    label = "Bin capacity"
-
+class BinCapacityCost(domain.BinCapacityCost, ConstraintPlugin[BinPackingContext]):
     def build(self, context: BinPackingContext, objective: ObjectiveBuilder) -> None:
         objective.add(
             self.name,
@@ -35,39 +38,12 @@ class BinCapacity(domain.BinCapacity, ConstraintPlugin[BinPackingContext]):
         )
 
 
-class MinimizeBins(domain.MinimizeBins, ConstraintPlugin[BinPackingContext]):
-    """Number of non-empty bins in the solution."""
-
-    default_level = "soft"
-    default_weight = 1
-    label = "Minimize used bins"
-
+class ColorConflictCost(domain.ColorConflictCost, ConstraintPlugin[BinPackingContext]):
     def build(self, context: BinPackingContext, objective: ObjectiveBuilder) -> None:
-        objective.add(self.name, sum(context.used), bound=len(context.problem.items))
+        objective.add(self.name, sum(context.color_excess), bound=context.color_bound)
 
 
-class ColorCompatibility(
-    domain.ColorCompatibility, ConstraintPlugin[BinPackingContext]
-):
-    """Extra same-color items assigned to one bin."""
-
-    default_level = "hard"
-    default_weight = 1
-    label = "Color compatibility"
-
-    def build(self, context: BinPackingContext, objective: ObjectiveBuilder) -> None:
-        objective.add(
-            self.name, sum(context.color_excess), bound=len(context.problem.items)
-        )
-
-
-class ItemConflicts(domain.ItemConflicts, ConstraintPlugin[BinPackingContext]):
-    """Forbidden item pairs assigned to one bin."""
-
-    default_level = "hard"
-    default_weight = 1
-    label = "Item conflicts"
-
+class ItemConflictCost(domain.ItemConflictCost, ConstraintPlugin[BinPackingContext]):
     def build(self, context: BinPackingContext, objective: ObjectiveBuilder) -> None:
         objective.add(
             self.name,
@@ -76,6 +52,10 @@ class ItemConflicts(domain.ItemConflicts, ConstraintPlugin[BinPackingContext]):
         )
 
 
-REGISTRY = ConstraintRegistry(
-    [BinCapacity(), ColorCompatibility(), ItemConflicts(), MinimizeBins()]
-)
+class UsedBinsCost(domain.UsedBinsCost, ConstraintPlugin[BinPackingContext]):
+    def build(self, context: BinPackingContext, objective: ObjectiveBuilder) -> None:
+        objective.add(self.name, sum(context.used), bound=len(context.problem.items))
+
+
+# Plugin order = list_constraints() order.
+REGISTRY = ConstraintRegistry([BinCapacityCost(), ColorConflictCost(), ItemConflictCost(), UsedBinsCost()])

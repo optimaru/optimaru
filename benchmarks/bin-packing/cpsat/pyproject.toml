@@ -1,7 +1,7 @@
 [project]
 name = "bin-packing-cpsat"
 version = "0.1.0"
-description = "OR-Tools CP-SAT backend for bin packing"
+description = "OR-Tools CP-SAT reference for the bin-packing use case."
 requires-python = ">=3.11,<4.0"
 dependencies = [
     "bin_packing",
@@ -13,12 +13,21 @@ dependencies = [
 [dependency-groups]
 dev = ["pytest", "ruff"]
 
+[project.scripts]
+bin-packing-compare = "bin_packing_cpsat.benchmark:main"
+
 [tool.uv.sources]
 bin_packing = { path = "../../../use-cases/bin-packing/python", editable = true }
 cpsat-plugins = { path = "../../cpsat-common", editable = true }
 
 [tool.setuptools]
 packages = ["bin_packing_cpsat"]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+extend-select = ["I"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

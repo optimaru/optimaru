@@ -1,5 +1,5 @@
-"""CP-SAT backend for :mod:`bin_packing`."""
+"""CP-SAT reference backend for :mod:`bin_packing`."""
 
-from .solve import catalog, solve
+from .solve import Built, build, catalog, solve
 
-__all__ = ["catalog", "solve"]
+__all__ = ["Built", "build", "catalog", "solve"]
