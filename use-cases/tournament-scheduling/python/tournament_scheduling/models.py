@@ -18,7 +18,7 @@ Score mapping (Java HardMediumSoftBigDecimalScore -> engine HardSoftScore):
 `pydantic` is an optional dependency (`pip install tournament_scheduling[models]`).
 """
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from . import _core
 
@@ -31,6 +31,11 @@ __all__ = [
     "demo_data",
     "with_initial_solution",
 ]
+
+
+def _valid_positions(count: int) -> str:
+    """The valid positions among `count`, for an error message."""
+    return f"0..{count - 1}" if count else "(the list is empty)"
 
 
 class TeamModel(BaseModel):
@@ -83,8 +88,37 @@ class TournamentScheduleModel(BaseModel):
     score_hard: int | None = None
     score_soft: float | None = None
 
+    @model_validator(mode="after")
+    def _check_indices(self):
+        """Team and day positions the engine reads without a range check. A penalty has no id, so
+        its errors give its place in the list."""
+        team_count = len(self.teams)
+        day_count = len(self.days)
+        valid_teams = _valid_positions(team_count)
+        valid_days = _valid_positions(day_count)
+        for position, penalty in enumerate(self.unavailability_penalties):
+            if not 0 <= penalty.team < team_count:
+                raise ValueError(
+                    f"unavailability penalty {position}: team {penalty.team!r} is out of range {valid_teams}"
+                )
+            if not 0 <= penalty.day < day_count:
+                raise ValueError(
+                    f"unavailability penalty {position}: day {penalty.day!r} is out of range {valid_days}"
+                )
+        for assignment in self.team_assignments:
+            if not 0 <= assignment.day < day_count:
+                raise ValueError(
+                    f"team assignment {assignment.id!r}: day {assignment.day!r} is out of range {valid_days}"
+                )
+            if assignment.team is not None and not 0 <= assignment.team < team_count:
+                raise ValueError(
+                    f"team assignment {assignment.id!r}: team {assignment.team!r} is out of range {valid_teams}"
+                )
+        return self
+
     def to_core(self) -> "_core.TournamentSchedule":
         """pydantic -> engine object (the score field is ignored; the engine recomputes it)."""
+        self._check_indices()  # the fields stay mutable after validation
         return _core.TournamentSchedule(
             [_core.Team(t.name) for t in self.teams],
             [_core.Day(d.date_index) for d in self.days],
@@ -238,5 +272,7 @@ def with_initial_solution(problem, solution):
         if value is None:
             continue
         if not isinstance(value, int) or isinstance(value, bool) or not 0 <= value < value_count:
-            raise ValueError(f"team assignment {assignment.id!r}: team {value!r} is out of range 0..{value_count - 1}")
+            raise ValueError(
+                f"team assignment {assignment.id!r}: team {value!r} is out of range {_valid_positions(value_count)}"
+            )
     return seeded

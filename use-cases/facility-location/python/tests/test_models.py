@@ -55,3 +55,28 @@ def test_extra_fields_are_rejected():
 
     with pytest.raises(ValidationError):
         models.LocationModel(latitude=0.0, longitude=0.0, altitude=1.0)
+
+
+def _dump_with_facility(value):
+    data = models.FacilityLocationProblemModel.from_core(sample_problem()).model_dump()
+    data["consumers"][0]["facility"] = value
+    return data
+
+
+@pytest.mark.parametrize("value", [-2, 2, 5, 99999999])
+def test_a_facility_out_of_range_is_refused_before_the_engine(value):
+    with pytest.raises(ValueError, match=rf"consumer 'C0': facility {value} is out of range -1\.\.1"):
+        models.FacilityLocationProblemModel.model_validate(_dump_with_facility(value))
+
+
+@pytest.mark.parametrize("value", [-1, 0, 1])
+def test_every_facility_in_range_is_accepted(value):
+    model = models.FacilityLocationProblemModel.model_validate(_dump_with_facility(value))
+    assert model.to_core().consumers[0].facility == value
+
+
+def test_a_facility_edited_after_validation_is_refused_by_to_core():
+    model = models.FacilityLocationProblemModel.from_core(sample_problem())
+    model.consumers[0].facility = 99999999
+    with pytest.raises(ValueError, match="out of range"):
+        model.to_core()

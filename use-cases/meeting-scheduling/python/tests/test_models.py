@@ -1,5 +1,7 @@
 """Serialization round-trip of the pydantic mirror and demo_data reproduction."""
 
+import pytest
+
 import meeting_scheduling as ms
 from meeting_scheduling.models import MeetingScheduleModel, demo_data
 
@@ -47,3 +49,35 @@ def test_round_trip_preserves_solution_and_score():
     rescored = ms.calculate_score(clone.to_core())
     assert rescored.hard == core.score.hard
     assert rescored.soft == core.score.soft
+
+
+def _dump_with_grain_room(value):
+    data = demo_data().model_dump()
+    data["meeting_assignments"][0]["grain_room"] = value
+    return data
+
+
+@pytest.mark.parametrize("value", [-1, 480, 99999999])
+def test_a_grain_room_out_of_range_is_refused_before_the_engine(value):
+    with pytest.raises(ValueError, match=rf"grain_room {value} is out of range 0\.\.479"):
+        MeetingScheduleModel.model_validate(_dump_with_grain_room(value))
+
+
+@pytest.mark.parametrize("value", [None, 0, 479])
+def test_every_grain_room_in_range_is_accepted(value):
+    model = MeetingScheduleModel.model_validate(_dump_with_grain_room(value))
+    assert model.to_core().meeting_assignments[0].grain_room == (-1 if value is None else value)
+
+
+def test_a_grain_room_edited_after_validation_is_refused_by_to_core():
+    model = demo_data()
+    model.meeting_assignments[0].grain_room = 99999999
+    with pytest.raises(ValueError, match="out of range"):
+        model.to_core()
+
+
+def test_a_grain_room_with_no_rooms_says_the_list_is_empty():
+    data = _dump_with_grain_room(0)
+    data["rooms"] = []
+    with pytest.raises(ValueError, match=r"grain_room 0 is out of range \(the list is empty\)"):
+        MeetingScheduleModel.model_validate(data)

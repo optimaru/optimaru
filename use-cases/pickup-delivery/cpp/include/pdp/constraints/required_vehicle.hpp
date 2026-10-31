@@ -6,8 +6,10 @@
 namespace pdp
 {
 // Hard (default, weight kCouplingPenalty): requiredVehicle — a request promised
-// to a vehicle stays on it, unassigned included. Where on the route it goes is
-// still free, which is what pinning its pickup would take away.
+// to a vehicle stays on it. Unassigned counts once and another vehicle twice, so
+// a request with no place on its vehicle waits rather than rides the wrong one.
+// Where on the route it goes is still free, which is what pinning its pickup
+// would take away.
 struct RequiredVehicle final : PdpUnitConstraint
 {
     RequiredVehicle()
@@ -28,7 +30,7 @@ struct RequiredVehicle final : PdpUnitConstraint
                 = p.deliveries[static_cast<std::size_t>(node.deliveryIndex)]
                       .requiredVehicleIndex;
             if (node.pickup && required >= 0 && required != u)
-                misplaced += 1;
+                misplaced += detail::isPool(p, u) ? 1 : 2;
         }
         return misplaced;
     }
