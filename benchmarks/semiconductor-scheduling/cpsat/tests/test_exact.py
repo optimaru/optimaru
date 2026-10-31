@@ -79,18 +79,20 @@ def test_semiconductor_exact_handles_alternative_tools_reentry_batching_and_main
     costs = fab_costs(result)
     assert len(result.assignments) == 6
     for name in (
-        "machine_eligibility",
-        "lot_route_precedence",
-        "machine_capacity",
-        "batch_capacity",
-        "batch_family_compatibility",
-        "setup_transitions",
-        "maintenance_windows",
-        "maximum_queue_time",
-        "inter_tool_transport",
+        "machine_eligibility_cost",
+        "lot_route_precedence_cost",
+        "machine_capacity_cost",
+        "batch_capacity_cost",
+        "batch_family_conflict_cost",
+        "missing_setup_time_cost",
+        "machine_unavailability_cost",
+        "max_queue_time_cost",
+        "missing_transport_time_cost",
     ):
-        assert sum(costs[name]) == 0
-    assert sum(costs["minimum_batch_fill"]) == 2
+        assert sum(costs[name]["costs"]) == 0
+    # LOT-A (family A) and LOT-B (family B) can never share the furnace (min batch 2).
+    assert sum(costs["min_batch_size_cost"]["costs"]) == 2
+    assert result.score_hard == 0
 
 
 def test_exact_respects_auxiliary_resource_calendar_and_pinned_work():

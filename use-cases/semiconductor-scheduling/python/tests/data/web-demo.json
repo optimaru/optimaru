@@ -1,0 +1,301 @@
+{
+    "machines": [
+        { "id": "LITHO-01", "group": "LITHO", "unavailable": [{ "start": 25, "end": 35 }] },
+        { "id": "LITHO-02", "group": "LITHO" },
+        { "id": "ETCH-01", "group": "ETCH", "unavailable": [{ "start": 50, "end": 58 }] },
+        { "id": "ETCH-02", "group": "ETCH" },
+        {
+            "id": "DIFF-01",
+            "group": "DIFFUSION",
+            "batch_capacity": 3,
+            "minimum_batch_size": 2,
+            "unavailable": [{ "start": 40, "end": 48 }]
+        },
+        { "id": "IMPLANT-01", "group": "IMPLANT" },
+        {
+            "id": "CVD-01",
+            "group": "CVD",
+            "batch_capacity": 2,
+            "minimum_batch_size": 2,
+            "unavailable": [{ "start": 70, "end": 78 }]
+        },
+        { "id": "METROLOGY-01", "group": "METROLOGY" }
+    ],
+    "auxiliary_resources": [
+        { "id": "LITHO-OPERATOR", "capacity": 1, "unavailable": [{ "start": 55, "end": 62 }] },
+        { "id": "RETICLE-A", "capacity": 1 },
+        { "id": "RETICLE-B", "capacity": 1 }
+    ],
+    "setup_times": [
+        { "machine_group": "LITHO", "from_family": "MASK-A1", "to_family": "MASK-B1", "duration": 3 },
+        { "machine_group": "LITHO", "from_family": "MASK-B1", "to_family": "MASK-A1", "duration": 4 },
+        { "machine_group": "LITHO", "from_family": "MASK-A2", "to_family": "MASK-B2", "duration": 3 },
+        { "machine_group": "LITHO", "from_family": "MASK-B2", "to_family": "MASK-A2", "duration": 4 },
+        { "machine_group": "ETCH", "from_family": "OXIDE-A", "to_family": "OXIDE-B", "duration": 2 },
+        { "machine_group": "ETCH", "from_family": "OXIDE-B", "to_family": "OXIDE-A", "duration": 3 },
+        { "machine_group": "ETCH", "from_family": "CONTACT-A", "to_family": "CONTACT-B", "duration": 2 },
+        { "machine_group": "ETCH", "from_family": "CONTACT-B", "to_family": "CONTACT-A", "duration": 3 },
+        { "machine_group": "DIFFUSION", "from_family": "DRIVE-A", "to_family": "DRIVE-B", "duration": 6 },
+        { "machine_group": "DIFFUSION", "from_family": "DRIVE-B", "to_family": "DRIVE-A", "duration": 6 },
+        { "machine_group": "CVD", "from_family": "FILM-A", "to_family": "FILM-B", "duration": 4 },
+        { "machine_group": "CVD", "from_family": "FILM-B", "to_family": "FILM-A", "duration": 4 }
+    ],
+    "transport_times": [
+        { "from_group": "LITHO", "to_group": "ETCH", "duration": 1 },
+        { "from_group": "ETCH", "to_group": "DIFFUSION", "duration": 2 },
+        { "from_group": "DIFFUSION", "to_group": "IMPLANT", "duration": 2 },
+        { "from_group": "IMPLANT", "to_group": "CVD", "duration": 2 },
+        { "from_group": "CVD", "to_group": "LITHO", "duration": 3 },
+        { "from_group": "ETCH", "to_group": "METROLOGY", "duration": 1 }
+    ],
+    "lots": [
+        {
+            "id": "LOT-A01",
+            "product": "Logic-A",
+            "release_time": 0,
+            "due_time": 105,
+            "priority": 5,
+            "max_cycle_time": 150,
+            "operations": [
+                {
+                    "id": "PHOTO-1",
+                    "family": "MASK-A1",
+                    "required_resources": ["LITHO-OPERATOR", "RETICLE-A"],
+                    "max_queue_time": 12,
+                    "eligible_machines": [
+                        { "machine_id": "LITHO-01", "duration": 8 },
+                        { "machine_id": "LITHO-02", "duration": 9, "preference_cost": 1 }
+                    ]
+                },
+                {
+                    "id": "ETCH-1",
+                    "family": "OXIDE-A",
+                    "eligible_machines": [
+                        { "machine_id": "ETCH-01", "duration": 7 },
+                        { "machine_id": "ETCH-02", "duration": 8 }
+                    ]
+                },
+                {
+                    "id": "DIFF",
+                    "family": "DRIVE-A",
+                    "max_queue_time": 14,
+                    "eligible_machines": [{ "machine_id": "DIFF-01", "duration": 18 }]
+                },
+                {
+                    "id": "IMPLANT",
+                    "family": "BORON-A",
+                    "eligible_machines": [{ "machine_id": "IMPLANT-01", "duration": 9 }]
+                },
+                { "id": "CVD", "family": "FILM-A", "eligible_machines": [{ "machine_id": "CVD-01", "duration": 14 }] },
+                {
+                    "id": "PHOTO-2",
+                    "family": "MASK-A2",
+                    "max_queue_time": 10,
+                    "eligible_machines": [
+                        { "machine_id": "LITHO-01", "duration": 7 },
+                        { "machine_id": "LITHO-02", "duration": 8 }
+                    ]
+                },
+                {
+                    "id": "ETCH-2",
+                    "family": "CONTACT-A",
+                    "eligible_machines": [
+                        { "machine_id": "ETCH-01", "duration": 6 },
+                        { "machine_id": "ETCH-02", "duration": 7 }
+                    ]
+                },
+                {
+                    "id": "QC",
+                    "family": "FINAL-A",
+                    "eligible_machines": [{ "machine_id": "METROLOGY-01", "duration": 5 }]
+                }
+            ]
+        },
+        {
+            "id": "LOT-A02",
+            "product": "Logic-A",
+            "release_time": 6,
+            "due_time": 118,
+            "priority": 3,
+            "max_cycle_time": 160,
+            "operations": [
+                {
+                    "id": "PHOTO-1",
+                    "family": "MASK-A1",
+                    "required_resources": ["LITHO-OPERATOR", "RETICLE-A"],
+                    "max_queue_time": 12,
+                    "eligible_machines": [
+                        { "machine_id": "LITHO-01", "duration": 8 },
+                        { "machine_id": "LITHO-02", "duration": 9 }
+                    ]
+                },
+                {
+                    "id": "ETCH-1",
+                    "family": "OXIDE-A",
+                    "eligible_machines": [
+                        { "machine_id": "ETCH-01", "duration": 7 },
+                        { "machine_id": "ETCH-02", "duration": 8 }
+                    ]
+                },
+                {
+                    "id": "DIFF",
+                    "family": "DRIVE-A",
+                    "max_queue_time": 14,
+                    "eligible_machines": [{ "machine_id": "DIFF-01", "duration": 18 }]
+                },
+                {
+                    "id": "IMPLANT",
+                    "family": "BORON-A",
+                    "eligible_machines": [{ "machine_id": "IMPLANT-01", "duration": 9 }]
+                },
+                { "id": "CVD", "family": "FILM-A", "eligible_machines": [{ "machine_id": "CVD-01", "duration": 14 }] },
+                {
+                    "id": "PHOTO-2",
+                    "family": "MASK-A2",
+                    "max_queue_time": 10,
+                    "eligible_machines": [
+                        { "machine_id": "LITHO-01", "duration": 7 },
+                        { "machine_id": "LITHO-02", "duration": 8 }
+                    ]
+                },
+                {
+                    "id": "ETCH-2",
+                    "family": "CONTACT-A",
+                    "eligible_machines": [
+                        { "machine_id": "ETCH-01", "duration": 6 },
+                        { "machine_id": "ETCH-02", "duration": 7 }
+                    ]
+                },
+                {
+                    "id": "QC",
+                    "family": "FINAL-A",
+                    "eligible_machines": [{ "machine_id": "METROLOGY-01", "duration": 5 }]
+                }
+            ]
+        },
+        {
+            "id": "LOT-B01",
+            "product": "Logic-B",
+            "release_time": 2,
+            "due_time": 112,
+            "priority": 4,
+            "max_cycle_time": 160,
+            "operations": [
+                {
+                    "id": "PHOTO-1",
+                    "family": "MASK-B1",
+                    "required_resources": ["LITHO-OPERATOR", "RETICLE-B"],
+                    "max_queue_time": 10,
+                    "eligible_machines": [
+                        { "machine_id": "LITHO-01", "duration": 7 },
+                        { "machine_id": "LITHO-02", "duration": 8 }
+                    ]
+                },
+                {
+                    "id": "ETCH-1",
+                    "family": "OXIDE-B",
+                    "eligible_machines": [
+                        { "machine_id": "ETCH-01", "duration": 8 },
+                        { "machine_id": "ETCH-02", "duration": 7 }
+                    ]
+                },
+                {
+                    "id": "DIFF",
+                    "family": "DRIVE-B",
+                    "max_queue_time": 12,
+                    "eligible_machines": [{ "machine_id": "DIFF-01", "duration": 16 }]
+                },
+                {
+                    "id": "IMPLANT",
+                    "family": "ARSENIC-B",
+                    "eligible_machines": [{ "machine_id": "IMPLANT-01", "duration": 8 }]
+                },
+                { "id": "CVD", "family": "FILM-B", "eligible_machines": [{ "machine_id": "CVD-01", "duration": 12 }] },
+                {
+                    "id": "PHOTO-2",
+                    "family": "MASK-B2",
+                    "max_queue_time": 9,
+                    "eligible_machines": [
+                        { "machine_id": "LITHO-01", "duration": 8 },
+                        { "machine_id": "LITHO-02", "duration": 7 }
+                    ]
+                },
+                {
+                    "id": "ETCH-2",
+                    "family": "CONTACT-B",
+                    "eligible_machines": [
+                        { "machine_id": "ETCH-01", "duration": 7 },
+                        { "machine_id": "ETCH-02", "duration": 6 }
+                    ]
+                },
+                {
+                    "id": "QC",
+                    "family": "FINAL-B",
+                    "eligible_machines": [{ "machine_id": "METROLOGY-01", "duration": 5 }]
+                }
+            ]
+        },
+        {
+            "id": "LOT-B02",
+            "product": "Logic-B",
+            "release_time": 10,
+            "due_time": 130,
+            "priority": 2,
+            "max_cycle_time": 170,
+            "operations": [
+                {
+                    "id": "PHOTO-1",
+                    "family": "MASK-B1",
+                    "required_resources": ["LITHO-OPERATOR", "RETICLE-B"],
+                    "max_queue_time": 10,
+                    "eligible_machines": [
+                        { "machine_id": "LITHO-01", "duration": 7 },
+                        { "machine_id": "LITHO-02", "duration": 8 }
+                    ]
+                },
+                {
+                    "id": "ETCH-1",
+                    "family": "OXIDE-B",
+                    "eligible_machines": [
+                        { "machine_id": "ETCH-01", "duration": 8 },
+                        { "machine_id": "ETCH-02", "duration": 7 }
+                    ]
+                },
+                {
+                    "id": "DIFF",
+                    "family": "DRIVE-B",
+                    "max_queue_time": 12,
+                    "eligible_machines": [{ "machine_id": "DIFF-01", "duration": 16 }]
+                },
+                {
+                    "id": "IMPLANT",
+                    "family": "ARSENIC-B",
+                    "eligible_machines": [{ "machine_id": "IMPLANT-01", "duration": 8 }]
+                },
+                { "id": "CVD", "family": "FILM-B", "eligible_machines": [{ "machine_id": "CVD-01", "duration": 12 }] },
+                {
+                    "id": "PHOTO-2",
+                    "family": "MASK-B2",
+                    "max_queue_time": 9,
+                    "eligible_machines": [
+                        { "machine_id": "LITHO-01", "duration": 8 },
+                        { "machine_id": "LITHO-02", "duration": 7 }
+                    ]
+                },
+                {
+                    "id": "ETCH-2",
+                    "family": "CONTACT-B",
+                    "eligible_machines": [
+                        { "machine_id": "ETCH-01", "duration": 7 },
+                        { "machine_id": "ETCH-02", "duration": 6 }
+                    ]
+                },
+                {
+                    "id": "QC",
+                    "family": "FINAL-B",
+                    "eligible_machines": [{ "machine_id": "METROLOGY-01", "duration": 5 }]
+                }
+            ]
+        }
+    ]
+}

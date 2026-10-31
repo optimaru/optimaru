@@ -209,12 +209,197 @@ class SemiconductorScheduleModel(BaseModel):
             raise ValueError("an operation may only be pinned once")
         return self
 
-    def to_core(self) -> SemiconductorScheduleModel:
-        return self.model_copy(deep=True)
+    def to_core(self):
+        """pydantic -> engine object (`_core.SemiconductorSchedule`): ids become indices; facts,
+        pins, assignments (batch ids included) and warm_start are passed on. The totals and
+        scores are not: the engine recomputes them. Times beyond the engine's int64 range raise
+        ValueError."""
+        from . import _core
+
+        machine_index = {machine.id: index for index, machine in enumerate(self.machines)}
+        resource_index = {resource.id: index for index, resource in enumerate(self.auxiliary_resources)}
+        operation_index = {
+            (lot.id, operation.id): (lot_position, position)
+            for lot_position, lot in enumerate(self.lots)
+            for position, operation in enumerate(lot.operations)
+        }
+
+        def windows(items: list[TimeWindowModel]):
+            return [_core.TimeWindow(_time(item.start), _time(item.end)) for item in items]
+
+        def assignment(item: AssignmentModel):
+            lot, operation = operation_index[(item.lot_id, item.operation_id)]
+            return _core.Assignment(
+                lot, operation, machine_index[item.machine_id], _time(item.start), _time(item.end), item.batch_id
+            )
+
+        return _core.SemiconductorSchedule(
+            machines=[
+                _core.Machine(
+                    machine.id,
+                    machine.group,
+                    _count(machine.batch_capacity),
+                    _count(machine.minimum_batch_size),
+                    windows(machine.unavailable),
+                )
+                for machine in self.machines
+            ],
+            auxiliary_resources=[
+                _core.AuxiliaryResource(resource.id, _count(resource.capacity), windows(resource.unavailable))
+                for resource in self.auxiliary_resources
+            ],
+            setup_times=[
+                _core.SetupTime(item.machine_group, item.from_family, item.to_family, _time(item.duration))
+                for item in self.setup_times
+            ],
+            transport_times=[
+                _core.TransportTime(item.from_group, item.to_group, _time(item.duration))
+                for item in self.transport_times
+            ],
+            lots=[
+                _core.Lot(
+                    lot.id,
+                    lot.product,
+                    _time(lot.release_time),
+                    _time(lot.due_time),
+                    _time(lot.priority),
+                    None if lot.max_cycle_time is None else _time(lot.max_cycle_time),
+                    [
+                        _core.Operation(
+                            operation.id,
+                            operation.family,
+                            [
+                                _core.MachineOption(
+                                    machine_index[option.machine_id],
+                                    _time(option.duration),
+                                    _time(option.preference_cost),
+                                )
+                                for option in operation.eligible_machines
+                            ],
+                            [resource_index[resource] for resource in operation.required_resources],
+                            _time(operation.min_queue_time),
+                            None if operation.max_queue_time is None else _time(operation.max_queue_time),
+                        )
+                        for operation in lot.operations
+                    ],
+                )
+                for lot in self.lots
+            ],
+            pinned_assignments=[assignment(item) for item in self.pinned_assignments],
+            assignments=[assignment(item) for item in self.assignments],
+            warm_start=self.warm_start,
+        )
 
     @classmethod
-    def from_core(cls, problem: SemiconductorScheduleModel) -> SemiconductorScheduleModel:
-        return problem.model_copy(deep=True)
+    def from_core(cls, schedule) -> SemiconductorScheduleModel:
+        """engine object -> pydantic: the facts by their ids, the assignments (batch_id None or
+        a string), makespan, totals and scores (None while the schedule is not scored) and
+        warm_start."""
+        machines = schedule.machines
+        resources = schedule.auxiliary_resources
+        lots = schedule.lots
+
+        def windows(items):
+            return [TimeWindowModel(start=item.start, end=item.end) for item in items]
+
+        def assignment(item) -> AssignmentModel:
+            lot = lots[item.lot]
+            return AssignmentModel(
+                lot_id=lot.id,
+                operation_id=lot.operations[item.operation].id,
+                machine_id=machines[item.machine].id,
+                start=item.start,
+                end=item.end,
+                batch_id=item.batch_id,
+            )
+
+        scored = schedule.scored
+        return cls(
+            machines=[
+                MachineModel(
+                    id=machine.id,
+                    group=machine.group,
+                    batch_capacity=machine.batch_capacity,
+                    minimum_batch_size=machine.minimum_batch_size,
+                    unavailable=windows(machine.unavailable),
+                )
+                for machine in machines
+            ],
+            auxiliary_resources=[
+                AuxiliaryResourceModel(
+                    id=resource.id, capacity=resource.capacity, unavailable=windows(resource.unavailable)
+                )
+                for resource in resources
+            ],
+            setup_times=[
+                SetupTimeModel(
+                    machine_group=item.machine_group,
+                    from_family=item.from_family,
+                    to_family=item.to_family,
+                    duration=item.duration,
+                )
+                for item in schedule.setup_times
+            ],
+            transport_times=[
+                TransportTimeModel(from_group=item.from_group, to_group=item.to_group, duration=item.duration)
+                for item in schedule.transport_times
+            ],
+            lots=[
+                LotModel(
+                    id=lot.id,
+                    product=lot.product,
+                    release_time=lot.release_time,
+                    due_time=lot.due_time,
+                    priority=lot.priority,
+                    max_cycle_time=lot.max_cycle_time,
+                    operations=[
+                        OperationModel(
+                            id=operation.id,
+                            family=operation.family,
+                            eligible_machines=[
+                                MachineOptionModel(
+                                    machine_id=machines[option.machine].id,
+                                    duration=option.duration,
+                                    preference_cost=option.preference_cost,
+                                )
+                                for option in operation.eligible_machines
+                            ],
+                            required_resources=[resources[index].id for index in operation.required_resources],
+                            min_queue_time=operation.min_queue_time,
+                            max_queue_time=operation.max_queue_time,
+                        )
+                        for operation in lot.operations
+                    ],
+                )
+                for lot in lots
+            ],
+            pinned_assignments=[assignment(item) for item in schedule.pinned_assignments],
+            assignments=[assignment(item) for item in schedule.assignments],
+            makespan=schedule.makespan if scored else None,
+            total_weighted_tardiness=schedule.total_weighted_tardiness if scored else None,
+            total_cycle_time=schedule.total_cycle_time if scored else None,
+            score_hard=schedule.score.hard if scored else None,
+            score_soft=schedule.score.soft if scored else None,
+            warm_start=schedule.warm_start,
+        )
+
+
+# The engine keeps times in int64 and counts in int: refuse what would not fit (with
+# headroom for the sums the scorer forms) instead of letting it wrap or fail obscurely.
+_TIME_LIMIT = 2**62
+_COUNT_LIMIT = 2**31 - 1
+
+
+def _time(value: int) -> int:
+    if not -_TIME_LIMIT <= value <= _TIME_LIMIT:
+        raise ValueError(f"time value {value} is outside the engine's range (|value| <= 2**62)")
+    return value
+
+
+def _count(value: int) -> int:
+    if not 0 <= value <= _COUNT_LIMIT:
+        raise ValueError(f"count {value} is outside the engine's range (0..2**31-1)")
+    return value
 
 
 def with_initial_solution(problem, solution):
@@ -225,7 +410,7 @@ def with_initial_solution(problem, solution):
     returns passes, feasible or not. Everything else, such as overlaps or route order, stays a hard penalty that the
     seed may break.
 
-    The search state is a machine choice and a priority rank per operation, which `_construct` decodes into a
+    The search state is a machine choice and a priority rank per operation, which the serial decoder turns into a
     schedule. The seed is converted to that state: the machine gives the choice, the order of the start times gives
     the rank. The decoder left-shifts operations and re-derives batches, so decoding a seed can give another schedule,
     worse as well as better, even when the seed came out of a solve.
