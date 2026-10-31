@@ -78,7 +78,7 @@ class NonRenewableResourceCapacityCost(Constraint):
         "over capacity; 0 means every stock suffices."
     )
     description_ko = (
-        "비재생 자원(예산처럼 한 번 쓰면 없어지는 자원)마다 모든 작업이 고른 실행 모드의 요구량 합계가 "
+        "비재생 자원(예산처럼 한 번 쓰면 없어지는 자원)마다 각 작업에 선택된 실행 모드의 요구량 합계가 "
         "용량을 넘는 양을 모두 더합니다. 작업을 언제 하는지는 상관없습니다. 용량을 넘은 자원 1단위가 "
         "비용 1이며, 0이면 모든 비재생 자원이 용량 안에 있습니다."
     )
@@ -102,7 +102,7 @@ class RenewableResourceCapacityCost(Constraint):
     )
     description_ko = (
         "재생 자원(사람이나 기계처럼 날마다 다시 쓸 수 있는 자원)과 날짜마다 그날 진행 중인 작업들의 "
-        "요구량이 용량을 넘는 양을 자원과 날짜에 걸쳐 모두 더합니다. 하루 동안 용량을 넘은 자원 1단위가 "
+        "요구량 합계가 용량을 넘는 양을 자원과 날짜에 걸쳐 모두 더합니다. 하루 동안 용량을 넘은 자원 1단위가 "
         "비용 1이며, 0이면 어느 날에도 용량을 넘는 자원이 없습니다."
     )
 
@@ -126,9 +126,9 @@ class ProjectDelayCost(Constraint):
         "on time."
     )
     description_ko = (
-        "프로젝트마다 마지막 작업(싱크)이 끝나는 날이 임계 경로 종료일(릴리스일 + 임계 경로 기간)보다 "
-        "늦은 일수를 모두 더합니다. 일찍 끝나도 이득은 없습니다. 하루 지연이 비용 1이며, 0이면 모든 "
-        "프로젝트가 제때 끝납니다."
+        "프로젝트마다 마지막 작업(싱크)이 끝나는 날이 임계 경로 종료일보다 늦은 일수를 모두 더합니다. "
+        "임계 경로 종료일은 프로젝트의 착수 가능일(릴리스일)에 임계 경로 기간을 더한 날입니다. 일찍 "
+        "끝나도 이득은 없습니다. 하루 지연이 비용 1이며, 0이면 모든 프로젝트가 제때 끝납니다."
     )
 
 
@@ -136,23 +136,24 @@ class MakespanCost(Constraint):
     """Latest SINK end date — when the last project finishes. Default: soft, weight 1.
 
     One penalty for the whole schedule, not per project (Java's groupBy(max)), so
-    pulling in a project that is not last is free in this term. The value is an
-    absolute day index (release offsets included), not a duration."""
+    pulling in a project that is not last is free in this term. The value is a
+    day index counted from day 0 (release dates do not move it), not a duration."""
 
     name = "makespan_cost"
     label_en = "Makespan"
     label_ko = "전체 완료일(메이크스팬)"
     description_en = (
         "The day the last project finishes: the latest end date of any project's last job (its "
-        "sink), as a day index counted from day 0 (release dates included). One value for the "
-        "whole schedule, so only the project that finishes last moves it. One unit of cost is one "
-        "day; 0 means every project ends on day 0."
+        "sink), as a day index counted from day 0 (release dates do not shift the schedule; they "
+        "only set the project-delay reference). One value for the whole schedule, so only the "
+        "project that finishes last moves it. One unit of cost is one day; 0 means every project "
+        "ends on day 0."
     )
     description_ko = (
         "가장 늦게 끝나는 프로젝트의 종료일, 곧 모든 프로젝트의 마지막 작업(싱크) 가운데 가장 늦은 "
-        "종료일을 0일부터 센 날짜 번호로 나타냅니다(릴리스일 포함). 일정 전체에 값이 하나뿐이어서 가장 "
-        "늦게 끝나는 프로젝트만 이 값을 바꿉니다. 하루가 비용 1이며, 0이면 모든 프로젝트가 0일에 "
-        "끝납니다."
+        "종료일을 0일부터 센 날짜 번호로 나타냅니다(착수 가능일은 일정을 늦추지 않고 프로젝트 지연의 "
+        "기준일에만 쓰입니다). 일정 전체에 값이 하나뿐이어서 가장 늦게 끝나는 프로젝트만 이 값을 "
+        "바꿉니다. 하루가 비용 1이며, 0이면 모든 프로젝트가 0일에 끝납니다."
     )
 
 

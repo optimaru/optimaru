@@ -804,6 +804,40 @@ void verifyMediumLevel()
                    0,
                    -5);
     }
+    {
+        // onNewBest reports the calculator's levels like the final score, not
+        // the decoded engine fold: demoted to soft at weight 10^9, the 2 days
+        // of delay make a soft total of 2 * 10^9 + 3, which a decoded fold
+        // would file as -2 medium / -3 soft.
+        ProjectJobSchedule one = makeBase(10, true, /*criticalPathDuration*/ 1);
+        one.delayRangeSize = 5;
+        addJob(one, JobType::SOURCE, 0, 0, {}, 0);
+        addJob(one, JobType::STANDARD, 3, 0, {0});
+        addJob(one, JobType::SINK, 0, 0, {1}, 0);
+        std::vector<Score> reported;
+        Solver::Config config;
+        config.spentLimit = std::chrono::milliseconds(300);
+        config.randomSeed = 1;
+        config.onNewBest = [&reported](std::int64_t, const Score &best)
+        { reported.push_back(best); };
+        DecomposedCalculator calculator;
+        defaultConstraints()
+            .soft("projectDelayCost")
+            .weight("projectDelayCost", static_cast<double>(kMediumUnit))
+            .into(calculator);
+        Solver(config).solve(one, calculator);
+        checkScore("solve() with projectDelayCost demoted at weight 10^9",
+                   one.score,
+                   0,
+                   0,
+                   -(2 * kMediumUnit + 3));
+        bool noMedium = !reported.empty();
+        for (const Score &best : reported)
+            noMedium = noMedium && best.medium == 0;
+        check(noMedium, "onNewBest never files the soft total under medium");
+        check(!reported.empty() && reported.back() == one.score,
+              "the last onNewBest score equals the final schedule.score");
+    }
     std::printf("\n");
 }
 

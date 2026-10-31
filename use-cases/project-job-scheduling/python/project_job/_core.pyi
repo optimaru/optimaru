@@ -203,7 +203,8 @@ class SolverConfig:
     """Stop early once (hard, medium, soft) is reached. E.g. (0, -(2**62),
     -(2**62)) stops at the first feasible solution."""
     on_new_best: Callable[[int, Score], None] | None
-    """Called with (step, score) on every new best solution."""
+    """Called with (step, score) on every new best solution, in the same levels as
+    the final schedule.score of the solve method in use."""
 
 class Solver:
     def __init__(self, config: SolverConfig = ...) -> None: ...

@@ -8,6 +8,7 @@ the three knobs and the medium level.
 
 import pickle
 import re
+from itertools import pairwise
 from types import SimpleNamespace
 
 import pytest
@@ -408,6 +409,56 @@ def test_demoting_the_medium_term_changes_the_trade_off():
     pjs.solve(schedule, time_limit_seconds=0.3, random_seed=1, constraints=demoted)
     assert (schedule.score.hard, schedule.score.medium, schedule.score.soft) == (0, 0, -9)
     assert score(pjs.constraint_costs(schedule), demoted) == (0, -9)
+
+
+def _solve_reporting(run, schedule):
+    """Solve `schedule` single-start with `run(solver, schedule)`, recording every on_new_best score."""
+    reported = []
+    cfg = pjs.SolverConfig()
+    cfg.spent_limit_seconds = 0.4
+    cfg.random_seed = 1
+    cfg.on_new_best = lambda _step, best: reported.append((best.hard, best.medium, best.soft))
+    run(pjs.Solver(cfg), schedule)
+    return reported
+
+
+def test_the_plugin_solve_reports_each_level_unfolded():
+    """schedule.score and on_new_best on the plugin path read the calculator's levels, not a decoded fold.
+
+    With project_delay_cost demoted to soft at weight 10^9, nothing is medium, so the
+    soft total of 2 * 10^9 + 3 must stay soft in the final score and in every new best."""
+    picks = [
+        non_renewable_resource_capacity_cost,
+        renewable_resource_capacity_cost,
+        ProjectDelayCost(hard=False, weight=MEDIUM_UNIT),
+        makespan_cost,
+    ]
+    schedule = _late_schedule()
+    schedule.set_assignment([0, -1, 0])  # the solver places the 3-day job
+    reported = _solve_reporting(lambda solver, s: solver.solve_with_constraints(s, picks), schedule)
+    final = (schedule.score.hard, schedule.score.medium, schedule.score.soft)
+    assert final == (0, 0, -(2 * MEDIUM_UNIT + 3))  # the case a decoded fold would misfile
+    assert score(pjs.constraint_costs(schedule), picks) == (final[0], final[2])
+    assert reported and all(medium == 0 for _, medium, _ in reported)
+    assert reported[-1] == final
+
+
+@pytest.mark.parametrize(
+    "run",
+    [
+        pytest.param(lambda solver, schedule: solver.solve(schedule), id="monolithic"),
+        pytest.param(
+            lambda solver, schedule: solver.solve_with_constraints(schedule, get_constraints()),
+            id="plugin",
+        ),
+    ],
+)
+def test_on_new_best_ends_on_the_final_score(run):
+    """Each path reports strictly improving new bests in the levels of its final schedule.score."""
+    schedule = build_schedule()
+    reported = _solve_reporting(run, schedule)
+    assert reported[-1] == (schedule.score.hard, schedule.score.medium, schedule.score.soft)
+    assert all(earlier < later for earlier, later in pairwise(reported))
 
 
 @pytest.mark.parametrize(

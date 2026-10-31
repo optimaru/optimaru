@@ -8,9 +8,9 @@ namespace pjs
 
 // Soft, weight 1: makespanCost — the latest SINK end date, i.e. when the
 // last project finishes. Raw cost (one global value, a max rather than a
-// total) = max over SINK allocations of endDate, an absolute day index
-// (release offsets included), so 0 = every project ends on day 0 (or there
-// is no SINK at all). One penalty for the whole schedule (the Java
+// total) = max over SINK allocations of endDate, a day index counted from
+// day 0 (release dates do not move it), so 0 = every project ends on day 0
+// (or there is no SINK at all). One penalty for the whole schedule (the Java
 // groupBy(max)), not one per project, so shortening any project other than
 // the last one is free on this term. The exponent shapes that value.
 // 0.2.0 migration note: was totalMakespan.

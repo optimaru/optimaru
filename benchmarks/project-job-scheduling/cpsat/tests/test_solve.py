@@ -143,7 +143,9 @@ def test_cpsat_defaults_are_the_engine_defaults() -> None:
         assert entry["kind"] == "either"  # every project-job constraint is flippable
         assert entry["params"] == {"weight": None, "hard": None, "exponent": 1.0}
     # The medium constraint sits on the medium level at weight 1 (medium units).
-    assert {name: (row.default_level, row.default_weight) for name, row in engine.items()} == {
+    assert {
+        name: (row.default_level, row.default_weight) for name, row in engine.items()
+    } == {
         "non_renewable_resource_capacity_cost": ("hard", 1.0),
         "renewable_resource_capacity_cost": ("hard", 1.0),
         "project_delay_cost": ("medium", 1.0),
@@ -163,7 +165,9 @@ def _fast_or_slow() -> ProjectJobScheduleModel:
             ExecutionModeModel(
                 id=f"{project}-fast",
                 duration=fast,
-                resource_requirements=[ResourceRequirementModel(resource_id="S", requirement=1)],
+                resource_requirements=[
+                    ResourceRequirementModel(resource_id="S", requirement=1)
+                ],
             ),
             ExecutionModeModel(id=f"{project}-slow", duration=slow),
         ]
@@ -180,10 +184,14 @@ def _fast_or_slow() -> ProjectJobScheduleModel:
                 id=f"{project}-end",
                 project_id=project,
                 job_type="SINK",
-                execution_modes=[ExecutionModeModel(id=f"{project}-end-mode", duration=0)],
+                execution_modes=[
+                    ExecutionModeModel(id=f"{project}-end-mode", duration=0)
+                ],
             )
         )
-        allocations.append(AllocationModel(id=f"{project}-job", job_id=f"{project}-job"))
+        allocations.append(
+            AllocationModel(id=f"{project}-job", job_id=f"{project}-job")
+        )
         allocations.append(
             AllocationModel(
                 id=f"{project}-end",
@@ -211,9 +219,15 @@ _CAPACITY = [non_renewable_resource_capacity_cost, renewable_resource_capacity_c
         ([*_CAPACITY, project_delay_cost, MakespanCost(weight=2)], (0, -1, -10)),
         # hard=False demotes medium to SOFT on both paths (before 0.2.0 CP-SAT kept it
         # on medium and the engine ignored it): 3 + 2 * 3 = 9 beats 1 + 2 * 5 = 11.
-        ([*_CAPACITY, ProjectDelayCost(hard=False), MakespanCost(weight=2)], (0, 0, -9)),
+        (
+            [*_CAPACITY, ProjectDelayCost(hard=False), MakespanCost(weight=2)],
+            (0, 0, -9),
+        ),
         # hard=True: one hard unit per day of delay, not 10^9.
-        ([*_CAPACITY, ProjectDelayCost(hard=True), MakespanCost(weight=2)], (-1, 0, -10)),
+        (
+            [*_CAPACITY, ProjectDelayCost(hard=True), MakespanCost(weight=2)],
+            (-1, 0, -10),
+        ),
     ],
     ids=["default-medium", "medium-demoted", "medium-promoted"],
 )
@@ -238,6 +252,7 @@ def test_demoting_a_hard_constraint_scores_like_the_engine() -> None:
     solved = solve(problem, time_limit_seconds=5, constraints=selection)
     assert (solved.score_hard, solved.score_medium, solved.score_soft) == (0, -1, -3)
     engine = score(domain.constraint_costs(solved.to_core()), selection)
-    assert (solved.score_hard, solved.score_medium * MEDIUM_UNIT + solved.score_soft) == pytest.approx(
-        tuple(engine)
-    )
+    assert (
+        solved.score_hard,
+        solved.score_medium * MEDIUM_UNIT + solved.score_soft,
+    ) == pytest.approx(tuple(engine))
