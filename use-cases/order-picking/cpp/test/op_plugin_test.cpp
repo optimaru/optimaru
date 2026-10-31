@@ -22,6 +22,7 @@
 #include <memory>
 #include <stdexcept>
 #include <random>
+#include <set>
 #include <string>
 #include <utility>
 #include <vector>
@@ -525,12 +526,21 @@ void verifyAssemblyBuilder()
           "a misspelled constraint name throws instead of doing nothing");
 
     // only() isolates a subset: just the split rule, nothing else scored.
+    // Expected by hand: -1000 per distinct (order, trolley) pair.
+    long long pairs = 0;
+    for (const Trolley &trolley : s.trolleys)
+    {
+        std::set<int> orders;
+        for (int task : trolley.pickTaskIndices)
+            orders.insert(s.pickTasks[task].orderIndex);
+        pairs += static_cast<long long>(orders.size());
+    }
     DecomposedCalculator isolated;
     defaultConstraints().only({"orderSplitByTrolleyCost"}).into(isolated);
-    const Score splitOnly = scoreWith(isolated, s);
-    check(splitOnly.hard == 0 && splitOnly.soft < 0.0
-              && std::fmod(splitOnly.soft, 1000.0) == 0.0,
-          "only() scores exactly the named constraint");
+    checkScore("only() scores exactly the named constraint",
+               scoreWith(isolated, s),
+               0,
+               -1000.0 * static_cast<double>(pairs));
     std::printf("\n");
 }
 

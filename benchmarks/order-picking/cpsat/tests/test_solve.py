@@ -206,4 +206,5 @@ def test_promoting_the_split_scores_like_the_engine():
     result = solve(request, constraints=selection)
     engine = _engine_score(request, result, selection)
     assert _reported(result) == (engine.hard, pytest.approx(engine.soft))
-    assert engine.hard == -(1 + 2 * 2)  # one bucket short + 2 x two (order, trolley) pairs
+    # One bucket short + 2 x two (order, trolley) pairs.
+    assert engine.hard == -(1 + 2 * 2)

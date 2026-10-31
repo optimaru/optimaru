@@ -93,14 +93,14 @@ class DistanceFromPreviousPickTaskCost(Constraint):
     label_en = "Distance between picks"
     label_ko = "피킹 지점 간 이동 거리"
     description_en = (
-        "The distance a trolley walks from its start location to its first pick and from "
+        "The distance a trolley travels from its start location to its first pick and from "
         "each pick to the next, in meters (the way back is a separate constraint). One unit "
-        "of cost is one meter; 0 means no trolley has to walk to its picks."
+        "of cost is one meter; 0 means no trolley has to travel to its picks."
     )
     description_ko = (
-        "트롤리가 출발 위치에서 첫 피킹 지점까지, 그리고 피킹 지점에서 다음 피킹 지점까지 걷는 "
+        "트롤리가 출발 위치에서 첫 피킹 지점까지, 그리고 피킹 지점에서 다음 피킹 지점까지 이동하는 "
         "거리(미터)를 더합니다(돌아오는 길은 별도 제약입니다). 1미터가 비용 1이며, 0이면 어떤 "
-        "트롤리도 피킹하러 걸어갈 필요가 없습니다."
+        "트롤리도 피킹하러 이동할 필요가 없습니다."
     )
 
 
@@ -133,8 +133,8 @@ class OrderSplitByTrolleyCost(Constraint):
     trolley still counts 1 (the quickstart's definition, kept)."""
 
     name = "order_split_by_trolley_cost"
-    label_en = "Orders split across trolleys"
-    label_ko = "트롤리별 주문 분할"
+    label_en = "Order-trolley pairs (order splits)"
+    label_ko = "주문-트롤리 쌍(주문 분할)"
     description_en = (
         "The number of (order, trolley) pairs: for each trolley, how many different orders "
         "have a pick on it. An order kept on one trolley counts 1 and one spread over three "
@@ -142,9 +142,9 @@ class OrderSplitByTrolleyCost(Constraint):
         "0 only when no pick is assigned."
     )
     description_ko = (
-        "(주문, 트롤리) 쌍의 수, 즉 트롤리마다 그 트롤리에 피킹이 하나라도 있는 서로 다른 주문의 "
-        "수를 더합니다. 한 트롤리에 모인 주문은 1, 트롤리 세 대에 나뉜 주문은 3이므로 최솟값은 "
-        "피킹이 배정된 주문의 수이고, 배정된 피킹이 없을 때만 0입니다."
+        "(주문, 트롤리) 쌍의 수를 셉니다. 트롤리마다 그 트롤리에 피킹이 하나라도 있는 서로 다른 "
+        "주문의 수를 더한 값입니다. 한 트롤리에 모인 주문은 1, 트롤리 세 대에 나뉜 주문은 3이므로 "
+        "최솟값은 피킹이 배정된 주문의 수이고, 배정된 피킹이 없을 때만 0입니다."
     )
 
 
