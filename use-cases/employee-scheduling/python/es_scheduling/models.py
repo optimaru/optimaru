@@ -3,9 +3,9 @@
 Defines a request carrying workers, shifts, and a discriminated list of rules,
 plus a response with a per-worker schedule and violation report:
 
+    from es_scheduling.constraints import MaxConsecutiveDaysCost, RequiredSkillCost
     from es_scheduling.models import (
-        ScheduleRequest, SchedulingInput, WorkerModel, ShiftModel,
-        MaxConsecutiveDaysRule, solve_request,
+        ScheduleRequest, SchedulingInput, WorkerModel, ShiftModel, solve_request,
     )
 
     request = ScheduleRequest(
@@ -13,7 +13,7 @@ plus a response with a per-worker schedule and violation report:
         model_input=SchedulingInput(
             workers=[WorkerModel(id="Worker 01", skills=["Skill A"])],
             shifts=[ShiftModel(id="Shift 1", start=540, end=1020, required_skill="Skill A")],
-            rules=[RequiredSkillRule(), MaxConsecutiveDaysRule(value=6, weight=2)],
+            rules=[RequiredSkillCost(), MaxConsecutiveDaysCost(value=6, weight=2)],
         ),
     )
     solution = solve_request(request)      # -> ScheduleSolution
@@ -21,11 +21,16 @@ plus a response with a per-worker schedule and violation report:
     print(solution.model_dump_json(indent=2))
 
 Everything round-trips through JSON (`ScheduleRequest.model_validate_json`,
-`solution.model_dump_json`), so this doubles as a service API contract.
+`solution.model_dump_json`), so this doubles as a service API contract. A rule
+in JSON is ``{"name": "max_consecutive_days_cost", "weight": 2, "value": 6}``:
+the spec's ``name``, its knobs (``weight`` / ``hard`` / ``exponent``) and its
+domain parameters.
 
-The rule models are duck-type compatible with the C++ core's constraint
-specs (`.name` / `.weight` / `.hard` / `.exponent` / `.params`), so a rule
-list is passed to ``DecomposedCalculator`` directly — no translation layer.
+There is ONE class per constraint: the spec in `es_scheduling.constraints`.
+The JSON rule models (`RULE_MODELS`, the `Rule` union) are generated from the
+specs' fields and bounds, so they cannot drift from them;
+`SchedulingInput.rules` accepts spec instances and JSON dicts alike, and
+`rule.to_spec()` turns a validated rule back into its spec.
 
 Times are integer minutes from day 0, 00:00 (see `es_scheduling.minutes`);
 dates are day indices. Requires the optional `pydantic` dependency
@@ -36,13 +41,16 @@ solution)` returns a new request whose `ShiftModel.worker` fields carry that
 result, and construction then fills only the shifts it left out.
 """
 
+import dataclasses
 import os
+import typing
 from collections.abc import Callable, Mapping
-from typing import Annotated, Any, Literal, Union
+from typing import Annotated, Any, ClassVar, Literal, Union
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, create_model, field_validator, model_validator
 
 from . import _core
+from . import constraints as _specs
 
 __all__ = [
     "WorkerModel",
@@ -54,36 +62,9 @@ __all__ = [
     "RuleTotal",
     "ScheduleSolution",
     "Rule",
-    "RequiredSkillRule",
-    "UnavailableWorkerRule",
-    "OverlappingShiftRule",
-    "MaxOneShiftPerDayRule",
-    "MinimumRestRule",
-    "UndesiredDayRule",
-    "DesiredDayRule",
-    "DesiredShiftRule",
-    "BalanceAssignmentsRule",
-    "MaxConsecutiveDaysRule",
-    "MinConsecutiveDaysRule",
-    "MaxConsecutiveOffRule",
-    "RestAfterConsecutiveWorkRule",
-    "MaxWeeklyMinutesRule",
-    "MinWeeklyMinutesRule",
-    "MinWeeklyRestDaysRule",
-    "AssignmentCostRule",
-    "UnassignedShiftRule",
-    "BalanceMinMaxGapRule",
-    "BalanceWeeklyMinutesGapRule",
-    "ShiftCoverageRule",
-    "LocationRunRule",
-    "RestAfterLocationRunRule",
-    "LocationRunGapRule",
-    "WorkerLocationCountRule",
-    "DayPatternRule",
-    "TargetDaysOffRule",
-    "WorkerDayCountInRuleRange",
-    "BalanceLocationRule",
-    "WorkerPairSameShiftRule",
+    "RuleBase",
+    "RULE_MODELS",
+    "rule_model",
     "default_rules",
     "to_schedule",
     "solve_request",
@@ -108,7 +89,7 @@ class WorkerModel(BaseModel):
     desired_dates: list[int] = Field(default_factory=list, description="day indices")
     desired_shifts: list[tuple[int, str]] = Field(
         default_factory=list,
-        description="(day, location) location-specific work preferences (see desired_shift rule)",
+        description="(day, location) location-specific work preferences (see the desired_shift_cost rule)",
     )
 
 
@@ -151,368 +132,124 @@ class ShiftModel(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Rules (a discriminated union; each rule carries its own policy and
-# weight). `policy` maps to the core's hard/soft override: None keeps the
-# rule's built-in default level.
+# Rules: a discriminated union GENERATED from the constraint specs
 # ---------------------------------------------------------------------------
+# One JSON model per spec class (es_scheduling.constraints), with the spec's
+# own fields: the three knobs from RuleBase, the domain parameters (their
+# bounds from the spec's `bounds`), and `name` as the discriminator. No second
+# field list to drift.
+
+_KNOBS = ("weight", "hard", "exponent")
+
+
+_CATALOG: dict[str, Any] | None = None
+
+
+def _catalog() -> dict[str, Any]:
+    """{name: constraint_info() row}: the C++ defaults, reward and flippability."""
+    global _CATALOG
+    if _CATALOG is None:
+        _CATALOG = {row.name: row for row in _core.constraint_info()}
+    return _CATALOG
 
 
 class RuleBase(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    weight: float = 1.0
-    policy: Literal["hard", "soft"] | None = None
-    exponent: float = 1.0
-
-    # Optional rule scope: restrict this constraint to a subset of workers
-    # and/or shifts, given as engine indices (positions in the solution's
-    # worker / shift lists). None on a dimension = no restriction. The core
-    # wraps the constraint in ScopedUnit when either is set (unit constraints
-    # only). Tag/id resolution is the caller's job, so the engine stays
-    # index-based.
-    worker_indices: list[int] | None = None
-    shift_indices: list[int] | None = None
-
-    # Duck-type bridge to the C++ core (same contract as the Constraint
-    # dataclasses): .name / .weight / .hard / .exponent / .params.
-    @property
-    def hard(self) -> bool | None:
-        return None if self.policy is None else self.policy == "hard"
-
-    @property
-    def params(self) -> dict:
-        return self.model_dump(exclude={"name", "weight", "policy", "exponent"})
-
-
-class RequiredSkillRule(RuleBase):
-    """Hard by default: worker must have the shift's required skill."""
-
-    name: Literal["required_skill"] = "required_skill"
-
-
-class UnavailableWorkerRule(RuleBase):
-    """Hard by default: no shifts on a worker's unavailable days."""
-
-    name: Literal["unavailable_employee"] = "unavailable_employee"
-
-
-class OverlappingShiftRule(RuleBase):
-    """Hard by default: a worker's shifts must not overlap in time."""
-
-    name: Literal["overlapping_shift"] = "overlapping_shift"
-
-
-class MaxOneShiftPerDayRule(RuleBase):
-    """Hard by default: at most one shift per worker per day."""
-
-    name: Literal["one_shift_per_day"] = "one_shift_per_day"
-
-
-class MinimumRestRule(RuleBase):
-    """Hard by default: at least `min_gap_minutes` rest between two shifts."""
-
-    name: Literal["min_rest"] = "min_rest"
-    min_gap_minutes: int = Field(default=600, ge=0)
-
-
-class UndesiredDayRule(RuleBase):
-    """Soft by default: avoid a worker's undesired days. Cost is overlap minutes,
-    or a per-day count (1 per undesired day worked) when ``per_day`` — the latter
-    puts it on the same unit scale as the count-based soft rules."""
-
-    name: Literal["undesired_day"] = "undesired_day"
-    per_day: bool = False
-
-
-class DesiredDayRule(RuleBase):
-    """Soft by default (reward): prefer a worker's desired days. Cost is overlap
-    minutes, or a per-day count when ``per_day``."""
-
-    name: Literal["desired_day"] = "desired_day"
-    per_day: bool = False
-
-
-class DesiredShiftRule(RuleBase):
-    """Soft by default (reward): location-specific work preference. Rewards only
-    when a worker is assigned a shift whose (day, location) is in their
-    ``WorkerModel.desired_shifts`` — the requested location must match, not just
-    the day (being given another location earns nothing). 1 per satisfied
-    preference."""
-
-    name: Literal["desired_shift"] = "desired_shift"
-
-
-class BalanceAssignmentsRule(RuleBase):
-    """Soft by default: spread shift counts evenly (unfairness statistic)."""
-
-    name: Literal["balance_assignments"] = "balance_assignments"
-
-
-class MaxConsecutiveDaysRule(RuleBase):
-    """Hard by default: at most `value` consecutive working days."""
-
-    name: Literal["max_consecutive_days"] = "max_consecutive_days"
-    value: int = Field(default=6, ge=1)
-
-
-class MinConsecutiveDaysRule(RuleBase):
-    """Soft by default: if working, work at least `value` days in a row."""
-
-    name: Literal["min_consecutive_days"] = "min_consecutive_days"
-    value: int = Field(default=2, ge=1)
-
-
-class MaxConsecutiveOffRule(RuleBase):
-    """Soft by default: avoid interior runs of more than `value` consecutive
-    days off (bounded by work on both sides, so off days at the horizon edge are
-    not counted). value=3 penalizes runs of 4+ days off."""
-
-    name: Literal["max_consecutive_off"] = "max_consecutive_off"
-    value: int = Field(default=3, ge=1)
-
-
-class RestAfterConsecutiveWorkRule(RuleBase):
-    """Hard by default: after >= `work_days` consecutive worked days, require
-    >= `rest_days` consecutive rest days before working again (penalty = the
-    shortfall). A run at the end of the horizon is not penalized."""
-
-    name: Literal["rest_after_consecutive_work"] = "rest_after_consecutive_work"
-    work_days: int = Field(default=6, ge=1)
-    rest_days: int = Field(default=3, ge=1)
-
-
-class MaxWeeklyMinutesRule(RuleBase):
-    """Hard by default: at most `minutes` assigned per calendar week. ``week_anchor``
-    is an engine day index on a week boundary; the weekly blocks align to it.
-    0 = day-0-anchored 7-day blocks."""
-
-    name: Literal["max_weekly_minutes"] = "max_weekly_minutes"
-    minutes: int = Field(default=40 * 60, ge=0)
-    week_anchor: int = 0
-
-
-class MinWeeklyMinutesRule(RuleBase):
-    """Soft by default: at least `minutes` per calendar week (guaranteed hours)."""
-
-    name: Literal["min_weekly_minutes"] = "min_weekly_minutes"
-    minutes: int = Field(default=8 * 60, ge=0)
-
-
-class MinWeeklyRestDaysRule(RuleBase):
-    """Hard by default: at least `value` rest days per calendar week (7-day
-    blocks from day 0) — i.e. at most `7 - value` worked days per week."""
-
-    name: Literal["min_weekly_rest_days"] = "min_weekly_rest_days"
-    value: int = Field(default=1, ge=0, le=7)
-
-
-class AssignmentCostRule(RuleBase):
-    """Soft by default: monetary cost — matrix override, else per-hour, else
-    per-shift."""
-
-    name: Literal["assignment_cost"] = "assignment_cost"
-    cost_per_hour: float = 0.0
-    cost_per_shift: float = 0.0
-    shift_costs: dict[str, dict[str, float]] = Field(default_factory=dict, description="{worker_id: {shift_id: cost}}")
-
-
-class UnassignedShiftRule(RuleBase):
-    """Hard by default: every shift must be assigned."""
-
-    name: Literal["unassigned_shift"] = "unassigned_shift"
-
-
-class BalanceMinMaxGapRule(RuleBase):
-    """Soft by default: busiest-vs-least-busy gap beyond `tolerance`."""
-
-    name: Literal["balance_min_max_gap"] = "balance_min_max_gap"
-    tolerance: int = Field(default=0, ge=0)
-
-
-class BalanceWeeklyMinutesGapRule(RuleBase):
-    """Soft by default: per calendar week, the busiest-vs-least-busy gap of
-    assigned minutes beyond `tolerance_minutes` (all employees compared). Cost
-    is in hours (excess minutes / 60)."""
-
-    name: Literal["balance_weekly_minutes_gap"] = "balance_weekly_minutes_gap"
-    tolerance_minutes: int = Field(default=120, ge=0)
-
-
-class ShiftCoverageRule(RuleBase):
-    """Soft by default: per (day, shift location) group, count the assigned
-    shifts whose worker has `worker_skill` (empty = count any assignee), and
-    penalise being below `min_count` (shortfall) or above `max_count` (excess;
-    max_count < 0 = no upper bound). Set policy="hard" for a strict staffing
-    floor; keep it soft for a role-mix range."""
-
-    name: Literal["shift_coverage"] = "shift_coverage"
-    worker_skill: str = ""
-    min_count: int = Field(default=0, ge=0)
-    max_count: int = Field(default=-1, ge=-1)
-
-
-class LocationRunRule(RuleBase):
-    """Soft by default: each maximal run of consecutive days working `location`
-    (empty = any work) should be within [min_run, max_run] (max_run < 0 = no
-    cap); shorter/longer runs cost the shortfall/excess. Set policy="hard" for a
-    strict run-length rule (e.g. stints at one location must be 3-6 days)."""
-
-    name: Literal["location_run"] = "location_run"
-    location: str = ""
-    min_run: int = Field(default=0, ge=0)
-    max_run: int = Field(default=-1, ge=-1)
-    # Whether a run reaching the end of the horizon waives its min-run shortfall
-    # (it might continue past the schedule). Default True. Set False when the
-    # rule stays in force past the last scheduled day (the day after closes the
-    # run), so an end run shorter than min_run is still a violation.
-    waive_min_at_end: bool = True
-
-
-class RestAfterLocationRunRule(RuleBase):
-    """Hard by default: after any run of `location` days, the next `rest_days`
-    days must be fully off; penalty = worked days in that window."""
-
-    name: Literal["rest_after_location_run"] = "rest_after_location_run"
-    location: str = ""
-    rest_days: int = Field(default=1, ge=1)
-
-
-class LocationRunGapRule(RuleBase):
-    """Soft by default: consecutive runs of `location` should be at least
-    `min_gap` days apart; penalty = shortfall per too-close pair."""
-
-    name: Literal["location_run_gap"] = "location_run_gap"
-    location: str = ""
-    min_gap: int = Field(default=0, ge=0)
-
-
-class WorkerLocationCountRule(RuleBase):
-    """Soft by default: per worker having `worker_skill` (empty = all), the count
-    of `location` shifts over the horizon must be in [min_count, max_count]
-    (max_count < 0 = no cap)."""
-
-    name: Literal["worker_location_count"] = "worker_location_count"
-    location: str = ""
-    worker_skill: str = ""
-    min_count: int = Field(default=0, ge=0)
-    max_count: int = Field(default=-1, ge=-1)
-
-
-class DayPatternRule(RuleBase):
-    """Soft by default: penalise each occurrence of an ordered day pattern.
-    `pattern` is comma-separated tokens; each is a location, "OFF" (off day), "*"
-    (any day), "WORK" (any worked day) or "!x" (a worked day not at location x).
-    Example: "Location A,OFF,Location B"."""
-
-    name: Literal["day_pattern"] = "day_pattern"
-    pattern: str = ""
-
-
-class TargetDaysOffRule(RuleBase):
-    """Soft by default: per worker, at least `min_count` of `target_days` (day
-    indices, e.g. weekends/holidays) must be off; penalty = shortfall."""
-
-    name: Literal["target_days_off"] = "target_days_off"
-    target_days: list[int] = Field(default_factory=list)
-    min_count: int = Field(default=0, ge=0)
-
-
-class WorkerDayCountInRuleRange(RuleBase):
-    """Soft by default (scope to one worker via worker_indices): the count of
-    distinct worked days in the inclusive day range [lo, hi] must be in
-    [min_count, max_count] (max_count < 0 = no cap). Building block for off-count
-    windows: "off >= K over a window" == "worked <= windowLen - K", so a caller
-    adds one per (worker, calendar week / sliding window) with the range clipped
-    to the scheduled days and the bound pre-adjusted for any fixed history."""
-
-    name: Literal["worker_day_count_in_range"] = "worker_day_count_in_range"
-    location: str = ""  # empty = any work; else count only that location's days
-    lo: int = Field(default=0, ge=0, le=_core.MAX_DAY)
-    hi: int = Field(default=-1, ge=-1, le=_core.MAX_DAY)
-    min_count: int = Field(default=0, ge=0)
-    max_count: int = Field(default=-1, ge=-1)
-
-
-class BalanceLocationRule(RuleBase):
-    """Soft by default: fairness of a per-worker count across workers having
-    `worker_skill` (empty = all). The count is `location` shifts (empty = all
-    work), unless `off_target_days` is given, in which case it is off-days among
-    those target days. `metric`: "ssd" (sqrt of squared deviations) or "gap"
-    (max-min beyond `tolerance`)."""
-
-    name: Literal["balance_location"] = "balance_location"
-    location: str = ""
-    worker_skill: str = ""
-    metric: Literal["ssd", "gap"] = "ssd"
-    tolerance: int = Field(default=0, ge=0)
-    off_target_days: list[int] = Field(default_factory=list)
-
-
-class WorkerPairSameShiftRule(RuleBase):
-    """Soft by default: a directional worker pairing over ``bucket_days`` /
-    ``bucket_locations`` (parallel arrays of (day, location) buckets both workers
-    are eligible for, resolved by the caller). ``penalty=False`` (REWARD): the pair
-    should share the same shift, so a bucket where exactly one works it costs 1;
-    ``penalty=True``: they should not share, so a bucket where both work it costs
-    1. ``anchor`` / ``paired`` are engine worker indices."""
-
-    name: Literal["worker_pair_same_shift"] = "worker_pair_same_shift"
-    anchor: int = -1
-    paired: int = -1
-    bucket_days: list[int] = Field(default_factory=list)
-    bucket_locations: list[str] = Field(default_factory=list)
-    penalty: bool = False
-
-
-Rule = Annotated[
-    Union[
-        RequiredSkillRule,
-        UnavailableWorkerRule,
-        OverlappingShiftRule,
-        MaxOneShiftPerDayRule,
-        MinimumRestRule,
-        UndesiredDayRule,
-        DesiredDayRule,
-        DesiredShiftRule,
-        BalanceAssignmentsRule,
-        MaxConsecutiveDaysRule,
-        MinConsecutiveDaysRule,
-        MaxConsecutiveOffRule,
-        RestAfterConsecutiveWorkRule,
-        MaxWeeklyMinutesRule,
-        MinWeeklyMinutesRule,
-        MinWeeklyRestDaysRule,
-        AssignmentCostRule,
-        UnassignedShiftRule,
-        BalanceMinMaxGapRule,
-        BalanceWeeklyMinutesGapRule,
-        ShiftCoverageRule,
-        LocationRunRule,
-        RestAfterLocationRunRule,
-        LocationRunGapRule,
-        WorkerLocationCountRule,
-        DayPatternRule,
-        TargetDaysOffRule,
-        WorkerDayCountInRuleRange,
-        BalanceLocationRule,
-        WorkerPairSameShiftRule,
-    ],
-    Field(discriminator="name"),
-]
-
-
-def default_rules() -> list:
-    """The eight classic rules at weight 1 (equal to the built-in score)."""
-    return [
-        RequiredSkillRule(),
-        UnavailableWorkerRule(),
-        OverlappingShiftRule(),
-        MaxOneShiftPerDayRule(),
-        MinimumRestRule(),
-        UndesiredDayRule(),
-        DesiredDayRule(),
-        BalanceAssignmentsRule(),
-    ]
+    """One rule as JSON: the spec's knobs and parameters; `to_spec()` is the spec.
+
+    ``weight`` None = the component's default weight; ``hard`` None = its
+    default level, True = hard, False = soft; ``exponent`` > 0 shapes the cost.
+    A rule is also a valid pick for ``DecomposedCalculator`` (it carries
+    ``name`` / ``weight`` / ``hard`` / ``exponent`` and ``params()``).
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    weight: float | None = Field(default=None, ge=0, description="None = the constraint's default weight")
+    hard: StrictBool | None = Field(
+        default=None, description="None = the default level; true = hard; false = soft (rewards refuse true)"
+    )
+    exponent: float = Field(default=1.0, gt=0, description="sign-preserving power shaping of the cost")
+
+    spec_class: ClassVar[type]
+
+    def to_spec(self) -> _specs.Constraint:
+        """The constraint spec this rule states."""
+        return self.spec_class(**{key: getattr(self, key) for key in type(self).model_fields if key != "name"})
+
+    def params(self) -> dict[str, Any]:
+        """The domain parameters (every field but name and the knobs), as the spec has them."""
+        return self.to_spec().params()
+
+    @model_validator(mode="after")
+    def _spec_checks(self):
+        # The spec's own checks (bounds) surface as a ValidationError, and so do
+        # the level rules the C++ component declares (constraint_info()).
+        spec = self.to_spec()
+        row = _catalog()[spec.name]
+        if spec.hard is True and row.reward:
+            raise ValueError(f"constraint {spec.name!r} is a reward (raw cost <= 0) and cannot be hard")
+        wanted = None if spec.hard is None else ("hard" if spec.hard else "soft")
+        if wanted is not None and wanted != row.default_level and not row.level_flippable:
+            raise ValueError(
+                f"constraint {spec.name!r} is always {row.default_level}; hard={spec.hard!r} is not allowed"
+            )
+        return self
+
+
+def _rule_model(spec_class: type) -> type[RuleBase]:
+    hints = typing.get_type_hints(spec_class)
+    params: dict[str, Any] = {}
+    for spec_field in dataclasses.fields(spec_class):
+        if spec_field.name in _KNOBS:
+            continue
+        annotation = hints[spec_field.name]
+        if spec_field.name in spec_class.bounds:
+            annotation = Annotated[annotation, Field(**spec_class.bounds[spec_field.name])]
+        if spec_field.default_factory is not dataclasses.MISSING:
+            params[spec_field.name] = (annotation, Field(default_factory=spec_field.default_factory))
+        else:
+            params[spec_field.name] = (annotation, spec_field.default)
+    model = create_model(
+        f"{spec_class.__name__}Rule",
+        __base__=RuleBase,
+        __module__=__name__,
+        name=(Literal[spec_class.name], spec_class.name),
+        **params,
+    )
+    model.spec_class = spec_class
+    model.__doc__ = spec_class.__doc__
+    return model
+
+
+#: {constraint name: its JSON rule model}, in factory order (= CONSTRAINT_NAMES).
+RULE_MODELS: dict[str, type[RuleBase]] = {spec.name: _rule_model(spec) for spec in _specs.SPEC_CLASSES}
+# Each model is also a module attribute under its own name (<SpecClass>Rule,
+# e.g. MaxConsecutiveDaysCostRule), so rules pickle (multi-start processes).
+globals().update({model.__name__: model for model in RULE_MODELS.values()})
+
+#: A rule as JSON: the union of every rule model, discriminated by ``name``.
+Rule = Annotated[Union[tuple(RULE_MODELS.values())], Field(discriminator="name")]
+
+
+def rule_model(constraint: "str | type[_specs.Constraint]") -> type[RuleBase]:
+    """The JSON rule model of a constraint, by name or spec class."""
+    name = constraint if isinstance(constraint, str) else constraint.name
+    try:
+        return RULE_MODELS[name]
+    except KeyError:
+        raise ValueError(f"unknown constraint {name!r}; available: {', '.join(RULE_MODELS)}") from None
+
+
+def _as_rule_data(rule: Any) -> Any:
+    """A spec instance -> its JSON form; anything else is left to pydantic."""
+    if isinstance(rule, _specs.Constraint):
+        return {"name": rule.name, **{knob: getattr(rule, knob) for knob in _KNOBS}, **rule.params()}
+    return rule
+
+
+def default_rules() -> list[RuleBase]:
+    """The eight default rules at their default weights (equal to the built-in score)."""
+    return [RULE_MODELS[spec.name]() for spec in _specs.get_constraints()]
 
 
 # ---------------------------------------------------------------------------
@@ -633,10 +370,10 @@ class SolverSettings(BaseModel):
     portfolio: list[dict[str, Any]] = Field(default_factory=list)
 
     # Multi-start SELECTION correction. When a caller inflates a constraint's
-    # weight for the search (e.g. multiplies the ShiftCoverage weight to prevent
-    # under-fill), the reported soft score no longer tracks the true objective,
-    # so picking the best-of-n by that score picks the wrong winner. This divisor
-    # un-inflates the "Shift coverage" soft cost when ranking candidates
+    # weight for the search (e.g. multiplies the shift_coverage_cost weight to
+    # prevent under-fill), the reported soft score no longer tracks the true
+    # objective, so picking the best-of-n by that score picks the wrong winner.
+    # This divisor un-inflates the shift_coverage_cost soft cost when ranking candidates
     # (selection only; the solved scores are untouched), so best-of-n is chosen
     # on the faithful objective. 1.0 = no correction (default); set it to the
     # multiplier used.
@@ -689,7 +426,15 @@ class SchedulingInput(BaseModel):
 
     workers: list[WorkerModel]
     shifts: list[ShiftModel]
+    # Constraint specs or their JSON form; a rule may repeat (other parameters).
     rules: list[Rule] = Field(default_factory=default_rules)
+
+    @field_validator("rules", mode="before")
+    @classmethod
+    def _specs_as_rules(cls, rules):
+        if isinstance(rules, (list, tuple)):
+            return [_as_rule_data(rule) for rule in rules]
+        return rules
 
     @model_validator(mode="after")
     def _unique_ids(self):
@@ -734,11 +479,16 @@ class ShiftAssignmentModel(BaseModel):
 
 
 class RuleTotal(BaseModel):
-    """Weighted cost of one rule in the final schedule (positive = penalizing,
-    negative = rewarding) — the score explanation."""
+    """Weighted cost of one rule instance in the final schedule (positive =
+    penalizing, negative = rewarding) — the score explanation. ``name`` is the
+    constraint name (``"shift_coverage_cost"``); ``label`` tells the instances
+    of a parametrized rule apart (``"Shift coverage[Skill A 1..inf]"``; empty
+    for a rule without one)."""
 
     name: str
+    label: str = ""
     cost: float
+    level: Literal["hard", "medium", "soft"] = "soft"
     is_hard: bool
 
 
@@ -866,7 +616,7 @@ def _build_and_solve(request: ScheduleRequest, seed: int, overrides: dict | None
     different late_acceptance_size / ruin fraction). Applied last, so it wins."""
     model_input = request.model_input
     schedule = to_schedule(model_input)
-    calc = _core.DecomposedCalculator(model_input.rules)
+    calc = _core.DecomposedCalculator([rule.to_spec() for rule in model_input.rules])
 
     cfg = _core.SolverConfig()
     cfg.spent_limit_seconds = request.timelimit
@@ -1042,7 +792,7 @@ def solve_request(
         return select(solutions)
 
     # Higher score is better: hard first (<= 0, closer to 0), then FAITHFUL soft.
-    # The faithful soft un-inflates the search-boosted "Shift coverage" cost
+    # The faithful soft un-inflates the search-boosted shift_coverage_cost
     # (divide that cost by the divisor) so the winner is the best on the true
     # objective, not on the boosted internal score. div = 1 => plain score_soft.
     div = request.settings.select_coverage_divisor
@@ -1050,7 +800,7 @@ def solve_request(
     def _faithful_key(s: ScheduleSolution) -> tuple[int, float]:
         if div == 1.0:
             return (s.score_hard, s.score_soft)
-        cov = sum(t.cost for t in s.rule_totals if t.is_hard is False and t.name.startswith("Shift coverage"))
+        cov = sum(t.cost for t in s.rule_totals if t.is_hard is False and t.name == "shift_coverage_cost")
         # rule_totals cost is positive for penalties; score_soft is its negative.
         # Removing the boost inflation (cov -> cov/div) lifts the soft score by
         # the inflated excess cov*(1 - 1/div).

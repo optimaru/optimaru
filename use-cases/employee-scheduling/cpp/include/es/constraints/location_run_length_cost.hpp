@@ -1,24 +1,31 @@
-#ifndef ES_CONSTRAINTS_LOCATION_RUN_HPP
-#define ES_CONSTRAINTS_LOCATION_RUN_HPP
+#ifndef ES_CONSTRAINTS_LOCATION_RUN_LENGTH_COST_HPP
+#define ES_CONSTRAINTS_LOCATION_RUN_LENGTH_COST_HPP
 
 #include "es/constraints/location_presence_base.hpp"
 
 namespace es {
 
-// Consecutive-run bounds on a location: each maximal run of `minRun..maxRun`
-// consecutive days holding the location is fine; a shorter run costs its
-// shortfall, a longer run its excess (maxRun < 0 = no upper bound). Example:
-// ("Location B", 3, 6): forbid runs shorter than 3 days or longer than 6 at
-// Location B. ("", 0, 6) soft: discourage 7+ days of any work in a row.
-struct LocationRun final : LocationPresenceBase {
-    LocationRun(double weight, std::string location, int minRun, int maxRun,
-                bool waiveMinAtEnd = true)
-        : LocationPresenceBase("Location run[" + (location.empty() ? "work" : location) + " " +
-                                       std::to_string(minRun) + ".." +
-                                       (maxRun < 0 ? std::string("inf") : std::to_string(maxRun)) +
-                                       "]",
-                               weight, /*hard=*/false, std::move(location)),
-          min_(minRun), max_(maxRun), waiveMinAtEnd_(waiveMinAtEnd) {}
+// Soft, weight 1: locationRunLengthCost, consecutive-run bounds on a
+// location (empty = any work). Each maximal run of `minRun..maxRun`
+// consecutive days holding the location is fine; raw cost per employee = the
+// shortfall of each shorter run plus the excess of each longer one (maxRun <
+// 0 = no upper bound), so 0 = every run is within bounds (the defaults
+// 0..inf never cost anything). Example: ("Location B", 3, 6): forbid runs
+// shorter than 3 days or longer than 6 at Location B. ("", 0, 6) soft:
+// discourage 7+ days of any work in a row. Each instance carries the label
+// "Location run[<location|work> <min>..<max|inf>]".
+struct LocationRunLengthCost final : LocationPresenceBase {
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
+
+    explicit LocationRunLengthCost(double weight = kDefaultWeight, std::string location = {},
+                                   int minRun = 0, int maxRun = -1, bool waiveMinAtEnd = true)
+        : LocationPresenceBase("locationRunLengthCost", weight, kDefaultLevel, std::move(location)),
+          min_(minRun), max_(maxRun), waiveMinAtEnd_(waiveMinAtEnd) {
+        label = "Location run[" + (loc_.empty() ? std::string("work") : loc_) + " " +
+                std::to_string(min_) + ".." + (max_ < 0 ? std::string("inf") : std::to_string(max_)) +
+                "]";  // display only; never a lookup key
+    }
     double cost(const EmployeeSchedule& s, int, const std::vector<int>& members) const override {
         for (int i : members)
             if (match_[i]) {
@@ -63,4 +70,4 @@ private:
 
 }  // namespace es
 
-#endif  // ES_CONSTRAINTS_LOCATION_RUN_HPP
+#endif  // ES_CONSTRAINTS_LOCATION_RUN_LENGTH_COST_HPP

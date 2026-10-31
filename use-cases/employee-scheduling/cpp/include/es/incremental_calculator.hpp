@@ -21,7 +21,7 @@ namespace es {
 // current employee (its per-shift penalty plus its pairs with that employee's
 // other shifts); afterVariableChanged inserts it into the new employee —
 // proportional to shifts per employee, independent of the total shift count.
-// Unassigned shifts (employeeIndex == -1) contribute nothing, so the
+// Shifts left unassigned (employeeIndex == -1) contribute nothing, so the
 // construction heuristic can score partially initialized solutions. All
 // helpers are shared with ScoreCalculator's full recompute, so the incremental
 // score is correct by construction.

@@ -1,14 +1,19 @@
-#ifndef ES_CONSTRAINTS_OVERLAPPING_SHIFT_HPP
-#define ES_CONSTRAINTS_OVERLAPPING_SHIFT_HPP
+#ifndef ES_CONSTRAINTS_SHIFT_OVERLAP_COST_HPP
+#define ES_CONSTRAINTS_SHIFT_OVERLAP_COST_HPP
 
 #include "es/constraints/assignment_constraint.hpp"
 
 namespace es {
 
-// Hard (default): overlap minutes between two shifts of the same employee.
-struct OverlappingShift final : GroupableAssignmentConstraint {
-    explicit OverlappingShift(double weight = 1.0)
-        : GroupableAssignmentConstraint("Overlapping shift", weight, /*hard=*/true) {}
+// Hard, weight 1: shiftOverlapCost. Raw cost per employee = the overlap
+// minutes summed over every pair of its shifts, so 0 = none of its shifts
+// overlap in time.
+struct ShiftOverlapCost final : GroupableAssignmentConstraint {
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
+
+    explicit ShiftOverlapCost(double weight = kDefaultWeight)
+        : GroupableAssignmentConstraint("shiftOverlapCost", weight, kDefaultLevel) {}
     void onReset(const EmployeeSchedule& s) override {
         start_.resize(s.shifts.size());
         end_.resize(s.shifts.size());
@@ -46,4 +51,4 @@ private:
 
 }  // namespace es
 
-#endif  // ES_CONSTRAINTS_OVERLAPPING_SHIFT_HPP
+#endif  // ES_CONSTRAINTS_SHIFT_OVERLAP_COST_HPP

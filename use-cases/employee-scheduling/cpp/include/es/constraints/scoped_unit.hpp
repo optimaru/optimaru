@@ -21,9 +21,16 @@ namespace es {
 // The inner constraint keeps its own cost/deltaCost. Scoped constraints opt
 // out of the calculator's structural delta-grouping and shared-context fast
 // paths (those virtuals stay at their nullptr defaults here), which is correct:
-// grouping keys off the concrete type (a ScopedUnit is not RequiredSkill etc.),
-// and inner constraints that use a shared context (e.g. DayPattern) fall back
-// to their own local context when none is bound.
+// grouping keys off the concrete type (a ScopedUnit is not RequiredSkillCost
+// etc.), and inner constraints that use a shared context (e.g. DayPatternCost)
+// fall back to their own local context when none is bound.
+//
+// The wrapper takes over ALL of the inner component's metadata — registry
+// name, weight, level, reward, levelFlippable, exponent, label — so a scoped
+// reward stays a reward (hard() refused) and the knobs a caller re-states
+// afterwards (python::applyKnobs on the ScopedUnit) see the inner defaults.
+// The inner component's own knobs are never read again: the calculator
+// weighs the wrapper.
 struct ScopedUnit final : EsUnitConstraint {
     std::unique_ptr<EsUnitConstraint> inner_;
     bool hasWorker_;
@@ -33,15 +40,16 @@ struct ScopedUnit final : EsUnitConstraint {
     std::vector<std::uint8_t> workerMask_;
     std::vector<std::uint8_t> shiftMask_;
 
-    ScopedUnit(std::unique_ptr<EsUnitConstraint> inner, double weight,
-               std::vector<int> workerIdx, std::vector<int> shiftIdx, bool hasWorker,
-               bool hasShift)
-        : EsUnitConstraint(inner->name, weight, inner->isHard),
+    ScopedUnit(std::unique_ptr<EsUnitConstraint> inner, std::vector<int> workerIdx,
+               std::vector<int> shiftIdx, bool hasWorker, bool hasShift)
+        : EsUnitConstraint(inner->name, inner->weight, inner->level),
           inner_(std::move(inner)),
           hasWorker_(hasWorker),
           hasShift_(hasShift),
           workerIdx_(std::move(workerIdx)),
-          shiftIdx_(std::move(shiftIdx)) {}
+          shiftIdx_(std::move(shiftIdx)) {
+        static_cast<optimaru::ConstraintMetadata&>(*this) = *inner_;
+    }
 
     void onReset(const EmployeeSchedule& s) override {
         inner_->onReset(s);

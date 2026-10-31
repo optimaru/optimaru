@@ -6,10 +6,13 @@
 namespace es {
 
 // Shared helper base: builds per-shift (day, location-match) tables and a
-// per-day presence scratch for one target location.
+// per-day presence scratch for one target location (LocationRunLengthCost,
+// RestAfterLocationRunCost, LocationRunGapCost; each passes its own registry
+// name and defaults).
 struct LocationPresenceBase : EsUnitConstraint {
-    LocationPresenceBase(std::string name, double weight, bool hard, std::string location)
-        : EsUnitConstraint(std::move(name), weight, hard), loc_(std::move(location)) {}
+    LocationPresenceBase(std::string name, double weight, optimaru::Level level,
+                         std::string location)
+        : EsUnitConstraint(std::move(name), weight, level), loc_(std::move(location)) {}
     void onReset(const EmployeeSchedule& s) override {
         horizon_ = 0;
         day_.resize(s.shifts.size());

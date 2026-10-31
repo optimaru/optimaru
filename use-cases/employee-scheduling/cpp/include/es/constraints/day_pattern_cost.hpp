@@ -1,5 +1,5 @@
-#ifndef ES_CONSTRAINTS_DAY_PATTERN_HPP
-#define ES_CONSTRAINTS_DAY_PATTERN_HPP
+#ifndef ES_CONSTRAINTS_DAY_PATTERN_COST_HPP
+#define ES_CONSTRAINTS_DAY_PATTERN_COST_HPP
 
 #include "es/constraints/common.hpp"
 
@@ -59,15 +59,24 @@ struct DayPatternProjectionContext final : optimaru::SharedConstraintContext {
     std::vector<std::int16_t> projectedDayLocation;
 };
 
-// Forbidden ordered day pattern (per employee, sliding over the horizon).
-// `pattern` is a comma-separated token list; each token is a location, "OFF"
-// (a day with no work), "*" (any day), "WORK" (any worked day) or "!x" (a worked
-// day not at location x). Penalty = 1 per horizon window matching the pattern.
-// Example: "Location A,OFF,Location B": a day at A, an off day, then a day at B.
-struct DayPattern final : EsUnitConstraint {
-    DayPattern(double weight, std::string pattern)
-        : EsUnitConstraint("Day pattern[" + pattern + "]", weight, /*hard=*/false),
+// Soft, weight 1: dayPatternCost, a forbidden ordered day pattern (per
+// employee, sliding over the horizon). `pattern` is a comma-separated token
+// list; each token is a location, "OFF" (a day with no work), "*" (any day),
+// "WORK" (any worked day) or "!x" (a worked day not at location x). Raw cost
+// per employee = 1 per horizon window matching the pattern, so 0 = the
+// pattern never occurs. Example: "Location A,OFF,Location B": a day at A, an
+// off day, then a day at B. The default (empty) pattern is one token naming
+// the location "", which no shift with a location matches. Each instance
+// carries the label "Day pattern[<pattern>]"; one calculator may hold several
+// (one per pattern), all sharing one projection context.
+struct DayPatternCost final : EsUnitConstraint {
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
+
+    explicit DayPatternCost(double weight = kDefaultWeight, std::string pattern = {})
+        : EsUnitConstraint("dayPatternCost", weight, kDefaultLevel),
           context_(&localContext_) {
+        label = "Day pattern[" + pattern + "]";  // display only; never a lookup key
         std::size_t start = 0;
         while (start <= pattern.size()) {
             std::size_t comma = pattern.find(',', start);
@@ -84,7 +93,7 @@ struct DayPattern final : EsUnitConstraint {
     }
     void bindSharedContext(optimaru::SharedConstraintContext& context) override {
         auto* typed = dynamic_cast<DayPatternProjectionContext*>(&context);
-        if (typed == nullptr) throw std::logic_error("Invalid DayPattern shared context type");
+        if (typed == nullptr) throw std::logic_error("Invalid DayPatternCost shared context type");
         context_ = typed;
         contextIsShared_ = true;
     }
@@ -154,4 +163,4 @@ private:
 
 }  // namespace es
 
-#endif  // ES_CONSTRAINTS_DAY_PATTERN_HPP
+#endif  // ES_CONSTRAINTS_DAY_PATTERN_COST_HPP

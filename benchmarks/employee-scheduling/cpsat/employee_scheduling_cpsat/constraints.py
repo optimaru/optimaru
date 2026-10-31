@@ -1,9 +1,14 @@
 """Class-based CP-SAT plugins for employee scheduling.
 
-One plugin per rule type of `es_scheduling.models`, under the rule's own name
-and in its own units. A request may hold several rules of one type with
-different parameters, so a plugin wraps one rule and the registry is assembled
-per request (`registry_for`), not once at import time.
+One plugin class per constraint of `es_scheduling.constraints`: each subclasses
+the domain spec (so a plugin IS a spec instance, with the same knobs and
+parameters) and adds only its CP-SAT formulation in `build()`, under the
+constraint's own name and in its own units. The default level, weight and
+reward flag come from the engine (`es_scheduling.constraint_info()`, read by
+cpsat-common), never from here. A request may hold several rules of one type
+with different parameters, so the registry is assembled per request
+(`registry_for`), one plugin per pick, the k-th repeat of a name named
+`"<name>#<k>"` (the engine's `constraint_costs()` key rule).
 
 Soft terms are multiplied by `SCALE`, because some are fractional and a CP-SAT
 objective is not. Those terms round to that grid, and `penalize_half_ssd` stands
@@ -16,12 +21,12 @@ from __future__ import annotations
 import math
 from collections import Counter, defaultdict
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass, field
-from typing import Any, ClassVar, NamedTuple
+from dataclasses import dataclass, field, fields
+from typing import Any, NamedTuple
 
 from cpsat_plugins import ConstraintPlugin, ConstraintRegistry, ObjectiveBuilder
-from es_scheduling import MINUTES_PER_DAY
-from es_scheduling import models as domain
+from es_scheduling import MINUTES_PER_DAY, constraint_info
+from es_scheduling import constraints as domain
 from es_scheduling.models import ScheduleRequest
 from ortools.sat.python import cp_model
 
@@ -224,30 +229,35 @@ class ScheduleContext:
 
 
 class RulePlugin(ConstraintPlugin[ScheduleContext]):
-    """One rule of a request, built into the model at the rule's level."""
+    """CP-SAT formulation mixed into one domain spec (the plugin is the rule).
 
-    rule_type: ClassVar[type]
-    # The C++ component's own default level. It decides the score, so it is the
-    # one that counts where a rule model's docstring says otherwise.
-    default_hard: ClassVar[bool]
+    The level is the engine's: ``hard=None`` keeps the C++ component's default
+    level (the ``constraint_info()`` row, `spec.level`), True is hard, False is
+    soft — the rule `ObjectiveBuilder.level_of` applies too.
+    """
+
     # Whether the raw cost can be fractional. Only the soft level has a fixed-point
     # grid, and the engine rounds a hard cost per unit, which this model cannot follow.
     fractional = False
 
-    def __init__(self, rule: Any, name: str) -> None:
-        self.rule = rule
-        if rule.exponent != 1.0:
-            raise ValueError(f"rule {rule.name!r}: exponent is not supported by CP-SAT")
-        if not float(rule.weight).is_integer():
-            raise ValueError(f"rule {rule.name!r}: weight must be an integer for CP-SAT")
-        hard = self.default_hard if rule.hard is None else rule.hard
-        if hard and self.fractional:
-            raise ValueError(f"rule {rule.name!r}: a fractional cost cannot be hard for CP-SAT")
-        self.name = name
-        self.default_level = "hard" if hard else "soft"
-        self.default_weight = rule.weight
-        self.label = rule.name
-        self.scale = 1 if hard else SCALE
+    @property
+    def is_hard(self) -> bool:
+        return self.spec.level == "hard" if self.hard is None else bool(self.hard)
+
+    @property
+    def scale(self) -> int:
+        return 1 if self.is_hard else SCALE
+
+    def check_supported(self) -> None:
+        """Refuse what this model cannot express, before any variable exists."""
+        if self.exponent != 1.0:
+            raise ValueError(f"rule {self.name!r}: exponent is not supported by CP-SAT")
+        if self.weight is not None and not float(self.weight).is_integer():
+            raise ValueError(f"rule {self.name!r}: weight must be an integer for CP-SAT")
+        if self.hard is True and self.spec.reward:
+            raise ValueError(f"rule {self.name!r} is a reward and cannot be hard")
+        if self.is_hard and self.fractional:
+            raise ValueError(f"rule {self.name!r}: a fractional cost cannot be hard for CP-SAT")
 
     def penalize(
         self, objective: ObjectiveBuilder, magnitude: Any, bound: int
@@ -372,12 +382,10 @@ class RulePlugin(ConstraintPlugin[ScheduleContext]):
                 )
 
 
-class RequiredSkill(RulePlugin):
-    rule_type = domain.RequiredSkillRule
-    default_hard = True
+class RequiredSkillCost(domain.RequiredSkillCost, RulePlugin):
 
     def build(self, context: ScheduleContext, objective: ObjectiveBuilder) -> None:
-        scope = context.scope(self.rule)
+        scope = context.scope(self)
         for shift in scope.shifts:
             skill = context.shifts[shift].required_skill
             if not skill:
@@ -388,14 +396,16 @@ class RequiredSkill(RulePlugin):
 
 
 class DateRule(RulePlugin):
-    """A per-(worker, shift) table of overlap minutes with a set of days."""
+    """A per-(worker, shift) table of overlap minutes with a set of days.
 
-    dates: ClassVar[str]
-    is_reward: ClassVar[bool] = False
+    A reward (desired_day_cost, per the engine's catalog row) adds its terms
+    as a reward instead of a penalty."""
+
+    dates: str = ""
 
     def build(self, context: ScheduleContext, objective: ObjectiveBuilder) -> None:
-        scope = context.scope(self.rule)
-        per_day = getattr(self.rule, "per_day", False)
+        scope = context.scope(self)
+        per_day = getattr(self, "per_day", False)
         for shift in scope.shifts:
             data = context.shifts[shift]
             terms = []
@@ -409,35 +419,26 @@ class DateRule(RulePlugin):
             if terms:
                 magnitude = sum(cost * literal for cost, literal in terms)
                 bound = max(cost for cost, _ in terms)
-                add = self.reward if self.is_reward else self.penalize
+                add = self.reward if self.spec.reward else self.penalize
                 add(objective, magnitude, bound)
 
 
-class UnavailableEmployee(DateRule):
-    rule_type = domain.UnavailableWorkerRule
-    default_hard = True
+class EmployeeUnavailabilityCost(domain.EmployeeUnavailabilityCost, DateRule):
     dates = "unavailable_dates"
 
 
-class UndesiredDay(DateRule):
-    rule_type = domain.UndesiredDayRule
-    default_hard = False
+class UndesiredDayCost(domain.UndesiredDayCost, DateRule):
     dates = "undesired_dates"
 
 
-class DesiredDay(DateRule):
-    rule_type = domain.DesiredDayRule
-    default_hard = False
+class DesiredDayCost(domain.DesiredDayCost, DateRule):
     dates = "desired_dates"
-    is_reward = True
 
 
-class DesiredShift(RulePlugin):
-    rule_type = domain.DesiredShiftRule
-    default_hard = False
+class DesiredShiftCost(domain.DesiredShiftCost, RulePlugin):
 
     def build(self, context: ScheduleContext, objective: ObjectiveBuilder) -> None:
-        scope = context.scope(self.rule)
+        scope = context.scope(self)
         wishes = {
             worker: {tuple(item) for item in context.workers[worker].desired_shifts}
             for worker in scope.workers
@@ -460,7 +461,7 @@ class PairRule(RulePlugin):
         raise NotImplementedError
 
     def build(self, context: ScheduleContext, objective: ObjectiveBuilder) -> None:
-        scope = context.scope(self.rule)
+        scope = context.scope(self)
         groups: defaultdict[tuple[int, int], list[int]] = defaultdict(list)
         for shift in scope.shifts:
             data = context.shifts[shift]
@@ -479,36 +480,28 @@ class PairRule(RulePlugin):
                     )
 
 
-class OverlappingShift(PairRule):
-    rule_type = domain.OverlappingShiftRule
-    default_hard = True
+class ShiftOverlapCost(domain.ShiftOverlapCost, PairRule):
 
     def pair_cost(self, left: tuple[int, int], right: tuple[int, int]) -> int:
         return max(0, min(left[1], right[1]) - max(left[0], right[0]))
 
 
-class MaxOneShiftPerDay(PairRule):
-    rule_type = domain.MaxOneShiftPerDayRule
-    default_hard = True
+class MaxOneShiftPerDayCost(domain.MaxOneShiftPerDayCost, PairRule):
 
     def pair_cost(self, left: tuple[int, int], right: tuple[int, int]) -> int:
         return int(left[0] // MINUTES_PER_DAY == right[0] // MINUTES_PER_DAY)
 
 
-class MinimumRest(PairRule):
-    rule_type = domain.MinimumRestRule
-    default_hard = True
+class MinRestCost(domain.MinRestCost, PairRule):
 
     def pair_cost(self, left: tuple[int, int], right: tuple[int, int]) -> int:
         early, late = (left, right) if left[0] <= right[0] else (right, left)
         if early[1] > late[0]:
             return 0
-        return max(0, self.rule.min_gap_minutes - (late[0] - early[1]))
+        return max(0, self.min_gap_minutes - (late[0] - early[1]))
 
 
-class BalanceAssignments(RulePlugin):
-    rule_type = domain.BalanceAssignmentsRule
-    default_hard = False
+class ShiftCountImbalanceCost(domain.ShiftCountImbalanceCost, RulePlugin):
     fractional = True
 
     def build(self, context: ScheduleContext, objective: ObjectiveBuilder) -> None:
@@ -523,8 +516,9 @@ class BalanceAssignments(RulePlugin):
         # A soft price on empty shifts is the one case where the total really
         # varies, and without the term an empty shift would look like a gain.
         if any(
-            rule.name == "unassigned_shift" and rule.hard is False
-            for rule in context.problem.model_input.rules
+            name.partition("#")[0] == "unassigned_shifts_cost"
+            and objective.level_of(spec, config) == "soft"
+            for name, (spec, config) in objective.selected.items()
         ):
             self.penalize_half_ssd(context, objective, loads, top, top)
             return
@@ -536,41 +530,35 @@ class BalanceAssignments(RulePlugin):
         )
 
 
-class MaxConsecutiveDays(RulePlugin):
-    rule_type = domain.MaxConsecutiveDaysRule
-    default_hard = True
+class MaxConsecutiveDaysCost(domain.MaxConsecutiveDaysCost, RulePlugin):
 
     def build(self, context: ScheduleContext, objective: ObjectiveBuilder) -> None:
-        scope = context.scope(self.rule)
+        scope = context.scope(self)
         days = context.by_day(scope.shifts)
         for worker in scope.workers:
             self.penalize_run_excess(
-                context, objective, context.presence(worker, days), self.rule.value
+                context, objective, context.presence(worker, days), self.value
             )
 
 
-class MinConsecutiveDays(RulePlugin):
-    rule_type = domain.MinConsecutiveDaysRule
-    default_hard = False
+class MinConsecutiveDaysCost(domain.MinConsecutiveDaysCost, RulePlugin):
 
     def build(self, context: ScheduleContext, objective: ObjectiveBuilder) -> None:
-        scope = context.scope(self.rule)
+        scope = context.scope(self)
         days = context.by_day(scope.shifts)
         for worker in scope.workers:
             self.penalize_run_shortfall(
-                context, objective, context.presence(worker, days), self.rule.value
+                context, objective, context.presence(worker, days), self.value
             )
 
 
-class MaxConsecutiveOff(RulePlugin):
-    rule_type = domain.MaxConsecutiveOffRule
-    default_hard = False
+class MaxConsecutiveDaysOffCost(domain.MaxConsecutiveDaysOffCost, RulePlugin):
 
     def build(self, context: ScheduleContext, objective: ObjectiveBuilder) -> None:
         """A run of off days between two worked days holds len - value windows."""
-        scope = context.scope(self.rule)
+        scope = context.scope(self)
         days = context.by_day(scope.shifts)
-        size = self.rule.value + 1
+        size = self.value + 1
         for worker in scope.workers:
             worked = context.presence(worker, days)
             before = self._seen(context, worked)
@@ -594,14 +582,12 @@ class MaxConsecutiveOff(RulePlugin):
         return seen
 
 
-class RestAfterConsecutiveWork(RulePlugin):
-    rule_type = domain.RestAfterConsecutiveWorkRule
-    default_hard = True
+class RestAfterConsecutiveWorkCost(domain.RestAfterConsecutiveWorkCost, RulePlugin):
 
     def build(self, context: ScheduleContext, objective: ObjectiveBuilder) -> None:
-        scope = context.scope(self.rule)
+        scope = context.scope(self)
         days = context.by_day(scope.shifts)
-        work_days, rest_days = self.rule.work_days, self.rule.rest_days
+        work_days, rest_days = self.work_days, self.rest_days
         for worker in scope.workers:
             worked = context.presence(worker, days)
             for gap in range(1, rest_days):
@@ -620,10 +606,10 @@ class RestAfterConsecutiveWork(RulePlugin):
 
 class WeeklyMinutes(RulePlugin):
     def anchor(self) -> int:
-        return 0
+        return self.week_anchor
 
     def build(self, context: ScheduleContext, objective: ObjectiveBuilder) -> None:
-        scope = context.scope(self.rule)
+        scope = context.scope(self)
         for week in context.weeks(scope.shifts, self.anchor()):
             duration = {s: context.shifts[s].end - context.shifts[s].start for s in week}
             top = sum(duration.values())
@@ -641,12 +627,18 @@ class WeeklyMinutes(RulePlugin):
         raise NotImplementedError
 
 
-class MaxWeeklyMinutes(WeeklyMinutes):
-    rule_type = domain.MaxWeeklyMinutesRule
-    default_hard = True
+class MaxWeeklyMinutesCost(domain.MaxWeeklyMinutesCost, WeeklyMinutes):
+    def penalize_week(
+        self,
+        context: ScheduleContext,
+        objective: ObjectiveBuilder,
+        total: Any,
+        top: int,
+    ) -> None:
+        self.penalize_outside(context, objective, total, top, 0, self.minutes)
 
-    def anchor(self) -> int:
-        return self.rule.week_anchor
+
+class MinWeeklyMinutesCost(domain.MinWeeklyMinutesCost, WeeklyMinutes):
 
     def penalize_week(
         self,
@@ -655,29 +647,13 @@ class MaxWeeklyMinutes(WeeklyMinutes):
         total: Any,
         top: int,
     ) -> None:
-        self.penalize_outside(context, objective, total, top, 0, self.rule.minutes)
+        self.penalize_outside(context, objective, total, top, self.minutes, -1)
 
 
-class MinWeeklyMinutes(WeeklyMinutes):
-    rule_type = domain.MinWeeklyMinutesRule
-    default_hard = False
-
-    def penalize_week(
-        self,
-        context: ScheduleContext,
-        objective: ObjectiveBuilder,
-        total: Any,
-        top: int,
-    ) -> None:
-        self.penalize_outside(context, objective, total, top, self.rule.minutes, -1)
-
-
-class MinWeeklyRestDays(RulePlugin):
-    rule_type = domain.MinWeeklyRestDaysRule
-    default_hard = True
+class MinWeeklyRestDaysCost(domain.MinWeeklyRestDaysCost, RulePlugin):
 
     def build(self, context: ScheduleContext, objective: ObjectiveBuilder) -> None:
-        scope = context.scope(self.rule)
+        scope = context.scope(self)
         for week in context.weeks(scope.shifts):
             days = [day for day in context.by_day(week) if day]
             for worker in scope.workers:
@@ -687,17 +663,15 @@ class MinWeeklyRestDays(RulePlugin):
                     sum(context.presence(worker, days)),
                     len(days),
                     0,
-                    7 - self.rule.value,
+                    7 - self.value,
                 )
 
 
-class AssignmentCost(RulePlugin):
-    rule_type = domain.AssignmentCostRule
-    default_hard = False
+class AssignmentCost(domain.AssignmentCost, RulePlugin):
     fractional = True
 
     def build(self, context: ScheduleContext, objective: ObjectiveBuilder) -> None:
-        rule = self.rule
+        rule = self
         scope = context.scope(rule)
         for shift in scope.shifts:
             data = context.shifts[shift]
@@ -715,28 +689,22 @@ class AssignmentCost(RulePlugin):
             objective.add(self.name, magnitude, bound=max(costs) - min(costs))
 
 
-class UnassignedShift(RulePlugin):
-    rule_type = domain.UnassignedShiftRule
-    default_hard = True
+class UnassignedShiftsCost(domain.UnassignedShiftsCost, RulePlugin):
 
     def build(self, context: ScheduleContext, objective: ObjectiveBuilder) -> None:
         self.penalize(objective, sum(context.unassigned), len(context.unassigned))
 
 
-class BalanceMinMaxGap(RulePlugin):
-    rule_type = domain.BalanceMinMaxGapRule
-    default_hard = False
+class ShiftCountGapCost(domain.ShiftCountGapCost, RulePlugin):
 
     def build(self, context: ScheduleContext, objective: ObjectiveBuilder) -> None:
         loads = [context.load(worker) for worker in range(len(context.workers))]
         self.penalize_gap(
-            context, objective, loads, len(context.shifts), self.rule.tolerance
+            context, objective, loads, len(context.shifts), self.tolerance
         )
 
 
-class BalanceWeeklyMinutesGap(RulePlugin):
-    rule_type = domain.BalanceWeeklyMinutesGapRule
-    default_hard = False
+class WeeklyMinutesGapCost(domain.WeeklyMinutesGapCost, RulePlugin):
     fractional = True
 
     def build(self, context: ScheduleContext, objective: ObjectiveBuilder) -> None:
@@ -752,18 +720,16 @@ class BalanceWeeklyMinutesGap(RulePlugin):
                 objective,
                 totals,
                 sum(duration.values()),
-                self.rule.tolerance_minutes,
+                self.tolerance_minutes,
                 per=60,
             )
 
 
-class ShiftCoverage(RulePlugin):
-    rule_type = domain.ShiftCoverageRule
-    default_hard = False
+class ShiftCoverageCost(domain.ShiftCoverageCost, RulePlugin):
 
     def build(self, context: ScheduleContext, objective: ObjectiveBuilder) -> None:
         # This rule scopes itself: unlike ScopedUnit, an empty list means all.
-        rule = self.rule
+        rule = self
         everyone = range(len(context.workers))
         counted = [
             worker
@@ -782,12 +748,10 @@ class ShiftCoverage(RulePlugin):
             )
 
 
-class LocationRun(RulePlugin):
-    rule_type = domain.LocationRunRule
-    default_hard = False
+class LocationRunLengthCost(domain.LocationRunLengthCost, RulePlugin):
 
     def build(self, context: ScheduleContext, objective: ObjectiveBuilder) -> None:
-        rule = self.rule
+        rule = self
         scope = context.scope(rule)
         days = context.by_day(scope.shifts, rule.location)
         for worker in scope.workers:
@@ -799,12 +763,10 @@ class LocationRun(RulePlugin):
                 self.penalize_run_excess(context, objective, present, rule.max_run)
 
 
-class RestAfterLocationRun(RulePlugin):
-    rule_type = domain.RestAfterLocationRunRule
-    default_hard = True
+class RestAfterLocationRunCost(domain.RestAfterLocationRunCost, RulePlugin):
 
     def build(self, context: ScheduleContext, objective: ObjectiveBuilder) -> None:
-        rule = self.rule
+        rule = self
         scope = context.scope(rule)
         at_location = context.by_day(scope.shifts, rule.location)
         days = context.by_day(scope.shifts)
@@ -822,12 +784,10 @@ class RestAfterLocationRun(RulePlugin):
                     )
 
 
-class LocationRunGap(RulePlugin):
-    rule_type = domain.LocationRunGapRule
-    default_hard = False
+class LocationRunGapCost(domain.LocationRunGapCost, RulePlugin):
 
     def build(self, context: ScheduleContext, objective: ObjectiveBuilder) -> None:
-        rule = self.rule
+        rule = self
         scope = context.scope(rule)
         days = context.by_day(scope.shifts, rule.location)
         for worker in scope.workers:
@@ -846,12 +806,10 @@ class LocationRunGap(RulePlugin):
                     )
 
 
-class WorkerLocationCount(RulePlugin):
-    rule_type = domain.WorkerLocationCountRule
-    default_hard = False
+class WorkerLocationCountCost(domain.WorkerLocationCountCost, RulePlugin):
 
     def build(self, context: ScheduleContext, objective: ObjectiveBuilder) -> None:
-        rule = self.rule
+        rule = self
         scope = context.scope(rule)
         shifts = [
             shift
@@ -867,14 +825,12 @@ class WorkerLocationCount(RulePlugin):
             )
 
 
-class DayPattern(RulePlugin):
-    rule_type = domain.DayPatternRule
-    default_hard = False
+class DayPatternCost(domain.DayPatternCost, RulePlugin):
 
     def build(self, context: ScheduleContext, objective: ObjectiveBuilder) -> None:
-        tokens = self.rule.pattern.split(",")
+        tokens = self.pattern.split(",")
         known = {shift.location for shift in context.shifts}
-        scope = context.scope(self.rule)
+        scope = context.scope(self)
         days = context.by_day(scope.shifts)
         for worker in scope.workers:
             for start in range(context.horizon - len(tokens) + 1):
@@ -913,12 +869,10 @@ class DayPattern(RulePlugin):
         return [only_at(token) if token in known else context.false]
 
 
-class TargetDaysOff(RulePlugin):
-    rule_type = domain.TargetDaysOffRule
-    default_hard = False
+class TargetDaysOffCost(domain.TargetDaysOffCost, RulePlugin):
 
     def build(self, context: ScheduleContext, objective: ObjectiveBuilder) -> None:
-        rule = self.rule
+        rule = self
         scope = context.scope(rule)
         days = context.by_day(scope.shifts)
         targets = sorted({d for d in rule.target_days if 0 <= d < context.horizon})
@@ -934,12 +888,10 @@ class TargetDaysOff(RulePlugin):
             )
 
 
-class WorkerDayCountInRange(RulePlugin):
-    rule_type = domain.WorkerDayCountInRuleRange
-    default_hard = False
+class WorkerDayCountInRangeCost(domain.WorkerDayCountInRangeCost, RulePlugin):
 
     def build(self, context: ScheduleContext, objective: ObjectiveBuilder) -> None:
-        rule = self.rule
+        rule = self
         if rule.hi < rule.lo:
             return
         scope = context.scope(rule)
@@ -956,16 +908,14 @@ class WorkerDayCountInRange(RulePlugin):
             )
 
 
-class BalanceLocation(RulePlugin):
-    rule_type = domain.BalanceLocationRule
-    default_hard = False
+class LocationImbalanceCost(domain.LocationImbalanceCost, RulePlugin):
 
     @property
     def fractional(self) -> bool:
-        return self.rule.metric == "ssd"
+        return self.metric == "ssd"
 
     def build(self, context: ScheduleContext, objective: ObjectiveBuilder) -> None:
-        rule = self.rule
+        rule = self
         workers = [
             worker
             for worker in range(len(context.workers))
@@ -997,12 +947,10 @@ class BalanceLocation(RulePlugin):
             self.penalize_half_ssd(context, objective, counts, top, total_top)
 
 
-class WorkerPairSameShift(RulePlugin):
-    rule_type = domain.WorkerPairSameShiftRule
-    default_hard = False
+class WorkerPairingCost(domain.WorkerPairingCost, RulePlugin):
 
     def build(self, context: ScheduleContext, objective: ObjectiveBuilder) -> None:
-        rule = self.rule
+        rule = self
         buckets: defaultdict[tuple[int, str], list[int]] = defaultdict(list)
         for shift, data in enumerate(context.shifts):
             buckets[context.day[shift], data.location].append(shift)
@@ -1025,53 +973,64 @@ class WorkerPairSameShift(RulePlugin):
 
 
 PLUGINS: dict[str, type[RulePlugin]] = {
-    plugin.rule_type.model_fields["name"].default: plugin
+    plugin.name: plugin
     for plugin in (
-        RequiredSkill,
-        UnavailableEmployee,
-        OverlappingShift,
-        MaxOneShiftPerDay,
-        MinimumRest,
-        UndesiredDay,
-        DesiredDay,
-        DesiredShift,
-        BalanceAssignments,
-        MaxConsecutiveDays,
-        MinConsecutiveDays,
-        MaxConsecutiveOff,
-        RestAfterConsecutiveWork,
-        MaxWeeklyMinutes,
-        MinWeeklyMinutes,
-        MinWeeklyRestDays,
+        RequiredSkillCost,
+        EmployeeUnavailabilityCost,
+        ShiftOverlapCost,
+        MaxOneShiftPerDayCost,
+        MinRestCost,
+        UndesiredDayCost,
+        DesiredDayCost,
+        DesiredShiftCost,
+        ShiftCountImbalanceCost,
+        MaxConsecutiveDaysCost,
+        MinConsecutiveDaysCost,
+        MaxConsecutiveDaysOffCost,
+        RestAfterConsecutiveWorkCost,
+        MaxWeeklyMinutesCost,
+        MinWeeklyMinutesCost,
+        MinWeeklyRestDaysCost,
         AssignmentCost,
-        UnassignedShift,
-        BalanceMinMaxGap,
-        BalanceWeeklyMinutesGap,
-        ShiftCoverage,
-        LocationRun,
-        RestAfterLocationRun,
-        LocationRunGap,
-        WorkerLocationCount,
-        DayPattern,
-        TargetDaysOff,
-        WorkerDayCountInRange,
-        BalanceLocation,
-        WorkerPairSameShift,
+        UnassignedShiftsCost,
+        ShiftCountGapCost,
+        WeeklyMinutesGapCost,
+        ShiftCoverageCost,
+        LocationRunLengthCost,
+        RestAfterLocationRunCost,
+        LocationRunGapCost,
+        WorkerLocationCountCost,
+        DayPatternCost,
+        TargetDaysOffCost,
+        WorkerDayCountInRangeCost,
+        LocationImbalanceCost,
+        WorkerPairingCost,
     )
 }
 
 
 def registry_for(rules: Iterable[Any]) -> ConstraintRegistry[ScheduleContext]:
-    """One plugin per rule; a repeated rule type gets a numbered name."""
+    """One plugin per pick (a spec, or a JSON rule model via `to_spec()`).
+
+    Each plugin is built from the pick's own fields, so it carries the same
+    knobs and parameters; the k-th repeat of a name is named ``"<name>#<k>"``
+    (its catalog row is the plain name's).
+    """
     seen: Counter[str] = Counter()
     plugins = []
     for rule in rules:
-        seen[rule.name] += 1
-        count = seen[rule.name]
-        plugins.append(
-            PLUGINS[rule.name](rule, rule.name if count == 1 else f"{rule.name}#{count}")
-        )
+        spec = rule.to_spec() if hasattr(rule, "to_spec") else rule
+        plugin = PLUGINS[spec.name](**{f.name: getattr(spec, f.name) for f in fields(spec)})
+        plugin.check_supported()
+        seen[spec.name] += 1
+        if seen[spec.name] > 1:
+            object.__setattr__(plugin, "name", f"{spec.name}#{seen[spec.name]}")
+        plugins.append(plugin)
     return ConstraintRegistry(plugins)
 
 
-REGISTRY = registry_for(plugin.rule_type() for plugin in PLUGINS.values())
+# Every constraint at its defaults, in the engine catalog's order
+# (constraint_info(): the eight defaults first), so catalog() lists the same
+# rows in the same order.
+_SPEC_BY_NAME = {spec_class.name: spec_class for spec_class in domain.SPEC_CLASSES}
+REGISTRY = registry_for(_SPEC_BY_NAME[row.name]() for row in constraint_info())

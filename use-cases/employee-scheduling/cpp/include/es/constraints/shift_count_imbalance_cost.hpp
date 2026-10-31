@@ -1,16 +1,22 @@
-#ifndef ES_CONSTRAINTS_BALANCE_SHIFT_ASSIGNMENTS_HPP
-#define ES_CONSTRAINTS_BALANCE_SHIFT_ASSIGNMENTS_HPP
+#ifndef ES_CONSTRAINTS_SHIFT_COUNT_IMBALANCE_COST_HPP
+#define ES_CONSTRAINTS_SHIFT_COUNT_IMBALANCE_COST_HPP
 
 #include "es/constraints/common.hpp"
 
 namespace es {
 
-// Soft (default), global statistic: the load-balancing "unfairness" over the
-// per-employee shift counts — not a per-unit sum, so it maintains the count
-// aggregates itself and yields the closed-form total at scoring time.
-struct BalanceShiftAssignments final : EsGlobalConstraint {
-    explicit BalanceShiftAssignments(double weight = 1.0)
-        : EsGlobalConstraint("Balance employee shift assignments", weight, /*hard=*/false) {}
+// Soft, weight 1, global: shiftCountImbalanceCost, the load-balancing
+// "unfairness" over the per-employee shift counts: sqrt(sum of squared
+// deviations from the mean count), rounded to 6 significant figures (every
+// employee counts, including those with no shift). Not a per-unit sum, so it
+// maintains the count aggregates itself and yields the closed-form total at
+// scoring time. 0 = every employee holds the same number of shifts.
+struct ShiftCountImbalanceCost final : EsGlobalConstraint {
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
+
+    explicit ShiftCountImbalanceCost(double weight = kDefaultWeight)
+        : EsGlobalConstraint("shiftCountImbalanceCost", weight, kDefaultLevel) {}
 
     void reset(const EmployeeSchedule& /*s*/,
                const std::vector<std::vector<int>>& membersPerUnit) override {
@@ -51,4 +57,4 @@ private:
 
 }  // namespace es
 
-#endif  // ES_CONSTRAINTS_BALANCE_SHIFT_ASSIGNMENTS_HPP
+#endif  // ES_CONSTRAINTS_SHIFT_COUNT_IMBALANCE_COST_HPP

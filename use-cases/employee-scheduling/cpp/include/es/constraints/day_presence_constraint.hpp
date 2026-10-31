@@ -7,10 +7,11 @@ namespace es {
 
 // Shared base: per-employee day-presence statistics ("worked days"). A day
 // counts once even with several shifts (day = the shift's start day).
-// Subclasses read the run-length structure.
+// Subclasses read the run-length structure (MaxConsecutiveDaysCost,
+// MinConsecutiveDaysCost) and pass their own registry name and defaults.
 struct DayPresenceConstraint : EsUnitConstraint {
-    DayPresenceConstraint(std::string name, double weight, bool hard)
-        : EsUnitConstraint(std::move(name), weight, hard) {}
+    DayPresenceConstraint(std::string name, double weight, optimaru::Level level)
+        : EsUnitConstraint(std::move(name), weight, level) {}
     void onReset(const EmployeeSchedule& s) override {
         horizon_ = 0;
         day_.resize(s.shifts.size());

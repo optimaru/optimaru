@@ -1,14 +1,19 @@
-#ifndef ES_CONSTRAINTS_REQUIRED_SKILL_HPP
-#define ES_CONSTRAINTS_REQUIRED_SKILL_HPP
+#ifndef ES_CONSTRAINTS_REQUIRED_SKILL_COST_HPP
+#define ES_CONSTRAINTS_REQUIRED_SKILL_COST_HPP
 
 #include "es/constraints/assignment_constraint.hpp"
 
 namespace es {
 
-// Hard (default): 1 per assigned shift whose required skill the employee lacks.
-struct RequiredSkill final : GroupableAssignmentConstraint {
-    explicit RequiredSkill(double weight = 1.0)
-        : GroupableAssignmentConstraint("Missing required skill", weight, /*hard=*/true) {}
+// Hard, weight 1: requiredSkillCost. Raw cost per employee = the number of
+// its assigned, non-pinned shifts whose required skill it lacks (1 per
+// shift), so 0 = every such shift is staffed by a holder of its skill.
+struct RequiredSkillCost final : GroupableAssignmentConstraint {
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
+
+    explicit RequiredSkillCost(double weight = kDefaultWeight)
+        : GroupableAssignmentConstraint("requiredSkillCost", weight, kDefaultLevel) {}
     void onReset(const EmployeeSchedule& s) override {
         shiftCount_ = static_cast<int>(s.shifts.size());
         miss_.assign(s.employees.size() * s.shifts.size(), 0);
@@ -48,4 +53,4 @@ private:
 
 }  // namespace es
 
-#endif  // ES_CONSTRAINTS_REQUIRED_SKILL_HPP
+#endif  // ES_CONSTRAINTS_REQUIRED_SKILL_COST_HPP

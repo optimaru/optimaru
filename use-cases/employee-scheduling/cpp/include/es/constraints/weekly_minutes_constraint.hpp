@@ -6,11 +6,13 @@
 namespace es {
 
 // Shared base: per-employee minutes per calendar week (7-day blocks from day
-// 0; a shift's whole duration counts in its start week).
+// 0, or from `weekAnchor`; a shift's whole duration counts in its start
+// week). MaxWeeklyMinutesCost and MinWeeklyMinutesCost pass their own
+// registry name and defaults.
 struct WeeklyMinutesConstraint : EsUnitConstraint {
-    WeeklyMinutesConstraint(std::string name, double weight, bool hard, Minutes minutes,
-                            int weekAnchor = 0)
-        : EsUnitConstraint(std::move(name), weight, hard),
+    WeeklyMinutesConstraint(std::string name, double weight, optimaru::Level level,
+                            Minutes minutes, int weekAnchor = 0)
+        : EsUnitConstraint(std::move(name), weight, level),
           threshold_(static_cast<std::int64_t>(minutes)),
           weekAnchor_(weekAnchor) {}
     void onReset(const EmployeeSchedule& s) override {

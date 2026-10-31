@@ -146,9 +146,9 @@ public:
         // The default fills every shift (the value range is the employee list,
         // so no move ever produces -1); enable this to let local search empty a
         // slot when that improves the score — needed when shifts are optional
-        // coverage slots (staffing floor via shift_coverage) rather than fixed
-        // demand. Default off: with the unassigned_shift hard rule (the usual
-        // setup) an empty slot is penalized and refilled anyway.
+        // coverage slots (staffing floor via shift_coverage_cost) rather than
+        // fixed demand. Default off: with the unassigned_shifts_cost hard rule
+        // (the usual setup) an empty slot is penalized and refilled anyway.
         bool employeeUnassignMoves = false;
 
         // LIST move mix. Exposed for parity with the generic engine; employee

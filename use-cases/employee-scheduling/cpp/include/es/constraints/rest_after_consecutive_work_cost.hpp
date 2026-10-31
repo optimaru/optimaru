@@ -1,22 +1,27 @@
-#ifndef ES_CONSTRAINTS_REST_AFTER_CONSECUTIVE_WORK_HPP
-#define ES_CONSTRAINTS_REST_AFTER_CONSECUTIVE_WORK_HPP
+#ifndef ES_CONSTRAINTS_REST_AFTER_CONSECUTIVE_WORK_COST_HPP
+#define ES_CONSTRAINTS_REST_AFTER_CONSECUTIVE_WORK_COST_HPP
 
 #include "es/constraints/common.hpp"
 
 namespace es {
 
-// Hard (default): after a run of >= `workDays` consecutive worked days the
-// employee must get >= `restDays` consecutive rest days before working again.
-// Penalty = restDays - gap for each qualifying run whose following rest gap is
-// too short. A run at the end of the horizon (no subsequent work) is not
-// penalized — there is no "next work" to rest before. Defaults: 6 worked days
-// require 3 rest days, so with MaxConsecutiveDays(6) this yields six days on, three off
-// pattern. restDays must be above 1 to bind: any rest gap is at least 1 day.
-// A day counts as worked if it holds any shift.
-struct RestAfterConsecutiveWork final : EsUnitConstraint {
-    explicit RestAfterConsecutiveWork(double weight = 1.0, int workDays = 6,
-                                      int restDays = 3)
-        : EsUnitConstraint("Rest after consecutive work", weight, /*hard=*/true),
+// Hard, weight 1: restAfterConsecutiveWorkCost. After a run of >= `workDays`
+// consecutive worked days the employee must get >= `restDays` consecutive
+// rest days before working again. Raw cost per employee = restDays - gap for
+// each qualifying run whose following rest gap is too short, so 0 = every
+// long run is followed by enough rest. A run at the end of the horizon (no
+// subsequent work) is not penalized — there is no "next work" to rest before.
+// Defaults: 6 worked days require 3 rest days, so with
+// MaxConsecutiveDaysCost(6) this yields a six days on, three off pattern.
+// restDays must be above 1 to bind: any rest gap is at least 1 day. A day
+// counts as worked if it holds any shift.
+struct RestAfterConsecutiveWorkCost final : EsUnitConstraint {
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
+
+    explicit RestAfterConsecutiveWorkCost(double weight = kDefaultWeight, int workDays = 6,
+                                          int restDays = 3)
+        : EsUnitConstraint("restAfterConsecutiveWorkCost", weight, kDefaultLevel),
           workDays_(workDays), restDays_(restDays) {}
     void onReset(const EmployeeSchedule& s) override {
         horizon_ = 0;
@@ -61,4 +66,4 @@ private:
 
 }  // namespace es
 
-#endif  // ES_CONSTRAINTS_REST_AFTER_CONSECUTIVE_WORK_HPP
+#endif  // ES_CONSTRAINTS_REST_AFTER_CONSECUTIVE_WORK_COST_HPP

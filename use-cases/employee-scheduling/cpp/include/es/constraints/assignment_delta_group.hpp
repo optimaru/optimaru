@@ -7,14 +7,14 @@
 // members include.
 
 #include "es/constraints/assignment_constraint.hpp"
-#include "es/constraints/desired_day.hpp"
-#include "es/constraints/desired_shift.hpp"
-#include "es/constraints/max_one_shift_per_day.hpp"
-#include "es/constraints/minimum_rest.hpp"
-#include "es/constraints/overlapping_shift.hpp"
-#include "es/constraints/required_skill.hpp"
-#include "es/constraints/unavailable_employee.hpp"
-#include "es/constraints/undesired_day.hpp"
+#include "es/constraints/desired_day_cost.hpp"
+#include "es/constraints/desired_shift_cost.hpp"
+#include "es/constraints/employee_unavailability_cost.hpp"
+#include "es/constraints/max_one_shift_per_day_cost.hpp"
+#include "es/constraints/min_rest_cost.hpp"
+#include "es/constraints/required_skill_cost.hpp"
+#include "es/constraints/shift_overlap_cost.hpp"
+#include "es/constraints/undesired_day_cost.hpp"
 
 namespace es {
 
@@ -34,33 +34,33 @@ struct EmployeeAssignmentDeltaGroup final
     };
 
     void add(std::size_t index, const EsUnitConstraint& constraint) override {
-        if (const auto* typed = dynamic_cast<const RequiredSkill*>(&constraint)) {
+        if (const auto* typed = dynamic_cast<const RequiredSkillCost*>(&constraint)) {
             if (requiredSkill_ != nullptr) duplicate_ = true;
             requiredSkill_ = typed;
             requiredSkillIndex_ = index;
-        } else if (const auto* typed = dynamic_cast<const UnavailableEmployee*>(&constraint)) {
+        } else if (const auto* typed = dynamic_cast<const EmployeeUnavailabilityCost*>(&constraint)) {
             if (unavailable_ != nullptr) duplicate_ = true;
             unavailable_ = typed;
             unavailableIndex_ = index;
-        } else if (const auto* typed = dynamic_cast<const UndesiredDay*>(&constraint)) {
+        } else if (const auto* typed = dynamic_cast<const UndesiredDayCost*>(&constraint)) {
             if (undesiredDay_ != nullptr) duplicate_ = true;
             undesiredDay_ = typed;
             undesiredDayIndex_ = index;
-        } else if (const auto* typed = dynamic_cast<const DesiredDay*>(&constraint)) {
+        } else if (const auto* typed = dynamic_cast<const DesiredDayCost*>(&constraint)) {
             if (desiredDay_ != nullptr) duplicate_ = true;
             desiredDay_ = typed;
             desiredDayIndex_ = index;
-        } else if (const auto* typed = dynamic_cast<const DesiredShift*>(&constraint)) {
+        } else if (const auto* typed = dynamic_cast<const DesiredShiftCost*>(&constraint)) {
             if (desiredShift_ != nullptr) duplicate_ = true;
             desiredShift_ = typed;
             desiredShiftIndex_ = index;
-        } else if (dynamic_cast<const OverlappingShift*>(&constraint) != nullptr) {
+        } else if (dynamic_cast<const ShiftOverlapCost*>(&constraint) != nullptr) {
             if (overlapIndex_ != NONE) duplicate_ = true;
             overlapIndex_ = index;
-        } else if (dynamic_cast<const MaxOneShiftPerDay*>(&constraint) != nullptr) {
+        } else if (dynamic_cast<const MaxOneShiftPerDayCost*>(&constraint) != nullptr) {
             if (sameDayIndex_ != NONE) duplicate_ = true;
             sameDayIndex_ = index;
-        } else if (const auto* typed = dynamic_cast<const MinimumRest*>(&constraint)) {
+        } else if (const auto* typed = dynamic_cast<const MinRestCost*>(&constraint)) {
             if (minimumRest_ != nullptr) duplicate_ = true;
             minimumRest_ = typed;
             minimumRestIndex_ = index;
@@ -197,12 +197,12 @@ private:
     }
 
     std::vector<std::size_t> indexes_;
-    const RequiredSkill* requiredSkill_ = nullptr;
-    const UnavailableEmployee* unavailable_ = nullptr;
-    const UndesiredDay* undesiredDay_ = nullptr;
-    const DesiredDay* desiredDay_ = nullptr;
-    const DesiredShift* desiredShift_ = nullptr;
-    const MinimumRest* minimumRest_ = nullptr;
+    const RequiredSkillCost* requiredSkill_ = nullptr;
+    const EmployeeUnavailabilityCost* unavailable_ = nullptr;
+    const UndesiredDayCost* undesiredDay_ = nullptr;
+    const DesiredDayCost* desiredDay_ = nullptr;
+    const DesiredShiftCost* desiredShift_ = nullptr;
+    const MinRestCost* minimumRest_ = nullptr;
     std::size_t requiredSkillIndex_ = NONE;
     std::size_t unavailableIndex_ = NONE;
     std::size_t undesiredDayIndex_ = NONE;

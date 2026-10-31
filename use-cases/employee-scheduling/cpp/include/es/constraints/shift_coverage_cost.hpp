@@ -1,31 +1,41 @@
-#ifndef ES_CONSTRAINTS_SHIFT_COVERAGE_HPP
-#define ES_CONSTRAINTS_SHIFT_COVERAGE_HPP
+#ifndef ES_CONSTRAINTS_SHIFT_COVERAGE_COST_HPP
+#define ES_CONSTRAINTS_SHIFT_COVERAGE_COST_HPP
 
 #include "es/constraints/common.hpp"
 
 namespace es {
 
-// Soft (default): daily staffing coverage. Groups shifts by (start day, shift
-// location) and counts, per group, the assigned shifts whose employee has
-// `workerSkill` (empty = count any assignee); penalizes each group below
-// `minCount` (shortfall) or above `maxCount` (excess; maxCount < 0 = no upper
-// bound). Models "at least K on this day+location" floors (set hard) and role-mix
-// ranges like "between 2 and 4 holders of a skill per day+location" (soft). Global
-// because coverage is a cross-employee count per group; maintained
-// incrementally from stored per-unit members and per-group counts.
-struct ShiftCoverage final : EsGlobalConstraint {
+// Soft, weight 1, global: shiftCoverageCost, daily staffing coverage. Groups
+// shifts by (start day, shift location) and counts, per group, the assigned
+// shifts whose employee has `workerSkill` (empty = count any assignee). Raw
+// cost = the sum over groups of the shortfall below `minCount` plus the
+// excess above `maxCount` (maxCount < 0 = no upper bound), so 0 = every group
+// is within [minCount, maxCount] (the defaults 0..inf never cost anything).
+// Models "at least K on this day+location" floors (set hard) and role-mix
+// ranges like "between 2 and 4 holders of a skill per day+location" (soft).
+// Global because coverage is a cross-employee count per group; maintained
+// incrementally from stored per-unit members and per-group counts. Each
+// instance carries the label "Shift coverage[<skill|any> <min>..<max|inf>]".
+struct ShiftCoverageCost final : EsGlobalConstraint {
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
+
     // Optional rule scope (native, because coverage groups are derived from the
     // shift set): shiftIndices restrict which shifts form/require groups (out-of-
     // scope shifts are ignored — no phantom floor on their groups), workerIndices
     // restrict which workers count toward the floor. Empty => all.
-    ShiftCoverage(double weight, std::string workerSkill, int minCount, int maxCount,
-                  std::vector<int> workerIndices = {}, std::vector<int> shiftIndices = {})
-        : EsGlobalConstraint(makeName(workerSkill, minCount, maxCount), weight, /*hard=*/false),
+    explicit ShiftCoverageCost(double weight = kDefaultWeight, std::string workerSkill = {},
+                               int minCount = 0, int maxCount = -1,
+                               std::vector<int> workerIndices = {},
+                               std::vector<int> shiftIndices = {})
+        : EsGlobalConstraint("shiftCoverageCost", weight, kDefaultLevel),
           skill_(std::move(workerSkill)),
           min_(minCount),
           max_(maxCount),
           workerIdx_(std::move(workerIndices)),
-          shiftIdx_(std::move(shiftIndices)) {}
+          shiftIdx_(std::move(shiftIndices)) {
+        label = makeLabel(skill_, min_, max_);  // display only; never a lookup key
+    }
 
     void reset(const EmployeeSchedule& s,
                const std::vector<std::vector<int>>& membersPerUnit) override {
@@ -86,7 +96,7 @@ struct ShiftCoverage final : EsGlobalConstraint {
     double cost() const override { return totalCost_; }
 
 private:
-    static std::string makeName(const std::string& sk, int mn, int mx) {
+    static std::string makeLabel(const std::string& sk, int mn, int mx) {
         return "Shift coverage[" + (sk.empty() ? std::string("any") : sk) + " " +
                std::to_string(mn) + ".." + (mx < 0 ? std::string("inf") : std::to_string(mx)) +
                "]";
@@ -116,4 +126,4 @@ private:
 
 }  // namespace es
 
-#endif  // ES_CONSTRAINTS_SHIFT_COVERAGE_HPP
+#endif  // ES_CONSTRAINTS_SHIFT_COVERAGE_COST_HPP

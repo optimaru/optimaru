@@ -5,14 +5,16 @@
 
 namespace es {
 
-// Shared base for the three date-overlap costs (unavailable / undesired /
-// desired): a per-(employee, shift) minute table selected by an Employee date
-// set, added with a sign (+1 penalty, -1 reward).
+// Shared base for the three date-overlap costs (EmployeeUnavailabilityCost /
+// UndesiredDayCost / DesiredDayCost): a per-(employee, shift) minute table
+// selected by an Employee date set, added with a sign (+1 penalty, -1 reward).
+// Not a component itself: each subclass passes its own registry name and
+// kDefaultWeight / kDefaultLevel.
 struct DateOverlapConstraint : GroupableAssignmentConstraint {
-    DateOverlapConstraint(std::string name, double weight, bool hard,
+    DateOverlapConstraint(std::string name, double weight, optimaru::Level level,
                           std::set<DayIndex> Employee::* dates, double sign,
                           bool perDay = false)
-        : GroupableAssignmentConstraint(std::move(name), weight, hard), dates_(dates), sign_(sign),
+        : GroupableAssignmentConstraint(std::move(name), weight, level), dates_(dates), sign_(sign),
           perDay_(perDay) {}
     void onReset(const EmployeeSchedule& s) override {
         shiftCount_ = static_cast<int>(s.shifts.size());

@@ -1,19 +1,26 @@
-#ifndef ES_CONSTRAINTS_DESIRED_SHIFT_HPP
-#define ES_CONSTRAINTS_DESIRED_SHIFT_HPP
+#ifndef ES_CONSTRAINTS_DESIRED_SHIFT_COST_HPP
+#define ES_CONSTRAINTS_DESIRED_SHIFT_COST_HPP
 
 #include "es/constraints/assignment_constraint.hpp"
 
 namespace es {
 
-// Soft (default), reward (negative cost): location-specific work preference.
-// Unlike DesiredDay (rewards any work on a desired date), this rewards only when
-// the worker is assigned a shift whose (start day, location) is in the worker's
-// `desiredShifts` set — i.e. the requested LOCATION must match, not just the day.
-// (Requesting one location but being given another earns nothing.) 1 per
-// satisfied preference.
-struct DesiredShift final : GroupableAssignmentConstraint {
-    explicit DesiredShift(double weight = 1.0)
-        : GroupableAssignmentConstraint("Desired shift for employee", weight, /*hard=*/false) {}
+// Soft, weight 1, REWARD: desiredShiftCost, a location-specific work
+// preference. Unlike DesiredDayCost (any work on a desired date), it counts
+// only a shift whose (start day, location) is in the worker's `desiredShifts`
+// set — the requested LOCATION must match, not just the day (being given
+// another location earns nothing). Raw cost per employee = minus 1 per
+// satisfied preference: raw <= 0, and 0 = no wish is granted. A reward can
+// never be hard (reward = true, levelFlippable = false).
+struct DesiredShiftCost final : GroupableAssignmentConstraint {
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
+
+    explicit DesiredShiftCost(double weight = kDefaultWeight)
+        : GroupableAssignmentConstraint("desiredShiftCost", weight, kDefaultLevel) {
+        reward = true;
+        levelFlippable = false;
+    }
     void onReset(const EmployeeSchedule& s) override {
         shiftCount_ = static_cast<int>(s.shifts.size());
         match_.assign(s.employees.size() * s.shifts.size(), 0);
@@ -50,4 +57,4 @@ private:
 
 }  // namespace es
 
-#endif  // ES_CONSTRAINTS_DESIRED_SHIFT_HPP
+#endif  // ES_CONSTRAINTS_DESIRED_SHIFT_COST_HPP
