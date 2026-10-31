@@ -26,6 +26,7 @@ public:
         : solver_(std::make_unique<Solver<Solution>>(std::move(config))),
           active_(std::make_shared<std::atomic<bool>>(true)),
           finalBestScore_(std::make_shared<HardSoftScore>()) {
+        requirePinnedValues<SolutionDescriptor<Solution>>(solution);
         Solver<Solution>* solver = solver_.get();
         auto active = active_;
         auto score = finalBestScore_;
