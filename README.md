@@ -4,8 +4,9 @@ A dependency-free, header-only C++17 metaheuristic solver engine for
 real-world combinatorial optimization — scheduling, routing and assignment.
 
 The engine contains **no domain code** — problems consume it as a library.
-Worked use cases live in [`use-cases/`](use-cases) and public benchmark
-harnesses in [`benchmarks/`](benchmarks).
+Worked use cases live in [`use-cases/`](use-cases), runnable notebooks with
+visualizations in [`examples/`](examples) and public benchmark harnesses in
+[`benchmarks/`](benchmarks).
 
 optimaru comes in a free edition and a paid edition; this repository is the
 free, open-source edition.
@@ -35,6 +36,7 @@ include/optimaru/     the engine (header-only, one header per class)
 test/                 engine tests
 use-cases/<slug>/     22 problems built on the engine: C++ domain + solver
                       and a pybind11 package (or a small pure-Python model)
+examples/             one Jupyter notebook per use case, with visualizations
 benchmarks/<slug>/    the same problems against OR-Tools (CP-SAT, or the
                       Routing solver for VRP);
                       competing solvers live only here

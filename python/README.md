@@ -66,6 +66,7 @@ Each subpackage is loaded on first use, so `import optimaru` stays cheap.
 
 - Website: <https://optimaru.com>
 - Source, docs and benchmarks against OR-Tools: <https://github.com/optimaru/optimaru>
+- Example notebooks, one per use case: <https://github.com/optimaru/optimaru/tree/main/examples>
 
 optimaru comes in a free, open-source edition (this package, Apache-2.0) and
 an Enterprise edition (coming soon).
