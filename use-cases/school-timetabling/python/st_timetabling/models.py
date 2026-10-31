@@ -146,7 +146,7 @@ class _ObjectiveWeightsBase(BaseModel):
 _objective_weight_fields: dict[str, Any | tuple[Any, Any]] = {
     spec.name: (
         float,
-        Field(default=default_weights()[spec.name], ge=0, description=spec.label_en),
+        Field(default=default_weights()[spec.name], ge=0, allow_inf_nan=False, description=spec.label_en),
     )
     for spec in soft_specs()
 }

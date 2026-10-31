@@ -6,7 +6,7 @@ and compares them. It runs build → cross-check gate → quality benchmark → 
 | File | Role |
 | --- | --- |
 | `run_bench.py` | Orchestration (track 1 by default, `--track2` for the canonical track, `--track3` for partial timetabling) |
-| `evaluate.py` | Track-1 shared evaluator: recomputes the quickstart's six-constraint score from a solution (checked against each solver's self-report); its per-term keys are the `*_cost` names below |
+| `evaluate.py` | Track-1 shared evaluator: recomputes the quickstart's six-constraint score from a solution (checked against each solver's self-report); its per-term keys are the `*_cost` names below, each holding the raw cost (the reward `teacher_time_efficiency_cost` is <= 0) |
 | `cpsat_quickstart.py` | Track-1 CP-SAT solver (six constraints: hard as constraints, the three soft ones as the objective) |
 | `gen_canonical.py` | Track-2 generator of S/M/L canonical `TimetableProblem`s (blocks / parallel sections / team teaching / unavailability, with a load check) |
 | `../../use-cases/school-timetabling/cpp/bench/st_quality_bench.cpp` | Track-1 C++ side: builds instances, dumps JSON, solves, cross-check mode |
@@ -100,9 +100,15 @@ engine's specs (`st_timetabling.constraints`): the same 17 names, the same
 `st_timetabling.constraint_info()` — nothing is restated. The hard constraints
 are CP-SAT model constraints, so on this path:
 
-- `unassigned_lessons_cost` with `hard=False` is partial timetabling (`solve_partial`);
-  every other hard constraint refuses `hard=False` (`fixed_slots_cost` /
-  `parallel_groups_cost` are not flippable in the engine either), and a weight 0 leaves it out;
+- `unassigned_lessons_cost` with `hard=False` is partial timetabling (`solve_partial`).
+  `weight=None` there is the engine default, 1, so a lesson would be dropped to save a single
+  teacher gap (20): pass `weight=UNASSIGNED_WEIGHT` (10000, the engine's
+  `UNASSIGNED_LESSONS_SOFT_WEIGHT`) for partial timetabling, as `solve_partial` does;
+- every other hard constraint refuses `hard=False`, and a weight 0 leaves it out.
+  `fixed_slots_cost` / `parallel_groups_cost` are not flippable in the engine either; the
+  other eight (`class_conflict_cost` ... `teacher_max_consecutive_periods_cost`) are model
+  constraints here without a penalty form, so they are structural on CP-SAT only, although the
+  catalog (read from the engine) lists them as `kind="either"`;
 - a soft constraint with `hard=True` forbids every violation (`model.add(expr == 0)`);
 - weights must be integers and `exponent` must be 1 (a linear CP-SAT objective).
 

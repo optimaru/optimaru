@@ -28,9 +28,9 @@ def validate_timetable(problem: TimetableProblem, timetable: Timetable) -> list[
         _check_teacher_conflicts,  # teacher_conflict_cost
         _check_parallel_groups,  # parallel_groups_cost
         _check_rooms,  # room_capacity_cost + placement consistency
-        _check_daily_course_limits,  # course_max_periods_per_day_cost
+        _check_course_max_periods_per_day,  # course_max_periods_per_day_cost
         _check_blocks,  # block_adjacency_cost
-        _check_teacher_workload,  # teacher_max_periods_cost
+        _check_teacher_max_periods,  # teacher_max_periods_cost
         _check_teacher_consecutive,  # teacher_max_consecutive_periods_cost
     )
     violations: list[str] = []
@@ -205,7 +205,7 @@ def _check_rooms(problem: TimetableProblem, timetable: Timetable) -> list[str]:
     return violations
 
 
-def _check_daily_course_limits(problem: TimetableProblem, timetable: Timetable) -> list[str]:
+def _check_course_max_periods_per_day(problem: TimetableProblem, timetable: Timetable) -> list[str]:
     violations = []
     for course in problem.courses:
         per_day: Counter[Weekday] = Counter(lesson.slot.day for lesson in _lessons_of_course(timetable, course.id))
@@ -230,7 +230,7 @@ def _check_blocks(problem: TimetableProblem, timetable: Timetable) -> list[str]:
     return violations
 
 
-def _check_teacher_workload(problem: TimetableProblem, timetable: Timetable) -> list[str]:
+def _check_teacher_max_periods(problem: TimetableProblem, timetable: Timetable) -> list[str]:
     violations = []
     busy = _busy_periods(timetable, by_teacher=True)
     for teacher in problem.teachers:

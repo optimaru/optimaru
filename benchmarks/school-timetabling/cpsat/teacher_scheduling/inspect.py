@@ -32,12 +32,18 @@ Severity = Literal["error", "warning", "info"]
 class InspectOptions(BaseModel):
     """Search criteria. Matches Comcigan's "move and search criteria" panel."""
 
-    lunch_after_period: int | None = Field(default=4, ge=1, description="Period right before lunch. None skips the lunch check")
+    lunch_after_period: int | None = Field(
+        default=4, ge=1, description="Period right before lunch. None skips the lunch check"
+    )
     max_periods_per_day: int = Field(default=5, ge=1, description="Finds teachers with more periods than this in a day")
-    max_subjects_per_day: int = Field(default=3, ge=1, description="Cap on distinct subjects a teacher teaches in a day")
+    max_subjects_per_day: int = Field(
+        default=3, ge=1, description="Cap on distinct subjects a teacher teaches in a day"
+    )
     long_run: int = Field(default=4, ge=2, description="Threshold counted as 'N consecutive periods'")
     medium_run: int = Field(default=3, ge=2, description="Second threshold for 'N consecutive periods'")
-    workload_spread: int = Field(default=3, ge=1, description="Allowed max-min spread of a teacher's periods per weekday")
+    workload_spread: int = Field(
+        default=3, ge=1, description="Allowed max-min spread of a teacher's periods per weekday"
+    )
 
 
 class Finding(BaseModel):
@@ -146,7 +152,9 @@ def _unassigned(index: _Index, _: InspectOptions) -> InspectionItem:
         )
         for row in rows
     )
-    return InspectionItem(id="unassigned", name="Unassigned periods", severity="error", count=len(findings), findings=findings)
+    return InspectionItem(
+        id="unassigned", name="Unassigned periods", severity="error", count=len(findings), findings=findings
+    )
 
 
 def _same_subject_twice_a_day(index: _Index, _: InspectOptions) -> InspectionItem:

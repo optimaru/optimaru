@@ -250,8 +250,9 @@ def solve(
     teacher_workday_cost / teacher_free_day_cost / class_gap_cost /
     avoided_period_cost / non_preferred_period_cost; omitted keys keep the
     component defaults 20/3/30/10/5/1). It becomes ``config.weights``
-    (`canon.ObjectiveWeights`). Canonical mode only, and not together with
-    ``constraints`` — a selection carries its own weights.
+    (`canon.ObjectiveWeights`, which rejects a bool, a non-finite or a negative
+    weight). Canonical mode only. Next to ``constraints`` it must equal the
+    defaults, like ``config.weights`` — a selection carries its own weights.
 
     ``constraints`` is a plugin constraint selection (canonical mode only; see
     the `constraints` module): an `Assembly`, or an iterable of specs and/or
@@ -311,14 +312,12 @@ def solve(
         unknown = sorted(set(weights) - set(_SOFT_NAMES))
         if unknown:
             raise ValueError(f"unknown soft weight(s) {unknown}; the weights are keyed by {list(_SOFT_NAMES)}")
-        if constraints is not None:
-            raise ValueError(
-                "weights apply to the default fast path only; with constraints=, give each pick its weight"
-            )
         cfg.weights = canon.ObjectiveWeights(**weights)
+    # weights= / config.weights at the defaults (e.g. a full default dict) are harmless next to a
+    # selection; anything else would be silently ignored, so it raises.
     if constraints is not None and canonical and _weights_of(cfg.weights) != _weights_of(canon.ObjectiveWeights()):
         raise ValueError(
-            "config.weights apply to the default fast path only; with constraints=, give each pick its weight"
+            "weights / config.weights apply to the default fast path only; with constraints=, give each pick its weight"
         )
 
     if initial_solution is not None and not (isinstance(initial_solution, dict) and "lessons" in initial_solution):

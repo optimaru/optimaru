@@ -58,10 +58,10 @@ def _weighted(penalties: dict[str, int], weights: dict[str, int]) -> float:
 
 def test_list_constraints_matches_core_registry():
     names = list_constraints()
-    assert names == tuple(canon.CONSTRAINT_NAMES)
+    assert names == list(canon.CONSTRAINT_NAMES) == st._core.list_constraints()  # a list, like the other packages
     assert len(names) == 17  # 0.2.0 adds fixed_slots_cost / parallel_groups_cost
     # The default Assembly holds the whole registry in the same order.
-    assert tuple(spec.name for spec in Assembly()) == names
+    assert [spec.name for spec in Assembly()] == names
 
 
 def test_default_assembly_matches_monolithic_score(problem):
@@ -133,6 +133,15 @@ def test_weight_override_applies_to_score_and_result(problem):
     assert result["status"] == "FEASIBLE"
     effective = dict(DEFAULT_WEIGHTS, teacher_gap_cost=40)
     assert result["objective_value"] == _weighted(result["penalties"], effective)
+
+
+def test_constraint_totals_follow_the_catalog_order():
+    """constraint_totals() lists the constraints in list_constraints() order, like constraint_costs()."""
+    table = _tiny_table()
+    calculator = canon.default_calculator()
+    calculator.score(table)
+    assert [t["name"] for t in calculator.constraint_totals()] == list_constraints()
+    assert list(calculator.constraint_costs(table)) == list_constraints()
 
 
 def test_drop_component(problem):

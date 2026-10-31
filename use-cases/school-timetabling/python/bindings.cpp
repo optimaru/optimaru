@@ -12,7 +12,9 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>  // std::vector / std::set / std::map / std::string conversions
 
+#include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -237,34 +239,77 @@ void allowedSlotFromPython(cn::Lesson &lesson, const std::vector<bool> &table)
     lesson.allowedSlot.assign(table.begin(), table.end());
 }
 
+// The fields of canon.ObjectiveWeights, by Python name.
+struct WeightField
+{
+    const char *name;
+    double cn::ObjectiveWeights::*member;
+};
+
+constexpr WeightField kWeightFields[] = {
+    {"teacher_gap_cost", &cn::ObjectiveWeights::teacherGapCost},
+    {"teacher_workday_cost", &cn::ObjectiveWeights::teacherWorkdayCost},
+    {"teacher_free_day_cost", &cn::ObjectiveWeights::teacherFreeDayCost},
+    {"class_gap_cost", &cn::ObjectiveWeights::classGapCost},
+    {"avoided_period_cost", &cn::ObjectiveWeights::avoidedPeriodCost},
+    {"non_preferred_period_cost",
+     &cn::ObjectiveWeights::nonPreferredPeriodCost},
+};
+
+// One fast-path soft weight (an ObjectiveWeights argument or field), checked
+// like a constraint pick's weight knob and in the same words: a real number
+// (not a bool), finite and >= 0.
+double checkedWeight(const char *field, const py::object &value)
+{
+    const std::string label
+        = std::string("ObjectiveWeights.") + field + ": weight must be ";
+    const std::string shown = py::repr(value).cast<std::string>();
+    if (py::isinstance<py::bool_>(value)
+        || !py::isinstance(value,
+                           py::module_::import("numbers").attr("Real")))
+        throw py::type_error(label + "a number, not " + shown);
+    const double weight = py::float_(value).cast<double>();
+    if (!std::isfinite(weight) || weight < 0.0)
+        throw py::value_error(label + "finite and >= 0, not " + shown);
+    return weight;
+}
+
 void bindCanon(py::module_ &canon)
 {
     // The soft weights of the monolithic fast path (SolverConfig.weights),
     // named like the soft constraints; the defaults are the components'
     // kDefaultWeight. Never part of the model, never read by the plugin path.
     const cn::ObjectiveWeights defaultWeights{};
-    py::class_<cn::ObjectiveWeights>(
+    py::class_<cn::ObjectiveWeights> objectiveWeights(
         canon,
         "ObjectiveWeights",
         py::module_local(),
         "Soft weights of the monolithic fast path (solve(...) without "
         "constraints=), one per soft constraint; the defaults are the C++ "
-        "components' kDefaultWeight.")
+        "components' kDefaultWeight.");
+    objectiveWeights
         .def(py::init(
-                 [](double teacherGap,
-                    double teacherWorkday,
-                    double teacherFreeDay,
-                    double classGap,
-                    double avoidedPeriod,
-                    double nonPreferredPeriod)
+                 [](const py::object &teacherGapCost,
+                    const py::object &teacherWorkdayCost,
+                    const py::object &teacherFreeDayCost,
+                    const py::object &classGapCost,
+                    const py::object &avoidedPeriodCost,
+                    const py::object &nonPreferredPeriodCost)
                  {
                      cn::ObjectiveWeights w;
-                     w.teacherGapCost = teacherGap;
-                     w.teacherWorkdayCost = teacherWorkday;
-                     w.teacherFreeDayCost = teacherFreeDay;
-                     w.classGapCost = classGap;
-                     w.avoidedPeriodCost = avoidedPeriod;
-                     w.nonPreferredPeriodCost = nonPreferredPeriod;
+                     w.teacherGapCost
+                         = checkedWeight("teacher_gap_cost", teacherGapCost);
+                     w.teacherWorkdayCost = checkedWeight(
+                         "teacher_workday_cost", teacherWorkdayCost);
+                     w.teacherFreeDayCost = checkedWeight(
+                         "teacher_free_day_cost", teacherFreeDayCost);
+                     w.classGapCost
+                         = checkedWeight("class_gap_cost", classGapCost);
+                     w.avoidedPeriodCost = checkedWeight(
+                         "avoided_period_cost", avoidedPeriodCost);
+                     w.nonPreferredPeriodCost
+                         = checkedWeight("non_preferred_period_cost",
+                                         nonPreferredPeriodCost);
                      return w;
                  }),
              py::arg("teacher_gap_cost") = defaultWeights.teacherGapCost,
@@ -276,17 +321,6 @@ void bindCanon(py::module_ &canon)
              py::arg("avoided_period_cost") = defaultWeights.avoidedPeriodCost,
              py::arg("non_preferred_period_cost")
              = defaultWeights.nonPreferredPeriodCost)
-        .def_readwrite("teacher_gap_cost",
-                       &cn::ObjectiveWeights::teacherGapCost)
-        .def_readwrite("teacher_workday_cost",
-                       &cn::ObjectiveWeights::teacherWorkdayCost)
-        .def_readwrite("teacher_free_day_cost",
-                       &cn::ObjectiveWeights::teacherFreeDayCost)
-        .def_readwrite("class_gap_cost", &cn::ObjectiveWeights::classGapCost)
-        .def_readwrite("avoided_period_cost",
-                       &cn::ObjectiveWeights::avoidedPeriodCost)
-        .def_readwrite("non_preferred_period_cost",
-                       &cn::ObjectiveWeights::nonPreferredPeriodCost)
         .def("__eq__",
              [](const cn::ObjectiveWeights &a, const cn::ObjectiveWeights &b)
              {
@@ -313,6 +347,17 @@ void bindCanon(py::module_ &canon)
                             w.avoidedPeriodCost,
                             w.nonPreferredPeriodCost);
             });
+    // The fields reject what the constructor rejects.
+    for (const WeightField &field : kWeightFields)
+    {
+        objectiveWeights.def_property(
+            field.name,
+            [member = field.member](const cn::ObjectiveWeights &w)
+            { return w.*member; },
+            [member = field.member, name = field.name](
+                cn::ObjectiveWeights &w, const py::object &value)
+            { w.*member = checkedWeight(name, value); });
+    }
 
     py::class_<cn::Lesson>(canon, "Lesson", py::module_local())
         .def(py::init(
@@ -524,9 +569,24 @@ void bindCanon(py::module_ &canon)
             "constraint_totals",
             [](const cn::DecomposedCalculator &calc)
             {
+                // In the catalog order, like constraint_costs():
+                // constraintTotals() lists the unit constraints before the
+                // global ones. Anything outside the catalog comes last.
+                const std::vector<std::string> order = cn::constraintOrder();
+                const auto rank = [&order](const std::string &name)
+                {
+                    return std::find(order.begin(), order.end(), name)
+                           - order.begin();
+                };
+                std::vector<optimaru::ConstraintTotal> totals
+                    = calc.constraintTotals();
+                std::stable_sort(totals.begin(),
+                                 totals.end(),
+                                 [&rank](const optimaru::ConstraintTotal &a,
+                                         const optimaru::ConstraintTotal &b)
+                                 { return rank(a.name) < rank(b.name); });
                 py::list out;
-                for (const optimaru::ConstraintTotal &t :
-                     calc.constraintTotals())
+                for (const optimaru::ConstraintTotal &t : totals)
                 {
                     py::dict d;
                     d["name"] = tfpy::pythonName(t.name);
@@ -540,7 +600,7 @@ void bindCanon(py::module_ &canon)
             },
             "Weighted cost per constraint for the last scored/solved "
             "solution (positive = penalizing): {name, label, cost, level, "
-            "is_hard}.")
+            "is_hard}, in list_constraints() order.")
         .def(
             "constraint_costs",
             [](cn::DecomposedCalculator &calc, cn::Timetable &table)

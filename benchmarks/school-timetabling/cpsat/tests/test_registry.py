@@ -15,6 +15,7 @@ from teacher_scheduling.domain.enums import Weekday
 from teacher_scheduling.domain.solution import SolveStatus
 from teacher_scheduling.solver.config import ObjectiveWeights, SolverConfig
 from teacher_scheduling.solver.registry import (
+    UNASSIGNED_WEIGHT,
     Constraint,
     UnassignedLessonsCost,
     default_constraints,
@@ -211,10 +212,10 @@ def test_instance_weight_wins_over_objective_weights():
     assert timetable.objective_value == 5
 
 
-# ---------------------------------------------------------------- relaxing H1 (hard <-> soft)
+# ---------------------------------------------------------------- relaxing unassigned_lessons_cost (hard <-> soft)
 
 
-def test_weekly_period_counts_can_be_relaxed_into_a_penalty():
+def test_unassigned_lessons_cost_can_be_relaxed_into_a_penalty():
     """The same constraint with hard=False allows unassigned lessons and counts them as a penalty."""
     # 3 periods but only 2 periods a day -> impossible as hard, 1 period unassigned when relaxed
     problem = make_problem([course(periods_per_week=3, max_periods_per_day=3)], [teacher()], days=1, periods=2)
@@ -227,6 +228,15 @@ def test_weekly_period_counts_can_be_relaxed_into_a_penalty():
     assert len(timetable.lessons) == 2
     assert timetable.penalties["unassigned_lessons_cost"] == 1
     assert timetable.objective_value == 100
+
+
+def test_relaxed_unassigned_lessons_default_to_weight_one():
+    """weight=None is the engine default, 1, on either level — not the partial-timetabling weight.
+
+    Pass weight=UNASSIGNED_WEIGHT (10000) for partial timetabling: at 1 a lesson is dropped to
+    save a single teacher gap (20)."""
+    assert UnassignedLessonsCost(hard=False).effective_weight == 1
+    assert UnassignedLessonsCost(hard=False, weight=UNASSIGNED_WEIGHT).effective_weight == UNASSIGNED_WEIGHT == 10_000
 
 
 def test_merge_replaces_in_place_and_appends_new_names():

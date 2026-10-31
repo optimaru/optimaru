@@ -7,8 +7,23 @@ from st_timetabling import constraint_info
 
 from teacher_scheduling.config import env
 
-# The engine's default weight of each soft constraint (C++ kDefaultWeight) — the one source.
-_DEFAULT_WEIGHTS = {row.name: int(row.default_weight) for row in constraint_info() if row.default_level == "soft"}
+
+def _default_weights() -> dict[str, int]:
+    """The engine's default weight of each soft constraint (C++ kDefaultWeight) — the one source.
+
+    CP-SAT objectives are integral, so a non-integral engine default fails loudly here
+    instead of being truncated."""
+    weights = {}
+    for row in constraint_info():
+        if row.default_level != "soft":
+            continue
+        if not float(row.default_weight).is_integer():
+            raise ValueError(f"{row.name}: CP-SAT needs an integer default weight, not {row.default_weight!r}")
+        weights[row.name] = int(row.default_weight)
+    return weights
+
+
+_DEFAULT_WEIGHTS = _default_weights()
 
 
 def _weight_field(name: str, description: str):
@@ -26,7 +41,9 @@ class ObjectiveWeights(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    teacher_gap_cost: int = _weight_field("teacher_gap_cost", "Penalty per idle period in the middle of a teacher's day")
+    teacher_gap_cost: int = _weight_field(
+        "teacher_gap_cost", "Penalty per idle period in the middle of a teacher's day"
+    )
     teacher_workday_cost: int = _weight_field(
         "teacher_workday_cost", "Penalty per teacher working day (favours compact teaching days)"
     )
@@ -61,5 +78,7 @@ class SolverConfig(BaseModel):
     num_workers: int = Field(default_factory=lambda: env.SOLVER_NUM_WORKERS, ge=1)
     log_search_progress: bool = Field(default_factory=lambda: env.SOLVER_LOG_SEARCH_PROGRESS)
     random_seed: int = 0
-    relative_gap_limit: float | None = Field(default=None, ge=0, description="Stop early once this relative gap is reached")
+    relative_gap_limit: float | None = Field(
+        default=None, ge=0, description="Stop early once this relative gap is reached"
+    )
     weights: ObjectiveWeights = Field(default_factory=ObjectiveWeights)

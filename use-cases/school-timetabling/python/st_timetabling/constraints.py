@@ -107,9 +107,9 @@ __all__ = [
 UNASSIGNED_LESSONS_SOFT_WEIGHT: float = float(canon.UNASSIGNED_LESSONS_SOFT_WEIGHT)
 
 
-def list_constraints() -> tuple[str, ...]:
+def list_constraints() -> list[str]:
     """Every constraint name a selection accepts, in catalog order (``canon.CONSTRAINT_NAMES``)."""
-    return tuple(canon.CONSTRAINT_NAMES)
+    return list(canon.CONSTRAINT_NAMES)
 
 
 class UnassignedLessonsCost(Constraint):
@@ -131,7 +131,7 @@ class UnassignedLessonsCost(Constraint):
         "0 means every course gets all of its weekly periods."
     )
     description_ko = (
-        "강좌의 주당 시수 가운데 시간을 받지 못한 수업 수입니다. 배정되지 않은 1시간이 비용 1이며, "
+        "강좌의 주당 시수 가운데 시간이 배정되지 않은 수업 수입니다. 배정되지 않은 수업 1시간이 비용 1이며, "
         "0이면 모든 강좌가 주당 시수를 다 채운 것입니다."
     )
 
@@ -184,7 +184,7 @@ class DisallowedSlotCost(Constraint):
         "class is unavailable. One unit of cost is one such lesson; 0 means every lesson sits on an allowed time."
     )
     description_ko = (
-        "강좌가 쓸 수 없는 시간(금지 시간, 교사나 학급이 안 되는 시간)에 놓인 수업 수입니다. "
+        "강좌가 쓸 수 없는 시간(금지 시간, 교사나 학급의 불가 시간)에 놓인 수업 수입니다. "
         "그런 수업 1개가 비용 1이며, 0이면 모든 수업이 허용된 시간에 있습니다."
     )
 
@@ -201,7 +201,7 @@ class RoomCapacityCost(Constraint):
     )
     description_ko = (
         "특별실 종류와 교시마다 그 특별실이 필요한 수업 가운데 보유한 실 수를 넘는 수입니다. "
-        "방을 못 받은 수업 1개가 비용 1이며, 0이면 특별실이 필요한 수업이 모두 방을 받습니다."
+        "특별실을 배정받지 못한 수업 1개가 비용 1이며, 0이면 특별실이 필요한 수업이 모두 특별실을 배정받습니다."
     )
 
 
@@ -225,14 +225,14 @@ class BlockAdjacencyCost(Constraint):
     """How far a block (block_periods consecutive periods) is broken. Default: hard, weight 1."""
 
     name = "block_adjacency_cost"
-    label_en = "Block periods"
+    label_en = "Consecutive blocks"
     label_ko = "연강 배치"
     description_en = (
         "For each block of consecutive periods, the missing adjacencies on one day plus one per member left "
         "out while the rest is placed. 0 means every block sits on one day in consecutive periods."
     )
     description_ko = (
-        "연강 묶음마다 같은 날 이어지지 못한 칸 수에, 일부만 배정됐을 때 빠진 수업 수를 더합니다. "
+        "연강 묶음마다 같은 날 바로 이어지지 못한 곳의 수에, 일부만 배정됐을 때 빠진 수업 수를 더합니다. "
         "0이면 모든 연강이 하루 안에 연달아 놓인 것입니다."
     )
 
@@ -365,7 +365,7 @@ class NonPreferredPeriodCost(Constraint):
     )
     description_ko = (
         "과목에 preferred_periods가 있는데 그 밖의 교시에 놓인 수업 수입니다(선호가 없는 과목은 세지 않습니다). "
-        "그런 수업 1개가 비용 1이며, 0이면 선호가 있는 수업이 모두 선호 교시에 있습니다."
+        "그런 수업 1개가 비용 1이며, 0이면 선호 교시가 있는 수업이 모두 선호 교시에 놓입니다."
     )
 
 
@@ -384,7 +384,7 @@ class FixedSlotsCost(Constraint):
     )
     description_ko = (
         "강좌의 fixed_slots에 놓이지 않은 수업 수입니다. 엔진은 고정 수업을 그 시간에 묶어 두므로 "
-        "비용은 늘 0이며, 소프트로 바꿀 수 없습니다."
+        "비용은 늘 0이며, 소프트 제약으로 바꿀 수 없습니다."
     )
 
 
@@ -404,7 +404,7 @@ class ParallelGroupsCost(Constraint):
     )
     description_ko = (
         "같은 parallel_group(한 학급을 나눠 동시에 수업하는 분반)의 수업이 서로 다른 시간에 놓인 수입니다. "
-        "엔진은 분반을 한 수업으로 합치므로 비용은 늘 0이며, 소프트로 바꿀 수 없습니다."
+        "엔진은 분반을 한 수업으로 합치므로 비용은 늘 0이며, 소프트 제약으로 바꿀 수 없습니다."
     )
 
 

@@ -19,9 +19,9 @@ void fail(const std::string &message)
     throw std::invalid_argument("st::canon::prepare: " + message);
 }
 
-// The hard default weights, read off the components (decision: the
-// monolithic totals read kDefaultWeight instead of re-typing the numbers).
-// Integral, so the hard total stays integer arithmetic.
+// The hard default weights, read off the components: the monolithic totals
+// read kDefaultWeight instead of re-typing the numbers, so the two paths
+// cannot drift apart. Integral, so the hard total stays integer arithmetic.
 template <typename Component> constexpr std::int64_t hardWeight()
 {
     static_assert(Component::kDefaultLevel == optimaru::Level::Hard,

@@ -13,6 +13,9 @@ are identical to the Java quickstart's
 
 The result keys are those names (the quickstart model has no constraint
 registry; the names follow the canonical model's where they mean the same).
+Each key holds that constraint's raw cost, so the reward
+teacher_time_efficiency_cost is <= 0 (minus the adjacent same-teacher pairs)
+and ``hard`` / ``soft`` are minus the sums of their three keys.
 
 Usage:
     uv run evaluate.py <instance.json> <solution.json>
@@ -87,7 +90,7 @@ def score_assignment(instance: dict, assignment: list[tuple[int, int]]) -> dict:
     )
 
     hard = -(room_pairs + teacher_pairs + class_pairs)
-    soft = time_efficiency - room_change - subject_repeat
+    soft = -(room_change + subject_repeat - time_efficiency)
     return {
         "hard": hard,
         "soft": soft,
@@ -95,7 +98,7 @@ def score_assignment(instance: dict, assignment: list[tuple[int, int]]) -> dict:
         "teacher_conflict_cost": teacher_pairs,
         "class_conflict_cost": class_pairs,
         "teacher_room_change_cost": room_change,
-        "teacher_time_efficiency_cost": time_efficiency,
+        "teacher_time_efficiency_cost": -time_efficiency,  # a reward: raw cost <= 0
         "class_subject_repeat_cost": subject_repeat,
     }
 

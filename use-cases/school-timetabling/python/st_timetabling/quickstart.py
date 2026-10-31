@@ -280,7 +280,9 @@ def inject_solution(converted: ConvertedProblem, lessons: list[dict]) -> None:
     for course_id, slots in by_course.items():
         indices = free_lessons.get(course_id, [])
         if len(slots) > len(indices):
-            raise ValueError(f"[{course_id}] {len(slots)} slots besides its fixed ones, for {len(indices)} free lessons")
+            raise ValueError(
+                f"[{course_id}] {len(slots)} slots besides its fixed ones, for {len(indices)} free lessons"
+            )
         course = converted.courses_by_id[course_id]
         required = converted.subjects_by_id[course["subject_id"]].get("required_room_type")
         candidates = (

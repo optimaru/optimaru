@@ -175,3 +175,22 @@ def test_weights_and_constraints_do_not_mix(problem):
     cfg.weights = st.canon.ObjectiveWeights(teacher_gap_cost=1)
     with pytest.raises(ValueError, match="fast path"):
         st.solve(problem, time_limit_seconds=0.1, config=cfg, constraints=st.Assembly())
+
+
+def test_default_weights_go_with_constraints(problem):
+    """weights= equal to the defaults changes nothing, so it is accepted next to a selection like config.weights."""
+    defaults = st.constraints.default_weights()  # the six soft names, as the server sends them
+    for weights in (defaults, {"teacher_gap_cost": defaults["teacher_gap_cost"]}):
+        result = st.solve(problem, time_limit_seconds=0.5, random_seed=3, weights=weights, constraints=st.Assembly())
+        assert result["lessons"]
+
+
+@pytest.mark.parametrize("bad", [-20, float("nan"), float("inf")])
+def test_solve_weights_refuse_non_finite_and_negative_values(problem, bad):
+    with pytest.raises(ValueError, match="teacher_gap_cost: weight must be finite and >= 0"):
+        st.solve(problem, time_limit_seconds=0.1, weights={"teacher_gap_cost": bad})
+
+
+def test_solve_weights_refuse_bools(problem):
+    with pytest.raises(TypeError, match="teacher_gap_cost: weight must be a number, not True"):
+        st.solve(problem, time_limit_seconds=0.1, weights={"teacher_gap_cost": True})

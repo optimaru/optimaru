@@ -31,8 +31,8 @@ add_executable(st_test test/st_test.cpp)
 target_link_libraries(st_test PRIVATE st_core)
 target_compile_options(st_test PRIVATE -Wall -Wextra)
 
-# Canonical full-parity domain (st::canon): the CP-SAT package's H1~H10 /
-# S1~S6 on the same engine. Kept as a separate library so the quickstart
+# Canonical full-parity domain (st::canon): the CP-SAT package's hard and
+# soft constraints on the same engine. Kept as a separate library so the quickstart
 # domain above stays byte-identical for the evaluate.py cross-check.
 add_library(st_canon
     src/canonical_score_calculator.cpp
@@ -47,8 +47,8 @@ add_executable(canonical_test test/canonical_test.cpp)
 target_link_libraries(canonical_test PRIVATE st_canon)
 target_compile_options(canonical_test PRIVATE -Wall -Wextra)
 
-# Plugin-assembly path (st/canonical_constraints.hpp): the same H1~H10 /
-# S1~S6 decomposed into one component each on the engine's
+# Plugin-assembly path (st/canonical_constraints.hpp): the same hard and
+# soft constraints decomposed into one component each on the engine's
 # DecomposedScoreCalculator, checked bit-for-bit against the monolithic
 # calculators.
 add_executable(canonical_plugin_test test/canonical_plugin_test.cpp)

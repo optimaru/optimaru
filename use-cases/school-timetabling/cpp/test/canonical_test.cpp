@@ -525,7 +525,8 @@ void verifySoftConstraints()
         t.courseAvoidedPeriodMask = {0x0001, 0};
         addLesson(t, 0, 0, {0}, slotIdx(kGrid25, 0, 1));
         addLesson(t, 0, 1, {0}, slotIdx(kGrid25, 0, 3));
-        // teacherGap 1, workday 1, freeDay 1, classGap 1, avoided 1: soft =
+        // teacherGapCost 1, teacherWorkdayCost 1, teacherFreeDayCost 1,
+        // classGapCost 1, avoidedPeriodCost 1: soft =
         // -(20 + 3 + 30 + 10 + 5) = -68.
         const Score score = ScoreCalculator::calculateScore(t);
         checkCount("weighted soft assembly",

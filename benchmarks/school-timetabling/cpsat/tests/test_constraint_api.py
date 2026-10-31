@@ -15,6 +15,7 @@ from teacher_scheduling.api import CONSTRAINT_DTOS, ConstraintDto, catalog, to_c
 from teacher_scheduling.solver.config import SolverConfig
 from teacher_scheduling.solver.registry import (
     CONSTRAINT_TYPES,
+    ENGINE_DEFAULTS,
     TeacherGapCost,
     UnassignedLessonsCost,
     default_constraints,
@@ -81,6 +82,70 @@ def test_a_structural_constraint_refuses_soft():
         solve(problem, config, constraints=merge(default_constraints(NO_WEIGHTS), relaxed))
 
 
+# ---------------------------------------------------------------- what the CP-SAT model cannot honour
+
+#: Hard constraints this CP-SAT model states as model constraints, without a penalty form. The
+#: engine can demote them (level_flippable), this path refuses hard=False.
+_STRUCTURAL_ON_CPSAT = (
+    "class_conflict_cost",
+    "teacher_conflict_cost",
+    "disallowed_slot_cost",
+    "room_capacity_cost",
+    "course_max_periods_per_day_cost",
+    "block_adjacency_cost",
+    "teacher_max_periods_cost",
+    "teacher_max_consecutive_periods_cost",
+)
+
+
+def _solve_with(*overrides):
+    problem = make_problem([course(periods_per_week=1)], [teacher()], days=1, periods=2)
+    config = SolverConfig(time_limit_seconds=1.0, num_workers=1, weights=NO_WEIGHTS)
+    return solve(problem, config, constraints=merge(default_constraints(NO_WEIGHTS), *overrides))
+
+
+@pytest.mark.parametrize("name", _STRUCTURAL_ON_CPSAT)
+def test_structural_hard_constraints_refuse_soft_on_cpsat(name):
+    assert ENGINE_DEFAULTS[name].level_flippable, "the engine demotes it; only CP-SAT refuses"
+    (relaxed,) = to_constraints(_LIST.validate_python([{"type": name, "hard": False}]))
+    with pytest.raises(ValueError, match="enforces it structurally, so hard=False is not supported"):
+        _solve_with(relaxed)
+
+
+@pytest.mark.parametrize(
+    ("constraint", "message"),
+    [
+        (TeacherGapCost(exponent=2.0), "exponent 2.0 is not supported by CP-SAT"),
+        (TeacherGapCost(weight=2.5), "CP-SAT needs an integer weight"),
+    ],
+    ids=["exponent", "non-integer-weight"],
+)
+def test_knobs_a_linear_integer_objective_cannot_honour_raise(constraint, message):
+    with pytest.raises(ValueError, match=message):
+        _solve_with(constraint)
+
+
+@pytest.mark.parametrize(
+    "old",
+    [
+        "weekly_period_counts",
+        "class_group_conflicts",
+        "teacher_conflicts",
+        "room_capacity",
+        "daily_course_limits",
+        "block_periods",
+        "teacher_workload",
+        "teacher_consecutive_limits",
+        "teacher_gap",
+        "fixed_slots",
+        "parallel_groups",
+    ],
+)
+def test_the_old_dto_names_are_rejected(old):
+    with pytest.raises(ValidationError):
+        _LIST.validate_python([{"type": old}])
+
+
 # ---------------------------------------------------------------- catalog
 
 
@@ -145,5 +210,5 @@ def test_dto_overrides_only_the_named_constraint():
     timetable = solve(problem, config, constraints=merge(default_constraints(NO_WEIGHTS), *overrides))
 
     assert timetable.status.has_solution
-    # With H2 (fixed placement) alive, the two cells land exactly where specified.
+    # With fixed_slots_cost (fixed placement) alive, the two cells land exactly where specified.
     assert {lesson.slot.period for lesson in timetable.lessons} == {1, 3}

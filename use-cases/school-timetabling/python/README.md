@@ -119,7 +119,8 @@ Rules:
 
 - Every spec and `add` take the three knobs: `weight` (None = the component
   default: 1 for hard, 20/3/30/10/5/1 for the soft ones — never `weights=`,
-  which belongs to the fast path and must be left out next to `constraints=`),
+  which belongs to the fast path and must stay at the defaults next to
+  `constraints=`),
   `hard` (None keeps the default level, True = hard, False = soft) and
   `exponent` (sign-preserving power shaping). Bad names raise `ValueError`, a
   wrong knob type `TypeError`, in the same words on the Python and the C++
@@ -187,7 +188,8 @@ Rules:
   removed; `weight=None` is the component default everywhere. The fast path's
   `canon.ObjectiveWeights` / `SolverConfig.weights` / `solve(weights=)` /
   `models.ObjectiveWeightsModel` are keyed by the soft constraint names
-  (`teacher_gap_cost`, ...) and take any non-negative number.
+  (`teacher_gap_cost`, ...) and take any finite number >= 0 (a bool, NaN,
+  infinity or a negative weight raises, as for a constraint pick's weight).
 - `Timetable.penalties` keys are the soft constraint names; partial
   timetabling reports `unassigned_lessons_cost` (was `weekly_period_counts`).
 - `canon.Breakdown` and `canon.compute_breakdown` are removed:

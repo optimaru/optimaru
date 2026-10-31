@@ -23,13 +23,13 @@ from teacher_scheduling.domain.entities import Course
 from teacher_scheduling.solver.variables import TimetableVariables
 
 
-def _add_weekly_period_counts(model: cp_model.CpModel, variables: TimetableVariables) -> None:
+def _add_unassigned_lessons_cost(model: cp_model.CpModel, variables: TimetableVariables) -> None:
     """unassigned_lessons_cost: exactly the weekly periods per course."""
     for course in variables.problem.courses:
         model.add(sum(variables.course_vars(course.id)) == course.periods_per_week)
 
 
-def _add_fixed_slots(model: cp_model.CpModel, variables: TimetableVariables) -> None:
+def _add_fixed_slots_cost(model: cp_model.CpModel, variables: TimetableVariables) -> None:
     """fixed_slots_cost: fixed placements."""
     for course in variables.problem.courses:
         for slot in course.fixed_slots:
@@ -39,7 +39,7 @@ def _add_fixed_slots(model: cp_model.CpModel, variables: TimetableVariables) -> 
             model.add(var == 1)
 
 
-def _add_parallel_groups(model: cp_model.CpModel, variables: TimetableVariables) -> None:
+def _add_parallel_groups_cost(model: cp_model.CpModel, variables: TimetableVariables) -> None:
     """parallel_groups_cost: a parallel group runs at the same time."""
     for courses in variables.problem.courses_by_parallel_group.values():
         representative, *others = courses
@@ -48,7 +48,7 @@ def _add_parallel_groups(model: cp_model.CpModel, variables: TimetableVariables)
                 model.add(variables.x[course.id, slot] == variables.x[representative.id, slot])
 
 
-def _add_class_group_conflicts(model: cp_model.CpModel, variables: TimetableVariables) -> None:
+def _add_class_conflict_cost(model: cp_model.CpModel, variables: TimetableVariables) -> None:
     """class_conflict_cost: no class clashes.
 
     Equating it with the boolean class_busy alone enforces "at most one lesson of that class at that time".
@@ -57,13 +57,13 @@ def _add_class_group_conflicts(model: cp_model.CpModel, variables: TimetableVari
         model.add(sum(lesson_vars) == variables.class_busy[key])
 
 
-def _add_teacher_conflicts(model: cp_model.CpModel, variables: TimetableVariables) -> None:
+def _add_teacher_conflict_cost(model: cp_model.CpModel, variables: TimetableVariables) -> None:
     """teacher_conflict_cost: no teacher clashes. Same approach as class_conflict_cost."""
     for key, lesson_vars in variables.teacher_lessons.items():
         model.add(sum(lesson_vars) == variables.teacher_busy[key])
 
 
-def _add_room_capacity(model: cp_model.CpModel, variables: TimetableVariables) -> None:
+def _add_room_capacity_cost(model: cp_model.CpModel, variables: TimetableVariables) -> None:
     """room_capacity_cost: a special-room type can be used only as many times at once as rooms exist.
 
     Which course uses which room is assigned after solving (`rooms.assign_rooms`).
@@ -83,7 +83,7 @@ def _add_room_capacity(model: cp_model.CpModel, variables: TimetableVariables) -
         model.add(sum(lesson_vars) <= capacity)
 
 
-def _add_daily_course_limits(model: cp_model.CpModel, variables: TimetableVariables) -> None:
+def _add_course_max_periods_per_day_cost(model: cp_model.CpModel, variables: TimetableVariables) -> None:
     """course_max_periods_per_day_cost: how many periods of the same course fit on one day."""
     for course in variables.problem.courses:
         limit = course.effective_max_periods_per_day
@@ -93,7 +93,7 @@ def _add_daily_course_limits(model: cp_model.CpModel, variables: TimetableVariab
                 model.add(sum(day_vars) <= limit)
 
 
-def _add_block_periods(model: cp_model.CpModel, variables: TimetableVariables) -> None:
+def _add_block_adjacency_cost(model: cp_model.CpModel, variables: TimetableVariables) -> None:
     """block_adjacency_cost: block time. Once a week, block_periods consecutive periods."""
     for course in variables.problem.courses:
         if not course.has_block:
@@ -127,7 +127,7 @@ def _block_start_vars(model: cp_model.CpModel, variables: TimetableVariables, co
     return starts
 
 
-def _add_teacher_workload(model: cp_model.CpModel, variables: TimetableVariables) -> None:
+def _add_teacher_max_periods_cost(model: cp_model.CpModel, variables: TimetableVariables) -> None:
     """teacher_max_periods_cost: teacher daily/weekly maximum periods."""
     problem = variables.problem
     for teacher in problem.teachers:
@@ -142,7 +142,7 @@ def _add_teacher_workload(model: cp_model.CpModel, variables: TimetableVariables
                 model.add(sum(day_vars) <= teacher.max_periods_per_day)
 
 
-def _add_teacher_consecutive_limits(model: cp_model.CpModel, variables: TimetableVariables) -> None:
+def _add_teacher_max_consecutive_periods_cost(model: cp_model.CpModel, variables: TimetableVariables) -> None:
     """teacher_max_consecutive_periods_cost: consecutive-lessons limit. At most limit lessons in every window of length (limit + 1)."""
     problem = variables.problem
     for teacher in problem.teachers:

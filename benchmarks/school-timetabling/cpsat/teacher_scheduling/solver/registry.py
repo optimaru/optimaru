@@ -192,7 +192,7 @@ class UnassignedLessonsCost(domain.UnassignedLessonsCost, _EnginePlugin):
     """
 
     def _build_hard(self, model: cp_model.CpModel, variables: TimetableVariables) -> None:
-        hard_impl._add_weekly_period_counts(model, variables)
+        hard_impl._add_unassigned_lessons_cost(model, variables)
 
     def _build_soft(self, model: cp_model.CpModel, variables: TimetableVariables) -> cp_model.LinearExpr | None:
         for course in variables.problem.courses:
@@ -211,25 +211,25 @@ class UnassignedLessonsCost(domain.UnassignedLessonsCost, _EnginePlugin):
 class FixedSlotsCost(domain.FixedSlotsCost, _Structural):
     """Fixed-time placement (never flippable)."""
 
-    _impl = staticmethod(hard_impl._add_fixed_slots)
+    _impl = staticmethod(hard_impl._add_fixed_slots_cost)
 
 
 class ParallelGroupsCost(domain.ParallelGroupsCost, _Structural):
     """Parallel sections run together (never flippable)."""
 
-    _impl = staticmethod(hard_impl._add_parallel_groups)
+    _impl = staticmethod(hard_impl._add_parallel_groups_cost)
 
 
 class ClassConflictCost(domain.ClassConflictCost, _Structural):
     """No class clashes."""
 
-    _impl = staticmethod(hard_impl._add_class_group_conflicts)
+    _impl = staticmethod(hard_impl._add_class_conflict_cost)
 
 
 class TeacherConflictCost(domain.TeacherConflictCost, _Structural):
     """No teacher clashes."""
 
-    _impl = staticmethod(hard_impl._add_teacher_conflicts)
+    _impl = staticmethod(hard_impl._add_teacher_conflict_cost)
 
 
 class DisallowedSlotCost(domain.DisallowedSlotCost, _Structural):
@@ -244,31 +244,31 @@ class DisallowedSlotCost(domain.DisallowedSlotCost, _Structural):
 class RoomCapacityCost(domain.RoomCapacityCost, _Structural):
     """Special-room capacity."""
 
-    _impl = staticmethod(hard_impl._add_room_capacity)
+    _impl = staticmethod(hard_impl._add_room_capacity_cost)
 
 
 class CourseMaxPeriodsPerDayCost(domain.CourseMaxPeriodsPerDayCost, _Structural):
     """Daily maximum periods per course."""
 
-    _impl = staticmethod(hard_impl._add_daily_course_limits)
+    _impl = staticmethod(hard_impl._add_course_max_periods_per_day_cost)
 
 
 class BlockAdjacencyCost(domain.BlockAdjacencyCost, _Structural):
     """Block time (consecutive periods)."""
 
-    _impl = staticmethod(hard_impl._add_block_periods)
+    _impl = staticmethod(hard_impl._add_block_adjacency_cost)
 
 
 class TeacherMaxPeriodsCost(domain.TeacherMaxPeriodsCost, _Structural):
     """Daily/weekly maximum periods per teacher."""
 
-    _impl = staticmethod(hard_impl._add_teacher_workload)
+    _impl = staticmethod(hard_impl._add_teacher_max_periods_cost)
 
 
 class TeacherMaxConsecutivePeriodsCost(domain.TeacherMaxConsecutivePeriodsCost, _Structural):
     """Teacher consecutive-lessons limit."""
 
-    _impl = staticmethod(hard_impl._add_teacher_consecutive_limits)
+    _impl = staticmethod(hard_impl._add_teacher_max_consecutive_periods_cost)
 
 
 # ---------------------------------------------------------------- soft constraints

@@ -243,7 +243,10 @@ class canon:
         """Soft weights of the monolithic fast path (`SolverConfig.weights`),
         keyed by the soft constraint names; the defaults are the components'
         kDefaultWeight (20/3/30/10/5/1). 0 drops the term. Never part of the
-        model and never read by the plugin path."""
+        model and never read by the plugin path. The constructor and the
+        field setters take a real number, finite and >= 0, like a constraint
+        pick's weight knob (TypeError for a bool or a non-number, ValueError
+        otherwise)."""
         def __init__(
             self,
             teacher_gap_cost: float = 20.0,
@@ -435,7 +438,8 @@ class canon:
             in `table.score`). Afterwards :meth:`constraint_totals` explains it."""
 
         def constraint_totals(self) -> list[canon.ConstraintTotalDict]:
-            """Weighted cost per constraint of the last score/solve (the score explanation)."""
+            """Weighted cost per constraint of the last score/solve (the score explanation),
+            in list_constraints() order."""
 
         def constraint_costs(self, table: canon.Timetable) -> dict[str, dict[str, Any]]:
             """Raw per-unit costs of this assembly's constraints on `table` (the

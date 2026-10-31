@@ -166,6 +166,34 @@ def test_objective_weights_take_non_integer_values():
     assert SolveConfig(weights=weights).to_canon().weights.teacher_gap_cost == 2.5
 
 
+@pytest.mark.parametrize("bad", [-1, float("nan"), float("inf")])
+def test_objective_weights_refuse_non_finite_and_negative_values(bad):
+    """The pydantic mirror and the C++ struct refuse the same weights a constraint pick refuses."""
+    from pydantic import ValidationError
+
+    from st_timetabling.models import ObjectiveWeightsModel
+
+    with pytest.raises(ValidationError):
+        ObjectiveWeightsModel(teacher_gap_cost=bad)
+    with pytest.raises(ValueError, match="teacher_gap_cost: weight must be finite and >= 0"):
+        st.canon.ObjectiveWeights(teacher_gap_cost=bad)
+    weights = st.canon.ObjectiveWeights()
+    with pytest.raises(ValueError, match="teacher_gap_cost: weight must be finite and >= 0"):
+        weights.teacher_gap_cost = bad
+    assert weights == st.canon.ObjectiveWeights()
+
+
+@pytest.mark.parametrize("bad", [True, "20", None])
+def test_core_objective_weights_refuse_bools_and_non_numbers(bad):
+    with pytest.raises(TypeError, match="class_gap_cost: weight must be a number"):
+        st.canon.ObjectiveWeights(class_gap_cost=bad)
+    weights = st.canon.ObjectiveWeights()
+    with pytest.raises(TypeError, match="class_gap_cost: weight must be a number"):
+        weights.class_gap_cost = bad
+    weights.class_gap_cost = 4  # an int is a real number
+    assert weights.class_gap_cost == 4.0
+
+
 def test_a_term_the_fast_path_does_not_know_is_left_out_of_to_core():
     """A soft term only the catalog knows is silently left out by to_core (the plugin path uses it)."""
     from pydantic import Field, create_model

@@ -1,4 +1,4 @@
-"""Checks the hard constraints H1–H10 one by one on small instances."""
+"""Checks the hard constraints one by one on small instances."""
 
 from collections import Counter
 
@@ -15,17 +15,17 @@ def _solved_and_valid(problem, timetable):
     assert validate_timetable(problem, timetable) == []
 
 
-# ---------------------------------------------------------------- H1 weekly periods
+# ---------------------------------------------------------------- unassigned_lessons_cost (weekly periods)
 
 
-def test_weekly_period_count():
+def test_unassigned_lessons_cost_meets_the_weekly_periods():
     problem = make_problem([course(periods_per_week=3, max_periods_per_day=3)], [teacher()], days=1, periods=5)
     timetable = quick_solve(problem)
     _solved_and_valid(problem, timetable)
     assert len(timetable.lessons) == 3
 
 
-# ---------------------------------------------------------------- H2 fixed time
+# ---------------------------------------------------------------- fixed_slots_cost (fixed time)
 
 
 def test_fixed_slot_is_scheduled():
@@ -51,7 +51,7 @@ def test_fixed_slot_conflicting_with_unavailable_raises():
         quick_solve(problem)
 
 
-# ---------------------------------------------------------------- forbidden/unavailable times
+# ---------------------------------------------------------------- disallowed_slot_cost (forbidden/unavailable times)
 
 
 def test_forbidden_and_unavailable_slots_are_avoided():
@@ -67,7 +67,7 @@ def test_forbidden_and_unavailable_slots_are_avoided():
     assert {lesson.slot.period for lesson in timetable.lessons} == {1, 3}
 
 
-# ---------------------------------------------------------------- H3/H4 no clashes
+# ---------------------------------------------------------------- class_conflict_cost / teacher_conflict_cost
 
 
 def test_class_conflicts_forbidden():
@@ -94,7 +94,7 @@ def test_teacher_conflicts_forbidden():
     assert len({lesson.slot for lesson in timetable.lessons}) == 4
 
 
-# ---------------------------------------------------------------- H5 parallel sections
+# ---------------------------------------------------------------- parallel_groups_cost (parallel sections)
 
 
 def test_parallel_group_runs_simultaneously():
@@ -113,7 +113,7 @@ def test_parallel_group_runs_simultaneously():
     assert slots_a.isdisjoint(slots_rest)  # a parallel group takes one class cell too
 
 
-# ---------------------------------------------------------------- H6 special-room capacity
+# ---------------------------------------------------------------- room_capacity_cost (special-room capacity)
 
 
 def test_room_capacity_respected():
@@ -157,10 +157,10 @@ def test_two_rooms_shared_in_same_slot():
     assert all(count == 1 for count in used.values())
 
 
-# ---------------------------------------------------------------- H7 daily cap per course
+# ---------------------------------------------------------------- course_max_periods_per_day_cost (course daily cap)
 
 
-def test_daily_course_limit():
+def test_course_max_periods_per_day():
     problem = make_problem([course(periods_per_week=4, max_periods_per_day=2)], [teacher()], days=2, periods=4)
     timetable = quick_solve(problem)
     _solved_and_valid(problem, timetable)
@@ -168,13 +168,13 @@ def test_daily_course_limit():
     assert sorted(per_day.values()) == [2, 2]
 
 
-# ---------------------------------------------------------------- H8 block time
+# ---------------------------------------------------------------- block_adjacency_cost (block time)
 
 
 def test_block_periods_are_consecutive():
     problem = make_problem([course(periods_per_week=3, block_periods=3)], [teacher()], days=2, periods=4)
     timetable = quick_solve(problem)
-    _solved_and_valid(problem, timetable)  # block continuity is checked by the validator's H8 check
+    _solved_and_valid(problem, timetable)  # the validator checks block continuity
     per_day: dict = {}
     for lesson in timetable.lessons:
         per_day.setdefault(lesson.slot.day, []).append(lesson.slot.period)
@@ -195,7 +195,7 @@ def test_block_without_room_raises_value_error():
         quick_solve(problem)
 
 
-# ---------------------------------------------------------------- H9 teacher daily/weekly caps
+# ---------------------------------------------------------------- teacher_max_periods_cost (teacher daily/weekly caps)
 
 
 def test_teacher_weekly_max():
@@ -227,10 +227,10 @@ def test_teacher_daily_max():
     assert sorted(per_day.values()) == [2, 2]
 
 
-# ---------------------------------------------------------------- H10 consecutive-lessons limit
+# ---------------------------------------------------------------- teacher_max_consecutive_periods_cost
 
 
-def test_teacher_consecutive_limit():
+def test_teacher_max_consecutive_periods():
     problem = make_problem(
         [course(periods_per_week=3, max_periods_per_day=3)],
         [teacher(max_consecutive_periods=2)],
@@ -238,7 +238,7 @@ def test_teacher_consecutive_limit():
         periods=5,
     )
     timetable = quick_solve(problem)
-    _solved_and_valid(problem, timetable)  # the validator's H10 check catches a consecutive-cap violation
+    _solved_and_valid(problem, timetable)  # the validator catches a consecutive-cap violation
     periods = sorted(lesson.slot.period for lesson in timetable.lessons)
     assert periods[2] - periods[0] != 2  # the three periods are not back to back
 

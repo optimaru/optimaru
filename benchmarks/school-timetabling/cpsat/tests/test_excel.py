@@ -231,7 +231,7 @@ def _parallel_workbook(periods_per_week: int, periods_on_monday: int) -> io.Byte
 
 
 def test_parallel_group_is_not_penalized_twice_for_one_missing_period():
-    """Parallel sections always move together (H5), so the unassigned penalty counts once per group."""
+    """Parallel sections always move together (parallel_groups_cost), so the unassigned penalty counts once per group."""
     # Monday has only 2 cells, the two parallel courses need 4 each -> 2 periods unassigned per group
     problem = import_workbook(_parallel_workbook(periods_per_week=4, periods_on_monday=2)).problem
     timetable = solve_partial(problem, SolverConfig(time_limit_seconds=10))

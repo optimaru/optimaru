@@ -6,8 +6,9 @@ constraints, shared by both solvers:
 
 - the 3 hard ones (room_conflict_cost / teacher_conflict_cost / class_conflict_cost)
   are CP-SAT hard constraints → any solution found has hard == 0.
-- the 3 soft ones are the objective: maximize teacher_time_efficiency_cost (a
-  reward) - teacher_room_change_cost - class_subject_repeat_cost.
+- the 3 soft ones are the objective: maximize the adjacent same-teacher pairs
+  (teacher_time_efficiency_cost, a reward whose raw cost is minus that count)
+  - teacher_room_change_cost - class_subject_repeat_cost.
   * teacher_room_change_cost: per teacher, the lesson pairs in different rooms. Each
     pair reifies same_room[i][j] ↔ (room_i == room_j): all pairs - same-room pairs.
   * teacher_time_efficiency_cost: pairs of adjacent periods (same day, Δperiod == 1)
