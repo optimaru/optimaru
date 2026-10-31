@@ -1,18 +1,22 @@
-#ifndef ES_CONSTRAINTS_MINIMUM_REST_HPP
-#define ES_CONSTRAINTS_MINIMUM_REST_HPP
+#ifndef ES_CONSTRAINTS_MIN_REST_COST_HPP
+#define ES_CONSTRAINTS_MIN_REST_COST_HPP
 
 #include "es/constraints/assignment_constraint.hpp"
 
 namespace es {
 
-// Hard (default): rest shortfall below `minGapMinutes` (default 10 hours)
-// between two same-employee shifts. The gap threshold is a constructor
-// parameter; the default matches the monolithic score calculator bit-for-bit.
-struct MinimumRest final : GroupableAssignmentConstraint {
-    explicit MinimumRest(double weight = 1.0,
+// Hard, weight 1: minRestCost. Raw cost per employee = the rest shortfall in
+// minutes below `minGapMinutes` (default 600 = 10 hours), summed over every
+// pair of its non-overlapping shifts (a zero gap counts), so 0 = every two
+// shifts are at least `minGapMinutes` apart. The default threshold matches
+// the monolithic score calculator bit-for-bit.
+struct MinRestCost final : GroupableAssignmentConstraint {
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
+
+    explicit MinRestCost(double weight = kDefaultWeight,
                          Minutes minGapMinutes = ScoreCalculator::MIN_REST_MINUTES)
-        : GroupableAssignmentConstraint("At least 10 hours between 2 shifts", weight,
-                                        /*hard=*/true),
+        : GroupableAssignmentConstraint("minRestCost", weight, kDefaultLevel),
           minGap_(static_cast<std::int32_t>(minGapMinutes)) {}
     void onReset(const EmployeeSchedule& s) override {
         start_.resize(s.shifts.size());
@@ -57,4 +61,4 @@ private:
 
 }  // namespace es
 
-#endif  // ES_CONSTRAINTS_MINIMUM_REST_HPP
+#endif  // ES_CONSTRAINTS_MIN_REST_COST_HPP

@@ -1,16 +1,20 @@
-#ifndef ES_CONSTRAINTS_UNASSIGNED_SHIFT_HPP
-#define ES_CONSTRAINTS_UNASSIGNED_SHIFT_HPP
+#ifndef ES_CONSTRAINTS_UNASSIGNED_SHIFTS_COST_HPP
+#define ES_CONSTRAINTS_UNASSIGNED_SHIFTS_COST_HPP
 
 #include "es/constraints/common.hpp"
 
 namespace es {
 
-// Hard (default): 1 per shift with no employee assigned (coverage guarantee).
-// Global because unassigned shifts belong to no unit: it tracks the assigned
-// total from the members it is notified about.
-struct UnassignedShift final : EsGlobalConstraint {
-    explicit UnassignedShift(double weight = 1.0)
-        : EsGlobalConstraint("Unassigned shift", weight, /*hard=*/true) {}
+// Hard, weight 1, global: unassignedShiftsCost (coverage guarantee). Raw
+// cost = the number of shifts with no employee assigned, so 0 = every shift
+// is staffed. Global because unassigned shifts belong to no unit: it tracks
+// the assigned total from the members it is notified about.
+struct UnassignedShiftsCost final : EsGlobalConstraint {
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
+
+    explicit UnassignedShiftsCost(double weight = kDefaultWeight)
+        : EsGlobalConstraint("unassignedShiftsCost", weight, kDefaultLevel) {}
     void reset(const EmployeeSchedule& s,
                const std::vector<std::vector<int>>& membersPerUnit) override {
         shiftCount_ = static_cast<long>(s.shifts.size());
@@ -42,4 +46,4 @@ private:
 
 }  // namespace es
 
-#endif  // ES_CONSTRAINTS_UNASSIGNED_SHIFT_HPP
+#endif  // ES_CONSTRAINTS_UNASSIGNED_SHIFTS_COST_HPP

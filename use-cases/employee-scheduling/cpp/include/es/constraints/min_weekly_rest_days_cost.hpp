@@ -1,19 +1,24 @@
-#ifndef ES_CONSTRAINTS_MIN_WEEKLY_REST_DAYS_HPP
-#define ES_CONSTRAINTS_MIN_WEEKLY_REST_DAYS_HPP
+#ifndef ES_CONSTRAINTS_MIN_WEEKLY_REST_DAYS_COST_HPP
+#define ES_CONSTRAINTS_MIN_WEEKLY_REST_DAYS_COST_HPP
 
 #include "es/constraints/common.hpp"
 
 namespace es {
 
-// Hard (default): worked days beyond (7 - value) in any calendar week (7-day
-// blocks from day 0, matching WeeklyMinutesConstraint) — i.e. "at least
-// `value` rest days per week". A day counts once even with several shifts.
-// value=1 -> at most 6 worked days per 7-day week.
-// A trailing partial week can never exceed the cap, so it is never forced to
-// yield rest days it has no room for.
-struct MinWeeklyRestDays final : EsUnitConstraint {
-    explicit MinWeeklyRestDays(double weight = 1.0, int value = 1)
-        : EsUnitConstraint("Min weekly rest days", weight, /*hard=*/true),
+// Hard, weight 1: minWeeklyRestDaysCost. Raw cost per employee = the worked
+// days beyond (7 - value) in each calendar week (7-day blocks from day 0,
+// matching WeeklyMinutesConstraint) — i.e. "at least `value` (default 1)
+// rest days per week" — so 0 = every week leaves that much rest. A day
+// counts once even with several shifts. value=1 -> at most 6 worked days per
+// 7-day week. A trailing partial week can never exceed the cap, so it is
+// never forced to yield rest days it has no room for; a week worked only on
+// pinned days is skipped.
+struct MinWeeklyRestDaysCost final : EsUnitConstraint {
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
+
+    explicit MinWeeklyRestDaysCost(double weight = kDefaultWeight, int value = 1)
+        : EsUnitConstraint("minWeeklyRestDaysCost", weight, kDefaultLevel),
           maxWorkDays_(7 - value) {}
     void onReset(const EmployeeSchedule& s) override {
         weeks_ = 0;
@@ -63,4 +68,4 @@ private:
 
 }  // namespace es
 
-#endif  // ES_CONSTRAINTS_MIN_WEEKLY_REST_DAYS_HPP
+#endif  // ES_CONSTRAINTS_MIN_WEEKLY_REST_DAYS_COST_HPP

@@ -166,16 +166,16 @@ def test_modified_default_assembly_keeps_grouping_and_custom_score():
     schedule = es.make_random_roster(days=6, shifts_per_day=5, employees=7, seed=29)
     calculator = es.DecomposedCalculator()
     for name in (
-        "required_skill",
-        "unavailable_employee",
-        "overlapping_shift",
-        "one_shift_per_day",
-        "min_rest",
-        "undesired_day",
-        "desired_day",
+        "required_skill_cost",
+        "employee_unavailability_cost",
+        "shift_overlap_cost",
+        "max_one_shift_per_day_cost",
+        "min_rest_cost",
+        "undesired_day_cost",
+        "desired_day_cost",
     ):
         calculator.add(name)
-    calculator.add("balance_assignments", weight=3.0)
+    calculator.add("shift_count_imbalance_cost", weight=3.0)
 
     trajectory = []
     cfg = es.SolverConfig()
@@ -195,8 +195,8 @@ def test_modified_default_assembly_keeps_grouping_and_custom_score():
 
 def test_structural_grouping_handles_pairwise_subsets_only_when_beneficial():
     schedule = es.make_random_roster(days=7, shifts_per_day=6, employees=8, seed=31)
-    grouped = es.DecomposedCalculator([es.OverlappingShift(), es.MinimumRest(min_gap_minutes=12 * 60)])
-    direct_only = es.DecomposedCalculator([es.RequiredSkill(), es.DesiredDay()])
+    grouped = es.DecomposedCalculator([es.ShiftOverlapCost(), es.MinRestCost(min_gap_minutes=12 * 60)])
+    direct_only = es.DecomposedCalculator([es.RequiredSkillCost(), es.DesiredDayCost()])
 
     grouped.score(schedule)
     direct_only.score(schedule)
@@ -229,19 +229,19 @@ def test_constraint_list_equals_add_by_name():
 
     declared = es.DecomposedCalculator(
         [
-            es.RequiredSkill(2.0),
-            es.MinimumRest(0.25, hard=False),
-            es.UndesiredDay(hard=True),
-            es.DesiredDay(exponent=2.0),
-            es.BalanceShiftAssignments(3.0),
+            es.RequiredSkillCost(2.0),
+            es.MinRestCost(0.25, hard=False),
+            es.UndesiredDayCost(hard=True),
+            es.DesiredDayCost(exponent=2.0),
+            es.ShiftCountImbalanceCost(3.0),
         ]
     )
     named = es.DecomposedCalculator()
-    named.add("required_skill", weight=2.0)
-    named.add("min_rest", weight=0.25, hard=False)
-    named.add("undesired_day", hard=True)
-    named.add("desired_day", exponent=2.0)
-    named.add("balance_assignments", weight=3.0)
+    named.add("required_skill_cost", weight=2.0)
+    named.add("min_rest_cost", weight=0.25, hard=False)
+    named.add("undesired_day_cost", hard=True)
+    named.add("desired_day_cost", exponent=2.0)
+    named.add("shift_count_imbalance_cost", weight=3.0)
 
     assert str(declared.score(schedule)) == str(named.score(schedule))
     assert declared.constraint_totals() == named.constraint_totals()
@@ -251,14 +251,14 @@ def test_default_constraint_list_reproduces_builtin_score():
     schedule = reference_schedule()
     calc = es.DecomposedCalculator(
         [
-            es.RequiredSkill(),
-            es.UnavailableEmployee(),
-            es.OverlappingShift(),
-            es.MaxOneShiftPerDay(),
-            es.MinimumRest(),
-            es.UndesiredDay(),
-            es.DesiredDay(),
-            es.BalanceShiftAssignments(),
+            es.RequiredSkillCost(),
+            es.EmployeeUnavailabilityCost(),
+            es.ShiftOverlapCost(),
+            es.MaxOneShiftPerDayCost(),
+            es.MinRestCost(),
+            es.UndesiredDayCost(),
+            es.DesiredDayCost(),
+            es.ShiftCountImbalanceCost(),
         ]
     )
     assert str(calc.score(schedule)) == REFERENCE_SCORE
@@ -269,14 +269,14 @@ def test_default_constraint_list_reproduces_builtin_score():
     [
         [{"name": n} for n in es.CONSTRAINT_NAMES],
         [
-            {"name": "required_skill", "weight": 2.0},
-            {"name": "unavailable_employee"},
-            {"name": "overlapping_shift", "weight": 0.5},
-            {"name": "one_shift_per_day"},
-            {"name": "min_rest", "hard": False, "weight": 0.25},
-            {"name": "undesired_day", "hard": True},
-            {"name": "desired_day", "weight": 0.5},
-            {"name": "balance_assignments", "weight": 3.0},
+            {"name": "required_skill_cost", "weight": 2.0},
+            {"name": "employee_unavailability_cost"},
+            {"name": "shift_overlap_cost", "weight": 0.5},
+            {"name": "max_one_shift_per_day_cost"},
+            {"name": "min_rest_cost", "hard": False, "weight": 0.25},
+            {"name": "undesired_day_cost", "hard": True},
+            {"name": "desired_day_cost", "weight": 0.5},
+            {"name": "shift_count_imbalance_cost", "weight": 3.0},
         ],
     ],
     ids=["default", "weighted-with-overrides"],
@@ -303,9 +303,9 @@ def test_shaped_assembly_solves_on_the_incremental_path():
     """exponent != 1 keeps the fast path: shaping is applied on top of the
     incrementally maintained raw cost, and the result stays exact."""
     calc = es.DecomposedCalculator()
-    calc.add("required_skill")
-    calc.add("undesired_day", exponent=2.0)
-    calc.add("balance_assignments", exponent=3.0)
+    calc.add("required_skill_cost")
+    calc.add("undesired_day_cost", exponent=2.0)
+    calc.add("shift_count_imbalance_cost", exponent=3.0)
 
     schedule = es.make_random_roster(days=6, shifts_per_day=5, employees=8, seed=7)
     cfg = es.SolverConfig()
@@ -314,9 +314,9 @@ def test_shaped_assembly_solves_on_the_incremental_path():
     es.Solver(cfg).solve(schedule, calc)
 
     fresh = es.DecomposedCalculator()
-    fresh.add("required_skill")
-    fresh.add("undesired_day", exponent=2.0)
-    fresh.add("balance_assignments", exponent=3.0)
+    fresh.add("required_skill_cost")
+    fresh.add("undesired_day_cost", exponent=2.0)
+    fresh.add("shift_count_imbalance_cost", exponent=3.0)
     assert str(schedule.score) == str(fresh.score(schedule))
     assert schedule.score.hard == 0
 
@@ -376,7 +376,7 @@ def test_squared_shaping_matches_hand_computation():
         shift.employee_index = i % len(schedule.employees)
 
     calc = es.DecomposedCalculator()
-    calc.add("undesired_day", exponent=2.0)
+    calc.add("undesired_day_cost", exponent=2.0)
     calc.score(schedule)
     (total,) = calc.constraint_totals()
 
@@ -411,13 +411,15 @@ def test_desired_shift_matches_day_and_location_and_shapes_per_employee():
         shift.employee_index = employee
     schedule = es.EmployeeSchedule([first, second], shifts)
 
-    calc = es.DecomposedCalculator([es.DesiredShift(weight=1.5, exponent=2.0)])
+    calc = es.DecomposedCalculator([es.DesiredShiftCost(weight=1.5, exponent=2.0)])
     result = calc.score(schedule)
     (total,) = calc.constraint_totals()
 
     assert total == {
-        "name": "Desired shift for employee",
+        "name": "desired_shift_cost",
+        "label": "",
         "cost": pytest.approx(-6.0),
+        "level": "soft",
         "is_hard": False,
     }
     assert result.hard == 0
@@ -441,7 +443,7 @@ def _week_roster():
 
 def test_max_consecutive_days_counts_run_excess():
     schedule = _week_roster()
-    calc = es.DecomposedCalculator([es.MaxConsecutiveDays(value=6)])
+    calc = es.DecomposedCalculator([es.MaxConsecutiveDaysCost(value=6)])
     score = calc.score(schedule)
     assert score.hard == -(14 - 6)  # one 14-day run, 8 days over the cap
 
@@ -450,7 +452,7 @@ def test_min_consecutive_days_counts_run_shortfall():
     schedule = _week_roster()
     schedule.shifts[3].employee_index = 1  # B: a single worked day (shortfall 2)
     schedule.shifts[4].employee_index = -1  # split A's run: 3 + 9 days
-    calc = es.DecomposedCalculator([es.MinConsecutiveDays(value=3)])
+    calc = es.DecomposedCalculator([es.MinConsecutiveDaysCost(value=3)])
     score = calc.score(schedule)
     assert score.soft == -2  # only B's 1-day run is below 3
 
@@ -459,8 +461,8 @@ def test_weekly_minutes_bounds():
     schedule = _week_roster()  # A: 7 shifts x 480min per week = 3360/week
     calc = es.DecomposedCalculator(
         [
-            es.MaxWeeklyMinutes(minutes=3000),  # A: 360 excess x 2 weeks
-            es.MinWeeklyMinutes(minutes=1000),  # B: 1000 shortfall x 2 weeks
+            es.MaxWeeklyMinutesCost(minutes=3000),  # A: 360 excess x 2 weeks
+            es.MinWeeklyMinutesCost(minutes=1000),  # B: 1000 shortfall x 2 weeks
         ]
     )
     score = calc.score(schedule)
@@ -492,13 +494,13 @@ def _presence_roster(pattern):
 )
 def test_rest_after_consecutive_work(pattern, expected):
     schedule = _presence_roster(pattern)
-    calc = es.DecomposedCalculator([es.RestAfterConsecutiveWork(work_days=6, rest_days=3)])
+    calc = es.DecomposedCalculator([es.RestAfterConsecutiveWorkCost(work_days=6, rest_days=3)])
     assert calc.score(schedule).hard == expected
 
 
 def test_min_weekly_rest_days_counts_worked_day_excess():
     schedule = _week_roster()  # A works all 14 days: 7 worked days per 7-day week
-    calc = es.DecomposedCalculator([es.MinWeeklyRestDays(value=1)])  # cap 6/week
+    calc = es.DecomposedCalculator([es.MinWeeklyRestDaysCost(value=1)])  # cap 6/week
     score = calc.score(schedule)
     assert score.hard == -(1 + 1)  # each week is 1 worked day over the cap
 
@@ -515,7 +517,7 @@ def test_min_weekly_rest_days_counts_a_day_once():
     extra.employee_index = 0
     shifts.append(extra)
     schedule = es.EmployeeSchedule([es.Employee("A"), es.Employee("B")], shifts)
-    calc = es.DecomposedCalculator([es.MinWeeklyRestDays(value=1)])
+    calc = es.DecomposedCalculator([es.MinWeeklyRestDaysCost(value=1)])
     assert calc.score(schedule).hard == -(1 + 1)  # day 0 counts once
 
 
@@ -545,7 +547,7 @@ def _two_shifts():
 
 def test_scoring_sees_a_required_skill_changed_after_the_first_score():
     schedule = _two_shifts()
-    calc = es.DecomposedCalculator([es.RequiredSkill()])
+    calc = es.DecomposedCalculator([es.RequiredSkillCost()])
     assert calc.score(schedule).hard == 0
     schedule.shifts[0].required_skill = "Skill B"
     assert calc.score(schedule).hard == -1
@@ -553,7 +555,7 @@ def test_scoring_sees_a_required_skill_changed_after_the_first_score():
 
 def test_scoring_sees_skills_changed_after_the_first_score():
     schedule = _two_shifts()
-    calc = es.DecomposedCalculator([es.RequiredSkill()])
+    calc = es.DecomposedCalculator([es.RequiredSkillCost()])
     assert calc.score(schedule).hard == 0
     schedule.employees[0].skills = {"Skill B"}
     assert calc.score(schedule).hard == -1
@@ -561,7 +563,7 @@ def test_scoring_sees_skills_changed_after_the_first_score():
 
 def test_scoring_sees_a_time_changed_after_the_first_score():
     schedule = _two_shifts()
-    calc = es.DecomposedCalculator([es.MaxOneShiftPerDay()])
+    calc = es.DecomposedCalculator([es.MaxOneShiftPerDayCost()])
     assert calc.score(schedule).hard == 0
     schedule.shifts[1].start, schedule.shifts[1].end = es.minutes(0, 19), es.minutes(0, 22)
     assert calc.score(schedule).hard == -1
@@ -582,7 +584,7 @@ def test_a_solve_sees_a_time_changed_after_the_first_score(use_calculator):
     cfg = es.SolverConfig()
     cfg.spent_limit_seconds = 0.1
     if use_calculator:
-        es.Solver(cfg).solve(schedule, es.DecomposedCalculator([es.MaxOneShiftPerDay()]))
+        es.Solver(cfg).solve(schedule, es.DecomposedCalculator([es.MaxOneShiftPerDayCost()]))
     else:
         es.Solver(cfg).solve(schedule)
     assert schedule.shifts[0].employee_index != schedule.shifts[1].employee_index
@@ -602,7 +604,7 @@ def test_a_solve_refuses_bad_times_set_after_the_first_score(use_calculator):
 
 def test_shifts_replaced_after_the_first_score_are_prepared():
     schedule = _two_shifts()
-    calc = es.DecomposedCalculator([es.RequiredSkill()])
+    calc = es.DecomposedCalculator([es.RequiredSkillCost()])
     assert calc.score(schedule).hard == 0
     replacement = es.Shift("Shift 3", es.minutes(0, 9), es.minutes(0, 17), required_skill="Skill C")
     replacement.employee_index = 0
@@ -622,19 +624,19 @@ def _skill_roster(required, held):
 def test_more_than_64_required_skills_are_refused():
     schedule = _skill_roster([f"Skill {i}" for i in range(65)], [])
     with pytest.raises(ValueError, match="more than 64"):
-        es.DecomposedCalculator([es.RequiredSkill()]).score(schedule)
+        es.DecomposedCalculator([es.RequiredSkillCost()]).score(schedule)
 
 
 def test_each_of_64_required_skills_is_checked():
     skills = [f"Skill {i}" for i in range(64)]
     schedule = _skill_roster(skills, skills[:-1])
-    assert es.DecomposedCalculator([es.RequiredSkill()]).score(schedule).hard == -1
+    assert es.DecomposedCalculator([es.RequiredSkillCost()]).score(schedule).hard == -1
 
 
 def test_skills_no_shift_requires_do_not_count_towards_the_limit():
     held = [f"Extra {i}" for i in range(100)] + ["Skill A"]
     schedule = _skill_roster(["Skill A", "Skill B"], held)
-    assert es.DecomposedCalculator([es.RequiredSkill()]).score(schedule).hard == -1
+    assert es.DecomposedCalculator([es.RequiredSkillCost()]).score(schedule).hard == -1
 
 
 @pytest.mark.parametrize("index", [-2, 2, 99999999])
@@ -671,7 +673,7 @@ def test_the_last_employee_index_and_unassigned_are_accepted():
     schedule = _two_shifts()
     schedule.shifts[0].employee_index = 1
     schedule.shifts[1].employee_index = -1
-    assert es.DecomposedCalculator([es.RequiredSkill()]).score(schedule).hard == -1
+    assert es.DecomposedCalculator([es.RequiredSkillCost()]).score(schedule).hard == -1
 
 
 @pytest.mark.parametrize(
@@ -681,13 +683,13 @@ def test_the_last_employee_index_and_unassigned_are_accepted():
 )
 def test_a_day_range_outside_the_horizon_limit_is_refused(lo, hi):
     with pytest.raises(ValueError, match="lo and hi must be days"):
-        es.DecomposedCalculator().add("worker_day_count_in_range", lo=lo, hi=hi)
+        es.DecomposedCalculator().add("worker_day_count_in_range_cost", lo=lo, hi=hi)
 
 
 def test_week_anchor_at_the_int_limit_keeps_weeks_small():
     schedule = _week_roster()
     calc = es.DecomposedCalculator()
-    calc.add("max_weekly_minutes", minutes=0, week_anchor=-(2**31))
+    calc.add("max_weekly_minutes_cost", minutes=0, week_anchor=-(2**31))
     assert calc.score(schedule).hard < 0
 
 
@@ -700,7 +702,7 @@ def test_min_weekly_rest_days_treats_a_fully_pinned_week_as_history(pinned_days,
         s.pinned = day in pinned_days
         shifts.append(s)
     schedule = es.EmployeeSchedule([es.Employee("A")], shifts)
-    assert es.DecomposedCalculator([es.MinWeeklyRestDays(value=1)]).score(schedule).hard == expected
+    assert es.DecomposedCalculator([es.MinWeeklyRestDaysCost(value=1)]).score(schedule).hard == expected
 
 
 def test_assignment_cost_matrix_and_defaults():
@@ -717,13 +719,13 @@ def test_assignment_cost_matrix_and_defaults():
     assert score.soft == -(999.0 + 13 * 80.0)
 
 
-def test_unassigned_shift_and_balance_gap():
+def test_unassigned_shifts_cost_and_shift_count_gap_cost():
     schedule = _week_roster()
     schedule.shifts[0].employee_index = -1
     calc = es.DecomposedCalculator(
         [
-            es.UnassignedShift(),
-            es.BalanceMinMaxGap(tolerance=3),  # A=13, B=0 -> gap 13, excess 10
+            es.UnassignedShiftsCost(),
+            es.ShiftCountGapCost(tolerance=3),  # A=13, B=0 -> gap 13, excess 10
         ]
     )
     score = calc.score(schedule)
@@ -731,16 +733,16 @@ def test_unassigned_shift_and_balance_gap():
     assert score.soft == -10
 
 
-def test_balance_weekly_minutes_gap():
+def test_weekly_minutes_gap_cost_in_hours():
     # A works all 14 days (480 min/day -> 3360 min/week); B never works (0).
     # Two 7-day weeks, each gap 3360; tolerance 120 -> 3240 excess min per week.
     # Cost is in hours: 3240 / 60 = 54 h per week, over two weeks.
     schedule = _week_roster()
-    calc = es.DecomposedCalculator([es.BalanceWeeklyMinutesGap(tolerance_minutes=120)])
+    calc = es.DecomposedCalculator([es.WeeklyMinutesGapCost(tolerance_minutes=120)])
     assert calc.score(schedule).soft == pytest.approx(-((3360 - 120) / 60 * 2))
 
 
-def test_balance_weekly_minutes_gap_within_tolerance():
+def test_weekly_minutes_gap_cost_within_tolerance():
     # A and B each work all 14 days (same hours) -> equal weekly minutes, gap 0.
     shifts = []
     for day in range(14):
@@ -749,15 +751,15 @@ def test_balance_weekly_minutes_gap_within_tolerance():
             s.employee_index = emp
             shifts.append(s)
     schedule = es.EmployeeSchedule([es.Employee("A"), es.Employee("B")], shifts)
-    calc = es.DecomposedCalculator([es.BalanceWeeklyMinutesGap(tolerance_minutes=120)])
+    calc = es.DecomposedCalculator([es.WeeklyMinutesGapCost(tolerance_minutes=120)])
     assert calc.score(schedule).soft == 0
 
 
 def test_min_rest_gap_is_parameterizable():
     schedule = _week_roster()  # 16h gaps between consecutive shifts
-    strict = es.DecomposedCalculator([es.MinimumRest(min_gap_minutes=18 * 60)])
+    strict = es.DecomposedCalculator([es.MinRestCost(min_gap_minutes=18 * 60)])
     assert strict.score(schedule).hard == -(2 * 60) * 13  # 120min short x 13 gaps
-    default = es.DecomposedCalculator([es.MinimumRest()])
+    default = es.DecomposedCalculator([es.MinRestCost()])
     assert default.score(schedule).hard == 0
 
 
@@ -768,23 +770,23 @@ def test_extended_assembly_solves_and_matches_recompute():
     def build():
         return es.DecomposedCalculator(
             [
-                es.RequiredSkill(),
-                es.UnavailableEmployee(),
-                es.OverlappingShift(),
-                es.MaxOneShiftPerDay(),
-                es.MinimumRest(),
-                es.UndesiredDay(),
-                es.DesiredDay(),
-                es.MaxConsecutiveDays(value=4),
-                es.MinConsecutiveDays(0.5, value=2),
-                es.RestAfterConsecutiveWork(work_days=4, rest_days=3),
-                es.MaxWeeklyMinutes(minutes=2400),
-                es.MinWeeklyMinutes(0.1, minutes=480),
-                es.MinWeeklyRestDays(value=1),
+                es.RequiredSkillCost(),
+                es.EmployeeUnavailabilityCost(),
+                es.ShiftOverlapCost(),
+                es.MaxOneShiftPerDayCost(),
+                es.MinRestCost(),
+                es.UndesiredDayCost(),
+                es.DesiredDayCost(),
+                es.MaxConsecutiveDaysCost(value=4),
+                es.MinConsecutiveDaysCost(0.5, value=2),
+                es.RestAfterConsecutiveWorkCost(work_days=4, rest_days=3),
+                es.MaxWeeklyMinutesCost(minutes=2400),
+                es.MinWeeklyMinutesCost(0.1, minutes=480),
+                es.MinWeeklyRestDaysCost(value=1),
                 es.AssignmentCost(0.01, cost_per_hour=1.0),
-                es.UnassignedShift(),
-                es.BalanceMinMaxGap(2.0, tolerance=1),
-                es.BalanceWeeklyMinutesGap(0.01, tolerance_minutes=60),
+                es.UnassignedShiftsCost(),
+                es.ShiftCountGapCost(2.0, tolerance=1),
+                es.WeeklyMinutesGapCost(0.01, tolerance_minutes=60),
             ]
         )
 
@@ -804,7 +806,7 @@ def test_hard_override_moves_the_level():
         shift.employee_index = i % len(schedule.employees)
 
     calc = es.DecomposedCalculator()
-    calc.add("undesired_day", hard=True)
+    calc.add("undesired_day_cost", hard=True)
     score = calc.score(schedule)
     assert score.hard < 0
     assert score.soft == 0
@@ -822,10 +824,10 @@ def test_day_pattern_projection_context_is_calculator_owned_and_rebuilt():
     schedule = es.EmployeeSchedule([employee], shifts)
 
     evening_first = es.DecomposedCalculator()
-    evening_first.add("day_pattern", pattern="Evening,OFF,Morning")
-    evening_first.add("day_pattern", pattern="Evening,*,Morning")
+    evening_first.add("day_pattern_cost", pattern="Evening,OFF,Morning")
+    evening_first.add("day_pattern_cost", pattern="Evening,*,Morning")
     morning_first = es.DecomposedCalculator()
-    morning_first.add("day_pattern", pattern="Morning,OFF,Evening")
+    morning_first.add("day_pattern_cost", pattern="Morning,OFF,Evening")
 
     assert evening_first.score(schedule).soft == -2
     assert morning_first.score(schedule).soft == 0
@@ -861,7 +863,7 @@ def test_day_pattern_worked_day_tokens(pattern, expected):
     schedule = es.EmployeeSchedule([es.Employee("A")], shifts)
 
     calculator = es.DecomposedCalculator()
-    calculator.add("day_pattern", pattern=pattern)
+    calculator.add("day_pattern_cost", pattern=pattern)
     assert calculator.score(schedule).soft == expected
 
 
@@ -880,25 +882,25 @@ def test_max_weekly_minutes_week_anchor_aligns_calendar_weeks():
     schedule = es.EmployeeSchedule([employee], shifts)
 
     anchored = es.DecomposedCalculator()
-    anchored.add("max_weekly_minutes", minutes=900, week_anchor=1)
+    anchored.add("max_weekly_minutes_cost", minutes=900, week_anchor=1)
     day0 = es.DecomposedCalculator()
-    day0.add("max_weekly_minutes", minutes=900, week_anchor=0)
+    day0.add("max_weekly_minutes_cost", minutes=900, week_anchor=0)
 
     assert anchored.score(schedule).hard == -300  # days 6,7 in one anchored week
     assert day0.score(schedule).hard == 0  # split across day-0 /7 blocks
 
 
-def test_worker_pair_same_shift_reward_and_penalty():
-    """WorkerPairSameShift over target buckets (day 0 Morning and Evening). REWARD
+def test_worker_pairing_cost_share_and_avoid_modes():
+    """WorkerPairingCost over target buckets (day 0 Morning and Evening). SHARE
     (penalty=False): a bucket where exactly one of the pair works it costs 1 -- so
     both on Morning costs 0, A on Morning & B on Evening costs 2 (each is alone in
-    one bucket), one working & one off costs 1. PENALTY is the mirror: both on the
-    same bucket costs 1."""
+    one bucket), one working & one off costs 1. AVOID (penalty=True) is the mirror:
+    both on the same bucket costs 1."""
 
     def calc(penalty):
         c = es.DecomposedCalculator()
         c.add(
-            "worker_pair_same_shift",
+            "worker_pairing_cost",
             anchor=0,
             paired=1,
             bucket_days=[0, 0],
@@ -921,8 +923,8 @@ def test_worker_pair_same_shift_reward_and_penalty():
         sch = es.EmployeeSchedule([es.Employee("A"), es.Employee("B")], shifts)
         return calc(penalty).score(sch).soft
 
-    assert score(0, 1, False) == 0  # both on a Morning slot -> same shift, no reward miss
-    assert score(0, 1, True) == -1  # ... but PENALTY: sharing a shift costs 1
+    assert score(0, 1, False) == 0  # both on a Morning slot -> they share, no cost
+    assert score(0, 1, True) == -1  # ... but AVOID: sharing a shift costs 1
     assert score(0, 2, False) == -2  # A on Morning, B on Evening -> each alone in a bucket
     assert score(0, 2, True) == 0  # ... not sharing -> no penalty
     assert score(0, -1, False) == -1  # A works, B off -> one-sided

@@ -1,25 +1,33 @@
-#ifndef ES_CONSTRAINTS_WORKER_PAIR_SAME_SHIFT_HPP
-#define ES_CONSTRAINTS_WORKER_PAIR_SAME_SHIFT_HPP
+#ifndef ES_CONSTRAINTS_WORKER_PAIRING_COST_HPP
+#define ES_CONSTRAINTS_WORKER_PAIRING_COST_HPP
 
 #include "es/constraints/common.hpp"
 
 namespace es {
 
-// Soft: a directional worker pairing over a set of (day, location) target buckets in
-// which BOTH workers are eligible (the caller resolves the candidate filter
-// and passes only those buckets). For REWARD ("should share the same shift") a
-// violation is a bucket where exactly one of the pair works it (XOR); for PENALTY
-// ("should not share") a violation is a bucket where both work it. One violation
-// per bucket. anchor/paired are engine worker
-// indices. Only these two units affect the cost, so onUnitChanged ignores others.
-struct WorkerPairSameShift final : EsGlobalConstraint {
-    WorkerPairSameShift(double weight, int anchor, int paired,
-                        std::vector<int> bucketDays, std::vector<std::string> bucketLocations,
-                        bool penalty)
-        : EsGlobalConstraint("Worker pairing[" + std::to_string(anchor) + (penalty ? "!=" : "==") +
-                                     std::to_string(paired) + "]",
-                             weight, /*hard=*/false),
+// Soft, weight 1, global: workerPairingCost, a directional worker pairing
+// over a set of (day, location) target buckets in which BOTH workers are
+// eligible (the caller resolves the candidate filter and passes only those
+// buckets). With penalty = false ("should share the same shift") a violation
+// is a bucket where exactly one of the pair works it (XOR); with penalty =
+// true ("should not share") a violation is a bucket where both work it. Raw
+// cost = the number of violating buckets — >= 0 in BOTH modes (it is not a
+// reward) — so 0 = the pairing holds on every bucket. anchor/paired are
+// engine worker indices (the default -1 never works, so it never costs). Only
+// these two units affect the cost, so onUnitChanged ignores others. Each
+// instance carries the label "Worker pairing[<anchor>==|!=<paired>]".
+struct WorkerPairingCost final : EsGlobalConstraint {
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
+
+    explicit WorkerPairingCost(double weight = kDefaultWeight, int anchor = -1, int paired = -1,
+                               std::vector<int> bucketDays = {},
+                               std::vector<std::string> bucketLocations = {},
+                               bool penalty = false)
+        : EsGlobalConstraint("workerPairingCost", weight, kDefaultLevel),
           anchor_(anchor), paired_(paired), penalty_(penalty) {
+        label = "Worker pairing[" + std::to_string(anchor_) + (penalty_ ? "!=" : "==") +
+                std::to_string(paired_) + "]";  // display only; never a lookup key
         const std::size_t n = std::min(bucketDays.size(), bucketLocations.size());
         for (std::size_t i = 0; i < n; ++i)
             targets_.emplace(bucketDays[i], std::move(bucketLocations[i]));
@@ -73,4 +81,4 @@ private:
 
 }  // namespace es
 
-#endif  // ES_CONSTRAINTS_WORKER_PAIR_SAME_SHIFT_HPP
+#endif  // ES_CONSTRAINTS_WORKER_PAIRING_COST_HPP

@@ -1,23 +1,28 @@
-#ifndef ES_CONSTRAINTS_BALANCE_WEEKLY_MINUTES_GAP_HPP
-#define ES_CONSTRAINTS_BALANCE_WEEKLY_MINUTES_GAP_HPP
+#ifndef ES_CONSTRAINTS_WEEKLY_MINUTES_GAP_COST_HPP
+#define ES_CONSTRAINTS_WEEKLY_MINUTES_GAP_COST_HPP
 
 #include "es/constraints/common.hpp"
 
 namespace es {
 
-// Soft (default): per calendar week (7-day blocks from day 0), the gap between
-// the busiest and least-busy employee's assigned minutes, beyond
-// `toleranceMinutes`, summed over weeks (fairness of weekly hours). The raw
-// cost is expressed in HOURS (excess minutes / 60) so it sits on a comparable
-// scale to the other soft terms; the threshold stays precise in minutes. ALL
+// Soft, weight 1, global: weeklyMinutesGapCost. Per calendar week (7-day
+// blocks from day 0), the gap between the busiest and least-busy employee's
+// assigned minutes, beyond `toleranceMinutes` (default 120), summed over
+// weeks (fairness of weekly hours); 0 = every week is within the tolerance.
+// The raw cost is expressed in HOURS (excess minutes / 60) so it sits on a
+// comparable scale to the other soft terms; the threshold stays precise in
+// minutes. ALL
 // employees are compared, so one who works zero minutes in a week counts as 0
 // (the min may be 0). Global because it is a min-max statistic across
 // employees, not a per-employee sum. cost() recomputes each week's min/max
 // from the maintained per-(employee, week) minute totals (cost proportional to
 // employees x weeks); onUnitChanged re-tallies only the changed employee's row.
-struct BalanceWeeklyMinutesGap final : EsGlobalConstraint {
-    explicit BalanceWeeklyMinutesGap(double weight = 1.0, int toleranceMinutes = 120)
-        : EsGlobalConstraint("Balance weekly minutes gap", weight, /*hard=*/false),
+struct WeeklyMinutesGapCost final : EsGlobalConstraint {
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
+
+    explicit WeeklyMinutesGapCost(double weight = kDefaultWeight, int toleranceMinutes = 120)
+        : EsGlobalConstraint("weeklyMinutesGapCost", weight, kDefaultLevel),
           tolerance_(toleranceMinutes) {}
     void reset(const EmployeeSchedule& s,
                const std::vector<std::vector<int>>& membersPerUnit) override {
@@ -70,4 +75,4 @@ private:
 
 }  // namespace es
 
-#endif  // ES_CONSTRAINTS_BALANCE_WEEKLY_MINUTES_GAP_HPP
+#endif  // ES_CONSTRAINTS_WEEKLY_MINUTES_GAP_COST_HPP

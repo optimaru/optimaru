@@ -29,5 +29,13 @@ add_executable(es_demo src/main.cpp)
 target_link_libraries(es_demo PRIVATE es_core)
 target_compile_options(es_demo PRIVATE -Wall -Wextra)
 
+# Plugin-assembly path (es/constraints.hpp): the catalog, the default assembly
+# against the monolithic calculator, incremental == full for every component,
+# ScopedUnit metadata and the instance labels.
+add_executable(es_plugin_test test/es_plugin_test.cpp)
+target_link_libraries(es_plugin_test PRIVATE es_core)
+target_compile_options(es_plugin_test PRIVATE -Wall -Wextra)
+
 enable_testing()
 add_test(NAME es_demo COMMAND es_demo 5 4 1)
+add_test(NAME es_plugin_test COMMAND es_plugin_test)

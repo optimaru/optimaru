@@ -8,7 +8,39 @@
 #include <unordered_map>
 #include <vector>
 
+#include "es/constraints/desired_day_cost.hpp"
+#include "es/constraints/employee_unavailability_cost.hpp"
+#include "es/constraints/max_one_shift_per_day_cost.hpp"
+#include "es/constraints/min_rest_cost.hpp"
+#include "es/constraints/required_skill_cost.hpp"
+#include "es/constraints/shift_count_imbalance_cost.hpp"
+#include "es/constraints/shift_overlap_cost.hpp"
+#include "es/constraints/undesired_day_cost.hpp"
+
 namespace es {
+
+// The monolithic score is the eight default components at their component
+// defaults (constraints.hpp defaultConstraints()), summed without weights:
+// every default weight is 1 and the levels are the ones below. The plugin
+// tests check the two paths agree; these asserts keep the hand-written sums
+// honest if a default ever moves.
+static_assert(RequiredSkillCost::kDefaultWeight == 1.0 &&
+                      EmployeeUnavailabilityCost::kDefaultWeight == 1.0 &&
+                      ShiftOverlapCost::kDefaultWeight == 1.0 &&
+                      MaxOneShiftPerDayCost::kDefaultWeight == 1.0 &&
+                      MinRestCost::kDefaultWeight == 1.0 && UndesiredDayCost::kDefaultWeight == 1.0 &&
+                      DesiredDayCost::kDefaultWeight == 1.0 &&
+                      ShiftCountImbalanceCost::kDefaultWeight == 1.0,
+              "the monolithic calculator assumes weight 1 for every default constraint");
+static_assert(RequiredSkillCost::kDefaultLevel == optimaru::Level::Hard &&
+                      EmployeeUnavailabilityCost::kDefaultLevel == optimaru::Level::Hard &&
+                      ShiftOverlapCost::kDefaultLevel == optimaru::Level::Hard &&
+                      MaxOneShiftPerDayCost::kDefaultLevel == optimaru::Level::Hard &&
+                      MinRestCost::kDefaultLevel == optimaru::Level::Hard &&
+                      UndesiredDayCost::kDefaultLevel == optimaru::Level::Soft &&
+                      DesiredDayCost::kDefaultLevel == optimaru::Level::Soft &&
+                      ShiftCountImbalanceCost::kDefaultLevel == optimaru::Level::Soft,
+              "the monolithic calculator puts the first five defaults on hard, the rest on soft");
 
 void ScoreCalculator::prepare(EmployeeSchedule& schedule) {
     const int employeeCount = static_cast<int>(schedule.employees.size());
@@ -80,24 +112,24 @@ Minutes ScoreCalculator::overlapWithDates(const Shift& shift, const std::set<Day
 std::int64_t ScoreCalculator::shiftHardPenalty(const Employee& emp, const Shift& shift) {
     std::int64_t p = 0;
     if (shift.requiredSkillBit != 0 && (emp.skillMask & shift.requiredSkillBit) == 0)
-        p += 1;  // Missing required skill (bit 0 == no requirement)
-    p += overlapWithDates(shift, emp.unavailableDates);         // Unavailable employee
+        p += 1;  // requiredSkillCost (bit 0 == no requirement)
+    p += overlapWithDates(shift, emp.unavailableDates);         // employeeUnavailabilityCost
     return p;
 }
 
 std::int64_t ScoreCalculator::shiftSoftDelta(const Employee& emp, const Shift& shift) {
-    return overlapWithDates(shift, emp.desiredDates)         // Desired day (reward)
-           - overlapWithDates(shift, emp.undesiredDates);    // Undesired day (penalty)
+    return overlapWithDates(shift, emp.desiredDates)         // desiredDayCost (reward)
+           - overlapWithDates(shift, emp.undesiredDates);    // undesiredDayCost (penalty)
 }
 
 std::int64_t ScoreCalculator::pairHardPenalty(const Shift& a, const Shift& b) {
     std::int64_t p = 0;
-    // Overlapping shift (overlap minutes).
+    // shiftOverlapCost (overlap minutes).
     Minutes overlap = std::min(a.end, b.end) - std::max(a.start, b.start);
     if (overlap > 0) p += overlap;
-    // Max one shift per day (precomputed day index avoids a division per pair).
+    // maxOneShiftPerDayCost (precomputed day index avoids a division per pair).
     if (a.startDay == b.startDay) p += 1;
-    // At least 10 hours between two shifts (a zero gap counts).
+    // minRestCost at its default 10-hour threshold (a zero gap counts).
     const Shift& early = (a.start <= b.start) ? a : b;
     const Shift& late = (a.start <= b.start) ? b : a;
     if (early.end <= late.start) {
@@ -187,7 +219,7 @@ Score ScoreCalculator::calculateScore(EmployeeSchedule& schedule) {
         }
     }
 
-    // Soft: balance employee shift assignments (all employees, including zero).
+    // Soft: shiftCountImbalanceCost (all employees, including zero).
     if (!employees.empty()) {
         long sum = 0, sumSq = 0;
         for (const auto& g : byEmployee) {

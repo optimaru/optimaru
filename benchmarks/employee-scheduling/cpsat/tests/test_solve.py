@@ -3,7 +3,9 @@ import typing
 from collections import Counter
 
 import pytest
-from es_scheduling import models as domain
+import es_scheduling
+from es_scheduling import constraints as domain
+from es_scheduling import models
 from es_scheduling.demo import generate_demo_data
 from es_scheduling.models import (
     ScheduleRequest,
@@ -13,75 +15,82 @@ from es_scheduling.models import (
 )
 
 from employee_scheduling_cpsat import catalog, constraint_costs, solve
-from employee_scheduling_cpsat.constraints import PLUGINS, SCALE
+from employee_scheduling_cpsat.constraints import PLUGINS, SCALE, registry_for
 
 DAY = 24 * 60
 
 # Every rule type, at values that make it bind on `_problem`. Several rule types
 # appear more than once where a parameter switches to another code path.
 RULES = [
-    domain.RequiredSkillRule(),
-    domain.RequiredSkillRule(weight=3, policy="soft"),
-    domain.UnavailableWorkerRule(),
-    domain.OverlappingShiftRule(),
-    domain.MaxOneShiftPerDayRule(),
-    domain.MinimumRestRule(),
-    domain.MinimumRestRule(min_gap_minutes=120),
-    domain.UndesiredDayRule(),
-    domain.UndesiredDayRule(per_day=True),
-    domain.DesiredDayRule(),
-    domain.DesiredDayRule(per_day=True),
-    domain.DesiredShiftRule(),
-    domain.BalanceAssignmentsRule(),
-    domain.MaxConsecutiveDaysRule(value=2),
-    domain.MinConsecutiveDaysRule(value=3),
-    domain.MaxConsecutiveOffRule(value=1),
-    domain.RestAfterConsecutiveWorkRule(work_days=2, rest_days=3),
-    domain.MaxWeeklyMinutesRule(minutes=600),
-    domain.MaxWeeklyMinutesRule(minutes=600, week_anchor=3),
-    domain.MinWeeklyMinutesRule(minutes=900),
-    domain.MinWeeklyRestDaysRule(value=5),
-    domain.AssignmentCostRule(
+    domain.RequiredSkillCost(),
+    domain.RequiredSkillCost(weight=3, hard=False),
+    domain.EmployeeUnavailabilityCost(),
+    domain.ShiftOverlapCost(),
+    domain.MaxOneShiftPerDayCost(),
+    domain.MinRestCost(),
+    domain.MinRestCost(min_gap_minutes=120),
+    domain.UndesiredDayCost(),
+    domain.UndesiredDayCost(per_day=True),
+    domain.DesiredDayCost(),
+    domain.DesiredDayCost(per_day=True),
+    domain.DesiredShiftCost(),
+    domain.ShiftCountImbalanceCost(),
+    domain.MaxConsecutiveDaysCost(value=2),
+    domain.MinConsecutiveDaysCost(value=3),
+    domain.MaxConsecutiveDaysOffCost(value=1),
+    domain.RestAfterConsecutiveWorkCost(work_days=2, rest_days=3),
+    domain.MaxWeeklyMinutesCost(minutes=600),
+    domain.MaxWeeklyMinutesCost(minutes=600, week_anchor=3),
+    domain.MinWeeklyMinutesCost(minutes=900),
+    domain.MinWeeklyMinutesCost(minutes=900, week_anchor=3),
+    domain.MinWeeklyRestDaysCost(value=5),
+    domain.AssignmentCost(
         cost_per_hour=1.5,
         cost_per_shift=2.0,
         shift_costs={"Worker 1": {"Shift 1": 9.25}},
     ),
-    domain.AssignmentCostRule(cost_per_shift=2.0),
-    domain.UnassignedShiftRule(),
-    domain.BalanceMinMaxGapRule(tolerance=1),
-    domain.BalanceWeeklyMinutesGapRule(tolerance_minutes=100),
-    domain.ShiftCoverageRule(worker_skill="Skill A", min_count=1, max_count=1),
-    domain.ShiftCoverageRule(min_count=2, worker_indices=[0, 1], shift_indices=[0, 2, 3]),
-    domain.ShiftCoverageRule(min_count=1, worker_indices=[1, 1, 99], shift_indices=[0, 0, 2, -1]),
-    domain.LocationRunRule(location="Location A", min_run=2, max_run=3),
-    domain.LocationRunRule(min_run=3, max_run=0, waive_min_at_end=False),
-    domain.RestAfterLocationRunRule(location="Location A", rest_days=2),
-    domain.LocationRunGapRule(location="Location A", min_gap=3),
-    domain.WorkerLocationCountRule(location="Location A", min_count=1, max_count=2),
-    domain.WorkerLocationCountRule(worker_skill="Skill B", min_count=4),
-    domain.DayPatternRule(pattern="Location A,OFF,Location B"),
-    domain.DayPatternRule(pattern="!Location B,*,WORK"),
-    domain.DayPatternRule(pattern="OFF,Location Z"),
-    domain.TargetDaysOffRule(target_days=[0, 5, 6, 99], min_count=2),
-    domain.WorkerDayCountInRuleRange(lo=1, hi=5, min_count=2, max_count=3),
-    domain.WorkerDayCountInRuleRange(location="Location B", lo=0, hi=9, max_count=1),
-    domain.BalanceLocationRule(location="Location A"),
-    domain.BalanceLocationRule(worker_skill="Skill A", metric="gap", tolerance=1),
-    domain.BalanceLocationRule(off_target_days=[0, 1, 2, 9]),
-    domain.WorkerPairSameShiftRule(
-        anchor=0, paired=1, bucket_days=[0, 1, 2], bucket_locations=["Location A"] * 3
+    domain.AssignmentCost(cost_per_shift=2.0),
+    domain.UnassignedShiftsCost(),
+    domain.ShiftCountGapCost(tolerance=1),
+    domain.WeeklyMinutesGapCost(tolerance_minutes=100),
+    domain.ShiftCoverageCost(worker_skill="Skill A", min_count=1, max_count=1),
+    domain.ShiftCoverageCost(
+        min_count=2, worker_indices=(0, 1), shift_indices=(0, 2, 3)
     ),
-    domain.WorkerPairSameShiftRule(
+    domain.ShiftCoverageCost(
+        min_count=1, worker_indices=(1, 1, 99), shift_indices=(0, 0, 2, -1)
+    ),
+    domain.LocationRunLengthCost(location="Location A", min_run=2, max_run=3),
+    domain.LocationRunLengthCost(min_run=3, max_run=0, waive_min_at_end=False),
+    domain.RestAfterLocationRunCost(location="Location A", rest_days=2),
+    domain.LocationRunGapCost(location="Location A", min_gap=3),
+    domain.WorkerLocationCountCost(location="Location A", min_count=1, max_count=2),
+    domain.WorkerLocationCountCost(worker_skill="Skill B", min_count=4),
+    domain.DayPatternCost(pattern="Location A,OFF,Location B"),
+    domain.DayPatternCost(pattern="!Location B,*,WORK"),
+    domain.DayPatternCost(pattern="OFF,Location Z"),
+    domain.TargetDaysOffCost(target_days=(0, 5, 6, 99), min_count=2),
+    domain.WorkerDayCountInRangeCost(lo=1, hi=5, min_count=2, max_count=3),
+    domain.WorkerDayCountInRangeCost(location="Location B", lo=0, hi=9, max_count=1),
+    domain.LocationImbalanceCost(location="Location A"),
+    domain.LocationImbalanceCost(worker_skill="Skill A", metric="gap", tolerance=1),
+    domain.LocationImbalanceCost(off_target_days=(0, 1, 2, 9)),
+    domain.WorkerPairingCost(
+        anchor=0, paired=1, bucket_days=(0, 1, 2), bucket_locations=("Location A",) * 3
+    ),
+    domain.WorkerPairingCost(
         anchor=0,
         paired=1,
-        bucket_days=[1, 2],
-        bucket_locations=["Location B", "Location A"],
+        bucket_days=(1, 2),
+        bucket_locations=("Location B", "Location A"),
         penalty=True,
     ),
-    domain.MaxConsecutiveDaysRule(value=1, worker_indices=[0, 2, 2, 99, -1]),
-    domain.MinimumRestRule(shift_indices=list(range(0, 24, 2))),
-    domain.DesiredDayRule(worker_indices=[]),
-    domain.DayPatternRule(pattern="Location A,WORK", worker_indices=[1], shift_indices=list(range(12))),
+    domain.MaxConsecutiveDaysCost(value=1, worker_indices=(0, 2, 2, 99, -1)),
+    domain.MinRestCost(shift_indices=tuple(range(0, 24, 2))),
+    domain.DesiredDayCost(worker_indices=()),
+    domain.DayPatternCost(
+        pattern="Location A,WORK", worker_indices=(1,), shift_indices=tuple(range(12))
+    ),
 ]
 
 
@@ -129,21 +138,25 @@ def _stacked_roster(problem: ScheduleRequest, seed: int) -> list[int | None]:
 def _with_workers(problem: ScheduleRequest, fixed: list[int | None]) -> ScheduleRequest:
     candidate = problem.model_copy(deep=True)
     for shift, worker in zip(candidate.model_input.shifts, fixed, strict=True):
-        shift.worker = None if worker is None else candidate.model_input.workers[worker].id
+        shift.worker = (
+            None if worker is None else candidate.model_input.workers[worker].id
+        )
     return candidate
 
 
 def _model_cost(total: dict, fixed: list[int | None]) -> float:
     """What the model's objective holds for an engine total: no root for sqrt(ssd)."""
-    if total["name"].startswith("Balance employee"):
+    if total["name"] == "shift_count_imbalance_cost":
         loads = Counter(worker for worker in fixed if worker is not None)
         return sum(load**2 for load in loads.values()) / 2
-    if total["name"].startswith("Balance[") and total["name"].endswith(" ssd]"):
+    if total["name"] == "location_imbalance_cost" and total["label"].endswith(" ssd]"):
         return total["cost"] ** 2 / 2
     return total["cost"]
 
 
-def _engine_cost(problem: ScheduleRequest, fixed: list[int | None]) -> tuple[bool, float]:
+def _engine_cost(
+    problem: ScheduleRequest, fixed: list[int | None]
+) -> tuple[bool, float]:
     """The one rule's weighted cost under `fixed`, in the model's terms."""
     [total] = constraint_costs(_with_workers(problem, fixed))["totals"]
     return total["is_hard"], _model_cost(total, fixed)
@@ -168,11 +181,76 @@ def test_each_rule_matches_the_engine_on_a_fixed_roster(rule, seed) -> None:
 
 
 def test_every_rule_type_has_a_plugin() -> None:
-    union = typing.get_args(typing.get_args(domain.Rule)[0])
-    names = {rule.model_fields["name"].default for rule in union}
+    union = typing.get_args(typing.get_args(models.Rule)[0])
+    names = [rule.model_fields["name"].default for rule in union]
 
-    assert set(PLUGINS) == names
-    assert {entry["name"] for entry in catalog()} == names
+    assert list(PLUGINS) == names == list(es_scheduling.CONSTRAINT_NAMES)
+    for name, plugin in PLUGINS.items():
+        assert issubclass(plugin, models.rule_model(name).spec_class)
+    assert {entry["name"] for entry in catalog()} == set(names)
+
+
+def test_cpsat_defaults_are_the_engine_defaults() -> None:
+    """The catalog equals constraint_info() row for row: the eight defaults first,
+    then the rule-only constraints (default_enabled False)."""
+    engine = es_scheduling.constraint_info()
+    entries = catalog()
+    assert [entry["name"] for entry in entries] == [row.name for row in engine]
+    for entry, row in zip(entries, engine, strict=True):
+        assert entry["default_level"] == row.default_level
+        assert entry["default_weight"] == row.default_weight
+        assert entry["level_flippable"] == row.level_flippable
+        assert entry["reward"] == row.reward
+        assert entry["default_enabled"] == row.default_enabled
+        assert entry["kind"] == ("either" if row.level_flippable else row.default_level)
+        assert entry["params"] == {"weight": None, "hard": None, "exponent": 1.0}
+    assert [row.name for row in engine if row.default_enabled] == [
+        spec.name for spec in domain.get_constraints()
+    ]
+
+
+def test_plugins_restate_no_engine_default() -> None:
+    for plugin in PLUGINS.values():
+        for attr in ("default_level", "default_weight", "default_hard", "rule_type"):
+            assert not hasattr(plugin, attr), (plugin, attr)
+
+
+def test_repeated_rules_get_numbered_plugins() -> None:
+    registry = registry_for(
+        [
+            domain.DayPatternCost(pattern="Location A,OFF,Location B"),
+            domain.RequiredSkillCost(),
+            domain.DayPatternCost(pattern="OFF,WORK"),
+        ]
+    )
+    assert [plugin.name for plugin in registry.plugins] == [
+        "day_pattern_cost",
+        "required_skill_cost",
+        "day_pattern_cost#2",
+    ]
+    assert [spec.name for spec in registry.specs] == [
+        plugin.name for plugin in registry.plugins
+    ]
+    assert registry.plugins[2].pattern == "OFF,WORK"
+    assert registry.specs[2].level == "soft"  # the plain name's catalog row
+
+
+def test_a_reward_refuses_hard_on_the_cpsat_path_too() -> None:
+    with pytest.raises(ValueError, match="is a reward"):
+        solve(_problem([domain.DesiredDayCost(hard=True)]))
+    with pytest.raises(ValueError, match="is a reward"):
+        solve(_problem([domain.DesiredShiftCost(hard=True, worker_indices=(0,))]))
+
+
+def test_demoting_a_hard_rule_scores_like_the_engine() -> None:
+    """hard=False lands on soft in both solvers (cpsat-common's level_of)."""
+    problem = _problem([domain.MaxConsecutiveDaysCost(value=1, hard=False)], seed=1)
+    fixed = _stacked_roster(problem, 1)
+    expected = constraint_costs(_with_workers(problem, fixed))
+    proxy: dict[str, int] = {}
+    solve(problem, time_limit_seconds=5, _fixed_workers=fixed, _proxy_score=proxy)
+    assert expected["hard"] == 0 and expected["soft"] < 0
+    assert proxy == {"hard": 0, "soft": round(SCALE * expected["soft"])}
 
 
 @pytest.mark.parametrize("seed", range(4))
@@ -186,7 +264,9 @@ def test_every_rule_at_once_matches_the_engine_on_a_fixed_roster(seed) -> None:
 
     assert proxy["hard"] == expected["hard"]
     soft = sum(
-        _model_cost(total, fixed) for total in expected["totals"] if not total["is_hard"]
+        _model_cost(total, fixed)
+        for total in expected["totals"]
+        if not total["is_hard"]
     )
     # Two ssd rules and two weeks of gap round up to the grid.
     assert -proxy["soft"] / SCALE == pytest.approx(soft, abs=5 / SCALE + 1e-9)
@@ -199,10 +279,12 @@ def test_mixed_sign_costs_do_not_outweigh_the_hard_level() -> None:
                 WorkerModel(id="Worker 1"),
                 WorkerModel(id="Worker 2", skills=["Skill A"]),
             ],
-            shifts=[ShiftModel(id="Shift 1", start=0, end=60, required_skill="Skill A")],
+            shifts=[
+                ShiftModel(id="Shift 1", start=0, end=60, required_skill="Skill A")
+            ],
             rules=[
-                domain.RequiredSkillRule(),
-                domain.AssignmentCostRule(
+                domain.RequiredSkillCost(),
+                domain.AssignmentCost(
                     shift_costs={
                         "Worker 1": {"Shift 1": -5.0},
                         "Worker 2": {"Shift 1": 5.0},
@@ -236,16 +318,16 @@ def test_a_shift_stays_empty_only_when_a_rule_prices_it() -> None:
         )
 
     priced = solve(
-        problem([domain.UnavailableWorkerRule(), domain.UnassignedShiftRule()]),
+        problem([domain.EmployeeUnavailabilityCost(), domain.UnassignedShiftsCost()]),
         time_limit_seconds=2,
     )
-    free = solve(problem([domain.UnavailableWorkerRule()]), time_limit_seconds=2)
+    free = solve(problem([domain.EmployeeUnavailabilityCost()]), time_limit_seconds=2)
 
     assert priced.model_input.shifts[0].worker is None
     assert free.model_input.shifts[0].worker == "Worker 1"
 
 
-def test_balance_does_not_buy_an_empty_shift_at_a_soft_price() -> None:
+def test_imbalance_does_not_buy_an_empty_shift_at_a_soft_price() -> None:
     problem = ScheduleRequest(
         model_input=SchedulingInput(
             workers=[WorkerModel(id="Worker 1"), WorkerModel(id="Worker 2")],
@@ -254,8 +336,8 @@ def test_balance_does_not_buy_an_empty_shift_at_a_soft_price() -> None:
                 for day in range(3)
             ],
             rules=[
-                domain.BalanceAssignmentsRule(),
-                domain.UnassignedShiftRule(policy="soft"),
+                domain.ShiftCountImbalanceCost(),
+                domain.UnassignedShiftsCost(hard=False),
             ],
         )
     )
@@ -268,15 +350,15 @@ def test_balance_does_not_buy_an_empty_shift_at_a_soft_price() -> None:
 
 def test_what_cannot_be_modelled_is_refused() -> None:
     with pytest.raises(ValueError, match="exponent"):
-        solve(_problem([domain.RequiredSkillRule(exponent=2.0)]))
+        solve(_problem([domain.RequiredSkillCost(exponent=2.0)]))
     # Refused even though no term of this rule would reach the objective.
     with pytest.raises(ValueError, match="integer"):
-        solve(_problem([domain.TargetDaysOffRule(weight=0.5)]))
+        solve(_problem([domain.TargetDaysOffCost(weight=0.5)]))
     with pytest.raises(ValueError, match="fractional"):
-        solve(_problem([domain.BalanceAssignmentsRule(policy="hard")]))
+        solve(_problem([domain.ShiftCountImbalanceCost(hard=True)]))
     with pytest.raises(ValueError, match="fractional"):
-        solve(_problem([domain.AssignmentCostRule(policy="hard", cost_per_shift=2.0)]))
-    pinned = _problem([domain.RequiredSkillRule()])
+        solve(_problem([domain.AssignmentCost(hard=True, cost_per_shift=2.0)]))
+    pinned = _problem([domain.RequiredSkillCost()])
     pinned.model_input.shifts[0].worker = "Worker 0"
     pinned.model_input.shifts[0].pinned = True
     with pytest.raises(ValueError, match="pinned"):

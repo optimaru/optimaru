@@ -21,10 +21,12 @@ def constraint_costs(request: ScheduleRequest) -> dict[str, Any]:
     """Score the workers set on `request` with the engine's own calculator.
 
     The calculator is the one the engine searches with, built from the same
-    rule list, so the two solvers are compared on one score.
+    rule list, so the two solvers are compared on one score. (The engine's
+    raw per-constraint costs are `es_scheduling.constraint_costs(schedule,
+    specs)`; this verdict is what the comparison runner reads.)
     """
     model_input = request.model_input
-    calculator = DecomposedCalculator(model_input.rules)
+    calculator = DecomposedCalculator([rule.to_spec() for rule in model_input.rules])
     result = calculator.score(to_schedule(model_input))
     return {
         "hard": result.hard,
@@ -45,12 +47,12 @@ def solve(
     """Assign workers to shifts, minimizing hard cost before soft cost.
 
     The rules come from `problem.model_input.rules`. A shift may stay
-    unassigned only when the unassigned_shift rule prices it; without that rule
-    the engine assigns every shift, so this model does too. The returned copy
-    holds the answer in `ShiftModel.worker`.
+    unassigned only when the unassigned_shifts_cost rule prices it; without
+    that rule the engine assigns every shift, so this model does too. The
+    returned copy holds the answer in `ShiftModel.worker`.
     """
     model_input = problem.model_input
-    rules = model_input.rules
+    rules = [rule.to_spec() for rule in model_input.rules]
     shifts, workers = model_input.shifts, model_input.workers
     if any(shift.pinned for shift in shifts):
         raise ValueError(
@@ -66,8 +68,10 @@ def solve(
         for s in range(len(shifts))
         for w in range(len(workers))
     }
-    unassigned = [model.new_bool_var(f"shift_{s}_unassigned") for s in range(len(shifts))]
-    may_stay_empty = any(rule.name == "unassigned_shift" for rule in rules)
+    unassigned = [
+        model.new_bool_var(f"shift_{s}_unassigned") for s in range(len(shifts))
+    ]
+    may_stay_empty = any(rule.name == "unassigned_shifts_cost" for rule in rules)
     for s in range(len(shifts)):
         model.add_exactly_one([*(x[s, w] for w in range(len(workers))), unassigned[s]])
         if _fixed_workers is not None:
@@ -79,7 +83,9 @@ def solve(
             model.add(unassigned[s] == 0)
 
     registry = registry_for(rules)
-    objective = registry.objective(model, ("hard", "soft"), None)
+    # Each plugin is itself the selection (name, weight, hard, exponent); the
+    # defaults come from the engine's constraint_info() rows.
+    objective = registry.objective(model, ("hard", "soft"), registry.plugins)
     registry.build(ScheduleContext(model, problem, x, unassigned), objective)
 
     solver = cp_model.CpSolver()

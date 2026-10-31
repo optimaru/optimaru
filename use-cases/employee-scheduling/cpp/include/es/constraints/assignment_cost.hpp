@@ -5,15 +5,20 @@
 
 namespace es {
 
-// Soft (default): monetary cost of the assignment. Per
-// (employee, shift): an explicit matrix entry if present, otherwise
-// costPerHour * duration, otherwise costPerShift. Fully incremental (constant-time
-// delta) via a precomputed table.
+// Soft, weight 1: assignmentCost, the monetary cost of the assignment. Raw
+// cost per employee = the sum over its assigned shifts of: an explicit matrix
+// entry (employee name -> shift id -> money) if present, otherwise
+// costPerHour * duration in hours, otherwise costPerShift. So 0 = the roster
+// costs nothing (the default: both rates 0, no matrix); a matrix entry may be
+// negative. Fully incremental (constant-time delta) via a precomputed table.
 struct AssignmentCost final : EsUnitConstraint {
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
+
     using CostMatrix = std::map<std::string, std::map<std::string, double>>;
-    explicit AssignmentCost(double weight = 1.0, double costPerHour = 0.0,
+    explicit AssignmentCost(double weight = kDefaultWeight, double costPerHour = 0.0,
                             double costPerShift = 0.0, CostMatrix matrix = {})
-        : EsUnitConstraint("Assignment cost", weight, /*hard=*/false),
+        : EsUnitConstraint("assignmentCost", weight, kDefaultLevel),
           costPerHour_(costPerHour), costPerShift_(costPerShift),
           matrix_(std::move(matrix)) {}
     void onReset(const EmployeeSchedule& s) override {

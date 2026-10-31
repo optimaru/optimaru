@@ -1,17 +1,26 @@
-#ifndef ES_CONSTRAINTS_TARGET_DAYS_OFF_HPP
-#define ES_CONSTRAINTS_TARGET_DAYS_OFF_HPP
+#ifndef ES_CONSTRAINTS_TARGET_DAYS_OFF_COST_HPP
+#define ES_CONSTRAINTS_TARGET_DAYS_OFF_COST_HPP
 
 #include "es/constraints/common.hpp"
 
 namespace es {
 
-// Soft: per employee, at least `minCount` of the given `targetDays` (day
-// indices, e.g. weekends + holidays) must be OFF (no work). Penalty = shortfall.
-struct TargetDaysOff final : EsUnitConstraint {
-    TargetDaysOff(double weight, std::vector<int> targetDays, int minCount)
-        : EsUnitConstraint("Target days off[>=" + std::to_string(minCount) + "]", weight,
-                           /*hard=*/false),
-          target_(std::move(targetDays)), min_(minCount) {}
+// Soft, weight 1: targetDaysOffCost. Per employee, at least `minCount` of the
+// given `targetDays` (day indices, e.g. weekends + holidays; days outside the
+// horizon are ignored) must be OFF (no work). Raw cost per employee = the
+// shortfall below minCount, so 0 = enough target days off (the default
+// minCount 0 never binds). Each instance carries the label
+// "Target days off[>=<minCount>]".
+struct TargetDaysOffCost final : EsUnitConstraint {
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
+
+    explicit TargetDaysOffCost(double weight = kDefaultWeight, std::vector<int> targetDays = {},
+                               int minCount = 0)
+        : EsUnitConstraint("targetDaysOffCost", weight, kDefaultLevel),
+          target_(std::move(targetDays)), min_(minCount) {
+        label = "Target days off[>=" + std::to_string(min_) + "]";  // display only
+    }
     void onReset(const EmployeeSchedule& s) override {
         horizon_ = 0;
         day_.resize(s.shifts.size());
@@ -47,4 +56,4 @@ private:
 
 }  // namespace es
 
-#endif  // ES_CONSTRAINTS_TARGET_DAYS_OFF_HPP
+#endif  // ES_CONSTRAINTS_TARGET_DAYS_OFF_COST_HPP

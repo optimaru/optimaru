@@ -1,21 +1,25 @@
-#ifndef ES_CONSTRAINTS_MAX_CONSECUTIVE_OFF_HPP
-#define ES_CONSTRAINTS_MAX_CONSECUTIVE_OFF_HPP
+#ifndef ES_CONSTRAINTS_MAX_CONSECUTIVE_DAYS_OFF_COST_HPP
+#define ES_CONSTRAINTS_MAX_CONSECUTIVE_DAYS_OFF_COST_HPP
 
 #include "es/constraints/common.hpp"
 
 namespace es {
 
-// Soft (default): interior runs of consecutive OFF days (days with no work)
-// longer than `value`. An OFF run is counted only when it sits strictly between
-// two worked days (bounded by work on both sides), so leading/trailing off at
-// the horizon edge — likely an artifact of the planning window — is not
-// penalized.
-// Penalty = len - value per over-long interior run. Models "avoid long gaps
-// between worked days" (value=3 -> runs of 4+ cost). A day counts as worked if it
-// holds any shift. Runs without deltaCost (full unit re-cost per touch).
-struct MaxConsecutiveOff final : EsUnitConstraint {
-    explicit MaxConsecutiveOff(double weight = 1.0, int value = 3)
-        : EsUnitConstraint("Max consecutive days off", weight, /*hard=*/false),
+// Soft, weight 1: maxConsecutiveDaysOffCost. Interior runs of consecutive
+// OFF days (days with no work) longer than `value` (default 3). An OFF run is
+// counted only when it sits strictly between two worked days (bounded by
+// work on both sides), so leading/trailing off at the horizon edge — likely
+// an artifact of the planning window — is not penalized. Raw cost per
+// employee = len - value per over-long interior run ("avoid long gaps between
+// worked days": value=3 -> runs of 4+ cost), so 0 = no such gap. A day counts
+// as worked if it holds any shift. Runs without deltaCost (full unit re-cost
+// per touch).
+struct MaxConsecutiveDaysOffCost final : EsUnitConstraint {
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
+
+    explicit MaxConsecutiveDaysOffCost(double weight = kDefaultWeight, int value = 3)
+        : EsUnitConstraint("maxConsecutiveDaysOffCost", weight, kDefaultLevel),
           value_(value) {}
     void onReset(const EmployeeSchedule& s) override {
         horizon_ = 0;
@@ -55,4 +59,4 @@ private:
 
 }  // namespace es
 
-#endif  // ES_CONSTRAINTS_MAX_CONSECUTIVE_OFF_HPP
+#endif  // ES_CONSTRAINTS_MAX_CONSECUTIVE_DAYS_OFF_COST_HPP

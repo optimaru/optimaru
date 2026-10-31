@@ -1,29 +1,38 @@
-#ifndef ES_CONSTRAINTS_BALANCE_LOCATION_HPP
-#define ES_CONSTRAINTS_BALANCE_LOCATION_HPP
+#ifndef ES_CONSTRAINTS_LOCATION_IMBALANCE_COST_HPP
+#define ES_CONSTRAINTS_LOCATION_IMBALANCE_COST_HPP
 
 #include "es/constraints/common.hpp"
 
 namespace es {
 
-// Soft, global fairness of a per-employee count across employees that have
-// `workerSkill` (empty = all). The counted quantity is either shifts of a
-// `location` (empty = all work), or — when `offTargetDays` is non-empty — the
-// number of those target days each employee has OFF. `metric` selects "ssd"
-// (sqrt of the sum of squared deviations, matching BalanceShiftAssignments) or
-// "gap" (max-min beyond `tolerance`). Covers balance per location, a gap on one
-// location's count, and balance of days off over a set of target days.
-struct BalanceLocation final : EsGlobalConstraint {
-    BalanceLocation(double weight, std::string location, std::string workerSkill,
-                    std::string metric, int tolerance, std::vector<int> offTargetDays)
-        : EsGlobalConstraint("Balance[" +
-                                     (!offTargetDays.empty()
-                                              ? std::string("off-target")
-                                              : (location.empty() ? std::string("work") : location)) +
-                                     " " + (workerSkill.empty() ? "all" : workerSkill) + " " + metric +
-                                     "]",
-                             weight, /*hard=*/false),
+// Soft, weight 1, global: locationImbalanceCost, the fairness of a
+// per-employee count across employees that have `workerSkill` (empty = all).
+// The counted quantity is either shifts of a `location` (empty = all work),
+// or — when `offTargetDays` is non-empty — the number of those target days
+// each employee has OFF. `metric` selects "ssd" (sqrt of the sum of squared
+// deviations, rounded like ShiftCountImbalanceCost) or "gap" (max - min
+// beyond `tolerance`). Raw cost = that statistic over the applicable
+// employees (0 with fewer than two), so 0 = the counts are even (within
+// `tolerance` for "gap"). Covers balance per location, a gap on one
+// location's count, and balance of days off over a set of target days. Each
+// instance carries the label "Balance[<off-target|location|work> <skill|all>
+// <metric>]".
+struct LocationImbalanceCost final : EsGlobalConstraint {
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
+
+    explicit LocationImbalanceCost(double weight = kDefaultWeight, std::string location = {},
+                                   std::string workerSkill = {}, std::string metric = "ssd",
+                                   int tolerance = 0, std::vector<int> offTargetDays = {})
+        : EsGlobalConstraint("locationImbalanceCost", weight, kDefaultLevel),
           loc_(std::move(location)), skill_(std::move(workerSkill)), metric_(std::move(metric)),
-          tolerance_(tolerance), target_(std::move(offTargetDays)) {}
+          tolerance_(tolerance), target_(std::move(offTargetDays)) {
+        label = "Balance[" +
+                (!target_.empty() ? std::string("off-target")
+                                  : (loc_.empty() ? std::string("work") : loc_)) +
+                " " + (skill_.empty() ? std::string("all") : skill_) + " " + metric_ +
+                "]";  // display only; never a lookup key
+    }
     void reset(const EmployeeSchedule& s,
                const std::vector<std::vector<int>>& membersPerUnit) override {
         match_.resize(s.shifts.size());
@@ -134,4 +143,4 @@ private:
 
 }  // namespace es
 
-#endif  // ES_CONSTRAINTS_BALANCE_LOCATION_HPP
+#endif  // ES_CONSTRAINTS_LOCATION_IMBALANCE_COST_HPP

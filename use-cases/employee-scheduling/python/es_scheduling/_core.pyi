@@ -17,26 +17,33 @@ Two ways to define the cost function:
    constraints at weight 1, scored by a hand-written marginal-delta
    incremental calculator (the fastest path).
 
-2. Assembled (plugin): build a :class:`DecomposedCalculator`, pick constraints
-   by name with per-constraint ``weight`` / ``hard`` / ``exponent``, then
-   ``Solver(cfg).solve(schedule, calc)``. Every built-in constraint carries
-   its own incremental (marginal-delta) evaluation and precomputes lookup
-   tables at reset, so any assembly — custom weights, hard/soft overrides,
-   shaped ``exponent != 1`` included — searches incrementally out of the box,
-   at ~0.9x the built-in step rate (effectively parity).
+2. Assembled (plugin): build a :class:`DecomposedCalculator` from constraint
+   specs (``es_scheduling.constraints``, one class per constraint) or by name
+   with per-constraint ``weight`` / ``hard`` / ``exponent`` and domain
+   parameters, then ``Solver(cfg).solve(schedule, calc)``. Every built-in
+   constraint carries its own incremental (marginal-delta) evaluation and
+   precomputes lookup tables at reset, so any assembly — custom weights,
+   hard/soft overrides, shaped ``exponent != 1`` included — searches
+   incrementally out of the box, at ~0.9x the built-in step rate (effectively
+   parity).
+
+The defaults (level, weight, reward) live in the C++ components and are
+reported by :func:`constraint_info`; the rule factory accepts the 30 names of
+``CONSTRAINT_NAMES``.
 """
 
-from typing import Callable, Iterable, Protocol, TypedDict, overload
+from typing import Any, Callable, Iterable, Literal, NamedTuple, Protocol, TypedDict, overload
 
 class ConstraintSpec(Protocol):
     """Anything with the spec attributes: the `Constraint` dataclasses
     (es_scheduling.constraints) and the pydantic rule models
-    (es_scheduling.models) both qualify."""
+    (es_scheduling.models) both qualify. ``params()`` (optional) returns the
+    domain parameters."""
 
     @property
     def name(self) -> str: ...
     @property
-    def weight(self) -> float: ...
+    def weight(self) -> float | None: ...
     @property
     def hard(self) -> bool | None: ...
     @property
@@ -48,72 +55,82 @@ MINUTES_PER_DAY: int
 MAX_DAY: int
 """The last day a shift or a day range may reach."""
 CONSTRAINT_NAMES: tuple[str, ...]
-"""Names accepted by :meth:`DecomposedCalculator.add`:
+"""Every name the rule factory accepts (:meth:`DecomposedCalculator.add`, the
+spec classes), in factory order. Default level and weight 1 each (the eight
+defaults first in :func:`constraint_info`):
 
-- ``"required_skill"``       hard; 1 per assigned shift whose required skill
-                             the employee lacks.
-- ``"unavailable_employee"`` hard; minutes of assigned shifts overlapping the
-                             employee's unavailable days.
-- ``"overlapping_shift"``    hard; overlapping minutes between two shifts of
-                             the same employee.
-- ``"one_shift_per_day"``    hard; 1 per pair of same-employee shifts starting
-                             on the same day.
-- ``"min_rest"``             hard; shortfall minutes below 10h rest between
-                             two same-employee shifts.
-- ``"undesired_day"``        soft; minutes on the employee's undesired days.
-- ``"desired_day"``          soft reward; minutes on the employee's desired
-                             days (negative cost).
-- ``"balance_assignments"``  soft; load-balancing "unfairness" statistic over
-                             per-employee shift counts (global, not per-unit).
+- ``"required_skill_cost"``          hard; 1 per assigned shift whose required
+                                     skill the employee lacks.  [default]
+- ``"employee_unavailability_cost"`` hard; minutes of assigned shifts on the
+                                     employee's unavailable days.  [default]
+- ``"shift_overlap_cost"``           hard; overlapping minutes between two shifts
+                                     of the same employee.  [default]
+- ``"max_one_shift_per_day_cost"``   hard; 1 per pair of same-employee shifts
+                                     starting on the same day.  [default]
+- ``"min_rest_cost"``                hard; shortfall minutes below
+                                     ``min_gap_minutes`` (600) of rest between two
+                                     same-employee shifts.  [default]
+- ``"undesired_day_cost"``           soft; minutes on the employee's undesired
+                                     days (``per_day``: 1 per shift).  [default]
+- ``"desired_day_cost"``             soft REWARD (raw <= 0, never hard); minutes on
+                                     the employee's desired days (``per_day``: 1 per
+                                     shift).  [default]
+- ``"desired_shift_cost"``           soft REWARD (raw <= 0, never hard); 1 per
+                                     assigned shift matching a desired (day,
+                                     location).
+- ``"shift_count_imbalance_cost"``   soft; load-balancing "unfairness" statistic
+                                     over per-employee shift counts (global).
+                                     [default]
+- ``"max_consecutive_days_cost"``    hard; days beyond ``value`` in any run of
+                                     consecutive worked days.
+- ``"min_consecutive_days_cost"``    soft; shortfall below ``value`` of any run.
+- ``"max_consecutive_days_off_cost"`` soft; interior off runs beyond ``value``.
+- ``"rest_after_consecutive_work_cost"`` hard; after >= ``work_days`` worked days in
+                                     a row, shortfall of the following rest gap below
+                                     ``rest_days`` (end-of-horizon runs excluded).
+- ``"max_weekly_minutes_cost"``      hard; assigned minutes beyond ``minutes`` per
+                                     calendar week (``week_anchor``).
+- ``"min_weekly_minutes_cost"``      soft; shortfall below ``minutes`` in every
+                                     week (guaranteed hours; ``week_anchor``).
+- ``"min_weekly_rest_days_cost"``    hard; worked days beyond ``7 - value`` per
+                                     calendar week (>= ``value`` rest days per week).
+- ``"assignment_cost"``              soft; money: ``shift_costs[name][id]`` override,
+                                     else ``cost_per_hour``/``cost_per_shift``.
+- ``"unassigned_shifts_cost"``       hard; 1 per shift left unassigned (global).
+- ``"shift_count_gap_cost"``         soft; busiest-vs-least-busy gap beyond
+                                     ``tolerance`` (global).
+- ``"weekly_minutes_gap_cost"``      soft; per calendar week, busiest-vs-least-busy
+                                     gap of assigned minutes beyond
+                                     ``tolerance_minutes``, in hours (global).
+- ``"shift_coverage_cost"``          soft; per (day, location) group, count of
+                                     assignees holding ``worker_skill`` outside
+                                     [``min_count``, ``max_count``] (global).
+- ``"location_run_length_cost"``     soft; maximal runs of days at ``location``
+                                     outside [``min_run``, ``max_run``].
+- ``"rest_after_location_run_cost"`` hard; worked days in the ``rest_days`` after a
+                                     run at ``location``.
+- ``"location_run_gap_cost"``        soft; shortfall below ``min_gap`` days between
+                                     two runs at ``location``.
+- ``"worker_location_count_cost"``   SOFT; per worker holding ``worker_skill``,
+                                     count of ``location`` shifts outside
+                                     [``min_count``, ``max_count``].
+- ``"day_pattern_cost"``             soft; 1 per window matching ``pattern``, a
+                                     comma-separated list of locations, ``OFF`` (a
+                                     day with no work), ``*`` (any day), ``WORK``
+                                     (any worked day) or ``!x`` (a worked day not at
+                                     location x).
+- ``"target_days_off_cost"``         soft; shortfall below ``min_count`` days off
+                                     among ``target_days``.
+- ``"worker_day_count_in_range_cost"`` SOFT; distinct worked days in [``lo``,
+                                     ``hi``] outside [``min_count``, ``max_count``].
+- ``"location_imbalance_cost"``      soft; fairness of a per-worker count across
+                                     workers holding ``worker_skill`` (global).
+- ``"worker_pairing_cost"``          soft; 1 per (day, location) bucket where the
+                                     pairing of ``anchor`` and ``paired`` fails
+                                     (raw >= 0; global).
 
-Extended rules (parameters via keyword arguments
-to :meth:`DecomposedCalculator.add` or spec-class fields):
-
-- ``"max_consecutive_days"`` hard; days beyond ``value`` in any run of
-                             consecutive worked days.
-- ``"min_consecutive_days"`` soft; shortfall below ``value`` of any run.
-- ``"rest_after_consecutive_work"`` hard; after >= ``work_days`` worked days in
-                             a row, shortfall of the following rest gap below
-                             ``rest_days`` (end-of-horizon runs excluded).
-- ``"max_weekly_minutes"``   hard; assigned minutes beyond ``minutes`` per
-                             calendar week.
-- ``"min_weekly_minutes"``   soft; shortfall below ``minutes`` in every week
-                             (guaranteed hours).
-- ``"min_weekly_rest_days"`` hard; worked days beyond ``7 - value`` per
-                             calendar week (>= ``value`` rest days per week).
-- ``"assignment_cost"``      soft; money: ``shift_costs[name][id]`` override,
-                             else ``cost_per_hour``/``cost_per_shift``.
-- ``"unassigned_shift"``     hard; 1 per shift left unassigned.
-- ``"balance_min_max_gap"``  soft; busiest-vs-least-busy gap beyond
-                             ``tolerance``.
-- ``"balance_weekly_minutes_gap"`` soft; per calendar week, busiest-vs-least-
-                             busy gap of assigned minutes beyond
-                             ``tolerance_minutes`` (all employees compared;
-                             cost in hours = excess minutes / 60).
-- ``"shift_coverage"``       soft; per (day, location) group, count of assignees
-                             holding ``worker_skill`` outside
-                             [``min_count``, ``max_count``].
-- ``"location_run"``         soft; maximal runs of days at ``location`` outside
-                             [``min_run``, ``max_run``].
-- ``"rest_after_location_run"`` hard; worked days in the ``rest_days`` after a
-                             run at ``location``.
-- ``"location_run_gap"``     soft; shortfall below ``min_gap`` days between two
-                             runs at ``location``.
-- ``"worker_location_count"`` hard; per worker holding ``worker_skill``, count of
-                             ``location`` shifts outside
-                             [``min_count``, ``max_count``].
-- ``"day_pattern"``          soft; 1 per window matching ``pattern``, a
-                             comma-separated list of locations, ``OFF`` (a day
-                             with no work), ``*`` (any day), ``WORK`` (any worked
-                             day) or ``!x`` (a worked day not at location x).
-- ``"target_days_off"``      soft; shortfall below ``min_count`` days off among
-                             ``target_days``.
-- ``"balance_location"``     soft; fairness of a per-worker count across workers
-                             holding ``worker_skill``.
-- ``"min_rest"`` takes an optional ``min_gap_minutes`` (default 600).
-
-Also accepted, though not listed in ``CONSTRAINT_NAMES``:
-``"worker_day_count_in_range"`` and ``"worker_pair_same_shift"``.
+Unit constraints take an optional scope ``worker_indices`` / ``shift_indices``;
+``shift_coverage_cost`` scopes natively; the other globals take none.
 """
 
 def minutes(day: int, hour: int = 0, minute: int = 0) -> int:
@@ -147,7 +164,7 @@ class Employee:
     undesired_dates: set[int]
     desired_dates: set[int]
     desired_shifts: set[tuple[int, str]]
-    """(day, location) location-specific work preferences (see the desired_shift rule)."""
+    """(day, location) location-specific work preferences (see the desired_shift_cost rule)."""
 
 class Shift:
     """Planning entity: one shift to be assigned to one employee.
@@ -190,14 +207,19 @@ class EmployeeSchedule:
         """The current employee index per shift (the solution vector)."""
 
 def calculate_score(schedule: EmployeeSchedule) -> Score:
-    """Full recompute with the eight DEFAULT constraints at weight 1 (also
-    stores `schedule.score`). For a custom assembly use
+    """Full recompute with the eight DEFAULT constraints at their default
+    weights (also stores `schedule.score`). For a custom assembly use
     :meth:`DecomposedCalculator.score` instead."""
 
 class ConstraintTotalDict(TypedDict):
     name: str
+    """The constraint's Python name, e.g. ``"day_pattern_cost"``."""
+    label: str
+    """Display text of this instance of a parametrized rule, e.g.
+    ``"Day pattern[Location A,OFF,Location B]"``; "" for one without."""
     cost: float
     """Weighted + shaped total; positive = penalizing, negative = rewarding."""
+    level: Literal["hard", "medium", "soft"]
     is_hard: bool
 
 class DecomposedCalculator:
@@ -207,33 +229,40 @@ class DecomposedCalculator:
 
     Assemble from constraint spec objects (``es_scheduling.constraints``)::
 
-        DecomposedCalculator([RequiredSkill(), MinimumRest(0.25, hard=False)])
+        DecomposedCalculator([RequiredSkillCost(), MinRestCost(weight=0.25, hard=False)])
 
-    or incrementally by name via :meth:`add`. All eight defaults at weight 1
-    (see :func:`default_calculator`) reproduce :func:`calculate_score` exactly.
+    or incrementally by name via :meth:`add`. The eight defaults at their
+    default weights (see :func:`default_calculator`) reproduce
+    :func:`calculate_score` exactly. A constraint may be added several times
+    (other parameters or scope); each instance is scored on its own.
     """
     @overload
     def __init__(self) -> None: ...
     @overload
     def __init__(self, constraints: Iterable[ConstraintSpec]) -> None:
         """Duck-typed: each item only needs `.name`, `.weight`, `.hard`,
-        `.exponent` (plus an optional `.params` dict) — the `Constraint`
-        dataclasses and the pydantic rule models both qualify."""
+        `.exponent` (plus an optional `params()`) — the `Constraint`
+        dataclasses and the pydantic rule models both qualify. Raises
+        ValueError for an unknown name, a reward made hard, a scope on a
+        global rule other than shift_coverage_cost, or an invalid knob value,
+        and TypeError for a knob of the wrong type."""
     def add(
         self,
         name: str,
-        weight: float = 1.0,
+        weight: float | None = None,
         hard: bool | None = None,
         exponent: float = 1.0,
         **params: object,
     ) -> None:
         """Add a built-in constraint (see `CONSTRAINT_NAMES`).
 
-        weight:   linear multiplier on the constraint's cost.
+        weight:   None = the component's default weight; otherwise a linear
+                  multiplier (finite, >= 0) on the constraint's cost.
         hard:     True/False overrides the constraint's default level
-                  (e.g. ``add("undesired_day", hard=True)`` promotes it;
-                  ``add("min_rest", hard=False, weight=0.25)`` demotes it).
-                  None keeps the default.
+                  (e.g. ``add("undesired_day_cost", hard=True)`` promotes it;
+                  ``add("min_rest_cost", hard=False, weight=0.25)`` demotes it).
+                  None keeps the default. The rewards (desired_day_cost,
+                  desired_shift_cost) refuse True.
         exponent: sign-preserving power shaping of the PER-EMPLOYEE cost:
                   contribution = weight * sign(c) * abs(c) ** exponent.
                   2.0 = squared, 3.0 = cubed — concentrated violations on one
@@ -241,25 +270,61 @@ class DecomposedCalculator:
                   applied on top of the incrementally maintained raw cost, so
                   it does not slow the search down.
         params:    constraint-specific options such as
-                  ``pattern="Location A,OFF,Location B"`` or ``value=6``.
+                  ``pattern="Location A,OFF,Location B"`` or ``value=6``, and the
+                  scope ``worker_indices`` / ``shift_indices``.
 
-        Raises ValueError for an unknown name. Duplicates are allowed (their
-        costs add up).
+        The same checks as a spec pick: ValueError for an unknown name or a
+        refused level, TypeError for a knob of the wrong type. Duplicates are
+        allowed (their costs add up).
         """
     def score(self, schedule: EmployeeSchedule) -> Score:
         """Score `schedule`'s current assignment with this assembly (also
         stores `schedule.score`) and prime the calculator so
         :meth:`constraint_totals` explains the result."""
     def constraint_totals(self) -> list[ConstraintTotalDict]:
-        """Weighted cost per constraint for the last scored/solved solution —
-        the score explanation ("which constraint costs how much")."""
+        """Weighted cost per constraint instance for the last scored/solved
+        solution — the score explanation ("which constraint costs how much")."""
     @property
     def delta_group_count(self) -> int:
         """Structural delta groups compiled by the last score/solve reset."""
 
 def default_calculator() -> DecomposedCalculator:
-    """A DecomposedCalculator preloaded with all eight default constraints at
-    weight 1 — equivalent to the built-in score."""
+    """A DecomposedCalculator preloaded with the eight default constraints at
+    their default weights — equivalent to the built-in score."""
+
+def constraint_costs(
+    schedule: EmployeeSchedule, constraints: Iterable[ConstraintSpec] | None = None
+) -> dict[str, dict[str, Any]]:
+    """Raw per-employee cost of every constraint instance, before
+    weight/exponent/level: {key: {"costs": [...], "weight": float, "exponent":
+    float, "hard": bool, "global": bool, "level": "hard" | "medium" | "soft",
+    "reward": bool, "level_flippable": bool, "name": str, "label": str}}.
+
+    ``constraints`` None = the eight defaults; otherwise the picks, built by
+    the same factory as :class:`DecomposedCalculator` (an empty list raises
+    ValueError). The key is the Python name, ``"<name>#<k>"`` for the k-th
+    instance of a name picked more than once; ``name`` is always the plain
+    name and ``label`` the instance's display text. A global constraint
+    reports its single total as a one-element list. Feed the result to
+    ``es_scheduling.constraints.score`` with the same list to re-price it."""
+
+class ConstraintInfo(NamedTuple):
+    """One constraint-catalog row, read off the C++ default and catalog assemblies."""
+
+    name: str
+    default_level: Literal["hard", "medium", "soft"]
+    default_weight: float
+    level_flippable: bool
+    reward: bool
+    default_enabled: bool
+
+def constraint_info() -> list[ConstraintInfo]:
+    """The constraint catalog: one row per name the rule factory accepts (30).
+    The eight defaults come first (``default_enabled=True``, in
+    ``get_constraints()`` order), then the opt-in rules
+    (``default_enabled=False``; unit constraints before global ones). Every
+    default weight is 1; ``desired_day_cost`` / ``desired_shift_cost`` are
+    rewards (``reward=True``, ``level_flippable=False``)."""
 
 class SolverConfig:
     """Termination, seeding and search options for `Solver`."""

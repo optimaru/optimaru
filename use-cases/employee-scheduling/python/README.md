@@ -73,21 +73,23 @@ contribution = −( weight × sign(c)·|c|^exponent )
 ```
 
 to the hard or soft level. A penalty (`c > 0`) subtracts from the score. A reward
-(`DesiredDay`, `DesiredShift`) has a negative cost and adds to it, which is why a
-good schedule can show a positive soft score.
+(`DesiredDayCost`, `DesiredShiftCost`) has a negative cost and adds to it, which is
+why a good schedule can show a positive soft score. A reward is always soft:
+`hard=True` on it raises `ValueError`.
 
 **Worked example.** `-602hard/357.34soft`, the fixed instance in
 `tests/_reference.py`:
 
 | rule (hard) | raw cost | | rule (soft) | raw cost |
 |---|---|---|---|---|
-| missing skill | 1 | | undesired-day minutes | 480 |
-| unavailable-day minutes | 480 | | desired-day minutes (reward) | −839 |
-| overlap minutes | 120 | | balance unfairness | 1.66 |
-| same-day pair | 1 | | | |
+| `required_skill_cost` | 1 | | `undesired_day_cost` (minutes) | 480 |
+| `employee_unavailability_cost` (minutes) | 480 | | `desired_day_cost` (minutes, reward) | −839 |
+| `shift_overlap_cost` (minutes) | 120 | | `shift_count_imbalance_cost` | 1.66 |
+| `max_one_shift_per_day_cost` | 1 | | | |
 
 hard = −(1 + 480 + 120 + 1) = **−602**; soft = −(480 − 839 + 1.66) = **+357.34**.
-`calc.constraint_totals()` gives this table for any schedule.
+`calc.constraint_totals()` gives this table (weighted) for any schedule, and
+`es.constraint_costs(schedule, constraints)` the raw per-employee costs.
 
 **Feasible means hard is 0.** The solver first drives hard to 0, then spends the
 rest of its budget raising soft. If hard ends below 0, the must-rules cannot all
@@ -100,32 +102,36 @@ be met or the budget was too short; `constraint_totals()` shows which rule is st
   `exponent` bends it: with `exponent=2.0`, one employee with 4 violation units
   costs 16, while four employees with 1 unit each cost 4.
 - Units differ per rule (counts or minutes). Pick weights to convert them into one
-  currency, such as `UndesiredDay(1/60)` to count hours instead of minutes.
+  currency, such as `UndesiredDayCost(weight=1/60)` to count hours instead of minutes.
 
 ## The rules
 
 A schedule is judged by rules; you choose which apply and how much each matters.
+There is one class per rule in `es_scheduling.constraints`, named `<Subject>Cost`;
+its `name` is the snake_case registry name (`RequiredSkillCost.name ==
+"required_skill_cost"`).
 
 ```python
 from es_scheduling import (
-    AssignmentCost, BalanceMinMaxGap, DecomposedCalculator, DesiredDay, MaxConsecutiveDays,
-    MaxOneShiftPerDay, MaxWeeklyMinutes, MinimumRest, OverlappingShift, RequiredSkill,
-    Solver, SolverConfig, UnassignedShift, UnavailableEmployee, UndesiredDay, make_random_roster,
+    AssignmentCost, DecomposedCalculator, DesiredDayCost, EmployeeUnavailabilityCost,
+    MaxConsecutiveDaysCost, MaxOneShiftPerDayCost, MaxWeeklyMinutesCost, MinRestCost,
+    RequiredSkillCost, ShiftCountGapCost, ShiftOverlapCost, Solver, SolverConfig,
+    UnassignedShiftsCost, UndesiredDayCost, make_random_roster,
 )
 
 rules = [
-    RequiredSkill(),                       # must: right skill for the shift
-    UnavailableEmployee(),                 # must: never on unavailable days
-    OverlappingShift(),                    # must: no two shifts at once
-    MaxOneShiftPerDay(),                   # must: one shift per day
-    MinimumRest(min_gap_minutes=12 * 60),  # must: 12h rest between shifts
-    UnassignedShift(),                     # must: every shift gets someone
-    MaxConsecutiveDays(value=6),           # must: at most 6 workdays in a row
-    MaxWeeklyMinutes(minutes=40 * 60),     # must: at most 40h per week
-    UndesiredDay(2.0),                     # nice: avoid disliked days (2x weight)
-    DesiredDay(),                          # nice: grant wished days
-    BalanceMinMaxGap(tolerance=1),         # nice: busiest vs least-busy at most 1 apart
-    AssignmentCost(cost_per_hour=10.0),    # nice: keep wage cost down
+    RequiredSkillCost(),                       # must: right skill for the shift
+    EmployeeUnavailabilityCost(),              # must: never on unavailable days
+    ShiftOverlapCost(),                        # must: no two shifts at once
+    MaxOneShiftPerDayCost(),                   # must: one shift per day
+    MinRestCost(min_gap_minutes=12 * 60),      # must: 12h rest between shifts
+    UnassignedShiftsCost(),                    # must: every shift gets someone
+    MaxConsecutiveDaysCost(value=6),           # must: at most 6 workdays in a row
+    MaxWeeklyMinutesCost(minutes=40 * 60),     # must: at most 40h per week
+    UndesiredDayCost(weight=2.0),              # nice: avoid disliked days (2x weight)
+    DesiredDayCost(),                          # nice: grant wished days
+    ShiftCountGapCost(tolerance=1),            # nice: busiest vs least-busy at most 1 apart
+    AssignmentCost(cost_per_hour=10.0),        # nice: keep wage cost down
 ]
 
 config = SolverConfig()
@@ -135,64 +141,78 @@ calc = DecomposedCalculator(rules)
 Solver(config).solve(schedule, calc)       # search AND final score use these rules
 ```
 
-Every rule takes the same three dials, plus its own options:
+Every rule takes the same three knobs, plus its own options:
 
-| dial | meaning |
+| knob | meaning |
 |---|---|
-| `weight=1.0` | how much one violation hurts; `UndesiredDay(2.0)` hurts twice as much |
-| `hard=None` | `True` makes it a must (hard), `False` a nice-to-have (soft), `None` keeps the rule's default |
+| `weight=None` | how much one unit of violation hurts; `None` is the rule's default weight (1 for every rule here), `UndesiredDayCost(weight=2.0)` hurts twice as much |
+| `hard=None` | `True` makes it a must (hard), `False` a nice-to-have (soft), `None` keeps the rule's default level; a reward refuses `True` |
 | `exponent=1.0` | `2.0` squares each person's violation, so one person suffering a lot is much worse than many suffering a little |
+
+The defaults are declared once, in the C++ components (`kDefaultWeight` /
+`kDefaultLevel`); `es.constraint_info()` reports them, one
+`ConstraintInfo(name, default_level, default_weight, level_flippable, reward,
+default_enabled)` per rule, the eight defaults first.
+
+A rule may be picked **several times** with different options (two day patterns,
+one cap per worker group): each instance is scored on its own,
+`constraint_totals()` tells them apart by `label` (`"Day pattern[A,OFF,B]"`), and
+`constraint_costs()` keys the second instance `"day_pattern_cost#2"`. The same
+rule with the same options twice is an error.
+
+**Scope.** Every per-employee rule also takes `worker_indices` / `shift_indices`
+(engine indices; `None` = everyone): `MaxConsecutiveDaysCost(value=4,
+worker_indices=(0, 1))` applies to the first two employees only.
+`ShiftCoverageCost` scopes natively (an empty list there means everyone); the
+other global rules take no scope.
 
 ### Rule catalog
 
-**The default eight** (`get_constraints()`; at weight 1 they reproduce
-`calculate_score` exactly):
+Default level and weight are what `constraint_info()` reports; the raw cost is
+per employee (per schedule for the global rules) and 0 means no violation.
 
-| rule | default | counts what |
-|---|---|---|
-| `RequiredSkill()` | hard | shifts given to someone without the needed skill (at most 64 distinct required skills) |
-| `UnavailableEmployee()` | hard | minutes worked on an unavailable day |
-| `OverlappingShift()` | hard | minutes where two of your shifts overlap |
-| `MaxOneShiftPerDay()` | hard | pairs of same-day shifts for one person |
-| `MinimumRest(min_gap_minutes=600)` | hard | missing rest minutes between shifts |
-| `UndesiredDay()` | soft | minutes worked on a disliked day |
-| `DesiredDay()` | soft | minutes worked on a wished day (a reward) |
-| `BalanceShiftAssignments()` | soft | statistical unfairness of shift counts |
+**The default eight** (`get_constraints()`; at their default weights they
+reproduce `calculate_score` exactly):
 
-**Opt-in specs** (`es_scheduling.constraints`, usable from Python and C++):
+| Constraint (Python name) | C++ component | Default level | Default weight | Raw cost (0 = no violation) |
+|---|---|---|---|---|
+| `required_skill_cost` | `RequiredSkillCost` | hard | 1 | shifts given to someone without the needed skill (at most 64 distinct required skills) |
+| `employee_unavailability_cost` | `EmployeeUnavailabilityCost` | hard | 1 | minutes worked on an unavailable day |
+| `shift_overlap_cost` | `ShiftOverlapCost` | hard | 1 | minutes where two of an employee's shifts overlap |
+| `max_one_shift_per_day_cost` | `MaxOneShiftPerDayCost` | hard | 1 | PAIRS of same-day shifts for one person |
+| `min_rest_cost` | `MinRestCost` | hard | 1 | missing rest minutes below `min_gap_minutes` (600) between shifts |
+| `undesired_day_cost` | `UndesiredDayCost` | soft | 1 | minutes worked on a disliked day (`per_day`: 1 per shift) |
+| `desired_day_cost` | `DesiredDayCost` | soft (reward) | 1 | minus the minutes worked on a wished day (`per_day`: −1 per shift); raw ≤ 0 |
+| `shift_count_imbalance_cost` | `ShiftCountImbalanceCost` | soft | 1 | sqrt of the squared deviations of the shift counts (global) |
 
-| rule | default | counts what |
-|---|---|---|
-| `DesiredShift()` | soft | satisfied (day, location) wishes in `Employee.desired_shifts` (a reward) |
-| `MaxConsecutiveDays(value=6)` | hard | workdays beyond `value` in a row |
-| `MinConsecutiveDays(value=2)` | soft | how far short runs fall below `value` |
-| `MaxConsecutiveOff(value=3)` | soft | off days beyond `value` in a run bounded by work on both sides |
-| `RestAfterConsecutiveWork(work_days=6, rest_days=3)` | hard | rest-gap shortfall after a run of `work_days`+ worked days |
-| `MaxWeeklyMinutes(minutes=2400)` | hard | minutes beyond the weekly cap |
-| `MinWeeklyMinutes(minutes=480)` | soft | minutes missing to the weekly guarantee (an idle week costs the full amount) |
-| `MinWeeklyRestDays(value=1)` | hard | worked days beyond `7 - value` per week |
-| `AssignmentCost(cost_per_hour=…, cost_per_shift=…, shift_costs={…})` | soft | money: per-cell override, else per-hour, else per-shift |
-| `UnassignedShift()` | hard | shifts nobody works |
-| `BalanceMinMaxGap(tolerance=0)` | soft | busiest minus least-busy shift count, beyond tolerance |
-| `BalanceWeeklyMinutesGap(tolerance_minutes=120)` | soft | per week, busiest minus least-busy minutes, beyond tolerance, in hours |
+**Opt-in rules** (not in the default set; `default_enabled=False`):
 
-**Rule models** (`es_scheduling.models`; also reachable through
-`DecomposedCalculator.add(name, ...)`):
+| Constraint (Python name) | C++ component | Default level | Default weight | Raw cost (0 = no violation) |
+|---|---|---|---|---|
+| `desired_shift_cost` | `DesiredShiftCost` | soft (reward) | 1 | −1 per satisfied (day, location) wish in `Employee.desired_shifts`; raw ≤ 0 |
+| `max_consecutive_days_cost` | `MaxConsecutiveDaysCost` | hard | 1 | workdays beyond `value` (6) in a row |
+| `min_consecutive_days_cost` | `MinConsecutiveDaysCost` | soft | 1 | how far runs fall below `value` (2) |
+| `max_consecutive_days_off_cost` | `MaxConsecutiveDaysOffCost` | soft | 1 | off days beyond `value` (3) in a run bounded by work on both sides |
+| `rest_after_consecutive_work_cost` | `RestAfterConsecutiveWorkCost` | hard | 1 | rest-gap shortfall below `rest_days` (3) after a run of `work_days` (6)+ |
+| `max_weekly_minutes_cost` | `MaxWeeklyMinutesCost` | hard | 1 | minutes beyond the weekly cap `minutes` (2400); weeks from `week_anchor` |
+| `min_weekly_minutes_cost` | `MinWeeklyMinutesCost` | soft | 1 | minutes missing to the weekly guarantee `minutes` (480); an idle week costs the full amount |
+| `min_weekly_rest_days_cost` | `MinWeeklyRestDaysCost` | hard | 1 | worked days beyond `7 - value` (1) per week |
+| `assignment_cost` | `AssignmentCost` | soft | 1 | money: `shift_costs` override, else `cost_per_hour`, else `cost_per_shift` |
+| `unassigned_shifts_cost` | `UnassignedShiftsCost` | hard | 1 | shifts nobody works (global) |
+| `shift_count_gap_cost` | `ShiftCountGapCost` | soft | 1 | busiest minus least-busy shift count, beyond `tolerance` (global) |
+| `weekly_minutes_gap_cost` | `WeeklyMinutesGapCost` | soft | 1 | per week, busiest minus least-busy minutes beyond `tolerance_minutes`, in HOURS (global) |
+| `shift_coverage_cost` | `ShiftCoverageCost` | soft | 1 | per (day, location), assignees holding `worker_skill` outside [`min_count`, `max_count`] (global) |
+| `location_run_length_cost` | `LocationRunLengthCost` | soft | 1 | runs of days at `location` outside [`min_run`, `max_run`] |
+| `rest_after_location_run_cost` | `RestAfterLocationRunCost` | hard | 1 | worked days in the `rest_days` after a run at `location` |
+| `location_run_gap_cost` | `LocationRunGapCost` | soft | 1 | shortfall below `min_gap` days between two runs at `location` |
+| `worker_location_count_cost` | `WorkerLocationCountCost` | **soft** | 1 | per worker holding `worker_skill`, `location` shifts outside [`min_count`, `max_count`] |
+| `day_pattern_cost` | `DayPatternCost` | soft | 1 | occurrences of an ordered pattern of days (see below) |
+| `target_days_off_cost` | `TargetDaysOffCost` | soft | 1 | shortfall below `min_count` days off among `target_days` |
+| `worker_day_count_in_range_cost` | `WorkerDayCountInRangeCost` | **soft** | 1 | distinct worked days in [`lo`, `hi`] outside [`min_count`, `max_count`] |
+| `location_imbalance_cost` | `LocationImbalanceCost` | soft | 1 | fairness of a per-worker count, by `"ssd"` or `"gap"` (global) |
+| `worker_pairing_cost` | `WorkerPairingCost` | soft | 1 | (day, location) buckets where a pair of workers fails to share (or, with `penalty`, shares) a shift; raw ≥ 0 (global) |
 
-| rule | default | counts what |
-|---|---|---|
-| `ShiftCoverageRule` | soft | per (day, location) group, assignees holding `worker_skill` outside [`min_count`, `max_count`] |
-| `LocationRunRule` | soft | runs of consecutive days at `location` outside [`min_run`, `max_run`] |
-| `RestAfterLocationRunRule` | hard | worked days in the `rest_days` after a run at `location` |
-| `LocationRunGapRule` | soft | shortfall below `min_gap` days between two runs at `location` |
-| `WorkerLocationCountRule` | hard | per worker holding `worker_skill`, `location` shifts outside [`min_count`, `max_count`] |
-| `DayPatternRule` | soft | occurrences of an ordered pattern of days (see below) |
-| `TargetDaysOffRule` | soft | shortfall below `min_count` days off among `target_days` |
-| `WorkerDayCountInRuleRange` | hard | distinct worked days in [`lo`, `hi`] outside [`min_count`, `max_count`] |
-| `BalanceLocationRule` | soft | fairness of a per-worker count, by `"ssd"` or `"gap"` |
-| `WorkerPairSameShiftRule` | soft | (day, location) buckets a pair of workers should share or avoid sharing |
-
-A `DayPatternRule.pattern` is comma-separated tokens: a location, `OFF` (a day with
+A `DayPatternCost.pattern` is comma-separated tokens: a location, `OFF` (a day with
 no work), `*` (any day), `WORK` (any worked day) or `!x` (a worked day not at
 location x). `"Location A,OFF,Location B"` costs 1 each time a day at Location A,
 an off day and a day at Location B follow each other.
@@ -201,8 +221,53 @@ After solving, ask why the score is what it is:
 
 ```python
 for total in calc.constraint_totals():
-    print(total["name"], total["cost"], "hard" if total["is_hard"] else "soft")
+    print(total["name"], total["label"], total["cost"], total["level"])
 ```
+
+The same rules by name: `calc = DecomposedCalculator(); calc.add("day_pattern_cost",
+pattern="Location A,OFF,Location B")` (weight, hard and exponent as keyword
+arguments, `weight=None` = the default). `es.list_constraints()` lists every name.
+
+### 0.2.0
+
+- Every rule is now `<Subject>Cost` / `<subject>_cost` (Python name = C++ registry
+  name in snake_case): `RequiredSkill` → `RequiredSkillCost`, `UnavailableEmployee`
+  → `EmployeeUnavailabilityCost`, `OverlappingShift` → `ShiftOverlapCost`,
+  `one_shift_per_day` → `max_one_shift_per_day_cost`, `MinimumRest` →
+  `MinRestCost`, `BalanceShiftAssignments` → `ShiftCountImbalanceCost`,
+  `MaxConsecutiveOff` → `MaxConsecutiveDaysOffCost`, `UnassignedShift` →
+  `UnassignedShiftsCost`, `BalanceMinMaxGap` → `ShiftCountGapCost`,
+  `BalanceWeeklyMinutesGap` → `WeeklyMinutesGapCost`, `location_run` →
+  `location_run_length_cost`, `balance_location` → `location_imbalance_cost`,
+  `worker_pair_same_shift` → `worker_pairing_cost`; the others gain the `Cost` /
+  `_cost` suffix. The C++ structs, headers and registry names follow
+  (`"Missing required skill"` → `"requiredSkillCost"`); the parametrized display
+  names (`"Day pattern[...]"`) moved to the instance `label`.
+- One class per rule: the pydantic `*Rule` models are generated from the specs
+  (`models.RULE_MODELS`, `models.rule_model(...)`); `SchedulingInput.rules` takes
+  specs or JSON. JSON: `policy: "hard" | "soft"` → `hard: true | false`; `weight`
+  defaults to `null` (the rule's default). Old names and `policy` are refused.
+- The generated rule models are named `<SpecClass>Rule`, so 0.1.5 imports such as
+  `from es_scheduling.models import MaxConsecutiveDaysRule` raise `ImportError`:
+  `MaxConsecutiveDaysRule` → `MaxConsecutiveDaysCostRule`, `UnavailableWorkerRule`
+  → `EmployeeUnavailabilityCostRule`, `WorkerDayCountInRuleRange` →
+  `WorkerDayCountInRangeCostRule`, `BalanceAssignmentsRule` →
+  `ShiftCountImbalanceCostRule`, and so on. Prefer `models.rule_model(name)`, or
+  pass the spec instances, over importing the classes.
+- The scope keys `worker_indices` / `shift_indices` are accepted only on the
+  per-employee rules and on `shift_coverage_cost`. The other global rules
+  (`unassigned_shifts_cost`, `shift_count_imbalance_cost`, `shift_count_gap_cost`,
+  `weekly_minutes_gap_cost`, `location_imbalance_cost`, `worker_pairing_cost`)
+  refuse them, even as `null`; in 0.1.5 every rule accepted them.
+- `weight=None` everywhere (also `DecomposedCalculator.add`); the defaults come
+  from C++ (`constraint_info()`). The two rewards refuse `hard=True`.
+- New: `constraint_costs(schedule, constraints)`, `constraint_info()`, the 10
+  rule-only constraints as spec classes, `UndesiredDayCost.per_day`,
+  `DesiredDayCost.per_day`, `MaxWeeklyMinutesCost.week_anchor`,
+  `MinWeeklyMinutesCost.week_anchor`; `constraint_totals()` reports
+  `{name, label, cost, level, is_hard}`.
+- `worker_location_count_cost` and `worker_day_count_in_range_cost` are soft by
+  default (as they always were in C++; the old documentation said hard).
 
 ## Pinning
 
@@ -224,9 +289,9 @@ days so the carried-in ones come first: day 0 is the first day of history.
 ## JSON in, JSON out
 
 ```python
+from es_scheduling.constraints import MaxConsecutiveDaysCost
 from es_scheduling.models import (
-    MaxConsecutiveDaysRule, ScheduleRequest, SchedulingInput, ShiftModel, WorkerModel,
-    default_rules, solve_request,
+    ScheduleRequest, SchedulingInput, ShiftModel, WorkerModel, default_rules, solve_request,
 )
 
 request = ScheduleRequest(
@@ -234,7 +299,7 @@ request = ScheduleRequest(
     model_input=SchedulingInput(
         workers=[WorkerModel(id="Worker 01", skills=["Skill A"])],
         shifts=[ShiftModel(id="Shift 1", start=540, end=1020, required_skill="Skill A")],
-        rules=[*default_rules(), MaxConsecutiveDaysRule(value=6, weight=2)],
+        rules=[*default_rules(), MaxConsecutiveDaysCost(value=6, weight=2)],
     ),
 )
 solution = solve_request(request)
@@ -243,8 +308,11 @@ print(solution.model_dump_json())        # ready to send over the wire
 ```
 
 `ScheduleRequest.model_validate_json(...)` accepts the same JSON back: the rule
-list is a discriminated union, so `{"name": "max_consecutive_days", "value": 6}`
-picks the right rule class.
+list is a discriminated union generated from the specs, so
+`{"name": "max_consecutive_days_cost", "value": 6, "hard": false}` picks the right
+rule model, and `rule.to_spec()` is the `MaxConsecutiveDaysCost` it states.
+`solution.rule_totals` explains the score per rule instance (`name`, `label`,
+`cost`, `level`).
 
 `es_scheduling.demo.generate_demo_data(seed=7, workers=12, days=14)` builds a
 made-up request with skills, unavailable and preferred days, and rules that solve
@@ -333,7 +401,7 @@ generic BASIC change/swap search. The `relocate/list_swap/two_opt/or_opt/tail_sw
 weights are generic LIST-variable options and do not affect this domain.
 
 `es.calculate_score(schedule)` scores a fixed assignment without solving (the
-default eight at weight 1).
+default eight at their default weights).
 
 ## Adding a rule
 
@@ -350,10 +418,11 @@ exponents need no code.
 bindings.cpp                 pybind11 module (PYBIND11_MODULE(_core))
 es_scheduling/__init__.py    re-exports core + constraints + helpers
 es_scheduling/_core.pyi      type stub with full API docs
-es_scheduling/constraints.py constraint spec classes (declarative assembly)
-es_scheduling/models.py      pydantic request/response layer (optional)
+es_scheduling/constraints.py constraint spec classes, one per rule (declarative assembly)
+es_scheduling/_constraint.py the shared optimaru spec base (a synced copy; never edit by hand)
+es_scheduling/models.py      pydantic request/response layer, rule models generated from the specs (optional)
 es_scheduling/demo.py        generate_demo_data, a made-up sample request
 es_scheduling/helpers.py     pure-Python conveniences (list_constraints, make_random_roster, ...)
 setup.py, pyproject.toml     build (links ../cpp + imports ../../../include)
-tests/                       correctness + model tests (pytest)
+tests/                       correctness, raw costs by hand, catalog + model tests (pytest)
 ```

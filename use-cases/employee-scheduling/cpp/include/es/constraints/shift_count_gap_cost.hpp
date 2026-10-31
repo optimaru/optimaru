@@ -1,16 +1,21 @@
-#ifndef ES_CONSTRAINTS_BALANCE_MIN_MAX_GAP_HPP
-#define ES_CONSTRAINTS_BALANCE_MIN_MAX_GAP_HPP
+#ifndef ES_CONSTRAINTS_SHIFT_COUNT_GAP_COST_HPP
+#define ES_CONSTRAINTS_SHIFT_COUNT_GAP_COST_HPP
 
 #include "es/constraints/common.hpp"
 
 namespace es {
 
-// Soft (default): how far the busiest employee is above the least busy one,
-// beyond `tolerance` (fairness as the min-max gap of the per-employee shift
-// counts). Amortized constant-time maintenance via a count histogram.
-struct BalanceMinMaxGap final : EsGlobalConstraint {
-    explicit BalanceMinMaxGap(double weight = 1.0, int tolerance = 0)
-        : EsGlobalConstraint("Balance min-max gap", weight, /*hard=*/false),
+// Soft, weight 1, global: shiftCountGapCost, fairness as the min-max gap of
+// the per-employee shift counts. Raw cost = max(0, busiest count - least busy
+// count - `tolerance`) (default tolerance 0; every employee counts), so 0 =
+// the counts are within `tolerance` of each other. Amortized constant-time
+// maintenance via a count histogram.
+struct ShiftCountGapCost final : EsGlobalConstraint {
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
+
+    explicit ShiftCountGapCost(double weight = kDefaultWeight, int tolerance = 0)
+        : EsGlobalConstraint("shiftCountGapCost", weight, kDefaultLevel),
           tolerance_(tolerance) {}
     void reset(const EmployeeSchedule& s,
                const std::vector<std::vector<int>>& membersPerUnit) override {
@@ -55,4 +60,4 @@ private:
 
 }  // namespace es
 
-#endif  // ES_CONSTRAINTS_BALANCE_MIN_MAX_GAP_HPP
+#endif  // ES_CONSTRAINTS_SHIFT_COUNT_GAP_COST_HPP

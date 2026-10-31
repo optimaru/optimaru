@@ -1,14 +1,19 @@
-#ifndef ES_CONSTRAINTS_MAX_ONE_SHIFT_PER_DAY_HPP
-#define ES_CONSTRAINTS_MAX_ONE_SHIFT_PER_DAY_HPP
+#ifndef ES_CONSTRAINTS_MAX_ONE_SHIFT_PER_DAY_COST_HPP
+#define ES_CONSTRAINTS_MAX_ONE_SHIFT_PER_DAY_COST_HPP
 
 #include "es/constraints/assignment_constraint.hpp"
 
 namespace es {
 
-// Hard (default): 1 per pair of same-employee shifts starting on the same day.
-struct MaxOneShiftPerDay final : GroupableAssignmentConstraint {
-    explicit MaxOneShiftPerDay(double weight = 1.0)
-        : GroupableAssignmentConstraint("Max one shift per day", weight, /*hard=*/true) {}
+// Hard, weight 1: maxOneShiftPerDayCost. Raw cost per employee = the number
+// of PAIRS of its shifts that start on the same day (three shifts on one day
+// cost 3), so 0 = at most one shift per day.
+struct MaxOneShiftPerDayCost final : GroupableAssignmentConstraint {
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
+
+    explicit MaxOneShiftPerDayCost(double weight = kDefaultWeight)
+        : GroupableAssignmentConstraint("maxOneShiftPerDayCost", weight, kDefaultLevel) {}
     void onReset(const EmployeeSchedule& s) override {
         day_.resize(s.shifts.size());
         for (std::size_t i = 0; i < s.shifts.size(); ++i) {
@@ -42,4 +47,4 @@ private:
 
 }  // namespace es
 
-#endif  // ES_CONSTRAINTS_MAX_ONE_SHIFT_PER_DAY_HPP
+#endif  // ES_CONSTRAINTS_MAX_ONE_SHIFT_PER_DAY_COST_HPP
