@@ -7,6 +7,15 @@
 
 namespace vrp
 {
+
+// ---------------------------------------------------------------------------
+// Route geometry helpers (no constraint component lives here)
+// ---------------------------------------------------------------------------
+// The smallest enclosing circle of a route's visit points (an incremental
+// minimum-enclosing-circle construction on an equirectangular projection
+// around the mean latitude), used by enclosingCircleRadiusCost.
+// maxRouteRadiusCost measures haversine distances from home instead
+// (detail::haversineMeters in common.hpp).
 namespace detail
 {
 
@@ -109,40 +118,6 @@ inline double smallestEnclosingRadius(const std::vector<Location> &locations)
 
 }  // namespace detail
 
-struct MaxRouteRadius final : VrpUnitConstraint {
-    MaxRouteRadius() : VrpUnitConstraint("maxRouteRadius", 1.0, true) {}
-    double cost(const VehicleRoutePlan& p, int u, const std::vector<int>& m) const override {
-        if (detail::isPool(p, u) || p.vehicles[u].maxRouteRadiusMeters <= 0) return 0;
-        const Location& home = p.locations[p.vehicles[u].homeLocationIndex];
-        double furthest = 0;
-        for (int i : m) furthest = std::max(furthest,
-            detail::haversineMeters(home, p.locations[p.visits[i].locationIndex]));
-        return std::max(0.0, furthest - p.vehicles[u].maxRouteRadiusMeters);
-    }
-};
-
-// Enclosing-circle radius constraint. This is the
-// minimum circle around the visits themselves (the depot is deliberately not
-// a point), unlike MaxRouteRadius which measures from the depot. It is an
-// opt-in soft objective so adding it does not change the default quickstart.
-struct MinimizeEnclosingCircleRadius final : VrpUnitConstraint
-{
-    MinimizeEnclosingCircleRadius()
-        : VrpUnitConstraint("minimizeEnclosingCircleRadius", 0.0, false)
-    {
-    }
-    double cost(const VehicleRoutePlan &p,
-                int u,
-                const std::vector<int> &members) const override
-    {
-        if (detail::isPool(p, u) || members.size() < 2)
-            return 0.0;
-        std::vector<Location> locations;
-        locations.reserve(members.size());
-        for (int i : members)
-            locations.push_back(p.locations[p.visits[i].locationIndex]);
-        return detail::smallestEnclosingRadius(locations);
-    }
-};
 }  // namespace vrp
-#endif
+
+#endif  // VRP_CONSTRAINTS_ROUTE_GEOMETRY_HPP

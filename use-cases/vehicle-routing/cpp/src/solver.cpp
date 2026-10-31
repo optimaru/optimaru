@@ -1,6 +1,7 @@
 #include "vrp/solver.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <exception>
 #include <limits>
@@ -292,10 +293,16 @@ void Solver::solve(
     // solution — the plugin components derive their own chain and never write
     // these — then score it with the caller's constraint assembly, leaving the
     // calculator primed on it so constraintTotals() explains exactly this
-    // score.
+    // score. The three levels come straight from the calculator's
+    // accumulators (levelScores(), before the medium fold) rather than being
+    // decoded from the folded engine soft, which would file a soft total of
+    // 10^9 or more under medium.
     ScoreCalculator::updateShadowVariables(plan);
     calculator.resetWorkingSolution(plan);
-    plan.score = fromEngineScore(calculator.calculateScore());
+    calculator.calculateScore();
+    const auto levels = calculator.levelScores();
+    plan.score = Score{static_cast<std::int64_t>(levels.hard), std::llround(levels.medium),
+                       std::llround(levels.soft)};
 }
 
 }  // namespace vrp

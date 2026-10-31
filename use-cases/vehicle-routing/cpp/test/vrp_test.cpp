@@ -61,7 +61,7 @@ void testJavaFixtures()
     checkEqual("drivingTime L2->L3", plan.drivingTime(loc2, loc3), 639);
     checkEqual("drivingTime L1->L3", plan.drivingTime(home, loc3), 941);
 
-    // vehicleCapacity: capacity 100, demands 80 + 40 -> 20 over.
+    // vehicleCapacityCost: capacity 100, demands 80 + 40 -> 20 over.
     plan.vehicles = {Vehicle{"1", 100, home, hourMinute(7, 0), {}}};
     plan.visits = {
         Visit{"2", "John", loc2, 80, hourMinute(8, 0), hourMinute(10, 0), 30 * 60,
@@ -71,18 +71,18 @@ void testJavaFixtures()
     };
     plan.vehicles[0].visitIndices = {0, 1};
     Score s = ScoreCalculator::calculateScore(plan);
-    checkEqual("vehicleCapacity hard penalty", -s.hard, 20);
-    // minimizeTravelTime: the route is open by default, so only
+    checkEqual("vehicleCapacityCost hard penalty", -s.hard, 20);
+    // travelTimeCost: the route is open by default, so only
     // home->L2->L3 = 843 + 639 = 1482 is driven.
-    checkEqual("minimizeTravelTime soft penalty (open route)", -s.soft, 1482);
+    checkEqual("travelTimeCost soft penalty (open route)", -s.soft, 1482);
     // With returnToDepot the Java round trip home->L2->L3->home is charged:
     // 843 + 639 + 941 = 2423.
     plan.vehicles[0].returnToDepot = true;
     s = ScoreCalculator::calculateScore(plan);
-    checkEqual("minimizeTravelTime soft penalty (return to depot)", -s.soft, 2423);
+    checkEqual("travelTimeCost soft penalty (return to depot)", -s.soft, 2423);
     plan.vehicles[0].returnToDepot = false;
 
-    // maximizeVisitsAssigned: one unassigned visit with a 30-minute service
+    // unassignedVisitsCost: one unassigned visit with a 30-minute service
     // duration is penalized by 30 on the medium level.
     VehicleRoutePlan plan2;
     addLocation(plan2, 49.288087, 16.562172);
@@ -93,7 +93,7 @@ void testJavaFixtures()
                           30 * 60, -1, NULL_TIME}};
     // Left out of every route == unassigned.
     Score s2 = ScoreCalculator::calculateScore(plan2);
-    checkEqual("maximizeVisitsAssigned medium penalty", -s2.medium, 30);
+    checkEqual("unassignedVisitsCost medium penalty", -s2.medium, 30);
     std::printf("\n");
 }
 

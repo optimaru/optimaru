@@ -1,13 +1,15 @@
-#ifndef VRP_CONSTRAINTS_MAXIMIZE_VISITS_ASSIGNED_HPP
-#define VRP_CONSTRAINTS_MAXIMIZE_VISITS_ASSIGNED_HPP
+#ifndef VRP_CONSTRAINTS_UNASSIGNED_VISITS_COST_HPP
+#define VRP_CONSTRAINTS_UNASSIGNED_VISITS_COST_HPP
 
 #include "vrp/constraints/route_sums.hpp"
 
 namespace vrp {
 
-// Medium (default, weight 1 medium level): maximizeVisitsAssigned -- the
-// per-visit penalty of every visit left in no route (by default its service
-// duration in minutes; see Visit::unassignedPenalty).
+// Medium, weight 1 (medium units): unassignedVisitsCost -- the per-visit
+// penalty of every visit left in no route (by default its service duration
+// in whole minutes; see Visit::unassignedPenalty). Raw cost (global) = the
+// summed penalty minutes of the unrouted visits -- penalty minutes, not a
+// count; 0 = every visit is routed (or every unrouted one carries penalty 0).
 //
 // Global because an unrouted visit belongs to no unit. It keeps the routed
 // penalty per vehicle, so a touched route costs O(its visits) and the total is
@@ -15,12 +17,17 @@ namespace vrp {
 // answer the engine's move previews in O(pieces), which is what lets the
 // whole default assembly serve them without writing a candidate route out.
 //
-// The medium level is folded into the engine's soft level as
-// `medium * kMediumUnit` (see domain.hpp), which is what the default weight
-// carries; the component's own cost stays plain penalty units.
-struct MaximizeVisitsAssigned final : detail::SummedGlobalConstraint {
-    explicit MaximizeVisitsAssigned(double weight = static_cast<double>(kMediumUnit))
-        : SummedGlobalConstraint("maximizeVisitsAssigned", weight, /*hard=*/false) {}
+// The domain folds the medium level into the engine's soft level as
+// `medium * kMediumUnit` (kMediumFold in domain.hpp); the fold lives in the
+// calculator, not in this weight. hard() gives 1 hard per penalty minute,
+// soft() 1 soft per penalty minute, and an explicit weight stays in medium
+// units.
+struct UnassignedVisitsCost final : detail::SummedGlobalConstraint {
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Medium;
+
+    explicit UnassignedVisitsCost(double weight = kDefaultWeight)
+        : SummedGlobalConstraint("unassignedVisitsCost", weight, kDefaultLevel) {}
 
     void resetWithSums(const VehicleRoutePlan& plan,
                        const std::vector<std::vector<int>>& membersPerUnit) override {
@@ -93,4 +100,4 @@ private:
 
 }  // namespace vrp
 
-#endif  // VRP_CONSTRAINTS_MAXIMIZE_VISITS_ASSIGNED_HPP
+#endif  // VRP_CONSTRAINTS_UNASSIGNED_VISITS_COST_HPP

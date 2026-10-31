@@ -213,7 +213,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("vehicles", &VehicleRoutePlan::vehicles)
         .def_readonly("visits", &VehicleRoutePlan::visits)
         // The unassigned pool: visits the solver chose not to route (the
-        // medium-level maximizeVisitsAssigned penalty). Filled by solve().
+        // medium-level unassignedVisitsCost penalty). Filled by solve().
         .def_readwrite("unassigned_visit_indices",
                        &VehicleRoutePlan::unassignedVisitIndices)
         .def("rebuild_unassigned_pool",
@@ -472,7 +472,8 @@ PYBIND11_MODULE(_core, m)
             return tfpy::constraintCosts(calculator, plan);
         },
         py::arg("plan"),
-        "Raw per-unit cost of every constraint, before weight/exponent/level.");
+        "Raw per-unit cost of every constraint, before weight/exponent/level "
+        "(each entry also carries the domain's medium_fold).");
 
     // The constraint names this domain scores, in default-assembly order --
     // the same strings a score breakdown reports.
@@ -480,4 +481,11 @@ PYBIND11_MODULE(_core, m)
         "list_constraints",
         [] { return tfpy::constraintNames(defaultConstraints()); },
         "Constraint names available to vrp_routing.constraints.");
+
+    // The constraint catalog, read off the same default assembly:
+    // constraint_info() -> [ConstraintInfo(name, default_level,
+    // default_weight, level_flippable, reward, default_enabled), ...] in
+    // list_constraints() order. The defaults live in the C++ components only
+    // (unassigned_visits_cost: medium, weight 1 in medium units).
+    tfpy::bindConstraintInfo(m, [] { return defaultConstraints(); });
 }
