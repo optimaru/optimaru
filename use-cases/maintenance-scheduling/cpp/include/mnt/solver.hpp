@@ -101,7 +101,7 @@ public:
         // guides; 0 disables the guidance.
         double windowValueProbability = 1.0;
         // Probability that a move seeds on a "hot" job — one currently inside
-        // a tagConflict. 0 disables.
+        // a tagConflictCost (two jobs sharing a tag on one day). 0 disables.
         double hotJobProbability = 0.5;
         // How many random crews a guided change move tries before settling
         // for a random one, looking for a crew that is free for the job's
@@ -120,8 +120,9 @@ public:
 
     // Solves with a caller-assembled plugin calculator (see
     // mnt/constraints.hpp): pick components and weights, then pass the
-    // assembly here. Weights come from the assembly, NOT from the quickstart
-    // defaults. The final schedule.score is computed by THIS calculator and
+    // assembly here. Weights and levels come from the assembly (each
+    // component's kDefaultWeight / kDefaultLevel unless the caller changed
+    // them). The final schedule.score is computed by THIS calculator and
     // the calculator is left primed on the final solution, so
     // constraintTotals() explains exactly that score.
     //

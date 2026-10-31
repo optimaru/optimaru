@@ -23,16 +23,47 @@ crewDate = startDateIndex * crewCount + crewIndex     # -1 == unassigned
   `Job.calculateEndDate`, it is the exclusive end date skipping weekends.
 - All dates are epoch days (Java `LocalDate.toEpochDay`).
 
+## cpp/
+
+- `include/mnt/domain.hpp` — domain + `optimaru::SolutionDescriptor` specialization
+- `include/mnt/constraints/` — one component per constraint: `min_start_date_cost.hpp`,
+  `max_end_date_cost.hpp`, `before_ideal_end_date_cost.hpp`, `after_ideal_end_date_cost.hpp`,
+  `crew_conflict_cost.hpp`, `tag_conflict_cost.hpp` (+ `common.hpp`: the per-job and
+  day-overlap bases); `include/mnt/constraints.hpp` assembles the default set
+  (`defaultConstraints()`)
+- `score_calculator` — full recompute (the reference)
+- `incremental_calculator` — before/after hooks, O(job calendar length) per move
+- `solver` — engine wrapper (CH + Late Acceptance + ALNS, guided selection)
+
 ## Constraints (full port of the Java ConstraintProvider)
 
-| Constraint | Level | Penalty (same semantics as Java) |
-|---|---|---|
-| crewConflict | Hard | -overlapping calendar days per overlapping job pair on the same crew |
-| minStartDate | Hard | -1 per day started before minStartDate |
-| maxEndDate | Hard | -1 per day ended after maxEndDate |
-| beforeIdealEndDate | Soft | -1 per day ended before idealEndDate |
-| afterIdealEndDate | Soft | -1,000,000 per day ended after idealEndDate |
-| tagConflict | Soft | -1,000 per shared tag x overlapping day of overlapping job pairs |
+| Constraint (Python name) | C++ component | Default level | Default weight | Raw cost (0 = no violation) |
+|---|---|---|---|---|
+| `min_start_date_cost` | `MinStartDateCost` | hard | 1 | per (start date, crew) cell: days its jobs start before their `min_start_date` |
+| `max_end_date_cost` | `MaxEndDateCost` | hard | 1 | per cell: days its jobs' (exclusive) end date passes their `max_end_date` |
+| `before_ideal_end_date_cost` | `BeforeIdealEndDateCost` | soft | 1 | per cell: days its jobs end before their `ideal_end_date` |
+| `after_ideal_end_date_cost` | `AfterIdealEndDateCost` | soft | 1,000,000 | per cell: days its jobs end after their `ideal_end_date` |
+| `crew_conflict_cost` | `CrewConflictCost` | hard | 1 | global total: overlapping calendar days summed over same-crew job pairs |
+| `tag_conflict_cost` | `TagConflictCost` | soft | 1,000 | global total: shared tags x overlapping days summed over job pairs |
+
+The rows are in `list_constraints()` order (the four per-job unit constraints first, the two
+global ones after them). Every constraint is flippable (`hard=True` / `hard=False`), none is
+a reward and all six are scored by default (`default_enabled`);
+`maintenance_scheduling.constraint_info()` reports exactly this table from the C++
+components (`kDefaultLevel` / `kDefaultWeight`), and the CP-SAT benchmark reads the same
+rows. `exponent` shapes the date rules per cell and the two global conflict rules on their
+single total. Unassigned jobs contribute nothing.
+
+**0.2.0:** the constraints were renamed with a `_cost` suffix (`min_start_date` ->
+`min_start_date_cost`, `max_end_date` -> `max_end_date_cost`, `before_ideal_end_date` ->
+`before_ideal_end_date_cost`, `after_ideal_end_date` -> `after_ideal_end_date_cost`,
+`crew_conflict` -> `crew_conflict_cost`, `tag_conflict` -> `tag_conflict_cost`; spec
+classes, default instances and C++ structs likewise, e.g. `CrewConflict` ->
+`CrewConflictCost`, registry `"crewConflict"` -> `"crewConflictCost"`). The suffix also
+separates the constraint names from the job fields `min_start_date` / `max_end_date`, which
+keep their names. The old names are not accepted any more (no aliases). The defaults are
+declared once, in the C++ components; the CP-SAT plugins no longer restate the 1,000,000 /
+1,000 weights. Raw costs and the default score are unchanged.
 
 Score mapping: the Java original already uses `HardSoftScore`, so it maps 1:1 onto the
 engine's HardSoftScore(int64 hard, double soft), and the soft weights
@@ -50,6 +81,7 @@ the score, but the solver never moves it.
 cd use-cases/maintenance-scheduling/cpp
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j4
 ./build/mnt_test          # constraint hand checks + incremental==full + FULL_ASSERT
+./build/mnt_plugin_test   # plugin assembly == monolith, raw costs by hand, catalog, overrides
 ./build/mnt_demo          # reproduces the Java demo (SMALL), 10 s, checks hard 0
 ./build/mnt_demo 15 --large
 
@@ -119,20 +151,29 @@ Decreasing ordering, or pre-assign part of the solution in the domain
 solver's `solve` before the engine runs — the engine only fills what is still unassigned.
 
 **Adding a hard or soft cost.** One file per constraint under
-`cpp/include/mnt/constraints/` (currently `after_ideal_end_date`, `before_ideal_end_date`, `crew_conflict`, `max_end_date`, `min_start_date`, `tag_conflict`):
-1. add `constraints/<name>.hpp` (a `UnitConstraint` or `GlobalConstraint`;
-   positive cost = penalty, the level and weight are constructor defaults);
+`cpp/include/mnt/constraints/` (currently `min_start_date_cost`, `max_end_date_cost`,
+`before_ideal_end_date_cost`, `after_ideal_end_date_cost`, `crew_conflict_cost`,
+`tag_conflict_cost`):
+1. add `constraints/<subject>_cost.hpp` with `struct <Subject>Cost` (a `UnitConstraint` —
+   usually a `PerJobConstraint` — or a `GlobalConstraint` such as a `DayOverlapGlobalConstraint`;
+   positive raw cost = penalty, 0 = no violation) declaring
+   `static constexpr double kDefaultWeight` and `static constexpr optimaru::Level kDefaultLevel`,
+   an `explicit <Subject>Cost(double weight = kDefaultWeight)` constructor and the registry
+   name `"<subject>Cost"` (the struct name with a lower-case first letter);
 2. include it in `cpp/include/mnt/constraints.hpp` and `emplace` it in
    `defaultConstraints()` if it belongs to the default set;
 3. for a default constraint, add the same raw cost to
-   `score_calculator` / `incremental_calculator` — `mnt_plugin_test` checks
-   they agree bit for bit;
-4. add a `Constraint` spec with the snake_case `name` to
-   `python/maintenance_scheduling/constraints.py`; callers then pick, reweight or flip it:
-   `constraints=get_constraints([..., MyRule(weight=5, hard=True)])`;
+   `score_calculator` / `incremental_calculator`, weighted by the component's
+   `kDefaultWeight` — `mnt_plugin_test` checks they agree bit for bit — and a positive and a
+   zero hand-calculated case to `mnt_test` / `mnt_plugin_test`;
+4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
+   `description_en` / `description_ko` to `python/maintenance_scheduling/constraints.py`
+   (plus its module-level default instance); callers then pick, reweight or flip it:
+   `constraints=get_constraints([..., MyRuleCost(weight=5, hard=True)])`;
 5. mirror it in the CP-SAT model in
-   [`benchmarks/maintenance-scheduling/cpsat`](../../benchmarks/maintenance-scheduling/cpsat) so the
-   benchmark stays like for like.
+   [`benchmarks/maintenance-scheduling/cpsat`](../../benchmarks/maintenance-scheduling/cpsat) (a
+   plugin subclassing the spec; defaults come from `constraint_info()`) so the benchmark stays
+   like for like.
 
 ## Benchmark
 

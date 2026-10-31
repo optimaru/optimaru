@@ -1,11 +1,55 @@
 #include "mnt/incremental_calculator.hpp"
 
 #include <cstddef>
+#include <cstdint>
 
+#include "mnt/constraints/after_ideal_end_date_cost.hpp"
+#include "mnt/constraints/before_ideal_end_date_cost.hpp"
+#include "mnt/constraints/crew_conflict_cost.hpp"
+#include "mnt/constraints/max_end_date_cost.hpp"
+#include "mnt/constraints/min_start_date_cost.hpp"
+#include "mnt/constraints/tag_conflict_cost.hpp"
 #include "mnt/score_calculator.hpp"
 
 namespace mnt
 {
+
+namespace
+{
+
+// The same constants the components and ScoreCalculator read. Integral, so
+// both levels are computed in int64 exactly like the full calculator.
+constexpr auto kCrewWeight
+    = static_cast<std::int64_t>(CrewConflictCost::kDefaultWeight);
+constexpr auto kMinStartWeight
+    = static_cast<std::int64_t>(MinStartDateCost::kDefaultWeight);
+constexpr auto kMaxEndWeight
+    = static_cast<std::int64_t>(MaxEndDateCost::kDefaultWeight);
+constexpr auto kBeforeIdealWeight
+    = static_cast<std::int64_t>(BeforeIdealEndDateCost::kDefaultWeight);
+constexpr auto kAfterIdealWeight
+    = static_cast<std::int64_t>(AfterIdealEndDateCost::kDefaultWeight);
+constexpr auto kTagWeight
+    = static_cast<std::int64_t>(TagConflictCost::kDefaultWeight);
+static_assert(
+    kCrewWeight == CrewConflictCost::kDefaultWeight
+        && kMinStartWeight == MinStartDateCost::kDefaultWeight
+        && kMaxEndWeight == MaxEndDateCost::kDefaultWeight
+        && kBeforeIdealWeight == BeforeIdealEndDateCost::kDefaultWeight
+        && kAfterIdealWeight == AfterIdealEndDateCost::kDefaultWeight
+        && kTagWeight == TagConflictCost::kDefaultWeight,
+    "the incremental calculator assumes integral default weights");
+static_assert(CrewConflictCost::kDefaultLevel == optimaru::Level::Hard
+                  && MinStartDateCost::kDefaultLevel == optimaru::Level::Hard
+                  && MaxEndDateCost::kDefaultLevel == optimaru::Level::Hard
+                  && BeforeIdealEndDateCost::kDefaultLevel
+                         == optimaru::Level::Soft
+                  && AfterIdealEndDateCost::kDefaultLevel
+                         == optimaru::Level::Soft
+                  && TagConflictCost::kDefaultLevel == optimaru::Level::Soft,
+              "the incremental calculator assumes the default levels");
+
+}  // namespace
 
 void MaintenanceSchedulingIncrementalScoreCalculator::resetWorkingSolution(
     MaintenanceSchedule &workingSolution)
@@ -142,9 +186,13 @@ void MaintenanceSchedulingIncrementalScoreCalculator::afterVariableChanged(
 Score MaintenanceSchedulingIncrementalScoreCalculator::calculateScore()
 {
     Score score;
-    score.hard = -(crewOverlap_ + minStartViolation_ + maxEndViolation_);
-    score.soft = -static_cast<double>(beforeIdeal_ + 1'000 * tagOverlap_
-                                      + 1'000'000 * afterIdeal_);
+    score.hard = -(kCrewWeight * crewOverlap_
+                   + kMinStartWeight * minStartViolation_
+                   + kMaxEndWeight * maxEndViolation_);
+    score.soft = -static_cast<double>(
+        kBeforeIdealWeight * beforeIdeal_
+        + kTagWeight * tagOverlap_
+        + kAfterIdealWeight * afterIdeal_);
     return score;
 }
 

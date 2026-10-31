@@ -26,10 +26,13 @@ namespace
 //
 // The (crew, date) composite value range is dateCount x crewCount wide, but
 // only a narrow slice of the date axis is worth proposing for a given job:
-//   lo  = first start that respects minStartDate      (below it: hard 2)
-//   hi  = last start that still ends by maxEndDate    (above it: hard 3)
-//   top = last start that still ends by idealEndDate  (above it: soft 5, at
-//         1'000'000 per day the single most expensive term in the model)
+//   lo  = first start that respects minStartDate      (below it: hard 2,
+//         minStartDateCost)
+//   hi  = last start that still ends by maxEndDate    (above it: hard 3,
+//         maxEndDateCost)
+//   top = last start that still ends by idealEndDate  (above it: soft 5,
+//         afterIdealEndDateCost, at 1'000'000 per day the single most
+//         expensive term in the model)
 // Since endDateFor(dur, i) is nondecreasing in i, each bound is a binary
 // search. `hi` only enters through the clamping of `top`, so the search
 // itself proposes dates from [lo, top].
@@ -200,10 +203,10 @@ void Solver::solve(MaintenanceSchedule &schedule)
     // composite value uniformly from [lo, top] — the job's own start window,
     // truncated at the latest start that still ends by idealEndDate — instead
     // of from the whole (date x crew) grid. That removes the two hard
-    // violations and the 1'000'000-per-day afterIdeal term from the proposal
-    // distribution entirely. Concentrating the draw harder on `top` (a
-    // min-of-k bias) was measured clearly worse: the same start dates then
-    // pile up and the tagConflict term degrades.
+    // violations and the 1'000'000-per-day afterIdealEndDateCost term from
+    // the proposal distribution entirely. Concentrating the draw harder on
+    // `top` (a min-of-k bias) was measured clearly worse: the same start
+    // dates then pile up and the tagConflictCost term degrades.
     std::shared_ptr<const DateWindows> windows;
     if (config_.windowValueProbability > 0.0)
     {
@@ -235,7 +238,7 @@ void Solver::solve(MaintenanceSchedule &schedule)
             if (freeCrewCandidates > 0)
             {
                 // Prefer a crew with no job on any day of this placement:
-                // crewConflict is hard, so a colliding crew makes the whole
+                // crewConflictCost is hard, so a colliding crew makes the whole
                 // proposal dead on arrival.
                 const int begin
                     = static_cast<int>(s->startDates[dateIndex] - s->dayBase);
@@ -254,11 +257,11 @@ void Solver::solve(MaintenanceSchedule &schedule)
     }
 
     // Violation-guided entity selection: with probability hotJobProbability
-    // the moved job is drawn from the jobs currently sitting in a tagConflict
-    // — the dominant soft term. A hot (tag, day) cell is picked from the
-    // calculator's live hot set, then a job carrying that tag and covering
-    // that day. Once tagConflict is 0 the hot set is empty and this falls
-    // back to uniform exploration by itself.
+    // the moved job is drawn from the jobs currently sitting in a
+    // tagConflictCost — the dominant soft term. A hot (tag, day) cell is
+    // picked from the calculator's live hot set, then a job carrying that tag
+    // and covering that day. Once tagConflictCost is 0 the hot set is empty
+    // and this falls back to uniform exploration by itself.
     std::shared_ptr<const std::vector<std::vector<int>>> tagJobs;
     if (config_.hotJobProbability > 0.0 && schedule.tagCount > 0)
     {
@@ -279,7 +282,7 @@ void Solver::solve(MaintenanceSchedule &schedule)
         engineConfig.localSearch.entityRecommender =
             [&calculator, tagJobs, hotThreshold, s](std::mt19937_64 &rng) -> int
         {
-            // Cheap first: with no tagConflict there is nothing to guide
+            // Cheap first: with no tagConflictCost there is nothing to guide
             // toward.
             if (!calculator.hasHotTagCells() || rng() >= hotThreshold)
                 return -1;

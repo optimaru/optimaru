@@ -15,15 +15,19 @@ namespace mnt
 // calculator is checked against (in the tests and under FULL_ASSERT).
 //
 // Constraints (HardSoftScore; day counts are CALENDAR days, exactly Java's
-// ChronoUnit.DAYS.between on the [startDate, endDate) intervals):
-//   hard 1. crewConflict        -1 per overlapping day per same-crew job pair
-//   hard 2. minStartDate        -1 per day a job starts before minStartDate
-//   hard 3. maxEndDate          -1 per day a job ends after maxEndDate
-//   soft 4. beforeIdealEndDate  -1 per day a job ends before idealEndDate
-//   soft 5. afterIdealEndDate   -1'000'000 per day a job ends after
-//                               idealEndDate
-//   soft 6. tagConflict         -1'000 per overlapping day per shared tag
-//                               per overlapping job pair
+// ChronoUnit.DAYS.between on the [startDate, endDate) intervals), the default
+// assembly of mnt/constraints.hpp at the components' kDefaultWeight:
+//   hard 1. crewConflictCost        -1 per overlapping day per same-crew job
+//                                   pair
+//   hard 2. minStartDateCost        -1 per day a job starts before
+//                                   minStartDate
+//   hard 3. maxEndDateCost          -1 per day a job ends after maxEndDate
+//   soft 4. beforeIdealEndDateCost  -1 per day a job ends before
+//                                   idealEndDate
+//   soft 5. afterIdealEndDateCost   -1'000'000 per day a job ends after
+//                                   idealEndDate
+//   soft 6. tagConflictCost         -1'000 per overlapping day per shared tag
+//                                   per overlapping job pair
 //
 // The two pairwise constraints reduce to per-day occupancy pair counts:
 // summed over all days d, C(jobs of crew c covering d, 2) equals the summed

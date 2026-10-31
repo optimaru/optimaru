@@ -377,8 +377,8 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("swap_move_weight", &Solver::Config::swapMoveWeight)
         // Guided selection (see cpp/src/solver.cpp): change moves draw the
         // start date from the job's own [minStart, idealEnd] window, seed on
-        // jobs sitting in a tagConflict, and prefer a crew that is free for
-        // the whole span.
+        // jobs sitting in a tagConflictCost, and prefer a crew that is free
+        // for the whole span.
         .def_readwrite("window_value_probability",
                        &Solver::Config::windowValueProbability)
         .def_readwrite("hot_job_probability",
@@ -451,4 +451,10 @@ PYBIND11_MODULE(_core, m)
         "list_constraints",
         [] { return tfpy::constraintNames(defaultConstraints()); },
         "Constraint names available to maintenance_scheduling.constraints.");
+
+    // The constraint catalog, read off the same default assembly:
+    // constraint_info() -> [ConstraintInfo(name, default_level,
+    // default_weight, level_flippable, reward, default_enabled), ...] in
+    // list_constraints() order. The defaults live in the C++ components only.
+    tfpy::bindConstraintInfo(m, [] { return defaultConstraints(); });
 }

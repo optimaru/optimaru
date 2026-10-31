@@ -24,6 +24,29 @@ for i, job in enumerate(schedule.jobs):
     print(job.name, crew.name, schedule.job_start_date(i), schedule.job_end_date(i))
 ```
 
+Score (HardSoftScore), at the default weights:
+
+- hard = -(`min_start_date_cost` + `max_end_date_cost` + `crew_conflict_cost`), each x1
+- soft = -(`before_ideal_end_date_cost` x1 + `after_ideal_end_date_cost` x1,000,000 +
+  `tag_conflict_cost` x1,000)
+
+The constraint names carry a `_cost` suffix since 0.2.0 (`crew_conflict` ->
+`crew_conflict_cost`, ...; the job fields `min_start_date` / `max_end_date` keep their
+names). Pick, re-weight or flip constraints with `maintenance_scheduling.constraints`, and read
+the defaults with `mnt.constraint_info()`:
+
+```python
+from maintenance_scheduling.constraints import TagConflictCost, get_constraints, score
+
+mnt.constraint_info()
+# [ConstraintInfo(name='min_start_date_cost', default_level='hard', default_weight=1.0,
+#                 level_flippable=True, reward=False, default_enabled=True), ...]
+mnt.solve(schedule, constraints=get_constraints(
+    [*get_constraints()[:5], TagConflictCost(weight=10_000)]))   # tag conflicts x10
+raw = mnt.constraint_costs(schedule)      # raw costs, re-priced in pure Python:
+score(raw), score(raw, [TagConflictCost(exponent=2.0)])
+```
+
 Dates are epoch day integers (Java `LocalDate.toEpochDay`). To work with `datetime.date`,
 use the pydantic mirror (optional dependency `pydantic`):
 

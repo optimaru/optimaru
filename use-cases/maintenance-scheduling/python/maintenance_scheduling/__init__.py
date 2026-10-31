@@ -10,13 +10,18 @@ Dates are exchanged as epoch days (days since 1970-01-01, Java LocalDate.toEpoch
 The pydantic mirror (`maintenance_scheduling.models`, optional dependency) converts to
 and from `datetime.date`.
 
-Constraints (HardSoftScore — same semantics as the Java ConstraintProvider):
-  hard 1. crewConflict        -overlapping days per overlapping job pair on the same crew
-  hard 2. minStartDate        -1 per day started before minStartDate
-  hard 3. maxEndDate          -1 per day ended after maxEndDate
-  soft 4. beforeIdealEndDate  -1 per day ended before idealEndDate
-  soft 5. afterIdealEndDate   -1'000'000 per day ended after idealEndDate
-  soft 6. tagConflict         -1'000 per shared tag x overlapping day of overlapping job pairs
+Constraints (HardSoftScore — same semantics as the Java ConstraintProvider), at the
+default weights:
+  hard 1. crew_conflict_cost          -overlapping days per overlapping job pair on the same crew
+  hard 2. min_start_date_cost         -1 per day started before min_start_date
+  hard 3. max_end_date_cost           -1 per day ended after max_end_date
+  soft 4. before_ideal_end_date_cost  -1 per day ended before ideal_end_date
+  soft 5. after_ideal_end_date_cost   -1'000'000 per day ended after ideal_end_date
+  soft 6. tag_conflict_cost           -1'000 per shared tag x overlapping day of overlapping job pairs
+Change a weight or a level through a constraint selection, e.g.
+``solve(schedule, constraints=get_constraints([..., TagConflictCost(weight=10_000)]))``
+(see `maintenance_scheduling.constraints`). `constraint_info()` lists every constraint with
+its default level and weight.
 
 Usage::
 
@@ -28,6 +33,7 @@ Usage::
 """
 
 from ._core import (
+    ConstraintInfo,
     Crew,
     Job,
     MaintenanceSchedule,
@@ -36,12 +42,14 @@ from ._core import (
     SolverConfig,
     calculate_score,
     constraint_costs,
+    constraint_info,
     generate_demo_data,
     list_constraints,
     plus_business_days,
 )
 
 __all__ = [
+    "ConstraintInfo",
     "Crew",
     "Job",
     "MaintenanceSchedule",
@@ -52,6 +60,7 @@ __all__ = [
     "generate_demo_data",
     "list_constraints",
     "constraint_costs",
+    "constraint_info",
     "plus_business_days",
     "solve",
     "with_initial_solution",
@@ -88,7 +97,7 @@ def solve(
 
     ``constraints`` picks the cost function directly
     (see `maintenance_scheduling.constraints`). Only the listed constraints are scored;
-    None uses all six default constraints::
+    None uses all six default constraints at their default weights::
 
         from maintenance_scheduling.constraints import get_constraints
         mnt.solve(schedule, constraints=get_constraints())
