@@ -10,7 +10,8 @@ def test_manual_two_facilities():
         distances=[[0, 4], [5, 0]],
         assignment={"L1": "F1", "L2": "F2"},
     )
-    assert tuple(calculate_score(problem)) == (0, -22.0)
+    result = calculate_score(problem)
+    assert (result.hard, result.soft) == (0, -22.0)
     solve(problem, time_limit_seconds=0.05)
     assert problem.total_cost == 22
 
@@ -29,8 +30,9 @@ def test_assignment_side_constraints_match_manual_values():
         location_capacities={"L1": 3, "L2": 10},
     )
     costs = constraint_costs(problem)
-    assert costs["fixed_assignments"] == [1]
-    assert costs["forbidden_assignments"] == [0, 1]
-    assert costs["location_capacities"] == [2, 0]
-    assert costs["minimize_assignment_cost"] == [15]
-    assert costs["minimize_flow_distance"] == [22]
+    # 0.2.0: per location (location order) for the side constraints, one total for the objectives.
+    assert costs["pinned_assignments_cost"]["costs"] == [1, 0]
+    assert costs["forbidden_assignments_cost"]["costs"] == [0, 1]
+    assert costs["location_capacity_cost"]["costs"] == [2, 0]
+    assert costs["assignment_cost"]["costs"] == [15]
+    assert costs["flow_distance_cost"]["costs"] == [22]

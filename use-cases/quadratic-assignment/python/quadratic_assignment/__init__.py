@@ -1,91 +1,176 @@
+"""Quadratic assignment — Python wrapper of the C++ solver on the optimaru engine.
+
+Place n facilities on n locations, one each, minimizing the flow between every
+pair of facilities times the distance between their locations (plus an optional
+direct facility-location cost), with pinned and forbidden placements and
+location capacities as hard constraints. One BASIC planning variable
+(`Facility.location`) per facility; the search only swaps two facilities'
+locations, so every state is a permutation.
+
+Score (HardSoftScore), at the default weights (all 1):
+  hard = -(pinned locations not holding their facility
+           + facilities at a forbidden location
+           + demand above location capacities)
+  soft = -(direct assignment cost + flow-distance cost)
+The problem carries no weights: change one through a constraint selection, e.g.
+``solve(problem, constraints=[*get_constraints()[:-1], FlowDistanceCost(weight=2)])``
+(see `quadratic_assignment.constraints`). `constraint_info()` lists every
+constraint with its default level and weight.
+
+Basic usage::
+
+    import quadratic_assignment as qap
+    from quadratic_assignment.models import QuadraticAssignmentProblemModel
+
+    problem = QuadraticAssignmentProblemModel.model_validate(data)
+    qap.solve(problem, time_limit_seconds=5.0, random_seed=42)   # the model, in place
+    core = problem.to_core(); qap.solve(core)                      # or the engine object
+
+`solve`, `calculate_score` and `constraint_costs` take the pydantic model or the
+engine object (`QuadraticAssignmentProblem`, `models.QuadraticAssignmentProblemModel.to_core()`).
+On a model, `calculate_score` and `constraint_costs` need an assignment that covers
+every location (ValueError naming the missing ones); the engine object scores a
+partial assignment too (an unassigned facility contributes nothing).
+"""
+
 from __future__ import annotations
 
-from ._core import SolverConfig as SolverConfig
-from .common import anneal, configure
-from .constraints import DEFAULTS, score
-from .models import QuadraticAssignmentProblemModel
-from .models import with_initial_solution as with_initial_solution
+from typing import Any
+
+from ._core import (
+    AcceptorType,
+    ConstraintInfo,
+    Facility,
+    FixedAssignment,
+    ForbiddenAssignment,
+    Location,
+    QuadraticAssignmentProblem,
+    Score,
+    Solver,
+    SolverConfig,
+    constraint_info,
+    list_constraints,
+)
+from ._core import calculate_score as _calculate_score
+from ._core import constraint_costs as _constraint_costs
+from .constraints import score as _score
+from .models import QuadraticAssignmentProblemModel, with_initial_solution
+
+__all__ = [
+    "AcceptorType",
+    "ConstraintInfo",
+    "Facility",
+    "FixedAssignment",
+    "ForbiddenAssignment",
+    "Location",
+    "QuadraticAssignmentProblem",
+    "QuadraticAssignmentProblemModel",
+    "Score",
+    "Solver",
+    "SolverConfig",
+    "calculate_score",
+    "constraint_costs",
+    "constraint_info",
+    "list_constraints",
+    "solve",
+    "with_initial_solution",
+]
 
 
-def list_constraints() -> list[str]:
-    return [constraint.name for constraint in DEFAULTS]
-
-
-def constraint_costs(problem: QuadraticAssignmentProblemModel) -> dict:
-    facility_index = {name: index for index, name in enumerate(problem.facilities)}
-    permutation = [facility_index[problem.assignment[location]] for location in problem.locations]
-    cost = sum(
-        problem.distances[i][j] * problem.flows[permutation[i]][permutation[j]]
-        for i in range(len(permutation))
-        for j in range(len(permutation))
+def _core_of(problem, *, complete: bool = False) -> QuadraticAssignmentProblem:
+    if isinstance(problem, QuadraticAssignmentProblemModel):
+        if complete and (missing := problem.missing_locations()):
+            raise ValueError(f"assignment must cover every location; missing: {missing}")
+        return problem.to_core()
+    if isinstance(problem, QuadraticAssignmentProblem):
+        return problem
+    raise TypeError(
+        f"problem must be a QuadraticAssignmentProblemModel or a QuadraticAssignmentProblem: {type(problem)!r}"
     )
-    assignment_cost = 0
-    if problem.assignment_costs is not None:
-        assignment_cost = sum(
-            problem.assignment_costs[facility_index[problem.assignment[location]]][location_index]
-            for location_index, location in enumerate(problem.locations)
-        )
-    forbidden = {(row.location, row.facility) for row in problem.forbidden_assignments}
-    return {
-        "fixed_assignments": [
-            int(problem.assignment.get(location) != facility)
-            for location, facility in problem.fixed_assignments.items()
-        ],
-        "forbidden_assignments": [
-            int((location, facility) in forbidden) for location, facility in problem.assignment.items()
-        ],
-        "location_capacities": [
-            max(
-                0,
-                problem.facility_demands.get(problem.assignment[location], 0)
-                - problem.location_capacities.get(
-                    location, problem.facility_demands.get(problem.assignment[location], 0)
-                ),
-            )
-            for location in problem.locations
-        ],
-        "minimize_assignment_cost": [assignment_cost],
-        "minimize_flow_distance": [cost],
-    }
 
 
-def calculate_score(problem: QuadraticAssignmentProblemModel, constraints=None):
-    costs = constraint_costs(problem)
-    problem.total_cost = costs["minimize_flow_distance"][0] + costs["minimize_assignment_cost"][0]
-    result = score(costs, constraints)
-    problem.score_hard, problem.score_soft = result
+def constraint_costs(problem) -> dict[str, dict[str, Any]]:
+    """Raw cost of every default constraint, before weight / exponent / level.
+
+    ``{name: {"costs": [...], "weight", "exponent", "hard", "global", "level", "reward",
+    "level_flippable", "name", "label"}}`` in `list_constraints()` order. The three side
+    constraints list one raw cost per location (location order; 0.1.x listed the fixed
+    locations / the assignment entries only); `assignment_cost` and `flow_distance_cost`
+    are one total each. `constraints.score()` turns it into a score. A model needs an
+    assignment covering every location.
+    """
+    return _constraint_costs(_core_of(problem, complete=True))
+
+
+def calculate_score(problem, constraints=None):
+    """Score the current assignment: the default constraints (the C++ full recompute) or a selection.
+
+    With ``constraints`` the score is ``constraints.score(constraint_costs(problem), constraints)``
+    (a ``constraints.Score(hard, soft)`` named tuple); without, the engine `Score`. A model needs
+    an assignment covering every location (ValueError naming the missing ones) and gets its
+    ``total_cost``, ``score_hard`` and ``score_soft`` filled in; an engine object its ``score``
+    (default constraints only).
+    """
+    core = _core_of(problem, complete=True)
+    result = _calculate_score(core) if constraints is None else _score(_constraint_costs(core), constraints)
+    if isinstance(problem, QuadraticAssignmentProblemModel):
+        problem.total_cost = core.total_cost()
+        problem.score_hard, problem.score_soft = result.hard, result.soft
     return result
 
 
 def solve(
-    problem, *, time_limit_seconds=None, random_seed=None, parallel_solver_count=None, config=None, constraints=None
-):
-    cfg = configure(config, time_limit_seconds, random_seed, parallel_solver_count)
-    initial = list(range(len(problem.facilities)))
-    if problem.warm_start:
-        facility_index = {facility: index for index, facility in enumerate(problem.facilities)}
-        initial = [facility_index[problem.assignment[location]] for location in problem.locations]
+    problem,
+    *,
+    time_limit_seconds: float | None = None,
+    random_seed: int | None = None,
+    parallel_solver_count: int | None = None,
+    stop_at_first_feasible: bool = False,
+    on_new_best=None,
+    config: SolverConfig | None = None,
+    constraints=None,
+) -> Score:
+    """Solve `problem` in place and return the final `Score`.
 
-    def evaluate(state):
-        problem.assignment = {
-            location: problem.facilities[state[index]] for index, location in enumerate(problem.locations)
-        }
-        return calculate_score(problem, constraints)
+    `problem` is the engine object (solved in place; the server path is ``to_core()`` ->
+    ``solve`` -> ``from_core()``) or the pydantic model (converted, solved, and the
+    assignment, ``total_cost``, score and ``warm_start=False`` written back into it).
 
-    def neighbor(state, rng):
-        result = state.copy()
-        if len(result) > 1:
-            left, right = rng.sample(range(len(result)), 2)
-            result[left], result[right] = result[right], result[left]
-        return result
+    The search starts from the identity (facility i at location i) or, with
+    ``warm_start`` (see `with_initial_solution`), from the problem's assignment, which must
+    then be a full bijection; a seed is used once.
 
-    if problem.facilities:
-        best, _ = anneal(initial, neighbor, evaluate, cfg)
-        evaluate(best)
+    ``config`` becomes the base settings (None = engine defaults: 30 s budget, late
+    acceptance over swap moves). Explicit keyword arguments override config. A zero time
+    budget (``time_limit_seconds=0``) returns the start unchanged; ``SolverConfig.step_count_limit
+    = N`` bounds the search to N steps (0 = no step limit). ``stop_at_first_feasible`` stops as
+    soon as hard 0 is reached. ``on_new_best(step, score)`` is called on every new best solution.
+
+    ``constraints`` picks the cost function directly (see `quadratic_assignment.constraints`);
+    only the listed constraints are scored and the solve is single-start
+    (``parallel_solver_count`` is ignored there). None uses every default constraint at its
+    default weight::
+
+        from quadratic_assignment.constraints import get_constraints
+        quadratic_assignment.solve(problem, constraints=get_constraints())
+    """
+    cfg = config if config is not None else SolverConfig()
+    if time_limit_seconds is not None:
+        cfg.spent_limit_seconds = time_limit_seconds
+    if random_seed is not None:
+        cfg.random_seed = random_seed
+    if parallel_solver_count is not None:
+        cfg.parallel_solver_count = parallel_solver_count
+    if stop_at_first_feasible:
+        cfg.best_score_limit = (0, -1e18)
+    if on_new_best is not None:
+        cfg.on_new_best = on_new_best
+
+    core = _core_of(problem)
+    if constraints is None:
+        Solver(cfg).solve(core)
     else:
-        problem.assignment = {}
-        problem.total_cost = 0
-        problem.score_hard, problem.score_soft = 0, 0.0
-    # A seed is used once, so a result edited and solved again starts fresh.
-    problem.warm_start = False
-    return problem.score_hard, problem.score_soft
+        Solver(cfg).solve_with_constraints(core, constraints)
+    if isinstance(problem, QuadraticAssignmentProblemModel):
+        problem._update_from_core(core)
+    return core.score
