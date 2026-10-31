@@ -37,3 +37,7 @@ target_compile_options(fcs_test PRIVATE -Wall -Wextra)
 add_executable(fcs_plugin_test test/fcs_plugin_test.cpp)
 target_link_libraries(fcs_plugin_test PRIVATE fcs_core)
 target_compile_options(fcs_plugin_test PRIVATE -Wall -Wextra)
+
+enable_testing()
+add_test(NAME fcs_test COMMAND fcs_test)
+add_test(NAME fcs_plugin_test COMMAND fcs_plugin_test)

@@ -38,3 +38,7 @@ target_compile_options(op_test PRIVATE -Wall -Wextra)
 add_executable(op_plugin_test test/op_plugin_test.cpp)
 target_link_libraries(op_plugin_test PRIVATE op_core)
 target_compile_options(op_plugin_test PRIVATE -Wall -Wextra)
+
+enable_testing()
+add_test(NAME op_test COMMAND op_test)
+add_test(NAME op_plugin_test COMMAND op_plugin_test)

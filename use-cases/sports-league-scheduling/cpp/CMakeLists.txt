@@ -37,3 +37,7 @@ target_compile_options(sls_test PRIVATE -Wall -Wextra)
 add_executable(sls_plugin_test test/sls_plugin_test.cpp)
 target_link_libraries(sls_plugin_test PRIVATE sls_core)
 target_compile_options(sls_plugin_test PRIVATE -Wall -Wextra)
+
+enable_testing()
+add_test(NAME sls_test COMMAND sls_test)
+add_test(NAME sls_plugin_test COMMAND sls_plugin_test)

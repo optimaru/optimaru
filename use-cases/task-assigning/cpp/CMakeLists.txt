@@ -37,3 +37,7 @@ target_compile_options(ta_test PRIVATE -Wall -Wextra)
 add_executable(ta_plugin_test test/ta_plugin_test.cpp)
 target_link_libraries(ta_plugin_test PRIVATE ta_core)
 target_compile_options(ta_plugin_test PRIVATE -Wall -Wextra)
+
+enable_testing()
+add_test(NAME ta_test COMMAND ta_test)
+add_test(NAME ta_plugin_test COMMAND ta_plugin_test)
