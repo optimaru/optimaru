@@ -65,22 +65,29 @@ def solve(problem, *, time_limit_seconds=30.0, random_seed=0, num_workers=1, con
             bound_violations.append(over)
         if task.fixed_station is not None:
             fixed_violations.append(1 - assigned[task_index, task.fixed_station])
+        # A station listed twice is still one forbidden station (the Python scorer's `in`).
         forbidden_violations.extend(
-            assigned[task_index, station] for station in task.forbidden_stations if station < count
+            assigned[task_index, station] for station in sorted(set(task.forbidden_stations)) if 0 <= station < count
         )
     objective.add("task_station_bounds", sum(bound_violations), count * count)
     objective.add("fixed_task_stations", sum(fixed_violations), len(fixed_violations))
     objective.add("forbidden_task_stations", sum(forbidden_violations), len(forbidden_violations))
+    # A group costs (distinct stations of its members) - 1, as the Python scorer counts it
+    # (len({station of each member}) - 1; a member listed twice counts once). Counting the
+    # members off the first member's station instead overstates groups of three or more
+    # (stations [0, 1, 1] cost 1, not 2).
     same_violations = []
+    same_bound = 0
     for group_index, group in enumerate(problem.same_station_groups):
-        anchor = index[group.task_ids[0]]
-        for task_id in group.task_ids[1:]:
-            violation = model.new_bool_var(f"same_group_{group_index}_{task_id}_violation")
-            other = index[task_id]
-            model.add(station_of[anchor] != station_of[other]).only_enforce_if(violation)
-            model.add(station_of[anchor] == station_of[other]).only_enforce_if(violation.Not())
-            same_violations.append(violation)
-    objective.add("same_station_groups", sum(same_violations), len(same_violations))
+        members = list(dict.fromkeys(index[task_id] for task_id in group.task_ids))
+        group_used = []
+        for station in range(count):
+            present = model.new_bool_var(f"same_group_{group_index}_station_{station}")
+            model.add_max_equality(present, [assigned[task, station] for task in members])
+            group_used.append(present)
+        same_violations.append(sum(group_used) - 1)
+        same_bound += len(members) - 1
+    objective.add("same_station_groups", sum(same_violations), same_bound)
     different_violations = []
     for pair_index, pair in enumerate(problem.different_station_pairs):
         violation = model.new_bool_var(f"different_pair_{pair_index}_violation")
