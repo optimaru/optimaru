@@ -201,7 +201,7 @@ def neis_bundle(
         text = buffer.getvalue()
         try:
             files[name] = text.encode(fmt.encoding)
-        except UnicodeEncodeError, LookupError:
+        except (UnicodeEncodeError, LookupError):
             files[name] = text.encode("utf-8-sig")
     return files
 

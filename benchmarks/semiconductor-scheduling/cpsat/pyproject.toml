@@ -2,7 +2,7 @@
 name = "semiconductor-scheduling-cpsat"
 version = "0.1.0"
 description = "Exact CP-SAT backend for semiconductor fab scheduling"
-requires-python = ">=3.14,<4.0"
+requires-python = ">=3.11,<4.0"
 dependencies = ["cpsat-plugins>=0.1.0", "semiconductor-scheduling", "ortools>=9.10", "pydantic>=2.5"]
 [dependency-groups]
 dev = ["pytest", "ruff"]

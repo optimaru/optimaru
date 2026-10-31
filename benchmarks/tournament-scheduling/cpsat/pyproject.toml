@@ -2,7 +2,7 @@
 name = "tournament-scheduling-cpsat"
 version = "0.1.0"
 description = "OR-Tools CP-SAT backend for tournament scheduling."
-requires-python = ">=3.14,<4.0"
+requires-python = ">=3.11,<4.0"
 dependencies = [
     "cpsat-plugins",
     "tournament_scheduling",
