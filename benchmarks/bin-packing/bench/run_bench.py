@@ -22,14 +22,13 @@ def _run_engine(problem, seconds: float, seed: int) -> dict:
     config = bin_packing.SolverConfig()
     config.spent_limit_seconds = seconds
     config.random_seed = seed
-    config.max_iterations = 2_147_483_647
     started = time.perf_counter()
     bin_packing.solve(core, config=config)
     elapsed = time.perf_counter() - started
     costs = bin_packing.constraint_costs(core)
-    if sum(costs["bin_capacity"]["costs"]) != 0:
+    if sum(costs["bin_capacity_cost"]["costs"]) != 0:
         raise AssertionError("engine returned an overloaded bin")
-    bins = int(costs["minimize_bins"]["costs"][0])
+    bins = int(costs["used_bins_cost"]["costs"][0])
     if bins != core.bins_used():
         raise AssertionError(
             f"engine self-report mismatch: {core.bins_used()} != {bins}"
@@ -57,9 +56,9 @@ def _run_cpsat(problem, seconds: float, seed: int, workers: int) -> dict:
         }
     core = solved.to_core()
     costs = bin_packing.constraint_costs(core)
-    if sum(costs["bin_capacity"]["costs"]) != 0:
+    if sum(costs["bin_capacity_cost"]["costs"]) != 0:
         raise AssertionError("CP-SAT returned an overloaded bin")
-    bins = int(costs["minimize_bins"]["costs"][0])
+    bins = int(costs["used_bins_cost"]["costs"][0])
     if bins != solved.bins_used:
         raise AssertionError(
             f"CP-SAT self-report mismatch: {solved.bins_used} != {bins}"
