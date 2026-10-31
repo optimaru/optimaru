@@ -15,7 +15,16 @@ def _problem(**fields) -> QuadraticAssignmentProblemModel:
 
 
 def _no_search() -> SolverConfig:
-    return SolverConfig(max_iterations=0)
+    config = SolverConfig()
+    config.spent_limit_seconds = 0.0
+    return config
+
+
+def _steps(count: int, seed: int) -> SolverConfig:
+    config = SolverConfig()
+    config.step_count_limit = count
+    config.random_seed = seed
+    return config
 
 
 def test_complete_seed_comes_back_unchanged_with_zero_budget():
@@ -63,7 +72,8 @@ def test_solved_result_feeds_back(as_dict):
 def test_search_from_a_seed_never_scores_below_it():
     seeded = with_initial_solution(_problem(), {"assignment": {"L1": "F3", "L2": "F1", "L3": "F2"}})
     seed_score = calculate_score(seeded.model_copy(deep=True))
-    assert tuple(solve(seeded, config=SolverConfig(max_iterations=200, random_seed=1))) >= tuple(seed_score)
+    result = solve(seeded, config=_steps(200, seed=1))
+    assert (result.hard, result.soft) >= (seed_score.hard, seed_score.soft)
 
 
 def test_partial_assignment_raises_and_names_the_location():
@@ -94,7 +104,7 @@ def test_malformed_solution_raises(solution):
 def test_hard_infeasible_result_feeds_back_unchanged():
     problem = _problem(fixed_assignments={"L1": "F1", "L2": "F1"})
     solved = problem.model_copy(deep=True)
-    solve(solved, config=SolverConfig(max_iterations=50, random_seed=1))
+    solve(solved, config=_steps(50, seed=1))
     assert solved.score_hard < 0
     seeded = with_initial_solution(problem, solved.model_dump(mode="json"))
     solve(seeded, config=_no_search())

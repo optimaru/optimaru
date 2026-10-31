@@ -15,7 +15,7 @@ def test_qaplib_parsers_and_reference_rescore() -> None:
 
     assert problem.distances == [[0, 3], [3, 0]]
     assert problem.flows == [[0, 5], [5, 0]]
-    assert constraint_costs(problem)["minimize_flow_distance"] == [30]
+    assert constraint_costs(problem)["flow_distance_cost"]["costs"] == [30]
     assert reference.objective == 30
 
 
