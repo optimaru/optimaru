@@ -4,7 +4,7 @@ import random
 
 import pdp_routing as pdp
 import pytest
-from pdp_routing.constraints import MinimizeTravelTime, get_constraints
+from pdp_routing.constraints import TravelTimeCost, get_constraints
 from pdp_routing.models import (
     DeliveryModel,
     PdpInput,
@@ -119,15 +119,15 @@ def test_pinned_stops_score_as_a_hard_violation():
     plan = pdp.models.to_plan(model_input)
     plan.vehicles[0].node_indices = [1, 0]
 
-    assert pdp.constraint_costs(plan)["pinned_stops"]["costs"][0] == 2
+    assert pdp.constraint_costs(plan)["pinned_stops_cost"]["costs"][0] == 2
 
 
 def test_constraints_can_be_replaced_with_pins_in_place():
     model_input = line_input([vehicle("v", ["ap", "ad"], pinned=1)], [request("a"), request("b")], NEARBY)
-    kept = [c for c in get_constraints() if c.name != "minimize_travel_time"]
+    kept = [c for c in get_constraints() if c.name != "travel_time_cost"]
 
     solution = solve_request(
-        PdpRequest(model_input=model_input, timelimit=0.2), constraints=[*kept, MinimizeTravelTime(weight=2)]
+        PdpRequest(model_input=model_input, timelimit=0.2), constraints=[*kept, TravelTimeCost(weight=2)]
     )
 
     assert solution.routes["v"][0].stop_id == "ap"
@@ -160,14 +160,14 @@ def test_a_required_request_counts_as_a_hard_violation_off_its_vehicle():
     places = {"v": 0, "w": 0, "ap": 1, "ad": 2}
     model_input = line_input([vehicle("v"), vehicle("w", ["ap", "ad"])], [bound("a", "v")], places)
 
-    assert sum(pdp.constraint_costs(pdp.models.to_plan(model_input))["required_vehicle"]["costs"]) == 2
+    assert sum(pdp.constraint_costs(pdp.models.to_plan(model_input))["required_vehicle_cost"]["costs"]) == 2
 
 
 def test_an_unassigned_required_request_counts_for_less_than_another_vehicle():
     places = {"v": 0, "w": 0, "ap": 1, "ad": 2}
     model_input = line_input([vehicle("v"), vehicle("w")], [bound("a", "v")], places)
 
-    assert sum(pdp.constraint_costs(pdp.models.to_plan(model_input))["required_vehicle"]["costs"]) == 1
+    assert sum(pdp.constraint_costs(pdp.models.to_plan(model_input))["required_vehicle_cost"]["costs"]) == 1
 
 
 def stops_of(solution, vehicle_id: str) -> list[str]:

@@ -89,7 +89,7 @@ class DeliveryModel(_Model):
         default=0,
         description=(
             "When the request was placed, on the plan's clock: negative if it has "
-            "already been waiting. Only `minimize_lateness` reads it."
+            "already been waiting. Only `squared_order_age_cost` reads it."
         ),
     )
     required_vehicle: str | None = Field(

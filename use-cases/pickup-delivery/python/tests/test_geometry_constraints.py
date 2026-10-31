@@ -4,7 +4,7 @@ import math
 
 import pdp_routing as pdp
 import pytest
-from pdp_routing.constraints import MinimizeEnclosingCircleRadius, score
+from pdp_routing.constraints import EnclosingCircleRadiusCost, score
 
 EARTH_RADIUS = 6_371_000.0
 
@@ -34,7 +34,7 @@ def _plan(points, *, depot=(0.0, 0.0), max_route_radius=0.0):
     return plan
 
 
-def _cost(plan, name="minimize_enclosing_circle_radius"):
+def _cost(plan, name="enclosing_circle_radius_cost"):
     return sum(pdp.constraint_costs(plan)[name]["costs"])
 
 
@@ -60,9 +60,9 @@ def test_depot_radius_is_distinct_and_weight_exponent_are_manual():
     plan = _plan([(0.0, 1.0), (0.0, 1.001)], max_route_radius=1.0)
     radius = EARTH_RADIUS * math.radians(0.0005)
     assert _cost(plan) == pytest.approx(radius)
-    assert _cost(plan, "max_route_radius") > 100_000
+    assert _cost(plan, "max_route_radius_cost") > 100_000
 
     raw = pdp.constraint_costs(plan)
-    shaped = score(raw, [MinimizeEnclosingCircleRadius(weight=3, exponent=2)])
+    shaped = score(raw, [EnclosingCircleRadiusCost(weight=3, exponent=2)])
     assert shaped.hard == 0
     assert shaped.soft == pytest.approx(-3 * radius**2)

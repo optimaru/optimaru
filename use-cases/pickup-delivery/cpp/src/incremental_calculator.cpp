@@ -1,11 +1,41 @@
 #include "pdp/incremental_calculator.hpp"
 
 #include <algorithm>
+#include <cstdint>
 
+#include "pdp/constraints/max_end_time_cost.hpp"
+#include "pdp/constraints/paired_request_cost.hpp"
+#include "pdp/constraints/pickup_before_dropoff_cost.hpp"
+#include "pdp/constraints/same_vehicle_cost.hpp"
+#include "pdp/constraints/travel_time_cost.hpp"
+#include "pdp/constraints/unassigned_requests_cost.hpp"
+#include "pdp/constraints/vehicle_capacity_cost.hpp"
 #include "pdp/score_calculator.hpp"
 
 namespace pdp
 {
+
+namespace
+{
+
+// The same constants the components and ScoreCalculator read (integral; see
+// score_calculator.cpp).
+constexpr auto kCapacityWeight
+    = static_cast<std::int64_t>(VehicleCapacityCost::kDefaultWeight);
+constexpr auto kTimeWindowWeight
+    = static_cast<std::int64_t>(MaxEndTimeCost::kDefaultWeight);
+constexpr auto kPairedWeight
+    = static_cast<std::int64_t>(PairedRequestCost::kDefaultWeight);
+constexpr auto kSameVehicleWeight
+    = static_cast<std::int64_t>(SameVehicleCost::kDefaultWeight);
+constexpr auto kPrecedenceWeight
+    = static_cast<std::int64_t>(PickupBeforeDropoffCost::kDefaultWeight);
+constexpr auto kUnassignedWeight
+    = static_cast<std::int64_t>(UnassignedRequestsCost::kDefaultWeight);
+constexpr auto kTravelWeight
+    = static_cast<std::int64_t>(TravelTimeCost::kDefaultWeight);
+
+}  // namespace
 
 void PdpIncrementalScoreCalculator::resetWorkingSolution(
     PdpRoutePlan &workingSolution)
@@ -206,14 +236,14 @@ PdpIncrementalScoreCalculator::couplingPenalty(int deliveryIndex) const
     const int dropoffRoute = routeOf(delivery.dropoffNodeIndex);
 
     if ((pickupRoute >= 0) != (dropoffRoute >= 0))
-        return ScoreCalculator::kCouplingPenalty;  // half-assigned
+        return kPairedWeight;  // half-assigned
     if (pickupRoute < 0)
         return 0;  // both unrouted: a dropped request (medium level)
     if (pickupRoute != dropoffRoute)
-        return ScoreCalculator::kCouplingPenalty;  // split across vehicles
+        return kSameVehicleWeight;  // split across vehicles
     if (nodePos_[static_cast<std::size_t>(delivery.pickupNodeIndex)]
         > nodePos_[static_cast<std::size_t>(delivery.dropoffNodeIndex)])
-        return ScoreCalculator::kCouplingPenalty;  // dropoff before pickup
+        return kPrecedenceWeight;  // dropoff before pickup
     return 0;
 }
 
@@ -234,9 +264,10 @@ PdpIncrementalScoreCalculator::unassignedMinutes(int deliveryIndex) const
 
 Score PdpIncrementalScoreCalculator::currentScore() const
 {
-    return Score{-(capacityTotal_ + latenessTotal_ + couplingTotal_),
-                 -unassignedTotal_,
-                 -drivingTotal_};
+    return Score{-(kCapacityWeight * capacityTotal_
+                   + kTimeWindowWeight * latenessTotal_ + couplingTotal_),
+                 -kUnassignedWeight * unassignedTotal_,
+                 -kTravelWeight * drivingTotal_};
 }
 
 optimaru::HardSoftScore PdpIncrementalScoreCalculator::calculateScore()

@@ -1,4 +1,20 @@
-"""Class-based CP-SAT plugins for pickup and delivery routing."""
+"""Class-based CP-SAT plugins for pickup and delivery routing.
+
+Each plugin subclasses the engine's spec of the same name and carries only
+``build()``: the default level and weight come from the engine's
+``pdp_routing.constraint_info()`` (cpsat-common reads the row), so the two
+solvers cannot disagree on a default. The registry follows the
+``list_constraints()`` order.
+
+The circuit formulation in solve.py enforces the three request-coupling rules
+(``paired_request_cost``, ``same_vehicle_cost``, ``pickup_before_dropoff_cost``)
+by construction: a request rides one vehicle or none, pickup first. Their
+plugins add no objective term (the raw cost is 0 in every CP-SAT solution) and
+refuse what the model cannot honour: ``hard=False`` or a weight other than the
+engine default. ``enclosing_circle_radius_cost``, ``squared_order_age_cost``,
+``pinned_stops_cost`` and ``required_vehicle_cost`` have no CP-SAT plugin
+(engine-only; selecting them here is an unknown-constraint error).
+"""
 
 import math
 from dataclasses import dataclass
@@ -33,9 +49,7 @@ class PdpContext:
     vehicle_radius: dict[int, Any]
 
 
-class VehicleCapacity(domain.VehicleCapacity, ConstraintPlugin[PdpContext]):
-    default_level = "hard"
-
+class VehicleCapacityCost(domain.VehicleCapacityCost, ConstraintPlugin[PdpContext]):
     def build(self, context: PdpContext, objective: ObjectiveBuilder) -> None:
         for vehicle, vehicle_data in enumerate(context.data.vehicles):
             for node in range(len(context.nodes)):
@@ -51,11 +65,7 @@ class VehicleCapacity(domain.VehicleCapacity, ConstraintPlugin[PdpContext]):
                 objective.add(self.name, excess, bound=context.max_capacity)
 
 
-class ServiceFinishedAfterMaxEndTime(
-    domain.ServiceFinishedAfterMaxEndTime, ConstraintPlugin[PdpContext]
-):
-    default_level = "hard"
-
+class MaxEndTimeCost(domain.MaxEndTimeCost, ConstraintPlugin[PdpContext]):
     def build(self, context: PdpContext, objective: ObjectiveBuilder) -> None:
         for node, stop in enumerate(context.nodes):
             late_seconds = context.model.new_int_var(
@@ -80,6 +90,7 @@ class ServiceFinishedAfterMaxEndTime(
 
 
 class _VehicleLimitPlugin(ConstraintPlugin[PdpContext]):
+    # The VehicleModel FIELD the plugin bounds (not a constraint name).
     limit: str
 
     def build(self, context: PdpContext, objective: ObjectiveBuilder) -> None:
@@ -107,34 +118,65 @@ class _VehicleLimitPlugin(ConstraintPlugin[PdpContext]):
             objective.add(self.name, excess, bound=bound)
 
 
-class MaxTravelTime(domain.MaxTravelTime, _VehicleLimitPlugin):
-    default_level = "hard"
+class MaxTravelTimeCost(domain.MaxTravelTimeCost, _VehicleLimitPlugin):
     limit = "max_travel_time"
 
 
-class MaxRouteDuration(domain.MaxRouteDuration, _VehicleLimitPlugin):
-    default_level = "hard"
+class MaxRouteDurationCost(domain.MaxRouteDurationCost, _VehicleLimitPlugin):
     limit = "max_route_duration"
 
 
-class VehicleEndTime(domain.VehicleEndTime, _VehicleLimitPlugin):
-    default_level = "hard"
+class VehicleMaxEndTimeCost(domain.VehicleMaxEndTimeCost, _VehicleLimitPlugin):
     limit = "max_end_time"
 
 
-class MaxStops(domain.MaxStops, _VehicleLimitPlugin):
-    default_level = "hard"
+class MaxStopsCost(domain.MaxStopsCost, _VehicleLimitPlugin):
     limit = "max_stops"
 
 
-class MaxRouteRadius(domain.MaxRouteRadius, _VehicleLimitPlugin):
-    default_level = "hard"
+class MaxRouteRadiusCost(domain.MaxRouteRadiusCost, _VehicleLimitPlugin):
     limit = "max_route_radius_meters"
 
 
-class UnassignedRequests(domain.UnassignedRequests, ConstraintPlugin[PdpContext]):
-    default_level = "medium"
+class _StructuralPlugin(ConstraintPlugin[PdpContext]):
+    """A request-coupling rule the circuit model enforces by construction.
 
+    solve.py assigns each request to one vehicle or to none (``assigned`` /
+    ``unassigned``: exactly one) and orders its pickup before its dropoff, so
+    the raw cost is 0 in every CP-SAT solution and nothing joins the
+    objective. That is the engine's rule at its default (hard, weight 1000) —
+    in the limit; the model cannot price a violation, so it refuses a
+    selection that would make one acceptable: ``hard=False``, or an explicit
+    weight other than the default. Leaving the rule out of a selection does
+    not lift the structure.
+    """
+
+    def build(self, context: PdpContext, objective: ObjectiveBuilder) -> None:
+        spec, config = objective.selected[self.name]
+        if config.hard is False or (
+            config.weight is not None and config.weight != spec.weight
+        ):
+            raise ValueError(
+                f"constraint {self.name!r}: the CP-SAT model enforces it structurally "
+                f"(hard, weight {spec.weight}); hard=False or another weight is not supported"
+            )
+
+
+class PairedRequestCost(domain.PairedRequestCost, _StructuralPlugin):
+    pass
+
+
+class SameVehicleCost(domain.SameVehicleCost, _StructuralPlugin):
+    pass
+
+
+class PickupBeforeDropoffCost(domain.PickupBeforeDropoffCost, _StructuralPlugin):
+    pass
+
+
+class UnassignedRequestsCost(
+    domain.UnassignedRequestsCost, ConstraintPlugin[PdpContext]
+):
     def build(self, context: PdpContext, objective: ObjectiveBuilder) -> None:
         penalties = [
             (delivery.pickup.service_duration + delivery.dropoff.service_duration) // 60
@@ -150,11 +192,9 @@ class UnassignedRequests(domain.UnassignedRequests, ConstraintPlugin[PdpContext]
         )
 
 
-class MinCapacityUtilization(
-    domain.MinCapacityUtilization, ConstraintPlugin[PdpContext]
+class MinCapacityUtilizationCost(
+    domain.MinCapacityUtilizationCost, ConstraintPlugin[PdpContext]
 ):
-    default_level = "soft"
-
     def build(self, context: PdpContext, objective: ObjectiveBuilder) -> None:
         for vehicle, vehicle_data in enumerate(context.data.vehicles):
             if vehicle_data.min_load_ratio <= 0:
@@ -174,9 +214,7 @@ class MinCapacityUtilization(
             objective.add(self.name, shortfall, bound=target)
 
 
-class MinimizeTravelTime(domain.MinimizeTravelTime, ConstraintPlugin[PdpContext]):
-    default_level = "soft"
-
+class TravelTimeCost(domain.TravelTimeCost, ConstraintPlugin[PdpContext]):
     def build(self, context: PdpContext, objective: ObjectiveBuilder) -> None:
         size = len(context.data.vehicles) + len(context.nodes)
         max_drive = max(
@@ -190,10 +228,7 @@ class MinimizeTravelTime(domain.MinimizeTravelTime, ConstraintPlugin[PdpContext]
         objective.add(self.name, sum(context.travel_terms), bound=max_drive * size)
 
 
-class MinimizeRouteDuration(domain.MinimizeRouteDuration, ConstraintPlugin[PdpContext]):
-    default_level = "soft"
-    default_weight = 0
-
+class RouteDurationCost(domain.RouteDurationCost, ConstraintPlugin[PdpContext]):
     def build(self, context: PdpContext, objective: ObjectiveBuilder) -> None:
         for vehicle, vehicle_data in enumerate(context.data.vehicles):
             objective.add(
@@ -203,10 +238,7 @@ class MinimizeRouteDuration(domain.MinimizeRouteDuration, ConstraintPlugin[PdpCo
             )
 
 
-class MinimizeLatency(domain.MinimizeLatency, ConstraintPlugin[PdpContext]):
-    default_level = "soft"
-    default_weight = 0
-
+class LatencyCost(domain.LatencyCost, ConstraintPlugin[PdpContext]):
     def build(self, context: PdpContext, objective: ObjectiveBuilder) -> None:
         for latency in context.vehicle_latency.values():
             objective.add(
@@ -215,28 +247,30 @@ class MinimizeLatency(domain.MinimizeLatency, ConstraintPlugin[PdpContext]):
 
 
 class VehicleFixedCost(domain.VehicleFixedCost, ConstraintPlugin[PdpContext]):
-    default_level = "soft"
-
     def build(self, context: PdpContext, objective: ObjectiveBuilder) -> None:
         for vehicle, vehicle_data in enumerate(context.data.vehicles):
             cost = max(0, round(vehicle_data.fixed_cost))
             objective.add(self.name, cost * context.vehicle_used[vehicle], bound=cost)
 
 
+# list_constraints() order, without the four engine-only constraints.
 REGISTRY = ConstraintRegistry(
     [
-        VehicleCapacity(),
-        ServiceFinishedAfterMaxEndTime(),
-        MaxTravelTime(),
-        MaxRouteDuration(),
-        VehicleEndTime(),
-        MaxStops(),
-        MaxRouteRadius(),
-        UnassignedRequests(),
-        MinCapacityUtilization(),
-        MinimizeTravelTime(),
-        MinimizeRouteDuration(),
-        MinimizeLatency(),
+        VehicleCapacityCost(),
+        MaxEndTimeCost(),
+        TravelTimeCost(),
+        MaxTravelTimeCost(),
+        MaxRouteDurationCost(),
+        VehicleMaxEndTimeCost(),
+        MaxStopsCost(),
+        MaxRouteRadiusCost(),
+        MinCapacityUtilizationCost(),
+        RouteDurationCost(),
+        LatencyCost(),
         VehicleFixedCost(),
+        PairedRequestCost(),
+        SameVehicleCost(),
+        PickupBeforeDropoffCost(),
+        UnassignedRequestsCost(),
     ]
 )

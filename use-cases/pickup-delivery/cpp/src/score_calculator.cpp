@@ -1,10 +1,61 @@
 #include "pdp/score_calculator.hpp"
 
 #include <algorithm>
+#include <cstdint>
 #include <vector>
+
+#include "pdp/constraints/max_end_time_cost.hpp"
+#include "pdp/constraints/paired_request_cost.hpp"
+#include "pdp/constraints/pickup_before_dropoff_cost.hpp"
+#include "pdp/constraints/same_vehicle_cost.hpp"
+#include "pdp/constraints/travel_time_cost.hpp"
+#include "pdp/constraints/unassigned_requests_cost.hpp"
+#include "pdp/constraints/vehicle_capacity_cost.hpp"
 
 namespace pdp
 {
+
+namespace
+{
+
+// The monolithic score is the core of the default assembly, so it reads the
+// same constants the components carry. Integral, so every level is computed
+// in int64 (the medium weight is in medium units; toEngineScore folds it).
+constexpr auto kCapacityWeight
+    = static_cast<std::int64_t>(VehicleCapacityCost::kDefaultWeight);
+constexpr auto kTimeWindowWeight
+    = static_cast<std::int64_t>(MaxEndTimeCost::kDefaultWeight);
+constexpr auto kPairedWeight
+    = static_cast<std::int64_t>(PairedRequestCost::kDefaultWeight);
+constexpr auto kSameVehicleWeight
+    = static_cast<std::int64_t>(SameVehicleCost::kDefaultWeight);
+constexpr auto kPrecedenceWeight
+    = static_cast<std::int64_t>(PickupBeforeDropoffCost::kDefaultWeight);
+constexpr auto kUnassignedWeight
+    = static_cast<std::int64_t>(UnassignedRequestsCost::kDefaultWeight);
+constexpr auto kTravelWeight
+    = static_cast<std::int64_t>(TravelTimeCost::kDefaultWeight);
+static_assert(kCapacityWeight == VehicleCapacityCost::kDefaultWeight
+                  && kTimeWindowWeight == MaxEndTimeCost::kDefaultWeight
+                  && kPairedWeight == PairedRequestCost::kDefaultWeight
+                  && kSameVehicleWeight == SameVehicleCost::kDefaultWeight
+                  && kPrecedenceWeight
+                         == PickupBeforeDropoffCost::kDefaultWeight
+                  && kUnassignedWeight == UnassignedRequestsCost::kDefaultWeight
+                  && kTravelWeight == TravelTimeCost::kDefaultWeight,
+              "the monolithic calculator assumes integral default weights");
+static_assert(VehicleCapacityCost::kDefaultLevel == optimaru::Level::Hard
+                  && MaxEndTimeCost::kDefaultLevel == optimaru::Level::Hard
+                  && PairedRequestCost::kDefaultLevel == optimaru::Level::Hard
+                  && SameVehicleCost::kDefaultLevel == optimaru::Level::Hard
+                  && PickupBeforeDropoffCost::kDefaultLevel
+                         == optimaru::Level::Hard
+                  && UnassignedRequestsCost::kDefaultLevel
+                         == optimaru::Level::Medium
+                  && TravelTimeCost::kDefaultLevel == optimaru::Level::Soft,
+              "the monolithic calculator assumes the components' levels");
+
+}  // namespace
 
 void ScoreCalculator::updateShadowVariables(PdpRoutePlan &plan)
 {
@@ -53,7 +104,7 @@ Score ScoreCalculator::calculateScore(PdpRoutePlan &plan)
                 = static_cast<int>(p);
     }
 
-    // --- Hard: capacity, running load along each route ---
+    // --- Hard: vehicleCapacityCost, running load along each route ---
     // Load rises at a pickup and falls at the matching dropoff, so what must
     // fit is the peak in between — not the route total.
     for (const Vehicle &vehicle : plan.vehicles)
@@ -66,21 +117,23 @@ Score ScoreCalculator::calculateScore(PdpRoutePlan &plan)
                 = plan.deliveries[static_cast<std::size_t>(node.deliveryIndex)];
             load += node.pickup ? delivery.demand : -delivery.demand;
             if (load > vehicle.capacity)
-                hardPenalty += load - vehicle.capacity;
+                hardPenalty += kCapacityWeight * (load - vehicle.capacity);
         }
     }
 
-    // --- Hard: time windows ---
+    // --- Hard: maxEndTimeCost, time windows ---
     for (const Node &node : plan.nodes)
     {
         if (node.vehicleIndex < 0)
             continue;
         const Seconds serviceFinished = node.arrivalTime + node.serviceDuration;
         if (serviceFinished > node.maxEndTime)
-            hardPenalty += ceilToMinutes(serviceFinished - node.maxEndTime);
+            hardPenalty += kTimeWindowWeight
+                           * ceilToMinutes(serviceFinished - node.maxEndTime);
     }
 
-    // --- Hard: request coupling (paired / same vehicle / pickup first) ---
+    // --- Hard: request coupling (pairedRequestCost / sameVehicleCost /
+    // pickupBeforeDropoffCost) ---
     for (const Delivery &delivery : plan.deliveries)
     {
         const Node &pickup
@@ -92,7 +145,7 @@ Score ScoreCalculator::calculateScore(PdpRoutePlan &plan)
         const bool dropoffRouted = dropoff.vehicleIndex >= 0;
         if (pickupRouted != dropoffRouted)
         {
-            hardPenalty += kCouplingPenalty;  // half-assigned request
+            hardPenalty += kPairedWeight;  // half-assigned request
             continue;
         }
         if (!pickupRouted)
@@ -102,18 +155,18 @@ Score ScoreCalculator::calculateScore(PdpRoutePlan &plan)
         }
         if (pickup.vehicleIndex != dropoff.vehicleIndex)
         {
-            hardPenalty += kCouplingPenalty;  // split across two vehicles
+            hardPenalty += kSameVehicleWeight;  // split across two vehicles
             continue;
         }
         if (position[static_cast<std::size_t>(delivery.pickupNodeIndex)]
             > position[static_cast<std::size_t>(delivery.dropoffNodeIndex)])
         {
-            hardPenalty += kCouplingPenalty;  // dropoff scheduled before pickup
+            hardPenalty += kPrecedenceWeight;  // dropoff before pickup
         }
     }
     score.hard = -hardPenalty;
 
-    // --- Medium: requests left unrouted ---
+    // --- Medium: unassignedRequestsCost, requests left unrouted ---
     for (const Delivery &delivery : plan.deliveries)
     {
         const Node &pickup
@@ -123,11 +176,12 @@ Score ScoreCalculator::calculateScore(PdpRoutePlan &plan)
         if (pickup.vehicleIndex < 0 && dropoff.vehicleIndex < 0)
         {
             score.medium
-                -= (pickup.serviceDuration + dropoff.serviceDuration) / 60;
+                -= kUnassignedWeight
+                   * ((pickup.serviceDuration + dropoff.serviceDuration) / 60);
         }
     }
 
-    // --- Soft: total driving time ---
+    // --- Soft: travelTimeCost, total driving time ---
     // home -> stops..., plus the leg back home when the vehicle returns to
     // its depot.
     for (const Vehicle &vehicle : plan.vehicles)
@@ -144,7 +198,7 @@ Score ScoreCalculator::calculateScore(PdpRoutePlan &plan)
             previousLocation = location;
         }
         total += vehicle.homeLeg(plan.drivingSeconds, previousLocation);
-        score.soft -= total;
+        score.soft -= kTravelWeight * total;
     }
 
     plan.score = score;

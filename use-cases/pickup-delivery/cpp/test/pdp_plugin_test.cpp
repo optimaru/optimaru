@@ -6,17 +6,23 @@
 //   (b) incremental score == full recompute across 1500 random LIST moves
 //       driven through the engine's ScoreDirector protocol (plugin path)
 //   (c) partial assemblies: each component isolates its own term
-//   (d) weight / isHard overrides
+//   (d) weight / level overrides
 //   (e) constraintTotals() explains exactly the reported score
 //   (f) a 2-second solve(plan, calculator) under FULL_ASSERT
 //   (g) the pair move takes a misplaced bound request to its vehicle
 //   (h) pinned stops and bound requests hold when other hard rules are broken
+//   (i) every component's raw cost by hand: one positive and one zero case
+//   (j) the catalog (info()) == each component's kDefaultWeight / kDefaultLevel
+//   (k) the medium level: fold, hard() / soft() / weight on
+//       unassignedRequestsCost, and incremental == full with those overrides
 #include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <functional>
 #include <memory>
 #include <random>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -175,28 +181,28 @@ void verifyPartialAssemblies()
 
     {
         DecomposedCalculator calculator;
-        calculator.emplace<PairedRequest>();
-        calculator.emplace<SameVehicle>();
-        calculator.emplace<PickupBeforeDropoff>();
-        calculator.emplace<VehicleCapacity>();
-        calculator.emplace<ServiceFinishedAfterMaxEndTime>();
+        calculator.emplace<PairedRequestCost>();
+        calculator.emplace<SameVehicleCost>();
+        calculator.emplace<PickupBeforeDropoffCost>();
+        calculator.emplace<VehicleCapacityCost>();
+        calculator.emplace<MaxEndTimeCost>();
         const Score score = scoreWith(calculator, plan);
         check(score.hard == full.hard && score.medium == 0 && score.soft == 0,
               "the five hard components alone reproduce the hard level");
     }
     {
         DecomposedCalculator calculator;
-        calculator.emplace<UnassignedRequests>();
+        calculator.emplace<UnassignedRequestsCost>();
         const Score score = scoreWith(calculator, plan);
         check(score.hard == 0 && score.medium == full.medium && score.soft == 0,
-              "unassignedRequests alone reproduces the medium level");
+              "unassignedRequestsCost alone reproduces the medium level");
     }
     {
         DecomposedCalculator calculator;
-        calculator.emplace<MinimizeTravelTime>();
+        calculator.emplace<TravelTimeCost>();
         const Score score = scoreWith(calculator, plan);
         check(score.hard == 0 && score.medium == 0 && score.soft == full.soft,
-              "minimizeTravelTime alone reproduces the soft level");
+              "travelTimeCost alone reproduces the soft level");
     }
     std::printf("\n");
 }
@@ -212,24 +218,24 @@ void verifyOverrides()
     randomizeRoutes(plan, rng, /*poolRate=*/0.05);
 
     DecomposedCalculator baseline;
-    baseline.emplace<VehicleCapacity>();
+    baseline.emplace<VehicleCapacityCost>();
     const Score base = scoreWith(baseline, plan);
 
     {
         DecomposedCalculator calculator;
-        calculator.emplace<VehicleCapacity>(10.0);
+        calculator.emplace<VehicleCapacityCost>(10.0);
         const Score score = scoreWith(calculator, plan);
         check(score.hard == 10 * base.hard,
-              "vehicleCapacity re-weighted to 10");
+              "vehicleCapacityCost re-weighted to 10");
     }
     {
         DecomposedCalculator calculator;
-        auto component = std::make_unique<VehicleCapacity>();
-        component->isHard = false;
+        auto component = std::make_unique<VehicleCapacityCost>();
+        component->level = optimaru::Level::Soft;
         calculator.add(std::move(component));
         const Score score = scoreWith(calculator, plan);
         check(score.hard == 0 && score.medium == 0 && score.soft == base.hard,
-              "vehicleCapacity demoted to soft");
+              "vehicleCapacityCost demoted to soft");
     }
     std::printf("\n");
 }
@@ -250,10 +256,19 @@ void verifyConstraintTotals()
     calculator.resetWorkingSolution(plan);
     const optimaru::HardSoftScore score = calculator.calculateScore();
 
+    // A medium total is in medium units (not multiplied by the fold), so it
+    // is folded here the way the calculator folds its medium accumulator.
     double hard = 0.0;
     double soft = 0.0;
     for (const optimaru::ConstraintTotal &total : calculator.constraintTotals())
-        (total.isHard ? hard : soft) += total.cost;
+    {
+        if (total.level == optimaru::Level::Hard)
+            hard += total.cost;
+        else if (total.level == optimaru::Level::Medium)
+            soft += total.cost * static_cast<double>(kMediumUnit);
+        else
+            soft += total.cost;
+    }
     check(std::fabs(-hard - static_cast<double>(score.hard)) < 1e-9
               && std::fabs(-soft - score.soft) < 1e-3,
           "per-constraint totals sum to the reported score");
@@ -307,7 +322,7 @@ void verifyFullAssertSolve()
 // -------------------------------------------------------------------------
 void verifyRepairHonoursRequiredVehicle()
 {
-    std::printf("== (g) Repair and requiredVehicle ==\n");
+    std::printf("== (g) Repair and requiredVehicleCost ==\n");
     // A single request, so no stop is routed near it and the pair move falls
     // back on picking a vehicle. With only that move and a handful of steps, a
     // pick among all the vehicles would almost never find the right one.
@@ -408,6 +423,409 @@ void verifyPinnedAndBoundUnderPressure()
     std::printf("\n");
 }
 
+
+// -------------------------------------------------------------------------
+// (i) Raw costs by hand: one positive and one zero case per component.
+// -------------------------------------------------------------------------
+// Two requests, two vehicles, an explicit driving matrix of 100 s per index
+// step (location k at longitude 0.001 * k on the equator, home = location 0):
+//   r1 = p1 (loc 1) -> d1 (loc 2), r2 = p2 (loc 3) -> d2 (loc 4), demand 4
+//   each, 60 s of service at every stop, windows [0, 24 h], vehicles of
+//   capacity 10 leaving at 0. With vehicle 0 on p1 d1 p2 d2 the arrivals are
+//   100, 260, 420, 580, the route ends at 640 and drives 400 s (open route).
+PdpRoutePlan buildHandInstance()
+{
+    PdpRoutePlan plan;
+    plan.name = "hand";
+    for (int k = 0; k < 5; ++k)
+        plan.locations.push_back(Location{0.0, 0.001 * k, k});
+    for (int v = 0; v < 2; ++v)
+    {
+        Vehicle vehicle;
+        vehicle.id = std::to_string(v);
+        vehicle.capacity = 10;
+        vehicle.homeLocationIndex = 0;
+        plan.vehicles.push_back(vehicle);
+    }
+    const char *ids[] = {"p1", "d1", "p2", "d2"};
+    for (int n = 0; n < 4; ++n)
+        plan.nodes.push_back(Node{ids[n], n + 1, 0, 24 * 3600, 60, n / 2,
+                                  n % 2 == 0, -1, NULL_TIME});
+    plan.deliveries = {Delivery{"r1", 0, 1, 4, 0, -1},
+                       Delivery{"r2", 2, 3, 4, 0, -1}};
+    plan.drivingSeconds.assign(5, std::vector<Seconds>(5, 0));
+    for (int a = 0; a < 5; ++a)
+        for (int b = 0; b < 5; ++b)
+            plan.drivingSeconds[a][b] = 100 * std::abs(a - b);
+    return plan;
+}
+
+// Vehicle 0 serves p1 d1 p2 d2; vehicle 1 and the pool are empty.
+PdpRoutePlan handRouted()
+{
+    PdpRoutePlan plan = buildHandInstance();
+    plan.vehicles[0].nodeIndices = {0, 1, 2, 3};
+    return plan;
+}
+
+// The raw per-unit costs (vehicle 0, vehicle 1, pool; one entry for a global)
+// of one registry name, read off the default assembly.
+std::vector<double> rawCosts(PdpRoutePlan plan, const std::string &name)
+{
+    plan.rebuildUnassignedPool();
+    DecomposedCalculator calculator;
+    addDefaultConstraints(calculator);
+    calculator.resetWorkingSolution(plan);
+    calculator.calculateScore();
+    for (const auto &entry : calculator.constraintCosts())
+        if (entry.name == name)
+            return entry.unitCosts;
+    throw std::logic_error("no constraint " + name);
+}
+
+bool near(const std::vector<double> &got, const std::vector<double> &want)
+{
+    if (got.size() != want.size())
+        return false;
+    for (std::size_t i = 0; i < got.size(); ++i)
+        if (std::fabs(got[i] - want[i]) > 1e-6 * std::max(1.0, std::fabs(want[i])))
+            return false;
+    return true;
+}
+
+void byHand(const std::string &name,
+            const std::function<void(PdpRoutePlan &)> &positive,
+            const std::vector<double> &positiveCosts,
+            const std::function<void(PdpRoutePlan &)> &zero,
+            const std::vector<double> &zeroCosts)
+{
+    PdpRoutePlan up = handRouted();
+    positive(up);
+    check(near(rawCosts(up, name), positiveCosts), name + " positive");
+    PdpRoutePlan down = handRouted();
+    zero(down);
+    check(near(rawCosts(down, name), zeroCosts), name + " zero");
+}
+
+void verifyRawCostsByHand()
+{
+    std::printf("== (i) Raw costs by hand ==\n");
+    constexpr double pi = 3.14159265358979323846;
+    // On the equator the haversine distance is R * dLongitude (radians), and
+    // the equirectangular projection keeps the stops on one line.
+    const double meterPerStep = 6371000.0 * 0.001 * pi / 180.0;
+    const std::vector<double> none{0.0, 0.0, 0.0};
+    const std::vector<double> noGlobal{0.0};
+    const auto keep = [](PdpRoutePlan &) {};
+
+    // Capacity 3: the load reaches 4 after p1 and after p2 -> 1 + 1.
+    byHand("vehicleCapacityCost",
+           [](PdpRoutePlan &p) { p.vehicles[0].capacity = 3; }, {2.0, 0.0, 0.0},
+           keep, none);
+    // p2 finishes at 480 against 400 (80 s -> 2 min), d2 at 640 against 580
+    // (60 s -> 1 min).
+    byHand("maxEndTimeCost",
+           [](PdpRoutePlan &p)
+           {
+               p.nodes[2].maxEndTime = 400;
+               p.nodes[3].maxEndTime = 580;
+           },
+           {3.0, 0.0, 0.0},
+           [](PdpRoutePlan &p) { p.nodes[3].maxEndTime = 640; }, none);
+    // 4 legs of 100 s, open; returnToDepot adds d2 -> home = 400 s.
+    byHand("travelTimeCost", keep, {400.0, 0.0, 0.0},
+           [](PdpRoutePlan &p) { p.vehicles[0].nodeIndices.clear(); }, none);
+    byHand("travelTimeCost",
+           [](PdpRoutePlan &p) { p.vehicles[0].returnToDepot = true; },
+           {800.0, 0.0, 0.0},
+           [](PdpRoutePlan &p)
+           {
+               p.vehicles[0].returnToDepot = true;
+               p.vehicles[0].nodeIndices.clear();  // a parked vehicle drives 0
+           },
+           none);
+    byHand("maxTravelTimeCost",
+           [](PdpRoutePlan &p) { p.vehicles[0].maxTravelTime = 300; },
+           {100.0, 0.0, 0.0},
+           [](PdpRoutePlan &p) { p.vehicles[0].maxTravelTime = 400; }, none);
+    byHand("maxRouteDurationCost",
+           [](PdpRoutePlan &p) { p.vehicles[0].maxRouteDuration = 600; },
+           {40.0, 0.0, 0.0},
+           [](PdpRoutePlan &p) { p.vehicles[0].maxRouteDuration = 640; }, none);
+    byHand("vehicleMaxEndTimeCost",
+           [](PdpRoutePlan &p) { p.vehicles[0].maxEndTime = 600; },
+           {40.0, 0.0, 0.0},
+           [](PdpRoutePlan &p) { p.vehicles[0].maxEndTime = 640; }, none);
+    byHand("maxStopsCost", [](PdpRoutePlan &p) { p.vehicles[0].maxStops = 3; },
+           {1.0, 0.0, 0.0},
+           [](PdpRoutePlan &p) { p.vehicles[0].maxStops = 4; }, none);
+    // The farthest stop (d2) is 4 steps from home.
+    byHand("maxRouteRadiusCost",
+           [&](PdpRoutePlan &p)
+           { p.vehicles[0].maxRouteRadiusMeters = 4 * meterPerStep - 25.0; },
+           {25.0, 0.0, 0.0},
+           [&](PdpRoutePlan &p)
+           { p.vehicles[0].maxRouteRadiusMeters = 4 * meterPerStep + 1.0; },
+           none);
+    // Four stops on one line, 3 steps from the first to the last: radius 1.5.
+    byHand("enclosingCircleRadiusCost", keep, {1.5 * meterPerStep, 0.0, 0.0},
+           [](PdpRoutePlan &p) { p.vehicles[0].nodeIndices = {0}; }, none);
+    // Target 10 * 1.0 against 4 + 4 delivered.
+    byHand("minCapacityUtilizationCost",
+           [](PdpRoutePlan &p) { p.vehicles[0].minLoadRatio = 1.0; },
+           {2.0, 0.0, 0.0},
+           [](PdpRoutePlan &p) { p.vehicles[0].minLoadRatio = 0.5; }, none);
+    byHand("routeDurationCost", keep, {640.0, 0.0, 0.0},
+           [](PdpRoutePlan &p) { p.vehicles[0].nodeIndices.clear(); }, none);
+    // 100 + 260 + 420 + 580.
+    byHand("latencyCost", keep, {1360.0, 0.0, 0.0},
+           [](PdpRoutePlan &p) { p.vehicles[0].nodeIndices.clear(); }, none);
+    // d1 finishes at 320, d2 at 640, both ordered at 0: 320^2 + 640^2. Zero:
+    // each request ordered exactly when its dropoff finishes.
+    byHand("squaredOrderAgeCost", keep, {512000.0, 0.0, 0.0},
+           [](PdpRoutePlan &p)
+           {
+               p.deliveries[0].orderTime = 320;
+               p.deliveries[1].orderTime = 640;
+           },
+           none);
+    // In the pool every dropoff is charged as finishing at 3600: 2 * 3600^2.
+    byHand("squaredOrderAgeCost",
+           [](PdpRoutePlan &p) { p.vehicles[0].nodeIndices.clear(); },
+           {0.0, 0.0, 25920000.0},
+           [](PdpRoutePlan &p)
+           {
+               p.vehicles[0].nodeIndices.clear();
+               p.deliveries[0].orderTime = 3600;
+               p.deliveries[1].orderTime = 3600;
+           },
+           none);
+    byHand("vehicleFixedCost", [](PdpRoutePlan &p) { p.vehicles[0].fixedCost = 50.0; },
+           {50.0, 0.0, 0.0},
+           [](PdpRoutePlan &p)
+           {
+               p.vehicles[1].fixedCost = 50.0;  // vehicle 1 stays unused
+           },
+           none);
+    // Pinned d1, p1 against a route starting p1, d1: both positions wrong.
+    byHand("pinnedStopsCost",
+           [](PdpRoutePlan &p) { p.vehicles[0].pinnedNodeIndices = {1, 0}; },
+           {2.0, 0.0, 0.0},
+           [](PdpRoutePlan &p) { p.vehicles[0].pinnedNodeIndices = {0, 1}; },
+           none);
+    // r1 bound to vehicle 1 rides vehicle 0 (2); r2 bound to vehicle 1 waits
+    // in the pool (1).
+    byHand("requiredVehicleCost",
+           [](PdpRoutePlan &p)
+           {
+               p.deliveries[0].requiredVehicleIndex = 1;
+               p.deliveries[1].requiredVehicleIndex = 1;
+               p.vehicles[0].nodeIndices = {0, 1};
+           },
+           {2.0, 0.0, 1.0},
+           [](PdpRoutePlan &p) { p.deliveries[0].requiredVehicleIndex = 0; },
+           none);
+    // d2 left out of the route: r2 is half-routed.
+    byHand("pairedRequestCost",
+           [](PdpRoutePlan &p) { p.vehicles[0].nodeIndices = {0, 1, 2}; }, {1.0},
+           keep, noGlobal);
+    // d2 rides vehicle 1.
+    byHand("sameVehicleCost",
+           [](PdpRoutePlan &p)
+           {
+               p.vehicles[0].nodeIndices = {0, 1, 2};
+               p.vehicles[1].nodeIndices = {3};
+           },
+           {1.0}, keep, noGlobal);
+    byHand("pickupBeforeDropoffCost",
+           [](PdpRoutePlan &p) { p.vehicles[0].nodeIndices = {1, 0, 2, 3}; },
+           {1.0}, keep, noGlobal);
+    // Both requests unrouted: (60 + 60) / 60 = 2 minutes each.
+    byHand("unassignedRequestsCost",
+           [](PdpRoutePlan &p) { p.vehicles[0].nodeIndices.clear(); }, {4.0},
+           keep, noGlobal);
+    std::printf("\n");
+}
+
+// -------------------------------------------------------------------------
+// (j) The catalog read off the default assembly == the components' constants.
+// -------------------------------------------------------------------------
+template <typename Component>
+bool rowIs(const optimaru::ConstraintInfo &row,
+           const char *name,
+           optimaru::Level level,
+           double weight,
+           bool isGlobal)
+{
+    return row.name == name && row.defaultLevel == Component::kDefaultLevel
+           && row.defaultWeight == Component::kDefaultWeight
+           && row.defaultLevel == level && row.defaultWeight == weight
+           && row.levelFlippable && !row.reward && row.isGlobal == isGlobal
+           && row.defaultEnabled == (weight > 0.0);
+}
+
+void verifyCatalog()
+{
+    std::printf("== (j) Catalog == component constants ==\n");
+    using optimaru::Level;
+    const auto rows = defaultConstraints().info();
+    check(rows.size() == 20, "20 catalog rows");
+    if (rows.size() != 20)
+        return;
+    // Unit constraints first, then the globals, in emplace order: the
+    // list_constraints() order.
+    check(rowIs<VehicleCapacityCost>(rows[0], "vehicleCapacityCost", Level::Hard, 1.0, false)
+              && rowIs<MaxEndTimeCost>(rows[1], "maxEndTimeCost", Level::Hard, 1.0, false)
+              && rowIs<TravelTimeCost>(rows[2], "travelTimeCost", Level::Soft, 1.0, false)
+              && rowIs<MaxTravelTimeCost>(rows[3], "maxTravelTimeCost", Level::Hard, 1.0, false)
+              && rowIs<MaxRouteDurationCost>(rows[4], "maxRouteDurationCost", Level::Hard, 1.0, false)
+              && rowIs<VehicleMaxEndTimeCost>(rows[5], "vehicleMaxEndTimeCost", Level::Hard, 1.0, false)
+              && rowIs<MaxStopsCost>(rows[6], "maxStopsCost", Level::Hard, 1.0, false)
+              && rowIs<MaxRouteRadiusCost>(rows[7], "maxRouteRadiusCost", Level::Hard, 1.0, false)
+              && rowIs<EnclosingCircleRadiusCost>(rows[8], "enclosingCircleRadiusCost", Level::Soft, 0.0, false)
+              && rowIs<MinCapacityUtilizationCost>(rows[9], "minCapacityUtilizationCost", Level::Soft, 1.0, false)
+              && rowIs<RouteDurationCost>(rows[10], "routeDurationCost", Level::Soft, 0.0, false)
+              && rowIs<LatencyCost>(rows[11], "latencyCost", Level::Soft, 0.0, false)
+              && rowIs<SquaredOrderAgeCost>(rows[12], "squaredOrderAgeCost", Level::Soft, 0.0, false)
+              && rowIs<VehicleFixedCost>(rows[13], "vehicleFixedCost", Level::Soft, 1.0, false)
+              && rowIs<PinnedStopsCost>(rows[14], "pinnedStopsCost", Level::Hard, 1e12, false)
+              && rowIs<RequiredVehicleCost>(rows[15], "requiredVehicleCost", Level::Hard, 1000.0, false)
+              && rowIs<PairedRequestCost>(rows[16], "pairedRequestCost", Level::Hard, 1000.0, true)
+              && rowIs<SameVehicleCost>(rows[17], "sameVehicleCost", Level::Hard, 1000.0, true)
+              && rowIs<PickupBeforeDropoffCost>(rows[18], "pickupBeforeDropoffCost", Level::Hard, 1000.0, true)
+              && rowIs<UnassignedRequestsCost>(rows[19], "unassignedRequestsCost", Level::Medium, 1.0, true),
+          "info() == the components' kDefaultWeight / kDefaultLevel");
+    check(PairedRequestCost::kDefaultWeight == ScoreCalculator::kCouplingPenalty
+              && RequiredVehicleCost::kDefaultWeight == ScoreCalculator::kCouplingPenalty
+              && PinnedStopsCost::kDefaultWeight == ScoreCalculator::kPinnedPenalty,
+          "the penalty defaults are ScoreCalculator's constants");
+    std::printf("\n");
+}
+
+// -------------------------------------------------------------------------
+// (k) The medium level: unassignedRequestsCost.
+// -------------------------------------------------------------------------
+optimaru::DecomposedScoreCalculator<PdpRoutePlan>::LevelScores
+levelsWith(ConstraintAssembly assembly, PdpRoutePlan &plan)
+{
+    DecomposedCalculator calculator;
+    std::move(assembly).into(calculator);
+    calculator.resetWorkingSolution(plan);
+    calculator.calculateScore();
+    return calculator.levelScores();
+}
+
+void verifyMediumLevel()
+{
+    std::printf("== (k) Medium level ==\n");
+    // Vehicle 0 serves r1; r2 is dropped: 2 medium minutes, 200 s of driving.
+    PdpRoutePlan plan = buildHandInstance();
+    plan.vehicles[0].nodeIndices = {0, 1};
+    plan.rebuildUnassignedPool();
+    const Score monolithic = ScoreCalculator::calculateScore(plan);
+    check(monolithic.hard == 0 && monolithic.medium == -2 && monolithic.soft == -200,
+          "the hand plan drops 2 medium minutes");
+
+    {
+        DecomposedCalculator calculator;
+        addDefaultConstraints(calculator);
+        calculator.resetWorkingSolution(plan);
+        const optimaru::HardSoftScore engine = calculator.calculateScore();
+        check(engine.hard == 0
+                  && engine.soft == -200.0 - 2.0 * static_cast<double>(kMediumUnit),
+              "default: medium folded into soft x 10^9");
+        check(engine.hard == toEngineScore(monolithic).hard
+                  && engine.soft == toEngineScore(monolithic).soft,
+              "default: the fold equals the monolithic Score adapter");
+        const auto levels = calculator.levelScores();
+        check(levels.hard == 0 && levels.medium == -2.0 && levels.soft == -200.0,
+              "levelScores() reports the unfolded levels");
+    }
+    {
+        const auto levels
+            = levelsWith(defaultConstraints().hard("unassignedRequestsCost"), plan);
+        check(levels.hard == -2 && levels.medium == 0.0 && levels.soft == -200.0,
+              "hard(): one hard unit per raw minute");
+    }
+    {
+        const auto levels
+            = levelsWith(defaultConstraints().soft("unassignedRequestsCost"), plan);
+        check(levels.hard == 0 && levels.medium == 0.0 && levels.soft == -202.0,
+              "soft(): one soft unit per raw minute, outside the fold");
+    }
+    {
+        const auto levels = levelsWith(
+            defaultConstraints().weight("unassignedRequestsCost", 3), plan);
+        check(levels.hard == 0 && levels.medium == -6.0 && levels.soft == -200.0,
+              "weight 3 stays in medium units");
+    }
+    std::printf("\n");
+}
+
+// Incremental == full recompute with the medium term overridden, through the
+// ScoreDirector protocol (the coupling globals have no preview contract, so
+// the engine applies and scores every move; this walk is that path).
+void verifyMediumIncremental()
+{
+    std::printf("== (k) Medium overrides: incremental == full ==\n");
+    const std::vector<std::pair<std::string, std::function<ConstraintAssembly()>>>
+        variants{
+            {"default", [] { return defaultConstraints(); }},
+            {"hard", [] { return defaultConstraints().hard("unassignedRequestsCost"); }},
+            {"soft", [] { return defaultConstraints().soft("unassignedRequestsCost"); }},
+            {"weight 3",
+             [] { return defaultConstraints().weight("unassignedRequestsCost", 3); }},
+        };
+    using Descriptor = optimaru::SolutionDescriptor<PdpRoutePlan>;
+    for (const auto &variant : variants)
+    {
+        PdpRoutePlan plan = buildRandomInstance(12, 3, /*seed=*/17);
+        plan.rebuildUnassignedPool();
+        DecomposedCalculator calculator;
+        variant.second().into(calculator);
+        optimaru::ScoreDirector<PdpRoutePlan> director(plan, calculator);
+        std::mt19937_64 rng(41);
+        int mismatches = 0;
+        int mediumSteps = 0;
+        for (int step = 0; step < 600; ++step)
+        {
+            const int listCount = Descriptor::listCount(plan);
+            const int from = static_cast<int>(
+                rng() % static_cast<std::uint64_t>(listCount));
+            if (Descriptor::listSize(plan, from) == 0)
+                continue;
+            const int position = static_cast<int>(
+                rng()
+                % static_cast<std::uint64_t>(Descriptor::listSize(plan, from)));
+            const int element = Descriptor::getElement(plan, from, position);
+            director.removeListElement(from, position);
+            const int to = static_cast<int>(
+                rng() % static_cast<std::uint64_t>(listCount));
+            const int insertAt = static_cast<int>(
+                rng()
+                % static_cast<std::uint64_t>(Descriptor::listSize(plan, to) + 1));
+            director.insertListElement(to, insertAt, element);
+
+            const optimaru::HardSoftScore incremental = director.calculateScore();
+            DecomposedCalculator fresh;
+            variant.second().into(fresh);
+            fresh.resetWorkingSolution(plan);
+            const optimaru::HardSoftScore full = fresh.calculateScore();
+            if (fresh.levelScores().medium != 0.0
+                || calculator.levelScores().medium != 0.0)
+                ++mediumSteps;
+            if (incremental.hard != full.hard
+                || std::fabs(incremental.soft - full.soft) > 1e-6)
+                ++mismatches;
+        }
+        check(mismatches == 0,
+              "unassignedRequestsCost " + variant.first
+                  + ": 600 random list moves, incremental == full recompute");
+        if (variant.first == "default" || variant.first == "weight 3")
+            check(mediumSteps > 0, variant.first + ": the walk visits medium states");
+    }
+    std::printf("\n");
+}
 }  // namespace
 
 int main()
@@ -420,6 +838,10 @@ int main()
     verifyFullAssertSolve();
     verifyRepairHonoursRequiredVehicle();
     verifyPinnedAndBoundUnderPressure();
+    verifyRawCostsByHand();
+    verifyCatalog();
+    verifyMediumLevel();
+    verifyMediumIncremental();
 
     if (failures == 0)
     {
