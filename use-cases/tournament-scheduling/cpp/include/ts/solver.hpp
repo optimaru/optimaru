@@ -92,7 +92,7 @@ public:
         bool valueRecommender = false;
 
         // Loaded-team-count macro moves (adopted on the quality bench — see
-        // solver.cpp). fairAssignmentCountPerTeam is an unfairness over the
+        // solver.cpp). assignmentCountImbalanceCost is an unfairness over the
         // LOADED teams only, so spreading the same assignments evenly over a
         // different number of teams can be a whole medium level better — a
         // jump no single-variable move reaches, because emptying (or

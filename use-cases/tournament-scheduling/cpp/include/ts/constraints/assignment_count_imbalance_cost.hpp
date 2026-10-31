@@ -1,26 +1,35 @@
-#ifndef TS_CONSTRAINTS_FAIR_ASSIGNMENT_COUNT_PER_TEAM_HPP
-#define TS_CONSTRAINTS_FAIR_ASSIGNMENT_COUNT_PER_TEAM_HPP
+#ifndef TS_CONSTRAINTS_ASSIGNMENT_COUNT_IMBALANCE_COST_HPP
+#define TS_CONSTRAINTS_ASSIGNMENT_COUNT_IMBALANCE_COST_HPP
 
 #include "ts/constraints/common.hpp"
 
 namespace ts
 {
 
-// Medium (default, weight kMediumScale): fairAssignmentCountPerTeam — the
-// LoadBalance unfairness of the per-team assignment counts. Only teams that
+// Medium, weight 1 (medium units): assignmentCountImbalanceCost — how unevenly
+// the assignments are spread over the teams. Raw cost (global) = the
+// LoadBalance unfairness of the per-team assignment counts,
+// sqrt(sum(load^2) - sum(load)^2 / n) rounded to 6 significant figures, so
+// 0 = every loaded team holds the same number of assignments. Only teams that
 // actually hold an assignment enter the balance (the Java rule has no
 // complement), which is why `n` is maintained separately from the team count.
+//
+// Folded into the engine's soft level as `medium * kMediumScale` (1e6) by the
+// calculator (kMediumFold in domain.hpp), not by this weight.
 //
 // Global because an unfairness is a statistic across units, not a sum over
 // them. Its three aggregates (sum, sum of squares, loaded-team count) update
 // in O(1) per join/leave and are exactly reversible, so it rides the
 // member-change fast path.
-struct FairAssignmentCountPerTeam final : MemberChangeGlobalConstraint
+struct AssignmentCountImbalanceCost final : MemberChangeGlobalConstraint
 {
-    explicit FairAssignmentCountPerTeam(double weight = kMediumScale)
-        : MemberChangeGlobalConstraint("fairAssignmentCountPerTeam",
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Medium;
+
+    explicit AssignmentCountImbalanceCost(double weight = kDefaultWeight)
+        : MemberChangeGlobalConstraint("assignmentCountImbalanceCost",
                                        weight,
-                                       /*hard=*/false)
+                                       kDefaultLevel)
     {
     }
     void reset(const TournamentSchedule & /*schedule*/,
@@ -79,4 +88,4 @@ private:
 
 }  // namespace ts
 
-#endif  // TS_CONSTRAINTS_FAIR_ASSIGNMENT_COUNT_PER_TEAM_HPP
+#endif  // TS_CONSTRAINTS_ASSIGNMENT_COUNT_IMBALANCE_COST_HPP

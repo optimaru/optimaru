@@ -27,7 +27,7 @@ using Calculator = TournamentSchedulingIncrementalScoreCalculator;
 // ---------------------------------------------------------------------------
 // TeamCountMove — the domain macro move (adopted on the quality bench)
 // ---------------------------------------------------------------------------
-// Why a macro move: medium 3 (fairAssignmentCountPerTeam) is
+// Why a macro move: medium 3 (assignmentCountImbalanceCost) is
 // LoadBalance::unfairness over the teams that currently hold at least one
 // assignment — Java's constraint has no complement, so an unloaded team
 // simply drops out of the balance. With A assignments over n loaded teams the
@@ -319,9 +319,10 @@ private:
     }
 
     // Least-loaded kept team that keeps the move hard-feasible: not already
-    // playing that day (hard 1) and not unavailable on it (hard 2). Falls
-    // back to ignoring the unavailability so a drain is completed and judged
-    // by the acceptor rather than left half-done.
+    // playing that day (teamConflictCost) and not unavailable on it
+    // (teamUnavailabilityCost). Falls back to ignoring the unavailability so
+    // a drain is completed and judged by the acceptor rather than left
+    // half-done.
     int bestReplacement(int team, int day, std::mt19937_64 &rng) const
     {
         const std::vector<std::int64_t> &loads = calculator_->teamLoads();

@@ -7,12 +7,31 @@ holds their pybind11 bindings (`tournament_scheduling._core`) and the pydantic m
 
 ## Constraints (same semantics as the Java ConstraintProvider)
 
-| Name | Level | What it measures |
-|------|------|------|
-| oneAssignmentPerDatePerTeam | Hard | one match per team per day (-1 per pair of same-team assignments on one day) |
-| unavailabilityPenalty | Hard | -1 per fact when an unavailable (team, day) has any assignment |
-| fairAssignmentCountPerTeam | Medium | fair assignment counts per team (LoadBalance unfairness) |
-| evenlyConfrontationCount | Soft | even head-to-head counts per team pair (LoadBalance unfairness) |
+| Constraint (Python name) | C++ component | Default level | Default weight | Raw cost (0 = no violation) |
+|---|---|---|---|---|
+| `team_conflict_cost` | `TeamConflictCost` | hard | 1 | one match per team per day: 1 per pair of same-team assignments on one day |
+| `team_unavailability_cost` | `TeamUnavailabilityCost` | hard | 1 | 1 per fact when an unavailable (team, day) has any assignment |
+| `assignment_count_imbalance_cost` | `AssignmentCountImbalanceCost` | medium | 1 | LoadBalance unfairness of the assignment counts per team |
+| `confrontation_count_imbalance_cost` | `ConfrontationCountImbalanceCost` | soft | 1 | LoadBalance unfairness of the head-to-head counts per team pair |
+
+`tournament_scheduling.constraint_info()` returns exactly these rows (`ConstraintInfo`:
+`name`, `default_level`, `default_weight`, `level_flippable`, `reward`, `default_enabled`),
+read off the C++ components' `kDefaultLevel` / `kDefaultWeight`;
+`constraint_costs(schedule)` returns the raw per-unit costs (a team for the two hard
+constraints, one total for the two imbalance constraints) with that metadata and the
+domain's `medium_fold` (`{"kind": "into_soft", "unit": 1e6}`) on every entry.
+`tournament_scheduling.constraints` holds one spec per row (`TeamConflictCost`, ...) and the
+module-level default instances (`team_conflict_cost`, ...). Every spec takes
+`weight=None` (the default above, in units of its level), `hard=None` (the default level;
+`True` = hard, `False` = soft) and `exponent=1.0`. The medium constraint moved to hard costs
+1 hard per raw unit (the total, rounded), moved to soft 1 soft per raw unit, and an explicit
+weight stays in medium units.
+
+0.2.0 renamed `one_assignment_per_date_per_team` / `unavailability_penalty` /
+`fair_assignment_count_per_team` / `evenly_confrontation_count` (and the spec classes
+`OneAssignmentPerDatePerTeam` / `UnavailabilityPenalty` / `FairAssignmentCountPerTeam` /
+`EvenlyConfrontationCount`) to the names above; the old names are unknown now. The spec
+class no longer shadows the `UnavailabilityPenalty` fact, which keeps its name.
 
 "Unfairness" is the load-balance unfairness of the reference model:
 `sqrt(sum(load^2) - sum(load)^2 / n)` rounded to 6 significant digits (HALF_EVEN).
@@ -28,6 +47,9 @@ folded into two (the same as the `cpp/include/ts/domain.hpp` comments):
 hard = Java hard as-is                         (0 == feasible)
 soft = -(medium unfairness * 1e6 + soft unfairness)   # MEDIUM_SCALE = 1e6
 ```
+
+The fold is the domain's `kMediumFold = intoSoft(1e6)` (`cpp/include/ts/domain.hpp`), applied
+by the calculators, not carried by the medium constraint's weight.
 
 medium/soft unfairness are 6-significant-digit decimals, so at this domain's instance
 scale medium always dominates soft (level priority preserved).
@@ -71,5 +93,6 @@ objects. Pin an assignment with `TeamAssignmentModel.pinned=True`
 cd ../cpp
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j4
 ./build/ts_test    # hand-computed constraint cases + 3000 random moves incremental==full + FULL_ASSERT solve
+./build/ts_plugin_test  # default assembly == monolith, raw costs by hand, catalog, medium knobs
 ./build/ts_demo 10 # reproduces the Java demo, 10 s solve, asserts feasible (0hard)
 ```

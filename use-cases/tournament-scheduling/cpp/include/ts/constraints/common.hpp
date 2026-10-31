@@ -34,18 +34,35 @@ namespace ts
 // they run as GlobalConstraints on the onMemberChanged fast path, maintaining
 // exactly the aggregates the monolithic calculator keeps.
 //
-// Score levels: the quickstart scores with HardMediumSoftBigDecimalScore,
-// which this domain folds into the engine's HardSoftScore by carrying the
-// medium level at kMediumScale per unit (see domain.hpp). The medium
-// component's default weight is therefore kMediumScale, and both unfairness
-// values go through ScoreCalculator::unfairnessFromAggregates, so an assembly
-// of all four reproduces the monolithic double bit-for-bit.
+// Names and defaults: every component is one `<Subject>Cost` struct in
+// constraints/<subject>_cost.hpp whose registry name is the struct name with a
+// lower-case first letter ("teamConflictCost"; Python sees it as
+// team_conflict_cost). Its default level and weight are declared ONCE, as
+// `kDefaultLevel` / `kDefaultWeight`; the constructor takes the weight first
+// and defaults it to kDefaultWeight. constraint_info() and the CP-SAT
+// reference read them from there, and the monolithic calculators read the
+// same constants (score_calculator.cpp / incremental_calculator.cpp).
+//
+//   teamConflictCost                 hard,   1  same-day assignment pairs
+//   teamUnavailabilityCost           hard,   1  violated unavailability facts
+//   assignmentCountImbalanceCost     medium, 1  unfairness of per-team counts
+//   confrontationCountImbalanceCost  soft,   1  unfairness of per-pair counts
+//
+// Score levels: the quickstart scores with HardMediumSoftBigDecimalScore. This
+// domain keeps the engine's HardSoftScore and declares how its medium level
+// folds into soft ONCE, in domain.hpp (kMediumFold = intoSoft(kMediumScale =
+// 1e6), registered through optimaru::MediumFoldOf<TournamentSchedule>). The
+// medium component is `Level::Medium` at weight 1 in medium units; the
+// decomposed calculator keeps a separate medium accumulator and folds it with
+// that constant. Both unfairness values go through
+// ScoreCalculator::unfairnessFromAggregates, so an assembly of all four
+// reproduces the monolithic double bit-for-bit.
 //
 //   DecomposedCalculator calc;
-//   defaultConstraints()              // the whole default set
-//       .weight("...", 2)            // ... then only what differs
-//       .soft("...")
-//       .drop("...")
+//   defaultConstraints()                              // the default set
+//       .weight("confrontationCountImbalanceCost", 2) // ... then the changes
+//       .soft("teamUnavailabilityCost")
+//       .drop("assignmentCountImbalanceCost")
 //       .into(calc);
 //   solver.solve(schedule, calc);
 //
@@ -54,22 +71,49 @@ namespace ts
 // scratch than start from the defaults.
 //
 // The level and the weight of each component are DEFAULTS — assembly-time
-// metadata, not part of the cost. Override them per instance via the mutable
-// `isHard` / `weight` / `exponent`.
+// metadata, not part of the cost. Override them per instance through the
+// assembly's knob setters (`weight` / `hard` / `soft` / `exponent`) or the
+// validated `setWeight` / `setLevel` / `setExponent` of the component
+// (`component->setLevel(optimaru::Level::Soft)`). The medium component moved
+// to hard costs 1 hard per raw unit (rounded), moved to soft 1 soft per raw
+// unit (outside the fold); an explicit weight stays in medium units.
 //
 // Cost sign convention (see decomposed_score_calculator.hpp): positive =
 // penalty; the calculator negates into the score.
-//
-// Naming note: the component that scores the UnavailabilityPenalty facts is
-// called UnavailabilityPenaltyConstraint, because the domain fact it reads
-// already owns the plain name in this namespace. Its constraint name string
-// is the provider's "unavailabilityPenalty" like everywhere else.
 
 using DecomposedCalculator
     = optimaru::DecomposedScoreCalculator<TournamentSchedule>;
 using ConstraintAssembly = optimaru::ConstraintAssembly<TournamentSchedule>;
 using TsUnitConstraint = optimaru::UnitConstraint<TournamentSchedule>;
 using TsGlobalConstraint = optimaru::GlobalConstraint<TournamentSchedule>;
+
+// A component's kDefaultWeight as an exact integer, for the monolithic
+// calculators (score_calculator.cpp / incremental_calculator.cpp), which are
+// the default assembly computed by hand. Fails to compile if a default weight
+// stops being integral or if a component leaves the level the monolith sums
+// it into.
+template <typename Component, optimaru::Level kLevel>
+constexpr std::int64_t monolithicWeight()
+{
+    static_assert(Component::kDefaultLevel == kLevel,
+                  "the monolithic calculators sum this constraint into "
+                  "another level");
+    constexpr auto weight
+        = static_cast<std::int64_t>(Component::kDefaultWeight);
+    static_assert(weight == Component::kDefaultWeight,
+                  "the monolithic calculators assume integral default "
+                  "weights");
+    return weight;
+}
+template <typename Component>
+constexpr std::int64_t kHardWeight
+    = monolithicWeight<Component, optimaru::Level::Hard>();
+template <typename Component>
+constexpr std::int64_t kMediumWeight
+    = monolithicWeight<Component, optimaru::Level::Medium>();
+template <typename Component>
+constexpr std::int64_t kSoftWeight
+    = monolithicWeight<Component, optimaru::Level::Soft>();
 
 namespace detail
 {

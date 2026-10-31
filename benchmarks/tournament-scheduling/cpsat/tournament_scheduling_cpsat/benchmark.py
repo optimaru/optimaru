@@ -16,8 +16,9 @@ NAME = "tournament-scheduling"
 PACKAGE = "tournament_scheduling"
 CPSAT_EXACT = False
 CPSAT_CAVEAT = (
-    "unfairness is sqrt(ssd) rounded to 6 significant figures; the CP-SAT backend "
-    "minimises integral ssd, which orders solutions the same way except across a rounding tie"
+    "the two imbalance costs are sqrt(ssd) rounded to 6 significant figures; CP-SAT "
+    "minimises the integral surrogate scale * ssd instead (not raw-identical), so both "
+    "answers are rescored by the engine"
 )
 
 TEAM_NAMES = ["Maarten", "Geoffrey", "Lukas", "Chris", "Fred", "Radek", "Maciej"]

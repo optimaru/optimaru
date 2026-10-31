@@ -1,4 +1,26 @@
-"""Class-based CP-SAT plugins for tournament scheduling."""
+"""Class-based CP-SAT plugins for tournament scheduling.
+
+Each plugin subclasses the domain spec of the same name and only adds
+``build()``: its default level and weight come from the engine's
+``constraint_info()`` (cpsat-common reads the row), so the two solvers share
+one set of defaults.
+
+Raw-cost parity with the engine (``tournament_scheduling.constraint_costs``):
+
+- ``team_conflict_cost`` and ``team_unavailability_cost`` add exactly the
+  engine's raw cost to the objective (one term per same-day assignment pair of
+  a team, one per violated unavailability fact).
+- ``assignment_count_imbalance_cost`` and ``confrontation_count_imbalance_cost``
+  are NOT raw-identical. The engine's raw cost is the unfairness
+  ``round6(sqrt(ssd))`` with ``ssd = sum(load^2) - sum(load)^2 / n`` over the
+  ``n`` loaded items; CP-SAT has no square root, so the objective term is the
+  integral surrogate ``scale * ssd`` (rounded up to an integer where ``n`` does
+  not divide ``scale``), see `_add_unfairness_surrogate`. The confrontation
+  surrogate also counts a team pair once per shared day, where the engine
+  counts every same-day assignment pair (the two differ only while a team
+  plays twice on one day, i.e. while ``team_conflict_cost > 0``). Reported
+  scores are always rescored through the engine's ``constraint_costs()``.
+"""
 
 import math
 from dataclasses import dataclass, field
@@ -17,11 +39,16 @@ def _add_unfairness_surrogate(
     loads: list[Any],
     max_load: int,
 ) -> None:
-    """Minimize the variance over positive loads.
+    """Minimize the variance numerator over positive loads (a surrogate).
 
-    The reference LoadBalance ignores zero-load items and reports the square root
-    of the variance numerator.  The square root is monotone, so CP-SAT can
-    minimize an integer-scaled variance without changing the optimum.
+    The reference LoadBalance ignores zero-load items and reports
+    ``round6(sqrt(ssd))``, ``ssd = sum(load^2) - sum(load)^2 / n``. The square
+    root and the 6-significant-figure rounding are monotone, so for this term
+    ON ITS OWN the integer-scaled ``scale * ssd`` added here has the same
+    minimizers (up to near-ties the rounding merges). It is not the engine's
+    raw cost: its objective value is ``scale * ssd``, and next to other terms
+    on the same level, under a weight or summed with the other imbalance term,
+    the surrogate trades off differently than the square root would.
     """
     if not loads:
         return
@@ -97,10 +124,8 @@ class TournamentContext:
         return self._and_cache[key]
 
 
-class OneAssignmentPerDatePerTeam(
-    domain.OneAssignmentPerDatePerTeam, ConstraintPlugin[TournamentContext]
-):
-    default_level = "hard"
+class TeamConflictCost(domain.TeamConflictCost, ConstraintPlugin[TournamentContext]):
+    """One term per pair of a team's assignments on one day: the engine's raw cost."""
 
     def build(self, context: TournamentContext, objective: ObjectiveBuilder) -> None:
         for team in range(len(context.problem.teams)):
@@ -119,20 +144,20 @@ class OneAssignmentPerDatePerTeam(
                         )
 
 
-class UnavailabilityPenalty(
-    domain.UnavailabilityPenalty, ConstraintPlugin[TournamentContext]
+class TeamUnavailabilityCost(
+    domain.TeamUnavailabilityCost, ConstraintPlugin[TournamentContext]
 ):
-    default_level = "hard"
+    """One term per unavailability fact whose cell is occupied: the engine's raw cost."""
 
     def build(self, context: TournamentContext, objective: ObjectiveBuilder) -> None:
         for penalty in context.problem.unavailability_penalties:
             objective.add(self.name, context.cell[penalty.team, penalty.day], bound=1)
 
 
-class FairAssignmentCountPerTeam(
-    domain.FairAssignmentCountPerTeam, ConstraintPlugin[TournamentContext]
+class AssignmentCountImbalanceCost(
+    domain.AssignmentCountImbalanceCost, ConstraintPlugin[TournamentContext]
 ):
-    default_level = "medium"
+    """The scaled-variance surrogate of the per-team load unfairness (not raw-identical)."""
 
     def build(self, context: TournamentContext, objective: ObjectiveBuilder) -> None:
         assignment_count = len(context.problem.team_assignments)
@@ -148,10 +173,13 @@ class FairAssignmentCountPerTeam(
         )
 
 
-class EvenlyConfrontationCount(
-    domain.EvenlyConfrontationCount, ConstraintPlugin[TournamentContext]
+class ConfrontationCountImbalanceCost(
+    domain.ConfrontationCountImbalanceCost, ConstraintPlugin[TournamentContext]
 ):
-    default_level = "soft"
+    """The scaled-variance surrogate of the per-pair confrontation unfairness.
+
+    Not raw-identical: besides the surrogate, a pair confronts once per day both
+    teams play (the engine: once per same-day assignment pair)."""
 
     def build(self, context: TournamentContext, objective: ObjectiveBuilder) -> None:
         team_count = len(context.problem.teams)
@@ -175,11 +203,12 @@ class EvenlyConfrontationCount(
         _add_unfairness_surrogate(context, objective, self.name, loads, day_count)
 
 
+# Plugin order = list_constraints() order.
 REGISTRY = ConstraintRegistry(
     [
-        OneAssignmentPerDatePerTeam(),
-        UnavailabilityPenalty(),
-        FairAssignmentCountPerTeam(),
-        EvenlyConfrontationCount(),
+        TeamConflictCost(),
+        TeamUnavailabilityCost(),
+        AssignmentCountImbalanceCost(),
+        ConfrontationCountImbalanceCost(),
     ]
 )

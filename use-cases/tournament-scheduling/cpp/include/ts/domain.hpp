@@ -7,6 +7,7 @@
 
 #include "optimaru/api/domain/solution_descriptor.hpp"
 #include "optimaru/api/score/buildin/hard_soft_score.hpp"
+#include "optimaru/api/score/level.hpp"
 
 namespace ts
 {
@@ -21,16 +22,25 @@ namespace ts
 //   hard  = Java hard, unchanged (whole violation counts; 0 == feasible)
 //   soft  = -(medium_unfairness * kMediumScale + soft_unfairness)
 //
-// i.e. the medium level (fairAssignmentCountPerTeam) is folded into the
+// i.e. the medium level (assignmentCountImbalanceCost) is folded into the
 // engine's soft as an offset of kMediumScale = 1e6 per medium unit, keeping
 // the level priority: both unfairness values are BigDecimal-style decimals
 // rounded to 6 significant figures, and for this domain's instance sizes the
 // soft-level unfairness stays far below kMediumScale times the smallest
 // representable medium difference, so medium always dominates soft.
+//
+// The fold is declared ONCE, here: ScoreCalculator::combinedSoft packs the
+// monolithic totals with kMediumFold, and the MediumFoldOf<TournamentSchedule>
+// specialization at the end of this header hands the same constant to the
+// decomposed calculator, which keeps a separate medium accumulator. The
+// medium constraint's weight is therefore in medium units (default 1), never
+// 1e6.
 using Score = optimaru::HardSoftScore;
 
 // The medium -> soft folding offset (see the Score comment above).
 constexpr double kMediumScale = 1e6;
+constexpr optimaru::MediumFold kMediumFold
+    = optimaru::MediumFold::intoSoft(kMediumScale);
 
 // ---------------------------------------------------------------------------
 // Team  (problem fact, @PlanningId id == its index in TournamentSchedule::
@@ -54,9 +64,10 @@ struct Day
 // ---------------------------------------------------------------------------
 // UnavailabilityPenalty  (problem fact)
 // ---------------------------------------------------------------------------
-// "team cannot play on day": one hard point per fact whose (team, day) cell
-// holds at least one assignment (Java's forEach(UnavailabilityPenalty)
-// .ifExists(TeamAssignment) — per fact, not per assignment).
+// "team cannot play on day": one hard point of teamUnavailabilityCost per
+// fact whose (team, day) cell holds at least one assignment (Java's
+// forEach(UnavailabilityPenalty).ifExists(TeamAssignment) — per fact, not per
+// assignment).
 struct UnavailabilityPenalty
 {
     int team = 0;  // index into teams
@@ -68,8 +79,8 @@ struct UnavailabilityPenalty
 // ---------------------------------------------------------------------------
 // One match slot on a day; the solver assigns which team fills it. `team` is
 // the only planning variable (-1 == unassigned). `id` mirrors the Java
-// @PlanningId: it must be unique (constraint 1 counts unordered pairs, the
-// lessThan(getId) join of the Java original).
+// @PlanningId: it must be unique (teamConflictCost counts unordered pairs,
+// the lessThan(getId) join of the Java original).
 struct TeamAssignment
 {
     std::int64_t id = 0;
@@ -132,6 +143,16 @@ template <> struct optimaru::SolutionDescriptor<ts::TournamentSchedule>
     {
         return s.teamAssignments[assignmentIndex].pinned;
     }
+};
+
+// ---------------------------------------------------------------------------
+// Medium fold registration
+// ---------------------------------------------------------------------------
+// The decomposed calculator folds its medium accumulator with the domain's
+// kMediumFold (see the Score adapter above): engine soft = soft + medium * 1e6.
+template <> struct optimaru::MediumFoldOf<ts::TournamentSchedule>
+{
+    static constexpr optimaru::MediumFold value = ts::kMediumFold;
 };
 
 #endif  // TS_DOMAIN_HPP

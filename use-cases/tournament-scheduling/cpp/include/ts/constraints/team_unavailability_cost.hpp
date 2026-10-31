@@ -1,15 +1,17 @@
-#ifndef TS_CONSTRAINTS_UNAVAILABILITY_PENALTY_HPP
-#define TS_CONSTRAINTS_UNAVAILABILITY_PENALTY_HPP
+#ifndef TS_CONSTRAINTS_TEAM_UNAVAILABILITY_COST_HPP
+#define TS_CONSTRAINTS_TEAM_UNAVAILABILITY_COST_HPP
 
 #include "ts/constraints/common.hpp"
 
 namespace ts
 {
 
-// Hard (default, weight 1): unavailabilityPenalty — one point per
-// UnavailabilityPenalty FACT whose (team, day) cell holds at least one
-// assignment. Per fact, not per assignment: two facts for the same cell cost
-// two, one fact over a cell with three assignments still costs one (the Java
+// Hard, weight 1: teamUnavailabilityCost — a team playing on a day it is
+// unavailable. Raw cost per team = the number of its UnavailabilityPenalty
+// FACTS whose (team, day) cell holds at least one assignment, so 0 = the team
+// plays on none of its unavailable days. Per fact, not per assignment: two
+// facts for the same cell cost two, one fact over a cell with three
+// assignments still costs one (the Java
 // forEach(UnavailabilityPenalty).ifExists(TeamAssignment)).
 //
 // That "at least one" is a clamp, so the cost is not a sum of per-member
@@ -17,13 +19,13 @@ namespace ts
 // team in O(members + facts of that team). It only ever applies to teams that
 // actually carry a fact, and declares exactly that scope, so the calculator
 // skips it on every other team.
-//
-// Named ...Constraint because the domain fact it reads already owns the plain
-// name in this namespace (see common.hpp).
-struct UnavailabilityPenaltyConstraint final : TsUnitConstraint
+struct TeamUnavailabilityCost final : TsUnitConstraint
 {
-    explicit UnavailabilityPenaltyConstraint(double weight = 1.0)
-        : TsUnitConstraint("unavailabilityPenalty", weight, /*hard=*/true)
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
+
+    explicit TeamUnavailabilityCost(double weight = kDefaultWeight)
+        : TsUnitConstraint("teamUnavailabilityCost", weight, kDefaultLevel)
     {
     }
     void onReset(const TournamentSchedule &schedule) override
@@ -71,4 +73,4 @@ private:
 
 }  // namespace ts
 
-#endif  // TS_CONSTRAINTS_UNAVAILABILITY_PENALTY_HPP
+#endif  // TS_CONSTRAINTS_TEAM_UNAVAILABILITY_COST_HPP

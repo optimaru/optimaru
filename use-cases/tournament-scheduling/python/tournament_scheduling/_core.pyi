@@ -3,11 +3,15 @@
 The compiled module wraps the C++ domain in `use-cases/tournament-scheduling/cpp`,
 which imports the generic engine in `include/optimaru`.
 
-Constraints of the Java quickstart (HardMediumSoftBigDecimalScore) and the score mapping:
-  hard 1. oneAssignmentPerDatePerTeam  -1 per pair of same-team assignments on one day
-  hard 2. unavailabilityPenalty        -1 when a (team, day) unavailability fact has an assignment
-  med  3. fairAssignmentCountPerTeam   LoadBalance unfairness of assignment counts per team
-  soft 4. evenlyConfrontationCount     LoadBalance unfairness of head-to-head counts per team pair
+Constraints of the Java quickstart (HardMediumSoftBigDecimalScore) and the score mapping
+(registry names; default weights per raw unit, all 1):
+  hard 1. team_conflict_cost                  -1 per pair of same-team assignments on one day
+  hard 2. team_unavailability_cost            -1 when a (team, day) unavailability fact has an
+                                              assignment
+  med  3. assignment_count_imbalance_cost     LoadBalance unfairness of assignment counts per team
+                                              (-1 medium per raw unit)
+  soft 4. confrontation_count_imbalance_cost  LoadBalance unfairness of head-to-head counts per
+                                              team pair
 
 The engine score is HardSoftScore(hard int, soft float), so medium is folded into
 soft: ``soft = -(medium unfairness * MEDIUM_SCALE + soft unfairness)``
@@ -17,7 +21,7 @@ to 6 significant digits (HALF_EVEN).
 """
 
 from collections.abc import Callable, Iterable, Sequence
-from typing import Any
+from typing import Any, Literal, NamedTuple
 
 MEDIUM_SCALE: float
 
@@ -42,8 +46,8 @@ class Day:
     date_index: int
 
 class UnavailabilityPenalty:
-    """Problem fact: (team, day) unavailable — one hard point when the cell has at
-    least one assignment (one point per fact; Java's forEach + ifExists)."""
+    """Problem fact: (team, day) unavailable — one hard point of team_unavailability_cost
+    when the cell has at least one assignment (one point per fact; Java's forEach + ifExists)."""
     def __init__(self, team: int, day: int) -> None: ...
     team: int
     day: int
@@ -153,11 +157,33 @@ class Solver:
         keeps the default set."""
 
 def list_constraints() -> list[str]:
-    """Constraint names scored by this domain (default assembly order, snake_case).
+    """Constraint names scored by this domain (default assembly order, snake_case:
+    the two per-team constraints, then the two imbalance constraints).
     The same names tournament_scheduling.constraints uses."""
 
-def constraint_costs(solution, /) -> dict[str, dict]:
+def constraint_costs(schedule: TournamentSchedule, /) -> dict[str, dict[str, Any]]:
     """Per-constraint, per-unit **raw** costs — before weight/exponent/level rounding.
-    `tournament_scheduling.constraints.score()` takes these and produces a score.
-    {name: {"costs": [...], "weight": w, "exponent": e,
-            "hard": bool, "global": bool}}."""
+    A unit is a team; the two imbalance (global) constraints report one cost.
+    `tournament_scheduling.constraints.score()` takes these and produces a score:
+    {name: {"costs": [...], "weight": float, "exponent": float, "hard": bool,
+    "global": bool, "level": "hard" | "medium" | "soft", "reward": bool,
+    "level_flippable": bool, "name": str, "label": str,
+    "medium_fold": {"kind": "into_soft", "unit": 1e6}}}. The medium fold belongs
+    to the domain, so EVERY entry carries it."""
+
+class ConstraintInfo(NamedTuple):
+    """One constraint-catalog row, read off the C++ default assembly."""
+
+    name: str
+    default_level: Literal["hard", "medium", "soft"]
+    default_weight: float
+    level_flippable: bool
+    reward: bool
+    default_enabled: bool
+
+def constraint_info() -> list[ConstraintInfo]:
+    """The constraint catalog, in list_constraints() order: the default level and
+    weight of each constraint (team_conflict_cost and team_unavailability_cost hard,
+    assignment_count_imbalance_cost medium in medium units,
+    confrontation_count_imbalance_cost soft; every default weight 1). All flippable,
+    none a reward, all enabled by default."""
