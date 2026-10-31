@@ -150,9 +150,17 @@ public:
         }
         else
         {
+            // A bound request only moves along its own route, which is also
+            // where a repair has to put it back.
+            const int required = delivery.requiredVehicleIndex < vehicleCount
+                                     ? delivery.requiredVehicleIndex
+                                     : -1;
             if (ctx.nearby.enabled())
             {
-                pickupAnchor = routedNeighbor(ctx, plan, pickup, pool, rng);
+                pickupAnchor
+                    = required >= 0
+                          ? routedNeighborIn(ctx, plan, pickup, required, rng)
+                          : routedNeighbor(ctx, plan, pickup, pool, rng);
                 if (pickupAnchor >= 0)
                 {
                     target = ctx.elementList[pickupAnchor];
@@ -165,8 +173,11 @@ public:
             }
             if (target < 0)
             {
-                target = static_cast<int>(
-                    rng() % static_cast<std::uint64_t>(vehicleCount));
+                target = required >= 0
+                             ? required
+                             : static_cast<int>(
+                                   rng()
+                                   % static_cast<std::uint64_t>(vehicleCount));
             }
         }
 
@@ -314,6 +325,10 @@ private:
         for (std::size_t vehicleIndex = 0; vehicleIndex < plan.vehicles.size();
              ++vehicleIndex)
         {
+            if (delivery.requiredVehicleIndex >= 0
+                && delivery.requiredVehicleIndex
+                       != static_cast<int>(vehicleIndex))
+                continue;
             const std::vector<int> &route
                 = plan.vehicles[vehicleIndex].nodeIndices;
             const Seconds before
@@ -485,6 +500,13 @@ void constructPairs(PdpRoutePlan &plan, bool decreasing)
                              return left.demand > right.demand;
                          });
     }
+    // A bound request has one vehicle to go to, so it goes first: a free
+    // request placed before it could take the only slot that fits.
+    std::stable_partition(
+        order.begin(),
+        order.end(),
+        [&plan](int deliveryIndex)
+        { return plan.deliveries[deliveryIndex].requiredVehicleIndex >= 0; });
 
     for (int deliveryIndex : order)
     {

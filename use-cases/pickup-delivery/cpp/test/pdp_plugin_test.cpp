@@ -9,6 +9,7 @@
 //   (d) weight / isHard overrides
 //   (e) constraintTotals() explains exactly the reported score
 //   (f) a 2-second solve(plan, calculator) under FULL_ASSERT
+//   (g) the pair move takes a misplaced bound request to its vehicle
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -300,6 +301,47 @@ void verifyFullAssertSolve()
     std::printf("\n");
 }
 
+// -------------------------------------------------------------------------
+// (g) The pair move takes a misplaced bound request straight to its vehicle.
+// -------------------------------------------------------------------------
+void verifyRepairHonoursRequiredVehicle()
+{
+    std::printf("== (g) Repair and requiredVehicle ==\n");
+    // A single request, so no stop is routed near it and the pair move falls
+    // back on picking a vehicle. With only that move and a handful of steps, a
+    // pick among all the vehicles would almost never find the right one.
+    const int vehicleCount = 40;
+    int repaired = 0;
+    const int seeds = 5;
+    for (int seed = 0; seed < seeds; ++seed)
+    {
+        PdpRoutePlan plan = buildRandomInstance(1, vehicleCount, /*seed=*/21);
+        plan.deliveries[0].requiredVehicleIndex = vehicleCount - 1;
+        plan.vehicles[0].nodeIndices = {plan.deliveries[0].pickupNodeIndex,
+                                        plan.deliveries[0].dropoffNodeIndex};
+
+        Solver::Config config;
+        config.stepCountLimit = 8;
+        config.spentLimit = std::chrono::minutes(1);  // safety net only
+        config.randomSeed = static_cast<std::uint64_t>(seed);
+        config.pairAssignmentProbability = 0.0;
+        config.relocateMoveWeight = 0.0;
+        config.listSwapMoveWeight = 0.0;
+        config.twoOptMoveWeight = 0.0;
+        config.orOptMoveWeight = 0.0;
+        config.tailSwapMoveWeight = 0.0;
+        config.ruinRecreate = false;
+
+        DecomposedCalculator calculator;
+        addDefaultConstraints(calculator);
+        Solver(config).solve(plan, calculator);
+        if (plan.vehicles[vehicleCount - 1].nodeIndices.size() == 2)
+            ++repaired;
+    }
+    check(repaired == seeds, "a misplaced bound request reaches its vehicle");
+    std::printf("\n");
+}
+
 }  // namespace
 
 int main()
@@ -310,6 +352,7 @@ int main()
     verifyOverrides();
     verifyConstraintTotals();
     verifyFullAssertSolve();
+    verifyRepairHonoursRequiredVehicle();
 
     if (failures == 0)
     {
