@@ -10,8 +10,9 @@ namespace cs
 // overlapping) a talk it lists as a prerequisite, weighed by their combined
 // duration.
 // Raw cost (one global total) = the sum of the combined duration of both talks
-// for each prerequisite that does not end before its dependent talk starts; 0
-// = no violation (every prerequisite ends before the talk that needs it).
+// for each prerequisite that ends after its dependent talk starts; 0 = no
+// violation (every prerequisite ends by the time the talk that needs it
+// starts).
 struct TalkPrerequisiteTalksCost final : BreakdownConstraint
 {
     static constexpr double kDefaultWeight = 10.0;

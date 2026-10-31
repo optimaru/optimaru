@@ -231,7 +231,7 @@ void verifyConstraints()
             "speakerConflictCost score", b.toScore(), -(10 * 120 + 120), 0);
     }
     // h5: talkPrerequisiteTalksCost — combined duration when the prerequisite
-    // does not end before the dependent starts.
+    // ends after the dependent starts.
     {
         ConferenceSchedule c = makeBase();
         int a = addTalk(c, "A", {0}, 3, 0);  // prerequisite at s3 (630-690)

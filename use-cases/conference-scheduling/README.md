@@ -38,7 +38,7 @@ total per schedule), scored by default and weighed in minutes.
 | `room_conflict_cost` | `RoomConflictCost` | hard | 1'000 | sum of overlapping minutes for each pair of talks in the same room |
 | `speaker_unavailability_cost` | `SpeakerUnavailabilityCost` | hard | 100 | sum of the timeslot's duration for each unavailable speaker of each talk (speaker-minutes) |
 | `speaker_conflict_cost` | `SpeakerConflictCost` | hard | 10 | sum of shared speakers x overlapping minutes for each pair of overlapping talks |
-| `talk_prerequisite_talks_cost` | `TalkPrerequisiteTalksCost` | hard | 10 | sum of the combined duration of both talks for each prerequisite that does not end before its dependent talk starts |
+| `talk_prerequisite_talks_cost` | `TalkPrerequisiteTalksCost` | hard | 10 | sum of the combined duration of both talks for each prerequisite that ends after its dependent talk starts |
 | `talk_mutually_exclusive_talks_tags_cost` | `TalkMutuallyExclusiveTalksTagsCost` | hard | 1 | sum of shared mutually-exclusive tags x overlapping minutes for each pair of overlapping talks |
 | `consecutive_talks_pause_cost` | `ConsecutiveTalksPauseCost` | hard | 1 | sum of the combined duration of both talks for each pair sharing a speaker without the minimum pause between them |
 | `crowd_control_risk_cost` | `CrowdControlRiskCost` | hard | 1 | sum of the timeslot's duration for each risky talk (crowd_control_risk > 0) in a timeslot holding three or more risky talks |
@@ -54,7 +54,7 @@ total per schedule), scored by default and weighed in minutes.
 | `theme_track_room_change_cost` | `ThemeTrackRoomChangeCost` | soft | 10 | sum of shared theme tracks x the combined duration for each same-day pair of talks in different rooms |
 | `sector_conflict_cost` | `SectorConflictCost` | soft | 10 | sum of shared sectors x overlapping minutes for each pair of overlapping talks |
 | `audience_type_theme_track_conflict_cost` | `AudienceTypeThemeTrackConflictCost` | soft | 1 | sum of shared theme tracks x shared audience types x overlapping minutes for each pair of overlapping talks |
-| `content_audience_level_flow_violation_cost` | `ContentAudienceLevelFlowViolationCost` | soft | 10 | sum of shared content tags x the combined duration for each pair where the lower-level talk does not end before the higher-level one starts |
+| `content_audience_level_flow_violation_cost` | `ContentAudienceLevelFlowViolationCost` | soft | 10 | sum of shared content tags x the combined duration for each pair where the lower-level talk ends after the higher-level talk starts |
 | `content_conflict_cost` | `ContentConflictCost` | soft | 100 | sum of shared content tags x overlapping minutes for each pair of overlapping talks |
 | `different_day_talks_cost` | `DifferentDayTalksCost` | soft | 10 | sum of (shared content tags + shared theme tracks) x the combined duration for each related pair on different days |
 | `popular_talks_room_size_cost` | `PopularTalksRoomSizeCost` | soft | 10 | sum of the combined duration for each pair where the talk with fewer favorites has the larger room |

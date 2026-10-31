@@ -534,7 +534,7 @@ class ThemeTrackRoomChangeCost(
                                     continue
                                 rooms_both = context.both(
                                     (
-                                        "stability",
+                                        "room_change",
                                         left,
                                         right,
                                         left_slot,

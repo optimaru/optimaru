@@ -144,8 +144,9 @@ class TalkTypeIncompatibilityCost(Constraint):
         "type."
     )
     description_ko = (
-        "발표 유형을 받지 않는 시간대에 놓인 발표마다 그 시간대의 길이(분, 최소 1)를 더하고, 방이 그 유형을 받지 "
-        "않으면 한 번 더 더합니다. 0이면 모든 발표가 자기 유형을 받는 시간대와 방에 있습니다."
+        "발표 유형을 허용하지 않는 시간대에 배정된 발표마다 그 시간대의 길이(분, 최소 1)를 더하고, 배정된 방이 그 "
+        "유형을 허용하지 않을 때도 같은 값을 더합니다. 0이면 모든 발표가 자기 유형을 허용하는 시간대와 방에 배정되어 "
+        "있습니다."
     )
 
 
@@ -160,8 +161,8 @@ class RoomUnavailabilityCost(Constraint):
         "means no talk uses an unavailable room."
     )
     description_ko = (
-        "사용할 수 없는 시간대의 방에 놓인 발표마다 그 시간대의 길이(분)를 더합니다. 0이면 사용할 수 없는 방을 쓰는 "
-        "발표가 없습니다."
+        "그 시간대에 사용할 수 없는 방에 배정된 발표마다 시간대의 길이(분)를 더합니다. 0이면 사용할 수 없는 방에 "
+        "배정된 발표가 없습니다."
     )
 
 
@@ -221,14 +222,14 @@ class TalkPrerequisiteTalksCost(Constraint):
 
     name = "talk_prerequisite_talks_cost"
     label_en = "Prerequisite talks"
-    label_ko = "선수 발표 순서"
+    label_ko = "선행 발표 순서"
     description_en = (
-        "For each prerequisite that does not end before the talk that requires it starts, the combined duration of "
-        "both talks in minutes. 0 means every prerequisite comes first."
+        "For each prerequisite that ends after the dependent talk starts, the combined duration of both talks in "
+        "minutes. 0 means every prerequisite ends by the time the talk that requires it starts."
     )
     description_ko = (
-        "선수 발표가 그것을 필요로 하는 발표의 시작 전에 끝나지 않을 때마다 두 발표의 길이(분)를 합쳐 더합니다. 0이면 "
-        "모든 선수 발표가 먼저 열립니다."
+        "선행 발표가 뒤따를 발표의 시작 시각보다 늦게 끝날 때마다 두 발표의 길이(분)를 합쳐 더합니다. 0이면 모든 "
+        "선행 발표가 뒤따를 발표의 시작 시각까지 끝납니다."
     )
 
 
@@ -255,14 +256,14 @@ class ConsecutiveTalksPauseCost(Constraint):
 
     name = "consecutive_talks_pause_cost"
     label_en = "Pause between a speaker's talks"
-    label_ko = "발표자 연속 발표 휴식"
+    label_ko = "발표자 발표 간 휴식"
     description_en = (
         "For every pair of talks sharing a speaker without the minimum pause between them (overlapping, or too close "
         "on the same day), the combined duration of both talks in minutes. 0 means every speaker gets the pause."
     )
     description_ko = (
-        "발표자를 공유하는 두 발표 사이에 최소 휴식 시간이 없을 때마다(시간이 겹치거나 같은 날 너무 붙어 있을 때) 두 "
-        "발표의 길이(분)를 합쳐 더합니다. 0이면 모든 발표자가 휴식 시간을 보장받습니다."
+        "공통 발표자가 있는 두 발표 사이에 최소 휴식 시간이 없을 때마다(시간이 겹치거나 같은 날 너무 가까울 때) 두 "
+        "발표의 길이(분)를 합쳐 더합니다. 0이면 모든 발표자가 발표 사이에 최소 휴식 시간을 가집니다."
     )
 
 
@@ -313,7 +314,7 @@ class SpeakerProhibitedTimeslotTagsCost(Constraint):
     )
     description_ko = (
         "발표마다 각 발표자의 금지 시간대 태그 가운데 배정된 시간대에 있는 태그 수에 시간대 길이(분)를 곱해 더합니다. "
-        "0이면 금지 태그가 붙은 시간대에 놓인 발표자가 없습니다."
+        "0이면 어느 발표자도 자신이 금지한 태그가 붙은 시간대에 발표하지 않습니다."
     )
 
 
@@ -345,7 +346,7 @@ class TalkProhibitedTimeslotTagsCost(Constraint):
     )
     description_ko = (
         "발표마다 그 발표의 금지 시간대 태그 가운데 배정된 시간대에 있는 태그 수에 시간대 길이(분)를 곱해 더합니다. "
-        "0이면 금지 태그가 붙은 시간대에 놓인 발표가 없습니다."
+        "0이면 금지 태그가 붙은 시간대에 배정된 발표가 없습니다."
     )
 
 
@@ -377,7 +378,7 @@ class SpeakerProhibitedRoomTagsCost(Constraint):
     )
     description_ko = (
         "발표마다 각 발표자의 금지 방 태그 가운데 배정된 방에 있는 태그 수에 시간대 길이(분)를 곱해 더합니다. 0이면 "
-        "금지 태그가 붙은 방에 놓인 발표자가 없습니다."
+        "어느 발표자도 자신이 금지한 태그가 붙은 방에서 발표하지 않습니다."
     )
 
 
@@ -409,7 +410,7 @@ class TalkProhibitedRoomTagsCost(Constraint):
     )
     description_ko = (
         "발표마다 그 발표의 금지 방 태그 가운데 배정된 방에 있는 태그 수에 시간대 길이(분)를 곱해 더합니다. 0이면 금지 "
-        "태그가 붙은 방에 놓인 발표가 없습니다."
+        "태그가 붙은 방에 배정된 발표가 없습니다."
     )
 
 
@@ -485,15 +486,15 @@ class ContentAudienceLevelFlowViolationCost(Constraint):
     content — the audience cannot follow from easy to hard. Default: soft, weight 10."""
 
     name = "content_audience_level_flow_violation_cost"
-    label_en = "Audience level flow"
+    label_en = "Audience level flow violation"
     label_ko = "청중 수준 흐름 위반"
     description_en = (
-        "For every pair of talks sharing content where the lower-level talk does not end before the higher-level one "
-        "starts, the shared content tags times their combined duration in minutes. 0 means every content goes from the "
-        "lower audience level to the higher one."
+        "For every pair of talks sharing content where the lower-level talk ends after the higher-level talk starts, "
+        "the shared content tags times their combined duration in minutes. 0 means every content goes from the lower "
+        "audience level to the higher one."
     )
     description_ko = (
-        "같은 내용을 다루는 발표 쌍에서 낮은 수준의 발표가 높은 수준의 발표 시작 전에 끝나지 않을 때마다 공통 내용 "
+        "같은 내용을 다루는 발표 쌍에서 낮은 수준의 발표가 높은 수준의 발표 시작 시각보다 늦게 끝날 때마다 공통 내용 "
         "태그 수에 두 발표 길이(분)의 합을 곱해 더합니다. 0이면 모든 내용이 낮은 수준에서 높은 수준 순으로 진행됩니다."
     )
 
@@ -521,7 +522,7 @@ class DifferentDayTalksCost(Constraint):
 
     name = "different_day_talks_cost"
     label_en = "Related talks on different days"
-    label_ko = "관련 발표의 날짜 분산"
+    label_ko = "다른 날에 열리는 관련 발표"
     description_en = (
         "For every pair of talks on different days, the shared content tags plus the shared theme tracks, times their "
         "combined duration in minutes. 0 means related talks are on the same day."
@@ -538,7 +539,7 @@ class PopularTalksRoomSizeCost(Constraint):
 
     name = "popular_talks_room_size_cost"
     label_en = "Popular talks in small rooms"
-    label_ko = "인기 발표의 방 크기"
+    label_ko = "작은 방에 배정된 인기 발표"
     description_en = (
         "For every pair of talks where the talk with fewer favorites has the larger room, their combined duration in "
         "minutes. 0 means room sizes follow popularity."
@@ -579,7 +580,7 @@ class SpeakerUndesiredTimeslotTagsCost(Constraint):
     )
     description_ko = (
         "발표마다 각 발표자의 기피 시간대 태그 가운데 배정된 시간대에 있는 태그 수에 시간대 길이(분)를 곱해 더합니다. "
-        "0이면 피하고 싶은 태그가 붙은 시간대에 놓인 발표자가 없습니다."
+        "0이면 어느 발표자도 피하고 싶은 태그가 붙은 시간대에 발표하지 않습니다."
     )
 
 
@@ -612,7 +613,7 @@ class TalkUndesiredTimeslotTagsCost(Constraint):
     )
     description_ko = (
         "발표마다 그 발표의 기피 시간대 태그 가운데 배정된 시간대에 있는 태그 수에 시간대 길이(분)를 곱해 더합니다. "
-        "0이면 피하고 싶은 태그가 붙은 시간대에 놓인 발표가 없습니다."
+        "0이면 피하고 싶은 태그가 붙은 시간대에 배정된 발표가 없습니다."
     )
 
 
@@ -646,7 +647,7 @@ class SpeakerUndesiredRoomTagsCost(Constraint):
     )
     description_ko = (
         "발표마다 각 발표자의 기피 방 태그 가운데 배정된 방에 있는 태그 수에 시간대 길이(분)를 곱해 더합니다. 0이면 "
-        "피하고 싶은 태그가 붙은 방에 놓인 발표자가 없습니다."
+        "어느 발표자도 피하고 싶은 태그가 붙은 방에서 발표하지 않습니다."
     )
 
 
@@ -679,7 +680,7 @@ class TalkUndesiredRoomTagsCost(Constraint):
     )
     description_ko = (
         "발표마다 그 발표의 기피 방 태그 가운데 배정된 방에 있는 태그 수에 시간대 길이(분)를 곱해 더합니다. 0이면 "
-        "피하고 싶은 태그가 붙은 방에 놓인 발표가 없습니다."
+        "피하고 싶은 태그가 붙은 방에 배정된 발표가 없습니다."
     )
 
 
@@ -690,14 +691,14 @@ class SpeakerMakespanCost(Constraint):
 
     name = "speaker_makespan_cost"
     label_en = "Speaker makespan"
-    label_ko = "발표자 일정 기간"
+    label_ko = "발표자 참석 기간"
     description_en = (
         "For each speaker whose talks span more than two consecutive days, (last day - first day - 1) times 480 "
         "minutes. 0 means every speaker's talks fit within two consecutive days."
     )
     description_ko = (
-        "발표가 연속된 이틀을 넘겨 퍼진 발표자마다 (마지막 날 - 첫날 - 1) × 480분을 더합니다. 0이면 모든 발표자의 "
-        "발표가 연속된 이틀 안에 있습니다."
+        "발표 일정이 연속된 이틀을 넘기는 발표자마다 (마지막 날 - 첫날 - 1) × 480분을 더합니다. 0이면 모든 발표자의 "
+        "발표가 연속된 이틀 안에 모여 있습니다."
     )
 
 

@@ -481,7 +481,7 @@ ScoreCalculator::breakdownOfPrepared(const ConferenceSchedule &schedule)
             }
 
             // h5: talkPrerequisiteTalksCost (both orders; x in y.prerequisites
-            // means x must end before y starts).
+            // means x must end by the time y starts).
             if (std::binary_search(schedule.talkPrereqSorted[j].begin(),
                                    schedule.talkPrereqSorted[j].end(),
                                    i)

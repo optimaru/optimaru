@@ -10,9 +10,9 @@ namespace cs
 // scheduled after (or overlapping) an advanced talk on the same content, so
 // the audience cannot follow the level progression.
 // Raw cost (one global total) = the sum of shared content tags x the combined
-// duration for each pair where the lower-level talk does not end before the
-// higher-level one starts; 0 = no violation (every content goes from the lower
-// audience level to the higher one).
+// duration for each pair where the lower-level talk ends after the
+// higher-level talk starts; 0 = no violation (every content goes from the
+// lower audience level to the higher one).
 struct ContentAudienceLevelFlowViolationCost final : BreakdownConstraint
 {
     static constexpr double kDefaultWeight = 10.0;
