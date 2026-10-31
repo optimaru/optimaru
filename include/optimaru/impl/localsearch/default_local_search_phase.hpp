@@ -86,6 +86,11 @@ public:
             if (Descriptor::entityCount(solution) == 0 || Descriptor::valueCount(solution) == 0) {
                 return director.calculateScore();
             }
+            if (allEntitiesPinned(solution)) {
+                const HardSoftScore score = director.calculateScore();
+                if (config_.onNewBest) config_.onNewBest(0, score);
+                return score;
+            }
         } else {
             if (Descriptor::listCount(solution) == 0 || countListElements(solution) == 0) {
                 return director.calculateScore();
@@ -478,6 +483,15 @@ private:
         int entities[2] = {0, 0};
         int entityCount = 0;
     };
+
+    // With nothing movable no move, built-in or custom, has a legal target, so
+    // run() stops here rather than have every selection handle that case.
+    static bool allEntitiesPinned(const Solution& sol) {
+        const int n = Descriptor::entityCount(sol);
+        for (int e = 0; e < n; ++e)
+            if (!entityPinned<Descriptor>(sol, e)) return false;
+        return true;
+    }
 
     AppliedMove applyBasicMove(ScoreDirector<Solution>& director, std::mt19937_64& rng) {
         Solution& solution = director.workingSolution();

@@ -90,6 +90,7 @@ public:
         static_assert(Descriptor::kind != VariableKind::CHAINED,
                       "CHAINED solutions solve through the "
                       "ChainedIncrementalScoreCalculator overload");
+        requirePinnedValues<Descriptor>(solution);
         ScoreDirector<Solution> director(solution, calculator, config_.environmentMode,
                                          variableListeners_.empty() ? nullptr
                                                                     : &variableListeners_);
@@ -138,6 +139,7 @@ public:
     // variables (their listeners would be missing in the threads).
     template <typename CalculatorFactory>
     HardSoftScore solveMultiStart(Solution& solution, CalculatorFactory&& calculatorFactory) {
+        requirePinnedValues<Descriptor>(solution);
         const int starts = std::max(1, config_.multiStartCount);
         if (starts == 1) {
             auto calculator = calculatorFactory();

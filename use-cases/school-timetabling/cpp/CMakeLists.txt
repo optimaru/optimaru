@@ -60,3 +60,8 @@ target_compile_options(canonical_plugin_test PRIVATE -Wall -Wextra)
 add_executable(st_quality_bench bench/st_quality_bench.cpp)
 target_link_libraries(st_quality_bench PRIVATE st_core)
 target_compile_options(st_quality_bench PRIVATE -Wall -Wextra)
+
+enable_testing()
+add_test(NAME st_test COMMAND st_test)
+add_test(NAME canonical_test COMMAND canonical_test)
+add_test(NAME canonical_plugin_test COMMAND canonical_plugin_test)

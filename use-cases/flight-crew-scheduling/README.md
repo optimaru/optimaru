@@ -59,7 +59,7 @@ seats, ~50 crew members) and reaches feasible (hard 0) within 10 s.
 - The demo data uses the same generation logic and scale as Java, but the RNG differs
   (std::mt19937_64 vs java.util.Random), so the instances are not byte-identical.
 - `pinned` is an extension of this port (not in the original quickstart; the same pattern
-  as the school-timetabling port).
+  as the es/st ports).
 
 ## Usage
 

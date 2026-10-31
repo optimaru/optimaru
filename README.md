@@ -33,7 +33,7 @@ An unchanged version publishes nothing.
 ```
 include/optimaru/     the engine (header-only, one header per class)
 test/                 engine tests
-use-cases/<slug>/     21 problems built on the engine: C++ domain + solver
+use-cases/<slug>/     22 problems built on the engine: C++ domain + solver
                       and a pybind11 package (or a small pure-Python model)
 benchmarks/<slug>/    the same problems against OR-Tools (CP-SAT, or the
                       Routing solver for VRP);
@@ -203,15 +203,15 @@ For a complete, production-shaped example see
 
 ## Use cases
 
-[`use-cases/README.md`](use-cases/README.md) lists all 21 use cases and
+[`use-cases/README.md`](use-cases/README.md) lists all 22 use cases and
 explains how to extend one — adding a move, changing the construction
 heuristic, adding a hard or soft cost. Each use case's README has a short
 usage example and the same guide with its own file names.
 
-Scheduling: bed allocation, conference, flight crew, food packaging,
-maintenance, meeting, project-job (RCPSP), school timetabling, semiconductor
-fab, sports league, task assigning, tournament. Routing: vehicle routing
-(CVRPTW), pickup & delivery (PDPTW), order picking. Assignment and packing:
+Scheduling: bed allocation, conference, employee shifts, flight crew, food
+packaging, maintenance, meeting, project-job (RCPSP), school timetabling,
+semiconductor fab, sports league, task assigning, tournament. Routing:
+vehicle routing (CVRPTW), pickup & delivery (PDPTW), order picking. Assignment and packing:
 facility location, bin packing, knapsack, quadratic assignment, max-cut,
 assembly-line balancing.
 

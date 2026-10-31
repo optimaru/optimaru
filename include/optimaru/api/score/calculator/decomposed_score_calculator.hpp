@@ -797,8 +797,8 @@ public:
     }
 
     // Units whose weighted hard cost is currently > 0, as an unordered list —
-    // fed to violation-guided move selection (school-timetabling's
-    // moves/hot_source.hpp draws from it). O(1) maintenance per touched unit.
+    // the generic analog of the hand-written calculator's penalizedEmployees(),
+    // for violation-guided move selection. O(1) maintenance per touched unit.
     const std::vector<int>& penalizedUnits() const { return penalized_; }
 
 private:

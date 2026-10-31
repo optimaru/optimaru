@@ -164,12 +164,11 @@ struct LocalSearchConfig {
     //
     // What the right weight is depends entirely on how big that neighbourhood
     // is, and for BASIC that is the size of the VALUE RANGE — one sweep costs
-    // ~2 * valueCount score evaluations against an ordinary step's one. With a
-    // 40-value range (an employee-rostering domain) a percent-scale weight
-    // spends a sensible slice of the budget and pays for itself; with a 40x25
-    // slot x room grid (school-timetabling) the same weight spends over 90% of
-    // the budget on descent and starves the move mix. Weight by the value
-    // range, and measure.
+    // ~2 * valueCount score evaluations against an ordinary step's one. With 40
+    // employees (employee-scheduling) a percent-scale weight spends a sensible
+    // slice of the budget and pays for itself; with a 40x25 slot x room grid
+    // (school-timetabling) the same weight spends over 90% of the budget on
+    // descent and starves the move mix. Weight by the value range, and measure.
     double descentWeight = 0.0;
     // Give up on a neighbourhood after this many improving passes, so one
     // application cannot run away on a large pair.

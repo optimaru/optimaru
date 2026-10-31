@@ -55,3 +55,27 @@ def test_solve_config_to_core():
 
     with pytest.raises(ValueError):
         SolveConfig(ruin_recreate_min_ruin_fraction=0.5, ruin_recreate_max_ruin_fraction=0.1)
+
+
+def _dump_with_round(value):
+    data = LeagueScheduleModel.from_core(small_schedule()).model_dump()
+    data["matches"][0]["round"] = value
+    return data
+
+
+@pytest.mark.parametrize("value", [-2, 2, 5, 99999999])
+def test_a_round_out_of_range_is_refused_before_the_engine(value):
+    with pytest.raises(ValueError, match=rf"match '1-2': round {value} is out of range -1\.\.1"):
+        LeagueScheduleModel.model_validate(_dump_with_round(value))
+
+
+@pytest.mark.parametrize("value", [-1, 0, 1])
+def test_every_round_in_range_is_accepted(value):
+    assert LeagueScheduleModel.model_validate(_dump_with_round(value)).to_core().matches[0].round == value
+
+
+def test_a_round_edited_after_validation_is_refused_by_to_core():
+    model = LeagueScheduleModel.from_core(small_schedule())
+    model.matches[0].round = 99999999
+    with pytest.raises(ValueError, match="out of range"):
+        model.to_core()

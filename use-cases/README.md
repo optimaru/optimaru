@@ -11,6 +11,7 @@ CP-SAT / Routing) never live here — they are in
 | [bed-allocation](bed-allocation) | C++ engine | `bed_allocation` |
 | [bin-packing](bin-packing) | pure Python | `bin_packing` |
 | [conference-scheduling](conference-scheduling) | C++ engine | `conference_scheduling` |
+| [employee-scheduling](employee-scheduling) | C++ engine | `es_scheduling` |
 | [facility-location](facility-location) | C++ engine | `facility_location` |
 | [flight-crew-scheduling](flight-crew-scheduling) | C++ engine | `flight_crew` |
 | [food-packaging](food-packaging) | C++ engine | `food_packaging` |
@@ -83,8 +84,9 @@ The contract is the same everywhere:
 
 - A complete solution skips construction: the search starts exactly from it.
 - A partial solution keeps what it gives, and only what it leaves out is constructed.
-- A solve's result is accepted back, even a hard-infeasible one. The exception is
-  pickup-delivery, which refuses a route with a broken pickup and dropoff pair.
+- A solve's result is accepted back, even a hard-infeasible one. The exceptions are
+  pickup-delivery, which refuses a route with a broken pickup and dropoff pair, and
+  school timetabling, which refuses a course placed twice at one time.
 - Entities are matched by id, never by position. Unknown ids and out-of-range values
   raise `ValueError`.
 - `with_initial_solution` returns a new problem and leaves its input untouched.

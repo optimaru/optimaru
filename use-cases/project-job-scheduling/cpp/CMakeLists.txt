@@ -37,3 +37,7 @@ target_compile_options(pjs_test PRIVATE -Wall -Wextra)
 add_executable(pjs_plugin_test test/pjs_plugin_test.cpp)
 target_link_libraries(pjs_plugin_test PRIVATE pjs_core)
 target_compile_options(pjs_plugin_test PRIVATE -Wall -Wextra)
+
+enable_testing()
+add_test(NAME pjs_test COMMAND pjs_test)
+add_test(NAME pjs_plugin_test COMMAND pjs_plugin_test)

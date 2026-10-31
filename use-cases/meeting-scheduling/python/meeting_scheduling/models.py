@@ -18,7 +18,7 @@ Score mapping (Java HardMediumSoftScore -> engine HardSoftScore):
 `pydantic` is an optional dependency (`pip install meeting_scheduling[models]`).
 """
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from . import _core
 
@@ -32,6 +32,11 @@ __all__ = [
     "demo_data",
     "with_initial_solution",
 ]
+
+
+def _valid_positions(count: int) -> str:
+    """The valid positions among `count`, for an error message."""
+    return f"0..{count - 1}" if count else "(the list is empty)"
 
 
 class PersonModel(BaseModel):
@@ -104,8 +109,23 @@ class MeetingScheduleModel(BaseModel):
     score_hard: int | None = None
     score_soft: float | None = None
 
+    @model_validator(mode="after")
+    def _check_indices(self):
+        """`grain_room` is a raw value the engine reads without a range check. It refuses
+        bad people and meetings itself."""
+        value_count = len(self.time_grains) * len(self.rooms)
+        valid_values = _valid_positions(value_count)
+        for assignment in self.meeting_assignments:
+            value = assignment.grain_room
+            if value is not None and not 0 <= value < value_count:
+                raise ValueError(
+                    f"meeting assignment {assignment.id!r}: grain_room {value!r} is out of range {valid_values}"
+                )
+        return self
+
     def to_core(self) -> "_core.MeetingSchedule":
         """pydantic -> engine object (the score field is ignored; the engine recomputes it)."""
+        self._check_indices()  # the fields stay mutable after validation
         return _core.MeetingSchedule(
             [_core.Person(p.id, p.full_name) for p in self.people],
             [_core.TimeGrain(g.id, g.grain_index, g.day_of_year, g.starting_minute_of_day) for g in self.time_grains],
@@ -250,7 +270,8 @@ def with_initial_solution(problem, solution):
         if value is None:
             continue
         if not isinstance(value, int) or isinstance(value, bool) or not 0 <= value < value_count:
+            valid_values = _valid_positions(value_count)
             raise ValueError(
-                f"meeting assignment {assignment.id!r}: grain_room {value!r} is out of range 0..{value_count - 1}"
+                f"meeting assignment {assignment.id!r}: grain_room {value!r} is out of range {valid_values}"
             )
     return seeded
