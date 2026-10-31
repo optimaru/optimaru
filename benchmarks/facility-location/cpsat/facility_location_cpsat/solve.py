@@ -79,15 +79,9 @@ def solve(
         ]
         for consumer in problem.consumers
     ]
-    objective = REGISTRY.objective(
-        model,
-        ("hard", "soft"),
-        constraints,
-        default_weights={
-            "facility_setup_cost": problem.setup_cost_weight,
-            "distance_from_facility": problem.distance_from_facility_weight,
-        },
-    )
+    # Default weights and levels come from the engine (constraint_info()); the
+    # canonical problem carries none.
+    objective = REGISTRY.objective(model, ("hard", "soft"), constraints)
     REGISTRY.build(
         FacilityContext(model, problem, x, used, overflow, distances), objective
     )

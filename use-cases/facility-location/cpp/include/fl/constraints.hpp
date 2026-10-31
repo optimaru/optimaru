@@ -4,19 +4,18 @@
 // ---------------------------------------------------------------------------
 // Constraint plugins — umbrella header
 // ---------------------------------------------------------------------------
-// One component per file under constraints/; common.hpp holds what all of them
-// need (the calculator aliases and the "prepare() has run" guard) and carries
-// the pattern's documentation.
+// One component per file under constraints/, named after its struct
+// (FacilityCapacityCost -> constraints/facility_capacity_cost.hpp); common.hpp
+// holds what all of them need (the calculator aliases and the "prepare() has
+// run" guard) and carries the pattern's documentation.
 //
 // Including this header still gives the whole set, so nothing that used it has
 // to change. Adding a component is a file plus a line here (and a line in
-// addDefaultConstraints below when it belongs to the default assembly).
-
-#include <cstdint>
+// defaultConstraints below when it belongs to the default assembly).
 
 #include "fl/constraints/common.hpp"
-#include "fl/constraints/distance_from_facility.hpp"
-#include "fl/constraints/facility_capacity.hpp"
+#include "fl/constraints/distance_from_facility_cost.hpp"
+#include "fl/constraints/facility_capacity_cost.hpp"
 #include "fl/constraints/facility_setup_cost.hpp"
 
 namespace fl
@@ -25,56 +24,42 @@ namespace fl
 // ---------------------------------------------------------------------------
 // Standard assembly
 // ---------------------------------------------------------------------------
-// The full provider: facilityCapacity hard at weight 1 plus the two soft terms
-// at the caller's weights (defaults = the quickstart's effective ones). With
-// the problem's own weights this assembly scores bit-for-bit like
-// ScoreCalculator::calculateScore and the monolithic incremental calculator.
+// The full provider, every component at its own defaults:
+//
+//   facilityCapacityCost       hard, weight 1
+//   facilitySetupCost          soft, weight 2
+//   distanceFromFacilityCost   soft, weight 6
+//
+// This assembly scores bit-for-bit like ScoreCalculator::calculateScore and
+// the monolithic incremental calculator (both read the same kDefaultWeight
+// constants). It is also the domain's constraint catalog: constraint_info()
+// reads the defaults off it, so they live in the component constructors and
+// nowhere else.
 //
 // `defaultConstraints()` hands the whole set back as a ConstraintAssembly, so
 // a caller states only what differs from it:
 //
 //     DecomposedCalculator calc;
-//     defaultConstraints(problem)
-//         .weight("facility setup cost", 4)
-//         .soft("facility capacity")
-//         .drop("distance from facility")
+//     defaultConstraints()
+//         .weight("facilitySetupCost", 4)
+//         .soft("facilityCapacityCost")
+//         .drop("distanceFromFacilityCost")
 //         .into(calc);
 //
-// `addDefaultConstraints(calc, ...)` is the same set poured straight into a
+// `addDefaultConstraints(calc)` is the same set poured straight into a
 // calculator, for callers that change nothing.
-inline ConstraintAssembly
-defaultConstraints(std::int64_t setupCostWeight = 2,
-                   std::int64_t distanceFromFacilityWeight = 6)
+inline ConstraintAssembly defaultConstraints()
 {
     ConstraintAssembly assembly;
-    assembly.emplace<FacilityCapacity>();
-    assembly.emplace<FacilitySetupCost>(static_cast<double>(setupCostWeight));
-    assembly.emplace<DistanceFromFacility>(
-        static_cast<double>(distanceFromFacilityWeight));
+    assembly.emplace<FacilityCapacityCost>();
+    assembly.emplace<FacilitySetupCost>();
+    assembly.emplace<DistanceFromFacilityCost>();
     return assembly;
 }
 
-// Same assembly, with the weights taken off the solution — where the
-// quickstart's ConstraintWeightOverrides land (see domain.hpp).
-inline ConstraintAssembly
-defaultConstraints(const FacilityLocationProblem &problem)
+inline void addDefaultConstraints(DecomposedCalculator &calculator)
 {
-    return defaultConstraints(problem.setupCostWeight,
-                              problem.distanceFromFacilityWeight);
-}
-
-inline void addDefaultConstraints(DecomposedCalculator &calculator,
-                                  std::int64_t setupCostWeight = 2,
-                                  std::int64_t distanceFromFacilityWeight = 6)
-{
-    defaultConstraints(setupCostWeight, distanceFromFacilityWeight)
-        .into(calculator);
-}
-
-inline void addDefaultConstraints(DecomposedCalculator &calculator,
-                                  const FacilityLocationProblem &problem)
-{
-    defaultConstraints(problem).into(calculator);
+    defaultConstraints().into(calculator);
 }
 
 }  // namespace fl

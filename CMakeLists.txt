@@ -22,6 +22,12 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     find_package(Threads REQUIRED)
     target_link_libraries(engine_test PRIVATE Threads::Threads)
 
+    # Levels, the medium fold and the knob guards (0.2.0 constraint contract).
+    add_executable(constraint_level_test test/constraint_level_test.cpp)
+    target_link_libraries(constraint_level_test PRIVATE optimaru)
+    target_compile_options(constraint_level_test PRIVATE -Wall -Wextra)
+
     enable_testing()
     add_test(NAME engine_test COMMAND engine_test)
+    add_test(NAME constraint_level_test COMMAND constraint_level_test)
 endif()

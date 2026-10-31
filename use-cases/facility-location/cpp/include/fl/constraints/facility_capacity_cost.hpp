@@ -1,24 +1,28 @@
-#ifndef FL_CONSTRAINTS_FACILITY_CAPACITY_HPP
-#define FL_CONSTRAINTS_FACILITY_CAPACITY_HPP
+#ifndef FL_CONSTRAINTS_FACILITY_CAPACITY_COST_HPP
+#define FL_CONSTRAINTS_FACILITY_CAPACITY_COST_HPP
 
 #include "fl/constraints/common.hpp"
 
 namespace fl
 {
 
-// Hard (default): facilityCapacity — the demand a facility carries beyond its
-// capacity. Java groups consumers by facility before summing their demand, so
-// a facility nobody uses is never penalized; here that gate is `members
-// .empty()`.
+// Hard, weight 1: facilityCapacityCost — the demand a facility carries beyond
+// its capacity. Raw cost per facility = max(0, assigned demand - capacity),
+// so 0 = within capacity. Java groups consumers by facility before summing
+// their demand, so a facility nobody uses is never penalized; here that gate
+// is `members.empty()`.
 //
 // No delta contract: max(0, demand - capacity) is not a sum of per-member
 // terms (the clamp is what makes it non-additive), so the marginal cost of one
 // consumer depends on the whole unit. cost() is O(members) either way, so the
 // calculator's full re-cost path loses nothing.
-struct FacilityCapacity final : FlUnitConstraint
+struct FacilityCapacityCost final : FlUnitConstraint
 {
-    explicit FacilityCapacity(double weight = 1.0)
-        : FlUnitConstraint("facility capacity", weight, /*hard=*/true)
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
+
+    explicit FacilityCapacityCost(double weight = kDefaultWeight)
+        : FlUnitConstraint("facilityCapacityCost", weight, kDefaultLevel)
     {
     }
     void onReset(const FacilityLocationProblem &problem) override
@@ -41,4 +45,4 @@ struct FacilityCapacity final : FlUnitConstraint
 
 }  // namespace fl
 
-#endif  // FL_CONSTRAINTS_FACILITY_CAPACITY_HPP
+#endif  // FL_CONSTRAINTS_FACILITY_CAPACITY_COST_HPP

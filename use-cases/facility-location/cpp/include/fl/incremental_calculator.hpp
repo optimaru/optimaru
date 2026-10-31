@@ -16,13 +16,13 @@ namespace fl
 //
 // Every constraint is a function of per-facility aggregates, so a single
 // variable change is O(1):
-//   - hard 1 (facilityCapacity): contribution(f) = max(0, usedDemand_f -
+//   - hard 1 (facilityCapacityCost): contribution(f) = max(0, usedDemand_f -
 //     capacity_f) while facility f serves >= 1 consumer, else 0 (Java's
 //     groupBy only sees used facilities). Moving one consumer in/out changes
 //     only that facility's term.
 //   - soft 2 (facilitySetupCost): setupCost_f enters when consumerCnt_f goes
 //     0 -> 1 and leaves when it drops back to 0.
-//   - soft 3 (distanceFromFacility): one precomputed matrix lookup per
+//   - soft 3 (distanceFromFacilityCost): one precomputed matrix lookup per
 //     change.
 //
 // beforeVariableChanged retracts the consumer's contribution while

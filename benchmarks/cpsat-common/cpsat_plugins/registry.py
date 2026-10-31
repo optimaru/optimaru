@@ -14,26 +14,53 @@ _FOLD_LIMIT = 2**62
 
 @dataclass(frozen=True)
 class ConstraintSpec:
-    """One catalog entry and its default score semantics."""
+    """One catalog entry and its default score semantics.
+
+    ``level`` and ``weight`` are the defaults (for a migrated domain, the
+    engine's constraint_info() row). ``level_flippable`` False means hard=True
+    / hard=False may not move the constraint off its level; ``reward`` means
+    the raw cost is <= 0 and hard=True is refused. Both paths reject the same
+    selections. ``default_enabled`` is the row's ``default_enabled`` (None:
+    ``weight > 0``, the rule for a domain whose catalog is its default set).
+    """
 
     name: str
     label: str
     level: str
-    weight: int = 1
+    weight: int | float = 1
     description: str = ""
     label_en: str = ""
     description_en: str = ""
+    level_flippable: bool = True
+    reward: bool = False
+    default_enabled: bool | None = None
 
     def as_dict(self) -> dict[str, Any]:
+        """The catalog row, in the server's ConstraintInfo vocabulary (knob_plan §5).
+
+        ``kind`` is ``"either"`` when hard=True/False may move the constraint,
+        else its fixed level (a non-flippable constraint is hard or soft: the
+        medium level is default-only and always flippable). ``params`` are
+        the selection knobs at "keep the default" — fed back as a selection
+        they change nothing (``hard: False`` would demote, so it is ``None``).
+        """
+        if self.level_flippable:
+            kind = "either"
+        else:
+            kind = "hard" if self.level == "hard" else "soft"
         return {
             "name": self.name,
             "label": self.label,
             "description": self.description,
             "label_en": self.label_en,
             "description_en": self.description_en,
-            "kind": "hard" if self.level == "hard" else "soft",
-            "default_enabled": True,
-            "params": {"weight": self.weight, "hard": self.level == "hard"},
+            "kind": kind,
+            "default_enabled": self.weight > 0 if self.default_enabled is None else self.default_enabled,
+            "default_level": self.level,
+            "default_weight": self.weight,
+            "level_flippable": self.level_flippable,
+            "reward": self.reward,
+            "params": {"weight": None, "hard": None, "exponent": 1.0},
         }
 
 
@@ -133,17 +160,42 @@ class ObjectiveBuilder:
         self.terms: dict[str, list] = {level: [] for level in self.levels}
         self.bounds: dict[str, int] = {level: 0 for level in self.levels}
 
+    def level_of(self, spec: ConstraintSpec, config: ConstraintConfig) -> str:
+        """The level a selection lands on, with the engine's knob rules.
+
+        ``hard=None`` keeps the default level, ``hard=True`` is hard and
+        ``hard=False`` is soft, from a hard OR a medium default (the engine's
+        ``soft()``), so both solvers demote the same way. A reward refuses
+        hard=True; a non-flippable constraint refuses any change of level.
+        """
+        level = spec.level
+        if config.hard is None:
+            return level
+        if config.hard:
+            if spec.reward:
+                raise ValueError(f"constraint {spec.name!r} is a reward and cannot be hard")
+            wanted = "hard"
+        elif "soft" in self.levels:
+            wanted = "soft"
+        else:
+            # 0.2.0 transition shim: removed once every use case is migrated.
+            # Level sets without "soft" (task-assigning's soft0/soft1/soft2)
+            # keep the pre-0.2.0 rule: hard=False moves a hard term to the
+            # first lower level and leaves every other term where it is.
+            wanted = (self.levels[1] if len(self.levels) > 1 else "hard") if level == "hard" else level
+        if wanted != level and not spec.level_flippable:
+            raise ValueError(
+                f"constraint {spec.name!r} is always {level}; hard={config.hard!r} is not allowed"
+            )
+        return wanted
+
     def add(self, name: str, magnitude, *, bound: int) -> None:
         """Add a non-negative raw penalty and a valid magnitude upper bound."""
         selected = self.selected.get(name)
         if selected is None:
             return
         spec, config = selected
-        level = spec.level
-        if config.hard is True:
-            level = "hard"
-        elif config.hard is False and level == "hard":
-            level = self.levels[1] if len(self.levels) > 1 else "hard"
+        level = self.level_of(spec, config)
         if level not in self.terms:
             raise ValueError(
                 f"constraint {name!r} uses unsupported score level {level!r}"
@@ -253,11 +305,7 @@ class ObjectiveBuilder:
         aliases = aliases or {}
         totals: dict[str, int | float] = {level: 0 for level in self.levels}
         for name, (spec, config) in self.selected.items():
-            level = spec.level
-            if config.hard is True:
-                level = "hard"
-            elif config.hard is False and level == "hard":
-                level = self.levels[1] if len(self.levels) > 1 else "hard"
+            level = self.level_of(spec, config)
             weight = spec.weight if config.weight is None else config.weight
             source_names = aliases.get(name, name)
             if isinstance(source_names, str):

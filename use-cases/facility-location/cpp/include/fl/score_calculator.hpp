@@ -11,17 +11,19 @@ namespace fl
 // calculateScore does a full recompute — the reference the incremental
 // calculator is checked against (in the tests and under FULL_ASSERT).
 //
-// Constraints (HardSoftScore):
-//   hard 1. facilityCapacity       -(usedDemand - capacity) per used facility
-//                                  whose assigned demand exceeds its capacity
-//                                  (groupBy(facility, sum(demand)) in Java, so
-//                                  only facilities with >= 1 consumer count)
-//   soft 2. facilitySetupCost      -setupCostWeight * setupCost per facility
-//                                  serving at least one consumer (weight 2)
-//   soft 3. distanceFromFacility   -distanceFromFacilityWeight * meters per
-//                                  assigned consumer (provider default 5,
-//                                  overridden to 6 by the solution's
-//                                  ConstraintWeightOverrides — see domain.hpp)
+// Constraints (HardSoftScore), the default assembly of fl/constraints.hpp at
+// the components' kDefaultWeight:
+//   hard 1. facilityCapacityCost       -(usedDemand - capacity) per used
+//                                      facility whose assigned demand exceeds
+//                                      its capacity (groupBy(facility,
+//                                      sum(demand)) in Java, so only
+//                                      facilities with >= 1 consumer count)
+//   soft 2. facilitySetupCost          -2 * setupCost per facility serving at
+//                                      least one consumer
+//   soft 3. distanceFromFacilityCost   -6 * meters per assigned consumer
+//                                      (provider default 5, overridden to 6
+//                                      by the solution's
+//                                      ConstraintWeightOverrides)
 // Unassigned consumers (facility == -1) contribute nothing: the construction
 // heuristic scores partially initialized solutions.
 class ScoreCalculator

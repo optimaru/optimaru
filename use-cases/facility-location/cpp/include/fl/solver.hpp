@@ -135,7 +135,7 @@ public:
     // fl/constraints.hpp): pick components and weights, then pass the
     // assembly here. The same search applies — construction heuristic,
     // late-acceptance local search, ALNS kicks and CloseFacilityMove. Weights
-    // come from the assembly, NOT from the problem's weight fields. The final
+    // and levels come from the assembly (the problem carries none). The final
     // problem.score is computed by THIS calculator and the calculator is left
     // primed on the final solution, so constraintTotals() explains exactly
     // that score. Single-start: the caller-owned calculator cannot be cloned,

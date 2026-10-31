@@ -5,8 +5,31 @@
 #include <cstdint>
 #include <vector>
 
+#include "fl/constraints/distance_from_facility_cost.hpp"
+#include "fl/constraints/facility_capacity_cost.hpp"
+#include "fl/constraints/facility_setup_cost.hpp"
+
 namespace fl
 {
+
+namespace
+{
+
+// The monolithic score is the default assembly, so it reads the same
+// constants the components carry. Integral, so the soft level is computed in
+// int64 exactly like the Java long arithmetic.
+constexpr auto kCapacityWeight
+    = static_cast<std::int64_t>(FacilityCapacityCost::kDefaultWeight);
+constexpr auto kSetupWeight
+    = static_cast<std::int64_t>(FacilitySetupCost::kDefaultWeight);
+constexpr auto kDistanceWeight
+    = static_cast<std::int64_t>(DistanceFromFacilityCost::kDefaultWeight);
+static_assert(kCapacityWeight == FacilityCapacityCost::kDefaultWeight
+                  && kSetupWeight == FacilitySetupCost::kDefaultWeight
+                  && kDistanceWeight == DistanceFromFacilityCost::kDefaultWeight,
+              "the monolithic calculator assumes integral default weights");
+
+}  // namespace
 
 void ScoreCalculator::prepare(FacilityLocationProblem &problem)
 {
@@ -50,8 +73,8 @@ Score ScoreCalculator::calculateScore(FacilityLocationProblem &problem)
         distance += problem.distanceOf(c, consumer.facility);
     }
 
-    // hard 1: facilityCapacity — Java groups consumers by facility, so only
-    // facilities with at least one assigned consumer are penalized.
+    // hard 1: facilityCapacityCost — Java groups consumers by facility, so
+    // only facilities with at least one assigned consumer are penalized.
     std::int64_t overCapacity = 0;
     // soft 2: facilitySetupCost — each used facility once (unweighted).
     std::int64_t setupCost = 0;
@@ -65,11 +88,10 @@ Score ScoreCalculator::calculateScore(FacilityLocationProblem &problem)
     }
 
     Score score;
-    score.hard = -overCapacity;
+    score.hard = -kCapacityWeight * overCapacity;
     // Negate in integer space so a zero penalty prints as 0, not -0.
     score.soft = static_cast<double>(
-        -(problem.setupCostWeight * setupCost
-          + problem.distanceFromFacilityWeight * distance));
+        -(kSetupWeight * setupCost + kDistanceWeight * distance));
     problem.score = score;
     return score;
 }
