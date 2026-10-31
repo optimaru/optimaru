@@ -26,8 +26,8 @@ struct WeeklyMinutesConstraint : EsUnitConstraint {
         std::int32_t minRaw = 0, maxRaw = 0;
         bool any = false;
         for (std::size_t i = 0; i < n; ++i) {
-            const std::int32_t x = static_cast<std::int32_t>(s.shifts[i].startDay) - weekAnchor_;
-            const std::int32_t r = (x >= 0) ? x / 7 : -((-x + 6) / 7);
+            const std::int64_t x = std::int64_t{s.shifts[i].startDay} - weekAnchor_;
+            const std::int32_t r = static_cast<std::int32_t>((x >= 0) ? x / 7 : -((-x + 6) / 7));
             raw[i] = r;
             duration_[i] = static_cast<std::int32_t>(s.shifts[i].end - s.shifts[i].start);
             if (!any) {

@@ -100,10 +100,6 @@ struct EmployeeSchedule {
     std::vector<Employee> employees;
     std::vector<Shift> shifts;
     Score score;
-
-    // Set once by ScoreCalculator::prepare; guards against re-interning skills
-    // on every calculateScore call.
-    bool prepared = false;
 };
 
 }  // namespace es

@@ -11,7 +11,7 @@
 namespace es {
 
 void ScoreCalculator::prepare(EmployeeSchedule& schedule) {
-    if (schedule.prepared) return;
+    const int employeeCount = static_cast<int>(schedule.employees.size());
     std::unordered_map<std::string, int> skillId;
     for (Shift& sh : schedule.shifts) {
         // The rules index per-day tables by these day numbers without a check.
@@ -20,6 +20,12 @@ void ScoreCalculator::prepare(EmployeeSchedule& schedule) {
                                         std::to_string(MAX_DAY) + ", got start=" +
                                         std::to_string(sh.start) +
                                         ", end=" + std::to_string(sh.end));
+        }
+        // Every calculator indexes the employee list by this without a check.
+        if (sh.employeeIndex < -1 || sh.employeeIndex >= employeeCount) {
+            throw std::invalid_argument("shift '" + sh.id + "': employee_index " +
+                                        std::to_string(sh.employeeIndex) + " is out of range -1.." +
+                                        std::to_string(employeeCount - 1));
         }
         // Empty requiredSkill == no skill requirement: bit 0 (matches everyone,
         // never a miss). Don't intern "" as a phantom skill nobody holds.
@@ -44,7 +50,6 @@ void ScoreCalculator::prepare(EmployeeSchedule& schedule) {
         }
         e.skillMask = mask;
     }
-    schedule.prepared = true;
 }
 
 Minutes ScoreCalculator::minutesOnDay(const Shift& shift, DayIndex day) {

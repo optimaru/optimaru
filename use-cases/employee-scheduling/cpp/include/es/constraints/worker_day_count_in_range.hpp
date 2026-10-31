@@ -24,7 +24,14 @@ struct WorkerDayCountInRange final : EsUnitConstraint {
                                    (maxCount < 0 ? std::string("inf") : std::to_string(maxCount)) +
                                    "]",
                            weight, /*hard=*/false),
-          lo_(lo), hi_(hi), min_(minCount), max_(maxCount), loc_(std::move(location)) {}
+          lo_(lo), hi_(hi), min_(minCount), max_(maxCount), loc_(std::move(location)) {
+        // hi - lo sizes the scratch table below. hi = -1 is the empty default range.
+        if (lo < 0 || lo > MAX_DAY || hi < -1 || hi > MAX_DAY) {
+            throw std::invalid_argument("worker_day_count_in_range: lo and hi must be days 0.." +
+                                        std::to_string(MAX_DAY) + ", got " + std::to_string(lo) +
+                                        ".." + std::to_string(hi));
+        }
+    }
     void onReset(const EmployeeSchedule& s) override {
         day_.resize(s.shifts.size());
         match_.resize(s.shifts.size());

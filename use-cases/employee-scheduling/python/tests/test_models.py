@@ -21,6 +21,7 @@ from es_scheduling.models import (  # noqa: E402
     ShiftModel,
     SolverSettings,
     UnassignedShiftRule,
+    WorkerDayCountInRuleRange,
     WorkerModel,
     default_rules,
     solve_request,
@@ -179,6 +180,13 @@ def test_a_shift_cannot_run_past_the_last_day():
     start = 36526 * 1440
     with pytest.raises(ValueError, match="up to day 36525"):
         es.calculate_score(es.EmployeeSchedule([es.Employee("A")], [es.Shift("Shift 1", start, start + 60)]))
+
+
+@pytest.mark.parametrize("bounds", [{"lo": -1}, {"hi": 36526}, {"hi": -2}], ids=["lo", "hi", "below-default"])
+def test_a_day_range_outside_the_limit_fails_when_built(bounds):
+    with pytest.raises(ValueError):
+        WorkerDayCountInRuleRange(**bounds)
+    assert WorkerDayCountInRuleRange(lo=0, hi=36525).hi == 36525
 
 
 def test_a_pinned_shift_without_a_worker_fails_when_built():

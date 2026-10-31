@@ -535,6 +535,81 @@ def test_a_fully_pinned_schedule_is_scored_but_not_searched(use_calculator):
     assert str(schedule.score) == str(expected)
 
 
+def _two_shifts():
+    shifts = [es.Shift("Shift 1", es.minutes(0, 9), es.minutes(0, 17), required_skill="Skill A")]
+    shifts.append(es.Shift("Shift 2", es.minutes(1, 9), es.minutes(1, 17)))
+    for shift in shifts:
+        shift.employee_index = 0
+    return es.EmployeeSchedule([es.Employee("A", {"Skill A"}), es.Employee("B")], shifts)
+
+
+def test_scoring_sees_a_required_skill_changed_after_the_first_score():
+    schedule = _two_shifts()
+    calc = es.DecomposedCalculator([es.RequiredSkill()])
+    assert calc.score(schedule).hard == 0
+    schedule.shifts[0].required_skill = "Skill B"
+    assert calc.score(schedule).hard == -1
+
+
+def test_scoring_sees_skills_changed_after_the_first_score():
+    schedule = _two_shifts()
+    calc = es.DecomposedCalculator([es.RequiredSkill()])
+    assert calc.score(schedule).hard == 0
+    schedule.employees[0].skills = {"Skill B"}
+    assert calc.score(schedule).hard == -1
+
+
+def test_scoring_sees_a_time_changed_after_the_first_score():
+    schedule = _two_shifts()
+    calc = es.DecomposedCalculator([es.MaxOneShiftPerDay()])
+    assert calc.score(schedule).hard == 0
+    schedule.shifts[1].start, schedule.shifts[1].end = es.minutes(0, 19), es.minutes(0, 22)
+    assert calc.score(schedule).hard == -1
+
+
+def test_the_built_in_score_sees_a_skill_changed_after_the_first_score():
+    schedule = _two_shifts()
+    assert es.calculate_score(schedule).hard == 0
+    schedule.shifts[0].required_skill = "Skill B"
+    assert es.calculate_score(schedule).hard == -1
+
+
+@pytest.mark.parametrize("use_calculator", [False, True], ids=["built-in", "plugin"])
+def test_a_solve_sees_a_time_changed_after_the_first_score(use_calculator):
+    schedule = _two_shifts()
+    es.calculate_score(schedule)
+    schedule.shifts[1].start, schedule.shifts[1].end = es.minutes(0, 19), es.minutes(0, 22)
+    cfg = es.SolverConfig()
+    cfg.spent_limit_seconds = 0.1
+    if use_calculator:
+        es.Solver(cfg).solve(schedule, es.DecomposedCalculator([es.MaxOneShiftPerDay()]))
+    else:
+        es.Solver(cfg).solve(schedule)
+    assert schedule.shifts[0].employee_index != schedule.shifts[1].employee_index
+
+
+@pytest.mark.parametrize("use_calculator", [False, True], ids=["built-in", "plugin"])
+def test_a_solve_refuses_bad_times_set_after_the_first_score(use_calculator):
+    schedule = _two_shifts()
+    es.calculate_score(schedule)
+    schedule.shifts[0].start = -10
+    with pytest.raises(ValueError, match="need 0 <= start < end"):
+        if use_calculator:
+            es.Solver().solve(schedule, es.default_calculator())
+        else:
+            es.Solver().solve(schedule)
+
+
+def test_shifts_replaced_after_the_first_score_are_prepared():
+    schedule = _two_shifts()
+    calc = es.DecomposedCalculator([es.RequiredSkill()])
+    assert calc.score(schedule).hard == 0
+    replacement = es.Shift("Shift 3", es.minutes(0, 9), es.minutes(0, 17), required_skill="Skill C")
+    replacement.employee_index = 0
+    schedule.shifts = [replacement]
+    assert calc.score(schedule).hard == -1
+
+
 def _skill_roster(required, held):
     shifts = [
         es.Shift(f"Shift {i}", es.minutes(i, 9), es.minutes(i, 17), required_skill=s) for i, s in enumerate(required)
@@ -560,6 +635,48 @@ def test_skills_no_shift_requires_do_not_count_towards_the_limit():
     held = [f"Extra {i}" for i in range(100)] + ["Skill A"]
     schedule = _skill_roster(["Skill A", "Skill B"], held)
     assert es.DecomposedCalculator([es.RequiredSkill()]).score(schedule).hard == -1
+
+
+@pytest.mark.parametrize("index", [-2, 2, 99999999])
+@pytest.mark.parametrize(
+    "use",
+    [
+        es.calculate_score,
+        lambda schedule: es.default_calculator().score(schedule),
+        lambda schedule: es.Solver().solve(schedule),
+        lambda schedule: es.Solver().solve(schedule, es.default_calculator()),
+    ],
+    ids=["built-in-score", "plugin-score", "built-in-solve", "plugin-solve"],
+)
+def test_an_employee_index_out_of_range_is_refused(use, index):
+    schedule = _two_shifts()
+    schedule.shifts[1].employee_index = index
+    with pytest.raises(ValueError, match=rf"shift 'Shift 2': employee_index {index} is out of range -1\.\.1"):
+        use(schedule)
+
+
+def test_the_last_employee_index_and_unassigned_are_accepted():
+    schedule = _two_shifts()
+    schedule.shifts[0].employee_index = 1
+    schedule.shifts[1].employee_index = -1
+    assert es.DecomposedCalculator([es.RequiredSkill()]).score(schedule).hard == -1
+
+
+@pytest.mark.parametrize(
+    ("lo", "hi"),
+    [(-1, 5), (0, es.MAX_DAY + 1), (-(2**31), 2**31 - 1), (0, -2)],
+    ids=["negative-lo", "past-the-last-day", "whole-int-range", "below-the-empty-default"],
+)
+def test_a_day_range_outside_the_horizon_limit_is_refused(lo, hi):
+    with pytest.raises(ValueError, match="lo and hi must be days"):
+        es.DecomposedCalculator().add("worker_day_count_in_range", lo=lo, hi=hi)
+
+
+def test_week_anchor_at_the_int_limit_keeps_weeks_small():
+    schedule = _week_roster()
+    calc = es.DecomposedCalculator()
+    calc.add("max_weekly_minutes", minutes=0, week_anchor=-(2**31))
+    assert calc.score(schedule).hard < 0
 
 
 @pytest.mark.parametrize(("pinned_days", "expected"), [(range(7), 0), (range(6), -1)], ids=["all", "all-but-one"])

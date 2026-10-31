@@ -14,6 +14,7 @@ request and `with_initial_solution` restarts a solve from an earlier result.
 
 from ._core import (
     CONSTRAINT_NAMES,
+    MAX_DAY,
     MINUTES_PER_DAY,
     DecomposedCalculator,
     Employee,
@@ -85,6 +86,7 @@ __all__ = [
     "BalanceWeeklyMinutesGap",
     "calculate_score",
     "minutes",
+    "MAX_DAY",
     "MINUTES_PER_DAY",
     "make_random_roster",
     "summary",

@@ -427,8 +427,8 @@ class WorkerDayCountInRuleRange(RuleBase):
 
     name: Literal["worker_day_count_in_range"] = "worker_day_count_in_range"
     location: str = ""  # empty = any work; else count only that location's days
-    lo: int = 0
-    hi: int = -1
+    lo: int = Field(default=0, ge=0, le=_core.MAX_DAY)
+    hi: int = Field(default=-1, ge=-1, le=_core.MAX_DAY)
     min_count: int = Field(default=0, ge=0)
     max_count: int = Field(default=-1, ge=-1)
 

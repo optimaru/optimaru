@@ -45,6 +45,8 @@ class ConstraintSpec(Protocol):
 MINUTES_PER_DAY: int
 """1440 — minutes in a day; day index of a time t is `t // MINUTES_PER_DAY`."""
 
+MAX_DAY: int
+"""The last day a shift or a day range may reach."""
 CONSTRAINT_NAMES: tuple[str, ...]
 """Names accepted by :meth:`DecomposedCalculator.add`:
 
@@ -170,7 +172,8 @@ class Shift:
     """Skill the assignee needs; "" = none. At most 64 distinct values across the
     shifts of a schedule, else solving and scoring raise ValueError."""
     employee_index: int
-    """Index into `EmployeeSchedule.employees`; -1 == unassigned."""
+    """Index into `EmployeeSchedule.employees`; -1 == unassigned. Solving and
+    scoring raise ValueError for a value outside that range."""
     pinned: bool
     """If True the shift keeps its employee_index fixed (scored but never moved)."""
 

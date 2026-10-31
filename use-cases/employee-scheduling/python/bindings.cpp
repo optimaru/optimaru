@@ -265,6 +265,7 @@ PYBIND11_MODULE(_core, m)
         py::arg("minute") = 0,
         "Minutes from day 0 00:00 (the time unit used by Shift.start/end).");
     m.attr("MINUTES_PER_DAY") = MINUTES_PER_DAY;
+    m.attr("MAX_DAY") = MAX_DAY;
 
     py::class_<Score>(m, "Score")
         .def_readonly("hard", &Score::hard)
@@ -337,8 +338,7 @@ PYBIND11_MODULE(_core, m)
                  {
                      return EmployeeSchedule{std::move(employees),
                                              std::move(shifts),
-                                             Score{},
-                                             false};
+                                             Score{}};
                  }),
              py::arg("employees"),
              py::arg("shifts"))
