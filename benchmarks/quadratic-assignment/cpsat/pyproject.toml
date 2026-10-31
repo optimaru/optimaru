@@ -3,13 +3,21 @@ name = "quadratic-assignment-cpsat"
 version = "0.1.0"
 description = "Exact CP-SAT backend for quadratic assignment"
 requires-python = ">=3.11,<4.0"
-dependencies = ["quadratic-assignment", "ortools>=9.10", "pydantic>=2.5"]
+dependencies = ["cpsat-plugins>=0.1.0", "quadratic-assignment", "ortools>=9.10", "pydantic>=2.5"]
+
 [dependency-groups]
 dev = ["pytest", "ruff"]
+
+[project.scripts]
+quadratic-assignment-compare = "quadratic_assignment_cpsat.benchmark:main"
+
 [tool.uv.sources]
+cpsat-plugins = { path = "../../cpsat-common", editable = true }
 quadratic-assignment = { path = "../../../use-cases/quadratic-assignment/python", editable = true }
+
 [tool.setuptools.packages.find]
 include = ["quadratic_assignment_cpsat*"]
+
 [tool.ruff]
 line-length = 120
 [tool.ruff.lint]

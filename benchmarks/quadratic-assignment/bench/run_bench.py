@@ -14,7 +14,7 @@ DEFAULT_INSTANCES = ("nug30", "lipa30a", "tai30a")
 
 def _objective(problem) -> int:
     costs = quadratic_assignment.constraint_costs(problem)
-    return int(costs["minimize_flow_distance"][0])
+    return int(costs["flow_distance_cost"]["costs"][0])
 
 
 def _gap(value: int, reference: int | None) -> float | None:
@@ -27,7 +27,6 @@ def _run_engine(problem, seconds: float, seed: int) -> dict:
     config = quadratic_assignment.SolverConfig()
     config.spent_limit_seconds = seconds
     config.random_seed = seed
-    config.max_iterations = 2_147_483_647
     started = time.perf_counter()
     quadratic_assignment.solve(problem, config=config)
     elapsed = time.perf_counter() - started
