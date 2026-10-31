@@ -369,9 +369,11 @@ PYBIND11_MODULE(_core, m)
                 c.bestScoreLimit = optimaru::HardSoftScore{hs.first, hs.second};
             })
         // Callback fired on every new best solution: on_new_best(step,
-        // score) with the decoded HardMediumSoft score. The pybind11
-        // wrapper re-acquires the GIL, so it is safe from the engine's
-        // multi-start worker threads too.
+        // score) with the HardMediumSoft score in the same levels as the
+        // final schedule.score (solve_with_constraints reads them off the
+        // calculator before the medium fold). The pybind11 wrapper
+        // re-acquires the GIL, so it is safe from the engine's multi-start
+        // worker threads too.
         .def_readwrite("on_new_best", &Solver::Config::onNewBest);
 
     py::class_<Solver>(m, "Solver", py::module_local())

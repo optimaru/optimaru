@@ -365,6 +365,32 @@ def test_a_promoted_medium_constraint_is_one_hard_unit_per_minute():
     assert score(fp.constraint_costs(schedule), picks) == (schedule.score.hard, schedule.score.soft)
 
 
+def test_on_new_best_reports_the_levels_of_the_final_score():
+    """on_new_best on the plugin path reports the same three levels as schedule.score.
+
+    The last new best is the returned solution, so with a soft total of 10^10 or more its
+    report still equals schedule.score instead of a decoded fold (which would move
+    soft // 10^10 into medium)."""
+    picks = [
+        max_end_time_cost,
+        operator_cleaning_conflict_cost,
+        after_ideal_end_time_cost,
+        unassigned_jobs_cost,
+        SquaredMakespanCost(weight=10_000),
+    ]
+    reports = []
+    schedule = build_schedule()
+    cfg = fp.SolverConfig()
+    cfg.spent_limit_seconds = 10.0
+    cfg.step_count_limit = 2000
+    cfg.random_seed = 7
+    cfg.on_new_best = lambda _step, best: reports.append((best.hard, best.medium, best.soft))
+    fp.Solver(cfg).solve_with_constraints(schedule, picks)
+    final = (schedule.score.hard, schedule.score.medium, schedule.score.soft)
+    assert final[2] <= -MEDIUM_UNIT
+    assert reports and reports[-1] == final
+
+
 @pytest.mark.parametrize(
     ("kwargs", "error"),
     [

@@ -78,7 +78,7 @@ class OperatorCleaningConflictCost(
                     objective.add(self.name, overlap, bound=context.horizon)
 
 
-class _EndDatePlugin(ConstraintPlugin[PackagingContext]):
+class _EndTimePlugin(ConstraintPlugin[PackagingContext]):
     field: ClassVar[str]
 
     def build(self, context: PackagingContext, objective: ObjectiveBuilder) -> None:
@@ -98,17 +98,15 @@ class _EndDatePlugin(ConstraintPlugin[PackagingContext]):
             objective.add(self.name, late, bound=context.horizon)
 
 
-class MaxEndTimeCost(domain.MaxEndTimeCost, _EndDatePlugin):
+class MaxEndTimeCost(domain.MaxEndTimeCost, _EndTimePlugin):
     field = "max_end_time"
 
 
-class AfterIdealEndTimeCost(domain.AfterIdealEndTimeCost, _EndDatePlugin):
+class AfterIdealEndTimeCost(domain.AfterIdealEndTimeCost, _EndTimePlugin):
     field = "ideal_end_time"
 
 
-class UnassignedJobsCost(
-    domain.UnassignedJobsCost, ConstraintPlugin[PackagingContext]
-):
+class UnassignedJobsCost(domain.UnassignedJobsCost, ConstraintPlugin[PackagingContext]):
     def build(self, context: PackagingContext, objective: ObjectiveBuilder) -> None:
         for job, duration in enumerate(context.duration):
             objective.add(self.name, duration * context.unassigned[job], bound=duration)

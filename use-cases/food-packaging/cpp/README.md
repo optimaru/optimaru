@@ -28,7 +28,8 @@ engine). Files:
 - `test/fp_plugin_test.cpp` — the plugin assembly == the monolith, plugin incremental ==
   full, raw costs by hand (a positive and a zero case per constraint), the catalog
   (`info()` == the components' constants), the medium level (fold, `hard()` / `soft()` /
-  weight) and FULL_ASSERT plugin solves
+  weight), FULL_ASSERT plugin solves and `onNewBest` reporting the same levels as the
+  final `schedule.score`
 
 ## Build
 

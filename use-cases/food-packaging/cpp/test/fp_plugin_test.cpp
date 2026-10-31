@@ -16,6 +16,8 @@
 //       10^10 fold, hard() / soft() / weight, and solve() reporting the
 //       assembly's levels
 //   (i) incremental == full recompute with each medium term overridden
+//   (j) onNewBest on the plugin path reports the same levels as
+//       schedule.score
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -784,34 +786,60 @@ void verifyMediumLevel()
 void verifyMediumIncremental()
 {
     std::printf("== (i) Medium overrides: incremental == full ==\n");
-    const std::vector<
-        std::pair<std::string, std::function<ConstraintAssembly()>>>
-        variants{
-            {"default", [] { return defaultConstraints(); }},
-            {"afterIdealEndTimeCost hard",
-             [] { return defaultConstraints().hard("afterIdealEndTimeCost"); }},
-            {"afterIdealEndTimeCost soft",
-             [] { return defaultConstraints().soft("afterIdealEndTimeCost"); }},
-            {"afterIdealEndTimeCost weight 3",
-             []
-             {
-                 return defaultConstraints().weight("afterIdealEndTimeCost",
-                                                    3);
-             }},
-            {"unassignedJobsCost hard",
-             [] { return defaultConstraints().hard("unassignedJobsCost"); }},
-            {"unassignedJobsCost soft",
-             [] { return defaultConstraints().soft("unassignedJobsCost"); }},
-            {"unassignedJobsCost weight 2",
-             [] { return defaultConstraints().weight("unassignedJobsCost", 2); }},
-        };
+    // Each variant names the medium constraint it overrides (empty for the
+    // default assembly), so the walk can prove it reaches states where THAT
+    // term costs something.
+    struct Variant
+    {
+        std::string label;
+        std::string overridden;
+        std::function<ConstraintAssembly()> assembly;
+    };
+    const std::vector<Variant> variants{
+        {"default", "", [] { return defaultConstraints(); }},
+        {"afterIdealEndTimeCost hard",
+         "afterIdealEndTimeCost",
+         [] { return defaultConstraints().hard("afterIdealEndTimeCost"); }},
+        {"afterIdealEndTimeCost soft",
+         "afterIdealEndTimeCost",
+         [] { return defaultConstraints().soft("afterIdealEndTimeCost"); }},
+        {"afterIdealEndTimeCost weight 3",
+         "afterIdealEndTimeCost",
+         []
+         {
+             return defaultConstraints().weight("afterIdealEndTimeCost", 3);
+         }},
+        {"unassignedJobsCost hard",
+         "unassignedJobsCost",
+         [] { return defaultConstraints().hard("unassignedJobsCost"); }},
+        {"unassignedJobsCost soft",
+         "unassignedJobsCost",
+         [] { return defaultConstraints().soft("unassignedJobsCost"); }},
+        {"unassignedJobsCost weight 2",
+         "unassignedJobsCost",
+         [] { return defaultConstraints().weight("unassignedJobsCost", 2); }},
+    };
+    // The raw unit sum of `name` on the calculator's working solution.
+    auto rawSum = [](const DecomposedCalculator &calculator,
+                     const std::string &name)
+    {
+        double sum = 0.0;
+        for (const auto &entry : calculator.constraintCosts())
+        {
+            if (entry.name != name)
+                continue;
+            for (const double cost : entry.unitCosts)
+                sum += cost;
+        }
+        return sum;
+    };
     using Descriptor = optimaru::SolutionDescriptor<PackagingSchedule>;
     for (const auto &variant : variants)
     {
         PackagingSchedule s = generateDemoData(/*lines*/ 3, /*jobs*/ 18);
         ScoreCalculator::prepare(s);
         DecomposedCalculator calculator;
-        variant.second().into(calculator);
+        variant.assembly().into(calculator);
         optimaru::ScoreDirector<PackagingSchedule> director(s, calculator);
         const int listCount = Descriptor::listCount(s);
         const int elementCount = Descriptor::elementCount(s);
@@ -834,6 +862,7 @@ void verifyMediumIncremental()
         std::uniform_real_distribution<double> unit(0.0, 1.0);
         int mismatches = 0;
         int mediumSteps = 0;
+        int overriddenSteps = 0;
         for (int step = 0; step < 800 && elementCount > 0; ++step)
         {
             const int element = static_cast<int>(rng() % elementCount);
@@ -865,21 +894,81 @@ void verifyMediumIncremental()
             const optimaru::HardSoftScore incremental
                 = director.calculateScore();
             DecomposedCalculator fresh;
-            variant.second().into(fresh);
+            variant.assembly().into(fresh);
             fresh.resetWorkingSolution(s);
             const optimaru::HardSoftScore full = fresh.calculateScore();
             if (fresh.levelScores().medium != 0.0)
                 ++mediumSteps;
+            if (!variant.overridden.empty()
+                && rawSum(fresh, variant.overridden) > 0.0)
+                ++overriddenSteps;
             if (incremental.hard != full.hard
                 || std::fabs(incremental.soft - full.soft) > 1e-3)
                 ++mismatches;
         }
         check(mismatches == 0,
-              variant.first + ": 800 random list moves, incremental == full");
-        // Every variant keeps at least one medium term.
-        check(mediumSteps > 0,
-              variant.first + ": the walk visits medium states");
+              variant.label + ": 800 random list moves, incremental == full");
+        if (variant.overridden.empty())
+        {
+            check(mediumSteps > 0,
+                  variant.label + ": the walk visits medium states");
+        }
+        else
+        {
+            // The other medium constraint can keep the medium level non-zero
+            // on its own, so count the overridden term itself.
+            check(overriddenSteps > 0,
+                  variant.label
+                      + ": the walk visits states where the overridden term "
+                        "is non-zero");
+        }
     }
+    std::printf("\n");
+}
+
+// -------------------------------------------------------------------------
+// (j) onNewBest on the plugin path reports the levels schedule.score reports.
+// -------------------------------------------------------------------------
+// With squaredMakespanCost at weight 10^4 the soft total passes 10^10, which a
+// decoded fold would split into medium + (soft mod 10^10). The last new best
+// is the returned solution, so its report must equal schedule.score exactly.
+void verifyPluginCallbackLevels()
+{
+    std::printf("== (j) Plugin-path onNewBest levels == schedule.score ==\n");
+    PackagingSchedule s = generateDemoData(/*lines*/ 3, /*jobs*/ 18);
+
+    Solver::Config config;
+    config.spentLimit = std::chrono::seconds(10);
+    config.stepCountLimit = 3000;
+    config.randomSeed = 5;
+    std::vector<Score> reports;
+    config.onNewBest = [&](std::int64_t, const Score &best)
+    { reports.push_back(best); };
+
+    constexpr double kWeight = 1e4;
+    DecomposedCalculator calculator;
+    defaultConstraints()
+        .weight("squaredMakespanCost", kWeight)
+        .into(calculator);
+    Solver(config).solve(s, calculator);
+
+    check(!reports.empty(), "onNewBest fired");
+    check(s.score.soft <= -kMediumUnit,
+          "the final soft total is 10^10 or more");
+    check(!reports.empty() && reports.back() == s.score,
+          "the last onNewBest score == schedule.score (" + s.score.toString()
+              + ")");
+    // Folded back, the reports are the engine's successive bests: strictly
+    // improving in its (hard, soft) order.
+    bool improving = true;
+    for (std::size_t i = 1; i < reports.size(); ++i)
+        improving
+            = improving
+              && toEngineScore(reports[i - 1]) < toEngineScore(reports[i]);
+    check(improving,
+          std::to_string(reports.size())
+              + " reports, strictly improving once folded into the engine "
+                "score");
     std::printf("\n");
 }
 
@@ -896,6 +985,7 @@ int main()
     verifyCatalog();
     verifyMediumLevel();
     verifyMediumIncremental();
+    verifyPluginCallbackLevels();
 
     if (failures == 0)
     {

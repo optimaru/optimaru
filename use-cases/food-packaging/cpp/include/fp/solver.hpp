@@ -132,9 +132,13 @@ public:
         double nearbyProbability = 0.8;
         int nearbySize = 10;
 
-        // New-best callback with the decoded HardMediumSoft score. With
-        // multiple legs/starts, step counts restart per leg and only worker
-        // 0 reports.
+        // New-best callback with the HardMediumSoft score, in the same levels
+        // as the final schedule.score of the solve() overload in use: the
+        // default path decodes the engine score (exact while |soft| < 10^10,
+        // the range in which the fold keeps the level order); the plugin path
+        // reads the calculator's three levels before the medium fold, so a
+        // soft total of 10^10 or more stays on soft there. With multiple
+        // legs/starts, step counts restart per leg and only worker 0 reports.
         std::function<void(std::int64_t, const Score &)> onNewBest;
     };
 
@@ -152,9 +156,10 @@ public:
     // fp/constraints.hpp): pick components and weights, then pass the
     // assembly here. Weights and levels come from the assembly (the
     // components' kDefaultWeight / kDefaultLevel unless the caller changed
-    // them). The final schedule.score is computed by THIS calculator (its
-    // three level accumulators, calculator.levelScores()) and the calculator
-    // is left primed on the final solution, so constraintTotals() explains
+    // them). The final schedule.score and every onNewBest score are computed
+    // by THIS calculator (its three level accumulators,
+    // calculator.levelScores(), before the medium fold) and the calculator is
+    // left primed on the final solution, so constraintTotals() explains
     // exactly that score.
     //
     // Two knobs do not apply on this path: parallelSolverCount and

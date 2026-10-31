@@ -45,7 +45,10 @@ engine's soft level as `engine.soft = medium * 10^10 + soft` (`kMediumFold` in
 on every `constraint_costs()` entry). Medium is a default-only level: `hard=True` makes a
 medium constraint 1 hard unit per minute, `hard=False` 1 soft unit per minute (outside the
 fold), and an explicit `weight` keeps it on the medium level, in medium units — in the
-engine and in the CP-SAT reference alike.
+engine and in the CP-SAT reference alike. A solve with `constraints=` reports
+`schedule.score` and every `on_new_best` score from the calculator's three levels
+(`levelScores()`), not by decoding the folded soft, so a soft total of 10^10 or more stays
+on soft in both.
 
 **0.2.0:** the constraints were renamed (`max_end_date_time` -> `max_end_time_cost`,
 `operator_cleaning_conflict` -> `operator_cleaning_conflict_cost`, `ideal_end_date_time`

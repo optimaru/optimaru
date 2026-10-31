@@ -79,6 +79,19 @@ bool anySharedOperator(const PackagingSchedule &schedule)
     return false;
 }
 
+// The plugin path's Score: the calculator's three accumulators before the
+// medium fold (levelScores()), each level rounded on its own. Decoding the
+// folded engine soft instead would file a soft total of 10^10 or more under
+// medium.
+Score levelScoreOf(
+    const optimaru::DecomposedScoreCalculator<PackagingSchedule> &calculator)
+{
+    const auto levels = calculator.levelScores();
+    return Score{static_cast<std::int64_t>(levels.hard),
+                 static_cast<std::int64_t>(std::llround(levels.medium)),
+                 static_cast<std::int64_t>(std::llround(levels.soft))};
+}
+
 }  // namespace
 
 void assignMissingOperators(PackagingSchedule &schedule)
@@ -336,11 +349,16 @@ void Solver::solve(
         engineConfig.multiStartCount = 1;
         if (config_.onNewBest)
         {
+            // Report the same three levels as the final schedule.score below.
+            // The engine calls onNewBest right after the working solution
+            // became the new best, so the calculator's accumulators hold
+            // exactly that solution; the folded engine score it passes is not
+            // decoded.
             auto callback = config_.onNewBest;
             engineConfig.onNewBest
-                = [callback](std::int64_t step,
-                             const optimaru::HardSoftScore &score)
-            { callback(step, fromEngineScore(score)); };
+                = [callback, &calculator](std::int64_t step,
+                                          const optimaru::HardSoftScore &)
+            { callback(step, levelScoreOf(calculator)); };
         }
         engineConfig.termination.spentLimit = config_.spentLimit;
         engineConfig.termination.bestScoreLimit = config_.bestScoreLimit;
@@ -404,16 +422,12 @@ void Solver::solve(
     // with the caller's constraint assembly (custom weights and levels
     // included), leaving the calculator primed on it so constraintTotals()
     // explains exactly this score. The three levels come straight from the
-    // calculator's accumulators (levelScores(), before the medium fold) rather
-    // than from decoding the folded engine score, so a demoted or re-weighted
-    // term lands on the level the assembly gave it.
+    // calculator's accumulators (levelScoreOf() above, like every onNewBest
+    // report) rather than from decoding the folded engine score, so a demoted
+    // or re-weighted term lands on the level the assembly gave it.
     ScoreCalculator::updateShadowVariables(schedule);
     calculator.resetWorkingSolution(schedule);
-    const auto levels = calculator.levelScores();
-    schedule.score
-        = Score{static_cast<std::int64_t>(levels.hard),
-                static_cast<std::int64_t>(std::llround(levels.medium)),
-                static_cast<std::int64_t>(std::llround(levels.soft))};
+    schedule.score = levelScoreOf(calculator);
 }
 
 }  // namespace fp

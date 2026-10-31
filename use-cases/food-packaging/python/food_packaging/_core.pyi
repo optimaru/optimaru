@@ -144,6 +144,10 @@ class SolverConfig:
     tail_swap_move_weight: float
     best_score_limit: tuple[int, float]
     on_new_best: Callable[[int, Score], None] | None
+    """Progress callback (steps, best score). The score has the same three levels as the
+    final schedule.score: with solve_with_constraints both come from the chosen
+    constraints' hard / medium / soft totals, so a soft total of 10^10 or more stays on
+    soft instead of spilling into medium."""
     def __init__(self) -> None: ...
 
 class Solver:

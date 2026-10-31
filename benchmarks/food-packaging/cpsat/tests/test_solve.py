@@ -164,7 +164,9 @@ def test_cpsat_defaults_are_the_engine_defaults() -> None:
         assert entry["kind"] == "either"  # every food-packaging constraint is flippable
         assert entry["params"] == {"weight": None, "hard": None, "exponent": 1.0}
     # The two medium constraints sit on the medium level at weight 1 (medium units).
-    assert {name: (row.default_level, row.default_weight) for name, row in engine.items()} == {
+    assert {
+        name: (row.default_level, row.default_weight) for name, row in engine.items()
+    } == {
         "max_end_time_cost": ("hard", 1.0),
         "after_ideal_end_time_cost": ("medium", 1.0),
         "squared_makespan_cost": ("soft", 1.0),
@@ -177,7 +179,9 @@ def _one_job_one_line(deadline_minutes: int = 24 * 60) -> PackagingScheduleModel
     """One line, one 100-minute job: on the line it costs 100^2 = 10000 soft
     (squared_makespan_cost); left out it costs its 100 unassigned minutes."""
     start = datetime(2026, 1, 1)
-    product = ProductModel(id="P", name="Product", cleaning_durations={"P": timedelta(0)})
+    product = ProductModel(
+        id="P", name="Product", cleaning_durations={"P": timedelta(0)}
+    )
     return PackagingScheduleModel(
         from_date=start.date(),
         to_date=(start + timedelta(days=1)).date(),
@@ -218,7 +222,11 @@ def _both_paths(selection):
         # it to medium and the engine ignored it): 100 soft beats 10000 soft.
         ([UnassignedJobsCost(hard=False), squared_makespan_cost], (0, 0, -100), False),
         # hard=True: one hard unit per minute, not 10^10.
-        ([UnassignedJobsCost(hard=True), SquaredMakespanCost(hard=True)], (-100, 0, 0), False),
+        (
+            [UnassignedJobsCost(hard=True), SquaredMakespanCost(hard=True)],
+            (-100, 0, 0),
+            False,
+        ),
     ],
     ids=["default-medium", "medium-demoted", "medium-promoted"],
 )
@@ -238,4 +246,7 @@ def test_demoting_a_hard_constraint_scores_like_the_engine() -> None:
     solved = solve(problem, time_limit_seconds=5, constraints=selection)
     engine = score(constraint_costs(solved.to_core()), selection)
     assert solved.score_hard == 0
-    assert (solved.score_hard, solved.score_medium * MEDIUM_UNIT + solved.score_soft) == pytest.approx(tuple(engine))
+    assert (
+        solved.score_hard,
+        solved.score_medium * MEDIUM_UNIT + solved.score_soft,
+    ) == pytest.approx(tuple(engine))
