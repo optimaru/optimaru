@@ -2,10 +2,13 @@
 // non-zero exit on any failure.
 //   (a) the default assembly on the engine's DecomposedScoreCalculator
 //       reproduces the monolithic score bit-for-bit on 500 random
-//       assignments (including undecided items)
-//   (b) incremental score == full recompute across 3000 random moves driven
-//       through the engine's ScoreDirector protocol (plugin path), and the
-//       raw totals stay equal to a fresh reset
+//       assignments (including undecided items), and every raw total equals
+//       ScoreCalculator::rawCosts
+//   (b) incremental == full recompute across 3000 random moves driven
+//       through the engine's ScoreDirector protocol (plugin path): after
+//       each move the score and every constraint's raw total equal the full
+//       recompute's, and every constraint is non-zero at some point of the
+//       walk
 //   (c) partial assemblies: removing one component removes exactly its term
 //   (d) weight / level / exponent overrides (globals shape their total; hard
 //       rounds once per constraint)
@@ -48,36 +51,7 @@ Score scoreWith(DecomposedCalculator &calculator, KnapsackProblem &problem)
     return calculator.calculateScore();
 }
 
-// -------------------------------------------------------------------------
-// (a) The default assembly == the monolithic full recompute.
-// -------------------------------------------------------------------------
-void verifyAssemblyParity()
-{
-    std::printf("== (a) Default assembly == monolithic score ==\n");
-    int mismatches = 0;
-    const int rounds = 500;
-    std::mt19937_64 rng(99);
-    std::uniform_real_distribution<double> unit(0.0, 1.0);
-    for (int round = 0; round < rounds; ++round)
-    {
-        KnapsackProblem p = randomInstance(5 + round % 25, 1000 + round, 0.1);
-        DecomposedCalculator calculator;
-        addDefaultConstraints(calculator);
-        const Score plugin = scoreWith(calculator, p);
-        const Score monolithic = ScoreCalculator::calculateScore(p);
-        if (!(plugin == monolithic) && ++mismatches <= 3)
-        {
-            std::printf("  MISMATCH @round %d: plugin=%s monolithic=%s\n", round,
-                        plugin.toString().c_str(), monolithic.toString().c_str());
-        }
-    }
-    check(mismatches == 0, std::to_string(rounds) + " random instances score identically (bit for bit)");
-    std::printf("\n");
-}
-
-// -------------------------------------------------------------------------
-// (b) Incremental == full recompute across a random walk.
-// -------------------------------------------------------------------------
+// One raw total per assembled component, in assembly order.
 std::vector<double> rawTotals(const DecomposedCalculator &calculator)
 {
     std::vector<double> totals;
@@ -91,9 +65,56 @@ std::vector<double> rawTotals(const DecomposedCalculator &calculator)
     return totals;
 }
 
+// The raw totals the default assembly must report for `raw` (the monolith's
+// full recompute), in catalog order; the reward's raw cost is -value.
+std::vector<double> expectedTotals(const RawCosts &raw)
+{
+    return {static_cast<double>(raw.capacityOverflow),  static_cast<double>(raw.resourceOverflow),
+            static_cast<double>(raw.missingMandatory),  static_cast<double>(raw.chosenForbidden),
+            static_cast<double>(raw.groupViolation),    static_cast<double>(raw.unmetDependencies),
+            -static_cast<double>(raw.value)};
+}
+
+const char *const kCatalogNames[] = {"knapsackCapacityCost",     "resourceCapacityCost", "mandatoryItemsCost",
+                                     "forbiddenItemsCost",       "selectionGroupBoundsCost",
+                                     "itemDependencyCost",       "selectedValueCost"};
+
+// -------------------------------------------------------------------------
+// (a) The default assembly == the monolithic full recompute.
+// -------------------------------------------------------------------------
+void verifyAssemblyParity()
+{
+    std::printf("== (a) Default assembly == monolithic score ==\n");
+    int mismatches = 0;
+    int costMismatches = 0;
+    const int rounds = 500;
+    for (int round = 0; round < rounds; ++round)
+    {
+        KnapsackProblem p = randomInstance(5 + round % 25, 1000 + round, 0.1);
+        DecomposedCalculator calculator;
+        addDefaultConstraints(calculator);
+        const Score plugin = scoreWith(calculator, p);
+        const Score monolithic = ScoreCalculator::calculateScore(p);
+        if (!(plugin == monolithic) && ++mismatches <= 3)
+        {
+            std::printf("  MISMATCH @round %d: plugin=%s monolithic=%s\n", round,
+                        plugin.toString().c_str(), monolithic.toString().c_str());
+        }
+        if (rawTotals(calculator) != expectedTotals(ScoreCalculator::rawCosts(p)) && ++costMismatches <= 3)
+            std::printf("  RAW COST MISMATCH @round %d\n", round);
+    }
+    check(mismatches == 0, std::to_string(rounds) + " random instances score identically (bit for bit)");
+    check(costMismatches == 0,
+          std::to_string(rounds) + " random instances: every raw total == ScoreCalculator::rawCosts");
+    std::printf("\n");
+}
+
+// -------------------------------------------------------------------------
+// (b) Incremental == full recompute across a random walk, per constraint.
+// -------------------------------------------------------------------------
 void verifyIncremental()
 {
-    std::printf("== (b) Plugin incremental == full recompute ==\n");
+    std::printf("== (b) Plugin incremental == full recompute, per constraint ==\n");
     KnapsackProblem p = randomInstance(40, 7, 0.1);
     ScoreCalculator::prepare(p);
     DecomposedCalculator calculator;
@@ -105,7 +126,8 @@ void verifyIncremental()
     std::uniform_real_distribution<double> unit(0.0, 1.0);
     const int n = p.itemCount();
     int mismatches = 0;
-    int rawMismatches = 0;
+    int costMismatches = 0;
+    int nonZero[7] = {0, 0, 0, 0, 0, 0, 0};
     const int steps = 3000;
     for (int step = 0; step < steps; ++step)
     {
@@ -134,17 +156,27 @@ void verifyIncremental()
             std::printf("  MISMATCH @step %d: incremental=%s full=%s\n", step,
                         incremental.toString().c_str(), full.toString().c_str());
         }
-        if (step % 100 == 0)
+        const std::vector<double> expected = expectedTotals(ScoreCalculator::rawCosts(shadow));
+        const std::vector<double> running = rawTotals(calculator);
+        for (int c = 0; c < 7; ++c)
         {
-            DecomposedCalculator fresh;
-            addDefaultConstraints(fresh);
-            scoreWith(fresh, shadow);
-            if (rawTotals(fresh) != rawTotals(calculator))
-                ++rawMismatches;
+            if (running[c] != expected[c] && ++costMismatches <= 3)
+            {
+                std::printf("  RAW COST MISMATCH @step %d %s: incremental=%g full=%g\n", step,
+                            kCatalogNames[c], running[c], expected[c]);
+            }
+            if (expected[c] != 0.0)
+                ++nonZero[c];
         }
     }
-    check(mismatches == 0, std::to_string(steps) + " random moves, incremental == full recompute");
-    check(rawMismatches == 0, "the raw constraint costs after a walk == a fresh reset's");
+    check(mismatches == 0, std::to_string(steps) + " random moves, incremental score == full recompute");
+    check(costMismatches == 0,
+          std::to_string(steps) + " random moves, every constraint's incremental raw total == full recompute");
+    for (int c = 0; c < 7; ++c)
+    {
+        check(nonZero[c] > 0, std::string(kCatalogNames[c]) + " is non-zero on " + std::to_string(nonZero[c])
+                                  + " of the walk's states");
+    }
     std::printf("\n");
 }
 

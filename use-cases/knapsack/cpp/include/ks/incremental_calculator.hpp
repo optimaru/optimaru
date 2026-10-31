@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "ks/domain.hpp"
+#include "ks/score_calculator.hpp"
 #include "optimaru/api/score/calculator/incremental_score_calculator.hpp"
 
 namespace ks
@@ -34,6 +35,12 @@ public:
     void beforeVariableChanged(int itemIndex) override;
     void afterVariableChanged(int itemIndex) override;
     Score calculateScore() override;
+
+    // The raw cost of every default constraint, read from the running
+    // totals (the same fields as ScoreCalculator::rawCosts).
+    // calculateScore() weighs exactly these; the tests compare them with
+    // ScoreCalculator::rawCosts after every move.
+    RawCosts totals() const;
 
 private:
     KnapsackProblem *problem_ = nullptr;

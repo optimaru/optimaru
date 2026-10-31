@@ -129,7 +129,14 @@ class KnapsackProblemModel(BaseModel):
         """engine object -> pydantic: the facts, the selection (an undecided item, -1, is
         not selected), `warm_start` and the results (`total_weight`, `total_value` from
         the selection; the score last computed on the core, 0hard/0soft if it was never
-        scored)."""
+        scored).
+
+        An item's `resource_usage` comes back with its keys sorted: the engine keeps it
+        in a map, so only the order differs from the model `to_core()` was built from
+        (the dicts compare equal). `resource_capacities` keeps its declaration order.
+        `knapsack.solve(model)` writes only the selection and the results back, so the
+        model keeps its own order.
+        """
         ids = [item.id for item in problem.items]
         return cls(
             capacity=problem.capacity,

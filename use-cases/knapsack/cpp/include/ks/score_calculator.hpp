@@ -1,6 +1,8 @@
 #ifndef KS_SCORE_CALCULATOR_HPP
 #define KS_SCORE_CALCULATOR_HPP
 
+#include <cstdint>
+
 #include "ks/domain.hpp"
 
 namespace ks
@@ -26,11 +28,41 @@ namespace ks
 //   soft 7. selectedValueCost           a reward: -(selected value), so the
 //                                       soft score is +selected value
 // Undecided items (selected == -1) count as not selected.
+
+// The raw cost of every default constraint, all >= 0 (signs and weights are
+// applied in the score): the selected weight over capacity, the summed
+// resource overflow, the unselected mandatory and selected forbidden
+// entries, the summed group violation, the unmet dependencies, and the
+// selected value (+value; selectedValueCost is -value).
+struct RawCosts
+{
+    std::int64_t capacityOverflow = 0;   // knapsackCapacityCost
+    std::int64_t resourceOverflow = 0;   // resourceCapacityCost
+    std::int64_t missingMandatory = 0;   // mandatoryItemsCost
+    std::int64_t chosenForbidden = 0;    // forbiddenItemsCost
+    std::int64_t groupViolation = 0;     // selectionGroupBoundsCost
+    std::int64_t unmetDependencies = 0;  // itemDependencyCost
+    std::int64_t value = 0;              // selectedValueCost (as +value)
+
+    bool operator==(const RawCosts &other) const
+    {
+        return capacityOverflow == other.capacityOverflow && resourceOverflow == other.resourceOverflow
+               && missingMandatory == other.missingMandatory && chosenForbidden == other.chosenForbidden
+               && groupViolation == other.groupViolation && unmetDependencies == other.unmetDependencies
+               && value == other.value;
+    }
+    bool operator!=(const RawCosts &other) const { return !(*this == other); }
+};
+
 class ScoreCalculator
 {
 public:
     // Runs prepare(), then the full recompute; stores problem.score.
     static Score calculateScore(KnapsackProblem &problem);
+
+    // Runs prepare(), then the full recompute of every raw cost (what
+    // calculateScore weighs); leaves problem.score alone.
+    static RawCosts rawCosts(KnapsackProblem &problem);
 
     // Validates the facts and the selection and (re)builds the derived
     // indexes (KnapsackProblem's "derived data"). Throws std::invalid_argument

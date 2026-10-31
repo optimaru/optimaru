@@ -90,7 +90,7 @@ class ResourceCapacityCost(Constraint):
     )
     description_ko = (
         "용량이 정해진 자원마다 선택한 물품의 사용량이 용량을 넘는 양을 모두 더하며, 용량이 없는 자원의 사용량은 "
-        "무시합니다. 초과 사용량 1단위가 비용 1이며, 0이면 모든 자원이 용량 안에 있습니다."
+        "무시합니다. 초과 사용량 1단위가 비용 1이며, 0이면 모든 자원의 사용량이 용량 안에 있습니다."
     )
 
 
@@ -105,8 +105,8 @@ class MandatoryItemsCost(Constraint):
         "One unit of cost is one missing entry; 0 means every mandatory item is selected."
     )
     description_ko = (
-        "선택되지 않은 필수 물품의 수이며, 두 번 나열된 물품은 두 번 셉니다. "
-        "빠진 항목 하나가 비용 1이며, 0이면 필수 물품이 모두 선택되었습니다."
+        "선택되지 않은 필수 물품의 수이며, 목록에 두 번 들어 있는 물품은 두 번 셉니다. "
+        "빠진 항목 하나가 비용 1이며, 0이면 필수 물품이 모두 선택되어 있습니다."
     )
 
 
@@ -121,8 +121,8 @@ class ForbiddenItemsCost(Constraint):
         "One unit of cost is one selected entry; 0 means no forbidden item is selected."
     )
     description_ko = (
-        "선택된 금지 물품의 수이며, 두 번 나열된 물품은 두 번 셉니다. "
-        "선택된 항목 하나가 비용 1이며, 0이면 금지 물품이 하나도 선택되지 않았습니다."
+        "선택된 금지 물품의 수이며, 목록에 두 번 들어 있는 물품은 두 번 셉니다. "
+        "선택된 항목 하나가 비용 1이며, 0이면 선택된 금지 물품이 없습니다."
     )
 
 
@@ -138,8 +138,8 @@ class SelectionGroupBoundsCost(Constraint):
         "0 means every group is within its bounds."
     )
     description_ko = (
-        "선택 그룹마다 선택된 물품 수가 최솟값에 모자라거나 최댓값을 넘는 만큼을 모두 더합니다. "
-        "물품 하나가 모자라거나 넘칠 때마다 비용 1이며, 0이면 모든 그룹이 범위 안에 있습니다."
+        "선택 그룹마다 선택된 물품 수가 최솟값에 못 미치거나 최댓값을 넘는 만큼을 모두 더합니다. "
+        "물품이 하나 모자라거나 남을 때마다 비용 1이며, 0이면 모든 그룹의 선택 수가 범위 안에 있습니다."
     )
 
 
@@ -155,7 +155,7 @@ class ItemDependencyCost(Constraint):
     )
     description_ko = (
         "선택된 물품이 필요로 하는 물품이 선택되지 않은 경우를 (물품, 필요 물품) 쌍마다 셉니다. "
-        "충족되지 않은 쌍 하나가 비용 1이며, 0이면 선택된 모든 물품의 필요 물품이 함께 선택되었습니다."
+        "충족되지 않은 쌍 하나가 비용 1이며, 0이면 선택된 모든 물품의 필요 물품이 함께 선택되어 있습니다."
     )
 
 
@@ -164,13 +164,13 @@ class SelectedValueCost(Constraint):
 
     name = "selected_value_cost"
     label_en = "Selected value"
-    label_ko = "선택한 가치"
+    label_ko = "선택 물품 가치"
     description_en = (
         "The total value of the selected items, scored as a reward: the raw cost is minus the selected value "
         "(never positive), so a larger value scores better. It is always soft; hard=True is refused."
     )
     description_ko = (
-        "선택한 물품의 가치 합을 보상으로 셉니다. 원시 비용은 선택한 가치에 음수를 붙인 값(0 이하)이므로 "
+        "선택한 물품의 가치 합을 보상으로 셉니다. 원시 비용은 이 가치 합에 음수를 붙인 값(0 이하)이므로 "
         "가치가 클수록 점수가 좋아집니다. 항상 소프트 제약이며 hard=True는 거부됩니다."
     )
 

@@ -107,6 +107,10 @@ other C++ use cases.
   (`parallel_solver_count` is ignored), as in every C++ package.
 - `KnapsackProblemModel.to_core()` / `from_core()` convert to and from the real
   engine object (0.1.5: model copies); the JSON input/output schema is unchanged.
+  `from_core()` returns each item's `resource_usage` with its keys sorted (the
+  engine keeps it in a map; the dict compares equal, 0.1.5 kept the input order).
+  `solve(model)` writes only the selection and the results back, so the model
+  keeps its own order.
 
 ## cpp/
 
@@ -137,12 +141,14 @@ ctest --test-dir build/knapsack --output-on-failure --no-tests=error
 
 `ks_test`: per-constraint hand checks (positive and zero) on the full recompute and
 the incremental calculator, incremental == full recompute over random flip / swap /
-undecided / batch moves, the greedy cases, FULL_ASSERT solves, brute-force optima,
-the zero budget with a seed, determinism, multi-start and validation.
-`ks_plugin_test`: default assembly == monolith bit for bit, plugin incremental ==
-full recompute, partial assemblies, overrides (exponent on the total, per-constraint
-hard rounding), raw costs by hand, a FULL_ASSERT plugin solve, the catalog and the
-reward guards.
+undecided / batch moves (the score and every constraint's raw total after each move,
+with every constraint non-zero during the walk), the greedy cases, FULL_ASSERT
+solves, brute-force optima (0/1 multidimensional instances and instances with every
+fact), the zero budget with a seed, determinism, multi-start and validation.
+`ks_plugin_test`: default assembly == monolith bit for bit (score and raw totals),
+plugin incremental == full recompute per constraint after each move, partial
+assemblies, overrides (exponent on the total, per-constraint hard rounding), raw
+costs by hand, a FULL_ASSERT plugin solve, the catalog and the reward guards.
 
 ## Usage
 

@@ -161,7 +161,7 @@ void ScoreCalculator::prepare(KnapsackProblem &problem)
     problem.prepared = true;
 }
 
-Score ScoreCalculator::calculateScore(KnapsackProblem &problem)
+RawCosts ScoreCalculator::rawCosts(KnapsackProblem &problem)
 {
     prepare(problem);
     const int n = problem.itemCount();
@@ -227,12 +227,26 @@ Score ScoreCalculator::calculateScore(KnapsackProblem &problem)
             unmetDependencies += selected(required) ? 0 : 1;
     }
 
+    RawCosts raw;
+    raw.capacityOverflow = capacityOverflow;
+    raw.resourceOverflow = resourceOverflow;
+    raw.missingMandatory = missingMandatory;
+    raw.chosenForbidden = chosenForbidden;
+    raw.groupViolation = groupViolation;
+    raw.unmetDependencies = unmetDependencies;
+    raw.value = value;
+    return raw;
+}
+
+Score ScoreCalculator::calculateScore(KnapsackProblem &problem)
+{
+    const RawCosts raw = rawCosts(problem);
     Score score;
-    score.hard = -(kCapacityWeight * capacityOverflow + kResourceWeight * resourceOverflow
-                   + kMandatoryWeight * missingMandatory + kForbiddenWeight * chosenForbidden
-                   + kGroupWeight * groupViolation + kDependencyWeight * unmetDependencies);
+    score.hard = -(kCapacityWeight * raw.capacityOverflow + kResourceWeight * raw.resourceOverflow
+                   + kMandatoryWeight * raw.missingMandatory + kForbiddenWeight * raw.chosenForbidden
+                   + kGroupWeight * raw.groupViolation + kDependencyWeight * raw.unmetDependencies);
     // soft 7. selectedValueCost: raw -(value), so the soft score is +value.
-    score.soft = static_cast<double>(kValueWeight * value);
+    score.soft = static_cast<double>(kValueWeight * raw.value);
     problem.score = score;
     return score;
 }

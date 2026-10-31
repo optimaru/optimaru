@@ -147,14 +147,27 @@ std::int64_t KnapsackIncrementalScoreCalculator::unmetOf(int dependency) const
     return selected_[d.item] && !selected_[d.required] ? 1 : 0;
 }
 
+RawCosts KnapsackIncrementalScoreCalculator::totals() const
+{
+    RawCosts raw;
+    raw.capacityOverflow = load_ > problem_->capacity ? load_ - problem_->capacity : 0;
+    raw.resourceOverflow = resourceOverflow_;
+    raw.missingMandatory = missingMandatory_;
+    raw.chosenForbidden = chosenForbidden_;
+    raw.groupViolation = groupViolation_;
+    raw.unmetDependencies = unmetDependencies_;
+    raw.value = value_;
+    return raw;
+}
+
 Score KnapsackIncrementalScoreCalculator::calculateScore()
 {
-    const std::int64_t capacityOverflow = load_ > problem_->capacity ? load_ - problem_->capacity : 0;
+    const RawCosts raw = totals();
     Score score;
-    score.hard = -(kCapacityWeight * capacityOverflow + kResourceWeight * resourceOverflow_
-                   + kMandatoryWeight * missingMandatory_ + kForbiddenWeight * chosenForbidden_
-                   + kGroupWeight * groupViolation_ + kDependencyWeight * unmetDependencies_);
-    score.soft = static_cast<double>(kValueWeight * value_);
+    score.hard = -(kCapacityWeight * raw.capacityOverflow + kResourceWeight * raw.resourceOverflow
+                   + kMandatoryWeight * raw.missingMandatory + kForbiddenWeight * raw.chosenForbidden
+                   + kGroupWeight * raw.groupViolation + kDependencyWeight * raw.unmetDependencies);
+    score.soft = static_cast<double>(kValueWeight * raw.value);
     return score;
 }
 

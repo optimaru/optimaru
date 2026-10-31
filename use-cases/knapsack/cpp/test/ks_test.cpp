@@ -2,8 +2,10 @@
 // failure.
 //   (1) hand-calculated scores, each on the full recompute AND the
 //       incremental calculator: a positive and a zero case per constraint
-//   (2) incremental score == full recompute across random flips, swaps and
-//       -1 (undecided) transitions on random instances using every fact
+//   (2) incremental == full recompute across random flips, swaps and -1
+//       (undecided) transitions on random instances using every fact: the
+//       score and every constraint's raw total after each move, and every
+//       constraint non-zero at some point of the walk
 //   (3) the greedy construction (the 0.1.x expectations, ties, fixed items)
 //   (4) the solver: FULL_ASSERT, brute-force optima, the zero budget with a
 //       seed, reproducibility under a step limit, multi-start, validation
@@ -175,12 +177,26 @@ void verifyHandCalculated()
 }
 
 // -------------------------------------------------------------------------
-// (2) Incremental == full recompute on a random walk.
+// (2) Incremental == full recompute on a random walk, per constraint.
 // -------------------------------------------------------------------------
+// The raw totals in catalog order (defaultConstraints()), the selected value
+// as the reward's raw cost (-value).
+std::vector<std::int64_t> catalogOrder(const RawCosts &raw)
+{
+    return {raw.capacityOverflow, raw.resourceOverflow,  raw.missingMandatory, raw.chosenForbidden,
+            raw.groupViolation,   raw.unmetDependencies, -raw.value};
+}
+
+const char *const kCatalogNames[] = {"knapsackCapacityCost",     "resourceCapacityCost", "mandatoryItemsCost",
+                                     "forbiddenItemsCost",       "selectionGroupBoundsCost",
+                                     "itemDependencyCost",       "selectedValueCost"};
+
 void verifyIncrementalWalk()
 {
-    std::printf("== (2) Incremental == full recompute on random walks ==\n");
+    std::printf("== (2) Incremental == full recompute on random walks, per constraint ==\n");
     int mismatches = 0;
+    int costMismatches = 0;
+    int nonZero[7] = {0, 0, 0, 0, 0, 0, 0};
     int steps = 0;
     for (std::uint64_t seed = 1; seed <= 6; ++seed)
     {
@@ -224,9 +240,29 @@ void verifyIncrementalWalk()
                             static_cast<unsigned long long>(seed), step,
                             incremental.toString().c_str(), full.toString().c_str());
             }
+            const std::vector<std::int64_t> expected = catalogOrder(ScoreCalculator::rawCosts(shadow));
+            const std::vector<std::int64_t> running = catalogOrder(calculator.totals());
+            for (int c = 0; c < 7; ++c)
+            {
+                if (running[c] != expected[c] && ++costMismatches <= 3)
+                {
+                    std::printf("  RAW COST MISMATCH seed %llu step %d %s: incremental=%lld full=%lld\n",
+                                static_cast<unsigned long long>(seed), step, kCatalogNames[c],
+                                static_cast<long long>(running[c]), static_cast<long long>(expected[c]));
+                }
+                if (expected[c] != 0)
+                    ++nonZero[c];
+            }
         }
     }
-    check(mismatches == 0, std::to_string(steps) + " random moves, incremental == full recompute");
+    check(mismatches == 0, std::to_string(steps) + " random moves, incremental score == full recompute");
+    check(costMismatches == 0,
+          std::to_string(steps) + " random moves, every constraint's incremental raw total == full recompute");
+    for (int c = 0; c < 7; ++c)
+    {
+        check(nonZero[c] > 0, std::string(kCatalogNames[c]) + " is non-zero on " + std::to_string(nonZero[c])
+                                  + " of the walk's states");
+    }
     std::printf("\n");
 }
 
@@ -350,12 +386,17 @@ void verifySolver()
         check(reached == instances, "random 0/1 knapsacks with <= 13 items reach the brute-force optimum");
     }
     {
-        // With every side constraint the hard landscape can be deceptive (a
-        // single flip of a mandatory item may cost more than it repairs), so
-        // only "never worse than the construction, never above the optimum"
-        // is asserted for every instance.
-        bool ok = true;
-        for (std::uint64_t seed = 21; seed < 29; ++seed)
+        // Instances with every fact (mandatory / forbidden items, groups,
+        // dependencies): the hard landscape can be deceptive (a single flip
+        // of a mandatory item may cost more than it repairs), and a rare
+        // instance stays in a local optimum (seed 713 of 21..1020 at 20 000
+        // steps). These 40 reach the brute-force optimum under their fixed
+        // seed and step limit (the time limit is only a backstop), and none
+        // ends below the construction.
+        int reached = 0;
+        bool bounded = true;
+        const int instances = 40;
+        for (std::uint64_t seed = 21; seed < 21 + instances; ++seed)
         {
             KnapsackProblem p = randomInstance(8 + static_cast<int>(seed % 6), seed);
             const Score optimum = bruteForceOptimum(p);
@@ -364,13 +405,20 @@ void verifySolver()
             zero.spentLimit = std::chrono::milliseconds(0);
             Solver(zero).solve(start);
             Solver::Config config;
-            config.spentLimit = std::chrono::milliseconds(5000);
-            config.stepCountLimit = 30000;
+            config.spentLimit = std::chrono::milliseconds(30000);
+            config.stepCountLimit = 20000;
             config.randomSeed = seed;
             Solver(config).solve(p);
-            ok = ok && p.score >= start.score && p.score <= optimum;
+            bounded = bounded && p.score >= start.score && p.score <= optimum;
+            if (sameScore(p.score, optimum))
+                ++reached;
+            else
+                std::printf("  seed %llu: %s, optimum %s\n", static_cast<unsigned long long>(seed),
+                            p.score.toString().c_str(), optimum.toString().c_str());
         }
-        check(ok, "instances with every fact: construction <= solved <= brute-force optimum");
+        check(bounded, "instances with every fact: construction <= solved <= brute-force optimum");
+        check(reached == instances,
+              "random instances with every fact and <= 13 items reach the brute-force optimum");
     }
     {
         // A complete seed with a zero budget comes back unchanged, and the

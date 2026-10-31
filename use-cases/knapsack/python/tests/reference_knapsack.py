@@ -51,7 +51,7 @@ OLD_DEFAULTS = {
     "maximize_value": (False, 1.0),
 }
 
-#: 0.1.5 catalog name -> 0.2.0 name (/var/tmp/design/rename_table.json, knapsack rows).
+#: 0.1.5 catalog name -> 0.2.0 name (the renames listed in the package README, section 0.2.0).
 RENAMED = {
     "capacity": "knapsack_capacity_cost",
     "resource_capacities": "resource_capacity_cost",

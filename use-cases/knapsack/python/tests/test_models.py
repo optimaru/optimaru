@@ -58,6 +58,7 @@ def test_from_core_round_trips_the_facts_and_fills_the_results():
     expected.update(total_weight=9, total_value=13, score_hard=core.score.hard, score_soft=core.score.soft)
     assert back.model_dump() == expected
     assert list(back.resource_capacities) == ["zeta", "alpha"]  # declaration order survives
+    assert list(back.items[0].resource_usage) == ["alpha", "zeta"]  # an item's usage is a map in the engine: sorted
 
 
 def test_from_core_of_a_solved_core_fills_the_totals():
@@ -91,6 +92,7 @@ def test_solving_the_model_writes_the_result_back_in_place():
     assert (model.score_hard, model.score_soft) == (result.hard, result.soft)
     assert model.warm_start is False
     assert model.total_weight == sum(item.weight for item in model.items if item.selected)
+    assert list(model.items[0].resource_usage) == ["zeta", "alpha"]  # the facts are not rewritten
 
 
 @pytest.mark.parametrize(
