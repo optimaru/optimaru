@@ -1,4 +1,5 @@
 from semiconductor_scheduling import constraint_costs as fab_costs
+from semiconductor_scheduling import constraint_items as fab_items
 from semiconductor_scheduling import solve as solve_fab
 from semiconductor_scheduling.models import (
     AssignmentModel,
@@ -90,30 +91,36 @@ def _fab_problem(*, with_assignments: bool) -> SemiconductorScheduleModel:
     )
 
 
+def _raw(costs: dict, name: str) -> float:
+    """A constraint's raw total (every constraint is global: one element)."""
+    return sum(costs[name]["costs"])
+
+
 def test_semiconductor_constraints_match_manual_calculation():
     costs = fab_costs(_fab_problem(with_assignments=True))
-    assert sum(costs["machine_eligibility"]) == 0
-    assert sum(costs["lot_route_precedence"]) == 2
-    assert sum(costs["machine_capacity"]) == 2
-    assert sum(costs["batch_capacity"]) == 3
-    assert sum(costs["batch_family_compatibility"]) == 8
-    assert sum(costs["setup_transitions"]) == 5
-    assert sum(costs["maintenance_windows"]) == 3
-    assert sum(costs["maximum_queue_time"]) == 3
-    assert sum(costs["inter_tool_transport"]) == 0
-    assert sum(costs["machine_preference"]) == 1
-    assert sum(costs["minimum_batch_fill"]) == 3
-    assert sum(costs["machine_load_balance"]) == 8
-    assert sum(costs["weighted_tardiness"]) == 6
-    assert sum(costs["total_cycle_time"]) == 46
-    assert costs["makespan"] == [17]
+    assert _raw(costs, "machine_eligibility_cost") == 0
+    assert _raw(costs, "lot_route_precedence_cost") == 2
+    assert _raw(costs, "machine_capacity_cost") == 2
+    assert _raw(costs, "batch_capacity_cost") == 3
+    assert _raw(costs, "batch_family_conflict_cost") == 8
+    assert _raw(costs, "missing_setup_time_cost") == 5
+    assert _raw(costs, "machine_unavailability_cost") == 3
+    assert _raw(costs, "max_queue_time_cost") == 3
+    assert _raw(costs, "missing_transport_time_cost") == 0
+    assert _raw(costs, "machine_preference_cost") == 1
+    assert _raw(costs, "min_batch_size_cost") == 3
+    assert _raw(costs, "machine_load_imbalance_cost") == 8
+    assert _raw(costs, "weighted_tardiness_cost") == 6
+    assert _raw(costs, "cycle_time_cost") == 46
+    assert costs["makespan_cost"]["costs"] == [17]
+    assert fab_items(_fab_problem(with_assignments=True))["makespan_cost"] == [17]
 
 
-def test_semiconductor_inter_tool_transport_matches_manual_shortfall():
+def test_semiconductor_missing_transport_time_matches_manual_shortfall():
     problem = _fab_problem(with_assignments=True)
     problem.assignments[1].start = 6
     problem.assignments[1].end = 11
-    assert sum(fab_costs(problem)["inter_tool_transport"]) == 1
+    assert _raw(fab_costs(problem), "missing_transport_time_cost") == 1
 
 
 def test_semiconductor_meta_builds_a_feasible_reentrant_schedule():
@@ -121,17 +128,17 @@ def test_semiconductor_meta_builds_a_feasible_reentrant_schedule():
     solve_fab(problem, time_limit_seconds=0.05, random_seed=3)
     costs = fab_costs(problem)
     for name in (
-        "machine_eligibility",
-        "lot_route_precedence",
-        "machine_capacity",
-        "batch_capacity",
-        "batch_family_compatibility",
-        "setup_transitions",
-        "maintenance_windows",
-        "maximum_queue_time",
-        "inter_tool_transport",
+        "machine_eligibility_cost",
+        "lot_route_precedence_cost",
+        "machine_capacity_cost",
+        "batch_capacity_cost",
+        "batch_family_conflict_cost",
+        "missing_setup_time_cost",
+        "machine_unavailability_cost",
+        "max_queue_time_cost",
+        "missing_transport_time_cost",
     ):
-        assert sum(costs[name]) == 0
+        assert _raw(costs, name) == 0
 
 
 def test_fab_resource_pin_and_cycle_constraints_match_manual_values():
@@ -182,9 +189,12 @@ def test_fab_resource_pin_and_cycle_constraints_match_manual_values():
             AssignmentModel(lot_id="L2", operation_id="O1", machine_id="M1", start=2, end=6),
         ],
     )
+    items = fab_items(problem)
+    assert items["min_queue_time_cost"] == [2]
+    assert items["auxiliary_resource_capacity_cost"] == [2]
+    assert sum(items["auxiliary_resource_unavailability_cost"]) == 3
+    assert items["pinned_assignments_cost"] == [1]
+    assert items["max_cycle_time_cost"] == [2]
     costs = fab_costs(problem)
-    assert costs["minimum_queue_time"] == [2]
-    assert costs["auxiliary_resource_capacity"] == [2]
-    assert sum(costs["auxiliary_resource_availability"]) == 3
-    assert costs["pinned_assignments"] == [1]
-    assert costs["maximum_cycle_time"] == [2]
+    assert _raw(costs, "auxiliary_resource_unavailability_cost") == 3
+    assert _raw(costs, "pinned_assignments_cost") == 1

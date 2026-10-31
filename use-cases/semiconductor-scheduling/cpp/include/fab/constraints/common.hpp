@@ -1,0 +1,157 @@
+#ifndef FAB_CONSTRAINTS_COMMON_HPP
+#define FAB_CONSTRAINTS_COMMON_HPP
+
+#include <cstdint>
+#include <memory>
+#include <stdexcept>
+#include <vector>
+
+#include "fab/domain.hpp"
+#include "fab/evaluator.hpp"
+#include "fab/score_terms.hpp"
+#include "optimaru/api/score/calculator/constraint_assembly.hpp"
+#include "optimaru/api/score/calculator/decomposed_score_calculator.hpp"
+
+namespace fab
+{
+
+// ---------------------------------------------------------------------------
+// Plugin-style constraint components
+// ---------------------------------------------------------------------------
+// The 20 constraints of the fab, one component each on the engine's
+// DecomposedScoreCalculator — the composable path NEXT TO the monolithic
+// calculators (fab/score_calculator.hpp, fab/incremental_calculator.hpp),
+// which stay the default fast path.
+//
+// Unit choice: none. The planning value of a row is a (rank, machine option)
+// pair and the schedule is DERIVED from all of them by the serial decoder:
+// changing one row's rank can move every later operation on every machine.
+// No cost decomposes per planning value, so all 20 components are
+// GlobalConstraints over one shared ScheduleView (the engine's
+// shared-context contract, the conference-scheduling BreakdownProjection
+// precedent): the view keeps the decoded schedule and the per-unit raw costs
+// up to date — lazily, once per score, however many components read it (see
+// ScheduleEvaluator) — and each component reports its own term.
+//
+// Each component still owns its cost: the raw formula over one unit (a row, a
+// lot, a machine, a resource, a pin or a machine group) is a static function
+// of its struct, which the view and the monolithic calculators call. A
+// formula is therefore written once, in the component's header.
+//
+//   DecomposedCalculator calc;
+//   defaultConstraints()                         // the whole default set
+//       .weight("weightedTardinessCost", 4)      // ... then only what differs
+//       .soft("maxQueueTimeCost")
+//       .drop("makespanCost")
+//       .into(calc);
+//   solver.solve(schedule, calc);
+//
+// Each component declares its defaults once, as static constexpr
+// kDefaultWeight / kDefaultLevel passed to the base constructor; they are
+// assembly-time metadata, not part of the cost. Override them per instance
+// with the constructor's weight argument or the validated setters, or by name
+// through ConstraintAssembly. The schedule carries no weights.
+//
+// Registry names are the struct names with a lower-case first letter
+// ("machineCapacityCost"); Python sees them through pythonName()
+// ("machine_capacity_cost").
+//
+// Global constraints shape their TOTAL: exponent e scores weight * total^e
+// (0.1.x shaped each item). Hard totals are rounded per constraint.
+//
+// Cost sign convention (see decomposed_score_calculator.hpp): positive =
+// penalty, 0 = no violation; the calculator negates into the score. Every
+// component requires ScoreCalculator::prepare(schedule) to have run.
+
+using DecomposedCalculator = optimaru::DecomposedScoreCalculator<SemiconductorSchedule>;
+using ConstraintAssembly = optimaru::ConstraintAssembly<SemiconductorSchedule>;
+using FabGlobalConstraint = optimaru::GlobalConstraint<SemiconductorSchedule>;
+
+namespace detail
+{
+
+inline void requirePrepared(const SemiconductorSchedule &schedule)
+{
+    if (!schedule.prepared)
+    {
+        throw std::logic_error("fab constraints require "
+                               "ScoreCalculator::prepare(schedule) first");
+    }
+}
+
+}  // namespace detail
+
+// The shared per-calculator view: one ScheduleEvaluator, reset once per
+// calculator reset, told about every planning-value change, asked for the
+// raw totals at most once per score (it caches them until the next change).
+struct ScheduleView final : optimaru::SharedConstraintContext
+{
+    void resetOnce(const SemiconductorSchedule &schedule)
+    {
+        if (resetGeneration_ == generation)
+            return;
+        resetGeneration_ = generation;
+        evaluator_.reset(schedule);
+    }
+    void markChanged(int row) { evaluator_.markChanged(row); }
+    void markAllChanged() { evaluator_.markAllChanged(); }
+    std::int64_t total(Term term) { return evaluator_.totals()[termIndex(term)]; }
+
+private:
+    ScheduleEvaluator evaluator_;
+    std::uint64_t resetGeneration_ = ~std::uint64_t{0};
+};
+
+// Shared base of the 20 components: the subclass names its Term; the view
+// does the rest.
+struct ScheduleViewConstraint : FabGlobalConstraint
+{
+    ScheduleViewConstraint(std::string constraintName, double constraintWeight,
+                           optimaru::Level constraintLevel, Term term)
+        : FabGlobalConstraint(std::move(constraintName), constraintWeight, constraintLevel),
+          term_(term)
+    {
+    }
+
+    Term term() const { return term_; }
+
+    const char *sharedContextKey() const override { return "fab.schedule"; }
+    std::unique_ptr<optimaru::SharedConstraintContext> createSharedContext() const override
+    {
+        return std::make_unique<ScheduleView>();
+    }
+    void bindSharedContext(optimaru::SharedConstraintContext &context) override
+    {
+        view_ = static_cast<ScheduleView *>(&context);
+    }
+
+    void reset(const SemiconductorSchedule &schedule,
+               const std::vector<std::vector<int>> & /*membersPerUnit*/) override
+    {
+        detail::requirePrepared(schedule);
+        view_->resetOnce(schedule);
+    }
+    // A row's value moved: every component hears it; the view keeps one mark.
+    bool supportsMemberChange() const override { return true; }
+    void onMemberChanged(const SemiconductorSchedule & /*schedule*/, int /*unit*/,
+                         const std::vector<int> & /*members*/, int row, bool /*joined*/) override
+    {
+        view_->markChanged(row);
+    }
+    // Not called while supportsMemberChange() holds; a unit notification
+    // cannot say who left, so it re-reads every row.
+    void onUnitChanged(const SemiconductorSchedule & /*schedule*/, int /*unit*/,
+                       const std::vector<int> & /*members*/) override
+    {
+        view_->markAllChanged();
+    }
+    double cost() const override { return static_cast<double>(view_->total(term_)); }
+
+private:
+    Term term_;
+    ScheduleView *view_ = nullptr;
+};
+
+}  // namespace fab
+
+#endif  // FAB_CONSTRAINTS_COMMON_HPP
