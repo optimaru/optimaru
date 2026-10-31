@@ -129,18 +129,16 @@ class _DomainConstraint:
         self.exponent = exponent
 
 
-class _CapacityPlugin(_DomainConstraint, ConstraintPlugin[dict]):
-    default_level = "hard"
-    default_weight = 2
+def test_registry_builds_only_selected_domain_constraint_plugins(monkeypatch) -> None:
+    spec_class = _fake_domain(monkeypatch, [("capacity", "hard", 2.0, True, False)])
 
-    def build(self, context, objective):
-        objective.add(self.name, context["value"], bound=1)
+    class CapacityPlugin(spec_class("capacity"), ConstraintPlugin[dict]):
+        def build(self, context, objective):
+            objective.add(self.name, context["value"], bound=1)
 
-
-def test_registry_builds_only_selected_domain_constraint_plugins() -> None:
     model = cp_model.CpModel()
     value = model.new_bool_var("value")
-    registry = ConstraintRegistry([_CapacityPlugin()])
+    registry = ConstraintRegistry([CapacityPlugin()])
     objective = registry.objective(
         model, ("hard", "soft"), [_DomainConstraint(weight=3)]
     )
@@ -216,18 +214,13 @@ def test_non_flippable_constraint_refuses_a_level_change() -> None:
         _level(("hard", "soft"), {"name": "pinned", "hard": False})
 
 
-def test_level_sets_without_soft_keep_the_pre_020_rule() -> None:
-    """0.2.0 transition shim: task-assigning's soft0/soft1/soft2 levels."""
-    specs = (
-        ConstraintSpec("skill", "Skill", "hard", 1),
-        ConstraintSpec("makespan", "Makespan", "soft1", 1),
-    )
-    levels = ("hard", "soft0", "soft1", "soft2")
-    objective = ObjectiveBuilder(
-        cp_model.CpModel(), levels, specs, [{"name": "skill", "hard": False}, {"name": "makespan", "hard": False}]
-    )
-    assert objective.level_of(*objective.selected["skill"]) == "soft0"
-    assert objective.level_of(*objective.selected["makespan"]) == "soft1"
+def test_hard_false_needs_a_soft_level() -> None:
+    """hard=False always means soft; a level set without one cannot take it."""
+    specs = (ConstraintSpec("skill", "Skill", "hard", 1),)
+    objective = ObjectiveBuilder(cp_model.CpModel(), ("hard", "medium"), specs, [{"name": "skill", "hard": False}])
+    assert objective.level_of(*objective.selected["skill"]) == "soft"
+    with pytest.raises(ValueError, match="unsupported score level 'soft'"):
+        objective.add("skill", 1, bound=1)
 
 
 def test_exponent_and_fractional_weight_stay_rejected() -> None:
@@ -307,26 +300,18 @@ def test_migrated_plugin_must_not_restate_engine_defaults(monkeypatch) -> None:
         CapacityCost().spec
 
 
-def test_unmigrated_plugin_keeps_its_classvar_defaults() -> None:
-    """0.2.0 transition shim: no constraint_info() in the chain -> ClassVars."""
-    spec = _CapacityPlugin().spec
-    assert (spec.level, spec.weight, spec.level_flippable, spec.reward) == ("hard", 2, True, False)
+def test_plugin_without_constraint_info_is_refused() -> None:
+    """Defaults come only from the domain's constraint_info(); there is no ClassVar path."""
 
-
-def test_unmigrated_plugin_may_set_its_defaults_per_instance() -> None:
-    """0.2.0 transition shim: employee-scheduling's RulePlugin sets them in __init__."""
-
-    class RulePlugin(ConstraintPlugin[dict]):
-        def __init__(self, name, hard, weight):
-            self.name = name
-            self.default_level = "hard" if hard else "soft"
-            self.default_weight = weight
+    class _Orphan(_DomainConstraint, ConstraintPlugin[dict]):
+        default_level = "hard"
+        default_weight = 2
 
         def build(self, context, objective):
             pass
 
-    spec = RulePlugin("rule", False, 4).spec
-    assert (spec.name, spec.level, spec.weight) == ("rule", "soft", 4)
+    with pytest.raises(TypeError, match="exposes constraint_info"):
+        _Orphan().spec
 
 
 def test_catalog_rows_use_the_server_vocabulary() -> None:

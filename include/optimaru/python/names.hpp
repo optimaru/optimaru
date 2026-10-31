@@ -21,11 +21,6 @@ namespace python {
 //   facilityCapacityCost -> facility_capacity_cost
 //   vehicleCapacityCost  -> vehicle_capacity_cost
 //
-// 0.2.0 transition shim: removed once every use case is migrated. Spaces and
-// dashes (the pre-0.2.0 registry spelling, "facility setup cost") map to
-// underscores too; once every registry name is camelCase only the
-// capital-letter rule remains.
-//
 // One shape it does not handle: a run of capitals is broken up letter by
 // letter ("HTTPTag" -> "h_t_t_p_tag"), because the rule cannot tell an
 // acronym from adjacent words without a dictionary. Spell an acronym in the
@@ -33,9 +28,7 @@ namespace python {
 inline std::string pythonName(const std::string& constraintName) {
     std::string out;
     for (const char c : constraintName) {
-        if (c == ' ' || c == '-') {
-            if (!out.empty() && out.back() != '_') out += '_';
-        } else if (std::isupper(static_cast<unsigned char>(c))) {
+        if (std::isupper(static_cast<unsigned char>(c))) {
             if (!out.empty() && out.back() != '_') out += '_';
             out += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
         } else {

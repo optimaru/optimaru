@@ -1277,7 +1277,7 @@ void testScoreAnalysis(const HardSoftScore& optimum) {
 struct TaConflict final : optimaru::UnitConstraint<TaskAssignment> {
     std::vector<std::vector<char>> adj;
     TaConflict(const TaskAssignment& s, double weight)
-            : UnitConstraint("conflict", weight, /*hard=*/true),
+            : UnitConstraint("conflict", weight, optimaru::Level::Hard),
               adj(s.assignment.size(), std::vector<char>(s.assignment.size(), 0)) {
         for (auto [a, b] : s.conflicts) adj[a][b] = adj[b][a] = 1;
     }
@@ -1304,7 +1304,8 @@ struct TaConflict final : optimaru::UnitConstraint<TaskAssignment> {
 template <bool WithDelta>
 struct TaCost final : optimaru::UnitConstraint<TaskAssignment> {
     explicit TaCost(double weight, double exp = 1.0)
-            : UnitConstraint(WithDelta ? "cost" : "cost (no delta)", weight, /*hard=*/false) {
+            : UnitConstraint(WithDelta ? "cost" : "cost (no delta)", weight,
+                             optimaru::Level::Soft) {
         exponent = exp;
     }
     double cost(const TaskAssignment& s, int unit,
@@ -1322,7 +1323,7 @@ struct TaCost final : optimaru::UnitConstraint<TaskAssignment> {
 
 struct TaBalance final : optimaru::GlobalConstraint<TaskAssignment> {
     explicit TaBalance(double weight)
-            : GlobalConstraint("balance", weight, /*hard=*/false) {}
+            : GlobalConstraint("balance", weight, optimaru::Level::Soft) {}
     std::vector<long> counts;
     void reset(const TaskAssignment&,
                const std::vector<std::vector<int>>& membersPerUnit) override {
@@ -1461,7 +1462,7 @@ void testDecomposedDeltaCalculator() {
 // three-route TSP for every move kind; a global without the contract must
 // switch previews off for the whole assembly.
 struct TspRouteLength final : optimaru::UnitConstraint<TspSolution> {
-    TspRouteLength() : UnitConstraint("routeLength", 1.0, false) {}
+    TspRouteLength() : UnitConstraint("routeLength", 1.0, optimaru::Level::Soft) {}
     double cost(const TspSolution& s, int, const std::vector<int>& members) const override {
         return routeLength(s, members);
     }
@@ -1470,7 +1471,8 @@ struct TspRouteLength final : optimaru::UnitConstraint<TspSolution> {
 // Longest route across the fleet: a statistic that does not decompose, with
 // the per-route lengths kept so a preview can re-take the maximum.
 struct TspLongestRoute final : optimaru::GlobalConstraint<TspSolution> {
-    explicit TspLongestRoute(bool previews) : GlobalConstraint("longestRoute", 1.0, false), previews_(previews) {}
+    explicit TspLongestRoute(bool previews)
+        : GlobalConstraint("longestRoute", 1.0, optimaru::Level::Soft), previews_(previews) {}
     void reset(const TspSolution& s, const std::vector<std::vector<int>>& members) override {
         lengths_.clear();
         for (const auto& m : members) lengths_.push_back(routeLength(s, m));
@@ -1554,7 +1556,7 @@ struct TspSumsContext final : optimaru::SharedConstraintContext {
 
 struct TspRouteLengthSums final : optimaru::UnitConstraint<TspSolution> {
     explicit TspRouteLengthSums(bool piecewise = true)
-        : UnitConstraint("routeLength", 1.0, false), piecewise_(piecewise) {}
+        : UnitConstraint("routeLength", 1.0, optimaru::Level::Soft), piecewise_(piecewise) {}
     const char* sharedContextKey() const override { return "tsp.sums"; }
     std::unique_ptr<optimaru::SharedConstraintContext> createSharedContext() const override {
         return std::make_unique<TspSumsContext>();
@@ -1581,7 +1583,7 @@ struct TspRouteLengthSums final : optimaru::UnitConstraint<TspSolution> {
 };
 
 struct TspLongestRouteSums final : optimaru::GlobalConstraint<TspSolution> {
-    TspLongestRouteSums() : GlobalConstraint("longestRoute", 1.0, false) {}
+    TspLongestRouteSums() : GlobalConstraint("longestRoute", 1.0, optimaru::Level::Soft) {}
     const char* sharedContextKey() const override { return "tsp.sums"; }
     std::unique_ptr<optimaru::SharedConstraintContext> createSharedContext() const override {
         return std::make_unique<TspSumsContext>();

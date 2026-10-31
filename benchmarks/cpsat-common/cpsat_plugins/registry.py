@@ -175,14 +175,8 @@ class ObjectiveBuilder:
             if spec.reward:
                 raise ValueError(f"constraint {spec.name!r} is a reward and cannot be hard")
             wanted = "hard"
-        elif "soft" in self.levels:
-            wanted = "soft"
         else:
-            # 0.2.0 transition shim: removed once every use case is migrated.
-            # Level sets without "soft" (task-assigning's soft0/soft1/soft2)
-            # keep the pre-0.2.0 rule: hard=False moves a hard term to the
-            # first lower level and leaves every other term where it is.
-            wanted = (self.levels[1] if len(self.levels) > 1 else "hard") if level == "hard" else level
+            wanted = "soft"
         if wanted != level and not spec.level_flippable:
             raise ValueError(
                 f"constraint {spec.name!r} is always {level}; hard={config.hard!r} is not allowed"

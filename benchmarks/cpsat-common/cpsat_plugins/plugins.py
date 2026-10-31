@@ -6,20 +6,20 @@ constraint and this mixin, and owns the code that adds its expression to the
 model. The solver therefore only creates planning variables and asks the
 registry to build the selected plugins.
 
-Default level and weight come from the engine. When the domain package exposes
-``constraint_info()`` (every package migrated to the 0.2.0 contract does), the
-plugin's ``spec`` reads its row: ``default_level``, ``default_weight``,
-``level_flippable`` and ``reward`` are the C++ component's constants, so the
-two solvers cannot disagree on a default. A migrated plugin must NOT restate
-``default_level`` / ``default_weight``; doing so raises TypeError.
+Default level and weight come from the engine. Every domain package exposes
+``constraint_info()``, and the plugin's ``spec`` reads its row:
+``default_level``, ``default_weight``, ``level_flippable`` and ``reward`` are
+the C++ component's constants, so the two solvers cannot disagree on a
+default. A plugin must NOT restate ``default_level`` / ``default_weight``;
+doing so raises TypeError, and so does a plugin whose domain package has no
+``constraint_info()``.
 """
 
 from __future__ import annotations
 
 import sys
 from abc import ABC, abstractmethod
-from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import replace
+from collections.abc import Iterable, Sequence
 from typing import Any, Generic, TypeVar
 
 from ortools.sat.python import cp_model
@@ -38,7 +38,7 @@ def engine_constraint_info(cls: type) -> dict[str, Any] | None:
     Walks the MRO and, for each class, its module's parent packages
     (``facility_location.constraints`` -> ``facility_location``), returning the
     first package's catalog keyed by name. None when no package in the chain
-    exposes ``constraint_info`` (a domain not yet on the 0.2.0 contract).
+    exposes ``constraint_info``.
     """
     for base in cls.__mro__:
         package_name = getattr(base, "__module__", "").rpartition(".")[0]
@@ -58,10 +58,7 @@ def engine_constraint_info(cls: type) -> dict[str, Any] | None:
 class ConstraintPlugin(ABC, Generic[ContextT]):
     """Engine-specific builder mixed into a domain ``Constraint`` subclass.
 
-    0.2.0 transition shim: removed once every use case is migrated. A plugin of
-    a domain without ``constraint_info()`` still declares its defaults by hand
-    as ClassVars (``default_level`` required, ``default_weight`` defaulting to
-    1), exactly as before 0.2.0.
+    Its defaults are the domain's ``constraint_info()`` row for its name.
     """
 
     label: str = ""
@@ -89,31 +86,26 @@ class ConstraintPlugin(ABC, Generic[ContextT]):
     def _defaults(self, name: str) -> tuple[str, int | float, bool, bool, bool | None]:
         cls = type(self)
         catalog = engine_constraint_info(cls)
-        if catalog is not None:
-            for attr in ("default_level", "default_weight"):
-                if getattr(self, attr, None) is not None:
-                    raise TypeError(
-                        f"{cls.__name__}.{attr} restates an engine default; "
-                        f"{name!r} takes it from the domain's constraint_info()"
-                    )
-            # A plugin per instance of a repeated rule is named "<name>#<k>"
-            # (the constraint_costs() key rule); its row is the plain name's.
-            row = catalog.get(name.partition("#")[0])
-            if row is None:
-                raise TypeError(f"{cls.__name__}: {name!r} is not in the domain's constraint_info()")
-            weight = row.default_weight
-            if float(weight).is_integer():
-                weight = int(weight)  # CP-SAT objectives are integral
-            enabled = getattr(row, "default_enabled", None)
-            return row.default_level, weight, row.level_flippable, row.reward, enabled
-        # 0.2.0 transition shim: removed once every use case is migrated. The
-        # defaults may be ClassVars or, as employee-scheduling's RulePlugin
-        # sets them, instance attributes.
-        level = getattr(self, "default_level", None)
-        if level is None:
-            raise TypeError(f"{cls.__name__} must declare default_level (its domain has no constraint_info())")
-        weight = getattr(self, "default_weight", None)
-        return level, 1 if weight is None else weight, True, False, None
+        if catalog is None:
+            raise TypeError(
+                f"{cls.__name__} must derive from a domain constraint whose package exposes constraint_info()"
+            )
+        for attr in ("default_level", "default_weight"):
+            if getattr(self, attr, None) is not None:
+                raise TypeError(
+                    f"{cls.__name__}.{attr} restates an engine default; "
+                    f"{name!r} takes it from the domain's constraint_info()"
+                )
+        # A plugin per instance of a repeated rule is named "<name>#<k>"
+        # (the constraint_costs() key rule); its row is the plain name's.
+        row = catalog.get(name.partition("#")[0])
+        if row is None:
+            raise TypeError(f"{cls.__name__}: {name!r} is not in the domain's constraint_info()")
+        weight = row.default_weight
+        if float(weight).is_integer():
+            weight = int(weight)  # CP-SAT objectives are integral
+        enabled = getattr(row, "default_enabled", None)
+        return row.default_level, weight, row.level_flippable, row.reward, enabled
 
     @abstractmethod
     def build(self, context: ContextT, objective: ObjectiveBuilder) -> None:
@@ -140,18 +132,9 @@ class ConstraintRegistry(Generic[ContextT]):
         model: cp_model.CpModel,
         levels: Sequence[str],
         constraints: Iterable[ConstraintSelection] | None,
-        *,
-        default_weights: Mapping[str, int] | None = None,
     ) -> ObjectiveBuilder:
-        """``default_weights`` is a 0.2.0 transition shim: removed once every
-        use case is migrated (a migrated domain's defaults all come from
-        constraint_info(), and its canonical model carries no weights)."""
-        default_weights = default_weights or {}
-        specs = tuple(
-            replace(spec, weight=default_weights.get(spec.name, spec.weight))
-            for spec in self.specs
-        )
-        return ObjectiveBuilder(model, levels, specs, constraints)
+        """The objective over this registry's specs; defaults come from constraint_info()."""
+        return ObjectiveBuilder(model, levels, self.specs, constraints)
 
     def build(self, context: ContextT, objective: ObjectiveBuilder) -> None:
         for name in objective.selected:

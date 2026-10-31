@@ -86,33 +86,6 @@ struct SharedConstraintContext {
 template <typename Solution>
 struct UnitConstraint;
 
-// 0.2.0 transition shim: removed once every use case is migrated.
-// The pre-0.2.0 constraint bases carried a mutable `bool isHard` member; the
-// real metadata is now `level`. This proxy keeps the old spellings compiling
-// on top of it, with `level` as the only state:
-//   c.isHard = false;     // sets level = Soft (true sets Hard)
-//   if (c.isHard) ...     // reads level == Hard
-//   c.isHard()            // the 0.2.0 spelling, which stays valid once the
-//                         // proxy becomes a plain member function
-// Migrated code uses `level` / `isHard()` only.
-class LevelHardFlag {
-public:
-    explicit LevelHardFlag(Level& level) : level_(&level) {}
-    LevelHardFlag(const LevelHardFlag&) = delete;  // the owner rebinds on copy
-    LevelHardFlag& operator=(bool hard) {
-        *level_ = hard ? Level::Hard : Level::Soft;
-        return *this;
-    }
-    LevelHardFlag& operator=(const LevelHardFlag& other) {
-        return *this = static_cast<bool>(other);
-    }
-    operator bool() const { return *level_ == Level::Hard; }
-    bool operator()() const { return *level_ == Level::Hard; }
-
-private:
-    Level* level_;
-};
-
 // Assembly-time metadata of one constraint, shared by the unit and global
 // bases. None of it is part of the cost: a component declares its defaults
 // (static constexpr kDefaultWeight / kDefaultLevel, passed to the base
@@ -139,58 +112,19 @@ struct ConstraintMetadata {
     // stays the registry name (the catalog, the Python name, the
     // ConstraintAssembly key). constraintTotals()/constraintCosts() report it.
     std::string label;
-    // 0.2.0 transition shim: removed once every use case is migrated (it
-    // becomes `bool isHard() const { return level == Level::Hard; }`).
-    LevelHardFlag isHard{level};
+
+    bool isHard() const { return level == Level::Hard; }
 
     ConstraintMetadata(std::string constraintName, double constraintWeight, Level constraintLevel)
         : name(std::move(constraintName)), weight(constraintWeight), level(constraintLevel) {}
-    // 0.2.0 transition shim: removed once every use case is migrated. The
-    // pre-0.2.0 `(name, weight, bool hard)` constructor.
-    ConstraintMetadata(std::string constraintName, double constraintWeight, bool hard)
-        : ConstraintMetadata(std::move(constraintName), constraintWeight,
-                             hard ? Level::Hard : Level::Soft) {}
 
-    // Copies rebind the isHard proxy to their own level. Copying is also how
-    // a wrapper component takes over everything its inner component declares
-    // (employee-scheduling ScopedUnit):
+    // Copying is how a wrapper component takes over everything its inner
+    // component declares (employee-scheduling ScopedUnit):
     //   static_cast<ConstraintMetadata&>(*this) = *inner;
-    ConstraintMetadata(const ConstraintMetadata& other)
-        : name(other.name),
-          weight(other.weight),
-          level(other.level),
-          reward(other.reward),
-          levelFlippable(other.levelFlippable),
-          exponent(other.exponent),
-          label(other.label) {}
-    ConstraintMetadata(ConstraintMetadata&& other) noexcept
-        : name(std::move(other.name)),
-          weight(other.weight),
-          level(other.level),
-          reward(other.reward),
-          levelFlippable(other.levelFlippable),
-          exponent(other.exponent),
-          label(std::move(other.label)) {}
-    ConstraintMetadata& operator=(const ConstraintMetadata& other) {
-        name = other.name;
-        weight = other.weight;
-        level = other.level;
-        reward = other.reward;
-        levelFlippable = other.levelFlippable;
-        exponent = other.exponent;
-        label = other.label;
-        return *this;
-    }
-    ConstraintMetadata& operator=(ConstraintMetadata&& other) noexcept {
-        name = std::move(other.name);
-        weight = other.weight;
-        level = other.level;
-        reward = other.reward;
-        levelFlippable = other.levelFlippable;
-        exponent = other.exponent;
-        label = std::move(other.label);
-        return *this;
-    }
+    ConstraintMetadata(const ConstraintMetadata&) = default;
+    ConstraintMetadata(ConstraintMetadata&&) noexcept = default;
+    ConstraintMetadata& operator=(const ConstraintMetadata&) = default;
+    ConstraintMetadata& operator=(ConstraintMetadata&&) noexcept = default;
 
     // --- the knob rules, in ONE place ------------------------------------
     // Re-state a knob with the checks every client gets: ConstraintAssembly's
@@ -276,9 +210,6 @@ template <typename Solution>
 struct UnitConstraint : ConstraintMetadata {
     UnitConstraint(std::string constraintName, double constraintWeight, Level constraintLevel)
         : ConstraintMetadata(std::move(constraintName), constraintWeight, constraintLevel) {}
-    // 0.2.0 transition shim: removed once every use case is migrated.
-    UnitConstraint(std::string constraintName, double constraintWeight, bool hard)
-        : ConstraintMetadata(std::move(constraintName), constraintWeight, hard) {}
     virtual ~UnitConstraint() = default;
 
     // Called once per resetWorkingSolution, before any cost()/deltaCost().
@@ -381,9 +312,6 @@ template <typename Solution>
 struct GlobalConstraint : ConstraintMetadata {
     GlobalConstraint(std::string constraintName, double constraintWeight, Level constraintLevel)
         : ConstraintMetadata(std::move(constraintName), constraintWeight, constraintLevel) {}
-    // 0.2.0 transition shim: removed once every use case is migrated.
-    GlobalConstraint(std::string constraintName, double constraintWeight, bool hard)
-        : ConstraintMetadata(std::move(constraintName), constraintWeight, hard) {}
     virtual ~GlobalConstraint() = default;
 
     virtual void reset(const Solution& solution,

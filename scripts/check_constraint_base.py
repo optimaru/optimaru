@@ -7,11 +7,13 @@ so that it builds and imports standalone as well as inside the ``optimaru`` whee
 top-level setup.py re-roots each package as ``optimaru.<subpackage>``), on Windows,
 macOS and Linux alike, without symlinks.
 
-    python3 scripts/check_constraint_base.py                 # exit 1 on any drifted copy
-    python3 scripts/check_constraint_base.py --require-all   # ...or on a package without one
+    python3 scripts/check_constraint_base.py                 # exit 1 on a drifted or missing copy
     python3 scripts/check_constraint_base.py --write         # re-sync every existing copy
     python3 scripts/check_constraint_base.py --write use-cases/<slug>/python/<package>
                                                              # ...and add a copy to a package
+
+Every use case must carry a copy: a package without one, or a use case without any
+package under python/, fails the check. ``--require-all`` is accepted and is the default.
 
 Run from anywhere; paths resolve against the repository root.
 """
@@ -42,10 +44,22 @@ def packages() -> list[Path]:
     return found
 
 
+def use_cases_without_package() -> list[Path]:
+    """Use-case directories with no importable package under python/."""
+    with_package = {package.parent.parent for package in packages()}
+    return [
+        use_case
+        for use_case in sorted(path for path in (ROOT / "use-cases").iterdir() if path.is_dir())
+        if not use_case.name.startswith(".") and use_case not in with_package
+    ]
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--write", action="store_true", help="overwrite drifted copies with the canonical file")
-    parser.add_argument("--require-all", action="store_true", help="also fail when a package has no copy")
+    parser.add_argument(
+        "--require-all", action="store_true", help="fail when a package has no copy (the default; kept for CI)"
+    )
     parser.add_argument("add", nargs="*", type=Path, help="with --write: package directories that get a new copy")
     args = parser.parse_args(argv)
     if args.add and not args.write:
@@ -61,11 +75,8 @@ def main(argv: list[str] | None = None) -> int:
             targets.append(package / FILENAME)
 
     drifted = [target for target in targets if not target.exists() or target.read_bytes() != canonical]
-    # 0.2.0 transition shim: removed once every use case is migrated. Without
-    # --require-all a package without a copy is allowed (the unmigrated ones);
-    # integration makes CI pass --require-all and then drops the flag's
-    # default-off path.
     missing = [package for package in packages() if not (package / FILENAME).exists() and package / FILENAME not in targets]
+    bare = use_cases_without_package()
 
     status = 0
     for target in drifted:
@@ -77,14 +88,15 @@ def main(argv: list[str] | None = None) -> int:
             print(f"DRIFT   {relative} differs from {CANONICAL.relative_to(ROOT)}")
             status = 1
     for package in missing:
-        relative = package.relative_to(ROOT)
-        if args.require_all:
-            print(f"MISSING {relative}/{FILENAME}")
-            status = 1
+        print(f"MISSING {package.relative_to(ROOT)}/{FILENAME}")
+        status = 1
+    for use_case in bare:
+        print(f"MISSING {use_case.relative_to(ROOT)}/python/<package>/{FILENAME} (no package)")
+        status = 1
     in_sync = len(targets) - (0 if args.write else len(drifted))
     print(
         f"{in_sync}/{len(targets)} copies of {CANONICAL.relative_to(ROOT)} in sync; "
-        f"{len(missing)} package(s) without a copy" + ("" if args.require_all else " (allowed)")
+        f"{len(missing) + len(bare)} without a copy"
     )
     return status
 

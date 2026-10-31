@@ -1,6 +1,6 @@
 // Constraint levels, the medium fold and the knob guards (0.2.0 contract),
 // engine test/ style: check() + a non-zero exit on any failure.
-//   (a) Level metadata, the isHard transition shim and the bool constructor
+//   (a) Level metadata, isHard() and metadata copies
 //   (b) the medium fold: IntoSoft and BelowHard fold the same three
 //       accumulators the way the domain's Score adapter does
 //   (c) hard()/soft() on a medium constraint, explicit medium weights
@@ -319,33 +319,24 @@ S assignmentA() {
 }
 
 void testLevelMetadata() {
-    std::printf("== (a) Level metadata and the isHard transition shim ==\n");
+    std::printf("== (a) Level metadata ==\n");
     ConflictCost<Tasks> conflict;
     check(conflict.weight == ConflictCost<Tasks>::kDefaultWeight && conflict.level == Level::Hard,
           "the default constructor carries kDefaultWeight / kDefaultLevel");
-    check(conflict.isHard() && static_cast<bool>(conflict.isHard),
-          "isHard() (0.2.0) and the shim's bool read agree on a hard constraint");
+    check(conflict.isHard(), "isHard() reads level == Hard");
     check(!conflict.reward && conflict.levelFlippable, "reward=false, levelFlippable=true by default");
-    conflict.isHard = false;  // the pre-0.2.0 write, through the shim
-    check(conflict.level == Level::Soft && !conflict.isHard(), "shim write isHard=false sets Soft");
-    conflict.isHard = true;
-    check(conflict.level == Level::Hard, "shim write isHard=true sets Hard");
+    conflict.setLevel(Level::Soft);
+    check(conflict.level == Level::Soft && !conflict.isHard(), "setLevel(Soft) clears isHard()");
+    conflict.setLevel(Level::Hard);
+    check(conflict.isHard(), "setLevel(Hard) sets isHard()");
 
-    // Copies rebind the shim to their own level.
+    // A copy owns its own metadata.
     ConflictCost<Tasks> copy = conflict;
-    copy.isHard = false;
+    copy.setLevel(Level::Soft);
     check(conflict.level == Level::Hard && copy.level == Level::Soft,
-          "a copied constraint's isHard writes its own level, not the original's");
-    copy.isHard = conflict.isHard;
-    check(copy.level == Level::Hard, "assigning one shim from another copies the flag");
-
-    // The pre-0.2.0 (name, weight, bool) constructor.
-    struct Legacy final : optimaru::UnitConstraint<Tasks> {
-        explicit Legacy(bool hard) : UnitConstraint("legacy", 2.0, hard) {}
-        double cost(const Tasks&, int, const std::vector<int>&) const override { return 0.0; }
-    };
-    check(Legacy(true).level == Level::Hard && Legacy(false).level == Level::Soft,
-          "the transition bool constructor maps true/false to Hard/Soft");
+          "changing a copied constraint's level leaves the original alone");
+    copy = conflict;
+    check(copy.isHard(), "copy assignment copies the level");
     check(std::string(optimaru::levelName(Level::Medium)) == "medium",
           "levelName spells the levels for clients");
     std::printf("\n");
@@ -610,8 +601,6 @@ void testPythonName() {
           "facilityCapacityCost -> facility_capacity_cost");
     check(pythonName("vehicleCapacityCost") == "vehicle_capacity_cost",
           "vehicleCapacityCost -> vehicle_capacity_cost");
-    check(pythonName("facility setup cost") == "facility_setup_cost",
-          "the pre-0.2.0 spaced spelling still maps");
     check(pythonName("distanceFromFacilityCost") == "distance_from_facility_cost",
           "distanceFromFacilityCost -> distance_from_facility_cost");
     using optimaru::python::instanceKeys;
