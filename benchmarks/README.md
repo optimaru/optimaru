@@ -18,6 +18,7 @@ taken as the result.
 | [assembly-line-balancing](assembly-line-balancing) | OR-Tools CP-SAT | SALBP-1 |
 | [bed-allocation](bed-allocation) | OR-Tools CP-SAT | generated |
 | [conference-scheduling](conference-scheduling) | OR-Tools CP-SAT | quickstart demo |
+| [employee-scheduling](employee-scheduling) | OR-Tools CP-SAT | seeded demo (generated) |
 | [facility-location](facility-location) | OR-Tools CP-SAT | generated |
 | [flight-crew-scheduling](flight-crew-scheduling) | OR-Tools CP-SAT | generated |
 | [food-packaging](food-packaging) | OR-Tools CP-SAT | quickstart demo |

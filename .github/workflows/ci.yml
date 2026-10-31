@@ -118,6 +118,7 @@ jobs:
           - bed-allocation
           - bin-packing
           - conference-scheduling
+          - employee-scheduling
           - facility-location
           - flight-crew-scheduling
           - food-packaging
