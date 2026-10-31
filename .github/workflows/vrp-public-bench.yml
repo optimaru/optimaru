@@ -25,7 +25,7 @@ on:
         description: "Solve budget per instance per solver (seconds)"
         default: "60"
       limit_per_bucket:
-        description: "Instances per size bucket (0 = all 100, ~300 min for three backends at 60s)"
+        description: "Instances per size bucket (0 = all 100, ~200 min for two backends at 60s)"
         default: "1"
       backends:
         description: "Comma-separated backends (engine,ortools) or all"
@@ -34,7 +34,7 @@ on:
 jobs:
   bench:
     runs-on: ubuntu-latest
-    # One instance per bucket x three backends x 60s is ~15 minutes of solving.
+    # One instance per bucket (5 buckets) x two backends x 60s is ~10 minutes of solving.
     timeout-minutes: 350
     env:
       SECONDS_BUDGET: ${{ github.event.inputs.seconds || '60' }}
@@ -62,7 +62,6 @@ jobs:
         env:
           CC: ccache cc
           CXX: ccache c++
-
 
       # Instance files only; --refresh-catalog re-reads the BKS every run so a
       # best-known-solution update is picked up.
