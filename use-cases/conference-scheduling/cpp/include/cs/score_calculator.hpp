@@ -11,88 +11,65 @@
 namespace cs
 {
 
-// Per-constraint match-unit totals of one full recompute. Each field is the
-// sum of the Java constraint's matchWeigher over all matches (all counted
-// positive); the constraint weights are applied only in hardTotal() /
-// softPenaltyTotal() / softRewardTotal(), mirroring
-// `penalize(HardSoftScore.ofHard(w), weigher)` one to one.
+// Per-constraint match-unit totals of one full recompute. Each member is named
+// after its constraint's registry name (cs/constraints/<subject>_cost.hpp) and
+// holds the sum of the Java constraint's matchWeigher over all matches, all
+// counted positive (the reward members too; their components negate them).
+// The constraint weights are applied only in hardTotal() / softPenaltyTotal()
+// / softRewardTotal(), which read each component's kDefaultWeight
+// (score_calculator.cpp), mirroring `penalize(HardSoftScore.ofHard(w),
+// weigher)` one to one.
 struct Breakdown
 {
     // Hard units.
-    std::int64_t talkTypeCompatibility = 0;       // synthetic; see note below
-    std::int64_t roomUnavailableTimeslot = 0;     // duration
-    std::int64_t roomConflict = 0;                // overlap minutes
-    std::int64_t speakerUnavailableTimeslot = 0;  // duration per speaker
-    std::int64_t speakerConflict = 0;  // overlap minutes per shared speaker
-    std::int64_t talkPrerequisiteTalks = 0;           // combined duration
-    std::int64_t talkMutuallyExclusiveTalksTags = 0;  // tags x overlap
-    std::int64_t consecutiveTalksPause = 0;           // combined duration
-    std::int64_t crowdControl = 0;                    // duration
-    std::int64_t speakerRequiredTimeslotTags = 0;     // missing x duration
-    std::int64_t speakerProhibitedTimeslotTags = 0;   // prevailing x duration
-    std::int64_t talkRequiredTimeslotTags = 0;
-    std::int64_t talkProhibitedTimeslotTags = 0;
-    std::int64_t speakerRequiredRoomTags = 0;
-    std::int64_t speakerProhibitedRoomTags = 0;
-    std::int64_t talkRequiredRoomTags = 0;
-    std::int64_t talkProhibitedRoomTags = 0;
+    std::int64_t talkTypeIncompatibilityCost = 0;  // synthetic; see below
+    std::int64_t roomUnavailabilityCost = 0;       // duration
+    std::int64_t roomConflictCost = 0;             // overlap minutes
+    std::int64_t speakerUnavailabilityCost = 0;    // duration per speaker
+    std::int64_t speakerConflictCost = 0;  // overlap minutes per shared speaker
+    std::int64_t talkPrerequisiteTalksCost = 0;           // combined duration
+    std::int64_t talkMutuallyExclusiveTalksTagsCost = 0;  // tags x overlap
+    std::int64_t consecutiveTalksPauseCost = 0;           // combined duration
+    std::int64_t crowdControlRiskCost = 0;                // duration
+    std::int64_t speakerRequiredTimeslotTagsCost = 0;     // missing x duration
+    std::int64_t speakerProhibitedTimeslotTagsCost = 0;  // prevailing x minutes
+    std::int64_t talkRequiredTimeslotTagsCost = 0;
+    std::int64_t talkProhibitedTimeslotTagsCost = 0;
+    std::int64_t speakerRequiredRoomTagsCost = 0;
+    std::int64_t speakerProhibitedRoomTagsCost = 0;
+    std::int64_t talkRequiredRoomTagsCost = 0;
+    std::int64_t talkProhibitedRoomTagsCost = 0;
 
     // Soft penalty units.
-    std::int64_t themeTrackConflict = 0;       // themes x overlap
-    std::int64_t themeTrackRoomStability = 0;  // themes x combined duration
-    std::int64_t sectorConflict = 0;           // sectors x overlap
-    std::int64_t audienceTypeThemeTrackConflict = 0;     // th x aud x overlap
-    std::int64_t contentAudienceLevelFlowViolation = 0;  // content x combined
-    std::int64_t contentConflict = 0;                    // content x overlap
-    std::int64_t sameDayTalks = 0;  // (themes + content) x combined duration
-    std::int64_t popularTalks = 0;  // combined duration
-    std::int64_t speakerPreferredTimeslotTags = 0;  // missing x duration
-    std::int64_t speakerUndesiredTimeslotTags = 0;  // prevailing x duration
-    std::int64_t talkPreferredTimeslotTags = 0;
-    std::int64_t talkUndesiredTimeslotTags = 0;
-    std::int64_t speakerPreferredRoomTags = 0;
-    std::int64_t speakerUndesiredRoomTags = 0;
-    std::int64_t talkPreferredRoomTags = 0;
-    std::int64_t talkUndesiredRoomTags = 0;
-    std::int64_t speakerMakespan = 0;  // (day span - 1) x 8h per speaker
+    std::int64_t themeTrackConflictCost = 0;    // themes x overlap
+    std::int64_t themeTrackRoomChangeCost = 0;  // themes x combined duration
+    std::int64_t sectorConflictCost = 0;        // sectors x overlap
+    std::int64_t audienceTypeThemeTrackConflictCost = 0;  // th x aud x overlap
+    std::int64_t contentAudienceLevelFlowViolationCost = 0;  // content x comb.
+    std::int64_t contentConflictCost = 0;       // content x overlap
+    std::int64_t differentDayTalksCost = 0;     // (themes + content) x combined
+    std::int64_t popularTalksRoomSizeCost = 0;  // combined duration
+    std::int64_t speakerPreferredTimeslotTagsCost = 0;  // missing x duration
+    std::int64_t speakerUndesiredTimeslotTagsCost = 0;  // prevailing x duration
+    std::int64_t talkPreferredTimeslotTagsCost = 0;
+    std::int64_t talkUndesiredTimeslotTagsCost = 0;
+    std::int64_t speakerPreferredRoomTagsCost = 0;
+    std::int64_t speakerUndesiredRoomTagsCost = 0;
+    std::int64_t talkPreferredRoomTagsCost = 0;
+    std::int64_t talkUndesiredRoomTagsCost = 0;
+    std::int64_t speakerMakespanCost = 0;  // (day span - 1) x 8h per speaker
 
-    // Soft reward units.
-    std::int64_t audienceTypeDiversity = 0;   // audiences x slot duration
-    std::int64_t audienceLevelDiversity = 0;  // slot duration
-    std::int64_t languageDiversity = 0;       // slot duration
+    // Soft reward units (positive here; the *DiversityCost components report
+    // them negated, as rewards).
+    std::int64_t audienceTypeDiversityCost = 0;   // audiences x slot duration
+    std::int64_t audienceLevelDiversityCost = 0;  // slot duration
+    std::int64_t languageDiversityCost = 0;       // slot duration
 
-    std::int64_t hardTotal() const
-    {
-        return 100000 * (talkTypeCompatibility + roomUnavailableTimeslot)
-               + 1000 * roomConflict + 100 * speakerUnavailableTimeslot
-               + 10 * (speakerConflict + talkPrerequisiteTalks)
-               + talkMutuallyExclusiveTalksTags + consecutiveTalksPause
-               + crowdControl + speakerRequiredTimeslotTags
-               + speakerProhibitedTimeslotTags + talkRequiredTimeslotTags
-               + talkProhibitedTimeslotTags + speakerRequiredRoomTags
-               + speakerProhibitedRoomTags + talkRequiredRoomTags
-               + talkProhibitedRoomTags;
-    }
-    std::int64_t softPenaltyTotal() const
-    {
-        return 10
-                   * (themeTrackConflict + themeTrackRoomStability
-                      + sectorConflict + contentAudienceLevelFlowViolation
-                      + sameDayTalks + popularTalks)
-               + audienceTypeThemeTrackConflict + 100 * contentConflict
-               + 20
-                     * (speakerPreferredTimeslotTags
-                        + speakerUndesiredTimeslotTags
-                        + talkPreferredTimeslotTags + talkUndesiredTimeslotTags
-                        + speakerPreferredRoomTags + speakerUndesiredRoomTags
-                        + talkPreferredRoomTags + talkUndesiredRoomTags
-                        + speakerMakespan);
-    }
-    std::int64_t softRewardTotal() const
-    {
-        return audienceTypeDiversity + audienceLevelDiversity
-               + 10 * languageDiversity;
-    }
+    // Weighted totals at the components' kDefaultWeight (all integral, so the
+    // sums are exact int64 like the Java long arithmetic).
+    std::int64_t hardTotal() const;
+    std::int64_t softPenaltyTotal() const;
+    std::int64_t softRewardTotal() const;
     Score toScore() const
     {
         return Score{
@@ -109,56 +86,60 @@ struct Breakdown
 // calculateScore does a full recompute — the reference the incremental
 // calculator is checked against (in the tests and under FULL_ASSERT).
 //
-// Hard (weight x units; units always scale with timeslot minutes):
-//   h0. talkTypeCompatibility        100000 x max(duration, 1) per talk whose
-//                                    timeslot or room does not admit its talk
-//                                    type. SYNTHETIC: the Java quickstart
-//                                    makes such assignments impossible via
-//                                    @ValueRangeProvider (talkType-compatible
-//                                    timeslots/rooms); the engine's single
-//                                    global value range cannot, so the port
-//                                    forbids them by penalty instead. Never
-//                                    fires on a Java-feasible solution.
-//   h1. roomUnavailableTimeslot      100000 x duration
-//   h2. roomConflict                 1000 x overlap per same-room pair
-//   h3. speakerUnavailableTimeslot   100 x duration per unavailable speaker
-//   h4. speakerConflict              10 x overlap per shared speaker of an
-//                                    overlapping pair
-//   h5. talkPrerequisiteTalks        10 x combined duration per (a, b) with
-//                                    a in b.prerequisites, end(a) > start(b)
-//   h6. talkMutuallyExclusiveTalksTags  1 x sharedTags x overlap
-//   h7. consecutiveTalksPause        1 x combined duration per pair sharing a
-//                                    speaker without the minimum pause
-//   h8. crowdControl                 1 x duration per risk>0 talk sharing its
-//                                    timeslot with >= 2 other risk>0 talks
+// Hard (default weight x units; units always scale with timeslot minutes;
+// the weights are the components' kDefaultWeight):
+//   h0. talkTypeIncompatibilityCost
+//           100000 x max(duration, 1) per talk whose timeslot or room does
+//           not admit its talk type. SYNTHETIC: the Java quickstart makes
+//           such assignments impossible via @ValueRangeProvider
+//           (talkType-compatible timeslots/rooms); the engine's single global
+//           value range cannot, so the port forbids them by penalty instead.
+//           Never fires on a Java-feasible solution.
+//   h1. roomUnavailabilityCost         100000 x duration
+//   h2. roomConflictCost               1000 x overlap per same-room pair
+//   h3. speakerUnavailabilityCost      100 x duration per unavailable speaker
+//   h4. speakerConflictCost            10 x overlap per shared speaker of an
+//                                      overlapping pair
+//   h5. talkPrerequisiteTalksCost      10 x combined duration per (a, b) with
+//                                      a in b.prerequisites, end(a) > start(b)
+//   h6. talkMutuallyExclusiveTalksTagsCost
+//                                      1 x sharedTags x overlap
+//   h7. consecutiveTalksPauseCost      1 x combined duration per pair sharing
+//                                      a speaker without the minimum pause
+//   h8. crowdControlRiskCost           1 x duration per risk>0 talk sharing
+//                                      its timeslot with >= 2 other risk>0
+//                                      talks
 //   h9-h16. required/prohibited timeslot/room tags (talk and speaker)
-//                                    1 x tagCount x duration
+//                                      1 x tagCount x duration
 // Soft:
-//   s1. themeTrackConflict           -10 x themes x overlap
-//   s2. themeTrackRoomStability      -10 x themes x combined (same day,
-//                                    different rooms)
-//   s3. sectorConflict               -10 x sectors x overlap
-//   s4. audienceTypeDiversity        +1 x audiences x slot duration (same
-//                                    timeslot)
-//   s5. audienceTypeThemeTrackConflict  -1 x themes x audiences x overlap
-//   s6. audienceLevelDiversity       +1 x slot duration (same timeslot,
-//                                    different level)
-//   s7. contentAudienceLevelFlowViolation  -10 x content x combined per
-//                                    (a, b) with level(a) < level(b) and
-//                                    end(a) > start(b)
-//   s8. contentConflict              -100 x content x overlap
-//   s9. languageDiversity            +10 x slot duration (same timeslot,
-//                                    different language)
-//   s10. sameDayTalks                -10 x (content + themes) x combined per
-//                                    pair sharing content/theme on different
-//                                    days
-//   s11. popularTalks                -10 x combined per (a, b) with
-//                                    favorites(a) < favorites(b) and
-//                                    capacity(a) > capacity(b)
+//   s1. themeTrackConflictCost         -10 x themes x overlap
+//   s2. themeTrackRoomChangeCost       -10 x themes x combined (same day,
+//                                      different rooms)
+//   s3. sectorConflictCost             -10 x sectors x overlap
+//   s4. audienceTypeDiversityCost      +1 x audiences x slot duration (same
+//                                      timeslot; a reward)
+//   s5. audienceTypeThemeTrackConflictCost
+//                                      -1 x themes x audiences x overlap
+//   s6. audienceLevelDiversityCost     +1 x slot duration (same timeslot,
+//                                      different level; a reward)
+//   s7. contentAudienceLevelFlowViolationCost
+//                                      -10 x content x combined per (a, b)
+//                                      with level(a) < level(b) and
+//                                      end(a) > start(b)
+//   s8. contentConflictCost            -100 x content x overlap
+//   s9. languageDiversityCost          +10 x slot duration (same timeslot,
+//                                      different language; a reward)
+//   s10. differentDayTalksCost         -10 x (content + themes) x combined
+//                                      per pair sharing content/theme on
+//                                      different days
+//   s11. popularTalksRoomSizeCost      -10 x combined per (a, b) with
+//                                      favorites(a) < favorites(b) and
+//                                      capacity(a) > capacity(b)
 //   s12-s19. preferred/undesired timeslot/room tags (talk and speaker)
-//                                    -20 x tagCount x duration
-//   s20. speakerMakespan             -20 x (daySpan - 1) x 8 x 60 per speaker
-//                                    whose talks span more than 2 days
+//                                      -20 x tagCount x duration
+//   s20. speakerMakespanCost           -20 x (daySpan - 1) x 8 x 60 per
+//                                      speaker whose talks span more than 2
+//                                      days
 // Unassigned talks (slotRoom == -1) contribute nothing: the construction
 // heuristic scores partially initialized solutions.
 class ScoreCalculator

@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <unordered_map>
 
+#include "cs/constraints.hpp"
 #include "cs/score_calculator.hpp"
 
 namespace cs
@@ -11,6 +12,72 @@ namespace cs
 
 namespace
 {
+
+// The default weights, read off the components — the same kDefaultWeight
+// constants the plugin path and ScoreCalculator's Breakdown totals use
+// (kHardWeight / kSoftWeight check that each is integral and on the level it
+// is summed into). The unary count tables fold several constraints that share
+// one weight; the static_asserts pin that down.
+constexpr std::int64_t kTalkTypeWeight
+    = kHardWeight<TalkTypeIncompatibilityCost>;
+constexpr std::int64_t kRoomUnavailabilityWeight
+    = kHardWeight<RoomUnavailabilityCost>;
+constexpr std::int64_t kRoomConflictWeight = kHardWeight<RoomConflictCost>;
+constexpr std::int64_t kSpeakerUnavailabilityWeight
+    = kHardWeight<SpeakerUnavailabilityCost>;
+constexpr std::int64_t kSpeakerConflictWeight
+    = kHardWeight<SpeakerConflictCost>;
+constexpr std::int64_t kPrerequisiteWeight
+    = kHardWeight<TalkPrerequisiteTalksCost>;
+constexpr std::int64_t kMutexWeight
+    = kHardWeight<TalkMutuallyExclusiveTalksTagsCost>;
+constexpr std::int64_t kPauseWeight = kHardWeight<ConsecutiveTalksPauseCost>;
+constexpr std::int64_t kCrowdWeight = kHardWeight<CrowdControlRiskCost>;
+// hardSlotCnt_ / hardRoomCnt_ sum the eight required/prohibited tag counts.
+constexpr std::int64_t kHardTagWeight
+    = kHardWeight<TalkRequiredTimeslotTagsCost>;
+static_assert(
+    kHardWeight<TalkProhibitedTimeslotTagsCost> == kHardTagWeight
+        && kHardWeight<SpeakerRequiredTimeslotTagsCost> == kHardTagWeight
+        && kHardWeight<SpeakerProhibitedTimeslotTagsCost> == kHardTagWeight
+        && kHardWeight<TalkRequiredRoomTagsCost> == kHardTagWeight
+        && kHardWeight<TalkProhibitedRoomTagsCost> == kHardTagWeight
+        && kHardWeight<SpeakerRequiredRoomTagsCost> == kHardTagWeight
+        && kHardWeight<SpeakerProhibitedRoomTagsCost> == kHardTagWeight,
+    "the hard tag count tables assume one shared weight");
+
+constexpr std::int64_t kThemeConflictWeight
+    = kSoftWeight<ThemeTrackConflictCost>;
+constexpr std::int64_t kThemeRoomChangeWeight
+    = kSoftWeight<ThemeTrackRoomChangeCost>;
+constexpr std::int64_t kSectorWeight = kSoftWeight<SectorConflictCost>;
+constexpr std::int64_t kAudienceThemeWeight
+    = kSoftWeight<AudienceTypeThemeTrackConflictCost>;
+constexpr std::int64_t kLevelFlowWeight
+    = kSoftWeight<ContentAudienceLevelFlowViolationCost>;
+constexpr std::int64_t kContentWeight = kSoftWeight<ContentConflictCost>;
+constexpr std::int64_t kDifferentDayWeight = kSoftWeight<DifferentDayTalksCost>;
+constexpr std::int64_t kPopularWeight = kSoftWeight<PopularTalksRoomSizeCost>;
+constexpr std::int64_t kMakespanWeight = kSoftWeight<SpeakerMakespanCost>;
+// softSlotCnt_ / softRoomCnt_ sum the eight preferred/undesired tag counts.
+constexpr std::int64_t kSoftTagWeight
+    = kSoftWeight<TalkPreferredTimeslotTagsCost>;
+static_assert(
+    kSoftWeight<TalkUndesiredTimeslotTagsCost> == kSoftTagWeight
+        && kSoftWeight<SpeakerPreferredTimeslotTagsCost> == kSoftTagWeight
+        && kSoftWeight<SpeakerUndesiredTimeslotTagsCost> == kSoftTagWeight
+        && kSoftWeight<TalkPreferredRoomTagsCost> == kSoftTagWeight
+        && kSoftWeight<TalkUndesiredRoomTagsCost> == kSoftTagWeight
+        && kSoftWeight<SpeakerPreferredRoomTagsCost> == kSoftTagWeight
+        && kSoftWeight<SpeakerUndesiredRoomTagsCost> == kSoftTagWeight,
+    "the soft tag count tables assume one shared weight");
+// The three rewards (positive units here, subtracted from the penalties).
+constexpr std::int64_t kAudienceTypeRewardWeight
+    = kSoftWeight<AudienceTypeDiversityCost>;
+constexpr std::int64_t kAudienceLevelRewardWeight
+    = kSoftWeight<AudienceLevelDiversityCost>;
+constexpr std::int64_t kLanguageRewardWeight
+    = kSoftWeight<LanguageDiversityCost>;
 
 // Remaps one talk-tag family from the shared interned pool to dense
 // 0..familySize-1 ids (per-slot occupancy tables are sized by the family,
@@ -108,7 +175,8 @@ void ConferenceSchedulingIncrementalScoreCalculator::resetWorkingSolution(
     seen_.assign(talkCount_, 0);
     epoch_ = 0;
 
-    // popularTalks support: capacity classes and favorite-count ranks.
+    // popularTalksRoomSizeCost support: capacity classes and favorite-count
+    // ranks.
     {
         capVal_.clear();
         capVal_.reserve(roomCount_);
@@ -304,18 +372,19 @@ void ConferenceSchedulingIncrementalScoreCalculator::addUnaryContribution(
     const std::size_t roomAt
         = static_cast<std::size_t>(talkIndex) * roomCount_ + room;
 
-    std::int64_t hardUnits = (hardSlotCnt_[slotAt] + hardRoomCnt_[roomAt]) * dur
-                             + 100 * unavailSpkCnt_[slotAt] * dur;
+    std::int64_t hardUnits
+        = kHardTagWeight * (hardSlotCnt_[slotAt] + hardRoomCnt_[roomAt]) * dur
+          + kSpeakerUnavailabilityWeight * unavailSpkCnt_[slotAt] * dur;
     if (ScoreCalculator::roomUnavailableAt(*schedule_, room, slot))
-        hardUnits += 100000 * dur;
+        hardUnits += kRoomUnavailabilityWeight * dur;
     const std::int64_t compatUnit = std::max<std::int64_t>(dur, 1);
     if (!slotCompat_[slotAt])
-        hardUnits += 100000 * compatUnit;
+        hardUnits += kTalkTypeWeight * compatUnit;
     if (!roomCompat_[roomAt])
-        hardUnits += 100000 * compatUnit;
+        hardUnits += kTalkTypeWeight * compatUnit;
 
     const std::int64_t softUnits
-        = 20 * (softSlotCnt_[slotAt] + softRoomCnt_[roomAt]) * dur;
+        = kSoftTagWeight * (softSlotCnt_[slotAt] + softRoomCnt_[roomAt]) * dur;
 
     hardBase_ -= sign * hardUnits;
     softBase_ -= static_cast<double>(sign * softUnits);
@@ -396,7 +465,7 @@ void ConferenceSchedulingIncrementalScoreCalculator::pairTotals(
     softUnits = 0;  // penalties positive, rewards negative
     const std::int64_t durI = s.slotDur[slot];
 
-    // --- sparse: talks sharing a speaker (speakerConflict, pause) ---------
+    // --- sparse: talks sharing a speaker (speakerConflictCost, pause) ---
     auto *self = const_cast<ConferenceSchedulingIncrementalScoreCalculator *>(
         this);  // epoch stamps are scratch state, not score state
     ++self->epoch_;
@@ -416,11 +485,14 @@ void ConferenceSchedulingIncrementalScoreCalculator::pairTotals(
             {
                 const int shared = ScoreCalculator::overlappingCount(
                     s.talkSpeakersSorted[talkIndex], s.talkSpeakersSorted[j]);
-                hardUnits += 10 * shared * overlap;  // speakerConflict
+                hardUnits += kSpeakerConflictWeight * shared
+                             * overlap;  // speakerConflictCost
             }
             if (!ScoreCalculator::pauseExists(
                     s, slot, sj, s.minimumConsecutiveTalksPauseInMinutes))
-                hardUnits += durI + s.slotDur[sj];  // consecutiveTalksPause
+                hardUnits
+                    += kPauseWeight
+                       * (durI + s.slotDur[sj]);  // consecutiveTalksPauseCost
         }
     }
 
@@ -431,7 +503,7 @@ void ConferenceSchedulingIncrementalScoreCalculator::pairTotals(
             continue;
         const int sj = s.timeslotIndexOf(assign_[j]);
         if (s.slotEnd[sj] > s.slotStart[slot])
-            hardUnits += 10 * (durI + s.slotDur[sj]);
+            hardUnits += kPrerequisiteWeight * (durI + s.slotDur[sj]);
     }
     for (int j : prereqRev_[static_cast<std::size_t>(talkIndex)])
     {  // i is a prerequisite of j
@@ -439,7 +511,7 @@ void ConferenceSchedulingIncrementalScoreCalculator::pairTotals(
             continue;
         const int sj = s.timeslotIndexOf(assign_[j]);
         if (s.slotEnd[slot] > s.slotStart[sj])
-            hardUnits += 10 * (durI + s.slotDur[sj]);
+            hardUnits += kPrerequisiteWeight * (durI + s.slotDur[sj]);
     }
 
     // --- dense: one pass over the slots, reading the occupancy tables -----
@@ -467,21 +539,23 @@ void ConferenceSchedulingIncrementalScoreCalculator::pairTotals(
 
         if (overlap > 0)
         {
-            // roomConflict.
-            hardUnits += 1000 * overlap * cellCnt_[sAt * roomCount_ + room];
-            // talkMutuallyExclusiveTalksTags.
+            // roomConflictCost.
+            hardUnits += kRoomConflictWeight * overlap
+                         * cellCnt_[sAt * roomCount_ + room];
+            // talkMutuallyExclusiveTalksTagsCost.
             std::int64_t mutexSum = 0;
             for (int m : mutexD_[talkIndex])
                 mutexSum += mutexCnt_[sAt * mutexDim_ + m];
-            hardUnits += mutexSum * overlap;
-            // themeTrackConflict / sectorConflict / contentConflict.
-            softUnits += 10 * themeSum * overlap;
+            hardUnits += kMutexWeight * mutexSum * overlap;
+            // themeTrackConflictCost / sectorConflictCost /
+            // contentConflictCost.
+            softUnits += kThemeConflictWeight * themeSum * overlap;
             std::int64_t sectorSum = 0;
             for (int sec : sectorD_[talkIndex])
                 sectorSum += sectorCnt_[sAt * sectorDim_ + sec];
-            softUnits += 10 * sectorSum * overlap;
-            softUnits += 100 * contentSum * overlap;
-            // audienceTypeThemeTrackConflict (theme x audience joint).
+            softUnits += kSectorWeight * sectorSum * overlap;
+            softUnits += kContentWeight * contentSum * overlap;
+            // audienceTypeThemeTrackConflictCost (theme x audience joint).
             std::int64_t taSum = 0;
             for (int t : themeD_[talkIndex])
             {
@@ -489,7 +563,7 @@ void ConferenceSchedulingIncrementalScoreCalculator::pairTotals(
                 for (int a : audD_[talkIndex])
                     taSum += themeAudCnt_[taBase + a];
             }
-            softUnits += taSum * overlap;
+            softUnits += kAudienceThemeWeight * taSum * overlap;
         }
 
         // Same-timeslot diversity rewards.
@@ -498,29 +572,34 @@ void ConferenceSchedulingIncrementalScoreCalculator::pairTotals(
             std::int64_t audSum = 0;
             for (int a : audD_[talkIndex])
                 audSum += audCnt_[sAt * audDim_ + a];
-            softUnits -= audSum * durI;  // audienceTypeDiversity
-            softUnits -= (cnt - levelCnt_[sAt * levelDim_ + lvlI]) * durI;
-            softUnits -= 10
+            softUnits -= kAudienceTypeRewardWeight * audSum
+                         * durI;  // audienceTypeDiversityCost
+            softUnits -= kAudienceLevelRewardWeight
+                         * (cnt - levelCnt_[sAt * levelDim_ + lvlI])
+                         * durI;  // audienceLevelDiversityCost
+            softUnits -= kLanguageRewardWeight
                          * (cnt - langCnt_[sAt * langDim_ + langD_[talkIndex]])
-                         * durI;  // languageDiversity
+                         * durI;  // languageDiversityCost
         }
 
         if (dayI == s.slotDay[sj])
         {
-            // themeTrackRoomStability (same day, OTHER rooms).
+            // themeTrackRoomChangeCost (same day, OTHER rooms).
             std::int64_t sameRoomThemes = 0;
             const std::size_t cellAt = sAt * roomCount_ + room;
             for (int t : themeD_[talkIndex])
                 sameRoomThemes += themeCellCnt_[cellAt * themeDim_ + t];
-            softUnits += 10 * (themeSum - sameRoomThemes) * combined;
+            softUnits += kThemeRoomChangeWeight * (themeSum - sameRoomThemes)
+                         * combined;
         }
         else
         {
-            // sameDayTalks (shared content/theme on different days).
-            softUnits += 10 * (contentSum + themeSum) * combined;
+            // differentDayTalksCost (shared content/theme on different days).
+            softUnits
+                += kDifferentDayWeight * (contentSum + themeSum) * combined;
         }
 
-        // contentAudienceLevelFlowViolation (both orders).
+        // contentAudienceLevelFlowViolationCost (both orders).
         if (!contentD_[talkIndex].empty())
         {
             if (endI > s.slotStart[sj])
@@ -533,7 +612,7 @@ void ConferenceSchedulingIncrementalScoreCalculator::pairTotals(
                     for (int l = lvlI + 1; l < levelDim_; ++l)
                         gt += contentLvlCnt_[clBase + l];
                 }
-                softUnits += 10 * gt * combined;
+                softUnits += kLevelFlowWeight * gt * combined;
             }
             if (s.slotEnd[sj] > startI)
             {
@@ -545,12 +624,12 @@ void ConferenceSchedulingIncrementalScoreCalculator::pairTotals(
                     for (int l = 0; l < lvlI; ++l)
                         lt += contentLvlCnt_[clBase + l];
                 }
-                softUnits += 10 * lt * combined;
+                softUnits += kLevelFlowWeight * lt * combined;
             }
         }
     }
 
-    // --- dense: popularTalks (per-capacity-class Fenwick trees) -----------
+    // --- dense: popularTalksRoomSizeCost (per-capacity-class Fenwick trees)
     const int capI = s.rooms[room].capacity;
     const int rankI = favRank_[talkIndex];
     for (int cls = 0; cls < capDim_; ++cls)
@@ -565,7 +644,7 @@ void ConferenceSchedulingIncrementalScoreCalculator::pairTotals(
             favPrefix(cls, rankI, cntLe, durLe);
             const int cntGt = capTotalCnt_[cls] - cntLe;
             const std::int64_t durGt = capTotalDur_[cls] - durLe;
-            softUnits += 10 * (cntGt * durI + durGt);
+            softUnits += kPopularWeight * (cntGt * durI + durGt);
         }
         else if (capVal_[cls] > capI)
         {
@@ -573,7 +652,7 @@ void ConferenceSchedulingIncrementalScoreCalculator::pairTotals(
             int cntLt;
             std::int64_t durLt;
             favPrefix(cls, rankI - 1, cntLt, durLt);
-            softUnits += 10 * (cntLt * durI + durLt);
+            softUnits += kPopularWeight * (cntLt * durI + durLt);
         }
     }
 }
@@ -592,15 +671,15 @@ bool ConferenceSchedulingIncrementalScoreCalculator::isHotTalk(
     const std::size_t roomAt
         = static_cast<std::size_t>(talkIndex) * roomCount_ + room;
     if (!slotCompat_[slotAt] || !roomCompat_[roomAt])
-        return true;  // synthetic talkTypeCompatibility
+        return true;  // synthetic talkTypeIncompatibilityCost
     if (hardSlotCnt_[slotAt] > 0 || hardRoomCnt_[roomAt] > 0)
         return true;  // required/prohibited timeslot/room tags
     if (unavailSpkCnt_[slotAt] > 0)
-        return true;  // speakerUnavailableTimeslot
+        return true;  // speakerUnavailabilityCost
     if (ScoreCalculator::roomUnavailableAt(s, room, slot))
-        return true;  // roomUnavailableTimeslot
+        return true;  // roomUnavailabilityCost
     if (cellCnt_[static_cast<std::size_t>(slot) * roomCount_ + room] >= 2)
-        return true;  // same-cell roomConflict
+        return true;  // same-cell roomConflictCost
     return false;
 }
 
@@ -693,8 +772,9 @@ void ConferenceSchedulingIncrementalScoreCalculator::afterVariableChanged(
 Score ConferenceSchedulingIncrementalScoreCalculator::calculateScore()
 {
     Score score;
-    score.hard = hardBase_ - crowdUnits_;
-    score.soft = softBase_ - static_cast<double>(20 * makespanUnits_);
+    score.hard = hardBase_ - kCrowdWeight * crowdUnits_;
+    score.soft
+        = softBase_ - static_cast<double>(kMakespanWeight * makespanUnits_);
     return score;
 }
 

@@ -1,4 +1,12 @@
-"""Class-based CP-SAT plugins for conference scheduling constraints."""
+"""Class-based CP-SAT plugins for conference scheduling constraints.
+
+One plugin per engine constraint, subclassing its spec
+(``conference_scheduling.constraints``) and carrying only ``build()``: the
+defaults (level, weight, reward, flippability) come from the engine's
+``conference_scheduling.constraint_info()`` through cpsat-common. The registry
+keeps the engine's ``list_constraints()`` order. The three ``*_diversity_cost``
+rewards add a reward term and refuse ``hard=True``.
+"""
 
 from __future__ import annotations
 
@@ -48,12 +56,9 @@ def _prohibited(prohibited: list[str], actual: list[str]) -> int:
     return len(set(prohibited) & set(actual))
 
 
-class TalkTypeCompatibility(
-    domain.TalkTypeCompatibility, ConstraintPlugin[ConferenceContext]
+class TalkTypeIncompatibilityCost(
+    domain.TalkTypeIncompatibilityCost, ConstraintPlugin[ConferenceContext]
 ):
-    default_level = "hard"
-    default_weight = 100_000
-
     def build(self, context: ConferenceContext, objective: ObjectiveBuilder) -> None:
         for talk, talk_data in enumerate(context.problem.talks):
             for slot, slot_data in enumerate(context.problem.timeslots):
@@ -70,12 +75,9 @@ class TalkTypeCompatibility(
                     )
 
 
-class RoomUnavailableTimeslot(
-    domain.RoomUnavailableTimeslot, ConstraintPlugin[ConferenceContext]
+class RoomUnavailabilityCost(
+    domain.RoomUnavailabilityCost, ConstraintPlugin[ConferenceContext]
 ):
-    default_level = "hard"
-    default_weight = 100_000
-
     def build(self, context: ConferenceContext, objective: ObjectiveBuilder) -> None:
         for talk in range(len(context.problem.talks)):
             for slot in range(len(context.problem.timeslots)):
@@ -88,12 +90,9 @@ class RoomUnavailableTimeslot(
                     )
 
 
-class SpeakerUnavailableTimeslot(
-    domain.SpeakerUnavailableTimeslot, ConstraintPlugin[ConferenceContext]
+class SpeakerUnavailabilityCost(
+    domain.SpeakerUnavailabilityCost, ConstraintPlugin[ConferenceContext]
 ):
-    default_level = "hard"
-    default_weight = 100
-
     def build(self, context: ConferenceContext, objective: ObjectiveBuilder) -> None:
         for talk, talk_data in enumerate(context.problem.talks):
             speakers = [context.problem.speakers[index] for index in talk_data.speakers]
@@ -160,140 +159,123 @@ class _RoomTagPlugin(ConstraintPlugin[ConferenceContext]):
                         )
 
 
-class SpeakerRequiredTimeslotTags(
-    domain.SpeakerRequiredTimeslotTags, _TimeslotTagPlugin
+class SpeakerRequiredTimeslotTagsCost(
+    domain.SpeakerRequiredTimeslotTagsCost, _TimeslotTagPlugin
 ):
-    default_level = "hard"
     owner_kind = "speaker"
     attribute = "required_timeslot_tags"
     comparison = "missing"
 
 
-class SpeakerProhibitedTimeslotTags(
-    domain.SpeakerProhibitedTimeslotTags, _TimeslotTagPlugin
+class SpeakerProhibitedTimeslotTagsCost(
+    domain.SpeakerProhibitedTimeslotTagsCost, _TimeslotTagPlugin
 ):
-    default_level = "hard"
     owner_kind = "speaker"
     attribute = "prohibited_timeslot_tags"
     comparison = "prohibited"
 
 
-class TalkRequiredTimeslotTags(domain.TalkRequiredTimeslotTags, _TimeslotTagPlugin):
-    default_level = "hard"
+class TalkRequiredTimeslotTagsCost(
+    domain.TalkRequiredTimeslotTagsCost, _TimeslotTagPlugin
+):
     owner_kind = "talk"
     attribute = "required_timeslot_tags"
     comparison = "missing"
 
 
-class TalkProhibitedTimeslotTags(domain.TalkProhibitedTimeslotTags, _TimeslotTagPlugin):
-    default_level = "hard"
+class TalkProhibitedTimeslotTagsCost(
+    domain.TalkProhibitedTimeslotTagsCost, _TimeslotTagPlugin
+):
     owner_kind = "talk"
     attribute = "prohibited_timeslot_tags"
     comparison = "prohibited"
 
 
-class SpeakerPreferredTimeslotTags(
-    domain.SpeakerPreferredTimeslotTags, _TimeslotTagPlugin
+class SpeakerPreferredTimeslotTagsCost(
+    domain.SpeakerPreferredTimeslotTagsCost, _TimeslotTagPlugin
 ):
-    default_level = "soft"
-    default_weight = 20
     owner_kind = "speaker"
     attribute = "preferred_timeslot_tags"
     comparison = "missing"
 
 
-class SpeakerUndesiredTimeslotTags(
-    domain.SpeakerUndesiredTimeslotTags, _TimeslotTagPlugin
+class SpeakerUndesiredTimeslotTagsCost(
+    domain.SpeakerUndesiredTimeslotTagsCost, _TimeslotTagPlugin
 ):
-    default_level = "soft"
-    default_weight = 20
     owner_kind = "speaker"
     attribute = "undesired_timeslot_tags"
     comparison = "prohibited"
 
 
-class TalkPreferredTimeslotTags(domain.TalkPreferredTimeslotTags, _TimeslotTagPlugin):
-    default_level = "soft"
-    default_weight = 20
+class TalkPreferredTimeslotTagsCost(
+    domain.TalkPreferredTimeslotTagsCost, _TimeslotTagPlugin
+):
     owner_kind = "talk"
     attribute = "preferred_timeslot_tags"
     comparison = "missing"
 
 
-class TalkUndesiredTimeslotTags(domain.TalkUndesiredTimeslotTags, _TimeslotTagPlugin):
-    default_level = "soft"
-    default_weight = 20
+class TalkUndesiredTimeslotTagsCost(
+    domain.TalkUndesiredTimeslotTagsCost, _TimeslotTagPlugin
+):
     owner_kind = "talk"
     attribute = "undesired_timeslot_tags"
     comparison = "prohibited"
 
 
-class SpeakerRequiredRoomTags(domain.SpeakerRequiredRoomTags, _RoomTagPlugin):
-    default_level = "hard"
+class SpeakerRequiredRoomTagsCost(domain.SpeakerRequiredRoomTagsCost, _RoomTagPlugin):
     owner_kind = "speaker"
     attribute = "required_room_tags"
     comparison = "missing"
 
 
-class SpeakerProhibitedRoomTags(domain.SpeakerProhibitedRoomTags, _RoomTagPlugin):
-    default_level = "hard"
-    owner_kind = "speaker"
-    attribute = "prohibited_room_tags"
-    comparison = "prohibited"
-
-
-class TalkRequiredRoomTags(domain.TalkRequiredRoomTags, _RoomTagPlugin):
-    default_level = "hard"
-    owner_kind = "talk"
-    attribute = "required_room_tags"
-    comparison = "missing"
-
-
-class TalkProhibitedRoomTags(domain.TalkProhibitedRoomTags, _RoomTagPlugin):
-    default_level = "hard"
-    owner_kind = "talk"
-    attribute = "prohibited_room_tags"
-    comparison = "prohibited"
-
-
-class SpeakerPreferredRoomTags(domain.SpeakerPreferredRoomTags, _RoomTagPlugin):
-    default_level = "soft"
-    default_weight = 20
-    owner_kind = "speaker"
-    attribute = "preferred_room_tags"
-    comparison = "missing"
-
-
-class SpeakerUndesiredRoomTags(domain.SpeakerUndesiredRoomTags, _RoomTagPlugin):
-    default_level = "soft"
-    default_weight = 20
-    owner_kind = "speaker"
-    attribute = "undesired_room_tags"
-    comparison = "prohibited"
-
-
-class TalkPreferredRoomTags(domain.TalkPreferredRoomTags, _RoomTagPlugin):
-    default_level = "soft"
-    default_weight = 20
-    owner_kind = "talk"
-    attribute = "preferred_room_tags"
-    comparison = "missing"
-
-
-class TalkUndesiredRoomTags(domain.TalkUndesiredRoomTags, _RoomTagPlugin):
-    default_level = "soft"
-    default_weight = 20
-    owner_kind = "talk"
-    attribute = "undesired_room_tags"
-    comparison = "prohibited"
-
-
-class TalkPrerequisiteTalks(
-    domain.TalkPrerequisiteTalks, ConstraintPlugin[ConferenceContext]
+class SpeakerProhibitedRoomTagsCost(
+    domain.SpeakerProhibitedRoomTagsCost, _RoomTagPlugin
 ):
-    default_level = "hard"
-    default_weight = 10
+    owner_kind = "speaker"
+    attribute = "prohibited_room_tags"
+    comparison = "prohibited"
 
+
+class TalkRequiredRoomTagsCost(domain.TalkRequiredRoomTagsCost, _RoomTagPlugin):
+    owner_kind = "talk"
+    attribute = "required_room_tags"
+    comparison = "missing"
+
+
+class TalkProhibitedRoomTagsCost(domain.TalkProhibitedRoomTagsCost, _RoomTagPlugin):
+    owner_kind = "talk"
+    attribute = "prohibited_room_tags"
+    comparison = "prohibited"
+
+
+class SpeakerPreferredRoomTagsCost(domain.SpeakerPreferredRoomTagsCost, _RoomTagPlugin):
+    owner_kind = "speaker"
+    attribute = "preferred_room_tags"
+    comparison = "missing"
+
+
+class SpeakerUndesiredRoomTagsCost(domain.SpeakerUndesiredRoomTagsCost, _RoomTagPlugin):
+    owner_kind = "speaker"
+    attribute = "undesired_room_tags"
+    comparison = "prohibited"
+
+
+class TalkPreferredRoomTagsCost(domain.TalkPreferredRoomTagsCost, _RoomTagPlugin):
+    owner_kind = "talk"
+    attribute = "preferred_room_tags"
+    comparison = "missing"
+
+
+class TalkUndesiredRoomTagsCost(domain.TalkUndesiredRoomTagsCost, _RoomTagPlugin):
+    owner_kind = "talk"
+    attribute = "undesired_room_tags"
+    comparison = "prohibited"
+
+
+class TalkPrerequisiteTalksCost(
+    domain.TalkPrerequisiteTalksCost, ConstraintPlugin[ConferenceContext]
+):
     def build(self, context: ConferenceContext, objective: ObjectiveBuilder) -> None:
         for talk, talk_data in enumerate(context.problem.talks):
             for prerequisite in talk_data.prerequisite_talks:
@@ -348,41 +330,31 @@ class _OverlapSharedPlugin(ConstraintPlugin[ConferenceContext]):
                         )
 
 
-class SpeakerConflict(domain.SpeakerConflict, _OverlapSharedPlugin):
-    default_level = "hard"
-    default_weight = 10
+class SpeakerConflictCost(domain.SpeakerConflictCost, _OverlapSharedPlugin):
     attribute = "speakers"
 
 
-class TalkMutuallyExclusiveTalksTags(
-    domain.TalkMutuallyExclusiveTalksTags, _OverlapSharedPlugin
+class TalkMutuallyExclusiveTalksTagsCost(
+    domain.TalkMutuallyExclusiveTalksTagsCost, _OverlapSharedPlugin
 ):
-    default_level = "hard"
     attribute = "mutually_exclusive_talks_tags"
 
 
-class ThemeTrackConflict(domain.ThemeTrackConflict, _OverlapSharedPlugin):
-    default_level = "soft"
-    default_weight = 10
+class ThemeTrackConflictCost(domain.ThemeTrackConflictCost, _OverlapSharedPlugin):
     attribute = "theme_track_tags"
 
 
-class SectorConflict(domain.SectorConflict, _OverlapSharedPlugin):
-    default_level = "soft"
-    default_weight = 10
+class SectorConflictCost(domain.SectorConflictCost, _OverlapSharedPlugin):
     attribute = "sector_tags"
 
 
-class ContentConflict(domain.ContentConflict, _OverlapSharedPlugin):
-    default_level = "soft"
-    default_weight = 100
+class ContentConflictCost(domain.ContentConflictCost, _OverlapSharedPlugin):
     attribute = "content_tags"
 
 
-class AudienceTypeThemeTrackConflict(
-    domain.AudienceTypeThemeTrackConflict, _OverlapSharedPlugin
+class AudienceTypeThemeTrackConflictCost(
+    domain.AudienceTypeThemeTrackConflictCost, _OverlapSharedPlugin
 ):
-    default_level = "soft"
     attribute = "audience_types"
 
     def coefficient(self, left: Any, right: Any) -> int:
@@ -391,11 +363,9 @@ class AudienceTypeThemeTrackConflict(
         return audience * theme
 
 
-class ConsecutiveTalksPause(
-    domain.ConsecutiveTalksPause, ConstraintPlugin[ConferenceContext]
+class ConsecutiveTalksPauseCost(
+    domain.ConsecutiveTalksPauseCost, ConstraintPlugin[ConferenceContext]
 ):
-    default_level = "hard"
-
     def build(self, context: ConferenceContext, objective: ObjectiveBuilder) -> None:
         for left in range(len(context.problem.talks)):
             a = context.problem.talks[left]
@@ -427,9 +397,9 @@ class ConsecutiveTalksPause(
                         objective.add(self.name, combined * both, bound=combined)
 
 
-class CrowdControl(domain.CrowdControl, ConstraintPlugin[ConferenceContext]):
-    default_level = "hard"
-
+class CrowdControlRiskCost(
+    domain.CrowdControlRiskCost, ConstraintPlugin[ConferenceContext]
+):
     def build(self, context: ConferenceContext, objective: ObjectiveBuilder) -> None:
         risky = [
             talk
@@ -444,17 +414,14 @@ class CrowdControl(domain.CrowdControl, ConstraintPlugin[ConferenceContext]):
             duration = slot_data.end_minute - slot_data.start_minute
             for talk in risky:
                 contributes = context.both(
-                    ("crowd_control", talk, slot),
+                    ("crowd_control_risk", talk, slot),
                     context.by_slot[talk, slot],
                     crowded,
                 )
                 objective.add(self.name, duration * contributes, bound=duration)
 
 
-class RoomConflict(domain.RoomConflict, ConstraintPlugin[ConferenceContext]):
-    default_level = "hard"
-    default_weight = 1_000
-
+class RoomConflictCost(domain.RoomConflictCost, ConstraintPlugin[ConferenceContext]):
     def build(self, context: ConferenceContext, objective: ObjectiveBuilder) -> None:
         for left in range(len(context.problem.talks)):
             for right in range(left + 1, len(context.problem.talks)):
@@ -472,12 +439,9 @@ class RoomConflict(domain.RoomConflict, ConstraintPlugin[ConferenceContext]):
                             objective.add(self.name, overlap * same_room, bound=overlap)
 
 
-class ContentAudienceLevelFlowViolation(
-    domain.ContentAudienceLevelFlowViolation, ConstraintPlugin[ConferenceContext]
+class ContentAudienceLevelFlowViolationCost(
+    domain.ContentAudienceLevelFlowViolationCost, ConstraintPlugin[ConferenceContext]
 ):
-    default_level = "soft"
-    default_weight = 10
-
     def build(self, context: ConferenceContext, objective: ObjectiveBuilder) -> None:
         for left in range(len(context.problem.talks)):
             a = context.problem.talks[left]
@@ -509,10 +473,9 @@ class ContentAudienceLevelFlowViolation(
                         )
 
 
-class SameDayTalks(domain.SameDayTalks, ConstraintPlugin[ConferenceContext]):
-    default_level = "soft"
-    default_weight = 10
-
+class DifferentDayTalksCost(
+    domain.DifferentDayTalksCost, ConstraintPlugin[ConferenceContext]
+):
     def build(self, context: ConferenceContext, objective: ObjectiveBuilder) -> None:
         for left in range(len(context.problem.talks)):
             a = context.problem.talks[left]
@@ -546,12 +509,9 @@ class SameDayTalks(domain.SameDayTalks, ConstraintPlugin[ConferenceContext]):
                         )
 
 
-class ThemeTrackRoomStability(
-    domain.ThemeTrackRoomStability, ConstraintPlugin[ConferenceContext]
+class ThemeTrackRoomChangeCost(
+    domain.ThemeTrackRoomChangeCost, ConstraintPlugin[ConferenceContext]
 ):
-    default_level = "soft"
-    default_weight = 10
-
     def build(self, context: ConferenceContext, objective: ObjectiveBuilder) -> None:
         room_count = len(context.problem.rooms)
         for left in range(len(context.problem.talks)):
@@ -598,10 +558,9 @@ class ThemeTrackRoomStability(
                                 )
 
 
-class PopularTalks(domain.PopularTalks, ConstraintPlugin[ConferenceContext]):
-    default_level = "soft"
-    default_weight = 10
-
+class PopularTalksRoomSizeCost(
+    domain.PopularTalksRoomSizeCost, ConstraintPlugin[ConferenceContext]
+):
     def build(self, context: ConferenceContext, objective: ObjectiveBuilder) -> None:
         for left in range(len(context.problem.talks)):
             a = context.problem.talks[left]
@@ -680,32 +639,27 @@ class _DiversityPlugin(ConstraintPlugin[ConferenceContext]):
                     objective.add_reward(self.name, amount * both, bound=amount)
 
 
-class AudienceTypeDiversity(domain.AudienceTypeDiversity, _DiversityPlugin):
-    default_level = "soft"
+class AudienceTypeDiversityCost(domain.AudienceTypeDiversityCost, _DiversityPlugin):
     attribute = "audience_types"
 
 
-class AudienceLevelDiversity(domain.AudienceLevelDiversity, _DiversityPlugin):
-    default_level = "soft"
+class AudienceLevelDiversityCost(domain.AudienceLevelDiversityCost, _DiversityPlugin):
     attribute = "audience_level"
 
     def pair_amount(self, left: set[Any], right: set[Any]) -> int:
         return int(left != right)
 
 
-class LanguageDiversity(domain.LanguageDiversity, _DiversityPlugin):
-    default_level = "soft"
-    default_weight = 10
+class LanguageDiversityCost(domain.LanguageDiversityCost, _DiversityPlugin):
     attribute = "language"
 
     def pair_amount(self, left: set[Any], right: set[Any]) -> int:
         return int(left != right)
 
 
-class SpeakerMakespan(domain.SpeakerMakespan, ConstraintPlugin[ConferenceContext]):
-    default_level = "soft"
-    default_weight = 20
-
+class SpeakerMakespanCost(
+    domain.SpeakerMakespanCost, ConstraintPlugin[ConferenceContext]
+):
     def build(self, context: ConferenceContext, objective: ObjectiveBuilder) -> None:
         days = sorted({slot.start_minute // 1440 for slot in context.problem.timeslots})
         if not days:
@@ -764,42 +718,42 @@ class SpeakerMakespan(domain.SpeakerMakespan, ConstraintPlugin[ConferenceContext
 
 REGISTRY = ConstraintRegistry(
     [
-        TalkTypeCompatibility(),
-        RoomUnavailableTimeslot(),
-        RoomConflict(),
-        SpeakerUnavailableTimeslot(),
-        SpeakerConflict(),
-        TalkPrerequisiteTalks(),
-        TalkMutuallyExclusiveTalksTags(),
-        ConsecutiveTalksPause(),
-        CrowdControl(),
-        SpeakerRequiredTimeslotTags(),
-        SpeakerProhibitedTimeslotTags(),
-        TalkRequiredTimeslotTags(),
-        TalkProhibitedTimeslotTags(),
-        SpeakerRequiredRoomTags(),
-        SpeakerProhibitedRoomTags(),
-        TalkRequiredRoomTags(),
-        TalkProhibitedRoomTags(),
-        ThemeTrackConflict(),
-        ThemeTrackRoomStability(),
-        SectorConflict(),
-        AudienceTypeThemeTrackConflict(),
-        ContentAudienceLevelFlowViolation(),
-        ContentConflict(),
-        SameDayTalks(),
-        PopularTalks(),
-        SpeakerPreferredTimeslotTags(),
-        SpeakerUndesiredTimeslotTags(),
-        TalkPreferredTimeslotTags(),
-        TalkUndesiredTimeslotTags(),
-        SpeakerPreferredRoomTags(),
-        SpeakerUndesiredRoomTags(),
-        TalkPreferredRoomTags(),
-        TalkUndesiredRoomTags(),
-        SpeakerMakespan(),
-        AudienceTypeDiversity(),
-        AudienceLevelDiversity(),
-        LanguageDiversity(),
+        TalkTypeIncompatibilityCost(),
+        RoomUnavailabilityCost(),
+        RoomConflictCost(),
+        SpeakerUnavailabilityCost(),
+        SpeakerConflictCost(),
+        TalkPrerequisiteTalksCost(),
+        TalkMutuallyExclusiveTalksTagsCost(),
+        ConsecutiveTalksPauseCost(),
+        CrowdControlRiskCost(),
+        SpeakerRequiredTimeslotTagsCost(),
+        SpeakerProhibitedTimeslotTagsCost(),
+        TalkRequiredTimeslotTagsCost(),
+        TalkProhibitedTimeslotTagsCost(),
+        SpeakerRequiredRoomTagsCost(),
+        SpeakerProhibitedRoomTagsCost(),
+        TalkRequiredRoomTagsCost(),
+        TalkProhibitedRoomTagsCost(),
+        ThemeTrackConflictCost(),
+        ThemeTrackRoomChangeCost(),
+        SectorConflictCost(),
+        AudienceTypeThemeTrackConflictCost(),
+        ContentAudienceLevelFlowViolationCost(),
+        ContentConflictCost(),
+        DifferentDayTalksCost(),
+        PopularTalksRoomSizeCost(),
+        SpeakerPreferredTimeslotTagsCost(),
+        SpeakerUndesiredTimeslotTagsCost(),
+        TalkPreferredTimeslotTagsCost(),
+        TalkUndesiredTimeslotTagsCost(),
+        SpeakerPreferredRoomTagsCost(),
+        SpeakerUndesiredRoomTagsCost(),
+        TalkPreferredRoomTagsCost(),
+        TalkUndesiredRoomTagsCost(),
+        SpeakerMakespanCost(),
+        AudienceTypeDiversityCost(),
+        AudienceLevelDiversityCost(),
+        LanguageDiversityCost(),
     ]
 )

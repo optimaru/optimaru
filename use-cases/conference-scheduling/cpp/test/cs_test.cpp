@@ -137,16 +137,19 @@ void verifyConstraints()
 {
     std::printf("== (a) Verifying each constraint in isolation ==\n");
 
-    // h0: talkTypeCompatibility (synthetic value-range replacement). A "L"
-    // talk in a "B"-only slot and room violates both halves: 2 x 60.
+    // h0: talkTypeIncompatibilityCost (synthetic value-range replacement). A
+    // "L" talk in a "B"-only slot and room violates both halves: 2 x 60.
     {
         ConferenceSchedule c = makeBase();
         c.talkTypes.push_back("L");
         int i = addTalk(c, "A", {0}, 0, 0);
         c.talks[i].talkType = 1;
         Breakdown b = ScoreCalculator::computeBreakdown(c);
-        checkUnits("talkTypeCompatibility both", b.talkTypeCompatibility, 120);
-        checkScore("talkTypeCompatibility score", b.toScore(), -12000000, 0);
+        checkUnits("talkTypeIncompatibilityCost both",
+                   b.talkTypeIncompatibilityCost,
+                   120);
+        checkScore(
+            "talkTypeIncompatibilityCost score", b.toScore(), -12000000, 0);
     }
     {
         ConferenceSchedule c = makeBase();
@@ -154,144 +157,153 @@ void verifyConstraints()
         c.rooms[0].talkTypes = {0, 1};  // room now admits "L"
         int i = addTalk(c, "A", {0}, 0, 0);
         c.talks[i].talkType = 1;
-        checkUnits("talkTypeCompatibility slot only",
-                   ScoreCalculator::computeBreakdown(c).talkTypeCompatibility,
-                   60);
+        checkUnits(
+            "talkTypeIncompatibilityCost slot only",
+            ScoreCalculator::computeBreakdown(c).talkTypeIncompatibilityCost,
+            60);
     }
-    // h1: roomUnavailableTimeslot — duration.
+    // h1: roomUnavailabilityCost — duration.
     {
         ConferenceSchedule c = makeBase();
         c.rooms[0].unavailableTimeslots = {0};
         addTalk(c, "A", {0}, 0, 0);
         Breakdown b = ScoreCalculator::computeBreakdown(c);
-        checkUnits(
-            "roomUnavailableTimeslot hit", b.roomUnavailableTimeslot, 60);
-        checkScore("roomUnavailableTimeslot score", b.toScore(), -6000000, 0);
+        checkUnits("roomUnavailabilityCost hit", b.roomUnavailabilityCost, 60);
+        checkScore("roomUnavailabilityCost score", b.toScore(), -6000000, 0);
     }
     {
         ConferenceSchedule c = makeBase();
         c.rooms[0].unavailableTimeslots = {0};
         addTalk(c, "A", {0}, 3, 0);
-        checkUnits("roomUnavailableTimeslot miss",
-                   ScoreCalculator::computeBreakdown(c).roomUnavailableTimeslot,
+        checkUnits("roomUnavailabilityCost miss",
+                   ScoreCalculator::computeBreakdown(c).roomUnavailabilityCost,
                    0);
     }
-    // h2: roomConflict — overlap minutes; distinct slots with equal times.
+    // h2: roomConflictCost — overlap minutes; distinct slots with equal times.
     {
         ConferenceSchedule c = makeBase();
         addTalk(c, "A", {0}, 0, 0);
         addTalk(c, "B", {1}, 1, 0);
-        checkUnits("roomConflict full overlap",
-                   ScoreCalculator::computeBreakdown(c).roomConflict,
+        checkUnits("roomConflictCost full overlap",
+                   ScoreCalculator::computeBreakdown(c).roomConflictCost,
                    60);
     }
     {
         ConferenceSchedule c = makeBase();
         addTalk(c, "A", {0}, 0, 0);
         addTalk(c, "B", {1}, 2, 0);  // s0/s2 overlap 570-600
-        checkUnits("roomConflict partial overlap",
-                   ScoreCalculator::computeBreakdown(c).roomConflict,
+        checkUnits("roomConflictCost partial overlap",
+                   ScoreCalculator::computeBreakdown(c).roomConflictCost,
                    30);
     }
     {
         ConferenceSchedule c = makeBase();
         addTalk(c, "A", {0}, 0, 0);
         addTalk(c, "B", {1}, 3, 0);  // disjoint times, same room
-        checkUnits("roomConflict disjoint",
-                   ScoreCalculator::computeBreakdown(c).roomConflict,
+        checkUnits("roomConflictCost disjoint",
+                   ScoreCalculator::computeBreakdown(c).roomConflictCost,
                    0);
     }
-    // h3: speakerUnavailableTimeslot — duration per unavailable speaker.
+    // h3: speakerUnavailabilityCost — duration per unavailable speaker.
     {
         ConferenceSchedule c = makeBase();
         c.speakers[0].unavailableTimeslots = {0};
         c.speakers[1].unavailableTimeslots = {0};
         addTalk(c, "A", {0, 1}, 0, 0);
         checkUnits(
-            "speakerUnavailableTimeslot two speakers",
-            ScoreCalculator::computeBreakdown(c).speakerUnavailableTimeslot,
+            "speakerUnavailabilityCost two speakers",
+            ScoreCalculator::computeBreakdown(c).speakerUnavailabilityCost,
             120);
     }
-    // h4: speakerConflict — overlap per shared speaker; the overlapping pair
-    // also lacks the consecutive pause (h7).
+    // h4: speakerConflictCost — overlap per shared speaker; the overlapping
+    // pair also lacks the consecutive pause (h7).
     {
         ConferenceSchedule c = makeBase();
         addTalk(c, "A", {0, 1}, 0, 0);
         addTalk(c, "B", {0, 1}, 1, 1);
         Breakdown b = ScoreCalculator::computeBreakdown(c);
-        checkUnits("speakerConflict two shared", b.speakerConflict, 120);
         checkUnits(
-            "consecutiveTalksPause via overlap", b.consecutiveTalksPause, 120);
-        checkScore("speakerConflict score", b.toScore(), -(10 * 120 + 120), 0);
+            "speakerConflictCost two shared", b.speakerConflictCost, 120);
+        checkUnits("consecutiveTalksPauseCost via overlap",
+                   b.consecutiveTalksPauseCost,
+                   120);
+        checkScore(
+            "speakerConflictCost score", b.toScore(), -(10 * 120 + 120), 0);
     }
-    // h5: talkPrerequisiteTalks — combined duration when the prerequisite
+    // h5: talkPrerequisiteTalksCost — combined duration when the prerequisite
     // does not end before the dependent starts.
     {
         ConferenceSchedule c = makeBase();
         int a = addTalk(c, "A", {0}, 3, 0);  // prerequisite at s3 (630-690)
         addTalk(c, "B", {1}, 0, 1);          // dependent at s0 (540-600)
         c.talks[1].prerequisiteTalks = {a};
-        checkUnits("talkPrerequisiteTalks violated",
-                   ScoreCalculator::computeBreakdown(c).talkPrerequisiteTalks,
-                   120);
+        checkUnits(
+            "talkPrerequisiteTalksCost violated",
+            ScoreCalculator::computeBreakdown(c).talkPrerequisiteTalksCost,
+            120);
     }
     {
         ConferenceSchedule c = makeBase();
         int a = addTalk(c, "A", {0}, 0, 0);  // ends 600
         addTalk(c, "B", {1}, 3, 1);          // starts 630
         c.talks[1].prerequisiteTalks = {a};
-        checkUnits("talkPrerequisiteTalks satisfied",
-                   ScoreCalculator::computeBreakdown(c).talkPrerequisiteTalks,
-                   0);
+        checkUnits(
+            "talkPrerequisiteTalksCost satisfied",
+            ScoreCalculator::computeBreakdown(c).talkPrerequisiteTalksCost,
+            0);
     }
-    // h6: talkMutuallyExclusiveTalksTags — shared tags x overlap.
+    // h6: talkMutuallyExclusiveTalksTagsCost — shared tags x overlap.
     {
         ConferenceSchedule c = makeBase();
         int a = addTalk(c, "A", {0}, 0, 0);
         int b = addTalk(c, "B", {1}, 1, 1);
         c.talks[a].mutuallyExclusiveTalksTags = {"M", "N"};
         c.talks[b].mutuallyExclusiveTalksTags = {"M", "N"};
-        checkUnits(
-            "mutuallyExclusiveTalksTags",
-            ScoreCalculator::computeBreakdown(c).talkMutuallyExclusiveTalksTags,
-            120);
+        checkUnits("mutuallyExclusiveTalksTags",
+                   ScoreCalculator::computeBreakdown(c)
+                       .talkMutuallyExclusiveTalksTagsCost,
+                   120);
     }
-    // h7: consecutiveTalksPause — shared speaker, same day, gap < minimum.
+    // h7: consecutiveTalksPauseCost — shared speaker, same day, gap < minimum.
     {
         ConferenceSchedule c = makeBase();
         addTalk(c, "A", {0}, 2, 0);  // 570-630
         addTalk(c, "B", {0}, 3, 1);  // 630-690: gap 0
-        checkUnits("consecutiveTalksPause gap 0",
-                   ScoreCalculator::computeBreakdown(c).consecutiveTalksPause,
-                   120);
+        checkUnits(
+            "consecutiveTalksPauseCost gap 0",
+            ScoreCalculator::computeBreakdown(c).consecutiveTalksPauseCost,
+            120);
     }
     {
         ConferenceSchedule c = makeBase();
         addTalk(c, "A", {0}, 0, 0);  // ends 600
         addTalk(c, "B", {0}, 3, 1);  // starts 630: gap 30 == minimum
-        checkUnits("consecutiveTalksPause gap 30 ok",
-                   ScoreCalculator::computeBreakdown(c).consecutiveTalksPause,
-                   0);
+        checkUnits(
+            "consecutiveTalksPauseCost gap 30 ok",
+            ScoreCalculator::computeBreakdown(c).consecutiveTalksPauseCost,
+            0);
     }
     {
         ConferenceSchedule c = makeBase();
         c.minimumConsecutiveTalksPauseInMinutes = 31;
         addTalk(c, "A", {0}, 0, 0);
         addTalk(c, "B", {0}, 3, 1);  // gap 30 < 31
-        checkUnits("consecutiveTalksPause configurable minimum",
-                   ScoreCalculator::computeBreakdown(c).consecutiveTalksPause,
-                   120);
+        checkUnits(
+            "consecutiveTalksPauseCost configurable minimum",
+            ScoreCalculator::computeBreakdown(c).consecutiveTalksPauseCost,
+            120);
     }
     {
         ConferenceSchedule c = makeBase();
         addTalk(c, "A", {0}, 0, 0);  // day 0
         addTalk(c, "B", {0}, 4, 1);  // day 1: pause exists across days
-        checkUnits("consecutiveTalksPause different days",
-                   ScoreCalculator::computeBreakdown(c).consecutiveTalksPause,
-                   0);
+        checkUnits(
+            "consecutiveTalksPauseCost different days",
+            ScoreCalculator::computeBreakdown(c).consecutiveTalksPauseCost,
+            0);
     }
-    // h8: crowdControl — a risk>0 talk with >= 2 other risk>0 talks in its
-    // timeslot; exactly one other is the wanted pairing (no penalty).
+    // h8: crowdControlRiskCost — a risk>0 talk with >= 2 other risk>0 talks in
+    // its timeslot; exactly one other is the wanted pairing (no penalty).
     {
         ConferenceSchedule c = makeBase();
         for (int r = 0; r < 3; ++r)
@@ -299,8 +311,8 @@ void verifyConstraints()
             int i = addTalk(c, "T", {r}, 0, r);
             c.talks[i].crowdControlRisk = 1;
         }
-        checkUnits("crowdControl three risk talks",
-                   ScoreCalculator::computeBreakdown(c).crowdControl,
+        checkUnits("crowdControlRiskCost three risk talks",
+                   ScoreCalculator::computeBreakdown(c).crowdControlRiskCost,
                    180);
     }
     {
@@ -310,16 +322,16 @@ void verifyConstraints()
             int i = addTalk(c, "T", {r}, 0, r);
             c.talks[i].crowdControlRisk = 1;
         }
-        checkUnits("crowdControl paired ok",
-                   ScoreCalculator::computeBreakdown(c).crowdControl,
+        checkUnits("crowdControlRiskCost paired ok",
+                   ScoreCalculator::computeBreakdown(c).crowdControlRiskCost,
                    0);
     }
     {
         ConferenceSchedule c = makeBase();
         int i = addTalk(c, "T", {0}, 0, 0);
         c.talks[i].crowdControlRisk = 1;
-        checkUnits("crowdControl alone ok",
-                   ScoreCalculator::computeBreakdown(c).crowdControl,
+        checkUnits("crowdControlRiskCost alone ok",
+                   ScoreCalculator::computeBreakdown(c).crowdControlRiskCost,
                    0);
     }
     // h9-h16 + s12-s19: the sixteen tag constraints. Slot s0 carries {TS},
@@ -349,32 +361,46 @@ void verifyConstraints()
         k1.preferredRoomTags = {"W"};      // missing
         k1.undesiredRoomTags = {"RM"};     // prevailing
         Breakdown b = ScoreCalculator::computeBreakdown(c);
-        checkUnits("talkRequiredTimeslotTags", b.talkRequiredTimeslotTags, 60);
         checkUnits(
-            "talkProhibitedTimeslotTags", b.talkProhibitedTimeslotTags, 60);
+            "talkRequiredTimeslotTagsCost", b.talkRequiredTimeslotTagsCost, 60);
+        checkUnits("talkProhibitedTimeslotTagsCost",
+                   b.talkProhibitedTimeslotTagsCost,
+                   60);
+        checkUnits("talkPreferredTimeslotTagsCost",
+                   b.talkPreferredTimeslotTagsCost,
+                   60);
+        checkUnits("talkUndesiredTimeslotTagsCost",
+                   b.talkUndesiredTimeslotTagsCost,
+                   60);
+        checkUnits("talkRequiredRoomTagsCost", b.talkRequiredRoomTagsCost, 60);
         checkUnits(
-            "talkPreferredTimeslotTags", b.talkPreferredTimeslotTags, 60);
+            "talkProhibitedRoomTagsCost", b.talkProhibitedRoomTagsCost, 60);
         checkUnits(
-            "talkUndesiredTimeslotTags", b.talkUndesiredTimeslotTags, 60);
-        checkUnits("talkRequiredRoomTags", b.talkRequiredRoomTags, 60);
-        checkUnits("talkProhibitedRoomTags", b.talkProhibitedRoomTags, 60);
-        checkUnits("talkPreferredRoomTags", b.talkPreferredRoomTags, 60);
-        checkUnits("talkUndesiredRoomTags", b.talkUndesiredRoomTags, 60);
+            "talkPreferredRoomTagsCost", b.talkPreferredRoomTagsCost, 60);
         checkUnits(
-            "speakerRequiredTimeslotTags", b.speakerRequiredTimeslotTags, 60);
-        checkUnits("speakerProhibitedTimeslotTags",
-                   b.speakerProhibitedTimeslotTags,
+            "talkUndesiredRoomTagsCost", b.talkUndesiredRoomTagsCost, 60);
+        checkUnits("speakerRequiredTimeslotTagsCost",
+                   b.speakerRequiredTimeslotTagsCost,
+                   60);
+        checkUnits("speakerProhibitedTimeslotTagsCost",
+                   b.speakerProhibitedTimeslotTagsCost,
+                   60);
+        checkUnits("speakerPreferredTimeslotTagsCost",
+                   b.speakerPreferredTimeslotTagsCost,
+                   60);
+        checkUnits("speakerUndesiredTimeslotTagsCost",
+                   b.speakerUndesiredTimeslotTagsCost,
+                   60);
+        checkUnits("speakerRequiredRoomTagsCost (2 tags)",
+                   b.speakerRequiredRoomTagsCost,
+                   120);
+        checkUnits("speakerProhibitedRoomTagsCost",
+                   b.speakerProhibitedRoomTagsCost,
                    60);
         checkUnits(
-            "speakerPreferredTimeslotTags", b.speakerPreferredTimeslotTags, 60);
+            "speakerPreferredRoomTagsCost", b.speakerPreferredRoomTagsCost, 60);
         checkUnits(
-            "speakerUndesiredTimeslotTags", b.speakerUndesiredTimeslotTags, 60);
-        checkUnits(
-            "speakerRequiredRoomTags (2 tags)", b.speakerRequiredRoomTags, 120);
-        checkUnits(
-            "speakerProhibitedRoomTags", b.speakerProhibitedRoomTags, 60);
-        checkUnits("speakerPreferredRoomTags", b.speakerPreferredRoomTags, 60);
-        checkUnits("speakerUndesiredRoomTags", b.speakerUndesiredRoomTags, 60);
+            "speakerUndesiredRoomTagsCost", b.speakerUndesiredRoomTagsCost, 60);
     }
     // Required tags with an empty tag set on the slot: all are missing.
     {
@@ -382,8 +408,8 @@ void verifyConstraints()
         int i = addTalk(c, "A", {}, 0, 0);
         c.talks[i].requiredTimeslotTags = {"X", "Y", "Z"};
         checkUnits(
-            "talkRequiredTimeslotTags all missing",
-            ScoreCalculator::computeBreakdown(c).talkRequiredTimeslotTags,
+            "talkRequiredTimeslotTagsCost all missing",
+            ScoreCalculator::computeBreakdown(c).talkRequiredTimeslotTagsCost,
             180);
     }
     // s1 + s2 + s5: theme conflict, room stability and the audience-theme
@@ -397,13 +423,14 @@ void verifyConstraints()
         c.talks[a].audienceTypes = {"Dev"};
         c.talks[b].audienceTypes = {"Dev"};
         Breakdown bd = ScoreCalculator::computeBreakdown(c);
-        checkUnits("themeTrackConflict", bd.themeTrackConflict, 60);
-        checkUnits("themeTrackRoomStability", bd.themeTrackRoomStability, 120);
-        checkUnits("audienceTypeThemeTrackConflict",
-                   bd.audienceTypeThemeTrackConflict,
+        checkUnits("themeTrackConflictCost", bd.themeTrackConflictCost, 60);
+        checkUnits(
+            "themeTrackRoomChangeCost", bd.themeTrackRoomChangeCost, 120);
+        checkUnits("audienceTypeThemeTrackConflictCost",
+                   bd.audienceTypeThemeTrackConflictCost,
                    60);
-        checkUnits("audienceTypeDiversity (different slots)",
-                   bd.audienceTypeDiversity,
+        checkUnits("audienceTypeDiversityCost (different slots)",
+                   bd.audienceTypeDiversityCost,
                    0);
     }
     // s2: same-day shared-theme pair in the SAME room is stable.
@@ -413,19 +440,20 @@ void verifyConstraints()
         int b = addTalk(c, "B", {1}, 3, 0);  // disjoint times, same room
         c.talks[a].themeTrackTags = {"AI"};
         c.talks[b].themeTrackTags = {"AI"};
-        checkUnits("themeTrackRoomStability same room",
-                   ScoreCalculator::computeBreakdown(c).themeTrackRoomStability,
-                   0);
+        checkUnits(
+            "themeTrackRoomChangeCost same room",
+            ScoreCalculator::computeBreakdown(c).themeTrackRoomChangeCost,
+            0);
     }
-    // s3: sectorConflict.
+    // s3: sectorConflictCost.
     {
         ConferenceSchedule c = makeBase();
         int a = addTalk(c, "A", {0}, 0, 0);
         int b = addTalk(c, "B", {1}, 2, 1);  // overlap 30
         c.talks[a].sectorTags = {"Fin", "Gov"};
         c.talks[b].sectorTags = {"Fin", "Gov"};
-        checkUnits("sectorConflict two sectors",
-                   ScoreCalculator::computeBreakdown(c).sectorConflict,
+        checkUnits("sectorConflictCost two sectors",
+                   ScoreCalculator::computeBreakdown(c).sectorConflictCost,
                    60);
     }
     // s4 + s6 + s9: same-timeslot diversity rewards.
@@ -439,13 +467,15 @@ void verifyConstraints()
         c.talks[b].audienceLevel = 2;
         c.talks[b].language = "de";
         Breakdown bd = ScoreCalculator::computeBreakdown(c);
-        checkUnits("audienceTypeDiversity", bd.audienceTypeDiversity, 60);
-        checkUnits("audienceLevelDiversity", bd.audienceLevelDiversity, 60);
-        checkUnits("languageDiversity", bd.languageDiversity, 60);
+        checkUnits(
+            "audienceTypeDiversityCost", bd.audienceTypeDiversityCost, 60);
+        checkUnits(
+            "audienceLevelDiversityCost", bd.audienceLevelDiversityCost, 60);
+        checkUnits("languageDiversityCost", bd.languageDiversityCost, 60);
         // rewards: +1*60 + 1*60 + 10*60 = +720 soft.
         checkScore("diversity rewards score", bd.toScore(), 0, 720);
     }
-    // s7: contentAudienceLevelFlowViolation — lower level ends after the
+    // s7: contentAudienceLevelFlowViolationCost — lower level ends after the
     // higher level starts.
     {
         ConferenceSchedule c = makeBase();
@@ -455,9 +485,9 @@ void verifyConstraints()
         c.talks[b].audienceLevel = 2;
         c.talks[a].contentTags = {"CT"};
         c.talks[b].contentTags = {"CT"};
-        checkUnits("contentAudienceLevelFlowViolation",
+        checkUnits("contentAudienceLevelFlowViolationCost",
                    ScoreCalculator::computeBreakdown(c)
-                       .contentAudienceLevelFlowViolation,
+                       .contentAudienceLevelFlowViolationCost,
                    120);
     }
     {
@@ -470,10 +500,11 @@ void verifyConstraints()
         c.talks[b].contentTags = {"CT"};
         checkUnits("flow satisfied (lower level first)",
                    ScoreCalculator::computeBreakdown(c)
-                       .contentAudienceLevelFlowViolation,
+                       .contentAudienceLevelFlowViolationCost,
                    0);
     }
-    // s8: contentConflict (equal levels so the flow constraint stays quiet).
+    // s8: contentConflictCost (equal levels so the flow constraint stays
+    // quiet).
     {
         ConferenceSchedule c = makeBase();
         int a = addTalk(c, "A", {0}, 0, 0);
@@ -481,12 +512,12 @@ void verifyConstraints()
         c.talks[a].contentTags = {"CT"};
         c.talks[b].contentTags = {"CT"};
         Breakdown bd = ScoreCalculator::computeBreakdown(c);
-        checkUnits("contentConflict", bd.contentConflict, 60);
+        checkUnits("contentConflictCost", bd.contentConflictCost, 60);
         checkUnits("flow quiet on equal levels",
-                   bd.contentAudienceLevelFlowViolation,
+                   bd.contentAudienceLevelFlowViolationCost,
                    0);
     }
-    // s10: sameDayTalks — shared content/theme on different days.
+    // s10: differentDayTalksCost — shared content/theme on different days.
     {
         ConferenceSchedule c = makeBase();
         int a = addTalk(c, "A", {0}, 0, 0);  // day 0
@@ -495,20 +526,22 @@ void verifyConstraints()
         c.talks[b].contentTags = {"CT"};
         c.talks[a].themeTrackTags = {"AI"};
         c.talks[b].themeTrackTags = {"AI"};
-        checkUnits("sameDayTalks theme+content",
-                   ScoreCalculator::computeBreakdown(c).sameDayTalks,
+        checkUnits("differentDayTalksCost theme+content",
+                   ScoreCalculator::computeBreakdown(c).differentDayTalksCost,
                    240);
     }
-    // s11: popularTalks — the more favorited talk sits in the smaller room.
+    // s11: popularTalksRoomSizeCost — the more favorited talk sits in the
+    // smaller room.
     {
         ConferenceSchedule c = makeBase();
         int a = addTalk(c, "A", {0}, 0, 2);  // fav 10, capacity 300
         int b = addTalk(c, "B", {1}, 3, 0);  // fav 20, capacity 100
         c.talks[a].favoriteCount = 10;
         c.talks[b].favoriteCount = 20;
-        checkUnits("popularTalks violated",
-                   ScoreCalculator::computeBreakdown(c).popularTalks,
-                   120);
+        checkUnits(
+            "popularTalksRoomSizeCost violated",
+            ScoreCalculator::computeBreakdown(c).popularTalksRoomSizeCost,
+            120);
     }
     {
         ConferenceSchedule c = makeBase();
@@ -516,26 +549,27 @@ void verifyConstraints()
         int b = addTalk(c, "B", {1}, 3, 2);  // fav 20, capacity 300
         c.talks[a].favoriteCount = 10;
         c.talks[b].favoriteCount = 20;
-        checkUnits("popularTalks satisfied",
-                   ScoreCalculator::computeBreakdown(c).popularTalks,
-                   0);
+        checkUnits(
+            "popularTalksRoomSizeCost satisfied",
+            ScoreCalculator::computeBreakdown(c).popularTalksRoomSizeCost,
+            0);
     }
-    // s20: speakerMakespan — talks spanning 3 calendar days (span 2) cost
+    // s20: speakerMakespanCost — talks spanning 3 calendar days (span 2) cost
     // one 8-hour day.
     {
         ConferenceSchedule c = makeBase();
         addTalk(c, "A", {0}, 0, 0);  // day 0
         addTalk(c, "B", {0}, 5, 1);  // day 2
-        checkUnits("speakerMakespan span 2",
-                   ScoreCalculator::computeBreakdown(c).speakerMakespan,
+        checkUnits("speakerMakespanCost span 2",
+                   ScoreCalculator::computeBreakdown(c).speakerMakespanCost,
                    480);
     }
     {
         ConferenceSchedule c = makeBase();
         addTalk(c, "A", {0}, 0, 0);  // day 0
         addTalk(c, "B", {0}, 4, 1);  // day 1: span 1 is fine
-        checkUnits("speakerMakespan span 1 ok",
-                   ScoreCalculator::computeBreakdown(c).speakerMakespan,
+        checkUnits("speakerMakespanCost span 1 ok",
+                   ScoreCalculator::computeBreakdown(c).speakerMakespanCost,
                    0);
     }
     // Unassigned talks contribute nothing.
