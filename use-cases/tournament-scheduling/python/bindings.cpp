@@ -326,12 +326,20 @@ PYBIND11_MODULE(_core, m)
             return tfpy::constraintCosts(calculator, schedule);
         },
         py::arg("schedule"),
-        "Raw per-unit cost of every constraint, before weight/exponent/level.");
+        "Raw per-unit cost of every constraint, before weight/exponent/level "
+        "(each entry also carries the domain's medium_fold).");
 
     // The constraint names this domain scores, in default-assembly order —
-    // the same strings a score breakdown reports.
+    // the keys of constraint_costs().
     m.def(
         "list_constraints",
         [] { return tfpy::constraintNames(defaultConstraints()); },
         "Constraint names available to tournament_scheduling.constraints.");
+
+    // The constraint catalog, read off the same default assembly:
+    // constraint_info() -> [ConstraintInfo(name, default_level,
+    // default_weight, level_flippable, reward, default_enabled), ...] in
+    // list_constraints() order. The defaults live in the C++ components only
+    // (assignment_count_imbalance_cost: medium, weight 1 in medium units).
+    tfpy::bindConstraintInfo(m, [] { return defaultConstraints(); });
 }

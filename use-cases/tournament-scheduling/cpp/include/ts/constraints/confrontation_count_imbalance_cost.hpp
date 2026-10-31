@@ -1,14 +1,17 @@
-#ifndef TS_CONSTRAINTS_EVENLY_CONFRONTATION_COUNT_HPP
-#define TS_CONSTRAINTS_EVENLY_CONFRONTATION_COUNT_HPP
+#ifndef TS_CONSTRAINTS_CONFRONTATION_COUNT_IMBALANCE_COST_HPP
+#define TS_CONSTRAINTS_CONFRONTATION_COUNT_IMBALANCE_COST_HPP
 
 #include "ts/constraints/common.hpp"
 
 namespace ts
 {
 
-// Soft (default, weight 1): evenlyConfrontationCount — the LoadBalance
-// unfairness of the confrontation counts per team pair. Two teams confront
-// each other once per pair of same-day assignments they hold (the Java
+// Soft, weight 1: confrontationCountImbalanceCost — how unevenly the
+// head-to-head meetings are spread over the team pairs. Raw cost (global) =
+// the LoadBalance unfairness of the confrontation counts per team pair,
+// sqrt(sum(count^2) - sum(count)^2 / n) rounded to 6 significant figures, so
+// 0 = every confronting pair meets equally often. Two teams confront each
+// other once per pair of same-day assignments they hold (the Java
 // lessThan(teamId) join, so a team never confronts itself), and only pairs
 // with at least one confrontation enter the balance.
 //
@@ -16,12 +19,15 @@ namespace ts
 // It keeps the same state the monolithic calculator does — per-(team, day)
 // occupancy plus the per-pair counts and the three unfairness aggregates —
 // so one join/leave costs O(teamCount) and is exactly reversible.
-struct EvenlyConfrontationCount final : MemberChangeGlobalConstraint
+struct ConfrontationCountImbalanceCost final : MemberChangeGlobalConstraint
 {
-    explicit EvenlyConfrontationCount(double weight = 1.0)
-        : MemberChangeGlobalConstraint("evenlyConfrontationCount",
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
+
+    explicit ConfrontationCountImbalanceCost(double weight = kDefaultWeight)
+        : MemberChangeGlobalConstraint("confrontationCountImbalanceCost",
                                        weight,
-                                       /*hard=*/false)
+                                       kDefaultLevel)
     {
     }
 
@@ -118,4 +124,4 @@ private:
 
 }  // namespace ts
 
-#endif  // TS_CONSTRAINTS_EVENLY_CONFRONTATION_COUNT_HPP
+#endif  // TS_CONSTRAINTS_CONFRONTATION_COUNT_IMBALANCE_COST_HPP

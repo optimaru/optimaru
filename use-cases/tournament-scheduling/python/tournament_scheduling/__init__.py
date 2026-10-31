@@ -2,7 +2,11 @@
 
 A port of the Java quickstart "tournament-scheduling": assigns teams to daily match slots
 (TeamAssignment). Constraints have the same semantics as the Java ConstraintProvider
-(2 hard + 1 medium + 1 soft; for the score mapping see the models/_core docs)::
+(2 hard + 1 medium + 1 soft; HardMediumSoftBigDecimalScore is folded as
+``soft = -(medium * MEDIUM_SCALE + raw soft)``, MEDIUM_SCALE == 1e6; for the details see the
+models/_core docs). ``constraint_info()`` lists each constraint's default level and weight
+(``assignment_count_imbalance_cost`` is medium at weight 1, in medium units);
+``constraint_costs(schedule)`` gives the raw per-constraint costs::
 
     import tournament_scheduling as ts
     from tournament_scheduling.models import demo_data
@@ -18,6 +22,7 @@ objects (`TournamentSchedule`). The pydantic mirror (for serialization) is in
 
 from ._core import (
     MEDIUM_SCALE,
+    ConstraintInfo,
     Day,
     Score,
     Solver,
@@ -28,12 +33,14 @@ from ._core import (
     UnavailabilityPenalty,
     calculate_score,
     constraint_costs,
+    constraint_info,
     list_constraints,
     unfairness,
 )
 
 __all__ = [
     "MEDIUM_SCALE",
+    "ConstraintInfo",
     "Day",
     "Score",
     "Solver",
@@ -47,6 +54,7 @@ __all__ = [
     "unfairness",
     "list_constraints",
     "constraint_costs",
+    "constraint_info",
     "with_initial_solution",
 ]
 

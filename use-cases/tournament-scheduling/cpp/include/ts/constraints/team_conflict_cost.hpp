@@ -1,19 +1,24 @@
-#ifndef TS_CONSTRAINTS_ONE_ASSIGNMENT_PER_DATE_PER_TEAM_HPP
-#define TS_CONSTRAINTS_ONE_ASSIGNMENT_PER_DATE_PER_TEAM_HPP
+#ifndef TS_CONSTRAINTS_TEAM_CONFLICT_COST_HPP
+#define TS_CONSTRAINTS_TEAM_CONFLICT_COST_HPP
 
 #include "ts/constraints/common.hpp"
 
 namespace ts
 {
 
-// Hard (default, weight 1): oneAssignmentPerDatePerTeam — one point per pair
-// of assignments a team holds on the same day (C(c, 2) per (team, day) cell).
+// Hard, weight 1: teamConflictCost — a team double-booked on one day. Raw
+// cost per team = the number of pairs of assignments it holds on the same day
+// (C(c, 2) per (team, day) cell, summed over the team's days), so 0 = the team
+// plays at most once per day.
 // A sum over the pairs INSIDE one unit, so the exact delta of one assignment
 // joining or leaving is the number of other members sharing its day.
-struct OneAssignmentPerDatePerTeam final : TsUnitConstraint
+struct TeamConflictCost final : TsUnitConstraint
 {
-    explicit OneAssignmentPerDatePerTeam(double weight = 1.0)
-        : TsUnitConstraint("oneAssignmentPerDatePerTeam", weight, /*hard=*/true)
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
+
+    explicit TeamConflictCost(double weight = kDefaultWeight)
+        : TsUnitConstraint("teamConflictCost", weight, kDefaultLevel)
     {
     }
     void onReset(const TournamentSchedule &schedule) override
@@ -58,4 +63,4 @@ private:
 
 }  // namespace ts
 
-#endif  // TS_CONSTRAINTS_ONE_ASSIGNMENT_PER_DATE_PER_TEAM_HPP
+#endif  // TS_CONSTRAINTS_TEAM_CONFLICT_COST_HPP

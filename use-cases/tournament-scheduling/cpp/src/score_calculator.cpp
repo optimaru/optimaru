@@ -3,8 +3,15 @@
 #include <cmath>
 #include <cstddef>
 
+#include "ts/constraints.hpp"
+
 namespace ts
 {
+
+// The monolithic score is the default assembly (ts/constraints.hpp), so it
+// reads the same kDefaultWeight constants the components carry (kHardWeight /
+// kMediumWeight / kSoftWeight check that each one is integral and on the
+// level it is summed into).
 
 double ScoreCalculator::unfairnessFromAggregates(std::int64_t sumOfLoads,
                                                  std::int64_t sumOfSquares,
@@ -94,22 +101,23 @@ Score ScoreCalculator::calculateScore(TournamentSchedule &schedule)
         ++teamLoad[assignment.team];
     }
 
-    // hard 1: oneAssignmentPerDatePerTeam — C(c, 2) per cell.
-    std::int64_t hard = 0;
+    // hard 1: teamConflictCost — C(c, 2) per cell.
+    std::int64_t teamConflicts = 0;
     for (int c : cellCnt)
-        hard += pairs(c);
+        teamConflicts += pairs(c);
 
-    // hard 2: unavailabilityPenalty — one per fact with a hit cell.
+    // hard 2: teamUnavailabilityCost — one per fact with a hit cell.
+    std::int64_t unavailableHits = 0;
     for (const UnavailabilityPenalty &penalty :
          schedule.unavailabilityPenalties)
     {
         if (cellCnt[static_cast<std::size_t>(penalty.team) * dayCount
                     + penalty.day]
             > 0)
-            ++hard;
+            ++unavailableHits;
     }
 
-    // medium 3: fairAssignmentCountPerTeam — unfairness of the loads of the
+    // medium 3: assignmentCountImbalanceCost — unfairness of the loads of the
     // teams with >= 1 assignment (Java has no complement here).
     std::int64_t balSum = 0, balSumSq = 0;
     int balN = 0;
@@ -123,9 +131,10 @@ Score ScoreCalculator::calculateScore(TournamentSchedule &schedule)
     }
     const double medium = unfairnessFromAggregates(balSum, balSumSq, balN);
 
-    // soft 4: evenlyConfrontationCount — per day, each assignment pair with
-    // teamId1 < teamId2 is one confrontation of that team pair; unfairness
-    // of the per-pair confrontation counts (pairs with >= 1 confrontation).
+    // soft 4: confrontationCountImbalanceCost — per day, each assignment pair
+    // with teamId1 < teamId2 is one confrontation of that team pair;
+    // unfairness of the per-pair confrontation counts (pairs with >= 1
+    // confrontation).
     std::int64_t confSum = 0, confSumSq = 0;
     int confN = 0;
     for (int t1 = 0; t1 < teamCount; ++t1)
@@ -149,8 +158,13 @@ Score ScoreCalculator::calculateScore(TournamentSchedule &schedule)
     }
     const double soft = unfairnessFromAggregates(confSum, confSumSq, confN);
 
-    score.hard = -hard;
-    score.soft = combinedSoft(medium, soft);
+    score.hard = -(kHardWeight<TeamConflictCost> * teamConflicts
+                   + kHardWeight<TeamUnavailabilityCost> * unavailableHits);
+    score.soft = combinedSoft(
+        static_cast<double>(kMediumWeight<AssignmentCountImbalanceCost>)
+            * medium,
+        static_cast<double>(kSoftWeight<ConfrontationCountImbalanceCost>)
+            * soft);
     schedule.score = score;
     return score;
 }
