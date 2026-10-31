@@ -10,7 +10,6 @@
 //       structural property each feature promises
 //   (e) a CP-SAT-sample-scale school (6 classes, 15 teachers, 34 slots)
 //       reaches hard 0 within 20 seconds
-#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdio>

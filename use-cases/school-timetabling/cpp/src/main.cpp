@@ -4,7 +4,6 @@
 #include <vector>
 
 #include "st/domain.hpp"
-#include "st/score_calculator.hpp"
 #include "st/solver.hpp"
 
 using namespace st;

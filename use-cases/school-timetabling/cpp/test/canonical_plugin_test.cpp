@@ -14,7 +14,6 @@
 //       can make (partial timetabling), and leaves it alone while H1 is hard
 //   (g) the plugin-path solve reaches hard 0 on the CP-SAT-sample-scale
 //       school within a 20-second budget
-#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdio>

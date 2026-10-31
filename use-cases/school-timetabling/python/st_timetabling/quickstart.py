@@ -48,7 +48,7 @@ favour consecutive teacher lessons, spread a class's subjects).
 from dataclasses import dataclass, field
 
 from . import _core
-from .convert import slots_by_course
+from .convert import _slot_key, slots_by_course
 
 __all__ = ["ConvertedProblem", "convert_problem", "convert_solution", "inject_solution"]
 
@@ -70,10 +70,6 @@ class ConvertedProblem:
     subjects_by_id: dict[str, dict]
     homeroom_index: dict[str, int]  # class id -> room index of its placeholder home room
     notes: list[str] = field(default_factory=list)
-
-
-def _slot_key(slot: dict) -> tuple[int, int]:
-    return (int(slot["day"]), int(slot["period"]))
 
 
 def convert_problem(problem: dict) -> ConvertedProblem:

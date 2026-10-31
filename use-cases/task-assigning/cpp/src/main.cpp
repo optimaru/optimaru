@@ -8,7 +8,6 @@
 
 #include "ta/demo_data.hpp"
 #include "ta/domain.hpp"
-#include "ta/score_calculator.hpp"
 #include "ta/solver.hpp"
 
 using namespace ta;

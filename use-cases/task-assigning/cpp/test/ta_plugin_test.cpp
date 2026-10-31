@@ -11,7 +11,6 @@
 //   (f) a 2-second solve(solution, calculator) under FULL_ASSERT
 #include <chrono>
 #include <cmath>
-#include <cstdint>
 #include <cstdio>
 #include <memory>
 #include <random>
