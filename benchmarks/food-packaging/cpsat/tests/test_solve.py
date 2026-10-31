@@ -9,9 +9,20 @@ from food_packaging.models import (
 )
 import pytest
 
+import food_packaging as domain
 from food_packaging import calculate_score, constraint_costs
-from food_packaging.constraints import get_constraints
+from food_packaging.constraints import (
+    MaxEndTimeCost,
+    SquaredMakespanCost,
+    UnassignedJobsCost,
+    get_constraints,
+    score,
+    squared_makespan_cost,
+    unassigned_jobs_cost,
+)
 from food_packaging_cpsat import catalog, solve
+
+MEDIUM_UNIT = 10_000_000_000  # the engine domain's medium fold (into soft)
 
 
 def test_smoke_and_plugin_catalog():
@@ -136,3 +147,95 @@ def test_each_cpsat_constraint_matches_shared_raw_cost(constraint):
 
     expected = -sum(constraint_costs(result.to_core())[constraint.name]["costs"])
     assert sum(proxy.values()) == expected
+
+
+def test_cpsat_defaults_are_the_engine_defaults() -> None:
+    """No hand-copied defaults: the CP-SAT catalog equals constraint_info()."""
+    engine = {row.name: row for row in domain.constraint_info()}
+    entries = catalog()
+    assert [entry["name"] for entry in entries] == domain.list_constraints()
+    for entry in entries:
+        row = engine[entry["name"]]
+        assert entry["default_level"] == row.default_level
+        assert entry["default_weight"] == row.default_weight
+        assert entry["level_flippable"] == row.level_flippable
+        assert entry["reward"] == row.reward
+        assert entry["default_enabled"] == row.default_enabled
+        assert entry["kind"] == "either"  # every food-packaging constraint is flippable
+        assert entry["params"] == {"weight": None, "hard": None, "exponent": 1.0}
+    # The two medium constraints sit on the medium level at weight 1 (medium units).
+    assert {name: (row.default_level, row.default_weight) for name, row in engine.items()} == {
+        "max_end_time_cost": ("hard", 1.0),
+        "after_ideal_end_time_cost": ("medium", 1.0),
+        "squared_makespan_cost": ("soft", 1.0),
+        "operator_cleaning_conflict_cost": ("hard", 1.0),
+        "unassigned_jobs_cost": ("medium", 1.0),
+    }
+
+
+def _one_job_one_line(deadline_minutes: int = 24 * 60) -> PackagingScheduleModel:
+    """One line, one 100-minute job: on the line it costs 100^2 = 10000 soft
+    (squared_makespan_cost); left out it costs its 100 unassigned minutes."""
+    start = datetime(2026, 1, 1)
+    product = ProductModel(id="P", name="Product", cleaning_durations={"P": timedelta(0)})
+    return PackagingScheduleModel(
+        from_date=start.date(),
+        to_date=(start + timedelta(days=1)).date(),
+        products=[product],
+        operators=[OperatorModel(id="O")],
+        lines=[LineModel(id="L", name="Line", start_date_time=start)],
+        jobs=[
+            JobModel(
+                id="J",
+                name="Job",
+                product_id="P",
+                duration=timedelta(minutes=100),
+                min_start_time=start,
+                ideal_end_time=start + timedelta(minutes=deadline_minutes),
+                max_end_time=start + timedelta(minutes=deadline_minutes),
+            )
+        ],
+    )
+
+
+def _both_paths(selection):
+    """The level triple each solver reports for the same selection."""
+    problem = _one_job_one_line()
+    solved = solve(problem, time_limit_seconds=5, constraints=selection)
+    cpsat = (solved.score_hard, solved.score_medium, solved.score_soft)
+    core = problem.to_core()
+    domain.solve(core, time_limit_seconds=0.3, random_seed=1, constraints=selection)
+    engine = (core.score.hard, core.score.medium, core.score.soft)
+    return solved, cpsat, engine
+
+
+@pytest.mark.parametrize(
+    ("selection", "expected", "assigned"),
+    [
+        # Default (medium): the unassigned minutes dominate the soft makespan.
+        ([unassigned_jobs_cost, squared_makespan_cost], (0, 0, -10000), True),
+        # hard=False demotes medium to SOFT on both paths (before 0.2.0 CP-SAT moved
+        # it to medium and the engine ignored it): 100 soft beats 10000 soft.
+        ([UnassignedJobsCost(hard=False), squared_makespan_cost], (0, 0, -100), False),
+        # hard=True: one hard unit per minute, not 10^10.
+        ([UnassignedJobsCost(hard=True), SquaredMakespanCost(hard=True)], (-100, 0, 0), False),
+    ],
+    ids=["default-medium", "medium-demoted", "medium-promoted"],
+)
+def test_medium_knobs_score_like_the_engine(selection, expected, assigned) -> None:
+    solved, cpsat, engine = _both_paths(selection)
+    assert cpsat == expected
+    assert engine == expected
+    assert (solved.lines[0].job_ids == ["J"]) is assigned
+    folded = score(constraint_costs(solved.to_core()), selection)
+    assert (cpsat[0], cpsat[1] * MEDIUM_UNIT + cpsat[2]) == pytest.approx(tuple(folded))
+
+
+def test_demoting_a_hard_constraint_scores_like_the_engine() -> None:
+    """hard=False on a hard constraint lands on soft in both solvers too."""
+    problem = _one_job_one_line(deadline_minutes=60)  # the job ends 40 minutes late
+    selection = [MaxEndTimeCost(hard=False), *get_constraints()[1:]]
+    solved = solve(problem, time_limit_seconds=5, constraints=selection)
+    engine = score(constraint_costs(solved.to_core()), selection)
+    assert solved.score_hard == 0
+    assert (solved.score_hard, solved.score_medium * MEDIUM_UNIT + solved.score_soft) == pytest.approx(tuple(engine))

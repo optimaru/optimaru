@@ -150,10 +150,11 @@ public:
 
     // Solves with a caller-assembled plugin calculator (see
     // fp/constraints.hpp): pick components and weights, then pass the
-    // assembly here. Weights come from the assembly, NOT from the quickstart
-    // level defaults. The final schedule.score is computed by THIS calculator
-    // (decoded back into the HardMediumSoft levels) and the calculator is
-    // left primed on the final solution, so constraintTotals() explains
+    // assembly here. Weights and levels come from the assembly (the
+    // components' kDefaultWeight / kDefaultLevel unless the caller changed
+    // them). The final schedule.score is computed by THIS calculator (its
+    // three level accumulators, calculator.levelScores()) and the calculator
+    // is left primed on the final solution, so constraintTotals() explains
     // exactly that score.
     //
     // Two knobs do not apply on this path: parallelSolverCount and

@@ -6,14 +6,24 @@
 //   (b) incremental score == full recompute across 1500 random LIST moves
 //       driven through the engine's ScoreDirector protocol (plugin path)
 //   (c) constraintTotals() explains exactly the reported score
-//   (d) weight / isHard overrides
+//   (d) weight / level overrides
 //   (e) a 2-second solve(schedule, calculator) under FULL_ASSERT
+//   (f) each component's raw cost, hand-calculated: a positive and a zero
+//       case per constraint (raw 0 = no violation)
+//   (g) the catalog: info() off the default assembly == the components'
+//       kDefaultWeight / kDefaultLevel; the level and knob guards
+//   (h) the medium level (afterIdealEndTimeCost, unassignedJobsCost): the
+//       10^10 fold, hard() / soft() / weight, and solve() reporting the
+//       assembly's levels
+//   (i) incremental == full recompute with each medium term overridden
 #include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <functional>
 #include <memory>
 #include <random>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -226,53 +236,63 @@ void verifyConstraintTotals()
 
     {
         DecomposedCalculator calculator;
-        calculator.emplace<MaxEndDateTime>();
+        calculator.emplace<MaxEndTimeCost>();
         const Score score = scoreWith(calculator, s);
-        check(score.hard == -breakdown.maxEndDateTime && score.medium == 0
+        check(score.hard == -breakdown.maxEndTimeCost && score.medium == 0
                   && score.soft == 0,
-              "maxEndDateTime alone == its breakdown term");
+              "maxEndTimeCost alone == its breakdown term");
     }
     {
         DecomposedCalculator calculator;
-        calculator.emplace<OperatorCleaningConflict>();
+        calculator.emplace<OperatorCleaningConflictCost>();
         const Score score = scoreWith(calculator, s);
-        check(score.hard == -breakdown.operatorCleaningConflict
+        check(score.hard == -breakdown.operatorCleaningConflictCost
                   && score.medium == 0 && score.soft == 0,
-              "operatorCleaningConflict alone == its breakdown term");
+              "operatorCleaningConflictCost alone == its breakdown term");
     }
     {
         DecomposedCalculator calculator;
-        calculator.emplace<IdealEndDateTime>();
+        calculator.emplace<AfterIdealEndTimeCost>();
         const Score score = scoreWith(calculator, s);
-        check(score.hard == 0 && score.medium == -breakdown.idealEndDateTime
+        check(score.hard == 0
+                  && score.medium == -breakdown.afterIdealEndTimeCost
                   && score.soft == 0,
-              "idealEndDateTime alone == its breakdown term");
+              "afterIdealEndTimeCost alone == its breakdown term");
     }
     {
         DecomposedCalculator calculator;
-        calculator.emplace<MaximizeJobsAssigned>();
+        calculator.emplace<UnassignedJobsCost>();
         const Score score = scoreWith(calculator, s);
-        check(score.hard == 0 && score.medium == -breakdown.maximizeJobsAssigned
+        check(score.hard == 0 && score.medium == -breakdown.unassignedJobsCost
                   && score.soft == 0,
-              "maximizeJobsAssigned alone == its breakdown term");
+              "unassignedJobsCost alone == its breakdown term");
     }
     {
         DecomposedCalculator calculator;
-        calculator.emplace<MinimizeMakespan>();
+        calculator.emplace<SquaredMakespanCost>();
         const Score score = scoreWith(calculator, s);
         check(score.hard == 0 && score.medium == 0
-                  && score.soft == -breakdown.minimizeMakespan,
-              "minimizeMakespan alone == its breakdown term");
+                  && score.soft == -breakdown.squaredMakespanCost,
+              "squaredMakespanCost alone == its breakdown term");
     }
     {
         DecomposedCalculator calculator;
         addDefaultConstraints(calculator);
         const Score score = scoreWith(calculator, s);
+        // A medium total is in medium units (cost is not multiplied by the
+        // fold); fold it here to compare with the engine score.
         double hard = 0.0;
         double soft = 0.0;
         for (const optimaru::ConstraintTotal &total :
              calculator.constraintTotals())
-            (total.isHard ? hard : soft) += total.cost;
+        {
+            if (total.level == optimaru::Level::Hard)
+                hard += total.cost;
+            else if (total.level == optimaru::Level::Medium)
+                soft += total.cost * static_cast<double>(kMediumUnit);
+            else
+                soft += total.cost;
+        }
         const optimaru::HardSoftScore engineScore = toEngineScore(score);
         check(std::fabs(-hard - static_cast<double>(engineScore.hard)) < 1e-9
                   && std::fabs(-soft - engineScore.soft) < 1e-3,
@@ -297,22 +317,47 @@ void verifyOverrides()
 
     {
         DecomposedCalculator calculator;
-        calculator.emplace<MaxEndDateTime>(3.0);
+        calculator.emplace<MaxEndTimeCost>(3.0);
         const Score score = scoreWith(calculator, s);
-        check(score.hard == -3 * breakdown.maxEndDateTime,
-              "maxEndDateTime re-weighted to 3");
+        check(score.hard == -3 * breakdown.maxEndTimeCost,
+              "maxEndTimeCost re-weighted to 3");
     }
     {
         // Demoted to soft at weight 1: the same minutes land on the soft
         // level instead of the hard one.
         DecomposedCalculator calculator;
-        auto component = std::make_unique<MaxEndDateTime>();
-        component->isHard = false;
+        auto component = std::make_unique<MaxEndTimeCost>();
+        component->level = optimaru::Level::Soft;
         calculator.add(std::move(component));
         const Score score = scoreWith(calculator, s);
         check(score.hard == 0 && score.medium == 0
-                  && score.soft == -breakdown.maxEndDateTime,
-              "maxEndDateTime demoted to soft");
+                  && score.soft == -breakdown.maxEndTimeCost,
+              "maxEndTimeCost demoted to soft");
+    }
+    {
+        // The same edit by registry name through the assembly.
+        DecomposedCalculator calculator;
+        defaultConstraints()
+            .only({"maxEndTimeCost"})
+            .soft("maxEndTimeCost")
+            .into(calculator);
+        const Score score = scoreWith(calculator, s);
+        check(score.hard == 0 && score.medium == 0
+                  && score.soft == -breakdown.maxEndTimeCost,
+              "only().soft(\"maxEndTimeCost\") == the by-hand demotion");
+    }
+    {
+        // exponent 2 shapes each line's raw lateness before the weight; the
+        // global conflict shapes its single total.
+        DecomposedCalculator calculator;
+        auto conflict = std::make_unique<OperatorCleaningConflictCost>();
+        conflict->exponent = 2.0;
+        calculator.add(std::move(conflict));
+        const Score score = scoreWith(calculator, s);
+        check(score.hard
+                  == -breakdown.operatorCleaningConflictCost
+                         * breakdown.operatorCleaningConflictCost,
+              "operatorCleaningConflictCost exponent 2 squares the total");
     }
     std::printf("\n");
 }
@@ -356,6 +401,488 @@ void verifyFullAssertSolve()
     std::printf("\n");
 }
 
+// -------------------------------------------------------------------------
+// Hand-built schedules for (f) and (h): the fp_test products (0 = A small,
+// 2 = B; cleanup B -> A small = 60, A small -> A small = 0), every line
+// starting at minute 0.
+// -------------------------------------------------------------------------
+constexpr Minutes BIG = 1000000000LL;  // a deadline that never fires
+constexpr int PA_S = 0;
+constexpr int PB = 2;
+
+struct JobSpec
+{
+    int product;
+    Minutes duration;
+    Minutes idealEnd = BIG;
+    Minutes maxEnd = BIG;
+};
+
+PackagingSchedule handSchedule(int operatorCount)
+{
+    PackagingSchedule s;
+    s.fromMinute = 0;
+    s.toMinute = 14 * 24 * 60;
+    s.products = {
+        {"1", "Product A small"}, {"2", "Product A large"}, {"3", "Product B"}};
+    s.cleanupMinutes = {0, 0, 40, 5, 0, 40, 60, 60, 0};
+    for (int o = 0; o < operatorCount; ++o)
+        s.operators.push_back({"Operator " + std::to_string(o + 1)});
+    return s;
+}
+
+int addJob(PackagingSchedule &s, const JobSpec &spec)
+{
+    Job job;
+    job.id = std::to_string(s.jobs.size());
+    job.name = "job" + job.id;
+    job.productIndex = spec.product;
+    job.durationMinutes = spec.duration;
+    job.idealEndTime = spec.idealEnd;
+    job.maxEndTime = spec.maxEnd;
+    s.jobs.push_back(std::move(job));
+    return static_cast<int>(s.jobs.size()) - 1;
+}
+
+void addLine(PackagingSchedule &s,
+             int operatorIndex,
+             const std::vector<JobSpec> &specs)
+{
+    Line line;
+    line.id = std::to_string(s.lines.size());
+    line.name = "Line " + line.id;
+    line.operatorIndex = operatorIndex;
+    for (const JobSpec &spec : specs)
+        line.jobs.push_back(addJob(s, spec));
+    s.lines.push_back(std::move(line));
+}
+
+// -------------------------------------------------------------------------
+// (f) Each component's raw cost on hand-built schedules: one violating
+// (positive) case and one clean (zero) case per constraint, read through
+// constraintCosts() — the raw numbers before weight, exponent and level. A
+// unit constraint reports one cost per list (the lines, then the unassigned
+// pool); a global one reports its single total.
+// -------------------------------------------------------------------------
+std::vector<double> rawCosts(PackagingSchedule &schedule,
+                             const std::string &name)
+{
+    ScoreCalculator::prepare(schedule);
+    DecomposedCalculator calculator;
+    addDefaultConstraints(calculator);
+    calculator.resetWorkingSolution(schedule);
+    calculator.calculateScore();
+    for (const auto &entry : calculator.constraintCosts())
+    {
+        if (entry.name == name)
+            return entry.unitCosts;
+    }
+    return {};
+}
+
+void verifyRawCostsByHand()
+{
+    std::printf("== (f) Raw costs by hand, positive and zero ==\n");
+    using Costs = std::vector<double>;
+    {
+        // Line 0: J0 runs 0..200 (deadline 200, on time), J1 200..350
+        // (deadline 250) -> 100 late. Line 1 has no deadline in reach.
+        PackagingSchedule s = handSchedule(2);
+        addLine(s, 0, {{PA_S, 200, BIG, 200}, {PA_S, 150, BIG, 250}});
+        addLine(s, 1, {{PB, 100}});
+        check(rawCosts(s, "maxEndTimeCost") == Costs{100.0, 0.0, 0.0},
+              "maxEndTimeCost: [100, 0, pool 0] (J1 ends 350, due 250)");
+    }
+    {
+        // The same chain with J1 due exactly when it ends.
+        PackagingSchedule s = handSchedule(2);
+        addLine(s, 0, {{PA_S, 200, BIG, 200}, {PA_S, 150, BIG, 350}});
+        addLine(s, 1, {{PB, 100}});
+        check(rawCosts(s, "maxEndTimeCost") == Costs{0.0, 0.0, 0.0},
+              "maxEndTimeCost: [0, 0, 0] every job ends by its deadline");
+    }
+    {
+        // Lines 0 and 1 share operator 0: cleaning windows [10, 70) and
+        // [30, 90) overlap 40 minutes. Line 2 (operator 1) cleans [5, 65)
+        // with no same-operator partner.
+        PackagingSchedule s = handSchedule(2);
+        addLine(s, 0, {{PB, 10}, {PA_S, 100}});
+        addLine(s, 0, {{PB, 30}, {PA_S, 100}});
+        addLine(s, 1, {{PB, 5}, {PA_S, 100}});
+        check(rawCosts(s, "operatorCleaningConflictCost") == Costs{40.0},
+              "operatorCleaningConflictCost: [40] overlap minutes");
+    }
+    {
+        // The same lines, each with its own operator.
+        PackagingSchedule s = handSchedule(3);
+        addLine(s, 0, {{PB, 10}, {PA_S, 100}});
+        addLine(s, 1, {{PB, 30}, {PA_S, 100}});
+        addLine(s, 2, {{PB, 5}, {PA_S, 100}});
+        check(rawCosts(s, "operatorCleaningConflictCost") == Costs{0.0},
+              "operatorCleaningConflictCost: [0] no shared operator");
+    }
+    {
+        // Ends 200 and 350 against ideal ends 200 and 250 -> 100 minutes.
+        PackagingSchedule s = handSchedule(2);
+        addLine(s, 0, {{PA_S, 200, 200, BIG}, {PA_S, 150, 250, BIG}});
+        addLine(s, 1, {{PB, 100, 100, BIG}});
+        check(rawCosts(s, "afterIdealEndTimeCost") == Costs{100.0, 0.0, 0.0},
+              "afterIdealEndTimeCost: [100, 0, pool 0]");
+    }
+    {
+        PackagingSchedule s = handSchedule(2);
+        addLine(s, 0, {{PA_S, 200, 200, BIG}, {PA_S, 150, 350, BIG}});
+        addLine(s, 1, {{PB, 100, 100, BIG}});
+        check(rawCosts(s, "afterIdealEndTimeCost") == Costs{0.0, 0.0, 0.0},
+              "afterIdealEndTimeCost: [0, 0, 0] every job ends by its ideal "
+              "time");
+    }
+    {
+        // A loose job (in no list, 200 min) and a pooled job (50 min).
+        PackagingSchedule s = handSchedule(1);
+        addLine(s, 0, {{PA_S, 100}});
+        addJob(s, {PA_S, 200});
+        s.unassignedJobs.push_back(addJob(s, {PB, 50}));
+        check(rawCosts(s, "unassignedJobsCost") == Costs{250.0},
+              "unassignedJobsCost: [250] (loose 200 + pooled 50)");
+    }
+    {
+        PackagingSchedule s = handSchedule(1);
+        addLine(s, 0, {{PA_S, 100}, {PB, 50}});
+        check(rawCosts(s, "unassignedJobsCost") == Costs{0.0},
+              "unassignedJobsCost: [0] every job on a line");
+    }
+    {
+        // Line 0: B 0..100, cleanup B -> A small 60, A small 160..260 ->
+        // 260^2 = 67600. Line 1 is empty.
+        PackagingSchedule s = handSchedule(2);
+        addLine(s, 0, {{PB, 100}, {PA_S, 100}});
+        addLine(s, 1, {});
+        check(rawCosts(s, "squaredMakespanCost") == Costs{67600.0, 0.0, 0.0},
+              "squaredMakespanCost: [260^2, 0, pool 0]");
+    }
+    {
+        // Every job in the pool: no line is busy.
+        PackagingSchedule s = handSchedule(2);
+        addLine(s, 0, {});
+        addLine(s, 1, {});
+        s.unassignedJobs.push_back(addJob(s, {PB, 100}));
+        check(rawCosts(s, "squaredMakespanCost") == Costs{0.0, 0.0, 0.0},
+              "squaredMakespanCost: [0, 0, 0] with empty lines");
+    }
+    std::printf("\n");
+}
+
+// -------------------------------------------------------------------------
+// (g) The catalog read off the default assembly is exactly the components'
+// constants, and the level/weight guards hold on the domain's assembly.
+// -------------------------------------------------------------------------
+bool throwsInvalid(const std::function<void()> &edit)
+{
+    try
+    {
+        edit();
+    }
+    catch (const std::invalid_argument &)
+    {
+        return true;
+    }
+    return false;
+}
+
+template <typename Component>
+bool rowIs(const optimaru::ConstraintInfo &row,
+           const char *name,
+           optimaru::Level level,
+           double weight,
+           bool isGlobal)
+{
+    return row.name == name && row.defaultLevel == Component::kDefaultLevel
+           && row.defaultWeight == Component::kDefaultWeight
+           && row.defaultLevel == level && row.defaultWeight == weight
+           && row.levelFlippable && !row.reward && row.isGlobal == isGlobal
+           && row.defaultEnabled;
+}
+
+void verifyCatalog()
+{
+    std::printf("== (g) Catalog and guards ==\n");
+    using optimaru::Level;
+    const auto rows = defaultConstraints().info();
+    check(rows.size() == 5, "5 catalog rows");
+    if (rows.size() != 5)
+        return;
+    // Unit constraints first, then the globals: the list_constraints() order.
+    check(rowIs<MaxEndTimeCost>(
+              rows[0], "maxEndTimeCost", Level::Hard, 1.0, false)
+              && rowIs<AfterIdealEndTimeCost>(
+                  rows[1], "afterIdealEndTimeCost", Level::Medium, 1.0, false)
+              && rowIs<SquaredMakespanCost>(
+                  rows[2], "squaredMakespanCost", Level::Soft, 1.0, false)
+              && rowIs<OperatorCleaningConflictCost>(
+                  rows[3],
+                  "operatorCleaningConflictCost",
+                  Level::Hard,
+                  1.0,
+                  true)
+              && rowIs<UnassignedJobsCost>(
+                  rows[4], "unassignedJobsCost", Level::Medium, 1.0, true),
+          "info(): maxEndTimeCost hard 1, afterIdealEndTimeCost medium 1, "
+          "squaredMakespanCost soft 1, operatorCleaningConflictCost hard 1 "
+          "(global), unassignedJobsCost medium 1 (global); all flippable, no "
+          "reward, all enabled");
+    std::vector<std::string> infoNames;
+    for (const auto &row : rows)
+        infoNames.push_back(row.name);
+    check(infoNames == defaultConstraints().names(),
+          "info() rows in names() order");
+    check(!throwsInvalid([] { defaultConstraints().soft("maxEndTimeCost"); })
+              && !throwsInvalid(
+                  [] { defaultConstraints().hard("squaredMakespanCost"); })
+              && !throwsInvalid(
+                  [] { defaultConstraints().hard("afterIdealEndTimeCost"); })
+              && !throwsInvalid(
+                  [] { defaultConstraints().soft("unassignedJobsCost"); }),
+          "every level flips (medium to hard or soft too)");
+    check(throwsInvalid(
+              [] { defaultConstraints().weight("squaredMakespanCost", -2.0); }),
+          "a negative weight is refused");
+    check(throwsInvalid(
+              [] { defaultConstraints().exponent("maxEndTimeCost", 0.0); }),
+          "a non-positive exponent is refused");
+    // 0.2.0 migration: the pre-0.2.0 registry name has no alias.
+    check(throwsInvalid(
+              [] { defaultConstraints().weight("maxEndDateTime", 2.0); }),
+          "a pre-0.2.0 registry name is unknown");
+    std::printf("\n");
+}
+
+// -------------------------------------------------------------------------
+// (h) The medium level: afterIdealEndTimeCost and unassignedJobsCost.
+// -------------------------------------------------------------------------
+optimaru::DecomposedScoreCalculator<PackagingSchedule>::LevelScores
+levelsWith(ConstraintAssembly assembly, PackagingSchedule &schedule)
+{
+    ScoreCalculator::prepare(schedule);
+    DecomposedCalculator calculator;
+    std::move(assembly).into(calculator);
+    calculator.resetWorkingSolution(schedule);
+    calculator.calculateScore();
+    return calculator.levelScores();
+}
+
+bool levelsAre(
+    const optimaru::DecomposedScoreCalculator<PackagingSchedule>::LevelScores
+        &levels,
+    std::int64_t hard,
+    double medium,
+    double soft)
+{
+    return levels.hard == hard && levels.medium == medium
+           && levels.soft == soft;
+}
+
+void verifyMediumLevel()
+{
+    std::printf("== (h) Medium level ==\n");
+    // Line 0: J0 0..200 (ideal 200), J1 200..350 (ideal 250) -> 100 minutes
+    // after the ideal end; one loose 50-minute job -> 50 unassigned minutes;
+    // makespan 350^2 = 122500 soft.
+    PackagingSchedule s = handSchedule(1);
+    addLine(s, 0, {{PA_S, 200, 200, BIG}, {PA_S, 150, 250, BIG}});
+    addJob(s, {PB, 50});
+    const Score monolithic = ScoreCalculator::calculateScore(s);
+    check(sameScore(monolithic, Score{0, -150, -122500}),
+          "the hand schedule: 0hard/-150medium/-122500soft");
+
+    {
+        ScoreCalculator::prepare(s);
+        DecomposedCalculator calculator;
+        addDefaultConstraints(calculator);
+        calculator.resetWorkingSolution(s);
+        const optimaru::HardSoftScore engine = calculator.calculateScore();
+        check(engine.hard == 0
+                  && engine.soft
+                         == -122500.0 - 150.0 * static_cast<double>(kMediumUnit),
+              "default: medium folded into soft x 10^10");
+        const optimaru::HardSoftScore adapter = toEngineScore(monolithic);
+        check(engine.hard == adapter.hard && engine.soft == adapter.soft,
+              "default: the fold equals the monolithic Score adapter");
+        check(levelsAre(calculator.levelScores(), 0, -150.0, -122500.0),
+              "levelScores() reports the unfolded levels");
+    }
+    check(levelsAre(levelsWith(defaultConstraints().hard("afterIdealEndTimeCost"),
+                               s),
+                    -100,
+                    -50.0,
+                    -122500.0),
+          "afterIdealEndTimeCost hard(): one hard unit per raw minute");
+    check(levelsAre(levelsWith(defaultConstraints().soft("afterIdealEndTimeCost"),
+                               s),
+                    0,
+                    -50.0,
+                    -122600.0),
+          "afterIdealEndTimeCost soft(): one soft unit per raw minute, "
+          "outside the fold");
+    check(levelsAre(
+              levelsWith(
+                  defaultConstraints().weight("afterIdealEndTimeCost", 3), s),
+              0,
+              -350.0,
+              -122500.0),
+          "afterIdealEndTimeCost weight 3 stays in medium units");
+    check(levelsAre(levelsWith(defaultConstraints().hard("unassignedJobsCost"),
+                               s),
+                    -50,
+                    -100.0,
+                    -122500.0),
+          "unassignedJobsCost hard(): one hard unit per raw minute");
+    check(levelsAre(levelsWith(defaultConstraints().soft("unassignedJobsCost"),
+                               s),
+                    0,
+                    -100.0,
+                    -122550.0),
+          "unassignedJobsCost soft(): one soft unit per raw minute, outside "
+          "the fold");
+    check(levelsAre(levelsWith(
+                        defaultConstraints().weight("unassignedJobsCost", 2), s),
+                    0,
+                    -200.0,
+                    -122500.0),
+          "unassignedJobsCost weight 2 stays in medium units");
+    {
+        // solve(schedule, calculator) reports the assembly's levels. One
+        // line, one 100-minute job: assigned it costs 100^2 = 10000 soft
+        // (squaredMakespanCost); with unassignedJobsCost demoted to soft,
+        // leaving it out costs only 100 soft, so the solver leaves it in the
+        // pool and those minutes land on SOFT (not medium).
+        PackagingSchedule one = handSchedule(1);
+        addLine(one, 0, {});
+        addJob(one, {PA_S, 100});
+        Solver::Config config;
+        config.spentLimit = std::chrono::milliseconds(300);
+        config.randomSeed = 1;
+        DecomposedCalculator calculator;
+        ConstraintAssembly{}
+            .emplace<UnassignedJobsCost>()
+            .emplace<SquaredMakespanCost>()
+            .soft("unassignedJobsCost")
+            .into(calculator);
+        Solver(config).solve(one, calculator);
+        check(sameScore(one.score, Score{0, 0, -100}),
+              "solve() with unassignedJobsCost demoted: 0hard/0medium/-100soft "
+              "(got " + one.score.toString() + ")");
+    }
+    std::printf("\n");
+}
+
+// -------------------------------------------------------------------------
+// (i) Incremental == full recompute with each medium term overridden,
+// through the ScoreDirector's LIST protocol (relocations, including to the
+// pool, and 2-opt reversals).
+// -------------------------------------------------------------------------
+void verifyMediumIncremental()
+{
+    std::printf("== (i) Medium overrides: incremental == full ==\n");
+    const std::vector<
+        std::pair<std::string, std::function<ConstraintAssembly()>>>
+        variants{
+            {"default", [] { return defaultConstraints(); }},
+            {"afterIdealEndTimeCost hard",
+             [] { return defaultConstraints().hard("afterIdealEndTimeCost"); }},
+            {"afterIdealEndTimeCost soft",
+             [] { return defaultConstraints().soft("afterIdealEndTimeCost"); }},
+            {"afterIdealEndTimeCost weight 3",
+             []
+             {
+                 return defaultConstraints().weight("afterIdealEndTimeCost",
+                                                    3);
+             }},
+            {"unassignedJobsCost hard",
+             [] { return defaultConstraints().hard("unassignedJobsCost"); }},
+            {"unassignedJobsCost soft",
+             [] { return defaultConstraints().soft("unassignedJobsCost"); }},
+            {"unassignedJobsCost weight 2",
+             [] { return defaultConstraints().weight("unassignedJobsCost", 2); }},
+        };
+    using Descriptor = optimaru::SolutionDescriptor<PackagingSchedule>;
+    for (const auto &variant : variants)
+    {
+        PackagingSchedule s = generateDemoData(/*lines*/ 3, /*jobs*/ 18);
+        ScoreCalculator::prepare(s);
+        DecomposedCalculator calculator;
+        variant.second().into(calculator);
+        optimaru::ScoreDirector<PackagingSchedule> director(s, calculator);
+        const int listCount = Descriptor::listCount(s);
+        const int elementCount = Descriptor::elementCount(s);
+        std::vector<int> listOf(elementCount, -1);
+        for (int l = 0; l < listCount; ++l)
+        {
+            for (int p = 0; p < Descriptor::listSize(s, l); ++p)
+                listOf[Descriptor::getElement(s, l, p)] = l;
+        }
+        auto indexWithin = [&](int list, int element)
+        {
+            for (int p = 0; p < Descriptor::listSize(s, list); ++p)
+            {
+                if (Descriptor::getElement(s, list, p) == element)
+                    return p;
+            }
+            return -1;
+        };
+        std::mt19937_64 rng(41);
+        std::uniform_real_distribution<double> unit(0.0, 1.0);
+        int mismatches = 0;
+        int mediumSteps = 0;
+        for (int step = 0; step < 800 && elementCount > 0; ++step)
+        {
+            const int element = static_cast<int>(rng() % elementCount);
+            if (unit(rng) < 0.8)
+            {
+                const int from = listOf[element];
+                if (from >= 0)
+                    director.removeListElement(from,
+                                               indexWithin(from, element));
+                const int to = static_cast<int>(rng() % listCount);
+                const int position = static_cast<int>(
+                    rng()
+                    % static_cast<unsigned>(Descriptor::listSize(s, to) + 1));
+                director.insertListElement(to, position, element);
+                listOf[element] = to;
+            }
+            else
+            {
+                const int list = static_cast<int>(rng() % listCount);
+                const int size = Descriptor::listSize(s, list);
+                if (size < 2)
+                    continue;
+                int first = static_cast<int>(rng() % size);
+                int last = static_cast<int>(rng() % size);
+                if (first > last)
+                    std::swap(first, last);
+                director.reverseListSegment(list, first, last);
+            }
+            const optimaru::HardSoftScore incremental
+                = director.calculateScore();
+            DecomposedCalculator fresh;
+            variant.second().into(fresh);
+            fresh.resetWorkingSolution(s);
+            const optimaru::HardSoftScore full = fresh.calculateScore();
+            if (fresh.levelScores().medium != 0.0)
+                ++mediumSteps;
+            if (incremental.hard != full.hard
+                || std::fabs(incremental.soft - full.soft) > 1e-3)
+                ++mismatches;
+        }
+        check(mismatches == 0,
+              variant.first + ": 800 random list moves, incremental == full");
+        // Every variant keeps at least one medium term.
+        check(mediumSteps > 0,
+              variant.first + ": the walk visits medium states");
+    }
+    std::printf("\n");
+}
+
 }  // namespace
 
 int main()
@@ -365,6 +892,10 @@ int main()
     verifyConstraintTotals();
     verifyOverrides();
     verifyFullAssertSolve();
+    verifyRawCostsByHand();
+    verifyCatalog();
+    verifyMediumLevel();
+    verifyMediumIncremental();
 
     if (failures == 0)
     {

@@ -92,7 +92,7 @@ def test_pinned_jobs_are_kept():
     assert schedule.jobs[1].line_index == -1
     assert 1 in schedule.unassigned_jobs
     # The pinned unassigned job's duration remains in the medium penalty.
-    assert fp.analyze(schedule).maximize_jobs_assigned >= schedule.jobs[1].duration_minutes
+    assert sum(fp.constraint_costs(schedule)["unassigned_jobs_cost"]["costs"]) >= schedule.jobs[1].duration_minutes
 
 
 def test_solver_config_roundtrip():

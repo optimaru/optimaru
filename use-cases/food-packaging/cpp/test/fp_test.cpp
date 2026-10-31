@@ -18,8 +18,8 @@
 //       by the wrapper's alternating loop)
 //   (f) the Java demo instance (Random(37) replica) has the expected shape
 //       and reaches 0hard
-//   (g) HardMediumSoft <-> engine HardSoft mapping roundtrip + input
-//       validation errors
+//   (g) HardMediumSoft <-> engine HardSoft mapping roundtrip (the domain's
+//       medium fold, intoSoft(10^10)) + input validation errors
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -147,12 +147,12 @@ void verifyConstraints()
     std::printf("== (a) Verifying each constraint (hand-computed) ==\n");
 
     {
-        // maxEndDateTime. Chain: J0 [clean 0,0) run 0..200; J1 clean [200,
+        // maxEndTimeCost. Chain: J0 [clean 0,0) run 0..200; J1 clean [200,
         // 200) (A small -> A small = 0), run 200..350. J1 is 100 late
         // against maxEnd 250; makespan 350^2.
         PackagingSchedule s = baseSchedule(1);
         addLine(s, 0, {{PA_S, 200, BIG, 200}, {PA_S, 150, BIG, 250}});
-        checkScore("maxEndDateTime 100 minutes late",
+        checkScore("maxEndTimeCost 100 minutes late",
                    ScoreCalculator::calculateScore(s),
                    {-100, 0, -350 * 350});
     }
@@ -175,47 +175,48 @@ void verifyConstraints()
               "first job: zero-length cleaning window at line start");
     }
     {
-        // operatorCleaningConflict: lines 0 and 1 share operator 0. Cleaning
-        // windows: line0 job1 [10, 70), line1 job1 [30, 90) -> overlap 40.
+        // operatorCleaningConflictCost: lines 0 and 1 share operator 0.
+        // Cleaning windows: line0 job1 [10, 70), line1 job1 [30, 90) ->
+        // overlap 40.
         // Line 2 (operator 1) has window [5, 65) but no same-operator
         // partner. Makespans: 170^2 + 190^2 + 165^2.
         PackagingSchedule s = baseSchedule(2);
         addLine(s, 0, {{PB, 10}, {PA_S, 100}});
         addLine(s, 0, {{PB, 30}, {PA_S, 100}});
         addLine(s, 1, {{PB, 5}, {PA_S, 100}});
-        checkScore("operatorCleaningConflict 40 overlap minutes",
+        checkScore("operatorCleaningConflictCost 40 overlap minutes",
                    ScoreCalculator::calculateScore(s),
                    {-40, 0, -(170 * 170 + 190 * 190 + 165 * 165)});
     }
     {
-        // idealEndDateTime: same chain as the maxEnd case but on the medium
-        // level (ends 200 and 350 against ideals 200 and 250).
+        // afterIdealEndTimeCost: same chain as the maxEnd case but on the
+        // medium level (ends 200 and 350 against ideals 200 and 250).
         PackagingSchedule s = baseSchedule(1);
         addLine(s, 0, {{PA_S, 200, 200, BIG}, {PA_S, 150, 250, BIG}});
-        checkScore("idealEndDateTime 100 minutes late",
+        checkScore("afterIdealEndTimeCost 100 minutes late",
                    ScoreCalculator::calculateScore(s),
                    {0, -100, -350 * 350});
     }
     {
-        // maximizeJobsAssigned: a loose job (in no list) and a pooled job
+        // unassignedJobsCost: a loose job (in no list) and a pooled job
         // both count as unassigned; each penalizes its duration.
         PackagingSchedule s = baseSchedule(1);
         addLine(s, 0, {{PA_S, 100}});
         addJob(s, {PA_S, 200});                           // loose
         s.unassignedJobs.push_back(addJob(s, {PB, 50}));  // pooled
-        checkScore("maximizeJobsAssigned 250 unassigned minutes",
+        checkScore("unassignedJobsCost 250 unassigned minutes",
                    ScoreCalculator::calculateScore(s),
                    {0, -250, -100 * 100});
     }
     {
-        // minimizeMakespan: line0 ends at 100; line1: job runs 0..200, then
+        // squaredMakespanCost: line0 ends at 100; line1: job runs 0..200, then
         // cleanup(A small -> B) = 40 and 1000 minutes -> ends 1240. The
         // unassigned 6000-minute job lands on the medium level.
         PackagingSchedule s = baseSchedule(2);
         addLine(s, 0, {{PA_S, 100}});
         addLine(s, 1, {{PA_S, 200}, {PB, 1000}});
         addJob(s, {PA_S, 6000});
-        checkScore("minimizeMakespan 100^2 + 1240^2",
+        checkScore("squaredMakespanCost 100^2 + 1240^2",
                    ScoreCalculator::calculateScore(s),
                    {0, -6000, -(100 * 100 + 1240 * 1240)});
     }
@@ -511,11 +512,11 @@ void verifyOperatorAssignment()
         addLine(s, 1, {{PB, 300}, {PA_S, 100}});
         ScoreCalculator::prepare(s);
         const std::int64_t conflictBefore
-            = ScoreCalculator::analyze(s).operatorCleaningConflict;
+            = ScoreCalculator::analyze(s).operatorCleaningConflictCost;
         check(conflictBefore == 58, "shared operator costs 58 before");
         const bool changed = improveOperatorAssignment(s);
         const std::int64_t conflictAfter
-            = ScoreCalculator::analyze(s).operatorCleaningConflict;
+            = ScoreCalculator::analyze(s).operatorCleaningConflictCost;
         check(changed && conflictAfter == 0,
               "hill climb resolves the operator conflict to 0");
     }
@@ -599,6 +600,23 @@ void verifyMappingAndValidation()
             ok = ok && back == score;
         }
         check(ok, "HardMediumSoft <-> engine HardSoft roundtrip is exact");
+        // The fold is 10^10 (some pre-0.2.0 docs said 10^9; the value never
+        // was), and the MediumFold packing is bit-for-bit the old int64
+        // `medium * kMediumUnit + soft`.
+        bool packed = kMediumFold.kind == optimaru::MediumFold::Kind::IntoSoft
+                      && kMediumFold.unit == 1e10 && kMediumUnit == 10000000000LL
+                      && optimaru::MediumFoldOf<PackagingSchedule>::value.unit
+                             == kMediumFold.unit;
+        for (const Score &score : samples)
+        {
+            const optimaru::HardSoftScore engine = toEngineScore(score);
+            packed = packed && engine.hard == score.hard
+                     && engine.soft
+                            == static_cast<double>(score.medium * kMediumUnit
+                                                   + score.soft);
+        }
+        check(packed,
+              "medium fold = intoSoft(10^10), identical to the int64 packing");
         check(toEngineScore({-1, 0, 0}) < toEngineScore({0, -900000, 0})
                   && toEngineScore({0, -1, 0})
                          < toEngineScore({0, 0, -9999999999LL}),

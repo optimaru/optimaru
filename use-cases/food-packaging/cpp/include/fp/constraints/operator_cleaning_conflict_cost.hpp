@@ -1,14 +1,18 @@
-#ifndef FP_CONSTRAINTS_OPERATOR_CLEANING_CONFLICT_HPP
-#define FP_CONSTRAINTS_OPERATOR_CLEANING_CONFLICT_HPP
+#ifndef FP_CONSTRAINTS_OPERATOR_CLEANING_CONFLICT_COST_HPP
+#define FP_CONSTRAINTS_OPERATOR_CLEANING_CONFLICT_COST_HPP
 
 #include "fp/constraints/common.hpp"
 
 namespace fp
 {
 
-// Hard (default, weight 1): operatorCleaningConflict — the minutes two
-// cleaning windows overlap on lines that share one operator. A person cannot
-// clean two machines at once.
+// Hard, weight 1: operatorCleaningConflictCost — the minutes two cleaning
+// windows overlap on lines that share one operator. A person cannot clean two
+// machines at once. Raw cost (one global total) = the summed overlap, in
+// minutes, of the cleaning windows [startCleaning, startProduction) over every
+// unordered pair of assigned jobs whose lines share an operator, so 0 = no
+// operator has two cleanings at once. The exponent shapes that total. 0.2.0
+// migration note: was operatorCleaningConflict.
 //
 // Global because the pairs span units: the conflicting jobs sit on DIFFERENT
 // lines (two jobs on the same line share its operator too, but their windows
@@ -20,10 +24,15 @@ namespace fp
 // the pair sum. cost() runs once per score, so a move costs O(jobs) plus the
 // provider's own O(jobs^2) pair scan — the same shape as the full recompute,
 // which is the trade this assembly path is for.
-struct OperatorCleaningConflict final : FpGlobalConstraint
+struct OperatorCleaningConflictCost final : FpGlobalConstraint
 {
-    explicit OperatorCleaningConflict(double weight = 1.0)
-        : FpGlobalConstraint("operatorCleaningConflict", weight, /*hard=*/true)
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
+
+    explicit OperatorCleaningConflictCost(double weight = kDefaultWeight)
+        : FpGlobalConstraint("operatorCleaningConflictCost",
+                             weight,
+                             kDefaultLevel)
     {
     }
 
@@ -105,4 +114,4 @@ private:
 
 }  // namespace fp
 
-#endif  // FP_CONSTRAINTS_OPERATOR_CLEANING_CONFLICT_HPP
+#endif  // FP_CONSTRAINTS_OPERATOR_CLEANING_CONFLICT_COST_HPP

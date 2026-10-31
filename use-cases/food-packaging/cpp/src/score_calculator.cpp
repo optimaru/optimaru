@@ -1,15 +1,56 @@
 #include "fp/score_calculator.hpp"
 
 #include <algorithm>
+#include <cstdint>
 #include <stdexcept>
 #include <string>
 #include <vector>
+
+#include "fp/constraints/after_ideal_end_time_cost.hpp"
+#include "fp/constraints/max_end_time_cost.hpp"
+#include "fp/constraints/operator_cleaning_conflict_cost.hpp"
+#include "fp/constraints/squared_makespan_cost.hpp"
+#include "fp/constraints/unassigned_jobs_cost.hpp"
 
 namespace fp
 {
 
 namespace
 {
+
+// The monolithic score is the default assembly, so it reads the same
+// constants the components carry. Integral, so every level is computed in
+// int64 exactly like the Java long arithmetic. The medium weights are in
+// medium units; toEngineScore folds the medium level (kMediumFold).
+constexpr auto kMaxEndWeight
+    = static_cast<std::int64_t>(MaxEndTimeCost::kDefaultWeight);
+constexpr auto kCleaningConflictWeight
+    = static_cast<std::int64_t>(OperatorCleaningConflictCost::kDefaultWeight);
+constexpr auto kAfterIdealEndWeight
+    = static_cast<std::int64_t>(AfterIdealEndTimeCost::kDefaultWeight);
+constexpr auto kUnassignedWeight
+    = static_cast<std::int64_t>(UnassignedJobsCost::kDefaultWeight);
+constexpr auto kMakespanWeight
+    = static_cast<std::int64_t>(SquaredMakespanCost::kDefaultWeight);
+static_assert(
+    kMaxEndWeight == MaxEndTimeCost::kDefaultWeight
+        && kCleaningConflictWeight
+               == OperatorCleaningConflictCost::kDefaultWeight
+        && kAfterIdealEndWeight == AfterIdealEndTimeCost::kDefaultWeight
+        && kUnassignedWeight == UnassignedJobsCost::kDefaultWeight
+        && kMakespanWeight == SquaredMakespanCost::kDefaultWeight,
+    "the monolithic calculator assumes integral default weights");
+static_assert(MaxEndTimeCost::kDefaultLevel == optimaru::Level::Hard
+                  && OperatorCleaningConflictCost::kDefaultLevel
+                         == optimaru::Level::Hard
+                  && AfterIdealEndTimeCost::kDefaultLevel
+                         == optimaru::Level::Medium
+                  && UnassignedJobsCost::kDefaultLevel
+                         == optimaru::Level::Medium
+                  && SquaredMakespanCost::kDefaultLevel
+                         == optimaru::Level::Soft,
+              "the monolithic calculator scores each term on its default "
+              "level");
 
 // The queried cleanup duration; throws like Java's
 // Product.getCleanupDuration when the map has no entry for the pair.
@@ -166,28 +207,38 @@ void ScoreCalculator::updateShadowVariables(PackagingSchedule &schedule)
     }
 }
 
+Score ConstraintBreakdown::toScore() const
+{
+    return {-(kMaxEndWeight * maxEndTimeCost
+              + kCleaningConflictWeight * operatorCleaningConflictCost),
+            -(kAfterIdealEndWeight * afterIdealEndTimeCost
+              + kUnassignedWeight * unassignedJobsCost),
+            -(kMakespanWeight * squaredMakespanCost)};
+}
+
 ConstraintBreakdown ScoreCalculator::analyze(PackagingSchedule &schedule)
 {
     prepare(schedule);
     updateShadowVariables(schedule);
     ConstraintBreakdown breakdown;
 
-    // maxEndDateTime (hard) / idealEndDateTime (medium) /
-    // maximizeJobsAssigned (medium).
+    // maxEndTimeCost (hard) / afterIdealEndTimeCost (medium) /
+    // unassignedJobsCost (medium).
     for (const Job &job : schedule.jobs)
     {
         if (job.endDateTime == kNoTime)
         {
-            breakdown.maximizeJobsAssigned += job.durationMinutes;
+            breakdown.unassignedJobsCost += job.durationMinutes;
             continue;
         }
         if (job.maxEndTime < job.endDateTime)
-            breakdown.maxEndDateTime += job.endDateTime - job.maxEndTime;
+            breakdown.maxEndTimeCost += job.endDateTime - job.maxEndTime;
         if (job.idealEndTime < job.endDateTime)
-            breakdown.idealEndDateTime += job.endDateTime - job.idealEndTime;
+            breakdown.afterIdealEndTimeCost
+                += job.endDateTime - job.idealEndTime;
     }
 
-    // operatorCleaningConflict (hard): every unique pair of assigned jobs
+    // operatorCleaningConflictCost (hard): every unique pair of assigned jobs
     // whose lines share an operator (Java's Joiners.equal groups the null
     // operator with itself too) and whose cleaning windows overlap. The
     // deliberately naive O(n^2) pair loop mirrors forEachUniquePair.
@@ -210,18 +261,18 @@ ConstraintBreakdown ScoreCalculator::analyze(PackagingSchedule &schedule)
             const Minutes end = std::min(jobA.startProductionDateTime,
                                          jobB.startProductionDateTime);
             if (start < end)
-                breakdown.operatorCleaningConflict += end - start;
+                breakdown.operatorCleaningConflictCost += end - start;
         }
     }
 
-    // minimizeMakespan (soft): the last job of each non-empty line.
+    // squaredMakespanCost (soft): the last job of each non-empty line.
     for (const Line &line : schedule.lines)
     {
         if (line.jobs.empty())
             continue;
         const Minutes makespan
             = schedule.jobs[line.jobs.back()].endDateTime - line.startDateTime;
-        breakdown.minimizeMakespan += makespan * makespan;
+        breakdown.squaredMakespanCost += makespan * makespan;
     }
     return breakdown;
 }

@@ -8,44 +8,50 @@
 namespace fp
 {
 
-// Per-constraint penalty magnitudes (all >= 0; the score negates them), for
-// tests and the Python bindings.
+// Per-constraint raw penalty magnitudes of one full recompute (all >= 0; the
+// score negates them), for the C++ tests. Each member is named after its
+// constraint's registry name (fp/constraints/<subject>_cost.hpp) and holds
+// that constraint's raw cost summed over its units, the same total
+// constraint_costs() reports per name. toScore() applies each component's
+// kDefaultWeight (score_calculator.cpp). Not bound to Python: since 0.2.0
+// constraint_costs() is the one per-constraint surface there.
 struct ConstraintBreakdown
 {
-    std::int64_t maxEndDateTime = 0;            // hard, minutes late
-    std::int64_t operatorCleaningConflict = 0;  // hard, overlap minutes
-    std::int64_t idealEndDateTime = 0;          // medium, minutes late
-    std::int64_t maximizeJobsAssigned = 0;      // medium, unassigned minutes
-    std::int64_t minimizeMakespan = 0;          // soft, sum of makespan^2
+    std::int64_t maxEndTimeCost = 0;                // hard, minutes late
+    std::int64_t operatorCleaningConflictCost = 0;  // hard, overlap minutes
+    std::int64_t afterIdealEndTimeCost = 0;         // medium, minutes late
+    std::int64_t unassignedJobsCost = 0;  // medium, unassigned minutes
+    std::int64_t squaredMakespanCost = 0;  // soft, sum of makespan^2
 
-    Score toScore() const
-    {
-        return {-(maxEndDateTime + operatorCleaningConflict),
-                -(idealEndDateTime + maximizeJobsAssigned),
-                -minimizeMakespan};
-    }
+    // The HardMediumSoft score at the components' kDefaultWeight (all
+    // integral, so the levels are exact int64 like the Java long arithmetic).
+    Score toScore() const;
 };
 
 // Port of org.acme.foodpackaging.solver.FoodPackagingConstraintProvider as a
 // straightforward full recompute over the job lists — the reference the
 // incremental calculator is verified against.
 //
-// Constraints (HardMediumSoftScore, all penalize):
-//   hard   1. maxEndDateTime           assigned job ending after maxEndTime:
-//                                      -minutes(end - maxEndTime)
-//   hard   2. operatorCleaningConflict unique pair of assigned jobs whose
-//                                      lines share an operator and whose
-//                                      cleaning windows
-//                                      [startCleaning, startProduction)
-//                                      overlap: -overlap minutes. (Jobs on
-//                                      the SAME line share its operator and
-//                                      are included, but their windows are
-//                                      sequential and can never overlap.)
-//   medium 3. idealEndDateTime         assigned job ending after
-//                                      idealEndTime: -minutes(end - ideal)
-//   medium 4. maximizeJobsAssigned     unassigned job: -duration minutes
-//   soft   5. minimizeMakespan         last job of each line: -minutes(end -
-//                                      line start)^2
+// Constraints (HardMediumSoftScore, all penalize), the default assembly of
+// fp/constraints.hpp at the components' kDefaultWeight (all 1):
+//   hard   1. maxEndTimeCost               assigned job ending after
+//                                          maxEndTime: -minutes(end -
+//                                          maxEndTime)
+//   hard   2. operatorCleaningConflictCost unique pair of assigned jobs whose
+//                                          lines share an operator and whose
+//                                          cleaning windows
+//                                          [startCleaning, startProduction)
+//                                          overlap: -overlap minutes. (Jobs
+//                                          on the SAME line share its
+//                                          operator and are included, but
+//                                          their windows are sequential and
+//                                          can never overlap.)
+//   medium 3. afterIdealEndTimeCost        assigned job ending after
+//                                          idealEndTime: -minutes(end -
+//                                          ideal)
+//   medium 4. unassignedJobsCost           unassigned job: -duration minutes
+//   soft   5. squaredMakespanCost          last job of each line:
+//                                          -minutes(end - line start)^2
 // minStartTime and priority exist in the Java domain but are read by no
 // constraint (kept as data for fidelity).
 class ScoreCalculator
@@ -70,7 +76,8 @@ public:
     // schedule.score and returns it.
     static Score calculateScore(PackagingSchedule &schedule);
 
-    // Same recompute, split per constraint (magnitudes; see toScore()).
+    // Same recompute, split per constraint (raw magnitudes; see toScore()).
+    // C++ only (tests); Python reads constraint_costs() instead.
     static ConstraintBreakdown analyze(PackagingSchedule &schedule);
 };
 

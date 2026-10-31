@@ -1,14 +1,22 @@
-#ifndef FP_CONSTRAINTS_MAXIMIZE_JOBS_ASSIGNED_HPP
-#define FP_CONSTRAINTS_MAXIMIZE_JOBS_ASSIGNED_HPP
+#ifndef FP_CONSTRAINTS_UNASSIGNED_JOBS_COST_HPP
+#define FP_CONSTRAINTS_UNASSIGNED_JOBS_COST_HPP
 
 #include "fp/constraints/common.hpp"
 
 namespace fp
 {
 
-// Medium (default, weight 1 medium level): maximizeJobsAssigned — the
-// production minutes of every job that is on no packaging LINE, so dropping a
-// long job hurts more than dropping a short one.
+// Medium, weight 1: unassignedJobsCost — the production minutes of every job
+// that is on no packaging LINE, so dropping a long job hurts more than
+// dropping a short one. Raw cost (one global total) = the summed
+// durationMinutes of the jobs in the unassigned pool or in no list at all,
+// so 0 = every job is on a line. The exponent shapes that total. 0.2.0
+// migration note: was maximizeJobsAssigned, soft at weight 10^10.
+//
+// The weight is in MEDIUM units (kMediumFold in domain.hpp folds medium into
+// the engine's soft level as `medium * 10^10`); hard() makes it 1 hard per
+// minute, soft() 1 soft per minute (outside the fold), and an explicit weight
+// stays in medium units.
 //
 // Global rather than a unit constraint on the pool list, even though this port
 // models the unassigned pool as one extra LIST: a job can also be in NO list
@@ -19,11 +27,13 @@ namespace fp
 //
 // It keeps the assigned minutes per line unit, so a touched list costs
 // O(its jobs) and the total is one subtraction.
-struct MaximizeJobsAssigned final : FpGlobalConstraint
+struct UnassignedJobsCost final : FpGlobalConstraint
 {
-    explicit MaximizeJobsAssigned(double weight
-                                  = static_cast<double>(kMediumUnit))
-        : FpGlobalConstraint("maximizeJobsAssigned", weight, /*hard=*/false)
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Medium;
+
+    explicit UnassignedJobsCost(double weight = kDefaultWeight)
+        : FpGlobalConstraint("unassignedJobsCost", weight, kDefaultLevel)
     {
     }
 
@@ -76,4 +86,4 @@ private:
 
 }  // namespace fp
 
-#endif  // FP_CONSTRAINTS_MAXIMIZE_JOBS_ASSIGNED_HPP
+#endif  // FP_CONSTRAINTS_UNASSIGNED_JOBS_COST_HPP

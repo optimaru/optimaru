@@ -15,13 +15,15 @@ namespace fp
 // hook protocol (beforeListChanged / afterListChanged). Every constraint of
 // this quickstart decomposes per line once the shadow chain is known:
 //
-//   - per line l: lateness sums (hard/medium), the makespan^2 term, the sum
-//     of assigned job durations, and the list of non-empty cleaning windows
-//     [startCleaning, startProduction) in position order,
-//   - one cross-line term: cleaning-window overlap between line pairs that
-//     share an operator (jobs on one line never overlap each other because
-//     the windows are sequential),
-//   - unassigned medium penalty = total job duration - assigned duration.
+//   - per line l: lateness sums (hard maxEndTimeCost / medium
+//     afterIdealEndTimeCost), the makespan^2 term (squaredMakespanCost), the
+//     sum of assigned job durations, and the list of non-empty cleaning
+//     windows [startCleaning, startProduction) in position order,
+//   - one cross-line term (operatorCleaningConflictCost): cleaning-window
+//     overlap between line pairs that share an operator (jobs on one line
+//     never overlap each other because the windows are sequential),
+//   - unassigned medium penalty (unassignedJobsCost) = total job duration -
+//     assigned duration.
 //
 // A move touches at most a few lists; each hook retracts / re-derives ONE
 // line in O(list length + same-operator overlap work) instead of rescoring
@@ -40,13 +42,9 @@ public:
     void afterListChanged(int listIndex) override;
     optimaru::HardSoftScore calculateScore() override;
 
-    // The maintained score as the HardMediumSoft triple (for tests).
-    Score currentScore() const
-    {
-        return {-(totalHardLate_ + conflictTotal_),
-                -(totalMediumLate_ + totalDuration_ - assignedDuration_),
-                -totalMakespanSq_};
-    }
+    // The maintained score as the HardMediumSoft triple (for tests), at the
+    // components' kDefaultWeight (see incremental_calculator.cpp).
+    Score currentScore() const;
 
 private:
     struct LineState

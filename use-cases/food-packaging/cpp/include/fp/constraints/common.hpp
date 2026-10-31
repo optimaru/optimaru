@@ -26,9 +26,9 @@ namespace fp
 // Unit choice: with the LIST descriptor the calculator's unit is one LIST,
 // i.e. one packaging line; members are its jobs IN PRODUCTION ORDER. Three
 // rules are per-line sums over that ordered chain and run as UnitConstraints.
-// The other two belong to no single line: operatorCleaningConflict pairs jobs
-// whose LINES share an operator (two different lines, generally), and
-// maximizeJobsAssigned counts the jobs in no list at all — both are
+// The other two belong to no single line: operatorCleaningConflictCost pairs
+// jobs whose LINES share an operator (two different lines, generally), and
+// unassignedJobsCost counts the jobs in no list at all — both are
 // GlobalConstraints.
 //
 // A component never reads the Job shadow variables (lineIndex,
@@ -40,15 +40,18 @@ namespace fp
 //
 // Score levels: the quickstart scores with HardMediumSoftScore, which this
 // domain folds into the engine's HardSoftScore as
-// `soft = medium * kMediumUnit + soft` (see domain.hpp). The two
-// medium-level components therefore carry the kMediumUnit factor in their
-// default weight.
+// `soft = medium * kMediumUnit + soft` (kMediumUnit = 10^10; kMediumFold and
+// the MediumFoldOf<PackagingSchedule> specialization in domain.hpp). The two
+// medium components (afterIdealEndTimeCost, unassignedJobsCost) declare
+// Level::Medium at weight 1, in medium units; the decomposed calculator keeps
+// a separate medium accumulator and applies the fold, so no component carries
+// the 10^10 factor in its weight.
 //
 //   DecomposedCalculator calc;
-//   defaultConstraints()              // the whole default set
-//       .weight("...", 2)            // ... then only what differs
-//       .soft("...")
-//       .drop("...")
+//   defaultConstraints()                          // the whole default set
+//       .weight("squaredMakespanCost", 2)         // ... then only what differs
+//       .soft("operatorCleaningConflictCost")
+//       .drop("maxEndTimeCost")
 //       .into(calc);
 //   solver.solve(schedule, calc);
 //
@@ -56,14 +59,25 @@ namespace fp
 // `ConstraintAssembly{}` when you would rather list components from
 // scratch than start from the defaults.
 //
-// The level and the weight of each component are DEFAULTS — assembly-time
-// metadata, not part of the cost. Override them per instance via the mutable
-// `isHard` / `weight` / `exponent`.
+// Each component declares its defaults once, as static constexpr
+// kDefaultWeight / kDefaultLevel passed to the base constructor; they are
+// assembly-time metadata, not part of the cost. Override them per instance
+// with the constructor's weight argument or the mutable `level` / `weight` /
+// `exponent`, or by name through ConstraintAssembly (weight / hard / soft /
+// exponent). Medium is a default-only level: hard() / soft() move a medium
+// component to 1 hard / 1 soft unit per raw unit, and an explicit weight
+// keeps it on the medium level, in medium units. The monolithic calculators
+// read the same kDefaultWeight constants, which is why the default assembly
+// scores bit-for-bit like them.
+//
+// Registry names are the struct names with a lower-case first letter
+// ("maxEndTimeCost"); Python sees them through pythonName()
+// ("max_end_time_cost").
 //
 // Cost sign convention (see decomposed_score_calculator.hpp): positive =
-// penalty; the calculator negates into the score. An assembly of all five
-// components at their default weights therefore scores bit-for-bit like
-// ScoreCalculator::calculateScore.
+// penalty, 0 = no violation; the calculator negates into the score. An
+// assembly of all five components at their default weights therefore scores
+// bit-for-bit like ScoreCalculator::calculateScore.
 //
 // Every component requires ScoreCalculator::prepare(schedule) to have run
 // (the solve() overload and the monolithic path both call it).

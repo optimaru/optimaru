@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
+#include <cstdint>
 #include <cstdlib>
 #include <memory>
 #include <stdexcept>
@@ -20,8 +22,8 @@ namespace
 
 // Raw cleaning-window overlap minutes between every pair of lines (operator
 // agnostic), from the current job lists. overlap[i][j] is what the
-// operatorCleaningConflict constraint would charge if lines i and j shared
-// an operator.
+// operatorCleaningConflictCost constraint would charge if lines i and j
+// shared an operator.
 std::vector<std::vector<std::int64_t>>
 lineOverlapMatrix(PackagingSchedule &schedule)
 {
@@ -399,11 +401,19 @@ void Solver::solve(
 
     // Refresh the job shadow variables on the best solution (the plugin
     // components derive their own chain and never write these), then score it
-    // with the caller's constraint assembly, leaving the calculator primed on
-    // it so constraintTotals() explains exactly this score.
+    // with the caller's constraint assembly (custom weights and levels
+    // included), leaving the calculator primed on it so constraintTotals()
+    // explains exactly this score. The three levels come straight from the
+    // calculator's accumulators (levelScores(), before the medium fold) rather
+    // than from decoding the folded engine score, so a demoted or re-weighted
+    // term lands on the level the assembly gave it.
     ScoreCalculator::updateShadowVariables(schedule);
     calculator.resetWorkingSolution(schedule);
-    schedule.score = fromEngineScore(calculator.calculateScore());
+    const auto levels = calculator.levelScores();
+    schedule.score
+        = Score{static_cast<std::int64_t>(levels.hard),
+                static_cast<std::int64_t>(std::llround(levels.medium)),
+                static_cast<std::int64_t>(std::llround(levels.soft))};
 }
 
 }  // namespace fp
