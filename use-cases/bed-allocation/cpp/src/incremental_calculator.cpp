@@ -1,12 +1,32 @@
 #include "ba/incremental_calculator.hpp"
 
 #include <algorithm>
+#include <cstdint>
 #include <limits>
 
+#include "ba/constraints/bed_conflict_cost.hpp"
+#include "ba/constraints/mixed_gender_room_cost.hpp"
 #include "ba/score_calculator.hpp"
 
 namespace ba
 {
+
+namespace
+{
+
+// The same constants the components and ScoreCalculator read (integral; see
+// score_calculator.cpp). The per-stay terms come from
+// ScoreCalculator::singleStayImpact, so only the two pair weights appear here.
+constexpr auto kBedConflictWeight
+    = static_cast<std::int64_t>(BedConflictCost::kDefaultWeight);
+constexpr auto kMixedGenderRoomWeight
+    = static_cast<std::int64_t>(MixedGenderRoomCost::kDefaultWeight);
+static_assert(kBedConflictWeight == BedConflictCost::kDefaultWeight
+                  && kMixedGenderRoomWeight
+                         == MixedGenderRoomCost::kDefaultWeight,
+              "the incremental calculator assumes integral pair weights");
+
+}  // namespace
 
 void BedAllocationIncrementalScoreCalculator::resetWorkingSolution(
     BedPlan &workingSolution)
@@ -125,17 +145,18 @@ void BedAllocationIncrementalScoreCalculator::insert(int stayIndex, int value)
     const int last = stay.departureDay - dayOffset_;
     const int roomIndex = plan_->beds[value].room;
 
-    // hard 1: each already-present occupant of this bed on this night is one
-    // new penalized pair.
+    // hard 1 (bedConflictCost): each already-present occupant of this bed on
+    // this night is one new penalized pair.
     std::int32_t *bedDays
         = bedDay_.data() + static_cast<std::size_t>(value) * dayCount_;
     for (int day = first; day <= last; ++day)
-        hardBedPairs_ += 1000LL * bedDays[day]++;
+        hardBedPairs_ += kBedConflictWeight * bedDays[day]++;
 
     if (plan_->rooms[roomIndex].genderLimitation
         == GenderLimitation::SAME_GENDER)
     {
-        // hard 4: pairs with the opposite-gender occupants of the room.
+        // hard 4 (mixedGenderRoomCost): pairs with the opposite-gender
+        // occupants of the room.
         const int own = stay.patientGender == Gender::MALE ? 0 : 1;
         std::int32_t *ownDays
             = roomDay_.data()
@@ -146,7 +167,7 @@ void BedAllocationIncrementalScoreCalculator::insert(int stayIndex, int value)
                     * dayCount_;
         for (int day = first; day <= last; ++day)
         {
-            hardRoomPairs_ += 1000LL * otherDays[day];
+            hardRoomPairs_ += kMixedGenderRoomWeight * otherDays[day];
             ++ownDays[day];
         }
     }
@@ -180,7 +201,7 @@ void BedAllocationIncrementalScoreCalculator::retract(int stayIndex, int value)
     std::int32_t *bedDays
         = bedDay_.data() + static_cast<std::size_t>(value) * dayCount_;
     for (int day = first; day <= last; ++day)
-        hardBedPairs_ -= 1000LL * --bedDays[day];
+        hardBedPairs_ -= kBedConflictWeight * --bedDays[day];
 
     if (plan_->rooms[roomIndex].genderLimitation
         == GenderLimitation::SAME_GENDER)
@@ -196,7 +217,7 @@ void BedAllocationIncrementalScoreCalculator::retract(int stayIndex, int value)
         for (int day = first; day <= last; ++day)
         {
             --ownDays[day];
-            hardRoomPairs_ -= 1000LL * otherDays[day];
+            hardRoomPairs_ -= kMixedGenderRoomWeight * otherDays[day];
         }
     }
 }

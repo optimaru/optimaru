@@ -4,27 +4,28 @@
 // ---------------------------------------------------------------------------
 // Constraint plugins — umbrella header
 // ---------------------------------------------------------------------------
-// One component per file under constraints/; common.hpp holds what all of them
-// need (the calculator aliases, the per-stay bases and the "prepare() has run"
-// guard) and carries the pattern's documentation.
+// One component per file under constraints/, named after its struct
+// (BedConflictCost -> constraints/bed_conflict_cost.hpp); common.hpp holds
+// what all of them need (the calculator aliases, the per-stay bases and the
+// "prepare() has run" guard) and carries the pattern's documentation.
 //
 // Including this header still gives the whole set, so nothing that used it has
 // to change. Adding a component is a file plus a line here (and a line in
-// addDefaultConstraints below when it belongs to the default assembly).
+// defaultConstraints below when it belongs to the default assembly).
 
-#include "ba/constraints/assign_every_patient_to_a_bed.hpp"
+#include "ba/constraints/bed_conflict_cost.hpp"
 #include "ba/constraints/common.hpp"
-#include "ba/constraints/department_maximum_age.hpp"
-#include "ba/constraints/department_minimum_age.hpp"
-#include "ba/constraints/department_specialty.hpp"
-#include "ba/constraints/department_specialty_not_first_priority.hpp"
-#include "ba/constraints/different_gender_in_same_gender_room_in_same_night.hpp"
-#include "ba/constraints/female_in_male_room.hpp"
-#include "ba/constraints/male_in_female_room.hpp"
-#include "ba/constraints/preferred_maximum_room_capacity.hpp"
-#include "ba/constraints/preferred_patient_equipment.hpp"
-#include "ba/constraints/required_patient_equipment.hpp"
-#include "ba/constraints/same_bed_in_same_night.hpp"
+#include "ba/constraints/department_max_age_cost.hpp"
+#include "ba/constraints/department_min_age_cost.hpp"
+#include "ba/constraints/department_specialty_cost.hpp"
+#include "ba/constraints/department_specialty_priority_cost.hpp"
+#include "ba/constraints/female_in_male_room_cost.hpp"
+#include "ba/constraints/male_in_female_room_cost.hpp"
+#include "ba/constraints/mixed_gender_room_cost.hpp"
+#include "ba/constraints/preferred_max_room_capacity_cost.hpp"
+#include "ba/constraints/preferred_patient_equipment_cost.hpp"
+#include "ba/constraints/required_patient_equipment_cost.hpp"
+#include "ba/constraints/unassigned_stays_cost.hpp"
 
 namespace ba
 {
@@ -32,17 +33,38 @@ namespace ba
 // ---------------------------------------------------------------------------
 // Standard assembly
 // ---------------------------------------------------------------------------
-// The full provider at the quickstart's weights. This assembly scores
-// bit-for-bit like ScoreCalculator::calculateScore and the monolithic
-// incremental calculator.
+// The full provider, every component at its own defaults (the quickstart's
+// weights):
+//
+//   bedConflictCost                   hard,   weight 1000
+//   femaleInMaleRoomCost              hard,   weight 50
+//   maleInFemaleRoomCost              hard,   weight 50
+//   mixedGenderRoomCost               hard,   weight 1000  (global)
+//   departmentMinAgeCost              hard,   weight 100
+//   departmentMaxAgeCost              hard,   weight 100
+//   requiredPatientEquipmentCost      hard,   weight 50
+//   unassignedStaysCost               medium, weight 1 (medium units)
+//   preferredMaxRoomCapacityCost      soft,   weight 8
+//   departmentSpecialtyCost           soft,   weight 10
+//   departmentSpecialtyPriorityCost   soft,   weight 10
+//   preferredPatientEquipmentCost     soft,   weight 50
+//
+// The assembly lists unit constraints first and globals after, so
+// mixedGenderRoomCost comes LAST in names() / info() / list_constraints().
+//
+// This assembly scores bit-for-bit like ScoreCalculator::calculateScore and
+// the monolithic incremental calculator (both read the same kDefaultWeight
+// constants and fold medium with the same kMediumFold). It is also the
+// domain's constraint catalog: constraint_info() reads the defaults off it,
+// so they live in the component constructors and nowhere else.
 //
 // `defaultConstraints()` hands the whole set back as a ConstraintAssembly,
 // so a caller states only what differs from it:
 //
 //     DecomposedCalculator calc;
 //     defaultConstraints()
-//         .weight("assignEveryPatientToABed", 2)
-//         .drop("departmentMaximumAge")
+//         .weight("unassignedStaysCost", 2)      // 2 medium per night
+//         .drop("departmentMaxAgeCost")
 //         .into(calc);
 //
 // `addDefaultConstraints(calc)` is the same set poured straight into a
@@ -50,18 +72,18 @@ namespace ba
 inline ConstraintAssembly defaultConstraints()
 {
     ConstraintAssembly assembly;
-    assembly.emplace<SameBedInSameNight>();
-    assembly.emplace<FemaleInMaleRoom>();
-    assembly.emplace<MaleInFemaleRoom>();
-    assembly.emplace<DifferentGenderInSameGenderRoomInSameNight>();
-    assembly.emplace<DepartmentMinimumAge>();
-    assembly.emplace<DepartmentMaximumAge>();
-    assembly.emplace<RequiredPatientEquipment>();
-    assembly.emplace<AssignEveryPatientToABed>();
-    assembly.emplace<PreferredMaximumRoomCapacity>();
-    assembly.emplace<DepartmentSpecialty>();
-    assembly.emplace<DepartmentSpecialtyNotFirstPriority>();
-    assembly.emplace<PreferredPatientEquipment>();
+    assembly.emplace<BedConflictCost>();
+    assembly.emplace<FemaleInMaleRoomCost>();
+    assembly.emplace<MaleInFemaleRoomCost>();
+    assembly.emplace<MixedGenderRoomCost>();
+    assembly.emplace<DepartmentMinAgeCost>();
+    assembly.emplace<DepartmentMaxAgeCost>();
+    assembly.emplace<RequiredPatientEquipmentCost>();
+    assembly.emplace<UnassignedStaysCost>();
+    assembly.emplace<PreferredMaxRoomCapacityCost>();
+    assembly.emplace<DepartmentSpecialtyCost>();
+    assembly.emplace<DepartmentSpecialtyPriorityCost>();
+    assembly.emplace<PreferredPatientEquipmentCost>();
     return assembly;
 }
 

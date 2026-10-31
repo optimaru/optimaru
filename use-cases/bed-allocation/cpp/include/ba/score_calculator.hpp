@@ -13,23 +13,24 @@ namespace ba
 // calculateScore does a full recompute — the reference the incremental
 // calculator is checked against (in the tests and under FULL_ASSERT).
 //
-// Constraints (HardMediumSoftScore; every one penalizes stay-nights):
-//   hard 1. sameBedInSameNight             -1000 * sameNightCount per pair of
+// Constraints (HardMediumSoftScore; every one penalizes stay-nights), the
+// default assembly of ba/constraints.hpp at the components' kDefaultWeight
+// (the numbers below; ba/constraints/*.hpp is where they live):
+//   hard 1. bedConflictCost                -1000 * sameNightCount per pair of
 //                                          stays in the same bed with
 //                                          overlapping nights
-//   hard 2. femaleInMaleRoom               -50 * nightCount per FEMALE stay
+//   hard 2. femaleInMaleRoomCost           -50 * nightCount per FEMALE stay
 //                                          in a MALE_ONLY room
-//   hard 3. maleInFemaleRoom               -50 * nightCount per MALE stay in
+//   hard 3. maleInFemaleRoomCost           -50 * nightCount per MALE stay in
 //                                          a FEMALE_ONLY room
-//   hard 4. differentGenderInSameGenderRoomInSameNight
-//                                          -1000 * sameNightCount per mixed-
+//   hard 4. mixedGenderRoomCost            -1000 * sameNightCount per mixed-
 //                                          gender pair in one SAME_GENDER
 //                                          room with overlapping nights
-//   hard 5. departmentMinimumAge           -100 * nightCount per stay younger
+//   hard 5. departmentMinAgeCost           -100 * nightCount per stay younger
 //                                          than its department's minimumAge
-//   hard 6. departmentMaximumAge           -100 * nightCount per stay older
+//   hard 6. departmentMaxAgeCost           -100 * nightCount per stay older
 //                                          than its department's maximumAge
-//   hard 7. requiredPatientEquipment       when the room misses at least one
+//   hard 7. requiredPatientEquipmentCost   when the room misses at least one
 //                                          required equipment:
 //                                          -50 * nightCount * (# of required
 //                                          equipment the room DOES have) —
@@ -39,20 +40,22 @@ namespace ba
 //                                          pins this down), so a room with
 //                                          none of the required equipment
 //                                          costs 0
-//   medium 8. assignEveryPatientToABed     -1 * nightCount per stay left in
+//   medium 8. unassignedStaysCost          -1 * nightCount per stay left in
 //                                          the "no bed" sentinel (the
-//                                          quickstart's null bed)
-//   soft 9. preferredMaximumRoomCapacity   -8 * nightCount when the room is
+//                                          quickstart's null bed); folded
+//                                          into the engine soft level by
+//                                          toEngineScore (kMediumFold)
+//   soft 9. preferredMaxRoomCapacityCost   -8 * nightCount when the room is
 //                                          larger than the patient prefers
-//   soft 10. departmentSpecialty           -10 * nightCount when the
+//   soft 10. departmentSpecialtyCost       -10 * nightCount when the
 //                                          department does not offer the
 //                                          stay's specialty
-//   soft 11. departmentSpecialtyNotFirstPriority
+//   soft 11. departmentSpecialtyPriorityCost
 //                                          -10 * (priority - 1) * nightCount
 //                                          when the department offers it at
 //                                          priority > 1 (skipped when not
 //                                          offered — Java would throw there)
-//   soft 12. preferredPatientEquipment     -50 * nightCount * (# of preferred
+//   soft 12. preferredPatientEquipmentCost -50 * nightCount * (# of preferred
 //                                          equipment the room lacks)
 //
 // Uninitialized stays (bed == -1) contribute nothing: the construction
@@ -88,20 +91,16 @@ public:
     static SingleImpact
     singleStayImpact(const BedPlan &plan, int stayIndex, int value);
 
-    // hard 1: 1000 * sameNightCount for two stays in one bed.
-    static std::int64_t sameBedPairPenalty(const Stay &a, const Stay &b)
-    {
-        return 1000LL * a.sameNightCount(b);
-    }
+    // hard 1 (bedConflictCost): BedConflictCost::kDefaultWeight (1000) *
+    // sameNightCount for two stays in one bed. Defined in
+    // score_calculator.cpp, which reads the component constant (the
+    // components include this header, so it cannot include theirs).
+    static std::int64_t bedConflictPairPenalty(const Stay &a, const Stay &b);
 
-    // hard 4: 1000 * sameNightCount for a mixed-gender pair; both stays must
+    // hard 4 (mixedGenderRoomCost): MixedGenderRoomCost::kDefaultWeight
+    // (1000) * sameNightCount for a mixed-gender pair; both stays must
     // already share one SAME_GENDER room (the caller checks the room).
-    static std::int64_t mixedGenderPairPenalty(const Stay &a, const Stay &b)
-    {
-        if (a.patientGender == b.patientGender)
-            return 0;
-        return 1000LL * a.sameNightCount(b);
-    }
+    static std::int64_t mixedGenderPairPenalty(const Stay &a, const Stay &b);
 };
 
 }  // namespace ba

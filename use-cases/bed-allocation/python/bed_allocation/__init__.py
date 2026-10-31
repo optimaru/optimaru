@@ -11,9 +11,16 @@ planning variable::
 
 Score convention (HardMediumSoftScore, as in the Java quickstart): hard is bed/gender/
 age/required-equipment violations (0 == feasible), medium is the nights of unassigned
-stays, soft is preference penalties (room size/specialty/preferred equipment).
-Lexicographic comparison (hard first). Internally it maps onto HardSoftScore(int64, double)
-as `engine.soft = medium * 10**9 + soft` (level order preserved).
+stays (`unassigned_stays_cost`), soft is preference penalties (room size/specialty/
+preferred equipment). Lexicographic comparison (hard first). Internally it maps onto
+HardSoftScore(int64, double) as `engine.soft = medium * 10**9 + soft` (the domain's medium
+fold; level order preserved).
+
+The constraints and their defaults (level, weight in units of that level) live in the C++
+components; `constraint_info()` reports them and `list_constraints()` lists the names::
+
+    {row.name: (row.default_level, row.default_weight) for row in ba.constraint_info()}
+    # {'bed_conflict_cost': ('hard', 1000.0), ..., 'unassigned_stays_cost': ('medium', 1.0), ...}
 
 The high-level entry point is `solve`::
 
@@ -30,6 +37,7 @@ The pydantic mirror (for serialization) is in `bed_allocation.models` (optional 
 from ._core import (
     Bed,
     BedPlan,
+    ConstraintInfo,
     Department,
     Gender,
     GenderLimitation,
@@ -40,12 +48,14 @@ from ._core import (
     Stay,
     calculate_score,
     constraint_costs,
+    constraint_info,
     list_constraints,
 )
 
 __all__ = [
     "Bed",
     "BedPlan",
+    "ConstraintInfo",
     "Department",
     "Gender",
     "GenderLimitation",
@@ -58,6 +68,7 @@ __all__ = [
     "solve",
     "list_constraints",
     "constraint_costs",
+    "constraint_info",
     "with_initial_solution",
 ]
 
@@ -126,8 +137,14 @@ def solve(
     (see `bed_allocation.constraints`). Only the listed constraints are scored;
     None uses all twelve default constraints::
 
-        from bed_allocation.constraints import get_constraints
+        from bed_allocation.constraints import UnassignedStaysCost, get_constraints
         ba.solve(plan, constraints=get_constraints())
+        # unassigned nights as soft instead of medium:
+        others = [spec for spec in get_constraints() if spec.name != "unassigned_stays_cost"]
+        ba.solve(plan, constraints=[*others, UnassignedStaysCost(hard=False)])
+
+    The result's score then reports each term on the level the selection gave it, and so
+    does every score passed to ``on_new_best``.
     """
     cfg = _build_config(
         time_limit_seconds=time_limit_seconds,

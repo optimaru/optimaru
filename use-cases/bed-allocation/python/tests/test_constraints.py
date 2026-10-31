@@ -28,7 +28,7 @@ def make_stay(index, bed, *, gender=ba.Gender.MALE, specialty="default", **kwarg
     )
 
 
-def test_female_in_male_room():
+def test_female_in_male_room_cost():
     plan = make_plan(
         [ba.Room("r0", "r0", gender_limitation=ba.GenderLimitation.MALE_ONLY)],
         [ba.Bed("b0", 0)],
@@ -38,7 +38,7 @@ def test_female_in_male_room():
     assert (score.hard, score.medium, score.soft) == (-300, 0, 0)
 
 
-def test_same_bed_in_same_night():
+def test_bed_conflict_cost():
     plan = make_plan(
         [ba.Room("r0", "r0")],
         [ba.Bed("b0", 0)],

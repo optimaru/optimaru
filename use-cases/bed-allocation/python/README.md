@@ -39,8 +39,8 @@ Passing a hand-built `_core.BedPlan` solves it in place. For JSON serialization 
 
 The Java original's `@PlanningVariable(allowsUnassigned = true)` is reproduced by
 adding one sentinel to the value range: the search can move a stay to "no bed", and
-that stay is penalized per night at the medium level. So hard 0 is always reachable
-(every hard violation can be resolved by giving up the assignment).
+that stay is penalized per night at the medium level (`unassigned_stays_cost`). So hard 0
+is always reachable (every hard violation can be resolved by giving up the assignment).
 
 ## Score mapping (HardMediumSoftScore -> engine HardSoftScore)
 
@@ -56,32 +56,64 @@ While `|soft| < 10^9`, medium dominates soft lexicographically within a double (
 to 2^53) — the soft sum is bounded by about `228 x total stay-nights`, so it stays exact up
 to millions of stay-nights. The Python `Score` exposes all three levels as-is.
 
+The 10^9 is the domain's **medium fold** (`kMediumFold = MediumFold::intoSoft(10^9)`,
+declared once in `domain.hpp`); it is not part of any weight. Every
+`constraint_costs()` entry carries it as `"medium_fold": {"kind": "into_soft", "unit": 1e9}`,
+and `bed_allocation.constraints.score()` applies it, so `score(raw)` equals
+`(score.hard, score.medium * 10**9 + score.soft)`.
+
 ## Constraints (same semantics as Java `BedAllocationConstraintProvider`, 12 of them)
 
-| Level | Constraint | Penalty |
-|---|---|---|
-| hard | sameBedInSameNight | overlapping nights x 1000 |
-| hard | femaleInMaleRoom / maleInFemaleRoom | nights x 50 |
-| hard | differentGenderInSameGenderRoomInSameNight | overlapping nights x 1000 |
-| hard | departmentMinimumAge / departmentMaximumAge | nights x 100 |
-| hard | requiredPatientEquipment | nights x (required equipment the room **has**) x 50 |
-| medium | assignEveryPatientToABed | nights of "no bed" stays x 1 |
-| soft | preferredMaximumRoomCapacity | nights x 8 |
-| soft | departmentSpecialty | nights x 10 |
-| soft | departmentSpecialtyNotFirstPriority | nights x (priority-1) x 10 |
-| soft | preferredPatientEquipment | nights x (missing preferred equipment) x 50 |
+In `list_constraints()` order; `constraint_info()` reports the default level and weight of
+each from the C++ components (`kDefaultLevel` / `kDefaultWeight`):
+
+| Level | Constraint (Python name) | C++ component | Default weight | Penalty |
+|---|---|---|---|---|
+| hard | `bed_conflict_cost` | `BedConflictCost` | 1000 | overlapping nights in one bed x 1000 |
+| hard | `female_in_male_room_cost` / `male_in_female_room_cost` | `FemaleInMaleRoomCost` / `MaleInFemaleRoomCost` | 50 | nights x 50 |
+| hard | `department_min_age_cost` / `department_max_age_cost` | `DepartmentMinAgeCost` / `DepartmentMaxAgeCost` | 100 | nights x 100 |
+| hard | `required_patient_equipment_cost` | `RequiredPatientEquipmentCost` | 50 | nights x (required equipment the room **has**) x 50 |
+| medium | `unassigned_stays_cost` | `UnassignedStaysCost` | 1 (medium units) | nights of "no bed" stays x 1 |
+| soft | `preferred_max_room_capacity_cost` | `PreferredMaxRoomCapacityCost` | 8 | nights x 8 |
+| soft | `department_specialty_cost` | `DepartmentSpecialtyCost` | 10 | nights x 10 |
+| soft | `department_specialty_priority_cost` | `DepartmentSpecialtyPriorityCost` | 10 | nights x (priority-1) x 10 |
+| soft | `preferred_patient_equipment_cost` | `PreferredPatientEquipmentCost` | 50 | nights x (missing preferred equipment) x 50 |
+| hard | `mixed_gender_room_cost` (global, last) | `MixedGenderRoomCost` | 1000 | overlapping mixed-gender nights in a SAME_GENDER room x 1000 |
+
+Pick, reweight or flip them through `bed_allocation.constraints`
+(`ba.solve(plan, constraints=get_constraints([...]))`). Every spec takes `weight=None`
+(the C++ default, in units of its level), `hard=None` (the default level; `True` = hard,
+`False` = soft) and `exponent=1.0`. `unassigned_stays_cost` is the only medium constraint:
+`hard=True` charges one hard unit per night, `hard=False` one soft unit per night
+(outside the 10^9 fold), and an explicit weight stays in medium units.
+
+**0.2.0:** every constraint was renamed to the unified `*_cost` names (old -> new:
+`same_bed_in_same_night` -> `bed_conflict_cost`, `female_in_male_room` ->
+`female_in_male_room_cost`, `male_in_female_room` -> `male_in_female_room_cost`,
+`different_gender_in_same_gender_room_in_same_night` -> `mixed_gender_room_cost`,
+`department_minimum_age` -> `department_min_age_cost`, `department_maximum_age` ->
+`department_max_age_cost`, `required_patient_equipment` -> `required_patient_equipment_cost`,
+`assign_every_patient_to_a_bed` -> `unassigned_stays_cost`,
+`preferred_maximum_room_capacity` -> `preferred_max_room_capacity_cost`,
+`department_specialty` -> `department_specialty_cost`,
+`department_specialty_not_first_priority` -> `department_specialty_priority_cost`,
+`preferred_patient_equipment` -> `preferred_patient_equipment_cost`; spec classes and
+module-level instances likewise). `unassigned_stays_cost` defaults to weight 1 in medium
+units (before: a soft weight of 10^9) and `hard=False` now demotes it to soft in the
+engine as well. The package re-exports `ConstraintInfo` / `constraint_info()`. Raw costs
+and the default score are unchanged.
 
 Caveats (kept exactly as in the original):
 
-- **requiredPatientEquipment weighs by the required equipment the room HAS.**
+- **`required_patient_equipment_cost` weighs by the required equipment the room HAS.**
   The filter fires when any required equipment is missing, and the match weight is the
   count present, not the count missing — a room with none costs 0. Counterintuitive, but
   the Java original's unit test (`penalizesBy(6)`) pins these semantics, so they were
   ported as-is.
-- departmentSpecialtyNotFirstPriority applies only when the department offers that
+- `department_specialty_priority_cost` applies only when the department offers that
   specialty. (In Java, `getSpecialtyPriority()` throws an NPE when it is not offered, so
   that path has no defined semantics — here it is skipped, and a missing specialty only
-  gets the departmentSpecialty penalty.)
+  gets the `department_specialty_cost` penalty.)
 - Dates are integer day indices (`models` uses `datetime.date.toordinal()`).
   `night_count = departure - arrival + 1` (the original's `+ 1` is kept).
 

@@ -30,23 +30,25 @@ namespace ba
 //
 // Ten of the twelve rules are a sum of independent per-(stay, value) terms —
 // they derive from PerStayConstraint below and only write that one term.
-// sameBedInSameNight is a sum over pairs INSIDE one bed, so it is a unit
-// constraint with an exact pairwise delta. Only
-// differentGenderInSameGenderRoomInSameNight spans units (its pairs share a
-// ROOM, and a room holds several beds), so it runs as a GlobalConstraint on
-// the onMemberChanged fast path.
+// bedConflictCost is a sum over pairs INSIDE one bed, so it is a unit
+// constraint with an exact pairwise delta. Only mixedGenderRoomCost spans
+// units (its pairs share a ROOM, and a room holds several beds), so it runs
+// as a GlobalConstraint on the onMemberChanged fast path.
 //
 // Score levels: the quickstart scores with HardMediumSoftScore, which this
 // domain folds into the engine's HardSoftScore as
-// `soft = medium * kMediumUnit + soft` (see domain.hpp). A medium-level
-// component is therefore a soft component whose weight carries the
-// kMediumUnit factor — assignEveryPatientToABed is the only one.
+// `soft = medium * kMediumUnit + soft` (kMediumFold in domain.hpp, registered
+// as optimaru::MediumFoldOf<BedPlan>). The decomposed calculator keeps a
+// separate medium accumulator and applies that fold itself, so a medium
+// component declares optimaru::Level::Medium and a weight in MEDIUM units —
+// unassignedStaysCost (weight 1) is the only one. No weight carries the
+// 10^9 factor.
 //
 //   DecomposedCalculator calc;
-//   defaultConstraints()              // the whole default set
-//       .weight("...", 2)            // ... then only what differs
-//       .soft("...")
-//       .drop("...")
+//   defaultConstraints()                          // the whole default set
+//       .weight("preferredPatientEquipmentCost", 25)  // ... then only
+//       .soft("departmentMaxAgeCost")                 //     what differs
+//       .drop("departmentSpecialtyPriorityCost")
 //       .into(calc);
 //   solver.solve(plan, calc);
 //
@@ -54,14 +56,21 @@ namespace ba
 // `ConstraintAssembly{}` when you would rather list components from
 // scratch than start from the defaults.
 //
-// The "Hard:"/"Medium:"/"Soft:" level and the weight of each component are
-// DEFAULTS — assembly-time metadata, not part of the cost. Override them per
-// instance via the mutable `isHard` / `weight` / `exponent`.
+// Each component declares its defaults once, as static constexpr
+// kDefaultWeight / kDefaultLevel passed to the base constructor; they are
+// assembly-time metadata, not part of the cost. Override them per instance
+// with the constructor's weight argument or the mutable `level` / `weight` /
+// `exponent`, or by name through ConstraintAssembly (`.hard()` / `.soft()` /
+// `.weight()`). The monolithic calculators read the same kDefaultWeight
+// constants, which is why the default assembly scores bit-for-bit like
+// ScoreCalculator::calculateScore.
+//
+// Registry names are the struct names with a lower-case first letter
+// ("bedConflictCost"); Python sees them through pythonName()
+// ("bed_conflict_cost").
 //
 // Cost sign convention (see decomposed_score_calculator.hpp): positive =
-// penalty; the calculator negates into the score. An assembly of all twelve
-// components at their default weights therefore scores bit-for-bit like
-// ScoreCalculator::calculateScore.
+// penalty, 0 = no violation; the calculator negates into the score.
 //
 // Every component requires ScoreCalculator::prepare(plan) to have run (the
 // solve() overload and the monolithic path both call it).

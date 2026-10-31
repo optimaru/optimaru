@@ -1,211 +1,337 @@
 """Constraint assembly specs — an API for picking the cost function declaratively.
 
-The default path (`ba.solve(plan)`) enables all twelve constraints at the quickstart weights.
-This module is the alternative path next to it: pick constraints, change weights, flip
-hard/soft, and pass the list to `solve(plan, constraints=...)`.
+The default path (`ba.solve(plan)`) enables all twelve constraints at their default
+weights (the quickstart's). This module is the alternative path next to it: pick
+constraints, change weights, flip hard/soft, and pass the list to
+`solve(plan, constraints=...)`.
 
 The shortest route is :func:`get_constraints`. It returns the default list, so
 a "default with a small tweak" declaration fits on one line::
 
     import bed_allocation as ba
     from bed_allocation.constraints import (
-        DepartmentSpecialty, get_constraints, same_bed_in_same_night,
+        DepartmentSpecialtyCost, bed_conflict_cost, get_constraints,
     )
 
     ba.solve(plan, constraints=get_constraints())              # defaults as-is
     ba.solve(plan, constraints=get_constraints([               # picked
-        same_bed_in_same_night, DepartmentSpecialty(weight=40),
+        bed_conflict_cost, DepartmentSpecialtyCost(weight=40),
     ]))
 
-Each constraint has a default instance at module level, so you can also pass a
-list of just a few. Only listed constraints are scored — leave one out and its
-term disappears from the score.
+Each constraint has a default instance at module level (`bed_conflict_cost`,
+`unassigned_stays_cost`, ...), so you can also pass a list of just a few. Only
+listed constraints are scored — leave one out and its term disappears from the score.
 
 Every spec takes ``(weight=None, hard=None, exponent=1.0)``:
 
-- ``weight``   linear multiplier on the constraint cost. ``None`` = component default.
-- ``hard``     ``True``/``False`` flips the default level; ``None`` keeps it.
-               **Medium constraints in this domain cannot be expressed with
-               this knob** — ``hard=False`` folds them into soft and the medium
-               meaning is lost. Leave medium terms at ``None``.
+- ``weight``   linear multiplier on the constraint cost, in units of its level.
+               ``None`` = the component default (``ba.constraint_info()`` reports
+               them; the plan carries none).
+- ``hard``     ``True`` = hard, ``False`` = soft, ``None`` = the default level.
+               ``unassigned_stays_cost`` is the one MEDIUM constraint: medium is a
+               default-only level, so ``hard=True`` makes it one hard unit per
+               night and ``hard=False`` one soft unit per night (outside the 10^9
+               medium fold), in the solver and in :func:`score` alike. An explicit
+               ``weight`` keeps it on the medium level, in medium units.
 - ``exponent`` sign-preserving power shaping: ``weight * sign(c) * |c| **
-               exponent``. 2.0 = squared, so concentrated violations grow much costlier.
+               exponent``, per bed for the unit constraints and on the single total
+               for the global ``mixed_gender_room_cost``. 2.0 = squared, so
+               concentrated violations grow much costlier.
 
-Names (`name`) are the C++ component names in snake_case. The core derives them
+Names (`name`) are the C++ component names in snake_case
+(``BedConflictCost`` -> ``bed_conflict_cost``). The core derives them
 mechanically, so there is no hand-maintained alias table — check them with
 `ba.list_constraints()`. Module-level instance names use the same snake_case,
 so they match the strings `list_constraints()` prints.
 """
 
-import math
-from dataclasses import dataclass
-from typing import ClassVar, NamedTuple
+from ._constraint import Constraint, Score, score_costs, select
 
 __all__ = [
     "Constraint",
     "Score",
     "score",
-    "SameBedInSameNight",
-    "FemaleInMaleRoom",
-    "MaleInFemaleRoom",
-    "DifferentGenderInSameGenderRoomInSameNight",
-    "DepartmentMinimumAge",
-    "DepartmentMaximumAge",
-    "RequiredPatientEquipment",
-    "AssignEveryPatientToABed",
-    "PreferredMaximumRoomCapacity",
-    "DepartmentSpecialty",
-    "DepartmentSpecialtyNotFirstPriority",
-    "PreferredPatientEquipment",
-    "same_bed_in_same_night",
-    "female_in_male_room",
-    "male_in_female_room",
-    "different_gender_in_same_gender_room_in_same_night",
-    "department_minimum_age",
-    "department_maximum_age",
-    "required_patient_equipment",
-    "assign_every_patient_to_a_bed",
-    "preferred_maximum_room_capacity",
-    "department_specialty",
-    "department_specialty_not_first_priority",
-    "preferred_patient_equipment",
+    "BedConflictCost",
+    "FemaleInMaleRoomCost",
+    "MaleInFemaleRoomCost",
+    "MixedGenderRoomCost",
+    "DepartmentMinAgeCost",
+    "DepartmentMaxAgeCost",
+    "RequiredPatientEquipmentCost",
+    "UnassignedStaysCost",
+    "PreferredMaxRoomCapacityCost",
+    "DepartmentSpecialtyCost",
+    "DepartmentSpecialtyPriorityCost",
+    "PreferredPatientEquipmentCost",
+    "bed_conflict_cost",
+    "female_in_male_room_cost",
+    "male_in_female_room_cost",
+    "mixed_gender_room_cost",
+    "department_min_age_cost",
+    "department_max_age_cost",
+    "required_patient_equipment_cost",
+    "unassigned_stays_cost",
+    "preferred_max_room_capacity_cost",
+    "department_specialty_cost",
+    "department_specialty_priority_cost",
+    "preferred_patient_equipment_cost",
     "get_constraints",
 ]
 
 
-@dataclass(frozen=True)
-class Constraint:
-    """Spec selecting one constraint: weight / level / shaping."""
-
-    weight: float | None = None  # None = component default weight
-    hard: bool | None = None  # None = component default level
-    exponent: float = 1.0
-    name: ClassVar[str] = ""
-
-    def __init_subclass__(cls, **kwargs):
-        super().__init_subclass__(**kwargs)
-        if not cls.name:
-            raise TypeError(f"{cls.__name__} must set a registry `name`")
-
-
-class SameBedInSameNight(Constraint):
+class BedConflictCost(Constraint):
     """Nights in which two stays use the same bed. Default: hard, weight 1000."""
 
-    name = "same_bed_in_same_night"
+    name = "bed_conflict_cost"
+    label_en = "Bed conflict"
+    label_ko = "병상 중복 배정"
+    description_en = (
+        "Nights on which two stays share one bed, summed over every pair of stays in the same bed. "
+        "One unit of cost is one shared night; 0 means no bed is double-booked on any night."
+    )
+    description_ko = (
+        "같은 병상에 배정된 두 입원의 기간이 겹치는 밤을 모든 입원 쌍에 대해 더합니다. "
+        "비용은 겹치는 밤 1박당 1이며, 0이면 어느 밤에도 한 병상에 두 환자가 배정되지 않습니다."
+    )
 
 
-class FemaleInMaleRoom(Constraint):
+class FemaleInMaleRoomCost(Constraint):
     """Nights a female patient spends in a MALE_ONLY room. Default: hard, weight 50."""
 
-    name = "female_in_male_room"
+    name = "female_in_male_room_cost"
+    label_en = "Female patient in a male-only room"
+    label_ko = "남성 전용 병실의 여성 환자"
+    description_en = (
+        "The nights female patients spend in rooms limited to men. "
+        "One unit of cost is one such night; 0 means no female patient is in a male-only room."
+    )
+    description_ko = (
+        "여성 환자가 남성 전용 병실에서 지내는 밤을 모두 더합니다. "
+        "비용은 그런 밤 1박당 1이며, 0이면 남성 전용 병실에 여성 환자가 없습니다."
+    )
 
 
-class MaleInFemaleRoom(Constraint):
+class MaleInFemaleRoomCost(Constraint):
     """Nights a male patient spends in a FEMALE_ONLY room. Default: hard, weight 50."""
 
-    name = "male_in_female_room"
+    name = "male_in_female_room_cost"
+    label_en = "Male patient in a female-only room"
+    label_ko = "여성 전용 병실의 남성 환자"
+    description_en = (
+        "The nights male patients spend in rooms limited to women. "
+        "One unit of cost is one such night; 0 means no male patient is in a female-only room."
+    )
+    description_ko = (
+        "남성 환자가 여성 전용 병실에서 지내는 밤을 모두 더합니다. "
+        "비용은 그런 밤 1박당 1이며, 0이면 여성 전용 병실에 남성 환자가 없습니다."
+    )
 
 
-class DifferentGenderInSameGenderRoomInSameNight(Constraint):
+class MixedGenderRoomCost(Constraint):
     """Nights in which men and women share a SAME_GENDER room. Default: hard, weight 1000.
 
     The pairing is per room while the calculator's unit is the bed, so this is a global constraint."""
 
-    name = "different_gender_in_same_gender_room_in_same_night"
+    name = "mixed_gender_room_cost"
+    label_en = "Mixed genders in a same-gender room"
+    label_ko = "동성 병실의 혼성 배정"
+    description_en = (
+        "Nights on which a male and a female patient share a same-gender room, summed over every "
+        "such pair of stays. One unit of cost is one shared night; 0 means every same-gender room "
+        "holds patients of one gender on each night."
+    )
+    description_ko = (
+        "동성 병실에서 남성 환자와 여성 환자가 함께 지내는 밤을 그런 입원 쌍마다 모두 더합니다. "
+        "비용은 함께 지내는 밤 1박당 1이며, 0이면 모든 동성 병실에 밤마다 한 성별의 환자만 있습니다."
+    )
 
 
-class DepartmentMinimumAge(Constraint):
+class DepartmentMinAgeCost(Constraint):
     """Nights a patient below the department minimum age spends there. Default: hard, weight 100."""
 
-    name = "department_minimum_age"
+    name = "department_min_age_cost"
+    label_en = "Below the department's minimum age"
+    label_ko = "진료과 최소 연령 미달"
+    description_en = (
+        "The nights patients younger than their department's minimum age spend there "
+        "(a department without a minimum age never counts). "
+        "One unit of cost is one such night; 0 means every patient is old enough for their department."
+    )
+    description_ko = (
+        "진료과의 최소 연령보다 어린 환자가 그 진료과에서 지내는 밤을 모두 더합니다. "
+        "최소 연령이 없는 진료과는 세지 않습니다. "
+        "비용은 그런 밤 1박당 1이며, 0이면 모든 환자가 진료과의 최소 연령을 충족합니다."
+    )
 
 
-class DepartmentMaximumAge(Constraint):
+class DepartmentMaxAgeCost(Constraint):
     """Nights a patient above the department maximum age spends there. Default: hard, weight 100."""
 
-    name = "department_maximum_age"
+    name = "department_max_age_cost"
+    label_en = "Above the department's maximum age"
+    label_ko = "진료과 최대 연령 초과"
+    description_en = (
+        "The nights patients older than their department's maximum age spend there "
+        "(a department without a maximum age never counts). "
+        "One unit of cost is one such night; 0 means every patient is young enough for their department."
+    )
+    description_ko = (
+        "진료과의 최대 연령보다 나이가 많은 환자가 그 진료과에서 지내는 밤을 모두 더합니다. "
+        "최대 연령이 없는 진료과는 세지 않습니다. "
+        "비용은 그런 밤 1박당 1이며, 0이면 모든 환자가 진료과의 최대 연령을 넘지 않습니다."
+    )
 
 
-class RequiredPatientEquipment(Constraint):
+class RequiredPatientEquipmentCost(Constraint):
     """Room assignments missing required equipment. Default: hard, weight 50.
 
     If the room lacks any required equipment, it is valued by the number of required
     equipment items the room **has** — exactly the semantics pinned by the quickstart's
-    unit test (so a room with none of the required equipment costs 0)."""
+    unit test (so a room with none of the required equipment costs 0). Kept as is in 0.2.0."""
 
-    name = "required_patient_equipment"
+    name = "required_patient_equipment_cost"
+    label_en = "Required equipment"
+    label_ko = "필수 장비"
+    description_en = (
+        "For a stay whose room lacks at least one required equipment item: its nights times the number "
+        "of required items the room does have (by design, a room with none of the required items also "
+        "costs 0). 0 means every stay's room has all of its required equipment, or none of it."
+    )
+    description_ko = (
+        "필수 장비가 하나라도 빠진 병실에 배정된 입원마다, 재원 밤 수에 그 병실이 갖춘 필수 장비 수를 곱해 더합니다. "
+        "설계상 필수 장비를 하나도 갖추지 않은 병실도 비용이 0입니다. "
+        "0이면 모든 입원의 병실이 필수 장비를 모두 갖추었거나 하나도 갖추지 않았습니다."
+    )
 
 
-class AssignEveryPatientToABed(Constraint):
-    """ Nights spent on the "no bed" sentinel. Default: medium, weight 10^9.
+class UnassignedStaysCost(Constraint):
+    """Nights spent on the "no bed" sentinel. Default: medium, weight 1 (medium units).
 
-    The medium level is folded into the engine soft level as `medium * kMediumUnit`,
-    so the default weight already carries that multiple (kMediumUnit = 10^9)."""
+    The domain folds medium into the engine soft level as ``medium * 10^9``; the fold
+    belongs to the domain (every ``constraint_costs()`` entry carries it as
+    ``medium_fold``), so the weight carries no 10^9 factor."""
 
-    name = "assign_every_patient_to_a_bed"
+    name = "unassigned_stays_cost"
+    label_en = "Unassigned stays"
+    label_ko = "병상 미배정 입원"
+    description_en = (
+        'The nights of the stays left without a bed (the solver\'s "no bed" value). '
+        "One unit of cost is one night without a bed; 0 means every stay has a bed."
+    )
+    description_ko = (
+        "병상을 배정받지 못한 입원(솔버의 '병상 없음' 값)의 재원 밤을 모두 더합니다. "
+        "비용은 병상 없이 보내는 밤 1박당 1이며, 0이면 모든 입원이 병상을 배정받았습니다."
+    )
 
 
-class PreferredMaximumRoomCapacity(Constraint):
+class PreferredMaxRoomCapacityCost(Constraint):
     """Nights spent in a room larger than the preferred capacity. Default: soft, weight 8."""
 
-    name = "preferred_maximum_room_capacity"
+    name = "preferred_max_room_capacity_cost"
+    label_en = "Preferred room size"
+    label_ko = "선호 병실 규모"
+    description_en = (
+        "The nights patients spend in a room with a larger capacity than the most they prefer "
+        "(a patient without a preference never counts). "
+        "One unit of cost is one such night; 0 means every patient's room is small enough."
+    )
+    description_ko = (
+        "환자가 선호하는 최대 인원보다 정원이 큰 병실에서 지내는 밤을 모두 더합니다. "
+        "선호 인원을 정하지 않은 환자는 세지 않습니다. "
+        "비용은 그런 밤 1박당 1이며, 0이면 모든 환자의 병실 정원이 선호 인원을 넘지 않습니다."
+    )
 
 
-class DepartmentSpecialty(Constraint):
+class DepartmentSpecialtyCost(Constraint):
     """Nights spent in a department that does not offer the specialty at all. Default: soft, weight 10."""
 
-    name = "department_specialty"
+    name = "department_specialty_cost"
+    label_en = "Department specialty"
+    label_ko = "진료과 전문 분야 불일치"
+    description_en = (
+        "The nights stays spend in a department that does not offer their specialty. "
+        "One unit of cost is one such night; 0 means every stay is in a department offering its specialty."
+    )
+    description_ko = (
+        "입원 환자에게 필요한 전문 분야를 다루지 않는 진료과에서 지내는 밤을 모두 더합니다. "
+        "비용은 그런 밤 1박당 1이며, "
+        "0이면 모든 입원 환자가 자신에게 필요한 전문 분야를 다루는 진료과에 있습니다."
+    )
 
 
-class DepartmentSpecialtyNotFirstPriority(Constraint):
+class DepartmentSpecialtyPriorityCost(Constraint):
     """Nights spent in a department offering the specialty only at priority > 1. Default: soft, weight 10.
 
     Valued by (priority - 1). A department not offering the specialty at all is already
-    valued by `department_specialty`, so this stays silent."""
+    valued by `department_specialty_cost`, so this stays silent."""
 
-    name = "department_specialty_not_first_priority"
+    name = "department_specialty_priority_cost"
+    label_en = "Department specialty priority"
+    label_ko = "진료과 전문 분야 우선순위"
+    description_en = (
+        "For a stay in a department that offers its specialty at priority p > 1: (p - 1) times its nights. "
+        "0 means every stay is in a department with its specialty at priority 1 "
+        "(a department without the specialty is counted by department_specialty_cost instead)."
+    )
+    description_ko = (
+        "입원 환자가 자신에게 필요한 전문 분야를 우선순위 p > 1로 다루는 진료과에 있으면, "
+        "(p - 1)에 재원 밤 수를 곱해 더합니다. "
+        "0이면 모든 입원 환자가 자신에게 필요한 전문 분야를 1순위로 다루는 진료과에 있습니다. "
+        "그 전문 분야를 아예 다루지 않는 진료과는 여기서 세지 않고 department_specialty_cost가 셉니다."
+    )
 
 
-class PreferredPatientEquipment(Constraint):
+class PreferredPatientEquipmentCost(Constraint):
     """Nights spent in a room missing preferred equipment. Default: soft, weight 50.
 
     Valued by the number of preferred equipment items the room lacks."""
 
-    name = "preferred_patient_equipment"
+    name = "preferred_patient_equipment_cost"
+    label_en = "Preferred equipment"
+    label_ko = "선호 장비"
+    description_en = (
+        "For each stay: its nights times the number of preferred equipment items its room lacks. "
+        "One unit of cost is one missing item for one night; 0 means every stay's room has all of its "
+        "preferred equipment."
+    )
+    description_ko = (
+        "입원마다 재원 밤 수에 병실에 없는 선호 장비 수를 곱해 더합니다. "
+        "비용은 1박 동안 빠진 선호 장비 1개당 1이며, 0이면 모든 입원의 병실이 선호 장비를 모두 갖추었습니다."
+    )
 
 
-#: Instances at the default weights. Reference them directly when picking.
-same_bed_in_same_night = SameBedInSameNight()
-female_in_male_room = FemaleInMaleRoom()
-male_in_female_room = MaleInFemaleRoom()
-different_gender_in_same_gender_room_in_same_night = DifferentGenderInSameGenderRoomInSameNight()
-department_minimum_age = DepartmentMinimumAge()
-department_maximum_age = DepartmentMaximumAge()
-required_patient_equipment = RequiredPatientEquipment()
-assign_every_patient_to_a_bed = AssignEveryPatientToABed()
-preferred_maximum_room_capacity = PreferredMaximumRoomCapacity()
-department_specialty = DepartmentSpecialty()
-department_specialty_not_first_priority = DepartmentSpecialtyNotFirstPriority()
-preferred_patient_equipment = PreferredPatientEquipment()
+#: Instances at the default weights (weight=None). Reference them directly when picking.
+bed_conflict_cost = BedConflictCost()
+female_in_male_room_cost = FemaleInMaleRoomCost()
+male_in_female_room_cost = MaleInFemaleRoomCost()
+mixed_gender_room_cost = MixedGenderRoomCost()
+department_min_age_cost = DepartmentMinAgeCost()
+department_max_age_cost = DepartmentMaxAgeCost()
+required_patient_equipment_cost = RequiredPatientEquipmentCost()
+unassigned_stays_cost = UnassignedStaysCost()
+preferred_max_room_capacity_cost = PreferredMaxRoomCapacityCost()
+department_specialty_cost = DepartmentSpecialtyCost()
+department_specialty_priority_cost = DepartmentSpecialtyPriorityCost()
+preferred_patient_equipment_cost = PreferredPatientEquipmentCost()
 
-#: Default set — same order as `ba.list_constraints()`. Assembly lists unit
+#: Default set — same order as `ba.list_constraints()`. The assembly lists unit
 #: constraints first and global constraints after, so the global
-#: `different_gender_in_same_gender_room_in_same_night` comes last
-#: (unlike the emplace order of C++ `defaultConstraints()`).
-_DEFAULTS: list[Constraint] = [
-    same_bed_in_same_night,
-    female_in_male_room,
-    male_in_female_room,
-    department_minimum_age,
-    department_maximum_age,
-    required_patient_equipment,
-    assign_every_patient_to_a_bed,
-    preferred_maximum_room_capacity,
-    department_specialty,
-    department_specialty_not_first_priority,
-    preferred_patient_equipment,
-    different_gender_in_same_gender_room_in_same_night,
-]
+#: `mixed_gender_room_cost` comes last (unlike the emplace order of C++
+#: `defaultConstraints()`).
+_DEFAULTS = (
+    bed_conflict_cost,
+    female_in_male_room_cost,
+    male_in_female_room_cost,
+    department_min_age_cost,
+    department_max_age_cost,
+    required_patient_equipment_cost,
+    unassigned_stays_cost,
+    preferred_max_room_capacity_cost,
+    department_specialty_cost,
+    department_specialty_priority_cost,
+    preferred_patient_equipment_cost,
+    mixed_gender_room_cost,
+)
 
 
 def get_constraints(constraints: list[Constraint] | None = None) -> list[Constraint]:
@@ -214,30 +340,12 @@ def get_constraints(constraints: list[Constraint] | None = None) -> list[Constra
     When `constraints` is given, that list is used as-is — only the listed
     constraints are scored. To change just one default, mix in the default instances::
 
-        get_constraints([same_bed_in_same_night, DepartmentSpecialty(weight=40)])
+        get_constraints([bed_conflict_cost, DepartmentSpecialtyCost(weight=40)])
+
+    Same contract as the C++ applyConstraints: an empty list (most likely a filter
+    that came out empty) and a constraint named twice raise ValueError.
     """
-    if constraints is None:
-        return list(_DEFAULTS)
-    if not constraints:
-        # Same contract as C++ applyConstraints: an empty list means "score
-        # nothing", which is most likely a mistake. A filter that happens to come
-        # out empty must not silently flip to "score everything".
-        raise ValueError("constraints must not be empty (pass None for the defaults)")
-    return list(constraints)
-
-
-class Score(NamedTuple):
-    """(hard, soft) returned by `score()`. Both are penalties, so <= 0."""
-
-    hard: int
-    soft: float
-
-
-def _shape(cost: float, exponent: float) -> float:
-    """Sign-preserving power. Rewards (negative costs) never flip into penalties."""
-    if exponent == 1.0 or cost == 0.0:
-        return cost
-    return -((-cost) ** exponent) if cost < 0.0 else cost**exponent
+    return select(constraints, _DEFAULTS)
 
 
 def score(costs: dict, constraints: list[Constraint] | None = None) -> Score:
@@ -254,32 +362,14 @@ def score(costs: dict, constraints: list[Constraint] | None = None) -> Score:
     No solver and no search are involved. The arithmetic matches the engine —
     each unit contributes ``weight * shape(cost, exponent)`` and hard
     contributions are **rounded per unit** before summing (the same order as the
-    engine's applyRaw; rounding the total afterwards gives different values).
+    engine; rounding the total afterwards gives different values).
 
     When ``constraints`` is given, only those constraints are scored — the same
     semantics as `get_constraints`. Unknown names raise ValueError.
 
-    The returned value is the **engine-level** (hard, soft). This domain folds
-    medium into engine soft as multiples of kMediumUnit (10^9), so to compare
-    with the split levels of `solution.score`, fold the same way first.
+    The returned value is the **engine-level** (hard, soft): the domain's medium
+    fold (``medium_fold`` on every entry, into soft at 10^9) is applied, so it
+    equals ``(score.hard, score.medium * 10**9 + score.soft)`` of a plan scored by
+    the same constraints.
     """
-    hard = 0
-    soft = 0.0
-    for spec in get_constraints(constraints):
-        entry = costs.get(spec.name)
-        if entry is None:
-            raise ValueError(
-                f"unknown constraint {spec.name!r}; available: " + ", ".join(repr(name) for name in sorted(costs))
-            )
-        weight = entry["weight"] if spec.weight is None else spec.weight
-        is_hard = entry["hard"] if spec.hard is None else spec.hard
-        exponent = spec.exponent
-        for cost in entry["costs"]:
-            value = weight * _shape(cost, exponent)
-            if is_hard:
-                # Round per unit contribution like the engine (half-away-from-zero
-                # like llround; Python's round is banker's rounding).
-                hard += int(math.floor(value + 0.5) if value >= 0 else math.ceil(value - 0.5))
-            else:
-                soft += value
-    return Score(-hard, -soft if soft != 0.0 else 0.0)
+    return score_costs(costs, get_constraints(constraints))

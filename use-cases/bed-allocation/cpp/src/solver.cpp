@@ -1,7 +1,9 @@
 #include "ba/solver.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <cstdlib>
 #include <exception>
 #include <stdexcept>
@@ -89,26 +91,57 @@ void configureEngine(const Solver::Config &config,
     }
 }
 
-// One single-threaded solve driven by whichever calculator the caller
-// brought (the monolithic incremental one, or a plugin assembly).
-void solveSingle(const Solver::Config &config,
-                 BedPlan &plan,
-                 optimaru::IncrementalScoreCalculator<BedPlan> &calculator)
+// The domain Score of a plugin calculator, read from its three level
+// accumulators (levelScores(), before the medium fold) rather than decoded
+// from the folded engine soft, which would file a soft total of 10^9 or more
+// (or the fraction of a non-integral medium total) under the wrong level.
+Score levelScoreOf(
+    const optimaru::DecomposedScoreCalculator<BedPlan> &calculator)
 {
-    optimaru::SolverConfig engineConfig;
-    configureEngine(config, plan, engineConfig);
-
-    optimaru::Solver<BedPlan> engine(std::move(engineConfig));
-    engine.solve(plan, calculator);
+    const auto levels = calculator.levelScores();
+    return Score{static_cast<std::int64_t>(levels.hard),
+                 static_cast<std::int64_t>(std::llround(levels.medium)),
+                 static_cast<std::int64_t>(std::llround(levels.soft))};
 }
 
 // One single-threaded solve on the monolithic fast path. The calculator
 // instance is this solve's own; the engine resets it on the working solution
-// at solve start.
+// at solve start. Its fixed default weights keep every level integral and,
+// below ~4.3 million stay-nights, the soft total under 10^9 (the Score adapter
+// in domain.hpp), so the engine score onNewBest decodes has exactly the levels
+// of the final full recompute.
 void solveSingle(const Solver::Config &config, BedPlan &plan)
 {
+    optimaru::SolverConfig engineConfig;
+    configureEngine(config, plan, engineConfig);
+
     BedAllocationIncrementalScoreCalculator calculator;
-    solveSingle(config, plan, calculator);
+    optimaru::Solver<BedPlan> engine(std::move(engineConfig));
+    engine.solve(plan, calculator);
+}
+
+// One single-threaded solve driven by a caller-assembled plugin calculator.
+// onNewBest reports the calculator's own levels, the same way as the final
+// plan.score of Solver::solve(plan, calculator): the engine announces a new
+// best right after the working solution became it, so the accumulators hold
+// exactly that solution at that moment.
+void solveSingle(const Solver::Config &config,
+                 BedPlan &plan,
+                 optimaru::DecomposedScoreCalculator<BedPlan> &calculator)
+{
+    optimaru::SolverConfig engineConfig;
+    configureEngine(config, plan, engineConfig);
+    if (config.onNewBest)
+    {
+        auto onNewBest = config.onNewBest;
+        engineConfig.onNewBest
+            = [onNewBest, &calculator](std::int64_t step,
+                                       const optimaru::HardSoftScore &)
+        { onNewBest(step, levelScoreOf(calculator)); };
+    }
+
+    optimaru::Solver<BedPlan> engine(std::move(engineConfig));
+    engine.solve(plan, calculator);
 }
 
 }  // namespace
@@ -198,10 +231,14 @@ void Solver::solve(BedPlan &plan,
         solveSingle(config_, plan, calculator);
 
     // Score the final solution with the caller's constraint assembly (custom
-    // weights included) and leave the calculator primed on it, so
-    // constraintTotals() explains exactly this score.
+    // weights and levels included) and leave the calculator primed on it, so
+    // constraintTotals() explains exactly this score. The three levels come
+    // straight from the calculator's accumulators (levelScores(), before the
+    // medium fold) rather than from decoding the folded engine score, so a
+    // demoted or re-weighted term lands on the level the assembly gave it.
+    // onNewBest reported the scores of this solve the same way.
     calculator.resetWorkingSolution(plan);
-    plan.score = fromEngineScore(calculator.calculateScore());
+    plan.score = levelScoreOf(calculator);
 }
 
 }  // namespace ba

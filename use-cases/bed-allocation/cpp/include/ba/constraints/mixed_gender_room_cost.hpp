@@ -1,5 +1,5 @@
-#ifndef BA_CONSTRAINTS_DIFFERENT_GENDER_IN_SAME_GENDER_ROOM_HPP
-#define BA_CONSTRAINTS_DIFFERENT_GENDER_IN_SAME_GENDER_ROOM_HPP
+#ifndef BA_CONSTRAINTS_MIXED_GENDER_ROOM_COST_HPP
+#define BA_CONSTRAINTS_MIXED_GENDER_ROOM_COST_HPP
 
 #include <algorithm>
 
@@ -8,21 +8,26 @@
 namespace ba
 {
 
-// Hard (default, weight 1000): differentGenderInSameGenderRoomInSameNight —
-// one point per night a male and a female patient share a SAME_GENDER room.
+// Hard, weight 1000: mixedGenderRoomCost — a male and a female patient in
+// one SAME_GENDER room on the same night. Raw cost (one global total) = the
+// summed shared nights over every opposite-gender pair of stays in one
+// SAME_GENDER room, so 0 = every SAME_GENDER room holds one gender per night.
+// 0.2.0 migration note: was differentGenderInSameGenderRoomInSameNight (the
+// Java quickstart's name).
 //
 // Global because its pairs share a ROOM while the calculator's unit is a BED,
 // and a room holds several beds. It maintains the occupant list of every
 // SAME_GENDER room and folds the marginal pair sum on each join/leave, which
 // is exactly reversible and therefore safe on the member-change fast path.
-struct DifferentGenderInSameGenderRoomInSameNight final
-    : MemberChangeGlobalConstraint
+struct MixedGenderRoomCost final : MemberChangeGlobalConstraint
 {
-    explicit DifferentGenderInSameGenderRoomInSameNight(double weight = 1000.0)
-        : MemberChangeGlobalConstraint(
-              "differentGenderInSameGenderRoomInSameNight",
-              weight,
-              /*hard=*/true)
+    static constexpr double kDefaultWeight = 1000.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
+
+    explicit MixedGenderRoomCost(double weight = kDefaultWeight)
+        : MemberChangeGlobalConstraint("mixedGenderRoomCost",
+                                       weight,
+                                       kDefaultLevel)
     {
     }
 
@@ -109,4 +114,4 @@ private:
 
 }  // namespace ba
 
-#endif  // BA_CONSTRAINTS_DIFFERENT_GENDER_IN_SAME_GENDER_ROOM_HPP
+#endif  // BA_CONSTRAINTS_MIXED_GENDER_ROOM_COST_HPP
