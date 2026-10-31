@@ -1,17 +1,21 @@
-#ifndef MS_CONSTRAINTS_ROOM_CONFLICT_HPP
-#define MS_CONSTRAINTS_ROOM_CONFLICT_HPP
+#ifndef MS_CONSTRAINTS_ROOM_CONFLICT_COST_HPP
+#define MS_CONSTRAINTS_ROOM_CONFLICT_COST_HPP
 
 #include "ms/constraints/common.hpp"
 
 namespace ms
 {
 
-// Hard (default, weight 1): roomConflict — one point per grain two meetings
-// occupy the same room at the same time.
-struct RoomConflict final : AssignmentPairConstraint
+// Hard, weight 1: roomConflictCost — two meetings in the same room at the
+// same time. Raw cost (global) = the grains each pair of meetings sharing a
+// room overlap, summed over the pairs; 0 = no room is double-booked.
+struct RoomConflictCost final : AssignmentPairConstraint
 {
-    explicit RoomConflict(double weight = 1.0)
-        : AssignmentPairConstraint("roomConflict", weight, /*hard=*/true)
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
+
+    explicit RoomConflictCost(double weight = kDefaultWeight)
+        : AssignmentPairConstraint("roomConflictCost", weight, kDefaultLevel)
     {
     }
 
@@ -45,4 +49,4 @@ protected:
 
 }  // namespace ms
 
-#endif  // MS_CONSTRAINTS_ROOM_CONFLICT_HPP
+#endif  // MS_CONSTRAINTS_ROOM_CONFLICT_COST_HPP

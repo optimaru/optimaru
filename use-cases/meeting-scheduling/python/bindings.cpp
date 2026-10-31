@@ -220,41 +220,10 @@ PYBIND11_MODULE(_core, m)
             },
             py::arg("assignment"));
 
-    py::class_<Breakdown>(m, "Breakdown", py::module_local())
-        .def_readonly("room_conflict_grains", &Breakdown::roomConflictGrains)
-        .def_readonly("overtime_sum", &Breakdown::overtimeSum)
-        .def_readonly("required_conflict_grains",
-                      &Breakdown::requiredConflictGrains)
-        .def_readonly("room_capacity_shortage",
-                      &Breakdown::roomCapacityShortage)
-        .def_readonly("start_end_day_violations",
-                      &Breakdown::startEndDayViolations)
-        .def_readonly("required_preferred_conflict_grains",
-                      &Breakdown::requiredPreferredConflictGrains)
-        .def_readonly("preferred_conflict_grains",
-                      &Breakdown::preferredConflictGrains)
-        .def_readonly("last_grain_index_sum", &Breakdown::lastGrainIndexSum)
-        .def_readonly("consecutive_meeting_pairs",
-                      &Breakdown::consecutiveMeetingPairs)
-        .def_readonly("overlapping_meeting_grains",
-                      &Breakdown::overlappingMeetingGrains)
-        .def_readonly("larger_room_capacity_sum",
-                      &Breakdown::largerRoomCapacitySum)
-        .def_readonly("room_stability_violations",
-                      &Breakdown::roomStabilityViolations)
-        .def("hard_total", &Breakdown::hardTotal)
-        .def("medium_total", &Breakdown::mediumTotal)
-        .def("soft_total", &Breakdown::softTotal);
-
     m.def("calculate_score",
           &ScoreCalculator::calculateScore,
           py::arg("schedule"),
           "Full recompute of the HardSoftScore (also stores schedule.score).");
-    m.def("compute_breakdown",
-          &ScoreCalculator::computeBreakdown,
-          py::arg("schedule"),
-          "Full per-constraint recompute (raw violation counts per Java "
-          "constraint).");
     m.def("demo_data",
           &buildDemoData,
           "The Java quickstart's DemoDataGenerator, reproduced draw-for-draw "
@@ -429,12 +398,20 @@ PYBIND11_MODULE(_core, m)
             return tfpy::constraintCosts(calculator, schedule);
         },
         py::arg("schedule"),
-        "Raw per-unit cost of every constraint, before weight/exponent/level.");
+        "Raw per-unit cost of every constraint, before weight/exponent/level "
+        "(each entry also carries the domain's medium_fold).");
 
     // The constraint names this domain scores, in default-assembly order —
-    // the same strings a score breakdown reports.
+    // the keys of constraint_costs().
     m.def(
         "list_constraints",
         [] { return tfpy::constraintNames(defaultConstraints()); },
         "Constraint names available to meeting_scheduling.constraints.");
+
+    // The constraint catalog, read off the same default assembly:
+    // constraint_info() -> [ConstraintInfo(name, default_level,
+    // default_weight, level_flippable, reward, default_enabled), ...] in
+    // list_constraints() order. The defaults live in the C++ components only
+    // (the two attendance-conflict mediums: weight 1 in medium units).
+    tfpy::bindConstraintInfo(m, [] { return defaultConstraints(); });
 }

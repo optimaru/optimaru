@@ -109,16 +109,16 @@ void verifyConstraints()
 {
     std::printf("== (a) Verifying each constraint in isolation ==\n");
 
-    // hard 1: roomConflict — same room, back to back: no overlap.
+    // hard 1: roomConflictCost — same room, back to back: no overlap.
     {
         MeetingSchedule s = makeBase(1, 12, {5, 5});
         addMeeting(s, 4, {}, {}, 0, 0);
         addMeeting(s, 4, {}, {}, 4, 0);
         const Breakdown b = ScoreCalculator::computeBreakdown(s);
-        checkCount("roomConflict unpenalized", b.roomConflictGrains, 0);
+        checkCount("roomConflictCost unpenalized", b.roomConflictCost, 0);
         // The pair is also back-to-back: one consecutive-meetings pair.
         checkCount(
-            "  ... consecutive pair counted", b.consecutiveMeetingPairs, 1);
+            "  ... consecutive pair counted", b.consecutiveMeetingsCost, 1);
     }
     // hard 1: overlap of 2 grains in the same room (Java: penalizesBy 2).
     {
@@ -126,9 +126,9 @@ void verifyConstraints()
         addMeeting(s, 4, {}, {}, 0, 0);
         addMeeting(s, 4, {}, {}, 2, 0);
         const Breakdown b = ScoreCalculator::computeBreakdown(s);
-        checkCount("roomConflict penalized", b.roomConflictGrains, 2);
+        checkCount("roomConflictCost penalized", b.roomConflictCost, 2);
         // Any-meeting overlap is penalized too (soft 10).
-        checkCount("  ... overlapping grains", b.overlappingMeetingGrains, 2);
+        checkCount("  ... overlapping grains", b.meetingOverlapCost, 2);
     }
     // hard 1: different rooms — no room conflict, still overlapping.
     {
@@ -136,15 +136,15 @@ void verifyConstraints()
         addMeeting(s, 4, {}, {}, 0, 0);
         addMeeting(s, 4, {}, {}, 2, 1);
         const Breakdown b = ScoreCalculator::computeBreakdown(s);
-        checkCount("roomConflict different rooms", b.roomConflictGrains, 0);
-        checkCount("  ... overlapping grains", b.overlappingMeetingGrains, 2);
+        checkCount("roomConflictCost different rooms", b.roomConflictCost, 0);
+        checkCount("  ... overlapping grains", b.meetingOverlapCost, 2);
     }
-    // hard 2: avoidOvertime — the last grain exists: no penalty.
+    // hard 2: overtimeCost — the last grain exists: no penalty.
     {
         MeetingSchedule s = makeBase(1, 4, {5});
         addMeeting(s, 4, {}, {}, 0, 0);
         const Breakdown b = ScoreCalculator::computeBreakdown(s);
-        checkCount("avoidOvertime unpenalized", b.overtimeSum, 0);
+        checkCount("overtimeCost unpenalized", b.overtimeCost, 0);
     }
     // hard 2: last grain index 5 does not exist (grains 0..3): penalty 5
     // (Java penalizes by the lastTimeGrainIndex itself).
@@ -152,16 +152,16 @@ void verifyConstraints()
         MeetingSchedule s = makeBase(1, 4, {5});
         addMeeting(s, 4, {}, {}, 2, 0);
         const Breakdown b = ScoreCalculator::computeBreakdown(s);
-        checkCount("avoidOvertime penalized", b.overtimeSum, 5);
+        checkCount("overtimeCost penalized", b.overtimeCost, 5);
     }
-    // hard 3: requiredAttendanceConflict — shared person, overlap 2.
+    // hard 3: requiredAttendanceConflictCost — shared person, overlap 2.
     {
         MeetingSchedule s = makeBase(1, 12, {5, 5});
         addMeeting(s, 4, {0}, {}, 0, 0);
         addMeeting(s, 4, {0}, {}, 2, 1);
         const Breakdown b = ScoreCalculator::computeBreakdown(s);
-        checkCount("requiredAttendanceConflict penalized",
-                   b.requiredConflictGrains,
+        checkCount("requiredAttendanceConflictCost penalized",
+                   b.requiredAttendanceConflictCost,
                    2);
     }
     // hard 3: back to back — no conflict.
@@ -170,8 +170,8 @@ void verifyConstraints()
         addMeeting(s, 4, {0}, {}, 0, 0);
         addMeeting(s, 4, {0}, {}, 4, 1);
         const Breakdown b = ScoreCalculator::computeBreakdown(s);
-        checkCount("requiredAttendanceConflict unpenalized",
-                   b.requiredConflictGrains,
+        checkCount("requiredAttendanceConflictCost unpenalized",
+                   b.requiredAttendanceConflictCost,
                    0);
     }
     // hard 3: two shared required people double the weight.
@@ -180,145 +180,145 @@ void verifyConstraints()
         addMeeting(s, 4, {0, 1}, {}, 0, 0);
         addMeeting(s, 4, {0, 1}, {}, 3, 1);
         const Breakdown b = ScoreCalculator::computeBreakdown(s);
-        checkCount("requiredAttendanceConflict two people",
-                   b.requiredConflictGrains,
+        checkCount("requiredAttendanceConflictCost two people",
+                   b.requiredAttendanceConflictCost,
                    2);
     }
-    // hard 4: requiredRoomCapacity — 1 required + 1 preferred vs capacity 2
+    // hard 4: roomCapacityCost — 1 required + 1 preferred vs capacity 2
     // (Java: unpenalized) and capacity 1 (Java: penalizes by 1).
     {
         MeetingSchedule s = makeBase(1, 12, {2});
         addMeeting(s, 4, {0}, {1}, 0, 0);
         const Breakdown b = ScoreCalculator::computeBreakdown(s);
-        checkCount(
-            "requiredRoomCapacity unpenalized", b.roomCapacityShortage, 0);
+        checkCount("roomCapacityCost unpenalized", b.roomCapacityCost, 0);
     }
     {
         MeetingSchedule s = makeBase(1, 12, {1});
         addMeeting(s, 4, {0}, {1}, 0, 0);
         const Breakdown b = ScoreCalculator::computeBreakdown(s);
-        checkCount("requiredRoomCapacity penalized", b.roomCapacityShortage, 1);
+        checkCount("roomCapacityCost penalized", b.roomCapacityCost, 1);
     }
-    // hard 5: startAndEndOnSameDay — 2 days x 4 grains; a meeting starting
+    // hard 5: dayCrossingCost — 2 days x 4 grains; a meeting starting
     // at grain 2 (day 100) ends at grain 5 (day 101).
     {
         MeetingSchedule s = makeBase(2, 4, {5});
         addMeeting(s, 4, {}, {}, 0, 0);
         const Breakdown b = ScoreCalculator::computeBreakdown(s);
-        checkCount(
-            "startAndEndOnSameDay unpenalized", b.startEndDayViolations, 0);
+        checkCount("dayCrossingCost unpenalized", b.dayCrossingCost, 0);
     }
     {
         MeetingSchedule s = makeBase(2, 4, {5});
         addMeeting(s, 4, {}, {}, 2, 0);
         const Breakdown b = ScoreCalculator::computeBreakdown(s);
-        checkCount(
-            "startAndEndOnSameDay penalized", b.startEndDayViolations, 1);
-        checkCount("  ... not overtime (grain exists)", b.overtimeSum, 0);
+        checkCount("dayCrossingCost penalized", b.dayCrossingCost, 1);
+        checkCount("  ... not overtime (grain exists)", b.overtimeCost, 0);
     }
-    // medium 6: requiredAndPreferredAttendanceConflict — required in one
+    // medium 6: requiredAndPreferredAttendanceConflictCost — required in one
     // meeting, preferred in another, full overlap of 4 (Java: 4).
     {
         MeetingSchedule s = makeBase(1, 12, {5, 5});
         addMeeting(s, 4, {0}, {}, 0, 0);
         addMeeting(s, 4, {}, {0}, 0, 1);
         const Breakdown b = ScoreCalculator::computeBreakdown(s);
-        checkCount("requiredAndPreferredAttendanceConflict",
-                   b.requiredPreferredConflictGrains,
+        checkCount("requiredAndPreferredAttendanceConflictCost",
+                   b.requiredAndPreferredAttendanceConflictCost,
                    4);
-        checkCount(
-            "  ... no required-required conflict", b.requiredConflictGrains, 0);
+        checkCount("  ... no required-required conflict",
+                   b.requiredAttendanceConflictCost,
+                   0);
     }
     {
         MeetingSchedule s = makeBase(1, 12, {5, 5});
         addMeeting(s, 4, {0}, {}, 0, 0);
         addMeeting(s, 4, {}, {0}, 4, 1);
         const Breakdown b = ScoreCalculator::computeBreakdown(s);
-        checkCount("requiredAndPreferred unpenalized",
-                   b.requiredPreferredConflictGrains,
+        checkCount("requiredAndPreferredAttendanceConflictCost unpenalized",
+                   b.requiredAndPreferredAttendanceConflictCost,
                    0);
     }
-    // medium 7: preferredAttendanceConflict — shared preferred person, full
+    // medium 7: preferredAttendanceConflictCost — shared preferred person, full
     // overlap of 4 (Java: 4).
     {
         MeetingSchedule s = makeBase(1, 12, {5, 5});
         addMeeting(s, 4, {}, {0}, 0, 0);
         addMeeting(s, 4, {}, {0}, 0, 1);
         const Breakdown b = ScoreCalculator::computeBreakdown(s);
-        checkCount("preferredAttendanceConflict", b.preferredConflictGrains, 4);
+        checkCount("preferredAttendanceConflictCost",
+                   b.preferredAttendanceConflictCost,
+                   4);
     }
-    // soft 8: doMeetingsAsSoonAsPossible — duration 1 at grain 0: last
+    // soft 8: meetingEndTimeCost — duration 1 at grain 0: last
     // index 0 (Java: 0); duration 4 at grain 0: last index 3 (Java: 3).
     {
         MeetingSchedule s = makeBase(1, 12, {5});
         addMeeting(s, 1, {}, {}, 0, 0);
         const Breakdown b = ScoreCalculator::computeBreakdown(s);
-        checkCount("doMeetingsAsSoonAsPossible zero", b.lastGrainIndexSum, 0);
+        checkCount("meetingEndTimeCost zero", b.meetingEndTimeCost, 0);
     }
     {
         MeetingSchedule s = makeBase(1, 12, {5});
         addMeeting(s, 4, {}, {}, 0, 0);
         const Breakdown b = ScoreCalculator::computeBreakdown(s);
-        checkCount("doMeetingsAsSoonAsPossible", b.lastGrainIndexSum, 3);
+        checkCount("meetingEndTimeCost", b.meetingEndTimeCost, 3);
     }
-    // soft 9: oneBreakBetweenConsecutiveMeetings — overlap (start equal) is
+    // soft 9: consecutiveMeetingsCost — overlap (start equal) is
     // not back-to-back (Java: 0); end 3 then start 4 is (Java: 1).
     {
         MeetingSchedule s = makeBase(1, 12, {5, 5});
         addMeeting(s, 4, {}, {}, 0, 0);
         addMeeting(s, 4, {}, {}, 0, 1);
         const Breakdown b = ScoreCalculator::computeBreakdown(s);
-        checkCount(
-            "oneBreak unpenalized (overlap)", b.consecutiveMeetingPairs, 0);
+        checkCount("consecutiveMeetingsCost unpenalized (overlap)",
+                   b.consecutiveMeetingsCost,
+                   0);
     }
     {
         MeetingSchedule s = makeBase(1, 12, {5, 5});
         addMeeting(s, 4, {}, {}, 0, 0);
         addMeeting(s, 4, {}, {}, 4, 1);
         const Breakdown b = ScoreCalculator::computeBreakdown(s);
-        checkCount("oneBreak penalized", b.consecutiveMeetingPairs, 1);
+        checkCount(
+            "consecutiveMeetingsCost penalized", b.consecutiveMeetingsCost, 1);
     }
-    // soft 10: overlappingMeetings — [1,4) vs [0,3): overlap 2 (Java: 2).
+    // soft 10: meetingOverlapCost — [1,4) vs [0,3): overlap 2 (Java: 2).
     {
         MeetingSchedule s = makeBase(1, 12, {5, 5});
         addMeeting(s, 3, {}, {}, 1, 0);
         addMeeting(s, 3, {}, {}, 0, 1);
         const Breakdown b = ScoreCalculator::computeBreakdown(s);
-        checkCount("overlappingMeetings", b.overlappingMeetingGrains, 2);
+        checkCount("meetingOverlapCost", b.meetingOverlapCost, 2);
     }
-    // soft 11: assignLargerRoomsFirst — capacity-1 room while a capacity-2
+    // soft 11: largerRoomCapacityCost — capacity-1 room while a capacity-2
     // room exists: 1 (Java: 1); in the largest room: 0.
     {
         MeetingSchedule s = makeBase(1, 12, {1, 2});
         addMeeting(s, 4, {}, {}, 0, 0);
         const Breakdown b = ScoreCalculator::computeBreakdown(s);
         checkCount(
-            "assignLargerRoomsFirst penalized", b.largerRoomCapacitySum, 1);
+            "largerRoomCapacityCost penalized", b.largerRoomCapacityCost, 1);
     }
     {
         MeetingSchedule s = makeBase(1, 12, {1, 2});
         addMeeting(s, 4, {}, {}, 0, 1);
         const Breakdown b = ScoreCalculator::computeBreakdown(s);
         checkCount(
-            "assignLargerRoomsFirst largest room", b.largerRoomCapacitySum, 0);
+            "largerRoomCapacityCost largest room", b.largerRoomCapacityCost, 0);
     }
-    // soft 12: roomStability — shared attendee, different rooms, gap 0
+    // soft 12: roomChangeCost — shared attendee, different rooms, gap 0
     // grains (end 3, start 4): 1 (Java: 1); gap 4 grains: 0 (Java: 0).
     {
         MeetingSchedule s = makeBase(1, 16, {5, 5});
         addMeeting(s, 4, {0}, {}, 0, 0);
         addMeeting(s, 4, {0}, {}, 4, 1);
         const Breakdown b = ScoreCalculator::computeBreakdown(s);
-        checkCount("roomStability penalized", b.roomStabilityViolations, 1);
+        checkCount("roomChangeCost penalized", b.roomChangeCost, 1);
     }
     {
         MeetingSchedule s = makeBase(1, 16, {5, 5});
         addMeeting(s, 4, {0}, {}, 0, 0);
         addMeeting(s, 4, {0}, {}, 8, 1);
         const Breakdown b = ScoreCalculator::computeBreakdown(s);
-        checkCount("roomStability unpenalized (gap > 2)",
-                   b.roomStabilityViolations,
-                   0);
+        checkCount("roomChangeCost unpenalized (gap > 2)", b.roomChangeCost, 0);
     }
     // soft 12: same room — stable, no penalty.
     {
@@ -326,7 +326,7 @@ void verifyConstraints()
         addMeeting(s, 4, {0}, {}, 0, 0);
         addMeeting(s, 4, {0}, {}, 4, 0);
         const Breakdown b = ScoreCalculator::computeBreakdown(s);
-        checkCount("roomStability same room", b.roomStabilityViolations, 0);
+        checkCount("roomChangeCost same room", b.roomChangeCost, 0);
     }
     // Score mapping: hard = -(hard sum), soft = -(medium * 1e6 + raw soft).
     {
@@ -358,7 +358,7 @@ void verifyConstraints()
         s.meetingAssignments.back().pinned = true;
         addMeeting(s, 4, {}, {}, 2, 0);
         const Breakdown b = ScoreCalculator::computeBreakdown(s);
-        checkCount("pinned assignment still scored", b.roomConflictGrains, 2);
+        checkCount("pinned assignment still scored", b.roomConflictCost, 2);
     }
     std::printf("\n");
 }

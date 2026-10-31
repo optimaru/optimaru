@@ -8,6 +8,8 @@
 #include <utility>
 #include <vector>
 
+#include "ms/constraints.hpp"
+
 namespace ms
 {
 
@@ -106,7 +108,7 @@ void ScoreCalculator::prepare(MeetingSchedule &schedule)
             grain.dayOfYear);
     }
 
-    // --- "assign larger rooms first" penalty per room ----------------------
+    // --- largerRoomCapacityCost penalty per room ---------------------------
     const int roomCount = schedule.roomCount();
     schedule.largerRoomPenalty.assign(roomCount, 0);
     for (int r = 0; r < roomCount; ++r)
@@ -189,17 +191,48 @@ void ScoreCalculator::prepare(MeetingSchedule &schedule)
     }
     schedule.conflictArcs.clear();
     schedule.conflictArcs.reserve(arcByPair.size());
-    schedule.stabilityNeighbors.assign(meetingCount, {});
+    schedule.roomChangeNeighbors.assign(meetingCount, {});
     for (const auto &[key, arc] : arcByPair)
     {
         schedule.conflictArcs.push_back(arc);
-        schedule.stabilityNeighbors[arc.meeting1].push_back(
+        schedule.roomChangeNeighbors[arc.meeting1].push_back(
             {arc.meeting2, arc.attendanceWeight});
-        schedule.stabilityNeighbors[arc.meeting2].push_back(
+        schedule.roomChangeNeighbors[arc.meeting2].push_back(
             {arc.meeting1, arc.attendanceWeight});
     }
 
     schedule.prepared = true;
+}
+
+// The monolithic score is the default assembly (ms/constraints.hpp), so the
+// weighted totals read the same kDefaultWeight constants the components carry
+// (kHardWeight / kMediumWeight / kSoftWeight check that each one is integral
+// and on the level it is summed into).
+std::int64_t Breakdown::hardTotal() const
+{
+    return kHardWeight<RoomConflictCost> * roomConflictCost
+           + kHardWeight<OvertimeCost> * overtimeCost
+           + kHardWeight<RequiredAttendanceConflictCost>
+                 * requiredAttendanceConflictCost
+           + kHardWeight<RoomCapacityCost> * roomCapacityCost
+           + kHardWeight<DayCrossingCost> * dayCrossingCost;
+}
+
+std::int64_t Breakdown::mediumTotal() const
+{
+    return kMediumWeight<RequiredAndPreferredAttendanceConflictCost>
+               * requiredAndPreferredAttendanceConflictCost
+           + kMediumWeight<PreferredAttendanceConflictCost>
+                 * preferredAttendanceConflictCost;
+}
+
+std::int64_t Breakdown::softTotal() const
+{
+    return kSoftWeight<MeetingEndTimeCost> * meetingEndTimeCost
+           + kSoftWeight<ConsecutiveMeetingsCost> * consecutiveMeetingsCost
+           + kSoftWeight<MeetingOverlapCost> * meetingOverlapCost
+           + kSoftWeight<LargerRoomCapacityCost> * largerRoomCapacityCost
+           + kSoftWeight<RoomChangeCost> * roomChangeCost;
 }
 
 Breakdown ScoreCalculator::computeBreakdown(MeetingSchedule &schedule)
@@ -221,33 +254,33 @@ Breakdown ScoreCalculator::computeBreakdown(MeetingSchedule &schedule)
         const int lastIndex = startIndex + meeting.durationInGrains - 1;
         const int lastOffset = lastIndex - schedule.grainIndexBase;
 
-        // 2. avoidOvertime: no TimeGrain fact exists at the last index.
+        // 2. overtimeCost: no TimeGrain fact exists at the last index.
         if (schedule.grainCountAtOffset(lastOffset) == 0)
-            b.overtimeSum += lastIndex;
-        // 4. requiredRoomCapacity.
+            b.overtimeCost += lastIndex;
+        // 4. roomCapacityCost.
         const int shortage = schedule.requiredCapacityOf[assignment.meeting]
                              - schedule.rooms[room].capacity;
         if (shortage > 0)
-            b.roomCapacityShortage += shortage;
-        // 5. startAndEndOnSameDay: -1 per grain fact at the last index on a
+            b.roomCapacityCost += shortage;
+        // 5. dayCrossingCost: -1 per grain fact at the last index on a
         // different day than the starting grain.
-        b.startEndDayViolations
+        b.dayCrossingCost
             += schedule.grainCountAtOffset(lastOffset)
                - schedule.grainCountAtOffsetOnDay(
                    lastOffset, schedule.timeGrains[pos].dayOfYear);
-        // 8. doMeetingsAsSoonAsPossible.
-        b.lastGrainIndexSum += lastIndex;
-        // 11. assignLargerRoomsFirst.
-        b.largerRoomCapacitySum += schedule.largerRoomPenalty[room];
+        // 8. meetingEndTimeCost.
+        b.meetingEndTimeCost += lastIndex;
+        // 11. largerRoomCapacityCost.
+        b.largerRoomCapacityCost += schedule.largerRoomPenalty[room];
         // Same-meeting attendance pairs (zero in sane data): the meeting
         // fully overlaps itself.
-        b.requiredConflictGrains
+        b.requiredAttendanceConflictCost
             += schedule.selfRequiredPairs[assignment.meeting]
                * meeting.durationInGrains;
-        b.preferredConflictGrains
+        b.preferredAttendanceConflictCost
             += schedule.selfPreferredPairs[assignment.meeting]
                * meeting.durationInGrains;
-        b.requiredPreferredConflictGrains
+        b.requiredAndPreferredAttendanceConflictCost
             += schedule.selfRequiredPreferred[assignment.meeting]
                * meeting.durationInGrains;
     }
@@ -277,19 +310,19 @@ Breakdown ScoreCalculator::computeBreakdown(MeetingSchedule &schedule)
                 startI, startI + durationI, startJ, startJ + durationJ);
             if (overlap > 0)
             {
-                // 10. overlappingMeetings (distinct meetings: the model is
+                // 10. meetingOverlapCost (distinct meetings: the model is
                 // 1:1, so distinct assignments imply distinct meetings).
-                b.overlappingMeetingGrains += overlap;
-                // 1. roomConflict.
+                b.meetingOverlapCost += overlap;
+                // 1. roomConflictCost.
                 if (roomI == schedule.roomIndexOf(right.grainRoom))
-                    b.roomConflictGrains += overlap;
+                    b.roomConflictCost += overlap;
             }
-            // 9. oneBreakBetweenConsecutiveMeetings (both directions; at
+            // 9. consecutiveMeetingsCost (both directions; at
             // most one can match).
             if (startI + durationI == startJ)
-                ++b.consecutiveMeetingPairs;
+                ++b.consecutiveMeetingsCost;
             if (startJ + durationJ == startI)
-                ++b.consecutiveMeetingPairs;
+                ++b.consecutiveMeetingsCost;
         }
     }
 
@@ -314,14 +347,15 @@ Breakdown ScoreCalculator::computeBreakdown(MeetingSchedule &schedule)
             startI, startI + durationI, startJ, startJ + durationJ);
         if (overlap > 0)
         {
-            // 3. requiredAttendanceConflict / 7. preferredAttendanceConflict
-            // / 6. requiredAndPreferredAttendanceConflict (both directions).
-            b.requiredConflictGrains += arc.requiredWeight * overlap;
-            b.preferredConflictGrains += arc.preferredWeight * overlap;
-            b.requiredPreferredConflictGrains
+            // 3. requiredAttendanceConflictCost / 7.
+            // preferredAttendanceConflictCost / 6.
+            // requiredAndPreferredAttendanceConflictCost (both directions).
+            b.requiredAttendanceConflictCost += arc.requiredWeight * overlap;
+            b.preferredAttendanceConflictCost += arc.preferredWeight * overlap;
+            b.requiredAndPreferredAttendanceConflictCost
                 += (arc.reqPrefForward + arc.reqPrefReverse) * overlap;
         }
-        // 12. roomStability: same attendee, different rooms, the earlier
+        // 12. roomChangeCost: same attendee, different rooms, the earlier
         // meeting (by the TimeGrain day/minute comparator, strict) followed
         // within <= 2 grains.
         if (schedule.roomIndexOf(left.grainRoom)
@@ -335,7 +369,7 @@ Breakdown ScoreCalculator::computeBreakdown(MeetingSchedule &schedule)
                 const int firstDuration = order < 0 ? durationI : durationJ;
                 const int secondStart = order < 0 ? startJ : startI;
                 if (secondStart - firstDuration - firstStart <= 2)
-                    b.roomStabilityViolations += arc.attendanceWeight;
+                    b.roomChangeCost += arc.attendanceWeight;
             }
         }
     }

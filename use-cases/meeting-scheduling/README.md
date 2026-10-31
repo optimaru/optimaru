@@ -18,7 +18,52 @@ result = ms.solve(schedule, time_limit_seconds=5.0, random_seed=42)
 print(result.score.hard, result.score.soft)
 ```
 
-`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, a full `config` (`meeting_scheduling.SolverConfig`) and `constraints` (see below). The C++ side builds and tests with:
+`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, a full `config` (`meeting_scheduling.SolverConfig`) and `constraints` (see below).
+
+## Constraints
+
+| Constraint (Python name) | C++ component | Default level | Default weight | Raw cost (0 = no violation) |
+|---|---|---|---|---|
+| `overtime_cost` | `OvertimeCost` | hard | 1 | per meeting running past the calendar: its last grain index (not the overrun) |
+| `room_capacity_cost` | `RoomCapacityCost` | hard | 1 | per meeting: `max(0, required + preferred attendees - room capacity)` seats |
+| `day_crossing_cost` | `DayCrossingCost` | hard | 1 | per meeting: time grains at its last grain index on another day than its start |
+| `meeting_end_time_cost` | `MeetingEndTimeCost` | soft | 1 | per meeting: its last grain index |
+| `larger_room_capacity_cost` | `LargerRoomCapacityCost` | soft | 1 | per meeting: capacity difference to every strictly larger room (seats) |
+| `room_conflict_cost` | `RoomConflictCost` | hard | 1 | overlapping grains of two meetings in the same room |
+| `required_attendance_conflict_cost` | `RequiredAttendanceConflictCost` | hard | 1 | overlapping grains x attendees required at both meetings (person-grains) |
+| `required_and_preferred_attendance_conflict_cost` | `RequiredAndPreferredAttendanceConflictCost` | medium | 1 | overlapping grains x attendees required at one and preferred at the other (person-grains) |
+| `preferred_attendance_conflict_cost` | `PreferredAttendanceConflictCost` | medium | 1 | overlapping grains x attendees preferred at both (person-grains) |
+| `consecutive_meetings_cost` | `ConsecutiveMeetingsCost` | soft | 100 | back-to-back meeting pairs (one ends at the grain the other starts) |
+| `meeting_overlap_cost` | `MeetingOverlapCost` | soft | 10 | overlapping grains of any two meetings |
+| `room_change_cost` | `RoomChangeCost` | soft | 1 | attendee room switches between meetings at most 2 grains apart |
+
+The first five are unit constraints (one cost per (time grain, room) cell, so `exponent`
+shapes per cell); the other seven compare pairs of meetings and are global (one total,
+shaped as a whole). The rows are in `list_constraints()` order, and
+`meeting_scheduling.constraint_info()` reports exactly this table from the C++ components
+(`kDefaultLevel` / `kDefaultWeight`): every constraint is flippable (`hard=True` /
+`hard=False`), none is a reward and all twelve are scored by default (`default_enabled`).
+The medium level folds into the engine's soft level as `medium x 1e6` (`MEDIUM_SCALE`,
+`kMediumFold` in `cpp/include/ms/domain.hpp`); a medium weight is in medium units.
+
+**0.2.0:** the constraints were renamed (`room_conflict` -> `room_conflict_cost`,
+`avoid_overtime` -> `overtime_cost`, `required_attendance_conflict` ->
+`required_attendance_conflict_cost`, `required_room_capacity` -> `room_capacity_cost`,
+`start_and_end_on_same_day` -> `day_crossing_cost`, `required_and_preferred_attendance_conflict`
+-> `required_and_preferred_attendance_conflict_cost`, `preferred_attendance_conflict` ->
+`preferred_attendance_conflict_cost`, `do_meetings_as_soon_as_possible` ->
+`meeting_end_time_cost`, `one_break_between_consecutive_meetings` -> `consecutive_meetings_cost`,
+`overlapping_meetings` -> `meeting_overlap_cost`, `assign_larger_rooms_first` ->
+`larger_room_capacity_cost`, `room_stability` -> `room_change_cost`; the spec classes and the
+module-level default instances follow, e.g. `OverlappingMeetings` / `overlapping_meetings` ->
+`MeetingOverlapCost` / `meeting_overlap_cost`). The two medium constraints now default to
+weight 1 in medium units (was 1e6 on the soft level), so `hard=True` charges 1 hard per
+person-grain (was 1e6), `hard=False` demotes them to soft at 1 per person-grain (was a no-op
+that kept the 1e6), and an explicit `weight` is in medium units. `compute_breakdown()` and the
+`Breakdown` class are gone: `constraint_costs(schedule)` is the per-constraint surface (sum a
+constraint's `costs` for the old totals). Raw costs and the default score are unchanged.
+
+The C++ side builds and tests with:
 
 ```sh
 cmake -S use-cases/meeting-scheduling/cpp -B build/meeting-scheduling && cmake --build build/meeting-scheduling -j
@@ -59,20 +104,32 @@ Decreasing ordering, or pre-assign part of the solution in the domain
 solver's `solve` before the engine runs — the engine only fills what is still unassigned.
 
 **Adding a hard or soft cost.** One file per constraint under
-`cpp/include/ms/constraints/` (currently `assign_larger_rooms_first`, `avoid_overtime`, `do_meetings_as_soon_as_possible`, `one_break_between_consecutive_meetings`, `overlapping_meetings`, `preferred_attendance_conflict`, `required_and_preferred_attendance_conflict`, `required_attendance_conflict`, `required_room_capacity`, `room_conflict`, `room_stability`, `start_and_end_on_same_day`):
-1. add `constraints/<name>.hpp` (a `UnitConstraint` or `GlobalConstraint`;
-   positive cost = penalty, the level and weight are constructor defaults);
+`cpp/include/ms/constraints/` (currently `consecutive_meetings_cost`, `day_crossing_cost`,
+`larger_room_capacity_cost`, `meeting_end_time_cost`, `meeting_overlap_cost`, `overtime_cost`,
+`preferred_attendance_conflict_cost`, `required_and_preferred_attendance_conflict_cost`,
+`required_attendance_conflict_cost`, `room_capacity_cost`, `room_change_cost`,
+`room_conflict_cost`, plus `common.hpp` with the three shared bases):
+1. add `constraints/<subject>_cost.hpp` with `struct <Subject>Cost` (a `UnitConstraint` or
+   `GlobalConstraint`, usually over one of the shared bases; positive raw cost = penalty,
+   0 = no violation) declaring `static constexpr double kDefaultWeight` and
+   `static constexpr optimaru::Level kDefaultLevel`, an
+   `explicit <Subject>Cost(double weight = kDefaultWeight)` constructor and the registry
+   name `"<subject>Cost"` (the struct name with a lower-case first letter);
 2. include it in `cpp/include/ms/constraints.hpp` and `emplace` it in
    `defaultConstraints()` if it belongs to the default set;
 3. for a default constraint, add the same raw cost to
-   `score_calculator` / `incremental_calculator` — `ms_plugin_test` checks
-   they agree bit for bit;
-4. add a `Constraint` spec with the snake_case `name` to
-   `python/meeting_scheduling/constraints.py`; callers then pick, reweight or flip it:
-   `constraints=get_constraints([..., MyRule(weight=5, hard=True)])`;
+   `score_calculator` (a `Breakdown` member named after the registry name) /
+   `incremental_calculator`, weighted by the component's `kDefaultWeight` —
+   `ms_plugin_test` checks they agree bit for bit — and a positive and a zero
+   hand-calculated case to `ms_test` / `ms_plugin_test`;
+4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
+   `description_en` / `description_ko` to `python/meeting_scheduling/constraints.py` (plus
+   its module-level default instance); callers then pick, reweight or flip it:
+   `constraints=get_constraints([..., MyRuleCost(weight=5, hard=True)])`;
 5. mirror it in the CP-SAT model in
-   [`benchmarks/meeting-scheduling/cpsat`](../../benchmarks/meeting-scheduling/cpsat) so the
-   benchmark stays like for like.
+   [`benchmarks/meeting-scheduling/cpsat`](../../benchmarks/meeting-scheduling/cpsat) (a plugin
+   subclassing the spec; defaults come from `constraint_info()`) so the benchmark stays like
+   for like.
 
 ## Benchmark
 

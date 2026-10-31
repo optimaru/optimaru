@@ -1,7 +1,25 @@
 """Constraint spot checks: reproduces representative cases of Java
-MeetingSchedulingConstraintProviderTest with compute_breakdown."""
+MeetingSchedulingConstraintProviderTest through the Python bindings.
+
+The raw costs come from `constraint_costs()` (summed over the units of each
+constraint), the only per-constraint surface since 0.2.0.
+"""
 
 import meeting_scheduling as ms
+from meeting_scheduling.constraints import get_constraints, score
+
+
+def raw_totals(schedule):
+    """Raw cost per constraint name (the units of each constraint summed)."""
+    return {name: sum(entry["costs"]) for name, entry in ms.constraint_costs(schedule).items()}
+
+
+def level_totals(schedule):
+    """Raw totals summed per default level (hard, medium, soft), at the default weights."""
+    totals = {"hard": 0.0, "medium": 0.0, "soft": 0.0}
+    for entry in ms.constraint_costs(schedule).values():
+        totals[entry["level"]] += entry["weight"] * sum(entry["costs"])
+    return totals
 
 
 def make_base(days: int, grains_per_day: int, capacities: list[int]) -> tuple[list, list, list]:
@@ -39,65 +57,67 @@ def make_schedule(days, grains_per_day, capacities, meetings_spec):
     return ms.MeetingSchedule(people, grains, rooms, meetings, assignments)
 
 
-def test_room_conflict():
+def test_room_conflict_cost():
     # Java roomConflictPenalized: dur 4 @0 and dur 4 @2, same room -> 2.
     s = make_schedule(1, 12, [5, 5], [(4, [], [], 0, 0), (4, [], [], 2, 0)])
-    b = ms.compute_breakdown(s)
-    assert b.room_conflict_grains == 2
-    assert b.overlapping_meeting_grains == 2
+    raw = raw_totals(s)
+    assert raw["room_conflict_cost"] == 2
+    assert raw["meeting_overlap_cost"] == 2
     # Placed back to back (dur 4 @0, @4): room conflict 0, one adjacent pair.
     s = make_schedule(1, 12, [5, 5], [(4, [], [], 0, 0), (4, [], [], 4, 0)])
-    b = ms.compute_breakdown(s)
-    assert b.room_conflict_grains == 0
-    assert b.consecutive_meeting_pairs == 1
+    raw = raw_totals(s)
+    assert raw["room_conflict_cost"] == 0
+    assert raw["consecutive_meetings_cost"] == 1
 
 
-def test_avoid_overtime():
+def test_overtime_cost():
     # Only grains 0..3 exist; dur 4 @2 has no last index 5 -> 5.
     s = make_schedule(1, 4, [5], [(4, [], [], 2, 0)])
-    assert ms.compute_breakdown(s).overtime_sum == 5
+    assert raw_totals(s)["overtime_cost"] == 5
     s = make_schedule(1, 4, [5], [(4, [], [], 0, 0)])
-    assert ms.compute_breakdown(s).overtime_sum == 0
+    assert raw_totals(s)["overtime_cost"] == 0
 
 
 def test_attendance_conflicts():
     # Java requiredAttendanceConflictPenalized: overlap 2.
     s = make_schedule(1, 12, [5, 5], [(4, [0], [], 0, 0), (4, [0], [], 2, 1)])
-    assert ms.compute_breakdown(s).required_conflict_grains == 2
+    assert raw_totals(s)["required_attendance_conflict_cost"] == 2
     # Java requiredAndPreferredAttendanceConflictPenalized: full overlap 4.
     s = make_schedule(1, 12, [5, 5], [(4, [0], [], 0, 0), (4, [], [0], 0, 1)])
-    assert ms.compute_breakdown(s).required_preferred_conflict_grains == 4
+    assert raw_totals(s)["required_and_preferred_attendance_conflict_cost"] == 4
     # Java preferredAttendanceConflictPenalized: full overlap 4.
     s = make_schedule(1, 12, [5, 5], [(4, [], [0], 0, 0), (4, [], [0], 0, 1)])
-    assert ms.compute_breakdown(s).preferred_conflict_grains == 4
+    assert raw_totals(s)["preferred_attendance_conflict_cost"] == 4
 
 
 def test_room_capacity_and_larger_rooms():
     # Java requiredRoomCapacityPenalized: 1 required + 1 preferred > capacity 1 -> 1.
     s = make_schedule(1, 12, [1], [(4, [0], [1], 0, 0)])
-    assert ms.compute_breakdown(s).room_capacity_shortage == 1
+    assert raw_totals(s)["room_capacity_cost"] == 1
     # Java assignLargerRoomsFirstPenalized: uses a capacity-1 room while a 2-seat room exists -> 1.
     s = make_schedule(1, 12, [1, 2], [(4, [], [], 0, 0)])
-    assert ms.compute_breakdown(s).larger_room_capacity_sum == 1
+    assert raw_totals(s)["larger_room_capacity_cost"] == 1
 
 
-def test_room_stability():
+def test_room_change_cost():
     # Java roomStabilityPenalized: same attendee, different room, gap of 0 grains -> 1.
     s = make_schedule(1, 16, [5, 5], [(4, [0], [], 0, 0), (4, [0], [], 4, 1)])
-    assert ms.compute_breakdown(s).room_stability_violations == 1
+    assert raw_totals(s)["room_change_cost"] == 1
     # Java roomStabilityUnpenalized: gap of 4 grains -> 0.
     s = make_schedule(1, 16, [5, 5], [(4, [0], [], 0, 0), (4, [0], [], 8, 1)])
-    assert ms.compute_breakdown(s).room_stability_violations == 0
+    assert raw_totals(s)["room_change_cost"] == 0
 
 
 def test_score_mapping():
     # hard = -(sum of hard), soft = -(medium * 1e6 + raw soft).
     s = make_schedule(1, 12, [5, 5], [(4, [0], [1], 0, 0), (4, [0], [1], 2, 0)])
-    b = ms.compute_breakdown(s)
-    score = ms.calculate_score(s)
-    assert score.hard == -b.hard_total()
-    assert score.soft == -(b.medium_total() * ms.MEDIUM_SCALE + b.soft_total())
-    assert b.medium_total() > 0  # medium really got folded
+    levels = level_totals(s)
+    total = ms.calculate_score(s)
+    assert total.hard == -levels["hard"]
+    assert total.soft == -(levels["medium"] * ms.MEDIUM_SCALE + levels["soft"])
+    assert levels["medium"] > 0  # medium really got folded
+    # The pure-Python score folds the same way (medium_fold on every entry).
+    assert score(ms.constraint_costs(s), get_constraints()) == (total.hard, total.soft)
 
 
 def test_unassigned_contributes_nothing():

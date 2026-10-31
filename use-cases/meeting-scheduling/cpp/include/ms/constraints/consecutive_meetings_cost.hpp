@@ -1,21 +1,26 @@
-#ifndef MS_CONSTRAINTS_ONE_BREAK_BETWEEN_CONSECUTIVE_MEETINGS_HPP
-#define MS_CONSTRAINTS_ONE_BREAK_BETWEEN_CONSECUTIVE_MEETINGS_HPP
+#ifndef MS_CONSTRAINTS_CONSECUTIVE_MEETINGS_COST_HPP
+#define MS_CONSTRAINTS_CONSECUTIVE_MEETINGS_COST_HPP
 
 #include "ms/constraints/common.hpp"
 
 namespace ms
 {
 
-// Soft (default, weight 100): oneBreakBetweenConsecutiveMeetings — two
-// meetings scheduled back to back with no grain in between. The most
+// Soft, weight 100: consecutiveMeetingsCost — two meetings scheduled back to
+// back with no grain in between, whatever their rooms and attendees. The most
 // expensive soft term of the provider: a day of meetings with no gaps is the
-// thing attendees complain about.
-struct OneBreakBetweenConsecutiveMeetings final : AssignmentPairConstraint
+// thing attendees complain about. Raw cost (global) = the number of meeting
+// pairs where one ends at the grain the other starts; 0 = every meeting is
+// followed by a break.
+struct ConsecutiveMeetingsCost final : AssignmentPairConstraint
 {
-    explicit OneBreakBetweenConsecutiveMeetings(double weight = 100.0)
-        : AssignmentPairConstraint("oneBreakBetweenConsecutiveMeetings",
+    static constexpr double kDefaultWeight = 100.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
+
+    explicit ConsecutiveMeetingsCost(double weight = kDefaultWeight)
+        : AssignmentPairConstraint("consecutiveMeetingsCost",
                                    weight,
-                                   /*hard=*/false)
+                                   kDefaultLevel)
     {
     }
 
@@ -49,4 +54,4 @@ protected:
 
 }  // namespace ms
 
-#endif  // MS_CONSTRAINTS_ONE_BREAK_BETWEEN_CONSECUTIVE_MEETINGS_HPP
+#endif  // MS_CONSTRAINTS_CONSECUTIVE_MEETINGS_COST_HPP

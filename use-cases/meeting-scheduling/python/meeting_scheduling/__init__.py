@@ -6,7 +6,9 @@ grain (15-minute units) and a room. The Java entity's two planning variables
 ``grain_room = time_grain_pos * room_count + room_index`` (-1 == unassigned).
 Constraints have the same semantics as the Java ConstraintProvider (5 hard + 2 medium +
 5 soft; HardMediumSoftScore is folded as ``soft = -(medium * MEDIUM_SCALE + raw soft)``,
-MEDIUM_SCALE == 1e6)::
+MEDIUM_SCALE == 1e6). ``constraint_info()`` lists each constraint's default level and
+weight (the medium pair at weight 1, in medium units); ``constraint_costs(schedule)`` gives
+the raw per-constraint costs::
 
     import meeting_scheduling as ms
 
@@ -22,7 +24,7 @@ The pydantic mirror (for serialization) is in `meeting_scheduling.models` (optio
 from ._core import (
     GRAIN_LENGTH_IN_MINUTES,
     MEDIUM_SCALE,
-    Breakdown,
+    ConstraintInfo,
     Meeting,
     MeetingAssignment,
     MeetingSchedule,
@@ -33,8 +35,8 @@ from ._core import (
     SolverConfig,
     TimeGrain,
     calculate_score,
-    compute_breakdown,
     constraint_costs,
+    constraint_info,
     demo_data,
     list_constraints,
 )
@@ -42,7 +44,7 @@ from ._core import (
 __all__ = [
     "GRAIN_LENGTH_IN_MINUTES",
     "MEDIUM_SCALE",
-    "Breakdown",
+    "ConstraintInfo",
     "Meeting",
     "MeetingAssignment",
     "MeetingSchedule",
@@ -53,7 +55,7 @@ __all__ = [
     "SolverConfig",
     "TimeGrain",
     "calculate_score",
-    "compute_breakdown",
+    "constraint_info",
     "list_constraints",
     "constraint_costs",
     "demo_data",

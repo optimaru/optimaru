@@ -169,19 +169,20 @@ void printBreakdown(const Breakdown &b)
         std::int64_t units;
     };
     const Row rows[] = {
-        {"H.roomConflict", b.roomConflictGrains},
-        {"H.avoidOvertime", b.overtimeSum},
-        {"H.requiredAttendanceConflict", b.requiredConflictGrains},
-        {"H.requiredRoomCapacity", b.roomCapacityShortage},
-        {"H.startAndEndOnSameDay", b.startEndDayViolations},
-        {"M.requiredAndPreferredAttendanceConflict",
-         b.requiredPreferredConflictGrains},
-        {"M.preferredAttendanceConflict", b.preferredConflictGrains},
-        {"S.doMeetingsAsSoonAsPossible", b.lastGrainIndexSum},
-        {"S.oneBreakBetweenConsecutiveMeetings", b.consecutiveMeetingPairs},
-        {"S.overlappingMeetings", b.overlappingMeetingGrains},
-        {"S.assignLargerRoomsFirst", b.largerRoomCapacitySum},
-        {"S.roomStability", b.roomStabilityViolations},
+        {"H.roomConflictCost", b.roomConflictCost},
+        {"H.overtimeCost", b.overtimeCost},
+        {"H.requiredAttendanceConflictCost", b.requiredAttendanceConflictCost},
+        {"H.roomCapacityCost", b.roomCapacityCost},
+        {"H.dayCrossingCost", b.dayCrossingCost},
+        {"M.requiredAndPreferredAttendanceConflictCost",
+         b.requiredAndPreferredAttendanceConflictCost},
+        {"M.preferredAttendanceConflictCost",
+         b.preferredAttendanceConflictCost},
+        {"S.meetingEndTimeCost", b.meetingEndTimeCost},
+        {"S.consecutiveMeetingsCost", b.consecutiveMeetingsCost},
+        {"S.meetingOverlapCost", b.meetingOverlapCost},
+        {"S.largerRoomCapacityCost", b.largerRoomCapacityCost},
+        {"S.roomChangeCost", b.roomChangeCost},
     };
     for (const Row &row : rows)
     {
