@@ -128,12 +128,12 @@ inline Minutes walkChain(const TaskAssigningSolution &solution,
 // so re-pricing one priority is a weight override like any other. Raw cost
 // per employee = the summed end times (minutes) of its tasks of that
 // priority; 0 = no task of that priority on the list.
-struct PriorityTaskEndTime : TaUnitConstraint
+struct PriorityTaskEndTimeCostBase : TaUnitConstraint
 {
-    PriorityTaskEndTime(std::string constraintName,
-                        double weight,
-                        optimaru::Level level,
-                        Priority priority)
+    PriorityTaskEndTimeCostBase(std::string constraintName,
+                                double weight,
+                                optimaru::Level level,
+                                Priority priority)
         : TaUnitConstraint(std::move(constraintName), weight, level),
           priority_(priority)
     {

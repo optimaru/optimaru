@@ -89,8 +89,8 @@ class RequiredSkillCost(Constraint):
         "0 means every assigned task is done by a fully skilled employee."
     )
     description_ko = (
-        "배정된 작업마다 작업 유형이 요구하는 기술 가운데 담당 직원에게 없는 기술을 모두 셉니다(작업 하나가 "
-        "여러 개를 빠뜨릴 수 있습니다). 빠진 기술 1개가 비용 1이며, 0이면 모든 작업을 필요한 기술을 다 갖춘 "
+        "배정된 작업마다 작업 유형이 요구하는 기술 가운데 담당 직원에게 없는 기술을 모두 셉니다(작업 하나에서 "
+        "여러 개가 빠질 수 있습니다). 빠진 기술 1개가 비용 1이며, 0이면 모든 작업을 필요한 기술을 다 갖춘 "
         "직원이 맡습니다."
     )
 
@@ -103,13 +103,13 @@ class SquaredMakespanCost(Constraint):
     soft[1]: the default weight 10^7 keeps it above the priority end-time terms on the
     shared soft level.
 
-    The square lives inside cost() rather than in `exponent` on purpose — exponent
-    is the knob that shapes the **weighted** cost, so keeping the square in the
-    definition lets callers layer more shaping on top."""
+    The square lives inside cost() rather than in `exponent` on purpose: the exponent
+    shapes each unit's raw cost before the weight; here the square is the constraint's
+    own definition, so a caller can still shape it further."""
 
     name = "squared_makespan_cost"
     label_en = "Squared makespan"
-    label_ko = "제곱 종료 시각"
+    label_ko = "종료 시각 제곱합"
     description_en = (
         "The square of each employee's end time (the end of the last task on the list, in minutes), "
         "summed over the employees, which spreads work away from the busiest employee. One unit of "
@@ -117,7 +117,8 @@ class SquaredMakespanCost(Constraint):
     )
     description_ko = (
         "직원마다 마지막 작업이 끝나는 시각(분)을 제곱해 모두 더하므로, 가장 바쁜 직원의 일을 다른 직원에게 "
-        "나누도록 이끕니다. 제곱한 1분이 비용 1이며, 0이면 어느 직원에게도 작업이 없습니다."
+        "나누도록 이끕니다. 분 단위 종료 시각을 제곱한 값 1이 비용 1이며, 0이면 어느 직원에게도 작업이 "
+        "없습니다."
     )
 
 
@@ -186,8 +187,8 @@ class UnassignedTasksCost(Constraint):
         "above every soft term). One unit of cost is one unassigned task; 0 means every task is assigned."
     )
     description_ko = (
-        "어느 직원의 목록에도 들어가지 않은 작업의 수를 미디엄 수준에서 셉니다(빠진 기술보다 낮고 모든 소프트 "
-        "항목보다 높습니다). 미배정 작업 1개가 비용 1이며, 0이면 모든 작업이 배정되었습니다."
+        "어느 직원의 목록에도 들어가지 않은 작업의 수를 미디엄 수준에서 셉니다(이 수준은 빠진 기술보다 낮고 "
+        "모든 소프트 항목보다 높습니다). 미배정 작업 1개가 비용 1이며, 0이면 모든 작업이 배정된 상태입니다."
     )
 
 

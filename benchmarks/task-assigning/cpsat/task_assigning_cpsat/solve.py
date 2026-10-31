@@ -15,14 +15,21 @@ __all__ = ["catalog", "solve"]
 
 AFFINITY_MULTIPLIER = {"NONE": 4, "LOW": 3, "MEDIUM": 2, "HIGH": 1}
 
-# The engine's three levels (decision 7): required_skill_cost hard,
-# unassigned_tasks_cost medium, the rest soft.
+# The engine's three levels: required_skill_cost hard, unassigned_tasks_cost
+# medium, the rest soft.
 LEVELS = ("hard", "medium", "soft")
 
-# The Bendable soft[1] and soft[2] share the soft level; the engine's Score
-# adapter decodes them with squared_makespan_cost's default weight
-# (kMakespanUnit, 10^7), read from the engine catalog rather than copied.
-SOFT1_UNIT = int(next(row.default_weight for row in constraint_info() if row.name == "squared_makespan_cost"))
+# The Bendable soft[1] and soft[2] share the soft level: the soft[1]-over-soft[2]
+# order is carried by squared_makespan_cost's default weight (kMakespanUnit,
+# 10^7), as in the engine, and the engine's Score adapter decodes the two with
+# it. Read from the engine catalog rather than copied.
+SOFT1_UNIT = int(
+    next(
+        row.default_weight
+        for row in constraint_info()
+        if row.name == "squared_makespan_cost"
+    )
+)
 
 
 def catalog() -> list[dict]:

@@ -15,8 +15,8 @@ namespace ta
 // soft level, the packing the Score adapter decodes (domain.hpp).
 //
 // The squaring lives in cost() rather than in `exponent` on purpose: the
-// exponent shapes the WEIGHTED cost of a unit, and here the square is the
-// constraint's own definition, so a caller can still shape it further.
+// exponent shapes each unit's raw cost before the weight; here the square is
+// the constraint's own definition, so a caller can still shape it further.
 struct SquaredMakespanCost final : TaUnitConstraint
 {
     static constexpr double kDefaultWeight = static_cast<double>(kMakespanUnit);

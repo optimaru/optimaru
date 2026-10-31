@@ -5,8 +5,9 @@ expression; the default level and weight come from the engine's
 ``task_assigning.constraint_info()`` (cpsat-common reads the row), so the two
 solvers cannot disagree on a default. The levels are the engine's three:
 ``required_skill_cost`` hard, ``unassigned_tasks_cost`` medium, the other four
-soft, with ``squared_makespan_cost``'s default weight 10^7 keeping the Bendable
-soft[1] above soft[2] on the one soft level (decision 7).
+soft. The Bendable soft[1]-over-soft[2] order is carried by
+``squared_makespan_cost``'s default weight 10^7 on the one soft level, as in the
+engine.
 """
 
 from dataclasses import dataclass
@@ -84,15 +85,21 @@ class _PriorityEndPlugin(ConstraintPlugin[TaskContext]):
             objective.add(self.name, active_end, bound=context.horizon)
 
 
-class CriticalPriorityTaskEndTimeCost(domain.CriticalPriorityTaskEndTimeCost, _PriorityEndPlugin):
+class CriticalPriorityTaskEndTimeCost(
+    domain.CriticalPriorityTaskEndTimeCost, _PriorityEndPlugin
+):
     priority = "CRITICAL"
 
 
-class MajorPriorityTaskEndTimeCost(domain.MajorPriorityTaskEndTimeCost, _PriorityEndPlugin):
+class MajorPriorityTaskEndTimeCost(
+    domain.MajorPriorityTaskEndTimeCost, _PriorityEndPlugin
+):
     priority = "MAJOR"
 
 
-class MinorPriorityTaskEndTimeCost(domain.MinorPriorityTaskEndTimeCost, _PriorityEndPlugin):
+class MinorPriorityTaskEndTimeCost(
+    domain.MinorPriorityTaskEndTimeCost, _PriorityEndPlugin
+):
     priority = "MINOR"
 
 

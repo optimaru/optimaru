@@ -79,11 +79,14 @@ units: `RequiredSkillCost(weight=1)` was 1 engine unit per missing skill and is 
 `CriticalPriorityTaskEndTimeCost(hard=True)` lands in the Bendable hard level, where it
 used to decode as soft0); `RequiredSkillCost(hard=False)` is 1 soft unit per missing skill
 (was 10^9). `UnassignedTasksCost(hard=False)` still scores one soft unit per task in the
-engine. CP-SAT scores on the same three levels (`("hard", "medium", "soft")`, decision 7)
-instead of `hard, soft0, soft1, soft2`, with `squared_makespan_cost` at its engine weight
-10^7 on the soft level; there `UnassignedTasksCost(hard=False)` now demotes to soft (it was a
-no-op on soft0). The folded CP-SAT objective no longer fits one int64 for the demo, so
-CP-SAT optimizes the three levels one after another (cpsat-common's staged solve).
+engine. CP-SAT scores on the same three levels (`("hard", "medium", "soft")`) instead of
+`hard, soft0, soft1, soft2`: the Bendable soft[1]-over-soft[2] order is carried by
+`squared_makespan_cost`'s default weight 10^7 on the one soft level, as in the engine. There
+`UnassignedTasksCost(hard=False)` now demotes to soft (it was a no-op on soft0), and
+`RequiredSkillCost(hard=False)` now lands on the soft level (one soft unit per missing
+skill, as in the engine); before, CP-SAT moved it to soft0. The folded CP-SAT objective no
+longer fits one int64 for the demo, so CP-SAT optimizes the three levels one after another
+(cpsat-common's staged solve).
 
 ## Starting from an existing solution
 

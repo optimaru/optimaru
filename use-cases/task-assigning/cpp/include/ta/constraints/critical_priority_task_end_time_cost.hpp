@@ -10,16 +10,16 @@ namespace ta
 // CRITICAL task, weighed four times as heavily as a minor one. Raw cost per
 // employee = the summed end times (minutes) of its CRITICAL tasks, so 0 = the
 // employee does no CRITICAL task. The Bendable soft[2] level.
-struct CriticalPriorityTaskEndTimeCost final : PriorityTaskEndTime
+struct CriticalPriorityTaskEndTimeCost final : PriorityTaskEndTimeCostBase
 {
     static constexpr double kDefaultWeight = 4.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
 
     explicit CriticalPriorityTaskEndTimeCost(double weight = kDefaultWeight)
-        : PriorityTaskEndTime("criticalPriorityTaskEndTimeCost",
-                              weight,
-                              kDefaultLevel,
-                              Priority::CRITICAL)
+        : PriorityTaskEndTimeCostBase("criticalPriorityTaskEndTimeCost",
+                                      weight,
+                                      kDefaultLevel,
+                                      Priority::CRITICAL)
     {
     }
 };

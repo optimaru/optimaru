@@ -166,6 +166,11 @@ def test_a_demoted_medium_term_counts_on_soft_in_both_solvers() -> None:
         _proxy_score=proxy,
     )
     assert proxy == {"hard": 0, "medium": 0, "soft": -1}
-    assert (solved.score_hard, solved.score_soft0, solved.score_soft1, solved.score_soft2) == (0, 0, 0, -1)
+    assert (
+        solved.score_hard,
+        solved.score_soft0,
+        solved.score_soft1,
+        solved.score_soft2,
+    ) == (0, 0, 0, -1)
     engine = score(domain.constraint_costs(solved.to_core()), selection)
     assert _engine_levels(solved) == tuple(engine) == (0, -1.0)
