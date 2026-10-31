@@ -1,22 +1,28 @@
-#ifndef FL_CONSTRAINTS_DISTANCE_FROM_FACILITY_HPP
-#define FL_CONSTRAINTS_DISTANCE_FROM_FACILITY_HPP
+#ifndef FL_CONSTRAINTS_DISTANCE_FROM_FACILITY_COST_HPP
+#define FL_CONSTRAINTS_DISTANCE_FROM_FACILITY_COST_HPP
 
 #include "fl/constraints/common.hpp"
 
 namespace fl
 {
 
-// Soft (default, weight 6): distanceFromFacility — the meters every assigned
-// consumer stands from its facility. The provider declares ofSoft(5), but the
-// quickstart solution overrides it to 6 (see domain.hpp), which is the default
-// carried here.
+// Soft, weight 6: distanceFromFacilityCost — the meters every assigned
+// consumer stands from its facility. Raw cost per facility = the summed
+// distance of its consumers (0 for an unused facility). The provider declares
+// ofSoft(5), but the quickstart solution overrides it to 6 with
+// ConstraintWeightOverrides, so 6 is the effective default carried here
+// (before 0.2.0 it was also stored on the problem as
+// distanceFromFacilityWeight).
 //
 // A pure sum of per-member terms, so the exact delta is one precomputed matrix
 // lookup: the calculator maintains it incrementally in O(1) per move.
-struct DistanceFromFacility final : FlUnitConstraint
+struct DistanceFromFacilityCost final : FlUnitConstraint
 {
-    explicit DistanceFromFacility(double weight = 6.0)
-        : FlUnitConstraint("distance from facility", weight, /*hard=*/false)
+    static constexpr double kDefaultWeight = 6.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
+
+    explicit DistanceFromFacilityCost(double weight = kDefaultWeight)
+        : FlUnitConstraint("distanceFromFacilityCost", weight, kDefaultLevel)
     {
     }
     void onReset(const FacilityLocationProblem &problem) override
@@ -44,4 +50,4 @@ struct DistanceFromFacility final : FlUnitConstraint
 
 }  // namespace fl
 
-#endif  // FL_CONSTRAINTS_DISTANCE_FROM_FACILITY_HPP
+#endif  // FL_CONSTRAINTS_DISTANCE_FROM_FACILITY_COST_HPP

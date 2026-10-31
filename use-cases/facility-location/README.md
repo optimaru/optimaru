@@ -15,21 +15,33 @@ The classic FLP: pick one facility for every consumer.
 
 ## Constraints (HardSoftScore — the engine score type as-is, no mapping)
 
-| Constraint | Level | What it measures |
-|---|---|---|
-| facility capacity | hard | `max(0, assigned demand - capacity)` per used facility |
-| facility setup cost | soft x2 | setup cost of facilities with at least one consumer |
-| distance from facility | soft x6 | consumer-to-facility distance (m) |
+| Constraint (Python name) | C++ component | Default level | Default weight | Raw cost per facility (0 = no violation) |
+|---|---|---|---|---|
+| `facility_capacity_cost` | `FacilityCapacityCost` | hard | 1 | `max(0, assigned demand - capacity)` while used |
+| `facility_setup_cost` | `FacilitySetupCost` | soft | 2 | its setup cost while it serves at least one consumer |
+| `distance_from_facility_cost` | `DistanceFromFacilityCost` | soft | 6 | summed consumer-to-facility distance (m) |
 
-The distance weight **6** is the `ConstraintWeightOverrides` demo value of the Java
-solution (the provider declares `ofSoft(5)`; the solution overrides it with
-`{"distance from facility": ofSoft(6)}`). Adjust it with the
-`FacilityLocationProblem.distanceFromFacilityWeight` / `setupCostWeight` fields
-(default 6 / 2 = the effective quickstart values).
+Every constraint is flippable (`hard=True` / `hard=False`) and none is a reward;
+`facility_location.constraint_info()` reports exactly this table from the C++
+components (`kDefaultLevel` / `kDefaultWeight`). The distance weight **6** is the
+`ConstraintWeightOverrides` demo value of the Java solution (the provider declares
+`ofSoft(5)`; the solution overrides it with `ofSoft(6)`).
+
+**0.2.0:** the constraints were renamed (`facility_capacity` -> `facility_capacity_cost`,
+`distance_from_facility` -> `distance_from_facility_cost`; `facility_setup_cost` is
+unchanged; default instances `capacity` / `setup_cost` / `distance` ->
+`facility_capacity_cost` / `facility_setup_cost` / `distance_from_facility_cost`), and the
+problem no longer carries `setup_cost_weight` / `distance_from_facility_weight`. Weights
+come only from constraint selections, e.g.
+`constraints=get_constraints([facility_capacity_cost, facility_setup_cost, DistanceFromFacilityCost(weight=5)])`
+for the un-overridden Java provider. Raw costs and the default score are unchanged.
 
 ## cpp/
 
 - `include/fl/domain.hpp` — domain + `optimaru::SolutionDescriptor` specialization
+- `include/fl/constraints/` — one component per constraint: `facility_capacity_cost.hpp`,
+  `facility_setup_cost.hpp`, `distance_from_facility_cost.hpp` (+ `common.hpp`);
+  `include/fl/constraints.hpp` assembles the default set (`defaultConstraints()`)
 - `score_calculator` — full recompute (the reference)
 - `incremental_calculator` — before/after hooks, O(1) per move
 - `solver` — engine wrapper (CH + Late Acceptance + adaptive ruin & recreate)
@@ -40,7 +52,8 @@ solution (the provider declares `ofSoft(5)`; the solution overrides it with
 cd cpp
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j4
-./build/fl_test      # per-constraint hand checks + 3000 random moves incremental==full + FULL_ASSERT solve
+./build/fl_test         # per-constraint hand checks + 3000 random moves incremental==full + FULL_ASSERT solve
+./build/fl_plugin_test  # plugin assembly == monolith, raw costs by hand, catalog, overrides
 ./build/fl_demo 10   # 10 s solve; checks hard 0 + every consumer assigned (exit 0)
 ```
 
@@ -128,20 +141,27 @@ Decreasing ordering, or pre-assign part of the solution in the domain
 solver's `solve` before the engine runs — the engine only fills what is still unassigned.
 
 **Adding a hard or soft cost.** One file per constraint under
-`cpp/include/fl/constraints/` (currently `distance_from_facility`, `facility_capacity`, `facility_setup_cost`):
-1. add `constraints/<name>.hpp` (a `UnitConstraint` or `GlobalConstraint`;
-   positive cost = penalty, the level and weight are constructor defaults);
+`cpp/include/fl/constraints/` (currently `facility_capacity_cost`, `facility_setup_cost`,
+`distance_from_facility_cost`):
+1. add `constraints/<subject>_cost.hpp` with `struct <Subject>Cost` (a `UnitConstraint` or
+   `GlobalConstraint`; positive raw cost = penalty, 0 = no violation) declaring
+   `static constexpr double kDefaultWeight` and `static constexpr optimaru::Level kDefaultLevel`,
+   an `explicit <Subject>Cost(double weight = kDefaultWeight)` constructor and the registry
+   name `"<subject>Cost"` (the struct name with a lower-case first letter);
 2. include it in `cpp/include/fl/constraints.hpp` and `emplace` it in
    `defaultConstraints()` if it belongs to the default set;
 3. for a default constraint, add the same raw cost to
-   `score_calculator` / `incremental_calculator` — `fl_plugin_test` checks
-   they agree bit for bit;
-4. add a `Constraint` spec with the snake_case `name` to
-   `python/facility_location/constraints.py`; callers then pick, reweight or flip it:
-   `constraints=get_constraints([..., MyRule(weight=5, hard=True)])`;
+   `score_calculator` / `incremental_calculator`, weighted by the component's
+   `kDefaultWeight` — `fl_plugin_test` checks they agree bit for bit — and a positive and a
+   zero hand-calculated case to `fl_test` / `fl_plugin_test`;
+4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
+   `description_en` / `description_ko` to `python/facility_location/constraints.py` (plus its
+   module-level default instance); callers then pick, reweight or flip it:
+   `constraints=get_constraints([..., MyRuleCost(weight=5, hard=True)])`;
 5. mirror it in the CP-SAT model in
-   [`benchmarks/facility-location/cpsat`](../../benchmarks/facility-location/cpsat) so the
-   benchmark stays like for like.
+   [`benchmarks/facility-location/cpsat`](../../benchmarks/facility-location/cpsat) (a plugin
+   subclassing the spec; defaults come from `constraint_info()`) so the benchmark stays like
+   for like.
 
 ## Benchmark
 

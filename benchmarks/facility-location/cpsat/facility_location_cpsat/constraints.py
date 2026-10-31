@@ -1,4 +1,9 @@
-"""Class-based CP-SAT plugins for facility location."""
+"""Class-based CP-SAT plugins for facility location.
+
+Each plugin subclasses the domain spec of the same name; its default level and
+weight come from the engine's ``facility_location.constraint_info()`` (the C++
+components' kDefaultLevel / kDefaultWeight), so they are not restated here.
+"""
 
 from dataclasses import dataclass
 from typing import Any
@@ -19,9 +24,7 @@ class FacilityContext:
     distances: list[list[int]]
 
 
-class FacilityCapacity(domain.FacilityCapacity, ConstraintPlugin[FacilityContext]):
-    default_level = "hard"
-
+class FacilityCapacityCost(domain.FacilityCapacityCost, ConstraintPlugin[FacilityContext]):
     def build(self, context: FacilityContext, objective: ObjectiveBuilder) -> None:
         objective.add(
             self.name,
@@ -31,9 +34,6 @@ class FacilityCapacity(domain.FacilityCapacity, ConstraintPlugin[FacilityContext
 
 
 class FacilitySetupCost(domain.FacilitySetupCost, ConstraintPlugin[FacilityContext]):
-    default_level = "soft"
-    default_weight = 2
-
     def build(self, context: FacilityContext, objective: ObjectiveBuilder) -> None:
         objective.add(
             self.name,
@@ -45,12 +45,9 @@ class FacilitySetupCost(domain.FacilitySetupCost, ConstraintPlugin[FacilityConte
         )
 
 
-class DistanceFromFacility(
-    domain.DistanceFromFacility, ConstraintPlugin[FacilityContext]
+class DistanceFromFacilityCost(
+    domain.DistanceFromFacilityCost, ConstraintPlugin[FacilityContext]
 ):
-    default_level = "soft"
-    default_weight = 6
-
     def build(self, context: FacilityContext, objective: ObjectiveBuilder) -> None:
         objective.add(
             self.name,
@@ -64,5 +61,5 @@ class DistanceFromFacility(
 
 
 REGISTRY = ConstraintRegistry(
-    [FacilityCapacity(), FacilitySetupCost(), DistanceFromFacility()]
+    [FacilityCapacityCost(), FacilitySetupCost(), DistanceFromFacilityCost()]
 )

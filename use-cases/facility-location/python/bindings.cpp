@@ -121,14 +121,9 @@ PYBIND11_MODULE(_core, m)
                        &FacilityLocationProblem::southWestCorner)
         .def_readwrite("north_east_corner",
                        &FacilityLocationProblem::northEastCorner)
-        // Constraint weights (see fl/domain.hpp): setup_cost_weight mirrors
-        // the provider's fixed ofSoft(2); distance_from_facility_weight
-        // defaults to 6 = the quickstart solution's ConstraintWeightOverrides
-        // value (the provider's un-overridden default is 5).
-        .def_readwrite("setup_cost_weight",
-                       &FacilityLocationProblem::setupCostWeight)
-        .def_readwrite("distance_from_facility_weight",
-                       &FacilityLocationProblem::distanceFromFacilityWeight)
+        // No weight fields (removed in 0.2.0): weights come only from
+        // constraint selections; the defaults are the components'
+        // kDefaultWeight, reported by constraint_info().
         .def_readonly("score", &FacilityLocationProblem::score)
         .def("facility_count", &FacilityLocationProblem::facilityCount)
         .def("consumer_count", &FacilityLocationProblem::consumerCount)
@@ -326,7 +321,7 @@ PYBIND11_MODULE(_core, m)
             {
                 ScoreCalculator::prepare(problem);
                 DecomposedCalculator calculator;
-                tfpy::applyConstraints(defaultConstraints(problem), constraints)
+                tfpy::applyConstraints(defaultConstraints(), constraints)
                     .into(calculator);
                 py::gil_scoped_release release;
                 solver.solve(problem, calculator);
@@ -343,7 +338,7 @@ PYBIND11_MODULE(_core, m)
         {
             ScoreCalculator::prepare(problem);
             DecomposedCalculator calculator;
-            defaultConstraints(problem).into(calculator);
+            defaultConstraints().into(calculator);
             return tfpy::constraintCosts(calculator, problem);
         },
         py::arg("problem"),
@@ -353,10 +348,12 @@ PYBIND11_MODULE(_core, m)
     // the same strings a score breakdown reports.
     m.def(
         "list_constraints",
-        []
-        {
-            FacilityLocationProblem empty;
-            return tfpy::constraintNames(defaultConstraints(empty));
-        },
+        [] { return tfpy::constraintNames(defaultConstraints()); },
         "Constraint names available to facility_location.constraints.");
+
+    // The constraint catalog, read off the same default assembly:
+    // constraint_info() -> [ConstraintInfo(name, default_level,
+    // default_weight, level_flippable, reward), ...] in list_constraints()
+    // order. The defaults live in the C++ components only.
+    tfpy::bindConstraintInfo(m, [] { return defaultConstraints(); });
 }

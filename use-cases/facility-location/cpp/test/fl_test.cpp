@@ -1,6 +1,8 @@
 // Facility-location unit tests (engine test/ style: check() + non-zero exit on
 // any failure):
-//   (a) every constraint verified in isolation against hand-computed scores
+//   (a) every constraint verified in isolation against hand-computed scores,
+//       a violating (positive) and a clean (zero) case each, at the
+//       components' kDefaultWeight (1 / 2 / 6)
 //   (b) incremental score == full recompute across a long random walk driven
 //       through the engine's ScoreDirector protocol (before/set/after)
 //   (c) a small instance solved under EnvironmentMode::FULL_ASSERT
@@ -90,13 +92,13 @@ void verifyConstraints()
 {
     std::printf("== (a) Verifying each constraint in isolation ==\n");
 
-    // hard 1: facilityCapacity — demand 30 on capacity 20 -> -10.
+    // hard 1: facilityCapacityCost — demand 30 on capacity 20 -> -10.
     {
         FacilityLocationProblem p;
         addFacility(p, 0, 0, /*setupCost*/ 0, /*capacity*/ 20);
         addConsumer(p, 0, 0, /*demand*/ 15, /*facility*/ 0);
         addConsumer(p, 0, 0, /*demand*/ 15, /*facility*/ 0);
-        checkScore("facilityCapacity overflow",
+        checkScore("facilityCapacityCost overflow",
                    ScoreCalculator::calculateScore(p),
                    -10,
                    0);
@@ -106,7 +108,7 @@ void verifyConstraints()
         FacilityLocationProblem p;
         addFacility(p, 0, 0, 0, 20);
         addConsumer(p, 0, 0, 15, 0);
-        checkScore("facilityCapacity within",
+        checkScore("facilityCapacityCost within (zero)",
                    ScoreCalculator::calculateScore(p),
                    0,
                    0);
@@ -118,7 +120,7 @@ void verifyConstraints()
         addFacility(p, 0, 0, 0, -5);  // unused
         addFacility(p, 0, 0, 0, 20);
         addConsumer(p, 0, 0, 15, 1);
-        checkScore("facilityCapacity ignores unused",
+        checkScore("facilityCapacityCost ignores unused",
                    ScoreCalculator::calculateScore(p),
                    0,
                    0);
@@ -156,7 +158,18 @@ void verifyConstraints()
                    0,
                    -3000);
     }
-    // soft 3: distanceFromFacility — 0.25 deg = 27750 m, weight 6.
+    // soft 2: an unused facility costs no setup, however expensive.
+    {
+        FacilityLocationProblem p;
+        addFacility(p, 0, 0, /*setupCost*/ 5000, /*capacity*/ 100);  // unused
+        addFacility(p, 0, 0, /*setupCost*/ 0, /*capacity*/ 100);
+        addConsumer(p, 0, 0, 1, 1);
+        checkScore("setupCost unused facility (zero)",
+                   ScoreCalculator::calculateScore(p),
+                   0,
+                   0);
+    }
+    // soft 3: distanceFromFacilityCost — 0.25 deg = 27750 m, weight 6.
     {
         FacilityLocationProblem p;
         addFacility(p, 0, 0, 0, 100);
@@ -176,19 +189,15 @@ void verifyConstraints()
                    0,
                    -832500);
     }
-    // The solution-level weight override: the Java provider declares the
-    // distance constraint at ofSoft(5); the quickstart solution's
-    // ConstraintWeightOverrides raises it to 6 (our default). Setting the
-    // field back to 5 reproduces the un-overridden provider.
+    // soft 3: a consumer standing on its facility costs no distance.
     {
         FacilityLocationProblem p;
-        p.distanceFromFacilityWeight = 5;
-        addFacility(p, 0, 0, 0, 100);
-        addConsumer(p, 0, 0.25, 1, 0);
-        checkScore("distance weight override -> 5",
+        addFacility(p, 0.5, 0.5, 0, 100);
+        addConsumer(p, 0.5, 0.5, 1, 0);
+        checkScore("distance on the facility (zero)",
                    ScoreCalculator::calculateScore(p),
                    0,
-                   -138750);
+                   0);
     }
     // Unassigned consumers contribute nothing (no setup, distance, demand).
     {

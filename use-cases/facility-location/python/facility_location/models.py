@@ -65,7 +65,12 @@ class ConsumerModel(BaseModel):
 
 
 class FacilityLocationProblemModel(BaseModel):
-    """Planning solution mirror. score is a read-only result, kept as a separate field."""
+    """Planning solution mirror. score is a read-only result, kept as a separate field.
+
+    The canonical problem carries no constraint weights (removed in 0.2.0): weights
+    come only from constraint selections, and the defaults (setup 2, distance 6)
+    are the C++ components' (``facility_location.constraint_info()``).
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -73,10 +78,6 @@ class FacilityLocationProblemModel(BaseModel):
     consumers: list[ConsumerModel]
     south_west_corner: LocationModel = Field(default_factory=lambda: LocationModel(latitude=-90.0, longitude=-180.0))
     north_east_corner: LocationModel = Field(default_factory=lambda: LocationModel(latitude=90.0, longitude=180.0))
-    # Mirrors the Java solution's ConstraintWeightOverrides: distance weight defaults
-    # to 6 (the solution overrides the provider's 5); setup cost weight is the provider's fixed 2.
-    setup_cost_weight: int = Field(default=2, ge=0)
-    distance_from_facility_weight: int = Field(default=6, ge=0)
     score_hard: int | None = None
     score_soft: float | None = None
 
@@ -94,15 +95,12 @@ class FacilityLocationProblemModel(BaseModel):
     def to_core(self) -> "_core.FacilityLocationProblem":
         """pydantic -> engine object (the score field is ignored; the engine recomputes it)."""
         self._check_indices()  # the fields stay mutable after validation
-        problem = _core.FacilityLocationProblem(
+        return _core.FacilityLocationProblem(
             [_core.Facility(f.id, f.location.to_core(), f.setup_cost, f.capacity) for f in self.facilities],
             [self._consumer_to_core(c) for c in self.consumers],
             self.south_west_corner.to_core(),
             self.north_east_corner.to_core(),
         )
-        problem.setup_cost_weight = self.setup_cost_weight
-        problem.distance_from_facility_weight = self.distance_from_facility_weight
-        return problem
 
     @staticmethod
     def _consumer_to_core(c: ConsumerModel) -> "_core.Consumer":
@@ -134,8 +132,6 @@ class FacilityLocationProblemModel(BaseModel):
             ],
             south_west_corner=LocationModel.from_core(problem.south_west_corner),
             north_east_corner=LocationModel.from_core(problem.north_east_corner),
-            setup_cost_weight=problem.setup_cost_weight,
-            distance_from_facility_weight=problem.distance_from_facility_weight,
             score_hard=problem.score.hard,
             score_soft=problem.score.soft,
         )

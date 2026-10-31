@@ -1,9 +1,28 @@
 #include "fl/incremental_calculator.hpp"
 
+#include <cstdint>
+
+#include "fl/constraints/distance_from_facility_cost.hpp"
+#include "fl/constraints/facility_capacity_cost.hpp"
+#include "fl/constraints/facility_setup_cost.hpp"
 #include "fl/score_calculator.hpp"
 
 namespace fl
 {
+
+namespace
+{
+
+// The same constants the components and ScoreCalculator read (integral; see
+// score_calculator.cpp).
+constexpr auto kCapacityWeight
+    = static_cast<std::int64_t>(FacilityCapacityCost::kDefaultWeight);
+constexpr auto kSetupWeight
+    = static_cast<std::int64_t>(FacilitySetupCost::kDefaultWeight);
+constexpr auto kDistanceWeight
+    = static_cast<std::int64_t>(DistanceFromFacilityCost::kDefaultWeight);
+
+}  // namespace
 
 void FacilityLocationIncrementalScoreCalculator::resetWorkingSolution(
     FacilityLocationProblem &workingSolution)
@@ -34,7 +53,7 @@ void FacilityLocationIncrementalScoreCalculator::insert(int consumerIndex,
 {
     const Consumer &consumer = problem_->consumers[consumerIndex];
 
-    // hard 1: facilityCapacity — replace this facility's penalty term.
+    // hard 1: facilityCapacityCost — replace this facility's penalty term.
     overCapacity_ -= capacityPenalty(facilityIndex);
     usedDemand_[facilityIndex] += consumer.demand;
     ++consumerCnt_[facilityIndex];
@@ -44,7 +63,7 @@ void FacilityLocationIncrementalScoreCalculator::insert(int consumerIndex,
     if (consumerCnt_[facilityIndex] == 1)
         usedSetupCost_ += problem_->facilities[facilityIndex].setupCost;
 
-    // soft 3: distanceFromFacility.
+    // soft 3: distanceFromFacilityCost.
     distance_ += problem_->distanceOf(consumerIndex, facilityIndex);
 }
 
@@ -87,11 +106,10 @@ void FacilityLocationIncrementalScoreCalculator::afterVariableChanged(
 Score FacilityLocationIncrementalScoreCalculator::calculateScore()
 {
     Score score;
-    score.hard = -overCapacity_;
+    score.hard = -kCapacityWeight * overCapacity_;
     // Negate in integer space so a zero penalty prints as 0, not -0.
     score.soft = static_cast<double>(
-        -(problem_->setupCostWeight * usedSetupCost_
-          + problem_->distanceFromFacilityWeight * distance_));
+        -(kSetupWeight * usedSetupCost_ + kDistanceWeight * distance_));
     return score;
 }
 

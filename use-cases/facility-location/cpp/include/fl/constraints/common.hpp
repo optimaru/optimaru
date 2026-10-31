@@ -31,29 +31,32 @@ namespace fl
 // `!members.empty()` here.
 //
 //   DecomposedCalculator calc;
-//   defaultConstraints(problem)              // the whole default set
-//       .weight("...", 2)            // ... then only what differs
-//       .soft("...")
-//       .drop("...")
+//   defaultConstraints()                     // the whole default set
+//       .weight("facilitySetupCost", 4)      // ... then only what differs
+//       .soft("facilityCapacityCost")
+//       .drop("distanceFromFacilityCost")
 //       .into(calc);
 //   solver.solve(problem, calc);
 //
-// Or `addDefaultConstraints(calc, problem)` when nothing differs, and
+// Or `addDefaultConstraints(calc)` when nothing differs, and
 // `ConstraintAssembly{}` when you would rather list components from
 // scratch than start from the defaults.
 //
-// The "Hard:"/"Soft:" level and the weight of each component are DEFAULTS —
+// Each component declares its defaults once, as static constexpr
+// kDefaultWeight / kDefaultLevel passed to the base constructor; they are
 // assembly-time metadata, not part of the cost. Override them per instance
-// via the mutable `isHard` / `weight` / `exponent`. Unlike the monolithic
-// calculators the components never read FacilityLocationProblem's weight
-// fields; pass the intended weights at assembly time (addDefaultConstraints
-// does, and its problem overload takes them straight off the solution, which
-// is where the quickstart's ConstraintWeightOverrides land).
+// with the constructor's weight argument or the mutable `level` / `weight` /
+// `exponent`, or by name through ConstraintAssembly. The canonical problem
+// carries no weights (removed in 0.2.0): the monolithic calculators read the
+// same kDefaultWeight constants, which is why the default assembly scores
+// bit-for-bit like them.
+//
+// Registry names are the struct names with a lower-case first letter
+// ("facilityCapacityCost"); Python sees them through pythonName()
+// ("facility_capacity_cost").
 //
 // Cost sign convention (see decomposed_score_calculator.hpp): positive =
-// penalty; the calculator negates into the score. An assembly of all three
-// components with the problem's own weights therefore scores bit-for-bit
-// like ScoreCalculator::calculateScore.
+// penalty, 0 = no violation; the calculator negates into the score.
 //
 // Every component requires ScoreCalculator::prepare(problem) to have run
 // (the solve() overload and the monolithic path both call it).
