@@ -43,11 +43,13 @@ reports exactly this table from the C++ components (`kDefaultLevel` /
   (`extra="forbid"` refuses them). Weights come only from constraint selections; the
   defaults (1 each) are the components'.
 - **C++ engine.** The pure-Python simulated annealing is replaced by the engine (late
-  acceptance over change / swap moves, the domain's `EmptyBinMove`, adaptive
-  ruin-and-recreate). `SolverConfig` has the engine knobs (`spent_limit_seconds`,
+  acceptance over change / swap moves, the domain's `EmptyBinMove` and `RepackMove`,
+  adaptive ruin-and-recreate; see [Search](#search)). `SolverConfig` has the engine
+  knobs (`spent_limit_seconds`,
   `step_count_limit`, `unimproved_*`, `parallel_solver_count`, `late_acceptance_size`,
   `ruin_recreate_*`, move weights, `value_recommender_probability`,
-  `empty_bin_moves`, `empty_bin_candidates`, `best_score_limit`, `on_new_best`,
+  `empty_bin_moves`, `empty_bin_candidates`, `repack_moves`, `repack_partner_bins`,
+  `best_score_limit`, `on_new_best`,
   `full_assert`) set as attributes (`SolverConfig()` takes no arguments);
   `max_iterations`, `stagnation_limit`, `temperature` and `cooling_rate` are gone.
   Zero budget is `spent_limit_seconds = 0` (was `max_iterations = 0`); a fixed
@@ -99,7 +101,9 @@ reports exactly this table from the C++ components (`kDefaultLevel` /
 - `incremental_calculator` — before/after hooks, O(1) plus the moved item's conflict
   partners per move
 - `construction` — best-fit decreasing around a seed, compaction
-- `solver` — engine wrapper (construction + Late Acceptance + `EmptyBinMove` + adaptive
+- `include/bp/moves.hpp` — the domain's macro moves, `EmptyBinMove` and `RepackMove`
+  (header-only, so the tests drive them directly)
+- `solver` — engine wrapper (construction + Late Acceptance + the macro moves + adaptive
   ruin & recreate, parallel starts)
 - `src/main.cpp` — demo on the web sample (20 items, colours, conflicts; 8 bins)
 
@@ -114,12 +118,57 @@ ctest --test-dir build/bin-packing --output-on-failure   # bp_test + bp_plugin_t
 incremental), 5000 random moves incremental == full (the score and each constraint's
 raw total after every move, each constraint non-zero during the walk; flat and
 hash-map colour counts), the construction against 0.1.x, zero-budget / warm-start
-behaviour, FULL_ASSERT solve, samples, parallel starts, compaction, fact checks.
+behaviour, FULL_ASSERT solve, samples, parallel starts, compaction, fact checks, and
+the macro moves: hand cases (`RepackMove` empties a bin `EmptyBinMove` can only empty
+into a clash, with and without a partner bin) and a walk of thousands of applied and
+undone moves, incremental == full after each apply and each undo, an undo restoring
+the assignment exactly, `RepackMove` never adding a hard violation, once plain and once
+under a FULL_ASSERT director.
 `bp_plugin_test`: plugin assembly == monolith (score and per-constraint totals),
 plugin incremental == full (every unit cost after every move, for the defaults and
 with exponents != 1 and fractional hard weights), partial assemblies, overrides
 (including the per-bin exponent), `constraintTotals()`, FULL_ASSERT plugin solve,
-raw costs by hand, the catalog.
+raw costs by hand, the catalog, and the macro-move walk on the plugin path.
+
+## Search
+
+Best-fit decreasing builds the start; late acceptance then works on it with the
+engine's change / swap moves, its adaptive ruin-and-recreate kicks, and two macro
+moves of the domain (`cpp/include/bp/moves.hpp`). Both exist because
+`used_bins_cost` is a step function: a bin only stops costing when its last item
+leaves, which no single change can show the acceptor.
+
+- **`EmptyBinMove`** (`empty_bin_moves`) moves every item of one of the
+  `empty_bin_candidates` lightest bins into the best-fitting other bin with room, in
+  one move. It checks the capacity only, like 0.1.x's `_try_empty_bin`.
+- **`RepackMove`** (`repack_moves`, `repack_partner_bins`) takes the items out of one
+  of those light bins *and* out of 1 to `repack_partner_bins` (2) other light bins, and
+  puts them back heaviest first into the fullest bin where each adds no capacity, colour
+  or conflict violation; one that fits no other bin goes to the emptied light bin
+  (or, if it clashes there too, a new bin). So the move either saves a bin or
+  reshuffles the light bins at an equal score. It adds no hard violation as long as
+  every item fits the capacity on its own and some bin is free.
+
+On instances with colours or conflicts `RepackMove` is what closes bins. Without it,
+emptying a bin into the others nearly always broke a colour or a conflict and late
+acceptance turned the move down: the search reached feasibility by opening bins and
+then kept them, 1-2 bins behind 0.1.x. Seeds 1-3, one thread, 120 items of weight
+10..60 on capacity 100, about 40% in one of 4 colours, 10 conflicts (the review's
+recipe, [`benchmarks/bin-packing/bench/quality.py`](../../benchmarks/bin-packing/bench/quality.py)),
+bins used:
+
+| instance (weight lower bound) | 0.1.5 at 2 s / 10 s | 0.2.0 without `RepackMove` at 2 s / 10 s | 0.2.0 at 2 s / 10 s |
+| --- | --- | --- | --- |
+| sq1 (43) | 44, 44\*, 44 / 44, 44, 44 | 46, 45, 46 / 45, 45, 46 | 43, 43, 43 / 43, 43, 43 |
+| g11 (42) | 43, 43, 43 / 43, 43, 43 | 45, 44, 44 / 45, 44, 44 | 42, 42, 42 / 42, 42, 42 |
+| g22 (44) | 45, 45, 44 / 45, 45, 44 | 46, 45, 46 / 46, 45, 46 | 44, 44, 44 / 44, 44, 44 |
+| g33 (42) | 43, 43, 43 / 43, 43, 43 | 44, 44, 43 / 44, 44, 43 | 42, 42, 42 / 42, 42, 42 |
+
+\* ended infeasible (-1hard). The plain twins of these instances (same weights, no
+colours or conflicts), the web demo, the web demo six times over and the benchmark's
+generated instances come out the same or better; so do larger
+instances with and without colours; the full table is in
+[`benchmarks/bin-packing`](../../benchmarks/bin-packing/README.md#search-quality-against-015).
 
 ## Usage
 
@@ -183,8 +232,9 @@ engine is `cpp/include/bp/solver.hpp` + `cpp/src/solver.cpp`.
 **Adding a move.** The engine already mixes change / swap moves (weights in
 `Solver::Config`; `value_recommender_probability` biases change moves toward bins in
 use). `EmptyBinMove` (moves every item of a light bin into the other bins in one step)
-is defined and registered in `cpp/src/solver.cpp` (`runEngine`) — use it as the
-template. A new move is an `optimaru::MoveOperator<…>` registered with
+and `RepackMove` (re-places the items of a few light bins without a clash) are defined
+in `cpp/include/bp/moves.hpp` and registered in `cpp/src/solver.cpp` (`runEngine`) —
+use them as the template, and give a new move a walk in `bp_test` (j). A new move is an `optimaru::MoveOperator<…>` registered with
 `engine.addMoveOperator(...)` next to the engine construction in `cpp/src/solver.cpp`;
 a ruin for LNS is a `RuinOperator` registered with `engine.addRuinOperator(...)`.
 

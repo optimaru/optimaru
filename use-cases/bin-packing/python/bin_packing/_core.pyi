@@ -107,13 +107,23 @@ class SolverConfig:
     descent_weight: float
     """BASIC best-improvement descent strategy weight. 0 = off."""
     custom_move_probability: float
-    """Gate on how often a step may draw EmptyBinMove; 1 = unrestricted."""
+    """Gate on how often a step may draw one of the macro moves (EmptyBinMove,
+    RepackMove); 1 = unrestricted."""
     empty_bin_moves: bool
     """Enable the bin-emptying macro move: it moves every item of one light bin
     into the other bins in a single step, the only way past the bins-used step
-    function."""
+    function. It checks the capacity only."""
     empty_bin_candidates: int
-    """The move empties one of this many lightest bins (1 = always the lightest)."""
+    """Both macro moves empty one of this many lightest bins (1 = always the
+    lightest)."""
+    repack_moves: bool
+    """Enable RepackMove: empty one light bin together with 1 to
+    repack_partner_bins other light bins and put their items back best fit
+    decreasing, only where they add no capacity, colour or conflict violation.
+    The move that closes bins on instances with colours or conflicts."""
+    repack_partner_bins: int
+    """Most partner bins RepackMove empties with its source (2; 0 = the source
+    alone). ValueError below 0."""
     best_score_limit: tuple[int, float]
     """(hard, soft): stop early once bestScore >= this. (0, -1e18) stops at
     the first feasible solution."""
@@ -121,7 +131,7 @@ class SolverConfig:
 
 class Solver:
     """Best-fit-decreasing construction + Late Acceptance local search (+ the
-    EmptyBinMove and adaptive ruin-and-recreate). Solves IN PLACE: fills
+    EmptyBinMove, RepackMove and adaptive ruin-and-recreate). Solves IN PLACE: fills
     item.bin and problem.score, clears warm_start."""
 
     def __init__(self, config: SolverConfig = ...) -> None: ...

@@ -368,10 +368,23 @@ constraint, a pybind11 extension `<package>._core` and a CP-SAT reference on
 - `capacity_weight`, `used_bin_weight`, `color_weight` and `conflict_weight`
   are removed from `BinPackingProblem` and `BinPackingProblemModel`
   (`extra="forbid"` refuses old payloads). Every default is 1.
-- Search is late acceptance with change/swap moves, an `EmptyBinMove` and
-  adaptive ruin-and-recreate. `on_new_best(step, score)` replaces
+- Search is late acceptance with change/swap moves, two bin-emptying macro
+  moves and adaptive ruin-and-recreate. `on_new_best(step, score)` replaces
   `on_new_best(problem)`, and the stagnation restarts are gone.
   `solve()` also takes `stop_at_first_feasible` and `on_new_best`.
+- The macro moves: `EmptyBinMove` moves a light bin's items into the other
+  bins by capacity alone, like 0.1.x. `RepackMove` empties a light bin
+  together with up to `repack_partner_bins` (2) other light bins and puts the
+  items back best fit decreasing, only where they add no capacity, colour or
+  conflict violation. New `SolverConfig` knobs: `repack_moves` (True) and
+  `repack_partner_bins`.
+- Without `RepackMove` the search ended 1-2 bins behind 0.1.x on instances
+  with colours or conflicts: emptying a bin into the others broke a colour or
+  a conflict, so late acceptance turned it down. With it, 0.2.0 uses as many
+  bins as 0.1.5 or fewer on every instance measured. On the 0.2.0 review's
+  120-item instance (4 colours, 10 conflicts, weight lower bound 43) it uses
+  43 bins at 2 s, where 0.1.5 used 44 and 0.2.0 without the move 45-46. The
+  table is in `use-cases/bin-packing/README.md` (Search).
 - Multi-start: worker 0 starts from the weight-descending best fit, and
   worker i > 0 starts from the same order with equal weights shuffled.
 - Exponent granularity is per bin. `color_conflict_cost` and

@@ -246,11 +246,11 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("value_recommender_probability", &Solver::Config::valueRecommenderProbability)
         // BASIC best-improvement descent strategy weight. 0 = off.
         .def_readwrite("descent_weight", &Solver::Config::descentWeight)
-        // Gate on how often a step may draw EmptyBinMove. 1 = engine default
-        // (unrestricted).
+        // Gate on how often a step may draw a macro move (EmptyBinMove,
+        // RepackMove). 1 = engine default (unrestricted).
         .def_readwrite("custom_move_probability", &Solver::Config::customMoveProbability)
         // EmptyBinMove: the domain macro move that empties one light bin in a
-        // single step (see cpp/src/solver.cpp).
+        // single step (see cpp/include/bp/moves.hpp).
         .def_readwrite("empty_bin_moves", &Solver::Config::emptyBinMoves)
         .def_property(
             "empty_bin_candidates",
@@ -260,6 +260,19 @@ PYBIND11_MODULE(_core, m)
                 if (count <= 0)
                     throw py::value_error("empty_bin_candidates must be positive");
                 c.emptyBinCandidates = count;
+            })
+        // RepackMove: empty a light bin with up to repack_partner_bins other
+        // light bins and re-place their items best fit decreasing without a
+        // capacity, colour or conflict clash (cpp/include/bp/moves.hpp).
+        .def_readwrite("repack_moves", &Solver::Config::repackMoves)
+        .def_property(
+            "repack_partner_bins",
+            [](const Solver::Config &c) { return c.repackPartnerBins; },
+            [](Solver::Config &c, int count)
+            {
+                if (count < 0)
+                    throw py::value_error("repack_partner_bins must be >= 0");
+                c.repackPartnerBins = count;
             })
         // Early termination once bestScore >= (hard, soft), e.g. (0, -1e18)
         // stops at the first feasible solution.

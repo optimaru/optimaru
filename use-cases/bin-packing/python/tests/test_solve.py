@@ -1,12 +1,19 @@
 """solve(): the engine knobs, the samples and the callbacks."""
 
 import json
+import random
 from pathlib import Path
 
 import pytest
 
 import bin_packing as bp
-from bin_packing.constraints import UsedBinsCost, get_constraints
+from bin_packing.constraints import (
+    BinCapacityCost,
+    ColorConflictCost,
+    ItemConflictCost,
+    UsedBinsCost,
+    get_constraints,
+)
 from bin_packing.models import BinPackingProblemModel
 
 WEB_DEMO = Path(__file__).parent / "fixtures" / "web_demo.json"
@@ -90,6 +97,7 @@ def test_empty_problem_scores_zero_and_clears_the_seed():
         ("late_acceptance_size", -1),
         ("spent_limit_seconds", -1.0),
         ("empty_bin_candidates", 0),
+        ("repack_partner_bins", -1),
         ("ruin_recreate_rewards", [1.0]),
     ],
 )
@@ -104,3 +112,62 @@ def test_the_simulated_annealing_knobs_are_gone():
         assert not hasattr(config, old)
     with pytest.raises(TypeError):
         bp.SolverConfig(max_iterations=0)
+
+
+def coloured_instance(seed: int = 20261031, count: int = 120) -> bp.BinPackingProblem:
+    """The 0.2.0 review's coloured instance (SQ-1): weights 10..60 on capacity 100, about
+    40% of the items in one of 4 colours, 10 conflict pairs. Seed 20261031 has a weight
+    lower bound of 43 bins (4288 / 100); 0.1.5 used 44."""
+    rng = random.Random(seed)
+    for _ in range(60):  # the review recipe's burn-in, kept so the instance is the same
+        rng.randint(1, 10)
+    for j in range(1, 60):
+        rng.sample(range(j), min(j, rng.choice([0, 1, 1, 2])))
+    items = []
+    for index in range(count):
+        item = {"id": f"I{index:03d}", "weight": rng.randint(10, 60)}
+        if rng.random() < 0.4:
+            item["color"] = rng.choice(["red", "blue", "green", "yellow"])
+        items.append(item)
+    conflicts = []
+    for _ in range(10):
+        first, second = rng.sample(range(count), 2)
+        conflicts.append({"first": items[first]["id"], "second": items[second]["id"]})
+    data = {"bin_capacity": 100, "items": items, "conflicts": conflicts}
+    return BinPackingProblemModel.model_validate(data).to_core()
+
+
+def test_repack_moves_close_the_bins_colours_and_conflicts_keep_open():
+    """EmptyBinMove alone (the 0.2.0 search before RepackMove) ends at 45-46 bins on this
+    instance at 2-30 s, 0.1.5 at 44; with RepackMove the step-limited search gets there."""
+    bins = {}
+    for repack in (True, False):
+        problem = coloured_instance()
+        config = bp.SolverConfig()
+        config.step_count_limit = 50_000
+        config.random_seed = 1
+        config.repack_moves = repack
+        score = bp.solve(problem, config=config)
+        assert score.hard == 0
+        bins[repack] = problem.bins_used()
+    assert bins[True] <= 44
+    assert bins[True] < bins[False]
+
+
+@pytest.mark.parametrize("shaped", [False, True])
+def test_full_assert_solve_with_the_macro_moves(shaped):
+    """FULL_ASSERT re-checks the incremental score after every move, RepackMove and
+    EmptyBinMove included, on the default calculator and on a re-weighted assembly."""
+    problem = coloured_instance(seed=7, count=40)
+    picks = (
+        [BinCapacityCost(weight=2), ColorConflictCost(exponent=2.0), ItemConflictCost(), UsedBinsCost(weight=3)]
+        if shaped
+        else None
+    )
+    config = bp.SolverConfig()
+    config.full_assert = True
+    config.step_count_limit = 3000
+    config.random_seed = 3
+    score = bp.solve(problem, config=config, constraints=picks)
+    assert score == bp.calculate_score(problem, picks)
+    assert all(item.bin >= 0 for item in problem.items)

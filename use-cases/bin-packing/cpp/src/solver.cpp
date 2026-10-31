@@ -13,6 +13,7 @@
 
 #include "bp/construction.hpp"
 #include "bp/incremental_calculator.hpp"
+#include "bp/moves.hpp"
 #include "bp/score_calculator.hpp"
 #include "optimaru/api/solver/solver.hpp"
 #include "optimaru/config/solver/solver_config.hpp"
@@ -23,146 +24,6 @@ namespace bp
 
 namespace
 {
-
-// ---------------------------------------------------------------------------
-// EmptyBinMove — the domain's missing macro move (0.1.5 `_try_empty_bin`)
-// ---------------------------------------------------------------------------
-// usedBinsCost is a step function of "does this bin hold anything": a bin
-// only stops costing once its LAST item leaves, so every single-item change
-// on the way there is no better and usually breaks the capacity of the bin it
-// lands in. This operator does the whole step in one move: take one of the
-// `candidates` lightest non-empty bins (uniformly; random among equal loads)
-// and move its items, heaviest first (random among equal weights), each to
-// the best-fitting OTHER non-empty bin that still has room. It gives up (no
-// move) when some item fits nowhere. Like 0.1.5 it checks the capacity only:
-// colours and conflicts are judged by the score, through the acceptor, like
-// everything else.
-//
-// Cost is O(n + used bins * moved items) per move (a census plus a best-fit
-// scan per moved item); the adaptive roulette wheel decides how often it is
-// worth that.
-class EmptyBinMove final : public optimaru::MoveOperator<BinPackingProblem>
-{
-public:
-    explicit EmptyBinMove(int candidates) : candidates_(std::max(1, candidates)) {}
-
-    const char *name() const override { return "emptyBin"; }
-
-    bool apply(optimaru::OperatorContext<BinPackingProblem> &ctx,
-               std::mt19937_64 &rng,
-               std::vector<int> &entities) override
-    {
-        BinPackingProblem &problem = ctx.director.workingSolution();
-        const int n = problem.itemCount();
-        const std::int64_t capacity = problem.binCapacity;
-
-        load_.assign(static_cast<std::size_t>(n), 0);
-        count_.assign(static_cast<std::size_t>(n), 0);
-        for (const Item &item : problem.items)
-        {
-            if (item.bin >= 0)
-            {
-                load_[item.bin] += item.weight;
-                ++count_[item.bin];
-            }
-        }
-        used_.clear();
-        for (int b = 0; b < n; ++b)
-        {
-            if (count_[b] > 0)
-                used_.push_back({load_[b], rng(), b});
-        }
-        if (used_.size() < 2)
-            return false;  // nowhere to move the items to
-
-        // The k lightest bins, random among equal loads.
-        const std::size_t k
-            = std::min<std::size_t>(static_cast<std::size_t>(candidates_), used_.size());
-        std::partial_sort(used_.begin(),
-                          used_.begin() + static_cast<std::ptrdiff_t>(k),
-                          used_.end());
-        const int source = used_[rng() % k].bin;
-
-        members_.clear();
-        for (int i = 0; i < n; ++i)
-        {
-            if (problem.items[i].bin == source)
-                members_.push_back(i);
-        }
-        std::shuffle(members_.begin(), members_.end(), rng);
-        std::stable_sort(members_.begin(),
-                         members_.end(),
-                         [&problem](int a, int b)
-                         { return problem.items[a].weight > problem.items[b].weight; });
-
-        // Plan every target first, so a failure leaves the solution as it is.
-        targets_.clear();
-        for (int item : members_)
-        {
-            const std::int64_t weight = problem.items[item].weight;
-            int target = -1;
-            std::int64_t bestRoom = 0;
-            for (const Candidate &candidate : used_)
-            {
-                const int bin = candidate.bin;
-                if (bin == source || load_[bin] + weight > capacity)
-                    continue;
-                const std::int64_t room = capacity - load_[bin] - weight;
-                if (target < 0 || room < bestRoom || (room == bestRoom && bin < target))
-                {
-                    target = bin;
-                    bestRoom = room;
-                }
-            }
-            if (target < 0)
-                return false;
-            load_[target] += weight;
-            targets_.push_back(target);
-        }
-
-        lastSource_ = source;
-        ctx.director.beginVariableChanges();
-        for (std::size_t m = 0; m < members_.size(); ++m)
-        {
-            ctx.director.changeVariable(members_[m], targets_[m]);
-            entities.push_back(members_[m]);
-        }
-        ctx.director.endVariableChanges();
-        return true;
-    }
-
-    void undoLast(optimaru::OperatorContext<BinPackingProblem> &ctx) override
-    {
-        ctx.director.beginVariableChanges();
-        for (int item : members_)
-            ctx.director.changeVariable(item, lastSource_);
-        ctx.director.endVariableChanges();
-    }
-
-private:
-    struct Candidate
-    {
-        std::int64_t load;
-        std::uint64_t tieBreak;
-        int bin;
-        bool operator<(const Candidate &other) const
-        {
-            if (load != other.load)
-                return load < other.load;
-            return tieBreak < other.tieBreak;
-        }
-    };
-
-    int candidates_;
-
-    // Scratch, reused across moves (no per-move allocation).
-    std::vector<std::int64_t> load_;
-    std::vector<int> count_;
-    std::vector<Candidate> used_;
-    std::vector<int> members_;
-    std::vector<int> targets_;
-    int lastSource_ = -1;
-};
 
 void requireRewards(const Solver::Config &config)
 {
@@ -205,8 +66,8 @@ void prepareSolve(BinPackingProblem &problem)
 }
 
 // Shared engine wiring for both solve() overloads: late-acceptance local
-// search (+ ALNS kicks), plus the domain's macro move and value recommender,
-// driven by whichever calculator the caller brought (the monolithic
+// search (+ ALNS kicks), plus the domain's macro moves (bp/moves.hpp) and
+// value recommender, driven by whichever calculator the caller brought (the monolithic
 // incremental one, or a plugin assembly). The engine's construction heuristic
 // finds nothing left to place: constructBins assigned every item.
 void runEngine(const Solver::Config &config,
@@ -272,6 +133,11 @@ void runEngine(const Solver::Config &config,
     optimaru::Solver<BinPackingProblem> engine(std::move(engineConfig));
     if (config.emptyBinMoves && problem.itemCount() >= 2)
         engine.addMoveOperator(std::make_unique<EmptyBinMove>(config.emptyBinCandidates));
+    if (config.repackMoves && problem.itemCount() >= 2)
+    {
+        engine.addMoveOperator(
+            std::make_unique<RepackMove>(config.emptyBinCandidates, config.repackPartnerBins));
+    }
     engine.solve(problem, calculator);
 }
 
