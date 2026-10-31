@@ -12,9 +12,6 @@ dependencies = [
 ]
 
 [dependency-groups]
-precommit = [
-    "pre-commit~=4.0",
-]
 test = [
     "pytest>=8.3.4",
     # tests/test_engine_parity.py: the engine's canonical score == validate.py
