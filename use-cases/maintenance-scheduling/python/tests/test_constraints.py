@@ -31,7 +31,7 @@ def schedule_of(jobs_and_assignments):
     return schedule
 
 
-def test_crew_conflict_overlap_days():
+def test_crew_conflict_cost_overlap_days():
     # [Mon,Thu) vs [Tue,Fri) on the same crew: overlap Tue+Wed = 2 days -> hard -2.
     schedule = schedule_of(
         [
@@ -53,7 +53,7 @@ def test_crew_conflict_overlap_days():
 
 
 def test_min_start_and_max_end():
-    # minStartDate violated by 2 days + (dur 1 @ Mon) end=Tue <= max Wed: no max penalty.
+    # min_start_date_cost: 2 days early + (dur 1 @ Mon) end=Tue <= max Wed: no max_end_date_cost.
     schedule = schedule_of([(mnt.Job("1", "j", 1, min_start_date=DAY_3, max_end_date=DAY_3), 0, DAY_1)])
     assert schedule.score.hard == -2
 
@@ -73,9 +73,9 @@ def test_ideal_end_date_soft_weights():
     assert schedule.score.soft == -2
 
 
-def test_tag_conflict():
+def test_tag_conflict_cost():
     # 1-day overlap on the same day, 1 shared tag {Downtown} -> soft -1'000
-    # (same crew, so crewConflict hard -1 as well).
+    # (same crew, so crew_conflict_cost hard -1 as well).
     schedule = schedule_of(
         [
             (mnt.Job("1", "t", 1, tags=["Downtown"]), 0, DAY_1),
@@ -85,7 +85,7 @@ def test_tag_conflict():
     assert schedule.score.hard == -1
     assert schedule.score.soft == -1_000
 
-    # Overlapping but without shared tags: no tagConflict penalty.
+    # Overlapping but without shared tags: no tag_conflict_cost penalty.
     schedule = schedule_of(
         [
             (mnt.Job("1", "t", 1, tags=["Downtown"]), 0, DAY_1),

@@ -17,18 +17,19 @@ reached by advancing duration days while skipping weekends
 Score convention: `hard` is the sum of constraint-violating days (0 == feasible), `soft` is
 the optimization objective. Both are maximized (less negative is better).
 
-Constraints (HardSoftScore; days are calendar days, like Java ChronoUnit.DAYS):
-  hard 1. crewConflict        -overlapping days per overlapping job pair on the same crew
-  hard 2. minStartDate        -1 per day started before minStartDate
-  hard 3. maxEndDate          -1 per day ended after maxEndDate
-  soft 4. beforeIdealEndDate  -1 per day ended before idealEndDate
-  soft 5. afterIdealEndDate   -1'000'000 per day ended after idealEndDate
-  soft 6. tagConflict         shared tags x overlapping days of overlapping job pairs
-                              -1'000
+Constraints (HardSoftScore; days are calendar days, like Java ChronoUnit.DAYS), at the
+default weights:
+  hard 1. crew_conflict_cost          -overlapping days per overlapping job pair on the same crew
+  hard 2. min_start_date_cost         -1 per day started before min_start_date
+  hard 3. max_end_date_cost           -1 per day ended after max_end_date
+  soft 4. before_ideal_end_date_cost  -1 per day ended before ideal_end_date
+  soft 5. after_ideal_end_date_cost   -1'000'000 per day ended after ideal_end_date
+  soft 6. tag_conflict_cost           shared tags x overlapping days of overlapping job pairs
+                                      -1'000
 """
 
 from collections.abc import Callable, Iterable
-from typing import Any
+from typing import Any, Literal, NamedTuple
 
 class Score:
     """HardSoft score. `hard` is the integer violation sum (0 == feasible); `soft`
@@ -154,7 +155,7 @@ class SolverConfig:
     """Probability that a change move draws a date from the job's own [minStart, idealEnd]
     start window. 0 draws uniformly from all of (date x crew)."""
     hot_job_probability: float
-    """Probability of seeding a move with a job currently caught in tagConflict."""
+    """Probability of seeding a move with a job currently caught in tag_conflict_cost."""
     free_crew_candidates: int
     """Random crews a guided change move tries to find one free for the whole job
     duration. 0 draws uniformly."""
@@ -175,11 +176,33 @@ class Solver:
         keeps the default set."""
 
 def list_constraints() -> list[str]:
-    """Constraint names scored by this domain (default assembly order, snake_case).
+    """Constraint names scored by this domain (snake_case; the four per-job unit
+    constraints first, the two global ones after them): min_start_date_cost,
+    max_end_date_cost, before_ideal_end_date_cost, after_ideal_end_date_cost,
+    crew_conflict_cost, tag_conflict_cost.
     The same names maintenance_scheduling.constraints uses."""
 
-def constraint_costs(solution, /) -> dict[str, dict]:
-    """Per-constraint, per-unit **raw** costs — before weight/exponent/level rounding.
-    `maintenance_scheduling.constraints.score()` takes these and produces a score.
-    {name: {"costs": [...], "weight": w, "exponent": e,
-            "hard": bool, "global": bool}}."""
+def constraint_costs(schedule: MaintenanceSchedule, /) -> dict[str, dict[str, Any]]:
+    """Raw cost of every default constraint, before weight/exponent/level rounding:
+    {name: {"costs": [...], "weight": float, "exponent": float, "hard": bool,
+    "global": bool, "level": "hard" | "medium" | "soft", "reward": bool,
+    "level_flippable": bool, "name": str, "label": str}}. The four date rules list one
+    cost per (start date, crew) cell; the two global conflict rules one total.
+    `maintenance_scheduling.constraints.score()` takes these and produces a score."""
+
+class ConstraintInfo(NamedTuple):
+    """One constraint-catalog row, read off the C++ default assembly."""
+
+    name: str
+    default_level: Literal["hard", "medium", "soft"]
+    default_weight: float
+    level_flippable: bool
+    reward: bool
+    default_enabled: bool
+
+def constraint_info() -> list[ConstraintInfo]:
+    """The constraint catalog, in list_constraints() order:
+    min_start_date_cost (hard, 1), max_end_date_cost (hard, 1),
+    before_ideal_end_date_cost (soft, 1), after_ideal_end_date_cost (soft, 1'000'000),
+    crew_conflict_cost (hard, 1), tag_conflict_cost (soft, 1'000); all flippable, none
+    a reward, all scored by default (default_enabled)."""

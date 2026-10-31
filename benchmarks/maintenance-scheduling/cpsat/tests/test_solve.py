@@ -3,9 +3,14 @@ from datetime import date
 import pytest
 
 import maintenance_scheduling as domain
-from maintenance_scheduling.constraints import get_constraints
+from maintenance_scheduling.constraints import (
+    AfterIdealEndDateCost,
+    MaxEndDateCost,
+    get_constraints,
+    score,
+)
 from maintenance_scheduling.models import CrewModel, JobModel, MaintenanceScheduleModel
-from maintenance_scheduling_cpsat import solve
+from maintenance_scheduling_cpsat import catalog, solve
 from maintenance_scheduling import calculate_score
 
 
@@ -79,3 +84,80 @@ def test_each_constraint_matches_domain_on_fixed_jobs(constraint) -> None:
     )
 
     assert sum(proxy.values()) == pytest.approx(expected)
+
+
+def test_cpsat_defaults_are_the_engine_defaults() -> None:
+    """No hand-copied defaults: the CP-SAT catalog equals constraint_info().
+
+    Before 0.2.0 the plugins restated after_ideal_end_date (1'000'000) and
+    tag_conflict (1'000) as ClassVars; now both solvers read the C++ constants."""
+    engine = {row.name: row for row in domain.constraint_info()}
+    entries = catalog()
+    assert [entry["name"] for entry in entries] == domain.list_constraints()
+    for entry in entries:
+        row = engine[entry["name"]]
+        assert entry["default_level"] == row.default_level
+        assert entry["default_weight"] == row.default_weight
+        assert entry["level_flippable"] == row.level_flippable
+        assert entry["reward"] == row.reward
+        assert entry["default_enabled"] == row.default_enabled
+        assert entry["kind"] == "either"  # every maintenance constraint is flippable
+        assert entry["params"] == {"weight": None, "hard": None, "exponent": 1.0}
+    assert {
+        name: (row.default_level, row.default_weight) for name, row in engine.items()
+    } == {
+        "min_start_date_cost": ("hard", 1.0),
+        "max_end_date_cost": ("hard", 1.0),
+        "before_ideal_end_date_cost": ("soft", 1.0),
+        "after_ideal_end_date_cost": ("soft", 1_000_000.0),
+        "crew_conflict_cost": ("hard", 1.0),
+        "tag_conflict_cost": ("soft", 1_000.0),
+    }
+
+
+def test_default_solve_scores_like_the_engine() -> None:
+    """The default selection: CP-SAT's reported score is the engine's score of the same
+    solution (the after_ideal_end_date_cost 1'000'000 weight comes from C++ on both)."""
+    problem = _parity_problem()
+    solved = solve(problem, time_limit_seconds=5)
+    shared = calculate_score(solved.to_core())
+    assert (solved.score_hard, solved.score_soft) == (shared.hard, shared.soft)
+    engine = score(domain.constraint_costs(solved.to_core()))
+    assert (solved.score_hard, solved.score_soft) == pytest.approx(tuple(engine))
+
+
+def test_demoting_max_end_date_scores_like_the_engine() -> None:
+    """hard=False lands on soft in both solvers.
+
+    Job a may not start before Wed and must end by Wed, which its 3 days cannot meet,
+    so max_end_date_cost (or min_start_date_cost) is violated in every solution.
+    Demoted to soft, the hard level only keeps what the other hard rules cost, and
+    CP-SAT's reported score equals the engine's score of the same solution under the
+    same selection."""
+    problem = _parity_problem()
+    selection = [
+        MaxEndDateCost(hard=False) if spec.name == "max_end_date_cost" else spec
+        for spec in get_constraints()
+    ]
+    solved = solve(problem, time_limit_seconds=5, constraints=selection)
+    raw = domain.constraint_costs(solved.to_core())
+    engine = score(raw, selection)
+    assert (solved.score_hard, solved.score_soft) == pytest.approx(tuple(engine))
+    assert solved.score_hard == -(
+        sum(raw["min_start_date_cost"]["costs"])
+        + sum(raw["crew_conflict_cost"]["costs"])
+    )
+
+
+def test_reweighting_after_ideal_end_date_scores_like_the_engine() -> None:
+    """An explicit weight replaces the engine default on both paths."""
+    problem = _parity_problem()
+    selection = [
+        AfterIdealEndDateCost(weight=7)
+        if spec.name == "after_ideal_end_date_cost"
+        else spec
+        for spec in get_constraints()
+    ]
+    solved = solve(problem, time_limit_seconds=5, constraints=selection)
+    engine = score(domain.constraint_costs(solved.to_core()), selection)
+    assert (solved.score_hard, solved.score_soft) == pytest.approx(tuple(engine))
