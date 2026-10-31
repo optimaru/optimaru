@@ -2,7 +2,7 @@
 name = "meeting_scheduling"
 version = "0.1.0"
 description = "Meeting-scheduling C++ solver with Python bindings"
-requires-python = ">=3.14,<4.0"
+requires-python = ">=3.11,<4.0"
 dependencies = []
 
 [project.optional-dependencies]
