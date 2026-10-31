@@ -10,7 +10,7 @@ name = "optimaru"
 version = "0.1.4"
 description = "Metaheuristic optimization engine for routing, scheduling, timetabling and allocation — 22 ready-to-use models."
 readme = "python/README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.11"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
 authors = [{ name = "optimaru" }]
@@ -27,6 +27,9 @@ classifiers = [
   "Operating System :: POSIX :: Linux",
   "Programming Language :: C++",
   "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3.14",
   "Topic :: Scientific/Engineering :: Mathematics",
   "Typing :: Typed",
@@ -45,7 +48,7 @@ Issues = "https://github.com/optimaru/optimaru/issues"
 include-package-data = false
 
 [tool.cibuildwheel]
-build = "cp314-*"
+build = "cp311-* cp312-* cp313-* cp314-*"
 skip = "*-win32 *-manylinux_i686 *-musllinux_i686"
 build-verbosity = 1
 # Smoke test: every subpackage (and its compiled _core) imports from the installed wheel.

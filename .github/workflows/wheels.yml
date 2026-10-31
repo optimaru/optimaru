@@ -99,7 +99,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Settings (cp314 only, smoke-test import of all 21 use cases) live in
+      # Settings (cp311–cp314, smoke-test import of all use cases) live in
       # pyproject.toml [tool.cibuildwheel]. v3.1 still shipped CPython 3.14.0rc2,
       # on which current pydantic fails to import (typing._eval_type signature).
       - uses: pypa/cibuildwheel@v4.3.1

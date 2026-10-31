@@ -12,7 +12,7 @@ solver.
 pip install optimaru
 ```
 
-Requires Python 3.14+. Wheels are published for Linux, macOS and Windows.
+Requires Python 3.11+ (wheels for CPython 3.11–3.14). Wheels are published for Linux, macOS and Windows.
 
 ## Example: vehicle routing
 
