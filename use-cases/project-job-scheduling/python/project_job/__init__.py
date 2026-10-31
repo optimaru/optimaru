@@ -19,12 +19,25 @@ topological order and fill `Allocation.start_date`/`end_date`. SOURCE/SINK
 allocations are always pinned (exactly Java's @PlanningPin + setPinned), and if
 uninitialized before solving they are fixed to (first mode, delay 0).
 
-Score convention (HardMediumSoftScore, as in the Java quickstart): hard is resource capacity
-violations (0 == feasible; non-renewable over the total, renewable per day), medium
-is the sum of per-project delays (sink end − critical path end, positive only), soft is
-the makespan (latest sink end date). Lexicographic comparison (hard first). Internally it
-maps onto HardSoftScore(int64, double) as `engine.soft = medium * 10**9 + soft`
-(level order preserved).
+Score convention (HardMediumSoftScore, as in the Java quickstart), at the default weights:
+  hard   1. non_renewable_resource_capacity_cost  use per non-renewable resource above
+                                                  capacity, over the whole horizon
+  hard   2. renewable_resource_capacity_cost      use per renewable resource x day above
+                                                  capacity
+  medium 3. project_delay_cost                    per-project delay (sink end - critical
+                                                  path end, positive only), in days
+  soft   4. makespan_cost                         the latest sink end date
+(0 hard == feasible). Lexicographic comparison (hard first). Internally it maps onto
+HardSoftScore(int64, double) with the domain's medium fold
+`engine.soft = medium * 10**9 + soft` (level order preserved).
+
+The constraints and their defaults (level, weight in units of that level) live in the C++
+components; `constraint_info()` reports them, `list_constraints()` lists the names and
+`constraint_costs()` gives the raw per-constraint costs of a schedule::
+
+    {row.name: (row.default_level, row.default_weight) for row in pjs.constraint_info()}
+    # {'non_renewable_resource_capacity_cost': ('hard', 1.0), ...,
+    #  'project_delay_cost': ('medium', 1.0), 'makespan_cost': ('soft', 1.0)}
 
 The high-level entry point is `solve`::
 
@@ -40,6 +53,7 @@ The pydantic mirror (for serialization) is in `project_job.models` (optional dep
 
 from ._core import (
     Allocation,
+    ConstraintInfo,
     ExecutionMode,
     Job,
     JobType,
@@ -52,11 +66,13 @@ from ._core import (
     SolverConfig,
     calculate_score,
     constraint_costs,
+    constraint_info,
     list_constraints,
 )
 
 __all__ = [
     "Allocation",
+    "ConstraintInfo",
     "ExecutionMode",
     "Job",
     "JobType",
@@ -71,6 +87,7 @@ __all__ = [
     "solve",
     "list_constraints",
     "constraint_costs",
+    "constraint_info",
     "with_initial_solution",
 ]
 
@@ -139,8 +156,13 @@ def solve(
     (see `project_job.constraints`). Only the listed constraints are scored; None
     uses all four default constraints::
 
-        from project_job.constraints import get_constraints
+        from project_job.constraints import ProjectDelayCost, get_constraints
         pjs.solve(schedule, constraints=get_constraints())
+        # project delay as soft days instead of medium:
+        others = [spec for spec in get_constraints() if spec.name != "project_delay_cost"]
+        pjs.solve(schedule, constraints=[*others, ProjectDelayCost(hard=False)])
+
+    The result's score then reports each term on the level the selection gave it.
     """
     cfg = _build_config(
         time_limit_seconds=time_limit_seconds,

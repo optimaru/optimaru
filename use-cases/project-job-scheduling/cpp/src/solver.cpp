@@ -1,6 +1,8 @@
 #include "pjs/solver.hpp"
 
 #include <algorithm>
+#include <cmath>
+#include <cstdint>
 #include <exception>
 #include <random>
 #include <stdexcept>
@@ -225,11 +227,19 @@ void Solver::solve(
 
     // Refresh the shadow dates on the best solution (the plugin components
     // derive their own chain and never write these), then score it with the
-    // caller's constraint assembly, leaving the calculator primed on it so
-    // constraintTotals() explains exactly this score.
+    // caller's constraint assembly (custom weights and levels included),
+    // leaving the calculator primed on it so constraintTotals() explains
+    // exactly this score. The three levels come straight from the
+    // calculator's accumulators (levelScores(), before the medium fold)
+    // rather than from decoding the folded engine score, so a demoted or
+    // re-weighted term lands on the level the assembly gave it.
     ScoreCalculator::updateDates(schedule);
     calculator.resetWorkingSolution(schedule);
-    schedule.score = fromEngineScore(calculator.calculateScore());
+    const auto levels = calculator.levelScores();
+    schedule.score
+        = Score{static_cast<std::int64_t>(levels.hard),
+                static_cast<std::int64_t>(std::llround(levels.medium)),
+                static_cast<std::int64_t>(std::llround(levels.soft))};
 }
 
 }  // namespace pjs

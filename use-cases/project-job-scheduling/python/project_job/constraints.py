@@ -1,6 +1,6 @@
 """Constraint assembly specs — an API for picking the cost function declaratively.
 
-The default path (`pjs.solve(schedule)`) enables all four constraints at the quickstart weights.
+The default path (`pjs.solve(schedule)`) enables all four constraints at the default weights.
 This module is the alternative path next to it: pick constraints, change weights, flip
 hard/soft, and pass the list to `solve(schedule, constraints=...)`.
 
@@ -9,120 +9,166 @@ a "default with a small tweak" declaration fits on one line::
 
     import project_job as pjs
     from project_job.constraints import (
-        TotalMakespan, get_constraints, renewable_resource_capacity,
+        MakespanCost, get_constraints, renewable_resource_capacity_cost,
     )
 
     pjs.solve(schedule, constraints=get_constraints())          # defaults as-is
     pjs.solve(schedule, constraints=get_constraints([           # picked
-        renewable_resource_capacity, TotalMakespan(weight=10),
+        renewable_resource_capacity_cost, MakespanCost(weight=10),
     ]))
 
-Each constraint has a default instance at module level, so you can also pass a
-list of just a few. Only listed constraints are scored — leave one out and its
-term disappears from the score.
+Each constraint has a default instance at module level (`makespan_cost`,
+`project_delay_cost`, ...), so you can also pass a list of just a few. Only listed
+constraints are scored — leave one out and its term disappears from the score.
 
 Every spec takes ``(weight=None, hard=None, exponent=1.0)``:
 
-- ``weight``   linear multiplier on the constraint cost. ``None`` = component default.
-- ``hard``     ``True``/``False`` flips the default level; ``None`` keeps it.
-               **Medium constraints in this domain cannot be expressed with
-               this knob** — ``hard=False`` folds them into soft and the medium
-               meaning is lost. Leave medium terms at ``None``.
+- ``weight``   linear multiplier on the constraint cost, in units of its level.
+               ``None`` = the component default (``pjs.constraint_info()`` reports
+               them).
+- ``hard``     ``True`` = hard, ``False`` = soft, ``None`` = the default level.
+               ``project_delay_cost`` is a MEDIUM constraint: medium is a
+               default-only level, so ``hard=True`` makes it one hard unit per day
+               and ``hard=False`` one soft unit per day (outside the 10^9 medium
+               fold), in the solver and in :func:`score` alike. An explicit
+               ``weight`` keeps it on the medium level, in medium units.
 - ``exponent`` sign-preserving power shaping: ``weight * sign(c) * |c| **
-               exponent``. 2.0 = squared, so concentrated violations grow much costlier.
+               exponent``. All four constraints are global, so it shapes each one's
+               single total. 2.0 = squared, so concentrated violations grow much
+               costlier.
 
-Names (`name`) are the C++ component names in snake_case. The core derives them
-mechanically, so there is no hand-maintained alias table — check them with
-`pjs.list_constraints()`. Module-level instance names use the same snake_case,
-so they match the strings `list_constraints()` prints.
+Names (`name`) are the C++ component names in snake_case
+(``ProjectDelayCost`` -> ``project_delay_cost``). The core derives them mechanically,
+so there is no hand-maintained alias table — check them with `pjs.list_constraints()`.
+Module-level instance names use the same snake_case, so they match the strings
+`list_constraints()` prints.
 """
 
-import math
-from dataclasses import dataclass
-from typing import ClassVar, NamedTuple
+from ._constraint import Constraint, Score, score_costs, select
 
 __all__ = [
     "Constraint",
     "Score",
     "score",
-    "NonRenewableResourceCapacity",
-    "RenewableResourceCapacity",
-    "TotalProjectDelay",
-    "TotalMakespan",
-    "non_renewable_resource_capacity",
-    "renewable_resource_capacity",
-    "total_project_delay",
-    "total_makespan",
+    "NonRenewableResourceCapacityCost",
+    "RenewableResourceCapacityCost",
+    "ProjectDelayCost",
+    "MakespanCost",
+    "non_renewable_resource_capacity_cost",
+    "renewable_resource_capacity_cost",
+    "project_delay_cost",
+    "makespan_cost",
     "get_constraints",
 ]
 
 
-@dataclass(frozen=True)
-class Constraint:
-    """Spec selecting one constraint: weight / level / shaping."""
-
-    weight: float | None = None  # None = component default weight
-    hard: bool | None = None  # None = component default level
-    exponent: float = 1.0
-    name: ClassVar[str] = ""
-
-    def __init_subclass__(cls, **kwargs):
-        super().__init_subclass__(**kwargs)
-        if not cls.name:
-            raise TypeError(f"{cls.__name__} must set a registry `name`")
-
-
-class NonRenewableResourceCapacity(Constraint):
+class NonRenewableResourceCapacityCost(Constraint):
     """Total demand on a non-renewable resource above its capacity. Default: hard, weight 1.
 
     Stock that is gone once used, so "when" things run does not matter — the only
     component that does not read the date chain."""
 
-    name = "non_renewable_resource_capacity"
+    name = "non_renewable_resource_capacity_cost"
+    label_en = "Non-renewable resource over capacity"
+    label_ko = "비재생 자원 용량 초과"
+    description_en = (
+        "For every non-renewable resource (a stock that is used up, such as a budget), the total "
+        "requirement of the execution modes chosen for all jobs beyond its capacity, summed over "
+        "those resources; when the jobs run does not matter. One unit of cost is one resource unit "
+        "over capacity; 0 means every stock suffices."
+    )
+    description_ko = (
+        "비재생 자원(예산처럼 한 번 쓰면 없어지는 자원)마다 모든 작업이 고른 실행 모드의 요구량 합계가 "
+        "용량을 넘는 양을 모두 더합니다. 작업을 언제 하는지는 상관없습니다. 용량을 넘은 자원 1단위가 "
+        "비용 1이며, 0이면 모든 비재생 자원이 용량 안에 있습니다."
+    )
 
 
-class RenewableResourceCapacity(Constraint):
+class RenewableResourceCapacityCost(Constraint):
     """Per (renewable resource, date), total demand of allocations busy that day above
     capacity. Default: hard, weight 1.
 
     Capacity that recovers daily, so it is purely a question of "when" things run, and
     it reads the whole date chain."""
 
-    name = "renewable_resource_capacity"
+    name = "renewable_resource_capacity_cost"
+    label_en = "Renewable resource over daily capacity"
+    label_ko = "재생 자원 일별 용량 초과"
+    description_en = (
+        "For every renewable resource (capacity that is available again each day, such as people "
+        "or machines) and every day, the requirement of the jobs running that day beyond its "
+        "capacity, summed over resources and days. One unit of cost is one resource unit over "
+        "capacity on one day; 0 means no resource is overbooked on any day."
+    )
+    description_ko = (
+        "재생 자원(사람이나 기계처럼 날마다 다시 쓸 수 있는 자원)과 날짜마다 그날 진행 중인 작업들의 "
+        "요구량이 용량을 넘는 양을 자원과 날짜에 걸쳐 모두 더합니다. 하루 동안 용량을 넘은 자원 1단위가 "
+        "비용 1이며, 0이면 어느 날에도 용량을 넘는 자원이 없습니다."
+    )
 
 
-class TotalProjectDelay(Constraint):
-    """Days by which each project's SINK passes its critical path end. Default: medium, weight 10^9.
+class ProjectDelayCost(Constraint):
+    """Days by which each project's SINK passes its critical path end. Default: medium,
+    weight 1 (medium units).
 
     Measured from (releaseDate + criticalPathDuration); finishing early costs nothing —
-    only delay counts. The medium level is folded into the engine soft level as
-    `medium * kMediumUnit`, so the default weight carries that multiple."""
+    only delay counts. The domain folds medium into the engine soft level as
+    ``medium * 10^9``; the fold belongs to the domain (every ``constraint_costs()`` entry
+    carries it as ``medium_fold``), so the weight carries no 10^9 factor."""
 
-    name = "total_project_delay"
+    name = "project_delay_cost"
+    label_en = "Project delay"
+    label_ko = "프로젝트 지연"
+    description_en = (
+        "Days by which each project's last job (its sink) ends after the project's critical-path "
+        "end date (release date + critical path duration), summed over the projects; finishing "
+        "early earns nothing. One unit of cost is one day of delay; 0 means every project ends "
+        "on time."
+    )
+    description_ko = (
+        "프로젝트마다 마지막 작업(싱크)이 끝나는 날이 임계 경로 종료일(릴리스일 + 임계 경로 기간)보다 "
+        "늦은 일수를 모두 더합니다. 일찍 끝나도 이득은 없습니다. 하루 지연이 비용 1이며, 0이면 모든 "
+        "프로젝트가 제때 끝납니다."
+    )
 
 
-class TotalMakespan(Constraint):
+class MakespanCost(Constraint):
     """Latest SINK end date — when the last project finishes. Default: soft, weight 1.
 
     One penalty for the whole schedule, not per project (Java's groupBy(max)), so
-    pulling in a project that is not last is free in this term."""
+    pulling in a project that is not last is free in this term. The value is an
+    absolute day index (release offsets included), not a duration."""
 
-    name = "total_makespan"
+    name = "makespan_cost"
+    label_en = "Makespan"
+    label_ko = "전체 완료일(메이크스팬)"
+    description_en = (
+        "The day the last project finishes: the latest end date of any project's last job (its "
+        "sink), as a day index counted from day 0 (release dates included). One value for the "
+        "whole schedule, so only the project that finishes last moves it. One unit of cost is one "
+        "day; 0 means every project ends on day 0."
+    )
+    description_ko = (
+        "가장 늦게 끝나는 프로젝트의 종료일, 곧 모든 프로젝트의 마지막 작업(싱크) 가운데 가장 늦은 "
+        "종료일을 0일부터 센 날짜 번호로 나타냅니다(릴리스일 포함). 일정 전체에 값이 하나뿐이어서 가장 "
+        "늦게 끝나는 프로젝트만 이 값을 바꿉니다. 하루가 비용 1이며, 0이면 모든 프로젝트가 0일에 "
+        "끝납니다."
+    )
 
 
-#: Instances at the default weights. Reference them directly when picking.
-non_renewable_resource_capacity = NonRenewableResourceCapacity()
-renewable_resource_capacity = RenewableResourceCapacity()
-total_project_delay = TotalProjectDelay()
-total_makespan = TotalMakespan()
+#: Instances at the default weights (weight=None). Reference them directly when picking.
+non_renewable_resource_capacity_cost = NonRenewableResourceCapacityCost()
+renewable_resource_capacity_cost = RenewableResourceCapacityCost()
+project_delay_cost = ProjectDelayCost()
+makespan_cost = MakespanCost()
 
 #: Default set — same order as `pjs.list_constraints()`.
-_DEFAULTS: list[Constraint] = [
-    non_renewable_resource_capacity,
-    renewable_resource_capacity,
-    total_project_delay,
-    total_makespan,
-]
+_DEFAULTS = (
+    non_renewable_resource_capacity_cost,
+    renewable_resource_capacity_cost,
+    project_delay_cost,
+    makespan_cost,
+)
 
 
 def get_constraints(constraints: list[Constraint] | None = None) -> list[Constraint]:
@@ -131,30 +177,12 @@ def get_constraints(constraints: list[Constraint] | None = None) -> list[Constra
     When `constraints` is given, that list is used as-is — only the listed
     constraints are scored. To change just one default, mix in the default instances::
 
-        get_constraints([renewable_resource_capacity, TotalMakespan(weight=10)])
+        get_constraints([renewable_resource_capacity_cost, MakespanCost(weight=10)])
+
+    Same contract as the C++ applyConstraints: an empty list (most likely a filter
+    that came out empty) and a constraint named twice raise ValueError.
     """
-    if constraints is None:
-        return list(_DEFAULTS)
-    if not constraints:
-        # Same contract as C++ applyConstraints: an empty list means "score
-        # nothing", which is most likely a mistake. A filter that happens to come
-        # out empty must not silently flip to "score everything".
-        raise ValueError("constraints must not be empty (pass None for the defaults)")
-    return list(constraints)
-
-
-class Score(NamedTuple):
-    """(hard, soft) returned by `score()`. Both are penalties, so <= 0."""
-
-    hard: int
-    soft: float
-
-
-def _shape(cost: float, exponent: float) -> float:
-    """Sign-preserving power. Rewards (negative costs) never flip into penalties."""
-    if exponent == 1.0 or cost == 0.0:
-        return cost
-    return -((-cost) ** exponent) if cost < 0.0 else cost**exponent
+    return select(constraints, _DEFAULTS)
 
 
 def score(costs: dict, constraints: list[Constraint] | None = None) -> Score:
@@ -171,32 +199,14 @@ def score(costs: dict, constraints: list[Constraint] | None = None) -> Score:
     No solver and no search are involved. The arithmetic matches the engine —
     each unit contributes ``weight * shape(cost, exponent)`` and hard
     contributions are **rounded per unit** before summing (the same order as the
-    engine's applyRaw; rounding the total afterwards gives different values).
+    engine; rounding the total afterwards gives different values).
 
     When ``constraints`` is given, only those constraints are scored — the same
     semantics as `get_constraints`. Unknown names raise ValueError.
 
-    The returned value is the **engine-level** (hard, soft). This domain folds
-    medium into engine soft as multiples of kMediumUnit (10^9), so to compare
-    with the split levels of `solution.score`, fold the same way first.
+    The returned value is the **engine-level** (hard, soft): the domain's medium
+    fold (``medium_fold`` on every entry, into soft at 10^9) is applied, so it
+    equals ``(score.hard, score.medium * 10**9 + score.soft)`` of a schedule scored
+    by the same constraints.
     """
-    hard = 0
-    soft = 0.0
-    for spec in get_constraints(constraints):
-        entry = costs.get(spec.name)
-        if entry is None:
-            raise ValueError(
-                f"unknown constraint {spec.name!r}; available: " + ", ".join(repr(name) for name in sorted(costs))
-            )
-        weight = entry["weight"] if spec.weight is None else spec.weight
-        is_hard = entry["hard"] if spec.hard is None else spec.hard
-        exponent = spec.exponent
-        for cost in entry["costs"]:
-            value = weight * _shape(cost, exponent)
-            if is_hard:
-                # Round per unit contribution like the engine (half-away-from-zero
-                # like llround; Python's round is banker's rounding).
-                hard += int(math.floor(value + 0.5) if value >= 0 else math.ceil(value - 0.5))
-            else:
-                soft += value
-    return Score(-hard, -soft if soft != 0.0 else 0.0)
+    return score_costs(costs, get_constraints(constraints))

@@ -112,13 +112,13 @@ void verifyConstraints()
 {
     std::printf("== (a) Verifying each constraint in isolation ==\n");
 
-    // hard 1: nonRenewableResourceCapacity — requirements 7 + 6 against
+    // hard 1: nonRenewableResourceCapacityCost — requirements 7 + 6 against
     // capacity 10 (dates are irrelevant): penalizes 13 - 10 = 3.
     {
         ProjectJobSchedule s = makeBase(10, /*renewable*/ false, 0);
         addJob(s, JobType::STANDARD, 10, 7, {}, 100);
         addJob(s, JobType::STANDARD, 10, 6, {}, 100);
-        checkScore("nonRenewableResourceCapacity",
+        checkScore("nonRenewableResourceCapacityCost",
                    ScoreCalculator::calculateScore(s),
                    -3,
                    0,
@@ -129,13 +129,13 @@ void verifyConstraints()
         ProjectJobSchedule s = makeBase(13, /*renewable*/ false, 0);
         addJob(s, JobType::STANDARD, 10, 7, {}, 100);
         addJob(s, JobType::STANDARD, 10, 6, {}, 100);
-        checkScore("nonRenewable within capacity",
+        checkScore("nonRenewableResourceCapacityCost within capacity",
                    ScoreCalculator::calculateScore(s),
                    0,
                    0,
                    0);
     }
-    // hard 2: renewableResourceCapacity — requirements 7 (days 101..110)
+    // hard 2: renewableResourceCapacityCost — requirements 7 (days 101..110)
     // and 5 (days 102..111) against capacity 10: 9 overlap days x 2 = 18.
     // predecessorsDoneDate 1 / 2 comes from duration-1 / duration-2
     // predecessors (the Java test presets the shadow directly).
@@ -145,7 +145,7 @@ void verifyConstraints()
         const int p2 = addJob(s, JobType::STANDARD, 2, 0, {}, 0);
         const int a1 = addJob(s, JobType::STANDARD, 10, 7, {p1}, 100);
         const int a2 = addJob(s, JobType::STANDARD, 10, 5, {p2}, 100);
-        checkScore("renewableResourceCapacity",
+        checkScore("renewableResourceCapacityCost",
                    ScoreCalculator::calculateScore(s),
                    -18,
                    0,
@@ -160,30 +160,32 @@ void verifyConstraints()
                   && s.allocations[a2].endDate == 112,
               "shadow chain of allocation 2 (done=2, start=102, end=112)");
     }
-    // medium 3 + soft 4 (+ hard 2): the Java totalProjectDelay case — SINK
-    // ends 111 and 112 against criticalPathEndDate 100 -> medium 11 + 12 =
-    // 23; makespan max(111, 112) = 112; the renewable overlap is 18 again.
+    // medium 3 + soft 4 (+ hard 2): the Java provider test's project-delay
+    // case (projectDelayCost + makespanCost) — SINK ends 111 and 112 against
+    // criticalPathEndDate 100 -> medium 11 + 12 = 23; makespan
+    // max(111, 112) = 112; the renewable overlap is 18 again.
     {
         ProjectJobSchedule s = makeBase(10, /*renewable*/ true, 100);
         const int p1 = addJob(s, JobType::STANDARD, 1, 0, {}, 0);
         const int p2 = addJob(s, JobType::STANDARD, 2, 0, {}, 0);
         addJob(s, JobType::SINK, 10, 7, {p1}, 100);
         addJob(s, JobType::SINK, 10, 5, {p2}, 100);
-        checkScore("totalProjectDelay + totalMakespan",
+        checkScore("projectDelayCost + makespanCost",
                    ScoreCalculator::calculateScore(s),
                    -18,
                    -23,
                    -112);
     }
     // medium 3: no penalty when the sinks end before the critical path end
-    // (the Java totalMakespan case: criticalPathDuration 155).
+    // (the Java provider test's makespan case, makespanCost:
+    // criticalPathDuration 155).
     {
         ProjectJobSchedule s = makeBase(10, /*renewable*/ true, 155);
         const int p1 = addJob(s, JobType::STANDARD, 1, 0, {}, 0);
         const int p2 = addJob(s, JobType::STANDARD, 2, 0, {}, 0);
         addJob(s, JobType::SINK, 10, 7, {p1}, 100);
         addJob(s, JobType::SINK, 10, 5, {p2}, 100);
-        checkScore("totalMakespan (delay not positive)",
+        checkScore("makespanCost (projectDelayCost 0)",
                    ScoreCalculator::calculateScore(s),
                    -18,
                    0,

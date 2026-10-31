@@ -8,6 +8,7 @@
 
 #include "optimaru/api/domain/solution_descriptor.hpp"
 #include "optimaru/api/score/buildin/hard_soft_score.hpp"
+#include "optimaru/api/score/level.hpp"
 
 namespace pjs
 {
@@ -28,7 +29,17 @@ namespace pjs
 // lexicographic order as long as |medium| < ~9.0 * 10^6 and |soft| < 10^9 —
 // both are bounded by allocationCount * (maxDelay + maxDuration), far below
 // those limits for any realistic instance.
+//
+// The fold is declared ONCE, here: toEngineScore below packs the monolithic
+// Score with it, and the MediumFoldOf<ProjectJobSchedule> specialization at
+// the end of this header hands the same constant to the decomposed
+// calculator, which keeps a separate medium accumulator. The medium
+// constraint's weight is therefore in medium units (projectDelayCost: 1),
+// never 10^9. (Before 0.2.0 the medium component carried 10^9 as its soft
+// weight.)
 constexpr std::int64_t kMediumUnit = 1000000000LL;
+constexpr optimaru::MediumFold kMediumFold
+    = optimaru::MediumFold::intoSoft(static_cast<double>(kMediumUnit));
 
 struct Score
 {
@@ -63,9 +74,12 @@ struct Score
 
 inline optimaru::HardSoftScore toEngineScore(const Score &s)
 {
-    return {s.hard,
-            static_cast<double>(s.medium) * static_cast<double>(kMediumUnit)
-                + static_cast<double>(s.soft)};
+    // soft + medium * 10^9: for the integral levels of this domain the same
+    // value as the old `medium * kMediumUnit + soft` (exact while
+    // |engine soft| < 2^53, see above).
+    return kMediumFold.toEngine(s.hard,
+                                static_cast<double>(s.medium),
+                                static_cast<double>(s.soft));
 }
 
 // Inverse of toEngineScore. Every constraint penalizes (medium/soft <= 0 and
@@ -313,6 +327,16 @@ template <> struct optimaru::SolutionDescriptor<pjs::ProjectJobSchedule>
         return s.jobTypeOf(allocationIndex) != pjs::JobType::STANDARD
                || s.allocations[allocationIndex].pinned;
     }
+};
+
+// ---------------------------------------------------------------------------
+// Medium fold registration
+// ---------------------------------------------------------------------------
+// The decomposed calculator folds its medium accumulator with the domain's
+// kMediumFold (see the Score adapter above).
+template <> struct optimaru::MediumFoldOf<pjs::ProjectJobSchedule>
+{
+    static constexpr optimaru::MediumFold value = pjs::kMediumFold;
 };
 
 #endif  // PJS_DOMAIN_HPP

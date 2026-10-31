@@ -1,22 +1,28 @@
-#ifndef PJS_CONSTRAINTS_NON_RENEWABLE_RESOURCE_CAPACITY_HPP
-#define PJS_CONSTRAINTS_NON_RENEWABLE_RESOURCE_CAPACITY_HPP
+#ifndef PJS_CONSTRAINTS_NON_RENEWABLE_RESOURCE_CAPACITY_COST_HPP
+#define PJS_CONSTRAINTS_NON_RENEWABLE_RESOURCE_CAPACITY_COST_HPP
 
 #include "pjs/constraints/common.hpp"
 
 namespace pjs
 {
 
-// Hard (default, weight 1): nonRenewableResourceCapacity — for every
+// Hard, weight 1: nonRenewableResourceCapacityCost — for every
 // non-renewable resource, how far the total requirement of all assigned
-// execution modes exceeds its capacity. A stock that is consumed once, so
-// WHEN a job runs is irrelevant: this is the one component that skips the
-// date chain.
-struct NonRenewableResourceCapacity final : ScheduleAggregateConstraint
+// execution modes exceeds its capacity. Raw cost (one global total) =
+// sum over non-renewable resources of max(0, total requirement - capacity),
+// in resource units, so 0 = every stock is within its capacity. A stock that
+// is consumed once, so WHEN a job runs is irrelevant: this is the one
+// component that skips the date chain. The exponent shapes the total.
+// 0.2.0 migration note: was nonRenewableResourceCapacity.
+struct NonRenewableResourceCapacityCost final : ScheduleAggregateConstraint
 {
-    explicit NonRenewableResourceCapacity(double weight = 1.0)
-        : ScheduleAggregateConstraint("nonRenewableResourceCapacity",
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
+
+    explicit NonRenewableResourceCapacityCost(double weight = kDefaultWeight)
+        : ScheduleAggregateConstraint("nonRenewableResourceCapacityCost",
                                       weight,
-                                      /*hard=*/true)
+                                      kDefaultLevel)
     {
     }
     bool needsDates() const override { return false; }
@@ -53,4 +59,4 @@ private:
 
 }  // namespace pjs
 
-#endif  // PJS_CONSTRAINTS_NON_RENEWABLE_RESOURCE_CAPACITY_HPP
+#endif  // PJS_CONSTRAINTS_NON_RENEWABLE_RESOURCE_CAPACITY_COST_HPP

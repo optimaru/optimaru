@@ -1,21 +1,28 @@
-#ifndef PJS_CONSTRAINTS_RENEWABLE_RESOURCE_CAPACITY_HPP
-#define PJS_CONSTRAINTS_RENEWABLE_RESOURCE_CAPACITY_HPP
+#ifndef PJS_CONSTRAINTS_RENEWABLE_RESOURCE_CAPACITY_COST_HPP
+#define PJS_CONSTRAINTS_RENEWABLE_RESOURCE_CAPACITY_COST_HPP
 
 #include "pjs/constraints/common.hpp"
 
 namespace pjs
 {
 
-// Hard (default, weight 1): renewableResourceCapacity — for every (renewable
+// Hard, weight 1: renewableResourceCapacityCost — for every (renewable
 // resource, day), how far the total requirement of the allocations busy that
-// day exceeds its capacity. A capacity that refreshes daily, so this one is
-// entirely about WHEN jobs run: it reads the whole date chain.
-struct RenewableResourceCapacity final : ScheduleAggregateConstraint
+// day exceeds its capacity. Raw cost (one global total) = sum over (renewable
+// resource, day) of max(0, requirement busy that day - capacity), in
+// resource-unit-days, so 0 = no resource is over capacity on any day. A
+// capacity that refreshes daily, so this one is entirely about WHEN jobs run:
+// it reads the whole date chain. The exponent shapes the total.
+// 0.2.0 migration note: was renewableResourceCapacity.
+struct RenewableResourceCapacityCost final : ScheduleAggregateConstraint
 {
-    explicit RenewableResourceCapacity(double weight = 1.0)
-        : ScheduleAggregateConstraint("renewableResourceCapacity",
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
+
+    explicit RenewableResourceCapacityCost(double weight = kDefaultWeight)
+        : ScheduleAggregateConstraint("renewableResourceCapacityCost",
                                       weight,
-                                      /*hard=*/true)
+                                      kDefaultLevel)
     {
     }
     double evaluate(const ProjectJobSchedule &schedule,
@@ -61,4 +68,4 @@ private:
 
 }  // namespace pjs
 
-#endif  // PJS_CONSTRAINTS_RENEWABLE_RESOURCE_CAPACITY_HPP
+#endif  // PJS_CONSTRAINTS_RENEWABLE_RESOURCE_CAPACITY_COST_HPP

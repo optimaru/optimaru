@@ -99,11 +99,12 @@ public:
     // Solves with a caller-assembled plugin calculator (see
     // pjs/constraints.hpp): pick components and weights, then pass the
     // assembly here. The same search applies, delay-guided value selection
-    // included. Weights come from the assembly, NOT from the quickstart level
-    // defaults. The final schedule.score is computed by THIS calculator
-    // (decoded back into the HardMediumSoft levels) and the calculator is
-    // left primed on the final solution, so constraintTotals() explains
-    // exactly that score. Single-start: the caller-owned calculator cannot be
+    // included. Weights and levels come from the assembly (the components'
+    // kDefaultWeight / kDefaultLevel unless the caller changed them). The
+    // final schedule.score is computed by THIS calculator (its three level
+    // accumulators, calculator.levelScores()) and the calculator is left
+    // primed on the final solution, so constraintTotals() explains exactly
+    // that score. Single-start: the caller-owned calculator cannot be
     // cloned, so parallelSolverCount is ignored.
     void
     solve(ProjectJobSchedule &schedule,

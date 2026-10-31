@@ -15,3 +15,15 @@ with the engine evaluator.
 uv run project-job-compare --seconds 10
 uv run project-job-compare --instance demo --seconds 2 --json
 ```
+
+## Constraints
+
+Plugins subclass the `project_job.constraints` specs of the same name
+(`NonRenewableResourceCapacityCost`, `RenewableResourceCapacityCost`,
+`ProjectDelayCost`, `MakespanCost`) and restate no defaults: the default level
+and weight of every plugin come from `project_job.constraint_info()`, and
+`catalog()` equals it. The objective uses the levels `hard`, `medium`, `soft`;
+`project_delay_cost` sits on `medium` at weight 1 like the engine, and
+`hard=False` demotes a hard or a medium constraint to `soft` (as the engine
+does since 0.2.0; before, CP-SAT moved a demoted hard constraint to `medium`).
+Not supported on CP-SAT: `exponent != 1` and non-integer weights.

@@ -18,23 +18,27 @@ Java's shadow variable chain (predecessorsDoneDate → startDate → endDate) is
 derived state: `calculate_score` / `Solver.solve` recompute and fill it in
 topological order.
 
-Score convention (HardMediumSoftScore, as in the Java quickstart; all penalties):
-  hard 1.  nonRenewableResourceCapacity  total use per non-renewable resource
-                                         above capacity: -(excess)
-  hard 2.  renewableResourceCapacity     use per renewable resource x day
-                                         above capacity: -(excess)
-  medium 3. totalProjectDelay            SINK end date - critical path end date
-                                         (positive only): -(sum of delays)
-  soft 4.  totalMakespan                 -(latest SINK end date)
+Score convention (HardMediumSoftScore, as in the Java quickstart; all penalties), at
+the default weights (the C++ components' kDefaultWeight, see constraint_info()):
+  hard   1. non_renewable_resource_capacity_cost  total use per non-renewable resource
+                                                  above capacity: -(excess) (global)
+  hard   2. renewable_resource_capacity_cost      use per renewable resource x day
+                                                  above capacity: -(excess) (global)
+  medium 3. project_delay_cost                    SINK end date - critical path end date
+                                                  (positive only): -(sum of delays)
+                                                  (medium units, global)
+  soft   4. makespan_cost                         -(latest SINK end date) (global)
 
 Internally the engine uses HardSoftScore(int64 hard, double soft), mapped as
-`engine.soft = medium * 10**9 + soft` (level priority holds while |soft| < 10**9;
-see cpp/include/pjs/domain.hpp for the exact rules).
+`engine.soft = medium * 10**9 + soft` (the domain's medium fold, "into_soft" with unit
+10**9; level priority holds while |soft| < 10**9; see cpp/include/pjs/domain.hpp for
+the exact rules). Medium weights are in medium units: project_delay_cost's default
+weight is 1, not 10**9.
 """
 
 from collections.abc import Callable, Iterable
 from enum import Enum
-from typing import Any
+from typing import Any, Literal, NamedTuple
 
 class Score:
     """HardMediumSoft score. hard 0 == feasible. Lexicographic comparison (hard first)."""
@@ -53,8 +57,9 @@ class JobType(Enum):
     SINK = ...
 
 class Project:
-    """Problem fact: a project. release_date is only the reference of the 'Total project
-    delay' constraint (it does not force the start — as in the Java quickstart)."""
+    """Problem fact: a project. release_date is only the reference of the
+    project_delay_cost constraint (it does not force the start — as in the Java
+    quickstart)."""
     def __init__(self, id: str, release_date: int = 0, critical_path_duration: int = 0) -> None: ...
     id: str
     release_date: int
@@ -211,14 +216,34 @@ class Solver:
     def solve_with_constraints(self, schedule: ProjectJobSchedule, constraints: Iterable[Any] | None = ...) -> None:
         """Score the same solve with a caller-chosen constraint set
         (see project_job.constraints). The given list replaces the default set; None
-        keeps the default set."""
+        keeps the default set. schedule.score reports the three levels the assembly put
+        the terms on (a medium constraint with hard=False lands on soft)."""
 
 def list_constraints() -> list[str]:
     """Constraint names scored by this domain (default assembly order, snake_case).
     The same names project_job.constraints uses."""
 
-def constraint_costs(solution, /) -> dict[str, dict]:
-    """Per-constraint, per-unit **raw** costs — before weight/exponent/level rounding.
-    `project_job.constraints.score()` takes these and produces a score.
-    {name: {"costs": [...], "weight": w, "exponent": e,
-            "hard": bool, "global": bool}}."""
+def constraint_costs(schedule: ProjectJobSchedule, /) -> dict[str, dict[str, Any]]:
+    """Raw cost of every default constraint, before weight/exponent/level:
+    {name: {"costs": [...], "weight": float, "exponent": float, "hard": bool,
+    "global": bool, "level": "hard" | "medium" | "soft", "reward": bool,
+    "level_flippable": bool, "name": str, "label": str,
+    "medium_fold": {"kind": "into_soft", "unit": 1e9}}}. All four constraints are
+    global, so each "costs" list holds the one total. `medium_fold` is on EVERY entry
+    (the fold belongs to the domain), and `project_job.constraints.score()` applies it."""
+
+class ConstraintInfo(NamedTuple):
+    """One constraint-catalog row, read off the C++ default assembly."""
+
+    name: str
+    default_level: Literal["hard", "medium", "soft"]
+    default_weight: float
+    level_flippable: bool
+    reward: bool
+    default_enabled: bool
+
+def constraint_info() -> list[ConstraintInfo]:
+    """The constraint catalog, in list_constraints() order: each component's default
+    level and weight (in units of that level; project_delay_cost is medium, weight 1),
+    whether its level may be flipped, whether it is a reward, and whether it is scored
+    when no constraints are given."""

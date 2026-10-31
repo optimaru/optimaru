@@ -1,4 +1,12 @@
-"""Class-based CP-SAT plugins for project/job scheduling."""
+"""Class-based CP-SAT plugins for project/job scheduling.
+
+Each plugin subclasses the domain spec of the same name; its default level and
+weight come from the engine's ``project_job.constraint_info()`` (the C++
+components' kDefaultLevel / kDefaultWeight), so they are not restated here.
+The medium constraint (``project_delay_cost``) lands on the CP-SAT medium level
+at weight 1, in medium units, exactly like the engine (whose domain folds
+medium into soft at 10^9); ``hard=False`` demotes it to soft on both paths.
+"""
 
 from dataclasses import dataclass
 from typing import Any
@@ -20,11 +28,9 @@ class ProjectContext:
     horizon: int
 
 
-class RenewableResourceCapacity(
-    domain.RenewableResourceCapacity, ConstraintPlugin[ProjectContext]
+class RenewableResourceCapacityCost(
+    domain.RenewableResourceCapacityCost, ConstraintPlugin[ProjectContext]
 ):
-    default_level = "hard"
-
     def build(self, context: ProjectContext, objective: ObjectiveBuilder) -> None:
         for resource in context.problem.resources:
             if not resource.renewable:
@@ -67,11 +73,9 @@ class RenewableResourceCapacity(
                 objective.add(self.name, excess, bound=total_demand)
 
 
-class NonRenewableResourceCapacity(
-    domain.NonRenewableResourceCapacity, ConstraintPlugin[ProjectContext]
+class NonRenewableResourceCapacityCost(
+    domain.NonRenewableResourceCapacityCost, ConstraintPlugin[ProjectContext]
 ):
-    default_level = "hard"
-
     def build(self, context: ProjectContext, objective: ObjectiveBuilder) -> None:
         for resource in context.problem.resources:
             if not resource.renewable:
@@ -92,9 +96,7 @@ class NonRenewableResourceCapacity(
                 objective.add(self.name, excess, bound=total)
 
 
-class TotalProjectDelay(domain.TotalProjectDelay, ConstraintPlugin[ProjectContext]):
-    default_level = "medium"
-
+class ProjectDelayCost(domain.ProjectDelayCost, ConstraintPlugin[ProjectContext]):
     def build(self, context: ProjectContext, objective: ObjectiveBuilder) -> None:
         objective.add(
             self.name,
@@ -103,18 +105,18 @@ class TotalProjectDelay(domain.TotalProjectDelay, ConstraintPlugin[ProjectContex
         )
 
 
-class TotalMakespan(domain.TotalMakespan, ConstraintPlugin[ProjectContext]):
-    default_level = "soft"
-
+class MakespanCost(domain.MakespanCost, ConstraintPlugin[ProjectContext]):
     def build(self, context: ProjectContext, objective: ObjectiveBuilder) -> None:
         objective.add(self.name, context.makespan, bound=context.horizon)
 
 
+# Plugin order = project_job.list_constraints() order, so catalog() lists the
+# engine's catalog.
 REGISTRY = ConstraintRegistry(
     [
-        NonRenewableResourceCapacity(),
-        RenewableResourceCapacity(),
-        TotalProjectDelay(),
-        TotalMakespan(),
+        NonRenewableResourceCapacityCost(),
+        RenewableResourceCapacityCost(),
+        ProjectDelayCost(),
+        MakespanCost(),
     ]
 )

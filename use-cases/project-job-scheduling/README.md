@@ -16,7 +16,7 @@ from project_job.demo import generate_demo_data
 
 schedule = generate_demo_data()
 result = pj.solve(schedule, time_limit_seconds=5.0, random_seed=42)
-print(result.score_hard, result.score_soft)
+print(result.score_hard, result.score_medium, result.score_soft)
 ```
 
 `solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, a full `config` (`project_job.SolverConfig`) and `constraints` (see below). The C++ side builds and tests with:
@@ -25,6 +25,53 @@ print(result.score_hard, result.score_soft)
 cmake -S use-cases/project-job-scheduling/cpp -B build/project-job-scheduling && cmake --build build/project-job-scheduling -j
 ctest --test-dir build/project-job-scheduling
 ```
+
+`pjs_test` hand-checks the monolithic score (the Java provider-test cases), incremental ==
+full recompute and a FULL_ASSERT solve; `pjs_plugin_test` checks the default assembly ==
+the monolith, the raw costs by hand (one positive and one zero case per constraint), the
+catalog and the medium knobs.
+
+## Constraints (HardMediumSoftScore, folded into the engine's HardSoftScore)
+
+`cpp/include/pjs/constraints/` holds one component per constraint
+(`non_renewable_resource_capacity_cost.hpp`, `renewable_resource_capacity_cost.hpp`,
+`project_delay_cost.hpp`, `makespan_cost.hpp`, plus `common.hpp`);
+`cpp/include/pjs/constraints.hpp` assembles the default set (`defaultConstraints()`).
+All four are global constraints (each reads the whole precedence chain or the whole
+stock), so each has one raw total, and the exponent shapes that total.
+
+| Constraint (Python name) | C++ component | Default level | Default weight | Raw cost (0 = no violation) |
+|---|---|---|---|---|
+| `non_renewable_resource_capacity_cost` | `NonRenewableResourceCapacityCost` | hard | 1 | resource units of total use above capacity, summed over the non-renewable resources |
+| `renewable_resource_capacity_cost` | `RenewableResourceCapacityCost` | hard | 1 | resource-unit-days of use above capacity, summed over (renewable resource, day) |
+| `project_delay_cost` | `ProjectDelayCost` | medium | 1 | days the SINK of each project ends after its critical-path end date (release + critical path duration), summed over the projects |
+| `makespan_cost` | `MakespanCost` | soft | 1 | the latest SINK end date, an absolute day index (one value for the schedule, a max, not a sum) |
+
+`list_constraints()` and `constraint_info()` report them in this order;
+`project_job.constraint_info()` reports exactly this table from the C++ components
+(`kDefaultLevel` / `kDefaultWeight`). Every constraint is flippable (`hard=True` /
+`hard=False`), none is a reward and all four are scored by default (`default_enabled`).
+
+The medium weight is in **medium units**: the domain folds the medium level into the
+engine's soft level as `engine.soft = medium * 10^9 + soft` (`kMediumFold` in
+`cpp/include/pjs/domain.hpp`, reported as `medium_fold: {"kind": "into_soft", "unit": 1e9}`
+on every `constraint_costs()` entry). Medium is a default-only level: `hard=True` makes
+`project_delay_cost` 1 hard unit per day, `hard=False` 1 soft unit per day (outside the
+fold), and an explicit `weight` keeps it on the medium level, in medium units — in the
+engine and in the CP-SAT reference alike.
+
+**0.2.0:** the constraints were renamed (`non_renewable_resource_capacity` ->
+`non_renewable_resource_capacity_cost`, `renewable_resource_capacity` ->
+`renewable_resource_capacity_cost`, `total_project_delay` -> `project_delay_cost`,
+`total_makespan` -> `makespan_cost`; the spec classes, module-level default instances, C++
+structs, headers and registry names follow: `TotalProjectDelay` -> `ProjectDelayCost`,
+`TotalMakespan` -> `MakespanCost`, ...). `makespan_cost` drops "total" because it is the
+latest end date (a max), not a total. `project_delay_cost` used to carry the fold as a soft
+weight of 10^9; now its default weight is 1 on the medium level and the fold belongs to the
+domain, so `hard=True` costs 1 hard per day (was 10^9), `hard=False` demotes it to soft in
+both solvers (it was a no-op in the engine), an explicit weight is in medium units (it used
+to replace the fold), and on CP-SAT `hard=False` on a hard constraint now lands on soft (it
+landed on medium). Raw costs and the default score are unchanged.
 
 ## Starting from an existing solution
 
@@ -57,20 +104,30 @@ Decreasing ordering, or pre-assign part of the solution in the domain
 solver's `solve` before the engine runs — the engine only fills what is still unassigned.
 
 **Adding a hard or soft cost.** One file per constraint under
-`cpp/include/pjs/constraints/` (currently `non_renewable_resource_capacity`, `renewable_resource_capacity`, `total_makespan`, `total_project_delay`):
-1. add `constraints/<name>.hpp` (a `UnitConstraint` or `GlobalConstraint`;
-   positive cost = penalty, the level and weight are constructor defaults);
+`cpp/include/pjs/constraints/` (currently `non_renewable_resource_capacity_cost`,
+`renewable_resource_capacity_cost`, `project_delay_cost`, `makespan_cost`):
+1. add `constraints/<subject>_cost.hpp` with `struct <Subject>Cost` (a `UnitConstraint` or
+   `GlobalConstraint`, here usually over `ScheduleAggregateConstraint`; positive raw cost =
+   penalty, 0 = no violation) declaring `static constexpr double kDefaultWeight` and
+   `static constexpr optimaru::Level kDefaultLevel`, an
+   `explicit <Subject>Cost(double weight = kDefaultWeight)` constructor and the registry
+   name `"<subject>Cost"` (the struct name with a lower-case first letter); a medium
+   constraint declares `Level::Medium` at a weight in medium units (the domain applies the
+   10^9 fold);
 2. include it in `cpp/include/pjs/constraints.hpp` and `emplace` it in
    `defaultConstraints()` if it belongs to the default set;
 3. for a default constraint, add the same raw cost to
-   `score_calculator` / `incremental_calculator` — `pjs_plugin_test` checks
-   they agree bit for bit;
-4. add a `Constraint` spec with the snake_case `name` to
-   `python/project_job/constraints.py`; callers then pick, reweight or flip it:
-   `constraints=get_constraints([..., MyRule(weight=5, hard=True)])`;
+   `score_calculator` / `incremental_calculator`, weighted by the component's
+   `kDefaultWeight` — `pjs_plugin_test` checks they agree bit for bit — and a positive and a
+   zero hand-calculated case to `pjs_test` / `pjs_plugin_test`;
+4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
+   `description_en` / `description_ko` to `python/project_job/constraints.py` (plus its
+   module-level default instance); callers then pick, reweight or flip it:
+   `constraints=get_constraints([..., MyRuleCost(weight=5, hard=True)])`;
 5. mirror it in the CP-SAT model in
-   [`benchmarks/project-job-scheduling/cpsat`](../../benchmarks/project-job-scheduling/cpsat) so the
-   benchmark stays like for like.
+   [`benchmarks/project-job-scheduling/cpsat`](../../benchmarks/project-job-scheduling/cpsat)
+   (a plugin subclassing the spec; defaults come from `constraint_info()`) so the benchmark
+   stays like for like.
 
 ## Benchmark
 

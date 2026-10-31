@@ -403,7 +403,9 @@ PYBIND11_MODULE(_core, m)
              py::call_guard<py::gil_scoped_release>())
         // Same solve, scored by a caller-chosen constraint set (see
         // project_job.constraints). The picks replace the defaults; None
-        // keeps them.
+        // keeps them. schedule.score then reports the three levels the
+        // assembly put the terms on (a medium constraint with hard=False
+        // lands on soft).
         .def(
             "solve_with_constraints",
             [](Solver &solver,
@@ -423,6 +425,8 @@ PYBIND11_MODULE(_core, m)
     // The raw per-unit costs of the default assembly on `schedule` — the input
     // project_job.constraints.score() turns into a score. Scoring once is
     // enough: re-pricing any assembly is pure Python arithmetic on these.
+    // All four constraints are global (one total each). Every entry carries
+    // the domain's medium fold (into_soft, 10^9), which score() applies.
     m.def(
         "constraint_costs",
         [](ProjectJobSchedule &schedule)
@@ -436,9 +440,13 @@ PYBIND11_MODULE(_core, m)
         "Raw per-unit cost of every constraint, before weight/exponent/level.");
 
     // The constraint names this domain scores, in default-assembly order —
-    // the same strings a score breakdown reports.
+    // the same strings constraint_costs() reports.
     m.def(
         "list_constraints",
         [] { return tfpy::constraintNames(defaultConstraints()); },
         "Constraint names available to project_job.constraints.");
+
+    // The constraint catalog, read off the default assembly: the components'
+    // kDefaultWeight / kDefaultLevel are the only place a default lives.
+    tfpy::bindConstraintInfo(m, [] { return defaultConstraints(); });
 }
