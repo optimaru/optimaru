@@ -56,6 +56,16 @@ def build_schedule():
     return sl.demo_schedule()
 
 
+def forced_conflict_schedule():
+    """Three teams, one round, two matches sharing team 0: one unavoidable team conflict."""
+    return sl.LeagueSchedule(
+        [sl.Team(str(t)) for t in range(3)],
+        [sl.Round(0)],
+        [sl.Match("a", 0, 1), sl.Match("b", 0, 2)],
+        [[0] * 3 for _ in range(3)],
+    )
+
+
 def solve(constraints=None):
     schedule = build_schedule()
     sl.solve(schedule, time_limit_seconds=0.6, random_seed=1, constraints=constraints)
@@ -302,12 +312,16 @@ def test_demoting_a_hard_constraint_scores_it_as_soft():
     assert pairs > 0
     assert score(raw, demoted) == (0, -pairs)
     assert score(raw, [team_conflict_cost]) == (-pairs, 0.0)
-    # The engine path agrees: a solve under the demoted selection reports the score
-    # score() gives its solution.
-    solved = build_schedule()
-    sl.solve(solved, time_limit_seconds=0.3, random_seed=1, constraints=demoted)
-    assert solved.score.hard == 0
-    assert score(sl.constraint_costs(solved), demoted) == (solved.score.hard, pytest.approx(solved.score.soft))
+    # The engine path agrees. One round and two matches sharing team 0 make the
+    # conflict unavoidable, so the solve reports a non-zero cost on whichever level
+    # the selection puts it (a binding that ignored hard=False would report -1hard).
+    demoted_solve = forced_conflict_schedule()
+    sl.solve(demoted_solve, time_limit_seconds=0.3, random_seed=1, constraints=demoted)
+    assert (demoted_solve.score.hard, demoted_solve.score.soft) == (0, -1.0)
+    assert score(sl.constraint_costs(demoted_solve), demoted) == (0, -1.0)
+    hard_solve = forced_conflict_schedule()
+    sl.solve(hard_solve, time_limit_seconds=0.3, random_seed=1, constraints=[team_conflict_cost])
+    assert (hard_solve.score.hard, hard_solve.score.soft) == (-1, 0.0)
 
 
 @pytest.mark.parametrize(

@@ -88,7 +88,7 @@ class TeamConflictCost(Constraint):
         "One unit of cost is one such pair; 0 means no team plays twice in a round."
     )
     description_ko = (
-        "같은 라운드에 열리면서 팀을 공유하는 경기 쌍의 수이며, 두 팀을 모두 공유하는 쌍도 한 번만 셉니다. "
+        "같은 라운드에 열리면서 한 팀 이상이 겹치는 경기 쌍의 수이며, 두 팀이 모두 겹치는 쌍도 한 번만 셉니다. "
         "그런 쌍 하나가 비용 1이며, 0이면 한 라운드에 두 번 경기하는 팀이 없습니다."
     )
 
@@ -109,7 +109,7 @@ class ConsecutiveHomeMatchesCost(Constraint):
         "0 means no team plays at home more than three rounds in a row."
     )
     description_ko = (
-        "팀마다 네 라운드 이상 연속으로 홈에서 치르는 구간의 길이를 모두 더합니다(4연속이면 4). "
+        "팀마다 네 라운드 이상 연속으로 홈 경기를 치르는 구간의 길이를 모두 더합니다(4연속이면 4). "
         "그런 구간의 라운드 하나가 비용 1이며, 0이면 어느 팀도 세 라운드를 넘게 연속으로 홈 경기를 치르지 않습니다."
     )
 
@@ -128,7 +128,7 @@ class ConsecutiveAwayMatchesCost(Constraint):
         "0 means no team plays away more than three rounds in a row."
     )
     description_ko = (
-        "팀마다 네 라운드 이상 연속으로 원정을 치르는 구간의 길이를 모두 더합니다(4연속이면 4). "
+        "팀마다 네 라운드 이상 연속으로 원정 경기를 치르는 구간의 길이를 모두 더합니다(4연속이면 4). "
         "그런 구간의 라운드 하나가 비용 1이며, 0이면 어느 팀도 세 라운드를 넘게 연속으로 원정 경기를 치르지 않습니다."
     )
 
@@ -153,19 +153,22 @@ class RepeatMatchOnNextDayCost(Constraint):
 
 
 class StartToAwayHopCost(Constraint):
-    """Km the away team travels from its home to a match in the season's **first** round.
-    Default: soft, weight 1."""
+    """Km the away team travels from its home to a match in a round with no round index
+    right before it (the season's **first** round, or the first round after a gap in the
+    indices). Default: soft, weight 1."""
 
     name = "start_to_away_hop_cost"
     label_en = "Travel to the first round"
     label_ko = "첫 라운드 원정 이동"
     description_en = (
-        "Kilometres each away team travels from its home to a match in the season's first round. "
-        "One unit of cost is one kilometre; 0 means no away travel to first-round matches."
+        "Kilometres each away team travels from its home to a match in a round with no round index "
+        "right before it (the season's first round, or the first round after a gap in the indices). "
+        "One unit of cost is one kilometre; 0 means no such trip."
     )
     description_ko = (
-        "시즌 첫 라운드 경기마다 원정 팀이 연고지에서 경기장까지 이동하는 거리(km)를 더합니다. "
-        "1km가 비용 1이며, 0이면 첫 라운드 경기에 원정 이동이 없습니다."
+        "바로 앞 라운드 번호가 없는 라운드(시즌 첫 라운드, 또는 라운드 번호가 비는 구간 바로 뒤의 라운드)의 "
+        "경기마다 원정 팀이 연고지에서 경기장까지 이동하는 거리(km)를 더합니다. "
+        "1km가 비용 1이며, 0이면 그런 이동이 없습니다."
     )
 
 
@@ -226,19 +229,22 @@ class AwayToHomeHopCost(Constraint):
 
 
 class AwayToEndHopCost(Constraint):
-    """Km the away team travels home after a match in the season's **last** round.
+    """Km the away team travels home after a match in a round with no round index right
+    after it (the season's **last** round, or the last round before a gap in the indices).
     Default: soft, weight 1."""
 
     name = "away_to_end_hop_cost"
     label_en = "Travel home after the last round"
     label_ko = "마지막 라운드 후 귀환 이동"
     description_en = (
-        "Kilometres each away team travels home after a match in the season's last round. "
-        "One unit of cost is one kilometre; 0 means no away travel home after last-round matches."
+        "Kilometres each away team travels home after a match in a round with no round index "
+        "right after it (the season's last round, or the last round before a gap in the indices). "
+        "One unit of cost is one kilometre; 0 means no such trip."
     )
     description_ko = (
-        "시즌 마지막 라운드 경기마다 원정 팀이 연고지로 돌아가는 거리(km)를 더합니다. "
-        "1km가 비용 1이며, 0이면 마지막 라운드 경기 뒤에 원정 귀환 이동이 없습니다."
+        "바로 다음 라운드 번호가 없는 라운드(시즌 마지막 라운드, 또는 라운드 번호가 비는 구간 바로 앞의 "
+        "라운드)의 경기마다 원정 팀이 연고지로 돌아가는 거리(km)를 더합니다. "
+        "1km가 비용 1이며, 0이면 그런 이동이 없습니다."
     )
 
 

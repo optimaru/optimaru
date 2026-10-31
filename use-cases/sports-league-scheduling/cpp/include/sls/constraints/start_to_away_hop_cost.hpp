@@ -7,10 +7,11 @@ namespace sls
 {
 
 // Soft, weight 1: startToAwayHopCost — the kilometres the away team travels to
-// a match played on the FIRST round index of the season (no round index
-// precedes it), coming from its own home. Raw cost per round position = the
-// summed dist(away, home) of its matches when no earlier round index exists,
-// else 0.
+// a match played on a round index with no round index right before it (the
+// season's first round, or the first round after a gap in the indices),
+// coming from its own home. Raw cost per round position = the summed
+// dist(away, home) of its matches when round index - 1 does not exist, else
+// 0.
 struct StartToAwayHopCost final : PerMatchConstraint
 {
     static constexpr double kDefaultWeight = 1.0;

@@ -56,9 +56,9 @@ public:
     int costliestMatch(std::mt19937_64 &rng, int sample) const;
 
     // The soft penalty a single match currently carries (see matchCost_).
-    // Summed over all matches this is the soft total with the hop terms
-    // counted twice, once for each match of the pair — the invariant the
-    // tests check.
+    // Summed over all matches this is the soft total with the three hop-pair
+    // terms counted twice, once for each match of the pair — the invariant
+    // the tests check.
     std::int64_t matchCost(int matchIndex) const
     {
         return matchCost_[static_cast<std::size_t>(matchIndex)];
@@ -80,20 +80,21 @@ private:
 
     // Raw running totals (all counted positive; weights and signs applied in
     // calculateScore).
-    std::int64_t sameDay_ = 0;      // hard 1, teamConflictCost
-    std::int64_t consecutive_ = 0;  // hard 2 + 3, consecutive*MatchesCost
-    std::int64_t repeat_ = 0;       // hard 4, repeatMatchOnNextDayCost
-    std::int64_t startHop_ = 0;     // soft 5, startToAwayHopCost
-    std::int64_t homeAwayHop_ = 0;  // soft 6, homeToAwayHopCost
-    std::int64_t awayAwayHop_ = 0;  // soft 7, awayToAwayHopCost
-    std::int64_t awayHomeHop_ = 0;  // soft 8, awayToHomeHopCost
-    std::int64_t endHop_ = 0;       // soft 9, awayToEndHopCost
-    std::int64_t classic_ = 0;      // soft 10, workdayClassicMatchesCost
-                                    // (count; weighted 1000)
+    std::int64_t teamConflict_ = 0;  // hard 1, teamConflictCost
+    std::int64_t consecutive_ = 0;   // hard 2 + 3, consecutive*MatchesCost
+    std::int64_t repeat_ = 0;        // hard 4, repeatMatchOnNextDayCost
+    std::int64_t startHop_ = 0;      // soft 5, startToAwayHopCost
+    std::int64_t homeAwayHop_ = 0;   // soft 6, homeToAwayHopCost
+    std::int64_t awayAwayHop_ = 0;   // soft 7, awayToAwayHopCost
+    std::int64_t awayHomeHop_ = 0;   // soft 8, awayToHomeHopCost
+    std::int64_t endHop_ = 0;        // soft 9, awayToEndHopCost
+    std::int64_t classic_ = 0;       // soft 10, workdayClassicMatchesCost
+                                     // (count; weighted 1000)
 
     // Soft penalty each match currently carries: its own start/end hop and
     // classic penalty plus every hop pair it takes part in, credited to both
-    // matches of the pair. Updated by exactly the same deltas as the running
+    // matches of the pair, each term at its component's kDefaultWeight (as in
+    // calculateScore). Updated by exactly the same deltas as the running
     // totals above, so it needs no extra scans; an unassigned match is 0.
     // Read only by the guided selection (costliestMatch) — never by the score.
     std::vector<std::int64_t> matchCost_;

@@ -14,6 +14,7 @@
 #include <string>
 #include <vector>
 
+#include "sls/constraints.hpp"
 #include "sls/domain.hpp"
 #include "sls/incremental_calculator.hpp"
 #include "sls/score_calculator.hpp"
@@ -464,12 +465,14 @@ void verifyIncremental()
             }
         }
         // The per-match guidance signal must track the same deltas: summed
-        // over all matches it is the soft total with the three hop terms
-        // counted twice (once per match of each pair).
+        // over all matches it is the (weighted) soft total with the three
+        // hop-pair terms counted twice (once per match of each pair).
         const Breakdown b = ScoreCalculator::computeBreakdown(shadow);
-        const std::int64_t expectedCost = b.softTotal() + b.homeToAwayHopCost
-                                          + b.awayToAwayHopCost
-                                          + b.awayToHomeHopCost;
+        const std::int64_t expectedCost
+            = b.softTotal()
+              + kSoftWeight<HomeToAwayHopCost> * b.homeToAwayHopCost
+              + kSoftWeight<AwayToAwayHopCost> * b.awayToAwayHopCost
+              + kSoftWeight<AwayToHomeHopCost> * b.awayToHomeHopCost;
         std::int64_t actualCost = 0;
         for (int i = 0; i < matchCount; ++i)
             actualCost += calc.matchCost(i);

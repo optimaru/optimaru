@@ -7,13 +7,13 @@ every match (`Match`) of the league (one BASIC variable: `Match::round`).
 - `cpp/` — domain (`sls::LeagueSchedule`), full-recompute scorer, O(delta)
   incremental scorer, a thin solver wrapper (LA + ALNS), demo (`sls_demo`),
   tests (`sls_test`, `sls_plugin_test`).
-- `include/sls/constraints/` — one component per constraint (+ `common.hpp`):
+- `cpp/include/sls/constraints/` — one component per constraint (+ `common.hpp`):
   `team_conflict_cost.hpp`, `consecutive_home_matches_cost.hpp`,
   `consecutive_away_matches_cost.hpp`, `repeat_match_on_next_day_cost.hpp`,
   `start_to_away_hop_cost.hpp`, `home_to_away_hop_cost.hpp`,
   `away_to_away_hop_cost.hpp`, `away_to_home_hop_cost.hpp`,
   `away_to_end_hop_cost.hpp`, `workday_classic_matches_cost.hpp`;
-  `include/sls/constraints.hpp` assembles the default set (`defaultConstraints()`).
+  `cpp/include/sls/constraints.hpp` assembles the default set (`defaultConstraints()`).
 - `python/` — pybind11 package `sports_league` (with the pydantic mirror, demo generator
   and type stubs). Details in `python/README.md`.
 
@@ -38,8 +38,8 @@ score_calculator.hpp`):
 
 | Constraint (Python name) | C++ component | Default level | Default weight | Raw cost (0 = no violation) |
 |---|---|---|---|---|
-| `start_to_away_hop_cost` | `StartToAwayHopCost` | soft | 1 | per round position: km the away teams travel to its matches when no earlier round index exists |
-| `away_to_end_hop_cost` | `AwayToEndHopCost` | soft | 1 | per round position: km the away teams travel home after its matches when no later round index exists |
+| `start_to_away_hop_cost` | `StartToAwayHopCost` | soft | 1 | per round position: km the away teams travel to its matches when round index - 1 does not exist (first round, or first after a gap) |
+| `away_to_end_hop_cost` | `AwayToEndHopCost` | soft | 1 | per round position: km the away teams travel home after its matches when round index + 1 does not exist (last round, or last before a gap) |
 | `workday_classic_matches_cost` | `WorkdayClassicMatchesCost` | soft | 1000 | per round position: the classic matches (derbies) in it when it is neither a weekend nor a holiday |
 | `team_conflict_cost` | `TeamConflictCost` | hard | 1 | total: match pairs on one round index sharing a team (a pair sharing both teams counts once) |
 | `consecutive_home_matches_cost` | `ConsecutiveHomeMatchesCost` | hard | 1 | total: the full length of every run of 4+ consecutive home round indices, summed over teams |
