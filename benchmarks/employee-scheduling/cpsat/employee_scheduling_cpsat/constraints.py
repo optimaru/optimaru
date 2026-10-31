@@ -221,13 +221,20 @@ class RulePlugin(ConstraintPlugin[ScheduleContext]):
     # The C++ component's own default level. It decides the score, so it is the
     # one that counts where a rule model's docstring says otherwise.
     default_hard: ClassVar[bool]
+    # Whether the raw cost can be fractional. Only the soft level has a fixed-point
+    # grid, and the engine rounds a hard cost per unit, which this model cannot follow.
+    fractional = False
 
     def __init__(self, rule: Any, name: str) -> None:
+        self.rule = rule
         if rule.exponent != 1.0:
             raise ValueError(f"rule {rule.name!r}: exponent is not supported by CP-SAT")
-        self.rule = rule
-        self.name = name
+        if not float(rule.weight).is_integer():
+            raise ValueError(f"rule {rule.name!r}: weight must be an integer for CP-SAT")
         hard = self.default_hard if rule.hard is None else rule.hard
+        if hard and self.fractional:
+            raise ValueError(f"rule {rule.name!r}: a fractional cost cannot be hard for CP-SAT")
+        self.name = name
         self.default_level = "hard" if hard else "soft"
         self.default_weight = rule.weight
         self.label = rule.name
@@ -430,12 +437,16 @@ class DesiredShift(RulePlugin):
 
     def build(self, context: ScheduleContext, objective: ObjectiveBuilder) -> None:
         scope = context.scope(self.rule)
+        wishes = {
+            worker: {tuple(item) for item in context.workers[worker].desired_shifts}
+            for worker in scope.workers
+        }
         for shift in scope.shifts:
             wanted = (context.day[shift], context.shifts[shift].location)
             literals = [
                 context.x[shift, worker]
                 for worker in scope.workers
-                if wanted in {tuple(item) for item in context.workers[worker].desired_shifts}
+                if wanted in wishes[worker]
             ]
             if literals:
                 self.reward(objective, sum(literals), 1)
@@ -497,6 +508,7 @@ class MinimumRest(PairRule):
 class BalanceAssignments(RulePlugin):
     rule_type = domain.BalanceAssignmentsRule
     default_hard = False
+    fractional = True
 
     def build(self, context: ScheduleContext, objective: ObjectiveBuilder) -> None:
         loads = [context.load(worker) for worker in range(len(context.workers))]
@@ -662,6 +674,7 @@ class MinWeeklyRestDays(RulePlugin):
 class AssignmentCost(RulePlugin):
     rule_type = domain.AssignmentCostRule
     default_hard = False
+    fractional = True
 
     def build(self, context: ScheduleContext, objective: ObjectiveBuilder) -> None:
         rule = self.rule
@@ -676,9 +689,10 @@ class AssignmentCost(RulePlugin):
                 row = rule.shift_costs.get(context.workers[worker].id, {})
                 terms.append((round(self.scale * row.get(data.id, base)), worker))
             magnitude = sum(cost * context.x[shift, worker] for cost, worker in terms)
-            bound = max((abs(cost) for cost, _ in terms), default=0)
-            if bound:
-                objective.add(self.name, magnitude, bound=bound)
+            # Already scaled. A cost may be negative, and the term is 0 when the
+            # shift goes elsewhere, so the bound is the width of that whole range.
+            costs = [0, *(cost for cost, _ in terms)]
+            objective.add(self.name, magnitude, bound=max(costs) - min(costs))
 
 
 class UnassignedShift(RulePlugin):
@@ -703,6 +717,7 @@ class BalanceMinMaxGap(RulePlugin):
 class BalanceWeeklyMinutesGap(RulePlugin):
     rule_type = domain.BalanceWeeklyMinutesGapRule
     default_hard = False
+    fractional = True
 
     def build(self, context: ScheduleContext, objective: ObjectiveBuilder) -> None:
         workers = range(len(context.workers))
@@ -926,6 +941,10 @@ class WorkerDayCountInRange(RulePlugin):
 class BalanceLocation(RulePlugin):
     rule_type = domain.BalanceLocationRule
     default_hard = False
+
+    @property
+    def fractional(self) -> bool:
+        return self.rule.metric == "ssd"
 
     def build(self, context: ScheduleContext, objective: ObjectiveBuilder) -> None:
         rule = self.rule

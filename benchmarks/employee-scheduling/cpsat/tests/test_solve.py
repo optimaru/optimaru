@@ -115,24 +115,33 @@ def _problem(rules: list, seed: int = 3) -> ScheduleRequest:
     )
 
 
-def _engine_cost(problem: ScheduleRequest, fixed: list[int | None]) -> tuple[bool, float]:
-    """The one rule's weighted cost under `fixed`, from the engine's calculator."""
+def _stacked_roster(problem: ScheduleRequest, seed: int) -> list[int | None]:
+    """Few workers and some gaps, so rules about doubled or long runs of work bind."""
+    rng = random.Random(seed)
+    return [
+        None if rng.random() < 0.1 else rng.choice([0, 0, 1, 2])
+        for _ in problem.model_input.shifts
+    ]
+
+
+def _with_workers(problem: ScheduleRequest, fixed: list[int | None]) -> ScheduleRequest:
     candidate = problem.model_copy(deep=True)
     for shift, worker in zip(candidate.model_input.shifts, fixed, strict=True):
         shift.worker = None if worker is None else candidate.model_input.workers[worker].id
-    [total] = constraint_costs(candidate)["totals"]
+    return candidate
+
+
+def _engine_cost(problem: ScheduleRequest, fixed: list[int | None]) -> tuple[bool, float]:
+    """The one rule's weighted cost under `fixed`, from the engine's calculator."""
+    [total] = constraint_costs(_with_workers(problem, fixed))["totals"]
     return total["is_hard"], total["cost"]
 
 
 @pytest.mark.parametrize("seed", range(4))
 @pytest.mark.parametrize("rule", RULES, ids=lambda item: repr(item)[:60])
 def test_each_rule_matches_the_engine_on_a_fixed_roster(rule, seed) -> None:
-    problem = _problem([rule])
-    rng = random.Random(seed)
-    # Stacked on few workers, so rules about doubled or long runs of work bind.
-    fixed = [
-        None if rng.random() < 0.1 else rng.choice([0, 0, 1, 2]) for _ in problem.model_input.shifts
-    ]
+    problem = _problem([rule], seed)
+    fixed = _stacked_roster(problem, seed)
     is_hard, expected = _engine_cost(problem, fixed)
     proxy: dict[str, int] = {}
 
@@ -154,14 +163,43 @@ def test_every_rule_type_has_a_plugin() -> None:
     assert {entry["name"] for entry in catalog()} == names
 
 
-def test_every_rule_at_once_builds_and_solves() -> None:
-    problem = _problem(RULES)
+@pytest.mark.parametrize("seed", range(4))
+def test_every_rule_at_once_matches_the_engine_on_a_fixed_roster(seed) -> None:
+    problem = _problem(RULES, seed)
+    fixed = _stacked_roster(problem, seed)
+    expected = constraint_costs(_with_workers(problem, fixed))
+    proxy: dict[str, int] = {}
 
-    solved = solve(problem, time_limit_seconds=5, num_workers=2)
+    solve(problem, time_limit_seconds=5, _fixed_workers=fixed, _proxy_score=proxy)
 
-    costs = constraint_costs(solved)
-    assert isinstance(costs["hard"], int)
-    assert len(costs["totals"]) == len(RULES)
+    assert proxy["hard"] == expected["hard"]
+    # Each of the three root rules and two weeks of gap rounds up to the grid.
+    assert proxy["soft"] / SCALE == pytest.approx(expected["soft"], abs=5 / SCALE + 1e-9)
+
+
+def test_mixed_sign_costs_do_not_outweigh_the_hard_level() -> None:
+    problem = ScheduleRequest(
+        model_input=SchedulingInput(
+            workers=[
+                WorkerModel(id="Worker 1"),
+                WorkerModel(id="Worker 2", skills=["Skill A"]),
+            ],
+            shifts=[ShiftModel(id="Shift 1", start=0, end=60, required_skill="Skill A")],
+            rules=[
+                domain.RequiredSkillRule(),
+                domain.AssignmentCostRule(
+                    shift_costs={
+                        "Worker 1": {"Shift 1": -5.0},
+                        "Worker 2": {"Shift 1": 5.0},
+                    }
+                ),
+            ],
+        )
+    )
+
+    solved = solve(problem, time_limit_seconds=2)
+
+    assert solved.model_input.shifts[0].worker == "Worker 2"
 
 
 def test_the_demo_solves_to_a_feasible_roster() -> None:
@@ -195,8 +233,13 @@ def test_a_shift_stays_empty_only_when_a_rule_prices_it() -> None:
 def test_what_cannot_be_modelled_is_refused() -> None:
     with pytest.raises(ValueError, match="exponent"):
         solve(_problem([domain.RequiredSkillRule(exponent=2.0)]))
+    # Refused even though no term of this rule would reach the objective.
     with pytest.raises(ValueError, match="integer"):
-        solve(_problem([domain.UndesiredDayRule(weight=0.5)]))
+        solve(_problem([domain.TargetDaysOffRule(weight=0.5)]))
+    with pytest.raises(ValueError, match="fractional"):
+        solve(_problem([domain.BalanceAssignmentsRule(policy="hard")]))
+    with pytest.raises(ValueError, match="fractional"):
+        solve(_problem([domain.AssignmentCostRule(policy="hard", cost_per_shift=2.5)]))
     pinned = _problem([domain.RequiredSkillRule()])
     pinned.model_input.shifts[0].worker = "Worker 0"
     pinned.model_input.shifts[0].pinned = True

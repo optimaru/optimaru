@@ -40,9 +40,10 @@ shifts.
 | `balance_weekly_minutes_gap` | as above, in hours | to 0.01 per week |
 | `balance_assignments`, `balance_location` with `metric="ssd"` | a fixed-point `sqrt(ssd)` over multiplication constraints | to 0.01, and the engine's rounding to 6 significant figures is not modelled |
 
-Worker and shift scopes (`worker_indices`, `shift_indices`) are modelled. A
-fractional rule moved to the hard level rounds up here, where the engine rounds
-to nearest. None of the benchmark instances does this.
+Worker and shift scopes (`worker_indices`, `shift_indices`) are modelled.
+
+On `large` the model has 51,661 variables, and presolve takes about 6 of the 30
+seconds.
 
 ## Not modelled
 
@@ -50,6 +51,10 @@ These are refused with a `ValueError`, not approximated:
 
 - `exponent` other than 1. It shapes a cost non-linearly, per unit.
 - A fractional `weight`, as in every CP-SAT backend here.
+- A rule with a fractional cost at the hard level: `assignment_cost`,
+  `balance_assignments`, `balance_weekly_minutes_gap`, and `balance_location` with
+  `metric="ssd"`. Only the soft level has a fixed-point grid, and the engine rounds
+  a hard cost per unit.
 - Pinned shifts. The engine exempts pinned-only runs and weeks from several rules.
   That depends on whole runs and does not fit the window literals above.
 
