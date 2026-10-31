@@ -245,7 +245,8 @@ identical.
 - Simulated annealing cools over the run's step limit when that is further
   along than the time limit (`SolverTermination::timeGradient()`). A
   step-limited run used to stay near its starting temperature because the
-  30 s wall-clock limit was far away, and was not repeatable.
+  30 s wall-clock limit was far away, and was not repeatable; it now repeats
+  whenever its steps lead the clock.
 - `python/solver_config.hpp`: `secondsToMillis()` (the time-limit rule) and
   `bindConfigCopy()` (`SolverConfig.__copy__` / `__deepcopy__`).
 - Removed: the `(name, weight, bool hard)` constructors and the assignable
@@ -699,8 +700,9 @@ constraint, a pybind11 extension `<package>._core` and a CP-SAT reference on
   per-item lists are available as `constraint_items(problem)`.
 - Search is the engine's simulated annealing with an automatic temperature.
   It cools over `step_count_limit` when that is further along than the time
-  limit, so `max_iterations=N` → `step_count_limit=N` anneals (and a seeded
-  step-limited run repeats). `on_new_best(step, Score)` replaces
+  limit, so `max_iterations=N` → `step_count_limit=N` anneals, and a seeded
+  step-limited run repeats whenever its steps lead the clock.
+  `on_new_best(step, Score)` replaces
   `on_new_best(state)`, and the returned `Score` is also an iterable,
   comparable (hard, soft) pair.
 - The pydantic models are no longer re-exported from the package root (they
