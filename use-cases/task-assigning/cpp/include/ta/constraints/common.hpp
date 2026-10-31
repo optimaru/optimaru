@@ -25,9 +25,9 @@ namespace ta
 // Unit choice: with the LIST descriptor the calculator's unit is one LIST,
 // i.e. one employee; members are that employee's task indices IN EXECUTION
 // ORDER. Five of the six rules are per-employee sums over that ordered chain
-// and therefore plain UnitConstraints. minimizeUnassignedTasks counts the
-// tasks in NO list at all, which belongs to no unit, so it runs as a
-// GlobalConstraint (the school-timetabling UnassignedLesson pattern).
+// and therefore plain UnitConstraints. unassignedTasksCost counts the tasks
+// in NO list at all, which belongs to no unit, so it runs as a
+// GlobalConstraint (the school-timetabling UnassignedLessonsCost pattern).
 //
 // A component never reads the Task shadow variables (employee, startTime):
 // walkChain below re-derives the start/end chain from the unit's own member
@@ -35,21 +35,27 @@ namespace ta
 // members) as the engine's contract requires. The LIST path re-costs a
 // touched list whole, so no delta contract is needed.
 //
-// Score levels: the quickstart scores with BendableScore(1 hard, 3 soft),
-// which this domain folds into the engine's HardSoftScore as
-//   engine.hard = hard[0] * kMissingSkillUnit + soft[0]
-//   engine.soft = soft[1] * kMakespanUnit     + soft[2]
-// (see domain.hpp). A component's default weight therefore carries its
-// level's unit factor: noMissingSkills weighs kMissingSkillUnit on the hard
-// level, minimizeUnassignedTasks weighs 1 on the same hard level,
-// minimizeMakespan weighs kMakespanUnit on the soft level, and the three
-// priority rules weigh their plain 4 / 2 / 1 factors on the soft level.
+// Score levels: the quickstart scores with BendableScore(1 hard, 3 soft).
+// The components score on the engine's three levels and the domain folds
+// them into HardSoftScore (domain.hpp, kMediumFold and toEngineScore):
+//   hard[0] requiredSkillCost         Level::Hard,   weight 1
+//   soft[0] unassignedTasksCost       Level::Medium, weight 1
+//   soft[1] squaredMakespanCost       Level::Soft,   weight kMakespanUnit (10^7)
+//   soft[2] {critical|major|minor}PriorityTaskEndTimeCost
+//                                     Level::Soft,   weight 4 / 2 / 1
+//   engine.hard = hard * kMissingSkillUnit + medium   (MediumFold::belowHard)
+//   engine.soft = soft                                (= soft1 * 10^7 + soft2)
+// Every weight is in units of its level; the 10^9 hard unit lives in the
+// fold, not in requiredSkillCost's weight. soft[1] and soft[2] share the one
+// soft level, so squaredMakespanCost's default weight 10^7 is what keeps
+// soft[1] lexicographically above soft[2] (the Score adapter decodes that
+// packing).
 //
 //   DecomposedCalculator calc;
-//   defaultConstraints()              // the whole default set
-//       .weight("...", 2)            // ... then only what differs
-//       .soft("...")
-//       .drop("...")
+//   defaultConstraints()                                    // the whole default set
+//       .weight("criticalPriorityTaskEndTimeCost", 2)       // ... then only what differs
+//       .soft("requiredSkillCost")
+//       .drop("majorPriorityTaskEndTimeCost")
 //       .into(calc);
 //   solver.solve(solution, calc);
 //
@@ -57,14 +63,20 @@ namespace ta
 // `ConstraintAssembly{}` when you would rather list components from
 // scratch than start from the defaults.
 //
-// The level and the weight of each component are DEFAULTS — assembly-time
-// metadata, not part of the cost. Override them per instance via the mutable
-// `isHard` / `weight` / `exponent`.
+// Each component declares its defaults once, as static constexpr
+// kDefaultWeight / kDefaultLevel passed to the base constructor; they are
+// assembly-time metadata, not part of the cost. Override them per instance
+// with the constructor's weight argument or the mutable `level` / `weight` /
+// `exponent`, or by name through ConstraintAssembly. The monolithic
+// calculators read the same kDefaultWeight constants, which is why the
+// default assembly scores bit-for-bit like them.
+//
+// Registry names are the struct names with a lower-case first letter
+// ("requiredSkillCost"); Python sees them through pythonName()
+// ("required_skill_cost").
 //
 // Cost sign convention (see decomposed_score_calculator.hpp): positive =
-// penalty; the calculator negates into the score. An assembly of all six
-// components at their default weights therefore scores bit-for-bit like
-// ScoreCalculator::calculateScore.
+// penalty, 0 = no violation; the calculator negates into the score.
 
 using DecomposedCalculator
     = optimaru::DecomposedScoreCalculator<TaskAssigningSolution>;
@@ -112,15 +124,17 @@ inline Minutes walkChain(const TaskAssigningSolution &solution,
 // ---------------------------------------------------------------------------
 // Shared base of the three soft[2] rules (critical x 4 / major x 2 / minor
 // x 1): the same per-employee chain walk, restricted to the tasks of one
-// priority. The x 4 / x 2 / x 1 factors are the components' default weights,
-// so re-pricing one priority is a weight override like any other.
+// priority. The x 4 / x 2 / x 1 factors are the components' kDefaultWeight,
+// so re-pricing one priority is a weight override like any other. Raw cost
+// per employee = the summed end times (minutes) of its tasks of that
+// priority; 0 = no task of that priority on the list.
 struct PriorityTaskEndTime : TaUnitConstraint
 {
     PriorityTaskEndTime(std::string constraintName,
                         double weight,
-                        bool hard,
+                        optimaru::Level level,
                         Priority priority)
-        : TaUnitConstraint(std::move(constraintName), weight, hard),
+        : TaUnitConstraint(std::move(constraintName), weight, level),
           priority_(priority)
     {
     }

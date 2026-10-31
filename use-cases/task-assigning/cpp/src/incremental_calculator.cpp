@@ -2,6 +2,8 @@
 
 #include <algorithm>
 
+#include "ta/constraints.hpp"  // priorityWeight: the components' default weights
+
 namespace ta
 {
 

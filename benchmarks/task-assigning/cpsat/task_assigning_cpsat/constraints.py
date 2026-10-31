@@ -1,4 +1,13 @@
-"""Class-based CP-SAT plugins for task assigning."""
+"""Class-based CP-SAT plugins for task assigning.
+
+Each plugin subclasses the domain spec of the same name and only builds its
+expression; the default level and weight come from the engine's
+``task_assigning.constraint_info()`` (cpsat-common reads the row), so the two
+solvers cannot disagree on a default. The levels are the engine's three:
+``required_skill_cost`` hard, ``unassigned_tasks_cost`` medium, the other four
+soft, with ``squared_makespan_cost``'s default weight 10^7 keeping the Bendable
+soft[1] above soft[2] on the one soft level (decision 7).
+"""
 
 from dataclasses import dataclass
 from typing import Any, ClassVar
@@ -22,9 +31,7 @@ class TaskContext:
     contributions: list[list[Any]]
 
 
-class NoMissingSkills(domain.NoMissingSkills, ConstraintPlugin[TaskContext]):
-    default_level = "hard"
-
+class RequiredSkillCost(domain.RequiredSkillCost, ConstraintPlugin[TaskContext]):
     def build(self, context: TaskContext, objective: ObjectiveBuilder) -> None:
         for task_index, task in enumerate(context.problem.tasks):
             required = set(context.task_type[task.task_type_code].required_skills)
@@ -34,19 +41,13 @@ class NoMissingSkills(domain.NoMissingSkills, ConstraintPlugin[TaskContext]):
                 objective.add(self.name, missing * literal, bound=missing)
 
 
-class MinimizeUnassignedTasks(
-    domain.MinimizeUnassignedTasks, ConstraintPlugin[TaskContext]
-):
-    default_level = "soft0"
-
+class UnassignedTasksCost(domain.UnassignedTasksCost, ConstraintPlugin[TaskContext]):
     def build(self, context: TaskContext, objective: ObjectiveBuilder) -> None:
         for literal in context.unassigned:
             objective.add(self.name, literal, bound=1)
 
 
-class MinimizeMakespan(domain.MinimizeMakespan, ConstraintPlugin[TaskContext]):
-    default_level = "soft1"
-
+class SquaredMakespanCost(domain.SquaredMakespanCost, ConstraintPlugin[TaskContext]):
     def build(self, context: TaskContext, objective: ObjectiveBuilder) -> None:
         for employee, contributions in enumerate(context.contributions):
             employee_end = context.model.new_int_var(
@@ -83,32 +84,26 @@ class _PriorityEndPlugin(ConstraintPlugin[TaskContext]):
             objective.add(self.name, active_end, bound=context.horizon)
 
 
-class CriticalPriorityTaskEndTime(
-    domain.CriticalPriorityTaskEndTime, _PriorityEndPlugin
-):
-    default_level = "soft2"
-    default_weight = 4
+class CriticalPriorityTaskEndTimeCost(domain.CriticalPriorityTaskEndTimeCost, _PriorityEndPlugin):
     priority = "CRITICAL"
 
 
-class MajorPriorityTaskEndTime(domain.MajorPriorityTaskEndTime, _PriorityEndPlugin):
-    default_level = "soft2"
-    default_weight = 2
+class MajorPriorityTaskEndTimeCost(domain.MajorPriorityTaskEndTimeCost, _PriorityEndPlugin):
     priority = "MAJOR"
 
 
-class MinorPriorityTaskEndTime(domain.MinorPriorityTaskEndTime, _PriorityEndPlugin):
-    default_level = "soft2"
+class MinorPriorityTaskEndTimeCost(domain.MinorPriorityTaskEndTimeCost, _PriorityEndPlugin):
     priority = "MINOR"
 
 
+# Plugin order = task_assigning.list_constraints() order (the catalog order).
 REGISTRY = ConstraintRegistry(
     [
-        NoMissingSkills(),
-        MinimizeUnassignedTasks(),
-        MinimizeMakespan(),
-        CriticalPriorityTaskEndTime(),
-        MajorPriorityTaskEndTime(),
-        MinorPriorityTaskEndTime(),
+        RequiredSkillCost(),
+        SquaredMakespanCost(),
+        CriticalPriorityTaskEndTimeCost(),
+        MajorPriorityTaskEndTimeCost(),
+        MinorPriorityTaskEndTimeCost(),
+        UnassignedTasksCost(),
     ]
 )

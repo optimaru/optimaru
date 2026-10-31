@@ -2,8 +2,29 @@
 
 #include <algorithm>
 
+#include "ta/constraints.hpp"
+
 namespace ta
 {
+
+namespace
+{
+// The monolith scores every level at the components' default weights: the
+// priority factors come from priorityWeight() (constraints.hpp), the hard,
+// medium and soft[1] levels count one unit per raw unit, and the Score
+// adapter (toEngineScore) applies the medium fold and the soft[1] packing.
+static_assert(RequiredSkillCost::kDefaultWeight == 1.0
+                  && UnassignedTasksCost::kDefaultWeight == 1.0
+                  && SquaredMakespanCost::kDefaultWeight
+                         == static_cast<double>(kMakespanUnit),
+              "the monolithic calculators assume the component defaults");
+static_assert(RequiredSkillCost::kDefaultLevel == optimaru::Level::Hard
+                  && UnassignedTasksCost::kDefaultLevel
+                         == optimaru::Level::Medium
+                  && SquaredMakespanCost::kDefaultLevel
+                         == optimaru::Level::Soft,
+              "the monolithic calculators assume the component levels");
+}  // namespace
 
 void ScoreCalculator::updateShadowVariables(TaskAssigningSolution &solution)
 {
@@ -38,10 +59,10 @@ Score ScoreCalculator::calculateScore(TaskAssigningSolution &solution)
 {
     updateShadowVariables(solution);
 
-    std::int64_t missingSkillTotal = 0;     // hard[0]
-    std::int64_t unassignedTotal = 0;       // soft[0]
-    std::int64_t makespanSquaredTotal = 0;  // soft[1]
-    std::int64_t weightedEndTimeTotal = 0;  // soft[2]
+    std::int64_t missingSkillTotal = 0;     // hard[0]  requiredSkillCost
+    std::int64_t unassignedTotal = 0;       // soft[0]  unassignedTasksCost
+    std::int64_t makespanSquaredTotal = 0;  // soft[1]  squaredMakespanCost
+    std::int64_t weightedEndTimeTotal = 0;  // soft[2]  *PriorityTaskEndTimeCost
 
     for (const Employee &employee : solution.employees)
     {
@@ -56,7 +77,7 @@ Score ScoreCalculator::calculateScore(TaskAssigningSolution &solution)
             weightedEndTimeTotal += priorityWeight(task.priority) * endTime;
             employeeEndTime = endTime;  // the LAST task's end time
         }
-        // minimizeMakespan: every employee penalizes endTime^2 (0 for an
+        // squaredMakespanCost: every employee penalizes endTime^2 (0 for an
         // employee without tasks).
         makespanSquaredTotal += employeeEndTime * employeeEndTime;
     }

@@ -16,15 +16,19 @@ Shadow variables are derived by the same rules as the Java original
     duration         == base_duration x affinity multiplier (HIGH 1 / MEDIUM 2 /
                         LOW 3 / NONE 4)
 
-Score convention (BendableScore [1]hard/[3]soft, as in the Java quickstart; all penalties):
-  hard[0]  noMissingSkills              required skills the employee lacks
-  soft[0]  minimizeUnassignedTasks      1 per unassigned task
-  soft[1]  minimizeMakespan             endTime^2 per employee
-  soft[2]  {critical|major|minor}PriorityTaskEndTime
+Score convention (BendableScore [1]hard/[3]soft, as in the Java quickstart; all penalties),
+at the default weights:
+  hard[0]  required_skill_cost          required skills the employee lacks
+  soft[0]  unassigned_tasks_cost        1 per unassigned task (the medium level)
+  soft[1]  squared_makespan_cost        endTime^2 per employee
+  soft[2]  {critical|major|minor}_priority_task_end_time_cost
                                         endTime x 4 / x 2 / x 1
 Internally it maps onto HardSoftScore(int64, double) as
-`engine.hard = hard * 10**9 + soft0`, `engine.soft = soft1 * 10**7 + soft2`
-(level order preserved; see cpp/include/ta/domain.hpp for the exact rules).
+`engine.hard = hard * 10**9 + soft0` (the medium level folds below hard) and
+`engine.soft = soft1 * 10**7 + soft2` (squared_makespan_cost's default weight is 10**7);
+level order preserved, see cpp/include/ta/domain.hpp for the exact rules.
+`constraint_info()` lists every constraint with its default level and weight; change one
+through a constraint selection (see `task_assigning.constraints`).
 
 The high-level entry point is `solve`::
 
@@ -40,6 +44,7 @@ The pydantic mirror (for serialization) is in `task_assigning.models` (optional 
 
 from ._core import (
     Affinity,
+    ConstraintInfo,
     Customer,
     Employee,
     Priority,
@@ -51,11 +56,13 @@ from ._core import (
     TaskType,
     calculate_score,
     constraint_costs,
+    constraint_info,
     list_constraints,
 )
 
 __all__ = [
     "Affinity",
+    "ConstraintInfo",
     "Customer",
     "Employee",
     "Priority",
@@ -70,6 +77,7 @@ __all__ = [
     "with_initial_solution",
     "list_constraints",
     "constraint_costs",
+    "constraint_info",
 ]
 
 
@@ -137,7 +145,7 @@ def solve(
 
     ``constraints`` picks the cost function directly
     (see `task_assigning.constraints`). Only the listed constraints are scored; None
-    uses all six default constraints::
+    uses all six default constraints at their default weights::
 
         from task_assigning.constraints import get_constraints
         ta.solve(solution, constraints=get_constraints())

@@ -269,8 +269,8 @@ PYBIND11_MODULE(_core, m)
     m.def("calculate_score",
           &ScoreCalculator::calculateScore,
           py::arg("solution"),
-          "Full recompute of the Bendable score (re-derives the task shadow "
-          "variables and stores solution.score).");
+          "Full recompute of the Bendable score at the default weights "
+          "(re-derives the task shadow variables and stores solution.score).");
 
     py::class_<Solver::Config>(m, "SolverConfig", py::module_local())
         .def(py::init<>())
@@ -428,6 +428,8 @@ PYBIND11_MODULE(_core, m)
     // The raw per-unit costs of the default assembly on `solution` — the input
     // task_assigning.constraints.score() turns into a score. Scoring once is
     // enough: re-pricing any assembly is pure Python arithmetic on these.
+    // Every entry carries the domain's medium fold ("medium_fold":
+    // {"kind": "below_hard", "unit": 1e9}), so score() folds like the engine.
     m.def(
         "constraint_costs",
         [](TaskAssigningSolution &solution)
@@ -445,4 +447,10 @@ PYBIND11_MODULE(_core, m)
         "list_constraints",
         [] { return tfpy::constraintNames(defaultConstraints()); },
         "Constraint names available to task_assigning.constraints.");
+
+    // The constraint catalog, read off the same default assembly:
+    // constraint_info() -> [ConstraintInfo(name, default_level,
+    // default_weight, level_flippable, reward, default_enabled), ...] in
+    // list_constraints() order. The defaults live in the C++ components only.
+    tfpy::bindConstraintInfo(m, [] { return defaultConstraints(); });
 }

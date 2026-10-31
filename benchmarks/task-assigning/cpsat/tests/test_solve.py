@@ -1,7 +1,12 @@
 import pytest
 
 import task_assigning as domain
-from task_assigning.constraints import get_constraints
+from task_assigning.constraints import (
+    RequiredSkillCost,
+    UnassignedTasksCost,
+    get_constraints,
+    score,
+)
 from task_assigning.demo import generate_demo_data
 from task_assigning.models import (
     CustomerModel,
@@ -22,8 +27,8 @@ def test_smoke_and_plugin_catalog():
     ) == len(problem.tasks)
     assert result.score_hard == 0
     assert {entry["name"] for entry in catalog()} >= {
-        "no_missing_skills",
-        "minimize_unassigned_tasks",
+        "required_skill_cost",
+        "unassigned_tasks_cost",
     }
     shared = calculate_score(result.to_core())
     assert (
@@ -38,7 +43,7 @@ def test_explicit_constraint_list_replaces_defaults():
     result = solve(
         generate_demo_data(),
         time_limit_seconds=2.0,
-        constraints=["minimize_unassigned_tasks"],
+        constraints=["unassigned_tasks_cost"],
     )
     assert result.score_hard == 0
     assert result.score_soft1 == 0
@@ -94,3 +99,73 @@ def test_each_constraint_matches_domain_on_fixed_tasks(constraint) -> None:
     )
 
     assert sum(proxy.values()) == pytest.approx(expected)
+
+
+def _engine_levels(solved: TaskAssigningSolutionModel) -> tuple[int, float]:
+    """The model's four Bendable levels folded the way the engine folds them."""
+    return (
+        solved.score_hard * 10**9 + solved.score_soft0,
+        solved.score_soft1 * 10**7 + solved.score_soft2,
+    )
+
+
+def test_cpsat_defaults_are_the_engine_defaults() -> None:
+    """No hand-copied defaults: the CP-SAT catalog equals constraint_info()."""
+    engine = {row.name: row for row in domain.constraint_info()}
+    entries = catalog()
+    assert [entry["name"] for entry in entries] == domain.list_constraints()
+    for entry in entries:
+        row = engine[entry["name"]]
+        assert entry["default_level"] == row.default_level
+        assert entry["default_weight"] == row.default_weight
+        assert entry["level_flippable"] == row.level_flippable
+        assert entry["reward"] == row.reward
+        assert entry["default_enabled"] == row.default_enabled
+        assert entry["kind"] == "either"  # every task-assigning constraint is flippable
+        assert entry["params"] == {"weight": None, "hard": None, "exponent": 1.0}
+    assert [entry["default_level"] for entry in entries] == [
+        "hard",
+        "soft",
+        "soft",
+        "soft",
+        "soft",
+        "medium",
+    ]
+
+
+@pytest.mark.parametrize(
+    "selection",
+    [
+        None,
+        [RequiredSkillCost(hard=False), *get_constraints()[1:]],
+        [*get_constraints()[:-1], UnassignedTasksCost(hard=False)],
+        [*get_constraints()[:-1], UnassignedTasksCost(hard=True)],
+    ],
+    ids=["defaults", "skills-soft", "unassigned-soft", "unassigned-hard"],
+)
+def test_cpsat_scores_like_the_engine(selection) -> None:
+    """CP-SAT's reported score is the engine's score of the same solution under the
+    same selection; hard=False lands on soft (from hard OR medium) in both solvers."""
+    solved = solve(generate_demo_data(), time_limit_seconds=2, constraints=selection)
+    engine = score(domain.constraint_costs(solved.to_core()), selection)
+    assert _engine_levels(solved) == (engine.hard, pytest.approx(engine.soft))
+
+
+def test_a_demoted_medium_term_counts_on_soft_in_both_solvers() -> None:
+    """unassigned_tasks_cost(hard=False) is one SOFT unit per unassigned task in CP-SAT
+    and in the engine; the selection without a medium term reports soft0 = 0."""
+    problem = _parity_problem()
+    selection = [UnassignedTasksCost(hard=False)]
+    proxy = {}
+    solved = solve(
+        problem,
+        time_limit_seconds=2,
+        constraints=selection,
+        _fixed_employee_by_task=[0, 0, 0, -1],
+        _fixed_starts=[0, 40, 80, 0],
+        _proxy_score=proxy,
+    )
+    assert proxy == {"hard": 0, "medium": 0, "soft": -1}
+    assert (solved.score_hard, solved.score_soft0, solved.score_soft1, solved.score_soft2) == (0, 0, 0, -1)
+    engine = score(domain.constraint_costs(solved.to_core()), selection)
+    assert _engine_levels(solved) == tuple(engine) == (0, -1.0)
