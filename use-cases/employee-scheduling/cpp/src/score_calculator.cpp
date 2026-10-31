@@ -27,6 +27,10 @@ void ScoreCalculator::prepare(EmployeeSchedule& schedule) {
                                         std::to_string(sh.employeeIndex) + " is out of range -1.." +
                                         std::to_string(employeeCount - 1));
         }
+        // Nothing may place a pinned shift, so it has to arrive placed.
+        if (sh.pinned && sh.employeeIndex < 0) {
+            throw std::invalid_argument("shift '" + sh.id + "' is pinned but has no employee");
+        }
         // Empty requiredSkill == no skill requirement: bit 0 (matches everyone,
         // never a miss). Don't intern "" as a phantom skill nobody holds.
         sh.requiredSkillBit = 0;

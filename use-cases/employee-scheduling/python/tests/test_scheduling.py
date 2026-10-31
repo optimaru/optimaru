@@ -655,6 +655,18 @@ def test_an_employee_index_out_of_range_is_refused(use, index):
         use(schedule)
 
 
+@pytest.mark.parametrize("use_calculator", [False, True], ids=["built-in", "plugin"])
+def test_a_pinned_shift_without_an_employee_is_refused(use_calculator):
+    schedule = _two_shifts()
+    schedule.shifts[1].employee_index = -1
+    schedule.shifts[1].pinned = True
+    with pytest.raises(ValueError, match="shift 'Shift 2' is pinned but has no employee"):
+        if use_calculator:
+            es.Solver().solve(schedule, es.default_calculator())
+        else:
+            es.Solver().solve(schedule)
+
+
 def test_the_last_employee_index_and_unassigned_are_accepted():
     schedule = _two_shifts()
     schedule.shifts[0].employee_index = 1
