@@ -5,18 +5,27 @@
 //       accumulators the way the domain's Score adapter does
 //   (c) hard()/soft() on a medium constraint, explicit medium weights
 //   (d) guards: reward never hard, non-flippable keeps its level, weight and
-//       exponent validation, medium without a fold, hard reward at reset
+//       exponent validation (NaN, +inf, negative), medium without a fold,
+//       hard reward at reset
 //   (e) ConstraintAssembly::info(): the catalog read off the defaults
-//   (f) exponent: per unit for unit constraints, on the total for globals
+//   (f) exponent: per unit for unit constraints, on the total for globals;
+//       sign-preserving on a reward's negative raw cost
 //   (g) raw costs: zero = no violation; incremental == fresh recompute on
 //       a random walk for both folds (the medium cells' save/restore too)
 //   (h) pythonName(): registry name -> Python name; instanceKeys()
 //   (i) knob setters on a bare component, labels, wrappers that copy their
 //       inner component's metadata, catalogInfo() for a catalog wider than
 //       the defaults
+//   (j) python::levelForHard(): the bindings' hard=True/False guard and its
+//       wording (wantedLevel / applyKnobs raise it as ValueError)
+//   (k) LIST kind with a medium level: every preview (unit cells, a
+//       previewing global, BelowHard rounding) equals the applied score,
+//       which FULL_ASSERT checks against a full recompute
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <functional>
 #include <limits>
 #include <memory>
@@ -28,7 +37,9 @@
 
 #include "optimaru/api/score/calculator/constraint_assembly.hpp"
 #include "optimaru/api/score/calculator/decomposed_score_calculator.hpp"
+#include "optimaru/python/level_guard.hpp"
 #include "optimaru/python/names.hpp"
+#include "optimaru/testing/preview_parity.hpp"
 
 using optimaru::HardSoftScore;
 using optimaru::Level;
@@ -77,6 +88,38 @@ struct TasksDescriptor {
 constexpr MediumFold kSoftFold = MediumFold::intoSoft(1000.0);
 constexpr MediumFold kHardFold = MediumFold::belowHard(100);
 
+// LIST kind (the shape of vehicle-routing / pickup-delivery): 24 cities on
+// three routes, each city with a demand. The two types differ only in their
+// medium fold, like the Tasks types above.
+struct Routes {
+    std::vector<std::pair<int, int>> city;  // grid coordinates per element; the depot is (0, 0)
+    std::vector<int> demand;                // per element
+    int capacity = 18;
+    std::vector<std::vector<int>> routes;   // the list planning variables
+};
+struct SoftFoldRoutes : Routes {};  // medium folds into soft x1000
+struct HardFoldRoutes : Routes {};  // medium folds below hard, 100 per hard unit
+
+template <typename S>
+struct RoutesDescriptor {
+    static constexpr optimaru::VariableKind kind = optimaru::VariableKind::LIST;
+    static int listCount(const S& s) { return static_cast<int>(s.routes.size()); }
+    static int elementCount(const S& s) { return static_cast<int>(s.city.size()); }
+    static int listSize(const S& s, int l) { return static_cast<int>(s.routes[l].size()); }
+    static int getElement(const S& s, int l, int p) { return s.routes[l][p]; }
+    static void insertElement(S& s, int l, int p, int e) {
+        s.routes[l].insert(s.routes[l].begin() + p, e);
+    }
+    static int removeElement(S& s, int l, int p) {
+        const int e = s.routes[l][p];
+        s.routes[l].erase(s.routes[l].begin() + p);
+        return e;
+    }
+    static void reverseSegment(S& s, int l, int first, int last) {
+        std::reverse(s.routes[l].begin() + first, s.routes[l].begin() + last + 1);
+    }
+};
+
 }  // namespace
 
 template <>
@@ -91,6 +134,18 @@ struct optimaru::MediumFoldOf<SoftFoldTasks> {
 };
 template <>
 struct optimaru::MediumFoldOf<HardFoldTasks> {
+    static constexpr optimaru::MediumFold value = kHardFold;
+};
+template <>
+struct optimaru::SolutionDescriptor<SoftFoldRoutes> : RoutesDescriptor<SoftFoldRoutes> {};
+template <>
+struct optimaru::SolutionDescriptor<HardFoldRoutes> : RoutesDescriptor<HardFoldRoutes> {};
+template <>
+struct optimaru::MediumFoldOf<SoftFoldRoutes> {
+    static constexpr optimaru::MediumFold value = kSoftFold;
+};
+template <>
+struct optimaru::MediumFoldOf<HardFoldRoutes> {
     static constexpr optimaru::MediumFold value = kHardFold;
 };
 
@@ -395,6 +450,11 @@ void testGuards() {
                                                std::numeric_limits<double>::quiet_NaN());
           }),
           "a NaN weight throws");
+    check(throwsInvalid([] {
+              defaults<SoftFoldTasks>().weight("taskCostCost",
+                                               std::numeric_limits<double>::infinity());
+          }),
+          "a +inf weight throws");
     check(throwsInvalid([] { defaults<SoftFoldTasks>().exponent("taskCostCost", 0.0); }),
           "exponent 0 throws");
     check(throwsInvalid([] { defaults<SoftFoldTasks>().exponent("taskCostCost", -2.0); }),
@@ -464,6 +524,15 @@ void testExponent() {
     check(same(scoreOf(pair().exponent("overloadCost", 2.0).exponent("idleWorkerCost", 2.0), s),
                {0, -6000.0}),
           "exponent 2: per unit for the unit constraint (2), on the total for the global (4)");
+    // A reward keeps its sign: on A, preferenceReward's raw -3 (worker 0)
+    // shapes to -9 (not +9), x0.5 = -4.5, so soft 28 - 4.5 = 23.5 (+ the fold).
+    SoftFoldTasks a = assignmentA<SoftFoldTasks>();
+    check(std::fabs(optimaru::shapeCost(-3.0, 2.0) + 9.0) < 1e-12 &&
+                  std::fabs(optimaru::shapeCost(-4.0, 0.5) + 2.0) < 1e-12,
+          "shapeCost raises the magnitude of a negative raw cost and keeps its sign");
+    check(same(scoreOf(defaults<SoftFoldTasks>().exponent("preferenceReward", 2.0), a),
+               {-4, -(23.5 + 2 * 1000.0)}),
+          "exponent 2 on a reward: raw -3 -> -9, x0.5 = -4.5 soft (a larger reward, not a penalty)");
     std::printf("\n");
 }
 
@@ -657,6 +726,201 @@ void testComponentsOutsideAnAssembly() {
     std::printf("\n");
 }
 
+// --- (j) the bindings' level guard -----------------------------------------
+
+std::string refusal(const std::function<void()>& edit) {
+    try {
+        edit();
+    } catch (const std::invalid_argument& error) {
+        return error.what();
+    }
+    return "";
+}
+
+void testBindingLevelGuard() {
+    std::printf("== (j) python::levelForHard: the bindings' hard=True/False guard ==\n");
+    using optimaru::python::levelForHard;
+    // What solve(..., constraints=[RewardCost(hard=True)]) and
+    // StructuralCost(hard=False) raise as ValueError through wantedLevel /
+    // applyKnobs, in the Python base's words.
+    const PreferenceReward<SoftFoldTasks> reward;
+    check(refusal([&] { levelForHard(reward, true, "'preference_reward'"); }) ==
+                  "constraint 'preference_reward' is a reward (raw cost <= 0) and cannot be hard",
+          "hard=True on a reward is refused: 'is a reward'");
+    check(levelForHard(reward, false, "'preference_reward'") == Level::Soft,
+          "hard=False on a soft reward re-states its level");
+    const ForbiddenWorkerCost<SoftFoldTasks> forbidden;
+    check(refusal([&] { levelForHard(forbidden, false, "'forbidden_worker_cost'"); }) ==
+                  "constraint 'forbidden_worker_cost' is always hard; hard=False is not allowed",
+          "hard=False on a non-flippable hard constraint is refused: 'is always hard'");
+    check(levelForHard(forbidden, true, "'forbidden_worker_cost'") == Level::Hard,
+          "hard=True on it re-states its level");
+    const OverloadCost<SoftFoldTasks> overload;
+    check(levelForHard(overload, false, "'overload_cost'") == Level::Soft &&
+                  levelForHard(overload, true, "'overload_cost'") == Level::Hard,
+          "a flippable medium constraint: hard=False -> soft, hard=True -> hard");
+    OverloadCost<SoftFoldTasks> fixedMedium;
+    fixedMedium.levelFlippable = false;
+    check(refusal([&] { levelForHard(fixedMedium, false, "'overload_cost'"); }) ==
+                          "constraint 'overload_cost' is always medium; hard=False is not allowed" &&
+                  refusal([&] { levelForHard(fixedMedium, true, "'overload_cost'"); }) ==
+                          "constraint 'overload_cost' is always medium; hard=True is not allowed",
+          "a non-flippable medium constraint refuses both hard=True and hard=False");
+    std::printf("\n");
+}
+
+// --- (k) LIST kind with a medium level -------------------------------------
+
+int manhattan(const std::pair<int, int>& a, const std::pair<int, int>& b) {
+    return std::abs(a.first - b.first) + std::abs(a.second - b.second);
+}
+
+// Hard: demand beyond the route's capacity.
+template <typename S>
+struct RouteDemandCost final : optimaru::UnitConstraint<S> {
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr Level kDefaultLevel = Level::Hard;
+    explicit RouteDemandCost(double weight = kDefaultWeight)
+        : optimaru::UnitConstraint<S>("routeDemandCost", weight, kDefaultLevel) {}
+    double cost(const S& s, int, const std::vector<int>& members) const override {
+        int load = 0;
+        for (int c : members) load += s.demand[c];
+        return load > s.capacity ? static_cast<double>(load - s.capacity) : 0.0;
+    }
+};
+
+// Medium unit: cities beyond seven on a route (its cells live in cacheSoft_).
+template <typename S>
+struct RouteOverflowCost final : optimaru::UnitConstraint<S> {
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr Level kDefaultLevel = Level::Medium;
+    explicit RouteOverflowCost(double weight = kDefaultWeight)
+        : optimaru::UnitConstraint<S>("routeOverflowCost", weight, kDefaultLevel) {}
+    double cost(const S&, int, const std::vector<int>& members) const override {
+        return members.size() > 7 ? static_cast<double>(members.size() - 7) : 0.0;
+    }
+};
+
+// Medium global with the preview contract: the longest route, in cities
+// (previews fold it through accumulate()).
+template <typename S>
+struct LongestRouteCost final : optimaru::GlobalConstraint<S> {
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr Level kDefaultLevel = Level::Medium;
+    explicit LongestRouteCost(double weight = kDefaultWeight)
+        : optimaru::GlobalConstraint<S>("longestRouteCost", weight, kDefaultLevel) {}
+    std::vector<int> sizes;
+    void reset(const S&, const std::vector<std::vector<int>>& membersPerUnit) override {
+        sizes.clear();
+        for (const auto& m : membersPerUnit) sizes.push_back(static_cast<int>(m.size()));
+    }
+    void onUnitChanged(const S&, int unit, const std::vector<int>& members) override {
+        sizes[unit] = static_cast<int>(members.size());
+    }
+    double cost() const override {
+        return static_cast<double>(*std::max_element(sizes.begin(), sizes.end()));
+    }
+    bool supportsPreview() const override { return true; }
+    double previewCost(const S&, const optimaru::PreviewedUnit* changes, int count) const override {
+        int longest = 0;
+        for (std::size_t u = 0; u < sizes.size(); ++u) {
+            int size = sizes[u];
+            for (int i = 0; i < count; ++i)
+                if (changes[i].unit == static_cast<int>(u))
+                    size = static_cast<int>(changes[i].members->size());
+            longest = std::max(longest, size);
+        }
+        return static_cast<double>(longest);
+    }
+};
+
+// Soft: the open path depot -> first -> ... -> last on the grid (order
+// sensitive, so a reversal changes it).
+template <typename S>
+struct RouteDistanceCost final : optimaru::UnitConstraint<S> {
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr Level kDefaultLevel = Level::Soft;
+    explicit RouteDistanceCost(double weight = kDefaultWeight)
+        : optimaru::UnitConstraint<S>("routeDistanceCost", weight, kDefaultLevel) {}
+    double cost(const S& s, int, const std::vector<int>& members) const override {
+        std::pair<int, int> at{0, 0};
+        int total = 0;
+        for (int c : members) {
+            total += manhattan(at, s.city[c]);
+            at = s.city[c];
+        }
+        return static_cast<double>(total);
+    }
+};
+
+template <typename S>
+optimaru::ConstraintAssembly<S> routeDefaults() {
+    optimaru::ConstraintAssembly<S> assembly;
+    assembly.template emplace<RouteDemandCost<S>>();
+    assembly.template emplace<RouteOverflowCost<S>>();
+    assembly.template emplace<LongestRouteCost<S>>();
+    assembly.template emplace<RouteDistanceCost<S>>();
+    return assembly;
+}
+
+// Route 0 holds cities 0-9, route 1 cities 10-17, route 2 cities 18-23:
+// overflow 3 / 1 / 0, longest route 10.
+template <typename S>
+S routesStart() {
+    S s;
+    for (int c = 0; c < 24; ++c) {
+        s.city.emplace_back((c * 7) % 11, (c * 5) % 13);
+        s.demand.push_back(1 + c % 4);
+    }
+    s.routes.assign(3, {});
+    for (int c = 0; c < 24; ++c) s.routes[c < 10 ? 0 : (c < 18 ? 1 : 2)].push_back(c);
+    return s;
+}
+
+template <typename S>
+void listMediumPreviews(const std::string& label, double mediumWeight, std::uint64_t seed) {
+    S s = routesStart<S>();
+    optimaru::DecomposedScoreCalculator<S> calc;
+    routeDefaults<S>()
+            .weight("routeOverflowCost", mediumWeight)
+            .weight("longestRouteCost", mediumWeight)
+            .into(calc);
+    optimaru::ScoreDirector<S> director(s, calc, optimaru::EnvironmentMode::FULL_ASSERT);
+    director.calculateScore();
+    // By hand: medium cells 3w, 1w, 0 and the global 10w. BelowHard rounds
+    // each cell and the global like hard, so at w = 0.6 that is
+    // llround(1.8) + llround(0.6) + llround(6.0) = 9, not llround(14 x 0.6) = 8.
+    const double w = mediumWeight;
+    const double expected =
+            optimaru::MediumFoldOf<S>::value.roundsMedium()
+                    ? static_cast<double>(std::llround(3 * w) + std::llround(w) + std::llround(10 * w))
+                    : 14.0 * w;
+    const double medium = calc.levelScores().medium;  // a score: -penalty
+    check(std::fabs(medium + expected) < 1e-9,
+          label + ": the medium penalty at the start is " + std::to_string(expected) + ", got " +
+                  std::to_string(-medium));
+    optimaru::testing::PreviewParity parity;
+    bool corrupted = false;
+    try {
+        parity = optimaru::testing::runPreviewParity(director, calc, seed, 4000);
+    } catch (const optimaru::ScoreCorruptionError& error) {
+        corrupted = true;
+        std::printf("    %s\n", error.what());
+    }
+    std::printf("    %d previews checked, %d declined\n", parity.checked, parity.declined);
+    check(!corrupted && parity.allEqual() && parity.declined == 0 && parity.checked > 1000,
+          label + ": every preview equals the applied score (FULL_ASSERT: == a full recompute)");
+}
+
+void testListMediumPreviews() {
+    std::printf("== (k) LIST kind with a medium level: previews ==\n");
+    listMediumPreviews<SoftFoldRoutes>("IntoSoft, medium weight 1", 1.0, 41);
+    listMediumPreviews<SoftFoldRoutes>("IntoSoft, medium weight 0.37", 0.37, 43);
+    listMediumPreviews<HardFoldRoutes>("BelowHard, medium weight 1", 1.0, 47);
+    listMediumPreviews<HardFoldRoutes>("BelowHard, medium weight 0.6", 0.6, 53);
+    std::printf("\n");
+}
+
 }  // namespace
 
 int main() {
@@ -669,6 +933,8 @@ int main() {
     testRawCostsAndIncremental();
     testPythonName();
     testComponentsOutsideAnAssembly();
+    testBindingLevelGuard();
+    testListMediumPreviews();
     if (failures == 0) {
         std::printf("All constraint-level tests PASSED.\n");
         return 0;

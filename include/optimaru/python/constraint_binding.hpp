@@ -37,6 +37,7 @@
 #include <vector>
 
 #include "optimaru/api/score/calculator/constraint_assembly.hpp"
+#include "optimaru/python/level_guard.hpp"
 #include "optimaru/python/names.hpp"
 
 namespace optimaru {
@@ -221,19 +222,15 @@ inline Knobs readKnobs(const py::handle& item, const std::string& shown) {
 }
 
 // The level a pick's `hard` asks for, checked against the component's
-// reward / levelFlippable flags (the _constraint.py _level wording).
+// reward / levelFlippable flags (the _constraint.py _level wording):
+// levelForHard (level_guard.hpp, where the engine tests check it), raised as
+// ValueError.
 inline Level wantedLevel(const ConstraintMetadata& constraint, bool hard, const std::string& shown) {
-    const Level wanted = hard ? Level::Hard : Level::Soft;
-    if (wanted == Level::Hard && constraint.reward) {
-        throw py::value_error("constraint " + detail::quoted(shown) +
-                              " is a reward (raw cost <= 0) and cannot be hard");
+    try {
+        return levelForHard(constraint, hard, detail::quoted(shown));
+    } catch (const std::invalid_argument& error) {
+        throw py::value_error(error.what());
     }
-    if (wanted != constraint.level && !constraint.levelFlippable) {
-        throw py::value_error("constraint " + detail::quoted(shown) + " is always " +
-                              levelName(constraint.level) + "; hard=" + (hard ? "True" : "False") +
-                              " is not allowed");
-    }
-    return wanted;
 }
 
 // Re-states one pick's knobs on a component a domain factory built (with
