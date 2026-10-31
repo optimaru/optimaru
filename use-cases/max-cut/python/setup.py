@@ -32,9 +32,29 @@ ext_modules = [
     )
 ]
 
+
+class BuildExt(build_ext):
+    """build_ext that keeps every object file inside this build's temp directory.
+
+    distutils writes an object to <build_temp>/<source path>, so ../cpp/src/*.cpp
+    would land one level ABOVE build_temp. An editable build's build_temp is a
+    fresh $TMPDIR/<random>.build-temp, so every use case would share
+    $TMPDIR/cpp/src/ and concurrent builds could link each other's solver.o.
+    Nesting build_temp one level per "../" keeps those objects in a directory
+    this build owns. (The top-level setup.py records only the extensions and
+    builds them from root-relative paths, so it does not need this.)
+    """
+
+    def finalize_options(self):
+        super().finalize_options()
+        sources = [os.path.normpath(s) for e in self.extensions for s in e.sources]
+        up = max((s.split(os.sep).count(os.pardir) for s in sources), default=0)
+        self.build_temp = os.path.join(self.build_temp, *(["objects"] * up))
+
+
 # Project metadata, packages and package_data live in pyproject.toml; this
 # file only wires up the pybind11 extension build.
 setup(
     ext_modules=ext_modules,
-    cmdclass={"build_ext": build_ext},
+    cmdclass={"build_ext": BuildExt},
 )
