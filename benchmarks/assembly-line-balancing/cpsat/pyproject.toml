@@ -1,21 +1,37 @@
 [project]
 name = "assembly-line-balancing-cpsat"
 version = "0.1.0"
-description = "Exact CP-SAT backend for assembly line balancing"
+description = "OR-Tools CP-SAT reference for the assembly-line-balancing use case."
 requires-python = ">=3.11,<4.0"
-dependencies = ["assembly-line-balancing", "ortools>=9.10", "pydantic>=2.5"]
+dependencies = [
+    "cpsat-plugins",
+    "assembly-line-balancing",
+    "ortools>=9.10",
+    "pydantic>=2.5",
+]
+
 [dependency-groups]
 dev = ["pytest", "ruff"]
+
+[project.scripts]
+assembly-line-balancing-compare = "assembly_line_balancing_cpsat.benchmark:main"
+
 [tool.uv.sources]
 assembly-line-balancing = { path = "../../../use-cases/assembly-line-balancing/python", editable = true }
+cpsat-plugins = { path = "../../cpsat-common", editable = true }
+
 [tool.setuptools.packages.find]
 include = ["assembly_line_balancing_cpsat*"]
+
 [tool.ruff]
 line-length = 120
+
 [tool.ruff.lint]
 extend-select = ["I"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"

@@ -1,5 +1,10 @@
 # SALBP benchmark snapshot
 
+> These rows were measured with the 0.1.5 pure-Python simulated-annealing engine. The 0.2.0
+> C++ port (CloseStationMove, the precedence-window value recommender, late acceptance with
+> ruin & recreate) has not been re-measured on the archive yet; re-run
+> `python -m bench.run_bench` and replace this snapshot.
+
 Measured on 2026-08-17 with an Apple M4 Pro (14 logical CPUs, 48 GiB), macOS
 26.3.1, one engine process, seed 1. The solve budget excludes archive download
 and parsing. Every solution is independently checked for capacity and

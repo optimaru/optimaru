@@ -40,7 +40,11 @@ def test_exact_respects_station_domains_and_separation_zoning():
 
 def test_a_split_group_costs_its_distinct_stations_minus_one():
     """Stations [0, 1, 1] cost 1 (the Python scorer), not 2 (members off the first member's station)."""
-    from assembly_line_balancing.constraints import FixedTaskStations, ForbiddenTaskStations, SameStationGroups
+    from assembly_line_balancing.constraints import (
+        FixedTaskStationsCost,
+        ForbiddenTaskStationsCost,
+        SameStationGroupsCost,
+    )
 
     result = solve(
         AssemblyLineBalancingProblemModel(
@@ -52,21 +56,53 @@ def test_a_split_group_costs_its_distinct_stations_minus_one():
             ],
             same_station_groups=[TaskGroupModel(id="g", task_ids=["A", "B", "C"])],
         ),
-        constraints=[FixedTaskStations(), SameStationGroups(hard=False, weight=2), ForbiddenTaskStations(hard=False)],
+        constraints=[
+            FixedTaskStationsCost(),
+            SameStationGroupsCost(hard=False, weight=2),
+            ForbiddenTaskStationsCost(hard=False),
+        ],
     )
     assert [task.station for task in result.tasks] == [0, 1, 1]
     assert result.score_soft == -2.0
 
 
 def test_a_forbidden_station_listed_twice_counts_once():
-    from assembly_line_balancing.constraints import ForbiddenTaskStations, MinimizeStations, StationCapacity
+    """A on its forbidden 0 costs 2 * 1 (not 2 * 2): cheaper than splitting the group (3)."""
+    from assembly_line_balancing.constraints import (
+        FixedTaskStationsCost,
+        ForbiddenTaskStationsCost,
+        SameStationGroupsCost,
+    )
 
     result = solve(
         AssemblyLineBalancingProblemModel(
             cycle_time=12,
-            tasks=[TaskModel(id="A", duration=6, forbidden_stations=[0, 0]), TaskModel(id="B", duration=6)],
+            tasks=[
+                TaskModel(id="A", duration=6, forbidden_stations=[0, 0]),
+                TaskModel(id="B", duration=6, fixed_station=0),
+            ],
+            same_station_groups=[TaskGroupModel(id="g", task_ids=["A", "B"])],
         ),
-        constraints=[StationCapacity(), MinimizeStations(weight=3), ForbiddenTaskStations(hard=False, weight=2)],
+        constraints=[
+            FixedTaskStationsCost(),
+            SameStationGroupsCost(hard=False, weight=3),
+            ForbiddenTaskStationsCost(hard=False, weight=2),
+        ],
     )
     assert [task.station for task in result.tasks] == [0, 0]
-    assert result.score_soft == -5.0
+    assert result.score_soft == -2.0
+
+
+def test_station_domains_do_not_get_a_station_prefix_forced_on_them():
+    """Only a plain line may force the used stations to be 0..k-1: B's min_station 1 must not open station 0
+    (A and B share station 1)."""
+    from assembly_line_balancing.constraints import TaskStationBoundsCost, UsedStationsCost
+
+    result = solve(
+        AssemblyLineBalancingProblemModel(
+            cycle_time=10, tasks=[TaskModel(id="A", duration=3), TaskModel(id="B", duration=3, min_station=1)]
+        ),
+        constraints=[TaskStationBoundsCost(), UsedStationsCost()],
+    )
+    assert (result.score_hard, result.score_soft) == (0, -1.0)
+    assert [task.station for task in result.tasks] == [1, 1]
