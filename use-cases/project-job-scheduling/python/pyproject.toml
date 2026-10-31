@@ -2,7 +2,7 @@
 name = "project_job"
 version = "0.1.0"
 description = "Project job scheduling (multi-project RCPSP) C++ solver with Python bindings"
-requires-python = ">=3.14,<4.0"
+requires-python = ">=3.11,<4.0"
 dependencies = []
 
 [project.optional-dependencies]

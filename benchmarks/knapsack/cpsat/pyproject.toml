@@ -2,7 +2,7 @@
 name = "knapsack-cpsat"
 version = "0.1.0"
 description = "Exact CP-SAT backend for knapsack"
-requires-python = ">=3.14,<4.0"
+requires-python = ">=3.11,<4.0"
 dependencies = ["cpsat-plugins>=0.1.0", "knapsack", "ortools>=9.10", "pydantic>=2.5"]
 
 [dependency-groups]

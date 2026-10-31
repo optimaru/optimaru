@@ -1,5 +1,7 @@
 """Input definition of the timetabling problem."""
 
+from __future__ import annotations
+
 from collections import defaultdict
 from functools import cached_property
 

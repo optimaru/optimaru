@@ -18,7 +18,7 @@ pip install optimaru
 
 One package with every use case as a subpackage — `optimaru.vehicle_routing`,
 `optimaru.school_timetabling`, … — compiled for Linux, macOS and Windows
-(Python 3.14+). See [`python/README.md`](python/README.md) for an example.
+(Python 3.11+). See [`python/README.md`](python/README.md) for an example.
 The distribution is built from this repository by [`setup.py`](setup.py), which
 reuses each use case's own `python/setup.py`.
 

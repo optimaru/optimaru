@@ -2,7 +2,7 @@
 name = "vrp-benchmark"
 version = "0.1.0"
 description = "CVRP benchmark: the optimaru vehicle-routing use case vs OR-Tools Routing."
-requires-python = ">=3.14,<4.0"
+requires-python = ">=3.11,<4.0"
 dependencies = ["vrp_routing[models]", "ortools>=9.15,<9.16"]
 
 [project.scripts]

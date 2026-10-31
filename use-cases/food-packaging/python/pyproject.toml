@@ -2,7 +2,7 @@
 name = "food_packaging"
 version = "0.1.0"
 description = "Food-packaging C++ solver (C++ port) with Python bindings"
-requires-python = ">=3.14,<4.0"
+requires-python = ">=3.11,<4.0"
 dependencies = []
 
 [project.optional-dependencies]
