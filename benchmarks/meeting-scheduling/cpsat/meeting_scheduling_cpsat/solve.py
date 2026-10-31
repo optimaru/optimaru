@@ -6,7 +6,7 @@ from collections import Counter
 from collections.abc import Iterable, Mapping
 
 from cpsat_plugins import ConstraintConfig
-from meeting_scheduling import calculate_score, constraint_costs
+from meeting_scheduling import MEDIUM_SCALE, calculate_score, constraint_costs
 from meeting_scheduling.constraints import Constraint
 from meeting_scheduling.models import MeetingScheduleModel
 from ortools.sat.python import cp_model
@@ -128,7 +128,9 @@ def solve(
     result = MeetingScheduleModel.from_core(core)
     selected_score = objective.score_costs(constraint_costs(core))
     result.score_hard = selected_score["hard"]
+    # Fold medium into soft with the engine's own factor (MEDIUM_SCALE = 1e6,
+    # the domain's kMediumFold), so the reported score is the engine's.
     result.score_soft = float(
-        selected_score["medium"] * 1_000_000_000 + selected_score["soft"]
+        selected_score["medium"] * MEDIUM_SCALE + selected_score["soft"]
     )
     return result

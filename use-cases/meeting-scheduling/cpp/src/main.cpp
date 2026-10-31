@@ -3,6 +3,7 @@
 // resulting schedule. Exits non-zero unless the solution is feasible
 // (hard == 0).
 #include <algorithm>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <string>
@@ -81,30 +82,40 @@ void printSchedule(const MeetingSchedule &schedule)
 
 void printBreakdown(const Breakdown &b)
 {
-    std::printf("  [hard]   room conflict grains:        %lld\n",
-                static_cast<long long>(b.roomConflictGrains));
-    std::printf("  [hard]   overtime (last index sum):   %lld\n",
-                static_cast<long long>(b.overtimeSum));
-    std::printf("  [hard]   required conflict grains:    %lld\n",
-                static_cast<long long>(b.requiredConflictGrains));
-    std::printf("  [hard]   room capacity shortage:      %lld\n",
-                static_cast<long long>(b.roomCapacityShortage));
-    std::printf("  [hard]   start/end day violations:    %lld\n",
-                static_cast<long long>(b.startEndDayViolations));
-    std::printf("  [medium] required+preferred grains:   %lld\n",
-                static_cast<long long>(b.requiredPreferredConflictGrains));
-    std::printf("  [medium] preferred conflict grains:   %lld\n",
-                static_cast<long long>(b.preferredConflictGrains));
-    std::printf("  [soft]   last-grain-index sum (x1):   %lld\n",
-                static_cast<long long>(b.lastGrainIndexSum));
-    std::printf("  [soft]   consecutive pairs (x100):    %lld\n",
-                static_cast<long long>(b.consecutiveMeetingPairs));
-    std::printf("  [soft]   overlapping grains (x10):    %lld\n",
-                static_cast<long long>(b.overlappingMeetingGrains));
-    std::printf("  [soft]   larger-room capacity (x1):   %lld\n",
-                static_cast<long long>(b.largerRoomCapacitySum));
-    std::printf("  [soft]   room stability (x1):         %lld\n",
-                static_cast<long long>(b.roomStabilityViolations));
+    // Raw per-constraint totals, labelled with the registry names (the
+    // default weight of each soft term in brackets).
+    const struct
+    {
+        const char *level;
+        const char *name;
+        std::int64_t value;
+    } rows[] = {
+        {"hard", "roomConflictCost", b.roomConflictCost},
+        {"hard", "overtimeCost", b.overtimeCost},
+        {"hard",
+         "requiredAttendanceConflictCost",
+         b.requiredAttendanceConflictCost},
+        {"hard", "roomCapacityCost", b.roomCapacityCost},
+        {"hard", "dayCrossingCost", b.dayCrossingCost},
+        {"medium",
+         "requiredAndPreferredAttendanceConflictCost",
+         b.requiredAndPreferredAttendanceConflictCost},
+        {"medium",
+         "preferredAttendanceConflictCost",
+         b.preferredAttendanceConflictCost},
+        {"soft", "meetingEndTimeCost (x1)", b.meetingEndTimeCost},
+        {"soft", "consecutiveMeetingsCost (x100)", b.consecutiveMeetingsCost},
+        {"soft", "meetingOverlapCost (x10)", b.meetingOverlapCost},
+        {"soft", "largerRoomCapacityCost (x1)", b.largerRoomCapacityCost},
+        {"soft", "roomChangeCost (x1)", b.roomChangeCost},
+    };
+    for (const auto &row : rows)
+    {
+        std::printf("  [%-6s] %-44s %lld\n",
+                    row.level,
+                    row.name,
+                    static_cast<long long>(row.value));
+    }
     std::printf("\n");
 }
 

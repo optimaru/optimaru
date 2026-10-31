@@ -1,20 +1,23 @@
-#ifndef MS_CONSTRAINTS_OVERLAPPING_MEETINGS_HPP
-#define MS_CONSTRAINTS_OVERLAPPING_MEETINGS_HPP
+#ifndef MS_CONSTRAINTS_MEETING_OVERLAP_COST_HPP
+#define MS_CONSTRAINTS_MEETING_OVERLAP_COST_HPP
 
 #include "ms/constraints/common.hpp"
 
 namespace ms
 {
 
-// Soft (default, weight 10): overlappingMeetings — one point per grain ANY
-// two meetings run at the same time, room and attendees irrelevant. It spreads
-// the calendar out so people are not forced to choose between simultaneous
-// meetings they might both want to join.
-struct OverlappingMeetings final : AssignmentPairConstraint
+// Soft, weight 10: meetingOverlapCost — ANY two meetings running at the
+// same time, room and attendees irrelevant. It spreads the calendar out so
+// people are not forced to choose between simultaneous meetings they might
+// both want to join. Raw cost (global) = the overlapping grains of every pair
+// of meetings, summed; 0 = no two meetings overlap.
+struct MeetingOverlapCost final : AssignmentPairConstraint
 {
-    explicit OverlappingMeetings(double weight = 10.0)
-        : AssignmentPairConstraint(
-              "overlappingMeetings", weight, /*hard=*/false)
+    static constexpr double kDefaultWeight = 10.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
+
+    explicit MeetingOverlapCost(double weight = kDefaultWeight)
+        : AssignmentPairConstraint("meetingOverlapCost", weight, kDefaultLevel)
     {
     }
 
@@ -45,4 +48,4 @@ protected:
 
 }  // namespace ms
 
-#endif  // MS_CONSTRAINTS_OVERLAPPING_MEETINGS_HPP
+#endif  // MS_CONSTRAINTS_MEETING_OVERLAP_COST_HPP

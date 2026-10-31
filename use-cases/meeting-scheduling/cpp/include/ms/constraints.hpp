@@ -4,27 +4,28 @@
 // ---------------------------------------------------------------------------
 // Constraint plugins — umbrella header
 // ---------------------------------------------------------------------------
-// One component per file under constraints/; common.hpp holds what all of them
-// need (the calculator aliases and the three shared bases — per-assignment
-// unit, cross-cell pair, attendance arc) and carries the pattern's
-// documentation.
+// One `<Subject>Cost` component per file under constraints/<subject>_cost.hpp,
+// each declaring its default level and weight once (kDefaultLevel /
+// kDefaultWeight); common.hpp holds what all of them need (the calculator
+// aliases and the three shared bases — per-assignment unit, cross-cell pair,
+// attendance arc) and carries the pattern's documentation.
 //
 // Adding a component is a file plus an include here (and an `emplace` in
 // defaultConstraints() below when it belongs to the default assembly).
 
-#include "ms/constraints/assign_larger_rooms_first.hpp"
-#include "ms/constraints/avoid_overtime.hpp"
 #include "ms/constraints/common.hpp"
-#include "ms/constraints/do_meetings_as_soon_as_possible.hpp"
-#include "ms/constraints/one_break_between_consecutive_meetings.hpp"
-#include "ms/constraints/overlapping_meetings.hpp"
-#include "ms/constraints/preferred_attendance_conflict.hpp"
-#include "ms/constraints/required_and_preferred_attendance_conflict.hpp"
-#include "ms/constraints/required_attendance_conflict.hpp"
-#include "ms/constraints/required_room_capacity.hpp"
-#include "ms/constraints/room_conflict.hpp"
-#include "ms/constraints/room_stability.hpp"
-#include "ms/constraints/start_and_end_on_same_day.hpp"
+#include "ms/constraints/consecutive_meetings_cost.hpp"
+#include "ms/constraints/day_crossing_cost.hpp"
+#include "ms/constraints/larger_room_capacity_cost.hpp"
+#include "ms/constraints/meeting_end_time_cost.hpp"
+#include "ms/constraints/meeting_overlap_cost.hpp"
+#include "ms/constraints/overtime_cost.hpp"
+#include "ms/constraints/preferred_attendance_conflict_cost.hpp"
+#include "ms/constraints/required_and_preferred_attendance_conflict_cost.hpp"
+#include "ms/constraints/required_attendance_conflict_cost.hpp"
+#include "ms/constraints/room_capacity_cost.hpp"
+#include "ms/constraints/room_change_cost.hpp"
+#include "ms/constraints/room_conflict_cost.hpp"
 
 namespace ms
 {
@@ -32,17 +33,20 @@ namespace ms
 // ---------------------------------------------------------------------------
 // Standard assembly
 // ---------------------------------------------------------------------------
-// The full provider at the quickstart's level weights. This assembly scores
-// bit-for-bit like ScoreCalculator::calculateScore and the monolithic
-// incremental calculator.
+// The full provider at the quickstart's level weights — each component at its
+// own kDefaultLevel / kDefaultWeight (the medium pair at weight 1 in medium
+// units; the domain's kMediumFold puts them on the engine's soft level). This
+// assembly scores bit-for-bit like ScoreCalculator::calculateScore and the
+// monolithic incremental calculator. It is also the catalog behind
+// constraint_info() (the Python bindings), in this order.
 //
 // `defaultConstraints()` hands the whole set back as a ConstraintAssembly,
 // so a caller states only what differs from it:
 //
 //     DecomposedCalculator calc;
 //     defaultConstraints()
-//         .weight("assignLargerRoomsFirst", 2)
-//         .drop("avoidOvertime")
+//         .weight("largerRoomCapacityCost", 2)
+//         .drop("overtimeCost")
 //         .into(calc);
 //
 // `addDefaultConstraints(calc)` is the same set poured straight into a
@@ -50,18 +54,18 @@ namespace ms
 inline ConstraintAssembly defaultConstraints()
 {
     ConstraintAssembly assembly;
-    assembly.emplace<RoomConflict>();
-    assembly.emplace<AvoidOvertime>();
-    assembly.emplace<RequiredAttendanceConflict>();
-    assembly.emplace<RequiredRoomCapacity>();
-    assembly.emplace<StartAndEndOnSameDay>();
-    assembly.emplace<RequiredAndPreferredAttendanceConflict>();
-    assembly.emplace<PreferredAttendanceConflict>();
-    assembly.emplace<DoMeetingsAsSoonAsPossible>();
-    assembly.emplace<OneBreakBetweenConsecutiveMeetings>();
-    assembly.emplace<OverlappingMeetings>();
-    assembly.emplace<AssignLargerRoomsFirst>();
-    assembly.emplace<RoomStability>();
+    assembly.emplace<RoomConflictCost>();
+    assembly.emplace<OvertimeCost>();
+    assembly.emplace<RequiredAttendanceConflictCost>();
+    assembly.emplace<RoomCapacityCost>();
+    assembly.emplace<DayCrossingCost>();
+    assembly.emplace<RequiredAndPreferredAttendanceConflictCost>();
+    assembly.emplace<PreferredAttendanceConflictCost>();
+    assembly.emplace<MeetingEndTimeCost>();
+    assembly.emplace<ConsecutiveMeetingsCost>();
+    assembly.emplace<MeetingOverlapCost>();
+    assembly.emplace<LargerRoomCapacityCost>();
+    assembly.emplace<RoomChangeCost>();
     return assembly;
 }
 

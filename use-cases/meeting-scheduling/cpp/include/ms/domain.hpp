@@ -8,6 +8,7 @@
 
 #include "optimaru/api/domain/solution_descriptor.hpp"
 #include "optimaru/api/score/buildin/hard_soft_score.hpp"
+#include "optimaru/api/score/level.hpp"
 
 namespace ms
 {
@@ -27,10 +28,19 @@ namespace ms
 // soft penalty (grain indices, break/overlap counts, room capacities) stays
 // far below 1e6, so medium always dominates soft. Both penalty sums are
 // integers, so the double representation is exact up to 2^53.
+//
+// The fold is declared ONCE, here: ScoreCalculator::toScore packs the
+// monolithic totals with kMediumFold, and the MediumFoldOf<MeetingSchedule>
+// specialization at the end of this header hands the same constant to the
+// decomposed calculator, which keeps a separate medium accumulator. A medium
+// constraint's weight is therefore in medium units (both medium components:
+// 1), never 1e6.
 using Score = optimaru::HardSoftScore;
 
 // The medium -> soft folding offset (see the Score comment above).
 constexpr double kMediumScale = 1e6;
+constexpr optimaru::MediumFold kMediumFold
+    = optimaru::MediumFold::intoSoft(kMediumScale);
 
 // Java TimeGrain.GRAIN_LENGTH_IN_MINUTES.
 constexpr int kGrainLengthInMinutes = 15;
@@ -49,9 +59,9 @@ struct Person
 // TimeGrain  (problem fact, value range half of the composite variable)
 // ---------------------------------------------------------------------------
 // A 15-minute slot. grainIndex is the Java grainIndex: the unit in which
-// durations, overlaps and "as soon as possible" penalties are measured (the
+// durations, overlaps and meeting end-time penalties are measured (the
 // demo data numbers grains 1..160). dayOfYear + startingMinuteOfDay define
-// the calendar position ("start and end on same day", room stability order).
+// the calendar position (dayCrossingCost, the roomChangeCost order).
 struct TimeGrain
 {
     std::string id;
@@ -130,7 +140,7 @@ struct ConflictArc
     std::int64_t preferredWeight = 0;   // shared preferred-attendance pairs
     std::int64_t reqPrefForward = 0;    // required in m1, preferred in m2
     std::int64_t reqPrefReverse = 0;    // required in m2, preferred in m1
-    std::int64_t attendanceWeight = 0;  // any-attendance pairs (room stability)
+    std::int64_t attendanceWeight = 0;  // any-attendance pairs (room change)
 };
 
 // ---------------------------------------------------------------------------
@@ -166,15 +176,15 @@ struct MeetingSchedule
     // meeting ends there).
     std::vector<std::vector<int>> grainDaysAtOffset;
     // Per room r: sum over rooms R with capacity(R) > capacity(r) of
-    // (capacity(R) - capacity(r)) — the "assign larger rooms first" penalty
-    // of one assignment in room r.
+    // (capacity(R) - capacity(r)) — the largerRoomCapacityCost of one
+    // assignment in room r.
     std::vector<std::int64_t> largerRoomPenalty;
     std::vector<int> requiredCapacityOf;   // per meeting
     std::vector<int> assignmentOfMeeting;  // meeting -> assignment index (1:1)
     // Meeting pairs sharing attendees (m1 < m2), for the full recompute.
     std::vector<ConflictArc> conflictArcs;
     // Adjacency view of conflictArcs' attendanceWeight for the incremental
-    // room-stability delta: per meeting, (other meeting, weight).
+    // roomChangeCost delta: per meeting, (other meeting, weight).
     std::vector<std::vector<std::pair<int, std::int64_t>>> stabilityNeighbors;
     // Same-meeting attendance-pair weights (nonzero only when one person
     // holds several attendance facts of one meeting; Java joins them too).
@@ -244,6 +254,16 @@ template <> struct optimaru::SolutionDescriptor<ms::MeetingSchedule>
     {
         return s.meetingAssignments[assignmentIndex].pinned;
     }
+};
+
+// ---------------------------------------------------------------------------
+// Medium fold registration
+// ---------------------------------------------------------------------------
+// The decomposed calculator folds its medium accumulator with the domain's
+// kMediumFold (see the Score adapter above): engine soft = soft + medium * 1e6.
+template <> struct optimaru::MediumFoldOf<ms::MeetingSchedule>
+{
+    static constexpr optimaru::MediumFold value = ms::kMediumFold;
 };
 
 #endif  // MS_DOMAIN_HPP

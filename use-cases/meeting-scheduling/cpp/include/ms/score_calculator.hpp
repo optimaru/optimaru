@@ -10,43 +10,36 @@ namespace ms
 
 // Per-constraint violation totals (raw, unweighted, counted positive) — the
 // exact quantities the Java MeetingSchedulingConstraintProvider penalizes.
-// Used by the tests (hand-computed per-constraint cases like the Java
-// ConstraintVerifier tests) and by the demo output.
+// Each member is named after its constraint's registry name
+// (ms/constraints/<subject>_cost.hpp). Used by the monolithic score, the C++
+// tests (hand-computed per-constraint cases like the Java ConstraintVerifier
+// tests) and the demo output; Python reads the same per-constraint values
+// through constraint_costs().
 struct Breakdown
 {
-    // Hard (weight 1 each).
-    std::int64_t roomConflictGrains = 0;      // overlap grains per room pair
-    std::int64_t overtimeSum = 0;             // sum of lastTimeGrainIndex
-    std::int64_t requiredConflictGrains = 0;  // shared-required overlap grains
-    std::int64_t roomCapacityShortage = 0;    // requiredCapacity - capacity
-    std::int64_t startEndDayViolations = 0;   // meetings crossing a day border
+    // Hard.
+    std::int64_t roomConflictCost = 0;  // overlap grains per room pair
+    std::int64_t overtimeCost = 0;      // sum of lastTimeGrainIndex
+    std::int64_t requiredAttendanceConflictCost = 0;  // shared-required grains
+    std::int64_t roomCapacityCost = 0;  // requiredCapacity - capacity
+    std::int64_t dayCrossingCost = 0;   // meetings crossing a day border
 
-    // Medium (weight 1 each, folded into soft via kMediumScale).
-    std::int64_t requiredPreferredConflictGrains = 0;
-    std::int64_t preferredConflictGrains = 0;
+    // Medium (folded into soft via kMediumFold).
+    std::int64_t requiredAndPreferredAttendanceConflictCost = 0;
+    std::int64_t preferredAttendanceConflictCost = 0;
 
     // Soft.
-    std::int64_t lastGrainIndexSum = 0;         // x1   "as soon as possible"
-    std::int64_t consecutiveMeetingPairs = 0;   // x100 back-to-back, no break
-    std::int64_t overlappingMeetingGrains = 0;  // x10  any-meeting overlap
-    std::int64_t largerRoomCapacitySum = 0;     // x1   larger rooms exist
-    std::int64_t roomStabilityViolations = 0;   // x1   attendee room switch
+    std::int64_t meetingEndTimeCost = 0;       // sum of lastTimeGrainIndex
+    std::int64_t consecutiveMeetingsCost = 0;  // back-to-back pairs, no break
+    std::int64_t meetingOverlapCost = 0;       // any-meeting overlap grains
+    std::int64_t largerRoomCapacityCost = 0;   // capacity of larger rooms
+    std::int64_t roomChangeCost = 0;           // attendee room switches
 
-    std::int64_t hardTotal() const
-    {
-        return roomConflictGrains + overtimeSum + requiredConflictGrains
-               + roomCapacityShortage + startEndDayViolations;
-    }
-    std::int64_t mediumTotal() const
-    {
-        return requiredPreferredConflictGrains + preferredConflictGrains;
-    }
-    std::int64_t softTotal() const
-    {
-        return lastGrainIndexSum + 100 * consecutiveMeetingPairs
-               + 10 * overlappingMeetingGrains + largerRoomCapacitySum
-               + roomStabilityViolations;
-    }
+    // Weighted totals per level at the components' kDefaultWeight (all
+    // integral, so the sums are exact int64; score_calculator.cpp).
+    std::int64_t hardTotal() const;
+    std::int64_t mediumTotal() const;
+    std::int64_t softTotal() const;
 };
 
 // Port of the reference meeting-scheduling MeetingSchedulingConstraintProvider.
@@ -54,35 +47,36 @@ struct Breakdown
 // calculateScore does a full recompute — the reference the incremental
 // calculator is checked against (in the tests and under FULL_ASSERT).
 //
-// Constraints (Java level in brackets; weights per unit):
-//   [hard]   1. roomConflict          -1 per overlap grain of two meetings in
+// Constraints (level in brackets; default weights per unit, the components'
+// kDefaultWeight):
+//   [hard]   1. roomConflictCost      -1 per overlap grain of two meetings in
 //                                        the same room
-//   [hard]   2. avoidOvertime         -lastTimeGrainIndex when no TimeGrain
+//   [hard]   2. overtimeCost          -lastTimeGrainIndex when no TimeGrain
 //                                        exists at the meeting's last index
-//   [hard]   3. requiredAttendanceConflict  -1 per overlap grain per shared
-//                                        required attendee pair
-//   [hard]   4. requiredRoomCapacity  -(requiredCapacity - capacity) when the
+//   [hard]   3. requiredAttendanceConflictCost  -1 per overlap grain per
+//                                        shared required attendee pair
+//   [hard]   4. roomCapacityCost      -(requiredCapacity - capacity) when the
 //                                        room is too small
-//   [hard]   5. startAndEndOnSameDay  -1 when the last grain exists on a
+//   [hard]   5. dayCrossingCost       -1 when the last grain exists on a
 //                                        different day than the first
-//   [medium] 6. requiredAndPreferredAttendanceConflict  -1 per overlap grain
-//                                        per (required, preferred) pair
-//   [medium] 7. preferredAttendanceConflict  -1 per overlap grain per shared
-//                                        preferred attendee pair
-//   [soft]   8. doMeetingsAsSoonAsPossible  -lastTimeGrainIndex per meeting
-//   [soft]   9. oneBreakBetweenConsecutiveMeetings  -100 per meeting pair
-//                                        scheduled back-to-back (no break)
-//   [soft]  10. overlappingMeetings   -10 per overlap grain of any two
+//   [medium] 6. requiredAndPreferredAttendanceConflictCost  -1 per overlap
+//                                        grain per (required, preferred) pair
+//   [medium] 7. preferredAttendanceConflictCost  -1 per overlap grain per
+//                                        shared preferred attendee pair
+//   [soft]   8. meetingEndTimeCost    -lastTimeGrainIndex per meeting
+//   [soft]   9. consecutiveMeetingsCost  -100 per meeting pair scheduled
+//                                        back-to-back (no break)
+//   [soft]  10. meetingOverlapCost    -10 per overlap grain of any two
 //                                        different meetings
-//   [soft]  11. assignLargerRoomsFirst  -(capacity(R) - capacity(room)) per
+//   [soft]  11. largerRoomCapacityCost  -(capacity(R) - capacity(room)) per
 //                                        strictly larger room R
-//   [soft]  12. roomStability         -1 per shared attendee whose next
+//   [soft]  12. roomChangeCost        -1 per shared attendee whose next
 //                                        meeting (gap <= 2 grains) switches
 //                                        rooms
 // Unassigned assignments (grainRoom == -1) contribute nothing: the
 // construction heuristic scores partially initialized solutions. (Java's
 // forEachIncludingUnassigned variants score some half-assigned states — e.g.
-// requiredRoomCapacity with room == null — but with the composite encoding
+// roomCapacityCost with room == null — but with the composite encoding
 // both Java variables are assigned or neither, and on fully assigned
 // solutions the semantics match exactly.)
 class ScoreCalculator
@@ -115,16 +109,16 @@ public:
     // Full per-constraint recompute (runs prepare() first).
     static Breakdown computeBreakdown(MeetingSchedule &schedule);
 
-    // Assembles the engine score from a breakdown (the medium -> soft folding
-    // in one place).
+    // Assembles the engine score from a breakdown, folding medium into soft
+    // with the domain's kMediumFold (engine soft = soft + medium * 1e6,
+    // exact for these integral totals: the old
+    // -(medium * kMediumScale + soft)).
     static Score toScore(const Breakdown &breakdown)
     {
-        Score score;
-        score.hard = -breakdown.hardTotal();
-        score.soft
-            = -(static_cast<double>(breakdown.mediumTotal()) * kMediumScale
-                + static_cast<double>(breakdown.softTotal()));
-        return score;
+        return kMediumFold.toEngine(
+            -breakdown.hardTotal(),
+            -static_cast<double>(breakdown.mediumTotal()),
+            -static_cast<double>(breakdown.softTotal()));
     }
 
     // Builds the derived tables on MeetingSchedule (grain occupancy span,

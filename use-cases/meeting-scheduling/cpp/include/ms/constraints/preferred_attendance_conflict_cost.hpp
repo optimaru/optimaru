@@ -1,24 +1,29 @@
-#ifndef MS_CONSTRAINTS_REQUIRED_ATTENDANCE_CONFLICT_HPP
-#define MS_CONSTRAINTS_REQUIRED_ATTENDANCE_CONFLICT_HPP
+#ifndef MS_CONSTRAINTS_PREFERRED_ATTENDANCE_CONFLICT_COST_HPP
+#define MS_CONSTRAINTS_PREFERRED_ATTENDANCE_CONFLICT_COST_HPP
 
 #include "ms/constraints/common.hpp"
 
 namespace ms
 {
 
-// Hard (default, weight 1): requiredAttendanceConflict — one point per
-// overlapping grain per person required at BOTH meetings. Somebody who must
-// attend two meetings at once makes the schedule impossible, hence hard.
+// Medium, weight 1 (medium units): preferredAttendanceConflictCost — a
+// person who would PREFER to attend two meetings that overlap. Not
+// impossible, just a shame, which is why it sits on the medium level below
+// the hard rules and above every soft comfort term. Raw cost (global) =
+// overlapping grains x shared preferred attendees, summed over meeting pairs
+// (person-grains); 0 = no such clash.
 //
-// The same-meeting term (a meeting listing one person as required twice) is
-// folded in here rather than split off, so this component is exactly the
-// provider's one rule.
-struct RequiredAttendanceConflict final : AttendanceArcConstraint
+// Folded into the engine's soft level as `medium * kMediumScale` by the
+// calculator (kMediumFold in domain.hpp), not by this weight.
+struct PreferredAttendanceConflictCost final : AttendanceArcConstraint
 {
-    explicit RequiredAttendanceConflict(double weight = 1.0)
-        : AttendanceArcConstraint("requiredAttendanceConflict",
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Medium;
+
+    explicit PreferredAttendanceConflictCost(double weight = kDefaultWeight)
+        : AttendanceArcConstraint("preferredAttendanceConflictCost",
                                   weight,
-                                  /*hard=*/true)
+                                  kDefaultLevel)
     {
     }
 
@@ -33,11 +38,11 @@ protected:
         int end = 0;
         detail::spanOf(schedule, unit, assignmentIndex, start, end);
         std::int64_t total
-            = schedule.selfRequiredPairs[meeting] * (end - start);
+            = schedule.selfPreferredPairs[meeting] * (end - start);
         for (int arcIndex : arcsOf(meeting))
         {
             const ConflictArc &arc = schedule.conflictArcs[arcIndex];
-            if (arc.requiredWeight == 0)
+            if (arc.preferredWeight == 0)
                 continue;
             int partnerAssignment = -1;
             int partnerUnit = -1;
@@ -51,7 +56,7 @@ protected:
                            partnerAssignment,
                            partnerStart,
                            partnerEnd);
-            total += arc.requiredWeight
+            total += arc.preferredWeight
                      * ScoreCalculator::overlapGrains(
                          start, end, partnerStart, partnerEnd);
         }
@@ -61,4 +66,4 @@ protected:
 
 }  // namespace ms
 
-#endif  // MS_CONSTRAINTS_REQUIRED_ATTENDANCE_CONFLICT_HPP
+#endif  // MS_CONSTRAINTS_PREFERRED_ATTENDANCE_CONFLICT_COST_HPP

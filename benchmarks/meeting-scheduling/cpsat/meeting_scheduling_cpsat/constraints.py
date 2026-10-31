@@ -1,4 +1,13 @@
-"""Class-based CP-SAT plugins for meeting scheduling."""
+"""Class-based CP-SAT plugins for meeting scheduling.
+
+One plugin per engine constraint, subclassing the domain spec of the same name
+(``meeting_scheduling.constraints``). The plugins carry only ``build()``: the
+default level and weight of each one come from the engine's
+``meeting_scheduling.constraint_info()`` (cpsat-common reads the row), so the
+medium pair defaults to weight 1 on the CP-SAT medium level and
+``consecutive_meetings_cost`` / ``meeting_overlap_cost`` to 100 / 10 on soft,
+exactly as in C++.
+"""
 
 from collections import Counter
 from dataclasses import dataclass, field
@@ -111,28 +120,23 @@ class _UnaryPlugin(ConstraintPlugin[MeetingContext]):
         self.build_rule(context, objective, self.rule)
 
 
-class AvoidOvertime(domain.AvoidOvertime, _UnaryPlugin):
-    default_level = "hard"
+class OvertimeCost(domain.OvertimeCost, _UnaryPlugin):
     rule = "overtime"
 
 
-class RequiredRoomCapacity(domain.RequiredRoomCapacity, _UnaryPlugin):
-    default_level = "hard"
+class RoomCapacityCost(domain.RoomCapacityCost, _UnaryPlugin):
     rule = "capacity"
 
 
-class StartAndEndOnSameDay(domain.StartAndEndOnSameDay, _UnaryPlugin):
-    default_level = "hard"
+class DayCrossingCost(domain.DayCrossingCost, _UnaryPlugin):
     rule = "same_day"
 
 
-class DoMeetingsAsSoonAsPossible(domain.DoMeetingsAsSoonAsPossible, _UnaryPlugin):
-    default_level = "soft"
+class MeetingEndTimeCost(domain.MeetingEndTimeCost, _UnaryPlugin):
     rule = "early"
 
 
-class AssignLargerRoomsFirst(domain.AssignLargerRoomsFirst, _UnaryPlugin):
-    default_level = "soft"
+class LargerRoomCapacityCost(domain.LargerRoomCapacityCost, _UnaryPlugin):
     rule = "larger_room"
 
 
@@ -216,15 +220,13 @@ class _PairPlugin(ConstraintPlugin[MeetingContext]):
         self.build_rule(context, objective, self.rule)
 
 
-class RoomConflict(domain.RoomConflict, _PairPlugin):
-    default_level = "hard"
+class RoomConflictCost(domain.RoomConflictCost, _PairPlugin):
     rule = "room"
 
 
-class RequiredAttendanceConflict(
-    domain.RequiredAttendanceConflict, _UnaryPlugin, _PairPlugin
+class RequiredAttendanceConflictCost(
+    domain.RequiredAttendanceConflictCost, _UnaryPlugin, _PairPlugin
 ):
-    default_level = "hard"
     rule = "required_self"
 
     def build(self, context: MeetingContext, objective: ObjectiveBuilder) -> None:
@@ -232,10 +234,9 @@ class RequiredAttendanceConflict(
         _PairPlugin.build_rule(self, context, objective, "required")
 
 
-class RequiredAndPreferredAttendanceConflict(
-    domain.RequiredAndPreferredAttendanceConflict, _UnaryPlugin, _PairPlugin
+class RequiredAndPreferredAttendanceConflictCost(
+    domain.RequiredAndPreferredAttendanceConflictCost, _UnaryPlugin, _PairPlugin
 ):
-    default_level = "medium"
     rule = "mixed_self"
 
     def build(self, context: MeetingContext, objective: ObjectiveBuilder) -> None:
@@ -243,10 +244,9 @@ class RequiredAndPreferredAttendanceConflict(
         _PairPlugin.build_rule(self, context, objective, "mixed")
 
 
-class PreferredAttendanceConflict(
-    domain.PreferredAttendanceConflict, _UnaryPlugin, _PairPlugin
+class PreferredAttendanceConflictCost(
+    domain.PreferredAttendanceConflictCost, _UnaryPlugin, _PairPlugin
 ):
-    default_level = "medium"
     rule = "preferred_self"
 
     def build(self, context: MeetingContext, objective: ObjectiveBuilder) -> None:
@@ -254,38 +254,34 @@ class PreferredAttendanceConflict(
         _PairPlugin.build_rule(self, context, objective, "preferred")
 
 
-class OneBreakBetweenConsecutiveMeetings(
-    domain.OneBreakBetweenConsecutiveMeetings, _PairPlugin
-):
-    default_level = "soft"
-    default_weight = 100
+class ConsecutiveMeetingsCost(domain.ConsecutiveMeetingsCost, _PairPlugin):
     rule = "break"
 
 
-class OverlappingMeetings(domain.OverlappingMeetings, _PairPlugin):
-    default_level = "soft"
-    default_weight = 10
+class MeetingOverlapCost(domain.MeetingOverlapCost, _PairPlugin):
     rule = "overlap"
 
 
-class RoomStability(domain.RoomStability, _PairPlugin):
-    default_level = "soft"
+class RoomChangeCost(domain.RoomChangeCost, _PairPlugin):
     rule = "stability"
 
 
+# Plugin order = the engine's list_constraints() order (the per-meeting
+# constraints first, then the pair constraints), so catalog() lists the
+# constraints exactly like constraint_info().
 REGISTRY = ConstraintRegistry(
     [
-        RoomConflict(),
-        AvoidOvertime(),
-        RequiredAttendanceConflict(),
-        RequiredRoomCapacity(),
-        StartAndEndOnSameDay(),
-        RequiredAndPreferredAttendanceConflict(),
-        PreferredAttendanceConflict(),
-        DoMeetingsAsSoonAsPossible(),
-        OneBreakBetweenConsecutiveMeetings(),
-        OverlappingMeetings(),
-        AssignLargerRoomsFirst(),
-        RoomStability(),
+        OvertimeCost(),
+        RoomCapacityCost(),
+        DayCrossingCost(),
+        MeetingEndTimeCost(),
+        LargerRoomCapacityCost(),
+        RoomConflictCost(),
+        RequiredAttendanceConflictCost(),
+        RequiredAndPreferredAttendanceConflictCost(),
+        PreferredAttendanceConflictCost(),
+        ConsecutiveMeetingsCost(),
+        MeetingOverlapCost(),
+        RoomChangeCost(),
     ]
 )

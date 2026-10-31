@@ -1,23 +1,28 @@
-#ifndef MS_CONSTRAINTS_ROOM_STABILITY_HPP
-#define MS_CONSTRAINTS_ROOM_STABILITY_HPP
+#ifndef MS_CONSTRAINTS_ROOM_CHANGE_COST_HPP
+#define MS_CONSTRAINTS_ROOM_CHANGE_COST_HPP
 
 #include "ms/constraints/common.hpp"
 
 namespace ms
 {
 
-// Soft (default, weight 1): roomStability — a shared attendee whose next
-// meeting starts within two grains but in a different room, so they have to
-// pack up and walk. Unlike the three conflict rules this one is not about
-// overlap: it fires precisely when the meetings do NOT overlap much.
+// Soft, weight 1: roomChangeCost — a shared attendee whose next meeting
+// starts within two grains but in a different room, so they have to pack up
+// and walk. Unlike the three conflict rules this one is not about overlap: it
+// fires precisely when the meetings do NOT overlap much. Raw cost (global) =
+// for every such pair of meetings, the shared-attendance multiplicity
+// (attendee room switches); 0 = nobody changes rooms between close meetings.
 //
 // "Next" is the Java TimeGrain comparator (day, then starting minute) and
 // must be strict — two meetings starting at the same grain have no earlier
 // one, so nobody walks between them.
-struct RoomStability final : AttendanceArcConstraint
+struct RoomChangeCost final : AttendanceArcConstraint
 {
-    explicit RoomStability(double weight = 1.0)
-        : AttendanceArcConstraint("roomStability", weight, /*hard=*/false)
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
+
+    explicit RoomChangeCost(double weight = kDefaultWeight)
+        : AttendanceArcConstraint("roomChangeCost", weight, kDefaultLevel)
     {
     }
 
@@ -69,4 +74,4 @@ protected:
 
 }  // namespace ms
 
-#endif  // MS_CONSTRAINTS_ROOM_STABILITY_HPP
+#endif  // MS_CONSTRAINTS_ROOM_CHANGE_COST_HPP

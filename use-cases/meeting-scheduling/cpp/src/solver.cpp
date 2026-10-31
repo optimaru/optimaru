@@ -21,10 +21,10 @@ namespace
 // Per-assignment "day-fit" starting grain positions: the positions at which
 // the meeting's whole [start, start + duration) interval still lands on
 // existing grains of the start grain's own day — exactly the starts that
-// satisfy hard 2 (avoidOvertime) and hard 5 (startAndEndOnSameDay). The
-// composite value range is (grain x room), so these are the grain halves a
-// guided change move should prefer; the room half stays uniform because every
-// room is legal (only its capacity is penalized, at soft/hard 4 weight 1).
+// satisfy hard 2 (overtimeCost) and hard 5 (dayCrossingCost). The composite
+// value range is (grain x room), so these are the grain halves a guided
+// change move should prefer; the room half stays uniform because every room
+// is legal (only its capacity is penalized, by hard 4 roomCapacityCost).
 std::vector<std::vector<int>> buildDayFitStarts(const MeetingSchedule &schedule)
 {
     const int grainCount = schedule.timeGrainCount();
