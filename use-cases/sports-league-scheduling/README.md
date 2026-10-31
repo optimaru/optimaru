@@ -28,8 +28,6 @@ The 10 constraints have the same semantics as Java `SportsLeagueSchedulingConstr
 — for the list see `python/README.md` or the comments in `cpp/include/sls/
 score_calculator.hpp`.
 
-<!-- usage-and-extending -->
-
 ## Usage
 
 ```sh

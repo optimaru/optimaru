@@ -22,9 +22,6 @@ public:
     void update(int, LnsOutcome) override {}
 };
 
-// Builds the configured scheme. `segmentLength` applies to
-// SEGMENTED_ROULETTE_WHEEL, `alpha` to ALPHA_UCB; both are ignored otherwise.
-
 }  // namespace optimaru
 
 #endif  // OPTIMARU_IMPL_HEURISTIC_SELECTOR_MOVE_GENERIC_SELECT_RANDOM_SELECT_HPP

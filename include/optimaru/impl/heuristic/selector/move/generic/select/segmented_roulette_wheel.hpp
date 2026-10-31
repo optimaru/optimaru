@@ -46,8 +46,6 @@ public:
         iteration_ = 0;
     }
 
-    std::int64_t segmentLength() const { return segmentLength_; }
-
 private:
     std::vector<double> segmentScores_;
     std::int64_t segmentLength_;

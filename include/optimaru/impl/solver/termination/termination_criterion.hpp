@@ -12,7 +12,9 @@ namespace optimaru {
 // The termination plugin point (impl.solver.termination.Termination upstream).
 // ---------------------------------------------------------------------------
 // One criterion per file next to this one; SolverTermination OR-composes them.
-// Adding a criterion is: a file here + one line in termination.hpp.
+// Adding a criterion is: a file here, a TerminationConfig field, its include
+// and construction in SolverTermination (solver_termination.hpp), and a line
+// in termination.hpp.
 
 // Shared per-solve state the criteria read from. The composite owns it and
 // refreshes it once per check, so a criterion never touches the clock itself.

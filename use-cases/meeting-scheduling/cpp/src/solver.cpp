@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cstdint>
-#include <memory>
 #include <random>
 #include <stdexcept>
 #include <utility>

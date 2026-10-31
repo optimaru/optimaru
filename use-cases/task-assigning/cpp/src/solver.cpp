@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <memory>
 #include <stdexcept>
-#include <utility>
 
 #include "ta/incremental_calculator.hpp"
 #include "ta/score_calculator.hpp"

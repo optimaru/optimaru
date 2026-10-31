@@ -7,9 +7,12 @@ OR-Tools CP-SAT on the same instances and the same wall-clock budget. The benchm
 
 ## Method
 
-There are two tracks. Track 1 measures how well the solvers handle "the
+There are three tracks. Track 1 measures how well the solvers handle "the
 same six constraints" (pure search performance); track 2 measures the quality
-of the C++ canonical solver against CP-SAT on the full real-world model.
+of the C++ canonical solver against CP-SAT on the full real-world model; track
+3 relaxes H1 on an instance with one weekday removed and compares how much
+each solver fills (partial timetabling; see README.md "Track 3"). CI publishes
+all three tables; the tables below cover tracks 1 and 2.
 
 ### Track 1 — the quickstart's six constraints
 
@@ -262,14 +265,17 @@ uv run run_bench.py --sizes S,M,L --seconds 10 \
 
 # 3) Track 2: full canonical constraints (out/RESULTS_track2.md)
 uv run run_bench.py --track2 --sizes S,M,L --seconds 10
+
+# 4) Track 3: partial timetabling, H1 relaxed (out/RESULTS_track3.md)
+uv run run_bench.py --track3 --sizes S,M,L --seconds 10
 ```
 
 ### CI
 
 [`school-timetabling-bench.yml`](../../.github/workflows/school-timetabling-bench.yml)
 runs exactly that order: ccache build → `st_test`/`canonical_test` gate →
-C++/evaluator cross-check gate → track 1 → track 2 →
-both tables published in the job summary (+ instance/solution JSON uploaded as
+C++/evaluator cross-check gate → track 1 → track 2 → track 3 →
+all three tables published in the job summary (+ instance/solution JSON uploaded as
 artifacts).
 
 - Triggers: push to `main` / PR (`include/**`, `use-cases/school-timetabling/**`,

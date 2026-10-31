@@ -1,8 +1,6 @@
 #ifndef OPTIMARU_IMPL_LOCALSEARCH_PREVIEW_EVALUATION_HPP
 #define OPTIMARU_IMPL_LOCALSEARCH_PREVIEW_EVALUATION_HPP
 
-#include <cmath>
-
 #include "optimaru/api/score/director/score_director.hpp"
 
 namespace optimaru {

@@ -11,7 +11,6 @@
 #include <vector>
 
 #include "pjs/domain.hpp"
-#include "pjs/score_calculator.hpp"
 #include "pjs/solver.hpp"
 
 using namespace pjs;

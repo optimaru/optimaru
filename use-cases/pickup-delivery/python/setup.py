@@ -2,7 +2,6 @@
 compiled together with the C++ use case in ../cpp (linked, not modified).
 
 Local dev:   uv sync --all-groups
-or:          uv run python setup.py build_ext --inplace
 """
 
 import os

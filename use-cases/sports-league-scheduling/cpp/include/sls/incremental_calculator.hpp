@@ -96,10 +96,6 @@ private:
     // consecutive_ by re-pricing the maximal run around roundIndex.
     void bumpRun(std::vector<int> &cnt, int team, int roundIndex, int delta);
 
-    std::size_t teamRoundOffset(int team, int roundIndex) const
-    {
-        return static_cast<std::size_t>(team) * indexCount_ + roundIndex;
-    }
     std::size_t pairRoundOffset(int pairId, int roundIndex) const
     {
         return static_cast<std::size_t>(pairId) * indexCount_ + roundIndex;

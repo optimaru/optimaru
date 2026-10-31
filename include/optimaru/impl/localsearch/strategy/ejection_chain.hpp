@@ -11,7 +11,6 @@
 #include "optimaru/impl/heuristic/selector/common/nearby/nearby_neighborhoods.hpp"
 #include "optimaru/impl/localsearch/element_index.hpp"
 #include "optimaru/impl/localsearch/list_move.hpp"
-#include "optimaru/impl/localsearch/preview_evaluation.hpp"
 #include "optimaru/impl/localsearch/termination_throttle.hpp"
 #include "optimaru/preview/api/move/operators.hpp"
 

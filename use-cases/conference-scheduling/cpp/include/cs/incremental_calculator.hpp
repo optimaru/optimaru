@@ -1,7 +1,6 @@
 #ifndef CS_INCREMENTAL_CALCULATOR_HPP
 #define CS_INCREMENTAL_CALCULATOR_HPP
 
-#include <cstddef>
 #include <cstdint>
 #include <vector>
 

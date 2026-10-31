@@ -78,10 +78,10 @@ class BenchmarkCase(Protocol):
     ) -> Any: ...
 
 
-def score_solution(package: str, solution: Any, constraints=None) -> Score:
+def score_solution(package: str, solution: Any) -> Score:
     module = importlib.import_module(package)
     specs = importlib.import_module(f"{package}.constraints")
-    result = specs.score(module.constraint_costs(solution), constraints)
+    result = specs.score(module.constraint_costs(solution))
     return Score(tuple(result), tuple(result._fields))
 
 
@@ -228,25 +228,6 @@ def _verdict(result: dict) -> str:
     best = max(tuple(run["score"]) for run in scored)
     winners = [run["solver"] for run in scored if tuple(run["score"]) == best]
     return "tie" if len(winners) == len(result["runs"]) > 1 else " = ".join(winners)
-
-
-def _gap(result: dict, solver: str = "engine", reference: str = "cp-sat") -> str:
-    """The engine's last-level gap to `reference`, when the higher levels tie."""
-    engine, other = _run(result, solver), _run(result, reference)
-    if (
-        not engine
-        or not other
-        or engine.get("score") is None
-        or other.get("score") is None
-    ):
-        return ""
-    left, right = list(engine["score"]), list(other["score"])
-    if left[:-1] != right[:-1]:
-        return ""
-    base = abs(right[-1])
-    if base < 1e-9:
-        return "" if abs(left[-1]) < 1e-9 else "n/a"
-    return f"{(abs(left[-1]) - base) / base * 100:+.2f}%"
 
 
 def _as_dict(result: InstanceResult) -> dict:
@@ -411,8 +392,3 @@ class JavaRandom:
             value = bits % bound
             if bits - value + (bound - 1) < (1 << 31):
                 return value
-
-    def shuffle(self, items: list) -> None:
-        for index in range(len(items) - 1, 0, -1):
-            swap = self.next_int(index + 1)
-            items[index], items[swap] = items[swap], items[index]

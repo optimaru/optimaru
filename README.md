@@ -55,6 +55,9 @@ include/optimaru/
 │   ├── score/calculator/chained_incremental_score_calculator.hpp
 │   ├── score/calculator/composite_incremental_score_calculator.hpp
 │   │                                              cost components, weighted sum
+│   ├── score/calculator/decomposed_score_calculator.hpp
+│   │                                              per-unit constraint plugins
+│   ├── score/calculator/constraint_assembly.hpp   default constraint set, weight/soft/drop by name
 │   ├── score/director/score_director.hpp          + EnvironmentMode::FULL_ASSERT
 │   ├── score/analysis/score_analysis.hpp          ScoreAnalysis / ConstraintAnalysis
 │   └── solver/{solver.hpp, solver_factory.hpp,
@@ -69,8 +72,9 @@ include/optimaru/
 │   └── heuristic/selector/common/nearby/nearby_selection_config.hpp
 ├── impl/
 │   ├── solver/default_solver.hpp                  phase orchestration, multi-start
-│   ├── solver/termination/termination.hpp         Termination hierarchy +
-│   │                                              SolverTermination (OR-composite)
+│   ├── solver/termination/                        termination_criterion.hpp (plugin point),
+│   │                                              one file per criterion, solver_termination.hpp
+│   │                                              (OR-composite); termination.hpp = umbrella
 │   ├── constructionheuristic/default_construction_heuristic_phase.hpp
 │   ├── localsearch/default_local_search_phase.hpp step loop, sampled moves, LNS
 │   ├── localsearch/list_move.hpp                  the LIST moves every strategy
@@ -83,17 +87,23 @@ include/optimaru/
 │   │   ├── acceptor.hpp                           hillclimbing/ lateacceptance/
 │   │   │                                          tabu/ simulatedannealing/
 │   │   │                                          greatdeluge/ stepcountinghillclimbing/
+│   │   │                                          recordtorecordtravel/
 │   ├── heuristic/selector/common/nearby/nearby_neighborhoods.hpp
-│   └── heuristic/selector/move/generic/ruin_recreate_selector.hpp
-│                                                  LnsOutcome + RouletteWheelSelector
+│   └── heuristic/selector/move/generic/           ruin/ one ruin operator per file;
+│                                                  select/ LnsOutcome + roulette / segmented /
+│                                                  alpha-UCB / random schemes;
+│                                                  ruin_recreate_selector.hpp = umbrella + factory
 ├── preview/api/move/operators.hpp                 custom MoveOperator / RuinOperator
 │                                                  registration (experimental API)
+├── python/constraint_binding.hpp                  pybind11 helper: Python constraint specs
+│                                                  -> ConstraintAssembly
 └── testing/preview_parity.hpp                     move-preview vs applied-score harness
                                                    for a use case's calculator tests
 ```
 
-`optimaru::` is one flat namespace; the directories organize the headers,
-the namespaces don't.
+`optimaru::` is one flat namespace apart from the `optimaru::testing` and
+`optimaru::python` helpers (and small `detail` / `chained` helper
+namespaces); the directories organize the headers, the namespaces don't.
 
 ## Features
 
@@ -113,15 +123,16 @@ the namespaces don't.
 - **Construction heuristics**: First Fit, First Fit Decreasing, cheapest
   insertion for list variables.
 - **Acceptors**: Hill Climbing, Late Acceptance, Entity Tabu, Simulated
-  Annealing, Great Deluge, Step Counting Hill Climbing.
+  Annealing, Great Deluge, Step Counting Hill Climbing, Record-to-Record Travel.
 - **Terminations**: spent / unimproved-spent / step count /
   unimproved-step-count / best score, OR-composed.
 - **Moves**: change/swap (BASIC); relocate / swap / 2-opt / Or-opt / 2-opt\*
-  tail swap (LIST), mixed by weight in `MoveSelectorConfig`.
+  tail swap / CROSS-exchange (LIST), mixed by weight in `MoveSelectorConfig`.
 - **Nearby selection**: `NearbySelectionConfig::distanceMeter` biases moves
   toward k-nearest neighbors.
-- **Ruin & recreate**: adaptive ALNS — random/related/worst ruin + greedy
-  (nearby-restricted) recreate + polish, roulette-wheel operator weights.
+- **Ruin & recreate**: adaptive ALNS — random/related/worst/SISR/route ruin +
+  regret-k (default k=3, nearby-restricted) recreate + polish, adaptive operator
+  weights (roulette wheel by default; segmented roulette, alpha-UCB, random).
 - **Solving**: `SolverFactory` / `Solver` / `SolverConfig`; async background
   solving with `SolverManager` / `SolverJob` / `SolverStatus` and
   `terminateEarly()`; `solveMultiStart()` (N independent starts, best wins).

@@ -133,9 +133,6 @@ class ObjectiveBuilder:
         self.terms: dict[str, list] = {level: [] for level in self.levels}
         self.bounds: dict[str, int] = {level: 0 for level in self.levels}
 
-    def enabled(self, name: str) -> bool:
-        return name in self.selected
-
     def add(self, name: str, magnitude, *, bound: int) -> None:
         """Add a non-negative raw penalty and a valid magnitude upper bound."""
         selected = self.selected.get(name)
@@ -290,6 +287,3 @@ class ObjectiveBuilder:
                 else scored
             )
         return result
-
-    def catalog(self) -> list[dict[str, Any]]:
-        return [spec.as_dict() for spec, _config in self.selected.values()]

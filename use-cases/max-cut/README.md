@@ -9,8 +9,6 @@ different-side pairs, partition cardinality bounds and optional balance. The
 base formulation follows the official
 [Hexaly weighted Max-Cut template](https://www.hexaly.com/templates/max-cut-problem).
 
-<!-- usage-and-extending -->
-
 ## Usage
 
 ```sh

@@ -200,7 +200,11 @@ defaults the caller can override per solve.
 
 ## Extending a pure Python use case
 
-Everything is in `python/<package>/`:
+Everything is in `python/<package>/`. Bin-packing is the exception: its
+solver, moves and `constraint_costs()` live in `_core.py` (see
+[its README](bin-packing/README.md#extending)); the rest of this section
+describes assembly-line-balancing, knapsack, max-cut, quadratic-assignment
+and semiconductor-scheduling:
 
 - **Move** — the `neighbor(state, rng)` function inside `solve()` in
   `__init__.py` returns one random neighbour of the current state; add a new

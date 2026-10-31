@@ -2,19 +2,15 @@
 #define OPTIMARU_IMPL_LOCALSEARCH_DEFAULT_LOCAL_SEARCH_PHASE_HPP
 
 #include <algorithm>
-#include <cmath>
 #include <cstdint>
 #include <functional>
-#include <limits>
 #include <memory>
 #include <random>
-#include <utility>
 #include <vector>
 
 #include "optimaru/api/domain/solution_descriptor.hpp"
 #include "optimaru/api/score/director/score_director.hpp"
 #include "optimaru/config/solver/solver_config.hpp"
-#include "optimaru/impl/constructionheuristic/default_construction_heuristic_phase.hpp"
 #include "optimaru/impl/heuristic/selector/common/nearby/nearby_neighborhoods.hpp"
 #include "optimaru/impl/heuristic/selector/move/generic/ruin_recreate_selector.hpp"
 #include "optimaru/impl/heuristic/selector/move/generic/ruin/random_ruin.hpp"
@@ -33,6 +29,7 @@
 #include "optimaru/impl/localsearch/element_index.hpp"
 #include "optimaru/impl/localsearch/greedy_repair.hpp"
 #include "optimaru/impl/localsearch/list_move.hpp"
+#include "optimaru/impl/localsearch/movable_entity.hpp"
 #include "optimaru/impl/localsearch/solution_snapshot.hpp"
 #include "optimaru/impl/localsearch/strategy/descent.hpp"
 #include "optimaru/impl/localsearch/strategy/ejection_chain.hpp"
@@ -54,7 +51,9 @@ namespace optimaru {
 // search stagnates.
 //   BASIC moves: ChangeMove (reassign one entity), SwapMove.
 //   LIST moves:  relocate (move one element), element swap, 2-opt
-//                (reverse a segment within one list).
+//                (reverse a segment within one list), Or-opt (move a 2-3
+//                element segment), 2-opt* (tail swap) and CROSS-exchange;
+//                mixed by MoveSelectorConfig weights (the last three default to 0).
 // Moves follow a do/undo protocol: apply through the
 // ScoreDirector, read calculateScore(), and revert when rejected.
 //
@@ -65,7 +64,6 @@ namespace optimaru {
 template <typename Solution>
 class DefaultLocalSearchPhase {
     using Descriptor = SolutionDescriptor<Solution>;
-    using ConstructionHeuristic = DefaultConstructionHeuristicPhase<Solution>;
     using Snapshot = SolutionSnapshot<Solution>;
 
 public:
@@ -493,21 +491,6 @@ private:
         for (int e = 0; e < n; ++e)
             if (!entityPinned<Descriptor>(sol, e)) return false;
         return true;
-    }
-
-    // Return a non-pinned entity: keep `e` if movable, otherwise resample (then
-    // scan) for one. run() has checked that one exists.
-    int movableEntity(const Solution& sol, int e,
-                      std::uniform_int_distribution<int>& pick, std::mt19937_64& rng) {
-        if (!entityPinned<Descriptor>(sol, e)) return e;
-        for (int t = 0; t < 8; ++t) {
-            const int c = pick(rng);
-            if (!entityPinned<Descriptor>(sol, c)) return c;
-        }
-        const int n = Descriptor::entityCount(sol);
-        for (int c = 0; c < n; ++c)
-            if (!entityPinned<Descriptor>(sol, c)) return c;
-        return e;
     }
 
     AppliedMove applyBasicMove(ScoreDirector<Solution>& director, std::mt19937_64& rng) {

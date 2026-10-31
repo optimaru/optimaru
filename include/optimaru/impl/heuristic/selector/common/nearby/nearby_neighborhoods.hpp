@@ -12,7 +12,7 @@ namespace optimaru {
 // ---------------------------------------------------------------------------
 // Precomputed k-nearest-neighbor lists for nearby selection (a
 // domain-provided distance meter). Built once at solve start from the domain-provided
-// SolverConfig::nearbyDistanceMeter; used to bias move selection toward pairs
+// SolverConfig::localSearch.nearby.distanceMeter; used to bias move selection toward pairs
 // that are close to each other (a distant relocate/swap is almost never an
 // improvement on spatial problems) and to drive the LNS related-ruin operator.
 class NearbyNeighborhoods {

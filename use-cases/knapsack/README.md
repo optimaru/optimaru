@@ -11,8 +11,6 @@ total-value maximization. The basic formulation follows the official
 the extra contracts expose common multiple-choice and multidimensional variants
 without changing the default instance format.
 
-<!-- usage-and-extending -->
-
 ## Usage
 
 ```sh

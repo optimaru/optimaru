@@ -1,6 +1,6 @@
 """CLI that solves the demo school and prints a timetable report.
 
-python -m teacher_scheduling [--time-limit N] [--backend cpsat]
+python -m teacher_scheduling [--time-limit N]
 """
 
 import argparse
@@ -15,7 +15,6 @@ from teacher_scheduling.validate import validate_timetable
 def main() -> int:
     parser = argparse.ArgumentParser(prog="python -m teacher_scheduling", description="Demo school timetabling")
     parser.add_argument("--time-limit", type=float, default=None, metavar="N", help="search time limit (seconds)")
-    parser.add_argument("--backend", choices=["cpsat"], default="cpsat", help="solver backend to use")
     args = parser.parse_args()
 
     config = SolverConfig() if args.time_limit is None else SolverConfig(time_limit_seconds=args.time_limit)

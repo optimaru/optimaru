@@ -226,7 +226,6 @@ struct PackagingSchedule
     std::vector<int> pinnedPrefixLen;  // per list: lines then the pool
 
     int lineCount() const { return static_cast<int>(lines.size()); }
-    int poolListIndex() const { return lineCount(); }
     int listCountWithPool() const { return lineCount() + 1; }
 
     const std::vector<int> &rawList(int listIndex) const

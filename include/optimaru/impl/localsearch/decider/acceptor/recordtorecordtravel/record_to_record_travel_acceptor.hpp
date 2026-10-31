@@ -77,8 +77,6 @@ public:
         return accepted;
     }
 
-    double threshold() const { return threshold_; }
-
 private:
     void advance() {
         const double next =

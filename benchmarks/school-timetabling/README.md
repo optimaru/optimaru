@@ -5,7 +5,7 @@ and compares them. It runs build → cross-check gate → quality benchmark → 
 
 | File | Role |
 | --- | --- |
-| `run_bench.py` | Orchestration (track 1 by default, `--track2` for the canonical track) |
+| `run_bench.py` | Orchestration (track 1 by default, `--track2` for the canonical track, `--track3` for partial timetabling) |
 | `evaluate.py` | Track-1 shared evaluator: recomputes the quickstart's six-constraint score from a solution (checked against each solver's self-report) |
 | `cpsat_quickstart.py` | Track-1 CP-SAT solver (six constraints: hard as constraints, the three soft ones as the objective) |
 | `gen_canonical.py` | Track-2 generator of S/M/L canonical `TimetableProblem`s (blocks / parallel sections / team teaching / unavailability, with a load check) |

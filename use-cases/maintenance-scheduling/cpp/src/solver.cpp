@@ -82,6 +82,46 @@ DateWindows buildDateWindows(const MaintenanceSchedule &schedule)
     return w;
 }
 
+// Shared engine wiring for both solve() overloads: termination, late
+// acceptance, the BASIC move mix and the ALNS knobs.
+optimaru::SolverConfig buildEngineConfig(const Solver::Config &config,
+                                         const MaintenanceSchedule &schedule)
+{
+    optimaru::SolverConfig engineConfig;
+    engineConfig.randomSeed = config.randomSeed;
+    engineConfig.environmentMode = config.environmentMode;
+    engineConfig.onNewBest = config.onNewBest;
+    engineConfig.termination.spentLimit = config.spentLimit;
+    engineConfig.termination.bestScoreLimit = config.bestScoreLimit;
+    engineConfig.termination.unimprovedSpentLimit = config.unimprovedSpentLimit;
+    engineConfig.termination.stepCountLimit = config.stepCountLimit;
+    engineConfig.termination.unimprovedStepCountLimit
+        = config.unimprovedStepCountLimit;
+    // lateAcceptanceSize 0 = auto-scale with the instance (see Config).
+    engineConfig.localSearch.acceptor.lateAcceptanceSize
+        = config.lateAcceptanceSize != 0
+              ? config.lateAcceptanceSize
+              : std::clamp<std::size_t>(8 * schedule.jobs.size(), 400, 3200);
+    engineConfig.localSearch.moveSelector.changeMoveWeight
+        = config.changeMoveWeight;
+    engineConfig.localSearch.moveSelector.swapMoveWeight
+        = config.swapMoveWeight;
+    auto &lns = engineConfig.localSearch.ruinRecreate;
+    lns.enabled = config.ruinRecreate;
+    lns.unimprovedStepTrigger = config.ruinRecreateUnimprovedStepTrigger;
+    lns.minRuinFraction = config.ruinRecreateMinRuinFraction;
+    lns.maxRuinFraction = config.ruinRecreateMaxRuinFraction;
+    lns.maxRuinCount = config.ruinRecreateMaxRuinCount;
+    lns.operatorDecay = config.ruinRecreateOperatorDecay;
+    lns.rewards = config.ruinRecreateRewards;
+    lns.polishSteps = config.ruinRecreatePolishSteps;
+    lns.asMoveWeight = config.ruinRecreateAsMoveWeight;
+    lns.asMoveMaxRuin = config.ruinRecreateAsMoveMaxRuin;
+    engineConfig.localSearch.descentWeight = config.descentWeight;
+    engineConfig.localSearch.descentMaxSweeps = config.descentMaxSweeps;
+    return engineConfig;
+}
+
 }  // namespace
 
 void Solver::solve(MaintenanceSchedule &schedule)
@@ -149,39 +189,7 @@ void Solver::solve(MaintenanceSchedule &schedule)
         return;
     }
 
-    optimaru::SolverConfig engineConfig;
-    engineConfig.randomSeed = config_.randomSeed;
-    engineConfig.environmentMode = config_.environmentMode;
-    engineConfig.onNewBest = config_.onNewBest;
-    engineConfig.termination.spentLimit = config_.spentLimit;
-    engineConfig.termination.bestScoreLimit = config_.bestScoreLimit;
-    engineConfig.termination.unimprovedSpentLimit
-        = config_.unimprovedSpentLimit;
-    engineConfig.termination.stepCountLimit = config_.stepCountLimit;
-    engineConfig.termination.unimprovedStepCountLimit
-        = config_.unimprovedStepCountLimit;
-    // lateAcceptanceSize 0 = auto-scale with the instance (see Config).
-    engineConfig.localSearch.acceptor.lateAcceptanceSize
-        = config_.lateAcceptanceSize != 0
-              ? config_.lateAcceptanceSize
-              : std::clamp<std::size_t>(8 * schedule.jobs.size(), 400, 3200);
-    engineConfig.localSearch.moveSelector.changeMoveWeight
-        = config_.changeMoveWeight;
-    engineConfig.localSearch.moveSelector.swapMoveWeight
-        = config_.swapMoveWeight;
-    auto &lns = engineConfig.localSearch.ruinRecreate;
-    lns.enabled = config_.ruinRecreate;
-    lns.unimprovedStepTrigger = config_.ruinRecreateUnimprovedStepTrigger;
-    lns.minRuinFraction = config_.ruinRecreateMinRuinFraction;
-    lns.maxRuinFraction = config_.ruinRecreateMaxRuinFraction;
-    lns.maxRuinCount = config_.ruinRecreateMaxRuinCount;
-    lns.operatorDecay = config_.ruinRecreateOperatorDecay;
-    lns.rewards = config_.ruinRecreateRewards;
-    lns.polishSteps = config_.ruinRecreatePolishSteps;
-    lns.asMoveWeight = config_.ruinRecreateAsMoveWeight;
-    lns.asMoveMaxRuin = config_.ruinRecreateAsMoveMaxRuin;
-    engineConfig.localSearch.descentWeight = config_.descentWeight;
-    engineConfig.localSearch.descentMaxSweeps = config_.descentMaxSweeps;
+    optimaru::SolverConfig engineConfig = buildEngineConfig(config_, schedule);
 
     // The single calculator instance of this solve. Created before the engine
     // so the guided-selection hooks can bind to it; the engine resets it on
@@ -322,39 +330,8 @@ void Solver::solve(
         // calculator's live occupancy and hot-cell state, which a
         // caller-assembled plugin does not expose. The built-in move mix plus
         // the ALNS kicks remain.
-        optimaru::SolverConfig engineConfig;
-        engineConfig.randomSeed = config_.randomSeed;
-        engineConfig.environmentMode = config_.environmentMode;
-        engineConfig.onNewBest = config_.onNewBest;
-        engineConfig.termination.spentLimit = config_.spentLimit;
-        engineConfig.termination.bestScoreLimit = config_.bestScoreLimit;
-        engineConfig.termination.unimprovedSpentLimit
-            = config_.unimprovedSpentLimit;
-        engineConfig.termination.stepCountLimit = config_.stepCountLimit;
-        engineConfig.termination.unimprovedStepCountLimit
-            = config_.unimprovedStepCountLimit;
-        engineConfig.localSearch.acceptor.lateAcceptanceSize
-            = config_.lateAcceptanceSize != 0
-                  ? config_.lateAcceptanceSize
-                  : std::clamp<std::size_t>(
-                        8 * schedule.jobs.size(), 400, 3200);
-        engineConfig.localSearch.moveSelector.changeMoveWeight
-            = config_.changeMoveWeight;
-        engineConfig.localSearch.moveSelector.swapMoveWeight
-            = config_.swapMoveWeight;
-        auto &lns = engineConfig.localSearch.ruinRecreate;
-        lns.enabled = config_.ruinRecreate;
-        lns.unimprovedStepTrigger = config_.ruinRecreateUnimprovedStepTrigger;
-        lns.minRuinFraction = config_.ruinRecreateMinRuinFraction;
-        lns.maxRuinFraction = config_.ruinRecreateMaxRuinFraction;
-        lns.maxRuinCount = config_.ruinRecreateMaxRuinCount;
-        lns.operatorDecay = config_.ruinRecreateOperatorDecay;
-        lns.rewards = config_.ruinRecreateRewards;
-        lns.polishSteps = config_.ruinRecreatePolishSteps;
-        lns.asMoveWeight = config_.ruinRecreateAsMoveWeight;
-        lns.asMoveMaxRuin = config_.ruinRecreateAsMoveMaxRuin;
-        engineConfig.localSearch.descentWeight = config_.descentWeight;
-        engineConfig.localSearch.descentMaxSweeps = config_.descentMaxSweeps;
+        optimaru::SolverConfig engineConfig
+            = buildEngineConfig(config_, schedule);
 
         optimaru::Solver<MaintenanceSchedule> engine(std::move(engineConfig));
         engine.solve(schedule, calculator);

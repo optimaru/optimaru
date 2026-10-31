@@ -2,8 +2,6 @@
 
 Domain model, constraints and API details: [`python/`](python/README.md).
 
-<!-- usage-and-extending -->
-
 ## Usage
 
 ```sh

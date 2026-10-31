@@ -149,14 +149,7 @@ public:
     // isolate a few rules ("score just the hard ones"). Throws on any name the
     // assembly does not hold.
     ConstraintAssembly& only(std::initializer_list<std::string> names) & {
-        for (const std::string& name : names) {
-            if (!contains(name)) {
-                throw std::invalid_argument("Constraint '" + name +
-                                            "' is not in this assembly; it holds " + nameList());
-            }
-        }
-        keepOnly(units_, names);
-        keepOnly(globals_, names);
+        onlyImpl(names);
         return *this;
     }
     ConstraintAssembly&& only(std::initializer_list<std::string> names) && {
@@ -167,14 +160,7 @@ public:
     // boundary has (the Python packages hand their constraint picks in as a
     // vector of names).
     ConstraintAssembly& only(const std::vector<std::string>& names) & {
-        for (const std::string& name : names) {
-            if (!contains(name)) {
-                throw std::invalid_argument("Constraint '" + name +
-                                            "' is not in this assembly; it holds " + nameList());
-            }
-        }
-        keepOnly(units_, names);
-        keepOnly(globals_, names);
+        onlyImpl(names);
         return *this;
     }
     ConstraintAssembly&& only(const std::vector<std::string>& names) && {
@@ -251,6 +237,18 @@ private:
             }
         }
         vector = std::move(kept);
+    }
+
+    template <typename Names>
+    void onlyImpl(const Names& names) {
+        for (const std::string& name : names) {
+            if (!contains(name)) {
+                throw std::invalid_argument("Constraint '" + name +
+                                            "' is not in this assembly; it holds " + nameList());
+            }
+        }
+        keepOnly(units_, names);
+        keepOnly(globals_, names);
     }
 
     // Applies `apply` to the named constraint, whichever kind it is. The two

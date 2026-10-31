@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <exception>
-#include <memory>
 #include <random>
 #include <stdexcept>
 #include <thread>

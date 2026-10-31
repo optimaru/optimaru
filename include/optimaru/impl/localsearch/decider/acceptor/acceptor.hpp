@@ -24,7 +24,7 @@ namespace optimaru {
 //
 // Concrete acceptors live in their upstream-mirrored subdirectories:
 // hillclimbing/, lateacceptance/, tabu/, simulatedannealing/, greatdeluge/,
-// stepcountinghillclimbing/.
+// stepcountinghillclimbing/, recordtorecordtravel/.
 class Acceptor {
 public:
     virtual ~Acceptor() = default;

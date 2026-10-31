@@ -32,8 +32,6 @@ per-instance assignments, so the script labels that number as an external
 aggregate rather than pretending it is a directly reproduced solver run.
 The checked-in local snapshot is in [`bench/RESULTS.md`](../../benchmarks/quadratic-assignment/bench/RESULTS.md).
 
-<!-- usage-and-extending -->
-
 ## Usage
 
 ```sh

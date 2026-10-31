@@ -65,8 +65,6 @@ print(problem.score, problem.used_facility_count(), problem.total_cost())
 The pydantic v2 serialization mirror is `facility_location.models`
 (`FacilityLocationProblemModel.from_core / to_core`).
 
-<!-- usage-and-extending -->
-
 ## Usage
 
 ```sh

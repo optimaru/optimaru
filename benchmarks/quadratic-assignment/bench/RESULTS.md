@@ -15,7 +15,7 @@ aggregate head-to-head result. Running all available archive instances is
 explicit:
 
 ```sh
-uv run --project benchmarks/quadratic-assignment/cpsat python -m bench.run_bench --all --seconds 60 --json
+cd benchmarks/quadratic-assignment && uv run --project cpsat python -m bench.run_bench --all --seconds 60 --json
 ```
 
 The CP-SAT reference is disabled by default on these instances because its

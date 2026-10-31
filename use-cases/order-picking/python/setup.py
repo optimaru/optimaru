@@ -10,9 +10,6 @@ or:          uv run python setup.py build_ext --inplace
 import os
 
 from pybind11.setup_helpers import Pybind11Extension, build_ext
-
-# setuptools must be imported before pybind11.setup_helpers: on Python 3.12+
-# it provides the distutils shim that pybind11's helpers still import.
 from setuptools import setup
 
 CORE = os.path.join("..", "cpp")

@@ -23,8 +23,8 @@ namespace optimaru {
 // editing a monolithic calculator.
 //
 //   auto composite = optimaru::CompositeIncrementalScoreCalculator<MySolution>();
-//   composite.add(std::make_unique<CapacityCost>());          // weight 1/1
-//   composite.add(std::make_unique<OvertimeCost>(), 2, 1.0);  // hard x2
+//   composite.add(std::make_unique<CapacityCost>(), "capacity");          // weight 1/1
+//   composite.add(std::make_unique<OvertimeCost>(), "overtime", 2, 1.0);  // hard x2
 //   solver.solve(solution, composite);
 //
 // Every hook is forwarded to every component; calculateScore() is the

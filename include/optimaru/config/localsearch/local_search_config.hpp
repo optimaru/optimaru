@@ -21,10 +21,11 @@ namespace optimaru {
 // RuinRecreateMoveSelector (impl.heuristic.selector.move.generic), with
 // adaptive operator selection. After
 // unimprovedStepTrigger steps without a new best, one kick runs: an
-// adaptively selected ruin operator (random / related / worst / registered
-// customs) removes a fraction of the solution, greedy best-placement rebuilds
-// it, polishSteps hill-climbing moves repair the seams, and the result
-// becomes the new incumbent unconditionally with a fresh acceptor
+// adaptively selected ruin operator (random / related / worst, SISR and route
+// ruins when enabled below, registered customs) removes a fraction of the
+// solution, the repair (regret-k by default, see regretK) rebuilds it,
+// polishSteps hill-climbing moves repair the seams, and the result becomes
+// the new incumbent unconditionally with a fresh acceptor
 // (perturbation-style; the best-solution snapshot is the safety net).
 struct RuinRecreateConfig {
     bool enabled = false;

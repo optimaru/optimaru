@@ -106,7 +106,7 @@ def subpackages():
     return packages, package_dir
 
 
-# 15 extensions — compile their translation units in parallel.
+# Compile every extension's translation units in parallel.
 ParallelCompile("OPTIMARU_BUILD_JOBS", default=0).install()
 
 ext_modules = [

@@ -10,7 +10,6 @@
 #include <vector>
 
 #include "ba/domain.hpp"
-#include "ba/score_calculator.hpp"
 #include "ba/solver.hpp"
 
 using namespace ba;

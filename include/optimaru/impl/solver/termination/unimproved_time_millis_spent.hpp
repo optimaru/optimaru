@@ -2,7 +2,6 @@
 #define OPTIMARU_IMPL_SOLVER_TERMINATION_UNIMPROVED_TIME_MILLIS_SPENT_HPP
 
 #include <chrono>
-#include <cstdint>
 
 #include "optimaru/impl/solver/termination/termination_criterion.hpp"
 

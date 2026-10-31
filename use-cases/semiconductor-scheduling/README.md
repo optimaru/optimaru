@@ -14,8 +14,6 @@ the [IBM CP scheduling example library](https://www.ibm.com/docs/en/icos/22.2.0?
 and [Gurobi's modeling examples](https://github.com/Gurobi/modeling-examples).
 The implementation is original and does not depend on a commercial runtime.
 
-<!-- usage-and-extending -->
-
 ## Usage
 
 ```sh

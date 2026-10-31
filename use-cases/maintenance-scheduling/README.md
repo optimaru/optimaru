@@ -62,8 +62,6 @@ The demo data reproduces the Java `DemoDataGenerator` bit for bit with a
 `java.util.Random(17)` replica (SMALL: 3 crews/8 weeks/14 jobs, LARGE: 5 crews/16 weeks/
 48 jobs; starting next Monday). Both SMALL and LARGE reach hard 0 within seconds.
 
-<!-- usage-and-extending -->
-
 ## Usage
 
 ```sh

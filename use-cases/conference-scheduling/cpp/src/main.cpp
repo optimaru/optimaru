@@ -8,7 +8,6 @@
 #include <vector>
 
 #include "cs/domain.hpp"
-#include "cs/score_calculator.hpp"
 #include "cs/solver.hpp"
 
 using namespace cs;
