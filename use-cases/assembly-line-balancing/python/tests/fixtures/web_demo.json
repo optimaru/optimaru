@@ -1,0 +1,36 @@
+{
+    "cycle_time": 12,
+    "max_stations": 6,
+    "tasks": [
+        { "id": "Frame", "duration": 6, "fixed_station": 0 },
+        { "id": "Motor", "duration": 5 },
+        { "id": "Wiring", "duration": 4 },
+        { "id": "Controls", "duration": 3 },
+        { "id": "Battery", "duration": 5 },
+        { "id": "Wheels", "duration": 4 },
+        { "id": "Brakes", "duration": 3 },
+        { "id": "Body", "duration": 6 },
+        { "id": "Paint", "duration": 5 },
+        { "id": "Software", "duration": 4 },
+        { "id": "Inspection", "duration": 3 },
+        { "id": "Packing", "duration": 2, "min_station": 4, "max_station": 5 }
+    ],
+    "precedences": [
+        { "before": "Frame", "after": "Motor" },
+        { "before": "Frame", "after": "Wheels" },
+        { "before": "Motor", "after": "Wiring" },
+        { "before": "Wiring", "after": "Controls" },
+        { "before": "Wiring", "after": "Battery" },
+        { "before": "Wheels", "after": "Brakes" },
+        { "before": "Controls", "after": "Body" },
+        { "before": "Battery", "after": "Body" },
+        { "before": "Brakes", "after": "Body" },
+        { "before": "Body", "after": "Paint" },
+        { "before": "Controls", "after": "Software" },
+        { "before": "Paint", "after": "Inspection" },
+        { "before": "Software", "after": "Inspection" },
+        { "before": "Inspection", "after": "Packing" }
+    ],
+    "same_station_groups": [{ "id": "electronics", "task_ids": ["Controls", "Software"] }],
+    "different_station_pairs": [{ "first": "Paint", "second": "Inspection" }]
+}

@@ -14,7 +14,10 @@ def test_manual_constraints_and_meta():
         tasks=[TaskModel(id="A", duration=3, station=1), TaskModel(id="B", duration=3, station=0)],
         precedences=[PrecedenceModel(before="A", after="B")],
     )
-    assert tuple(calculate_score(problem)) == (-1, -2.0)
+    score = calculate_score(problem)
+    assert (score.hard, score.soft) == (-1, -2.0)
+    assert (problem.score_hard, problem.score_soft) == (-1, -2.0)
+    assert problem.station_loads == [3, 3]
     solve(problem, time_limit_seconds=0.05)
     assert problem.score_hard == 0
     assert problem.stations_used == 2
@@ -32,10 +35,24 @@ def test_zoning_and_station_domain_costs_match_manual_values():
         same_station_groups=[TaskGroupModel(id="zone", task_ids=["A", "B"])],
         different_station_pairs=[TaskPairModel(first="A", second="B")],
     )
-    costs = constraint_costs(problem)
-    assert costs["station_count_limit"] == [1, 0]
-    assert costs["fixed_task_stations"] == [1, 0]
-    assert costs["forbidden_task_stations"] == [0, 1]
-    assert costs["same_station_groups"] == [1]
-    assert costs["different_station_pairs"] == [0]
-    assert costs["task_precedence"] == [1]
+    costs = {name: entry["costs"] for name, entry in constraint_costs(problem).items()}
+    # Per station (0, 1) for the per-station constraints, one total for the globals.
+    assert costs["max_stations_cost"] == [0, 1]  # A on station 1 with max_stations 1
+    assert costs["fixed_task_stations_cost"] == [0, 1]  # A off its fixed station 0
+    assert costs["forbidden_task_stations_cost"] == [1, 0]  # B on its forbidden station 0
+    assert costs["same_station_groups_cost"] == [1]
+    assert costs["different_station_pairs_cost"] == [0, 0]
+    assert costs["task_precedence_cost"] == [1]
+    # The 0.1.5 per-task lists ([1, 0], [1, 0], [0, 1], ...) had the same totals.
+    assert {name: sum(values) for name, values in costs.items()} == {
+        "station_capacity_cost": 0,
+        "task_precedence_cost": 1,
+        "max_stations_cost": 1,
+        "task_station_bounds_cost": 0,
+        "fixed_task_stations_cost": 1,
+        "forbidden_task_stations_cost": 1,
+        "same_station_groups_cost": 1,
+        "different_station_pairs_cost": 0,
+        "used_stations_cost": 2,
+        "workload_imbalance_cost": 0,
+    }

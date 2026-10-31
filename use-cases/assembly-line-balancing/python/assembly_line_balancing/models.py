@@ -1,6 +1,34 @@
+"""The canonical assembly-line-balancing problem (pydantic v2) and its engine conversion.
+
+`AssemblyLineBalancingProblemModel` is the JSON contract (tasks by id); `to_core()`
+builds the C++ `_core.AssemblyLineBalancingProblem` (tasks by index) and
+`from_core()` builds the model back, stations and results included::
+
+    from assembly_line_balancing.models import AssemblyLineBalancingProblemModel
+
+    core = AssemblyLineBalancingProblemModel.model_validate(data).to_core()
+    alb.solve(core, time_limit_seconds=5)                    # in place
+    result = AssemblyLineBalancingProblemModel.from_core(core)
+
+The canonical problem carries no constraint weights: weights come only from
+constraint selections, and the defaults are the C++ components'
+(``assembly_line_balancing.constraint_info()``).
+"""
+
 from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from . import _core
+
+__all__ = [
+    "AssemblyLineBalancingProblemModel",
+    "PrecedenceModel",
+    "TaskGroupModel",
+    "TaskModel",
+    "TaskPairModel",
+    "with_initial_solution",
+]
 
 
 class TaskModel(BaseModel):
@@ -82,12 +110,86 @@ class AssemblyLineBalancingProblemModel(BaseModel):
                 raise ValueError("task station domains must use indices below the task count")
         return self
 
-    def to_core(self) -> AssemblyLineBalancingProblemModel:
-        return self.model_copy(deep=True)
+    def to_core(self) -> _core.AssemblyLineBalancingProblem:
+        """pydantic -> engine object: ids become task indices, `None` stays "no limit".
+
+        The stations and `warm_start` are copied; the result fields are ignored (the
+        engine recomputes them).
+        """
+        self.valid_ids()  # the fields stay mutable after validation
+        index = {task.id: position for position, task in enumerate(self.tasks)}
+        return _core.AssemblyLineBalancingProblem(
+            self.cycle_time,
+            [
+                _core.Task(
+                    task.id,
+                    task.duration,
+                    task.min_station,
+                    task.max_station,
+                    task.fixed_station,
+                    list(task.forbidden_stations),
+                    task.station,
+                )
+                for task in self.tasks
+            ],
+            [_core.Precedence(index[edge.before], index[edge.after]) for edge in self.precedences],
+            self.max_stations,
+            [
+                _core.TaskGroup(group.id, [index[task_id] for task_id in group.task_ids])
+                for group in self.same_station_groups
+            ],
+            [_core.TaskPair(index[pair.first], index[pair.second]) for pair in self.different_station_pairs],
+            self.warm_start,
+        )
 
     @classmethod
-    def from_core(cls, problem: AssemblyLineBalancingProblemModel) -> AssemblyLineBalancingProblemModel:
-        return problem.model_copy(deep=True)
+    def from_core(cls, problem: _core.AssemblyLineBalancingProblem) -> AssemblyLineBalancingProblemModel:
+        """engine object -> pydantic: the facts, the stations, `warm_start` and the results
+        (`station_loads`, `stations_used` from the stations; the score last computed on the core,
+        0hard/0soft if it was never scored)."""
+        ids = [task.id for task in problem.tasks]
+        return cls(
+            cycle_time=problem.cycle_time,
+            tasks=[
+                TaskModel(
+                    id=task.id,
+                    duration=task.duration,
+                    min_station=task.min_station,
+                    max_station=task.max_station,
+                    fixed_station=task.fixed_station,
+                    forbidden_stations=list(task.forbidden_stations),
+                    station=task.station,
+                )
+                for task in problem.tasks
+            ],
+            precedences=[
+                PrecedenceModel(before=ids[edge.before], after=ids[edge.after]) for edge in problem.precedences
+            ],
+            max_stations=problem.max_stations,
+            same_station_groups=[
+                TaskGroupModel(id=group.id, task_ids=[ids[task] for task in group.tasks])
+                for group in problem.same_station_groups
+            ],
+            different_station_pairs=[
+                TaskPairModel(first=ids[pair.first], second=ids[pair.second])
+                for pair in problem.different_station_pairs
+            ],
+            stations_used=problem.stations_used(),
+            station_loads=list(problem.station_loads()),
+            score_hard=problem.score.hard,
+            score_soft=problem.score.soft,
+            warm_start=problem.warm_start,
+        )
+
+    def _update_from_core(self, problem: _core.AssemblyLineBalancingProblem) -> None:
+        """Write a solved core's stations, results and `warm_start` back into this model, in place."""
+        for task, station in zip(self.tasks, problem.assignment(), strict=True):
+            task.station = station
+        self.station_loads = list(problem.station_loads())
+        self.stations_used = problem.stations_used()
+        self.score_hard = problem.score.hard
+        self.score_soft = problem.score.soft
+        self.warm_start = problem.warm_start
 
 
 def with_initial_solution(problem, solution):
