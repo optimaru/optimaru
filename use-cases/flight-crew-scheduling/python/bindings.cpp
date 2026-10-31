@@ -355,7 +355,8 @@ PYBIND11_MODULE(_core, m)
             return tfpy::constraintCosts(calculator, schedule);
         },
         py::arg("schedule"),
-        "Raw per-unit cost of every constraint, before weight/exponent/level.");
+        "Raw per-employee cost of every default constraint, before "
+        "weight/exponent/level.");
 
     // The constraint names this domain scores, in default-assembly order —
     // the same strings a score breakdown reports.
@@ -363,4 +364,10 @@ PYBIND11_MODULE(_core, m)
         "list_constraints",
         [] { return tfpy::constraintNames(defaultConstraints()); },
         "Constraint names available to flight_crew.constraints.");
+
+    // The constraint catalog, read off the same default assembly:
+    // constraint_info() -> [ConstraintInfo(name, default_level,
+    // default_weight, level_flippable, reward, default_enabled), ...] in
+    // list_constraints() order. The defaults live in the C++ components only.
+    tfpy::bindConstraintInfo(m, [] { return defaultConstraints(); });
 }

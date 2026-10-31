@@ -10,17 +10,18 @@ indices (the pydantic mirror `flight_crew.models` uses code/id string references
 Time unit: minutes from a reference epoch (Unix in the model). Dates are day indices
 obtained as floor(minutes / 1440).
 
-Score convention: HardSoftScore — the same weights as the Java quickstart.
-  hard 1. requiredSkill               -100 per assignment without the skill
-  hard 2. flightConflict              -10 per overlapping assignment pair of one crew member
-  hard 3. transferBetweenTwoFlights   -1 per disconnected consecutive assignment pair
-  hard 4. employeeUnavailability      -10 per assignment on an unavailable day
-  soft 5. firstAssignmentNotDepartingFromHome  -1000
-  soft 6. lastAssignmentNotArrivingAtHome      -1000
+Score convention: HardSoftScore, at the default weights — the same weights as the Java
+quickstart, which are the C++ components' defaults (constraint_info()):
+  hard 1. required_skill_cost                -100 per assignment without the skill
+  hard 2. flight_conflict_cost               -10 per overlapping assignment pair of one crew member
+  hard 3. transfer_between_two_flights_cost  -1 per disconnected consecutive assignment pair
+  hard 4. employee_unavailability_cost       -10 per assignment on an unavailable day
+  soft 5. first_assignment_not_departing_from_home_cost  -1000
+  soft 6. last_assignment_not_arriving_at_home_cost      -1000
 """
 
 from collections.abc import Callable, Iterable
-from typing import Any
+from typing import Any, Literal, NamedTuple
 
 class Score:
     """HardSoft score. `hard` is the weighted violation sum (0 == feasible); `soft` is
@@ -167,11 +168,33 @@ class Solver:
         keeps the default set."""
 
 def list_constraints() -> list[str]:
-    """Constraint names scored by this domain (default assembly order, snake_case).
-    The same names flight_crew.constraints uses."""
+    """Constraint names scored by this domain (default assembly order, snake_case):
+    required_skill_cost, flight_conflict_cost, transfer_between_two_flights_cost,
+    employee_unavailability_cost, first_assignment_not_departing_from_home_cost,
+    last_assignment_not_arriving_at_home_cost. The same names flight_crew.constraints uses."""
 
-def constraint_costs(solution, /) -> dict[str, dict]:
-    """Per-constraint, per-unit **raw** costs — before weight/exponent/level rounding.
-    `flight_crew.constraints.score()` takes these and produces a score.
-    {name: {"costs": [...], "weight": w, "exponent": e,
-            "hard": bool, "global": bool}}."""
+def constraint_costs(schedule: FlightCrewSchedule) -> dict[str, dict[str, Any]]:
+    """Raw per-employee cost of every default constraint, before weight/exponent/level:
+    {name: {"costs": [...], "weight": float, "exponent": float, "hard": bool,
+    "global": bool, "level": "hard" | "medium" | "soft", "reward": bool,
+    "level_flippable": bool, "name": str, "label": str}}. flight_crew.constraints.score()
+    turns it into a score. (A domain with a medium level adds "medium_fold" to every
+    entry; a name held more than once is keyed "<name>#<k>" from its second instance.)"""
+
+class ConstraintInfo(NamedTuple):
+    """One constraint-catalog row, read off the C++ default assembly."""
+
+    name: str
+    default_level: Literal["hard", "medium", "soft"]
+    default_weight: float
+    level_flippable: bool
+    reward: bool
+    default_enabled: bool
+
+def constraint_info() -> list[ConstraintInfo]:
+    """The constraint catalog, in list_constraints() order:
+    required_skill_cost (hard, 100), flight_conflict_cost (hard, 10),
+    transfer_between_two_flights_cost (hard, 1), employee_unavailability_cost (hard, 10),
+    first_assignment_not_departing_from_home_cost (soft, 1000),
+    last_assignment_not_arriving_at_home_cost (soft, 1000); all flippable, none a reward,
+    all scored by default (default_enabled)."""

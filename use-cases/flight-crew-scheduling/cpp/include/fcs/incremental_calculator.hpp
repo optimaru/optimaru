@@ -18,9 +18,10 @@ namespace fcs
 // Every constraint is a function of ONE employee's itinerary (plus two unary
 // terms), so a single variable change is O(delta): it only touches the old
 // and the new employee of the changed assignment.
-//   - unary (requiredSkill, employeeUnavailability): O(1) flat-table lookups
-//     added/removed with the assignment.
-//   - pairwise (flightConflict, transfer, first/last-not-home): a per-employee
+//   - unary (requiredSkillCost, employeeUnavailabilityCost): O(1) flat-table
+//     lookups added/removed with the assignment.
+//   - pairwise (flightConflictCost, transferBetweenTwoFlightsCost,
+//     first/lastAssignmentNot...HomeCost): a per-employee
 //     departure-sorted itinerary is maintained; when an assignment enters or
 //     leaves an employee, that employee's ItineraryStats is recomputed from
 //     the sorted list (O(n_e^2) worst case, n_e = that employee's assignment
@@ -50,7 +51,8 @@ private:
     std::vector<std::vector<int>> byEmployee_;
     std::vector<ItineraryStats> stats_;
 
-    // Running totals (all counted positive; signs applied in calculateScore).
+    // Running raw totals (all counted positive; the components' kDefaultWeight
+    // and the signs are applied in calculateScore).
     std::int64_t missingSkill_ = 0;
     std::int64_t unavailable_ = 0;
     std::int64_t conflictPairs_ = 0;

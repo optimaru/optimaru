@@ -1,11 +1,59 @@
 #include "fcs/score_calculator.hpp"
 
 #include <algorithm>
+#include <cstdint>
 #include <string>
 #include <unordered_map>
 
+#include "fcs/constraints/employee_unavailability_cost.hpp"
+#include "fcs/constraints/first_assignment_not_departing_from_home_cost.hpp"
+#include "fcs/constraints/flight_conflict_cost.hpp"
+#include "fcs/constraints/last_assignment_not_arriving_at_home_cost.hpp"
+#include "fcs/constraints/required_skill_cost.hpp"
+#include "fcs/constraints/transfer_between_two_flights_cost.hpp"
+
 namespace fcs
 {
+
+namespace
+{
+
+// The monolithic score is the default assembly (fcs/constraints.hpp), so it
+// reads the same constants the components carry. The hard weights are
+// integral, so the hard level is computed in int64 exactly like the Java int
+// arithmetic; the soft weights stay doubles as before.
+constexpr auto kRequiredSkillWeight
+    = static_cast<std::int64_t>(RequiredSkillCost::kDefaultWeight);
+constexpr auto kFlightConflictWeight
+    = static_cast<std::int64_t>(FlightConflictCost::kDefaultWeight);
+constexpr auto kTransferWeight
+    = static_cast<std::int64_t>(TransferBetweenTwoFlightsCost::kDefaultWeight);
+constexpr auto kUnavailabilityWeight
+    = static_cast<std::int64_t>(EmployeeUnavailabilityCost::kDefaultWeight);
+constexpr double kFirstNotHomeWeight
+    = FirstAssignmentNotDepartingFromHomeCost::kDefaultWeight;
+constexpr double kLastNotHomeWeight
+    = LastAssignmentNotArrivingAtHomeCost::kDefaultWeight;
+
+static_assert(kRequiredSkillWeight == RequiredSkillCost::kDefaultWeight
+                  && kFlightConflictWeight == FlightConflictCost::kDefaultWeight
+                  && kTransferWeight
+                         == TransferBetweenTwoFlightsCost::kDefaultWeight
+                  && kUnavailabilityWeight
+                         == EmployeeUnavailabilityCost::kDefaultWeight,
+              "the monolithic calculators assume integral hard weights");
+static_assert(
+    RequiredSkillCost::kDefaultLevel == optimaru::Level::Hard
+        && FlightConflictCost::kDefaultLevel == optimaru::Level::Hard
+        && TransferBetweenTwoFlightsCost::kDefaultLevel == optimaru::Level::Hard
+        && EmployeeUnavailabilityCost::kDefaultLevel == optimaru::Level::Hard
+        && FirstAssignmentNotDepartingFromHomeCost::kDefaultLevel
+               == optimaru::Level::Soft
+        && LastAssignmentNotArrivingAtHomeCost::kDefaultLevel
+               == optimaru::Level::Soft,
+    "the monolithic calculators assume the component levels");
+
+}  // namespace
 
 void ScoreCalculator::prepare(FlightCrewSchedule &schedule)
 {
@@ -138,7 +186,7 @@ ScoreCalculator::itineraryStats(const FlightCrewSchedule &schedule,
     if (n == 0)
         return stats;
 
-    // hard 2: flight conflict — overlapping pairs. Sorted by departure, so
+    // hard 2: flightConflictCost — overlapping pairs. Sorted by departure, so
     // the inner loop stops at the first non-overlapping departure.
     for (int i = 0; i < n; ++i)
     {
@@ -166,7 +214,7 @@ ScoreCalculator::itineraryStats(const FlightCrewSchedule &schedule,
         while (groupEnd < n && schedule.departureOf(sorted[groupEnd]) == dep)
             ++groupEnd;
 
-        // hard 3: transfer — a pair (a, b) is departure-consecutive iff a is
+        // hard 3: transferBetweenTwoFlightsCost — a pair (a, b) is departure-consecutive iff a is
         // ALONE on its departure time and b is in the very next group (any
         // other same-time-as-a assignment `c` satisfies dep(a) <= dep(c) <
         // dep(b), so the Java ifNotExists kills the pair).
@@ -181,7 +229,8 @@ ScoreCalculator::itineraryStats(const FlightCrewSchedule &schedule,
             }
         }
 
-        // soft 5: every member of the FIRST departure-time group counts.
+        // soft 5: firstAssignmentNotDepartingFromHomeCost — every member of
+        // the FIRST departure-time group counts.
         if (groupStart == 0)
         {
             for (int k = groupStart; k < groupEnd; ++k)
@@ -190,7 +239,8 @@ ScoreCalculator::itineraryStats(const FlightCrewSchedule &schedule,
                     ++stats.firstNotHome;
             }
         }
-        // soft 6: every member of the LAST departure-time group counts.
+        // soft 6: lastAssignmentNotArrivingAtHomeCost — every member of the
+        // LAST departure-time group counts.
         if (groupEnd == n)
         {
             for (int k = groupStart; k < groupEnd; ++k)
@@ -244,12 +294,12 @@ Score ScoreCalculator::calculateScore(FlightCrewSchedule &schedule)
     }
 
     Score score;
-    score.hard = -(REQUIRED_SKILL_WEIGHT * missingSkill
-                   + FLIGHT_CONFLICT_WEIGHT * conflictPairs
-                   + TRANSFER_WEIGHT * transfers
-                   + UNAVAILABILITY_WEIGHT * unavailable);
-    score.soft = -(FIRST_NOT_HOME_WEIGHT * static_cast<double>(firstNotHome)
-                   + LAST_NOT_HOME_WEIGHT * static_cast<double>(lastNotHome));
+    score.hard = -(kRequiredSkillWeight * missingSkill
+                   + kFlightConflictWeight * conflictPairs
+                   + kTransferWeight * transfers
+                   + kUnavailabilityWeight * unavailable);
+    score.soft = -(kFirstNotHomeWeight * static_cast<double>(firstNotHome)
+                   + kLastNotHomeWeight * static_cast<double>(lastNotHome));
     if (score.soft == 0.0)
         score.soft = 0.0;  // normalize -0.0
     schedule.score = score;

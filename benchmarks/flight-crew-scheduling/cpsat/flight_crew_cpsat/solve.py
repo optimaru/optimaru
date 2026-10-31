@@ -70,6 +70,8 @@ def solve(
                 ) from exc
             model.add(x[a, employee] == 1)
 
+    # Default weights and levels come from the engine (constraint_info()); the
+    # canonical problem carries none.
     objective = REGISTRY.objective(model, ("hard", "soft"), constraints)
 
     # For each employee, selected duties form one chronological path. Arc

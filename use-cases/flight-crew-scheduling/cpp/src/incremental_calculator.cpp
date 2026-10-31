@@ -1,9 +1,37 @@
 #include "fcs/incremental_calculator.hpp"
 
 #include <algorithm>
+#include <cstdint>
+
+#include "fcs/constraints/employee_unavailability_cost.hpp"
+#include "fcs/constraints/first_assignment_not_departing_from_home_cost.hpp"
+#include "fcs/constraints/flight_conflict_cost.hpp"
+#include "fcs/constraints/last_assignment_not_arriving_at_home_cost.hpp"
+#include "fcs/constraints/required_skill_cost.hpp"
+#include "fcs/constraints/transfer_between_two_flights_cost.hpp"
 
 namespace fcs
 {
+
+namespace
+{
+
+// The same constants the components and ScoreCalculator read (integral hard
+// weights; see score_calculator.cpp).
+constexpr auto kRequiredSkillWeight
+    = static_cast<std::int64_t>(RequiredSkillCost::kDefaultWeight);
+constexpr auto kFlightConflictWeight
+    = static_cast<std::int64_t>(FlightConflictCost::kDefaultWeight);
+constexpr auto kTransferWeight
+    = static_cast<std::int64_t>(TransferBetweenTwoFlightsCost::kDefaultWeight);
+constexpr auto kUnavailabilityWeight
+    = static_cast<std::int64_t>(EmployeeUnavailabilityCost::kDefaultWeight);
+constexpr double kFirstNotHomeWeight
+    = FirstAssignmentNotDepartingFromHomeCost::kDefaultWeight;
+constexpr double kLastNotHomeWeight
+    = LastAssignmentNotArrivingAtHomeCost::kDefaultWeight;
+
+}  // namespace
 
 void FlightCrewIncrementalScoreCalculator::resetWorkingSolution(
     FlightCrewSchedule &workingSolution)
@@ -120,12 +148,12 @@ void FlightCrewIncrementalScoreCalculator::refreshEmployee(int employeeIndex)
 Score FlightCrewIncrementalScoreCalculator::calculateScore()
 {
     Score score;
-    score.hard = -(REQUIRED_SKILL_WEIGHT * missingSkill_
-                   + FLIGHT_CONFLICT_WEIGHT * conflictPairs_
-                   + TRANSFER_WEIGHT * transfers_
-                   + UNAVAILABILITY_WEIGHT * unavailable_);
-    score.soft = -(FIRST_NOT_HOME_WEIGHT * static_cast<double>(firstNotHome_)
-                   + LAST_NOT_HOME_WEIGHT * static_cast<double>(lastNotHome_));
+    score.hard = -(kRequiredSkillWeight * missingSkill_
+                   + kFlightConflictWeight * conflictPairs_
+                   + kTransferWeight * transfers_
+                   + kUnavailabilityWeight * unavailable_);
+    score.soft = -(kFirstNotHomeWeight * static_cast<double>(firstNotHome_)
+                   + kLastNotHomeWeight * static_cast<double>(lastNotHome_));
     if (score.soft == 0.0)
         score.soft = 0.0;  // normalize -0.0
     return score;

@@ -33,14 +33,15 @@ namespace fcs
 // through ScoreCalculator::itineraryStats, the very function the monolithic
 // calculator uses — that is what keeps the "consecutive departure" and
 // "earliest/latest departure, ties included" semantics identical rather than
-// re-derived. flightConflict is a plain pair sum on top of that, so it also
-// carries an exact delta; the other three are re-costed per touched employee.
+// re-derived. flightConflictCost is a plain pair sum on top of that, so it
+// also carries an exact delta; the other three are re-costed per touched
+// employee.
 //
 //   DecomposedCalculator calc;
-//   defaultConstraints()              // the whole default set
-//       .weight("...", 2)            // ... then only what differs
-//       .soft("...")
-//       .drop("...")
+//   defaultConstraints()                              // the whole default set
+//       .weight("employeeUnavailabilityCost", 2)      // ... then only what
+//       .soft("transferBetweenTwoFlightsCost")        //     differs
+//       .drop("lastAssignmentNotArrivingAtHomeCost")
 //       .into(calc);
 //   solver.solve(schedule, calc);
 //
@@ -48,15 +49,23 @@ namespace fcs
 // `ConstraintAssembly{}` when you would rather list components from
 // scratch than start from the defaults.
 //
-// The "Hard:"/"Soft:" level and the weight of each component are DEFAULTS —
+// Each component declares its defaults once, as static constexpr
+// kDefaultWeight / kDefaultLevel passed to the base constructor; they are
 // assembly-time metadata, not part of the cost. Override them per instance
-// via the mutable `isHard` / `weight` / `exponent`. The Java weights (100 /
-// 10 / 1 / 10 / 1'000 / 1'000) are exactly these defaults.
+// with the constructor's weight argument or the mutable `level` / `weight` /
+// `exponent`, or by name through ConstraintAssembly. The Java weights (100 /
+// 10 / 1 / 10 / 1'000 / 1'000) are exactly these defaults, and the monolithic
+// calculators read the same kDefaultWeight constants, which is why the
+// default assembly scores bit-for-bit like them. Every constraint is flippable
+// (hard <-> soft); there is no medium level, no reward and no structural rule
+// in this domain.
+//
+// Registry names are the struct names with a lower-case first letter
+// ("requiredSkillCost"); Python sees them through pythonName()
+// ("required_skill_cost").
 //
 // Cost sign convention (see decomposed_score_calculator.hpp): positive =
-// penalty; the calculator negates into the score. An assembly of all six
-// components at their default weights therefore scores bit-for-bit like
-// ScoreCalculator::calculateScore.
+// penalty, 0 = no violation; the calculator negates into the score.
 //
 // Every component requires ScoreCalculator::prepare(schedule) to have run
 // (the solve() overload and the monolithic path both call it).
