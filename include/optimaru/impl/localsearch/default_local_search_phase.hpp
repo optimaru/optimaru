@@ -27,6 +27,7 @@
 #include "optimaru/impl/localsearch/decider/acceptor/stepcountinghillclimbing/step_counting_hill_climbing_acceptor.hpp"
 #include "optimaru/impl/localsearch/decider/acceptor/tabu/entity_tabu_acceptor.hpp"
 #include "optimaru/impl/localsearch/element_index.hpp"
+#include "optimaru/impl/localsearch/movable_entity.hpp"
 #include "optimaru/impl/localsearch/greedy_repair.hpp"
 #include "optimaru/impl/localsearch/list_move.hpp"
 #include "optimaru/impl/localsearch/solution_snapshot.hpp"
@@ -475,21 +476,6 @@ private:
         int entities[2] = {0, 0};
         int entityCount = 0;
     };
-
-    // Return a non-pinned entity: keep `e` if movable, otherwise resample (then
-    // scan) for one. Falls back to `e` only in the degenerate all-pinned case.
-    int movableEntity(const Solution& sol, int e,
-                      std::uniform_int_distribution<int>& pick, std::mt19937_64& rng) {
-        if (!entityPinned<Descriptor>(sol, e)) return e;
-        for (int t = 0; t < 8; ++t) {
-            const int c = pick(rng);
-            if (!entityPinned<Descriptor>(sol, c)) return c;
-        }
-        const int n = Descriptor::entityCount(sol);
-        for (int c = 0; c < n; ++c)
-            if (!entityPinned<Descriptor>(sol, c)) return c;
-        return e;
-    }
 
     AppliedMove applyBasicMove(ScoreDirector<Solution>& director, std::mt19937_64& rng) {
         Solution& solution = director.workingSolution();
