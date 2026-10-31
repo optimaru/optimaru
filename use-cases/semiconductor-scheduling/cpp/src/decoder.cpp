@@ -17,7 +17,7 @@ constexpr int kMaxPasses = 10000;
 
 inline Time overlap(Time startA, Time endA, Time startB, Time endB)
 {
-    return std::max<Time>(0, std::min(endA, endB) - std::max(startA, startB));
+    return std::max<Time>(0, checked::sub(std::min(endA, endB), std::max(startA, startB)));
 }
 
 }  // namespace
@@ -201,13 +201,13 @@ void Decoder::run(const int *option, const std::int64_t *rank)
                 const Time wait = std::max(
                     schedule.transportTime(previousMachine.groupIndex, machine.groupIndex),
                     lot.operations[static_cast<std::size_t>(r.operation - 1)].minQueueTime);
-                time = previous.end + wait;
+                time = checked::add(previous.end, wait);
             }
             ready = first ? time : std::max(ready, time);
             first = false;
         }
         const Time start = earliestStart(m, operation, ready, chosen.duration);
-        const Time end = start + chosen.duration;
+        const Time end = checked::add(start, chosen.duration);
         auto &items = machineItems_[static_cast<std::size_t>(m)];
         for (int row : batch_)
         {
@@ -236,7 +236,7 @@ Time Decoder::earliestStart(int m, const Operation &operation, Time ready, Time 
             moved = false;
             for (const TimeWindow &window : machine.unavailableByStart)
             {
-                if (overlap(start, start + duration, window.start, window.end) > 0)
+                if (overlap(start, checked::add(start, duration), window.start, window.end) > 0)
                 {
                     start = window.end;
                     moved = true;
@@ -244,7 +244,7 @@ Time Decoder::earliestStart(int m, const Operation &operation, Time ready, Time 
                 }
             }
         }
-        const Time end = start + duration;
+        const Time end = checked::add(start, duration);
 
         // The selected operation's resources: downtime, then capacity.
         bool conflict = false;
@@ -312,8 +312,8 @@ Time Decoder::earliestStart(int m, const Operation &operation, Time ready, Time 
         {
             if (incompatible != nullptr)
             {
-                start = incompatible->end
-                        + schedule.setupTime(machine.groupIndex, incompatible->family, family);
+                start = checked::add(incompatible->end,
+                                     schedule.setupTime(machine.groupIndex, incompatible->family, family));
                 continue;
             }
             if (overlapping)
@@ -332,8 +332,8 @@ Time Decoder::earliestStart(int m, const Operation &operation, Time ready, Time 
         if (previous != nullptr
             && !(machine.isBatch() && previous->family == family && previous->end == start))
         {
-            const Time required
-                = previous->end + schedule.setupTime(machine.groupIndex, previous->family, family);
+            const Time required = checked::add(
+                previous->end, schedule.setupTime(machine.groupIndex, previous->family, family));
             if (start < required)
             {
                 start = required;

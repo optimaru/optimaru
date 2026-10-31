@@ -39,7 +39,7 @@ struct BatchFamilyConflictCost final : ScheduleViewConstraint
                 if (b->start >= a->end)
                     break;
                 if (terms::familyOf(schedule, b) != family)
-                    total += terms::emit(items, terms::overlap(a->start, a->end, b->start, b->end));
+                    total = checked::add(total, terms::emit(items, terms::overlap(a->start, a->end, b->start, b->end)));
             }
         }
         return total;

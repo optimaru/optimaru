@@ -141,8 +141,9 @@ def solve(
     `with_initial_solution`) the search starts from them, and a complete seed is returned
     unchanged unless the search finds a strictly better schedule.
 
-    ``config`` becomes the base settings (`SolverConfig`; None = engine defaults: 30 s, late
-    acceptance). Explicit keyword arguments override it. ``stop_at_first_feasible`` stops
+    ``config`` becomes the base settings (`SolverConfig`; None = engine defaults: 30 s,
+    simulated annealing with an automatic temperature, 1% of the start's |soft|). Explicit
+    keyword arguments override it. ``stop_at_first_feasible`` stops
     as soon as hard 0 is reached; ``on_new_best`` is called with ``(step, Score)``.
     A zero budget (``time_limit_seconds=0``) returns the start as is.
 

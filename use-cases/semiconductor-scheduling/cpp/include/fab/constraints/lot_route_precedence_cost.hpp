@@ -30,13 +30,14 @@ struct LotRoutePrecedenceCost final : ScheduleViewConstraint
         const Lot &l = schedule.lots[static_cast<std::size_t>(lot)];
         std::int64_t total = 0;
         if (route[0] != nullptr)
-            total += terms::emit(items, std::max<Time>(0, l.releaseTime - route[0]->start));
+            total = checked::add(total, terms::emit(items, std::max<Time>(0, checked::sub(l.releaseTime, route[0]->start))));
         for (std::size_t i = 1; i < l.operations.size(); ++i)
         {
             if (route[i - 1] == nullptr || route[i] == nullptr)
                 continue;
-            const Time wait = route[i]->start - route[i - 1]->end;
-            total += terms::emit(items, std::max<Time>(0, -wait));
+            // max(0, -wait), wait = start - previous end
+            const Time early = checked::sub(route[i - 1]->end, route[i]->start);
+            total = checked::add(total, terms::emit(items, std::max<Time>(0, early)));
         }
         return total;
     }

@@ -213,7 +213,7 @@ class SemiconductorScheduleModel(BaseModel):
         """pydantic -> engine object (`_core.SemiconductorSchedule`): ids become indices; facts,
         pins, assignments (batch ids included) and warm_start are passed on. The totals and
         scores are not: the engine recomputes them. Times beyond the engine's int64 range raise
-        ValueError."""
+        ValueError; a derived time or cost that overflows int64 later raises OverflowError."""
         from . import _core
 
         machine_index = {machine.id: index for index, machine in enumerate(self.machines)}
@@ -384,8 +384,10 @@ class SemiconductorScheduleModel(BaseModel):
         )
 
 
-# The engine keeps times in int64 and counts in int: refuse what would not fit (with
-# headroom for the sums the scorer forms) instead of letting it wrap or fail obscurely.
+# The engine keeps times in int64 and counts in int: refuse what would not fit instead of
+# failing obscurely in the conversion. The times the decoder derives and the costs the
+# scorer sums and multiplies are checked in C++ and raise OverflowError when they leave
+# int64 (0.1.x computed them as exact Python integers).
 _TIME_LIMIT = 2**62
 _COUNT_LIMIT = 2**31 - 1
 

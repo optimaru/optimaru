@@ -30,7 +30,7 @@ struct CycleTimeCost final : ScheduleViewConstraint
         const ScorePlacement *last = route[l.operations.size() - 1];
         if (last == nullptr)
             return 0;
-        return terms::emit(items, std::max<Time>(0, last->end - l.releaseTime));
+        return terms::emit(items, std::max<Time>(0, checked::sub(last->end, l.releaseTime)));
     }
 };
 

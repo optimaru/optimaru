@@ -48,7 +48,7 @@ OLD_NAMES = [
     "makespan",
 ]
 
-# The 0.2.0 names (rename_table.json), in the same order.
+# The 0.2.0 names of the same constraints, in the same order.
 NEW_NAMES = [
     "machine_eligibility_cost",
     "lot_route_precedence_cost",

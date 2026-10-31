@@ -33,8 +33,9 @@ struct MinQueueTimeCost final : ScheduleViewConstraint
         {
             if (route[i - 1] == nullptr || route[i] == nullptr)
                 continue;
-            const Time wait = route[i]->start - route[i - 1]->end;
-            total += terms::emit(items, std::max<Time>(0, l.operations[i - 1].minQueueTime - wait));
+            const Time wait = checked::sub(route[i]->start, route[i - 1]->end);
+            const Time missing = checked::sub(l.operations[i - 1].minQueueTime, wait);
+            total = checked::add(total, terms::emit(items, std::max<Time>(0, missing)));
         }
         return total;
     }

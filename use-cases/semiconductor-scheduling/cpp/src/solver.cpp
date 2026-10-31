@@ -75,6 +75,18 @@ void endSearch(SemiconductorSchedule &schedule)
 namespace
 {
 
+// Leaves search mode without touching the assignment list, for a solve that
+// failed after beginSearch() (for example the decoder giving up). Otherwise
+// the schedule would stay in search mode, and the plugin path would re-decode
+// the planning values while the monolithic calculator scores `assignments`.
+void abandonSearch(SemiconductorSchedule &schedule)
+{
+    schedule.searching = false;
+    schedule.seedComplete = false;
+    schedule.seedValues.clear();
+    schedule.seedAssignments.clear();
+}
+
 void validate(const Solver::Config &config)
 {
     if (config.ruinRecreateRewards.size() != 4)
@@ -183,6 +195,19 @@ void Solver::solve(SemiconductorSchedule &schedule)
 {
     validate(config_);
     beginSearch(schedule);
+    try
+    {
+        searchFromBegun(schedule);
+    }
+    catch (...)
+    {
+        abandonSearch(schedule);
+        throw;
+    }
+}
+
+void Solver::searchFromBegun(SemiconductorSchedule &schedule)
+{
     if (schedule.rows.empty())
     {
         endSearch(schedule);
@@ -249,9 +274,17 @@ void Solver::solve(SemiconductorSchedule &schedule,
 {
     validate(config_);
     beginSearch(schedule);
-    if (!schedule.rows.empty())
-        runSingle(schedule, calculator);
-    endSearch(schedule);  // assignments + the default totals
+    try
+    {
+        if (!schedule.rows.empty())
+            runSingle(schedule, calculator);
+        endSearch(schedule);  // assignments + the default totals
+    }
+    catch (...)
+    {
+        abandonSearch(schedule);
+        throw;
+    }
     // Score with the caller's assembly, in data mode, and leave the
     // calculator primed on the result.
     calculator.resetWorkingSolution(schedule);

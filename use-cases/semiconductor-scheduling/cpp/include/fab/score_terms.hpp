@@ -98,7 +98,7 @@ namespace terms
 
 inline Time overlap(Time startA, Time endA, Time startB, Time endB)
 {
-    return std::max<Time>(0, std::min(endA, endB) - std::max(startA, startB));
+    return std::max<Time>(0, checked::sub(std::min(endA, endB), std::max(startA, startB)));
 }
 
 // Appends one item and returns it (items may be null: totals only).
@@ -131,7 +131,8 @@ inline std::int64_t overloadArea(const PlacementList &placements, int capacity)
     {
         const Time moment = events[i].first;
         if (hasPrevious)
-            excess += std::max<std::int64_t>(0, active - capacity) * (moment - previous);
+            excess = checked::add(excess, checked::mul(std::max<std::int64_t>(0, active - capacity),
+                                                       checked::sub(moment, previous)));
         for (; i < events.size() && events[i].first == moment; ++i)
             active += events[i].second;
         previous = moment;

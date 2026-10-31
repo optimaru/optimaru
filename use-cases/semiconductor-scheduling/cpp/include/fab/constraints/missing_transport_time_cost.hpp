@@ -35,11 +35,11 @@ struct MissingTransportTimeCost final : ScheduleViewConstraint
             const ScorePlacement *current = route[i];
             if (previous == nullptr || current == nullptr)
                 continue;
-            const Time wait = current->start - previous->end;
+            const Time wait = checked::sub(current->start, previous->end);
             const Time required = schedule.transportTime(
                 schedule.machines[static_cast<std::size_t>(previous->machine)].groupIndex,
                 schedule.machines[static_cast<std::size_t>(current->machine)].groupIndex);
-            total += terms::emit(items, std::max<Time>(0, required - wait));
+            total = checked::add(total, terms::emit(items, std::max<Time>(0, checked::sub(required, wait))));
         }
         return total;
     }

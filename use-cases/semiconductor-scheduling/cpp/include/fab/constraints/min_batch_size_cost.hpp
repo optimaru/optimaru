@@ -44,7 +44,7 @@ struct MinBatchSizeCost final : ScheduleViewConstraint
         }
         std::int64_t total = 0;
         for (const auto &group : groups)
-            total += terms::emit(items, std::max<std::int64_t>(0, m.minimumBatchSize - group.second));
+            total = checked::add(total, terms::emit(items, std::max<std::int64_t>(0, m.minimumBatchSize - group.second)));
         return total;
     }
 };

@@ -89,15 +89,15 @@ class MachineEligibilityCost(Constraint):
 
     name = "machine_eligibility_cost"
     label_en = "Eligible equipment"
-    label_ko = "가용 설비"
+    label_ko = "적격 설비"
     description_en = (
         "Counts every operation that has no assignment, runs on a machine none of its options names, "
         "or runs longer or shorter than that option's duration. One unit is one such operation; "
         "0 means every operation runs on an eligible tool for exactly its duration."
     )
     description_ko = (
-        "배정이 없거나, 어느 선택지에도 없는 설비에서 돌거나, 선택지의 처리 시간과 길이가 다른 공정을 셉니다. "
-        "그런 공정 하나가 비용 1이며, 0이면 모든 공정이 가용 설비에서 정해진 시간만큼 처리됩니다."
+        "배정되지 않았거나, 어느 선택지에도 없는 설비에서 처리되거나, 처리 시간이 선택지의 처리 시간과 다른 공정을 셉니다. "
+        "그런 공정 하나가 비용 1이며, 0이면 모든 공정이 적격 설비에서 정해진 처리 시간 동안 처리됩니다."
     )
 
 
@@ -114,7 +114,7 @@ class LotRoutePrecedenceCost(Constraint):
     )
     description_ko = (
         "첫 공정이 로트 투입 시각보다 일찍 시작한 시간과, 각 공정이 앞 공정이 끝나기 전에 시작한 시간을 더합니다. "
-        "이른 시간 1단위가 비용 1이며, 0이면 모든 로트가 투입 후 공정 순서대로 진행됩니다."
+        "앞당겨진 시간 1단위가 비용 1이며, 0이면 모든 로트가 투입 후 공정 순서대로 진행됩니다."
     )
 
 
@@ -123,15 +123,15 @@ class MachineCapacityCost(Constraint):
 
     name = "machine_capacity_cost"
     label_en = "Unary equipment capacity"
-    label_ko = "단일 설비 용량"
+    label_ko = "단일 처리 설비 용량"
     description_en = (
         "On every tool that processes one lot at a time, the time during which more than one lot runs, "
         "weighted by how many lots are too many. One unit is one lot-time unit of overload; 0 means no "
         "two lots overlap on a unary tool."
     )
     description_ko = (
-        "한 번에 한 로트만 처리하는 설비에서 둘 이상의 로트가 겹쳐 도는 시간을 초과 로트 수만큼 곱해 더합니다. "
-        "초과 로트·시간 1단위가 비용 1이며, 0이면 단일 설비에서 겹치는 로트가 없습니다."
+        "한 번에 한 로트만 처리하는 설비마다 둘 이상의 로트가 겹쳐 처리되는 시간에 초과 로트 수를 곱해 더합니다. "
+        "로트 하나가 시간 1단위만큼 초과하면 비용 1이며, 0이면 단일 처리 설비에서 겹치는 로트가 없습니다."
     )
 
 
@@ -146,8 +146,8 @@ class BatchCapacityCost(Constraint):
         "by the excess. One unit is one lot-time unit above capacity; 0 means no batch tool is overfilled."
     )
     description_ko = (
-        "배치 설비마다 배치 용량보다 많은 로트를 처리하는 시간을 초과 로트 수만큼 곱해 더합니다. "
-        "초과 로트·시간 1단위가 비용 1이며, 0이면 용량을 넘긴 배치 설비가 없습니다."
+        "배치 설비마다 배치 용량보다 많은 로트를 처리하는 시간에 초과 로트 수를 곱해 더합니다. "
+        "로트 하나가 시간 1단위만큼 용량을 넘으면 비용 1이며, 0이면 용량을 넘긴 배치 설비가 없습니다."
     )
 
 
@@ -156,7 +156,7 @@ class BatchFamilyConflictCost(Constraint):
 
     name = "batch_family_conflict_cost"
     label_en = "Batch recipe compatibility"
-    label_ko = "배치 레시피 호환"
+    label_ko = "배치 레시피 호환성"
     description_en = (
         "On every batch tool, the time two lots of different recipe families run at the same time, summed "
         "over the overlapping pairs. One unit is one time unit of mixed families; 0 means every batch run "
@@ -164,7 +164,7 @@ class BatchFamilyConflictCost(Constraint):
     )
     description_ko = (
         "배치 설비마다 레시피 계열이 다른 두 로트가 동시에 처리되는 시간을 겹치는 쌍마다 더합니다. "
-        "섞여 처리된 시간 1단위가 비용 1이며, 0이면 모든 배치가 한 계열만 담습니다."
+        "서로 다른 계열이 함께 처리된 시간 1단위가 비용 1이며, 0이면 모든 배치에 한 계열만 들어갑니다."
     )
 
 
@@ -181,7 +181,7 @@ class MissingSetupTimeCost(Constraint):
     )
     description_ko = (
         "한 설비에서 레시피가 바뀌어 셋업이 필요한 연속 작업 사이에, 다음 작업 시작 전에 들어가지 못한 셋업 시간을 더합니다. "
-        "모자란 셋업 시간 1단위가 비용 1이며, 0이면 필요한 셋업이 모두 들어갑니다."
+        "모자란 셋업 시간 1단위가 비용 1이며, 0이면 필요한 셋업 시간이 모두 확보됩니다."
     )
 
 
@@ -247,7 +247,7 @@ class MissingTransportTimeCost(Constraint):
         "unit is one time unit short; 0 means every transfer fits."
     )
     description_ko = (
-        "연속한 두 공정 사이에서 설비 그룹 간 반송 시간 중 대기 시간 안에 들어가지 못한 부분을 더합니다(반송 시간이 없어도 두 공정이 겹치면 그만큼 셉니다). "
+        "연속한 두 공정 사이에서 설비 그룹 간 반송 시간 중 대기 시간 안에 들어가지 못한 부분을 더합니다(반송 시간 항목이 없어도 두 공정이 겹치면 그만큼 셉니다). "
         "모자란 반송 시간 1단위가 비용 1이며, 0이면 모든 반송이 시간 안에 이뤄집니다."
     )
 
@@ -264,8 +264,8 @@ class AuxiliaryResourceCapacityCost(Constraint):
         "One unit is one use-time unit above capacity; 0 means no resource is over-used."
     )
     description_ko = (
-        "작업자·레티클·지그·반송기마다 용량보다 많은 공정이 쓰는 시간을 초과 사용 수만큼 곱해 더합니다(한 공정이 같은 자원을 두 번 적으면 두 번 씁니다). "
-        "초과 사용·시간 1단위가 비용 1이며, 0이면 용량을 넘겨 쓰인 자원이 없습니다."
+        "작업자·레티클·지그·반송기마다 용량보다 많은 공정이 쓰는 시간에 초과 사용 수를 곱해 더합니다(한 공정이 같은 자원을 두 번 지정하면 두 번 쓰는 것으로 셉니다). "
+        "사용 하나가 시간 1단위만큼 용량을 넘으면 비용 1이며, 0이면 용량을 넘겨 쓰인 자원이 없습니다."
     )
 
 
@@ -296,8 +296,8 @@ class PinnedAssignmentsCost(Constraint):
         "One unit is one moved pin; 0 means every pin is kept."
     )
     description_ko = (
-        "고정 배정 가운데 공정이 빠졌거나 다른 설비·시작·종료 시각으로 옮겨진 것을 셉니다. "
-        "옮겨진 고정 배정 하나가 비용 1이며, 0이면 모든 고정 배정이 지켜집니다."
+        "공정이 배정되지 않았거나 설비, 시작 시각, 종료 시각 중 하나라도 달라진 고정 배정을 셉니다. "
+        "어긋난 고정 배정 하나가 비용 1이며, 0이면 모든 고정 배정이 지켜집니다."
     )
 
 
@@ -329,7 +329,7 @@ class MachinePreferenceCost(Constraint):
     )
     description_ko = (
         "공정마다 실제로 쓴 설비 선택지의 인증·수율·운영 선호 비용을 더합니다. "
-        "선호 비용 1이 비용 1이며, 0이면 비용이 없는 설비만 썼습니다."
+        "선호 비용 1이 비용 1이며, 0이면 선호 비용이 0인 설비만 사용합니다."
     )
 
 
@@ -338,7 +338,7 @@ class MinBatchSizeCost(Constraint):
 
     name = "min_batch_size_cost"
     label_en = "Minimum batch fill"
-    label_ko = "최소 배치 채움"
+    label_ko = "최소 배치 크기 충족"
     description_en = (
         "For every batch run (one recipe family and batch id on a batch tool), the lots missing to reach the "
         "tool's minimum batch size. One unit is one missing lot; 0 means every batch run is full enough."
@@ -362,7 +362,7 @@ class MachineLoadImbalanceCost(Constraint):
     )
     description_ko = (
         "설비가 둘 이상인 설비 그룹마다 부하(처리 시간 합)가 가장 큰 설비와 가장 작은 설비의 차이를 더합니다. "
-        "차이 시간 1단위가 비용 1이며, 0이면 모든 그룹의 부하가 고릅니다."
+        "차이 시간 1단위가 비용 1이며, 0이면 모든 그룹에서 설비 부하가 같습니다."
     )
 
 

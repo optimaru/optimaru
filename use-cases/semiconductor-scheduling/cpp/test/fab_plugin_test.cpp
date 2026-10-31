@@ -1,7 +1,8 @@
 // fab_plugin_test — the plugin assembly (fab/constraints.hpp):
 //   (a) the default assembly == the monolithic score bit-for-bit, in data
 //       mode and in search mode, on 300 random states
-//   (b) plugin incremental == full recompute on random ScoreDirector walks
+//   (b) plugin incremental == full recompute, per constraint, on random
+//       ScoreDirector walks in which every constraint becomes non-zero
 //   (c) each component alone reports exactly its term
 //   (d) weight / level / exponent overrides match hand arithmetic
 //   (e) constraintTotals() explains exactly the reported score
@@ -31,29 +32,6 @@ using namespace fabtest;
 
 namespace
 {
-
-const char *const kNames[kTermCount] = {
-    "machineEligibilityCost",
-    "lotRoutePrecedenceCost",
-    "machineCapacityCost",
-    "batchCapacityCost",
-    "batchFamilyConflictCost",
-    "missingSetupTimeCost",
-    "machineUnavailabilityCost",
-    "maxQueueTimeCost",
-    "minQueueTimeCost",
-    "missingTransportTimeCost",
-    "auxiliaryResourceCapacityCost",
-    "auxiliaryResourceUnavailabilityCost",
-    "pinnedAssignmentsCost",
-    "maxCycleTimeCost",
-    "machinePreferenceCost",
-    "minBatchSizeCost",
-    "machineLoadImbalanceCost",
-    "weightedTardinessCost",
-    "cycleTimeCost",
-    "makespanCost",
-};
 
 Score scoreWith(DecomposedCalculator &calculator, SemiconductorSchedule &schedule)
 {
@@ -106,10 +84,28 @@ void verifyAssemblyParity()
     check(mismatches == 0, "(a) default assembly == monolith on 300 random states (data + search mode)");
 }
 
+// The raw cost of every constraint of `calculator` (one global each), in
+// Term order; a constraint the assembly lacks reads -1.
+RawTotals rawOfAssembly(const DecomposedCalculator &calculator)
+{
+    RawTotals out;
+    out.fill(-1);
+    for (const auto &entry : calculator.constraintCosts())
+    {
+        for (int t = 0; t < kTermCount; ++t)
+        {
+            if (entry.name == kTermNames[t] && entry.unitCosts.size() == 1)
+                out[static_cast<std::size_t>(t)] = static_cast<std::int64_t>(entry.unitCosts[0]);
+        }
+    }
+    return out;
+}
+
 // (b)
 void verifyIncremental()
 {
     int mismatches = 0;
+    TermHits hits;
     for (int instance = 0; instance < 60; ++instance)
     {
         SemiconductorSchedule s = randomInstance(static_cast<std::uint64_t>(instance) * 31 + 3);
@@ -141,11 +137,19 @@ void verifyIncremental()
                     director.changeVariable(row, old);  // a rejected move
                 }
             }
-            if (!(director.calculateScore() == ScoreCalculator::searchStateScore(s)))
+            // Every constraint's raw cost, then the score.
+            const Score score = director.calculateScore();
+            const RawTotals full = ScoreCalculator::searchStateRawCosts(s);
+            if (!(rawOfAssembly(calculator) == full && score == ScoreCalculator::searchStateScore(s)))
                 ++mismatches;
+            if (!atSeed(s))
+                hits.add(full);
         }
     }
-    check(mismatches == 0, "(b) plugin incremental == full recompute on 60 x 300 moves");
+    check(mismatches == 0, "(b) plugin incremental == full recompute, per constraint, on 60 x 300 moves");
+    check(hits.missing().empty(),
+          "(b) every constraint is non-zero in some decoded state of the walk (never: " + hits.missing() + ")");
+    std::printf("  (b) the rarest term is non-zero in %lld decoded states\n", static_cast<long long>(hits.fewest()));
 }
 
 // (c)
@@ -159,7 +163,7 @@ void verifyComponentsAlone()
         for (int t = 0; t < kTermCount; ++t)
         {
             DecomposedCalculator calculator;
-            defaultConstraints().only({kNames[t]}).into(calculator);
+            defaultConstraints().only({kTermNames[t]}).into(calculator);
             const Score score = scoreWith(calculator, s);
             const std::int64_t expected = raw[static_cast<std::size_t>(t)];
             const double weight = t == static_cast<int>(Term::WeightedTardinessCost) ? 10.0 : 1.0;
@@ -361,7 +365,7 @@ void verifyCatalog()
     check(ok, "(h) info() == the components' constants, in list order");
     bool registryOrder = true;
     for (int t = 0; t < kTermCount; ++t)
-        registryOrder &= rows[static_cast<std::size_t>(t)].name == kNames[t];
+        registryOrder &= rows[static_cast<std::size_t>(t)].name == kTermNames[t];
     check(registryOrder, "(h) catalog order == Term order");
     // Every constraint flips both ways.
     bool flips = true;

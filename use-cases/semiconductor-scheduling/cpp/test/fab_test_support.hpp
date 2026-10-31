@@ -4,6 +4,8 @@
 // Shared by fab_test.cpp and fab_plugin_test.cpp: check(), a fixture
 // builder addressing everything by id, and seeded random instances.
 
+#include <algorithm>
+#include <array>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -154,9 +156,73 @@ struct Builder
 
 inline std::int64_t raw(const RawTotals &totals, Term term) { return totals[termIndex(term)]; }
 
+// The registry names, in Term order.
+inline const char *const kTermNames[kTermCount] = {
+    "machineEligibilityCost",
+    "lotRoutePrecedenceCost",
+    "machineCapacityCost",
+    "batchCapacityCost",
+    "batchFamilyConflictCost",
+    "missingSetupTimeCost",
+    "machineUnavailabilityCost",
+    "maxQueueTimeCost",
+    "minQueueTimeCost",
+    "missingTransportTimeCost",
+    "auxiliaryResourceCapacityCost",
+    "auxiliaryResourceUnavailabilityCost",
+    "pinnedAssignmentsCost",
+    "maxCycleTimeCost",
+    "machinePreferenceCost",
+    "minBatchSizeCost",
+    "machineLoadImbalanceCost",
+    "weightedTardinessCost",
+    "cycleTimeCost",
+    "makespanCost",
+};
+
+// True while every row holds the values of a complete warm-start seed: the
+// score is then that of the supplied assignments, not of a decode.
+inline bool atSeed(const SemiconductorSchedule &s)
+{
+    if (!s.seedComplete || s.seedValues.size() != s.rows.size())
+        return false;
+    for (std::size_t r = 0; r < s.rows.size(); ++r)
+    {
+        if (s.rows[r].value != s.seedValues[r])
+            return false;
+    }
+    return true;
+}
+
+// How often each term was non-zero over the decoded states of a walk: a
+// full-vs-incremental walk only proves a term's incremental update if the
+// term actually moved away from 0.
+struct TermHits
+{
+    std::array<std::int64_t, kTermCount> hits{};
+
+    void add(const RawTotals &totals)
+    {
+        for (int t = 0; t < kTermCount; ++t)
+            hits[static_cast<std::size_t>(t)] += totals[static_cast<std::size_t>(t)] != 0 ? 1 : 0;
+    }
+    // The terms never seen non-zero, comma-separated ("" = none).
+    std::string missing() const
+    {
+        std::string out;
+        for (int t = 0; t < kTermCount; ++t)
+        {
+            if (hits[static_cast<std::size_t>(t)] == 0)
+                out += (out.empty() ? "" : ", ") + std::string(kTermNames[t]);
+        }
+        return out;
+    }
+    std::int64_t fewest() const { return *std::min_element(hits.begin(), hits.end()); }
+};
+
 // A seeded random instance with a random (not decoded) assignment list:
 // re-entrant routes, repeated machine options, batch tools, duplicate setup
-// and transport entries, downtime, duplicated required resources, pins.
+// and transport entries, downtime, duplicated required resources, 0-4 pins.
 inline SemiconductorSchedule randomInstance(std::uint64_t seed)
 {
     std::mt19937_64 rng(seed);
@@ -224,7 +290,12 @@ inline SemiconductorSchedule randomInstance(std::uint64_t seed)
         b.setup(groups[pick(0, 2)], families[pick(0, 2)], families[pick(0, 2)], pick(0, 4));
     for (int k = pick(0, 5); k > 0; --k)
         b.transport(groups[pick(0, 2)], groups[pick(0, 2)], pick(0, 4));
-    // Pins: on the last option of a machine, with its duration.
+    // Pins: on the last option of a machine, with its duration. Pins are
+    // fixed obstacles to the decoder, so in a decoded state only pins that
+    // overlap each other make the unary overload, the batch overload and the
+    // family conflict non-zero. Half the instances therefore cluster their
+    // pins on one machine within a few time units (adding that machine as an
+    // option where an operation lacks it).
     std::vector<std::pair<int, int>> keys;
     for (int l = 0; l < lotCount; ++l)
     {
@@ -232,21 +303,37 @@ inline SemiconductorSchedule randomInstance(std::uint64_t seed)
             keys.emplace_back(l, o);
     }
     std::shuffle(keys.begin(), keys.end(), rng);
-    const int pins = std::min<int>(static_cast<int>(keys.size()), pick(0, 3) / 2);
+    const int pins = std::min<int>(static_cast<int>(keys.size()), pick(0, 4));
+    const bool cluster = pick(0, 1) == 0;
+    const int clusterMachine = pick(0, machineCount - 1);
     for (int p = 0; p < pins; ++p)
     {
         const auto [l, o] = keys[static_cast<std::size_t>(p)];
-        const Operation &operation = b.s.lots[static_cast<std::size_t>(l)].operations[static_cast<std::size_t>(o)];
-        const MachineOption &any = operation.eligibleMachines[static_cast<std::size_t>(
-            pick(0, static_cast<int>(operation.eligibleMachines.size()) - 1))];
-        const MachineOption *last = &any;
+        Operation &operation = b.s.lots[static_cast<std::size_t>(l)].operations[static_cast<std::size_t>(o)];
+        const int any = pick(0, static_cast<int>(operation.eligibleMachines.size()) - 1);
+        int machine = operation.eligibleMachines[static_cast<std::size_t>(any)].machine;
+        if (cluster)
+        {
+            machine = clusterMachine;
+            const bool listed
+                = std::any_of(operation.eligibleMachines.begin(), operation.eligibleMachines.end(),
+                              [machine](const MachineOption &option) { return option.machine == machine; });
+            if (!listed)
+            {
+                Time duration = pick(1, 6);
+                if (b.s.machines[static_cast<std::size_t>(machine)].batchCapacity > 1)
+                    duration = batchDuration.try_emplace({machine, operation.family}, duration).first->second;
+                operation.eligibleMachines.push_back({machine, duration, 0});
+            }
+        }
+        const MachineOption *last = nullptr;
         for (const MachineOption &option : operation.eligibleMachines)
         {
-            if (option.machine == any.machine)
+            if (option.machine == machine)
                 last = &option;
         }
-        const Time start = pick(0, 20);
-        b.s.pinnedAssignments.push_back({l, o, last->machine, start, start + last->duration, std::nullopt});
+        const Time start = cluster ? pick(0, 2) : pick(0, 20);
+        b.s.pinnedAssignments.push_back({l, o, machine, start, start + last->duration, std::nullopt});
     }
     // A random assignment list (data mode).
     const char *ids[] = {"", "RUN1", "RUN2", "B001", "B002"};

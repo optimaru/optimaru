@@ -105,6 +105,9 @@ public:
 
     // Solves in place (see the class comment): fills assignments, score,
     // makespan, totalWeightedTardiness, totalCycleTime; warmStart = false.
+    // If the search throws (for example the decoder giving up), the schedule
+    // is back in data mode with its assignments untouched, and the error
+    // propagates. Both overloads.
     void solve(SemiconductorSchedule &schedule);
 
     // The same search scored by a caller-assembled plugin calculator (see
@@ -118,6 +121,8 @@ public:
                optimaru::DecomposedScoreCalculator<SemiconductorSchedule> &calculator);
 
 private:
+    // solve(schedule) after beginSearch(): the starts and endSearch().
+    void searchFromBegun(SemiconductorSchedule &schedule);
     void runSingle(SemiconductorSchedule &schedule,
                    optimaru::IncrementalScoreCalculator<SemiconductorSchedule> &calculator) const;
 

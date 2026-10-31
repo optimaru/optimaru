@@ -1,6 +1,7 @@
 #include "fab/score_calculator.hpp"
 
 #include <algorithm>
+#include <initializer_list>
 #include <map>
 #include <numeric>
 #include <set>
@@ -8,6 +9,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 
 #include "fab/constraints.hpp"
 #include "fab/decoder.hpp"
@@ -18,21 +20,13 @@ namespace fab
 namespace
 {
 
-// The default weights, read off the components (integral, so the monolithic
-// score is integer arithmetic).
-constexpr auto kPreferenceWeight = static_cast<std::int64_t>(MachinePreferenceCost::kDefaultWeight);
-constexpr auto kMinBatchWeight = static_cast<std::int64_t>(MinBatchSizeCost::kDefaultWeight);
-constexpr auto kLoadWeight = static_cast<std::int64_t>(MachineLoadImbalanceCost::kDefaultWeight);
-constexpr auto kTardinessWeight = static_cast<std::int64_t>(WeightedTardinessCost::kDefaultWeight);
-constexpr auto kCycleWeight = static_cast<std::int64_t>(CycleTimeCost::kDefaultWeight);
-constexpr auto kMakespanWeight = static_cast<std::int64_t>(MakespanCost::kDefaultWeight);
-static_assert(kPreferenceWeight == MachinePreferenceCost::kDefaultWeight
-                  && kMinBatchWeight == MinBatchSizeCost::kDefaultWeight
-                  && kLoadWeight == MachineLoadImbalanceCost::kDefaultWeight
-                  && kTardinessWeight == WeightedTardinessCost::kDefaultWeight
-                  && kCycleWeight == CycleTimeCost::kDefaultWeight
-                  && kMakespanWeight == MakespanCost::kDefaultWeight,
-              "the monolithic calculator assumes integral default weights");
+// The default soft weights, read off the components.
+constexpr double kPreferenceWeight = MachinePreferenceCost::kDefaultWeight;
+constexpr double kMinBatchWeight = MinBatchSizeCost::kDefaultWeight;
+constexpr double kLoadWeight = MachineLoadImbalanceCost::kDefaultWeight;
+constexpr double kTardinessWeight = WeightedTardinessCost::kDefaultWeight;
+constexpr double kCycleWeight = CycleTimeCost::kDefaultWeight;
+constexpr double kMakespanWeight = MakespanCost::kDefaultWeight;
 // The 14 hard terms all weigh 1.
 static_assert(MachineEligibilityCost::kDefaultWeight == 1.0 && LotRoutePrecedenceCost::kDefaultWeight == 1.0
                   && MachineCapacityCost::kDefaultWeight == 1.0 && BatchCapacityCost::kDefaultWeight == 1.0
@@ -271,7 +265,8 @@ RawTotals rawCostsOf(const SemiconductorSchedule &schedule,
     auto list = [items](Term term) -> std::vector<std::int64_t> *
     { return items == nullptr ? nullptr : &(*items)[termIndex(term)]; };
     RawTotals total{};
-    auto add = [&total](Term term, std::int64_t value) { total[termIndex(term)] += value; };
+    auto add = [&total](Term term, std::int64_t value)
+    { total[termIndex(term)] = checked::add(total[termIndex(term)], value); };
 
     const int n = schedule.rowCount();
     std::vector<ScorePlacement> placements(assignments.size());
@@ -413,14 +408,19 @@ Score ScoreCalculator::scoreOf(const RawTotals &raw)
 {
     std::int64_t hard = 0;
     for (int t = 0; t < kHardTermCount; ++t)
-        hard += raw[static_cast<std::size_t>(t)];
-    const std::int64_t soft = kPreferenceWeight * raw[termIndex(Term::MachinePreferenceCost)]
-                              + kMinBatchWeight * raw[termIndex(Term::MinBatchSizeCost)]
-                              + kLoadWeight * raw[termIndex(Term::MachineLoadImbalanceCost)]
-                              + kTardinessWeight * raw[termIndex(Term::WeightedTardinessCost)]
-                              + kCycleWeight * raw[termIndex(Term::CycleTimeCost)]
-                              + kMakespanWeight * raw[termIndex(Term::MakespanCost)];
-    return {-hard, soft == 0 ? 0.0 : -static_cast<double>(soft)};
+        hard = checked::add(hard, raw[static_cast<std::size_t>(t)]);
+    // Soft in double, in list order, the way the plugin assembly sums its
+    // globals (weight * total): no int64 product to overflow, and the same
+    // score bit for bit.
+    double soft = 0.0;
+    for (const auto &[weight, term] : {std::pair{kPreferenceWeight, Term::MachinePreferenceCost},
+                                       std::pair{kMinBatchWeight, Term::MinBatchSizeCost},
+                                       std::pair{kLoadWeight, Term::MachineLoadImbalanceCost},
+                                       std::pair{kTardinessWeight, Term::WeightedTardinessCost},
+                                       std::pair{kCycleWeight, Term::CycleTimeCost},
+                                       std::pair{kMakespanWeight, Term::MakespanCost}})
+        soft += weight * static_cast<double>(raw[termIndex(term)]);
+    return {-hard, soft == 0.0 ? 0.0 : -soft};
 }
 
 void ScoreCalculator::storeTotals(SemiconductorSchedule &schedule, const RawTotals &raw)

@@ -35,8 +35,8 @@ struct MaxQueueTimeCost final : ScheduleViewConstraint
             const std::optional<Time> &limit = l.operations[i - 1].maxQueueTime;
             if (!limit)
                 continue;
-            const Time wait = route[i]->start - route[i - 1]->end;
-            total += terms::emit(items, std::max<Time>(0, wait - *limit));
+            const Time wait = checked::sub(route[i]->start, route[i - 1]->end);
+            total = checked::add(total, terms::emit(items, std::max<Time>(0, checked::sub(wait, *limit))));
         }
         return total;
     }

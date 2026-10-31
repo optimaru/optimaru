@@ -29,7 +29,7 @@ struct WeightedTardinessCost final : ScheduleViewConstraint
         const ScorePlacement *last = route[l.operations.size() - 1];
         if (last == nullptr)
             return 0;
-        return terms::emit(items, std::max<Time>(0, last->end - l.dueTime) * l.priority);
+        return terms::emit(items, checked::mul(std::max<Time>(0, checked::sub(last->end, l.dueTime)), l.priority));
     }
 };
 

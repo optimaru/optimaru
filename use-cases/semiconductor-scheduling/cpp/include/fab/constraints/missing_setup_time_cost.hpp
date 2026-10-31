@@ -39,7 +39,10 @@ struct MissingSetupTimeCost final : ScheduleViewConstraint
                 continue;
             const Time required = schedule.setupTime(m.groupIndex, from, to);
             if (required != 0)
-                total += terms::emit(items, std::max<Time>(0, previous->end + required - current->start));
+            {
+                const Time missing = checked::sub(checked::add(previous->end, required), current->start);
+                total = checked::add(total, terms::emit(items, std::max<Time>(0, missing)));
+            }
         }
         return total;
     }

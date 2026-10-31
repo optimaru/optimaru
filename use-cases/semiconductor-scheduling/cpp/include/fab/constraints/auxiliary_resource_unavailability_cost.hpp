@@ -30,7 +30,7 @@ struct AuxiliaryResourceUnavailabilityCost final : ScheduleViewConstraint
         for (const ScorePlacement *p : users)
         {
             for (const TimeWindow &window : r.unavailable)
-                total += terms::emit(items, terms::overlap(p->start, p->end, window.start, window.end));
+                total = checked::add(total, terms::emit(items, terms::overlap(p->start, p->end, window.start, window.end)));
         }
         return total;
     }

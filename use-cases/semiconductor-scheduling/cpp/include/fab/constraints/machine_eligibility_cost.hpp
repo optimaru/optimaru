@@ -31,7 +31,7 @@ struct MachineEligibilityCost final : ScheduleViewConstraint
         if (p == nullptr)
             return 1;
         const MachineOption *option = schedule.operationOfRow(row).lastOptionOn(p->machine);
-        return option == nullptr || p->end - p->start != option->duration ? 1 : 0;
+        return option == nullptr || checked::sub(p->end, p->start) != option->duration ? 1 : 0;
     }
 };
 

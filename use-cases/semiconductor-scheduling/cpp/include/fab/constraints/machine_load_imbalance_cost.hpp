@@ -27,7 +27,7 @@ struct MachineLoadImbalanceCost final : ScheduleViewConstraint
     {
         std::int64_t load = 0;
         for (const ScorePlacement *p : rows)
-            load += p->end - p->start;
+            load = checked::add(load, checked::sub(p->end, p->start));
         return load;
     }
     // One group: the loads of its machines in machine order.
@@ -37,7 +37,7 @@ struct MachineLoadImbalanceCost final : ScheduleViewConstraint
         if (loads.size() < 2)
             return 0;
         const auto [low, high] = std::minmax_element(loads.begin(), loads.end());
-        return terms::emit(items, *high - *low);
+        return terms::emit(items, checked::sub(*high, *low));
     }
 };
 

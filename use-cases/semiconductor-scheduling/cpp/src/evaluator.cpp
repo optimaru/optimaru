@@ -250,7 +250,8 @@ void ScheduleEvaluator::recost()
     const SemiconductorSchedule &schedule = *schedule_;
     auto move = [this](Term term, std::int64_t &cell, std::int64_t value)
     {
-        totals_[termIndex(term)] += value - cell;
+        std::int64_t &total = totals_[termIndex(term)];
+        total = checked::add(checked::sub(total, cell), value);
         cell = value;
     };
     auto at = [this](int row) -> const ScorePlacement *

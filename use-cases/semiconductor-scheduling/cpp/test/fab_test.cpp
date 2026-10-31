@@ -1,9 +1,10 @@
 // fab_test — the decoder, every constraint by hand (a positive and a zero
-// case each), the incremental evaluator against the full recompute on random
-// move sequences, and the solver's contracts. check() style: non-zero exit on
-// any failure.
+// case each), the incremental evaluator against the full recompute of every
+// constraint on random move sequences, the solver's contracts and the int64
+// overflow checks. check() style: non-zero exit on any failure.
 #include <chrono>
 #include <cstdio>
+#include <limits>
 #include <random>
 #include <stdexcept>
 #include <string>
@@ -65,6 +66,21 @@ Builder queueProblem()
     b.machine("M1", "A").machine("M2", "B");
     b.lot("L1", 0, 50).op("A", "F", {{"M1", 2}}, {}, 0, 1).op("B", "F", {{"M2", 2}});
     b.lot("L2", 0, 50).op("X", "F", {{"M2", 10}});
+    return b;
+}
+
+// The decoder's 10 000-pass guard: a resource down on every odd unit step,
+// so a two-unit operation that needs it never fits. L2 adds a second row.
+Builder horizonProblem()
+{
+    Builder b;
+    b.machine("M1", "A").machine("M2", "B");
+    std::vector<TimeWindow> windows;
+    for (int k = 0; k < 10003; ++k)
+        windows.push_back({2 * k + 1, 2 * k + 2});
+    b.resource("R", 1, windows);
+    b.lot("L1", 0, 50).op("O", "F", {{"M1", 2}}, {"R"});
+    b.lot("L2", 0, 50).op("O", "F", {{"M2", 3}});
     return b;
 }
 
@@ -214,15 +230,7 @@ void testDecoder()
         check(selected == std::vector<int>{0}, "the seed maps (M1, 3) back to option 0");
     }
     {
-        // The 10 000-pass guard: a resource down on every odd unit step.
-        Builder b;
-        b.machine("M1", "A");
-        std::vector<TimeWindow> windows;
-        for (int k = 0; k < 10003; ++k)
-            windows.push_back({2 * k + 1, 2 * k + 2});
-        b.resource("R", 1, windows);
-        b.lot("L1", 0, 50).op("O", "F", {{"M1", 2}}, {"R"});
-        SemiconductorSchedule s = b.build();
+        SemiconductorSchedule s = horizonProblem().build();
         beginSearch(s);
         bool thrown = false;
         try
@@ -366,15 +374,14 @@ void testHandCalculated()
 }
 
 // --------------------------------------------------------------------------
-// (c) incremental == full on random move sequences
+// (c) incremental == full, per constraint, on random move sequences
 // --------------------------------------------------------------------------
-
-bool sameTotals(const RawTotals &a, const RawTotals &b) { return a == b; }
 
 void testIncrementalMatchesFull(int instances, int moves)
 {
     int mismatches = 0;
     std::int64_t movesDone = 0;
+    TermHits hits;
     for (int seed = 0; seed < instances; ++seed)
     {
         SemiconductorSchedule s = randomInstance(static_cast<std::uint64_t>(seed) * 7919 + 1);
@@ -384,14 +391,17 @@ void testIncrementalMatchesFull(int instances, int moves)
         optimaru::ScoreDirector<SemiconductorSchedule> director(s, calculator);
         std::mt19937_64 rng(static_cast<std::uint64_t>(seed));
         const int n = s.rowCount();
+        // Every constraint's raw cost, then the score.
         auto verify = [&](const char *what)
         {
             const RawTotals incremental = calculator.rawTotals();
             const RawTotals full = ScoreCalculator::searchStateRawCosts(s);
-            const bool same = sameTotals(incremental, full)
-                              && director.calculateScore() == ScoreCalculator::searchStateScore(s);
+            const bool same
+                = incremental == full && director.calculateScore() == ScoreCalculator::searchStateScore(s);
             if (!same && mismatches++ < 5)
                 std::printf("  mismatch: instance %d after %s\n", seed, what);
+            if (!atSeed(s))
+                hits.add(full);
         };
         verify("reset");
         for (int m = 0; m < moves; ++m, ++movesDone)
@@ -447,10 +457,13 @@ void testIncrementalMatchesFull(int instances, int moves)
             verify("a move");
         }
     }
-    check(mismatches == 0, "incremental == full on " + std::to_string(instances) + " instances x "
-                               + std::to_string(moves) + " moves (" + std::to_string(mismatches)
-                               + " mismatches)");
-    std::printf("  incremental vs full: %lld moves checked\n", static_cast<long long>(movesDone));
+    check(mismatches == 0, "incremental == full, per constraint, on " + std::to_string(instances)
+                               + " instances x " + std::to_string(moves) + " moves ("
+                               + std::to_string(mismatches) + " mismatches)");
+    check(hits.missing().empty(),
+          "every constraint is non-zero in some decoded state of the walk (never: " + hits.missing() + ")");
+    std::printf("  incremental vs full: %lld moves checked; the rarest term is non-zero in %lld decoded states\n",
+                static_cast<long long>(movesDone), static_cast<long long>(hits.fewest()));
 }
 
 // The suffix decode really is a suffix: a change late in the order decodes
@@ -475,6 +488,12 @@ void testSuffixDecode()
 // --------------------------------------------------------------------------
 // (d) the solver
 // --------------------------------------------------------------------------
+
+Score scoreWithAssembly(DecomposedCalculator &calculator, SemiconductorSchedule &schedule)
+{
+    calculator.resetWorkingSolution(schedule);
+    return calculator.calculateScore();
+}
 
 Solver::Config zeroBudget()
 {
@@ -550,6 +569,45 @@ void testSolver()
         }
         check(!corrupted, "FULL_ASSERT solves report no score corruption");
     }
+    for (const bool warm : {false, true})
+    {
+        for (const bool plugin : {false, true})
+        {
+            // A failed solve leaves search mode: both scoring paths score the
+            // assignment list again, as before the solve.
+            Builder b = horizonProblem();
+            b.assign("L1", "O", "M1", 0, 2).assign("L2", "O", "M2", 0, 3);
+            SemiconductorSchedule s = b.build();
+            s.warmStart = warm;
+            SemiconductorSchedule copy = s;
+            const Score before = ScoreCalculator::calculateScore(copy);
+            Solver::Config config;
+            config.stepCountLimit = 20;
+            bool thrown = false;
+            try
+            {
+                DecomposedCalculator calculator;
+                addDefaultConstraints(calculator);
+                if (plugin)
+                    Solver(config).solve(s, calculator);
+                else
+                    Solver(config).solve(s);
+            }
+            catch (const std::runtime_error &)
+            {
+                thrown = true;
+            }
+            DecomposedCalculator again;
+            addDefaultConstraints(again);
+            again.resetWorkingSolution(s);
+            SemiconductorSchedule rescored = s;
+            const std::string what = std::string(warm ? "warm" : "cold") + (plugin ? ", plugin" : "");
+            check(thrown && !s.searching && !s.seedComplete && s.seedValues.empty() && s.seedAssignments.empty(),
+                  "a failed solve leaves search mode (" + what + ")");
+            check(again.calculateScore() == before && ScoreCalculator::calculateScore(rescored) == before,
+                  "after a failed solve both paths score the assignments (" + what + ")");
+        }
+    }
     {
         // A short solve improves the queue problem's seed with idle time.
         Builder b = choiceProblem();
@@ -564,6 +622,56 @@ void testSolver()
         Solver(config).solve(s);
         check(s.score > seedScore, "the search improves a seed with idle time");
     }
+}
+
+// Times and costs are exact int64; what leaves int64 throws instead of
+// wrapping (0.1.x computed exact Python integers).
+void testCheckedArithmetic()
+{
+    constexpr std::int64_t kMax = std::numeric_limits<std::int64_t>::max();
+    constexpr std::int64_t kMin = std::numeric_limits<std::int64_t>::min();
+    auto throws = [](auto &&f)
+    {
+        try
+        {
+            f();
+        }
+        catch (const std::overflow_error &)
+        {
+            return true;
+        }
+        return false;
+    };
+    check(checked::add(kMax, -1) == kMax - 1 && checked::sub(-1, kMin) == kMax && checked::mul(kMin, 1) == kMin
+              && checked::mul(-3, 4) == -12 && checked::mul(-3, -4) == 12
+              && checked::mul(3037000499, 3037000499) == 3037000499LL * 3037000499LL,
+          "checked arithmetic: in-range results are exact");
+    check(throws([&] { checked::add(kMax, 1); }) && throws([&] { checked::add(kMin, -1); })
+              && throws([&] { checked::sub(kMin, 1); }) && throws([&] { checked::sub(0, kMin); })
+              && throws([&] { checked::mul(kMax, 2); }) && throws([&] { checked::mul(-1, kMin); })
+              && throws([&] { checked::mul(kMin, -1); }) && throws([&] { checked::mul(3037000500, 3037000500); })
+              && throws([&] { checked::mul(-3037000500, 3037000500); }),
+          "checked arithmetic: out-of-range results throw");
+
+    auto oneLot = [](std::int64_t priority)
+    {
+        Builder b;
+        b.machine("M1", "G");
+        b.lot("L1", 0, 1, priority).op("O", "F", {{"M1", Time{1} << 30}});
+        b.assign("L1", "O", "M1", 0, Time{1} << 30);
+        return b.build();
+    };
+    SemiconductorSchedule exact = oneLot(std::int64_t{1} << 30);
+    ScoreCalculator::calculateScore(exact);
+    check(exact.totalWeightedTardiness == (std::int64_t{1} << 30) * ((std::int64_t{1} << 30) - 1),
+          "a 2^60 tardiness is exact");
+    SemiconductorSchedule huge = oneLot(std::int64_t{1} << 40);
+    check(throws([&] { ScoreCalculator::calculateScore(huge); }), "a tardiness beyond int64 throws (monolith)");
+    DecomposedCalculator calculator;
+    addDefaultConstraints(calculator);
+    check(throws([&] { scoreWithAssembly(calculator, huge); }), "a tardiness beyond int64 throws (plugin path)");
+    check(throws([&] { Solver(zeroBudget()).solve(huge); }) && !huge.searching,
+          "a tardiness beyond int64 throws (solve) and leaves search mode");
 }
 
 void testCatalog()
@@ -590,6 +698,7 @@ int main(int argc, char **argv)
     testIncrementalMatchesFull(quick ? 40 : 300, quick ? 200 : 1000);
     testSuffixDecode();
     testSolver();
+    testCheckedArithmetic();
     testCatalog();
     return finish("fab_test");
 }

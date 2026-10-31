@@ -116,7 +116,7 @@ def test_semiconductor_constraints_match_manual_calculation():
     assert fab_items(_fab_problem(with_assignments=True))["makespan_cost"] == [17]
 
 
-def test_semiconductor_inter_tool_transport_matches_manual_shortfall():
+def test_semiconductor_missing_transport_time_matches_manual_shortfall():
     problem = _fab_problem(with_assignments=True)
     problem.assignments[1].start = 6
     problem.assignments[1].end = 11

@@ -277,7 +277,9 @@ class SolverConfig:
 
 class Solver:
     """Simulated annealing over the decoded search state. Solves IN PLACE: assignments, score,
-    makespan, totals; warm_start = False."""
+    makespan, totals; warm_start = False. If the solve raises (RuntimeError when the decoder
+    gives up, OverflowError past int64), the schedule keeps its assignments and scores them
+    as before."""
 
     def __init__(self, config: SolverConfig = ...) -> None: ...
     def solve(self, schedule: SemiconductorSchedule) -> None: ...

@@ -126,6 +126,12 @@ steps; `machine_preference_cost` charges even on a duration mismatch.
 - `solve` / `calculate_score` return a `Score` (iterable and comparable as `(hard, soft)`)
   and accept the Pydantic model (written back in place, as before) or the engine object
   `_core.SemiconductorSchedule` (`to_core()` / `from_core()` now convert to and from it).
+- **Integer range**: times, durations, priorities and costs are int64 in the engine.
+  `to_core()` refuses an input beyond |2**62| with `ValueError`; a derived time or a cost
+  (a tardiness product, an overload area, a sum) that leaves int64 raises `OverflowError`
+  instead of wrapping (0.1.x computed exact Python integers). A solve that fails (an
+  overflow, or the decoder giving up after 10 000 passes) leaves the schedule as it was:
+  both scoring paths score its assignment list again.
 
 ## cpp/
 
@@ -159,10 +165,13 @@ ctest --test-dir build/semiconductor-scheduling --output-on-failure --no-tests=e
 ```
 
 `fab_test`: decoder fixtures, a hand-calculated positive and zero case per constraint,
-incremental == full recompute on 300 random instances x 1000 moves, solver contracts
-(zero budget, seeds never lost, multi-start, FULL_ASSERT). `fab_plugin_test`: default
-assembly == monolith (data and search mode), plugin incremental == full, components alone,
-overrides, `constraintTotals()`, raw costs by hand, the catalog.
+incremental == full recompute of every constraint's raw cost on 300 random instances x
+1000 moves (each constraint non-zero in some decoded state; the random instances cluster
+pins so that pin overlaps reach the capacity and family-conflict terms), solver contracts
+(zero budget, seeds never lost, multi-start, FULL_ASSERT, a failed solve), int64 overflow.
+`fab_plugin_test`: default assembly == monolith (data and search mode), plugin incremental
+== full per constraint, components alone, overrides, `constraintTotals()`, raw costs by
+hand, the catalog.
 
 ## python/
 

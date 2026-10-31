@@ -2,7 +2,9 @@
 #define FAB_DOMAIN_HPP
 
 #include <cstdint>
+#include <limits>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -28,6 +30,51 @@ namespace fab
 // Times, durations and costs are int64 (`Time`): the Pydantic contract uses
 // unbounded ints and the capacity areas multiply excess by time.
 using Time = std::int64_t;
+
+// Checked int64 arithmetic for the times the decoder derives and the costs
+// the score terms sum. 0.1.x computed exact Python integers; a result outside
+// int64 throws std::overflow_error (OverflowError in Python) instead of
+// wrapping.
+namespace checked
+{
+
+[[noreturn]] inline void overflow()
+{
+    throw std::overflow_error("semiconductor scheduling: a time or cost does not fit in int64 "
+                              "(scale the times or priorities down)");
+}
+
+inline std::int64_t add(std::int64_t a, std::int64_t b)
+{
+    constexpr std::int64_t kMax = std::numeric_limits<std::int64_t>::max();
+    constexpr std::int64_t kMin = std::numeric_limits<std::int64_t>::min();
+    if (b > 0 ? a > kMax - b : a < kMin - b)
+        overflow();
+    return a + b;
+}
+
+inline std::int64_t sub(std::int64_t a, std::int64_t b)
+{
+    constexpr std::int64_t kMax = std::numeric_limits<std::int64_t>::max();
+    constexpr std::int64_t kMin = std::numeric_limits<std::int64_t>::min();
+    if (b < 0 ? a > kMax + b : a < kMin + b)
+        overflow();
+    return a - b;
+}
+
+inline std::int64_t mul(std::int64_t a, std::int64_t b)
+{
+    constexpr std::int64_t kMax = std::numeric_limits<std::int64_t>::max();
+    constexpr std::int64_t kMin = std::numeric_limits<std::int64_t>::min();
+    if (a == 0 || b == 0)
+        return 0;
+    const bool out = a > 0 ? (b > 0 ? a > kMax / b : b < kMin / a) : (b > 0 ? a < kMin / b : a < kMax / b);
+    if (out)
+        overflow();
+    return a * b;
+}
+
+}  // namespace checked
 
 // The engine's HardSoftScore as is: there is no medium level.
 //   hard = -(sum of the 14 hard constraints' raw costs, weight 1 each)

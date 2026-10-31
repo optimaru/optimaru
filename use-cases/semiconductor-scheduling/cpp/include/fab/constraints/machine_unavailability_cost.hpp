@@ -30,7 +30,7 @@ struct MachineUnavailabilityCost final : ScheduleViewConstraint
         for (const ScorePlacement *p : rows)
         {
             for (const TimeWindow &window : m.unavailable)
-                total += terms::emit(items, terms::overlap(p->start, p->end, window.start, window.end));
+                total = checked::add(total, terms::emit(items, terms::overlap(p->start, p->end, window.start, window.end)));
         }
         return total;
     }
