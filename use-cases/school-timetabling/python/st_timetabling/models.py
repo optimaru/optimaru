@@ -18,7 +18,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, create_model, model_validator
 
 from . import _core
-from .constraints import soft_specs
+from .constraints import default_weights, soft_specs
 
 __all__ = [
     "LessonModel",
@@ -126,27 +126,27 @@ class TimetableModel(BaseModel):
 
 
 class _ObjectiveWeightsBase(BaseModel):
-    """Body of `ObjectiveWeightsModel`. The fields are generated from the constraint registry."""
+    """Body of `ObjectiveWeightsModel`. The fields are generated from the constraint catalog."""
 
     model_config = ConfigDict(extra="forbid")
 
     def to_core(self) -> "_core.canon.ObjectiveWeights":
         # The monolithic fast path's ObjectiveWeights is a fixed struct, so only the
-        # terms it knows are passed. The assembly path skips this mirror and uses
-        # the components' weights directly, so a soft term only in the registry still works there.
+        # terms it knows are passed. The plugin path skips this mirror and uses the
+        # components' weights directly, so a soft term only in the catalog still works there.
         known = set(_core.canon.ObjectiveWeights().__dir__())
         return _core.canon.ObjectiveWeights(**{k: v for k, v in self.model_dump().items() if k in known})
 
 
-#: Canonical soft-weight mirror. **The fields are not written by hand** — names and
-#: defaults come straight from the soft terms of the constraint registry (plugin
-#: style: the objective is the sum of the registered constraints, not a separately
-#: maintained list). Adding a soft constraint creates its weight field automatically,
-#: so the two lists have nowhere to drift apart.
+#: Soft-weight mirror of the fast path. **The fields are not written by hand** —
+#: names and defaults come from the soft rows of `constraint_info()` (the C++
+#: components' kDefaultLevel / kDefaultWeight), descriptions from the specs. A
+#: new soft component brings its weight field along, so the lists have nowhere
+#: to drift apart.
 _objective_weight_fields: dict[str, Any | tuple[Any, Any]] = {
     spec.name: (
-        int,
-        Field(default=int(spec.default_weight), ge=0, description=(spec.__doc__ or "").strip().split("\n")[0]),
+        float,
+        Field(default=default_weights()[spec.name], ge=0, allow_inf_nan=False, description=spec.label_en),
     )
     for spec in soft_specs()
 }
@@ -156,8 +156,8 @@ ObjectiveWeightsModel = _create_model(
     "ObjectiveWeightsModel",
     __base__=_ObjectiveWeightsBase,
     __doc__=(
-        "Canonical soft-weight mirror (`_core.canon.ObjectiveWeights`). The fields are "
-        "generated from the soft constraints of `st_timetabling.constraints`."
+        "Soft-weight mirror of the fast path (`_core.canon.ObjectiveWeights`), keyed by the soft "
+        "constraint names. The fields are generated from the soft rows of `constraint_info()`."
     ),
     **_objective_weight_fields,
 )
@@ -166,7 +166,8 @@ ObjectiveWeightsModel = _create_model(
 class SolveConfig(BaseModel):
     """Serializable mirror of `_core.SolverConfig` / `_core.canon.SolverConfig`.
 
-    The common engine fields are the same in both modes; ``weights`` applies to
+    The common engine fields are the same in both modes; ``weights`` (the fast
+    path's soft weights, keyed by the soft constraint names) applies to
     canonical mode only (`to_canon()`) — the quickstart config (`to_core()`)
     has no such field."""
 
@@ -210,7 +211,7 @@ class SolveConfig(BaseModel):
         return self
 
     def to_canon(self) -> "_core.canon.SolverConfig":
-        """Canonical-mode config (with weights)."""
+        """Canonical-mode config (with the fast path's soft weights)."""
         cfg = self._apply_common(_core.canon.SolverConfig())
         cfg.weights = self.weights.to_core()
         return cfg

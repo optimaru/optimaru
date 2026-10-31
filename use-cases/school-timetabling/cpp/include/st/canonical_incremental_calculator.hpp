@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "st/canonical_domain.hpp"
+#include "st/objective_weights.hpp"
 #include "optimaru/api/score/calculator/incremental_score_calculator.hpp"
 
 namespace st::canon
@@ -56,26 +57,43 @@ private:
 // a teacher or a class — derived from per-(owner, slot) occupancy counts (a
 // mask bit flips only on a 0<->1 count transition, so team-teaching overlaps
 // keep the DISTINCT-period semantics of validate.py). All mask metrics
-// (H9 daily, H10 runs, S1/S4 gaps, S2 workdays, S3 free days) are recomputed
-// for just the touched (owner, day) in O(periods <= 16) and applied as a
-// subtract-old / add-new delta; the weekly H9 total is carried per teacher.
+// (teacherMaxPeriodsCost daily part, teacherMaxConsecutivePeriodsCost runs,
+// the teacher/class gaps, workdays, worked free days) are recomputed for just
+// the touched (owner, day) in O(periods <= 16) and applied as a
+// subtract-old / add-new delta; the weekly teacherMaxPeriodsCost part is
+// carried per teacher.
 //
-//   - H3/H4 conflict pairs, H6 room-demand excess and H7 course-day excess
-//     are count-map increments with closed-form deltas.
-//   - H8 recomputes the moved lesson's whole block group (k <= ~4 members)
-//     against the shared ScoreCalculator::blockViolation helper.
-//   - H1/H5/S5/S6 are per-lesson lookups.
+//   - classConflictCost / teacherConflictCost pairs, roomCapacityCost excess
+//     and courseMaxPeriodsPerDayCost excess are count-map increments with
+//     closed-form deltas.
+//   - blockAdjacencyCost recomputes the moved lesson's whole block group
+//     (k <= ~4 members) against the shared ScoreCalculator::blockViolation
+//     helper.
+//   - unassignedLessonsCost, disallowedSlotCost and the avoided /
+//     non-preferred period costs are per-lesson lookups.
+//   - fixedSlotsCost / parallelGroupsCost are 0 by construction (pinned
+//     lessons, merged parallel groups) and carry no state.
+//
+// Hard terms are weighted by their components' kDefaultWeight, soft terms by
+// the ObjectiveWeights given at construction (default: the soft components'
+// kDefaultWeight) — the model carries no weights.
 //
 // beforeVariableChanged retracts the lesson's contribution while `slot` still
 // holds the OLD value; afterVariableChanged inserts the NEW value. Unassigned
-// lessons (slot == -1) contribute only H1, so the construction heuristic can
-// score partially initialized solutions. The full-recompute reference is
-// ScoreCalculator::computeBreakdown (checked in the tests and under
-// EnvironmentMode::FULL_ASSERT).
+// lessons (slot == -1) contribute only unassignedLessonsCost, so the
+// construction heuristic can score partially initialized solutions. The
+// full-recompute reference is ScoreCalculator::computeBreakdown (checked in
+// the tests and under EnvironmentMode::FULL_ASSERT).
 class CanonicalIncrementalScoreCalculator final
     : public optimaru::IncrementalScoreCalculator<Timetable>
 {
 public:
+    explicit CanonicalIncrementalScoreCalculator(ObjectiveWeights weights
+                                                 = ObjectiveWeights{})
+        : weights_(weights)
+    {
+    }
+
     void resetWorkingSolution(Timetable &workingSolution) override;
     void beforeVariableChanged(int lessonIndex) override;
     void afterVariableChanged(int lessonIndex) override;
@@ -91,7 +109,7 @@ public:
     int hotLesson(std::mt19937_64 &rng) const;
 
     // True while any hard-violation hot set is non-empty (i.e. the working
-    // solution has a hard violation other than H1 unassigned).
+    // solution has a hard violation other than unassigned lessons).
     bool hasHotViolations() const
     {
         return hotNotAllowed_.size() != 0 || hotClassCells_.size() != 0
@@ -105,6 +123,7 @@ public:
     bool hotSetsConsistent() const;
 
 private:
+    ObjectiveWeights weights_;
     Timetable *table_ = nullptr;
     int slotCount_ = 0;
     int dayCount_ = 0;
@@ -118,38 +137,41 @@ private:
     std::vector<std::uint16_t> teacherDayMask_;
     std::vector<std::uint16_t> classDayMask_;
     std::vector<int> teacherWeekCnt_;      // distinct busy periods per week
-    std::vector<std::int64_t> blockViol_;  // current H8 value per group
+    std::vector<std::int64_t> blockViol_;  // blockAdjacencyCost per group
     std::vector<std::pair<int, int>> blockScratch_;
 
-    // Running totals (all counted positive; signs applied in calculateScore).
-    std::int64_t unassigned_ = 0;           // H1
-    std::int64_t classPairs_ = 0;           // H3
-    std::int64_t teacherPairs_ = 0;         // H4
-    std::int64_t notAllowed_ = 0;           // H5
-    std::int64_t roomExcess_ = 0;           // H6
-    std::int64_t courseExcess_ = 0;         // H7
-    std::int64_t blockTotal_ = 0;           // H8
-    std::int64_t teacherDailyExcess_ = 0;   // H9 (daily)
-    std::int64_t teacherWeeklyExcess_ = 0;  // H9 (weekly)
-    std::int64_t consecutiveExcess_ = 0;    // H10
-    std::int64_t teacherGap_ = 0;           // S1
-    std::int64_t teacherWorkday_ = 0;       // S2
-    std::int64_t teacherFreeDay_ = 0;       // S3
-    std::int64_t classGap_ = 0;             // S4
-    std::int64_t avoided_ = 0;              // S5
-    std::int64_t nonPreferred_ = 0;         // S6
+    // Running raw totals (all counted positive; weights and signs applied in
+    // calculateScore), one per constraint.
+    std::int64_t unassigned_ = 0;           // unassignedLessonsCost
+    std::int64_t classPairs_ = 0;           // classConflictCost
+    std::int64_t teacherPairs_ = 0;         // teacherConflictCost
+    std::int64_t notAllowed_ = 0;           // disallowedSlotCost
+    std::int64_t roomExcess_ = 0;           // roomCapacityCost
+    std::int64_t courseExcess_ = 0;         // courseMaxPeriodsPerDayCost
+    std::int64_t blockTotal_ = 0;           // blockAdjacencyCost
+    std::int64_t teacherDailyExcess_ = 0;   // teacherMaxPeriodsCost (daily)
+    std::int64_t teacherWeeklyExcess_ = 0;  // teacherMaxPeriodsCost (weekly)
+    std::int64_t consecutiveExcess_ = 0;    // teacherMaxConsecutivePeriodsCost
+    std::int64_t teacherGap_ = 0;           // teacherGapCost
+    std::int64_t teacherWorkday_ = 0;       // teacherWorkdayCost
+    std::int64_t teacherFreeDay_ = 0;       // teacherFreeDayCost
+    std::int64_t classGap_ = 0;             // classGapCost
+    std::int64_t avoided_ = 0;              // avoidedPeriodCost
+    std::int64_t nonPreferred_ = 0;         // nonPreferredPeriodCost
 
     // Hard-violation hot keys (see hotLesson): encoded as owner * slotCount +
     // slot (cells), owner * dayCount + day (owner-days), or the owner id
     // itself. Maintained by insert/retract/setTeacherDayMask/refreshBlock.
-    HotSet hotClassCells_;    // H3: classSlotCnt >= 2
-    HotSet hotTeacherCells_;  // H4: teacherSlotCnt >= 2
-    HotSet hotNotAllowed_;    // H5: lesson on a forbidden slot
-    HotSet hotRoomCells_;     // H6: demand > capacity per (type, slot)
-    HotSet hotCourseDays_;    // H7: count > dailyLimit per (course, day)
-    HotSet hotBlocks_;        // H8: block group with violation > 0
-    HotSet hotTeacherDays_;   // H9 daily / H10: excess on a (teacher, day)
-    HotSet hotTeachersWeek_;  // H9 weekly: over maxPerWeek
+    HotSet hotClassCells_;    // classConflictCost: classSlotCnt >= 2
+    HotSet hotTeacherCells_;  // teacherConflictCost: teacherSlotCnt >= 2
+    HotSet hotNotAllowed_;    // disallowedSlotCost: lesson on a forbidden slot
+    HotSet hotRoomCells_;     // roomCapacityCost: demand > capacity
+    HotSet hotCourseDays_;    // courseMaxPeriodsPerDayCost: count > limit
+    HotSet hotBlocks_;        // blockAdjacencyCost: group with violation > 0
+    // teacherMaxPeriodsCost daily / teacherMaxConsecutivePeriodsCost: excess
+    // on a (teacher, day).
+    HotSet hotTeacherDays_;
+    HotSet hotTeachersWeek_;  // teacherMaxPeriodsCost weekly: over maxPerWeek
     // Static owner -> lesson indices maps for resolving hot keys to lessons.
     std::vector<std::vector<int>> lessonsOfClass_;
     std::vector<std::vector<int>> lessonsOfTeacher_;
@@ -179,12 +201,12 @@ private:
         return picked;
     }
 
-    // Replace the (teacher, day) mask and apply the metric deltas (H9 daily +
-    // weekly, H10, S1, S2, S3).
+    // Replace the (teacher, day) mask and apply the teacher-mask family's
+    // metric deltas.
     void setTeacherDayMask(int teacher, int day, std::uint16_t newMask);
-    // Replace the (class, day) mask and apply the S4 delta.
+    // Replace the (class, day) mask and apply the classGapCost delta.
     void setClassDayMask(int classGroup, int day, std::uint16_t newMask);
-    // Recompute one block group's H8 value from assign_.
+    // Recompute one block group's blockAdjacencyCost value from assign_.
     void refreshBlock(int group);
 
     std::size_t slotOffset(int owner, int slot) const

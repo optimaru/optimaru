@@ -1,15 +1,16 @@
 """Partial timetabling that allows unassigned lessons.
 
 Comcigan leaves unfillable periods in an "unassigned list" and shows the rest
-placed. In the default configuration H1 (weekly periods met) is hard, so a
+placed. In the default configuration unassigned_lessons_cost (weekly periods met) is hard, so a
 single cell that does not fit makes the whole problem INFEASIBLE — and the user
 cannot see why.
 
-All this does is swap the H1 constraint for its relaxed mode —
-`WeeklyPeriodCounts(hard=False)` turns "exactly" into "at most" and the
-unfilled periods into a penalty. Its weight is far above the sum of the other
-soft terms, so every period that can be filled is filled and only the truly
-impossible ones stay unassigned.
+All this does is swap the unassigned-lessons constraint for its relaxed mode —
+`UnassignedLessonsCost(hard=False)` turns "exactly" into "at most" and the
+unfilled periods into a penalty. Its weight (`UNASSIGNED_WEIGHT`, the engine's
+documented soft weight) is far above the sum of the other soft terms, so every
+period that can be filled is filled and only the truly impossible ones stay
+unassigned.
 """
 
 from __future__ import annotations
@@ -21,7 +22,7 @@ from teacher_scheduling.domain.solution import Timetable
 from teacher_scheduling.solver.config import SolverConfig
 from teacher_scheduling.solver.registry import (
     UNASSIGNED_WEIGHT,
-    WeeklyPeriodCounts,
+    UnassignedLessonsCost,
     default_constraints,
     merge,
 )
@@ -48,14 +49,14 @@ class UnassignedCourse:
 def solve_partial(problem: TimetableProblem, config: SolverConfig | None = None) -> Timetable:
     """Solves allowing unassigned lessons. Returns a partial solution with every fillable period filled.
 
-    Unassigned periods are reported as `Timetable.penalties["weekly_period_counts"]`.
-    The penalty size can be set in `config.weights` under the same name.
+    Unassigned periods are reported as `Timetable.penalties["unassigned_lessons_cost"]`.
+    The penalty size can be set in `config.weights` under the same name (an extra field).
     """
     from teacher_scheduling.solver.solver import solve
 
     config = config or SolverConfig()
-    weight = config.weights.model_dump().get(WeeklyPeriodCounts.name, UNASSIGNED_WEIGHT)
-    relaxed = WeeklyPeriodCounts(hard=False, weight=weight)
+    weight = config.weights.model_dump().get(UnassignedLessonsCost.name, UNASSIGNED_WEIGHT)
+    relaxed = UnassignedLessonsCost(hard=False, weight=weight)
     return solve(problem, config, constraints=merge(default_constraints(config.weights), relaxed))
 
 

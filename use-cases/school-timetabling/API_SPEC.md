@@ -69,7 +69,7 @@ harness exchange the same shape.
   "objective_value": 42.0,
   "best_objective_bound": 40.0,
   "wall_time_seconds": 9.7,
-  "penalties": {"teacher_gap": 1, "class_gap": 0},
+  "penalties": {"teacher_gap_cost": 1, "class_gap_cost": 0},
   "notes": []
 }
 ```
@@ -84,19 +84,25 @@ harness exchange the same shape.
 
 ## Weights (`ObjectiveWeights`)
 
-The weights of the six soft constraints. `penalties` holds the **raw counts**
-under the same keys, and `objective_value` is their weighted sum.
+The weights of the six soft constraints, keyed by the constraint names (one
+name per constraint in every layer since 0.2.0). `penalties` holds the **raw
+counts** under the same keys, and `objective_value` is their weighted sum.
+Partial timetabling (`unassigned_lessons_cost` relaxed) adds
+`penalties["unassigned_lessons_cost"]`, the unfilled weekly periods.
 
 ```json
-{"teacher_gap": 20, "teacher_workday": 3, "teacher_free_day": 30,
- "class_gap": 10, "avoided_period": 5, "non_preferred_period": 1}
+{"teacher_gap_cost": 20, "teacher_workday_cost": 3, "teacher_free_day_cost": 30,
+ "class_gap_cost": 10, "avoided_period_cost": 5, "non_preferred_period_cost": 1}
 ```
+
+The defaults are the engine components' (`st_timetabling.constraint_info()`);
+the canonical problem carries no weights.
 
 ## Two backends
 
 `benchmarks/school-timetabling/cpsat` (OR-Tools CP-SAT) and `python` (optimaru
-local search) have identical constraint semantics — every hard H1–H10 / soft
-S1–S6 constraint and `weights` apply the same way. The parity is gated by
+local search) have identical constraint semantics — every hard and soft
+constraint, under the same name, and `weights` apply the same way. The parity is gated by
 `benchmarks/school-timetabling/cpsat/tests/test_engine_parity.py`.
 
 They differ only in how they search. Local search cannot prove optimality or

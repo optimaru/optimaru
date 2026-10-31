@@ -180,7 +180,7 @@ def test_inspection_reports_every_search_condition(imported, solved):
         "teacher_daily_overload",
         "consecutive_long",
         "lunch_adjacent",
-        "teacher_gap",
+        "teacher_gap_cost",
     } <= ids
 
 
@@ -231,7 +231,7 @@ def _parallel_workbook(periods_per_week: int, periods_on_monday: int) -> io.Byte
 
 
 def test_parallel_group_is_not_penalized_twice_for_one_missing_period():
-    """Parallel sections always move together (H5), so the unassigned penalty counts once per group."""
+    """Parallel sections always move together (parallel_groups_cost), so the unassigned penalty counts once per group."""
     # Monday has only 2 cells, the two parallel courses need 4 each -> 2 periods unassigned per group
     problem = import_workbook(_parallel_workbook(periods_per_week=4, periods_on_monday=2)).problem
     timetable = solve_partial(problem, SolverConfig(time_limit_seconds=10))
@@ -239,7 +239,7 @@ def test_parallel_group_is_not_penalized_twice_for_one_missing_period():
     assert len(timetable.lessons) == 4, "the two parallel courses share the 2 cells"
     missing = {u.subject_id: u.missing for u in unassigned_courses(problem, timetable)}
     assert missing == {"Tech": 2, "HomeEc": 2}, "the unassigned list still shows each course"
-    assert timetable.penalties["weekly_period_counts"] == 2, "must not be multiplied by the group size"
+    assert timetable.penalties["unassigned_lessons_cost"] == 2, "must not be multiplied by the group size"
 
 
 # ---------------------------------------------------------------- export

@@ -9,28 +9,32 @@ namespace st
 {
 
 // Port of the reference school-timetabling TimeTableConstraintProvider, plus
-// one extension (teacherUnavailable).
+// one extension (teacherUnavailabilityCost). The quickstart model has no
+// constraint registry (solve(mode="quickstart") takes no constraints=); the
+// terms carry the same *Cost names as the canonical model where they mean the
+// same thing (teacherConflictCost, classConflictCost).
 //
 // calculateScore does a full recompute — the reference the incremental
 // calculator is checked against (in the tests and under FULL_ASSERT).
 //
 // Constraints (HardSoftScore):
-//   hard 1. roomConflict            -1 per lesson pair in the same timeslot
-//                                      and room
-//   hard 2. teacherConflict         -1 per same-teacher lesson pair in the
-//                                      same timeslot
-//   hard 3. studentGroupConflict    -1 per same-group lesson pair in the same
-//                                      timeslot
-//   hard 4. teacherUnavailable      -1 per lesson in a timeslot its teacher
-//                                      is unavailable (extension; zero when
-//                                      the map is empty)
-//   soft 5. teacherRoomStability    -1 per same-teacher lesson pair in
-//                                      different rooms
-//   soft 6. teacherTimeEfficiency   +1 per same-teacher lesson pair on the
-//                                      same day in consecutive periods
-//   soft 7. studentGroupSubjectVariety  -1 per same-group same-subject lesson
-//                                      pair on the same day in consecutive
-//                                      periods
+//   hard 1. roomConflictCost          -1 per lesson pair in the same
+//                                        timeslot and room
+//   hard 2. teacherConflictCost       -1 per same-teacher lesson pair in the
+//                                        same timeslot
+//   hard 3. classConflictCost         -1 per same-group (class) lesson pair
+//                                        in the same timeslot
+//   hard 4. teacherUnavailabilityCost -1 per lesson in a timeslot its
+//                                        teacher is unavailable (extension;
+//                                        zero when the map is empty)
+//   soft 5. teacherRoomChangeCost     -1 per same-teacher lesson pair in
+//                                        different rooms
+//   soft 6. teacherTimeEfficiencyCost +1 per same-teacher lesson pair on the
+//                                        same day in consecutive periods (a
+//                                        REWARD: raw cost <= 0)
+//   soft 7. classSubjectRepeatCost    -1 per same-group same-subject lesson
+//                                        pair on the same day in consecutive
+//                                        periods
 // Unassigned lessons (slotRoom == -1) contribute nothing: the construction
 // heuristic scores partially initialized solutions.
 class ScoreCalculator

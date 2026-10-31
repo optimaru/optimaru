@@ -21,7 +21,8 @@ def test_demo_problem_solves_feasible(problem):
     # Canonical mode has full parity, so there are no 'unsupported' notes.
     assert result["notes"] == []
 
-    # H3/H4: a class / a teacher (team-teaching co-teachers included) has one lesson at a time.
+    # class_conflict_cost / teacher_conflict_cost: a class / a teacher (team-teaching co-teachers
+    # included) has one lesson at a time.
     class_slots = set()
     teacher_slots = set()
     for lesson in result["lessons"]:
@@ -32,19 +33,19 @@ def test_demo_problem_solves_feasible(problem):
             assert (teacher_id, slot) not in teacher_slots
             teacher_slots.add((teacher_id, slot))
 
-    # H5 extension: Kim (T_KOR) is unavailable Monday period 1.
+    # disallowed_slot_cost: Kim (T_KOR) is unavailable Monday period 1.
     for lesson in result["lessons"]:
         if "T_KOR" in lesson["teacher_ids"]:
             assert (lesson["slot"]["day"], lesson["slot"]["period"]) != (0, 1)
 
-    # H1: the periods of every course are kept.
+    # unassigned_lessons_cost: the periods of every course are kept.
     per_course: dict[str, int] = {}
     for lesson in result["lessons"]:
         per_course[lesson["course_id"]] = per_course.get(lesson["course_id"], 0) + 1
     for course in problem["courses"]:
         assert per_course[course["id"]] == course["periods_per_week"]
 
-    # H6: every special-room lesson gets a room (on hard 0 the greedy pass always succeeds).
+    # room_capacity_cost: every special-room lesson gets a room (on hard 0 the greedy pass always succeeds).
     for lesson in result["lessons"]:
         if lesson["subject_id"] == "SCI":
             assert lesson["room_id"] == "R_SCI"
@@ -53,22 +54,23 @@ def test_demo_problem_solves_feasible(problem):
         else:
             assert lesson["room_id"] is None
 
-    # penalties are the raw S1–S6 counts, objective_value the sum weighted by the defaults.
+    # penalties are the raw soft counts keyed by the soft constraint names, objective_value the
+    # sum weighted by the defaults.
     assert set(result["penalties"]) == {
-        "teacher_gap",
-        "teacher_workday",
-        "teacher_free_day",
-        "class_gap",
-        "avoided_period",
-        "non_preferred_period",
+        "teacher_gap_cost",
+        "teacher_workday_cost",
+        "teacher_free_day_cost",
+        "class_gap_cost",
+        "avoided_period_cost",
+        "non_preferred_period_cost",
     }
     default_weights = {
-        "teacher_gap": 20,
-        "teacher_workday": 3,
-        "teacher_free_day": 30,
-        "class_gap": 10,
-        "avoided_period": 5,
-        "non_preferred_period": 1,
+        "teacher_gap_cost": 20,
+        "teacher_workday_cost": 3,
+        "teacher_free_day_cost": 30,
+        "class_gap_cost": 10,
+        "avoided_period_cost": 5,
+        "non_preferred_period_cost": 1,
     }
     assert result["objective_value"] == sum(
         default_weights[name] * count for name, count in result["penalties"].items()
@@ -123,7 +125,7 @@ def test_solve_accepts_config_objects(problem):
 
 
 def test_solve_weights_override(problem):
-    weights = {"teacher_gap": 0, "teacher_workday": 1, "class_gap": 2}
+    weights = {"teacher_gap_cost": 0, "teacher_workday_cost": 1, "class_gap_cost": 2}
     result = st.solve(
         problem,
         time_limit_seconds=5.0,
@@ -131,14 +133,14 @@ def test_solve_weights_override(problem):
         stop_at_first_feasible=True,
         weights=weights,
     )
-    # Keys not given keep the cpsat defaults.
+    # Keys not given keep the component defaults.
     effective = {
-        "teacher_gap": 0,
-        "teacher_workday": 1,
-        "teacher_free_day": 30,
-        "class_gap": 2,
-        "avoided_period": 5,
-        "non_preferred_period": 1,
+        "teacher_gap_cost": 0,
+        "teacher_workday_cost": 1,
+        "teacher_free_day_cost": 30,
+        "class_gap_cost": 2,
+        "avoided_period_cost": 5,
+        "non_preferred_period_cost": 1,
     }
     assert result["objective_value"] == sum(effective[name] * count for name, count in result["penalties"].items())
 
@@ -146,3 +148,49 @@ def test_solve_weights_override(problem):
         st.solve(problem, mode="quickstart", weights=weights)
     with pytest.raises(ValueError, match="mode"):
         st.solve(problem, mode="cpsat")
+
+
+def test_solve_weights_take_non_integer_values(problem):
+    """The fast path's soft weights are plain numbers now (the selection path never needed integers)."""
+    result = st.solve(
+        problem, time_limit_seconds=2.0, random_seed=3, stop_at_first_feasible=True, weights={"teacher_gap_cost": 2.5}
+    )
+    defaults = dict(st.constraints.default_weights(), teacher_gap_cost=2.5)
+    assert result["objective_value"] == pytest.approx(
+        sum(defaults[name] * count for name, count in result["penalties"].items())
+    )
+
+
+@pytest.mark.parametrize("old", ["teacher_gap", "class_gap", "non_preferred_period"])
+def test_solve_weights_refuse_the_old_keys(problem, old):
+    with pytest.raises(ValueError, match="unknown soft weight"):
+        st.solve(problem, time_limit_seconds=0.1, weights={old: 1})
+
+
+def test_weights_and_constraints_do_not_mix(problem):
+    """A selection carries its own weights: the fast path's weights next to it would be ignored, so they raise."""
+    with pytest.raises(ValueError, match="fast path"):
+        st.solve(problem, time_limit_seconds=0.1, weights={"teacher_gap_cost": 1}, constraints=st.Assembly())
+    cfg = st.canon.SolverConfig()
+    cfg.weights = st.canon.ObjectiveWeights(teacher_gap_cost=1)
+    with pytest.raises(ValueError, match="fast path"):
+        st.solve(problem, time_limit_seconds=0.1, config=cfg, constraints=st.Assembly())
+
+
+def test_default_weights_go_with_constraints(problem):
+    """weights= equal to the defaults changes nothing, so it is accepted next to a selection like config.weights."""
+    defaults = st.constraints.default_weights()  # the six soft names, as the server sends them
+    for weights in (defaults, {"teacher_gap_cost": defaults["teacher_gap_cost"]}):
+        result = st.solve(problem, time_limit_seconds=0.5, random_seed=3, weights=weights, constraints=st.Assembly())
+        assert result["lessons"]
+
+
+@pytest.mark.parametrize("bad", [-20, float("nan"), float("inf")])
+def test_solve_weights_refuse_non_finite_and_negative_values(problem, bad):
+    with pytest.raises(ValueError, match="teacher_gap_cost: weight must be finite and >= 0"):
+        st.solve(problem, time_limit_seconds=0.1, weights={"teacher_gap_cost": bad})
+
+
+def test_solve_weights_refuse_bools(problem):
+    with pytest.raises(TypeError, match="teacher_gap_cost: weight must be a number, not True"):
+        st.solve(problem, time_limit_seconds=0.1, weights={"teacher_gap_cost": True})

@@ -1,5 +1,7 @@
 #include "st/bit_ops.hpp"
+#include "st/canonical_constraints.hpp"
 #include "st/canonical_score_calculator.hpp"
+#include "st/objective_weights.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -17,14 +19,61 @@ void fail(const std::string &message)
     throw std::invalid_argument("st::canon::prepare: " + message);
 }
 
+// The hard default weights, read off the components: the monolithic totals
+// read kDefaultWeight instead of re-typing the numbers, so the two paths
+// cannot drift apart. Integral, so the hard total stays integer arithmetic.
+template <typename Component> constexpr std::int64_t hardWeight()
+{
+    static_assert(Component::kDefaultLevel == optimaru::Level::Hard,
+                  "a hard total term must be a hard constraint");
+    static_assert(static_cast<double>(
+                      static_cast<std::int64_t>(Component::kDefaultWeight))
+                      == Component::kDefaultWeight,
+                  "the monolithic calculator assumes integral hard weights");
+    return static_cast<std::int64_t>(Component::kDefaultWeight);
+}
+
 }  // namespace
+
+std::int64_t Breakdown::hardTotal() const
+{
+    return hardWeight<UnassignedLessonsCost>() * unassignedLessonsCost
+           + hardWeight<ClassConflictCost>() * classConflictCost
+           + hardWeight<TeacherConflictCost>() * teacherConflictCost
+           + hardWeight<DisallowedSlotCost>() * disallowedSlotCost
+           + hardWeight<RoomCapacityCost>() * roomCapacityCost
+           + hardWeight<CourseMaxPeriodsPerDayCost>()
+                 * courseMaxPeriodsPerDayCost
+           + hardWeight<BlockAdjacencyCost>() * blockAdjacencyCost
+           + hardWeight<TeacherMaxPeriodsCost>() * teacherMaxPeriodsCost
+           + hardWeight<TeacherMaxConsecutivePeriodsCost>()
+                 * teacherMaxConsecutivePeriodsCost
+           + hardWeight<FixedSlotsCost>() * fixedSlotsCost
+           + hardWeight<ParallelGroupsCost>() * parallelGroupsCost;
+}
+
+double Breakdown::softPenalty(const ObjectiveWeights &w) const
+{
+    return w.teacherGapCost * static_cast<double>(teacherGapCost)
+           + w.teacherWorkdayCost * static_cast<double>(teacherWorkdayCost)
+           + w.teacherFreeDayCost * static_cast<double>(teacherFreeDayCost)
+           + w.classGapCost * static_cast<double>(classGapCost)
+           + w.avoidedPeriodCost * static_cast<double>(avoidedPeriodCost)
+           + w.nonPreferredPeriodCost
+                 * static_cast<double>(nonPreferredPeriodCost);
+}
+
+Score Breakdown::toScore(const ObjectiveWeights &w) const
+{
+    return {-hardTotal(), -softPenalty(w)};
+}
 
 std::int64_t
 ScoreCalculator::blockViolation(std::vector<std::pair<int, int>> &dayPeriods,
                                 std::size_t groupSize)
 {
     if (dayPeriods.empty())
-        return 0;  // nothing placed: H1 charges for it, not H8
+        return 0;  // nothing placed: unassignedLessonsCost charges for it
     const std::int64_t missing = static_cast<std::int64_t>(
         groupSize > dayPeriods.size() ? groupSize - dayPeriods.size() : 0);
     if (dayPeriods.size() < 2)
@@ -145,8 +194,9 @@ void ScoreCalculator::prepare(Timetable &table)
         lesson.roomTypeDemand.resize(table.roomTypeCount, 0);
         if (lesson.allowedSlot.empty())
             lesson.allowedSlot.assign(slotCount, 1);
-        // Default S5/S6 unit: the courseKey's period masks. Merged lessons
-        // arrive with one explicit unit per member course instead.
+        // Default avoided/preferred-period unit: the courseKey's period
+        // masks. Merged lessons arrive with one explicit unit per member
+        // course instead.
         if (lesson.preferenceUnits.empty())
         {
             lesson.preferenceUnits.emplace_back(
@@ -155,7 +205,8 @@ void ScoreCalculator::prepare(Timetable &table)
         }
     }
 
-    // Block-group member lists (H8 recomputes one group at a time).
+    // Block-group member lists (blockAdjacencyCost recomputes one group at
+    // a time).
     table.blockMembers.assign(table.blockGroupCount, {});
     for (int i = 0; i < static_cast<int>(table.lessons.size()); ++i)
     {
@@ -193,7 +244,7 @@ Breakdown ScoreCalculator::computeBreakdown(Timetable &table)
     {
         if (lesson.slot < 0)
         {
-            ++b.unassigned;  // H1
+            ++b.unassignedLessonsCost;
             continue;
         }
         const int s = lesson.slot;
@@ -202,12 +253,14 @@ Breakdown ScoreCalculator::computeBreakdown(Timetable &table)
             = static_cast<std::uint16_t>(1U << (table.periodOfSlot[s] - 1));
 
         if (lesson.allowedSlot[s] == 0)
-            ++b.slotNotAllowed;  // H5
+            ++b.disallowedSlotCost;
 
         classSlotCnt[static_cast<std::size_t>(lesson.classGroupId) * slotCount
-                     + s] += 1;
+                     + s]
+            += 1;
         classDayMask[static_cast<std::size_t>(lesson.classGroupId) * dayCount
-                     + day] |= bit;
+                     + day]
+            |= bit;
         for (int t : lesson.teachers)
         {
             teacherSlotCnt[static_cast<std::size_t>(t) * slotCount + s] += 1;
@@ -219,44 +272,47 @@ Breakdown ScoreCalculator::computeBreakdown(Timetable &table)
                 += lesson.roomTypeDemand[type];
         }
         courseDayCnt[static_cast<std::size_t>(lesson.courseKey) * dayCount
-                     + day] += 1;
+                     + day]
+            += 1;
 
-        // S5/S6: every preference unit (one per member course) counts on its
-        // own, so merged lessons penalize once per member like validate.py.
+        // avoidedPeriodCost / nonPreferredPeriodCost: every preference unit
+        // (one per member course) counts on its own, so merged lessons
+        // penalize once per member like validate.py.
         for (const auto &[avoided, preferred] : lesson.preferenceUnits)
         {
             if ((avoided & bit) != 0)
-                ++b.avoidedPeriod;
+                ++b.avoidedPeriodCost;
             if (preferred != 0 && (preferred & bit) == 0)
-                ++b.nonPreferredPeriod;
+                ++b.nonPreferredPeriodCost;
         }
     }
 
-    // H3/H4: conflict pairs per occupancy cell.
+    // classConflictCost / teacherConflictCost: pairs per occupancy cell.
     for (int c : classSlotCnt)
-        b.classConflicts += pairs(c);
+        b.classConflictCost += pairs(c);
     for (int c : teacherSlotCnt)
-        b.teacherConflicts += pairs(c);
+        b.teacherConflictCost += pairs(c);
 
-    // H6: demand excess per (roomType, slot).
+    // roomCapacityCost: demand excess per (roomType, slot).
     for (int type = 0; type < table.roomTypeCount; ++type)
     {
         const int capacity = table.roomCapacityByType[type];
         const std::size_t base = static_cast<std::size_t>(type) * slotCount;
         for (int s = 0; s < slotCount; ++s)
-            b.roomOverCapacity += max0(roomDemand[base + s] - capacity);
+            b.roomCapacityCost += max0(roomDemand[base + s] - capacity);
     }
 
-    // H7: per-course daily excess.
+    // courseMaxPeriodsPerDayCost: per-course daily excess.
     for (int course = 0; course < table.courseCount; ++course)
     {
         const int limit = table.courseDailyLimit[course];
         const std::size_t base = static_cast<std::size_t>(course) * dayCount;
         for (int day = 0; day < dayCount; ++day)
-            b.courseDailyExcess += max0(courseDayCnt[base + day] - limit);
+            b.courseMaxPeriodsPerDayCost
+                += max0(courseDayCnt[base + day] - limit);
     }
 
-    // H8: block groups.
+    // blockAdjacencyCost: block groups.
     std::vector<std::pair<int, int>> dayPeriods;
     for (const std::vector<int> &members : table.blockMembers)
     {
@@ -268,10 +324,10 @@ Breakdown ScoreCalculator::computeBreakdown(Timetable &table)
                 dayPeriods.emplace_back(table.dayOfSlot[s],
                                         table.periodOfSlot[s]);
         }
-        b.blockBreaks += blockViolation(dayPeriods, members.size());
+        b.blockAdjacencyCost += blockViolation(dayPeriods, members.size());
     }
 
-    // H9/H10 + S1~S3 from the per-(teacher, day) busy masks.
+    // The teacher-mask family from the per-(teacher, day) busy masks.
     for (int t = 0; t < table.teacherCount; ++t)
     {
         const std::size_t base = static_cast<std::size_t>(t) * dayCount;
@@ -283,29 +339,41 @@ Breakdown ScoreCalculator::computeBreakdown(Timetable &table)
                 continue;
             const int busy = st::bits::popcount(mask);
             weekly += busy;
-            b.teacherDailyExcess += max0(busy - table.teacherMaxPerDay[t]);
-            b.consecutiveExcess
+            b.teacherMaxPeriodsCost += max0(busy - table.teacherMaxPerDay[t]);
+            b.teacherMaxConsecutivePeriodsCost
                 += runExcessOf(mask, table.teacherMaxConsecutive[t]);
-            b.teacherGap += gapOf(mask);
-            ++b.teacherWorkday;
+            b.teacherGapCost += gapOf(mask);
+            ++b.teacherWorkdayCost;
             if ((table.teacherPreferredFreeDays[t] & (1U << day)) != 0)
-                ++b.teacherFreeDay;
+                ++b.teacherFreeDayCost;
         }
         if (table.teacherMaxPerWeek[t] >= 0)
-            b.teacherWeeklyExcess += max0(weekly - table.teacherMaxPerWeek[t]);
+        {
+            b.teacherMaxPeriodsCost
+                += max0(weekly - table.teacherMaxPerWeek[t]);
+        }
     }
 
-    // S4 from the per-(class, day) busy masks.
+    // classGapCost from the per-(class, day) busy masks.
     for (std::uint16_t mask : classDayMask)
-        b.classGap += gapOf(mask);
+        b.classGapCost += gapOf(mask);
+
+    // fixedSlotsCost / parallelGroupsCost stay 0: pinned lessons never move
+    // and a merged parallel group is one lesson.
 
     return b;
 }
 
 Score ScoreCalculator::calculateScore(Timetable &table)
 {
+    return calculateScore(table, ObjectiveWeights{});
+}
+
+Score ScoreCalculator::calculateScore(Timetable &table,
+                                      const ObjectiveWeights &weights)
+{
     const Breakdown b = computeBreakdown(table);
-    table.score = b.toScore(table.weights);
+    table.score = b.toScore(weights);
     return table.score;
 }
 

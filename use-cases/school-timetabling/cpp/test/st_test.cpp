@@ -93,13 +93,13 @@ void verifyConstraints()
 {
     std::printf("== (a) Verifying each constraint in isolation ==\n");
 
-    // hard 1: roomConflict — same timeslot, same room, otherwise unrelated.
+    // hard 1: roomConflictCost — same timeslot, same room, otherwise unrelated.
     {
         Timetable t = makeBase(2, 3, 3);
         addLesson(t, "Math", "TA", "G1", 0, 0);
         addLesson(t, "English", "TB", "G2", 0, 0);
         checkScore(
-            "roomConflict pair", ScoreCalculator::calculateScore(t), -1, 0);
+            "roomConflictCost pair", ScoreCalculator::calculateScore(t), -1, 0);
     }
     // hard 1: three lessons in one cell -> C(3,2) = 3 pairs.
     {
@@ -107,35 +107,38 @@ void verifyConstraints()
         addLesson(t, "Math", "TA", "G1", 0, 0);
         addLesson(t, "English", "TB", "G2", 0, 0);
         addLesson(t, "Science", "TC", "G3", 0, 0);
-        checkScore(
-            "roomConflict triple", ScoreCalculator::calculateScore(t), -3, 0);
+        checkScore("roomConflictCost triple",
+                   ScoreCalculator::calculateScore(t),
+                   -3,
+                   0);
     }
-    // hard 2: teacherConflict — same teacher, same timeslot, different rooms.
-    // The pair is also a different-room pair of one teacher: stability -1.
+    // hard 2: teacherConflictCost — same teacher, same timeslot, different
+    // rooms. The pair is also a different-room pair of one teacher:
+    // teacherRoomChangeCost -1.
     {
         Timetable t = makeBase(2, 3, 3);
         addLesson(t, "Math", "TA", "G1", 0, 0);
         addLesson(t, "English", "TA", "G2", 0, 1);
-        checkScore("teacherConflict (+stability)",
+        checkScore("teacherConflictCost (+teacherRoomChangeCost)",
                    ScoreCalculator::calculateScore(t),
                    -1,
                    -1);
     }
-    // hard 3: studentGroupConflict — same group, same timeslot, different
+    // hard 3: classConflictCost — same group, same timeslot, different
     // teachers/rooms/subjects.
     {
         Timetable t = makeBase(2, 3, 3);
         addLesson(t, "Math", "TA", "G1", 0, 0);
         addLesson(t, "English", "TB", "G1", 0, 1);
         checkScore(
-            "studentGroupConflict", ScoreCalculator::calculateScore(t), -1, 0);
+            "classConflictCost", ScoreCalculator::calculateScore(t), -1, 0);
     }
-    // hard 4: teacherUnavailable — one lesson on a blocked timeslot.
+    // hard 4: teacherUnavailabilityCost — one lesson on a blocked timeslot.
     {
         Timetable t = makeBase(2, 3, 3);
         t.teacherUnavailable["TA"] = {0};
         addLesson(t, "Math", "TA", "G1", 0, 0);
-        checkScore("teacherUnavailable hit",
+        checkScore("teacherUnavailabilityCost hit",
                    ScoreCalculator::calculateScore(t),
                    -1,
                    0);
@@ -145,18 +148,18 @@ void verifyConstraints()
         Timetable t = makeBase(2, 3, 3);
         t.teacherUnavailable["TA"] = {0};
         addLesson(t, "Math", "TA", "G1", 3, 0);
-        checkScore("teacherUnavailable miss",
+        checkScore("teacherUnavailabilityCost miss",
                    ScoreCalculator::calculateScore(t),
                    0,
                    0);
     }
-    // soft 5: teacherRoomStability — same teacher on different days, different
+    // soft 5: teacherRoomChangeCost — same teacher on different days, different
     // rooms -> -1; same room -> 0.
     {
         Timetable t = makeBase(2, 3, 3);
         addLesson(t, "Math", "TA", "G1", 0, 0);
         addLesson(t, "Korean", "TA", "G2", 3, 1);
-        checkScore("teacherRoomStability differ",
+        checkScore("teacherRoomChangeCost differ",
                    ScoreCalculator::calculateScore(t),
                    0,
                    -1);
@@ -165,7 +168,7 @@ void verifyConstraints()
         Timetable t = makeBase(2, 3, 3);
         addLesson(t, "Math", "TA", "G1", 0, 0);
         addLesson(t, "Korean", "TA", "G2", 3, 0);
-        checkScore("teacherRoomStability same",
+        checkScore("teacherRoomChangeCost same",
                    ScoreCalculator::calculateScore(t),
                    0,
                    0);
@@ -177,18 +180,18 @@ void verifyConstraints()
         addLesson(
             t, "Korean", "TA", "G2", 2, 0);  // periods 1 and 3: not adjacent
         addLesson(t, "English", "TA", "G3", 3, 1);
-        checkScore("teacherRoomStability [A,A,B]",
+        checkScore("teacherRoomChangeCost [A,A,B]",
                    ScoreCalculator::calculateScore(t),
                    0,
                    -2);
     }
-    // soft 6: teacherTimeEfficiency — same teacher, same day, consecutive
-    // periods, same room -> +1 reward.
+    // soft 6: teacherTimeEfficiencyCost (a reward) — same teacher, same day,
+    // consecutive periods, same room -> +1 reward.
     {
         Timetable t = makeBase(2, 3, 3);
         addLesson(t, "Math", "TA", "G1", 0, 0);
         addLesson(t, "Korean", "TA", "G2", 1, 0);
-        checkScore("teacherTimeEfficiency adjacent",
+        checkScore("teacherTimeEfficiencyCost adjacent",
                    ScoreCalculator::calculateScore(t),
                    0,
                    +1);
@@ -198,7 +201,7 @@ void verifyConstraints()
         Timetable t = makeBase(2, 3, 3);
         addLesson(t, "Math", "TA", "G1", 0, 0);
         addLesson(t, "Korean", "TA", "G2", 2, 0);
-        checkScore("teacherTimeEfficiency gap",
+        checkScore("teacherTimeEfficiencyCost gap",
                    ScoreCalculator::calculateScore(t),
                    0,
                    0);
@@ -209,29 +212,30 @@ void verifyConstraints()
         Timetable t = makeBase(2, 3, 3);
         addLesson(t, "Math", "TA", "G1", 2, 0);
         addLesson(t, "Korean", "TA", "G2", 3, 0);
-        checkScore("teacherTimeEfficiency day border",
+        checkScore("teacherTimeEfficiencyCost day border",
                    ScoreCalculator::calculateScore(t),
                    0,
                    0);
     }
-    // soft 7: studentGroupSubjectVariety — same group+subject on consecutive
+    // soft 7: classSubjectRepeatCost — same group+subject on consecutive
     // periods (different teachers, to isolate) -> -1.
     {
         Timetable t = makeBase(2, 3, 3);
         addLesson(t, "Math", "TA", "G1", 0, 0);
         addLesson(t, "Math", "TB", "G1", 1, 1);
-        checkScore("studentGroupSubjectVariety",
+        checkScore("classSubjectRepeatCost",
                    ScoreCalculator::calculateScore(t),
                    0,
                    -1);
     }
-    // soft 6 + 7 together: the usual same-teacher double period. variety -1,
-    // efficiency +1, stability 0 (same room) -> net 0.
+    // soft 6 + 7 together: the usual same-teacher double period.
+    // classSubjectRepeatCost -1, teacherTimeEfficiencyCost +1,
+    // teacherRoomChangeCost 0 (same room) -> net 0.
     {
         Timetable t = makeBase(2, 3, 3);
         addLesson(t, "Math", "TA", "G1", 0, 0);
         addLesson(t, "Math", "TA", "G1", 1, 0);
-        checkScore("double period (efficiency+variety)",
+        checkScore("double period (teacherTimeEfficiencyCost + classSubjectRepeatCost)",
                    ScoreCalculator::calculateScore(t),
                    0,
                    0);
@@ -242,7 +246,8 @@ void verifyConstraints()
         t.teacherUnavailable["TA"] = {0};
         addLesson(t, "Math", "TA", "G1", 0, 0);
         addLesson(t, "English", "TA", "G1");  // unassigned
-        // Only the assigned lesson counts: teacherUnavailable -1, nothing else.
+        // Only the assigned lesson counts: teacherUnavailabilityCost -1,
+        // nothing else.
         checkScore("unassigned contributes nothing",
                    ScoreCalculator::calculateScore(t),
                    -1,

@@ -1,19 +1,24 @@
-#ifndef ST_CONSTRAINTS_SLOT_ROOM_CAPACITY_HPP
-#define ST_CONSTRAINTS_SLOT_ROOM_CAPACITY_HPP
+#ifndef ST_CONSTRAINTS_SLOT_ROOM_CAPACITY_COST_HPP
+#define ST_CONSTRAINTS_SLOT_ROOM_CAPACITY_COST_HPP
 
 #include "st/constraints/slot/slot_constraint.hpp"
 
 namespace st::canon
 {
 
-// Hard (default): H6 — per (roomType, slot): max(0, demand - capacity),
-// summed over the room types (a merged lesson carries the SUM of its member
-// courses' demands). Not a per-pair cost, but the marginal cost of one
-// lesson joining/leaving is still exact from the other members' demand.
-struct RoomCapacity final : GroupableSlotConstraint
+// roomCapacityCost — hard, weight 1. Raw cost per slot = sum over the
+// special-room types of max(0, demand - owned rooms) (a merged lesson
+// carries the SUM of its member courses' demands), so 0 = every special-room
+// lesson finds a room of its type. Not a per-pair cost, but the marginal
+// cost of one lesson joining/leaving is still exact from the other members'
+// demand.
+struct RoomCapacityCost final : GroupableSlotConstraint
 {
-    explicit RoomCapacity(double weight = 1.0)
-        : GroupableSlotConstraint("H6 room capacity", weight, /*hard=*/true)
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
+
+    explicit RoomCapacityCost(double weight = kDefaultWeight)
+        : GroupableSlotConstraint("roomCapacityCost", weight, kDefaultLevel)
     {
     }
     void onReset(const Timetable &table) override
@@ -64,4 +69,4 @@ struct RoomCapacity final : GroupableSlotConstraint
 
 }  // namespace st::canon
 
-#endif  // ST_CONSTRAINTS_SLOT_ROOM_CAPACITY_HPP
+#endif  // ST_CONSTRAINTS_SLOT_ROOM_CAPACITY_COST_HPP

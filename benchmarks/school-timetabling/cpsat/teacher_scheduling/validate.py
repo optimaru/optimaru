@@ -1,12 +1,13 @@
 """Timetable validation.
 
 Independently of the solver, checks again that a timetable respects the hard
-constraints H1–H10 and recomputes the soft penalties by hand. Used by the tests
+constraints and recomputes the soft penalties by hand, keyed by the soft
+constraint names (the engine's `Timetable.penalties` keys). Used by the tests
 and the CLI.
 
-Validation against the default registry (hard H1–H10, soft S1–S6). Custom
-hard_constraints / soft_terms injected into `solve()` are not checked here —
-validating custom constraints is up to the caller.
+Validation against the default registry. Custom hard_constraints / soft_terms
+injected into `solve()` are not checked here — validating custom constraints
+is up to the caller.
 """
 
 from collections import Counter, defaultdict
@@ -21,16 +22,16 @@ def validate_timetable(problem: TimetableProblem, timetable: Timetable) -> list[
     """Returns the hard-violation messages. Empty means a valid timetable."""
     checks = (
         _check_slot_validity,
-        _check_weekly_counts,  # H1
-        _check_fixed_slots,  # H2
-        _check_class_conflicts,  # H3
-        _check_teacher_conflicts,  # H4
-        _check_parallel_groups,  # H5
-        _check_rooms,  # H6 + placement consistency
-        _check_daily_course_limits,  # H7
-        _check_blocks,  # H8
-        _check_teacher_workload,  # H9
-        _check_teacher_consecutive,  # H10
+        _check_weekly_counts,  # unassigned_lessons_cost
+        _check_fixed_slots,  # fixed_slots_cost
+        _check_class_conflicts,  # class_conflict_cost
+        _check_teacher_conflicts,  # teacher_conflict_cost
+        _check_parallel_groups,  # parallel_groups_cost
+        _check_rooms,  # room_capacity_cost + placement consistency
+        _check_course_max_periods_per_day,  # course_max_periods_per_day_cost
+        _check_blocks,  # block_adjacency_cost
+        _check_teacher_max_periods,  # teacher_max_periods_cost
+        _check_teacher_consecutive,  # teacher_max_consecutive_periods_cost
     )
     violations: list[str] = []
     for check in checks:
@@ -39,7 +40,9 @@ def validate_timetable(problem: TimetableProblem, timetable: Timetable) -> list[
 
 
 def compute_penalties(problem: TimetableProblem, timetable: Timetable) -> dict[str, int]:
-    """Recounts the soft penalties (S1–S6) directly from the timetable. For checking what the solver reports."""
+    """Recounts the soft penalties directly from the timetable, keyed by the soft constraint names.
+
+    For checking what the solver reports."""
     teacher_periods = _busy_periods(timetable, by_teacher=True)
     class_periods = _busy_periods(timetable, by_teacher=False)
 
@@ -52,14 +55,14 @@ def compute_penalties(problem: TimetableProblem, timetable: Timetable) -> dict[s
             non_preferred += 1
 
     return {
-        "teacher_gap": sum(_gap_count(periods) for periods in teacher_periods.values()),
-        "teacher_workday": len(teacher_periods),  # keys exist only for (teacher, weekday) pairs with lessons
-        "teacher_free_day": sum(
+        "teacher_gap_cost": sum(_gap_count(periods) for periods in teacher_periods.values()),
+        "teacher_workday_cost": len(teacher_periods),  # keys exist only for (teacher, weekday) pairs with lessons
+        "teacher_free_day_cost": sum(
             1 for (teacher_id, day) in teacher_periods if day in problem.teacher_by_id[teacher_id].preferred_free_days
         ),
-        "class_gap": sum(_gap_count(periods) for periods in class_periods.values()),
-        "avoided_period": avoided,
-        "non_preferred_period": non_preferred,
+        "class_gap_cost": sum(_gap_count(periods) for periods in class_periods.values()),
+        "avoided_period_cost": avoided,
+        "non_preferred_period_cost": non_preferred,
     }
 
 
@@ -202,7 +205,7 @@ def _check_rooms(problem: TimetableProblem, timetable: Timetable) -> list[str]:
     return violations
 
 
-def _check_daily_course_limits(problem: TimetableProblem, timetable: Timetable) -> list[str]:
+def _check_course_max_periods_per_day(problem: TimetableProblem, timetable: Timetable) -> list[str]:
     violations = []
     for course in problem.courses:
         per_day: Counter[Weekday] = Counter(lesson.slot.day for lesson in _lessons_of_course(timetable, course.id))
@@ -227,7 +230,7 @@ def _check_blocks(problem: TimetableProblem, timetable: Timetable) -> list[str]:
     return violations
 
 
-def _check_teacher_workload(problem: TimetableProblem, timetable: Timetable) -> list[str]:
+def _check_teacher_max_periods(problem: TimetableProblem, timetable: Timetable) -> list[str]:
     violations = []
     busy = _busy_periods(timetable, by_teacher=True)
     for teacher in problem.teachers:

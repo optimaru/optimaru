@@ -1,18 +1,22 @@
-#ifndef ST_CONSTRAINTS_SLOT_AVOIDED_PERIOD_HPP
-#define ST_CONSTRAINTS_SLOT_AVOIDED_PERIOD_HPP
+#ifndef ST_CONSTRAINTS_SLOT_AVOIDED_PERIOD_COST_HPP
+#define ST_CONSTRAINTS_SLOT_AVOIDED_PERIOD_COST_HPP
 
 #include "st/constraints/slot/slot_constraint.hpp"
 
 namespace st::canon
 {
 
-// Soft (default, weight = ObjectiveWeights::avoidedPeriod): S5 — one point
-// per preference unit whose avoided-period mask contains the slot's period
-// (a merged lesson counts once per member course, like validate.py).
-struct AvoidedPeriod final : GroupableSlotConstraint
+// avoidedPeriodCost — soft, weight 5. Raw cost per slot = one point per
+// preference unit of its lessons whose subject avoids the slot's period
+// (avoided_periods; a merged lesson counts once per member course, like
+// validate.py); 0 = no lesson sits in an avoided period.
+struct AvoidedPeriodCost final : GroupableSlotConstraint
 {
-    explicit AvoidedPeriod(double weight = ObjectiveWeights{}.avoidedPeriod)
-        : GroupableSlotConstraint("S5 avoided period", weight, /*hard=*/false)
+    static constexpr double kDefaultWeight = 5.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
+
+    explicit AvoidedPeriodCost(double weight = kDefaultWeight)
+        : GroupableSlotConstraint("avoidedPeriodCost", weight, kDefaultLevel)
     {
     }
     void onReset(const Timetable &table) override
@@ -58,4 +62,4 @@ struct AvoidedPeriod final : GroupableSlotConstraint
 
 }  // namespace st::canon
 
-#endif  // ST_CONSTRAINTS_SLOT_AVOIDED_PERIOD_HPP
+#endif  // ST_CONSTRAINTS_SLOT_AVOIDED_PERIOD_COST_HPP

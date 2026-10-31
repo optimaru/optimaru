@@ -1,18 +1,24 @@
-#ifndef ST_CONSTRAINTS_SLOT_SLOT_NOT_ALLOWED_HPP
-#define ST_CONSTRAINTS_SLOT_SLOT_NOT_ALLOWED_HPP
+#ifndef ST_CONSTRAINTS_SLOT_DISALLOWED_SLOT_COST_HPP
+#define ST_CONSTRAINTS_SLOT_DISALLOWED_SLOT_COST_HPP
 
 #include "st/constraints/slot/slot_constraint.hpp"
 
 namespace st::canon
 {
 
-// Hard (default): H5 — one point per lesson assigned outside its allowedSlot
-// table (calendar holes, forbidden slots, teacher/class unavailability are
-// pre-baked into that table by the conversion layer).
-struct SlotNotAllowed final : GroupableSlotConstraint
+// disallowedSlotCost — hard, weight 1. Raw cost per slot = the lessons on it
+// that their allowedSlot table forbids (calendar holes, course
+// forbidden_slots, teacher and class unavailability are pre-baked into that
+// table by the conversion layer), so 0 = every lesson sits on a time it may
+// use. Engine-only: the CP-SAT reference never creates a variable for a
+// forbidden time.
+struct DisallowedSlotCost final : GroupableSlotConstraint
 {
-    explicit SlotNotAllowed(double weight = 1.0)
-        : GroupableSlotConstraint("H5 slot not allowed", weight, /*hard=*/true)
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
+
+    explicit DisallowedSlotCost(double weight = kDefaultWeight)
+        : GroupableSlotConstraint("disallowedSlotCost", weight, kDefaultLevel)
     {
     }
     void onReset(const Timetable &table) override
@@ -43,4 +49,4 @@ struct SlotNotAllowed final : GroupableSlotConstraint
 
 }  // namespace st::canon
 
-#endif  // ST_CONSTRAINTS_SLOT_SLOT_NOT_ALLOWED_HPP
+#endif  // ST_CONSTRAINTS_SLOT_DISALLOWED_SLOT_COST_HPP

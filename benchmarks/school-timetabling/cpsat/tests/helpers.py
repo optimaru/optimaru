@@ -12,12 +12,12 @@ from teacher_scheduling.solver.solver import solve
 
 # Hard-constraint tests solve as a pure satisfaction problem, without an objective.
 NO_WEIGHTS = ObjectiveWeights(
-    teacher_gap=0,
-    teacher_workday=0,
-    teacher_free_day=0,
-    class_gap=0,
-    avoided_period=0,
-    non_preferred_period=0,
+    teacher_gap_cost=0,
+    teacher_workday_cost=0,
+    teacher_free_day_cost=0,
+    class_gap_cost=0,
+    avoided_period_cost=0,
+    non_preferred_period_cost=0,
 )
 
 

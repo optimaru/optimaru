@@ -1,9 +1,9 @@
 """Assigning special rooms after solving.
 
 The default CP-SAT model guarantees "demand <= rooms per (special-room type,
-time)" through H6, and which lesson uses which room is decided here after
+time)" through room_capacity_cost, and which lesson uses which room is decided here after
 solving. Rooms of one type are interchangeable, so a per-time greedy pass
-always succeeds. When a plugin assembly drops H6, rooms are reused so even a
+always succeeds. When a plugin assembly drops room_capacity_cost, rooms are reused so even a
 violating solution can be serialized — otherwise switching a constraint off
 would make the post-processing fail, and the optional-constraint API would not
 really work.
@@ -43,7 +43,7 @@ def assign_rooms(problem: TimetableProblem, lessons: list[ScheduledLesson]) -> l
                 free.remove(room_id)
                 remaining.remove(index)
                 assigned[index] = assigned[index].model_copy(update={"room_id": room_id})
-        # Pass 2: the remaining lessons take the remaining rooms in order. If H6 was dropped
+        # Pass 2: the remaining lessons take the remaining rooms in order. If room_capacity_cost was dropped
         # from the assembly, free can run out first, so the room list is cycled after that.
         # Same-time/room clashes then remain visible in the result, preserving the meaning
         # of the constraint the caller switched off.

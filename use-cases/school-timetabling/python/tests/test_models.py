@@ -127,45 +127,86 @@ def test_solve_config_validation():
         cfg.ruin_recreate_rewards = [1.0, 2.0, 3.0]
 
 
-# ------------------------------------------------------- the objective comes from the registry
+# ------------------------------------------------------- the objective comes from the catalog
 
 
-def test_objective_weights_are_generated_from_the_constraint_registry():
+def test_objective_weights_are_generated_from_the_constraint_catalog():
     """The weight fields are not written by hand — the soft constraints are the terms of the objective.
 
     Two separately kept lists drift apart as soon as a constraint is added. This
-    pins that both the names and the defaults come from the specs.
-    """
+    pins that both the names and the defaults come from the C++ catalog
+    (constraint_info(): kDefaultLevel / kDefaultWeight)."""
     from st_timetabling.constraints import default_weights, soft_specs
     from st_timetabling.models import ObjectiveWeightsModel
 
+    soft_rows = [row for row in st.constraint_info() if row.default_level == "soft"]
     assert list(ObjectiveWeightsModel.model_fields) == [spec.name for spec in soft_specs()]
-    assert ObjectiveWeightsModel().model_dump() == default_weights()
+    assert list(ObjectiveWeightsModel.model_fields) == [row.name for row in soft_rows]
+    assert (
+        ObjectiveWeightsModel().model_dump() == default_weights() == {row.name: row.default_weight for row in soft_rows}
+    )
+    assert ObjectiveWeightsModel().to_core() == st.canon.ObjectiveWeights()
 
 
-def test_a_new_soft_constraint_gets_a_weight_field_by_itself():
-    """Registering one more soft constraint brings its objective term along automatically."""
+@pytest.mark.parametrize("old", ["teacher_gap", "teacher_workday", "teacher_free_day", "class_gap"])
+def test_objective_weights_refuse_the_old_field_names(old):
+    from pydantic import ValidationError
+
+    from st_timetabling.models import ObjectiveWeightsModel
+
+    with pytest.raises(ValidationError):
+        ObjectiveWeightsModel.model_validate({old: 1})
+
+
+def test_objective_weights_take_non_integer_values():
+    from st_timetabling.models import ObjectiveWeightsModel, SolveConfig
+
+    weights = ObjectiveWeightsModel(teacher_gap_cost=2.5)
+    assert weights.to_core().teacher_gap_cost == 2.5
+    assert SolveConfig(weights=weights).to_canon().weights.teacher_gap_cost == 2.5
+
+
+@pytest.mark.parametrize("bad", [-1, float("nan"), float("inf")])
+def test_objective_weights_refuse_non_finite_and_negative_values(bad):
+    """The pydantic mirror and the C++ struct refuse the same weights a constraint pick refuses."""
+    from pydantic import ValidationError
+
+    from st_timetabling.models import ObjectiveWeightsModel
+
+    with pytest.raises(ValidationError):
+        ObjectiveWeightsModel(teacher_gap_cost=bad)
+    with pytest.raises(ValueError, match="teacher_gap_cost: weight must be finite and >= 0"):
+        st.canon.ObjectiveWeights(teacher_gap_cost=bad)
+    weights = st.canon.ObjectiveWeights()
+    with pytest.raises(ValueError, match="teacher_gap_cost: weight must be finite and >= 0"):
+        weights.teacher_gap_cost = bad
+    assert weights == st.canon.ObjectiveWeights()
+
+
+@pytest.mark.parametrize("bad", [True, "20", None])
+def test_core_objective_weights_refuse_bools_and_non_numbers(bad):
+    with pytest.raises(TypeError, match="class_gap_cost: weight must be a number"):
+        st.canon.ObjectiveWeights(class_gap_cost=bad)
+    weights = st.canon.ObjectiveWeights()
+    with pytest.raises(TypeError, match="class_gap_cost: weight must be a number"):
+        weights.class_gap_cost = bad
+    weights.class_gap_cost = 4  # an int is a real number
+    assert weights.class_gap_cost == 4.0
+
+
+def test_a_term_the_fast_path_does_not_know_is_left_out_of_to_core():
+    """A soft term only the catalog knows is silently left out by to_core (the plugin path uses it)."""
     from pydantic import Field, create_model
 
-    from st_timetabling.constraints import Constraint
     from st_timetabling.models import _ObjectiveWeightsBase
 
-    class FirstPeriodLoad(Constraint):
-        """S7 (hypothetical): 1 point per lesson in period 1."""
-
-        name = "first_period_load"
-        default_hard = False
-        default_weight = 7
-
-    specs = (FirstPeriodLoad,)
     generated = create_model(
         "Extended",
         __base__=_ObjectiveWeightsBase,
-        **{s.name: (int, Field(default=int(s.default_weight), ge=0)) for s in specs},
+        first_period_load_cost=(float, Field(default=7.0, ge=0)),
     )
-    assert generated().model_dump() == {"first_period_load": 7}
-    # A term the monolithic struct does not know is silently left out by to_core (the assembly path uses it).
-    assert "first_period_load" not in generated().to_core().__dir__()
+    assert generated().model_dump() == {"first_period_load_cost": 7.0}
+    assert "first_period_load_cost" not in generated().to_core().__dir__()
 
 
 def _dump_with_slot_room(value):

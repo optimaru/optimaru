@@ -78,7 +78,8 @@ void ScoreCalculator::prepare(Timetable &table)
                 continue;
             table.teacherUnavailableFlat[static_cast<std::size_t>(it->second)
                                              * tsCount
-                                         + s] = 1;
+                                         + s]
+                = 1;
         }
     }
 
@@ -124,23 +125,24 @@ Score ScoreCalculator::calculateScore(Timetable &table)
         ++teacherRoomCnt[static_cast<std::size_t>(lesson.teacherId) * roomCount
                          + room];
         if (teacherUnavailableAt(table, lesson.teacherId, ts))
-            ++unavailable;  // hard 4
+            ++unavailable;  // hard 4: teacherUnavailabilityCost
     }
 
     // Hard 1-3: conflicts are pair counts per occupancy cell. slotRoom values
-    // ARE (timeslot, room) cells, so roomConflict falls out of the encoding.
+    // ARE (timeslot, room) cells, so roomConflictCost falls out of the
+    // encoding.
     std::int64_t conflicts = 0;
     for (int c : slotRoomCnt)
-        conflicts += pairs(c);  // hard 1: roomConflict
+        conflicts += pairs(c);  // hard 1: roomConflictCost
     for (int c : teacherSlotCnt)
-        conflicts += pairs(c);  // hard 2: teacherConflict
+        conflicts += pairs(c);  // hard 2: teacherConflictCost
     for (int c : groupSlotCnt)
-        conflicts += pairs(c);  // hard 3: studentGroupConflict
+        conflicts += pairs(c);  // hard 3: classConflictCost
     score.hard = -(conflicts + unavailable);
 
-    // Soft 5: teacherRoomStability. Different-room pairs of one teacher =
+    // Soft 5: teacherRoomChangeCost. Different-room pairs of one teacher =
     // all pairs C(n, 2) minus the same-room pairs sum C(c_r, 2).
-    std::int64_t stability = 0;
+    std::int64_t roomChange = 0;
     for (int t = 0; t < table.teacherCount; ++t)
     {
         std::int64_t sameRoomPairs = 0;
@@ -149,12 +151,13 @@ Score ScoreCalculator::calculateScore(Timetable &table)
             sameRoomPairs += pairs(
                 teacherRoomCnt[static_cast<std::size_t>(t) * roomCount + r]);
         }
-        stability += pairs(teacherLessons[t]) - sameRoomPairs;
+        roomChange += pairs(teacherLessons[t]) - sameRoomPairs;
     }
 
     // Soft 6 + 7: consecutive-period pairs = sum over adjacent timeslot cells
     // of count[slot] * count[nextSlot] (each unordered pair counted once).
-    std::int64_t efficiency = 0;  // soft 6: teacherTimeEfficiency (reward)
+    // soft 6: teacherTimeEfficiencyCost (a reward)
+    std::int64_t adjacentPairs = 0;
     for (int t = 0; t < table.teacherCount; ++t)
     {
         const std::size_t base = static_cast<std::size_t>(t) * tsCount;
@@ -163,13 +166,13 @@ Score ScoreCalculator::calculateScore(Timetable &table)
             const int next = table.nextSlot[s];
             if (next >= 0)
             {
-                efficiency
+                adjacentPairs
                     += static_cast<std::int64_t>(teacherSlotCnt[base + s])
                        * teacherSlotCnt[base + next];
             }
         }
     }
-    std::int64_t variety = 0;  // soft 7: studentGroupSubjectVariety (penalty)
+    std::int64_t subjectRepeat = 0;  // soft 7: classSubjectRepeatCost
     for (int g = 0; g < table.groupSubjectCount; ++g)
     {
         const std::size_t base = static_cast<std::size_t>(g) * tsCount;
@@ -178,13 +181,14 @@ Score ScoreCalculator::calculateScore(Timetable &table)
             const int next = table.nextSlot[s];
             if (next >= 0)
             {
-                variety
+                subjectRepeat
                     += static_cast<std::int64_t>(groupSubjectSlotCnt[base + s])
                        * groupSubjectSlotCnt[base + next];
             }
         }
     }
-    score.soft = static_cast<double>(efficiency - stability - variety);
+    score.soft
+        = static_cast<double>(adjacentPairs - roomChange - subjectRepeat);
 
     table.score = score;
     return score;

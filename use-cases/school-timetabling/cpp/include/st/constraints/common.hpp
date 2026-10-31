@@ -21,22 +21,38 @@ namespace st::canon
 // ---------------------------------------------------------------------------
 // Plugin-style constraint components
 // ---------------------------------------------------------------------------
-// The canonical H1~H10 / S1~S6 rules, split into one small component each on
-// the engine's DecomposedScoreCalculator — an optional assembly path NEXT TO
-// the monolithic CanonicalIncrementalScoreCalculator, which stays the tuned
+// The canonical rules, one small component each on the engine's
+// DecomposedScoreCalculator — an optional assembly path NEXT TO the
+// monolithic CanonicalIncrementalScoreCalculator, which stays the tuned
 // default fast path.
+//
+// Naming: one header per constraint, <subject>_cost.hpp; the struct is
+// <Subject>Cost and its registry name the struct name with a lower-case
+// first letter ("teacherGapCost"), which Python sees as teacher_gap_cost
+// (optimaru::python::pythonName). That one name is the constraint's name in
+// every layer: list_constraints(), constraint_info(), constraint_costs(),
+// the specs, the CP-SAT plugins and the Timetable.penalties keys.
+//
+// Defaults: each component declares kDefaultWeight (in units of its level)
+// and kDefaultLevel once, and takes the weight as its first constructor
+// argument. The level and the weight are assembly-time metadata, not part of
+// the cost: re-state them with ConstraintAssembly::weight / hard / soft /
+// exponent (or the Python weight / hard / exponent knobs), or write
+// `component->level = optimaru::Level::Soft`. The two structural components
+// (fixedSlotsCost, parallelGroupsCost) are not level-flippable.
 //
 // Unit choice: with the BASIC descriptor the calculator's unit is the VALUE,
 // i.e. one timeslot; members are the lessons currently assigned to it. The
-// per-slot rules (H3/H4/H5/H6, S5/S6) therefore decompose as UnitConstraints
+// per-slot rules (class/teacher conflicts, disallowed slots, room capacity,
+// avoided / non-preferred periods) therefore decompose as UnitConstraints
 // with exact deltaCost, while everything whose state spans slots — per
 // teacher, class, course or block group — runs as a GlobalConstraint on the
 // onMemberChanged fast path, maintaining exactly the aggregates the
 // monolithic calculator keeps (occupancy counts folded into per-(owner, day)
 // busy masks). Every metric goes through the shared ScoreCalculator building
-// blocks (pairs/max0/gapOf/runExcessOf/blockViolation), so an assembly of
-// all fifteen components with default metadata reproduces the monolithic
-// score bit-for-bit (H2 fixed slots stay enforced by pinning, never scored).
+// blocks (pairs/max0/gapOf/runExcessOf/blockViolation), so the default
+// assembly reproduces the monolithic score bit-for-bit (fixed slots and
+// parallel groups hold by construction: pinned and merged lessons).
 //
 // Two structural fast paths close most of the plugin path's dispatch cost
 // against the monolithic calculator, without changing any cost definition:
@@ -48,15 +64,8 @@ namespace st::canon
 // Both are transparent to partial assemblies and metadata overrides.
 //
 //   DecomposedCalculator calc;
-//   addCanonicalConstraints(calc, weights);   // ... or pick components
+//   defaultConstraints().weight("teacherGapCost", 40).into(calc);
 //   solver.solve(table, calc);
-//
-// The "Hard:"/"Soft:" level and the weight of each component are DEFAULTS —
-// assembly-time metadata, not part of the cost. Override them per instance
-// via the mutable `isHard` / `weight` / `exponent` (es pattern). The S1~S6
-// default weights are the ObjectiveWeights defaults; unlike the monolithic
-// calculators, the components never read Timetable::weights — pass the
-// intended weights at assembly time (addCanonicalConstraints does).
 //
 // Cost sign convention (see decomposed_score_calculator.hpp): positive =
 // penalty; the calculator negates into the score.
@@ -87,8 +96,8 @@ inline std::uint16_t periodBit(const Timetable &table, int slot)
     return static_cast<std::uint16_t>(1U << (table.periodOfSlot[slot] - 1));
 }
 
-// Number of teachers standing in both lessons (H4 counts one conflict pair
-// per shared teacher; teacher lists are tiny and duplicate-free).
+// Number of teachers standing in both lessons (teacherConflictCost counts one
+// conflict pair per shared teacher; teacher lists are tiny and duplicate-free).
 inline int sharedTeachers(const Lesson &a, const Lesson &b)
 {
     int shared = 0;
@@ -100,13 +109,14 @@ inline int sharedTeachers(const Lesson &a, const Lesson &b)
     return shared;
 }
 
-// Busy-mask projection primitive (H9/H10/S1~S4): per-(owner, slot)
-// occupancy counts folded into a 16-bit busy-period mask per (owner, day).
+// Busy-mask projection primitive (the teacher-mask family and classGapCost):
+// per-(owner, slot) occupancy counts folded into a 16-bit busy-period mask
+// per (owner, day).
 // A mask bit flips only on a 0<->1 count transition — the monolithic
 // calculator's DISTINCT-period semantics, under which team teaching and
 // merged lessons keep a period busy until the last occupant leaves. Owned
 // by TeacherMaskHub (one shared instance for the whole teacher family) and
-// by ClassGap (its own class-keyed instance); every flip reaches the
+// by ClassGapCost (its own class-keyed instance); every flip reaches the
 // owner's metric fold through the callback.
 class OwnerDayMasks
 {

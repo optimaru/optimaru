@@ -15,10 +15,11 @@ namespace st::canon
 // Violation guidance for the decomposed plugin path, shaped like the
 // monolithic calculator's hot hooks. A hot slot is a unit whose weighted
 // hard cost is currently > 0 (the contract behind the engine's
-// penalizedUnits(): the per-slot conflicts H3/H4/H5/H6 in the standard
-// assembly); a hot lesson is a uniformly random member of a random hot
-// slot. Hard globals (H1, H7~H10) do not feed penalizedUnits() — they
-// steer through the score itself.
+// penalizedUnits(): the per-slot class/teacher conflicts, disallowed slots
+// and room capacity in the standard assembly); a hot lesson is a uniformly
+// random member of a random hot slot. Hard globals (unassigned lessons, the
+// course/teacher limits, block adjacency) do not feed penalizedUnits() —
+// they steer through the score itself.
 class DecomposedHotSource
 {
 public:
@@ -49,18 +50,21 @@ private:
     const optimaru::DecomposedScoreCalculator<Timetable> *calculator_;
 };
 
-// Does the assembly treat "unassigned" as a modelling choice? H1 demoted to
-// soft is exactly the CP-SAT reference's WeeklyPeriodCounts(hard=false)
-// contract: unmet periods become a (heavy) penalty instead of an infeasible
-// model. An assembly without H1 at all says the same thing even louder — it
-// puts no price on unassigned lessons.
+// Does the assembly treat "unassigned" as a modelling choice?
+// unassignedLessonsCost demoted to soft is exactly the CP-SAT reference's
+// UnassignedLessonsCost(hard=False) contract: unmet periods become a (heavy)
+// penalty instead of an infeasible model. An assembly without it at all
+// says the same thing even louder — it puts no price on unassigned lessons.
 bool allowsUnassigned(
     const optimaru::DecomposedScoreCalculator<Timetable> &calculator)
 {
     for (const auto &global : calculator.globalConstraintList())
     {
-        if (dynamic_cast<const UnassignedLesson *>(global.get()) != nullptr)
-            return !global->isHard;
+        if (dynamic_cast<const UnassignedLessonsCost *>(global.get())
+            != nullptr)
+        {
+            return global->level != optimaru::Level::Hard;
+        }
     }
     return true;
 }

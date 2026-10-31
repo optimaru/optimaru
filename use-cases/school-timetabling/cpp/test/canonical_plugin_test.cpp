@@ -7,25 +7,36 @@
 //       through the engine's ScoreDirector protocol (plugin path)
 //   (c) partial assemblies: removing one component removes exactly that
 //       term, on hand-computed instances
-//   (d) weight / isHard overrides: H9 demoted to soft, S1 weight doubled
+//   (d) weight / level overrides: teacherMaxPeriodsCost demoted to soft,
+//       teacherGapCost weight doubled
 //   (e) a 2-second solve(table, calculator) under FULL_ASSERT (custom move
 //       operators included)
-//   (f) H1 demoted to soft turns "leave it unassigned" into a move the search
-//       can make (partial timetabling), and leaves it alone while H1 is hard
+//   (f) unassignedLessonsCost demoted to soft turns "leave it unassigned"
+//       into a move the search can make (partial timetabling), and leaves it
+//       alone while it is hard
 //   (g) the plugin-path solve reaches hard 0 on the CP-SAT-sample-scale
 //       school within a 20-second budget
+//   (h) raw costs by hand: one positive and one zero case per constraint,
+//       read through constraintCosts()
+//   (i) the catalog: defaultConstraints().info() equals every component's
+//       kDefaultWeight / kDefaultLevel / flippability, in constraintOrder();
+//       the structural constraints refuse soft() and accept hard()
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <functional>
 #include <limits>
+#include <map>
 #include <memory>
 #include <random>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "st/canonical_constraints.hpp"
 #include "st/canonical_domain.hpp"
+#include "st/canonical_incremental_calculator.hpp"
 #include "st/canonical_score_calculator.hpp"
 #include "st/canonical_solver.hpp"
 #include "optimaru/api/score/director/score_director.hpp"
@@ -60,7 +71,7 @@ void checkCount(const std::string &label,
 
 const ObjectiveWeights kZeroWeights{0, 0, 0, 0, 0, 0};
 
-// Base grid: slots enumerated day-major from periodsPerDay, zero weights.
+// Base grid: slots enumerated day-major from periodsPerDay.
 Timetable makeGrid(const std::vector<int> &periodsPerDay)
 {
     Timetable t;
@@ -72,7 +83,6 @@ Timetable makeGrid(const std::vector<int> &periodsPerDay)
             t.periodOfSlot.push_back(p);
         }
     }
-    t.weights = kZeroWeights;
     return t;
 }
 
@@ -102,44 +112,62 @@ int addLesson(Timetable &t,
     return static_cast<int>(t.lessons.size()) - 1;
 }
 
-// The full assembly minus one component (by constraint name; empty = all
-// fifteen), S weights injected assembly-time like addCanonicalConstraints.
+// The default assembly at the given soft weights: what the monolithic path
+// scores with these ObjectiveWeights (the model carries no weights).
+ConstraintAssembly weightedDefaults(const ObjectiveWeights &w)
+{
+    return defaultConstraints()
+        .weight("teacherGapCost", w.teacherGapCost)
+        .weight("teacherWorkdayCost", w.teacherWorkdayCost)
+        .weight("teacherFreeDayCost", w.teacherFreeDayCost)
+        .weight("classGapCost", w.classGapCost)
+        .weight("avoidedPeriodCost", w.avoidedPeriodCost)
+        .weight("nonPreferredPeriodCost", w.nonPreferredPeriodCost);
+}
+
+// The full set minus one component (by registry name; empty = all
+// seventeen), soft weights from `w`. Built component by component, without
+// a shared TeacherMaskHub, so the standalone (private-hub) path of the mask
+// family stays covered next to defaultConstraints()'s shared one.
 void assembleExcept(DecomposedCalculator &calc,
                     const ObjectiveWeights &w,
                     const std::string &skip)
 {
     auto keep = [&skip](const char *name) { return skip != name; };
-    if (keep("H1 unassigned lesson"))
-        calc.emplace<UnassignedLesson>();
-    if (keep("H3 class conflict"))
-        calc.emplace<ClassConflict>();
-    if (keep("H4 teacher conflict"))
-        calc.emplace<TeacherConflict>();
-    if (keep("H5 slot not allowed"))
-        calc.emplace<SlotNotAllowed>();
-    if (keep("H6 room capacity"))
-        calc.emplace<RoomCapacity>();
-    if (keep("H7 course daily limit"))
-        calc.emplace<CourseDailyLimit>();
-    if (keep("H8 block adjacency"))
-        calc.emplace<BlockAdjacency>();
-    if (keep("H9 teacher load limit"))
-        calc.emplace<TeacherLoadLimit>();
-    if (keep("H10 teacher consecutive limit"))
-        calc.emplace<TeacherConsecutiveLimit>();
-    if (keep("S1 teacher gap"))
-        calc.emplace<TeacherGap>(static_cast<double>(w.teacherGap));
-    if (keep("S2 teacher workday"))
-        calc.emplace<TeacherWorkday>(static_cast<double>(w.teacherWorkday));
-    if (keep("S3 teacher free day"))
-        calc.emplace<TeacherFreeDay>(static_cast<double>(w.teacherFreeDay));
-    if (keep("S4 class gap"))
-        calc.emplace<ClassGap>(static_cast<double>(w.classGap));
-    if (keep("S5 avoided period"))
-        calc.emplace<AvoidedPeriod>(static_cast<double>(w.avoidedPeriod));
-    if (keep("S6 non-preferred period"))
-        calc.emplace<NonPreferredPeriod>(
-            static_cast<double>(w.nonPreferredPeriod));
+    if (keep("unassignedLessonsCost"))
+        calc.emplace<UnassignedLessonsCost>();
+    if (keep("classConflictCost"))
+        calc.emplace<ClassConflictCost>();
+    if (keep("teacherConflictCost"))
+        calc.emplace<TeacherConflictCost>();
+    if (keep("disallowedSlotCost"))
+        calc.emplace<DisallowedSlotCost>();
+    if (keep("roomCapacityCost"))
+        calc.emplace<RoomCapacityCost>();
+    if (keep("courseMaxPeriodsPerDayCost"))
+        calc.emplace<CourseMaxPeriodsPerDayCost>();
+    if (keep("blockAdjacencyCost"))
+        calc.emplace<BlockAdjacencyCost>();
+    if (keep("teacherMaxPeriodsCost"))
+        calc.emplace<TeacherMaxPeriodsCost>();
+    if (keep("teacherMaxConsecutivePeriodsCost"))
+        calc.emplace<TeacherMaxConsecutivePeriodsCost>();
+    if (keep("teacherGapCost"))
+        calc.emplace<TeacherGapCost>(w.teacherGapCost);
+    if (keep("teacherWorkdayCost"))
+        calc.emplace<TeacherWorkdayCost>(w.teacherWorkdayCost);
+    if (keep("teacherFreeDayCost"))
+        calc.emplace<TeacherFreeDayCost>(w.teacherFreeDayCost);
+    if (keep("classGapCost"))
+        calc.emplace<ClassGapCost>(w.classGapCost);
+    if (keep("avoidedPeriodCost"))
+        calc.emplace<AvoidedPeriodCost>(w.avoidedPeriodCost);
+    if (keep("nonPreferredPeriodCost"))
+        calc.emplace<NonPreferredPeriodCost>(w.nonPreferredPeriodCost);
+    if (keep("fixedSlotsCost"))
+        calc.emplace<FixedSlotsCost>();
+    if (keep("parallelGroupsCost"))
+        calc.emplace<ParallelGroupsCost>();
 }
 
 // -------------------------------------------------------------------------
@@ -159,7 +187,6 @@ Timetable buildRandomInstance(int courseCount, std::uint64_t seed)
     t.teacherCount = teachers;
     t.classCount = classes;
     t.roomCapacityByType = {1, 2};
-    t.weights = ObjectiveWeights{};  // defaults: every soft term active
     t.teacherMaxPerDay.assign(teachers, 4);
     t.teacherMaxPerWeek.assign(teachers, 9);
     t.teacherMaxConsecutive.assign(teachers, 2);
@@ -199,7 +226,8 @@ Timetable buildRandomInstance(int courseCount, std::uint64_t seed)
             }
             if (block >= 0 && i < 2)
                 t.lessons[lesson].blockGroup = block;
-            if (rng() % 3 == 0)  // merged-lesson style multi-unit S5/S6
+            if (rng() % 3 == 0)  // merged-lesson style multi-unit
+                                 // avoidedPeriodCost / nonPreferredPeriodCost
             {
                 t.lessons[lesson].preferenceUnits
                     = {{static_cast<std::uint16_t>(rng() % 4),
@@ -237,7 +265,7 @@ void verifyAssemblyParity()
                 t.blockGroupCount);
 
     DecomposedCalculator calc;
-    addCanonicalConstraints(calc, t.weights);
+    addCanonicalConstraints(calc);
 
     std::mt19937_64 rng(2024);
     std::uniform_real_distribution<double> unit(0.0, 1.0);
@@ -254,7 +282,7 @@ void verifyAssemblyParity()
                 = unit(rng) < 0.10 ? -1 : static_cast<int>(rng() % slotCount);
         }
         const Score full
-            = ScoreCalculator::computeBreakdown(t).toScore(t.weights);
+            = ScoreCalculator::computeBreakdown(t).toScore(ObjectiveWeights{});
         calc.resetWorkingSolution(t);
         const Score assembled = calc.calculateScore();
         if (assembled.hard != full.hard || assembled.soft != full.soft)
@@ -272,11 +300,42 @@ void verifyAssemblyParity()
           std::to_string(rounds)
               + " random assignments, assembly == monolithic bit-for-bit");
 
+    // The same at non-default (and non-integer) soft weights: the assembly
+    // re-weighted by name scores like the monolithic calculators given the
+    // same ObjectiveWeights (full recompute and the incremental calculator).
+    const ObjectiveWeights custom{7.0, 2.5, 11.0, 4.0, 9.0, 3.0};
+    DecomposedCalculator weighted;
+    weightedDefaults(custom).into(weighted);
+    CanonicalIncrementalScoreCalculator monolithic(custom);
+    int weightedMismatches = 0;
+    for (int round = 0; round < 100; ++round)
+    {
+        for (int i = 0; i < lessonCount; ++i)
+        {
+            t.lessons[i].slot
+                = unit(rng) < 0.10 ? -1 : static_cast<int>(rng() % slotCount);
+        }
+        const Score full = ScoreCalculator::computeBreakdown(t).toScore(custom);
+        weighted.resetWorkingSolution(t);
+        monolithic.resetWorkingSolution(t);
+        const Score assembled = weighted.calculateScore();
+        const Score incremental = monolithic.calculateScore();
+        if (assembled.hard != full.hard || assembled.soft != full.soft
+            || incremental.hard != full.hard || incremental.soft != full.soft)
+        {
+            ++weightedMismatches;
+        }
+    }
+    check(weightedMismatches == 0,
+          "100 random assignments at custom soft weights: assembly == "
+          "monolithic (full and incremental)");
+
     // The per-constraint breakdown must add up to the score it explains.
     double hardTotal = 0.0;
     double softTotal = 0.0;
     for (const optimaru::ConstraintTotal &total : calc.constraintTotals())
-        (total.isHard ? hardTotal : softTotal) += total.cost;
+        (total.level == optimaru::Level::Hard ? hardTotal : softTotal)
+            += total.cost;
     const Score score = calc.calculateScore();
     check(hardTotal == static_cast<double>(-score.hard)
               && softTotal == -score.soft,
@@ -296,7 +355,7 @@ void verifyIncremental()
     ScoreCalculator::prepare(t);
 
     DecomposedCalculator calc;
-    addCanonicalConstraints(calc, t.weights);
+    addCanonicalConstraints(calc);
     optimaru::ScoreDirector<Timetable> director(t, calc);
     Timetable shadow = t;
 
@@ -334,8 +393,8 @@ void verifyIncremental()
         // Full recompute on the same assignment.
         for (int i = 0; i < lessonCount; ++i)
             shadow.lessons[i].slot = t.lessons[i].slot;
-        const Score full
-            = ScoreCalculator::computeBreakdown(shadow).toScore(t.weights);
+        const Score full = ScoreCalculator::computeBreakdown(shadow).toScore(
+            ObjectiveWeights{});
         const Score incremental = director.calculateScore();
         if (full.hard != incremental.hard || full.soft != incremental.soft)
         {
@@ -363,8 +422,9 @@ void verifyPartialAssemblies()
     std::printf("== (c) Partial assemblies, hand-computed ==\n");
     const std::vector<int> grid{5, 5};
 
-    // Case 1 (hard): one H4 pair (teacher 0 twice on slot 0) + one H3 pair
-    // (class 1 twice on slot 0). Full hard = 2; minus H4 -> 1; minus H3 -> 1.
+    // Case 1 (hard): one teacherConflictCost pair (teacher 0 twice on slot 0)
+    // + one classConflictCost pair (class 1 twice on slot 0). Full hard = 2;
+    // without either -> 1.
     {
         Timetable t = makeGrid(grid);
         addLesson(t, 0, 0, {0}, 0);
@@ -373,38 +433,38 @@ void verifyPartialAssemblies()
         ScoreCalculator::prepare(t);
 
         DecomposedCalculator full;
-        assembleExcept(full, t.weights, "");
+        assembleExcept(full, kZeroWeights, "");
         full.resetWorkingSolution(t);
         checkCount("case1 full assembly hard", -full.calculateScore().hard, 2);
 
-        DecomposedCalculator noH4;
-        assembleExcept(noH4, t.weights, "H4 teacher conflict");
-        noH4.resetWorkingSolution(t);
-        checkCount("case1 without H4: only the H3 pair",
-                   -noH4.calculateScore().hard,
+        DecomposedCalculator noTeacherConflict;
+        assembleExcept(noTeacherConflict, kZeroWeights, "teacherConflictCost");
+        noTeacherConflict.resetWorkingSolution(t);
+        checkCount("case1 without teacherConflictCost: the class pair",
+                   -noTeacherConflict.calculateScore().hard,
                    1);
 
-        DecomposedCalculator noH3;
-        assembleExcept(noH3, t.weights, "H3 class conflict");
-        noH3.resetWorkingSolution(t);
-        checkCount("case1 without H3: only the H4 pair",
-                   -noH3.calculateScore().hard,
+        DecomposedCalculator noClassConflict;
+        assembleExcept(noClassConflict, kZeroWeights, "classConflictCost");
+        noClassConflict.resetWorkingSolution(t);
+        checkCount("case1 without classConflictCost: the teacher pair",
+                   -noClassConflict.calculateScore().hard,
                    1);
     }
 
     // Case 2 (soft): the forced-gap shape — one class, periods 1 and 5 on
-    // one day (courseDailyLimit 2). Default weights: S1 20*3 + S4 10*3 +
-    // S2 3*1 = 93. Without S1 -> 33.
+    // one day (courseDailyLimit 2). Default weights: teacherGapCost 20*3 +
+    // classGapCost 10*3 + teacherWorkdayCost 3*1 = 93. Without
+    // teacherGapCost -> 33.
     {
         Timetable t = makeGrid(grid);
-        t.weights = ObjectiveWeights{};
         addLesson(t, 0, 0, {0}, slotIdx(grid, 0, 1));
         addLesson(t, 0, 0, {0}, slotIdx(grid, 0, 5));
         t.courseDailyLimit = {2};
         ScoreCalculator::prepare(t);
 
         DecomposedCalculator full;
-        assembleExcept(full, t.weights, "");
+        assembleExcept(full, ObjectiveWeights{}, "");
         full.resetWorkingSolution(t);
         const Score fullScore = full.calculateScore();
         checkCount("case2 full assembly soft penalty",
@@ -412,16 +472,17 @@ void verifyPartialAssemblies()
                    93);
         checkCount("case2 full assembly hard", -fullScore.hard, 0);
 
-        DecomposedCalculator noS1;
-        assembleExcept(noS1, t.weights, "S1 teacher gap");
-        noS1.resetWorkingSolution(t);
-        checkCount("case2 without S1: 93 - 20*3",
-                   static_cast<std::int64_t>(-noS1.calculateScore().soft),
-                   33);
+        DecomposedCalculator noTeacherGap;
+        assembleExcept(noTeacherGap, ObjectiveWeights{}, "teacherGapCost");
+        noTeacherGap.resetWorkingSolution(t);
+        checkCount(
+            "case2 without teacherGapCost: 93 - 20*3",
+            static_cast<std::int64_t>(-noTeacherGap.calculateScore().soft),
+            33);
     }
 
-    // Case 3 (global hard): two unassigned lessons cost H1 = 2; dropping H1
-    // leaves nothing else violated.
+    // Case 3 (global hard): two unassigned lessons cost unassignedLessonsCost
+    // = 2; dropping it leaves nothing else violated.
     {
         Timetable t = makeGrid(grid);
         addLesson(t, 0, 0, {0});
@@ -430,16 +491,18 @@ void verifyPartialAssemblies()
         ScoreCalculator::prepare(t);
 
         DecomposedCalculator full;
-        assembleExcept(full, t.weights, "");
+        assembleExcept(full, kZeroWeights, "");
         full.resetWorkingSolution(t);
-        checkCount(
-            "case3 full assembly hard (H1 x2)", -full.calculateScore().hard, 2);
+        checkCount("case3 full assembly hard (unassignedLessonsCost x2)",
+                   -full.calculateScore().hard,
+                   2);
 
-        DecomposedCalculator noH1;
-        assembleExcept(noH1, t.weights, "H1 unassigned lesson");
-        noH1.resetWorkingSolution(t);
-        checkCount(
-            "case3 without H1: hard clean", -noH1.calculateScore().hard, 0);
+        DecomposedCalculator noUnassigned;
+        assembleExcept(noUnassigned, kZeroWeights, "unassignedLessonsCost");
+        noUnassigned.resetWorkingSolution(t);
+        checkCount("case3 without unassignedLessonsCost: hard clean",
+                   -noUnassigned.calculateScore().hard,
+                   0);
     }
     std::printf("\n");
 }
@@ -449,11 +512,11 @@ void verifyPartialAssemblies()
 // -------------------------------------------------------------------------
 void verifyOverrides()
 {
-    std::printf("== (d) weight / isHard overrides ==\n");
+    std::printf("== (d) weight / level overrides ==\n");
     const std::vector<int> grid{5, 5};
 
-    // H9 demoted to soft at weight 7: one daily-excess point (3 periods over
-    // maxPerDay 2) moves from hard to soft * 7.
+    // teacherMaxPeriodsCost demoted to soft at weight 7: one daily-excess
+    // point (3 periods over maxPerDay 2) moves from hard to soft * 7.
     {
         Timetable t = makeGrid(grid);
         t.teacherMaxPerDay = {2};
@@ -463,41 +526,43 @@ void verifyOverrides()
         ScoreCalculator::prepare(t);
 
         DecomposedCalculator hardCalc;
-        assembleExcept(hardCalc, t.weights, "");
+        assembleExcept(hardCalc, kZeroWeights, "");
         hardCalc.resetWorkingSolution(t);
         const Score hardScore = hardCalc.calculateScore();
-        checkCount("H9 default: 1 hard point", -hardScore.hard, 1);
-        checkCount("H9 default: soft clean",
+        checkCount(
+            "teacherMaxPeriodsCost default: 1 hard point", -hardScore.hard, 1);
+        checkCount("teacherMaxPeriodsCost default: soft clean",
                    static_cast<std::int64_t>(-hardScore.soft),
                    0);
 
         DecomposedCalculator softCalc;
-        assembleExcept(softCalc, t.weights, "H9 teacher load limit");
-        auto h9 = std::make_unique<TeacherLoadLimit>(/*weight=*/7.0);
-        h9->isHard = false;  // demote: same cost, soft level
-        softCalc.add(std::move(h9));
+        assembleExcept(softCalc, kZeroWeights, "teacherMaxPeriodsCost");
+        auto maxPeriods = std::make_unique<TeacherMaxPeriodsCost>(7.0);
+        maxPeriods->level = optimaru::Level::Soft;  // same cost, soft level
+        softCalc.add(std::move(maxPeriods));
         softCalc.resetWorkingSolution(t);
         const Score softScore = softCalc.calculateScore();
-        checkCount("H9 demoted: hard clean", -softScore.hard, 0);
-        checkCount("H9 demoted: soft = 7 * 1",
+        checkCount(
+            "teacherMaxPeriodsCost demoted: hard clean", -softScore.hard, 0);
+        checkCount("teacherMaxPeriodsCost demoted: soft = 7 * 1",
                    static_cast<std::int64_t>(-softScore.soft),
                    7);
     }
 
-    // S1 at double weight on the forced-gap shape: 93 + 20*3 = 153.
+    // teacherGapCost at double weight on the forced-gap shape: 93 + 20*3 =
+    // 153.
     {
         Timetable t = makeGrid(grid);
-        t.weights = ObjectiveWeights{};
         addLesson(t, 0, 0, {0}, slotIdx(grid, 0, 1));
         addLesson(t, 0, 0, {0}, slotIdx(grid, 0, 5));
         t.courseDailyLimit = {2};
         ScoreCalculator::prepare(t);
 
         DecomposedCalculator calc;
-        assembleExcept(calc, t.weights, "S1 teacher gap");
-        calc.emplace<TeacherGap>(2.0 * t.weights.teacherGap);
+        assembleExcept(calc, ObjectiveWeights{}, "teacherGapCost");
+        calc.emplace<TeacherGapCost>(2.0 * TeacherGapCost::kDefaultWeight);
         calc.resetWorkingSolution(t);
-        checkCount("S1 doubled: 93 + 20*3",
+        checkCount("teacherGapCost doubled: 93 + 20*3",
                    static_cast<std::int64_t>(-calc.calculateScore().soft),
                    153);
     }
@@ -524,7 +589,7 @@ void verifyFullAssertSolve()
     config.ruinRecreatePolishSteps = 100;
 
     DecomposedCalculator calc;
-    addCanonicalConstraints(calc, t.weights);
+    addCanonicalConstraints(calc);
 
     bool corrupted = false;
     Score final{};
@@ -542,10 +607,10 @@ void verifyFullAssertSolve()
     check(!corrupted, "2s FULL_ASSERT plugin solve without score corruption");
     if (!corrupted)
     {
-        // The assembly uses the same weights as the table, so the plugin
-        // score must equal the monolithic full recompute bit-for-bit.
+        // Both sides at the default weights, so the plugin score must equal
+        // the monolithic full recompute bit-for-bit.
         const Score recomputed
-            = ScoreCalculator::computeBreakdown(t).toScore(t.weights);
+            = ScoreCalculator::computeBreakdown(t).toScore(ObjectiveWeights{});
         check(final.hard == recomputed.hard && final.soft == recomputed.soft,
               "plugin-reported score == monolithic full recompute");
         check(calc.calculateScore().hard == final.hard
@@ -583,7 +648,6 @@ DemoSchool buildDemoSchool()
     d.t.teacherCount = 15;
     d.t.classCount = 6;
     d.t.roomCapacityByType = {2, 1, 1, 1};
-    d.t.weights = ObjectiveWeights{};  // CP-SAT defaults
 
     d.t.teacherMaxPerWeek.assign(15, -1);
     d.t.teacherMaxPerWeek[0] = 18;   // T01
@@ -653,7 +717,8 @@ DemoSchool buildDemoSchool()
     for (int c = 0; c < 6; ++c)
     {
         addCourse(c, {KOR[c]}, 5, 1, -1, 0, 0, false);
-        addCourse(c, {MATH[c]}, 5, 1, -1, 0, 0x000F, false);  // prefers mornings
+        addCourse(
+            c, {MATH[c]}, 5, 1, -1, 0, 0x000F, false);  // prefers mornings
         addCourse(c, {ENG[c]}, c == 2 ? 4 : 5, 1, -1, 0, 0, false);
         addCourse(c, {SCI[c]}, 4, 1, /*SCI*/ 0, 0, 0, false);
         addCourse(c, {SOC[c]}, 4, 1, -1, 0, 0, false);
@@ -693,10 +758,10 @@ void verifySampleScaleSolve()
     config.spentLimit = std::chrono::seconds(20);
     config.bestScoreLimit = Score{0, -std::numeric_limits<double>::infinity()};
     config.randomSeed = 1;
-    config.weights = ObjectiveWeights{};  // CP-SAT default weights
+    config.weights = ObjectiveWeights{};  // ignored on the plugin path
 
     DecomposedCalculator calc;
-    addCanonicalConstraints(calc, d.t.weights);
+    addCanonicalConstraints(calc);
 
     const auto start = std::chrono::steady_clock::now();
     Solver solver(config);
@@ -711,8 +776,7 @@ void verifySampleScaleSolve()
     checkCount("sample-scale hard total", b.hardTotal(), 0);
     check(seconds <= 20.5, "finished within the 20s budget");
     check(d.t.score.hard == -b.hardTotal()
-              && d.t.score.soft
-                     == -static_cast<double>(b.softPenalty(d.t.weights)),
+              && d.t.score.soft == -b.softPenalty(ObjectiveWeights{}),
           "plugin score matches the monolithic recompute");
 
     bool hrPinned = true;
@@ -733,7 +797,7 @@ Timetable buildOverConstrained()
     t.teacherCount = 1;
     for (int course = 0; course < 6; ++course)
     {
-        t.courseDailyLimit.push_back(5);  // H7 must not be the binding limit
+        t.courseDailyLimit.push_back(5);  // not the binding limit
         for (int i = 0; i < 5; ++i)
             addLesson(t, 0, course, {0});
     }
@@ -746,41 +810,549 @@ Timetable buildOverConstrained()
 
 void verifyRelaxedUnassigned()
 {
-    std::printf("== (f) H1 demoted to soft: unassigning becomes a choice ==\n");
+    std::printf("== (f) unassignedLessonsCost soft: unassigning becomes a "
+                "choice ==\n");
 
     Solver::Config config;
     config.spentLimit = std::chrono::seconds(3);
     config.randomSeed = 1;
     config.weights = kZeroWeights;
 
-    // H1 hard (the default): every lesson takes a slot and the leftovers show
-    // up as class conflicts — the search has no way to leave one out.
+    // unassignedLessonsCost hard (the default): every lesson takes a slot and
+    // the leftovers show up as class conflicts — the search has no way to
+    // leave one out.
     Timetable strict = buildOverConstrained();
     DecomposedCalculator hard;
-    addCanonicalConstraints(hard, kZeroWeights);
+    weightedDefaults(kZeroWeights).into(hard);
     Solver(config).solve(strict, hard);
     const Breakdown strictBreakdown = ScoreCalculator::computeBreakdown(strict);
-    checkCount(
-        "H1 hard: nothing left unassigned", strictBreakdown.unassigned, 0);
-    check(strictBreakdown.classConflicts > 0,
-          "H1 hard: the overflow lands on H3 instead");
+    checkCount("unassignedLessonsCost hard: nothing left unassigned",
+               strictBreakdown.unassignedLessonsCost,
+               0);
+    check(strictBreakdown.classConflictCost > 0,
+          "unassignedLessonsCost hard: the overflow lands on classConflictCost "
+          "instead");
 
-    // H1 soft: the 10 lessons that do not fit come out, and what stays is
-    // conflict-free — the CP-SAT WeeklyPeriodCounts(hard=false) contract.
+    // unassignedLessonsCost soft at its documented soft weight: the 10
+    // lessons that do not fit come out, and what stays is conflict-free — the
+    // CP-SAT UnassignedLessonsCost(hard=False) contract.
     Timetable partial = buildOverConstrained();
     DecomposedCalculator soft;
-    assembleExcept(soft, kZeroWeights, "H1 unassigned lesson");
-    auto h1 = std::make_unique<UnassignedLesson>(/*weight=*/10000.0);
-    h1->isHard = false;  // demote: an unplaced lesson is a price, not a veto
-    soft.add(std::move(h1));
+    weightedDefaults(kZeroWeights)
+        .soft("unassignedLessonsCost")
+        .weight("unassignedLessonsCost", UnassignedLessonsCost::kSoftWeight)
+        .into(soft);
     Solver(config).solve(partial, soft);
     const Breakdown breakdown = ScoreCalculator::computeBreakdown(partial);
-    checkCount("H1 soft: 30 lessons - 20 slots left unassigned",
-               breakdown.unassigned,
-               10);
-    checkCount("H1 soft: what stayed is conflict-free",
-               breakdown.hardTotal() - breakdown.unassigned,
+    checkCount(
+        "unassignedLessonsCost soft: 30 lessons - 20 slots left unassigned",
+        breakdown.unassignedLessonsCost,
+        10);
+    checkCount("unassignedLessonsCost soft: what stayed is conflict-free",
+               breakdown.hardTotal() - breakdown.unassignedLessonsCost,
                0);
+    std::printf("\n");
+}
+
+// -------------------------------------------------------------------------
+// (h) Raw costs by hand, through constraintCosts(): one positive and one
+// zero case per constraint (before weight, exponent and level).
+// -------------------------------------------------------------------------
+using Build = std::function<void(Timetable &)>;
+const std::vector<int> kGridRaw{5, 5};
+
+// The raw total (sum of the unit costs) the default assembly reports for
+// `name` on the instance `build` makes from a 2-day x 5-period grid.
+double rawCost(const Build &build, const std::string &name)
+{
+    Timetable t = makeGrid(kGridRaw);
+    build(t);
+    ScoreCalculator::prepare(t);
+    DecomposedCalculator calc;
+    addDefaultConstraints(calc);
+    calc.resetWorkingSolution(t);
+    calc.calculateScore();  // primes the per-unit cache
+    for (const auto &entry : calc.constraintCosts())
+    {
+        if (entry.name != name)
+            continue;
+        double total = 0.0;
+        for (double cost : entry.unitCosts)
+            total += cost;
+        return total;
+    }
+    return -1.0;  // not in the default assembly
+}
+
+void checkRaw(const std::string &name,
+              const Build &positive,
+              double expected,
+              const Build &zero)
+{
+    const double hit = rawCost(positive, name);
+    const double clean = rawCost(zero, name);
+    std::printf("  [%s] %-52s positive=%g (expected %g) zero=%g\n",
+                hit == expected && clean == 0.0 ? "PASS" : "FAIL",
+                name.c_str(),
+                hit,
+                expected,
+                clean);
+    if (hit != expected || clean != 0.0)
+        ++failures;
+}
+
+int slotOf(int day, int period) { return slotIdx(kGridRaw, day, period); }
+
+void verifyRawCostsByHand()
+{
+    std::printf("== (h) Raw costs by hand, per constraint ==\n");
+    // Two lessons, one of them without a slot -> 1; both placed -> 0.
+    checkRaw(
+        "unassignedLessonsCost",
+        [](Timetable &t)
+        {
+            addLesson(t, 0, 0, {0}, slotOf(0, 1));
+            addLesson(t, 0, 1, {1});
+        },
+        1.0,
+        [](Timetable &t)
+        {
+            addLesson(t, 0, 0, {0}, slotOf(0, 1));
+            addLesson(t, 0, 1, {1}, slotOf(0, 2));
+        });
+    // Class 0 twice on Mon 1 -> one pair; on Mon 1 and Mon 2 -> none.
+    checkRaw(
+        "classConflictCost",
+        [](Timetable &t)
+        {
+            addLesson(t, 0, 0, {0}, slotOf(0, 1));
+            addLesson(t, 0, 1, {1}, slotOf(0, 1));
+        },
+        1.0,
+        [](Timetable &t)
+        {
+            addLesson(t, 0, 0, {0}, slotOf(0, 1));
+            addLesson(t, 0, 1, {1}, slotOf(0, 2));
+        });
+    // Two team-taught lessons sharing both teachers on one slot -> one pair
+    // per shared teacher = 2; one teacher each -> 0.
+    checkRaw(
+        "teacherConflictCost",
+        [](Timetable &t)
+        {
+            addLesson(t, 0, 0, {0, 1}, slotOf(0, 1));
+            addLesson(t, 1, 1, {0, 1}, slotOf(0, 1));
+        },
+        2.0,
+        [](Timetable &t)
+        {
+            addLesson(t, 0, 0, {0}, slotOf(0, 1));
+            addLesson(t, 1, 1, {1}, slotOf(0, 1));
+        });
+    // A lesson on a slot its allowedSlot table forbids -> 1; elsewhere -> 0.
+    checkRaw(
+        "disallowedSlotCost",
+        [](Timetable &t)
+        {
+            const int i = addLesson(t, 0, 0, {0}, slotOf(0, 1));
+            t.lessons[i].allowedSlot.assign(10, 1);
+            t.lessons[i].allowedSlot[slotOf(0, 1)] = 0;
+        },
+        1.0,
+        [](Timetable &t)
+        {
+            const int i = addLesson(t, 0, 0, {0}, slotOf(0, 2));
+            t.lessons[i].allowedSlot.assign(10, 1);
+            t.lessons[i].allowedSlot[slotOf(0, 1)] = 0;
+        });
+    // One lab, three lab lessons on Mon 1 -> 3 - 1 = 2; spread -> 0.
+    checkRaw(
+        "roomCapacityCost",
+        [](Timetable &t)
+        {
+            t.roomCapacityByType = {1};
+            for (int c = 0; c < 3; ++c)
+            {
+                const int i = addLesson(t, c, c, {c}, slotOf(0, 1));
+                t.lessons[i].roomTypeDemand = {1};
+            }
+        },
+        2.0,
+        [](Timetable &t)
+        {
+            t.roomCapacityByType = {1};
+            for (int c = 0; c < 3; ++c)
+            {
+                const int i = addLesson(t, c, c, {c}, slotOf(0, c + 1));
+                t.lessons[i].roomTypeDemand = {1};
+            }
+        });
+    // Daily cap 1, three lessons of the course on Monday -> 2; one per day
+    // (two days) -> 0.
+    checkRaw(
+        "courseMaxPeriodsPerDayCost",
+        [](Timetable &t)
+        {
+            t.courseDailyLimit = {1};
+            for (int p = 1; p <= 3; ++p)
+                addLesson(t, 0, 0, {0}, slotOf(0, p));
+        },
+        2.0,
+        [](Timetable &t)
+        {
+            t.courseDailyLimit = {1};
+            addLesson(t, 0, 0, {0}, slotOf(0, 1));
+            addLesson(t, 0, 0, {0}, slotOf(1, 1));
+        });
+    // A 2-period block on Mon 1 and Mon 3 -> 1; on Mon 1-2 -> 0.
+    checkRaw(
+        "blockAdjacencyCost",
+        [](Timetable &t)
+        {
+            t.courseDailyLimit = {2};
+            const int a = addLesson(t, 0, 0, {0}, slotOf(0, 1));
+            const int b = addLesson(t, 0, 0, {0}, slotOf(0, 3));
+            t.lessons[a].blockGroup = 0;
+            t.lessons[b].blockGroup = 0;
+        },
+        1.0,
+        [](Timetable &t)
+        {
+            t.courseDailyLimit = {2};
+            const int a = addLesson(t, 0, 0, {0}, slotOf(0, 1));
+            const int b = addLesson(t, 0, 0, {0}, slotOf(0, 2));
+            t.lessons[a].blockGroup = 0;
+            t.lessons[b].blockGroup = 0;
+        });
+    // maxPerDay 2 and maxPerWeek 3, four lessons: three on Monday (daily
+    // excess 1) plus one on Tuesday (weekly 4 - 3 = 1) -> 2; caps 3 / 4 -> 0.
+    checkRaw(
+        "teacherMaxPeriodsCost",
+        [](Timetable &t)
+        {
+            t.teacherMaxPerDay = {2};
+            t.teacherMaxPerWeek = {3};
+            for (int p = 1; p <= 3; ++p)
+                addLesson(t, p - 1, p - 1, {0}, slotOf(0, 2 * p - 1));
+            addLesson(t, 3, 3, {0}, slotOf(1, 1));
+        },
+        2.0,
+        [](Timetable &t)
+        {
+            t.teacherMaxPerDay = {3};
+            t.teacherMaxPerWeek = {4};
+            for (int p = 1; p <= 3; ++p)
+                addLesson(t, p - 1, p - 1, {0}, slotOf(0, 2 * p - 1));
+            addLesson(t, 3, 3, {0}, slotOf(1, 1));
+        });
+    // Limit 2: a run of Mon 1-4 -> 4 - 2 = 2; runs of 2 and 2 (Mon 1-2,
+    // 4-5) -> 0.
+    checkRaw(
+        "teacherMaxConsecutivePeriodsCost",
+        [](Timetable &t)
+        {
+            t.teacherMaxConsecutive = {2};
+            for (int p = 1; p <= 4; ++p)
+                addLesson(t, p - 1, p - 1, {0}, slotOf(0, p));
+        },
+        2.0,
+        [](Timetable &t)
+        {
+            t.teacherMaxConsecutive = {2};
+            int c = 0;
+            for (int p : {1, 2, 4, 5})
+            {
+                addLesson(t, c, c, {0}, slotOf(0, p));
+                ++c;
+            }
+        });
+    // Teacher on Mon 1 and Mon 4 -> 2 idle periods; Mon 1 and 2 -> 0.
+    checkRaw(
+        "teacherGapCost",
+        [](Timetable &t)
+        {
+            addLesson(t, 0, 0, {0}, slotOf(0, 1));
+            addLesson(t, 1, 1, {0}, slotOf(0, 4));
+        },
+        2.0,
+        [](Timetable &t)
+        {
+            addLesson(t, 0, 0, {0}, slotOf(0, 1));
+            addLesson(t, 1, 1, {0}, slotOf(0, 2));
+        });
+    // One teacher on both days -> 2 workdays; nothing placed -> 0.
+    checkRaw(
+        "teacherWorkdayCost",
+        [](Timetable &t)
+        {
+            addLesson(t, 0, 0, {0}, slotOf(0, 1));
+            addLesson(t, 0, 1, {0}, slotOf(1, 1));
+        },
+        2.0,
+        [](Timetable &t)
+        {
+            addLesson(t, 0, 0, {0});
+            addLesson(t, 0, 1, {0});
+        });
+    // Tuesday requested free, a lesson on Tuesday -> 1 worked requested free
+    // day; on Monday -> 0.
+    checkRaw(
+        "teacherFreeDayCost",
+        [](Timetable &t)
+        {
+            t.teacherPreferredFreeDays = {1 << 1};
+            addLesson(t, 0, 0, {0}, slotOf(1, 2));
+        },
+        1.0,
+        [](Timetable &t)
+        {
+            t.teacherPreferredFreeDays = {1 << 1};
+            addLesson(t, 0, 0, {0}, slotOf(0, 2));
+        });
+    // Class on Mon 2 and Mon 5 (two teachers) -> 2 idle periods; Mon 2-3 ->
+    // 0.
+    checkRaw(
+        "classGapCost",
+        [](Timetable &t)
+        {
+            addLesson(t, 0, 0, {0}, slotOf(0, 2));
+            addLesson(t, 0, 1, {1}, slotOf(0, 5));
+        },
+        2.0,
+        [](Timetable &t)
+        {
+            addLesson(t, 0, 0, {0}, slotOf(0, 2));
+            addLesson(t, 0, 1, {1}, slotOf(0, 3));
+        });
+    // A merged lesson with two units, both avoiding period 1, on Mon 1 -> 2;
+    // on Mon 2 -> 0.
+    checkRaw(
+        "avoidedPeriodCost",
+        [](Timetable &t)
+        {
+            const int i = addLesson(t, 0, 0, {0, 1}, slotOf(0, 1));
+            t.lessons[i].preferenceUnits = {{0x0001, 0}, {0x0001, 0}};
+        },
+        2.0,
+        [](Timetable &t)
+        {
+            const int i = addLesson(t, 0, 0, {0, 1}, slotOf(0, 2));
+            t.lessons[i].preferenceUnits = {{0x0001, 0}, {0x0001, 0}};
+        });
+    // Subject preferring period 2, lesson on Mon 1 -> 1; on Mon 2 -> 0.
+    checkRaw(
+        "nonPreferredPeriodCost",
+        [](Timetable &t)
+        {
+            t.coursePreferredPeriodMask = {0x0002};
+            addLesson(t, 0, 0, {0}, slotOf(0, 1));
+        },
+        1.0,
+        [](Timetable &t)
+        {
+            t.coursePreferredPeriodMask = {0x0002};
+            addLesson(t, 0, 0, {0}, slotOf(0, 2));
+        });
+    // The two structural constraints are 0 by construction, so their
+    // "positive" case is the worst the model can express: a pinned lesson
+    // sitting on its fixed slot next to a clash, and a merged parallel group
+    // (one lesson for two sections) on a disallowed slot. Both stay 0 — the
+    // clash and the disallowed slot are other constraints' costs.
+    checkRaw(
+        "fixedSlotsCost",
+        [](Timetable &t)
+        {
+            const int i = addLesson(t, 0, 0, {0}, slotOf(0, 1));
+            t.lessons[i].pinned = true;
+            addLesson(t, 0, 1, {0}, slotOf(0, 1));
+        },
+        0.0,
+        [](Timetable &t)
+        {
+            const int i = addLesson(t, 0, 0, {0}, slotOf(0, 1));
+            t.lessons[i].pinned = true;
+        });
+    checkRaw(
+        "parallelGroupsCost",
+        [](Timetable &t)
+        {
+            const int i = addLesson(t, 0, 0, {0, 1}, slotOf(0, 1));
+            t.lessons[i].preferenceUnits = {{0, 0}, {0, 0}};
+            t.lessons[i].allowedSlot.assign(10, 1);
+            t.lessons[i].allowedSlot[slotOf(0, 1)] = 0;
+        },
+        0.0,
+        [](Timetable &t)
+        {
+            const int i = addLesson(t, 0, 0, {0, 1}, slotOf(0, 2));
+            t.lessons[i].preferenceUnits = {{0, 0}, {0, 0}};
+        });
+    std::printf("\n");
+}
+
+// -------------------------------------------------------------------------
+// (i) The catalog: info() rows equal every component's constants, in the
+// recorded catalog order; the structural constraints are not flippable.
+// -------------------------------------------------------------------------
+template <typename Component>
+bool rowIs(const optimaru::ConstraintInfo &row,
+           const char *name,
+           optimaru::Level level,
+           double weight,
+           bool flippable = true)
+{
+    return row.name == name && row.defaultLevel == Component::kDefaultLevel
+           && row.defaultWeight == Component::kDefaultWeight
+           && row.defaultLevel == level && row.defaultWeight == weight
+           && row.levelFlippable == flippable && !row.reward
+           && row.defaultEnabled;
+}
+
+template <typename F> bool throwsInvalidArgument(F &&f)
+{
+    try
+    {
+        f();
+    }
+    catch (const std::invalid_argument &)
+    {
+        return true;
+    }
+    return false;
+}
+
+void verifyCatalog()
+{
+    std::printf("== (i) Catalog: info() == the components' constants ==\n");
+    using optimaru::Level;
+    const std::vector<std::string> order = constraintOrder();
+    const std::vector<std::string> expected{"unassignedLessonsCost",
+                                            "classConflictCost",
+                                            "teacherConflictCost",
+                                            "disallowedSlotCost",
+                                            "roomCapacityCost",
+                                            "courseMaxPeriodsPerDayCost",
+                                            "blockAdjacencyCost",
+                                            "teacherMaxPeriodsCost",
+                                            "teacherMaxConsecutivePeriodsCost",
+                                            "teacherGapCost",
+                                            "teacherWorkdayCost",
+                                            "teacherFreeDayCost",
+                                            "classGapCost",
+                                            "avoidedPeriodCost",
+                                            "nonPreferredPeriodCost",
+                                            "fixedSlotsCost",
+                                            "parallelGroupsCost"};
+    check(order == expected, "constraintOrder() is the catalog order");
+
+    const std::vector<optimaru::ConstraintInfo> rows
+        = defaultConstraints().info();
+    std::map<std::string, optimaru::ConstraintInfo> byName;
+    for (const optimaru::ConstraintInfo &row : rows)
+        byName.emplace(row.name, row);
+    bool sameSet = rows.size() == order.size();
+    for (const std::string &name : order)
+        sameSet = sameSet && byName.count(name) == 1;
+    check(sameSet, "constraintOrder() names exactly the default assembly");
+    if (!sameSet)
+        return;
+
+    auto row = [&byName](const char *name) { return byName.at(name); };
+    check(
+        rowIs<UnassignedLessonsCost>(row("unassignedLessonsCost"),
+                                     "unassignedLessonsCost",
+                                     Level::Hard,
+                                     1.0)
+            && rowIs<ClassConflictCost>(
+                row("classConflictCost"), "classConflictCost", Level::Hard, 1.0)
+            && rowIs<TeacherConflictCost>(row("teacherConflictCost"),
+                                          "teacherConflictCost",
+                                          Level::Hard,
+                                          1.0)
+            && rowIs<DisallowedSlotCost>(row("disallowedSlotCost"),
+                                         "disallowedSlotCost",
+                                         Level::Hard,
+                                         1.0)
+            && rowIs<RoomCapacityCost>(
+                row("roomCapacityCost"), "roomCapacityCost", Level::Hard, 1.0)
+            && rowIs<CourseMaxPeriodsPerDayCost>(
+                row("courseMaxPeriodsPerDayCost"),
+                "courseMaxPeriodsPerDayCost",
+                Level::Hard,
+                1.0)
+            && rowIs<BlockAdjacencyCost>(row("blockAdjacencyCost"),
+                                         "blockAdjacencyCost",
+                                         Level::Hard,
+                                         1.0)
+            && rowIs<TeacherMaxPeriodsCost>(row("teacherMaxPeriodsCost"),
+                                            "teacherMaxPeriodsCost",
+                                            Level::Hard,
+                                            1.0)
+            && rowIs<TeacherMaxConsecutivePeriodsCost>(
+                row("teacherMaxConsecutivePeriodsCost"),
+                "teacherMaxConsecutivePeriodsCost",
+                Level::Hard,
+                1.0),
+        "the nine hard rows: hard, weight 1, flippable");
+    check(
+        rowIs<TeacherGapCost>(
+            row("teacherGapCost"), "teacherGapCost", Level::Soft, 20.0)
+            && rowIs<TeacherWorkdayCost>(row("teacherWorkdayCost"),
+                                         "teacherWorkdayCost",
+                                         Level::Soft,
+                                         3.0)
+            && rowIs<TeacherFreeDayCost>(row("teacherFreeDayCost"),
+                                         "teacherFreeDayCost",
+                                         Level::Soft,
+                                         30.0)
+            && rowIs<ClassGapCost>(
+                row("classGapCost"), "classGapCost", Level::Soft, 10.0)
+            && rowIs<AvoidedPeriodCost>(
+                row("avoidedPeriodCost"), "avoidedPeriodCost", Level::Soft, 5.0)
+            && rowIs<NonPreferredPeriodCost>(row("nonPreferredPeriodCost"),
+                                             "nonPreferredPeriodCost",
+                                             Level::Soft,
+                                             1.0),
+        "the six soft rows: 20/3/30/10/5/1, flippable");
+    check(rowIs<FixedSlotsCost>(row("fixedSlotsCost"),
+                                "fixedSlotsCost",
+                                Level::Hard,
+                                1.0,
+                                /*flippable=*/false)
+              && rowIs<ParallelGroupsCost>(row("parallelGroupsCost"),
+                                           "parallelGroupsCost",
+                                           Level::Hard,
+                                           1.0,
+                                           /*flippable=*/false),
+          "the two structural rows: hard, weight 1, not flippable");
+
+    for (const char *name : {"fixedSlotsCost", "parallelGroupsCost"})
+    {
+        check(
+            throwsInvalidArgument([name] { defaultConstraints().soft(name); }),
+            std::string(name) + ": soft() is refused");
+        check(
+            !throwsInvalidArgument([name] { defaultConstraints().hard(name); }),
+            std::string(name) + ": hard() is a no-op");
+        check(throwsInvalidArgument(
+                  [name] { defaultConstraints().weight(name, -1.0); }),
+              std::string(name) + ": a negative weight is refused");
+    }
+    // Every other constraint flips both ways.
+    bool flippable = true;
+    for (const std::string &name : order)
+    {
+        if (name == "fixedSlotsCost" || name == "parallelGroupsCost")
+            continue;
+        flippable = flippable
+                    && !throwsInvalidArgument(
+                        [&name]
+                        {
+                            defaultConstraints().soft(name);
+                            defaultConstraints().hard(name);
+                        });
+    }
+    check(flippable, "the fifteen other constraints flip both ways");
     std::printf("\n");
 }
 
@@ -794,6 +1366,8 @@ int main()
     verifyOverrides();
     verifyFullAssertSolve();
     verifyRelaxedUnassigned();
+    verifyRawCostsByHand();
+    verifyCatalog();
     verifySampleScaleSolve();
 
     if (failures == 0)

@@ -1,18 +1,23 @@
-#ifndef ST_CONSTRAINTS_SLOT_TEACHER_CONFLICT_HPP
-#define ST_CONSTRAINTS_SLOT_TEACHER_CONFLICT_HPP
+#ifndef ST_CONSTRAINTS_SLOT_TEACHER_CONFLICT_COST_HPP
+#define ST_CONSTRAINTS_SLOT_TEACHER_CONFLICT_COST_HPP
 
 #include "st/constraints/slot/slot_constraint.hpp"
 
 namespace st::canon
 {
 
-// Hard (default): H4 teacher conflict — one point per shared teacher per
-// pair of lessons on one slot (team teaching occupies the slot once per
-// teacher, exactly like the monolithic per-(teacher, slot) counts).
-struct TeacherConflict final : GroupableSlotConstraint
+// teacherConflictCost — hard, weight 1. Raw cost per slot = one point per
+// shared teacher per pair of lessons on it (team teaching occupies the slot
+// once per teacher, exactly like the monolithic per-(teacher, slot) counts:
+// C(n, 2) per (teacher, slot)), so 0 = no teacher stands in two lessons at
+// once.
+struct TeacherConflictCost final : GroupableSlotConstraint
 {
-    explicit TeacherConflict(double weight = 1.0)
-        : GroupableSlotConstraint("H4 teacher conflict", weight, /*hard=*/true)
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
+
+    explicit TeacherConflictCost(double weight = kDefaultWeight)
+        : GroupableSlotConstraint("teacherConflictCost", weight, kDefaultLevel)
     {
     }
     void onReset(const Timetable &table) override
@@ -53,4 +58,4 @@ struct TeacherConflict final : GroupableSlotConstraint
 
 }  // namespace st::canon
 
-#endif  // ST_CONSTRAINTS_SLOT_TEACHER_CONFLICT_HPP
+#endif  // ST_CONSTRAINTS_SLOT_TEACHER_CONFLICT_COST_HPP

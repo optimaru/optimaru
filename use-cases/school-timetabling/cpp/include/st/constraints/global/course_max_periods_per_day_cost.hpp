@@ -1,19 +1,23 @@
-#ifndef ST_CONSTRAINTS_GLOBAL_COURSE_DAILY_LIMIT_HPP
-#define ST_CONSTRAINTS_GLOBAL_COURSE_DAILY_LIMIT_HPP
+#ifndef ST_CONSTRAINTS_GLOBAL_COURSE_MAX_PERIODS_PER_DAY_COST_HPP
+#define ST_CONSTRAINTS_GLOBAL_COURSE_MAX_PERIODS_PER_DAY_COST_HPP
 
 #include "st/constraints/global/global_constraint.hpp"
 
 namespace st::canon
 {
 
-// Hard (default): H7 — per (courseKey, day): max(0, lessons - dailyLimit),
-// maintained with the monolithic closed-form count deltas.
-struct CourseDailyLimit final : MemberChangeGlobalConstraint
+// courseMaxPeriodsPerDayCost — hard, weight 1. Raw cost = sum over
+// (courseKey, day) of max(0, lessons that day - the course's daily cap
+// max_periods_per_day), so 0 = no course exceeds its daily cap. Maintained
+// with the monolithic closed-form count deltas.
+struct CourseMaxPeriodsPerDayCost final : MemberChangeGlobalConstraint
 {
-    explicit CourseDailyLimit(double weight = 1.0)
-        : MemberChangeGlobalConstraint("H7 course daily limit",
-                                       weight,
-                                       /*hard=*/true)
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
+
+    explicit CourseMaxPeriodsPerDayCost(double weight = kDefaultWeight)
+        : MemberChangeGlobalConstraint(
+              "courseMaxPeriodsPerDayCost", weight, kDefaultLevel)
     {
     }
     void reset(const Timetable &table,
@@ -71,4 +75,4 @@ private:
 
 }  // namespace st::canon
 
-#endif  // ST_CONSTRAINTS_GLOBAL_COURSE_DAILY_LIMIT_HPP
+#endif  // ST_CONSTRAINTS_GLOBAL_COURSE_MAX_PERIODS_PER_DAY_COST_HPP

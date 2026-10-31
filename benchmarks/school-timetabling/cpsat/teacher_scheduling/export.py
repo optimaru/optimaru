@@ -173,7 +173,7 @@ def neis_bundle(
             row = [fmt.period_label(period)]
             for day in day_indexes:
                 # Weekday is an IntEnum, so it looks up integer keys directly.
-                # Parallel sections (H5) put several courses in one class and time.
+                # Parallel sections (parallel_groups_cost) put several courses in one class and time.
                 # Handle them explicitly via `parallel_separator` instead of silently keeping the last.
                 items = grid.get((day, period), [])
                 if fmt.parallel_separator is None:

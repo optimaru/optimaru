@@ -1,12 +1,12 @@
 #ifndef ST_CONSTRAINTS_SLOT_SLOT_DELTA_GROUP_HPP
 #define ST_CONSTRAINTS_SLOT_SLOT_DELTA_GROUP_HPP
 
-#include "st/constraints/slot/avoided_period.hpp"
-#include "st/constraints/slot/class_conflict.hpp"
-#include "st/constraints/slot/non_preferred_period.hpp"
-#include "st/constraints/slot/room_capacity.hpp"
-#include "st/constraints/slot/slot_not_allowed.hpp"
-#include "st/constraints/slot/teacher_conflict.hpp"
+#include "st/constraints/slot/avoided_period_cost.hpp"
+#include "st/constraints/slot/class_conflict_cost.hpp"
+#include "st/constraints/slot/disallowed_slot_cost.hpp"
+#include "st/constraints/slot/non_preferred_period_cost.hpp"
+#include "st/constraints/slot/room_capacity_cost.hpp"
+#include "st/constraints/slot/teacher_conflict_cost.hpp"
 
 namespace st::canon
 {
@@ -25,27 +25,30 @@ struct SlotDeltaGroup final : optimaru::UnitConstraintDeltaGroup<Timetable>
 
     void add(std::size_t index, const CanonUnitConstraint &constraint) override
     {
-        if (dynamic_cast<const ClassConflict *>(&constraint) != nullptr)
+        if (dynamic_cast<const ClassConflictCost *>(&constraint) != nullptr)
         {
             takeIndex(classIndex_, index);
         }
-        else if (dynamic_cast<const TeacherConflict *>(&constraint) != nullptr)
+        else if (dynamic_cast<const TeacherConflictCost *>(&constraint)
+                 != nullptr)
         {
             takeIndex(teacherIndex_, index);
         }
-        else if (dynamic_cast<const SlotNotAllowed *>(&constraint) != nullptr)
+        else if (dynamic_cast<const DisallowedSlotCost *>(&constraint)
+                 != nullptr)
         {
             takeIndex(allowedIndex_, index);
         }
-        else if (dynamic_cast<const RoomCapacity *>(&constraint) != nullptr)
+        else if (dynamic_cast<const RoomCapacityCost *>(&constraint) != nullptr)
         {
             takeIndex(roomIndex_, index);
         }
-        else if (dynamic_cast<const AvoidedPeriod *>(&constraint) != nullptr)
+        else if (dynamic_cast<const AvoidedPeriodCost *>(&constraint)
+                 != nullptr)
         {
             takeIndex(avoidedIndex_, index);
         }
-        else if (dynamic_cast<const NonPreferredPeriod *>(&constraint)
+        else if (dynamic_cast<const NonPreferredPeriodCost *>(&constraint)
                  != nullptr)
         {
             takeIndex(nonPreferredIndex_, index);
@@ -153,7 +156,8 @@ struct SlotDeltaGroup final : optimaru::UnitConstraintDeltaGroup<Timetable>
                         const std::uint16_t bit
                             = static_cast<std::uint16_t>(1U << p);
                         avoidedHits_[static_cast<std::size_t>(i) * maxPeriod_
-                                     + p] += (avoided & bit) != 0 ? 1 : 0;
+                                     + p]
+                            += (avoided & bit) != 0 ? 1 : 0;
                         nonPreferredHits_[static_cast<std::size_t>(i)
                                               * maxPeriod_
                                           + p]
@@ -274,7 +278,8 @@ private:
             {
                 teacherSlotCnt_[static_cast<std::size_t>(teacherIds_[k])
                                     * slotCount_
-                                + slot] += joined ? 1 : -1;
+                                + slot]
+                    += joined ? 1 : -1;
             }
         }
         if (roomIndex_ != NONE)

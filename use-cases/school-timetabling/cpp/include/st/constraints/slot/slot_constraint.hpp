@@ -13,13 +13,15 @@ namespace st::canon
 
 struct SlotDeltaGroup;
 
-// Marker base of the per-slot family (H3/H4/H5/H6/S5/S6): their marginal
-// costs are all projections of one lesson joining/leaving a slot, so the
-// calculator compiles every present member into ONE SlotDeltaGroup evaluate
-// per member change — dense per-lesson tables plus the monolithic
-// (owner, slot) count maps replace the six per-constraint deltaCost calls
-// (which re-scan the slot's members). Metadata (weight/isHard/exponent)
-// stays calculator-owned, so overrides keep working unchanged.
+// Marker base of the per-slot family (classConflictCost, teacherConflictCost,
+// disallowedSlotCost, roomCapacityCost, avoidedPeriodCost,
+// nonPreferredPeriodCost): their marginal costs are all projections of one
+// lesson joining/leaving a slot, so the calculator compiles every present
+// member into ONE SlotDeltaGroup evaluate per member change — dense
+// per-lesson tables plus the monolithic (owner, slot) count maps replace the
+// six per-constraint deltaCost calls (which re-scan the slot's members).
+// Metadata (weight / level / exponent) stays calculator-owned, so the knobs
+// keep working unchanged.
 struct GroupableSlotConstraint : CanonUnitConstraint
 {
     using CanonUnitConstraint::CanonUnitConstraint;

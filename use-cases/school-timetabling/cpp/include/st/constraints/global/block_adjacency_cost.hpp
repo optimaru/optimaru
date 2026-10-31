@@ -1,24 +1,29 @@
-#ifndef ST_CONSTRAINTS_GLOBAL_BLOCK_ADJACENCY_HPP
-#define ST_CONSTRAINTS_GLOBAL_BLOCK_ADJACENCY_HPP
+#ifndef ST_CONSTRAINTS_GLOBAL_BLOCK_ADJACENCY_COST_HPP
+#define ST_CONSTRAINTS_GLOBAL_BLOCK_ADJACENCY_COST_HPP
 
 #include "st/constraints/global/global_constraint.hpp"
 
 namespace st::canon
 {
 
-// Hard (default): H8 — per block group with k assigned members: (k-1) minus
-// the same-day consecutive-period adjacencies, plus one per missing member
-// while 0 < k < groupSize (the shared blockViolation helper — see there for
-// why a half-placed block is not free). The moved lesson's whole (small)
-// group is recomputed per touch,
-// from this component's own slot map (the solution's variable already holds
-// the NEW value while the old unit's leave is delivered).
-struct BlockAdjacency final : MemberChangeGlobalConstraint
+// blockAdjacencyCost — hard, weight 1. Raw cost = sum over the block groups
+// (a course's block_periods consecutive periods) of: with k assigned
+// members, (k-1) minus the same-day consecutive-period adjacencies, plus one
+// per missing member while 0 < k < groupSize (the shared blockViolation
+// helper — see there for why a half-placed block is not free). 0 = every
+// block sits on one day in consecutive periods (or is not placed at all,
+// which unassignedLessonsCost prices). The moved lesson's whole (small)
+// group is recomputed per touch, from this component's own slot map (the
+// solution's variable already holds the NEW value while the old unit's leave
+// is delivered).
+struct BlockAdjacencyCost final : MemberChangeGlobalConstraint
 {
-    explicit BlockAdjacency(double weight = 1.0)
-        : MemberChangeGlobalConstraint("H8 block adjacency",
-                                       weight,
-                                       /*hard=*/true)
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
+
+    explicit BlockAdjacencyCost(double weight = kDefaultWeight)
+        : MemberChangeGlobalConstraint(
+              "blockAdjacencyCost", weight, kDefaultLevel)
     {
     }
     void reset(const Timetable &table,
@@ -75,11 +80,11 @@ private:
     }
     std::vector<int> slotOf_;              // lesson -> slot (-1 = unassigned)
     std::vector<std::int32_t> groupOf_;    // lesson -> block group (-1 = none)
-    std::vector<std::int64_t> violation_;  // current H8 value per group
+    std::vector<std::int64_t> violation_;  // current raw cost per group
     std::vector<std::pair<int, int>> scratch_;
     std::int64_t total_ = 0;
 };
 
 }  // namespace st::canon
 
-#endif  // ST_CONSTRAINTS_GLOBAL_BLOCK_ADJACENCY_HPP
+#endif  // ST_CONSTRAINTS_GLOBAL_BLOCK_ADJACENCY_COST_HPP
