@@ -2,19 +2,15 @@
 #define OPTIMARU_IMPL_LOCALSEARCH_DEFAULT_LOCAL_SEARCH_PHASE_HPP
 
 #include <algorithm>
-#include <cmath>
 #include <cstdint>
 #include <functional>
-#include <limits>
 #include <memory>
 #include <random>
-#include <utility>
 #include <vector>
 
 #include "optimaru/api/domain/solution_descriptor.hpp"
 #include "optimaru/api/score/director/score_director.hpp"
 #include "optimaru/config/solver/solver_config.hpp"
-#include "optimaru/impl/constructionheuristic/default_construction_heuristic_phase.hpp"
 #include "optimaru/impl/heuristic/selector/common/nearby/nearby_neighborhoods.hpp"
 #include "optimaru/impl/heuristic/selector/move/generic/ruin_recreate_selector.hpp"
 #include "optimaru/impl/heuristic/selector/move/generic/ruin/random_ruin.hpp"
@@ -65,7 +61,6 @@ namespace optimaru {
 template <typename Solution>
 class DefaultLocalSearchPhase {
     using Descriptor = SolutionDescriptor<Solution>;
-    using ConstructionHeuristic = DefaultConstructionHeuristicPhase<Solution>;
     using Snapshot = SolutionSnapshot<Solution>;
 
 public:

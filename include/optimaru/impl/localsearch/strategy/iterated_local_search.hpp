@@ -13,7 +13,6 @@
 #include "optimaru/impl/localsearch/element_index.hpp"
 #include "optimaru/impl/localsearch/greedy_repair.hpp"
 #include "optimaru/impl/localsearch/list_move.hpp"
-#include "optimaru/impl/localsearch/preview_evaluation.hpp"
 #include "optimaru/impl/localsearch/termination_throttle.hpp"
 #include "optimaru/impl/localsearch/solution_snapshot.hpp"
 #include "optimaru/preview/api/move/operators.hpp"
@@ -121,7 +120,6 @@ public:
         }
     }
 
-    std::int64_t evaluations() const { return evaluations_; }
     std::int64_t declined() const { return declined_; }
 
     // Slow-path (declined-preview) evaluations one run() tolerates: at an

@@ -45,8 +45,6 @@ public:
     virtual void update(int operatorIndex, LnsOutcome outcome) = 0;
     virtual void reset() {}
 
-    int operatorCount() const { return operatorCount_; }
-
 protected:
     int operatorCount_;
 };

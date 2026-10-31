@@ -856,7 +856,6 @@ class ChainDistanceCalculator final
 public:
     void resetWorkingSolution(ChainedVrp& s,
                               const std::vector<std::vector<int>>& chains) override {
-        sched_ = &s;
         perChain_.assign(chains.size(), 0.0);
         total_ = 0;
         for (std::size_t a = 0; a < chains.size(); ++a) {
@@ -874,7 +873,6 @@ public:
     HardSoftScore calculateScore() override { return {0, -total_}; }
 
 private:
-    ChainedVrp* sched_ = nullptr;
     std::vector<double> perChain_;
     double total_ = 0;
 };

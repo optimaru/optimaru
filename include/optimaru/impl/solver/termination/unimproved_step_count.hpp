@@ -1,7 +1,6 @@
 #ifndef OPTIMARU_IMPL_SOLVER_TERMINATION_UNIMPROVED_STEP_COUNT_HPP
 #define OPTIMARU_IMPL_SOLVER_TERMINATION_UNIMPROVED_STEP_COUNT_HPP
 
-#include <chrono>
 #include <cstdint>
 
 #include "optimaru/impl/solver/termination/termination_criterion.hpp"
