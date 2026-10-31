@@ -130,7 +130,7 @@ Raw costs and the default score are unchanged.
 
 ## Extending
 
-Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-c-engine-use-case).
+Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-use-case).
 The planning variable is **LIST**; the domain solver that configures the
 engine is `cpp/include/vrp/solver.hpp` + `cpp/src/solver.cpp`.
 

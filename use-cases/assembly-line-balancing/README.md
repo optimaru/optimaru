@@ -163,7 +163,7 @@ print(AssemblyLineBalancingProblemModel.from_core(core).station_loads)
 from assembly_line_balancing.constraints import WorkloadImbalanceCost, get_constraints, score
 
 alb.constraint_info()          # [ConstraintInfo(name='station_capacity_cost', default_level='hard', ...), ...]
-alb.solve(problem, constraints=[*get_constraints()[:-1], WorkloadImbalanceCost(weight=1)])
+alb.solve(problem, time_limit_seconds=1.0, constraints=[*get_constraints()[:-1], WorkloadImbalanceCost(weight=1)])
 raw = alb.constraint_costs(problem)                 # raw costs, re-priced in pure Python:
 score(raw), score(raw, [*get_constraints()[:-1], WorkloadImbalanceCost(weight=2)])
 ```
@@ -189,7 +189,7 @@ print({task.id: task.station for task in warm.tasks}, warm.stations_used)
 
 ## Extending
 
-Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-c-engine-use-case).
+Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-use-case).
 The planning variable is **BASIC**; the domain solver that configures the engine is
 `cpp/include/alb/solver.hpp` + `cpp/src/solver.cpp`.
 

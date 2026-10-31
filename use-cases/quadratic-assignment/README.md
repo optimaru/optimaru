@@ -113,6 +113,17 @@ other C++ use cases.
   (0.1.5: `on_new_best(state)`). Parallel starts are the engine's multi-start:
   every worker starts from the same permutation with seed + i (0.1.5 perturbed the
   start with 3k swaps and ran one chain).
+- **Acceptors.** `LATE_ACCEPTANCE` (the default) and the others work on swaps
+  only, and no move perturbs a permutation (ruin-and-recreate would break the
+  bijection). So late acceptance stops improving at a 2-swap local optimum: most
+  of a long budget can be idle, and re-solving a returned solution rarely
+  improves it. Use the `unimproved_*` limits to stop early, independent starts
+  (`parallel_solver_count`), `RECORD_TO_RECORD_TRAVEL`, or `SIMULATED_ANNEALING`,
+  whose starting temperature is automatic: `simulated_annealing_temperature_fraction`
+  (0.01) × |start soft|, or `simulated_annealing_starting_temperature` set
+  explicitly; it cools to 0 over the time limit, or over `step_count_limit` when
+  that is further along. `ENTITY_TABU` accepts only non-worsening swaps (a hill
+  climber), and `GREAT_DELUGE` keeps the start score as its water level.
 - `solve()` returns the engine `Score` (`.hard`, `.soft`, `is_feasible()`; 0.1.5:
   a tuple) and takes the engine object or the model (written back in place).
   `calculate_score(problem, constraints)` returns the engine `Score` for the
@@ -197,7 +208,7 @@ print(core.assignment(), core.total_cost())                          # per locat
 from quadratic_assignment.constraints import FlowDistanceCost, PinnedAssignmentsCost, get_constraints, score
 
 qap.constraint_info()      # [ConstraintInfo(name='pinned_assignments_cost', default_level='hard', ...), ...]
-qap.solve(problem, constraints=[*get_constraints()[:-1], FlowDistanceCost(weight=2)])
+qap.solve(problem, time_limit_seconds=1.0, constraints=[*get_constraints()[:-1], FlowDistanceCost(weight=2)])
 raw = qap.constraint_costs(problem)                  # raw costs, re-priced in pure Python:
 score(raw), score(raw, [PinnedAssignmentsCost(hard=False), *get_constraints()[1:]])
 ```
@@ -246,7 +257,7 @@ because the QAPLIB archive download was not reachable when 0.2.0 was prepared.
 
 ## Extending
 
-Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-c-engine-use-case).
+Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-use-case).
 The planning variable is **BASIC**; the domain solver that configures the engine is
 `cpp/include/qap/solver.hpp` + `cpp/src/solver.cpp`.
 

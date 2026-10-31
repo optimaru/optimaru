@@ -116,7 +116,8 @@ steps; `machine_preference_cost` charges even on a duration mismatch.
   `spent_limit_seconds=0` (the start is returned as is) and `max_iterations=N` becomes
   `step_count_limit=N`. The `anneal` / `configure` helpers and `common.py` are gone.
 - **Search**: the engine's simulated annealing over the decoded state (auto temperature:
-  1% of the start's soft score, cooling over the time limit; change moves steered to a
+  1% of the start's soft score, cooling over the time limit, or over `step_count_limit` when
+  that is further along; change moves steered to a
   machine switch or a small priority shift, plus a priority swap of two lots' operations)
   replaces the Python simulated annealing; `parallel_solver_count` runs independent
   threads (seed + i), the strictly best wins. With `constraints=...` the solve is single
@@ -220,7 +221,7 @@ relative order, but its start times are recomputed.
 
 ## Extending
 
-Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-c-engine-use-case).
+Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-use-case).
 The planning variable is **BASIC** (the composite rank x slot value); the domain solver is
 `cpp/include/fab/solver.hpp` + `cpp/src/solver.cpp`.
 

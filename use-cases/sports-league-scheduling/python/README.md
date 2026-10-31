@@ -74,7 +74,7 @@ from sports_league.constraints import WorkdayClassicMatchesCost, get_constraints
 sl.constraint_info()
 # [ConstraintInfo(name='start_to_away_hop_cost', default_level='soft', default_weight=1.0,
 #                 level_flippable=True, reward=False, default_enabled=True), ...]
-sl.solve(schedule, constraints=get_constraints(
+sl.solve(schedule, time_limit_seconds=1.0, constraints=get_constraints(
     [*get_constraints()[:2], WorkdayClassicMatchesCost(weight=10_000), *get_constraints()[3:]]))
 raw = sl.constraint_costs(schedule)       # raw costs, re-priced in pure Python:
 score(raw), score(raw, [WorkdayClassicMatchesCost(hard=True)])

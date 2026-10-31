@@ -65,10 +65,24 @@ Both are exact: the hard level in int64, the soft level within a double (exact u
 `task_assigning.constraints.score()` folds the same way.
 
 Level priority holds while `|soft0| < 10^9` (task count), `|soft2| < 10^7`
-(weighted endTime sum), `|soft1| < 9x10^8` (sum of endTime^2). It stays exact up to
-horizons of tens of thousands of minutes — the same practical range in which Java's
-int-based BendableScore does not overflow. The Python `Score` exposes all four levels
-(`hard`/`soft0`/`soft1`/`soft2`) as-is.
+(weighted endTime sum), `|soft1| < 9x10^8` (sum of endTime^2). At the default
+weights and exponent 1 it stays exact up to horizons of tens of thousands of
+minutes — the same practical range in which Java's int-based BendableScore does not
+overflow. The Python `Score` exposes all four levels (`hard`/`soft0`/`soft1`/`soft2`)
+as-is; `soft1` / `soft2` are the soft level split by 10^7, so they are the two terms
+only at the default weights.
+
+Outside that range:
+
+- `SquaredMakespanCost(exponent=2)` shapes the already squared cost again
+  (endTime^4 per employee), which leaves the exact 2^53 window from an end time of
+  about 173 minutes on one employee; a soft level beyond int64 raises
+  `OverflowError` instead of decoding to nonsense.
+- The `below_hard` fold leaves the hard level 1/10^9 of the int64 range: hard
+  penalties above about 9.2x10^9 weighted units saturate at -(2^63 - 1). Keep
+  `RequiredSkillCost` at weight 1 (0.1.5's `NoMissingSkills` default 1e9 is now
+  the fold), and give a soft term made hard a small weight
+  (`SquaredMakespanCost(hard=True, weight=1)`).
 
 ## Constraints (same semantics as Java `TaskAssigningConstraintProvider`, 6 of them)
 

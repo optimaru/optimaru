@@ -38,6 +38,33 @@ Hard contributions are rounded per unit (per global constraint for a global),
 not once on the hard total. The result differs from 0.1.x only for fractional
 hard weights, or when a shaped value is fractional.
 
+**The range of a score.** The engine's hard level is an int64, and every
+scoring path (the engine, `score()` / `score_costs()`) applies the same two
+rules:
+
+- One contribution (a unit's `weight × shape(cost, exponent)`, or a global
+  constraint's) must be finite, and a hard one, or a medium one that a
+  `below_hard` fold lands in the hard level, must stay below 2^62 (about
+  4.6e18). Otherwise scoring raises `OverflowError` naming the constraint.
+  A huge exponent (`cost**200`) or weight used to give `nan` / `-inf` scores
+  in the engine and `OverflowError` in Python, or a wrapped hard score.
+- The hard total is summed exactly and saturates at −(2^63 − 1) instead of
+  wrapping. A penalty beyond int64 used to wrap to a positive hard score that
+  `is_feasible()` reported as feasible, and the search then chased it; now it
+  reports −9223372036854775807hard, and a larger penalty never looks better
+  than a smaller one (saturated scores tie). With task-assigning's
+  `below_hard` fold (hard × 1e9 + medium) the hard level keeps 1/1e9 of that
+  range: about 9.2e9 weighted hard units.
+
+The int-level Score adapters (bed-allocation, food-packaging,
+pickup-delivery, project-job-scheduling, task-assigning, vehicle-routing)
+report medium and soft as integers, rounded per level (half away from zero),
+and raise `OverflowError` for a level beyond int64. With a fractional weight
+or exponent on a medium or soft term their reported `Score` can therefore
+differ by less than one unit per level from
+`constraints.score(constraint_costs(x), selection)`, which keeps the
+fraction; the search itself compares the unrounded engine score.
+
 **Levels: hard, medium, soft.** Some domains have a medium level between hard
 and soft. Medium is a default-only level: there is no medium knob, and
 `hard=None` keeps it. A medium constraint has default weight 1 in medium
@@ -98,8 +125,9 @@ constants, and Python reads them through the new catalog:
   `default_enabled` is True when the constraint is in the default set with a
   weight > 0.
 - A catalog can be wider than the default set: the default rows come first,
-  in `list_constraints()` order, then any catalog-only rows with
-  `default_enabled=False` (employee-scheduling).
+  in `get_constraints()` order, then any catalog-only rows with
+  `default_enabled=False` (employee-scheduling, whose `list_constraints()`
+  lists all 30 names in factory order).
 - Python spec classes declare no `default_weight` / `default_hard` /
   `default_level`. They carry `label_en`, `label_ko`, `description_en` and
   `description_ko`.
@@ -121,13 +149,19 @@ and `scripts/check_constraint_base.py` enforces this in CI. In every package:
 - `get_constraints()` refuses an empty list and a constraint picked twice
   ("picked more than once").
 - `select(constraints, defaults, *, repeatable=False)` and `instance_keys()`
-  are new. `repeatable=True` allows one name several times with different
-  parameters (employee-scheduling).
+  are new in the shared base (`<package>._constraint`; employee-scheduling's
+  `constraints` re-exports both). `repeatable=True` allows one name several
+  times with different parameters (employee-scheduling).
 - Knob types are checked the same way in Python and C++: `weight=True` or a
   string, and `hard=1` or `'x'`, raise `TypeError`
   (`constraint '<name>': weight must be a number or None, not True`).
   `numpy.bool_` is accepted for `hard`.
 - Out-of-range values raise `ValueError`.
+- `score_costs()` rounds hard contributions exactly like `std::llround` for
+  every double. The first 0.2.0 copies (and 0.1.x) added 0.5 first, which
+  rounded 0.49999999999999994 up to 1 and odd integers in [2^52, 2^53) up by
+  one, so Python could report 1 more hard unit than the engine. The
+  cpsat-common `ObjectiveBuilder.score_costs()` uses the same formula.
 
 **Scores of a selection.** On the `constraints=` path, bed-allocation,
 food-packaging, pickup-delivery, project-job-scheduling and vehicle-routing
@@ -135,8 +169,34 @@ report the final `score` and every `on_new_best` score from the
 calculator's three level accumulators (`levelScores()`), before the medium
 fold. A demoted or re-weighted term therefore shows on the level the
 selection gave it, and a large soft total (1e9 or more; 1e10 for
-food-packaging) no longer appears as medium. Results at the defaults are
+food-packaging) no longer appears as medium. task-assigning does the same
+for its hard and medium (`soft0`) levels. Results at the defaults are
 identical.
+
+**Solving from Python (all 22 use cases).**
+
+- A raising `on_new_best` callback raises from `solve()` on every path. With
+  `parallel_solver_count > 1`, flight-crew-scheduling, food-packaging,
+  knapsack, quadratic-assignment, task-assigning and school-timetabling's
+  quickstart mode used to abort the whole process (`std::terminate`); the
+  engine's multi-start now catches the first error, stops the other starts
+  and rethrows it.
+- vehicle-routing and pickup-delivery `Solver.solve` release the GIL like
+  every other package. With `on_new_best` and `parallel_solver_count >= 2`
+  they used to deadlock.
+- conference-scheduling calls `on_new_best` on the `constraints=` path too.
+- Time limits (`spent_limit_seconds`, `unimproved_spent_limit_seconds`,
+  employee-scheduling's `no_improvement_limit_seconds`) must be finite and
+  `>= 0` in every package (`ValueError`). Some packages accepted `-1`, and
+  all accepted NaN and infinity (an infinite limit read back as a zero
+  budget).
+- `solve(config=cfg, ...)` applies its keyword arguments to a copy, so a
+  time limit, seed, `on_new_best` or `stop_at_first_feasible` no longer leaks
+  into `cfg` and later solves that reuse it. `SolverConfig` supports
+  `copy.copy()` and `copy.deepcopy()`.
+- A score whose soft level is 0 prints `0soft`, not `-0soft`
+  (maintenance-scheduling, meeting-scheduling, sports-league-scheduling,
+  school-timetabling's canonical model).
 
 ### Engine (C++, `include/optimaru`)
 
@@ -150,8 +210,9 @@ identical.
   function. The constructors take `(name, weight, Level)`.
 - `ConstraintAssembly`: `weight()`, `level()`, `hard()`, `soft()`,
   `exponent()`, `drop()`, `only()`, `names()` and `info()` (the catalog).
-  `hard()` throws on a reward, and `hard()` / `soft()` throw on a
-  non-flippable constraint. `optimaru::catalogInfo(defaults, catalog)` builds
+  `hard()` throws on a reward, and `hard()` / `soft()` throw when they would
+  change the level of a non-flippable constraint (re-stating its level is a
+  no-op). `optimaru::catalogInfo(defaults, catalog)` builds
   a catalog that is wider than the default set.
 - `DecomposedScoreCalculator` keeps three accumulators and folds medium with
   the domain's `MediumFold`. `levelScores()` reports the three levels before
@@ -168,6 +229,25 @@ identical.
   the knob guards, the catalog, exponent shaping (including sign preservation
   on a reward), the random-walk incremental vs. recompute check for both
   folds, and preview parity on a LIST-kind domain with a medium level.
+- Score range (see *The range of a score*): `HardTotal` (an exact,
+  non-wrapping hard sum), `roundHardContribution` /
+  `checkedSoftContribution` (`std::overflow_error` naming the constraint),
+  `foldBelowHardSaturating`, and `MediumFold::toEngine`, which now saturates
+  the `below_hard` fold. `roundScoreLevel()` is the range-checked rounding
+  for a domain's int64 Score level, and `withoutNegativeZero()` keeps a zero
+  soft level positive (`MediumFold::toEngine` applies it).
+- `DefaultSolver::solveMultiStart` is exception-safe: the first exception
+  thrown in a start is caught on its thread, the other starts stop at their
+  next step (`SolverTermination` takes a second, run-scoped stop flag), every
+  thread is joined and the exception is rethrown on the calling thread.
+  `terminateEarly()` now reaches every start, and the acceptor factory is
+  shared with them.
+- Simulated annealing cools over the run's step limit when that is further
+  along than the time limit (`SolverTermination::timeGradient()`). A
+  step-limited run used to stay near its starting temperature because the
+  30 s wall-clock limit was far away, and was not repeatable.
+- `python/solver_config.hpp`: `secondsToMillis()` (the time-limit rule) and
+  `bindConfigCopy()` (`SolverConfig.__copy__` / `__deepcopy__`).
 - Removed: the `(name, weight, bool hard)` constructors and the assignable
   `isHard` member.
 
@@ -189,6 +269,13 @@ identical.
   constraint, otherwise its fixed level. `default_enabled` comes from the
   engine row, and `params` is `{weight: None, hard: None, exponent: 1.0}`.
 - `exponent != 1` and non-integer weights are still rejected on CP-SAT.
+- A Mapping selection gets the spec base's knob checks: `hard='false'` or
+  `hard=1`, `weight=True` and `enabled='no'` raise `TypeError`, a negative or
+  non-finite weight `ValueError`. An `exponent` key is accepted, so the
+  catalog row's `params` and the server's
+  `{name, enabled, weight, hard, exponent}` shape feed back as selections;
+  only an exponent other than 1.0 raises (`exponent is not supported by
+  CP-SAT`).
 
 ### The six C++ ports
 
@@ -210,8 +297,11 @@ constraint, a pybind11 extension `<package>._core` and a CP-SAT reference on
   Without a time limit, a solve runs the 30 s default budget.
 - `solve()` returns the engine `Score` (`.hard`, `.soft`, `is_feasible()`)
   instead of a tuple. It takes the pydantic model (written back in place) or
-  the core object. `calculate_score(problem)` returns the engine `Score`, and
-  `calculate_score(problem, constraints)` returns a `constraints.Score`.
+  the core object (bin-packing: the core object only, as in 0.1.5; convert a
+  model with `to_core()`). `calculate_score(problem)` returns the engine
+  `Score`, and `calculate_score(problem, constraints)` returns a
+  `constraints.Score` named tuple (bin-packing and semiconductor-scheduling:
+  the engine `Score`).
   `DEFAULTS` and the top-level `score` are removed; use
   `constraints.get_constraints()` and `constraints.score()`.
 - `constraint_costs()` returns the standard dict described above, instead of
@@ -310,6 +400,8 @@ constraint, a pybind11 extension `<package>._core` and a CP-SAT reference on
 - The three diversity constraints are rewards. `hard=True` raises, and
   `hard=False` is a no-op. `audience_type_diversity_cost` still rewards
   same-timeslot pairs that share an audience type (the 0.1.x arithmetic).
+- `solve(..., constraints=...)` and `Solver.solve_with_constraints` call
+  `on_new_best` (0.1.5 dropped the callback on that path).
 
 #### employee-scheduling
 
@@ -317,12 +409,24 @@ constraint, a pybind11 extension `<package>._core` and a CP-SAT reference on
   (`"Missing required skill"` → `requiredSkillCost`). Parametrized display
   names became the per-instance `label`. `constraint_totals()` and
   `rule_totals` report `{name, label, cost, level, is_hard}`.
-- One class per constraint. The hand-written pydantic `*Rule` models are
-  generated from the specs as `<SpecClass>Rule` (for example,
-  `MaxConsecutiveDaysRule` → `MaxConsecutiveDaysCostRule`,
-  `UnavailableWorkerRule` → `EmployeeUnavailabilityCostRule`), so 0.1.5
-  imports raise `ImportError`. Use `models.rule_model(name)` or pass spec
-  instances. `rule.to_spec()` returns the spec.
+- One class per constraint: the spec. The hand-written pydantic `*Rule`
+  models are gone; their JSON form is generated from the specs as
+  `<SpecClass>Model` (for example `MaxConsecutiveDaysCostModel`; no class
+  ends in `Rule`), so 0.1.5 imports such as `MaxConsecutiveDaysRule` or
+  `AssignmentCostRule` raise `ImportError`. Pass spec instances (or JSON
+  dicts) to `SchedulingInput.rules`, or use `models.rule_model(name)`.
+  `rule.to_spec()` returns the spec. `Rule` (the union), `RuleBase`,
+  `RULE_MODELS`, `default_rules()`, `RuleTotal` and the `rules` /
+  `rule_totals` JSON fields keep their names.
+- `SchedulingInput.rules` follows `get_constraints()`: an empty list and the
+  same rule with the same parameters twice raise `ValidationError`, and so
+  do `DecomposedCalculator(list)` and `constraint_costs(schedule, list)`
+  (`ValueError`; `DecomposedCalculator()` plus `add()` still builds
+  incrementally). It validates on assignment too
+  (`model_input.rules = [MaxConsecutiveDaysCost(...)]` used to skip the
+  validator and fail in `solve_request` with `AttributeError: ... to_spec`).
+  The rule models' `weight` / `exponent` refuse a bool or a numeric string,
+  as the specs do.
 - JSON: `policy: "hard" | "soft"` is replaced by `hard: true | false | null`,
   and `weight` defaults to `null` (the C++ default, 1). Scope keys
   (`worker_indices` / `shift_indices`) are accepted only on per-employee rules
@@ -336,8 +440,13 @@ constraint, a pybind11 extension `<package>._core` and a CP-SAT reference on
   the rule factory accepts. The default set is `get_constraints()`.
 - The 10 constraints that existed only as rule models now have spec classes.
   `UndesiredDayCost` / `DesiredDayCost` gain `per_day`, and
-  `MinWeeklyMinutesCost` gains `week_anchor`, which the C++ path now uses.
-  Spec parameters validate their bounds at construction.
+  `MaxWeeklyMinutesCost` / `MinWeeklyMinutesCost` gain `week_anchor`, which
+  the C++ path now uses. Spec parameters validate their bounds at
+  construction.
+- The per-employee specs carry the rule scope as dataclass fields
+  `worker_indices` / `shift_indices`, declared before the domain parameters,
+  so build specs with keyword arguments: a 0.1.5-style positional
+  `MaxConsecutiveDaysCost(None, None, 1.0, 5)` binds 5 to `worker_indices`.
 - Documentation fix: `worker_location_count_cost` and
   `worker_day_count_in_range_cost` are soft by default, as they always were.
   The location-run labels now name their location.
@@ -507,6 +616,17 @@ constraint, a pybind11 extension `<package>._core` and a CP-SAT reference on
 - Search is late acceptance over swap moves only. It starts from the identity
   or a warm-start bijection, and the result is asserted to be a bijection.
   `acceptor_type` and `entity_tabu_size` are exposed.
+- `SIMULATED_ANNEALING` gets an automatic starting temperature
+  (`simulated_annealing_temperature_fraction` × |start soft|, 0.01 by
+  default; `simulated_annealing_starting_temperature` sets it explicitly),
+  as in semiconductor-scheduling. With the engine default (0, 0) it was
+  hill climbing. `ENTITY_TABU` accepts only non-worsening swaps, and
+  `GREAT_DELUGE` keeps the start score as its water level.
+- No move perturbs a permutation (ruin-and-recreate would break the
+  bijection), so late acceptance stops improving at a 2-swap local optimum:
+  most of a long budget can be idle, and re-solving a returned solution
+  rarely improves it. Use the `unimproved_*` limits, independent starts,
+  `RECORD_TO_RECORD_TRAVEL` or `SIMULATED_ANNEALING`.
 - The input assignment must be representable even without `warm_start`:
   known ids, and no facility on two locations. Otherwise `to_core()` raises
   `ValueError`. A partial assignment is scored on the core; model-level
@@ -578,8 +698,22 @@ constraint, a pybind11 extension `<package>._core` and a CP-SAT reference on
   each item). `constraint_costs()` returns the standard dict, and the 0.1.x
   per-item lists are available as `constraint_items(problem)`.
 - Search is the engine's simulated annealing with an automatic temperature.
-  `on_new_best(step, Score)` replaces `on_new_best(state)`, and the returned
-  `Score` is also an iterable, comparable (hard, soft) pair.
+  It cools over `step_count_limit` when that is further along than the time
+  limit, so `max_iterations=N` → `step_count_limit=N` anneals (and a seeded
+  step-limited run repeats). `on_new_best(step, Score)` replaces
+  `on_new_best(state)`, and the returned `Score` is also an iterable,
+  comparable (hard, soft) pair.
+- The pydantic models are no longer re-exported from the package root (they
+  were by accident in 0.1.5); import them from
+  `semiconductor_scheduling.models`.
+- Labels name what is charged: `batch_family_conflict_cost` "Batch
+  recipe-family conflict", `missing_setup_time_cost` "Missing setup time",
+  `machine_unavailability_cost` "Equipment unavailability",
+  `missing_transport_time_cost` "Missing transport time",
+  `auxiliary_resource_unavailability_cost` "Auxiliary resource
+  unavailability", `min_batch_size_cost` "Batch below minimum size",
+  `machine_load_imbalance_cost` "Equipment-group load imbalance" (and the
+  Korean labels to match).
 - Times, durations, priorities and costs are exact int64. A derived value that
   leaves int64 raises `OverflowError`, and `to_core()` refuses inputs beyond
   |2**62|. A solve that raises leaves the schedule in data mode.
@@ -589,8 +723,9 @@ constraint, a pybind11 extension `<package>._core` and a CP-SAT reference on
 #### sports-league-scheduling
 
 - Renames: `matches_on_same_day` → `team_conflict_cost` and
-  `classic_matches` → `workday_classic_matches_cost`; the hop and run rules
-  gain `_cost`.
+  `classic_matches` → `workday_classic_matches_cost`; the hop, run and
+  repeat-match rules (`repeat_match_on_next_day` →
+  `repeat_match_on_next_day_cost`) gain `_cost`.
 - The Python `Breakdown` and `compute_breakdown()` are removed; use
   `constraint_costs()`. The C++ `Breakdown` members are renamed.
 - CP-SAT: the workday-derby default weight is fixed (1 → 1000, as in the
@@ -612,8 +747,18 @@ constraint, a pybind11 extension `<package>._core` and a CP-SAT reference on
     skill.
   - `RequiredSkillCost(hard=False)` is 1 soft unit per missing skill.
   - A soft constraint made hard decodes into `Score.hard`.
+- Migrating: 0.1.5's `NoMissingSkills(weight=1e9)` (its default) is
+  `RequiredSkillCost()` (weight 1) in 0.2.0. Weight 1e9 would ask for 1e18
+  engine units per missing skill, which the fold saturates from 10 missing
+  skills on (see *The range of a score*): about 9.2e9 weighted hard units
+  fit. The same holds for a soft term made hard: `SquaredMakespanCost(hard=True)`
+  at its default weight 1e7 charges 1e7 hard units per squared minute and
+  saturates on most instances; give it `weight=1` when you make it hard.
 - `squared_makespan_cost` keeps its default weight of 1e7, so it stays above
   the priority terms.
+- On the `constraints=` path, `solution.score` and `on_new_best` read the
+  calculator's hard and medium levels instead of decoding the folded hard
+  level (a medium weight of 1e9 or more used to show as missing skills).
 - C++: `priorityWeight()` moved to `ta/constraints.hpp`.
   `PriorityTaskEndTime` takes `optimaru::Level` instead of `bool hard`.
 - CP-SAT: the levels are hard/medium/soft (were hard, soft0, soft1, soft2).
@@ -659,19 +804,23 @@ constraint, a pybind11 extension `<package>._core` and a CP-SAT reference on
 - The six ports' simulated-annealing knobs (`max_iterations`,
   `stagnation_limit`, `temperature`, `cooling_rate`), the `anneal` /
   `configure` helpers, the `SolverConfig` keyword constructor, `DEFAULTS` and
-  the top-level `score`. Also knapsack's `_greedy_selection`, and
-  quadratic-assignment's `common.py` and pure `_core.py`.
+  the top-level `score`. Also knapsack's `_greedy_selection`, and the
+  pure-Python `common.py` and `_core.py` of assembly-line-balancing,
+  knapsack, max-cut, quadratic-assignment and semiconductor-scheduling
+  (`Constraint` / `Score` / `SolverConfig` / `anneal` / `configure` /
+  `score_costs`; use `<package>.constraints` and the `_core` extension).
 - Problem-level weight fields:
   - facility-location: `setup_cost_weight` and `distance_from_facility_weight`
   - bin-packing: `capacity_weight`, `used_bin_weight`, `color_weight` and
     `conflict_weight`
   - school-timetabling: `canon.Timetable.weights`
 - Python spec ClassVars `default_hard` / `default_weight` / `default_level`,
-  and per-package copies of the spec base.
+  and the hand-written, divergent per-package spec bases (each package now
+  carries a byte-identical synced copy of the shared one).
 - school-timetabling: `CPSAT_ALIASES`, `STRUCTURAL_IN_ENGINE`, `ENGINE_ONLY`
   and `resolve_name`.
-- employee-scheduling: the hand-written `*Rule` models and the JSON `policy`
-  field.
+- employee-scheduling: the hand-written `*Rule` models (and every
+  `*Rule`-suffixed class) and the JSON `policy` field.
 - flight-crew-scheduling: the C++ `*_WEIGHT` constants.
 - Engine: the `(name, weight, bool hard)` constraint constructors and the
   assignable `isHard` member (use `level` / `setLevel()` / `isHard()`).

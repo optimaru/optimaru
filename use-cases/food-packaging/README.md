@@ -1,6 +1,6 @@
 # Food Packaging (C++ / Python)
 
-A C++ engine port of the The `food-packaging` example model (Apache-2.0; see the repository NOTICE).
+A C++ engine port of the `food-packaging` example model (Apache-2.0; see the repository NOTICE).
 Assigns packaging jobs (Job) to production lines (Line) **in order** — every product change
 inserts a cleanup time that depends on the previous product, and the cleaning windows of
 lines run by the same operator must not overlap.
@@ -117,7 +117,7 @@ Two things differ from the other use cases, on the default solve only (without `
 
 ## Extending
 
-Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-c-engine-use-case).
+Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-use-case).
 The planning variable is **LIST**; the domain solver that configures the
 engine is `cpp/include/fp/solver.hpp` + `cpp/src/solver.cpp`.
 

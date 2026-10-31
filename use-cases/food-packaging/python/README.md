@@ -41,7 +41,7 @@ fp.constraint_info()
 #                 level_flippable=True, reward=False, default_enabled=True), ...,
 #  ConstraintInfo(name='unassigned_jobs_cost', default_level='medium', default_weight=1.0, ...)]
 others = [spec for spec in get_constraints() if spec.name != "unassigned_jobs_cost"]
-fp.solve(schedule, constraints=[*others, UnassignedJobsCost(hard=False)])  # unassigned as soft
+fp.solve(schedule, time_limit_seconds=1.0, constraints=[*others, UnassignedJobsCost(hard=False)])  # unassigned as soft
 score(raw), score(raw, [*others, UnassignedJobsCost(weight=2)])            # re-priced in pure Python
 ```
 
