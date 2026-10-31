@@ -261,9 +261,24 @@ def test_the_search_takes_a_misplaced_required_request_to_its_vehicle():
 
     for seed in range(5):
         solution = solve_request(
+            # The steps end the solve; the time limit is only a safety net.
             PdpRequest(model_input=model_input, timelimit=60, random_seed=seed, solver_parameters=only_the_pair_move)
         )
         assert stops_of(solution, "v39") == ["ap", "ad"]
+
+
+@pytest.mark.parametrize("plugin_path", [False, True])
+def test_a_required_vehicle_outside_the_plan_is_refused_by_the_engine(plugin_path):
+    places = {"v": 0, "w": 0, "ap": 1, "ad": 2}
+    plan = pdp.models.to_plan(line_input([vehicle("v"), vehicle("w")], [bound("a", "w")], places))
+    plan.vehicles = plan.vehicles[:1]
+    solver = pdp._core.Solver(pdp._core.SolverConfig())
+
+    with pytest.raises(ValueError, match="requiredVehicleIndex out of range"):
+        if plugin_path:
+            solver.solve_with_constraints(plan, get_constraints())
+        else:
+            solver.solve(plan)
 
 
 def test_an_unknown_required_vehicle_is_refused():

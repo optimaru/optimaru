@@ -6,6 +6,7 @@
 #include <limits>
 #include <memory>
 #include <stdexcept>
+#include <string>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -152,9 +153,7 @@ public:
         {
             // A bound request only moves along its own route, which is also
             // where a repair has to put it back.
-            const int required = delivery.requiredVehicleIndex < vehicleCount
-                                     ? delivery.requiredVehicleIndex
-                                     : -1;
+            const int required = delivery.requiredVehicleIndex;
             if (ctx.nearby.enabled())
             {
                 pickupAnchor
@@ -764,6 +763,23 @@ void solveInParallel(const Solver::Config &config,
 namespace
 {
 
+// A required vehicle is a raw position in plan.vehicles, and the pair move uses
+// it as a list index, so a bad one has to stop here.
+void checkRequiredVehicles(const PdpRoutePlan &plan)
+{
+    const int vehicleCount = static_cast<int>(plan.vehicles.size());
+    for (const Delivery &delivery : plan.deliveries)
+    {
+        if (delivery.requiredVehicleIndex < -1
+            || delivery.requiredVehicleIndex >= vehicleCount)
+        {
+            throw std::invalid_argument(
+                "request " + delivery.id
+                + ": requiredVehicleIndex out of range");
+        }
+    }
+}
+
 // Shared engine wiring for both solve() overloads: termination, late
 // acceptance, the LIST move mix, the ALNS knobs and the driving-time nearby
 // selection (all pure problem-fact lookups, so they apply to the plugin path
@@ -896,6 +912,7 @@ optimaru::SolverConfig buildEngineConfig(const Solver::Config &config,
 
 void Solver::solve(PdpRoutePlan &plan)
 {
+    checkRequiredVehicles(plan);
     // Empty pool so the construction heuristic places every stop itself.
     if (config_.pairConstructionHeuristic && !plan.vehicles.empty())
         constructPairs(plan, config_.firstFitDecreasing);
@@ -942,6 +959,7 @@ void Solver::solve(
     PdpRoutePlan &plan,
     optimaru::DecomposedScoreCalculator<PdpRoutePlan> &calculator)
 {
+    checkRequiredVehicles(plan);
     if (config_.ruinRecreateRewards.size() != 4)
     {
         throw std::invalid_argument(

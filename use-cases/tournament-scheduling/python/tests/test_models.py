@@ -73,9 +73,9 @@ def test_assignment_model_defaults():
 @pytest.mark.parametrize(
     "section, field, value, message",
     [
-        ("unavailability_penalties", "team", 7, r"unavailability penalty: team 7 is out of range 0\.\.6"),
+        ("unavailability_penalties", "team", 7, r"unavailability penalty 0: team 7 is out of range 0\.\.6"),
         ("unavailability_penalties", "team", 99999999, "team 99999999 is out of range"),
-        ("unavailability_penalties", "day", 18, r"unavailability penalty: day 18 is out of range 0\.\.17"),
+        ("unavailability_penalties", "day", 18, r"unavailability penalty 0: day 18 is out of range 0\.\.17"),
         ("unavailability_penalties", "day", 99999999, "day 99999999 is out of range"),
         ("team_assignments", "day", 18, r"team assignment 0: day 18 is out of range 0\.\.17"),
         ("team_assignments", "day", 99999999, "day 99999999 is out of range"),

@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <random>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -481,6 +482,18 @@ void testConstructionRespectsRequiredVehicle()
               && contested.vehicles[1].nodeIndices == std::vector<int>({0, 1})
               && contested.score.isFeasible(),
           "a bound request is placed before a free one can take its slot");
+
+    PdpRoutePlan unknown = buildLine({0}, {{1, 100000}});
+    bool refused = false;
+    try
+    {
+        Solver(config).solve(unknown);
+    }
+    catch (const std::invalid_argument &)
+    {
+        refused = true;
+    }
+    check(refused, "a required vehicle outside the plan is refused");
     std::printf("\n");
 }
 

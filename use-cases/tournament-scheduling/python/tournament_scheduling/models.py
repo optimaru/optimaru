@@ -88,11 +88,15 @@ class TournamentScheduleModel(BaseModel):
         """Team and day positions the engine reads without a range check."""
         team_count = len(self.teams)
         day_count = len(self.days)
-        for penalty in self.unavailability_penalties:
+        for position, penalty in enumerate(self.unavailability_penalties):
             if not 0 <= penalty.team < team_count:
-                raise ValueError(f"unavailability penalty: team {penalty.team!r} is out of range 0..{team_count - 1}")
+                raise ValueError(
+                    f"unavailability penalty {position}: team {penalty.team!r} is out of range 0..{team_count - 1}"
+                )
             if not 0 <= penalty.day < day_count:
-                raise ValueError(f"unavailability penalty: day {penalty.day!r} is out of range 0..{day_count - 1}")
+                raise ValueError(
+                    f"unavailability penalty {position}: day {penalty.day!r} is out of range 0..{day_count - 1}"
+                )
         for assignment in self.team_assignments:
             if not 0 <= assignment.day < day_count:
                 raise ValueError(
