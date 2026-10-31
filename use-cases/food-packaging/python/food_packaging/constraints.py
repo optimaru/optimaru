@@ -9,137 +9,190 @@ a "default with a small tweak" declaration fits on one line::
 
     import food_packaging as fp
     from food_packaging.constraints import (
-        MinimizeMakespan, get_constraints, max_end_date_time,
+        SquaredMakespanCost, get_constraints, max_end_time_cost,
     )
 
     fp.solve(schedule, constraints=get_constraints())           # defaults as-is
     fp.solve(schedule, constraints=get_constraints([            # picked
-        max_end_date_time, MinimizeMakespan(weight=10),
+        max_end_time_cost, SquaredMakespanCost(weight=10),
     ]))
 
-Each constraint has a default instance at module level, so you can also pass a
-list of just a few. Only listed constraints are scored — leave one out and its
-term disappears from the score.
+Each constraint has a default instance at module level (`max_end_time_cost`,
+`unassigned_jobs_cost`, ...), so you can also pass a list of just a few. Only listed
+constraints are scored — leave one out and its term disappears from the score.
 
 Every spec takes ``(weight=None, hard=None, exponent=1.0)``:
 
-- ``weight``   linear multiplier on the constraint cost. ``None`` = component default.
-- ``hard``     ``True``/``False`` flips the default level; ``None`` keeps it.
-               **Medium constraints in this domain cannot be expressed with
-               this knob** — ``hard=False`` folds them into soft and the medium
-               meaning is lost. Leave medium terms at ``None``.
+- ``weight``   linear multiplier on the constraint cost, in units of its level.
+               ``None`` = the component default (``fp.constraint_info()`` reports
+               them).
+- ``hard``     ``True`` = hard, ``False`` = soft, ``None`` = the default level.
+               ``after_ideal_end_time_cost`` and ``unassigned_jobs_cost`` are MEDIUM
+               constraints: medium is a default-only level, so ``hard=True`` makes
+               them one hard unit per minute and ``hard=False`` one soft unit per
+               minute (outside the 10^10 medium fold), in the solver and in
+               :func:`score` alike. An explicit ``weight`` keeps them on the medium
+               level, in medium units.
 - ``exponent`` sign-preserving power shaping: ``weight * sign(c) * |c| **
-               exponent``. 2.0 = squared, so concentrated violations grow much costlier.
+               exponent``, per line for the unit constraints and on the single total
+               for the globals ``operator_cleaning_conflict_cost`` and
+               ``unassigned_jobs_cost``. 2.0 = squared, so concentrated violations
+               grow much costlier.
 
-Names (`name`) are the C++ component names in snake_case. The core derives them
-mechanically, so there is no hand-maintained alias table — check them with
-`fp.list_constraints()`. Module-level instance names use the same snake_case,
-so they match the strings `list_constraints()` prints.
+Names (`name`) are the C++ component names in snake_case
+(``MaxEndTimeCost`` -> ``max_end_time_cost``). The core derives them mechanically,
+so there is no hand-maintained alias table — check them with `fp.list_constraints()`.
+Module-level instance names use the same snake_case, so they match the strings
+`list_constraints()` prints.
 """
 
-import math
-from dataclasses import dataclass
-from typing import ClassVar, NamedTuple
+from ._constraint import Constraint, Score, score_costs, select
 
 __all__ = [
     "Constraint",
     "Score",
     "score",
-    "MaxEndDateTime",
-    "IdealEndDateTime",
-    "MinimizeMakespan",
-    "OperatorCleaningConflict",
-    "MaximizeJobsAssigned",
-    "max_end_date_time",
-    "ideal_end_date_time",
-    "minimize_makespan",
-    "operator_cleaning_conflict",
-    "maximize_jobs_assigned",
+    "MaxEndTimeCost",
+    "AfterIdealEndTimeCost",
+    "SquaredMakespanCost",
+    "OperatorCleaningConflictCost",
+    "UnassignedJobsCost",
+    "max_end_time_cost",
+    "after_ideal_end_time_cost",
+    "squared_makespan_cost",
+    "operator_cleaning_conflict_cost",
+    "unassigned_jobs_cost",
     "get_constraints",
 ]
 
 
-@dataclass(frozen=True)
-class Constraint:
-    """Spec selecting one constraint: weight / level / shaping."""
+class MaxEndTimeCost(Constraint):
+    """Minutes by which a job passes the end time it must not miss. Default: hard, weight 1.
 
-    weight: float | None = None  # None = component default weight
-    hard: bool | None = None  # None = component default level
-    exponent: float = 1.0
-    name: ClassVar[str] = ""
+    Unassigned jobs are silent here — `unassigned_jobs_cost` prices them."""
 
-    def __init_subclass__(cls, **kwargs):
-        super().__init_subclass__(**kwargs)
-        if not cls.name:
-            raise TypeError(f"{cls.__name__} must set a registry `name`")
-
-
-class MaxEndDateTime(Constraint):
-    """Minutes by which a job passes a deadline it must not miss. Default: hard, weight 1.
-
-    Unassigned jobs are silent here — `maximize_jobs_assigned` values them."""
-
-    name = "max_end_date_time"
+    name = "max_end_time_cost"
+    label_en = "Job past its latest end time"
+    label_ko = "최종 마감 시각 초과"
+    description_en = (
+        "Minutes by which an assigned job ends after its latest allowed end time (max_end_time), "
+        "summed over the jobs of every line. One unit of cost is one minute late; 0 means every "
+        "assigned job ends by its deadline. Jobs on no line are not counted here."
+    )
+    description_ko = (
+        "라인에 배정된 작업이 최종 마감 시각(max_end_time)보다 늦게 끝난 시간(분)을 모든 라인에 걸쳐 더합니다. "
+        "1분 늦을 때마다 비용 1이며, 0이면 배정된 모든 작업이 최종 마감 시각까지 끝납니다. "
+        "라인에 배정되지 않은 작업은 여기서 세지 않습니다."
+    )
 
 
-class IdealEndDateTime(Constraint):
-    """Minutes by which a job passes its ideal end date. Default: medium, weight 10^9.
+class AfterIdealEndTimeCost(Constraint):
+    """Minutes by which a job passes its ideal end time. Default: medium, weight 1 (medium units).
 
-    Missing the ideal date is a cost; missing `max_end_date_time` is a violation —
-    that is why the shape is the same but the level differs. The medium level is folded
-    into the engine soft level as `medium * kMediumUnit`."""
+    Missing the ideal time is a cost; missing `max_end_time_cost` is a violation —
+    that is why the shape is the same but the level differs. The domain folds medium
+    into the engine soft level as ``medium * 10^10``; the fold belongs to the domain
+    (every ``constraint_costs()`` entry carries it as ``medium_fold``), so the weight
+    carries no 10^10 factor."""
 
-    name = "ideal_end_date_time"
+    name = "after_ideal_end_time_cost"
+    label_en = "Job past its ideal end time"
+    label_ko = "이상적 종료 시각 초과"
+    description_en = (
+        "Minutes by which an assigned job ends after its ideal end time (ideal_end_time), summed "
+        "over the jobs of every line. One unit of cost is one minute past the ideal end; 0 means "
+        "every assigned job ends by its ideal time."
+    )
+    description_ko = (
+        "라인에 배정된 작업이 이상적인 종료 시각(ideal_end_time)보다 늦게 끝난 시간(분)을 모든 라인에 걸쳐 "
+        "더합니다. 1분 늦을 때마다 비용 1이며, 0이면 배정된 모든 작업이 이상적인 종료 시각까지 끝납니다."
+    )
 
 
-class MinimizeMakespan(Constraint):
+class SquaredMakespanCost(Constraint):
     """The **square** of each line's busy time. Default: soft, weight 1.
 
     Squaring pushes toward spreading jobs evenly across lines rather than just shrinking
     the total. An empty line costs nothing.
 
-    The square lives inside cost() rather than in `exponent` on purpose — exponent
-    is the knob that shapes the **weighted** cost, so keeping the square in the
-    definition lets callers layer more shaping on top."""
+    The square lives inside the raw cost rather than in `exponent` on purpose — the
+    exponent shapes the raw cost on top of it, so callers can still layer more shaping."""
 
-    name = "minimize_makespan"
+    name = "squared_makespan_cost"
+    label_en = "Squared line makespan"
+    label_ko = "라인 가동 시간의 제곱"
+    description_en = (
+        "For every line with jobs, the square of the minutes from the line start to the end of "
+        "its last job, summed over the lines; squaring favours spreading the work evenly. One "
+        "unit of cost is one squared minute; 0 means no line has a job."
+    )
+    description_ko = (
+        "작업이 있는 라인마다 라인 시작부터 마지막 작업이 끝날 때까지의 시간(분)을 제곱해 모두 더합니다. "
+        "제곱하기 때문에 작업을 라인에 고르게 나눌수록 유리합니다. 분 단위 시간을 제곱한 값 1(1분²)이 "
+        "비용 1이며, 0이면 어느 라인에도 작업이 없습니다."
+    )
 
 
-class OperatorCleaningConflict(Constraint):
+class OperatorCleaningConflictCost(Constraint):
     """Overlapping cleaning minutes on lines sharing one operator. Default: hard, weight 1.
 
     One person cannot clean two machines at once. The conflicting jobs sit on
     **different** lines, so this is a global constraint (two jobs on one line have
     strictly sequential cleaning windows and cannot overlap)."""
 
-    name = "operator_cleaning_conflict"
+    name = "operator_cleaning_conflict_cost"
+    label_en = "Operator cleaning overlap"
+    label_ko = "작업자 세척 시간 겹침"
+    description_en = (
+        "Minutes in which the cleaning windows of two jobs overlap on lines run by the same "
+        "operator, summed over every such pair of jobs. One unit of cost is one overlapping "
+        "minute; 0 means no operator has two cleanings at the same time."
+    )
+    description_ko = (
+        "같은 작업자가 맡은 라인들에서 두 작업의 세척 시간이 겹치는 시간(분)을 그러한 모든 작업 쌍에 대해 "
+        "더합니다. 겹치는 1분이 비용 1이며, 0이면 어떤 작업자도 두 세척을 동시에 하지 않습니다."
+    )
 
 
-class MaximizeJobsAssigned(Constraint):
-    """Production minutes of jobs on no packaging line. Default: medium, weight 10^9.
+class UnassignedJobsCost(Constraint):
+    """Production minutes of jobs on no packaging line. Default: medium, weight 1 (medium units).
 
     Dropping a long job hurts more than dropping a short one. A job can be in no list
     at all (the initial state before the construction heuristic), so the condition is
-    "on no line", which is global rather than a property of any single unit."""
+    "on no line", which is global rather than a property of any single unit. The
+    domain's medium fold (``medium * 10^10`` into soft) lives in the domain, not in the
+    weight."""
 
-    name = "maximize_jobs_assigned"
+    name = "unassigned_jobs_cost"
+    label_en = "Unassigned jobs"
+    label_ko = "미배정 작업"
+    description_en = (
+        "The production minutes of every job left on no packaging line, so leaving out a long "
+        "job costs more than a short one. One unit of cost is one unscheduled production "
+        "minute; 0 means every job is on a line."
+    )
+    description_ko = (
+        "어느 포장 라인에도 배정되지 않은 작업의 생산 시간(분)을 모두 더합니다. 따라서 긴 작업을 빼면 짧은 "
+        "작업을 뺄 때보다 비용이 큽니다. 배정되지 않은 작업의 생산 시간 1분이 비용 1이며, 0이면 모든 작업이 "
+        "라인에 배정되어 있습니다."
+    )
 
 
-#: Instances at the default weights. Reference them directly when picking.
-max_end_date_time = MaxEndDateTime()
-ideal_end_date_time = IdealEndDateTime()
-minimize_makespan = MinimizeMakespan()
-operator_cleaning_conflict = OperatorCleaningConflict()
-maximize_jobs_assigned = MaximizeJobsAssigned()
+#: Instances at the default weights (weight=None). Reference them directly when picking.
+max_end_time_cost = MaxEndTimeCost()
+after_ideal_end_time_cost = AfterIdealEndTimeCost()
+squared_makespan_cost = SquaredMakespanCost()
+operator_cleaning_conflict_cost = OperatorCleaningConflictCost()
+unassigned_jobs_cost = UnassignedJobsCost()
 
 #: Default set — same order as `fp.list_constraints()` (unit first, global after).
-_DEFAULTS: list[Constraint] = [
-    max_end_date_time,
-    ideal_end_date_time,
-    minimize_makespan,
-    operator_cleaning_conflict,
-    maximize_jobs_assigned,
-]
+_DEFAULTS = (
+    max_end_time_cost,
+    after_ideal_end_time_cost,
+    squared_makespan_cost,
+    operator_cleaning_conflict_cost,
+    unassigned_jobs_cost,
+)
 
 
 def get_constraints(constraints: list[Constraint] | None = None) -> list[Constraint]:
@@ -148,30 +201,12 @@ def get_constraints(constraints: list[Constraint] | None = None) -> list[Constra
     When `constraints` is given, that list is used as-is — only the listed
     constraints are scored. To change just one default, mix in the default instances::
 
-        get_constraints([max_end_date_time, MinimizeMakespan(weight=10)])
+        get_constraints([max_end_time_cost, SquaredMakespanCost(weight=10)])
+
+    Same contract as the C++ applyConstraints: an empty list (most likely a filter
+    that came out empty) and a constraint named twice raise ValueError.
     """
-    if constraints is None:
-        return list(_DEFAULTS)
-    if not constraints:
-        # Same contract as C++ applyConstraints: an empty list means "score
-        # nothing", which is most likely a mistake. A filter that happens to come
-        # out empty must not silently flip to "score everything".
-        raise ValueError("constraints must not be empty (pass None for the defaults)")
-    return list(constraints)
-
-
-class Score(NamedTuple):
-    """(hard, soft) returned by `score()`. Both are penalties, so <= 0."""
-
-    hard: int
-    soft: float
-
-
-def _shape(cost: float, exponent: float) -> float:
-    """Sign-preserving power. Rewards (negative costs) never flip into penalties."""
-    if exponent == 1.0 or cost == 0.0:
-        return cost
-    return -((-cost) ** exponent) if cost < 0.0 else cost**exponent
+    return select(constraints, _DEFAULTS)
 
 
 def score(costs: dict, constraints: list[Constraint] | None = None) -> Score:
@@ -188,32 +223,14 @@ def score(costs: dict, constraints: list[Constraint] | None = None) -> Score:
     No solver and no search are involved. The arithmetic matches the engine —
     each unit contributes ``weight * shape(cost, exponent)`` and hard
     contributions are **rounded per unit** before summing (the same order as the
-    engine's applyRaw; rounding the total afterwards gives different values).
+    engine; rounding the total afterwards gives different values).
 
     When ``constraints`` is given, only those constraints are scored — the same
     semantics as `get_constraints`. Unknown names raise ValueError.
 
-    The returned value is the **engine-level** (hard, soft). This domain folds
-    medium into engine soft as multiples of kMediumUnit (10^9), so to compare
-    with the split levels of `solution.score`, fold the same way first.
+    The returned value is the **engine-level** (hard, soft): the domain's medium
+    fold (``medium_fold`` on every entry, into soft at 10^10) is applied, so it
+    equals ``(score.hard, score.medium * 10**10 + score.soft)`` of a schedule scored
+    by the same constraints.
     """
-    hard = 0
-    soft = 0.0
-    for spec in get_constraints(constraints):
-        entry = costs.get(spec.name)
-        if entry is None:
-            raise ValueError(
-                f"unknown constraint {spec.name!r}; available: " + ", ".join(repr(name) for name in sorted(costs))
-            )
-        weight = entry["weight"] if spec.weight is None else spec.weight
-        is_hard = entry["hard"] if spec.hard is None else spec.hard
-        exponent = spec.exponent
-        for cost in entry["costs"]:
-            value = weight * _shape(cost, exponent)
-            if is_hard:
-                # Round per unit contribution like the engine (half-away-from-zero
-                # like llround; Python's round is banker's rounding).
-                hard += int(math.floor(value + 0.5) if value >= 0 else math.ceil(value - 0.5))
-            else:
-                soft += value
-    return Score(-hard, -soft if soft != 0.0 else 0.0)
+    return score_costs(costs, get_constraints(constraints))

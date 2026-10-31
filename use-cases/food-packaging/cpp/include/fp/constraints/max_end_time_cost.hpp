@@ -1,18 +1,23 @@
-#ifndef FP_CONSTRAINTS_MAX_END_DATE_TIME_HPP
-#define FP_CONSTRAINTS_MAX_END_DATE_TIME_HPP
+#ifndef FP_CONSTRAINTS_MAX_END_TIME_COST_HPP
+#define FP_CONSTRAINTS_MAX_END_TIME_COST_HPP
 
 #include "fp/constraints/common.hpp"
 
 namespace fp
 {
 
-// Hard (default, weight 1): maxEndDateTime — the minutes a job runs past the
-// deadline it must not miss. Unassigned jobs are silent here;
-// maximizeJobsAssigned is the term that prices them.
-struct MaxEndDateTime final : FpUnitConstraint
+// Hard, weight 1: maxEndTimeCost — the minutes a job runs past the deadline
+// it must not miss (Job::maxEndTime). Raw cost per line = the sum over its
+// jobs of max(0, end - maxEndTime), so 0 = every job on the line ends by its
+// deadline. Unassigned jobs are silent here; unassignedJobsCost is the term
+// that prices them. 0.2.0 migration note: was maxEndDateTime.
+struct MaxEndTimeCost final : FpUnitConstraint
 {
-    explicit MaxEndDateTime(double weight = 1.0)
-        : FpUnitConstraint("maxEndDateTime", weight, /*hard=*/true)
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
+
+    explicit MaxEndTimeCost(double weight = kDefaultWeight)
+        : FpUnitConstraint("maxEndTimeCost", weight, kDefaultLevel)
     {
     }
     void onReset(const PackagingSchedule &schedule) override
@@ -44,4 +49,4 @@ struct MaxEndDateTime final : FpUnitConstraint
 
 }  // namespace fp
 
-#endif  // FP_CONSTRAINTS_MAX_END_DATE_TIME_HPP
+#endif  // FP_CONSTRAINTS_MAX_END_TIME_COST_HPP

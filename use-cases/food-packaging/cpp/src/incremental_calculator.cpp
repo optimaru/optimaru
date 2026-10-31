@@ -1,13 +1,33 @@
 #include "fp/incremental_calculator.hpp"
 
 #include <algorithm>
+#include <cstdint>
 #include <stdexcept>
+
+#include "fp/constraints/after_ideal_end_time_cost.hpp"
+#include "fp/constraints/max_end_time_cost.hpp"
+#include "fp/constraints/operator_cleaning_conflict_cost.hpp"
+#include "fp/constraints/squared_makespan_cost.hpp"
+#include "fp/constraints/unassigned_jobs_cost.hpp"
 
 namespace fp
 {
 
 namespace
 {
+
+// The same constants the components and ScoreCalculator read (integral; see
+// score_calculator.cpp).
+constexpr auto kMaxEndWeight
+    = static_cast<std::int64_t>(MaxEndTimeCost::kDefaultWeight);
+constexpr auto kCleaningConflictWeight
+    = static_cast<std::int64_t>(OperatorCleaningConflictCost::kDefaultWeight);
+constexpr auto kAfterIdealEndWeight
+    = static_cast<std::int64_t>(AfterIdealEndTimeCost::kDefaultWeight);
+constexpr auto kUnassignedWeight
+    = static_cast<std::int64_t>(UnassignedJobsCost::kDefaultWeight);
+constexpr auto kMakespanWeight
+    = static_cast<std::int64_t>(SquaredMakespanCost::kDefaultWeight);
 
 Minutes
 cleanupOrThrow(const PackagingSchedule &s, int previousProduct, int product)
@@ -189,6 +209,15 @@ void FoodPackagingIncrementalScoreCalculator::afterListChanged(int listIndex)
             = overlap;
         conflictTotal_ += overlap;
     }
+}
+
+Score FoodPackagingIncrementalScoreCalculator::currentScore() const
+{
+    return {-(kMaxEndWeight * totalHardLate_
+              + kCleaningConflictWeight * conflictTotal_),
+            -(kAfterIdealEndWeight * totalMediumLate_
+              + kUnassignedWeight * (totalDuration_ - assignedDuration_)),
+            -(kMakespanWeight * totalMakespanSq_)};
 }
 
 optimaru::HardSoftScore

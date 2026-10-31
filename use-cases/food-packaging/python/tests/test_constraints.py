@@ -1,4 +1,7 @@
-"""Constraint spot checks: re-verifies the hand-computed cases of the C++ tests through _core."""
+"""Constraint spot checks: re-verifies the hand-computed cases of the C++ tests through _core.
+
+Per-constraint values are read from `constraint_costs()` (the raw cost per unit, summed
+here), the only per-constraint surface since 0.2.0 (`analyze()` was removed)."""
 
 import pytest
 
@@ -38,11 +41,16 @@ def make_schedule(operator_count, lines, loose_jobs=(), pooled_jobs=()):
     return fp.PackagingSchedule(0, 14 * 24 * 60, products, cleanup, operators, core_lines, jobs, pool)
 
 
-def test_max_end_date_time():
+def raw_total(schedule, name):
+    """The raw cost of one constraint, summed over its units (lines, then the pool)."""
+    return sum(fp.constraint_costs(schedule)[name]["costs"])
+
+
+def test_max_end_time_cost():
     # J1 fits 200 exactly; J2 ends at 350, 100 minutes late against maxEnd 250.
     schedule = make_schedule(1, [(0, [(PA_S, 200, BIG, 200), (PA_S, 150, BIG, 250)])])
     assert fp.calculate_score(schedule) == fp.Score(-100, 0, -(350 * 350))
-    assert fp.analyze(schedule).max_end_date_time == 100
+    assert raw_total(schedule, "max_end_time_cost") == 100
 
 
 def test_cleanup_chain_shadows():
@@ -56,7 +64,7 @@ def test_cleanup_chain_shadows():
     assert (j0.start_cleaning_minute, j0.start_production_minute, j0.end_minute) == (0, 0, 100)
 
 
-def test_operator_cleaning_conflict():
+def test_operator_cleaning_conflict_cost():
     # Lines 0/1 share operator 0: cleaning windows [10,70) and [30,90) overlap 40 minutes.
     schedule = make_schedule(
         2,
@@ -66,12 +74,11 @@ def test_operator_cleaning_conflict():
             (1, [(PB, 5, BIG, BIG), (PA_S, 100, BIG, BIG)]),
         ],
     )
-    breakdown = fp.analyze(schedule)
-    assert breakdown.operator_cleaning_conflict == 40
-    assert breakdown.minimize_makespan == 170 * 170 + 190 * 190 + 165 * 165
+    assert raw_total(schedule, "operator_cleaning_conflict_cost") == 40
+    assert raw_total(schedule, "squared_makespan_cost") == 170 * 170 + 190 * 190 + 165 * 165
 
 
-def test_maximize_jobs_assigned():
+def test_unassigned_jobs_cost():
     # Both loose jobs (outside any list) and jobs in the pool count as unassigned.
     schedule = make_schedule(
         1,
@@ -80,9 +87,10 @@ def test_maximize_jobs_assigned():
         pooled_jobs=[(PB, 50, BIG, BIG)],
     )
     assert fp.calculate_score(schedule) == fp.Score(0, -250, -(100 * 100))
+    assert raw_total(schedule, "unassigned_jobs_cost") == 250
 
 
-def test_minimize_makespan():
+def test_squared_makespan_cost():
     # Line 0: 100 minutes. Line 1: ends at 200 + cleaning 40 + 1000 = 1240.
     schedule = make_schedule(
         2,
@@ -111,6 +119,6 @@ def test_operator_helpers():
             (1, [(PB, 300, BIG, BIG), (PA_S, 100, BIG, BIG)]),
         ],
     )
-    assert fp.analyze(schedule).operator_cleaning_conflict == 58
+    assert raw_total(schedule, "operator_cleaning_conflict_cost") == 58
     assert fp.improve_operator_assignment(schedule) is True
-    assert fp.analyze(schedule).operator_cleaning_conflict == 0
+    assert raw_total(schedule, "operator_cleaning_conflict_cost") == 0

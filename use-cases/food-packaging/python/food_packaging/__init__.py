@@ -21,18 +21,27 @@ Monday 00:00 == minute 0; the pydantic mirror `food_packaging.models` converts b
 epoch minutes and `datetime.datetime`).
 
 Constraints (Java uses HardMediumSoftScore; the mapping onto engine HardSoftScore is
-engine.soft = medium * 10^10 + soft, and the order is preserved exactly while
-|soft| < 10^10 and |medium| < 9*10^5):
-  hard   1. maxEndDateTime           -1 per minute past maxEndTime
-  hard   2. operatorCleaningConflict for job pairs on lines of the same operator whose
-                                     cleaning windows [startCleaning, startProduction)
-                                     overlap, -overlapping minutes
-  medium 3. idealEndDateTime         -1 per minute past idealEndTime
-  medium 4. maximizeJobsAssigned     -duration minutes per unassigned job
-  soft   5. minimizeMakespan         -(end - line start)^2 per last job
-                                     of a line
+the domain's medium fold engine.soft = medium * 10^10 + soft, and the order is
+preserved exactly while |soft| < 10^10 and |medium| < 9*10^5):
+  hard   1. max_end_time_cost                -1 per minute past max_end_time
+  hard   2. operator_cleaning_conflict_cost  for job pairs on lines of the same operator
+                                             whose cleaning windows [startCleaning,
+                                             startProduction) overlap, -overlapping
+                                             minutes
+  medium 3. after_ideal_end_time_cost        -1 per minute past ideal_end_time
+  medium 4. unassigned_jobs_cost             -duration minutes per unassigned job
+  soft   5. squared_makespan_cost            -(end - line start)^2 per last job
+                                             of a line
 (minStartTime and priority are data fields no constraint reads, the same as in
 Java.)
+
+The constraints and their defaults (level, weight in units of that level) live in the C++
+components; `constraint_info()` reports them, `list_constraints()` lists the names and
+`constraint_costs()` gives the raw per-constraint costs of a schedule (the only
+per-constraint surface since 0.2.0; `analyze()` was removed)::
+
+    {row.name: (row.default_level, row.default_weight) for row in fp.constraint_info()}
+    # {'max_end_time_cost': ('hard', 1.0), ..., 'unassigned_jobs_cost': ('medium', 1.0)}
 
 Usage::
 
@@ -44,7 +53,7 @@ Usage::
 """
 
 from ._core import (
-    ConstraintBreakdown,
+    ConstraintInfo,
     Job,
     Line,
     Operator,
@@ -53,17 +62,17 @@ from ._core import (
     Score,
     Solver,
     SolverConfig,
-    analyze,
     assign_missing_operators,
     calculate_score,
     constraint_costs,
+    constraint_info,
     generate_demo_data,
     improve_operator_assignment,
     list_constraints,
 )
 
 __all__ = [
-    "ConstraintBreakdown",
+    "ConstraintInfo",
     "Job",
     "Line",
     "Operator",
@@ -72,12 +81,12 @@ __all__ = [
     "Score",
     "Solver",
     "SolverConfig",
-    "analyze",
     "assign_missing_operators",
     "calculate_score",
     "generate_demo_data",
     "list_constraints",
     "constraint_costs",
+    "constraint_info",
     "improve_operator_assignment",
     "solve",
     "with_initial_solution",
@@ -117,8 +126,13 @@ def solve(
     (see `food_packaging.constraints`). Only the listed constraints are scored; None
     uses all five default constraints::
 
-        from food_packaging.constraints import get_constraints
+        from food_packaging.constraints import UnassignedJobsCost, get_constraints
         fp.solve(schedule, constraints=get_constraints())
+        # unassigned minutes as soft instead of medium:
+        others = [spec for spec in get_constraints() if spec.name != "unassigned_jobs_cost"]
+        fp.solve(schedule, constraints=[*others, UnassignedJobsCost(hard=False)])
+
+    The result's score then reports each term on the level the selection gave it.
     """
     cfg = config if config is not None else SolverConfig()
     if time_limit_seconds is not None:
