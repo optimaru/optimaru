@@ -34,7 +34,7 @@ SALBP large data set (n=100). Lower is better; the best value is bold.
 | instance_n=100_10 | 100 | 22 | 25 | **22** |
 | instance_n=100_100 | 100 | 25 | 29 | **25** |
 
-Stations used. The engine column is the 0.1.5 pure-Python simulated annealing; the 0.2.0 C++
-engine (CloseStationMove, the precedence-window recommender) has not been re-measured on the
-archive yet. Measured 2026-10-29 on one Apple Silicon Mac (16 cores), 30 s per solver and instance. The engine runs single-threaded; CP-SAT uses 8 workers and its time includes model construction. Single runs — a snapshot, not a statistical study.
+Stations used. **The engine column holds 0.1.5 numbers** (the pure-Python simulated
+annealing): the 0.2.0 C++ engine (CloseStationMove, the precedence-window recommender) has not
+been re-measured on the archive yet. Measured 2026-10-29 on one Apple Silicon Mac (16 cores), 30 s per solver and instance. The engine runs single-threaded; CP-SAT uses 8 workers and its time includes model construction. Single runs — a snapshot, not a statistical study.
 <!-- results:end -->

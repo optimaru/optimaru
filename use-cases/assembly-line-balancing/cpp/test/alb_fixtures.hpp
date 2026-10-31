@@ -6,12 +6,14 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <map>
 #include <optional>
 #include <random>
 #include <string>
 #include <vector>
 
 #include "alb/domain.hpp"
+#include "alb/score_calculator.hpp"
 
 namespace alb_test
 {
@@ -30,6 +32,78 @@ inline void check(bool ok, const std::string &label)
 inline bool sameScore(const Score &a, const Score &b)
 {
     return a.hard == b.hard && std::fabs(a.soft - b.soft) < 1e-9;
+}
+
+// The ten registry names, in catalog order.
+inline const std::vector<std::string> kNames = {
+    "stationCapacityCost",       "taskPrecedenceCost",    "maxStationsCost",
+    "taskStationBoundsCost",     "fixedTaskStationsCost", "forbiddenTaskStationsCost",
+    "sameStationGroupsCost",     "differentStationPairsCost", "usedStationsCost",
+    "workloadImbalanceCost",
+};
+
+// The ten raw totals by registry name (the keys of constraintCosts()).
+inline std::map<std::string, double> namedTotals(const RawCosts &raw)
+{
+    return {
+        {"stationCapacityCost", static_cast<double>(raw.stationCapacityCost)},
+        {"taskPrecedenceCost", static_cast<double>(raw.taskPrecedenceCost)},
+        {"maxStationsCost", static_cast<double>(raw.maxStationsCost)},
+        {"taskStationBoundsCost", static_cast<double>(raw.taskStationBoundsCost)},
+        {"fixedTaskStationsCost", static_cast<double>(raw.fixedTaskStationsCost)},
+        {"forbiddenTaskStationsCost", static_cast<double>(raw.forbiddenTaskStationsCost)},
+        {"sameStationGroupsCost", static_cast<double>(raw.sameStationGroupsCost)},
+        {"differentStationPairsCost", static_cast<double>(raw.differentStationPairsCost)},
+        {"usedStationsCost", static_cast<double>(raw.usedStationsCost)},
+        {"workloadImbalanceCost", static_cast<double>(raw.workloadImbalanceCost)},
+    };
+}
+
+// Compares the maintained per-constraint totals of one walk state with a
+// full recompute: prints the first mismatching constraint (at most
+// `printBudget` times) and records every constraint that is non-zero.
+// Returns true when every constraint agrees.
+inline bool sameTotals(const std::map<std::string, double> &maintained,
+                       const std::map<std::string, double> &recomputed,
+                       std::map<std::string, int> &nonZeroStates,
+                       const std::string &where,
+                       int &printBudget)
+{
+    bool same = maintained.size() == recomputed.size();
+    for (const auto &[name, cost] : recomputed)
+    {
+        if (cost != 0.0)
+            ++nonZeroStates[name];
+        const auto it = maintained.find(name);
+        if (it == maintained.end() || std::fabs(it->second - cost) > 1e-9)
+        {
+            if (same && printBudget-- > 0)
+            {
+                std::printf("  %s MISMATCH %s: maintained=%g recomputed=%g\n", name.c_str(),
+                            where.c_str(), it == maintained.end() ? NAN : it->second, cost);
+            }
+            same = false;
+        }
+    }
+    return same;
+}
+
+// True (and silent) when every name of `names` was non-zero in at least one
+// walk state; otherwise prints the names that never were.
+inline bool everyConstraintNonZero(const std::map<std::string, int> &nonZeroStates,
+                                   const std::vector<std::string> &names)
+{
+    bool all = true;
+    for (const std::string &name : names)
+    {
+        const auto it = nonZeroStates.find(name);
+        if (it == nonZeroStates.end() || it->second == 0)
+        {
+            std::printf("  %s was never non-zero during the walk\n", name.c_str());
+            all = false;
+        }
+    }
+    return all;
 }
 
 inline Task task(const std::string &id,

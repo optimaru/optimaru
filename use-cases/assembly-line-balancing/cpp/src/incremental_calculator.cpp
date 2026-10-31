@@ -228,6 +228,41 @@ void AssemblyLineBalancingIncrementalScoreCalculator::afterVariableChanged(int t
         insert(taskIndex, now);  // now unassigned: nothing to insert
 }
 
+RawCosts AssemblyLineBalancingIncrementalScoreCalculator::rawCosts() const
+{
+    RawCosts raw;
+    raw.stationCapacityCost = overCapacity_;
+    raw.taskPrecedenceCost = reversedArcs_;
+    raw.maxStationsCost = beyondMaxStations_;
+    raw.taskStationBoundsCost = outsideBounds_;
+    raw.fixedTaskStationsCost = missedFixed_;
+    raw.forbiddenTaskStationsCost = forbiddenHits_;
+    raw.sameStationGroupsCost = groupExtra_;
+    raw.differentStationPairsCost = pairsTogether_;
+    raw.usedStationsCost = usedStations_;
+    if (kTrackWorkload)
+    {
+        if (!usedLoads_.empty())
+            raw.workloadImbalanceCost = *usedLoads_.rbegin() - *usedLoads_.begin();
+    }
+    else
+    {
+        std::int64_t heaviest = 0;
+        std::int64_t lightest = 0;
+        bool any = false;
+        for (std::int64_t load : load_)
+        {
+            if (load <= 0)
+                continue;
+            heaviest = any ? std::max(heaviest, load) : load;
+            lightest = any ? std::min(lightest, load) : load;
+            any = true;
+        }
+        raw.workloadImbalanceCost = heaviest - lightest;
+    }
+    return raw;
+}
+
 Score AssemblyLineBalancingIncrementalScoreCalculator::calculateScore()
 {
     std::int64_t workload = 0;

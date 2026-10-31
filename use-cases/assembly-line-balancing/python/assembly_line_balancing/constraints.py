@@ -73,14 +73,14 @@ class StationCapacityCost(Constraint):
 
     name = "station_capacity_cost"
     label_en = "Station capacity"
-    label_ko = "공정 용량"
+    label_ko = "작업장 용량"
     description_en = (
         "Processing time a station carries beyond the cycle time, summed over the stations. "
         "One unit of cost is one time unit over the cycle; 0 means every station finishes within the cycle time."
     )
     description_ko = (
-        "공정마다 배정된 작업 시간 가운데 사이클 타임을 넘는 시간을 모두 더합니다. "
-        "초과 시간 1단위가 비용 1이며, 0이면 모든 공정이 사이클 타임 안에 끝납니다."
+        "작업장마다 배정된 작업 시간의 합이 사이클 타임을 넘는 만큼을 모든 작업장에 걸쳐 더합니다. "
+        "초과 시간 1단위가 비용 1이며, 0이면 모든 작업장이 사이클 타임 안에 작업을 마칩니다."
     )
 
 
@@ -95,8 +95,8 @@ class TaskPrecedenceCost(Constraint):
         "Each such arc costs 1; 0 means the line respects every precedence."
     )
     description_ko = (
-        "먼저 해야 하는 작업이 뒤따르는 작업보다 뒤 공정에 놓인 선후 관계를 셉니다. "
-        "그런 관계 하나가 비용 1이며, 0이면 모든 선후 관계를 지킵니다."
+        "먼저 해야 하는 작업이 뒤따르는 작업보다 뒤쪽 작업장에 놓인 선후 관계의 수입니다. "
+        "그런 관계 하나가 비용 1이며, 0이면 모든 선후 관계가 지켜집니다."
     )
 
 
@@ -105,14 +105,14 @@ class MaxStationsCost(Constraint):
 
     name = "max_stations_cost"
     label_en = "Maximum stations"
-    label_ko = "최대 공정 수"
+    label_ko = "최대 작업장 수"
     description_en = (
         "How far each task sits beyond the last station max_stations allows: a task on station s costs "
         "s - max_stations + 1 (stations count from 0). 0 means every task is within the allowed stations."
     )
     description_ko = (
-        "max_stations가 허용하는 마지막 공정을 넘어선 만큼을 작업마다 더합니다. 공정 s(0부터 셉니다)에 놓인 "
-        "작업은 s - max_stations + 1만큼 비용이 듭니다. 0이면 모든 작업이 허용된 공정 안에 있습니다."
+        "작업마다 max_stations가 허용하는 마지막 작업장을 넘어선 만큼을 더합니다. 작업장 번호는 0부터 세며, "
+        "작업장 s에 놓인 작업의 비용은 s - max_stations + 1입니다. 0이면 모든 작업이 허용된 작업장 안에 있습니다."
     )
 
 
@@ -121,14 +121,14 @@ class TaskStationBoundsCost(Constraint):
 
     name = "task_station_bounds_cost"
     label_en = "Task station bounds"
-    label_ko = "작업별 공정 범위"
+    label_ko = "작업별 작업장 범위"
     description_en = (
         "How many stations each task sits below its min_station or above its max_station, summed. "
         "0 means every task is inside its own station range."
     )
     description_ko = (
-        "작업마다 min_station보다 앞이나 max_station보다 뒤로 벗어난 공정 수를 모두 더합니다. "
-        "0이면 모든 작업이 자기 공정 범위 안에 있습니다."
+        "작업마다 min_station보다 앞쪽으로, 또는 max_station보다 뒤쪽으로 벗어난 작업장 수를 모두 더합니다. "
+        "0이면 모든 작업이 자신에게 허용된 작업장 범위 안에 있습니다."
     )
 
 
@@ -137,14 +137,14 @@ class FixedTaskStationsCost(Constraint):
 
     name = "fixed_task_stations_cost"
     label_en = "Fixed task stations"
-    label_ko = "고정 공정"
+    label_ko = "고정 작업장"
     description_en = (
         "Tasks with a fixed_station that are assigned to another station; each costs 1. "
         "0 means every fixed task is on its station."
     )
     description_ko = (
-        "fixed_station이 정해진 작업이 다른 공정에 배정되면 작업마다 비용 1입니다. "
-        "0이면 고정된 작업이 모두 제 공정에 있습니다."
+        "fixed_station이 지정된 작업이 다른 작업장에 배정되면 그 작업마다 비용 1입니다. "
+        "0이면 고정된 작업이 모두 지정된 작업장에 있습니다."
     )
 
 
@@ -153,14 +153,14 @@ class ForbiddenTaskStationsCost(Constraint):
 
     name = "forbidden_task_stations_cost"
     label_en = "Forbidden task stations"
-    label_ko = "금지 공정"
+    label_ko = "금지 작업장"
     description_en = (
         "Tasks assigned to a station listed in their forbidden_stations; each costs 1. "
         "0 means no task is on a forbidden station."
     )
     description_ko = (
-        "작업이 forbidden_stations에 적힌 공정에 배정되면 작업마다 비용 1입니다. "
-        "0이면 금지된 공정에 놓인 작업이 없습니다."
+        "작업이 자신의 forbidden_stations에 포함된 작업장에 배정되면 그 작업마다 비용 1입니다. "
+        "0이면 금지된 작업장에 놓인 작업이 없습니다."
     )
 
 
@@ -169,14 +169,14 @@ class SameStationGroupsCost(Constraint):
 
     name = "same_station_groups_cost"
     label_en = "Same-station zoning"
-    label_ko = "같은 공정 묶음"
+    label_ko = "같은 작업장 배치"
     description_en = (
         "For every same-station group, the number of stations its tasks use beyond the first. "
         "0 means each group sits on one station."
     )
     description_ko = (
-        "같은 공정에 있어야 하는 묶음마다 작업들이 쓰는 공정 수에서 1을 뺀 값을 더합니다. "
-        "0이면 모든 묶음이 한 공정에 모여 있습니다."
+        "같은 작업장에 모아야 하는 작업 묶음마다, 그 작업들이 쓰는 작업장 수에서 1을 뺀 값을 더합니다. "
+        "0이면 모든 묶음이 각각 한 작업장에 모여 있습니다."
     )
 
 
@@ -185,14 +185,14 @@ class DifferentStationPairsCost(Constraint):
 
     name = "different_station_pairs_cost"
     label_en = "Different-station zoning"
-    label_ko = "다른 공정 짝"
+    label_ko = "다른 작업장 배치"
     description_en = (
         "Pairs of tasks that must be on different stations but share one; each such pair costs 1. "
         "0 means every pair is separated."
     )
     description_ko = (
-        "서로 다른 공정에 있어야 하는 두 작업이 같은 공정에 놓이면 짝마다 비용 1입니다. "
-        "0이면 모든 짝이 떨어져 있습니다."
+        "서로 다른 작업장에 있어야 하는 두 작업이 같은 작업장에 놓이면 그 쌍마다 비용 1입니다. "
+        "0이면 모든 쌍이 서로 다른 작업장에 있습니다."
     )
 
 
@@ -204,11 +204,13 @@ class UsedStationsCost(Constraint):
 
     name = "used_stations_cost"
     label_en = "Stations used"
-    label_ko = "사용 공정 수"
+    label_ko = "사용 작업장 수"
     description_en = (
         "The number of stations that hold at least one task; each open station costs 1. 0 means no task is assigned."
     )
-    description_ko = "작업이 하나 이상 배정된 공정의 수입니다. 공정 하나가 비용 1이며, 0이면 배정된 작업이 없습니다."
+    description_ko = (
+        "작업이 하나 이상 배정된 작업장의 수입니다. 사용하는 작업장 하나가 비용 1이며, 0이면 배정된 작업이 없습니다."
+    )
 
 
 class WorkloadImbalanceCost(Constraint):
@@ -222,8 +224,8 @@ class WorkloadImbalanceCost(Constraint):
         "Off by default (weight 0); 0 means every used station carries the same load."
     )
     description_ko = (
-        "사용 중인 공정 가운데 가장 많이 맡은 공정과 가장 적게 맡은 공정의 작업 시간 차이입니다. "
-        "기본으로는 꺼져 있으며(가중치 0), 0이면 사용 중인 모든 공정의 작업량이 같습니다."
+        "사용 중인 작업장 가운데 작업 시간이 가장 많은 작업장과 가장 적은 작업장의 차이입니다. "
+        "기본으로는 꺼져 있으며(가중치 0), 0이면 사용 중인 모든 작업장의 작업량이 같습니다."
     )
 
 

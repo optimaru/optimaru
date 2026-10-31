@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "alb/domain.hpp"
+#include "alb/score_calculator.hpp"
 #include "optimaru/api/score/calculator/incremental_score_calculator.hpp"
 
 namespace alb
@@ -44,6 +45,12 @@ public:
     void beforeVariableChanged(int taskIndex) override;
     void afterVariableChanged(int taskIndex) override;
     Score calculateScore() override;
+
+    // The maintained raw total of every default constraint (what
+    // ScoreCalculator::rawCosts recomputes), for the full-vs-incremental
+    // tests. While workloadImbalanceCost keeps its default weight 0 it is
+    // read from the maintained per-station loads (an O(stations) scan).
+    RawCosts rawCosts() const;
 
 private:
     AssemblyLineBalancingProblem *problem_ = nullptr;

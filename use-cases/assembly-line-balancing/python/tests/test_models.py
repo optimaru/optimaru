@@ -1,6 +1,7 @@
 """The canonical model and its engine conversion (assembly_line_balancing.models)."""
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -170,3 +171,22 @@ def test_the_core_refuses_what_the_engine_cannot_score():
         alb.solve(cyclic, time_limit_seconds=0)
     with pytest.raises(TypeError, match="problem must be"):
         alb.solve({"cycle_time": 5, "tasks": []})
+
+
+@pytest.mark.parametrize(
+    "tasks, max_stations, message",
+    [
+        ([alb.Task("A", 2, fixed_station=-3)], None, "task 'A': fixed_station must be >= 0"),
+        ([alb.Task("A", 2, min_station=-1)], None, "task 'A': min_station must be >= 0"),
+        ([alb.Task("A", 2, min_station=2, max_station=1)], None, "task 'A': max_station must be >= min_station"),
+        ([alb.Task("A", 2)], 0, "max_stations must be >= 1"),
+    ],
+)
+def test_the_core_refuses_the_station_domains_the_model_refuses(tasks, max_stations, message):
+    # Direct core users get the pydantic model's rules, with the field named, on both
+    # the scoring and the solve path (before the construction copies a fixed station).
+    problem = alb.AssemblyLineBalancingProblem(5, tasks, max_stations=max_stations)
+    with pytest.raises(ValueError, match=re.escape(message)):
+        alb.calculate_score(problem)
+    with pytest.raises(ValueError, match=re.escape(message)):
+        alb.solve(problem, time_limit_seconds=0)

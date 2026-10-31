@@ -75,11 +75,25 @@ void ScoreCalculator::prepare(AssemblyLineBalancingProblem &problem)
     const int n = problem.taskCount();
     if (problem.cycleTime <= 0)
         throw std::invalid_argument("cycle_time must be positive");
+    if (problem.maxStations && *problem.maxStations < 1)
+        throw std::invalid_argument("max_stations must be >= 1");
     int top = -1;
     for (const Task &task : problem.tasks)
     {
         if (task.duration <= 0)
             throw std::invalid_argument("task '" + task.id + "': duration must be positive");
+        // The station-domain rules the pydantic model enforces, so a direct
+        // core caller gets a message naming the field (and the construction
+        // never copies a negative fixed station into `station`).
+        if (task.minStation < 0)
+            throw std::invalid_argument("task '" + task.id + "': min_station must be >= 0");
+        if (task.maxStation && *task.maxStation < task.minStation)
+        {
+            throw std::invalid_argument("task '" + task.id
+                                        + "': max_station must be >= min_station");
+        }
+        if (task.fixedStation && *task.fixedStation < 0)
+            throw std::invalid_argument("task '" + task.id + "': fixed_station must be >= 0");
         if (task.station < -1)
         {
             throw std::invalid_argument("task '" + task.id + "': station "

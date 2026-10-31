@@ -1,7 +1,9 @@
 // Assembly-line-balancing plugin-assembly tests (alb/constraints.hpp):
 //   (a) the default assembly reproduces the monolith bit for bit — the score
 //       and every constraint's raw total — on 500 random assignments
-//   (b) plugin incremental == full recompute over random move sequences
+//   (b) plugin incremental == full recompute over random move sequences:
+//       the score and every constraint's raw total after each move, each
+//       constraint non-zero at least once
 //   (c) dropping one component drops exactly that term
 //   (d) weight / level / exponent overrides, hand-calculated
 //   (e) constraintTotals() explains the score
@@ -34,28 +36,9 @@ using namespace alb_test;
 namespace
 {
 
-const std::vector<std::string> kNames = {
-    "stationCapacityCost",       "taskPrecedenceCost",    "maxStationsCost",
-    "taskStationBoundsCost",     "fixedTaskStationsCost", "forbiddenTaskStationsCost",
-    "sameStationGroupsCost",     "differentStationPairsCost", "usedStationsCost",
-    "workloadImbalanceCost",
-};
-
 std::map<std::string, double> monolithTotals(AssemblyLineBalancingProblem &p)
 {
-    const RawCosts raw = ScoreCalculator::rawCosts(p);
-    return {
-        {"stationCapacityCost", static_cast<double>(raw.stationCapacityCost)},
-        {"taskPrecedenceCost", static_cast<double>(raw.taskPrecedenceCost)},
-        {"maxStationsCost", static_cast<double>(raw.maxStationsCost)},
-        {"taskStationBoundsCost", static_cast<double>(raw.taskStationBoundsCost)},
-        {"fixedTaskStationsCost", static_cast<double>(raw.fixedTaskStationsCost)},
-        {"forbiddenTaskStationsCost", static_cast<double>(raw.forbiddenTaskStationsCost)},
-        {"sameStationGroupsCost", static_cast<double>(raw.sameStationGroupsCost)},
-        {"differentStationPairsCost", static_cast<double>(raw.differentStationPairsCost)},
-        {"usedStationsCost", static_cast<double>(raw.usedStationsCost)},
-        {"workloadImbalanceCost", static_cast<double>(raw.workloadImbalanceCost)},
-    };
+    return namedTotals(ScoreCalculator::rawCosts(p));
 }
 
 std::map<std::string, double> pluginTotals(const DecomposedCalculator &calculator)
@@ -137,13 +120,17 @@ void verifyIncremental()
 {
     std::printf("== (b) Plugin incremental == full recompute ==\n");
     int mismatches = 0;
+    int totalMismatches = 0;
+    int printBudget = 3;
+    std::map<std::string, int> nonZeroStates;
     for (std::uint64_t seed = 1; seed <= 6; ++seed)
     {
         AssemblyLineBalancingProblem p = randomInstance(12 + static_cast<int>(seed), seed);
         ScoreCalculator::prepare(p);
         DecomposedCalculator calculator;
-        // Weighted workload, a shaped unit and a shaped global: every
-        // accumulation path is exercised.
+        // Weighted workload (the opt-in weight-0 constraint switched on), a
+        // shaped unit and a shaped global: every accumulation path is
+        // exercised.
         defaultConstraints()
             .weight("workloadImbalanceCost", 2)
             .exponent("stationCapacityCost", 2.0)
@@ -198,9 +185,14 @@ void verifyIncremental()
                 std::printf("  MISMATCH seed %llu step %d: incremental=%s full=%s\n",
                             static_cast<unsigned long long>(seed), step,
                             incremental.toString().c_str(), full.toString().c_str());
+            const std::string where = "seed " + std::to_string(seed) + " step " + std::to_string(step);
+            if (!sameTotals(pluginTotals(calculator), pluginTotals(fresh), nonZeroStates, where, printBudget))
+                ++totalMismatches;
         }
     }
     check(mismatches == 0, "3000 random moves on shaped / re-weighted assemblies, incremental == reset");
+    check(totalMismatches == 0, "after every move each constraint's raw total == the reset's");
+    check(everyConstraintNonZero(nonZeroStates, kNames), "every constraint is non-zero at least once in the walk");
     std::printf("\n");
 }
 

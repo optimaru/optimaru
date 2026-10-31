@@ -18,6 +18,9 @@ holds the exact CP-SAT reference.
 - Facts: `cycle_time`; per task `duration`, `min_station`, `max_station`,
   `fixed_station` (a penalty, not a pin), `forbidden_stations`; `precedences`
   (before/after), `max_stations`, `same_station_groups`, `different_station_pairs`.
+  The engine object refuses what the pydantic model refuses (a `ValueError` naming
+  the field): `cycle_time` or a `duration` <= 0, `max_stations` < 1, a
+  `min_station` or `fixed_station` < 0 and a `max_station` below `min_station`.
 - `warm_start` — start from the stations on the tasks (tasks at `-1` go through the
   construction); a plain solve ignores input stations. Every solve resets it.
 

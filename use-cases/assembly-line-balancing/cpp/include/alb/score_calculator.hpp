@@ -58,10 +58,12 @@ public:
     // (adjacency per task, distinct group members, pairs per task, sorted
     // forbidden stations), then refreshes stationCount = max(task count,
     // 1 + max station). Throws std::invalid_argument on a cycle time or
-    // duration <= 0, a station < -1 or an index out of range. Call it after
-    // editing the problem and outside a running search (the Solver, the
-    // Python calculate_score / constraint_costs do); never during one, since
-    // the station count must stay frozen while the engine runs.
+    // duration <= 0, max_stations < 1, a min_station or fixed_station < 0, a
+    // max_station below min_station, a station < -1 or an index out of
+    // range. Call it after editing the problem and outside a running search
+    // (the Solver, the Python calculate_score / constraint_costs do); never
+    // during one, since the station count must stay frozen while the engine
+    // runs.
     static void prepare(AssemblyLineBalancingProblem &problem);
 };
 

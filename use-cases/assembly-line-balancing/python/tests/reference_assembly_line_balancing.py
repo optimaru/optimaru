@@ -58,7 +58,7 @@ OLD_DEFAULTS = {
     "workload_balance": (False, 0.0),
 }
 
-#: 0.1.5 name -> 0.2.0 name (rename_table.json, assembly-line-balancing rows).
+#: 0.1.5 constraint name -> its 0.2.0 registry name.
 RENAMED = {
     "station_capacity": "station_capacity_cost",
     "task_precedence": "task_precedence_cost",

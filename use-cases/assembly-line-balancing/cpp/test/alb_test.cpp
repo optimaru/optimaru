@@ -7,14 +7,16 @@
 //       above the task count, absent limits, duplicate arcs, unassigned tasks
 //   (c) the construction ported from the 0.1.5 package (plain, seeds, fixed
 //       override, overflow past the task count, cycles)
-//   (d) incremental score == full recompute across a long random walk of
-//       change / swap / unassign / batch moves through the ScoreDirector
+//   (d) incremental score and every maintained raw total == full recompute
+//       across a long random walk of change / swap / unassign / batch moves
+//       through the ScoreDirector, each constraint non-zero at least once
 //   (e) FULL_ASSERT solves (CloseStationMove, value recommender, ALNS)
 //   (f) seeded determinism, the parallel multi-start, a SALBP-like instance
 //       reaching 0hard, a complete seed surviving a zero budget
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
+#include <map>
 #include <random>
 #include <stdexcept>
 #include <string>
@@ -145,16 +147,17 @@ void verifyEdgeCases()
     overlap.sameStationGroups = {{"x", {0, 1}}, {"y", {1, 2, 0}}};
     check(rawOf(overlap).sameStationGroupsCost == 3, "groups {A, B} -> 1 and {B, C, A} -> 2");
 
-    // Invalid facts are refused by prepare().
-    auto refuses = [](AssemblyLineBalancingProblem p)
+    // Invalid facts are refused by prepare(); with `message`, the error must
+    // name the field exactly.
+    auto refuses = [](AssemblyLineBalancingProblem p, const std::string &message = "")
     {
         try
         {
             ScoreCalculator::prepare(p);
         }
-        catch (const std::invalid_argument &)
+        catch (const std::invalid_argument &e)
         {
-            return true;
+            return message.empty() || std::string(e.what()) == message;
         }
         return false;
     };
@@ -170,6 +173,24 @@ void verifyEdgeCases()
     bad = fixtureH();
     bad.cycleTime = 0;
     check(refuses(bad), "cycle time 0 is refused");
+    // The station-domain rules of the pydantic model, for direct core users.
+    bad = fixtureH();
+    bad.tasks[1].fixedStation = -3;  // B
+    check(refuses(bad, "task 'B': fixed_station must be >= 0"), "fixed_station -3 is refused by name");
+    bad.tasks[1].fixedStation = -1;
+    check(refuses(bad, "task 'B': fixed_station must be >= 0"), "fixed_station -1 is refused too");
+    bad = fixtureH();
+    bad.tasks[0].minStation = -1;  // A
+    check(refuses(bad, "task 'A': min_station must be >= 0"), "min_station -1 is refused by name");
+    bad = fixtureH();
+    bad.tasks[3].maxStation = 0;  // D, min_station 0
+    check(!refuses(bad), "max_station == min_station is accepted");
+    bad.tasks[3].minStation = 1;
+    check(refuses(bad, "task 'D': max_station must be >= min_station"),
+          "max_station below min_station is refused by name");
+    bad = fixtureH();
+    bad.maxStations = 0;
+    check(refuses(bad, "max_stations must be >= 1"), "max_stations 0 is refused by name");
     std::printf("\n");
 }
 
@@ -246,6 +267,22 @@ void verifyConstruction()
         check(p.assignment() == std::vector<int>({0, 0}) && p.score.hard == -1,
               "a complete seed comes back unchanged, its broken fixed station a hard penalty");
     }
+    {
+        // Refused before the construction copies the fixed station into
+        // Task::station, so the message names the field.
+        AssemblyLineBalancingProblem p = threeTasks();
+        p.tasks[0].fixedStation = -3;
+        bool named = false;
+        try
+        {
+            zeroBudget().solve(p);
+        }
+        catch (const std::invalid_argument &e)
+        {
+            named = std::string(e.what()) == "task 'A': fixed_station must be >= 0";
+        }
+        check(named, "solve() refuses fixed_station -3 by name");
+    }
     auto throwsCycle = [](AssemblyLineBalancingProblem p)
     {
         try
@@ -275,8 +312,16 @@ void verifyConstruction()
 // -------------------------------------------------------------------------
 // (d) Incremental == full recompute over a random walk.
 // -------------------------------------------------------------------------
-template <typename Calculator>
-int randomWalk(AssemblyLineBalancingProblem &p, Calculator &calculator, int steps, std::uint64_t seed)
+// Returns the number of states whose score differs; `totalMismatches`
+// counts the states where some constraint's maintained raw total differs
+// from ScoreCalculator::rawCosts, `nonZeroStates` the states per constraint
+// with a non-zero raw total.
+int randomWalk(AssemblyLineBalancingProblem &p,
+               AssemblyLineBalancingIncrementalScoreCalculator &calculator,
+               int steps,
+               std::uint64_t seed,
+               int &totalMismatches,
+               std::map<std::string, int> &nonZeroStates)
 {
     optimaru::ScoreDirector<AssemblyLineBalancingProblem> director(p, calculator);
     std::mt19937_64 rng(seed);
@@ -284,6 +329,7 @@ int randomWalk(AssemblyLineBalancingProblem &p, Calculator &calculator, int step
     const int n = p.taskCount();
     const int values = p.stationCount;
     int mismatches = 0;
+    int printBudget = 3;
     for (int step = 0; step < steps; ++step)
     {
         const double kind = unit(rng);
@@ -326,6 +372,9 @@ int randomWalk(AssemblyLineBalancingProblem &p, Calculator &calculator, int step
                         incremental.toString().c_str(),
                         full.toString().c_str());
         }
+        if (!sameTotals(namedTotals(calculator.rawCosts()), namedTotals(ScoreCalculator::rawCosts(shadow)),
+                        nonZeroStates, "@step " + std::to_string(step), printBudget))
+            ++totalMismatches;
     }
     return mismatches;
 }
@@ -334,14 +383,21 @@ void verifyIncremental()
 {
     std::printf("== (d) Incremental == full recompute ==\n");
     int mismatches = 0;
+    int totalMismatches = 0;
+    std::map<std::string, int> nonZeroStates;
     for (std::uint64_t seed = 1; seed <= 6; ++seed)
     {
         AssemblyLineBalancingProblem p = randomInstance(12 + static_cast<int>(seed), seed);
         ScoreCalculator::prepare(p);
         AssemblyLineBalancingIncrementalScoreCalculator calculator;
-        mismatches += randomWalk(p, calculator, 600, 100 + seed);
+        mismatches += randomWalk(p, calculator, 600, 100 + seed, totalMismatches, nonZeroStates);
     }
     check(mismatches == 0, "3600 random change / swap / unassign / batch moves, incremental == full");
+    check(totalMismatches == 0, "after every move each constraint's maintained raw total == rawCosts()");
+    // workloadImbalanceCost (default weight 0) is not in the monolithic
+    // score; rawCosts() still reads it from the maintained loads, so it is
+    // compared here too.
+    check(everyConstraintNonZero(nonZeroStates, kNames), "every constraint is non-zero at least once in the walk");
     std::printf("\n");
 }
 
