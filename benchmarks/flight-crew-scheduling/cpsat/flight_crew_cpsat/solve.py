@@ -114,7 +114,6 @@ def solve(
         objective,
     )
 
-
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = time_limit_seconds
     solver.parameters.random_seed = random_seed

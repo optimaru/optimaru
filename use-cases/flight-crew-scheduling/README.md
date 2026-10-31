@@ -73,6 +73,9 @@ seats, ~50 crew members) and reaches feasible (hard 0) within 10 s.
 - `cpp/src/score_calculator.cpp` — full recompute (the reference)
 - `cpp/src/incremental_calculator.cpp` — before/after hooks, per-crew-member
   O(delta) incremental scoring
+- `cpp/src/monolithic_weights.hpp` — the component defaults both monolithic
+  calculators read, with compile-time checks that the hard weights are whole
+  numbers and the levels match the components
 - `cpp/src/solver.cpp` — engine wrapper (LA + ALNS)
 - `python/` — pybind11 package `flight_crew` (with the pydantic v2 mirror;
   see `python/README.md` for usage)

@@ -300,8 +300,8 @@ void verifyConstraints()
                    -32,
                    -4000);
     }
-    // soft 6 isolated: lastAssignmentNotArrivingAtHomeCost — the Java provider
-    // test case.
+    // soft 6 isolated: lastAssignmentNotArrivingAtHomeCost — the Java
+    // provider test case.
     // Employee 0 (home 0): 1->2 [0,10), 2->3 [11,12): connected, no overlap.
     // first departs 1 != 0 -> -1000; last arrives 3 != 0 -> -1000.
     // Employee 1 (home 1): 1->2 [0,10), 2->1 [11,12): first departs home,

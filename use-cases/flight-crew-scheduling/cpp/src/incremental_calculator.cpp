@@ -3,35 +3,10 @@
 #include <algorithm>
 #include <cstdint>
 
-#include "fcs/constraints/employee_unavailability_cost.hpp"
-#include "fcs/constraints/first_assignment_not_departing_from_home_cost.hpp"
-#include "fcs/constraints/flight_conflict_cost.hpp"
-#include "fcs/constraints/last_assignment_not_arriving_at_home_cost.hpp"
-#include "fcs/constraints/required_skill_cost.hpp"
-#include "fcs/constraints/transfer_between_two_flights_cost.hpp"
+#include "monolithic_weights.hpp"
 
 namespace fcs
 {
-
-namespace
-{
-
-// The same constants the components and ScoreCalculator read (integral hard
-// weights; see score_calculator.cpp).
-constexpr auto kRequiredSkillWeight
-    = static_cast<std::int64_t>(RequiredSkillCost::kDefaultWeight);
-constexpr auto kFlightConflictWeight
-    = static_cast<std::int64_t>(FlightConflictCost::kDefaultWeight);
-constexpr auto kTransferWeight
-    = static_cast<std::int64_t>(TransferBetweenTwoFlightsCost::kDefaultWeight);
-constexpr auto kUnavailabilityWeight
-    = static_cast<std::int64_t>(EmployeeUnavailabilityCost::kDefaultWeight);
-constexpr double kFirstNotHomeWeight
-    = FirstAssignmentNotDepartingFromHomeCost::kDefaultWeight;
-constexpr double kLastNotHomeWeight
-    = LastAssignmentNotArrivingAtHomeCost::kDefaultWeight;
-
-}  // namespace
 
 void FlightCrewIncrementalScoreCalculator::resetWorkingSolution(
     FlightCrewSchedule &workingSolution)

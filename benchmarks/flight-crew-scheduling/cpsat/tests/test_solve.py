@@ -157,14 +157,20 @@ def test_default_solve_scores_like_the_engine() -> None:
 
 @pytest.mark.parametrize(
     "demoted",
-    [RequiredSkillCost(hard=False), FlightConflictCost(hard=False), TransferBetweenTwoFlightsCost(hard=False)],
+    [
+        RequiredSkillCost(hard=False),
+        FlightConflictCost(hard=False),
+        TransferBetweenTwoFlightsCost(hard=False),
+    ],
     ids=lambda item: item.name,
 )
 def test_demoting_a_hard_constraint_scores_like_the_engine(demoted) -> None:
     """hard=False lands on soft in both solvers: CP-SAT's reported score is the
     engine's score of the same solution under the same selection."""
     problem = _parity_problem()
-    selection = [demoted if spec.name == demoted.name else spec for spec in get_constraints()]
+    selection = [
+        demoted if spec.name == demoted.name else spec for spec in get_constraints()
+    ]
     proxy = {}
     solved = solve(
         problem,

@@ -137,15 +137,15 @@ class EmployeeUnavailabilityCost(Constraint):
 
     name = "employee_unavailability_cost"
     label_en = "Crew unavailability"
-    label_ko = "승무원 휴무일"
+    label_ko = "승무원 근무 불가일"
     description_en = (
         "Assignments whose flight touches a day the crew member is unavailable, from the departure "
         "date through the arrival date. One unit of cost is one such assignment; 0 means nobody flies "
         "on a day they are unavailable."
     )
     description_ko = (
-        "출발일부터 도착일까지 비행 기간에 승무원의 휴무일이 걸친 배정을 셉니다. 그런 배정 하나가 "
-        "비용 1이며, 0이면 아무도 휴무일에 비행하지 않습니다."
+        "비행 기간(출발일부터 도착일까지)에 승무원이 근무할 수 없는 날이 하루라도 포함된 배정을 "
+        "셉니다. 그런 배정 하나가 비용 1이며, 0이면 아무도 근무할 수 없는 날에 비행하지 않습니다."
     )
 
 
@@ -157,7 +157,7 @@ class FirstAssignmentNotDepartingFromHomeCost(Constraint):
 
     name = "first_assignment_not_departing_from_home_cost"
     label_en = "First flight not from home"
-    label_ko = "첫 비행 출발지"
+    label_ko = "첫 항공편 거점 외 출발"
     description_en = (
         "Crew members whose earliest flight departs from an airport other than their home airport, so "
         "they must travel there first; flights tied on the earliest departure all count. One unit of "
@@ -178,7 +178,7 @@ class LastAssignmentNotArrivingAtHomeCost(Constraint):
 
     name = "last_assignment_not_arriving_at_home_cost"
     label_en = "Last flight not to home"
-    label_ko = "마지막 비행 도착지"
+    label_ko = "마지막 항공편 거점 외 도착"
     description_en = (
         "Crew members whose latest flight lands at an airport other than their home airport, so the "
         "roster ends away from home; flights tied on the latest departure all count. One unit of cost "
