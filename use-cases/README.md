@@ -11,6 +11,7 @@ CP-SAT / Routing) never live here — they are in
 | [bed-allocation](bed-allocation) | C++ engine | `bed_allocation` |
 | [bin-packing](bin-packing) | pure Python | `bin_packing` |
 | [conference-scheduling](conference-scheduling) | C++ engine | `conference_scheduling` |
+| [employee-scheduling](employee-scheduling) | C++ engine | `es_scheduling` |
 | [facility-location](facility-location) | C++ engine | `facility_location` |
 | [flight-crew-scheduling](flight-crew-scheduling) | C++ engine | `flight_crew` |
 | [food-packaging](food-packaging) | C++ engine | `food_packaging` |

@@ -30,6 +30,7 @@ jobs:
         use_case:
           - bed-allocation
           - conference-scheduling
+          - employee-scheduling
           - facility-location
           - flight-crew-scheduling
           - food-packaging
@@ -68,6 +69,7 @@ jobs:
           - bed-allocation
           - bin-packing
           - conference-scheduling
+          - employee-scheduling
           - facility-location
           - flight-crew-scheduling
           - food-packaging
