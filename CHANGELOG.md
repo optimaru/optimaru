@@ -648,6 +648,12 @@ constraint, a pybind11 extension `<package>._core` and a CP-SAT reference on
 - On the `constraints=` path, `plan.score` and `on_new_best` report the
   unfolded levels.
 
+### Examples
+
+- `examples/`: the 22 notebooks use the 0.2.0 names and APIs and were
+  re-executed with 0.2.0 on Linux x86-64. The six ported use cases' notebooks
+  describe the C++ search instead of the 0.1.x simulated-annealing knobs.
+
 ### Removed APIs
 
 - Per-constraint breakdowns other than `constraint_costs()`:

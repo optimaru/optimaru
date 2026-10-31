@@ -7,14 +7,16 @@ are saved with their outputs, so you can read them on GitHub without running any
 ## Run them
 
 ```bash
-pip install optimaru matplotlib jupyter
+pip install "optimaru>=0.2" matplotlib jupyter
 jupyter lab
 ```
 
-Requires Python 3.11+. Each notebook stands alone, so you can download a single file and run it.
+Requires Python 3.11+ and optimaru 0.2 or later. Each notebook stands alone, so you can download a
+single file and run it.
 
-Solves stop on a time limit, so your scores and charts can differ a little from the saved outputs,
-depending on your machine.
+Most solves stop on a time limit, so your scores and charts can differ a little from the saved outputs,
+depending on your machine. The saved outputs come from optimaru 0.2.0 on Linux x86-64. On another
+platform the same seed can take a different path, even in a solve with a step limit.
 
 ## Where to start
 
@@ -25,7 +27,9 @@ explained notebook, and the others follow the same outline:
 2. Solve it and read the score.
 3. Visualize the solution in the form the domain uses: a map, a Gantt chart, a timetable.
 4. Check the result without relying on the solver.
-5. Change the rules with constraint plugins, without touching the solver.
+5. Change the rules with constraint plugins, without touching the solver. Every constraint has a
+   `*_cost` name and the same three knobs, `weight`, `hard` and `exponent`, and `constraint_info()`
+   lists the defaults.
 6. Try a what-if, then restart the search from an existing solution.
 
 ## Notebooks
@@ -77,3 +81,5 @@ explained notebook, and the others follow the same outline:
 - [`use-cases/README.md`](../use-cases/README.md) explains how to add a move, change the construction
   heuristic, or add a hard or soft cost.
 - Each use case's README covers its usage and how to extend it.
+- Coming from optimaru 0.1.x? [`CHANGELOG.md`](../CHANGELOG.md) lists every renamed constraint and
+  every removed API.
