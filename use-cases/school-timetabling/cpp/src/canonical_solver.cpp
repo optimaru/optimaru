@@ -79,7 +79,8 @@ GuidedSetup configureEngine(const Solver::Config &config,
 
     // Guided value selection: change moves only draw slots the lesson is
     // allowed on (its allowedSlot table), so the search never wanders into
-    // H5 territory. Lessons allowed nowhere fall back to uniform-random (-1).
+    // disallowedSlotCost territory. Lessons allowed nowhere fall back to
+    // uniform-random (-1).
     setup.allowedSlots = std::make_shared<std::vector<std::vector<int>>>();
     setup.allowedSlots->reserve(table.lessons.size());
     for (const Lesson &lesson : table.lessons)
@@ -162,11 +163,10 @@ GuidedSetup configureEngine(const Solver::Config &config,
 
 void Solver::solve(Timetable &table)
 {
-    table.weights = config_.weights;
     ScoreCalculator::prepare(table);  // normalize ids / derived tables
     if (table.lessons.empty() || table.slotCount() == 0)
     {
-        ScoreCalculator::calculateScore(table);
+        ScoreCalculator::calculateScore(table, config_.weights);
         return;
     }
     if (config_.ruinRecreateRewards.size() != 4)
@@ -232,7 +232,7 @@ void Solver::solve(Timetable &table)
     // The single calculator instance of this (single-start) solve. Created
     // before the engine so the guided-selection hooks can bind to it; the
     // engine resets it on the working solution at solve start.
-    CanonicalIncrementalScoreCalculator calculator;
+    CanonicalIncrementalScoreCalculator calculator(config_.weights);
 
     // Violation-guided entity selection (the es guided-moves pattern): with
     // probability hotLessonProbability the moved lesson is drawn from the
@@ -267,7 +267,7 @@ void Solver::solve(Timetable &table)
     engine.solve(table, calculator);
 
     // The authoritative final score: a full recompute on the best solution.
-    table.score = ScoreCalculator::calculateScore(table);
+    table.score = ScoreCalculator::calculateScore(table, config_.weights);
 }
 
 void Solver::solve(Timetable &table,
@@ -318,7 +318,8 @@ void Solver::solve(Timetable &table,
                 &hotSource));
     }
     // Only worth a slot in the move mix when the assembly prices unassignment
-    // as a soft penalty; with H1 hard, unassigning is always a hard loss.
+    // as a soft penalty; with unassignedLessonsCost hard, unassigning is
+    // always a hard loss.
     if (allowsUnassigned(calculator))
     {
         engine.addMoveOperator(

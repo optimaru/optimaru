@@ -7,7 +7,9 @@
 namespace st::canon
 {
 
-// Shared projection of the per-(teacher, day) mask family (H9/H10/S1~S3):
+// Shared projection of the per-(teacher, day) mask family
+// (teacherMaxPeriodsCost, teacherMaxConsecutivePeriodsCost, teacherGapCost,
+// teacherWorkdayCost, teacherFreeDayCost):
 // ONE occupancy/busy-mask table with every family metric folded per flip —
 // exactly the monolithic setTeacherDayMask. Family members subscribing to
 // the same hub receive the identical join/leave stream from the calculator
@@ -23,11 +25,11 @@ class TeacherMaskHub
 public:
     enum Metric
     {
-        kLoadLimit = 0,    // H9: daily excess + weekly excess
-        kConsecutive = 1,  // H10: run-length excess
-        kGap = 2,          // S1
-        kWorkday = 3,      // S2
-        kFreeDay = 4,      // S3
+        kMaxPeriods = 0,             // teacherMaxPeriodsCost: daily + weekly
+        kMaxConsecutivePeriods = 1,  // teacherMaxConsecutivePeriodsCost
+        kGap = 2,                    // teacherGapCost
+        kWorkday = 3,                // teacherWorkdayCost
+        kFreeDay = 4,                // teacherFreeDayCost
         kMetricCount = 5
     };
 
@@ -130,10 +132,10 @@ private:
         const TeacherLimits &limits = limits_[teacher];
         const int oldBusy = st::bits::popcount(oldMask);
         const int newBusy = st::bits::popcount(newMask);
-        totals_[kLoadLimit]
+        totals_[kMaxPeriods]
             += ScoreCalculator::max0(newBusy - limits.maxPerDay)
                - ScoreCalculator::max0(oldBusy - limits.maxPerDay);
-        totals_[kConsecutive]
+        totals_[kMaxConsecutivePeriods]
             += ScoreCalculator::runExcessOf(newMask, limits.maxConsecutive)
                - ScoreCalculator::runExcessOf(oldMask, limits.maxConsecutive);
         totals_[kGap] += ScoreCalculator::gapOf(newMask)
@@ -149,7 +151,7 @@ private:
         week_[teacher] = newWeek;
         if (limits.maxPerWeek >= 0)
         {
-            totals_[kLoadLimit]
+            totals_[kMaxPeriods]
                 += ScoreCalculator::max0(newWeek - limits.maxPerWeek)
                    - ScoreCalculator::max0(oldWeek - limits.maxPerWeek);
         }
@@ -177,16 +179,17 @@ private:
 };
 
 // Shared base of the mask family: a thin subscriber that forwards its
-// reset/event stream to the hub and reads back one metric total.
+// reset/event stream to the hub and reads back one metric total. The level
+// is the member's kDefaultLevel (the knobs re-state it per instance).
 struct TeacherDayMaskConstraint : MemberChangeGlobalConstraint
 {
     TeacherDayMaskConstraint(std::string constraintName,
                              double constraintWeight,
-                             bool hard,
+                             optimaru::Level constraintLevel,
                              TeacherMaskHub::Metric metric,
                              std::shared_ptr<TeacherMaskHub> hub)
         : MemberChangeGlobalConstraint(
-              std::move(constraintName), constraintWeight, hard),
+              std::move(constraintName), constraintWeight, constraintLevel),
           metric_(metric),
           hub_(hub != nullptr ? std::move(hub)
                               : std::make_shared<TeacherMaskHub>())

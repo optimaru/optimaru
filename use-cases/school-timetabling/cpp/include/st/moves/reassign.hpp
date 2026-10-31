@@ -20,20 +20,20 @@ namespace st::canon
 // at all (only registered together with UnassignMove).
 //
 // Dropping is easy to steer: a lesson that carries a hard violation is a hot
-// lesson, so the guidance points straight at it. Coming back has no such
-// signal — H1 is a global constraint, so an unassigned lesson never shows up
-// in penalizedUnits(), and once the search reaches hard 0 (which the relaxed
-// model does almost immediately, by dropping) nothing points at the lessons
-// waiting outside. The builtin change move can place them, but it draws one
-// random allowed slot: on a dense timetable that lands on a conflict almost
-// every time and the step is rejected, so the run ends with far more
-// unassigned than the instance requires.
+// lesson, so the guidance points straight at it. Coming back has no such signal
+// — unassignedLessonsCost is a global constraint, so an unassigned lesson never
+// shows up in penalizedUnits(), and once the search reaches hard 0 (which the
+// relaxed model does almost immediately, by dropping) nothing points at the
+// lessons waiting outside. The builtin change move can place them, but it draws
+// one random allowed slot: on a dense timetable that lands on a conflict almost
+// every time and the step is rejected, so the run ends with far more unassigned
+// than the instance requires.
 //
-// This operator closes that loop: seed on an UNASSIGNED lesson and evaluate
-// up to `candidateCount` placements through the score director, applying the
-// best (the SmartClassSwapMove best-of-k pattern). Blocks move as a unit —
-// a whole consecutive run on one day — because H8 prices a half-placed block
-// as a violation, so putting one member back alone would never survive.
+// This operator closes that loop: seed on an UNASSIGNED lesson and evaluate up
+// to `candidateCount` placements through the score director, applying the best
+// (the SmartClassSwapMove best-of-k pattern). Blocks move as a unit — a whole
+// consecutive run on one day — because blockAdjacencyCost prices a half-placed
+// block as a violation, so putting one member back alone would never survive.
 template <typename HotSource>
 class ReassignMove final : public optimaru::MoveOperator<Timetable>
 {
@@ -121,7 +121,7 @@ private:
 
     // One candidate placement: (lesson, slot) pairs. A loose lesson takes one
     // allowed slot; a block group takes a consecutive run on one day, which
-    // is the only shape H8 accepts.
+    // is the only shape blockAdjacencyCost accepts.
     bool drawPlacement(const Timetable &table,
                        int group,
                        int lesson,

@@ -79,7 +79,7 @@ def test_block_periods_assign_block_group(problem):
     math = [l for l in conv.table.lessons if l.id.startswith("C1-MATH#")]
     # Only the last block_periods lessons get a blockGroup.
     assert [l.block_group for l in math] == [-1, -1, 0, 0]
-    # The H7 cap rises to at least the block size (a block must fit in one day).
+    # The course_max_periods_per_day_cost cap rises to at least the block size (a block must fit in one day).
     group_index = next(i for i, g in enumerate(conv.groups) if g.key == "C1-MATH")
     assert conv.table.course_daily_limit[group_index] == 2
 
@@ -115,7 +115,8 @@ def test_parallel_group_merges_into_one_lesson(problem):
     assert len(merged) == 2
     assert len(merged[0].teachers) == 2
     assert sum(merged[0].room_type_demand) == 1  # one tech room (home economics uses the class room)
-    # S5/S6: one preference unit per member course (technology avoids / home economics prefers).
+    # avoided/non-preferred periods: one preference unit per member course (technology avoids / home
+    # economics prefers).
     assert merged[0].preference_units == [(1 << 3, 0), (0, (1 << 0) | (1 << 1))]
 
     group = next(g for g in conv.groups if g.key == "C1-split")
@@ -137,7 +138,7 @@ def test_parallel_group_merges_into_one_lesson(problem):
         course_id: sorted((l["slot"]["day"], l["slot"]["period"]) for l in emitted if l["course_id"] == course_id)
         for course_id in ("C1-TECH", "C1-HOME")
     }
-    assert slots_of["C1-TECH"] == slots_of["C1-HOME"] == [(3, 1), (3, 2)]  # H5: run together
+    assert slots_of["C1-TECH"] == slots_of["C1-HOME"] == [(3, 1), (3, 2)]  # parallel_groups_cost: run together
     for lesson in emitted:
         assert lesson["room_id"] == ("R_TECH" if lesson["course_id"] == "C1-TECH" else None)
 
@@ -216,7 +217,22 @@ def test_round_trip_rooms_and_penalties(problem):
     assert all(l["room_id"] == "R_SCI" for l in per_course["C1-SCI"] + per_course["C2-SCI"])
     assert all(l["room_id"] == "R_GYM" for l in per_course["C1-PE"] + per_course["C2-PE"])
 
-    # penalties are the raw S1–S6 counts, objective_value the weighted sum (cpsat units).
-    breakdown = canon.compute_breakdown(table)
-    assert result["penalties"] == {name: int(count) for name, count in breakdown.penalties().items()}
-    assert result["objective_value"] == breakdown.soft_penalty(table.weights)
+    # penalties are the raw soft costs keyed by the soft constraint names, objective_value the
+    # weighted sum at the default weights (cpsat units).
+    costs = canon.constraint_costs(table)
+    soft = [name for name, entry in costs.items() if entry["level"] == "soft"]
+    assert (
+        list(result["penalties"])
+        == soft
+        == [
+            "teacher_gap_cost",
+            "teacher_workday_cost",
+            "teacher_free_day_cost",
+            "class_gap_cost",
+            "avoided_period_cost",
+            "non_preferred_period_cost",
+        ]
+    )
+    assert result["penalties"] == {name: int(sum(costs[name]["costs"])) for name in soft}
+    assert result["objective_value"] == sum(costs[name]["weight"] * result["penalties"][name] for name in soft)
+    assert result["objective_value"] == -canon.calculate_score(table).soft

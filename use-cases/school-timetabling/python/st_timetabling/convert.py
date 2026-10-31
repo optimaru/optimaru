@@ -1,11 +1,12 @@
 """Canonical `TimetableProblem` JSON (dict) <-> st::canon domain conversion (full parity).
 
 Moves the canonical problem JSON of API_SPEC.md into the canonical C++
-domain (`_core.canon`). st::canon implements hard H1–H10 / soft S1–S6 of the
-CP-SAT reference package (teacher_scheduling in benchmarks/school-timetabling/cpsat)
-with validate.py's semantics, so through this conversion the engine backend
-honours every canonical constraint as well — the approximate quickstart
-conversion lives in `st_timetabling.quickstart`.
+domain (`_core.canon`). st::canon implements every hard and soft constraint of
+the CP-SAT reference package (teacher_scheduling in
+benchmarks/school-timetabling/cpsat) with validate.py's semantics and under the
+same names, so through this conversion the engine backend honours every
+canonical constraint as well — the approximate quickstart conversion lives in
+`st_timetabling.quickstart`.
 
 Conversion rules
 ----------------
@@ -15,19 +16,20 @@ Conversion rules
   teacher_ids of the member courses (duplicates kept — a teacher taking two
   parallel sections at once then shows up as a hard clash), its special-room
   demand is the members' sum and its class occupancy is 1 (same as cpsat's
-  Course.occupancy_key). H5 (parallel sections run together) holds by the
-  merge itself.
-- S5/S6 (avoided/preferred periods per subject) count one unit per member
-  course through Lesson.preference_units, matching validate.py's per-lesson
-  counts exactly.
-- `fixed_slots` -> pinned Lesson (H2: the engine never moves it).
+  Course.occupancy_key). parallel_groups_cost (parallel sections run
+  together) holds by the merge itself.
+- avoided_period_cost / non_preferred_period_cost (avoided/preferred periods
+  per subject) count one unit per member course through
+  Lesson.preference_units, matching validate.py's per-lesson counts exactly.
+- `fixed_slots` -> pinned Lesson (fixed_slots_cost: the engine never moves it).
 - `forbidden_slots` + class/teacher `unavailable` -> per-lesson allowed_slot
-  table (H5, hard).
+  table (disallowed_slot_cost, hard).
 - `block_periods` >= 2 -> blockGroup on the group's last block_periods Lessons
-  (H8: consecutive periods on one day).
-- `required_room_type` -> roomTypeDemand + roomCapacityByType (H6, hard).
-  Concrete rooms are chosen afterwards by a greedy pass (convert_solution), as
-  in cpsat — H6 being hard, it always succeeds on a hard-0 solution.
+  (block_adjacency_cost: consecutive periods on one day).
+- `required_room_type` -> roomTypeDemand + roomCapacityByType
+  (room_capacity_cost, hard). Concrete rooms are chosen afterwards by a greedy
+  pass (convert_solution), as in cpsat — the constraint being hard, it always
+  succeeds on a hard-0 solution.
 - Per-teacher caps (max_periods_per_week/day, max_consecutive_periods),
   preferred_free_days and the per-course daily cap (max_periods_per_day) are
   all passed through.
@@ -116,7 +118,7 @@ def convert_problem(problem: dict) -> ConvertedProblem:
             raise ValueError(f"[{course['id']}] unknown subject: {course['subject_id']}")
         return subject.get("required_room_type")
 
-    # --- special-room types -> dense index, room counts (H6) ---
+    # --- special-room types -> dense index, room counts (room_capacity_cost) ---
     needed_types = sorted({rt for c in courses if (rt := required_room_type(c)) is not None})
     room_ids_by_type: dict[str, list[str]] = {}
     for room in problem.get("rooms", []):
@@ -126,7 +128,8 @@ def convert_problem(problem: dict) -> ConvertedProblem:
             raise ValueError(f"no room of the required type: {room_type}")
     room_type_index = {room_type: i for i, room_type in enumerate(needed_types)}
 
-    # --- teacher unavailability + period caps (H4 extension / H9 / H10 / S3) ---
+    # --- teacher unavailability + period caps (teacher_max_periods_cost,
+    #     teacher_max_consecutive_periods_cost, teacher_free_day_cost) ---
     teacher_blocked: list[set[int]] = []
     max_per_day: list[int] = []
     max_per_week: list[int] = []
@@ -177,14 +180,14 @@ def convert_problem(problem: dict) -> ConvertedProblem:
         # Teachers: concatenated member teacher_ids (duplicates kept — see the docstring above).
         group_teachers = [teacher_index[t] for c in members for t in c["teacher_ids"]]
 
-        # Special-room demand: the members' sum (H6).
+        # Special-room demand: the members' sum (room_capacity_cost).
         demand = [0] * len(needed_types)
         for course in members:
             room_type = required_room_type(course)
             if room_type is not None:
                 demand[room_type_index[room_type]] += 1
 
-        # allowed_slot: removes the union of forbidden/unavailable times (H5). Same as
+        # allowed_slot: removes the union of forbidden/unavailable times (disallowed_slot_cost). Same as
         # cpsat's _course_allowed_slots + the intersection over parallel sections.
         blocked: set[int] = set(class_blocked[class_index[class_id]])
         for course in members:
@@ -206,11 +209,12 @@ def convert_problem(problem: dict) -> ConvertedProblem:
         if len(fixed) > ppw:
             raise ValueError(f"group {group_key} has more fixed times than weekly periods")
 
-        # H7: minimum over members of the effective daily cap (max(own cap, block size)). A
+        # course_max_periods_per_day_cost: minimum over members of the effective daily cap
+        # (max(own cap, block size)). A
         # merged group places the same count per day for every member, so the minimum is the whole condition.
         daily_limits.append(min(max(int(c.get("max_periods_per_day", 1)), block) for c in members))
 
-        # S5/S6: one (avoided, preferred) mask unit per member subject.
+        # avoided/non-preferred periods: one (avoided, preferred) mask unit per member subject.
         units = []
         for course in members:
             subject = subjects_by_id[course["subject_id"]]
@@ -315,7 +319,8 @@ def inject_solution(converted: ConvertedProblem, lessons: list[dict]) -> None:
     (course_id + slot; room_id is ignored, `convert_solution` recomputes it).
     Lessons are matched to courses by id. Pinned Lessons get their own fixed
     slot, blockGroup Lessons a consecutive window on one day (guaranteed to
-    exist by H8 when the input solution is valid), and the rest are assigned in
+    exist by block_adjacency_cost when the input solution is valid), and the
+    rest are assigned in
     (day, period) order. Used both for the parity check and for warm starts.
 
     A course may hold fewer slots than its weekly periods: the Lessons left
@@ -357,7 +362,8 @@ def inject_solution(converted: ConvertedProblem, lessons: list[dict]) -> None:
                 for k, slot in zip(unpinned_block, free_window):
                     placed[k] = slot
                     pool.remove(slot)
-            # No window (the input already violates H8): leave it to the remaining assignment below.
+            # No window (the input already violates block_adjacency_cost): leave it to the
+            # remaining assignment below.
 
         # 3) the rest: in sorted order. Missing slots (an under-filled solution) stay unassigned (-1).
         rest = [k for k in range(n) if k not in placed]
@@ -395,6 +401,7 @@ def convert_solution(
     *,
     wall_time_seconds: float = 0.0,
     unassigned_weight: float | None = None,
+    weights: "canon.ObjectiveWeights | None" = None,
 ) -> dict:
     """Turns the engine assignment (the slots of `converted.table`) back into a
     canonical Timetable JSON (dict). Merged groups unfold into one canonical
@@ -403,26 +410,36 @@ def convert_solution(
 
     Special rooms: the same greedy pass as cpsat's rooms.assign_rooms — per
     (type, time) keep the room a course used before, otherwise take free rooms
-    in order. H6 being hard, it always succeeds on a hard-0 solution; only a
-    solution with hard violations left (INFEASIBLE) can report room_id=null plus a
-    note.
+    in order. room_capacity_cost being hard, it always succeeds on a hard-0
+    solution; only a solution with hard violations left (INFEASIBLE) can report
+    room_id=null plus a note.
 
-    penalties are the engine breakdown's raw S1–S6 counts (same meaning as
-    validate.py's compute_penalties); objective_value is the weighted penalty
-    sum under table.weights — the same unit as the cpsat backend.
+    penalties are the raw soft costs of the canonical rescore
+    (`canon.constraint_costs`), keyed by the soft constraint names
+    (teacher_gap_cost ... non_preferred_period_cost; the same meaning as
+    validate.py's compute_penalties); objective_value is their sum weighted by
+    ``weights`` (a `canon.ObjectiveWeights`; None = the default weights) — the
+    same unit as the cpsat backend. status follows the hard rescore at the
+    components' default weights.
 
-    ``unassigned_weight`` is passed only by an assembly that demotes H1 to soft
-    (partial timetabling): unassigned periods are then **a result, not a search
-    failure**, so they leave the hard total (status is decided by the other hard
-    constraints only), the unfilled periods appear in penalties under the same
-    name as cpsat (`weekly_period_counts`), and they add `unassigned_weight`
-    times to objective_value — the same unit as cpsat's relaxed mode."""
+    ``unassigned_weight`` is passed only by a selection that demotes
+    unassigned_lessons_cost to soft (partial timetabling): unassigned periods
+    are then **a result, not a search failure**, so they leave the hard total
+    (status is decided by the other hard constraints only), the unfilled
+    periods appear in penalties as ``unassigned_lessons_cost``, and they add
+    `unassigned_weight` times to objective_value — the same unit as cpsat's
+    relaxed mode."""
     table = converted.table
-    breakdown = canon.compute_breakdown(table)
+    costs = canon.constraint_costs(table)  # the default set: raw costs at the default weights
+    raw = {name: sum(entry["costs"]) for name, entry in costs.items()}
+    unassigned = int(raw["unassigned_lessons_cost"])
+    hard_total = round(sum(entry["weight"] * raw[name] for name, entry in costs.items() if entry["hard"]))
     partial = unassigned_weight is not None
-    # In partial timetabling H1 is not hard: unassigned lessons are the model's
-    # choice and must not make the status INFEASIBLE (cpsat's relaxed mode reports OPTIMAL/FEASIBLE).
-    hard_total = breakdown.hard_total() - (breakdown.unassigned if partial else 0)
+    # In partial timetabling unassigned_lessons_cost is not hard: unassigned lessons are the
+    # model's choice and must not make the status INFEASIBLE (cpsat's relaxed mode reports
+    # OPTIMAL/FEASIBLE).
+    if partial:
+        hard_total -= round(costs["unassigned_lessons_cost"]["weight"] * unassigned)
     notes: list[str] = list(converted.notes)
     assignment = table.assignment()
 
@@ -463,7 +480,7 @@ def convert_solution(
                 free.remove(room_id)
                 remaining.remove(index)
                 lessons_out[index]["room_id"] = room_id
-        for index in remaining:  # pass 2: free rooms in order; short only on a solution violating H6
+        for index in remaining:  # pass 2: free rooms in order; short only on a solution violating room capacity
             if free:
                 room_id = free.pop(0)
                 preferred[lessons_out[index]["course_id"]] = room_id
@@ -481,14 +498,18 @@ def convert_solution(
     feasible = hard_total == 0
     if not feasible:
         notes.append(f"hard violations left: {hard_total}")
-    penalties = {name: int(count) for name, count in breakdown.penalties().items()}
-    objective = float(breakdown.soft_penalty(table.weights))
+    weights = canon.ObjectiveWeights() if weights is None else weights
+    soft_names = [name for name, entry in costs.items() if entry["level"] == "soft"]
+    penalties = {name: int(raw[name]) for name in soft_names}
+    objective = float(sum(getattr(weights, name) * penalties[name] for name in soft_names))
     if unassigned_weight is not None:
-        # Same name and unit as cpsat's relaxed mode: the unfilled periods are the penalty term.
-        penalties["weekly_period_counts"] = int(breakdown.unassigned)
-        objective += unassigned_weight * breakdown.unassigned
-        if breakdown.unassigned:
-            notes.append(f"{breakdown.unassigned} periods unassigned (H1 relaxed — the rest is a partial solution)")
+        # The unfilled periods are the penalty term, in cpsat's relaxed-mode unit.
+        penalties["unassigned_lessons_cost"] = unassigned
+        objective += unassigned_weight * unassigned
+        if unassigned:
+            notes.append(
+                f"{unassigned} periods unassigned (unassigned_lessons_cost relaxed — the rest is a partial solution)"
+            )
     return {
         "status": "FEASIBLE" if feasible else "INFEASIBLE",
         "lessons": lessons_out,

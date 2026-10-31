@@ -1,17 +1,22 @@
-#ifndef ST_CONSTRAINTS_SLOT_CLASS_CONFLICT_HPP
-#define ST_CONSTRAINTS_SLOT_CLASS_CONFLICT_HPP
+#ifndef ST_CONSTRAINTS_SLOT_CLASS_CONFLICT_COST_HPP
+#define ST_CONSTRAINTS_SLOT_CLASS_CONFLICT_COST_HPP
 
 #include "st/constraints/slot/slot_constraint.hpp"
 
 namespace st::canon
 {
 
-// Hard (default): H3 class conflict — one point per pair of same-class
-// lessons on one slot (C(n, 2) per (classGroup, slot) occupancy cell,
-struct ClassConflict final : GroupableSlotConstraint
+// classConflictCost — hard, weight 1. Raw cost per slot = the number of
+// pairs of same-class lessons on it (C(n, 2) per (classGroup, slot)
+// occupancy cell; a merged parallel group is one occupancy unit), so 0 = no
+// class has two lessons at once.
+struct ClassConflictCost final : GroupableSlotConstraint
 {
-    explicit ClassConflict(double weight = 1.0)
-        : GroupableSlotConstraint("H3 class conflict", weight, /*hard=*/true)
+    static constexpr double kDefaultWeight = 1.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
+
+    explicit ClassConflictCost(double weight = kDefaultWeight)
+        : GroupableSlotConstraint("classConflictCost", weight, kDefaultLevel)
     {
     }
     void onReset(const Timetable &table) override
@@ -53,4 +58,4 @@ struct ClassConflict final : GroupableSlotConstraint
 
 }  // namespace st::canon
 
-#endif  // ST_CONSTRAINTS_SLOT_CLASS_CONFLICT_HPP
+#endif  // ST_CONSTRAINTS_SLOT_CLASS_CONFLICT_COST_HPP

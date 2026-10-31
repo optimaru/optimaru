@@ -1,18 +1,22 @@
-#ifndef ST_CONSTRAINTS_CLASS_GAP_HPP
-#define ST_CONSTRAINTS_CLASS_GAP_HPP
+#ifndef ST_CONSTRAINTS_CLASS_GAP_COST_HPP
+#define ST_CONSTRAINTS_CLASS_GAP_COST_HPP
 
 #include "st/constraints/global/global_constraint.hpp"
 
 namespace st::canon
 {
 
-// Soft (default, weight = ObjectiveWeights::classGap): S4 — idle periods
-// wedged inside a class's day, on the class-owned busy masks (one occupancy
-// unit per lesson, so a merged lesson counts once).
-struct ClassGap final : MemberChangeGlobalConstraint
+// classGapCost — soft, weight 10. Raw cost = the idle periods wedged inside
+// a class's day (last - first + 1 - count over its busy periods), summed
+// over (class, day), on the class-owned busy masks (one occupancy unit per
+// lesson, so a merged lesson counts once); 0 = every class day is compact.
+struct ClassGapCost final : MemberChangeGlobalConstraint
 {
-    explicit ClassGap(double weight = ObjectiveWeights{}.classGap)
-        : MemberChangeGlobalConstraint("S4 class gap", weight, /*hard=*/false)
+    static constexpr double kDefaultWeight = 10.0;
+    static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
+
+    explicit ClassGapCost(double weight = kDefaultWeight)
+        : MemberChangeGlobalConstraint("classGapCost", weight, kDefaultLevel)
     {
     }
     void reset(const Timetable &table,
@@ -74,4 +78,4 @@ private:
 
 }  // namespace st::canon
 
-#endif  // ST_CONSTRAINTS_CLASS_GAP_HPP
+#endif  // ST_CONSTRAINTS_CLASS_GAP_COST_HPP

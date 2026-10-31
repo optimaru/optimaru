@@ -1,4 +1,4 @@
-"""fixed_slots -> pinned conversion (H2) and pins kept after solve (canonical domain)."""
+"""fixed_slots -> pinned conversion (fixed_slots_cost) and pins kept after solve (canonical domain)."""
 
 import pytest
 import st_timetabling as st

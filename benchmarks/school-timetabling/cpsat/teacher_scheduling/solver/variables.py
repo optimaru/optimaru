@@ -4,7 +4,7 @@ The core variable is just `x[(course_id, slot)]`: "is course c placed at time s"
 Teacher/class occupancy (`teacher_busy`, `class_busy`) are auxiliary booleans
 derived from x, declared up front to make constraints like gaps and blocks easy
 to write. The equalities tying them to x are posted by the hard constraints
-(H3/H4), and those equalities are the no-clash constraints themselves.
+(class_conflict_cost / teacher_conflict_cost), and those equalities are the no-clash constraints themselves.
 """
 
 from collections import defaultdict

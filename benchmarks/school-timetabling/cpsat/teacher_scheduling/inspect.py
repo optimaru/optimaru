@@ -288,7 +288,7 @@ def _teacher_gaps(index: _Index, _: InspectOptions) -> InspectionItem:
         if (gaps := _gap_count(periods))
     ]
     return InspectionItem(
-        id="teacher_gap", name="Teacher gaps", severity="info", count=len(findings), findings=tuple(findings)
+        id="teacher_gap_cost", name="Teacher gaps", severity="info", count=len(findings), findings=tuple(findings)
     )
 
 
@@ -394,7 +394,8 @@ def inspect_timetable(
         _free_day_broken(index, options),
     ]
 
-    # A partial solution that allows unassigned lessons naturally shows H1 violations, so
+    # A partial solution that allows unassigned lessons naturally shows unassigned_lessons_cost
+    # violations, so
     # those messages are filtered out (the `unassigned` item already shows the same, structured).
     violations = tuple(v for v in validate_timetable(problem, timetable) if "weekly periods" not in v)
 

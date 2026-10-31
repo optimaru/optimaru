@@ -14,9 +14,10 @@ canonical engine (st_timetabling.solve; "pending" if the import fails), and
 both results are rescored with cpsat's validate.py (same time limit, same problem).
 
 Track 3 (--track3, partial timetabling): a track-2 instance loses one weekday
-(--drop-day) so it cannot be filled, and both backends solve with H1 relaxed
-(CP-SAT solve_partial, the engine with weekly_period_counts hard=false); both
-are rescored with cpsat's validate.py, with H1 shortfall counted separately.
+(--drop-day) so it cannot be filled, and both backends solve with the
+unassigned lessons relaxed (CP-SAT solve_partial, the engine with
+unassigned_lessons_cost hard=false); both are rescored with cpsat's
+validate.py, with the weekly-period shortfall counted separately.
 
 Example:
     uv run run_bench.py --sizes S,M --seconds 10
@@ -197,6 +198,15 @@ def track1(args) -> None:
 # ---------------------------------------------------------------- track 2
 
 
+def _cpsat_path() -> None:
+    """Puts the CP-SAT reference (teacher_scheduling) on sys.path, together with the engine
+    package it builds on: its constraint registry subclasses the st_timetabling specs and
+    takes their defaults from st_timetabling.constraint_info(), so the extension must be built."""
+    for path in (BENCH_DIR / "cpsat", ST_DIR / "python"):
+        if str(path) not in sys.path:
+            sys.path.insert(0, str(path))
+
+
 def _load_engine_solver():
     """The st_timetabling canonical entry point (`st_timetabling.solve`, default mode
     canonical). None when the import fails (extension not built, say)."""
@@ -252,17 +262,18 @@ def track3(args) -> None:
     """Track 3: partial timetabling — how much of an unfillable instance each backend fills.
 
     A track-2 instance loses one weekday so that periods > cells, and both sides
-    solve with H1 (weekly periods) relaxed — CP-SAT with `solve_partial`, the
-    engine with the equivalent assembly (`weekly_period_counts` hard=false). Both
+    solve with unassigned_lessons_cost (weekly periods) relaxed — CP-SAT with
+    `solve_partial`, the engine with the equivalent assembly
+    (`unassigned_lessons_cost` hard=false). Both
     follow the same contract, "unfilled periods are a penalty, not a hard
     violation", so the comparison is **how much was filled** (placed periods) and
     the soft quality of the result.
 
-    Both results are rescored with cpsat's validate.py, with H1 violations counted
+    Both results are rescored with cpsat's validate.py, with weekly-period violations counted
     separately — here they are the intended shortfall, not a defect, and the
     other hard violations must be 0.
     """
-    sys.path.insert(0, str(BENCH_DIR / "cpsat"))
+    _cpsat_path()
     from pydantic import ValidationError
     from teacher_scheduling import SolverConfig, Timetable, TimetableProblem
     from teacher_scheduling.partial import UNASSIGNED_WEIGHT, solve_partial, unassigned_courses
@@ -281,7 +292,7 @@ def track3(args) -> None:
         print("engine: pending (st_timetabling canonical not installed — running CP-SAT only)")
 
     def evaluate_result(problem, problem_dict, timetable) -> dict:
-        """Shared rescoring. Separates H1 (the shortfall) from the other hard constraints.
+        """Shared rescoring. Separates the weekly-period shortfall from the other hard constraints.
 
         The other hard constraints are checked on **the placed part only** — the
         problem is re-validated with the weekly periods reduced to the placed counts,
@@ -377,7 +388,7 @@ def track3(args) -> None:
                 problem_dict,
                 time_limit_seconds=float(args.seconds),
                 random_seed=args.seed,
-                constraints=Assembly().add("weekly_period_counts", hard=False, weight=UNASSIGNED_WEIGHT),
+                constraints=Assembly().add("unassigned_lessons_cost", hard=False, weight=UNASSIGNED_WEIGHT),
             )
         except Exception as e:  # noqa: BLE001 — show backend failures in the table as they are
             rows.append(
@@ -413,8 +424,9 @@ def track3(args) -> None:
     lines = [
         f"## Track 3: partial timetabling — C++ canonical vs CP-SAT ({args.seconds}s, seed {args.seed})",
         "",
-        f"Instances made unfillable (periods > cells) by removing weekday {args.drop_day}. Both sides relax H1"
-        f" (CP-SAT `solve_partial`, engine `weekly_period_counts hard=false weight={UNASSIGNED_WEIGHT}`).",
+        f"Instances made unfillable (periods > cells) by removing weekday {args.drop_day}. Both sides relax the"
+        f" weekly periods (CP-SAT `solve_partial`, engine `unassigned_lessons_cost hard=false"
+        f" weight={UNASSIGNED_WEIGHT}`).",
         "",
         "| instance | backend | status | placed/required | unassigned | hard left | soft penalty | total objective | wall |",
         "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
@@ -436,7 +448,7 @@ def track3(args) -> None:
         "- The **total objective** (unassigned×10000 + soft) is what both solvers actually minimise — lower is better.",
         "- **placed/required** dominates that objective: one more placed cell is worth 10000 soft points.",
         "- **hard left** are the hard violations besides unassigned lessons. Anything above 0 is a broken solution, not a partial one.",
-        "- The weighted penalty is S1–S6 (default weights) over the placed part — it drops when less is placed, so read it with the placed count.",
+        "- The weighted penalty is the six soft costs (default weights) over the placed part — it drops when less is placed, so read it with the placed count.",
         "- The two statuses use different axes: CP-SAT proves the relaxed model (OPTIMAL/FEASIBLE), the engine is FEASIBLE when the hard"
         " constraints besides unassigned lessons are 0.",
     ]
@@ -450,7 +462,7 @@ def track3(args) -> None:
 
 
 def track2(args) -> None:
-    sys.path.insert(0, str(BENCH_DIR / "cpsat"))
+    _cpsat_path()
     from teacher_scheduling import SolverConfig, TimetableProblem, solve
     from teacher_scheduling.solver.config import ObjectiveWeights
     from teacher_scheduling.validate import compute_penalties, validate_timetable
@@ -553,7 +565,7 @@ def track2(args) -> None:
         )
     lines += [
         "",
-        "- Both backends are rescored with cpsat validate.py (hard-violation list + S1–S6 penalties × default weights).",
+        "- Both backends are rescored with cpsat validate.py (hard-violation list + soft penalties × default weights).",
         "- engine is the st_timetabling canonical backend (single thread; pending if the import fails).",
     ]
     for row in rows:
@@ -568,7 +580,9 @@ def track2(args) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--track2", action="store_true", help="run the full canonical-constraints track")
-    parser.add_argument("--track3", action="store_true", help="run the partial-timetabling track (H1 relaxed)")
+    parser.add_argument(
+        "--track3", action="store_true", help="run the partial-timetabling track (unassigned lessons relaxed)"
+    )
     parser.add_argument(
         "--drop-day",
         type=int,

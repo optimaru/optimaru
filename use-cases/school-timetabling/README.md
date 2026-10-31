@@ -57,20 +57,39 @@ Decreasing ordering, or pre-assign part of the solution in the domain
 solver's `solve` before the engine runs — the engine only fills what is still unassigned.
 
 **Adding a hard or soft cost.** One file per constraint under
-`cpp/include/st/constraints/` (currently `class_gap`, `global/block_adjacency`, `global/course_daily_limit`, `global/unassigned_lesson`, `slot/avoided_period`, `slot/class_conflict`, `slot/non_preferred_period`, `slot/room_capacity`, `slot/slot_not_allowed`, `slot/teacher_conflict`, `teacher/teacher_consecutive_limit`, `teacher/teacher_free_day`, `teacher/teacher_gap`, `teacher/teacher_load_limit`, `teacher/teacher_workday`):
-1. add `constraints/<name>.hpp` (a `UnitConstraint` or `GlobalConstraint`;
-   positive cost = penalty, the level and weight are constructor defaults);
-2. include it in `cpp/include/st/canonical_constraints.hpp` and `emplace` it in
-   `defaultConstraints()` if it belongs to the default set;
-3. for a default constraint, add the same raw cost to
-   `canonical_score_calculator` / `canonical_incremental_calculator` — `canonical_plugin_test` checks
-   they agree bit for bit;
-4. add a `Constraint` spec with the snake_case `name` to
-   `python/st_timetabling/constraints.py`; callers then pick, reweight or flip it:
-   `constraints=get_constraints([..., MyRule(weight=5, hard=True)])`;
+`cpp/include/st/constraints/` (currently `class_gap_cost`, `global/block_adjacency_cost`,
+`global/course_max_periods_per_day_cost`, `global/fixed_slots_cost`,
+`global/parallel_groups_cost`, `global/unassigned_lessons_cost`, `slot/avoided_period_cost`,
+`slot/class_conflict_cost`, `slot/disallowed_slot_cost`, `slot/non_preferred_period_cost`,
+`slot/room_capacity_cost`, `slot/teacher_conflict_cost`, `teacher/teacher_free_day_cost`,
+`teacher/teacher_gap_cost`, `teacher/teacher_max_consecutive_periods_cost`,
+`teacher/teacher_max_periods_cost`, `teacher/teacher_workday_cost`; the helper bases
+`global/global_constraint.hpp`, `slot/slot_constraint.hpp`, `slot/slot_delta_group.hpp`,
+`teacher/teacher_mask_hub.hpp`):
+1. add `constraints/<subject>_cost.hpp` with `struct <Subject>Cost` (a `UnitConstraint` or
+   `GlobalConstraint`; positive raw cost = penalty, 0 = no violation) declaring
+   `static constexpr double kDefaultWeight` and `static constexpr optimaru::Level kDefaultLevel`,
+   an `explicit <Subject>Cost(double weight = kDefaultWeight)` constructor and the registry
+   name `"<subject>Cost"` (the struct name with a lower-case first letter);
+2. include it in `cpp/include/st/canonical_constraints.hpp` and add it to
+   `detail::buildDefaultSet()` (whose order is the catalog order) if it belongs to the
+   default set;
+3. for a default constraint, add the same raw cost to `canonical_score_calculator`
+   (a `Breakdown` member named like the registry name) / `canonical_incremental_calculator`,
+   weighted by the component's `kDefaultWeight` (a soft one also gets an `ObjectiveWeights`
+   field) — `canonical_plugin_test` checks they agree bit for bit — and a positive and a zero
+   hand-calculated case to `canonical_plugin_test` (h);
+4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
+   `description_en` / `description_ko` to `python/st_timetabling/constraints.py` (plus its
+   module-level default instance and its place in `_DEFAULTS`); callers then pick, reweight
+   or flip it: `constraints=get_constraints([..., MyRuleCost(weight=5, hard=True)])`;
 5. mirror it in the CP-SAT model in
-   [`benchmarks/school-timetabling/cpsat`](../../benchmarks/school-timetabling/cpsat) so the
-   benchmark stays like for like.
+   [`benchmarks/school-timetabling/cpsat`](../../benchmarks/school-timetabling/cpsat) (a
+   plugin subclassing the spec in `teacher_scheduling/solver/registry.py`; defaults come from
+   `constraint_info()`) so the benchmark stays like for like.
+
+The constraint table (names, defaults, raw costs) and the 0.2.0 renames are in
+[`python/README.md`](python/README.md#constraints).
 
 ## Benchmark
 

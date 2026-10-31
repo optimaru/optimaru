@@ -1,16 +1,17 @@
 """Parity gate: st::canon engine score == cpsat validate.py (ground truth).
 
 The same canonical problem is (i) solved with CP-SAT (teacher_scheduling), the
-solution injected into the st::canon domain to compute the engine breakdown,
-and (ii) compared with cpsat's validate_timetable (hard H1–H10) +
-compute_penalties (soft S1–S6).
+solution injected into the st::canon domain to compute the engine's raw
+constraint costs (`constraint_costs`), and (ii) compared with cpsat's
+validate_timetable (the hard constraints) + compute_penalties (the soft ones,
+keyed by the same *_cost names).
 
 Gate conditions (per problem):
 - hard-violation counts match exactly: the cpsat solution has 0 violations
-  under validate, and the engine's hard_total() is 0 too.
-- raw soft counts (S1–S6) match key by key.
-- weighted penalty sums match exactly: engine soft_penalty(weights) ==
-  validate's weighted sum == the objective_value cpsat reports.
+  under validate, and every engine hard raw cost is 0 too.
+- raw soft counts match key by key.
+- weighted penalty sums match exactly: the engine's score of the soft costs at
+  `weights` == validate's weighted sum == the objective_value cpsat reports.
 
 The reverse direction (engine solve -> cpsat validate) is checked as well, so
 the semantics of the whole pipeline, conversion and reverse conversion
@@ -19,7 +20,7 @@ included, are pinned down.
 
 import st_timetabling as st
 from st_timetabling import canon
-from st_timetabling.constraints import Assembly
+from st_timetabling.constraints import UNASSIGNED_LESSONS_SOFT_WEIGHT, UnassignedLessonsCost, get_constraints
 
 from teacher_scheduling import SolverConfig as CpsatConfig
 from teacher_scheduling import Timetable, TimetableProblem
@@ -30,12 +31,12 @@ from teacher_scheduling.validate import compute_penalties, validate_timetable
 # Problem 3: a small instance with parallel sections (members with different preferred/avoided
 # masks) + a block + forbidden times + class unavailability + a teacher consecutive cap and a free day.
 _FEATURE_WEIGHTS = {
-    "teacher_gap": 7,
-    "teacher_workday": 2,
-    "teacher_free_day": 11,
-    "class_gap": 3,
-    "avoided_period": 5,
-    "non_preferred_period": 2,
+    "teacher_gap_cost": 7,
+    "teacher_workday_cost": 2,
+    "teacher_free_day_cost": 11,
+    "class_gap_cost": 3,
+    "avoided_period_cost": 5,
+    "non_preferred_period_cost": 2,
 }
 
 
@@ -139,26 +140,31 @@ def _assert_parity(problem_dict: dict, cpsat_result: Timetable, weights: dict[st
     violations = validate_timetable(problem, cpsat_result)
     truth_penalties = compute_penalties(problem, cpsat_result)
 
-    # Engine: inject the same solution into st::canon and recompute the breakdown.
+    # Engine: inject the same solution into st::canon and read the raw constraint costs.
     converted = st.convert_problem(problem_dict)
-    converted.table.weights = canon.ObjectiveWeights(**weights)
     st.inject_solution(converted, [lesson.model_dump(mode="json") for lesson in cpsat_result.lessons])
-    breakdown = canon.compute_breakdown(converted.table)
+    costs = canon.constraint_costs(converted.table)
+    raw = {name: sum(entry["costs"]) for name, entry in costs.items()}
 
     # Hard-violation counts match exactly (a valid cpsat solution => 0 on both sides).
     assert violations == []
-    assert breakdown.hard_total() == 0
+    assert all(raw[name] == 0 for name, entry in costs.items() if entry["hard"])
 
-    # Soft: raw counts match per key + the weighted sums match (cpsat's reported value included).
-    assert dict(breakdown.penalties()) == dict(truth_penalties)
-    engine_soft = breakdown.soft_penalty(canon.ObjectiveWeights(**weights))
+    # Soft: raw counts match per key (one name on both sides) + the weighted sums match (cpsat's
+    # reported value included).
+    soft = {name: int(raw[name]) for name, entry in costs.items() if entry["level"] == "soft"}
+    assert soft == dict(truth_penalties)
+    picks = [type(spec)(weight=weights[spec.name]) if spec.name in weights else spec for spec in get_constraints()]
+    engine_soft = -st.constraints.score(costs, picks).soft
     assert engine_soft == _weighted(truth_penalties, weights)
     assert engine_soft == cpsat_result.objective_value
 
-    # The score path must give the same value too (calculate_score == breakdown).
-    score = canon.calculate_score(converted.table)
+    # The score paths must give the same value too: the monolith at these weights, and the plugin
+    # assembly at these weights.
+    score = canon.calculate_score(converted.table, canon.ObjectiveWeights(**weights))
     assert score.hard == 0
     assert -score.soft == engine_soft
+    assert -canon.DecomposedCalculator(picks).score(converted.table).soft == engine_soft
 
 
 def _solve_and_assert(problem_dict: dict, *, weights: dict[str, int] | None = None, time_limit: float = 10.0) -> None:
@@ -185,7 +191,8 @@ def test_parity_feature_problem_with_custom_weights():
 
 
 def test_parity_partial_solution(problem):
-    """Partial timetabling (H1 relaxed) follows the same contract — cpsat solve_partial is the ground truth.
+    """Partial timetabling (unassigned lessons relaxed) follows the same contract — cpsat solve_partial is the
+    ground truth.
 
     The unassigned count cannot be matched (local search proves no optimality).
     What is pinned down is the **semantics**: unassigned lessons are not a hard
@@ -207,20 +214,24 @@ def test_parity_partial_solution(problem):
 
     result = st.solve(
         problem,
-        constraints=Assembly().add("weekly_period_counts", hard=False, weight=10_000),
+        constraints=[
+            *get_constraints()[1:],
+            UnassignedLessonsCost(hard=False, weight=UNASSIGNED_LESSONS_SOFT_WEIGHT),
+        ],
         time_limit_seconds=10.0,
         random_seed=7,
     )
 
-    # Unassigned lessons are a result, not a search failure.
+    # Unassigned lessons are a result, not a search failure; both sides report them under one name.
     assert result["status"] == "FEASIBLE"
-    assert result["penalties"]["weekly_period_counts"] == required - len(result["lessons"])
+    assert result["penalties"]["unassigned_lessons_cost"] == required - len(result["lessons"])
+    assert optimum.penalties["unassigned_lessons_cost"] == required - len(optimum.lessons)
     # It cannot fill more than the optimum (cpsat proves optimality).
     assert 0 < len(result["lessons"]) <= len(optimum.lessons)
 
     # The placed part respects every hard constraint — viewed as the problem with the
     # weekly periods reduced to the placed counts, cpsat validate must find no
-    # violation (the same as checking everything but H1).
+    # violation (the same as checking everything but unassigned_lessons_cost).
     timetable = Timetable.model_validate(result)
     scheduled: dict[str, int] = {}
     for lesson in timetable.lessons:
@@ -253,3 +264,61 @@ def test_parity_engine_solution_backwards():
     assert dict(result["penalties"]) == dict(truth_penalties)
     default_weights = CpsatConfig().weights.model_dump()
     assert result["objective_value"] == _weighted(truth_penalties, default_weights)
+
+
+def test_cpsat_defaults_are_the_engine_defaults():
+    """The CP-SAT registry is the engine's specs: same names, order and defaults (constraint_info())."""
+    from teacher_scheduling.solver.registry import CONSTRAINT_TYPES, ENGINE_DEFAULTS, default_constraints
+
+    assert [c.name for c in CONSTRAINT_TYPES] == list(st.list_constraints())
+    for constraint_type in CONSTRAINT_TYPES:
+        assert issubclass(constraint_type, getattr(st.constraints, constraint_type.__name__))
+    for constraint, row in zip(default_constraints(), st.constraint_info(), strict=True):
+        assert (constraint.weight, constraint.hard, constraint.exponent) == (None, None, 1.0)
+        assert ENGINE_DEFAULTS[constraint.name] == row
+        assert constraint.level == row.default_level
+        assert constraint.effective_weight == row.default_weight
+    assert CpsatConfig().weights.model_dump() == {
+        row.name: row.default_weight for row in st.constraint_info() if row.default_level == "soft"
+    }
+
+
+def test_teacher_gap_made_hard_is_forbidden_on_both_paths():
+    """hard=True on a soft constraint: CP-SAT forbids every violation; the engine scores it on the hard level."""
+    from helpers import NO_WEIGHTS, course, make_problem, slot, teacher
+
+    from teacher_scheduling.domain.solution import SolveStatus
+    from teacher_scheduling.solver.registry import TeacherGapCost as CpsatTeacherGapCost
+    from teacher_scheduling.solver.registry import default_constraints, merge
+
+    config = CpsatConfig(time_limit_seconds=5.0, num_workers=4, random_seed=7, weights=NO_WEIGHTS)
+    constraints = merge(default_constraints(NO_WEIGHTS), CpsatTeacherGapCost(hard=True))
+    # One fixed lesson in period 1: the other must sit in period 2 (period 3 would leave a gap).
+    problem = make_problem(
+        [course(periods_per_week=2, max_periods_per_day=2, fixed_slots=frozenset({slot(0, 1)}))],
+        [teacher()],
+        days=1,
+        periods=3,
+    )
+    result = solve_cpsat(problem, config, constraints=constraints)
+    assert result.status.has_solution
+    assert {lesson.slot.period for lesson in result.lessons} == {1, 2}
+    assert "teacher_gap_cost" not in result.penalties  # a hard term reports no penalty
+
+    # The engine scores the same timetable at hard 0 under the same selection.
+    problem_dict = problem.model_dump(mode="json")
+    converted = st.convert_problem(problem_dict)
+    st.inject_solution(converted, [lesson.model_dump(mode="json") for lesson in result.lessons])
+    selection = [
+        st.TeacherGapCost(hard=True) if spec.name == "teacher_gap_cost" else spec for spec in get_constraints()
+    ]
+    assert canon.DecomposedCalculator(selection).score(converted.table).hard == 0
+
+    # Fixed lessons in periods 1 and 3 leave a gap that hard=True cannot accept.
+    gapped = make_problem(
+        [course(periods_per_week=2, max_periods_per_day=2, fixed_slots=frozenset({slot(0, 1), slot(0, 3)}))],
+        [teacher()],
+        days=1,
+        periods=3,
+    )
+    assert solve_cpsat(gapped, config, constraints=constraints).status == SolveStatus.INFEASIBLE

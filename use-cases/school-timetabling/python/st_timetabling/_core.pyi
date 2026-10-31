@@ -5,10 +5,13 @@ The compiled module wraps the C++ domain in
 `include/optimaru`. Two domains are exposed:
 
 - module top level: the quickstart port (`Timetable`, slotRoom composite
-  encoding, the 7 constraints below)
+  encoding, the 7 terms below) and the package's constraint catalog
+  (`constraint_info`, `ConstraintInfo`, `list_constraints` — the canonical
+  domain's; the quickstart model has no registry)
 - `canon` submodule: the canonical full-parity domain (`st::canon`), which
-  implements hard H1–H10 / soft S1–S6 of the CP-SAT reference package
-  (benchmarks/school-timetabling/cpsat) with validate.py's semantics.
+  implements every hard and soft constraint of the CP-SAT reference package
+  (benchmarks/school-timetabling/cpsat) with validate.py's semantics, under
+  the same names.
 
 The quickstart domain uses one BASIC int variable per entity (Lesson), so
 the two variables (timeslot, room) are a single composite encoding::
@@ -18,22 +21,45 @@ the two variables (timeslot, room) are a single composite encoding::
 Score convention: `hard` counts constraint violations (0 == feasible),
 `soft` is the objective. Both are maximised (less negative is better).
 
-Quickstart constraints (HardSoftScore):
-  hard 1. roomConflict          -1 per pair of lessons in the same timeslot+room
-  hard 2. teacherConflict       -1 per pair of same-teacher lessons in a timeslot
-  hard 3. studentGroupConflict  -1 per pair of same-group lessons in a timeslot
-  hard 4. teacherUnavailable    -1 per lesson in a timeslot its teacher cannot
-                                take (extension)
-  soft 5. teacherRoomStability  -1 per pair of same-teacher lessons in
-                                different rooms
-  soft 6. teacherTimeEfficiency +1 per pair of same-teacher lessons in
-                                consecutive periods of a day
-  soft 7. studentGroupSubjectVariety  -1 per pair of same-group, same-subject
-                                lessons in consecutive periods of a day
+Quickstart terms (HardSoftScore, not selectable):
+  hard 1. room_conflict_cost           -1 per pair of lessons in the same
+                                       timeslot+room
+  hard 2. teacher_conflict_cost        -1 per pair of same-teacher lessons in a
+                                       timeslot
+  hard 3. class_conflict_cost          -1 per pair of same-group lessons in a
+                                       timeslot
+  hard 4. teacher_unavailability_cost  -1 per lesson in a timeslot its teacher
+                                       cannot take (extension)
+  soft 5. teacher_room_change_cost     -1 per pair of same-teacher lessons in
+                                       different rooms
+  soft 6. teacher_time_efficiency_cost +1 per pair of same-teacher lessons in
+                                       consecutive periods of a day (a reward)
+  soft 7. class_subject_repeat_cost    -1 per pair of same-group, same-subject
+                                       lessons in consecutive periods of a day
 """
 
 from collections.abc import Callable, Iterable
-from typing import Protocol, TypedDict, overload
+from typing import Any, Literal, NamedTuple, Protocol, TypedDict, overload
+
+class ConstraintInfo(NamedTuple):
+    """One constraint-catalog row, read off the C++ default assembly."""
+
+    name: str
+    default_level: Literal["hard", "medium", "soft"]
+    default_weight: float
+    level_flippable: bool
+    reward: bool
+    default_enabled: bool
+
+def constraint_info() -> list[ConstraintInfo]:
+    """The constraint catalog of the canonical domain, in list_constraints()
+    order: per constraint its Python name, default level, default weight (the
+    C++ kDefaultWeight), whether hard=True/False may change the level (False
+    for fixed_slots_cost / parallel_groups_cost), whether it is a reward, and
+    whether it is scored by default."""
+
+def list_constraints() -> list[str]:
+    """The canonical constraint names, in catalog order (= canon.CONSTRAINT_NAMES)."""
 
 class Score:
     """HardSoft score. `hard` is the integer violation sum (0 == feasible);
@@ -192,37 +218,47 @@ class canon:
     """Canonical full-parity domain submodule (`st::canon`).
 
     At runtime this is the `st_timetabling._core.canon` module (written as a
-    namespace class in the stub). Implements hard H1–H10 / soft S1–S6 of the
-    CP-SAT reference with validate.py's semantics:
+    namespace class in the stub). Implements every constraint of the CP-SAT
+    reference with validate.py's semantics (raw cost; 0 = no violation):
 
-      H1 unassigned  H2 fixed (pinned)  H3 class clash C(n,2)
-      H4 teacher clash C(n,2)  H5 placed outside allowed_slot
-      H6 demand over capacity per (special room type, time)
-      H7 over the (course, weekday) daily cap  H8 broken block
-      H9 teacher daily/weekly cap  H10 teacher consecutive-lessons cap
-      S1 teacher gaps  S2 teacher working days  S3 requested free day
-      S4 class gaps  S5 avoided periods  S6 off preferred periods
+      hard: unassigned_lessons_cost (lessons without a slot),
+            class_conflict_cost / teacher_conflict_cost (C(n,2) clashes),
+            disallowed_slot_cost (placed outside allowed_slot),
+            room_capacity_cost (demand over the special rooms per type and time),
+            course_max_periods_per_day_cost (over a course's daily cap),
+            block_adjacency_cost (broken blocks),
+            teacher_max_periods_cost (daily + weekly caps),
+            teacher_max_consecutive_periods_cost (consecutive-lessons cap),
+            fixed_slots_cost / parallel_groups_cost (structural, always 0:
+            pinned and merged lessons; not flippable)
+      soft: teacher_gap_cost (20), teacher_workday_cost (3),
+            teacher_free_day_cost (30, worked requested free days),
+            class_gap_cost (10), avoided_period_cost (5),
+            non_preferred_period_cost (1)
 
     Design limits: periods <= 16, weekday index < 8 (bitmasks; prepare rejects more).
     """
 
     class ObjectiveWeights:
-        """S1–S6 weights (cpsat ObjectiveWeights defaults). 0 drops the term."""
+        """Soft weights of the monolithic fast path (`SolverConfig.weights`),
+        keyed by the soft constraint names; the defaults are the components'
+        kDefaultWeight (20/3/30/10/5/1). 0 drops the term. Never part of the
+        model and never read by the plugin path."""
         def __init__(
             self,
-            teacher_gap: int = 20,
-            teacher_workday: int = 3,
-            teacher_free_day: int = 30,
-            class_gap: int = 10,
-            avoided_period: int = 5,
-            non_preferred_period: int = 1,
+            teacher_gap_cost: float = 20.0,
+            teacher_workday_cost: float = 3.0,
+            teacher_free_day_cost: float = 30.0,
+            class_gap_cost: float = 10.0,
+            avoided_period_cost: float = 5.0,
+            non_preferred_period_cost: float = 1.0,
         ) -> None: ...
-        teacher_gap: int
-        teacher_workday: int
-        teacher_free_day: int
-        class_gap: int
-        avoided_period: int
-        non_preferred_period: int
+        teacher_gap_cost: float
+        teacher_workday_cost: float
+        teacher_free_day_cost: float
+        class_gap_cost: float
+        avoided_period_cost: float
+        non_preferred_period_cost: float
 
     class Lesson:
         """Planning entity: one weekly hour of a (possibly merged) course. `slot`
@@ -245,16 +281,17 @@ class canon:
         """Dense ids of every teacher teaching the lesson (team teaching >= 2,
         merged lessons take the union)."""
         room_type_demand: list[int]
-        """Demand per special-room type (H6). Empty list = no demand."""
+        """Demand per special-room type (room_capacity_cost). Empty list = no demand."""
         allowed_slot: list[bool]
-        """Per-slot allowance table (H5). Empty list = everything allowed."""
+        """Per-slot allowance table (disallowed_slot_cost). Empty list = everything allowed."""
         preference_units: list[tuple[int, int]]
-        """S5/S6 units: one (avoided mask, preferred mask) pair per member course
-        (bit = period - 1). Empty means derived from the course_key masks."""
+        """avoided_period_cost / non_preferred_period_cost units: one (avoided mask,
+        preferred mask) pair per member course (bit = period - 1). Empty means
+        derived from the course_key masks."""
         block_group: int
-        """Block (consecutive periods) group id (H8), -1 = none."""
+        """Block (consecutive periods) group id (block_adjacency_cost), -1 = none."""
         pinned: bool
-        """True pins the slot (H2: the engine never moves it)."""
+        """True pins the slot (fixed slots: the engine never moves it)."""
         slot: int
 
     class Timetable:
@@ -273,7 +310,7 @@ class canon:
         teacher_count: int
         class_count: int
         room_capacity_by_type: list[int]
-        """Number of rooms per special-room type (H6)."""
+        """Number of rooms per special-room type (room_capacity_cost)."""
         teacher_max_per_day: list[int]
         teacher_max_per_week: list[int]
         """-1 = unlimited (cpsat's None)."""
@@ -283,7 +320,6 @@ class canon:
         course_daily_limit: list[int]
         course_avoided_period_mask: list[int]
         course_preferred_period_mask: list[int]
-        weights: canon.ObjectiveWeights
         @property
         def score(self) -> Score: ...
         @property
@@ -294,65 +330,37 @@ class canon:
         def set_assignment(self, assignment: list[int]) -> None:
             """Writes the slot of every lesson. ValueError if the length differs from the lesson count."""
 
-    class Breakdown:
-        """Violation counts per constraint (validate.py's hard checks +
-        compute_penalties semantics). hard_total() is the absolute hard score,
-        soft_penalty(weights) the absolute soft score."""
-        @property
-        def unassigned(self) -> int: ...
-        @property
-        def class_conflicts(self) -> int: ...
-        @property
-        def teacher_conflicts(self) -> int: ...
-        @property
-        def slot_not_allowed(self) -> int: ...
-        @property
-        def room_over_capacity(self) -> int: ...
-        @property
-        def course_daily_excess(self) -> int: ...
-        @property
-        def block_breaks(self) -> int: ...
-        @property
-        def teacher_daily_excess(self) -> int: ...
-        @property
-        def teacher_weekly_excess(self) -> int: ...
-        @property
-        def consecutive_excess(self) -> int: ...
-        @property
-        def teacher_gap(self) -> int: ...
-        @property
-        def teacher_workday(self) -> int: ...
-        @property
-        def teacher_free_day(self) -> int: ...
-        @property
-        def class_gap(self) -> int: ...
-        @property
-        def avoided_period(self) -> int: ...
-        @property
-        def non_preferred_period(self) -> int: ...
-        def hard_total(self) -> int: ...
-        def soft_penalty(self, weights: canon.ObjectiveWeights) -> int: ...
-        def penalties(self) -> dict[str, int]:
-            """Raw S1–S6 counts (same keys as cpsat Timetable.penalties)."""
-
+    @overload
     @staticmethod
     def calculate_score(table: canon.Timetable) -> Score:
-        """Full HardSoftScore recompute (also stored in `table.score`)."""
-
+        """Full HardSoftScore recompute at the default weights (also stored in `table.score`)."""
+    @overload
     @staticmethod
-    def compute_breakdown(table: canon.Timetable) -> canon.Breakdown:
-        """Full per-constraint recompute (H1–H10 / S1–S6 counts)."""
+    def calculate_score(table: canon.Timetable, weights: canon.ObjectiveWeights) -> Score:
+        """The same with the soft terms at `weights` (the fast path's weights)."""
 
     @staticmethod
     def prepare(table: canon.Timetable) -> None:
-        """Normalises the instance (idempotent; compute_breakdown /
-        calculate_score / solve call it too). Invalid input raises ValueError."""
+        """Normalises the instance (idempotent; calculate_score / constraint_costs /
+        solve call it too). Invalid input raises ValueError."""
+
+    @staticmethod
+    def constraint_costs(
+        table: canon.Timetable, constraints: Iterable[canon.ConstraintSpec] | None = None
+    ) -> dict[str, dict[str, Any]]:
+        """Raw per-unit cost of every default constraint (or of the picked ones),
+        before weight/exponent/level, in list_constraints() order:
+        {name: {"costs": [...], "weight": float, "exponent": float, "hard": bool,
+        "global": bool, "level": "hard" | "medium" | "soft", "reward": bool,
+        "level_flippable": bool, "name": str, "label": str}}. "costs" holds one
+        value per slot for the per-slot constraints, one total for the others.
+        `st_timetabling.constraints.score(costs, selection)` turns it into the
+        engine score of any selection."""
 
     class ConstraintSpec(Protocol):
-        """Constraint-spec duck type: the `Constraint` dataclasses of
-        `st_timetabling.constraints` and `Assembly` items qualify. A `weight` of
-        None means the component default (hard H* = 1, soft S* = cpsat default
-        weight)."""
+        """Constraint-pick duck type: the `Constraint` specs of
+        `st_timetabling.constraints` and `Assembly` items qualify. `weight`
+        None = the component default, `hard` None = the default level."""
 
         @property
         def name(self) -> str: ...
@@ -364,25 +372,26 @@ class canon:
         def exponent(self) -> float: ...
 
     CONSTRAINT_NAMES: tuple[str, ...]
-    """Every name `DecomposedCalculator.add` accepts (registry order):
+    """Every name a selection accepts, in catalog order: unassigned_lessons_cost,
+    class_conflict_cost, teacher_conflict_cost, disallowed_slot_cost,
+    room_capacity_cost, course_max_periods_per_day_cost, block_adjacency_cost,
+    teacher_max_periods_cost, teacher_max_consecutive_periods_cost (hard, weight
+    1), teacher_gap_cost (20), teacher_workday_cost (3), teacher_free_day_cost
+    (30), class_gap_cost (10), avoided_period_cost (5), non_preferred_period_cost
+    (1) (soft), fixed_slots_cost, parallel_groups_cost (hard, structural).
+    `constraint_info()` reports the same defaults."""
 
-    - hard (default weight 1): ``"unassigned_lesson"`` (H1),
-      ``"class_conflict"`` (H3), ``"teacher_conflict"`` (H4),
-      ``"slot_not_allowed"`` (H5), ``"room_capacity"`` (H6),
-      ``"course_daily_limit"`` (H7), ``"block_adjacency"`` (H8),
-      ``"teacher_load_limit"`` (H9), ``"teacher_consecutive_limit"`` (H10)
-    - soft (default weight = the cpsat ObjectiveWeights defaults):
-      ``"teacher_gap"`` (S1, 20), ``"teacher_workday"`` (S2, 3),
-      ``"teacher_free_day"`` (S3, 30), ``"class_gap"`` (S4, 10),
-      ``"avoided_period"`` (S5, 5), ``"non_preferred_period"`` (S6, 1)
-
-    H2 (fixed time) is enforced by pinned lessons and is not scored.
-    """
+    UNASSIGNED_LESSONS_SOFT_WEIGHT: float
+    """The documented weight of unassigned_lessons_cost demoted to soft
+    (partial timetabling): 10000 per unplaced period. A recommendation, not a
+    default."""
 
     class ConstraintTotalDict(TypedDict):
         name: str
+        label: str
         cost: float
         """Total after weighting; positive = penalty."""
+        level: Literal["hard", "medium", "soft"]
         is_hard: bool
 
     class DecomposedCalculator:
@@ -390,18 +399,18 @@ class canon:
         hard/soft levels, then pass it to ``Solver.solve(table, calc)`` or score
         a fixed assignment directly.
 
-        Assemble from an iterable of specs (an `Assembly` / spec list from
+        Assemble from constraint picks (an `Assembly` / spec list from
         `st_timetabling.constraints`) or add names one by one with :meth:`add`.
-        The full default set of 15 (:func:`default_calculator`) matches
-        :func:`calculate_score` bit for bit when `weights` equals
-        `table.weights`."""
+        The default set (:func:`default_calculator`) matches
+        :func:`calculate_score` bit for bit."""
 
         @overload
         def __init__(self) -> None: ...
         @overload
-        def __init__(self, constraints: Iterable[canon.ConstraintSpec]) -> None:
-            """Duck-typed: items only need `.name`/`.weight`/`.hard`/`.exponent`
-            (both `Assembly` and the `Constraint` dataclasses qualify)."""
+        def __init__(self, constraints: Iterable[canon.ConstraintSpec] | None) -> None:
+            """Duck-typed picks (`.name`/`.weight`/`.hard`/`.exponent`); None = the
+            default set. The picks replace the defaults; an empty list or a name
+            picked twice raises ValueError, a wrong knob type TypeError."""
 
         def add(
             self,
@@ -410,12 +419,12 @@ class canon:
             hard: bool | None = None,
             exponent: float = 1.0,
         ) -> None:
-            """Adds a built-in canonical constraint by name (`CONSTRAINT_NAMES`).
+            """Adds one canonical constraint by name (`CONSTRAINT_NAMES`).
 
-            weight:   linear multiplier of the constraint cost; None keeps the
+            weight:   linear multiplier of the raw cost; None keeps the
                       component default.
-            hard:     True/False flips the default hard/soft level
-                      (None = keep the default).
+            hard:     None keeps the default level, True = hard, False = soft
+                      (fixed_slots_cost / parallel_groups_cost refuse False).
             exponent: sign-preserving power shaping:
                       contribution = weight * sign(c)*|c|^exponent.
             Unknown names raise ValueError. Adding a name twice is allowed (the
@@ -428,20 +437,24 @@ class canon:
         def constraint_totals(self) -> list[canon.ConstraintTotalDict]:
             """Weighted cost per constraint of the last score/solve (the score explanation)."""
 
+        def constraint_costs(self, table: canon.Timetable) -> dict[str, dict[str, Any]]:
+            """Raw per-unit costs of this assembly's constraints on `table` (the
+            `canon.constraint_costs` shape; re-primes the calculator)."""
+
         @property
         def delta_group_count(self) -> int:
             """Number of structural delta groups compiled by the last reset/solve."""
 
     @staticmethod
-    def default_calculator(weights: canon.ObjectiveWeights = ...) -> canon.DecomposedCalculator:
-        """A DecomposedCalculator with the full canonical set: hard H1–H10 at
-        weight 1, soft S1–S6 at `weights` (default: the cpsat default weights)."""
+    def default_calculator() -> canon.DecomposedCalculator:
+        """A DecomposedCalculator with the default set, every component at its
+        default weight and level (scores like `calculate_score`)."""
 
     class SolverConfig:
         """Configuration of `canon.Solver`. The common engine fields match the
-        top-level `SolverConfig`; canonical-only additions are `weights` and the
-        guided-search knobs (`hot_lesson_probability`, `same_class_nearby*`,
-        `smart_class_swap_*`)."""
+        top-level `SolverConfig`; canonical-only additions are the fast path's
+        `weights` and the guided-search knobs (`hot_lesson_probability`,
+        `same_class_nearby*`, `smart_class_swap_*`)."""
         def __init__(self) -> None: ...
         spent_limit_seconds: float
         unimproved_spent_limit_seconds: float
@@ -471,7 +484,8 @@ class canon:
         best_score_limit: tuple[int, float]
         on_new_best: Callable[[int, Score], None] | None
         weights: canon.ObjectiveWeights
-        """Copied into Timetable.weights when solve() starts."""
+        """The soft weights of the monolithic fast path, solve(table) only (the
+        model carries none; the plugin path's components carry their own)."""
         hot_lesson_probability: float
         """Probability of picking a lesson involved in a hard violation as the move target (0 = off)."""
         same_class_nearby: bool
@@ -483,7 +497,7 @@ class canon:
         reassign_candidates: int
         """Placements tried when putting an unassigned lesson back (partial timetabling only).
 
-        Used only when the assembly demotes H1 to soft. Re-inserting into a
+        Used only when the assembly demotes unassigned_lessons_cost to soft. Re-inserting into a
         tight timetable needs a slot that clashes with nobody, which a single
         random cell almost never finds — looking wide is the point of this move,
         hence a larger k than the swap's. Track-3 sweep (partial_M, 10 s):
@@ -499,10 +513,11 @@ class canon:
         @overload
         def solve(self, table: canon.Timetable, calculator: canon.DecomposedCalculator) -> None:
             """Plugin-assembly path: both the search and the final `table.score`
-            use `calculator` (soft weights come from the assembly — config.weights
+            use `calculator` (the weights come from the assembly — config.weights
             is ignored). Single start: parallel_solver_count is ignored.
 
-            When the assembly demotes H1 (`unassigned_lesson`) to soft or drops it,
-            the unassign moves switch on — only then can the search leave a lesson
-            at slot -1 (the BASIC move mix's value range is [0, slot_count)). With
-            H1 hard, every lesson takes a slot exactly as on the default path."""
+            When the assembly demotes `unassigned_lessons_cost` to soft or drops
+            it, the unassign moves switch on — only then can the search leave a
+            lesson at slot -1 (the BASIC move mix's value range is [0,
+            slot_count)). With it hard, every lesson takes a slot exactly as on
+            the default path."""

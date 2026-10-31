@@ -3,26 +3,43 @@
 from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+from st_timetabling import constraint_info
 
 from teacher_scheduling.config import env
 
+# The engine's default weight of each soft constraint (C++ kDefaultWeight) — the one source.
+_DEFAULT_WEIGHTS = {row.name: int(row.default_weight) for row in constraint_info() if row.default_level == "soft"}
+
+
+def _weight_field(name: str, description: str):
+    return Field(default=_DEFAULT_WEIGHTS[name], ge=0, description=description)
+
 
 class ObjectiveWeights(BaseModel):
-    """Soft-constraint weights. 0 removes the term from the objective.
+    """Soft-constraint weights, keyed by the soft constraint names. 0 removes the term from the objective.
 
-    Weights of custom SoftTerms beyond the six declared ones (S1–S6) are passed
-    as extra fields named after the term, e.g. `ObjectiveWeights(first_period_load=2)`.
-    A custom term without a weight counts as 1 (see `weight_for`).
+    The defaults are the engine's (`st_timetabling.constraint_info()`). Weights
+    of custom SoftTerms beyond the six declared ones are passed as extra fields
+    named after the term, e.g. `ObjectiveWeights(first_period_load=2)`. A custom
+    term without a weight counts as 1 (see `weight_for`).
     """
 
     model_config = ConfigDict(extra="allow")
 
-    teacher_gap: int = Field(default=20, ge=0, description="Penalty per idle period in the middle of a teacher's day")
-    teacher_workday: int = Field(default=3, ge=0, description="Penalty per teacher working day (favours compact teaching days)")
-    teacher_free_day: int = Field(default=30, ge=0, description="Penalty when a requested free day gets a lesson")
-    class_gap: int = Field(default=10, ge=0, description="Penalty per idle period in the middle of a class's day")
-    avoided_period: int = Field(default=5, ge=0, description="Penalty for a lesson in one of its subject's avoided periods")
-    non_preferred_period: int = Field(default=1, ge=0, description="Penalty for a lesson outside its subject's preferred periods")
+    teacher_gap_cost: int = _weight_field("teacher_gap_cost", "Penalty per idle period in the middle of a teacher's day")
+    teacher_workday_cost: int = _weight_field(
+        "teacher_workday_cost", "Penalty per teacher working day (favours compact teaching days)"
+    )
+    teacher_free_day_cost: int = _weight_field(
+        "teacher_free_day_cost", "Penalty per worked requested free day (a lesson on a preferred free day)"
+    )
+    class_gap_cost: int = _weight_field("class_gap_cost", "Penalty per idle period in the middle of a class's day")
+    avoided_period_cost: int = _weight_field(
+        "avoided_period_cost", "Penalty for a lesson in one of its subject's avoided periods"
+    )
+    non_preferred_period_cost: int = _weight_field(
+        "non_preferred_period_cost", "Penalty for a lesson outside its subject's preferred periods"
+    )
 
     @model_validator(mode="after")
     def _check_extra_weights(self) -> ObjectiveWeights:

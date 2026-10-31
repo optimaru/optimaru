@@ -14,20 +14,22 @@ namespace st::canon
 // Moved verbatim out of canonical_solver.cpp — one operator per file, the
 // domain-side counterpart of the engine's generic/ruin layout.
 
-// Unassign move (only registered when the assembly demotes H1 to soft): take
-// one assigned lesson out of the timetable. The BASIC move mix only ever
-// draws values from [0, slotCount), so without this operator "leave it
-// unassigned" is not a choice the search can make — demoting H1 to soft would
-// change the score of a solution the search can never reach, and the run would
-// come back with every lesson placed and hard violations instead. The opposite
-// direction needs no operator: for an unassigned lesson the builtin change
-// move sees oldValue == -1 and takes the valueRecommender's allowed slot.
+// Unassign move (only registered when the assembly demotes
+// unassignedLessonsCost to soft): take one assigned lesson out of the
+// timetable. The BASIC move mix only ever draws values from [0, slotCount), so
+// without this operator "leave it unassigned" is not a choice the search can
+// make — demoting unassignedLessonsCost to soft would change the score of a
+// solution the search can never reach, and the run would come back with every
+// lesson placed and hard violations instead. The opposite direction needs no
+// operator: for an unassigned lesson the builtin change move sees oldValue ==
+// -1 and takes the valueRecommender's allowed slot.
 //
 // Seeded on a hard-violating lesson when there is one, because that is where
 // unassigning pays: hard beats soft lexicographically, so dropping a lesson
-// that carries a violation is an improvement on its own, and H1's soft weight
-// (the CP-SAT unassigned penalty, ~10000 against soft terms of 1~30) is what
-// makes the search put it back as soon as a conflict-free slot opens up.
+// that carries a violation is an improvement on its own, and
+// unassignedLessonsCost's soft weight (UnassignedLessonsCost::kSoftWeight,
+// 10000 against soft terms of 1~30) is what makes the search put it back as
+// soon as a conflict-free slot opens up.
 template <typename HotSource>
 class UnassignMove final : public optimaru::MoveOperator<Timetable>
 {
@@ -51,9 +53,10 @@ public:
         if (!removable(table, a))
             return false;
 
-        // A block (consecutive periods) leaves as a whole or not at all: half a block is not
-        // a block, and H8 prices it as such. Taking the group out together is
-        // what keeps "drop it" reachable for block lessons at all.
+        // A block (consecutive periods) leaves as a whole or not at all: half a
+        // block is not a block, and blockAdjacencyCost prices it as such.
+        // Taking the group out together is what keeps "drop it" reachable for
+        // block lessons at all.
         last_.clear();
         const int group = table.lessons[a].blockGroup;
         if (group < 0)
@@ -91,7 +94,7 @@ public:
     }
 
 private:
-    // Pinned lessons are H2 (fixed slots) and never move; an already
+    // Pinned lessons are fixed slots and never move; an already
     // unassigned lesson has nothing to remove.
     static bool removable(const Timetable &table, int lesson)
     {

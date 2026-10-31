@@ -1,7 +1,7 @@
 // Canonical-domain (st::canon) unit tests, engine test/ style: check() + a
 // non-zero exit on any failure.
-//   (a) every hard (H1, H3~H10) and soft (S1~S6) constraint verified in
-//       isolation against hand-computed counts, several reproducing the
+//   (a) every hard and soft constraint verified in isolation against
+//       hand-computed counts, several reproducing the
 //       CP-SAT package's test cases (benchmarks/school-timetabling/cpsat/tests)
 //   (b) incremental score == full recompute across a long random walk driven
 //       through the engine's ScoreDirector protocol (before/set/after)
@@ -56,7 +56,7 @@ void checkCount(const std::string &label,
 
 const ObjectiveWeights kZeroWeights{0, 0, 0, 0, 0, 0};
 
-// Base grid: slots enumerated day-major from periodsPerDay, zero weights.
+// Base grid: slots enumerated day-major from periodsPerDay.
 Timetable makeGrid(const std::vector<int> &periodsPerDay)
 {
     Timetable t;
@@ -68,7 +68,6 @@ Timetable makeGrid(const std::vector<int> &periodsPerDay)
             t.periodOfSlot.push_back(p);
         }
     }
-    t.weights = kZeroWeights;
     return t;
 }
 
@@ -100,7 +99,7 @@ int addLesson(Timetable &t,
 
 // -------------------------------------------------------------------------
 // (a) Hard constraints in isolation. Grid: 2 days x 5 periods (slots 0..4 =
-// Mon periods 1-5, 5..9 = Tue). Weights are zero, so soft must stay 0.
+// Mon periods 1-5, 5..9 = Tue).
 // -------------------------------------------------------------------------
 const std::vector<int> kGrid25{5, 5};
 
@@ -108,60 +107,74 @@ void verifyHardConstraints()
 {
     std::printf("== (a1) Hard constraints, hand-computed ==\n");
 
-    // H1: unassigned lessons cost 1 hard each.
+    // unassignedLessonsCost: unassigned lessons cost 1 hard each.
     {
         Timetable t = makeGrid(kGrid25);
         addLesson(t, 0, 0, {0});
         addLesson(t, 0, 1, {1});
         addLesson(t, 0, 2, {2}, 0);
         const Breakdown b = ScoreCalculator::computeBreakdown(t);
-        checkCount("H1 two unassigned lessons", b.unassigned, 2);
-        checkCount("H1 hard total", b.hardTotal(), 2);
+        checkCount("unassignedLessonsCost two unassigned lessons",
+                   b.unassignedLessonsCost,
+                   2);
+        checkCount("unassignedLessonsCost hard total", b.hardTotal(), 2);
     }
-    // H3: class conflict — same class, same slot, C(n,2).
+    // classConflictCost: class conflict — same class, same slot, C(n,2).
     {
         Timetable t = makeGrid(kGrid25);
         addLesson(t, 0, 0, {0}, 0);
         addLesson(t, 0, 1, {1}, 0);
         Breakdown b = ScoreCalculator::computeBreakdown(t);
-        checkCount("H3 class conflict pair", b.classConflicts, 1);
+        checkCount(
+            "classConflictCost class conflict pair", b.classConflictCost, 1);
         addLesson(t, 0, 2, {2}, 0);
         t.prepared = false;  // structural change: re-run prepare()
         b = ScoreCalculator::computeBreakdown(t);
-        checkCount("H3 class conflict triple = C(3,2)", b.classConflicts, 3);
+        checkCount("classConflictCost class conflict triple = C(3,2)",
+                   b.classConflictCost,
+                   3);
     }
-    // H4: teacher conflict — same teacher, same slot, different classes.
+    // teacherConflictCost: teacher conflict — same teacher, same slot,
+    // different classes.
     {
         Timetable t = makeGrid(kGrid25);
         addLesson(t, 0, 0, {0}, 0);
         addLesson(t, 1, 1, {0}, 0);
         const Breakdown b = ScoreCalculator::computeBreakdown(t);
-        checkCount("H4 teacher conflict pair", b.teacherConflicts, 1);
-        checkCount("H4 no class conflict across classes", b.classConflicts, 0);
+        checkCount("teacherConflictCost teacher conflict pair",
+                   b.teacherConflictCost,
+                   1);
+        checkCount("teacherConflictCost no class conflict across classes",
+                   b.classConflictCost,
+                   0);
     }
-    // H4: team teaching — two lessons sharing BOTH teachers conflict once
-    // per teacher.
+    // teacherConflictCost: team teaching — two lessons sharing BOTH teachers
+    // conflict once per teacher.
     {
         Timetable t = makeGrid(kGrid25);
         addLesson(t, 0, 0, {0, 1}, 0);
         addLesson(t, 1, 1, {0, 1}, 0);
         const Breakdown b = ScoreCalculator::computeBreakdown(t);
-        checkCount("H4 team-teaching double conflict", b.teacherConflicts, 2);
+        checkCount("teacherConflictCost team-teaching double conflict",
+                   b.teacherConflictCost,
+                   2);
     }
-    // H5: assignment outside the allowedSlot table.
+    // disallowedSlotCost: assignment outside the allowedSlot table.
     {
         Timetable t = makeGrid(kGrid25);
         const int i = addLesson(t, 0, 0, {0}, 0);
         t.lessons[i].allowedSlot.assign(10, 1);
         t.lessons[i].allowedSlot[0] = 0;
         Breakdown b = ScoreCalculator::computeBreakdown(t);
-        checkCount("H5 forbidden slot hit", b.slotNotAllowed, 1);
+        checkCount(
+            "disallowedSlotCost forbidden slot hit", b.disallowedSlotCost, 1);
         t.lessons[i].slot = 1;
         b = ScoreCalculator::computeBreakdown(t);
-        checkCount("H5 allowed slot ok", b.slotNotAllowed, 0);
+        checkCount(
+            "disallowedSlotCost allowed slot ok", b.disallowedSlotCost, 0);
     }
-    // H6: room-type demand over capacity (cpsat test_room_capacity_respected:
-    // one science lab shared by two classes).
+    // roomCapacityCost: room-type demand over capacity (cpsat
+    // test_room_capacity_respected: one science lab shared by two classes).
     {
         Timetable t = makeGrid(kGrid25);
         t.roomCapacityByType = {1};
@@ -170,39 +183,50 @@ void verifyHardConstraints()
         t.lessons[a].roomTypeDemand = {1};
         t.lessons[b1].roomTypeDemand = {1};
         Breakdown b = ScoreCalculator::computeBreakdown(t);
-        checkCount("H6 demand 2 > capacity 1", b.roomOverCapacity, 1);
+        checkCount(
+            "roomCapacityCost demand 2 > capacity 1", b.roomCapacityCost, 1);
         t.lessons[b1].slot = 1;
         b = ScoreCalculator::computeBreakdown(t);
-        checkCount("H6 spread over slots ok", b.roomOverCapacity, 0);
+        checkCount(
+            "roomCapacityCost spread over slots ok", b.roomCapacityCost, 0);
     }
-    // H6: a merged lesson carries the SUM of its members' demands.
+    // roomCapacityCost: a merged lesson carries the SUM of its members'
+    // demands.
     {
         Timetable t = makeGrid(kGrid25);
         t.roomCapacityByType = {1};
         const int i = addLesson(t, 0, 0, {0, 1}, 0);
         t.lessons[i].roomTypeDemand = {2};
         Breakdown b = ScoreCalculator::computeBreakdown(t);
-        checkCount("H6 merged demand 2 > capacity 1", b.roomOverCapacity, 1);
+        checkCount("roomCapacityCost merged demand 2 > capacity 1",
+                   b.roomCapacityCost,
+                   1);
         t.roomCapacityByType = {2};
         t.prepared = false;
         b = ScoreCalculator::computeBreakdown(t);
-        checkCount("H6 merged demand 2 <= capacity 2", b.roomOverCapacity, 0);
+        checkCount("roomCapacityCost merged demand 2 <= capacity 2",
+                   b.roomCapacityCost,
+                   0);
     }
-    // H7: per-course daily cap (cpsat test_daily_course_limit).
+    // courseMaxPeriodsPerDayCost: per-course daily cap (cpsat
+    // test_daily_course_limit).
     {
         Timetable t = makeGrid(kGrid25);
         addLesson(t, 0, 0, {0}, slotIdx(kGrid25, 0, 1));
         addLesson(t, 0, 0, {0}, slotIdx(kGrid25, 0, 3));
         t.courseDailyLimit = {1};
         Breakdown b = ScoreCalculator::computeBreakdown(t);
-        checkCount(
-            "H7 two same-course lessons one day", b.courseDailyExcess, 1);
+        checkCount("courseMaxPeriodsPerDayCost two same-course lessons one day",
+                   b.courseMaxPeriodsPerDayCost,
+                   1);
         t.lessons[1].slot = slotIdx(kGrid25, 1, 3);
         b = ScoreCalculator::computeBreakdown(t);
-        checkCount("H7 spread over days ok", b.courseDailyExcess, 0);
+        checkCount("courseMaxPeriodsPerDayCost spread over days ok",
+                   b.courseMaxPeriodsPerDayCost,
+                   0);
     }
-    // H8: block groups — violation = (k-1) - same-day consecutive
-    // adjacencies.
+    // blockAdjacencyCost: block groups — violation = (k-1) - same-day
+    // consecutive adjacencies.
     {
         auto blockCase = [](const std::vector<std::pair<int, int>> &dayPeriods,
                             std::int64_t expected,
@@ -215,22 +239,29 @@ void verifyHardConstraints()
                     = addLesson(t, 0, 0, {0}, slotIdx(kGrid25, day, period));
                 t.lessons[i].blockGroup = 0;
             }
-            t.courseDailyLimit = {4};  // keep H7 out of the way
+            t.courseDailyLimit
+                = {4};  // keep courseMaxPeriodsPerDayCost out of the way
             const Breakdown b = ScoreCalculator::computeBreakdown(t);
-            checkCount(label, b.blockBreaks, expected);
+            checkCount(label, b.blockAdjacencyCost, expected);
         };
-        blockCase({{0, 1}, {0, 2}}, 0, "H8 pair adjacent");
-        blockCase({{0, 1}, {0, 3}}, 1, "H8 pair with a hole");
-        blockCase({{0, 1}, {1, 1}}, 1, "H8 pair split across days");
-        blockCase({{0, 1}, {0, 2}, {0, 3}}, 0, "H8 triple run");
-        blockCase({{0, 1}, {0, 2}, {0, 4}}, 1, "H8 triple, one detached");
-        blockCase({{0, 1}, {0, 3}, {1, 1}}, 2, "H8 triple fully scattered");
+        blockCase({{0, 1}, {0, 2}}, 0, "blockAdjacencyCost pair adjacent");
+        blockCase({{0, 1}, {0, 3}}, 1, "blockAdjacencyCost pair with a hole");
+        blockCase(
+            {{0, 1}, {1, 1}}, 1, "blockAdjacencyCost pair split across days");
+        blockCase({{0, 1}, {0, 2}, {0, 3}}, 0, "blockAdjacencyCost triple run");
+        blockCase({{0, 1}, {0, 2}, {0, 4}},
+                  1,
+                  "blockAdjacencyCost triple, one detached");
+        blockCase({{0, 1}, {0, 3}, {1, 1}},
+                  2,
+                  "blockAdjacencyCost triple fully scattered");
     }
-    // H8 vs partial assignment. CP-SAT's _check_blocks asks whether SOME day
-    // holds a run of block_periods, so half of a 2-period block is "no 2-period block" there
-    // — half a block is charged here too, or partial solving could buy its
-    // way out of a block by dropping one member. Dropping the WHOLE group is
-    // the deliberate exception: H1 is what prices that.
+    // blockAdjacencyCost vs partial assignment. CP-SAT's _check_blocks asks
+    // whether SOME day holds a run of block_periods, so half of a 2-period
+    // block is "no 2-period block" there — half a block is charged here too, or
+    // partial solving could buy its way out of a block by dropping one member.
+    // Dropping the WHOLE group is the deliberate exception:
+    // unassignedLessonsCost is what prices that.
     {
         Timetable t = makeGrid(kGrid25);
         const int a = addLesson(t, 0, 0, {0}, slotIdx(kGrid25, 0, 1));
@@ -239,8 +270,13 @@ void verifyHardConstraints()
         t.lessons[b1].blockGroup = 0;
         t.courseDailyLimit = {4};
         const Breakdown b = ScoreCalculator::computeBreakdown(t);
-        checkCount("H8 half-placed block is charged", b.blockBreaks, 1);
-        checkCount("H8 ... and H1 charges the missing hour", b.unassigned, 1);
+        checkCount("blockAdjacencyCost half-placed block is charged",
+                   b.blockAdjacencyCost,
+                   1);
+        checkCount("blockAdjacencyCost ... and unassignedLessonsCost charges "
+                   "the missing hour",
+                   b.unassignedLessonsCost,
+                   1);
     }
     {
         Timetable t = makeGrid(kGrid25);
@@ -250,10 +286,15 @@ void verifyHardConstraints()
         t.lessons[b1].blockGroup = 0;
         t.courseDailyLimit = {4};
         const Breakdown b = ScoreCalculator::computeBreakdown(t);
-        checkCount("H8 group dropped whole is free", b.blockBreaks, 0);
-        checkCount("H8 ... H1 alone prices it", b.unassigned, 2);
+        checkCount("blockAdjacencyCost group dropped whole is free",
+                   b.blockAdjacencyCost,
+                   0);
+        checkCount(
+            "blockAdjacencyCost ... unassignedLessonsCost alone prices it",
+            b.unassignedLessonsCost,
+            2);
     }
-    // H9 daily: distinct busy periods over maxPerDay.
+    // teacherMaxPeriodsCost daily: distinct busy periods over maxPerDay.
     {
         Timetable t = makeGrid(kGrid25);
         t.teacherMaxPerDay = {2};
@@ -261,21 +302,27 @@ void verifyHardConstraints()
         addLesson(t, 1, 1, {0}, slotIdx(kGrid25, 0, 3));
         addLesson(t, 2, 2, {0}, slotIdx(kGrid25, 0, 5));
         const Breakdown b = ScoreCalculator::computeBreakdown(t);
-        checkCount("H9 3 periods > maxPerDay 2", b.teacherDailyExcess, 1);
+        checkCount("teacherMaxPeriodsCost 3 periods > maxPerDay 2",
+                   b.teacherMaxPeriodsCost,
+                   1);
     }
-    // H9 daily counts DISTINCT periods (validate.py uses a set): a same-slot
-    // overlap is an H4 conflict, not extra daily load.
+    // teacherMaxPeriodsCost daily counts DISTINCT periods (validate.py uses a
+    // set): a same-slot overlap is an teacherConflictCost conflict, not extra
+    // daily load.
     {
         Timetable t = makeGrid(kGrid25);
         t.teacherMaxPerDay = {1};
         addLesson(t, 0, 0, {0}, 0);
         addLesson(t, 1, 1, {0}, 0);
         const Breakdown b = ScoreCalculator::computeBreakdown(t);
-        checkCount("H9 same-slot overlap: conflict", b.teacherConflicts, 1);
-        checkCount(
-            "H9 same-slot overlap: no daily excess", b.teacherDailyExcess, 0);
+        checkCount("teacherMaxPeriodsCost same-slot overlap: conflict",
+                   b.teacherConflictCost,
+                   1);
+        checkCount("teacherMaxPeriodsCost same-slot overlap: no daily excess",
+                   b.teacherMaxPeriodsCost,
+                   0);
     }
-    // H9 weekly (cpsat test_teacher_weekly_max shape).
+    // teacherMaxPeriodsCost weekly (cpsat test_teacher_weekly_max shape).
     {
         Timetable t = makeGrid(kGrid25);
         t.teacherMaxPerWeek = {2};
@@ -283,10 +330,12 @@ void verifyHardConstraints()
         addLesson(t, 1, 1, {0}, slotIdx(kGrid25, 0, 3));
         addLesson(t, 2, 2, {0}, slotIdx(kGrid25, 1, 1));
         const Breakdown b = ScoreCalculator::computeBreakdown(t);
-        checkCount(
-            "H9 3 weekly periods > maxPerWeek 2", b.teacherWeeklyExcess, 1);
+        checkCount("teacherMaxPeriodsCost 3 weekly periods > maxPerWeek 2",
+                   b.teacherMaxPeriodsCost,
+                   1);
     }
-    // H10: consecutive-run excess (cpsat test_teacher_consecutive_limit).
+    // teacherMaxConsecutivePeriodsCost: consecutive-run excess (cpsat
+    // test_teacher_consecutive_limit).
     {
         auto runCase = [](std::vector<int> periods,
                           int limit,
@@ -303,11 +352,20 @@ void verifyHardConstraints()
                 addLesson(t, id, id, {0}, slotIdx(kGrid25, 0, p));
             }
             const Breakdown b = ScoreCalculator::computeBreakdown(t);
-            checkCount(label, b.consecutiveExcess, expected);
+            checkCount(label, b.teacherMaxConsecutivePeriodsCost, expected);
         };
-        runCase({1, 2, 3}, 2, 1, "H10 run 3 over limit 2");
-        runCase({1, 2, 3, 4, 5}, 2, 3, "H10 run 5 over limit 2");
-        runCase({1, 2, 4, 5}, 2, 0, "H10 two runs of 2 ok");
+        runCase({1, 2, 3},
+                2,
+                1,
+                "teacherMaxConsecutivePeriodsCost run 3 over limit 2");
+        runCase({1, 2, 3, 4, 5},
+                2,
+                3,
+                "teacherMaxConsecutivePeriodsCost run 5 over limit 2");
+        runCase({1, 2, 4, 5},
+                2,
+                0,
+                "teacherMaxConsecutivePeriodsCost two runs of 2 ok");
     }
     std::printf("\n");
 }
@@ -319,18 +377,23 @@ void verifySoftConstraints()
 {
     std::printf("== (a2) Soft constraints, hand-computed ==\n");
 
-    // S1: teacher gap = last - first + 1 - count of the day's busy periods.
+    // teacherGapCost: teacher gap = last - first + 1 - count of the day's busy
+    // periods.
     {
         Timetable t = makeGrid(kGrid25);
-        t.weights.teacherGap = 1;
+        ObjectiveWeights weights = kZeroWeights;
+        weights.teacherGapCost = 1;
         addLesson(t, 0, 0, {0}, slotIdx(kGrid25, 0, 1));
         addLesson(t, 1, 1, {0}, slotIdx(kGrid25, 0, 3));
         const Breakdown b = ScoreCalculator::computeBreakdown(t);
-        checkCount("S1 periods {1,3} -> gap 1", b.teacherGap, 1);
-        checkCount("S1 weighted soft penalty", b.softPenalty(t.weights), 1);
+        checkCount(
+            "teacherGapCost periods {1,3} -> gap 1", b.teacherGapCost, 1);
+        checkCount("teacherGapCost weighted soft penalty",
+                   static_cast<std::int64_t>(b.softPenalty(weights)),
+                   1);
     }
-    // S1: an unavailable period wedged between lessons still counts as a gap
-    // (validate.py counts busy periods only, ignoring availability).
+    // teacherGapCost: an unavailable period wedged between lessons still counts
+    // as a gap (validate.py counts busy periods only, ignoring availability).
     {
         Timetable t = makeGrid(kGrid25);
         const int a = addLesson(t, 0, 0, {0}, slotIdx(kGrid25, 0, 1));
@@ -341,93 +404,123 @@ void verifySoftConstraints()
             t.lessons[i].allowedSlot[slotIdx(kGrid25, 0, 2)] = 0;
         }
         const Breakdown b = ScoreCalculator::computeBreakdown(t);
-        checkCount("S1 unavailable period still a gap", b.teacherGap, 1);
+        checkCount("teacherGapCost unavailable period still a gap",
+                   b.teacherGapCost,
+                   1);
     }
-    // S1+S4: cpsat test_forced_gap_matches_hand_count — one class, periods 1
-    // and 5 fixed -> 3 gaps for both the teacher and the class.
+    // teacherGapCost + classGapCost: cpsat test_forced_gap_matches_hand_count —
+    // one class, periods 1 and 5 fixed -> 3 gaps for both the teacher and the
+    // class.
     {
         Timetable t = makeGrid(kGrid25);
         addLesson(t, 0, 0, {0}, slotIdx(kGrid25, 0, 1));
         addLesson(t, 0, 0, {0}, slotIdx(kGrid25, 0, 5));
         t.courseDailyLimit = {2};
         const Breakdown b = ScoreCalculator::computeBreakdown(t);
-        checkCount("S1 forced gap: teacher 3", b.teacherGap, 3);
-        checkCount("S4 forced gap: class 3", b.classGap, 3);
+        checkCount("teacherGapCost forced gap: teacher 3", b.teacherGapCost, 3);
+        checkCount("classGapCost forced gap: class 3", b.classGapCost, 3);
         checkCount("hard stays 0", b.hardTotal(), 0);
     }
-    // S2: one workday per (teacher, day) with any lesson.
+    // teacherWorkdayCost: one workday per (teacher, day) with any lesson.
     {
         Timetable t = makeGrid(kGrid25);
         addLesson(t, 0, 0, {0}, slotIdx(kGrid25, 0, 1));
         addLesson(t, 1, 1, {0}, slotIdx(kGrid25, 0, 2));
         addLesson(t, 2, 2, {0}, slotIdx(kGrid25, 1, 1));
         const Breakdown b = ScoreCalculator::computeBreakdown(t);
-        checkCount("S2 lessons on two days -> 2 workdays", b.teacherWorkday, 2);
+        checkCount("teacherWorkdayCost lessons on two days -> 2 workdays",
+                   b.teacherWorkdayCost,
+                   2);
     }
-    // S3: workday on a preferred-free day (cpsat
+    // teacherFreeDayCost: workday on a preferred-free day (cpsat
     // test_forced_free_day_violation_counted).
     {
         Timetable t = makeGrid(kGrid25);
         t.teacherPreferredFreeDays = {1 << 1};  // Tue
         addLesson(t, 0, 0, {0}, slotIdx(kGrid25, 1, 1));
         Breakdown b = ScoreCalculator::computeBreakdown(t);
-        checkCount("S3 lesson on preferred-free day", b.teacherFreeDay, 1);
+        checkCount("teacherFreeDayCost lesson on preferred-free day",
+                   b.teacherFreeDayCost,
+                   1);
         t.lessons[0].slot = slotIdx(kGrid25, 0, 1);
         b = ScoreCalculator::computeBreakdown(t);
-        checkCount("S3 lesson moved off the free day", b.teacherFreeDay, 0);
+        checkCount("teacherFreeDayCost lesson moved off the free day",
+                   b.teacherFreeDayCost,
+                   0);
     }
-    // S4: class gap with different teachers (isolated from S1 by weights).
+    // classGapCost: class gap with different teachers (isolated from
+    // teacherGapCost by weights).
     {
         Timetable t = makeGrid(kGrid25);
         addLesson(t, 0, 0, {0}, slotIdx(kGrid25, 0, 2));
         addLesson(t, 0, 1, {1}, slotIdx(kGrid25, 0, 4));
         const Breakdown b = ScoreCalculator::computeBreakdown(t);
-        checkCount("S4 class periods {2,4} -> gap 1", b.classGap, 1);
-        checkCount("S1 single-lesson teachers have no gap", b.teacherGap, 0);
+        checkCount(
+            "classGapCost class periods {2,4} -> gap 1", b.classGapCost, 1);
+        checkCount("teacherGapCost single-lesson teachers have no gap",
+                   b.teacherGapCost,
+                   0);
     }
-    // S5/S6: cpsat test_period_preferences_steer_placement — avoided {1},
-    // preferred {2}, lesson forced to period 1 hits both.
+    // avoidedPeriodCost / nonPreferredPeriodCost: cpsat
+    // test_period_preferences_steer_placement — avoided {1}, preferred {2},
+    // lesson forced to period 1 hits both.
     {
         Timetable t = makeGrid(kGrid25);
         t.courseAvoidedPeriodMask = {0x0001};    // period 1
         t.coursePreferredPeriodMask = {0x0002};  // period 2
         addLesson(t, 0, 0, {0}, slotIdx(kGrid25, 0, 1));
         Breakdown b = ScoreCalculator::computeBreakdown(t);
-        checkCount("S5 avoided period hit", b.avoidedPeriod, 1);
-        checkCount("S6 off the preferred periods", b.nonPreferredPeriod, 1);
+        checkCount(
+            "avoidedPeriodCost avoided period hit", b.avoidedPeriodCost, 1);
+        checkCount("nonPreferredPeriodCost off the preferred periods",
+                   b.nonPreferredPeriodCost,
+                   1);
         t.lessons[0].slot = slotIdx(kGrid25, 0, 2);
         b = ScoreCalculator::computeBreakdown(t);
-        checkCount("S5 clean period", b.avoidedPeriod, 0);
-        checkCount("S6 preferred period", b.nonPreferredPeriod, 0);
+        checkCount("avoidedPeriodCost clean period", b.avoidedPeriodCost, 0);
+        checkCount("nonPreferredPeriodCost preferred period",
+                   b.nonPreferredPeriodCost,
+                   0);
     }
-    // S6: an empty preferred mask means no preference.
+    // nonPreferredPeriodCost: an empty preferred mask means no preference.
     {
         Timetable t = makeGrid(kGrid25);
         addLesson(t, 0, 0, {0}, slotIdx(kGrid25, 0, 5));
         const Breakdown b = ScoreCalculator::computeBreakdown(t);
-        checkCount("S6 no preference, no penalty", b.nonPreferredPeriod, 0);
+        checkCount("nonPreferredPeriodCost no preference, no penalty",
+                   b.nonPreferredPeriodCost,
+                   0);
     }
-    // S5/S6 preference units: a merged lesson carries one unit per member
-    // course and each unit counts on its own (validate.py counts the member
-    // lessons individually). Units {avoided {1}}, {avoided {1}, preferred
-    // {2}} at period 1: S5 = 2, S6 = 1; moved to period 2 both clear.
+    // avoidedPeriodCost / nonPreferredPeriodCost preference units: a merged
+    // lesson carries one unit per member course and each unit counts on its own
+    // (validate.py counts the member lessons individually). Units {avoided
+    // {1}}, {avoided {1}, preferred {2}} at period 1: avoidedPeriodCost = 2,
+    // nonPreferredPeriodCost = 1; moved to period 2 both clear.
     {
         Timetable t = makeGrid(kGrid25);
         const int i = addLesson(t, 0, 0, {0, 1}, slotIdx(kGrid25, 0, 1));
         t.lessons[i].preferenceUnits = {{0x0001, 0x0000}, {0x0001, 0x0002}};
         Breakdown b = ScoreCalculator::computeBreakdown(t);
-        checkCount("S5 merged units, both avoided", b.avoidedPeriod, 2);
-        checkCount("S6 merged units, one preferred", b.nonPreferredPeriod, 1);
+        checkCount("avoidedPeriodCost merged units, both avoided",
+                   b.avoidedPeriodCost,
+                   2);
+        checkCount("nonPreferredPeriodCost merged units, one preferred",
+                   b.nonPreferredPeriodCost,
+                   1);
         t.lessons[i].slot = slotIdx(kGrid25, 0, 2);
         b = ScoreCalculator::computeBreakdown(t);
-        checkCount("S5 merged units clean period", b.avoidedPeriod, 0);
-        checkCount("S6 merged units on preferred", b.nonPreferredPeriod, 0);
+        checkCount("avoidedPeriodCost merged units clean period",
+                   b.avoidedPeriodCost,
+                   0);
+        checkCount("nonPreferredPeriodCost merged units on preferred",
+                   b.nonPreferredPeriodCost,
+                   0);
     }
-    // Weighted assembly: soft score = -(weighted sum) with the CP-SAT default
-    // weights.
+    // Weighted assembly: soft score = -(weighted sum) with the default
+    // weights 20/3/30/10/5/1 (the soft components' kDefaultWeight; the model
+    // carries none).
     {
         Timetable t = makeGrid(kGrid25);
-        t.weights = ObjectiveWeights{};  // 20/3/30/10/5/1
         t.teacherPreferredFreeDays = {1 << 0};
         t.courseAvoidedPeriodMask = {0x0001, 0};
         addLesson(t, 0, 0, {0}, slotIdx(kGrid25, 0, 1));
@@ -461,7 +554,6 @@ Timetable buildRandomInstance(int courseCount, std::uint64_t seed)
     t.teacherCount = teachers;
     t.classCount = classes;
     t.roomCapacityByType = {1, 2};
-    t.weights = ObjectiveWeights{};  // defaults: every soft term active
     t.teacherMaxPerDay.assign(teachers, 4);
     t.teacherMaxPerWeek.assign(teachers, 9);
     t.teacherMaxConsecutive.assign(teachers, 2);
@@ -502,7 +594,8 @@ Timetable buildRandomInstance(int courseCount, std::uint64_t seed)
             }
             if (block >= 0 && i < 2)
                 t.lessons[lesson].blockGroup = block;
-            if (rng() % 3 == 0)  // merged-lesson style multi-unit S5/S6
+            if (rng() % 3 == 0)  // merged-lesson style multi-unit
+                                 // avoidedPeriodCost / nonPreferredPeriodCost
             {
                 t.lessons[lesson].preferenceUnits
                     = {{static_cast<std::uint16_t>(rng() % 4),
@@ -579,8 +672,8 @@ void verifyIncremental()
         // Full recompute on the same assignment.
         for (int i = 0; i < lessonCount; ++i)
             shadow.lessons[i].slot = t.lessons[i].slot;
-        const Score full
-            = ScoreCalculator::computeBreakdown(shadow).toScore(t.weights);
+        const Score full = ScoreCalculator::computeBreakdown(shadow).toScore(
+            ObjectiveWeights{});
         const Score incremental = director.calculateScore();
         if (!calc.hotSetsConsistent())
             ++hotMismatches;
@@ -798,7 +891,6 @@ DemoSchool buildDemoSchool()
     d.t.teacherCount = 15;
     d.t.classCount = 6;
     d.t.roomCapacityByType = {2, 1, 1, 1};
-    d.t.weights = ObjectiveWeights{};  // CP-SAT defaults
 
     d.t.teacherMaxPerWeek.assign(15, -1);
     d.t.teacherMaxPerWeek[0] = 18;   // T01
@@ -868,7 +960,8 @@ DemoSchool buildDemoSchool()
     for (int c = 0; c < 6; ++c)
     {
         addCourse(c, {KOR[c]}, 5, 1, -1, 0, 0, false);
-        addCourse(c, {MATH[c]}, 5, 1, -1, 0, 0x000F, false);  // prefers mornings
+        addCourse(
+            c, {MATH[c]}, 5, 1, -1, 0, 0x000F, false);  // prefers mornings
         addCourse(c, {ENG[c]}, c == 2 ? 4 : 5, 1, -1, 0, 0, false);
         addCourse(c, {SCI[c]}, 4, 1, /*SCI*/ 0, 0, 0, false);
         addCourse(c, {SOC[c]}, 4, 1, -1, 0, 0, false);

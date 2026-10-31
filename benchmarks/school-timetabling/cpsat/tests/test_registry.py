@@ -16,7 +16,7 @@ from teacher_scheduling.domain.solution import SolveStatus
 from teacher_scheduling.solver.config import ObjectiveWeights, SolverConfig
 from teacher_scheduling.solver.registry import (
     Constraint,
-    WeeklyPeriodCounts,
+    UnassignedLessonsCost,
     default_constraints,
     merge,
 )
@@ -152,7 +152,7 @@ def test_custom_soft_steers_away_from_first_period():
     assert {lesson.slot.period for lesson in timetable.lessons} == {2, 3}
     assert timetable.penalties["first_period_load"] == 0
     # Default terms are reported as well (terms with nothing to count are omitted as before).
-    assert {"teacher_gap", "teacher_workday", "class_gap"} <= set(timetable.penalties)
+    assert {"teacher_gap_cost", "teacher_workday_cost", "class_gap_cost"} <= set(timetable.penalties)
 
 
 def test_custom_soft_counts_forced_first_period():
@@ -186,7 +186,7 @@ def test_unspecified_custom_weight_defaults_to_one():
 
 def test_weight_for_declared_extra_and_unknown_names():
     weights = ObjectiveWeights(first_period_load=2)
-    assert weights.weight_for("teacher_gap") == 20  # declared fields keep their defaults
+    assert weights.weight_for("teacher_gap_cost") == 20  # declared fields keep their defaults
     assert weights.weight_for("first_period_load") == 2  # a custom term given as an extra
     assert weights.weight_for("unknown_term") == 1  # an unspecified custom term is 1
 
@@ -221,18 +221,18 @@ def test_weekly_period_counts_can_be_relaxed_into_a_penalty():
 
     assert _solve(problem).status == SolveStatus.INFEASIBLE
 
-    relaxed = merge(default_constraints(NO_WEIGHTS), WeeklyPeriodCounts(hard=False, weight=100))
+    relaxed = merge(default_constraints(NO_WEIGHTS), UnassignedLessonsCost(hard=False, weight=100))
     timetable = _solve(problem, constraints=relaxed)
     assert timetable.status.has_solution
     assert len(timetable.lessons) == 2
-    assert timetable.penalties["weekly_period_counts"] == 1
+    assert timetable.penalties["unassigned_lessons_cost"] == 1
     assert timetable.objective_value == 100
 
 
 def test_merge_replaces_in_place_and_appends_new_names():
     """merge replaces same-named entries in place and appends only new names."""
     base = default_constraints()
-    merged = merge(base, WeeklyPeriodCounts(hard=False), NoLateFriday("T1"))
+    merged = merge(base, UnassignedLessonsCost(hard=False), NoLateFriday("T1"))
 
     assert [c.name for c in merged] == [*[c.name for c in base], "no_late_friday"]
-    assert merged[0] == WeeklyPeriodCounts(hard=False)
+    assert merged[0] == UnassignedLessonsCost(hard=False)
