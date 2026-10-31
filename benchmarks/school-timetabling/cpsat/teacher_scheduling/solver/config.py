@@ -34,10 +34,6 @@ class ObjectiveWeights(BaseModel):
         """The weight for SoftTerm.name. A name neither declared nor in extras counts as 1."""
         return self.model_dump().get(name, 1)
 
-    @property
-    def is_empty(self) -> bool:
-        return not any(self.model_dump().values())
-
 
 class SolverConfig(BaseModel):
     """CP-SAT run parameters."""

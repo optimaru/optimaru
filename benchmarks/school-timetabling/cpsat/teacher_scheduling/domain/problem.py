@@ -73,14 +73,6 @@ class TimetableProblem(BaseModel):
         return {room_type: tuple(rooms) for room_type, rooms in grouped.items()}
 
     @cached_property
-    def courses_by_teacher(self) -> dict[str, tuple[Course, ...]]:
-        grouped: dict[str, list[Course]] = defaultdict(list)
-        for course in self.courses:
-            for teacher_id in course.teacher_ids:
-                grouped[teacher_id].append(course)
-        return {teacher_id: tuple(courses) for teacher_id, courses in grouped.items()}
-
-    @cached_property
     def courses_by_class_group(self) -> dict[str, tuple[Course, ...]]:
         grouped: dict[str, list[Course]] = defaultdict(list)
         for course in self.courses:

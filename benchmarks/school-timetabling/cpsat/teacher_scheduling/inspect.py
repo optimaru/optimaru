@@ -68,10 +68,6 @@ class InspectionReport(BaseModel):
     total_lessons: int = 0
     required_lessons: int = 0
 
-    @property
-    def is_clean(self) -> bool:
-        return not self.hard_violations and all(item.severity != "error" or item.count == 0 for item in self.items)
-
 
 # ---------------------------------------------------------------- aggregation helpers
 

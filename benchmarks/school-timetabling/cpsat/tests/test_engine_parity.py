@@ -17,10 +17,6 @@ the semantics of the whole pipeline, conversion and reverse conversion
 included, are pinned down.
 """
 
-import pytest
-
-pytest.importorskip("teacher_scheduling")
-
 import st_timetabling as st
 from st_timetabling import canon
 from st_timetabling.constraints import Assembly
