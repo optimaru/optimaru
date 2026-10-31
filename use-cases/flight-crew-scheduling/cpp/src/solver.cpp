@@ -4,7 +4,6 @@
 #include <cstdlib>
 #include <memory>
 #include <stdexcept>
-#include <utility>
 
 #include "fcs/incremental_calculator.hpp"
 #include "fcs/score_calculator.hpp"

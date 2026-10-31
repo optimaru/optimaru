@@ -15,7 +15,6 @@
 #include <cstdlib>
 #include <fstream>
 #include <optional>
-#include <sstream>
 #include <stdexcept>
 #include <string>
 

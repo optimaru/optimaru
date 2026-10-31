@@ -22,7 +22,6 @@
 #include "fp/constraints.hpp"
 #include "fp/demo_data.hpp"
 #include "fp/domain.hpp"
-#include "fp/incremental_calculator.hpp"
 #include "fp/score_calculator.hpp"
 #include "fp/solver.hpp"
 #include "optimaru/python/constraint_binding.hpp"

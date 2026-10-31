@@ -8,7 +8,6 @@
 
 #include "fp/demo_data.hpp"
 #include "fp/domain.hpp"
-#include "fp/score_calculator.hpp"
 #include "fp/solver.hpp"
 
 using namespace fp;

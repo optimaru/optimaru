@@ -11,7 +11,6 @@
 #include <vector>
 
 #include "fl/domain.hpp"
-#include "fl/score_calculator.hpp"
 #include "fl/solver.hpp"
 
 using namespace fl;
