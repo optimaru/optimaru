@@ -29,8 +29,6 @@ cd cpp && cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build 
 cd ../python && uv venv && uv pip install -e . pytest pydantic && uv run pytest -q
 ```
 
-<!-- usage-and-extending -->
-
 ## Usage
 
 ```sh

@@ -35,8 +35,6 @@ versions still need to be recorded before treating two aggregate numbers as a
 strict speed comparison.
 The checked-in local snapshot is in [`bench/RESULTS.md`](../../benchmarks/assembly-line-balancing/bench/RESULTS.md).
 
-<!-- usage-and-extending -->
-
 ## Usage
 
 ```sh

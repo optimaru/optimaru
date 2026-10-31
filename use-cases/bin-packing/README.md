@@ -34,8 +34,6 @@ These template files are not the 240-instance BPPLIB GI collection used in
 Hexaly's 2024 performance article, so the runner does not mix their metrics or
 claim a direct comparison with the published 0.1% aggregate gap.
 
-<!-- usage-and-extending -->
-
 ## Usage
 
 ```sh

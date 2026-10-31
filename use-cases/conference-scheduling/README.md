@@ -76,8 +76,6 @@ Knobs that were measured but stay off by default (bench key = config field):
 Protocol: 6-seed interleaved A/B; per-seed win/loss is a lexicographic
 hard-then-soft comparison. The raw campaign logs are not checked in.
 
-<!-- usage-and-extending -->
-
 ## Usage
 
 ```sh

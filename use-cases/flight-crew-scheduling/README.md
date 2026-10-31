@@ -61,8 +61,6 @@ seats, ~50 crew members) and reaches feasible (hard 0) within 10 s.
 - `pinned` is an extension of this port (not in the original quickstart; the same pattern
   as the school-timetabling port).
 
-<!-- usage-and-extending -->
-
 ## Usage
 
 ```sh
