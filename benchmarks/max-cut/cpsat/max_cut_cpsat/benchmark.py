@@ -20,10 +20,10 @@ CPSAT_EXACT = True
 CPSAT_CAVEAT = ""
 
 
-def self_report(problem: Any) -> None:
-    # Compare rescored answers only; the engine folds medium levels into its
-    # two-level score, so its own report is not level-for-level comparable.
-    return None
+def self_report(problem: Any) -> tuple[float, ...]:
+    # The engine's own score of its answer (the model's score fields after
+    # max_cut.solve), cross-checked against the rescored one.
+    return (problem.score_hard, problem.score_soft)
 
 
 def _build(vertex_count: int, density: float, seed: int) -> Any:
@@ -41,7 +41,11 @@ def _build(vertex_count: int, density: float, seed: int) -> Any:
 
 
 def instances() -> dict[str, Callable[[], Any]]:
-    return {"g30": lambda: _build(30, 0.3, seed=0), "g80": lambda: _build(80, 0.1, seed=1), "g200": lambda: _build(200, 0.05, seed=2)}
+    return {
+        "g30": lambda: _build(30, 0.3, seed=0),
+        "g80": lambda: _build(80, 0.1, seed=1),
+        "g200": lambda: _build(200, 0.05, seed=2),
+    }
 
 
 def describe(problem: Any) -> str:
