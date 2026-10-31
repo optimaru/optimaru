@@ -131,12 +131,12 @@ and `scripts/check_constraint_base.py` enforces this in CI. In every package:
 
 **Scores of a selection.** On the `constraints=` path, bed-allocation,
 food-packaging, pickup-delivery, project-job-scheduling and vehicle-routing
-report the final `score` from the calculator's three level accumulators
-(`levelScores()`), before the medium fold. pickup-delivery,
-project-job-scheduling and vehicle-routing report every `on_new_best` score
-the same way. A demoted or re-weighted term therefore shows on the level the
-selection gave it, and a soft total of 1e9 or more no longer appears as
-medium. Results at the defaults are identical.
+report the final `score` and every `on_new_best` score from the
+calculator's three level accumulators (`levelScores()`), before the medium
+fold. A demoted or re-weighted term therefore shows on the level the
+selection gave it, and a large soft total (1e9 or more; 1e10 for
+food-packaging) no longer appears as medium. Results at the defaults are
+identical.
 
 ### Engine (C++, `include/optimaru`)
 
