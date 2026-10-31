@@ -73,8 +73,8 @@ Knobs that were measured but stay off by default (bench key = config field):
   480/2000 (@120) and 3200/6400 (@200) all failed to beat the automatic value
   `clamp(8 x talk, 800, 3200)`. Kept automatic.
 
-Raw data / protocol: campaign logs (6-seed interleaved A/B; per-seed win/loss is a
-lexicographic hard-then-soft comparison).
+Protocol: 6-seed interleaved A/B; per-seed win/loss is a lexicographic
+hard-then-soft comparison. The raw campaign logs are not checked in.
 
 <!-- usage-and-extending -->
 
