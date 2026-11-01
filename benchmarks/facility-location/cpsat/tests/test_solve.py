@@ -6,6 +6,7 @@ import facility_location as domain
 from facility_location.constraints import (
     DistanceFromFacilityCost,
     FacilityCapacityCost,
+    FacilitySetupCost,
     get_constraints,
     score,
 )
@@ -16,7 +17,9 @@ from facility_location.models import (
     LocationModel,
 )
 from facility_location_cpsat import solve
+from facility_location_cpsat.solve import build_model
 from facility_location import calculate_score
+from ortools.sat.python import cp_model
 
 
 def test_prefers_capacity_feasibility_before_distance() -> None:
@@ -216,7 +219,7 @@ def test_cpsat_defaults_are_the_engine_defaults() -> None:
         assert entry["reward"] == row.reward
         assert entry["default_enabled"] == row.default_enabled
         assert entry["kind"] == "either"  # every facility-location constraint is flippable
-        assert entry["params"] == {"weight": None, "hard": None, "exponent": 1.0}
+        assert entry["params"] == {"weight": None, "hard": None, "exponent": 1.0, "offset": 0.0, "clip": True}
 
 
 def test_demoting_capacity_scores_like_the_engine() -> None:
@@ -228,3 +231,94 @@ def test_demoting_capacity_scores_like_the_engine() -> None:
     engine = score(domain.constraint_costs(solved.to_core()), selection)
     assert (solved.score_hard, solved.score_soft) == pytest.approx(tuple(engine))
     assert solved.score_hard == 0
+
+
+# --- 0.3.0: repeated picks and offset / clip ---------------------------------------
+
+
+def _three_by_three() -> FacilityLocationProblemModel:
+    """Three facilities (one far, one small) and three consumers: 27 assignments."""
+    return FacilityLocationProblemModel(
+        facilities=[
+            FacilityModel(id="a", location=LocationModel(latitude=0, longitude=0), setup_cost=9, capacity=3),
+            FacilityModel(id="b", location=LocationModel(latitude=0.01, longitude=0), setup_cost=2, capacity=8),
+            FacilityModel(id="c", location=LocationModel(latitude=0, longitude=0.02), setup_cost=4, capacity=2),
+        ],
+        consumers=[
+            ConsumerModel(id="p", location=LocationModel(latitude=0, longitude=0), demand=3),
+            ConsumerModel(id="q", location=LocationModel(latitude=0.005, longitude=0), demand=2),
+            ConsumerModel(id="r", location=LocationModel(latitude=0, longitude=0.01), demand=1),
+        ],
+    )
+
+
+SELECTIONS = {
+    "repeat": [DistanceFromFacilityCost(), DistanceFromFacilityCost(weight=2, offset=500)],
+    "repeat-literal": [
+        FacilityCapacityCost(),
+        FacilitySetupCost(),
+        DistanceFromFacilityCost(offset=1000, clip=False),
+        DistanceFromFacilityCost(weight=3, offset=-200),
+    ],
+    "hard-offsets": [
+        FacilityCapacityCost(offset=1),
+        FacilityCapacityCost(weight=2, offset=2, clip=False),
+        FacilitySetupCost(offset=-3, clip=False),
+    ],
+    "identical-twice": [FacilitySetupCost(), FacilitySetupCost(), DistanceFromFacilityCost()],
+}
+
+
+def _assignments(problem):
+    for assignment in product(range(len(problem.facilities)), repeat=len(problem.consumers)):
+        candidate = problem.model_copy(deep=True)
+        for consumer, facility in zip(candidate.consumers, assignment, strict=True):
+            consumer.facility = facility
+        yield assignment, candidate
+
+
+@pytest.mark.parametrize("selection", list(SELECTIONS.values()), ids=list(SELECTIONS))
+def test_the_cpsat_terms_equal_the_engine_on_every_assignment(selection) -> None:
+    """Pin each of the 27 assignments: the CP-SAT objective's per-level value is the
+    engine's score of that assignment under the same repeated / shifted picks, exactly."""
+    problem = _three_by_three()
+    for assignment, candidate in _assignments(problem):
+        model, x, objective = build_model(problem, selection)
+        for (consumer, facility), literal in x.items():
+            model.add(literal == int(assignment[consumer] == facility))
+        objective.minimize()
+        solver = cp_model.CpSolver()
+        assert solver.solve(model) == cp_model.OPTIMAL
+        core = candidate.to_core()
+        engine = score(domain.constraint_costs(core, selection), selection)
+        assert objective.score(solver) == {"hard": engine.hard, "soft": engine.soft}, assignment
+        # Re-pricing the default costs (each name once) gives the same per instance key.
+        assert objective.score_costs(domain.constraint_costs(core)) == {"hard": engine.hard, "soft": engine.soft}
+
+
+@pytest.mark.parametrize("selection", list(SELECTIONS.values()), ids=list(SELECTIONS))
+def test_repeated_and_shifted_picks_reach_the_brute_force_optimum(selection) -> None:
+    problem = _three_by_three()
+    best = max(
+        tuple(score(domain.constraint_costs(candidate.to_core(), selection), selection))
+        for _, candidate in _assignments(problem)
+    )
+    solved = solve(problem, time_limit_seconds=5, constraints=selection)
+    assert (solved.score_hard, solved.score_soft) == pytest.approx(best)
+    engine = score(domain.constraint_costs(solved.to_core(), selection), selection)
+    assert (solved.score_hard, solved.score_soft) == pytest.approx(tuple(engine))
+
+
+def test_mapping_selections_repeat_and_shift_like_specs() -> None:
+    """The server's {name, weight, offset, clip} dicts pick the same instances as specs."""
+    problem = _three_by_three()
+    specs = [FacilitySetupCost(), FacilitySetupCost(weight=3, offset=4, clip=False)]
+    dicts = [{"name": "facility_setup_cost"}, {"name": "facility_setup_cost", "weight": 3, "offset": 4, "clip": False}]
+    assert solve(problem, time_limit_seconds=5, constraints=dicts) == solve(
+        problem, time_limit_seconds=5, constraints=specs
+    )
+
+
+def test_a_fractional_offset_is_refused_by_cpsat() -> None:
+    with pytest.raises(ValueError, match="offset must be an integer for CP-SAT"):
+        solve(_three_by_three(), time_limit_seconds=1, constraints=[DistanceFromFacilityCost(offset=0.5)])

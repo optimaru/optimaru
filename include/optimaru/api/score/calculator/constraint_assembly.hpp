@@ -68,6 +68,19 @@ struct ConstraintInfo {
 // Assemblies are ordinary movable values, so a domain hands one back from a
 // factory and the caller adjusts it. into() moves the components into the
 // calculator and leaves the assembly empty — build one, spend it once.
+//
+// One name, several instances: a constraint stated with several sets of knobs
+// (x^2 + x^3 as exponent 2 plus exponent 3, a capped and an uncapped travel
+// time) is the same component added more than once. add() keeps its
+// override semantics; addInstance() / addInstances() append further
+// instances next to the one already held, each scored on its own with its
+// own metadata, and the instances add up. Every by-name edit and lookup
+// (weight(), level(), hard(), soft(), exponent(), offset(), clip(), find(),
+// add()'s replacement) addresses the FIRST instance of the name; drop()
+// removes the first, only() keeps every instance of the names it is given.
+// The calculator, and the Python constraint_costs() keys
+// (python::instanceKeys: "<name>", "<name>#2", ...), see the instances of a
+// name in the order they were added.
 
 template <typename Solution>
 class ConstraintAssembly {
@@ -85,8 +98,8 @@ public:
 
     // Adds a constraint, REPLACING any already in the assembly under the same
     // name (override semantics: stating a constraint twice means "this one",
-    // not "count it twice"). Use the calculator's own add() when you really do
-    // want the same cost counted more than once.
+    // not "count it twice"). Use addInstance() below when you really do want
+    // the same cost counted more than once (each instance with its own knobs).
     ConstraintAssembly& add(std::unique_ptr<Unit> constraint) & {
         replaceOrAppend(units_, std::move(constraint));
         return *this;
@@ -113,6 +126,50 @@ public:
         return std::move(*this);
     }
 
+    // Appends another instance of a constraint, KEEPING any already held
+    // under the same name (see "One name, several instances" above).
+    ConstraintAssembly& addInstance(std::unique_ptr<Unit> constraint) & {
+        units_.push_back(std::move(constraint));
+        return *this;
+    }
+    ConstraintAssembly&& addInstance(std::unique_ptr<Unit> constraint) && {
+        addInstance(std::move(constraint));
+        return std::move(*this);
+    }
+    ConstraintAssembly& addInstance(std::unique_ptr<Global> constraint) & {
+        globals_.push_back(std::move(constraint));
+        return *this;
+    }
+    ConstraintAssembly&& addInstance(std::unique_ptr<Global> constraint) && {
+        addInstance(std::move(constraint));
+        return std::move(*this);
+    }
+    template <typename C, typename... Args>
+    ConstraintAssembly& emplaceInstance(Args&&... args) & {
+        return addInstance(std::make_unique<C>(std::forward<Args>(args)...));
+    }
+    template <typename C, typename... Args>
+    ConstraintAssembly&& emplaceInstance(Args&&... args) && {
+        addInstance(std::make_unique<C>(std::forward<Args>(args)...));
+        return std::move(*this);
+    }
+    // Appends every component of `other` as further instances (units after
+    // this assembly's units, globals after its globals, in `other`'s order)
+    // and leaves `other` empty. How a copy of a default component joins the
+    // assembly: build the domain's default assembly again, re-state the
+    // knobs on it, keep only the one name, and append it.
+    ConstraintAssembly& addInstances(ConstraintAssembly&& other) & {
+        for (auto& constraint : other.units_) units_.push_back(std::move(constraint));
+        for (auto& constraint : other.globals_) globals_.push_back(std::move(constraint));
+        other.units_.clear();
+        other.globals_.clear();
+        return *this;
+    }
+    ConstraintAssembly&& addInstances(ConstraintAssembly&& other) && {
+        addInstances(std::move(other));
+        return std::move(*this);
+    }
+
     // --- adjusting --------------------------------------------------------
     // The level, the weight and the exponent are assembly-time metadata, not
     // part of any cost, which is exactly why they can be re-stated here.
@@ -121,6 +178,8 @@ public:
     // ConstraintMetadata::setWeight/setLevel/setExponent:
     //   weight    finite and >= 0, in units of the constraint's level
     //   exponent  finite and > 0
+    //   offset    finite (any sign)
+    //   clip      any bool
     //   level     a reward can never be Hard; a constraint whose
     //             levelFlippable is false keeps its level (re-stating the
     //             level it already has is accepted as a no-op)
@@ -168,6 +227,28 @@ public:
     }
     ConstraintAssembly&& exponent(const std::string& name, double exponent) && {
         this->exponent(name, exponent);  // the parameter shadows the method
+        return std::move(*this);
+    }
+    // The shift of the shaping, applied with the exponent (per unit for a
+    // unit constraint, on the total for a global): with clip (the default)
+    // sign(x) * max(0, |x| - offset)^exponent, the threshold; without it
+    // (clip(name, false)) the literal (x - offset)^exponent, sign-preserving,
+    // which rewards every evaluated unit below the offset (shapeCost in
+    // decomposed_score_calculator.hpp).
+    ConstraintAssembly& offset(const std::string& name, double offset) & {
+        require(name).setOffset(offset);
+        return *this;
+    }
+    ConstraintAssembly&& offset(const std::string& name, double offset) && {
+        this->offset(name, offset);  // the parameter shadows the method
+        return std::move(*this);
+    }
+    ConstraintAssembly& clip(const std::string& name, bool clip) & {
+        require(name).setClip(clip);
+        return *this;
+    }
+    ConstraintAssembly&& clip(const std::string& name, bool clip) && {
+        this->clip(name, clip);  // the parameter shadows the method
         return std::move(*this);
     }
 

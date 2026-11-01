@@ -40,12 +40,12 @@ inline std::string pythonName(const std::string& constraintName) {
 
 // The key of each constraint instance in `constraint_costs()`, given the
 // instances' Python names in calculator order: the Python name itself, and
-// "<name>#<k>" for the k-th instance (k >= 2) of a name a domain adds more
-// than once (employee-scheduling day patterns, scoped rules). The Python base
-// (_constraint.py instance_keys) derives the same keys from a selection list,
-// and employee-scheduling's CP-SAT registry numbers repeated rules the same
-// way, so the three agree as long as they see the same list in the same
-// order. A name that occurs once keeps its plain key.
+// "<name>#<k>" for the k-th instance (k >= 2) of a name picked more than
+// once (applyConstraints, employee-scheduling's rule factory). The Python
+// base (_constraint.py instance_keys) derives the same keys from a selection
+// list, and the CP-SAT references (cpsat-common resolve()) number repeated
+// picks the same way, so they agree as long as they see the same list in the
+// same order. A name that occurs once keeps its plain key.
 inline std::vector<std::string> instanceKeys(const std::vector<std::string>& pythonNames) {
     std::map<std::string, int> seen;
     std::vector<std::string> keys;

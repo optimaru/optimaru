@@ -148,20 +148,27 @@ class Solver:
     def solve_with_constraints(self, problem: FacilityLocationProblem, constraints: Iterable[Any] | None = ...) -> None:
         """Score the same solve with a caller-chosen constraint set
         (see facility_location.constraints). The given list replaces the default set; None
-        keeps the default set."""
+        keeps the default set. A name may be picked several times: each pick is its own
+        instance with its own knobs, and the instances add up."""
 
 def list_constraints() -> list[str]:
     """Constraint names scored by this domain (default assembly order, snake_case):
     facility_capacity_cost, facility_setup_cost, distance_from_facility_cost.
     The same names facility_location.constraints uses."""
 
-def constraint_costs(problem: FacilityLocationProblem) -> dict[str, dict[str, Any]]:
-    """Raw per-facility cost of every default constraint, before weight/exponent/level:
-    {name: {"costs": [...], "weight": float, "exponent": float, "hard": bool,
-    "global": bool, "level": "hard" | "medium" | "soft", "reward": bool,
-    "level_flippable": bool, "name": str, "label": str}}. facility_location.constraints.score()
-    turns it into a score. (A domain with a medium level adds "medium_fold" to every
-    entry; a name held more than once is keyed "<name>#<k>" from its second instance.)"""
+def constraint_costs(
+    problem: FacilityLocationProblem, constraints: Iterable[Any] | None = ...
+) -> dict[str, dict[str, Any]]:
+    """Raw per-facility cost of every constraint, before weight/exponent/offset/level:
+    {key: {"costs": [...], "weight": float, "exponent": float, "offset": float,
+    "clip": bool, "hard": bool, "global": bool, "level": "hard" | "medium" | "soft",
+    "reward": bool, "level_flippable": bool, "name": str, "label": str,
+    "default_weight": float, "default_level": str}}. None = the default constraints;
+    a pick list (as for solve) scores exactly those picks, each entry carrying its
+    pick's knobs, the k-th pick of a name keyed "<name>#<k>" from the second on.
+    facility_location.constraints.score() turns it into a score. (A domain with a
+    medium level adds "medium_fold" to every entry, a scoped constraint its evaluated
+    "units".)"""
 
 class ConstraintInfo(NamedTuple):
     """One constraint-catalog row, read off the C++ default assembly."""

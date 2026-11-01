@@ -15,6 +15,12 @@
 //       case per constraint (raw 0 = no violation)
 //   (i) the catalog: info() off the default assembly == the components'
 //       kDefaultWeight / kDefaultLevel; the level guards
+//   (j) repeated components and the offset / clip knobs: a hand-calculated
+//       repeat (distance + 0.5 x distance^2), threshold and literal offsets
+//       by hand (an unused facility counts in literal mode), incremental ==
+//       a fresh recompute over a random walk and a FULL_ASSERT solve with
+//       repeated, shifted components
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -639,6 +645,166 @@ void verifyCatalog()
     std::printf("\n");
 }
 
+
+// -------------------------------------------------------------------------
+// (j) Repeated components and offsets. A repeat is a fresh copy of a
+// default component (another defaultConstraints(), the one name kept, its
+// knobs re-stated) appended with addInstances(), as the Python bindings
+// build it from a pick list.
+// -------------------------------------------------------------------------
+ConstraintAssembly copyOf(const std::string &name)
+{
+    ConstraintAssembly copy = defaultConstraints();
+    copy.only({name});
+    return copy;
+}
+
+// Both consumers of twoFacilities() on F1, which carries 3 + 4 = 7 on its
+// capacity 50; F0 unused. Raw: capacity [0, 0], setup [0, 40], distance
+// [27750, 0 + 27750 - 27750 = 0]: consumer 0 at the origin is 27750 m from
+// F1, consumer 1 stands on it.
+FacilityLocationProblem repeatInstance()
+{
+    FacilityLocationProblem p = twoFacilities();
+    addConsumerAt(p, 0.0, 3, 1);
+    addConsumerAt(p, 0.25, 4, 1);
+    ScoreCalculator::prepare(p);
+    return p;
+}
+
+ConstraintAssembly repeatedAssembly()
+{
+    ConstraintAssembly assembly = defaultConstraints();
+    assembly.offset("facilitySetupCost", 30000.0);
+    assembly.addInstances(std::move(copyOf("distanceFromFacilityCost")
+                                        .weight("distanceFromFacilityCost", 0.001)
+                                        .exponent("distanceFromFacilityCost", 2.0)
+                                        .offset("distanceFromFacilityCost", 4000.0)
+                                        .clip("distanceFromFacilityCost", false)));
+    assembly.addInstances(std::move(copyOf("facilityCapacityCost")
+                                        .weight("facilityCapacityCost", 2.0)
+                                        .offset("facilityCapacityCost", 1.0)
+                                        .clip("facilityCapacityCost", false)));
+    assembly.addInstances(std::move(copyOf("facilitySetupCost")
+                                        .weight("facilitySetupCost", 0.25)
+                                        .offset("facilitySetupCost", -1000.0)));
+    return assembly;
+}
+
+void verifyRepeatsAndOffsets()
+{
+    std::printf("== (j) Repeated components, offset / clip ==\n");
+    {
+        FacilityLocationProblem p = repeatInstance();
+        ConstraintAssembly assembly = copyOf("distanceFromFacilityCost");
+        assembly.addInstances(std::move(copyOf("distanceFromFacilityCost")
+                                            .weight("distanceFromFacilityCost", 0.5)
+                                            .exponent("distanceFromFacilityCost", 2.0)));
+        DecomposedCalculator calculator;
+        assembly.into(calculator);
+        const Score score = scoreWith(calculator, p);
+        check(score.hard == 0 && score.soft == -(6.0 * 27750 + 0.5 * 27750.0 * 27750.0),
+              "distance x 6 + 0.5 x distance^2: -(166500 + 385031250) soft");
+        const auto entries = calculator.constraintCosts();
+        check(entries.size() == 2 && entries[0].unitCosts == entries[1].unitCosts
+                  && entries[1].weight == 0.5 && entries[1].exponent == 2.0
+                  && entries[1].defaultWeight == 6.0,
+              "two instances, the same raw costs, each with its own knobs");
+    }
+    {
+        FacilityLocationProblem p = repeatInstance();
+        // Threshold at 20000 m: only F1's 27750 - 20000 = 7750 counts.
+        DecomposedCalculator threshold;
+        copyOf("distanceFromFacilityCost")
+            .offset("distanceFromFacilityCost", 20000.0)
+            .into(threshold);
+        check(scoreWith(threshold, p).soft == -6.0 * 7750,
+              "threshold offset 20000: 6 x 7750");
+        // Literal: F0 (unused, raw 0) is rewarded 6 x 20000 too.
+        DecomposedCalculator literal;
+        copyOf("distanceFromFacilityCost")
+            .offset("distanceFromFacilityCost", 20000.0)
+            .clip("distanceFromFacilityCost", false)
+            .into(literal);
+        check(scoreWith(literal, p).soft == -6.0 * (7750 - 20000),
+              "literal offset 20000: 6 x (7750 - 20000), the unused facility included");
+        // A negative threshold offset adds to the non-zero facility only.
+        DecomposedCalculator negative;
+        copyOf("facilitySetupCost").offset("facilitySetupCost", -10.0).into(negative);
+        check(scoreWith(negative, p).soft == -2.0 * 50,
+              "setup threshold offset -10: 2 x (40 + 10), F0 stays 0");
+        // A hard literal offset rounds per facility: (0 - 0.5) x 3 = -1.5 ->
+        // -2 on both facilities, +4 hard.
+        DecomposedCalculator hard;
+        copyOf("facilityCapacityCost")
+            .weight("facilityCapacityCost", 3.0)
+            .offset("facilityCapacityCost", 0.5)
+            .clip("facilityCapacityCost", false)
+            .into(hard);
+        check(scoreWith(hard, p).hard == 4,
+              "capacity literal offset 0.5 at weight 3: llround(-1.5) x 2 = -4 -> +4 hard");
+    }
+    {
+        // Random walk: incremental == a fresh calculator of the same assembly.
+        FacilityLocationProblem p = buildRandomInstance(8, 40, 7, 15, 1);
+        ScoreCalculator::prepare(p);
+        DecomposedCalculator calculator;
+        repeatedAssembly().into(calculator);
+        optimaru::ScoreDirector<FacilityLocationProblem> director(p, calculator);
+        std::mt19937_64 rng(321);
+        std::uniform_real_distribution<double> unit(0.0, 1.0);
+        int mismatches = 0;
+        double drift = 0.0;
+        const int steps = 3000;
+        for (int step = 0; step < steps; ++step)
+        {
+            const int consumer = static_cast<int>(rng() % p.consumerCount());
+            const int value = unit(rng) < 0.1 ? -1 : static_cast<int>(rng() % p.facilityCount());
+            director.changeVariable(consumer, value);
+            FacilityLocationProblem shadow = p;
+            DecomposedCalculator fresh;
+            repeatedAssembly().into(fresh);
+            const Score full = scoreWith(fresh, shadow);
+            const Score incremental = director.calculateScore();
+            drift = std::max(drift, std::fabs(full.soft - incremental.soft));
+            // The engine's FULL_ASSERT rule (scoresAgree): hard exact, soft
+            // within 1e-6. The fractional weights (0.001 x distance^2,
+            // 0.25 x setup) leave a few ulps of accumulation drift.
+            if (!optimaru::scoresAgree(incremental, full))
+                ++mismatches;
+        }
+        std::printf("    largest soft drift %.3g\n", drift);
+        check(mismatches == 0,
+              std::to_string(steps)
+                  + " random moves with repeated, shifted components: incremental == fresh");
+    }
+    {
+        FacilityLocationProblem p = buildRandomInstance(6, 20, 11, 15, 2);
+        Solver::Config config;
+        config.spentLimit = std::chrono::seconds(2);
+        config.randomSeed = 5;
+        config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+        DecomposedCalculator calculator;
+        repeatedAssembly().into(calculator);
+        bool corrupted = false;
+        try
+        {
+            Solver solver(config);
+            solver.solve(p, calculator);
+        }
+        catch (const optimaru::ScoreCorruptionError &e)
+        {
+            corrupted = true;
+            std::printf("  ScoreCorruptionError: %s\n", e.what());
+        }
+        check(!corrupted, "2s FULL_ASSERT solve with repeated, shifted components");
+        DecomposedCalculator fresh;
+        repeatedAssembly().into(fresh);
+        check(!corrupted && sameScore(p.score, scoreWith(fresh, p)),
+              "the reported score == a fresh recompute of the same assembly");
+    }
+    std::printf("\n");
+}
 }  // namespace
 
 int main()
@@ -652,6 +818,7 @@ int main()
     verifyAssemblyBuilder();
     verifyRawCostsByHand();
     verifyCatalog();
+    verifyRepeatsAndOffsets();
 
     if (failures == 0)
     {

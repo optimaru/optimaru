@@ -1,6 +1,7 @@
 """facility_location.constraints — an API for picking the cost function declaratively."""
 
 import pickle
+import random
 import re
 from types import SimpleNamespace
 
@@ -230,9 +231,22 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
         hard = None
         exponent = 0.0
 
-    for pick, message in ((Negative(), "weight must be finite and >= 0"), (Flat(), "exponent must be finite and > 0")):
+    class Unbounded:
+        name = "facility_setup_cost"
+        weight = None
+        hard = None
+        exponent = 1.0
+        offset = float("inf")
+
+    for pick, message in (
+        (Negative(), "weight must be finite and >= 0"),
+        (Flat(), "exponent must be finite and > 0"),
+        (Unbounded(), "offset must be finite, not inf"),
+    ):
         with pytest.raises(ValueError, match=message):
             fl.solve(build_problem(), time_limit_seconds=0.1, constraints=[pick])
+    with pytest.raises(ValueError, match="offset must be finite, not nan"):
+        FacilitySetupCost(offset=float("nan"))
 
 
 @pytest.mark.parametrize(
@@ -243,6 +257,10 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
         ({"hard": 1}, "hard must be True, False or None, not 1"),
         ({"hard": "x"}, "hard must be True, False or None, not 'x'"),
         ({"exponent": True}, "exponent must be a number, not True"),
+        ({"offset": "5"}, "offset must be a number, not '5'"),
+        ({"offset": False}, "offset must be a number, not False"),
+        ({"clip": 1}, "clip must be True or False, not 1"),
+        ({"clip": "no"}, "clip must be True or False, not 'no'"),
     ],
 )
 def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
@@ -336,6 +354,15 @@ def test_score_equals_the_engine_for_the_default_assembly():
         [FacilityCapacityCost(hard=False), setup_cost, distance],
         [capacity, setup_cost, DistanceFromFacilityCost(exponent=2.0)],
         [FacilityCapacityCost(exponent=2.0), FacilitySetupCost(hard=True, weight=0.5), distance],
+        [capacity, setup_cost, distance, DistanceFromFacilityCost(weight=0.5, exponent=2.0)],
+        [capacity, setup_cost, DistanceFromFacilityCost(offset=10000.0), DistanceFromFacilityCost(offset=-50.0)],
+        [capacity, FacilitySetupCost(offset=500.0, clip=False), DistanceFromFacilityCost(offset=20000.0, clip=False)],
+        [
+            FacilityCapacityCost(offset=2.0),
+            FacilityCapacityCost(offset=1.0, clip=False, weight=3),
+            setup_cost,
+            distance,
+        ],
     ],
 )
 def test_score_matches_the_engine_for_arbitrary_specs(specs):
@@ -370,19 +397,19 @@ def test_score_rejects_an_unknown_constraint_name():
         score(raw, [Renamed()])
 
 
-def test_naming_a_constraint_twice_is_rejected():
-    """Passing the same constraint twice must not let the later one silently win.
+def test_naming_a_constraint_twice_scores_both_picks():
+    """Since 0.3.0 a constraint may be picked several times: each pick is scored on its own.
 
-    It is the same class of mistake as a typo, so it is an error — write the
-    desired metadata exactly once."""
-    with pytest.raises(ValueError, match="picked more than once"):
-        fl.solve(
-            build_problem(),
-            time_limit_seconds=0.2,
-            constraints=[capacity, DistanceFromFacilityCost(weight=10), distance],
-        )
-    with pytest.raises(ValueError, match="picked more than once"):
-        get_constraints([capacity, capacity])
+    The later pick no longer wins in silence, nor is it an error: both are
+    instances with their own knobs, and they add up."""
+    picks = [FacilityCapacityCost(), DistanceFromFacilityCost(weight=10), DistanceFromFacilityCost()]
+    problem = _zero_budget_solve(_two_assigned(), picks)
+    assert problem.score.hard == -2  # demand 7 on capacity 5
+    assert problem.score.soft == -(10 + 6) * 777  # both distance picks
+    assert get_constraints([FacilityCapacityCost(), FacilityCapacityCost()]) == [
+        FacilityCapacityCost(),
+        FacilityCapacityCost(),
+    ]
 
 
 # --- The range of a score (an int64 hard level) ---------------------------------
@@ -449,3 +476,180 @@ def test_the_overflow_message_reads_the_same_on_both_paths():
     assert score(fl.constraint_costs(_three_overloaded()), zero) == (-9, 0.0)
     solved = _zero_budget_solve(_three_overloaded(), zero)
     assert (solved.score.hard, solved.score.soft) == (-9, 0.0)
+
+
+# --- 0.3.0: repeated picks and the offset / clip knobs ------------------------------
+
+
+def _two_assigned():
+    """The hand-calculated instance with both consumers on facility 0, facility 1 unused.
+
+    Raw per facility: capacity [2, 0] (demand 7 on capacity 5), setup [100, 0],
+    distance [777, 0] (333 m + 444 m).
+    """
+    problem = fl.FacilityLocationProblem(
+        [
+            fl.Facility("used", fl.Location(0.0, 0.0), 100, 5),
+            fl.Facility("unused", fl.Location(1.0, 1.0), 999, 100),
+        ],
+        [
+            fl.Consumer("c1", fl.Location(0.003, 0.0), 4),
+            fl.Consumer("c2", fl.Location(0.0, 0.004), 3),
+        ],
+    )
+    problem.set_assignment([0, 0])
+    return problem
+
+
+REPEAT = [DistanceFromFacilityCost(), DistanceFromFacilityCost(weight=0.5, exponent=2)]
+
+
+def test_a_repeated_pick_by_hand():
+    """distance x 6 plus 0.5 x distance^2 per facility: 6 x 777 + 0.5 x 777^2 = 306526.5."""
+    raw = fl.constraint_costs(_two_assigned(), REPEAT)
+    assert list(raw) == ["distance_from_facility_cost", "distance_from_facility_cost#2"]
+    first, second = raw.values()
+    assert first["costs"] == second["costs"] == [777.0, 0.0]
+    assert (first["weight"], first["exponent"], second["weight"], second["exponent"]) == (6.0, 1.0, 0.5, 2.0)
+    assert first["name"] == second["name"] == "distance_from_facility_cost"
+    assert second["default_weight"] == 6.0
+    expected = (0, -(6 * 777 + 0.5 * 777**2))
+    assert expected == (0, -306526.5)
+    assert score(raw, REPEAT) == expected
+    # The default costs hold the name once; the second pick reads the same raw costs.
+    assert score(fl.constraint_costs(_two_assigned()), REPEAT) == expected
+    engine = _zero_budget_solve(_two_assigned(), REPEAT)
+    assert engine.assignment() == [0, 0]
+    assert (engine.score.hard, engine.score.soft) == expected
+
+
+def test_identical_picks_count_twice():
+    picks = [FacilitySetupCost(), FacilitySetupCost()]
+    assert score(fl.constraint_costs(_two_assigned()), picks) == (0, -400.0)
+    assert _zero_budget_solve(_two_assigned(), picks).score.soft == -400.0
+    assert list(fl.constraint_costs(_two_assigned(), picks)) == ["facility_setup_cost", "facility_setup_cost#2"]
+
+
+def test_the_keys_follow_the_pick_order_of_each_name():
+    picks = [
+        FacilitySetupCost(weight=1),
+        DistanceFromFacilityCost(),
+        FacilitySetupCost(weight=2),
+        FacilityCapacityCost(),
+        FacilitySetupCost(weight=3),
+    ]
+    raw = fl.constraint_costs(_two_assigned(), picks)
+    assert {key: entry["weight"] for key, entry in raw.items()} == {
+        "facility_capacity_cost": 1.0,
+        "facility_setup_cost": 1.0,
+        "facility_setup_cost#2": 2.0,
+        "facility_setup_cost#3": 3.0,
+        "distance_from_facility_cost": 6.0,
+    }
+    assert score(raw, picks) == (-2, -(600 + 6 * 777))
+    engine = _zero_budget_solve(_two_assigned(), picks)
+    assert (engine.score.hard, engine.score.soft) == score(raw, picks)
+
+
+@pytest.mark.parametrize(
+    ("pick", "expected"),
+    [
+        # Unit constraints, shaped per facility; facility 1 is unused (raw 0).
+        (DistanceFromFacilityCost(offset=100), (0, -6 * 677)),
+        (DistanceFromFacilityCost(offset=100, clip=False), (0, -6 * (677 - 100))),  # the unused one is rewarded
+        (DistanceFromFacilityCost(offset=1000), (0, 0.0)),
+        (DistanceFromFacilityCost(offset=1000, clip=False), (0, -6 * (-223 - 1000))),
+        (DistanceFromFacilityCost(offset=700, exponent=2), (0, -6 * 77**2)),
+        (DistanceFromFacilityCost(offset=800, exponent=3, clip=False), (0, -6 * (-(23**3) - 800**3))),
+        (FacilitySetupCost(offset=-10), (0, -2 * 110)),  # a negative offset adds to every non-zero facility
+        (FacilitySetupCost(offset=-10, clip=False), (0, -2 * (110 + 10))),  # ...or to every facility
+        (FacilityCapacityCost(offset=1), (-1, 0.0)),
+        (FacilityCapacityCost(offset=3, clip=False), (4, 0.0)),  # (2 - 3) + (0 - 3): a hard reward below 3
+        (FacilityCapacityCost(offset=1.5, clip=False, weight=1), (1, 0.0)),  # 0.5 -> 1, -1.5 -> -2: per unit
+    ],
+)
+def test_offsets_by_hand_on_both_paths(pick, expected):
+    """threshold sign(x) max(0, |x| - offset)^e and literal (x - offset)^e: Python mirror == engine == hand."""
+    assert score(fl.constraint_costs(_two_assigned()), [pick]) == expected
+    raw = fl.constraint_costs(_two_assigned(), [pick])
+    entry = next(iter(raw.values()))
+    assert (entry["offset"], entry["clip"]) == (float(pick.offset), pick.clip)
+    assert score(raw, [pick]) == expected
+    engine = _zero_budget_solve(_two_assigned(), [pick])
+    assert engine.assignment() == [0, 0]
+    assert (engine.score.hard, engine.score.soft) == expected
+
+
+def test_offset_zero_reproduces_the_0_2_0_scores():
+    """offset 0 is the plain shaping in both modes, so every 0.2.0 selection scores the same."""
+    plain = [FacilityCapacityCost(), FacilitySetupCost(), DistanceFromFacilityCost(exponent=2)]
+    shifted = [
+        FacilityCapacityCost(offset=0.0, clip=False),
+        FacilitySetupCost(offset=0),
+        DistanceFromFacilityCost(exponent=2, offset=0.0, clip=False),
+    ]
+    problem = _solved()
+    raw = fl.constraint_costs(problem)
+    assert score(raw, shifted) == score(raw, plain)
+    engines = []
+    for picks in (plain, shifted):
+        copy = build_problem()
+        copy.set_assignment(problem.assignment())
+        engines.append(_zero_budget_solve(copy, picks))
+    assert engines[0].assignment() == engines[1].assignment() == problem.assignment()
+    assert (engines[0].score.hard, engines[0].score.soft) == (engines[1].score.hard, engines[1].score.soft)
+    for entry in raw.values():
+        assert (entry["offset"], entry["clip"]) == (0.0, True)
+        assert "units" not in entry  # facility location has no scoped constraint
+
+
+def _random_instance(seed, facilities=6, consumers=24):
+    rng = random.Random(seed)
+    return fl.FacilityLocationProblem(
+        [
+            fl.Facility(
+                f"F{i}",
+                fl.Location(rng.uniform(51.44, 51.56), rng.uniform(-0.16, -0.01)),
+                rng.randint(20000, 80000),
+                90,
+            )
+            for i in range(facilities)
+        ],
+        [
+            fl.Consumer(f"C{i}", fl.Location(rng.uniform(51.44, 51.56), rng.uniform(-0.16, -0.01)), 15)
+            for i in range(consumers)
+        ],
+    )
+
+
+@pytest.mark.parametrize(
+    "picks",
+    [
+        [FacilityCapacityCost(), FacilitySetupCost(), *REPEAT],
+        [
+            FacilityCapacityCost(),
+            FacilityCapacityCost(offset=1, clip=False, weight=2),
+            FacilitySetupCost(offset=30000),
+            FacilitySetupCost(offset=-1000, clip=False, weight=0.25),
+            DistanceFromFacilityCost(),
+            DistanceFromFacilityCost(offset=4000, exponent=2, weight=0.001, clip=False),
+        ],
+    ],
+    ids=["repeat", "repeat-and-offsets"],
+)
+def test_full_assert_solves_with_repeats_and_offsets(picks):
+    """FULL_ASSERT re-checks the incremental score against a full recompute after every move."""
+    problem = _random_instance(5)
+    config = fl.SolverConfig()
+    config.full_assert = True
+    config.random_seed = 3
+    config.parallel_solver_count = 1
+    config.step_count_limit = 20000
+    config.spent_limit_seconds = 30
+    fl.Solver(config).solve_with_constraints(problem, picks)
+    raw = fl.constraint_costs(problem, picks)
+    assert len(raw) == len(picks)
+    python = score(raw, picks)
+    assert python.hard == problem.score.hard
+    assert python.soft == pytest.approx(problem.score.soft)
+    assert score(fl.constraint_costs(problem), picks) == python  # the default costs score the repeats too

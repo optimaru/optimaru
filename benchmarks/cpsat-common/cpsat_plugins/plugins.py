@@ -13,6 +13,18 @@ the C++ component's constants, so the two solvers cannot disagree on a
 default. A plugin must NOT restate ``default_level`` / ``default_weight``;
 doing so raises TypeError, and so does a plugin whose domain package has no
 ``constraint_info()``.
+
+Repeated picks: a selection may name one constraint several times
+(``resolve`` keys them ``name``, ``"<name>#<k>"``). The registry builds the
+plugin once per instance, each time through a view of the objective whose
+``add`` / ``add_reward`` / ``selected[self.name]`` address that instance, so a
+plugin written for one instance needs no change.
+
+Offsets: ``ObjectiveBuilder.add`` shapes each call's term on its own, so an
+``offset`` is honoured only by a plugin that adds one term per engine unit
+(and one for a global's total), every evaluated unit included. Such a plugin
+sets ``terms_per_unit = True``; for any other the registry refuses a non-zero
+offset (``constraint 'x' offset is not supported by this CP-SAT model``).
 """
 
 from __future__ import annotations
@@ -20,7 +32,7 @@ from __future__ import annotations
 import sys
 from abc import ABC, abstractmethod
 from collections.abc import Iterable, Sequence
-from typing import Any, Generic, TypeVar
+from typing import Any, ClassVar, Generic, TypeVar
 
 from ortools.sat.python import cp_model
 
@@ -62,6 +74,10 @@ class ConstraintPlugin(ABC, Generic[ContextT]):
     """
 
     label: str = ""
+    # build() adds one term per engine unit (every evaluated unit, a constant
+    # 0 included) or, for a global constraint, one term for its total: the
+    # granularity the engine shapes at, so offset / clip are honoured.
+    terms_per_unit: ClassVar[bool] = False
 
     @property
     def spec(self) -> ConstraintSpec:
@@ -133,12 +149,62 @@ class ConstraintRegistry(Generic[ContextT]):
         levels: Sequence[str],
         constraints: Iterable[ConstraintSelection] | None,
     ) -> ObjectiveBuilder:
-        """The objective over this registry's specs; defaults come from constraint_info()."""
-        return ObjectiveBuilder(model, levels, self.specs, constraints)
+        """The objective over this registry's specs; defaults come from constraint_info().
+
+        A name picked several times gives one instance per pick. A non-zero
+        offset is refused for a plugin that does not add per-unit terms.
+        """
+        objective = ObjectiveBuilder(model, levels, self.specs, constraints)
+        for key, (spec, config) in objective.selected.items():
+            if config.offset != 0 and not self.plugin_for(key, spec.name).terms_per_unit:
+                raise ValueError(
+                    f"constraint {spec.name!r} offset is not supported by this CP-SAT model"
+                )
+        return objective
+
+    def plugin_for(self, key: str, name: str) -> ConstraintPlugin[ContextT]:
+        """The plugin of an instance key: its own (a registry with a plugin per
+        instance) or the one of its name."""
+        plugin = self._by_name.get(key)
+        return plugin if plugin is not None else self._by_name[name]
 
     def build(self, context: ContextT, objective: ObjectiveBuilder) -> None:
-        for name in objective.selected:
-            self._by_name[name].build(context, objective)
+        for key, (spec, _config) in objective.selected.items():
+            plugin = self.plugin_for(key, spec.name)
+            view = objective if key == plugin.name else InstanceObjective(objective, key, plugin.name)
+            plugin.build(context, view)
 
     def catalog(self) -> list[dict[str, Any]]:
         return [plugin.spec.as_dict() for plugin in self.plugins]
+
+
+class InstanceObjective:
+    """The objective as the plugin of one repeated instance sees it.
+
+    ``add`` / ``add_reward`` under the plugin's own name land on the
+    instance's key, and ``selected[name]`` returns the instance's
+    ``(spec, config)``; everything else is the objective's.
+    """
+
+    def __init__(self, objective: ObjectiveBuilder, key: str, name: str) -> None:
+        self._objective = objective
+        self._key = key
+        self._name = name
+
+    def _target(self, name: str) -> str:
+        return self._key if name == self._name else name
+
+    def add(self, name: str, magnitude, *, bound: int) -> None:
+        self._objective.add(self._target(name), magnitude, bound=bound)
+
+    def add_reward(self, name: str, magnitude, *, bound: int) -> None:
+        self._objective.add_reward(self._target(name), magnitude, bound=bound)
+
+    @property
+    def selected(self) -> dict:
+        view = dict(self._objective.selected)
+        view[self._name] = self._objective.selected[self._key]
+        return view
+
+    def __getattr__(self, attribute: str):
+        return getattr(self._objective, attribute)

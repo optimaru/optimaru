@@ -17,6 +17,7 @@ included, for any selection.
 from __future__ import annotations
 
 import importlib.util
+import struct
 import sys
 from dataclasses import FrozenInstanceError, dataclass
 from pathlib import Path
@@ -357,6 +358,14 @@ def test_an_unknown_name_is_refused():
         ({"hard": "yes"}, TypeError, "hard must be True, False or None"),
         ({"exponent": 0}, ValueError, "exponent must be finite and > 0"),
         ({"exponent": False}, TypeError, "exponent must be a number"),
+        ({"offset": float("nan")}, ValueError, "offset must be finite, not nan"),
+        ({"offset": float("-inf")}, ValueError, "offset must be finite, not -inf"),
+        ({"offset": "10"}, TypeError, "offset must be a number, not '10'"),
+        ({"offset": True}, TypeError, "offset must be a number, not True"),
+        ({"offset": None}, TypeError, "offset must be a number, not None"),
+        ({"clip": 1}, TypeError, "clip must be True or False, not 1"),
+        ({"clip": None}, TypeError, "clip must be True or False, not None"),
+        ({"clip": "no"}, TypeError, "clip must be True or False, not 'no'"),
     ],
 )
 def test_specs_validate_their_knobs(kwargs, error, message):
@@ -403,8 +412,20 @@ def test_select_contract():
     assert select(None, DEFAULTS) == list(DEFAULTS)
     with pytest.raises(ValueError, match="must not be empty"):
         select([], DEFAULTS)
-    with pytest.raises(ValueError, match="picked more than once"):
-        select([ConflictCost(), ConflictCost(weight=2)], DEFAULTS)
+    # Since 0.3.0 a name may be picked several times: each pick is an instance.
+    picks = [ConflictCost(), ConflictCost(weight=2)]
+    assert select(picks, DEFAULTS) == picks
+    assert select([ConflictCost(), ConflictCost()], DEFAULTS) == [ConflictCost(), ConflictCost()]
+
+
+def test_the_two_new_knobs_are_keyword_only_and_default_to_the_0_2_0_shaping():
+    spec = ConflictCost(2, None, 3.0)
+    assert (spec.weight, spec.hard, spec.exponent, spec.offset, spec.clip) == (2, None, 3.0, 0.0, True)
+    with pytest.raises(TypeError):
+        ConflictCost(2, None, 3.0, 5.0)  # offset is keyword-only
+    assert ConflictCost(offset=-2.5, clip=False).offset == -2.5
+    assert DayPatternCost(None, None, 1.0, "A,OFF").pattern == "A,OFF"  # parameters stay positional
+    assert "offset" not in DayPatternCost().params() and "clip" not in DayPatternCost().params()
 
 
 def test_params_are_the_non_knob_fields():
@@ -415,20 +436,16 @@ def test_params_are_the_non_knob_fields():
     assert ConflictCost().params() == {}
 
 
-def test_repeatable_selections_allow_one_name_with_different_parameters():
+def test_repeated_picks_are_kept_with_or_without_the_old_repeatable_flag():
+    """``repeatable`` changes nothing since 0.3.0; the same parameters twice are two instances."""
     first, second = (
         DayPatternCost(pattern="A,OFF"),
         DayPatternCost(pattern="B,OFF", worker_indices=(1,)),
     )
-    assert select([first, second], DEFAULTS, repeatable=True) == [first, second]
-    with pytest.raises(ValueError, match="picked more than once"):
-        select([first, second], DEFAULTS)  # not repeatable
-    with pytest.raises(ValueError, match="with the same parameters"):
-        select(
-            [first, DayPatternCost(pattern="A,OFF", weight=3)],
-            DEFAULTS,
-            repeatable=True,
-        )
+    same = DayPatternCost(pattern="A,OFF", weight=3)
+    for flag in (True, False):
+        assert select([first, second], DEFAULTS, repeatable=flag) == [first, second]
+        assert select([first, same], DEFAULTS, repeatable=flag) == [first, same]
 
 
 @dataclass(frozen=True)
@@ -450,10 +467,16 @@ class ScopedLimitCost(Constraint):
         ({"scope": True}, {"scope": np.bool_(True)}),
     ],
 )
-def test_repeatable_duplicates_compare_parameters_by_value(first, second):
-    """x=1 and x=1.0 (or numpy.int64(1)) are the same parameters, at any depth."""
-    with pytest.raises(ValueError, match="with the same parameters"):
-        select([ScopedLimitCost(**first), ScopedLimitCost(**second)], DEFAULTS, repeatable=True)
+def test_parameters_compare_by_value(first, second):
+    """x=1 and x=1.0 (or numpy.int64(1)) are the same parameters, at any depth (``_normalized``).
+
+    select() no longer refuses equal parameters; the helper stays for callers
+    that compare picks (employee-scheduling's bindings until 0.3.0), and the
+    picks are kept.
+    """
+    picks = [ScopedLimitCost(**first), ScopedLimitCost(**second)]
+    assert base._normalized(picks[0].params()) == base._normalized(picks[1].params())
+    assert select(picks, DEFAULTS) == picks
 
 
 @pytest.mark.parametrize(
@@ -469,10 +492,11 @@ def test_repeatable_duplicates_compare_parameters_by_value(first, second):
         ({"limit": 2**53 + 1}, {"limit": float(2**53 + 1)}),
     ],
 )
-def test_repeatable_instances_with_different_parameters_are_kept(first, second):
+def test_different_parameters_stay_different(first, second):
     """A bool is not the number it equals; order, strings and exact values still count."""
     picks = [ScopedLimitCost(**first), ScopedLimitCost(**second)]
-    assert select(picks, DEFAULTS, repeatable=True) == picks
+    assert base._normalized(picks[0].params()) != base._normalized(picks[1].params())
+    assert select(picks, DEFAULTS) == picks
 
 
 def test_instance_keys_and_scoring_repeated_instances():
@@ -495,6 +519,137 @@ def test_instance_keys_and_scoring_repeated_instances():
     assert score_costs(costs, picks) == (-1, -(3.0 + 2 * 4.0))
     with pytest.raises(ValueError, match="picked more often than the costs hold it"):
         score_costs(costs, [*picks, DayPatternCost(pattern="C")])
+
+
+def test_a_parameterless_repeat_reads_the_plain_entry_with_its_own_knobs():
+    """Every instance of a constraint without parameters has the same raw costs.
+
+    So costs computed for the defaults (the name once) can score
+    ``[TaskCostCost(), TaskCostCost(exponent=2, offset=5)]``: the second pick
+    reads the plain entry with its own knobs (constraint_level_test.cpp (p):
+    28 + max(0, x - 5)^2 = 28 + 136).
+    """
+    picks = [TaskCostCost(), TaskCostCost(exponent=2.0, offset=5.0)]
+    assert instance_keys(picks) == ["task_cost_cost", "task_cost_cost#2"]
+    assert score_costs(costs_a(), picks) == (0, -164.0)
+    # Costs that do hold the k-th instance are read as they are.
+    held = {**costs_a(), "task_cost_cost#2": _entry([1.0, 0.0, 0.0, 0.0], level="soft", name="task_cost_cost")}
+    assert score_costs(held, [TaskCostCost(), TaskCostCost(weight=3)]) == (0, -(28.0 + 3.0))
+    # Identical picks count twice.
+    assert score_costs(costs_a(), [TaskCostCost(), TaskCostCost()]) == (0, -56.0)
+
+
+def test_the_repeated_assembly_of_the_engine_test_by_hand():
+    """constraint_level_test.cpp (p) repeated<SoftFoldTasks>(): -3hard / -6156.5soft (IntoSoft 1000)."""
+    picks = [
+        *DEFAULTS,
+        TaskCostCost(exponent=2.0, offset=5.0),
+        TaskCostCost(weight=0.5, offset=10.0, clip=False),
+        ConflictCost(offset=1.0, clip=False),
+        IdleWorkerCost(offset=1.0, exponent=2.0, clip=False),
+        OverloadCost(offset=-1.0, weight=2.0),
+    ]
+    assert score_costs(costs_a(INTO_SOFT), picks) == (-3, -6156.5)
+
+
+# --- offset / clip --------------------------------------------------------------
+
+
+def test_shape_with_an_offset_threshold_and_literal():
+    """The engine's shapeCost, step for step (constraint_level_test.cpp (o))."""
+    assert shape(15.0, 1.0, 5.0) == 10.0
+    assert shape(3.0, 1.0, 5.0) == 0.0
+    assert shape(0.0, 2.0, 5.0) == 0.0
+    assert shape(-8.0, 2.0, 5.0) == -9.0
+    assert shape(15.0, 3.0, 10.0, clip=False) == 125.0
+    assert shape(7.0, 3.0, 10.0, clip=False) == -27.0
+    assert shape(0.0, 1.0, 10.0, clip=False) == -10.0
+    assert shape(4.0, 2.0, -1.0) == 25.0
+    assert shape(0.0, 2.0, -1.0) == 0.0
+    assert shape(-4.0, 1.0, -1.0) == -5.0
+    assert shape(0.0, 2.0, -1.0, clip=False) == 1.0
+
+
+@pytest.mark.parametrize("cost", [-7.5, -1.0, -0.0, 0.0, 0.3, 1.0, 2.0, 17.25, 1e10])
+@pytest.mark.parametrize("exponent", [0.5, 1.0, 2.0, 3.0])
+@pytest.mark.parametrize("clip", [True, False])
+def test_offset_zero_is_the_0_2_0_shape_bit_for_bit(cost, exponent, clip):
+    old = cost if exponent == 1.0 or cost == 0.0 else (-((-cost) ** exponent) if cost < 0.0 else cost**exponent)
+    new = shape(cost, exponent, 0.0, clip)
+    assert struct.pack("<d", new) == struct.pack("<d", old)
+
+
+def _tasks_only(costs):
+    return {name: entry for name, entry in costs.items() if name in ("task_cost_cost", "preference_reward", "conflict_cost")}
+
+
+@pytest.mark.parametrize(
+    ("pick", "soft"),
+    [
+        (TaskCostCost(offset=5.0), 16.0),  # [10, 6, 0, 0]
+        (TaskCostCost(offset=5.0, clip=False), 8.0),  # [10, 6, -5, -3]: the empty worker is rewarded too
+        (TaskCostCost(offset=5.0, exponent=2.0), 136.0),
+        (TaskCostCost(offset=5.0, exponent=2.0, clip=False), 102.0),  # 100 + 36 - 25 - 9
+        (TaskCostCost(offset=-1.0), 31.0),  # [16, 12, 0, 3]
+        (TaskCostCost(offset=-1.0, clip=False), 32.0),  # [16, 12, 1, 3]
+    ],
+)
+def test_unit_offsets_by_hand(pick, soft):
+    """Per unit, every number asserted for the engine in constraint_level_test.cpp (o)."""
+    assert score_costs(_tasks_only(costs_a()), [pick]) == (0, -soft)
+
+
+def test_offsets_on_a_reward_and_on_a_hard_constraint():
+    costs = _tasks_only(costs_a())
+    assert score_costs(costs, [TaskCostCost(), PreferenceReward(offset=1.0)]) == (0, -27.0)
+    assert score_costs(costs, [TaskCostCost(), PreferenceReward(offset=1.0, clip=False)]) == (0, -24.5)
+    # [1.5, 0.5, -0.5, -0.5] rounded per unit, half away from zero: 2 + 1 - 1 - 1.
+    assert score_costs(costs, [ConflictCost(offset=0.5, clip=False)]) == (-1, 0.0)
+    assert score_costs(costs, [ConflictCost(offset=1.0, clip=False)]) == (1, 0.0)
+
+
+def test_a_global_is_shaped_on_its_total():
+    costs = {"idle_worker_cost": _entry([2.0], level="soft", is_global=True, name="idle_worker_cost")}
+    assert score_costs(costs, [IdleWorkerCost(offset=1.0, exponent=2.0)]) == (0, -1.0)
+    assert score_costs(costs, [IdleWorkerCost(offset=3.0, exponent=2.0, clip=False)]) == (0, 1.0)
+    assert score_costs(costs, [IdleWorkerCost(offset=3.0)]) == (0, 0.0)
+
+
+def test_literal_offsets_charge_only_the_units_a_scoped_constraint_evaluates():
+    """constraint_costs() names a scoped constraint's ``units``; the other cells are never evaluated."""
+    scoped = _entry([3.0, 0.0, 0.0, 0.0], level="soft", name="task_cost_cost")
+    scoped["units"] = [0, 2]
+    pick = TaskCostCost(offset=1.0, clip=False)
+    assert score_costs({"task_cost_cost": scoped}, [pick]) == (0, -1.0)  # (3 - 1) + (0 - 1)
+    unscoped = _entry([3.0, 0.0, 0.0, 0.0], level="soft", name="task_cost_cost")
+    assert score_costs({"task_cost_cost": unscoped}, [pick]) == (0, 1.0)  # 2 - 1 - 1 - 1
+    # Threshold mode and offset 0 do not depend on it (the unevaluated cells are 0).
+    assert score_costs({"task_cost_cost": scoped}, [TaskCostCost(offset=1.0)]) == (0, -2.0)
+    assert score_costs({"task_cost_cost": scoped}, [TaskCostCost()]) == (0, -3.0)
+
+
+def test_weight_zero_contributes_exactly_zero_at_any_offset():
+    costs = _tasks_only(costs_a())
+    assert score_costs(costs, [TaskCostCost(weight=0, offset=50.0, clip=False, exponent=400.0)]) == (0, 0.0)
+
+
+def test_a_literal_overflow_keeps_the_sign_of_the_shifted_cost():
+    """(1 - 1000)^201 is -inf in the engine's pow(); the mirror reports the same."""
+    costs = {"task_cost_cost": _entry([1.0], level="soft", name="task_cost_cost")}
+    with pytest.raises(OverflowError, match=r"is not finite \(-inf\)"):
+        score_costs(costs, [TaskCostCost(offset=1000.0, exponent=201.0, clip=False)])
+    with pytest.raises(OverflowError, match=r"is not finite \(inf\)"):
+        score_costs(costs, [TaskCostCost(offset=-1000.0, exponent=201.0)])
+
+
+def test_duck_typed_picks_may_leave_offset_and_clip_unset():
+    class Pick:
+        name = "task_cost_cost"
+        weight = None
+        hard = None
+        exponent = 1.0
+
+    assert score_costs(_tasks_only(costs_a()), [Pick()]) == (0, -28.0)
 
 
 def test_shape_preserves_the_sign():

@@ -18,16 +18,21 @@ The problem carries no weights (removed in 0.2.0, together with the rename of
 `facility_location.constraints`, and read the defaults with `fl.constraint_info()`:
 
 ```python
-from facility_location.constraints import DistanceFromFacilityCost, get_constraints
+from facility_location.constraints import (
+    DistanceFromFacilityCost, FacilityCapacityCost, FacilitySetupCost, score,
+)
 
 fl.constraint_info()
 # [ConstraintInfo(name='facility_capacity_cost', default_level='hard', default_weight=1.0,
 #                 level_flippable=True, reward=False, default_enabled=True), ...]
-fl.solve(problem, time_limit_seconds=1.0, constraints=get_constraints(
-    [*get_constraints()[:2], DistanceFromFacilityCost(weight=5)]))   # the un-overridden provider
+fl.solve(problem, time_limit_seconds=1.0, constraints=[
+    FacilityCapacityCost(), FacilitySetupCost(), DistanceFromFacilityCost(weight=5),
+])                                        # the un-overridden provider
 raw = fl.constraint_costs(problem)        # raw per-facility costs, re-priced in pure Python:
-from facility_location.constraints import score
 score(raw), score(raw, [DistanceFromFacilityCost(exponent=2.0)])
+# A constraint may be picked several times, each pick with its own knobs; offset / clip
+# shift the shaping per facility (clip=True: only the distance beyond 500 m counts).
+score(raw, [DistanceFromFacilityCost(), DistanceFromFacilityCost(weight=0.01, exponent=2, offset=500)])
 ```
 
 ## Install / test

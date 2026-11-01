@@ -18,7 +18,7 @@ A package's ``constraints.py`` builds on it::
         description_en = "..."
         description_ko = "..."
 
-    facility_capacity_cost = FacilityCapacityCost()
+    facility_capacity_cost = FacilityCapacityCost()  # the ready-made FacilityCapacityCost()
     _DEFAULTS = (facility_capacity_cost, ...)
 
     def get_constraints(constraints=None):
@@ -27,7 +27,7 @@ A package's ``constraints.py`` builds on it::
     def score(costs, constraints=None):
         return score_costs(costs, get_constraints(constraints))
 
-Every spec takes the same three knobs, and only those:
+Every spec takes the same five knobs, and only those:
 
 - ``weight``   ``None`` = the component's default weight (C++ kDefaultWeight,
                in units of its level); otherwise a finite number >= 0.
@@ -37,6 +37,19 @@ Every spec takes the same three knobs, and only those:
                whose level is not flippable refuses any change.
 - ``exponent`` sign-preserving power shaping, > 0 (1.0 = none): per unit for a
                unit constraint, on the single total for a global one.
+- ``offset``   a shift of that shaping, any finite number (0.0 = none), at the
+               same granularity as ``exponent``. Keyword-only.
+- ``clip``     what happens below the offset (keyword-only). ``True`` (the
+               default, the threshold): ``sign(x) * max(0, |x| - offset) **
+               exponent``, so only the part beyond the offset counts.
+               ``False`` (the literal formula): ``shape(x - offset,
+               exponent)``, which is negative below the offset (a reward) and
+               charges every unit the constraint evaluates, a raw 0 included.
+
+With ``offset=0`` both modes are the plain ``shape(x, exponent)``, so a spec
+that leaves the two new knobs alone scores exactly as before. Each unit (or a
+global's total) then contributes ``weight * shape(x, exponent, offset,
+clip)``.
 
 Defaults (weight, level, flippability, reward) live in C++ only and are
 reported by ``<package>.constraint_info()``; there are no default ClassVars
@@ -44,25 +57,24 @@ here. Domain parameters are extra dataclass fields on a subclass (decorate it
 with ``@dataclass(frozen=True)`` and call ``super().__post_init__()`` from
 its own ``__post_init__``, if it has one).
 
-A domain that may state one parametrized constraint several times
-(employee-scheduling: one ``DayPatternCost`` per pattern, scoped rules) passes
-``repeatable=True`` to ``select``; ``constraint_costs()`` then keys the k-th
-instance of a name ``"<name>#<k>"`` and ``instance_keys`` / ``score_costs``
-follow the same rule. Two instances count as the same when their parameters
-are equal by value (``1``, ``1.0`` and ``numpy.int64(1)`` are one value;
-``True`` is not ``1``; lists, tuples, sets and dicts compare element by
-element).
+One constraint may be picked several times, in every package: each pick is
+its own instance with its own knobs (and, where the constraint has domain
+parameters, its own parameters), scored independently, and the instances add
+up. ``x**2 + x**3`` is two picks, ``exponent=2`` and ``exponent=3``; two
+identical picks simply count twice. ``constraint_costs()`` keys the k-th
+instance of a name ``"<name>#<k>"`` (the first keeps the plain name), and
+``instance_keys`` / ``score_costs`` follow the same rule.
 """
 
 import math
 import numbers
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, field, fields
 from typing import Any, ClassVar, NamedTuple
 
 __all__ = ["Constraint", "Score", "instance_keys", "score_costs", "select", "shape"]
 
-_KNOBS = ("weight", "hard", "exponent")
+_KNOBS = ("weight", "hard", "exponent", "offset", "clip")
 
 
 @dataclass(frozen=True)
@@ -76,11 +88,16 @@ class Constraint:
     intermediate base that should not need a name passes ``abstract=True``::
 
         class _RouteLimit(Constraint, abstract=True): ...
+
+    ``offset`` and ``clip`` are keyword-only, so the positional order of the
+    first three knobs and of a subclass's domain parameters is the 0.2.0 one.
     """
 
     weight: float | None = None  # None = the component's default weight
     hard: bool | None = None  # None = the component's default level
     exponent: float = 1.0
+    offset: float = field(default=0.0, kw_only=True)  # 0.0 = no shift
+    clip: bool = field(default=True, kw_only=True)  # True = threshold, False = literal
 
     name: ClassVar[str] = ""
     label_en: ClassVar[str] = ""
@@ -94,14 +111,14 @@ class Constraint:
             raise TypeError(f"{cls.__name__} must set a registry `name`")
 
     def __post_init__(self):
-        _check_knobs(self.name, self.weight, self.hard, self.exponent)
+        _check_knobs(self.name, self.weight, self.hard, self.exponent, self.offset, self.clip)
 
     def params(self) -> dict[str, Any]:
-        """The domain parameters: every dataclass field but the three knobs."""
+        """The domain parameters: every dataclass field but the five knobs."""
         return {field.name: getattr(self, field.name) for field in fields(self) if field.name not in _KNOBS}
 
 
-def _check_knobs(name: str, weight: Any, hard: Any, exponent: Any) -> None:
+def _check_knobs(name: str, weight: Any, hard: Any, exponent: Any, offset: Any = 0.0, clip: Any = True) -> None:
     if weight is not None:
         if isinstance(weight, bool) or not isinstance(weight, numbers.Real):
             raise TypeError(f"constraint {name!r}: weight must be a number or None, not {weight!r}")
@@ -113,6 +130,12 @@ def _check_knobs(name: str, weight: Any, hard: Any, exponent: Any) -> None:
         raise TypeError(f"constraint {name!r}: exponent must be a number, not {exponent!r}")
     if not math.isfinite(exponent) or exponent <= 0:
         raise ValueError(f"constraint {name!r}: exponent must be finite and > 0, not {exponent!r}")
+    if isinstance(offset, bool) or not isinstance(offset, numbers.Real):
+        raise TypeError(f"constraint {name!r}: offset must be a number, not {offset!r}")
+    if not math.isfinite(offset):
+        raise ValueError(f"constraint {name!r}: offset must be finite, not {offset!r}")
+    if not _is_bool(clip):
+        raise TypeError(f"constraint {name!r}: clip must be True or False, not {clip!r}")
 
 
 def _is_bool(value: Any) -> bool:
@@ -167,35 +190,20 @@ def select(constraints: Iterable[Any] | None, defaults: Sequence[Any], *, repeat
     """The ``get_constraints`` contract: ``None`` = ``defaults``; a list replaces them.
 
     Only the listed constraints are scored. An empty list is an error, not
-    "the defaults" (a filter that came back empty is a mistake), and so is
-    naming the same constraint twice (the later pick would win in silence).
-    The same rules as the C++ ``applyConstraints``.
+    "the defaults" (a filter that came back empty is a mistake). A name may
+    appear several times: every pick is its own instance with its own knobs
+    (and parameters), scored on its own, and the instances add up; identical
+    picks count twice. The same rules as the C++ ``applyConstraints``.
 
-    ``repeatable=True`` is for a domain whose factory adds a parametrized
-    constraint once per pick (employee-scheduling): the same name may then
-    appear several times as long as the domain parameters (``params()``)
-    differ; the same name with the same parameters twice is still an error.
-    Parameters are compared by value (``_normalized``): ``x=1``, ``x=1.0``
-    and ``x=numpy.int64(1)`` are the same parameters, ``x=True`` is not.
+    ``repeatable`` is accepted for compatibility and changes nothing: since
+    0.3.0 every package accepts repeated picks.
     """
+    del repeatable
     if constraints is None:
         return list(defaults)
     picked = list(constraints)
     if not picked:
         raise ValueError("constraints must not be empty (pass None for the defaults)")
-    seen: set[Any] = set()
-    for spec in picked:
-        key = (spec.name, _normalized(_params_of(spec))) if repeatable else spec.name
-        if key in seen:
-            if repeatable:
-                raise ValueError(
-                    f"constraint {spec.name!r} picked more than once with the same parameters; "
-                    "state each instance once with the metadata you want"
-                )
-            raise ValueError(
-                f"constraint {spec.name!r} picked more than once; state it once with the metadata you want"
-            )
-        seen.add(key)
     return picked
 
 
@@ -203,7 +211,7 @@ def instance_keys(constraints: Iterable[Any]) -> list[str]:
     """The ``constraint_costs()`` key of each pick, in order.
 
     The name itself, and ``"<name>#<k>"`` for the k-th pick (k >= 2) of a name
-    that a ``repeatable`` selection states several times: the rule the C++
+    the selection states several times: the rule the C++
     ``constraint_costs()`` (python::instanceKeys) keys its entries by, given
     the same list in the same order.
     """
@@ -226,11 +234,36 @@ class Score(NamedTuple):
     soft: float
 
 
-def shape(cost: float, exponent: float) -> float:
-    """Sign-preserving power: rewards (negative costs) never flip into penalties."""
+def _power(cost: float, exponent: float) -> float:
     if exponent == 1.0 or cost == 0.0:
         return cost
     return -((-cost) ** exponent) if cost < 0.0 else cost**exponent
+
+
+def shape(cost: float, exponent: float, offset: float = 0.0, clip: bool = True) -> float:
+    """Sign-preserving power, shifted by ``offset``: the engine's shapeCost.
+
+    ``shape(x, e)`` raises ``|x|`` to ``e`` and keeps the sign (rewards, i.e.
+    negative costs, never flip into penalties). With an offset:
+
+    - ``clip=True`` (the threshold): ``sign(x) * max(0, |x| - offset) ** e``;
+      ``x == 0`` stays 0 at any offset.
+    - ``clip=False`` (the literal formula): ``shape(x - offset, e)``.
+
+    ``offset=0`` is ``shape(x, e)`` in both modes. The steps are the C++ ones,
+    so both give the same float.
+    """
+    if offset == 0.0:
+        return _power(cost, exponent)
+    if not clip:
+        return _power(cost - offset, exponent)
+    if cost == 0.0:
+        return 0.0
+    excess = abs(cost) - offset
+    if not excess > 0.0:
+        return 0.0
+    shaped = _power(excess, exponent)
+    return -shaped if cost < 0.0 else shaped
 
 
 def _round_half_away(value: float) -> int:
@@ -255,17 +288,21 @@ _MAX_HARD_CONTRIBUTION = 2.0**62
 _HARD_SCORE_LIMIT = 2**63 - 1
 
 
-def _contribution(name: str, weight: float, cost: float, exponent: float) -> float:
+def _contribution(
+    name: str, weight: float, cost: float, exponent: float, offset: float = 0.0, clip: bool = True
+) -> float:
     if weight == 0:
         # Exactly 0, without shaping the cost: an opt-in constraint left at
-        # weight 0 contributes nothing at any exponent (0 * inf would be nan).
-        # The engine's weightedCost() follows the same rule.
+        # weight 0 contributes nothing at any exponent or offset (0 * inf
+        # would be nan). The engine's weightedCost() follows the same rule.
         return 0.0
     try:
-        value = weight * shape(cost, exponent)
+        value = weight * shape(cost, exponent, offset, clip)
     except OverflowError:
-        # cost**exponent beyond a double, where the engine's pow() gives +-inf.
-        value = weight * math.copysign(math.inf, cost)
+        # A power beyond a double, where the engine's pow() gives +-inf with
+        # the sign of what was raised (x - offset for the literal formula).
+        base = cost - offset if offset != 0.0 and not clip else cost
+        value = weight * math.copysign(math.inf, base)
     if not math.isfinite(value):
         raise OverflowError(
             f"constraint {name!r}: its contribution weight * cost^exponent is not finite ({value!r}); "
@@ -316,6 +353,18 @@ def _level(spec: Any, entry: Mapping[str, Any]) -> str:
     return wanted
 
 
+def _evaluated(entry: Mapping[str, Any]) -> list[float]:
+    """The raw costs of the units a constraint evaluates.
+
+    Every unit's, unless the entry names its ``units`` (a scoped constraint:
+    the other cells are 0 and never evaluated). The literal offset formula
+    charges exactly these, a raw 0 included, as the engine does.
+    """
+    costs = entry["costs"]
+    units = entry.get("units")
+    return list(costs) if units is None else [costs[unit] for unit in units]
+
+
 def _domain_fold(costs: Mapping[str, Mapping[str, Any]]) -> tuple[str, float] | None:
     """The domain's medium fold, which every entry of a medium domain carries."""
     fold: tuple[str, float] | None = None
@@ -340,14 +389,16 @@ def score_costs(costs: Mapping[str, Mapping[str, Any]], constraints: Iterable[An
     level), its default weight and level (``default_weight`` /
     ``default_level``; costs computed under a selection carry that
     selection's ``weight`` / ``level`` next to them, and an unset knob here
-    still means the default), and on a domain with a medium level the
-    domain's medium fold (on every entry). No solver and no search are
-    involved, so one scoring pass answers every "what would this cost at
-    weight 10 / as a soft term" question. A weight of 0 contributes exactly
-    0 whatever the exponent.
+    still means the default), for a scoped constraint the ``units`` it
+    evaluates, and on a domain with a medium level the domain's medium fold
+    (on every entry). No solver and no search are involved, so one scoring
+    pass answers every "what would this cost at weight 10 / as a soft term /
+    squared beyond 10" question. A weight of 0 contributes exactly 0
+    whatever the exponent or offset.
 
-    The arithmetic is the engine's: each unit contributes
-    ``weight * shape(cost, exponent)``; hard contributions are rounded per
+    The arithmetic is the engine's: each evaluated unit (every unit, or the
+    entry's ``units``) contributes ``weight * shape(cost, exponent, offset,
+    clip)``; hard contributions are rounded per
     unit (half away from zero) before summing; then the domain's medium fold
     applies to the whole score, whatever the selection holds: ``into_soft``
     adds ``medium * unit`` to soft, ``below_hard`` reports
@@ -357,7 +408,11 @@ def score_costs(costs: Mapping[str, Mapping[str, Any]], constraints: Iterable[An
     a hard one of 2**62 or more, raises OverflowError; the hard total
     saturates at ``-(2**63 - 1)`` (never wraps to a feasible-looking score).
     Every listed spec is scored (pass ``select(...)``'s result), each looked up
-    under its ``instance_keys`` key; an unknown one raises ValueError.
+    under its ``instance_keys`` key; an unknown one raises ValueError. The
+    k-th pick of a constraint without domain parameters may also be scored
+    from costs that hold the name only once (the default ``constraint_costs()``):
+    every instance of it has the same raw costs, so its entry is read with
+    the pick's own knobs.
     """
     hard = 0
     soft = 0.0
@@ -366,6 +421,10 @@ def score_costs(costs: Mapping[str, Mapping[str, Any]], constraints: Iterable[An
     picked = list(constraints)
     for spec, key in zip(picked, instance_keys(picked)):
         entry = costs.get(key)
+        if entry is None and key != spec.name and spec.name in costs and not _params_of(spec):
+            # A repeat of a parameterless constraint: its raw costs are the
+            # first instance's, whatever knobs either pick carries.
+            entry = costs[spec.name]
         if entry is None:
             if key != spec.name and spec.name in costs:
                 raise ValueError(
@@ -375,10 +434,14 @@ def score_costs(costs: Mapping[str, Mapping[str, Any]], constraints: Iterable[An
             available = sorted({str(value.get("name", name)) for name, value in costs.items()})
             raise ValueError(f"unknown constraint {spec.name!r}; available: " + ", ".join(map(repr, available)))
         exponent = 1.0 if spec.exponent is None else spec.exponent
-        _check_knobs(spec.name, spec.weight, spec.hard, exponent)
+        offset = getattr(spec, "offset", None)
+        offset = 0.0 if offset is None else offset
+        clip = getattr(spec, "clip", None)
+        clip = True if clip is None else clip
+        _check_knobs(spec.name, spec.weight, spec.hard, exponent, offset, clip)
         level = _level(spec, entry)
         weight = _default_weight(entry) if spec.weight is None else spec.weight
-        values = [_contribution(spec.name, weight, cost, exponent) for cost in entry["costs"]]
+        values = [_contribution(spec.name, weight, cost, exponent, offset, bool(clip)) for cost in _evaluated(entry)]
         if level == "hard":
             hard += sum(_round_hard(spec.name, value) for value in values)
         elif level == "medium":

@@ -32,13 +32,17 @@ def _is_bool(value: Any) -> bool:
     return kind.__module__ == "numpy" and kind.__name__ in ("bool_", "bool")
 
 
-def _check_knobs(name: str, weight: Any, hard: Any, exponent: Any) -> None:
+def _check_knobs(
+    name: str, weight: Any, hard: Any, exponent: Any, offset: Any = 0.0, clip: Any = True
+) -> None:
     """The engine's knob rules, with the optimaru spec base's wording.
 
     A Mapping selection gets the checks a spec gets at construction, so the
     two solvers refuse the same values: weight None or a real number (not
     bool), finite and >= 0; hard None, True or False; exponent a real number,
-    finite and > 0 (and 1.0 on CP-SAT, see ``_check_exponent``).
+    finite and > 0 (and 1.0 on CP-SAT, see ``_check_exponent``); offset a real
+    number (not bool), finite (and an integer on CP-SAT, see
+    ``ObjectiveBuilder.add``); clip True or False.
     """
     if weight is not None:
         if isinstance(weight, bool) or not isinstance(weight, numbers.Real):
@@ -51,6 +55,41 @@ def _check_knobs(name: str, weight: Any, hard: Any, exponent: Any) -> None:
         raise TypeError(f"constraint {name!r}: exponent must be a number, not {exponent!r}")
     if not math.isfinite(exponent) or exponent <= 0:
         raise ValueError(f"constraint {name!r}: exponent must be finite and > 0, not {exponent!r}")
+    if isinstance(offset, bool) or not isinstance(offset, numbers.Real):
+        raise TypeError(f"constraint {name!r}: offset must be a number, not {offset!r}")
+    if not math.isfinite(offset):
+        raise ValueError(f"constraint {name!r}: offset must be finite, not {offset!r}")
+    if not _is_bool(clip):
+        raise TypeError(f"constraint {name!r}: clip must be True or False, not {clip!r}")
+
+
+def _shift(value: int | float, offset: int | float, clip: bool) -> int | float:
+    """The engine's shapeCost at exponent 1 (the only exponent CP-SAT takes).
+
+    ``clip``: sign(x) * max(0, |x| - offset); otherwise x - offset. offset 0
+    returns x unchanged.
+    """
+    if offset == 0:
+        return value
+    if not clip:
+        return value - offset
+    if value == 0:
+        return 0
+    excess = abs(value) - offset
+    if not excess > 0:
+        return 0
+    return -excess if value < 0 else excess
+
+
+def _evaluated(entry: Mapping[str, Any]) -> list:
+    """The raw costs of the units a constraint evaluates (``units`` when scoped)."""
+    costs = entry["costs"]
+    units = entry.get("units")
+    return list(costs) if units is None else [costs[unit] for unit in units]
+
+
+def _is_constant(term: Any) -> bool:
+    return isinstance(term, numbers.Integral)
 
 
 def _check_exponent(name: str, exponent: Any) -> None:
@@ -87,8 +126,9 @@ class ConstraintSpec:
         ``kind`` is ``"either"`` when hard=True/False may move the constraint,
         else its fixed level (a non-flippable constraint is hard or soft: the
         medium level is default-only and always flippable). ``params`` are
-        the selection knobs at "keep the default" — fed back as a selection
-        they change nothing (``hard: False`` would demote, so it is ``None``).
+        the five selection knobs at "keep the default" — fed back as a
+        selection they change nothing (``hard: False`` would demote, so it is
+        ``None``).
         """
         if self.level_flippable:
             kind = "either"
@@ -106,18 +146,25 @@ class ConstraintSpec:
             "default_weight": self.weight,
             "level_flippable": self.level_flippable,
             "reward": self.reward,
-            "params": {"weight": None, "hard": None, "exponent": 1.0},
+            "params": {"weight": None, "hard": None, "exponent": 1.0, "offset": 0.0, "clip": True},
         }
 
 
 @dataclass(frozen=True)
 class ConstraintConfig:
-    """Runtime selection. A supplied list has replace semantics."""
+    """Runtime selection. A supplied list has replace semantics.
+
+    A name may appear several times: each entry is its own instance with its
+    own knobs (see ``resolve``). ``offset`` / ``clip`` shape every term the
+    plugin adds (``ObjectiveBuilder.add``).
+    """
 
     name: str
     enabled: bool = True
     weight: int | None = None
     hard: bool | None = None
+    offset: int | float = 0
+    clip: bool = True
 
     @classmethod
     def parse(
@@ -133,17 +180,28 @@ class ConstraintConfig:
             exponent = 1.0 if exponent is None else exponent
             weight = getattr(value, "weight", None)
             hard = getattr(value, "hard", None)
-            _check_knobs(name, weight, hard, exponent)
+            offset = getattr(value, "offset", None)
+            offset = 0 if offset is None else offset
+            clip = getattr(value, "clip", None)
+            clip = True if clip is None else clip
+            _check_knobs(name, weight, hard, exponent, offset, clip)
             _check_exponent(name, exponent)
-            return cls(name=name, weight=weight, hard=None if hard is None else bool(hard))
+            return cls(
+                name=name,
+                weight=weight,
+                hard=None if hard is None else bool(hard),
+                offset=offset,
+                clip=bool(clip),
+            )
         payload = dict(value)
         name = payload.pop("name", payload.pop("type", None))
         if name is None:
             raise ValueError("constraint config needs 'name' or 'type'")
-        # The catalog row's params ({weight, hard, exponent}) and the server's
-        # ConstraintSelection {name, enabled, weight, hard, exponent} are both
-        # valid selections; only an exponent other than 1.0 is CP-SAT-only.
-        unknown = set(payload) - {"enabled", "weight", "hard", "exponent"}
+        # The catalog row's params ({weight, hard, exponent, offset, clip}) and
+        # the server's ConstraintSelection {name, enabled, weight, hard,
+        # exponent[, offset, clip]} are both valid selections; only an
+        # exponent other than 1.0 is CP-SAT-only.
+        unknown = set(payload) - {"enabled", "weight", "hard", "exponent", "offset", "clip"}
         if unknown:
             raise ValueError(
                 f"unknown constraint parameters for {name!r}: {sorted(unknown)}"
@@ -153,7 +211,11 @@ class ConstraintConfig:
         exponent = 1.0 if exponent is None else exponent
         weight = payload.get("weight")
         hard = payload.get("hard")
-        _check_knobs(name, weight, hard, exponent)
+        offset = payload.get("offset")
+        offset = 0 if offset is None else offset
+        clip = payload.get("clip")
+        clip = True if clip is None else clip
+        _check_knobs(name, weight, hard, exponent, offset, clip)
         _check_exponent(name, exponent)
         enabled = payload.get("enabled", True)
         if not _is_bool(enabled):
@@ -163,11 +225,16 @@ class ConstraintConfig:
             enabled=bool(enabled),
             weight=weight,
             hard=None if hard is None else bool(hard),
+            offset=offset,
+            clip=bool(clip),
         )
 
 
 class DomainConstraint(Protocol):
-    """Shared engine-side constraint selection accepted by CP-SAT too."""
+    """Shared engine-side constraint selection accepted by CP-SAT too.
+
+    ``offset`` / ``clip`` (optional on a duck-typed pick: 0 / True).
+    """
 
     name: str
     weight: float | None
@@ -184,7 +251,13 @@ def resolve(
     specs: Sequence[ConstraintSpec],
     constraints: Iterable[ConstraintSelection] | None,
 ) -> dict[str, tuple[ConstraintSpec, ConstraintConfig]]:
-    """Resolve defaults or an explicit replacement list into a name map."""
+    """Resolve defaults or an explicit replacement list into an instance map.
+
+    Keyed like the engine's ``constraint_costs()``: the first enabled pick of
+    a name is ``name``, the k-th ``"<name>#<k>"`` (python::instanceKeys), so
+    a name picked several times gives one entry per pick, each with its own
+    knobs. Disabled picks are dropped before counting.
+    """
     by_name = {spec.name: spec for spec in specs}
     selected = (
         [ConstraintConfig(name=spec.name) for spec in specs]
@@ -192,15 +265,19 @@ def resolve(
         else [ConstraintConfig.parse(value) for value in constraints]
     )
     result: dict[str, tuple[ConstraintSpec, ConstraintConfig]] = {}
+    seen: dict[str, int] = {}
     for config in selected:
         if config.name not in by_name:
             raise ValueError(
                 f"unknown constraint {config.name!r}; available: {sorted(by_name)}"
             )
-        if config.name in result:
-            raise ValueError(f"duplicate constraint {config.name!r}")
-        if config.enabled:
-            result[config.name] = (by_name[config.name], config)
+        if not config.enabled:
+            continue
+        count = seen[config.name] = seen.get(config.name, 0) + 1
+        key = config.name if count == 1 else f"{config.name}#{count}"
+        if key in result:
+            raise ValueError(f"duplicate constraint {key!r}")
+        result[key] = (by_name[config.name], config)
     return result
 
 
@@ -246,7 +323,22 @@ class ObjectiveBuilder:
         return wanted
 
     def add(self, name: str, magnitude, *, bound: int) -> None:
-        """Add a non-negative raw penalty and a valid magnitude upper bound."""
+        """Add a non-negative raw penalty and a valid magnitude upper bound.
+
+        One call is one engine unit (or a global constraint's single total):
+        the selection's ``offset`` / ``clip`` shape each call's term on its
+        own, as the engine shapes each unit. With an offset, call it for EVERY
+        unit the engine evaluates, a constant 0 included (``bound=0``): the
+        literal formula charges ``-weight * offset`` there.
+        """
+        self._add(name, magnitude, low=0, high=max(0, int(bound)))
+
+    def add_reward(self, name: str, magnitude, *, bound: int) -> None:
+        """Add a non-negative reward (represented as a negative penalty)."""
+        self._add(name, -magnitude, low=-max(0, int(bound)), high=0)
+
+    def _add(self, name: str, value, *, low: int, high: int) -> None:
+        """Add ``weight * shift(value)`` for a raw ``value`` in ``[low, high]``."""
         selected = self.selected.get(name)
         if selected is None:
             return
@@ -269,16 +361,78 @@ class ObjectiveBuilder:
                     f"constraint {name!r} weight must be an integer for CP-SAT"
                 )
             weight = int(weight)
-        # A zero upper bound means this penalty is identically zero. Keeping
-        # ``weight * 0`` creates OR-Tools' FloatAffine(IntConstant(0), ...),
-        # which CpSolver.value() cannot evaluate when scores are reported.
-        if weight and bound > 0:
-            self.terms[level].append(weight * magnitude)
-            self.bounds[level] += weight * max(0, int(bound))
+        offset = config.offset
+        if isinstance(offset, float):
+            if not offset.is_integer():
+                raise ValueError(
+                    f"constraint {name!r} offset must be an integer for CP-SAT"
+                )
+            offset = int(offset)
+        if not weight:
+            return
+        if offset == 0:
+            # A zero range means this penalty is identically zero. Keeping
+            # ``weight * 0`` creates OR-Tools' FloatAffine(IntConstant(0), ...),
+            # which CpSolver.value() cannot evaluate when scores are reported.
+            if high > low:
+                self.terms[level].append(weight * value)
+                self.bounds[level] += weight * (high - low)
+            return
+        term, term_low, term_high = self._shifted(value, low, high, offset, config.clip)
+        if _is_constant(term):
+            if term:
+                self.terms[level].append(weight * int(term))
+            return
+        self.terms[level].append(weight * term)
+        self.bounds[level] += weight * (term_high - term_low)
 
-    def add_reward(self, name: str, magnitude, *, bound: int) -> None:
-        """Add a non-negative reward (represented as a negative penalty)."""
-        self.add(name, -magnitude, bound=bound)
+    def _shifted(self, value, low: int, high: int, offset: int, clip: bool):
+        """``(term, low, high)``: the engine's offset shaping of an integral raw value.
+
+        Literal: ``value - offset``. Threshold, offset > 0:
+        ``max(0, x - offset) + min(0, x + offset)`` (each half only where the
+        range reaches it). Threshold, offset < 0: ``x + |offset| * [x >= 1] -
+        |offset| * [x <= -1]``. Exact for integral expressions and offsets.
+        """
+        if _is_constant(value) or high == low:
+            constant = int(value) if _is_constant(value) else low
+            shifted = _shift(constant, offset, clip)
+            return int(shifted), int(shifted), int(shifted)
+        if not clip:
+            return value - offset, low - offset, high - offset
+        model = self.model
+        if offset > 0:
+            parts = []
+            term_low = term_high = 0
+            if high > offset:
+                above = model.new_int_var(0, high - offset, "")
+                model.add_max_equality(above, [0, value - offset])
+                parts.append(above)
+                term_high = high - offset
+            if low < -offset:
+                below = model.new_int_var(low + offset, 0, "")
+                model.add_min_equality(below, [0, value + offset])
+                parts.append(below)
+                term_low = low + offset
+            if not parts:
+                return 0, 0, 0
+            return sum(parts), term_low, term_high
+        gap = -offset
+        term = value
+        term_low, term_high = low, high
+        if high >= 1:
+            positive = model.new_bool_var("")
+            model.add(value >= 1).only_enforce_if(positive)
+            model.add(value <= 0).only_enforce_if(~positive)
+            term = term + gap * positive
+            term_high = high + gap
+        if low <= -1:
+            negative = model.new_bool_var("")
+            model.add(value <= -1).only_enforce_if(negative)
+            model.add(value >= 0).only_enforce_if(~negative)
+            term = term - gap * negative
+            term_low = low - gap
+        return term, term_low, term_high
 
     def folds(self) -> bool:
         """Whether all levels fit one int64 objective (see `minimize`)."""
@@ -310,7 +464,11 @@ class ObjectiveBuilder:
             return solver.solve(self.model)
         budget = solver.parameters.max_time_in_seconds
         deadline = time.monotonic() + budget
-        stages = [level for level in self.levels if self.terms[level]]
+        stages = [
+            level
+            for level in self.levels
+            if any(not _is_constant(term) for term in self.terms[level])
+        ]
         solved = optimal = False
         for index, level in enumerate(stages):
             left = max(deadline - time.monotonic(), 0.01)
@@ -342,7 +500,10 @@ class ObjectiveBuilder:
     def score(self, solver: cp_model.CpSolver) -> dict[str, int]:
         """Return negative penalty totals for the solver's current solution."""
         return {
-            level: -sum(int(solver.value(term)) for term in self.terms[level])
+            level: -sum(
+                int(term) if _is_constant(term) else int(solver.value(term))
+                for term in self.terms[level]
+            )
             for level in self.levels
         }
 
@@ -357,26 +518,40 @@ class ObjectiveBuilder:
         example squared loads instead of square-root unfairness). Search may
         use that surrogate, but API scores must still use the shared engine
         meaning. ``costs`` is the result of a domain's ``constraint_costs``.
+
+        Each selected instance reads its ``constraint_costs()`` key (``name``,
+        ``"<name>#<k>"``), or the plain name's entry when the costs hold the
+        name once (a repeat of a constraint has the same raw costs), and
+        shapes every evaluated unit with its own offset / clip, as the engine
+        does. ``aliases`` maps a name (or an instance key) to the engine
+        entries it sums.
         """
         aliases = aliases or {}
         totals: dict[str, int | float] = {level: 0 for level in self.levels}
-        for name, (spec, config) in self.selected.items():
+        for key, (spec, config) in self.selected.items():
             level = self.level_of(spec, config)
             weight = spec.weight if config.weight is None else config.weight
-            source_names = aliases.get(name, name)
+            source_names = aliases.get(key, aliases.get(spec.name, key))
             if isinstance(source_names, str):
                 source_names = (source_names,)
-            raw_values = [
-                value
-                for source_name in source_names
-                for value in costs[source_name]["costs"]
-            ]
+            raw_values = []
+            for source_name in source_names:
+                entry = costs.get(source_name)
+                if entry is None and source_name == key and key != spec.name:
+                    entry = costs[spec.name]
+                if entry is None:
+                    entry = costs[source_name]  # KeyError names the missing entry
+                raw_values.extend(_evaluated(entry))
+            if config.offset != 0:
+                raw_values = [_shift(value, config.offset, config.clip) for value in raw_values]
             if level == "hard":
                 # Match DecomposedScoreCalculator: each unit contribution is
                 # rounded independently, half away from zero.
                 totals[level] += sum(
                     _round_half_away(weight * value) for value in raw_values
                 )
+            elif config.offset != 0:
+                totals[level] += sum(weight * value for value in raw_values)
             else:
                 totals[level] += weight * sum(raw_values)
         result: dict[str, int | float] = {}

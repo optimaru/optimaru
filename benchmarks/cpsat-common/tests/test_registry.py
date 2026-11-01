@@ -123,10 +123,12 @@ def test_canonical_cost_alias_can_sum_several_engine_components() -> None:
 class _DomainConstraint:
     name = "capacity"
 
-    def __init__(self, weight=None, hard=None, exponent=1.0):
+    def __init__(self, weight=None, hard=None, exponent=1.0, *, offset=0.0, clip=True):
         self.weight = weight
         self.hard = hard
         self.exponent = exponent
+        self.offset = offset
+        self.clip = clip
 
 
 def test_registry_builds_only_selected_domain_constraint_plugins(monkeypatch) -> None:
@@ -330,7 +332,7 @@ def test_catalog_rows_use_the_server_vocabulary() -> None:
     assert all(catalog[name]["default_enabled"] for name in ("capacity", "bonus"))
     # Fed back as a selection, the params change nothing (hard: False would demote).
     for row in catalog.values():
-        assert row["params"] == {"weight": None, "hard": None, "exponent": 1.0}
+        assert row["params"] == {"weight": None, "hard": None, "exponent": 1.0, "offset": 0.0, "clip": True}
 
 
 def test_default_enabled_and_repeated_instances_read_the_engine_row(monkeypatch) -> None:
@@ -384,6 +386,12 @@ def test_default_enabled_and_repeated_instances_read_the_engine_row(monkeypatch)
         ({"name": "capacity", "exponent": 2.0}, ValueError, "exponent is not supported by CP-SAT"),
         ({"name": "capacity", "enabled": "no"}, TypeError, "enabled must be True or False"),
         (_DomainConstraint(hard="false"), TypeError, "hard must be True, False or None"),
+        ({"name": "capacity", "offset": "1"}, TypeError, "offset must be a number, not '1'"),
+        ({"name": "capacity", "offset": True}, TypeError, "offset must be a number, not True"),
+        ({"name": "capacity", "offset": float("inf")}, ValueError, "offset must be finite, not inf"),
+        ({"name": "capacity", "clip": 0}, TypeError, "clip must be True or False, not 0"),
+        (_DomainConstraint(offset=float("nan")), ValueError, "offset must be finite, not nan"),
+        (_DomainConstraint(clip="yes"), TypeError, "clip must be True or False, not 'yes'"),
     ],
 )
 def test_mapping_selections_get_the_spec_knob_checks(selection, error, message) -> None:
@@ -416,3 +424,192 @@ def test_score_costs_round_like_llround_at_the_double_edges() -> None:
     assert objective.score_costs({"capacity": {"costs": [-0.49999999999999994]}})["hard"] == 0
     assert objective.score_costs({"capacity": {"costs": [4503599627370497.0]}})["hard"] == -4503599627370497
     assert objective.score_costs({"capacity": {"costs": [2.5]}})["hard"] == -3
+
+
+# --- 0.3.0: repeated picks ---------------------------------------------------------
+
+
+def test_a_name_picked_several_times_resolves_to_one_instance_per_pick() -> None:
+    """Keys follow constraint_costs(): name, name#2, ... (disabled picks do not count)."""
+    selected = resolve(
+        SPECS,
+        [
+            {"name": "distance"},
+            {"name": "capacity", "weight": 5},
+            {"name": "distance", "enabled": False},
+            {"name": "distance", "weight": 7, "offset": 3},
+            "distance",
+        ],
+    )
+    assert list(selected) == ["distance", "capacity", "distance#2", "distance#3"]
+    assert selected["distance#2"][0] is SPECS[1]
+    assert (selected["distance#2"][1].weight, selected["distance#2"][1].offset) == (7, 3)
+    assert selected["distance#3"][1].weight is None
+    # A registry with its own plugin per instance (employee-scheduling) names them already.
+    specs = (*SPECS, ConstraintSpec("distance#2", "Distance", "soft", 3))
+    assert list(resolve(specs, [{"name": "distance"}, {"name": "distance#2"}])) == ["distance", "distance#2"]
+    with pytest.raises(ValueError, match="duplicate constraint 'distance#2'"):
+        resolve(specs, [{"name": "distance"}, {"name": "distance#2"}, {"name": "distance"}])
+
+
+def test_repeated_picks_add_separate_terms_with_their_own_knobs(monkeypatch) -> None:
+    spec_class = _fake_domain(monkeypatch, [("capacity", "hard", 2.0, True, False)])
+    built = []
+
+    class CapacityPlugin(spec_class("capacity"), ConstraintPlugin[dict]):
+        def build(self, context, objective):
+            built.append(objective.selected[self.name][1])
+            objective.add(self.name, context["value"], bound=4)
+
+    model = cp_model.CpModel()
+    value = model.new_int_var(0, 4, "value")
+    model.add(value == 3)
+    registry = ConstraintRegistry([CapacityPlugin()])
+    objective = registry.objective(
+        model,
+        ("hard", "soft"),
+        [_DomainConstraint(), _DomainConstraint(weight=5, hard=False)],
+    )
+    registry.build({"value": value}, objective)
+    # The plugin ran once per instance and saw that instance's knobs.
+    assert [(config.weight, config.hard) for config in built] == [(None, None), (5, False)]
+    assert (len(objective.terms["hard"]), len(objective.terms["soft"])) == (1, 1)
+    objective.minimize()
+    solver = cp_model.CpSolver()
+    assert solver.solve(model) == cp_model.OPTIMAL
+    assert objective.score(solver) == {"hard": -6, "soft": -15}
+    costs = {"capacity": {"costs": [3]}}  # computed with the name once: the copy reads it too
+    assert objective.score_costs(costs) == {"hard": -6, "soft": -15}
+    held = {"capacity": {"costs": [3]}, "capacity#2": {"costs": [1]}}
+    assert objective.score_costs(held) == {"hard": -6, "soft": -5}
+
+
+# --- 0.3.0: offset / clip --------------------------------------------------------
+
+
+def _engine_shift(value, offset, clip):
+    """The optimaru base's shape() at exponent 1 (the reference CP-SAT must match)."""
+    if offset == 0:
+        return value
+    if not clip:
+        return value - offset
+    if value == 0:
+        return 0
+    excess = abs(value) - offset
+    return 0 if excess <= 0 else (-excess if value < 0 else excess)
+
+
+@pytest.mark.parametrize("offset", [-3, -1, 2, 5, 0])
+@pytest.mark.parametrize("clip", [True, False])
+@pytest.mark.parametrize("reward", [False, True])
+def test_shifted_terms_are_exact_for_every_value(offset, clip, reward) -> None:
+    """threshold max(0, |x| - offset), literal x - offset: integer-exact against the engine's formula."""
+    spec = ConstraintSpec("distance", "Distance", "soft", 2, reward=reward)
+    for raw in range(0, 9):
+        model = cp_model.CpModel()
+        value = model.new_int_var(0, 8, "value")
+        model.add(value == raw)
+        objective = ObjectiveBuilder(
+            model, ("hard", "soft"), [spec], [{"name": "distance", "offset": offset, "clip": clip}]
+        )
+        if reward:
+            objective.add_reward("distance", value, bound=8)
+        else:
+            objective.add("distance", value, bound=8)
+        objective.minimize()
+        solver = cp_model.CpSolver()
+        assert solver.solve(model) == cp_model.OPTIMAL
+        x = -raw if reward else raw
+        expected = 2 * _engine_shift(x, offset, clip)
+        assert objective.score(solver) == {"hard": 0, "soft": -expected}, (raw, offset, clip, reward)
+        assert objective.score_costs({"distance": {"costs": [x]}}) == {"hard": 0, "soft": -expected}
+
+
+def test_a_literal_offset_charges_a_constant_zero_unit() -> None:
+    """An evaluated unit whose raw cost is identically 0 still gets -weight * offset."""
+    objective = ObjectiveBuilder(
+        cp_model.CpModel(), ("hard", "soft"), SPECS, [{"name": "distance", "offset": 4, "clip": False}]
+    )
+    objective.add("distance", 0, bound=0)
+    assert objective.terms["soft"] == [-12]
+    objective.minimize()
+    solver = cp_model.CpSolver()
+    assert solver.solve(objective.model) == cp_model.OPTIMAL
+    assert objective.score(solver) == {"hard": 0, "soft": 12}
+    threshold = ObjectiveBuilder(cp_model.CpModel(), ("hard", "soft"), SPECS, [{"name": "distance", "offset": 4}])
+    threshold.add("distance", 0, bound=0)
+    assert threshold.terms["soft"] == []
+
+
+def test_the_folded_objective_stays_lexicographic_with_negative_terms() -> None:
+    """A literal hard term below its offset is negative; the fold uses spans, not maxima."""
+    model = cp_model.CpModel()
+    x = model.new_int_var(0, 10, "x")
+    specs = (ConstraintSpec("capacity", "Capacity", "hard", 1), ConstraintSpec("bonus", "Bonus", "soft", 1000))
+    objective = ObjectiveBuilder(
+        model, ("hard", "soft"), specs, [{"name": "capacity", "offset": 5, "clip": False}, "bonus"]
+    )
+    objective.add("capacity", x, bound=10)  # wants x small
+    objective.add_reward("bonus", x, bound=10)  # wants x large
+    solver = cp_model.CpSolver()
+    assert objective.solve(solver) == cp_model.OPTIMAL
+    assert solver.value(x) == 0
+    assert objective.score(solver) == {"hard": 5, "soft": 0}
+
+
+@pytest.mark.parametrize(
+    ("selection", "message"),
+    [
+        ({"name": "capacity", "offset": 1.5}, "constraint 'capacity' offset must be an integer for CP-SAT"),
+    ],
+)
+def test_a_fractional_offset_is_refused_like_a_fractional_weight(selection, message) -> None:
+    objective = ObjectiveBuilder(cp_model.CpModel(), ("hard", "soft"), SPECS, [selection])
+    with pytest.raises(ValueError, match=message):
+        objective.add("capacity", 1, bound=1)
+    integral = ObjectiveBuilder(cp_model.CpModel(), ("hard", "soft"), SPECS, [{"name": "capacity", "offset": 2.0}])
+    integral.add("capacity", 1, bound=3)  # 2.0 is an integer
+
+
+def test_score_costs_shape_each_evaluated_unit() -> None:
+    objective = ObjectiveBuilder(
+        cp_model.CpModel(),
+        ("hard", "soft"),
+        SPECS,
+        [{"name": "capacity", "offset": 1, "clip": False}, {"name": "distance", "offset": 2}],
+    )
+    costs = {
+        "capacity": {"costs": [3, 0, 0, 0], "units": [0, 2]},  # scoped: units 1 and 3 never evaluated
+        "distance": {"costs": [4, 1, 0, 2]},
+    }
+    # hard: 2 x ((3 - 1) + (0 - 1)) = 2; soft: 3 x (2 + 0 + 0 + 0) = 6.
+    assert objective.score_costs(costs) == {"hard": -2, "soft": -6}
+
+
+def test_an_offset_needs_a_plugin_with_per_unit_terms(monkeypatch) -> None:
+    spec_class = _fake_domain(monkeypatch, [("capacity", "hard", 1.0, True, False)])
+
+    class SummedPlugin(spec_class("capacity"), ConstraintPlugin[dict]):
+        def build(self, context, objective):
+            objective.add(self.name, sum(context["values"]), bound=8)
+
+    class PerUnitPlugin(spec_class("capacity"), ConstraintPlugin[dict]):
+        terms_per_unit = True
+
+        def build(self, context, objective):
+            for value in context["values"]:
+                objective.add(self.name, value, bound=4)
+
+    model = cp_model.CpModel()
+    values = [model.new_int_var(0, 4, f"v{index}") for index in range(2)]
+    model.add(values[0] == 3)
+    model.add(values[1] == 1)
+    with pytest.raises(ValueError, match="constraint 'capacity' offset is not supported by this CP-SAT model"):
+        ConstraintRegistry([SummedPlugin()]).objective(model, ("hard", "soft"), [_DomainConstraint(offset=2.0)])
+    registry = ConstraintRegistry([PerUnitPlugin()])
+    objective = registry.objective(model, ("hard", "soft"), [_DomainConstraint(), _DomainConstraint(offset=2.0)])
+    registry.build({"values": values}, objective)
+    solver = cp_model.CpSolver()
+    assert objective.solve(solver) == cp_model.OPTIMAL
+    # capacity: 3 + 1; capacity#2 (threshold at 2): 1 + 0.
+    assert objective.score(solver) == {"hard": -5, "soft": 0}
