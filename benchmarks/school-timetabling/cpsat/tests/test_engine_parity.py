@@ -21,7 +21,7 @@ included, are pinned down.
 import pytest
 import st_timetabling as st
 from st_timetabling import canon
-from st_timetabling.constraints import UNASSIGNED_LESSONS_SOFT_WEIGHT, UnassignedLessonsCost, get_constraints
+from st_timetabling.constraints import UNASSIGNED_LESSONS_SOFT_WEIGHT, Level, UnassignedLessonsCost, get_constraints
 
 from teacher_scheduling import SolverConfig as CpsatConfig
 from teacher_scheduling import Timetable, TimetableProblem
@@ -411,6 +411,70 @@ def test_repeated_and_shifted_picks_score_like_the_engine(entries):
     # Each name's raw count is reported once, under its name.
     names = {name for name, _ in entries}
     assert set(result.penalties) == names
+
+
+def _engine_score(problem: TimetableProblem, result: Timetable, picks) -> tuple[int, float]:
+    """The engine's (hard, soft) of a timetable under `picks`: the calculator and the Python
+    mirror agree on both levels."""
+    converted = st.convert_problem(problem.model_dump(mode="json"))
+    st.inject_solution(converted, [lesson.model_dump(mode="json") for lesson in result.lessons])
+    mirror = st.constraints.score(canon.constraint_costs(converted.table, picks), picks)
+    engine = canon.DecomposedCalculator(picks).score(converted.table)
+    assert (engine.hard, engine.soft) == (mirror.hard, mirror.soft)
+    return mirror.hard, mirror.soft
+
+
+def test_each_repeat_keeps_its_own_level_on_cpsat():
+    """One constraint on two levels: avoided_period_cost hard (CP-SAT forbids period 5, the
+    engine charges it on the hard level) plus a soft literal repeat; teacher_gap_cost twice
+    with offsets. CP-SAT's optimum is the engine's best feasible timetable, mirror included."""
+    from itertools import combinations
+
+    from teacher_scheduling.domain.solution import ScheduledLesson, SolveStatus
+
+    entries = [
+        ("avoided_period_cost", {"level": "hard"}),
+        ("avoided_period_cost", {"weight": 3, "offset": 1, "clip": False}),
+        ("non_preferred_period_cost", {"weight": 5, "offset": -1}),
+        ("teacher_gap_cost", {"weight": 2, "offset": 1, "clip": False}),
+        ("teacher_gap_cost", {"level": Level.SOFT}),
+    ]
+    problem = _tiny_problem()
+    picks = _cpsat_picks(entries)
+    assert [pick.effective_level for pick in picks[-5:]] == ["hard", "soft", "soft", "soft", "soft"]
+    config = CpsatConfig(time_limit_seconds=10.0, num_workers=1, random_seed=7)
+    result = solve_cpsat(problem, config, constraints=picks)
+    assert result.status == SolveStatus.OPTIMAL
+    hard, soft = _engine_score(problem, result, picks)
+    assert hard == 0 and -soft == result.objective_value
+    course = problem.courses[0]
+    scores = []
+    for periods in combinations(range(1, 6), 3):
+        lessons = tuple(
+            ScheduledLesson(
+                course_id=course.id,
+                class_group_id=course.class_group_id,
+                subject_id=course.subject_id,
+                teacher_ids=course.teacher_ids,
+                slot=lesson.slot.model_copy(update={"period": period}),
+            )
+            for lesson, period in zip(result.lessons, periods, strict=True)
+        )
+        scores.append(_engine_score(problem, Timetable(status=SolveStatus.FEASIBLE, lessons=lessons), picks))
+    assert min(hard for hard, _ in scores) < 0  # period 5 costs on the hard level
+    assert max(scores) == (0, soft)
+
+
+@pytest.mark.parametrize("level", [Level.MEDIUM, "medium"])
+def test_medium_is_refused_by_cpsat(level):
+    """No medium level in this use case: the CP-SAT plugins refuse it like the engine, per instance."""
+    from teacher_scheduling.solver.registry import TeacherGapCost as CpsatTeacherGapCost
+
+    problem = _tiny_problem()
+    config = CpsatConfig(time_limit_seconds=1.0, num_workers=1)
+    picks = [*_cpsat_picks([]), CpsatTeacherGapCost(), CpsatTeacherGapCost(level=level)]
+    with pytest.raises(ValueError, match="this use case has no medium level"):
+        solve_cpsat(problem, config, constraints=picks)
 
 
 def test_an_offset_cpsat_cannot_shape_is_refused():

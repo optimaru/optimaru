@@ -1418,6 +1418,16 @@ ConstraintAssembly repeatedAssembly()
                               .clip("teacherConflictCost", false));
     assembly.addInstances(copyOf("unassignedLessonsCost", hub)
                               .offset("unassignedLessonsCost", 1.0));
+    // Repeats on another level than their default: a soft one hard, a hard
+    // one soft, each shifted.
+    assembly.addInstances(copyOf("teacherGapCost", hub)
+                              .hard("teacherGapCost")
+                              .offset("teacherGapCost", 2.0));
+    assembly.addInstances(copyOf("classConflictCost", hub)
+                              .soft("classConflictCost")
+                              .weight("classConflictCost", 5.0)
+                              .offset("classConflictCost", -1.0)
+                              .clip("classConflictCost", false));
     return assembly;
 }
 

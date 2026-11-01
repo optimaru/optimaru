@@ -70,11 +70,13 @@ namespace ms
 //
 // The level and the weight of each component are DEFAULTS — assembly-time
 // metadata, not part of the cost. Override them per instance through the
-// assembly's knob setters (`weight` / `hard` / `soft` / `exponent`) or the
-// validated `setWeight` / `setLevel` / `setExponent` of the component
-// (`component->setLevel(optimaru::Level::Soft)`). A medium component moved
-// to hard costs 1 hard per raw unit, moved to soft 1 soft per raw unit
-// (outside the fold); an explicit weight stays in medium units.
+// assembly's knob setters (`weight` / `level` (or its `hard` / `soft`
+// shorthands) / `exponent` / `offset` / `clip`) or the validated
+// `setWeight` / `setLevel` / `setExponent` / `setOffset` of the component
+// (`component->setLevel(optimaru::Level::Medium)`). Any component may take
+// any of the three levels. A medium component moved to hard costs 1 hard per
+// raw unit, moved to soft 1 soft per raw unit (outside the fold); an explicit
+// weight stays in units of the level in effect.
 //
 // Cost sign convention (see decomposed_score_calculator.hpp): positive =
 // penalty; the calculator negates into the score. An assembly of all twelve

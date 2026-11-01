@@ -516,6 +516,13 @@ void addRepeatedShifted(DecomposedCalculator& calc) {
     scoped->setOffset(2.0);
     scoped->setClip(false);
     calc.add(std::move(scoped));
+    // Repeats on another level than their default: a hard one soft, a soft one hard.
+    auto demoted = shaped<EmployeeUnavailabilityCost>(30.0, false, 0.5);
+    demoted->setLevel(optimaru::Level::Soft);
+    calc.add(std::move(demoted));
+    auto promoted = shaped<UndesiredDayCost>(240.0, true);
+    promoted->setLevel(optimaru::Level::Hard);
+    calc.add(std::move(promoted));
 }
 
 void verifyRepeatsAndOffsets() {

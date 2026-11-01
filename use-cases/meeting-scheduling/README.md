@@ -41,10 +41,11 @@ The first five are unit constraints (one cost per (time grain, room) cell, so `e
 shapes per cell); the other seven compare pairs of meetings and are global (one total,
 shaped as a whole). The rows are in `list_constraints()` order, and
 `meeting_scheduling.constraint_info()` reports exactly this table from the C++ components
-(`kDefaultLevel` / `kDefaultWeight`): every constraint is flippable (`level="hard"` /
-`level="soft"`), none is a reward and all twelve are scored by default (`default_enabled`).
-The medium level folds into the engine's soft level as `medium x 1e6` (`MEDIUM_SCALE`,
-`kMediumFold` in `cpp/include/ms/domain.hpp`); a medium weight is in medium units.
+(`kDefaultLevel` / `kDefaultWeight`): every constraint is flippable to any of the three
+levels (`level="hard"` / `"medium"` / `"soft"`), none is a reward and all twelve are scored
+by default (`default_enabled`). The medium level folds into the engine's soft level as
+`medium x 1e6` (`MEDIUM_SCALE`, `kMediumFold` in `cpp/include/ms/domain.hpp`); a weight is
+in units of the level in effect, so a medium weight is in medium units.
 
 **0.2.0:** the constraints were renamed (`room_conflict` -> `room_conflict_cost`,
 `avoid_overtime` -> `overtime_cost`, `required_attendance_conflict` ->
@@ -73,6 +74,15 @@ the offset); `offset=0` is the 0.2.0 shaping. Each pick is its own instance with
 knobs, and the instances add up; `ms.constraint_costs(schedule, picks)` keys the second
 pick `"<name>#2"`. The CP-SAT reference takes integral offsets on every constraint (see
 its README).
+
+The `hard` knob is gone in 0.3.0 (`hard=` raises `TypeError`): `level` replaces it, a
+`Level` (`Level.HARD`, `Level.MEDIUM`, `Level.SOFT`, from `meeting_scheduling.constraints`)
+or its name. Medium is no longer a default-only level: any constraint may move onto it,
+`MeetingOverlapCost(level="medium", weight=3)` charges 3 medium units per overlapping grain
+(3e6 soft after the fold). Each repeated pick carries its own level, so one constraint can
+count on two levels at once: `MeetingEndTimeCost()` plus
+`MeetingEndTimeCost(level="hard", offset=4)` also charges, on the hard level, every meeting
+whose last grain index lies beyond 4, by the grains beyond it.
 
 The C++ side builds and tests with:
 

@@ -5,6 +5,7 @@ import pytest
 import meeting_scheduling as domain
 from meeting_scheduling.constraints import (
     LargerRoomCapacityCost,
+    Level,
     MeetingEndTimeCost,
     MeetingOverlapCost,
     PreferredAttendanceConflictCost,
@@ -307,6 +308,17 @@ SELECTIONS = {
         MeetingOverlapCost(),
         LargerRoomCapacityCost(),
     ],
+    # Each pick on its own level, medium included: soft and hard constraints moved onto
+    # medium, medium ones moved off it, repeats of one name on three levels, with offsets.
+    "levels": [
+        MeetingEndTimeCost(),
+        MeetingEndTimeCost(level=Level.MEDIUM, offset=2),
+        MeetingEndTimeCost(level="hard", weight=2, offset=3),
+        MeetingOverlapCost(level="medium", weight=2, offset=1),
+        RoomConflictCost(level="medium"),
+        PreferredAttendanceConflictCost(level="soft", offset=1, clip=False),
+        PreferredAttendanceConflictCost(level=Level.HARD),
+    ],
 }
 
 
@@ -314,6 +326,19 @@ def _assignments(problem):
     cells = len(problem.time_grains) * len(problem.rooms)
     for assignment in product(range(cells), repeat=len(problem.meeting_assignments)):
         yield list(assignment), _fixed_candidate(problem, list(assignment))
+
+
+def _engine_score(candidate, selection):
+    """The engine's own score of `candidate` under `selection`: a zero-budget solve with every
+    meeting pinned, so the assignment stays as it is."""
+    pinned = candidate.model_copy(deep=True)
+    for assignment in pinned.meeting_assignments:
+        assignment.pinned = True
+    core = pinned.to_core()
+    config = domain.SolverConfig()
+    config.spent_limit_seconds = 0
+    domain.Solver(config).solve_with_constraints(core, selection)
+    return core.score.hard, core.score.soft
 
 
 def _folded(proxy: dict[str, int]) -> dict[str, float]:
@@ -342,6 +367,8 @@ def test_the_cpsat_terms_equal_the_engine_on_every_assignment(selection) -> None
         assert _folded(proxy) == {"hard": engine.hard, "soft": engine.soft}, assignment
         # Re-pricing the default costs (each name once) gives the same per instance key.
         assert score(domain.constraint_costs(core), selection) == engine
+        # ...and the engine's own score of the pinned assignment is the mirror's.
+        assert _engine_score(candidate, selection) == tuple(engine), assignment
 
 
 @pytest.mark.parametrize("selection", list(SELECTIONS.values()), ids=list(SELECTIONS))

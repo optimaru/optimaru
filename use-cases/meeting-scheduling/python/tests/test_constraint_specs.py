@@ -14,11 +14,13 @@ import pytest
 import meeting_scheduling as ms
 from meeting_scheduling.constraints import (
     Constraint,
+    Level,
     MeetingEndTimeCost,
     MeetingOverlapCost,
     OvertimeCost,
     PreferredAttendanceConflictCost,
     RequiredAndPreferredAttendanceConflictCost,
+    RoomChangeCost,
     RoomConflictCost,
     consecutive_meetings_cost,
     day_crossing_cost,
@@ -636,6 +638,70 @@ def test_a_repeated_and_a_shifted_medium_pick():
     assert [entry["level"] for entry in raw.values()] == ["medium", "medium"]
     assert score(raw, repeat) == _engine_score(repeat) == (0, -(2 + 4) * 1e6)
     assert score(ms.constraint_costs(_attendance_clash()), shifted) == _engine_score(shifted) == (0, -4 * 0.5 * 1e6)
+
+
+# Each pick carries its own level, medium included. On the attendance clash: end time 3 and 5
+# in two cells (soft, weight 1), overlap 2 (soft, weight 10), the preferred-attendance medium
+# 2 (weight 1 in medium units), every hard cost 0.
+LEVELS = [
+    MeetingEndTimeCost(),  # soft: 3 + 5 = 8
+    MeetingEndTimeCost(level=Level.MEDIUM, offset=4),  # medium: max(0, 5 - 4) = 1
+    MeetingEndTimeCost(level="hard", weight=2, offset=4),  # hard: 2 x 1 = 2
+    MeetingOverlapCost(level="medium", weight=3),  # soft -> medium: 3 x 2 = 6
+    RoomConflictCost(level="medium"),  # hard -> medium, raw 0
+    PreferredAttendanceConflictCost(),  # medium: 2
+    PreferredAttendanceConflictCost(level="soft", offset=1),  # medium -> soft: 2 - 1 = 1
+    PreferredAttendanceConflictCost(level=Level.HARD, weight=2, offset=-1),  # medium -> hard: 2 x 3 = 6
+]
+
+
+def test_each_repeat_carries_its_own_level():
+    """hard 2 + 6 = 8; medium 1 + 6 + 0 + 2 = 9 folded at 1e6; soft 8 + 1: (-8, -(9e6 + 9))."""
+    raw = ms.constraint_costs(_attendance_clash(), LEVELS)
+    assert {key: entry["level"] for key, entry in raw.items()} == {
+        "meeting_end_time_cost": "soft",
+        "meeting_end_time_cost#2": "medium",
+        "meeting_end_time_cost#3": "hard",
+        "meeting_overlap_cost": "medium",
+        "room_conflict_cost": "medium",
+        "preferred_attendance_conflict_cost": "medium",
+        "preferred_attendance_conflict_cost#2": "soft",
+        "preferred_attendance_conflict_cost#3": "hard",
+    }
+    assert {entry["medium_fold"]["unit"] for entry in raw.values()} == {1e6}
+    expected = (-(2 + 6), -((1 + 6 + 0 + 2) * 1e6 + 8 + 1))
+    assert expected == (-8, -9000009.0)
+    assert score(raw, LEVELS) == expected
+    assert score(ms.constraint_costs(_attendance_clash()), LEVELS) == expected
+    assert _engine_score(LEVELS) == expected
+
+
+@pytest.mark.parametrize("level", [Level.MEDIUM, "medium"])
+@pytest.mark.parametrize(
+    ("spec", "expected"),
+    [
+        (MeetingOverlapCost, (0, -10 * 2 * 1e6)),  # soft -> medium: weight 10 in medium units
+        (MeetingEndTimeCost, (0, -(3 + 5) * 1e6)),  # a unit constraint, per cell
+        (RoomChangeCost, (0, -2 * 1e6)),
+        (OvertimeCost, (0, 0.0)),  # hard -> medium, raw 0
+    ],
+)
+def test_any_flippable_constraint_may_move_onto_medium(spec, level, expected):
+    """Medium is a level a pick may ask for: its weight is in medium units, folded into soft
+    at 1e6, on both paths, as a Level or by its name."""
+    pick = spec(level=level)
+    raw = ms.constraint_costs(_attendance_clash(), [pick])
+    assert next(iter(raw.values()))["level"] == "medium"
+    assert score(raw, [pick]) == expected
+    assert score(ms.constraint_costs(_attendance_clash()), [pick]) == expected
+    assert _engine_score([pick]) == expected
+
+
+def test_the_hard_knob_is_gone():
+    """0.3.0 replaced hard= by level=; the old keyword is a TypeError, not a silent default."""
+    with pytest.raises(TypeError, match="hard"):
+        MeetingOverlapCost(hard=True)
+    assert MeetingOverlapCost(level="medium") == MeetingOverlapCost(level=Level.MEDIUM)
 
 
 def test_offset_zero_reproduces_the_0_2_0_scores():

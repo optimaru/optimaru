@@ -8,6 +8,7 @@ from conference_scheduling.constraints import (
     ContentConflictCost,
     DifferentDayTalksCost,
     LanguageDiversityCost,
+    Level,
     RoomConflictCost,
     SpeakerConflictCost,
     SpeakerMakespanCost,
@@ -322,6 +323,15 @@ SELECTIONS = {
         DifferentDayTalksCost(),
         SpeakerMakespanCost(),
     ],
+    # Each pick on its own level: a soft repeat of a hard constraint beyond an offset, a
+    # hard literal repeat of a soft one, a demoted hard one with a negative literal offset.
+    "repeat-levels": [
+        RoomConflictCost(),
+        RoomConflictCost(level=Level.SOFT, weight=2, offset=10),
+        ContentConflictCost(level="hard", weight=3, offset=50, clip=False),
+        ContentConflictCost(),
+        SpeakerUnavailabilityCost(level="soft", offset=-3, clip=False),
+    ],
 }
 
 
@@ -329,6 +339,19 @@ def _assignments(problem):
     cells = len(problem.timeslots) * len(problem.rooms)
     for assignment in product(range(cells), repeat=len(problem.talks)):
         yield list(assignment), _fixed_candidate(problem, assignment)
+
+
+def _engine_score(candidate, selection):
+    """The engine's own score of `candidate` under `selection`: a zero-budget solve with every
+    talk pinned, so the assignment stays as it is."""
+    pinned = candidate.model_copy(deep=True)
+    for talk in pinned.talks:
+        talk.pinned = True
+    core = pinned.to_core()
+    config = domain.SolverConfig()
+    config.spent_limit_seconds = 0
+    domain.Solver(config).solve_with_constraints(core, selection)
+    return core.score.hard, core.score.soft
 
 
 @pytest.mark.parametrize("selection", list(SELECTIONS.values()), ids=list(SELECTIONS))
@@ -350,6 +373,8 @@ def test_the_cpsat_terms_equal_the_engine_on_every_assignment(selection) -> None
         assert proxy == {"hard": engine.hard, "soft": engine.soft}, assignment
         # Re-pricing the default costs (each name once) gives the same per instance key.
         assert score(domain.constraint_costs(core), selection) == engine
+        # ...and the engine's own score of the pinned assignment is the mirror's.
+        assert _engine_score(candidate, selection) == tuple(engine), assignment
 
 
 @pytest.mark.parametrize("selection", list(SELECTIONS.values()), ids=list(SELECTIONS))
@@ -376,6 +401,17 @@ def test_mapping_selections_repeat_and_shift_like_specs() -> None:
     assert solve(problem, time_limit_seconds=5, constraints=dicts) == solve(
         problem, time_limit_seconds=5, constraints=specs
     )
+
+
+@pytest.mark.parametrize("level", [Level.MEDIUM, "medium"])
+def test_medium_is_refused_by_cpsat(level) -> None:
+    """No medium level in this use case: CP-SAT refuses it like the engine, per instance."""
+    for picks in (
+        [ContentConflictCost(level=level)],
+        [RoomConflictCost(), RoomConflictCost(level=level)],
+    ):
+        with pytest.raises(ValueError, match="this use case has no medium level"):
+            solve(_two_talks(), time_limit_seconds=1, constraints=picks)
 
 
 def test_a_fractional_offset_is_refused_by_cpsat() -> None:

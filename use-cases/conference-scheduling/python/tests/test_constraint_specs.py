@@ -18,6 +18,7 @@ from conference_scheduling.constraints import (
     Constraint,
     ContentConflictCost,
     LanguageDiversityCost,
+    Level,
     RoomConflictCost,
     SpeakerMakespanCost,
     content_conflict_cost,
@@ -727,6 +728,54 @@ def test_offsets_by_hand_on_both_paths(pick, expected):
     assert score(raw, [pick]) == expected
     engine = _pinned_solve(_three_talks(), [pick])
     assert (engine.score.hard, engine.score.soft) == expected
+
+
+# Each pick carries its own level: room conflict 60 (hard, weight 1000), content conflict
+# 60 (soft, weight 100). The second room pick is soft at weight 2 beyond 10 minutes, the
+# first content pick hard and literal beyond 50 at weight 3.
+LEVELS = [
+    RoomConflictCost(),
+    RoomConflictCost(level=Level.SOFT, weight=2, offset=10),
+    ContentConflictCost(level="hard", weight=3, offset=50, clip=False),
+    ContentConflictCost(),
+]
+
+
+def test_each_repeat_carries_its_own_level():
+    """hard: 1000 x 60 + 3 x (60 - 50) = 60030; soft: 2 x (60 - 10) + 100 x 60 = 6100."""
+    raw = cs.constraint_costs(_three_talks(), LEVELS)
+    assert {key: entry["level"] for key, entry in raw.items()} == {
+        "room_conflict_cost": "hard",
+        "room_conflict_cost#2": "soft",
+        "content_conflict_cost": "hard",
+        "content_conflict_cost#2": "soft",
+    }
+    expected = (-(1000 * 60 + 3 * (60 - 50)), -(2 * (60 - 10) + 100 * 60))
+    assert expected == (-60030, -6100.0)
+    assert score(raw, LEVELS) == expected
+    assert score(cs.constraint_costs(_three_talks()), LEVELS) == expected
+    engine = _pinned_solve(_three_talks(), LEVELS)
+    assert (engine.score.hard, engine.score.soft) == expected
+
+
+@pytest.mark.parametrize("level", [Level.MEDIUM, "medium"])
+def test_medium_is_refused_on_every_path(level):
+    """Conference scheduling has no medium level: a pick asking for it raises before scoring,
+    on the engine path and in score(), also as the second pick of a name."""
+    for picks in ([ContentConflictCost(level=level)], [RoomConflictCost(), RoomConflictCost(level=level)]):
+        with pytest.raises(ValueError, match="this use case has no medium level"):
+            _pinned_solve(_three_talks(), picks)
+        with pytest.raises(ValueError, match="this use case has no medium level"):
+            cs.constraint_costs(_three_talks(), picks)
+        with pytest.raises(ValueError, match="this use case has no medium level"):
+            score(cs.constraint_costs(_three_talks()), picks)
+
+
+def test_the_hard_knob_is_gone():
+    """0.3.0 replaced hard= by level=; the old keyword is a TypeError, not a silent default."""
+    with pytest.raises(TypeError, match="hard"):
+        ContentConflictCost(hard=True)
+    assert ContentConflictCost(level="hard") == ContentConflictCost(level=Level.HARD)
 
 
 def test_a_second_reward_pick_still_refuses_hard():

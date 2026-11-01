@@ -23,6 +23,7 @@ from es_scheduling.constraints import (
     DesiredDayCost,
     DesiredShiftCost,
     EmployeeUnavailabilityCost,
+    Level,
     LocationImbalanceCost,
     MaxConsecutiveDaysCost,
     MaxOneShiftPerDayCost,
@@ -654,6 +655,60 @@ def test_a_second_reward_pick_still_refuses_hard():
         es.DecomposedCalculator(picks)
     with pytest.raises(ValueError, match="is a reward"):
         score(es.constraint_costs(reference_schedule(), [DesiredDayCost(), DesiredDayCost()]), picks)
+
+
+# Each pick carries its own level: undesired minutes [0, 480, 0, 0] (soft), unavailable
+# minutes [480, 0, 0, 0] (hard). The second undesired pick is hard beyond 400 minutes, the
+# second unavailability pick soft, literal beyond 80 at weight 0.5 (every employee charged).
+LEVELS = [
+    UndesiredDayCost(),
+    UndesiredDayCost(level=Level.HARD, offset=400),
+    EmployeeUnavailabilityCost(),
+    EmployeeUnavailabilityCost(level="soft", weight=0.5, offset=80, clip=False),
+]
+
+
+def test_each_repeat_carries_its_own_level():
+    """hard: (480 - 400) + 480 = 560; soft: 480 + 0.5 x ((480 - 80) + 3 x (0 - 80)) = 560."""
+    raw = es.constraint_costs(reference_schedule(), LEVELS)
+    assert {key: entry["level"] for key, entry in raw.items()} == {
+        "undesired_day_cost": "soft",
+        "undesired_day_cost#2": "hard",
+        "employee_unavailability_cost": "hard",
+        "employee_unavailability_cost#2": "soft",
+    }
+    expected = (-((480 - 400) + 480), -(480 + 0.5 * ((480 - 80) + 3 * (0 - 80))))
+    assert expected == (-560, -560.0)
+    assert score(raw, LEVELS) == expected
+    assert _engine(LEVELS) == expected
+    by_name = es.DecomposedCalculator()
+    for pick in LEVELS:
+        knobs = {knob: getattr(pick, knob) for knob in ("weight", "level", "exponent", "offset", "clip")}
+        by_name.add(pick.name, **knobs, **pick.params())
+    result = by_name.score(reference_schedule())
+    assert (result.hard, result.soft) == expected
+    assert [(t["name"], t["level"]) for t in by_name.constraint_totals()] == [
+        ("undesired_day_cost", "soft"),
+        ("undesired_day_cost", "hard"),
+        ("employee_unavailability_cost", "hard"),
+        ("employee_unavailability_cost", "soft"),
+    ]
+
+
+@pytest.mark.parametrize("level", [Level.MEDIUM, "medium"])
+def test_medium_is_refused_on_every_path(level):
+    """Employee scheduling has no medium level: a pick asking for it raises before scoring,
+    in the calculator, in add(), in constraint_costs() and in score(), also as a repeat."""
+    for picks in ([UndesiredDayCost(level=level)], [RequiredSkillCost(), RequiredSkillCost(level=level)]):
+        with pytest.raises(ValueError, match="this use case has no medium level"):
+            es.DecomposedCalculator(picks)
+        with pytest.raises(ValueError, match="this use case has no medium level"):
+            es.constraint_costs(reference_schedule(), picks)
+        default_level = [type(pick)(**pick.params()) for pick in picks]  # a rule needs its own "#2"
+        with pytest.raises(ValueError, match="this use case has no medium level"):
+            score(es.constraint_costs(reference_schedule(), default_level), picks)
+    with pytest.raises(ValueError, match="this use case has no medium level"):
+        es.DecomposedCalculator().add("undesired_day_cost", level=level)
 
 
 def test_add_takes_the_offset_and_clip_knobs():

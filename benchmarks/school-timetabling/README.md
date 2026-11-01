@@ -110,15 +110,17 @@ are CP-SAT model constraints, so on this path:
   constraints here without a penalty form, so they are structural on CP-SAT only, although the
   catalog (read from the engine) lists them as `kind="either"`;
 - a soft constraint with `level="hard"` forbids every violation (`model.add(expr == 0)`);
+  `level="medium"` is refused, as by the engine (this use case has no medium level);
 - weights must be integers and `exponent` must be 1 (a linear CP-SAT objective);
 - an integral `offset` / `clip` is shaped as the engine shapes it on a soft constraint: the
   one total of a global constraint, or each calendar slot of `avoided_period_cost` /
   `non_preferred_period_cost` (an empty slot included); a hard constraint (a model
   constraint here) and a fractional offset refuse a non-zero offset;
 - a constraint listed several times in `solve(constraints=...)` adds one objective term per
-  entry, each with its own knobs (0.3.0); `Timetable.penalties` reports each name's raw count
-  once, and `registry.merge` keeps its replace-by-name semantics, like the engine's
-  `Assembly`.
+  entry, each with its own knobs, its level included (0.3.0: `avoided_period_cost` once hard
+  and once soft forbids the avoided periods and still prices its soft repeat);
+  `Timetable.penalties` reports each name's raw count once, and `registry.merge` keeps its
+  replace-by-name semantics, like the engine's `Assembly`.
 
 `Timetable.penalties`, `validate.compute_penalties` and `SolverConfig.weights` are keyed by
 the soft constraint names (`teacher_gap_cost`, ...), the same keys as the engine.

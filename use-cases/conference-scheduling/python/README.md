@@ -103,7 +103,10 @@ and rewards a total below the offset); `offset=0` is the 0.2.0 shaping. Each pic
 own instance with its own knobs, the instances add up, and
 `cs.constraint_costs(schedule, picks)` keys the second pick `content_conflict_cost#2`.
 A literal offset on a reward (`AudienceTypeDiversityCost(offset=..., clip=False)`) shifts
-the reward further; a threshold offset rewards only the part beyond it.
+the reward further; a threshold offset rewards only the part beyond it. The `hard` knob is
+gone (`hard=` raises `TypeError`): `level` replaces it (`Level.HARD` / `Level.SOFT`, or
+`"hard"` / `"soft"`), each repeated pick carries its own, and `level="medium"` raises
+`ValueError`, as this use case has no medium level.
 
 ### Value range replacement (the only semantic difference)
 

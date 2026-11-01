@@ -20,6 +20,7 @@ from st_timetabling.constraints import (
     ClassConflictCost,
     ClassGapCost,
     FixedSlotsCost,
+    Level,
     NonPreferredPeriodCost,
     ParallelGroupsCost,
     TeacherConflictCost,
@@ -435,6 +436,65 @@ def test_offsets_by_hand_on_both_paths(pick, expected):
     assert "units" not in entry
     assert score(raw, [pick]) == expected
     assert _engine([pick]) == expected
+
+
+# Each pick carries its own level (the tiny table: teacher gaps 1, weight 20; workday 1,
+# weight 3; every hard cost 0, class conflicts 0 in each of the 4 slots).
+LEVELS = [
+    TeacherGapCost(),  # soft: 20
+    TeacherGapCost(level=Level.HARD, weight=2),  # hard: 2
+    TeacherWorkdayCost(level="hard", weight=4, offset=0.5, clip=False),  # hard: 4 x (1 - 0.5) = 2
+    TeacherWorkdayCost(),  # soft: 3
+    ClassConflictCost(level="soft", offset=-1, clip=False),  # soft: 1 x (0 + 1) in each of 4 slots
+]
+
+
+def test_each_repeat_carries_its_own_level():
+    """hard 2 + 2 = 4; soft 20 + 3 + 4 = 27, on the calculator, add() and the mirror alike."""
+    raw = canon.constraint_costs(_tiny_table(), LEVELS)
+    assert {key: entry["level"] for key, entry in raw.items()} == {
+        "class_conflict_cost": "soft",
+        "teacher_gap_cost": "soft",
+        "teacher_gap_cost#2": "hard",
+        "teacher_workday_cost": "hard",
+        "teacher_workday_cost#2": "soft",
+    }
+    expected = (-(2 + 2), -(20 + 3 + 4 * 1))
+    assert expected == (-4, -27.0)
+    assert score(raw, LEVELS) == expected
+    assert score(canon.constraint_costs(_tiny_table()), LEVELS) == expected
+    assert _engine(LEVELS) == expected
+    by_name = canon.DecomposedCalculator()
+    for pick in LEVELS:
+        by_name.add(pick.name, weight=pick.weight, level=pick.level, offset=pick.offset, clip=pick.clip)
+    result = by_name.score(_tiny_table())
+    assert (result.hard, result.soft) == expected
+
+
+@pytest.mark.parametrize("level", [Level.MEDIUM, "medium"])
+def test_medium_is_refused_on_every_path(problem, level):
+    """School timetabling has no medium level: a pick asking for it raises before scoring,
+    in the calculator, in add(), in solve(), in constraint_costs() and in score(), also as a repeat."""
+    for picks in ([TeacherGapCost(level=level)], [ClassConflictCost(), ClassConflictCost(level=level)]):
+        with pytest.raises(ValueError, match="this use case has no medium level"):
+            canon.DecomposedCalculator(picks)
+        with pytest.raises(ValueError, match="this use case has no medium level"):
+            canon.constraint_costs(_tiny_table(), picks)
+        with pytest.raises(ValueError, match="this use case has no medium level"):
+            score(canon.constraint_costs(_tiny_table()), picks)
+        with pytest.raises(ValueError, match="this use case has no medium level"):
+            st.solve(problem, time_limit_seconds=0.1, constraints=picks)
+    with pytest.raises(ValueError, match="this use case has no medium level"):
+        canon.DecomposedCalculator().add("teacher_gap_cost", level=level)
+
+
+def test_the_hard_knob_is_gone():
+    """0.3.0 replaced hard= by level=; the old keyword is a TypeError, not a silent default."""
+    with pytest.raises(TypeError, match="hard"):
+        TeacherGapCost(hard=True)
+    with pytest.raises(TypeError, match="hard"):
+        canon.DecomposedCalculator().add("teacher_gap_cost", hard=True)
+    assert TeacherGapCost(level="hard") == TeacherGapCost(level=Level.HARD)
 
 
 def test_add_takes_the_offset_and_clip_knobs():
