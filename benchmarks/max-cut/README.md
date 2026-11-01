@@ -20,6 +20,13 @@ Exponents other than 1 and fractional weights are not supported on CP-SAT (they
 raise `ValueError`); `cut_weight_cost` with `hard=True` is refused as in the
 engine.
 
+**0.3.0:** a constraint may be picked several times (as specs or as
+`{"name", "weight", "hard", "offset", "clip"}` mappings); each pick builds its own terms with
+its own knobs. The four unit constraints add one term per side (side 0 and side 1, a side
+of raw 0 included) and the imbalance and the cut one term for their total, so an integral
+`offset` shapes each side (or the total) exactly as the engine does in both `clip` modes;
+a fractional offset is refused (`offset must be an integer for CP-SAT`).
+
 ```sh
 cd benchmarks/max-cut/cpsat
 uv sync --all-groups --all-extras
