@@ -259,9 +259,12 @@ protected:
     RouteSumsContext* sums_ = nullptr;
 };
 
-struct SummedUnitConstraint : WithRouteSums<VrpUnitConstraint> {
-    using WithRouteSums<VrpUnitConstraint>::WithRouteSums;
-    void onReset(const VehicleRoutePlan& plan) override { this->sums_->prepare(plan); }
+struct SummedUnitConstraint : WithRouteSums<PerVehicleConstraint> {
+    using WithRouteSums<PerVehicleConstraint>::WithRouteSums;
+    void onReset(const VehicleRoutePlan& plan) override {
+        PerVehicleConstraint::onReset(plan);  // the vehicles scope
+        this->sums_->prepare(plan);
+    }
 };
 struct SummedGlobalConstraint : WithRouteSums<VrpGlobalConstraint> {
     using WithRouteSums<VrpGlobalConstraint>::WithRouteSums;

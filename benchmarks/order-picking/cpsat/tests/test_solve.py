@@ -10,7 +10,11 @@ import pytest
 
 import order_picking as domain
 from order_picking import calculate_score, constraint_costs
+from itertools import permutations, product
+
 from order_picking.constraints import (
+    DistanceFromLastPickTaskToPathOriginCost,
+    DistanceFromPreviousPickTaskCost,
     OrderSplitByTrolleyCost,
     TrolleyCapacityCost,
     get_constraints,
@@ -122,7 +126,13 @@ def test_cpsat_defaults_are_the_engine_defaults():
         assert entry["reward"] == row.reward
         assert entry["default_enabled"] == row.default_enabled
         assert entry["kind"] == "either"  # every order-picking constraint is flippable
-        assert entry["params"] == {"weight": None, "hard": None, "exponent": 1.0}
+        assert entry["params"] == {
+            "weight": None,
+            "hard": None,
+            "exponent": 1.0,
+            "offset": 0.0,
+            "clip": True,
+        }
     # The order split weighs 1000 on both paths (it was restated by hand before).
     assert engine["order_split_by_trolley_cost"].default_weight == 1000.0
 
@@ -208,3 +218,131 @@ def test_promoting_the_split_scores_like_the_engine():
     assert _reported(result) == (engine.hard, pytest.approx(engine.soft))
     # One bucket short + 2 x two (order, trolley) pairs.
     assert engine.hard == -(1 + 2 * 2)
+
+
+# --- 0.3.0: repeated picks and offset / clip ---------------------------------------
+
+
+def _three_picks(timelimit: float = 5) -> OrderPickingRequest:
+    """Two trolleys (one bucket of 50 each) and three picks: O1 (40 + 40, two buckets) and
+    O2 (40). Every assignment of the picks with every picking order: 24 solutions."""
+    origin = LocationModel(column="A", shelving_row=1, side="LEFT", row=0)
+    spots = [
+        LocationModel(column="B", shelving_row=2, side="RIGHT", row=3),
+        LocationModel(column="C", shelving_row=1, side="LEFT", row=5),
+        LocationModel(column="D", shelving_row=3, side="RIGHT", row=1),
+    ]
+    return OrderPickingRequest(
+        timelimit=timelimit,
+        trolleys=[
+            TrolleyModel(id=name, bucket_count=1, bucket_capacity=50, location=origin)
+            for name in ("T1", "T2")
+        ],
+        orders=[
+            OrderModel(
+                id="O1",
+                items=[
+                    ProductModel(id="P1", volume=40, location=spots[0]),
+                    ProductModel(id="P2", volume=40, location=spots[1]),
+                ],
+            ),
+            OrderModel(
+                id="O2", items=[ProductModel(id="P3", volume=40, location=spots[2])]
+            ),
+        ],
+    )
+
+
+def _routes():
+    for trolleys in product(range(2), repeat=3):
+        on = [
+            [task for task, t in enumerate(trolleys) if t == trolley]
+            for trolley in range(2)
+        ]
+        for first in permutations(on[0]):
+            for second in permutations(on[1]):
+                yield [list(first), list(second)]
+
+
+def _engine_of(request, routes, selection):
+    canonical = to_solution(request)
+    for trolley, route in zip(canonical.trolleys, routes, strict=True):
+        trolley.pick_task_indices = route
+    return score(constraint_costs(canonical, selection), selection)
+
+
+SELECTIONS = {
+    "repeat": [
+        TrolleyCapacityCost(),
+        DistanceFromPreviousPickTaskCost(),
+        DistanceFromPreviousPickTaskCost(weight=2, offset=5),
+    ],
+    "repeat-literal": [
+        DistanceFromPreviousPickTaskCost(offset=10, clip=False),
+        DistanceFromPreviousPickTaskCost(weight=3, offset=-2),
+        OrderSplitByTrolleyCost(),
+        OrderSplitByTrolleyCost(weight=7, offset=1, clip=False),  # the empty trolley -7
+    ],
+    "hard-offsets": [
+        TrolleyCapacityCost(offset=1),
+        TrolleyCapacityCost(weight=2, offset=2, clip=False),
+        DistanceFromLastPickTaskToPathOriginCost(offset=-3, clip=False),
+    ],
+    "identical-twice": [
+        OrderSplitByTrolleyCost(),
+        OrderSplitByTrolleyCost(),
+        DistanceFromPreviousPickTaskCost(),
+    ],
+}
+
+
+@pytest.mark.parametrize("selection", list(SELECTIONS.values()), ids=list(SELECTIONS))
+def test_the_cpsat_terms_equal_the_engine_on_every_solution(selection):
+    """Pin each of the 24 solutions: the CP-SAT objective's own levels are the engine's
+    score of those routes under the same repeated / shifted picks, exactly; the reported
+    score re-prices the default costs (each name once) to the same value."""
+    request = _three_picks()
+    routes = list(_routes())
+    assert len(routes) == 24
+    for fixed in routes:
+        proxy: dict[str, int] = {}
+        result = solve(
+            request, constraints=selection, _fixed_routes=fixed, _proxy_score=proxy
+        )
+        engine = _engine_of(request, fixed, selection)
+        assert (proxy["hard"], proxy["soft"]) == (engine.hard, engine.soft), fixed
+        assert _reported(result) == (engine.hard, engine.soft), fixed
+
+
+@pytest.mark.parametrize("selection", list(SELECTIONS.values()), ids=list(SELECTIONS))
+def test_repeated_and_shifted_picks_reach_the_brute_force_optimum(selection):
+    request = _three_picks()
+    best = max(tuple(_engine_of(request, fixed, selection)) for fixed in _routes())
+    assert _reported(solve(request, constraints=selection)) == best
+
+
+def test_mapping_selections_repeat_and_shift_like_specs():
+    """The server's {name, weight, offset, clip} dicts pick the same instances as specs."""
+    specs = [
+        OrderSplitByTrolleyCost(),
+        OrderSplitByTrolleyCost(weight=3, offset=1, clip=False),
+    ]
+    dicts = [
+        {"name": "order_split_by_trolley_cost"},
+        {
+            "name": "order_split_by_trolley_cost",
+            "weight": 3,
+            "offset": 1,
+            "clip": False,
+        },
+    ]
+    assert solve(_three_picks(), constraints=dicts) == solve(
+        _three_picks(), constraints=specs
+    )
+
+
+def test_a_fractional_offset_is_refused_by_cpsat():
+    with pytest.raises(ValueError, match="offset must be an integer for CP-SAT"):
+        solve(
+            _three_picks(timelimit=1), constraints=[OrderSplitByTrolleyCost(offset=0.5)]
+        )

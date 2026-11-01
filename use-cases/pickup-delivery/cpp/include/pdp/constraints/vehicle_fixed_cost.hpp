@@ -9,13 +9,13 @@ namespace pdp
 // Soft, weight 1: vehicleFixedCost — the price of putting a vehicle on the
 // road at all. Raw cost per vehicle = Vehicle::fixedCost while it serves at
 // least one stop; 0 for an unused vehicle (and for the pool list).
-struct VehicleFixedCost final : PdpUnitConstraint
+struct VehicleFixedCost final : detail::PerVehicleConstraint
 {
     static constexpr double kDefaultWeight = 1.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
 
     explicit VehicleFixedCost(double weight = kDefaultWeight)
-        : PdpUnitConstraint("vehicleFixedCost", weight, kDefaultLevel)
+        : PerVehicleConstraint("vehicleFixedCost", weight, kDefaultLevel)
     {
     }
     double

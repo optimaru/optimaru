@@ -20,6 +20,13 @@
 //       unassignedVisitsCost, and incremental == full and previews ==
 //       applied score with those overrides
 //   (m) onNewBest on the plugin path reports the same levels as plan.score
+//   (n) repeated components and the offset / clip knobs: a hand-calculated
+//       repeat (travel + 0.5 x travel^2), threshold / literal / negative
+//       offsets by hand (an idle vehicle counts in literal mode, the pool
+//       never does), the global's total shaped once, incremental == a fresh
+//       recompute over a random walk, every preview == the applied score
+//       under FULL_ASSERT and a FULL_ASSERT solve with repeated, shifted
+//       components
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -852,6 +859,238 @@ void verifyPluginCallbackLevels() {
     std::printf("\n");
 }
 
+
+// -------------------------------------------------------------------------
+// (n) Repeated components and offsets. A repeat is a fresh copy of a
+// default component (another defaultConstraints(), the one name kept, its
+// knobs re-stated) appended with addInstances(), as the Python bindings
+// build it from a pick list.
+// -------------------------------------------------------------------------
+ConstraintAssembly copyOf(const std::string& name) {
+    ConstraintAssembly copy = defaultConstraints();
+    copy.only({name});
+    return copy;
+}
+
+// The hand instance with a third vehicle: vehicle 0 (capacity 4) on visits
+// 0 1 drives 200 s and carries 6 (2 over), vehicle 1 on visit 3 drives
+// 400 s, vehicle 2 stays idle, visit 2 waits in the pool with 5 penalty
+// minutes. Raw per unit (3 vehicles, pool): travel [200, 400, 0, 0],
+// capacity [2, 0, 0, 0]; unassigned total 5.
+VehicleRoutePlan repeatInstance() {
+    VehicleRoutePlan plan = buildHandInstance();
+    Vehicle idle = plan.vehicles[1];
+    idle.id = "2";
+    plan.vehicles.push_back(idle);
+    plan.vehicles[0].capacity = 4;
+    plan.vehicles[0].visitIndices = {0, 1};
+    plan.vehicles[1].visitIndices = {3};
+    plan.visits[2].unassignedPenaltyMinutes = 5;
+    plan.rebuildUnassignedPool();
+    return plan;
+}
+
+DecomposedCalculator::LevelScores levelsOf(ConstraintAssembly assembly, VehicleRoutePlan plan) {
+    return levelsWith(std::move(assembly), plan);
+}
+
+// Every shaped flavour at once, on a unit constraint answering piecewise
+// (travel, capacity), one that does not (latency, maxEndTime) and the global.
+ConstraintAssembly repeatedAssembly() {
+    ConstraintAssembly assembly = defaultConstraints();
+    assembly.offset("travelTimeCost", 3000.0).clip("travelTimeCost", false);
+    assembly.offset("unassignedVisitsCost", 1.0);
+    assembly.addInstances(std::move(copyOf("travelTimeCost")
+                                            .weight("travelTimeCost", 0.001)
+                                            .exponent("travelTimeCost", 2.0)
+                                            .offset("travelTimeCost", 2000.0)));
+    assembly.addInstances(std::move(copyOf("vehicleCapacityCost")
+                                            .weight("vehicleCapacityCost", 2.0)
+                                            .offset("vehicleCapacityCost", 1.0)
+                                            .clip("vehicleCapacityCost", false)));
+    assembly.addInstances(std::move(copyOf("unassignedVisitsCost")
+                                            .weight("unassignedVisitsCost", 2.0)
+                                            .offset("unassignedVisitsCost", 3.0)
+                                            .clip("unassignedVisitsCost", false)));
+    assembly.addInstances(std::move(copyOf("maxEndTimeCost").offset("maxEndTimeCost", -2.0)));
+    assembly.addInstances(std::move(copyOf("latencyCost")
+                                            .weight("latencyCost", 0.01)
+                                            .offset("latencyCost", 5000.0)
+                                            .clip("latencyCost", false)));
+    return assembly;
+}
+
+void verifyRepeatsAndOffsets() {
+    std::printf("== (n) Repeated components, offset / clip ==\n");
+    {
+        VehicleRoutePlan plan = repeatInstance();
+        ConstraintAssembly assembly = copyOf("travelTimeCost");
+        assembly.addInstances(std::move(
+                copyOf("travelTimeCost").weight("travelTimeCost", 0.5).exponent("travelTimeCost", 2.0)));
+        DecomposedCalculator calculator;
+        assembly.into(calculator);
+        calculator.resetWorkingSolution(plan);
+        const optimaru::HardSoftScore score = calculator.calculateScore();
+        check(score.hard == 0 && score.soft == -(600.0 + 0.5 * (200.0 * 200.0 + 400.0 * 400.0)),
+              "travel + 0.5 x travel^2 per vehicle: -(600 + 100000) soft");
+        const auto entries = calculator.constraintCosts();
+        check(entries.size() == 2 && entries[0].unitCosts == entries[1].unitCosts
+                      && entries[0].unitCosts == std::vector<double>{200.0, 400.0, 0.0, 0.0}
+                      && entries[1].weight == 0.5 && entries[1].exponent == 2.0
+                      && entries[1].defaultWeight == 1.0,
+              "two instances, the same raw costs, each with its own knobs");
+        check(entries.size() == 2 && entries[0].scoped && entries[1].scoped
+                      && entries[0].units == std::vector<int>{0, 1, 2}
+                      && entries[1].units == std::vector<int>{0, 1, 2},
+              "a per-vehicle component evaluates the three vehicles, not the pool");
+    }
+    {
+        // Threshold at 300 s: only vehicle 1's 400 - 300 = 100 counts.
+        check(levelsOf(copyOf("travelTimeCost").offset("travelTimeCost", 300.0), repeatInstance())
+                              .soft == -100.0,
+              "threshold offset 300: 100");
+        // Literal: (200 - 300) + (400 - 300) + (0 - 300) = -300, the idle
+        // vehicle included and the pool not (it would make -600).
+        check(levelsOf(copyOf("travelTimeCost")
+                               .offset("travelTimeCost", 300.0)
+                               .clip("travelTimeCost", false),
+                       repeatInstance())
+                              .soft == 300.0,
+              "literal offset 300: -100 + 100 - 300 -> +300 soft, the pool not charged");
+        // A negative threshold offset adds 50 to every non-zero vehicle.
+        check(levelsOf(copyOf("travelTimeCost").offset("travelTimeCost", -50.0), repeatInstance())
+                              .soft == -700.0,
+              "threshold offset -50: 250 + 450, the idle vehicle stays 0");
+        check(levelsOf(copyOf("travelTimeCost")
+                               .offset("travelTimeCost", -50.0)
+                               .clip("travelTimeCost", false),
+                       repeatInstance())
+                              .soft == -750.0,
+              "literal offset -50: 250 + 450 + 50");
+        // A hard literal pick rounds per vehicle: (2 - 2.5) -> -1, (0 - 2.5)
+        // -> -3 twice: -7 (a rounded total would give -6).
+        check(levelsOf(copyOf("vehicleCapacityCost")
+                               .offset("vehicleCapacityCost", 2.5)
+                               .clip("vehicleCapacityCost", false),
+                       repeatInstance())
+                              .hard == 7,
+              "capacity literal offset 2.5: llround per vehicle, +7 hard");
+        // The global's total is shaped once: (5 - 2)^2 = 9 medium minutes.
+        const auto global = levelsOf(copyOf("unassignedVisitsCost")
+                                             .offset("unassignedVisitsCost", 2.0)
+                                             .exponent("unassignedVisitsCost", 2.0),
+                                     repeatInstance());
+        check(global.medium == -9.0 && global.hard == 0 && global.soft == 0.0,
+              "unassigned threshold offset 2, exponent 2: -(5 - 2)^2 medium");
+        const auto reward = levelsOf(copyOf("unassignedVisitsCost")
+                                             .offset("unassignedVisitsCost", 8.0)
+                                             .clip("unassignedVisitsCost", false),
+                                     repeatInstance());
+        check(reward.medium == 3.0, "unassigned literal offset 8: 5 - 8 -> +3 medium");
+        // The medium instances add up: 5 + 2 x 5.
+        const auto twice = levelsOf(
+                std::move(copyOf("unassignedVisitsCost")
+                                  .addInstances(std::move(copyOf("unassignedVisitsCost")
+                                                                  .weight("unassignedVisitsCost", 2.0)))),
+                repeatInstance());
+        check(twice.medium == -15.0, "a repeated medium pick: -5 - 10 medium");
+    }
+    using Descriptor = optimaru::SolutionDescriptor<VehicleRoutePlan>;
+    {
+        // Random walk: incremental == a fresh calculator of the same assembly.
+        VehicleRoutePlan plan = buildRandomInstance(30, 4, /*seed=*/17);
+        std::mt19937_64 layout(29);
+        randomizeRoutes(plan, layout, /*poolRate=*/0.15);
+        plan.rebuildUnassignedPool();
+        DecomposedCalculator calculator;
+        repeatedAssembly().into(calculator);
+        optimaru::ScoreDirector<VehicleRoutePlan> director(plan, calculator);
+        std::mt19937_64 rng(43);
+        int mismatches = 0;
+        double drift = 0.0;
+        const int steps = 1500;
+        for (int step = 0; step < steps; ++step) {
+            const int listCount = Descriptor::listCount(plan);
+            const int from = static_cast<int>(rng() % static_cast<std::uint64_t>(listCount));
+            if (Descriptor::listSize(plan, from) == 0) continue;
+            const int position = static_cast<int>(
+                    rng() % static_cast<std::uint64_t>(Descriptor::listSize(plan, from)));
+            const int element = Descriptor::getElement(plan, from, position);
+            director.removeListElement(from, position);
+            const int to = static_cast<int>(rng() % static_cast<std::uint64_t>(listCount));
+            const int insertAt = static_cast<int>(
+                    rng() % static_cast<std::uint64_t>(Descriptor::listSize(plan, to) + 1));
+            director.insertListElement(to, insertAt, element);
+
+            const optimaru::HardSoftScore incremental = director.calculateScore();
+            DecomposedCalculator fresh;
+            repeatedAssembly().into(fresh);
+            fresh.resetWorkingSolution(plan);
+            const optimaru::HardSoftScore full = fresh.calculateScore();
+            drift = std::max(drift, std::fabs(full.soft - incremental.soft));
+            if (!optimaru::scoresAgree(incremental, full)) ++mismatches;
+        }
+        std::printf("    largest soft drift %.3g\n", drift);
+        check(mismatches == 0, std::to_string(steps)
+                                       + " random list moves with repeated, shifted components: "
+                                         "incremental == fresh");
+    }
+    {
+        // Every preview == the applied score, re-checked under FULL_ASSERT.
+        VehicleRoutePlan plan = buildRandomInstance(30, 4, /*seed=*/19);
+        std::mt19937_64 layout(31);
+        randomizeRoutes(plan, layout, /*poolRate=*/0.10);
+        plan.rebuildUnassignedPool();
+        DecomposedCalculator calculator;
+        repeatedAssembly().into(calculator);
+        optimaru::ScoreDirector<VehicleRoutePlan> director(plan, calculator,
+                                                           optimaru::EnvironmentMode::FULL_ASSERT);
+        director.calculateScore();
+        optimaru::testing::PreviewParity parity;
+        bool corrupted = false;
+        try {
+            parity = optimaru::testing::runPreviewParity(director, calculator, /*seed=*/13,
+                                                         /*trials=*/3000);
+        } catch (const optimaru::ScoreCorruptionError& error) {
+            corrupted = true;
+            std::printf("    %s\n", error.what());
+        }
+        std::printf("    %d moves checked, %d previewed, %d declined\n", parity.checked,
+                    parity.previewed, parity.declined);
+        check(!corrupted && parity.allEqual() && parity.declined == 0 && parity.previewed > 1000,
+              "repeated, shifted components: every preview served and equal to the applied "
+              "score (FULL_ASSERT)");
+    }
+    {
+        VehicleRoutePlan plan = buildRandomInstance(25, 4, /*seed=*/9);
+        plan.rebuildUnassignedPool();
+        Solver::Config config;
+        config.spentLimit = std::chrono::seconds(2);
+        config.randomSeed = 3;
+        config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+        config.ruinRecreateUnimprovedStepTrigger = 200;
+        config.ruinRecreatePolishSteps = 100;
+        DecomposedCalculator calculator;
+        repeatedAssembly().into(calculator);
+        bool corrupted = false;
+        try {
+            Solver solver(config);
+            solver.solve(plan, calculator);
+        } catch (const optimaru::ScoreCorruptionError& e) {
+            corrupted = true;
+            std::printf("  ScoreCorruptionError: %s\n", e.what());
+        }
+        check(!corrupted, "2s FULL_ASSERT solve with repeated, shifted components");
+        // plan.score rounds each level on its own (the fractional weights
+        // leave fractions), exactly as the solver's levelScore does.
+        const auto levels = levelsWith(repeatedAssembly(), plan);
+        check(!corrupted && plan.score.hard == levels.hard
+                      && plan.score.medium == optimaru::roundScoreLevel(levels.medium, "medium")
+                      && plan.score.soft == optimaru::roundScoreLevel(levels.soft, "soft"),
+              "the reported levels == a fresh recompute of the same assembly");
+    }
+    std::printf("\n");
+}
 }  // namespace
 
 int main() {
@@ -869,6 +1108,7 @@ int main() {
     verifyMediumLevel();
     verifyMediumIncremental();
     verifyPluginCallbackLevels();
+    verifyRepeatsAndOffsets();
 
     if (failures == 0) {
         std::printf("All vehicle-routing plugin checks PASSED.\n");

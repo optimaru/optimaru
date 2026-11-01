@@ -165,7 +165,8 @@ class Solver:
     def solve_with_constraints(self, schedule: FlightCrewSchedule, constraints: Iterable[Any] | None = ...) -> None:
         """Score the same solve with a caller-chosen constraint set
         (see flight_crew.constraints). The given list replaces the default set; None
-        keeps the default set."""
+        keeps the default set. A name may be picked several times: each pick is its own
+        instance with its own knobs, and the instances add up."""
 
 def list_constraints() -> list[str]:
     """Constraint names scored by this domain (default assembly order, snake_case):
@@ -173,13 +174,18 @@ def list_constraints() -> list[str]:
     employee_unavailability_cost, first_assignment_not_departing_from_home_cost,
     last_assignment_not_arriving_at_home_cost. The same names flight_crew.constraints uses."""
 
-def constraint_costs(schedule: FlightCrewSchedule) -> dict[str, dict[str, Any]]:
-    """Raw per-employee cost of every default constraint, before weight/exponent/level:
-    {name: {"costs": [...], "weight": float, "exponent": float, "hard": bool,
-    "global": bool, "level": "hard" | "medium" | "soft", "reward": bool,
-    "level_flippable": bool, "name": str, "label": str}}. flight_crew.constraints.score()
-    turns it into a score. (A domain with a medium level adds "medium_fold" to every
-    entry; a name held more than once is keyed "<name>#<k>" from its second instance.)"""
+def constraint_costs(
+    schedule: FlightCrewSchedule, constraints: Iterable[Any] | None = ...
+) -> dict[str, dict[str, Any]]:
+    """Raw per-employee cost of every constraint, before weight/exponent/offset/level:
+    {key: {"costs": [...], "weight": float, "exponent": float, "offset": float,
+    "clip": bool, "hard": bool, "global": bool, "level": "hard" | "medium" | "soft",
+    "reward": bool, "level_flippable": bool, "name": str, "label": str,
+    "default_weight": float, "default_level": str}}, one cost per employee (every
+    employee is evaluated, an idle one included). None = the default constraints; a
+    pick list (as for solve) scores exactly those picks, each entry carrying its pick's
+    knobs, the k-th pick of a name keyed "<name>#<k>" from the second on.
+    flight_crew.constraints.score() turns it into a score."""
 
 class ConstraintInfo(NamedTuple):
     """One constraint-catalog row, read off the C++ default assembly."""

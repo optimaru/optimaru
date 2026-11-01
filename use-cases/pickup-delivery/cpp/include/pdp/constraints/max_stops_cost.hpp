@@ -10,13 +10,13 @@ namespace pdp
 // Vehicle::maxStops (a request counts as two). Raw cost per vehicle =
 // max(0, stop count - maxStops) while maxStops > 0; 0 = within the cap, or no
 // cap set (the pool list costs 0).
-struct MaxStopsCost final : PdpUnitConstraint
+struct MaxStopsCost final : detail::PerVehicleConstraint
 {
     static constexpr double kDefaultWeight = 1.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
 
     explicit MaxStopsCost(double weight = kDefaultWeight)
-        : PdpUnitConstraint("maxStopsCost", weight, kDefaultLevel)
+        : PerVehicleConstraint("maxStopsCost", weight, kDefaultLevel)
     {
     }
     double

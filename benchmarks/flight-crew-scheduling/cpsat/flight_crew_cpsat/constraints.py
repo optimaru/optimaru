@@ -3,6 +3,11 @@
 Each plugin subclasses the domain spec of the same name and only adds ``build()``;
 its default level and weight are read from ``flight_crew.constraint_info()`` (the
 C++ components' kDefaultLevel / kDefaultWeight), never restated here.
+
+Every plugin adds one term per employee (the engine's unit), idle ones included,
+so a pick's ``offset`` / ``clip`` shape each employee on its own exactly as the
+engine does (``terms_per_unit``), and a constraint picked several times adds one
+set of terms per pick.
 """
 
 from dataclasses import dataclass, field
@@ -38,27 +43,32 @@ class FlightCrewContext:
 
 
 class RequiredSkillCost(domain.RequiredSkillCost, ConstraintPlugin[FlightCrewContext]):
+    terms_per_unit = True  # one term per employee: its seats without the skill
+
     def build(self, context: FlightCrewContext, objective: ObjectiveBuilder) -> None:
-        for assignment, assignment_data in enumerate(
-            context.problem.flight_assignments
-        ):
-            for employee, employee_data in enumerate(context.problem.employees):
-                missing = int(
-                    assignment_data.required_skill not in employee_data.skills
-                )
-                objective.add(
-                    self.name,
-                    missing * context.x[assignment, employee],
-                    bound=missing,
-                )
+        for employee, employee_data in enumerate(context.problem.employees):
+            missing = [
+                int(assignment_data.required_skill not in employee_data.skills)
+                for assignment_data in context.problem.flight_assignments
+            ]
+            objective.add(
+                self.name,
+                sum(
+                    flag * context.x[assignment, employee]
+                    for assignment, flag in enumerate(missing)
+                ),
+                bound=sum(missing),
+            )
 
 
 class EmployeeUnavailabilityCost(
     domain.EmployeeUnavailabilityCost, ConstraintPlugin[FlightCrewContext]
 ):
+    terms_per_unit = True  # one term per employee: its seats on unavailable days
+
     def build(self, context: FlightCrewContext, objective: ObjectiveBuilder) -> None:
-        for assignment, flight in enumerate(context.flights):
-            covered_days = {
+        covered = [
+            {
                 flight.departure_utc_date_time.date() + timedelta(days=offset)
                 for offset in range(
                     (
@@ -68,75 +78,112 @@ class EmployeeUnavailabilityCost(
                     + 1
                 )
             }
-            for employee, employee_data in enumerate(context.problem.employees):
-                unavailable = int(
-                    covered_days & set(employee_data.unavailable_days) != set()
-                )
-                objective.add(
-                    self.name,
-                    unavailable * context.x[assignment, employee],
-                    bound=unavailable,
-                )
+            for flight in context.flights
+        ]
+        for employee, employee_data in enumerate(context.problem.employees):
+            unavailable = [
+                int(days & set(employee_data.unavailable_days) != set())
+                for days in covered
+            ]
+            objective.add(
+                self.name,
+                sum(
+                    flag * context.x[assignment, employee]
+                    for assignment, flag in enumerate(unavailable)
+                ),
+                bound=sum(unavailable),
+            )
 
 
 class FlightConflictCost(
     domain.FlightConflictCost, ConstraintPlugin[FlightCrewContext]
 ):
+    terms_per_unit = True  # one term per employee: its overlapping pairs
+
     def build(self, context: FlightCrewContext, objective: ObjectiveBuilder) -> None:
-        for left in range(len(context.flights)):
-            for right in range(left + 1, len(context.flights)):
-                overlap = (
-                    context.flights[left].departure_utc_date_time
-                    < context.flights[right].arrival_utc_date_time
-                    and context.flights[right].departure_utc_date_time
-                    < context.flights[left].arrival_utc_date_time
-                )
-                if not overlap:
-                    continue
-                for employee in range(len(context.problem.employees)):
-                    objective.add(
-                        self.name,
-                        context.assigned_to_both(left, right, employee),
-                        bound=1,
-                    )
+        overlapping = [
+            (left, right)
+            for left in range(len(context.flights))
+            for right in range(left + 1, len(context.flights))
+            if context.flights[left].departure_utc_date_time
+            < context.flights[right].arrival_utc_date_time
+            and context.flights[right].departure_utc_date_time
+            < context.flights[left].arrival_utc_date_time
+        ]
+        for employee in range(len(context.problem.employees)):
+            objective.add(
+                self.name,
+                sum(
+                    context.assigned_to_both(left, right, employee)
+                    for left, right in overlapping
+                ),
+                bound=len(overlapping),
+            )
 
 
 class TransferBetweenTwoFlightsCost(
     domain.TransferBetweenTwoFlightsCost, ConstraintPlugin[FlightCrewContext]
 ):
+    terms_per_unit = True  # one term per employee: its broken connections
+
     def build(self, context: FlightCrewContext, objective: ObjectiveBuilder) -> None:
-        for (left, right, _employee), arc in context.transitions.items():
-            invalid = int(
+        broken: dict[int, list[Any]] = {
+            employee: [] for employee in range(len(context.problem.employees))
+        }
+        for (left, right, employee), arc in context.transitions.items():
+            if (
                 context.flights[left].arrival_airport
                 != context.flights[right].departure_airport
-            )
-            objective.add(self.name, invalid * arc, bound=invalid)
+            ):
+                broken[employee].append(arc)
+        # A chronological path over n duties uses at most n - 1 transitions.
+        steps = max(0, len(context.flights) - 1)
+        for arcs in broken.values():
+            objective.add(self.name, sum(arcs), bound=min(len(arcs), steps))
 
 
 class FirstAssignmentNotDepartingFromHomeCost(
     domain.FirstAssignmentNotDepartingFromHomeCost,
     ConstraintPlugin[FlightCrewContext],
 ):
+    terms_per_unit = True  # one term per employee: 0 or 1 (one first duty)
+
     def build(self, context: FlightCrewContext, objective: ObjectiveBuilder) -> None:
-        for (assignment, employee), literal in context.first.items():
-            invalid = int(
-                context.flights[assignment].departure_airport
-                != context.problem.employees[employee].home_airport
-            )
-            objective.add(self.name, invalid * literal, bound=invalid)
+        _per_employee_end(
+            self.name,
+            context,
+            objective,
+            context.first,
+            lambda flight: flight.departure_airport,
+        )
 
 
 class LastAssignmentNotArrivingAtHomeCost(
     domain.LastAssignmentNotArrivingAtHomeCost,
     ConstraintPlugin[FlightCrewContext],
 ):
+    terms_per_unit = True  # one term per employee: 0 or 1 (one last duty)
+
     def build(self, context: FlightCrewContext, objective: ObjectiveBuilder) -> None:
-        for (assignment, employee), literal in context.last.items():
-            invalid = int(
-                context.flights[assignment].arrival_airport
-                != context.problem.employees[employee].home_airport
-            )
-            objective.add(self.name, invalid * literal, bound=invalid)
+        _per_employee_end(
+            self.name,
+            context,
+            objective,
+            context.last,
+            lambda flight: flight.arrival_airport,
+        )
+
+
+def _per_employee_end(name, context, objective, literals, airport_of) -> None:
+    """One term per employee: its first (or last) duty is away from home."""
+    for employee, employee_data in enumerate(context.problem.employees):
+        away = [
+            literal
+            for (assignment, owner), literal in literals.items()
+            if owner == employee
+            and airport_of(context.flights[assignment]) != employee_data.home_airport
+        ]
+        objective.add(name, sum(away), bound=min(1, len(away)))
 
 
 # Plugin order = flight_crew.list_constraints() order.

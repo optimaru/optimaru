@@ -67,8 +67,8 @@ better = solve_request(next_request)
 | `unassigned_visits_cost` | `UnassignedVisitsCost` | medium | 1 | penalty minutes of the visits left unrouted (`unassigned_penalty_minutes`, by default the service time in whole minutes) |
 
 That is the `list_constraints()` order: the thirteen per-vehicle unit constraints
-(each vehicle, plus the unassigned pool as the last unit), then the global
-`unassigned_visits_cost`. `vrp_routing.constraint_info()` reports exactly this
+(each vehicle; `constraint_costs()` lists the unassigned pool as one more cell, always
+0, which no route constraint evaluates), then the global `unassigned_visits_cost`. `vrp_routing.constraint_info()` reports exactly this
 table from the C++ components (`kDefaultLevel` / `kDefaultWeight`). Every
 constraint is flippable (`hard=True` / `hard=False`), none is a reward, and every
 one at a weight above 0 is scored by default (`default_enabled`); the three opt-in
@@ -93,6 +93,28 @@ so a soft total of 10^9 or more stays on soft in both.
 
 **Exponent.** It shapes each unit's raw cost before the weight: per vehicle for
 the unit constraints, on the single total for `unassigned_visits_cost`.
+
+**0.3.0:** every constraint takes two more knobs, `offset` and `clip` (keyword-only), and
+may be picked several times. A raw cost `x` (per vehicle, or the unassigned total) is
+shaped as `sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
+`(x - offset) ** exponent`, sign-preserving (`clip=False`, which lowers the penalty of
+every vehicle below the offset, an idle one included; the unassigned pool is no vehicle
+and is never charged); `offset=0` is the 0.2.0 shaping. Each pick is its own instance with
+its own knobs, and the instances add up:
+
+```python
+from vrp_routing.constraints import TravelTimeCost, UnassignedVisitsCost, VehicleCapacityCost
+
+vrp.Solver(config).solve_with_constraints(plan, [
+    VehicleCapacityCost(),
+    UnassignedVisitsCost(),
+    TravelTimeCost(),                                         # driving seconds
+    TravelTimeCost(weight=1e-9, exponent=3, offset=7200),     # + 1e-9 x (seconds beyond 2 h)^3
+])
+```
+
+`vrp.constraint_costs(plan, picks)` keys the second pick `travel_time_cost#2`; its
+per-vehicle entries list the vehicles they evaluate as `"units"`.
 
 **0.2.0.** Every constraint name ends in `_cost` (C++ struct, header file, registry
 name, Python spec class, module-level default instance and catalog name):
@@ -124,7 +146,8 @@ weight 1 in medium units (it was 10^9 in soft units); `hard=False` on it now dem
 it to soft (it used to be a no-op relabel) and `hard=True` charges 1 hard unit per
 penalty minute (it used to charge 10^9); the `enclosing_circle_radius_cost` default
 instance no longer passes `weight=0` (the C++ default is 0); `get_constraints()` and
-`score()` now refuse a constraint named twice, as the C++ solve path already did;
+`score()` now refuse a constraint named twice, as the C++ solve path already did (0.3.0
+lifts that refusal again, see below);
 `constraint_info()` / `ConstraintInfo` are new.
 Raw costs and the default score are unchanged.
 
@@ -168,7 +191,7 @@ shared prefix sums in `route_sums.hpp` and the enclosing-circle helpers in
 4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
    `description_en` / `description_ko` to `python/vrp_routing/constraints.py` (plus its
    module-level default instance); callers then pick, reweight or flip it:
-   `constraints=get_constraints([..., MyRuleCost(weight=5, hard=True)])`.
+   `constraints=[..., MyRuleCost(weight=5, hard=True)]`.
 
 The CVRP benchmark scores plain distance, so a new cost does not change it.
 

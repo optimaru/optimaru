@@ -1,7 +1,7 @@
 """order_picking.constraints — an API for picking the cost function declaratively.
 
-"Which constraints are on" and the knobs are covered here. Per-constraint values
-are covered by `test_order_picking.py` and the C++ tests.
+"Which constraints are on", the five knobs and repeated picks are covered here.
+Per-constraint values are covered by `test_order_picking.py` and the C++ tests.
 """
 
 import pickle
@@ -130,13 +130,18 @@ def test_empty_constraint_list_is_rejected():
         get_constraints([])
 
 
-def test_naming_a_constraint_twice_is_rejected():
-    """Passing the same constraint twice must not let the later one silently win."""
-    twice = [order_split_by_trolley_cost, OrderSplitByTrolleyCost(weight=10)]
-    with pytest.raises(ValueError, match="picked more than once"):
-        op.solve(build_solution(), time_limit_seconds=0.2, constraints=twice)
-    with pytest.raises(ValueError, match="picked more than once"):
-        get_constraints(twice)
+def test_naming_a_constraint_twice_scores_both_picks():
+    """Since 0.3.0 a constraint may be picked several times: each pick is scored on its own.
+
+    The later pick no longer wins in silence, nor is it an error: both are
+    instances with their own knobs, and they add up."""
+    twice = [TrolleyCapacityCost(), OrderSplitByTrolleyCost(), OrderSplitByTrolleyCost(weight=10)]
+    assert _zero_budget(twice) == (-1, -(1000 + 10) * 3.0)
+    assert get_constraints(twice) == twice
+    assert get_constraints([TrolleyCapacityCost(), TrolleyCapacityCost()]) == [
+        TrolleyCapacityCost(),
+        TrolleyCapacityCost(),
+    ]
 
 
 def test_spec_subclass_must_name_a_constraint():
@@ -262,9 +267,22 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
         hard = None
         exponent = 0.0
 
-    for pick, message in ((Negative(), "weight must be finite and >= 0"), (Flat(), "exponent must be finite and > 0")):
+    class Unbounded:
+        name = "order_split_by_trolley_cost"
+        weight = None
+        hard = None
+        exponent = 1.0
+        offset = float("inf")
+
+    for pick, message in (
+        (Negative(), "weight must be finite and >= 0"),
+        (Flat(), "exponent must be finite and > 0"),
+        (Unbounded(), "offset must be finite, not inf"),
+    ):
         with pytest.raises(ValueError, match=message):
             op.solve(build_solution(), time_limit_seconds=0.1, constraints=[pick])
+    with pytest.raises(ValueError, match="offset must be finite, not nan"):
+        OrderSplitByTrolleyCost(offset=float("nan"))
 
 
 @pytest.mark.parametrize(
@@ -275,6 +293,10 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
         ({"hard": 1}, "hard must be True, False or None, not 1"),
         ({"hard": "x"}, "hard must be True, False or None, not 'x'"),
         ({"exponent": True}, "exponent must be a number, not True"),
+        ({"offset": "5"}, "offset must be a number, not '5'"),
+        ({"offset": False}, "offset must be a number, not False"),
+        ({"clip": 1}, "clip must be True or False, not 1"),
+        ({"clip": "no"}, "clip must be True or False, not 'no'"),
     ],
 )
 def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
@@ -339,7 +361,18 @@ def test_score_reproduces_the_engine_score_exactly():
         [TrolleyCapacityCost(hard=False), *get_constraints()[1:]],
         [*get_constraints()[:3], OrderSplitByTrolleyCost(weight=10, exponent=2.0)],
         [TrolleyCapacityCost(exponent=2.0), DistanceFromPreviousPickTaskCost(hard=True, weight=0.5)],
+        [*get_constraints(), DistanceFromPreviousPickTaskCost(weight=0.5, exponent=2.0)],
+        [
+            TrolleyCapacityCost(),
+            TrolleyCapacityCost(offset=1, clip=False, weight=2),
+            DistanceFromPreviousPickTaskCost(offset=100),
+            DistanceFromPreviousPickTaskCost(offset=-5, clip=False, weight=0.25),
+            DistanceFromLastPickTaskToPathOriginCost(offset=30, clip=False),
+            OrderSplitByTrolleyCost(),
+            OrderSplitByTrolleyCost(weight=200, offset=2, exponent=2),
+        ],
     ],
+    ids=["demoted", "squared-split", "shaped", "repeat", "repeat-and-offsets"],
 )
 def test_score_matches_the_engine_for_arbitrary_specs(specs):
     """Rescoring a solution solved with arbitrary specs under those specs must equal the engine score.
@@ -349,6 +382,9 @@ def test_score_matches_the_engine_for_arbitrary_specs(specs):
     python = score(raw, specs)
     assert python.hard == solution.score.hard
     assert python.soft == pytest.approx(solution.score.soft)
+    picked = op.constraint_costs(solution, specs)
+    assert len(picked) == len(specs)
+    assert score(picked, specs) == python  # the picks' own costs, repeats keyed name#k
 
 
 def test_score_is_additive_over_the_picked_constraints():
@@ -387,3 +423,163 @@ def test_score_rejects_an_unknown_constraint_name():
 
     with pytest.raises(ValueError, match="unknown constraint"):
         score(raw, [Renamed()])
+
+
+# --- 0.3.0: repeated picks and the offset / clip knobs ------------------------------
+
+
+def _hand_solution():
+    """Two orders, three trolleys parked at A1L0: t0 (2 buckets of 10) picks order 0 at
+    A1L2 (6) then order 1 at A1L5 (7); t1 (1 bucket of 10) picks order 0 at A1L5 (15,
+    two buckets); t2 stays empty.
+
+    Raw per trolley: walk [5, 5, 0], walk back [5, 5, 0], orders [2, 1, 0], buckets
+    short [0, 1, 0].
+    """
+    origin = op.WarehouseLocation(0, 0, op.Side.LEFT, 0)
+    trolleys = [op.Trolley(f"t{i}", buckets, 10, origin) for i, buckets in enumerate((2, 1, 1))]
+    tasks = [
+        op.PickTask("a", 0, 6, op.WarehouseLocation(0, 0, op.Side.LEFT, 2)),
+        op.PickTask("b", 1, 7, op.WarehouseLocation(0, 0, op.Side.LEFT, 5)),
+        op.PickTask("c", 0, 15, op.WarehouseLocation(0, 0, op.Side.LEFT, 5)),
+    ]
+    solution = op.OrderPickingSolution([op.Order("o0"), op.Order("o1")], trolleys, tasks)
+    solution.trolleys[0].pick_task_indices = [0, 1]
+    solution.trolleys[1].pick_task_indices = [2]
+    return solution
+
+
+def _zero_budget(picks):
+    """The engine's score of the hand solution under `picks`: a solve with no time keeps it."""
+    solution = op.solve(_hand_solution(), time_limit_seconds=0, random_seed=1, constraints=picks)
+    assert [list(trolley.pick_task_indices) for trolley in solution.trolleys] == [[0, 1], [2], []]
+    return solution.score.hard, solution.score.soft
+
+
+REPEAT = [DistanceFromPreviousPickTaskCost(), DistanceFromPreviousPickTaskCost(weight=0.5, exponent=2)]
+
+
+def test_a_repeated_pick_by_hand():
+    """walk plus 0.5 x walk^2 per trolley: 10 + 0.5 x (25 + 25) = 35."""
+    raw = op.constraint_costs(_hand_solution(), REPEAT)
+    assert list(raw) == ["distance_from_previous_pick_task_cost", "distance_from_previous_pick_task_cost#2"]
+    first, second = raw.values()
+    assert first["costs"] == second["costs"] == [5.0, 5.0, 0.0]
+    assert (first["weight"], first["exponent"], second["weight"], second["exponent"]) == (1.0, 1.0, 0.5, 2.0)
+    assert first["name"] == second["name"] == "distance_from_previous_pick_task_cost"
+    assert "units" not in first  # every trolley is evaluated, an empty one included
+    expected = (0, -35.0)
+    assert score(raw, REPEAT) == expected
+    # The default costs hold the name once; the second pick reads the same raw costs.
+    assert score(op.constraint_costs(_hand_solution()), REPEAT) == expected
+    assert _zero_budget(REPEAT) == expected
+
+
+def test_identical_picks_count_twice():
+    picks = [OrderSplitByTrolleyCost(), OrderSplitByTrolleyCost()]
+    assert score(op.constraint_costs(_hand_solution()), picks) == (0, -6000.0)
+    assert _zero_budget(picks) == (0, -6000.0)
+    assert list(op.constraint_costs(_hand_solution(), picks)) == [
+        "order_split_by_trolley_cost",
+        "order_split_by_trolley_cost#2",
+    ]
+
+
+def test_the_keys_follow_the_pick_order_of_each_name():
+    picks = [
+        OrderSplitByTrolleyCost(weight=1),
+        TrolleyCapacityCost(),
+        OrderSplitByTrolleyCost(weight=2),
+        DistanceFromPreviousPickTaskCost(),
+        OrderSplitByTrolleyCost(weight=3),
+    ]
+    raw = op.constraint_costs(_hand_solution(), picks)
+    assert {key: entry["weight"] for key, entry in raw.items()} == {
+        "trolley_capacity_cost": 1.0,
+        "distance_from_previous_pick_task_cost": 1.0,
+        "order_split_by_trolley_cost": 1.0,
+        "order_split_by_trolley_cost#2": 2.0,
+        "order_split_by_trolley_cost#3": 3.0,
+    }
+    assert [key for key in raw if key.startswith("order")] == [
+        "order_split_by_trolley_cost",
+        "order_split_by_trolley_cost#2",
+        "order_split_by_trolley_cost#3",
+    ]
+    expected = (-1, -(10 + 6 * 3))
+    assert score(raw, picks) == expected
+    assert _zero_budget(picks) == expected
+
+
+@pytest.mark.parametrize(
+    ("pick", "expected"),
+    [
+        # Per trolley; t2 is empty (raw 0 everywhere).
+        (DistanceFromPreviousPickTaskCost(offset=3), (0, -4.0)),
+        (DistanceFromPreviousPickTaskCost(offset=3, clip=False), (0, -1.0)),  # 2 + 2 - 3: t2 is rewarded
+        (DistanceFromPreviousPickTaskCost(offset=10), (0, 0.0)),
+        (DistanceFromPreviousPickTaskCost(offset=4, exponent=2, clip=False), (0, -(1 + 1 - 16))),
+        (OrderSplitByTrolleyCost(offset=-1), (0, -5000.0)),  # a negative offset adds to every non-zero trolley
+        (OrderSplitByTrolleyCost(offset=-1, clip=False), (0, -6000.0)),  # ...or to every trolley
+        (OrderSplitByTrolleyCost(offset=1, exponent=3), (0, -1000.0)),  # (2 - 1)^3 on t0 only
+        (TrolleyCapacityCost(offset=3, clip=False), (8, 0.0)),  # -3 -2 -3: a hard reward below 3
+        (TrolleyCapacityCost(offset=1.5, clip=False), (5, 0.0)),  # -1.5 -> -2, -0.5 -> -1: per trolley
+    ],
+)
+def test_offsets_by_hand_on_both_paths(pick, expected):
+    """threshold sign(x) max(0, |x| - offset)^e and literal (x - offset)^e: Python mirror == engine == hand."""
+    assert score(op.constraint_costs(_hand_solution()), [pick]) == expected
+    raw = op.constraint_costs(_hand_solution(), [pick])
+    entry = next(iter(raw.values()))
+    assert (entry["offset"], entry["clip"]) == (float(pick.offset), pick.clip)
+    assert score(raw, [pick]) == expected
+    assert _zero_budget([pick]) == expected
+
+
+def test_offset_zero_reproduces_the_0_2_0_scores():
+    """offset 0 is the plain shaping in both modes, so every 0.2.0 selection scores the same."""
+    plain = [TrolleyCapacityCost(), OrderSplitByTrolleyCost(), DistanceFromPreviousPickTaskCost(exponent=2)]
+    shifted = [
+        TrolleyCapacityCost(offset=0.0, clip=False),
+        OrderSplitByTrolleyCost(offset=0),
+        DistanceFromPreviousPickTaskCost(exponent=2, offset=0.0, clip=False),
+    ]
+    raw = op.constraint_costs(_hand_solution())
+    assert score(raw, shifted) == score(raw, plain) == (-1, -(3000 + 50))
+    assert _zero_budget(shifted) == _zero_budget(plain) == score(raw, plain)
+    for entry in raw.values():
+        assert (entry["offset"], entry["clip"]) == (0.0, True)
+
+
+@pytest.mark.parametrize(
+    "picks",
+    [
+        [*get_constraints(), DistanceFromPreviousPickTaskCost(weight=0.5, exponent=2)],
+        [
+            TrolleyCapacityCost(),
+            TrolleyCapacityCost(offset=1, clip=False, weight=2),
+            DistanceFromPreviousPickTaskCost(),
+            DistanceFromPreviousPickTaskCost(offset=40, exponent=2, weight=0.01, clip=False),
+            DistanceFromLastPickTaskToPathOriginCost(offset=-3),
+            OrderSplitByTrolleyCost(offset=1),
+            OrderSplitByTrolleyCost(weight=300, offset=-2, clip=False),
+        ],
+    ],
+    ids=["repeat", "repeat-and-offsets"],
+)
+def test_full_assert_solves_with_repeats_and_offsets(picks):
+    """FULL_ASSERT re-checks the incremental score against a full recompute after every move."""
+    solution = build_solution()
+    config = op.SolverConfig()
+    config.full_assert = True
+    config.random_seed = 3
+    config.parallel_solver_count = 1
+    config.step_count_limit = 3000
+    config.spent_limit_seconds = 30
+    op.Solver(config).solve_with_constraints(solution, picks)
+    raw = op.constraint_costs(solution, picks)
+    assert len(raw) == len(picks)
+    python = score(raw, picks)
+    assert python.hard == solution.score.hard
+    assert python.soft == pytest.approx(solution.score.soft)
+    assert score(op.constraint_costs(solution), picks) == python  # the default costs score the repeats too

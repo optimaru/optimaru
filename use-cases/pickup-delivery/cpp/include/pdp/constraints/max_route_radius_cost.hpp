@@ -11,13 +11,13 @@ namespace pdp
 // Vehicle::maxRouteRadiusMeters. Raw cost per vehicle = max(0, farthest
 // distance - limit) meters while the limit > 0; 0 = every stop within the
 // radius, or no limit set (the pool list costs 0).
-struct MaxRouteRadiusCost final : PdpUnitConstraint
+struct MaxRouteRadiusCost final : detail::PerVehicleConstraint
 {
     static constexpr double kDefaultWeight = 1.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
 
     explicit MaxRouteRadiusCost(double weight = kDefaultWeight)
-        : PdpUnitConstraint("maxRouteRadiusCost", weight, kDefaultLevel)
+        : PerVehicleConstraint("maxRouteRadiusCost", weight, kDefaultLevel)
     {
     }
     double

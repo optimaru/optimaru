@@ -1,7 +1,7 @@
 """vrp_routing.constraints — an API for picking the cost function declaratively.
 
-"Which constraints are on", the catalog (`constraint_info()`), the three knobs and
-the medium level are covered here. Per-constraint values are covered by
+"Which constraints are on", the catalog (`constraint_info()`), the five knobs, repeated
+picks and the medium level are covered here. Per-constraint values are covered by
 `test_routing.py` and the C++ tests (one hand-calculated positive and zero case each).
 """
 
@@ -17,15 +17,19 @@ from vrp_routing.constraints import (
     Constraint,
     EnclosingCircleRadiusCost,
     LatencyCost,
+    MaxEndTimeCost,
+    MaxStopsCost,
     RouteDurationCost,
     TravelTimeCost,
     UnassignedVisitsCost,
+    VehicleCapacityCost,
     get_constraints,
     score,
     travel_time_cost,
     unassigned_visits_cost,
     vehicle_capacity_cost,
 )
+from vrp_routing.models import RoutingInput, VehicleModel, VisitModel, to_plan
 
 MEDIUM_UNIT = 1_000_000_000  # the domain's medium fold (into soft)
 
@@ -464,12 +468,18 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     flat = SimpleNamespace(
         name="travel_time_cost", weight=None, hard=None, exponent=0.0
     )
+    unbounded = SimpleNamespace(
+        name="travel_time_cost", weight=None, hard=None, exponent=1.0, offset=float("inf")
+    )
     for pick, message in (
         (negative, "weight must be finite and >= 0"),
         (flat, "exponent must be finite and > 0"),
+        (unbounded, "offset must be finite, not inf"),
     ):
         with pytest.raises(ValueError, match=message):
             solve([pick])
+    with pytest.raises(ValueError, match="offset must be finite, not nan"):
+        TravelTimeCost(offset=float("nan"))
 
 
 @pytest.mark.parametrize(
@@ -479,6 +489,10 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
         ({"hard": 1}, "hard must be True, False or None, not 1"),
         ({"hard": "x"}, "hard must be True, False or None, not 'x'"),
         ({"exponent": True}, "exponent must be a number, not True"),
+        ({"offset": "5"}, "offset must be a number, not '5'"),
+        ({"offset": False}, "offset must be a number, not False"),
+        ({"clip": 1}, "clip must be True or False, not 1"),
+        ({"clip": "no"}, "clip must be True or False, not 'no'"),
     ],
 )
 def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
@@ -600,3 +614,197 @@ def test_a_worker_thread_that_cannot_start_raises_instead_of_aborting():
         assert time.monotonic() - started < 10.0
     finally:
         _core._fail_worker_thread_start(-1)
+
+
+# --- 0.3.0: repeated picks and the offset / clip knobs ------------------------------
+
+# Everything on a line, the position in seconds of driving from the depots.
+HAND_PLACES = {"v": 0, "w": 0, "x": 0, "a": 100, "b": 300, "c": 600, "d": 900, "e": 1000}
+
+
+def _hand_plan():
+    """Vehicle v (capacity 1) on a, b; w on c; x idle; d and e in the pool (5 and 3 minutes).
+
+    Raw per vehicle (v, w, x; the pool's cell is always 0): travel [300, 600, 0],
+    capacity [1, 0, 0]; unassigned total 8 penalty minutes.
+    """
+    order = list(HAND_PLACES)
+    routes = {"v": ["a", "b"], "w": ["c"], "x": []}
+    model = RoutingInput(
+        vehicles=[
+            VehicleModel(id=name, capacity=1 if name == "v" else 5, depot=(37.5, 127.0), initial_route=route)
+            for name, route in routes.items()
+        ],
+        visits=[
+            VisitModel(id=name, location=(37.5, 127.0), unassigned_penalty_minutes={"d": 5, "e": 3}.get(name, -1))
+            for name in "abcde"
+        ],
+        driving_seconds=[[abs(HAND_PLACES[p] - HAND_PLACES[q]) for q in order] for p in order],
+    )
+    plan = to_plan(model)
+    plan.rebuild_unassigned_pool()
+    return plan
+
+
+def _zero_budget(picks):
+    """The engine's score of the hand plan under `picks`: a solve with no time keeps it as it is."""
+    plan = _hand_plan()
+    cfg = vrp.SolverConfig()
+    cfg.spent_limit_seconds = 0
+    cfg.random_seed = 1
+    vrp.Solver(cfg).solve_with_constraints(plan, picks)
+    assert [list(vehicle.visit_indices) for vehicle in plan.vehicles] == [[0, 1], [2], []]
+    assert list(plan.unassigned_visit_indices) == [3, 4]
+    return _engine(plan.score)
+
+
+REPEAT = [TravelTimeCost(), TravelTimeCost(weight=0.5, exponent=2)]
+
+
+def test_a_repeated_pick_by_hand():
+    """travel plus 0.5 x travel^2 per vehicle: 900 + 0.5 x (300^2 + 600^2) = 225900."""
+    raw = vrp.constraint_costs(_hand_plan(), REPEAT)
+    assert list(raw) == ["travel_time_cost", "travel_time_cost#2"]
+    first, second = raw.values()
+    assert first["costs"] == second["costs"] == [300.0, 600.0, 0.0, 0.0]
+    assert (first["weight"], first["exponent"], second["weight"], second["exponent"]) == (1.0, 1.0, 0.5, 2.0)
+    assert first["name"] == second["name"] == "travel_time_cost"
+    assert second["default_weight"] == 1.0
+    expected = (0, -(900 + 0.5 * (300**2 + 600**2)))
+    assert expected == (0, -225900.0)
+    assert score(raw, REPEAT) == expected
+    # The default costs hold the name once; the second pick reads the same raw costs.
+    assert score(vrp.constraint_costs(_hand_plan()), REPEAT) == expected
+    assert _zero_budget(REPEAT) == expected
+
+
+def test_identical_picks_count_twice():
+    picks = [TravelTimeCost(), TravelTimeCost()]
+    assert score(vrp.constraint_costs(_hand_plan()), picks) == (0, -1800.0)
+    assert _zero_budget(picks) == (0, -1800.0)
+    assert list(vrp.constraint_costs(_hand_plan(), picks)) == ["travel_time_cost", "travel_time_cost#2"]
+
+
+def test_the_keys_follow_the_pick_order_of_each_name():
+    picks = [
+        TravelTimeCost(weight=1),
+        VehicleCapacityCost(),
+        TravelTimeCost(weight=2),
+        UnassignedVisitsCost(),
+        TravelTimeCost(weight=3),
+    ]
+    raw = vrp.constraint_costs(_hand_plan(), picks)
+    assert {key: entry["weight"] for key, entry in raw.items()} == {
+        "vehicle_capacity_cost": 1.0,
+        "travel_time_cost": 1.0,
+        "travel_time_cost#2": 2.0,
+        "travel_time_cost#3": 3.0,
+        "unassigned_visits_cost": 1.0,
+    }
+    assert [key for key in raw if key.startswith("travel")] == [
+        "travel_time_cost",
+        "travel_time_cost#2",
+        "travel_time_cost#3",
+    ]
+    expected = (-1, -8 * MEDIUM_UNIT - 6 * 900)
+    assert score(raw, picks) == expected
+    assert _zero_budget(picks) == expected
+
+
+def test_a_repeated_medium_pick_adds_up():
+    picks = [UnassignedVisitsCost(), UnassignedVisitsCost(weight=2)]
+    assert score(vrp.constraint_costs(_hand_plan()), picks) == (0, -24 * MEDIUM_UNIT)
+    assert _zero_budget(picks) == (0, -24 * MEDIUM_UNIT)
+
+
+@pytest.mark.parametrize(
+    ("pick", "expected"),
+    [
+        # Per vehicle; x is idle (raw 0) and the pool is no vehicle.
+        (TravelTimeCost(offset=400), (0, -200.0)),
+        (TravelTimeCost(offset=400, clip=False), (0, 300.0)),  # -100 + 200 - 400: x is rewarded too
+        (TravelTimeCost(offset=700), (0, 0.0)),
+        (TravelTimeCost(offset=-50), (0, -1000.0)),  # a negative offset adds to every non-zero vehicle
+        (TravelTimeCost(offset=-50, clip=False), (0, -1050.0)),  # ...or to every vehicle
+        (TravelTimeCost(offset=500, exponent=2), (0, -(100.0**2))),
+        (TravelTimeCost(offset=400, exponent=3, clip=False), (0, -(-(100**3) + 200**3 - 400**3))),
+        (VehicleCapacityCost(offset=3, clip=False), (8, 0.0)),  # (1 - 3) + (0 - 3) x 2: a hard reward below 3
+        (VehicleCapacityCost(offset=1.5, clip=False), (5, 0.0)),  # -0.5 -> -1, -1.5 -> -2 twice: per vehicle
+        # The global's total (8 minutes) is shaped once: (8 - 2)^2, not (5 - 2)^2 + (3 - 2)^2.
+        (UnassignedVisitsCost(offset=2, exponent=2), (0, -36 * MEDIUM_UNIT)),
+        (UnassignedVisitsCost(offset=10, clip=False), (0, 2 * MEDIUM_UNIT)),
+        (UnassignedVisitsCost(offset=10, clip=False, hard=True), (2, 0.0)),
+    ],
+)
+def test_offsets_by_hand_on_both_paths(pick, expected):
+    """threshold sign(x) max(0, |x| - offset)^e and literal (x - offset)^e: Python mirror == engine == hand."""
+    assert score(vrp.constraint_costs(_hand_plan()), [pick]) == expected
+    raw = vrp.constraint_costs(_hand_plan(), [pick])
+    entry = next(iter(raw.values()))
+    assert (entry["offset"], entry["clip"]) == (float(pick.offset), pick.clip)
+    assert score(raw, [pick]) == expected
+    assert _zero_budget([pick]) == expected
+
+
+def test_the_route_constraints_evaluate_the_vehicles_and_not_the_pool():
+    """Every per-vehicle entry lists the vehicles as its "units"; the literal offset charges
+    exactly those (3 x 2 hard on an all-zero max_stops_cost), never the pool's cell."""
+    raw = vrp.constraint_costs(_hand_plan())
+    for name, entry in raw.items():
+        if entry["global"]:
+            assert "units" not in entry
+        else:
+            assert entry["units"] == [0, 1, 2], name
+            assert len(entry["costs"]) == 4 and entry["costs"][3] == 0.0, name
+    pick = MaxStopsCost(offset=2, clip=False)
+    assert raw["max_stops_cost"]["costs"] == [0.0, 0.0, 0.0, 0.0]
+    assert score(raw, [pick]) == (6, 0.0)
+    assert _zero_budget([pick]) == (6, 0.0)
+
+
+def test_offset_zero_reproduces_the_0_2_0_scores():
+    """offset 0 is the plain shaping in both modes, so every 0.2.0 selection scores the same."""
+    plain = [VehicleCapacityCost(), UnassignedVisitsCost(), TravelTimeCost(exponent=2)]
+    shifted = [
+        VehicleCapacityCost(offset=0.0, clip=False),
+        UnassignedVisitsCost(offset=0),
+        TravelTimeCost(exponent=2, offset=0.0, clip=False),
+    ]
+    raw = vrp.constraint_costs(_hand_plan())
+    assert score(raw, shifted) == score(raw, plain) == (-1, -8 * MEDIUM_UNIT - (300**2 + 600**2))
+    assert _zero_budget(shifted) == _zero_budget(plain) == score(raw, plain)
+    for entry in raw.values():
+        assert (entry["offset"], entry["clip"]) == (0.0, True)
+
+
+@pytest.mark.parametrize(
+    "picks",
+    [
+        [VehicleCapacityCost(), UnassignedVisitsCost(), TravelTimeCost(), TravelTimeCost(exponent=2, offset=1000)],
+        [
+            VehicleCapacityCost(),
+            VehicleCapacityCost(offset=1, clip=False, weight=2),
+            MaxEndTimeCost(),
+            UnassignedVisitsCost(offset=5),
+            UnassignedVisitsCost(weight=2, offset=20, clip=False),
+            TravelTimeCost(offset=-100),
+            LatencyCost(weight=1, offset=3000, clip=False),
+        ],
+    ],
+    ids=["repeat", "repeat-and-offsets"],
+)
+def test_score_matches_the_engine_for_repeated_and_shifted_picks(picks):
+    """A real solve under repeated, shifted picks: the Python re-pricing of its costs is its score."""
+    plan = solve(picks)
+    raw = vrp.constraint_costs(plan, picks)
+    assert len(raw) == len(picks)
+    python = score(raw, picks)
+    assert python == _engine(plan.score)
+    assert score(vrp.constraint_costs(plan), picks) == python  # the default costs score the repeats too
+
+
+def test_naming_a_constraint_twice_scores_both_picks():
+    """Since 0.3.0 a constraint may be picked several times: each pick is scored on its own."""
+    assert get_constraints([TravelTimeCost(), TravelTimeCost()]) == [TravelTimeCost(), TravelTimeCost()]
+    picks = [VehicleCapacityCost(), TravelTimeCost(weight=10), TravelTimeCost()]
+    assert _zero_budget(picks) == (-1, -(10 + 1) * 900.0)

@@ -10,13 +10,13 @@ namespace pdp
 // the stops wait for their vehicle. Raw cost per vehicle = the sum over its
 // stops of max(0, arrival - departureTime) in seconds; 0 for an unused
 // vehicle (and for the pool list).
-struct LatencyCost final : PdpUnitConstraint
+struct LatencyCost final : detail::PerVehicleConstraint
 {
     static constexpr double kDefaultWeight = 0.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
 
     explicit LatencyCost(double weight = kDefaultWeight)
-        : PdpUnitConstraint("latencyCost", weight, kDefaultLevel)
+        : PerVehicleConstraint("latencyCost", weight, kDefaultLevel)
     {
     }
     double

@@ -2,35 +2,54 @@
 
 The default path (`op.solve(solution)`) enables all four constraints at their default
 weights. This module is the alternative path next to it: pick constraints, change weights,
-flip hard/soft, and pass the list to `solve(solution, constraints=...)`.
+flip hard/soft, shape the cost, and pass the list to `solve(solution, constraints=...)`.
 
-The shortest route is :func:`get_constraints`. It returns the default list, so
-a "default with a small tweak" declaration fits on one line::
+A constraint list reads one way: one class call per constraint::
 
     import order_picking as op
     from order_picking.constraints import (
-        OrderSplitByTrolleyCost, get_constraints, trolley_capacity_cost,
+        DistanceFromLastPickTaskToPathOriginCost, DistanceFromPreviousPickTaskCost,
+        OrderSplitByTrolleyCost, TrolleyCapacityCost, get_constraints,
     )
 
-    op.solve(solution, constraints=get_constraints())           # defaults as-is
-    op.solve(solution, constraints=get_constraints([            # picked
-        trolley_capacity_cost, OrderSplitByTrolleyCost(weight=100),
-    ]))
+    op.solve(solution, constraints=get_constraints())           # the defaults as-is
+    op.solve(solution, constraints=[                            # picked
+        TrolleyCapacityCost(), OrderSplitByTrolleyCost(weight=100),
+    ])
 
-Default instances (`trolley_capacity_cost`, `distance_from_previous_pick_task_cost`,
-`distance_from_last_pick_task_to_path_origin_cost`, `order_split_by_trolley_cost`) live at
-module level, so you can also pass a list of just a few. Only listed constraints are
-scored — leave one out and its term disappears from the score.
+Only listed constraints are scored — leave one out and its term disappears from the
+score. (The module also carries ready-made default instances: ``trolley_capacity_cost``
+is ``TrolleyCapacityCost()``, and so on.)
 
-Every spec takes ``(weight=None, hard=None, exponent=1.0)``:
+Every spec takes five knobs:
 
 - ``weight``   linear multiplier on the constraint cost. ``None`` = the component
-               default (order_split_by_trolley_cost 1000, the other three 1);
+               default (OrderSplitByTrolleyCost 1000, the other three 1);
                ``op.constraint_info()`` reports the defaults.
 - ``hard``     ``True`` = hard, ``False`` = soft, ``None`` = the default level.
 - ``exponent`` sign-preserving power shaping per trolley: ``weight * sign(c) *
                |c| ** exponent``. 2.0 = squared, so concentrated violations grow
                much costlier.
+- ``offset``   (keyword) shifts that shaping per trolley; 0.0 = none.
+- ``clip``     (keyword) ``True`` (the default) counts only what lies beyond the
+               offset, ``max(0, c - offset) ** exponent``; ``False`` shapes
+               ``c - offset`` as it is, so a trolley below the offset — an empty
+               one (cost 0) included — lowers the penalty.
+
+The same constraint may be picked several times; each pick is scored on its own with
+its own knobs and the picks add up. The walk plus the square of every meter beyond
+100 m per trolley::
+
+    op.solve(solution, constraints=[
+        TrolleyCapacityCost(),
+        DistanceFromPreviousPickTaskCost(),
+        DistanceFromPreviousPickTaskCost(weight=0.1, exponent=2, offset=100),
+        DistanceFromLastPickTaskToPathOriginCost(),
+        OrderSplitByTrolleyCost(),
+    ])
+
+``op.constraint_costs(solution, picks)`` keys the second pick
+``"distance_from_previous_pick_task_cost#2"``.
 
 Names (`name`) are the C++ component names in snake_case
 (``TrolleyCapacityCost`` -> ``trolley_capacity_cost``). The core derives them
@@ -148,7 +167,7 @@ class OrderSplitByTrolleyCost(Constraint):
     )
 
 
-#: Instances at the default weights (weight=None). Reference them directly when picking.
+#: Ready-made default instances (``trolley_capacity_cost`` is ``TrolleyCapacityCost()``).
 trolley_capacity_cost = TrolleyCapacityCost()
 distance_from_previous_pick_task_cost = DistanceFromPreviousPickTaskCost()
 distance_from_last_pick_task_to_path_origin_cost = DistanceFromLastPickTaskToPathOriginCost()
@@ -167,13 +186,14 @@ def get_constraints(constraints: list[Constraint] | None = None) -> list[Constra
     """Return the cost function. Without arguments, all four default constraints.
 
     When `constraints` is given, that list is used as-is — only the listed
-    constraints are scored. To change just one default, mix in the default instances::
+    constraints are scored::
 
-        get_constraints([trolley_capacity_cost, OrderSplitByTrolleyCost(weight=100)])
+        get_constraints([TrolleyCapacityCost(), OrderSplitByTrolleyCost(weight=100)])
 
     Same contract as the C++ applyConstraints: an empty list is an error (a
-    filter that came out empty must not silently flip to "score everything"),
-    and so is naming the same constraint twice.
+    filter that came out empty must not silently flip to "score everything");
+    a constraint named several times is scored once per pick, each with its
+    own knobs.
     """
     return select(constraints, _DEFAULTS)
 
@@ -182,17 +202,19 @@ def score(costs: dict, constraints: list[Constraint] | None = None) -> Score:
     """Apply specs to raw constraint costs and produce a score — pure Python.
 
     ``costs`` is what `op.constraint_costs(solution)` returns: per constraint, the
-    **raw** cost of each trolley (before weight, exponent and level rounding).
-    Fetch it once and rescore with different weights without re-solving::
+    **raw** cost of each trolley (before weight, exponent, offset and level
+    rounding). Fetch it once and rescore with different weights without re-solving::
 
         raw = op.constraint_costs(solution)
         score(raw)                     # default set
-        score(raw, picked)             # picked list
+        score(raw, [TrolleyCapacityCost(), OrderSplitByTrolleyCost(weight=100)])
+        score(raw, [OrderSplitByTrolleyCost(), OrderSplitByTrolleyCost(weight=500, offset=2)])
 
     No solver and no search are involved. The arithmetic matches the engine —
-    each trolley contributes ``weight * shape(cost, exponent)`` and hard
-    contributions are **rounded per unit** before summing (the same order as the
-    engine's applyRaw; rounding the total afterwards gives different values).
+    each trolley contributes ``weight * shape(cost, exponent, offset, clip)`` and
+    hard contributions are **rounded per unit** before summing (the same order as
+    the engine's applyRaw; rounding the total afterwards gives different values).
+    A second pick of a constraint reads the same raw costs with its own knobs.
 
     When ``constraints`` is given, only those constraints are scored — the same
     semantics as `get_constraints`. Unknown names raise ValueError.

@@ -1,11 +1,17 @@
+from itertools import permutations, product
+
 import pdp_routing as domain
 import pytest
+from ortools.sat.python import cp_model
 from pdp_routing.constraints import (
+    MaxEndTimeCost,
+    MaxStopsCost,
     PairedRequestCost,
     PickupBeforeDropoffCost,
     SameVehicleCost,
     TravelTimeCost,
     UnassignedRequestsCost,
+    VehicleCapacityCost,
     paired_request_cost,
     pickup_before_dropoff_cost,
     same_vehicle_cost,
@@ -24,6 +30,7 @@ from pdp_routing.models import (
     solve_request as solve_metaheuristic_request,
 )
 from pickup_delivery_cpsat import catalog, solve_request
+from pickup_delivery_cpsat.constraints import REGISTRY
 
 # Engine constraints the CP-SAT reference has no plugin for.
 ENGINE_ONLY = {
@@ -77,7 +84,13 @@ def test_cpsat_defaults_are_the_engine_defaults() -> None:
         assert (
             entry["kind"] == "either"
         )  # every pickup-delivery constraint is flippable
-        assert entry["params"] == {"weight": None, "hard": None, "exponent": 1.0}
+        assert entry["params"] == {
+            "weight": None,
+            "hard": None,
+            "exponent": 1.0,
+            "offset": 0.0,
+            "clip": True,
+        }
     assert engine["unassigned_requests_cost"].default_level == "medium"
     assert (
         next(e for e in entries if e["name"] == "unassigned_requests_cost")[
@@ -266,3 +279,180 @@ def test_structural_constraints_accept_their_engine_default(spec_class) -> None:
     for pick in (spec_class(), spec_class(hard=True), spec_class(weight=1000)):
         solved = solve_request(_two_requests(timelimit=1), constraints=[pick])
         assert _levels(solved.score)["hard"] == 0
+
+
+# --- 0.3.0: repeated picks and offset / clip ---------------------------------------
+
+# Everything on a line, the position in seconds of driving from the depots.
+LINE = {"V1": 0, "V2": 0, "P0": 100, "D0": 300, "P1": 200, "D1": 500}
+
+
+def _line_request(timelimit: float = 5) -> PdpRequest:
+    """Two vehicles (V1 carries 3), two requests: r0 (demand 4, its dropoff due at 250 s)
+    and r1 (demand 2, 300 s of service each, 10 penalty minutes when left out)."""
+    order = list(LINE)
+    return PdpRequest(
+        timelimit=timelimit,
+        model_input=PdpInput(
+            vehicles=[
+                VehicleModel(id="V1", capacity=3, home=(37.0, 127.0)),
+                VehicleModel(id="V2", capacity=10, home=(37.0, 127.0)),
+            ],
+            deliveries=[
+                DeliveryModel(
+                    id="r0",
+                    demand=4,
+                    pickup=StopModel(
+                        id="P0", location=(37.0, 127.0), service_duration=60
+                    ),
+                    dropoff=StopModel(
+                        id="D0",
+                        location=(37.0, 127.0),
+                        service_duration=60,
+                        max_end_time=250,
+                    ),
+                ),
+                DeliveryModel(
+                    id="r1",
+                    demand=2,
+                    pickup=StopModel(
+                        id="P1", location=(37.0, 127.0), service_duration=300
+                    ),
+                    dropoff=StopModel(
+                        id="D1", location=(37.0, 127.0), service_duration=300
+                    ),
+                ),
+            ],
+            driving_seconds=[[abs(LINE[a] - LINE[b]) for b in order] for a in order],
+        ),
+    )
+
+
+def _route_sets():
+    """Every solution of the line instance: each request on V1, V2 or none, the stops of
+    a vehicle with both requests in each of the six pickup-first interleavings."""
+    pairs = {"r0": ("P0", "D0"), "r1": ("P1", "D1")}
+    for where in product((None, "V1", "V2"), repeat=2):
+        routes = {"V1": [], "V2": []}
+        for request, vehicle in zip(pairs, where):
+            if vehicle:
+                routes[vehicle].append(request)
+        choices = []
+        for vehicle, requests in routes.items():
+            stops = [stop for request in requests for stop in pairs[request]]
+            orders = {
+                order
+                for order in permutations(stops)
+                if all(
+                    order.index(pairs[r][0]) < order.index(pairs[r][1])
+                    for r in requests
+                )
+            }
+            choices.append([(vehicle, order) for order in sorted(orders)])
+        for combination in product(*choices):
+            yield dict(combination)
+
+
+def _engine_levels(request, routes, selection):
+    """The engine's (hard, folded soft) for `routes` under `selection`, and the plan's costs."""
+    plan = to_plan(request.model_input)
+    node_by_id = {node.id: i for i, node in enumerate(plan.nodes)}
+    for vehicle in plan.vehicles:
+        vehicle.node_indices = [node_by_id[stop_id] for stop_id in routes[vehicle.id]]
+    plan.rebuild_unassigned_pool()
+    engine = score(domain.constraint_costs(plan, selection), selection)
+    return (engine.hard, engine.soft), domain.constraint_costs(plan)
+
+
+SELECTIONS = {
+    "repeat": [
+        VehicleCapacityCost(),
+        TravelTimeCost(),
+        TravelTimeCost(weight=2, offset=100),
+    ],
+    "repeat-literal": [
+        UnassignedRequestsCost(),
+        UnassignedRequestsCost(weight=2, offset=3, clip=False),
+        TravelTimeCost(offset=150, clip=False),
+        TravelTimeCost(weight=3, offset=-20),
+        MaxStopsCost(offset=1, clip=False),  # 0 on both vehicles: -1 each, not the pool
+    ],
+    "hard-offsets": [
+        VehicleCapacityCost(offset=1),
+        VehicleCapacityCost(weight=2, offset=2, clip=False),
+        MaxEndTimeCost(offset=1, clip=False),
+        PairedRequestCost(offset=1, clip=False),
+        UnassignedRequestsCost(),
+    ],
+    "identical-twice": [TravelTimeCost(), TravelTimeCost(), UnassignedRequestsCost()],
+}
+
+
+@pytest.mark.parametrize("selection", list(SELECTIONS.values()), ids=list(SELECTIONS))
+def test_the_cpsat_terms_equal_the_engine_on_every_solution(selection) -> None:
+    """Pin each of the 19 solutions: the CP-SAT objective's levels are the engine's score
+    of those routes under the same repeated / shifted picks, exactly."""
+    request = _line_request(timelimit=5)
+    for routes in _route_sets():
+        solved = solve_request(request, constraints=selection, _fixed_routes=routes)
+        levels = _levels(solved.score)
+        engine, costs = _engine_levels(request, routes, selection)
+        assert (
+            levels["hard"],
+            levels["soft"] + levels["medium"] * MEDIUM_UNIT,
+        ) == engine, routes
+        # Re-pricing the default costs (each name once) gives the same per instance key.
+        objective = REGISTRY.objective(
+            cp_model.CpModel(), ("hard", "medium", "soft"), selection
+        )
+        assert objective.score_costs(costs) == levels, routes
+
+
+@pytest.mark.parametrize("selection", list(SELECTIONS.values()), ids=list(SELECTIONS))
+def test_repeated_and_shifted_picks_reach_the_brute_force_optimum(selection) -> None:
+    request = _line_request()
+    best = max(
+        _engine_levels(request, routes, selection)[0] for routes in _route_sets()
+    )
+    solved = solve_request(request, constraints=selection)
+    levels = _levels(solved.score)
+    assert (levels["hard"], levels["soft"] + levels["medium"] * MEDIUM_UNIT) == best
+
+
+def test_mapping_selections_repeat_and_shift_like_specs() -> None:
+    """The server's {name, weight, offset, clip} dicts pick the same instances as specs."""
+    specs = [
+        UnassignedRequestsCost(),
+        TravelTimeCost(),
+        TravelTimeCost(weight=3, offset=100, clip=False),
+    ]
+    dicts = [
+        {"name": "unassigned_requests_cost"},
+        {"name": "travel_time_cost"},
+        {"name": "travel_time_cost", "weight": 3, "offset": 100, "clip": False},
+    ]
+    assert solve_request(_line_request(), constraints=dicts) == solve_request(
+        _line_request(), constraints=specs
+    )
+
+
+def test_a_fractional_offset_is_refused_by_cpsat() -> None:
+    with pytest.raises(ValueError, match="offset must be an integer for CP-SAT"):
+        solve_request(
+            _line_request(timelimit=1), constraints=[TravelTimeCost(offset=0.5)]
+        )
+
+
+def test_a_repeated_structural_pick_refuses_per_instance() -> None:
+    """Each instance of a structural rule is checked on its own: the second pick's
+    hard=False is refused even though the first one is the default."""
+    with pytest.raises(ValueError, match="enforces it structurally"):
+        solve_request(
+            _two_requests(timelimit=1),
+            constraints=[PairedRequestCost(), PairedRequestCost(hard=False)],
+        )
+    solved = solve_request(
+        _two_requests(timelimit=1),
+        constraints=[PairedRequestCost(), PairedRequestCost()],
+    )
+    assert _levels(solved.score)["hard"] == 0

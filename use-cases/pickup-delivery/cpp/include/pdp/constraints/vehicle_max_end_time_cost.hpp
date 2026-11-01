@@ -11,13 +11,13 @@ namespace pdp
 // Vehicle::maxEndTime. Raw cost per vehicle = max(0, endTime - maxEndTime)
 // seconds while maxEndTime > 0; 0 = back in time, or no limit set (the pool
 // list costs 0). A stop's own time window is maxEndTimeCost.
-struct VehicleMaxEndTimeCost final : PdpUnitConstraint
+struct VehicleMaxEndTimeCost final : detail::PerVehicleConstraint
 {
     static constexpr double kDefaultWeight = 1.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
 
     explicit VehicleMaxEndTimeCost(double weight = kDefaultWeight)
-        : PdpUnitConstraint("vehicleMaxEndTimeCost", weight, kDefaultLevel)
+        : PerVehicleConstraint("vehicleMaxEndTimeCost", weight, kDefaultLevel)
     {
     }
     double
