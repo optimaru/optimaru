@@ -33,7 +33,8 @@ explained notebook, and the others follow the same outline:
    `constraint_info()` lists the defaults. The notebooks write each pick as a class call, such as
    `VehicleCapacityCost()` or `TravelTimeCost(weight=10)`; the ready-made `vehicle_capacity_cost` is the
    same as `VehicleCapacityCost()`. [`vehicle-routing.ipynb`](vehicle-routing.ipynb) shows `x² + x³`
-   built from two picks, and a threshold offset next to the literal formula.
+   built from two picks, and a threshold offset next to the literal formula, which stays off hard
+   rules.
 6. Try a what-if, then restart the search from an existing solution.
 
 ## Notebooks

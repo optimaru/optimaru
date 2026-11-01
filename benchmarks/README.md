@@ -49,7 +49,10 @@ keyed `name`, `name#2`, ... as in the engine. CP-SAT accepts only `exponent=1`,
 integral weights and integral offsets, and some constraints are structural in a
 CP-SAT model (enforced by its variables, so `level="soft"` is refused there;
 school-timetabling, pickup-delivery and semiconductor-scheduling have such
-constraints). Each benchmark's README (or `cpsat/README.md`) lists its own
+constraints). As in the engine, `clip=False` with a non-zero offset is refused
+on hard, and on medium where it counts toward the hard score (task assigning),
+with the engine's message, when the objective is built: hard 0 must mean no
+violation. Each benchmark's README (or `cpsat/README.md`) lists its own
 limits, including the plugins that refuse an offset.
 
 The assembly-line-balancing, bin-packing and quadratic-assignment tables on

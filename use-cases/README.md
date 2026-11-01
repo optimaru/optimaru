@@ -68,12 +68,19 @@ knobs and nothing else:
   raw cost `x` beyond the offset counts. `False` is the literal formula, the
   sign-preserving `(x - offset) ** exponent`, which is negative (a reward)
   below the offset and charges every unit the constraint evaluates, a raw 0
-  included. Each use case's README says which units those are.
+  included. Each use case's README says which units those are. `clip=False`
+  with a non-zero offset is refused on hard, and on medium where medium
+  counts toward the hard score (task assigning), because hard 0 must mean no
+  violation: `ValueError: constraint 'vehicle_capacity_cost': clip=False with
+  a non-zero offset cannot be hard, because hard 0 must mean no violation; use
+  clip=True (a threshold) or another level`. The threshold (`clip=True`) is
+  allowed on every level.
 
 So `TravelTimeCost(offset=10, exponent=3)` adds `max(0, x - 10)**3` per
-vehicle, and `TravelTimeCost(offset=10, exponent=3, clip=False)` adds
-`(x - 10)**3`. With `offset=0` both modes are the plain `x ** exponent`. A weight
-of 0 contributes exactly 0 at any exponent and offset.
+vehicle, and the soft `TravelTimeCost(offset=10, exponent=3, clip=False)` adds
+`(x - 10)**3` per vehicle, an idle one included. Both formulas apply per unit,
+not to the total. With `offset=0` both modes are the plain `x ** exponent`. A
+weight of 0 contributes exactly 0 at any exponent and offset.
 
 A constraint may be picked several times. Each pick is its own instance with its
 own knobs (its level included) and, where the constraint has domain parameters,

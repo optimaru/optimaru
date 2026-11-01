@@ -76,9 +76,9 @@ wheel.
 - Removed: the "picked more than once" `ValueError` in every package, and
   employee-scheduling's "same rule with the same parameters" refusal.
 - Unchanged: an empty list is still a `ValueError`, unknown names are still
-  errors, and knob validation is unchanged. The reward and fixed-level rules
-  apply to each instance, so a second pick of a reward still refuses
-  `level="hard"`.
+  errors, and a repeat validates its knobs like any other pick. The reward,
+  fixed-level and literal-offset rules apply to each instance, so a second
+  pick of a reward still refuses `level="hard"`.
 - `select(constraints, defaults, *, repeatable=...)` still accepts
   `repeatable`, but it changes nothing, and passing it (any value) emits a
   `DeprecationWarning`. It will be removed.
@@ -150,9 +150,11 @@ violation never reaches hard 0.
   default is fine.
 - Every Python-facing path refuses it with the same `ValueError`: the solver
   and `constraint_costs(solution, picks)` (the bindings), `score()` /
-  `score_costs()`, `DecomposedCalculator.add()`, employee scheduling's JSON
-  rules and the CP-SAT references. `{q}` is the constraint's name as `repr()`
-  spells it:
+  `score_costs()`, the `DecomposedCalculator` of employee and school
+  timetabling (built from a list, or through `add()`), employee scheduling's
+  JSON rules and the CP-SAT references. school timetabling's `Assembly.add()`
+  is a builder and accepts the pick; whatever receives the assembly refuses
+  it. `{q}` is the constraint's name as `repr()` spells it:
   - hard: `constraint {q}: clip=False with a non-zero offset cannot be hard,
     because hard 0 must mean no violation; use clip=True (a threshold) or
     another level`
@@ -329,12 +331,16 @@ lists the evaluated units as `"units"`.
   `[VehicleCapacityCost(), UnassignedVisitsCost(), TravelTimeCost(weight=10)]`.
   The snake-case module attributes stay in the API. `vehicle_capacity_cost` is
   the ready-made `VehicleCapacityCost()`.
-- Every README describes the five knobs and the repeat rule.
+- Every README describes the five knobs and the repeat rule. The use-case
+  READMEs (with their `python/` READMEs) also say which units the offset
+  applies to and that the literal formula with an offset is refused on hard;
+  their examples keep `clip=False` with an offset on soft constraints.
 - The `examples/` notebooks use class calls and `level`, and describe the five
   knobs. The vehicle-routing notebook has a new section that builds
   `x**2 + x**3` from two picks and compares a threshold offset with the
-  literal formula, both applied per vehicle. The notebooks need optimaru 0.3, and their saved outputs
-  come from 0.3.0.
+  literal formula, both applied per vehicle, and explains why the literal
+  formula stays off hard rules. The notebooks need optimaru 0.3, and their
+  saved outputs come from 0.3.0.
 
 ## 0.2.0
 
