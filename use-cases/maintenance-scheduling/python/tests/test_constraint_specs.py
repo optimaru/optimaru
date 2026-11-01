@@ -2,7 +2,7 @@
 
 Spot checks of individual constraint values live in `test_constraints.py`. This
 file covers the selection path that picks "which constraints are on", the catalog
-(`constraint_info()`), the five knobs and repeated picks.
+(`constraint_info()`), the five knobs (the level included) and repeated picks.
 """
 
 import pickle
@@ -12,11 +12,13 @@ from types import SimpleNamespace
 import pytest
 
 import maintenance_scheduling as mnt
+from maintenance_scheduling._constraint import instance_keys
 from maintenance_scheduling.constraints import (
     AfterIdealEndDateCost,
     BeforeIdealEndDateCost,
     Constraint,
     CrewConflictCost,
+    Level,
     MaxEndDateCost,
     MinStartDateCost,
     TagConflictCost,
@@ -701,8 +703,14 @@ def test_offset_zero_reproduces_the_0_2_0_scores():
             TagConflictCost(offset=5),
             TagConflictCost(offset=10, exponent=2, weight=0.5, clip=False),
         ],
+        [
+            *get_constraints(),
+            MaxEndDateCost(level="soft", weight=1.5, offset=1, clip=False),
+            TagConflictCost(level=Level.HARD, weight=2, offset=4),
+            CrewConflictCost(level="soft", weight=0.5, exponent=2),
+        ],
     ],
-    ids=["repeat", "repeat-and-offsets"],
+    ids=["repeat", "repeat-and-offsets", "repeats-on-other-levels"],
 )
 def test_full_assert_solves_with_repeats_and_offsets(picks):
     """FULL_ASSERT re-checks the incremental score against a full recompute after every move."""
@@ -720,3 +728,74 @@ def test_full_assert_solves_with_repeats_and_offsets(picks):
     assert python.hard == schedule.score.hard
     assert python.soft == pytest.approx(schedule.score.soft)
     assert score(mnt.constraint_costs(schedule), picks) == python  # the default costs score the repeats too
+
+
+# --- Levels: hard and soft, each pick (a repeat included) on the level it names ------
+
+
+@pytest.mark.parametrize(
+    ("picks", "expected"),
+    [
+        ([TagConflictCost(level="hard")], (-4000, 0.0)),  # 1000 hard units per tag-conflict day
+        ([CrewConflictCost(level=Level.SOFT, weight=5)], (0, -10.0)),
+        ([MinStartDateCost(level="soft", weight=0.5)], (0, -1.0)),
+        ([AfterIdealEndDateCost(level=Level.HARD, weight=2)], (-2, 0.0)),
+        ([MaxEndDateCost(level="hard")], (-1, 0.0)),  # the default level, named
+        # A repeat carries its own level and shaping. Hard: min start 2, the tag total
+        # beyond 1 (3) and 2 x (4 - 6) = -4, a hard reward: -2 - 3 + 4 = -1. Soft: the
+        # default tag conflict 1000 x 4 and 3 x (x - 1) on every cell, a's 2 days early
+        # (3) and 39 empty cells (-3 each): -4000 - (3 - 117) = -3886.
+        (
+            [
+                MinStartDateCost(),
+                MinStartDateCost(level="soft", weight=3, offset=1, clip=False),
+                TagConflictCost(),
+                TagConflictCost(level="hard", weight=1, offset=1),
+                TagConflictCost(level=Level.HARD, weight=2, offset=6, clip=False),
+            ],
+            (-1, -3886.0),
+        ),
+    ],
+)
+def test_levels_by_hand_on_both_paths(picks, expected):
+    """A pick's level moves its term, with the weight in units of that level: engine == mirror == hand."""
+    assert score(mnt.constraint_costs(_two_jobs()), picks) == expected
+    raw = mnt.constraint_costs(_two_jobs(), picks)
+    for pick, key in zip(picks, instance_keys(picks)):
+        assert raw[key]["level"] == (pick.level or raw[key]["default_level"]), key
+    assert score(raw, picks) == expected
+    assert _engine(picks) == expected
+
+
+@pytest.mark.parametrize("level", ["medium", Level.MEDIUM])
+def test_medium_is_refused_without_a_medium_level(level):
+    """The domain has no medium level: every path refuses the pick before scoring, a repeat too."""
+    message = "constraint 'tag_conflict_cost': this use case has no medium level"
+    pick = TagConflictCost(level=level)  # the spec cannot know the domain
+    for picks in ([pick], [TagConflictCost(), pick]):
+        with pytest.raises(ValueError, match=message):
+            _engine(picks)
+        with pytest.raises(ValueError, match=message):
+            mnt.solve(build_schedule(), time_limit_seconds=0.1, constraints=picks)
+        with pytest.raises(ValueError, match=message):
+            mnt.constraint_costs(_two_jobs(), picks)
+        with pytest.raises(ValueError, match=message):
+            score(mnt.constraint_costs(_two_jobs()), picks)
+
+
+def test_a_level_must_be_a_level():
+    with pytest.raises(TypeError, match="level must be a Level"):
+        TagConflictCost(level=True)
+    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft', not 'firm'"):
+        TagConflictCost(level="firm")
+    pick = SimpleNamespace(name="tag_conflict_cost", weight=None, level="firm", exponent=1.0)
+    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft', not 'firm'"):
+        _engine([TagConflictCost(), pick])
+
+
+def test_the_knob_was_renamed():
+    """0.3.0 replaced hard=True / hard=False by level="hard" / level="soft"; hard= is unknown."""
+    with pytest.raises(TypeError):
+        TagConflictCost(hard=True)
+    with pytest.raises(TypeError):
+        TagConflictCost(weight=None, hard=False)

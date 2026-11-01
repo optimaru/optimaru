@@ -24,10 +24,11 @@ with optional item colours and conflict pairs, on this repository's C++ engine
 | `item_conflict_cost` | `ItemConflictCost` | hard | 1 | per bin: the listed conflict pairs with both items in it |
 | `used_bins_cost` | `UsedBinsCost` (global) | soft | 1 | the number of bins holding at least one item |
 
-Every constraint is flippable (`level="hard"` / `level="soft"`), none is a reward and all
-four are scored by default (`default_enabled`); `bin_packing.constraint_info()`
-reports exactly this table from the C++ components (`kDefaultLevel` /
-`kDefaultWeight`). Unassigned items contribute nothing.
+Every constraint is flippable (`level="hard"` / `level="soft"`, or `Level.HARD` /
+`Level.SOFT`; `level="medium"` raises `ValueError`, the domain has no medium level), none
+is a reward and all four are scored by default (`default_enabled`);
+`bin_packing.constraint_info()` reports exactly this table from the C++ components
+(`kDefaultLevel` / `kDefaultWeight`). Unassigned items contribute nothing.
 
 ### 0.2.0
 
@@ -97,7 +98,8 @@ count for `used_bins_cost` — the granularity of `exponent`) is shaped as
 `sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
 `(x - offset) ** exponent`, sign-preserving (`clip=False`, which lowers the penalty of
 every bin 0..n-1 below the offset, an empty one included); `offset=0` is the 0.2.0
-shaping. Each pick is its own instance with its own knobs, and the instances add up:
+shaping. Each pick is its own instance with its own knobs, its level included (`level`
+replaced the `hard` knob; `hard=` raises `TypeError`), and the instances add up:
 
 ```python
 from bin_packing.constraints import UsedBinsCost, get_constraints

@@ -51,10 +51,12 @@ score_calculator.hpp`):
 
 The order is `list_constraints()`: the three unit constraints (one cost per round
 position) first, then the seven global constraints (one total each). Every constraint is
-flippable (`level="hard"` / `level="soft"`), none is a reward and all ten are scored by default
-(`default_enabled`); `sports_league.constraint_info()` reports exactly this table from the
-C++ components (`kDefaultLevel` / `kDefaultWeight`). The consecutive rules charge the
-whole run length (a run of 4 costs 4), as the Java provider does.
+flippable (`level="hard"` / `level="soft"`, or `Level.HARD` / `Level.SOFT`;
+`level="medium"` raises `ValueError`, the domain has no medium level), none is a reward
+and all ten are scored by default (`default_enabled`); `sports_league.constraint_info()`
+reports exactly this table from the C++ components (`kDefaultLevel` / `kDefaultWeight`).
+The consecutive rules charge the whole run length (a run of 4 costs 4), as the Java
+provider does.
 
 **0.2.0:** the constraints were renamed — `matches_on_same_day` -> `team_conflict_cost`,
 `classic_matches` -> `workday_classic_matches_cost`, and every other name gained the
@@ -73,7 +75,8 @@ constraints, the single total for the seven globals — the granularity of `expo
 shaped as `sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
 `(x - offset) ** exponent`, sign-preserving (`clip=False`, which lowers the penalty of
 every round below the offset, an empty one included); `offset=0` is the 0.2.0 shaping.
-Each pick is its own instance with its own knobs, and the instances add up:
+Each pick is its own instance with its own knobs, its level included (`level` replaced
+the `hard` knob; `hard=` raises `TypeError`), and the instances add up:
 
 ```python
 from sports_league.constraints import AwayToAwayHopCost, get_constraints

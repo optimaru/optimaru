@@ -492,7 +492,10 @@ ConstraintAssembly copyOf(const std::string &name)
 
 // The defaults (workload switched on) with two of them shifted, plus repeats
 // of the scoped per-task rules (literal, one fractional), the pairwise delta
-// rule (negative literal), the no-delta capacity rule and the four globals.
+// rule (negative literal), the no-delta capacity rule and the four globals,
+// and three repeats on the other level than their default: the station bounds
+// and the scoped forbidden stations demoted to soft (literal, fractional
+// weight), the used stations promoted to hard (threshold).
 ConstraintAssembly repeatedAssembly()
 {
     ConstraintAssembly assembly = defaultConstraints();
@@ -520,6 +523,19 @@ ConstraintAssembly repeatedAssembly()
                                         .offset("workloadImbalanceCost", 3.0)
                                         .clip("workloadImbalanceCost", false)));
     assembly.addInstances(std::move(copyOf("taskStationBoundsCost")));
+    assembly.addInstances(std::move(copyOf("taskStationBoundsCost")
+                                        .soft("taskStationBoundsCost")
+                                        .weight("taskStationBoundsCost", 1.5)
+                                        .offset("taskStationBoundsCost", 1.0)
+                                        .clip("taskStationBoundsCost", false)));
+    assembly.addInstances(std::move(copyOf("forbiddenTaskStationsCost")
+                                        .soft("forbiddenTaskStationsCost")
+                                        .offset("forbiddenTaskStationsCost", 1.0)
+                                        .clip("forbiddenTaskStationsCost", false)));
+    assembly.addInstances(std::move(copyOf("usedStationsCost")
+                                        .hard("usedStationsCost")
+                                        .weight("usedStationsCost", 2.0)
+                                        .offset("usedStationsCost", 3.0)));
     return assembly;
 }
 
@@ -549,6 +565,36 @@ void verifyRepeatsAndOffsets()
             copyOf("taskStationBoundsCost").weight("taskStationBoundsCost", 2.0).exponent("taskStationBoundsCost", 2.0)));
         check(sameScore(scoreWith(std::move(assembly), fixtureH()), Score{-6, 0.0}),
               "station bounds + 2 x bounds^2 per station: -6 hard");
+    }
+    {
+        // Each instance on its own level: the soft default used stations (3)
+        // next to a hard repeat, 2 x (3 - 1) beyond its offset.
+        ConstraintAssembly assembly = copyOf("usedStationsCost");
+        assembly.addInstances(std::move(copyOf("usedStationsCost")
+                                            .hard("usedStationsCost")
+                                            .weight("usedStationsCost", 2.0)
+                                            .offset("usedStationsCost", 1.0)));
+        AssemblyLineBalancingProblem p = fixtureH();
+        ScoreCalculator::prepare(p);
+        DecomposedCalculator calculator;
+        assembly.into(calculator);
+        calculator.resetWorkingSolution(p);
+        check(sameScore(calculator.calculateScore(), Score{-4, -3.0}),
+              "soft used stations + a hard repeat beyond 1: -4 hard / -3 soft");
+        const auto entries = calculator.constraintCosts();
+        check(entries.size() == 2 && entries[0].level == optimaru::Level::Soft
+                  && entries[1].level == optimaru::Level::Hard && entries[1].defaultLevel == optimaru::Level::Soft,
+              "the repeat reports its own level, the default stays soft");
+        // The scoped forbidden stations, hard by default, with a soft literal
+        // repeat: 2 x (x - 2) on its stations 0 and 1 only: 2 x (-2 - 1).
+        ConstraintAssembly scoped = copyOf("forbiddenTaskStationsCost");
+        scoped.addInstances(std::move(copyOf("forbiddenTaskStationsCost")
+                                          .soft("forbiddenTaskStationsCost")
+                                          .weight("forbiddenTaskStationsCost", 2.0)
+                                          .offset("forbiddenTaskStationsCost", 2.0)
+                                          .clip("forbiddenTaskStationsCost", false)));
+        check(sameScore(scoreWith(std::move(scoped), fixtureH()), Score{-1, 6.0}),
+              "hard forbidden stations + a soft literal repeat on its two stations: -1 hard / +6 soft");
     }
     {
         // Fixture H, V = 4: capacity [0, 0, 0, 1] at weight 3, literal offset
@@ -678,7 +724,8 @@ void verifyRepeatsAndOffsets()
             }
         }
         std::printf("    largest soft drift %.3g\n", drift);
-        check(mismatches == 0, "3000 random moves with repeated, shifted components: incremental == fresh");
+        check(mismatches == 0,
+              "3000 random moves with repeated, shifted components on both levels: incremental == fresh");
     }
     {
         AssemblyLineBalancingProblem p = randomInstance(14, 91);

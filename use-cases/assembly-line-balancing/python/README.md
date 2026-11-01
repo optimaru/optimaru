@@ -15,7 +15,8 @@ Score (HardSoftScore), at the default weights:
 
 The problem carries no weights. Pick, re-weight or flip constraints with
 `assembly_line_balancing.constraints`, and read the defaults with
-`alb.constraint_info()`:
+`alb.constraint_info()`. `level` is `"hard"` or `"soft"` (`Level.HARD` / `Level.SOFT`);
+the domain has no medium level, so `level="medium"` raises `ValueError`:
 
 ```python
 import assembly_line_balancing as alb

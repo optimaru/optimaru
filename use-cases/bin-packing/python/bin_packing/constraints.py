@@ -28,7 +28,7 @@ Every spec takes five knobs:
                ``bp.constraint_info()`` reports the defaults.
 - ``level``    ``None`` = the default level, otherwise ``Level.HARD`` or
                ``Level.SOFT`` (or the names ``"hard"`` and ``"soft"``). This use
-               case has no medium level.
+               case has no medium level: ``level="medium"`` raises ValueError.
 - ``exponent`` sign-preserving power shaping: ``weight * sign(c) * |c| ** exponent``.
                Applied per BIN for the three per-bin constraints, and on the bin
                count for UsedBinsCost. (0.1.x shaped colour excess per
@@ -42,7 +42,7 @@ Every spec takes five knobs:
                penalty, and a bin count below it does too.
 
 The same constraint may be picked several times; each pick is scored on its own with
-its own knobs and the picks add up. Every bin costs 1, and every bin beyond the tenth
+its own knobs (its level included) and the picks add up. Every bin costs 1, and every bin beyond the tenth
 100 on top::
 
     bp.solve(problem, constraints=[

@@ -65,10 +65,11 @@ level and weight are the defaults `constraint_info()` reports:
 | 10 | `away_to_home_hop_cost` | soft | 1 | if m2.home == m1.away, dist(m1.home, m1.away) |
 
 Each spec takes `weight=None` (the default above), `level=None` (the default level,
-otherwise `"hard"` or `"soft"`), `exponent=1.0` (applied per round position for the
-three unit constraints, on the one total for the seven globals) and the keyword-only
-`offset=0.0` / `clip=True`; a constraint may be picked several times, each pick with its
-own knobs:
+otherwise `"hard"` or `"soft"`, or `Level.HARD` / `Level.SOFT`; the domain has no
+medium level, so `level="medium"` raises `ValueError`), `exponent=1.0` (applied per
+round position for the three unit constraints, on the one total for the seven globals)
+and the keyword-only `offset=0.0` / `clip=True`; a constraint may be picked several
+times, each pick with its own knobs:
 
 ```python
 from sports_league.constraints import AwayToAwayHopCost, WorkdayClassicMatchesCost, get_constraints, score

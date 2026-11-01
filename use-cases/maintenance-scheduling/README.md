@@ -47,8 +47,9 @@ crewDate = startDateIndex * crewCount + crewIndex     # -1 == unassigned
 | `tag_conflict_cost` | `TagConflictCost` | soft | 1,000 | global total: shared tags x overlapping days summed over job pairs |
 
 The rows are in `list_constraints()` order (the four per-job unit constraints first, the two
-global ones after them). Every constraint is flippable (`level="hard"` / `level="soft"`), none is
-a reward and all six are scored by default (`default_enabled`);
+global ones after them). Every constraint is flippable (`level="hard"` / `level="soft"`, or
+`Level.HARD` / `Level.SOFT`; `level="medium"` raises `ValueError`, the domain has no medium
+level), none is a reward and all six are scored by default (`default_enabled`);
 `maintenance_scheduling.constraint_info()` reports exactly this table from the C++
 components (`kDefaultLevel` / `kDefaultWeight`), and the CP-SAT benchmark reads the same
 rows. `exponent` shapes the date rules per cell and the two global conflict rules on their
@@ -71,7 +72,8 @@ total for the two conflict rules — the granularity of `exponent`) is shaped as
 `sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
 `(x - offset) ** exponent`, sign-preserving (`clip=False`, which lowers the penalty of
 every cell below the offset, an empty one included: every crew on every start date);
-`offset=0` is the 0.2.0 shaping. Each pick is its own instance with its own knobs, and the
+`offset=0` is the 0.2.0 shaping. Each pick is its own instance with its own knobs, its
+level included (`level` replaced the `hard` knob; `hard=` raises `TypeError`), and the
 instances add up:
 
 ```python

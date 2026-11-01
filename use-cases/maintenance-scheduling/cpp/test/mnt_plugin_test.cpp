@@ -798,7 +798,9 @@ MaintenanceSchedule repeatInstance()
 
 // The defaults, two of them shifted, plus repeats of a per-job delta rule
 // (literal, fractional weight), a global member-change rule (threshold,
-// squared) and a soft per-job rule (negative offset).
+// squared) and a soft per-job rule (negative offset), and two repeats on the
+// other level than their default: max end demoted to soft (literal,
+// fractional weight) and tag conflict promoted to hard (threshold).
 ConstraintAssembly repeatedAssembly()
 {
     ConstraintAssembly assembly = defaultConstraints();
@@ -816,6 +818,15 @@ ConstraintAssembly repeatedAssembly()
                                         .weight("beforeIdealEndDateCost", 0.5)
                                         .offset("beforeIdealEndDateCost", -2.0)));
     assembly.addInstances(std::move(copyOf("crewConflictCost")));
+    assembly.addInstances(std::move(copyOf("maxEndDateCost")
+                                        .soft("maxEndDateCost")
+                                        .weight("maxEndDateCost", 1.5)
+                                        .offset("maxEndDateCost", 1.0)
+                                        .clip("maxEndDateCost", false)));
+    assembly.addInstances(std::move(copyOf("tagConflictCost")
+                                        .hard("tagConflictCost")
+                                        .weight("tagConflictCost", 2.0)
+                                        .offset("tagConflictCost", 4.0)));
     return assembly;
 }
 
@@ -854,6 +865,44 @@ void verifyRepeatsAndOffsets()
                    scoreWith(calculator, s),
                    -30,
                    0.0);
+    }
+    {
+        // Each instance on its own level: the soft default tag conflict
+        // (1000 x 5) next to a hard repeat, 2 x (5 - 1) beyond its offset.
+        MaintenanceSchedule s = repeatInstance();
+        ConstraintAssembly assembly = copyOf("tagConflictCost");
+        assembly.addInstances(std::move(copyOf("tagConflictCost")
+                                            .hard("tagConflictCost")
+                                            .weight("tagConflictCost", 2.0)
+                                            .offset("tagConflictCost", 1.0)));
+        DecomposedCalculator calculator;
+        assembly.into(calculator);
+        checkScore("soft tag conflict + a hard repeat beyond 1: -8hard",
+                   scoreWith(calculator, s),
+                   -8,
+                   -5000.0);
+        const auto entries = calculator.constraintCosts();
+        check(entries.size() == 2 && entries[0].level == optimaru::Level::Soft
+                  && entries[1].level == optimaru::Level::Hard
+                  && entries[1].defaultLevel == optimaru::Level::Soft,
+              "the repeat reports its own level, the default stays soft");
+    }
+    {
+        // A hard per-cell rule with a soft literal repeat: 0.5 x (3 - 1) on
+        // the early cell, 0.5 x (0 - 1) on each of the 79 others.
+        MaintenanceSchedule s = repeatInstance();
+        ConstraintAssembly assembly = copyOf("minStartDateCost");
+        assembly.addInstances(std::move(copyOf("minStartDateCost")
+                                            .soft("minStartDateCost")
+                                            .weight("minStartDateCost", 0.5)
+                                            .offset("minStartDateCost", 1.0)
+                                            .clip("minStartDateCost", false)));
+        DecomposedCalculator calculator;
+        assembly.into(calculator);
+        checkScore("hard min start + a soft literal repeat: -(1 - 39.5)soft",
+                   scoreWith(calculator, s),
+                   -3,
+                   38.5);
     }
     {
         MaintenanceSchedule s = repeatInstance();
@@ -976,8 +1025,8 @@ void verifyRepeatsAndOffsets()
         std::printf("    largest soft drift %.3g\n", drift);
         check(mismatches == 0,
               std::to_string(steps)
-                  + " random moves with repeated, shifted components: "
-                    "incremental == fresh");
+                  + " random moves with repeated, shifted components on both "
+                    "levels: incremental == fresh");
     }
     {
         MaintenanceSchedule s = buildRandomInstance(/*jobCount*/ 16, /*seed*/ 11);

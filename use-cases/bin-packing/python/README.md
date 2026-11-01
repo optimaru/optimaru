@@ -33,7 +33,8 @@ score(raw, [UsedBinsCost(), UsedBinsCost(weight=100, offset=10)])
 ```
 
 `weight` (None = the default, 1), `level` (None = the default level, otherwise "hard" or
-"soft"), `exponent` (1.0) and the keyword-only `offset` (0.0) / `clip` (True) are the
+"soft", or `Level.HARD` / `Level.SOFT`; the domain has no medium level, so "medium" raises
+`ValueError`), `exponent` (1.0) and the keyword-only `offset` (0.0) / `clip` (True) are the
 knobs. The exponent shapes each bin's cost for the three per-bin constraints and the bin
 count for `used_bins_cost`; 0.1.x shaped colour excess per (bin, colour) and conflicts per
 pair, so only exponent != 1 scores change (totals and exponent-1 scores are identical).

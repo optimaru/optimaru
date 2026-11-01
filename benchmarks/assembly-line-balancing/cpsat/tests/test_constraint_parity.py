@@ -17,11 +17,12 @@ from __future__ import annotations
 from itertools import product
 
 import pytest
-from assembly_line_balancing import constraint_costs, constraint_info, list_constraints
+from assembly_line_balancing import Solver, SolverConfig, constraint_costs, constraint_info, list_constraints
 from assembly_line_balancing.constraints import (
     DifferentStationPairsCost,
     FixedTaskStationsCost,
     ForbiddenTaskStationsCost,
+    Level,
     MaxStationsCost,
     SameStationGroupsCost,
     StationCapacityCost,
@@ -267,23 +268,47 @@ SELECTIONS = {
         WorkloadImbalanceCost(weight=1, offset=2),
     ],
     "identical-twice": [TaskPrecedenceCost(), TaskPrecedenceCost(), UsedStationsCost()],
+    # Each pick on its own level: a soft literal capacity next to the hard default, the
+    # used stations on hard beyond 1 next to their soft default, the scoped forbidden
+    # stations and the precedence moved to soft.
+    "levels": [
+        StationCapacityCost(),
+        StationCapacityCost(level="soft", weight=3, offset=1, clip=False),
+        UsedStationsCost(),
+        UsedStationsCost(level=Level.HARD, offset=1),
+        ForbiddenTaskStationsCost(level="soft", weight=2, offset=1, clip=False),
+        TaskPrecedenceCost(level="soft", weight=2, offset=-1),
+    ],
 }
 
 
 def _engine_score(problem: dict, stations, selection) -> dict:
+    """The Python score() mirror of the assignment under `selection`."""
     core = _assigned(problem, stations).to_core()
     engine = score(constraint_costs(core, selection), selection)
     return {"hard": engine.hard, "soft": engine.soft}
+
+
+def _engine_solve(problem: dict, stations, selection) -> dict:
+    """The engine's own score of the assignment: a warm-started solve with no time keeps it."""
+    core = _assigned(problem, stations).to_core()
+    core.warm_start = True
+    config = SolverConfig()
+    config.spent_limit_seconds = 0
+    Solver(config).solve_with_constraints(core, selection)
+    assert list(core.assignment()) == list(stations)
+    return {"hard": core.score.hard, "soft": core.score.soft}
 
 
 @pytest.mark.parametrize("instance", ["trio", "fixture-h"])
 @pytest.mark.parametrize("selection", list(SELECTIONS.values()), ids=list(SELECTIONS))
 def test_the_cpsat_terms_equal_the_engine_on_every_assignment(instance, selection):
     """Pin every assignment: the CP-SAT objective's per-level value is the engine's score of
-    that assignment under the same repeated / shifted picks, exactly — every station is a
-    term of a per-station constraint (an empty one included), the scoped max_stations_cost
-    and forbidden_task_stations_cost exactly their engine units; re-pricing the default
-    costs (each name once) gives the same per instance key."""
+    that assignment under the same repeated / shifted picks (its own and the score()
+    mirror's), exactly — every station is a term of a per-station constraint (an empty one
+    included), the scoped max_stations_cost and forbidden_task_stations_cost exactly their
+    engine units; re-pricing the default costs (each name once) gives the same per
+    instance key."""
     problem = INSTANCES[instance]
     built = build(Model.model_validate(problem), selection, symmetry_breaking=False)
     built.objective.minimize()
@@ -295,6 +320,7 @@ def test_the_cpsat_terms_equal_the_engine_on_every_assignment(instance, selectio
         solver.parameters.num_search_workers = 1
         assert solver.solve(built.model) == cp_model.OPTIMAL
         expected = _engine_score(problem, stations, selection)
+        assert _engine_solve(problem, stations, selection) == expected, stations
         assert built.objective.score(solver) == expected, stations
         core = _assigned(problem, stations).to_core()
         assert built.objective.score_costs(constraint_costs(core)) == expected, stations
@@ -327,9 +353,17 @@ def test_the_scoped_plugins_add_terms_for_their_engine_units_only():
 
 
 def test_mapping_selections_repeat_and_shift_like_specs():
-    """The server's {name, weight, offset, clip} dicts pick the same instances as specs."""
-    specs = [UsedStationsCost(), UsedStationsCost(weight=3, offset=1, clip=False)]
-    dicts = [{"name": "used_stations_cost"}, {"name": "used_stations_cost", "weight": 3, "offset": 1, "clip": False}]
+    """The server's {name, weight, level, offset, clip} dicts pick the same instances as specs."""
+    specs = [
+        UsedStationsCost(),
+        UsedStationsCost(weight=3, offset=1, clip=False),
+        UsedStationsCost(level="hard", offset=2),
+    ]
+    dicts = [
+        {"name": "used_stations_cost"},
+        {"name": "used_stations_cost", "weight": 3, "offset": 1, "clip": False},
+        {"name": "used_stations_cost", "level": "hard", "offset": 2},
+    ]
     model = Model.model_validate(TRIO)
     assert solve(model, time_limit_seconds=5, constraints=dicts) == solve(
         model, time_limit_seconds=5, constraints=specs
@@ -339,3 +373,14 @@ def test_mapping_selections_repeat_and_shift_like_specs():
 def test_a_fractional_offset_is_refused_by_cpsat():
     with pytest.raises(ValueError, match="offset must be an integer for CP-SAT"):
         solve(Model.model_validate(TRIO), time_limit_seconds=1, constraints=[StationCapacityCost(offset=0.5)])
+
+
+@pytest.mark.parametrize("level", ["medium", Level.MEDIUM])
+def test_medium_is_refused_like_the_engine(level):
+    """The domain has no medium level: CP-SAT refuses the pick as the engine does, a repeat too."""
+    message = "constraint 'used_stations_cost': this use case has no medium level"
+    for selection in ([UsedStationsCost(level=level)], [UsedStationsCost(), UsedStationsCost(level=level)]):
+        with pytest.raises(ValueError, match=message):
+            solve(Model.model_validate(TRIO), time_limit_seconds=1, constraints=selection)
+        with pytest.raises(ValueError, match=message):
+            _engine_solve(TRIO, (0, 0, 1), selection)
