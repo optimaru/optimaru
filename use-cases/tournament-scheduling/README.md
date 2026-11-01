@@ -58,6 +58,29 @@ it to soft at 1 per raw unit (was a no-op that kept the 1e6), and an explicit `w
 medium units (was plain soft units that dropped the fold). `constraint_info()` /
 `ConstraintInfo` are new. Raw costs and the default score are unchanged.
 
+**0.3.0:** every constraint takes two more knobs, `offset` and `clip` (keyword-only), and
+may be picked several times. A raw cost `x` (per team for the two unit constraints, on the
+one total for the two imbalance constraints) is shaped as `sign(x) * max(0, |x| - offset)
+** exponent` (`clip=True`, the default) or `(x - offset) ** exponent`, sign-preserving
+(`clip=False`, which charges every unit the constraint evaluates, a raw 0 included, and acts
+as a reward below the offset); `offset=0` is the 0.2.0 shaping. `team_conflict_cost`
+evaluates every team; `team_unavailability_cost` is scoped to the teams with an
+unavailability fact (its `constraint_costs()` entry lists them as `"units"`), so its
+literal offset charges those teams only. Each pick is its own instance with its own knobs,
+and the instances add up:
+
+```python
+ts.solve(schedule, constraints=[
+    *get_constraints(),
+    ConfrontationCountImbalanceCost(exponent=2, offset=2),   # + (head-to-head imbalance beyond 2)^2
+])
+```
+
+`ts.constraint_costs(schedule, picks)` keys the second pick
+`confrontation_count_imbalance_cost#2`. CP-SAT takes integral offsets on the two hard
+constraints (one term per evaluated team); its imbalance surrogates have no raw-identical
+total to shift, so it refuses an offset on them (the engine takes it).
+
 The C++ side builds and tests with:
 
 ```sh

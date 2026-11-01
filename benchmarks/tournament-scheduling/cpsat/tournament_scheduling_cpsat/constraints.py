@@ -20,6 +20,14 @@ Raw-cost parity with the engine (``tournament_scheduling.constraint_costs``):
   counts every same-day assignment pair (the two differ only while a team
   plays twice on one day, i.e. while ``team_conflict_cost > 0``). Reported
   scores are always rescored through the engine's ``constraint_costs()``.
+
+Repeats and offsets: a constraint picked several times adds one set of terms per
+pick. The two hard plugins add one term per team the engine evaluates (every team
+for ``team_conflict_cost``, the teams with an unavailability fact for the scoped
+``team_unavailability_cost``), so they take integral offsets (``terms_per_unit``).
+The two imbalance surrogates have no raw-identical total to shift, so they refuse a
+non-zero offset on CP-SAT (``constraint 'x' offset is not supported by this CP-SAT
+model``); the engine takes it.
 """
 
 import math
@@ -125,33 +133,47 @@ class TournamentContext:
 
 
 class TeamConflictCost(domain.TeamConflictCost, ConstraintPlugin[TournamentContext]):
-    """One term per pair of a team's assignments on one day: the engine's raw cost."""
+    """One term per team: its same-day assignment pairs, the engine's raw cost."""
+
+    terms_per_unit = True  # one term per team, an idle one included
 
     def build(self, context: TournamentContext, objective: ObjectiveBuilder) -> None:
         for team in range(len(context.problem.teams)):
+            pairs = []
             for day, assignments in enumerate(context.by_day):
                 members = [context.x[assignment, team] for assignment in assignments]
                 for left in range(len(members)):
                     for right in range(left + 1, len(members)):
-                        objective.add(
-                            self.name,
+                        pairs.append(
                             context.both(
                                 ("duplicate", team, day, left, right),
                                 members[left],
                                 members[right],
-                            ),
-                            bound=1,
+                            )
                         )
+            objective.add(self.name, sum(pairs), bound=len(pairs))
 
 
 class TeamUnavailabilityCost(
     domain.TeamUnavailabilityCost, ConstraintPlugin[TournamentContext]
 ):
-    """One term per unavailability fact whose cell is occupied: the engine's raw cost."""
+    """One term per team with a fact: its facts whose cell is occupied, the engine's raw cost.
+
+    The engine scopes this constraint to those teams, so a team without a fact adds
+    no term (a literal offset charges the scoped teams only)."""
+
+    terms_per_unit = True  # one term per scoped team
 
     def build(self, context: TournamentContext, objective: ObjectiveBuilder) -> None:
+        team_count = len(context.problem.teams)
+        cells: dict[int, list[Any]] = {}
         for penalty in context.problem.unavailability_penalties:
-            objective.add(self.name, context.cell[penalty.team, penalty.day], bound=1)
+            if 0 <= penalty.team < team_count:
+                cells.setdefault(penalty.team, []).append(
+                    context.cell[penalty.team, penalty.day]
+                )
+        for team in sorted(cells):
+            objective.add(self.name, sum(cells[team]), bound=len(cells[team]))
 
 
 class AssignmentCountImbalanceCost(

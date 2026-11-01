@@ -19,8 +19,8 @@ score folds medium into soft with the engine's `MEDIUM_SCALE` (1e6).
 
 | Constraint | Level, weight | CP-SAT objective term | Raw-identical to the engine? |
 |---|---|---|---|
-| `team_conflict_cost` | hard, 1 | one 0/1 term per pair of a team's assignments on one day | **yes** |
-| `team_unavailability_cost` | hard, 1 | the (team, day) occupancy bool of each unavailability fact | **yes** |
+| `team_conflict_cost` | hard, 1 | per team: its 0/1 same-day assignment pairs, summed | **yes** |
+| `team_unavailability_cost` | hard, 1 | per team with a fact: the (team, day) occupancy bools of its facts, summed | **yes** |
 | `assignment_count_imbalance_cost` | medium, 1 | `scale * ssd` of the per-team loads | **no** (surrogate) |
 | `confrontation_count_imbalance_cost` | soft, 1 | `scale * ssd` of the per-pair confrontation counts | **no** (surrogate, and see below) |
 
@@ -69,6 +69,14 @@ inside int64; where the active count does not divide `scale`, the term is
   differ: two assignments of T0 and one of T1 on a day are 2 confrontations in
   the engine and 1 in CP-SAT
   (`test_confrontations_count_once_per_shared_day_on_cpsat`).
+
+Repeats and offsets (0.3.0): a constraint picked several times adds one set of terms
+per pick. The two hard plugins add one term per team the engine evaluates (every team,
+or the teams with a fact for the scoped `team_unavailability_cost`), so they take
+integral offsets and match the engine exactly under repeats and offsets
+(`test_the_hard_terms_equal_the_engine_with_repeats_and_offsets`). The two imbalance
+surrogates have no raw-identical total to shift: CP-SAT refuses a non-zero offset on them
+(`constraint 'x' offset is not supported by this CP-SAT model`), while the engine takes it.
 
 The reported score never uses the surrogate: `solve()` rescores the solution
 through the engine's `constraint_costs()` under the same selection, so a CP-SAT
