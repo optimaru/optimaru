@@ -384,40 +384,6 @@ std::decay_t<std::invoke_result_t<Factory&>> applyConstraints(Factory&& defaults
     return assembly;
 }
 
-// 0.3.0 transition shim: removed once every use case is migrated. The
-// pre-0.3.0 form, handed the default assembly itself: it cannot copy a
-// component, so it still refuses a name picked twice. Pass the factory
-// (above) instead.
-template <typename Solution>
-ConstraintAssembly<Solution> applyConstraints(ConstraintAssembly<Solution> assembly,
-                                              const py::object& constraints) {
-    if (constraints.is_none()) return assembly;
-    std::vector<std::string> picked;
-    for (py::handle item : constraints) {
-        const std::string name = resolveName(assembly, item.attr("name").template cast<std::string>());
-        const std::string shown = pythonName(name);
-        const Knobs knobs = readKnobs(item, shown);
-        for (const std::string& already : picked) {
-            if (already == name) {
-                throw py::value_error("constraint '" + shown +
-                                      "' picked more than once; this package does not support "
-                                      "repeated picks yet");
-            }
-        }
-        try {
-            restateKnobs(assembly, name, knobs, detail::quoted(shown));
-        } catch (const std::invalid_argument& error) {
-            throw py::value_error(error.what());
-        }
-        picked.push_back(name);
-    }
-    if (picked.empty()) {
-        throw py::value_error("constraints must not be empty (pass None for the defaults)");
-    }
-    assembly.only(picked);
-    return assembly;
-}
-
 // Rule 1 of "The range of a score" (level.hpp) in Python's words: the
 // constraint's Python name and Python's repr() of the contribution, so a
 // solve and score(constraint_costs(...), picks) refuse the same pick with
