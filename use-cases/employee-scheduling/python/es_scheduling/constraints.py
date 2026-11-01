@@ -34,7 +34,9 @@ The knobs (see ``_constraint.py``):
                offset`` as it is, which charges every employee the rule
                evaluates (a raw 0 included; a worker-scoped rule evaluates
                only the employees in its scope) and rewards a cost below the
-               offset.
+               offset. With an offset it is refused on hard (the pick's level,
+               or the default: ``RequiredSkillCost`` and the other hard rules),
+               because hard 0 must mean no violation.
 
 The defaults live in C++ only; ``es_scheduling.constraint_info()`` reports
 them for all 30 constraints. Every other field is a domain parameter

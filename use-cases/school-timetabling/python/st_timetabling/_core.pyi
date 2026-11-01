@@ -442,7 +442,9 @@ class canon:
             offset:   (keyword) shifts that shaping (0.0 = none): with clip=True
                       (the default) weight * sign(c)*max(0, |c| - offset)^exponent,
                       with clip=False weight * (c - offset)^exponent (sign-
-                      preserving; every slot of a per-slot constraint is charged).
+                      preserving; every slot of a per-slot constraint is charged),
+                      refused with an offset on hard (ValueError: hard 0 must
+                      mean no violation).
             Unknown names raise ValueError. Adding a name twice is allowed (the
             costs add up)."""
 

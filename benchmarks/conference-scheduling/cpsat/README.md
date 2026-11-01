@@ -15,4 +15,5 @@ with its own knobs, its `level` included) and takes integral `offset` / `clip`: 
 conference constraint is global, so each plugin sums its pieces into the one total the
 engine shapes and adds it once (`terms_per_unit`), a total of 0 included. A fractional
 offset is refused ("offset must be an integer for CP-SAT"), and so is `level="medium"`
-(this use case has no medium level), as on the engine.
+(this use case has no medium level), as on the engine. `clip=False` with an offset on a
+hard pick is refused with the engine's message when the objective is built.

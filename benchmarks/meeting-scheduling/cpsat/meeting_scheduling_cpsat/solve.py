@@ -86,7 +86,11 @@ def solve(
     preferred_counts = [
         Counter(meeting.preferred_attendees) for meeting in problem.meetings
     ]
-    objective = REGISTRY.objective(model, ("hard", "medium", "soft"), constraints)
+    # The engine folds medium into soft (MEDIUM_SCALE), so a literal offset may sit on
+    # medium; only hard refuses it.
+    objective = REGISTRY.objective(
+        model, ("hard", "medium", "soft"), constraints, medium_fold="into_soft"
+    )
     REGISTRY.build(
         MeetingContext(
             model,

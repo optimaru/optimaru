@@ -563,7 +563,8 @@ void bindCanon(py::module_ &canon)
             "exponent: sign-preserving power shaping, > 0.\n"
             "offset:   (keyword) a shift of that shaping, finite (0 = none); "
             "clip=True (the default) counts only what lies beyond it, "
-            "clip=False shapes cost - offset as it is.\n"
+            "clip=False shapes cost - offset as it is (refused with an "
+            "offset on hard, ValueError: hard 0 must mean no violation).\n"
             "Raises ValueError for an unknown name. Adding a name twice is "
             "allowed here (their costs add up).")
         .def(

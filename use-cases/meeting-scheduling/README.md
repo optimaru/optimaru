@@ -70,10 +70,12 @@ one total for the seven pair constraints) is shaped as
 `sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
 `(x - offset) ** exponent`, sign-preserving (`clip=False`, which charges every
 (grain, room) cell of a unit constraint, an empty one included, and acts as a reward below
-the offset); `offset=0` is the 0.2.0 shaping. Each pick is its own instance with its own
-knobs, and the instances add up; `ms.constraint_costs(schedule, picks)` keys the second
-pick `"<name>#2"`. The CP-SAT reference takes integral offsets on every constraint (see
-its README).
+the offset); `offset=0` is the 0.2.0 shaping. `clip=False` with an offset is refused on
+hard (`OvertimeCost`, `RoomConflictCost` and the other hard constraints by default), because
+hard 0 must mean no violation; it is allowed on medium, which folds into soft. Each pick is
+its own instance with its own knobs, and the instances add up;
+`ms.constraint_costs(schedule, picks)` keys the second pick `"<name>#2"`. The CP-SAT
+reference takes integral offsets on every constraint (see its README).
 
 The `hard` knob is gone in 0.3.0 (`hard=` raises `TypeError`): `level` replaces it, a
 `Level` (`Level.HARD`, `Level.MEDIUM`, `Level.SOFT`, from `meeting_scheduling.constraints`)

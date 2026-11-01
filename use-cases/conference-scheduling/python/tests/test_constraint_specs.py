@@ -525,7 +525,8 @@ def test_score_reproduces_the_engine_score_exactly():
         [*HARD_PICKS, ContentConflictCost(offset=30.0), ContentConflictCost(offset=-20.0, clip=False)],
         [
             *HARD_PICKS,
-            RoomConflictCost(offset=10.0, clip=False, weight=3),
+            RoomConflictCost(level="soft", offset=10.0, clip=False, weight=3),
+            RoomConflictCost(offset=10.0, weight=3),
             LanguageDiversityCost(offset=50.0),
             LanguageDiversityCost(offset=-30.0, clip=False, weight=2),
         ],
@@ -708,8 +709,11 @@ def test_the_keys_follow_the_pick_order_of_each_name():
         (SpeakerMakespanCost(offset=-10, clip=False), (0, -20 * 10)),
         # Hard (room conflict 60, weight 1000), rounded once (the one total).
         (RoomConflictCost(offset=10), (-1000 * 50, 0.0)),
-        (RoomConflictCost(offset=100, clip=False), (40000, 0.0)),  # a hard reward below 100
-        (RoomConflictCost(offset=59.5, clip=False, weight=3), (-2, 0.0)),  # 3 x 0.5 = 1.5 -> 2
+        (RoomConflictCost(offset=59.5, weight=3), (-2, 0.0)),  # 3 x 0.5 = 1.5 -> 2
+        # The literal formula with an offset is refused on hard; on soft it rewards the
+        # total below 100, 1000 x (60 - 100), and is not rounded: 3 x 0.5 = 1.5.
+        (RoomConflictCost(level="soft", offset=100, clip=False), (0, 40000.0)),
+        (RoomConflictCost(level="soft", offset=59.5, clip=False, weight=3), (0, -1.5)),
         # The reward (language diversity -60, weight 10): a threshold rewards only beyond the
         # offset, a literal one shifts it further.
         (LanguageDiversityCost(offset=20), (0, 10 * 40)),
@@ -731,12 +735,13 @@ def test_offsets_by_hand_on_both_paths(pick, expected):
 
 
 # Each pick carries its own level: room conflict 60 (hard, weight 1000), content conflict
-# 60 (soft, weight 100). The second room pick is soft at weight 2 beyond 10 minutes, the
-# first content pick hard and literal beyond 50 at weight 3.
+# 60 (soft, weight 100). The second room pick is soft and literal at weight 2 beyond 10
+# minutes, the first content pick hard at weight 3 beyond 50 (a threshold: the literal
+# formula with an offset is refused on hard).
 LEVELS = [
     RoomConflictCost(),
-    RoomConflictCost(level=Level.SOFT, weight=2, offset=10),
-    ContentConflictCost(level="hard", weight=3, offset=50, clip=False),
+    RoomConflictCost(level=Level.SOFT, weight=2, offset=10, clip=False),
+    ContentConflictCost(level="hard", weight=3, offset=50),
     ContentConflictCost(),
 ]
 
@@ -817,7 +822,8 @@ def test_offset_zero_reproduces_the_0_2_0_scores():
         [*HARD_PICKS, *REPEAT, LanguageDiversityCost()],
         [
             *HARD_PICKS,
-            RoomConflictCost(offset=30, clip=False, weight=2),
+            RoomConflictCost(level="soft", offset=30, clip=False, weight=2),
+            RoomConflictCost(offset=30, weight=2),
             ContentConflictCost(),
             ContentConflictCost(offset=120, exponent=2, weight=0.25, clip=False),
             constraints.SpeakerConflictCost(offset=-5),
@@ -843,3 +849,88 @@ def test_full_assert_solves_with_repeats_and_offsets(picks):
     assert python.hard == schedule.score.hard
     assert python.soft == pytest.approx(schedule.score.soft)
     assert score(cs.constraint_costs(schedule), picks) == python  # the default costs score the repeats too
+
+
+# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+
+HARD_REFUSAL = (
+    "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
+    "violation; use clip=True (a threshold) or another level"
+)
+
+
+def _refusal(call):
+    with pytest.raises(ValueError) as refused:
+        call()
+    return str(refused.value)
+
+
+@pytest.mark.parametrize("offset", [100.0, -20.0])
+@pytest.mark.parametrize(
+    "pick",
+    [
+        lambda offset: RoomConflictCost(offset=offset, clip=False),  # the default level, hard
+        lambda offset: RoomConflictCost(level=Level.HARD, offset=offset, clip=False),
+        lambda offset: ContentConflictCost(level="hard", offset=offset, clip=False),
+    ],
+    ids=["room-default-hard", "room-level-hard", "content-moved-to-hard"],
+)
+def test_the_literal_offset_is_refused_on_hard_on_every_path(pick, offset):
+    """A positive offset would reward a total below it, so a 0 room conflict would cancel
+    another hard violation and an infeasible schedule could score hard 0; a negative one
+    would charge a schedule without any conflict. The engine (solve, Solver,
+    constraint_costs) and the score() mirror refuse it with the same message, also as a
+    repeat next to the default pick."""
+    spec = pick(offset)
+    message = HARD_REFUSAL.format(q=repr(spec.name))
+    repeat = [RoomConflictCost(), ContentConflictCost(), spec]
+    assert _refusal(lambda: cs.solve(build_schedule(), time_limit_seconds=0.1, constraints=[spec])) == message
+    assert _refusal(lambda: _pinned_solve(_three_talks(), [spec])) == message
+    assert _refusal(lambda: _pinned_solve(_three_talks(), repeat)) == message
+    assert _refusal(lambda: cs.constraint_costs(_three_talks(), [spec])) == message
+    assert _refusal(lambda: score(cs.constraint_costs(_three_talks()), [spec])) == message
+    assert _refusal(lambda: score(cs.constraint_costs(_three_talks()), repeat)) == message
+
+
+@pytest.mark.parametrize("offset", [100.0, -20.0])
+def test_the_same_literal_pick_on_soft_is_accepted(offset):
+    """1000 x (60 - offset) on soft, on every path: a reward below 100, a charge with -20."""
+    pick = RoomConflictCost(level="soft", offset=offset, clip=False)
+    expected = (0, -1000 * (60 - offset))
+    assert score(cs.constraint_costs(_three_talks()), [pick]) == expected
+    raw = cs.constraint_costs(_three_talks(), [pick])
+    assert (raw["room_conflict_cost"]["level"], raw["room_conflict_cost"]["clip"]) == ("soft", False)
+    assert score(raw, [pick]) == expected
+    engine = _pinned_solve(_three_talks(), [pick])
+    assert (engine.score.hard, engine.score.soft) == expected
+    # Next to the hard default, the soft literal copy is fine as well.
+    both = [RoomConflictCost(), pick]
+    assert score(cs.constraint_costs(_three_talks(), both), both) == (-60000, expected[1])
+
+
+@pytest.mark.parametrize(
+    ("pick", "expected"),
+    [
+        (RoomConflictCost(offset=100.0), (0, 0.0)),  # clip=True on hard: a threshold
+        (RoomConflictCost(offset=-20.0), (-1000 * 80, 0.0)),  # adds 20 to the non-zero total only
+        (RoomConflictCost(clip=False), (-60000, 0.0)),  # clip=False with offset 0: the 0.2.0 shaping
+        (RoomConflictCost(offset=0.0, clip=False), (-60000, 0.0)),
+        (SpeakerMakespanCost(level="hard", offset=-10.0), (0, 0.0)),  # a total of 0 stays 0
+    ],
+)
+def test_the_allowed_combinations_on_hard(pick, expected):
+    assert score(cs.constraint_costs(_three_talks()), [pick]) == expected
+    engine = _pinned_solve(_three_talks(), [pick])
+    assert (engine.score.hard, engine.score.soft) == expected
+
+
+def test_the_refusal_comes_after_every_knob_of_a_duck_typed_pick():
+    """The engine checks once a pick's knobs are all re-stated: the level a pick moves to decides."""
+    moved = SimpleNamespace(
+        name="room_conflict_cost", weight=None, level="soft", exponent=1.0, offset=100.0, clip=False
+    )
+    assert _pinned_solve(_three_talks(), [moved]).score.soft == 40000.0
+    kept = SimpleNamespace(name="room_conflict_cost", weight=None, level=None, exponent=1.0, offset=100.0, clip=False)
+    message = HARD_REFUSAL.format(q="'room_conflict_cost'")
+    assert _refusal(lambda: _pinned_solve(_three_talks(), [kept])) == message
+    assert _refusal(lambda: score(cs.constraint_costs(_three_talks()), [kept])) == message

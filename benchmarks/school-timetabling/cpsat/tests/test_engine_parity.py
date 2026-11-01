@@ -490,3 +490,69 @@ def test_an_offset_cpsat_cannot_shape_is_refused():
         solve_cpsat(problem, config, constraints=merge(default_constraints(), ClassConflictCost(offset=1)))
     with pytest.raises(ValueError, match="offset is not supported by this CP-SAT model on the hard level"):
         solve_cpsat(problem, config, constraints=merge(default_constraints(), TeacherGapCost(level="hard", offset=1)))
+
+
+# ------------------------------------------- 0.3.0: clip=False with an offset stays off hard
+
+HARD_REFUSAL = (
+    "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
+    "violation; use clip=True (a threshold) or another level"
+)
+
+
+@pytest.mark.parametrize("offset", [1, -1])
+@pytest.mark.parametrize(
+    ("name", "knobs"),
+    [
+        ("teacher_conflict_cost", {}),  # the default level, hard
+        ("teacher_gap_cost", {"level": "hard"}),  # soft moved to hard
+        ("fixed_slots_cost", {}),  # structural, never flippable
+        ("parallel_groups_cost", {"level": Level.HARD}),  # structural
+    ],
+    ids=["teacher-conflict-default-hard", "teacher-gap-moved-to-hard", "fixed-slots", "parallel-groups"],
+)
+def test_the_literal_offset_is_refused_on_hard_like_the_engine(name, knobs, offset):
+    """The CP-SAT plugins refuse the pick in the engine's words, before their own limits (a
+    hard offset is a model constraint here), as a plugin and through the API DTOs; the
+    engine and the score() mirror say the same about the same pick."""
+    from helpers import course, make_problem, teacher
+    from pydantic import TypeAdapter
+
+    from teacher_scheduling.api import ConstraintDto, to_constraints
+    from teacher_scheduling.solver.registry import CONSTRAINT_TYPE_BY_NAME, default_constraints, merge
+
+    message = HARD_REFUSAL.format(q=repr(name))
+    pick = CONSTRAINT_TYPE_BY_NAME[name](**knobs, offset=offset, clip=False)
+    problem = make_problem([course(periods_per_week=1)], [teacher()], days=1, periods=2)
+    config = CpsatConfig(time_limit_seconds=1.0, num_workers=1)
+    for picks in ([pick], merge(default_constraints(), pick), [*default_constraints(), pick]):
+        with pytest.raises(ValueError) as refused:
+            solve_cpsat(problem, config, constraints=picks)
+        assert str(refused.value) == message
+    payload = [{"type": name, **{key: str(value) for key, value in knobs.items()}, "offset": offset, "clip": False}]
+    (dto_pick,) = to_constraints(TypeAdapter(list[ConstraintDto]).validate_python(payload))
+    with pytest.raises(ValueError) as refused:
+        solve_cpsat(problem, config, constraints=[dto_pick])
+    assert str(refused.value) == message
+    # The engine and the Python mirror refuse the same pick in the same words.
+    converted = st.convert_problem(problem.model_dump(mode="json"))
+    with pytest.raises(ValueError) as refused:
+        canon.DecomposedCalculator([pick])
+    assert str(refused.value) == message
+    with pytest.raises(ValueError) as refused:
+        st.constraints.score(canon.constraint_costs(converted.table), [pick])
+    assert str(refused.value) == message
+
+
+@pytest.mark.parametrize("offset", [1, -1])
+def test_the_same_literal_pick_on_soft_scores_like_the_engine(offset):
+    """teacher_gap_cost on its default soft level takes the literal formula: CP-SAT's optimum
+    is the engine's soft score of its timetable."""
+    from teacher_scheduling.domain.solution import SolveStatus
+
+    problem = _tiny_problem()
+    picks = _cpsat_picks([("teacher_gap_cost", {"level": "soft", "weight": 2, "offset": offset, "clip": False})])
+    config = CpsatConfig(time_limit_seconds=10.0, num_workers=1, random_seed=7)
+    result = solve_cpsat(problem, config, constraints=picks)
+    assert result.status == SolveStatus.OPTIMAL
+    assert -_engine_soft(problem, result, picks) == result.objective_value

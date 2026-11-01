@@ -422,9 +422,12 @@ def test_the_keys_follow_the_pick_order_of_each_name():
         (AvoidedPeriodCost(offset=1), (0, 0.0)),
         (AvoidedPeriodCost(offset=1, clip=False), (0, -5 * 4 * -1)),
         (NonPreferredPeriodCost(offset=-2, clip=False), (0, -1 * 4 * 2)),
-        # Hard, rounded per unit: 3 x (0 - 0.5) = -1.5 -> -2 in each of the 4 slots.
-        (TeacherConflictCost(offset=0.5, clip=False, weight=3), (8, 0.0)),
-        (TeacherMaxPeriodsCost(offset=1, clip=False), (1, 0.0)),  # a global at 0: one hard reward
+        # Hard, rounded: 3 x (1 - 0.5) = 1.5 -> 2 (teacher gaps moved to hard).
+        (TeacherGapCost(level="hard", offset=0.5, weight=3), (-2, 0.0)),
+        # The literal formula with an offset is refused on hard; on soft it charges every
+        # slot, 3 x (0 - 0.5) = -1.5 in each of the 4 (not rounded), and a global at 0 once.
+        (TeacherConflictCost(level="soft", offset=0.5, clip=False, weight=3), (0, 6.0)),
+        (TeacherMaxPeriodsCost(level="soft", offset=1, clip=False), (0, 1.0)),
     ],
 )
 def test_offsets_by_hand_on_both_paths(pick, expected):
@@ -443,7 +446,7 @@ def test_offsets_by_hand_on_both_paths(pick, expected):
 LEVELS = [
     TeacherGapCost(),  # soft: 20
     TeacherGapCost(level=Level.HARD, weight=2),  # hard: 2
-    TeacherWorkdayCost(level="hard", weight=4, offset=0.5, clip=False),  # hard: 4 x (1 - 0.5) = 2
+    TeacherWorkdayCost(level="hard", weight=4, offset=0.5),  # hard: 4 x max(0, 1 - 0.5) = 2
     TeacherWorkdayCost(),  # soft: 3
     ClassConflictCost(level="soft", offset=-1, clip=False),  # soft: 1 x (0 + 1) in each of 4 slots
 ]
@@ -545,11 +548,13 @@ PICKS = {
         TeacherGapCost(weight=2, offset=1, clip=False),
         TeacherGapCost(weight=0.5, exponent=2, offset=2),
         TeacherWorkdayCost(offset=-1, clip=False),
-        TeacherMaxPeriodsCost(offset=1, clip=False, weight=2),
+        TeacherMaxPeriodsCost(level="soft", offset=1, clip=False, weight=2),
+        TeacherMaxPeriodsCost(offset=1, weight=2),
         ClassGapCost(offset=1),
         AvoidedPeriodCost(offset=1, clip=False, weight=2),
         NonPreferredPeriodCost(offset=-1),
-        TeacherConflictCost(offset=0.5, clip=False),
+        TeacherConflictCost(level="soft", offset=0.5, clip=False),
+        TeacherConflictCost(offset=0.5),
     ],
 }
 
@@ -573,3 +578,104 @@ def test_full_assert_solves_with_repeats_and_offsets(problem, picks):
     assert python.hard == reported.hard
     assert python.soft == pytest.approx(reported.soft)
     assert score(canon.constraint_costs(converted.table), picks) == python
+
+
+# ------------------------------------------- 0.3.0: clip=False with an offset stays off hard
+
+HARD_REFUSAL = (
+    "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
+    "violation; use clip=True (a threshold) or another level"
+)
+
+
+def _refusal(call):
+    with pytest.raises(ValueError) as refused:
+        call()
+    return str(refused.value)
+
+
+@pytest.mark.parametrize("offset", [0.5, -0.5])
+@pytest.mark.parametrize(
+    "pick",
+    [
+        lambda offset: TeacherConflictCost(offset=offset, clip=False),  # the default level, hard (per slot)
+        lambda offset: TeacherGapCost(level=Level.HARD, offset=offset, clip=False),  # soft moved to hard
+        lambda offset: FixedSlotsCost(offset=offset, clip=False),  # structural, never flippable
+        lambda offset: ParallelGroupsCost(level="hard", offset=offset, clip=False),  # structural
+    ],
+    ids=["teacher-conflict-default-hard", "teacher-gap-moved-to-hard", "fixed-slots", "parallel-groups"],
+)
+def test_the_literal_offset_is_refused_on_hard_on_every_path(problem, pick, offset):
+    """A positive offset would reward the 4 slots without a teacher conflict, so their slack
+    would cancel another hard violation and an infeasible timetable could score hard 0; a
+    negative one would charge every slot of a timetable without one. The engine
+    (DecomposedCalculator(list), add(), constraint_costs, solve) and the score() mirror
+    refuse it with the same message, also as a repeat next to the defaults."""
+    spec = pick(offset)
+    message = HARD_REFUSAL.format(q=repr(spec.name))
+    repeat = [*get_constraints(), spec]
+    knobs = {knob: getattr(spec, knob) for knob in ("weight", "level", "offset", "clip")}
+    assert _refusal(lambda: canon.DecomposedCalculator([spec])) == message
+    assert _refusal(lambda: canon.DecomposedCalculator(repeat)) == message
+    assert _refusal(lambda: canon.DecomposedCalculator().add(spec.name, **knobs)) == message
+    assert _refusal(lambda: canon.constraint_costs(_tiny_table(), [spec])) == message
+    assert _refusal(lambda: score(canon.constraint_costs(_tiny_table()), [spec])) == message
+    assert _refusal(lambda: score(canon.constraint_costs(_tiny_table()), repeat)) == message
+    assert _refusal(lambda: st.solve(problem, time_limit_seconds=0.1, constraints=[spec])) == message
+
+
+def test_an_assembly_with_a_literal_hard_pick_is_refused_where_it_is_used(problem):
+    """Assembly.add builds the spec (a builder checks no catalog); the calculator and solve()
+    that receive the assembly refuse it in the engine's words."""
+    assembly = Assembly().add("teacher_conflict_cost", offset=0.5, clip=False)
+    message = HARD_REFUSAL.format(q="'teacher_conflict_cost'")
+    assert _refusal(lambda: canon.DecomposedCalculator(assembly)) == message
+    assert _refusal(lambda: st.solve(problem, time_limit_seconds=0.1, constraints=assembly)) == message
+    assert _refusal(lambda: score(canon.constraint_costs(_tiny_table()), list(assembly))) == message
+    soft = Assembly().add("teacher_conflict_cost", level="soft", offset=0.5, clip=False)
+    canon.DecomposedCalculator(soft).score(_tiny_table())  # the same pick on soft is fine
+
+
+@pytest.mark.parametrize("offset", [0.5, -0.5])
+def test_the_same_literal_pick_on_soft_is_accepted(offset):
+    """3 x (0 - offset) in each of the 4 slots, on soft, on every path."""
+    pick = TeacherConflictCost(level="soft", weight=3, offset=offset, clip=False)
+    expected = (0, -3 * (0 - offset) * 4)
+    assert score(canon.constraint_costs(_tiny_table()), [pick]) == expected
+    raw = canon.constraint_costs(_tiny_table(), [pick])
+    entry = raw["teacher_conflict_cost"]
+    assert (entry["level"], entry["clip"]) == ("soft", False)
+    assert score(raw, [pick]) == expected
+    assert _engine([pick]) == expected
+    by_name = canon.DecomposedCalculator()
+    by_name.add(pick.name, weight=3, level="soft", offset=offset, clip=False)
+    result = by_name.score(_tiny_table())
+    assert (result.hard, result.soft) == expected
+    # Next to the hard default, the soft literal copy is fine as well.
+    assert _engine([TeacherConflictCost(), pick]) == expected
+
+
+@pytest.mark.parametrize(
+    ("pick", "expected"),
+    [
+        (TeacherConflictCost(offset=0.5), (0, 0.0)),  # clip=True on hard: a threshold keeps a 0 at 0
+        (TeacherConflictCost(offset=-0.5), (0, 0.0)),
+        (TeacherGapCost(level="hard", offset=-1), (-20 * 2, 0.0)),  # adds 1 to the non-zero total
+        (TeacherConflictCost(clip=False), (0, 0.0)),  # clip=False with offset 0: the 0.2.0 shaping
+        (TeacherGapCost(level="hard", offset=0.0, clip=False), (-20, 0.0)),
+        (FixedSlotsCost(offset=1), (0, 0.0)),
+    ],
+)
+def test_the_allowed_combinations_on_hard(pick, expected):
+    assert score(canon.constraint_costs(_tiny_table()), [pick]) == expected
+    assert _engine([pick]) == expected
+
+
+def test_the_refusal_comes_after_every_knob_of_a_duck_typed_pick():
+    """The engine checks once a pick's knobs are all re-stated: the level a pick moves to decides."""
+    moved = SimpleNamespace(name="teacher_conflict_cost", weight=3, level="soft", exponent=1.0, offset=0.5, clip=False)
+    assert _engine([moved]) == (0, 6.0)
+    kept = SimpleNamespace(name="teacher_conflict_cost", weight=3, level=None, exponent=1.0, offset=0.5, clip=False)
+    message = HARD_REFUSAL.format(q="'teacher_conflict_cost'")
+    assert _refusal(lambda: canon.DecomposedCalculator([kept])) == message
+    assert _refusal(lambda: score(canon.constraint_costs(_tiny_table()), [kept])) == message

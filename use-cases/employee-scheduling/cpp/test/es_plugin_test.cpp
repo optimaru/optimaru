@@ -20,10 +20,11 @@
 //   (h) repeated components and the offset / clip knobs: a hand-calculated
 //       repeat (undesired minutes + 0.5 x undesired minutes^2), threshold and
 //       literal offsets by hand (literal mode charges every employee, a
-//       worker scope's employees only), incremental == a fresh recompute
-//       over a random walk and a FULL_ASSERT solve with repeated, shifted
-//       components (delta-grouped hard, shared-context day patterns, scoped
-//       and global ones)
+//       worker scope's employees only), the literal formula refused on hard
+//       at reset (a scoped one included) and kept on soft, incremental == a
+//       fresh recompute over a random walk and a FULL_ASSERT solve with
+//       repeated, shifted components (delta-grouped hard, shared-context day
+//       patterns, scoped and global ones)
 // The hand-calculated positive and zero raw cost of every constraint is
 // checked through the bindings (python/tests/test_constraint_costs.py).
 #include <algorithm>
@@ -501,7 +502,12 @@ EmployeeSchedule repeatInstance() {
 
 void addRepeatedShifted(DecomposedCalculator& calc) {
     addEveryComponent(calc);
-    calc.add(shaped<RequiredSkillCost>(1.0, false, 2.0));            // delta-grouped hard, literal
+    // Hard refuses the literal formula with an offset (hard 0 must mean no
+    // violation): the hard copies are thresholds, the literal ones soft.
+    calc.add(shaped<RequiredSkillCost>(1.0, true, 2.0));             // delta-grouped hard, threshold
+    auto literalSkill = shaped<RequiredSkillCost>(1.0, false, 2.0);  // ... and a soft literal copy
+    literalSkill->setLevel(optimaru::Level::Soft);
+    calc.add(std::move(literalSkill));
     calc.add(shaped<EmployeeUnavailabilityCost>(60.0, true));        // hard threshold
     auto squared = shaped<UndesiredDayCost>(120.0, true, 0.01);      // a repeat: (minutes - 120)^2
     squared->setExponent(2.0);
@@ -515,6 +521,7 @@ void addRepeatedShifted(DecomposedCalculator& calc) {
                                                std::vector<int>{1, 3}, std::vector<int>{}, true, false);
     scoped->setOffset(2.0);
     scoped->setClip(false);
+    scoped->setLevel(optimaru::Level::Soft);  // a scoped literal copy, on soft
     calc.add(std::move(scoped));
     // Repeats on another level than their default: a hard one soft, a soft one hard.
     auto demoted = shaped<EmployeeUnavailabilityCost>(30.0, false, 0.5);
@@ -559,9 +566,17 @@ void verifyRepeatsAndOffsets() {
               "literal offset -10: (480 + 10) + (0 + 10)");
         check(soft(shaped<DesiredDayCost>(30.0, false)).soft == 60.0,
               "a literal offset on a reward (raw [0, 0]): two employees rewarded 30 each");
-        // A hard literal pick rounds per employee: 3 x (0 - 0.5) = -1.5 -> -2, twice.
-        auto hard = shaped<EmployeeUnavailabilityCost>(0.5, false, 3.0);
-        check(soft(std::move(hard)).hard == 4, "hard literal offset 0.5 at weight 3: llround(-1.5) x 2 = -4");
+        // A hard pick rounds per employee: 3 x (480 - 479.5) = 1.5 -> 2.
+        auto hard = shaped<UndesiredDayCost>(479.5, true, 3.0);
+        hard->setLevel(optimaru::Level::Hard);
+        check(soft(std::move(hard)).hard == -2, "hard threshold offset 479.5 at weight 3: llround(1.5) = 2");
+        // The literal unavailability pick on soft charges both employees,
+        // 3 x (0 - 0.5) = -1.5 each, not rounded: +3 soft.
+        auto literal = shaped<EmployeeUnavailabilityCost>(0.5, false, 3.0);
+        literal->setLevel(optimaru::Level::Soft);
+        const Score literalScore = soft(std::move(literal));
+        check(literalScore.hard == 0 && literalScore.soft == 3.0,
+              "soft literal offset 0.5 at weight 3 on unavailability: 2 x 1.5 = +3 soft");
         // A worker scope: only Worker 2 is evaluated, so the literal charges it alone.
         DecomposedCalculator scopedCalc;
         auto scoped = std::make_unique<ScopedUnit>(std::make_unique<UndesiredDayCost>(), std::vector<int>{1, 1, 7},
@@ -581,6 +596,66 @@ void verifyRepeatsAndOffsets() {
         globalThreshold.add(shaped<ShiftCountImbalanceCost>(2.0, true));
         check(score(global, s).soft == 2.0 && score(globalThreshold, s).soft == 0.0,
               "global total 0, offset 2: literal rewards 2, threshold 0");
+    }
+    {
+        // On hard (its default level, or moved there) the literal formula
+        // with an offset is refused at reset, whichever sign and setter
+        // order: +0.5 would reward both employees without unavailable minutes
+        // (+4 hard, cancelling other hard violations), -0.5 would charge them.
+        auto resetRefusal = [](std::unique_ptr<EsUnitConstraint> component) {
+            EmployeeSchedule s = repeatInstance();
+            DecomposedCalculator calc;
+            calc.add(std::move(component));
+            try {
+                score(calc, s);
+            } catch (const std::logic_error& error) {
+                return std::string(error.what());
+            }
+            return std::string();
+        };
+        auto refusal = [](const std::string& name) {
+            return "Constraint '" + name +
+                   "' cannot use clip=false with a non-zero offset on a level that counts toward the "
+                   "hard score (hard 0 must mean no violation)";
+        };
+        auto clipFirst = std::make_unique<EmployeeUnavailabilityCost>(3.0);
+        clipFirst->setClip(false);
+        clipFirst->setOffset(-0.5);
+        check(resetRefusal(shaped<EmployeeUnavailabilityCost>(0.5, false, 3.0)) ==
+                              refusal("employeeUnavailabilityCost") &&
+                      resetRefusal(std::move(clipFirst)) == refusal("employeeUnavailabilityCost"),
+              "unavailability literal offset +-0.5 on hard: refused at reset");
+        auto promoted = shaped<UndesiredDayCost>(100.0, false);
+        promoted->setLevel(optimaru::Level::Hard);
+        auto scoped = std::make_unique<ScopedUnit>(std::make_unique<MaxConsecutiveDaysCost>(1.0, 3),
+                                                   std::vector<int>{1}, std::vector<int>{}, true, false);
+        scoped->setOffset(2.0);
+        scoped->setClip(false);
+        check(resetRefusal(std::move(promoted)) == refusal("undesiredDayCost") &&
+                      resetRefusal(std::move(scoped)) == refusal("maxConsecutiveDaysCost"),
+              "a soft literal offset moved to hard, and a scoped hard one: refused at reset");
+        {
+            // Next to the default component, the literal hard repeat is refused too.
+            EmployeeSchedule s = repeatInstance();
+            DecomposedCalculator calc;
+            calc.emplace<EmployeeUnavailabilityCost>();
+            calc.add(shaped<EmployeeUnavailabilityCost>(0.5, false));
+            std::string message;
+            try {
+                score(calc, s);
+            } catch (const std::logic_error& error) {
+                message = error.what();
+            }
+            check(message == refusal("employeeUnavailabilityCost"),
+                  "a literal hard repeat next to the default: refused at reset");
+        }
+        auto softLiteral = shaped<EmployeeUnavailabilityCost>(0.5, false);
+        softLiteral->setLevel(optimaru::Level::Soft);
+        check(resetRefusal(shaped<EmployeeUnavailabilityCost>(0.5, true)).empty() &&
+                      resetRefusal(shaped<EmployeeUnavailabilityCost>(0.0, false)).empty() &&
+                      resetRefusal(std::move(softLiteral)).empty(),
+              "unavailability: a threshold offset or clip=false with offset 0 on hard, and the "
+              "literal offset on soft, are allowed");
     }
     {
         // Random walk: incremental == a fresh calculator of the same components.

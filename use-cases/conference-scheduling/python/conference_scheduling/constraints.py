@@ -36,7 +36,9 @@ Every spec takes five knobs:
 - ``clip``     (keyword) ``True`` (the default) counts only what lies beyond the
                offset, ``sign(c) * max(0, |c| - offset) ** exponent``; ``False``
                shapes ``c - offset`` as it is, so a total below the offset (a 0
-               included) lowers the penalty.
+               included) lowers the penalty. With an offset it is refused on
+               hard (``RoomConflictCost`` by default), because hard 0 must mean
+               no violation.
 
 The same constraint may be picked several times; each pick is scored on its own with
 its own knobs (its level included) and the picks add up. The content-conflict minutes

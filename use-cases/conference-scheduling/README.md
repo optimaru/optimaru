@@ -93,8 +93,10 @@ per-constraint surface (each reward reported negated, as its raw cost <= 0), and
 may be picked several times. Each constraint's one total `x` is shaped as
 `sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
 `(x - offset) ** exponent`, sign-preserving (`clip=False`, which charges a total of 0 as
-well and acts as a reward below the offset); `offset=0` is the 0.2.0 shaping. Each pick is
-its own instance with its own knobs, and the instances add up:
+well and acts as a reward below the offset); `offset=0` is the 0.2.0 shaping. `clip=False`
+with an offset is refused on hard (`RoomConflictCost` and the other hard constraints by
+default), because hard 0 must mean no violation. Each pick is its own instance with its own
+knobs, and the instances add up:
 
 ```python
 cs.solve(schedule, constraints=[

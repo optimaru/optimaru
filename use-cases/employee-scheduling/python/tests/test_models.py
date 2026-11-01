@@ -611,3 +611,74 @@ def test_the_json_schema_carries_the_offset_and_clip_knobs():
     properties = rule_model(MaxConsecutiveDaysCost).model_json_schema()["properties"]
     assert properties["offset"]["default"] == 0.0 and properties["offset"]["type"] == "number"
     assert properties["clip"]["default"] is True and properties["clip"]["type"] == "boolean"
+
+
+# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+
+HARD_REFUSAL = (
+    "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
+    "violation; use clip=True (a threshold) or another level"
+)
+
+
+def _validation_message(call):
+    """The one error of a ValidationError, as the model validator raised it."""
+    with pytest.raises(ValidationError) as refused:
+        call()
+    (error,) = refused.value.errors()
+    return str(error["ctx"]["error"])
+
+
+@pytest.mark.parametrize("offset", [120, -120])
+@pytest.mark.parametrize(
+    "rule",
+    [
+        lambda offset: {"name": "required_skill_cost", "offset": offset, "clip": False},  # default hard
+        lambda offset: {"name": "undesired_day_cost", "level": "hard", "offset": offset, "clip": False},
+        lambda offset: {"name": "max_consecutive_days_cost", "value": 3, "offset": offset, "clip": False},
+    ],
+    ids=["skill-default-hard", "undesired-moved-to-hard", "max-days-default-hard"],
+)
+def test_a_json_rule_refuses_the_literal_offset_on_hard(rule, offset):
+    """The JSON rule models refuse it when they are validated, in the engine's words: as a
+    rule model, inside a request, and from a spec instance."""
+    data = rule(offset)
+    message = HARD_REFUSAL.format(q=repr(data["name"]))
+    model = rule_model(data["name"])
+    assert _validation_message(lambda: model.model_validate(data)) == message
+    payload = {**_small_input().model_dump(), "rules": [{"name": "required_skill_cost"}, data]}
+    assert _validation_message(lambda: SchedulingInput.model_validate(payload)) == message
+    spec = model.spec_class(**{key: value for key, value in data.items() if key != "name"})
+    # The spec itself is accepted until it is scored; a rule list refuses it.
+    assert _validation_message(lambda: _small_input(rules=[spec])) == message
+
+
+@pytest.mark.parametrize("offset", [120, -120])
+def test_solve_request_refuses_a_literal_hard_rule_added_in_place(offset):
+    """An in-place edit of the rule list bypasses pydantic; the engine refuses the pick."""
+    request = ScheduleRequest(timelimit=0.05, model_input=_small_input(rules=default_rules()))
+    request.model_input.rules.append(RequiredSkillCost(offset=offset, clip=False))
+    with pytest.raises(ValueError) as refused:
+        solve_request(request)
+    assert str(refused.value) == HARD_REFUSAL.format(q="'required_skill_cost'")
+
+
+@pytest.mark.parametrize(
+    "rule",
+    [
+        {"name": "required_skill_cost", "level": "soft", "offset": 120, "clip": False},
+        {"name": "required_skill_cost", "offset": 120},  # a threshold on hard
+        {"name": "required_skill_cost", "offset": 0, "clip": False},  # clip=False with offset 0
+        {"name": "undesired_day_cost", "offset": -120, "clip": False},  # soft by default
+    ],
+    ids=["soft-literal", "hard-threshold", "hard-offset-0", "default-soft-literal"],
+)
+def test_the_allowed_literal_and_threshold_rules_solve(rule):
+    request = ScheduleRequest(
+        timelimit=0.05,
+        model_input=SchedulingInput.model_validate({**_small_input().model_dump(), "rules": [rule]}),
+    )
+    solution = solve_request(request)
+    (total,) = solution.rule_totals
+    assert total.name == rule["name"]
+    assert total.level == rule.get("level", "soft" if rule["name"] == "undesired_day_cost" else "hard")

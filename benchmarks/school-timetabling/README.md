@@ -115,7 +115,9 @@ are CP-SAT model constraints, so on this path:
 - an integral `offset` / `clip` is shaped as the engine shapes it on a soft constraint: the
   one total of a global constraint, or each calendar slot of `avoided_period_cost` /
   `non_preferred_period_cost` (an empty slot included); a hard constraint (a model
-  constraint here) and a fractional offset refuse a non-zero offset;
+  constraint here) and a fractional offset refuse a non-zero offset, and `clip=False` with
+  an offset on hard is refused first, with the engine's message (hard 0 must mean no
+  violation);
 - a constraint listed several times in `solve(constraints=...)` adds one objective term per
   entry, each with its own knobs, its level included (0.3.0: `avoided_period_cost` once hard
   and once soft forbids the avoided periods and still prices its soft repeat);

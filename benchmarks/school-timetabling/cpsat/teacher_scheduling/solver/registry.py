@@ -47,7 +47,9 @@ The knobs on the CP-SAT path:
                it). ``clip=True`` counts only what lies beyond the offset,
                ``clip=False`` shifts the penalty as it is. A hard constraint
                (a model constraint here) and a fractional offset refuse a
-               non-zero offset.
+               non-zero offset. ``clip=False`` with a non-zero offset on the
+               hard level (the knob's, or the default) is refused first, in the
+               engine's words: hard 0 must mean no violation.
 
 A constraint may be listed several times in `solve(constraints=...)`: each
 entry is its own instance with its own knobs, adding its own objective term
@@ -88,6 +90,26 @@ UNASSIGNED_WEIGHT = int(domain.UNASSIGNED_LESSONS_SOFT_WEIGHT)
 
 #: The engine's catalog rows, by name: the default level / weight / flippability of each constraint.
 ENGINE_DEFAULTS: dict[str, Any] = {row.name: row for row in _engine_constraint_info()}
+
+
+def _check_literal_offset(name: str, level: str, offset: float, clip: bool) -> None:
+    """``clip=False`` with an offset != 0 stays off the hard level, in the engine's words.
+
+    The rule of the engine (python::checkLiteralOffset) and of the
+    ``st_timetabling`` score() mirror, word for word: the literal formula
+    charges every evaluated unit ``shape(x - offset)``, a raw 0 included, so on
+    hard it would reward slack (one unit's slack cancelling another's
+    violation) or charge units without a violation, and hard 0 must mean no
+    violation. This use case has no medium level, so only hard refuses it.
+    ``level`` is the effective one.
+    """
+    if clip or offset == 0:
+        return
+    if level == "hard":
+        raise ValueError(
+            f"constraint {name!r}: clip=False with a non-zero offset cannot be hard, because hard 0 "
+            "must mean no violation; use clip=True (a threshold) or another level"
+        )
 
 
 @runtime_checkable
@@ -155,9 +177,13 @@ class _EnginePlugin:
         return int(self.offset)
 
     def build(self, model: cp_model.CpModel, variables: TimetableVariables) -> cp_model.LinearExpr | None:
+        # The engine's knob rules first (the same refusals, in the same words), then the
+        # CP-SAT model's own limits.
+        level = self.effective_level
+        _check_literal_offset(self.name, level, self.offset, self.clip)
         if self.exponent != 1.0:
             raise ValueError(f"constraint {self.name!r}: exponent {self.exponent!r} is not supported by CP-SAT")
-        level, weight = self.effective_level, self.effective_weight
+        weight = self.effective_weight
         if self.effective_offset != 0 and level == "hard":
             raise ValueError(
                 f"constraint {self.name!r} offset is not supported by this CP-SAT model on the hard level "

@@ -24,7 +24,9 @@
 //   (j) repeated components and the offset / clip knobs: a hand-calculated
 //       repeat, threshold and literal offsets by hand on a global, a
 //       per-slot and a hard constraint (literal mode charges every slot),
-//       incremental == a fresh recompute over a random walk and a
+//       the literal formula refused on hard at reset (a structural one
+//       included) and kept on soft, incremental == a fresh recompute over a
+//       random walk and a
 //       FULL_ASSERT solve with repeated, shifted components — the repeated
 //       teacher-mask instances sharing the assembly's one TeacherMaskHub
 #include <algorithm>
@@ -1400,10 +1402,17 @@ ConstraintAssembly repeatedAssembly()
                               .exponent("teacherGapCost", 2.0)
                               .offset("teacherGapCost", 2.0)
                               .clip("teacherGapCost", false));
+    // The literal copies of hard components sit on soft: hard refuses the
+    // literal formula with an offset (hard 0 must mean no violation). The
+    // hard copies are thresholds.
     assembly.addInstances(copyOf("teacherMaxPeriodsCost", hub)
+                              .soft("teacherMaxPeriodsCost")
                               .weight("teacherMaxPeriodsCost", 2.0)
                               .offset("teacherMaxPeriodsCost", 1.0)
                               .clip("teacherMaxPeriodsCost", false));
+    assembly.addInstances(copyOf("teacherMaxPeriodsCost", hub)
+                              .weight("teacherMaxPeriodsCost", 2.0)
+                              .offset("teacherMaxPeriodsCost", 1.0));
     assembly.addInstances(copyOf("teacherWorkdayCost", hub)
                               .offset("teacherWorkdayCost", -1.0));
     assembly.addInstances(copyOf("classGapCost", hub)
@@ -1414,8 +1423,11 @@ ConstraintAssembly repeatedAssembly()
                               .offset("avoidedPeriodCost", 1.0)
                               .clip("avoidedPeriodCost", false));
     assembly.addInstances(copyOf("teacherConflictCost", hub)
+                              .soft("teacherConflictCost")
                               .offset("teacherConflictCost", 0.5)
                               .clip("teacherConflictCost", false));
+    assembly.addInstances(copyOf("teacherConflictCost", hub)
+                              .offset("teacherConflictCost", 0.5));
     assembly.addInstances(copyOf("unassignedLessonsCost", hub)
                               .offset("unassignedLessonsCost", 1.0));
     // Repeats on another level than their default: a soft one hard, a hard
@@ -1490,13 +1502,94 @@ void verifyRepeatsAndOffsets()
                        .offset("teacherWorkdayCost", -1.0))
                   == -3.0 * 2,
               "global threshold offset -1: 3 x (1 + 1)");
-        // A hard literal pick rounds per slot: 3 x (0 - 0.5) = -1.5 -> -2.
-        checkCount("hard per-slot literal offset 0.5 at weight 3: 4 x 2",
-                   hard(copyOf("teacherConflictCost", hub)
-                            .weight("teacherConflictCost", 3.0)
-                            .offset("teacherConflictCost", 0.5)
-                            .clip("teacherConflictCost", false)),
-                   8);
+        // A hard pick rounds its contribution: 3 x (1 - 0.5) = 1.5 -> 2.
+        checkCount("hard threshold offset 0.5 at weight 3 on teacher gaps: llround(1.5)",
+                   hard(copyOf("teacherGapCost", hub)
+                            .hard("teacherGapCost")
+                            .weight("teacherGapCost", 3.0)
+                            .offset("teacherGapCost", 0.5)),
+                   -2);
+        // The literal teacher-conflict pick on soft charges every slot,
+        // 3 x (0 - 0.5) = -1.5 in each of the 4, not rounded: +6 soft.
+        check(soft(copyOf("teacherConflictCost", hub)
+                       .soft("teacherConflictCost")
+                       .weight("teacherConflictCost", 3.0)
+                       .offset("teacherConflictCost", 0.5)
+                       .clip("teacherConflictCost", false))
+                  == 6.0,
+              "soft per-slot literal offset 0.5 at weight 3: 4 x 1.5");
+    }
+    {
+        // On hard (its default level, or moved there) the literal formula
+        // with an offset is refused at reset, whichever sign and setter
+        // order, a structural (non-flippable) constraint included: +0.5
+        // would reward the 4 slots without a teacher conflict (+8 hard,
+        // cancelling other hard violations), -0.5 would charge them.
+        const auto hub = std::make_shared<TeacherMaskHub>();
+        auto resetRefusal = [](ConstraintAssembly assembly) {
+            Timetable t = repeatInstance();
+            try
+            {
+                scoreWithAssembly(std::move(assembly), t);
+            }
+            catch (const std::logic_error &error)
+            {
+                return std::string(error.what());
+            }
+            return std::string();
+        };
+        auto refusal = [](const std::string &name) {
+            return "Constraint '" + name
+                   + "' cannot use clip=false with a non-zero offset on a level "
+                     "that counts toward the hard score (hard 0 must mean no "
+                     "violation)";
+        };
+        check(resetRefusal(copyOf("teacherConflictCost", hub)
+                               .offset("teacherConflictCost", 0.5)
+                               .clip("teacherConflictCost", false))
+                      == refusal("teacherConflictCost")
+                  && resetRefusal(copyOf("teacherConflictCost", hub)
+                                      .clip("teacherConflictCost", false)
+                                      .offset("teacherConflictCost", -0.5))
+                         == refusal("teacherConflictCost"),
+              "teacher-conflict literal offset +-0.5 on hard: refused at reset");
+        check(resetRefusal(copyOf("teacherGapCost", hub)
+                               .offset("teacherGapCost", 2.0)
+                               .clip("teacherGapCost", false)
+                               .hard("teacherGapCost"))
+                      == refusal("teacherGapCost")
+                  && resetRefusal(copyOf("fixedSlotsCost", hub)
+                                      .offset("fixedSlotsCost", 1.0)
+                                      .clip("fixedSlotsCost", false))
+                         == refusal("fixedSlotsCost")
+                  && resetRefusal(copyOf("parallelGroupsCost", hub)
+                                      .clip("parallelGroupsCost", false)
+                                      .offset("parallelGroupsCost", -1.0))
+                         == refusal("parallelGroupsCost"),
+              "a soft literal offset moved to hard, and the structural fixed "
+              "slots / parallel groups: refused at reset");
+        ConstraintAssembly repeated = copyOf("teacherConflictCost", hub);
+        repeated.addInstances(copyOf("teacherConflictCost", hub)
+                                  .offset("teacherConflictCost", 0.5)
+                                  .clip("teacherConflictCost", false));
+        check(resetRefusal(std::move(repeated)) == refusal("teacherConflictCost"),
+              "a literal hard repeat next to the default: refused at reset");
+        check(resetRefusal(copyOf("teacherConflictCost", hub)
+                               .offset("teacherConflictCost", 0.5))
+                      .empty()
+                  && resetRefusal(copyOf("teacherConflictCost", hub)
+                                      .clip("teacherConflictCost", false))
+                         .empty()
+                  && resetRefusal(copyOf("fixedSlotsCost", hub)
+                                      .offset("fixedSlotsCost", 1.0))
+                         .empty()
+                  && resetRefusal(copyOf("teacherConflictCost", hub)
+                                      .soft("teacherConflictCost")
+                                      .offset("teacherConflictCost", 0.5)
+                                      .clip("teacherConflictCost", false))
+                         .empty(),
+              "a threshold offset or clip=false with offset 0 on hard, and the "
+              "literal offset on soft, are allowed");
     }
     {
         // Random walk: incremental == a fresh calculator of the same assembly.

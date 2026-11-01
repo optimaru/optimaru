@@ -44,7 +44,10 @@ Every spec takes the same five knobs:
                offset, ``sign(c) * max(0, |c| - offset) ** exponent``; ``False``
                shapes ``c - offset`` as it is, so a cost below the offset lowers
                the penalty (every slot of a per-slot constraint, an empty one
-               included, is charged).
+               included, is charged). With an offset it is refused on hard
+               (``TeacherConflictCost`` and the other hard constraints by
+               default, the structural ones included), because hard 0 must mean
+               no violation.
 
 A constraint may be picked several times in a list; each pick is scored on its
 own with its own knobs and the picks add up. Teacher gaps plus their square
