@@ -142,7 +142,7 @@ class SolverConfig:
     """Macro moves on the number of loaded teams (empty / revive a team). The only path
     across the medium-level team-count barrier, so default True."""
     best_score_limit: tuple[int, float]
-    """Stop early at or above this score. E.g. (0, -1e18) == stop at the first feasible."""
+    """Stop early at or above this score. E.g. (0, -inf) == stop at the first feasible."""
     on_new_best: Callable[[int, Score], None] | None
 
 class Solver:

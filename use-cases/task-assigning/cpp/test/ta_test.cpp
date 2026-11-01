@@ -14,6 +14,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdio>
+#include <limits>
 #include <random>
 #include <string>
 #include <utility>
@@ -512,10 +513,39 @@ void verifyFeasibleSolve()
     std::printf("\n");
 }
 
+// -------------------------------------------------------------------------
+// stop_at_first_feasible's best-score limit (0, 0, INT64_MIN, INT64_MIN):
+// hard and soft0 (folded into the engine's hard level) compared exactly,
+// soft -inf, so no soft score, however low, misses the stop.
+// -------------------------------------------------------------------------
+void verifyStopAtFirstFeasibleLimit()
+{
+    std::printf("== stop_at_first_feasible's limit ==\n");
+    const optimaru::HardSoftScore limit
+        = toEngineScoreLimit(Score{0, 0, kNoLevelFloor, kNoLevelFloor});
+    check(limit.hard == 0 && std::isinf(limit.soft) && limit.soft < 0.0,
+          "(0, 0, INT64_MIN, INT64_MIN) -> engine limit (0, -inf)");
+    check(optimaru::HardSoftScore{0, -1e30} >= limit
+              && toEngineScore(Score{0, 0, -(1LL << 40), -(1LL << 62)}) >= limit,
+          "every skill met and every task assigned, any soft: reaches it");
+    check(!(toEngineScore(Score{0, -1, 0, 0}) >= limit)
+              && !(toEngineScore(Score{-1, 0, 0, 0}) >= limit),
+          "an unassigned task or a missing skill does not");
+    const optimaru::HardSoftScore lax
+        = toEngineScoreLimit(Score{0, -2, kNoLevelFloor, 0});
+    check(lax.hard == -2 && lax.soft == -std::numeric_limits<double>::infinity(),
+          "soft0 keeps its floor (-2 unassigned) while soft1 has none");
+    const Score other{-2, -3, -5, -7};
+    check(toEngineScoreLimit(other) == toEngineScore(other),
+          "any other limit folds like a score");
+    std::printf("\n");
+}
+
 }  // namespace
 
 int main()
 {
+    verifyStopAtFirstFeasibleLimit();
     verifyConstraints();
     verifyIncremental();
     verifyFullAssertSolve();

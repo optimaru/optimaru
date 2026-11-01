@@ -431,7 +431,7 @@ PYBIND11_MODULE(_core, m)
                 c.ruinRecreateRewards = std::move(rewards);
             })
         .def_readwrite("ruin_recreate_polish_steps", &Solver::Config::ruinRecreatePolishSteps)
-        // Early termination once bestScore >= (hard, soft); (0, -1e18) stops
+        // Early termination once bestScore >= (hard, soft); (0, -inf) stops
         // at the first feasible schedule.
         .def_property(
             "best_score_limit",

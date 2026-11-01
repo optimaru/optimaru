@@ -125,7 +125,7 @@ class SolverConfig:
     """Most partner bins RepackMove empties with its source (2; 0 = the source
     alone). ValueError below 0."""
     best_score_limit: tuple[int, float]
-    """(hard, soft): stop early once bestScore >= this. (0, -1e18) stops at
+    """(hard, soft): stop early once bestScore >= this. (0, -inf) stops at
     the first feasible solution."""
     on_new_best: Callable[[int, Score], None] | None
 

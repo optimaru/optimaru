@@ -20,7 +20,9 @@ import importlib.util
 import sys
 from dataclasses import FrozenInstanceError, dataclass
 from pathlib import Path
+from typing import Any
 
+import numpy as np
 import pytest
 
 _PATH = Path(__file__).resolve().parents[3] / "python" / "optimaru" / "_constraint.py"
@@ -262,13 +264,73 @@ def test_the_below_hard_fold_saturates():
 
 @pytest.mark.parametrize(
     ("weight", "exponent", "level"),
-    [(1e19, 1.0, "hard"), (1.0, 200.0, "soft"), (1.0, 200.0, "hard"), (0.0, 400.0, "soft")],
+    [(1e19, 1.0, "hard"), (1.0, 200.0, "soft"), (1.0, 200.0, "hard")],
 )
 def test_out_of_range_contributions_raise_overflow_error(weight, exponent, level):
     """A hard contribution of 2**62 or more, or a non-finite one, cannot be scored."""
     costs = {"conflict_cost": _entry([1e3], level=level, name="conflict_cost")}
     with pytest.raises(OverflowError, match="conflict_cost"):
         score_costs(costs, [ConflictCost(weight=weight, exponent=exponent)])
+
+
+@pytest.mark.parametrize("level", ["hard", "soft", "medium"])
+@pytest.mark.parametrize("exponent", [400.0, 2000.0, 1e300])
+def test_weight_zero_contributes_exactly_zero_at_any_exponent(level, exponent):
+    """An opt-in constraint at weight 0 is 0 without shaping its cost (no 0 * inf = nan).
+
+    The engine asserts the same (constraint_level_test.cpp (l)).
+    """
+    fold = BELOW_HARD if level == "medium" else None
+    costs = {
+        "conflict_cost": _entry([1e3, -1e3, 0.0], level=level, name="conflict_cost", fold=fold),
+        "task_cost_cost": _entry([2.0], level="soft", name="task_cost_cost", fold=fold),
+    }
+    result = score_costs(costs, [ConflictCost(weight=0.0, exponent=exponent), TaskCostCost()])
+    assert result == (0, -2.0)
+    assert score_costs(costs, [ConflictCost(weight=0, exponent=exponent)]) == (0, 0.0)
+
+
+def test_unset_knobs_mean_the_default_even_for_costs_of_another_selection():
+    """constraint_costs(x, picks) carries the picks' weight / level and the defaults.
+
+    employee-scheduling and school-timetabling compute costs for a selection: an
+    entry there holds that selection's weight and level, and ``default_weight`` /
+    ``default_level`` (what weight=None / hard=None mean). Re-pricing with
+    another selection must read the defaults, not the first selection's knobs.
+    """
+    costs = {
+        "conflict_cost": {
+            **_entry([2.0, 1.0], level="soft", weight=5.0, name="conflict_cost"),
+            "default_level": "hard",
+            "default_weight": 1.0,
+        },
+        "overload_cost": {
+            **_entry([1.0], level="hard", name="overload_cost", fold=INTO_SOFT),
+            "default_level": "medium",
+            "default_weight": 1.0,
+        },
+    }
+    costs["conflict_cost"]["medium_fold"] = costs["overload_cost"]["medium_fold"]
+    # Unset knobs: conflict back at hard x1 (3 hard), overload back at medium (1 x 1000 soft).
+    assert score_costs(costs, [ConflictCost(), OverloadCost()]) == (-3, -1000.0)
+    # The first selection's knobs, stated explicitly, reproduce its score.
+    assert score_costs(costs, [ConflictCost(weight=5.0, hard=False), OverloadCost(hard=True)]) == (-1, -15.0)
+    # An entry without the default keys (hand-made, older package) reads level / weight.
+    legacy = {"conflict_cost": _entry([2.0, 1.0], level="soft", weight=5.0, name="conflict_cost")}
+    assert score_costs(legacy, [ConflictCost()]) == (0, -15.0)
+
+
+def test_a_non_flippable_check_uses_the_default_level():
+    costs = {
+        "forbidden_worker_cost": {
+            **_entry([1.0], level="hard", flippable=False, name="forbidden_worker_cost"),
+            "default_level": "hard",
+            "default_weight": 1.0,
+        }
+    }
+    with pytest.raises(ValueError, match="is always hard; hard=False is not allowed"):
+        score_costs(costs, [ForbiddenWorkerCost(hard=False)])
+    assert score_costs(costs, [ForbiddenWorkerCost(hard=True)]) == (-1, 0.0)
 
 
 def test_an_unknown_name_is_refused():
@@ -367,6 +429,50 @@ def test_repeatable_selections_allow_one_name_with_different_parameters():
             DEFAULTS,
             repeatable=True,
         )
+
+
+@dataclass(frozen=True)
+class ScopedLimitCost(Constraint):
+    name = "scoped_limit_cost"
+    limit: Any = 0
+    scope: Any = None
+
+
+@pytest.mark.parametrize(
+    ("first", "second"),
+    [
+        ({"limit": 1}, {"limit": 1.0}),
+        ({"limit": 2}, {"limit": np.int64(2)}),
+        ({"limit": 2.5}, {"limit": np.float64(2.5)}),
+        ({"scope": [1, 2]}, {"scope": (1.0, np.int32(2))}),
+        ({"scope": {"a": [1, {2}]}}, {"scope": {"a": (1.0, frozenset({2.0}))}}),
+        ({"scope": np.array([1, 2])}, {"scope": [1, 2]}),
+        ({"scope": True}, {"scope": np.bool_(True)}),
+    ],
+)
+def test_repeatable_duplicates_compare_parameters_by_value(first, second):
+    """x=1 and x=1.0 (or numpy.int64(1)) are the same parameters, at any depth."""
+    with pytest.raises(ValueError, match="with the same parameters"):
+        select([ScopedLimitCost(**first), ScopedLimitCost(**second)], DEFAULTS, repeatable=True)
+
+
+@pytest.mark.parametrize(
+    ("first", "second"),
+    [
+        ({"limit": 1}, {"limit": True}),
+        ({"limit": 0}, {"limit": False}),
+        ({"scope": [1]}, {"scope": [True]}),
+        ({"limit": 1}, {"limit": 1.5}),
+        ({"scope": "12"}, {"scope": ["1", "2"]}),
+        ({"scope": [1, 2]}, {"scope": [2, 1]}),
+        ({"scope": {"a": 1}}, {"scope": {"a": 2}}),
+        ({"limit": 2**53 + 1}, {"limit": float(2**53 + 1)}),
+    ],
+)
+def test_repeatable_instances_with_different_parameters_are_kept(first, second):
+    """A bool is not the number it equals; order, strings and exact values still count."""
+    picks = [ScopedLimitCost(**first), ScopedLimitCost(**second)]
+    assert select(picks, DEFAULTS, repeatable=True) == picks
 
 
 def test_instance_keys_and_scoring_repeated_instances():

@@ -443,14 +443,9 @@ def test_the_overflow_message_reads_the_same_on_both_paths():
     with pytest.raises(OverflowError) as in_engine:
         _zero_budget_solve(_three_overloaded(), hard)
     assert str(in_engine.value) == expected
-    # weight 0 x a cost**exponent beyond a double: nan on both paths, reported as not finite
-    zero = [DistanceFromFacilityCost(weight=0.0, exponent=400)]
-    with pytest.raises(OverflowError) as in_python:
-        score(fl.constraint_costs(_three_overloaded()), zero)
-    with pytest.raises(OverflowError) as in_engine:
-        _zero_budget_solve(_three_overloaded(), zero)
-    expected = (
-        "constraint 'distance_from_facility_cost': its contribution weight * cost^exponent is not "
-        "finite (nan); lower its weight or exponent"
-    )
-    assert str(in_engine.value) == str(in_python.value) == expected
+    # A weight of 0 is exactly 0 at any exponent on both paths: cost**400 beyond a double is
+    # never computed, so 0 x inf can no longer turn an opt-in term left at 0 into nan.
+    zero = [FacilityCapacityCost(), DistanceFromFacilityCost(weight=0.0, exponent=400)]
+    assert score(fl.constraint_costs(_three_overloaded()), zero) == (-9, 0.0)
+    solved = _zero_budget_solve(_three_overloaded(), zero)
+    assert (solved.score.hard, solved.score.soft) == (-9, 0.0)

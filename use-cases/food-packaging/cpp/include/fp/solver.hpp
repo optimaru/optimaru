@@ -57,7 +57,7 @@ public:
 
         // Stop early once bestScore >= bestScoreLimit, as the ENGINE score
         // (hard = Java hard; soft = medium * kMediumUnit + soft). E.g.
-        // {0, -1e18} stops at the first hard-feasible solution. The default
+        // {0, -inf} stops at the first hard-feasible solution. The default
         // never fires.
         optimaru::HardSoftScore bestScoreLimit{
             std::numeric_limits<std::int64_t>::max(),

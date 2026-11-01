@@ -51,7 +51,7 @@ def test_solve_config_to_core():
     core = cfg.to_core()
     assert core.spent_limit_seconds == pytest.approx(3.0)
     assert core.random_seed == 7
-    assert core.best_score_limit == (0, -1e18)
+    assert core.best_score_limit == (0, float("-inf"))
 
     with pytest.raises(ValueError):
         SolveConfig(ruin_recreate_min_ruin_fraction=0.5, ruin_recreate_max_ruin_fraction=0.1)

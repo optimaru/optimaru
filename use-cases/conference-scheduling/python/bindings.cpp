@@ -460,7 +460,7 @@ PYBIND11_MODULE(_core, m)
         // quickstart's per-TalkType value ranges; see cs/solver.hpp).
         .def_readwrite("compatible_value_probability",
                        &Solver::Config::compatibleValueProbability)
-        // Early termination once bestScore >= (hard, soft), e.g. (0, -1e18)
+        // Early termination once bestScore >= (hard, soft), e.g. (0, -inf)
         // stops at the first feasible solution.
         .def_property(
             "best_score_limit",

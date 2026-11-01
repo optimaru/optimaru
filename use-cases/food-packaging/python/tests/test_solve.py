@@ -105,11 +105,11 @@ def test_solver_config_roundtrip():
     config.random_seed = 11
     config.parallel_solver_count = 2
     config.operator_rounds = 2
-    config.best_score_limit = (0, -1e18)
+    config.best_score_limit = (0, float("-inf"))
     assert config.spent_limit_seconds == 1.5
     assert config.parallel_solver_count == 2
     assert config.operator_rounds == 2
-    assert config.best_score_limit == (0, -1e18)
+    assert config.best_score_limit == (0, float("-inf"))
 
     schedule = fp.generate_demo_data(line_count=2, job_count=8)
     fp.solve(schedule, config=config)
@@ -132,3 +132,19 @@ def test_a_raising_on_new_best_raises_from_a_multi_start_solve():
             on_new_best=_boom,
         )
     assert time.monotonic() - started < 8.0
+
+
+def test_a_worker_thread_that_cannot_start_raises_instead_of_aborting():
+    """Creating worker thread 1 fails (std::system_error, injected through the module's test
+    seam): the worker already running is stopped and joined, and the error reaches the caller
+    at once. A joinable std::thread destroyed on that path used to call std::terminate."""
+    from food_packaging import _core
+
+    _core._fail_worker_thread_start(1)
+    try:
+        started = time.monotonic()
+        with pytest.raises(RuntimeError, match="injected worker thread creation failure"):
+            fp.solve(fp.generate_demo_data(line_count=2, job_count=8), time_limit_seconds=30.0, parallel_solver_count=4)
+        assert time.monotonic() - started < 10.0
+    finally:
+        _core._fail_worker_thread_start(-1)

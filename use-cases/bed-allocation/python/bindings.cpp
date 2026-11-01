@@ -337,7 +337,8 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("nearby_probability", &Solver::Config::nearbyProbability)
         .def_readwrite("nearby_size", &Solver::Config::nearbySize)
         // Early termination once bestScore >= (hard, medium, soft), e.g.
-        // (0, -2**62, -2**62) stops at the first feasible solution.
+        // (0, -2**63, -2**63) stops at the first feasible solution: INT64_MIN
+        // on medium or soft is "no floor" (toEngineScoreLimit, ba/domain.hpp).
         .def_property(
             "best_score_limit",
             [](const Solver::Config &c)

@@ -63,6 +63,18 @@ inline double shapeCost(double cost, double exponent) {
     return cost < 0.0 ? -std::pow(-cost, exponent) : std::pow(cost, exponent);
 }
 
+// One contribution: weight * shapeCost(cost, exponent), and exactly 0 at
+// weight 0 without shaping the cost at all. An opt-in constraint left at
+// weight 0 contributes nothing whatever its exponent: shaping first would
+// give 0 * inf = NaN once cost^exponent leaves the double range, and that
+// NaN would be refused as a non-finite contribution (level.hpp, rule 1).
+// Every contribution the calculator computes goes through here; the Python
+// score() mirror (_constraint.py _contribution) follows the same rule.
+inline double weightedCost(double weight, double cost, double exponent) {
+    if (weight == 0.0) return 0.0;
+    return weight * shapeCost(cost, exponent);
+}
+
 // Calculator-owned, type-erased state shared by related constraints. The
 // calculator advances the generation once per resetWorkingSolution(), letting
 // a domain rebuild a common projection exactly once without process-global or
@@ -115,11 +127,22 @@ struct ConstraintMetadata {
     // stays the registry name (the catalog, the Python name, the
     // ConstraintAssembly key). constraintTotals()/constraintCosts() report it.
     std::string label;
+    // The weight and level the component was constructed with (its
+    // kDefaultWeight / kDefaultLevel in every domain factory). The setters
+    // below never change them, so constraintCosts() can report the default a
+    // pick's weight=None / hard=None means even after an assembler re-stated
+    // the knobs (Python: the costs entries' default_weight / default_level).
+    double defaultWeight;
+    Level defaultLevel;
 
     bool isHard() const { return level == Level::Hard; }
 
     ConstraintMetadata(std::string constraintName, double constraintWeight, Level constraintLevel)
-        : name(std::move(constraintName)), weight(constraintWeight), level(constraintLevel) {}
+        : name(std::move(constraintName)),
+          weight(constraintWeight),
+          level(constraintLevel),
+          defaultWeight(constraintWeight),
+          defaultLevel(constraintLevel) {}
 
     // Copying is how a wrapper component takes over everything its inner
     // component declares (employee-scheduling ScopedUnit):
@@ -643,7 +666,7 @@ public:
         double medium = mediumUnits_;
         double soft = softUnits_;
         for (const GlobalScoreEntry& entry : globalScore_) {
-            const double c = entry.weight * shapeCost(entry.constraint->cost(), entry.exponent);
+            const double c = weightedCost(entry.weight, entry.constraint->cost(), entry.exponent);
             accumulate(entry, c, hard, medium, soft);
         }
         return foldScore(hard, medium, soft);
@@ -663,7 +686,7 @@ public:
         double medium = mediumUnits_;
         double soft = softUnits_;
         for (const GlobalScoreEntry& entry : globalScore_) {
-            const double c = entry.weight * shapeCost(entry.constraint->cost(), entry.exponent);
+            const double c = weightedCost(entry.weight, entry.constraint->cost(), entry.exponent);
             accumulate(entry, c, hard, medium, soft);
         }
         checkSoftTotal(medium);
@@ -855,7 +878,7 @@ public:
                               unitConstraints_[c]->label});
         }
         for (const auto& g : globalConstraints_) {
-            totals.push_back({g->name, g->weight * shapeCost(g->cost(), g->exponent),
+            totals.push_back({g->name, weightedCost(g->weight, g->cost(), g->exponent),
                               g->level == Level::Hard, g->level, g->label});
         }
         return totals;
@@ -877,15 +900,20 @@ public:
     // their single cost() as a one-element list.
     struct ConstraintCosts {
         std::string name;
-        double weight;   // the assembly's current weight (the domain default)
+        double weight;   // the assembly's current weight
         double exponent;
         bool isHard;     // level == Level::Hard
         bool isGlobal;
         std::vector<double> unitCosts;
-        Level level;
+        Level level;     // the assembly's current level
         bool reward;
         bool levelFlippable;
         std::string label;  // ConstraintMetadata::label (empty = none)
+        // What weight=None / hard=None mean for this component
+        // (ConstraintMetadata::defaultWeight / defaultLevel): equal to
+        // weight / level unless the assembly re-stated them.
+        double defaultWeight;
+        Level defaultLevel;
     };
     std::vector<ConstraintCosts> constraintCosts() const {
         std::vector<ConstraintCosts> out;
@@ -901,11 +929,13 @@ public:
             out.push_back({constraint.name, constraint.weight, constraint.exponent,
                            constraint.level == Level::Hard, false, std::move(costs),
                            constraint.level, constraint.reward, constraint.levelFlippable,
-                           constraint.label});
+                           constraint.label, constraint.defaultWeight,
+                           constraint.defaultLevel});
         }
         for (const auto& g : globalConstraints_) {
             out.push_back({g->name, g->weight, g->exponent, g->level == Level::Hard, true,
-                           {g->cost()}, g->level, g->reward, g->levelFlippable, g->label});
+                           {g->cost()}, g->level, g->reward, g->levelFlippable, g->label,
+                           g->defaultWeight, g->defaultLevel});
         }
         return out;
     }
@@ -1184,7 +1214,7 @@ private:
     // difference into the running totals.
     void applyRaw(int unit, const UnitDispatchEntry& entry, std::size_t idx, double raw) {
         cacheRaw_[idx] = raw;
-        const double value = entry.weight * shapeCost(raw, entry.exponent);
+        const double value = weightedCost(entry.weight, raw, entry.exponent);
         const std::string& name = entry.constraint->name;
         if (entry.isHard) {
             // Both cells are below 2^62 (rule 1), so their difference fits.
@@ -1476,7 +1506,7 @@ private:
                     materializeRun(i);  // this run only: the other may stay piecewise
                     raw = entry->constraint->cost(*solution_, unit, *changes[i].members);
                 }
-                const double value = entry->weight * shapeCost(raw, entry->exponent);
+                const double value = weightedCost(entry->weight, raw, entry->exponent);
                 const std::string& name = entry->constraint->name;
                 if (entry->isHard) {
                     hard.add(roundHardContribution(value, name) - cacheHard_[idx]);
@@ -1498,7 +1528,7 @@ private:
                 materializeAll();
                 raw = entry.constraint->previewCost(*solution_, changes, count);
             }
-            const double c = entry.weight * shapeCost(raw, entry.exponent);
+            const double c = weightedCost(entry.weight, raw, entry.exponent);
             accumulate(entry, c, hard, medium, soft);
         }
         return foldScore(hard, medium, soft);

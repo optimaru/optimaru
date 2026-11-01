@@ -197,7 +197,7 @@ class SolverConfig:
     """Relative weight of the BASIC swap move; 0 disables it."""
     best_score_limit: tuple[int, float]
     """Stops early once bestScore >= (hard, soft) (lexicographic).
-    (0, -1e18) stops at the first feasible solution. Default: unreachable."""
+    (0, -inf) stops at the first feasible solution. Default: unreachable."""
     on_new_best: Callable[[int, Score], None] | None
     """Called on every new best solution: on_new_best(step, score). The GIL is
     re-acquired on entry (safe from multi-start worker threads too)."""

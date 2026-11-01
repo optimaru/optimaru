@@ -376,7 +376,7 @@ PYBIND11_MODULE(_core, m)
                        &Solver::Config::hotJobProbability)
         .def_readwrite("free_crew_candidates",
                        &Solver::Config::freeCrewCandidates)
-        // Early termination once bestScore >= (hard, soft), e.g. (0, -1e18)
+        // Early termination once bestScore >= (hard, soft), e.g. (0, -inf)
         // stops at the first feasible solution.
         .def_property(
             "best_score_limit",

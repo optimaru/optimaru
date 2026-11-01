@@ -7,12 +7,12 @@
 #include <limits>
 #include <memory>
 #include <stdexcept>
-#include <thread>
 #include <utility>
 #include <vector>
 
 #include "optimaru/api/solver/solver.hpp"
 #include "optimaru/config/solver/solver_config.hpp"
+#include "optimaru/impl/solver/worker_threads.hpp"
 #include "vrp/incremental_calculator.hpp"
 #include "vrp/score_calculator.hpp"
 
@@ -35,33 +35,29 @@ void solveInParallel(const Solver::Config &config, VehicleRoutePlan &plan,
     // Raised by the first worker that fails: every worker's engine checks
     // it once a step, so the others stop instead of using up their budget.
     auto stop = std::make_shared<std::atomic<bool>>(false);
-    std::vector<std::thread> workers;
-    workers.reserve(static_cast<std::size_t>(workerCount));
-    for (int i = 0; i < workerCount; ++i)
-    {
-        workers.emplace_back(
-            [&config, i, &candidates, &failures, &stop]
+    // A worker that cannot be started (std::system_error) stops and joins
+    // the ones already running before the error is rethrown here.
+    optimaru::runWorkerThreads(
+        workerCount, *stop,
+        [&config, &candidates, &failures, &stop](int i)
+        {
+            try
             {
-                try
-                {
-                    Solver::Config workerConfig = config;
-                    workerConfig.parallelSolverCount = 1;
-                    workerConfig.stopFlag = stop;
-                    workerConfig.randomSeed += static_cast<std::uint64_t>(i);
-                    if (i != 0)
-                        workerConfig.onNewBest = nullptr;  // only worker 0 reports
-                    Solver worker(std::move(workerConfig));
-                    worker.solve(candidates[static_cast<std::size_t>(i)]);
-                }
-                catch (...)
-                {
-                    failures[static_cast<std::size_t>(i)] = std::current_exception();
-                    stop->store(true);
-                }
-            });
-    }
-    for (std::thread &worker : workers)
-        worker.join();
+                Solver::Config workerConfig = config;
+                workerConfig.parallelSolverCount = 1;
+                workerConfig.stopFlag = stop;
+                workerConfig.randomSeed += static_cast<std::uint64_t>(i);
+                if (i != 0)
+                    workerConfig.onNewBest = nullptr;  // only worker 0 reports
+                Solver worker(std::move(workerConfig));
+                worker.solve(candidates[static_cast<std::size_t>(i)]);
+            }
+            catch (...)
+            {
+                failures[static_cast<std::size_t>(i)] = std::current_exception();
+                stop->store(true);
+            }
+        });
     for (const std::exception_ptr &failure : failures)
     {
         if (failure)
@@ -108,7 +104,7 @@ optimaru::SolverConfig buildEngineConfig(const Solver::Config &config,
     if (config.bestScoreLimit.medium != std::numeric_limits<std::int64_t>::max())
     {
         engineConfig.termination.bestScoreLimit
-            = toEngineScore(config.bestScoreLimit);
+            = toEngineScoreLimit(config.bestScoreLimit);
     }
     engineConfig.termination.unimprovedSpentLimit = config.unimprovedSpentLimit;
     engineConfig.termination.stepCountLimit = config.stepCountLimit;

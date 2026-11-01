@@ -67,7 +67,7 @@ def test_fixed_slot_becomes_pinned_and_survives_solve(problem):
     cfg = st.SolverConfig()
     cfg.spent_limit_seconds = 10.0
     cfg.random_seed = 7
-    cfg.best_score_limit = (0, -1e18)  # stop at the first feasible solution
+    cfg.best_score_limit = (0, float("-inf"))  # stop at the first feasible solution
     st.Solver(cfg).solve(conv.table)
     assert conv.table.assignment()[pinned_index] == expected
 

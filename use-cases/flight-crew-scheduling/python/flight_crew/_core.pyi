@@ -153,7 +153,7 @@ class SolverConfig:
     change_move_weight: float
     swap_move_weight: float
     best_score_limit: tuple[int, float]
-    """Stop early at or above this score. (0, -1e18) stops at the first feasible."""
+    """Stop early at or above this score. (0, -inf) stops at the first feasible."""
     on_new_best: Callable[[int, Score], None] | None
 
 class Solver:

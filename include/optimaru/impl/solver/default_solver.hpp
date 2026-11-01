@@ -8,7 +8,6 @@
 #include <functional>
 #include <memory>
 #include <mutex>
-#include <thread>
 #include <utility>
 #include <vector>
 
@@ -24,6 +23,7 @@
 #include "optimaru/impl/localsearch/default_local_search_phase.hpp"
 #include "optimaru/impl/localsearch/decider/acceptor/acceptor.hpp"
 #include "optimaru/impl/solver/termination/termination.hpp"
+#include "optimaru/impl/solver/worker_threads.hpp"
 #include "optimaru/preview/api/move/operators.hpp"
 
 namespace optimaru {
@@ -144,8 +144,10 @@ public:
     // onNewBest callback, a FULL_ASSERT score corruption, bad_alloc) is
     // caught on its worker thread, the other starts are told to stop at
     // their next step, every thread is joined, and the first exception is
-    // rethrown on the calling thread (the solution is left as it was).
-    // terminateEarly() on this solver reaches every start.
+    // rethrown on the calling thread (the solution is left as it was). A
+    // thread that cannot be created (std::system_error) stops and joins the
+    // starts already running before the error is rethrown
+    // (runWorkerThreads). terminateEarly() on this solver reaches every start.
     // Note: registered custom operators and variable listeners are per-Solver
     // (possibly stateful), so multi-start threads run with the built-ins only
     // — do NOT combine solveMultiStart() with a calculator that reads shadow
@@ -173,31 +175,26 @@ public:
         auto stop = std::make_shared<std::atomic<bool>>(false);
         std::mutex failureMutex;
         std::exception_ptr firstFailure;
-        std::vector<std::thread> threads;
-        threads.reserve(starts);
-        for (int i = 0; i < starts; ++i) {
-            threads.emplace_back([this, i, &copies, &scores, &calculators, &stop, &failureMutex,
-                                  &firstFailure] {
-                try {
-                    SolverConfig threadConfig = config_;
-                    threadConfig.randomSeed = config_.randomSeed + static_cast<std::uint64_t>(i);
-                    threadConfig.multiStartCount = 1;
-                    if (i != 0) threadConfig.onNewBest = nullptr;  // only thread 0 reports
-                    DefaultSolver threadSolver(std::move(threadConfig));
-                    if (acceptorFactory_) threadSolver.setAcceptorFactory(acceptorFactory_);
-                    threadSolver.adoptTerminateEarlyFlag(terminateEarly_);
-                    threadSolver.runStop_ = stop;
-                    scores[i] = threadSolver.solve(copies[i], *calculators[i]);
-                } catch (...) {
-                    {
-                        std::lock_guard<std::mutex> lock(failureMutex);
-                        if (!firstFailure) firstFailure = std::current_exception();
-                    }
-                    stop->store(true);
+        runWorkerThreads(starts, *stop, [this, &copies, &scores, &calculators, &stop,
+                                         &failureMutex, &firstFailure](int i) {
+            try {
+                SolverConfig threadConfig = config_;
+                threadConfig.randomSeed = config_.randomSeed + static_cast<std::uint64_t>(i);
+                threadConfig.multiStartCount = 1;
+                if (i != 0) threadConfig.onNewBest = nullptr;  // only thread 0 reports
+                DefaultSolver threadSolver(std::move(threadConfig));
+                if (acceptorFactory_) threadSolver.setAcceptorFactory(acceptorFactory_);
+                threadSolver.adoptTerminateEarlyFlag(terminateEarly_);
+                threadSolver.runStop_ = stop;
+                scores[i] = threadSolver.solve(copies[i], *calculators[i]);
+            } catch (...) {
+                {
+                    std::lock_guard<std::mutex> lock(failureMutex);
+                    if (!firstFailure) firstFailure = std::current_exception();
                 }
-            });
-        }
-        for (std::thread& t : threads) t.join();
+                stop->store(true);
+            }
+        });
         if (firstFailure) std::rethrow_exception(firstFailure);
 
         int bestIndex = 0;

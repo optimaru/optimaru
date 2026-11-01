@@ -95,7 +95,7 @@ def solve(
     ``config`` becomes the base settings (None = engine defaults: 30 s budget, ALNS
     on). Explicit keyword arguments override config.
     ``stop_at_first_feasible`` stops as soon as hard 0 is reached
-    (best_score_limit=(0, -1e18)).
+    (best_score_limit=(0, -inf)).
 
     ``constraints`` picks the cost function directly
     (see `maintenance_scheduling.constraints`). Only the listed constraints are scored;
@@ -113,7 +113,7 @@ def solve(
     if parallel_solver_count is not None:
         cfg.parallel_solver_count = parallel_solver_count
     if stop_at_first_feasible:
-        cfg.best_score_limit = (0, -1e18)
+        cfg.best_score_limit = (0, float("-inf"))
     if on_new_best is not None:
         cfg.on_new_best = on_new_best
     if constraints is None:

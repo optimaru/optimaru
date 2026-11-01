@@ -157,3 +157,24 @@ def test_the_package_still_imports_without_pydantic():
     code = "import sys; sys.modules['pydantic'] = None; import vrp_routing; vrp_routing.Solver"
 
     subprocess.run([sys.executable, "-c", code], check=True)
+
+
+def test_stop_at_first_feasible_request_sets_the_hard_only_limit(monkeypatch):
+    """solve_request(stop_at_first_feasible=True) hands the engine (0, -(2**63), -(2**63)):
+    INT64_MIN on medium and soft means "no floor", so only hard is compared and no soft
+    score, however low, misses the stop (toEngineScoreLimit, tested in the C++ suite)."""
+    from vrp_routing import models
+
+    seen = []
+
+    class Captured(Exception):
+        pass
+
+    def capture(cfg):
+        seen.append(cfg.best_score_limit)
+        raise Captured
+
+    monkeypatch.setattr(models._core, "Solver", capture)
+    with pytest.raises(Captured):
+        models.solve_request(problem().model_copy(update={"stop_at_first_feasible": True}))
+    assert seen == [(0, -(2**63), -(2**63))]

@@ -131,3 +131,39 @@ def test_a_raising_on_new_best_stops_every_parallel_worker():
             on_new_best=boom,
         )
     assert time.monotonic() - started < 10.0
+
+
+def test_a_worker_thread_that_cannot_start_raises_instead_of_aborting():
+    """Creating worker thread 1 fails (std::system_error, injected through the module's test
+    seam): the worker already running is stopped and joined, and the error reaches the caller
+    at once. A joinable std::thread destroyed on that path used to call std::terminate."""
+    import time
+
+    import pytest
+
+    from bed_allocation import _core
+
+    _core._fail_worker_thread_start(1)
+    try:
+        started = time.monotonic()
+        with pytest.raises(RuntimeError, match="injected worker thread creation failure"):
+            ba.solve(generate_demo_data().to_core(), time_limit_seconds=30.0, parallel_solver_count=4)
+        assert time.monotonic() - started < 10.0
+    finally:
+        _core._fail_worker_thread_start(-1)
+
+
+def test_stop_at_first_feasible_has_no_soft_floor():
+    """-(2**63) (INT64_MIN) on the soft-side levels means "no floor": the engine compares
+    hard only, so no soft score, however low, misses the stop (toEngineScoreLimit,
+    tested in the C++ suite)."""
+    cfg = ba._build_config(
+        time_limit_seconds=None,
+        random_seed=None,
+        parallel_solver_count=None,
+        stop_at_first_feasible=True,
+        full_assert=False,
+        on_new_best=None,
+        config=None,
+    )
+    assert cfg.best_score_limit == (0, -(2**63), -(2**63))

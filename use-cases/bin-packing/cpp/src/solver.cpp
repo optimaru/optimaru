@@ -6,7 +6,6 @@
 #include <memory>
 #include <random>
 #include <stdexcept>
-#include <thread>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -17,6 +16,7 @@
 #include "bp/score_calculator.hpp"
 #include "optimaru/api/solver/solver.hpp"
 #include "optimaru/config/solver/solver_config.hpp"
+#include "optimaru/impl/solver/worker_threads.hpp"
 #include "optimaru/preview/api/move/operators.hpp"
 
 namespace bp
@@ -200,36 +200,32 @@ void Solver::solve(BinPackingProblem &problem)
     // Raised by the first worker that fails: every worker's engine checks
     // it once a step, so the others stop instead of using up their budget.
     auto stop = std::make_shared<std::atomic<bool>>(false);
-    std::vector<std::thread> workers;
-    workers.reserve(workerCount);
-    for (int i = 0; i < workerCount; ++i)
-    {
-        workers.emplace_back(
-            [this, i, seeded, &descending, &candidates, &failures, &stop]
+    // A worker that cannot be started (std::system_error) stops and joins
+    // the ones already running before the error is rethrown here.
+    optimaru::runWorkerThreads(
+        workerCount, *stop,
+        [this, seeded, &descending, &candidates, &failures, &stop](int i)
+        {
+            try
             {
-                try
-                {
-                    Config workerConfig = config_;
-                    workerConfig.parallelSolverCount = 1;
-                    workerConfig.stopFlag = stop;
-                    workerConfig.randomSeed += static_cast<std::uint64_t>(i);
-                    if (i != 0)
-                        workerConfig.onNewBest = nullptr;
-                    std::mt19937_64 rng(workerConfig.randomSeed);
-                    const std::vector<int> order
-                        = (i == 0 || seeded) ? descending
-                                             : tieShuffledOrder(candidates[i], rng);
-                    searchOneStart(workerConfig, candidates[i], order);
-                }
-                catch (...)
-                {
-                    failures[i] = std::current_exception();
-                    stop->store(true);
-                }
-            });
-    }
-    for (std::thread &worker : workers)
-        worker.join();
+                Config workerConfig = config_;
+                workerConfig.parallelSolverCount = 1;
+                workerConfig.stopFlag = stop;
+                workerConfig.randomSeed += static_cast<std::uint64_t>(i);
+                if (i != 0)
+                    workerConfig.onNewBest = nullptr;
+                std::mt19937_64 rng(workerConfig.randomSeed);
+                const std::vector<int> order
+                    = (i == 0 || seeded) ? descending
+                                         : tieShuffledOrder(candidates[i], rng);
+                searchOneStart(workerConfig, candidates[i], order);
+            }
+            catch (...)
+            {
+                failures[i] = std::current_exception();
+                stop->store(true);
+            }
+        });
     for (const std::exception_ptr &failure : failures)
     {
         if (failure)

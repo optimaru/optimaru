@@ -286,7 +286,7 @@ PYBIND11_MODULE(_core, m)
                        &Solver::Config::ruinRecreatePolishSteps)
         .def_readwrite("change_move_weight", &Solver::Config::changeMoveWeight)
         .def_readwrite("swap_move_weight", &Solver::Config::swapMoveWeight)
-        // Early termination once bestScore >= (hard, soft), e.g. (0, -1e18)
+        // Early termination once bestScore >= (hard, soft), e.g. (0, -inf)
         // stops at the first feasible solution.
         .def_property(
             "best_score_limit",

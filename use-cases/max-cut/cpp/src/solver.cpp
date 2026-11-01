@@ -5,7 +5,6 @@
 #include <exception>
 #include <memory>
 #include <stdexcept>
-#include <thread>
 #include <utility>
 #include <vector>
 
@@ -13,6 +12,7 @@
 #include "mc/score_calculator.hpp"
 #include "optimaru/api/solver/solver.hpp"
 #include "optimaru/config/solver/solver_config.hpp"
+#include "optimaru/impl/solver/worker_threads.hpp"
 
 namespace mc
 {
@@ -123,28 +123,29 @@ void searchInParallel(const Solver::Config &config, MaxCutProblem &problem, int 
             engineConfig.onNewBest = nullptr;
         engines.push_back(std::make_unique<optimaru::Solver<MaxCutProblem>>(std::move(engineConfig)));
     }
-    std::vector<std::thread> workers;
-    workers.reserve(starts);
-    for (int i = 0; i < starts; ++i)
+    // A worker that cannot be started (std::system_error) stops and joins the
+    // ones already running before the error is rethrown here.
+    const auto stopAll = [&engines]
     {
-        workers.emplace_back(
-            [i, &copies, &scores, &failures, &engines]
+        for (const auto &engine : engines)
+            engine->terminateEarly();
+    };
+    optimaru::runWorkerThreads(
+        starts,
+        [&copies, &scores, &failures, &engines, &stopAll](int i)
+        {
+            try
             {
-                try
-                {
-                    MaxCutIncrementalScoreCalculator calculator;
-                    scores[i] = engines[i]->solve(copies[i], calculator);
-                }
-                catch (...)
-                {
-                    failures[i] = std::current_exception();
-                    for (const auto &engine : engines)
-                        engine->terminateEarly();
-                }
-            });
-    }
-    for (std::thread &worker : workers)
-        worker.join();
+                MaxCutIncrementalScoreCalculator calculator;
+                scores[i] = engines[i]->solve(copies[i], calculator);
+            }
+            catch (...)
+            {
+                failures[i] = std::current_exception();
+                stopAll();
+            }
+        },
+        stopAll);
     for (const std::exception_ptr &failure : failures)
     {
         if (failure)

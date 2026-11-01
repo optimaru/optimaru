@@ -148,7 +148,7 @@ class SolverConfig:
     travel penalty among them is chosen (tournament selection). 1 means uniform random.
     While infeasible it automatically falls back to uniform random."""
     best_score_limit: tuple[int, float]
-    """Stop early once bestScore >= (hard, soft). (0, -1e18) stops at the first
+    """Stop early once bestScore >= (hard, soft). (0, -inf) stops at the first
     feasible."""
     on_new_best: Callable[[int, Score], None] | None
     """Called on every new best: on_new_best(step, score)."""

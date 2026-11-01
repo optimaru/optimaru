@@ -48,7 +48,10 @@ A domain that may state one parametrized constraint several times
 (employee-scheduling: one ``DayPatternCost`` per pattern, scoped rules) passes
 ``repeatable=True`` to ``select``; ``constraint_costs()`` then keys the k-th
 instance of a name ``"<name>#<k>"`` and ``instance_keys`` / ``score_costs``
-follow the same rule.
+follow the same rule. Two instances count as the same when their parameters
+are equal by value (``1``, ``1.0`` and ``numpy.int64(1)`` are one value;
+``True`` is not ``1``; lists, tuples, sets and dicts compare element by
+element).
 """
 
 import math
@@ -125,6 +128,41 @@ def _params_of(spec: Any) -> dict[str, Any]:
     return params() if callable(params) else {}
 
 
+def _normalized(value: Any) -> Any:
+    """A hashable stand-in for a parameter value that compares by value.
+
+    Numbers compare by value whatever their type (``1 == 1.0 ==
+    numpy.int64(1)``), but a bool stays distinct from the number it equals
+    (``True`` is not ``1``); sequences (list and tuple alike), sets and
+    mappings are compared element by element; strings and bytes are atoms.
+    Anything else is used as it is when hashable, else by ``repr()``.
+    """
+    if value is None or isinstance(value, (str, bytes)):
+        return value
+    if _is_bool(value):
+        return ("bool", bool(value))
+    if isinstance(value, numbers.Integral):
+        return ("number", int(value))
+    if isinstance(value, numbers.Real):
+        return ("number", float(value))  # 1.0 == 1 and hash(1.0) == hash(1)
+    if isinstance(value, Mapping):
+        return ("map", frozenset((_normalized(key), _normalized(item)) for key, item in value.items()))
+    if isinstance(value, (set, frozenset)):
+        return ("set", frozenset(_normalized(item) for item in value))
+    if isinstance(value, Sequence):
+        return ("sequence", tuple(_normalized(item) for item in value))
+    tolist = getattr(value, "tolist", None)  # numpy arrays and scalars, without importing numpy
+    if callable(tolist):
+        converted = tolist()
+        if converted is not value:
+            return _normalized(converted)
+    try:
+        hash(value)
+    except TypeError:
+        return ("repr", repr(value))
+    return value
+
+
 def select(constraints: Iterable[Any] | None, defaults: Sequence[Any], *, repeatable: bool = False) -> list[Any]:
     """The ``get_constraints`` contract: ``None`` = ``defaults``; a list replaces them.
 
@@ -137,6 +175,8 @@ def select(constraints: Iterable[Any] | None, defaults: Sequence[Any], *, repeat
     constraint once per pick (employee-scheduling): the same name may then
     appear several times as long as the domain parameters (``params()``)
     differ; the same name with the same parameters twice is still an error.
+    Parameters are compared by value (``_normalized``): ``x=1``, ``x=1.0``
+    and ``x=numpy.int64(1)`` are the same parameters, ``x=True`` is not.
     """
     if constraints is None:
         return list(defaults)
@@ -145,7 +185,7 @@ def select(constraints: Iterable[Any] | None, defaults: Sequence[Any], *, repeat
         raise ValueError("constraints must not be empty (pass None for the defaults)")
     seen: set[Any] = set()
     for spec in picked:
-        key = (spec.name, repr(sorted(_params_of(spec).items()))) if repeatable else spec.name
+        key = (spec.name, _normalized(_params_of(spec))) if repeatable else spec.name
         if key in seen:
             if repeatable:
                 raise ValueError(
@@ -216,11 +256,15 @@ _HARD_SCORE_LIMIT = 2**63 - 1
 
 
 def _contribution(name: str, weight: float, cost: float, exponent: float) -> float:
+    if weight == 0:
+        # Exactly 0, without shaping the cost: an opt-in constraint left at
+        # weight 0 contributes nothing at any exponent (0 * inf would be nan).
+        # The engine's weightedCost() follows the same rule.
+        return 0.0
     try:
         value = weight * shape(cost, exponent)
     except OverflowError:
-        # cost**exponent beyond a double, where the engine's pow() gives +-inf
-        # (and weight 0 then gives nan, as 0 * inf does in C++).
+        # cost**exponent beyond a double, where the engine's pow() gives +-inf.
         value = weight * math.copysign(math.inf, cost)
     if not math.isfinite(value):
         raise OverflowError(
@@ -243,8 +287,25 @@ def _saturate_hard(total: int) -> int:
     return max(-_HARD_SCORE_LIMIT, min(_HARD_SCORE_LIMIT, total))
 
 
+def _default_level(entry: Mapping[str, Any]) -> str:
+    """The level ``hard=None`` means: the component's default level.
+
+    ``constraint_costs()`` reports it as ``default_level``. An entry built
+    without it (by hand, or by an older package) falls back on ``level``,
+    which is the default only when the costs were computed for the default
+    selection or for picks that kept this constraint's level.
+    """
+    return entry.get("default_level") or entry.get("level") or ("hard" if entry["hard"] else "soft")
+
+
+def _default_weight(entry: Mapping[str, Any]) -> float:
+    """The weight ``weight=None`` means: ``default_weight``, else ``weight`` (as for the level)."""
+    weight = entry.get("default_weight")
+    return entry["weight"] if weight is None else weight
+
+
 def _level(spec: Any, entry: Mapping[str, Any]) -> str:
-    default = entry.get("level") or ("hard" if entry["hard"] else "soft")
+    default = _default_level(entry)
     if spec.hard is None:
         return default
     wanted = "hard" if spec.hard else "soft"
@@ -276,10 +337,14 @@ def score_costs(costs: Mapping[str, Mapping[str, Any]], constraints: Iterable[An
 
     ``costs`` is what ``<package>.constraint_costs(solution)`` returns: per
     constraint the **raw** cost of each unit (before weight, exponent and
-    level), its default weight and level, and on a domain with a medium level
-    the domain's medium fold (on every entry). No solver and no search are
+    level), its default weight and level (``default_weight`` /
+    ``default_level``; costs computed under a selection carry that
+    selection's ``weight`` / ``level`` next to them, and an unset knob here
+    still means the default), and on a domain with a medium level the
+    domain's medium fold (on every entry). No solver and no search are
     involved, so one scoring pass answers every "what would this cost at
-    weight 10 / as a soft term" question.
+    weight 10 / as a soft term" question. A weight of 0 contributes exactly
+    0 whatever the exponent.
 
     The arithmetic is the engine's: each unit contributes
     ``weight * shape(cost, exponent)``; hard contributions are rounded per
@@ -312,7 +377,7 @@ def score_costs(costs: Mapping[str, Mapping[str, Any]], constraints: Iterable[An
         exponent = 1.0 if spec.exponent is None else spec.exponent
         _check_knobs(spec.name, spec.weight, spec.hard, exponent)
         level = _level(spec, entry)
-        weight = entry["weight"] if spec.weight is None else spec.weight
+        weight = _default_weight(entry) if spec.weight is None else spec.weight
         values = [_contribution(spec.name, weight, cost, exponent) for cost in entry["costs"]]
         if level == "hard":
             hard += sum(_round_hard(spec.name, value) for value in values)

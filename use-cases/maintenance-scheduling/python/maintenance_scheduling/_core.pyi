@@ -160,7 +160,7 @@ class SolverConfig:
     """Random crews a guided change move tries to find one free for the whole job
     duration. 0 draws uniformly."""
     best_score_limit: tuple[int, float]
-    """Stop early once bestScore >= (hard, soft). (0, -1e18) stops at the first
+    """Stop early once bestScore >= (hard, soft). (0, -inf) stops at the first
     feasible."""
     on_new_best: Callable[[int, Score], None] | None
 

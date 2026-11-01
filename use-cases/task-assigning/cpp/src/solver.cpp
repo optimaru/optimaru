@@ -36,7 +36,7 @@ optimaru::SolverConfig buildEngineConfig(const Solver::Config &config,
     }
     engineConfig.termination.spentLimit = config.spentLimit;
     engineConfig.termination.bestScoreLimit
-        = toEngineScore(config.bestScoreLimit);
+        = toEngineScoreLimit(config.bestScoreLimit);
     engineConfig.termination.unimprovedSpentLimit = config.unimprovedSpentLimit;
     engineConfig.termination.stepCountLimit = config.stepCountLimit;
     engineConfig.termination.unimprovedStepCountLimit

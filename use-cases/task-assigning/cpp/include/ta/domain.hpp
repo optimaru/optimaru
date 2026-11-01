@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -116,6 +117,23 @@ inline optimaru::HardSoftScore toEngineScore(const Score &s)
         static_cast<double>(s.soft0),
         static_cast<double>(s.soft1) * static_cast<double>(kMakespanUnit)
             + static_cast<double>(s.soft2));
+}
+
+// A best-score LIMIT (Solver::Config::bestScoreLimit) in engine terms.
+// kNoLevelFloor (INT64_MIN) on soft1 or soft2 means "no floor on the soft
+// levels": the engine's soft limit becomes -inf, so only hard and soft0 (the
+// levels folded into the engine's hard level, compared exactly) count and no
+// soft score, however low, can miss the stop. stop_at_first_feasible passes
+// (0, 0, kNoLevelFloor, kNoLevelFloor): every skill met and every task
+// assigned. Any other limit folds as a score.
+constexpr std::int64_t kNoLevelFloor = std::numeric_limits<std::int64_t>::min();
+
+inline optimaru::HardSoftScore toEngineScoreLimit(const Score &limit)
+{
+    if (limit.soft1 == kNoLevelFloor || limit.soft2 == kNoLevelFloor)
+        return {toEngineScore({limit.hard, limit.soft0, 0, 0}).hard,
+                -std::numeric_limits<double>::infinity()};
+    return toEngineScore(limit);
 }
 
 // Inverse of toEngineScore. Every constraint penalizes (all levels <= 0 and

@@ -120,7 +120,10 @@ steps; `machine_preference_cost` charges even on a duration mismatch.
   that is further along; change moves steered to a
   machine switch or a small priority shift, plus a priority swap of two lots' operations)
   replaces the Python simulated annealing; `parallel_solver_count` runs independent
-  threads (seed + i), the strictly best wins. With `constraints=...` the solve is single
+  threads (seed + i), the strictly best wins. The temperature follows the larger of the
+  step fraction and the time fraction, so a seeded, step-limited run repeats only while
+  the step fraction leads: give it a time limit generous enough for the step budget. Once
+  the clock leads, the run depends on timing. With `constraints=...` the solve is single
   start. A complete warm-start seed is recognised by its values (not by object identity),
   so returning to the seed's values later in the search scores the supplied schedule
   again.

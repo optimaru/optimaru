@@ -64,7 +64,7 @@ For finer control build `fab.SolverConfig()` and pass `config=`:
 | `step_count_limit`, `unimproved_step_count_limit`, `unimproved_spent_limit_seconds` | 0 (off) | early exits |
 | `random_seed`, `parallel_solver_count` | 0, 1 | independent threads with seed + i; the strictly best wins |
 | `acceptor_type` | `SIMULATED_ANNEALING` | the engine's acceptor (`LATE_ACCEPTANCE`, `HILL_CLIMBING`, ...) |
-| `simulated_annealing_starting_temperature`, `simulated_annealing_temperature_fraction` | (0, 0) = auto, 0.01 | auto: hard 0, soft = 1% of the start's \|soft\|, cooling over the time limit (or over `step_count_limit` when that is further along) |
+| `simulated_annealing_starting_temperature`, `simulated_annealing_temperature_fraction` | (0, 0) = auto, 0.01 | auto: hard 0, soft = 1% of the start's \|soft\|, cooling over the time limit (or over `step_count_limit` when that is further along). A seeded `step_count_limit` run repeats only while its step fraction leads the time fraction: give it a time limit generous enough for the step budget |
 | `late_acceptance_size` | 0 (= clamp(16 x rows, 400, 3200)) | for `LATE_ACCEPTANCE` |
 | `machine_move_probability` | 0.55 | share of change moves that switch a machine (else a priority shift of 1..8) |
 | `priority_swap_moves`, `custom_move_probability` | True, 0.45 | the priority swap of two operations, and its gate |

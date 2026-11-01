@@ -250,7 +250,7 @@ PYBIND11_MODULE(_core, m)
         // CloseStationMove: the domain macro move that empties one station in
         // a single step (see cpp/src/solver.cpp).
         .def_readwrite("close_station_moves", &Solver::Config::closeStationMoves)
-        // Early termination once bestScore >= (hard, soft), e.g. (0, -1e18)
+        // Early termination once bestScore >= (hard, soft), e.g. (0, -inf)
         // stops at the first feasible solution.
         .def_property(
             "best_score_limit",

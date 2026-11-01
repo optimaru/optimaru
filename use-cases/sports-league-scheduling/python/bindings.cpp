@@ -239,7 +239,7 @@ PYBIND11_MODULE(_core, m)
         // Tournament size of the travel-guided entity selection (1 = uniform).
         .def_readwrite("costliest_match_sample",
                        &Solver::Config::costliestMatchSample)
-        // Early termination once bestScore >= (hard, soft), e.g. (0, -1e18)
+        // Early termination once bestScore >= (hard, soft), e.g. (0, -inf)
         // stops at the first feasible solution.
         .def_property(
             "best_score_limit",

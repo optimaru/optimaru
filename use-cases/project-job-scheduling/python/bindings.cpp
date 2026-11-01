@@ -360,7 +360,8 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("change_move_weight", &Solver::Config::changeMoveWeight)
         .def_readwrite("swap_move_weight", &Solver::Config::swapMoveWeight)
         // Early termination once bestScore >= (hard, medium, soft), e.g.
-        // (0, -2**62, -2**62) stops at the first feasible solution.
+        // (0, -2**63, -2**63) stops at the first feasible solution: INT64_MIN
+        // on medium or soft is "no floor" (toEngineScoreLimit, pjs/domain.hpp).
         .def_property(
             "best_score_limit",
             [](const Solver::Config &c)
