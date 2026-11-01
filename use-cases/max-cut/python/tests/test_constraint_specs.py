@@ -1,4 +1,8 @@
-"""max_cut.constraints — an API for picking the cost function declaratively."""
+"""max_cut.constraints — an API for picking the cost function declaratively.
+
+"Which constraints are on", the catalog, the five knobs (the level included) and repeated
+picks are covered here.
+"""
 
 import json
 import pickle
@@ -9,11 +13,13 @@ from types import SimpleNamespace
 import pytest
 
 import max_cut
+from max_cut._constraint import instance_keys
 from max_cut.constraints import (
     Constraint,
     CutWeightCost,
     DifferentPartitionPairsCost,
     FixedPartitionCost,
+    Level,
     PartitionImbalanceCost,
     PartitionSizeBoundsCost,
     SamePartitionPairsCost,
@@ -272,9 +278,10 @@ def test_reweighting_scales_only_that_term():
     assert max_cut.calculate_score(problem, balanced) == (-5, 0.0)
 
 
-def test_the_reward_refuses_hard_true_on_every_path():
+@pytest.mark.parametrize("level", ["hard", Level.HARD])
+def test_the_reward_refuses_level_hard_on_every_path(level):
     """cut_weight_cost is a reward (raw <= 0): level="hard" raises, in Python and through C++."""
-    pick = CutWeightCost(level="hard")  # the spec itself is a plain value
+    pick = CutWeightCost(level=level)  # the spec itself is a plain value
     problem = fixture_h()
     with pytest.raises(ValueError, match="is a reward"):
         score(max_cut.constraint_costs(problem), [pick])
@@ -282,6 +289,8 @@ def test_the_reward_refuses_hard_true_on_every_path():
         max_cut.calculate_score(problem, [pick])
     with pytest.raises(ValueError, match="is a reward"):
         max_cut.solve(problem, time_limit_seconds=0, constraints=[pick])
+    with pytest.raises(ValueError, match="is a reward"):
+        max_cut.constraint_costs(problem, [pick])
     duck = SimpleNamespace(name="cut_weight_cost", weight=None, level="hard", exponent=1.0)
     with pytest.raises(ValueError, match="'cut_weight_cost' is a reward"):
         max_cut.Solver(_zero()).solve_with_constraints(problem.to_core(), [duck])
@@ -299,7 +308,9 @@ def test_the_reward_refuses_hard_true_on_every_path():
         ({"weight": "2"}, TypeError),
         ({"exponent": 0}, ValueError),
         ({"exponent": -1.0}, ValueError),
-        ({"hard": 1}, TypeError),
+        ({"level": 1}, TypeError),
+        ({"level": "firm"}, ValueError),
+        ({"hard": True}, TypeError),  # the removed knob is an unknown keyword
     ],
 )
 def test_specs_validate_their_knobs(kwargs, error):
@@ -595,8 +606,16 @@ def test_offset_zero_reproduces_the_0_2_0_scores():
             CutWeightCost(offset=20, clip=False),
             CutWeightCost(weight=0.1, exponent=2, offset=5),
         ],
+        [
+            *get_constraints(),
+            FixedPartitionCost(level="soft", weight=1.5, offset=1, clip=False),
+            SamePartitionPairsCost(level=Level.SOFT, weight=2, offset=-1),
+            PartitionImbalanceCost(level="hard", weight=2, offset=1),
+            PartitionImbalanceCost(level=Level.HARD, weight=0.5, offset=3, clip=False),
+            CutWeightCost(level="soft", weight=0.5, offset=3, clip=False),
+        ],
     ],
-    ids=["repeat", "repeat-and-offsets"],
+    ids=["repeat", "repeat-and-offsets", "repeats-on-other-levels"],
 )
 def test_full_assert_solves_with_repeats_and_offsets(picks):
     """FULL_ASSERT re-checks the incremental score against a full recompute after every move."""
@@ -614,3 +633,85 @@ def test_full_assert_solves_with_repeats_and_offsets(picks):
     assert python.hard == core.score.hard
     assert python.soft == pytest.approx(core.score.soft)
     assert score(max_cut.constraint_costs(core), picks) == python  # the default costs score the repeats too
+
+
+# --- Levels: hard and soft, each pick (a repeat included) on the level it names ------
+
+
+@pytest.mark.parametrize(
+    ("picks", "expected"),
+    [
+        ([PartitionSizeBoundsCost(level="soft")], (0, -2.0)),
+        ([FixedPartitionCost(level=Level.SOFT, weight=2)], (0, -2.0)),
+        ([DifferentPartitionPairsCost(level="soft", offset=1, clip=False)], (0, 1.0)),  # (0 - 1) + (1 - 1)
+        ([PartitionImbalanceCost(level=Level.HARD, weight=1)], (-2, 0.0)),  # the soft global promoted
+        ([SamePartitionPairsCost(level="hard")], (-1, 0.0)),  # the default level, named
+        ([CutWeightCost(level=Level.SOFT)], (0, 2.0)),  # the reward's own level, named
+        # A repeat carries its own level and shaping. Hard: 3 x (2 - 1) on the imbalance
+        # repeat and the size per side [1, 1]. Soft: the imbalance 2, 2 x ((1 - 2) + (1 - 2))
+        # on the literal size repeat, the cut 2 and 2 x (2 + 1) on the literal cut repeat:
+        # -2 + 4 + 2 + 6.
+        (
+            [
+                PartitionImbalanceCost(weight=1),
+                PartitionImbalanceCost(level="hard", weight=3, offset=1),
+                PartitionSizeBoundsCost(),
+                PartitionSizeBoundsCost(level=Level.SOFT, weight=2, offset=2, clip=False),
+                CutWeightCost(),
+                CutWeightCost(weight=2, offset=1, clip=False),
+            ],
+            (-5, 10.0),
+        ),
+    ],
+)
+def test_levels_by_hand_on_both_paths(picks, expected):
+    """A pick's level moves its term, with the weight in units of that level: engine == mirror == hand."""
+    problem = fixture_h()
+    assert score(max_cut.constraint_costs(problem), picks) == expected
+    raw = max_cut.constraint_costs(problem, picks)
+    for pick, key in zip(picks, instance_keys(picks), strict=True):
+        assert raw[key]["level"] == (pick.level or raw[key]["default_level"]), key
+        assert raw[key]["hard"] == (raw[key]["level"] == "hard"), key
+    assert score(raw, picks) == expected
+    assert max_cut.calculate_score(problem, picks) == expected
+    engine = engine_solve(problem, picks)
+    assert engine.assignment() == problem.to_core().assignment()
+    assert (engine.score.hard, engine.score.soft) == expected
+
+
+@pytest.mark.parametrize("level", ["medium", Level.MEDIUM])
+def test_medium_is_refused_without_a_medium_level(level):
+    """The domain has no medium level: every path refuses the pick before scoring, a repeat too."""
+    for name, spec in (("fixed_partition_cost", FixedPartitionCost), ("cut_weight_cost", CutWeightCost)):
+        message = f"constraint '{name}': this use case has no medium level"
+        pick = spec(level=level)  # the spec cannot know the domain
+        for picks in ([pick], [spec(), pick]):
+            with pytest.raises(ValueError, match=message):
+                engine_solve(fixture_h(), picks)
+            with pytest.raises(ValueError, match=message):
+                solved(picks)
+            with pytest.raises(ValueError, match=message):
+                max_cut.constraint_costs(fixture_h(), picks)
+            with pytest.raises(ValueError, match=message):
+                score(max_cut.constraint_costs(fixture_h()), picks)
+            with pytest.raises(ValueError, match=message):
+                max_cut.calculate_score(fixture_h(), picks)
+
+
+def test_a_level_must_be_a_level():
+    with pytest.raises(TypeError, match="level must be a Level"):
+        PartitionSizeBoundsCost(level=True)
+    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft', not 'firm'"):
+        PartitionSizeBoundsCost(level="firm")
+    pick = SimpleNamespace(name="partition_size_bounds_cost", weight=None, level="firm", exponent=1.0)
+    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft', not 'firm'"):
+        engine_solve(fixture_h(), [PartitionSizeBoundsCost(), pick])
+
+
+def test_the_knob_was_renamed():
+    """0.3.0 replaced hard=True / hard=False by level="hard" / level="soft"; hard= is unknown."""
+    with pytest.raises(TypeError):
+        PartitionImbalanceCost(hard=True)
+    with pytest.raises(TypeError):
+        FixedPartitionCost(weight=None, hard=False)
+    assert PartitionImbalanceCost(level="hard") == PartitionImbalanceCost(level=Level.HARD)

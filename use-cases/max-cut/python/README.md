@@ -42,11 +42,14 @@ score(raw, [PartitionImbalanceCost(weight=1), PartitionImbalanceCost(weight=5, e
 The four unit constraints (fixed, same-side, different-side, size bounds) report one
 raw cost per side and `exponent` (with `offset` / `clip`, 0.3.0) shapes each side; the
 imbalance and the cut report one total. `constraint_costs(problem, picks)` scores a pick
-list, the second pick of a name keyed `<name>#2`. `calculate_score` / `constraint_costs` need a complete partition (a partial
-one raises `ValueError`). 0.2.0 renamed every constraint (no aliases), replaced the
-per-term lists of `constraint_costs()` by the standard dict, shapes each side instead
-of each fixed vertex / pair, rounds hard per side, refuses `level="hard"` on the reward
-and partial partitions, and replaced the simulated-annealing `SolverConfig` knobs
+list, the second pick of a name keyed `<name>#2`. `level` is None (the default level),
+"hard" or "soft" (or `Level.HARD` / `Level.SOFT`); the domain has no medium level, so
+"medium" raises `ValueError`, and a repeat carries its own level. `calculate_score` /
+`constraint_costs` need a complete partition (a partial one raises `ValueError`). 0.2.0
+renamed every constraint (no aliases), replaced the per-term lists of
+`constraint_costs()` by the standard dict, shapes each side instead of each fixed
+vertex / pair, rounds hard per side, refuses `level="hard"` on the reward and partial
+partitions, and replaced the simulated-annealing `SolverConfig` knobs
 (`max_iterations`, `stagnation_limit`, `temperature`, `cooling_rate`) by the engine's
 (`spent_limit_seconds`, `step_count_limit`, ...); see the
 [use-case README](../README.md#020).

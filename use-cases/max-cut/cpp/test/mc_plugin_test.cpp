@@ -16,10 +16,11 @@
 //       constraint (fixture H), the edge cases, the -1 rules
 //   (i) the catalog (info() == the components' constants) and the guards
 //   (j) repeated components and the offset / clip knobs: a hand-calculated
-//       repeat, threshold and literal offsets by hand per side (a side of
-//       raw 0 counts in literal mode) and on the globals' totals,
-//       incremental == a fresh recompute over a random walk and a
-//       FULL_ASSERT solve with repeated, shifted components
+//       repeat, a repeat on its own level (hard next to the soft default),
+//       threshold and literal offsets by hand per side (a side of raw 0
+//       counts in literal mode) and on the globals' totals, incremental == a
+//       fresh recompute over a random walk and a FULL_ASSERT solve with
+//       repeated, shifted components on both levels
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -632,7 +633,9 @@ Score scoreOf(ConstraintAssembly assembly, MaxCutProblem p)
 
 // Every kind repeated or shifted at least once: per-member deltas, pair
 // deltas, the O(1) re-cost, both member-change globals, the reward in both
-// modes, a fractional hard weight on a literal offset.
+// modes, a fractional hard weight on a literal offset; and repeats on the
+// other level than their default: the size bounds demoted to soft, the
+// imbalance promoted to hard (threshold).
 ConstraintAssembly repeatedAssembly()
 {
     ConstraintAssembly assembly = defaultConstraints();
@@ -661,6 +664,10 @@ ConstraintAssembly repeatedAssembly()
                                         .weight("cutWeightCost", 0.25)
                                         .exponent("cutWeightCost", 1.5)
                                         .offset("cutWeightCost", 10.0)));
+    assembly.addInstances(std::move(copyOf("partitionImbalanceCost")
+                                        .hard("partitionImbalanceCost")
+                                        .weight("partitionImbalanceCost", 2.0)
+                                        .offset("partitionImbalanceCost", 1.0)));
     return assembly;
 }
 
@@ -684,6 +691,25 @@ void verifyRepeatsAndOffsets()
                   && entries[1].exponent == 2.0 && entries[1].defaultWeight == 1.0
                   && entries[0].name == entries[1].name,
               "two instances, the same raw costs per side, each with its own knobs");
+    }
+    {
+        // Each instance on its own level: the soft imbalance (2, at weight 1)
+        // next to a hard repeat, 2 x (2 - 1) beyond its offset.
+        ConstraintAssembly assembly = copyOf("partitionImbalanceCost");
+        assembly.weight("partitionImbalanceCost", 1.0);
+        assembly.addInstances(std::move(copyOf("partitionImbalanceCost")
+                                            .hard("partitionImbalanceCost")
+                                            .weight("partitionImbalanceCost", 2.0)
+                                            .offset("partitionImbalanceCost", 1.0)));
+        MaxCutProblem p = hPositive();
+        DecomposedCalculator calculator;
+        assembly.into(calculator);
+        check(sameScore(scoreWith(calculator, p), Score{-2, -2.0}),
+              "soft imbalance + a hard repeat beyond 1: -2 hard / -2 soft");
+        const auto entries = calculator.constraintCosts();
+        check(entries.size() == 2 && entries[0].level == optimaru::Level::Soft
+                  && entries[1].level == optimaru::Level::Hard && entries[1].defaultLevel == optimaru::Level::Soft,
+              "the repeat reports its own level, the default stays soft");
     }
     {
         ConstraintAssembly assembly = copyOf("cutWeightCost");
@@ -820,7 +846,8 @@ void verifyRepeatsAndOffsets()
         }
         std::printf("    largest soft drift %.3g\n", drift);
         check(mismatches == 0,
-              std::to_string(moves) + " random moves with repeated, shifted components: incremental == fresh");
+              std::to_string(moves)
+                  + " random moves with repeated, shifted components on both levels: incremental == fresh");
     }
     {
         MaxCutProblem p = randomInstance(30, 11, 0.0, /*bounds=*/false);

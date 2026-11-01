@@ -1,4 +1,8 @@
-"""semiconductor_scheduling.constraints — the declarative cost function and the catalog."""
+"""semiconductor_scheduling.constraints — the declarative cost function and the catalog.
+
+"Which constraints are on", the catalog, the five knobs (the level included) and repeated
+picks are covered here.
+"""
 
 import math
 import pickle
@@ -11,8 +15,10 @@ from fab_random import instance
 
 import semiconductor_scheduling as fab
 from semiconductor_scheduling import constraints as specs
+from semiconductor_scheduling._constraint import instance_keys
 from semiconductor_scheduling.constraints import (
     Constraint,
+    Level,
     MachineCapacityCost,
     MaxQueueTimeCost,
     WeightedTardinessCost,
@@ -237,7 +243,9 @@ def test_levels_flip_both_ways():
         ({"weight": float("nan")}, ValueError),
         ({"weight": "2"}, TypeError),
         ({"exponent": 0}, ValueError),
-        ({"hard": 1}, TypeError),
+        ({"level": 1}, TypeError),
+        ({"level": "firm"}, ValueError),
+        ({"hard": True}, TypeError),  # the removed knob is an unknown keyword
     ],
 )
 def test_specs_validate_their_knobs(kwargs, error):
@@ -484,8 +492,15 @@ def test_score_equals_the_engine_with_repeats_and_offsets():
             WeightedTardinessCost(offset=-3),
             specs.CycleTimeCost(weight=0.5, offset=20, clip=False),
         ],
+        [
+            *get_constraints(),
+            MachineCapacityCost(level="soft", weight=1.5, offset=1, clip=False),
+            specs.LotRoutePrecedenceCost(level=Level.SOFT, weight=2, offset=-1),
+            specs.MakespanCost(level="hard", weight=0.5, offset=10),
+            WeightedTardinessCost(level=Level.HARD, weight=0.25, offset=3, clip=False),
+        ],
     ],
-    ids=["repeat", "repeat-and-offsets"],
+    ids=["repeat", "repeat-and-offsets", "repeats-on-other-levels"],
 )
 def test_full_assert_solves_with_repeats_and_offsets(picks):
     """FULL_ASSERT re-checks the incremental score against a full recompute after every move."""
@@ -497,3 +512,80 @@ def test_full_assert_solves_with_repeats_and_offsets(picks):
     assert python.hard == result.hard
     assert python.soft == pytest.approx(result.soft)
     assert score(fab.constraint_costs(problem), picks) == python  # the default costs score the repeats too
+
+
+# --- Levels: hard and soft, each pick (a repeat included) on the level it names ------
+
+
+@pytest.mark.parametrize(
+    ("picks", "expected"),
+    [
+        ([MachineCapacityCost(level="soft", offset=1, clip=False)], (0, 1.0)),  # a raw 0 - 1, on soft
+        ([specs.LotRoutePrecedenceCost(level=Level.SOFT, weight=0.5)], (0, -13.0)),
+        ([specs.MakespanCost(level=Level.HARD)], (-11, 0.0)),  # the soft objective promoted
+        ([WeightedTardinessCost(level="hard")], (-120, 0.0)),  # the default weight 10, now in hard units
+        ([specs.PinnedAssignmentsCost(level="hard")], (-2, 0.0)),  # the default level, named
+        ([specs.CycleTimeCost(level="soft")], (0, -11.0)),
+        # A repeat carries its own level and shaping. Hard: 2 x (11 - 10) on the makespan
+        # repeat, the 2 pinned misses and (12 - 2) on the literal tardiness. Soft: the makespan
+        # 11, 3 x (2 - 4) on the literal pinned repeat and the precedence beyond -1 (26 + 1):
+        # -11 + 6 - 27.
+        (
+            [
+                specs.MakespanCost(),
+                specs.MakespanCost(level="hard", weight=2, offset=10),
+                specs.PinnedAssignmentsCost(),
+                specs.PinnedAssignmentsCost(level=Level.SOFT, weight=3, offset=4, clip=False),
+                WeightedTardinessCost(level=Level.HARD, weight=1, offset=2, clip=False),
+                specs.LotRoutePrecedenceCost(level="soft", offset=-1),
+            ],
+            (-14, -32.0),
+        ),
+    ],
+)
+def test_levels_by_hand_on_both_paths(picks, expected):
+    """A pick's level moves its term, with the weight in units of that level: engine == mirror == hand."""
+    problem = _busy_problem()
+    assert score(fab.constraint_costs(problem), picks) == expected
+    raw = fab.constraint_costs(problem, picks)
+    for pick, key in zip(picks, instance_keys(picks), strict=True):
+        assert raw[key]["level"] == (pick.level or raw[key]["default_level"]), key
+        assert raw[key]["hard"] == (raw[key]["level"] == "hard"), key
+    assert score(raw, picks) == expected
+    assert _engine(problem, picks) == expected
+
+
+@pytest.mark.parametrize("level", ["medium", Level.MEDIUM])
+def test_medium_is_refused_without_a_medium_level(level):
+    """The domain has no medium level: every path refuses the pick before scoring, a repeat too."""
+    for name, spec in (("machine_capacity_cost", MachineCapacityCost), ("makespan_cost", specs.MakespanCost)):
+        message = f"constraint '{name}': this use case has no medium level"
+        pick = spec(level=level)  # the spec cannot know the domain
+        for picks in ([pick], [spec(), pick]):
+            with pytest.raises(ValueError, match=message):
+                fab.solve(_problem(), time_limit_seconds=0, constraints=picks)
+            with pytest.raises(ValueError, match=message):
+                _engine(_problem(), picks)
+            with pytest.raises(ValueError, match=message):
+                fab.constraint_costs(_problem(), picks)
+            with pytest.raises(ValueError, match=message):
+                score(fab.constraint_costs(_problem()), picks)
+
+
+def test_a_level_must_be_a_level():
+    with pytest.raises(TypeError, match="level must be a Level"):
+        specs.MakespanCost(level=True)
+    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft', not 'firm'"):
+        specs.MakespanCost(level="firm")
+    pick = SimpleNamespace(name="makespan_cost", weight=None, level="firm", exponent=1.0)
+    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft', not 'firm'"):
+        _engine(_problem(), [specs.MakespanCost(), pick])
+
+
+def test_the_knob_was_renamed():
+    """0.3.0 replaced hard=True / hard=False by level="hard" / level="soft"; hard= is unknown."""
+    with pytest.raises(TypeError):
+        specs.MakespanCost(hard=True)
+    with pytest.raises(TypeError):
+        MachineCapacityCost(weight=None, hard=False)
+    assert specs.MakespanCost(level="hard") == specs.MakespanCost(level=Level.HARD)

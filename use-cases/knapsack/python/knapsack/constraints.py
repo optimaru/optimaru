@@ -29,8 +29,10 @@ Every spec takes five knobs:
                weights; ``knapsack.constraint_info()`` reports the defaults.
 - ``level``    ``None`` = the default level, otherwise ``Level.HARD`` or
                ``Level.SOFT`` (or the names ``"hard"`` and ``"soft"``). This use
-               case has no medium level. ``SelectedValueCost`` is a reward and
-               always soft: ``level="hard"`` raises ValueError.
+               case has no medium level: ``level="medium"`` raises ValueError.
+               ``SelectedValueCost`` is a reward and always soft:
+               ``level="hard"`` raises ValueError. (``level`` replaced the
+               ``hard`` knob; ``hard=`` raises TypeError.)
 - ``exponent`` sign-preserving power shaping: ``weight * sign(c) * |c| ** exponent``
                on each constraint's single total (every knapsack constraint is
                global), e.g. the summed resource overflow.
@@ -43,8 +45,8 @@ Every spec takes five knobs:
                a literal one adds ``offset`` to the reward.
 
 The same constraint may be picked several times; each pick is scored on its own with
-its own knobs and the picks add up. The resource overflow plus its square beyond 10
-units::
+its own knobs (its level included) and the picks add up. The resource overflow plus its
+square beyond 10 units::
 
     knapsack.solve(problem, constraints=[
         KnapsackCapacityCost(),
@@ -257,7 +259,8 @@ def score(costs: dict, constraints: list[Constraint] | None = None) -> Score:
     with its own knobs.
 
     When ``constraints`` is given, only those constraints are scored — the same
-    semantics as `get_constraints`. Unknown names raise ValueError; ``level="hard"``
-    on the ``selected_value_cost`` reward raises ValueError.
+    semantics as `get_constraints`. Unknown names raise ValueError; so do
+    ``level="medium"`` (no medium level here) and ``level="hard"`` on the
+    ``selected_value_cost`` reward.
     """
     return score_costs(costs, get_constraints(constraints))

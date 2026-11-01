@@ -19,11 +19,12 @@ import random
 from itertools import product
 
 import pytest
-from max_cut import constraint_costs, constraint_info, list_constraints
+from max_cut import Solver, SolverConfig, constraint_costs, constraint_info, list_constraints
 from max_cut.constraints import (
     CutWeightCost,
     DifferentPartitionPairsCost,
     FixedPartitionCost,
+    Level,
     PartitionImbalanceCost,
     PartitionSizeBoundsCost,
     SamePartitionPairsCost,
@@ -297,9 +298,10 @@ def test_symmetry_breaking_keeps_the_optimum():
         assert (free.score_hard, free.score_soft) == (broken.score_hard, broken.score_soft)
 
 
-def test_the_reward_refuses_hard_true_in_cpsat_too():
-    with pytest.raises(ValueError, match="is a reward"):
-        solve(Model.model_validate(TRIANGLE), time_limit_seconds=1, constraints=[CutWeightCost(level="hard")])
+def test_the_reward_refuses_level_hard_in_cpsat_too():
+    for picks in ([CutWeightCost(level="hard")], [CutWeightCost(), CutWeightCost(level=Level.HARD)]):
+        with pytest.raises(ValueError, match="is a reward"):
+            solve(Model.model_validate(TRIANGLE), time_limit_seconds=1, constraints=picks)
 
 
 def test_exponents_and_fractional_weights_stay_unsupported():
@@ -342,13 +344,40 @@ SELECTIONS = {
         CutWeightCost(offset=-3),
     ],
     "identical-twice": [SamePartitionPairsCost(), SamePartitionPairsCost(), CutWeightCost()],
+    # Each pick on its own level: a soft literal repeat of the hard fixed sides, the size
+    # bounds on soft with a hard threshold repeat, the soft imbalance promoted to hard
+    # (literal) next to a soft threshold repeat, a soft same-side repeat and the reward
+    # (always soft) shifted both ways.
+    "levels": [
+        FixedPartitionCost(),
+        FixedPartitionCost(level="soft", weight=3, offset=1, clip=False),
+        PartitionSizeBoundsCost(level=Level.SOFT, weight=2),
+        PartitionSizeBoundsCost(level="hard", offset=1),
+        PartitionImbalanceCost(level="hard", weight=2, offset=1, clip=False),
+        PartitionImbalanceCost(level=Level.SOFT, weight=1, offset=2),
+        SamePartitionPairsCost(level="soft", offset=-1),
+        CutWeightCost(offset=10),
+        CutWeightCost(level="soft", weight=2, offset=-3, clip=False),
+    ],
 }
+
+
+def _engine_score(core, selection) -> dict:
+    """The engine's own score of the core's partition: a zero-budget warm start keeps it."""
+    config = SolverConfig()
+    config.spent_limit_seconds = 0
+    core.warm_start = True
+    kept = core.assignment()
+    Solver(config).solve_with_constraints(core, selection)
+    assert core.assignment() == kept
+    return {"hard": core.score.hard, "soft": core.score.soft}
 
 
 @pytest.mark.parametrize("selection", list(SELECTIONS.values()), ids=list(SELECTIONS))
 def test_the_cpsat_terms_equal_the_engine_on_every_partition(selection):
     """Pin each of the 128 partitions of EVERYTHING: the CP-SAT objective's per-level value is
-    the engine's score of that partition under the same repeated / shifted picks, exactly."""
+    the engine's score of that partition under the same repeated / shifted picks (its own and
+    the score() mirror's), exactly."""
     built = build(Model.model_validate(EVERYTHING), selection, symmetry_breaking=False)
     built.objective.minimize()
     literals = [built.context.side[vertex] for vertex in EVERYTHING["vertices"]]
@@ -361,6 +390,7 @@ def test_the_cpsat_terms_equal_the_engine_on_every_partition(selection):
         assert solver.solve(model) == cp_model.OPTIMAL
         core = _with_partition(EVERYTHING, sides).to_core()
         engine = score(constraint_costs(core, selection), selection)
+        assert _engine_score(core, selection) == {"hard": engine.hard, "soft": engine.soft}, sides
         assert built.objective.score(solver) == {"hard": engine.hard, "soft": engine.soft}, sides
         # Re-pricing the default costs (each name once) gives the same per instance key.
         assert built.objective.score_costs(constraint_costs(core)) == {"hard": engine.hard, "soft": engine.soft}
@@ -379,12 +409,37 @@ def test_repeated_and_shifted_picks_reach_the_brute_force_optimum(instance, sele
 
 
 def test_mapping_selections_repeat_and_shift_like_specs():
-    """The server's {name, weight, offset, clip} dicts pick the same instances as specs."""
-    specs = [CutWeightCost(), CutWeightCost(weight=3, offset=4, clip=False)]
-    dicts = [{"name": "cut_weight_cost"}, {"name": "cut_weight_cost", "weight": 3, "offset": 4, "clip": False}]
+    """The server's {name, weight, level, offset, clip} dicts pick the same instances as specs."""
+    specs = [
+        CutWeightCost(),
+        CutWeightCost(weight=3, offset=4, clip=False),
+        PartitionImbalanceCost(level="hard", weight=2, offset=1),
+        PartitionImbalanceCost(level="soft", weight=1, offset=2, clip=False),
+    ]
+    dicts = [
+        {"name": "cut_weight_cost"},
+        {"name": "cut_weight_cost", "weight": 3, "offset": 4, "clip": False},
+        {"name": "partition_imbalance_cost", "weight": 2, "level": "hard", "offset": 1},
+        {"name": "partition_imbalance_cost", "weight": 1, "level": "soft", "offset": 2, "clip": False},
+    ]
     by_specs = solve(Model.model_validate(TRIANGLE), time_limit_seconds=5, constraints=specs)
     assert solve(Model.model_validate(TRIANGLE), time_limit_seconds=5, constraints=dicts) == by_specs
-    assert (by_specs.score_hard, by_specs.score_soft) == (0, 7.0 + 3 * (7 + 4))
+    # A 2-1 split (imbalance 1) keeps the hard repeat at 0 and earns (1 - 2) = -1 on the soft
+    # literal one; cutting C off gives 7.
+    assert (by_specs.score_hard, by_specs.score_soft) == (0, 7.0 + 3 * (7 + 4) + 1)
+
+
+@pytest.mark.parametrize("level", ["medium", Level.MEDIUM])
+def test_medium_is_refused_like_the_engine(level):
+    """The domain has no medium level: CP-SAT refuses the pick, a repeat too, in the engine's words."""
+    message = "constraint 'partition_size_bounds_cost': this use case has no medium level"
+    for picks in (
+        [PartitionSizeBoundsCost(level=level)],
+        [PartitionSizeBoundsCost(), PartitionSizeBoundsCost(level=level)],
+        [{"name": "partition_size_bounds_cost"}, {"name": "partition_size_bounds_cost", "level": "medium"}],
+    ):
+        with pytest.raises(ValueError, match=message):
+            solve(Model.model_validate(TRIANGLE), time_limit_seconds=1, constraints=picks)
 
 
 def test_a_fractional_offset_is_refused_by_cpsat():

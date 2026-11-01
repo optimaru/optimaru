@@ -27,10 +27,12 @@ much more slowly). Flows, distances and direct costs may be negative: the object
 term's whole value range, so the hard level still dominates the soft one.
 
 **0.3.0:** a constraint may be picked several times (as specs or as
-`{"name", "weight", "hard", "offset", "clip"}` mappings); each pick builds its own terms with
-its own knobs. The three side constraints add one term per location the engine evaluates
-(the fixed locations, the locations named by a forbidden row, the capacitated locations)
-and the two objectives one term for their total, so an integral `offset` shapes each
+`{"name", "weight", "level", "offset", "clip"}` mappings); each pick builds its own terms with
+its own knobs, its level included (`level="soft"` / `level="hard"` move a term in both
+solvers; `level="medium"` is refused by both: `this use case has no medium level`). The
+three side constraints add one term per location the engine evaluates (the fixed
+locations, the locations named by a forbidden row, the capacitated locations) and the two
+objectives one term for their total, so an integral `offset` shapes each
 location (or the total) exactly as the engine does in both `clip` modes; a fractional
 offset is refused (`offset must be an integer for CP-SAT`). The shared `ObjectiveBuilder`
 shapes a term over a non-negative range, so an offset on `assignment_cost` /

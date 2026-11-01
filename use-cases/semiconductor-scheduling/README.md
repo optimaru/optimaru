@@ -64,9 +64,11 @@ reports its total as one raw cost:
 | `cycle_time_cost` | `CycleTimeCost` | soft | 1 | completion - release of completed lots (= `total_cycle_time`) |
 | `makespan_cost` | `MakespanCost` | soft | 1 | latest completion among the lots' last steps (= `makespan`) |
 
-Every constraint is flippable (`level="hard"` / `level="soft"`), none is a reward, and all 20
-are scored by default (`default_enabled`); `semiconductor_scheduling.constraint_info()`
-reports exactly this table from the C++ components (`kDefaultLevel` / `kDefaultWeight`).
+Every constraint is flippable (`level="hard"` / `level="soft"`, or `Level.HARD` /
+`Level.SOFT`; `level="medium"` raises `ValueError`, the domain has no medium level), none is
+a reward, and all 20 are scored by default (`default_enabled`);
+`semiconductor_scheduling.constraint_info()` reports exactly this table from the C++
+components (`kDefaultLevel` / `kDefaultWeight`).
 The 0.1.x quirks are kept on purpose: a route overlap is charged by
 `lot_route_precedence_cost`, by `min_queue_time_cost` (min 0) and by
 `missing_transport_time_cost` (no entry); `makespan_cost` reads only the lots' last
@@ -79,7 +81,8 @@ picked several times. Every constraint is global, so the offset shapes its singl
 total `x`: `sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
 `(x - offset) ** exponent`, sign-preserving (`clip=False`, which charges a total of 0 too
 and rewards a total below the offset); `offset=0` is the 0.2.0 shaping. Each pick is its
-own instance with its own knobs, and the instances add up (every instance reads the
+own instance with its own knobs, its level included (`level` replaced the `hard` knob;
+`hard=` raises `TypeError`), and the instances add up (every instance reads the
 calculator's one shared schedule view, so a repeat costs no second decode):
 
 ```python
@@ -91,9 +94,9 @@ fab.solve(problem, constraints=[
 ```
 
 `fab.constraint_costs(problem, picks)` scores a pick list and keys the second pick
-`makespan_cost#2`; every entry reports its `offset` and `clip`. The CP-SAT reference takes
-the same picks (integral offsets on its eight penalized constraints; its twelve
-structural ones refuse an offset like a weight or a level).
+`makespan_cost#2`; every entry reports its `offset`, `clip` and the `level` in effect. The
+CP-SAT reference takes the same picks (integral offsets on its eight penalized
+constraints; its twelve structural ones refuse an offset like a weight or a level).
 
 ### 0.2.0
 

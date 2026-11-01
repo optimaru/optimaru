@@ -40,9 +40,11 @@ exponent (with `offset` / `clip`, 0.3.0) shapes each location they evaluate (the
 `"units"`: the fixed, the forbidden-row and the capacitated locations); the two
 objectives report one total each and the exponent shapes that total;
 `constraint_costs(problem, picks)` scores a pick list, the second pick of a name keyed
-`<name>#2`. These are the same terms 0.1.x shaped, so exponents score as before at
-the soft level. Hard contributions are rounded per location (0.1.x
-rounded the hard total once), which differs only when a hard constraint's
+`<name>#2`. `level` is None (the default level), "hard" or "soft" (or `Level.HARD` /
+`Level.SOFT`); the domain has no medium level, so "medium" raises `ValueError`, and a
+repeat carries its own level. These are the same terms 0.1.x shaped, so exponents score
+as before at the soft level. Hard contributions are rounded per location (0.1.x rounded
+the hard total once), which differs only when a hard constraint's
 weighted, shaped per-location value is fractional: a fractional hard weight, or an
 exponent != 1 on `location_capacity_cost` (costs `[2, 2]` at exponent 0.5 give
 `-2`; 0.1.x gave `-3`). 0.2.0 renamed every constraint (no aliases: `fixed_assignments` ->

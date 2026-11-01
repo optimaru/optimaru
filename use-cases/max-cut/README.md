@@ -59,11 +59,12 @@ The first four are unit constraints (`constraint_costs()` reports
 `[side 0, side 1]`), the last two globals (one total). Five are scored by
 default; `partition_imbalance_cost` has default weight 0 (`default_enabled` is
 False): give it a weight to trade cut weight for balance. Every constraint but
-the reward is flippable (`level="hard"` / `level="soft"`). `cut_weight_cost` is a
-reward: it is always soft — `level="hard"` raises `ValueError` in `solve`,
-`calculate_score`, `constraints.score()` and the CP-SAT reference — and its level
-cannot change. `max_cut.constraint_info()` reports exactly this table from the
-C++ components (`kDefaultLevel` / `kDefaultWeight`).
+the reward is flippable (`level="hard"` / `level="soft"`, or `Level.HARD` /
+`Level.SOFT`; `level="medium"` raises `ValueError`, the domain has no medium level).
+`cut_weight_cost` is a reward: it is always soft — `level="hard"` raises `ValueError`
+in `solve`, `calculate_score`, `constraints.score()` and the CP-SAT reference — and
+its level cannot change. `max_cut.constraint_info()` reports exactly this table from
+the C++ components (`kDefaultLevel` / `kDefaultWeight`).
 
 ### 0.3.0
 
@@ -74,7 +75,8 @@ imbalance and the cut their single total: `sign(x) * max(0, |x| - offset) ** exp
 which charges both sides, a side of raw 0 included, and rewards a side below the
 offset); `offset=0` is the 0.2.0 shaping. On the `cut_weight_cost` reward (raw `-cut`) a
 threshold offset rewards only the cut beyond it and a literal one adds `offset` to the
-reward. Each pick is its own instance with its own knobs, and the instances add up:
+reward. Each pick is its own instance with its own knobs, its level included (`level`
+replaced the `hard` knob; `hard=` raises `TypeError`), and the instances add up:
 
 ```python
 max_cut.solve(problem, constraints=[
@@ -86,8 +88,8 @@ max_cut.solve(problem, constraints=[
 ```
 
 `max_cut.constraint_costs(problem, picks)` scores a pick list and keys the second pick
-`partition_imbalance_cost#2`; every entry reports its `offset` and `clip`. The CP-SAT
-reference takes the same picks (integral offsets).
+`partition_imbalance_cost#2`; every entry reports its `offset`, `clip` and the `level` in
+effect. The CP-SAT reference takes the same picks (integral offsets).
 
 ### 0.2.0
 

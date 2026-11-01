@@ -163,7 +163,8 @@ class Solver:
         """Score the same solve with a caller-chosen constraint set
         (see knapsack.constraints). The given list replaces the default set; None
         keeps the default set. Single start. A name may be picked several times: each
-        pick is its own instance with its own knobs, and the instances add up."""
+        pick is its own instance with its own knobs (its level included), and the
+        instances add up. There is no medium level: level="medium" raises ValueError."""
 
 def list_constraints() -> list[str]:
     """Constraint names scored by this domain (default assembly order, snake_case):
@@ -176,13 +177,14 @@ def constraint_costs(
 ) -> dict[str, dict[str, Any]]:
     """Raw cost of every constraint, before weight/exponent/offset/level:
     {key: {"costs": [total], "weight": float, "exponent": float, "offset": float,
-    "clip": bool, "hard": bool, "global": bool, "level": "hard" | "medium" | "soft",
+    "clip": bool, "hard": bool, "global": bool, "level": "hard" | "soft",
     "reward": bool, "level_flippable": bool, "name": str, "label": str,
-    "default_weight": float, "default_level": str}}. Every knapsack constraint is
-    global, so "costs" holds one raw total. None = the default constraints; a pick
-    list (as for solve) scores exactly those picks, each entry carrying its pick's
-    knobs, the k-th pick of a name keyed "<name>#<k>" from the second on.
-    knapsack.constraints.score() turns it into a score."""
+    "default_weight": float, "default_level": str}}, "level" being the level in
+    effect (the pick's, or the default) and "hard" the same as level == "hard".
+    Every knapsack constraint is global, so "costs" holds one raw total. None = the
+    default constraints; a pick list (as for solve) scores exactly those picks, each
+    entry carrying its pick's knobs, the k-th pick of a name keyed "<name>#<k>" from
+    the second on. knapsack.constraints.score() turns it into a score."""
 
 class ConstraintInfo(NamedTuple):
     """One constraint-catalog row, read off the C++ default assembly."""

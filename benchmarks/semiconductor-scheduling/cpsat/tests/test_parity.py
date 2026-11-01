@@ -17,6 +17,7 @@ import pytest
 import semiconductor_scheduling as domain
 from semiconductor_scheduling.constraints import (
     CycleTimeCost,
+    Level,
     LotRoutePrecedenceCost,
     MachineCapacityCost,
     MachineEligibilityCost,
@@ -365,6 +366,19 @@ SELECTIONS = {
         MakespanCost(offset=10),
         CycleTimeCost(offset=5, clip=False),
     ],
+    # Each penalized pick on its own level (a structural rule cannot move): a soft literal
+    # repeat of the hard queue limit, the makespan on both levels, the tardiness and the
+    # load imbalance promoted to hard, the cycle-time limit demoted to soft.
+    "levels": [
+        MaxQueueTimeCost(),
+        MaxQueueTimeCost(level="soft", weight=3, offset=1, clip=False),
+        MakespanCost(),
+        MakespanCost(level=Level.HARD, offset=20),
+        WeightedTardinessCost(level="hard", weight=1, offset=2, clip=False),
+        CycleTimeCost(level=Level.SOFT, offset=5),
+        MaxCycleTimeCost(level="soft", weight=2, offset=-1),
+        MachineLoadImbalanceCost(level="hard", offset=1),
+    ],
 }
 
 
@@ -372,8 +386,9 @@ SELECTIONS = {
 @pytest.mark.parametrize("selection", list(SELECTIONS.values()), ids=list(SELECTIONS))
 def test_repeated_and_shifted_picks_match_the_engine_on_fixed_assignments(selection, fixture) -> None:
     """Every operation fixed: the CP-SAT objective of a selection with repeats and offsets is
-    the engine's score of that schedule under the same picks, exactly, per level. A selected
-    structural rule the schedule breaks makes the model infeasible instead."""
+    the engine's score of that schedule under the same picks (the C++ assembly's and the
+    score() mirror's), exactly, per level. A selected structural rule the schedule breaks
+    makes the model infeasible instead."""
     build, assignments = FIXTURES[fixture]
     core = build(assignments).to_core()
     raw = domain.constraint_costs(core)
@@ -384,6 +399,8 @@ def test_repeated_and_shifted_picks_match_the_engine_on_fixed_assignments(select
     proxy: dict[str, int] = {}
     solve(build([]), time_limit_seconds=5, constraints=selection, _fixed_assignments=assignments, _proxy_score=proxy)
     engine = score(domain.constraint_costs(core, selection), selection)
+    own = domain.calculate_score(core, selection)  # the C++ assembly of the same picks
+    assert (own.hard, own.soft) == (engine.hard, engine.soft)
     assert proxy == {"hard": engine.hard, "soft": engine.soft}
     assert score(raw, selection) == engine  # the default costs score the repeats too
 
@@ -406,13 +423,34 @@ def test_a_solve_with_repeats_and_offsets_reports_the_engine_score(selection) ->
 
 
 def test_mapping_selections_repeat_and_shift_like_specs() -> None:
-    """The server's {name, weight, offset, clip} dicts pick the same instances as specs."""
-    specs = [MakespanCost(), MakespanCost(weight=3, offset=4, clip=False)]
-    dicts = [{"name": "makespan_cost"}, {"name": "makespan_cost", "weight": 3, "offset": 4, "clip": False}]
+    """The server's {name, weight, level, offset, clip} dicts pick the same instances as specs."""
+    specs = [MakespanCost(), MakespanCost(weight=3, offset=4, clip=False), MakespanCost(level="hard", offset=15)]
+    dicts = [
+        {"name": "makespan_cost"},
+        {"name": "makespan_cost", "weight": 3, "offset": 4, "clip": False},
+        {"name": "makespan_cost", "level": "hard", "offset": 15},
+    ]
     by_specs = solve(_fab([]), time_limit_seconds=5, constraints=specs, _fixed_assignments=FAB)
     by_dicts = solve(_fab([]), time_limit_seconds=5, constraints=dicts, _fixed_assignments=FAB)
     assert (by_dicts.score_hard, by_dicts.score_soft) == (by_specs.score_hard, by_specs.score_soft)
-    assert (by_specs.score_hard, by_specs.score_soft) == (0, -(17 + 3 * (17 - 4)))
+    # The hard repeat charges the makespan 17 beyond 15.
+    assert (by_specs.score_hard, by_specs.score_soft) == (-(17 - 15), -(17 + 3 * (17 - 4)))
+
+
+@pytest.mark.parametrize("level", ["medium", Level.MEDIUM])
+def test_medium_is_refused_like_the_engine(level) -> None:
+    """The domain has no medium level: a penalized pick is refused in the engine's words, a
+    repeat too; a structural rule refuses any level but hard anyway."""
+    message = "constraint 'makespan_cost': this use case has no medium level"
+    for picks in (
+        [MakespanCost(level=level)],
+        [MakespanCost(), MakespanCost(level=level)],
+        [{"name": "makespan_cost"}, {"name": "makespan_cost", "level": "medium"}],
+    ):
+        with pytest.raises(ValueError, match=message):
+            solve(_fab([]), time_limit_seconds=1, constraints=picks)
+    with pytest.raises(ValueError, match="enforces this constraint structurally"):
+        solve(_fab([]), time_limit_seconds=1, constraints=[MachineCapacityCost(level=level)])
 
 
 def test_a_fractional_offset_is_refused_by_cpsat() -> None:

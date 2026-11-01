@@ -35,7 +35,9 @@ fab.constraint_items(problem)              # the per-item lists (0.1.x constrain
 
 Every constraint is global: `exponent`, `offset` and `clip` (0.3.0) shape its total, and
 `constraint_costs(problem, picks)` scores a pick list, the second pick of a name keyed
-`<name>#2`.
+`<name>#2`. `level` is None (the default level), "hard" or "soft" (or `Level.HARD` /
+`Level.SOFT`); the domain has no medium level, so "medium" raises `ValueError`, and a
+repeat carries its own level.
 
 ## Install / test
 

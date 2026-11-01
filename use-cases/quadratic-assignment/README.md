@@ -50,10 +50,11 @@ holds the exact CP-SAT reference.
 The three side constraints are `UnitConstraint`s over the locations (the exponent
 shapes each location's cost); the two objectives are `GlobalConstraint`s on the
 engine's member-change fast path (the exponent shapes the total). Every
-constraint is flippable (`level="hard"` / `level="soft"`), none is a reward and all
-five are scored by default (`default_enabled`); `quadratic_assignment.constraint_info()`
-reports exactly this table from the C++ components (`kDefaultLevel` /
-`kDefaultWeight`).
+constraint is flippable (`level="hard"` / `level="soft"`, or `Level.HARD` /
+`Level.SOFT`; `level="medium"` raises `ValueError`, the domain has no medium level), none
+is a reward and all five are scored by default (`default_enabled`);
+`quadratic_assignment.constraint_info()` reports exactly this table from the C++
+components (`kDefaultLevel` / `kDefaultWeight`).
 
 ### 0.3.0
 
@@ -66,7 +67,8 @@ the 0.2.0 shaping. The side constraints are scoped: `pinned_assignments_cost` ev
 the fixed locations, `forbidden_assignments_cost` the locations named by a forbidden row
 and `location_capacity_cost` the locations with a capacity, so a literal offset charges
 exactly those (`constraint_costs()` reports them as `"units"`). Each pick is its own
-instance with its own knobs, and the instances add up:
+instance with its own knobs, its level included (`level` replaced the `hard` knob; `hard=`
+raises `TypeError`), and the instances add up:
 
 ```python
 qap.solve(problem, constraints=[
@@ -77,9 +79,9 @@ qap.solve(problem, constraints=[
 ```
 
 `qap.constraint_costs(problem, picks)` scores a pick list and keys the second pick
-`flow_distance_cost#2`; every entry reports its `offset` and `clip`. The CP-SAT reference
-takes the same picks (integral offsets; on an objective only while its data cannot make
-the total negative).
+`flow_distance_cost#2`; every entry reports its `offset`, `clip` and the `level` in effect.
+The CP-SAT reference takes the same picks (integral offsets; on an objective only while
+its data cannot make the total negative).
 
 ### 0.2.0
 
