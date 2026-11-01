@@ -7,28 +7,29 @@ from collections.abc import Iterable, Mapping
 from bed_allocation import calculate_score, constraint_costs
 from bed_allocation.constraints import Constraint
 from bed_allocation.models import BedPlanModel
-from cpsat_plugins import ConstraintConfig
+from cpsat_plugins import ConstraintConfig, ObjectiveBuilder
 from ortools.sat.python import cp_model
 
 from .constraints import BedContext, REGISTRY
 
-__all__ = ["catalog", "solve"]
+__all__ = ["build_model", "catalog", "solve"]
 
 
 def catalog() -> list[dict]:
     return REGISTRY.catalog()
 
 
-def solve(
+def build_model(
     problem: BedPlanModel,
-    *,
-    time_limit_seconds: float = 30.0,
-    random_seed: int = 0,
-    num_workers: int = 1,
     constraints: Iterable[ConstraintConfig | Constraint | str | Mapping] | None = None,
     _fixed_beds: list[int] | None = None,
-    _proxy_score: dict[str, int] | None = None,
-) -> BedPlanModel:
+) -> tuple[cp_model.CpModel, dict[tuple[int, int], cp_model.IntVar], ObjectiveBuilder]:
+    """The CP-SAT model of ``problem`` under ``constraints``: (model, x, objective).
+
+    ``x[stay, value]`` are the assignment literals (value ``len(beds)`` is the "no bed"
+    sentinel); the objective holds one term per engine unit and selected instance (a
+    constraint picked twice adds two sets of terms, each with its own knobs).
+    """
     model = cp_model.CpModel()
     stay_count, bed_count = len(problem.stays), len(problem.beds)
     no_bed = bed_count
@@ -54,6 +55,22 @@ def solve(
     REGISTRY.build(
         BedContext(model, problem, x, no_bed, room_of_bed, departments), objective
     )
+    return model, x, objective
+
+
+def solve(
+    problem: BedPlanModel,
+    *,
+    time_limit_seconds: float = 30.0,
+    random_seed: int = 0,
+    num_workers: int = 1,
+    constraints: Iterable[ConstraintConfig | Constraint | str | Mapping] | None = None,
+    _fixed_beds: list[int] | None = None,
+    _proxy_score: dict[str, int] | None = None,
+) -> BedPlanModel:
+    _model, x, objective = build_model(problem, constraints, _fixed_beds)
+    bed_count = len(problem.beds)
+    no_bed = bed_count
 
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = time_limit_seconds

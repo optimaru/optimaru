@@ -2,41 +2,62 @@
 
 The default path (`ba.solve(plan)`) enables all twelve constraints at their default
 weights (the quickstart's). This module is the alternative path next to it: pick
-constraints, change weights, flip hard/soft, and pass the list to
+constraints, change weights, flip hard/soft, shape the cost, and pass the list to
 `solve(plan, constraints=...)`.
 
-The shortest route is :func:`get_constraints`. It returns the default list, so
-a "default with a small tweak" declaration fits on one line::
+A constraint list reads one way: one class call per constraint::
 
     import bed_allocation as ba
     from bed_allocation.constraints import (
-        DepartmentSpecialtyCost, bed_conflict_cost, get_constraints,
+        BedConflictCost, DepartmentSpecialtyCost, UnassignedStaysCost, get_constraints,
     )
 
-    ba.solve(plan, constraints=get_constraints())              # defaults as-is
-    ba.solve(plan, constraints=get_constraints([               # picked
-        bed_conflict_cost, DepartmentSpecialtyCost(weight=40),
-    ]))
+    ba.solve(plan, constraints=get_constraints())              # the defaults as-is
+    ba.solve(plan, constraints=[                                # picked
+        BedConflictCost(), UnassignedStaysCost(), DepartmentSpecialtyCost(weight=40),
+    ])
 
-Each constraint has a default instance at module level (`bed_conflict_cost`,
-`unassigned_stays_cost`, ...), so you can also pass a list of just a few. Only
-listed constraints are scored — leave one out and its term disappears from the score.
+Only listed constraints are scored — leave one out and its term disappears from the
+score. (The module also carries ready-made default instances: ``bed_conflict_cost`` is
+``BedConflictCost()``, and so on.)
 
-Every spec takes ``(weight=None, hard=None, exponent=1.0)``:
+Every spec takes five knobs:
 
 - ``weight``   linear multiplier on the constraint cost, in units of its level.
                ``None`` = the component default (``ba.constraint_info()`` reports
                them; the plan carries none).
 - ``hard``     ``True`` = hard, ``False`` = soft, ``None`` = the default level.
-               ``unassigned_stays_cost`` is the one MEDIUM constraint: medium is a
+               ``UnassignedStaysCost`` is the one MEDIUM constraint: medium is a
                default-only level, so ``hard=True`` makes it one hard unit per
                night and ``hard=False`` one soft unit per night (outside the 10^9
                medium fold), in the solver and in :func:`score` alike. An explicit
                ``weight`` keeps it on the medium level, in medium units.
 - ``exponent`` sign-preserving power shaping: ``weight * sign(c) * |c| **
                exponent``, per bed for the unit constraints and on the single total
-               for the global ``mixed_gender_room_cost``. 2.0 = squared, so
+               for the global ``MixedGenderRoomCost``. 2.0 = squared, so
                concentrated violations grow much costlier.
+- ``offset``   (keyword) shifts that shaping, at the same granularity; 0.0 = none.
+- ``clip``     (keyword) ``True`` (the default) counts only what lies beyond the
+               offset, ``max(0, c - offset) ** exponent``; ``False`` shapes
+               ``c - offset`` as it is, so a unit below the offset lowers the
+               penalty. The literal form charges every unit the constraint
+               evaluates, a raw 0 included: every real bed (an empty one
+               included, never the "no bed" sentinel) for the per-bed
+               constraints, only the sentinel for ``UnassignedStaysCost``, and
+               the one total for ``MixedGenderRoomCost``; a ``constraint_costs()``
+               entry lists its evaluated units as ``"units"``.
+
+The same constraint may be picked several times; each pick is scored on its own with
+its own knobs and the picks add up. The unassigned nights on the medium level, plus the
+square of those beyond 10 (on the sentinel's total, the scoped unit)::
+
+    ba.solve(plan, constraints=[
+        *[spec for spec in get_constraints() if spec.name != "unassigned_stays_cost"],
+        UnassignedStaysCost(),
+        UnassignedStaysCost(exponent=2, offset=10),
+    ])
+
+``ba.constraint_costs(plan, picks)`` keys the second pick ``"unassigned_stays_cost#2"``.
 
 Names (`name`) are the C++ component names in snake_case
 (``BedConflictCost`` -> ``bed_conflict_cost``). The core derives them
@@ -300,7 +321,7 @@ class PreferredPatientEquipmentCost(Constraint):
     )
 
 
-#: Instances at the default weights (weight=None). Reference them directly when picking.
+#: Ready-made default instances (``bed_conflict_cost`` is ``BedConflictCost()``).
 bed_conflict_cost = BedConflictCost()
 female_in_male_room_cost = FemaleInMaleRoomCost()
 male_in_female_room_cost = MaleInFemaleRoomCost()
@@ -338,12 +359,13 @@ def get_constraints(constraints: list[Constraint] | None = None) -> list[Constra
     """Return the cost function. Without arguments, all twelve default constraints.
 
     When `constraints` is given, that list is used as-is — only the listed
-    constraints are scored. To change just one default, mix in the default instances::
+    constraints are scored::
 
-        get_constraints([bed_conflict_cost, DepartmentSpecialtyCost(weight=40)])
+        get_constraints([BedConflictCost(), DepartmentSpecialtyCost(weight=40)])
 
     Same contract as the C++ applyConstraints: an empty list (most likely a filter
-    that came out empty) and a constraint named twice raise ValueError.
+    that came out empty) raises ValueError; a constraint named several times is
+    scored once per pick, each with its own knobs.
     """
     return select(constraints, _DEFAULTS)
 
@@ -352,17 +374,19 @@ def score(costs: dict, constraints: list[Constraint] | None = None) -> Score:
     """Apply specs to raw constraint costs and produce a score — pure Python.
 
     ``costs`` is what `ba.constraint_costs(plan)` returns: per constraint, the
-    **raw** cost of each unit (before weight, exponent and level rounding).
+    **raw** cost of each unit (before weight, exponent, offset and level rounding).
     Fetch it once and rescore with different weights without re-solving::
 
         raw = ba.constraint_costs(plan)
         score(raw)                     # default set
-        score(raw, picked)             # picked list
+        score(raw, [BedConflictCost(), UnassignedStaysCost(weight=3)])
+        score(raw, [UnassignedStaysCost(), UnassignedStaysCost(exponent=2, offset=10)])
 
     No solver and no search are involved. The arithmetic matches the engine —
-    each unit contributes ``weight * shape(cost, exponent)`` and hard
-    contributions are **rounded per unit** before summing (the same order as the
-    engine; rounding the total afterwards gives different values).
+    each unit contributes ``weight * shape(cost, exponent, offset, clip)`` and
+    hard contributions are **rounded per unit** before summing (the same order as
+    the engine; rounding the total afterwards gives different values). A second
+    pick of a constraint reads the same raw costs with its own knobs.
 
     When ``constraints`` is given, only those constraints are scored — the same
     semantics as `get_constraints`. Unknown names raise ValueError.
