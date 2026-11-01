@@ -273,41 +273,53 @@ PYBIND11_MODULE(_core, m)
              py::call_guard<py::gil_scoped_release>())
         // Same solve, scored by a caller-chosen constraint set (see
         // assembly_line_balancing.constraints). The picks replace the
-        // defaults; None keeps them. Single start.
+        // defaults; None keeps them. Single start. A name may be picked
+        // several times: every pick is its own instance (a fresh copy of the
+        // default component) with its own knobs.
         .def(
             "solve_with_constraints",
             [](Solver &solver, AssemblyLineBalancingProblem &problem, const py::object &constraints)
             {
                 DecomposedCalculator calculator;
-                tfpy::applyConstraints(defaultConstraints(), constraints).into(calculator);
+                tfpy::applyConstraints([] { return defaultConstraints(); }, constraints).into(calculator);
                 py::gil_scoped_release release;
                 solver.solve(problem, calculator);
             },
             py::arg("problem"),
             py::arg("constraints") = py::none());
 
-    // The raw per-unit costs of the default assembly on `problem` — the input
-    // assembly_line_balancing.constraints.score() turns into a score — keyed in
+    // The raw per-unit costs of an assembly on `problem` — the input
+    // assembly_line_balancing.constraints.score() turns into a score — in
     // catalog (list_constraints()) order. Scoring once is enough: re-pricing
-    // any assembly is pure Python arithmetic on these.
+    // any assembly is pure Python arithmetic on these. None = the default
+    // assembly; a pick list scores exactly those picks (applyConstraints),
+    // each entry carrying its pick's knobs. The keys are tfpy::constraintCosts'
+    // (the k-th instance of a name "<name>#<k>", in calculator order); only
+    // the order of the names follows the catalog, each name's instances stay
+    // together in their own order.
     m.def(
         "constraint_costs",
-        [](AssemblyLineBalancingProblem &problem)
+        [](AssemblyLineBalancingProblem &problem, const py::object &constraints)
         {
             ScoreCalculator::prepare(problem);
             DecomposedCalculator calculator;
-            defaultConstraints().into(calculator);
+            tfpy::applyConstraints([] { return defaultConstraints(); }, constraints).into(calculator);
             const py::dict costs = tfpy::constraintCosts(calculator, problem);
             py::dict ordered;
             for (const std::string &name : catalogNames())
             {
-                const std::string key = tfpy::pythonName(name);
-                ordered[py::str(key)] = costs[py::str(key)];
+                const std::string pythonName = tfpy::pythonName(name);
+                for (const auto &item : costs)
+                {
+                    if (py::reinterpret_borrow<py::dict>(item.second)["name"].cast<std::string>() == pythonName)
+                        ordered[item.first] = item.second;
+                }
             }
             return ordered;
         },
         py::arg("problem"),
-        "Raw per-unit cost of every constraint, before weight/exponent/level.");
+        py::arg("constraints") = py::none(),
+        "Raw per-unit cost of every constraint, before weight/exponent/offset/level.");
 
     // The constraint names this domain scores, in catalog order — the same
     // strings a score breakdown reports.
