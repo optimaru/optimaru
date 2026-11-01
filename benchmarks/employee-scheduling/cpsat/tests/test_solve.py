@@ -379,8 +379,11 @@ def test_what_cannot_be_modelled_is_refused() -> None:
 
 # The plugins that add one term per engine unit (an employee, or the total of
 # unassigned_shifts_cost), so they take offsets; at values that bind on `_problem`.
+# The literal formula with an offset is refused on hard, so the literal picks of
+# the hard rules sit on soft.
 SHIFTED = [
-    domain.RequiredSkillCost(offset=1, clip=False),
+    domain.RequiredSkillCost(level="soft", offset=1, clip=False),
+    domain.RequiredSkillCost(offset=1),
     domain.RequiredSkillCost(weight=2, offset=-1),
     domain.EmployeeUnavailabilityCost(offset=60),
     domain.UndesiredDayCost(offset=100, clip=False),
@@ -388,7 +391,8 @@ SHIFTED = [
     domain.UndesiredDayCost(offset=30, worker_indices=(0, 2, 2, 9), clip=False),
     domain.DesiredDayCost(offset=200),
     domain.DesiredDayCost(offset=100, clip=False, shift_indices=tuple(range(0, 24, 3))),
-    domain.UnassignedShiftsCost(offset=2, clip=False),
+    domain.UnassignedShiftsCost(offset=2),
+    domain.UnassignedShiftsCost(level="soft", offset=2, clip=False),
     domain.UnassignedShiftsCost(weight=3, offset=1, level="soft"),
 ]
 
@@ -482,17 +486,15 @@ def test_each_repeat_keeps_its_own_level_on_every_path(seed) -> None:
 @pytest.mark.parametrize("level", [domain.Level.MEDIUM, "medium"])
 def test_medium_is_refused_on_cpsat(level) -> None:
     """No medium level here: the rule schema refuses it, and so does the registry itself
-    (the first term a medium plugin adds)."""
+    (when the objective is built, before any term is added)."""
     with pytest.raises(ValueError, match="'hard' or 'soft'"):
         _problem([domain.RequiredSkillCost(), domain.RequiredSkillCost(level=level)])
     picks = [domain.UndesiredDayCost(), domain.UndesiredDayCost(level=level)]
     registry = registry_for(picks)
-    objective = registry.objective(
-        cp_model.CpModel(), ("hard", "soft"), selection(registry.plugins)
-    )
-    objective.add("undesired_day_cost", 0, bound=0)
     with pytest.raises(ValueError, match="this use case has no medium level"):
-        objective.add("undesired_day_cost#2", 0, bound=0)
+        registry.objective(
+            cp_model.CpModel(), ("hard", "soft"), selection(registry.plugins)
+        )
 
 
 def _tiny(rules: list) -> ScheduleRequest:
@@ -524,7 +526,8 @@ TINY = {
         domain.UndesiredDayCost(),
     ],
     "shifted": [
-        domain.RequiredSkillCost(offset=1, clip=False),
+        domain.RequiredSkillCost(offset=1),
+        domain.RequiredSkillCost(level="soft", offset=1, clip=False),
         domain.UndesiredDayCost(offset=400),
         domain.UndesiredDayCost(weight=2, offset=-60, clip=False),
         domain.DesiredDayCost(offset=100, clip=False),
@@ -585,3 +588,72 @@ def test_an_offset_cpsat_cannot_shape_is_refused() -> None:
         "desired_day_cost",
         "unassigned_shifts_cost",
     }
+
+
+# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+
+HARD_REFUSAL = (
+    "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
+    "violation; use clip=True (a threshold) or another level"
+)
+
+LITERAL_ON_HARD = [
+    lambda offset: domain.RequiredSkillCost(
+        offset=offset, clip=False
+    ),  # the default level, hard
+    lambda offset: domain.UndesiredDayCost(level="hard", offset=offset, clip=False),
+    lambda offset: domain.UnassignedShiftsCost(offset=offset, clip=False),  # global
+    lambda offset: domain.MaxConsecutiveDaysCost(
+        value=2, offset=offset, clip=False
+    ),  # no per-unit terms
+]
+LITERAL_IDS = [
+    "skill-default-hard",
+    "undesired-moved-to-hard",
+    "unassigned-global",
+    "max-days-runs",
+]
+
+
+@pytest.mark.parametrize("offset", [1, -1])
+@pytest.mark.parametrize("pick", LITERAL_ON_HARD, ids=LITERAL_IDS)
+def test_the_literal_offset_is_refused_on_hard_like_the_engine(pick, offset) -> None:
+    """The rule schema refuses the pick in the engine's words; so does the CP-SAT
+    objective itself (before it asks whether the plugin takes offsets at all), and so
+    do the engine and the score() mirror."""
+    spec = pick(offset)
+    message = HARD_REFUSAL.format(q=repr(spec.name))
+    for rules in ([spec], [domain.RequiredSkillCost(), spec]):
+        with pytest.raises(ValueError) as refused:
+            _problem(rules)
+        (error,) = refused.value.errors()
+        assert str(error["ctx"]["error"]) == message
+    registry = registry_for([spec])
+    with pytest.raises(ValueError) as refused:
+        registry.objective(
+            cp_model.CpModel(), ("hard", "soft"), selection(registry.plugins)
+        )
+    assert str(refused.value) == message
+    with pytest.raises(ValueError) as refused:
+        es_scheduling.DecomposedCalculator([spec])
+    assert str(refused.value) == message
+    allowed = type(spec)(**spec.params())
+    roster = models.to_schedule(_problem([allowed]).model_input)
+    with pytest.raises(ValueError) as refused:
+        domain.score(es_scheduling.constraint_costs(roster, [allowed]), [spec])
+    assert str(refused.value) == message
+
+
+@pytest.mark.parametrize("seed", range(2))
+@pytest.mark.parametrize("offset", [1, -1])
+def test_the_same_literal_pick_on_soft_matches_the_engine(offset, seed) -> None:
+    rules = [
+        domain.RequiredSkillCost(),
+        domain.RequiredSkillCost(level="soft", offset=offset, clip=False),
+        domain.UnassignedShiftsCost(level="soft", offset=offset, clip=False),
+    ]
+    problem = _problem(rules, seed)
+    fixed = _stacked_roster(problem, seed)
+    proxy: dict[str, int] = {}
+    solve(problem, time_limit_seconds=5, _fixed_workers=fixed, _proxy_score=proxy)
+    assert proxy == _engine_scaled(problem, fixed)

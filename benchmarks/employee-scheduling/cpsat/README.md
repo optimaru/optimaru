@@ -83,6 +83,10 @@ These are refused with a `ValueError`, not approximated:
   a 0 included) and `unassigned_shifts_cost` (its total). On the soft level the offset
   moves to the `SCALE` grid with the term (`solve.selection`). Every other rule refuses
   an offset with "offset is not supported by this CP-SAT model".
+- `clip=False` with an offset on a hard rule (its `level`, or its default level), for
+  every plugin. The rule schema refuses it already, and the objective refuses it again
+  when it is built, with the engine's message (`constraint 'required_skill_cost':
+  clip=False with a non-zero offset cannot be hard, ...`): hard 0 must mean no violation.
 - `assignment_cost`, `shift_count_imbalance_cost`, `weekly_minutes_gap_cost` and
   `location_imbalance_cost` with `metric="ssd"` at the hard level, even if this
   request's values are whole. Only the soft level has a fixed-point grid, and the engine

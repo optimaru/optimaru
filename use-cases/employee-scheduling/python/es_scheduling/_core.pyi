@@ -285,7 +285,8 @@ class DecomposedCalculator:
                   ** exponent`` (sign-preserving), which charges every
                   employee the rule evaluates, a raw 0 included (a worker
                   scope evaluates its employees only), and rewards below the
-                  offset.
+                  offset; with an offset it is refused on hard (ValueError),
+                  because hard 0 must mean no violation.
         params:    constraint-specific options such as
                   ``pattern="Location A,OFF,Location B"`` or ``value=6``, and the
                   scope ``worker_indices`` / ``shift_indices``.

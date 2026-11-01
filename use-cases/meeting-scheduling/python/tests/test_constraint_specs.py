@@ -605,14 +605,19 @@ def test_the_keys_follow_the_pick_order_of_each_name():
         (MeetingEndTimeCost(offset=4, exponent=3, clip=False), (0, -(-1 + 1 + 22 * -(4**3)))),
         (MeetingEndTimeCost(offset=-1), (0, -(4 + 6))),  # a negative offset adds to every non-zero cell
         (MeetingEndTimeCost(offset=-1, clip=False), (0, -(4 + 6 + 22 * 1))),  # ...or to every cell
-        # A hard unit constraint at 0 everywhere, literal: rounded per cell, 3 x -0.5 -> -2 x 24.
-        (OvertimeCost(offset=0.5, clip=False, weight=3), (48, 0.0)),
+        # A hard unit constraint at 0 everywhere: the threshold keeps it at 0. The literal
+        # formula with an offset is refused on hard; on soft it charges every cell, 3 x -0.5
+        # x 24 = -36 (not rounded), and on medium (folded into soft at 1e6) as well.
         (OvertimeCost(offset=0.5), (0, 0.0)),
+        (OvertimeCost(level="soft", offset=0.5, clip=False, weight=3), (0, 36.0)),
+        (OvertimeCost(level="medium", offset=0.5, clip=False, weight=3), (0, 36e6)),
+        # Hard rounds per cell: end time 3 and 5 beyond 2.5 are 0.5 -> 1 and 2.5 -> 3.
+        (MeetingEndTimeCost(level="hard", offset=2.5), (-4, 0.0)),
         # Global constraints, the one total shaped once.
         (MeetingOverlapCost(offset=1), (0, -10 * 1)),
         (MeetingOverlapCost(offset=5, clip=False), (0, -10 * (2 - 5))),
         (RoomConflictCost(offset=3), (0, 0.0)),
-        (RoomConflictCost(offset=3, clip=False), (3, 0.0)),  # a hard reward below 3
+        (RoomConflictCost(level="soft", offset=3, clip=False), (0, 3.0)),  # a reward below 3, on soft
         # Medium (folded into soft at 1e6).
         (PreferredAttendanceConflictCost(offset=1), (0, -1e6)),
         (PreferredAttendanceConflictCost(offset=3, clip=False), (0, 1e6)),
@@ -725,7 +730,8 @@ def test_offset_zero_reproduces_the_0_2_0_scores():
         [*HARD_PICKS, *REPEAT, meeting_overlap_cost, preferred_attendance_conflict_cost],
         [
             *HARD_PICKS,
-            OvertimeCost(offset=1, clip=False, weight=2),
+            OvertimeCost(level="soft", offset=1, clip=False, weight=2),
+            OvertimeCost(offset=1, weight=2),
             MeetingEndTimeCost(),
             MeetingEndTimeCost(offset=6, exponent=2, weight=0.25, clip=False),
             MeetingOverlapCost(),
@@ -753,3 +759,99 @@ def test_full_assert_solves_with_repeats_and_offsets(picks):
     assert python.hard == schedule.score.hard
     assert python.soft == pytest.approx(schedule.score.soft)
     assert score(ms.constraint_costs(schedule), picks) == python  # the default costs score the repeats too
+
+
+# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+
+HARD_REFUSAL = (
+    "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
+    "violation; use clip=True (a threshold) or another level"
+)
+
+
+def _refusal(call):
+    with pytest.raises(ValueError) as refused:
+        call()
+    return str(refused.value)
+
+
+def _pinned_solve(picks):
+    """A zero-budget Solver run on the fully pinned attendance clash: the engine's own score."""
+    schedule = _attendance_clash()
+    config = ms.SolverConfig()
+    config.spent_limit_seconds = 0
+    ms.Solver(config).solve_with_constraints(schedule, picks)
+    return schedule.score.hard, schedule.score.soft
+
+
+@pytest.mark.parametrize("offset", [0.5, -0.5])
+@pytest.mark.parametrize(
+    "pick",
+    [
+        lambda offset: OvertimeCost(offset=offset, clip=False),  # the default level, hard (per cell)
+        lambda offset: RoomConflictCost(level=Level.HARD, offset=offset, clip=False),  # global
+        lambda offset: MeetingEndTimeCost(level="hard", offset=offset, clip=False),  # soft moved to hard
+        lambda offset: PreferredAttendanceConflictCost(level="hard", offset=offset, clip=False),  # medium
+    ],
+    ids=["overtime-default-hard", "room-conflict-level-hard", "end-time-moved-to-hard", "medium-moved-to-hard"],
+)
+def test_the_literal_offset_is_refused_on_hard_on_every_path(pick, offset):
+    """A positive offset would reward the 24 cells without overtime, so their slack would
+    cancel another hard violation and an infeasible schedule could score hard 0; a negative
+    one would charge every cell of a schedule without overtime. The engine (solve, Solver,
+    constraint_costs) and the score() mirror refuse it with the same message, also as a
+    repeat next to the default picks."""
+    spec = pick(offset)
+    message = HARD_REFUSAL.format(q=repr(spec.name))
+    repeat = [*get_constraints(), spec]
+    assert _refusal(lambda: ms.solve(build_schedule(), time_limit_seconds=0.1, constraints=[spec])) == message
+    assert _refusal(lambda: _pinned_solve([spec])) == message
+    assert _refusal(lambda: _pinned_solve(repeat)) == message
+    assert _refusal(lambda: ms.constraint_costs(_attendance_clash(), [spec])) == message
+    assert _refusal(lambda: score(ms.constraint_costs(_attendance_clash()), [spec])) == message
+    assert _refusal(lambda: score(ms.constraint_costs(_attendance_clash()), repeat)) == message
+
+
+@pytest.mark.parametrize("offset", [0.5, -0.5])
+@pytest.mark.parametrize(
+    ("level", "unit"),
+    [("soft", 1.0), (Level.MEDIUM, 1e6)],  # medium folds into soft here, so it is allowed too
+)
+def test_the_same_literal_pick_on_soft_or_medium_is_accepted(offset, level, unit):
+    """3 x (0 - offset) on each of the 24 cells, on every path."""
+    pick = OvertimeCost(level=level, weight=3, offset=offset, clip=False)
+    expected = (0, -3 * (0 - offset) * 24 * unit)
+    assert score(ms.constraint_costs(_attendance_clash()), [pick]) == expected
+    raw = ms.constraint_costs(_attendance_clash(), [pick])
+    assert (raw["overtime_cost"]["level"], raw["overtime_cost"]["clip"]) == (str(level), False)
+    assert score(raw, [pick]) == expected
+    assert _pinned_solve([pick]) == expected
+    assert _engine_score([pick]) == expected
+    # Next to the hard default, the literal copy is fine as well.
+    both = [OvertimeCost(), pick]
+    assert score(ms.constraint_costs(_attendance_clash(), both), both) == expected
+
+
+@pytest.mark.parametrize(
+    ("pick", "expected"),
+    [
+        (OvertimeCost(offset=0.5), (0, 0.0)),  # clip=True on hard: a threshold keeps a 0 at 0
+        (OvertimeCost(offset=-0.5), (0, 0.0)),
+        (MeetingEndTimeCost(level="hard", offset=-1), (-(4 + 6), 0.0)),  # adds 1 to the non-zero cells only
+        (OvertimeCost(clip=False), (0, 0.0)),  # clip=False with offset 0: the 0.2.0 shaping
+        (MeetingEndTimeCost(level="hard", offset=0.0, clip=False), (-8, 0.0)),
+    ],
+)
+def test_the_allowed_combinations_on_hard(pick, expected):
+    assert score(ms.constraint_costs(_attendance_clash()), [pick]) == expected
+    assert _pinned_solve([pick]) == expected
+
+
+def test_the_refusal_comes_after_every_knob_of_a_duck_typed_pick():
+    """The engine checks once a pick's knobs are all re-stated: the level a pick moves to decides."""
+    moved = SimpleNamespace(name="overtime_cost", weight=3, level="soft", exponent=1.0, offset=0.5, clip=False)
+    assert _pinned_solve([moved]) == (0, 36.0)
+    kept = SimpleNamespace(name="overtime_cost", weight=3, level=None, exponent=1.0, offset=0.5, clip=False)
+    message = HARD_REFUSAL.format(q="'overtime_cost'")
+    assert _refusal(lambda: _pinned_solve([kept])) == message
+    assert _refusal(lambda: score(ms.constraint_costs(_attendance_clash()), [kept])) == message

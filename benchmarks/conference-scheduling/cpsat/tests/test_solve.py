@@ -313,22 +313,26 @@ SELECTIONS = {
         ContentConflictCost(weight=3, offset=-10),
         LanguageDiversityCost(offset=20, clip=False),
     ],
+    # The literal formula with an offset is refused on hard: the hard picks are
+    # thresholds, their literal copies sit on soft.
     "hard-offsets": [
         RoomConflictCost(offset=10),
-        RoomConflictCost(weight=2, offset=40, clip=False),
-        SpeakerUnavailabilityCost(offset=-3, clip=False),
+        RoomConflictCost(level="soft", weight=2, offset=40, clip=False),
+        SpeakerUnavailabilityCost(offset=-3),
+        SpeakerUnavailabilityCost(level="soft", offset=-3, clip=False),
     ],
     "identical-twice": [
         DifferentDayTalksCost(),
         DifferentDayTalksCost(),
         SpeakerMakespanCost(),
     ],
-    # Each pick on its own level: a soft repeat of a hard constraint beyond an offset, a
-    # hard literal repeat of a soft one, a demoted hard one with a negative literal offset.
+    # Each pick on its own level: a soft literal repeat of a hard constraint beyond an
+    # offset, a hard threshold repeat of a soft one, a demoted hard one with a negative
+    # literal offset.
     "repeat-levels": [
         RoomConflictCost(),
-        RoomConflictCost(level=Level.SOFT, weight=2, offset=10),
-        ContentConflictCost(level="hard", weight=3, offset=50, clip=False),
+        RoomConflictCost(level=Level.SOFT, weight=2, offset=10, clip=False),
+        ContentConflictCost(level="hard", weight=3, offset=50),
         ContentConflictCost(),
         SpeakerUnavailabilityCost(level="soft", offset=-3, clip=False),
     ],
@@ -432,3 +436,67 @@ def test_every_plugin_adds_its_total_once() -> None:
     selection = [SpeakerMakespanCost(offset=5, clip=False)]
     solved = solve(_two_talks(), time_limit_seconds=5, constraints=selection)
     assert (solved.score_hard, solved.score_soft) == (0, 20 * 5)
+
+
+# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+
+HARD_REFUSAL = (
+    "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
+    "violation; use clip=True (a threshold) or another level"
+)
+
+
+@pytest.mark.parametrize("offset", [40, -3])
+@pytest.mark.parametrize(
+    "selection",
+    [
+        lambda offset: RoomConflictCost(
+            offset=offset, clip=False
+        ),  # the default level, hard
+        lambda offset: {"name": "room_conflict_cost", "offset": offset, "clip": False},
+        lambda offset: ContentConflictCost(level="hard", offset=offset, clip=False),
+        lambda offset: {
+            "name": "content_conflict_cost",
+            "level": "hard",
+            "offset": offset,
+            "clip": False,
+        },
+    ],
+    ids=["room-spec", "room-mapping", "content-moved-to-hard", "content-mapping"],
+)
+def test_the_literal_offset_is_refused_on_hard_like_the_engine(
+    selection, offset
+) -> None:
+    """The CP-SAT reference refuses the pick with the engine's and score()'s message,
+    alone and as a repeat next to the default picks."""
+    pick = selection(offset)
+    name = pick["name"] if isinstance(pick, dict) else pick.name
+    message = HARD_REFUSAL.format(q=repr(name))
+    for picks in ([pick], [RoomConflictCost(), ContentConflictCost(), pick]):
+        with pytest.raises(ValueError) as refused:
+            solve(_two_talks(), time_limit_seconds=1, constraints=picks)
+        assert str(refused.value) == message
+    if not isinstance(pick, dict):
+        # The engine and the score() mirror say the same.
+        core = _two_talks().to_core()
+        with pytest.raises(ValueError) as refused:
+            domain.constraint_costs(core, [pick])
+        assert str(refused.value) == message
+        with pytest.raises(ValueError) as refused:
+            score(domain.constraint_costs(core), [pick])
+        assert str(refused.value) == message
+
+
+@pytest.mark.parametrize("offset", [40, -3])
+def test_the_same_literal_pick_on_soft_is_accepted(offset) -> None:
+    picks = [
+        RoomConflictCost(),
+        RoomConflictCost(level="soft", offset=offset, clip=False),
+    ]
+    problem = _two_talks()
+    best = max(
+        tuple(score(domain.constraint_costs(candidate.to_core(), picks), picks))
+        for _, candidate in _assignments(problem)
+    )
+    solved = solve(problem, time_limit_seconds=5, constraints=picks)
+    assert (solved.score_hard, solved.score_soft) == pytest.approx(best)

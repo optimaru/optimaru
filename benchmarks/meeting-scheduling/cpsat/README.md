@@ -29,4 +29,5 @@ default level and weight of every plugin come from the engine's
   cell included) and the seven pair plugins add their total once, as the engine shapes
   them (`terms_per_unit`).
 - Not supported on CP-SAT (rejected): `exponent != 1`, non-integer weights and fractional
-  offsets.
+  offsets. `clip=False` with an offset on a hard pick is refused with the engine's message
+  when the objective is built; on medium, which folds into soft, it is allowed.

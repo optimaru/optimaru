@@ -44,6 +44,9 @@ Every spec takes five knobs:
                offset, ``sign(c) * max(0, |c| - offset) ** exponent``; ``False``
                shapes ``c - offset`` as it is, so every cell (or total) below the
                offset — an empty cell (cost 0) included — lowers the penalty.
+               With an offset it is refused on hard (``OvertimeCost`` and the
+               other hard constraints by default), because hard 0 must mean no
+               violation; medium folds into soft here, so it is allowed there.
 
 The same constraint may be picked several times; each pick is scored on its own with
 its own knobs and the picks add up. The overlap plus its square beyond eight grains::

@@ -604,11 +604,14 @@ def test_the_keys_follow_the_pick_order_of_each_name():
         # a literal one shifts every employee further.
         (DesiredDayCost(offset=200), (0, 400 + 39)),
         (DesiredDayCost(offset=200, clip=False), (0, 800 + 2 * 200 + 439)),
-        # Hard, rounded per employee: 3 x 479.5 = 1438.5 -> 1439, 3 x -0.5 = -1.5 -> -2 three times.
-        (EmployeeUnavailabilityCost(offset=0.5, clip=False, weight=3), (-(1439 - 6), 0.0)),
+        # Hard, rounded per employee: 3 x 479.5 = 1438.5 -> 1439.
+        (EmployeeUnavailabilityCost(offset=0.5, weight=3), (-1439, 0.0)),
         (EmployeeUnavailabilityCost(offset=80), (-400, 0.0)),
-        # min rest is 0 everywhere: the literal formula charges every evaluated employee.
-        (MinRestCost(offset=5, clip=False), (20, 0.0)),
+        # The literal formula with an offset is refused on hard; on soft it charges every
+        # employee, not rounded: 3 x 479.5 + 3 x 3 x -0.5 = 1434.
+        (EmployeeUnavailabilityCost(level="soft", offset=0.5, clip=False, weight=3), (0, -(1438.5 - 4.5))),
+        # min rest is 0 everywhere: the literal formula (on soft) charges every evaluated employee.
+        (MinRestCost(level="soft", offset=5, clip=False), (0, 20.0)),
         (MinRestCost(offset=5), (0, 0.0)),
     ],
 )
@@ -637,12 +640,12 @@ def test_a_global_total_is_shaped_once():
 
 def test_a_scoped_rule_reports_and_charges_exactly_its_units():
     """A worker-scoped rule evaluates its in-range employees only (ascending, each once)."""
-    pick = MinRestCost(offset=5, clip=False, worker_indices=(2, 0, 2, 9, -1))
+    pick = MinRestCost(level="soft", offset=5, clip=False, worker_indices=(2, 0, 2, 9, -1))
     raw = es.constraint_costs(reference_schedule(), [pick])
     (entry,) = raw.values()
     assert entry["units"] == [0, 2]
     assert entry["costs"] == [0.0, 0.0, 0.0, 0.0]
-    assert score(raw, [pick]) == _engine([pick]) == (2 * 5, 0.0)  # 2 evaluated employees x -(0 - 5)
+    assert score(raw, [pick]) == _engine([pick]) == (0, 2 * 5.0)  # 2 evaluated employees x -(0 - 5)
     unscoped = es.constraint_costs(reference_schedule(), [MinRestCost()])
     assert "units" not in unscoped["min_rest_cost"]
     shift_scoped = es.constraint_costs(reference_schedule(), [MinRestCost(shift_indices=(0, 1))])
@@ -741,13 +744,14 @@ PICKS = {
     "repeat": [*get_constraints(), *REPEAT, DayPatternCost(pattern="WORK,WORK"), DayPatternCost(pattern="WORK,WORK")],
     "repeat-and-offsets": [
         *get_constraints(),
-        RequiredSkillCost(offset=1, clip=False, weight=2),
+        RequiredSkillCost(level="soft", offset=1, clip=False, weight=2),
+        RequiredSkillCost(offset=1, weight=2),
         UndesiredDayCost(offset=200, exponent=2, weight=0.01),
         UndesiredDayCost(offset=-30, clip=False, weight=0.5),
         DesiredDayCost(offset=60, clip=False),
         ShiftCountImbalanceCost(offset=0.5, clip=False, weight=2),
         MaxConsecutiveDaysCost(value=3, offset=1, worker_indices=(0, 2)),
-        MaxConsecutiveDaysCost(value=3, offset=2, clip=False, worker_indices=(1,)),
+        MaxConsecutiveDaysCost(value=3, level="soft", offset=2, clip=False, worker_indices=(1,)),
         DayPatternCost(pattern="WORK,OFF,WORK", offset=-1),
         LocationImbalanceCost(offset=1, clip=False),
     ],
@@ -782,3 +786,101 @@ def test_a_solve_with_repeated_and_shifted_picks_reports_the_mirror_score(picks)
     fresh = es.DecomposedCalculator(picks).score(schedule)
     assert python.hard == reported.hard == fresh.hard
     assert python.soft == pytest.approx(reported.soft) == pytest.approx(fresh.soft)
+
+
+# ---------------------------------------------------------------------------
+# 0.3.0: clip=False with an offset stays off the hard score
+# ---------------------------------------------------------------------------
+
+HARD_REFUSAL = (
+    "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
+    "violation; use clip=True (a threshold) or another level"
+)
+
+
+def _refusal(call):
+    with pytest.raises(ValueError) as refused:
+        call()
+    return str(refused.value)
+
+
+def _knobs(pick):
+    return {knob: getattr(pick, knob) for knob in ("weight", "level", "exponent", "offset", "clip")}
+
+
+@pytest.mark.parametrize("offset", [0.5, -0.5])
+@pytest.mark.parametrize(
+    "pick",
+    [
+        lambda offset: EmployeeUnavailabilityCost(offset=offset, clip=False),  # the default level, hard
+        lambda offset: RequiredSkillCost(level=Level.HARD, offset=offset, clip=False),
+        lambda offset: UndesiredDayCost(level="hard", offset=offset, clip=False),  # soft moved to hard
+        lambda offset: MaxConsecutiveDaysCost(value=3, offset=offset, clip=False, worker_indices=(1,)),  # scoped
+    ],
+    ids=["unavailability-default-hard", "skill-level-hard", "undesired-moved-to-hard", "scoped-default-hard"],
+)
+def test_the_literal_offset_is_refused_on_hard_on_every_path(pick, offset):
+    """A positive offset would reward the employees without unavailable minutes, so their
+    slack would cancel another hard violation and an infeasible roster could score hard 0;
+    a negative one would charge every employee of a roster without any. The engine
+    (DecomposedCalculator(list), add(), constraint_costs) and the score() mirror refuse it
+    with the same message, also as a repeat next to the defaults."""
+    spec = pick(offset)
+    message = HARD_REFUSAL.format(q=repr(spec.name))
+    repeat = [*get_constraints(), spec]
+    assert _refusal(lambda: es.DecomposedCalculator([spec])) == message
+    assert _refusal(lambda: es.DecomposedCalculator(repeat)) == message
+    assert _refusal(lambda: es.DecomposedCalculator().add(spec.name, **_knobs(spec), **spec.params())) == message
+    assert _refusal(lambda: es.constraint_costs(reference_schedule(), [spec])) == message
+    # The mirror reads the entry of an allowed pick with the same parameters.
+    allowed = type(spec)(**spec.params())
+    assert _refusal(lambda: score(es.constraint_costs(reference_schedule(), [allowed]), [spec])) == message
+
+
+@pytest.mark.parametrize("offset", [0.5, -0.5])
+def test_the_same_literal_pick_on_soft_is_accepted(offset):
+    """3 x (480 - offset) + 3 x 3 x (0 - offset) on soft, every employee charged."""
+    pick = EmployeeUnavailabilityCost(level="soft", weight=3, offset=offset, clip=False)
+    expected = (0, -3 * ((480 - offset) + 3 * (0 - offset)))
+    raw = es.constraint_costs(reference_schedule(), [pick])
+    entry = raw["employee_unavailability_cost"]
+    assert (entry["level"], entry["clip"]) == ("soft", False)
+    assert score(raw, [pick]) == expected
+    assert score(es.constraint_costs(reference_schedule()), [pick]) == expected
+    assert _engine([pick]) == expected
+    by_name = es.DecomposedCalculator()
+    by_name.add(pick.name, **_knobs(pick))
+    result = by_name.score(reference_schedule())
+    assert (result.hard, result.soft) == expected
+    # Next to the hard default, the soft literal copy is fine as well.
+    both = [EmployeeUnavailabilityCost(), pick]
+    assert _engine(both) == (-480, expected[1])
+
+
+@pytest.mark.parametrize(
+    ("pick", "expected"),
+    [
+        (EmployeeUnavailabilityCost(offset=0.5), (-480, 0.0)),  # clip=True on hard: a threshold, 479.5 -> 480
+        (EmployeeUnavailabilityCost(offset=-0.5), (-481, 0.0)),  # adds 0.5 to the non-zero employee only
+        (EmployeeUnavailabilityCost(clip=False), (-480, 0.0)),  # clip=False with offset 0: the 0.2.0 shaping
+        (MinRestCost(offset=0.0, clip=False), (0, 0.0)),
+        (MinRestCost(offset=-5), (0, 0.0)),  # a threshold keeps a 0 at 0
+    ],
+)
+def test_the_allowed_combinations_on_hard(pick, expected):
+    assert score(es.constraint_costs(reference_schedule(), [pick]), [pick]) == expected
+    assert _engine([pick]) == expected
+
+
+def test_the_refusal_comes_after_every_knob_of_a_duck_typed_pick():
+    """The engine checks once a pick's knobs are all re-stated: the level a pick moves to decides."""
+    moved = SimpleNamespace(
+        name="employee_unavailability_cost", weight=3, level="soft", exponent=1.0, offset=0.5, clip=False
+    )
+    assert _engine([moved]) == (0, -3 * (479.5 - 1.5))
+    kept = SimpleNamespace(
+        name="employee_unavailability_cost", weight=3, level=None, exponent=1.0, offset=0.5, clip=False
+    )
+    message = HARD_REFUSAL.format(q="'employee_unavailability_cost'")
+    assert _refusal(lambda: es.DecomposedCalculator([kept])) == message
+    assert _refusal(lambda: score(es.constraint_costs(reference_schedule()), [kept])) == message

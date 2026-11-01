@@ -99,8 +99,11 @@ use `constraint_costs()`. Raw costs and the default score are unchanged.
 may be picked several times. Every constraint here is global, so the one total `x` is
 shaped as `sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
 `(x - offset) ** exponent`, sign-preserving (`clip=False`, which also charges a total of 0
-and rewards a total below the offset); `offset=0` is the 0.2.0 shaping. Each pick is its
-own instance with its own knobs, the instances add up, and
+and rewards a total below the offset); `offset=0` is the 0.2.0 shaping. `clip=False` with an
+offset is refused on hard (`ValueError: constraint 'room_conflict_cost': clip=False with a
+non-zero offset cannot be hard, because hard 0 must mean no violation; use clip=True (a
+threshold) or another level`), so a literal pick of a hard constraint goes on
+`level="soft"`. Each pick is its own instance with its own knobs, the instances add up, and
 `cs.constraint_costs(schedule, picks)` keys the second pick `content_conflict_cost#2`.
 A literal offset on a reward (`AudienceTypeDiversityCost(offset=..., clip=False)`) shifts
 the reward further; a threshold offset rewards only the part beyond it. The `hard` knob is

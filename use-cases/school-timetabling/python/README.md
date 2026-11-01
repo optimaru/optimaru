@@ -132,10 +132,16 @@ Rules:
   `exponent` (sign-preserving power shaping) and the keyword-only `offset`
   (`0.0`) / `clip` (`True`): with an offset, `clip=True` counts only what lies
   beyond it (`max(0, c - offset) ** exponent`), `clip=False` shapes `c - offset`
-  as it is (every slot of a per-slot constraint is charged). Bad names raise
-  `ValueError`, a wrong knob type `TypeError`, in the same words on the Python
-  and the C++ path. `fixed_slots_cost` / `parallel_groups_cost` refuse
-  `level="soft"`.
+  as it is (every slot of a per-slot constraint is charged). `clip=False` with
+  an offset is refused on hard (the pick's level, or the default, the
+  structural `fixed_slots_cost` / `parallel_groups_cost` included), because
+  hard 0 must mean no violation: `ValueError: constraint 'teacher_conflict_cost':
+  clip=False with a non-zero offset cannot be hard, because hard 0 must mean no
+  violation; use clip=True (a threshold) or another level`. An `Assembly` holding
+  such a pick is refused where it is used (`canon.DecomposedCalculator`,
+  `solve`). Bad names raise `ValueError`, a wrong knob type `TypeError`, in the
+  same words on the Python and the C++ path. `fixed_slots_cost` /
+  `parallel_groups_cost` refuse `level="soft"`.
 - `Assembly.add` **replaces** an existing entry with the same name (override
   semantics: an Assembly holds each name once); a plain list goes through
   `get_constraints`, where a name picked several times is one instance per

@@ -292,10 +292,13 @@ SELECTIONS = {
         MeetingEndTimeCost(weight=3, offset=-1),
         MeetingOverlapCost(offset=1, clip=False),
     ],
+    # The literal formula with an offset is refused on hard: the hard picks are
+    # thresholds, their literal copies sit on soft and on medium (which folds into soft).
     "hard-offsets": [
         RoomCapacityCost(offset=1),
-        RoomCapacityCost(weight=2, offset=2, clip=False),
-        RoomConflictCost(offset=-3, clip=False),
+        RoomCapacityCost(level="soft", weight=2, offset=2, clip=False),
+        RoomConflictCost(offset=-3),
+        RoomConflictCost(level="medium", offset=-3, clip=False),
     ],
     "medium": [
         PreferredAttendanceConflictCost(),
@@ -422,3 +425,76 @@ def test_every_plugin_adds_engine_units() -> None:
     assert (
         solved.score_soft == 8 - 0
     )  # both meetings in the large room (penalty 0): 8 cells x +1
+
+
+# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+
+HARD_REFUSAL = (
+    "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
+    "violation; use clip=True (a threshold) or another level"
+)
+
+
+@pytest.mark.parametrize("offset", [2, -2])
+@pytest.mark.parametrize(
+    "selection",
+    [
+        lambda offset: RoomCapacityCost(
+            offset=offset, clip=False
+        ),  # the default level, hard
+        lambda offset: {"name": "room_capacity_cost", "offset": offset, "clip": False},
+        lambda offset: PreferredAttendanceConflictCost(
+            level="hard", offset=offset, clip=False
+        ),
+        lambda offset: {
+            "name": "meeting_end_time_cost",
+            "level": "hard",
+            "offset": offset,
+            "clip": False,
+        },
+    ],
+    ids=[
+        "capacity-spec",
+        "capacity-mapping",
+        "medium-moved-to-hard",
+        "end-time-mapping",
+    ],
+)
+def test_the_literal_offset_is_refused_on_hard_like_the_engine(
+    selection, offset
+) -> None:
+    """The CP-SAT reference refuses the pick with the engine's and score()'s message,
+    alone and as a repeat next to the default picks."""
+    pick = selection(offset)
+    name = pick["name"] if isinstance(pick, dict) else pick.name
+    message = HARD_REFUSAL.format(q=repr(name))
+    for picks in ([pick], [*get_constraints(), pick]):
+        with pytest.raises(ValueError) as refused:
+            solve(_two_meetings(), time_limit_seconds=1, constraints=picks)
+        assert str(refused.value) == message
+    if not isinstance(pick, dict):
+        # The engine and the score() mirror say the same.
+        core = _two_meetings().to_core()
+        with pytest.raises(ValueError) as refused:
+            domain.constraint_costs(core, [pick])
+        assert str(refused.value) == message
+        with pytest.raises(ValueError) as refused:
+            score(domain.constraint_costs(core), [pick])
+        assert str(refused.value) == message
+
+
+@pytest.mark.parametrize("offset", [2, -2])
+@pytest.mark.parametrize("level", ["soft", Level.MEDIUM])
+def test_the_same_literal_pick_on_soft_or_medium_is_accepted(offset, level) -> None:
+    """Medium folds into soft here, so it takes the literal formula like soft does."""
+    picks = [
+        RoomCapacityCost(),
+        RoomCapacityCost(level=level, offset=offset, clip=False),
+    ]
+    problem = _two_meetings()
+    best = max(
+        tuple(score(domain.constraint_costs(candidate.to_core(), picks), picks))
+        for _, candidate in _assignments(problem)
+    )
+    solved = solve(problem, time_limit_seconds=5, constraints=picks)
+    assert (solved.score_hard, solved.score_soft) == pytest.approx(best)

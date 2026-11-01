@@ -20,7 +20,8 @@
 //   (i) repeated components and the offset / clip knobs: a hand-calculated
 //       repeat (content x 100 + 0.5 x content^2), threshold and literal
 //       offsets on the one total by hand (a total of 0 counts in literal
-//       mode), incremental == a fresh recompute over a random walk and a
+//       mode), the literal formula refused on hard at reset and kept on
+//       soft, incremental == a fresh recompute over a random walk and a
 //       FULL_ASSERT solve with repeated, shifted components
 #include <algorithm>
 #include <chrono>
@@ -1280,10 +1281,17 @@ ConstraintAssembly repeatedAssembly()
                                         .exponent("contentConflictCost", 2.0)
                                         .offset("contentConflictCost", 120.0)
                                         .clip("contentConflictCost", false)));
+    // The literal room copy sits on soft: hard refuses the literal formula
+    // with an offset (hard 0 must mean no violation). The hard copy is a
+    // threshold.
     assembly.addInstances(std::move(copyOf("roomConflictCost")
+                                        .soft("roomConflictCost")
                                         .weight("roomConflictCost", 2.0)
                                         .offset("roomConflictCost", 30.0)
                                         .clip("roomConflictCost", false)));
+    assembly.addInstances(std::move(copyOf("roomConflictCost")
+                                        .weight("roomConflictCost", 2.0)
+                                        .offset("roomConflictCost", 30.0)));
     assembly.addInstances(std::move(copyOf("speakerConflictCost")
                                         .offset("speakerConflictCost", -5.0)));
     assembly.addInstances(std::move(copyOf("languageDiversityCost")
@@ -1294,15 +1302,14 @@ ConstraintAssembly repeatedAssembly()
                                         .offset("speakerMakespanCost", 100.0)
                                         .clip("speakerMakespanCost", false)));
     // Repeats on another level than their default: a hard one soft, a soft
-    // one hard, each shifted.
+    // one hard (a threshold there), each shifted.
     assembly.addInstances(std::move(copyOf("roomConflictCost")
                                         .soft("roomConflictCost")
                                         .weight("roomConflictCost", 3.0)
                                         .offset("roomConflictCost", 10.0)));
     assembly.addInstances(std::move(copyOf("themeTrackConflictCost")
                                         .hard("themeTrackConflictCost")
-                                        .offset("themeTrackConflictCost", 5.0)
-                                        .clip("themeTrackConflictCost", false)));
+                                        .offset("themeTrackConflictCost", 5.0)));
     return assembly;
 }
 
@@ -1365,16 +1372,94 @@ void verifyRepeatsAndOffsets()
             .into(negative);
         check(scoreWith(negative, c).soft == -100.0 * 70,
               "content threshold offset -10: 100 x (60 + 10)");
-        // A hard literal offset rounds the one total: 3 x (60 - 59.5) = 1.5
-        // -> 2.
+        // A hard threshold offset rounds the one total: 3 x (60 - 59.5) =
+        // 1.5 -> 2.
         DecomposedCalculator hard;
         copyOf("roomConflictCost")
             .weight("roomConflictCost", 3.0)
             .offset("roomConflictCost", 59.5)
-            .clip("roomConflictCost", false)
             .into(hard);
         check(scoreWith(hard, c).hard == -2,
-              "room literal offset 59.5 at weight 3: llround(1.5) = 2 hard");
+              "room threshold offset 59.5 at weight 3: llround(1.5) = 2 hard");
+        // The literal room pick on soft: 1000 x (60 - 100) = -40000, a
+        // reward, and 3 x (60 - 59.5) = 1.5 is not rounded.
+        DecomposedCalculator softReward;
+        copyOf("roomConflictCost")
+            .soft("roomConflictCost")
+            .offset("roomConflictCost", 100.0)
+            .clip("roomConflictCost", false)
+            .into(softReward);
+        DecomposedCalculator softHalf;
+        copyOf("roomConflictCost")
+            .soft("roomConflictCost")
+            .weight("roomConflictCost", 3.0)
+            .offset("roomConflictCost", 59.5)
+            .clip("roomConflictCost", false)
+            .into(softHalf);
+        const Score reward = scoreWith(softReward, c);
+        const Score half = scoreWith(softHalf, c);
+        check(reward.hard == 0 && reward.soft == 40000.0 && half.hard == 0
+                  && half.soft == -1.5,
+              "room literal offsets on soft: +40000 (a reward below 100), "
+              "-1.5 (not rounded)");
+    }
+    {
+        // On hard (its default level, or moved there) the literal formula
+        // with an offset is refused at reset, whichever sign and setter
+        // order: +100 would reward a schedule without room conflicts (+40000
+        // hard, cancelling other hard violations), -20 would charge one.
+        auto resetRefusal = [](ConstraintAssembly assembly) {
+            ConferenceSchedule c = repeatInstance();
+            DecomposedCalculator calculator;
+            assembly.into(calculator);
+            try
+            {
+                scoreWith(calculator, c);
+            }
+            catch (const std::logic_error &error)
+            {
+                return std::string(error.what());
+            }
+            return std::string();
+        };
+        auto refusal = [](const std::string &name) {
+            return "Constraint '" + name
+                   + "' cannot use clip=false with a non-zero offset on a level "
+                     "that counts toward the hard score (hard 0 must mean no "
+                     "violation)";
+        };
+        check(resetRefusal(copyOf("roomConflictCost")
+                               .offset("roomConflictCost", 100.0)
+                               .clip("roomConflictCost", false))
+                      == refusal("roomConflictCost")
+                  && resetRefusal(copyOf("roomConflictCost")
+                                      .clip("roomConflictCost", false)
+                                      .offset("roomConflictCost", -20.0))
+                         == refusal("roomConflictCost"),
+              "room literal offset +100 / -20 on hard: refused at reset");
+        check(resetRefusal(copyOf("contentConflictCost")
+                               .offset("contentConflictCost", 50.0)
+                               .clip("contentConflictCost", false)
+                               .hard("contentConflictCost"))
+                  == refusal("contentConflictCost"),
+              "content literal offset moved to hard afterwards: refused at reset");
+        ConstraintAssembly repeated = copyOf("roomConflictCost");
+        repeated.addInstances(std::move(copyOf("roomConflictCost")
+                                            .offset("roomConflictCost", 100.0)
+                                            .clip("roomConflictCost", false)));
+        check(resetRefusal(std::move(repeated)) == refusal("roomConflictCost"),
+              "a literal hard repeat next to the default: refused at reset");
+        check(resetRefusal(copyOf("roomConflictCost").offset("roomConflictCost", 100.0))
+                      .empty()
+                  && resetRefusal(copyOf("roomConflictCost").clip("roomConflictCost", false))
+                         .empty()
+                  && resetRefusal(copyOf("roomConflictCost")
+                                      .soft("roomConflictCost")
+                                      .offset("roomConflictCost", 100.0)
+                                      .clip("roomConflictCost", false))
+                         .empty(),
+              "room: a threshold offset or clip=false with offset 0 on hard, "
+              "and the literal offset on soft, are allowed");
     }
     {
         // Random walk: incremental == a fresh calculator of the same assembly.

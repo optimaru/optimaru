@@ -18,9 +18,10 @@
 //   (j) repeated components and the offset / clip knobs: a hand-calculated
 //       repeat (end time + 0.5 x end time^2 per cell), threshold and literal
 //       offsets by hand on a unit, a global and a medium constraint (literal
-//       mode charges every cell, an empty one included), incremental == a
-//       fresh recompute over a random walk and a FULL_ASSERT solve with
-//       repeated, shifted components
+//       mode charges every cell, an empty one included), the literal formula
+//       refused on hard at reset and kept on soft and on the medium level
+//       (which folds into soft), incremental == a fresh recompute over a
+//       random walk and a FULL_ASSERT solve with repeated, shifted components
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -960,14 +961,22 @@ ConstraintAssembly repeatedAssembly()
                                         .exponent("meetingEndTimeCost", 2.0)
                                         .offset("meetingEndTimeCost", 10.0)
                                         .clip("meetingEndTimeCost", false)));
+    // The literal copies of hard components sit on soft: hard refuses the
+    // literal formula with an offset (hard 0 must mean no violation). The
+    // hard copy is a threshold.
     assembly.addInstances(std::move(copyOf("overtimeCost")
+                                        .soft("overtimeCost")
                                         .weight("overtimeCost", 2.0)
                                         .offset("overtimeCost", 1.0)
                                         .clip("overtimeCost", false)));
+    assembly.addInstances(std::move(copyOf("overtimeCost")
+                                        .weight("overtimeCost", 2.0)
+                                        .offset("overtimeCost", 1.0)));
     assembly.addInstances(std::move(copyOf("meetingOverlapCost")
                                         .weight("meetingOverlapCost", 3.0)
                                         .offset("meetingOverlapCost", -3.0)));
     assembly.addInstances(std::move(copyOf("roomConflictCost")
+                                        .soft("roomConflictCost")
                                         .offset("roomConflictCost", 2.0)
                                         .clip("roomConflictCost", false)));
     assembly.addInstances(
@@ -1036,16 +1045,36 @@ void verifyRepeatsAndOffsets()
             .into(global);
         checkScore("global literal offset 5: 10 x (2 - 5)",
                    scoreWith(global, s), 0, 30.0);
-        // A hard literal pick rounds per cell: 3 x (0 - 0.5) = -1.5 -> -2 in
-        // each of the 24 cells, +48 hard.
+        // A hard pick rounds per cell: end time 3 and 5 beyond the threshold
+        // 2.5 are 0.5 -> 1 and 2.5 -> 3, -4 hard.
         DecomposedCalculator hard;
+        copyOf("meetingEndTimeCost")
+            .hard("meetingEndTimeCost")
+            .offset("meetingEndTimeCost", 2.5)
+            .into(hard);
+        checkScore("hard unit threshold offset 2.5: llround(0.5) + llround(2.5) = 4 hard",
+                   scoreWith(hard, s), -4, 0.0);
+        // The literal overtime pick on soft charges every cell, 3 x (0 - 0.5)
+        // = -1.5 in each of the 24, not rounded: +36 soft. On medium (which
+        // folds into soft) it is allowed too: +36 medium.
+        DecomposedCalculator soft;
         copyOf("overtimeCost")
+            .soft("overtimeCost")
             .weight("overtimeCost", 3.0)
             .offset("overtimeCost", 0.5)
             .clip("overtimeCost", false)
-            .into(hard);
-        checkScore("hard unit literal offset 0.5 at weight 3: 24 x 2",
-                   scoreWith(hard, s), 48, 0.0);
+            .into(soft);
+        checkScore("soft unit literal offset 0.5 at weight 3: 24 x 1.5",
+                   scoreWith(soft, s), 0, 36.0);
+        const auto literalMedium = levelsWith(copyOf("overtimeCost")
+                                                  .level("overtimeCost", optimaru::Level::Medium)
+                                                  .weight("overtimeCost", 3.0)
+                                                  .offset("overtimeCost", 0.5)
+                                                  .clip("overtimeCost", false),
+                                              s);
+        check(literalMedium.hard == 0 && literalMedium.medium == 36.0
+                  && literalMedium.soft == 0.0,
+              "medium unit literal offset 0.5 at weight 3: +36 medium (into soft)");
         // The medium level: a threshold and a repeat stay medium.
         const char *preferred = "preferredAttendanceConflictCost";
         const auto shifted
@@ -1073,6 +1102,68 @@ void verifyRepeatsAndOffsets()
         check(onLevels.hard == -2 && onLevels.medium == -1.0
                   && onLevels.soft == -8.0,
               "one component repeated on three levels: -2 hard, -1 medium, -8 soft");
+    }
+    {
+        // On hard (its default level, or moved there) the literal formula
+        // with an offset is refused at reset, whichever sign and setter
+        // order: +0.5 would reward the 24 cells without overtime (+48 hard,
+        // cancelling other hard violations), -0.5 would charge them.
+        auto resetRefusal = [](ConstraintAssembly assembly) {
+            MeetingSchedule s = repeatInstance();
+            DecomposedCalculator calculator;
+            assembly.into(calculator);
+            try
+            {
+                scoreWith(calculator, s);
+            }
+            catch (const std::logic_error &error)
+            {
+                return std::string(error.what());
+            }
+            return std::string();
+        };
+        auto refusal = [](const std::string &name) {
+            return "Constraint '" + name
+                   + "' cannot use clip=false with a non-zero offset on a level "
+                     "that counts toward the hard score (hard 0 must mean no "
+                     "violation)";
+        };
+        check(resetRefusal(copyOf("overtimeCost")
+                               .offset("overtimeCost", 0.5)
+                               .clip("overtimeCost", false))
+                      == refusal("overtimeCost")
+                  && resetRefusal(copyOf("overtimeCost")
+                                      .clip("overtimeCost", false)
+                                      .offset("overtimeCost", -0.5))
+                         == refusal("overtimeCost"),
+              "overtime literal offset +-0.5 on hard: refused at reset");
+        const char *preferred = "preferredAttendanceConflictCost";
+        check(resetRefusal(copyOf("roomConflictCost")
+                               .offset("roomConflictCost", 2.0)
+                               .clip("roomConflictCost", false))
+                      == refusal("roomConflictCost")
+                  && resetRefusal(copyOf(preferred)
+                                      .offset(preferred, 1.0)
+                                      .clip(preferred, false)
+                                      .hard(preferred))
+                         == refusal(preferred),
+              "a global hard literal offset, and a medium one moved to hard "
+              "afterwards: refused at reset");
+        ConstraintAssembly repeated = copyOf("overtimeCost");
+        repeated.addInstances(std::move(copyOf("overtimeCost")
+                                            .offset("overtimeCost", 0.5)
+                                            .clip("overtimeCost", false)));
+        check(resetRefusal(std::move(repeated)) == refusal("overtimeCost"),
+              "a literal hard repeat next to the default: refused at reset");
+        check(resetRefusal(copyOf("overtimeCost").offset("overtimeCost", 0.5)).empty()
+                  && resetRefusal(copyOf("overtimeCost").clip("overtimeCost", false))
+                         .empty()
+                  && resetRefusal(copyOf(preferred)
+                                      .offset(preferred, 1.0)
+                                      .clip(preferred, false))
+                         .empty(),
+              "overtime: a threshold offset or clip=false with offset 0 on hard, "
+              "and a literal offset on the medium level (into soft), are allowed");
     }
     {
         // Random walk: incremental == a fresh calculator of the same assembly.

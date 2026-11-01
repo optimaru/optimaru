@@ -572,7 +572,8 @@ PYBIND11_MODULE(_core, m)
             "sign(c) * max(0, |c| - offset)^exponent; with clip=False the "
             "literal (c - offset)^exponent, which charges every employee the "
             "rule evaluates (a raw 0 included) and rewards a cost below the "
-            "offset.\n"
+            "offset; with an offset it is refused on hard (ValueError), "
+            "because hard 0 must mean no violation.\n"
             "Extra keyword arguments become constraint-specific parameters "
             "(e.g. add('max_consecutive_days_cost', value=6)).")
         .def(

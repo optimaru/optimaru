@@ -65,6 +65,7 @@ from pydantic import (
 
 from . import _core
 from . import constraints as _specs
+from ._constraint import _check_literal_offset
 
 __all__ = [
     "WorkerModel",
@@ -190,7 +191,9 @@ class RuleBase(BaseModel):
     for ``DecomposedCalculator`` (it carries ``name`` / ``weight`` / ``level`` /
     ``exponent`` / ``offset`` / ``clip`` and ``params()``). The knobs take the
     values the spec takes: ``weight: true`` or ``"2"`` is refused here as the
-    spec refuses it.
+    spec refuses it. ``clip: false`` with a non-zero ``offset`` is refused on
+    hard (the rule's ``level``, or its default level), in the engine's words,
+    because hard 0 must mean no violation.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -211,7 +214,8 @@ class RuleBase(BaseModel):
         default=True,
         description=(
             "true = the threshold sign(c) * max(0, |c| - offset) ** exponent; false = the literal "
-            "(c - offset) ** exponent, which charges every evaluated employee and rewards below the offset"
+            "(c - offset) ** exponent, which charges every evaluated employee and rewards below the offset "
+            "(refused on hard with a non-zero offset, because hard 0 must mean no violation)"
         ),
     )
 
@@ -237,6 +241,10 @@ class RuleBase(BaseModel):
             raise ValueError(
                 f"constraint {spec.name!r} is always {row.default_level}; level={str(spec.level)!r} is not allowed"
             )
+        # The literal formula with an offset stays off hard (the engine's and
+        # score()'s message); this use case has no medium level.
+        level = row.default_level if spec.level is None else str(spec.level)
+        _check_literal_offset(spec.name, level, spec.offset, spec.clip, None)
         return self
 
 
