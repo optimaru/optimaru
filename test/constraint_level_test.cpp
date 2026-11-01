@@ -12,7 +12,8 @@
 //       sign-preserving on a reward's negative raw cost
 //   (g) raw costs: zero = no violation; incremental == fresh recompute on
 //       a random walk for both folds (the medium cells' save/restore too)
-//   (h) pythonName(): registry name -> Python name; instanceKeys()
+//   (h) pythonName(): registry name -> Python name; instanceKeys(); a name
+//       holding '#' is refused by instanceKeys() and by the assembly
 //   (i) knob setters on a bare component, labels, wrappers that copy their
 //       inner component's metadata, catalogInfo() for a catalog wider than
 //       the defaults
@@ -642,6 +643,15 @@ void testPythonName() {
                   std::vector<std::string>{"day_pattern_cost", "min_rest_cost", "day_pattern_cost#2",
                                            "day_pattern_cost#3"},
           "instanceKeys: a repeated name's k-th instance is '<name>#<k>', a single one keeps its name");
+    std::string refused;
+    try {
+        instanceKeys({"min_rest_cost", "day_pattern_cost#2"});
+    } catch (const std::invalid_argument& error) {
+        refused = error.what();
+    }
+    check(refused == "constraint 'day_pattern_cost#2': a name must not contain '#', which "
+                     "constraint_costs() keys repeated picks with ('<name>#<k>')",
+          "instanceKeys refuses a name holding '#' (ValueError), in the Python base's words");
     std::printf("\n");
 }
 
@@ -2303,6 +2313,47 @@ void exactRandomWalk() {
           "the unshifted control stays on the delta path (cost() at reset only)");
 }
 
+// (h) A name holding '#' is refused where a component joins an assembly.
+void testHashInAssemblyNames() {
+    std::printf("== (h) '#' in a name ==\n");
+    auto refusal = [](const std::function<void(LoadAssembly&)>& edit) {
+        LoadAssembly assembly;
+        try {
+            edit(assembly);
+        } catch (const std::invalid_argument& error) {
+            return std::string(error.what());
+        }
+        return std::string();
+    };
+    const std::string expected =
+            "Constraint 'load#Cost': a name must not contain '#', which keys repeated instances "
+            "(\"<name>#<k>\")";
+    check(refusal([](LoadAssembly& a) { a.emplace<LoadCost<Loads>>(Level::Soft, "load#Cost"); }) ==
+                          expected &&
+                  refusal([](LoadAssembly& a) {
+                      a.add(std::make_unique<LoadCost<Loads>>(Level::Soft, "load#Cost"));
+                  }) == expected &&
+                  refusal([](LoadAssembly& a) {
+                      a.emplaceInstance<LoadCost<Loads>>(Level::Soft, "load#Cost");
+                  }) == expected,
+          "add(), emplace() and emplaceInstance() refuse a unit constraint named 'load#Cost'");
+    struct HashedTotal final : optimaru::GlobalConstraint<Loads> {
+        HashedTotal() : optimaru::GlobalConstraint<Loads>("total#", 1.0, Level::Soft) {}
+        void reset(const Loads&, const std::vector<std::vector<int>>&) override {}
+        void onUnitChanged(const Loads&, int, const std::vector<int>&) override {}
+        double cost() const override { return 0.0; }
+    };
+    check(refusal([](LoadAssembly& a) { a.emplace<HashedTotal>(); }).find("'total#'") !=
+                          std::string::npos &&
+                  refusal([](LoadAssembly& a) { a.emplaceInstance<HashedTotal>(); })
+                                  .find("must not contain '#'") != std::string::npos,
+          "a global constraint named 'total#' is refused too");
+    check(refusal([](LoadAssembly& a) { a.emplace<LoadCost<Loads>>(Level::Soft, "load_2Cost"); })
+                  .empty(),
+          "any other name is accepted");
+    std::printf("\n");
+}
+
 void testExactNegativeThreshold() {
     std::printf("== (r) a negative threshold is a fixed charge, computed exactly ==\n");
     check(((0.1 + 0.2) - 0.1) - 0.2 != 0.0,
@@ -2458,6 +2509,7 @@ int main() {
     testOffsetClip();
     testInstances();
     testLiteralOffsetGuard();
+    testHashInAssemblyNames();
     testExactNegativeThreshold();
     if (failures == 0) {
         std::printf("All constraint-level tests PASSED.\n");

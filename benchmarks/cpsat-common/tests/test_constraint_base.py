@@ -16,7 +16,10 @@ included, for any selection.
 
 from __future__ import annotations
 
+import copy
+import dataclasses
 import importlib.util
+import pickle
 import struct
 import sys
 import warnings
@@ -822,9 +825,57 @@ def test_a_level_is_a_string_for_json_selections():
     assert [level.value for level in Level] == ["hard", "medium", "soft"]
 
 
+HARD_REMOVED = (
+    "hard= was removed in optimaru 0.3.0; use level='hard' or level='soft' (level=None keeps the default)"
+)
+
+
 def test_the_old_knob_is_gone():
-    with pytest.raises(TypeError):
-        OverloadCost(hard=True)
+    """hard= names its replacement instead of the dataclass's "unexpected keyword argument"."""
+    for kwargs in ({"hard": True}, {"hard": False}, {"weight": 2.0, "hard": True}):
+        with pytest.raises(TypeError) as raised:
+            OverloadCost(**kwargs)
+        assert str(raised.value) == HARD_REMOVED
+    with pytest.raises(TypeError) as raised:
+        DayPatternCost(3.0, "soft", pattern="A,OFF", hard=True)  # domain parameters too
+    assert str(raised.value) == HARD_REMOVED
+    with pytest.raises(TypeError, match="unexpected keyword argument 'colour'"):
+        OverloadCost(colour="red")  # any other unknown keyword keeps the dataclass's words
+
+
+def test_the_hard_refusal_leaves_the_dataclass_alone():
+    """__new__ only looks at the keywords: copies, pickles and replace() work as before."""
+    pick = DayPatternCost(2.0, "hard", 1.5, offset=1.0, pattern="A,OFF")
+    assert pickle.loads(pickle.dumps(pick)) == pick
+    assert copy.copy(pick) == pick and copy.deepcopy(pick) == pick
+    assert dataclasses.replace(pick, weight=3.0) == DayPatternCost(3.0, "hard", 1.5, offset=1.0, pattern="A,OFF")
+    with pytest.raises(TypeError) as raised:
+        dataclasses.replace(pick, hard=True)
+    assert str(raised.value) == HARD_REMOVED
+    with pytest.raises(FrozenInstanceError):
+        pick.weight = 1.0
+
+
+def test_a_name_must_not_hold_a_hash():
+    """'#' separates a name from its instance number in the constraint_costs() keys."""
+    with pytest.raises(ValueError) as raised:
+
+        class Hashed(Constraint):
+            name = "load#2"
+
+    assert str(raised.value) == (
+        "constraint 'load#2': a name must not contain '#', which constraint_costs() keys repeated "
+        "picks with ('<name>#<k>')"
+    )
+    with pytest.raises(ValueError, match="must not contain '#'"):
+
+        class Base(Constraint, abstract=True):
+            name = "#"
+
+    class Plain(Constraint):  # every other character is fine
+        name = "load_2"
+
+    assert instance_keys([Plain(), Plain()]) == ["load_2", "load_2#2"]
 
 
 def test_a_soft_constraint_can_move_onto_medium():

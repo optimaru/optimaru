@@ -653,6 +653,26 @@ def test_a_json_rule_refuses_the_literal_offset_on_hard(rule, offset):
     assert _validation_message(lambda: _small_input(rules=[spec])) == message
 
 
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"name": "required_skill_cost", "hard": True},
+        {"name": "undesired_day_cost", "hard": False, "weight": 2},
+        {"name": "max_consecutive_days_cost", "value": 3, "hard": True},
+    ],
+    ids=["skill", "undesired", "max-days"],
+)
+def test_a_json_rule_names_the_replacement_of_hard(data):
+    """A JSON rule still carrying the removed "hard" key is refused in the words every path
+    uses (the spec's TypeError, DecomposedCalculator.add()), not "Extra inputs are not permitted"."""
+    message = (
+        "hard= was removed in optimaru 0.3.0; use level='hard' or level='soft' (level=None keeps the default)"
+    )
+    assert _validation_message(lambda: rule_model(data["name"]).model_validate(data)) == message
+    payload = {**_small_input().model_dump(), "rules": [data]}
+    assert _validation_message(lambda: SchedulingInput.model_validate(payload)) == message
+
+
 @pytest.mark.parametrize("offset", [120, -120])
 def test_solve_request_refuses_a_literal_hard_rule_added_in_place(offset):
     """An in-place edit of the rule list bypasses pydantic; the engine refuses the pick."""

@@ -6,6 +6,7 @@
 
 #include <cctype>
 #include <map>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -45,12 +46,21 @@ inline std::string pythonName(const std::string& constraintName) {
 // base (_constraint.py instance_keys) derives the same keys from a selection
 // list, and the CP-SAT references (cpsat-common resolve()) number repeated
 // picks the same way, so they agree as long as they see the same list in the
-// same order. A name that occurs once keeps its plain key.
+// same order. A name that occurs once keeps its plain key. A name holding
+// '#' would make the keys ambiguous ("a#2" is also the second "a"), so it is
+// refused with std::invalid_argument (ValueError in Python), in the words of
+// the Python base (_constraint.py Constraint.__init_subclass__);
+// ConstraintAssembly refuses it where a component is added.
 inline std::vector<std::string> instanceKeys(const std::vector<std::string>& pythonNames) {
     std::map<std::string, int> seen;
     std::vector<std::string> keys;
     keys.reserve(pythonNames.size());
     for (const std::string& name : pythonNames) {
+        if (name.find('#') != std::string::npos) {
+            throw std::invalid_argument("constraint '" + name +
+                                        "': a name must not contain '#', which constraint_costs() "
+                                        "keys repeated picks with ('<name>#<k>')");
+        }
         const int count = ++seen[name];
         keys.push_back(count == 1 ? name : name + "#" + std::to_string(count));
     }

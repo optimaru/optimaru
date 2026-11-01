@@ -60,6 +60,20 @@ namespace py = pybind11;
 // pythonName() (names.hpp) is the one mapping between the C++ registry name
 // and the Python name: facilityCapacityCost -> facility_capacity_cost.
 
+// The TypeError text for the knob `level` replaced in 0.3.0, word for word
+// the Python base's (_constraint.py _HARD_REMOVED), for the binding paths
+// that take knobs as keywords (employee scheduling's and school
+// timetabling's DecomposedCalculator.add()).
+inline constexpr const char* kHardRemoved =
+        "hard= was removed in optimaru 0.3.0; use level='hard' or level='soft' (level=None keeps "
+        "the default)";
+
+// Refuses a `hard` keyword with kHardRemoved; call it first on the **kwargs
+// of a binding that takes knobs as keywords.
+inline void refuseHardKeyword(const py::kwargs& kwargs) {
+    if (kwargs.contains("hard")) throw py::type_error(kHardRemoved);
+}
+
 // Python name -> the assembly's own name. Throws with the available names
 // when nothing matches, so a typo cannot quietly leave the cost function as
 // it was.

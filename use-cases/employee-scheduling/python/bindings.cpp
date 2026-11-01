@@ -537,9 +537,7 @@ PYBIND11_MODULE(_core, m)
             {
                 // kwargs are domain parameters, which the factory reads by name
                 // and otherwise ignores: the old knob must not vanish there.
-                if (kwargs.contains("hard"))
-                    throw py::type_error("add() got an unexpected keyword argument "
-                                         "'hard'; use level='hard' or level='soft'");
+                tfpy::refuseHardKeyword(kwargs);
                 // The same checks as a spec pick: a SimpleNamespace carrying
                 // the five knobs goes through the one factory path.
                 py::object pick = py::module_::import("types").attr(

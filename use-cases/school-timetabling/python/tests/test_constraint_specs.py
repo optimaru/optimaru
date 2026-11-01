@@ -491,12 +491,21 @@ def test_medium_is_refused_on_every_path(problem, level):
         canon.DecomposedCalculator().add("teacher_gap_cost", level=level)
 
 
+HARD_REMOVED = (
+    "hard= was removed in optimaru 0.3.0; use level='hard' or level='soft' (level=None keeps the default)"
+)
+
+
 def test_the_hard_knob_is_gone():
-    """0.3.0 replaced hard= by level=; the old keyword is a TypeError, not a silent default."""
-    with pytest.raises(TypeError, match="hard"):
+    """0.3.0 replaced hard= by level=; the old keyword names its replacement on both paths."""
+    with pytest.raises(TypeError) as raised:
         TeacherGapCost(hard=True)
-    with pytest.raises(TypeError, match="hard"):
+    assert str(raised.value) == HARD_REMOVED
+    with pytest.raises(TypeError) as raised:
         canon.DecomposedCalculator().add("teacher_gap_cost", hard=True)
+    assert str(raised.value) == HARD_REMOVED
+    with pytest.raises(TypeError, match="unexpected keyword argument 'colour'"):
+        canon.DecomposedCalculator().add("teacher_gap_cost", colour="red")
     assert TeacherGapCost(level="hard") == TeacherGapCost(level=Level.HARD)
 
 

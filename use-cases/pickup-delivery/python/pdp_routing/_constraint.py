@@ -84,6 +84,12 @@ __all__ = ["Constraint", "Level", "Score", "instance_keys", "score_costs", "sele
 
 _KNOBS = ("weight", "level", "exponent", "offset", "clip")
 
+# The words every path that meets the removed knob uses: a spec (Constraint
+# below), employee-scheduling's JSON rules and DecomposedCalculator.add() of
+# employee scheduling and school timetabling (python::kHardRemoved in the
+# engine's constraint_binding.hpp).
+_HARD_REMOVED = "hard= was removed in optimaru 0.3.0; use level='hard' or level='soft' (level=None keeps the default)"
+
 
 class Level(StrEnum):
     """The score level a constraint is charged on. Hard dominates medium, medium dominates soft."""
@@ -107,6 +113,9 @@ class Constraint:
 
     ``offset`` and ``clip`` are keyword-only, so the positional order stays
     ``weight, level, exponent`` followed by a subclass's domain parameters.
+    ``hard=``, the knob ``level`` replaced in 0.3.0, raises a TypeError that
+    says so. A ``name`` must not contain ``#``, which ``constraint_costs()``
+    keys repeated picks with (``"<name>#<k>"``).
     """
 
     weight: float | None = None  # None = the component's default weight
@@ -121,10 +130,23 @@ class Constraint:
     description_en: ClassVar[str] = ""
     description_ko: ClassVar[str] = ""
 
+    def __new__(cls, *args: Any, **kwargs: Any):
+        # Ahead of the dataclass __init__, which would only say "unexpected
+        # keyword argument 'hard'". Unpickling and copying call __new__
+        # without arguments, so they are unaffected.
+        if "hard" in kwargs:
+            raise TypeError(_HARD_REMOVED)
+        return super().__new__(cls)
+
     def __init_subclass__(cls, *, abstract: bool = False, **kwargs):
         super().__init_subclass__(**kwargs)
         if not abstract and not cls.name:
             raise TypeError(f"{cls.__name__} must set a registry `name`")
+        if "#" in cls.name:
+            raise ValueError(
+                f"constraint {cls.name!r}: a name must not contain '#', which constraint_costs() "
+                "keys repeated picks with ('<name>#<k>')"
+            )
 
     def __post_init__(self):
         _check_knobs(self.name, self.weight, self.level, self.exponent, self.offset, self.clip)

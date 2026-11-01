@@ -80,7 +80,9 @@ struct ConstraintInfo {
 // removes the first, only() keeps every instance of the names it is given.
 // The calculator, and the Python constraint_costs() keys
 // (python::instanceKeys: "<name>", "<name>#2", ...), see the instances of a
-// name in the order they were added.
+// name in the order they were added. Those keys are why a name must not
+// contain '#': every add / addInstance / emplace refuses one
+// (std::invalid_argument naming the constraint).
 
 template <typename Solution>
 class ConstraintAssembly {
@@ -101,7 +103,7 @@ public:
     // not "count it twice"). Use addInstance() below when you really do want
     // the same cost counted more than once (each instance with its own knobs).
     ConstraintAssembly& add(std::unique_ptr<Unit> constraint) & {
-        replaceOrAppend(units_, std::move(constraint));
+        replaceOrAppend(units_, checkedName(std::move(constraint)));
         return *this;
     }
     ConstraintAssembly&& add(std::unique_ptr<Unit> constraint) && {
@@ -109,7 +111,7 @@ public:
         return std::move(*this);
     }
     ConstraintAssembly& add(std::unique_ptr<Global> constraint) & {
-        replaceOrAppend(globals_, std::move(constraint));
+        replaceOrAppend(globals_, checkedName(std::move(constraint)));
         return *this;
     }
     ConstraintAssembly&& add(std::unique_ptr<Global> constraint) && {
@@ -129,7 +131,7 @@ public:
     // Appends another instance of a constraint, KEEPING any already held
     // under the same name (see "One name, several instances" above).
     ConstraintAssembly& addInstance(std::unique_ptr<Unit> constraint) & {
-        units_.push_back(std::move(constraint));
+        units_.push_back(checkedName(std::move(constraint)));
         return *this;
     }
     ConstraintAssembly&& addInstance(std::unique_ptr<Unit> constraint) && {
@@ -137,7 +139,7 @@ public:
         return std::move(*this);
     }
     ConstraintAssembly& addInstance(std::unique_ptr<Global> constraint) & {
-        globals_.push_back(std::move(constraint));
+        globals_.push_back(checkedName(std::move(constraint)));
         return *this;
     }
     ConstraintAssembly&& addInstance(std::unique_ptr<Global> constraint) && {
@@ -347,6 +349,19 @@ public:
     }
 
 private:
+    // '#' separates a name from its instance number in the constraint_costs()
+    // keys ("<name>#<k>"), so a name holding one could collide with another
+    // name's repeat.
+    template <typename Pointer>
+    static Pointer checkedName(Pointer constraint) {
+        if (constraint->name.find('#') != std::string::npos) {
+            throw std::invalid_argument("Constraint '" + constraint->name +
+                                        "': a name must not contain '#', which keys repeated "
+                                        "instances (\"<name>#<k>\")");
+        }
+        return constraint;
+    }
+
     template <typename Vector, typename Pointer>
     static void replaceOrAppend(Vector& vector, Pointer constraint) {
         for (auto& existing : vector) {

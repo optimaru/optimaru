@@ -534,8 +534,15 @@ void bindCanon(py::module_ &canon)
                const py::object &level,
                const py::object &exponent,
                const py::object &offset,
-               const py::object &clip)
+               const py::object &clip,
+               const py::kwargs &kwargs)
             {
+                // The knobs are the only keywords; the removed one gets the
+                // words every path uses, any other the usual TypeError.
+                tfpy::refuseHardKeyword(kwargs);
+                for (const auto &item : kwargs)
+                    throw py::type_error("add() got an unexpected keyword argument '"
+                                         + py::str(item.first).cast<std::string>() + "'");
                 const py::object pick = py::module_::import("types").attr(
                     "SimpleNamespace")(py::arg("name") = name,
                                        py::arg("weight") = weight,
