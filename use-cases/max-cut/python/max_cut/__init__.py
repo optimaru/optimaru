@@ -10,7 +10,7 @@ Score (HardSoftScore), at the default weights:
   soft = +(cut weight)                         # cut_weight_cost is a reward
 (`partition_imbalance_cost` is an opt-in objective: default weight 0.) The
 problem carries no weights: change one through a constraint selection, e.g.
-``solve(problem, constraints=[*get_constraints()[:4], PartitionImbalanceCost(weight=2), cut_weight_cost])``
+``solve(problem, constraints=[*get_constraints()[:4], PartitionImbalanceCost(weight=2), CutWeightCost()])``
 (see `max_cut.constraints`). `constraint_info()` lists every constraint with its
 default level and weight.
 
@@ -95,17 +95,19 @@ def _complete_core_of(problem) -> MaxCutProblem:
     return core
 
 
-def constraint_costs(problem) -> dict[str, dict[str, Any]]:
-    """Raw cost of every default constraint, before weight / exponent / level.
+def constraint_costs(problem, constraints=None) -> dict[str, dict[str, Any]]:
+    """Raw cost of every constraint, before weight / exponent / offset / level.
 
-    ``{name: {"costs": [...], "weight", "exponent", "hard", "global", "level", "reward",
-    "level_flippable", "name", "label"}}`` in `list_constraints()` order. The four unit
-    constraints (fixed, same-side, different-side, size bounds) report ``[side 0, side 1]``
-    (0.1.x listed one 0/1 term per fixed vertex / pair; the sums are equal); the imbalance
-    and the cut one total each. `constraints.score()` turns it into a score. Raises
-    ValueError on a partial partition.
+    ``{key: {"costs": [...], "weight", "exponent", "offset", "clip", "hard", "global",
+    "level", "reward", "level_flippable", "name", "label", ...}}``: None = the default
+    constraints in `list_constraints()` order; a pick list (as for `solve`) scores exactly
+    those picks, each entry carrying its pick's knobs, the k-th pick of a name keyed
+    ``"<name>#<k>"``. The four unit constraints (fixed, same-side, different-side, size
+    bounds) report ``[side 0, side 1]`` (0.1.x listed one 0/1 term per fixed vertex / pair;
+    the sums are equal); the imbalance and the cut one total each. `constraints.score()`
+    turns it into a score. Raises ValueError on a partial partition.
     """
-    return _constraint_costs(_complete_core_of(problem))
+    return _constraint_costs(_complete_core_of(problem), constraints)
 
 
 def calculate_score(problem, constraints=None):
@@ -154,8 +156,9 @@ def solve(
     ``on_new_best(step, score)`` is called on every new best solution.
 
     ``constraints`` picks the cost function directly (see `max_cut.constraints`); only the
-    listed constraints are scored and the solve is single-start (``parallel_solver_count``
-    is ignored there). None uses every default constraint at its default weight::
+    listed constraints are scored, a name picked several times once per pick, and the solve
+    is single-start (``parallel_solver_count`` is ignored there). None uses every default
+    constraint at its default weight::
 
         from max_cut.constraints import get_constraints
         max_cut.solve(problem, constraints=get_constraints())

@@ -37,6 +37,15 @@ of runs on a machine, not only consecutive ones, so a setup matrix that breaks t
 inequality may exclude schedules the engine scores 0. Not supported on CP-SAT (refused):
 `exponent != 1` and non-integer weights.
 
+**0.3.0:** a constraint may be picked several times (as specs or as
+`{"name", "weight", "hard", "offset", "clip"}` mappings); each pick is built on its own
+with its own knobs (a repeated structural pick posts its rule again and is checked with its
+own weight and level). Every engine constraint is global, so a penalized plugin adds its
+total as one term and an integral `offset` shapes it exactly as the engine does in both
+`clip` modes; a fractional offset is refused (`offset must be an integer for CP-SAT`). A
+structural plugin has no term to shape: an offset on it is refused (`offset is not
+supported by this CP-SAT model`), like a weight or a level.
+
 ## Tests
 
 `tests/test_parity.py`: on fixtures with every operation fixed (`_fixed_assignments`) and
@@ -44,7 +53,9 @@ one constraint selected, a penalized plugin's objective term (`_proxy_score`) eq
 engine's raw cost and a structural plugin accepts the schedule exactly when the engine's
 raw cost is 0 — a positive and a zero fixture per constraint (cycle time and makespan are
 positive whenever every operation is assigned). Plus the catalog parity, a demotion scored
-like the engine, the structural refusals and a C++-rescored optimum with hard 0.
+like the engine, the structural refusals and a C++-rescored optimum with hard 0; and
+selections with repeated and shifted picks scored exactly like the engine on every fixture
+(the objective per level == `score(constraint_costs(core, picks), picks)`).
 
 ## Engine comparison
 

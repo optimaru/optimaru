@@ -16,6 +16,14 @@ Two kinds of plugin, one semantics (the engine's raw cost; 0 = no violation):
 - PENALIZED (8): MaxQueueTimeCost and MaxCycleTimeCost (hard) and the six soft terms add
   their exact raw cost to the objective, on the level the selection asks for.
 
+Every engine constraint is global, so a penalized plugin adds its total as ONE term (the
+engine's unit): a pick's ``offset`` / ``clip`` shape that total exactly as the engine does
+(``terms_per_unit``). A structural plugin has no term to shape and keeps
+``terms_per_unit = False``: the registry refuses an offset on it, as the plugin refuses a
+weight or a level. A constraint picked several times is built once per pick (a repeated
+structural pick posts its rule again, a repeated penalized pick adds its own term), and
+each instance is checked with its own knobs.
+
 Where CP-SAT is stricter than the engine (documented, never laxer): MissingSetupTimeCost is
 posted for every pair of runs on a machine, not only consecutive ones, so setup matrices
 that break the triangle inequality may exclude schedules the engine scores 0.
@@ -200,6 +208,8 @@ class MachineUnavailabilityCost(domain.MachineUnavailabilityCost, ConstraintPlug
 
 
 class MaxQueueTimeCost(domain.MaxQueueTimeCost, ConstraintPlugin[FabContext]):
+    terms_per_unit = True  # one term: the global total, the engine's unit
+
     def build(self, context: FabContext, objective: ObjectiveBuilder) -> None:
         model = context.model
         excesses = []
@@ -297,6 +307,8 @@ class PinnedAssignmentsCost(domain.PinnedAssignmentsCost, ConstraintPlugin[FabCo
 
 
 class MaxCycleTimeCost(domain.MaxCycleTimeCost, ConstraintPlugin[FabContext]):
+    terms_per_unit = True
+
     def build(self, context: FabContext, objective: ObjectiveBuilder) -> None:
         model = context.model
         excesses = []
@@ -311,6 +323,8 @@ class MaxCycleTimeCost(domain.MaxCycleTimeCost, ConstraintPlugin[FabContext]):
 
 
 class MachinePreferenceCost(domain.MachinePreferenceCost, ConstraintPlugin[FabContext]):
+    terms_per_unit = True
+
     def build(self, context: FabContext, objective: ObjectiveBuilder) -> None:
         terms = [choice.preference_cost * choice.present for options in context.choices for choice in options]
         bound = sum(max((choice.preference_cost for choice in options), default=0) for options in context.choices)
@@ -320,6 +334,8 @@ class MachinePreferenceCost(domain.MachinePreferenceCost, ConstraintPlugin[FabCo
 class MinBatchSizeCost(domain.MinBatchSizeCost, ConstraintPlugin[FabContext]):
     """Groups of equal start and family on a batch tool (the engine groups by batch id, and
     the result's batch ids are given per (machine, family, start))."""
+
+    terms_per_unit = True
 
     def build(self, context: FabContext, objective: ObjectiveBuilder) -> None:
         model = context.model
@@ -360,6 +376,8 @@ class MinBatchSizeCost(domain.MinBatchSizeCost, ConstraintPlugin[FabContext]):
 
 
 class MachineLoadImbalanceCost(domain.MachineLoadImbalanceCost, ConstraintPlugin[FabContext]):
+    terms_per_unit = True
+
     def build(self, context: FabContext, objective: ObjectiveBuilder) -> None:
         model = context.model
         groups = defaultdict(list)
@@ -382,6 +400,8 @@ class MachineLoadImbalanceCost(domain.MachineLoadImbalanceCost, ConstraintPlugin
 
 
 class WeightedTardinessCost(domain.WeightedTardinessCost, ConstraintPlugin[FabContext]):
+    terms_per_unit = True
+
     def build(self, context: FabContext, objective: ObjectiveBuilder) -> None:
         model = context.model
         terms = []
@@ -394,6 +414,8 @@ class WeightedTardinessCost(domain.WeightedTardinessCost, ConstraintPlugin[FabCo
 
 
 class CycleTimeCost(domain.CycleTimeCost, ConstraintPlugin[FabContext]):
+    terms_per_unit = True
+
     def build(self, context: FabContext, objective: ObjectiveBuilder) -> None:
         model = context.model
         terms = []
@@ -405,6 +427,8 @@ class CycleTimeCost(domain.CycleTimeCost, ConstraintPlugin[FabContext]):
 
 
 class MakespanCost(domain.MakespanCost, ConstraintPlugin[FabContext]):
+    terms_per_unit = True
+
     def build(self, context: FabContext, objective: ObjectiveBuilder) -> None:
         makespan = context.model.new_int_var(0, context.horizon, "makespan")
         context.model.add_max_equality(

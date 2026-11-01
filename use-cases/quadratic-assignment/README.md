@@ -55,6 +55,32 @@ five are scored by default (`default_enabled`); `quadratic_assignment.constraint
 reports exactly this table from the C++ components (`kDefaultLevel` /
 `kDefaultWeight`).
 
+### 0.3.0
+
+Every constraint takes two more knobs, `offset` and `clip` (keyword-only), and may be
+picked several times. The three side constraints shape each location they evaluate, the
+two objectives their total `x`: `sign(x) * max(0, |x| - offset) ** exponent`
+(`clip=True`, the default) or `(x - offset) ** exponent`, sign-preserving (`clip=False`,
+which charges a location of raw 0 too and rewards one below the offset); `offset=0` is
+the 0.2.0 shaping. The side constraints are scoped: `pinned_assignments_cost` evaluates
+the fixed locations, `forbidden_assignments_cost` the locations named by a forbidden row
+and `location_capacity_cost` the locations with a capacity, so a literal offset charges
+exactly those (`constraint_costs()` reports them as `"units"`). Each pick is its own
+instance with its own knobs, and the instances add up:
+
+```python
+qap.solve(problem, constraints=[
+    *get_constraints()[:-1],
+    FlowDistanceCost(),                           # the flow cost
+    FlowDistanceCost(weight=10, offset=1000),     # + 10 x (what exceeds a budget of 1000)
+])
+```
+
+`qap.constraint_costs(problem, picks)` scores a pick list and keys the second pick
+`flow_distance_cost#2`; every entry reports its `offset` and `clip`. The CP-SAT reference
+takes the same picks (integral offsets; on an objective only while its data cannot make
+the total negative).
+
 ### 0.2.0
 
 The package was a pure-Python reference (simulated annealing over
@@ -176,8 +202,11 @@ optima, determinism). `qap_plugin_test`: default assembly == monolith bit for bi
 plugin incremental == full recompute with accepted and undone moves (per-constraint
 raw costs, each constraint non-zero on some step), partial assemblies, overrides
 (unit exponent per location, global exponent on the total, per-location hard
-rounding), the cost layout, FULL_ASSERT plugin solves, raw costs by hand and the
-catalog.
+rounding), the cost layout, FULL_ASSERT plugin solves, raw costs by hand, the
+catalog, and repeated / shifted components (a hand-calculated repeat, threshold and
+literal offsets by hand, the scoped side constraints charging only their locations,
+incremental == a fresh recompute over a walk with accepted and undone moves, a
+FULL_ASSERT solve).
 
 ## Usage
 
@@ -214,6 +243,9 @@ qap.constraint_info()      # [ConstraintInfo(name='pinned_assignments_cost', def
 qap.solve(problem, time_limit_seconds=1.0, constraints=[*get_constraints()[:-1], FlowDistanceCost(weight=2)])
 raw = qap.constraint_costs(problem)                  # raw costs, re-priced in pure Python:
 score(raw), score(raw, [PinnedAssignmentsCost(hard=False), *get_constraints()[1:]])
+# A constraint may be picked several times, each pick with its own knobs; offset / clip
+# shift the shaping (clip=True: only the flow cost beyond 20 counts for the second pick).
+score(raw, [FlowDistanceCost(), FlowDistanceCost(weight=10, offset=20)])
 ```
 
 ## Starting from an existing solution
@@ -297,7 +329,7 @@ full bijection.
    `description_en` / `description_ko` to
    `python/quadratic_assignment/constraints.py` (plus its module-level default
    instance); callers then pick, reweight or flip it:
-   `constraints=get_constraints([..., MyRuleCost(weight=5, hard=True)])`;
+   `constraints=[..., MyRuleCost(weight=5, hard=True)]`;
 5. mirror it in the CP-SAT model in
    [`benchmarks/quadratic-assignment/cpsat`](../../benchmarks/quadratic-assignment/cpsat)
    (a plugin subclassing the spec; defaults come from `constraint_info()`), with an

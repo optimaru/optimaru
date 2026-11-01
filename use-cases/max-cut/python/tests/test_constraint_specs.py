@@ -1,7 +1,9 @@
 """max_cut.constraints — an API for picking the cost function declaratively."""
 
+import json
 import pickle
 import re
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -309,9 +311,18 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     """The C++ side guards too: a duck-typed pick cannot smuggle a negative weight in."""
     negative = SimpleNamespace(name="fixed_partition_cost", weight=-2.0, hard=None, exponent=1.0)
     flat = SimpleNamespace(name="fixed_partition_cost", weight=None, hard=None, exponent=0.0)
-    for pick, message in ((negative, "weight must be finite and >= 0"), (flat, "exponent must be finite and > 0")):
+    unbounded = SimpleNamespace(name="fixed_partition_cost", weight=None, hard=None, exponent=1.0, offset=float("inf"))
+    for pick, message in (
+        (negative, "weight must be finite and >= 0"),
+        (flat, "exponent must be finite and > 0"),
+        (unbounded, "offset must be finite, not inf"),
+    ):
         with pytest.raises(ValueError, match=message):
             max_cut.solve(plain(), time_limit_seconds=0, constraints=[pick])
+        with pytest.raises(ValueError, match=message):
+            max_cut.constraint_costs(fixture_h(), [pick])
+    with pytest.raises(ValueError, match="offset must be finite, not nan"):
+        FixedPartitionCost(offset=float("nan"))
 
 
 @pytest.mark.parametrize(
@@ -322,6 +333,10 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
         ({"hard": 1}, "hard must be True, False or None, not 1"),
         ({"hard": "x"}, "hard must be True, False or None, not 'x'"),
         ({"exponent": True}, "exponent must be a number, not True"),
+        ({"offset": "5"}, "offset must be a number, not '5'"),
+        ({"offset": False}, "offset must be a number, not False"),
+        ({"clip": 1}, "clip must be True or False, not 1"),
+        ({"clip": "no"}, "clip must be True or False, not 'no'"),
     ],
 )
 def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
@@ -354,15 +369,24 @@ def test_unknown_and_old_names_are_refused():
             score(raw, [pick])
 
 
-def test_empty_and_repeated_picks_are_rejected():
+def test_an_empty_pick_list_is_rejected():
     with pytest.raises(ValueError, match="must not be empty"):
         max_cut.solve(plain(), time_limit_seconds=0, constraints=[])
     with pytest.raises(ValueError, match="must not be empty"):
+        max_cut.constraint_costs(fixture_h(), [])
+    with pytest.raises(ValueError, match="must not be empty"):
         get_constraints([])
-    with pytest.raises(ValueError, match="picked more than once"):
-        max_cut.solve(plain(), time_limit_seconds=0, constraints=[cut_weight_cost, CutWeightCost(weight=2)])
-    with pytest.raises(ValueError, match="picked more than once"):
-        get_constraints([fixed_partition_cost, fixed_partition_cost])
+
+
+def test_naming_a_constraint_twice_scores_both_picks():
+    """Since 0.3.0 a constraint may be picked several times: each pick is scored on its own.
+
+    The later pick no longer wins in silence, nor is it an error: both are
+    instances with their own knobs, and they add up."""
+    picks = [CutWeightCost(), CutWeightCost(weight=2), PartitionSizeBoundsCost()]
+    assert engine_score(fixture_h(), picks) == (-2, 2.0 + 2 * 2.0)
+    assert max_cut.calculate_score(fixture_h(), picks) == (-2, 6.0)
+    assert get_constraints([FixedPartitionCost(), FixedPartitionCost()]) == [FixedPartitionCost(), FixedPartitionCost()]
 
 
 # --- Pure-Python scoring (constraint_costs -> score) ------------------------
@@ -380,6 +404,19 @@ def test_empty_and_repeated_picks_are_rejected():
             SamePartitionPairsCost(weight=0.5),
             DifferentPartitionPairsCost(weight=0.5),
             PartitionSizeBoundsCost(weight=0.5),
+        ],
+        [*get_constraints(), PartitionSizeBoundsCost(weight=0.5, exponent=2.0), CutWeightCost(weight=0.5)],
+        [
+            PartitionSizeBoundsCost(offset=1.0),
+            PartitionSizeBoundsCost(offset=-2.0, clip=False),
+            CutWeightCost(offset=3),
+        ],
+        [
+            SamePartitionPairsCost(offset=0.5, clip=False, weight=3),
+            DifferentPartitionPairsCost(offset=1.0),
+            PartitionImbalanceCost(weight=1, offset=1.0, exponent=2.0, clip=False),
+            CutWeightCost(offset=4.0, clip=False),
+            CutWeightCost(weight=0.5, offset=2.0, exponent=1.5),
         ],
     ],
 )
@@ -418,3 +455,163 @@ def test_score_equals_the_engine_for_the_default_assembly():
     engine = max_cut.calculate_score(problem.to_core())
     python = score(max_cut.constraint_costs(problem))
     assert (python.hard, python.soft) == (engine.hard, engine.soft)
+
+
+# --- 0.3.0: repeated picks and the offset / clip knobs ------------------------------
+
+
+def engine_solve(problem: MaxCutProblemModel, constraints) -> max_cut.MaxCutProblem:
+    """The engine's zero-budget warm-start solve of the model's partition (it keeps the partition)."""
+    core = problem.to_core()
+    core.warm_start = True
+    max_cut.Solver(_zero()).solve_with_constraints(core, constraints)
+    return core
+
+
+REPEAT = [PartitionSizeBoundsCost(), PartitionSizeBoundsCost(weight=2, exponent=2)]
+
+
+def test_a_repeated_pick_by_hand():
+    """size per side [1, 1] plus 2 x size^2 per side: (1 + 1) + 2 x (1 + 1) = 6 hard."""
+    problem = fixture_h()
+    raw = max_cut.constraint_costs(problem, REPEAT)
+    assert list(raw) == ["partition_size_bounds_cost", "partition_size_bounds_cost#2"]
+    first, second = raw.values()
+    assert first["costs"] == second["costs"] == [1.0, 1.0]
+    assert (first["weight"], first["exponent"], second["weight"], second["exponent"]) == (1.0, 1.0, 2.0, 2.0)
+    assert first["name"] == second["name"] == "partition_size_bounds_cost"
+    assert second["default_weight"] == 1.0
+    expected = (-(2 + 2 * 2), 0.0)
+    assert score(raw, REPEAT) == expected
+    # The default costs hold the name once; the second pick reads the same raw costs.
+    assert score(max_cut.constraint_costs(problem), REPEAT) == expected
+    assert max_cut.calculate_score(problem, REPEAT) == expected
+    engine = engine_solve(problem, REPEAT)
+    assert engine.assignment() == problem.to_core().assignment()
+    assert (engine.score.hard, engine.score.soft) == expected
+
+
+def test_identical_picks_count_twice():
+    picks = [CutWeightCost(), CutWeightCost()]
+    assert score(max_cut.constraint_costs(fixture_h()), picks) == (0, 4.0)
+    assert engine_score(fixture_h(), picks) == (0, 4.0)
+    assert list(max_cut.constraint_costs(fixture_h(), picks)) == ["cut_weight_cost", "cut_weight_cost#2"]
+
+
+def test_the_keys_follow_the_pick_order_of_each_name():
+    picks = [
+        DifferentPartitionPairsCost(weight=1),
+        CutWeightCost(),
+        DifferentPartitionPairsCost(weight=2),
+        FixedPartitionCost(),
+        DifferentPartitionPairsCost(weight=3),
+    ]
+    raw = max_cut.constraint_costs(fixture_h(), picks)
+    assert {key: entry["weight"] for key, entry in raw.items()} == {
+        "fixed_partition_cost": 1.0,
+        "different_partition_pairs_cost": 1.0,
+        "different_partition_pairs_cost#2": 2.0,
+        "different_partition_pairs_cost#3": 3.0,
+        "cut_weight_cost": 1.0,
+    }
+    assert score(raw, picks) == (-(6 + 1), 2.0)
+    assert engine_score(fixture_h(), picks) == score(raw, picks)
+
+
+def test_a_second_pick_of_the_reward_still_refuses_hard():
+    picks = [CutWeightCost(), CutWeightCost(hard=True)]
+    with pytest.raises(ValueError, match="is a reward"):
+        score(max_cut.constraint_costs(fixture_h()), picks)
+    with pytest.raises(ValueError, match="is a reward"):
+        max_cut.solve(fixture_h(), time_limit_seconds=0, constraints=picks)
+
+
+@pytest.mark.parametrize(
+    ("pick", "expected"),
+    [
+        # Unit constraints, shaped per side: fixed [1, 0], same [1, 0], different [0, 1], size [1, 1].
+        (DifferentPartitionPairsCost(offset=1, clip=False), (1, 0.0)),  # (0 - 1) + (1 - 1): the side of raw 0 too
+        (DifferentPartitionPairsCost(offset=1), (0, 0.0)),
+        (SamePartitionPairsCost(offset=2, clip=False), (3, 0.0)),  # a hard reward below 2 on both sides
+        (SamePartitionPairsCost(offset=-1), (-2, 0.0)),  # a negative offset adds to the non-zero side only
+        (SamePartitionPairsCost(offset=-1, clip=False), (-3, 0.0)),  # ...or to both sides
+        (SamePartitionPairsCost(offset=1.5, clip=False), (3, 0.0)),  # llround(-0.5) + llround(-1.5): per side
+        (FixedPartitionCost(weight=3, offset=0.5, clip=False), (0, 0.0)),  # 1.5 -> 2, -1.5 -> -2
+        (PartitionSizeBoundsCost(offset=1, exponent=3, clip=False), (0, 0.0)),
+        (PartitionSizeBoundsCost(hard=False, offset=0.5), (0, -1.0)),  # 0.5 + 0.5, soft: not rounded
+        # The globals shape their single total: imbalance 2, cut reward 2.
+        (PartitionImbalanceCost(weight=1, offset=1), (0, -1.0)),
+        (PartitionImbalanceCost(weight=1, offset=3, clip=False), (0, 1.0)),  # shaped once, not per side
+        (PartitionImbalanceCost(offset=3, clip=False), (0, 0.0)),  # the default weight 0 contributes 0
+        (CutWeightCost(offset=1), (0, 1.0)),  # the reward beyond the offset only
+        (CutWeightCost(offset=1, clip=False), (0, 3.0)),  # the offset adds to the reward
+        (CutWeightCost(offset=5), (0, 0.0)),
+    ],
+)
+def test_offsets_by_hand_on_both_paths(pick, expected):
+    """threshold sign(x) max(0, |x| - offset)^e and literal (x - offset)^e: Python mirror == engine == hand."""
+    problem = fixture_h()
+    assert score(max_cut.constraint_costs(problem), [pick]) == expected
+    raw = max_cut.constraint_costs(problem, [pick])
+    entry = next(iter(raw.values()))
+    assert (entry["offset"], entry["clip"]) == (float(pick.offset), pick.clip)
+    assert "units" not in entry  # both sides are always evaluated: no scoped constraint
+    assert score(raw, [pick]) == expected
+    assert max_cut.calculate_score(problem, [pick]) == expected
+    engine = engine_solve(problem, [pick])
+    assert engine.assignment() == problem.to_core().assignment()
+    assert (engine.score.hard, engine.score.soft) == expected
+
+
+def test_offset_zero_reproduces_the_0_2_0_scores():
+    """offset 0 is the plain shaping in both modes, so every 0.2.0 selection scores the same."""
+    plain_picks = [PartitionSizeBoundsCost(exponent=2), SamePartitionPairsCost(), CutWeightCost(exponent=1.5)]
+    shifted_by_zero = [
+        PartitionSizeBoundsCost(exponent=2, offset=0.0, clip=False),
+        SamePartitionPairsCost(offset=0),
+        CutWeightCost(exponent=1.5, offset=0.0, clip=False),
+    ]
+    problem = solved()
+    raw = max_cut.constraint_costs(problem)
+    assert score(raw, shifted_by_zero) == score(raw, plain_picks)
+    assert (
+        engine_score(problem, plain_picks) == engine_score(problem, shifted_by_zero) == tuple(score(raw, plain_picks))
+    )
+    for entry in raw.values():
+        assert (entry["offset"], entry["clip"]) == (0.0, True)
+
+
+@pytest.mark.parametrize(
+    "picks",
+    [
+        [*get_constraints(), *REPEAT],
+        [
+            FixedPartitionCost(),
+            SamePartitionPairsCost(),
+            SamePartitionPairsCost(offset=1, clip=False, weight=2),
+            DifferentPartitionPairsCost(offset=-1),
+            PartitionSizeBoundsCost(),
+            PartitionSizeBoundsCost(offset=1, exponent=2, weight=0.5, hard=False),
+            PartitionImbalanceCost(weight=0.25, offset=2, clip=False),
+            CutWeightCost(offset=20, clip=False),
+            CutWeightCost(weight=0.1, exponent=2, offset=5),
+        ],
+    ],
+    ids=["repeat", "repeat-and-offsets"],
+)
+def test_full_assert_solves_with_repeats_and_offsets(picks):
+    """FULL_ASSERT re-checks the incremental score against a full recompute after every move."""
+    data = json.loads((Path(__file__).parent / "fixtures" / "web_demo.json").read_text())
+    core = MaxCutProblemModel.model_validate(data).to_core()
+    config = max_cut.SolverConfig()
+    config.full_assert = True
+    config.random_seed = 3
+    config.step_count_limit = 3000
+    config.spent_limit_seconds = 30
+    max_cut.Solver(config).solve_with_constraints(core, picks)
+    raw = max_cut.constraint_costs(core, picks)
+    assert len(raw) == len(picks)
+    python = score(raw, picks)
+    assert python.hard == core.score.hard
+    assert python.soft == pytest.approx(core.score.soft)
+    assert score(max_cut.constraint_costs(core), picks) == python  # the default costs score the repeats too

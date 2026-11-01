@@ -30,12 +30,18 @@ qap.constraint_info()
 qap.solve(problem, time_limit_seconds=1.0, constraints=[*get_constraints()[:-1], FlowDistanceCost(weight=2)])
 raw = qap.constraint_costs(problem)   # {name: {"costs": [...], "weight": ..., ...}}
 score(raw), score(raw, [LocationCapacityCost(exponent=2.0)])
+# A constraint may be picked several times, each pick with its own knobs; offset / clip
+# shift the shaping (clip=True: only the flow cost beyond 1000 counts for the second pick).
+score(raw, [FlowDistanceCost(), FlowDistanceCost(weight=10, offset=1000)])
 ```
 
 The side constraints report one raw cost per location (location order) and the
-exponent shapes each one; the two objectives report one total each and the
-exponent shapes that total — the same terms 0.1.x shaped, so exponents score as
-before at the soft level. Hard contributions are rounded per location (0.1.x
+exponent (with `offset` / `clip`, 0.3.0) shapes each location they evaluate (their
+`"units"`: the fixed, the forbidden-row and the capacitated locations); the two
+objectives report one total each and the exponent shapes that total;
+`constraint_costs(problem, picks)` scores a pick list, the second pick of a name keyed
+`<name>#2`. These are the same terms 0.1.x shaped, so exponents score as before at
+the soft level. Hard contributions are rounded per location (0.1.x
 rounded the hard total once), which differs only when a hard constraint's
 weighted, shaped per-location value is fractional: a fractional hard weight, or an
 exponent != 1 on `location_capacity_cost` (costs `[2, 2]` at exponent 0.5 give

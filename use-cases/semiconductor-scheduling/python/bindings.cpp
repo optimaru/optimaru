@@ -325,18 +325,21 @@ PYBIND11_MODULE(_core, m)
         [](SemiconductorSchedule &schedule, const py::object &constraints)
         {
             ScoreCalculator::prepare(schedule);
+            // The monolith knows the default picks only; a list (repeats and
+            // offsets included) takes the assembly path.
             if (constraints.is_none())
                 return ScoreCalculator::calculateScore(schedule);
             DecomposedCalculator calculator;
-            tfpy::applyConstraints(defaultConstraints(), constraints).into(calculator);
+            tfpy::applyConstraints([] { return defaultConstraints(); }, constraints).into(calculator);
             calculator.resetWorkingSolution(schedule);
             const Score score = calculator.calculateScore();
             storeScore(schedule, score);
             return score;
         },
         py::arg("schedule"), py::arg("constraints") = py::none(),
-        "Scores schedule.assignments as given (None = the default constraints, else the picks) and stores "
-        "score, makespan, total_weighted_tardiness and total_cycle_time.");
+        "Scores schedule.assignments as given (None = the default constraints, else the picks, a name "
+        "picked several times once per pick) and stores score, makespan, total_weighted_tardiness and "
+        "total_cycle_time.");
 
     py::enum_<optimaru::AcceptorType>(m, "AcceptorType", py::module_local())
         .value("HILL_CLIMBING", optimaru::AcceptorType::HILL_CLIMBING)
@@ -446,32 +449,39 @@ PYBIND11_MODULE(_core, m)
         .def(py::init<Solver::Config>(), py::arg("config"))
         .def("solve", py::overload_cast<SemiconductorSchedule &>(&Solver::solve), py::arg("schedule"),
              py::call_guard<py::gil_scoped_release>())
+        // The same search scored by a caller-chosen constraint set (single
+        // start). A name may be picked several times: every pick is its own
+        // instance (a fresh copy of the default component, reading the
+        // calculator's one shared schedule view) with its own knobs.
         .def(
             "solve_with_constraints",
             [](Solver &solver, SemiconductorSchedule &schedule, const py::object &constraints)
             {
                 ScoreCalculator::prepare(schedule);
                 DecomposedCalculator calculator;
-                tfpy::applyConstraints(defaultConstraints(), constraints).into(calculator);
+                tfpy::applyConstraints([] { return defaultConstraints(); }, constraints).into(calculator);
                 py::gil_scoped_release release;
                 solver.solve(schedule, calculator);
             },
             py::arg("schedule"), py::arg("constraints") = py::none());
 
-    // The raw costs of the default assembly on schedule.assignments: one
-    // entry per constraint (a global constraint reports its total as one
-    // element) — the input semiconductor_scheduling.constraints.score() turns
-    // into a score.
+    // The raw costs of an assembly on schedule.assignments: one entry per
+    // constraint (a global constraint reports its total as one element) —
+    // the input semiconductor_scheduling.constraints.score() turns into a
+    // score. None = the default assembly; a pick list scores exactly those
+    // picks (applyConstraints), each entry carrying its pick's knobs, the
+    // k-th pick of a name keyed "<name>#<k>".
     m.def(
         "constraint_costs",
-        [](SemiconductorSchedule &schedule)
+        [](SemiconductorSchedule &schedule, const py::object &constraints)
         {
             ScoreCalculator::prepare(schedule);
             DecomposedCalculator calculator;
-            defaultConstraints().into(calculator);
+            tfpy::applyConstraints([] { return defaultConstraints(); }, constraints).into(calculator);
             return tfpy::constraintCosts(calculator, schedule);
         },
-        py::arg("schedule"), "Raw cost of every constraint on schedule.assignments, before weight/exponent/level.");
+        py::arg("schedule"), py::arg("constraints") = py::none(),
+        "Raw cost of every constraint on schedule.assignments, before weight/exponent/offset/level.");
 
     // The 0.1.x per-item lists (one item per lot, pair, machine, window, ...).
     m.def(

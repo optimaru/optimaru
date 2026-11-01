@@ -18,7 +18,7 @@ The problem carries no weights. Pick, re-weight or flip constraints with
 
 ```python
 import max_cut
-from max_cut.constraints import FixedPartitionCost, PartitionImbalanceCost, cut_weight_cost, get_constraints, score
+from max_cut.constraints import CutWeightCost, FixedPartitionCost, PartitionImbalanceCost, get_constraints, score
 
 max_cut.constraint_info()
 # [ConstraintInfo(name='fixed_partition_cost', default_level='hard', default_weight=1.0,
@@ -30,15 +30,19 @@ max_cut.constraint_info()
 max_cut.solve(
     problem,
     time_limit_seconds=1.0,
-    constraints=[*get_constraints()[:4], PartitionImbalanceCost(weight=2), cut_weight_cost],
+    constraints=[*get_constraints()[:4], PartitionImbalanceCost(weight=2), CutWeightCost()],
 )
 raw = max_cut.constraint_costs(problem)   # {name: {"costs": [side 0, side 1] or [total], "weight": ..., ...}}
 score(raw), score(raw, [FixedPartitionCost(exponent=2.0)])
+# A constraint may be picked several times, each pick with its own knobs; offset / clip
+# shift the shaping (clip=True: only the imbalance beyond 2 is squared).
+score(raw, [PartitionImbalanceCost(weight=1), PartitionImbalanceCost(weight=5, exponent=2, offset=2)])
 ```
 
 The four unit constraints (fixed, same-side, different-side, size bounds) report one
-raw cost per side and `exponent` shapes each side; the imbalance and the cut report
-one total. `calculate_score` / `constraint_costs` need a complete partition (a partial
+raw cost per side and `exponent` (with `offset` / `clip`, 0.3.0) shapes each side; the
+imbalance and the cut report one total. `constraint_costs(problem, picks)` scores a pick
+list, the second pick of a name keyed `<name>#2`. `calculate_score` / `constraint_costs` need a complete partition (a partial
 one raises `ValueError`). 0.2.0 renamed every constraint (no aliases), replaced the
 per-term lists of `constraint_costs()` by the standard dict, shapes each side instead
 of each fixed vertex / pair, rounds hard per side, refuses `hard=True` on the reward

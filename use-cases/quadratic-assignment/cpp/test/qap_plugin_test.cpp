@@ -19,6 +19,12 @@
 //       case per constraint (raw 0 = no violation)
 //   (i) the catalog: info() off the default assembly == the components'
 //       kDefaultWeight / kDefaultLevel; the knob guards
+//   (j) repeated components and the offset / clip knobs: a hand-calculated
+//       repeat, threshold and literal offsets by hand per location and on
+//       the totals, the scoped side constraints charging only their
+//       evaluated locations ("units"), incremental == a fresh recompute
+//       over a random walk (accepted and undone moves) and a FULL_ASSERT
+//       solve with repeated, shifted components
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -503,6 +509,275 @@ void verifyCatalog()
     std::printf("\n");
 }
 
+// -------------------------------------------------------------------------
+// (j) Repeated components and offsets. A repeat is a fresh copy of a
+// default component (another defaultConstraints(), the one name kept, its
+// knobs re-stated) appended with addInstances(), as the Python bindings
+// build it from a pick list. The three side constraints shape each location
+// they evaluate (their scopedUnits()), the two objectives their total.
+// -------------------------------------------------------------------------
+ConstraintAssembly copyOf(const std::string &name)
+{
+    ConstraintAssembly copy = defaultConstraints();
+    copy.only({name});
+    return copy;
+}
+
+// The side instance at the identity: pinned [1, 0] (scope L1), forbidden
+// [0, 1] (scope L2), capacity [2, 0] (scope L1, L2), assignment 15, flow 22.
+QuadraticAssignmentProblem sideIdentity()
+{
+    QuadraticAssignmentProblem p = sideInstance();
+    identity(p);
+    return p;
+}
+
+// Three locations, one of each scope: L1 pinned to F1, (F3, L2) forbidden,
+// only L2 capacitated (10). At the identity every side constraint is 0.
+QuadraticAssignmentProblem scopedInstance()
+{
+    QuadraticAssignmentProblem p = threeFacilities();
+    p.fixedAssignments.push_back({0, 0});
+    p.forbiddenAssignments.push_back({2, 1});
+    p.locations[1].capacity = 10;
+    identity(p);
+    return p;
+}
+
+Score scoreOf(ConstraintAssembly assembly, QuadraticAssignmentProblem p)
+{
+    return scoreWith(std::move(assembly), p);
+}
+
+// Every kind repeated or shifted at least once: the two delta units, the
+// full re-cost unit, both member-change globals; literal and threshold,
+// negative offsets, a fractional hard weight.
+ConstraintAssembly repeatedAssembly()
+{
+    ConstraintAssembly assembly = defaultConstraints();
+    assembly.offset("locationCapacityCost", 1.0).clip("locationCapacityCost", false);
+    assembly.offset("flowDistanceCost", 50.0);
+    assembly.addInstances(std::move(copyOf("pinnedAssignmentsCost")
+                                        .weight("pinnedAssignmentsCost", 1.5)
+                                        .offset("pinnedAssignmentsCost", 0.5)
+                                        .clip("pinnedAssignmentsCost", false)));
+    assembly.addInstances(std::move(copyOf("forbiddenAssignmentsCost")
+                                        .exponent("forbiddenAssignmentsCost", 2.0)
+                                        .offset("forbiddenAssignmentsCost", -1.0)));
+    assembly.addInstances(std::move(copyOf("locationCapacityCost")
+                                        .weight("locationCapacityCost", 2.0)
+                                        .exponent("locationCapacityCost", 2.0)
+                                        .offset("locationCapacityCost", 2.0)));
+    assembly.addInstances(std::move(copyOf("assignmentCost")
+                                        .weight("assignmentCost", 0.5)
+                                        .offset("assignmentCost", -20.0)
+                                        .clip("assignmentCost", false)));
+    assembly.addInstances(std::move(copyOf("flowDistanceCost")
+                                        .weight("flowDistanceCost", 0.25)
+                                        .exponent("flowDistanceCost", 1.5)
+                                        .offset("flowDistanceCost", 100.0)
+                                        .clip("flowDistanceCost", false)
+                                        .hard("flowDistanceCost")));
+    return assembly;
+}
+
+void verifyRepeatsAndOffsets()
+{
+    std::printf("== (j) Repeated components, offset / clip ==\n");
+    {
+        // flow 22 + 0.5 x 22^2 = 264.
+        ConstraintAssembly assembly = copyOf("flowDistanceCost");
+        assembly.addInstances(std::move(
+            copyOf("flowDistanceCost").weight("flowDistanceCost", 0.5).exponent("flowDistanceCost", 2.0)));
+        QuadraticAssignmentProblem p = sideIdentity();
+        DecomposedCalculator calculator;
+        assembly.into(calculator);
+        const Score score = scoreWith(calculator, p);
+        check(score.hard == 0 && score.soft == -264.0, "flow + 0.5 x flow^2: -(22 + 242) soft");
+        const Costs entries = calculator.constraintCosts();
+        check(entries.size() == 2 && entries[0].unitCosts == entries[1].unitCosts
+                  && entries[0].unitCosts == std::vector<double>{22.0} && entries[1].weight == 0.5
+                  && entries[1].exponent == 2.0 && entries[1].defaultWeight == 1.0
+                  && entries[0].name == entries[1].name,
+              "two instances, the same raw total, each with its own knobs");
+    }
+    {
+        ConstraintAssembly assembly = copyOf("locationCapacityCost");
+        assembly.addInstances(copyOf("locationCapacityCost"));
+        check(scoreOf(std::move(assembly), sideIdentity()).hard == -4, "capacity picked twice: 2 x 2");
+    }
+    {
+        const QuadraticAssignmentProblem p = sideIdentity();
+        check(scoreOf(copyOf("locationCapacityCost").offset("locationCapacityCost", 1.0), p).hard == -1,
+              "capacity threshold offset 1 on [2, 0]: 1 + 0");
+        check(scoreOf(copyOf("locationCapacityCost")
+                          .offset("locationCapacityCost", 1.0)
+                          .clip("locationCapacityCost", false),
+                      p)
+                      .hard
+                  == 0,
+              "capacity literal offset 1 on [2, 0]: (2 - 1) + (0 - 1), both locations in scope");
+        check(scoreOf(copyOf("locationCapacityCost")
+                          .offset("locationCapacityCost", 2.5)
+                          .clip("locationCapacityCost", false),
+                      p)
+                      .hard
+                  == 4,
+              "a hard literal offset rounds per location: llround(-0.5) + llround(-2.5) = -4, +4 hard");
+        check(scoreOf(copyOf("pinnedAssignmentsCost")
+                          .offset("pinnedAssignmentsCost", 1.0)
+                          .clip("pinnedAssignmentsCost", false),
+                      p)
+                      .hard
+                  == 0,
+              "pinned literal offset 1 on [1, 0]: only L1 is evaluated, 1 - 1 = 0 (L2 is not charged)");
+        check(scoreOf(copyOf("pinnedAssignmentsCost").offset("pinnedAssignmentsCost", -1.0), p).hard == -2,
+              "pinned threshold offset -1: the broken pin costs 1 + 1");
+        check(scoreOf(copyOf("pinnedAssignmentsCost")
+                          .offset("pinnedAssignmentsCost", -1.0)
+                          .clip("pinnedAssignmentsCost", false),
+                      p)
+                      .hard
+                  == -2,
+              "pinned literal offset -1: L1 only, 1 + 1 (L2 is outside the scope)");
+        check(scoreOf(copyOf("flowDistanceCost").offset("flowDistanceCost", 20.0), p).soft == -2.0,
+              "flow threshold offset 20 on 22: -2 soft");
+        check(scoreOf(copyOf("flowDistanceCost").offset("flowDistanceCost", 30.0).clip("flowDistanceCost", false), p)
+                      .soft
+                  == 8.0,
+              "flow literal offset 30 on 22: shaped once, 22 - 30 = -8, +8 soft");
+        check(scoreOf(copyOf("assignmentCost").offset("assignmentCost", -5.0), p).soft == -20.0,
+              "assignment threshold offset -5 on 15: -20 soft");
+    }
+    {
+        // The scoped side constraints on an all-zero solution: a literal
+        // offset charges (#evaluated locations) x -offset, not 3 x.
+        const QuadraticAssignmentProblem p = scopedInstance();
+        check(scoreOf(defaultConstraints().only({"pinnedAssignmentsCost", "forbiddenAssignmentsCost",
+                                                 "locationCapacityCost"}),
+                      p)
+                      .hard
+                  == 0,
+              "the scoped instance at the identity: every side constraint is 0");
+        for (const char *name : {"pinnedAssignmentsCost", "forbiddenAssignmentsCost", "locationCapacityCost"})
+        {
+            check(scoreOf(copyOf(name).offset(name, 2.0).clip(name, false), p).hard == 2,
+                  std::string(name) + " literal offset 2: one evaluated location, +2 hard (not +6)");
+            check(scoreOf(copyOf(name).offset(name, 2.0), p).hard == 0,
+                  std::string(name) + " threshold offset 2: 0");
+        }
+        DecomposedCalculator calculator;
+        defaultConstraints().into(calculator);
+        QuadraticAssignmentProblem q = p;
+        scoreWith(calculator, q);
+        const Costs entries = calculator.constraintCosts();
+        check(entries.size() == 5 && entries[0].scoped && entries[0].units == std::vector<int>{0}
+                  && entries[1].scoped && entries[1].units == std::vector<int>{1} && entries[2].scoped
+                  && entries[2].units == std::vector<int>{1} && !entries[3].scoped && !entries[4].scoped
+                  && entries[0].unitCosts.size() == 3,
+              "constraintCosts(): pinned units [0], forbidden [1], capacity [1]; the objectives unscoped");
+    }
+    {
+        // Random walk: incremental == a fresh calculator of the same assembly.
+        int mismatches = 0;
+        int checks = 0;
+        double drift = 0.0;
+        for (int round = 0; round < 3; ++round)
+        {
+            QuadraticAssignmentProblem p = randomInstance(12, 17 + round);
+            std::mt19937_64 rng(321 + round);
+            place(p, randomPermutation(12, rng));
+            ScoreCalculator::prepare(p);
+            DecomposedCalculator calculator;
+            repeatedAssembly().into(calculator);
+            optimaru::ScoreDirector<QuadraticAssignmentProblem> director(p, calculator);
+            std::uniform_int_distribution<int> facility(0, 11);
+            std::uniform_int_distribution<int> kind(0, 9);
+            for (int step = 0; step < 1000; ++step, ++checks)
+            {
+                const int a = facility(rng);
+                const int b = facility(rng);
+                const int what = kind(rng);
+                const bool accept = (step % 3) != 0;
+                const QuadraticAssignmentProblem before = p;
+                director.beginMoveEvaluation();
+                if (what < 7)
+                {
+                    const int la = p.facilities[a].location;
+                    const int lb = p.facilities[b].location;
+                    director.beginVariableChanges();
+                    director.changeVariable(a, lb);
+                    director.changeVariable(b, la);
+                    director.endVariableChanges();
+                }
+                else if (what < 9)
+                {
+                    director.changeVariable(a, p.facilities[a].location < 0 ? facility(rng) : -1);
+                }
+                else
+                {
+                    director.changeVariable(a, facility(rng));
+                }
+                director.calculateScore();
+                if (!accept)
+                {
+                    director.beginMoveRollback();
+                    director.beginVariableChanges();
+                    for (int f = 0; f < p.facilityCount(); ++f)
+                    {
+                        if (p.facilities[f].location != before.facilities[f].location)
+                            director.changeVariable(f, before.facilities[f].location);
+                    }
+                    director.endVariableChanges();
+                }
+                director.endMoveEvaluation(accept);
+                const Score incremental = director.calculateScore();
+                DecomposedCalculator fresh;
+                repeatedAssembly().into(fresh);
+                QuadraticAssignmentProblem copy = p;
+                const Score full = scoreWith(fresh, copy);
+                drift = std::max(drift, std::fabs(full.soft - incremental.soft));
+                if (!optimaru::scoresAgree(incremental, full) && ++mismatches <= 3)
+                {
+                    std::printf("  MISMATCH round %d step %d: incremental=%s full=%s\n", round, step,
+                                incremental.toString().c_str(), full.toString().c_str());
+                }
+            }
+        }
+        std::printf("    largest soft drift %.3g\n", drift);
+        check(mismatches == 0, std::to_string(checks)
+                                   + " moves (accepted and undone) with repeated, shifted components: "
+                                     "incremental == fresh");
+    }
+    {
+        QuadraticAssignmentProblem p = randomInstance(10, 57);
+        DecomposedCalculator calculator;
+        repeatedAssembly().into(calculator);
+        Solver::Config config;
+        config.spentLimit = std::chrono::seconds(60);
+        config.stepCountLimit = 1500;
+        config.randomSeed = 3;
+        config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+        bool ok = true;
+        try
+        {
+            Solver(config).solve(p, calculator);
+        }
+        catch (const std::exception &error)
+        {
+            std::printf("  %s\n", error.what());
+            ok = false;
+        }
+        DecomposedCalculator fresh;
+        repeatedAssembly().into(fresh);
+        QuadraticAssignmentProblem copy = p;
+        check(ok && p.isBijection() && p.score && optimaru::scoresAgree(*p.score, scoreWith(fresh, copy)),
+              "FULL_ASSERT solve with repeated, shifted components: no corruption, a bijection, the "
+              "score == a fresh recompute");
+    }
+    std::printf("\n");
+}
+
 }  // namespace
 
 int main()
@@ -516,6 +791,7 @@ int main()
     verifyNames();
     verifyRawCostsByHand();
     verifyCatalog();
+    verifyRepeatsAndOffsets();
     if (failures != 0)
     {
         std::printf("%d check(s) FAILED\n", failures);

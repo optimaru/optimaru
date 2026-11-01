@@ -26,6 +26,7 @@ from quadratic_assignment import solve as engine_solve
 from quadratic_assignment.constraints import (
     AssignmentCost,
     FlowDistanceCost,
+    ForbiddenAssignmentsCost,
     LocationCapacityCost,
     PinnedAssignmentsCost,
     get_constraints,
@@ -252,7 +253,7 @@ def test_cpsat_defaults_are_the_engine_defaults():
         assert entry["reward"] == row.reward
         assert entry["default_enabled"] == row.default_enabled
         assert entry["kind"] == "either"  # every quadratic-assignment constraint is flippable
-        assert entry["params"] == {"weight": None, "hard": None, "exponent": 1.0}
+        assert entry["params"] == {"weight": None, "hard": None, "exponent": 1.0, "offset": 0.0, "clip": True}
 
 
 def test_demoting_a_hard_constraint_scores_like_the_engine():
@@ -293,3 +294,97 @@ def test_selections_by_name_and_mapping_work():
     assert (solved.score_hard, solved.score_soft) == (0, -26.0)  # L1<-F2, L2<-F1: 3 + 23
     with pytest.raises(ValueError, match="unknown constraint"):
         solve(Model.model_validate(SIDE), time_limit_seconds=1, constraints=["minimize_flow_distance"])
+
+
+# --- 0.3.0: repeated picks and offset / clip ---------------------------------------
+
+SELECTIONS = {
+    "repeat": [
+        PinnedAssignmentsCost(),
+        PinnedAssignmentsCost(weight=2),
+        FlowDistanceCost(),
+        FlowDistanceCost(weight=3),
+    ],
+    "repeat-literal": [
+        ForbiddenAssignmentsCost(offset=1, clip=False),
+        ForbiddenAssignmentsCost(weight=2, offset=-1),
+        LocationCapacityCost(),
+        AssignmentCost(offset=5, clip=False),
+        FlowDistanceCost(),
+    ],
+    "hard-offsets": [
+        PinnedAssignmentsCost(offset=1, clip=False),
+        LocationCapacityCost(offset=2),
+        LocationCapacityCost(weight=2, offset=3, clip=False),
+        ForbiddenAssignmentsCost(offset=-2, clip=False),
+        AssignmentCost(offset=8),
+        FlowDistanceCost(offset=60, clip=False),
+        FlowDistanceCost(offset=-5),
+    ],
+    "identical-twice": [LocationCapacityCost(), LocationCapacityCost(), AssignmentCost()],
+}
+
+
+@pytest.mark.parametrize("selection", list(SELECTIONS.values()), ids=list(SELECTIONS))
+def test_the_cpsat_terms_equal_the_engine_on_every_permutation(selection):
+    """Pin each of the 120 permutations of EVERYTHING: the CP-SAT objective's per-level value is
+    the engine's score of that permutation under the same repeated / shifted picks, exactly. The
+    side constraints are scoped (not every location is fixed, forbidden or capacitated), so a
+    literal offset matches only when CP-SAT adds terms for exactly the engine's locations."""
+    built = build(Model.model_validate(EVERYTHING), selection)
+    built.objective.minimize()
+    facilities = EVERYTHING["facilities"]
+    for perm in permutations(facilities):
+        at = [facilities.index(facility) for facility in perm]
+        model = built.model
+        model.clear_assumptions()
+        model.add_assumptions(
+            [
+                literal if at[location] == facility else literal.Not()
+                for (facility, location), literal in built.context.assigned.items()
+            ]
+        )
+        solver = cp_model.CpSolver()
+        solver.parameters.num_search_workers = 1
+        assert solver.solve(model) == cp_model.OPTIMAL
+        core = _assigned(EVERYTHING, perm).to_core()
+        engine = score(constraint_costs(core, selection), selection)
+        assert built.objective.score(solver) == {"hard": engine.hard, "soft": engine.soft}, perm
+        # Re-pricing the default costs (each name once) gives the same per instance key.
+        assert built.objective.score_costs(constraint_costs(core)) == {"hard": engine.hard, "soft": engine.soft}
+
+
+@pytest.mark.parametrize("selection", list(SELECTIONS.values()), ids=list(SELECTIONS))
+def test_repeated_and_shifted_picks_reach_the_brute_force_optimum(selection):
+    solved = solve(Model.model_validate(EVERYTHING), time_limit_seconds=20, constraints=selection)
+    assert (solved.score_hard, solved.score_soft) == pytest.approx(_brute_force(EVERYTHING, selection))
+    engine = score(constraint_costs(solved.to_core(), selection), selection)
+    assert (solved.score_hard, solved.score_soft) == pytest.approx(tuple(engine))
+
+
+def test_mapping_selections_repeat_and_shift_like_specs():
+    """The server's {name, weight, offset, clip} dicts pick the same instances as specs."""
+    specs = [FlowDistanceCost(), FlowDistanceCost(weight=3, offset=20, clip=False)]
+    dicts = [{"name": "flow_distance_cost"}, {"name": "flow_distance_cost", "weight": 3, "offset": 20, "clip": False}]
+    by_specs = solve(Model.model_validate(SIDE), time_limit_seconds=5, constraints=specs)
+    assert solve(Model.model_validate(SIDE), time_limit_seconds=5, constraints=dicts) == by_specs
+    assert (by_specs.score_hard, by_specs.score_soft) == (0, -(22 + 3 * (22 - 20)))  # the identity: 22 < 23
+
+
+def test_a_fractional_offset_is_refused_by_cpsat():
+    with pytest.raises(ValueError, match="offset must be an integer for CP-SAT"):
+        solve(Model.model_validate(SIDE), time_limit_seconds=1, constraints=[FlowDistanceCost(offset=0.5)])
+
+
+@pytest.mark.parametrize(
+    ("pick", "data"),
+    [(FlowDistanceCost(offset=1), "flows and distances"), (AssignmentCost(offset=-1, clip=False), "assignment costs")],
+)
+def test_an_offset_on_a_total_that_may_be_negative_is_refused(pick, data):
+    """ObjectiveBuilder.add shapes a non-negative range: with negative flows, distances or direct
+    costs (SIGNED) an objective's offset is refused instead of shaped wrongly; offset 0 still works."""
+    with pytest.raises(ValueError, match=f"offset needs non-negative {data} for CP-SAT"):
+        solve(Model.model_validate(SIGNED), time_limit_seconds=1, constraints=[PinnedAssignmentsCost(), pick])
+    plain = [PinnedAssignmentsCost(), type(pick)()]
+    solved = solve(Model.model_validate(SIGNED), time_limit_seconds=10, constraints=plain)
+    assert (solved.score_hard, solved.score_soft) == pytest.approx(_brute_force(SIGNED, plain))

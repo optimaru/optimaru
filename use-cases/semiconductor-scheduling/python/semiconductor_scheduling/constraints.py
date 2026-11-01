@@ -2,32 +2,50 @@
 
 The default path (``solve(problem)``) scores all 20 constraints at their default weights.
 This module is the alternative path next to it: pick constraints, change weights, flip
-hard/soft, and pass the list to ``solve(problem, constraints=...)`` or
-``calculate_score(problem, constraints=...)``::
+hard/soft, shape the cost, and pass the list to ``solve(problem, constraints=...)`` or
+``calculate_score(problem, constraints=...)``. A constraint list reads one way: one class
+call per constraint::
 
     import semiconductor_scheduling as fab
     from semiconductor_scheduling.constraints import (
-        WeightedTardinessCost, get_constraints, machine_eligibility_cost, makespan_cost,
+        MachineEligibilityCost, MakespanCost, WeightedTardinessCost, get_constraints,
     )
 
     fab.solve(problem, constraints=get_constraints())                       # defaults as-is
-    fab.solve(problem, constraints=[machine_eligibility_cost, makespan_cost,
+    fab.solve(problem, constraints=[MachineEligibilityCost(), MakespanCost(),
                                     WeightedTardinessCost(weight=50)])      # picked
 
-Default instances (``machine_eligibility_cost``, ..., ``makespan_cost``) live at module
-level. Only listed constraints are scored — leave one out and its term disappears from the
-score.
+Only listed constraints are scored — leave one out and its term disappears from the
+score. (The module also carries ready-made default instances: ``makespan_cost`` is
+``MakespanCost()``, and so on.)
 
-Every spec takes ``(weight=None, hard=None, exponent=1.0)``:
+Every spec takes five knobs:
 
 - ``weight``   linear multiplier on the constraint cost. ``None`` = the component default
-               (every constraint 1, weighted_tardiness_cost 10); ``constraint_info()``
+               (every constraint 1, WeightedTardinessCost 10); ``constraint_info()``
                reports them. The problem carries no weights.
 - ``hard``     ``True`` = hard, ``False`` = soft, ``None`` = the default level (the first
                14 constraints are hard, the last 6 soft). Every constraint flips both ways.
 - ``exponent`` sign-preserving power shaping of the constraint's TOTAL raw cost:
                ``weight * total ** exponent`` (every constraint is global; 0.1.x shaped
                each item — a lot, a pair, a window — before summing).
+- ``offset``   (keyword) shifts that shaping of the total; 0.0 = none.
+- ``clip``     (keyword) ``True`` (the default) counts only what lies beyond the
+               offset, ``max(0, total - offset) ** exponent``; ``False`` shapes
+               ``total - offset`` as it is, so a total below the offset — a raw 0
+               included — lowers the penalty.
+
+The same constraint may be picked several times; each pick is scored on its own with
+its own knobs and the picks add up. The makespan plus a steep penalty on every minute
+beyond 480::
+
+    fab.solve(problem, constraints=[
+        *get_constraints()[:-1],
+        MakespanCost(),
+        MakespanCost(weight=100, offset=480),
+    ])
+
+``fab.constraint_costs(problem, picks)`` keys the second pick ``"makespan_cost#2"``.
 
 Names (``name``) are the C++ component names in snake_case
 (``MachineEligibilityCost`` -> ``machine_eligibility_cost``); check them with
@@ -414,7 +432,7 @@ class MakespanCost(Constraint):
     )
 
 
-#: Instances at the default weights (weight=None). Reference them directly when picking.
+#: Ready-made default instances (``makespan_cost`` is ``MakespanCost()``).
 machine_eligibility_cost = MachineEligibilityCost()
 lot_route_precedence_cost = LotRoutePrecedenceCost()
 machine_capacity_cost = MachineCapacityCost()
@@ -466,7 +484,8 @@ def get_constraints(constraints: list[Constraint] | None = None) -> list[Constra
 
     When `constraints` is given, that list is used as-is — only the listed constraints are
     scored. Same contract as the C++ applyConstraints: an empty list (most likely a filter
-    that came out empty) and a constraint named twice raise ValueError.
+    that came out empty) raises ValueError; a constraint named several times is scored once
+    per pick, each with its own knobs.
     """
     return select(constraints, _DEFAULTS)
 
@@ -480,10 +499,12 @@ def score(costs: dict, constraints: list[Constraint] | None = None) -> Score:
 
         raw = fab.constraint_costs(problem)
         score(raw)                                              # default set
-        score(raw, [machine_eligibility_cost, WeightedTardinessCost(weight=50)])
+        score(raw, [MachineEligibilityCost(), WeightedTardinessCost(weight=50)])
+        score(raw, [MakespanCost(), MakespanCost(weight=100, offset=480)])
 
-    The arithmetic matches the engine: ``weight * total ** exponent`` per constraint, hard
-    contributions rounded per constraint (half away from zero). Unknown names raise
+    The arithmetic matches the engine: ``weight * shape(total, exponent, offset, clip)`` per
+    constraint, hard contributions rounded per constraint (half away from zero). A second
+    pick of a constraint reads the same raw total with its own knobs. Unknown names raise
     ValueError.
     """
     return score_costs(costs, get_constraints(constraints))

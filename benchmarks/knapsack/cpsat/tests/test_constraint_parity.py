@@ -21,9 +21,12 @@ import pytest
 from knapsack import constraint_costs, constraint_info, list_constraints
 from knapsack.constraints import (
     ForbiddenItemsCost,
+    ItemDependencyCost,
     KnapsackCapacityCost,
+    MandatoryItemsCost,
     ResourceCapacityCost,
     SelectedValueCost,
+    SelectionGroupBoundsCost,
     get_constraints,
     score,
 )
@@ -241,7 +244,7 @@ def test_cpsat_defaults_are_the_engine_defaults():
         assert entry["reward"] == row.reward
         assert entry["default_enabled"] == row.default_enabled
         assert entry["kind"] == ("soft" if row.reward else "either")
-        assert entry["params"] == {"weight": None, "hard": None, "exponent": 1.0}
+        assert entry["params"] == {"weight": None, "hard": None, "exponent": 1.0, "offset": 0.0, "clip": True}
 
 
 def test_demoting_a_hard_constraint_scores_like_the_engine():
@@ -286,3 +289,76 @@ def test_selections_by_name_and_mapping_work():
     assert (solved.score_hard, solved.score_soft) == (0, 16.0)
     with pytest.raises(ValueError, match="unknown constraint"):
         solve(Model.model_validate(PLAIN), time_limit_seconds=1, constraints=["capacity"])
+
+
+# --- 0.3.0: repeated picks and offset / clip ---------------------------------------
+
+SELECTIONS = {
+    "repeat": [MandatoryItemsCost(), MandatoryItemsCost(weight=2), SelectedValueCost(), SelectedValueCost(weight=3)],
+    "repeat-literal": [
+        KnapsackCapacityCost(offset=2, clip=False),
+        KnapsackCapacityCost(weight=3, offset=-1),
+        ResourceCapacityCost(),
+        ResourceCapacityCost(offset=1, clip=False),
+        SelectedValueCost(offset=5, clip=False),
+    ],
+    "hard-offsets": [
+        ForbiddenItemsCost(offset=1),
+        ForbiddenItemsCost(weight=2, offset=2, clip=False),
+        SelectionGroupBoundsCost(offset=-2, clip=False),
+        SelectionGroupBoundsCost(offset=1),
+        ItemDependencyCost(offset=1),
+        MandatoryItemsCost(hard=False, offset=1, clip=False),
+        SelectedValueCost(offset=10),
+        SelectedValueCost(offset=-3),
+    ],
+    "identical-twice": [ItemDependencyCost(), ItemDependencyCost(), SelectedValueCost()],
+}
+
+
+@pytest.mark.parametrize("selection", list(SELECTIONS.values()), ids=list(SELECTIONS))
+def test_the_cpsat_terms_equal_the_engine_on_every_selection(selection):
+    """Pin each of the 64 selections of EVERYTHING: the CP-SAT objective's per-level value is
+    the engine's score of that selection under the same repeated / shifted picks, exactly."""
+    built = build(Model.model_validate(EVERYTHING), selection)
+    built.objective.minimize()
+    for chosen in product((False, True), repeat=len(EVERYTHING["items"])):
+        model = built.model
+        model.clear_assumptions()
+        model.add_assumptions(
+            [literal if pick else literal.Not() for literal, pick in zip(built.context.chosen, chosen, strict=True)]
+        )
+        solver = cp_model.CpSolver()
+        solver.parameters.num_search_workers = 1
+        assert solver.solve(model) == cp_model.OPTIMAL
+        core = _selected(EVERYTHING, chosen).to_core()
+        engine = score(constraint_costs(core, selection), selection)
+        assert built.objective.score(solver) == {"hard": engine.hard, "soft": engine.soft}, chosen
+        # Re-pricing the default costs (each name once) gives the same per instance key.
+        assert built.objective.score_costs(constraint_costs(core)) == {"hard": engine.hard, "soft": engine.soft}
+
+
+@pytest.mark.parametrize("selection", list(SELECTIONS.values()), ids=list(SELECTIONS))
+def test_repeated_and_shifted_picks_reach_the_brute_force_optimum(selection):
+    solved = solve(Model.model_validate(EVERYTHING), time_limit_seconds=10, constraints=selection)
+    assert (solved.score_hard, solved.score_soft) == pytest.approx(_brute_force(EVERYTHING, selection))
+    engine = score(constraint_costs(solved.to_core(), selection), selection)
+    assert (solved.score_hard, solved.score_soft) == pytest.approx(tuple(engine))
+
+
+def test_mapping_selections_repeat_and_shift_like_specs():
+    """The server's {name, weight, offset, clip} dicts pick the same instances as specs."""
+    specs = [KnapsackCapacityCost(), SelectedValueCost(), SelectedValueCost(weight=3, offset=4, clip=False)]
+    dicts = [
+        {"name": "knapsack_capacity_cost"},
+        {"name": "selected_value_cost"},
+        {"name": "selected_value_cost", "weight": 3, "offset": 4, "clip": False},
+    ]
+    by_specs = solve(Model.model_validate(PLAIN), time_limit_seconds=5, constraints=specs)
+    assert solve(Model.model_validate(PLAIN), time_limit_seconds=5, constraints=dicts) == by_specs
+    assert (by_specs.score_hard, by_specs.score_soft) == (0, 16.0 + 3 * (16 + 4))
+
+
+def test_a_fractional_offset_is_refused_by_cpsat():
+    with pytest.raises(ValueError, match="offset must be an integer for CP-SAT"):
+        solve(Model.model_validate(PLAIN), time_limit_seconds=1, constraints=[KnapsackCapacityCost(offset=0.5)])

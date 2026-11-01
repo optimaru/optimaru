@@ -107,8 +107,10 @@ def test_get_constraints_contract():
     assert get_constraints() == list(specs._DEFAULTS)
     with pytest.raises(ValueError, match="must not be empty"):
         get_constraints([])
-    with pytest.raises(ValueError, match="more than once"):
-        get_constraints([specs.makespan_cost, specs.makespan_cost])
+    with pytest.raises(ValueError, match="must not be empty"):
+        fab.constraint_costs(_problem(), [])
+    # Since 0.3.0 a constraint may be picked several times: each pick is its own instance.
+    assert get_constraints([specs.MakespanCost(), specs.MakespanCost()]) == [specs.MakespanCost()] * 2
     with pytest.raises(TypeError, match="registry `name`"):
 
         class Nameless(Constraint):
@@ -246,11 +248,20 @@ def test_specs_validate_their_knobs(kwargs, error):
 def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     negative = SimpleNamespace(name="makespan_cost", weight=-2.0, hard=None, exponent=1.0)
     flat = SimpleNamespace(name="makespan_cost", weight=None, hard=None, exponent=0.0)
-    for pick, message in ((negative, "weight must be finite and >= 0"), (flat, "exponent must be finite and > 0")):
+    unbounded = SimpleNamespace(name="makespan_cost", weight=None, hard=None, exponent=1.0, offset=float("inf"))
+    for pick, message in (
+        (negative, "weight must be finite and >= 0"),
+        (flat, "exponent must be finite and > 0"),
+        (unbounded, "offset must be finite, not inf"),
+    ):
         with pytest.raises(ValueError, match=message):
             fab.solve(_problem(), time_limit_seconds=0, constraints=[pick])
         with pytest.raises(ValueError, match=message):
             fab.calculate_score(_problem(), [pick])
+        with pytest.raises(ValueError, match=message):
+            fab.constraint_costs(_problem(), [pick])
+    with pytest.raises(ValueError, match="offset must be finite, not nan"):
+        specs.MakespanCost(offset=float("nan"))
 
 
 @pytest.mark.parametrize(
@@ -259,6 +270,10 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
         ({"weight": True}, "weight must be a number or None, not True"),
         ({"hard": 1}, "hard must be True, False or None, not 1"),
         ({"hard": "x"}, "hard must be True, False or None, not 'x'"),
+        ({"offset": "5"}, "offset must be a number, not '5'"),
+        ({"offset": False}, "offset must be a number, not False"),
+        ({"clip": 1}, "clip must be True or False, not 1"),
+        ({"clip": "no"}, "clip must be True or False, not 'no'"),
     ],
 )
 def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
@@ -308,3 +323,178 @@ def _steps(count: int) -> fab.SolverConfig:
     config = fab.SolverConfig()
     config.step_count_limit = count
     return config
+
+
+# --- 0.3.0: repeated picks and the offset / clip knobs ------------------------------
+
+# The busy instance's raw totals the hand cases below read (a precondition test pins them).
+BUSY = {
+    "makespan_cost": 11.0,
+    "cycle_time_cost": 11.0,
+    "weighted_tardiness_cost": 12.0,
+    "lot_route_precedence_cost": 26.0,
+    "pinned_assignments_cost": 2.0,
+    "machine_capacity_cost": 0.0,
+}
+
+
+def _engine(problem: SemiconductorScheduleModel, picks):
+    """The C++ assembly's score of the problem's assignments under ``picks``."""
+    return fab.calculate_score(problem.model_copy(deep=True), picks)
+
+
+def test_the_busy_instance_holds_the_totals_the_hand_cases_read():
+    raw = fab.constraint_costs(_busy_problem())
+    assert {name: raw[name]["costs"][0] for name in BUSY} == BUSY
+
+
+REPEAT = [specs.MakespanCost(), specs.MakespanCost(weight=0.5, exponent=2)]
+
+
+def test_a_repeated_pick_by_hand():
+    """makespan x 1 plus 0.5 x makespan^2 on 11: 11 + 60.5 = 71.5 soft."""
+    problem = _busy_problem()
+    raw = fab.constraint_costs(problem, REPEAT)
+    assert list(raw) == ["makespan_cost", "makespan_cost#2"]
+    first, second = raw.values()
+    assert first["costs"] == second["costs"] == [11.0]
+    assert (first["weight"], first["exponent"], second["weight"], second["exponent"]) == (1.0, 1.0, 0.5, 2.0)
+    assert first["name"] == second["name"] == "makespan_cost"
+    assert second["default_weight"] == 1.0
+    expected = (0, -(11 + 0.5 * 11**2))
+    assert expected == (0, -71.5)
+    assert score(raw, REPEAT) == expected
+    # The default costs hold the name once; the second pick reads the same raw total.
+    assert score(fab.constraint_costs(problem), REPEAT) == expected
+    assert _engine(problem, REPEAT) == expected
+
+
+def test_identical_picks_count_twice():
+    picks = [specs.CycleTimeCost(), specs.CycleTimeCost()]
+    problem = _busy_problem()
+    assert score(fab.constraint_costs(problem), picks) == (0, -22.0)
+    assert _engine(problem, picks) == (0, -22.0)
+    assert list(fab.constraint_costs(problem, picks)) == ["cycle_time_cost", "cycle_time_cost#2"]
+
+
+def test_the_keys_follow_the_pick_order_of_each_name():
+    picks = [
+        specs.CycleTimeCost(weight=1),
+        specs.MakespanCost(),
+        specs.CycleTimeCost(weight=2),
+        specs.PinnedAssignmentsCost(),
+        specs.CycleTimeCost(weight=3),
+    ]
+    problem = _busy_problem()
+    raw = fab.constraint_costs(problem, picks)
+    assert {key: entry["weight"] for key, entry in raw.items()} == {
+        "pinned_assignments_cost": 1.0,
+        "cycle_time_cost": 1.0,
+        "cycle_time_cost#2": 2.0,
+        "cycle_time_cost#3": 3.0,
+        "makespan_cost": 1.0,
+    }
+    assert score(raw, picks) == (-2, -(11 * 6 + 11))
+    assert _engine(problem, picks) == score(raw, picks)
+
+
+@pytest.mark.parametrize(
+    ("pick", "expected"),
+    [
+        # Every constraint is global: the offset shapes its single total (BUSY).
+        (specs.MakespanCost(offset=5), (0, -6.0)),
+        (specs.MakespanCost(offset=15), (0, 0.0)),
+        (specs.MakespanCost(offset=15, clip=False), (0, 4.0)),  # 11 - 15 below the offset: a bonus
+        (specs.MakespanCost(offset=5, exponent=2), (0, -36.0)),
+        (MachineCapacityCost(offset=3, clip=False), (3, 0.0)),  # a raw 0 is charged in literal mode
+        (MachineCapacityCost(offset=-1), (0, 0.0)),  # ...and left alone by the threshold
+        (MachineCapacityCost(offset=-1, clip=False), (-1, 0.0)),
+        (specs.PinnedAssignmentsCost(offset=-1), (-3, 0.0)),  # a negative offset adds to a non-zero total
+        (specs.LotRoutePrecedenceCost(offset=0.5, clip=False), (-26, 0.0)),  # 25.5 rounds half away: 26
+        (MachineCapacityCost(weight=3, offset=0.5, clip=False), (2, 0.0)),  # 3 x -0.5 = -1.5 -> -2
+        (WeightedTardinessCost(offset=2), (0, -100.0)),  # the default weight 10 x (12 - 2)
+        (WeightedTardinessCost(weight=0, offset=2, clip=False), (0, 0.0)),  # weight 0 contributes 0
+        (specs.CycleTimeCost(hard=True, offset=1), (-10, 0.0)),
+    ],
+)
+def test_offsets_by_hand_on_both_paths(pick, expected):
+    """threshold sign(x) max(0, |x| - offset)^e and literal (x - offset)^e: Python mirror == engine == hand."""
+    problem = _busy_problem()
+    assert score(fab.constraint_costs(problem), [pick]) == expected
+    raw = fab.constraint_costs(problem, [pick])
+    entry = next(iter(raw.values()))
+    assert (entry["offset"], entry["clip"]) == (float(pick.offset), pick.clip)
+    assert "units" not in entry  # every constraint is global, none is scoped
+    assert score(raw, [pick]) == expected
+    assert _engine(problem, [pick]) == expected
+
+
+def test_offset_zero_reproduces_the_0_2_0_scores():
+    """offset 0 is the plain shaping in both modes, so every 0.2.0 selection scores the same."""
+    plain = [MaxQueueTimeCost(weight=0.5), specs.CycleTimeCost(exponent=2), WeightedTardinessCost(exponent=1.5)]
+    shifted = [
+        MaxQueueTimeCost(weight=0.5, offset=0.0, clip=False),
+        specs.CycleTimeCost(exponent=2, offset=0),
+        WeightedTardinessCost(exponent=1.5, offset=0.0, clip=False),
+    ]
+    problem = _busy_problem()
+    raw = fab.constraint_costs(problem)
+    assert score(raw, shifted) == score(raw, plain)
+    assert _engine(problem, plain) == _engine(problem, shifted) == score(raw, plain)
+    for entry in raw.values():
+        assert (entry["offset"], entry["clip"]) == (0.0, True)
+
+
+def test_score_equals_the_engine_with_repeats_and_offsets():
+    """Random pick lists with repeats and offsets in both modes: the mirror == the C++ assembly."""
+    rng = random.Random(11)
+    for seed in range(25):
+        problem = _problem(seed)
+        raw = fab.constraint_costs(problem)
+        picks = []
+        for spec in get_constraints():
+            for _ in range(rng.choice([0, 1, 1, 2])):
+                picks.append(
+                    type(spec)(
+                        weight=rng.choice([None, 0, 0.5, 2]),
+                        hard=rng.choice([None, True, False]),
+                        exponent=rng.choice([1.0, 1.0, 2.0, 0.5]),
+                        offset=rng.choice([0.0, 0.0, 1.0, 2.5, -1.0, 10.0]),
+                        clip=rng.choice([True, False]),
+                    )
+                )
+        if not picks:
+            continue
+        engine = _engine(problem, picks)
+        assert score(fab.constraint_costs(problem, picks), picks) == score(raw, picks)
+        python = score(raw, picks)
+        assert python.hard == engine.hard
+        assert python.soft == pytest.approx(engine.soft)
+
+
+@pytest.mark.parametrize(
+    "picks",
+    [
+        [*get_constraints(), *REPEAT],
+        [
+            *get_constraints()[:14],
+            specs.LotRoutePrecedenceCost(weight=2, offset=1, clip=False),
+            MachineCapacityCost(offset=1),
+            specs.MakespanCost(offset=5, clip=False),
+            specs.MakespanCost(weight=0.25, exponent=2, offset=10),
+            WeightedTardinessCost(offset=-3),
+            specs.CycleTimeCost(weight=0.5, offset=20, clip=False),
+        ],
+    ],
+    ids=["repeat", "repeat-and-offsets"],
+)
+def test_full_assert_solves_with_repeats_and_offsets(picks):
+    """FULL_ASSERT re-checks the incremental score against a full recompute after every move."""
+    problem = _problem(8)
+    result = fab.solve(problem, random_seed=3, full_assert=True, config=_steps(300), constraints=picks)
+    raw = fab.constraint_costs(problem, picks)
+    assert len(raw) == len(picks)
+    python = score(raw, picks)
+    assert python.hard == result.hard
+    assert python.soft == pytest.approx(result.soft)
+    assert score(fab.constraint_costs(problem), picks) == python  # the default costs score the repeats too

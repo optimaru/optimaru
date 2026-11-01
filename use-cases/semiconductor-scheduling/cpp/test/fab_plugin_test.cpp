@@ -10,6 +10,11 @@
 //   (g) raw costs by hand through constraintCosts(): a positive and a zero
 //       case per constraint
 //   (h) the catalog: info() == the components' kDefaultWeight / kDefaultLevel
+//   (i) repeated components and the offset / clip knobs: a hand-calculated
+//       repeat, threshold and literal offsets by hand on the totals (a raw 0
+//       counts in literal mode), incremental == a fresh recompute over
+//       random walks (every repeat reads the calculator's one shared schedule
+//       view) and FULL_ASSERT solves with repeated, shifted components
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -380,6 +385,200 @@ void verifyCatalog()
     check(flips, "(h) hard constraints demote, soft ones promote");
 }
 
+// (i) Repeated components and offsets. A repeat is a fresh copy of a
+// default component (another defaultConstraints(), the one name kept, its
+// knobs re-stated) appended with addInstances(), as the Python bindings build
+// it from a pick list. Every component is global: the offset shapes the
+// instance's total. The copies share the calculator's one "fab.schedule"
+// view, which resets once per calculator reset and decodes once per score.
+ConstraintAssembly copyOf(const std::string &name)
+{
+    ConstraintAssembly copy = defaultConstraints();
+    copy.only({name});
+    return copy;
+}
+
+Score scoreOf(ConstraintAssembly assembly, SemiconductorSchedule s)
+{
+    DecomposedCalculator calculator;
+    std::move(assembly).into(calculator);
+    return scoreWith(calculator, s);
+}
+
+// Every constraint stays in; hard and soft totals repeated or shifted in
+// both modes, a fractional hard weight on a literal offset, a soft one made
+// hard and back.
+ConstraintAssembly repeatedAssembly()
+{
+    ConstraintAssembly assembly = defaultConstraints();
+    assembly.offset("makespanCost", 5.0).clip("makespanCost", false);
+    assembly.offset("machineCapacityCost", 1.0);
+    assembly.addInstances(std::move(copyOf("makespanCost")
+                                        .weight("makespanCost", 0.5)
+                                        .exponent("makespanCost", 2.0)
+                                        .offset("makespanCost", 10.0)));
+    assembly.addInstances(std::move(copyOf("lotRoutePrecedenceCost")
+                                        .weight("lotRoutePrecedenceCost", 1.5)
+                                        .offset("lotRoutePrecedenceCost", 0.5)
+                                        .clip("lotRoutePrecedenceCost", false)));
+    assembly.addInstances(std::move(copyOf("batchFamilyConflictCost").offset("batchFamilyConflictCost", -2.0)));
+    assembly.addInstances(std::move(copyOf("pinnedAssignmentsCost")
+                                        .offset("pinnedAssignmentsCost", -1.0)
+                                        .clip("pinnedAssignmentsCost", false)));
+    assembly.addInstances(std::move(copyOf("weightedTardinessCost")
+                                        .weight("weightedTardinessCost", 0.25)
+                                        .exponent("weightedTardinessCost", 1.5)
+                                        .offset("weightedTardinessCost", 20.0)
+                                        .clip("weightedTardinessCost", false)));
+    assembly.addInstances(std::move(copyOf("cycleTimeCost").hard("cycleTimeCost").offset("cycleTimeCost", 30.0)));
+    assembly.addInstances(std::move(copyOf("machineCapacityCost").soft("machineCapacityCost")));
+    return assembly;
+}
+
+void verifyRepeatsAndOffsets()
+{
+    // fabProblem(): makespan 17, cycle time 46, machine capacity 2, family
+    // conflict 8, max queue time 3, no pins (pinnedAssignmentsCost 0).
+    const SemiconductorSchedule s = fabProblem();
+    {
+        ConstraintAssembly assembly = copyOf("makespanCost");
+        assembly.addInstances(
+            std::move(copyOf("makespanCost").weight("makespanCost", 0.5).exponent("makespanCost", 2.0)));
+        DecomposedCalculator calculator;
+        assembly.into(calculator);
+        SemiconductorSchedule copy = s;
+        const Score score = scoreWith(calculator, copy);
+        check(score.hard == 0 && score.soft == -(17 + 0.5 * 289), "(i) makespan + 0.5 x makespan^2: -161.5 soft");
+        const auto entries = calculator.constraintCosts();
+        check(entries.size() == 2 && entries[0].unitCosts == entries[1].unitCosts
+                  && entries[0].unitCosts == std::vector<double>{17.0} && entries[1].weight == 0.5
+                  && entries[1].exponent == 2.0 && entries[1].defaultWeight == 1.0
+                  && entries[0].name == entries[1].name,
+              "(i) two instances, the same raw total, each with its own knobs");
+        ConstraintAssembly twice = copyOf("machineCapacityCost");
+        twice.addInstances(copyOf("machineCapacityCost"));
+        check(scoreOf(std::move(twice), s).hard == -4, "(i) identical picks count twice: 2 x 2");
+    }
+    check(scoreOf(copyOf("makespanCost").offset("makespanCost", 10.0), s).soft == -7.0,
+          "(i) threshold offset 10 on the makespan 17: -7");
+    check(scoreOf(copyOf("makespanCost").offset("makespanCost", 20.0).clip("makespanCost", false), s).soft == 3.0,
+          "(i) literal offset 20 on 17: 17 - 20 = -3, +3 soft");
+    check(scoreOf(copyOf("pinnedAssignmentsCost")
+                      .offset("pinnedAssignmentsCost", 2.0)
+                      .clip("pinnedAssignmentsCost", false),
+                  s)
+                  .hard
+              == 2,
+          "(i) literal offset 2 on a raw 0 (no pins): charged, +2 hard");
+    check(scoreOf(copyOf("pinnedAssignmentsCost").offset("pinnedAssignmentsCost", -1.0), s).hard == 0,
+          "(i) a negative threshold offset leaves a raw 0 at 0");
+    check(scoreOf(copyOf("pinnedAssignmentsCost")
+                      .offset("pinnedAssignmentsCost", -1.0)
+                      .clip("pinnedAssignmentsCost", false),
+                  s)
+                  .hard
+              == -1,
+          "(i) a negative literal offset charges a raw 0: 0 + 1");
+    check(scoreOf(copyOf("batchFamilyConflictCost").offset("batchFamilyConflictCost", -2.0), s).hard == -10,
+          "(i) a negative threshold offset adds to a non-zero total: 8 + 2");
+    check(scoreOf(copyOf("maxQueueTimeCost").offset("maxQueueTimeCost", 0.5).clip("maxQueueTimeCost", false), s)
+                  .hard
+              == -3,
+          "(i) a hard literal offset rounds the total: 3 - 0.5 = 2.5 -> 3");
+    check(scoreOf(copyOf("pinnedAssignmentsCost")
+                      .weight("pinnedAssignmentsCost", 3.0)
+                      .offset("pinnedAssignmentsCost", 0.5)
+                      .clip("pinnedAssignmentsCost", false),
+                  s)
+                  .hard
+              == 2,
+          "(i) 3 x (0 - 0.5) = -1.5 -> -2, +2 hard");
+    {
+        DecomposedCalculator calculator;
+        copyOf("cycleTimeCost").offset("cycleTimeCost", 2.5).clip("cycleTimeCost", false).into(calculator);
+        SemiconductorSchedule copy = s;
+        scoreWith(calculator, copy);
+        const auto entries = calculator.constraintCosts();
+        check(entries.size() == 1 && entries[0].offset == 2.5 && !entries[0].clip && !entries[0].scoped
+                  && entries[0].unitCosts == std::vector<double>{46.0},
+              "(i) constraintCosts() reports the offset and clip, the raw total unshaped");
+    }
+    {
+        int mismatches = 0;
+        int moves = 0;
+        for (int instance = 0; instance < 30; ++instance)
+        {
+            SemiconductorSchedule w = randomInstance(static_cast<std::uint64_t>(instance) * 37 + 11);
+            w.warmStart = instance % 2 == 0;
+            beginSearch(w);
+            DecomposedCalculator calculator;
+            repeatedAssembly().into(calculator);
+            optimaru::ScoreDirector<SemiconductorSchedule> director(w, calculator);
+            std::mt19937_64 rng(static_cast<std::uint64_t>(instance) + 77);
+            const int n = w.rowCount();
+            for (int m = 0; m < 200; ++m, ++moves)
+            {
+                const int row = static_cast<int>(rng() % static_cast<std::uint64_t>(n));
+                const int old = w.rows[static_cast<std::size_t>(row)].value;
+                if (m % 4 == 3 && n > 1)
+                {
+                    const int other = static_cast<int>(rng() % static_cast<std::uint64_t>(n));
+                    director.beginVariableChanges();
+                    director.changeVariable(row, randomValue(w, rng, false));
+                    director.changeVariable(other, randomValue(w, rng, true));
+                    director.endVariableChanges();
+                }
+                else
+                {
+                    director.changeVariable(row, randomValue(w, rng, true));
+                    if (m % 5 == 0)
+                    {
+                        director.calculateScore();
+                        director.changeVariable(row, old);  // a rejected move
+                    }
+                }
+                const Score incremental = director.calculateScore();
+                SemiconductorSchedule copy = w;
+                DecomposedCalculator fresh;
+                repeatedAssembly().into(fresh);
+                const Score full = scoreWith(fresh, copy);
+                if (!optimaru::scoresAgree(incremental, full) && ++mismatches <= 3)
+                {
+                    std::printf("  MISMATCH instance %d move %d: incremental=%s full=%s\n", instance, m,
+                                incremental.toString().c_str(), full.toString().c_str());
+                }
+            }
+        }
+        check(mismatches == 0, "(i) " + std::to_string(moves)
+                                   + " moves with repeated, shifted components: incremental == fresh");
+    }
+    bool ok = true;
+    try
+    {
+        for (int seed = 0; seed < 4; ++seed)
+        {
+            SemiconductorSchedule w = randomInstance(950 + static_cast<std::uint64_t>(seed));
+            w.warmStart = seed % 2 == 1;
+            DecomposedCalculator calculator;
+            repeatedAssembly().into(calculator);
+            Solver::Config config;
+            config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+            config.stepCountLimit = 300;
+            config.randomSeed = static_cast<std::uint64_t>(seed);
+            Solver(config).solve(w, calculator);
+            DecomposedCalculator again;
+            repeatedAssembly().into(again);
+            ok &= optimaru::scoresAgree(w.score, scoreWith(again, w)) && !w.searching;
+        }
+    }
+    catch (const std::exception &error)
+    {
+        std::printf("  %s\n", error.what());
+        ok = false;
+    }
+    check(ok, "(i) FULL_ASSERT solves with repeated, shifted components; the score is the assembly's");
+}
+
 }  // namespace
 
 int main()
@@ -392,5 +591,6 @@ int main()
     verifySolveFullAssert();
     verifyRawCostsByHand();
     verifyCatalog();
+    verifyRepeatsAndOffsets();
     return finish("fab_plugin_test");
 }

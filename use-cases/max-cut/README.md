@@ -65,6 +65,30 @@ reward: it is always soft — `hard=True` raises `ValueError` in `solve`,
 cannot change. `max_cut.constraint_info()` reports exactly this table from the
 C++ components (`kDefaultLevel` / `kDefaultWeight`).
 
+### 0.3.0
+
+Every constraint takes two more knobs, `offset` and `clip` (keyword-only), and may be
+picked several times. The four unit constraints shape each side's raw cost `x`, the
+imbalance and the cut their single total: `sign(x) * max(0, |x| - offset) ** exponent`
+(`clip=True`, the default) or `(x - offset) ** exponent`, sign-preserving (`clip=False`,
+which charges both sides, a side of raw 0 included, and rewards a side below the
+offset); `offset=0` is the 0.2.0 shaping. On the `cut_weight_cost` reward (raw `-cut`) a
+threshold offset rewards only the cut beyond it and a literal one adds `offset` to the
+reward. Each pick is its own instance with its own knobs, and the instances add up:
+
+```python
+max_cut.solve(problem, constraints=[
+    *get_constraints()[:4],
+    PartitionImbalanceCost(weight=1),                          # |n0 - n1|
+    PartitionImbalanceCost(weight=5, exponent=2, offset=2),    # + 5 x (imbalance beyond 2)^2
+    CutWeightCost(),
+])
+```
+
+`max_cut.constraint_costs(problem, picks)` scores a pick list and keys the second pick
+`partition_imbalance_cost#2`; every entry reports its `offset` and `clip`. The CP-SAT
+reference takes the same picks (integral offsets).
+
 ### 0.2.0
 
 The package was a pure-Python reference (simulated annealing over
@@ -171,7 +195,9 @@ zero budget, an empty graph, brute-force optima, determinism and validation.
 plugin incremental == full recompute per constraint (with the opt-in imbalance
 switched on too), partial assemblies, overrides (exponent per side, per-side hard
 rounding), `constraintTotals()`, FULL_ASSERT plugin solves, the builder, raw costs
-by hand, the catalog and the reward guards.
+by hand, the catalog and the reward guards, and repeated / shifted components (a
+hand-calculated repeat, threshold and literal offsets by hand per side and on the
+totals, incremental == a fresh recompute over a random walk, a FULL_ASSERT solve).
 
 ## Usage
 
@@ -203,16 +229,19 @@ print(MaxCutProblemModel.from_core(core).cut_weight)
 and `constraints`:
 
 ```python
-from max_cut.constraints import PartitionImbalanceCost, PartitionSizeBoundsCost, cut_weight_cost, get_constraints, score
+from max_cut.constraints import CutWeightCost, PartitionImbalanceCost, PartitionSizeBoundsCost, get_constraints, score
 
 max_cut.constraint_info()     # [ConstraintInfo(name='fixed_partition_cost', default_level='hard', ...), ...]
 max_cut.solve(
     problem,
     time_limit_seconds=1.0,
-    constraints=[*get_constraints()[:4], PartitionImbalanceCost(weight=2), cut_weight_cost],
+    constraints=[*get_constraints()[:4], PartitionImbalanceCost(weight=2), CutWeightCost()],
 )
 raw = max_cut.constraint_costs(problem)             # raw costs, re-priced in pure Python:
-score(raw), score(raw, [PartitionSizeBoundsCost(hard=False), cut_weight_cost])
+score(raw), score(raw, [PartitionSizeBoundsCost(hard=False), CutWeightCost()])
+# A constraint may be picked several times, each pick with its own knobs; offset / clip
+# shift the shaping (clip=True: only the cut beyond 5 earns the second pick's bonus).
+score(raw, [CutWeightCost(), CutWeightCost(weight=0.5, offset=5)])
 ```
 
 ## Starting from an existing solution
@@ -273,7 +302,7 @@ Python reference-parity tests pin it.
 4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
    `description_en` / `description_ko` to `python/max_cut/constraints.py` (plus its
    module-level default instance); callers then pick, reweight or flip it:
-   `constraints=get_constraints([..., MyRuleCost(weight=5, hard=True)])`;
+   `constraints=[..., MyRuleCost(weight=5, hard=True)]`;
 5. mirror it in the CP-SAT model in
    [`benchmarks/max-cut/cpsat`](../../benchmarks/max-cut/cpsat) (a plugin subclassing
    the spec; defaults come from `constraint_info()`), with an exact encoding so

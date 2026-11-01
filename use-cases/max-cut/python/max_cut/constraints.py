@@ -2,36 +2,58 @@
 
 The default path (`max_cut.solve(problem)`) scores every default constraint at
 its default weight. This module is the alternative path next to it: pick
-constraints, change weights, flip hard/soft, and pass the list to
+constraints, change weights, flip hard/soft, shape the cost, and pass the list to
 `solve(problem, constraints=...)`.
 
-The shortest route is :func:`get_constraints`. It returns the default list, so
-a "default with a small tweak" declaration fits on one line::
+A constraint list reads one way: one class call per constraint::
 
     import max_cut
-    from max_cut.constraints import PartitionImbalanceCost, cut_weight_cost, get_constraints
+    from max_cut.constraints import (
+        CutWeightCost, PartitionImbalanceCost, PartitionSizeBoundsCost, get_constraints,
+    )
 
     max_cut.solve(problem, constraints=get_constraints())                       # defaults as-is
-    max_cut.solve(problem, constraints=[*get_constraints()[:4], PartitionImbalanceCost(weight=2), cut_weight_cost])
+    max_cut.solve(problem, constraints=[*get_constraints()[:4], PartitionImbalanceCost(weight=2), CutWeightCost()])
+    max_cut.solve(problem, constraints=[PartitionSizeBoundsCost(), CutWeightCost()])   # picked
 
-Default instances (`fixed_partition_cost`, `same_partition_pairs_cost`, ...,
-`cut_weight_cost`) live at module level, so you can also pass a list of just a
-few. Only listed constraints are scored — leave one out and its term disappears
-from the score.
+Only listed constraints are scored — leave one out and its term disappears from the
+score. (The module also carries ready-made default instances: ``cut_weight_cost`` is
+``CutWeightCost()``, and so on.)
 
-Every spec takes ``(weight=None, hard=None, exponent=1.0)``:
+Every spec takes five knobs:
 
 - ``weight``   linear multiplier on the constraint cost. ``None`` = the component
-               default (1, except ``partition_imbalance_cost``: 0, an opt-in
+               default (1, except ``PartitionImbalanceCost``: 0, an opt-in
                objective). The problem carries no weights;
                ``max_cut.constraint_info()`` reports the defaults.
 - ``hard``     ``True`` = hard, ``False`` = soft, ``None`` = the default level.
-               ``cut_weight_cost`` is a reward and always soft: ``hard=True``
+               ``CutWeightCost`` is a reward and always soft: ``hard=True``
                raises ValueError.
 - ``exponent`` sign-preserving power shaping: ``weight * sign(c) * |c| ** exponent``.
                The four unit constraints (fixed, same-side, different-side,
                size bounds) shape each SIDE's cost; the two globals (imbalance,
                cut) their single total.
+- ``offset``   (keyword) shifts that shaping, per side or on the total; 0.0 = none.
+- ``clip``     (keyword) ``True`` (the default) counts only what lies beyond the
+               offset, ``max(0, c - offset) ** exponent``; ``False`` shapes
+               ``c - offset`` as it is, so a side (or total) below the offset — a
+               raw 0 included — lowers the penalty; a unit constraint charges both
+               sides. On the ``CutWeightCost`` reward (raw ``-cut``) a threshold
+               offset rewards only the cut beyond it, a literal one adds ``offset``
+               to the reward.
+
+The same constraint may be picked several times; each pick is scored on its own with
+its own knobs and the picks add up. The imbalance plus its square beyond 2 vertices::
+
+    max_cut.solve(problem, constraints=[
+        *get_constraints()[:4],
+        PartitionImbalanceCost(weight=1),
+        PartitionImbalanceCost(weight=5, exponent=2, offset=2),
+        CutWeightCost(),
+    ])
+
+``max_cut.constraint_costs(problem, picks)`` keys the second pick
+``"partition_imbalance_cost#2"``.
 
 Names (`name`) are the C++ component names in snake_case
 (``FixedPartitionCost`` -> ``fixed_partition_cost``). The core derives them
@@ -160,7 +182,7 @@ class CutWeightCost(Constraint):
     )
 
 
-#: Instances at the default weights (weight=None). Reference them directly when picking.
+#: Ready-made default instances (``cut_weight_cost`` is ``CutWeightCost()``).
 fixed_partition_cost = FixedPartitionCost()
 same_partition_pairs_cost = SamePartitionPairsCost()
 different_partition_pairs_cost = DifferentPartitionPairsCost()
@@ -183,12 +205,13 @@ def get_constraints(constraints: list[Constraint] | None = None) -> list[Constra
     """Return the cost function. Without arguments, every default constraint.
 
     When `constraints` is given, that list is used as-is — only the listed
-    constraints are scored. To change just one default, mix in the default instances::
+    constraints are scored. To change just one default, list the others as they are::
 
-        get_constraints([*get_constraints()[:4], PartitionImbalanceCost(weight=2), cut_weight_cost])
+        get_constraints([*get_constraints()[:4], PartitionImbalanceCost(weight=2), CutWeightCost()])
 
     Same contract as the C++ applyConstraints: an empty list (most likely a filter
-    that came out empty) and a constraint named twice raise ValueError.
+    that came out empty) raises ValueError; a constraint named several times is
+    scored once per pick, each with its own knobs.
     """
     return select(constraints, _DEFAULTS)
 
@@ -198,18 +221,20 @@ def score(costs: dict, constraints: list[Constraint] | None = None) -> Score:
 
     ``costs`` is what `max_cut.constraint_costs(problem)` returns: per constraint
     its **raw** costs (per side for the four unit constraints, one total for the
-    imbalance and the cut), before weight, exponent and level rounding. Fetch it
-    once and rescore with different weights without re-solving::
+    imbalance and the cut), before weight, exponent, offset and level rounding. Fetch
+    it once and rescore with different weights without re-solving::
 
         raw = max_cut.constraint_costs(problem)
         score(raw)                                              # default set
-        score(raw, [partition_size_bounds_cost, PartitionImbalanceCost(weight=2), cut_weight_cost])
+        score(raw, [PartitionSizeBoundsCost(), PartitionImbalanceCost(weight=2), CutWeightCost()])
+        score(raw, [CutWeightCost(), CutWeightCost(weight=0.5, offset=10)])
 
     No solver and no search are involved. The arithmetic matches the engine —
-    each side (or global total) contributes ``weight * shape(cost, exponent)`` and
-    hard contributions are **rounded per side** before summing (the same order as
-    the engine; rounding the total afterwards gives different values for
-    fractional hard weights).
+    each side (or global total) contributes ``weight * shape(cost, exponent, offset,
+    clip)`` and hard contributions are **rounded per side** before summing (the same
+    order as the engine; rounding the total afterwards gives different values for
+    fractional hard weights). A second pick of a constraint reads the same raw costs
+    with its own knobs.
 
     When ``constraints`` is given, only those constraints are scored — the same
     semantics as `get_constraints`. Unknown names raise ValueError; ``hard=True``
