@@ -22,7 +22,8 @@
 //   (j) repeated components and the offset / clip knobs: a hand-calculated
 //       repeat, a repeat on its own level (soft next to the hard default),
 //       threshold and literal offsets by hand on each global's total (a raw
-//       0 counts in literal mode, the reward shifts further), incremental ==
+//       0 counts in literal mode, the reward shifts further), the literal
+//       formula refused on hard at reset and kept on soft, incremental ==
 //       a fresh recompute over a random walk and a FULL_ASSERT solve with
 //       repeated, shifted components on both levels
 #include <algorithm>
@@ -585,7 +586,9 @@ Score scoreOf(ConstraintAssembly assembly, KnapsackProblem p)
 
 // Every kind repeated or shifted at least once (threshold, literal on a raw
 // 0, negative, a repeated exponent, the reward in both modes, a fractional
-// hard weight).
+// hard weight). Hard refuses the literal formula with an offset, so the
+// literal copies of the hard penalties sit on soft, next to a hard threshold
+// copy with the same knobs.
 ConstraintAssembly repeatedAssembly()
 {
     ConstraintAssembly assembly = defaultConstraints();
@@ -594,12 +597,18 @@ ConstraintAssembly repeatedAssembly()
     assembly.addInstances(std::move(copyOf("resourceCapacityCost")
                                         .weight("resourceCapacityCost", 0.5)
                                         .exponent("resourceCapacityCost", 2.0)));
+    assembly.addInstances(std::move(
+        copyOf("knapsackCapacityCost").weight("knapsackCapacityCost", 2.0).offset("knapsackCapacityCost", 5.0)));
     assembly.addInstances(std::move(copyOf("knapsackCapacityCost")
+                                        .soft("knapsackCapacityCost")
                                         .weight("knapsackCapacityCost", 2.0)
                                         .offset("knapsackCapacityCost", 5.0)
                                         .clip("knapsackCapacityCost", false)));
     assembly.addInstances(std::move(copyOf("mandatoryItemsCost").offset("mandatoryItemsCost", -1.0)));
+    assembly.addInstances(std::move(
+        copyOf("forbiddenItemsCost").weight("forbiddenItemsCost", 1.5).offset("forbiddenItemsCost", -0.5)));
     assembly.addInstances(std::move(copyOf("forbiddenItemsCost")
+                                        .soft("forbiddenItemsCost")
                                         .weight("forbiddenItemsCost", 1.5)
                                         .offset("forbiddenItemsCost", -0.5)
                                         .clip("forbiddenItemsCost", false)));
@@ -664,13 +673,16 @@ void verifyRepeatsAndOffsets()
               "threshold offset 2 on the resource total 5: -3");
         check(scoreOf(copyOf("resourceCapacityCost").offset("resourceCapacityCost", 7.0), p).hard == 0,
               "threshold offset 7 on 5: 0");
-        check(scoreOf(copyOf("resourceCapacityCost")
-                          .offset("resourceCapacityCost", 7.0)
-                          .clip("resourceCapacityCost", false),
-                      p)
-                      .hard
-                  == 2,
-              "literal offset 7 on 5: (5 - 7) = -2, a hard reward of 2");
+        // The six penalties are hard by default, which refuses the literal
+        // formula with an offset, so its numbers are checked on soft (not
+        // rounded).
+        check(sameScore(scoreOf(copyOf("resourceCapacityCost")
+                                    .soft("resourceCapacityCost")
+                                    .offset("resourceCapacityCost", 7.0)
+                                    .clip("resourceCapacityCost", false),
+                                p),
+                        Score{0, 2.0}),
+              "soft literal offset 7 on 5: (5 - 7) = -2, a reward of 2");
         check(scoreOf(copyOf("resourceCapacityCost")
                           .offset("resourceCapacityCost", 2.0)
                           .exponent("resourceCapacityCost", 3.0),
@@ -678,32 +690,37 @@ void verifyRepeatsAndOffsets()
                       .hard
                   == -27,
               "threshold offset 2, exponent 3: (5 - 2)^3 = 27");
-        check(scoreOf(copyOf("knapsackCapacityCost")
-                          .offset("knapsackCapacityCost", 4.0)
-                          .clip("knapsackCapacityCost", false),
-                      p)
-                      .hard
-                  == 4,
-              "literal offset 4 on a raw 0 (the selection fits): charged, -4 -> +4 hard");
+        check(sameScore(scoreOf(copyOf("knapsackCapacityCost")
+                                    .soft("knapsackCapacityCost")
+                                    .offset("knapsackCapacityCost", 4.0)
+                                    .clip("knapsackCapacityCost", false),
+                                p),
+                        Score{0, 4.0}),
+              "soft literal offset 4 on a raw 0 (the selection fits): charged, -4 -> +4");
         check(scoreOf(copyOf("knapsackCapacityCost").offset("knapsackCapacityCost", -1.0), p).hard == 0,
               "a negative threshold offset leaves a raw 0 at 0");
-        check(scoreOf(copyOf("knapsackCapacityCost")
-                          .offset("knapsackCapacityCost", -1.0)
-                          .clip("knapsackCapacityCost", false),
-                      p)
-                      .hard
-                  == -1,
-              "a negative literal offset charges a raw 0: 0 + 1");
+        check(sameScore(scoreOf(copyOf("knapsackCapacityCost")
+                                    .soft("knapsackCapacityCost")
+                                    .offset("knapsackCapacityCost", -1.0)
+                                    .clip("knapsackCapacityCost", false),
+                                p),
+                        Score{0, -1.0}),
+              "a negative soft literal offset charges a raw 0: 0 + 1");
         check(scoreOf(copyOf("mandatoryItemsCost").offset("mandatoryItemsCost", -1.0), p).hard == -4,
               "a negative threshold offset adds to a non-zero total: 3 + 1");
-        check(scoreOf(copyOf("knapsackCapacityCost")
-                          .weight("knapsackCapacityCost", 3.0)
-                          .offset("knapsackCapacityCost", 0.5)
-                          .clip("knapsackCapacityCost", false),
+        check(scoreOf(copyOf("mandatoryItemsCost").weight("mandatoryItemsCost", 3.0).offset("mandatoryItemsCost", 0.5),
                       p)
                       .hard
-                  == 2,
-              "a hard literal offset rounds the total: 3 x (0 - 0.5) = -1.5 -> -2, +2 hard");
+                  == -8,
+              "a hard threshold offset rounds the total: 3 x (3 - 0.5) = 7.5 -> 8");
+        check(sameScore(scoreOf(copyOf("knapsackCapacityCost")
+                                    .soft("knapsackCapacityCost")
+                                    .weight("knapsackCapacityCost", 3.0)
+                                    .offset("knapsackCapacityCost", 0.5)
+                                    .clip("knapsackCapacityCost", false),
+                                p),
+                        Score{0, 1.5}),
+              "a soft literal offset is not rounded: 3 x (0 - 0.5) = -1.5, +1.5");
         check(scoreOf(copyOf("selectedValueCost").offset("selectedValueCost", 10.0), p).soft == 6.0,
               "the reward with a threshold offset 10: only the 16 - 10 beyond it, +6");
         check(scoreOf(copyOf("selectedValueCost")
@@ -715,6 +732,7 @@ void verifyRepeatsAndOffsets()
               "the reward with a literal offset 10: -16 - 10 = -26, +26");
         DecomposedCalculator calculator;
         copyOf("resourceCapacityCost")
+            .soft("resourceCapacityCost")
             .offset("resourceCapacityCost", 2.5)
             .clip("resourceCapacityCost", false)
             .into(calculator);
@@ -724,6 +742,63 @@ void verifyRepeatsAndOffsets()
         check(entries.size() == 1 && entries[0].offset == 2.5 && !entries[0].clip && !entries[0].scoped
                   && entries[0].unitCosts == Costs{5.0},
               "constraintCosts() reports the offset and clip, the raw total unshaped");
+    }
+    {
+        // On hard the literal formula with an offset is refused at reset,
+        // whichever sign and setter order: on the instance above, +5 on the
+        // fitting capacity total would score +5 hard and cancel the resource
+        // overflow 5 (an infeasible selection at hard 0), and -1 would charge
+        // a selection without a violation.
+        auto refusal = [](const std::string &name) {
+            return "Constraint '" + name
+                   + "' cannot use clip=false with a non-zero offset on a level that counts "
+                     "toward the hard score (hard 0 must mean no violation)";
+        };
+        auto resetRefusal = [](ConstraintAssembly assembly) {
+            try
+            {
+                scoreOf(std::move(assembly), shiftedInstance());
+            }
+            catch (const std::logic_error &error)
+            {
+                return std::string(error.what());
+            }
+            return std::string();
+        };
+        check(resetRefusal(copyOf("knapsackCapacityCost")
+                               .offset("knapsackCapacityCost", 5.0)
+                               .clip("knapsackCapacityCost", false))
+                      == refusal("knapsackCapacityCost")
+                  && resetRefusal(copyOf("knapsackCapacityCost")
+                                      .clip("knapsackCapacityCost", false)
+                                      .offset("knapsackCapacityCost", -1.0))
+                         == refusal("knapsackCapacityCost"),
+              "capacity literal offset +5 / -1 on its default hard: refused at reset");
+        check(resetRefusal(copyOf("itemDependencyCost")
+                               .soft("itemDependencyCost")
+                               .offset("itemDependencyCost", 2.0)
+                               .clip("itemDependencyCost", false)
+                               .hard("itemDependencyCost"))
+                  == refusal("itemDependencyCost"),
+              "dependency literal offset moved back to hard afterwards: refused at reset");
+        ConstraintAssembly repeated = copyOf("resourceCapacityCost");
+        repeated.addInstances(std::move(
+            copyOf("resourceCapacityCost").offset("resourceCapacityCost", 7.0).clip("resourceCapacityCost", false)));
+        check(resetRefusal(std::move(repeated)) == refusal("resourceCapacityCost"),
+              "a hard literal repeat next to the default: refused at reset");
+        check(resetRefusal(copyOf("knapsackCapacityCost").offset("knapsackCapacityCost", 5.0)).empty()
+                  && resetRefusal(copyOf("knapsackCapacityCost").clip("knapsackCapacityCost", false)).empty()
+                  && resetRefusal(copyOf("knapsackCapacityCost")
+                                      .offset("knapsackCapacityCost", 5.0)
+                                      .clip("knapsackCapacityCost", false)
+                                      .soft("knapsackCapacityCost"))
+                         .empty()
+                  && resetRefusal(copyOf("selectedValueCost")
+                                      .offset("selectedValueCost", 10.0)
+                                      .clip("selectedValueCost", false))
+                         .empty(),
+              "a threshold offset or clip=false with offset 0 on hard, the literal offset on soft "
+              "and on the soft reward are allowed");
     }
     {
         // Random walk: incremental == a fresh calculator of the same assembly.

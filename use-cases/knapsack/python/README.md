@@ -32,7 +32,11 @@ score(raw, [MandatoryItemsCost(), MandatoryItemsCost(exponent=2, offset=1)])
 ```
 
 Every knapsack constraint is global: `constraint_costs()` reports one raw total per
-constraint and `exponent` (with `offset` / `clip`, 0.3.0) shapes that total;
+constraint and `exponent` (with `offset` / `clip`, 0.3.0) shapes that total, a raw 0
+included. `clip=False` with an offset is refused on hard, where hard 0 must mean no
+violation: `ValueError: constraint 'mandatory_items_cost': clip=False with a non-zero offset
+cannot be hard, because hard 0 must mean no violation; use clip=True (a threshold) or
+another level`. On soft (and on the soft reward) it is allowed.
 `constraint_costs(problem, picks)` scores a pick list, the second pick of a name keyed
 `<name>#2`. `level` is None (the default level), "hard" or "soft" (or `Level.HARD` /
 `Level.SOFT`); the domain has no medium level, so "medium" raises `ValueError`, and a

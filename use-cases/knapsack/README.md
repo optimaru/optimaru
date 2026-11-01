@@ -54,7 +54,10 @@ Every constraint takes two more knobs, `offset` and `clip` (keyword-only), and m
 picked several times. Every knapsack constraint is global, so the offset shapes its single
 raw total `x`: `sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
 `(x - offset) ** exponent`, sign-preserving (`clip=False`, which charges a total of 0 too
-and rewards a total below the offset); `offset=0` is the 0.2.0 shaping. On the
+and rewards a total below the offset); `offset=0` is the 0.2.0 shaping. Both apply to that
+one total, a raw 0 included. `clip=False` with an offset is refused on hard (the six
+penalties by default), because hard 0 must mean no violation: a fitting capacity total
+would otherwise turn into a hard reward that cancels another constraint's overflow. On the
 `selected_value_cost` reward (raw `-value`) a threshold offset rewards only the value
 beyond it and a literal one adds `offset` to the reward. Each pick is its own instance with
 its own knobs, its level included (`level` replaced the `hard` knob; `hard=` raises
@@ -178,7 +181,8 @@ plugin incremental == full recompute per constraint after each move, partial
 assemblies, overrides (exponent on the total, per-constraint hard rounding), raw
 costs by hand, a FULL_ASSERT plugin solve, the catalog and the reward guards, and
 repeated / shifted components (a hand-calculated repeat, threshold and literal offsets
-by hand, incremental == a fresh recompute over a random walk, a FULL_ASSERT solve).
+by hand, the literal formula refused on hard at reset and kept on soft, incremental == a
+fresh recompute over a random walk, a FULL_ASSERT solve).
 
 ## Usage
 

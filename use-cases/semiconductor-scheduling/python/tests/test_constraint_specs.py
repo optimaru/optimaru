@@ -334,6 +334,18 @@ def _steps(count: int) -> fab.SolverConfig:
 
 # --- 0.3.0: repeated picks and the offset / clip knobs ------------------------------
 
+HARD_REFUSAL = (
+    "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
+    "violation; use clip=True (a threshold) or another level"
+)
+
+
+def _refusal(call) -> str:
+    with pytest.raises(ValueError) as refused:
+        call()
+    return str(refused.value)
+
+
 # The busy instance's raw totals the hand cases below read (a precondition test pins them).
 BUSY = {
     "makespan_cost": 11.0,
@@ -408,17 +420,20 @@ def test_the_keys_follow_the_pick_order_of_each_name():
 @pytest.mark.parametrize(
     ("pick", "expected"),
     [
-        # Every constraint is global: the offset shapes its single total (BUSY).
+        # Every constraint is global: the offset shapes its single total (BUSY). The literal
+        # formula with an offset is refused on hard (the 14 hard defaults), so its numbers on
+        # those constraints are checked on soft (not rounded).
         (specs.MakespanCost(offset=5), (0, -6.0)),
         (specs.MakespanCost(offset=15), (0, 0.0)),
         (specs.MakespanCost(offset=15, clip=False), (0, 4.0)),  # 11 - 15 below the offset: a bonus
         (specs.MakespanCost(offset=5, exponent=2), (0, -36.0)),
-        (MachineCapacityCost(offset=3, clip=False), (3, 0.0)),  # a raw 0 is charged in literal mode
+        (MachineCapacityCost(level="soft", offset=3, clip=False), (0, 3.0)),  # a raw 0 is charged in literal mode
         (MachineCapacityCost(offset=-1), (0, 0.0)),  # ...and left alone by the threshold
-        (MachineCapacityCost(offset=-1, clip=False), (-1, 0.0)),
+        (MachineCapacityCost(level="soft", offset=-1, clip=False), (0, -1.0)),
         (specs.PinnedAssignmentsCost(offset=-1), (-3, 0.0)),  # a negative offset adds to a non-zero total
-        (specs.LotRoutePrecedenceCost(offset=0.5, clip=False), (-26, 0.0)),  # 25.5 rounds half away: 26
-        (MachineCapacityCost(weight=3, offset=0.5, clip=False), (2, 0.0)),  # 3 x -0.5 = -1.5 -> -2
+        (specs.LotRoutePrecedenceCost(offset=0.5), (-26, 0.0)),  # hard rounds the total: 25.5 -> 26
+        (specs.LotRoutePrecedenceCost(level="soft", offset=0.5, clip=False), (0, -25.5)),
+        (MachineCapacityCost(level="soft", weight=3, offset=0.5, clip=False), (0, 1.5)),  # 3 x -0.5
         (WeightedTardinessCost(offset=2), (0, -100.0)),  # the default weight 10 x (12 - 2)
         (WeightedTardinessCost(weight=0, offset=2, clip=False), (0, 0.0)),  # weight 0 contributes 0
         (specs.CycleTimeCost(level="hard", offset=1), (-10, 0.0)),
@@ -453,8 +468,18 @@ def test_offset_zero_reproduces_the_0_2_0_scores():
 
 
 def test_score_equals_the_engine_with_repeats_and_offsets():
-    """Random pick lists with repeats and offsets in both modes: the mirror == the C++ assembly."""
+    """Random pick lists with repeats and offsets in both modes: the mirror == the C++ assembly.
+
+    A list with a literal offset on hard (the pick's level, or the default) is refused by
+    both paths with the same message, naming its first such pick; moved to soft, the same
+    picks score alike."""
     rng = random.Random(11)
+    default_level = {row.name: row.default_level for row in fab.constraint_info()}
+
+    def literal_on_hard(pick):
+        return not pick.clip and pick.offset != 0 and (pick.level or default_level[pick.name]) == "hard"
+
+    refused_lists = 0
     for seed in range(25):
         problem = _problem(seed)
         raw = fab.constraint_costs(problem)
@@ -472,11 +497,29 @@ def test_score_equals_the_engine_with_repeats_and_offsets():
                 )
         if not picks:
             continue
+        refused = next((pick for pick in picks if literal_on_hard(pick)), None)
+        if refused is not None:
+            refused_lists += 1
+            message = HARD_REFUSAL.format(q=repr(refused.name))
+            with pytest.raises(ValueError) as engine_refusal:
+                _engine(problem, picks)
+            with pytest.raises(ValueError) as costs_refusal:
+                fab.constraint_costs(problem, picks)
+            with pytest.raises(ValueError) as mirror_refusal:
+                score(raw, picks)
+            assert str(engine_refusal.value) == str(costs_refusal.value) == str(mirror_refusal.value) == message
+            picks = [
+                type(pick)(weight=pick.weight, level="soft", exponent=pick.exponent, offset=pick.offset, clip=pick.clip)
+                if literal_on_hard(pick)
+                else pick
+                for pick in picks
+            ]
         engine = _engine(problem, picks)
         assert score(fab.constraint_costs(problem, picks), picks) == score(raw, picks)
         python = score(raw, picks)
         assert python.hard == engine.hard
         assert python.soft == pytest.approx(engine.soft)
+    assert refused_lists > 0
 
 
 @pytest.mark.parametrize(
@@ -485,7 +528,8 @@ def test_score_equals_the_engine_with_repeats_and_offsets():
         [*get_constraints(), *REPEAT],
         [
             *get_constraints()[:14],
-            specs.LotRoutePrecedenceCost(weight=2, offset=1, clip=False),
+            specs.LotRoutePrecedenceCost(weight=2, offset=1),
+            specs.LotRoutePrecedenceCost(level="soft", weight=2, offset=1, clip=False),  # literal: soft only
             MachineCapacityCost(offset=1),
             specs.MakespanCost(offset=5, clip=False),
             specs.MakespanCost(weight=0.25, exponent=2, offset=10),
@@ -497,7 +541,8 @@ def test_score_equals_the_engine_with_repeats_and_offsets():
             MachineCapacityCost(level="soft", weight=1.5, offset=1, clip=False),
             specs.LotRoutePrecedenceCost(level=Level.SOFT, weight=2, offset=-1),
             specs.MakespanCost(level="hard", weight=0.5, offset=10),
-            WeightedTardinessCost(level=Level.HARD, weight=0.25, offset=3, clip=False),
+            WeightedTardinessCost(level=Level.HARD, weight=0.25, offset=3),  # a fractional hard threshold
+            WeightedTardinessCost(weight=0.25, offset=3, clip=False),  # the literal copy on its default soft
         ],
     ],
     ids=["repeat", "repeat-and-offsets", "repeats-on-other-levels"],
@@ -527,7 +572,8 @@ def test_full_assert_solves_with_repeats_and_offsets(picks):
         ([specs.PinnedAssignmentsCost(level="hard")], (-2, 0.0)),  # the default level, named
         ([specs.CycleTimeCost(level="soft")], (0, -11.0)),
         # A repeat carries its own level and shaping. Hard: 2 x (11 - 10) on the makespan
-        # repeat, the 2 pinned misses and (12 - 2) on the literal tardiness. Soft: the makespan
+        # repeat, the 2 pinned misses and the tardiness beyond 2 (12 - 2; the literal formula
+        # with an offset is refused on hard). Soft: the makespan
         # 11, 3 x (2 - 4) on the literal pinned repeat and the precedence beyond -1 (26 + 1):
         # -11 + 6 - 27.
         (
@@ -536,7 +582,7 @@ def test_full_assert_solves_with_repeats_and_offsets(picks):
                 specs.MakespanCost(level="hard", weight=2, offset=10),
                 specs.PinnedAssignmentsCost(),
                 specs.PinnedAssignmentsCost(level=Level.SOFT, weight=3, offset=4, clip=False),
-                WeightedTardinessCost(level=Level.HARD, weight=1, offset=2, clip=False),
+                WeightedTardinessCost(level=Level.HARD, weight=1, offset=2),
                 specs.LotRoutePrecedenceCost(level="soft", offset=-1),
             ],
             (-14, -32.0),
@@ -589,3 +635,90 @@ def test_the_knob_was_renamed():
     with pytest.raises(TypeError):
         MachineCapacityCost(weight=None, hard=False)
     assert specs.MakespanCost(level="hard") == specs.MakespanCost(level=Level.HARD)
+
+
+# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+
+
+@pytest.mark.parametrize("offset", [3.0, -3.0])
+@pytest.mark.parametrize(
+    "pick",
+    [
+        lambda offset: MachineCapacityCost(offset=offset, clip=False),  # the default level, hard
+        lambda offset: specs.LotRoutePrecedenceCost(level="hard", offset=offset, clip=False),
+        lambda offset: specs.MakespanCost(level=Level.HARD, offset=offset, clip=False),  # an objective moved to hard
+    ],
+    ids=["capacity-default-hard", "precedence-level-hard", "makespan-moved-to-hard"],
+)
+def test_the_literal_offset_is_refused_on_hard_on_every_path(pick, offset):
+    """Every constraint is global, so the literal formula shapes one total, a raw 0 included.
+    On hard a positive offset would turn a clean total into a hard reward: on the busy
+    instance, MachineCapacityCost(offset=26, clip=False) would score +26 for its total of 0
+    and cancel the 26 precedence violations. A negative one would charge a schedule without
+    a violation. solve, calculate_score, constraint_costs and the score() mirror refuse it
+    with the same message, alone and as a repeat; so does the CP-SAT reference (its own
+    tests)."""
+    spec = pick(offset)
+    message = HARD_REFUSAL.format(q=repr(spec.name))
+    picks = [*get_constraints(), spec]  # a repeat next to the defaults
+    problem = _busy_problem()
+    assert _refusal(lambda: fab.solve(problem.model_copy(deep=True), time_limit_seconds=0, constraints=[spec])) == (
+        message
+    )
+    assert _refusal(lambda: fab.solve(problem.model_copy(deep=True), config=_steps(10), constraints=picks)) == message
+    assert _refusal(lambda: _engine(problem, [spec])) == message
+    assert _refusal(lambda: _engine(problem, picks)) == message
+    assert _refusal(lambda: fab.constraint_costs(problem, [spec])) == message
+    assert _refusal(lambda: score(fab.constraint_costs(problem), [spec])) == message
+    assert _refusal(lambda: score(fab.constraint_costs(problem), picks)) == message
+
+
+@pytest.mark.parametrize("offset", [3.0, -3.0])
+def test_the_same_literal_pick_on_soft_is_accepted(offset):
+    """The capacity total 0 minus the offset, -(0 - offset), on soft, on every path; next to
+    the hard defaults, which keep "hard 0 = no violation"."""
+    pick = MachineCapacityCost(level="soft", offset=offset, clip=False)
+    expected = (0, offset)
+    problem = _busy_problem()
+    assert score(fab.constraint_costs(problem), [pick]) == expected
+    raw = fab.constraint_costs(problem, [pick])
+    assert (raw["machine_capacity_cost"]["level"], raw["machine_capacity_cost"]["clip"]) == ("soft", False)
+    assert score(raw, [pick]) == expected
+    assert _engine(problem, [pick]) == expected
+    defaults = _engine(problem, get_constraints())
+    picks = [*get_constraints(), pick]
+    engine = _engine(problem, picks)
+    assert engine == score(fab.constraint_costs(problem), picks)
+    assert (engine.hard, engine.soft) == (defaults.hard, pytest.approx(defaults.soft + offset))
+    solved = problem.model_copy(deep=True)
+    result = fab.solve(solved, random_seed=1, config=_steps(50), constraints=picks)
+    assert tuple(score(fab.constraint_costs(solved), picks)) == pytest.approx(tuple(result))
+
+
+@pytest.mark.parametrize(
+    ("pick", "expected"),
+    [
+        (MachineCapacityCost(offset=3.0), (0, 0.0)),  # clip=True on hard: a threshold, a raw 0 stays 0
+        (specs.PinnedAssignmentsCost(offset=-3.0), (-5, 0.0)),  # 2 + 3
+        (specs.PinnedAssignmentsCost(clip=False), (-2, 0.0)),  # clip=False with offset 0: the 0.2.0 shaping
+        (specs.PinnedAssignmentsCost(offset=0.0, clip=False), (-2, 0.0)),
+        (specs.MakespanCost(level="hard", offset=5.0), (-6, 0.0)),  # 11 - 5
+    ],
+)
+def test_the_allowed_combinations_on_hard(pick, expected):
+    problem = _busy_problem()
+    assert score(fab.constraint_costs(problem), [pick]) == expected
+    assert score(fab.constraint_costs(problem, [pick]), [pick]) == expected
+    assert _engine(problem, [pick]) == expected
+
+
+def test_the_refusal_comes_after_every_knob_of_a_duck_typed_pick():
+    """The engine checks once a pick's knobs are all re-stated: the level a pick ends on decides."""
+    name = "machine_capacity_cost"
+    problem = _busy_problem()
+    moved = SimpleNamespace(name=name, weight=None, level="soft", exponent=1.0, offset=3.0, clip=False)
+    assert _engine(problem, [moved]) == score(fab.constraint_costs(problem), [moved]) == (0, 3.0)
+    kept = SimpleNamespace(name=name, weight=None, level=None, exponent=1.0, offset=3.0, clip=False)
+    message = HARD_REFUSAL.format(q=repr(name))
+    assert _refusal(lambda: _engine(problem, [kept])) == message
+    assert _refusal(lambda: score(fab.constraint_costs(problem), [kept])) == message

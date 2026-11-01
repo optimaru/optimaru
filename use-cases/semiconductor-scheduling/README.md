@@ -80,8 +80,12 @@ Every constraint takes two more knobs, `offset` and `clip` (keyword-only), and m
 picked several times. Every constraint is global, so the offset shapes its single raw
 total `x`: `sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
 `(x - offset) ** exponent`, sign-preserving (`clip=False`, which charges a total of 0 too
-and rewards a total below the offset); `offset=0` is the 0.2.0 shaping. Each pick is its
-own instance with its own knobs, its level included (`level` replaced the `hard` knob;
+and rewards a total below the offset); `offset=0` is the 0.2.0 shaping. Both apply to the
+constraint's one total (every constraint is global), a raw 0 included. `clip=False` with
+an offset is refused on hard (the 14 constraints that are hard by default, or a soft one
+moved to hard), because hard 0 must mean no violation: a clean total would otherwise turn
+into a hard reward that cancels another constraint's violation. Each pick is its own
+instance with its own knobs, its level included (`level` replaced the `hard` knob;
 `hard=` raises `TypeError`), and the instances add up (every instance reads the
 calculator's one shared schedule view, so a repeat costs no second decode):
 
@@ -202,8 +206,8 @@ pins so that pin overlaps reach the capacity and family-conflict terms), solver 
 `fab_plugin_test`: default assembly == monolith (data and search mode), plugin incremental
 == full per constraint, components alone, overrides, `constraintTotals()`, raw costs by
 hand, the catalog, and repeated / shifted components (a hand-calculated repeat, threshold
-and literal offsets by hand, incremental == a fresh recompute over random walks, FULL_ASSERT
-solves).
+and literal offsets by hand, the literal formula refused on hard at reset and kept on soft,
+incremental == a fresh recompute over random walks, FULL_ASSERT solves).
 
 ## python/
 

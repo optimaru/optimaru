@@ -42,12 +42,14 @@ inequality may exclude schedules the engine scores 0. Not supported on CP-SAT (r
 with its own knobs, its level included (a repeated structural pick posts its rule again and
 is checked with its own weight and level). A penalized pick may move to the other level
 (`level="hard"` / `level="soft"`); `level="medium"` is refused as in the engine (`this use
-case has no medium level`), and a structural one refuses any level but hard. Every engine
+case has no medium level`, a structural rule included), and a structural one refuses any
+level but hard. Every engine
 constraint is global, so a penalized plugin adds its total as one term and an integral
 `offset` shapes it exactly as the engine does in both `clip` modes; a fractional offset is
 refused (`offset must be an integer for CP-SAT`). A structural plugin has no term to shape:
 an offset on it is refused (`offset is not supported by this CP-SAT model`), like a weight
-or a level.
+or a level. `clip=False` with an offset on a hard pick, a structural one included, is
+refused with the engine's message when the objective is built, before that check.
 
 ## Tests
 

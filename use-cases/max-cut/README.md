@@ -73,10 +73,14 @@ picked several times. The four unit constraints shape each side's raw cost `x`, 
 imbalance and the cut their single total: `sign(x) * max(0, |x| - offset) ** exponent`
 (`clip=True`, the default) or `(x - offset) ** exponent`, sign-preserving (`clip=False`,
 which charges both sides, a side of raw 0 included, and rewards a side below the
-offset); `offset=0` is the 0.2.0 shaping. On the `cut_weight_cost` reward (raw `-cut`) a
-threshold offset rewards only the cut beyond it and a literal one adds `offset` to the
-reward. Each pick is its own instance with its own knobs, its level included (`level`
-replaced the `hard` knob; `hard=` raises `TypeError`), and the instances add up:
+offset); `offset=0` is the 0.2.0 shaping. Both apply per side (or to the one total), not
+to the sum over the sides. `clip=False` with an offset is refused on hard (the four unit
+constraints by default), because hard 0 must mean no violation: a clean side would
+otherwise earn a hard reward that cancels the other side's violation. On the
+`cut_weight_cost` reward (raw `-cut`) a threshold offset rewards only the cut beyond it
+and a literal one adds `offset` to the reward. Each pick is its own instance with its own
+knobs, its level included (`level` replaced the `hard` knob; `hard=` raises `TypeError`),
+and the instances add up:
 
 ```python
 max_cut.solve(problem, constraints=[
@@ -200,7 +204,8 @@ switched on too), partial assemblies, overrides (exponent per side, per-side har
 rounding), `constraintTotals()`, FULL_ASSERT plugin solves, the builder, raw costs
 by hand, the catalog and the reward guards, and repeated / shifted components (a
 hand-calculated repeat, threshold and literal offsets by hand per side and on the
-totals, incremental == a fresh recompute over a random walk, a FULL_ASSERT solve).
+totals, the literal formula refused on hard at reset and kept on soft, incremental == a
+fresh recompute over a random walk, a FULL_ASSERT solve).
 
 ## Usage
 

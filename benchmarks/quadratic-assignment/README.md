@@ -38,7 +38,8 @@ offset is refused (`offset must be an integer for CP-SAT`). The shared `Objectiv
 shapes a term over a non-negative range, so an offset on `assignment_cost` /
 `flow_distance_cost` is refused when the data can make that total negative (a negative
 direct cost, flow or distance: `offset needs non-negative ... for CP-SAT`); offset 0 keeps
-scoring signed data as before.
+scoring signed data as before. `clip=False` with an offset on a hard pick is refused with
+the engine's message when the objective is built, before that check.
 
 ```sh
 cd benchmarks/quadratic-assignment/cpsat

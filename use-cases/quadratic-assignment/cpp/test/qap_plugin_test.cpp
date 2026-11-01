@@ -23,7 +23,8 @@
 //       repeat, a repeat on its own level (soft next to the hard default),
 //       threshold and literal offsets by hand per location and on the
 //       totals, the scoped side constraints charging only their evaluated
-//       locations ("units"), incremental == a fresh recompute over a random
+//       locations ("units"), the literal formula refused on hard at reset
+//       and kept on soft, incremental == a fresh recompute over a random
 //       walk (accepted and undone moves) and a FULL_ASSERT solve with
 //       repeated, shifted components on both levels
 #include <algorithm>
@@ -553,14 +554,23 @@ Score scoreOf(ConstraintAssembly assembly, QuadraticAssignmentProblem p)
 // Every kind repeated or shifted at least once: the two delta units, the
 // full re-cost unit, both member-change globals; literal and threshold,
 // negative offsets, a fractional hard weight; and repeats on the other level
-// than their default: the flow promoted to hard, the forbidden rows demoted
-// to soft (literal, over their scope).
+// than their default: the flow promoted to hard (threshold), the capacity,
+// pinned and forbidden rows on soft (literal, over their scope). Hard
+// refuses the literal formula with an offset, so the literal copies of the
+// hard side constraints sit on soft, next to a hard threshold copy.
 ConstraintAssembly repeatedAssembly()
 {
     ConstraintAssembly assembly = defaultConstraints();
-    assembly.offset("locationCapacityCost", 1.0).clip("locationCapacityCost", false);
+    assembly.offset("locationCapacityCost", 1.0);
     assembly.offset("flowDistanceCost", 50.0);
+    assembly.addInstances(std::move(copyOf("locationCapacityCost")
+                                        .soft("locationCapacityCost")
+                                        .offset("locationCapacityCost", 1.0)
+                                        .clip("locationCapacityCost", false)));
+    assembly.addInstances(std::move(
+        copyOf("pinnedAssignmentsCost").weight("pinnedAssignmentsCost", 1.5).offset("pinnedAssignmentsCost", 0.5)));
     assembly.addInstances(std::move(copyOf("pinnedAssignmentsCost")
+                                        .soft("pinnedAssignmentsCost")
                                         .weight("pinnedAssignmentsCost", 1.5)
                                         .offset("pinnedAssignmentsCost", 0.5)
                                         .clip("pinnedAssignmentsCost", false)));
@@ -579,8 +589,12 @@ ConstraintAssembly repeatedAssembly()
                                         .weight("flowDistanceCost", 0.25)
                                         .exponent("flowDistanceCost", 1.5)
                                         .offset("flowDistanceCost", 100.0)
-                                        .clip("flowDistanceCost", false)
                                         .hard("flowDistanceCost")));
+    assembly.addInstances(std::move(copyOf("flowDistanceCost")
+                                        .weight("flowDistanceCost", 0.25)
+                                        .exponent("flowDistanceCost", 1.5)
+                                        .offset("flowDistanceCost", 100.0)
+                                        .clip("flowDistanceCost", false)));
     assembly.addInstances(std::move(copyOf("forbiddenAssignmentsCost")
                                         .soft("forbiddenAssignmentsCost")
                                         .weight("forbiddenAssignmentsCost", 2.0)
@@ -636,36 +650,41 @@ void verifyRepeatsAndOffsets()
         const QuadraticAssignmentProblem p = sideIdentity();
         check(scoreOf(copyOf("locationCapacityCost").offset("locationCapacityCost", 1.0), p).hard == -1,
               "capacity threshold offset 1 on [2, 0]: 1 + 0");
-        check(scoreOf(copyOf("locationCapacityCost")
-                          .offset("locationCapacityCost", 1.0)
-                          .clip("locationCapacityCost", false),
-                      p)
-                      .hard
-                  == 0,
-              "capacity literal offset 1 on [2, 0]: (2 - 1) + (0 - 1), both locations in scope");
-        check(scoreOf(copyOf("locationCapacityCost")
-                          .offset("locationCapacityCost", 2.5)
-                          .clip("locationCapacityCost", false),
-                      p)
-                      .hard
-                  == 4,
-              "a hard literal offset rounds per location: llround(-0.5) + llround(-2.5) = -4, +4 hard");
-        check(scoreOf(copyOf("pinnedAssignmentsCost")
-                          .offset("pinnedAssignmentsCost", 1.0)
-                          .clip("pinnedAssignmentsCost", false),
-                      p)
-                      .hard
-                  == 0,
-              "pinned literal offset 1 on [1, 0]: only L1 is evaluated, 1 - 1 = 0 (L2 is not charged)");
+        // The three side constraints are hard by default, which refuses the
+        // literal formula with an offset, so its numbers are checked on soft
+        // (not rounded).
+        check(sameScore(scoreOf(copyOf("locationCapacityCost")
+                                    .soft("locationCapacityCost")
+                                    .offset("locationCapacityCost", 1.0)
+                                    .clip("locationCapacityCost", false),
+                                p),
+                        {0, 0.0}),
+              "soft capacity literal offset 1 on [2, 0]: (2 - 1) + (0 - 1), both locations in scope");
+        check(sameScore(scoreOf(copyOf("locationCapacityCost").offset("locationCapacityCost", 1.5), p), {-1, 0.0}),
+              "a hard threshold offset rounds per location: 2 - 1.5 = 0.5 -> 1, L2 stays 0");
+        check(sameScore(scoreOf(copyOf("locationCapacityCost")
+                                    .soft("locationCapacityCost")
+                                    .offset("locationCapacityCost", 2.5)
+                                    .clip("locationCapacityCost", false),
+                                p),
+                        {0, 3.0}),
+              "a soft literal offset is not rounded: (2 - 2.5) + (0 - 2.5) = -3, +3");
+        check(sameScore(scoreOf(copyOf("pinnedAssignmentsCost")
+                                    .soft("pinnedAssignmentsCost")
+                                    .offset("pinnedAssignmentsCost", 1.0)
+                                    .clip("pinnedAssignmentsCost", false),
+                                p),
+                        {0, 0.0}),
+              "soft pinned literal offset 1 on [1, 0]: only L1 is evaluated, 1 - 1 = 0 (L2 is not charged)");
         check(scoreOf(copyOf("pinnedAssignmentsCost").offset("pinnedAssignmentsCost", -1.0), p).hard == -2,
               "pinned threshold offset -1: the broken pin costs 1 + 1");
-        check(scoreOf(copyOf("pinnedAssignmentsCost")
-                          .offset("pinnedAssignmentsCost", -1.0)
-                          .clip("pinnedAssignmentsCost", false),
-                      p)
-                      .hard
-                  == -2,
-              "pinned literal offset -1: L1 only, 1 + 1 (L2 is outside the scope)");
+        check(sameScore(scoreOf(copyOf("pinnedAssignmentsCost")
+                                    .soft("pinnedAssignmentsCost")
+                                    .offset("pinnedAssignmentsCost", -1.0)
+                                    .clip("pinnedAssignmentsCost", false),
+                                p),
+                        {0, -2.0}),
+              "soft pinned literal offset -1: L1 only, 1 + 1 (L2 is outside the scope)");
         check(scoreOf(copyOf("flowDistanceCost").offset("flowDistanceCost", 20.0), p).soft == -2.0,
               "flow threshold offset 20 on 22: -2 soft");
         check(scoreOf(copyOf("flowDistanceCost").offset("flowDistanceCost", 30.0).clip("flowDistanceCost", false), p)
@@ -677,7 +696,8 @@ void verifyRepeatsAndOffsets()
     }
     {
         // The scoped side constraints on an all-zero solution: a literal
-        // offset charges (#evaluated locations) x -offset, not 3 x.
+        // offset charges (#evaluated locations) x -offset, not 3 x (on soft:
+        // hard refuses it).
         const QuadraticAssignmentProblem p = scopedInstance();
         check(scoreOf(defaultConstraints().only({"pinnedAssignmentsCost", "forbiddenAssignmentsCost",
                                                  "locationCapacityCost"}),
@@ -687,8 +707,8 @@ void verifyRepeatsAndOffsets()
               "the scoped instance at the identity: every side constraint is 0");
         for (const char *name : {"pinnedAssignmentsCost", "forbiddenAssignmentsCost", "locationCapacityCost"})
         {
-            check(scoreOf(copyOf(name).offset(name, 2.0).clip(name, false), p).hard == 2,
-                  std::string(name) + " literal offset 2: one evaluated location, +2 hard (not +6)");
+            check(sameScore(scoreOf(copyOf(name).soft(name).offset(name, 2.0).clip(name, false), p), {0, 2.0}),
+                  std::string(name) + " soft literal offset 2: one evaluated location, +2 (not +6)");
             check(scoreOf(copyOf(name).offset(name, 2.0), p).hard == 0,
                   std::string(name) + " threshold offset 2: 0");
         }
@@ -702,6 +722,58 @@ void verifyRepeatsAndOffsets()
                   && entries[2].units == std::vector<int>{1} && !entries[3].scoped && !entries[4].scoped
                   && entries[0].unitCosts.size() == 3,
               "constraintCosts(): pinned units [0], forbidden [1], capacity [1]; the objectives unscoped");
+    }
+    {
+        // On hard the literal formula with an offset is refused at reset,
+        // whichever sign and setter order, for a hard default side
+        // constraint and for the soft flow moved to hard: +2 on capacity
+        // [2, 0] would score L1's overload as 0 and reward L2's slack (+2
+        // hard), -1 would charge locations without a violation.
+        auto refusal = [](const std::string &name) {
+            return "Constraint '" + name
+                   + "' cannot use clip=false with a non-zero offset on a level that counts "
+                     "toward the hard score (hard 0 must mean no violation)";
+        };
+        auto resetRefusal = [](ConstraintAssembly assembly) {
+            try
+            {
+                scoreOf(std::move(assembly), sideIdentity());
+            }
+            catch (const std::logic_error &error)
+            {
+                return std::string(error.what());
+            }
+            return std::string();
+        };
+        check(resetRefusal(copyOf("locationCapacityCost")
+                               .offset("locationCapacityCost", 2.0)
+                               .clip("locationCapacityCost", false))
+                      == refusal("locationCapacityCost")
+                  && resetRefusal(copyOf("locationCapacityCost")
+                                      .clip("locationCapacityCost", false)
+                                      .offset("locationCapacityCost", -1.0))
+                         == refusal("locationCapacityCost"),
+              "capacity literal offset +2 / -1 on its default hard: refused at reset");
+        check(resetRefusal(copyOf("flowDistanceCost")
+                               .offset("flowDistanceCost", 30.0)
+                               .clip("flowDistanceCost", false)
+                               .hard("flowDistanceCost"))
+                  == refusal("flowDistanceCost"),
+              "flow literal offset moved to hard afterwards: refused at reset");
+        ConstraintAssembly repeated = copyOf("pinnedAssignmentsCost");
+        repeated.addInstances(std::move(
+            copyOf("pinnedAssignmentsCost").offset("pinnedAssignmentsCost", 1.0).clip("pinnedAssignmentsCost", false)));
+        check(resetRefusal(std::move(repeated)) == refusal("pinnedAssignmentsCost"),
+              "a hard literal repeat next to the default: refused at reset");
+        check(resetRefusal(copyOf("locationCapacityCost").offset("locationCapacityCost", 2.0)).empty()
+                  && resetRefusal(copyOf("locationCapacityCost").clip("locationCapacityCost", false)).empty()
+                  && resetRefusal(copyOf("locationCapacityCost")
+                                      .offset("locationCapacityCost", 2.0)
+                                      .clip("locationCapacityCost", false)
+                                      .soft("locationCapacityCost"))
+                         .empty(),
+              "capacity: a threshold offset or clip=false with offset 0 on hard, and the literal "
+              "offset on soft, are allowed");
     }
     {
         // Random walk: incremental == a fresh calculator of the same assembly.

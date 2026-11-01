@@ -33,8 +33,12 @@ score(raw, [MakespanCost(), MakespanCost(weight=100, offset=480)])
 fab.constraint_items(problem)              # the per-item lists (0.1.x constraint_costs)
 ```
 
-Every constraint is global: `exponent`, `offset` and `clip` (0.3.0) shape its total, and
-`constraint_costs(problem, picks)` scores a pick list, the second pick of a name keyed
+Every constraint is global: `exponent`, `offset` and `clip` (0.3.0) shape its total, a raw
+0 included. `clip=False` with an offset is refused on hard, where hard 0 must mean no
+violation: `ValueError: constraint 'machine_capacity_cost': clip=False with a non-zero offset
+cannot be hard, because hard 0 must mean no violation; use clip=True (a threshold) or another
+level`. On soft it is allowed. `constraint_costs(problem, picks)` scores a pick list, the
+second pick of a name keyed
 `<name>#2`. `level` is None (the default level), "hard" or "soft" (or `Level.HARD` /
 `Level.SOFT`); the domain has no medium level, so "medium" raises `ValueError`, and a
 repeat carries its own level.

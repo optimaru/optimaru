@@ -40,7 +40,9 @@ Every spec takes five knobs:
 - ``clip``     (keyword) ``True`` (the default) counts only what lies beyond the
                offset, ``max(0, c - offset) ** exponent``; ``False`` shapes
                ``c - offset`` as it is, so a total below the offset — a raw 0
-               included — lowers the penalty. On the ``SelectedValueCost`` reward
+               included — lowers the penalty. With an offset it is refused on
+               hard (the six penalties by default), because hard 0 must mean no
+               violation. On the ``SelectedValueCost`` reward
                (raw ``-value``) a threshold offset rewards only the value beyond it,
                a literal one adds ``offset`` to the reward.
 
