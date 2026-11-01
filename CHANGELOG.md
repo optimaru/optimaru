@@ -69,10 +69,10 @@ wheel.
   instance `name#k` (k >= 2), with k counted in pick order, and
   `score(costs, picks)` reads the same keys. The dict itself lists its
   entries in the assembly's order (unit constraints first, then global ones),
-  so read entries by key rather than by position. For a constraint without domain parameters, `score()` also
-  accepts costs that hold the name only once (the default
-  `constraint_costs(solution)`), and reads that entry with each pick's own
-  knobs.
+  so read entries by key rather than by position. For a constraint without
+  domain parameters, `score()` also accepts costs that hold the name only once
+  (the default `constraint_costs(solution)`), and reads that entry with each
+  pick's own knobs.
 - Removed: the "picked more than once" `ValueError` in every package, and
   employee-scheduling's "same rule with the same parameters" refusal.
 - Unchanged: an empty list is still a `ValueError`, unknown names are still
