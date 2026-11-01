@@ -40,8 +40,13 @@ score(raw, [PartitionImbalanceCost(weight=1), PartitionImbalanceCost(weight=5, e
 ```
 
 The four unit constraints (fixed, same-side, different-side, size bounds) report one
-raw cost per side and `exponent` (with `offset` / `clip`, 0.3.0) shapes each side; the
-imbalance and the cut report one total. `constraint_costs(problem, picks)` scores a pick
+raw cost per side and `exponent` (with `offset` / `clip`, 0.3.0) shapes each side, a side
+of raw 0 included (per side, not over the sum); the imbalance and the cut report one
+total. `clip=False` with an offset is refused on hard, where hard 0 must mean no
+violation: `ValueError: constraint 'fixed_partition_cost': clip=False with a non-zero
+offset cannot be hard, because hard 0 must mean no violation; use clip=True (a threshold)
+or another level`. On soft (and on the soft reward) it is allowed.
+`constraint_costs(problem, picks)` scores a pick
 list, the second pick of a name keyed `<name>#2`. `level` is None (the default level),
 "hard" or "soft" (or `Level.HARD` / `Level.SOFT`); the domain has no medium level, so
 "medium" raises `ValueError`, and a repeat carries its own level. `calculate_score` /

@@ -37,8 +37,12 @@ score(raw, [FlowDistanceCost(), FlowDistanceCost(weight=10, offset=1000)])
 
 The side constraints report one raw cost per location (location order) and the
 exponent (with `offset` / `clip`, 0.3.0) shapes each location they evaluate (their
-`"units"`: the fixed, the forbidden-row and the capacitated locations); the two
-objectives report one total each and the exponent shapes that total;
+`"units"`: the fixed, the forbidden-row and the capacitated locations), per location,
+not over the sum; the two objectives report one total each and the exponent shapes that
+total. `clip=False` with an offset is refused on hard, where hard 0 must mean no
+violation: `ValueError: constraint 'location_capacity_cost': clip=False with a non-zero
+offset cannot be hard, because hard 0 must mean no violation; use clip=True (a threshold)
+or another level`. On soft it is allowed.
 `constraint_costs(problem, picks)` scores a pick list, the second pick of a name keyed
 `<name>#2`. `level` is None (the default level), "hard" or "soft" (or `Level.HARD` /
 `Level.SOFT`); the domain has no medium level, so "medium" raises `ValueError`, and a

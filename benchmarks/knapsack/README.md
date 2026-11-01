@@ -21,6 +21,8 @@ set. Exponents other than 1 and fractional weights are not supported on CP-SAT
 its own knobs, its level included. Every knapsack constraint is global and adds its single
 total as one term, so an integral `offset` shapes that total exactly as the engine does in
 both `clip` modes; a fractional offset is refused (`offset must be an integer for CP-SAT`).
+`clip=False` with an offset on a hard pick is refused with the engine's message when the
+objective is built.
 
 ```sh
 cd benchmarks/knapsack/cpsat

@@ -35,7 +35,9 @@ Every spec takes five knobs:
 - ``clip``     (keyword) ``True`` (the default) counts only what lies beyond the
                offset, ``max(0, total - offset) ** exponent``; ``False`` shapes
                ``total - offset`` as it is, so a total below the offset — a raw 0
-               included — lowers the penalty.
+               included — lowers the penalty. With an offset it is refused on
+               hard (the 14 constraints that are hard by default, or a soft one
+               moved to hard), because hard 0 must mean no violation.
 
 The same constraint may be picked several times; each pick is scored on its own with
 its own knobs (its level included) and the picks add up. The makespan plus a steep

@@ -306,32 +306,36 @@ SELECTIONS = {
         FlowDistanceCost(),
         FlowDistanceCost(weight=3),
     ],
+    # The literal formula with an offset is refused on hard: the hard picks are
+    # thresholds, the literal copies of the hard side constraints sit on soft.
     "repeat-literal": [
-        ForbiddenAssignmentsCost(offset=1, clip=False),
+        ForbiddenAssignmentsCost(level="soft", offset=1, clip=False),
         ForbiddenAssignmentsCost(weight=2, offset=-1),
         LocationCapacityCost(),
         AssignmentCost(offset=5, clip=False),
         FlowDistanceCost(),
     ],
     "hard-offsets": [
-        PinnedAssignmentsCost(offset=1, clip=False),
+        PinnedAssignmentsCost(offset=1),
+        PinnedAssignmentsCost(level="soft", offset=1, clip=False),
         LocationCapacityCost(offset=2),
-        LocationCapacityCost(weight=2, offset=3, clip=False),
-        ForbiddenAssignmentsCost(offset=-2, clip=False),
+        LocationCapacityCost(level="soft", weight=2, offset=3, clip=False),
+        ForbiddenAssignmentsCost(offset=-2),
+        ForbiddenAssignmentsCost(level="soft", offset=-2, clip=False),
         AssignmentCost(offset=8),
         FlowDistanceCost(offset=60, clip=False),
         FlowDistanceCost(offset=-5),
     ],
     "identical-twice": [LocationCapacityCost(), LocationCapacityCost(), AssignmentCost()],
     # Each pick on its own level: a soft literal repeat of the hard pins, the capacity on soft
-    # with a hard threshold repeat, the soft direct cost promoted to hard (literal) next to a
-    # soft threshold repeat, a soft forbidden repeat and the flow on both levels.
+    # with a hard threshold repeat, the soft direct cost promoted to hard (threshold) next to
+    # a soft threshold repeat, a soft forbidden repeat and the flow on both levels.
     "levels": [
         PinnedAssignmentsCost(),
         PinnedAssignmentsCost(level="soft", weight=3, offset=1, clip=False),
         LocationCapacityCost(level=Level.SOFT, weight=2),
         LocationCapacityCost(level="hard", offset=1),
-        AssignmentCost(level="hard", weight=2, offset=8, clip=False),
+        AssignmentCost(level="hard", weight=2, offset=8),
         AssignmentCost(level=Level.SOFT, offset=3),
         ForbiddenAssignmentsCost(level="soft", offset=-1),
         FlowDistanceCost(),
@@ -444,3 +448,62 @@ def test_an_offset_on_a_total_that_may_be_negative_is_refused(pick, data):
     plain = [PinnedAssignmentsCost(), type(pick)()]
     solved = solve(Model.model_validate(SIGNED), time_limit_seconds=10, constraints=plain)
     assert (solved.score_hard, solved.score_soft) == pytest.approx(_brute_force(SIGNED, plain))
+
+
+# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+
+HARD_REFUSAL = (
+    "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
+    "violation; use clip=True (a threshold) or another level"
+)
+
+
+def _refusal(call) -> str:
+    with pytest.raises(ValueError) as refused:
+        call()
+    return str(refused.value)
+
+
+@pytest.mark.parametrize("offset", [2, -2])
+@pytest.mark.parametrize(
+    "selection",
+    [
+        lambda offset: LocationCapacityCost(offset=offset, clip=False),  # the default level, hard
+        lambda offset: {"name": "location_capacity_cost", "offset": offset, "clip": False},
+        lambda offset: FlowDistanceCost(level=Level.HARD, offset=offset, clip=False),
+        lambda offset: {"name": "flow_distance_cost", "level": "hard", "offset": offset, "clip": False},
+    ],
+    ids=["capacity-spec", "capacity-mapping", "flow-moved-to-hard", "flow-mapping"],
+)
+def test_the_literal_offset_is_refused_on_hard_like_the_engine(selection, offset):
+    """solve() and build() refuse the pick with the engine's and score()'s message, alone and
+    as a repeat next to the defaults, before any term is added (and before the objectives'
+    non-negative-data check)."""
+    pick = selection(offset)
+    name = pick["name"] if isinstance(pick, dict) else pick.name
+    message = HARD_REFUSAL.format(q=repr(name))
+    for problem in (SIDE, SIGNED):
+        for picks in ([pick], [*get_constraints(), pick]):
+            with pytest.raises(ValueError) as refused:
+                solve(Model.model_validate(problem), time_limit_seconds=1, constraints=picks)
+            assert str(refused.value) == message
+            with pytest.raises(ValueError) as refused:
+                build(Model.model_validate(problem), picks)
+            assert str(refused.value) == message
+    if not isinstance(pick, dict):
+        # The engine and the score() mirror say the same.
+        core = _assigned(SIDE, ["F1", "F2"]).to_core()
+        assert _refusal(lambda: _engine_score(core, [pick])) == message
+        assert _refusal(lambda: constraint_costs(core, [pick])) == message
+        assert _refusal(lambda: score(constraint_costs(core), [pick])) == message
+
+
+@pytest.mark.parametrize("offset", [2, -2])
+def test_the_same_literal_pick_on_soft_is_accepted(offset):
+    """The soft literal capacity, charged on the capacitated locations only, next to the hard
+    defaults reaches the brute-force optimum."""
+    selection = [*get_constraints(), LocationCapacityCost(level="soft", offset=offset, clip=False)]
+    solved = solve(Model.model_validate(EVERYTHING), time_limit_seconds=20, constraints=selection)
+    assert (solved.score_hard, solved.score_soft) == pytest.approx(_brute_force(EVERYTHING, selection))
+    engine = score(constraint_costs(solved.to_core(), selection), selection)
+    assert (solved.score_hard, solved.score_soft) == pytest.approx(tuple(engine))

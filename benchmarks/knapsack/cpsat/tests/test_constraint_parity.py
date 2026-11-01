@@ -297,17 +297,21 @@ def test_selections_by_name_and_mapping_work():
 
 SELECTIONS = {
     "repeat": [MandatoryItemsCost(), MandatoryItemsCost(weight=2), SelectedValueCost(), SelectedValueCost(weight=3)],
+    # The literal formula with an offset is refused on hard: the hard picks are
+    # thresholds, the literal copies of the hard penalties sit on soft.
     "repeat-literal": [
-        KnapsackCapacityCost(offset=2, clip=False),
+        KnapsackCapacityCost(level="soft", offset=2, clip=False),
         KnapsackCapacityCost(weight=3, offset=-1),
         ResourceCapacityCost(),
-        ResourceCapacityCost(offset=1, clip=False),
+        ResourceCapacityCost(level="soft", offset=1, clip=False),
         SelectedValueCost(offset=5, clip=False),
     ],
     "hard-offsets": [
         ForbiddenItemsCost(offset=1),
-        ForbiddenItemsCost(weight=2, offset=2, clip=False),
-        SelectionGroupBoundsCost(offset=-2, clip=False),
+        ForbiddenItemsCost(weight=2, offset=2),
+        ForbiddenItemsCost(level="soft", weight=2, offset=2, clip=False),
+        SelectionGroupBoundsCost(offset=-2),
+        SelectionGroupBoundsCost(level="soft", offset=-2, clip=False),
         SelectionGroupBoundsCost(offset=1),
         ItemDependencyCost(offset=1),
         MandatoryItemsCost(level="soft", offset=1, clip=False),
@@ -316,15 +320,15 @@ SELECTIONS = {
     ],
     "identical-twice": [ItemDependencyCost(), ItemDependencyCost(), SelectedValueCost()],
     # Each pick on its own level: a soft literal capacity next to the hard default, the
-    # mandatory misses on soft with a hard threshold repeat, a soft dependency repeat and
-    # the reward (always soft) shifted both ways.
+    # mandatory misses on soft with a hard threshold repeat, a soft dependency repeat, the
+    # resource threshold named on hard and the reward (always soft) shifted both ways.
     "levels": [
         KnapsackCapacityCost(),
         KnapsackCapacityCost(level="soft", weight=3, offset=1, clip=False),
         MandatoryItemsCost(level=Level.SOFT, weight=2),
         MandatoryItemsCost(level="hard", offset=1),
         ItemDependencyCost(level="soft", offset=-1),
-        ResourceCapacityCost(level=Level.HARD, weight=2, offset=1, clip=False),
+        ResourceCapacityCost(level=Level.HARD, weight=2, offset=1),
         SelectedValueCost(offset=10),
         SelectedValueCost(level="soft", weight=2, offset=-3, clip=False),
     ],
@@ -410,3 +414,60 @@ def test_medium_is_refused_like_the_engine(level):
 def test_a_fractional_offset_is_refused_by_cpsat():
     with pytest.raises(ValueError, match="offset must be an integer for CP-SAT"):
         solve(Model.model_validate(PLAIN), time_limit_seconds=1, constraints=[KnapsackCapacityCost(offset=0.5)])
+
+
+# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+
+HARD_REFUSAL = (
+    "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
+    "violation; use clip=True (a threshold) or another level"
+)
+
+
+def _refusal(call) -> str:
+    with pytest.raises(ValueError) as refused:
+        call()
+    return str(refused.value)
+
+
+@pytest.mark.parametrize("offset", [2, -2])
+@pytest.mark.parametrize(
+    "selection",
+    [
+        lambda offset: KnapsackCapacityCost(offset=offset, clip=False),  # the default level, hard
+        lambda offset: {"name": "knapsack_capacity_cost", "offset": offset, "clip": False},
+        lambda offset: ItemDependencyCost(level=Level.HARD, offset=offset, clip=False),
+        lambda offset: {"name": "item_dependency_cost", "level": "hard", "offset": offset, "clip": False},
+    ],
+    ids=["capacity-spec", "capacity-mapping", "dependency-level-hard", "dependency-mapping"],
+)
+def test_the_literal_offset_is_refused_on_hard_like_the_engine(selection, offset):
+    """solve() and build() refuse the pick with the engine's and score()'s message, alone and
+    as a repeat next to the defaults, before any term is added."""
+    pick = selection(offset)
+    name = pick["name"] if isinstance(pick, dict) else pick.name
+    message = HARD_REFUSAL.format(q=repr(name))
+    for picks in ([pick], [*get_constraints(), pick]):
+        with pytest.raises(ValueError) as refused:
+            solve(Model.model_validate(PLAIN), time_limit_seconds=1, constraints=picks)
+        assert str(refused.value) == message
+        with pytest.raises(ValueError) as refused:
+            build(Model.model_validate(PLAIN), picks)
+        assert str(refused.value) == message
+    if not isinstance(pick, dict):
+        # The engine and the score() mirror say the same.
+        core = Model.model_validate(PLAIN).to_core()
+        assert _refusal(lambda: _engine_score(core, [pick])) == message
+        assert _refusal(lambda: constraint_costs(core, [pick])) == message
+        assert _refusal(lambda: score(constraint_costs(core), [pick])) == message
+
+
+@pytest.mark.parametrize("offset", [2, -2])
+def test_the_same_literal_pick_on_soft_is_accepted(offset):
+    """The soft literal capacity next to the hard defaults reaches the brute-force optimum,
+    and its CP-SAT term equals the engine's on every pinned selection (SELECTIONS)."""
+    selection = [*get_constraints(), KnapsackCapacityCost(level="soft", offset=offset, clip=False)]
+    solved = solve(Model.model_validate(EVERYTHING), time_limit_seconds=10, constraints=selection)
+    assert (solved.score_hard, solved.score_soft) == pytest.approx(_brute_force(EVERYTHING, selection))
+    engine = score(constraint_costs(solved.to_core(), selection), selection)
+    assert (solved.score_hard, solved.score_soft) == pytest.approx(tuple(engine))

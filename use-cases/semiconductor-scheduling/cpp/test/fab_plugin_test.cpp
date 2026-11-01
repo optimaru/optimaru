@@ -13,7 +13,8 @@
 //   (i) repeated components and the offset / clip knobs: a hand-calculated
 //       repeat, a repeat on its own level (hard next to the soft default),
 //       threshold and literal offsets by hand on the totals (a raw 0 counts
-//       in literal mode), incremental == a fresh recompute over random walks
+//       in literal mode), the literal formula refused on hard at reset and
+//       kept on soft, incremental == a fresh recompute over random walks
 //       (every repeat reads the calculator's one shared schedule view) and
 //       FULL_ASSERT solves with repeated, shifted components on both levels
 #include <cmath>
@@ -43,6 +44,12 @@ Score scoreWith(DecomposedCalculator &calculator, SemiconductorSchedule &schedul
 {
     calculator.resetWorkingSolution(schedule);
     return calculator.calculateScore();
+}
+
+// Exact equality of both levels (the hand cases below are exact in binary).
+bool sameScore(const Score &a, const Score &b)
+{
+    return a.hard == b.hard && a.soft == b.soft;
 }
 
 // Raw cost per constraint name from constraintCosts() (one entry per global).
@@ -407,8 +414,10 @@ Score scoreOf(ConstraintAssembly assembly, SemiconductorSchedule s)
 }
 
 // Every constraint stays in; hard and soft totals repeated or shifted in
-// both modes, a fractional hard weight on a literal offset, a soft one made
-// hard and back.
+// both modes, a fractional hard weight on a threshold offset, a soft one made
+// hard and back. Hard refuses the literal formula with an offset, so the
+// literal copies of hard defaults sit on soft, next to a hard threshold copy
+// with the same knobs.
 ConstraintAssembly repeatedAssembly()
 {
     ConstraintAssembly assembly = defaultConstraints();
@@ -420,10 +429,16 @@ ConstraintAssembly repeatedAssembly()
                                         .offset("makespanCost", 10.0)));
     assembly.addInstances(std::move(copyOf("lotRoutePrecedenceCost")
                                         .weight("lotRoutePrecedenceCost", 1.5)
+                                        .offset("lotRoutePrecedenceCost", 0.5)));
+    assembly.addInstances(std::move(copyOf("lotRoutePrecedenceCost")
+                                        .soft("lotRoutePrecedenceCost")
+                                        .weight("lotRoutePrecedenceCost", 1.5)
                                         .offset("lotRoutePrecedenceCost", 0.5)
                                         .clip("lotRoutePrecedenceCost", false)));
     assembly.addInstances(std::move(copyOf("batchFamilyConflictCost").offset("batchFamilyConflictCost", -2.0)));
+    assembly.addInstances(std::move(copyOf("pinnedAssignmentsCost").offset("pinnedAssignmentsCost", -1.0)));
     assembly.addInstances(std::move(copyOf("pinnedAssignmentsCost")
+                                        .soft("pinnedAssignmentsCost")
                                         .offset("pinnedAssignmentsCost", -1.0)
                                         .clip("pinnedAssignmentsCost", false)));
     assembly.addInstances(std::move(copyOf("weightedTardinessCost")
@@ -481,36 +496,43 @@ void verifyRepeatsAndOffsets()
           "(i) threshold offset 10 on the makespan 17: -7");
     check(scoreOf(copyOf("makespanCost").offset("makespanCost", 20.0).clip("makespanCost", false), s).soft == 3.0,
           "(i) literal offset 20 on 17: 17 - 20 = -3, +3 soft");
-    check(scoreOf(copyOf("pinnedAssignmentsCost")
-                      .offset("pinnedAssignmentsCost", 2.0)
-                      .clip("pinnedAssignmentsCost", false),
-                  s)
-                  .hard
-              == 2,
-          "(i) literal offset 2 on a raw 0 (no pins): charged, +2 hard");
+    // The hard defaults refuse the literal formula with an offset, so its
+    // numbers on them are checked on soft (not rounded).
+    check(sameScore(scoreOf(copyOf("pinnedAssignmentsCost")
+                                .soft("pinnedAssignmentsCost")
+                                .offset("pinnedAssignmentsCost", 2.0)
+                                .clip("pinnedAssignmentsCost", false),
+                            s),
+                    Score{0, 2.0}),
+          "(i) soft literal offset 2 on a raw 0 (no pins): charged, +2");
     check(scoreOf(copyOf("pinnedAssignmentsCost").offset("pinnedAssignmentsCost", -1.0), s).hard == 0,
           "(i) a negative threshold offset leaves a raw 0 at 0");
-    check(scoreOf(copyOf("pinnedAssignmentsCost")
-                      .offset("pinnedAssignmentsCost", -1.0)
-                      .clip("pinnedAssignmentsCost", false),
-                  s)
-                  .hard
-              == -1,
-          "(i) a negative literal offset charges a raw 0: 0 + 1");
+    check(sameScore(scoreOf(copyOf("pinnedAssignmentsCost")
+                                .soft("pinnedAssignmentsCost")
+                                .offset("pinnedAssignmentsCost", -1.0)
+                                .clip("pinnedAssignmentsCost", false),
+                            s),
+                    Score{0, -1.0}),
+          "(i) a negative soft literal offset charges a raw 0: 0 + 1");
     check(scoreOf(copyOf("batchFamilyConflictCost").offset("batchFamilyConflictCost", -2.0), s).hard == -10,
           "(i) a negative threshold offset adds to a non-zero total: 8 + 2");
-    check(scoreOf(copyOf("maxQueueTimeCost").offset("maxQueueTimeCost", 0.5).clip("maxQueueTimeCost", false), s)
-                  .hard
-              == -3,
-          "(i) a hard literal offset rounds the total: 3 - 0.5 = 2.5 -> 3");
-    check(scoreOf(copyOf("pinnedAssignmentsCost")
-                      .weight("pinnedAssignmentsCost", 3.0)
-                      .offset("pinnedAssignmentsCost", 0.5)
-                      .clip("pinnedAssignmentsCost", false),
-                  s)
-                  .hard
-              == 2,
-          "(i) 3 x (0 - 0.5) = -1.5 -> -2, +2 hard");
+    check(sameScore(scoreOf(copyOf("maxQueueTimeCost").offset("maxQueueTimeCost", 0.5), s), Score{-3, 0.0}),
+          "(i) a hard threshold offset rounds the total: 3 - 0.5 = 2.5 -> 3");
+    check(sameScore(scoreOf(copyOf("maxQueueTimeCost")
+                                .soft("maxQueueTimeCost")
+                                .offset("maxQueueTimeCost", 0.5)
+                                .clip("maxQueueTimeCost", false),
+                            s),
+                    Score{0, -2.5}),
+          "(i) a soft literal offset is not rounded: 3 - 0.5 = 2.5");
+    check(sameScore(scoreOf(copyOf("pinnedAssignmentsCost")
+                                .soft("pinnedAssignmentsCost")
+                                .weight("pinnedAssignmentsCost", 3.0)
+                                .offset("pinnedAssignmentsCost", 0.5)
+                                .clip("pinnedAssignmentsCost", false),
+                            s),
+                    Score{0, 1.5}),
+          "(i) soft: 3 x (0 - 0.5) = -1.5, +1.5");
     {
         DecomposedCalculator calculator;
         copyOf("cycleTimeCost").offset("cycleTimeCost", 2.5).clip("cycleTimeCost", false).into(calculator);
@@ -520,6 +542,59 @@ void verifyRepeatsAndOffsets()
         check(entries.size() == 1 && entries[0].offset == 2.5 && !entries[0].clip && !entries[0].scoped
                   && entries[0].unitCosts == std::vector<double>{46.0},
               "(i) constraintCosts() reports the offset and clip, the raw total unshaped");
+    }
+    {
+        // On hard the literal formula with an offset is refused at reset,
+        // whichever sign and setter order, for a hard default and for the
+        // soft makespan moved to hard: +2 on the machine capacity total 2
+        // would score it as 0 (and +8 would turn the family conflicts' 8 into
+        // a hard 0), -1 would charge a total without a violation.
+        auto refusal = [](const std::string &name) {
+            return "Constraint '" + name
+                   + "' cannot use clip=false with a non-zero offset on a level that counts "
+                     "toward the hard score (hard 0 must mean no violation)";
+        };
+        auto resetRefusal = [&s](ConstraintAssembly assembly) {
+            try
+            {
+                scoreOf(std::move(assembly), s);
+            }
+            catch (const std::logic_error &error)
+            {
+                return std::string(error.what());
+            }
+            return std::string();
+        };
+        check(resetRefusal(copyOf("machineCapacityCost")
+                               .offset("machineCapacityCost", 2.0)
+                               .clip("machineCapacityCost", false))
+                      == refusal("machineCapacityCost")
+                  && resetRefusal(copyOf("machineCapacityCost")
+                                      .clip("machineCapacityCost", false)
+                                      .offset("machineCapacityCost", -1.0))
+                         == refusal("machineCapacityCost"),
+              "(i) machine capacity literal offset +2 / -1 on its default hard: refused at reset");
+        check(resetRefusal(copyOf("makespanCost")
+                               .offset("makespanCost", 20.0)
+                               .clip("makespanCost", false)
+                               .hard("makespanCost"))
+                  == refusal("makespanCost"),
+              "(i) makespan literal offset moved to hard afterwards: refused at reset");
+        ConstraintAssembly repeated = copyOf("lotRoutePrecedenceCost");
+        repeated.addInstances(std::move(copyOf("lotRoutePrecedenceCost")
+                                            .offset("lotRoutePrecedenceCost", 1.0)
+                                            .clip("lotRoutePrecedenceCost", false)));
+        check(resetRefusal(std::move(repeated)) == refusal("lotRoutePrecedenceCost"),
+              "(i) a hard literal repeat next to the default: refused at reset");
+        check(resetRefusal(copyOf("machineCapacityCost").offset("machineCapacityCost", 2.0)).empty()
+                  && resetRefusal(copyOf("machineCapacityCost").clip("machineCapacityCost", false)).empty()
+                  && resetRefusal(copyOf("machineCapacityCost")
+                                      .offset("machineCapacityCost", 2.0)
+                                      .clip("machineCapacityCost", false)
+                                      .soft("machineCapacityCost"))
+                         .empty(),
+              "(i) machine capacity: a threshold offset or clip=false with offset 0 on hard, and the "
+              "literal offset on soft, are allowed");
     }
     {
         int mismatches = 0;

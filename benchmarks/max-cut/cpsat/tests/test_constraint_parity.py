@@ -326,18 +326,22 @@ def test_selections_by_name_and_mapping_work():
 
 SELECTIONS = {
     "repeat": [SamePartitionPairsCost(), SamePartitionPairsCost(weight=2), CutWeightCost(), CutWeightCost(weight=3)],
+    # The literal formula with an offset is refused on hard: the hard picks are
+    # thresholds, the literal copies of the hard unit constraints sit on soft.
     "repeat-literal": [
-        DifferentPartitionPairsCost(offset=1, clip=False),
+        DifferentPartitionPairsCost(level="soft", offset=1, clip=False),
         DifferentPartitionPairsCost(weight=2, offset=-1),
         PartitionSizeBoundsCost(),
         CutWeightCost(offset=5, clip=False),
     ],
     "hard-offsets": [
-        FixedPartitionCost(offset=1, clip=False),
+        FixedPartitionCost(offset=1),
+        FixedPartitionCost(level="soft", offset=1, clip=False),
         FixedPartitionCost(weight=2, offset=-2),
-        SamePartitionPairsCost(offset=-1, clip=False),
+        SamePartitionPairsCost(offset=-1),
+        SamePartitionPairsCost(level="soft", offset=-1, clip=False),
         PartitionSizeBoundsCost(offset=1),
-        PartitionSizeBoundsCost(weight=2, offset=2, clip=False),
+        PartitionSizeBoundsCost(level="soft", weight=2, offset=2, clip=False),
         PartitionImbalanceCost(weight=1, offset=2, clip=False),
         PartitionImbalanceCost(weight=2, offset=1),
         CutWeightCost(offset=10),
@@ -346,14 +350,14 @@ SELECTIONS = {
     "identical-twice": [SamePartitionPairsCost(), SamePartitionPairsCost(), CutWeightCost()],
     # Each pick on its own level: a soft literal repeat of the hard fixed sides, the size
     # bounds on soft with a hard threshold repeat, the soft imbalance promoted to hard
-    # (literal) next to a soft threshold repeat, a soft same-side repeat and the reward
+    # (threshold) next to a soft threshold repeat, a soft same-side repeat and the reward
     # (always soft) shifted both ways.
     "levels": [
         FixedPartitionCost(),
         FixedPartitionCost(level="soft", weight=3, offset=1, clip=False),
         PartitionSizeBoundsCost(level=Level.SOFT, weight=2),
         PartitionSizeBoundsCost(level="hard", offset=1),
-        PartitionImbalanceCost(level="hard", weight=2, offset=1, clip=False),
+        PartitionImbalanceCost(level="hard", weight=2, offset=1),
         PartitionImbalanceCost(level=Level.SOFT, weight=1, offset=2),
         SamePartitionPairsCost(level="soft", offset=-1),
         CutWeightCost(offset=10),
@@ -445,3 +449,61 @@ def test_medium_is_refused_like_the_engine(level):
 def test_a_fractional_offset_is_refused_by_cpsat():
     with pytest.raises(ValueError, match="offset must be an integer for CP-SAT"):
         solve(Model.model_validate(TRIANGLE), time_limit_seconds=1, constraints=[CutWeightCost(offset=0.5)])
+
+
+# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+
+HARD_REFUSAL = (
+    "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
+    "violation; use clip=True (a threshold) or another level"
+)
+
+
+def _refusal(call) -> str:
+    with pytest.raises(ValueError) as refused:
+        call()
+    return str(refused.value)
+
+
+@pytest.mark.parametrize("offset", [2, -2])
+@pytest.mark.parametrize(
+    "selection",
+    [
+        lambda offset: DifferentPartitionPairsCost(offset=offset, clip=False),  # the default level, hard
+        lambda offset: {"name": "different_partition_pairs_cost", "offset": offset, "clip": False},
+        lambda offset: PartitionImbalanceCost(level=Level.HARD, weight=1, offset=offset, clip=False),
+        lambda offset: {"name": "partition_imbalance_cost", "level": "hard", "offset": offset, "clip": False},
+    ],
+    ids=["different-spec", "different-mapping", "imbalance-moved-to-hard", "imbalance-mapping"],
+)
+def test_the_literal_offset_is_refused_on_hard_like_the_engine(selection, offset):
+    """solve() and build() refuse the pick with the engine's and score()'s message, alone and
+    as a repeat next to the defaults, before any term is added."""
+    pick = selection(offset)
+    name = pick["name"] if isinstance(pick, dict) else pick.name
+    message = HARD_REFUSAL.format(q=repr(name))
+    for picks in ([pick], [*get_constraints(), pick]):
+        with pytest.raises(ValueError) as refused:
+            solve(Model.model_validate(EVERYTHING), time_limit_seconds=1, constraints=picks)
+        assert str(refused.value) == message
+        with pytest.raises(ValueError) as refused:
+            build(Model.model_validate(EVERYTHING), picks)
+        assert str(refused.value) == message
+    if not isinstance(pick, dict):
+        # The engine and the score() mirror say the same (on a complete partition, which
+        # constraint_costs() needs before it reads the picks).
+        core = _with_partition(EVERYTHING, [0, 1] * 3 + [0]).to_core()
+        assert _refusal(lambda: _engine_score(core, [pick])) == message
+        assert _refusal(lambda: constraint_costs(core, [pick])) == message
+        assert _refusal(lambda: score(constraint_costs(core), [pick])) == message
+
+
+@pytest.mark.parametrize("offset", [2, -2])
+def test_the_same_literal_pick_on_soft_is_accepted(offset):
+    """The soft literal different-side pick, charged on both sides, next to the hard defaults
+    reaches the brute-force optimum."""
+    selection = [*get_constraints(), DifferentPartitionPairsCost(level="soft", offset=offset, clip=False)]
+    solved = solve(Model.model_validate(EVERYTHING), time_limit_seconds=10, constraints=selection)
+    assert (solved.score_hard, solved.score_soft) == pytest.approx(_brute_force(EVERYTHING, selection))
+    engine = score(constraint_costs(solved.to_core(), selection), selection)
+    assert (solved.score_hard, solved.score_soft) == pytest.approx(tuple(engine))

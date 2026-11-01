@@ -44,7 +44,9 @@ Every spec takes five knobs:
                the fixed ones, ``ForbiddenAssignmentsCost`` those named by a
                forbidden row, ``LocationCapacityCost`` those with a capacity), so a
                literal offset charges exactly those (``constraint_costs()`` reports
-               them as ``"units"``).
+               them as ``"units"``). With an offset it is refused on hard (the
+               three side constraints by default), because hard 0 must mean no
+               violation.
 
 The same constraint may be picked several times; each pick is scored on its own with
 its own knobs (its level included) and the picks add up. The flow cost plus a steep

@@ -66,9 +66,13 @@ which charges a location of raw 0 too and rewards one below the offset); `offset
 the 0.2.0 shaping. The side constraints are scoped: `pinned_assignments_cost` evaluates
 the fixed locations, `forbidden_assignments_cost` the locations named by a forbidden row
 and `location_capacity_cost` the locations with a capacity, so a literal offset charges
-exactly those (`constraint_costs()` reports them as `"units"`). Each pick is its own
-instance with its own knobs, its level included (`level` replaced the `hard` knob; `hard=`
-raises `TypeError`), and the instances add up:
+exactly those (`constraint_costs()` reports them as `"units"`). Both formulas apply per
+evaluated location (or to the one total), not to the sum over the locations.
+`clip=False` with an offset is refused on hard (the three side constraints by default),
+because hard 0 must mean no violation: a location with slack would otherwise earn a hard
+reward that cancels another location's violation. Each pick is its own instance with its
+own knobs, its level included (`level` replaced the `hard` knob; `hard=` raises
+`TypeError`), and the instances add up:
 
 ```python
 qap.solve(problem, constraints=[
@@ -208,8 +212,8 @@ raw costs, each constraint non-zero on some step), partial assemblies, overrides
 rounding), the cost layout, FULL_ASSERT plugin solves, raw costs by hand, the
 catalog, and repeated / shifted components (a hand-calculated repeat, threshold and
 literal offsets by hand, the scoped side constraints charging only their locations,
-incremental == a fresh recompute over a walk with accepted and undone moves, a
-FULL_ASSERT solve).
+the literal formula refused on hard at reset and kept on soft, incremental == a fresh
+recompute over a walk with accepted and undone moves, a FULL_ASSERT solve).
 
 ## Usage
 

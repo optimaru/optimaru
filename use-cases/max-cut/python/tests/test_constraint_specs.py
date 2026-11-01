@@ -416,13 +416,16 @@ def test_naming_a_constraint_twice_scores_both_picks():
             PartitionSizeBoundsCost(weight=0.5),
         ],
         [*get_constraints(), PartitionSizeBoundsCost(weight=0.5, exponent=2.0), CutWeightCost(weight=0.5)],
+        # The literal formula with an offset is refused on hard; its copies sit on soft.
         [
             PartitionSizeBoundsCost(offset=1.0),
-            PartitionSizeBoundsCost(offset=-2.0, clip=False),
+            PartitionSizeBoundsCost(offset=-2.0),
+            PartitionSizeBoundsCost(level="soft", offset=-2.0, clip=False),
             CutWeightCost(offset=3),
         ],
         [
-            SamePartitionPairsCost(offset=0.5, clip=False, weight=3),
+            SamePartitionPairsCost(offset=0.5, weight=3),
+            SamePartitionPairsCost(level="soft", offset=0.5, clip=False, weight=3),
             DifferentPartitionPairsCost(offset=1.0),
             PartitionImbalanceCost(weight=1, offset=1.0, exponent=2.0, clip=False),
             CutWeightCost(offset=4.0, clip=False),
@@ -540,14 +543,18 @@ def test_a_second_pick_of_the_reward_still_refuses_hard():
     ("pick", "expected"),
     [
         # Unit constraints, shaped per side: fixed [1, 0], same [1, 0], different [0, 1], size [1, 1].
-        (DifferentPartitionPairsCost(offset=1, clip=False), (1, 0.0)),  # (0 - 1) + (1 - 1): the side of raw 0 too
+        # The four are hard by default, which refuses the literal formula with an offset, so
+        # its numbers are checked on soft (not rounded); hard rounds a threshold per side.
+        (DifferentPartitionPairsCost(level="soft", offset=1, clip=False), (0, 1.0)),  # (0 - 1) + (1 - 1): both sides
         (DifferentPartitionPairsCost(offset=1), (0, 0.0)),
-        (SamePartitionPairsCost(offset=2, clip=False), (3, 0.0)),  # a hard reward below 2 on both sides
+        (SamePartitionPairsCost(level="soft", offset=2, clip=False), (0, 3.0)),  # a reward below 2 on both sides
         (SamePartitionPairsCost(offset=-1), (-2, 0.0)),  # a negative offset adds to the non-zero side only
-        (SamePartitionPairsCost(offset=-1, clip=False), (-3, 0.0)),  # ...or to both sides
-        (SamePartitionPairsCost(offset=1.5, clip=False), (3, 0.0)),  # llround(-0.5) + llround(-1.5): per side
-        (FixedPartitionCost(weight=3, offset=0.5, clip=False), (0, 0.0)),  # 1.5 -> 2, -1.5 -> -2
-        (PartitionSizeBoundsCost(offset=1, exponent=3, clip=False), (0, 0.0)),
+        (SamePartitionPairsCost(level="soft", offset=-1, clip=False), (0, -3.0)),  # ...or to both sides
+        (SamePartitionPairsCost(level="soft", offset=1.5, clip=False), (0, 2.0)),  # (1 - 1.5) + (0 - 1.5)
+        (FixedPartitionCost(weight=3, offset=0.5), (-2, 0.0)),  # 1.5 -> 2 on the violated side, 0 on the other
+        (FixedPartitionCost(level="soft", weight=3, offset=0.5, clip=False), (0, 0.0)),  # 1.5 - 1.5
+        (PartitionSizeBoundsCost(level="soft", offset=1, exponent=3, clip=False), (0, 0.0)),
+        (PartitionSizeBoundsCost(offset=0.5), (-2, 0.0)),  # 0.5 -> 1 on each side: hard rounds per side
         (PartitionSizeBoundsCost(level="soft", offset=0.5), (0, -1.0)),  # 0.5 + 0.5, soft: not rounded
         # The globals shape their single total: imbalance 2, cut reward 2.
         (PartitionImbalanceCost(weight=1, offset=1), (0, -1.0)),
@@ -598,7 +605,8 @@ def test_offset_zero_reproduces_the_0_2_0_scores():
         [
             FixedPartitionCost(),
             SamePartitionPairsCost(),
-            SamePartitionPairsCost(offset=1, clip=False, weight=2),
+            SamePartitionPairsCost(offset=1, weight=2),
+            SamePartitionPairsCost(level="soft", offset=1, clip=False, weight=2),  # literal: soft only
             DifferentPartitionPairsCost(offset=-1),
             PartitionSizeBoundsCost(),
             PartitionSizeBoundsCost(offset=1, exponent=2, weight=0.5, level="soft"),
@@ -611,7 +619,8 @@ def test_offset_zero_reproduces_the_0_2_0_scores():
             FixedPartitionCost(level="soft", weight=1.5, offset=1, clip=False),
             SamePartitionPairsCost(level=Level.SOFT, weight=2, offset=-1),
             PartitionImbalanceCost(level="hard", weight=2, offset=1),
-            PartitionImbalanceCost(level=Level.HARD, weight=0.5, offset=3, clip=False),
+            PartitionImbalanceCost(level=Level.HARD, weight=0.5, offset=3),  # a fractional hard threshold
+            PartitionImbalanceCost(weight=0.5, offset=3, clip=False),  # the literal copy on its default soft
             CutWeightCost(level="soft", weight=0.5, offset=3, clip=False),
         ],
     ],
@@ -715,3 +724,103 @@ def test_the_knob_was_renamed():
     with pytest.raises(TypeError):
         FixedPartitionCost(weight=None, hard=False)
     assert PartitionImbalanceCost(level="hard") == PartitionImbalanceCost(level=Level.HARD)
+
+
+# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+
+HARD_REFUSAL = (
+    "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
+    "violation; use clip=True (a threshold) or another level"
+)
+
+
+def _refusal(call) -> str:
+    with pytest.raises(ValueError) as refused:
+        call()
+    return str(refused.value)
+
+
+@pytest.mark.parametrize("offset", [3.0, -3.0])
+@pytest.mark.parametrize(
+    "pick",
+    [
+        lambda offset: FixedPartitionCost(offset=offset, clip=False),  # the default level, hard
+        lambda offset: SamePartitionPairsCost(level="hard", offset=offset, clip=False),
+        lambda offset: PartitionImbalanceCost(level=Level.HARD, weight=1, offset=offset, clip=False),
+    ],
+    ids=["fixed-default-hard", "same-level-hard", "imbalance-moved-to-hard"],
+)
+def test_the_literal_offset_is_refused_on_hard_on_every_path(pick, offset):
+    """The four unit constraints shape each side, a side of raw 0 included. On hard a
+    positive offset would reward the clean side and cancel the other side's violation: on
+    fixture_h(), DifferentPartitionPairsCost(offset=1, clip=False) would score hard +1 for a
+    pair on the same side. A negative one would charge both sides of a clean partition. solve,
+    Solver, constraint_costs, calculate_score and the score() mirror refuse it with the same
+    message, alone and as a repeat; so does the CP-SAT reference (its own tests)."""
+    spec = pick(offset)
+    message = HARD_REFUSAL.format(q=repr(spec.name))
+    picks = [*get_constraints(), spec]  # a repeat next to the defaults
+    assert _refusal(lambda: max_cut.solve(fixture_h(), time_limit_seconds=0, constraints=[spec])) == message
+    assert _refusal(lambda: solved([spec])) == message
+    assert _refusal(lambda: engine_solve(fixture_h(), [spec])) == message
+    assert _refusal(lambda: engine_solve(fixture_h(), picks)) == message
+    assert _refusal(lambda: max_cut.constraint_costs(fixture_h(), [spec])) == message
+    assert _refusal(lambda: max_cut.calculate_score(fixture_h(), [spec])) == message
+    assert _refusal(lambda: score(max_cut.constraint_costs(fixture_h()), [spec])) == message
+    assert _refusal(lambda: score(max_cut.constraint_costs(fixture_h()), picks)) == message
+
+
+@pytest.mark.parametrize("offset", [3.0, -3.0])
+def test_the_same_literal_pick_on_soft_is_accepted(offset):
+    """different [0, 1] minus the offset on both sides, -((0 - offset) + (1 - offset)), on soft,
+    on every path; next to the hard defaults, which keep "hard 0 = no violation" (-5)."""
+    pick = DifferentPartitionPairsCost(level="soft", offset=offset, clip=False)
+    expected = (0, 2 * offset - 1)
+    problem = fixture_h()
+    assert score(max_cut.constraint_costs(problem), [pick]) == expected
+    raw = max_cut.constraint_costs(problem, [pick])
+    entry = raw["different_partition_pairs_cost"]
+    assert (entry["level"], entry["clip"], entry["costs"]) == ("soft", False, [0.0, 1.0])
+    assert score(raw, [pick]) == expected
+    assert max_cut.calculate_score(problem, [pick]) == expected
+    assert engine_score(problem, [pick]) == expected
+    picks = [*get_constraints(), pick]
+    assert engine_score(problem, picks) == score(max_cut.constraint_costs(problem), picks) == (-5, 2 + expected[1])
+
+
+@pytest.mark.parametrize(
+    ("pick", "expected"),
+    [
+        (FixedPartitionCost(offset=3.0), (0, 0.0)),  # clip=True on hard: a threshold, a raw 0 stays 0
+        (FixedPartitionCost(offset=-3.0), (-4, 0.0)),  # 1 + 3 on the violated side only
+        (SamePartitionPairsCost(clip=False), (-1, 0.0)),  # clip=False with offset 0: the 0.2.0 shaping
+        (SamePartitionPairsCost(offset=0.0, clip=False), (-1, 0.0)),
+        (PartitionImbalanceCost(level="hard", weight=1, offset=1.0), (-1, 0.0)),  # 2 - 1
+    ],
+)
+def test_the_allowed_combinations_on_hard(pick, expected):
+    problem = fixture_h()
+    assert score(max_cut.constraint_costs(problem), [pick]) == expected
+    assert score(max_cut.constraint_costs(problem, [pick]), [pick]) == expected
+    assert engine_score(problem, [pick]) == expected
+
+
+def test_the_reward_keeps_its_own_refusal_first():
+    """cut_weight_cost, the one non-flippable constraint, is a soft reward: the literal formula
+    is allowed on its level (test_offsets_by_hand_on_both_paths), and level="hard" is refused
+    as a reward first, in the same words on both paths."""
+    pick = CutWeightCost(level="hard", offset=3, clip=False)
+    message = "constraint 'cut_weight_cost' is a reward (raw cost <= 0) and cannot be hard"
+    assert _refusal(lambda: engine_solve(fixture_h(), [pick])) == message
+    assert _refusal(lambda: score(max_cut.constraint_costs(fixture_h()), [pick])) == message
+
+
+def test_the_refusal_comes_after_every_knob_of_a_duck_typed_pick():
+    """The engine checks once a pick's knobs are all re-stated: the level a pick ends on decides."""
+    name = "different_partition_pairs_cost"
+    moved = SimpleNamespace(name=name, weight=None, level="soft", exponent=1.0, offset=3.0, clip=False)
+    assert engine_score(fixture_h(), [moved]) == score(max_cut.constraint_costs(fixture_h()), [moved]) == (0, 5.0)
+    kept = SimpleNamespace(name=name, weight=None, level=None, exponent=1.0, offset=3.0, clip=False)
+    message = HARD_REFUSAL.format(q=repr(name))
+    assert _refusal(lambda: engine_score(fixture_h(), [kept])) == message
+    assert _refusal(lambda: score(max_cut.constraint_costs(fixture_h()), [kept])) == message

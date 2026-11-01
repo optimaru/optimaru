@@ -27,7 +27,8 @@ its own knobs, its level included. The four unit constraints add one term per si
 and side 1, a side of raw 0 included) and the imbalance and the cut one term for their
 total, so an integral `offset` shapes each side (or the total) exactly as the engine does
 in both `clip` modes; a fractional offset is refused (`offset must be an integer for
-CP-SAT`).
+CP-SAT`). `clip=False` with an offset on a hard pick is refused with the engine's message
+when the objective is built.
 
 ```sh
 cd benchmarks/max-cut/cpsat

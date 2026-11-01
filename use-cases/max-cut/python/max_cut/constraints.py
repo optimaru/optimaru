@@ -41,7 +41,9 @@ Every spec takes five knobs:
                offset, ``max(0, c - offset) ** exponent``; ``False`` shapes
                ``c - offset`` as it is, so a side (or total) below the offset — a
                raw 0 included — lowers the penalty; a unit constraint charges both
-               sides. On the ``CutWeightCost`` reward (raw ``-cut``) a threshold
+               sides. With an offset it is refused on hard (the four unit
+               constraints by default), because hard 0 must mean no violation.
+               On the ``CutWeightCost`` reward (raw ``-cut``) a threshold
                offset rewards only the cut beyond it, a literal one adds ``offset``
                to the reward.
 

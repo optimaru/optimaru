@@ -18,7 +18,8 @@
 //   (j) repeated components and the offset / clip knobs: a hand-calculated
 //       repeat, a repeat on its own level (hard next to the soft default),
 //       threshold and literal offsets by hand per side (a side of raw 0
-//       counts in literal mode) and on the globals' totals, incremental == a
+//       counts in literal mode) and on the globals' totals, the literal
+//       formula refused on hard at reset and kept on soft, incremental == a
 //       fresh recompute over a random walk and a FULL_ASSERT solve with
 //       repeated, shifted components on both levels
 #include <algorithm>
@@ -633,15 +634,20 @@ Score scoreOf(ConstraintAssembly assembly, MaxCutProblem p)
 
 // Every kind repeated or shifted at least once: per-member deltas, pair
 // deltas, the O(1) re-cost, both member-change globals, the reward in both
-// modes, a fractional hard weight on a literal offset; and repeats on the
-// other level than their default: the size bounds demoted to soft, the
-// imbalance promoted to hard (threshold).
+// modes, a fractional hard weight on a threshold offset (hard refuses the
+// literal formula with an offset, so the literal copies of the hard unit
+// constraints sit on soft); and repeats on the other level than their
+// default: the size bounds demoted to soft, the imbalance promoted to hard
+// (threshold).
 ConstraintAssembly repeatedAssembly()
 {
     ConstraintAssembly assembly = defaultConstraints();
     assembly.weight("partitionImbalanceCost", 2.0).offset("partitionImbalanceCost", 3.0);
     assembly.offset("cutWeightCost", 5.0).clip("cutWeightCost", false);
+    assembly.addInstances(std::move(
+        copyOf("fixedPartitionCost").weight("fixedPartitionCost", 1.5).offset("fixedPartitionCost", 0.5)));
     assembly.addInstances(std::move(copyOf("fixedPartitionCost")
+                                        .soft("fixedPartitionCost")
                                         .weight("fixedPartitionCost", 1.5)
                                         .offset("fixedPartitionCost", 0.5)
                                         .clip("fixedPartitionCost", false)));
@@ -650,6 +656,7 @@ ConstraintAssembly repeatedAssembly()
                                         .exponent("samePartitionPairsCost", 2.0)
                                         .offset("samePartitionPairsCost", 1.0)));
     assembly.addInstances(std::move(copyOf("differentPartitionPairsCost")
+                                        .soft("differentPartitionPairsCost")
                                         .offset("differentPartitionPairsCost", -1.0)
                                         .clip("differentPartitionPairsCost", false)));
     assembly.addInstances(std::move(copyOf("partitionSizeBoundsCost")
@@ -718,47 +725,53 @@ void verifyRepeatsAndOffsets()
     }
     {
         const MaxCutProblem p = hPositive();
-        check(scoreOf(copyOf("differentPartitionPairsCost")
-                          .offset("differentPartitionPairsCost", 1.0)
-                          .clip("differentPartitionPairsCost", false),
-                      p)
-                      .hard
-                  == 1,
-              "literal offset 1 on different [0, 1]: (0 - 1) + (1 - 1), the side of raw 0 is rewarded");
+        // The four unit constraints are hard by default, which refuses the
+        // literal formula with an offset, so its numbers are checked on soft
+        // (not rounded); hard rounds a threshold per side.
+        check(sameScore(scoreOf(copyOf("differentPartitionPairsCost")
+                                    .soft("differentPartitionPairsCost")
+                                    .offset("differentPartitionPairsCost", 1.0)
+                                    .clip("differentPartitionPairsCost", false),
+                                p),
+                        Score{0, 1.0}),
+              "soft literal offset 1 on different [0, 1]: (0 - 1) + (1 - 1), the side of raw 0 is rewarded");
         check(scoreOf(copyOf("differentPartitionPairsCost").offset("differentPartitionPairsCost", 1.0), p).hard
                   == 0,
               "threshold offset 1 on different [0, 1]: 0");
-        check(scoreOf(copyOf("samePartitionPairsCost")
-                          .offset("samePartitionPairsCost", 2.0)
-                          .clip("samePartitionPairsCost", false),
-                      p)
-                      .hard
-                  == 3,
-              "literal offset 2 on same [1, 0]: (1 - 2) + (0 - 2) = -3, +3 hard");
+        check(sameScore(scoreOf(copyOf("samePartitionPairsCost")
+                                    .soft("samePartitionPairsCost")
+                                    .offset("samePartitionPairsCost", 2.0)
+                                    .clip("samePartitionPairsCost", false),
+                                p),
+                        Score{0, 3.0}),
+              "soft literal offset 2 on same [1, 0]: (1 - 2) + (0 - 2) = -3, +3");
         check(scoreOf(copyOf("samePartitionPairsCost").offset("samePartitionPairsCost", -1.0), p).hard == -2,
               "a negative threshold offset adds to the non-zero side only: 1 + 1");
-        check(scoreOf(copyOf("samePartitionPairsCost")
-                          .offset("samePartitionPairsCost", -1.0)
-                          .clip("samePartitionPairsCost", false),
-                      p)
-                      .hard
-                  == -3,
-              "a negative literal offset adds to both sides: (1 + 1) + (0 + 1)");
-        check(scoreOf(copyOf("samePartitionPairsCost")
-                          .offset("samePartitionPairsCost", 1.5)
-                          .clip("samePartitionPairsCost", false),
-                      p)
-                      .hard
-                  == 3,
-              "a hard literal offset rounds per side: llround(-0.5) + llround(-1.5) = -3, +3 hard");
-        check(scoreOf(copyOf("partitionSizeBoundsCost")
-                          .offset("partitionSizeBoundsCost", 1.0)
-                          .exponent("partitionSizeBoundsCost", 3.0)
-                          .clip("partitionSizeBoundsCost", false),
-                      p)
-                      .hard
-                  == 0,
-              "literal offset 1, exponent 3 on size [1, 1]: 0^3 + 0^3");
+        check(sameScore(scoreOf(copyOf("samePartitionPairsCost")
+                                    .soft("samePartitionPairsCost")
+                                    .offset("samePartitionPairsCost", -1.0)
+                                    .clip("samePartitionPairsCost", false),
+                                p),
+                        Score{0, -3.0}),
+              "a negative soft literal offset adds to both sides: (1 + 1) + (0 + 1)");
+        check(sameScore(scoreOf(copyOf("samePartitionPairsCost")
+                                    .soft("samePartitionPairsCost")
+                                    .offset("samePartitionPairsCost", 1.5)
+                                    .clip("samePartitionPairsCost", false),
+                                p),
+                        Score{0, 2.0}),
+              "a soft literal offset is not rounded: (1 - 1.5) + (0 - 1.5) = -2, +2");
+        check(sameScore(scoreOf(copyOf("partitionSizeBoundsCost").offset("partitionSizeBoundsCost", 0.5), p),
+                        Score{-2, 0.0}),
+              "a hard threshold offset rounds per side: llround(-0.5) + llround(-0.5) = -2");
+        check(sameScore(scoreOf(copyOf("partitionSizeBoundsCost")
+                                    .soft("partitionSizeBoundsCost")
+                                    .offset("partitionSizeBoundsCost", 1.0)
+                                    .exponent("partitionSizeBoundsCost", 3.0)
+                                    .clip("partitionSizeBoundsCost", false),
+                                p),
+                        Score{0, 0.0}),
+              "soft literal offset 1, exponent 3 on size [1, 1]: 0^3 + 0^3");
         check(scoreOf(copyOf("partitionImbalanceCost")
                           .weight("partitionImbalanceCost", 1.0)
                           .offset("partitionImbalanceCost", 1.0),
@@ -787,13 +800,73 @@ void verifyRepeatsAndOffsets()
                   == 3.0,
               "the cut reward 2 with a literal offset 1: -2 - 1 = -3, +3 soft");
         DecomposedCalculator calculator;
-        copyOf("fixedPartitionCost").offset("fixedPartitionCost", 2.5).clip("fixedPartitionCost", false).into(calculator);
+        copyOf("fixedPartitionCost")
+            .soft("fixedPartitionCost")
+            .offset("fixedPartitionCost", 2.5)
+            .clip("fixedPartitionCost", false)
+            .into(calculator);
         MaxCutProblem q = hPositive();
         scoreWith(calculator, q);
         const auto entries = calculator.constraintCosts();
         check(entries.size() == 1 && entries[0].offset == 2.5 && !entries[0].clip && !entries[0].scoped
                   && entries[0].unitCosts == Costs{1.0, 0.0},
               "constraintCosts() reports the offset and clip, the raw side costs unshaped");
+    }
+    {
+        // On hard the literal formula with an offset is refused at reset,
+        // whichever sign and setter order, for a hard default unit constraint
+        // and for the soft imbalance moved to hard: +1 on different [0, 1]
+        // would reward the clean side and score a violated pair +1 hard, -1
+        // would charge both sides of a clean partition.
+        auto refusal = [](const std::string &name) {
+            return "Constraint '" + name
+                   + "' cannot use clip=false with a non-zero offset on a level that counts "
+                     "toward the hard score (hard 0 must mean no violation)";
+        };
+        auto resetRefusal = [](ConstraintAssembly assembly) {
+            try
+            {
+                scoreOf(std::move(assembly), hPositive());
+            }
+            catch (const std::logic_error &error)
+            {
+                return std::string(error.what());
+            }
+            return std::string();
+        };
+        check(resetRefusal(copyOf("differentPartitionPairsCost")
+                               .offset("differentPartitionPairsCost", 1.0)
+                               .clip("differentPartitionPairsCost", false))
+                      == refusal("differentPartitionPairsCost")
+                  && resetRefusal(copyOf("differentPartitionPairsCost")
+                                      .clip("differentPartitionPairsCost", false)
+                                      .offset("differentPartitionPairsCost", -1.0))
+                         == refusal("differentPartitionPairsCost"),
+              "different-side literal offset +1 / -1 on its default hard: refused at reset");
+        check(resetRefusal(copyOf("partitionImbalanceCost")
+                               .weight("partitionImbalanceCost", 1.0)
+                               .offset("partitionImbalanceCost", 3.0)
+                               .clip("partitionImbalanceCost", false)
+                               .hard("partitionImbalanceCost"))
+                  == refusal("partitionImbalanceCost"),
+              "imbalance literal offset moved to hard afterwards: refused at reset");
+        ConstraintAssembly repeated = copyOf("fixedPartitionCost");
+        repeated.addInstances(std::move(
+            copyOf("fixedPartitionCost").offset("fixedPartitionCost", 2.0).clip("fixedPartitionCost", false)));
+        check(resetRefusal(std::move(repeated)) == refusal("fixedPartitionCost"),
+              "a hard literal repeat next to the default: refused at reset");
+        check(resetRefusal(copyOf("differentPartitionPairsCost").offset("differentPartitionPairsCost", 1.0)).empty()
+                  && resetRefusal(copyOf("differentPartitionPairsCost").clip("differentPartitionPairsCost", false))
+                         .empty()
+                  && resetRefusal(copyOf("differentPartitionPairsCost")
+                                      .offset("differentPartitionPairsCost", 1.0)
+                                      .clip("differentPartitionPairsCost", false)
+                                      .soft("differentPartitionPairsCost"))
+                         .empty()
+                  && resetRefusal(copyOf("cutWeightCost").offset("cutWeightCost", 1.0).clip("cutWeightCost", false))
+                         .empty(),
+              "a threshold offset or clip=false with offset 0 on hard, the literal offset on soft "
+              "and on the soft reward are allowed");
     }
     {
         // Random walk: incremental == a fresh calculator of the same assembly.
