@@ -216,46 +216,25 @@ def test_a_worker_thread_that_cannot_start_raises_instead_of_aborting():
         _core._fail_worker_thread_start(-1)
 
 
-def test_stop_at_first_feasible_stops_whatever_the_soft_total(monkeypatch):
-    """stop_at_first_feasible compares the hard level only (best_score_limit (0, -inf)).
-
-    The first 0.2.0 limit, (0, -1e18), was never reached by a feasible solution whose
-    soft score is below -1e18. This demo has no soft penalty that is still non-zero at
-    the first feasible solution, so the test checks the limit the solve hands to the
-    engine directly, and that the 30 s solve still stops at that solution.
-    """
-    import dataclasses
-    import time
-
+def test_stop_at_first_feasible_has_no_soft_floor(monkeypatch):
+    """stop_at_first_feasible hands the engine best_score_limit (0, -inf): only the hard level
+    is compared, so no soft score, however low, misses the stop. The first 0.2.0 limit,
+    (0, -1e18), was never reached by a soft score below -1e18. A soft score that low cannot
+    be built here (its only default soft term is a reward (selected_value_cost)), so the limit itself is checked; the stop is exercised end to end
+    in the other packages' tests."""
     import knapsack as package
 
-    limits = []
-    real_solver = package.Solver
-
-    def recording_solver(cfg):
-        limits.append(cfg.best_score_limit)
-        return real_solver(cfg)
-
-    monkeypatch.setattr(package, "Solver", recording_solver)
-    from knapsack.constraints import get_constraints
-
-    info = {row.name: row for row in package.constraint_info()}
-
-    def heavy(spec):
-        row = info[spec.name]
-        soft_penalty = row.default_level == "soft" and row.default_enabled and not row.reward
-        return dataclasses.replace(spec, weight=1e21) if soft_penalty else spec
-
     seen = []
-    started = time.monotonic()
-    package.solve(
-        demo(),
-        time_limit_seconds=30.0,
-        random_seed=1,
-        stop_at_first_feasible=True,
-        on_new_best=lambda _step, score: seen.append(score),
-        constraints=[heavy(spec) for spec in get_constraints()],
-    )
-    assert time.monotonic() - started < 20.0
-    assert limits and all(limit == (0, float("-inf")) for limit in limits)
-    assert seen and seen[-1].hard == 0
+
+    class Captured(Exception):
+        pass
+
+    class Capture:
+        def __init__(self, cfg):
+            seen.append(cfg.best_score_limit)
+            raise Captured
+
+    monkeypatch.setattr(package, "Solver", Capture)
+    with pytest.raises(Captured):
+        package.solve(demo(), stop_at_first_feasible=True)
+    assert seen == [(0, float("-inf"))]
