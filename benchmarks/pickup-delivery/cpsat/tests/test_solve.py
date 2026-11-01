@@ -395,13 +395,18 @@ SELECTIONS = {
         UnassignedRequestsCost(weight=2, offset=3, clip=False),
         TravelTimeCost(offset=150, clip=False),
         TravelTimeCost(weight=3, offset=-20),
-        MaxStopsCost(offset=1, clip=False),  # 0 on both vehicles: -1 each, not the pool
+        # 0 on both vehicles: -1 each, not the pool; on soft, since hard refuses the
+        # literal formula with an offset.
+        MaxStopsCost(level="soft", offset=1, clip=False),
     ],
+    # Thresholds on hard; the literal copies (refused on hard) sit on soft. The
+    # structural paired_request_cost stays hard, so it takes the threshold only.
     "hard-offsets": [
         VehicleCapacityCost(offset=1),
-        VehicleCapacityCost(weight=2, offset=2, clip=False),
-        MaxEndTimeCost(offset=1, clip=False),
-        PairedRequestCost(offset=1, clip=False),
+        VehicleCapacityCost(level="soft", weight=2, offset=2, clip=False),
+        MaxEndTimeCost(offset=1),
+        MaxEndTimeCost(level="soft", offset=1, clip=False),
+        PairedRequestCost(offset=1),
         UnassignedRequestsCost(),
     ],
     "identical-twice": [TravelTimeCost(), TravelTimeCost(), UnassignedRequestsCost()],
@@ -489,3 +494,81 @@ def test_a_repeated_structural_pick_refuses_per_instance() -> None:
         constraints=[PairedRequestCost(), PairedRequestCost()],
     )
     assert _levels(solved.score)["hard"] == 0
+
+
+# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+
+HARD_REFUSAL = (
+    "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
+    "violation; use clip=True (a threshold) or another level"
+)
+
+
+@pytest.mark.parametrize("offset", [2, -2])
+@pytest.mark.parametrize(
+    "selection",
+    [
+        # The default level, hard.
+        lambda offset: VehicleCapacityCost(offset=offset, clip=False),
+        lambda offset: {
+            "name": "vehicle_capacity_cost",
+            "offset": offset,
+            "clip": False,
+        },
+        lambda offset: TravelTimeCost(level="hard", offset=offset, clip=False),
+        lambda offset: {
+            "name": "travel_time_cost",
+            "level": "hard",
+            "offset": offset,
+            "clip": False,
+        },
+        # Structural here (the circuit model), flippable in the engine; hard by default.
+        lambda offset: PairedRequestCost(offset=offset, clip=False),
+    ],
+    ids=[
+        "capacity-spec",
+        "capacity-mapping",
+        "travel-moved-to-hard",
+        "travel-mapping",
+        "paired-structural",
+    ],
+)
+def test_the_literal_offset_is_refused_on_hard_like_the_engine(
+    selection, offset
+) -> None:
+    """The CP-SAT reference refuses the pick with the engine's and score()'s message."""
+    pick = selection(offset)
+    name = pick["name"] if isinstance(pick, dict) else pick.name
+    message = HARD_REFUSAL.format(q=repr(name))
+    for picks in ([pick], [VehicleCapacityCost(), UnassignedRequestsCost(), pick]):
+        with pytest.raises(ValueError) as refused:
+            solve_request(_line_request(timelimit=1), constraints=picks)
+        assert str(refused.value) == message
+        with pytest.raises(ValueError) as refused:
+            REGISTRY.objective(cp_model.CpModel(), ("hard", "medium", "soft"), picks)
+        assert str(refused.value) == message
+    if not isinstance(pick, dict):
+        # The engine and the score() mirror say the same.
+        plan = to_plan(_line_request().model_input)
+        with pytest.raises(ValueError) as refused:
+            domain.constraint_costs(plan, [pick])
+        assert str(refused.value) == message
+        with pytest.raises(ValueError) as refused:
+            score(domain.constraint_costs(plan), [pick])
+        assert str(refused.value) == message
+        with pytest.raises(ValueError) as refused:
+            solve_metaheuristic_request(_line_request(timelimit=1), constraints=[pick])
+        assert str(refused.value) == message
+
+
+@pytest.mark.parametrize("offset", [2, -2])
+def test_the_same_literal_pick_on_soft_is_accepted(offset) -> None:
+    picks = [
+        VehicleCapacityCost(),
+        UnassignedRequestsCost(),
+        VehicleCapacityCost(level="soft", offset=offset, clip=False),
+    ]
+    request = _line_request()
+    best = max(_engine_levels(request, routes, picks)[0] for routes in _route_sets())
+    levels = _levels(solve_request(request, constraints=picks).score)
+    assert (levels["hard"], levels["soft"] + levels["medium"] * MEDIUM_UNIT) == best

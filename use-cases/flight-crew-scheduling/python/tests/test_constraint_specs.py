@@ -247,9 +247,11 @@ def test_score_rejects_an_unknown_constraint_name():
         [*get_constraints(), FlightConflictCost(weight=3, exponent=2.0)],
         [
             RequiredSkillCost(),
-            RequiredSkillCost(offset=1, clip=False, weight=40),
+            RequiredSkillCost(level="soft", offset=1, clip=False, weight=40),
+            RequiredSkillCost(offset=1, weight=40),
             FlightConflictCost(offset=-1),
-            TransferBetweenTwoFlightsCost(offset=1, clip=False, weight=5),
+            TransferBetweenTwoFlightsCost(level="soft", offset=1, clip=False, weight=5),
+            TransferBetweenTwoFlightsCost(offset=1, weight=5),
             FirstAssignmentNotDepartingFromHomeCost(),
             FirstAssignmentNotDepartingFromHomeCost(weight=250, offset=0.5, clip=False),
             LastAssignmentNotArrivingAtHomeCost(offset=1),
@@ -593,12 +595,22 @@ def test_the_keys_follow_the_pick_order_of_each_name():
     [
         # Per employee; X1 holds no unavailable seat (raw 0), and neither does P1.
         (EmployeeUnavailabilityCost(offset=1), (-10, 0.0)),
-        (EmployeeUnavailabilityCost(offset=1, clip=False), (10, 0.0)),  # -1 + 1 - 1: the zeros are rewarded
         (EmployeeUnavailabilityCost(offset=3), (0, 0.0)),
-        (EmployeeUnavailabilityCost(offset=3, exponent=2, clip=False), (190, 0.0)),  # -9 - 1 - 9
         (RequiredSkillCost(offset=-1), (-200, 0.0)),  # a negative offset adds to every non-zero employee
-        (RequiredSkillCost(offset=-1, clip=False), (-400, 0.0)),  # ...or to every employee
-        (EmployeeUnavailabilityCost(weight=1, offset=0.5, clip=False), (0, 0.0)),  # -1 + 2 - 1: per employee
+        # Hard rounds per employee: 1.5 -> 2 on P1 and P2 (a rounded total gives 3).
+        (LastAssignmentNotArrivingAtHomeCost(level="hard", weight=1, offset=-0.5), (-4, 0.0)),
+        # The literal formula with an offset is refused on hard (the default of these two),
+        # so its picks sit on soft:
+        (
+            EmployeeUnavailabilityCost(level="soft", offset=1, clip=False),
+            (0, 10.0),
+        ),  # -1 + 1 - 1: the zeros are rewarded
+        (EmployeeUnavailabilityCost(level="soft", offset=3, exponent=2, clip=False), (0, 190.0)),  # -9 - 1 - 9
+        (RequiredSkillCost(level="soft", offset=-1, clip=False), (0, -400.0)),  # ...or to every employee
+        (
+            EmployeeUnavailabilityCost(level="soft", weight=2, offset=0.5, clip=False),
+            (0, -1.0),
+        ),  # 2 x (-0.5 + 1.5 - 0.5)
         (LastAssignmentNotArrivingAtHomeCost(offset=1, clip=False), (0, 1000.0)),  # 0 + 0 - 1, soft
         (FirstAssignmentNotDepartingFromHomeCost(offset=0.5), (0, -500.0)),
     ],
@@ -634,11 +646,13 @@ def test_offset_zero_reproduces_the_0_2_0_scores():
         [*get_constraints(), FlightConflictCost(weight=3, exponent=2)],
         [
             RequiredSkillCost(),
-            RequiredSkillCost(offset=1, clip=False, weight=40),
+            RequiredSkillCost(level="soft", offset=1, clip=False, weight=40),
+            RequiredSkillCost(offset=1, weight=40),
             FlightConflictCost(),
             FlightConflictCost(weight=2, exponent=2, offset=1),
             TransferBetweenTwoFlightsCost(offset=-1),
-            EmployeeUnavailabilityCost(offset=-2, clip=False),
+            EmployeeUnavailabilityCost(level="soft", offset=-2, clip=False),
+            EmployeeUnavailabilityCost(offset=-2),
             FirstAssignmentNotDepartingFromHomeCost(weight=250, offset=0.5, clip=False),
             LastAssignmentNotArrivingAtHomeCost(),
         ],
@@ -722,3 +736,84 @@ def test_a_level_must_be_a_level():
 def test_the_knob_was_renamed():
     with pytest.raises(TypeError):
         FlightConflictCost(hard=True)
+
+
+# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+
+HARD_REFUSAL = (
+    "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
+    "violation; use clip=True (a threshold) or another level"
+)
+
+
+def _refusal(call):
+    with pytest.raises(ValueError) as refused:
+        call()
+    return str(refused.value)
+
+
+@pytest.mark.parametrize("offset", [1.5, -1.5])
+@pytest.mark.parametrize(
+    "pick",
+    [
+        lambda offset: RequiredSkillCost(offset=offset, clip=False),  # the default level, hard
+        lambda offset: FlightConflictCost(level="hard", offset=offset, clip=False),
+        lambda offset: EmployeeUnavailabilityCost(offset=offset, clip=False),
+        lambda offset: LastAssignmentNotArrivingAtHomeCost(level=Level.HARD, offset=offset, clip=False),
+    ],
+    ids=["skill-default-hard", "conflict-level-hard", "unavailability-default-hard", "last-home-moved-to-hard"],
+)
+def test_the_literal_offset_is_refused_on_hard_on_every_path(pick, offset):
+    """A positive offset would reward the employees below it, so one employee's slack would
+    cancel another's violation and an infeasible schedule could score hard 0; a negative
+    one would charge every employee, an idle one included. The engine (solve, Solver,
+    constraint_costs) and the score() mirror refuse it with the same message; the CP-SAT
+    reference's test_solve.py checks the same words."""
+    spec = pick(offset)
+    message = HARD_REFUSAL.format(q=repr(spec.name))
+    repeated = [type(spec)(), spec]  # a refused repeat next to its accepted first instance
+    assert _refusal(lambda: fc.solve(build_schedule(), time_limit_seconds=0.1, constraints=[spec])) == message
+    assert _refusal(lambda: _zero_budget(repeated)) == message
+    config = fc.SolverConfig()
+    config.spent_limit_seconds = 0.1
+    assert _refusal(lambda: fc.Solver(config).solve_with_constraints(_hand_schedule(), [spec])) == message
+    assert _refusal(lambda: fc.constraint_costs(_hand_schedule(), [spec])) == message
+    assert _refusal(lambda: fc.constraint_costs(_hand_schedule(), repeated)) == message
+    assert _refusal(lambda: score(fc.constraint_costs(_hand_schedule()), [spec])) == message
+    assert _refusal(lambda: score(fc.constraint_costs(_hand_schedule()), repeated)) == message
+
+
+@pytest.mark.parametrize("offset", [3.0, -3.0])
+def test_the_same_literal_pick_on_soft_is_accepted(offset):
+    """100 x ((0 - offset) + (0 - offset) + (1 - offset)) per employee, on soft, on every path."""
+    pick = RequiredSkillCost(level="soft", offset=offset, clip=False)
+    expected = (0, -100 * (1 - 3 * offset))
+    assert score(fc.constraint_costs(_hand_schedule()), [pick]) == expected
+    raw = fc.constraint_costs(_hand_schedule(), [pick])
+    assert (raw["required_skill_cost"]["level"], raw["required_skill_cost"]["clip"]) == ("soft", False)
+    assert score(raw, [pick]) == expected
+    assert _zero_budget([pick]) == expected
+
+
+@pytest.mark.parametrize(
+    ("pick", "expected"),
+    [
+        (RequiredSkillCost(offset=3.0), (0, 0.0)),  # clip=True on hard: a threshold
+        (RequiredSkillCost(offset=-3.0), (-400, 0.0)),  # 100 x (1 + 3) on X1 only
+        (RequiredSkillCost(clip=False), (-100, 0.0)),  # clip=False with offset 0: the 0.2.0 shaping
+        (RequiredSkillCost(offset=0.0, clip=False), (-100, 0.0)),
+    ],
+)
+def test_the_allowed_combinations_on_hard(pick, expected):
+    assert score(fc.constraint_costs(_hand_schedule()), [pick]) == expected
+    assert _zero_budget([pick]) == expected
+
+
+def test_the_refusal_comes_after_every_knob_of_a_duck_typed_pick():
+    """The engine checks once a pick's knobs are all re-stated: the level a pick moves to decides."""
+    moved = SimpleNamespace(name="required_skill_cost", weight=None, level="soft", exponent=1.0, offset=3.0, clip=False)
+    assert _zero_budget([moved]) == (0, 800.0)
+    kept = SimpleNamespace(name="required_skill_cost", weight=None, level=None, exponent=1.0, offset=3.0, clip=False)
+    message = HARD_REFUSAL.format(q="'required_skill_cost'")
+    assert _refusal(lambda: _zero_budget([kept])) == message
+    assert _refusal(lambda: score(fc.constraint_costs(_hand_schedule()), [kept])) == message

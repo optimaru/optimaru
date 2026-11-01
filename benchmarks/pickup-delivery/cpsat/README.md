@@ -38,7 +38,11 @@ their total (a constant 0 for the three structural rules), so an integral `offse
 each unit exactly as the engine does, in both `clip` modes; a fractional offset is refused
 (`offset must be an integer for CP-SAT`). `max_route_radius_cost`, `vehicle_fixed_cost`
 and `min_capacity_utilization_cost` work on whole numbers here (meters and the load target
-rounded up, the fixed cost rounded), with or without an offset.
+rounded up, the fixed cost rounded), with or without an offset. `clip=False` with an offset
+is refused on hard with the engine's message (`constraint 'vehicle_capacity_cost':
+clip=False with a non-zero offset cannot be hard, ...`), the three structural rules
+included, since they stay hard; medium folds into soft, as in the engine, so it takes the
+literal formula.
 
 `catalog()` lists the plugins in `list_constraints()` order;
 `tests/test_solve.py::test_cpsat_defaults_are_the_engine_defaults` keeps it equal to

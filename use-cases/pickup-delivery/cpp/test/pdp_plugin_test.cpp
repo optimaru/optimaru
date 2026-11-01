@@ -19,8 +19,9 @@
 //       repeat (travel + 0.5 x travel^2), threshold / literal / negative
 //       offsets by hand (an idle vehicle counts in literal mode, the pool
 //       only for the two components that price it), the global's total
-//       shaped once, incremental == a fresh recompute over a random walk,
-//       every preview == the applied score under FULL_ASSERT and a
+//       shaped once, the literal formula refused on hard at reset and kept
+//       on soft and medium, incremental == a fresh recompute over a random
+//       walk, every preview == the applied score under FULL_ASSERT and a
 //       FULL_ASSERT solve with repeated, shifted components
 #include <algorithm>
 #include <chrono>
@@ -906,10 +907,16 @@ ConstraintAssembly repeatedAssembly()
                                         .weight("travelTimeCost", 0.001)
                                         .exponent("travelTimeCost", 2.0)
                                         .offset("travelTimeCost", 2000.0)));
+    // The literal copies of hard components sit on soft: hard refuses the
+    // literal formula with an offset (hard 0 must mean no violation).
     assembly.addInstances(std::move(copyOf("vehicleCapacityCost")
+                                        .soft("vehicleCapacityCost")
                                         .weight("vehicleCapacityCost", 2.0)
                                         .offset("vehicleCapacityCost", 1.0)
                                         .clip("vehicleCapacityCost", false)));
+    assembly.addInstances(std::move(copyOf("vehicleCapacityCost")
+                                        .weight("vehicleCapacityCost", 2.0)
+                                        .offset("vehicleCapacityCost", 1.0)));
     assembly.addInstances(std::move(copyOf("unassignedRequestsCost")
                                         .weight("unassignedRequestsCost", 2.0)
                                         .offset("unassignedRequestsCost", 3.0)
@@ -923,8 +930,12 @@ ConstraintAssembly repeatedAssembly()
                                         .weight("squaredOrderAgeCost", 1e-6)
                                         .offset("squaredOrderAgeCost", 1e6)
                                         .clip("squaredOrderAgeCost", false)));
-    assembly.addInstances(std::move(
-        copyOf("pairedRequestCost").offset("pairedRequestCost", 1.0).clip("pairedRequestCost", false)));
+    assembly.addInstances(std::move(copyOf("pairedRequestCost")
+                                        .soft("pairedRequestCost")
+                                        .offset("pairedRequestCost", 1.0)
+                                        .clip("pairedRequestCost", false)));
+    assembly.addInstances(
+        std::move(copyOf("pairedRequestCost").offset("pairedRequestCost", 1.0)));
     return assembly;
 }
 
@@ -979,31 +990,46 @@ void verifyRepeatsAndOffsets()
                       .soft
                   == -750.0,
               "literal offset -50: 250 + 450 + 50");
-        // A hard literal pick rounds per vehicle: (2 - 2.5) -> -1, (0 - 2.5)
-        // -> -3 twice: -7 (a rounded total would give -6).
-        check(levelsOf(copyOf("vehicleCapacityCost")
-                           .offset("vehicleCapacityCost", 2.5)
-                           .clip("vehicleCapacityCost", false),
+        // The literal capacity pick on soft: (2 - 2.5) + (0 - 2.5) x 2 =
+        // -5.5, the idle vehicle included: +5.5 soft (not rounded).
+        const auto literal = levelsOf(copyOf("vehicleCapacityCost")
+                                          .soft("vehicleCapacityCost")
+                                          .offset("vehicleCapacityCost", 2.5)
+                                          .clip("vehicleCapacityCost", false),
+                                      repeatInstance());
+        check(literal.hard == 0 && literal.soft == 5.5,
+              "capacity literal offset 2.5 on soft: -0.5 - 2.5 - 2.5 -> +5.5 soft");
+        // A hard threshold pick rounds per vehicle: travel moved to hard at
+        // weight 0.005 beyond 100 s: llround(0.5) + llround(1.5) = 3 (a
+        // rounded total would give 2).
+        check(levelsOf(copyOf("travelTimeCost")
+                           .hard("travelTimeCost")
+                           .weight("travelTimeCost", 0.005)
+                           .offset("travelTimeCost", 100.0),
                        repeatInstance())
                       .hard
-                  == 7,
-              "capacity literal offset 2.5: llround per vehicle, +7 hard");
+                  == -3,
+              "travel on hard, threshold offset 100 at weight 0.005: llround per vehicle, -3 hard");
         // requiredVehicleCost prices the pool: r3 bound to vehicle 0 and
         // waiting there costs 1 on the pool's unit, and a literal offset 2
-        // charges all four units: 3 x (0 - 2) + (1 - 2) = -7.
+        // (on soft: hard refuses it) charges all four units: 3 x (0 - 2) +
+        // (1 - 2) = -7.
         PdpRoutePlan bound = repeatInstance();
         bound.deliveries[2].requiredVehicleIndex = 0;
         DecomposedCalculator required;
         copyOf("requiredVehicleCost")
+            .soft("requiredVehicleCost")
             .weight("requiredVehicleCost", 1.0)
             .offset("requiredVehicleCost", 2.0)
             .clip("requiredVehicleCost", false)
             .into(required);
         required.resetWorkingSolution(bound);
-        check(required.calculateScore().hard == 7 && !required.constraintCosts()[0].scoped
+        const optimaru::HardSoftScore requiredScore = required.calculateScore();
+        check(requiredScore.hard == 0 && requiredScore.soft == 7.0
+                  && !required.constraintCosts()[0].scoped
                   && required.constraintCosts()[0].unitCosts
                          == std::vector<double>{0.0, 0.0, 0.0, 1.0},
-              "requiredVehicleCost evaluates the pool too: literal offset 2 -> +7 hard");
+              "requiredVehicleCost evaluates the pool too: literal offset 2 on soft -> +7 soft");
         // The global's total is shaped once: (4 - 2)^2 = 4 medium minutes.
         const auto global = levelsOf(copyOf("unassignedRequestsCost")
                                          .offset("unassignedRequestsCost", 2.0)
@@ -1023,6 +1049,66 @@ void verifyRepeatsAndOffsets()
                                                                          2.0)))),
                        repeatInstance());
         check(twice.medium == -12.0, "a repeated medium pick: -4 - 8 medium");
+    }
+    {
+        // On a level that counts toward the hard score the literal formula
+        // with an offset is refused at reset, whichever sign and setter
+        // order: +2.5 would reward the vehicles below it (+7 hard, so one
+        // vehicle's spare capacity would cancel another's overload), -2.5
+        // would charge three vehicles that hold no violation. Medium folds
+        // into soft here, so it keeps the literal formula.
+        auto resetRefusal = [](ConstraintAssembly assembly) {
+            PdpRoutePlan plan = repeatInstance();
+            try
+            {
+                levelsWith(std::move(assembly), plan);
+            }
+            catch (const std::logic_error &error)
+            {
+                return std::string(error.what());
+            }
+            return std::string();
+        };
+        auto refusal = [](const std::string &name) {
+            return "Constraint '" + name
+                   + "' cannot use clip=false with a non-zero offset on a level that counts toward "
+                     "the hard score (hard 0 must mean no violation)";
+        };
+        check(resetRefusal(copyOf("vehicleCapacityCost")
+                               .offset("vehicleCapacityCost", 2.5)
+                               .clip("vehicleCapacityCost", false))
+                      == refusal("vehicleCapacityCost")
+                  && resetRefusal(copyOf("vehicleCapacityCost")
+                                      .clip("vehicleCapacityCost", false)
+                                      .offset("vehicleCapacityCost", -2.5))
+                         == refusal("vehicleCapacityCost"),
+              "capacity literal offset +-2.5 on hard (its default): refused at reset");
+        check(resetRefusal(copyOf("pairedRequestCost")
+                               .offset("pairedRequestCost", 1.0)
+                               .clip("pairedRequestCost", false))
+                  == refusal("pairedRequestCost"),
+              "a coupling global with the literal offset on hard (its default): refused at reset");
+        check(resetRefusal(copyOf("travelTimeCost")
+                               .offset("travelTimeCost", 300.0)
+                               .clip("travelTimeCost", false)
+                               .hard("travelTimeCost"))
+                  == refusal("travelTimeCost"),
+              "travel literal offset moved to hard afterwards: refused at reset");
+        ConstraintAssembly repeated = copyOf("vehicleCapacityCost");
+        repeated.addInstances(std::move(copyOf("vehicleCapacityCost")
+                                            .offset("vehicleCapacityCost", 1.0)
+                                            .clip("vehicleCapacityCost", false)));
+        check(resetRefusal(std::move(repeated)) == refusal("vehicleCapacityCost"),
+              "a repeated capacity instance with the literal offset on hard: refused at reset");
+        check(resetRefusal(copyOf("vehicleCapacityCost").offset("vehicleCapacityCost", 2.5)).empty()
+                  && resetRefusal(copyOf("vehicleCapacityCost").clip("vehicleCapacityCost", false))
+                         .empty()
+                  && resetRefusal(copyOf("unassignedRequestsCost")
+                                      .offset("unassignedRequestsCost", 6.0)
+                                      .clip("unassignedRequestsCost", false))
+                         .empty(),
+              "allowed: a threshold offset or clip=false with offset 0 on hard, the literal "
+              "offset on the into-soft medium");
     }
     using Descriptor = optimaru::SolutionDescriptor<PdpRoutePlan>;
     {

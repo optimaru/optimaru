@@ -36,7 +36,9 @@ Every spec takes five knobs:
 - ``clip``     (keyword) ``True`` (the default) counts only what lies beyond the
                offset, ``max(0, c - offset) ** exponent``; ``False`` shapes
                ``c - offset`` as it is, so a trolley below the offset — an empty
-               one (cost 0) included — lowers the penalty.
+               one (cost 0) included — lowers the penalty. With an offset it is
+               refused on hard (``TrolleyCapacityCost`` by default), because
+               hard 0 must mean no violation.
 
 The same constraint may be picked several times; each pick is scored on its own with
 its own knobs and the picks add up. The walk plus the square of every meter beyond

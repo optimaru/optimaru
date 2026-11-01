@@ -18,4 +18,6 @@ on both (`this use case has no medium level`). Like every CP-SAT reference,
 terms with its own knobs, its level included. Every plugin adds one term per trolley,
 an empty one included, so an integral `offset` shapes each trolley exactly as the
 engine does in both `clip` modes; a fractional offset is refused (`offset must be an
-integer for CP-SAT`).
+integer for CP-SAT`). `clip=False` with an offset is refused on hard with the engine's
+message (`constraint 'trolley_capacity_cost': clip=False with a non-zero offset cannot be
+hard, ...`).

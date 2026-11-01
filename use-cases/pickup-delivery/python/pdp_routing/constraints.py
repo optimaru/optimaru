@@ -49,7 +49,9 @@ Every spec takes five knobs:
                one (cost 0) included — lowers the penalty. The unassigned pool is
                no vehicle: a route constraint never charges it, except
                ``RequiredVehicleCost`` and ``SquaredOrderAgeCost``, which price
-               the requests waiting there and so count the pool as a unit.
+               the requests waiting there and so count the pool as a unit. With
+               an offset it is refused on hard (``VehicleCapacityCost`` by
+               default), because hard 0 must mean no violation.
 
 The same constraint may be picked several times; each pick is scored on its own with
 its own knobs and the picks add up. Travel time plus the square of every second

@@ -18,8 +18,9 @@
 //   (j) repeated components and the offset / clip knobs: a hand-calculated
 //       repeat (conflicts + their square), threshold / literal / negative
 //       offsets by hand (an idle employee counts in literal mode), per-unit
-//       hard rounding, incremental == a fresh recompute over a random walk
-//       (delta, full-recost and soft components repeated and shifted) and a
+//       hard rounding, the literal formula refused on hard at reset and kept
+//       on soft, incremental == a fresh recompute over a random walk (delta,
+//       full-recost and soft components repeated and shifted) and a
 //       FULL_ASSERT solve with the same assembly
 #include <algorithm>
 #include <chrono>
@@ -820,22 +821,36 @@ Score repeatScore(ConstraintAssembly assembly)
     return scoreWith(calculator, s);
 }
 
+// The four hard components take threshold offsets on hard; their literal
+// copies sit on soft, because hard refuses the literal formula with an
+// offset (hard 0 must mean no violation).
 ConstraintAssembly repeatedAssembly()
 {
     ConstraintAssembly assembly = defaultConstraints();
-    assembly.offset("flightConflictCost", 1.0).clip("flightConflictCost", false);
+    assembly.offset("flightConflictCost", 1.0);
     assembly.offset("requiredSkillCost", -1.0);
+    assembly.addInstances(std::move(copyOf("flightConflictCost")
+                                        .soft("flightConflictCost")
+                                        .offset("flightConflictCost", 1.0)
+                                        .clip("flightConflictCost", false)));
     assembly.addInstances(std::move(copyOf("flightConflictCost")
                                         .weight("flightConflictCost", 2.0)
                                         .exponent("flightConflictCost", 2.0)
                                         .offset("flightConflictCost", 1.0)));
     assembly.addInstances(std::move(copyOf("requiredSkillCost")
+                                        .soft("requiredSkillCost")
                                         .weight("requiredSkillCost", 30.0)
                                         .offset("requiredSkillCost", 0.5)
                                         .clip("requiredSkillCost", false)));
+    assembly.addInstances(std::move(copyOf("requiredSkillCost")
+                                        .weight("requiredSkillCost", 30.0)
+                                        .offset("requiredSkillCost", 0.5)));
     assembly.addInstances(std::move(copyOf("employeeUnavailabilityCost")
+                                        .soft("employeeUnavailabilityCost")
                                         .offset("employeeUnavailabilityCost", -2.0)
                                         .clip("employeeUnavailabilityCost", false)));
+    assembly.addInstances(std::move(
+        copyOf("employeeUnavailabilityCost").offset("employeeUnavailabilityCost", -2.0)));
     assembly.addInstances(std::move(copyOf("transferBetweenTwoFlightsCost")
                                         .weight("transferBetweenTwoFlightsCost", 3.0)
                                         .offset("transferBetweenTwoFlightsCost", 1.0)));
@@ -870,27 +885,36 @@ void verifyRepeatsAndOffsets()
     checkScore("threshold offset 2 on the conflicts: 10 x 1",
                repeatScore(copyOf("flightConflictCost").offset("flightConflictCost", 2.0)), -10,
                0.0);
-    checkScore("literal offset 2 on the conflicts: 10 x (1 - 2 - 2), the idle E2 included",
+    // The literal formula with an offset is refused on hard (below), so the
+    // literal picks of the hard components are scored on soft.
+    checkScore("literal offset 2 on the conflicts, on soft: 10 x (1 - 2 - 2), the idle E2 "
+               "included",
                repeatScore(copyOf("flightConflictCost")
+                               .soft("flightConflictCost")
                                .offset("flightConflictCost", 2.0)
                                .clip("flightConflictCost", false)),
-               30, 0.0);
+               0, 30.0);
     checkScore("threshold offset -1 on the skill: 100 x (1 + 1), the others 0",
                repeatScore(copyOf("requiredSkillCost").offset("requiredSkillCost", -1.0)), -200,
                0.0);
-    checkScore("literal offset -1 on the skill: 100 x (1 + 2 + 1)",
+    checkScore("literal offset -1 on the skill, on soft: 100 x (1 + 2 + 1)",
                repeatScore(copyOf("requiredSkillCost")
+                               .soft("requiredSkillCost")
                                .offset("requiredSkillCost", -1.0)
                                .clip("requiredSkillCost", false)),
-               -400, 0.0);
-    // (3 - 0.5) -> 3, (0 - 0.5) -> -1 twice per employee: -1 (a rounded
-    // total, 2.5 - 1 = 1.5 -> 2, would give -2).
-    checkScore("conflicts literal offset 0.5 at weight 1: llround per employee",
-               repeatScore(copyOf("flightConflictCost")
-                               .weight("flightConflictCost", 1.0)
-                               .offset("flightConflictCost", 0.5)
-                               .clip("flightConflictCost", false)),
-               -1, 0.0);
+               0, -400.0);
+    {
+        // A hard pick rounds per employee: with E1 on two more overlapping
+        // flights the conflicts are [3, 1, 0], and at weight 0.5 llround(1.5)
+        // + llround(0.5) = 3 (a rounded total would give 2).
+        FlightCrewSchedule s = repeatInstance();
+        addAssignment(s, addFlight(s, 0, 300, 0, 400), 1);
+        addAssignment(s, addFlight(s, 0, 310, 0, 410), 1);
+        DecomposedCalculator calculator;
+        copyOf("flightConflictCost").weight("flightConflictCost", 0.5).into(calculator);
+        checkScore("conflicts [3, 1, 0] at weight 0.5: llround per employee, -3 hard",
+                   scoreWith(calculator, s), -3, 0.0);
+    }
     checkScore("a soft literal offset 1: 1000 x (-1 + 0 - 1) -> +2000 soft",
                repeatScore(copyOf("firstAssignmentNotDepartingFromHomeCost")
                                .offset("firstAssignmentNotDepartingFromHomeCost", 1.0)
@@ -900,6 +924,54 @@ void verifyRepeatsAndOffsets()
                repeatScore(std::move(
                    copyOf("requiredSkillCost").addInstances(copyOf("requiredSkillCost")))),
                -200, 0.0);
+    {
+        // On hard (the default of the four hard components) the literal
+        // formula with an offset is refused at reset, whichever sign and
+        // setter order: +2 would reward E1 and E2 (+30 hard, so their slack
+        // would cancel E0's conflicts), -1 would charge employees that hold
+        // no violation.
+        auto resetRefusal = [](ConstraintAssembly assembly) {
+            try
+            {
+                repeatScore(std::move(assembly));
+            }
+            catch (const std::logic_error &error)
+            {
+                return std::string(error.what());
+            }
+            return std::string();
+        };
+        auto refusal = [](const std::string &name) {
+            return "Constraint '" + name
+                   + "' cannot use clip=false with a non-zero offset on a level that counts toward "
+                     "the hard score (hard 0 must mean no violation)";
+        };
+        check(resetRefusal(copyOf("flightConflictCost")
+                               .offset("flightConflictCost", 2.0)
+                               .clip("flightConflictCost", false))
+                      == refusal("flightConflictCost")
+                  && resetRefusal(copyOf("requiredSkillCost")
+                                      .clip("requiredSkillCost", false)
+                                      .offset("requiredSkillCost", -1.0))
+                         == refusal("requiredSkillCost"),
+              "conflicts / skill literal offset on hard (their default): refused at reset");
+        check(resetRefusal(copyOf("firstAssignmentNotDepartingFromHomeCost")
+                               .offset("firstAssignmentNotDepartingFromHomeCost", 1.0)
+                               .clip("firstAssignmentNotDepartingFromHomeCost", false)
+                               .hard("firstAssignmentNotDepartingFromHomeCost"))
+                  == refusal("firstAssignmentNotDepartingFromHomeCost"),
+              "a soft component's literal offset moved to hard afterwards: refused at reset");
+        ConstraintAssembly repeated = copyOf("flightConflictCost");
+        repeated.addInstances(std::move(copyOf("flightConflictCost")
+                                            .offset("flightConflictCost", 1.0)
+                                            .clip("flightConflictCost", false)));
+        check(resetRefusal(std::move(repeated)) == refusal("flightConflictCost"),
+              "a repeated conflict instance with the literal offset on hard: refused at reset");
+        check(resetRefusal(copyOf("flightConflictCost").offset("flightConflictCost", 2.0)).empty()
+                  && resetRefusal(copyOf("flightConflictCost").clip("flightConflictCost", false))
+                         .empty(),
+              "allowed on hard: a threshold offset, or clip=false with offset 0");
+    }
     {
         // Random walk: incremental == a fresh calculator of the same assembly.
         FlightCrewSchedule s = buildRandomInstance(/*flights*/ 18, /*employees*/ 8, /*seed*/ 13);

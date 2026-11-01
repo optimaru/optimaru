@@ -775,7 +775,7 @@ def test_a_worker_thread_that_cannot_start_raises_instead_of_aborting():
 HAND_PLACES = {"v": 0, "w": 0, "x": 0, "p1": 100, "d1": 200, "p2": 300, "d2": 400, "p3": 900, "d3": 1000}
 
 
-def _hand_plan():
+def _hand_input():
     """Vehicle v (capacity 2) on r1, w on r2, x idle; r3 (2 x 120 s of service) in the pool.
 
     Raw per vehicle (v, w, x; the pool's cell is 0 for every route constraint):
@@ -789,7 +789,7 @@ def _hand_plan():
     def stop(name, request):
         return pdp.models.StopModel(id=name, location=(37.5, 127.0), service_duration=service.get(request, 0))
 
-    model = pdp.models.PdpInput(
+    return pdp.models.PdpInput(
         vehicles=[
             pdp.models.VehicleModel(
                 id=name, capacity=2 if name == "v" else 10, home=(37.5, 127.0), max_stops=0, initial_route=route
@@ -802,7 +802,11 @@ def _hand_plan():
         ],
         driving_seconds=[[abs(HAND_PLACES[p] - HAND_PLACES[q]) for q in order] for p in order],
     )
-    return pdp.models.to_plan(model)
+
+
+def _hand_plan():
+    """The hand instance (`_hand_input`) as a plan."""
+    return pdp.models.to_plan(_hand_input())
 
 
 def _zero_budget(picks):
@@ -889,15 +893,20 @@ def test_a_repeated_medium_pick_adds_up():
         (TravelTimeCost(offset=-50, clip=False), (0, -750.0)),  # ...or to every vehicle
         (TravelTimeCost(offset=300, exponent=2), (0, -(100.0**2))),
         (VehicleCapacityCost(offset=1), (-1, 0.0)),
-        (VehicleCapacityCost(offset=2.5, clip=False), (7, 0.0)),  # -0.5 -> -1, -2.5 -> -3 twice: per vehicle
-        (MaxStopsCost(offset=2, clip=False), (6, 0.0)),  # all zero: 3 vehicles x -2, never the pool
+        (VehicleCapacityCost(offset=-0.5), (-3, 0.0)),  # hard rounds per vehicle: 2.5 -> 3, the zeros stay 0
+        # The literal formula with an offset is refused on hard (the default of the
+        # capacity, stop and coupling rules), so these picks sit on soft, where it charges
+        # every evaluated unit: 2 x ((2 - 2.5) + (0 - 2.5) x 2) = -11 for the capacity.
+        (VehicleCapacityCost(level="soft", offset=2.5, clip=False, weight=2), (0, 11.0)),
+        (MaxStopsCost(level="soft", offset=2, clip=False), (0, 6.0)),  # all zero: 3 vehicles x -2, never the pool
         # required_vehicle_cost prices the pool: all four units are evaluated.
-        (RequiredVehicleCost(weight=1, offset=2, clip=False), (8, 0.0)),
+        (RequiredVehicleCost(level="soft", weight=1, offset=2, clip=False), (0, 8.0)),
         # The globals' totals are shaped once.
         (UnassignedRequestsCost(offset=2, exponent=2), (0, -4 * MEDIUM_UNIT)),
-        (UnassignedRequestsCost(offset=6, clip=False), (0, 2 * MEDIUM_UNIT)),
-        (UnassignedRequestsCost(offset=6, clip=False, level="hard"), (2, 0.0)),
-        (PairedRequestCost(offset=1, clip=False), (1000, 0.0)),  # 0 broken pairs, 1 below the offset
+        (UnassignedRequestsCost(offset=6, clip=False), (0, 2 * MEDIUM_UNIT)),  # medium folds into soft
+        (UnassignedRequestsCost(offset=6, clip=False, level="soft"), (0, 2.0)),
+        (UnassignedRequestsCost(offset=6, level="hard"), (0, 0.0)),  # the threshold on hard: nothing beyond 6
+        (PairedRequestCost(level="soft", offset=1, clip=False), (0, 1000.0)),  # 0 broken pairs, 1 below the offset
     ],
 )
 def test_offsets_by_hand_on_both_paths(pick, expected):
@@ -952,9 +961,11 @@ def test_offset_zero_reproduces_the_0_2_0_scores():
         ],
         [
             VehicleCapacityCost(),
-            VehicleCapacityCost(offset=1, clip=False, weight=2),
+            VehicleCapacityCost(level="soft", offset=1, clip=False, weight=2),
+            VehicleCapacityCost(offset=1, weight=2),
             PairedRequestCost(),
-            PairedRequestCost(offset=1, clip=False),
+            PairedRequestCost(level="soft", offset=1, clip=False),
+            PairedRequestCost(offset=1),
             MaxEndTimeCost(),
             UnassignedRequestsCost(offset=5),
             UnassignedRequestsCost(weight=2, offset=20, clip=False),
@@ -994,14 +1005,16 @@ def test_naming_a_constraint_twice_scores_both_picks():
         ([UnassignedRequestsCost(level=Level.SOFT, weight=2)], (0, -8.0)),
         ([UnassignedRequestsCost(level="hard", offset=1)], (-3, 0.0)),
         # A repeat carries its own level and shaping: soft travel, medium beyond 300 s,
-        # and hard 2 x (x - 300) per vehicle: 2 x (-100 + 100 - 300) = -600, a hard reward.
+        # hard 2 x max(0, x - 300) per vehicle, and a literal copy 2 x (x - 300) per
+        # vehicle, 2 x (-100 + 100 - 300) = -600, which may sit on soft but not on hard.
         (
             [
                 TravelTimeCost(),
                 TravelTimeCost(level="medium", offset=300),
-                TravelTimeCost(level="hard", weight=2, offset=300, clip=False),
+                TravelTimeCost(level="hard", weight=2, offset=300),
+                TravelTimeCost(level="soft", weight=2, offset=300, clip=False),
             ],
-            (600, -600 - 100 * MEDIUM_UNIT),
+            (-200, -600 + 600 - 100 * MEDIUM_UNIT),
         ),
     ],
 )
@@ -1022,3 +1035,99 @@ def test_a_repeat_is_checked_on_its_own_level():
         _zero_budget([TravelTimeCost(), pick])
     with pytest.raises(ValueError, match="constraint 'travel_time_cost': level must be 'hard', 'medium' or 'soft'"):
         score(pdp.constraint_costs(_hand_plan()), [TravelTimeCost(), pick])
+
+
+# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+
+HARD_REFUSAL = (
+    "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
+    "violation; use clip=True (a threshold) or another level"
+)
+
+
+def _refusal(call):
+    with pytest.raises(ValueError) as refused:
+        call()
+    return str(refused.value)
+
+
+@pytest.mark.parametrize("offset", [2.5, -2.5])
+@pytest.mark.parametrize(
+    "pick",
+    [
+        lambda offset: VehicleCapacityCost(offset=offset, clip=False),  # the default level, hard
+        lambda offset: VehicleCapacityCost(level="hard", offset=offset, clip=False),
+        lambda offset: RequiredVehicleCost(offset=offset, clip=False),  # hard, and it evaluates the pool
+        lambda offset: PairedRequestCost(offset=offset, clip=False),  # a coupling global, hard
+        lambda offset: TravelTimeCost(level="hard", offset=offset, clip=False),
+        lambda offset: UnassignedRequestsCost(level=Level.HARD, offset=offset, clip=False),
+    ],
+    ids=[
+        "capacity-default-hard",
+        "capacity-level-hard",
+        "required-vehicle-default-hard",
+        "paired-default-hard",
+        "travel-moved-to-hard",
+        "unassigned-moved-to-hard",
+    ],
+)
+def test_the_literal_offset_is_refused_on_hard_on_every_path(pick, offset):
+    """A positive offset would reward the vehicles below it, so one vehicle's spare capacity
+    would cancel another's overload and an infeasible plan could score hard 0; a negative
+    one would charge every vehicle, an idle one included. The engine (solve_with_constraints,
+    solve_request, constraint_costs) and the score() mirror refuse it with the same message;
+    the CP-SAT reference's test_solve.py checks the same words."""
+    spec = pick(offset)
+    message = HARD_REFUSAL.format(q=repr(spec.name))
+    repeated = [type(spec)(), spec]  # a refused repeat next to its accepted first instance
+    assert _refusal(lambda: solve([spec], seconds=0.1)) == message
+    assert _refusal(lambda: _zero_budget(repeated)) == message
+    request = pdp.models.PdpRequest(model_input=_hand_input(), timelimit=0.1)
+    assert _refusal(lambda: pdp.models.solve_request(request, constraints=[spec])) == message
+    assert _refusal(lambda: pdp.constraint_costs(_hand_plan(), [spec])) == message
+    assert _refusal(lambda: pdp.constraint_costs(_hand_plan(), repeated)) == message
+    assert _refusal(lambda: score(pdp.constraint_costs(_hand_plan()), [spec])) == message
+    assert _refusal(lambda: score(pdp.constraint_costs(_hand_plan()), repeated)) == message
+
+
+@pytest.mark.parametrize("offset", [3.0, -3.0])
+def test_the_same_literal_pick_on_soft_is_accepted(offset):
+    """(2 - offset) + (0 - offset) x 2 per vehicle, on soft, on every path; never the pool."""
+    pick = VehicleCapacityCost(level="soft", offset=offset, clip=False)
+    expected = (0, -(2 - offset + 2 * (0 - offset)))
+    assert score(pdp.constraint_costs(_hand_plan()), [pick]) == expected
+    raw = pdp.constraint_costs(_hand_plan(), [pick])
+    assert (raw["vehicle_capacity_cost"]["level"], raw["vehicle_capacity_cost"]["clip"]) == ("soft", False)
+    assert score(raw, [pick]) == expected
+    assert _zero_budget([pick]) == expected
+    # Medium folds into soft here, so it takes the literal formula too.
+    medium = VehicleCapacityCost(level="medium", offset=offset, clip=False)
+    assert score(pdp.constraint_costs(_hand_plan()), [medium]) == (0, expected[1] * MEDIUM_UNIT)
+    assert _zero_budget([medium]) == (0, expected[1] * MEDIUM_UNIT)
+
+
+@pytest.mark.parametrize(
+    ("pick", "expected"),
+    [
+        (VehicleCapacityCost(offset=3.0), (0, 0.0)),  # clip=True on hard: a threshold
+        (VehicleCapacityCost(offset=-3.0), (-5, 0.0)),  # 2 + 3 on the overloaded vehicle only
+        (VehicleCapacityCost(clip=False), (-2, 0.0)),  # clip=False with offset 0: the 0.2.0 shaping
+        (VehicleCapacityCost(offset=0.0, clip=False), (-2, 0.0)),
+        (PairedRequestCost(offset=-1), (0, 0.0)),  # no broken pair: a threshold adds nothing to 0
+    ],
+)
+def test_the_allowed_combinations_on_hard(pick, expected):
+    assert score(pdp.constraint_costs(_hand_plan()), [pick]) == expected
+    assert _zero_budget([pick]) == expected
+
+
+def test_the_refusal_comes_after_every_knob_of_a_duck_typed_pick():
+    """The engine checks once a pick's knobs are all re-stated: the level a pick moves to decides."""
+    moved = SimpleNamespace(
+        name="vehicle_capacity_cost", weight=None, level="soft", exponent=1.0, offset=3.0, clip=False
+    )
+    assert _zero_budget([moved]) == (0, 7.0)
+    kept = SimpleNamespace(name="vehicle_capacity_cost", weight=None, level=None, exponent=1.0, offset=3.0, clip=False)
+    message = HARD_REFUSAL.format(q="'vehicle_capacity_cost'")
+    assert _refusal(lambda: _zero_budget([kept])) == message
+    assert _refusal(lambda: score(pdp.constraint_costs(_hand_plan()), [kept])) == message

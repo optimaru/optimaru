@@ -23,7 +23,9 @@ both (`this use case has no medium level`). Not supported on CP-SAT (refused):
 with its own knobs, its level included. Every plugin adds one term per employee, an idle
 one included, so an integral `offset` shapes each employee exactly as the engine does in
 both `clip` modes; a fractional offset is refused (`offset must be an integer for
-CP-SAT`).
+CP-SAT`). `clip=False` with an offset is refused on hard with the engine's message
+(`constraint 'required_skill_cost': clip=False with a non-zero offset cannot be hard,
+...`).
 
 ## Engine comparison
 

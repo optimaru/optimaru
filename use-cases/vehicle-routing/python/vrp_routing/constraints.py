@@ -45,7 +45,9 @@ Every spec takes five knobs:
                offset, ``max(0, c - offset) ** exponent``; ``False`` shapes
                ``c - offset`` as it is, so a vehicle below the offset — an idle
                one (cost 0) included — lowers the penalty. The unassigned pool is
-               no vehicle: a route constraint never charges it.
+               no vehicle: a route constraint never charges it. With an offset it
+               is refused on hard (``VehicleCapacityCost`` by default), because
+               hard 0 must mean no violation.
 
 The same constraint may be picked several times; each pick is scored on its own with
 its own knobs and the picks add up. Travel time plus the cube of every second beyond

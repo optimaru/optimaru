@@ -22,6 +22,8 @@ from order_picking.constraints import (
     score,
 )
 from order_picking_cpsat import catalog, solve
+from order_picking_cpsat.constraints import REGISTRY
+from ortools.sat.python import cp_model
 
 
 def test_smoke_and_constraint_selection():
@@ -302,9 +304,10 @@ SELECTIONS = {
         OrderSplitByTrolleyCost(),
         OrderSplitByTrolleyCost(weight=7, offset=1, clip=False),  # the empty trolley -7
     ],
+    # A threshold on hard; the literal copy (refused on hard) sits on soft.
     "hard-offsets": [
         TrolleyCapacityCost(offset=1),
-        TrolleyCapacityCost(weight=2, offset=2, clip=False),
+        TrolleyCapacityCost(level="soft", weight=2, offset=2, clip=False),
         DistanceFromLastPickTaskToPathOriginCost(offset=-3, clip=False),
     ],
     "identical-twice": [
@@ -394,3 +397,74 @@ def test_medium_is_refused_like_the_engine(level):
             domain.solve(
                 to_solution(_three_picks()), time_limit_seconds=0, constraints=selection
             )
+
+
+# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+
+HARD_REFUSAL = (
+    "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
+    "violation; use clip=True (a threshold) or another level"
+)
+
+
+@pytest.mark.parametrize("offset", [2, -2])
+@pytest.mark.parametrize(
+    "selection",
+    [
+        # The default level, hard.
+        lambda offset: TrolleyCapacityCost(offset=offset, clip=False),
+        lambda offset: {
+            "name": "trolley_capacity_cost",
+            "offset": offset,
+            "clip": False,
+        },
+        lambda offset: DistanceFromPreviousPickTaskCost(
+            level="hard", offset=offset, clip=False
+        ),
+        lambda offset: {
+            "name": "distance_from_previous_pick_task_cost",
+            "level": "hard",
+            "offset": offset,
+            "clip": False,
+        },
+    ],
+    ids=["buckets-spec", "buckets-mapping", "walk-moved-to-hard", "walk-mapping"],
+)
+def test_the_literal_offset_is_refused_on_hard_like_the_engine(selection, offset):
+    """The CP-SAT reference refuses the pick with the engine's and score()'s message."""
+    pick = selection(offset)
+    name = pick["name"] if isinstance(pick, dict) else pick.name
+    message = HARD_REFUSAL.format(q=repr(name))
+    for picks in ([pick], [TrolleyCapacityCost(), OrderSplitByTrolleyCost(), pick]):
+        with pytest.raises(ValueError) as refused:
+            solve(_three_picks(timelimit=1), constraints=picks)
+        assert str(refused.value) == message
+        with pytest.raises(ValueError) as refused:
+            REGISTRY.objective(cp_model.CpModel(), ("hard", "soft"), picks)
+        assert str(refused.value) == message
+    if not isinstance(pick, dict):
+        # The engine and the score() mirror say the same.
+        canonical = to_solution(_three_picks())
+        with pytest.raises(ValueError) as refused:
+            constraint_costs(canonical, [pick])
+        assert str(refused.value) == message
+        with pytest.raises(ValueError) as refused:
+            score(constraint_costs(canonical), [pick])
+        assert str(refused.value) == message
+        with pytest.raises(ValueError) as refused:
+            domain.solve(
+                to_solution(_three_picks()), time_limit_seconds=0, constraints=[pick]
+            )
+        assert str(refused.value) == message
+
+
+@pytest.mark.parametrize("offset", [2, -2])
+def test_the_same_literal_pick_on_soft_is_accepted(offset):
+    picks = [
+        TrolleyCapacityCost(),
+        OrderSplitByTrolleyCost(),
+        TrolleyCapacityCost(level="soft", offset=offset, clip=False),
+    ]
+    request = _three_picks()
+    best = max(tuple(_engine_of(request, fixed, picks)) for fixed in _routes())
+    assert _reported(solve(request, constraints=picks)) == best

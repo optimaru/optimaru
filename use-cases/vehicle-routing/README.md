@@ -102,8 +102,11 @@ may be picked several times. A raw cost `x` (per vehicle, or the unassigned tota
 shaped as `sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
 `(x - offset) ** exponent`, sign-preserving (`clip=False`, which lowers the penalty of
 every vehicle below the offset, an idle one included; the unassigned pool is no vehicle
-and is never charged); `offset=0` is the 0.2.0 shaping. Each pick is its own instance with
-its own knobs, and the instances add up:
+and is never charged); `offset=0` is the 0.2.0 shaping. Both apply per vehicle, not to the
+total. `clip=False` with an offset is refused on hard (by default, every constraint the
+table lists as hard), because hard 0 must mean no violation; medium folds into soft here,
+so it takes the literal formula. Each pick is its own instance with its own knobs, and the
+instances add up:
 
 ```python
 from vrp_routing.constraints import TravelTimeCost, UnassignedVisitsCost, VehicleCapacityCost
