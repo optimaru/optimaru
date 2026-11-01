@@ -161,7 +161,8 @@ class Solver:
     def solve_with_constraints(self, schedule: LeagueSchedule, constraints: Iterable[Any] | None = ...) -> None:
         """Score the same solve with a caller-chosen constraint set
         (see sports_league.constraints). The given list replaces the default set; None
-        keeps the default set."""
+        keeps the default set. A name may be picked several times: each pick is its own
+        instance with its own knobs, and the instances add up."""
 
 def list_constraints() -> list[str]:
     """Constraint names scored by this domain (default assembly order, snake_case: the
@@ -171,15 +172,21 @@ def list_constraints() -> list[str]:
     repeat_match_on_next_day_cost, home_to_away_hop_cost, away_to_away_hop_cost,
     away_to_home_hop_cost. The same names sports_league.constraints uses."""
 
-def constraint_costs(schedule: LeagueSchedule) -> dict[str, dict[str, Any]]:
-    """Per-constraint **raw** costs of every default constraint — before
-    weight/exponent/level rounding: {name: {"costs": [...], "weight": float,
-    "exponent": float, "hard": bool, "global": bool, "level": "hard" | "medium" |
-    "soft", "reward": bool, "level_flippable": bool, "name": str, "label": str}}.
-    The three unit constraints report one cost per round position, the seven globals
-    a single total. `sports_league.constraints.score()` takes these and produces a
-    score. This is the only per-constraint surface (the 0.1.x Breakdown /
-    compute_breakdown are gone)."""
+def constraint_costs(
+    schedule: LeagueSchedule, constraints: Iterable[Any] | None = ...
+) -> dict[str, dict[str, Any]]:
+    """Per-constraint **raw** costs — before weight/exponent/offset/level rounding:
+    {key: {"costs": [...], "weight": float, "exponent": float, "offset": float,
+    "clip": bool, "hard": bool, "global": bool, "level": "hard" | "medium" | "soft",
+    "reward": bool, "level_flippable": bool, "name": str, "label": str,
+    "default_weight": float, "default_level": str}}. The three unit constraints
+    report one cost per round position, an empty round included, the seven globals
+    a single total. None = the default constraints; a pick list (as for solve)
+    scores exactly those picks, each entry carrying its pick's knobs, the k-th pick
+    of a name keyed "<name>#<k>" from the second on.
+    `sports_league.constraints.score()` takes these and produces a score. This is
+    the only per-constraint surface (the 0.1.x Breakdown / compute_breakdown are
+    gone)."""
 
 class ConstraintInfo(NamedTuple):
     """One constraint-catalog row, read off the C++ default assembly."""
