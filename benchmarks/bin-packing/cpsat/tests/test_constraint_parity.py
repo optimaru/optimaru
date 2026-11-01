@@ -14,11 +14,12 @@ import random
 from itertools import product
 
 import pytest
-from bin_packing import constraint_costs, constraint_info, list_constraints
+from bin_packing import calculate_score, constraint_costs, constraint_info, list_constraints
 from bin_packing.constraints import (
     BinCapacityCost,
     ColorConflictCost,
     ItemConflictCost,
+    Level,
     UsedBinsCost,
     get_constraints,
     score,
@@ -158,6 +159,16 @@ SELECTIONS = {
         UsedBinsCost(level="hard", offset=1),
     ],
     "identical-twice": [ItemConflictCost(), ItemConflictCost(), UsedBinsCost()],
+    # Each pick on its own level: a soft literal capacity next to the hard default, the
+    # bin count on hard beyond 1 next to its soft default, the conflicts moved to soft.
+    "levels": [
+        BinCapacityCost(),
+        BinCapacityCost(level="soft", weight=3, offset=1, clip=False),
+        UsedBinsCost(),
+        UsedBinsCost(level=Level.HARD, offset=1),
+        ItemConflictCost(level="soft", weight=2, offset=-1),
+        ColorConflictCost(level="hard", weight=2, offset=1, clip=False),
+    ],
 }
 
 
@@ -165,9 +176,9 @@ SELECTIONS = {
 @pytest.mark.parametrize("selection", list(SELECTIONS.values()), ids=list(SELECTIONS))
 def test_the_cpsat_terms_equal_the_engine_on_every_assignment(instance, selection):
     """Pin every assignment: the CP-SAT objective's per-level value is the engine's score of
-    that assignment under the same repeated / shifted picks, exactly — every bin is a term
-    of a per-bin constraint, an empty one included; re-pricing the default costs (each name
-    once) gives the same per instance key."""
+    that assignment under the same repeated / shifted picks (its own and the score()
+    mirror's), exactly — every bin is a term of a per-bin constraint, an empty one included;
+    re-pricing the default costs (each name once) gives the same per instance key."""
     problem = INSTANCES[instance]
     built = build(Model.model_validate(problem), selection, symmetry_breaking=False)
     built.objective.minimize()
@@ -184,5 +195,7 @@ def test_the_cpsat_terms_equal_the_engine_on_every_assignment(instance, selectio
         core = model.to_core()
         engine = score(constraint_costs(core, selection), selection)
         expected = {"hard": engine.hard, "soft": engine.soft}
+        own = calculate_score(core, selection)  # the C++ calculator of the same assembly
+        assert {"hard": own.hard, "soft": own.soft} == expected, bins
         assert built.objective.score(solver) == expected, bins
         assert built.objective.score_costs(constraint_costs(core)) == expected, bins

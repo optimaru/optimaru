@@ -1,4 +1,8 @@
-"""bin_packing.constraints — an API for picking the cost function declaratively."""
+"""bin_packing.constraints — an API for picking the cost function declaratively.
+
+"Which constraints are on", the catalog, the five knobs (the level included) and repeated
+picks are covered here.
+"""
 
 import pickle
 import random
@@ -8,11 +12,13 @@ from types import SimpleNamespace
 import pytest
 
 import bin_packing as bp
+from bin_packing._constraint import instance_keys
 from bin_packing.constraints import (
     BinCapacityCost,
     ColorConflictCost,
     Constraint,
     ItemConflictCost,
+    Level,
     UsedBinsCost,
     bin_capacity_cost,
     color_conflict_cost,
@@ -615,8 +621,14 @@ def _random_problem(seed: int, items: int = 30) -> bp.BinPackingProblem:
             UsedBinsCost(),
             UsedBinsCost(offset=8, exponent=2, weight=0.25),
         ],
+        [
+            *get_constraints(),
+            BinCapacityCost(level="soft", weight=1.5, offset=1, clip=False),
+            ItemConflictCost(level=Level.SOFT, weight=2, offset=-1),
+            UsedBinsCost(level="hard", offset=8),
+        ],
     ],
-    ids=["repeat", "repeat-and-offsets"],
+    ids=["repeat", "repeat-and-offsets", "repeats-on-other-levels"],
 )
 def test_full_assert_solves_with_repeats_and_offsets(picks):
     """FULL_ASSERT re-checks the incremental score against a full recompute after every move."""
@@ -637,3 +649,73 @@ def test_full_assert_solves_with_repeats_and_offsets(picks):
     engine = bp.calculate_score(problem, picks)
     assert engine.hard == python.hard
     assert engine.soft == pytest.approx(python.soft)
+
+
+# --- Levels: hard and soft, each pick (a repeat included) on the level it names ------
+
+
+@pytest.mark.parametrize(
+    ("picks", "expected"),
+    [
+        ([UsedBinsCost(level="hard")], (-2, 0.0)),
+        ([BinCapacityCost(level=Level.SOFT, weight=2)], (0, -6.0)),
+        ([ItemConflictCost(level="soft", offset=1, clip=False)], (0, 4.0)),  # (0 - 1) on four bins, 0 on one
+        ([ColorConflictCost(level="hard")], (-1, 0.0)),  # the default level, named
+        # A repeat carries its own level and shaping. Hard: the capacity [3, 0, 0, 0, 0] and
+        # the bins beyond the first (2 - 1). Soft: the 2 bins and 3 x (x - 1) per bin on
+        # the capacity, 3 x (2 - 1 - 1 - 1 - 1) = -6: -2 + 6.
+        (
+            [
+                UsedBinsCost(),
+                UsedBinsCost(level="hard", offset=1),
+                BinCapacityCost(),
+                BinCapacityCost(level=Level.SOFT, weight=3, offset=1, clip=False),
+            ],
+            (-4, 4.0),
+        ),
+    ],
+)
+def test_levels_by_hand_on_both_paths(picks, expected):
+    """A pick's level moves its term, with the weight in units of that level: engine == mirror == hand."""
+    assert score(bp.constraint_costs(_hand()), picks) == expected
+    raw = bp.constraint_costs(_hand(), picks)
+    for pick, key in zip(picks, instance_keys(picks)):
+        assert raw[key]["level"] == (pick.level or raw[key]["default_level"]), key
+    assert score(raw, picks) == expected
+    assert _engine(picks) == expected
+
+
+@pytest.mark.parametrize("level", ["medium", Level.MEDIUM])
+def test_medium_is_refused_without_a_medium_level(level):
+    """The domain has no medium level: every path refuses the pick before scoring, a repeat too."""
+    message = "constraint 'used_bins_cost': this use case has no medium level"
+    pick = UsedBinsCost(level=level)  # the spec cannot know the domain
+    for picks in ([pick], [UsedBinsCost(), pick]):
+        with pytest.raises(ValueError, match=message):
+            _zero_budget_solve(_hand(), picks)
+        with pytest.raises(ValueError, match=message):
+            bp.calculate_score(_hand(), picks)
+        with pytest.raises(ValueError, match=message):
+            bp.solve(build_problem(), config=_config(0.1), constraints=picks)
+        with pytest.raises(ValueError, match=message):
+            bp.constraint_costs(_hand(), picks)
+        with pytest.raises(ValueError, match=message):
+            score(bp.constraint_costs(_hand()), picks)
+
+
+def test_a_level_must_be_a_level():
+    with pytest.raises(TypeError, match="level must be a Level"):
+        UsedBinsCost(level=True)
+    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft', not 'firm'"):
+        UsedBinsCost(level="firm")
+    pick = SimpleNamespace(name="used_bins_cost", weight=None, level="firm", exponent=1.0)
+    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft', not 'firm'"):
+        _engine([UsedBinsCost(), pick])
+
+
+def test_the_knob_was_renamed():
+    """0.3.0 replaced hard=True / hard=False by level="hard" / level="soft"; hard= is unknown."""
+    with pytest.raises(TypeError):
+        UsedBinsCost(hard=True)
+    with pytest.raises(TypeError):
+        BinCapacityCost(weight=None, hard=False)

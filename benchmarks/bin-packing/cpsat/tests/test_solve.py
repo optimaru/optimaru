@@ -7,6 +7,7 @@ from bin_packing.constraints import (
     BinCapacityCost,
     ColorConflictCost,
     ItemConflictCost,
+    Level,
     UsedBinsCost,
     get_constraints,
     score,
@@ -205,6 +206,16 @@ SELECTIONS = {
         UsedBinsCost(level="hard", offset=1),
     ],
     "identical-twice": [ItemConflictCost(), ItemConflictCost(), UsedBinsCost()],
+    # Each pick on its own level: a soft literal capacity next to the hard default, the
+    # bin count on hard beyond 1 next to its soft default, the conflicts moved to soft.
+    "levels": [
+        BinCapacityCost(),
+        BinCapacityCost(level="soft", weight=3, offset=1, clip=False),
+        UsedBinsCost(),
+        UsedBinsCost(level=Level.HARD, offset=1),
+        ItemConflictCost(level="soft", weight=2, offset=-1),
+        ColorConflictCost(level="hard", weight=2, offset=1, clip=False),
+    ],
 }
 
 
@@ -219,9 +230,17 @@ def test_repeated_and_shifted_picks_reach_the_brute_force_optimum(selection) -> 
 
 
 def test_mapping_selections_repeat_and_shift_like_specs() -> None:
-    """The server's {name, weight, offset, clip} dicts pick the same instances as specs."""
-    specs = [UsedBinsCost(), UsedBinsCost(weight=3, offset=1, clip=False)]
-    dicts = [{"name": "used_bins_cost"}, {"name": "used_bins_cost", "weight": 3, "offset": 1, "clip": False}]
+    """The server's {name, weight, level, offset, clip} dicts pick the same instances as specs."""
+    specs = [
+        UsedBinsCost(),
+        UsedBinsCost(weight=3, offset=1, clip=False),
+        UsedBinsCost(level="hard", offset=2),
+    ]
+    dicts = [
+        {"name": "used_bins_cost"},
+        {"name": "used_bins_cost", "weight": 3, "offset": 1, "clip": False},
+        {"name": "used_bins_cost", "level": "hard", "offset": 2},
+    ]
     problem = _parity_problem()
     assert solve(problem, time_limit_seconds=5, constraints=dicts) == solve(
         problem, time_limit_seconds=5, constraints=specs
@@ -231,3 +250,14 @@ def test_mapping_selections_repeat_and_shift_like_specs() -> None:
 def test_a_fractional_offset_is_refused_by_cpsat() -> None:
     with pytest.raises(ValueError, match="offset must be an integer for CP-SAT"):
         solve(_parity_problem(), time_limit_seconds=1, constraints=[BinCapacityCost(offset=0.5)])
+
+
+@pytest.mark.parametrize("level", ["medium", Level.MEDIUM])
+def test_medium_is_refused_like_the_engine(level) -> None:
+    """The domain has no medium level: CP-SAT refuses the pick as the engine does, a repeat too."""
+    message = "constraint 'used_bins_cost': this use case has no medium level"
+    for selection in ([UsedBinsCost(level=level)], [UsedBinsCost(), UsedBinsCost(level=level)]):
+        with pytest.raises(ValueError, match=message):
+            solve(_parity_problem(), time_limit_seconds=1, constraints=selection)
+        with pytest.raises(ValueError, match=message):
+            domain.calculate_score(_parity_problem().to_core(), selection)

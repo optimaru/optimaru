@@ -737,7 +737,9 @@ Score scoreOf(ConstraintAssembly assembly, BinPackingProblem p)
 
 // The defaults with two of them shifted, plus repeats of the no-delta
 // capacity rule (squared), the delta-path colour and conflict rules (literal,
-// one fractional) and the global bin count (threshold).
+// one fractional) and the global bin count (threshold), and two repeats on
+// the other level than their default: the conflict rule demoted to soft
+// (literal, fractional weight) and the bin count promoted to hard (threshold).
 ConstraintAssembly repeatedAssembly()
 {
     ConstraintAssembly assembly = defaultConstraints();
@@ -755,6 +757,13 @@ ConstraintAssembly repeatedAssembly()
                                         .clip("itemConflictCost", false)));
     assembly.addInstances(
         std::move(copyOf("usedBinsCost").weight("usedBinsCost", 0.25).offset("usedBinsCost", 3.0)));
+    assembly.addInstances(std::move(copyOf("itemConflictCost")
+                                        .soft("itemConflictCost")
+                                        .weight("itemConflictCost", 1.5)
+                                        .offset("itemConflictCost", 1.0)
+                                        .clip("itemConflictCost", false)));
+    assembly.addInstances(std::move(
+        copyOf("usedBinsCost").hard("usedBinsCost").weight("usedBinsCost", 2.0).offset("usedBinsCost", 4.0)));
     return assembly;
 }
 
@@ -780,6 +789,32 @@ void verifyRepeatsAndOffsets()
             std::move(copyOf("binCapacityCost").weight("binCapacityCost", 0.5).exponent("binCapacityCost", 2.0)));
         check(sameScore(scoreOf(std::move(capacity), everyTermPositive()), Score{-40, 0.0}),
               "capacity + 0.5 x capacity^2 per bin: -(8 + 32)");
+    }
+    {
+        // Each instance on its own level: the soft default bin count (2) next
+        // to a hard repeat, 2 x (2 - 1) beyond its offset.
+        ConstraintAssembly assembly = copyOf("usedBinsCost");
+        assembly.addInstances(std::move(
+            copyOf("usedBinsCost").hard("usedBinsCost").weight("usedBinsCost", 2.0).offset("usedBinsCost", 1.0)));
+        BinPackingProblem p = everyTermPositive();
+        DecomposedCalculator calculator;
+        assembly.into(calculator);
+        check(sameScore(scoreWith(calculator, p), Score{-2, -2.0}),
+              "soft bin count + a hard repeat beyond 1: -2 hard / -2 soft");
+        const auto entries = calculator.constraintCosts();
+        check(entries.size() == 2 && entries[0].level == optimaru::Level::Soft
+                  && entries[1].level == optimaru::Level::Hard && entries[1].defaultLevel == optimaru::Level::Soft,
+              "the repeat reports its own level, the default stays soft");
+        // The hard colour rule with a soft literal repeat: 0.5 x (x - 1) per
+        // bin, 0 on bin 0 and -0.5 on each of the three others.
+        ConstraintAssembly colour = copyOf("colorConflictCost");
+        colour.addInstances(std::move(copyOf("colorConflictCost")
+                                          .soft("colorConflictCost")
+                                          .weight("colorConflictCost", 0.5)
+                                          .offset("colorConflictCost", 1.0)
+                                          .clip("colorConflictCost", false)));
+        check(sameScore(scoreOf(std::move(colour), everyTermPositive()), Score{-1, 1.5}),
+              "hard colour + a soft literal repeat: -1 hard / +1.5 soft");
     }
     {
         const BinPackingProblem p = everyTermPositive();
@@ -898,7 +933,8 @@ void verifyRepeatsAndOffsets()
         }
         std::printf("    largest soft drift %.3g, %d macro moves applied\n", drift, macroApplied);
         check(mismatches == 0 && macroApplied > 100,
-              std::to_string(steps) + " random moves with repeated, shifted components: incremental == fresh");
+              std::to_string(steps)
+                  + " random moves with repeated, shifted components on both levels: incremental == fresh");
     }
     {
         BinPackingProblem p = randomInstance(18, 23, 3, 8);

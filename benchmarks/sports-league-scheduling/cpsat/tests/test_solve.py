@@ -9,6 +9,7 @@ from sports_league.constraints import (
     AwayToHomeHopCost,
     ConsecutiveHomeMatchesCost,
     HomeToAwayHopCost,
+    Level,
     RepeatMatchOnNextDayCost,
     StartToAwayHopCost,
     TeamConflictCost,
@@ -268,23 +269,47 @@ SELECTIONS = {
         HomeToAwayHopCost(),
         TeamConflictCost(),
     ],
+    # Each pick on its own level: a soft literal team conflict next to the hard default,
+    # the start hop on hard beyond 10 next to its soft default, the derby moved to hard.
+    "levels": [
+        TeamConflictCost(),
+        TeamConflictCost(level="soft", weight=3, offset=1, clip=False),
+        StartToAwayHopCost(),
+        StartToAwayHopCost(level=Level.HARD, offset=10),
+        WorkdayClassicMatchesCost(level="hard", weight=2),
+        HomeToAwayHopCost(level="hard", offset=-1),
+    ],
 }
 
 
-def _engine_of(problem, fixed, selection):
+def _pinned(problem, fixed):
     candidate = problem.model_copy(deep=True)
     for match, round_ in zip(candidate.matches, fixed, strict=True):
         match.round = round_
-    core = candidate.to_core()
+    return candidate.to_core()
+
+
+def _engine_of(problem, fixed, selection):
+    """The Python score() mirror of the pinned rounds under `selection`."""
+    core = _pinned(problem, fixed)
     return tuple(score(domain.constraint_costs(core, selection), selection))
+
+
+def _engine_solve(problem, fixed, selection):
+    """The engine's own score of the pinned rounds: a solve with no time keeps them."""
+    core = _pinned(problem, fixed)
+    assignment = core.assignment()
+    domain.solve(core, time_limit_seconds=0, random_seed=1, constraints=selection)
+    assert core.assignment() == assignment
+    return core.score.hard, core.score.soft
 
 
 @pytest.mark.parametrize("selection", list(SELECTIONS.values()), ids=list(SELECTIONS))
 def test_the_cpsat_terms_equal_the_engine_on_every_assignment(selection) -> None:
     """Pin each of the 27 assignments: the CP-SAT objective's own levels are the engine's
-    score under the same repeated / shifted picks, exactly (every round is a term of a
-    unit constraint, an empty one included); the reported score re-prices the default
-    costs (each name once) to the same value."""
+    score under the same repeated / shifted picks (its own and the score() mirror's),
+    exactly (every round is a term of a unit constraint, an empty one included); the
+    reported score re-prices the default costs (each name once) to the same value."""
     problem = _three_rounds()
     for fixed in product(range(3), repeat=3):
         proxy: dict[str, int] = {}
@@ -296,6 +321,7 @@ def test_the_cpsat_terms_equal_the_engine_on_every_assignment(selection) -> None
             _proxy_score=proxy,
         )
         engine = _engine_of(problem, fixed, selection)
+        assert _engine_solve(problem, fixed, selection) == engine, fixed
         assert (proxy["hard"], proxy["soft"]) == engine, fixed
         assert (solved.score_hard, solved.score_soft) == engine, fixed
 
@@ -311,11 +337,16 @@ def test_repeated_and_shifted_picks_reach_the_brute_force_optimum(selection) -> 
 
 
 def test_mapping_selections_repeat_and_shift_like_specs() -> None:
-    """The server's {name, weight, offset, clip} dicts pick the same instances as specs."""
-    specs = [HomeToAwayHopCost(), HomeToAwayHopCost(weight=3, offset=10, clip=False)]
+    """The server's {name, weight, level, offset, clip} dicts pick the same instances as specs."""
+    specs = [
+        HomeToAwayHopCost(),
+        HomeToAwayHopCost(weight=3, offset=10, clip=False),
+        HomeToAwayHopCost(level="hard", offset=20),
+    ]
     dicts = [
         {"name": "home_to_away_hop_cost"},
         {"name": "home_to_away_hop_cost", "weight": 3, "offset": 10, "clip": False},
+        {"name": "home_to_away_hop_cost", "level": "hard", "offset": 20},
     ]
     problem = _three_rounds()
     assert solve(problem, time_limit_seconds=5, constraints=dicts) == solve(
@@ -330,3 +361,19 @@ def test_a_fractional_offset_is_refused_by_cpsat() -> None:
             time_limit_seconds=1,
             constraints=[StartToAwayHopCost(offset=0.5)],
         )
+
+
+@pytest.mark.parametrize("level", ["medium", Level.MEDIUM])
+def test_medium_is_refused_like_the_engine(level) -> None:
+    """The domain has no medium level: CP-SAT refuses the pick as the engine does, a repeat too."""
+    message = "constraint 'home_to_away_hop_cost': this use case has no medium level"
+    for selection in (
+        [HomeToAwayHopCost(level=level)],
+        [HomeToAwayHopCost(), HomeToAwayHopCost(level=level)],
+    ):
+        with pytest.raises(ValueError, match=message):
+            solve(_three_rounds(), time_limit_seconds=1, constraints=selection)
+        with pytest.raises(ValueError, match=message):
+            domain.solve(
+                _three_rounds().to_core(), time_limit_seconds=0, constraints=selection
+            )

@@ -943,7 +943,9 @@ LeagueSchedule repeatInstance()
 // The defaults, two of them shifted, plus repeats of a per-match delta rule
 // (literal, fractional weight), a round-index pair global (threshold,
 // squared), a team-side run global (negative offset), the clamped repeat
-// rule and the derby rule (literal).
+// rule and the derby rule (literal), and two repeats on the other level than
+// their default: team conflict demoted to soft (literal, fractional weight)
+// and the away-to-end hop promoted to hard (threshold).
 ConstraintAssembly repeatedAssembly()
 {
     ConstraintAssembly assembly = defaultConstraints();
@@ -965,6 +967,15 @@ ConstraintAssembly repeatedAssembly()
         std::move(copyOf("workdayClassicMatchesCost")
                       .offset("workdayClassicMatchesCost", 1.0)
                       .clip("workdayClassicMatchesCost", false)));
+    assembly.addInstances(std::move(copyOf("teamConflictCost")
+                                        .soft("teamConflictCost")
+                                        .weight("teamConflictCost", 1.5)
+                                        .offset("teamConflictCost", 1.0)
+                                        .clip("teamConflictCost", false)));
+    assembly.addInstances(std::move(copyOf("awayToEndHopCost")
+                                        .hard("awayToEndHopCost")
+                                        .weight("awayToEndHopCost", 2.0)
+                                        .offset("awayToEndHopCost", 25.0)));
     return assembly;
 }
 
@@ -1002,6 +1013,44 @@ void verifyRepeatsAndOffsets()
                    scoreWith(calculator, s),
                    0,
                    -241.5);
+    }
+    {
+        // Each instance on its own level: the soft default home-to-away hop
+        // (13) next to a hard repeat, 2 x (13 - 3) beyond its offset.
+        LeagueSchedule s = repeatInstance();
+        ConstraintAssembly assembly = copyOf("homeToAwayHopCost");
+        assembly.addInstances(std::move(copyOf("homeToAwayHopCost")
+                                            .hard("homeToAwayHopCost")
+                                            .weight("homeToAwayHopCost", 2.0)
+                                            .offset("homeToAwayHopCost", 3.0)));
+        DecomposedCalculator calculator;
+        assembly.into(calculator);
+        checkScore("soft home-to-away + a hard repeat beyond 3: -20hard",
+                   scoreWith(calculator, s),
+                   -20,
+                   -13.0);
+        const auto entries = calculator.constraintCosts();
+        check(entries.size() == 2 && entries[0].level == optimaru::Level::Soft
+                  && entries[1].level == optimaru::Level::Hard
+                  && entries[1].defaultLevel == optimaru::Level::Soft,
+              "the repeat reports its own level, the default stays soft");
+    }
+    {
+        // A soft per-round rule with a hard literal repeat: 3 x (21 - 1) on
+        // round 0, 3 x (0 - 1) on round 1: -(60 - 3) hard.
+        LeagueSchedule s = repeatInstance();
+        ConstraintAssembly assembly = copyOf("startToAwayHopCost");
+        assembly.addInstances(std::move(copyOf("startToAwayHopCost")
+                                            .hard("startToAwayHopCost")
+                                            .weight("startToAwayHopCost", 3.0)
+                                            .offset("startToAwayHopCost", 1.0)
+                                            .clip("startToAwayHopCost", false)));
+        DecomposedCalculator calculator;
+        assembly.into(calculator);
+        checkScore("soft start hop + a hard literal repeat: -57hard",
+                   scoreWith(calculator, s),
+                   -57,
+                   -21.0);
     }
     {
         LeagueSchedule s = repeatInstance();
@@ -1136,8 +1185,8 @@ void verifyRepeatsAndOffsets()
         std::printf("    largest soft drift %.3g\n", drift);
         check(mismatches == 0,
               std::to_string(steps)
-                  + " random moves with repeated, shifted components: "
-                    "incremental == fresh");
+                  + " random moves with repeated, shifted components on both "
+                    "levels: incremental == fresh");
     }
     {
         LeagueSchedule s = buildRandomInstance(/*matches*/ 20, /*seed*/ 11);

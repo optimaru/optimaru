@@ -39,8 +39,10 @@ holds the exact CP-SAT reference.
 | `used_stations_cost` | `UsedStationsCost` | soft | 1 | stations with a load > 0 (the SALBP-1 objective) | global |
 | `workload_imbalance_cost` | `WorkloadImbalanceCost` | soft | **0** (opt-in) | max - min load over the used stations | global |
 
-Every constraint is flippable (`level="hard"` / `level="soft"`), none is a reward, and
-all but `workload_imbalance_cost` are scored by default (`default_enabled`);
+Every constraint is flippable (`level="hard"` / `level="soft"`, or `Level.HARD` /
+`Level.SOFT`; `level="medium"` raises `ValueError`, the domain has no medium level),
+none is a reward, and all but `workload_imbalance_cost` are scored by default
+(`default_enabled`);
 `assembly_line_balancing.constraint_info()` reports exactly this table from the C++
 components (`kDefaultLevel` / `kDefaultWeight`). An unassigned task (`station = -1`)
 contributes nothing (the engine convention): an arc, pair or group member counts
@@ -111,7 +113,8 @@ every evaluated station below the offset, an empty one included); `offset=0` is 
 shaping. `max_stations_cost` and `forbidden_task_stations_cost` evaluate only their own
 stations (from `max_stations` on, and the stations some task forbids), so `clip=False`
 charges those and no other; `constraint_costs()` lists them as `"units"`. Each pick is its
-own instance with its own knobs, and the instances add up:
+own instance with its own knobs, its level included (`level` replaced the `hard` knob;
+`hard=` raises `TypeError`), and the instances add up:
 
 ```python
 from assembly_line_balancing.constraints import UsedStationsCost, get_constraints

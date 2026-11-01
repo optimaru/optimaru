@@ -2,7 +2,7 @@
 
 Spot checks of individual constraint values live in `test_constraints.py`. This
 file covers the selection path that picks "which constraints are on", the five
-knobs and repeated picks.
+knobs (the level included) and repeated picks.
 """
 
 import pickle
@@ -12,6 +12,7 @@ from types import SimpleNamespace
 import pytest
 
 import sports_league as sl
+from sports_league._constraint import instance_keys
 from sports_league.constraints import (
     AwayToAwayHopCost,
     AwayToEndHopCost,
@@ -20,6 +21,7 @@ from sports_league.constraints import (
     ConsecutiveHomeMatchesCost,
     Constraint,
     HomeToAwayHopCost,
+    Level,
     RepeatMatchOnNextDayCost,
     StartToAwayHopCost,
     TeamConflictCost,
@@ -641,8 +643,15 @@ def test_score_matches_the_engine_for_repeated_and_shifted_specs(specs):
             AwayToAwayHopCost(offset=5000, clip=False),
             AwayToHomeHopCost(),
         ],
+        [
+            *get_constraints(),
+            TeamConflictCost(level="soft", weight=1.5, offset=1, clip=False),
+            StartToAwayHopCost(level=Level.HARD, offset=500),
+            HomeToAwayHopCost(level="hard", weight=0.5, offset=2000, clip=False),
+            WorkdayClassicMatchesCost(level="hard", weight=2),
+        ],
     ],
-    ids=["repeat", "repeat-and-offsets"],
+    ids=["repeat", "repeat-and-offsets", "repeats-on-other-levels"],
 )
 def test_full_assert_solves_with_repeats_and_offsets(picks):
     """FULL_ASSERT re-checks the incremental score against a full recompute after every move."""
@@ -660,3 +669,71 @@ def test_full_assert_solves_with_repeats_and_offsets(picks):
     assert python.hard == schedule.score.hard
     assert python.soft == pytest.approx(schedule.score.soft)
     assert score(sl.constraint_costs(schedule), picks) == python
+
+
+# --- Levels: hard and soft, each pick (a repeat included) on the level it names ------
+
+
+@pytest.mark.parametrize(
+    ("picks", "expected"),
+    [
+        ([HomeToAwayHopCost(level="hard")], (-13, 0.0)),
+        ([StartToAwayHopCost(level=Level.HARD, weight=2)], (-42, 0.0)),
+        ([TeamConflictCost(level="soft", weight=5, offset=1, clip=False)], (0, 5.0)),  # 5 x (0 - 1), soft
+        ([AwayToEndHopCost(level="soft")], (0, -31.0)),  # the default level, named
+        # A repeat carries its own level and shaping. Soft: the default start hop 21 and
+        # home-to-away 13. Hard: the start hop beyond 10 per round (11 + 0) and
+        # 2 x (13 - 20) = -14 on the home-to-away total, a hard reward: -11 + 14 = 3.
+        (
+            [
+                StartToAwayHopCost(),
+                StartToAwayHopCost(level="hard", offset=10),
+                HomeToAwayHopCost(),
+                HomeToAwayHopCost(level=Level.HARD, weight=2, offset=20, clip=False),
+            ],
+            (3, -34.0),
+        ),
+    ],
+)
+def test_levels_by_hand_on_both_paths(picks, expected):
+    """A pick's level moves its term, with the weight in units of that level: engine == mirror == hand."""
+    assert score(sl.constraint_costs(_two_rounds()), picks) == expected
+    raw = sl.constraint_costs(_two_rounds(), picks)
+    for pick, key in zip(picks, instance_keys(picks)):
+        assert raw[key]["level"] == (pick.level or raw[key]["default_level"]), key
+    assert score(raw, picks) == expected
+    assert _engine(picks) == expected
+
+
+@pytest.mark.parametrize("level", ["medium", Level.MEDIUM])
+def test_medium_is_refused_without_a_medium_level(level):
+    """The domain has no medium level: every path refuses the pick before scoring, a repeat too."""
+    message = "constraint 'home_to_away_hop_cost': this use case has no medium level"
+    pick = HomeToAwayHopCost(level=level)  # the spec cannot know the domain
+    for picks in ([pick], [HomeToAwayHopCost(), pick]):
+        with pytest.raises(ValueError, match=message):
+            _engine(picks)
+        with pytest.raises(ValueError, match=message):
+            sl.solve(build_schedule(), time_limit_seconds=0.1, constraints=picks)
+        with pytest.raises(ValueError, match=message):
+            sl.constraint_costs(_two_rounds(), picks)
+        with pytest.raises(ValueError, match=message):
+            score(sl.constraint_costs(_two_rounds()), picks)
+
+
+def test_a_level_must_be_a_level():
+    with pytest.raises(TypeError, match="level must be a Level"):
+        HomeToAwayHopCost(level=True)
+    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft', not 'firm'"):
+        HomeToAwayHopCost(level="firm")
+    pick = SimpleNamespace(name="home_to_away_hop_cost", weight=None, level="firm", exponent=1.0)
+    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft', not 'firm'"):
+        _engine([HomeToAwayHopCost(), pick])
+
+
+def test_the_knob_was_renamed():
+    """0.3.0 replaced hard=True / hard=False by level="hard" / level="soft"; hard= is unknown."""
+    with pytest.raises(TypeError):
+        HomeToAwayHopCost(hard=True)
+    with pytest.raises(TypeError):
+        TeamConflictCost(weight=None, hard=False)

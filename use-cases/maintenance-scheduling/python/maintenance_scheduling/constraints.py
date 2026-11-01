@@ -29,7 +29,7 @@ Every spec takes five knobs:
                AfterIdealEndDateCost 1'000'000); ``mnt.constraint_info()`` reports them.
 - ``level``    ``None`` = the default level, otherwise ``Level.HARD`` or
                ``Level.SOFT`` (or the names ``"hard"`` and ``"soft"``). This use
-               case has no medium level.
+               case has no medium level: ``level="medium"`` raises ValueError.
 - ``exponent`` sign-preserving power shaping: ``weight * sign(c) * |c| **
                exponent``. 2.0 = squared, so concentrated violations grow much
                costlier. The four date rules shape per (start date, crew) cell; the
@@ -42,7 +42,7 @@ Every spec takes five knobs:
                penalty, and a global total below it does too.
 
 The same constraint may be picked several times; each pick is scored on its own with
-its own knobs and the picks add up. A tag-conflict day costs 1000, and the total
+its own knobs (its level included) and the picks add up. A tag-conflict day costs 1000, and the total
 beyond ten days costs its square on top::
 
     mnt.solve(schedule, constraints=[

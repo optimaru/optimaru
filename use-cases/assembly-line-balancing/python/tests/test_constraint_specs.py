@@ -1,4 +1,8 @@
-"""assembly_line_balancing.constraints — an API for picking the cost function declaratively."""
+"""assembly_line_balancing.constraints — an API for picking the cost function declaratively.
+
+"Which constraints are on", the catalog, the five knobs (the level included) and repeated
+picks are covered here.
+"""
 
 import pickle
 import re
@@ -7,11 +11,13 @@ from types import SimpleNamespace
 import pytest
 
 import assembly_line_balancing as alb
+from assembly_line_balancing._constraint import instance_keys
 from assembly_line_balancing.constraints import (
     Constraint,
     DifferentStationPairsCost,
     FixedTaskStationsCost,
     ForbiddenTaskStationsCost,
+    Level,
     MaxStationsCost,
     SameStationGroupsCost,
     StationCapacityCost,
@@ -641,8 +647,15 @@ def test_offset_zero_reproduces_the_0_2_0_scores():
             UsedStationsCost(offset=3, exponent=2, weight=0.25),
             WorkloadImbalanceCost(weight=0.5, offset=2, clip=False),
         ],
+        [
+            *get_constraints(),
+            StationCapacityCost(level="soft", weight=1.5, offset=1, clip=False),
+            ForbiddenTaskStationsCost(level=Level.SOFT, weight=2, offset=1, clip=False),
+            UsedStationsCost(level="hard", offset=3),
+            WorkloadImbalanceCost(level="hard", weight=0.5, offset=1),
+        ],
     ],
-    ids=["repeat", "repeat-and-offsets"],
+    ids=["repeat", "repeat-and-offsets", "repeats-on-other-levels"],
 )
 def test_full_assert_solves_with_repeats_and_offsets(picks):
     """FULL_ASSERT re-checks the incremental score against a full recompute after every move."""
@@ -660,3 +673,76 @@ def test_full_assert_solves_with_repeats_and_offsets(picks):
     assert python.hard == core.score.hard
     assert python.soft == pytest.approx(core.score.soft)
     assert score(alb.constraint_costs(core), picks) == python  # the default costs score the repeats too
+
+
+# --- Levels: hard and soft, each pick (a repeat included) on the level it names ------
+
+
+@pytest.mark.parametrize(
+    ("picks", "expected"),
+    [
+        ([UsedStationsCost(level="hard")], (-3, 0.0)),
+        ([TaskStationBoundsCost(level=Level.SOFT, weight=2)], (0, -4.0)),
+        ([WorkloadImbalanceCost(level="hard", weight=1)], (-3, 0.0)),  # the opt-in objective, on hard
+        ([StationCapacityCost(level="hard")], (-1, 0.0)),  # the default level, named
+        # A scoped constraint on soft charges only its own stations: (0 - 2) + (1 - 2).
+        ([ForbiddenTaskStationsCost(level="soft", offset=2, clip=False)], (0, 3.0)),
+        # A repeat carries its own level and shaping. Hard: the station bounds [1, 0, 0, 1]
+        # (2) and the used stations beyond 1 (3 - 1). Soft: the 3 used stations and
+        # 3 x (x - 1) per station on the bounds, 3 x (0 - 1 - 1 + 0) = -6: -3 + 6.
+        (
+            [
+                UsedStationsCost(),
+                UsedStationsCost(level="hard", offset=1),
+                TaskStationBoundsCost(),
+                TaskStationBoundsCost(level=Level.SOFT, weight=3, offset=1, clip=False),
+            ],
+            (-4, 3.0),
+        ),
+    ],
+)
+def test_levels_by_hand_on_both_paths(picks, expected):
+    """A pick's level moves its term, with the weight in units of that level: engine == mirror == hand."""
+    assert score(alb.constraint_costs(fixture_h()), picks) == expected
+    raw = alb.constraint_costs(fixture_h(), picks)
+    for pick, key in zip(picks, instance_keys(picks)):
+        assert raw[key]["level"] == (pick.level or raw[key]["default_level"]), key
+    assert score(raw, picks) == expected
+    assert alb.calculate_score(fixture_h(), picks) == expected
+    assert _engine(picks) == expected
+
+
+@pytest.mark.parametrize("level", ["medium", Level.MEDIUM])
+def test_medium_is_refused_without_a_medium_level(level):
+    """The domain has no medium level: every path refuses the pick before scoring, a repeat too."""
+    message = "constraint 'used_stations_cost': this use case has no medium level"
+    pick = UsedStationsCost(level=level)  # the spec cannot know the domain
+    for picks in ([pick], [UsedStationsCost(), pick]):
+        with pytest.raises(ValueError, match=message):
+            _engine(picks)
+        with pytest.raises(ValueError, match=message):
+            alb.solve(build_problem(), config=_config(steps=10), constraints=picks)
+        with pytest.raises(ValueError, match=message):
+            alb.constraint_costs(fixture_h(), picks)
+        with pytest.raises(ValueError, match=message):
+            score(alb.constraint_costs(fixture_h()), picks)
+        with pytest.raises(ValueError, match=message):
+            alb.calculate_score(fixture_h(), picks)
+
+
+def test_a_level_must_be_a_level():
+    with pytest.raises(TypeError, match="level must be a Level"):
+        UsedStationsCost(level=True)
+    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft', not 'firm'"):
+        UsedStationsCost(level="firm")
+    pick = SimpleNamespace(name="used_stations_cost", weight=None, level="firm", exponent=1.0)
+    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft', not 'firm'"):
+        _engine([UsedStationsCost(), pick])
+
+
+def test_the_knob_was_renamed():
+    """0.3.0 replaced hard=True / hard=False by level="hard" / level="soft"; hard= is unknown."""
+    with pytest.raises(TypeError):
+        UsedStationsCost(hard=True)
+    with pytest.raises(TypeError):
+        StationCapacityCost(weight=None, hard=False)

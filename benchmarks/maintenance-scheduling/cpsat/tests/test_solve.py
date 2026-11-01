@@ -8,6 +8,7 @@ from maintenance_scheduling.constraints import (
     AfterIdealEndDateCost,
     BeforeIdealEndDateCost,
     CrewConflictCost,
+    Level,
     MaxEndDateCost,
     MinStartDateCost,
     TagConflictCost,
@@ -231,27 +232,51 @@ SELECTIONS = {
         TagConflictCost(),
         CrewConflictCost(),
     ],
+    # Each pick on its own level: a soft literal max end next to the hard default, the
+    # tag conflict on hard beyond 1 next to its soft default, crew conflict moved to soft.
+    "levels": [
+        MaxEndDateCost(),
+        MaxEndDateCost(level="soft", weight=3, offset=1, clip=False),
+        TagConflictCost(),
+        TagConflictCost(level=Level.HARD, offset=1),
+        CrewConflictCost(level="soft", weight=2),
+        AfterIdealEndDateCost(level="hard", weight=2, offset=-1),
+    ],
 }
 
 _OPTIONS = list(product(range(2), range(3)))  # (crew, start date index)
 
 
-def _engine_of(problem, fixed, selection):
+def _pinned(problem, fixed):
     dates = [date(2026, 1, 5), date(2026, 1, 6), date(2026, 1, 7)]
     candidate = problem.model_copy(deep=True)
     for job, (crew, day) in zip(candidate.jobs, fixed, strict=True):
         job.crew_id = candidate.crews[crew].id
         job.start_date = dates[day]
-    core = candidate.to_core()
+    return candidate.to_core()
+
+
+def _engine_of(problem, fixed, selection):
+    """The Python score() mirror of the pinned assignment under `selection`."""
+    core = _pinned(problem, fixed)
     return tuple(score(domain.constraint_costs(core, selection), selection))
+
+
+def _engine_solve(problem, fixed, selection):
+    """The engine's own score of the pinned assignment: a solve with no time keeps it."""
+    core = _pinned(problem, fixed)
+    assignment = core.assignment()
+    domain.solve(core, time_limit_seconds=0, random_seed=1, constraints=selection)
+    assert core.assignment() == assignment
+    return core.score.hard, core.score.soft
 
 
 @pytest.mark.parametrize("selection", list(SELECTIONS.values()), ids=list(SELECTIONS))
 def test_the_cpsat_terms_equal_the_engine_on_every_assignment(selection) -> None:
     """Pin each of the 36 assignments: the CP-SAT objective's own levels are the engine's
-    score under the same repeated / shifted picks, exactly (every cell is a term, an
-    empty one included); the reported score re-prices the default costs (each name
-    once) to the same value."""
+    score under the same repeated / shifted picks (its own and the score() mirror's),
+    exactly (every cell is a term, an empty one included); the reported score re-prices
+    the default costs (each name once) to the same value."""
     problem = _three_days()
     for fixed in product(_OPTIONS, repeat=2):
         proxy: dict[str, int] = {}
@@ -263,6 +288,7 @@ def test_the_cpsat_terms_equal_the_engine_on_every_assignment(selection) -> None
             _proxy_score=proxy,
         )
         engine = _engine_of(problem, fixed, selection)
+        assert _engine_solve(problem, fixed, selection) == engine, fixed
         assert (proxy["hard"], proxy["soft"]) == engine, fixed
         assert (solved.score_hard, solved.score_soft) == engine, fixed
 
@@ -278,11 +304,16 @@ def test_repeated_and_shifted_picks_reach_the_brute_force_optimum(selection) -> 
 
 
 def test_mapping_selections_repeat_and_shift_like_specs() -> None:
-    """The server's {name, weight, offset, clip} dicts pick the same instances as specs."""
-    specs = [TagConflictCost(), TagConflictCost(weight=3, offset=1, clip=False)]
+    """The server's {name, weight, level, offset, clip} dicts pick the same instances as specs."""
+    specs = [
+        TagConflictCost(),
+        TagConflictCost(weight=3, offset=1, clip=False),
+        TagConflictCost(level="hard", offset=1),
+    ]
     dicts = [
         {"name": "tag_conflict_cost"},
         {"name": "tag_conflict_cost", "weight": 3, "offset": 1, "clip": False},
+        {"name": "tag_conflict_cost", "level": "hard", "offset": 1},
     ]
     problem = _three_days()
     assert solve(problem, time_limit_seconds=5, constraints=dicts) == solve(
@@ -297,3 +328,19 @@ def test_a_fractional_offset_is_refused_by_cpsat() -> None:
             time_limit_seconds=1,
             constraints=[MinStartDateCost(offset=0.5)],
         )
+
+
+@pytest.mark.parametrize("level", ["medium", Level.MEDIUM])
+def test_medium_is_refused_like_the_engine(level) -> None:
+    """The domain has no medium level: CP-SAT refuses the pick as the engine does, a repeat too."""
+    message = "constraint 'tag_conflict_cost': this use case has no medium level"
+    for selection in (
+        [TagConflictCost(level=level)],
+        [TagConflictCost(), TagConflictCost(level=level)],
+    ):
+        with pytest.raises(ValueError, match=message):
+            solve(_three_days(), time_limit_seconds=1, constraints=selection)
+        with pytest.raises(ValueError, match=message):
+            domain.solve(
+                _three_days().to_core(), time_limit_seconds=0, constraints=selection
+            )

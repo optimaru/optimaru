@@ -35,7 +35,9 @@ The constraint names carry a `_cost` suffix since 0.2.0 (`crew_conflict` ->
 names). Pick, re-weight or flip constraints with `maintenance_scheduling.constraints`, and read
 the defaults with `mnt.constraint_info()`. Each spec takes `(weight=None, level=None,
 exponent=1.0)` and the keyword-only `offset=0.0` / `clip=True`, and a constraint may be
-picked several times, each pick with its own knobs:
+picked several times, each pick with its own knobs. `level` is `"hard"` or `"soft"`
+(`Level.HARD` / `Level.SOFT`); the domain has no medium level, so `level="medium"` raises
+`ValueError`:
 
 ```python
 from maintenance_scheduling.constraints import TagConflictCost, get_constraints, score

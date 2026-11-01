@@ -21,15 +21,16 @@ constraint specs (`bin_capacity_cost`, `color_conflict_cost`, `item_conflict_cos
 `used_bins_cost`) and take their default levels and weights from
 `bin_packing.constraint_info()`. `cpsat/tests/test_constraint_parity.py` pins every
 assignment of small instances in CP-SAT and checks that each constraint's term equals
-the engine's raw cost (0 = no violation). CP-SAT accepts only exponent 1 and integer
-weights.
+the engine's raw cost (0 = no violation). `level="soft"` / `level="hard"` moves a term to
+the soft / hard level in both solvers, and `level="medium"` is refused by both (`this use
+case has no medium level`). CP-SAT accepts only exponent 1 and integer weights.
 
 **0.3.0:** a constraint may be picked several times (as specs or as
-`{"name", "weight", "hard", "offset", "clip"}` mappings); each pick builds its own terms with
-its own knobs. The three per-bin constraints add one term per bin 0..n-1, an empty bin
-included, and `used_bins_cost` one term for the bin count, so an integral `offset` shapes
-each bin (or the count) exactly as the engine does in both `clip` modes; a fractional
-offset is refused (`offset must be an integer for CP-SAT`).
+`{"name", "weight", "level", "offset", "clip"}` mappings); each pick builds its own terms with
+its own knobs, its level included. The three per-bin constraints add one term per bin
+0..n-1, an empty bin included, and `used_bins_cost` one term for the bin count, so an
+integral `offset` shapes each bin (or the count) exactly as the engine does in both `clip`
+modes; a fractional offset is refused (`offset must be an integer for CP-SAT`).
 
 <!-- results:start -->
 ## Results
