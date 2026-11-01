@@ -10,7 +10,7 @@ Score (HardSoftScore), at the default weights (1 each):
            + conflict pairs sharing a bin)        # item_conflict_cost
   soft = -(bins in use)                           # used_bins_cost
 The problem carries no weights: change one through a constraint selection, e.g.
-``solve(problem, constraints=get_constraints([..., UsedBinsCost(weight=2)]))``
+``solve(problem, constraints=[..., UsedBinsCost(weight=2)])``
 (see `bin_packing.constraints`). `constraint_info()` lists every constraint with its
 default level and weight.
 
@@ -79,8 +79,9 @@ def solve(
     ``on_new_best(step, score)`` is called on every new best solution.
 
     ``constraints`` picks the cost function directly (see `bin_packing.constraints`).
-    Only the listed constraints are scored; None uses all four default constraints at
-    their default weights. With constraints the solve is single-start
+    Only the listed constraints are scored, a name picked several times once per pick;
+    None uses all four default constraints at their default weights. With constraints
+    the solve is single-start
     (``parallel_solver_count`` is ignored)::
 
         from bin_packing.constraints import get_constraints

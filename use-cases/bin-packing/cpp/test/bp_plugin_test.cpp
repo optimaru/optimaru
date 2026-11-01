@@ -27,6 +27,12 @@
 //       keep or roll back) on the default and the shaped assembly; after
 //       every apply and every undo the score and every unit cost equal a
 //       fresh assembly's
+//   (k) repeated components and the offset / clip knobs: hand-calculated
+//       repeats of a per-bin and the global rule, threshold and literal
+//       offsets by hand (literal mode charges every bin 0..n-1, an empty one
+//       included; the global shapes its one count), incremental == a fresh
+//       recompute over random variable and macro moves, and a FULL_ASSERT
+//       solve with repeated, shifted components
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -709,6 +715,222 @@ void verifyMacroMoves()
     std::printf("\n");
 }
 
+// -------------------------------------------------------------------------
+// (k) Repeated components and offsets. A repeat is a fresh copy of a
+// default component (another defaultConstraints(), the one name kept, its
+// knobs re-stated) appended with addInstances(), as the Python bindings
+// build it from a pick list.
+// -------------------------------------------------------------------------
+ConstraintAssembly copyOf(const std::string &name)
+{
+    ConstraintAssembly copy = defaultConstraints();
+    copy.only({name});
+    return copy;
+}
+
+Score scoreOf(ConstraintAssembly assembly, BinPackingProblem p)
+{
+    DecomposedCalculator calculator;
+    assembly.into(calculator);
+    return scoreWith(calculator, p);
+}
+
+// The defaults with two of them shifted, plus repeats of the no-delta
+// capacity rule (squared), the delta-path colour and conflict rules (literal,
+// one fractional) and the global bin count (threshold).
+ConstraintAssembly repeatedAssembly()
+{
+    ConstraintAssembly assembly = defaultConstraints();
+    assembly.offset("binCapacityCost", 2.0);
+    assembly.offset("usedBinsCost", 1.0).clip("usedBinsCost", false);
+    assembly.addInstances(
+        std::move(copyOf("binCapacityCost").weight("binCapacityCost", 0.5).exponent("binCapacityCost", 2.0)));
+    assembly.addInstances(std::move(copyOf("colorConflictCost")
+                                        .weight("colorConflictCost", 3.0)
+                                        .offset("colorConflictCost", 0.5)
+                                        .clip("colorConflictCost", false)));
+    assembly.addInstances(std::move(copyOf("itemConflictCost")
+                                        .exponent("itemConflictCost", 2.0)
+                                        .offset("itemConflictCost", -1.0)
+                                        .clip("itemConflictCost", false)));
+    assembly.addInstances(
+        std::move(copyOf("usedBinsCost").weight("usedBinsCost", 0.25).offset("usedBinsCost", 3.0)));
+    return assembly;
+}
+
+void verifyRepeatsAndOffsets()
+{
+    std::printf("== (k) Repeated components, offset / clip ==\n");
+    {
+        // everyTermPositive(), n = 4 bins: capacity [8, 0, 0, 0], colour
+        // [1, 0, 0, 0], conflicts [1, 0, 0, 0], 2 bins used.
+        ConstraintAssembly assembly = copyOf("usedBinsCost");
+        assembly.addInstances(
+            std::move(copyOf("usedBinsCost").weight("usedBinsCost", 10.0).offset("usedBinsCost", 1.0)));
+        BinPackingProblem p = everyTermPositive();
+        DecomposedCalculator calculator;
+        assembly.into(calculator);
+        check(sameScore(scoreWith(calculator, p), Score{0, -12.0}), "used bins + 10 x (used - 1): -12 soft");
+        const auto entries = calculator.constraintCosts();
+        check(entries.size() == 2 && entries[0].unitCosts == entries[1].unitCosts && entries[1].weight == 10.0
+                  && entries[1].offset == 1.0 && entries[0].offset == 0.0 && entries[1].defaultWeight == 1.0,
+              "two global instances, the same count, each with its own knobs");
+        ConstraintAssembly capacity = copyOf("binCapacityCost");
+        capacity.addInstances(
+            std::move(copyOf("binCapacityCost").weight("binCapacityCost", 0.5).exponent("binCapacityCost", 2.0)));
+        check(sameScore(scoreOf(std::move(capacity), everyTermPositive()), Score{-40, 0.0}),
+              "capacity + 0.5 x capacity^2 per bin: -(8 + 32)");
+    }
+    {
+        const BinPackingProblem p = everyTermPositive();
+        check(sameScore(scoreOf(copyOf("binCapacityCost").offset("binCapacityCost", 3.0), p), Score{-5, 0.0}),
+              "capacity threshold offset 3: 8 - 3");
+        check(sameScore(scoreOf(copyOf("binCapacityCost").offset("binCapacityCost", 3.0).clip("binCapacityCost", false),
+                                p),
+                        Score{4, 0.0}),
+              "capacity literal offset 3: (8 - 3) + 3 x (0 - 3), every bin");
+        check(sameScore(scoreOf(copyOf("binCapacityCost").offset("binCapacityCost", -1.0), p), Score{-9, 0.0}),
+              "capacity threshold offset -1 adds to the non-zero bin only");
+        check(sameScore(scoreOf(copyOf("binCapacityCost").offset("binCapacityCost", -1.0).clip("binCapacityCost", false),
+                                p),
+                        Score{-12, 0.0}),
+              "capacity literal offset -1 adds to every bin: 9 + 3");
+        // Hard literal offset rounds per bin: (1 - 0.5) x 3 = 1.5 -> 2,
+        // (0 - 0.5) x 3 = -1.5 -> -2 on three bins.
+        check(sameScore(scoreOf(copyOf("colorConflictCost")
+                                    .weight("colorConflictCost", 3.0)
+                                    .offset("colorConflictCost", 0.5)
+                                    .clip("colorConflictCost", false),
+                                p),
+                        Score{4, 0.0}),
+              "colour literal offset 0.5 at weight 3, rounded per bin: +4 hard");
+        check(sameScore(scoreOf(copyOf("usedBinsCost").offset("usedBinsCost", 5.0).clip("usedBinsCost", false), p),
+                        Score{0, 3.0}),
+              "used bins literal offset 5: 2 - 5, a reward");
+    }
+    {
+        // Random walk over variable changes, swaps, bin merges and the two
+        // macro moves (kept or rolled back): incremental == a fresh
+        // calculator of the same assembly after every step.
+        BinPackingProblem p = randomInstance(30, 17, 4, 25);
+        std::mt19937_64 rng(77);
+        randomize(p, rng, 8, 0.0);
+        ScoreCalculator::prepare(p);
+        DecomposedCalculator calculator;
+        repeatedAssembly().into(calculator);
+        optimaru::ScoreDirector<BinPackingProblem> director(p, calculator);
+        optimaru::NearbyNeighborhoods nearby;
+        std::vector<int> noLists;
+        optimaru::OperatorContext<BinPackingProblem> ctx{director, nearby, noLists, noLists};
+        EmptyBinMove empty(3);
+        RepackMove repack(3, 2);
+        BinPackingProblem shadow = p;
+        const int n = p.itemCount();
+        std::uniform_real_distribution<double> unit(0.0, 1.0);
+        int mismatches = 0;
+        int macroApplied = 0;
+        double drift = 0.0;
+        std::vector<int> entities;
+        auto agrees = [&]() -> bool
+        {
+            shadow.setAssignment(p.assignment());
+            DecomposedCalculator fresh;
+            repeatedAssembly().into(fresh);
+            const Score full = scoreWith(fresh, shadow);
+            const Score incremental = director.calculateScore();
+            drift = std::max(drift, std::fabs(full.soft - incremental.soft));
+            // The engine's FULL_ASSERT rule (scoresAgree): hard exact, soft
+            // within 1e-6 (the fractional weights accumulate a few ulps).
+            return optimaru::scoresAgree(incremental, full);
+        };
+        const int steps = 3000;
+        for (int step = 0; step < steps; ++step)
+        {
+            const double r = unit(rng);
+            if (r < 0.5)
+            {
+                const int item = static_cast<int>(rng() % n);
+                director.changeVariable(item, unit(rng) < 0.1 ? -1 : static_cast<int>(rng() % 8));
+            }
+            else if (r < 0.7)
+            {
+                const int a = static_cast<int>(rng() % n);
+                const int b = static_cast<int>(rng() % n);
+                const int va = p.items[a].bin;
+                const int vb = p.items[b].bin;
+                director.beginVariableChanges();
+                director.changeVariable(a, vb);
+                director.changeVariable(b, va);
+                director.endVariableChanges();
+            }
+            else
+            {
+                // Macro moves need every item placed.
+                for (int i = 0; i < n; ++i)
+                {
+                    if (p.items[i].bin < 0)
+                        director.changeVariable(i, static_cast<int>(rng() % n));
+                }
+                entities.clear();
+                director.beginMoveEvaluation();
+                const bool applied = r < 0.85 ? empty.apply(ctx, rng, entities) : repack.apply(ctx, rng, entities);
+                if (!applied)
+                {
+                    director.endMoveEvaluation(false);
+                    continue;
+                }
+                ++macroApplied;
+                if (!agrees() && ++mismatches <= 3)
+                    std::printf("  MISMATCH after a macro move @step %d\n", step);
+                const bool keep = unit(rng) < 0.5;
+                if (!keep)
+                {
+                    director.beginMoveRollback();
+                    if (r < 0.85)
+                        empty.undoLast(ctx);
+                    else
+                        repack.undoLast(ctx);
+                }
+                director.endMoveEvaluation(keep);
+            }
+            if (!agrees() && ++mismatches <= 3)
+                std::printf("  MISMATCH @step %d\n", step);
+        }
+        std::printf("    largest soft drift %.3g, %d macro moves applied\n", drift, macroApplied);
+        check(mismatches == 0 && macroApplied > 100,
+              std::to_string(steps) + " random moves with repeated, shifted components: incremental == fresh");
+    }
+    {
+        BinPackingProblem p = randomInstance(18, 23, 3, 8);
+        ScoreCalculator::prepare(p);
+        DecomposedCalculator calculator;
+        repeatedAssembly().into(calculator);
+        Solver::Config config;
+        config.spentLimit = std::chrono::seconds(2);
+        config.randomSeed = 5;
+        config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+        config.ruinRecreateUnimprovedStepTrigger = 200;
+        config.ruinRecreatePolishSteps = 100;
+        config.ruinRecreateAsMoveWeight = 0.05;
+        bool corrupted = false;
+        try
+        {
+            Solver(config).solve(p, calculator);
+        }
+        catch (const optimaru::ScoreCorruptionError &e)
+        {
+            corrupted = true;
+            std::printf("  ScoreCorruptionError: %s\n", e.what());
+        }
+        check(!corrupted, "2s FULL_ASSERT solve with repeated, shifted components");
+        DecomposedCalculator fresh;
+        repeatedAssembly().into(fresh);
+        check(!corrupted && optimaru::scoresAgree(p.score, scoreWith(fresh, p)),
+              "the reported score == a fresh recompute of the same assembly");
+    }
+    std::printf("\n");
+}
+
 }  // namespace
 
 int main()
@@ -723,6 +945,7 @@ int main()
     verifyRawCostsByHand();
     verifyCatalog();
     verifyMacroMoves();
+    verifyRepeatsAndOffsets();
     if (failures == 0)
     {
         std::printf("All bin-packing plugin checks PASSED.\n");

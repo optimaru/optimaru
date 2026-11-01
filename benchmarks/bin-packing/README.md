@@ -24,6 +24,13 @@ assignment of small instances in CP-SAT and checks that each constraint's term e
 the engine's raw cost (0 = no violation). CP-SAT accepts only exponent 1 and integer
 weights.
 
+**0.3.0:** a constraint may be picked several times (as specs or as
+`{"name", "weight", "hard", "offset", "clip"}` mappings); each pick builds its own terms with
+its own knobs. The three per-bin constraints add one term per bin 0..n-1, an empty bin
+included, and `used_bins_cost` one term for the bin count, so an integral `offset` shapes
+each bin (or the count) exactly as the engine does in both `clip` modes; a fractional
+offset is refused (`offset must be an integer for CP-SAT`).
+
 <!-- results:start -->
 ## Results
 

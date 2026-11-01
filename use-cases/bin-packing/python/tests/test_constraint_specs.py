@@ -244,6 +244,9 @@ def test_weight_none_means_the_component_default():
         ({"exponent": 0}, ValueError),
         ({"exponent": -1.0}, ValueError),
         ({"hard": 1}, TypeError),
+        ({"offset": float("nan")}, ValueError),
+        ({"offset": "1"}, TypeError),
+        ({"clip": 0}, TypeError),
     ],
 )
 def test_specs_validate_their_knobs(kwargs, error):
@@ -255,7 +258,12 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     """The C++ side guards too: a duck-typed pick cannot smuggle a negative weight in."""
     negative = SimpleNamespace(name="used_bins_cost", weight=-2.0, hard=None, exponent=1.0)
     flat = SimpleNamespace(name="used_bins_cost", weight=None, hard=None, exponent=0.0)
-    for pick, message in ((negative, "weight must be finite and >= 0"), (flat, "exponent must be finite and > 0")):
+    unbounded = SimpleNamespace(name="used_bins_cost", weight=None, hard=None, exponent=1.0, offset=float("inf"))
+    for pick, message in (
+        (negative, "weight must be finite and >= 0"),
+        (flat, "exponent must be finite and > 0"),
+        (unbounded, "offset must be finite, not inf"),
+    ):
         with pytest.raises(ValueError, match=message):
             bp.solve(build_problem(), config=_config(0.1), constraints=[pick])
         with pytest.raises(ValueError, match=message):
@@ -270,6 +278,10 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
         ({"hard": 1}, "hard must be True, False or None, not 1"),
         ({"hard": "x"}, "hard must be True, False or None, not 'x'"),
         ({"exponent": True}, "exponent must be a number, not True"),
+        ({"offset": "5"}, "offset must be a number, not '5'"),
+        ({"offset": False}, "offset must be a number, not False"),
+        ({"clip": 1}, "clip must be True or False, not 1"),
+        ({"clip": "no"}, "clip must be True or False, not 'no'"),
     ],
 )
 def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
@@ -316,6 +328,15 @@ def test_score_equals_the_engine_for_the_default_assembly():
         [BinCapacityCost(hard=False), color_conflict_cost, item_conflict_cost, used_bins_cost],
         [BinCapacityCost(exponent=2.0), ColorConflictCost(exponent=3.0), item_conflict_cost, used_bins_cost],
         [BinCapacityCost(weight=0.5), UsedBinsCost(hard=True, weight=0.5, exponent=2.0)],
+        [*get_constraints(), UsedBinsCost(weight=100, offset=1), BinCapacityCost(exponent=2)],
+        [
+            BinCapacityCost(offset=1),
+            BinCapacityCost(offset=0.5, clip=False, weight=3),
+            ColorConflictCost(offset=-1),
+            ItemConflictCost(offset=1, clip=False),
+            UsedBinsCost(),
+            UsedBinsCost(offset=2, exponent=2, weight=0.5, clip=False),
+        ],
     ],
 )
 def test_score_matches_the_engine_for_arbitrary_specs(specs):
@@ -383,8 +404,232 @@ def test_score_rejects_an_unknown_constraint_name():
         score(raw, [Renamed()])
 
 
-def test_naming_a_constraint_twice_is_rejected():
-    with pytest.raises(ValueError, match="picked more than once"):
-        bp.solve(build_problem(), config=_config(0.1), constraints=[used_bins_cost, UsedBinsCost(weight=10)])
-    with pytest.raises(ValueError, match="picked more than once"):
-        get_constraints([used_bins_cost, used_bins_cost])
+def test_naming_a_constraint_twice_scores_both_picks():
+    """Since 0.3.0 a constraint may be picked several times: each pick is scored on its own.
+
+    The later pick no longer wins in silence, nor is it an error: both are
+    instances with their own knobs, and they add up."""
+    picks = [UsedBinsCost(), UsedBinsCost(weight=10)]
+    problem = _zero_budget_solve(_hand(), picks)
+    assert problem.score == bp.Score(0, -(1 + 10) * 2)
+    assert get_constraints([UsedBinsCost(), UsedBinsCost()]) == [UsedBinsCost(), UsedBinsCost()]
+
+
+# --- 0.3.0: repeated picks and the offset / clip knobs ------------------------------
+
+
+def _hand() -> bp.BinPackingProblem:
+    """build_problem() placed by hand, n = 5 bins: bin 0 = A5 B5 E3 (13 on 10, two reds),
+    bin 1 = C4 D3 (the conflict pair). Raw: capacity [3, 0, 0, 0, 0], colour
+    [1, 0, 0, 0, 0], conflicts [0, 1, 0, 0, 0], 2 bins used."""
+    problem = build_problem()
+    problem.set_assignment([0, 0, 1, 1, 0])
+    return problem
+
+
+def _zero_budget_solve(problem, picks):
+    """Score a complete assignment under ``picks`` on the engine: a warm start, no step taken."""
+    config = bp.SolverConfig()
+    config.spent_limit_seconds = 0
+    assignment = problem.assignment()
+    problem.warm_start = True  # otherwise the solve ignores the input bins
+    bp.Solver(config).solve_with_constraints(problem, picks)
+    assert problem.assignment() == assignment
+    return problem
+
+
+def _engine(picks):
+    """Both engine paths: calculate_score with the picks and a zero-budget solve."""
+    calculated = bp.calculate_score(_hand(), picks)
+    solved = _zero_budget_solve(_hand(), picks).score
+    assert (calculated.hard, calculated.soft) == (solved.hard, solved.soft)
+    return (calculated.hard, calculated.soft)
+
+
+REPEAT = [UsedBinsCost(), UsedBinsCost(weight=100, offset=1)]
+
+
+def test_the_hand_instance():
+    raw = bp.constraint_costs(_hand())
+    assert {name: entry["costs"] for name, entry in raw.items()} == {
+        "bin_capacity_cost": [3, 0, 0, 0, 0],
+        "color_conflict_cost": [1, 0, 0, 0, 0],
+        "item_conflict_cost": [0, 1, 0, 0, 0],
+        "used_bins_cost": [2],
+    }
+    assert score(raw) == _engine(None) == (-5, -2.0)
+
+
+def test_a_repeated_pick_by_hand():
+    """2 bins, plus 100 x (2 - 1) for the bins beyond the first: -102."""
+    raw = bp.constraint_costs(_hand(), REPEAT)
+    assert list(raw) == ["used_bins_cost", "used_bins_cost#2"]
+    first, second = raw.values()
+    assert first["costs"] == second["costs"] == [2.0]
+    assert (first["weight"], first["offset"], second["weight"], second["offset"]) == (1.0, 0.0, 100.0, 1.0)
+    assert first["name"] == second["name"] == "used_bins_cost"
+    assert second["default_weight"] == 1.0
+    expected = (0, -(2 + 100 * 1))
+    assert score(raw, REPEAT) == expected
+    # The default costs hold the name once; the second pick reads the same raw costs.
+    assert score(bp.constraint_costs(_hand()), REPEAT) == expected
+    assert _engine(REPEAT) == expected
+
+
+def test_a_repeated_unit_pick_by_hand():
+    """capacity per bin plus 2 x its square: -(3 + 2 x 9) on bin 0."""
+    picks = [BinCapacityCost(), BinCapacityCost(weight=2, exponent=2)]
+    raw = bp.constraint_costs(_hand(), picks)
+    assert list(raw) == ["bin_capacity_cost", "bin_capacity_cost#2"]
+    assert raw["bin_capacity_cost"]["costs"] == raw["bin_capacity_cost#2"]["costs"]
+    assert score(raw, picks) == (-21, 0.0)
+    assert score(bp.constraint_costs(_hand()), picks) == (-21, 0.0)
+    assert _engine(picks) == (-21, 0.0)
+
+
+def test_identical_picks_count_twice():
+    picks = [ItemConflictCost(), ItemConflictCost()]
+    assert score(bp.constraint_costs(_hand()), picks) == (-2, 0.0)
+    assert _engine(picks) == (-2, 0.0)
+    assert list(bp.constraint_costs(_hand(), picks)) == ["item_conflict_cost", "item_conflict_cost#2"]
+
+
+def test_the_keys_follow_the_pick_order_of_each_name():
+    picks = [
+        UsedBinsCost(weight=1),
+        BinCapacityCost(),
+        UsedBinsCost(weight=2),
+        ColorConflictCost(),
+        UsedBinsCost(weight=3),
+    ]
+    raw = bp.constraint_costs(_hand(), picks)
+    assert {key: entry["weight"] for key, entry in raw.items()} == {
+        "bin_capacity_cost": 1.0,
+        "color_conflict_cost": 1.0,
+        "used_bins_cost": 1.0,
+        "used_bins_cost#2": 2.0,
+        "used_bins_cost#3": 3.0,
+    }
+    assert score(raw, picks) == (-(3 + 1), -(6 * 2))
+    assert _engine(picks) == score(raw, picks)
+
+
+@pytest.mark.parametrize(
+    ("pick", "expected"),
+    [
+        # Per-bin constraints, shaped per bin 0..4; an empty bin (raw 0) counts in literal mode.
+        (BinCapacityCost(offset=1), (-2, 0.0)),
+        (BinCapacityCost(offset=1, clip=False), (-(2 - 4), 0.0)),  # the four other bins are rewarded
+        (BinCapacityCost(offset=5), (0, 0.0)),
+        (BinCapacityCost(offset=5, clip=False), (-(-2 - 4 * 5), 0.0)),
+        (ItemConflictCost(offset=-2), (-3, 0.0)),  # a negative offset adds to every non-zero bin
+        (ItemConflictCost(offset=-2, clip=False), (-(3 + 4 * 2), 0.0)),  # ...or to every bin
+        (ColorConflictCost(offset=0.5, clip=False, weight=3), (6, 0.0)),  # 1.5 -> 2, 4 x (-1.5 -> -2): per bin
+        (
+            ColorConflictCost(offset=2, exponent=2, clip=False),
+            (-(-1 - 4 * 4), 0.0),
+        ),  # (1 - 2)^2, 4 x (0 - 2)^2, signs kept
+        # The global shapes its one count.
+        (UsedBinsCost(offset=1, exponent=2), (0, -1.0)),
+        (UsedBinsCost(offset=5, exponent=3, clip=False), (0, 27.0)),  # (2 - 5)^3: a reward below 5 bins
+        (UsedBinsCost(offset=-1), (0, -3.0)),
+        (UsedBinsCost(hard=True, offset=0.5, clip=False, weight=3), (-5, 0.0)),  # 4.5 -> 5
+    ],
+)
+def test_offsets_by_hand_on_both_paths(pick, expected):
+    """threshold sign(x) max(0, |x| - offset)^e and literal (x - offset)^e: Python mirror == engine == hand."""
+    assert score(bp.constraint_costs(_hand()), [pick]) == expected
+    raw = bp.constraint_costs(_hand(), [pick])
+    entry = next(iter(raw.values()))
+    assert (entry["offset"], entry["clip"]) == (float(pick.offset), pick.clip)
+    assert "units" not in entry  # every bin is evaluated: no scoped constraint here
+    assert score(raw, [pick]) == expected
+    assert _engine([pick]) == expected
+
+
+def test_offset_zero_reproduces_the_0_2_0_scores():
+    """offset 0 is the plain shaping in both modes, so every 0.2.0 selection scores the same."""
+    plain = [BinCapacityCost(exponent=2), ColorConflictCost(), ItemConflictCost(), UsedBinsCost(exponent=2)]
+    shifted = [
+        BinCapacityCost(exponent=2, offset=0.0, clip=False),
+        ColorConflictCost(offset=0),
+        ItemConflictCost(clip=False),
+        UsedBinsCost(exponent=2, offset=0.0, clip=False),
+    ]
+    problem = _solved()
+    raw = bp.constraint_costs(problem)
+    assert score(raw, shifted) == score(raw, plain)
+    assert bp.calculate_score(problem, shifted) == bp.calculate_score(problem, plain)
+    for entry in raw.values():
+        assert (entry["offset"], entry["clip"]) == (0.0, True)
+
+
+def test_python_score_equals_cpp_calculate_score_for_random_repeats_and_offsets():
+    """Random assignments, random pick lists with repeats, offsets of both signs and both clip modes."""
+    rng = random.Random(11)
+    classes = (BinCapacityCost, ColorConflictCost, ItemConflictCost, UsedBinsCost)
+    for _ in range(60):
+        problem = build_problem()
+        problem.set_assignment([rng.randrange(problem.item_count()) for _ in range(problem.item_count())])
+        specs = [
+            rng.choice(classes)(
+                weight=rng.choice([None, 0, 0.5, 1, 3]),
+                hard=rng.choice([None, True, False]),
+                exponent=rng.choice([1.0, 0.5, 2.0, 3.0]),
+                offset=rng.choice([0, 0.5, 1, 2, -1, -0.25]),
+                clip=rng.choice([True, False]),
+            )
+            for _ in range(rng.randrange(1, 7))
+        ]
+        engine = bp.calculate_score(problem, specs)
+        python = score(bp.constraint_costs(problem), specs)
+        assert python.hard == engine.hard
+        assert python.soft == pytest.approx(engine.soft)
+        assert score(bp.constraint_costs(problem, specs), specs) == python
+
+
+def _random_problem(seed: int, items: int = 30) -> bp.BinPackingProblem:
+    rng = random.Random(seed)
+    pairs = [tuple(rng.sample(range(items), 2)) for _ in range(10)]
+    return bp.BinPackingProblem(
+        20,
+        [bp.Item(f"i{k}", rng.randint(1, 12), color=rng.choice([None, "red", "blue", "green"])) for k in range(items)],
+        conflicts=[(f"i{a}", f"i{b}") for a, b in pairs],
+    )
+
+
+@pytest.mark.parametrize(
+    "picks",
+    [
+        [*get_constraints(), *REPEAT, BinCapacityCost(weight=2, exponent=2)],
+        [
+            BinCapacityCost(),
+            BinCapacityCost(offset=1, clip=False, weight=2),
+            ColorConflictCost(offset=-1),
+            ColorConflictCost(offset=0.5, clip=False, weight=3),
+            ItemConflictCost(offset=1, clip=False, exponent=2),
+            UsedBinsCost(),
+            UsedBinsCost(offset=8, exponent=2, weight=0.25),
+        ],
+    ],
+    ids=["repeat", "repeat-and-offsets"],
+)
+def test_full_assert_solves_with_repeats_and_offsets(picks):
+    """FULL_ASSERT re-checks the incremental score against a full recompute after every move."""
+    problem = _random_problem(5)
+    config = bp.SolverConfig()
+    config.full_assert = True
+    config.random_seed = 3
+    config.parallel_solver_count = 1
+    config.step_count_limit = 5000
+    config.spent_limit_seconds = 30
+    bp.Solver(config).solve_with_constraints(problem, picks)
+    raw = bp.constraint_costs(problem, picks)
+    assert len(raw) == len(picks)
+    python = score(raw, picks)
+    assert python.hard == problem.score.hard
+    assert python.soft == pytest.approx(problem.score.soft)
+    assert score(bp.constraint_costs(problem), picks) == python  # the default costs score the repeats too
+    engine = bp.calculate_score(problem, picks)
+    assert engine.hard == python.hard
+    assert engine.soft == pytest.approx(python.soft)
