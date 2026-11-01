@@ -2,34 +2,58 @@
 
 The default path (`knapsack.solve(problem)`) scores every default constraint at
 its default weight. This module is the alternative path next to it: pick
-constraints, change weights, flip hard/soft, and pass the list to
+constraints, change weights, flip hard/soft, shape the cost, and pass the list to
 `solve(problem, constraints=...)`.
 
-The shortest route is :func:`get_constraints`. It returns the default list, so
-a "default with a small tweak" declaration fits on one line::
+A constraint list reads one way: one class call per constraint::
 
     import knapsack
-    from knapsack.constraints import SelectedValueCost, get_constraints
+    from knapsack.constraints import (
+        KnapsackCapacityCost, MandatoryItemsCost, SelectedValueCost, get_constraints,
+    )
 
     knapsack.solve(problem, constraints=get_constraints())                       # defaults as-is
     knapsack.solve(problem, constraints=[*get_constraints()[:-1], SelectedValueCost(weight=2)])
+    knapsack.solve(problem, constraints=[                                        # picked
+        KnapsackCapacityCost(), MandatoryItemsCost(), SelectedValueCost(),
+    ])
 
-Default instances (`knapsack_capacity_cost`, `resource_capacity_cost`, ...,
-`selected_value_cost`) live at module level, so you can also pass a list of
-just a few. Only listed constraints are scored — leave one out and its term
-disappears from the score.
+Only listed constraints are scored — leave one out and its term disappears from the
+score. (The module also carries ready-made default instances:
+``knapsack_capacity_cost`` is ``KnapsackCapacityCost()``, and so on.)
 
-Every spec takes ``(weight=None, hard=None, exponent=1.0)``:
+Every spec takes five knobs:
 
 - ``weight``   linear multiplier on the constraint cost. ``None`` = the component
                default (1 for every knapsack constraint). The problem carries no
                weights; ``knapsack.constraint_info()`` reports the defaults.
 - ``hard``     ``True`` = hard, ``False`` = soft, ``None`` = the default level.
-               ``selected_value_cost`` is a reward and always soft:
+               ``SelectedValueCost`` is a reward and always soft:
                ``hard=True`` raises ValueError.
 - ``exponent`` sign-preserving power shaping: ``weight * sign(c) * |c| ** exponent``
                on each constraint's single total (every knapsack constraint is
                global), e.g. the summed resource overflow.
+- ``offset``   (keyword) shifts that shaping of the total; 0.0 = none.
+- ``clip``     (keyword) ``True`` (the default) counts only what lies beyond the
+               offset, ``max(0, c - offset) ** exponent``; ``False`` shapes
+               ``c - offset`` as it is, so a total below the offset — a raw 0
+               included — lowers the penalty. On the ``SelectedValueCost`` reward
+               (raw ``-value``) a threshold offset rewards only the value beyond it,
+               a literal one adds ``offset`` to the reward.
+
+The same constraint may be picked several times; each pick is scored on its own with
+its own knobs and the picks add up. The resource overflow plus its square beyond 10
+units::
+
+    knapsack.solve(problem, constraints=[
+        KnapsackCapacityCost(),
+        ResourceCapacityCost(),
+        ResourceCapacityCost(exponent=2, offset=10),
+        SelectedValueCost(),
+    ])
+
+``knapsack.constraint_costs(problem, picks)`` keys the second pick
+``"resource_capacity_cost#2"``.
 
 Names (`name`) are the C++ component names in snake_case
 (``KnapsackCapacityCost`` -> ``knapsack_capacity_cost``). The core derives them
@@ -175,7 +199,7 @@ class SelectedValueCost(Constraint):
     )
 
 
-#: Instances at the default weights (weight=None). Reference them directly when picking.
+#: Ready-made default instances (``knapsack_capacity_cost`` is ``KnapsackCapacityCost()``).
 knapsack_capacity_cost = KnapsackCapacityCost()
 resource_capacity_cost = ResourceCapacityCost()
 mandatory_items_cost = MandatoryItemsCost()
@@ -200,12 +224,13 @@ def get_constraints(constraints: list[Constraint] | None = None) -> list[Constra
     """Return the cost function. Without arguments, every default constraint.
 
     When `constraints` is given, that list is used as-is — only the listed
-    constraints are scored. To change just one default, mix in the default instances::
+    constraints are scored. To change just one default, list the others as they are::
 
         get_constraints([*get_constraints()[:-1], SelectedValueCost(weight=2)])
 
     Same contract as the C++ applyConstraints: an empty list (most likely a filter
-    that came out empty) and a constraint named twice raise ValueError.
+    that came out empty) raises ValueError; a constraint named several times is
+    scored once per pick, each with its own knobs.
     """
     return select(constraints, _DEFAULTS)
 
@@ -214,18 +239,20 @@ def score(costs: dict, constraints: list[Constraint] | None = None) -> Score:
     """Apply specs to raw constraint costs and produce a score — pure Python.
 
     ``costs`` is what `knapsack.constraint_costs(problem)` returns: per constraint
-    its **raw** total (a one-element list), before weight, exponent and level
+    its **raw** total (a one-element list), before weight, exponent, offset and level
     rounding. Fetch it once and rescore with different weights without re-solving::
 
         raw = knapsack.constraint_costs(problem)
         score(raw)                                              # default set
-        score(raw, [knapsack_capacity_cost, SelectedValueCost(weight=2)])
+        score(raw, [KnapsackCapacityCost(), SelectedValueCost(weight=2)])
+        score(raw, [MandatoryItemsCost(), MandatoryItemsCost(exponent=2, offset=1)])
 
     No solver and no search are involved. The arithmetic matches the engine —
-    each constraint contributes ``weight * shape(cost, exponent)`` and hard
-    contributions are **rounded per constraint** before summing (the same order
+    each constraint contributes ``weight * shape(cost, exponent, offset, clip)`` and
+    hard contributions are **rounded per constraint** before summing (the same order
     as the engine; rounding the total afterwards gives different values for
-    fractional hard weights).
+    fractional hard weights). A second pick of a constraint reads the same raw total
+    with its own knobs.
 
     When ``constraints`` is given, only those constraints are scored — the same
     semantics as `get_constraints`. Unknown names raise ValueError; ``hard=True``

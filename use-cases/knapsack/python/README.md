@@ -26,10 +26,15 @@ knapsack.constraint_info()
 knapsack.solve(problem, time_limit_seconds=1.0, constraints=[*get_constraints()[:-1], SelectedValueCost(weight=2)])
 raw = knapsack.constraint_costs(problem)   # {name: {"costs": [total], "weight": ..., ...}}
 score(raw), score(raw, [MandatoryItemsCost(exponent=2.0)])
+# A constraint may be picked several times, each pick with its own knobs; offset / clip
+# shift the shaping of the total (clip=True: only the misses beyond the first count).
+score(raw, [MandatoryItemsCost(), MandatoryItemsCost(exponent=2, offset=1)])
 ```
 
 Every knapsack constraint is global: `constraint_costs()` reports one raw total per
-constraint and `exponent` shapes that total. 0.2.0 renamed every constraint (no
+constraint and `exponent` (with `offset` / `clip`, 0.3.0) shapes that total;
+`constraint_costs(problem, picks)` scores a pick list, the second pick of a name keyed
+`<name>#2`. 0.2.0 renamed every constraint (no
 aliases), replaced the per-term lists of `constraint_costs()` by the standard dict,
 shapes each constraint's total instead of each term, rounds hard per constraint, refuses
 `hard=True` on the reward, and replaced the simulated-annealing `SolverConfig` knobs

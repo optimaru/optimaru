@@ -6,6 +6,11 @@ components' kDefaultLevel / kDefaultWeight), so they are not restated here.
 Each one adds exactly the raw cost the engine's component reports — the same
 input and selection give the same per-constraint value, and 0 means no
 violation (``tests/test_constraint_parity.py``).
+
+Every knapsack constraint is global: each plugin adds its single total in one
+``objective.add`` call, the engine's unit, so a pick's ``offset`` / ``clip``
+shape that total exactly as the engine does (``terms_per_unit``), and a
+constraint picked several times adds one term per pick.
 """
 
 from __future__ import annotations
@@ -30,6 +35,8 @@ class KnapsackContext:
 class KnapsackCapacityCost(domain.KnapsackCapacityCost, ConstraintPlugin[KnapsackContext]):
     """max(0, selected weight - capacity)."""
 
+    terms_per_unit = True  # one term: the global total, the engine's unit
+
     def build(self, context: KnapsackContext, objective: ObjectiveBuilder) -> None:
         items = context.problem.items
         total = sum(item.weight for item in items)
@@ -41,6 +48,8 @@ class KnapsackCapacityCost(domain.KnapsackCapacityCost, ConstraintPlugin[Knapsac
 
 class ResourceCapacityCost(domain.ResourceCapacityCost, ConstraintPlugin[KnapsackContext]):
     """Sum over declared resources of max(0, selected usage - capacity)."""
+
+    terms_per_unit = True
 
     def build(self, context: KnapsackContext, objective: ObjectiveBuilder) -> None:
         items = context.problem.items
@@ -60,6 +69,8 @@ class ResourceCapacityCost(domain.ResourceCapacityCost, ConstraintPlugin[Knapsac
 class MandatoryItemsCost(domain.MandatoryItemsCost, ConstraintPlugin[KnapsackContext]):
     """One per mandatory entry left out (repeats count)."""
 
+    terms_per_unit = True
+
     def build(self, context: KnapsackContext, objective: ObjectiveBuilder) -> None:
         entries = context.problem.mandatory_items
         objective.add(self.name, sum(1 - context.by_id[item_id] for item_id in entries), bound=len(entries))
@@ -68,6 +79,8 @@ class MandatoryItemsCost(domain.MandatoryItemsCost, ConstraintPlugin[KnapsackCon
 class ForbiddenItemsCost(domain.ForbiddenItemsCost, ConstraintPlugin[KnapsackContext]):
     """One per forbidden entry selected (repeats count)."""
 
+    terms_per_unit = True
+
     def build(self, context: KnapsackContext, objective: ObjectiveBuilder) -> None:
         entries = context.problem.forbidden_items
         objective.add(self.name, sum(context.by_id[item_id] for item_id in entries), bound=len(entries))
@@ -75,6 +88,8 @@ class ForbiddenItemsCost(domain.ForbiddenItemsCost, ConstraintPlugin[KnapsackCon
 
 class SelectionGroupBoundsCost(domain.SelectionGroupBoundsCost, ConstraintPlugin[KnapsackContext]):
     """Per group max(0, min - n) + max(0, n - max), n = selected members."""
+
+    terms_per_unit = True
 
     def build(self, context: KnapsackContext, objective: ObjectiveBuilder) -> None:
         violations = []
@@ -95,6 +110,8 @@ class SelectionGroupBoundsCost(domain.SelectionGroupBoundsCost, ConstraintPlugin
 class ItemDependencyCost(domain.ItemDependencyCost, ConstraintPlugin[KnapsackContext]):
     """One per (item, required) pair with the item selected and the required one not."""
 
+    terms_per_unit = True
+
     def build(self, context: KnapsackContext, objective: ObjectiveBuilder) -> None:
         violations = []
         for item in context.problem.items:
@@ -109,6 +126,8 @@ class ItemDependencyCost(domain.ItemDependencyCost, ConstraintPlugin[KnapsackCon
 
 class SelectedValueCost(domain.SelectedValueCost, ConstraintPlugin[KnapsackContext]):
     """The reward: -(selected value)."""
+
+    terms_per_unit = True
 
     def build(self, context: KnapsackContext, objective: ObjectiveBuilder) -> None:
         items = context.problem.items

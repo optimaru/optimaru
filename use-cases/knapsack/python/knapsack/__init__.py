@@ -76,15 +76,18 @@ def _core_of(problem) -> KnapsackProblem:
     raise TypeError(f"problem must be a KnapsackProblemModel or a KnapsackProblem: {type(problem)!r}")
 
 
-def constraint_costs(problem) -> dict[str, dict[str, Any]]:
-    """Raw cost of every default constraint, before weight / exponent / level.
+def constraint_costs(problem, constraints=None) -> dict[str, dict[str, Any]]:
+    """Raw cost of every constraint, before weight / exponent / offset / level.
 
-    ``{name: {"costs": [total], "weight", "exponent", "hard", "global", "level", "reward",
-    "level_flippable", "name", "label"}}`` in `list_constraints()` order. Every knapsack
-    constraint is global, so ``costs`` holds one raw total (0.1.x listed one term per
-    resource / entry / group / pair). `constraints.score()` turns it into a score.
+    ``{key: {"costs": [total], "weight", "exponent", "offset", "clip", "hard", "global",
+    "level", "reward", "level_flippable", "name", "label", ...}}``: None = the default
+    constraints in `list_constraints()` order; a pick list (as for `solve`) scores exactly
+    those picks, each entry carrying its pick's knobs, the k-th pick of a name keyed
+    ``"<name>#<k>"``. Every knapsack constraint is global, so ``costs`` holds one raw total
+    (0.1.x listed one term per resource / entry / group / pair). `constraints.score()`
+    turns it into a score.
     """
-    return _constraint_costs(_core_of(problem))
+    return _constraint_costs(_core_of(problem), constraints)
 
 
 def calculate_score(problem, constraints=None):
@@ -129,8 +132,9 @@ def solve(
     ``on_new_best(step, score)`` is called on every new best solution.
 
     ``constraints`` picks the cost function directly (see `knapsack.constraints`); only the
-    listed constraints are scored and the solve is single-start (``parallel_solver_count``
-    is ignored there). None uses every default constraint at its default weight::
+    listed constraints are scored, a name picked several times once per pick, and the solve
+    is single-start (``parallel_solver_count`` is ignored there). None uses every default
+    constraint at its default weight::
 
         from knapsack.constraints import get_constraints
         knapsack.solve(problem, constraints=get_constraints())

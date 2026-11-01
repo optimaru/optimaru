@@ -15,6 +15,12 @@ set. Exponents other than 1 and fractional weights are not supported on CP-SAT
 (they raise `ValueError`); `selected_value_cost` with `hard=True` is refused as
 in the engine.
 
+**0.3.0:** a constraint may be picked several times (as specs or as
+`{"name", "weight", "hard", "offset", "clip"}` mappings); each pick builds its own term with
+its own knobs. Every knapsack constraint is global and adds its single total as one term,
+so an integral `offset` shapes that total exactly as the engine does in both `clip` modes;
+a fractional offset is refused (`offset must be an integer for CP-SAT`).
+
 ```sh
 cd benchmarks/knapsack/cpsat
 uv sync --all-groups --all-extras

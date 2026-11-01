@@ -303,9 +303,20 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     """The C++ side guards too: a duck-typed pick cannot smuggle a negative weight in."""
     negative = SimpleNamespace(name="knapsack_capacity_cost", weight=-2.0, hard=None, exponent=1.0)
     flat = SimpleNamespace(name="knapsack_capacity_cost", weight=None, hard=None, exponent=0.0)
-    for pick, message in ((negative, "weight must be finite and >= 0"), (flat, "exponent must be finite and > 0")):
+    unbounded = SimpleNamespace(
+        name="knapsack_capacity_cost", weight=None, hard=None, exponent=1.0, offset=float("inf")
+    )
+    for pick, message in (
+        (negative, "weight must be finite and >= 0"),
+        (flat, "exponent must be finite and > 0"),
+        (unbounded, "offset must be finite, not inf"),
+    ):
         with pytest.raises(ValueError, match=message):
             knapsack.solve(basic(), time_limit_seconds=0, constraints=[pick])
+        with pytest.raises(ValueError, match=message):
+            knapsack.constraint_costs(basic(), [pick])
+    with pytest.raises(ValueError, match="offset must be finite, not nan"):
+        KnapsackCapacityCost(offset=float("nan"))
 
 
 @pytest.mark.parametrize(
@@ -316,6 +327,10 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
         ({"hard": 1}, "hard must be True, False or None, not 1"),
         ({"hard": "x"}, "hard must be True, False or None, not 'x'"),
         ({"exponent": True}, "exponent must be a number, not True"),
+        ({"offset": "5"}, "offset must be a number, not '5'"),
+        ({"offset": False}, "offset must be a number, not False"),
+        ({"clip": 1}, "clip must be True or False, not 1"),
+        ({"clip": "no"}, "clip must be True or False, not 'no'"),
     ],
 )
 def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
@@ -349,17 +364,26 @@ def test_unknown_and_old_names_are_refused():
             score(raw, [pick])
 
 
-def test_empty_and_repeated_picks_are_rejected():
+def test_an_empty_pick_list_is_rejected():
     with pytest.raises(ValueError, match="must not be empty"):
         knapsack.solve(basic(), time_limit_seconds=0, constraints=[])
     with pytest.raises(ValueError, match="must not be empty"):
+        knapsack.constraint_costs(basic(), [])
+    with pytest.raises(ValueError, match="must not be empty"):
         get_constraints([])
-    with pytest.raises(ValueError, match="picked more than once"):
-        knapsack.solve(
-            basic(), time_limit_seconds=0, constraints=[knapsack_capacity_cost, KnapsackCapacityCost(weight=2)]
-        )
-    with pytest.raises(ValueError, match="picked more than once"):
-        get_constraints([selected_value_cost, selected_value_cost])
+
+
+def test_naming_a_constraint_twice_scores_both_picks():
+    """Since 0.3.0 a constraint may be picked several times: each pick is scored on its own.
+
+    The later pick no longer wins in silence, nor is it an error: both are
+    instances with their own knobs, and they add up."""
+    problem = basic()
+    problem.items[0].selected = problem.items[2].selected = True  # A + C: 11 on 10
+    picks = [KnapsackCapacityCost(), KnapsackCapacityCost(weight=2), SelectedValueCost()]
+    assert engine_score(problem, picks) == (-(1 + 2), 17.0)
+    assert knapsack.calculate_score(problem, picks) == (-3, 17.0)
+    assert get_constraints([SelectedValueCost(), SelectedValueCost()]) == [SelectedValueCost(), SelectedValueCost()]
 
 
 # --- Pure-Python scoring (constraint_costs -> score) ------------------------
@@ -374,6 +398,15 @@ def test_empty_and_repeated_picks_are_rejected():
         [SelectionGroupBoundsCost(exponent=2.0), ItemDependencyCost(weight=0.5), SelectedValueCost(weight=2)],
         [ForbiddenItemsCost(hard=False, exponent=0.5), SelectedValueCost(exponent=1.5)],
         [KnapsackCapacityCost(weight=0.5), MandatoryItemsCost(weight=0.5), ForbiddenItemsCost(weight=0.5)],
+        [*get_constraints(), ResourceCapacityCost(weight=0.5, exponent=2.0), SelectedValueCost(weight=0.5)],
+        [ResourceCapacityCost(offset=1.0), ResourceCapacityCost(offset=-2.0, clip=False), SelectedValueCost(offset=3)],
+        [
+            MandatoryItemsCost(offset=0.5, clip=False, weight=3),
+            ForbiddenItemsCost(offset=1.0),
+            SelectionGroupBoundsCost(hard=False, offset=1.0, exponent=2.0, clip=False),
+            SelectedValueCost(offset=4.0, clip=False),
+            SelectedValueCost(weight=0.5, offset=2.0, exponent=1.5),
+        ],
     ],
 )
 def test_score_matches_the_engine_for_arbitrary_specs(specs):
@@ -411,3 +444,179 @@ def test_score_equals_the_engine_for_the_default_assembly():
     engine = knapsack.calculate_score(problem.to_core())
     python = score(knapsack.constraint_costs(problem))
     assert (python.hard, python.soft) == (engine.hard, engine.soft)
+
+
+# --- 0.3.0: repeated picks and the offset / clip knobs ------------------------------
+
+
+def shifted() -> KnapsackProblemModel:
+    """A + B selected (weight 10 of 100): resource overflow 2 + 3 = 5, mandatory C missing
+    three times, value 9 + 7 = 16; the capacity, forbidden, group and dependency totals are 0."""
+    return KnapsackProblemModel(
+        capacity=100,
+        resource_capacities={"r1": 1, "r2": 0},
+        mandatory_items=["C", "C", "C"],
+        items=[
+            ItemModel(id="A", weight=6, value=9, resource_usage={"r1": 3, "r2": 1}, selected=True),
+            ItemModel(id="B", weight=4, value=7, resource_usage={"r2": 2}, selected=True),
+            ItemModel(id="C", weight=5, value=8),
+        ],
+    )
+
+
+def engine_solve(problem: KnapsackProblemModel, constraints) -> knapsack.KnapsackProblem:
+    """The engine's zero-budget warm-start solve of the model's selection (it keeps the selection)."""
+    core = problem.to_core()
+    core.warm_start = True
+    knapsack.Solver(_zero()).solve_with_constraints(core, constraints)
+    return core
+
+
+REPEAT = [MandatoryItemsCost(), MandatoryItemsCost(weight=2, exponent=2)]
+
+
+def test_a_repeated_pick_by_hand():
+    """mandatory x 1 plus 2 x mandatory^2 on the total 3: 3 + 2 x 9 = 21 hard."""
+    problem = shifted()
+    raw = knapsack.constraint_costs(problem, REPEAT)
+    assert list(raw) == ["mandatory_items_cost", "mandatory_items_cost#2"]
+    first, second = raw.values()
+    assert first["costs"] == second["costs"] == [3.0]
+    assert (first["weight"], first["exponent"], second["weight"], second["exponent"]) == (1.0, 1.0, 2.0, 2.0)
+    assert first["name"] == second["name"] == "mandatory_items_cost"
+    assert second["default_weight"] == 1.0
+    expected = (-(3 + 2 * 3**2), 0.0)
+    assert expected == (-21, 0.0)
+    assert score(raw, REPEAT) == expected
+    # The default costs hold the name once; the second pick reads the same raw total.
+    assert score(knapsack.constraint_costs(problem), REPEAT) == expected
+    assert knapsack.calculate_score(problem, REPEAT) == expected
+    engine = engine_solve(problem, REPEAT)
+    assert engine.assignment() == problem.to_core().assignment()
+    assert (engine.score.hard, engine.score.soft) == expected
+
+
+def test_identical_picks_count_twice():
+    picks = [SelectedValueCost(), SelectedValueCost()]
+    assert score(knapsack.constraint_costs(shifted()), picks) == (0, 32.0)
+    assert engine_score(shifted(), picks) == (0, 32.0)
+    assert list(knapsack.constraint_costs(shifted(), picks)) == ["selected_value_cost", "selected_value_cost#2"]
+
+
+def test_the_keys_follow_the_pick_order_of_each_name():
+    picks = [
+        ResourceCapacityCost(weight=1),
+        SelectedValueCost(),
+        ResourceCapacityCost(weight=2),
+        MandatoryItemsCost(),
+        ResourceCapacityCost(weight=3),
+    ]
+    raw = knapsack.constraint_costs(shifted(), picks)
+    assert {key: entry["weight"] for key, entry in raw.items()} == {
+        "resource_capacity_cost": 1.0,
+        "resource_capacity_cost#2": 2.0,
+        "resource_capacity_cost#3": 3.0,
+        "mandatory_items_cost": 1.0,
+        "selected_value_cost": 1.0,
+    }
+    assert score(raw, picks) == (-(5 * 6 + 3), 16.0)
+    assert engine_score(shifted(), picks) == score(raw, picks)
+
+
+def test_a_second_pick_of_the_reward_still_refuses_hard():
+    picks = [SelectedValueCost(), SelectedValueCost(hard=True)]
+    with pytest.raises(ValueError, match="is a reward"):
+        score(knapsack.constraint_costs(shifted()), picks)
+    with pytest.raises(ValueError, match="is a reward"):
+        knapsack.solve(shifted(), time_limit_seconds=0, constraints=picks)
+
+
+@pytest.mark.parametrize(
+    ("pick", "expected"),
+    [
+        # Every knapsack constraint is global: the offset shapes its single total.
+        (ResourceCapacityCost(offset=2), (-3, 0.0)),
+        (ResourceCapacityCost(offset=7), (0, 0.0)),
+        (ResourceCapacityCost(offset=7, clip=False), (2, 0.0)),  # 5 - 7: a hard reward below 7
+        (ResourceCapacityCost(offset=2, exponent=3), (-27, 0.0)),
+        (KnapsackCapacityCost(offset=4, clip=False), (4, 0.0)),  # a raw 0 is charged in literal mode
+        (KnapsackCapacityCost(offset=-1), (0, 0.0)),  # ...and left alone by the threshold
+        (KnapsackCapacityCost(offset=-1, clip=False), (-1, 0.0)),
+        (MandatoryItemsCost(offset=-1), (-4, 0.0)),  # a negative offset adds to a non-zero total
+        (KnapsackCapacityCost(weight=3, offset=0.5, clip=False), (2, 0.0)),  # 3 x -0.5 = -1.5 -> -2
+        (ItemDependencyCost(hard=False, offset=2, clip=False), (0, 2.0)),
+        (ForbiddenItemsCost(weight=0, offset=5, clip=False), (0, 0.0)),  # weight 0 contributes 0
+        # The reward (raw -16): the threshold rewards only the value beyond the offset,
+        # the literal formula adds the offset to the reward.
+        (SelectedValueCost(offset=10), (0, 6.0)),
+        (SelectedValueCost(offset=10, clip=False), (0, 26.0)),
+        (SelectedValueCost(offset=-4, clip=False), (0, 12.0)),
+        (SelectedValueCost(offset=20), (0, 0.0)),
+    ],
+)
+def test_offsets_by_hand_on_both_paths(pick, expected):
+    """threshold sign(x) max(0, |x| - offset)^e and literal (x - offset)^e: Python mirror == engine == hand."""
+    problem = shifted()
+    assert score(knapsack.constraint_costs(problem), [pick]) == expected
+    raw = knapsack.constraint_costs(problem, [pick])
+    entry = next(iter(raw.values()))
+    assert (entry["offset"], entry["clip"]) == (float(pick.offset), pick.clip)
+    assert "units" not in entry  # every knapsack constraint is global, none is scoped
+    assert score(raw, [pick]) == expected
+    assert knapsack.calculate_score(problem, [pick]) == expected
+    engine = engine_solve(problem, [pick])
+    assert engine.assignment() == problem.to_core().assignment()
+    assert (engine.score.hard, engine.score.soft) == expected
+
+
+def test_offset_zero_reproduces_the_0_2_0_scores():
+    """offset 0 is the plain shaping in both modes, so every 0.2.0 selection scores the same."""
+    plain = [ResourceCapacityCost(exponent=2), MandatoryItemsCost(), SelectedValueCost(exponent=1.5)]
+    shifted_by_zero = [
+        ResourceCapacityCost(exponent=2, offset=0.0, clip=False),
+        MandatoryItemsCost(offset=0),
+        SelectedValueCost(exponent=1.5, offset=0.0, clip=False),
+    ]
+    problem = solved()
+    raw = knapsack.constraint_costs(problem)
+    assert score(raw, shifted_by_zero) == score(raw, plain)
+    assert engine_score(problem, plain) == engine_score(problem, shifted_by_zero) == tuple(score(raw, plain))
+    for entry in raw.values():
+        assert (entry["offset"], entry["clip"]) == (0.0, True)
+
+
+@pytest.mark.parametrize(
+    "picks",
+    [
+        [*get_constraints(), *REPEAT],
+        [
+            KnapsackCapacityCost(),
+            KnapsackCapacityCost(offset=2, clip=False, weight=2),
+            ResourceCapacityCost(offset=3),
+            ResourceCapacityCost(offset=-1, clip=False, weight=0.25),
+            MandatoryItemsCost(),
+            ForbiddenItemsCost(),
+            SelectionGroupBoundsCost(exponent=2, offset=1),
+            ItemDependencyCost(),
+            SelectedValueCost(offset=20, clip=False),
+            SelectedValueCost(weight=0.1, exponent=2, offset=5),
+        ],
+    ],
+    ids=["repeat", "repeat-and-offsets"],
+)
+def test_full_assert_solves_with_repeats_and_offsets(picks):
+    """FULL_ASSERT re-checks the incremental score against a full recompute after every move."""
+    problem = extended()
+    core = problem.to_core()
+    config = knapsack.SolverConfig()
+    config.full_assert = True
+    config.random_seed = 3
+    config.step_count_limit = 3000
+    config.spent_limit_seconds = 30
+    knapsack.Solver(config).solve_with_constraints(core, picks)
+    raw = knapsack.constraint_costs(core, picks)
+    assert len(raw) == len(picks)
+    python = score(raw, picks)
+    assert python.hard == core.score.hard
+    assert python.soft == pytest.approx(core.score.soft)
+    assert score(knapsack.constraint_costs(core), picks) == python  # the default costs score the repeats too
