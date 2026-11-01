@@ -159,17 +159,27 @@ def test_a_worker_thread_that_cannot_start_raises_instead_of_aborting():
         _core._fail_worker_thread_start(-1)
 
 
-def test_stop_at_first_feasible_stops_whatever_the_soft_total():
+def test_stop_at_first_feasible_stops_whatever_the_soft_total(monkeypatch):
     """stop_at_first_feasible compares the hard level only (best_score_limit (0, -inf)).
 
-    Every enabled soft penalty at weight 1e21 puts the soft score far below -1e18 at the
-    first feasible solution: the solve still stops there instead of running its whole
-    30 s. The first 0.2.0 limit, (0, -1e18), was never reached by such a score.
+    The first 0.2.0 limit, (0, -1e18), was never reached by a feasible solution whose
+    soft score is below -1e18. This demo has no soft penalty that is still non-zero at
+    the first feasible solution, so the test checks the limit the solve hands to the
+    engine directly, and that the 30 s solve still stops at that solution.
     """
     import dataclasses
     import time
 
     import flight_crew as package
+
+    limits = []
+    real_solver = package.Solver
+
+    def recording_solver(cfg):
+        limits.append(cfg.best_score_limit)
+        return real_solver(cfg)
+
+    monkeypatch.setattr(package, "Solver", recording_solver)
     from flight_crew.constraints import get_constraints
 
     info = {row.name: row for row in package.constraint_info()}
@@ -190,4 +200,5 @@ def test_stop_at_first_feasible_stops_whatever_the_soft_total():
         constraints=[heavy(spec) for spec in get_constraints()],
     )
     assert time.monotonic() - started < 20.0
-    assert seen[-1].hard == 0 and seen[-1].soft < -1e18
+    assert limits and all(limit == (0, float("-inf")) for limit in limits)
+    assert seen and seen[-1].hard == 0
