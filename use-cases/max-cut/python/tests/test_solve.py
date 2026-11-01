@@ -147,6 +147,24 @@ def test_a_raising_on_new_best_raises_from_solve(parallel_solver_count):
         max_cut.solve(problem, time_limit_seconds=5.0, parallel_solver_count=parallel_solver_count, on_new_best=fail)
 
 
+def test_a_worker_thread_that_cannot_start_raises_instead_of_aborting():
+    """Creating worker thread 1 fails (std::system_error, injected through the module's test
+    seam): the worker already running is stopped and joined, and the error reaches the caller
+    at once. A joinable std::thread destroyed on that path used to call std::terminate."""
+    import time
+
+    from max_cut import _core
+
+    _core._fail_worker_thread_start(1)
+    try:
+        started = time.monotonic()
+        with pytest.raises(RuntimeError, match="injected worker thread creation failure"):
+            max_cut.solve(demo(), time_limit_seconds=30.0, parallel_solver_count=4)
+        assert time.monotonic() - started < 10.0
+    finally:
+        _core._fail_worker_thread_start(-1)
+
+
 def test_full_assert_solves_without_corruption():
     for exact in (True, False):
         config = steps(3000, seed=3)
@@ -213,3 +231,27 @@ def test_inputs_of_the_wrong_type_are_refused():
         max_cut.solve({"vertices": [], "edges": []})
     with pytest.raises(TypeError):
         max_cut.constraint_costs([])
+
+
+def test_stop_at_first_feasible_has_no_soft_floor(monkeypatch):
+    """stop_at_first_feasible hands the engine best_score_limit (0, -inf): only the hard level
+    is compared, so no soft score, however low, misses the stop. The first 0.2.0 limit,
+    (0, -1e18), was never reached by a soft score below -1e18. A soft score that low cannot
+    be built here (its default soft terms are a reward (cut_weight_cost) and an opt-in term at weight 0), so the limit itself is checked; the stop is exercised end to end
+    in the other packages' tests."""
+    import max_cut as package
+
+    seen = []
+
+    class Captured(Exception):
+        pass
+
+    class Capture:
+        def __init__(self, cfg):
+            seen.append(cfg.best_score_limit)
+            raise Captured
+
+    monkeypatch.setattr(package, "Solver", Capture)
+    with pytest.raises(Captured):
+        package.solve(demo(), stop_at_first_feasible=True)
+    assert seen == [(0, float("-inf"))]

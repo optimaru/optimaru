@@ -200,8 +200,9 @@ class SolverConfig:
     change_move_weight: float
     swap_move_weight: float
     best_score_limit: tuple[int, int, int]
-    """Stop early once (hard, medium, soft) is reached. E.g. (0, -(2**62),
-    -(2**62)) stops at the first feasible solution."""
+    """Stop early once (hard, medium, soft) is reached. -(2**63) on medium or
+    soft means no floor on the soft side (only hard is compared), so
+    (0, -(2**63), -(2**63)) stops at the first feasible solution."""
     on_new_best: Callable[[int, Score], None] | None
     """Called with (step, score) on every new best solution, in the same levels as
     the final schedule.score of the solve method in use."""

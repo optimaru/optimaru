@@ -725,7 +725,7 @@ def _build_and_solve(request: ScheduleRequest, seed: int, overrides: dict | None
     cfg.or_opt_move_weight = request.settings.or_opt_move_weight
     cfg.tail_swap_move_weight = request.settings.tail_swap_move_weight
     if request.settings.stop_at_first_feasible:
-        cfg.best_score_limit = (0, -1e18)
+        cfg.best_score_limit = (0, float("-inf"))
     if request.settings.best_score_limit is not None:
         cfg.best_score_limit = request.settings.best_score_limit
     for key, value in (overrides or {}).items():

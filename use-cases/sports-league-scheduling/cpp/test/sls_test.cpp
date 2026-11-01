@@ -10,6 +10,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <limits>
 #include <random>
 #include <string>
 #include <vector>
@@ -554,7 +555,7 @@ void verifyFeasibleSolve()
     Solver::Config config;
     config.spentLimit = std::chrono::seconds(5);
     config.randomSeed = 5;
-    config.bestScoreLimit = Score{0, -1e18};  // stop at first feasible
+    config.bestScoreLimit = Score{0, -std::numeric_limits<double>::infinity()};  // stop at first feasible
     Solver solver(config);
     solver.solve(s);
 

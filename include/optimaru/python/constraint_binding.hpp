@@ -30,7 +30,8 @@
 // bindConstraintInfo() also registers the module's translator for the
 // engine's ContributionOverflowError (level.hpp, rule 1), so every package
 // raises it as OverflowError naming the constraint by its Python name, word
-// for word as the Python score() mirror does.
+// for word as the Python score() mirror does, and the private test seam
+// `<pkg>._core._fail_worker_thread_start(index)` (see bindWorkerThreadSeam).
 
 #include <pybind11/pybind11.h>
 
@@ -39,10 +40,12 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <system_error>
 #include <utility>
 #include <vector>
 
 #include "optimaru/api/score/calculator/constraint_assembly.hpp"
+#include "optimaru/impl/solver/worker_threads.hpp"
 #include "optimaru/python/level_guard.hpp"
 #include "optimaru/python/names.hpp"
 #include "optimaru/python/solver_config.hpp"  // secondsToMillis, bindConfigCopy
@@ -92,7 +95,9 @@ std::vector<std::string> constraintNames(const ConstraintAssembly<Solution>& ass
 // Returns {key: {"costs": [...], "weight": w, "exponent": e, "hard": bool,
 //                "global": bool, "level": "hard"|"medium"|"soft",
 //                "reward": bool, "level_flippable": bool, "name": str,
-//                "label": str[, "medium_fold": {...}]}}.
+//                "label": str, "default_weight": w0,
+//                "default_level": "hard"|"medium"|"soft"
+//                [, "medium_fold": {...}]}}.
 //
 // key    the Python name; the k-th instance (k >= 2) of a name the calculator
 //        holds more than once is "<name>#<k>" (instanceKeys, names.hpp), so
@@ -105,6 +110,13 @@ std::vector<std::string> constraintNames(const ConstraintAssembly<Solution>& ass
 //        below_hard domain reports hard * unit + medium even when the
 //        selection holds no medium constraint at all. Absent on a domain
 //        without a medium level.
+// weight / level / exponent  the calculator's CURRENT metadata, which is the
+//        picks' when the domain's constraint_costs() takes a selection
+//        (employee-scheduling, school-timetabling).
+// default_weight / default_level  what weight=None / hard=None mean for the
+//        component (ConstraintMetadata::defaultWeight / defaultLevel): the
+//        Python score() reads these, so re-pricing costs computed under one
+//        selection with another leaves an unset knob at the real default.
 // "hard" stays for pre-0.2.0 readers (it is level == "hard").
 template <typename Solution>
 py::dict constraintCosts(DecomposedScoreCalculator<Solution>& calculator, Solution& solution) {
@@ -130,6 +142,8 @@ py::dict constraintCosts(DecomposedScoreCalculator<Solution>& calculator, Soluti
         info["level_flippable"] = entry.levelFlippable;
         info["name"] = names[i];
         info["label"] = entry.label;
+        info["default_weight"] = entry.defaultWeight;
+        info["default_level"] = levelName(entry.defaultLevel);
         if (fold.hasMedium()) {
             py::dict medium;
             medium["kind"] = fold.kind == MediumFold::Kind::BelowHard ? "below_hard" : "into_soft";
@@ -153,11 +167,7 @@ py::dict constraintCosts(DecomposedScoreCalculator<Solution>& calculator, Soluti
 //   hard      None, True or False (a numpy.bool_ counts as a bool). TypeError.
 //   exponent  None (= 1.0, no shaping: a duck-typed pick may leave it unset),
 //             or a real number (not bool), finite and > 0.
-struct Knobs {
-    std::optional<double> weight;
-    std::optional<bool> hard;
-    std::optional<double> exponent;
-};
+// The result is a Knobs (level_guard.hpp), which restateKnobs applies.
 
 namespace detail {
 
@@ -170,9 +180,17 @@ inline std::string reprOf(const py::handle& value) {
 }
 
 // numbers.Real minus bool: what _check_knobs accepts as a weight/exponent.
+// numbers.Real is looked up once per module (gil_safe_call_once_and_store,
+// which also keeps it alive until the interpreter is gone), not per knob.
 inline bool isRealNumber(const py::handle& value) {
     if (py::isinstance<py::bool_>(value)) return false;
-    return py::isinstance(value, py::module_::import("numbers").attr("Real"));
+    PYBIND11_CONSTINIT static py::gil_safe_call_once_and_store<py::object> numbersReal;
+    const py::object& real =
+            numbersReal
+                    .call_once_and_store_result(
+                            [] { return py::module_::import("numbers").attr("Real"); })
+                    .get_stored();
+    return py::isinstance(value, real);
 }
 
 // bool or numpy.bool_ (the only bool-like values hard accepts).
@@ -228,21 +246,10 @@ inline Knobs readKnobs(const py::handle& item, const std::string& shown) {
     return knobs;
 }
 
-// The level a pick's `hard` asks for, checked against the component's
-// reward / levelFlippable flags (the _constraint.py _level wording):
-// levelForHard (level_guard.hpp, where the engine tests check it), raised as
-// ValueError.
-inline Level wantedLevel(const ConstraintMetadata& constraint, bool hard, const std::string& shown) {
-    try {
-        return levelForHard(constraint, hard, detail::quoted(shown));
-    } catch (const std::invalid_argument& error) {
-        throw py::value_error(error.what());
-    }
-}
-
 // Re-states one pick's knobs on a component a domain factory built (with
-// its kDefaultWeight / kDefaultLevel, so None keeps them): the same checks as
-// applyConstraints, for code that cannot go through an assembly
+// its kDefaultWeight / kDefaultLevel, so None keeps them): the same checks
+// and the same rule (restateKnobs, level_guard.hpp; the exponent is always
+// applied) as applyConstraints, for code that cannot go through an assembly
 // (employee-scheduling's rule factory, which may add a rule several times).
 // Apply it to the OUTERMOST component — after wrapping in a ScopedUnit, which
 // copies the inner component's metadata.
@@ -253,9 +260,11 @@ inline Level wantedLevel(const ConstraintMetadata& constraint, bool hard, const 
 inline void applyKnobs(ConstraintMetadata& constraint, const py::handle& item,
                        const std::string& shown) {
     const Knobs knobs = readKnobs(item, shown);
-    if (knobs.hard) constraint.setLevel(wantedLevel(constraint, *knobs.hard, shown));
-    if (knobs.weight) constraint.setWeight(*knobs.weight);
-    if (knobs.exponent) constraint.setExponent(*knobs.exponent);
+    try {
+        restateKnobs(constraint, knobs, detail::quoted(shown));
+    } catch (const std::invalid_argument& error) {
+        throw py::value_error(error.what());
+    }
 }
 
 // Applies the constraint picks coming from Python (<pkg>.constraints) to a
@@ -268,7 +277,9 @@ inline void applyKnobs(ConstraintMetadata& constraint, const py::handle& item,
 //   hard      None = the component's kDefaultLevel (hard, medium or soft),
 //             True = hard, False = soft. A reward refuses True; a constraint
 //             whose level is not flippable refuses any change of level.
-//   exponent  1.0 = no shaping, else finite and > 0
+//   exponent  1.0 = no shaping, else finite and > 0; always applied, so an
+//             explicit 1.0 (or None) resets a default assembly component
+//             built with another exponent, as the Python score() reads it
 // (readKnobs above). A wrong type is a TypeError, every other refusal a
 // ValueError, each naming the constraint by its Python name, in the words
 // of the Python base.
@@ -289,9 +300,11 @@ ConstraintAssembly<Solution> applyConstraints(ConstraintAssembly<Solution> assem
         const std::string name = resolveName(assembly, item.attr("name").template cast<std::string>());
         const std::string shown = pythonName(name);
         const Knobs knobs = readKnobs(item, shown);
-        if (knobs.weight) assembly.weight(name, *knobs.weight);
-        if (knobs.hard) assembly.level(name, wantedLevel(*assembly.find(name), *knobs.hard, shown));
-        if (knobs.exponent && *knobs.exponent != 1.0) assembly.exponent(name, *knobs.exponent);
+        try {
+            restateKnobs(assembly, name, knobs, detail::quoted(shown));
+        } catch (const std::invalid_argument& error) {
+            throw py::value_error(error.what());
+        }
         // The same constraint twice would let the second pick's metadata win
         // in silence — the same class of mistake as a typo'd name, so it is
         // an error rather than a last-wins rule nobody can see.
@@ -356,9 +369,43 @@ inline void registerContributionOverflowTranslator() {
 // optimaru wheel.
 namespace detail {
 
+// The worker the test seam fails, -1 = none (module-local, like the hook).
+inline int& failingWorkerThread() {
+    static int index = -1;
+    return index;
+}
+
+inline void failWorkerThreadStart(int index) {
+    if (index == failingWorkerThread()) {
+        throw std::system_error(std::make_error_code(std::errc::resource_unavailable_try_again),
+                                "injected worker thread creation failure");
+    }
+}
+
+// `<pkg>._core._fail_worker_thread_start(index)`: a private test seam over
+// optimaru::workerThreadStartHook (impl/solver/worker_threads.hpp). From the
+// next parallel solve on, creating worker thread `index` of every pool in this
+// module fails with std::system_error ("injected worker thread creation
+// failure", a RuntimeError in Python), as std::thread does when the system
+// has no thread left; -1 switches it off again. The package tests use it to
+// check that such a solve stops and joins the workers already running and
+// raises, where it used to call std::terminate. Not for production use.
+inline void bindWorkerThreadSeam(py::module_& m) {
+    m.def(
+            "_fail_worker_thread_start",
+            [](int index) {
+                failingWorkerThread() = index;
+                workerThreadStartHook = index < 0 ? nullptr : &failWorkerThreadStart;
+            },
+            py::arg("index"),
+            "Test seam: fail the creation of worker thread `index` in every parallel "
+            "solve from now on (-1 = off).");
+}
+
 template <typename Rows>
 void bindInfoRows(py::module_& m, Rows rowsOf) {
     registerContributionOverflowTranslator();
+    bindWorkerThreadSeam(m);
     py::object namedtuple = py::module_::import("collections").attr("namedtuple");
     py::object rowType = namedtuple(
             "ConstraintInfo",

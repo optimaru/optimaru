@@ -195,7 +195,7 @@ class SolverConfig:
     """Probability that a change move draws only start grains that keep the meeting
     within one day (0 disables)."""
     best_score_limit: tuple[int, float]
-    """Stop early once bestScore >= (hard, soft); (0, -1e18) stops at the first
+    """Stop early once bestScore >= (hard, soft); (0, -inf) stops at the first
     feasible."""
     on_new_best: Callable[[int, Score], None] | None
 

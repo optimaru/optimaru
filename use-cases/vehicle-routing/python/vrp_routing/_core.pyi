@@ -152,8 +152,9 @@ class SolverConfig:
     unimproved_step_count_limit: int
     unimproved_spent_limit_seconds: float
     best_score_limit: tuple[int, int, int]
-    """(hard, medium, soft): stop early once bestScore >= this. (0, 0, -2**62)
-    stops at the first feasible, fully-assigned solution."""
+    """(hard, medium, soft): stop early once bestScore >= this. -(2**63) on
+    medium or soft means no floor on the soft side (only hard is compared), so
+    (0, -(2**63), -(2**63)) stops at the first feasible solution."""
 
     # --- engine ---
     random_seed: int

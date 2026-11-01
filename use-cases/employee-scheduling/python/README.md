@@ -404,7 +404,7 @@ config.custom_move_probability = 0.30   # cap the adaptive custom-move pool
 config.nearby_shifts = True             # temporal nearby swap/descent/ruin bias
 config.nearby_shifts_probability = 0.65 # 0.8 pays on large-only (1000+ shift) rosters
 config.employee_ruin_moves = True       # LNS targets hot employee/day regions
-config.best_score_limit = (0, -1e18)    # stop at the first feasible schedule
+config.best_score_limit = (0, float("-inf"))    # stop at the first feasible schedule
 config.on_new_best = lambda step, score: print(step, score)   # progress callback
 solver = es.Solver(config)
 ```

@@ -5,6 +5,7 @@
 // Also doubles as reference code for writing a SolutionDescriptor and an
 // IncrementalScoreCalculator against this engine.
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -13,10 +14,13 @@
 #include <numeric>
 #include <stdexcept>
 #include <string>
+#include <system_error>
+#include <thread>
 #include <utility>
 #include <vector>
 
 #include "optimaru/api/score/calculator/constraint_assembly.hpp"
+#include "optimaru/impl/solver/worker_threads.hpp"
 #include "optimaru/testing/preview_parity.hpp"
 #include "optimaru/optimaru.hpp"
 
@@ -340,6 +344,73 @@ void testMultiStartAndFfd(const HardSoftScore& optimum) {
         check(caught == "boom", "multi-start rethrows a start's exception on the calling thread");
         check(seconds < 10.0, "the other starts stop once one fails (no 30 s wait)");
         check(s.assignment == before.assignment, "a failed multi-start leaves the solution as it was");
+    }
+    {   // A thread that cannot be created (std::system_error, here injected
+        // through the test seam before start 1): the start already running
+        // is stopped and joined, and the error comes out of solveMultiStart
+        // instead of std::terminate (a joinable std::thread destroyed).
+        TaskAssignment s = buildTaskInstance();
+        const TaskAssignment before = s;
+        optimaru::SolverConfig config;
+        config.termination.spentLimit = std::chrono::seconds(30);
+        config.multiStartCount = 3;
+        optimaru::Solver<TaskAssignment> solver(config);
+        optimaru::workerThreadStartHook = [](int index) {
+            if (index == 1) {
+                throw std::system_error(std::make_error_code(std::errc::resource_unavailable_try_again),
+                                        "injected thread creation failure");
+            }
+        };
+        const auto start = std::chrono::steady_clock::now();
+        bool caught = false;
+        try {
+            solver.solveMultiStart(s, [] { return std::make_unique<TaskAssignmentCalculator>(); });
+        } catch (const std::system_error& error) {
+            caught = std::string(error.what()).find("injected") != std::string::npos;
+        }
+        optimaru::workerThreadStartHook = nullptr;
+        const double seconds =
+                std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+        check(caught, "multi-start rethrows a thread creation failure on the calling thread");
+        check(seconds < 10.0, "the start already running is stopped and joined (no 30 s wait)");
+        check(s.assignment == before.assignment,
+              "a multi-start that could not start leaves the solution as it was");
+    }
+    {   // runWorkerThreads itself: the failure on the very first thread, and
+        // on a later one, with the workers that did start all joined.
+        std::atomic<bool> stop{false};
+        std::atomic<int> ran{0};
+        optimaru::workerThreadStartHook = [](int index) {
+            if (index == 2) throw std::system_error(std::make_error_code(std::errc::not_enough_memory));
+        };
+        bool caught = false;
+        try {
+            optimaru::runWorkerThreads(4, stop, [&stop, &ran](int) {
+                while (!stop.load()) std::this_thread::yield();
+                ++ran;
+            });
+        } catch (const std::system_error&) {
+            caught = true;
+        }
+        check(caught && stop.load() && ran.load() == 2,
+              "runWorkerThreads: a failure at thread 2 sets stop, joins threads 0 and 1, rethrows");
+        stop.store(false);
+        optimaru::workerThreadStartHook = [](int) {
+            throw std::system_error(std::make_error_code(std::errc::resource_unavailable_try_again));
+        };
+        caught = false;
+        try {
+            optimaru::runWorkerThreads(3, stop, [](int) {});
+        } catch (const std::system_error&) {
+            caught = true;
+        }
+        check(caught && stop.load(), "runWorkerThreads: a failure at thread 0 is rethrown too");
+        optimaru::workerThreadStartHook = nullptr;
+        stop.store(false);
+        std::vector<int> seen(5, 0);
+        optimaru::runWorkerThreads(5, stop, [&seen](int i) { seen[static_cast<std::size_t>(i)] = i + 1; });
+        check(seen == std::vector<int>({1, 2, 3, 4, 5}) && !stop.load(),
+              "runWorkerThreads runs work(i) once per index and joins them all");
     }
     {   // terminateEarly() reaches every start.
         TaskAssignment s = buildTaskInstance();

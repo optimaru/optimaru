@@ -153,7 +153,7 @@ class SolverConfig:
     """The auto temperature's fraction of the start's |soft| (0.01 by default; > 0)."""
     full_assert: bool
     best_score_limit: tuple[int, float]
-    """(hard, soft): stop early once bestScore >= this. (0, -1e18) stops at
+    """(hard, soft): stop early once bestScore >= this. (0, -inf) stops at
     the first feasible solution."""
     on_new_best: Callable[[int, Score], None] | None
 

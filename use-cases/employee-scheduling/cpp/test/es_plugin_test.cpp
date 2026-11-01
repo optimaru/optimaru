@@ -30,6 +30,7 @@
 #include <random>
 #include <stdexcept>
 #include <string>
+#include <system_error>
 #include <vector>
 
 #include "es/constraints.hpp"
@@ -37,6 +38,7 @@
 #include "es/score_calculator.hpp"
 #include "es/solver.hpp"
 #include "optimaru/api/score/director/score_director.hpp"
+#include "optimaru/impl/solver/worker_threads.hpp"
 #include "optimaru/python/names.hpp"
 
 using namespace es;
@@ -420,6 +422,35 @@ void verifyParallelFailureStopsWorkers() {
                   std::to_string(seconds) + " s");
 }
 
+void verifyThreadStartFailureStopsWorkers() {
+    std::printf("== (g) a worker thread that cannot start ==\n");
+    EmployeeSchedule s = buildRoster(5);
+    Solver::Config config;
+    config.spentLimit = std::chrono::seconds(30);
+    config.parallelSolverCount = 4;
+    // std::thread throws std::system_error when the system has no thread to
+    // give; here worker 1's creation fails through the engine's test seam.
+    optimaru::workerThreadStartHook = [](int index) {
+        if (index == 1) {
+            throw std::system_error(std::make_error_code(std::errc::resource_unavailable_try_again),
+                                    "injected worker thread creation failure");
+        }
+    };
+    const auto started = std::chrono::steady_clock::now();
+    bool raised = false;
+    try {
+        Solver(config).solve(s);
+    } catch (const std::system_error& error) {
+        raised = std::string(error.what()).find("injected") != std::string::npos;
+    }
+    optimaru::workerThreadStartHook = nullptr;
+    const double seconds =
+            std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
+    check(raised && seconds < 10.0,
+          "worker 1 cannot start: worker 0 is stopped and joined, the error reaches the caller "
+          "after " + std::to_string(seconds) + " s (no std::terminate)");
+}
+
 }  // namespace
 
 int main() {
@@ -429,6 +460,7 @@ int main() {
     verifyScopedUnit();
     verifyLabels();
     verifyParallelFailureStopsWorkers();
+    verifyThreadStartFailureStopsWorkers();
     if (failures == 0) {
         std::printf("All plugin checks PASSED.\n");
         return 0;

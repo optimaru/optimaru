@@ -446,7 +446,7 @@ class SolverConfig:
     """LIST 2-opt* tail-swap relative weight; unused by employee scheduling."""
     best_score_limit: tuple[int, float]
     """Stop early once bestScore >= (hard, soft), compared lexicographically.
-    (0, -1e18) stops at the first feasible solution. Default: unreachable."""
+    (0, -inf) stops at the first feasible solution. Default: unreachable."""
     on_new_best: Callable[[int, Score], None] | None
     """Callback fired on every new best solution: on_new_best(step, score).
     Runs on the solving thread and re-acquires the GIL, which solve() releases."""

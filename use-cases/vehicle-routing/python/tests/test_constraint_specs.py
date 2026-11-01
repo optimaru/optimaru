@@ -579,3 +579,24 @@ def test_a_raising_on_new_best_stops_every_parallel_worker():
     with pytest.raises(RuntimeError, match="boom"):
         vrp.Solver(cfg).solve(small_plan())
     assert time.monotonic() - started < 10.0
+
+
+def test_a_worker_thread_that_cannot_start_raises_instead_of_aborting():
+    """Creating worker thread 1 fails (std::system_error, injected through the module's test
+    seam): the worker already running is stopped and joined, and the error reaches the caller
+    at once. A joinable std::thread destroyed on that path used to call std::terminate."""
+    import time
+
+    from vrp_routing import _core
+
+    cfg = vrp.SolverConfig()
+    cfg.spent_limit_seconds = 30.0
+    cfg.parallel_solver_count = 4
+    _core._fail_worker_thread_start(1)
+    try:
+        started = time.monotonic()
+        with pytest.raises(RuntimeError, match="injected worker thread creation failure"):
+            vrp.Solver(cfg).solve(small_plan())
+        assert time.monotonic() - started < 10.0
+    finally:
+        _core._fail_worker_thread_start(-1)

@@ -24,7 +24,13 @@
 //   (l) the range of a score: a hard total beyond int64 saturates at
 //       -INT64_MAX (never wraps to a feasible-looking score), the BelowHard
 //       fold saturates too, incremental == fresh across the saturation
-//       boundary, and an out-of-range contribution throws overflow_error
+//       boundary, and an out-of-range contribution throws overflow_error;
+//       a weight-0 constraint contributes exactly 0 whatever its exponent
+//   (m) python::restateKnobs(): the one knob rule of both binding paths
+//       (applyConstraints, applyKnobs); the exponent is always applied, so
+//       an explicit 1.0 resets a component built with another exponent
+//   (n) constraintCosts() reports each component's default weight / level
+//       next to the re-stated ones (what weight=None / hard=None mean)
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -1029,13 +1035,61 @@ void testScoreRange() {
               scoreOf(std::move(assembly), t);
           }),
           "a non-finite soft contribution (cost^400) throws overflow_error");
-    check(throwsOverflow([&] {
-              optimaru::ConstraintAssembly<Tasks> assembly;
-              assembly.emplace<TaskCostCost<Tasks>>(0.0);
-              assembly.exponent("taskCostCost", 400.0);
-              scoreOf(std::move(assembly), t);
-          }),
-          "weight 0 x inf (NaN) throws too, like Python's cost**exponent OverflowError");
+    // Weight 0 is exactly 0 whatever the exponent: the shaped value is never
+    // computed, so cost^400 = inf cannot turn into 0 x inf = NaN (an opt-in
+    // constraint left at weight 0 must not make a selection unscorable).
+    bool weightZeroThrew = false;
+    HardSoftScore weightZero;
+    try {
+        optimaru::ConstraintAssembly<Tasks> assembly;
+        assembly.emplace<TaskCostCost<Tasks>>(0.0);
+        assembly.exponent("taskCostCost", 400.0);
+        assembly.emplace<ConflictCost<Tasks>>(0.0);
+        assembly.exponent("conflictCost", 2000.0);  // worker 0's 3 conflicts: 3^2000 = inf
+        weightZero = scoreOf(std::move(assembly), t);
+    } catch (const std::overflow_error&) {
+        weightZeroThrew = true;
+    }
+    check(!weightZeroThrew && weightZero.hard == 0 && weightZero.soft == 0.0 &&
+                  !std::signbit(weightZero.soft),
+          "weight 0 x cost^400 / cost^2000 contributes exactly 0 (soft and hard), got " +
+                  str(weightZero));
+    {
+        // Every path: reset, incremental moves (applyRaw), the unit totals,
+        // a medium global's total in levelScores() / constraintTotals().
+        HardFoldTasks h;
+        h.assignment = {0, 0, 0, 0, 0, 0};  // 3 idle workers: 3^2000 = inf
+        optimaru::ConstraintAssembly<HardFoldTasks> assembly;
+        assembly.emplace<IdleWorkerCost<HardFoldTasks>>(0.0);
+        assembly.exponent("idleWorkerCost", 2000.0);
+        assembly.emplace<OverloadCost<HardFoldTasks>>(0.0);
+        assembly.exponent("overloadCost", 2000.0);  // 4 tasks over: 4^2000 = inf
+        assembly.emplace<TaskCostCost<HardFoldTasks>>();
+        optimaru::DecomposedScoreCalculator<HardFoldTasks> calc;
+        assembly.into(calc);
+        bool threw = false;
+        bool allZero = true;
+        double soft = 0.0;
+        try {
+            calc.resetWorkingSolution(h);
+            const auto levels = calc.levelScores();
+            allZero = levels.hard == 0 && levels.medium == 0.0;
+            for (const auto& total : calc.constraintTotals()) {
+                if (total.name != "taskCostCost" && total.cost != 0.0) allZero = false;
+            }
+            calc.beforeVariableChanged(5);
+            h.assignment[5] = 1;
+            calc.afterVariableChanged(5);
+            const HardSoftScore moved = calc.calculateScore();
+            allZero = allZero && moved.hard == 0;
+            soft = moved.soft;
+        } catch (const std::overflow_error&) {
+            threw = true;
+        }
+        check(!threw && allZero && soft == -(7.0 + 2 + 6 + 5 + 8 + 6),
+              "weight 0 at a huge exponent is 0 on reset, after a move, in levelScores() "
+              "and in constraintTotals() (only the weighted taskCostCost scores)");
+    }
     std::string message;
     std::string named;
     bool beyond = false;
@@ -1074,6 +1128,130 @@ void testScoreRange() {
     std::printf("\n");
 }
 
+// --- (m) restateKnobs ------------------------------------------------------
+
+void testRestateKnobs() {
+    std::printf("== (m) python::restateKnobs: the knob rule of both binding paths ==\n");
+    using optimaru::python::Knobs;
+    using optimaru::python::restateKnobs;
+    // A default assembly whose component is built with exponent 2 (no shipped
+    // domain does, but a domain factory may): every pick re-states the
+    // exponent, an explicit 1.0 included, as the Python score() mirror reads
+    // a pick (spec.exponent, 1.0 when unset).
+    auto shaped = [] {
+        optimaru::ConstraintAssembly<Tasks> assembly;
+        assembly.emplace<TaskCostCost<Tasks>>();
+        assembly.exponent("taskCostCost", 2.0);
+        return assembly;
+    };
+    Tasks t = assignmentA<Tasks>();
+    {
+        auto assembly = shaped();
+        Knobs knobs;
+        knobs.exponent = 1.0;
+        restateKnobs(assembly, "taskCostCost", knobs, "'task_cost_cost'");
+        check(assembly.find("taskCostCost")->exponent == 1.0,
+              "an explicit exponent 1.0 resets a component built with exponent 2");
+        check(scoreOf(std::move(assembly), t).soft == -28.0,
+              "...and the assembly scores unshaped: soft -28 (not -(15^2 + 11^2 + 2^2))");
+    }
+    {
+        auto assembly = shaped();
+        restateKnobs(assembly, "taskCostCost", Knobs{}, "'task_cost_cost'");
+        check(assembly.find("taskCostCost")->exponent == 1.0,
+              "an unset exponent (None) reads as 1.0 and resets it too");
+    }
+    {
+        auto assembly = shaped();
+        Knobs knobs;
+        knobs.exponent = 3.0;
+        restateKnobs(assembly, "taskCostCost", knobs, "'task_cost_cost'");
+        check(assembly.find("taskCostCost")->exponent == 3.0, "exponent 3 is applied");
+    }
+    {
+        auto assembly = defaults<SoftFoldTasks>();
+        Knobs knobs;
+        knobs.weight = 5.0;
+        knobs.hard = false;
+        restateKnobs(assembly, "conflictCost", knobs, "'conflict_cost'");
+        const optimaru::ConstraintMetadata* conflict = assembly.find("conflictCost");
+        check(conflict->weight == 5.0 && conflict->level == Level::Soft,
+              "weight 5, hard=False: re-stated on the assembly");
+        Knobs keep;  // weight / hard unset keep the component's defaults
+        restateKnobs(assembly, "overloadCost", keep, "'overload_cost'");
+        const optimaru::ConstraintMetadata* overload = assembly.find("overloadCost");
+        check(overload->weight == 1.0 && overload->level == Level::Medium,
+              "weight / hard unset keep the default weight and the medium level");
+        Knobs hard;
+        hard.hard = true;
+        check(refusal([&] {
+                  restateKnobs(assembly, "preferenceReward", hard, "'preference_reward'");
+              }) == "constraint 'preference_reward' is a reward (raw cost <= 0) and cannot be hard",
+              "hard=True on a reward is refused in the Python base's words");
+    }
+    {
+        // applyKnobs' path: a component built outside any assembly.
+        TaskCostCost<Tasks> bare;
+        bare.setExponent(2.0);
+        Knobs knobs;
+        knobs.exponent = 1.0;
+        restateKnobs(bare, knobs, "'task_cost_cost'");
+        check(bare.exponent == 1.0,
+              "the component path applies an explicit 1.0 the same way as the assembly path");
+        Knobs soft;
+        soft.hard = false;
+        soft.weight = 2.5;
+        ForbiddenWorkerCost<Tasks> forbidden;
+        check(refusal([&] { restateKnobs(forbidden, soft, "'forbidden_worker_cost'"); }) ==
+                      "constraint 'forbidden_worker_cost' is always hard; hard=False is not allowed",
+              "hard=False on a non-flippable component is refused on the component path too");
+    }
+    std::printf("\n");
+}
+
+// --- (n) default weight / level in constraintCosts() --------------------------
+
+void testReportedDefaults() {
+    std::printf("== (n) constraintCosts(): default weight / level next to the re-stated ones ==\n");
+    SoftFoldTasks s = assignmentA<SoftFoldTasks>();
+    auto assembly = defaults<SoftFoldTasks>();
+    assembly.weight("conflictCost", 5.0).soft("conflictCost");
+    assembly.hard("overloadCost");
+    assembly.weight("preferenceReward", 2.0);
+    optimaru::DecomposedScoreCalculator<SoftFoldTasks> calc;
+    assembly.into(calc);
+    calc.resetWorkingSolution(s);
+    calc.calculateScore();
+    bool conflict = false;
+    bool overload = false;
+    bool reward = false;
+    bool untouched = true;
+    for (const auto& entry : calc.constraintCosts()) {
+        if (entry.name == "conflictCost") {
+            conflict = entry.weight == 5.0 && entry.level == Level::Soft &&
+                       entry.defaultWeight == 1.0 && entry.defaultLevel == Level::Hard;
+        } else if (entry.name == "overloadCost") {
+            overload = entry.level == Level::Hard && entry.defaultLevel == Level::Medium;
+        } else if (entry.name == "preferenceReward") {
+            reward = entry.weight == 2.0 && entry.defaultWeight == 0.5;
+        } else if (entry.defaultWeight != entry.weight || entry.defaultLevel != entry.level) {
+            untouched = false;
+        }
+    }
+    check(conflict, "conflictCost re-stated to weight 5 / soft reports default 1 / hard");
+    check(overload, "overloadCost made hard reports its default level medium");
+    check(reward, "preferenceReward at weight 2 reports its default weight 0.5");
+    check(untouched, "a component left alone reports default == current");
+    // A wrapper copying its inner component's metadata takes the defaults too.
+    TaskCostCost<Tasks> inner(4.0);
+    inner.setWeight(9.0);
+    TaskCostCost<Tasks> copy;
+    static_cast<optimaru::ConstraintMetadata&>(copy) = inner;
+    check(copy.weight == 9.0 && copy.defaultWeight == 4.0,
+          "a metadata copy carries the inner component's construction weight as its default");
+    std::printf("\n");
+}
+
 }  // namespace
 
 int main() {
@@ -1089,6 +1267,8 @@ int main() {
     testBindingLevelGuard();
     testListMediumPreviews();
     testScoreRange();
+    testRestateKnobs();
+    testReportedDefaults();
     if (failures == 0) {
         std::printf("All constraint-level tests PASSED.\n");
         return 0;

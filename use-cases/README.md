@@ -56,7 +56,7 @@ A selection sets three knobs per constraint and nothing else:
   refuses any change of level.
 - `exponent` — `1.0` by default, `> 0`, sign-preserving; applied per unit for
   a unit constraint and to the single total for a global one, before the
-  weight.
+  weight. A weight of 0 contributes exactly 0 at any exponent.
 
 Some domains also have a **medium** level between hard and soft (unassigned
 visits, stays, requests, tasks, ...). It is a default-only level: `hard=True`
@@ -73,7 +73,8 @@ component). Python reads them from `<package>.constraint_info()`, one
   rules its factory accepts; its defaults are the `default_enabled` rows.
 - `constraint_costs(solution)` reports every selected constraint's raw costs as
   `{name: {costs, weight, exponent, hard, global, level, reward,
-  level_flippable, name, label}}`.
+  level_flippable, name, label, default_weight, default_level}}`
+  (`weight` / `level` are the current knobs, `default_*` what `None` means).
 - `constraints.score(costs, selection)` re-prices them in pure Python with the
   engine's arithmetic.
 

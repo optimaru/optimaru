@@ -272,7 +272,7 @@ class SolverConfig:
     ruin_recreate_rewards: list[float]
     ruin_recreate_polish_steps: int
     best_score_limit: tuple[int, float]
-    """(hard, soft): stop once bestScore >= this; (0, -1e18) stops at the first feasible."""
+    """(hard, soft): stop once bestScore >= this; (0, -inf) stops at the first feasible."""
     on_new_best: Callable[[int, Score], None] | None
 
 class Solver:

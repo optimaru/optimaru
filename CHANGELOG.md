@@ -32,7 +32,14 @@ constraint.
   and `False` makes it soft.
 - `exponent`: `1.0` by default. It must be finite and `> 0`, and it preserves
   sign. A unit constraint is shaped per unit; a global constraint is shaped on
-  its single total, before the weight is applied.
+  its single total, before the weight is applied. Every pick states its
+  exponent, `1.0` included, on both binding paths (`applyConstraints` and
+  `applyKnobs`), the same value the Python `score()` mirror uses; a duck-typed
+  pick without one reads as `1.0`.
+- A weight of `0` contributes exactly 0 at any exponent, on every path (the
+  engine's `weightedCost()` and `score()` / `score_costs()`): the shaped value
+  is never computed. An opt-in constraint at weight 0 with a huge exponent
+  used to raise `OverflowError` (`0 × inf = nan`).
 
 Hard contributions are rounded per unit (per global constraint for a global),
 not once on the hard total. The result differs from 0.1.x only for fractional
@@ -138,11 +145,16 @@ constants, and Python reads them through the new catalog:
 
 **`constraint_costs()` is the only per-constraint surface.** Every package
 returns the same dict:
-`{name: {costs, weight, exponent, hard, global, level, reward, level_flippable, name, label}}`,
+`{name: {costs, weight, exponent, hard, global, level, reward, level_flippable, name, label, default_weight, default_level}}`,
 plus `medium_fold` on a medium domain. `name` is the plain Python name.
 `label` is the display text of one instance of a parametrized constraint
 (`''` means none). A name selected more than once (employee-scheduling) is
-keyed `<name>#<k>` from its second instance on.
+keyed `<name>#<k>` from its second instance on. `weight` / `level` /
+`exponent` are the calculator's current knobs, which are the selection's
+where `constraint_costs()` takes one (employee-scheduling,
+school-timetabling); `default_weight` / `default_level` are what
+`weight=None` / `hard=None` mean, and `score()` reads those, so costs
+computed under one selection re-price correctly under another.
 
 **One shared spec base.** `python/optimaru/_constraint.py` is the single
 source. Every package carries a byte-identical copy as `<package>/_constraint.py`,
@@ -153,7 +165,10 @@ and `scripts/check_constraint_base.py` enforces this in CI. In every package:
 - `select(constraints, defaults, *, repeatable=False)` and `instance_keys()`
   are new in the shared base (`<package>._constraint`; employee-scheduling's
   `constraints` re-exports both). `repeatable=True` allows one name several
-  times with different parameters (employee-scheduling).
+  times with different parameters (employee-scheduling). Parameters are
+  compared by value: `x=1`, `x=1.0` and `x=numpy.int64(1)` are the same
+  parameters, `x=True` is not, and lists, tuples, sets and dicts are compared
+  element by element.
 - Knob types are checked the same way in Python and C++: `weight=True` or a
   string, and `hard=1` or `'x'`, raise `TypeError`
   (`constraint '<name>': weight must be a number or None, not True`).
@@ -190,7 +205,33 @@ identical.
   `solve_request` runs parallel starts as processes.
 - vehicle-routing and pickup-delivery `Solver.solve` release the GIL like
   every other package. With `on_new_best` and `parallel_solver_count >= 2`
-  they used to deadlock.
+  they used to deadlock. In all 22 packages the C++ search runs without the
+  GIL (`Solver.solve`, `solve_with_constraints` and the `solve()` /
+  `solve_request()` wrappers around them), so other Python threads keep
+  running during a solve. The problem object being solved is read and
+  written by C++ meanwhile: do not read or mutate it (or its entities) from
+  another thread until the solve returns; `on_new_best` runs with the GIL
+  and may read the score it is given.
+- `stop_at_first_feasible` compares the hard level only and can no longer
+  miss the stop. It used `best_score_limit = (0, -1e18)`, which a feasible
+  solution with a soft score below -1e18 never reached, so such a solve ran
+  its whole time limit. The limit is now `(0, -inf)` in the 17 packages
+  whose `best_score_limit` is `(hard, soft)`; in bed-allocation,
+  project-job-scheduling, vehicle-routing and pickup-delivery it is
+  `(0, -2**63, -2**63)` and in task-assigning `(0, 0, -2**63, -2**63)`:
+  INT64_MIN on a soft-side level means "no floor" there
+  (`toEngineScoreLimit`), and the engine's soft limit becomes -inf.
+  vehicle-routing and pickup-delivery used `(0, 0, -2**62)` and documented
+  it as "fully assigned", but the medium fold made that limit compare hard
+  only in practice; the documentation now says so. task-assigning still
+  requires every task assigned (`soft0` stays in the engine's hard level).
+- A worker thread that cannot be created (`std::thread` throws
+  `std::system_error` when the system has none left) no longer aborts the
+  process: the engine's multi-start and the 16 use-case worker pools start
+  their threads through `optimaru::runWorkerThreads`, which stops and joins
+  the workers already running and raises the error (`RuntimeError` in
+  Python). They used to destroy the started, still joinable threads, which
+  calls `std::terminate`.
 - conference-scheduling calls `on_new_best` on the `constraints=` path too.
 - Time limits (`spent_limit_seconds`, `unimproved_spent_limit_seconds`,
   employee-scheduling's `no_improvement_limit_seconds`) must be finite,
@@ -235,6 +276,19 @@ identical.
   `python/level_guard.hpp` holds `levelForHard()`, the pybind-free
   `hard=True/False` guard that the bindings raise as `ValueError`.
   `pythonName()` maps camelCase registry names only.
+- `ConstraintMetadata::defaultWeight` / `defaultLevel`: the weight and level
+  a component was constructed with; the setters never change them, and
+  `constraintCosts()` reports them next to the current ones.
+- `weightedCost(weight, cost, exponent)`: every contribution of the
+  decomposed calculator; exactly 0 at weight 0, without shaping.
+- `python/level_guard.hpp` also holds `Knobs` and `restateKnobs()`, the one
+  pybind-free rule both `applyConstraints` and `applyKnobs` follow (the
+  exponent is always applied). `detail::isRealNumber` looks `numbers.Real`
+  up once per module (`gil_safe_call_once_and_store`).
+- `impl/solver/worker_threads.hpp`: `runWorkerThreads(count, stop, work)` /
+  `runWorkerThreads(count, work, stopStarted)` start a pool exception-safely
+  (see *Solving from Python*); `workerThreadStartHook` is the test seam, also
+  reachable as the private `<package>._core._fail_worker_thread_start(index)`.
 - `test/constraint_level_test.cpp` is new. It covers levels and both folds,
   the knob guards, the catalog, exponent shaping (including sign preservation
   on a reward), the random-walk incremental vs. recompute check for both
@@ -262,10 +316,17 @@ identical.
   (through `Solver::Config::stopFlag`, set by `solve()` only and not bound to
   Python), and the first worker that fails raises it.
 - Simulated annealing cools over the run's step limit when that is further
-  along than the time limit (`SolverTermination::timeGradient()`). A
-  step-limited run used to stay near its starting temperature because the
-  30 s wall-clock limit was far away, and was not repeatable; it now repeats
-  whenever its steps lead the clock.
+  along than the time limit (`SolverTermination::timeGradient()`, the larger
+  of the step fraction `steps / step_count_limit` and the time fraction
+  `elapsed / spent_limit_seconds`). A step-limited run used to stay near its
+  starting temperature because the 30 s wall-clock limit was far away.
+  Repeatability is conditional: a seeded, step-limited run repeats only
+  while the step fraction leads the time fraction at every step, that is,
+  when the time limit is generous enough for the step budget (several times
+  what the steps take on the slowest machine it runs on) and no other
+  time-based limit (`unimproved_spent_limit_seconds`) ends it. Once the clock
+  leads, the temperature, and with it the run, depends on timing; a run that
+  hits its time limit before its step limit does not repeat.
 - `python/solver_config.hpp`: `secondsToMillis()` (the time-limit rule, with
   `kMaxTimeLimitSeconds = 1e9`) and `bindConfigCopy()`
   (`SolverConfig.__copy__` / `__deepcopy__`).
@@ -733,8 +794,10 @@ constraint, a pybind11 extension `<package>._core` and a CP-SAT reference on
   per-item lists are available as `constraint_items(problem)`.
 - Search is the engine's simulated annealing with an automatic temperature.
   It cools over `step_count_limit` when that is further along than the time
-  limit, so `max_iterations=N` → `step_count_limit=N` anneals, and a seeded
-  step-limited run repeats whenever its steps lead the clock.
+  limit, so `max_iterations=N` → `step_count_limit=N` anneals. A seeded
+  step-limited run repeats only while its step fraction leads its time
+  fraction: give it a time limit generous enough for the step budget (see
+  the engine notes above).
   `on_new_best(step, Score)` replaces
   `on_new_best(state)`, and the returned `Score` is also an iterable,
   comparable (hard, soft) pair.

@@ -256,7 +256,7 @@ PYBIND11_MODULE(_core, m)
         // Nearby swap partners: items of similar weight. probability 0 = off.
         .def_readwrite("nearby_probability", &Solver::Config::nearbyProbability)
         .def_readwrite("nearby_size", &Solver::Config::nearbySize)
-        // Early termination once bestScore >= (hard, soft), e.g. (0, -1e18)
+        // Early termination once bestScore >= (hard, soft), e.g. (0, -inf)
         // stops at the first feasible solution.
         .def_property(
             "best_score_limit",

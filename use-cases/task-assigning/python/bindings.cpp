@@ -360,7 +360,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("tail_swap_move_weight",
                        &Solver::Config::tailSwapMoveWeight)
         // Early termination once bestScore >= (hard, soft0, soft1, soft2),
-        // e.g. (0, 0, -2**62, -2**62) stops at the first feasible,
+        // e.g. (0, 0, -2**63, -2**63) stops at the first feasible,
         // fully-assigned solution.
         .def_property(
             "best_score_limit",

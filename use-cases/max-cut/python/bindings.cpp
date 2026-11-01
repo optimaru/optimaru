@@ -241,7 +241,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("swap_move_weight", &Solver::Config::swapMoveWeight)
         // BASIC best-improvement descent strategy weight. 0 = off.
         .def_readwrite("descent_weight", &Solver::Config::descentWeight)
-        // Early termination once bestScore >= (hard, soft), e.g. (0, -1e18)
+        // Early termination once bestScore >= (hard, soft), e.g. (0, -inf)
         // stops at the first feasible solution.
         .def_property(
             "best_score_limit",

@@ -13,6 +13,7 @@
 //       plain solve that must reach feasibility
 #include <cmath>
 #include <cstdio>
+#include <limits>
 #include <random>
 #include <string>
 #include <vector>
@@ -514,7 +515,7 @@ void verifySolve()
         OrderPickingSolution s = buildDemoData();
         Solver::Config config;
         config.spentLimit = std::chrono::seconds(4);
-        config.bestScoreLimit = {0, -1e18};  // stop once feasible
+        config.bestScoreLimit = {0, -std::numeric_limits<double>::infinity()};  // stop once feasible
         config.randomSeed = 7;
         Solver(config).solve(s);
 

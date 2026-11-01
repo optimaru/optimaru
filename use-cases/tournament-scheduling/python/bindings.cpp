@@ -258,7 +258,7 @@ PYBIND11_MODULE(_core, m)
         // Loaded-team-count macro moves: the search's only way across the
         // medium level's team-count barrier (see ts/solver.hpp).
         .def_readwrite("team_count_moves", &Solver::Config::teamCountMoves)
-        // Early termination once bestScore >= (hard, soft), e.g. (0, -1e18)
+        // Early termination once bestScore >= (hard, soft), e.g. (0, -inf)
         // stops at the first feasible solution.
         .def_property(
             "best_score_limit",

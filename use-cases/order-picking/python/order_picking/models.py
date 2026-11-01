@@ -192,7 +192,7 @@ def solve_request(request: OrderPickingRequest, *, constraints=None) -> OrderPic
     config.parallel_solver_count = request.num_workers
     _apply_solver_parameters(config, request.solver_parameters)
     if request.stop_at_first_feasible:
-        config.best_score_limit = (0, -1e18)
+        config.best_score_limit = (0, float("-inf"))
     solver = _core.Solver(config)
     if constraints is None:
         solver.solve(solution)

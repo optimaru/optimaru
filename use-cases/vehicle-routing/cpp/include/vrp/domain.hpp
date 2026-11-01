@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -97,6 +98,22 @@ inline optimaru::HardSoftScore toEngineScore(const Score &s)
     return kMediumFold.toEngine(s.hard,
                                 static_cast<double>(s.medium),
                                 static_cast<double>(s.soft));
+}
+
+// A best-score LIMIT (Solver::Config::bestScoreLimit) in engine terms.
+// kNoLevelFloor (INT64_MIN) on the medium or the soft level means "no floor
+// on the soft side": the engine's soft limit becomes -inf, so only the hard
+// level is compared and no soft score, however low, can miss the stop.
+// stop_at_first_feasible passes (0, kNoLevelFloor, kNoLevelFloor). Through
+// toEngineScore the sentinel would fold into a finite engine soft that a
+// low enough soft score never reaches. Any other limit folds as a score.
+constexpr std::int64_t kNoLevelFloor = std::numeric_limits<std::int64_t>::min();
+
+inline optimaru::HardSoftScore toEngineScoreLimit(const Score &limit)
+{
+    if (limit.medium == kNoLevelFloor || limit.soft == kNoLevelFloor)
+        return {limit.hard, -std::numeric_limits<double>::infinity()};
+    return toEngineScore(limit);
 }
 
 // Inverse of toEngineScore. Every constraint penalizes (medium and soft are

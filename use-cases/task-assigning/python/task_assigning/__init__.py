@@ -113,9 +113,9 @@ def _build_config(
     if parallel_solver_count is not None:
         cfg.parallel_solver_count = parallel_solver_count
     if stop_at_first_feasible:
-        # Stop as soon as hard 0 + every task assigned is reached (soft1/soft2 have an
-        # effectively -inf floor).
-        cfg.best_score_limit = (0, 0, -(2**62), -(2**62))
+        # Stop as soon as hard 0 + every task assigned is reached: -(2**63) on soft1/soft2
+        # is "no floor", so no soft total, however low, misses the stop.
+        cfg.best_score_limit = (0, 0, -(2**63), -(2**63))
     if full_assert:
         cfg.full_assert = True
     if on_new_best is not None:

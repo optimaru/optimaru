@@ -176,6 +176,10 @@ class SolverConfig:
     or_opt_move_weight: float
     tail_swap_move_weight: float
     best_score_limit: tuple[int, int, int, int]
+    """(hard, soft0, soft1, soft2): stop early once bestScore >= this. -(2**63)
+    on soft1 or soft2 means no floor there (only hard and soft0 are compared),
+    so (0, 0, -(2**63), -(2**63)) stops at the first solution with every skill
+    met and every task assigned."""
     on_new_best: Callable[[int, Score], None] | None
 
 class Solver:

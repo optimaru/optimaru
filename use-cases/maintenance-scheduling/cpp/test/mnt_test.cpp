@@ -17,6 +17,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <limits>
 #include <random>
 #include <string>
 #include <vector>
@@ -550,7 +551,7 @@ void verifyDemoAndPinnedSolve()
 
     Solver::Config config;
     config.spentLimit = std::chrono::seconds(8);
-    config.bestScoreLimit = Score{0, -1e18};  // stop at first feasible
+    config.bestScoreLimit = Score{0, -std::numeric_limits<double>::infinity()};  // stop at first feasible
     config.randomSeed = 5;
     Solver solver(config);
     solver.solve(s);

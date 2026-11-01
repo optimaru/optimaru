@@ -181,7 +181,7 @@ class SolveConfig(BaseModel):
         cfg.change_move_weight = self.change_move_weight
         cfg.swap_move_weight = self.swap_move_weight
         if self.stop_at_first_feasible:
-            cfg.best_score_limit = (0, -1e18)
+            cfg.best_score_limit = (0, float("-inf"))
         if self.best_score_limit is not None:
             cfg.best_score_limit = self.best_score_limit
         return cfg

@@ -358,7 +358,8 @@ def solve_request(request: PdpRequest, *, constraints=None) -> PdpSolution:
     config.parallel_solver_count = request.num_workers
     _apply_solver_parameters(config, request.solver_parameters)
     if request.stop_at_first_feasible:
-        config.best_score_limit = (0, 0, -(2**62))
+        # Hard 0: -(2**63) on medium/soft is "no floor" (the engine compares hard only).
+        config.best_score_limit = (0, -(2**63), -(2**63))
     solver = _core.Solver(config)
     has_route_policy = any(
         v.max_travel_time

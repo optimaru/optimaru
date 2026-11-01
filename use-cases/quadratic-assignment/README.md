@@ -122,7 +122,10 @@ other C++ use cases.
   whose starting temperature is automatic: `simulated_annealing_temperature_fraction`
   (0.01) × |start soft|, or `simulated_annealing_starting_temperature` set
   explicitly; it cools to 0 over the time limit, or over `step_count_limit` when
-  that is further along. `ENTITY_TABU` accepts only non-worsening swaps (a hill
+  that is further along (the larger of the step and time fractions). A seeded,
+  step-limited run repeats only while the step fraction leads, so give it a
+  time limit generous enough for the step budget; once the clock leads, the
+  run depends on timing. `ENTITY_TABU` accepts only non-worsening swaps (a hill
   climber), and `GREAT_DELUGE` keeps the start score as its water level.
 - `solve()` returns the engine `Score` (`.hard`, `.soft`, `is_feasible()`; 0.1.5:
   a tuple) and takes the engine object or the model (written back in place).

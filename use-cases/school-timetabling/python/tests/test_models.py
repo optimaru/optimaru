@@ -102,7 +102,7 @@ def test_solve_config_to_core():
     assert cfg.random_seed == 9
     assert cfg.parallel_solver_count == 2
     assert cfg.late_acceptance_size == 50
-    assert cfg.best_score_limit == (0, -1e18)  # stop_at_first_feasible
+    assert cfg.best_score_limit == (0, float("-inf"))  # stop_at_first_feasible
     assert cfg.unimproved_spent_limit_seconds == pytest.approx(0.5)
     assert cfg.step_count_limit == 100
     assert cfg.unimproved_step_count_limit == 40

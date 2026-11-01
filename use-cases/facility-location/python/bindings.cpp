@@ -274,7 +274,7 @@ PYBIND11_MODULE(_core, m)
                        &Solver::Config::closeFacilityKeep)
         .def_readwrite("close_facility_migrate_probability",
                        &Solver::Config::closeFacilityMigrateProbability)
-        // Early termination once bestScore >= (hard, soft), e.g. (0, -1e18)
+        // Early termination once bestScore >= (hard, soft), e.g. (0, -inf)
         // stops at the first feasible solution.
         .def_property(
             "best_score_limit",

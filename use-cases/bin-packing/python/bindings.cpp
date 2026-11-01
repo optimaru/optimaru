@@ -274,7 +274,7 @@ PYBIND11_MODULE(_core, m)
                     throw py::value_error("repack_partner_bins must be >= 0");
                 c.repackPartnerBins = count;
             })
-        // Early termination once bestScore >= (hard, soft), e.g. (0, -1e18)
+        // Early termination once bestScore >= (hard, soft), e.g. (0, -inf)
         // stops at the first feasible solution.
         .def_property(
             "best_score_limit",

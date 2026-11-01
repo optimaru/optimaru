@@ -807,7 +807,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("or_opt_move_weight", &Solver::Config::orOptMoveWeight)
         .def_readwrite("tail_swap_move_weight",
                        &Solver::Config::tailSwapMoveWeight)
-        // Early termination once bestScore >= (hard, soft), e.g. (0, -1e18)
+        // Early termination once bestScore >= (hard, soft), e.g. (0, -inf)
         // stops at the first feasible solution.
         .def_property(
             "best_score_limit",

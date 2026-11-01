@@ -329,7 +329,7 @@ PYBIND11_MODULE(_core, m)
                         "day_fit_value_probability must be in [0, 1]");
                 c.dayFitValueProbability = probability;
             })
-        // Early termination once bestScore >= (hard, soft), e.g. (0, -1e18)
+        // Early termination once bestScore >= (hard, soft), e.g. (0, -inf)
         // stops at the first feasible solution.
         .def_property(
             "best_score_limit",

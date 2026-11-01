@@ -7,7 +7,6 @@
 #include <cstdlib>
 #include <exception>
 #include <stdexcept>
-#include <thread>
 #include <utility>
 #include <vector>
 
@@ -15,6 +14,7 @@
 #include "ba/score_calculator.hpp"
 #include "optimaru/api/solver/solver.hpp"
 #include "optimaru/config/solver/solver_config.hpp"
+#include "optimaru/impl/solver/worker_threads.hpp"
 
 namespace ba
 {
@@ -41,7 +41,7 @@ void configureEngine(const Solver::Config &config,
     }
     engineConfig.termination.spentLimit = config.spentLimit;
     engineConfig.termination.bestScoreLimit
-        = toEngineScore(config.bestScoreLimit);
+        = toEngineScoreLimit(config.bestScoreLimit);
     engineConfig.termination.unimprovedSpentLimit = config.unimprovedSpentLimit;
     engineConfig.termination.stepCountLimit = config.stepCountLimit;
     engineConfig.termination.unimprovedStepCountLimit
@@ -177,34 +177,30 @@ void Solver::solve(BedPlan &plan)
         // Raised by the first worker that fails: every worker's engine checks
         // it once a step, so the others stop instead of using up their budget.
         auto stop = std::make_shared<std::atomic<bool>>(false);
-        std::vector<std::thread> workers;
-        workers.reserve(workerCount);
-        for (int i = 0; i < workerCount; ++i)
-        {
-            workers.emplace_back(
-                [this, i, &candidates, &failures, &stop]
+        // A worker that cannot be started (std::system_error) stops and joins
+        // the ones already running before the error is rethrown here.
+        optimaru::runWorkerThreads(
+            workerCount, *stop,
+            [this, &candidates, &failures, &stop](int i)
+            {
+                try
                 {
-                    try
-                    {
-                        Config workerConfig = config_;
-                        workerConfig.parallelSolverCount = 1;
-                        workerConfig.stopFlag = stop;
-                        workerConfig.randomSeed
-                            += static_cast<std::uint64_t>(i);
-                        if (i != 0)
-                            workerConfig.onNewBest = nullptr;
-                        solveSingle(workerConfig, candidates[i]);
-                        ScoreCalculator::calculateScore(candidates[i]);
-                    }
-                    catch (...)
-                    {
-                        failures[i] = std::current_exception();
-                        stop->store(true);
-                    }
-                });
-        }
-        for (std::thread &worker : workers)
-            worker.join();
+                    Config workerConfig = config_;
+                    workerConfig.parallelSolverCount = 1;
+                    workerConfig.stopFlag = stop;
+                    workerConfig.randomSeed
+                        += static_cast<std::uint64_t>(i);
+                    if (i != 0)
+                        workerConfig.onNewBest = nullptr;
+                    solveSingle(workerConfig, candidates[i]);
+                    ScoreCalculator::calculateScore(candidates[i]);
+                }
+                catch (...)
+                {
+                    failures[i] = std::current_exception();
+                    stop->store(true);
+                }
+            });
         for (const std::exception_ptr &failure : failures)
         {
             if (failure)

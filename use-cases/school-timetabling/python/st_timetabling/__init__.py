@@ -280,7 +280,7 @@ def solve(
     terms, so every period that can be filled is filled.
 
     ``stop_at_first_feasible`` stops as soon as hard 0 is reached
-    (best_score_limit=(0, -1e18)). Do not combine it with a selection relaxing
+    (best_score_limit=(0, -inf)). Do not combine it with a selection relaxing
     `unassigned_lessons_cost` — a solution that drops every lesson is hard 0
     too and would stop there.
 
@@ -306,7 +306,7 @@ def solve(
     if parallel_solver_count is not None:
         cfg.parallel_solver_count = parallel_solver_count
     if stop_at_first_feasible:
-        cfg.best_score_limit = (0, -1e18)
+        cfg.best_score_limit = (0, float("-inf"))
     if on_new_best is not None:
         cfg.on_new_best = on_new_best
     if weights is not None:

@@ -135,7 +135,7 @@ class SolverConfig:
     descent_weight: float
     """BASIC best-improvement descent strategy weight. 0 = off (off in exact-size mode)."""
     best_score_limit: tuple[int, float]
-    """(hard, soft): stop early once bestScore >= this. (0, -1e18) stops at
+    """(hard, soft): stop early once bestScore >= this. (0, -inf) stops at
     the first feasible solution."""
     on_new_best: Callable[[int, Score], None] | None
     """Called as on_new_best(step, score) on every new best (by the first parallel start
