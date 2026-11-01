@@ -358,7 +358,7 @@ def test_score_equals_the_engine_for_the_default_assembly():
         [capacity, FacilitySetupCost(offset=500.0, clip=False), DistanceFromFacilityCost(offset=20000.0, clip=False)],
         [
             FacilityCapacityCost(offset=2.0),
-            FacilityCapacityCost(offset=1.0, clip=False, weight=3),
+            FacilityCapacityCost(level="soft", offset=1.0, clip=False, weight=3),
             setup_cost,
             distance,
         ],
@@ -563,8 +563,11 @@ def test_the_keys_follow_the_pick_order_of_each_name():
         (FacilitySetupCost(offset=-10), (0, -2 * 110)),  # a negative offset adds to every non-zero facility
         (FacilitySetupCost(offset=-10, clip=False), (0, -2 * (110 + 10))),  # ...or to every facility
         (FacilityCapacityCost(offset=1), (-1, 0.0)),
-        (FacilityCapacityCost(offset=3, clip=False), (4, 0.0)),  # (2 - 3) + (0 - 3): a hard reward below 3
-        (FacilityCapacityCost(offset=1.5, clip=False, weight=1), (1, 0.0)),  # 0.5 -> 1, -1.5 -> -2: per unit
+        (FacilityCapacityCost(offset=1.5), (-1, 0.0)),  # hard rounds per facility: 0.5 -> 1, 0 -> 0
+        # The literal formula with an offset is refused on hard; on soft it charges
+        # (2 - 3) + (0 - 3) = -4 (a reward below 3) and 0.5 - 1.5 = -1, not rounded.
+        (FacilityCapacityCost(level="soft", offset=3, clip=False), (0, 4.0)),
+        (FacilityCapacityCost(level="soft", offset=1.5, clip=False, weight=1), (0, 1.0)),
     ],
 )
 def test_offsets_by_hand_on_both_paths(pick, expected):
@@ -627,7 +630,8 @@ def _random_instance(seed, facilities=6, consumers=24):
         [FacilityCapacityCost(), FacilitySetupCost(), *REPEAT],
         [
             FacilityCapacityCost(),
-            FacilityCapacityCost(offset=1, clip=False, weight=2),
+            FacilityCapacityCost(level="soft", offset=1, clip=False, weight=2),
+            FacilityCapacityCost(offset=1, weight=2),
             FacilitySetupCost(offset=30000),
             FacilitySetupCost(offset=-1000, clip=False, weight=0.25),
             DistanceFromFacilityCost(),
@@ -652,3 +656,83 @@ def test_full_assert_solves_with_repeats_and_offsets(picks):
     assert python.hard == problem.score.hard
     assert python.soft == pytest.approx(problem.score.soft)
     assert score(fl.constraint_costs(problem), picks) == python  # the default costs score the repeats too
+
+
+# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+
+HARD_REFUSAL = (
+    "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
+    "violation; use clip=True (a threshold) or another level"
+)
+
+
+def _refusal(call):
+    with pytest.raises(ValueError) as refused:
+        call()
+    return str(refused.value)
+
+
+@pytest.mark.parametrize("offset", [3.0, -3.0])
+@pytest.mark.parametrize(
+    "pick",
+    [
+        lambda offset: FacilityCapacityCost(offset=offset, clip=False),  # the default level, hard
+        lambda offset: FacilityCapacityCost(level="hard", offset=offset, clip=False),
+        lambda offset: DistanceFromFacilityCost(level="hard", offset=offset, clip=False),
+    ],
+    ids=["capacity-default-hard", "capacity-level-hard", "distance-moved-to-hard"],
+)
+def test_the_literal_offset_is_refused_on_hard_on_every_path(pick, offset):
+    """A positive offset would reward the facilities below it, so one facility's spare
+    capacity would cancel another's overload and an infeasible solution could score
+    hard 0; a negative one would charge every facility, an unused one included. The
+    engine (solve, Solver, constraint_costs), the score() mirror and the CP-SAT
+    reference refuse it with the same message."""
+    spec = pick(offset)
+    message = HARD_REFUSAL.format(q=repr(spec.name))
+    picks = [FacilityCapacityCost(), spec] if spec.name == "facility_capacity_cost" else [spec]
+    assert _refusal(lambda: fl.solve(build_problem(), time_limit_seconds=0.1, constraints=[spec])) == message
+    assert _refusal(lambda: _zero_budget_solve(_two_assigned(), picks)) == message  # a repeat too
+    assert _refusal(lambda: fl.constraint_costs(_two_assigned(), [spec])) == message
+    assert _refusal(lambda: score(fl.constraint_costs(_two_assigned()), [spec])) == message
+    assert _refusal(lambda: score(fl.constraint_costs(_two_assigned()), picks)) == message
+
+
+@pytest.mark.parametrize("offset", [3.0, -3.0])
+def test_the_same_literal_pick_on_soft_is_accepted(offset):
+    """(2 - offset) + (0 - offset) per facility, on soft, on every path."""
+    pick = FacilityCapacityCost(level="soft", offset=offset, clip=False)
+    expected = (0, -(2 - offset + 0 - offset))
+    assert score(fl.constraint_costs(_two_assigned()), [pick]) == expected
+    raw = fl.constraint_costs(_two_assigned(), [pick])
+    assert (raw["facility_capacity_cost"]["level"], raw["facility_capacity_cost"]["clip"]) == ("soft", False)
+    assert score(raw, [pick]) == expected
+    engine = _zero_budget_solve(_two_assigned(), [pick])
+    assert (engine.score.hard, engine.score.soft) == expected
+
+
+@pytest.mark.parametrize(
+    ("pick", "expected"),
+    [
+        (FacilityCapacityCost(offset=3.0), (0, 0.0)),  # clip=True on hard: a threshold
+        (FacilityCapacityCost(offset=-3.0), (-5, 0.0)),  # 2 + 3 on the overloaded facility only
+        (FacilityCapacityCost(clip=False), (-2, 0.0)),  # clip=False with offset 0: the 0.2.0 shaping
+        (FacilityCapacityCost(offset=0.0, clip=False), (-2, 0.0)),
+    ],
+)
+def test_the_allowed_combinations_on_hard(pick, expected):
+    assert score(fl.constraint_costs(_two_assigned()), [pick]) == expected
+    engine = _zero_budget_solve(_two_assigned(), [pick])
+    assert (engine.score.hard, engine.score.soft) == expected
+
+
+def test_the_refusal_comes_after_every_knob_of_a_duck_typed_pick():
+    """The engine checks once a pick's knobs are all re-stated: the level a pick moves to decides."""
+    moved = SimpleNamespace(
+        name="facility_capacity_cost", weight=None, level="soft", exponent=1.0, offset=3.0, clip=False
+    )
+    assert _zero_budget_solve(_two_assigned(), [moved]).score.soft == 4.0
+    kept = SimpleNamespace(name="facility_capacity_cost", weight=None, level=None, exponent=1.0, offset=3.0, clip=False)
+    message = HARD_REFUSAL.format(q="'facility_capacity_cost'")
+    assert _refusal(lambda: _zero_budget_solve(_two_assigned(), [kept])) == message
+    assert _refusal(lambda: score(fl.constraint_costs(_two_assigned()), [kept])) == message

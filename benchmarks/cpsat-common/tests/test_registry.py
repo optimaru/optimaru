@@ -1,6 +1,7 @@
 import pytest
 
 from cpsat_plugins import (
+    ConstraintConfig,
     ConstraintPlugin,
     ConstraintRegistry,
     ConstraintSpec,
@@ -553,19 +554,30 @@ def test_a_literal_offset_charges_a_constant_zero_unit() -> None:
 
 
 def test_the_folded_objective_stays_lexicographic_with_negative_terms() -> None:
-    """A literal hard term below its offset is negative; the fold uses spans, not maxima."""
+    """A literal term below its offset is negative; the fold uses spans, not maxima.
+
+    The literal formula is refused on hard, so the negative term sits on an
+    into_soft medium level here, above a soft reward that pulls the other way.
+    """
     model = cp_model.CpModel()
     x = model.new_int_var(0, 10, "x")
-    specs = (ConstraintSpec("capacity", "Capacity", "hard", 1), ConstraintSpec("bonus", "Bonus", "soft", 1000))
+    specs = (
+        ConstraintSpec("capacity", "Capacity", "medium", 1),
+        ConstraintSpec("bonus", "Bonus", "soft", 1000),
+    )
     objective = ObjectiveBuilder(
-        model, ("hard", "soft"), specs, [{"name": "capacity", "offset": 5, "clip": False}, "bonus"]
+        model,
+        ("hard", "medium", "soft"),
+        specs,
+        [{"name": "capacity", "offset": 5, "clip": False}, "bonus"],
+        medium_fold="into_soft",
     )
     objective.add("capacity", x, bound=10)  # wants x small
     objective.add_reward("bonus", x, bound=10)  # wants x large
     solver = cp_model.CpSolver()
     assert objective.solve(solver) == cp_model.OPTIMAL
     assert solver.value(x) == 0
-    assert objective.score(solver) == {"hard": 5, "soft": 0}
+    assert objective.score(solver) == {"hard": 0, "medium": 5, "soft": 0}
 
 
 @pytest.mark.parametrize(
@@ -587,14 +599,106 @@ def test_score_costs_shape_each_evaluated_unit() -> None:
         cp_model.CpModel(),
         ("hard", "soft"),
         SPECS,
-        [{"name": "capacity", "offset": 1, "clip": False}, {"name": "distance", "offset": 2}],
+        [
+            {"name": "capacity", "level": "soft", "offset": 1, "clip": False},
+            {"name": "distance", "offset": 2},
+            {"name": "capacity", "offset": 2},
+        ],
     )
     costs = {
         "capacity": {"costs": [3, 0, 0, 0], "units": [0, 2]},  # scoped: units 1 and 3 never evaluated
         "distance": {"costs": [4, 1, 0, 2]},
     }
-    # hard: 2 x ((3 - 1) + (0 - 1)) = 2; soft: 3 x (2 + 0 + 0 + 0) = 6.
-    assert objective.score_costs(costs) == {"hard": -2, "soft": -6}
+    # soft: capacity 2 x ((3 - 1) + (0 - 1)) = 2, distance 3 x (2 + 0 + 0 + 0) = 6;
+    # hard: capacity#2 (threshold at 2) 2 x (1 + 0) = 2.
+    assert objective.score_costs(costs) == {"hard": -2, "soft": -8}
+
+
+# --- 0.3.0: clip=False with an offset stays off the hard score ---------------------
+
+HARD_REFUSAL = (
+    "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
+    "violation; use clip=True (a threshold) or another level"
+)
+MEDIUM_REFUSAL = (
+    "constraint {q}: clip=False with a non-zero offset cannot be medium here, where medium counts toward "
+    "the hard score; use clip=True (a threshold) or level='soft'"
+)
+
+
+@pytest.mark.parametrize("offset", [3, -3])
+@pytest.mark.parametrize(
+    ("selection", "medium_fold", "message"),
+    [
+        ({"name": "capacity"}, None, HARD_REFUSAL),  # default-level hard
+        ({"name": "capacity", "level": "hard"}, None, HARD_REFUSAL),
+        ({"name": "distance", "level": "hard"}, "into_soft", HARD_REFUSAL),
+        ({"name": "pinned"}, None, HARD_REFUSAL),  # non-flippable hard
+        ({"name": "unassigned"}, "below_hard", MEDIUM_REFUSAL),  # default-level medium
+        ({"name": "distance", "level": "medium"}, "below_hard", MEDIUM_REFUSAL),
+    ],
+)
+def test_the_literal_offset_is_refused_where_it_counts_toward_hard(selection, medium_fold, message, offset) -> None:
+    """Refused with the engine's words when the objective is built, before any term is added."""
+    picked = {**selection, "offset": offset, "clip": False}
+    with pytest.raises(ValueError) as refused:
+        ObjectiveBuilder(cp_model.CpModel(), ("hard", "medium", "soft"), LEVELED, [picked], medium_fold=medium_fold)
+    assert str(refused.value) == message.format(q=repr(selection["name"]))
+
+
+@pytest.mark.parametrize(
+    "selection",
+    [
+        {"name": "capacity", "offset": 3},  # clip=True on hard: a threshold
+        {"name": "capacity", "offset": -3},
+        {"name": "capacity", "clip": False},  # clip=False with offset 0
+        {"name": "capacity", "offset": 0, "clip": False},
+        {"name": "capacity", "level": "soft", "offset": 3, "clip": False},
+        {"name": "distance", "offset": -3, "clip": False},
+        {"name": "unassigned", "offset": 3, "clip": False},  # medium into soft
+        {"name": "bonus", "offset": 2, "clip": False},  # a soft reward
+    ],
+)
+def test_the_allowed_offset_combinations(selection) -> None:
+    objective = ObjectiveBuilder(
+        cp_model.CpModel(), ("hard", "medium", "soft"), LEVELED, [selection], medium_fold="into_soft"
+    )
+    spec, config = objective.selected[selection["name"]]
+    assert objective.level_of(spec, config) in ("hard", "medium", "soft")
+
+
+def test_the_literal_offset_refusal_reaches_every_entry_path(monkeypatch) -> None:
+    """The registry (any plugin), a duck-typed pick, a repeated instance and score_costs."""
+    spec_class = _fake_domain(monkeypatch, [("capacity", "hard", 1.0, True, False)])
+
+    class SummedPlugin(spec_class("capacity"), ConstraintPlugin[dict]):
+        def build(self, context, objective):
+            objective.add(self.name, context, bound=1)
+
+    message = HARD_REFUSAL.format(q="'capacity'")
+    registry = ConstraintRegistry([SummedPlugin()])
+    for picks in (
+        [_DomainConstraint(offset=2.0, clip=False)],
+        [_DomainConstraint(), _DomainConstraint(offset=-2.0, clip=False)],
+        [{"name": "capacity", "level": "hard", "offset": 2, "clip": False}],
+    ):
+        with pytest.raises(ValueError) as refused:
+            registry.objective(cp_model.CpModel(), ("hard", "soft"), picks)
+        assert str(refused.value) == message
+    # Moved to soft, the same pick passes the level rule (and then needs a per-unit plugin).
+    with pytest.raises(ValueError, match="offset is not supported by this CP-SAT model"):
+        registry.objective(cp_model.CpModel(), ("hard", "soft"), [_DomainConstraint(level="soft", offset=2.0, clip=False)])
+    # level_of refuses it too, so score_costs on a hand-edited selection cannot score it.
+    objective = ObjectiveBuilder(cp_model.CpModel(), ("hard", "soft"), SPECS, [{"name": "capacity"}])
+    spec, _config = objective.selected["capacity"]
+    objective.selected["capacity"] = (spec, ConstraintConfig(name="capacity", offset=1, clip=False))
+    with pytest.raises(ValueError, match="cannot be hard"):
+        objective.score_costs({"capacity": {"costs": [0]}})
+
+
+def test_medium_fold_is_validated() -> None:
+    with pytest.raises(ValueError, match="medium_fold must be None, 'into_soft' or 'below_hard'"):
+        ObjectiveBuilder(cp_model.CpModel(), ("hard", "soft"), SPECS, medium_fold="below")
 
 
 def test_an_offset_needs_a_plugin_with_per_unit_terms(monkeypatch) -> None:

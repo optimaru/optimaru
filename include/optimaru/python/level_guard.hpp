@@ -2,10 +2,12 @@
 #define OPTIMARU_PYTHON_LEVEL_GUARD_HPP
 
 // The knob rules of a Python pick, kept free of pybind11 so the engine tests
-// can check them: whether a pick's `level` knob may be honoured (its refusals and
-// their wording; constraint_binding.hpp's restateKnobs callers raise them as
-// ValueError), and how the five knobs, once read and type-checked
-// (constraint_binding.hpp readKnobs), are re-stated on a component.
+// can check them: whether a pick's `level` knob may be honoured (checkedLevel)
+// and whether its offset / clip may sit on its effective level
+// (checkLiteralOffset), with their refusals and wording (constraint_binding.hpp's
+// restateKnobs callers raise them as ValueError), and how the five knobs, once
+// read and type-checked (constraint_binding.hpp readKnobs), are re-stated on a
+// component.
 
 #include <optional>
 #include <stdexcept>
@@ -77,11 +79,47 @@ inline Level checkedLevel(const ConstraintMetadata& constraint, Level wanted, Me
     return wanted;
 }
 
+// Checks a pick once ALL of its knobs are re-stated (so the order of the
+// setters does not matter), on the component's effective state: a level that
+// counts toward the hard score (hard, or medium where it folds below hard:
+// MediumFold::countsTowardHard) refuses clip=False with a non-zero offset,
+// because hard 0 must mean no violation. The level is the pick's, or the
+// component's default when the pick leaves it unset, a structural
+// (non-flippable) hard one included. In the words of the Python base
+// (_constraint.py _check_literal_offset):
+//   constraint 'x': clip=False with a non-zero offset cannot be hard, because
+//       hard 0 must mean no violation; use clip=True (a threshold) or another
+//       level
+//   constraint 'x': clip=False with a non-zero offset cannot be medium here,
+//       where medium counts toward the hard score; use clip=True (a
+//       threshold) or level='soft'
+// The threshold (clip=True) with any offset, clip=False with offset 0, and
+// any combination on soft or on an into_soft medium stay allowed. The engine
+// refuses the same states at reset (DecomposedScoreCalculator::
+// validateLevel, std::logic_error); this is the Python-facing wording.
+// `quotedName` as for checkedLevel. Throws std::invalid_argument.
+inline void checkLiteralOffset(const ConstraintMetadata& constraint, MediumFold fold,
+                               const std::string& quotedName) {
+    if (constraint.clip || constraint.offset == 0.0 || !fold.countsTowardHard(constraint.level)) {
+        return;
+    }
+    if (constraint.level == Level::Hard) {
+        throw std::invalid_argument("constraint " + quotedName +
+                                    ": clip=False with a non-zero offset cannot be hard, because "
+                                    "hard 0 must mean no violation; use clip=True (a threshold) or "
+                                    "another level");
+    }
+    throw std::invalid_argument("constraint " + quotedName +
+                                ": clip=False with a non-zero offset cannot be medium here, where "
+                                "medium counts toward the hard score; use clip=True (a threshold) "
+                                "or level='soft'");
+}
+
 // Re-states one pick's knobs on a component, the same way on both binding
 // paths: applyConstraints (an assembly, through the overload below) and
-// applyKnobs (a component a domain factory built outside any assembly).
-// `quotedName` as for checkedLevel; `fold` is the domain's. Throws
-// std::invalid_argument.
+// applyKnobs (a component a domain factory built outside any assembly), then
+// checks the result (checkLiteralOffset). `quotedName` as for checkedLevel;
+// `fold` is the domain's. Throws std::invalid_argument.
 inline void restateKnobs(ConstraintMetadata& constraint, const Knobs& knobs, MediumFold fold,
                          const std::string& quotedName) {
     if (knobs.level) constraint.setLevel(checkedLevel(constraint, *knobs.level, fold, quotedName));
@@ -89,6 +127,7 @@ inline void restateKnobs(ConstraintMetadata& constraint, const Knobs& knobs, Med
     constraint.setExponent(knobs.exponent);
     constraint.setOffset(knobs.offset);
     constraint.setClip(knobs.clip);
+    checkLiteralOffset(constraint, fold, quotedName);
 }
 
 template <typename Solution>
@@ -106,6 +145,7 @@ void restateKnobs(ConstraintAssembly<Solution>& assembly, const std::string& nam
     assembly.exponent(name, knobs.exponent);
     assembly.offset(name, knobs.offset);
     assembly.clip(name, knobs.clip);
+    checkLiteralOffset(*constraint, MediumFoldOf<Solution>::value, quotedName);
 }
 
 }  // namespace python

@@ -262,7 +262,8 @@ SELECTIONS = {
     ],
     "hard-offsets": [
         FacilityCapacityCost(offset=1),
-        FacilityCapacityCost(weight=2, offset=2, clip=False),
+        # The literal formula with an offset is refused on hard; its copy sits on soft.
+        FacilityCapacityCost(level="soft", weight=2, offset=2, clip=False),
         FacilitySetupCost(offset=-3, clip=False),
     ],
     "identical-twice": [FacilitySetupCost(), FacilitySetupCost(), DistanceFromFacilityCost()],
@@ -322,3 +323,56 @@ def test_mapping_selections_repeat_and_shift_like_specs() -> None:
 def test_a_fractional_offset_is_refused_by_cpsat() -> None:
     with pytest.raises(ValueError, match="offset must be an integer for CP-SAT"):
         solve(_three_by_three(), time_limit_seconds=1, constraints=[DistanceFromFacilityCost(offset=0.5)])
+
+
+# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+
+HARD_REFUSAL = (
+    "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
+    "violation; use clip=True (a threshold) or another level"
+)
+
+
+@pytest.mark.parametrize("offset", [2, -2])
+@pytest.mark.parametrize(
+    "selection",
+    [
+        lambda offset: FacilityCapacityCost(offset=offset, clip=False),  # the default level, hard
+        lambda offset: {"name": "facility_capacity_cost", "offset": offset, "clip": False},
+        lambda offset: DistanceFromFacilityCost(level="hard", offset=offset, clip=False),
+        lambda offset: {"name": "distance_from_facility_cost", "level": "hard", "offset": offset, "clip": False},
+    ],
+    ids=["capacity-spec", "capacity-mapping", "distance-moved-to-hard", "distance-mapping"],
+)
+def test_the_literal_offset_is_refused_on_hard_like_the_engine(selection, offset) -> None:
+    """The CP-SAT reference refuses the pick with the engine's and score()'s message."""
+    pick = selection(offset)
+    name = pick["name"] if isinstance(pick, dict) else pick.name
+    message = HARD_REFUSAL.format(q=repr(name))
+    for picks in ([pick], [FacilityCapacityCost(), DistanceFromFacilityCost(), pick]):
+        with pytest.raises(ValueError) as refused:
+            solve(_three_by_three(), time_limit_seconds=1, constraints=picks)
+        assert str(refused.value) == message
+        with pytest.raises(ValueError) as refused:
+            build_model(_three_by_three(), picks)
+        assert str(refused.value) == message
+    if not isinstance(pick, dict):
+        # The engine and the score() mirror say the same.
+        core = _three_by_three().to_core()
+        with pytest.raises(ValueError) as refused:
+            domain.constraint_costs(core, [pick])
+        assert str(refused.value) == message
+        with pytest.raises(ValueError) as refused:
+            score(domain.constraint_costs(core), [pick])
+        assert str(refused.value) == message
+
+
+@pytest.mark.parametrize("offset", [2, -2])
+def test_the_same_literal_pick_on_soft_is_accepted(offset) -> None:
+    picks = [FacilityCapacityCost(), FacilityCapacityCost(level="soft", offset=offset, clip=False)]
+    problem = _three_by_three()
+    best = max(
+        tuple(score(domain.constraint_costs(candidate.to_core(), picks), picks)) for _, candidate in _assignments(problem)
+    )
+    solved = solve(problem, time_limit_seconds=5, constraints=picks)
+    assert (solved.score_hard, solved.score_soft) == pytest.approx(best)

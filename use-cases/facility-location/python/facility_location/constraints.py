@@ -38,7 +38,9 @@ Every spec takes five knobs:
 - ``clip``     (keyword) ``True`` (the default) counts only what lies beyond the
                offset, ``max(0, c - offset) ** exponent``; ``False`` shapes
                ``c - offset`` as it is, so a facility below the offset — an unused
-               one (cost 0) included — lowers the penalty.
+               one (cost 0) included — lowers the penalty. With an offset it is
+               refused on hard (``FacilityCapacityCost`` by default), because
+               hard 0 must mean no violation.
 
 The same constraint may be picked several times; each pick is scored on its own with
 its own knobs and the picks add up. Distance plus its square beyond 500 m per

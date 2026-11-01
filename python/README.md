@@ -82,6 +82,15 @@ Every constraint takes the same five knobs:
   exponent=3)` costs `max(0, x - 10)**3` for a vehicle that drives `x` seconds.
   `clip=False` is the literal formula, `(x - 10)**3`, which is negative, a
   reward, below 10.
+  Either formula applies per unit: per vehicle, per slot and so on, on every
+  unit the constraint evaluates, raw 0 included. It is not one formula over the
+  total violation, so with `clip=False` an idle vehicle contributes
+  `(0 - 10)**3 = -1000`.
+  `clip=False` with a non-zero offset is refused on hard, and on medium where
+  medium counts toward the hard score (task assigning), because hard 0 must
+  mean no violation: `ValueError: constraint 'vehicle_capacity_cost':
+  clip=False with a non-zero offset cannot be hard, because hard 0 must mean no
+  violation; use clip=True (a threshold) or another level`.
 
 A constraint may be picked several times. Each pick is its own instance with its
 own knobs, and the instances add up: `TravelTimeCost(exponent=2)` and

@@ -171,10 +171,15 @@ py::dict constraintCosts(DecomposedScoreCalculator<Solution>& calculator, Soluti
 // ---------------------------------------------------------------------------
 // The five knobs of one pick, read the way the Python base reads them
 // ---------------------------------------------------------------------------
-// The picks are duck-typed (any object with name/weight/level/exponent, and
-// optionally offset/clip), so the C++ side checks the types itself, with the
+// The picks are duck-typed, so the C++ side checks the types itself, with the
 // same rules and the same wording as `_constraint.py` (_check_knobs /
-// _level): what one path refuses, the other refuses too.
+// _level): what one path refuses, the other refuses too. The duck-typing
+// rule, in the same words as the Python score_costs docstring:
+//   A pick must carry `name`, `weight`, `level` and `exponent`. `offset` and
+//   `clip` are optional and default to 0.0 and True. They only add shaping,
+//   and their defaults change nothing. A missing weight, level or exponent
+//   stays an AttributeError, because it is more likely a mistake, e.g. an
+//   object still carrying `hard`.
 //   weight    None, or a real number (numbers.Real, but not bool), finite
 //             and >= 0. TypeError / ValueError.
 //   level     None, or a string spelling a level ("hard", "medium", "soft"),
@@ -324,7 +329,10 @@ inline void applyKnobs(ConstraintMetadata& constraint, const py::handle& item,
 //             built with another exponent, as the Python score() reads it
 //   offset    0.0 = no shift, else finite (any sign); always applied
 //   clip      True = the threshold sign(x) * max(0, |x| - offset)^exponent,
-//             False = the literal (x - offset)^exponent; always applied
+//             False = the literal (x - offset)^exponent, per evaluated unit;
+//             always applied. With an offset != 0 it is refused on a level
+//             that counts toward the hard score (checkLiteralOffset, once
+//             all knobs of the pick are re-stated).
 // (readKnobs above). A wrong type is a TypeError, every other refusal a
 // ValueError, each naming the constraint by its Python name, in the words
 // of the Python base.

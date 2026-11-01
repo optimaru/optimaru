@@ -183,6 +183,10 @@ public:
     //   level     a reward can never be Hard; a constraint whose
     //             levelFlippable is false keeps its level (re-stating the
     //             level it already has is accepted as a no-op)
+    // A rule that spans several knobs is checked by the calculator at reset
+    // (std::logic_error), so the setters may come in any order: clip(false)
+    // with an offset != 0 on a level that counts toward the hard score
+    // (DecomposedScoreCalculator::validateLevel).
 
     ConstraintAssembly& weight(const std::string& name, double weight) & {
         require(name).setWeight(weight);

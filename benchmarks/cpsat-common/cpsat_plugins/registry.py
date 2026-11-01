@@ -282,8 +282,43 @@ def resolve(
     return result
 
 
+_MEDIUM_FOLDS = (None, "into_soft", "below_hard")
+
+
+def _check_literal_offset(name: str, level: str, config: ConstraintConfig, medium_fold: str | None) -> None:
+    """``clip=False`` with an offset != 0 stays off the levels that count toward the hard score.
+
+    The engine's rule, word for word as the optimaru spec base
+    (``_check_literal_offset``) and the bindings (python::checkLiteralOffset)
+    raise it: hard, and medium where the domain folds it below hard
+    (``medium_fold="below_hard"``, task assigning), refuse the literal
+    formula, because it charges every evaluated unit ``x - offset`` and hard 0
+    must mean no violation. ``level`` is the effective one.
+    """
+    if config.clip or config.offset == 0:
+        return
+    if level == "hard":
+        raise ValueError(
+            f"constraint {name!r}: clip=False with a non-zero offset cannot be hard, because hard 0 "
+            "must mean no violation; use clip=True (a threshold) or another level"
+        )
+    if level == "medium" and medium_fold == "below_hard":
+        raise ValueError(
+            f"constraint {name!r}: clip=False with a non-zero offset cannot be medium here, where "
+            "medium counts toward the hard score; use clip=True (a threshold) or level='soft'"
+        )
+
+
 class ObjectiveBuilder:
-    """Collect named penalty terms and build a safe lexicographic objective."""
+    """Collect named penalty terms and build a safe lexicographic objective.
+
+    ``medium_fold`` is the engine domain's MediumFold kind (what
+    ``constraint_costs()`` reports as ``medium_fold["kind"]``): ``None`` for a
+    domain without a medium level, ``"into_soft"``, or ``"below_hard"`` where
+    medium counts toward the hard score (task assigning). The knob rules of
+    every selected instance (``level_of``) are checked here, before any term
+    is added.
+    """
 
     def __init__(
         self,
@@ -291,22 +326,36 @@ class ObjectiveBuilder:
         levels: Sequence[str],
         specs: Sequence[ConstraintSpec],
         constraints: Iterable[ConstraintSelection] | None = None,
+        *,
+        medium_fold: str | None = None,
     ) -> None:
         if not levels or levels[0] != "hard":
             raise ValueError("levels must start with 'hard'")
+        if medium_fold not in _MEDIUM_FOLDS:
+            raise ValueError(f"medium_fold must be None, 'into_soft' or 'below_hard', not {medium_fold!r}")
         self.model = model
         self.levels = tuple(levels)
+        self.medium_fold = medium_fold
         self.selected = resolve(specs, constraints)
         self.terms: dict[str, list] = {level: [] for level in self.levels}
         self.bounds: dict[str, int] = {level: 0 for level in self.levels}
+        for spec, config in self.selected.values():
+            self.level_of(spec, config)  # refuse a selection before the model is built
 
     def level_of(self, spec: ConstraintSpec, config: ConstraintConfig) -> str:
         """The level a selection lands on, with the engine's knob rules.
 
         ``level=None`` keeps the default level. ``"medium"`` needs a domain
         with a medium level, a reward refuses ``"hard"``, and a non-flippable
-        constraint refuses any change of level.
+        constraint refuses any change of level. On the level it lands on,
+        ``clip=False`` with an offset != 0 is refused where that level counts
+        toward the hard score (hard; medium with ``medium_fold="below_hard"``).
         """
+        level = self._requested_level(spec, config)
+        _check_literal_offset(spec.name, level, config, self.medium_fold)
+        return level
+
+    def _requested_level(self, spec: ConstraintSpec, config: ConstraintConfig) -> str:
         wanted = config.level
         if wanted is None:
             return spec.level

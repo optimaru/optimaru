@@ -19,6 +19,7 @@ from __future__ import annotations
 import importlib.util
 import struct
 import sys
+import warnings
 from dataclasses import FrozenInstanceError, dataclass
 from pathlib import Path
 from typing import Any
@@ -92,6 +93,8 @@ def _entry(
         "costs": costs,
         "weight": weight,
         "exponent": 1.0,
+        "offset": 0.0,  # 0.3.0 costs always carry offset / clip
+        "clip": True,
         "hard": level == "hard",
         "global": is_global,
         "level": level,
@@ -438,16 +441,24 @@ def test_params_are_the_non_knob_fields():
     assert ConflictCost().params() == {}
 
 
-def test_repeated_picks_are_kept_with_or_without_the_old_repeatable_flag():
-    """``repeatable`` changes nothing since 0.3.0; the same parameters twice are two instances."""
+def test_repeatable_is_deprecated_and_changes_nothing():
+    """``repeatable`` changes nothing since 0.3.0: passing it, with any value, warns."""
     first, second = (
         DayPatternCost(pattern="A,OFF"),
         DayPatternCost(pattern="B,OFF", worker_indices=(1,)),
     )
     same = DayPatternCost(pattern="A,OFF", weight=3)
-    for flag in (True, False):
-        assert select([first, second], DEFAULTS, repeatable=flag) == [first, second]
-        assert select([first, same], DEFAULTS, repeatable=flag) == [first, same]
+    for flag in (True, False, None):
+        with pytest.warns(DeprecationWarning, match=r"select\(repeatable=\.\.\.\) changes nothing since optimaru 0\.3\.0") as caught:
+            assert select([first, second], DEFAULTS, repeatable=flag) == [first, second]
+        assert caught[0].filename == __file__  # points at the caller
+        with pytest.warns(DeprecationWarning, match="will be removed"):
+            assert select([first, same], DEFAULTS, repeatable=flag) == [first, same]
+        with pytest.warns(DeprecationWarning):
+            assert select(None, DEFAULTS, repeatable=flag) == list(DEFAULTS)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")  # not passing it does not warn
+        assert select([first, same], DEFAULTS) == [first, same]
 
 
 @dataclass(frozen=True)
@@ -460,45 +471,50 @@ class ScopedLimitCost(Constraint):
 @pytest.mark.parametrize(
     ("first", "second"),
     [
+        # equal parameters, whatever their types
         ({"limit": 1}, {"limit": 1.0}),
         ({"limit": 2}, {"limit": np.int64(2)}),
-        ({"limit": 2.5}, {"limit": np.float64(2.5)}),
         ({"scope": [1, 2]}, {"scope": (1.0, np.int32(2))}),
-        ({"scope": {"a": [1, {2}]}}, {"scope": {"a": (1.0, frozenset({2.0}))}}),
         ({"scope": np.array([1, 2])}, {"scope": [1, 2]}),
         ({"scope": True}, {"scope": np.bool_(True)}),
-    ],
-)
-def test_parameters_compare_by_value(first, second):
-    """x=1 and x=1.0 (or numpy.int64(1)) are the same parameters, at any depth (``_normalized``).
-
-    select() no longer refuses equal parameters; the helper stays for callers
-    that compare picks (employee-scheduling's bindings until 0.3.0), and the
-    picks are kept.
-    """
-    picks = [ScopedLimitCost(**first), ScopedLimitCost(**second)]
-    assert base._normalized(picks[0].params()) == base._normalized(picks[1].params())
-    assert select(picks, DEFAULTS) == picks
-
-
-@pytest.mark.parametrize(
-    ("first", "second"),
-    [
+        # different parameters
         ({"limit": 1}, {"limit": True}),
-        ({"limit": 0}, {"limit": False}),
-        ({"scope": [1]}, {"scope": [True]}),
         ({"limit": 1}, {"limit": 1.5}),
-        ({"scope": "12"}, {"scope": ["1", "2"]}),
         ({"scope": [1, 2]}, {"scope": [2, 1]}),
         ({"scope": {"a": 1}}, {"scope": {"a": 2}}),
-        ({"limit": 2**53 + 1}, {"limit": float(2**53 + 1)}),
     ],
 )
-def test_different_parameters_stay_different(first, second):
-    """A bool is not the number it equals; order, strings and exact values still count."""
-    picks = [ScopedLimitCost(**first), ScopedLimitCost(**second)]
-    assert base._normalized(picks[0].params()) != base._normalized(picks[1].params())
+def test_two_picks_of_a_parametrized_constraint_are_two_instances(first, second):
+    """Equal or not, two picks are two instances, each scored from its own entry.
+
+    select() keeps both, they get the keys ``name`` and ``name#2``, and
+    score_costs reads each instance's own raw costs (a parametrized
+    constraint's instances may differ, so the plain entry does not stand in
+    for the second one).
+    """
+    picks = [ScopedLimitCost(**first), ScopedLimitCost(**second, weight=2)]
     assert select(picks, DEFAULTS) == picks
+    assert instance_keys(picks) == ["scoped_limit_cost", "scoped_limit_cost#2"]
+    costs = {
+        "scoped_limit_cost": _entry([1.0, 2.0], level="soft", name="scoped_limit_cost"),
+        "scoped_limit_cost#2": _entry([5.0, 0.0], level="soft", name="scoped_limit_cost"),
+    }
+    assert score_costs(costs, picks) == (0, -(3.0 + 2 * 5.0))
+    with pytest.raises(ValueError, match="picked more often than the costs hold it"):
+        score_costs({"scoped_limit_cost": costs["scoped_limit_cost"]}, picks)
+
+
+def test_the_picked_more_often_message():
+    """A parametrized constraint picked twice, costs that hold it once: the exact message."""
+    costs = {"day_pattern_cost": _entry([1.0], level="soft", name="day_pattern_cost")}
+    picks = [DayPatternCost(pattern="A"), DayPatternCost(pattern="B")]
+    with pytest.raises(ValueError) as refused:
+        score_costs(costs, picks)
+    assert str(refused.value) == (
+        "constraint 'day_pattern_cost' is picked more often than the costs hold it "
+        "('day_pattern_cost#2' is missing); compute constraint_costs() with the same constraint list"
+    )
+    assert score_costs(costs, picks[:1]) == (0, -1.0)
 
 
 def test_instance_keys_and_scoring_repeated_instances():
@@ -542,16 +558,16 @@ def test_a_parameterless_repeat_reads_the_plain_entry_with_its_own_knobs():
 
 
 def test_the_repeated_assembly_of_the_engine_test_by_hand():
-    """constraint_level_test.cpp (p) repeated<SoftFoldTasks>(): -3hard / -6156.5soft (IntoSoft 1000)."""
+    """constraint_level_test.cpp (p) repeated<SoftFoldTasks>(): -4hard / -6155.5soft (IntoSoft 1000)."""
     picks = [
         *DEFAULTS,
         TaskCostCost(exponent=2.0, offset=5.0),
         TaskCostCost(weight=0.5, offset=10.0, clip=False),
-        ConflictCost(offset=1.0, clip=False),
+        ConflictCost(level="soft", offset=1.0, clip=False),
         IdleWorkerCost(offset=1.0, exponent=2.0, clip=False),
         OverloadCost(offset=-1.0, weight=2.0),
     ]
-    assert score_costs(costs_a(INTO_SOFT), picks) == (-3, -6156.5)
+    assert score_costs(costs_a(INTO_SOFT), picks) == (-4, -6155.5)
 
 
 # --- offset / clip --------------------------------------------------------------
@@ -605,9 +621,12 @@ def test_offsets_on_a_reward_and_on_a_hard_constraint():
     costs = _tasks_only(costs_a())
     assert score_costs(costs, [TaskCostCost(), PreferenceReward(offset=1.0)]) == (0, -27.0)
     assert score_costs(costs, [TaskCostCost(), PreferenceReward(offset=1.0, clip=False)]) == (0, -24.5)
-    # [1.5, 0.5, -0.5, -0.5] rounded per unit, half away from zero: 2 + 1 - 1 - 1.
-    assert score_costs(costs, [ConflictCost(offset=0.5, clip=False)]) == (-1, 0.0)
-    assert score_costs(costs, [ConflictCost(offset=1.0, clip=False)]) == (1, 0.0)
+    # Threshold on hard: [1.5, 0.5, 0, 0] rounded per unit, half away from zero: 2 + 1.
+    assert score_costs(costs, [ConflictCost(offset=0.5)]) == (-3, 0.0)
+    # The literal formula keeps its numbers on soft (hard refuses it):
+    # [1.5, 0.5, -0.5, -0.5] = 1 and [1, 0, -1, -1] = -1, not rounded.
+    assert score_costs(costs, [ConflictCost(level="soft", offset=0.5, clip=False)]) == (0, -1.0)
+    assert score_costs(costs, [ConflictCost(level="soft", offset=1.0, clip=False)]) == (0, 1.0)
 
 
 def test_a_global_is_shaped_on_its_total():
@@ -635,16 +654,123 @@ def test_weight_zero_contributes_exactly_zero_at_any_offset():
     assert score_costs(costs, [TaskCostCost(weight=0, offset=50.0, clip=False, exponent=400.0)]) == (0, 0.0)
 
 
-def test_a_literal_overflow_keeps_the_sign_of_the_shifted_cost():
-    """(1 - 1000)^201 is -inf in the engine's pow(); the mirror reports the same."""
-    costs = {"task_cost_cost": _entry([1.0], level="soft", name="task_cost_cost")}
-    with pytest.raises(OverflowError, match=r"is not finite \(-inf\)"):
+@pytest.mark.parametrize(("level", "fold"), [("soft", None), ("medium", INTO_SOFT)])
+def test_a_literal_overflow_keeps_the_sign_of_the_shifted_cost(level, fold):
+    """(1 - 1000)^201 is -inf in the engine's pow(); the mirror reports the same.
+
+    Python's float power raises OverflowError instead, so ``_contribution``
+    takes ``copysign(inf, cost - offset)``: the sign of the NEGATIVE base,
+    not of the raw cost 1.
+    """
+    costs = {"task_cost_cost": _entry([1.0], level=level, name="task_cost_cost", fold=fold)}
+    with pytest.raises(OverflowError) as refused:
         score_costs(costs, [TaskCostCost(offset=1000.0, exponent=201.0, clip=False)])
+    assert str(refused.value) == (
+        "constraint 'task_cost_cost': its contribution weight * cost^exponent is not finite (-inf); "
+        "lower its weight or exponent"
+    )
     with pytest.raises(OverflowError, match=r"is not finite \(inf\)"):
         score_costs(costs, [TaskCostCost(offset=-1000.0, exponent=201.0)])
+    with pytest.raises(OverflowError, match=r"is not finite \(inf\)"):
+        score_costs(costs, [TaskCostCost(offset=-1000.0, exponent=201.0, clip=False)])
+
+
+def test_on_hard_the_literal_refusal_comes_before_the_overflow():
+    costs = {"conflict_cost": _entry([1.0], level="hard", name="conflict_cost")}
+    with pytest.raises(ValueError, match="cannot be hard"):
+        score_costs(costs, [ConflictCost(offset=1000.0, exponent=201.0, clip=False)])
+
+
+# --- clip=False with an offset stays off the hard score ---------------------------
+
+HARD_REFUSAL = (
+    "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
+    "violation; use clip=True (a threshold) or another level"
+)
+MEDIUM_REFUSAL = (
+    "constraint {q}: clip=False with a non-zero offset cannot be medium here, where medium counts toward "
+    "the hard score; use clip=True (a threshold) or level='soft'"
+)
+
+
+@pytest.mark.parametrize("offset", [2.0, -2.0])
+@pytest.mark.parametrize(
+    ("pick", "fold", "message"),
+    [
+        (lambda o: ConflictCost(offset=o, clip=False), INTO_SOFT, HARD_REFUSAL),  # default-level hard
+        (lambda o: ConflictCost(offset=o, clip=False), None, HARD_REFUSAL),
+        (lambda o: ConflictCost(level="hard", offset=o, clip=False), INTO_SOFT, HARD_REFUSAL),
+        (lambda o: TaskCostCost(level="hard", offset=o, clip=False), INTO_SOFT, HARD_REFUSAL),
+        (lambda o: ForbiddenWorkerCost(offset=o, clip=False), INTO_SOFT, HARD_REFUSAL),  # non-flippable
+        (lambda o: OverloadCost(level="hard", offset=o, clip=False), BELOW_HARD, HARD_REFUSAL),
+        (lambda o: OverloadCost(offset=o, clip=False), BELOW_HARD, MEDIUM_REFUSAL),  # default-level medium
+        (lambda o: TaskCostCost(level="medium", offset=o, clip=False), BELOW_HARD, MEDIUM_REFUSAL),
+        (lambda o: IdleWorkerCost(offset=o, clip=False), BELOW_HARD, MEDIUM_REFUSAL),  # a global
+    ],
+)
+def test_the_literal_offset_is_refused_where_it_counts_toward_hard(pick, fold, message, offset):
+    """Positive: a hard reward (slack cancels violations). Negative: a cost without a violation."""
+    spec = pick(offset)
+    with pytest.raises(ValueError) as refused:
+        score_costs(costs_a(fold), [spec])
+    assert str(refused.value) == message.format(q=repr(spec.name))
+    # The same pick with the threshold, or on soft, scores.
+    score_costs(costs_a(fold), [type(spec)(level=spec.level, offset=offset)])
+    if spec.name != "forbidden_worker_cost":
+        score_costs(costs_a(fold), [type(spec)(level="soft", offset=offset, clip=False)])
+
+
+@pytest.mark.parametrize(
+    ("picks", "fold", "expected"),
+    [
+        # clip=True on hard: conflict [2, 1, 0, 0] beyond 1 -> [1, 0, 0, 0].
+        ([ConflictCost(offset=1.0)], None, (-1, 0.0)),
+        ([ConflictCost(offset=-1.0)], None, (-5, 0.0)),  # [3, 2, 0, 0]
+        # clip=False with offset 0 on hard: the 0.2.0 shaping.
+        ([ConflictCost(clip=False)], None, (-3, 0.0)),
+        ([ForbiddenWorkerCost(offset=0.0, clip=False)], INTO_SOFT, (-1, 0.0)),
+        # clip=False with an offset on soft: [1, 0, -1, -1] and [3, 2, 1, 1].
+        ([ConflictCost(level="soft", offset=1.0, clip=False)], None, (0, 1.0)),
+        ([ConflictCost(level="soft", offset=-1.0, clip=False)], None, (0, -7.0)),
+        # ... and on medium where it folds into soft: [0, -1, -1, -1] x 1000.
+        ([OverloadCost(offset=1.0, clip=False)], INTO_SOFT, (0, 3000.0)),
+        # A threshold on medium below hard: overload [1, 0, 0, 0] beyond 0.5 rounds to 1.
+        ([OverloadCost(offset=0.5)], BELOW_HARD, (-1, 0.0)),
+    ],
+)
+def test_the_allowed_offset_combinations(picks, fold, expected):
+    assert score_costs(costs_a(fold), picks) == pytest.approx(expected)
+
+
+def test_a_repeat_is_checked_on_its_own_level():
+    """The rule applies per instance: a soft literal copy next to the hard default is fine."""
+    picks = [ConflictCost(), ConflictCost(level="soft", offset=1.0, clip=False)]
+    assert score_costs(costs_a(), picks) == (-3, 1.0)
+    with pytest.raises(ValueError, match=r"constraint 'conflict_cost': clip=False .* cannot be hard"):
+        score_costs(costs_a(), [ConflictCost(), ConflictCost(offset=1.0, clip=False)])
+
+
+def test_costs_from_before_0_3_cannot_score_the_literal_formula():
+    """An entry without "clip" (optimaru < 0.3) does not name a scoped constraint's units."""
+    old = {"task_cost_cost": _entry([15.0, 11.0, 0.0, 2.0], level="soft", name="task_cost_cost")}
+    del old["task_cost_cost"]["offset"], old["task_cost_cost"]["clip"]
+    with pytest.raises(ValueError) as refused:
+        score_costs(old, [TaskCostCost(offset=5.0, clip=False)])
+    assert str(refused.value) == (
+        "constraint 'task_cost_cost': these costs come from optimaru < 0.3 and do not say which units the "
+        "constraint evaluates; recompute them with constraint_costs() before scoring clip=False with an offset"
+    )
+    # Everything that does not depend on the evaluated units still scores.
+    assert score_costs(old, [TaskCostCost()]) == (0, -28.0)
+    assert score_costs(old, [TaskCostCost(offset=5.0)]) == (0, -16.0)
+    assert score_costs(old, [TaskCostCost(clip=False)]) == (0, -28.0)
+    # 0.3.0 costs carry "clip" and score it: [10, 6, -5, -3].
+    assert score_costs(_tasks_only(costs_a()), [TaskCostCost(offset=5.0, clip=False)]) == (0, -8.0)
 
 
 def test_duck_typed_picks_may_leave_offset_and_clip_unset():
+    """name / weight / level / exponent are required; offset / clip default to 0.0 / True."""
+
     class Pick:
         name = "task_cost_cost"
         weight = None
@@ -652,6 +778,23 @@ def test_duck_typed_picks_may_leave_offset_and_clip_unset():
         exponent = 1.0
 
     assert score_costs(_tasks_only(costs_a()), [Pick()]) == (0, -28.0)
+
+    class Literal(Pick):
+        name = "conflict_cost"
+        offset = 1.0
+        clip = False
+
+    with pytest.raises(ValueError, match="cannot be hard"):
+        score_costs(_tasks_only(costs_a()), [Literal()])
+
+    class OldPick:  # still carries the removed `hard` knob instead of `level`
+        name = "task_cost_cost"
+        weight = None
+        hard = False
+        exponent = 1.0
+
+    with pytest.raises(AttributeError, match="level"):
+        score_costs(_tasks_only(costs_a()), [OldPick()])
 
 
 def test_shape_preserves_the_sign():

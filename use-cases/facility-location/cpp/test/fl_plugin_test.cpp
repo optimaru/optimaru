@@ -17,8 +17,9 @@
 //       kDefaultWeight / kDefaultLevel; the level guards
 //   (j) repeated components and the offset / clip knobs: a hand-calculated
 //       repeat (distance + 0.5 x distance^2), threshold and literal offsets
-//       by hand (an unused facility counts in literal mode), incremental ==
-//       a fresh recompute over a random walk and a FULL_ASSERT solve with
+//       by hand (an unused facility counts in literal mode), the literal
+//       formula refused on hard at reset and kept on soft, incremental == a
+//       fresh recompute over a random walk and a FULL_ASSERT solve with
 //       repeated, shifted components
 #include <algorithm>
 #include <cmath>
@@ -681,10 +682,16 @@ ConstraintAssembly repeatedAssembly()
                                         .exponent("distanceFromFacilityCost", 2.0)
                                         .offset("distanceFromFacilityCost", 4000.0)
                                         .clip("distanceFromFacilityCost", false)));
+    // The literal capacity copy sits on soft: hard refuses the literal
+    // formula with an offset (hard 0 must mean no violation).
     assembly.addInstances(std::move(copyOf("facilityCapacityCost")
+                                        .soft("facilityCapacityCost")
                                         .weight("facilityCapacityCost", 2.0)
                                         .offset("facilityCapacityCost", 1.0)
                                         .clip("facilityCapacityCost", false)));
+    assembly.addInstances(std::move(copyOf("facilityCapacityCost")
+                                        .weight("facilityCapacityCost", 2.0)
+                                        .offset("facilityCapacityCost", 1.0)));
     assembly.addInstances(std::move(copyOf("facilitySetupCost")
                                         .weight("facilitySetupCost", 0.25)
                                         .offset("facilitySetupCost", -1000.0)));
@@ -733,16 +740,63 @@ void verifyRepeatsAndOffsets()
         copyOf("facilitySetupCost").offset("facilitySetupCost", -10.0).into(negative);
         check(scoreWith(negative, p).soft == -2.0 * 50,
               "setup threshold offset -10: 2 x (40 + 10), F0 stays 0");
-        // A hard literal offset rounds per facility: (0 - 0.5) x 3 = -1.5 ->
-        // -2 on both facilities, +4 hard.
-        DecomposedCalculator hard;
+        // The literal capacity pick on soft: (0 - 0.5) x 3 = -1.5 on both
+        // facilities, an unused one included: +3 soft (not rounded).
+        DecomposedCalculator soft;
         copyOf("facilityCapacityCost")
+            .soft("facilityCapacityCost")
             .weight("facilityCapacityCost", 3.0)
             .offset("facilityCapacityCost", 0.5)
             .clip("facilityCapacityCost", false)
-            .into(hard);
-        check(scoreWith(hard, p).hard == 4,
-              "capacity literal offset 0.5 at weight 3: llround(-1.5) x 2 = -4 -> +4 hard");
+            .into(soft);
+        const Score softScore = scoreWith(soft, p);
+        check(softScore.hard == 0 && softScore.soft == 3.0,
+              "capacity literal offset 0.5 at weight 3 on soft: 2 x (-1.5) -> +3 soft");
+    }
+    {
+        // On hard (its default level) the literal formula with an offset is
+        // refused at reset, whichever sign and setter order: +0.5 would
+        // reward both facilities (+4 hard, a feasible-looking score), -0.5
+        // would charge two facilities that hold no violation.
+        const std::string refusal =
+            "Constraint 'facilityCapacityCost' cannot use clip=false with a non-zero offset on a "
+            "level that counts toward the hard score (hard 0 must mean no violation)";
+        auto resetRefusal = [](ConstraintAssembly assembly) {
+            FacilityLocationProblem p = repeatInstance();
+            DecomposedCalculator calculator;
+            assembly.into(calculator);
+            try
+            {
+                scoreWith(calculator, p);
+            }
+            catch (const std::logic_error &error)
+            {
+                return std::string(error.what());
+            }
+            return std::string();
+        };
+        check(resetRefusal(copyOf("facilityCapacityCost")
+                               .offset("facilityCapacityCost", 0.5)
+                               .clip("facilityCapacityCost", false))
+                      == refusal
+                  && resetRefusal(copyOf("facilityCapacityCost")
+                                      .clip("facilityCapacityCost", false)
+                                      .offset("facilityCapacityCost", -0.5))
+                         == refusal,
+              "capacity literal offset +-0.5 on hard: refused at reset");
+        check(resetRefusal(copyOf("distanceFromFacilityCost")
+                               .offset("distanceFromFacilityCost", 4000.0)
+                               .clip("distanceFromFacilityCost", false)
+                               .hard("distanceFromFacilityCost"))
+                  == "Constraint 'distanceFromFacilityCost' cannot use clip=false with a non-zero "
+                     "offset on a level that counts toward the hard score (hard 0 must mean no "
+                     "violation)",
+              "distance literal offset moved to hard afterwards: refused at reset");
+        check(resetRefusal(copyOf("facilityCapacityCost").offset("facilityCapacityCost", 0.5))
+                      .empty()
+                  && resetRefusal(copyOf("facilityCapacityCost").clip("facilityCapacityCost", false))
+                         .empty(),
+              "capacity on hard: a threshold offset, or clip=false with offset 0, is allowed");
     }
     {
         // Random walk: incremental == a fresh calculator of the same assembly.

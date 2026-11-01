@@ -46,11 +46,16 @@ Every spec takes the same five knobs, and only those:
                ``False`` (the literal formula): ``shape(x - offset,
                exponent)``, which is negative below the offset (a reward) and
                charges every unit the constraint evaluates, a raw 0 included.
+               With an offset != 0 it is refused on a level that counts
+               toward the hard score (hard, or medium where it folds below
+               hard), because hard 0 must mean no violation.
 
 With ``offset=0`` both modes are the plain ``shape(x, exponent)``, so a spec
 that leaves the two new knobs alone scores exactly as before. Each unit (or a
 global's total) then contributes ``weight * shape(x, exponent, offset,
-clip)``.
+clip)``. The formula applies PER UNIT (per vehicle, per slot, ...), on every
+unit the constraint evaluates, raw 0 included; it is not one formula over the
+total violation.
 
 Defaults (weight, level, flippability, reward) live in C++ only and are
 reported by ``<package>.constraint_info()``; there are no default ClassVars
@@ -69,6 +74,7 @@ instance of a name ``"<name>#<k>"`` (the first keeps the plain name), and
 
 import math
 import numbers
+import warnings
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, fields
 from enum import StrEnum
@@ -164,42 +170,10 @@ def _params_of(spec: Any) -> dict[str, Any]:
     return params() if callable(params) else {}
 
 
-def _normalized(value: Any) -> Any:
-    """A hashable stand-in for a parameter value that compares by value.
-
-    Numbers compare by value whatever their type (``1 == 1.0 ==
-    numpy.int64(1)``), but a bool stays distinct from the number it equals
-    (``True`` is not ``1``); sequences (list and tuple alike), sets and
-    mappings are compared element by element; strings and bytes are atoms.
-    Anything else is used as it is when hashable, else by ``repr()``.
-    """
-    if value is None or isinstance(value, (str, bytes)):
-        return value
-    if _is_bool(value):
-        return ("bool", bool(value))
-    if isinstance(value, numbers.Integral):
-        return ("number", int(value))
-    if isinstance(value, numbers.Real):
-        return ("number", float(value))  # 1.0 == 1 and hash(1.0) == hash(1)
-    if isinstance(value, Mapping):
-        return ("map", frozenset((_normalized(key), _normalized(item)) for key, item in value.items()))
-    if isinstance(value, (set, frozenset)):
-        return ("set", frozenset(_normalized(item) for item in value))
-    if isinstance(value, Sequence):
-        return ("sequence", tuple(_normalized(item) for item in value))
-    tolist = getattr(value, "tolist", None)  # numpy arrays and scalars, without importing numpy
-    if callable(tolist):
-        converted = tolist()
-        if converted is not value:
-            return _normalized(converted)
-    try:
-        hash(value)
-    except TypeError:
-        return ("repr", repr(value))
-    return value
+_UNSET: Any = object()  # select()'s "repeatable not passed"
 
 
-def select(constraints: Iterable[Any] | None, defaults: Sequence[Any], *, repeatable: bool = False) -> list[Any]:
+def select(constraints: Iterable[Any] | None, defaults: Sequence[Any], *, repeatable: Any = _UNSET) -> list[Any]:
     """The ``get_constraints`` contract: ``None`` = ``defaults``; a list replaces them.
 
     Only the listed constraints are scored. An empty list is an error, not
@@ -208,10 +182,17 @@ def select(constraints: Iterable[Any] | None, defaults: Sequence[Any], *, repeat
     (and parameters), scored on its own, and the instances add up; identical
     picks count twice. The same rules as the C++ ``applyConstraints``.
 
-    ``repeatable`` is accepted for compatibility and changes nothing: since
-    0.3.0 every package accepts repeated picks.
+    ``repeatable`` is deprecated: since 0.3.0 every package accepts repeated
+    picks, so it changes nothing. Passing it, with any value, emits a
+    ``DeprecationWarning``; it will be removed.
     """
-    del repeatable
+    if repeatable is not _UNSET:
+        warnings.warn(
+            "select(repeatable=...) changes nothing since optimaru 0.3.0, where every constraint "
+            "may be picked several times, and will be removed; drop the argument",
+            DeprecationWarning,
+            stacklevel=2,
+        )
     if constraints is None:
         return list(defaults)
     picked = list(constraints)
@@ -375,6 +356,33 @@ def _level(spec: Any, entry: Mapping[str, Any]) -> str:
     return wanted
 
 
+def _check_literal_offset(name: str, level: str, offset: float, clip: Any, fold: tuple[str, float] | None) -> None:
+    """``clip=False`` with an offset != 0 stays off the levels that count toward the hard score.
+
+    Those are hard, and medium where the domain folds it below hard. The
+    literal formula charges every evaluated unit ``shape(x - offset, e)``, a
+    raw 0 included: a positive offset rewards the units below it (one unit's
+    slack would cancel another's violation), a negative one charges units
+    with no violation at all, and hard 0 must mean no violation. ``level`` is
+    the effective one (the pick's, or the default). The threshold
+    (``clip=True``) with any offset, ``offset=0`` and any combination on soft
+    or on an into_soft medium are allowed. The engine refuses the same picks
+    in the same words (python::checkLiteralOffset).
+    """
+    if clip or offset == 0.0:
+        return
+    if level == "hard":
+        raise ValueError(
+            f"constraint {name!r}: clip=False with a non-zero offset cannot be hard, because hard 0 "
+            "must mean no violation; use clip=True (a threshold) or another level"
+        )
+    if level == "medium" and fold is not None and fold[0] == "below_hard":
+        raise ValueError(
+            f"constraint {name!r}: clip=False with a non-zero offset cannot be medium here, where "
+            "medium counts toward the hard score; use clip=True (a threshold) or level='soft'"
+        )
+
+
 def _evaluated(entry: Mapping[str, Any]) -> list[float]:
     """The raw costs of the units a constraint evaluates.
 
@@ -420,7 +428,8 @@ def score_costs(costs: Mapping[str, Mapping[str, Any]], constraints: Iterable[An
 
     The arithmetic is the engine's: each evaluated unit (every unit, or the
     entry's ``units``) contributes ``weight * shape(cost, exponent, offset,
-    clip)``; hard contributions are rounded per
+    clip)``, per unit and a raw 0 included, not one formula over the total;
+    hard contributions are rounded per
     unit (half away from zero) before summing; then the domain's medium fold
     applies to the whole score, whatever the selection holds: ``into_soft``
     adds ``medium * unit`` to soft, ``below_hard`` reports
@@ -435,6 +444,19 @@ def score_costs(costs: Mapping[str, Mapping[str, Any]], constraints: Iterable[An
     from costs that hold the name only once (the default ``constraint_costs()``):
     every instance of it has the same raw costs, so its entry is read with
     the pick's own knobs.
+
+    ``clip=False`` with an offset != 0 is refused (ValueError, in the
+    engine's words) on a level that counts toward the hard score: hard, or
+    medium in a below_hard domain; the level is the pick's, or the default.
+    It also needs costs from optimaru >= 0.3 (their entries carry
+    ``"clip"``): older costs do not say which units a constraint evaluates,
+    so scoring the literal formula from them raises ValueError.
+
+    A pick must carry ``name``, ``weight``, ``level`` and ``exponent``.
+    ``offset`` and ``clip`` are optional and default to 0.0 and True. They
+    only add shaping, and their defaults change nothing. A missing weight,
+    level or exponent stays an AttributeError, because it is more likely a
+    mistake, e.g. an object still carrying ``hard``.
     """
     hard = 0
     soft = 0.0
@@ -462,6 +484,15 @@ def score_costs(costs: Mapping[str, Mapping[str, Any]], constraints: Iterable[An
         clip = True if clip is None else clip
         _check_knobs(spec.name, spec.weight, spec.level, exponent, offset, clip)
         level = _level(spec, entry)
+        _check_literal_offset(spec.name, level, offset, clip, fold)
+        if not clip and offset != 0.0 and "clip" not in entry:
+            # optimaru < 0.3 does not report a scoped constraint's "units", so
+            # these costs cannot say which units the literal formula charges.
+            raise ValueError(
+                f"constraint {spec.name!r}: these costs come from optimaru < 0.3 and do not say which "
+                "units the constraint evaluates; recompute them with constraint_costs() before scoring "
+                "clip=False with an offset"
+            )
         weight = _default_weight(entry) if spec.weight is None else spec.weight
         values = [_contribution(spec.name, weight, cost, exponent, offset, bool(clip)) for cost in _evaluated(entry)]
         if level == "hard":

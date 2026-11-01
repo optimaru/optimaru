@@ -25,6 +25,9 @@ Offsets: ``ObjectiveBuilder.add`` shapes each call's term on its own, so an
 (and one for a global's total), every evaluated unit included. Such a plugin
 sets ``terms_per_unit = True``; for any other the registry refuses a non-zero
 offset (``constraint 'x' offset is not supported by this CP-SAT model``).
+``clip=False`` with a non-zero offset is refused on a level that counts toward
+the hard score (hard, or medium with ``medium_fold="below_hard"``), with the
+engine's message, whatever the plugin.
 """
 
 from __future__ import annotations
@@ -148,13 +151,19 @@ class ConstraintRegistry(Generic[ContextT]):
         model: cp_model.CpModel,
         levels: Sequence[str],
         constraints: Iterable[ConstraintSelection] | None,
+        *,
+        medium_fold: str | None = None,
     ) -> ObjectiveBuilder:
         """The objective over this registry's specs; defaults come from constraint_info().
 
         A name picked several times gives one instance per pick. A non-zero
-        offset is refused for a plugin that does not add per-unit terms.
+        offset is refused for a plugin that does not add per-unit terms, and
+        ``clip=False`` with an offset on a level that counts toward the hard
+        score is refused for every plugin (``ObjectiveBuilder.level_of``;
+        ``medium_fold`` as there: ``"below_hard"`` where medium counts toward
+        the hard score).
         """
-        objective = ObjectiveBuilder(model, levels, self.specs, constraints)
+        objective = ObjectiveBuilder(model, levels, self.specs, constraints, medium_fold=medium_fold)
         for key, (spec, config) in objective.selected.items():
             if config.offset != 0 and not self.plugin_for(key, spec.name).terms_per_unit:
                 raise ValueError(

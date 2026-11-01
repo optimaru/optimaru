@@ -158,6 +158,8 @@ struct ConstraintMetadata {
     // the offset (the threshold), clip = false shapes cost - offset as it is
     // (the literal formula, which rewards every evaluated unit below the
     // offset). With offset 0 the two agree and the shaping is the 0.2.0 one.
+    // The literal formula with an offset != 0 is refused at reset on a level
+    // that counts toward the hard score (validateLevel).
     double offset = 0.0;
     bool clip = true;
     // Display text for ONE instance of a parametrized constraint that a
@@ -1043,9 +1045,17 @@ public:
 
 private:
     // Level sanity, checked at every reset because the metadata is mutable
-    // until then: a medium constraint needs a domain medium fold, and a
+    // until then (ConstraintAssembly::level / offset / clip, or the setters,
+    // in any order): a medium constraint needs a domain medium fold; a
     // reward can never be hard (its raw cost is <= 0, so a hard reward would
-    // push the hard score above 0).
+    // push the hard score above 0); and a level that counts toward the hard
+    // score (hard, or a BelowHard medium: MediumFold::countsTowardHard)
+    // cannot take the literal offset formula (clip false with an offset
+    // != 0). That formula charges every evaluated unit shape(x - offset), a
+    // raw 0 included: a positive offset rewards the units below it, so one
+    // unit's slack cancels another's violation, and a negative one charges
+    // units with no violation at all. Either way hard 0 would no longer mean
+    // no violation.
     template <typename Constraint>
     static void validateLevel(const Constraint& constraint) {
         if (constraint.level == Level::Medium && !kMediumFold.hasMedium()) {
@@ -1056,6 +1066,12 @@ private:
         if (constraint.reward && constraint.level == Level::Hard) {
             throw std::logic_error("Constraint '" + constraint.name +
                                    "' is a reward and cannot be hard");
+        }
+        if (!constraint.clip && constraint.offset != 0.0 &&
+            kMediumFold.countsTowardHard(constraint.level)) {
+            throw std::logic_error("Constraint '" + constraint.name +
+                                   "' cannot use clip=false with a non-zero offset on a level that "
+                                   "counts toward the hard score (hard 0 must mean no violation)");
         }
     }
     void validateLevels() const {
