@@ -14,6 +14,13 @@ refuse what the model cannot honour: ``hard=False`` or a weight other than the
 engine default. ``enclosing_circle_radius_cost``, ``squared_order_age_cost``,
 ``pinned_stops_cost`` and ``required_vehicle_cost`` have no CP-SAT plugin
 (engine-only; selecting them here is an unknown-constraint error).
+
+Every plugin adds one term per engine unit (``terms_per_unit``): one per vehicle,
+idle ones included (a constant 0 where a vehicle's limit is unset), never for the
+unassigned pool, which the engine's route constraints do not evaluate; the
+request-level globals add their single total (the structural three: a constant 0).
+So a pick's ``offset`` / ``clip`` shape each unit on its own exactly as the engine
+does, and a constraint picked several times adds one set of terms per pick.
 """
 
 import math
@@ -50,8 +57,11 @@ class PdpContext:
 
 
 class VehicleCapacityCost(domain.VehicleCapacityCost, ConstraintPlugin[PdpContext]):
+    terms_per_unit = True  # one term per vehicle: the excess summed over its nodes
+
     def build(self, context: PdpContext, objective: ObjectiveBuilder) -> None:
         for vehicle, vehicle_data in enumerate(context.data.vehicles):
+            excesses = []
             for node in range(len(context.nodes)):
                 excess = context.model.new_int_var(
                     0,
@@ -62,11 +72,20 @@ class VehicleCapacityCost(domain.VehicleCapacityCost, ConstraintPlugin[PdpContex
                     excess,
                     [0, context.load[vehicle, node] - vehicle_data.capacity],
                 )
-                objective.add(self.name, excess, bound=context.max_capacity)
+                excesses.append(excess)
+            objective.add(
+                self.name,
+                sum(excesses),
+                bound=context.max_capacity * len(context.nodes),
+            )
 
 
 class MaxEndTimeCost(domain.MaxEndTimeCost, ConstraintPlugin[PdpContext]):
+    terms_per_unit = True  # one term per vehicle: the late minutes of its stops
+
     def build(self, context: PdpContext, objective: ObjectiveBuilder) -> None:
+        minute_bound = (context.horizon + 59) // 60
+        late = []
         for node, stop in enumerate(context.nodes):
             late_seconds = context.model.new_int_var(
                 0, context.horizon, f"node_{node}_late_seconds"
@@ -82,21 +101,37 @@ class MaxEndTimeCost(domain.MaxEndTimeCost, ConstraintPlugin[PdpContext]):
                 0, context.horizon + 59, f"node_{node}_late_numerator"
             )
             late_minutes = context.model.new_int_var(
-                0, (context.horizon + 59) // 60, f"node_{node}_late_minutes"
+                0, minute_bound, f"node_{node}_late_minutes"
             )
             context.model.add(numerator == late_seconds + 59)
             context.model.add_division_equality(late_minutes, numerator, 60)
-            objective.add(self.name, late_minutes, bound=(context.horizon + 59) // 60)
+            late.append(late_minutes)
+        # A stop's late minutes belong to the vehicle that serves it.
+        for vehicle in range(len(context.data.vehicles)):
+            on_vehicle = []
+            for node, late_minutes in enumerate(late):
+                served = context.assigned[vehicle, context.node_delivery[node]]
+                share = context.model.new_int_var(
+                    0, minute_bound, f"vehicle_{vehicle}_node_{node}_late_minutes"
+                )
+                context.model.add(share == late_minutes).only_enforce_if(served)
+                context.model.add(share == 0).only_enforce_if(served.Not())
+                on_vehicle.append(share)
+            objective.add(
+                self.name, sum(on_vehicle), bound=minute_bound * len(context.nodes)
+            )
 
 
 class _VehicleLimitPlugin(ConstraintPlugin[PdpContext]):
     # The VehicleModel FIELD the plugin bounds (not a constraint name).
     limit: str
+    terms_per_unit = True  # one term per vehicle, a constant 0 without a limit
 
     def build(self, context: PdpContext, objective: ObjectiveBuilder) -> None:
         for vehicle, vehicle_data in enumerate(context.data.vehicles):
             configured = getattr(vehicle_data, self.limit)
             if configured <= 0:
+                objective.add(self.name, 0, bound=0)
                 continue
             if self.limit == "max_travel_time":
                 value, bound = context.vehicle_travel[vehicle], context.horizon
@@ -151,6 +186,11 @@ class _StructuralPlugin(ConstraintPlugin[PdpContext]):
     not lift the structure.
     """
 
+    # Its total is 0 in every CP-SAT solution: one constant term, so an offset
+    # shapes it as the engine shapes the global's total (the literal formula
+    # charges -weight * offset).
+    terms_per_unit = True
+
     def build(self, context: PdpContext, objective: ObjectiveBuilder) -> None:
         spec, config = objective.selected[self.name]
         if config.hard is False or (
@@ -160,6 +200,7 @@ class _StructuralPlugin(ConstraintPlugin[PdpContext]):
                 f"constraint {self.name!r}: the CP-SAT model enforces it structurally "
                 f"(hard, weight {spec.weight}); hard=False or another weight is not supported"
             )
+        objective.add(self.name, 0, bound=0)
 
 
 class PairedRequestCost(domain.PairedRequestCost, _StructuralPlugin):
@@ -177,6 +218,8 @@ class PickupBeforeDropoffCost(domain.PickupBeforeDropoffCost, _StructuralPlugin)
 class UnassignedRequestsCost(
     domain.UnassignedRequestsCost, ConstraintPlugin[PdpContext]
 ):
+    terms_per_unit = True  # a global: one term, its total
+
     def build(self, context: PdpContext, objective: ObjectiveBuilder) -> None:
         penalties = [
             (delivery.pickup.service_duration + delivery.dropoff.service_duration) // 60
@@ -195,9 +238,12 @@ class UnassignedRequestsCost(
 class MinCapacityUtilizationCost(
     domain.MinCapacityUtilizationCost, ConstraintPlugin[PdpContext]
 ):
+    terms_per_unit = True  # one term per vehicle, a constant 0 without a target
+
     def build(self, context: PdpContext, objective: ObjectiveBuilder) -> None:
         for vehicle, vehicle_data in enumerate(context.data.vehicles):
             if vehicle_data.min_load_ratio <= 0:
+                objective.add(self.name, 0, bound=0)
                 continue
             target = math.ceil(vehicle_data.capacity * vehicle_data.min_load_ratio)
             shortfall = context.model.new_int_var(
@@ -215,6 +261,8 @@ class MinCapacityUtilizationCost(
 
 
 class TravelTimeCost(domain.TravelTimeCost, ConstraintPlugin[PdpContext]):
+    terms_per_unit = True  # one term per vehicle: its driving seconds
+
     def build(self, context: PdpContext, objective: ObjectiveBuilder) -> None:
         size = len(context.data.vehicles) + len(context.nodes)
         max_drive = max(
@@ -225,10 +273,17 @@ class TravelTimeCost(domain.TravelTimeCost, ConstraintPlugin[PdpContext]):
             ),
             default=0,
         )
-        objective.add(self.name, sum(context.travel_terms), bound=max_drive * size)
+        # A route drives at most one leg per stop plus the leg home.
+        legs = len(context.nodes) + 1
+        for vehicle in range(len(context.data.vehicles)):
+            objective.add(
+                self.name, context.vehicle_travel[vehicle], bound=max_drive * legs
+            )
 
 
 class RouteDurationCost(domain.RouteDurationCost, ConstraintPlugin[PdpContext]):
+    terms_per_unit = True
+
     def build(self, context: PdpContext, objective: ObjectiveBuilder) -> None:
         for vehicle, vehicle_data in enumerate(context.data.vehicles):
             objective.add(
@@ -239,14 +294,19 @@ class RouteDurationCost(domain.RouteDurationCost, ConstraintPlugin[PdpContext]):
 
 
 class LatencyCost(domain.LatencyCost, ConstraintPlugin[PdpContext]):
+    terms_per_unit = True
+
     def build(self, context: PdpContext, objective: ObjectiveBuilder) -> None:
-        for latency in context.vehicle_latency.values():
+        for vehicle in range(len(context.data.vehicles)):
+            latency = context.vehicle_latency[vehicle]
             objective.add(
                 self.name, latency, bound=context.horizon * len(context.nodes)
             )
 
 
 class VehicleFixedCost(domain.VehicleFixedCost, ConstraintPlugin[PdpContext]):
+    terms_per_unit = True
+
     def build(self, context: PdpContext, objective: ObjectiveBuilder) -> None:
         for vehicle, vehicle_data in enumerate(context.data.vehicles):
             cost = max(0, round(vehicle_data.fixed_cost))

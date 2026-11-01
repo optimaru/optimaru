@@ -10,12 +10,12 @@ namespace vrp {
 // max(0, capacity * minLoadRatio - summed demand) in demand units, for a
 // vehicle with at least one visit and minLoadRatio > 0; 0 = loaded enough,
 // unused, or no ratio set (the pool list costs 0).
-struct MinCapacityUtilizationCost final : VrpUnitConstraint {
+struct MinCapacityUtilizationCost final : detail::PerVehicleConstraint {
     static constexpr double kDefaultWeight = 1.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
 
     explicit MinCapacityUtilizationCost(double weight = kDefaultWeight)
-        : VrpUnitConstraint("minCapacityUtilizationCost", weight, kDefaultLevel) {}
+        : PerVehicleConstraint("minCapacityUtilizationCost", weight, kDefaultLevel) {}
     double cost(const VehicleRoutePlan& p, int u, const std::vector<int>& m) const override {
         if (detail::isPool(p, u) || m.empty() || p.vehicles[u].minLoadRatio <= 0) return 0;
         std::int64_t load = 0;

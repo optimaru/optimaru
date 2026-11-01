@@ -19,14 +19,14 @@ namespace pdp
 // Raw cost per vehicle = the number of positions i < pinned count where the
 // route's i-th stop is not the i-th pinned stop; 0 = the pinned prefix is in
 // place, or nothing is pinned (the pool list costs 0).
-struct PinnedStopsCost final : PdpUnitConstraint
+struct PinnedStopsCost final : detail::PerVehicleConstraint
 {
     static constexpr double kDefaultWeight
         = static_cast<double>(ScoreCalculator::kPinnedPenalty);
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
 
     explicit PinnedStopsCost(double weight = kDefaultWeight)
-        : PdpUnitConstraint("pinnedStopsCost", weight, kDefaultLevel)
+        : PerVehicleConstraint("pinnedStopsCost", weight, kDefaultLevel)
     {
     }
 

@@ -11,13 +11,13 @@ namespace pdp
 // = the sum over its nodes of ceilToMinutes(arrival + serviceDuration -
 // maxEndTime); 0 = every stop finishes inside its window (the pool list
 // costs 0). The vehicle's own end-of-shift bound is vehicleMaxEndTimeCost.
-struct MaxEndTimeCost final : PdpUnitConstraint
+struct MaxEndTimeCost final : detail::PerVehicleConstraint
 {
     static constexpr double kDefaultWeight = 1.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
 
     explicit MaxEndTimeCost(double weight = kDefaultWeight)
-        : PdpUnitConstraint("maxEndTimeCost", weight, kDefaultLevel)
+        : PerVehicleConstraint("maxEndTimeCost", weight, kDefaultLevel)
     {
     }
     double cost(const PdpRoutePlan &plan,

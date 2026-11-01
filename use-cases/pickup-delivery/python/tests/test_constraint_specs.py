@@ -1,7 +1,7 @@
 """pdp_routing.constraints — an API for picking the cost function declaratively.
 
-"Which constraints are on", the catalog (`constraint_info()`), the three knobs and
-the medium level are covered here. Per-constraint values are covered by
+"Which constraints are on", the catalog (`constraint_info()`), the five knobs, repeated
+picks and the medium level are covered here. Per-constraint values are covered by
 `test_pdp.py` and the C++ tests (one hand-calculated positive and zero case each).
 """
 
@@ -14,9 +14,16 @@ import pytest
 from pdp_routing import constraints as specs
 from pdp_routing.constraints import (
     Constraint,
+    LatencyCost,
+    MaxEndTimeCost,
+    MaxStopsCost,
+    PairedRequestCost,
+    RequiredVehicleCost,
+    SameVehicleCost,
     SquaredOrderAgeCost,
     TravelTimeCost,
     UnassignedRequestsCost,
+    VehicleCapacityCost,
     get_constraints,
     paired_request_cost,
     pickup_before_dropoff_cost,
@@ -577,12 +584,18 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     flat = SimpleNamespace(
         name="travel_time_cost", weight=None, hard=None, exponent=0.0
     )
+    unbounded = SimpleNamespace(
+        name="travel_time_cost", weight=None, hard=None, exponent=1.0, offset=float("inf")
+    )
     for pick, message in (
         (negative, "weight must be finite and >= 0"),
         (flat, "exponent must be finite and > 0"),
+        (unbounded, "offset must be finite, not inf"),
     ):
         with pytest.raises(ValueError, match=message):
             solve([pick])
+    with pytest.raises(ValueError, match="offset must be finite, not nan"):
+        TravelTimeCost(offset=float("nan"))
 
 
 @pytest.mark.parametrize(
@@ -592,6 +605,10 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
         ({"hard": 1}, "hard must be True, False or None, not 1"),
         ({"hard": "x"}, "hard must be True, False or None, not 'x'"),
         ({"exponent": True}, "exponent must be a number, not True"),
+        ({"offset": "5"}, "offset must be a number, not '5'"),
+        ({"offset": False}, "offset must be a number, not False"),
+        ({"clip": 1}, "clip must be True or False, not 1"),
+        ({"clip": "no"}, "clip must be True or False, not 'no'"),
     ],
 )
 def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
@@ -711,3 +728,215 @@ def test_a_worker_thread_that_cannot_start_raises_instead_of_aborting():
         assert time.monotonic() - started < 10.0
     finally:
         _core._fail_worker_thread_start(-1)
+
+
+# --- 0.3.0: repeated picks and the offset / clip knobs ------------------------------
+
+# Everything on a line, the position in seconds of driving from the depots.
+HAND_PLACES = {"v": 0, "w": 0, "x": 0, "p1": 100, "d1": 200, "p2": 300, "d2": 400, "p3": 900, "d3": 1000}
+
+
+def _hand_plan():
+    """Vehicle v (capacity 2) on r1, w on r2, x idle; r3 (2 x 120 s of service) in the pool.
+
+    Raw per vehicle (v, w, x; the pool's cell is 0 for every route constraint):
+    travel [200, 400, 0], capacity [2, 0, 0] (4 picked up on capacity 2);
+    unassigned total 4 minutes.
+    """
+    order = list(HAND_PLACES)
+    routes = {"v": ["p1", "d1"], "w": ["p2", "d2"], "x": []}
+    service = {"r3": 120}
+
+    def stop(name, request):
+        return pdp.models.StopModel(id=name, location=(37.5, 127.0), service_duration=service.get(request, 0))
+
+    model = pdp.models.PdpInput(
+        vehicles=[
+            pdp.models.VehicleModel(
+                id=name, capacity=2 if name == "v" else 10, home=(37.5, 127.0), max_stops=0, initial_route=route
+            )
+            for name, route in routes.items()
+        ],
+        deliveries=[
+            pdp.models.DeliveryModel(id=f"r{i}", demand=4, pickup=stop(f"p{i}", f"r{i}"), dropoff=stop(f"d{i}", f"r{i}"))
+            for i in (1, 2, 3)
+        ],
+        driving_seconds=[[abs(HAND_PLACES[p] - HAND_PLACES[q]) for q in order] for p in order],
+    )
+    return pdp.models.to_plan(model)
+
+
+def _zero_budget(picks):
+    """The engine's score of the hand plan under `picks`: a solve with no time (and no pair
+    construction, which would route r3) keeps it as it is."""
+    plan = _hand_plan()
+    cfg = pdp.SolverConfig()
+    cfg.spent_limit_seconds = 0
+    cfg.random_seed = 1
+    cfg.pair_construction_heuristic = False
+    pdp.Solver(cfg).solve_with_constraints(plan, picks)
+    assert [list(vehicle.node_indices) for vehicle in plan.vehicles] == [[0, 1], [2, 3], []]
+    assert sorted(plan.unassigned_node_indices) == [4, 5]
+    return _engine(plan.score)
+
+
+REPEAT = [TravelTimeCost(), TravelTimeCost(weight=0.5, exponent=2)]
+
+
+def test_a_repeated_pick_by_hand():
+    """travel plus 0.5 x travel^2 per vehicle: 600 + 0.5 x (200^2 + 400^2) = 100600."""
+    raw = pdp.constraint_costs(_hand_plan(), REPEAT)
+    assert list(raw) == ["travel_time_cost", "travel_time_cost#2"]
+    first, second = raw.values()
+    assert first["costs"] == second["costs"] == [200.0, 400.0, 0.0, 0.0]
+    assert first["units"] == second["units"] == [0, 1, 2]
+    assert (first["weight"], first["exponent"], second["weight"], second["exponent"]) == (1.0, 1.0, 0.5, 2.0)
+    assert first["name"] == second["name"] == "travel_time_cost"
+    expected = (0, -(600 + 0.5 * (200**2 + 400**2)))
+    assert expected == (0, -100600.0)
+    assert score(raw, REPEAT) == expected
+    # The default costs hold the name once; the second pick reads the same raw costs.
+    assert score(pdp.constraint_costs(_hand_plan()), REPEAT) == expected
+    assert _zero_budget(REPEAT) == expected
+
+
+def test_identical_picks_count_twice():
+    picks = [TravelTimeCost(), TravelTimeCost()]
+    assert score(pdp.constraint_costs(_hand_plan()), picks) == (0, -1200.0)
+    assert _zero_budget(picks) == (0, -1200.0)
+    assert list(pdp.constraint_costs(_hand_plan(), picks)) == ["travel_time_cost", "travel_time_cost#2"]
+
+
+def test_the_keys_follow_the_pick_order_of_each_name():
+    picks = [
+        TravelTimeCost(weight=1),
+        VehicleCapacityCost(),
+        TravelTimeCost(weight=2),
+        UnassignedRequestsCost(),
+        TravelTimeCost(weight=3),
+    ]
+    raw = pdp.constraint_costs(_hand_plan(), picks)
+    assert {key: entry["weight"] for key, entry in raw.items()} == {
+        "vehicle_capacity_cost": 1.0,
+        "travel_time_cost": 1.0,
+        "travel_time_cost#2": 2.0,
+        "travel_time_cost#3": 3.0,
+        "unassigned_requests_cost": 1.0,
+    }
+    assert [key for key in raw if key.startswith("travel")] == [
+        "travel_time_cost",
+        "travel_time_cost#2",
+        "travel_time_cost#3",
+    ]
+    expected = (-2, -4 * MEDIUM_UNIT - 6 * 600)
+    assert score(raw, picks) == expected
+    assert _zero_budget(picks) == expected
+
+
+def test_a_repeated_medium_pick_adds_up():
+    picks = [UnassignedRequestsCost(), UnassignedRequestsCost(weight=2)]
+    assert score(pdp.constraint_costs(_hand_plan()), picks) == (0, -12 * MEDIUM_UNIT)
+    assert _zero_budget(picks) == (0, -12 * MEDIUM_UNIT)
+
+
+@pytest.mark.parametrize(
+    ("pick", "expected"),
+    [
+        # Per vehicle; x is idle (raw 0) and the pool is no vehicle.
+        (TravelTimeCost(offset=300), (0, -100.0)),
+        (TravelTimeCost(offset=300, clip=False), (0, 300.0)),  # -100 + 100 - 300: x is rewarded too
+        (TravelTimeCost(offset=500), (0, 0.0)),
+        (TravelTimeCost(offset=-50), (0, -700.0)),  # a negative offset adds to every non-zero vehicle
+        (TravelTimeCost(offset=-50, clip=False), (0, -750.0)),  # ...or to every vehicle
+        (TravelTimeCost(offset=300, exponent=2), (0, -(100.0**2))),
+        (VehicleCapacityCost(offset=1), (-1, 0.0)),
+        (VehicleCapacityCost(offset=2.5, clip=False), (7, 0.0)),  # -0.5 -> -1, -2.5 -> -3 twice: per vehicle
+        (MaxStopsCost(offset=2, clip=False), (6, 0.0)),  # all zero: 3 vehicles x -2, never the pool
+        # required_vehicle_cost prices the pool: all four units are evaluated.
+        (RequiredVehicleCost(weight=1, offset=2, clip=False), (8, 0.0)),
+        # The globals' totals are shaped once.
+        (UnassignedRequestsCost(offset=2, exponent=2), (0, -4 * MEDIUM_UNIT)),
+        (UnassignedRequestsCost(offset=6, clip=False), (0, 2 * MEDIUM_UNIT)),
+        (UnassignedRequestsCost(offset=6, clip=False, hard=True), (2, 0.0)),
+        (PairedRequestCost(offset=1, clip=False), (1000, 0.0)),  # 0 broken pairs, 1 below the offset
+    ],
+)
+def test_offsets_by_hand_on_both_paths(pick, expected):
+    """threshold sign(x) max(0, |x| - offset)^e and literal (x - offset)^e: Python mirror == engine == hand."""
+    assert score(pdp.constraint_costs(_hand_plan()), [pick]) == expected
+    raw = pdp.constraint_costs(_hand_plan(), [pick])
+    entry = next(iter(raw.values()))
+    assert (entry["offset"], entry["clip"]) == (float(pick.offset), pick.clip)
+    assert score(raw, [pick]) == expected
+    assert _zero_budget([pick]) == expected
+
+
+def test_the_route_constraints_evaluate_the_vehicles_and_not_the_pool():
+    """Every per-vehicle entry lists the vehicles as its "units"; the two constraints that
+    price the pool (and the globals) evaluate every unit and carry none."""
+    raw = pdp.constraint_costs(_hand_plan())
+    for name, entry in raw.items():
+        if entry["global"] or name in ("required_vehicle_cost", "squared_order_age_cost"):
+            assert "units" not in entry, name
+        else:
+            assert entry["units"] == [0, 1, 2], name
+        if not entry["global"]:
+            assert len(entry["costs"]) == 4, name
+    assert raw["squared_order_age_cost"]["costs"][3] > 0  # the pool's dropoff d3 counts there
+
+
+def test_offset_zero_reproduces_the_0_2_0_scores():
+    """offset 0 is the plain shaping in both modes, so every 0.2.0 selection scores the same."""
+    plain = [VehicleCapacityCost(), UnassignedRequestsCost(), TravelTimeCost(exponent=2)]
+    shifted = [
+        VehicleCapacityCost(offset=0.0, clip=False),
+        UnassignedRequestsCost(offset=0),
+        TravelTimeCost(exponent=2, offset=0.0, clip=False),
+    ]
+    raw = pdp.constraint_costs(_hand_plan())
+    assert score(raw, shifted) == score(raw, plain) == (-2, -4 * MEDIUM_UNIT - (200**2 + 400**2))
+    assert _zero_budget(shifted) == _zero_budget(plain) == score(raw, plain)
+    for entry in raw.values():
+        assert (entry["offset"], entry["clip"]) == (0.0, True)
+
+
+@pytest.mark.parametrize(
+    "picks",
+    [
+        [
+            VehicleCapacityCost(),
+            PairedRequestCost(),
+            SameVehicleCost(),
+            UnassignedRequestsCost(),
+            TravelTimeCost(),
+            TravelTimeCost(exponent=2, offset=1000),
+        ],
+        [
+            VehicleCapacityCost(),
+            VehicleCapacityCost(offset=1, clip=False, weight=2),
+            PairedRequestCost(),
+            PairedRequestCost(offset=1, clip=False),
+            MaxEndTimeCost(),
+            UnassignedRequestsCost(offset=5),
+            UnassignedRequestsCost(weight=2, offset=20, clip=False),
+            TravelTimeCost(offset=-100),
+            LatencyCost(weight=1, offset=3000, clip=False),
+        ],
+    ],
+    ids=["repeat", "repeat-and-offsets"],
+)
+def test_score_matches_the_engine_for_repeated_and_shifted_picks(picks):
+    """A real solve under repeated, shifted picks: the Python re-pricing of its costs is its score."""
+    plan = solve(picks)
+    raw = pdp.constraint_costs(plan, picks)
+    assert len(raw) == len(picks)
+    python = score(raw, picks)
+    assert python == _engine(plan.score)
+    assert score(pdp.constraint_costs(plan), picks) == python  # the default costs score the repeats too
+
+
+def test_naming_a_constraint_twice_scores_both_picks():
+    """Since 0.3.0 a constraint may be picked several times: each pick is scored on its own."""
+    assert get_constraints([TravelTimeCost(), TravelTimeCost()]) == [TravelTimeCost(), TravelTimeCost()]
+    picks = [VehicleCapacityCost(), TravelTimeCost(weight=10), TravelTimeCost()]
+    assert _zero_budget(picks) == (-2, -(10 + 1) * 600.0)

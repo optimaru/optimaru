@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <numeric>
 #include <vector>
 
 #include "optimaru/api/score/calculator/constraint_assembly.hpp"
@@ -23,9 +24,10 @@ namespace vrp {
 //
 // Unit choice: with the LIST descriptor the calculator's unit is one LIST,
 // i.e. one vehicle; members are its visits IN ROUTE ORDER. Every rule but one
-// is a per-route sum and runs as a UnitConstraint. Only unassignedVisitsCost
-// counts the visits in NO route at all, which belongs to no unit, so it runs
-// as a GlobalConstraint.
+// is a per-route sum and runs as a UnitConstraint over the vehicles
+// (detail::PerVehicleConstraint: the pool list is no vehicle, so it is not
+// one of their units). Only unassignedVisitsCost counts the visits in NO
+// route at all, which belongs to no unit, so it runs as a GlobalConstraint.
 //
 // A component never reads the Visit shadow variables (vehicleIndex,
 // arrivalTime): walkRoute below re-derives the arrival chain from the unit's
@@ -47,8 +49,11 @@ namespace vrp {
 // kDefaultWeight / kDefaultLevel passed to the base constructor. They are
 // assembly-time metadata, not part of the cost. Override them per instance
 // with the constructor's weight argument or the mutable `level` / `weight` /
-// `exponent` (validated setters setWeight / setLevel / setExponent), or by
-// name through ConstraintAssembly. Read the level with `isHard()` or `level`.
+// `exponent` / `offset` / `clip` (validated setters setWeight / setLevel /
+// setExponent / setOffset / setClip), or by name through ConstraintAssembly.
+// Read the level with `isHard()` or `level`. A name may be held several times
+// (ConstraintAssembly::addInstances): each instance has its own knobs and the
+// instances add up.
 //
 // Score levels: the quickstart scores with HardMediumSoftScore. The medium
 // level (unassignedVisitsCost) is folded into the engine's HardSoftScore by
@@ -93,6 +98,27 @@ struct RouteMetrics {
 inline bool isPool(const VehicleRoutePlan& plan, int unit) {
     return unit >= static_cast<int>(plan.vehicles.size());
 }
+
+// The base of every per-vehicle component: a unit constraint that EVALUATES
+// the vehicles and not the pool list (scopedUnits() = 0 .. vehicles - 1, set
+// at reset). The pool's cost is 0 either way, so no score changes; what the
+// scope decides is where the literal offset formula (clip = false) charges
+// shapeCost(0 - offset): every vehicle, an idle one included, and never the
+// pool, which is no vehicle. constraint_costs() reports the scope as
+// "units", so the Python score() charges the same vehicles. A component
+// that needs its own onReset() calls this one first.
+struct PerVehicleConstraint : VrpUnitConstraint {
+    using VrpUnitConstraint::VrpUnitConstraint;
+
+    void onReset(const VehicleRoutePlan& plan) override {
+        vehicles_.resize(plan.vehicles.size());
+        std::iota(vehicles_.begin(), vehicles_.end(), 0);
+    }
+    const std::vector<int>* scopedUnits() const override { return &vehicles_; }
+
+private:
+    std::vector<int> vehicles_;
+};
 
 // The Java arrivalTimeSupplier / getDepartureTime chain of one route,
 // re-derived from its member order:

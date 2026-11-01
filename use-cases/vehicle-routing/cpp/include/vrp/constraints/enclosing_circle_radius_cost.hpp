@@ -14,13 +14,13 @@ namespace vrp
 // route with fewer than two visits (and for the pool list). Opt-in so adding
 // it does not change the default quickstart: give it a weight to prefer
 // compact routes.
-struct EnclosingCircleRadiusCost final : VrpUnitConstraint
+struct EnclosingCircleRadiusCost final : detail::PerVehicleConstraint
 {
     static constexpr double kDefaultWeight = 0.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
 
     explicit EnclosingCircleRadiusCost(double weight = kDefaultWeight)
-        : VrpUnitConstraint("enclosingCircleRadiusCost", weight, kDefaultLevel)
+        : PerVehicleConstraint("enclosingCircleRadiusCost", weight, kDefaultLevel)
     {
     }
     double cost(const VehicleRoutePlan &p,

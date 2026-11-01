@@ -11,13 +11,13 @@ namespace pdp
 // above Vehicle::maxRouteDuration. Raw cost per vehicle = max(0, endTime -
 // departureTime - maxRouteDuration) seconds while maxRouteDuration > 0;
 // 0 = within the limit, or no limit set (the pool list costs 0).
-struct MaxRouteDurationCost final : PdpUnitConstraint
+struct MaxRouteDurationCost final : detail::PerVehicleConstraint
 {
     static constexpr double kDefaultWeight = 1.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
 
     explicit MaxRouteDurationCost(double weight = kDefaultWeight)
-        : PdpUnitConstraint("maxRouteDurationCost", weight, kDefaultLevel)
+        : PerVehicleConstraint("maxRouteDurationCost", weight, kDefaultLevel)
     {
     }
     double

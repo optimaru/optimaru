@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <numeric>
 #include <vector>
 
 #include "pdp/domain.hpp"
@@ -24,7 +25,9 @@ namespace pdp
 // Unit choice: with the LIST descriptor the calculator's unit is one LIST,
 // i.e. one vehicle; members are its nodes IN ROUTE ORDER. The descriptor
 // exposes the unassigned pool as one extra list after the vehicles, so every
-// per-route component steps over it (detail::isPool).
+// per-route component steps over it (detail::isPool) and evaluates the
+// vehicles only (detail::PerVehicleConstraint); requiredVehicleCost and
+// squaredOrderAgeCost price the pool too and evaluate every list.
 //
 // The per-route rules run as UnitConstraints. The three coupling rules relate
 // a request's pickup to its dropoff — which may sit in different routes, which
@@ -47,8 +50,11 @@ namespace pdp
 // kDefaultWeight / kDefaultLevel passed to the base constructor. They are
 // assembly-time metadata, not part of the cost. Override them per instance
 // with the constructor's weight argument or the mutable `level` / `weight` /
-// `exponent` (validated setters setWeight / setLevel / setExponent), or by
-// name through ConstraintAssembly. Read the level with `isHard()` or `level`.
+// `exponent` / `offset` / `clip` (validated setters setWeight / setLevel /
+// setExponent / setOffset / setClip), or by name through ConstraintAssembly.
+// Read the level with `isHard()` or `level`. A name may be held several times
+// (ConstraintAssembly::addInstances): each instance has its own knobs and the
+// instances add up.
 //
 // Score levels: HardMediumSoft. The medium level (unassignedRequestsCost) is
 // folded into the engine's HardSoftScore by the calculator as
@@ -98,6 +104,30 @@ inline bool isPool(const PdpRoutePlan &plan, int unit)
 {
     return unit >= static_cast<int>(plan.vehicles.size());
 }
+
+// The base of every per-vehicle component: a unit constraint that EVALUATES
+// the vehicles and not the pool list (scopedUnits() = 0 .. vehicles - 1, set
+// at reset). The pool's cost is 0 either way, so no score changes; what the
+// scope decides is where the literal offset formula (clip = false) charges
+// shapeCost(0 - offset): every vehicle, an idle one included, and never the
+// pool, which is no vehicle. constraint_costs() reports the scope as
+// "units", so the Python score() charges the same vehicles. The two
+// components that DO price the pool (requiredVehicleCost,
+// squaredOrderAgeCost) stay on PdpUnitConstraint and evaluate every list.
+struct PerVehicleConstraint : PdpUnitConstraint
+{
+    using PdpUnitConstraint::PdpUnitConstraint;
+
+    void onReset(const PdpRoutePlan &plan) override
+    {
+        vehicles_.resize(plan.vehicles.size());
+        std::iota(vehicles_.begin(), vehicles_.end(), 0);
+    }
+    const std::vector<int> *scopedUnits() const override { return &vehicles_; }
+
+private:
+    std::vector<int> vehicles_;
+};
 
 // The arrival chain of one route, re-derived from its member order:
 //   arrival      = previous departure + drivingTime(previous -> this)

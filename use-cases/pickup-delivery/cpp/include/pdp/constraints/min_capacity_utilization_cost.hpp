@@ -11,13 +11,13 @@ namespace pdp
 // = max(0, capacity * minLoadRatio - delivered demand), where delivered demand
 // is the sum of its pickups' demand, while the vehicle is used and the ratio
 // > 0; 0 = on target, unused, or no target set (the pool list costs 0).
-struct MinCapacityUtilizationCost final : PdpUnitConstraint
+struct MinCapacityUtilizationCost final : detail::PerVehicleConstraint
 {
     static constexpr double kDefaultWeight = 1.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
 
     explicit MinCapacityUtilizationCost(double weight = kDefaultWeight)
-        : PdpUnitConstraint("minCapacityUtilizationCost", weight, kDefaultLevel)
+        : PerVehicleConstraint("minCapacityUtilizationCost", weight, kDefaultLevel)
     {
     }
     double

@@ -77,8 +77,9 @@ late, when that costs less than waiting.
 | `unassigned_requests_cost` | `UnassignedRequestsCost` | medium | 1 | service minutes (rounded down) of the requests left entirely unrouted |
 
 That is the `list_constraints()` order: the sixteen per-vehicle unit constraints
-(each vehicle, plus the unassigned pool as the last unit), then the four
-request-level globals. `pdp_routing.constraint_info()` reports exactly this table
+(each vehicle, plus the unassigned pool as the last unit; only `required_vehicle_cost`
+and `squared_order_age_cost` price the pool, the others evaluate the vehicles alone),
+then the four request-level globals. `pdp_routing.constraint_info()` reports exactly this table
 from the C++ components (`kDefaultLevel` / `kDefaultWeight`). Every constraint is
 flippable (`hard=True` / `hard=False`), none is a reward, and every one at a weight
 above 0 is scored by default (`default_enabled`); the four opt-in objectives
@@ -105,6 +106,28 @@ level.
 the unit constraints, on the single total for the four globals.
 `squared_order_age_cost` squares per request inside its raw cost, so an exponent
 compounds it (exponent 2 gives a 4th power).
+
+**0.3.0:** every constraint takes two more knobs, `offset` and `clip` (keyword-only), and
+may be picked several times. A raw cost `x` (per vehicle, or a global's total) is shaped
+as `sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
+`(x - offset) ** exponent`, sign-preserving (`clip=False`, which lowers the penalty of
+every evaluated unit below the offset, an idle vehicle included; the unassigned pool is no
+vehicle and only `required_vehicle_cost` and `squared_order_age_cost` evaluate it);
+`offset=0` is the 0.2.0 shaping. Each pick is its own instance with its own knobs, and the
+instances add up:
+
+```python
+from pdp_routing.constraints import TravelTimeCost, get_constraints
+
+pdp.Solver(config).solve_with_constraints(plan, [
+    *get_constraints(),                                        # the defaults
+    TravelTimeCost(weight=0.001, exponent=2, offset=7200),     # + 0.001 x (seconds beyond 2 h)^2
+])
+```
+
+`pdp.constraint_costs(plan, picks)` keys the second pick `travel_time_cost#2`; its
+per-vehicle entries list the vehicles they evaluate as `"units"`. The CP-SAT reference
+takes integral offsets on every plugin; it refuses a non-integral one.
 
 **0.2.0.** Every constraint name ends in `_cost` (C++ struct, header file, registry
 name, Python spec class, module-level default instance and catalog name):
@@ -327,7 +350,7 @@ enclosing-circle helpers in `route_geometry.hpp`):
 4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
    `description_en` / `description_ko` to `python/pdp_routing/constraints.py` (plus its
    module-level default instance); callers then pick, reweight or flip it:
-   `constraints=get_constraints([..., MyRuleCost(weight=5, hard=True)])`;
+   `constraints=[..., MyRuleCost(weight=5, hard=True)]`;
 5. mirror it in the CP-SAT model in
    [`benchmarks/pickup-delivery/cpsat`](../../benchmarks/pickup-delivery/cpsat) (a plugin
    subclassing the spec; defaults come from `constraint_info()`) so the benchmark stays like
