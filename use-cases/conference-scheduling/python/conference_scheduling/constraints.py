@@ -2,27 +2,26 @@
 
 The default path (`cs.solve(schedule)`) enables all thirty-seven constraints at their
 default weights (the Java provider's). This module is the alternative path next to it:
-pick constraints, change weights, flip hard/soft, and pass the list to
+pick constraints, change weights, flip hard/soft, shape the cost, and pass the list to
 `solve(schedule, constraints=...)`.
 
-The shortest route is :func:`get_constraints`. It returns the default list, so
-a "default with a small tweak" declaration fits on one line::
+A constraint list reads one way: one class call per constraint::
 
     import conference_scheduling as cs
     from conference_scheduling.constraints import (
-        ContentConflictCost, get_constraints, room_conflict_cost,
+        ContentConflictCost, RoomConflictCost, get_constraints,
     )
 
-    cs.solve(schedule, constraints=get_constraints())           # defaults as-is
-    cs.solve(schedule, constraints=get_constraints([            # picked
-        room_conflict_cost, ContentConflictCost(weight=500),
-    ]))
+    cs.solve(schedule, constraints=get_constraints())           # the defaults as-is
+    cs.solve(schedule, constraints=[                             # picked
+        RoomConflictCost(), ContentConflictCost(weight=500),
+    ])
 
-Each constraint has a default instance at module level (`room_conflict_cost`, ...), so
-you can also pass a list of just a few. Only listed constraints are scored — leave one
-out and its term disappears from the score.
+Only listed constraints are scored — leave one out and its term disappears from the
+score. (The module also carries ready-made default instances: ``room_conflict_cost``
+is ``RoomConflictCost()``, and so on.)
 
-Every spec takes ``(weight=None, hard=None, exponent=1.0)``:
+Every spec takes five knobs:
 
 - ``weight``   linear multiplier on the constraint cost. ``None`` = the component
                default (the Java provider's weight; ``cs.constraint_info()`` reports
@@ -31,6 +30,24 @@ Every spec takes ``(weight=None, hard=None, exponent=1.0)``:
 - ``exponent`` sign-preserving power shaping: ``weight * sign(c) * |c| ** exponent``.
                Every constraint here is global, so it shapes the one total. 2.0 =
                squared, so concentrated violations grow much costlier.
+- ``offset``   (keyword) shifts that shaping of the total; 0.0 = none.
+- ``clip``     (keyword) ``True`` (the default) counts only what lies beyond the
+               offset, ``sign(c) * max(0, |c| - offset) ** exponent``; ``False``
+               shapes ``c - offset`` as it is, so a total below the offset (a 0
+               included) lowers the penalty.
+
+The same constraint may be picked several times; each pick is scored on its own with
+its own knobs and the picks add up. The content-conflict minutes plus their square
+beyond one hour::
+
+    cs.solve(schedule, constraints=[
+        RoomConflictCost(),
+        ContentConflictCost(),
+        ContentConflictCost(weight=1, exponent=2, offset=60),
+    ])
+
+``cs.constraint_costs(schedule, picks)`` keys the second pick
+``"content_conflict_cost#2"``.
 
 Three terms (`audience_type_diversity_cost`, `audience_level_diversity_cost`,
 `language_diversity_cost`) are **rewards**: their raw cost is <= 0, so raising their
@@ -757,7 +774,7 @@ class LanguageDiversityCost(Constraint):
     )
 
 
-#: Instances at the default weights (weight=None). Reference them directly when picking.
+#: Ready-made default instances (``room_conflict_cost`` is ``RoomConflictCost()``).
 talk_type_incompatibility_cost = TalkTypeIncompatibilityCost()
 room_unavailability_cost = RoomUnavailabilityCost()
 room_conflict_cost = RoomConflictCost()
@@ -842,12 +859,13 @@ def get_constraints(constraints: list[Constraint] | None = None) -> list[Constra
     """Return the cost function. Without arguments, all thirty-seven default constraints.
 
     When `constraints` is given, that list is used as-is — only the listed
-    constraints are scored. To change just one default, mix in the default instances::
+    constraints are scored::
 
-        get_constraints([room_conflict_cost, ContentConflictCost(weight=500)])
+        get_constraints([RoomConflictCost(), ContentConflictCost(weight=500)])
 
     Same contract as the C++ applyConstraints: an empty list (most likely a filter
-    that came out empty) and a constraint named twice raise ValueError.
+    that came out empty) raises ValueError; a constraint named several times is
+    scored once per pick, each with its own knobs.
     """
     return select(constraints, _DEFAULTS)
 
@@ -857,16 +875,18 @@ def score(costs: dict, constraints: list[Constraint] | None = None) -> Score:
 
     ``costs`` is what `cs.constraint_costs(schedule)` returns: per constraint, the
     **raw** cost (one global total each; the three rewards are <= 0), before weight,
-    exponent and level rounding. Fetch it once and rescore with different weights
-    without re-solving::
+    exponent, offset and level rounding. Fetch it once and rescore with different
+    weights without re-solving::
 
         raw = cs.constraint_costs(schedule)
         score(raw)                     # default set
-        score(raw, picked)             # picked list
+        score(raw, [RoomConflictCost(), ContentConflictCost(weight=500)])
+        score(raw, [ContentConflictCost(), ContentConflictCost(exponent=2, offset=60)])
 
     No solver and no search are involved. The arithmetic matches the engine —
-    each total contributes ``weight * shape(cost, exponent)`` and hard
-    contributions are rounded before summing (the same order as the engine).
+    each total contributes ``weight * shape(cost, exponent, offset, clip)`` and hard
+    contributions are rounded before summing (the same order as the engine). A
+    second pick of a constraint reads the same raw cost with its own knobs.
 
     When ``constraints`` is given, only those constraints are scored — the same
     semantics as `get_constraints`. Unknown names raise ValueError, and so does

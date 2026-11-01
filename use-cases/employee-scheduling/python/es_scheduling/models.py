@@ -23,8 +23,8 @@ plus a response with a per-worker schedule and violation report:
 Everything round-trips through JSON (`ScheduleRequest.model_validate_json`,
 `solution.model_dump_json`), so this doubles as a service API contract. A rule
 in JSON is ``{"name": "max_consecutive_days_cost", "weight": 2, "value": 6}``:
-the spec's ``name``, its knobs (``weight`` / ``hard`` / ``exponent``) and its
-domain parameters.
+the spec's ``name``, its knobs (``weight`` / ``hard`` / ``exponent`` /
+``offset`` / ``clip``) and its domain parameters.
 
 There is ONE class per constraint: the spec in `es_scheduling.constraints`.
 The JSON rule models (`RULE_MODELS`, the `Rule` union; one generated pydantic
@@ -32,8 +32,9 @@ model per spec, named ``<Spec>Model``, e.g. ``MaxConsecutiveDaysCostModel``)
 are generated from the specs' fields and bounds, so they cannot drift from
 them; `SchedulingInput.rules` accepts spec instances and JSON dicts alike (on
 construction and on assignment), and `rule.to_spec()` turns a validated rule
-back into its spec. The same rule with the same parameters twice, or an empty
-rule list, is refused, as `get_constraints()` refuses it.
+back into its spec. A rule may appear several times (each entry is its own
+instance with its own knobs, and the instances add up); an empty rule list is
+refused, as `get_constraints()` refuses it.
 
 Times are integer minutes from day 0, 00:00 (see `es_scheduling.minutes`);
 dates are day indices. Requires the optional `pydantic` dependency
@@ -148,11 +149,11 @@ class ShiftModel(BaseModel):
 # Rules: a discriminated union GENERATED from the constraint specs
 # ---------------------------------------------------------------------------
 # One JSON model per spec class (es_scheduling.constraints), with the spec's
-# own fields: the three knobs from RuleBase, the domain parameters (their
+# own fields: the five knobs from RuleBase, the domain parameters (their
 # bounds from the spec's `bounds`), and `name` as the discriminator. No second
 # field list to drift.
 
-_KNOBS = ("weight", "hard", "exponent")
+_KNOBS = ("weight", "hard", "exponent", "offset", "clip")
 
 
 _CATALOG: dict[str, Any] | None = None
@@ -167,7 +168,7 @@ def _catalog() -> dict[str, Any]:
 
 
 def _a_real_number(value: Any) -> Any:
-    """weight / exponent take numbers only, as the spec does: not a bool, not a numeric string."""
+    """weight / exponent / offset take numbers only, as the spec does: not a bool, not a numeric string."""
     if isinstance(value, (bool, str, bytes)):
         raise ValueError(f"must be a number, not {value!r}")
     return value
@@ -175,17 +176,21 @@ def _a_real_number(value: Any) -> Any:
 
 _Weight = Annotated[float, Field(ge=0), BeforeValidator(_a_real_number)]
 _Exponent = Annotated[float, Field(gt=0), BeforeValidator(_a_real_number)]
+_Offset = Annotated[float, Field(allow_inf_nan=False), BeforeValidator(_a_real_number)]
 
 
 class RuleBase(BaseModel):
     """One rule as JSON: the spec's knobs and parameters; `to_spec()` is the spec.
 
     ``weight`` None = the component's default weight; ``hard`` None = its
-    default level, True = hard, False = soft; ``exponent`` > 0 shapes the cost.
-    A rule is also a valid pick for ``DecomposedCalculator`` (it carries
-    ``name`` / ``weight`` / ``hard`` / ``exponent`` and ``params()``). The
-    knobs take the values the spec takes: ``weight: true`` or ``"2"`` is
-    refused here as the spec refuses it.
+    default level, True = hard, False = soft; ``exponent`` > 0 shapes the cost;
+    ``offset`` (finite, any sign) shifts that shaping and ``clip`` says what
+    happens below the offset (True: only what lies beyond it counts; False:
+    the literal ``(cost - offset) ** exponent``). A rule is also a valid pick
+    for ``DecomposedCalculator`` (it carries ``name`` / ``weight`` / ``hard`` /
+    ``exponent`` / ``offset`` / ``clip`` and ``params()``). The knobs take the
+    values the spec takes: ``weight: true`` or ``"2"`` is refused here as the
+    spec refuses it.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -195,6 +200,20 @@ class RuleBase(BaseModel):
         default=None, description="None = the default level; true = hard; false = soft (rewards refuse true)"
     )
     exponent: _Exponent = Field(default=1.0, description="sign-preserving power shaping of the cost")
+    offset: _Offset = Field(
+        default=0.0,
+        description=(
+            "shift of the shaping, per employee (a global rule: its total); 0 = none. "
+            "clip=true counts only what lies beyond it, clip=false shapes cost - offset as it is"
+        ),
+    )
+    clip: StrictBool = Field(
+        default=True,
+        description=(
+            "true = the threshold sign(c) * max(0, |c| - offset) ** exponent; false = the literal "
+            "(c - offset) ** exponent, which charges every evaluated employee and rewards below the offset"
+        ),
+    )
 
     spec_class: ClassVar[type]
 
@@ -456,8 +475,8 @@ class SchedulingInput(BaseModel):
 
     workers: list[WorkerModel]
     shifts: list[ShiftModel]
-    # Constraint specs or their JSON form; a rule may repeat (other parameters),
-    # but not with the same parameters, and the list may not be empty.
+    # Constraint specs or their JSON form; a rule may repeat (each entry is its
+    # own instance), and the list may not be empty.
     rules: list[Rule] = Field(default_factory=default_rules)
 
     @field_validator("rules", mode="before")
@@ -470,8 +489,7 @@ class SchedulingInput(BaseModel):
     @field_validator("rules")
     @classmethod
     def _a_selection(cls, rules):
-        # get_constraints()'s rules: an empty list is an error, and so is the
-        # same rule with the same parameters twice.
+        # get_constraints()'s rules: an empty list is an error.
         _specs.get_constraints([rule.to_spec() for rule in rules])
         return rules
 

@@ -2,26 +2,25 @@
 
 The default path (`ms.solve(schedule)`) enables all twelve constraints at the provider weights.
 This module is the alternative path next to it: pick constraints, change weights, flip
-hard/soft, and pass the list to `solve(schedule, constraints=...)`.
+hard/soft, shape the cost, and pass the list to `solve(schedule, constraints=...)`.
 
-The shortest route is :func:`get_constraints`. It returns the default list, so
-a "default with a small tweak" declaration fits on one line::
+A constraint list reads one way: one class call per constraint::
 
     import meeting_scheduling as ms
     from meeting_scheduling.constraints import (
-        MeetingOverlapCost, get_constraints, room_conflict_cost,
+        MeetingOverlapCost, RoomConflictCost, get_constraints,
     )
 
-    ms.solve(schedule, constraints=get_constraints())           # defaults as-is
-    ms.solve(schedule, constraints=get_constraints([            # picked
-        room_conflict_cost, MeetingOverlapCost(weight=100),
-    ]))
+    ms.solve(schedule, constraints=get_constraints())           # the defaults as-is
+    ms.solve(schedule, constraints=[                             # picked
+        RoomConflictCost(), MeetingOverlapCost(weight=100),
+    ])
 
-Each constraint has a default instance at module level, so you can also pass a
-list of just a few. Only listed constraints are scored — leave one out and its
-term disappears from the score.
+Only listed constraints are scored — leave one out and its term disappears from the
+score. (The module also carries ready-made default instances: ``room_conflict_cost``
+is ``RoomConflictCost()``, and so on.)
 
-Every spec takes ``(weight=None, hard=None, exponent=1.0)``:
+Every spec takes five knobs:
 
 - ``weight``   linear multiplier on the constraint cost, in units of its level.
                ``None`` = the C++ component default (``ms.constraint_info()``
@@ -38,6 +37,22 @@ Every spec takes ``(weight=None, hard=None, exponent=1.0)``:
                exponent``, per (grain, room) cell for the five per-meeting
                constraints and on the total for the seven pair constraints.
                2.0 = squared, so concentrated violations grow much costlier.
+- ``offset``   (keyword) shifts that shaping, at the same granularity; 0.0 = none.
+- ``clip``     (keyword) ``True`` (the default) counts only what lies beyond the
+               offset, ``sign(c) * max(0, |c| - offset) ** exponent``; ``False``
+               shapes ``c - offset`` as it is, so every cell (or total) below the
+               offset — an empty cell (cost 0) included — lowers the penalty.
+
+The same constraint may be picked several times; each pick is scored on its own with
+its own knobs and the picks add up. The overlap plus its square beyond eight grains::
+
+    ms.solve(schedule, constraints=[
+        *get_constraints(),
+        MeetingOverlapCost(weight=1, exponent=2, offset=8),
+    ])
+
+``ms.constraint_costs(schedule, picks)`` keys the second pick
+``"meeting_overlap_cost#2"``.
 
 Attendance conflicts split into three terms: hard when both are **required**, medium
 when only one is required or both are preferred — levels separate impossible schedules
@@ -330,7 +345,7 @@ class RoomChangeCost(Constraint):
     )
 
 
-#: Instances at the default weights (weight=None). Reference them directly when picking.
+#: Ready-made default instances (``room_conflict_cost`` is ``RoomConflictCost()``).
 overtime_cost = OvertimeCost()
 room_capacity_cost = RoomCapacityCost()
 day_crossing_cost = DayCrossingCost()
@@ -365,12 +380,13 @@ def get_constraints(constraints: list[Constraint] | None = None) -> list[Constra
     """Return the cost function. Without arguments, all twelve default constraints.
 
     When `constraints` is given, that list is used as-is — only the listed
-    constraints are scored. To change just one default, mix in the default instances::
+    constraints are scored::
 
-        get_constraints([room_conflict_cost, MeetingOverlapCost(weight=100)])
+        get_constraints([RoomConflictCost(), MeetingOverlapCost(weight=100)])
 
     Same contract as the C++ applyConstraints: an empty list is an error (pass
-    None for the defaults), and naming a constraint twice is an error.
+    None for the defaults); a constraint named several times is scored once per
+    pick, each with its own knobs.
     """
     return select(constraints, _DEFAULTS)
 
@@ -379,17 +395,19 @@ def score(costs: dict, constraints: list[Constraint] | None = None) -> Score:
     """Apply specs to raw constraint costs and produce a score — pure Python.
 
     ``costs`` is what `ms.constraint_costs(schedule)` returns: per constraint, the
-    **raw** cost of each unit (before weight, exponent and level rounding).
+    **raw** cost of each unit (before weight, exponent, offset and level rounding).
     Fetch it once and rescore with different weights without re-solving::
 
         raw = ms.constraint_costs(schedule)
         score(raw)                     # default set
-        score(raw, picked)             # picked list
+        score(raw, [RoomConflictCost(), MeetingOverlapCost(weight=100)])
+        score(raw, [MeetingOverlapCost(), MeetingOverlapCost(exponent=2, offset=8)])
 
     No solver and no search are involved. The arithmetic matches the engine —
-    each unit contributes ``weight * shape(cost, exponent)`` and hard
+    each unit contributes ``weight * shape(cost, exponent, offset, clip)`` and hard
     contributions are **rounded per unit** before summing (the same order as the
-    engine's applyRaw; rounding the total afterwards gives different values).
+    engine's applyRaw; rounding the total afterwards gives different values). A
+    second pick of a constraint reads the same raw costs with its own knobs.
 
     When ``constraints`` is given, only those constraints are scored — the same
     semantics as `get_constraints`. Unknown names raise ValueError.

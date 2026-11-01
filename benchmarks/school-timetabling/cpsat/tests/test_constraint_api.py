@@ -67,10 +67,16 @@ def test_unknown_parameter_is_rejected():
         _LIST.validate_python([{"type": "teacher_gap_cost", "wieght": 3}])
 
 
-def test_every_constraint_takes_the_three_knobs():
-    """Every DTO carries the engine's knobs (weight / hard / exponent) and nothing else."""
+def test_every_constraint_takes_the_five_knobs():
+    """Every DTO carries the engine's knobs (weight / hard / exponent / offset / clip) and nothing else."""
     for dto in CONSTRAINT_DTOS:
-        assert set(dto.model_fields) == {"type", "weight", "hard", "exponent"}
+        assert set(dto.model_fields) == {"type", "weight", "hard", "exponent", "offset", "clip"}
+
+
+def test_offset_and_clip_round_trip_through_their_dto():
+    payload = [{"type": "teacher_gap_cost", "weight": 3, "offset": 2, "clip": False}]
+    (restored,) = to_constraints(_LIST.validate_python(payload))
+    assert restored == TeacherGapCost(weight=3, offset=2, clip=False)
 
 
 def test_a_structural_constraint_refuses_soft():
@@ -174,7 +180,13 @@ def test_catalog_defaults_are_the_engine_defaults():
         assert spec.level_flippable == row.level_flippable
         assert spec.reward == row.reward
         assert spec.default_enabled == row.default_enabled
-        assert {param.name: param.default for param in spec.params} == {"weight": None, "hard": None, "exponent": 1.0}
+        assert {param.name: param.default for param in spec.params} == {
+            "weight": None,
+            "hard": None,
+            "exponent": 1.0,
+            "offset": 0.0,
+            "clip": True,
+        }
     assert TeacherGapCost().weight is None, "the instance keeps the engine default (weight=None)"
     assert TeacherGapCost().effective_weight == 20
 

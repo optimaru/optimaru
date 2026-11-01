@@ -1,9 +1,17 @@
+from itertools import product
+
 import pytest
 
 import conference_scheduling as domain
 from conference_scheduling.constraints import (
     AudienceTypeDiversityCost,
+    ContentConflictCost,
+    DifferentDayTalksCost,
     LanguageDiversityCost,
+    RoomConflictCost,
+    SpeakerConflictCost,
+    SpeakerMakespanCost,
+    SpeakerUnavailabilityCost,
     get_constraints,
     score,
 )
@@ -183,7 +191,13 @@ def test_cpsat_defaults_are_the_engine_defaults() -> None:
         assert entry["default_enabled"] == row.default_enabled
         # The three *_diversity_cost rewards stay soft; everything else flips.
         assert entry["kind"] == ("soft" if row.reward else "either")
-        assert entry["params"] == {"weight": None, "hard": None, "exponent": 1.0}
+        assert entry["params"] == {
+            "weight": None,
+            "hard": None,
+            "exponent": 1.0,
+            "offset": 0.0,
+            "clip": True,
+        }
     assert [entry["name"] for entry in entries if entry["reward"]] == [
         "audience_type_diversity_cost",
         "audience_level_diversity_cost",
@@ -236,3 +250,149 @@ def test_old_names_are_unknown() -> None:
     for old in ("talk_type_compatibility", "room_conflict", "same_day_talks"):
         with pytest.raises(ValueError, match="unknown constraint"):
             solve(_parity_problem(), time_limit_seconds=1, constraints=[old])
+
+
+# --- 0.3.0: repeated picks and offset / clip ---------------------------------------
+
+
+def _two_talks() -> ConferenceScheduleModel:
+    """Two talks, three slots (two overlapping, one on the next day), two rooms: 36 assignments.
+
+    Both talks share speaker P0, content C and theme T; their languages differ, so a
+    shared slot earns the language-diversity reward. P0 cannot speak in S0, R0 is
+    closed in S1.
+    """
+    return ConferenceScheduleModel(
+        name="Tiny",
+        talk_types=["Talk"],
+        timeslots=[
+            TimeslotModel(id="S0", start_minute=0, end_minute=60, talk_types=[0]),
+            TimeslotModel(id="S1", start_minute=30, end_minute=90, talk_types=[0]),
+            TimeslotModel(id="S2", start_minute=1440, end_minute=1500, talk_types=[0]),
+        ],
+        rooms=[
+            RoomModel(id="R0", capacity=10, talk_types=[0], unavailable_timeslots=[1]),
+            RoomModel(id="R1", capacity=100, talk_types=[0]),
+        ],
+        speakers=[
+            SpeakerModel(id="P0", unavailable_timeslots=[0]),
+            SpeakerModel(id="P1"),
+        ],
+        talks=[
+            TalkModel(
+                code="A",
+                talk_type=0,
+                speakers=[0],
+                content_tags=["C"],
+                theme_track_tags=["T"],
+                language="ko",
+                audience_level=1,
+                favorite_count=20,
+            ),
+            TalkModel(
+                code="B",
+                talk_type=0,
+                speakers=[0, 1],
+                content_tags=["C"],
+                theme_track_tags=["T"],
+                language="en",
+                audience_level=2,
+                favorite_count=10,
+            ),
+        ],
+    )
+
+
+SELECTIONS = {
+    "repeat": [ContentConflictCost(), ContentConflictCost(weight=2, offset=20)],
+    "repeat-literal": [
+        RoomConflictCost(),
+        SpeakerConflictCost(),
+        ContentConflictCost(offset=50, clip=False),
+        ContentConflictCost(weight=3, offset=-10),
+        LanguageDiversityCost(offset=20, clip=False),
+    ],
+    "hard-offsets": [
+        RoomConflictCost(offset=10),
+        RoomConflictCost(weight=2, offset=40, clip=False),
+        SpeakerUnavailabilityCost(offset=-3, clip=False),
+    ],
+    "identical-twice": [
+        DifferentDayTalksCost(),
+        DifferentDayTalksCost(),
+        SpeakerMakespanCost(),
+    ],
+}
+
+
+def _assignments(problem):
+    cells = len(problem.timeslots) * len(problem.rooms)
+    for assignment in product(range(cells), repeat=len(problem.talks)):
+        yield list(assignment), _fixed_candidate(problem, assignment)
+
+
+@pytest.mark.parametrize("selection", list(SELECTIONS.values()), ids=list(SELECTIONS))
+def test_the_cpsat_terms_equal_the_engine_on_every_assignment(selection) -> None:
+    """Pin each of the 36 assignments: the CP-SAT objective's per-level value is the
+    engine's score of that assignment under the same repeated / shifted picks, exactly."""
+    problem = _two_talks()
+    for assignment, candidate in _assignments(problem):
+        core = candidate.to_core()
+        engine = score(domain.constraint_costs(core, selection), selection)
+        proxy = {}
+        solve(
+            problem,
+            time_limit_seconds=5,
+            constraints=selection,
+            _fixed_slot_rooms=assignment,
+            _proxy_score=proxy,
+        )
+        assert proxy == {"hard": engine.hard, "soft": engine.soft}, assignment
+        # Re-pricing the default costs (each name once) gives the same per instance key.
+        assert score(domain.constraint_costs(core), selection) == engine
+
+
+@pytest.mark.parametrize("selection", list(SELECTIONS.values()), ids=list(SELECTIONS))
+def test_repeated_and_shifted_picks_reach_the_brute_force_optimum(selection) -> None:
+    problem = _two_talks()
+    best = max(
+        tuple(score(domain.constraint_costs(candidate.to_core(), selection), selection))
+        for _, candidate in _assignments(problem)
+    )
+    solved = solve(problem, time_limit_seconds=5, constraints=selection)
+    assert (solved.score_hard, solved.score_soft) == pytest.approx(best)
+    engine = score(domain.constraint_costs(solved.to_core(), selection), selection)
+    assert (solved.score_hard, solved.score_soft) == pytest.approx(tuple(engine))
+
+
+def test_mapping_selections_repeat_and_shift_like_specs() -> None:
+    """The server's {name, weight, offset, clip} dicts pick the same instances as specs."""
+    problem = _two_talks()
+    specs = [ContentConflictCost(), ContentConflictCost(weight=3, offset=4, clip=False)]
+    dicts = [
+        {"name": "content_conflict_cost"},
+        {"name": "content_conflict_cost", "weight": 3, "offset": 4, "clip": False},
+    ]
+    assert solve(problem, time_limit_seconds=5, constraints=dicts) == solve(
+        problem, time_limit_seconds=5, constraints=specs
+    )
+
+
+def test_a_fractional_offset_is_refused_by_cpsat() -> None:
+    with pytest.raises(ValueError, match="offset must be an integer for CP-SAT"):
+        solve(
+            _two_talks(),
+            time_limit_seconds=1,
+            constraints=[ContentConflictCost(offset=0.5)],
+        )
+
+
+def test_every_plugin_adds_its_total_once() -> None:
+    """Every conference constraint is global, so every plugin takes offsets (terms_per_unit)."""
+    from conference_scheduling_cpsat.constraints import REGISTRY
+
+    assert all(plugin.terms_per_unit for plugin in REGISTRY.plugins)
+    # A literal offset on a constraint whose total is 0 everywhere still charges it.
+    selection = [SpeakerMakespanCost(offset=5, clip=False)]
+    solved = solve(_two_talks(), time_limit_seconds=5, constraints=selection)
+    assert (solved.score_hard, solved.score_soft) == (0, 20 * 5)

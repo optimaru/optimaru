@@ -17,6 +17,12 @@
 //       three rewards report raw <= 0)
 //   (h) the knob guards: the three rewards refuse hard() and any level
 //       change, every other constraint flips both ways
+//   (i) repeated components and the offset / clip knobs: a hand-calculated
+//       repeat (content x 100 + 0.5 x content^2), threshold and literal
+//       offsets on the one total by hand (a total of 0 counts in literal
+//       mode), incremental == a fresh recompute over a random walk and a
+//       FULL_ASSERT solve with repeated, shifted components
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -1239,6 +1245,197 @@ void verifyGuards()
     std::printf("\n");
 }
 
+// -------------------------------------------------------------------------
+// (i) Repeated components and offsets. A repeat is a fresh copy of a
+// default component (another defaultConstraints(), the one name kept, its
+// knobs re-stated) appended with addInstances(), as the Python bindings
+// build it from a pick list. Every component reads the one shared
+// BreakdownProjection ("cs.breakdown"), so the copies share it too.
+// -------------------------------------------------------------------------
+ConstraintAssembly copyOf(const std::string &name)
+{
+    ConstraintAssembly copy = defaultConstraints();
+    copy.only({name});
+    return copy;
+}
+
+// A (speaker 0, content C) at s0 r0 and B (speaker 1, content C) at s1 r0:
+// the same 60 minutes in the same room. Raw: roomConflictCost 60,
+// contentConflictCost 60 (one shared tag x 60), every other total 0.
+ConferenceSchedule repeatInstance()
+{
+    ConferenceSchedule c = rawBase();
+    placeTalk(c, {0}, 0, 0).contentTags = {"C"};
+    placeTalk(c, {1}, 1, 0).contentTags = {"C"};
+    ScoreCalculator::prepare(c);
+    return c;
+}
+
+ConstraintAssembly repeatedAssembly()
+{
+    ConstraintAssembly assembly = defaultConstraints();
+    assembly.offset("contentConflictCost", 30.0);
+    assembly.addInstances(std::move(copyOf("contentConflictCost")
+                                        .weight("contentConflictCost", 0.25)
+                                        .exponent("contentConflictCost", 2.0)
+                                        .offset("contentConflictCost", 120.0)
+                                        .clip("contentConflictCost", false)));
+    assembly.addInstances(std::move(copyOf("roomConflictCost")
+                                        .weight("roomConflictCost", 2.0)
+                                        .offset("roomConflictCost", 30.0)
+                                        .clip("roomConflictCost", false)));
+    assembly.addInstances(std::move(copyOf("speakerConflictCost")
+                                        .offset("speakerConflictCost", -5.0)));
+    assembly.addInstances(std::move(copyOf("languageDiversityCost")
+                                        .weight("languageDiversityCost", 0.5)
+                                        .offset("languageDiversityCost", 60.0)
+                                        .clip("languageDiversityCost", false)));
+    assembly.addInstances(std::move(copyOf("speakerMakespanCost")
+                                        .offset("speakerMakespanCost", 100.0)
+                                        .clip("speakerMakespanCost", false)));
+    return assembly;
+}
+
+void verifyRepeatsAndOffsets()
+{
+    std::printf("== (i) Repeated components, offset / clip ==\n");
+    {
+        ConferenceSchedule c = repeatInstance();
+        ConstraintAssembly assembly = copyOf("contentConflictCost");
+        assembly.addInstances(std::move(copyOf("contentConflictCost")
+                                            .weight("contentConflictCost", 0.5)
+                                            .exponent("contentConflictCost", 2.0)));
+        DecomposedCalculator calculator;
+        assembly.into(calculator);
+        const Score score = scoreWith(calculator, c);
+        check(score.hard == 0 && score.soft == -(100.0 * 60 + 0.5 * 60.0 * 60.0),
+              "content x 100 + 0.5 x content^2: -(6000 + 1800) soft");
+        const auto entries = calculator.constraintCosts();
+        check(entries.size() == 2 && entries[0].unitCosts == entries[1].unitCosts
+                  && entries[0].unitCosts == std::vector<double>{60.0}
+                  && entries[1].weight == 0.5 && entries[1].exponent == 2.0
+                  && entries[1].defaultWeight == 100.0,
+              "two instances, the same raw total, each with its own knobs");
+    }
+    {
+        ConferenceSchedule c = repeatInstance();
+        // Threshold at 20 minutes: only 60 - 20 = 40 counts.
+        DecomposedCalculator threshold;
+        copyOf("contentConflictCost")
+            .offset("contentConflictCost", 20.0)
+            .into(threshold);
+        check(scoreWith(threshold, c).soft == -100.0 * 40,
+              "threshold offset 20: 100 x 40");
+        // Literal at 100: 60 - 100 = -40, a reward.
+        DecomposedCalculator literal;
+        copyOf("contentConflictCost")
+            .offset("contentConflictCost", 100.0)
+            .clip("contentConflictCost", false)
+            .into(literal);
+        check(scoreWith(literal, c).soft == 100.0 * 40,
+              "literal offset 100: 100 x (60 - 100), a reward");
+        // A total of 0 (speakerMakespanCost): the threshold keeps it at 0,
+        // the literal formula charges it.
+        DecomposedCalculator zeroThreshold;
+        copyOf("speakerMakespanCost")
+            .offset("speakerMakespanCost", -10.0)
+            .into(zeroThreshold);
+        DecomposedCalculator zeroLiteral;
+        copyOf("speakerMakespanCost")
+            .offset("speakerMakespanCost", -10.0)
+            .clip("speakerMakespanCost", false)
+            .into(zeroLiteral);
+        check(scoreWith(zeroThreshold, c).soft == 0.0
+                  && scoreWith(zeroLiteral, c).soft == -20.0 * 10,
+              "makespan total 0, offset -10: threshold 0, literal 20 x 10");
+        // A negative threshold offset adds to a non-zero total.
+        DecomposedCalculator negative;
+        copyOf("contentConflictCost")
+            .offset("contentConflictCost", -10.0)
+            .into(negative);
+        check(scoreWith(negative, c).soft == -100.0 * 70,
+              "content threshold offset -10: 100 x (60 + 10)");
+        // A hard literal offset rounds the one total: 3 x (60 - 59.5) = 1.5
+        // -> 2.
+        DecomposedCalculator hard;
+        copyOf("roomConflictCost")
+            .weight("roomConflictCost", 3.0)
+            .offset("roomConflictCost", 59.5)
+            .clip("roomConflictCost", false)
+            .into(hard);
+        check(scoreWith(hard, c).hard == -2,
+              "room literal offset 59.5 at weight 3: llround(1.5) = 2 hard");
+    }
+    {
+        // Random walk: incremental == a fresh calculator of the same assembly.
+        ConferenceSchedule c = buildRandomInstance(/*talkCount*/ 18, /*seed*/ 23);
+        ScoreCalculator::prepare(c);
+        DecomposedCalculator calculator;
+        repeatedAssembly().into(calculator);
+        optimaru::ScoreDirector<ConferenceSchedule> director(c, calculator);
+        std::mt19937_64 rng(321);
+        std::uniform_real_distribution<double> unit(0.0, 1.0);
+        int mismatches = 0;
+        const int steps = 400;
+        for (int step = 0; step < steps; ++step)
+        {
+            const int talk = static_cast<int>(rng() % c.talkCount());
+            const int value = unit(rng) < 0.1
+                                  ? -1
+                                  : static_cast<int>(rng() % c.slotRoomCount());
+            director.changeVariable(talk, value);
+            ConferenceSchedule shadow = c;
+            DecomposedCalculator fresh;
+            repeatedAssembly().into(fresh);
+            const Score full = scoreWith(fresh, shadow);
+            const Score incremental = director.calculateScore();
+            if (!optimaru::scoresAgree(incremental, full))
+            {
+                if (++mismatches <= 3)
+                {
+                    std::printf("  MISMATCH @step %d: incremental=%s full=%s\n",
+                                step,
+                                incremental.toString().c_str(),
+                                full.toString().c_str());
+                }
+            }
+        }
+        check(mismatches == 0,
+              std::to_string(steps)
+                  + " random moves with repeated, shifted components: "
+                    "incremental == fresh");
+    }
+    {
+        ConferenceSchedule c = buildRandomInstance(/*talkCount*/ 12, /*seed*/ 29);
+        Solver::Config config;
+        config.spentLimit = std::chrono::seconds(2);
+        config.randomSeed = 5;
+        config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+        config.ruinRecreateUnimprovedStepTrigger = 200;
+        config.ruinRecreatePolishSteps = 100;
+        DecomposedCalculator calculator;
+        repeatedAssembly().into(calculator);
+        bool corrupted = false;
+        try
+        {
+            Solver solver(config);
+            solver.solve(c, calculator);
+        }
+        catch (const optimaru::ScoreCorruptionError &e)
+        {
+            corrupted = true;
+            std::printf("  ScoreCorruptionError: %s\n", e.what());
+        }
+        check(!corrupted,
+              "2s FULL_ASSERT solve with repeated, shifted components");
+        DecomposedCalculator fresh;
+        repeatedAssembly().into(fresh);
+        check(!corrupted && sameScore(c.score, scoreWith(fresh, c)),
+              "the reported score == a fresh recompute of the same assembly");
+    }
+    std::printf("\n");
+}
+
 }  // namespace
 
 int main()
@@ -1251,6 +1448,7 @@ int main()
     verifyFullAssertSolve();
     verifyRawCostsByHand();
     verifyGuards();
+    verifyRepeatsAndOffsets();
 
     if (failures == 0)
     {

@@ -21,4 +21,10 @@ default level and weight of every plugin come from the engine's
   (1e6), so it equals `meeting_scheduling.calculate_score` on the same assignment (0.2.0:
   this used 1e9 before, which disagreed with the engine whenever a medium term was
   non-zero).
-- Not supported on CP-SAT (rejected): `exponent != 1` and non-integer weights.
+- Since 0.3.0 a constraint may be picked several times (one set of terms per pick, each
+  with its own knobs) and takes integral `offset` / `clip` on every constraint: the five
+  per-meeting plugins add one term per (grain, room) cell (the engine's unit, an empty
+  cell included) and the seven pair plugins add their total once, as the engine shapes
+  them (`terms_per_unit`).
+- Not supported on CP-SAT (rejected): `exponent != 1`, non-integer weights and fractional
+  offsets.

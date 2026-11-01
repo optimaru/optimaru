@@ -3,28 +3,30 @@
 The default fast path (the monolithic incremental calculator) scores every
 canonical constraint at its default weight. This module is the optional path
 next to it: pick constraints one by one, change their weights, flip their
-hard/soft level, drop some, then pass the selection to
+hard/soft level, shape their cost, drop some, then pass the selection to
 ``solve(problem, constraints=...)`` or ``canon.DecomposedCalculator``.
 
 The shortest form is :func:`get_constraints` — without an argument it is the
-default set, and a list replaces it::
+default set, and a list replaces it; a list reads one way, one class call per
+constraint::
 
     import st_timetabling as st
-    from st_timetabling.constraints import TeacherGapCost, class_conflict_cost, get_constraints
+    from st_timetabling.constraints import ClassConflictCost, TeacherGapCost, get_constraints
 
     st.solve(problem, constraints=get_constraints())               # defaults as they are
-    st.solve(problem, constraints=get_constraints([                # only these two
-        class_conflict_cost, TeacherGapCost(weight=40),
-    ]))
+    st.solve(problem, constraints=[                                # only these two
+        ClassConflictCost(), TeacherGapCost(weight=40),
+    ])
 
 :class:`Assembly` starts from the default set and edits it by name, so "the
-defaults with a small change" is a one-liner::
+defaults with a small change" is a one-liner (``add`` replaces the constraint of
+that name; a plain list is where a constraint is picked several times)::
 
     from st_timetabling.constraints import Assembly
 
     st.solve(problem, constraints=Assembly().add("teacher_gap_cost", weight=40).drop("teacher_workday_cost"))
 
-Every spec takes the same three knobs, ``(weight=None, hard=None, exponent=1.0)``:
+Every spec takes the same five knobs:
 
 - ``weight``   linear multiplier of the constraint's raw cost. ``None`` is the
                component's default weight (the C++ kDefaultWeight: 1 for the
@@ -37,13 +39,31 @@ Every spec takes the same three knobs, ``(weight=None, hard=None, exponent=1.0)`
 - ``exponent`` sign-preserving power shaping of the cost: ``weight * sign(c) *
                |c| ** exponent`` (per slot for the per-slot constraints, on the
                single total for the others). 2.0 = squared.
+- ``offset``   (keyword) shifts that shaping, at the same granularity; 0.0 = none.
+- ``clip``     (keyword) ``True`` (the default) counts only what lies beyond the
+               offset, ``sign(c) * max(0, |c| - offset) ** exponent``; ``False``
+               shapes ``c - offset`` as it is, so a cost below the offset lowers
+               the penalty (every slot of a per-slot constraint, an empty one
+               included, is charged).
+
+A constraint may be picked several times in a list; each pick is scored on its
+own with its own knobs and the picks add up. Teacher gaps plus their square
+beyond three per week::
+
+    st.solve(problem, constraints=[
+        *get_constraints(),
+        TeacherGapCost(weight=1, exponent=2, offset=3),
+    ])
+
+``canon.constraint_costs(table, picks)`` keys the second pick
+``"teacher_gap_cost#2"``.
 
 Names are the C++ component names in snake_case (``TeacherGapCost`` ->
 ``teacher_gap_cost``): the one name of each constraint in every layer —
 ``list_constraints()``, ``constraint_info()``, ``constraint_costs()``, the
 CP-SAT reference, the ``Timetable.penalties`` keys and the solve ``weights``
-keys. Module-level instances at the default weights (``teacher_gap_cost``, ...)
-are ready to pick.
+keys. The module also carries ready-made default instances
+(``teacher_gap_cost`` is ``TeacherGapCost()``, and so on).
 """
 
 from ._constraint import Constraint, Score, score_costs, select
@@ -408,7 +428,7 @@ class ParallelGroupsCost(Constraint):
     )
 
 
-#: Instances at the default weights (weight=None). Reference them directly when picking.
+#: Ready-made default instances (``teacher_gap_cost`` is ``TeacherGapCost()``).
 unassigned_lessons_cost = UnassignedLessonsCost()
 class_conflict_cost = ClassConflictCost()
 teacher_conflict_cost = TeacherConflictCost()
@@ -464,12 +484,12 @@ def default_weights() -> dict[str, float]:
     return {row.name: row.default_weight for row in constraint_info() if row.default_level == "soft"}
 
 
-def spec_named(name: str, *, weight=None, hard=None, exponent=1.0) -> Constraint:
+def spec_named(name: str, *, weight=None, hard=None, exponent=1.0, offset=0.0, clip=True) -> Constraint:
     """The spec of the constraint called ``name`` with the given knobs; unknown names raise ValueError."""
     spec_class = _SPEC_BY_NAME.get(name)
     if spec_class is None:
         raise ValueError(f"unknown constraint name: {name!r} (see list_constraints())")
-    return spec_class(weight=weight, hard=hard, exponent=exponent)
+    return spec_class(weight=weight, hard=hard, exponent=exponent, offset=offset, clip=clip)
 
 
 class Assembly:
@@ -478,7 +498,9 @@ class Assembly:
     defaults with a small change" stays short.
 
     ``add`` inserts a constraint by name (or spec instance) and **replaces the
-    one with the same name** (override semantics; for summed duplicates use
+    one with the same name** (override semantics: an Assembly is a builder, it
+    holds each name once; to pick a constraint several times pass a plain list
+    such as ``[*Assembly(), TeacherGapCost(exponent=2, offset=3)]``, or use
     ``canon.DecomposedCalculator.add`` directly). ``drop`` removes the named
     constraint. Both return self for chaining::
 
@@ -504,17 +526,20 @@ class Assembly:
         weight: float | None = None,
         hard: bool | None = None,
         exponent: float = 1.0,
+        offset: float = 0.0,
+        clip: bool = True,
     ) -> "Assembly":
         """Adds a constraint (replacing one with the same name). A name builds a
-        spec from weight/hard/exponent; a spec instance is used as is (mixing an
-        instance with keyword overrides raises ValueError). Unknown names raise
-        ValueError."""
+        spec from weight/hard/exponent/offset/clip; a spec instance is used as
+        is (mixing an instance with keyword overrides raises ValueError).
+        Unknown names raise ValueError."""
         if isinstance(constraint, str):
-            spec = spec_named(constraint, weight=weight, hard=hard, exponent=exponent)
+            spec = spec_named(constraint, weight=weight, hard=hard, exponent=exponent, offset=offset, clip=clip)
         elif isinstance(constraint, Constraint):
-            if weight is not None or hard is not None or exponent != 1.0:
+            if weight is not None or hard is not None or exponent != 1.0 or offset != 0.0 or clip is not True:
                 raise ValueError(
-                    "a spec instance cannot be combined with weight/hard/exponent (put them in the instance)"
+                    "a spec instance cannot be combined with weight/hard/exponent/offset/clip "
+                    "(put them in the instance)"
                 )
             spec = constraint
         else:
@@ -554,12 +579,13 @@ def get_constraints(constraints: list[Constraint] | None = None) -> list[Constra
 
         canon.DecomposedCalculator(get_constraints())          # the defaults
         canon.DecomposedCalculator(get_constraints([           # pick and choose
-            class_conflict_cost, TeacherGapCost(weight=40),
+            ClassConflictCost(), TeacherGapCost(weight=40),
         ]))
 
     The same contract as the C++ ``applyConstraints``: an empty list is an error
-    (not "the defaults"), and so is naming a constraint twice. The default set
-    equals what :class:`Assembly` builds without arguments.
+    (not "the defaults"); a constraint named several times is scored once per
+    pick, each with its own knobs. The default set equals what
+    :class:`Assembly` builds without arguments.
     """
     return select(constraints, _DEFAULTS)
 
@@ -568,7 +594,11 @@ def score(costs: dict, constraints: list[Constraint] | None = None) -> Score:
     """Scores raw constraint costs with a selection — pure Python, the engine's arithmetic.
 
     ``costs`` is ``canon.constraint_costs(table)`` (each constraint's raw cost
-    per slot, or its single total, before weight / exponent / level);
+    per slot, or its single total, before weight / exponent / offset / level);
     ``constraints`` the selection (``None`` = the defaults). Equals the engine's
-    score of the same assembly on the same table, without a solver."""
+    score of the same assembly on the same table, without a solver. A second
+    pick of a constraint reads the same raw costs with its own knobs::
+
+        score(canon.constraint_costs(table), [*get_constraints(), TeacherGapCost(exponent=2, offset=3)])
+    """
     return score_costs(costs, get_constraints(constraints))

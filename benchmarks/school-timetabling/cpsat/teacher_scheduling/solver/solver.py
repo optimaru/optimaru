@@ -8,7 +8,14 @@ from teacher_scheduling.domain.problem import TimetableProblem
 from teacher_scheduling.domain.solution import ScheduledLesson, SolveStatus, Timetable
 from teacher_scheduling.solver.config import SolverConfig
 from teacher_scheduling.solver.objective import PenaltyTerms
-from teacher_scheduling.solver.registry import Constraint, build_all, default_constraints, weight_of
+from teacher_scheduling.solver.registry import (
+    Constraint,
+    build_all,
+    default_constraints,
+    instance_keys,
+    objective_term,
+    weight_of,
+)
 from teacher_scheduling.solver.rooms import assign_rooms
 from teacher_scheduling.solver.variables import TimetableVariables
 
@@ -33,7 +40,10 @@ def solve(
     constraint at its default level) with the `config.weights` soft weights. A
     given constraint list is the whole list — to keep the defaults use
     `registry.merge(default_constraints(), ...)`; a built-in constraint's
-    ``weight=None`` is the engine default, not `config.weights`.
+    ``weight=None`` is the engine default, not `config.weights`. A constraint
+    listed several times adds one objective term per entry, each with its own
+    knobs (an offset shaped as the engine shapes it); `Timetable.penalties`
+    reports each name's raw count once.
     Solutions obtained with relaxed or injected custom constraints are outside the
     scope of `validate.validate_timetable` (see the `teacher_scheduling.solver.registry` docstring).
     """
@@ -43,8 +53,9 @@ def solve(
     variables = TimetableVariables(model, problem)
     if constraints is None:
         constraints = default_constraints(config.weights)
+    constraints = list(constraints)
     penalties = build_all(model, variables, constraints)
-    _minimize(model, penalties, constraints, config)
+    _minimize(model, variables, penalties, constraints, config)
 
     solver = _make_solver(config)
     status = _STATUS_BY_CPSAT.get(solver.solve(model), SolveStatus.UNKNOWN)
@@ -64,17 +75,25 @@ def solve(
 
 def _minimize(
     model: cp_model.CpModel,
+    variables: TimetableVariables,
     penalties: PenaltyTerms,
     constraints: Sequence[Constraint],
     config: SolverConfig,
 ) -> None:
-    """Minimises the weighted sum of the penalty expressions. Terms with weight 0 leave the objective.
+    """Minimises the weighted sum of the (offset-shaped) penalty terms, one per entry. Terms with
+    weight 0 leave the objective.
 
     A penalty expression stays in `penalties` even with weight 0 — removing it
     from the objective is not the same as hiding it from the result.
     """
-    weights = {constraint.name: weight_of(constraint, config.weights) for constraint in constraints}
-    objective = [weights[name] * expr for name, expr in penalties.items() if weights[name]]
+    objective = []
+    for key, constraint in zip(instance_keys(constraints), constraints, strict=True):
+        expr = penalties.get(key)
+        weight = weight_of(constraint, config.weights)
+        if expr is None or not weight:
+            continue
+        term = objective_term(constraint, model, variables, expr)
+        objective.append(weight * term)
     if objective:
         model.minimize(sum(objective))
 
@@ -109,4 +128,8 @@ def _extract_lessons(solver: cp_model.CpSolver, variables: TimetableVariables) -
 
 
 def _penalty_values(solver: cp_model.CpSolver, penalties: PenaltyTerms) -> dict[str, int]:
-    return {name: int(solver.value(expr)) for name, expr in penalties.items()}
+    """The raw count of each penalized name, once: a repeated entry ("<name>#<k>") counts the same."""
+    values: dict[str, int] = {}
+    for key, expr in penalties.items():
+        values.setdefault(key.partition("#")[0], int(solver.value(expr)))
+    return values

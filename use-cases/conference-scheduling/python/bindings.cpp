@@ -487,7 +487,9 @@ PYBIND11_MODULE(_core, m)
              py::call_guard<py::gil_scoped_release>())
         // Same solve, scored by a caller-chosen constraint set (see
         // conference_scheduling.constraints). The picks replace the
-        // defaults; None keeps them.
+        // defaults; None keeps them. A name may be picked several times:
+        // every pick is its own instance (a fresh copy of the default
+        // component) with its own knobs.
         .def(
             "solve_with_constraints",
             [](Solver &solver,
@@ -496,7 +498,8 @@ PYBIND11_MODULE(_core, m)
             {
                 ScoreCalculator::prepare(schedule);
                 DecomposedCalculator calculator;
-                tfpy::applyConstraints(defaultConstraints(), constraints)
+                tfpy::applyConstraints([] { return defaultConstraints(); },
+                                       constraints)
                     .into(calculator);
                 py::gil_scoped_release release;
                 solver.solve(schedule, calculator);
@@ -504,22 +507,28 @@ PYBIND11_MODULE(_core, m)
             py::arg("schedule"),
             py::arg("constraints") = py::none());
 
-    // The raw per-unit costs of the default assembly on `schedule` — the input
+    // The raw costs of an assembly on `schedule` — the input
     // conference_scheduling.constraints.score() turns into a score. Scoring
     // once is enough: re-pricing any assembly is pure Python arithmetic on
-    // these.
+    // these. None = the default assembly; a pick list scores exactly those
+    // picks (applyConstraints), each entry carrying its pick's knobs, the
+    // k-th pick of a name keyed "<name>#<k>".
     m.def(
         "constraint_costs",
-        [](ConferenceSchedule &schedule)
+        [](ConferenceSchedule &schedule, const py::object &constraints)
         {
             ScoreCalculator::prepare(schedule);
             DecomposedCalculator calculator;
-            defaultConstraints().into(calculator);
+            tfpy::applyConstraints([] { return defaultConstraints(); },
+                                   constraints)
+                .into(calculator);
             return tfpy::constraintCosts(calculator, schedule);
         },
         py::arg("schedule"),
-        "Raw cost of every default constraint (one global total each), before "
-        "weight/exponent/level; the three *_diversity_cost rewards are <= 0.");
+        py::arg("constraints") = py::none(),
+        "Raw cost of every constraint (one global total each), before "
+        "weight/exponent/offset/level; the three *_diversity_cost rewards "
+        "are <= 0.");
 
     // The constraint names this domain scores, in default-assembly order —
     // the same strings constraint_costs() reports.

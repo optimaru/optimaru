@@ -18,6 +18,7 @@ from es_scheduling.constraints import (  # noqa: E402
     MaxConsecutiveDaysCost,
     RequiredSkillCost,
     UnassignedShiftsCost,
+    UndesiredDayCost,
     WorkerDayCountInRangeCost,
 )
 from es_scheduling.demo import generate_demo_data  # noqa: E402
@@ -394,7 +395,7 @@ def test_there_is_one_rule_model_per_spec_in_factory_order():
         assert model.spec_class is spec
         assert model.__name__ == f"{spec.__name__}Model"  # no "Rule" suffix in 0.2.0
         assert getattr(models, model.__name__) is model  # picklable by reference
-        assert set(model.model_fields) == {"name", "weight", "hard", "exponent", *spec().params()}
+        assert set(model.model_fields) == {"name", "weight", "hard", "exponent", "offset", "clip", *spec().params()}
         assert model().to_spec() == spec()
 
 
@@ -436,6 +437,11 @@ def test_a_rule_may_repeat_with_other_parameters():
         {"name": "required_skill_cost", "weight": "2"},  # ... and a numeric string
         {"name": "required_skill_cost", "exponent": True},
         {"name": "required_skill_cost", "exponent": "2"},
+        {"name": "required_skill_cost", "offset": "5"},
+        {"name": "required_skill_cost", "offset": False},
+        {"name": "required_skill_cost", "offset": float("inf")},
+        {"name": "required_skill_cost", "clip": 1},
+        {"name": "required_skill_cost", "clip": "no"},
     ],
     ids=[
         "old-name",
@@ -450,6 +456,11 @@ def test_a_rule_may_repeat_with_other_parameters():
         "weight-str",
         "exponent-bool",
         "exponent-str",
+        "offset-str",
+        "offset-bool",
+        "offset-inf",
+        "clip-int",
+        "clip-str",
     ],
 )
 def test_a_bad_rule_fails_validation(rule):
@@ -501,49 +512,85 @@ def test_an_unvalidated_spec_in_rules_still_solves():
     assert "max_consecutive_days_cost" in {total.name for total in solution.rule_totals}
 
 
+def _all_on_the_first_worker():
+    model_input = _small_input()
+    for shift in model_input.shifts:
+        shift.worker = "Worker 01"
+    return to_schedule(model_input)
+
+
+def test_an_empty_rule_list_is_refused():
+    """The get_constraints() rule holds for SchedulingInput.rules too."""
+    with pytest.raises(ValidationError, match="must not be empty"):
+        _small_input(rules=[])
+
+
 @pytest.mark.parametrize(
     "rules",
     [
-        [],
         [RequiredSkillCost(), RequiredSkillCost()],
         [MaxConsecutiveDaysCost(value=2), {"name": "max_consecutive_days_cost", "value": 2}],
+        [MaxConsecutiveDaysCost(value=2), MaxConsecutiveDaysCost(value=2, weight=3, offset=1)],
     ],
-    ids=["empty", "same-twice", "spec-and-json-twice"],
+    ids=["same-twice", "spec-and-json-twice", "other-knobs"],
 )
-def test_an_empty_or_repeated_rule_list_is_refused(rules):
-    """The get_constraints() rules hold for SchedulingInput.rules too (both were scored)."""
-    with pytest.raises(ValidationError, match="must not be empty|same parameters"):
-        _small_input(rules=rules)
+def test_a_repeated_rule_is_one_instance_per_entry(rules):
+    """Since 0.3.0 the same rule may repeat with the same parameters: each entry is scored."""
+    model_input = _small_input(rules=rules)
+    assert len(model_input.rules) == 2
+    solution = solve_request(ScheduleRequest(timelimit=0.05, model_input=model_input))
+    assert [total.name for total in solution.rule_totals] == [rules[0].name] * 2
 
 
-def test_the_cpp_calculator_refuses_an_empty_or_repeated_selection():
-    """DecomposedCalculator(list) follows get_constraints(); add() still builds incrementally."""
+def test_the_cpp_calculator_accepts_a_repeated_selection():
+    """DecomposedCalculator(list) follows get_constraints(): empty is refused, a repeat is an instance."""
     with pytest.raises(ValueError, match="must not be empty"):
         es.DecomposedCalculator([])
-    with pytest.raises(ValueError, match="same parameters"):
-        es.DecomposedCalculator([MaxConsecutiveDaysCost(value=1), MaxConsecutiveDaysCost(value=1)])
-    schedule = to_schedule(_small_input())
-    with pytest.raises(ValueError, match="same parameters"):
-        es.constraint_costs(schedule, [DayPatternCost(pattern="WORK,WORK")] * 2)
-    # Other knobs alone do not make another instance (select() keys name and parameters) ...
-    with pytest.raises(ValueError, match="same parameters"):
-        es.DecomposedCalculator([MaxConsecutiveDaysCost(value=1), MaxConsecutiveDaysCost(value=1, weight=2)])
-    # ... other parameters (or scope) do.
+    schedule = _all_on_the_first_worker()
+    twice = es.DecomposedCalculator([MaxConsecutiveDaysCost(value=1), MaxConsecutiveDaysCost(value=1)])
+    once = es.DecomposedCalculator([MaxConsecutiveDaysCost(value=1)])
+    assert once.score(schedule).hard == -3  # four days in a row against a limit of 1
+    assert twice.score(schedule).hard == 2 * once.score(schedule).hard
+    raw = es.constraint_costs(schedule, [DayPatternCost(pattern="WORK,WORK")] * 2)
+    assert list(raw) == ["day_pattern_cost", "day_pattern_cost#2"]
+    # Other knobs alone make another instance too, as do other parameters (or scope).
+    es.DecomposedCalculator([MaxConsecutiveDaysCost(value=1), MaxConsecutiveDaysCost(value=1, weight=2)])
     es.DecomposedCalculator([MaxConsecutiveDaysCost(value=1), MaxConsecutiveDaysCost(value=2)])
     es.DecomposedCalculator([MaxConsecutiveDaysCost(value=1), MaxConsecutiveDaysCost(value=1, worker_indices=(0,))])
 
 
-def test_the_cpp_calculator_compares_parameters_by_value_like_get_constraints():
-    """A list and a tuple scope are the same parameters on every path, as in get_constraints()."""
+def test_a_list_and_a_tuple_scope_are_two_instances_of_the_same_rule():
+    """A list and a tuple scope are the same parameters; picked twice, they count twice on every path."""
     a = MaxConsecutiveDaysCost(value=5, worker_indices=(0, 1))
     b = MaxConsecutiveDaysCost(value=5, worker_indices=[0, 1])
-    with pytest.raises(ValueError, match="same parameters"):
-        es.constraints.get_constraints([a, b])
-    with pytest.raises(ValueError, match="same parameters"):
-        es.DecomposedCalculator([a, b])
-    with pytest.raises(ValueError, match="same parameters"):
-        es.constraint_costs(to_schedule(_small_input()), [a, b])
-    # A different scope is still another instance on both paths.
-    other = MaxConsecutiveDaysCost(value=5, worker_indices=[0])
-    assert len(es.constraints.get_constraints([a, other])) == 2
-    es.DecomposedCalculator([a, other])
+    assert len(es.constraints.get_constraints([a, b])) == 2
+    schedule = _all_on_the_first_worker()
+    raw = es.constraint_costs(schedule, [a, b])
+    assert list(raw) == ["max_consecutive_days_cost", "max_consecutive_days_cost#2"]
+    assert raw["max_consecutive_days_cost"]["costs"] == raw["max_consecutive_days_cost#2"]["costs"]
+    assert raw["max_consecutive_days_cost"]["units"] == raw["max_consecutive_days_cost#2"]["units"] == [0, 1]
+    single = es.DecomposedCalculator([a]).score(schedule)
+    double = es.DecomposedCalculator([a, b]).score(schedule)
+    assert (double.hard, double.soft) == (2 * single.hard, 2 * single.soft)
+
+
+def test_offset_and_clip_round_trip_through_json():
+    """The knobs are rule fields (not domain parameters): spec -> JSON -> spec keeps them."""
+    spec = UndesiredDayCost(weight=0.5, exponent=2.0, offset=120, clip=False)
+    (rule,) = _small_input(rules=[spec]).rules
+    assert (rule.offset, rule.clip) == (120.0, False)
+    assert rule.to_spec() == spec
+    assert rule.params() == spec.params()
+    assert "offset" not in rule.params() and "clip" not in rule.params()
+    dumped = rule.model_dump(mode="json")
+    assert dumped["offset"] == 120.0 and dumped["clip"] is False
+    again = SchedulingInput.model_validate({**_small_input().model_dump(), "rules": [dumped]})
+    assert again.rules[0].to_spec() == spec
+    defaults = rule_model(UndesiredDayCost)()
+    assert (defaults.offset, defaults.clip) == (0.0, True)
+
+
+def test_the_json_schema_carries_the_offset_and_clip_knobs():
+    properties = rule_model(MaxConsecutiveDaysCost).model_json_schema()["properties"]
+    assert properties["offset"]["default"] == 0.0 and properties["offset"]["type"] == "number"
+    assert properties["clip"]["default"] is True and properties["clip"]["type"] == "boolean"

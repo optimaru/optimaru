@@ -1,7 +1,7 @@
 """Constraint specs — one class per constraint of the employee-scheduling engine.
 
 Each spec names one C++ component (``name`` is its Python registry name, the
-C++ name in snake_case) and carries the three knobs every optimaru constraint
+C++ name in snake_case) and carries the five knobs every optimaru constraint
 takes, plus the constraint's own domain parameters::
 
     constraints = [
@@ -12,6 +12,7 @@ takes, plus the constraint's own domain parameters::
         MaxConsecutiveDaysCost(value=5, worker_indices=(0, 1)),   # scoped
         DayPatternCost(pattern="Location A,OFF,Location B"),
         DayPatternCost(pattern="WORK,WORK,WORK,WORK,WORK,WORK,WORK"),  # same rule, again
+        UndesiredDayCost(weight=0.01, exponent=2, offset=120),   # + (minutes beyond 2 h)^2
     ]
     solver.solve(schedule, DecomposedCalculator(get_constraints(constraints)))
 
@@ -26,6 +27,15 @@ The knobs (see ``_constraint.py``):
                ``True``.
 - ``exponent`` sign-preserving power shaping, > 0: per employee for a unit
                constraint, on the single total for a global one.
+- ``offset``   (keyword) a shift of that shaping, any finite number (0.0 =
+               none), at the same granularity.
+- ``clip``     (keyword) ``True`` (the default, the threshold) counts only
+               what lies beyond the offset, ``sign(c) * max(0, |c| - offset)
+               ** exponent``; ``False`` (the literal formula) shapes ``c -
+               offset`` as it is, which charges every employee the rule
+               evaluates (a raw 0 included; a worker-scoped rule evaluates
+               only the employees in its scope) and rewards a cost below the
+               offset.
 
 The defaults live in C++ only; ``es_scheduling.constraint_info()`` reports
 them for all 30 constraints. Every other field is a domain parameter
@@ -36,11 +46,13 @@ declared once, in the class's ``bounds``, and checked here; the JSON rule
 models (``es_scheduling.models``) are generated from these classes and turn
 the same bounds into pydantic constraints.
 
-Unlike the other use cases, one constraint may be picked several times with
-different parameters or scope (``select(..., repeatable=True)``); the C++
-factory scores each instance on its own, ``constraint_totals()`` tells them
-apart by label and ``constraint_costs()`` keys the k-th instance
-``"<name>#<k>"``.
+One constraint may be picked several times, with different parameters, scope
+or knobs (``x**2 + x**3`` is two picks, ``exponent=2`` and ``exponent=3``) or
+with the same ones (identical picks simply count twice); the C++ factory
+scores each instance on its own, ``constraint_totals()`` tells them apart by
+label and ``constraint_costs()`` keys the k-th instance ``"<name>#<k>"``.
+(The module also carries ready-made default instances: ``required_skill_cost``
+is ``RequiredSkillCost()``, and so on.)
 
 This module does not need pydantic.
 """
@@ -894,8 +906,8 @@ SPEC_CLASSES: tuple[type[Constraint], ...] = (
     WorkerPairingCost,
 )
 
-#: Instances at the default weights and parameters (weight=None), one per
-#: constraint. Reference them directly when picking.
+#: Ready-made default instances at the default weights and parameters, one per
+#: constraint (``required_skill_cost`` is ``RequiredSkillCost()``).
 required_skill_cost = RequiredSkillCost()
 employee_unavailability_cost = EmployeeUnavailabilityCost()
 shift_overlap_cost = ShiftOverlapCost()
@@ -956,10 +968,11 @@ def get_constraints(constraints: list[Constraint] | None = None) -> list[Constra
 
     Passing `constraints` uses that list as given — only what is in it is
     scored. An empty list is an error, not "the defaults". A constraint may
-    appear several times with different parameters (scope included); the
-    same constraint with the same parameters twice is an error.
+    appear several times, with different parameters (scope included) or
+    knobs, or with the same ones: every pick is its own instance, scored on
+    its own, and the instances add up.
     """
-    return select(constraints, _DEFAULTS, repeatable=True)
+    return select(constraints, _DEFAULTS)
 
 
 def score(costs: dict, constraints: list[Constraint] | None = None) -> Score:
@@ -967,7 +980,9 @@ def score(costs: dict, constraints: list[Constraint] | None = None) -> Score:
 
     `costs` must be ``constraint_costs(schedule, constraints)`` of the SAME
     list (repeated rules are keyed ``"<name>#<k>"``); None = the defaults on
-    both sides. Each spec's weight / hard / exponent re-prices its entry
-    without another scoring pass.
+    both sides. Each spec's weight / hard / exponent / offset / clip re-prices
+    its entry without another scoring pass. A repeat of a rule without domain
+    parameters may also be scored from costs that hold it once (the same raw
+    costs); a parametrized repeat needs its own ``"<name>#<k>"`` entry.
     """
     return score_costs(costs, get_constraints(constraints))

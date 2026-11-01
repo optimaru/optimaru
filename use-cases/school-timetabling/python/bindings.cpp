@@ -158,13 +158,21 @@ template <typename Config> void bindSolverConfigCommon(py::class_<Config> &cls)
 // components of ONE calculator share one projection, so a pick added to a
 // calculator that already holds family members joins their hub
 // (cn::sharedTeacherMaskHub) — the factory is defaultConstraints(hub).
+//
+// A name may be picked several times: applyConstraints calls the factory
+// once more per repeat and appends that copy. Every call hands out the SAME
+// hub (the calculator's, or one made here for an empty calculator), so the
+// repeated teacher-mask instances subscribe to the projection the others
+// read — the hub counts its subscribers and applies each event once.
 
 // The constraints `picks` names (None = the whole default set), with their
 // knobs applied, poured into `calc`.
 void addPicks(cn::DecomposedCalculator &calc, const py::object &picks)
 {
-    tfpy::applyConstraints(
-        cn::defaultConstraints(cn::sharedTeacherMaskHub(calc)), picks)
+    std::shared_ptr<cn::TeacherMaskHub> hub = cn::sharedTeacherMaskHub(calc);
+    if (hub == nullptr)
+        hub = std::make_shared<cn::TeacherMaskHub>();
+    tfpy::applyConstraints([&] { return cn::defaultConstraints(hub); }, picks)
         .into(calc);
 }
 
@@ -195,7 +203,9 @@ std::vector<optimaru::ConstraintInfo> catalogRows()
     return ordered;
 }
 
-// tfpy::constraintCosts(calc, table) with its entries in the catalog order.
+// tfpy::constraintCosts(calc, table) with its entries in the catalog order:
+// each catalog name's instances together, in the calculator's order (the
+// keys stay tfpy's: "<name>", "<name>#2", ..., the instanceKeys rule).
 py::dict orderedConstraintCosts(cn::DecomposedCalculator &calc,
                                 cn::Timetable &table)
 {
@@ -204,9 +214,12 @@ py::dict orderedConstraintCosts(cn::DecomposedCalculator &calc,
     py::dict ordered;
     for (const std::string &name : catalogNames())
     {
-        const py::str key(name);
-        if (costs.contains(key))
-            ordered[key] = costs[key];
+        for (const auto &item : costs)
+        {
+            const py::dict entry = py::reinterpret_borrow<py::dict>(item.second);
+            if (entry["name"].cast<std::string>() == name)
+                ordered[item.first] = item.second;
+        }
     }
     for (const auto &item : costs)  // anything outside the catalog order
     {
@@ -495,9 +508,11 @@ void bindCanon(py::module_ &canon)
         "exactly.")
         .def(py::init<>())
         // Example: DecomposedCalculator([TeacherGapCost(weight=40), ...]).
-        // Duck-typed picks (.name/.weight/.hard/.exponent), resolved and
-        // checked by tfpy::applyConstraints: weight None keeps the
-        // component's kDefaultWeight, hard None its kDefaultLevel.
+        // Duck-typed picks (.name/.weight/.hard/.exponent, optionally
+        // .offset/.clip), resolved and checked by tfpy::applyConstraints:
+        // weight None keeps the component's kDefaultWeight, hard None its
+        // kDefaultLevel; a name picked several times is one instance per
+        // pick.
         .def(py::init(
                  [](const py::object &constraints)
                  {
@@ -507,22 +522,27 @@ void bindCanon(py::module_ &canon)
                  }),
              py::arg("constraints"),
              "Assemble from constraint picks (duck-typed: .name, .weight, "
-             ".hard, .exponent; None = the whole default set). The picks "
-             "replace the defaults; a name picked twice or an empty list is "
-             "a ValueError.")
+             ".hard, .exponent, optionally .offset / .clip; None = the whole "
+             "default set). The picks replace the defaults; a name picked "
+             "several times is one instance per pick, each with its own "
+             "knobs (their costs add up); an empty list is a ValueError.")
         .def(
             "add",
             [](cn::DecomposedCalculator &calc,
                const std::string &name,
                const py::object &weight,
                const py::object &hard,
-               const py::object &exponent)
+               const py::object &exponent,
+               const py::object &offset,
+               const py::object &clip)
             {
                 const py::object pick = py::module_::import("types").attr(
                     "SimpleNamespace")(py::arg("name") = name,
                                        py::arg("weight") = weight,
                                        py::arg("hard") = hard,
-                                       py::arg("exponent") = exponent);
+                                       py::arg("exponent") = exponent,
+                                       py::arg("offset") = offset,
+                                       py::arg("clip") = clip);
                 py::list picks;
                 picks.append(pick);
                 addPicks(calc, picks);
@@ -531,13 +551,19 @@ void bindCanon(py::module_ &canon)
             py::arg("weight") = py::none(),
             py::arg("hard") = py::none(),
             py::arg("exponent") = 1.0,
+            py::kw_only(),
+            py::arg("offset") = 0.0,
+            py::arg("clip") = true,
             "Add one canonical constraint by name (see CONSTRAINT_NAMES), "
-            "with the same three knobs and checks as a spec:\n"
+            "with the same five knobs and checks as a spec:\n"
             "weight:   None = the component's default weight, else a finite "
             "number >= 0.\n"
             "hard:     None = the default level, True = hard, False = soft "
             "(fixed_slots_cost / parallel_groups_cost refuse False).\n"
             "exponent: sign-preserving power shaping, > 0.\n"
+            "offset:   (keyword) a shift of that shaping, finite (0 = none); "
+            "clip=True (the default) counts only what lies beyond it, "
+            "clip=False shapes cost - offset as it is.\n"
             "Raises ValueError for an unknown name. Adding a name twice is "
             "allowed here (their costs add up).")
         .def(
@@ -635,9 +661,11 @@ void bindCanon(py::module_ &canon)
         py::arg("table"),
         py::arg("constraints") = py::none(),
         "Raw per-unit cost of every default constraint (or of the picked "
-        "ones), before weight/exponent/level: {name: {costs, weight, "
-        "exponent, hard, global, level, reward, level_flippable, name, "
-        "label}}, in list_constraints() order.");
+        "ones), before weight/exponent/offset/level: {key: {costs, weight, "
+        "exponent, offset, clip, hard, global, level, reward, "
+        "level_flippable, name, label, default_weight, default_level}}, in "
+        "list_constraints() order; the k-th pick of a name is keyed "
+        "'<name>#<k>', next to the name's first instance.");
 
     py::class_<cn::Solver::Config> config(
         canon, "SolverConfig", py::module_local());

@@ -148,10 +148,11 @@ def _weights_of(weights: "canon.ObjectiveWeights") -> dict[str, float]:
 def _picks_of(constraints) -> list[Constraint]:
     """`solve(constraints=...)`'s argument as a list of specs.
 
-    An `Assembly` is taken as it is (its add() already resolved duplicates by
-    name); any other iterable of specs and/or names goes through
-    `get_constraints`, so a constraint named twice or an empty list is a
-    ValueError — the same contract as the C++ `applyConstraints`."""
+    An `Assembly` is taken as it is (its add() replaces a name it already
+    holds); any other iterable of specs and/or names goes through
+    `get_constraints`, so an empty list is a ValueError and a constraint
+    named several times is one instance per pick — the same contract as the
+    C++ `applyConstraints`."""
     if isinstance(constraints, Assembly):
         return list(constraints)
     return get_constraints([spec_named(item) if isinstance(item, str) else item for item in constraints])
@@ -165,13 +166,19 @@ def _assemble_plugin(constraints):
     kDefaultWeight, `constraint_info()`), the same as on the fast path. The
     rescoring weights (objective_value) mirror the assembly: a picked soft
     constraint takes its effective weight, a soft constraint left out of the
-    selection 0. They are plain numbers — no integer requirement.
+    selection 0. A soft constraint picked several times takes the sum of its
+    instances' effective weights, which is exactly their linear contribution
+    (``w1 * c + w2 * c``). objective_value stays that linear weighted sum of the
+    raw penalties: like a pick's exponent, an offset / clip shapes the search
+    score only; `constraints.score(canon.constraint_costs(table, picks), picks)`
+    is the exact score of the selection. They are plain numbers — no integer
+    requirement.
 
-    The third value is a float only for an assembly that demotes
-    `unassigned_lessons_cost` to soft (that component's effective weight) or
-    leaves it out altogether (0.0), and None while it stays hard — it tells
-    `convert_solution` whether unassigned lessons may remain in the result and
-    what each one costs.
+    The third value is a float only for an assembly that demotes every
+    instance of `unassigned_lessons_cost` to soft (the sum of their effective
+    weights) or leaves it out altogether (0.0), and None while one instance
+    stays hard — it tells `convert_solution` whether unassigned lessons may
+    remain in the result and what each one costs.
     """
     picks = _picks_of(constraints)
     calculator = canon.DecomposedCalculator(picks)  # the C++ knob checks
@@ -180,10 +187,14 @@ def _assemble_plugin(constraints):
     for spec in picks:
         weight = _DEFAULT_WEIGHTS[spec.name] if spec.weight is None else float(spec.weight)
         if spec.name in report:
-            report[spec.name] = weight
+            report[spec.name] += weight  # a repeated soft pick: the instances add up
         if spec.name == UnassignedLessonsCost.name:
-            # Hard means unassigned lessons cannot occur (the engine does not enable the moves either).
-            unassigned_weight = None if spec.hard is not False else weight
+            # Hard means unassigned lessons cannot occur (the engine does not enable the moves
+            # either); one hard instance is enough.
+            if spec.hard is not False:
+                unassigned_weight = None
+            elif unassigned_weight is not None:
+                unassigned_weight += weight
     return calculator, canon.ObjectiveWeights(**report), unassigned_weight
 
 
@@ -257,7 +268,8 @@ def solve(
 
     ``constraints`` is a plugin constraint selection (canonical mode only; see
     the `constraints` module): an `Assembly`, or an iterable of specs and/or
-    names (a constraint named twice or an empty list raises ValueError).
+    names (an empty list raises ValueError; a constraint named several times
+    is one instance per pick, each with its own knobs).
     ``None`` (default) keeps the monolithic incremental calculator's fast path.
     When given, the search runs on the assembled `canon.DecomposedCalculator`:
     a pick's ``weight=None`` is the component default (never ``weights`` /
@@ -265,7 +277,9 @@ def solve(
     is single-start (parallel_solver_count ignored). The response's penalties
     are always the canonical rescore (raw soft counts, independent of the
     selection), and objective_value uses the selection's effective soft
-    weights (a picked soft constraint its weight, one left out 0). status also
+    weights (a picked soft constraint its weight, the sum of them for one
+    picked several times, one left out 0; exponent / offset / clip shape the
+    search score only). status also
     follows the canonical hard rescore (e.g. a selection that demotes a hard
     constraint to soft and then violates it is INFEASIBLE).
 

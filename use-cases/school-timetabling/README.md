@@ -27,6 +27,13 @@ cmake -S use-cases/school-timetabling/cpp -B build/school-timetabling && cmake -
 ctest --test-dir build/school-timetabling
 ```
 
+**0.3.0:** in a `constraints=` list a constraint may be picked several times (each pick
+its own instance with its own knobs; the instances add up), and every constraint takes two
+more keyword knobs, `offset` and `clip`: `TeacherGapCost(exponent=2, offset=3)` charges
+`max(0, gaps - 3)**2`, `clip=False` shapes `gaps - 3` as it is. `offset=0` is the 0.2.0
+shaping. `constraints.Assembly` stays a builder that holds each name once (`add` replaces).
+Details: [`python/`](python/README.md#plugin-constraint-assembly-constraints).
+
 ## Starting from an existing solution
 
 ```python

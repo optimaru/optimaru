@@ -63,6 +63,17 @@ that kept the 1e6), and an explicit `weight` is in medium units. `compute_breakd
 `Breakdown` class are gone: `constraint_costs(schedule)` is the per-constraint surface (sum a
 constraint's `costs` for the old totals). Raw costs and the default score are unchanged.
 
+**0.3.0:** every constraint takes two more knobs, `offset` and `clip` (keyword-only), and
+may be picked several times. A raw cost `x` (per cell for the five unit constraints, the
+one total for the seven pair constraints) is shaped as
+`sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
+`(x - offset) ** exponent`, sign-preserving (`clip=False`, which charges every
+(grain, room) cell of a unit constraint, an empty one included, and acts as a reward below
+the offset); `offset=0` is the 0.2.0 shaping. Each pick is its own instance with its own
+knobs, and the instances add up; `ms.constraint_costs(schedule, picks)` keys the second
+pick `"<name>#2"`. The CP-SAT reference takes integral offsets on every constraint (see
+its README).
+
 The C++ side builds and tests with:
 
 ```sh
@@ -125,7 +136,7 @@ solver's `solve` before the engine runs — the engine only fills what is still 
 4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
    `description_en` / `description_ko` to `python/meeting_scheduling/constraints.py` (plus
    its module-level default instance); callers then pick, reweight or flip it:
-   `constraints=get_constraints([..., MyRuleCost(weight=5, hard=True)])`;
+   `constraints=[..., MyRuleCost(weight=5, hard=True)]`;
 5. mirror it in the CP-SAT model in
    [`benchmarks/meeting-scheduling/cpsat`](../../benchmarks/meeting-scheduling/cpsat) (a plugin
    subclassing the spec; defaults come from `constraint_info()`) so the benchmark stays like

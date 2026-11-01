@@ -882,6 +882,7 @@ void runEngine(const Solver::Config& config, EmployeeSchedule& schedule,
     engineConfig.localSearch.descentMaxSweeps = config.descentMaxSweeps;
     engineConfig.localSearch.customMoveProbability = config.customMoveProbability;
     engineConfig.randomSeed = config.randomSeed;
+    engineConfig.environmentMode = config.environmentMode;
     engineConfig.onNewBest = config.onNewBest;
 
     // Guided move selection: the domain heuristics plugged into the engine's

@@ -255,9 +255,48 @@ def test_unknown_or_invalid_constraint_raises(problem):
     # constraints are canonical-mode only.
     with pytest.raises(ValueError, match="canonical"):
         st.solve(problem, mode="quickstart", constraints=Assembly())
-    # A plain list goes through get_constraints: a constraint named twice is an error, not last-wins.
-    with pytest.raises(ValueError, match="picked more than once"):
-        st.solve(problem, constraints=["teacher_gap_cost", TeacherGapCost(weight=4)], time_limit_seconds=0.1)
+    # An empty plain list is an error, not the defaults.
+    with pytest.raises(ValueError, match="must not be empty"):
+        st.solve(problem, constraints=[], time_limit_seconds=0.1)
+
+
+def test_a_plain_list_may_pick_a_constraint_twice(problem):
+    """A plain list goes through get_constraints: a name picked twice is two instances, not last-wins.
+
+    objective_value adds the instances' weights (20 + 4 for the teacher gaps), the
+    exact linear contribution of the two picks."""
+    picks = [*Assembly(), "teacher_gap_cost", TeacherGapCost(weight=4)]
+    result = st.solve(problem, constraints=picks, time_limit_seconds=5.0, random_seed=7, stop_at_first_feasible=True)
+    assert result["status"] == "FEASIBLE"
+    effective = dict(DEFAULT_WEIGHTS, teacher_gap_cost=20 + 20 + 4)
+    assert result["objective_value"] == pytest.approx(_weighted(result["penalties"], effective))
+
+
+def test_one_hard_instance_keeps_unassigned_lessons_hard(problem):
+    """unassigned_lessons_cost picked twice, once hard: no partial timetable (no unassign moves)."""
+    picks = [
+        *[spec for spec in Assembly() if spec.name != "unassigned_lessons_cost"],
+        UnassignedLessonsCost(hard=False, weight=UNASSIGNED_LESSONS_SOFT_WEIGHT),
+        UnassignedLessonsCost(),
+    ]
+    result = st.solve(_over_constrained(problem), constraints=picks, time_limit_seconds=2.0, random_seed=7)
+    assert result["status"] == "INFEASIBLE"
+    assert len(result["lessons"]) == 40, "one hard instance: the search gives every lesson a slot"
+    assert "unassigned_lessons_cost" not in result["penalties"]
+    # Both soft: a partial timetable, each unplaced period costing the sum of the weights.
+    soft_twice = [
+        *[spec for spec in Assembly() if spec.name != "unassigned_lessons_cost"],
+        UnassignedLessonsCost(hard=False, weight=UNASSIGNED_LESSONS_SOFT_WEIGHT),
+        UnassignedLessonsCost(hard=False, weight=1),
+    ]
+    partial = st.solve(_over_constrained(problem), constraints=soft_twice, time_limit_seconds=5.0, random_seed=7)
+    assert partial["status"] == "FEASIBLE"
+    unassigned = partial["penalties"]["unassigned_lessons_cost"]
+    assert unassigned > 0
+    rest = {name: count for name, count in partial["penalties"].items() if name != "unassigned_lessons_cost"}
+    assert partial["objective_value"] == pytest.approx(
+        _weighted(rest, DEFAULT_WEIGHTS) + (UNASSIGNED_LESSONS_SOFT_WEIGHT + 1) * unassigned
+    )
 
 
 def test_soft_weights_need_not_be_integers(problem):

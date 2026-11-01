@@ -17,6 +17,13 @@
 //   (f) parallel workers: a throwing onNewBest (worker 0) stops the other
 //       workers, so a 30 s, 4-worker solve rethrows at once (Python reaches
 //       no thread pool here: solve_request forks processes for its starts)
+//   (h) repeated components and the offset / clip knobs: a hand-calculated
+//       repeat (undesired minutes + 0.5 x undesired minutes^2), threshold and
+//       literal offsets by hand (literal mode charges every employee, a
+//       worker scope's employees only), incremental == a fresh recompute
+//       over a random walk and a FULL_ASSERT solve with repeated, shifted
+//       components (delta-grouped hard, shared-context day patterns, scoped
+//       and global ones)
 // The hand-calculated positive and zero raw cost of every constraint is
 // checked through the bindings (python/tests/test_constraint_costs.py).
 #include <algorithm>
@@ -451,6 +458,182 @@ void verifyThreadStartFailureStopsWorkers() {
           "after " + std::to_string(seconds) + " s (no std::terminate)");
 }
 
+// ---------------------------------------------------------------------------
+// (h) repeated components and offsets
+// ---------------------------------------------------------------------------
+// The bindings build every pick as its own component (the factory), so a
+// repeat is simply a second component of the same type, and the knobs are
+// re-stated on it (applyKnobs: setWeight / setExponent / setOffset / setClip).
+template <typename C, typename... Args>
+std::unique_ptr<C> shaped(double offset, bool clip, Args&&... args) {
+    auto component = std::make_unique<C>(std::forward<Args>(args)...);
+    component->setOffset(offset);
+    component->setClip(clip);
+    return component;
+}
+
+// Two employees, one shift each, all of the 480 minutes of Worker 1's shift on
+// one of its undesired days: undesired [480, 0], unavailable [0, 0], loads
+// [1, 1] (shift_count_imbalance_cost 0).
+EmployeeSchedule repeatInstance() {
+    EmployeeSchedule s;
+    Employee first;
+    first.name = "Worker 1";
+    first.skills = {"Skill A"};
+    first.undesiredDates = {1};
+    Employee second;
+    second.name = "Worker 2";
+    second.skills = {"Skill A"};
+    s.employees = {first, second};
+    for (int d = 1; d <= 2; ++d) {
+        Shift shift;
+        shift.id = "Shift " + std::to_string(d);
+        shift.start = at(d, 9);
+        shift.end = at(d, 17);
+        shift.location = "Location A";
+        shift.requiredSkill = "Skill A";
+        shift.employeeIndex = d - 1;
+        s.shifts.push_back(shift);
+    }
+    ScoreCalculator::prepare(s);
+    return s;
+}
+
+void addRepeatedShifted(DecomposedCalculator& calc) {
+    addEveryComponent(calc);
+    calc.add(shaped<RequiredSkillCost>(1.0, false, 2.0));            // delta-grouped hard, literal
+    calc.add(shaped<EmployeeUnavailabilityCost>(60.0, true));        // hard threshold
+    auto squared = shaped<UndesiredDayCost>(120.0, true, 0.01);      // a repeat: (minutes - 120)^2
+    squared->setExponent(2.0);
+    calc.add(std::move(squared));
+    calc.add(shaped<UndesiredDayCost>(-30.0, false, 0.5));           // ... and a literal one
+    calc.add(shaped<DesiredDayCost>(60.0, false));                   // a reward, literal
+    calc.add(shaped<DayPatternCost>(-1.0, true, 1.0, "WORK,WORK,WORK"));  // shared day-pattern context
+    calc.add(shaped<ShiftCountImbalanceCost>(0.5, false, 2.0));      // global
+    calc.add(shaped<LocationImbalanceCost>(1.0, false, 1.0, "Location A", "", "ssd", 0, std::vector<int>{}));
+    auto scoped = std::make_unique<ScopedUnit>(std::make_unique<MaxConsecutiveDaysCost>(1.0, 3),
+                                               std::vector<int>{1, 3}, std::vector<int>{}, true, false);
+    scoped->setOffset(2.0);
+    scoped->setClip(false);
+    calc.add(std::move(scoped));
+}
+
+void verifyRepeatsAndOffsets() {
+    std::printf("== (h) repeated components, offset / clip ==\n");
+    {
+        EmployeeSchedule s = repeatInstance();
+        DecomposedCalculator calc;
+        calc.emplace<UndesiredDayCost>();
+        auto second = std::make_unique<UndesiredDayCost>(0.5);
+        second->setExponent(2.0);
+        calc.add(std::move(second));
+        const Score result = score(calc, s);
+        check(result.hard == 0 && result.soft == -(480.0 + 0.5 * 480.0 * 480.0),
+              "undesired + 0.5 x undesired^2: -(480 + 115200) soft");
+        const auto entries = calc.constraintCosts();
+        check(entries.size() == 2 && entries[0].unitCosts == entries[1].unitCosts &&
+                      entries[0].unitCosts == std::vector<double>{480.0, 0.0} && entries[1].weight == 0.5 &&
+                      entries[1].exponent == 2.0 && entries[0].name == entries[1].name,
+              "two instances, the same raw costs, each with its own knobs");
+    }
+    {
+        EmployeeSchedule s = repeatInstance();
+        auto soft = [&](std::unique_ptr<EsUnitConstraint> component) {
+            DecomposedCalculator calc;
+            calc.add(std::move(component));
+            return score(calc, s);
+        };
+        check(soft(shaped<UndesiredDayCost>(100.0, true)).soft == -380.0, "threshold offset 100: 480 - 100");
+        check(soft(shaped<UndesiredDayCost>(100.0, false)).soft == -280.0,
+              "literal offset 100: (480 - 100) + (0 - 100), both employees");
+        check(soft(shaped<UndesiredDayCost>(-10.0, true)).soft == -490.0,
+              "threshold offset -10: the non-zero employee only");
+        check(soft(shaped<UndesiredDayCost>(-10.0, false)).soft == -500.0,
+              "literal offset -10: (480 + 10) + (0 + 10)");
+        check(soft(shaped<DesiredDayCost>(30.0, false)).soft == 60.0,
+              "a literal offset on a reward (raw [0, 0]): two employees rewarded 30 each");
+        // A hard literal pick rounds per employee: 3 x (0 - 0.5) = -1.5 -> -2, twice.
+        auto hard = shaped<EmployeeUnavailabilityCost>(0.5, false, 3.0);
+        check(soft(std::move(hard)).hard == 4, "hard literal offset 0.5 at weight 3: llround(-1.5) x 2 = -4");
+        // A worker scope: only Worker 2 is evaluated, so the literal charges it alone.
+        DecomposedCalculator scopedCalc;
+        auto scoped = std::make_unique<ScopedUnit>(std::make_unique<UndesiredDayCost>(), std::vector<int>{1, 1, 7},
+                                                   std::vector<int>{}, true, false);
+        scoped->setOffset(100.0);
+        scoped->setClip(false);
+        scopedCalc.add(std::move(scoped));
+        const Score scopedScore = score(scopedCalc, s);
+        const auto scopedEntries = scopedCalc.constraintCosts();
+        check(scopedScore.soft == 100.0 && scopedEntries.size() == 1 && scopedEntries[0].scoped &&
+                      scopedEntries[0].units == std::vector<int>{1},
+              "a worker-scoped literal offset charges its in-range employee only (units {1})");
+        // A global total (the imbalance of loads [1, 1] is 0) is shaped once.
+        DecomposedCalculator global;
+        global.add(shaped<ShiftCountImbalanceCost>(2.0, false));
+        DecomposedCalculator globalThreshold;
+        globalThreshold.add(shaped<ShiftCountImbalanceCost>(2.0, true));
+        check(score(global, s).soft == 2.0 && score(globalThreshold, s).soft == 0.0,
+              "global total 0, offset 2: literal rewards 2, threshold 0");
+    }
+    {
+        // Random walk: incremental == a fresh calculator of the same components.
+        EmployeeSchedule s = buildRoster(13);
+        std::mt19937_64 rng(31);
+        randomAssignment(s, rng, /*allowUnassigned=*/true);
+        ScoreCalculator::prepare(s);
+        DecomposedCalculator calc;
+        addRepeatedShifted(calc);
+        optimaru::ScoreDirector<EmployeeSchedule> director(s, calc);
+        const int employees = static_cast<int>(s.employees.size());
+        const int shifts = static_cast<int>(s.shifts.size());
+        int mismatches = 0;
+        const int steps = 2000;
+        for (int step = 0; step < steps; ++step) {
+            const int shift = static_cast<int>(rng() % shifts);
+            if (rng() % 4 == 0) {
+                const int other = static_cast<int>(rng() % shifts);
+                const int a = s.shifts[shift].employeeIndex, b = s.shifts[other].employeeIndex;
+                director.changeVariable(shift, b);
+                director.changeVariable(other, a);
+            } else {
+                director.changeVariable(shift, static_cast<int>(rng() % (employees + 1)) - 1);
+            }
+            const Score incremental = director.calculateScore();
+            EmployeeSchedule shadow = s;
+            DecomposedCalculator fresh;
+            addRepeatedShifted(fresh);
+            const Score full = score(fresh, shadow);
+            if (!optimaru::scoresAgree(incremental, full) && ++mismatches <= 3)
+                std::printf("    step %d: incremental %s full %s\n", step, str(incremental).c_str(),
+                            str(full).c_str());
+        }
+        check(mismatches == 0, std::to_string(steps) +
+                                       " random moves with repeated, shifted components: incremental == fresh");
+    }
+    {
+        EmployeeSchedule s = buildRoster(17);
+        Solver::Config config;
+        config.spentLimit = std::chrono::seconds(2);
+        config.randomSeed = 5;
+        config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+        DecomposedCalculator calc;
+        addRepeatedShifted(calc);
+        bool corrupted = false;
+        try {
+            Solver solver(config);
+            solver.solve(s, calc);
+        } catch (const optimaru::ScoreCorruptionError& e) {
+            corrupted = true;
+            std::printf("  ScoreCorruptionError: %s\n", e.what());
+        }
+        check(!corrupted, "2s FULL_ASSERT solve with repeated, shifted components");
+        DecomposedCalculator fresh;
+        addRepeatedShifted(fresh);
+        check(!corrupted && sameScore(s.score, score(fresh, s)),
+              "the reported score == a fresh recompute of the same components");
+    }
+}
+
 }  // namespace
 
 int main() {
@@ -461,6 +644,7 @@ int main() {
     verifyLabels();
     verifyParallelFailureStopsWorkers();
     verifyThreadStartFailureStopsWorkers();
+    verifyRepeatsAndOffsets();
     if (failures == 0) {
         std::printf("All plugin checks PASSED.\n");
         return 0;

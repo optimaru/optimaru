@@ -14,6 +14,17 @@ Soft terms are multiplied by `SCALE`, because some are fractional and a CP-SAT
 objective is not. Those terms round to that grid, and `penalize_half_ssd` stands
 in for a root, so the objective is close to the engine's score but not equal to
 it. The reported score is always the engine's own (`constraint_costs`).
+
+Offsets: a pick's ``offset`` / ``clip`` shape each engine unit (an employee, or
+a global rule's total) on its own, so only a plugin that adds exactly one term
+per evaluated employee — every employee, or a worker scope's in-range ones, a
+constant 0 included — or one term for a global total takes them
+(``terms_per_unit``): ``required_skill_cost``, the three date rules
+(``employee_unavailability_cost``, ``undesired_day_cost``,
+``desired_day_cost``) and ``unassigned_shifts_cost``. The registry refuses an
+offset on every other plugin (their terms are runs, pairs or windows, not
+employees). On the soft level the offset moves to the ``SCALE`` grid with the
+term (``solve.selection``); a fractional offset is refused.
 """
 
 from __future__ import annotations
@@ -260,6 +271,10 @@ class RulePlugin(ConstraintPlugin[ScheduleContext]):
             raise ValueError(
                 f"rule {self.name!r}: a fractional cost cannot be hard for CP-SAT"
             )
+        if not float(self.offset).is_integer():
+            raise ValueError(
+                f"rule {self.name!r}: offset must be an integer for CP-SAT"
+            )
 
     def penalize(self, objective: ObjectiveBuilder, magnitude: Any, bound: int) -> None:
         objective.add(self.name, self.scale * magnitude, bound=self.scale * bound)
@@ -383,41 +398,45 @@ class RulePlugin(ConstraintPlugin[ScheduleContext]):
 
 
 class RequiredSkillCost(domain.RequiredSkillCost, RulePlugin):
+    terms_per_unit = True  # one term per evaluated employee, the engine's unit
+
     def build(self, context: ScheduleContext, objective: ObjectiveBuilder) -> None:
         scope = context.scope(self)
-        for shift in scope.shifts:
-            skill = context.shifts[shift].required_skill
-            if not skill:
-                continue
-            for worker in scope.workers:
-                if skill not in context.workers[worker].skills:
-                    self.penalize(objective, context.x[shift, worker], 1)
+        for worker in scope.workers:
+            skills = context.workers[worker].skills
+            lacking = [
+                context.x[shift, worker]
+                for shift in scope.shifts
+                if context.shifts[shift].required_skill
+                and context.shifts[shift].required_skill not in skills
+            ]
+            self.penalize(objective, sum(lacking) if lacking else 0, len(lacking))
 
 
 class DateRule(RulePlugin):
     """A per-(worker, shift) table of overlap minutes with a set of days.
 
-    A reward (desired_day_cost, per the engine's catalog row) adds its terms
-    as a reward instead of a penalty."""
+    One term per evaluated employee: the minutes (or, ``per_day``, the shifts)
+    of its shifts on those days. A reward (desired_day_cost, per the engine's
+    catalog row) adds its terms as a reward instead of a penalty."""
 
     dates: str = ""
+    terms_per_unit = True  # one term per evaluated employee, the engine's unit
 
     def build(self, context: ScheduleContext, objective: ObjectiveBuilder) -> None:
         scope = context.scope(self)
         per_day = getattr(self, "per_day", False)
-        for shift in scope.shifts:
-            data = context.shifts[shift]
+        add = self.reward if self.spec.reward else self.penalize
+        for worker in scope.workers:
+            dates = getattr(context.workers[worker], self.dates)
             terms = []
-            for worker in scope.workers:
-                dates = getattr(context.workers[worker], self.dates)
+            for shift in scope.shifts:
+                data = context.shifts[shift]
                 minutes = date_overlap(data.start, data.end, dates)
                 if minutes:
                     terms.append((1 if per_day else minutes, context.x[shift, worker]))
-            if terms:
-                magnitude = sum(cost * literal for cost, literal in terms)
-                bound = max(cost for cost, _ in terms)
-                add = self.reward if self.spec.reward else self.penalize
-                add(objective, magnitude, bound)
+            magnitude = sum(cost * literal for cost, literal in terms) if terms else 0
+            add(objective, magnitude, sum(cost for cost, _ in terms))
 
 
 class EmployeeUnavailabilityCost(domain.EmployeeUnavailabilityCost, DateRule):
@@ -681,8 +700,11 @@ class AssignmentCost(domain.AssignmentCost, RulePlugin):
 
 
 class UnassignedShiftsCost(domain.UnassignedShiftsCost, RulePlugin):
+    terms_per_unit = True  # global in the engine: one term, the total
+
     def build(self, context: ScheduleContext, objective: ObjectiveBuilder) -> None:
-        self.penalize(objective, sum(context.unassigned), len(context.unassigned))
+        unassigned = sum(context.unassigned) if context.unassigned else 0
+        self.penalize(objective, unassigned, len(context.unassigned))
 
 
 class ShiftCountGapCost(domain.ShiftCountGapCost, RulePlugin):
