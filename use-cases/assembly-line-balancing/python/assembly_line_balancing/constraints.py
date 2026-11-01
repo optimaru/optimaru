@@ -2,37 +2,60 @@
 
 The default path (`alb.solve(problem)`) scores every default constraint at its
 default weight. This module is the alternative path next to it: pick
-constraints, change weights, change levels, and pass the list to
+constraints, change weights, change levels, shape the cost, and pass the list to
 `solve(problem, constraints=...)`.
 
-The shortest route is :func:`get_constraints`. It returns the default list, so
-a "default with a small tweak" declaration fits on one line::
+A constraint list reads one way: one class call per constraint::
 
     import assembly_line_balancing as alb
-    from assembly_line_balancing.constraints import WorkloadImbalanceCost, get_constraints
+    from assembly_line_balancing.constraints import (
+        StationCapacityCost, UsedStationsCost, WorkloadImbalanceCost, get_constraints,
+    )
 
-    alb.solve(problem, constraints=get_constraints())                       # defaults as-is
+    alb.solve(problem, constraints=get_constraints())                       # the defaults as-is
     alb.solve(problem, constraints=[*get_constraints()[:-1], WorkloadImbalanceCost(weight=1)])
+    alb.solve(problem, constraints=[StationCapacityCost(), UsedStationsCost()])   # picked
 
-Default instances (`station_capacity_cost`, `task_precedence_cost`, ...,
-`workload_imbalance_cost`) live at module level, so you can also pass a list of
-just a few. Only listed constraints are scored — leave one out and its term
-disappears from the score.
+Only listed constraints are scored — leave one out and its term disappears from
+the score. (The module also carries ready-made default instances:
+``station_capacity_cost`` is ``StationCapacityCost()``, and so on.)
 
-Every spec takes ``(weight=None, level=None, exponent=1.0)``:
+Every spec takes five knobs:
 
 - ``weight``   linear multiplier on the constraint cost. ``None`` = the component
                default (1 for every constraint except the opt-in
-               workload_imbalance_cost, 0). The problem carries no weights;
+               WorkloadImbalanceCost, 0). The problem carries no weights;
                ``alb.constraint_info()`` reports the defaults.
 - ``level``    ``None`` = the default level, otherwise ``Level.HARD`` or
                ``Level.SOFT`` (or the names ``"hard"`` and ``"soft"``). This use
-               case has no medium level.
+               case has no medium level: ``level="medium"`` raises ValueError.
 - ``exponent`` sign-preserving power shaping: ``weight * sign(c) * |c| ** exponent``,
                per station for the per-station constraints and on the single
-               total for the global ones (task_precedence_cost,
-               same_station_groups_cost, used_stations_cost,
-               workload_imbalance_cost).
+               total for the global ones (TaskPrecedenceCost,
+               SameStationGroupsCost, UsedStationsCost, WorkloadImbalanceCost).
+- ``offset``   (keyword) shifts that shaping, at the same granularity; 0.0 = none.
+- ``clip``     (keyword) ``True`` (the default) counts only what lies beyond the
+               offset, ``max(0, c - offset) ** exponent``; ``False`` shapes
+               ``c - offset`` as it is, so a station below the offset — an empty
+               one (cost 0) included — lowers the penalty, and a global total
+               below it does too. MaxStationsCost and ForbiddenTaskStationsCost
+               evaluate only their own stations (from ``max_stations`` on, and the
+               stations some task forbids; ``constraint_costs()`` lists them as
+               ``"units"``), so ``clip=False`` charges those and no other. With
+               an offset it is refused on hard (every rule but UsedStationsCost and
+               WorkloadImbalanceCost by default), because hard 0 must mean no
+               violation.
+
+The same constraint may be picked several times; each pick is scored on its own with
+its own knobs (its level included) and the picks add up. Every used station costs 1, and each one beyond
+the fourth 10 on top::
+
+    alb.solve(problem, constraints=[
+        *get_constraints(),
+        UsedStationsCost(weight=10, offset=4),
+    ])
+
+``alb.constraint_costs(problem, picks)`` keys the second pick ``"used_stations_cost#2"``.
 
 Names (`name`) are the C++ component names in snake_case
 (``StationCapacityCost`` -> ``station_capacity_cost``). The core derives them
@@ -232,7 +255,7 @@ class WorkloadImbalanceCost(Constraint):
     )
 
 
-#: Instances at the default weights (weight=None). Reference them directly when picking.
+#: Ready-made default instances (``station_capacity_cost`` is ``StationCapacityCost()``).
 station_capacity_cost = StationCapacityCost()
 task_precedence_cost = TaskPrecedenceCost()
 max_stations_cost = MaxStationsCost()
@@ -263,12 +286,13 @@ def get_constraints(constraints: list[Constraint] | None = None) -> list[Constra
     """Return the cost function. Without arguments, every default constraint.
 
     When `constraints` is given, that list is used as-is — only the listed
-    constraints are scored. To change just one default, mix in the default instances::
+    constraints are scored::
 
         get_constraints([*get_constraints()[:-1], WorkloadImbalanceCost(weight=1)])
 
     Same contract as the C++ applyConstraints: an empty list (most likely a filter
-    that came out empty) and a constraint named twice raise ValueError.
+    that came out empty) raises ValueError; a constraint named several times is
+    scored once per pick, each with its own knobs.
     """
     return select(constraints, _DEFAULTS)
 
@@ -278,18 +302,20 @@ def score(costs: dict, constraints: list[Constraint] | None = None) -> Score:
 
     ``costs`` is what `alb.constraint_costs(problem)` returns: per constraint, the
     **raw** cost of each station (one total for the global constraints), before
-    weight, exponent and level rounding. Fetch it once and rescore with different
-    weights without re-solving::
+    weight, exponent, offset and level rounding. Fetch it once and rescore with
+    different weights without re-solving::
 
         raw = alb.constraint_costs(problem)
         score(raw)                                              # default set
-        score(raw, [station_capacity_cost, WorkloadImbalanceCost(weight=1)])
+        score(raw, [StationCapacityCost(), WorkloadImbalanceCost(weight=1)])
+        score(raw, [UsedStationsCost(), UsedStationsCost(weight=10, offset=4)])
 
     No solver and no search are involved. The arithmetic matches the engine —
-    each unit contributes ``weight * shape(cost, exponent)`` and hard
-    contributions are **rounded per unit** before summing (the same order as
-    the engine; rounding the total afterwards gives different values for
-    fractional hard weights).
+    each evaluated unit contributes ``weight * shape(cost, exponent, offset, clip)``
+    and hard contributions are **rounded per unit** before summing (the same
+    order as the engine; rounding the total afterwards gives different values
+    for fractional hard weights). A second pick of a constraint reads the same
+    raw costs with its own knobs.
 
     When ``constraints`` is given, only those constraints are scored — the same
     semantics as `get_constraints`. Unknown names raise ValueError.

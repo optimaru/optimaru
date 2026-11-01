@@ -1,7 +1,8 @@
 """flight_crew.constraints — an API for picking the cost function declaratively.
 
 Spot checks of individual constraint values live in `test_constraints.py`. This
-file only covers the selection path that picks "which constraints are on".
+file covers the selection path that picks "which constraints are on", the five knobs
+(the level included) and repeated picks.
 """
 
 import pickle
@@ -11,12 +12,14 @@ from types import SimpleNamespace
 import pytest
 
 import flight_crew as fc
+from flight_crew._constraint import instance_keys
 from flight_crew.constraints import (
     Constraint,
     EmployeeUnavailabilityCost,
     FirstAssignmentNotDepartingFromHomeCost,
     FlightConflictCost,
     LastAssignmentNotArrivingAtHomeCost,
+    Level,
     RequiredSkillCost,
     TransferBetweenTwoFlightsCost,
     employee_unavailability_cost,
@@ -241,6 +244,18 @@ def test_score_rejects_an_unknown_constraint_name():
         ],
         [required_skill_cost, FirstAssignmentNotDepartingFromHomeCost(level="hard", weight=0.5)],
         [LastAssignmentNotArrivingAtHomeCost(exponent=2.0), EmployeeUnavailabilityCost(exponent=2.0)],
+        [*get_constraints(), FlightConflictCost(weight=3, exponent=2.0)],
+        [
+            RequiredSkillCost(),
+            RequiredSkillCost(level="soft", offset=1, clip=False, weight=40),
+            RequiredSkillCost(offset=1, weight=40),
+            FlightConflictCost(offset=-1),
+            TransferBetweenTwoFlightsCost(level="soft", offset=1, clip=False, weight=5),
+            TransferBetweenTwoFlightsCost(offset=1, weight=5),
+            FirstAssignmentNotDepartingFromHomeCost(),
+            FirstAssignmentNotDepartingFromHomeCost(weight=250, offset=0.5, clip=False),
+            LastAssignmentNotArrivingAtHomeCost(offset=1),
+        ],
     ],
 )
 def test_score_matches_the_engine_for_arbitrary_specs(specs):
@@ -253,18 +268,23 @@ def test_score_matches_the_engine_for_arbitrary_specs(specs):
     python = score(fc.constraint_costs(schedule), specs)
     assert python.hard == schedule.score.hard
     assert python.soft == pytest.approx(schedule.score.soft)
+    if specs is not None:
+        picked = fc.constraint_costs(schedule, specs)
+        assert len(picked) == len(specs)
+        assert score(picked, specs) == python  # the picks' own costs, repeats keyed name#k
 
 
-def test_naming_a_constraint_twice_is_rejected():
-    """Passing the same constraint twice must not let the later one silently win."""
-    with pytest.raises(ValueError, match="picked more than once"):
-        fc.solve(
-            build_schedule(),
-            time_limit_seconds=0.2,
-            constraints=[required_skill_cost, RequiredSkillCost(weight=10)],
-        )
-    with pytest.raises(ValueError, match="picked more than once"):
-        get_constraints([flight_conflict_cost, flight_conflict_cost])
+def test_naming_a_constraint_twice_scores_both_picks():
+    """Since 0.3.0 a constraint may be picked several times: each pick is scored on its own.
+
+    The later pick no longer wins in silence, nor is it an error: both are
+    instances with their own knobs, and they add up."""
+    picks = [RequiredSkillCost(), RequiredSkillCost(weight=10)]
+    assert _zero_budget(picks) == (-(100 + 10), 0.0)  # X1's one unqualified seat, twice
+    assert get_constraints([FlightConflictCost(), FlightConflictCost()]) == [
+        FlightConflictCost(),
+        FlightConflictCost(),
+    ]
 
 
 # --- The catalog (constraint_info) -------------------------------------------
@@ -368,9 +388,22 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
         level = None
         exponent = 0.0
 
-    for pick, message in ((Negative(), "weight must be finite and >= 0"), (Flat(), "exponent must be finite and > 0")):
+    class Unbounded:
+        name = "flight_conflict_cost"
+        weight = None
+        level = None
+        exponent = 1.0
+        offset = float("inf")
+
+    for pick, message in (
+        (Negative(), "weight must be finite and >= 0"),
+        (Flat(), "exponent must be finite and > 0"),
+        (Unbounded(), "offset must be finite, not inf"),
+    ):
         with pytest.raises(ValueError, match=message):
             fc.solve(build_schedule(), time_limit_seconds=0.1, constraints=[pick])
+    with pytest.raises(ValueError, match="offset must be finite, not nan"):
+        FlightConflictCost(offset=float("nan"))
 
 
 @pytest.mark.parametrize(
@@ -380,6 +413,10 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
         ({"weight": "2"}, "weight must be a number or None, not '2'"),
         ({"level": 1}, "level must be a Level, its name or None, not 1"),
         ({"exponent": True}, "exponent must be a number, not True"),
+        ({"offset": "5"}, "offset must be a number, not '5'"),
+        ({"offset": False}, "offset must be a number, not False"),
+        ({"clip": 1}, "clip must be True or False, not 1"),
+        ({"clip": "no"}, "clip must be True or False, not 'no'"),
     ],
 )
 def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
@@ -460,3 +497,323 @@ def test_constraint_costs_match_every_constraint_by_hand():
     schedule.set_assignment([-1] * 5)
     for name, entry in fc.constraint_costs(schedule).items():
         assert entry["costs"] == [0.0, 0.0, 0.0], name
+
+
+# --- 0.3.0: repeated picks and the offset / clip knobs ------------------------------
+
+
+def _hand_schedule():
+    """The by-hand schedule above, every seat assigned (P1, P2, X1).
+
+    Raw per employee: skill [0, 0, 1], conflicts [1, 0, 0], transfers [0, 1, 0],
+    unavailable [0, 2, 0], first not home [1, 0, 0], last not home [1, 1, 0].
+    """
+    airports = [fc.Airport("ICN"), fc.Airport("NRT"), fc.Airport("KIX")]
+    employees = [
+        fc.Employee("P1", home_airport=1, skills=["Pilot"]),
+        fc.Employee("P2", home_airport=0, skills=["Pilot"], unavailable_days={1}),
+        fc.Employee("X1", home_airport=1, skills=[]),
+    ]
+    flights = [
+        fc.Flight("F0", 0, 9 * HOUR, 1, 11 * HOUR),
+        fc.Flight("F1", 1, 10 * HOUR, 0, 12 * HOUR),
+        fc.Flight("F2", 0, 33 * HOUR, 2, 35 * HOUR),
+        fc.Flight("F3", 0, 37 * HOUR, 1, 39 * HOUR),
+        fc.Flight("F4", 1, 50 * HOUR, 1, 52 * HOUR),
+    ]
+    assignments = [fc.FlightAssignment(f"a{i}", i, required_skill="Pilot") for i in range(5)]
+    schedule = fc.FlightCrewSchedule(airports, employees, flights, assignments)
+    schedule.set_assignment([0, 0, 1, 1, 2])
+    return schedule
+
+
+def _zero_budget(picks):
+    """The engine's score of the hand schedule under `picks`: a solve with no time keeps it."""
+    schedule = fc.solve(_hand_schedule(), time_limit_seconds=0, random_seed=1, constraints=picks)
+    assert schedule.assignment() == [0, 0, 1, 1, 2]
+    return schedule.score.hard, schedule.score.soft
+
+
+REPEAT = [EmployeeUnavailabilityCost(), EmployeeUnavailabilityCost(weight=3, exponent=2)]
+
+
+def test_a_repeated_pick_by_hand():
+    """unavailable seats x 10 plus 3 x their square per employee: 10 x 2 + 3 x 4 = 32."""
+    raw = fc.constraint_costs(_hand_schedule(), REPEAT)
+    assert list(raw) == ["employee_unavailability_cost", "employee_unavailability_cost#2"]
+    first, second = raw.values()
+    assert first["costs"] == second["costs"] == [0.0, 2.0, 0.0]
+    assert (first["weight"], first["exponent"], second["weight"], second["exponent"]) == (10.0, 1.0, 3.0, 2.0)
+    assert first["name"] == second["name"] == "employee_unavailability_cost"
+    assert second["default_weight"] == 10.0
+    assert "units" not in first  # every employee is evaluated, an idle one included
+    expected = (-32, 0.0)
+    assert score(raw, REPEAT) == expected
+    # The default costs hold the name once; the second pick reads the same raw costs.
+    assert score(fc.constraint_costs(_hand_schedule()), REPEAT) == expected
+    assert _zero_budget(REPEAT) == expected
+
+
+def test_identical_picks_count_twice():
+    picks = [LastAssignmentNotArrivingAtHomeCost(), LastAssignmentNotArrivingAtHomeCost()]
+    assert score(fc.constraint_costs(_hand_schedule()), picks) == (0, -4000.0)
+    assert _zero_budget(picks) == (0, -4000.0)
+    assert list(fc.constraint_costs(_hand_schedule(), picks)) == [
+        "last_assignment_not_arriving_at_home_cost",
+        "last_assignment_not_arriving_at_home_cost#2",
+    ]
+
+
+def test_the_keys_follow_the_pick_order_of_each_name():
+    picks = [
+        RequiredSkillCost(weight=1),
+        FlightConflictCost(),
+        RequiredSkillCost(weight=2),
+        LastAssignmentNotArrivingAtHomeCost(),
+        RequiredSkillCost(weight=3),
+    ]
+    raw = fc.constraint_costs(_hand_schedule(), picks)
+    assert {key: entry["weight"] for key, entry in raw.items()} == {
+        "required_skill_cost": 1.0,
+        "required_skill_cost#2": 2.0,
+        "required_skill_cost#3": 3.0,
+        "flight_conflict_cost": 10.0,
+        "last_assignment_not_arriving_at_home_cost": 1000.0,
+    }
+    assert [key for key in raw if key.startswith("required")] == [
+        "required_skill_cost",
+        "required_skill_cost#2",
+        "required_skill_cost#3",
+    ]
+    expected = (-(6 + 10), -2000.0)
+    assert score(raw, picks) == expected
+    assert _zero_budget(picks) == expected
+
+
+@pytest.mark.parametrize(
+    ("pick", "expected"),
+    [
+        # Per employee; X1 holds no unavailable seat (raw 0), and neither does P1.
+        (EmployeeUnavailabilityCost(offset=1), (-10, 0.0)),
+        (EmployeeUnavailabilityCost(offset=3), (0, 0.0)),
+        (RequiredSkillCost(offset=-1), (-200, 0.0)),  # a negative offset adds to every non-zero employee
+        # Hard rounds per employee: 1.5 -> 2 on P1 and P2 (a rounded total gives 3).
+        (LastAssignmentNotArrivingAtHomeCost(level="hard", weight=1, offset=-0.5), (-4, 0.0)),
+        # The literal formula with an offset is refused on hard (the default of these two),
+        # so its picks sit on soft:
+        (
+            EmployeeUnavailabilityCost(level="soft", offset=1, clip=False),
+            (0, 10.0),
+        ),  # -1 + 1 - 1: the zeros are rewarded
+        (EmployeeUnavailabilityCost(level="soft", offset=3, exponent=2, clip=False), (0, 190.0)),  # -9 - 1 - 9
+        (RequiredSkillCost(level="soft", offset=-1, clip=False), (0, -400.0)),  # ...or to every employee
+        (
+            EmployeeUnavailabilityCost(level="soft", weight=2, offset=0.5, clip=False),
+            (0, -1.0),
+        ),  # 2 x (-0.5 + 1.5 - 0.5)
+        (LastAssignmentNotArrivingAtHomeCost(offset=1, clip=False), (0, 1000.0)),  # 0 + 0 - 1, soft
+        (FirstAssignmentNotDepartingFromHomeCost(offset=0.5), (0, -500.0)),
+    ],
+)
+def test_offsets_by_hand_on_both_paths(pick, expected):
+    """threshold sign(x) max(0, |x| - offset)^e and literal (x - offset)^e: Python mirror == engine == hand."""
+    assert score(fc.constraint_costs(_hand_schedule()), [pick]) == expected
+    raw = fc.constraint_costs(_hand_schedule(), [pick])
+    entry = next(iter(raw.values()))
+    assert (entry["offset"], entry["clip"]) == (float(pick.offset), pick.clip)
+    assert score(raw, [pick]) == expected
+    assert _zero_budget([pick]) == expected
+
+
+def test_offset_zero_reproduces_the_0_2_0_scores():
+    """offset 0 is the plain shaping in both modes, so every 0.2.0 selection scores the same."""
+    plain = [RequiredSkillCost(), EmployeeUnavailabilityCost(exponent=2), LastAssignmentNotArrivingAtHomeCost()]
+    shifted = [
+        RequiredSkillCost(offset=0.0, clip=False),
+        EmployeeUnavailabilityCost(exponent=2, offset=0),
+        LastAssignmentNotArrivingAtHomeCost(offset=0.0, clip=False),
+    ]
+    raw = fc.constraint_costs(_hand_schedule())
+    assert score(raw, shifted) == score(raw, plain) == (-(100 + 40), -2000.0)
+    assert _zero_budget(shifted) == _zero_budget(plain) == score(raw, plain)
+    for entry in raw.values():
+        assert (entry["offset"], entry["clip"]) == (0.0, True)
+
+
+@pytest.mark.parametrize(
+    "picks",
+    [
+        [*get_constraints(), FlightConflictCost(weight=3, exponent=2)],
+        [
+            RequiredSkillCost(),
+            RequiredSkillCost(level="soft", offset=1, clip=False, weight=40),
+            RequiredSkillCost(offset=1, weight=40),
+            FlightConflictCost(),
+            FlightConflictCost(weight=2, exponent=2, offset=1),
+            TransferBetweenTwoFlightsCost(offset=-1),
+            EmployeeUnavailabilityCost(level="soft", offset=-2, clip=False),
+            EmployeeUnavailabilityCost(offset=-2),
+            FirstAssignmentNotDepartingFromHomeCost(weight=250, offset=0.5, clip=False),
+            LastAssignmentNotArrivingAtHomeCost(),
+        ],
+    ],
+    ids=["repeat", "repeat-and-offsets"],
+)
+def test_full_assert_solves_with_repeats_and_offsets(picks):
+    """FULL_ASSERT re-checks the incremental score against a full recompute after every move."""
+    schedule = build_schedule()
+    config = fc.SolverConfig()
+    config.full_assert = True
+    config.random_seed = 3
+    config.parallel_solver_count = 1
+    config.step_count_limit = 3000
+    config.spent_limit_seconds = 30
+    fc.Solver(config).solve_with_constraints(schedule, picks)
+    raw = fc.constraint_costs(schedule, picks)
+    assert len(raw) == len(picks)
+    python = score(raw, picks)
+    assert python.hard == schedule.score.hard
+    assert python.soft == pytest.approx(schedule.score.soft)
+    assert score(fc.constraint_costs(schedule), picks) == python  # the default costs score the repeats too
+
+
+# --- Levels: hard and soft, each pick (a repeat included) on the level it names ------
+
+
+@pytest.mark.parametrize(
+    ("picks", "expected"),
+    [
+        ([RequiredSkillCost(level="soft")], (0, -100.0)),
+        ([FlightConflictCost(level=Level.SOFT)], (0, -10.0)),
+        ([LastAssignmentNotArrivingAtHomeCost(level=Level.HARD, weight=2)], (-4, 0.0)),
+        ([EmployeeUnavailabilityCost(level="hard")], (-20, 0.0)),  # the default level, named
+        # A repeat carries its own level and shaping: the hard default, soft the seats beyond
+        # one per employee (2 - 1), and soft 3 x (x - 1) per employee: 3 x (-1 + 1 - 1) = -3.
+        (
+            [
+                EmployeeUnavailabilityCost(),
+                EmployeeUnavailabilityCost(level="soft", weight=1, offset=1),
+                EmployeeUnavailabilityCost(level="soft", weight=3, offset=1, clip=False),
+            ],
+            (-20, 2.0),
+        ),
+    ],
+)
+def test_levels_by_hand_on_both_paths(picks, expected):
+    """A pick's level moves its term, with the weight in units of that level: engine == mirror == hand."""
+    assert score(fc.constraint_costs(_hand_schedule()), picks) == expected
+    raw = fc.constraint_costs(_hand_schedule(), picks)
+    for pick, key in zip(picks, instance_keys(picks)):
+        assert raw[key]["level"] == (pick.level or raw[key]["default_level"]), key
+    assert score(raw, picks) == expected
+    assert _zero_budget(picks) == expected
+
+
+@pytest.mark.parametrize("level", ["medium", Level.MEDIUM])
+def test_medium_is_refused_without_a_medium_level(level):
+    """The domain has no medium level: every path refuses the pick before scoring, a repeat too."""
+    message = "constraint 'flight_conflict_cost': this use case has no medium level"
+    pick = FlightConflictCost(level=level)  # the spec cannot know the domain
+    for picks in ([pick], [FlightConflictCost(), pick]):
+        with pytest.raises(ValueError, match=message):
+            _zero_budget(picks)
+        with pytest.raises(ValueError, match=message):
+            fc.constraint_costs(_hand_schedule(), picks)
+        with pytest.raises(ValueError, match=message):
+            score(fc.constraint_costs(_hand_schedule()), picks)
+
+
+def test_a_level_must_be_a_level():
+    with pytest.raises(TypeError, match="level must be a Level"):
+        FlightConflictCost(level=False)
+    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft', not 'firm'"):
+        FlightConflictCost(level="firm")
+    pick = SimpleNamespace(name="flight_conflict_cost", weight=None, level="firm", exponent=1.0)
+    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft', not 'firm'"):
+        _zero_budget([FlightConflictCost(), pick])
+
+
+def test_the_knob_was_renamed():
+    with pytest.raises(TypeError):
+        FlightConflictCost(hard=True)
+
+
+# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+
+HARD_REFUSAL = (
+    "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
+    "violation; use clip=True (a threshold) or another level"
+)
+
+
+def _refusal(call):
+    with pytest.raises(ValueError) as refused:
+        call()
+    return str(refused.value)
+
+
+@pytest.mark.parametrize("offset", [1.5, -1.5])
+@pytest.mark.parametrize(
+    "pick",
+    [
+        lambda offset: RequiredSkillCost(offset=offset, clip=False),  # the default level, hard
+        lambda offset: FlightConflictCost(level="hard", offset=offset, clip=False),
+        lambda offset: EmployeeUnavailabilityCost(offset=offset, clip=False),
+        lambda offset: LastAssignmentNotArrivingAtHomeCost(level=Level.HARD, offset=offset, clip=False),
+    ],
+    ids=["skill-default-hard", "conflict-level-hard", "unavailability-default-hard", "last-home-moved-to-hard"],
+)
+def test_the_literal_offset_is_refused_on_hard_on_every_path(pick, offset):
+    """A positive offset would reward the employees below it, so one employee's slack would
+    cancel another's violation and an infeasible schedule could score hard 0; a negative
+    one would charge every employee, an idle one included. The engine (solve, Solver,
+    constraint_costs) and the score() mirror refuse it with the same message; the CP-SAT
+    reference's test_solve.py checks the same words."""
+    spec = pick(offset)
+    message = HARD_REFUSAL.format(q=repr(spec.name))
+    repeated = [type(spec)(), spec]  # a refused repeat next to its accepted first instance
+    assert _refusal(lambda: fc.solve(build_schedule(), time_limit_seconds=0.1, constraints=[spec])) == message
+    assert _refusal(lambda: _zero_budget(repeated)) == message
+    config = fc.SolverConfig()
+    config.spent_limit_seconds = 0.1
+    assert _refusal(lambda: fc.Solver(config).solve_with_constraints(_hand_schedule(), [spec])) == message
+    assert _refusal(lambda: fc.constraint_costs(_hand_schedule(), [spec])) == message
+    assert _refusal(lambda: fc.constraint_costs(_hand_schedule(), repeated)) == message
+    assert _refusal(lambda: score(fc.constraint_costs(_hand_schedule()), [spec])) == message
+    assert _refusal(lambda: score(fc.constraint_costs(_hand_schedule()), repeated)) == message
+
+
+@pytest.mark.parametrize("offset", [3.0, -3.0])
+def test_the_same_literal_pick_on_soft_is_accepted(offset):
+    """100 x ((0 - offset) + (0 - offset) + (1 - offset)) per employee, on soft, on every path."""
+    pick = RequiredSkillCost(level="soft", offset=offset, clip=False)
+    expected = (0, -100 * (1 - 3 * offset))
+    assert score(fc.constraint_costs(_hand_schedule()), [pick]) == expected
+    raw = fc.constraint_costs(_hand_schedule(), [pick])
+    assert (raw["required_skill_cost"]["level"], raw["required_skill_cost"]["clip"]) == ("soft", False)
+    assert score(raw, [pick]) == expected
+    assert _zero_budget([pick]) == expected
+
+
+@pytest.mark.parametrize(
+    ("pick", "expected"),
+    [
+        (RequiredSkillCost(offset=3.0), (0, 0.0)),  # clip=True on hard: a threshold
+        (RequiredSkillCost(offset=-3.0), (-400, 0.0)),  # 100 x (1 + 3) on X1 only
+        (RequiredSkillCost(clip=False), (-100, 0.0)),  # clip=False with offset 0: the 0.2.0 shaping
+        (RequiredSkillCost(offset=0.0, clip=False), (-100, 0.0)),
+    ],
+)
+def test_the_allowed_combinations_on_hard(pick, expected):
+    assert score(fc.constraint_costs(_hand_schedule()), [pick]) == expected
+    assert _zero_budget([pick]) == expected
+
+
+def test_the_refusal_comes_after_every_knob_of_a_duck_typed_pick():
+    """The engine checks once a pick's knobs are all re-stated: the level a pick moves to decides."""
+    moved = SimpleNamespace(name="required_skill_cost", weight=None, level="soft", exponent=1.0, offset=3.0, clip=False)
+    assert _zero_budget([moved]) == (0, 800.0)
+    kept = SimpleNamespace(name="required_skill_cost", weight=None, level=None, exponent=1.0, offset=3.0, clip=False)
+    message = HARD_REFUSAL.format(q="'required_skill_cost'")
+    assert _refusal(lambda: _zero_budget([kept])) == message
+    assert _refusal(lambda: score(fc.constraint_costs(_hand_schedule()), [kept])) == message

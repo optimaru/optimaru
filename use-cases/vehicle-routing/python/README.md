@@ -53,8 +53,12 @@ print(plan.routes())                   # {"V1": ["C1"]}
 - `vrp.constraint_info()` lists every constraint with its default level and
   weight (the C++ components' `kDefaultLevel` / `kDefaultWeight`);
   `vrp_routing.constraints` picks, re-weights and flips them for
-  `Solver.solve_with_constraints` / `solve_request(..., constraints=...)`. The
-  constraint table and the 0.2.0 renames are in the
+  `Solver.solve_with_constraints` / `solve_request(..., constraints=...)`. Every
+  constraint takes five knobs (`weight`, `level`, `exponent` and the keyword-only
+  `offset` / `clip`) and may be picked several times, each pick with its own knobs
+  (`[TravelTimeCost(), TravelTimeCost(exponent=2, offset=3600)]` is the driving time
+  plus the square of every second beyond one hour per vehicle). The constraint table,
+  the 0.2.0 renames and the 0.3.0 knobs are in the
   [use-case README](../README.md#constraints).
 
 The default VRP configuration also enables a PyVRP-style granular descent:

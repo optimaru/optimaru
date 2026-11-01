@@ -215,23 +215,31 @@ class Solver:
     def solve_with_constraints(self, plan: BedPlan, constraints: Iterable[Any] | None = ...) -> None:
         """Score the same solve with a caller-chosen constraint set
         (see bed_allocation.constraints). The given list replaces the default set; None
-        keeps the default set. plan.score reports the three levels the assembly put the
-        terms on (unassigned_stays_cost with level="soft" lands on soft), and so does every
-        score passed to on_new_best."""
+        keeps the default set. A name may be picked several times: each pick is its own
+        instance with its own knobs, its level included, and the instances add up.
+        plan.score reports the three levels the assembly put the terms on
+        (unassigned_stays_cost with level="soft" lands on soft, a soft constraint with
+        level="medium" on medium), and so does every score passed to on_new_best."""
 
 def list_constraints() -> list[str]:
     """Constraint names scored by this domain (default assembly order, snake_case:
     the unit constraints, then the global mixed_gender_room_cost).
     The same names bed_allocation.constraints uses."""
 
-def constraint_costs(plan: BedPlan, /) -> dict[str, dict[str, Any]]:
-    """Raw per-unit cost of every default constraint, before weight/exponent/level:
-    {name: {"costs": [...], "weight": float, "exponent": float, "hard": bool,
-    "global": bool, "level": "hard" | "medium" | "soft", "reward": bool,
-    "level_flippable": bool, "name": str, "label": str,
+def constraint_costs(plan: BedPlan, constraints: Iterable[Any] | None = ...) -> dict[str, dict[str, Any]]:
+    """Raw per-unit cost of every constraint, before weight/exponent/offset/level:
+    {key: {"costs": [...], "weight": float, "exponent": float, "offset": float,
+    "clip": bool, "hard": bool, "global": bool, "level": "hard" | "medium" | "soft",
+    "reward": bool, "level_flippable": bool, "name": str, "label": str,
+    "default_weight": float, "default_level": str,
     "medium_fold": {"kind": "into_soft", "unit": 1e9}}}. Units are the planning values
-    (beds in order, then the "no bed" sentinel); a global constraint has one entry.
-    `medium_fold` is on EVERY entry (the fold belongs to the domain), and
+    (beds in order, then the "no bed" sentinel); a global constraint has one entry. A unit
+    constraint's "units" lists the units it evaluates, where a literal offset (clip=False)
+    charges a raw 0: the real beds for the per-bed constraints (never the sentinel),
+    [no_bed_value()] for unassigned_stays_cost. None = the default
+    constraints; a pick list (as for solve) scores exactly those picks, each entry
+    carrying its pick's knobs, the k-th pick of a name keyed "<name>#<k>" from the second
+    on. `medium_fold` is on EVERY entry (the fold belongs to the domain), and
     `bed_allocation.constraints.score()` applies it."""
 
 class ConstraintInfo(NamedTuple):

@@ -3,7 +3,7 @@
 Spot checks of individual constraint values live in `test_constraints.py` and the C++
 tests (one hand-calculated positive and zero case per constraint). This file covers the
 selection path that picks "which constraints are on", the catalog (`constraint_info()`),
-the three knobs and the medium level.
+the five knobs, repeated picks and the medium level.
 """
 
 import pickle
@@ -14,10 +14,15 @@ import pytest
 
 import bed_allocation as ba
 from bed_allocation import constraints as specs
+from bed_allocation._constraint import instance_keys
 from bed_allocation.constraints import (
     BedConflictCost,
     Constraint,
+    DepartmentSpecialtyCost,
+    Level,
+    MixedGenderRoomCost,
     PreferredMaxRoomCapacityCost,
+    PreferredPatientEquipmentCost,
     UnassignedStaysCost,
     bed_conflict_cost,
     get_constraints,
@@ -414,9 +419,18 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     """The C++ side guards too: a duck-typed pick cannot smuggle a negative weight in."""
     negative = SimpleNamespace(name="bed_conflict_cost", weight=-2.0, level=None, exponent=1.0)
     flat = SimpleNamespace(name="bed_conflict_cost", weight=None, level=None, exponent=0.0)
-    for pick, message in ((negative, "weight must be finite and >= 0"), (flat, "exponent must be finite and > 0")):
+    unbounded = SimpleNamespace(name="bed_conflict_cost", weight=None, level=None, exponent=1.0, offset=float("inf"))
+    for pick, message in (
+        (negative, "weight must be finite and >= 0"),
+        (flat, "exponent must be finite and > 0"),
+        (unbounded, "offset must be finite, not inf"),
+    ):
         with pytest.raises(ValueError, match=message):
             ba.solve(build_plan(), time_limit_seconds=0.1, constraints=[pick])
+        with pytest.raises(ValueError, match=message):
+            ba.constraint_costs(build_plan(), [pick])
+    with pytest.raises(ValueError, match="offset must be finite, not nan"):
+        BedConflictCost(offset=float("nan"))
 
 
 @pytest.mark.parametrize(
@@ -425,6 +439,10 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
         ({"weight": True}, "weight must be a number or None, not True"),
         ({"level": 1}, "level must be a Level, its name or None, not 1"),
         ({"exponent": True}, "exponent must be a number, not True"),
+        ({"offset": "5"}, "offset must be a number, not '5'"),
+        ({"offset": False}, "offset must be a number, not False"),
+        ({"clip": 1}, "clip must be True or False, not 1"),
+        ({"clip": "no"}, "clip must be True or False, not 'no'"),
     ],
 )
 def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
@@ -463,3 +481,489 @@ def test_old_names_are_gone(old):
         ba.solve(build_plan(), time_limit_seconds=0.05, constraints=[pick])
     with pytest.raises(ValueError, match="unknown constraint"):
         score(ba.constraint_costs(build_plan()), [pick])
+
+
+# --- 0.3.0: repeated picks and the offset / clip knobs ------------------------------
+#
+# The hand instance is _hand_plan(): s0 in b0, s1 in b1 (6 nights each, both rooms above
+# the preferred capacity 1), b2 empty, s2 and s3 (12 nights) on the "no bed" sentinel.
+# Raw per unit (b0, b1, b2, sentinel): preferred_max_room_capacity_cost [6, 6, 0, 0],
+# unassigned_stays_cost [0, 0, 0, 12], every other unit constraint [0, 0, 0, 0] and the
+# global mixed_gender_room_cost 0. The per-bed constraints evaluate the real beds b0..b2
+# (an empty one included), never the sentinel; unassigned_stays_cost evaluates the
+# sentinel only.
+
+
+def _hand_plan():
+    plan = build_plan()
+    plan.set_assignment([0, 1, plan.no_bed_value(), plan.no_bed_value()])
+    return plan
+
+
+def _zero_budget(plan, picks):
+    """The engine's score of `plan` under `picks`: a solve with no time keeps the assignment."""
+    before = plan.assignment()
+    config = ba.SolverConfig()
+    config.spent_limit_seconds = 0
+    ba.Solver(config).solve_with_constraints(plan, picks)
+    assert plan.assignment() == before
+    return _engine(plan.score)
+
+
+REPEAT = [PreferredMaxRoomCapacityCost(), PreferredMaxRoomCapacityCost(weight=0.5, exponent=2)]
+
+
+def test_naming_a_constraint_twice_scores_both_picks():
+    """Since 0.3.0 a constraint may be picked several times: each pick is scored on its own.
+
+    The later pick no longer wins in silence, nor is it an error: both are
+    instances with their own knobs, and they add up."""
+    picks = [BedConflictCost(), UnassignedStaysCost(), PreferredMaxRoomCapacityCost(weight=10), *REPEAT[:1]]
+    assert _zero_budget(_hand_plan(), picks) == (0, -12 * MEDIUM_UNIT - (10 + 8) * 12)
+    assert get_constraints([BedConflictCost(), BedConflictCost()]) == [BedConflictCost(), BedConflictCost()]
+    plan = build_plan()
+    ba.solve(plan, time_limit_seconds=0.2, random_seed=1, constraints=[*picks, BedConflictCost(weight=1)])
+    assert score(ba.constraint_costs(plan), [*picks, BedConflictCost(weight=1)]) == _engine(plan.score)
+
+
+def test_a_repeated_pick_by_hand():
+    """8 x nights plus 0.5 x nights^2 per bed: 8 x 12 + 0.5 x 2 x 6^2 = 132."""
+    raw = ba.constraint_costs(_hand_plan(), REPEAT)
+    assert list(raw) == ["preferred_max_room_capacity_cost", "preferred_max_room_capacity_cost#2"]
+    first, second = raw.values()
+    assert first["costs"] == second["costs"] == [6.0, 6.0, 0.0, 0.0]
+    assert first["units"] == second["units"] == [0, 1, 2]  # the real beds, not the sentinel
+    assert (first["weight"], first["exponent"], second["weight"], second["exponent"]) == (8.0, 1.0, 0.5, 2.0)
+    assert first["name"] == second["name"] == "preferred_max_room_capacity_cost"
+    assert second["default_weight"] == 8.0
+    assert second["medium_fold"] == {"kind": "into_soft", "unit": float(MEDIUM_UNIT)}
+    expected = (0, -(8 * 12 + 0.5 * 2 * 6**2))
+    assert expected == (0, -132.0)
+    assert score(raw, REPEAT) == expected
+    # The default costs hold the name once; the second pick reads the same raw costs.
+    assert score(ba.constraint_costs(_hand_plan()), REPEAT) == expected
+    assert _zero_budget(_hand_plan(), REPEAT) == expected
+
+
+def test_identical_picks_count_twice():
+    picks = [PreferredMaxRoomCapacityCost(), PreferredMaxRoomCapacityCost()]
+    assert score(ba.constraint_costs(_hand_plan()), picks) == (0, -192.0)
+    assert _zero_budget(_hand_plan(), picks) == (0, -192.0)
+    assert list(ba.constraint_costs(_hand_plan(), picks)) == [
+        "preferred_max_room_capacity_cost",
+        "preferred_max_room_capacity_cost#2",
+    ]
+
+
+def test_the_keys_follow_the_pick_order_of_each_name():
+    picks = [
+        PreferredMaxRoomCapacityCost(weight=1),
+        MixedGenderRoomCost(),
+        PreferredMaxRoomCapacityCost(weight=2),
+        UnassignedStaysCost(),
+        PreferredMaxRoomCapacityCost(weight=3),
+    ]
+    raw = ba.constraint_costs(_hand_plan(), picks)
+    assert {key: entry["weight"] for key, entry in raw.items()} == {
+        "unassigned_stays_cost": 1.0,
+        "preferred_max_room_capacity_cost": 1.0,
+        "preferred_max_room_capacity_cost#2": 2.0,
+        "preferred_max_room_capacity_cost#3": 3.0,
+        "mixed_gender_room_cost": 1000.0,
+    }
+    assert [key for key in raw if key.startswith("preferred")] == [
+        "preferred_max_room_capacity_cost",
+        "preferred_max_room_capacity_cost#2",
+        "preferred_max_room_capacity_cost#3",
+    ]
+    expected = (0, -12 * MEDIUM_UNIT - 6 * 12)
+    assert score(raw, picks) == expected
+    assert _zero_budget(_hand_plan(), picks) == expected
+
+
+def test_a_repeated_medium_pick_adds_up():
+    """Both instances stay on the medium level (folded at 10^9); a promoted repeat goes hard."""
+    picks = [UnassignedStaysCost(), UnassignedStaysCost(weight=2)]
+    assert score(ba.constraint_costs(_hand_plan()), picks) == (0, -36 * MEDIUM_UNIT)
+    plan = _hand_plan()
+    _zero_budget(plan, picks)
+    assert (plan.score.hard, plan.score.medium, plan.score.soft) == (0, -36, 0)
+    mixed = [UnassignedStaysCost(), UnassignedStaysCost(level="hard"), UnassignedStaysCost(level="soft", offset=2)]
+    assert score(ba.constraint_costs(_hand_plan(), mixed), mixed) == (-12, -12 * MEDIUM_UNIT - 10)
+    plan = _hand_plan()
+    _zero_budget(plan, mixed)
+    assert (plan.score.hard, plan.score.medium, plan.score.soft) == (-12, -12, -10)
+
+
+@pytest.mark.parametrize(
+    ("pick", "expected"),
+    [
+        # Per real bed: b0, b1 at 6 nights, b2 empty (raw 0, evaluated, so charged in literal mode).
+        (PreferredMaxRoomCapacityCost(offset=2), (0, -8 * 2 * 4)),
+        (PreferredMaxRoomCapacityCost(offset=2, clip=False), (0, -8 * (2 * 4 - 2))),  # the empty bed is rewarded
+        (PreferredMaxRoomCapacityCost(offset=10), (0, 0.0)),
+        (PreferredMaxRoomCapacityCost(offset=10, clip=False), (0, -8 * (2 * -4 - 10))),
+        (PreferredMaxRoomCapacityCost(offset=3, exponent=2), (0, -8 * 2 * 3**2)),
+        (PreferredMaxRoomCapacityCost(offset=7, exponent=3, clip=False), (0, -8 * (2 * -1 - 7**3))),
+        (PreferredMaxRoomCapacityCost(offset=-1), (0, -8 * 2 * 7)),  # a negative offset adds to every non-zero bed
+        (PreferredMaxRoomCapacityCost(offset=-1, clip=False), (0, -8 * (2 * 7 + 1))),  # ...or to every bed
+        # The literal formula with an offset is refused on hard (bed_conflict_cost's default);
+        # on soft it charges every real bed: 3 beds at (0 - 1) x 1000, a reward, not rounded.
+        (BedConflictCost(level="soft", offset=1, clip=False), (0, 3000.0)),
+        (BedConflictCost(level="soft", weight=4, offset=0.5, clip=False), (0, 6.0)),  # -2 on each of the 3 beds
+        (BedConflictCost(weight=3, offset=0.5), (0, 0.0)),  # the threshold stays on hard: no conflict, 0
+        # The scoped medium constraint evaluates the sentinel only: (12 - 20), not 4 x (0 - 20).
+        (UnassignedStaysCost(offset=2), (0, -10 * MEDIUM_UNIT)),
+        (UnassignedStaysCost(offset=20, clip=False), (0, 8 * MEDIUM_UNIT)),
+        (UnassignedStaysCost(offset=20, clip=False, level="soft"), (0, 8.0)),
+        (UnassignedStaysCost(offset=10, level="hard"), (-2, 0.0)),  # hard takes the threshold: 12 - 10
+        (UnassignedStaysCost(offset=-1, level="soft"), (0, -13.0)),
+        # The global's single total (0 here) is shaped once: (0 - 2) x 1000, not per unit, on
+        # soft (its default hard refuses the literal formula with an offset).
+        (MixedGenderRoomCost(level="soft", offset=2, clip=False), (0, 2000.0)),
+        (MixedGenderRoomCost(offset=2), (0, 0.0)),
+    ],
+)
+def test_offsets_by_hand_on_both_paths(pick, expected):
+    """threshold sign(x) max(0, |x| - offset)^e and literal (x - offset)^e: Python mirror == engine == hand."""
+    assert score(ba.constraint_costs(_hand_plan()), [pick]) == expected
+    raw = ba.constraint_costs(_hand_plan(), [pick])
+    entry = next(iter(raw.values()))
+    assert (entry["offset"], entry["clip"]) == (float(pick.offset), pick.clip)
+    assert score(raw, [pick]) == expected
+    assert _zero_budget(_hand_plan(), [pick]) == expected
+
+
+def _mixed_room():
+    """One SAME_GENDER room with three beds: a man (6 nights) and two women (6 and 3 nights).
+
+    The global mixed_gender_room_cost totals the opposite-gender pairs: 6 + 3 = 9 nights."""
+    stays = [
+        ba.Stay("m", "m", ba.Gender.MALE, 30, 0, 5, "default", bed=0),
+        ba.Stay("f1", "f1", ba.Gender.FEMALE, 30, 0, 5, "default", bed=1),
+        ba.Stay("f2", "f2", ba.Gender.FEMALE, 30, 3, 5, "default", bed=2),
+    ]
+    return ba.BedPlan(
+        [ba.Department("d0", "Dept", {"default": 1})],
+        [ba.Room("r0", "r0", capacity=3, gender_limitation=ba.GenderLimitation.SAME_GENDER)],
+        [ba.Bed("b0", 0), ba.Bed("b1", 0, 1), ba.Bed("b2", 0, 2)],
+        stays,
+    )
+
+
+@pytest.mark.parametrize(
+    ("pick", "expected"),
+    [
+        (MixedGenderRoomCost(), (-9000, 0.0)),
+        (MixedGenderRoomCost(offset=4, exponent=2), (-25000, 0.0)),  # (9 - 4)^2, the total shaped once
+        (MixedGenderRoomCost(level="soft", offset=12, exponent=3, clip=False), (0, 27000.0)),  # (9 - 12)^3 = -27
+        (MixedGenderRoomCost(weight=1, offset=-1, level="soft"), (0, -10.0)),
+    ],
+)
+def test_the_global_total_is_shaped_once(pick, expected):
+    raw = ba.constraint_costs(_mixed_room(), [pick])
+    assert raw["mixed_gender_room_cost"]["costs"] == [9.0]
+    assert raw["mixed_gender_room_cost"]["global"] is True
+    assert "units" not in raw["mixed_gender_room_cost"]
+    assert score(raw, [pick]) == expected
+    assert _zero_budget(_mixed_room(), [pick]) == expected
+
+
+def test_the_scopes_report_their_units():
+    """Every per-bed entry lists the real beds as its "units", unassigned_stays_cost the sentinel,
+    and the global none. On a solution with every stay in a bed (b2 shared), a literal offset
+    charges exactly those units: -3 medium on the sentinel, 3 x 50 on the beds (on soft: the
+    hard default refuses the literal formula with an offset)."""
+    plan = build_plan()
+    plan.set_assignment([0, 1, 2, 2])  # nobody without a bed
+    raw = ba.constraint_costs(plan)
+    for key, entry in raw.items():
+        if key == "mixed_gender_room_cost":
+            assert "units" not in entry
+        elif key == "unassigned_stays_cost":
+            assert entry["units"] == [plan.no_bed_value()] == [3]
+        else:
+            assert entry["units"] == [0, 1, 2], key
+        assert len(entry["costs"]) == (1 if entry["global"] else 4)
+    assert raw["unassigned_stays_cost"]["costs"] == [0.0, 0.0, 0.0, 0.0]
+    assert raw["male_in_female_room_cost"]["costs"] == [0.0, 0.0, 0.0, 0.0]
+    for pick, expected in (
+        (UnassignedStaysCost(offset=3, clip=False), (0, 3 * MEDIUM_UNIT)),
+        (specs.MaleInFemaleRoomCost(level="soft", offset=1, clip=False), (0, 150.0)),  # not 4 x 50
+    ):
+        assert score(raw, [pick]) == expected
+        copy = build_plan()
+        copy.set_assignment([0, 1, 2, 2])
+        assert _zero_budget(copy, [pick]) == expected
+
+
+def test_offset_zero_reproduces_the_0_2_0_scores():
+    """offset 0 is the plain shaping in both modes, so every 0.2.0 selection scores the same."""
+    plain = [*get_constraints()[:-1], MixedGenderRoomCost(exponent=2)]
+    shifted = [type(spec)(exponent=spec.exponent, offset=0.0, clip=False) for spec in plain]
+    raw, solved = _raw()
+    assert score(raw, shifted) == score(raw, plain)
+    engines = []
+    for picks in (plain, shifted):
+        copy = build_plan()
+        copy.set_assignment(solved.assignment())
+        engines.append(_zero_budget(copy, picks))
+    assert engines[0] == engines[1] == score(raw, plain)
+    for entry in raw.values():
+        assert (entry["offset"], entry["clip"]) == (0.0, True)
+
+
+SELECTIONS = {
+    "repeat": [*get_constraints(), *REPEAT, UnassignedStaysCost(weight=2, exponent=2)],
+    "repeat-and-offsets": [
+        BedConflictCost(),
+        BedConflictCost(level="soft", weight=1, offset=1, clip=False),  # hard refuses the literal formula
+        BedConflictCost(weight=1, offset=1),
+        UnassignedStaysCost(),
+        UnassignedStaysCost(offset=4, exponent=2),
+        UnassignedStaysCost(offset=-2, clip=False, level="soft", weight=3),
+        PreferredMaxRoomCapacityCost(offset=3),
+        PreferredMaxRoomCapacityCost(offset=5, clip=False, weight=0.25),
+        DepartmentSpecialtyCost(offset=-1),
+        MixedGenderRoomCost(),
+        MixedGenderRoomCost(offset=2, clip=False, level="soft", weight=1),
+    ],
+}
+
+
+@pytest.mark.parametrize("picks", list(SELECTIONS.values()), ids=list(SELECTIONS))
+def test_score_matches_the_engine_for_repeats_and_offsets(picks):
+    raw, solved = _raw()
+    copy = build_plan()
+    copy.set_assignment(solved.assignment())
+    engine = _zero_budget(copy, picks)
+    python = score(ba.constraint_costs(solved, picks), picks)
+    assert python.hard == engine[0]
+    assert python.soft == pytest.approx(engine[1])
+    assert score(raw, picks) == python  # the default costs score the repeats too
+
+
+@pytest.mark.parametrize("picks", list(SELECTIONS.values()), ids=list(SELECTIONS))
+def test_full_assert_solves_with_repeats_and_offsets(picks):
+    """FULL_ASSERT re-checks the incremental score against a full recompute after every move."""
+    from bed_allocation.demo import generate_demo_data
+
+    plan = generate_demo_data().to_core()
+    config = ba.SolverConfig()
+    config.full_assert = True
+    config.random_seed = 3
+    config.parallel_solver_count = 1
+    config.step_count_limit = 3000
+    config.spent_limit_seconds = 30
+    ba.Solver(config).solve_with_constraints(plan, picks)
+    raw = ba.constraint_costs(plan, picks)
+    assert len(raw) == len(picks)
+    python = score(raw, picks)
+    engine = _engine(plan.score)
+    assert python.hard == engine[0]
+    assert python.soft == pytest.approx(engine[1])
+    assert score(ba.constraint_costs(plan), picks) == python
+
+
+# --- Levels: each pick, a repeat included, on the level it names --------------------
+
+
+def test_a_soft_constraint_can_move_to_medium():
+    """On medium at its default weight 8, a night above the preferred capacity outranks a
+    night without a bed (1 medium), so the solver leaves all four stays without a bed."""
+    picks = [bed_conflict_cost, unassigned_stays_cost]
+    soft_level = solve([*picks, preferred_max_room_capacity_cost])
+    medium_level = solve([*picks, PreferredMaxRoomCapacityCost(level=Level.MEDIUM)])
+    assert (soft_level.hard, soft_level.medium, soft_level.soft) == (0, -6, -144)
+    assert (medium_level.hard, medium_level.medium, medium_level.soft) == (0, -24, 0)
+
+
+def test_a_level_must_be_a_level():
+    with pytest.raises(TypeError, match="level must be a Level"):
+        BedConflictCost(level=True)
+    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft'"):
+        BedConflictCost(level="firm")
+    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft'"):
+        BedConflictCost(level="HARD")
+
+
+def test_core_refuses_an_unknown_level_like_the_python_base():
+    pick = SimpleNamespace(name="bed_conflict_cost", weight=None, level="firm", exponent=1.0)
+    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft', not 'firm'"):
+        ba.solve(build_plan(), time_limit_seconds=0.1, constraints=[pick])
+    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft', not 'firm'"):
+        ba.constraint_costs(build_plan(), [pick])
+
+
+def test_the_knob_was_renamed():
+    """hard= is gone: a spec refuses it, and an old duck-typed pick that carries `hard` but
+    no `level` is refused on every path instead of running at the default level."""
+    with pytest.raises(TypeError):
+        BedConflictCost(hard=True)
+    old = SimpleNamespace(name="bed_conflict_cost", weight=None, hard=True, exponent=1.0)
+    with pytest.raises(AttributeError, match="level"):
+        ba.solve(build_plan(), time_limit_seconds=0.1, constraints=[old])
+    with pytest.raises(AttributeError, match="level"):
+        ba.constraint_costs(build_plan(), [old])
+    with pytest.raises(AttributeError, match="level"):
+        score(ba.constraint_costs(build_plan()), [old])
+
+
+@pytest.mark.parametrize(
+    ("picks", "expected"),
+    [
+        # _hand_plan(): preferred capacity [6, 6, 0, 0] nights, unassigned [0, 0, 0, 12].
+        ([PreferredMaxRoomCapacityCost(level="medium")], (0, -96 * MEDIUM_UNIT)),  # weight 8 in medium units
+        ([PreferredMaxRoomCapacityCost(level=Level.HARD)], (-96, 0.0)),
+        ([PreferredMaxRoomCapacityCost(level=Level.MEDIUM, weight=1)], (0, -12 * MEDIUM_UNIT)),
+        ([PreferredMaxRoomCapacityCost(level="soft")], (0, -96.0)),
+        ([UnassignedStaysCost(level=Level.SOFT, weight=2)], (0, -24.0)),
+        ([UnassignedStaysCost(level="hard", offset=1)], (-11, 0.0)),
+        ([UnassignedStaysCost(level="medium", exponent=2, offset=10)], (0, -4 * MEDIUM_UNIT)),
+        # A repeat carries its own level and shaping: soft nights, medium beyond 4 nights per
+        # bed (2 + 2), hard 2 x nights beyond 5 per bed (1 + 1), and soft 2 x (x - 7) per real
+        # bed: 2 x (-1 - 1 - 7) = -18, a reward (hard refuses the literal formula with an offset).
+        (
+            [
+                PreferredMaxRoomCapacityCost(),
+                PreferredMaxRoomCapacityCost(level="medium", offset=4),
+                PreferredMaxRoomCapacityCost(level="hard", weight=2, offset=5),
+                PreferredMaxRoomCapacityCost(level="soft", weight=2, offset=7, clip=False),
+            ],
+            (-4, -32 * MEDIUM_UNIT - 96 + 18),
+        ),
+        # The medium constraint repeated onto all three levels.
+        (
+            [
+                UnassignedStaysCost(),
+                UnassignedStaysCost(level=Level.HARD, weight=3, offset=2),
+                UnassignedStaysCost(level=Level.SOFT, offset=20, clip=False),
+            ],
+            (-30, -12 * MEDIUM_UNIT + 8),
+        ),
+    ],
+)
+def test_levels_by_hand_on_both_paths(picks, expected):
+    """A pick's level moves its term, with the weight in units of that level: engine == mirror == hand."""
+    assert score(ba.constraint_costs(_hand_plan()), picks) == expected
+    raw = ba.constraint_costs(_hand_plan(), picks)
+    for pick, key in zip(picks, instance_keys(picks)):
+        assert raw[key]["level"] == (pick.level or raw[key]["default_level"]), key
+    assert score(raw, picks) == expected
+    assert _zero_budget(_hand_plan(), picks) == expected
+
+
+def test_a_repeat_on_medium_reports_its_level_unfolded():
+    """plan.score reports each level on its own: the repeat's medium term is medium."""
+    picks = [
+        PreferredPatientEquipmentCost(),
+        PreferredMaxRoomCapacityCost(),
+        PreferredMaxRoomCapacityCost(level="medium"),
+    ]
+    plan = _hand_plan()
+    _zero_budget(plan, picks)
+    assert (plan.score.hard, plan.score.medium, plan.score.soft) == (0, -96, -96)
+
+
+def test_a_repeat_is_checked_on_its_own_level():
+    """The second pick's level is read and checked like the first's, on both paths."""
+    pick = SimpleNamespace(name="bed_conflict_cost", weight=None, level="firm", exponent=1.0)
+    with pytest.raises(ValueError, match="constraint 'bed_conflict_cost': level must be 'hard', 'medium' or 'soft'"):
+        _zero_budget(_hand_plan(), [BedConflictCost(), pick])
+    with pytest.raises(ValueError, match="constraint 'bed_conflict_cost': level must be 'hard', 'medium' or 'soft'"):
+        score(ba.constraint_costs(_hand_plan()), [BedConflictCost(), pick])
+
+
+# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+
+HARD_REFUSAL = (
+    "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
+    "violation; use clip=True (a threshold) or another level"
+)
+
+
+def _refusal(call):
+    with pytest.raises(ValueError) as refused:
+        call()
+    return str(refused.value)
+
+
+@pytest.mark.parametrize("offset", [2.5, -2.5])
+@pytest.mark.parametrize(
+    "pick",
+    [
+        lambda offset: BedConflictCost(offset=offset, clip=False),  # the default level, hard
+        lambda offset: BedConflictCost(level="hard", offset=offset, clip=False),
+        lambda offset: MixedGenderRoomCost(offset=offset, clip=False),  # the global, hard by default
+        lambda offset: PreferredMaxRoomCapacityCost(level="hard", offset=offset, clip=False),
+        lambda offset: UnassignedStaysCost(level=Level.HARD, offset=offset, clip=False),
+    ],
+    ids=[
+        "bed-conflict-default-hard",
+        "bed-conflict-level-hard",
+        "mixed-gender-default-hard",
+        "preferred-capacity-moved-to-hard",
+        "unassigned-moved-to-hard",
+    ],
+)
+def test_the_literal_offset_is_refused_on_hard_on_every_path(pick, offset):
+    """A positive offset would reward the beds below it, so one bed's slack would cancel
+    another bed's conflict and an infeasible plan could score hard 0; a negative one would
+    charge every bed, an empty one included. The engine (solve, solve_with_constraints,
+    constraint_costs) and the score() mirror refuse it with the same message; the CP-SAT
+    reference's test_solve.py checks the same words."""
+    spec = pick(offset)
+    message = HARD_REFUSAL.format(q=repr(spec.name))
+    repeated = [type(spec)(), spec]  # a refused repeat next to its accepted first instance
+    assert _refusal(lambda: ba.solve(build_plan(), time_limit_seconds=0.1, constraints=[spec])) == message
+    assert _refusal(lambda: _zero_budget(_hand_plan(), repeated)) == message
+    assert _refusal(lambda: ba.constraint_costs(_hand_plan(), [spec])) == message
+    assert _refusal(lambda: ba.constraint_costs(_hand_plan(), repeated)) == message
+    assert _refusal(lambda: score(ba.constraint_costs(_hand_plan()), [spec])) == message
+    assert _refusal(lambda: score(ba.constraint_costs(_hand_plan()), repeated)) == message
+
+
+@pytest.mark.parametrize("offset", [3.0, -3.0])
+def test_the_same_literal_pick_on_soft_is_accepted(offset):
+    """(0 - offset) x 1000 on each of the three real beds, on soft, on every path; never the
+    "no bed" sentinel. Medium folds into soft here, so it takes the literal formula too."""
+    pick = BedConflictCost(level="soft", offset=offset, clip=False)
+    expected = (0, 3 * 1000 * offset)
+    assert score(ba.constraint_costs(_hand_plan()), [pick]) == expected
+    raw = ba.constraint_costs(_hand_plan(), [pick])
+    assert (raw["bed_conflict_cost"]["level"], raw["bed_conflict_cost"]["clip"]) == ("soft", False)
+    assert score(raw, [pick]) == expected
+    assert _zero_budget(_hand_plan(), [pick]) == expected
+    plan = build_plan()
+    ba.solve(plan, time_limit_seconds=0.2, random_seed=1, constraints=[BedConflictCost(), pick])
+    assert score(ba.constraint_costs(plan), [BedConflictCost(), pick]) == _engine(plan.score)
+    medium = BedConflictCost(level="medium", offset=offset, clip=False)
+    assert score(ba.constraint_costs(_hand_plan()), [medium]) == (0, expected[1] * MEDIUM_UNIT)
+    assert _zero_budget(_hand_plan(), [medium]) == (0, expected[1] * MEDIUM_UNIT)
+
+
+@pytest.mark.parametrize(
+    ("pick", "expected"),
+    [
+        # _mixed_room(): 9 mixed-gender nights, the global's one total.
+        (MixedGenderRoomCost(offset=4), (-5000, 0.0)),  # clip=True on hard: a threshold
+        (MixedGenderRoomCost(offset=-1), (-10000, 0.0)),  # a negative threshold adds 1 to the non-zero total
+        (MixedGenderRoomCost(clip=False), (-9000, 0.0)),  # clip=False with offset 0: the 0.2.0 shaping
+        (MixedGenderRoomCost(offset=0.0, clip=False), (-9000, 0.0)),
+        (BedConflictCost(offset=-1), (0, 0.0)),  # no conflict: a threshold adds nothing to a raw 0
+    ],
+)
+def test_the_allowed_combinations_on_hard(pick, expected):
+    assert score(ba.constraint_costs(_mixed_room()), [pick]) == expected
+    assert _zero_budget(_mixed_room(), [pick]) == expected
+
+
+def test_the_refusal_comes_after_every_knob_of_a_duck_typed_pick():
+    """The engine checks once a pick's knobs are all re-stated: the level a pick moves to decides."""
+    moved = SimpleNamespace(name="bed_conflict_cost", weight=None, level="soft", exponent=1.0, offset=1.0, clip=False)
+    assert _zero_budget(_hand_plan(), [moved]) == (0, 3000.0)
+    kept = SimpleNamespace(name="bed_conflict_cost", weight=None, level=None, exponent=1.0, offset=1.0, clip=False)
+    message = HARD_REFUSAL.format(q="'bed_conflict_cost'")
+    assert _refusal(lambda: _zero_budget(_hand_plan(), [kept])) == message
+    assert _refusal(lambda: ba.constraint_costs(_hand_plan(), [kept])) == message
+    assert _refusal(lambda: score(ba.constraint_costs(_hand_plan()), [kept])) == message

@@ -15,6 +15,12 @@
 //   (h) each component's raw cost by hand: one positive, one zero case
 //   (i) the catalog (defaultConstraints().info()) == the components'
 //       constants, and the knob guards
+//   (j) repeated components and the offset / clip knobs: a hand-calculated
+//       repeat, threshold and literal offsets by hand (an idle employee is
+//       an evaluated unit), the global's total shaped once, the literal
+//       formula refused at reset on hard and on the below-hard medium and
+//       kept on soft, incremental == a fresh recompute over a random LIST
+//       walk and a FULL_ASSERT solve with repeated, shifted components
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -625,6 +631,18 @@ void verifyMediumLevel()
     checkScore("no medium term selected: hard still folds x 10^9",
                scoreOf(defaultConstraints().only({"requiredSkillCost"}), s),
                Score{-1, 0, 0, 0});
+    checkScore("level(Medium): minorPriorityTaskEndTimeCost moves onto soft0",
+               scoreOf(defaultConstraints().level("minorPriorityTaskEndTimeCost",
+                                                  optimaru::Level::Medium),
+                       s),
+               Score{-1, -42, -1600, 0});
+    checkScore("a weight on a moved constraint is in medium units",
+               scoreOf(defaultConstraints()
+                           .level("minorPriorityTaskEndTimeCost",
+                                  optimaru::Level::Medium)
+                           .weight("minorPriorityTaskEndTimeCost", 0.5),
+                       s),
+               Score{-1, -22, -1600, 0});
     std::printf("\n");
 }
 
@@ -640,6 +658,12 @@ void verifyMediumIncremental()
             {"hard()", [] { return defaultConstraints().hard("unassignedTasksCost"); }},
             {"soft()", [] { return defaultConstraints().soft("unassignedTasksCost"); }},
             {"weight 5", [] { return defaultConstraints().weight("unassignedTasksCost", 5); }},
+            {"criticalPriorityTaskEndTimeCost on medium",
+             []
+             {
+                 return defaultConstraints().level("criticalPriorityTaskEndTimeCost",
+                                                   optimaru::Level::Medium);
+             }},
         };
     for (const auto &variant : variants)
     {
@@ -688,7 +712,7 @@ void verifyMediumIncremental()
         }
         check(mismatches == 0,
               variant.first + ": 1500 list moves, incremental == full");
-        if (variant.first == "default" || variant.first == "weight 5")
+        if (variant.first != "hard()" && variant.first != "soft()")
             check(mediumSteps > 0, variant.first + ": the walk visits medium states");
     }
     std::printf("\n");
@@ -893,6 +917,331 @@ void verifyCatalog()
     std::printf("\n");
 }
 
+// -------------------------------------------------------------------------
+// (j) Repeated components and offsets. A repeat is a fresh copy of a
+// default component (another defaultConstraints(), the one name kept, its
+// knobs re-stated) appended with addInstances(), as the Python bindings
+// build it from a pick list.
+// -------------------------------------------------------------------------
+ConstraintAssembly copyOf(const std::string &name)
+{
+    ConstraintAssembly copy = defaultConstraints();
+    copy.only({name});
+    return copy;
+}
+
+// Three HIGH-affinity employees: e0 (no skills) runs t0 (critical, 0..10,
+// needs x) and t1 (major, 10..30), e1 runs t2 (minor, 0..5), e2 is idle.
+// Raw per employee (e0, e1, e2): requiredSkillCost [1, 0, 0],
+// squaredMakespanCost [900, 25, 0], critical [10, 0, 0], major [30, 0, 0],
+// minor [0, 5, 0]; unassignedTasksCost [0].
+TaskAssigningSolution repeatInstance()
+{
+    Builder b;
+    for (int e = 0; e < 3; ++e)
+        b.addEmployee({}, {Affinity::HIGH});
+    const int t0 = b.addTask(10, {"x"}, Priority::CRITICAL);
+    const int t1 = b.addTask(20, {}, Priority::MAJOR);
+    const int t2 = b.addTask(5, {}, Priority::MINOR);
+    b.solution.employees[0].tasks = {t0, t1};
+    b.solution.employees[1].tasks = {t2};
+    return b.solution;
+}
+
+optimaru::DecomposedScoreCalculator<TaskAssigningSolution>::LevelScores
+levelsWith(ConstraintAssembly assembly, TaskAssigningSolution &s)
+{
+    DecomposedCalculator calculator;
+    std::move(assembly).into(calculator);
+    calculator.resetWorkingSolution(s);
+    calculator.calculateScore();
+    return calculator.levelScores();
+}
+
+ConstraintAssembly repeatedAssembly()
+{
+    ConstraintAssembly assembly = defaultConstraints();
+    assembly.offset("criticalPriorityTaskEndTimeCost", 30.0);
+    assembly.addInstances(std::move(copyOf("squaredMakespanCost")
+                                        .weight("squaredMakespanCost", 0.5)
+                                        .offset("squaredMakespanCost", 1e6)
+                                        .clip("squaredMakespanCost", false)));
+    // The literal required-skill copy sits on soft: hard (and the below-hard
+    // medium) refuse the literal formula with an offset (hard 0 must mean no
+    // violation).
+    assembly.addInstances(std::move(copyOf("requiredSkillCost")
+                                        .soft("requiredSkillCost")
+                                        .weight("requiredSkillCost", 2.0)
+                                        .offset("requiredSkillCost", 1.0)
+                                        .clip("requiredSkillCost", false)));
+    assembly.addInstances(std::move(copyOf("requiredSkillCost")
+                                        .weight("requiredSkillCost", 2.0)
+                                        .offset("requiredSkillCost", 1.0)));
+    assembly.addInstances(std::move(copyOf("unassignedTasksCost")
+                                        .exponent("unassignedTasksCost", 2.0)
+                                        .offset("unassignedTasksCost", 1.0)));
+    assembly.addInstances(std::move(copyOf("unassignedTasksCost")
+                                        .soft("unassignedTasksCost")
+                                        .weight("unassignedTasksCost", 3.0)
+                                        .offset("unassignedTasksCost", -2.0)
+                                        .clip("unassignedTasksCost", false)));
+    assembly.addInstances(
+        std::move(copyOf("minorPriorityTaskEndTimeCost")
+                      .exponent("minorPriorityTaskEndTimeCost", 2.0)
+                      .offset("minorPriorityTaskEndTimeCost", 10.0)));
+    return assembly;
+}
+
+void verifyRepeatsAndOffsets()
+{
+    std::printf("== (j) Repeated components, offset / clip ==\n");
+    {
+        TaskAssigningSolution s = repeatInstance();
+        ConstraintAssembly twice = copyOf("criticalPriorityTaskEndTimeCost");
+        twice.addInstances(
+            std::move(copyOf("criticalPriorityTaskEndTimeCost")
+                          .weight("criticalPriorityTaskEndTimeCost", 0.5)
+                          .exponent("criticalPriorityTaskEndTimeCost", 2.0)));
+        DecomposedCalculator calculator;
+        std::move(twice).into(calculator);
+        calculator.resetWorkingSolution(s);
+        calculator.calculateScore();
+        const auto levels = calculator.levelScores();
+        check(levels.hard == 0 && levels.medium == 0.0
+                  && levels.soft == -(4.0 * 10 + 0.5 * 100),
+              "4 x end + 0.5 x end^2 per employee: -90 soft");
+        const auto entries = calculator.constraintCosts();
+        check(entries.size() == 2 && entries[0].unitCosts == entries[1].unitCosts
+                  && entries[0].unitCosts == std::vector<double>{10, 0, 0}
+                  && !entries[0].scoped && entries[1].weight == 0.5
+                  && entries[1].exponent == 2.0 && entries[1].defaultWeight == 4.0,
+              "two instances, the same raw costs, each with its own knobs");
+    }
+    {
+        TaskAssigningSolution s = repeatInstance();
+        check(levelsWith(copyOf("criticalPriorityTaskEndTimeCost")
+                             .offset("criticalPriorityTaskEndTimeCost", 4.0),
+                         s)
+                      .soft
+                  == -4.0 * 6,
+              "threshold offset 4: 4 x (10 - 4)");
+        check(levelsWith(copyOf("criticalPriorityTaskEndTimeCost")
+                             .offset("criticalPriorityTaskEndTimeCost", 4.0)
+                             .clip("criticalPriorityTaskEndTimeCost", false),
+                         s)
+                      .soft
+                  == -4.0 * (6 - 4 - 4),
+              "literal offset 4: 4 x (6 - 4 - 4), the idle employee included");
+        check(levelsWith(copyOf("majorPriorityTaskEndTimeCost")
+                             .offset("majorPriorityTaskEndTimeCost", -1.0),
+                         s)
+                      .soft
+                  == -2.0 * 31,
+              "threshold offset -1 adds to the non-zero employee only");
+        const auto skill = levelsWith(copyOf("requiredSkillCost")
+                                          .soft("requiredSkillCost")
+                                          .weight("requiredSkillCost", 3.0)
+                                          .offset("requiredSkillCost", 0.5)
+                                          .clip("requiredSkillCost", false),
+                                      s);
+        check(skill.hard == 0 && skill.medium == 0.0 && skill.soft == 1.5,
+              "required-skill literal offset 0.5 at weight 3 on soft: 1.5 - 1.5 "
+              "twice, the idle employee included: +1.5 soft (not rounded)");
+        // A hard threshold still rounds per employee: (1 - 0.5) x 3 = 1.5 -> 2.
+        check(levelsWith(copyOf("requiredSkillCost")
+                             .weight("requiredSkillCost", 3.0)
+                             .offset("requiredSkillCost", 0.5),
+                         s)
+                      .hard
+                  == -2,
+              "required-skill threshold offset 0.5 at weight 3 on hard: 1.5 -> -2 hard");
+        const auto global = levelsWith(copyOf("unassignedTasksCost")
+                                           .soft("unassignedTasksCost")
+                                           .offset("unassignedTasksCost", 3.0)
+                                           .clip("unassignedTasksCost", false),
+                                       s);
+        check(global.soft == 3.0 && global.medium == 0.0 && global.hard == 0,
+              "unassigned literal offset 3 on the single total, on soft: +3 soft");
+    }
+    {
+        // Hard, and medium (it folds below hard here), refuse the literal
+        // formula with an offset at reset, whichever sign and setter order:
+        // +0.5 would reward the employees without a missing skill, -0.5 would
+        // charge every employee, an idle one included; +3 on the unassigned
+        // total would reward a plan that leaves no task out.
+        auto resetRefusal = [](ConstraintAssembly assembly) {
+            TaskAssigningSolution s = repeatInstance();
+            try
+            {
+                levelsWith(std::move(assembly), s);
+            }
+            catch (const std::logic_error &error)
+            {
+                return std::string(error.what());
+            }
+            return std::string();
+        };
+        auto refusal = [](const std::string &name) {
+            return "Constraint '" + name
+                   + "' cannot use clip=false with a non-zero offset on a level that counts "
+                     "toward the hard score (hard 0 must mean no violation)";
+        };
+        check(resetRefusal(copyOf("requiredSkillCost")
+                               .offset("requiredSkillCost", 0.5)
+                               .clip("requiredSkillCost", false))
+                      == refusal("requiredSkillCost")
+                  && resetRefusal(copyOf("requiredSkillCost")
+                                      .clip("requiredSkillCost", false)
+                                      .offset("requiredSkillCost", -0.5))
+                         == refusal("requiredSkillCost"),
+              "required-skill literal offset +-0.5 on hard: refused at reset");
+        check(resetRefusal(copyOf("unassignedTasksCost")
+                               .offset("unassignedTasksCost", 3.0)
+                               .clip("unassignedTasksCost", false))
+                      == refusal("unassignedTasksCost")
+                  && resetRefusal(copyOf("unassignedTasksCost")
+                                      .clip("unassignedTasksCost", false)
+                                      .offset("unassignedTasksCost", -3.0))
+                         == refusal("unassignedTasksCost"),
+              "unassigned literal offset +-3 on its default below-hard medium: refused at reset");
+        check(resetRefusal(copyOf("criticalPriorityTaskEndTimeCost")
+                               .offset("criticalPriorityTaskEndTimeCost", 4.0)
+                               .clip("criticalPriorityTaskEndTimeCost", false)
+                               .level("criticalPriorityTaskEndTimeCost", optimaru::Level::Medium))
+                      == refusal("criticalPriorityTaskEndTimeCost")
+                  && resetRefusal(copyOf("criticalPriorityTaskEndTimeCost")
+                                      .hard("criticalPriorityTaskEndTimeCost")
+                                      .offset("criticalPriorityTaskEndTimeCost", 4.0)
+                                      .clip("criticalPriorityTaskEndTimeCost", false))
+                         == refusal("criticalPriorityTaskEndTimeCost"),
+              "a soft literal pick moved to medium (after) or hard (before): refused at reset");
+        check(resetRefusal(copyOf("requiredSkillCost").offset("requiredSkillCost", 0.5)).empty()
+                  && resetRefusal(copyOf("requiredSkillCost").clip("requiredSkillCost", false))
+                         .empty()
+                  && resetRefusal(copyOf("unassignedTasksCost").offset("unassignedTasksCost", 3.0))
+                         .empty()
+                  && resetRefusal(copyOf("unassignedTasksCost").clip("unassignedTasksCost", false))
+                         .empty()
+                  && resetRefusal(copyOf("unassignedTasksCost")
+                                      .soft("unassignedTasksCost")
+                                      .offset("unassignedTasksCost", 3.0)
+                                      .clip("unassignedTasksCost", false))
+                         .empty(),
+              "allowed: thresholds on hard and medium, clip=false with offset 0 on "
+              "both, and the literal formula on soft");
+    }
+    {
+        // Random LIST walk: incremental == a fresh calculator of the same
+        // assembly.
+        TaskAssigningSolution solution
+            = buildRandomInstance(/*taskCount*/ 30, /*employeeCount*/ 6, 7);
+        const int taskCount = static_cast<int>(solution.tasks.size());
+        const int employeeCount = static_cast<int>(solution.employees.size());
+        DecomposedCalculator calculator;
+        repeatedAssembly().into(calculator);
+        optimaru::ScoreDirector<TaskAssigningSolution> director(solution,
+                                                                calculator);
+        std::mt19937_64 rng(321);
+        std::uniform_real_distribution<double> unit(0.0, 1.0);
+        std::vector<int> taskList(taskCount, -1);
+        auto indexWithin = [&](int list, int task)
+        {
+            const std::vector<int> &tasks = solution.employees[list].tasks;
+            for (std::size_t p = 0; p < tasks.size(); ++p)
+            {
+                if (tasks[p] == task)
+                    return static_cast<int>(p);
+            }
+            return -1;
+        };
+        int mismatches = 0;
+        int mediumSteps = 0;
+        double drift = 0.0;
+        const int steps = 2000;
+        for (int step = 0; step < steps; ++step)
+        {
+            const int task = static_cast<int>(rng() % taskCount);
+            const double dice = unit(rng);
+            if (dice < 0.2 && taskList[task] >= 0)
+            {
+                director.removeListElement(taskList[task],
+                                           indexWithin(taskList[task], task));
+                taskList[task] = -1;
+            }
+            else if (dice < 0.85)
+            {
+                if (taskList[task] >= 0)
+                    director.removeListElement(taskList[task],
+                                               indexWithin(taskList[task], task));
+                const int list = static_cast<int>(rng() % employeeCount);
+                const int position = static_cast<int>(
+                    rng() % (solution.employees[list].tasks.size() + 1));
+                director.insertListElement(list, position, task);
+                taskList[task] = list;
+            }
+            else
+            {
+                const int list = static_cast<int>(rng() % employeeCount);
+                const int size
+                    = static_cast<int>(solution.employees[list].tasks.size());
+                if (size < 2)
+                    continue;
+                int first = static_cast<int>(rng() % size);
+                int last = static_cast<int>(rng() % size);
+                if (first > last)
+                    std::swap(first, last);
+                director.reverseListSegment(list, first, last);
+            }
+            const optimaru::HardSoftScore incremental = director.calculateScore();
+            TaskAssigningSolution shadow = solution;
+            DecomposedCalculator fresh;
+            repeatedAssembly().into(fresh);
+            fresh.resetWorkingSolution(shadow);
+            const optimaru::HardSoftScore full = fresh.calculateScore();
+            if (fresh.levelScores().medium != 0.0)
+                ++mediumSteps;
+            drift = std::max(drift, std::fabs(full.soft - incremental.soft));
+            if (!optimaru::scoresAgree(incremental, full))
+                ++mismatches;
+        }
+        std::printf("    largest soft drift %.3g\n", drift);
+        check(mismatches == 0,
+              std::to_string(steps)
+                  + " random list moves with repeated, shifted components: "
+                    "incremental == fresh");
+        check(mediumSteps > 0, "the walk visits medium states");
+    }
+    {
+        TaskAssigningSolution solution
+            = buildRandomInstance(/*taskCount*/ 20, /*employeeCount*/ 5, 11);
+        Solver::Config config;
+        config.spentLimit = std::chrono::seconds(2);
+        config.randomSeed = 5;
+        config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+        config.ruinRecreateUnimprovedStepTrigger = 200;
+        config.ruinRecreatePolishSteps = 100;
+        DecomposedCalculator calculator;
+        repeatedAssembly().into(calculator);
+        bool corrupted = false;
+        try
+        {
+            Solver solver(config);
+            solver.solve(solution, calculator);
+        }
+        catch (const optimaru::ScoreCorruptionError &e)
+        {
+            corrupted = true;
+            std::printf("  ScoreCorruptionError: %s\n", e.what());
+        }
+        check(!corrupted, "2s FULL_ASSERT solve with repeated, shifted components");
+        DecomposedCalculator fresh;
+        repeatedAssembly().into(fresh);
+        check(!corrupted && solution.score == scoreWith(fresh, solution),
+              "the reported score == a fresh recompute of the same assembly");
+    }
+    std::printf("\n");
+}
+
 }  // namespace
 
 int main()
@@ -907,6 +1256,7 @@ int main()
     verifyMediumIncremental();
     verifyRawCostsByHand();
     verifyCatalog();
+    verifyRepeatsAndOffsets();
 
     if (failures == 0)
     {

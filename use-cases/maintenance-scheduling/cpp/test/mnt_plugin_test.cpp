@@ -14,6 +14,14 @@
 //       case per constraint (raw 0 = no violation)
 //   (i) the catalog: info() off the default assembly == the components'
 //       kDefaultWeight / kDefaultLevel; the level and knob guards
+//   (j) repeated components and the offset / clip knobs: hand-calculated
+//       repeats of a per-job and a global rule, threshold and literal
+//       offsets by hand (in literal mode every (start date, crew) cell
+//       counts, an empty one included; a global shapes its one total), the
+//       literal formula refused on hard at reset and kept on soft,
+//       incremental == a fresh recompute over a random walk and a
+//       FULL_ASSERT solve with repeated, shifted components
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -760,6 +768,385 @@ void verifyCatalog()
     std::printf("\n");
 }
 
+// -------------------------------------------------------------------------
+// (j) Repeated components and offsets. A repeat is a fresh copy of a
+// default component (another defaultConstraints(), the one name kept, its
+// knobs re-stated) appended with addInstances(), as the Python bindings
+// build it from a pick list.
+// -------------------------------------------------------------------------
+ConstraintAssembly copyOf(const std::string &name)
+{
+    ConstraintAssembly copy = defaultConstraints();
+    copy.only({name});
+    return copy;
+}
+
+// Two 5-business-day jobs from DAY_1 on crew 0, both tagged Downtown: they
+// overlap on all 5 calendar days they span ([Mon, Sat)), so crewConflictCost
+// and tagConflictCost both total 5. Job 0 may start on DAY_1 + 3 only, so
+// minStartDateCost is 3 on cell (date 0, crew 0) and 0 on the other 79 cells
+// (40 business days x 2 crews).
+MaintenanceSchedule repeatInstance()
+{
+    MaintenanceSchedule s = makeBase();
+    addJob(s, 5, {"Downtown"}, /*minStartDate*/ DAY_1 + 3);
+    addJob(s, 5, {"Downtown"});
+    ScoreCalculator::prepare(s);
+    s.jobs[0].crewDate = s.crewDateOf(0, 0);
+    s.jobs[1].crewDate = s.crewDateOf(0, 0);
+    return s;
+}
+
+// The defaults, two of them shifted (crew conflict by a threshold: hard
+// refuses the literal formula with an offset), plus repeats of a per-job
+// delta rule (literal on soft, fractional weight), a global member-change
+// rule (threshold, squared; and literal on soft) and a soft per-job rule
+// (negative offset), and two repeats on the other level than their default:
+// max end demoted to soft (literal, fractional weight) and tag conflict
+// promoted to hard (threshold).
+ConstraintAssembly repeatedAssembly()
+{
+    ConstraintAssembly assembly = defaultConstraints();
+    assembly.offset("afterIdealEndDateCost", 2.0);
+    assembly.offset("crewConflictCost", 1.0);
+    assembly.addInstances(std::move(copyOf("crewConflictCost")
+                                        .soft("crewConflictCost")
+                                        .offset("crewConflictCost", 1.0)
+                                        .clip("crewConflictCost", false)));
+    assembly.addInstances(std::move(copyOf("minStartDateCost")
+                                        .soft("minStartDateCost")
+                                        .weight("minStartDateCost", 2.0)
+                                        .offset("minStartDateCost", 1.0)
+                                        .clip("minStartDateCost", false)));
+    assembly.addInstances(std::move(copyOf("tagConflictCost")
+                                        .weight("tagConflictCost", 0.25)
+                                        .exponent("tagConflictCost", 2.0)
+                                        .offset("tagConflictCost", 3.0)));
+    assembly.addInstances(std::move(copyOf("beforeIdealEndDateCost")
+                                        .weight("beforeIdealEndDateCost", 0.5)
+                                        .offset("beforeIdealEndDateCost", -2.0)));
+    assembly.addInstances(std::move(copyOf("crewConflictCost")));
+    assembly.addInstances(std::move(copyOf("maxEndDateCost")
+                                        .soft("maxEndDateCost")
+                                        .weight("maxEndDateCost", 1.5)
+                                        .offset("maxEndDateCost", 1.0)
+                                        .clip("maxEndDateCost", false)));
+    assembly.addInstances(std::move(copyOf("tagConflictCost")
+                                        .hard("tagConflictCost")
+                                        .weight("tagConflictCost", 2.0)
+                                        .offset("tagConflictCost", 4.0)));
+    return assembly;
+}
+
+void verifyRepeatsAndOffsets()
+{
+    std::printf("== (j) Repeated components, offset / clip ==\n");
+    {
+        MaintenanceSchedule s = repeatInstance();
+        check(s.crewDateCount() == 80, "80 (start date, crew) cells");
+        ConstraintAssembly assembly = copyOf("crewConflictCost");
+        assembly.addInstances(std::move(copyOf("crewConflictCost")
+                                            .weight("crewConflictCost", 2.0)
+                                            .exponent("crewConflictCost", 2.0)));
+        DecomposedCalculator calculator;
+        assembly.into(calculator);
+        checkScore("crew conflict + 2 x crew conflict^2: -(5 + 50)",
+                   scoreWith(calculator, s),
+                   -55,
+                   0.0);
+        const auto entries = calculator.constraintCosts();
+        check(entries.size() == 2 && entries[0].unitCosts == entries[1].unitCosts
+                  && entries[0].unitCosts.size() == 1
+                  && entries[1].weight == 2.0 && entries[1].exponent == 2.0
+                  && entries[1].defaultWeight == 1.0,
+              "two global instances, the same total, each with its own knobs");
+    }
+    {
+        MaintenanceSchedule s = repeatInstance();
+        ConstraintAssembly assembly = copyOf("minStartDateCost");
+        assembly.addInstances(std::move(copyOf("minStartDateCost")
+                                            .weight("minStartDateCost", 3.0)
+                                            .exponent("minStartDateCost", 2.0)));
+        DecomposedCalculator calculator;
+        assembly.into(calculator);
+        checkScore("min start + 3 x min start^2 per cell: -(3 + 27)",
+                   scoreWith(calculator, s),
+                   -30,
+                   0.0);
+    }
+    {
+        // Each instance on its own level: the soft default tag conflict
+        // (1000 x 5) next to a hard repeat, 2 x (5 - 1) beyond its offset.
+        MaintenanceSchedule s = repeatInstance();
+        ConstraintAssembly assembly = copyOf("tagConflictCost");
+        assembly.addInstances(std::move(copyOf("tagConflictCost")
+                                            .hard("tagConflictCost")
+                                            .weight("tagConflictCost", 2.0)
+                                            .offset("tagConflictCost", 1.0)));
+        DecomposedCalculator calculator;
+        assembly.into(calculator);
+        checkScore("soft tag conflict + a hard repeat beyond 1: -8hard",
+                   scoreWith(calculator, s),
+                   -8,
+                   -5000.0);
+        const auto entries = calculator.constraintCosts();
+        check(entries.size() == 2 && entries[0].level == optimaru::Level::Soft
+                  && entries[1].level == optimaru::Level::Hard
+                  && entries[1].defaultLevel == optimaru::Level::Soft,
+              "the repeat reports its own level, the default stays soft");
+    }
+    {
+        // A hard per-cell rule with a soft literal repeat: 0.5 x (3 - 1) on
+        // the early cell, 0.5 x (0 - 1) on each of the 79 others.
+        MaintenanceSchedule s = repeatInstance();
+        ConstraintAssembly assembly = copyOf("minStartDateCost");
+        assembly.addInstances(std::move(copyOf("minStartDateCost")
+                                            .soft("minStartDateCost")
+                                            .weight("minStartDateCost", 0.5)
+                                            .offset("minStartDateCost", 1.0)
+                                            .clip("minStartDateCost", false)));
+        DecomposedCalculator calculator;
+        assembly.into(calculator);
+        checkScore("hard min start + a soft literal repeat: -(1 - 39.5)soft",
+                   scoreWith(calculator, s),
+                   -3,
+                   38.5);
+    }
+    {
+        MaintenanceSchedule s = repeatInstance();
+        DecomposedCalculator threshold;
+        copyOf("minStartDateCost")
+            .offset("minStartDateCost", 1.0)
+            .into(threshold);
+        checkScore("threshold offset 1: max(0, 3 - 1)",
+                   scoreWith(threshold, s),
+                   -2,
+                   0.0);
+        // Literal, on soft (hard refuses it with an offset): the 79 empty
+        // cells are each rewarded 1.
+        DecomposedCalculator literal;
+        copyOf("minStartDateCost")
+            .soft("minStartDateCost")
+            .offset("minStartDateCost", 1.0)
+            .clip("minStartDateCost", false)
+            .into(literal);
+        checkScore("soft literal offset 1: (3 - 1) + 79 x (0 - 1), every cell",
+                   scoreWith(literal, s),
+                   0,
+                   77.0);
+        DecomposedCalculator negative;
+        copyOf("minStartDateCost")
+            .offset("minStartDateCost", -2.0)
+            .into(negative);
+        checkScore("threshold offset -2 adds to the non-zero cell only",
+                   scoreWith(negative, s),
+                   -5,
+                   0.0);
+        DecomposedCalculator negativeLiteral;
+        copyOf("minStartDateCost")
+            .soft("minStartDateCost")
+            .offset("minStartDateCost", -2.0)
+            .clip("minStartDateCost", false)
+            .into(negativeLiteral);
+        checkScore("soft literal offset -2 adds to every cell: 5 + 79 x 2",
+                   scoreWith(negativeLiteral, s),
+                   0,
+                   -163.0);
+        // A hard threshold offset rounds per cell: (3 - 0.5) x 3 = 7.5 -> 8,
+        // and the empty cells stay 0.
+        DecomposedCalculator hard;
+        copyOf("minStartDateCost")
+            .weight("minStartDateCost", 3.0)
+            .offset("minStartDateCost", 0.5)
+            .into(hard);
+        checkScore("hard threshold offset 0.5 at weight 3, rounded per cell",
+                   scoreWith(hard, s),
+                   -8,
+                   0.0);
+        // The same literal pick on soft is not rounded: 7.5 - 79 x 1.5.
+        DecomposedCalculator soft;
+        copyOf("minStartDateCost")
+            .soft("minStartDateCost")
+            .weight("minStartDateCost", 3.0)
+            .offset("minStartDateCost", 0.5)
+            .clip("minStartDateCost", false)
+            .into(soft);
+        checkScore("soft literal offset 0.5 at weight 3: -(7.5 - 118.5)",
+                   scoreWith(soft, s),
+                   0,
+                   111.0);
+        // A global shapes its one total.
+        DecomposedCalculator tagThreshold;
+        copyOf("tagConflictCost").offset("tagConflictCost", 2.0).into(tagThreshold);
+        checkScore("tag threshold offset 2: 1000 x (5 - 2)",
+                   scoreWith(tagThreshold, s),
+                   0,
+                   -3000.0);
+        DecomposedCalculator tagLiteral;
+        copyOf("tagConflictCost")
+            .offset("tagConflictCost", 8.0)
+            .clip("tagConflictCost", false)
+            .into(tagLiteral);
+        checkScore("tag literal offset 8: 1000 x (5 - 8), a reward",
+                   scoreWith(tagLiteral, s),
+                   0,
+                   3000.0);
+    }
+    {
+        // On hard the literal formula with an offset is refused at reset,
+        // whichever sign and setter order, for a hard default (a per-cell
+        // and a global rule) and for a soft rule moved to hard: +1 would
+        // reward the 79 empty cells (+77 hard, a feasible-looking score for
+        // a job that starts too early), -1 would charge 80 cells that hold
+        // no violation.
+        auto refusal = [](const std::string &name) {
+            return "Constraint '" + name
+                   + "' cannot use clip=false with a non-zero offset on a level "
+                     "that counts toward the hard score (hard 0 must mean no "
+                     "violation)";
+        };
+        auto resetRefusal = [](ConstraintAssembly assembly) {
+            MaintenanceSchedule s = repeatInstance();
+            DecomposedCalculator calculator;
+            assembly.into(calculator);
+            try
+            {
+                scoreWith(calculator, s);
+            }
+            catch (const std::logic_error &error)
+            {
+                return std::string(error.what());
+            }
+            return std::string();
+        };
+        check(resetRefusal(copyOf("minStartDateCost")
+                               .offset("minStartDateCost", 1.0)
+                               .clip("minStartDateCost", false))
+                      == refusal("minStartDateCost")
+                  && resetRefusal(copyOf("minStartDateCost")
+                                      .clip("minStartDateCost", false)
+                                      .offset("minStartDateCost", -1.0))
+                         == refusal("minStartDateCost"),
+              "min start literal offset +-1 on hard: refused at reset");
+        check(resetRefusal(copyOf("crewConflictCost")
+                               .offset("crewConflictCost", 1.0)
+                               .clip("crewConflictCost", false))
+                  == refusal("crewConflictCost"),
+              "crew conflict (a global) literal offset on hard: refused at reset");
+        check(resetRefusal(copyOf("tagConflictCost")
+                               .offset("tagConflictCost", 8.0)
+                               .clip("tagConflictCost", false)
+                               .hard("tagConflictCost"))
+                  == refusal("tagConflictCost"),
+              "tag literal offset moved to hard afterwards: refused at reset");
+        ConstraintAssembly repeated = copyOf("minStartDateCost");
+        repeated.addInstances(std::move(copyOf("minStartDateCost")
+                                            .offset("minStartDateCost", 1.0)
+                                            .clip("minStartDateCost", false)));
+        check(resetRefusal(std::move(repeated)) == refusal("minStartDateCost"),
+              "a hard literal repeat next to the default: refused at reset");
+        check(resetRefusal(copyOf("minStartDateCost")
+                               .offset("minStartDateCost", 1.0))
+                      .empty()
+                  && resetRefusal(copyOf("minStartDateCost")
+                                      .clip("minStartDateCost", false))
+                         .empty()
+                  && resetRefusal(copyOf("minStartDateCost")
+                                      .offset("minStartDateCost", 1.0)
+                                      .clip("minStartDateCost", false)
+                                      .soft("minStartDateCost"))
+                         .empty(),
+              "min start: a threshold offset or clip=false with offset 0 on "
+              "hard, and the literal offset on soft, are allowed");
+    }
+    {
+        // Random walk: incremental == a fresh calculator of the same assembly.
+        MaintenanceSchedule s = buildRandomInstance(/*jobCount*/ 24, /*seed*/ 7);
+        ScoreCalculator::prepare(s);
+        DecomposedCalculator calculator;
+        repeatedAssembly().into(calculator);
+        optimaru::ScoreDirector<MaintenanceSchedule> director(s, calculator);
+        std::mt19937_64 rng(321);
+        std::uniform_real_distribution<double> unit(0.0, 1.0);
+        const int jobCount = static_cast<int>(s.jobs.size());
+        const int valueCount = s.crewDateCount();
+        int mismatches = 0;
+        double drift = 0.0;
+        const int steps = 3000;
+        for (int step = 0; step < steps; ++step)
+        {
+            if (unit(rng) < 0.75)
+            {
+                const int job = static_cast<int>(rng() % jobCount);
+                const int value = unit(rng) < 0.10
+                                      ? -1
+                                      : static_cast<int>(rng() % valueCount);
+                director.changeVariable(job, value);
+            }
+            else
+            {
+                const int a = static_cast<int>(rng() % jobCount);
+                const int b = static_cast<int>(rng() % jobCount);
+                const int va = s.jobs[a].crewDate;
+                const int vb = s.jobs[b].crewDate;
+                director.changeVariable(a, vb);
+                director.changeVariable(b, va);
+            }
+            MaintenanceSchedule shadow = s;
+            DecomposedCalculator fresh;
+            repeatedAssembly().into(fresh);
+            const Score full = scoreWith(fresh, shadow);
+            const Score incremental = director.calculateScore();
+            drift = std::max(drift, std::fabs(full.soft - incremental.soft));
+            // The engine's FULL_ASSERT rule (scoresAgree): hard exact, soft
+            // within 1e-6 (the fractional weights accumulate a few ulps).
+            if (!optimaru::scoresAgree(incremental, full))
+            {
+                if (++mismatches <= 3)
+                {
+                    std::printf("  MISMATCH @step %d: incremental=%s full=%s\n",
+                                step,
+                                incremental.toString().c_str(),
+                                full.toString().c_str());
+                }
+            }
+        }
+        std::printf("    largest soft drift %.3g\n", drift);
+        check(mismatches == 0,
+              std::to_string(steps)
+                  + " random moves with repeated, shifted components on both "
+                    "levels: incremental == fresh");
+    }
+    {
+        MaintenanceSchedule s = buildRandomInstance(/*jobCount*/ 16, /*seed*/ 11);
+        Solver::Config config;
+        config.spentLimit = std::chrono::seconds(2);
+        config.randomSeed = 5;
+        config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+        config.ruinRecreateUnimprovedStepTrigger = 200;
+        config.ruinRecreatePolishSteps = 100;
+        DecomposedCalculator calculator;
+        repeatedAssembly().into(calculator);
+        bool corrupted = false;
+        try
+        {
+            Solver solver(config);
+            solver.solve(s, calculator);
+        }
+        catch (const optimaru::ScoreCorruptionError &e)
+        {
+            corrupted = true;
+            std::printf("  ScoreCorruptionError: %s\n", e.what());
+        }
+        check(!corrupted, "2s FULL_ASSERT solve with repeated, shifted components");
+        DecomposedCalculator fresh;
+        repeatedAssembly().into(fresh);
+        check(!corrupted && optimaru::scoresAgree(s.score, scoreWith(fresh, s)),
+              "the reported score == a fresh recompute of the same assembly");
+    }
+    std::printf("\n");
+}
+
 }  // namespace
 
 int main()
@@ -773,6 +1160,7 @@ int main()
     verifyAssemblyBuilder();
     verifyRawCostsByHand();
     verifyCatalog();
+    verifyRepeatsAndOffsets();
 
     if (failures == 0)
     {

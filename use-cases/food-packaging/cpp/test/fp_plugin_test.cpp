@@ -18,6 +18,14 @@
 //   (i) incremental == full recompute with each medium term overridden
 //   (j) onNewBest on the plugin path reports the same levels as
 //       schedule.score
+//   (k) repeated components and the offset / clip knobs: a hand-calculated
+//       repeat, threshold and literal offsets by hand (the per-line
+//       constraints evaluate every line, an empty one included, never the
+//       unassigned pool), the globals' totals shaped once, the literal
+//       formula refused on hard at reset and kept on soft (and on the
+//       into_soft medium), incremental == a fresh recompute over a random
+//       LIST walk and a FULL_ASSERT solve with repeated, shifted components
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -752,6 +760,22 @@ void verifyMediumLevel()
                     -200.0,
                     -122500.0),
           "unassignedJobsCost weight 2 stays in medium units");
+    check(levelsAre(levelsWith(defaultConstraints().level(
+                                   "squaredMakespanCost", optimaru::Level::Medium),
+                               s),
+                    0,
+                    -122650.0,
+                    0.0),
+          "level(Medium): squaredMakespanCost moves onto medium");
+    check(levelsAre(levelsWith(defaultConstraints()
+                                   .level("squaredMakespanCost",
+                                          optimaru::Level::Medium)
+                                   .weight("squaredMakespanCost", 0.5),
+                               s),
+                    0,
+                    -61400.0,
+                    0.0),
+          "a weight on a moved constraint is in medium units");
     {
         // solve(schedule, calculator) reports the assembly's levels. One
         // line, one 100-minute job: assigned it costs 100^2 = 10000 soft
@@ -818,6 +842,13 @@ void verifyMediumIncremental()
         {"unassignedJobsCost weight 2",
          "unassignedJobsCost",
          [] { return defaultConstraints().weight("unassignedJobsCost", 2); }},
+        {"squaredMakespanCost on medium",
+         "squaredMakespanCost",
+         []
+         {
+             return defaultConstraints().level("squaredMakespanCost",
+                                               optimaru::Level::Medium);
+         }},
     };
     // The raw unit sum of `name` on the calculator's working solution.
     auto rawSum = [](const DecomposedCalculator &calculator,
@@ -972,6 +1003,327 @@ void verifyPluginCallbackLevels()
     std::printf("\n");
 }
 
+// -------------------------------------------------------------------------
+// (k) Repeated components and offsets. A repeat is a fresh copy of a
+// default component (another defaultConstraints(), the one name kept, its
+// knobs re-stated) appended with addInstances(), as the Python bindings
+// build it from a pick list.
+// -------------------------------------------------------------------------
+ConstraintAssembly copyOf(const std::string &name)
+{
+    ConstraintAssembly copy = defaultConstraints();
+    copy.only({name});
+    return copy;
+}
+
+// Line 0: J0 0..200 (ideal 200), J1 200..350 (ideal 250); line 1 empty; a
+// 50-minute job in the unassigned pool. Raw per unit (line 0, line 1, pool):
+// afterIdealEndTimeCost [100, 0, 0], squaredMakespanCost [350^2, 0, 0],
+// maxEndTimeCost [0, 0, 0] (evaluated on the two lines); the globals
+// unassignedJobsCost [50] and operatorCleaningConflictCost [0].
+PackagingSchedule repeatSchedule()
+{
+    PackagingSchedule s = handSchedule(2);
+    addLine(s, 0, {{PA_S, 200, 200, BIG}, {PA_S, 150, 250, BIG}});
+    addLine(s, 1, {});
+    s.unassignedJobs.push_back(addJob(s, {PB, 50}));
+    ScoreCalculator::prepare(s);
+    return s;
+}
+
+ConstraintAssembly repeatedAssembly()
+{
+    ConstraintAssembly assembly = defaultConstraints();
+    assembly.offset("squaredMakespanCost", 10000.0);
+    assembly.addInstances(std::move(copyOf("squaredMakespanCost")
+                                        .weight("squaredMakespanCost", 0.25)
+                                        .offset("squaredMakespanCost", 40000.0)
+                                        .clip("squaredMakespanCost", false)));
+    // The literal copies of the hard constraints sit on soft: hard refuses
+    // the literal formula with an offset (hard 0 must mean no violation).
+    assembly.addInstances(std::move(copyOf("maxEndTimeCost")
+                                        .soft("maxEndTimeCost")
+                                        .weight("maxEndTimeCost", 2.0)
+                                        .offset("maxEndTimeCost", 1.0)
+                                        .clip("maxEndTimeCost", false)));
+    assembly.addInstances(std::move(copyOf("maxEndTimeCost")
+                                        .weight("maxEndTimeCost", 2.0)
+                                        .offset("maxEndTimeCost", 1.0)));
+    assembly.addInstances(std::move(copyOf("afterIdealEndTimeCost")
+                                        .exponent("afterIdealEndTimeCost", 2.0)
+                                        .offset("afterIdealEndTimeCost", 30.0)));
+    assembly.addInstances(std::move(copyOf("afterIdealEndTimeCost")
+                                        .soft("afterIdealEndTimeCost")
+                                        .weight("afterIdealEndTimeCost", 3.0)
+                                        .offset("afterIdealEndTimeCost", -5.0)
+                                        .clip("afterIdealEndTimeCost", false)));
+    assembly.addInstances(
+        std::move(copyOf("operatorCleaningConflictCost")
+                      .soft("operatorCleaningConflictCost")
+                      .weight("operatorCleaningConflictCost", 2.0)
+                      .offset("operatorCleaningConflictCost", 3.0)
+                      .clip("operatorCleaningConflictCost", false)));
+    assembly.addInstances(
+        std::move(copyOf("operatorCleaningConflictCost")
+                      .weight("operatorCleaningConflictCost", 2.0)
+                      .offset("operatorCleaningConflictCost", 3.0)));
+    assembly.addInstances(std::move(copyOf("unassignedJobsCost")
+                                        .soft("unassignedJobsCost")
+                                        .offset("unassignedJobsCost", -10.0)));
+    return assembly;
+}
+
+void verifyRepeatsAndOffsets()
+{
+    std::printf("== (k) Repeated components, offset / clip ==\n");
+    {
+        PackagingSchedule s = repeatSchedule();
+        ConstraintAssembly twice = copyOf("squaredMakespanCost");
+        twice.addInstances(std::move(copyOf("squaredMakespanCost")
+                                         .weight("squaredMakespanCost", 0.5)
+                                         .exponent("squaredMakespanCost", 0.5)));
+        DecomposedCalculator calculator;
+        std::move(twice).into(calculator);
+        calculator.resetWorkingSolution(s);
+        calculator.calculateScore();
+        check(levelsAre(calculator.levelScores(), 0, 0.0, -(122500.0 + 0.5 * 350)),
+              "makespan^2 + 0.5 x sqrt(makespan^2) per line: -122675 soft");
+        const auto entries = calculator.constraintCosts();
+        check(entries.size() == 2 && entries[0].unitCosts == entries[1].unitCosts
+                  && entries[0].unitCosts == std::vector<double>{122500, 0, 0}
+                  && entries[0].scoped
+                  && entries[0].units == std::vector<int>{0, 1}
+                  && entries[1].weight == 0.5 && entries[1].exponent == 0.5
+                  && entries[1].defaultWeight == 1.0,
+              "two instances, the same raw costs over the two lines, each with "
+              "its own knobs");
+    }
+    {
+        PackagingSchedule s = repeatSchedule();
+        check(levelsAre(levelsWith(copyOf("squaredMakespanCost")
+                                       .offset("squaredMakespanCost", 22500.0),
+                                   s),
+                        0,
+                        0.0,
+                        -100000.0),
+              "threshold offset 22500: 122500 - 22500 on line 0");
+        check(levelsAre(levelsWith(copyOf("squaredMakespanCost")
+                                       .offset("squaredMakespanCost", 22500.0)
+                                       .clip("squaredMakespanCost", false),
+                                   s),
+                        0,
+                        0.0,
+                        -77500.0),
+              "literal offset 22500: the empty line is rewarded, the pool is not");
+        check(levelsAre(levelsWith(copyOf("squaredMakespanCost")
+                                       .offset("squaredMakespanCost", -1.0),
+                                   s),
+                        0,
+                        0.0,
+                        -122501.0),
+              "threshold offset -1 adds to the non-zero line only");
+        check(levelsAre(levelsWith(copyOf("maxEndTimeCost")
+                                       .soft("maxEndTimeCost")
+                                       .weight("maxEndTimeCost", 3.0)
+                                       .offset("maxEndTimeCost", 0.5)
+                                       .clip("maxEndTimeCost", false),
+                                   s),
+                        0,
+                        0.0,
+                        3.0),
+              "max end literal offset 0.5 at weight 3 on soft: 2 lines x (-1.5) "
+              "-> +3 soft, not the pool");
+        check(levelsAre(levelsWith(copyOf("afterIdealEndTimeCost")
+                                       .offset("afterIdealEndTimeCost", 40.0)
+                                       .clip("afterIdealEndTimeCost", false),
+                                   s),
+                        0,
+                        -20.0,
+                        0.0),
+              "after-ideal literal offset 40: (100 - 40) + (0 - 40) medium");
+        check(levelsAre(levelsWith(copyOf("unassignedJobsCost")
+                                       .offset("unassignedJobsCost", 20.0)
+                                       .exponent("unassignedJobsCost", 2.0),
+                                   s),
+                        0,
+                        -900.0,
+                        0.0),
+              "unassigned threshold offset 20, exponent 2 on the total: (50 - 20)^2");
+        check(levelsAre(levelsWith(copyOf("operatorCleaningConflictCost")
+                                       .soft("operatorCleaningConflictCost")
+                                       .offset("operatorCleaningConflictCost", 5.0)
+                                       .clip("operatorCleaningConflictCost", false),
+                                   s),
+                        0,
+                        0.0,
+                        5.0),
+              "cleaning-conflict literal offset 5 on the single total, on soft: +5 soft");
+    }
+    {
+        // On hard (the default level of maxEndTimeCost and
+        // operatorCleaningConflictCost) the literal formula with an offset is
+        // refused at reset, whichever sign and setter order: +0.5 would
+        // reward both lines (+4 hard, a feasible-looking score), -0.5 would
+        // charge lines that end in time.
+        auto resetRefusal = [](ConstraintAssembly assembly) {
+            PackagingSchedule s = repeatSchedule();
+            try
+            {
+                levelsWith(std::move(assembly), s);
+            }
+            catch (const std::logic_error &error)
+            {
+                return std::string(error.what());
+            }
+            return std::string();
+        };
+        auto refusal = [](const std::string &name) {
+            return "Constraint '" + name
+                   + "' cannot use clip=false with a non-zero offset on a level that counts "
+                     "toward the hard score (hard 0 must mean no violation)";
+        };
+        check(resetRefusal(copyOf("maxEndTimeCost")
+                               .offset("maxEndTimeCost", 0.5)
+                               .clip("maxEndTimeCost", false))
+                      == refusal("maxEndTimeCost")
+                  && resetRefusal(copyOf("maxEndTimeCost")
+                                      .clip("maxEndTimeCost", false)
+                                      .offset("maxEndTimeCost", -0.5))
+                         == refusal("maxEndTimeCost"),
+              "max end literal offset +-0.5 on hard: refused at reset");
+        check(resetRefusal(copyOf("operatorCleaningConflictCost")
+                               .offset("operatorCleaningConflictCost", 5.0)
+                               .clip("operatorCleaningConflictCost", false))
+                  == refusal("operatorCleaningConflictCost"),
+              "cleaning-conflict literal offset on its default hard level: refused at reset");
+        check(resetRefusal(copyOf("squaredMakespanCost")
+                               .offset("squaredMakespanCost", 22500.0)
+                               .clip("squaredMakespanCost", false)
+                               .hard("squaredMakespanCost"))
+                      == refusal("squaredMakespanCost")
+                  && resetRefusal(copyOf("afterIdealEndTimeCost")
+                                      .hard("afterIdealEndTimeCost")
+                                      .offset("afterIdealEndTimeCost", 40.0)
+                                      .clip("afterIdealEndTimeCost", false))
+                         == refusal("afterIdealEndTimeCost"),
+              "a soft / medium literal pick moved to hard (before or after): refused at reset");
+        check(resetRefusal(copyOf("maxEndTimeCost").offset("maxEndTimeCost", 0.5)).empty()
+                  && resetRefusal(copyOf("maxEndTimeCost").clip("maxEndTimeCost", false))
+                         .empty()
+                  && resetRefusal(copyOf("afterIdealEndTimeCost")
+                                      .offset("afterIdealEndTimeCost", 40.0)
+                                      .clip("afterIdealEndTimeCost", false))
+                         .empty(),
+              "allowed: a hard threshold offset, hard clip=false with offset 0, and the "
+              "literal formula on the into_soft medium");
+    }
+    {
+        // Random LIST walk: incremental == a fresh calculator of the same
+        // assembly.
+        PackagingSchedule s = generateDemoData(/*lines*/ 4, /*jobs*/ 24);
+        ScoreCalculator::prepare(s);
+        DecomposedCalculator calculator;
+        repeatedAssembly().into(calculator);
+        optimaru::ScoreDirector<PackagingSchedule> director(s, calculator);
+        using Descriptor = optimaru::SolutionDescriptor<PackagingSchedule>;
+        const int listCount = Descriptor::listCount(s);
+        const int elementCount = Descriptor::elementCount(s);
+        std::vector<int> listOf(elementCount, -1);
+        for (int l = 0; l < listCount; ++l)
+        {
+            for (int p = 0; p < Descriptor::listSize(s, l); ++p)
+                listOf[Descriptor::getElement(s, l, p)] = l;
+        }
+        auto indexWithin = [&](int list, int element)
+        {
+            for (int p = 0; p < Descriptor::listSize(s, list); ++p)
+            {
+                if (Descriptor::getElement(s, list, p) == element)
+                    return p;
+            }
+            return -1;
+        };
+        std::mt19937_64 rng(321);
+        std::uniform_real_distribution<double> unit(0.0, 1.0);
+        int mismatches = 0;
+        int mediumSteps = 0;
+        double drift = 0.0;
+        const int steps = 1500;
+        for (int step = 0; step < steps && elementCount > 0; ++step)
+        {
+            const int element = static_cast<int>(rng() % elementCount);
+            if (unit(rng) < 0.8)
+            {
+                const int from = listOf[element];
+                if (from >= 0)
+                    director.removeListElement(from, indexWithin(from, element));
+                const int to = static_cast<int>(rng() % listCount);
+                const int position = static_cast<int>(
+                    rng() % static_cast<unsigned>(Descriptor::listSize(s, to) + 1));
+                director.insertListElement(to, position, element);
+                listOf[element] = to;
+            }
+            else
+            {
+                const int list = static_cast<int>(rng() % listCount);
+                const int size = Descriptor::listSize(s, list);
+                if (size < 2)
+                    continue;
+                int first = static_cast<int>(rng() % size);
+                int last = static_cast<int>(rng() % size);
+                if (first > last)
+                    std::swap(first, last);
+                director.reverseListSegment(list, first, last);
+            }
+            const optimaru::HardSoftScore incremental = director.calculateScore();
+            PackagingSchedule shadow = s;
+            DecomposedCalculator fresh;
+            repeatedAssembly().into(fresh);
+            fresh.resetWorkingSolution(shadow);
+            const optimaru::HardSoftScore full = fresh.calculateScore();
+            if (fresh.levelScores().medium != 0.0)
+                ++mediumSteps;
+            drift = std::max(drift, std::fabs(full.soft - incremental.soft));
+            if (!optimaru::scoresAgree(incremental, full))
+                ++mismatches;
+        }
+        std::printf("    largest soft drift %.3g\n", drift);
+        check(mismatches == 0,
+              std::to_string(steps)
+                  + " random list moves with repeated, shifted components: "
+                    "incremental == fresh");
+        check(mediumSteps > 0, "the walk visits medium states");
+    }
+    {
+        PackagingSchedule s = generateDemoData(/*lines*/ 3, /*jobs*/ 12);
+        Solver::Config config;
+        config.spentLimit = std::chrono::seconds(2);
+        config.randomSeed = 5;
+        config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+        config.ruinRecreateUnimprovedStepTrigger = 200;
+        config.ruinRecreatePolishSteps = 100;
+        DecomposedCalculator calculator;
+        repeatedAssembly().into(calculator);
+        bool corrupted = false;
+        try
+        {
+            Solver solver(config);
+            solver.solve(s, calculator);
+        }
+        catch (const optimaru::ScoreCorruptionError &e)
+        {
+            corrupted = true;
+            std::printf("  ScoreCorruptionError: %s\n", e.what());
+        }
+        check(!corrupted, "2s FULL_ASSERT solve with repeated, shifted components");
+        DecomposedCalculator fresh;
+        repeatedAssembly().into(fresh);
+        check(!corrupted && sameScore(s.score, scoreWith(fresh, s)),
+              "the reported score == a fresh recompute of the same assembly");
+    }
+    std::printf("\n");
+}
+
 }  // namespace
 
 int main()
@@ -986,6 +1338,7 @@ int main()
     verifyMediumLevel();
     verifyMediumIncremental();
     verifyPluginCallbackLevels();
+    verifyRepeatsAndOffsets();
 
     if (failures == 0)
     {

@@ -2,24 +2,25 @@
 
 The default path (`quadratic_assignment.solve(problem)`) scores every default
 constraint at its default weight. This module is the alternative path next to
-it: pick constraints, change weights, change levels, and pass the list to
-`solve(problem, constraints=...)`.
+it: pick constraints, change weights, change levels, shape the cost, and pass the
+list to `solve(problem, constraints=...)`.
 
-The shortest route is :func:`get_constraints`. It returns the default list, so
-a "default with a small tweak" declaration fits on one line::
+A constraint list reads one way: one class call per constraint::
 
     import quadratic_assignment as qap
-    from quadratic_assignment.constraints import FlowDistanceCost, get_constraints
+    from quadratic_assignment.constraints import (
+        FlowDistanceCost, PinnedAssignmentsCost, get_constraints,
+    )
 
     qap.solve(problem, constraints=get_constraints())                        # defaults as-is
     qap.solve(problem, constraints=[*get_constraints()[:-1], FlowDistanceCost(weight=2)])
+    qap.solve(problem, constraints=[PinnedAssignmentsCost(), FlowDistanceCost()])   # picked
 
-Default instances (`pinned_assignments_cost`, `forbidden_assignments_cost`,
-`location_capacity_cost`, `assignment_cost`, `flow_distance_cost`) live at
-module level, so you can also pass a list of just a few. Only listed
-constraints are scored — leave one out and its term disappears from the score.
+Only listed constraints are scored — leave one out and its term disappears from the
+score. (The module also carries ready-made default instances: ``flow_distance_cost``
+is ``FlowDistanceCost()``, and so on.)
 
-Every spec takes ``(weight=None, level=None, exponent=1.0)``:
+Every spec takes five knobs:
 
 - ``weight``   linear multiplier on the constraint cost. ``None`` = the component
                default (1 for every quadratic-assignment constraint). The problem
@@ -27,11 +28,37 @@ Every spec takes ``(weight=None, level=None, exponent=1.0)``:
                reports the defaults.
 - ``level``    ``None`` = the default level, otherwise ``Level.HARD`` or
                ``Level.SOFT`` (or the names ``"hard"`` and ``"soft"``). This use
-               case has no medium level.
+               case has no medium level: ``level="medium"`` raises ValueError.
+               (``level`` replaced the ``hard`` knob; ``hard=`` raises TypeError.)
 - ``exponent`` sign-preserving power shaping ``weight * sign(c) * |c| ** exponent``:
                per location for the three side constraints (pinned, forbidden,
-               capacity), on the single total for ``assignment_cost`` and
-               ``flow_distance_cost`` — exactly the terms 0.1.x shaped.
+               capacity), on the single total for ``AssignmentCost`` and
+               ``FlowDistanceCost`` — exactly the terms 0.1.x shaped.
+- ``offset``   (keyword) shifts that shaping, per location or on the total;
+               0.0 = none.
+- ``clip``     (keyword) ``True`` (the default) counts only what lies beyond the
+               offset, ``max(0, c - offset) ** exponent``; ``False`` shapes
+               ``c - offset`` as it is, so a location (or total) below the offset — a
+               raw 0 included — lowers the penalty. The three side constraints are
+               scoped: they evaluate only their locations (``PinnedAssignmentsCost``
+               the fixed ones, ``ForbiddenAssignmentsCost`` those named by a
+               forbidden row, ``LocationCapacityCost`` those with a capacity), so a
+               literal offset charges exactly those (``constraint_costs()`` reports
+               them as ``"units"``). With an offset it is refused on hard (the
+               three side constraints by default), because hard 0 must mean no
+               violation.
+
+The same constraint may be picked several times; each pick is scored on its own with
+its own knobs (its level included) and the picks add up. The flow cost plus a steep
+penalty on what exceeds a budget of 1000::
+
+    qap.solve(problem, constraints=[
+        *get_constraints()[:-1],
+        FlowDistanceCost(),
+        FlowDistanceCost(weight=10, offset=1000),
+    ])
+
+``qap.constraint_costs(problem, picks)`` keys the second pick ``"flow_distance_cost#2"``.
 
 Names (`name`) are the C++ component names in snake_case
 (``PinnedAssignmentsCost`` -> ``pinned_assignments_cost``). The core derives them
@@ -147,7 +174,7 @@ class FlowDistanceCost(Constraint):
     )
 
 
-#: Instances at the default weights (weight=None). Reference them directly when picking.
+#: Ready-made default instances (``flow_distance_cost`` is ``FlowDistanceCost()``).
 pinned_assignments_cost = PinnedAssignmentsCost()
 forbidden_assignments_cost = ForbiddenAssignmentsCost()
 location_capacity_cost = LocationCapacityCost()
@@ -168,12 +195,13 @@ def get_constraints(constraints: list[Constraint] | None = None) -> list[Constra
     """Return the cost function. Without arguments, every default constraint.
 
     When `constraints` is given, that list is used as-is — only the listed
-    constraints are scored. To change just one default, mix in the default instances::
+    constraints are scored. To change just one default, list the others as they are::
 
         get_constraints([*get_constraints()[:-1], FlowDistanceCost(weight=2)])
 
     Same contract as the C++ applyConstraints: an empty list (most likely a filter
-    that came out empty) and a constraint named twice raise ValueError.
+    that came out empty) raises ValueError; a constraint named several times is
+    scored once per pick, each with its own knobs.
     """
     return select(constraints, _DEFAULTS)
 
@@ -183,20 +211,23 @@ def score(costs: dict, constraints: list[Constraint] | None = None) -> Score:
 
     ``costs`` is what `quadratic_assignment.constraint_costs(problem)` returns: per
     constraint its **raw** costs (one per location for the side constraints, one
-    total for the objectives), before weight, exponent and level rounding. Fetch it
-    once and rescore with different weights without re-solving::
+    total for the objectives), before weight, exponent, offset and level rounding.
+    Fetch it once and rescore with different weights without re-solving::
 
         raw = quadratic_assignment.constraint_costs(problem)
         score(raw)                                               # default set
-        score(raw, [pinned_assignments_cost, FlowDistanceCost(weight=2)])
+        score(raw, [PinnedAssignmentsCost(), FlowDistanceCost(weight=2)])
+        score(raw, [FlowDistanceCost(), FlowDistanceCost(weight=10, offset=1000)])
 
     No solver and no search are involved. The arithmetic matches the engine —
-    each unit contributes ``weight * shape(cost, exponent)`` and hard
-    contributions are **rounded per unit** before summing (the same order as the
-    engine; rounding the total afterwards gives different values for fractional
-    hard weights).
+    each evaluated unit (a scoped constraint's ``"units"``) contributes
+    ``weight * shape(cost, exponent, offset, clip)`` and hard contributions are
+    **rounded per unit** before summing (the same order as the engine; rounding the
+    total afterwards gives different values for fractional hard weights). A second
+    pick of a constraint reads the same raw costs with its own knobs.
 
     When ``constraints`` is given, only those constraints are scored — the same
-    semantics as `get_constraints`. Unknown names raise ValueError.
+    semantics as `get_constraints`. Unknown names raise ValueError, and so does
+    ``level="medium"`` (no medium level here).
     """
     return score_costs(costs, get_constraints(constraints))

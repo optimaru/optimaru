@@ -39,15 +39,21 @@ constraint-plugin contract and the comparison runner (`run_cli`).
 
 A CP-SAT constraint is a plugin that subclasses the use case's own constraint
 spec (`<Subject>Cost`), so both solvers take the same selection: the same
-names and the same `weight` / `level` / `exponent` knobs. The plugin declares no
-defaults; its level, weight, `level_flippable` and `reward` come from the
-domain's `constraint_info()`, so the two solvers cannot disagree on a default.
-`level="soft"` demotes a hard or medium constraint to soft on both paths. CP-SAT
-accepts only `exponent=1` and integral weights, and some constraints are
-structural in a CP-SAT model (enforced by its variables, so `level="soft"` is
-refused there; school-timetabling, pickup-delivery and semiconductor-scheduling
-have such constraints). Each benchmark's README (or `cpsat/README.md`) lists
-its own limits.
+names and the same five knobs, `weight` / `level` / `exponent` / `offset` /
+`clip`. The plugin declares no defaults; its level, weight, `level_flippable`
+and `reward` come from the domain's `constraint_info()`, so the two solvers
+cannot disagree on a default. `level="soft"` demotes a hard or medium
+constraint to soft on both paths. A constraint picked several times adds one
+set of terms per pick, each with its own knobs, and the per-pick costs are
+keyed `name`, `name#2`, ... as in the engine. CP-SAT accepts only `exponent=1`,
+integral weights and integral offsets, and some constraints are structural in a
+CP-SAT model (enforced by its variables, so `level="soft"` is refused there;
+school-timetabling, pickup-delivery and semiconductor-scheduling have such
+constraints). As in the engine, `clip=False` with a non-zero offset is refused
+on hard, and on medium where it counts toward the hard score (task assigning),
+with the engine's message, when the objective is built: hard 0 must mean no
+violation. Each benchmark's README (or `cpsat/README.md`) lists its own
+limits, including the plugins that refuse an offset.
 
 The assembly-line-balancing, bin-packing and quadratic-assignment tables on
 public instance sets still hold numbers measured with the 0.1.x pure-Python

@@ -1,11 +1,17 @@
 from datetime import date
+from itertools import product
 
 import pytest
 
 import maintenance_scheduling as domain
 from maintenance_scheduling.constraints import (
     AfterIdealEndDateCost,
+    BeforeIdealEndDateCost,
+    CrewConflictCost,
+    Level,
     MaxEndDateCost,
+    MinStartDateCost,
+    TagConflictCost,
     get_constraints,
     score,
 )
@@ -102,7 +108,13 @@ def test_cpsat_defaults_are_the_engine_defaults() -> None:
         assert entry["reward"] == row.reward
         assert entry["default_enabled"] == row.default_enabled
         assert entry["kind"] == "either"  # every maintenance constraint is flippable
-        assert entry["params"] == {"weight": None, "level": None, "exponent": 1.0}
+        assert entry["params"] == {
+            "weight": None,
+            "level": None,
+            "exponent": 1.0,
+            "offset": 0.0,
+            "clip": True,
+        }
     assert {
         name: (row.default_level, row.default_weight) for name, row in engine.items()
     } == {
@@ -161,3 +173,248 @@ def test_reweighting_after_ideal_end_date_scores_like_the_engine() -> None:
     solved = solve(problem, time_limit_seconds=5, constraints=selection)
     engine = score(domain.constraint_costs(solved.to_core()), selection)
     assert (solved.score_hard, solved.score_soft) == pytest.approx(tuple(engine))
+
+
+# --- 0.3.0: repeated picks and offset / clip ---------------------------------------
+
+
+def _three_days() -> MaintenanceScheduleModel:
+    """Mon 5 - Wed 7 Jan 2026 (3 start dates) x 2 crews = 6 cells, two jobs: 36 assignments.
+
+    a (2 days) may start Tue at the earliest, must end by Wed and ideally ends on Wed;
+    b (1 day) ideally ends on Thu; both carry ``downtown``.
+    """
+    return MaintenanceScheduleModel(
+        from_date=date(2026, 1, 5),
+        to_date=date(2026, 1, 8),
+        crews=[CrewModel(id="c0", name="Crew 0"), CrewModel(id="c1", name="Crew 1")],
+        jobs=[
+            JobModel(
+                id="a",
+                name="A",
+                duration_in_days=2,
+                min_start_date=date(2026, 1, 6),
+                max_end_date=date(2026, 1, 7),
+                ideal_end_date=date(2026, 1, 7),
+                tags=["downtown"],
+            ),
+            JobModel(
+                id="b",
+                name="B",
+                duration_in_days=1,
+                ideal_end_date=date(2026, 1, 8),
+                tags=["downtown", "crane"],
+            ),
+        ],
+    )
+
+
+SELECTIONS = {
+    "repeat": [
+        CrewConflictCost(),
+        CrewConflictCost(weight=3, offset=1),
+        TagConflictCost(),
+    ],
+    # The literal formula with an offset is refused on hard: the hard picks are
+    # thresholds, their literal copies sit on soft.
+    "repeat-literal": [
+        MinStartDateCost(level="soft", offset=1, clip=False),
+        MinStartDateCost(weight=2, offset=-1),
+        AfterIdealEndDateCost(),
+        AfterIdealEndDateCost(weight=5, offset=1, clip=False),
+    ],
+    "hard-offsets": [
+        MaxEndDateCost(offset=1),
+        MaxEndDateCost(level="soft", offset=1, clip=False),
+        CrewConflictCost(weight=2, offset=2),
+        CrewConflictCost(level="soft", weight=2, offset=2, clip=False),
+        TagConflictCost(offset=-1),
+        BeforeIdealEndDateCost(weight=3, offset=1, clip=False),
+    ],
+    "identical-twice": [
+        TagConflictCost(),
+        TagConflictCost(),
+        CrewConflictCost(),
+    ],
+    # Each pick on its own level: a soft literal max end next to the hard default, the
+    # tag conflict on hard beyond 1 next to its soft default, crew conflict moved to soft.
+    "levels": [
+        MaxEndDateCost(),
+        MaxEndDateCost(level="soft", weight=3, offset=1, clip=False),
+        TagConflictCost(),
+        TagConflictCost(level=Level.HARD, offset=1),
+        CrewConflictCost(level="soft", weight=2),
+        AfterIdealEndDateCost(level="hard", weight=2, offset=-1),
+    ],
+}
+
+_OPTIONS = list(product(range(2), range(3)))  # (crew, start date index)
+
+
+def _pinned(problem, fixed):
+    dates = [date(2026, 1, 5), date(2026, 1, 6), date(2026, 1, 7)]
+    candidate = problem.model_copy(deep=True)
+    for job, (crew, day) in zip(candidate.jobs, fixed, strict=True):
+        job.crew_id = candidate.crews[crew].id
+        job.start_date = dates[day]
+    return candidate.to_core()
+
+
+def _engine_of(problem, fixed, selection):
+    """The Python score() mirror of the pinned assignment under `selection`."""
+    core = _pinned(problem, fixed)
+    return tuple(score(domain.constraint_costs(core, selection), selection))
+
+
+def _engine_solve(problem, fixed, selection):
+    """The engine's own score of the pinned assignment: a solve with no time keeps it."""
+    core = _pinned(problem, fixed)
+    assignment = core.assignment()
+    domain.solve(core, time_limit_seconds=0, random_seed=1, constraints=selection)
+    assert core.assignment() == assignment
+    return core.score.hard, core.score.soft
+
+
+@pytest.mark.parametrize("selection", list(SELECTIONS.values()), ids=list(SELECTIONS))
+def test_the_cpsat_terms_equal_the_engine_on_every_assignment(selection) -> None:
+    """Pin each of the 36 assignments: the CP-SAT objective's own levels are the engine's
+    score under the same repeated / shifted picks (its own and the score() mirror's),
+    exactly (every cell is a term, an empty one included); the reported score re-prices
+    the default costs (each name once) to the same value."""
+    problem = _three_days()
+    for fixed in product(_OPTIONS, repeat=2):
+        proxy: dict[str, int] = {}
+        solved = solve(
+            problem,
+            time_limit_seconds=5,
+            constraints=selection,
+            _fixed_options=list(fixed),
+            _proxy_score=proxy,
+        )
+        engine = _engine_of(problem, fixed, selection)
+        assert _engine_solve(problem, fixed, selection) == engine, fixed
+        assert (proxy["hard"], proxy["soft"]) == engine, fixed
+        assert (solved.score_hard, solved.score_soft) == engine, fixed
+
+
+@pytest.mark.parametrize("selection", list(SELECTIONS.values()), ids=list(SELECTIONS))
+def test_repeated_and_shifted_picks_reach_the_brute_force_optimum(selection) -> None:
+    problem = _three_days()
+    best = max(
+        _engine_of(problem, fixed, selection) for fixed in product(_OPTIONS, repeat=2)
+    )
+    solved = solve(problem, time_limit_seconds=5, constraints=selection)
+    assert (solved.score_hard, solved.score_soft) == best
+
+
+def test_mapping_selections_repeat_and_shift_like_specs() -> None:
+    """The server's {name, weight, level, offset, clip} dicts pick the same instances as specs."""
+    specs = [
+        TagConflictCost(),
+        TagConflictCost(weight=3, offset=1, clip=False),
+        TagConflictCost(level="hard", offset=1),
+    ]
+    dicts = [
+        {"name": "tag_conflict_cost"},
+        {"name": "tag_conflict_cost", "weight": 3, "offset": 1, "clip": False},
+        {"name": "tag_conflict_cost", "level": "hard", "offset": 1},
+    ]
+    problem = _three_days()
+    assert solve(problem, time_limit_seconds=5, constraints=dicts) == solve(
+        problem, time_limit_seconds=5, constraints=specs
+    )
+
+
+def test_a_fractional_offset_is_refused_by_cpsat() -> None:
+    with pytest.raises(ValueError, match="offset must be an integer for CP-SAT"):
+        solve(
+            _three_days(),
+            time_limit_seconds=1,
+            constraints=[MinStartDateCost(offset=0.5)],
+        )
+
+
+@pytest.mark.parametrize("level", ["medium", Level.MEDIUM])
+def test_medium_is_refused_like_the_engine(level) -> None:
+    """The domain has no medium level: CP-SAT refuses the pick as the engine does, a repeat too."""
+    message = "constraint 'tag_conflict_cost': this use case has no medium level"
+    for selection in (
+        [TagConflictCost(level=level)],
+        [TagConflictCost(), TagConflictCost(level=level)],
+    ):
+        with pytest.raises(ValueError, match=message):
+            solve(_three_days(), time_limit_seconds=1, constraints=selection)
+        with pytest.raises(ValueError, match=message):
+            domain.solve(
+                _three_days().to_core(), time_limit_seconds=0, constraints=selection
+            )
+
+
+# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+
+HARD_REFUSAL = (
+    "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
+    "violation; use clip=True (a threshold) or another level"
+)
+
+
+@pytest.mark.parametrize("offset", [2, -2])
+@pytest.mark.parametrize(
+    "selection",
+    [
+        # the default level, hard
+        lambda offset: MinStartDateCost(offset=offset, clip=False),
+        lambda offset: {"name": "min_start_date_cost", "offset": offset, "clip": False},
+        # a global, hard by default
+        lambda offset: CrewConflictCost(offset=offset, clip=False),
+        lambda offset: TagConflictCost(level="hard", offset=offset, clip=False),
+        lambda offset: {
+            "name": "tag_conflict_cost",
+            "level": "hard",
+            "offset": offset,
+            "clip": False,
+        },
+    ],
+    ids=[
+        "min-start-spec",
+        "min-start-mapping",
+        "crew-conflict-spec",
+        "tag-moved-to-hard",
+        "tag-mapping",
+    ],
+)
+def test_the_literal_offset_is_refused_on_hard_like_the_engine(
+    selection, offset
+) -> None:
+    """The CP-SAT reference refuses the pick with the engine's and score()'s message,
+    alone and as a repeat next to the default picks."""
+    pick = selection(offset)
+    name = pick["name"] if isinstance(pick, dict) else pick.name
+    message = HARD_REFUSAL.format(q=repr(name))
+    for picks in ([pick], [*get_constraints(), pick]):
+        with pytest.raises(ValueError) as refused:
+            solve(_three_days(), time_limit_seconds=1, constraints=picks)
+        assert str(refused.value) == message
+    if not isinstance(pick, dict):
+        # The engine and the score() mirror say the same.
+        core = _three_days().to_core()
+        with pytest.raises(ValueError) as refused:
+            domain.constraint_costs(core, [pick])
+        assert str(refused.value) == message
+        with pytest.raises(ValueError) as refused:
+            score(domain.constraint_costs(core), [pick])
+        assert str(refused.value) == message
+
+
+@pytest.mark.parametrize("offset", [2, -2])
+def test_the_same_literal_pick_on_soft_is_accepted(offset) -> None:
+    picks = [
+        MinStartDateCost(),
+        MinStartDateCost(level="soft", offset=offset, clip=False),
+    ]
+    problem = _three_days()
+    best = max(
+        _engine_of(problem, fixed, picks) for fixed in product(_OPTIONS, repeat=2)
+    )
+    solved = solve(problem, time_limit_seconds=5, constraints=picks)
+    assert (solved.score_hard, solved.score_soft) == best

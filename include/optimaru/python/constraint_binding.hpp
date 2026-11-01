@@ -12,7 +12,7 @@
 // pulled in by bindings.cpp alone, never by a C++ target.
 //
 //   ConstraintAssembly assembly = python::applyConstraints(
-//       defaultConstraints(), constraints);   // or defaultConstraints(problem)
+//       [&] { return defaultConstraints(); }, constraints);   // or (problem)
 //   assembly.into(calculator);
 //
 //   python::bindConstraintInfo(m, [] { return defaultConstraints(); });
@@ -30,17 +30,20 @@
 // bindConstraintInfo() also registers the module's translator for the
 // engine's ContributionOverflowError (level.hpp, rule 1), so every package
 // raises it as OverflowError naming the constraint by its Python name, word
-// for word as the Python score() mirror does, and the private test seam
+// for word as the Python score() mirror does (and SignedCostLevelError as its
+// ValueError), and the private test seam
 // `<pkg>._core._fail_worker_thread_start(index)` (see bindWorkerThreadSeam).
 
 #include <pybind11/pybind11.h>
 
+#include <algorithm>
 #include <cmath>
 #include <exception>
 #include <optional>
 #include <stdexcept>
 #include <string>
 #include <system_error>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -57,6 +60,20 @@ namespace py = pybind11;
 
 // pythonName() (names.hpp) is the one mapping between the C++ registry name
 // and the Python name: facilityCapacityCost -> facility_capacity_cost.
+
+// The TypeError text for the knob `level` replaced in 0.3.0, word for word
+// the Python base's (_constraint.py _HARD_REMOVED), for the binding paths
+// that take knobs as keywords (employee scheduling's and school
+// timetabling's DecomposedCalculator.add()).
+inline constexpr const char* kHardRemoved =
+        "hard= was removed in optimaru 0.3.0; use level='hard' or level='soft' (level=None keeps "
+        "the default)";
+
+// Refuses a `hard` keyword with kHardRemoved; call it first on the **kwargs
+// of a binding that takes knobs as keywords.
+inline void refuseHardKeyword(const py::kwargs& kwargs) {
+    if (kwargs.contains("hard")) throw py::type_error(kHardRemoved);
+}
 
 // Python name -> the assembly's own name. Throws with the available names
 // when nothing matches, so a typo cannot quietly leave the cost function as
@@ -92,27 +109,35 @@ std::vector<std::string> constraintNames(const ConstraintAssembly<Solution>& ass
 // of here — one implementation, readable, and re-pricing an assembly costs no
 // scoring pass at all.
 //
-// Returns {key: {"costs": [...], "weight": w, "exponent": e, "hard": bool,
-//                "global": bool, "level": "hard"|"medium"|"soft",
+// Returns {key: {"costs": [...], "weight": w, "exponent": e, "offset": o,
+//                "clip": bool, "hard": bool, "global": bool,
+//                "level": "hard"|"medium"|"soft",
 //                "reward": bool, "level_flippable": bool, "name": str,
 //                "label": str, "default_weight": w0,
 //                "default_level": "hard"|"medium"|"soft"
-//                [, "medium_fold": {...}]}}.
+//                [, "units": [...]] [, "medium_fold": {...}]}}.
 //
 // key    the Python name; the k-th instance (k >= 2) of a name the calculator
 //        holds more than once is "<name>#<k>" (instanceKeys, names.hpp), so
-//        repeated parametrized rules do not overwrite each other. "name" is
-//        always the plain Python name, "label" the instance's display text
-//        (ConstraintMetadata::label; "" = none).
+//        repeated picks (and repeated parametrized rules) do not overwrite
+//        each other. "name" is always the plain Python name, "label" the
+//        instance's display text (ConstraintMetadata::label; "" = none).
+// costs  one raw cost per unit (every unit of the domain, in unit order), or
+//        the single total of a global constraint.
+// units  only on a SCOPED unit constraint (scopedUnits(), e.g. a rule for a
+//        few workers): the unit indices it evaluates, ascending. The other
+//        cells of "costs" are 0 and never evaluated, which matters for the
+//        literal offset formula (clip=False): it charges every evaluated
+//        unit, a raw 0 included, and no other. Absent = every unit.
 // medium_fold  {"kind": "into_soft" | "below_hard", "unit": u}: the DOMAIN's
 //        MediumFold, on EVERY entry of a domain that has one (whatever level
 //        the entry is on), because the fold applies to the whole score: a
 //        below_hard domain reports hard * unit + medium even when the
 //        selection holds no medium constraint at all. Absent on a domain
 //        without a medium level.
-// weight / level / exponent  the calculator's CURRENT metadata, which is the
-//        picks' when the domain's constraint_costs() takes a selection
-//        (employee-scheduling, school-timetabling).
+// weight / level / exponent / offset / clip  the calculator's CURRENT
+//        metadata, which is the picks' when the domain's constraint_costs()
+//        takes a selection.
 // default_weight / default_level  what weight=None / level=None mean for the
 //        component (ConstraintMetadata::defaultWeight / defaultLevel): the
 //        Python score() reads these, so re-pricing costs computed under one
@@ -135,6 +160,8 @@ py::dict constraintCosts(DecomposedScoreCalculator<Solution>& calculator, Soluti
         info["costs"] = py::cast(entry.unitCosts);
         info["weight"] = entry.weight;
         info["exponent"] = entry.exponent;
+        info["offset"] = entry.offset;
+        info["clip"] = entry.clip;
         info["hard"] = entry.isHard;
         info["global"] = entry.isGlobal;
         info["level"] = levelName(entry.level);
@@ -144,6 +171,10 @@ py::dict constraintCosts(DecomposedScoreCalculator<Solution>& calculator, Soluti
         info["label"] = entry.label;
         info["default_weight"] = entry.defaultWeight;
         info["default_level"] = levelName(entry.defaultLevel);
+        if (entry.scoped) info["units"] = py::cast(entry.units);
+        // The sign rule's input (SignedCostLevelError): only where it holds,
+        // so every other entry stays as it was.
+        if (entry.signedCost) info["signed"] = true;
         if (fold.hasMedium()) {
             py::dict medium;
             medium["kind"] = fold.kind == MediumFold::Kind::BelowHard ? "below_hard" : "into_soft";
@@ -156,18 +187,29 @@ py::dict constraintCosts(DecomposedScoreCalculator<Solution>& calculator, Soluti
 }
 
 // ---------------------------------------------------------------------------
-// The three knobs of one pick, read the way the Python base reads them
+// The five knobs of one pick, read the way the Python base reads them
 // ---------------------------------------------------------------------------
-// The picks are duck-typed (any object with name/weight/level/exponent), so
-// the C++ side checks the types itself, with the same rules and the same
-// wording as `_constraint.py` (_check_knobs / _level): what one path refuses,
-// the other refuses too.
+// The picks are duck-typed, so the C++ side checks the types itself, with the
+// same rules and the same wording as `_constraint.py` (_check_knobs /
+// _level): what one path refuses, the other refuses too. The duck-typing
+// rule, in the same words as the Python score_costs docstring:
+//   A pick must carry `name`, `weight`, `level` and `exponent`. `offset` and
+//   `clip` are optional and default to 0.0 and True. They only add shaping,
+//   and their defaults change nothing. A missing weight, level or exponent
+//   stays an AttributeError, because it is more likely a mistake, e.g. an
+//   object still carrying `hard`.
 //   weight    None, or a real number (numbers.Real, but not bool), finite
 //             and >= 0. TypeError / ValueError.
 //   level     None, or a string spelling a level ("hard", "medium", "soft"),
 //             which a Python Level is. TypeError / ValueError.
 //   exponent  None (= 1.0, no shaping: a duck-typed pick may leave it unset),
 //             or a real number (not bool), finite and > 0.
+//   offset    absent or None (= 0.0, no shift), or a real number (not bool),
+//             finite, any sign.
+//   clip      absent or None (= True, the threshold), or True / False.
+// A numeric knob counts as the double float() makes of it (py::float_), which
+// is also what the checks above see: an offset of Fraction(1, 10**400) is 0.0
+// (no shift). _check_knobs checks and returns the same doubles.
 // The result is a Knobs (level_guard.hpp), which restateKnobs applies.
 
 namespace detail {
@@ -192,6 +234,15 @@ inline bool isRealNumber(const py::handle& value) {
                             [] { return py::module_::import("numbers").attr("Real"); })
                     .get_stored();
     return py::isinstance(value, real);
+}
+
+// bool or numpy.bool_ (the only bool-like values clip accepts).
+inline bool isBool(const py::handle& value) {
+    if (py::isinstance<py::bool_>(value)) return true;
+    const py::handle type = py::type::handle_of(value);
+    const std::string module = py::str(type.attr("__module__")).cast<std::string>();
+    const std::string qualname = py::str(type.attr("__qualname__")).cast<std::string>();
+    return module == "numpy" && (qualname == "bool_" || qualname == "bool");
 }
 
 }  // namespace detail
@@ -239,6 +290,27 @@ inline Knobs readKnobs(const py::handle& item, const std::string& shown) {
         }
         knobs.exponent = value;
     }
+    const py::object offset = py::getattr(item, "offset", py::none());
+    if (!offset.is_none()) {
+        if (!detail::isRealNumber(offset)) {
+            throw py::type_error(label + ": offset must be a number, not " +
+                                 detail::reprOf(offset));
+        }
+        const double value = py::float_(offset).cast<double>();
+        if (!std::isfinite(value)) {
+            throw py::value_error(label + ": offset must be finite, not " +
+                                  detail::reprOf(offset));
+        }
+        knobs.offset = value;
+    }
+    const py::object clip = py::getattr(item, "clip", py::none());
+    if (!clip.is_none()) {
+        if (!detail::isBool(clip)) {
+            throw py::type_error(label + ": clip must be True or False, not " +
+                                 detail::reprOf(clip));
+        }
+        knobs.clip = PyObject_IsTrue(clip.ptr()) == 1;
+    }
     return knobs;
 }
 
@@ -266,8 +338,8 @@ inline void applyKnobs(ConstraintMetadata& constraint, const py::handle& item,
 // Applies the constraint picks coming from Python (<pkg>.constraints) to a
 // domain's default assembly: the name of a component plus the metadata to
 // re-state on it. Duck-typed on purpose — any object carrying
-// name/weight/level/exponent works, which is what lets the spec dataclasses
-// stay plain Python. The three knobs:
+// name/weight/level/exponent (and optionally offset/clip) works, which is what
+// lets the spec dataclasses stay plain Python. The five knobs:
 //   weight    None = the component's kDefaultWeight (in units of its level),
 //             else a finite number >= 0
 //   level     None = the component's kDefaultLevel, otherwise "hard",
@@ -276,6 +348,9 @@ inline void applyKnobs(ConstraintMetadata& constraint, const py::handle& item,
 //   exponent  1.0 = no shaping, else finite and > 0; always applied, so an
 //             explicit 1.0 (or None) resets a default assembly component
 //             built with another exponent, as the Python score() reads it
+//   offset    0.0 = no shift, else finite (any sign); always applied
+//   clip      True = the threshold, False = the literal formula (shapeCost);
+//             always applied. The hard-0 rule: checkLiteralOffset.
 // (readKnobs above). A wrong type is a TypeError, every other refusal a
 // ValueError, each naming the constraint by its Python name, in the words
 // of the Python base.
@@ -283,48 +358,70 @@ inline void applyKnobs(ConstraintMetadata& constraint, const py::handle& item,
 // The picks REPLACE the default set: passing three of them scores exactly
 // those three. Passing None keeps every default; an empty list is an error,
 // not "the defaults" (a filter that came back empty is a mistake, and the
-// Python get_constraints() rejects it for the same reason). Naming the same
-// constraint twice is an error too. Since the assembly already looks
-// components up by name, there is no name -> factory registry here to drift
-// out of sync.
-template <typename Solution>
-ConstraintAssembly<Solution> applyConstraints(ConstraintAssembly<Solution> assembly,
-                                              const py::object& constraints) {
+// Python get_constraints() rejects it for the same reason). Since the
+// assembly already looks components up by name, there is no name -> factory
+// registry here to drift out of sync.
+//
+// A name may be picked several times. Every pick is its own instance with
+// its own knobs, scored independently; the instances add up (identical
+// picks simply count twice). The first pick of a name re-states the default
+// component; each further pick is a fresh copy of it, taken from a new
+// default assembly (so the same domain parameters as the default instance),
+// with that pick's knobs, appended after it (ConstraintAssembly::
+// addInstances). constraint_costs() keys the k-th instance "<name>#<k>"
+// (instanceKeys), the order Python's instance_keys derives from the list.
+//
+//   tfpy::applyConstraints([] { return defaultConstraints(); }, constraints)
+//   tfpy::applyConstraints([&] { return defaultConstraints(problem); }, constraints)
+//
+// `defaults` is a callable returning the domain's default assembly; it is
+// called once, plus once per repeated pick. A pick's domain parameters
+// (params()) are not read here: a domain whose constraints take parameters
+// builds each pick's component itself and re-states its knobs with
+// applyKnobs (employee-scheduling's rule factory).
+template <typename Factory,
+          typename = std::enable_if_t<std::is_invocable_v<Factory&>>>
+std::decay_t<std::invoke_result_t<Factory&>> applyConstraints(Factory&& defaults,
+                                                              const py::object& constraints) {
+    using Assembly = std::decay_t<std::invoke_result_t<Factory&>>;
+    Assembly assembly = defaults();
     if (constraints.is_none()) return assembly;
-    std::vector<std::string> picked;
+    std::vector<std::string> picked;  // each name once, in first-pick order
+    std::vector<Assembly> copies;     // one single-component assembly per repeat
     for (py::handle item : constraints) {
         const std::string name = resolveName(assembly, item.attr("name").template cast<std::string>());
         const std::string shown = pythonName(name);
         const Knobs knobs = readKnobs(item, shown);
+        const bool repeat = std::find(picked.begin(), picked.end(), name) != picked.end();
         try {
-            restateKnobs(assembly, name, knobs, detail::quoted(shown));
+            if (!repeat) {
+                restateKnobs(assembly, name, knobs, detail::quoted(shown));
+            } else {
+                Assembly copy = defaults();
+                restateKnobs(copy, name, knobs, detail::quoted(shown));
+                copy.only(std::vector<std::string>{name});
+                copies.push_back(std::move(copy));
+            }
         } catch (const std::invalid_argument& error) {
             throw py::value_error(error.what());
         }
-        // The same constraint twice would let the second pick's metadata win
-        // in silence — the same class of mistake as a typo'd name, so it is
-        // an error rather than a last-wins rule nobody can see.
-        for (const std::string& already : picked) {
-            if (already == name) {
-                throw py::value_error("constraint '" + pythonName(name)
-                                      + "' picked more than once; state it once with the "
-                                        "metadata you want");
-            }
-        }
-        picked.push_back(name);
+        if (!repeat) picked.push_back(name);
     }
     if (picked.empty()) {
         throw py::value_error("constraints must not be empty (pass None for the defaults)");
     }
     assembly.only(picked);
+    for (Assembly& copy : copies) assembly.addInstances(std::move(copy));
     return assembly;
 }
 
 // Rule 1 of "The range of a score" (level.hpp) in Python's words: the
 // constraint's Python name and Python's repr() of the contribution, so a
 // solve and score(constraint_costs(...), picks) refuse the same pick with
-// the same OverflowError text. Module-local: each package's extension
-// translates the exceptions its own copy of the engine throws.
+// the same OverflowError text. The sign rule (SignedCostLevelError, thrown at
+// reset) likewise becomes the mirror's ValueError. Module-local: each
+// package's extension translates the exceptions its own copy of the engine
+// throws.
 inline void registerContributionOverflowTranslator() {
     py::register_local_exception_translator([](std::exception_ptr pending) {
         try {
@@ -334,6 +431,10 @@ inline void registerContributionOverflowTranslator() {
             const std::string text = ContributionOverflowError::message(
                     pythonName(error.constraint()), shown, error.beyondHardLimit());
             PyErr_SetString(PyExc_OverflowError, text.c_str());
+        } catch (const SignedCostLevelError& error) {
+            const std::string text =
+                    SignedCostLevelError::message(pythonName(error.constraint()), error.level());
+            PyErr_SetString(PyExc_ValueError, text.c_str());
         }
     });
 }

@@ -14,7 +14,10 @@ namespace qap
 // bijection this is the 0.1.x sum over location pairs i, j of
 // distances[i][j] * flows[p_i][p_j]. One number for the whole assignment (a
 // GlobalConstraint, so the exponent shapes the total). Flows and distances are
-// not validated >= 0, so the total may be negative (scored as a bonus).
+// not validated >= 0, so the total may be negative (scored as a bonus). When
+// either matrix holds a negative entry, rawCostCanBeNegative() says so, and
+// the calculator refuses the instance on the hard level
+// (SignedCostLevelError); without one, the total is >= 0.
 //
 // Member-change fast path with its own location mirror: a facility f leaving
 // location l retracts contrib(f, l), then leaves the mirror; joining enters the
@@ -75,6 +78,10 @@ struct FlowDistanceCost final : QapMemberChangeGlobalConstraint
         }
     }
     double cost() const override { return static_cast<double>(total_); }
+    bool rawCostCanBeNegative(const QuadraticAssignmentProblem &problem) const override
+    {
+        return detail::hasNegative(problem.flows) || detail::hasNegative(problem.distances);
+    }
 
 private:
     std::int64_t contribution(const QuadraticAssignmentProblem &problem, int facility, int location) const

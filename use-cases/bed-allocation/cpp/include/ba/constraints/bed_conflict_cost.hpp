@@ -26,6 +26,12 @@ struct BedConflictCost final : BaUnitConstraint
     void onReset(const BedPlan &plan) override
     {
         detail::requirePrepared(plan);
+        beds_.reset(plan);
+    }
+    // The real beds; the sentinel is no bed (detail::RealBeds).
+    const std::vector<int> *scopedUnits() const override
+    {
+        return beds_.units();
     }
     double cost(const BedPlan &plan,
                 int unit,
@@ -59,6 +65,9 @@ struct BedConflictCost final : BaUnitConstraint
         }
         return static_cast<double>(nights);
     }
+
+private:
+    detail::RealBeds beds_;
 };
 
 }  // namespace ba

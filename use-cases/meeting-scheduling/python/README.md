@@ -83,10 +83,30 @@ these costs, in `tests/test_constraints.py` and the C++ tests).
 Picking the cost function (see `meeting_scheduling.constraints`):
 
 ```python
-from meeting_scheduling.constraints import MeetingOverlapCost, get_constraints, room_conflict_cost
+from meeting_scheduling.constraints import MeetingOverlapCost, RoomConflictCost, get_constraints, score
 
-ms.solve(schedule, time_limit_seconds=1.0, constraints=get_constraints([room_conflict_cost, MeetingOverlapCost(weight=100)]))
+ms.solve(schedule, time_limit_seconds=1.0, constraints=[RoomConflictCost(), MeetingOverlapCost(weight=100)])
+raw = ms.constraint_costs(schedule)       # re-priced in pure Python, no re-solve:
+score(raw), score(raw, [RoomConflictCost(), MeetingOverlapCost(weight=100)])
+# A constraint may be picked several times, each pick with its own knobs; offset / clip
+# shift the shaping (clip=True: only the overlap beyond 8 grains counts, squared).
+score(raw, [*get_constraints(), MeetingOverlapCost(weight=1, exponent=2, offset=8)])
 ```
+
+**0.3.0:** every constraint takes two more knobs, `offset` and `clip` (keyword-only), and
+may be picked several times. A raw cost `x` (per (grain, room) cell for the five
+per-meeting constraints, the one total for the seven pair constraints) is shaped as
+`sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
+`(x - offset) ** exponent`, sign-preserving (`clip=False`, which charges every cell, an
+empty one included, and rewards a cost below the offset); `offset=0` is the 0.2.0 shaping.
+`clip=False` with an offset is refused on hard (`ValueError: constraint 'overtime_cost':
+clip=False with a non-zero offset cannot be hard, because hard 0 must mean no violation; use
+clip=True (a threshold) or another level`); on soft and on medium (folded into soft) it is
+allowed. Each pick is its own instance with its own knobs, the instances add up, and
+`ms.constraint_costs(schedule, picks)` keys the second pick `meeting_overlap_cost#2`.
+The `hard` knob is gone (`hard=` raises `TypeError`): `level` replaces it (`Level.HARD` /
+`Level.MEDIUM` / `Level.SOFT`, or the names), any constraint may move onto medium (its
+weight then in medium units, folded at 1e6), and each repeated pick carries its own level.
 
 ## Build / test
 

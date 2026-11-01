@@ -65,20 +65,32 @@ level and weight are the defaults `constraint_info()` reports:
 | 10 | `away_to_home_hop_cost` | soft | 1 | if m2.home == m1.away, dist(m1.home, m1.away) |
 
 Each spec takes `weight=None` (the default above), `level=None` (the default level,
-otherwise `"hard"` or `"soft"`) and `exponent=1.0` (applied per round position for the
-three unit constraints, on the one total for the seven globals):
+otherwise `"hard"` or `"soft"`, or `Level.HARD` / `Level.SOFT`; the domain has no
+medium level, so `level="medium"` raises `ValueError`), `exponent=1.0` (applied per
+round position for the three unit constraints, on the one total for the seven globals)
+and the keyword-only `offset=0.0` / `clip=True`; a constraint may be picked several
+times, each pick with its own knobs:
 
 ```python
-from sports_league.constraints import WorkdayClassicMatchesCost, get_constraints, score
+from sports_league.constraints import AwayToAwayHopCost, WorkdayClassicMatchesCost, get_constraints, score
 
 sl.constraint_info()
 # [ConstraintInfo(name='start_to_away_hop_cost', default_level='soft', default_weight=1.0,
 #                 level_flippable=True, reward=False, default_enabled=True), ...]
-sl.solve(schedule, time_limit_seconds=1.0, constraints=get_constraints(
-    [*get_constraints()[:2], WorkdayClassicMatchesCost(weight=10_000), *get_constraints()[3:]]))
+sl.solve(schedule, time_limit_seconds=1.0, constraints=[
+    *get_constraints()[:2], WorkdayClassicMatchesCost(weight=10_000), *get_constraints()[3:],
+])
 raw = sl.constraint_costs(schedule)       # raw costs, re-priced in pure Python:
 score(raw), score(raw, [WorkdayClassicMatchesCost(level="hard")])
+# offset / clip shift the shaping (clip=True: only the km beyond 1000 count).
+score(raw, [AwayToAwayHopCost(), AwayToAwayHopCost(weight=0.01, exponent=2, offset=1000)])
 ```
+
+`clip=False` shapes `x - offset` on every round position of a unit constraint, an empty
+one included (per round, not over the sum), and on a global's one total. It is refused on
+hard, where hard 0 must mean no violation: `ValueError: constraint 'team_conflict_cost':
+clip=False with a non-zero offset cannot be hard, because hard 0 must mean no violation;
+use clip=True (a threshold) or another level`. On soft it is allowed.
 
 **0.2.0:** the names gained the `_cost` suffix (`start_to_away_hop` ->
 `start_to_away_hop_cost`, ...), `matches_on_same_day` became `team_conflict_cost` and

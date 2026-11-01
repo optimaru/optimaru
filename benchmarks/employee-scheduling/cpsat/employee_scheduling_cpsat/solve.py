@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
+from cpsat_plugins import ConstraintConfig
 from es_scheduling import DecomposedCalculator
 from es_scheduling.models import ScheduleRequest, to_schedule
 from ortools.sat.python import cp_model
 
-from .constraints import REGISTRY, ScheduleContext, registry_for
+from .constraints import REGISTRY, RulePlugin, ScheduleContext, registry_for
 
-__all__ = ["catalog", "constraint_costs", "solve"]
+__all__ = ["catalog", "constraint_costs", "selection", "solve"]
 
 
 def catalog() -> list[dict]:
@@ -33,6 +35,28 @@ def constraint_costs(request: ScheduleRequest) -> dict[str, Any]:
         "soft": result.soft,
         "totals": calculator.constraint_totals(),
     }
+
+
+def selection(plugins: Sequence[RulePlugin]) -> list[ConstraintConfig]:
+    """Each plugin's knobs as the objective's selection, the offset on its grid.
+
+    A soft plugin adds ``SCALE`` times its raw cost (see ``RulePlugin.scale``),
+    so its offset is scaled the same way: ``SCALE * shape(x, offset)`` is
+    ``shape(SCALE * x, SCALE * offset)`` for the threshold and the literal
+    formula alike. A hard plugin's scale is 1.
+    """
+    return [
+        ConstraintConfig(
+            name=plugin.name,
+            # The doubles the engine reads; a fractional offset stays fractional,
+            # so the engine's rules see it before check_supported refuses it.
+            weight=None if plugin.weight is None else float(plugin.weight),
+            level=None if plugin.level is None else str(plugin.level),
+            offset=float(plugin.offset) * plugin.scale,
+            clip=plugin.clip,
+        )
+        for plugin in plugins
+    ]
 
 
 def solve(
@@ -83,9 +107,10 @@ def solve(
             model.add(unassigned[s] == 0)
 
     registry = registry_for(rules)
-    # Each plugin is itself the selection (name, weight, hard, exponent); the
-    # defaults come from the engine's constraint_info() rows.
-    objective = registry.objective(model, ("hard", "soft"), registry.plugins)
+    # Each plugin is itself the selection (name, weight, level, offset, clip);
+    # the defaults come from the engine's constraint_info() rows. A repeated
+    # rule is its own plugin "<name>#<k>", so it adds its own terms.
+    objective = registry.objective(model, ("hard", "soft"), selection(registry.plugins))
     registry.build(ScheduleContext(model, problem, x, unassigned), objective)
 
     solver = cp_model.CpSolver()

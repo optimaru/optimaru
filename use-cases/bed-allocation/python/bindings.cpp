@@ -369,14 +369,17 @@ PYBIND11_MODULE(_core, m)
              py::call_guard<py::gil_scoped_release>())
         // Same solve, scored by a caller-chosen constraint set (see
         // bed_allocation.constraints). The picks replace the defaults;
-        // None keeps them.
+        // None keeps them. A name may be picked several times: every pick is
+        // its own instance (a fresh copy of the default component) with its
+        // own knobs.
         .def(
             "solve_with_constraints",
             [](Solver &solver, BedPlan &plan, const py::object &constraints)
             {
                 ScoreCalculator::prepare(plan);
                 DecomposedCalculator calculator;
-                tfpy::applyConstraints(defaultConstraints(), constraints)
+                tfpy::applyConstraints([] { return defaultConstraints(); },
+                                       constraints)
                     .into(calculator);
                 py::gil_scoped_release release;
                 solver.solve(plan, calculator);
@@ -384,23 +387,30 @@ PYBIND11_MODULE(_core, m)
             py::arg("plan"),
             py::arg("constraints") = py::none());
 
-    // The raw per-unit costs of the default assembly on `plan` — the input
+    // The raw per-unit costs of an assembly on `plan` — the input
     // bed_allocation.constraints.score() turns into a score. Scoring once is
     // enough: re-pricing any assembly is pure Python arithmetic on these.
     // Units are the planning values (beds in order, then the "no bed"
-    // sentinel); a global constraint has one entry. Every entry carries the
-    // domain's medium fold (into_soft, 10^9), which score() applies.
+    // sentinel); a global constraint has one entry. "units" lists what a unit
+    // constraint evaluates: the real beds for the per-bed rules, the sentinel
+    // for unassigned_stays_cost. Every entry carries the domain's medium fold (into_soft,
+    // 10^9), which score() applies. None = the default assembly; a pick list
+    // scores exactly those picks (applyConstraints), each entry carrying its
+    // pick's knobs, the k-th pick of a name keyed "<name>#<k>".
     m.def(
         "constraint_costs",
-        [](BedPlan &plan)
+        [](BedPlan &plan, const py::object &constraints)
         {
             ScoreCalculator::prepare(plan);
             DecomposedCalculator calculator;
-            defaultConstraints().into(calculator);
+            tfpy::applyConstraints([] { return defaultConstraints(); },
+                                   constraints)
+                .into(calculator);
             return tfpy::constraintCosts(calculator, plan);
         },
         py::arg("plan"),
-        "Raw per-unit cost of every constraint, before weight/exponent/level.");
+        py::arg("constraints") = py::none(),
+        "Raw per-unit cost of every constraint, before weight/exponent/offset/level.");
 
     // The constraint names this domain scores, in default-assembly order
     // (unit constraints first, then the global mixed_gender_room_cost) — the

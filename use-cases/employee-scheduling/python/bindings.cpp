@@ -282,10 +282,12 @@ py::dict paramsOf(const py::handle &pick)
 // None keeps kDefaultWeight, level None keeps kDefaultLevel; a reward refuses
 // level='hard'; the type and range checks speak the Python base's words).
 //
-// Unlike tfpy::applyConstraints, the factory may add one constraint several
-// times (other parameters or scope): each instance is scored on its own and
-// told apart by its label, and constraint_costs() keys the k-th instance
-// "<name>#<k>".
+// The factory may add one constraint several times (other parameters, scope
+// or knobs, or the same ones): each instance is a fresh component, scored on
+// its own and told apart by its label (identical picks share one), and
+// constraint_costs() keys the k-th instance "<name>#<k>". The knobs include
+// offset / clip (readKnobs), which shape each evaluated employee's cost (a
+// worker scope's employees only) or a global rule's total.
 void addConstraintByName(DecomposedCalculator &calc,
                          const py::handle &pick,
                          const py::dict &params)
@@ -351,22 +353,13 @@ void addConstraintByName(DecomposedCalculator &calc,
         calc.add(std::move(built.global));
 }
 
-// Python package holding this extension (e.g. "optimaru.employee_scheduling"),
-// set when the module loads, so calculatorFor can reach the package's
-// _constraint helpers.
-std::string &packageName()
-{
-    static std::string name;
-    return name;
-}
-
 // A calculator holding exactly `constraints` (each pick added by the
 // factory), or the default assembly for None. The selection rules of the
-// Python get_constraints() (select(..., repeatable=True)): an empty list is
-// an error, and so is the same name with the same parameters twice. The key
-// is the one select() uses, (name, _normalized(params)), so parameters
-// compare by value (a list and a tuple scope, or 1 and 1.0, are the same);
-// the same name with other parameters or scope is a separate instance.
+// Python get_constraints(): an empty list is an error. A name may be picked
+// several times, with other parameters or scope or with the same ones: every
+// pick is its own instance with its own knobs, scored on its own, and the
+// instances add up (identical picks count twice). constraint_costs() keys
+// the k-th instance of a name "<name>#<k>", in pick order.
 std::unique_ptr<DecomposedCalculator> calculatorFor(const py::object &constraints)
 {
     auto calc = std::make_unique<DecomposedCalculator>();
@@ -375,25 +368,13 @@ std::unique_ptr<DecomposedCalculator> calculatorFor(const py::object &constraint
         addDefaultConstraints(*calc);
         return calc;
     }
-    const py::object normalized
-        = py::module_::import((packageName() + "._constraint").c_str()).attr("_normalized");
-    py::list seen;
+    std::size_t picked = 0;
     for (py::handle pick : constraints)
     {
-        const py::dict params = paramsOf(pick);
-        const std::string name = pick.attr("name").cast<std::string>();
-        const py::tuple key = py::make_tuple(name, normalized(params));
-        if (seen.contains(key))
-        {
-            throw py::value_error(
-                "constraint '" + name
-                + "' picked more than once with the same parameters; state each "
-                  "instance once with the metadata you want");
-        }
-        seen.append(key);
-        addConstraintByName(*calc, pick, params);
+        addConstraintByName(*calc, pick, paramsOf(pick));
+        ++picked;
     }
-    if (seen.size() == 0)
+    if (picked == 0)
         throw py::value_error(
             "constraints must not be empty (pass None for the defaults)");
     return calc;
@@ -403,10 +384,6 @@ std::unique_ptr<DecomposedCalculator> calculatorFor(const py::object &constraint
 
 PYBIND11_MODULE(_core, m)
 {
-    {
-        const std::string module = m.attr("__name__").cast<std::string>();
-        packageName() = module.substr(0, module.rfind('.'));
-    }
     m.doc() = "Employee shift scheduling — optimaru engine-backed C++ wrapper "
               "exposed to Python";
 
@@ -531,14 +508,16 @@ PYBIND11_MODULE(_core, m)
         "incrementally via add(name, ...) — then pass to "
         "Solver.solve(schedule, calc). The eight defaults at their default "
         "weights reproduce calculate_score exactly. A constraint may be "
-        "added several times (other parameters or scope).")
+        "added several times (with other parameters, scope or knobs, or the "
+        "same ones): each is its own instance, and the instances add up.")
         .def(py::init<>())
         // Example: DecomposedCalculator([RequiredSkillCost(weight=2.0), ...]).
-        // Duck-typed: each pick needs .name/.weight/.level/.exponent, plus an
-        // optional params() (or .params dict) with the domain parameters.
-        // The get_constraints() rules: no empty list (build an empty
-        // calculator with DecomposedCalculator() and add()), and the same
-        // rule with the same parameters at most once.
+        // Duck-typed: each pick needs .name/.weight/.level/.exponent (and
+        // optionally .offset/.clip), plus an optional params() (or .params
+        // dict) with the domain parameters. The get_constraints() rules: no
+        // empty list (build an empty calculator with DecomposedCalculator()
+        // and add()); a rule may be picked several times, each pick its own
+        // instance.
         .def(py::init([](const py::iterable &constraints)
                       { return calculatorFor(constraints); }),
              py::arg("constraints"),
@@ -552,27 +531,33 @@ PYBIND11_MODULE(_core, m)
                const py::object &weight,
                const py::object &level,
                const py::object &exponent,
+               const py::object &offset,
+               const py::object &clip,
                const py::kwargs &kwargs)
             {
                 // kwargs are domain parameters, which the factory reads by name
                 // and otherwise ignores: the old knob must not vanish there.
-                if (kwargs.contains("hard"))
-                    throw py::type_error("add() got an unexpected keyword argument "
-                                         "'hard'; use level='hard' or level='soft'");
+                tfpy::refuseHardKeyword(kwargs);
                 // The same checks as a spec pick: a SimpleNamespace carrying
-                // the three knobs goes through the one factory path.
+                // the five knobs goes through the one factory path.
                 py::object pick = py::module_::import("types").attr(
                     "SimpleNamespace")(py::arg("name") = name,
                                        py::arg("weight") = weight,
                                        py::arg("level") = level,
-                                       py::arg("exponent") = exponent);
+                                       py::arg("exponent") = exponent,
+                                       py::arg("offset") = offset,
+                                       py::arg("clip") = clip);
                 addConstraintByName(calc, pick, kwargs);
             },
             py::arg("name"),
             py::arg("weight") = py::none(),
             py::arg("level") = py::none(),
             py::arg("exponent") = 1.0,
-            "Add a built-in constraint by name (see CONSTRAINT_NAMES).\n"
+            py::kw_only(),
+            py::arg("offset") = 0.0,
+            py::arg("clip") = true,
+            "Add a built-in constraint by name (see CONSTRAINT_NAMES). A name "
+            "may be added several times: each call adds its own instance.\n"
             "weight:   None = the component's default weight; otherwise a "
             "linear multiplier (finite, >= 0) on its cost.\n"
             "level:    None keeps the constraint's default level, otherwise "
@@ -580,6 +565,13 @@ PYBIND11_MODULE(_core, m)
             "exponent: shapes the per-employee cost superlinearly, sign-"
             "preserving: contribution = weight * sign(c)*|c|^exponent. "
             "2.0 = squared, 3.0 = cubed; penalizes concentrated violations.\n"
+            "offset:   (keyword) shifts that shaping, any finite number; with "
+            "clip=True (the default) only what lies beyond it counts, "
+            "sign(c) * max(0, |c| - offset)^exponent; with clip=False the "
+            "literal (c - offset)^exponent, which charges every employee the "
+            "rule evaluates (a raw 0 included) and rewards a cost below the "
+            "offset; with an offset it is refused on hard (ValueError), "
+            "because hard 0 must mean no violation.\n"
             "Extra keyword arguments become constraint-specific parameters "
             "(e.g. add('max_consecutive_days_cost', value=6)).")
         .def(
@@ -648,10 +640,11 @@ PYBIND11_MODULE(_core, m)
         py::arg("schedule"),
         py::arg("constraints") = py::none(),
         "Raw per-employee cost of every constraint instance (the eight "
-        "defaults for None), before weight/exponent/level: {key: {costs, "
-        "weight, exponent, hard, global, level, reward, level_flippable, name, "
-        "label}}. The k-th instance of a name picked more than once is keyed "
-        "'<name>#<k>'.");
+        "defaults for None), before weight/exponent/offset/level: {key: "
+        "{costs, weight, exponent, offset, clip, hard, global, level, reward, "
+        "level_flippable, name, label[, units]}}. The k-th instance of a name "
+        "picked more than once is keyed '<name>#<k>'; a worker-scoped rule "
+        "carries the employees it evaluates as 'units'.");
 
     // The constraint catalog: the eight defaults (default_enabled=True),
     // then every other constraint the factory builds (default_enabled=False),

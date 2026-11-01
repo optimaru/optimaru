@@ -196,7 +196,12 @@ def test_constraint_costs_and_default_score_equal_the_oracle(name, data):
 
 def _old_selection(specs: list[Constraint]) -> list[dict]:
     return [
-        {"name": OLD_OF[spec.name], "weight": spec.weight, "hard": {None: None, "hard": True, "soft": False}[spec.level], "exponent": spec.exponent}
+        {
+            "name": OLD_OF[spec.name],
+            "weight": spec.weight,
+            "hard": {None: None, "hard": True, "soft": False}[spec.level],
+            "exponent": spec.exponent,
+        }
         for spec in specs
     ]
 

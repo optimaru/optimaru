@@ -107,8 +107,8 @@ def solve(
     budget is the engine's 30s.
 
     ``constraints`` picks the cost function (see `order_picking.constraints`).
-    Only the constraints in the list are scored; None keeps all four
-    defaults::
+    Only the constraints in the list are scored, a name picked several times
+    once per pick; None keeps all four defaults::
 
         from order_picking.constraints import get_constraints
         op.solve(solution, constraints=get_constraints())

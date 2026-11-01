@@ -44,17 +44,21 @@ ctest --test-dir build/bed-allocation
 | `mixed_gender_room_cost` | `MixedGenderRoomCost` (global) | hard | 1000 | one total: shared nights of every opposite-gender pair in one `SAME_GENDER` room |
 
 This is the `list_constraints()` order (unit constraints first, the global last). Every
-constraint is flippable (`level="hard"` / `level="soft"`), none is a reward and all twelve are
-scored by default; `bed_allocation.constraint_info()` reports exactly this table from the
-C++ components (`kDefaultLevel` / `kDefaultWeight`).
+constraint is flippable onto any of the three levels (`level="hard"`, `"medium"` or
+`"soft"`, or a `Level`), none is a reward and all twelve are scored by default;
+`bed_allocation.constraint_info()` reports exactly this table from the C++ components
+(`kDefaultLevel` / `kDefaultWeight`).
 
 The medium level folds into the engine's soft level as `medium * 10^9 + soft`
 (`kMediumFold` in `cpp/include/ba/domain.hpp`); weights are in units of their level, so
 `unassigned_stays_cost` defaults to weight **1** medium unit per night.
 `UnassignedStaysCost(level="hard")` makes it one hard unit per night,
 `UnassignedStaysCost(level="soft")` one soft unit per night (outside the fold), and an
-explicit weight stays on the medium level in medium units — in the engine, in
-`constraints.score()` and in the CP-SAT reference alike.
+explicit weight is in units of the level in effect — in the engine, in
+`constraints.score()` and in the CP-SAT reference alike. Any other constraint may move
+onto medium the same way (`PreferredMaxRoomCapacityCost(level="medium")` charges one
+medium unit per night above the preferred capacity, in both solvers too), and a repeated
+pick carries its own level.
 
 **0.2.0:** the constraints were renamed to the unified `*_cost` names (old -> new):
 `same_bed_in_same_night` -> `bed_conflict_cost`, `female_in_male_room` ->
@@ -74,6 +78,34 @@ real medium constraint: its default weight is 1 medium unit (was a soft weight o
 `level="soft"` now demotes it to soft in the engine too (it was a no-op), and `level="hard"`
 gives one hard unit per night. Raw costs and the default score are unchanged;
 `solve(..., constraints=...)` reports the levels the selection put the terms on.
+
+**0.3.0:** every constraint takes two more knobs, `offset` and `clip` (keyword-only), and
+may be picked several times. A raw cost `x` (per real bed for the per-bed constraints, on
+the one total for the global `mixed_gender_room_cost`) is shaped as
+`sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
+`(x - offset) ** exponent`, sign-preserving (`clip=False`, which charges every unit the
+constraint evaluates, a raw 0 included, and acts as a reward below the offset);
+`offset=0` is the 0.2.0 shaping. The per-bed constraints evaluate the real beds, an empty
+one included, and never the "no bed" sentinel (it is no bed); `unassigned_stays_cost`
+evaluates the sentinel only. A `constraint_costs()` entry lists its evaluated units as
+`"units"`, and the literal offset charges exactly those. Both apply per evaluated unit, not
+to the total. `clip=False` with an offset is refused on hard (by default, every constraint
+the table lists as hard), because hard 0 must mean no violation; medium folds into soft
+here, so it takes the literal formula. Each pick is its own instance with its own knobs,
+and the instances add up:
+
+```python
+ba.solve(plan, constraints=[
+    BedConflictCost(),
+    UnassignedStaysCost(),                         # 1 medium unit per unassigned night
+    UnassignedStaysCost(exponent=2, offset=10),    # + (unassigned nights beyond 10)^2
+    PreferredMaxRoomCapacityCost(),
+])
+```
+
+`ba.constraint_costs(plan, picks)` keys the second pick `unassigned_stays_cost#2`. The
+CP-SAT reference takes integral offsets on every constraint (one term per evaluated unit,
+one for the global total).
 
 ## Starting from an existing solution
 

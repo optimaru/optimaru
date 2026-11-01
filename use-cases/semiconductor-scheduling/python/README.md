@@ -15,7 +15,9 @@ The problem carries no weights. Pick, re-weight or flip constraints with
 
 ```python
 import semiconductor_scheduling as fab
-from semiconductor_scheduling.constraints import MaxQueueTimeCost, WeightedTardinessCost, get_constraints, score
+from semiconductor_scheduling.constraints import (
+    MakespanCost, MaxQueueTimeCost, WeightedTardinessCost, get_constraints, score,
+)
 
 fab.constraint_info()
 # [ConstraintInfo(name='machine_eligibility_cost', default_level='hard', default_weight=1.0,
@@ -25,8 +27,21 @@ picks = [*get_constraints()[:7], MaxQueueTimeCost(level="soft"), *get_constraint
 fab.solve(problem, time_limit_seconds=5, constraints=picks)
 raw = fab.constraint_costs(problem)        # raw totals, re-priced in pure Python:
 score(raw), score(raw, picks), score(raw, [WeightedTardinessCost(exponent=2.0)])
+# A constraint may be picked several times, each pick with its own knobs; offset / clip
+# shift the shaping of the total (clip=True: only the minutes beyond 480 count).
+score(raw, [MakespanCost(), MakespanCost(weight=100, offset=480)])
 fab.constraint_items(problem)              # the per-item lists (0.1.x constraint_costs)
 ```
+
+Every constraint is global: `exponent`, `offset` and `clip` (0.3.0) shape its total, a raw
+0 included. `clip=False` with an offset is refused on hard, where hard 0 must mean no
+violation: `ValueError: constraint 'machine_capacity_cost': clip=False with a non-zero offset
+cannot be hard, because hard 0 must mean no violation; use clip=True (a threshold) or another
+level`. On soft it is allowed. `constraint_costs(problem, picks)` scores a pick list, the
+second pick of a name keyed
+`<name>#2`. `level` is None (the default level), "hard" or "soft" (or `Level.HARD` /
+`Level.SOFT`); the domain has no medium level, so "medium" raises `ValueError`, and a
+repeat carries its own level.
 
 ## Install / test
 

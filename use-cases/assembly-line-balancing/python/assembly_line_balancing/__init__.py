@@ -80,15 +80,20 @@ def _core_of(problem) -> AssemblyLineBalancingProblem:
     )
 
 
-def constraint_costs(problem) -> dict[str, dict[str, Any]]:
-    """Raw cost of every default constraint, before weight / exponent / level.
+def constraint_costs(problem, constraints=None) -> dict[str, dict[str, Any]]:
+    """Raw cost of every constraint, before weight / exponent / offset / level.
 
-    ``{name: {"costs": [...], "weight", "exponent", "hard", "global", "level", "reward",
-    "level_flippable", "name", "label"}}`` in `list_constraints()` order: one cost per
-    station (``0 .. station_count - 1``) for the per-station constraints, one total for the
-    global ones. `constraints.score()` turns it into a score.
+    ``{key: {"costs": [...], "weight", "exponent", "offset", "clip", "hard", "global",
+    "level", "reward", "level_flippable", "name", "label", "default_weight",
+    "default_level"}}`` in `list_constraints()` order: one cost per station
+    (``0 .. station_count - 1``) for the per-station constraints, one total for the global
+    ones; ``max_stations_cost`` and ``forbidden_task_stations_cost`` add ``"units"``, the
+    stations they evaluate. None = the default constraints; a pick list (as for `solve`)
+    scores exactly those picks, each entry carrying its pick's knobs, the k-th pick of a
+    name keyed ``"<name>#<k>"`` from the second on. `constraints.score()` turns it into a
+    score.
     """
-    return _constraint_costs(_core_of(problem))
+    return _constraint_costs(_core_of(problem), constraints)
 
 
 def calculate_score(problem, constraints=None):
@@ -132,8 +137,9 @@ def solve(
     step limit). ``stop_at_first_feasible`` stops as soon as hard 0 is reached.
 
     ``constraints`` picks the cost function directly (see `assembly_line_balancing.constraints`);
-    only the listed constraints are scored and the solve is single-start (``parallel_solver_count``
-    is ignored there). None uses every default constraint at its default weight::
+    only the listed constraints are scored, a name picked several times once per pick, and the
+    solve is single-start (``parallel_solver_count`` is ignored there). None uses every default
+    constraint at its default weight::
 
         from assembly_line_balancing.constraints import get_constraints
         alb.solve(problem, constraints=get_constraints())

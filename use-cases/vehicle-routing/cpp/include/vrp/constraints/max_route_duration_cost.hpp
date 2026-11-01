@@ -10,12 +10,12 @@ namespace vrp {
 // above Vehicle::maxRouteDuration. Raw cost per vehicle = max(0, end time -
 // departure time - maxRouteDuration) seconds while maxRouteDuration > 0;
 // 0 = within the limit, or no limit set (the pool list costs 0).
-struct MaxRouteDurationCost final : VrpUnitConstraint {
+struct MaxRouteDurationCost final : detail::PerVehicleConstraint {
     static constexpr double kDefaultWeight = 1.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
 
     explicit MaxRouteDurationCost(double weight = kDefaultWeight)
-        : VrpUnitConstraint("maxRouteDurationCost", weight, kDefaultLevel) {}
+        : PerVehicleConstraint("maxRouteDurationCost", weight, kDefaultLevel) {}
     double cost(const VehicleRoutePlan& p, int u, const std::vector<int>& m) const override {
         if (detail::isPool(p, u) || p.vehicles[u].maxRouteDuration <= 0) return 0;
         const auto x = detail::routeMetrics(p, u, m);

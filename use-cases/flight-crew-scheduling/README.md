@@ -19,9 +19,11 @@ level). The default weights are exactly those of the Java `ConstraintProvider`:
 | `first_assignment_not_departing_from_home_cost` | `FirstAssignmentNotDepartingFromHomeCost` | soft | 1000 | earliest-departure assignments (ties all count) not leaving from home |
 | `last_assignment_not_arriving_at_home_cost` | `LastAssignmentNotArrivingAtHomeCost` | soft | 1000 | latest-departure assignments (ties all count) not landing at home |
 
-Every constraint is flippable (`level="hard"` / `level="soft"`), none is a reward and all six
-are scored by default (`default_enabled`); `flight_crew.constraint_info()` reports exactly
-this table from the C++ components (`kDefaultLevel` / `kDefaultWeight`). All six are unit
+Every constraint is flippable (`level="hard"` / `level="soft"`, or `Level.HARD` /
+`Level.SOFT`; `level="medium"` raises `ValueError`, the domain has no medium level), none
+is a reward and all six are scored by default (`default_enabled`);
+`flight_crew.constraint_info()` reports exactly this table from the C++ components
+(`kDefaultLevel` / `kDefaultWeight`). All six are unit
 constraints over one employee's itinerary, so `exponent` shapes each employee's raw cost.
 
 **0.2.0:** the constraints were renamed with the `_cost` suffix in every layer
@@ -36,6 +38,27 @@ unknown now (no aliases). The defaults are declared once, as each component's
 `kDefaultWeight` / `kDefaultLevel`; the monolithic calculators read the same constants (the
 `fcs::REQUIRED_SKILL_WEIGHT` ... `LAST_NOT_HOME_WEIGHT` constants of `domain.hpp` are gone).
 Raw costs, levels, weights and the default score are unchanged.
+
+**0.3.0:** every constraint takes two more knobs, `offset` and `clip` (keyword-only), and
+may be picked several times. Each employee's raw cost `x` is shaped as
+`sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
+`(x - offset) ** exponent`, sign-preserving (`clip=False`, which lowers the penalty of
+every employee below the offset, an idle one included); `offset=0` is the 0.2.0 shaping.
+Both apply per employee, not to the total. `clip=False` with an offset is refused on hard
+(the four crew rules by default), because hard 0 must mean no violation. Each pick is its
+own instance with its own knobs, and the instances add up:
+
+```python
+from flight_crew.constraints import FlightConflictCost, get_constraints
+
+fc.solve(problem, constraints=[
+    *get_constraints(),                                   # the defaults
+    FlightConflictCost(weight=10, exponent=2, offset=1),  # + 10 x (conflicts beyond the first)^2
+])
+```
+
+`fc.constraint_costs(schedule, picks)` keys the second pick `flight_conflict_cost#2`. The
+CP-SAT reference takes integral offsets.
 
 "Consecutive" follows the Java stream semantics: a pair (a, b) is consecutive when
 dep(a) < dep(b) and no other assignment c of the same crew member satisfies
@@ -182,7 +205,7 @@ solver's `solve` before the engine runs — the engine only fills what is still 
 4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
    `description_en` / `description_ko` to `python/flight_crew/constraints.py` (plus its
    module-level default instance); callers then pick, reweight or flip it:
-   `constraints=get_constraints([..., MyRuleCost(weight=5, level="hard")])`;
+   `constraints=[..., MyRuleCost(weight=5, level="hard")]`;
 5. mirror it in the CP-SAT model in
    [`benchmarks/flight-crew-scheduling/cpsat`](../../benchmarks/flight-crew-scheduling/cpsat) (a
    plugin subclassing the spec; defaults come from `constraint_info()`) so the benchmark stays

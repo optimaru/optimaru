@@ -15,6 +15,14 @@
 //       kDefaultLevel / kDefaultWeight
 //   (i) the medium level: the default fold, hard() / soft() / weight on a
 //       medium constraint, and incremental == full with those overrides
+//   (j) repeated components and the offset / clip knobs: a hand-calculated
+//       repeat (end time + 0.5 x end time^2 per cell), threshold and literal
+//       offsets by hand on a unit, a global and a medium constraint (literal
+//       mode charges every cell, an empty one included), the literal formula
+//       refused on hard at reset and kept on soft and on the medium level
+//       (which folds into soft), incremental == a fresh recompute over a
+//       random walk and a FULL_ASSERT solve with repeated, shifted components
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -868,6 +876,16 @@ void verifyMediumIncremental()
             {"soft",
              [=] { return defaultConstraints().soft(mixed).soft(preferred); }},
             {"weight 3", [=] { return defaultConstraints().weight(mixed, 3); }},
+            // Any component may move onto medium: a unit one, a global soft
+            // one and a global hard one.
+            {"onto medium",
+             [] {
+                 using optimaru::Level;
+                 return defaultConstraints()
+                     .level("meetingEndTimeCost", Level::Medium)
+                     .level("meetingOverlapCost", Level::Medium)
+                     .level("roomConflictCost", Level::Medium);
+             }},
         };
     for (const auto &variant : variants)
     {
@@ -898,9 +916,327 @@ void verifyMediumIncremental()
         check(mismatches == 0,
               "medium " + variant.first
                   + ": 600 random moves, incremental == full recompute");
-        if (variant.first == "default" || variant.first == "weight 3")
+        if (variant.first == "default" || variant.first == "weight 3"
+            || variant.first == "onto medium")
             check(mediumSteps > 0,
                   variant.first + ": the walk visits medium states");
+    }
+    std::printf("\n");
+}
+
+// -------------------------------------------------------------------------
+// (j) Repeated components and offsets. A repeat is a fresh copy of a
+// default component (another defaultConstraints(), the one name kept, its
+// knobs re-stated) appended with addInstances(), as the Python bindings
+// build it from a pick list.
+// -------------------------------------------------------------------------
+ConstraintAssembly copyOf(const std::string &name)
+{
+    ConstraintAssembly copy = defaultConstraints();
+    copy.only({name});
+    return copy;
+}
+
+// The medium-level hand instance (12 grains x 2 rooms = 24 cells):
+// meetingEndTimeCost 3 in cell 0 and 5 in cell 5, meetingOverlapCost 2,
+// roomChangeCost 2, the two mediums 2 each; every hard cost 0.
+MeetingSchedule repeatInstance()
+{
+    MeetingSchedule s = makeBase(1, 12, {5, 5}, /*people*/ 2);
+    addMeeting(s, 4, {0}, {1}, 0, 0);
+    addMeeting(s, 4, {}, {0, 1}, 2, 1);
+    ScoreCalculator::prepare(s);
+    return s;
+}
+
+ConstraintAssembly repeatedAssembly()
+{
+    const char *mixed = "requiredAndPreferredAttendanceConflictCost";
+    const char *preferred = "preferredAttendanceConflictCost";
+    ConstraintAssembly assembly = defaultConstraints();
+    assembly.offset("meetingEndTimeCost", 4.0);
+    assembly.offset(preferred, 1.0).clip(preferred, false);
+    assembly.addInstances(std::move(copyOf("meetingEndTimeCost")
+                                        .weight("meetingEndTimeCost", 0.25)
+                                        .exponent("meetingEndTimeCost", 2.0)
+                                        .offset("meetingEndTimeCost", 10.0)
+                                        .clip("meetingEndTimeCost", false)));
+    // The literal copies of hard components sit on soft: hard refuses the
+    // literal formula with an offset (hard 0 must mean no violation). The
+    // hard copy is a threshold.
+    assembly.addInstances(std::move(copyOf("overtimeCost")
+                                        .soft("overtimeCost")
+                                        .weight("overtimeCost", 2.0)
+                                        .offset("overtimeCost", 1.0)
+                                        .clip("overtimeCost", false)));
+    assembly.addInstances(std::move(copyOf("overtimeCost")
+                                        .weight("overtimeCost", 2.0)
+                                        .offset("overtimeCost", 1.0)));
+    assembly.addInstances(std::move(copyOf("meetingOverlapCost")
+                                        .weight("meetingOverlapCost", 3.0)
+                                        .offset("meetingOverlapCost", -3.0)));
+    assembly.addInstances(std::move(copyOf("roomConflictCost")
+                                        .soft("roomConflictCost")
+                                        .offset("roomConflictCost", 2.0)
+                                        .clip("roomConflictCost", false)));
+    assembly.addInstances(
+        std::move(copyOf(mixed).weight(mixed, 2.0).offset(mixed, 1.5)));
+    // Repeats on their own levels: a soft unit component and a hard global
+    // one moved onto medium, a medium one onto hard, each shifted.
+    using optimaru::Level;
+    assembly.addInstances(std::move(copyOf("meetingEndTimeCost")
+                                        .level("meetingEndTimeCost", Level::Medium)
+                                        .offset("meetingEndTimeCost", 6.0)));
+    assembly.addInstances(std::move(copyOf("roomConflictCost")
+                                        .level("roomConflictCost", Level::Medium)
+                                        .weight("roomConflictCost", 2.0)
+                                        .offset("roomConflictCost", 1.0)
+                                        .clip("roomConflictCost", false)));
+    assembly.addInstances(std::move(
+        copyOf(preferred).level(preferred, Level::Hard).offset(preferred, 2.0)));
+    return assembly;
+}
+
+void verifyRepeatsAndOffsets()
+{
+    std::printf("== (j) Repeated components, offset / clip ==\n");
+    {
+        MeetingSchedule s = repeatInstance();
+        ConstraintAssembly assembly = copyOf("meetingEndTimeCost");
+        assembly.addInstances(std::move(copyOf("meetingEndTimeCost")
+                                            .weight("meetingEndTimeCost", 0.5)
+                                            .exponent("meetingEndTimeCost", 2.0)));
+        DecomposedCalculator calculator;
+        assembly.into(calculator);
+        checkScore("end time + 0.5 x end time^2: -(8 + 17)",
+                   scoreWith(calculator, s), 0, -25.0);
+        const auto entries = calculator.constraintCosts();
+        check(entries.size() == 2 && entries[0].unitCosts == entries[1].unitCosts
+                  && entries[0].unitCosts.size() == 24
+                  && entries[1].weight == 0.5 && entries[1].exponent == 2.0
+                  && entries[1].defaultWeight == 1.0,
+              "two instances, the same 24 raw cells, each with its own knobs");
+    }
+    {
+        MeetingSchedule s = repeatInstance();
+        DecomposedCalculator threshold;
+        copyOf("meetingEndTimeCost")
+            .offset("meetingEndTimeCost", 4.0)
+            .into(threshold);
+        checkScore("unit threshold offset 4: (5 - 4) in one cell",
+                   scoreWith(threshold, s), 0, -1.0);
+        DecomposedCalculator literal;
+        copyOf("meetingEndTimeCost")
+            .offset("meetingEndTimeCost", 4.0)
+            .clip("meetingEndTimeCost", false)
+            .into(literal);
+        checkScore("unit literal offset 4: -1 + 1 + 22 empty cells x -4",
+                   scoreWith(literal, s), 0, 88.0);
+        DecomposedCalculator negative;
+        copyOf("meetingEndTimeCost")
+            .offset("meetingEndTimeCost", -1.0)
+            .into(negative);
+        checkScore("unit threshold offset -1: the two non-zero cells + 1",
+                   scoreWith(negative, s), 0, -10.0);
+        DecomposedCalculator global;
+        copyOf("meetingOverlapCost")
+            .offset("meetingOverlapCost", 5.0)
+            .clip("meetingOverlapCost", false)
+            .into(global);
+        checkScore("global literal offset 5: 10 x (2 - 5)",
+                   scoreWith(global, s), 0, 30.0);
+        // A hard pick rounds per cell: end time 3 and 5 beyond the threshold
+        // 2.5 are 0.5 -> 1 and 2.5 -> 3, -4 hard.
+        DecomposedCalculator hard;
+        copyOf("meetingEndTimeCost")
+            .hard("meetingEndTimeCost")
+            .offset("meetingEndTimeCost", 2.5)
+            .into(hard);
+        checkScore("hard unit threshold offset 2.5: llround(0.5) + llround(2.5) = 4 hard",
+                   scoreWith(hard, s), -4, 0.0);
+        // The literal overtime pick on soft charges every cell, 3 x (0 - 0.5)
+        // = -1.5 in each of the 24, not rounded: +36 soft. On medium (which
+        // folds into soft) it is allowed too: +36 medium.
+        DecomposedCalculator soft;
+        copyOf("overtimeCost")
+            .soft("overtimeCost")
+            .weight("overtimeCost", 3.0)
+            .offset("overtimeCost", 0.5)
+            .clip("overtimeCost", false)
+            .into(soft);
+        checkScore("soft unit literal offset 0.5 at weight 3: 24 x 1.5",
+                   scoreWith(soft, s), 0, 36.0);
+        const auto literalMedium = levelsWith(copyOf("overtimeCost")
+                                                  .level("overtimeCost", optimaru::Level::Medium)
+                                                  .weight("overtimeCost", 3.0)
+                                                  .offset("overtimeCost", 0.5)
+                                                  .clip("overtimeCost", false),
+                                              s);
+        check(literalMedium.hard == 0 && literalMedium.medium == 36.0
+                  && literalMedium.soft == 0.0,
+              "medium unit literal offset 0.5 at weight 3: +36 medium (into soft)");
+        // The medium level: a threshold and a repeat stay medium.
+        const char *preferred = "preferredAttendanceConflictCost";
+        const auto shifted
+            = levelsWith(copyOf(preferred).offset(preferred, 1.0), s);
+        check(shifted.hard == 0 && shifted.medium == -1.0 && shifted.soft == 0.0,
+              "medium threshold offset 1: (2 - 1) medium");
+        ConstraintAssembly twice = copyOf(preferred);
+        twice.addInstances(std::move(copyOf(preferred).weight(preferred, 2.0)));
+        const auto repeated = levelsWith(std::move(twice), s);
+        check(repeated.hard == 0 && repeated.medium == -6.0
+                  && repeated.soft == 0.0,
+              "a repeated medium pick: 2 + 2 x 2 medium");
+        // Each repeat on its own level: end time soft (3 + 5), again on
+        // medium beyond 4 (5 - 4 = 1) and on hard at weight 2 beyond 4 (2).
+        using optimaru::Level;
+        ConstraintAssembly levels = copyOf("meetingEndTimeCost");
+        levels.addInstances(std::move(copyOf("meetingEndTimeCost")
+                                          .level("meetingEndTimeCost", Level::Medium)
+                                          .offset("meetingEndTimeCost", 4.0)));
+        levels.addInstances(std::move(copyOf("meetingEndTimeCost")
+                                          .level("meetingEndTimeCost", Level::Hard)
+                                          .weight("meetingEndTimeCost", 2.0)
+                                          .offset("meetingEndTimeCost", 4.0)));
+        const auto onLevels = levelsWith(std::move(levels), s);
+        check(onLevels.hard == -2 && onLevels.medium == -1.0
+                  && onLevels.soft == -8.0,
+              "one component repeated on three levels: -2 hard, -1 medium, -8 soft");
+    }
+    {
+        // On hard (its default level, or moved there) the literal formula
+        // with an offset is refused at reset, whichever sign and setter
+        // order: +0.5 would reward the 24 cells without overtime (+48 hard,
+        // cancelling other hard violations), -0.5 would charge them.
+        auto resetRefusal = [](ConstraintAssembly assembly) {
+            MeetingSchedule s = repeatInstance();
+            DecomposedCalculator calculator;
+            assembly.into(calculator);
+            try
+            {
+                scoreWith(calculator, s);
+            }
+            catch (const std::logic_error &error)
+            {
+                return std::string(error.what());
+            }
+            return std::string();
+        };
+        auto refusal = [](const std::string &name) {
+            return "Constraint '" + name
+                   + "' cannot use clip=false with a non-zero offset on a level "
+                     "that counts toward the hard score (hard 0 must mean no "
+                     "violation)";
+        };
+        check(resetRefusal(copyOf("overtimeCost")
+                               .offset("overtimeCost", 0.5)
+                               .clip("overtimeCost", false))
+                      == refusal("overtimeCost")
+                  && resetRefusal(copyOf("overtimeCost")
+                                      .clip("overtimeCost", false)
+                                      .offset("overtimeCost", -0.5))
+                         == refusal("overtimeCost"),
+              "overtime literal offset +-0.5 on hard: refused at reset");
+        const char *preferred = "preferredAttendanceConflictCost";
+        check(resetRefusal(copyOf("roomConflictCost")
+                               .offset("roomConflictCost", 2.0)
+                               .clip("roomConflictCost", false))
+                      == refusal("roomConflictCost")
+                  && resetRefusal(copyOf(preferred)
+                                      .offset(preferred, 1.0)
+                                      .clip(preferred, false)
+                                      .hard(preferred))
+                         == refusal(preferred),
+              "a global hard literal offset, and a medium one moved to hard "
+              "afterwards: refused at reset");
+        ConstraintAssembly repeated = copyOf("overtimeCost");
+        repeated.addInstances(std::move(copyOf("overtimeCost")
+                                            .offset("overtimeCost", 0.5)
+                                            .clip("overtimeCost", false)));
+        check(resetRefusal(std::move(repeated)) == refusal("overtimeCost"),
+              "a literal hard repeat next to the default: refused at reset");
+        check(resetRefusal(copyOf("overtimeCost").offset("overtimeCost", 0.5)).empty()
+                  && resetRefusal(copyOf("overtimeCost").clip("overtimeCost", false))
+                         .empty()
+                  && resetRefusal(copyOf(preferred)
+                                      .offset(preferred, 1.0)
+                                      .clip(preferred, false))
+                         .empty(),
+              "overtime: a threshold offset or clip=false with offset 0 on hard, "
+              "and a literal offset on the medium level (into soft), are allowed");
+    }
+    {
+        // Random walk: incremental == a fresh calculator of the same assembly.
+        MeetingSchedule s = buildRandomInstance(/*meetings*/ 14, /*seed*/ 23);
+        ScoreCalculator::prepare(s);
+        DecomposedCalculator calculator;
+        repeatedAssembly().into(calculator);
+        optimaru::ScoreDirector<MeetingSchedule> director(s, calculator);
+        std::mt19937_64 rng(321);
+        std::uniform_real_distribution<double> unit(0.0, 1.0);
+        const int assignmentCount
+            = static_cast<int>(s.meetingAssignments.size());
+        int mismatches = 0;
+        int mediumSteps = 0;
+        const int steps = 1500;
+        for (int step = 0; step < steps; ++step)
+        {
+            const int assignment = static_cast<int>(rng() % assignmentCount);
+            const int value = unit(rng) < 0.1
+                                  ? -1
+                                  : static_cast<int>(rng() % s.grainRoomCount());
+            director.changeVariable(assignment, value);
+            MeetingSchedule shadow = s;
+            DecomposedCalculator fresh;
+            repeatedAssembly().into(fresh);
+            const Score full = scoreWith(fresh, shadow);
+            if (fresh.levelScores().medium != 0.0)
+                ++mediumSteps;
+            const Score incremental = director.calculateScore();
+            if (!optimaru::scoresAgree(incremental, full))
+            {
+                if (++mismatches <= 3)
+                {
+                    std::printf("  MISMATCH @step %d: incremental=%s full=%s\n",
+                                step,
+                                incremental.toString().c_str(),
+                                full.toString().c_str());
+                }
+            }
+        }
+        check(mismatches == 0,
+              std::to_string(steps)
+                  + " random moves with repeated, shifted components: "
+                    "incremental == fresh");
+        check(mediumSteps > 0, "the walk visits medium states");
+    }
+    {
+        MeetingSchedule s = buildRandomInstance(/*meetings*/ 8, /*seed*/ 29);
+        Solver::Config config;
+        config.spentLimit = std::chrono::seconds(2);
+        config.randomSeed = 5;
+        config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+        config.ruinRecreateUnimprovedStepTrigger = 200;
+        config.ruinRecreatePolishSteps = 100;
+        DecomposedCalculator calculator;
+        repeatedAssembly().into(calculator);
+        bool corrupted = false;
+        try
+        {
+            Solver solver(config);
+            solver.solve(s, calculator);
+        }
+        catch (const optimaru::ScoreCorruptionError &e)
+        {
+            corrupted = true;
+            std::printf("  ScoreCorruptionError: %s\n", e.what());
+        }
+        check(!corrupted,
+              "2s FULL_ASSERT solve with repeated, shifted components");
+        DecomposedCalculator fresh;
+        repeatedAssembly().into(fresh);
+        check(!corrupted && sameScore(s.score, scoreWith(fresh, s)),
+              "the reported score == a fresh recompute of the same assembly");
     }
     std::printf("\n");
 }
@@ -919,6 +1255,7 @@ int main()
     verifyCatalog();
     verifyMediumLevel();
     verifyMediumIncremental();
+    verifyRepeatsAndOffsets();
 
     if (failures == 0)
     {

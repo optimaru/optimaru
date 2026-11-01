@@ -38,8 +38,9 @@ ctest --test-dir build/task-assigning
 | `unassigned_tasks_cost` | `UnassignedTasksCost` | soft[0] | **medium** | 1 | global: tasks on no employee's list |
 
 This is the `list_constraints()` order (the unit constraints first, the global
-`unassigned_tasks_cost` last). Every constraint is flippable (`level="hard"` / `level="soft"`),
-none is a reward and all six are scored by default (`default_enabled`);
+`unassigned_tasks_cost` last). Every constraint is flippable onto any of the three levels
+(`level="hard"`, `"medium"` or `"soft"`, or a `Level`), none is a reward and all six are
+scored by default (`default_enabled`);
 `task_assigning.constraint_info()` reports exactly this table from the C++ components
 (`kDefaultLevel` / `kDefaultWeight`).
 
@@ -59,8 +60,11 @@ is what keeps soft[1] above soft[2] (the `Score` adapter decodes `soft1 = soft /
 is 3 hard units (3 * 10^9 engine units) per missing skill, `UnassignedTasksCost(weight=3)` 3
 medium units per task. `UnassignedTasksCost(level="hard")` is
 one hard unit per unassigned task, `UnassignedTasksCost(level="soft")` one soft unit per
-unassigned task (outside the fold), in the engine and in CP-SAT alike. A selection without
-the medium constraint still folds the hard level by 10^9.
+unassigned task (outside the fold), in the engine and in CP-SAT alike. Any other constraint
+may move onto medium the same way: `SquaredMakespanCost(level="medium", weight=1)` charges
+one medium unit per squared minute, counted in the engine's hard level below the missing
+skills and rounded per employee like a hard term, and a repeated pick carries its own level.
+A selection without the medium constraint still folds the hard level by 10^9.
 
 **0.2.0:** the constraints were renamed — `no_missing_skills` -> `required_skill_cost`,
 `minimize_unassigned_tasks` -> `unassigned_tasks_cost`, `minimize_makespan` ->
@@ -87,6 +91,29 @@ engine. CP-SAT scores on the same three levels (`("hard", "medium", "soft")`) in
 skill, as in the engine); before, CP-SAT moved it to soft0. The folded CP-SAT objective no
 longer fits one int64 for the demo, so CP-SAT optimizes the three levels one after another
 (cpsat-common's staged solve).
+
+**0.3.0:** every constraint takes two more knobs, `offset` and `clip` (keyword-only), and
+may be picked several times. A raw cost `x` (per employee for the five unit constraints, on
+the one total for `unassigned_tasks_cost`) is shaped as `sign(x) * max(0, |x| - offset) **
+exponent` (`clip=True`, the default) or `(x - offset) ** exponent`, sign-preserving
+(`clip=False`, which charges every employee, an idle one included, and acts as a reward
+below the offset); `offset=0` is the 0.2.0 shaping. Both apply per employee (or on the
+global's total), not to the total violation. `clip=False` with an offset is refused on hard
+(`required_skill_cost` by default) and on medium (`unassigned_tasks_cost` by default),
+because medium folds below hard here, so it counts toward the hard score, and hard 0 must
+mean no violation; use a threshold (`clip=True`) there, or move the pick to soft. Each pick
+is its own instance with its own knobs, and the instances add up:
+
+```python
+ta.solve(solution, constraints=[
+    *get_constraints(),
+    CriticalPriorityTaskEndTimeCost(exponent=2, offset=120),  # + (critical end times beyond 120)^2
+])
+```
+
+`ta.constraint_costs(solution, picks)` keys the second pick
+`critical_priority_task_end_time_cost#2`. The CP-SAT reference takes integral offsets on
+every constraint (one term per employee, one for the global total).
 
 ## Starting from an existing solution
 

@@ -272,8 +272,10 @@ class Solver:
     ) -> None:
         """Score the same solve with a caller-chosen constraint set
         (see pdp_routing.constraints). The given list replaces the default set;
-        None keeps the default set. plan.score and on_new_best report the three
-        levels unfolded, so a soft total of 10^9 or more stays soft."""
+        None keeps the default set. A name may be picked several times: each pick is
+        its own instance with its own knobs, and the instances add up. plan.score and
+        on_new_best report the three levels unfolded, so a soft total of 10^9 or more
+        stays soft."""
 
 def list_constraints() -> list[str]:
     """Constraint names scored by this domain (default assembly order, snake_case):
@@ -282,16 +284,26 @@ def list_constraints() -> list[str]:
     pickup_before_dropoff_cost, unassigned_requests_cost).
     The same names pdp_routing.constraints uses."""
 
-def constraint_costs(plan: PdpRoutePlan) -> dict[str, dict[str, Any]]:
-    """Per-constraint, per-unit **raw** costs — before weight/exponent/level rounding.
-    A unit is a vehicle (plus the unassigned pool as the last unit); a global
+def constraint_costs(
+    plan: PdpRoutePlan, constraints: Iterable[Any] | None = ...
+) -> dict[str, dict[str, Any]]:
+    """Per-constraint, per-unit **raw** costs — before weight/exponent/offset/level
+    rounding. A unit is a vehicle (plus the unassigned pool as the last unit); a global
     constraint reports one cost. `pdp_routing.constraints.score()` takes these and
     produces a score:
-    {name: {"costs": [...], "weight": float, "exponent": float, "hard": bool,
-    "global": bool, "level": "hard" | "medium" | "soft", "reward": bool,
-    "level_flippable": bool, "name": str, "label": str,
-    "medium_fold": {"kind": "into_soft", "unit": 1e9}}}. The medium fold belongs
-    to the domain, so EVERY entry carries it."""
+    {key: {"costs": [...], "weight": float, "exponent": float, "offset": float,
+    "clip": bool, "hard": bool, "global": bool, "level": "hard" | "medium" | "soft",
+    "reward": bool, "level_flippable": bool, "name": str, "label": str,
+    "default_weight": float, "default_level": str, "units": [...],
+    "medium_fold": {"kind": "into_soft", "unit": 1e9}}}. None = the default
+    constraints; a pick list (as for solve_with_constraints) scores exactly those
+    picks, each entry carrying its pick's knobs, the k-th pick of a name keyed
+    "<name>#<k>" from the second on. "units" (the per-vehicle constraints) lists the
+    vehicle indices the constraint evaluates, so the literal offset (clip=False)
+    charges every vehicle, an idle one included, and not the pool;
+    required_vehicle_cost and squared_order_age_cost price the pool too and carry no
+    "units" (every unit counts). The medium fold belongs to the domain, so EVERY entry
+    carries it."""
 
 class ConstraintInfo(NamedTuple):
     """One constraint-catalog row, read off the C++ default assembly."""

@@ -12,6 +12,15 @@
 //   (h) raw costs by hand per constraint (positive and zero) through
 //       constraintCosts(), unit granularity included
 //   (i) the catalog: names, order, levels, weights, flippability
+//   (j) repeated components and the offset / clip knobs: hand-calculated
+//       repeats of a per-station and a global rule, threshold and literal
+//       offsets by hand (literal mode charges every evaluated station, an
+//       empty one included; the scoped maxStationsCost and
+//       forbiddenTaskStationsCost charge only their scoped stations; a global
+//       shapes its one total), the literal formula refused on hard at reset
+//       and kept on soft, incremental == a fresh recompute over random move
+//       sequences and a FULL_ASSERT solve with repeated, shifted components
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -468,6 +477,379 @@ void verifyCatalog()
     std::printf("\n");
 }
 
+// -------------------------------------------------------------------------
+// (j) Repeated components and offsets. A repeat is a fresh copy of a
+// default component (another defaultConstraints(), the one name kept, its
+// knobs re-stated) appended with addInstances(), as the Python bindings
+// build it from a pick list.
+// -------------------------------------------------------------------------
+ConstraintAssembly copyOf(const std::string &name)
+{
+    ConstraintAssembly copy = defaultConstraints();
+    copy.only({name});
+    return copy;
+}
+
+// The defaults (workload switched on) with two of them shifted by a
+// threshold, plus repeats of the scoped per-task rules (one literal, one a
+// fractional threshold), the pairwise delta rule (negative literal), the
+// no-delta capacity rule and the four globals (precedence literal), and
+// repeats on the other level than their default: the literal copies of hard
+// rules on soft (hard refuses the literal formula with an offset), among
+// them the station bounds and the scoped forbidden stations (fractional
+// weight), and the used stations promoted to hard (threshold).
+ConstraintAssembly repeatedAssembly()
+{
+    ConstraintAssembly assembly = defaultConstraints();
+    assembly.weight("workloadImbalanceCost", 1.0);
+    assembly.offset("stationCapacityCost", 1.0);
+    assembly.offset("taskPrecedenceCost", 1.0);
+    assembly.addInstances(std::move(copyOf("taskPrecedenceCost")
+                                        .soft("taskPrecedenceCost")
+                                        .offset("taskPrecedenceCost", 1.0)
+                                        .clip("taskPrecedenceCost", false)));
+    assembly.addInstances(std::move(copyOf("maxStationsCost")
+                                        .soft("maxStationsCost")
+                                        .weight("maxStationsCost", 2.0)
+                                        .offset("maxStationsCost", 1.0)
+                                        .clip("maxStationsCost", false)));
+    assembly.addInstances(std::move(copyOf("forbiddenTaskStationsCost")
+                                        .weight("forbiddenTaskStationsCost", 3.0)
+                                        .offset("forbiddenTaskStationsCost", 0.5)));
+    assembly.addInstances(std::move(copyOf("differentStationPairsCost")
+                                        .soft("differentStationPairsCost")
+                                        .offset("differentStationPairsCost", -1.0)
+                                        .clip("differentStationPairsCost", false)));
+    assembly.addInstances(std::move(copyOf("stationCapacityCost").exponent("stationCapacityCost", 2.0)));
+    assembly.addInstances(std::move(
+        copyOf("sameStationGroupsCost").exponent("sameStationGroupsCost", 2.0).offset("sameStationGroupsCost", 1.0)));
+    assembly.addInstances(std::move(copyOf("usedStationsCost")
+                                        .weight("usedStationsCost", 0.25)
+                                        .exponent("usedStationsCost", 2.0)
+                                        .offset("usedStationsCost", 2.0)));
+    assembly.addInstances(std::move(copyOf("workloadImbalanceCost")
+                                        .weight("workloadImbalanceCost", 0.5)
+                                        .offset("workloadImbalanceCost", 3.0)
+                                        .clip("workloadImbalanceCost", false)));
+    assembly.addInstances(std::move(copyOf("taskStationBoundsCost")));
+    assembly.addInstances(std::move(copyOf("taskStationBoundsCost")
+                                        .soft("taskStationBoundsCost")
+                                        .weight("taskStationBoundsCost", 1.5)
+                                        .offset("taskStationBoundsCost", 1.0)
+                                        .clip("taskStationBoundsCost", false)));
+    assembly.addInstances(std::move(copyOf("forbiddenTaskStationsCost")
+                                        .soft("forbiddenTaskStationsCost")
+                                        .offset("forbiddenTaskStationsCost", 1.0)
+                                        .clip("forbiddenTaskStationsCost", false)));
+    assembly.addInstances(std::move(copyOf("usedStationsCost")
+                                        .hard("usedStationsCost")
+                                        .weight("usedStationsCost", 2.0)
+                                        .offset("usedStationsCost", 3.0)));
+    return assembly;
+}
+
+void verifyRepeatsAndOffsets()
+{
+    std::printf("== (j) Repeated components, offset / clip ==\n");
+    {
+        // Fixture H uses 3 stations: 3 + 10 x (3 - 2).
+        ConstraintAssembly assembly = copyOf("usedStationsCost");
+        assembly.addInstances(
+            std::move(copyOf("usedStationsCost").weight("usedStationsCost", 10.0).offset("usedStationsCost", 2.0)));
+        AssemblyLineBalancingProblem p = fixtureH();
+        ScoreCalculator::prepare(p);
+        DecomposedCalculator calculator;
+        assembly.into(calculator);
+        calculator.resetWorkingSolution(p);
+        check(sameScore(calculator.calculateScore(), Score{0, -13.0}), "used stations + 10 x (used - 2): -13 soft");
+        const auto entries = calculator.constraintCosts();
+        check(entries.size() == 2 && entries[0].unitCosts == entries[1].unitCosts && entries[1].weight == 10.0
+                  && entries[1].offset == 2.0 && entries[0].offset == 0.0 && entries[1].defaultWeight == 1.0,
+              "two global instances, the same total, each with its own knobs");
+    }
+    {
+        // Station bounds [1, 0, 0, 1] + 2 x their square per station.
+        ConstraintAssembly assembly = copyOf("taskStationBoundsCost");
+        assembly.addInstances(std::move(
+            copyOf("taskStationBoundsCost").weight("taskStationBoundsCost", 2.0).exponent("taskStationBoundsCost", 2.0)));
+        check(sameScore(scoreWith(std::move(assembly), fixtureH()), Score{-6, 0.0}),
+              "station bounds + 2 x bounds^2 per station: -6 hard");
+    }
+    {
+        // Each instance on its own level: the soft default used stations (3)
+        // next to a hard repeat, 2 x (3 - 1) beyond its offset.
+        ConstraintAssembly assembly = copyOf("usedStationsCost");
+        assembly.addInstances(std::move(copyOf("usedStationsCost")
+                                            .hard("usedStationsCost")
+                                            .weight("usedStationsCost", 2.0)
+                                            .offset("usedStationsCost", 1.0)));
+        AssemblyLineBalancingProblem p = fixtureH();
+        ScoreCalculator::prepare(p);
+        DecomposedCalculator calculator;
+        assembly.into(calculator);
+        calculator.resetWorkingSolution(p);
+        check(sameScore(calculator.calculateScore(), Score{-4, -3.0}),
+              "soft used stations + a hard repeat beyond 1: -4 hard / -3 soft");
+        const auto entries = calculator.constraintCosts();
+        check(entries.size() == 2 && entries[0].level == optimaru::Level::Soft
+                  && entries[1].level == optimaru::Level::Hard && entries[1].defaultLevel == optimaru::Level::Soft,
+              "the repeat reports its own level, the default stays soft");
+        // The scoped forbidden stations, hard by default, with a soft literal
+        // repeat: 2 x (x - 2) on its stations 0 and 1 only: 2 x (-2 - 1).
+        ConstraintAssembly scoped = copyOf("forbiddenTaskStationsCost");
+        scoped.addInstances(std::move(copyOf("forbiddenTaskStationsCost")
+                                          .soft("forbiddenTaskStationsCost")
+                                          .weight("forbiddenTaskStationsCost", 2.0)
+                                          .offset("forbiddenTaskStationsCost", 2.0)
+                                          .clip("forbiddenTaskStationsCost", false)));
+        check(sameScore(scoreWith(std::move(scoped), fixtureH()), Score{-1, 6.0}),
+              "hard forbidden stations + a soft literal repeat on its two stations: -1 hard / +6 soft");
+    }
+    {
+        // Fixture H, V = 4: capacity [0, 0, 0, 1] at weight 3, offset 0.5.
+        // The hard threshold rounds per station: 1.5 -> 2 on station 3, the
+        // others stay 0. The literal formula is refused on hard, so it is
+        // checked on soft, unrounded: 1.5 on station 3, -1.5 on the others.
+        check(sameScore(scoreWith(copyOf("stationCapacityCost")
+                                      .weight("stationCapacityCost", 3.0)
+                                      .offset("stationCapacityCost", 0.5),
+                                  fixtureH()),
+                        Score{-2, 0.0}),
+              "hard threshold offset 0.5 at weight 3, rounded per station: -2 hard");
+        check(sameScore(scoreWith(copyOf("stationCapacityCost")
+                                      .soft("stationCapacityCost")
+                                      .weight("stationCapacityCost", 3.0)
+                                      .offset("stationCapacityCost", 0.5)
+                                      .clip("stationCapacityCost", false),
+                                  fixtureH()),
+                        Score{0, 3.0}),
+              "soft literal offset 0.5 at weight 3: 1.5 - 3 x 1.5 -> +3 soft");
+        check(sameScore(scoreWith(copyOf("stationCapacityCost").offset("stationCapacityCost", -1.0), fixtureH()),
+                        Score{-2, 0.0}),
+              "threshold offset -1 adds to the non-zero station only");
+        check(sameScore(scoreWith(copyOf("stationCapacityCost")
+                                      .soft("stationCapacityCost")
+                                      .offset("stationCapacityCost", -1.0)
+                                      .clip("stationCapacityCost", false),
+                                  fixtureH()),
+                        Score{0, -5.0}),
+              "soft literal offset -1 adds to every station: 3 x 1 + 2");
+        // Scoped: maxStationsCost evaluates station 3 only (raw 1),
+        // forbiddenTaskStationsCost stations 0 and 1 (raw 0, 1).
+        check(sameScore(scoreWith(copyOf("maxStationsCost")
+                                      .soft("maxStationsCost")
+                                      .offset("maxStationsCost", 2.0)
+                                      .clip("maxStationsCost", false),
+                                  fixtureH()),
+                        Score{0, 1.0}),
+              "soft max stations literal offset 2: (1 - 2) on its one station");
+        check(sameScore(scoreWith(copyOf("forbiddenTaskStationsCost")
+                                      .soft("forbiddenTaskStationsCost")
+                                      .offset("forbiddenTaskStationsCost", 2.0)
+                                      .clip("forbiddenTaskStationsCost", false),
+                                  fixtureH()),
+                        Score{0, 3.0}),
+              "soft forbidden stations literal offset 2: (0 - 2) + (1 - 2) on its two stations");
+        check(sameScore(scoreWith(copyOf("usedStationsCost").offset("usedStationsCost", 5.0).clip("usedStationsCost", false),
+                                  fixtureH()),
+                        Score{0, 2.0}),
+              "used stations literal offset 5: 3 - 5, a reward");
+    }
+    {
+        // Fixture Z: every hard term 0. The scoped components report their
+        // units, and a literal offset charges -offset on exactly those.
+        AssemblyLineBalancingProblem p = fixtureZ();
+        ScoreCalculator::prepare(p);
+        DecomposedCalculator calculator;
+        defaultConstraints().into(calculator);
+        calculator.resetWorkingSolution(p);
+        calculator.calculateScore();
+        bool unitsOk = true;
+        for (const auto &entry : calculator.constraintCosts())
+        {
+            if (entry.name == "maxStationsCost")
+                unitsOk = unitsOk && entry.scoped && entry.units == std::vector<int>{3};
+            else if (entry.name == "forbiddenTaskStationsCost")
+                unitsOk = unitsOk && entry.scoped && entry.units == std::vector<int>({0, 1});
+            else
+                unitsOk = unitsOk && !entry.scoped;
+        }
+        check(p.stationCount == 4 && unitsOk, "scoped units: max stations [3], forbidden stations [0, 1]");
+        check(sameScore(scoreWith(copyOf("maxStationsCost")
+                                      .soft("maxStationsCost")
+                                      .offset("maxStationsCost", 5.0)
+                                      .clip("maxStationsCost", false),
+                                  fixtureZ()),
+                        Score{0, 5.0}),
+              "an all-zero max stations, soft literal offset 5: one evaluated station, +5");
+        check(sameScore(scoreWith(copyOf("forbiddenTaskStationsCost")
+                                      .soft("forbiddenTaskStationsCost")
+                                      .offset("forbiddenTaskStationsCost", 5.0)
+                                      .clip("forbiddenTaskStationsCost", false),
+                                  fixtureZ()),
+                        Score{0, 10.0}),
+              "an all-zero forbidden stations, soft literal offset 5: two evaluated stations, +10");
+    }
+    {
+        // On hard the literal formula with an offset is refused at reset,
+        // whichever sign and setter order, for a hard default (per station,
+        // scoped and global) and for the soft used stations moved to hard:
+        // on fixture Z (every hard term 0) +5 would reward the scoped
+        // stations (+5 hard, cancelling another violation), -5 would charge
+        // stations that hold no violation.
+        auto refusal = [](const std::string &name) {
+            return "Constraint '" + name
+                   + "' cannot use clip=false with a non-zero offset on a level that counts "
+                     "toward the hard score (hard 0 must mean no violation)";
+        };
+        auto resetRefusal = [](ConstraintAssembly assembly) {
+            try
+            {
+                scoreWith(std::move(assembly), fixtureZ());
+            }
+            catch (const std::logic_error &error)
+            {
+                return std::string(error.what());
+            }
+            return std::string();
+        };
+        check(resetRefusal(copyOf("stationCapacityCost")
+                               .offset("stationCapacityCost", 5.0)
+                               .clip("stationCapacityCost", false))
+                      == refusal("stationCapacityCost")
+                  && resetRefusal(copyOf("stationCapacityCost")
+                                      .clip("stationCapacityCost", false)
+                                      .offset("stationCapacityCost", -5.0))
+                         == refusal("stationCapacityCost"),
+              "station capacity literal offset +-5 on hard: refused at reset");
+        check(resetRefusal(copyOf("maxStationsCost").offset("maxStationsCost", 5.0).clip("maxStationsCost", false))
+                  == refusal("maxStationsCost"),
+              "scoped max stations literal offset on hard: refused at reset");
+        check(resetRefusal(copyOf("taskPrecedenceCost")
+                               .offset("taskPrecedenceCost", 1.0)
+                               .clip("taskPrecedenceCost", false))
+                  == refusal("taskPrecedenceCost"),
+              "task precedence (a global) literal offset on hard: refused at reset");
+        check(resetRefusal(copyOf("usedStationsCost")
+                               .offset("usedStationsCost", 5.0)
+                               .clip("usedStationsCost", false)
+                               .hard("usedStationsCost"))
+                  == refusal("usedStationsCost"),
+              "used stations literal offset moved to hard afterwards: refused at reset");
+        ConstraintAssembly repeated = copyOf("stationCapacityCost");
+        repeated.addInstances(std::move(copyOf("stationCapacityCost")
+                                            .offset("stationCapacityCost", 1.0)
+                                            .clip("stationCapacityCost", false)));
+        check(resetRefusal(std::move(repeated)) == refusal("stationCapacityCost"),
+              "a hard literal repeat next to the default: refused at reset");
+        check(resetRefusal(copyOf("stationCapacityCost").offset("stationCapacityCost", 5.0)).empty()
+                  && resetRefusal(copyOf("stationCapacityCost").clip("stationCapacityCost", false)).empty()
+                  && resetRefusal(copyOf("stationCapacityCost")
+                                      .offset("stationCapacityCost", 5.0)
+                                      .clip("stationCapacityCost", false)
+                                      .soft("stationCapacityCost"))
+                         .empty(),
+              "station capacity: a threshold offset or clip=false with offset 0 on hard, and the "
+              "literal offset on soft, are allowed");
+    }
+    {
+        // Random walks: incremental == a fresh calculator of the same assembly.
+        int mismatches = 0;
+        double drift = 0.0;
+        for (std::uint64_t seed = 1; seed <= 6; ++seed)
+        {
+            AssemblyLineBalancingProblem p = randomInstance(12 + static_cast<int>(seed), seed);
+            ScoreCalculator::prepare(p);
+            DecomposedCalculator calculator;
+            repeatedAssembly().into(calculator);
+            optimaru::ScoreDirector<AssemblyLineBalancingProblem> director(p, calculator);
+            std::mt19937_64 rng(900 + seed);
+            std::uniform_real_distribution<double> unit(0.0, 1.0);
+            const int n = p.taskCount();
+            const int values = p.stationCount;
+            for (int step = 0; step < 500; ++step)
+            {
+                const double kind = unit(rng);
+                if (kind < 0.55)
+                {
+                    const int t = static_cast<int>(rng() % n);
+                    director.changeVariable(t, unit(rng) < 0.1 ? -1 : static_cast<int>(rng() % values));
+                }
+                else if (kind < 0.85)
+                {
+                    const int a = static_cast<int>(rng() % n);
+                    const int b = static_cast<int>(rng() % n);
+                    const int va = p.tasks[a].station;
+                    const int vb = p.tasks[b].station;
+                    director.beginVariableChanges();
+                    director.changeVariable(a, vb);
+                    director.changeVariable(b, va);
+                    director.endVariableChanges();
+                }
+                else
+                {
+                    const int victim = static_cast<int>(rng() % values);
+                    director.beginVariableChanges();
+                    for (int t = 0; t < n; ++t)
+                    {
+                        if (p.tasks[t].station == victim)
+                            director.changeVariable(t, static_cast<int>(rng() % values));
+                    }
+                    director.endVariableChanges();
+                }
+                const Score incremental = director.calculateScore();
+                AssemblyLineBalancingProblem shadow = p;
+                DecomposedCalculator fresh;
+                repeatedAssembly().into(fresh);
+                fresh.resetWorkingSolution(shadow);
+                const Score full = fresh.calculateScore();
+                drift = std::max(drift, std::fabs(full.soft - incremental.soft));
+                // The engine's FULL_ASSERT rule (scoresAgree): hard exact,
+                // soft within 1e-6 (the fractional weights accumulate ulps).
+                if (!optimaru::scoresAgree(incremental, full) && ++mismatches <= 3)
+                    std::printf("  MISMATCH seed %llu step %d: incremental=%s full=%s\n",
+                                static_cast<unsigned long long>(seed), step, incremental.toString().c_str(),
+                                full.toString().c_str());
+            }
+        }
+        std::printf("    largest soft drift %.3g\n", drift);
+        check(mismatches == 0,
+              "3000 random moves with repeated, shifted components on both levels: incremental == fresh");
+    }
+    {
+        AssemblyLineBalancingProblem p = randomInstance(14, 91);
+        p.precedences.clear();
+        for (int t = 1; t < p.taskCount(); t += 2)
+            p.precedences.push_back({t - 1, t});
+        Solver::Config config;
+        config.spentLimit = std::chrono::seconds(30);
+        config.stepCountLimit = 1500;
+        config.randomSeed = 4;
+        config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+        config.ruinRecreateUnimprovedStepTrigger = 100;
+        config.ruinRecreatePolishSteps = 50;
+        DecomposedCalculator calculator;
+        repeatedAssembly().into(calculator);
+        bool corrupted = false;
+        try
+        {
+            Solver(config).solve(p, calculator);
+        }
+        catch (const optimaru::ScoreCorruptionError &e)
+        {
+            corrupted = true;
+            std::printf("  ScoreCorruptionError: %s\n", e.what());
+        }
+        check(!corrupted, "FULL_ASSERT solve with repeated, shifted components");
+        DecomposedCalculator fresh;
+        repeatedAssembly().into(fresh);
+        fresh.resetWorkingSolution(p);
+        check(!corrupted && optimaru::scoresAgree(p.score, fresh.calculateScore()),
+              "the reported score == a fresh recompute of the same assembly");
+    }
+    std::printf("\n");
+}
+
 }  // namespace
 
 int main()
@@ -481,6 +863,7 @@ int main()
     verifyAssemblyBuilder();
     verifyRawCostsByHand();
     verifyCatalog();
+    verifyRepeatsAndOffsets();
 
     if (failures == 0)
     {

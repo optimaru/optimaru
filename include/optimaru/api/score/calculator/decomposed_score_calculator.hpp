@@ -63,16 +63,62 @@ inline double shapeCost(double cost, double exponent) {
     return cost < 0.0 ? -std::pow(-cost, exponent) : std::pow(cost, exponent);
 }
 
-// One contribution: weight * shapeCost(cost, exponent), and exactly 0 at
-// weight 0 without shaping the cost at all. An opt-in constraint left at
-// weight 0 contributes nothing whatever its exponent: shaping first would
-// give 0 * inf = NaN once cost^exponent leaves the double range, and that
-// NaN would be refused as a non-finite contribution (level.hpp, rule 1).
-// Every contribution the calculator computes goes through here; the Python
-// score() mirror (_constraint.py _contribution) follows the same rule.
+// The full shaping of one raw cost x (one unit of a unit constraint, or a
+// global constraint's single total) with the exponent, offset and clip knobs.
+// This is the canonical statement of the formula; the other comments refer
+// here.
+//
+//   clip = true  (threshold, the default):
+//       sign(x) * max(0, |x| - offset) ^ exponent
+//       Only the part of |x| beyond the offset counts; x = 0 stays 0 at any
+//       offset (sign(0) = 0). A negative offset adds |offset| to every
+//       non-zero x: a fixed charge per non-zero unit, so the shaping jumps
+//       at x = 0 (see shapingJumpsAtZero).
+//   clip = false (the literal formula):
+//       shapeCost(x - offset, exponent)
+//       Every evaluated unit counts, a raw 0 included: below the offset the
+//       shaped value is negative, i.e. a reward ((x - 10)^3 at offset 10).
+//
+// The formula applies per evaluated unit (per vehicle, per slot, ...), not
+// once over the total violation. offset = 0 is shapeCost(x, exponent) in both
+// modes, bit for bit (the 0.2.0 shaping). The Python mirror (_constraint.py
+// shape) is the same formula, step for step, so both give the same double.
+inline double shapeCost(double cost, double exponent, double offset, bool clip) {
+    if (offset == 0.0) return shapeCost(cost, exponent);
+    if (!clip) return shapeCost(cost - offset, exponent);
+    if (cost == 0.0) return 0.0;
+    const double excess = std::fabs(cost) - offset;
+    if (!(excess > 0.0)) return 0.0;
+    const double shaped = shapeCost(excess, exponent);
+    return cost < 0.0 ? -shaped : shaped;
+}
+
+// Is the shaping discontinuous at x = 0? Only the threshold with a negative
+// offset is: 0 at x == 0 exactly, |offset|^exponent just beside it. Every
+// other combination is continuous there, so a rounding residue on a raw cost
+// that should be 0 (raw + d - d with real-valued deltas) shifts its
+// contribution by a rounding residue too. Here it would be charged the whole
+// fixed charge, so the calculator gives such a constraint its raw costs
+// exactly, as cost() computes them, instead of accumulating deltas
+// (compileUnitDispatch, and the previews: resetWorkingSolution).
+inline bool shapingJumpsAtZero(double offset, bool clip) { return clip && offset < 0.0; }
+
+// One contribution: weight * shapeCost(cost, exponent[, offset, clip]), and
+// exactly 0 at weight 0 without shaping the cost at all. An opt-in
+// constraint left at weight 0 contributes nothing whatever its exponent or
+// offset: shaping first would give 0 * inf = NaN once cost^exponent leaves
+// the double range, and that NaN would be refused as a non-finite
+// contribution (level.hpp, rule 1). Every contribution the calculator
+// computes goes through here; the Python score() mirror (_constraint.py
+// _contribution) follows the same rule.
 inline double weightedCost(double weight, double cost, double exponent) {
     if (weight == 0.0) return 0.0;
     return weight * shapeCost(cost, exponent);
+}
+inline double weightedCost(double weight, double cost, double exponent, double offset,
+                           bool clip) {
+    if (weight == 0.0) return 0.0;
+    return weight * shapeCost(cost, exponent, offset, clip);
 }
 
 // Calculator-owned, type-erased state shared by related constraints. The
@@ -101,6 +147,44 @@ struct SharedConstraintContext {
 template <typename Solution>
 struct UnitConstraint;
 
+// The sign rule's exception. A constraint whose raw cost can be negative on
+// the problem's data although it is not a reward (a signed objective, such as
+// quadratic assignment's unvalidated cost matrices: rawCostCanBeNegative) can
+// no more count toward the hard score than a reward can, because a negative
+// hard contribution cancels another violation and an infeasible solution
+// could score hard 0. Whether it can be negative depends on the data, so the
+// calculator checks it at reset (DecomposedScoreCalculator::validateLevel,
+// on the level in effect, hard or a below_hard medium). constraint() is the
+// registry name; what() names it. The Python bindings raise ValueError with
+// message(pythonName(constraint()), level()), word for word the text of the
+// Python score() mirror (_constraint.py _check_signed), on every path that
+// resets a calculator (python/constraint_binding.hpp).
+class SignedCostLevelError : public std::invalid_argument {
+public:
+    SignedCostLevelError(std::string constraint, Level level)
+        : std::invalid_argument(text("Constraint '" + constraint + "'", level)),
+          constraint_(std::move(constraint)),
+          level_(level) {}
+
+    const std::string& constraint() const noexcept { return constraint_; }
+    Level level() const noexcept { return level_; }
+
+    // The Python text, the constraint named the way the caller spells it.
+    static std::string message(const std::string& constraint, Level level) {
+        return text("constraint '" + constraint + "'", level);
+    }
+
+private:
+    static std::string text(const std::string& who, Level level) {
+        const std::string head = who + " can have a negative raw cost on this problem (a bonus) ";
+        if (level == Level::Hard) return head + "and cannot be hard";
+        return head + "and cannot be medium here, where medium counts toward the hard score";
+    }
+
+    std::string constraint_;
+    Level level_;
+};
+
 // Assembly-time metadata of one constraint, shared by the unit and global
 // bases. None of it is part of the cost: a component declares its defaults
 // (static constexpr kDefaultWeight / kDefaultLevel, passed to the base
@@ -118,8 +202,15 @@ struct ConstraintMetadata {
     // the constraint off it (re-stating the level it already has is fine).
     bool levelFlippable = true;
     // Applied BEFORE the weight: contribution = weight * shapeCost(cost,
-    // exponent), per unit for a UnitConstraint, on the total for a global.
+    // exponent, offset, clip), per unit for a UnitConstraint, on the total
+    // for a global (see shapeCost above for the formula).
     double exponent = 1.0;
+    // The shift of the shaping (any finite sign; 0 = none) and its mode
+    // (clip = true the threshold, false the literal formula): see shapeCost
+    // for the formula and python::checkLiteralOffset for the hard-0 rule,
+    // which validateLevel enforces at reset.
+    double offset = 0.0;
+    bool clip = true;
     // Display text for ONE instance of a parametrized constraint that a
     // domain may add several times under the same registry name
     // (employee-scheduling "dayPatternCost" for pattern "A,OFF,B"). Empty =
@@ -163,6 +254,8 @@ struct ConstraintMetadata {
     //                levelFlippable is false keeps its level (re-stating the
     //                level it already has is a no-op)
     //   setExponent  finite and > 0
+    //   setOffset    finite (any sign)
+    //   setClip      any bool
     void setWeight(double newWeight) {
         if (!std::isfinite(newWeight) || newWeight < 0.0) {
             throw std::invalid_argument("Constraint '" + name + "' weight must be finite and >= 0");
@@ -187,6 +280,13 @@ struct ConstraintMetadata {
         }
         exponent = newExponent;
     }
+    void setOffset(double newOffset) {
+        if (!std::isfinite(newOffset)) {
+            throw std::invalid_argument("Constraint '" + name + "' offset must be finite");
+        }
+        offset = newOffset;
+    }
+    void setClip(bool newClip) { clip = newClip; }
 
 protected:
     ~ConstraintMetadata() = default;
@@ -210,6 +310,10 @@ struct ListPiece {
 // collected automatically at reset; groups of two or more replace their
 // individual deltaCost() calls with one evaluate() call. The group must write
 // one raw marginal cost to `deltas[index]` for every index it owns.
+// hasIntegralRawDeltas() = every delta it writes is a whole number (counts,
+// minutes): the calculator then folds hard members at an integral weight
+// directly, and keeps members whose shaping jumps at 0 (shapingJumpsAtZero)
+// on the group path, since whole deltas below 2^53 accumulate exactly.
 template <typename Solution>
 struct UnitConstraintDeltaGroup {
     virtual ~UnitConstraintDeltaGroup() = default;
@@ -222,8 +326,9 @@ struct UnitConstraintDeltaGroup {
                           int entity, double* deltas) = 0;
 };
 
-// A cost that is a sum of independent per-unit terms. The exponent shapes
-// each unit's raw cost before the weight.
+// A cost that is a sum of independent per-unit terms. The exponent, offset
+// and clip shape each unit's raw cost before the weight (shapeCost), every
+// unit the constraint evaluates (all of them, or its scopedUnits()).
 //
 //   struct FacilityCapacityCost final : optimaru::UnitConstraint<Problem> {
 //       static constexpr double kDefaultWeight = 1.0;
@@ -257,7 +362,12 @@ struct UnitConstraint : ConstraintMetadata {
     // cost as `raw ± deltaCost(...)` instead of re-running cost() over the
     // whole unit — O(members) or O(1) per move instead of O(members^2) for
     // pairwise costs. Shaping (exponent) and weight are applied on top of the
-    // raw aggregate, so shaped constraints keep the fast path too.
+    // raw aggregate, so shaped constraints keep the fast path too. One
+    // exception: an instance whose shaping jumps at 0 (the threshold with a
+    // negative offset, shapingJumpsAtZero) is re-costed with cost() instead,
+    // since a rounding residue of the accumulated raw would be charged in
+    // full; only a compiled group with integral raw deltas, which accumulate
+    // exactly, keeps it on the delta path.
     //
     // deltaCost returns the marginal raw cost of `entity` belonging to the
     // unit given the OTHER members: implementations iterating `members` must
@@ -284,7 +394,10 @@ struct UnitConstraint : ConstraintMetadata {
     // cannot settle): the calculator then materializes the list and asks
     // cost(). The sums live in a SharedConstraintContext refreshed through
     // its onListChanged() hook, so several components share one refresh.
-    // FULL_ASSERT checks every preview against the applied score.
+    // FULL_ASSERT checks every preview against the applied score. An instance
+    // whose shaping jumps at 0 (shapingJumpsAtZero) is never asked: sums can
+    // round where cost() does not, so its previews always run cost() on the
+    // written-out list, which is exactly what the applied path computes.
     virtual bool supportsPiecewisePreview() const { return false; }
     virtual bool piecewiseCost(const Solution& /*solution*/, int /*unit*/,
                                const ListPiece* /*pieces*/, int /*count*/,
@@ -298,12 +411,30 @@ struct UnitConstraint : ConstraintMetadata {
     // scoped to a subset (e.g. a per-worker rule): the calculator then visits it
     // only for those units and skips it everywhere else. The skip is exact ONLY
     // if cost()/deltaCost() are guaranteed 0 for every unit not in the list.
+    //
+    // The list is also the set of units the constraint EVALUATES (nullptr =
+    // every unit): the literal offset formula (clip = false) charges
+    // shapeCost(0 - offset) to an evaluated unit whose raw cost is 0 and
+    // nothing to a unit outside the scope. constraintCosts() reports the set
+    // (`units`), so the Python mirror and the CP-SAT references charge the
+    // same units.
     virtual const std::vector<int>* scopedUnits() const { return nullptr; }
+
+    // Optional sign contract. A cost is >= 0 by the sign convention, a
+    // reward's <= 0. Return true when, on `solution`'s data, this
+    // constraint's raw cost can also be negative although it is not a reward
+    // (a signed objective over data that is not validated >= 0): the
+    // calculator then refuses it, at reset, on a level that counts toward the
+    // hard score (SignedCostLevelError), as it refuses a hard reward, and
+    // constraintCosts() reports it (`signedCost`). Asked at reset only while
+    // the instance sits on such a level, and by constraintCosts(); it reads
+    // the problem's facts, not the assignment.
+    virtual bool rawCostCanBeNegative(const Solution& /*solution*/) const { return false; }
 
     // Optional structural grouping contract. Constraints returning the same
     // non-empty key are compiled into one delta evaluator when at least two
-    // compatible constraints are present. Metadata (weight, level, exponent)
-    // remains calculator-owned and therefore fully customizable.
+    // compatible constraints are present. Metadata (weight, level, exponent,
+    // offset, clip) remains calculator-owned and therefore fully customizable.
     virtual const char* deltaGroupKey() const { return nullptr; }
     virtual std::unique_ptr<UnitConstraintDeltaGroup<Solution>> createDeltaGroup() const {
         return nullptr;
@@ -332,8 +463,18 @@ struct PreviewedUnit {
 
 // A cost that does NOT decompose per unit (a statistic across units, e.g.
 // load balancing). It maintains its own aggregates: notified once per touched
-// unit, asked for the closed-form total at scoring time. The exponent shapes
-// that single total.
+// unit, asked for the closed-form total at scoring time. The exponent, offset
+// and clip shape that single total.
+//
+// The calculator never accumulates a global's total: it asks cost() (or
+// previewCost()) at every score, so the total is exactly what the global's
+// own aggregates give. That matters for a threshold with a negative offset,
+// whose shaping jumps at 0 (shapingJumpsAtZero): a global whose total can be
+// fractional should not keep it as a running sum of real-valued differences,
+// or a total that should be 0 may carry a rounding residue that is charged
+// the whole |offset|^exponent. Integral aggregates (counts, int64 sums) and
+// totals recomputed from the members are exact; every global in this
+// repository's use cases is one of those.
 template <typename Solution>
 struct GlobalConstraint : ConstraintMetadata {
     GlobalConstraint(std::string constraintName, double constraintWeight, Level constraintLevel)
@@ -354,6 +495,10 @@ struct GlobalConstraint : ConstraintMetadata {
         onUnitChanged(solution, unit, members);
     }
     virtual double cost() const = 0;
+
+    // The sign contract of UnitConstraint::rawCostCanBeNegative, for the
+    // single total.
+    virtual bool rawCostCanBeNegative(const Solution& /*solution*/) const { return false; }
 
     // Optional LIST-kind preview contract. The calculator serves the engine's
     // move previews (see IncrementalScoreCalculator) by re-costing the touched
@@ -429,7 +574,7 @@ public:
     }
 
     void resetWorkingSolution(Solution& workingSolution) override {
-        validateLevels();
+        validateLevels(workingSolution);
         solution_ = &workingSolution;
         if (profUnitNs_.empty() && !unitConstraints_.empty()) {
             prof_ = std::getenv("ES_PROFILE") != nullptr;
@@ -461,7 +606,6 @@ public:
         cacheHard_.assign(cells, 0);
         cacheSoft_.assign(cells, 0.0);
         deltaCapable_.resize(unitConstraints_.size());
-        hasNonDeltaConstraints_ = false;
         for (auto& [key, context] : sharedContexts_) {
             (void) key;
             context->beginReset();
@@ -470,20 +614,25 @@ public:
         // constraint at weight 0 (an opt-in objective left off) is not asked
         // during a preview at all: its contribution is 0 whatever it answers,
         // and some such costs are the most expensive in an assembly. The
-        // applied path still costs it, since rawUnitCosts() reports it.
+        // applied path still costs it, since rawUnitCosts() reports it. An
+        // instance whose shaping jumps at 0 previews through cost() on the
+        // written-out candidate, never its piecewise answer (see
+        // UnitConstraint::piecewiseCost), so a preview's raw is the applied
+        // one exactly.
         piecewise_.resize(unitConstraints_.size());
         for (std::size_t c = 0; c < unitConstraints_.size(); ++c) {
-            deltaCapable_[c] = unitConstraints_[c]->supportsDelta();
-            hasNonDeltaConstraints_ |= !deltaCapable_[c];
+            const UnitConstraint<Solution>& constraint = *unitConstraints_[c];
+            deltaCapable_[c] = constraint.supportsDelta();
             unitConstraints_[c]->onReset(workingSolution);
-            piecewise_[c] = unitConstraints_[c]->supportsPiecewisePreview();
+            piecewise_[c] = constraint.supportsPiecewisePreview() &&
+                            !shapingJumpsAtZero(constraint.offset, constraint.clip);
         }
         resetDeltaGroups(workingSolution);
         compileUnitDispatch();
         // Global dispatch partition: supportsMemberChange() is a capability
         // query (stable within one solve, like supportsDelta()/scopedUnits()),
         // so it is sampled once here instead of twice per member-change event.
-        // Score-time metadata (weight/exponent/level) is sampled here too —
+        // Score-time metadata (weight/exponent/offset/clip/level) is sampled here too —
         // metadata overrides take effect at reset, when the cached per-unit
         // contributions are rebuilt against them anyway.
         memberChangeGlobals_.clear();
@@ -503,7 +652,8 @@ public:
             globalScore_.push_back({pointer, pointer->weight, pointer->exponent,
                                     pointer->level == Level::Hard,
                                     pointer->level == Level::Medium,
-                                    pointer->supportsPiecewisePreview()});
+                                    pointer->supportsPiecewisePreview(), pointer->offset,
+                                    pointer->clip});
         }
         deltaGroupPtrs_.clear();
         for (const auto& group : deltaGroups_) deltaGroupPtrs_.push_back(group.get());
@@ -583,8 +733,10 @@ public:
         // variable notifications.  Taking a per-unit transaction snapshot in
         // that case only duplicates work on every evaluated move.  Keep the
         // snapshot path for assemblies containing full re-cost constraints,
-        // whose expensive rollback recalculation it is designed to avoid.
-        if (!hasNonDeltaConstraints_) return;
+        // whose expensive rollback recalculation it is designed to avoid
+        // (an instance routed there for an exact raw included: the snapshot
+        // restores its exact cells).
+        if (!hasFullRecost_) return;
         trialActive_ = true;
         rollbackActive_ = false;
         savedUnitList_.clear();
@@ -628,7 +780,7 @@ public:
         for (int unit : dirtyUnitList_) {
             const std::vector<int>& members = members_[unit];
             if (!rollbackActive_) {
-                if (hasNonDeltaConstraints_) {
+                if (hasFullRecost_) {
                     const std::size_t base =
                             static_cast<std::size_t>(unit) * unitConstraints_.size();
                     const UnitDispatchEntry* entry = dispatch_.data() + dispatchStart_[unit];
@@ -666,7 +818,7 @@ public:
         double medium = mediumUnits_;
         double soft = softUnits_;
         for (const GlobalScoreEntry& entry : globalScore_) {
-            const double c = weightedCost(entry.weight, entry.constraint->cost(), entry.exponent);
+            const double c = globalContribution(entry, entry.constraint->cost());
             accumulate(entry, c, hard, medium, soft);
         }
         return foldScore(hard, medium, soft);
@@ -686,7 +838,7 @@ public:
         double medium = mediumUnits_;
         double soft = softUnits_;
         for (const GlobalScoreEntry& entry : globalScore_) {
-            const double c = weightedCost(entry.weight, entry.constraint->cost(), entry.exponent);
+            const double c = globalContribution(entry, entry.constraint->cost());
             accumulate(entry, c, hard, medium, soft);
         }
         checkSoftTotal(medium);
@@ -861,12 +1013,15 @@ public:
     }
 
     // Weighted total per constraint, for score explanation ("which constraint
-    // costs how much"). Cheap: sums the existing cache.
+    // costs how much"). Cheap: sums the existing cache. Like calculateScore()
+    // and constraintCosts(), it uses the knobs sampled at the last reset
+    // (SampledKnobs): an edit to a component after the reset takes effect,
+    // and is checked (validateLevel), at the next one.
     std::vector<ConstraintTotal> constraintTotals() const {
         std::vector<ConstraintTotal> totals;
         const std::size_t C = unitConstraints_.size();
         for (std::size_t c = 0; c < C; ++c) {
-            const Level level = unitConstraints_[c]->level;
+            const Level level = unitKnobs(c).level;
             double sum = 0.0;
             for (int u = 0; u < unitCount_; ++u) {
                 const std::size_t idx = static_cast<std::size_t>(u) * C + c;
@@ -877,9 +1032,13 @@ public:
             totals.push_back({unitConstraints_[c]->name, sum, level == Level::Hard, level,
                               unitConstraints_[c]->label});
         }
-        for (const auto& g : globalConstraints_) {
-            totals.push_back({g->name, weightedCost(g->weight, g->cost(), g->exponent),
-                              g->level == Level::Hard, g->level, g->label});
+        for (std::size_t g = 0; g < globalConstraints_.size(); ++g) {
+            const GlobalConstraint<Solution>& global = *globalConstraints_[g];
+            const SampledKnobs knobs = globalKnobs(g);
+            totals.push_back({global.name,
+                              weightedCost(knobs.weight, global.cost(), knobs.exponent,
+                                           knobs.offset, knobs.clip),
+                              knobs.level == Level::Hard, knobs.level, global.label});
         }
         return totals;
     }
@@ -898,14 +1057,29 @@ public:
     // BEFORE the weight (see applyRaw): a different exponent cannot be
     // recovered from a total. Global constraints own no unit, so they report
     // their single cost() as a one-element list.
+    //
+    // `units` names the units a SCOPED unit constraint evaluates
+    // (scopedUnits() != nullptr: the in-range indices, ascending, each once);
+    // the other cells of unitCosts are 0 and never evaluated. The literal
+    // offset formula (clip = false) charges every EVALUATED unit, a raw 0
+    // included, so a re-pricing caller needs that set: `scoped` is false and
+    // `units` empty for a constraint that evaluates every unit (and for every
+    // global).
+    //
+    // weight, exponent, level, offset and clip are the knobs the score uses,
+    // sampled at the last reset (SampledKnobs), as constraintTotals() reports
+    // them. `signedCost` is rawCostCanBeNegative() on the working solution's
+    // data (false before the first reset): the Python mirror refuses such an
+    // entry on a level that counts toward the hard score, as the calculator
+    // does at reset.
     struct ConstraintCosts {
         std::string name;
-        double weight;   // the assembly's current weight
+        double weight;   // the weight in effect (sampled at the last reset)
         double exponent;
         bool isHard;     // level == Level::Hard
         bool isGlobal;
         std::vector<double> unitCosts;
-        Level level;     // the assembly's current level
+        Level level;     // the level in effect (sampled at the last reset)
         bool reward;
         bool levelFlippable;
         std::string label;  // ConstraintMetadata::label (empty = none)
@@ -914,6 +1088,11 @@ public:
         // weight / level unless the assembly re-stated them.
         double defaultWeight;
         Level defaultLevel;
+        double offset = 0.0;  // the offset / clip in effect (sampled at the last reset)
+        bool clip = true;
+        bool scoped = false;
+        std::vector<int> units;
+        bool signedCost = false;
     };
     std::vector<ConstraintCosts> constraintCosts() const {
         std::vector<ConstraintCosts> out;
@@ -926,16 +1105,35 @@ public:
             for (int u = 0; u < unitCount_; ++u) {
                 costs.push_back(cacheRaw_[static_cast<std::size_t>(u) * C + c]);
             }
-            out.push_back({constraint.name, constraint.weight, constraint.exponent,
-                           constraint.level == Level::Hard, false, std::move(costs),
-                           constraint.level, constraint.reward, constraint.levelFlippable,
-                           constraint.label, constraint.defaultWeight,
-                           constraint.defaultLevel});
+            const SampledKnobs knobs = unitKnobs(c);
+            ConstraintCosts entry{constraint.name, knobs.weight, knobs.exponent,
+                                  knobs.level == Level::Hard, false, std::move(costs),
+                                  knobs.level, constraint.reward,
+                                  constraint.levelFlippable, constraint.label,
+                                  constraint.defaultWeight, constraint.defaultLevel,
+                                  knobs.offset, knobs.clip, false, {}};
+            entry.signedCost = solution_ != nullptr && constraint.rawCostCanBeNegative(*solution_);
+            if (const std::vector<int>* scope = constraint.scopedUnits()) {
+                entry.scoped = true;
+                for (int u : *scope) {
+                    if (u >= 0 && u < unitCount_) entry.units.push_back(u);
+                }
+                std::sort(entry.units.begin(), entry.units.end());
+                entry.units.erase(std::unique(entry.units.begin(), entry.units.end()),
+                                  entry.units.end());
+            }
+            out.push_back(std::move(entry));
         }
-        for (const auto& g : globalConstraints_) {
-            out.push_back({g->name, g->weight, g->exponent, g->level == Level::Hard, true,
-                           {g->cost()}, g->level, g->reward, g->levelFlippable, g->label,
-                           g->defaultWeight, g->defaultLevel});
+        for (std::size_t g = 0; g < globalConstraints_.size(); ++g) {
+            const GlobalConstraint<Solution>& global = *globalConstraints_[g];
+            const SampledKnobs knobs = globalKnobs(g);
+            ConstraintCosts entry{global.name, knobs.weight, knobs.exponent,
+                                  knobs.level == Level::Hard, true, {global.cost()}, knobs.level,
+                                  global.reward, global.levelFlippable, global.label,
+                                  global.defaultWeight, global.defaultLevel, knobs.offset,
+                                  knobs.clip, false, {}};
+            entry.signedCost = solution_ != nullptr && global.rawCostCanBeNegative(*solution_);
+            out.push_back(std::move(entry));
         }
         return out;
     }
@@ -959,11 +1157,17 @@ public:
 
 private:
     // Level sanity, checked at every reset because the metadata is mutable
-    // until then: a medium constraint needs a domain medium fold, and a
+    // until then (ConstraintAssembly::level / offset / clip, or the setters,
+    // in any order): a medium constraint needs a domain medium fold; a
     // reward can never be hard (its raw cost is <= 0, so a hard reward would
-    // push the hard score above 0).
+    // push the hard score above 0); the hard-0 rule (python::
+    // checkLiteralOffset): no clip false with an offset != 0 on a level that
+    // counts toward the hard score; and the sign rule (SignedCostLevelError):
+    // no instance whose raw cost can be negative on this problem
+    // (rawCostCanBeNegative) on such a level. The last one reads the data, so
+    // it is asked only of an instance that sits on such a level.
     template <typename Constraint>
-    static void validateLevel(const Constraint& constraint) {
+    static void validateLevel(const Constraint& constraint, const Solution& solution) {
         if (constraint.level == Level::Medium && !kMediumFold.hasMedium()) {
             throw std::logic_error("Constraint '" + constraint.name +
                                    "' is medium-level, but this domain declares no medium fold "
@@ -973,10 +1177,20 @@ private:
             throw std::logic_error("Constraint '" + constraint.name +
                                    "' is a reward and cannot be hard");
         }
+        if (!constraint.clip && constraint.offset != 0.0 &&
+            kMediumFold.countsTowardHard(constraint.level)) {
+            throw std::logic_error("Constraint '" + constraint.name +
+                                   "' cannot use clip=false with a non-zero offset on a level that "
+                                   "counts toward the hard score (hard 0 must mean no violation)");
+        }
+        if (!constraint.reward && kMediumFold.countsTowardHard(constraint.level) &&
+            constraint.rawCostCanBeNegative(solution)) {
+            throw SignedCostLevelError(constraint.name, constraint.level);
+        }
     }
-    void validateLevels() const {
-        for (const auto& constraint : unitConstraints_) validateLevel(*constraint);
-        for (const auto& constraint : globalConstraints_) validateLevel(*constraint);
+    void validateLevels(const Solution& solution) const {
+        for (const auto& constraint : unitConstraints_) validateLevel(*constraint, solution);
+        for (const auto& constraint : globalConstraints_) validateLevel(*constraint, solution);
     }
 
     // Folds one weighted contribution into the right accumulator (positive =
@@ -1049,7 +1263,8 @@ private:
         kGroupedHardInt = 0,  // grouped delta, hard, integral weight: direct fold
         kGroupedApply = 1,    // grouped delta folded through applyRaw (soft/shaped)
         kVirtualDelta = 2,    // per-constraint deltaCost() call
-        kFullRecost = 3,      // no delta contract: full cost() re-run
+        kFullRecost = 3,      // full cost() re-run: no delta contract, or a raw that
+                              // must be exact (shapingJumpsAtZero)
     };
     // One compiled dispatch entry: everything the hot path needs, contiguous
     // (the constraint pointer for the virtual call, the classification, and
@@ -1062,7 +1277,18 @@ private:
         std::uint8_t kind;
         bool isHard;
         bool isMedium;
+        // offset != 0: the shaping reads unitOffset_[c] / unitClip_[c]. A flag
+        // in the entry's padding, so an unshifted assembly (every 0.2.0 one)
+        // keeps its 32-byte entries and its plain weightedCost().
+        bool shifted;
     };
+
+    // One unit's shaped, weighted contribution (the knobs sampled at reset).
+    double unitContribution(const UnitDispatchEntry& entry, double raw) const {
+        if (!entry.shifted) return weightedCost(entry.weight, raw, entry.exponent);
+        return weightedCost(entry.weight, raw, entry.exponent, unitOffset_[entry.c],
+                            unitClip_[entry.c] != 0);
+    }
 
     // Compiles the per-unit dispatch table: one contiguous, pre-classified
     // entry per (unit, applicable constraint), so the per-event hot path is
@@ -1074,9 +1300,30 @@ private:
     // when many per-worker rules exist. All cost/save/restore loops iterate
     // this instead of [0,C), so scoped-out (unit,c) cells stay at their reset
     // value (0) forever, which is exactly their true cost.
+    //
+    // An instance whose shaping jumps at 0 (shapingJumpsAtZero: the threshold
+    // with a negative offset) needs its raw exactly as cost() gives it: a
+    // raw accumulated as cacheRaw_ + sign * delta (kGroupedApply,
+    // kVirtualDelta) can keep a residue of 1e-16 where it should be back at
+    // 0, which the shaping charges the whole |offset|^exponent. Such an
+    // instance takes kFullRecost instead, on the applies, in a batch
+    // (endVariableChanges) and through the trial snapshot (a rejected move
+    // restores the saved exact cells), like a constraint without a delta
+    // contract. The one exception is a member of a compiled group with
+    // integral raw deltas (hasIntegralRawDeltas: school timetabling's slot
+    // group, employee scheduling's assignment group): integral deltas below
+    // 2^53 accumulate exactly, so it keeps kGroupedApply. kGroupedHardInt
+    // never meets the case (it needs offset 0). Every other combination
+    // keeps its dispatch: clip=false with any offset and the threshold with
+    // offset >= 0 are continuous at 0, so a residue there stays a residue.
     void compileUnitDispatch() {
         const std::size_t C = unitConstraints_.size();
         std::vector<UnitDispatchEntry> metas(C);
+        unitOffset_.assign(C, 0.0);
+        unitClip_.assign(C, 1);
+        unitKnobs_.clear();
+        unitKnobs_.reserve(C);
+        hasFullRecost_ = false;
         for (std::size_t c = 0; c < C; ++c) {
             const UnitConstraint<Solution>& constraint = *unitConstraints_[c];
             UnitDispatchEntry& meta = metas[c];
@@ -1084,15 +1331,23 @@ private:
             meta.weight = constraint.weight;
             meta.exponent = constraint.exponent;
             meta.c = static_cast<std::uint32_t>(c);
+            const bool exactRaw = shapingJumpsAtZero(constraint.offset, constraint.clip);
             if (!deltaCapable_[c]) {
                 meta.kind = kFullRecost;
             } else if (groupedDelta_[c]) {
-                meta.kind = directGroupedHardDelta_[c] ? kGroupedHardInt : kGroupedApply;
+                meta.kind = directGroupedHardDelta_[c] ? kGroupedHardInt
+                            : exactRaw && !integralGroupedDelta_[c] ? kFullRecost
+                                                                    : kGroupedApply;
             } else {
-                meta.kind = kVirtualDelta;
+                meta.kind = exactRaw ? kFullRecost : kVirtualDelta;
             }
+            hasFullRecost_ |= meta.kind == kFullRecost;
             meta.isHard = constraint.level == Level::Hard;
             meta.isMedium = constraint.level == Level::Medium;
+            meta.shifted = constraint.offset != 0.0;
+            unitOffset_[c] = constraint.offset;
+            unitClip_[c] = constraint.clip ? 1 : 0;
+            unitKnobs_.push_back(liveKnobs(constraint));
         }
         std::vector<std::size_t> applyAll;
         for (std::size_t c = 0; c < C; ++c)
@@ -1136,13 +1391,17 @@ private:
 
     void refreshDirectGroupedHardDeltas() {
         std::fill(directGroupedHardDelta_.begin(), directGroupedHardDelta_.end(), 0);
+        std::fill(integralGroupedDelta_.begin(), integralGroupedDelta_.end(), 0);
         for (const auto& group : deltaGroups_) {
             if (!group->hasIntegralRawDeltas()) continue;
             for (std::size_t index : group->indexes()) {
                 const UnitConstraint<Solution>& constraint = *unitConstraints_[index];
+                integralGroupedDelta_[index] = 1;
+                // The direct fold adds weight * raw delta: exact only for an
+                // unshaped contribution (exponent 1, no offset).
                 directGroupedHardDelta_[index] =
                         constraint.level == Level::Hard && constraint.exponent == 1.0 &&
-                        std::isfinite(constraint.weight) &&
+                        constraint.offset == 0.0 && std::isfinite(constraint.weight) &&
                         std::trunc(constraint.weight) == constraint.weight;
             }
         }
@@ -1152,6 +1411,7 @@ private:
         deltaGroups_.clear();
         groupedDelta_.assign(unitConstraints_.size(), 0);
         directGroupedHardDelta_.assign(unitConstraints_.size(), 0);
+        integralGroupedDelta_.assign(unitConstraints_.size(), 0);
         groupedDeltaBuffer_.assign(unitConstraints_.size(), 0.0);
 
         std::vector<std::unique_ptr<UnitConstraintDeltaGroup<Solution>>> candidates;
@@ -1214,7 +1474,7 @@ private:
     // difference into the running totals.
     void applyRaw(int unit, const UnitDispatchEntry& entry, std::size_t idx, double raw) {
         cacheRaw_[idx] = raw;
-        const double value = weightedCost(entry.weight, raw, entry.exponent);
+        const double value = unitContribution(entry, raw);
         const std::string& name = entry.constraint->name;
         if (entry.isHard) {
             // Both cells are below 2^62 (rule 1), so their difference fits.
@@ -1506,7 +1766,7 @@ private:
                     materializeRun(i);  // this run only: the other may stay piecewise
                     raw = entry->constraint->cost(*solution_, unit, *changes[i].members);
                 }
-                const double value = weightedCost(entry->weight, raw, entry->exponent);
+                const double value = unitContribution(*entry, raw);
                 const std::string& name = entry->constraint->name;
                 if (entry->isHard) {
                     hard.add(roundHardContribution(value, name) - cacheHard_[idx]);
@@ -1528,7 +1788,7 @@ private:
                 materializeAll();
                 raw = entry.constraint->previewCost(*solution_, changes, count);
             }
-            const double c = weightedCost(entry.weight, raw, entry.exponent);
+            const double c = globalContribution(entry, raw);
             accumulate(entry, c, hard, medium, soft);
         }
         return foldScore(hard, medium, soft);
@@ -1574,7 +1834,42 @@ private:
         bool isHard;
         bool isMedium;
         bool piecewise;  // supportsPiecewisePreview(), sampled at reset
+        double offset;
+        bool clip;
     };
+
+    // One global's shaped, weighted total (the knobs sampled at reset).
+    static double globalContribution(const GlobalScoreEntry& entry, double raw) {
+        return weightedCost(entry.weight, raw, entry.exponent, entry.offset, entry.clip);
+    }
+
+    // The knobs of one instance as the score uses them: sampled at the last
+    // reset (compileUnitDispatch for a unit constraint, globalScore_ for a
+    // global), the component's own metadata for one added since or before any
+    // reset. constraintTotals() and constraintCosts() report these, so they
+    // explain calculateScore() even after a component was edited.
+    struct SampledKnobs {
+        double weight;
+        double exponent;
+        Level level;
+        double offset;
+        bool clip;
+    };
+    static SampledKnobs liveKnobs(const ConstraintMetadata& constraint) {
+        return {constraint.weight, constraint.exponent, constraint.level, constraint.offset,
+                constraint.clip};
+    }
+    SampledKnobs unitKnobs(std::size_t c) const {
+        return c < unitKnobs_.size() ? unitKnobs_[c] : liveKnobs(*unitConstraints_[c]);
+    }
+    SampledKnobs globalKnobs(std::size_t g) const {
+        if (g >= globalScore_.size() || globalScore_[g].constraint != globalConstraints_[g].get()) {
+            return liveKnobs(*globalConstraints_[g]);
+        }
+        const GlobalScoreEntry& entry = globalScore_[g];
+        const Level level = entry.isHard ? Level::Hard : entry.isMedium ? Level::Medium : Level::Soft;
+        return {entry.weight, entry.exponent, level, entry.offset, entry.clip};
+    }
 
     std::unordered_map<std::string, std::unique_ptr<SharedConstraintContext>> sharedContexts_;
     std::vector<SharedConstraintContext*> sharedContextList_;  // the same, insertion order
@@ -1593,12 +1888,16 @@ private:
     std::vector<UnitDispatchEntry> dispatch_;  // per unit: compiled entries, contiguous
     std::vector<std::size_t> dispatchStart_;   // unit -> [start, end) into dispatch_
     std::vector<char> deltaCapable_;  // supportsDelta() per unit constraint, cached at reset
+    std::vector<double> unitOffset_;  // per unit constraint: offset, sampled at reset
+    std::vector<char> unitClip_;      // per unit constraint: clip, sampled at reset
+    std::vector<SampledKnobs> unitKnobs_;  // per unit constraint: every knob, sampled at reset
     std::vector<char> piecewise_;     // supportsPiecewisePreview() per unit constraint
     std::vector<char> groupedDelta_;  // delta is supplied by a compiled structural group
     std::vector<char> directGroupedHardDelta_;
+    std::vector<char> integralGroupedDelta_;  // in a group with hasIntegralRawDeltas()
     std::vector<double> groupedDeltaBuffer_;
     bool deltaGroupsDirty_ = true;
-    bool hasNonDeltaConstraints_ = false;
+    bool hasFullRecost_ = false;  // some dispatch entry is kFullRecost (compileUnitDispatch)
 
     Solution* solution_ = nullptr;
     int unitCount_ = 0;

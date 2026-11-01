@@ -21,6 +21,15 @@
 //   (i) the catalog: defaultConstraints().info() equals every component's
 //       kDefaultWeight / kDefaultLevel / flippability, in constraintOrder();
 //       the structural constraints refuse soft() and accept hard()
+//   (j) repeated components and the offset / clip knobs: a hand-calculated
+//       repeat, threshold and literal offsets by hand on a global, a
+//       per-slot and a hard constraint (literal mode charges every slot),
+//       the literal formula refused on hard at reset (a structural one
+//       included) and kept on soft, incremental == a fresh recompute over a
+//       random walk and a
+//       FULL_ASSERT solve with repeated, shifted components — the repeated
+//       teacher-mask instances sharing the assembly's one TeacherMaskHub
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -1356,6 +1365,314 @@ void verifyCatalog()
     std::printf("\n");
 }
 
+// -------------------------------------------------------------------------
+// (j) Repeated components and offsets. A repeat is a fresh copy of a default
+// component (another defaultConstraints(hub), the one name kept, its knobs
+// re-stated) appended with addInstances(), as the Python bindings build it
+// from a pick list — every copy built on the SAME hub, so the teacher-mask
+// instances (repeats included) subscribe to one projection.
+// -------------------------------------------------------------------------
+ConstraintAssembly copyOf(const std::string &name,
+                          const std::shared_ptr<TeacherMaskHub> &hub)
+{
+    ConstraintAssembly copy = defaultConstraints(hub);
+    copy.only({name});
+    return copy;
+}
+
+// 1 day x 4 periods, one teacher and one class, lessons in periods 1 and 3:
+// teacherGapCost 1, teacherWorkdayCost 1, classGapCost 1, everything else 0.
+Timetable repeatInstance()
+{
+    const std::vector<int> grid{4};
+    Timetable t = makeGrid(grid);
+    addLesson(t, 0, 0, {0}, slotIdx(grid, 0, 1));
+    addLesson(t, 0, 1, {0}, slotIdx(grid, 0, 3));
+    ScoreCalculator::prepare(t);
+    return t;
+}
+
+ConstraintAssembly repeatedAssembly()
+{
+    const auto hub = std::make_shared<TeacherMaskHub>();
+    ConstraintAssembly assembly = defaultConstraints(hub);
+    assembly.offset("teacherGapCost", 1.0);
+    assembly.addInstances(copyOf("teacherGapCost", hub)
+                              .weight("teacherGapCost", 0.5)
+                              .exponent("teacherGapCost", 2.0)
+                              .offset("teacherGapCost", 2.0)
+                              .clip("teacherGapCost", false));
+    // The literal copies of hard components sit on soft: hard refuses the
+    // literal formula with an offset (hard 0 must mean no violation). The
+    // hard copies are thresholds.
+    assembly.addInstances(copyOf("teacherMaxPeriodsCost", hub)
+                              .soft("teacherMaxPeriodsCost")
+                              .weight("teacherMaxPeriodsCost", 2.0)
+                              .offset("teacherMaxPeriodsCost", 1.0)
+                              .clip("teacherMaxPeriodsCost", false));
+    assembly.addInstances(copyOf("teacherMaxPeriodsCost", hub)
+                              .weight("teacherMaxPeriodsCost", 2.0)
+                              .offset("teacherMaxPeriodsCost", 1.0));
+    assembly.addInstances(copyOf("teacherWorkdayCost", hub)
+                              .offset("teacherWorkdayCost", -1.0));
+    assembly.addInstances(copyOf("classGapCost", hub)
+                              .offset("classGapCost", 1.0)
+                              .clip("classGapCost", false));
+    assembly.addInstances(copyOf("avoidedPeriodCost", hub)
+                              .weight("avoidedPeriodCost", 2.0)
+                              .offset("avoidedPeriodCost", 1.0)
+                              .clip("avoidedPeriodCost", false));
+    assembly.addInstances(copyOf("teacherConflictCost", hub)
+                              .soft("teacherConflictCost")
+                              .offset("teacherConflictCost", 0.5)
+                              .clip("teacherConflictCost", false));
+    assembly.addInstances(copyOf("teacherConflictCost", hub)
+                              .offset("teacherConflictCost", 0.5));
+    assembly.addInstances(copyOf("unassignedLessonsCost", hub)
+                              .offset("unassignedLessonsCost", 1.0));
+    // Repeats on another level than their default: a soft one hard, a hard
+    // one soft, each shifted.
+    assembly.addInstances(copyOf("teacherGapCost", hub)
+                              .hard("teacherGapCost")
+                              .offset("teacherGapCost", 2.0));
+    assembly.addInstances(copyOf("classConflictCost", hub)
+                              .soft("classConflictCost")
+                              .weight("classConflictCost", 5.0)
+                              .offset("classConflictCost", -1.0)
+                              .clip("classConflictCost", false));
+    return assembly;
+}
+
+Score scoreWithAssembly(ConstraintAssembly assembly, Timetable &t)
+{
+    DecomposedCalculator calc;
+    std::move(assembly).into(calc);
+    calc.resetWorkingSolution(t);
+    return calc.calculateScore();
+}
+
+void verifyRepeatsAndOffsets()
+{
+    std::printf("== (j) Repeated components, offset / clip ==\n");
+    {
+        Timetable t = repeatInstance();
+        const auto hub = std::make_shared<TeacherMaskHub>();
+        ConstraintAssembly assembly = copyOf("teacherGapCost", hub);
+        assembly.addInstances(copyOf("teacherGapCost", hub)
+                                  .weight("teacherGapCost", 0.5)
+                                  .exponent("teacherGapCost", 2.0));
+        DecomposedCalculator calc;
+        std::move(assembly).into(calc);
+        calc.resetWorkingSolution(t);
+        const Score score = calc.calculateScore();
+        check(score.hard == 0 && score.soft == -(20.0 * 1 + 0.5 * 1.0),
+              "teacher gaps x 20 + 0.5 x gaps^2 on one hub: -(20 + 0.5)");
+        const auto entries = calc.constraintCosts();
+        check(entries.size() == 2 && entries[0].unitCosts == entries[1].unitCosts
+                  && entries[0].unitCosts == std::vector<double>{1.0}
+                  && entries[1].weight == 0.5 && entries[1].exponent == 2.0,
+              "two instances, the same raw total, each with its own knobs");
+    }
+    {
+        Timetable t = repeatInstance();
+        const auto hub = std::make_shared<TeacherMaskHub>();
+        auto soft = [&](ConstraintAssembly assembly)
+        { return scoreWithAssembly(std::move(assembly), t).soft; };
+        auto hard = [&](ConstraintAssembly assembly)
+        { return scoreWithAssembly(std::move(assembly), t).hard; };
+        check(soft(copyOf("teacherGapCost", hub)
+                       .offset("teacherGapCost", 0.5))
+                  == -20.0 * 0.5,
+              "global threshold offset 0.5: 20 x (1 - 0.5)");
+        check(soft(copyOf("teacherGapCost", hub)
+                       .offset("teacherGapCost", 2.0)
+                       .clip("teacherGapCost", false))
+                  == 20.0,
+              "global literal offset 2: 20 x (1 - 2), a reward");
+        check(soft(copyOf("avoidedPeriodCost", hub)
+                       .offset("avoidedPeriodCost", 1.0))
+                  == 0.0,
+              "per-slot threshold offset 1 on four empty slots: 0");
+        check(soft(copyOf("avoidedPeriodCost", hub)
+                       .offset("avoidedPeriodCost", 1.0)
+                       .clip("avoidedPeriodCost", false))
+                  == 5.0 * 4,
+              "per-slot literal offset 1: every one of the 4 slots, 5 x 1 each");
+        check(soft(copyOf("teacherWorkdayCost", hub)
+                       .offset("teacherWorkdayCost", -1.0))
+                  == -3.0 * 2,
+              "global threshold offset -1: 3 x (1 + 1)");
+        // A hard pick rounds its contribution: 3 x (1 - 0.5) = 1.5 -> 2.
+        checkCount("hard threshold offset 0.5 at weight 3 on teacher gaps: llround(1.5)",
+                   hard(copyOf("teacherGapCost", hub)
+                            .hard("teacherGapCost")
+                            .weight("teacherGapCost", 3.0)
+                            .offset("teacherGapCost", 0.5)),
+                   -2);
+        // The literal teacher-conflict pick on soft charges every slot,
+        // 3 x (0 - 0.5) = -1.5 in each of the 4, not rounded: +6 soft.
+        check(soft(copyOf("teacherConflictCost", hub)
+                       .soft("teacherConflictCost")
+                       .weight("teacherConflictCost", 3.0)
+                       .offset("teacherConflictCost", 0.5)
+                       .clip("teacherConflictCost", false))
+                  == 6.0,
+              "soft per-slot literal offset 0.5 at weight 3: 4 x 1.5");
+    }
+    {
+        // On hard (its default level, or moved there) the literal formula
+        // with an offset is refused at reset, whichever sign and setter
+        // order, a structural (non-flippable) constraint included: +0.5
+        // would reward the 4 slots without a teacher conflict (+8 hard,
+        // cancelling other hard violations), -0.5 would charge them.
+        const auto hub = std::make_shared<TeacherMaskHub>();
+        auto resetRefusal = [](ConstraintAssembly assembly) {
+            Timetable t = repeatInstance();
+            try
+            {
+                scoreWithAssembly(std::move(assembly), t);
+            }
+            catch (const std::logic_error &error)
+            {
+                return std::string(error.what());
+            }
+            return std::string();
+        };
+        auto refusal = [](const std::string &name) {
+            return "Constraint '" + name
+                   + "' cannot use clip=false with a non-zero offset on a level "
+                     "that counts toward the hard score (hard 0 must mean no "
+                     "violation)";
+        };
+        check(resetRefusal(copyOf("teacherConflictCost", hub)
+                               .offset("teacherConflictCost", 0.5)
+                               .clip("teacherConflictCost", false))
+                      == refusal("teacherConflictCost")
+                  && resetRefusal(copyOf("teacherConflictCost", hub)
+                                      .clip("teacherConflictCost", false)
+                                      .offset("teacherConflictCost", -0.5))
+                         == refusal("teacherConflictCost"),
+              "teacher-conflict literal offset +-0.5 on hard: refused at reset");
+        check(resetRefusal(copyOf("teacherGapCost", hub)
+                               .offset("teacherGapCost", 2.0)
+                               .clip("teacherGapCost", false)
+                               .hard("teacherGapCost"))
+                      == refusal("teacherGapCost")
+                  && resetRefusal(copyOf("fixedSlotsCost", hub)
+                                      .offset("fixedSlotsCost", 1.0)
+                                      .clip("fixedSlotsCost", false))
+                         == refusal("fixedSlotsCost")
+                  && resetRefusal(copyOf("parallelGroupsCost", hub)
+                                      .clip("parallelGroupsCost", false)
+                                      .offset("parallelGroupsCost", -1.0))
+                         == refusal("parallelGroupsCost"),
+              "a soft literal offset moved to hard, and the structural fixed "
+              "slots / parallel groups: refused at reset");
+        ConstraintAssembly repeated = copyOf("teacherConflictCost", hub);
+        repeated.addInstances(copyOf("teacherConflictCost", hub)
+                                  .offset("teacherConflictCost", 0.5)
+                                  .clip("teacherConflictCost", false));
+        check(resetRefusal(std::move(repeated)) == refusal("teacherConflictCost"),
+              "a literal hard repeat next to the default: refused at reset");
+        check(resetRefusal(copyOf("teacherConflictCost", hub)
+                               .offset("teacherConflictCost", 0.5))
+                      .empty()
+                  && resetRefusal(copyOf("teacherConflictCost", hub)
+                                      .clip("teacherConflictCost", false))
+                         .empty()
+                  && resetRefusal(copyOf("fixedSlotsCost", hub)
+                                      .offset("fixedSlotsCost", 1.0))
+                         .empty()
+                  && resetRefusal(copyOf("teacherConflictCost", hub)
+                                      .soft("teacherConflictCost")
+                                      .offset("teacherConflictCost", 0.5)
+                                      .clip("teacherConflictCost", false))
+                         .empty(),
+              "a threshold offset or clip=false with offset 0 on hard, and the "
+              "literal offset on soft, are allowed");
+    }
+    {
+        // Random walk: incremental == a fresh calculator of the same assembly.
+        Timetable t = buildRandomInstance(/*courseCount*/ 16, /*seed*/ 23);
+        ScoreCalculator::prepare(t);
+        DecomposedCalculator calc;
+        repeatedAssembly().into(calc);
+        optimaru::ScoreDirector<Timetable> director(t, calc);
+        std::mt19937_64 rng(321);
+        std::uniform_real_distribution<double> unit(0.0, 1.0);
+        const int lessonCount = static_cast<int>(t.lessons.size());
+        int mismatches = 0;
+        const int steps = 2000;
+        for (int step = 0; step < steps; ++step)
+        {
+            if (unit(rng) < 0.75)
+            {
+                const int lesson = static_cast<int>(rng() % lessonCount);
+                const int value = unit(rng) < 0.1
+                                      ? -1
+                                      : static_cast<int>(rng() % t.slotCount());
+                director.changeVariable(lesson, value);
+            }
+            else
+            {
+                const int a = static_cast<int>(rng() % lessonCount);
+                const int b = static_cast<int>(rng() % lessonCount);
+                const int va = t.lessons[a].slot;
+                const int vb = t.lessons[b].slot;
+                director.beginVariableChanges();
+                director.changeVariable(a, vb);
+                director.changeVariable(b, va);
+                director.endVariableChanges();
+            }
+            Timetable shadow = t;
+            const Score full = scoreWithAssembly(repeatedAssembly(), shadow);
+            const Score incremental = director.calculateScore();
+            if (!optimaru::scoresAgree(incremental, full))
+            {
+                if (++mismatches <= 3)
+                {
+                    std::printf("  MISMATCH @step %d: incremental=%s full=%s\n",
+                                step,
+                                incremental.toString().c_str(),
+                                full.toString().c_str());
+                }
+            }
+        }
+        check(mismatches == 0,
+              std::to_string(steps)
+                  + " random moves with repeated, shifted components: "
+                    "incremental == fresh");
+    }
+    {
+        Timetable t = buildRandomInstance(/*courseCount*/ 8, /*seed*/ 29);
+        Solver::Config config;
+        config.spentLimit = std::chrono::seconds(2);
+        config.randomSeed = 5;
+        config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+        config.ruinRecreateUnimprovedStepTrigger = 200;
+        config.ruinRecreatePolishSteps = 100;
+        DecomposedCalculator calc;
+        repeatedAssembly().into(calc);
+        bool corrupted = false;
+        try
+        {
+            Solver solver(config);
+            solver.solve(t, calc);
+        }
+        catch (const optimaru::ScoreCorruptionError &e)
+        {
+            corrupted = true;
+            std::printf("  ScoreCorruptionError: %s\n", e.what());
+        }
+        check(!corrupted,
+              "2s FULL_ASSERT solve with repeated, shifted components");
+        const Score fresh = scoreWithAssembly(repeatedAssembly(), t);
+        check(!corrupted && optimaru::scoresAgree(t.score, fresh),
+              "the reported score == a fresh recompute of the same assembly");
+    }
+    std::printf("\n");
+}
+
 }  // namespace
 
 int main()
@@ -1369,6 +1686,7 @@ int main()
     verifyRawCostsByHand();
     verifyCatalog();
     verifySampleScaleSolve();
+    verifyRepeatsAndOffsets();
 
     if (failures == 0)
     {

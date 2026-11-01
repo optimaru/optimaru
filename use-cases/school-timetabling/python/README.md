@@ -85,11 +85,11 @@ serialization mirrors live in `st_timetabling.models`.
 The default cost function is the monolithic incremental calculator (fast
 path), which scores every constraint above. Passing `constraints=` switches to
 the **plugin path** next to it: pick constraints per component, change their
-weights, change levels levels and drop some.
+weights, move them between hard and soft and drop some.
 
 ```python
 import st_timetabling as st
-from st_timetabling.constraints import Assembly, TeacherGapCost, get_constraints, class_conflict_cost
+from st_timetabling.constraints import Assembly, ClassConflictCost, TeacherGapCost, get_constraints
 
 print(st.list_constraints())  # the 17 constraint names, in catalog order
 
@@ -100,8 +100,12 @@ result = st.solve(
     constraints=Assembly().add("teacher_gap_cost", weight=40).drop("teacher_workday_cost"),
 )
 # The same entry point as every other use case: None = the defaults, a list replaces them.
+result = st.solve(problem_dict, time_limit_seconds=10.0, constraints=[ClassConflictCost(), TeacherGapCost(weight=40)])
+# A constraint may be picked several times: the defaults plus the teacher gaps beyond 3, squared.
 result = st.solve(
-    problem_dict, time_limit_seconds=10.0, constraints=get_constraints([class_conflict_cost, TeacherGapCost(weight=40)])
+    problem_dict,
+    time_limit_seconds=10.0,
+    constraints=[*get_constraints(), TeacherGapCost(weight=1, exponent=2, offset=3)],
 )
 ```
 
@@ -119,23 +123,44 @@ print(calc.constraint_totals())  # weighted cost per constraint: {name, label, c
 
 Rules:
 
-- Every spec and `add` take the three knobs: `weight` (None = the component
+- Every spec and `add` take the five knobs: `weight` (None = the component
   default: 1 for hard, 20/3/30/10/5/1 for the soft ones — never `weights=`,
   which belongs to the fast path and must stay at the defaults next to
   `constraints=`),
-  `level` (None keeps the default level, otherwise "hard" or "soft") and
-  `exponent` (sign-preserving power shaping). Bad names raise `ValueError`, a
-  wrong knob type `TypeError`, in the same words on the Python and the C++
-  path. `fixed_slots_cost` / `parallel_groups_cost` refuse `level="soft"`.
+  `level` (None keeps the default level, otherwise "hard" or "soft", or a
+  `Level`; this use case has no medium level, so "medium" raises `ValueError`),
+  `exponent` (sign-preserving power shaping) and the keyword-only `offset`
+  (`0.0`) / `clip` (`True`): with an offset, `clip=True` counts only what lies
+  beyond it (`max(0, c - offset) ** exponent`), `clip=False` shapes `c - offset`
+  as it is (every slot of a per-slot constraint is charged). `clip=False` with
+  an offset is refused on hard (the pick's level, or the default, the
+  structural `fixed_slots_cost` / `parallel_groups_cost` included), because
+  hard 0 must mean no violation: `ValueError: constraint 'teacher_conflict_cost':
+  clip=False with a non-zero offset cannot be hard, because hard 0 must mean no
+  violation; use clip=True (a threshold) or another level`. An `Assembly` holding
+  such a pick is refused where it is used (`canon.DecomposedCalculator`,
+  `solve`). Bad names raise `ValueError`, a wrong knob type `TypeError`, in the
+  same words on the Python and the C++ path. `fixed_slots_cost` /
+  `parallel_groups_cost` refuse `level="soft"`.
 - `Assembly.add` **replaces** an existing entry with the same name (override
-  semantics); a plain list goes through `get_constraints` (a name twice is a
-  `ValueError`); for summed duplicates use `canon.DecomposedCalculator.add`.
+  semantics: an Assembly holds each name once); a plain list goes through
+  `get_constraints`, where a name picked several times is one instance per
+  pick, each with its own knobs (`canon.constraint_costs(table, picks)` keys the
+  second `"<name>#2"`); `canon.DecomposedCalculator.add` adds another instance
+  too. **0.3.0** made both possible (repeats were a `ValueError` before) and
+  added `offset` / `clip`; `offset=0` is the 0.2.0 shaping. It also replaced
+  the `hard` knob by `level` (`hard=` raises `TypeError`), and each repeated
+  pick carries its own level: `[TeacherGapCost(), TeacherGapCost(level="hard",
+  offset=2)]` charges every gap on soft and the gaps beyond two on hard.
 - The default assembly matches the monolithic score **bit for bit** (gated by
   `tests/test_constraints.py` and the C++ `canonical_plugin_test`).
 - `penalties` in the `solve` response are always the canonical rescore (raw
   soft counts, independent of the assembly); `objective_value` uses the
-  assembly's effective soft weights (a picked soft constraint its weight, one
-  left out 0; any non-negative number). `status` follows the canonical hard
+  assembly's effective soft weights (a picked soft constraint its weight, the
+  sum of the instances' weights for one picked several times, one left out 0;
+  any non-negative number). Like the exponent, `offset` / `clip` shape the
+  search score only; `constraints.score(canon.constraint_costs(table, picks),
+  picks)` is the selection's exact score. `status` follows the canonical hard
   rescore too, so an assembly that demotes a hard constraint to soft and ends
   violating it is INFEASIBLE.
 - **`unassigned_lessons_cost` is the exception**: demoted to soft, unassigned

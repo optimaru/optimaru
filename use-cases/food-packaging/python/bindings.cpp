@@ -379,9 +379,11 @@ PYBIND11_MODULE(_core, m)
              py::call_guard<py::gil_scoped_release>())
         // Same solve, scored by a caller-chosen constraint set (see
         // food_packaging.constraints). The picks replace the defaults; None
-        // keeps them. schedule.score then reports the three levels the
-        // assembly put the terms on (a medium constraint with level='soft'
-        // lands on soft).
+        // keeps them. A name may be picked several times: every pick is its
+        // own instance (a fresh copy of the default component) with its own
+        // knobs. schedule.score then reports the three levels the assembly
+        // put the terms on (a medium constraint with level='soft' lands on
+        // soft).
         .def(
             "solve_with_constraints",
             [](Solver &solver,
@@ -390,7 +392,8 @@ PYBIND11_MODULE(_core, m)
             {
                 ScoreCalculator::prepare(schedule);
                 DecomposedCalculator calculator;
-                tfpy::applyConstraints(defaultConstraints(), constraints)
+                tfpy::applyConstraints([] { return defaultConstraints(); },
+                                       constraints)
                     .into(calculator);
                 py::gil_scoped_release release;
                 solver.solve(schedule, calculator);
@@ -398,25 +401,32 @@ PYBIND11_MODULE(_core, m)
             py::arg("schedule"),
             py::arg("constraints") = py::none());
 
-    // The raw per-unit costs of the default assembly on `schedule` — the input
+    // The raw per-unit costs of an assembly on `schedule` — the input
     // food_packaging.constraints.score() turns into a score. Scoring once is
     // enough: re-pricing any assembly is pure Python arithmetic on these.
     // Units are the lists (the packaging lines in order, then the unassigned
-    // pool); a global constraint has one entry. Every entry carries the
-    // domain's medium fold (into_soft, 10^10), which score() applies. Since
-    // 0.2.0 this is the only per-constraint surface (analyze() and
-    // ConstraintBreakdown are no longer bound).
+    // pool); a global constraint has one entry, and a per-line constraint
+    // lists the lines it evaluates as "units" (never the pool). Every entry
+    // carries the domain's medium fold (into_soft, 10^10), which score()
+    // applies. None = the default assembly; a pick list scores exactly those
+    // picks (applyConstraints), each entry carrying its pick's knobs, the
+    // k-th pick of a name keyed "<name>#<k>". Since 0.2.0 this is the only
+    // per-constraint surface (analyze() and ConstraintBreakdown are no longer
+    // bound).
     m.def(
         "constraint_costs",
-        [](PackagingSchedule &schedule)
+        [](PackagingSchedule &schedule, const py::object &constraints)
         {
             ScoreCalculator::prepare(schedule);
             DecomposedCalculator calculator;
-            defaultConstraints().into(calculator);
+            tfpy::applyConstraints([] { return defaultConstraints(); },
+                                   constraints)
+                .into(calculator);
             return tfpy::constraintCosts(calculator, schedule);
         },
         py::arg("schedule"),
-        "Raw per-unit cost of every constraint, before weight/exponent/level.");
+        py::arg("constraints") = py::none(),
+        "Raw per-unit cost of every constraint, before weight/exponent/offset/level.");
 
     // The constraint names this domain scores, in default-assembly order
     // (the unit constraints first, then the globals

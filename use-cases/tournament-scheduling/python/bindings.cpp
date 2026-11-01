@@ -286,7 +286,9 @@ PYBIND11_MODULE(_core, m)
              py::call_guard<py::gil_scoped_release>())
         // Same solve, scored by a caller-chosen constraint set (see
         // tournament_scheduling.constraints). The picks replace the defaults;
-        // None keeps them.
+        // None keeps them. A name may be picked several times: every pick is
+        // its own instance (a fresh copy of the default component) with its
+        // own knobs.
         .def(
             "solve_with_constraints",
             [](Solver &solver,
@@ -294,7 +296,8 @@ PYBIND11_MODULE(_core, m)
                const py::object &constraints)
             {
                 DecomposedCalculator calculator;
-                tfpy::applyConstraints(defaultConstraints(), constraints)
+                tfpy::applyConstraints([] { return defaultConstraints(); },
+                                       constraints)
                     .into(calculator);
                 py::gil_scoped_release release;
                 solver.solve(schedule, calculator);
@@ -302,20 +305,27 @@ PYBIND11_MODULE(_core, m)
             py::arg("schedule"),
             py::arg("constraints") = py::none());
 
-    // The raw per-unit costs of the default assembly on `schedule` — the input
+    // The raw per-unit costs of an assembly on `schedule` — the input
     // tournament_scheduling.constraints.score() turns into a score. Scoring
     // once is enough: re-pricing any assembly is pure Python arithmetic on
-    // these.
+    // these. The scoped team_unavailability_cost lists the teams it evaluates
+    // (those with an unavailability fact) as "units". None = the default
+    // assembly; a pick list scores exactly those picks (applyConstraints),
+    // each entry carrying its pick's knobs, the k-th pick of a name keyed
+    // "<name>#<k>".
     m.def(
         "constraint_costs",
-        [](TournamentSchedule &schedule)
+        [](TournamentSchedule &schedule, const py::object &constraints)
         {
             DecomposedCalculator calculator;
-            defaultConstraints().into(calculator);
+            tfpy::applyConstraints([] { return defaultConstraints(); },
+                                   constraints)
+                .into(calculator);
             return tfpy::constraintCosts(calculator, schedule);
         },
         py::arg("schedule"),
-        "Raw per-unit cost of every constraint, before weight/exponent/level "
+        py::arg("constraints") = py::none(),
+        "Raw per-unit cost of every constraint, before weight/exponent/offset/level "
         "(each entry also carries the domain's medium_fold).");
 
     // The constraint names this domain scores, in default-assembly order —

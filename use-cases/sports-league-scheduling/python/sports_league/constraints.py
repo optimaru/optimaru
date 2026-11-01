@@ -2,39 +2,57 @@
 
 The default path (`sl.solve(schedule)`) enables all ten constraints at their default
 weights. This module is the alternative path next to it: pick constraints, change
-weights, change levels, and pass the list to `solve(schedule, constraints=...)`.
+weights, change levels, shape the cost, and pass the list to
+`solve(schedule, constraints=...)`.
 
-The shortest route is :func:`get_constraints`. It returns the default list, so
-a "default with a small tweak" declaration fits on one line::
+A constraint list reads one way: one class call per constraint::
 
     import sports_league as sl
     from sports_league.constraints import (
-        WorkdayClassicMatchesCost, get_constraints, team_conflict_cost,
+        TeamConflictCost, WorkdayClassicMatchesCost, get_constraints,
     )
 
-    sl.solve(schedule, constraints=get_constraints())          # defaults as-is
-    sl.solve(schedule, constraints=get_constraints([           # picked
-        team_conflict_cost, WorkdayClassicMatchesCost(weight=10_000),
-    ]))
+    sl.solve(schedule, constraints=get_constraints())          # the defaults as-is
+    sl.solve(schedule, constraints=[                           # picked
+        TeamConflictCost(), WorkdayClassicMatchesCost(weight=10_000),
+    ])
 
-Each constraint has a default instance at module level (`team_conflict_cost`,
-`workday_classic_matches_cost`, ...), so you can also pass a list of just a few.
 Only listed constraints are scored — leave one out and its term disappears from the
-score.
+score. (The module also carries ready-made default instances: ``team_conflict_cost``
+is ``TeamConflictCost()``, and so on.)
 
-Every spec takes ``(weight=None, level=None, exponent=1.0)``:
+Every spec takes five knobs:
 
 - ``weight``   linear multiplier on the constraint cost. ``None`` = the component
-               default (1 for every constraint but `workday_classic_matches_cost`,
+               default (1 for every constraint but WorkdayClassicMatchesCost,
                whose default is 1000). ``sl.constraint_info()`` reports the defaults.
 - ``level``    ``None`` = the default level, otherwise ``Level.HARD`` or
                ``Level.SOFT`` (or the names ``"hard"`` and ``"soft"``). This use
-               case has no medium level.
+               case has no medium level: ``level="medium"`` raises ValueError.
 - ``exponent`` sign-preserving power shaping: ``weight * sign(c) * |c| **
                exponent``. 2.0 = squared, so concentrated violations grow much
-               costlier. The three unit constraints (`start_to_away_hop_cost`,
-               `away_to_end_hop_cost`, `workday_classic_matches_cost`) shape the cost
-               of each round; the seven global constraints shape their one total.
+               costlier. The three unit constraints (StartToAwayHopCost,
+               AwayToEndHopCost, WorkdayClassicMatchesCost) shape the cost of each
+               round; the seven global constraints shape their one total.
+- ``offset``   (keyword) shifts that shaping, at the same granularity; 0.0 = none.
+- ``clip``     (keyword) ``True`` (the default) counts only what lies beyond the
+               offset, ``max(0, c - offset) ** exponent``; ``False`` shapes
+               ``c - offset`` as it is, so a round below the offset — an empty one
+               (cost 0) included — lowers the penalty, and a global total below it
+               does too. With an offset it is refused on hard (``TeamConflictCost``
+               and the other three hard globals by default), because hard 0 must
+               mean no violation.
+
+The same constraint may be picked several times; each pick is scored on its own with
+its own knobs (its level included) and the picks add up. Every away-to-away kilometre costs 1, and the
+total beyond 1000 km costs 0.01 x its square on top::
+
+    sl.solve(schedule, constraints=[
+        *get_constraints(),
+        AwayToAwayHopCost(weight=0.01, exponent=2, offset=1000),
+    ])
+
+``sl.constraint_costs(schedule, picks)`` keys the second pick ``"away_to_away_hop_cost#2"``.
 
 The five travel terms (`*_hop_cost`) are all in km, so adding them up makes sense.
 The 1'000 of `workday_classic_matches_cost` is set against those km — expensive enough
@@ -271,7 +289,7 @@ class WorkdayClassicMatchesCost(Constraint):
     )
 
 
-#: Instances at the default weights (weight=None). Reference them directly when picking.
+#: Ready-made default instances (``team_conflict_cost`` is ``TeamConflictCost()``).
 start_to_away_hop_cost = StartToAwayHopCost()
 away_to_end_hop_cost = AwayToEndHopCost()
 workday_classic_matches_cost = WorkdayClassicMatchesCost()
@@ -302,12 +320,13 @@ def get_constraints(constraints: list[Constraint] | None = None) -> list[Constra
     """Return the cost function. Without arguments, all ten default constraints.
 
     When `constraints` is given, that list is used as-is — only the listed
-    constraints are scored. To change just one default, mix in the default instances::
+    constraints are scored::
 
-        get_constraints([team_conflict_cost, WorkdayClassicMatchesCost(weight=10_000)])
+        get_constraints([TeamConflictCost(), WorkdayClassicMatchesCost(weight=10_000)])
 
     Same contract as the C++ applyConstraints: an empty list (most likely a filter
-    that came out empty) and a constraint named twice raise ValueError.
+    that came out empty) raises ValueError; a constraint named several times is
+    scored once per pick, each with its own knobs.
     """
     return select(constraints, _DEFAULTS)
 
@@ -316,18 +335,20 @@ def score(costs: dict, constraints: list[Constraint] | None = None) -> Score:
     """Apply specs to raw constraint costs and produce a score — pure Python.
 
     ``costs`` is what `sl.constraint_costs(schedule)` returns: per constraint, the
-    **raw** cost of each unit (before weight, exponent and level rounding).
+    **raw** cost of each unit (before weight, exponent, offset and level rounding).
     Fetch it once and rescore with different weights without re-solving::
 
         raw = sl.constraint_costs(schedule)
         score(raw)                     # default set
-        score(raw, picked)             # picked list
+        score(raw, [TeamConflictCost(), WorkdayClassicMatchesCost(weight=10_000)])
+        score(raw, [AwayToAwayHopCost(), AwayToAwayHopCost(exponent=2, offset=1000)])
 
     No solver and no search are involved. The arithmetic matches the engine —
-    each unit contributes ``weight * shape(cost, exponent)`` and hard
+    each unit contributes ``weight * shape(cost, exponent, offset, clip)`` and hard
     contributions are **rounded per unit** before summing (the same order as the
     engine's applyRaw; rounding the total afterwards gives different values).
-    ``weight=None`` / ``level=None`` read the entry's default weight and level.
+    ``weight=None`` / ``level=None`` read the entry's default weight and level. A
+    second pick of a constraint reads the same raw costs with its own knobs.
 
     When ``constraints`` is given, only those constraints are scored — the same
     semantics as `get_constraints`. Unknown names raise ValueError.

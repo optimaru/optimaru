@@ -75,20 +75,25 @@ for a in result.flight_assignments:
 
 The score is the original `HardSoftScore` as-is (no level folding). `fc.constraint_info()`
 reports this catalog (`ConstraintInfo(name, default_level, default_weight, level_flippable,
-reward, default_enabled)`) straight from the C++ components; every constraint is flippable,
-none is a reward, all six are on by default.
+reward, default_enabled)`) straight from the C++ components; every constraint is flippable
+between hard and soft (`level="medium"` raises `ValueError`: there is no medium level), none
+is a reward, all six are on by default.
 
 Pick, re-weight or flip constraints with the specs in `flight_crew.constraints`; each takes
-`(weight=None, level=None, exponent=1.0)` (`None` = the C++ default):
+`(weight=None, level=None, exponent=1.0)` (`None` = the C++ default) and the keyword-only
+`offset=0.0` / `clip=True`, and a constraint may be picked several times, each pick with
+its own knobs:
 
 ```python
 from flight_crew.constraints import (
-    FlightConflictCost, RequiredSkillCost, get_constraints, last_assignment_not_arriving_at_home_cost,
+    FlightConflictCost, LastAssignmentNotArrivingAtHomeCost, RequiredSkillCost, get_constraints,
 )
 
 fc.solve(problem, constraints=get_constraints())  # the defaults
 fc.solve(problem, constraints=[RequiredSkillCost(weight=500), FlightConflictCost(level="soft"),
-                               last_assignment_not_arriving_at_home_cost])
+                               LastAssignmentNotArrivingAtHomeCost()])
+fc.solve(problem, constraints=[*get_constraints(),  # + 10 x (conflicts beyond the first)^2
+                               FlightConflictCost(weight=10, exponent=2, offset=1)])
 ```
 
 `fc.constraint_costs(schedule)` returns the raw per-employee costs and

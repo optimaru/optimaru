@@ -11,12 +11,12 @@ namespace vrp {
 // = max(0, haversine meters from home to its farthest visit -
 // maxRouteRadiusMeters) while maxRouteRadiusMeters > 0; 0 = every visit
 // within the radius, or no radius set (the pool list costs 0).
-struct MaxRouteRadiusCost final : VrpUnitConstraint {
+struct MaxRouteRadiusCost final : detail::PerVehicleConstraint {
     static constexpr double kDefaultWeight = 1.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
 
     explicit MaxRouteRadiusCost(double weight = kDefaultWeight)
-        : VrpUnitConstraint("maxRouteRadiusCost", weight, kDefaultLevel) {}
+        : PerVehicleConstraint("maxRouteRadiusCost", weight, kDefaultLevel) {}
     double cost(const VehicleRoutePlan& p, int u, const std::vector<int>& m) const override {
         if (detail::isPool(p, u) || p.vehicles[u].maxRouteRadiusMeters <= 0) return 0;
         const Location& home = p.locations[p.vehicles[u].homeLocationIndex];

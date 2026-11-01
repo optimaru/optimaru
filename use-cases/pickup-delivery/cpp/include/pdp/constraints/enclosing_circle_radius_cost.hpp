@@ -12,13 +12,13 @@ namespace pdp
 // the smallest circle enclosing its stop points (home excluded); 0 for a
 // route with fewer than two stops (and for the pool list). Give it a weight
 // to prefer compact routes.
-struct EnclosingCircleRadiusCost final : PdpUnitConstraint
+struct EnclosingCircleRadiusCost final : detail::PerVehicleConstraint
 {
     static constexpr double kDefaultWeight = 0.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
 
     explicit EnclosingCircleRadiusCost(double weight = kDefaultWeight)
-        : PdpUnitConstraint("enclosingCircleRadiusCost", weight, kDefaultLevel)
+        : PerVehicleConstraint("enclosingCircleRadiusCost", weight, kDefaultLevel)
     {
     }
     double cost(const PdpRoutePlan &p,

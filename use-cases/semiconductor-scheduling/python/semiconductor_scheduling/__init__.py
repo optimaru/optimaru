@@ -150,7 +150,8 @@ def solve(
     A zero budget (``time_limit_seconds=0``) returns the start as is.
 
     ``constraints`` picks the cost function (see `semiconductor_scheduling.constraints`):
-    only the listed constraints are scored, by a single start; None scores all 20 defaults.
+    only the listed constraints are scored, a name picked several times once per pick, by a
+    single start; None scores all 20 defaults.
     """
     # A copy: the keyword overrides below must not leak into the caller's config.
     cfg = copy.copy(config) if config is not None else SolverConfig()
@@ -184,7 +185,8 @@ def calculate_score(problem, constraints=None) -> Score:
 
     Stores makespan, total_weighted_tardiness, total_cycle_time, score_hard and score_soft
     (on the model, or on the engine object). ``constraints`` = None scores the 20 defaults;
-    a list scores exactly those picks (the totals always come from every constraint).
+    a list scores exactly those picks, repeats and offsets included (the totals always come
+    from every constraint).
     """
     core, model = _core_of(problem)
     score = _core.calculate_score(core, constraints)
@@ -193,14 +195,16 @@ def calculate_score(problem, constraints=None) -> Score:
     return score
 
 
-def constraint_costs(problem) -> dict:
-    """Raw cost of every default constraint on ``problem.assignments``:
-    ``{name: {"costs": [total], "weight", "exponent", "hard", "global", "level", ...}}``
-    — the input of `semiconductor_scheduling.constraints.score`. Every constraint is global,
-    so ``costs`` holds its total as one element (0.1.x returned per-item lists; see
-    `constraint_items`)."""
+def constraint_costs(problem, constraints=None) -> dict:
+    """Raw cost of every constraint on ``problem.assignments``:
+    ``{key: {"costs": [total], "weight", "exponent", "offset", "clip", "hard", "global",
+    "level", ...}}`` — the input of `semiconductor_scheduling.constraints.score`. None = the
+    default constraints; a pick list (as for `solve`) scores exactly those picks, each entry
+    carrying its pick's knobs, the k-th pick of a name keyed ``"<name>#<k>"``. Every
+    constraint is global, so ``costs`` holds its total as one element (0.1.x returned
+    per-item lists; see `constraint_items`)."""
     core, _model = _core_of(problem)
-    return _core.constraint_costs(core)
+    return _core.constraint_costs(core, constraints)
 
 
 def constraint_items(problem) -> dict[str, list[int]]:

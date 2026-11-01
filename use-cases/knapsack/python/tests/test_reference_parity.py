@@ -302,7 +302,13 @@ def test_scores_match_the_oracle_at_integer_weights(seed):
         weight = rng.choice([None, 0, 1, 2, 5])
         level = rng.choice([None, "soft"] if spec.name == "selected_value_cost" else [None, "hard", "soft"])
         picked.append(type(spec)(weight=weight, level=level))
-    expected = ref.score_costs(old, [(by_old[spec.name], spec.weight, {None: None, "hard": True, "soft": False}[spec.level], 1.0) for spec in picked])
+    expected = ref.score_costs(
+        old,
+        [
+            (by_old[spec.name], spec.weight, {None: None, "hard": True, "soft": False}[spec.level], 1.0)
+            for spec in picked
+        ],
+    )
     assert tuple(score(raw, picked)) == pytest.approx(expected)
     # ... and the engine scores the same picks the same way.
     core = Model.model_validate(data).to_core()

@@ -49,8 +49,9 @@ stock), so each has one raw total, and the exponent shapes that total.
 
 `list_constraints()` and `constraint_info()` report them in this order;
 `project_job.constraint_info()` reports exactly this table from the C++ components
-(`kDefaultLevel` / `kDefaultWeight`). Every constraint is flippable (`level="hard"` /
-`level="soft"`), none is a reward and all four are scored by default (`default_enabled`).
+(`kDefaultLevel` / `kDefaultWeight`). Every constraint is flippable onto any of the three
+levels (`level="hard"`, `"medium"` or `"soft"`, or a `Level`), none is a reward and all four
+are scored by default (`default_enabled`).
 
 The medium weight is in **medium units**: the domain folds the medium level into the
 engine's soft level as `engine.soft = medium * 10^9 + soft` (`kMediumFold` in
@@ -58,7 +59,9 @@ engine's soft level as `engine.soft = medium * 10^9 + soft` (`kMediumFold` in
 on every `constraint_costs()` entry). `level="hard"` makes
 `project_delay_cost` 1 hard unit per day, `level="soft"` 1 soft unit per day (outside the
 fold), and a `weight` is in units of the level in effect — in the
-engine and in the CP-SAT reference alike.
+engine and in the CP-SAT reference alike. Any other constraint may move onto medium the
+same way (`MakespanCost(level="medium")` charges one medium unit per day of the makespan,
+in both solvers too), and a repeated pick carries its own level.
 
 **0.2.0:** the constraints were renamed (`non_renewable_resource_capacity` ->
 `non_renewable_resource_capacity_cost`, `renewable_resource_capacity` ->
@@ -72,6 +75,27 @@ domain, so `level="hard"` costs 1 hard per day (was 10^9), `level="soft"` demote
 both solvers (it was a no-op in the engine), an explicit weight is in medium units (it used
 to replace the fold), and on CP-SAT `level="soft"` on a hard constraint now lands on soft (it
 landed on medium). Raw costs and the default score are unchanged.
+
+**0.3.0:** every constraint takes two more knobs, `offset` and `clip` (keyword-only), and
+may be picked several times. All four constraints are global, so each instance shapes its
+one total `x` once: `sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default)
+or `(x - offset) ** exponent`, sign-preserving (`clip=False`, which acts as a reward below
+the offset, e.g. a makespan under a target day); `offset=0` is the 0.2.0 shaping.
+`clip=False` with an offset is refused on hard (the two resource constraints by default),
+because hard 0 must mean no violation; medium folds into soft here, so it takes the literal
+formula. Each pick is its own instance with its own knobs, and the instances add up:
+
+```python
+pj.solve(core, constraints=[
+    *get_constraints(),
+    MakespanCost(exponent=2, offset=40),   # + (days beyond day 40)^2
+])
+```
+
+`pj.constraint_costs(core, picks)` keys the second pick `makespan_cost#2`. The domain
+`Score` keeps integer levels, so fractional weights round in `schedule.score` (as before);
+`constraints.score()` reports the exact engine value. The CP-SAT reference takes integral
+offsets on every constraint (one term per global total).
 
 ## Starting from an existing solution
 

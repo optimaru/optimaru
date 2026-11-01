@@ -1,17 +1,25 @@
-"""quadratic_assignment.constraints — an API for picking the cost function declaratively."""
+"""quadratic_assignment.constraints — an API for picking the cost function declaratively.
 
+"Which constraints are on", the catalog, the five knobs (the level included) and repeated
+picks are covered here.
+"""
+
+import json
 import pickle
 import re
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 import quadratic_assignment as qap
+from quadratic_assignment._constraint import instance_keys
 from quadratic_assignment.constraints import (
     AssignmentCost,
     Constraint,
     FlowDistanceCost,
     ForbiddenAssignmentsCost,
+    Level,
     LocationCapacityCost,
     PinnedAssignmentsCost,
     assignment_cost,
@@ -285,7 +293,9 @@ def test_weights_steer_the_solve():
         ({"weight": "2"}, TypeError),
         ({"exponent": 0}, ValueError),
         ({"exponent": -1.0}, ValueError),
-        ({"hard": 1}, TypeError),
+        ({"level": 1}, TypeError),
+        ({"level": "firm"}, ValueError),
+        ({"hard": True}, TypeError),  # the removed knob is an unknown keyword
     ],
 )
 def test_specs_validate_their_knobs(kwargs, error):
@@ -297,9 +307,18 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     """The C++ side guards too: a duck-typed pick cannot smuggle a negative weight in."""
     negative = SimpleNamespace(name="flow_distance_cost", weight=-2.0, level=None, exponent=1.0)
     flat = SimpleNamespace(name="flow_distance_cost", weight=None, level=None, exponent=0.0)
-    for pick, message in ((negative, "weight must be finite and >= 0"), (flat, "exponent must be finite and > 0")):
+    unbounded = SimpleNamespace(name="flow_distance_cost", weight=None, level=None, exponent=1.0, offset=float("inf"))
+    for pick, message in (
+        (negative, "weight must be finite and >= 0"),
+        (flat, "exponent must be finite and > 0"),
+        (unbounded, "offset must be finite, not inf"),
+    ):
         with pytest.raises(ValueError, match=message):
             qap.solve(three(), time_limit_seconds=0, constraints=[pick])
+        with pytest.raises(ValueError, match=message):
+            qap.constraint_costs(side(), [pick])
+    with pytest.raises(ValueError, match="offset must be finite, not nan"):
+        FlowDistanceCost(offset=float("nan"))
 
 
 @pytest.mark.parametrize(
@@ -309,6 +328,10 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
         ({"weight": "2"}, "weight must be a number or None, not '2'"),
         ({"level": 1}, "level must be a Level, its name or None, not 1"),
         ({"exponent": True}, "exponent must be a number, not True"),
+        ({"offset": "5"}, "offset must be a number, not '5'"),
+        ({"offset": False}, "offset must be a number, not False"),
+        ({"clip": 1}, "clip must be True or False, not 1"),
+        ({"clip": "no"}, "clip must be True or False, not 'no'"),
     ],
 )
 def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
@@ -340,15 +363,24 @@ def test_unknown_and_old_names_are_refused():
             score(raw, [pick])
 
 
-def test_empty_and_repeated_picks_are_rejected():
+def test_an_empty_pick_list_is_rejected():
     with pytest.raises(ValueError, match="must not be empty"):
         qap.solve(three(), time_limit_seconds=0, constraints=[])
     with pytest.raises(ValueError, match="must not be empty"):
+        qap.constraint_costs(side(), [])
+    with pytest.raises(ValueError, match="must not be empty"):
         get_constraints([])
-    with pytest.raises(ValueError, match="picked more than once"):
-        qap.solve(three(), time_limit_seconds=0, constraints=[flow_distance_cost, FlowDistanceCost(weight=2)])
-    with pytest.raises(ValueError, match="picked more than once"):
-        get_constraints([assignment_cost, assignment_cost])
+
+
+def test_naming_a_constraint_twice_scores_both_picks():
+    """Since 0.3.0 a constraint may be picked several times: each pick is scored on its own.
+
+    The later pick no longer wins in silence, nor is it an error: both are
+    instances with their own knobs, and they add up."""
+    picks = [FlowDistanceCost(), FlowDistanceCost(weight=2), LocationCapacityCost()]
+    assert engine_score(side(), picks) == (-2, -(22 + 2 * 22))
+    assert qap.calculate_score(side(), picks) == (-2, -66.0)
+    assert get_constraints([AssignmentCost(), AssignmentCost()]) == [AssignmentCost(), AssignmentCost()]
 
 
 # --- Pure-Python scoring (constraint_costs -> score) ------------------------
@@ -362,7 +394,25 @@ def test_empty_and_repeated_picks_are_rejected():
         [PinnedAssignmentsCost(weight=3), LocationCapacityCost(level="soft"), flow_distance_cost],
         [LocationCapacityCost(exponent=2.0), ForbiddenAssignmentsCost(weight=0.5), FlowDistanceCost(weight=2)],
         [PinnedAssignmentsCost(level="soft", exponent=0.5), FlowDistanceCost(exponent=1.5)],
-        [PinnedAssignmentsCost(weight=0.5), ForbiddenAssignmentsCost(weight=0.5), AssignmentCost(level="hard")],
+        # The direct costs below are negative, so a promoted objective is the flow (whose data
+        # is not): see test_an_objective_that_can_be_negative_is_refused_on_hard.
+        [PinnedAssignmentsCost(weight=0.5), ForbiddenAssignmentsCost(weight=0.5), FlowDistanceCost(level="hard")],
+        [*get_constraints(), LocationCapacityCost(weight=0.5, exponent=2.0), FlowDistanceCost(weight=0.5)],
+        # The literal formula with an offset is refused on hard; its copies sit on soft.
+        [
+            LocationCapacityCost(offset=1.0),
+            LocationCapacityCost(offset=-2.0),
+            LocationCapacityCost(level="soft", offset=-2.0, clip=False),
+            FlowDistanceCost(offset=3),
+        ],
+        [
+            PinnedAssignmentsCost(offset=0.5, weight=3),
+            PinnedAssignmentsCost(level="soft", offset=0.5, clip=False, weight=3),
+            ForbiddenAssignmentsCost(level="soft", offset=1.0, clip=False),
+            AssignmentCost(offset=-2.0, exponent=2.0),
+            FlowDistanceCost(offset=40.0, clip=False),
+            FlowDistanceCost(weight=0.5, offset=2.0, exponent=1.5),
+        ],
     ],
 )
 def test_score_matches_the_engine_for_arbitrary_specs(specs):
@@ -403,3 +453,450 @@ def test_score_equals_the_engine_for_the_default_assembly():
     engine = qap.calculate_score(problem.to_core())
     python = score(qap.constraint_costs(problem))
     assert (python.hard, python.soft) == (engine.hard, engine.soft)
+
+
+# --- 0.3.0: repeated picks and the offset / clip knobs ------------------------------
+
+
+def scoped() -> QuadraticAssignmentProblemModel:
+    """Three locations, one of each scope at the identity, every side constraint 0: L1 pinned
+    to F1, (F3, L2) forbidden, only L2 capacitated."""
+    return QuadraticAssignmentProblemModel(
+        facilities=["F1", "F2", "F3"],
+        locations=["L1", "L2", "L3"],
+        flows=[[0, 3, 1], [3, 0, 2], [1, 2, 0]],
+        distances=[[0, 1, 4], [1, 0, 2], [4, 2, 0]],
+        assignment={"L1": "F1", "L2": "F2", "L3": "F3"},
+        fixed_assignments={"L1": "F1"},
+        forbidden_assignments=[ForbiddenAssignmentModel(facility="F3", location="L2")],
+        location_capacities={"L2": 10},
+    )
+
+
+def engine_solve(problem: QuadraticAssignmentProblemModel, constraints) -> qap.QuadraticAssignmentProblem:
+    """The engine's zero-budget warm-start solve of the model's assignment (it keeps the assignment)."""
+    core = problem.to_core()
+    core.warm_start = True
+    qap.Solver(_zero()).solve_with_constraints(core, constraints)
+    return core
+
+
+REPEAT = [FlowDistanceCost(), FlowDistanceCost(weight=0.5, exponent=2)]
+
+
+def test_a_repeated_pick_by_hand():
+    """flow 22 plus 0.5 x flow^2: 22 + 0.5 x 484 = 264 soft."""
+    problem = side()
+    raw = qap.constraint_costs(problem, REPEAT)
+    assert list(raw) == ["flow_distance_cost", "flow_distance_cost#2"]
+    first, second = raw.values()
+    assert first["costs"] == second["costs"] == [22.0]
+    assert (first["weight"], first["exponent"], second["weight"], second["exponent"]) == (1.0, 1.0, 0.5, 2.0)
+    assert first["name"] == second["name"] == "flow_distance_cost"
+    assert second["default_weight"] == 1.0
+    expected = (0, -(22 + 0.5 * 22**2))
+    assert expected == (0, -264.0)
+    assert score(raw, REPEAT) == expected
+    # The default costs hold the name once; the second pick reads the same raw costs.
+    assert score(qap.constraint_costs(problem), REPEAT) == expected
+    assert qap.calculate_score(problem, REPEAT) == expected
+    engine = engine_solve(problem, REPEAT)
+    assert engine.assignment() == problem.to_core().assignment()
+    assert (engine.score.hard, engine.score.soft) == expected
+
+
+def test_identical_picks_count_twice():
+    picks = [LocationCapacityCost(), LocationCapacityCost()]
+    assert score(qap.constraint_costs(side()), picks) == (-4, 0.0)
+    assert engine_score(side(), picks) == (-4, 0.0)
+    assert list(qap.constraint_costs(side(), picks)) == ["location_capacity_cost", "location_capacity_cost#2"]
+
+
+def test_the_keys_follow_the_pick_order_of_each_name():
+    picks = [
+        AssignmentCost(weight=1),
+        FlowDistanceCost(),
+        AssignmentCost(weight=2),
+        PinnedAssignmentsCost(),
+        AssignmentCost(weight=3),
+    ]
+    raw = qap.constraint_costs(side(), picks)
+    assert {key: entry["weight"] for key, entry in raw.items()} == {
+        "pinned_assignments_cost": 1.0,
+        "assignment_cost": 1.0,
+        "assignment_cost#2": 2.0,
+        "assignment_cost#3": 3.0,
+        "flow_distance_cost": 1.0,
+    }
+    assert score(raw, picks) == (-1, -(15 * 6 + 22))
+    assert engine_score(side(), picks) == score(raw, picks)
+
+
+@pytest.mark.parametrize(
+    ("pick", "expected"),
+    [
+        # Side constraints, shaped per evaluated location: pinned [1, 0] (L1), forbidden
+        # [0, 1] (L2), capacity [2, 0] (L1 and L2). The three are hard by default, which
+        # refuses the literal formula with an offset, so its numbers are checked on soft
+        # (not rounded).
+        (LocationCapacityCost(offset=1), (-1, 0.0)),
+        (LocationCapacityCost(offset=1.5), (-1, 0.0)),  # hard rounds per location: 0.5 -> 1, L2 stays 0
+        (LocationCapacityCost(level="soft", offset=1, clip=False), (0, 0.0)),  # (2 - 1) + (0 - 1): a raw 0 too
+        (LocationCapacityCost(level="soft", offset=2.5, clip=False), (0, 3.0)),  # (2 - 2.5) + (0 - 2.5)
+        (PinnedAssignmentsCost(level="soft", offset=1, clip=False), (0, 0.0)),  # L1 only: 1 - 1; L2 is out of scope
+        (PinnedAssignmentsCost(offset=-1), (-2, 0.0)),
+        (PinnedAssignmentsCost(level="soft", offset=-1, clip=False), (0, -2.0)),  # still L1 only
+        (ForbiddenAssignmentsCost(level="soft", offset=3, clip=False), (0, 2.0)),  # L2 only: 1 - 3
+        (ForbiddenAssignmentsCost(level="soft", offset=0.5), (0, -0.5)),
+        # The objectives shape their single total: flow 22, assignment 15.
+        (FlowDistanceCost(offset=20), (0, -2.0)),
+        (FlowDistanceCost(offset=30, clip=False), (0, 8.0)),  # 22 - 30 below the offset: a bonus
+        (FlowDistanceCost(offset=10, exponent=2), (0, -144.0)),
+        (AssignmentCost(offset=-5), (0, -20.0)),
+        (AssignmentCost(offset=20), (0, 0.0)),
+        (AssignmentCost(weight=0, offset=20, clip=False), (0, 0.0)),  # weight 0 contributes 0
+    ],
+)
+def test_offsets_by_hand_on_both_paths(pick, expected):
+    """threshold sign(x) max(0, |x| - offset)^e and literal (x - offset)^e: Python mirror == engine == hand."""
+    problem = side()
+    assert score(qap.constraint_costs(problem), [pick]) == expected
+    raw = qap.constraint_costs(problem, [pick])
+    entry = next(iter(raw.values()))
+    assert (entry["offset"], entry["clip"]) == (float(pick.offset), pick.clip)
+    assert score(raw, [pick]) == expected
+    assert qap.calculate_score(problem, [pick]) == expected
+    engine = engine_solve(problem, [pick])
+    assert engine.assignment() == problem.to_core().assignment()
+    assert (engine.score.hard, engine.score.soft) == expected
+
+
+def test_the_scoped_side_constraints_report_their_units():
+    """constraint_costs() carries the evaluated locations of the three side constraints."""
+    assert {key: entry.get("units") for key, entry in qap.constraint_costs(side()).items()} == {
+        "pinned_assignments_cost": [0],
+        "forbidden_assignments_cost": [1],
+        "location_capacity_cost": [0, 1],
+        "assignment_cost": None,
+        "flow_distance_cost": None,
+    }
+    problem = three()
+    problem.assignment = {"L1": "F1", "L2": "F2", "L3": "F3"}
+    assert {key: entry.get("units") for key, entry in qap.constraint_costs(problem).items()} == {
+        "pinned_assignments_cost": [0, 1],
+        "forbidden_assignments_cost": [0],
+        "location_capacity_cost": [0, 2],
+        "assignment_cost": None,
+        "flow_distance_cost": None,
+    }
+
+
+@pytest.mark.parametrize("spec", [PinnedAssignmentsCost, ForbiddenAssignmentsCost, LocationCapacityCost])
+def test_a_literal_offset_charges_only_the_evaluated_locations(spec):
+    """On an all-zero solution a literal offset scores (#evaluated locations) x -offset on both
+    paths: one location each here, so +2, not 3 x 2. On soft: the three are hard by default,
+    which refuses the literal formula with an offset."""
+    problem = scoped()
+    raw = qap.constraint_costs(problem)
+    assert raw[spec.name]["costs"] == [0.0, 0.0, 0.0]
+    assert len(raw[spec.name]["units"]) == 1
+    pick = spec(level="soft", offset=2, clip=False)
+    assert score(raw, [pick]) == (0, 2.0)
+    assert score(qap.constraint_costs(problem, [pick]), [pick]) == (0, 2.0)
+    assert engine_score(problem, [pick]) == (0, 2.0)
+    assert engine_score(problem, [spec(offset=2)]) == (0, 0.0)
+
+
+def test_offset_zero_reproduces_the_0_2_0_scores():
+    """offset 0 is the plain shaping in both modes, so every 0.2.0 selection scores the same."""
+    plain_picks = [LocationCapacityCost(exponent=2), PinnedAssignmentsCost(), FlowDistanceCost(exponent=1.5)]
+    shifted_by_zero = [
+        LocationCapacityCost(exponent=2, offset=0.0, clip=False),
+        PinnedAssignmentsCost(offset=0),
+        FlowDistanceCost(exponent=1.5, offset=0.0, clip=False),
+    ]
+    problem = solved()
+    raw = qap.constraint_costs(problem)
+    assert score(raw, shifted_by_zero) == score(raw, plain_picks)
+    assert engine_score(problem, plain_picks) == engine_score(problem, shifted_by_zero)
+    assert engine_score(problem, plain_picks) == tuple(score(raw, plain_picks))
+    for entry in raw.values():
+        assert (entry["offset"], entry["clip"]) == (0.0, True)
+
+
+@pytest.mark.parametrize(
+    "picks",
+    [
+        [*get_constraints(), *REPEAT],
+        [
+            PinnedAssignmentsCost(),
+            PinnedAssignmentsCost(offset=1, weight=2),
+            PinnedAssignmentsCost(level="soft", offset=1, clip=False, weight=2),  # literal: soft only
+            ForbiddenAssignmentsCost(offset=-1),
+            LocationCapacityCost(),
+            LocationCapacityCost(offset=1, exponent=2, weight=0.5, level="soft"),
+            AssignmentCost(offset=-10, clip=False),
+            FlowDistanceCost(offset=20, clip=False),
+            FlowDistanceCost(weight=0.1, exponent=2, offset=5),
+        ],
+        [
+            *get_constraints(),
+            PinnedAssignmentsCost(level="soft", weight=1.5, offset=1, clip=False),
+            LocationCapacityCost(level=Level.SOFT, weight=2, offset=-1),
+            AssignmentCost(level="hard", weight=0.5, offset=10),
+            FlowDistanceCost(level=Level.HARD, weight=0.25, offset=100),  # a fractional hard threshold
+            FlowDistanceCost(weight=0.25, offset=100, clip=False),  # the literal copy on its default soft
+        ],
+    ],
+    ids=["repeat", "repeat-and-offsets", "repeats-on-other-levels"],
+)
+def test_full_assert_solves_with_repeats_and_offsets(picks):
+    """FULL_ASSERT re-checks the incremental score against a full recompute after every move."""
+    data = json.loads((Path(__file__).parent / "fixtures" / "web_demo.json").read_text())
+    core = QuadraticAssignmentProblemModel.model_validate(data).to_core()
+    config = qap.SolverConfig()
+    config.full_assert = True
+    config.random_seed = 3
+    config.step_count_limit = 3000
+    config.spent_limit_seconds = 30
+    qap.Solver(config).solve_with_constraints(core, picks)
+    raw = qap.constraint_costs(core, picks)
+    assert len(raw) == len(picks)
+    python = score(raw, picks)
+    assert python.hard == core.score.hard
+    assert python.soft == pytest.approx(core.score.soft)
+    assert score(qap.constraint_costs(core), picks) == python  # the default costs score the repeats too
+
+
+# --- Levels: hard and soft, each pick (a repeat included) on the level it names ------
+
+
+@pytest.mark.parametrize(
+    ("picks", "expected"),
+    [
+        ([LocationCapacityCost(level="soft")], (0, -2.0)),
+        ([PinnedAssignmentsCost(level=Level.SOFT, weight=2)], (0, -2.0)),
+        ([ForbiddenAssignmentsCost(level="soft", offset=2, clip=False)], (0, 1.0)),  # L2 only: 1 - 2, on soft
+        ([FlowDistanceCost(level=Level.HARD)], (-22, 0.0)),  # the soft objective promoted
+        ([AssignmentCost(level="soft")], (0, -15.0)),  # the default level, named
+        ([PinnedAssignmentsCost(level=Level.HARD)], (-1, 0.0)),
+        # A repeat carries its own level and shaping. Hard: 2 x (22 - 20) on the flow repeat,
+        # the capacity [2, 0] and the assignment cost beyond 10 (15 - 10; the literal formula
+        # with an offset is refused on hard). Soft: the flow 22,
+        # 3 x ((2 - 2) + (0 - 2)) on the literal capacity repeat and the pinned L1 beyond -1
+        # (1 + 1): -22 + 6 - 2.
+        (
+            [
+                FlowDistanceCost(),
+                FlowDistanceCost(level="hard", weight=2, offset=20),
+                LocationCapacityCost(),
+                LocationCapacityCost(level=Level.SOFT, weight=3, offset=2, clip=False),
+                AssignmentCost(level=Level.HARD, offset=10),
+                PinnedAssignmentsCost(level="soft", offset=-1),
+            ],
+            (-11, -18.0),
+        ),
+    ],
+)
+def test_levels_by_hand_on_both_paths(picks, expected):
+    """A pick's level moves its term, with the weight in units of that level: engine == mirror == hand."""
+    problem = side()
+    assert score(qap.constraint_costs(problem), picks) == expected
+    raw = qap.constraint_costs(problem, picks)
+    for pick, key in zip(picks, instance_keys(picks), strict=True):
+        assert raw[key]["level"] == (pick.level or raw[key]["default_level"]), key
+        assert raw[key]["hard"] == (raw[key]["level"] == "hard"), key
+    assert score(raw, picks) == expected
+    assert qap.calculate_score(problem, picks) == expected
+    engine = engine_solve(problem, picks)
+    assert engine.assignment() == problem.to_core().assignment()
+    assert (engine.score.hard, engine.score.soft) == expected
+
+
+@pytest.mark.parametrize("level", ["medium", Level.MEDIUM])
+def test_medium_is_refused_without_a_medium_level(level):
+    """The domain has no medium level: every path refuses the pick before scoring, a repeat too."""
+    for name, spec in (("pinned_assignments_cost", PinnedAssignmentsCost), ("flow_distance_cost", FlowDistanceCost)):
+        message = f"constraint '{name}': this use case has no medium level"
+        pick = spec(level=level)  # the spec cannot know the domain
+        for picks in ([pick], [spec(), pick]):
+            with pytest.raises(ValueError, match=message):
+                engine_solve(side(), picks)
+            with pytest.raises(ValueError, match=message):
+                solved(picks)
+            with pytest.raises(ValueError, match=message):
+                qap.constraint_costs(side(), picks)
+            with pytest.raises(ValueError, match=message):
+                score(qap.constraint_costs(side()), picks)
+            with pytest.raises(ValueError, match=message):
+                qap.calculate_score(side(), picks)
+
+
+def test_a_level_must_be_a_level():
+    with pytest.raises(TypeError, match="level must be a Level"):
+        LocationCapacityCost(level=True)
+    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft', not 'firm'"):
+        LocationCapacityCost(level="firm")
+    pick = SimpleNamespace(name="location_capacity_cost", weight=None, level="firm", exponent=1.0)
+    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft', not 'firm'"):
+        engine_solve(side(), [LocationCapacityCost(), pick])
+
+
+def test_the_knob_was_renamed():
+    """0.3.0 replaced hard=True / hard=False by level="hard" / level="soft"; hard= is unknown."""
+    with pytest.raises(TypeError):
+        FlowDistanceCost(hard=True)
+    with pytest.raises(TypeError):
+        LocationCapacityCost(weight=None, hard=False)
+    assert FlowDistanceCost(level="hard") == FlowDistanceCost(level=Level.HARD)
+
+
+# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+
+HARD_REFUSAL = (
+    "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
+    "violation; use clip=True (a threshold) or another level"
+)
+
+
+def _refusal(call) -> str:
+    with pytest.raises(ValueError) as refused:
+        call()
+    return str(refused.value)
+
+
+@pytest.mark.parametrize("offset", [3.0, -3.0])
+@pytest.mark.parametrize(
+    "pick",
+    [
+        lambda offset: LocationCapacityCost(offset=offset, clip=False),  # the default level, hard
+        lambda offset: PinnedAssignmentsCost(level="hard", offset=offset, clip=False),
+        lambda offset: FlowDistanceCost(level=Level.HARD, offset=offset, clip=False),  # an objective moved to hard
+    ],
+    ids=["capacity-default-hard", "pinned-level-hard", "flow-moved-to-hard"],
+)
+def test_the_literal_offset_is_refused_on_hard_on_every_path(pick, offset):
+    """The side constraints shape each location they evaluate, a raw 0 included. On hard a
+    positive offset would reward the locations below it and cancel another's violation: on
+    side(), LocationCapacityCost(offset=2, clip=False) would score L1's overload of 2 as 0 and
+    L2's slack as a hard reward of 2. A negative one would charge locations without a
+    violation. solve, Solver, constraint_costs, calculate_score and the score() mirror refuse
+    it with the same message, alone and as a repeat; so does the CP-SAT reference (its own
+    tests)."""
+    spec = pick(offset)
+    message = HARD_REFUSAL.format(q=repr(spec.name))
+    picks = [*get_constraints(), spec]  # a repeat next to the defaults
+    assert _refusal(lambda: qap.solve(side(), time_limit_seconds=0, constraints=[spec])) == message
+    assert _refusal(lambda: solved([spec])) == message
+    assert _refusal(lambda: engine_solve(side(), [spec])) == message
+    assert _refusal(lambda: engine_solve(side(), picks)) == message
+    assert _refusal(lambda: qap.constraint_costs(side(), [spec])) == message
+    assert _refusal(lambda: qap.calculate_score(side(), [spec])) == message
+    assert _refusal(lambda: score(qap.constraint_costs(side()), [spec])) == message
+    assert _refusal(lambda: score(qap.constraint_costs(side()), picks)) == message
+
+
+@pytest.mark.parametrize("offset", [3.0, -3.0])
+def test_the_same_literal_pick_on_soft_is_accepted(offset):
+    """capacity [2, 0] minus the offset on L1 and L2, -((2 - offset) + (0 - offset)), on soft,
+    on every path; next to the hard defaults, which keep "hard 0 = no violation" (-4)."""
+    pick = LocationCapacityCost(level="soft", offset=offset, clip=False)
+    expected = (0, 2 * offset - 2)
+    problem = side()
+    assert score(qap.constraint_costs(problem), [pick]) == expected
+    raw = qap.constraint_costs(problem, [pick])
+    entry = raw["location_capacity_cost"]
+    assert (entry["level"], entry["clip"], entry["units"]) == ("soft", False, [0, 1])
+    assert score(raw, [pick]) == expected
+    assert qap.calculate_score(problem, [pick]) == expected
+    assert engine_score(problem, [pick]) == expected
+    picks = [*get_constraints(), pick]
+    assert engine_score(problem, picks) == score(qap.constraint_costs(problem), picks) == (-4, -37 + expected[1])
+
+
+@pytest.mark.parametrize(
+    ("pick", "expected"),
+    [
+        (LocationCapacityCost(offset=3.0), (0, 0.0)),  # clip=True on hard: a threshold, a raw 0 stays 0
+        (LocationCapacityCost(offset=-3.0), (-5, 0.0)),  # 2 + 3 on L1 only
+        (PinnedAssignmentsCost(clip=False), (-1, 0.0)),  # clip=False with offset 0: the 0.2.0 shaping
+        (PinnedAssignmentsCost(offset=0.0, clip=False), (-1, 0.0)),
+        (FlowDistanceCost(level="hard", offset=20.0), (-2, 0.0)),  # 22 - 20
+    ],
+)
+def test_the_allowed_combinations_on_hard(pick, expected):
+    problem = side()
+    assert score(qap.constraint_costs(problem), [pick]) == expected
+    assert score(qap.constraint_costs(problem, [pick]), [pick]) == expected
+    assert engine_score(problem, [pick]) == expected
+
+
+SIGN_REFUSAL = "constraint {q} can have a negative raw cost on this problem (a bonus) and cannot be hard"
+
+
+def _signed(direct=None, flows=None) -> QuadraticAssignmentProblemModel:
+    """side() with negative data: a broken pin (L1 holds F1, not F2) and a direct cost of -20."""
+    problem = side()
+    problem.assignment_costs = direct or [[-10, -10], [-10, -10]]
+    if flows is not None:
+        problem.flows = flows
+    return problem
+
+
+@pytest.mark.parametrize(
+    "pick",
+    [
+        AssignmentCost(level="hard", weight=0.05),
+        AssignmentCost(level="hard", weight=0.1, offset=10),  # a threshold does not help: -20 is beyond -10
+        AssignmentCost(level=Level.HARD),
+    ],
+    ids=["weight", "threshold", "plain"],
+)
+def test_an_objective_that_can_be_negative_is_refused_on_hard(pick):
+    """Negative direct costs make assignment_cost's total negative (-20 here). On hard that
+    would be a hard reward: next to the broken pin (+1) it would score hard 0, or a positive
+    hard score alone. The engine refuses it at reset, on every path, and the score() mirror
+    refuses the same pick from soft costs ("signed" entries), in the same words."""
+    message = SIGN_REFUSAL.format(q="'assignment_cost'")
+    picks = [PinnedAssignmentsCost(), pick]
+    problem = _signed()
+    assert _refusal(lambda: qap.constraint_costs(problem, picks)) == message
+    assert _refusal(lambda: qap.calculate_score(problem, picks)) == message
+    assert _refusal(lambda: engine_solve(problem, picks)) == message
+    assert _refusal(lambda: qap.solve(_signed(), time_limit_seconds=0, constraints=[pick])) == message
+    raw = qap.constraint_costs(problem)
+    assert raw["assignment_cost"]["signed"] is True and raw["assignment_cost"]["costs"] == [-20.0]
+    assert "signed" not in raw["flow_distance_cost"]  # the flows and distances are >= 0
+    assert _refusal(lambda: score(raw, picks)) == message
+    # On its default soft level the negative total is a bonus, as before, and the pin stays hard.
+    assert score(raw, [PinnedAssignmentsCost(), AssignmentCost()]) == (-1, 20.0)
+    assert engine_score(problem, [PinnedAssignmentsCost(), AssignmentCost()]) == (-1, 20.0)
+
+
+def test_negative_flows_or_distances_keep_the_flow_off_hard():
+    flows = [[0, -3], [2, 0]]  # 4 x -3 + 5 x 2 = -2 at the identity
+    problem = _signed(direct=[[7, 1], [2, 8]], flows=flows)
+    message = SIGN_REFUSAL.format(q="'flow_distance_cost'")
+    for pick in (FlowDistanceCost(level="hard"), FlowDistanceCost(level="hard", offset=1)):
+        assert _refusal(lambda pick=pick: engine_score(problem, [pick])) == message
+        assert _refusal(lambda pick=pick: score(qap.constraint_costs(problem), [pick])) == message
+    # The direct costs are >= 0 now, so assignment_cost may move to hard (15 at the identity).
+    assert engine_score(problem, [AssignmentCost(level="hard")]) == (-15, 0.0)
+    assert score(qap.constraint_costs(problem), [AssignmentCost(level="hard")]) == (-15, 0.0)
+    # The literal-offset rule is asked first, as the engine asks it when the pick is read.
+    literal = FlowDistanceCost(level="hard", offset=1, clip=False)
+    assert _refusal(lambda: engine_score(problem, [literal])) == HARD_REFUSAL.format(q="'flow_distance_cost'")
+    assert _refusal(lambda: score(qap.constraint_costs(problem), [literal])) == HARD_REFUSAL.format(
+        q="'flow_distance_cost'"
+    )
+
+
+def test_the_refusal_comes_after_every_knob_of_a_duck_typed_pick():
+    """The engine checks once a pick's knobs are all re-stated: the level a pick ends on decides."""
+    name = "location_capacity_cost"
+    moved = SimpleNamespace(name=name, weight=None, level="soft", exponent=1.0, offset=3.0, clip=False)
+    assert engine_score(side(), [moved]) == score(qap.constraint_costs(side()), [moved]) == (0, 4.0)
+    kept = SimpleNamespace(name=name, weight=None, level=None, exponent=1.0, offset=3.0, clip=False)
+    message = HARD_REFUSAL.format(q=repr(name))
+    assert _refusal(lambda: engine_score(side(), [kept])) == message
+    assert _refusal(lambda: score(qap.constraint_costs(side()), [kept])) == message

@@ -191,7 +191,9 @@ class Solver:
     def solve_with_constraints(self, solution: TaskAssigningSolution, constraints: Iterable[Any] | None = ...) -> None:
         """Score the same solve with a caller-chosen constraint set
         (see task_assigning.constraints). The given list replaces the default set;
-        None keeps the default set."""
+        None keeps the default set. A name may be picked several times: each pick is its
+        own instance with its own knobs, its level included, and the instances add up.
+        A pick moved onto medium lands on soft0 (below hard)."""
 
 def list_constraints() -> list[str]:
     """Constraint names scored by this domain (default assembly order, snake_case; the unit
@@ -200,15 +202,22 @@ def list_constraints() -> list[str]:
     major_priority_task_end_time_cost, minor_priority_task_end_time_cost,
     unassigned_tasks_cost. The same names task_assigning.constraints uses."""
 
-def constraint_costs(solution: TaskAssigningSolution) -> dict[str, dict[str, Any]]:
-    """Raw per-employee cost of every default constraint (one total for the global
-    unassigned_tasks_cost), before weight/exponent/level:
-    {name: {"costs": [...], "weight": float, "exponent": float, "hard": bool,
-    "global": bool, "level": "hard" | "medium" | "soft", "reward": bool,
-    "level_flippable": bool, "name": str, "label": str,
-    "medium_fold": {"kind": "below_hard", "unit": 1e9}}}. The medium fold is on EVERY
-    entry: it belongs to the domain. `task_assigning.constraints.score()` turns it into
-    the engine score."""
+def constraint_costs(
+    solution: TaskAssigningSolution, constraints: Iterable[Any] | None = ...
+) -> dict[str, dict[str, Any]]:
+    """Raw per-employee cost of every constraint (one total for the global
+    unassigned_tasks_cost), before weight/exponent/offset/level:
+    {key: {"costs": [...], "weight": float, "exponent": float, "offset": float,
+    "clip": bool, "hard": bool, "global": bool, "level": "hard" | "medium" | "soft",
+    "reward": bool, "level_flippable": bool, "name": str, "label": str,
+    "default_weight": float, "default_level": str,
+    "medium_fold": {"kind": "below_hard", "unit": 1e9}}}. Every employee is a unit the
+    per-employee constraints evaluate, an idle one included (a literal offset,
+    clip=False, charges it). None = the default constraints; a pick list (as for solve)
+    scores exactly those picks, each entry carrying its pick's knobs, the k-th pick of a
+    name keyed "<name>#<k>" from the second on. The medium fold is on EVERY entry: it
+    belongs to the domain. `task_assigning.constraints.score()` turns it into the
+    engine score."""
 
 class ConstraintInfo(NamedTuple):
     """One constraint-catalog row, read off the C++ default assembly."""

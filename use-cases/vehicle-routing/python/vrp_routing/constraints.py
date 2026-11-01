@@ -5,42 +5,62 @@ the per-vehicle route-policy constraints cost 0 while their parameter is 0. The
 enclosing-circle radius, route duration and latency are opt-in objectives with
 default weight 0.
 This module is the alternative path next to it: pick constraints, change weights, change
-levels, and pass the list to `solve_with_constraints`.
+levels, shape the cost, and pass the list to `solve_with_constraints`.
 
-The shortest route is :func:`get_constraints`. It returns the default list, so
-a "default with a small tweak" declaration fits on one line::
+A constraint list reads one way: one class call per constraint::
 
     import vrp_routing as vrp
     from vrp_routing.constraints import (
-        TravelTimeCost, get_constraints, vehicle_capacity_cost,
+        TravelTimeCost, UnassignedVisitsCost, VehicleCapacityCost, get_constraints,
     )
 
     solver = vrp.Solver(cfg)
-    solver.solve_with_constraints(plan, get_constraints())      # defaults as-is
-    solver.solve_with_constraints(plan, get_constraints([       # picked
-        vehicle_capacity_cost, TravelTimeCost(weight=10),
-    ]))
+    solver.solve_with_constraints(plan, get_constraints())      # the defaults as-is
+    solver.solve_with_constraints(plan, [                       # picked
+        VehicleCapacityCost(), UnassignedVisitsCost(), TravelTimeCost(weight=10),
+    ])
 
-Each constraint has a default instance at module level, so you can also pass a
-list of just a few. Only listed constraints are scored — leave one out and its
-term disappears from the score.
+Only listed constraints are scored — leave one out and its term disappears from the
+score. (The module also carries ready-made default instances: ``vehicle_capacity_cost``
+is ``VehicleCapacityCost()``, and so on.)
 
-Every spec takes ``(weight=None, level=None, exponent=1.0)``:
+Every spec takes five knobs:
 
 - ``weight``   linear multiplier on the constraint cost, in units of its level.
                ``None`` = the C++ component default (``vrp.constraint_info()``
                lists them).
 - ``level``    ``None`` = the default level, otherwise a ``Level`` or its name
                (``Level.MEDIUM`` or ``"medium"``). Any flippable constraint may
-               take any of the three levels.
-               ``unassigned_visits_cost`` is the one **medium** constraint
-               (folded into the engine's soft level as ``medium * 10^9``): ``level="hard"`` charges one hard
-               unit per penalty minute, ``level="soft"`` one soft unit per penalty
-               minute, and a ``weight`` is in units of the level in effect.
+               take any of the three levels. ``UnassignedVisitsCost`` is the one
+               **medium** constraint (folded into the engine's soft level as
+               ``medium * 10^9``): ``level="hard"`` charges one hard unit per
+               penalty minute, ``level="soft"`` one soft unit per penalty minute,
+               and a ``weight`` is in units of the level in effect.
 - ``exponent`` sign-preserving power shaping: ``weight * sign(c) * |c| **
                exponent``, per vehicle for the route constraints and on the total
-               for the global ``unassigned_visits_cost``. 2.0 = squared, so
+               for the global ``UnassignedVisitsCost``. 2.0 = squared, so
                concentrated violations grow much costlier.
+- ``offset``   (keyword) shifts that shaping, at the same granularity; 0.0 = none.
+- ``clip``     (keyword) ``True`` (the default) counts only what lies beyond the
+               offset, ``max(0, c - offset) ** exponent``; ``False`` shapes
+               ``c - offset`` as it is, so a vehicle below the offset — an idle
+               one (cost 0) included — lowers the penalty. The unassigned pool is
+               no vehicle: a route constraint never charges it. With an offset it
+               is refused on hard (``VehicleCapacityCost`` by default), because
+               hard 0 must mean no violation.
+
+The same constraint may be picked several times; each pick is scored on its own with
+its own knobs and the picks add up. Travel time plus the cube of every second beyond
+two hours of driving per vehicle::
+
+    solver.solve_with_constraints(plan, [
+        VehicleCapacityCost(),
+        UnassignedVisitsCost(),
+        TravelTimeCost(),
+        TravelTimeCost(weight=1e-9, exponent=3, offset=7200),
+    ])
+
+``vrp.constraint_costs(plan, picks)`` keys the second pick ``"travel_time_cost#2"``.
 
 Names (`name`) are the C++ component names in snake_case
 (``VehicleCapacityCost`` -> ``vehicle_capacity_cost``). The core derives them
@@ -352,7 +372,7 @@ class UnassignedVisitsCost(Constraint):
     )
 
 
-#: Instances at the default weights (weight=None). Reference them directly when picking.
+#: Ready-made default instances (``vehicle_capacity_cost`` is ``VehicleCapacityCost()``).
 vehicle_capacity_cost = VehicleCapacityCost()
 max_end_time_cost = MaxEndTimeCost()
 travel_time_cost = TravelTimeCost()
@@ -391,12 +411,13 @@ def get_constraints(constraints: list[Constraint] | None = None) -> list[Constra
     """Return the cost function. Without arguments, every registered constraint.
 
     When `constraints` is given, that list is used as-is — only the listed
-    constraints are scored. To change just one default, mix in the default instances::
+    constraints are scored::
 
-        get_constraints([vehicle_capacity_cost, TravelTimeCost(weight=10)])
+        get_constraints([VehicleCapacityCost(), UnassignedVisitsCost(), TravelTimeCost(weight=10)])
 
     Same contract as the C++ applyConstraints: an empty list is an error (pass
-    None for the defaults), and naming a constraint twice is an error.
+    None for the defaults); a constraint named several times is scored once per
+    pick, each with its own knobs.
     """
     return select(constraints, _DEFAULTS)
 
@@ -405,17 +426,20 @@ def score(costs: dict, constraints: list[Constraint] | None = None) -> Score:
     """Apply specs to raw constraint costs and produce a score — pure Python.
 
     ``costs`` is what `vrp.constraint_costs(plan)` returns: per constraint, the
-    **raw** cost of each unit (before weight, exponent and level rounding).
+    **raw** cost of each unit (before weight, exponent, offset and level rounding).
     Fetch it once and rescore with different weights without re-solving::
 
         raw = vrp.constraint_costs(plan)
         score(raw)                     # default set
-        score(raw, picked)             # picked list
+        score(raw, [VehicleCapacityCost(), UnassignedVisitsCost(), TravelTimeCost(weight=10)])
+        score(raw, [TravelTimeCost(), TravelTimeCost(exponent=2, offset=3600)])
 
     No solver and no search are involved. The arithmetic matches the engine —
-    each unit contributes ``weight * shape(cost, exponent)`` and hard
-    contributions are **rounded per unit** before summing (the same order as the
-    engine's applyRaw; rounding the total afterwards gives different values).
+    each evaluated unit (a vehicle; the global's total) contributes ``weight *
+    shape(cost, exponent, offset, clip)`` and hard contributions are **rounded
+    per unit** before summing (the same order as the engine's applyRaw;
+    rounding the total afterwards gives different values). A second pick of a
+    constraint reads the same raw costs with its own knobs.
 
     When ``constraints`` is given, only those constraints are scored — the same
     semantics as `get_constraints`. Unknown names raise ValueError.

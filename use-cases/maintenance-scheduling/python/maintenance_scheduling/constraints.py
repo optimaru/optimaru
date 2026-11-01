@@ -2,42 +2,58 @@
 
 The default path (`mnt.solve(schedule)`) enables all six constraints at their default
 weights (the quickstart's). This module is the alternative path next to it: pick
-constraints, change weights, change levels, and pass the list to
+constraints, change weights, change levels, shape the cost, and pass the list to
 `solve(schedule, constraints=...)`.
 
-The shortest route is :func:`get_constraints`. It returns the default list, so
-a "default with a small tweak" declaration fits on one line::
+A constraint list reads one way: one class call per constraint::
 
     import maintenance_scheduling as mnt
     from maintenance_scheduling.constraints import (
-        TagConflictCost, crew_conflict_cost, get_constraints,
+        CrewConflictCost, TagConflictCost, get_constraints,
     )
 
-    mnt.solve(schedule, constraints=get_constraints())          # defaults as-is
-    mnt.solve(schedule, constraints=get_constraints([           # picked
-        crew_conflict_cost, TagConflictCost(weight=10_000),
-    ]))
+    mnt.solve(schedule, constraints=get_constraints())          # the defaults as-is
+    mnt.solve(schedule, constraints=[                           # picked
+        CrewConflictCost(), TagConflictCost(weight=10_000),
+    ])
 
-Each constraint has a default instance at module level (`min_start_date_cost`,
-`max_end_date_cost`, `before_ideal_end_date_cost`, `after_ideal_end_date_cost`,
-`crew_conflict_cost`, `tag_conflict_cost`), so you can also pass a list of just a
-few. Only listed constraints are scored — leave one out and its term disappears from
-the score.
+Only listed constraints are scored — leave one out and its term disappears from the
+score. (The module also carries ready-made default instances: ``crew_conflict_cost``
+is ``CrewConflictCost()``, and so on.)
 
-Every spec takes ``(weight=None, level=None, exponent=1.0)``:
+Every spec takes five knobs:
 
 - ``weight``   linear multiplier on the constraint cost. ``None`` = the component
-               default (min_start_date_cost, max_end_date_cost, crew_conflict_cost
-               and before_ideal_end_date_cost 1, tag_conflict_cost 1000,
-               after_ideal_end_date_cost 1'000'000); ``mnt.constraint_info()``
-               reports them.
+               default (MinStartDateCost, MaxEndDateCost, CrewConflictCost and
+               BeforeIdealEndDateCost 1, TagConflictCost 1000,
+               AfterIdealEndDateCost 1'000'000); ``mnt.constraint_info()`` reports them.
 - ``level``    ``None`` = the default level, otherwise ``Level.HARD`` or
                ``Level.SOFT`` (or the names ``"hard"`` and ``"soft"``). This use
-               case has no medium level.
+               case has no medium level: ``level="medium"`` raises ValueError.
 - ``exponent`` sign-preserving power shaping: ``weight * sign(c) * |c| **
                exponent``. 2.0 = squared, so concentrated violations grow much
                costlier. The four date rules shape per (start date, crew) cell; the
                two global conflict rules shape their single total.
+- ``offset``   (keyword) shifts that shaping, at the same granularity; 0.0 = none.
+- ``clip``     (keyword) ``True`` (the default) counts only what lies beyond the
+               offset, ``max(0, c - offset) ** exponent``; ``False`` shapes
+               ``c - offset`` as it is, so a cell below the offset — an empty one
+               (cost 0) included, every crew on every start date — lowers the
+               penalty, and a global total below it does too. With an offset it
+               is refused on hard (``MinStartDateCost``, ``MaxEndDateCost`` and
+               ``CrewConflictCost`` by default), because hard 0 must mean no
+               violation.
+
+The same constraint may be picked several times; each pick is scored on its own with
+its own knobs (its level included) and the picks add up. A tag-conflict day costs 1000, and the total
+beyond ten days costs its square on top::
+
+    mnt.solve(schedule, constraints=[
+        *get_constraints(),
+        TagConflictCost(weight=100, exponent=2, offset=10),
+    ])
+
+``mnt.constraint_costs(schedule, picks)`` keys the second pick ``"tag_conflict_cost#2"``.
 
 The weight ratio of the three soft terms (1 : 1'000 : 1'000'000) is the character of this
 domain — lateness is a thousand times a tag conflict and a million times early completion.
@@ -188,7 +204,7 @@ class TagConflictCost(Constraint):
     )
 
 
-#: Instances at the default weights (weight=None). Reference them directly when picking.
+#: Ready-made default instances (``crew_conflict_cost`` is ``CrewConflictCost()``).
 min_start_date_cost = MinStartDateCost()
 max_end_date_cost = MaxEndDateCost()
 before_ideal_end_date_cost = BeforeIdealEndDateCost()
@@ -211,12 +227,13 @@ def get_constraints(constraints: list[Constraint] | None = None) -> list[Constra
     """Return the cost function. Without arguments, all six default constraints.
 
     When `constraints` is given, that list is used as-is — only the listed
-    constraints are scored. To change just one default, mix in the default instances::
+    constraints are scored::
 
-        get_constraints([crew_conflict_cost, TagConflictCost(weight=10_000)])
+        get_constraints([CrewConflictCost(), TagConflictCost(weight=10_000)])
 
     Same contract as the C++ applyConstraints: an empty list (most likely a filter
-    that came out empty) and a constraint named twice raise ValueError.
+    that came out empty) raises ValueError; a constraint named several times is
+    scored once per pick, each with its own knobs.
     """
     return select(constraints, _DEFAULTS)
 
@@ -225,17 +242,19 @@ def score(costs: dict, constraints: list[Constraint] | None = None) -> Score:
     """Apply specs to raw constraint costs and produce a score — pure Python.
 
     ``costs`` is what `mnt.constraint_costs(schedule)` returns: per constraint, the
-    **raw** cost of each unit (before weight, exponent and level rounding).
+    **raw** cost of each unit (before weight, exponent, offset and level rounding).
     Fetch it once and rescore with different weights without re-solving::
 
         raw = mnt.constraint_costs(schedule)
         score(raw)                     # default set
-        score(raw, picked)             # picked list
+        score(raw, [CrewConflictCost(), TagConflictCost(weight=10_000)])
+        score(raw, [TagConflictCost(), TagConflictCost(exponent=2, offset=10)])
 
     No solver and no search are involved. The arithmetic matches the engine —
-    each unit contributes ``weight * shape(cost, exponent)`` and hard
+    each unit contributes ``weight * shape(cost, exponent, offset, clip)`` and hard
     contributions are **rounded per unit** before summing (the same order as the
-    engine's applyRaw; rounding the total afterwards gives different values).
+    engine's applyRaw; rounding the total afterwards gives different values). A
+    second pick of a constraint reads the same raw costs with its own knobs.
 
     When ``constraints`` is given, only those constraints are scored — the same
     semantics as `get_constraints`. Unknown names raise ValueError.

@@ -90,17 +90,21 @@ def _core_of(problem, *, complete: bool = False) -> QuadraticAssignmentProblem:
     )
 
 
-def constraint_costs(problem) -> dict[str, dict[str, Any]]:
-    """Raw cost of every default constraint, before weight / exponent / level.
+def constraint_costs(problem, constraints=None) -> dict[str, dict[str, Any]]:
+    """Raw cost of every constraint, before weight / exponent / offset / level.
 
-    ``{name: {"costs": [...], "weight", "exponent", "hard", "global", "level", "reward",
-    "level_flippable", "name", "label"}}`` in `list_constraints()` order. The three side
-    constraints list one raw cost per location (location order; 0.1.x listed the fixed
-    locations / the assignment entries only); `assignment_cost` and `flow_distance_cost`
-    are one total each. `constraints.score()` turns it into a score. A model needs an
-    assignment covering every location.
+    ``{key: {"costs": [...], "weight", "exponent", "offset", "clip", "hard", "global",
+    "level", "reward", "level_flippable", "name", "label", ...}}``: None = the default
+    constraints in `list_constraints()` order; a pick list (as for `solve`) scores exactly
+    those picks, each entry carrying its pick's knobs, the k-th pick of a name keyed
+    ``"<name>#<k>"``. The three side constraints list one raw cost per location (location
+    order; 0.1.x listed the fixed locations / the assignment entries only) and their
+    evaluated locations as ``"units"`` (the fixed, the forbidden-row and the capacitated
+    locations: the only ones a literal offset charges); `assignment_cost` and
+    `flow_distance_cost` are one total each. `constraints.score()` turns it into a score.
+    A model needs an assignment covering every location.
     """
-    return _constraint_costs(_core_of(problem, complete=True))
+    return _constraint_costs(_core_of(problem, complete=True), constraints)
 
 
 def calculate_score(problem, constraints=None):
@@ -148,9 +152,9 @@ def solve(
     soon as hard 0 is reached. ``on_new_best(step, score)`` is called on every new best solution.
 
     ``constraints`` picks the cost function directly (see `quadratic_assignment.constraints`);
-    only the listed constraints are scored and the solve is single-start
-    (``parallel_solver_count`` is ignored there). None uses every default constraint at its
-    default weight::
+    only the listed constraints are scored, a name picked several times once per pick, and
+    the solve is single-start (``parallel_solver_count`` is ignored there). None uses every
+    default constraint at its default weight::
 
         from quadratic_assignment.constraints import get_constraints
         quadratic_assignment.solve(problem, constraints=get_constraints())

@@ -58,12 +58,16 @@ private:
 bool allowsUnassigned(
     const optimaru::DecomposedScoreCalculator<Timetable> &calculator)
 {
+    // Every instance counts: a constraint picked several times may hold a
+    // hard and a soft unassignedLessonsCost, and one hard instance is enough
+    // to make every unassignment a hard loss.
     for (const auto &global : calculator.globalConstraintList())
     {
         if (dynamic_cast<const UnassignedLessonsCost *>(global.get())
-            != nullptr)
+                != nullptr
+            && global->level == optimaru::Level::Hard)
         {
-            return global->level != optimaru::Level::Hard;
+            return false;
         }
     }
     return true;

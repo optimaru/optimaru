@@ -19,19 +19,15 @@ namespace fp
 // kMediumFold in domain.hpp), and the decomposed calculator applies that
 // fold, so the component carries no 10^10 factor. hard() makes it 1 hard per
 // minute, soft() 1 soft per minute (outside the fold), and an explicit weight
-// stays in medium units.
-struct AfterIdealEndTimeCost final : FpUnitConstraint
+// is in units of the level in effect (medium by default).
+struct AfterIdealEndTimeCost final : detail::PerLineConstraint
 {
     static constexpr double kDefaultWeight = 1.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Medium;
 
     explicit AfterIdealEndTimeCost(double weight = kDefaultWeight)
-        : FpUnitConstraint("afterIdealEndTimeCost", weight, kDefaultLevel)
+        : detail::PerLineConstraint("afterIdealEndTimeCost", weight, kDefaultLevel)
     {
-    }
-    void onReset(const PackagingSchedule &schedule) override
-    {
-        detail::requirePrepared(schedule);
     }
     double cost(const PackagingSchedule &schedule,
                 int unit,

@@ -2,6 +2,7 @@
 #define BA_CONSTRAINTS_COMMON_HPP
 
 #include <cstdint>
+#include <numeric>
 #include <stdexcept>
 #include <vector>
 
@@ -26,7 +27,9 @@ namespace ba
 // i.e. one planning value — a real bed, or the "no bed" sentinel
 // (BedPlan::noBedValue()); members are the stays currently assigned to it.
 // Uninitialized stays (bed == -1) belong to no unit and so contribute
-// nothing, exactly like in the monolithic path.
+// nothing, exactly like in the monolithic path. The per-bed rules evaluate
+// the real beds (detail::RealBeds), unassignedStaysCost the sentinel only;
+// that scope is where a literal offset (clip = false) charges a raw 0.
 //
 // Ten of the twelve rules are a sum of independent per-(stay, value) terms —
 // they derive from PerStayConstraint below and only write that one term.
@@ -60,8 +63,12 @@ namespace ba
 // kDefaultWeight / kDefaultLevel passed to the base constructor; they are
 // assembly-time metadata, not part of the cost. Override them per instance
 // with the constructor's weight argument or the mutable `level` / `weight` /
-// `exponent`, or by name through ConstraintAssembly (`.hard()` / `.soft()` /
-// `.weight()`). The monolithic calculators read the same kDefaultWeight
+// `exponent` / `offset` / `clip`, or by name through ConstraintAssembly
+// (`.level()`, with `.hard()` / `.soft()` as its shortcuts, `.weight()`,
+// `.exponent()`, `.offset()`, `.clip()`); any component may take any of the
+// three levels, and a name may be held several times
+// (ConstraintAssembly::addInstances), each instance with its own knobs. The
+// monolithic calculators read the same kDefaultWeight
 // constants, which is why the default assembly scores bit-for-bit like
 // ScoreCalculator::calculateScore.
 //
@@ -97,6 +104,27 @@ inline bool isRealBed(const BedPlan &plan, int value)
 {
     return value >= 0 && value < plan.bedCount();
 }
+
+// The units a per-bed component EVALUATES: the real beds 0 .. bedCount - 1,
+// set at reset (its scopedUnits()). The "no bed" sentinel is no bed, so it is
+// not one of them. Its cost is 0 either way, so no score changes; what the
+// scope decides is where the literal offset formula (clip = false) charges
+// shapeCost(0 - offset): every real bed, an empty one included, and never the
+// sentinel. constraint_costs() reports the scope as "units", so the Python
+// score() charges the same beds.
+class RealBeds
+{
+public:
+    void reset(const BedPlan &plan)
+    {
+        beds_.resize(static_cast<std::size_t>(plan.bedCount()));
+        std::iota(beds_.begin(), beds_.end(), 0);
+    }
+    const std::vector<int> *units() const { return &beds_; }
+
+private:
+    std::vector<int> beds_;
+};
 
 }  // namespace detail
 
@@ -139,10 +167,21 @@ struct PerStayConstraint : BaUnitConstraint
 };
 
 // Shared base of the per-stay rules that read the bed's ROOM: the "no bed"
-// sentinel has none, so they are silent there.
+// sentinel has none, so they are silent there, and they evaluate the real
+// beds only (detail::RealBeds).
 struct PerStayRoomConstraint : PerStayConstraint
 {
     using PerStayConstraint::PerStayConstraint;
+
+    void onReset(const BedPlan &plan) override
+    {
+        PerStayConstraint::onReset(plan);
+        beds_.reset(plan);
+    }
+    const std::vector<int> *scopedUnits() const override
+    {
+        return beds_.units();
+    }
 
     // The penalty units stay `stayIndex` incurs in `room` (already resolved
     // from the bed), never called for the sentinel.
@@ -155,6 +194,9 @@ struct PerStayRoomConstraint : PerStayConstraint
             return 0.0;
         return roomCost(plan, plan.beds[unit].room, stayIndex);
     }
+
+private:
+    detail::RealBeds beds_;
 };
 
 // ---------------------------------------------------------------------------

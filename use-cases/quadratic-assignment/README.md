@@ -50,10 +50,49 @@ holds the exact CP-SAT reference.
 The three side constraints are `UnitConstraint`s over the locations (the exponent
 shapes each location's cost); the two objectives are `GlobalConstraint`s on the
 engine's member-change fast path (the exponent shapes the total). Every
-constraint is flippable (`level="hard"` / `level="soft"`), none is a reward and all
-five are scored by default (`default_enabled`); `quadratic_assignment.constraint_info()`
-reports exactly this table from the C++ components (`kDefaultLevel` /
-`kDefaultWeight`).
+constraint is flippable (`level="hard"` / `level="soft"`, or `Level.HARD` /
+`Level.SOFT`; `level="medium"` raises `ValueError`, the domain has no medium level), none
+is a reward and all five are scored by default (`default_enabled`). One limit depends on
+the data: the matrices are not validated >= 0, so when `assignment_costs` holds a negative
+entry the assignment cost's total can be negative, and so can the flow cost's when a flow
+or a distance is negative. On such data that objective cannot be hard, since a negative
+hard total would cancel a broken pin and an infeasible layout could score hard 0: every
+path refuses it with `ValueError: constraint 'assignment_cost' can have a negative raw
+cost on this problem (a bonus) and cannot be hard` (`constraint_costs()` marks its entry
+`"signed": True`). On soft the negative total stays a bonus.
+`quadratic_assignment.constraint_info()` reports exactly this table from the C++
+components (`kDefaultLevel` / `kDefaultWeight`).
+
+### 0.3.0
+
+Every constraint takes two more knobs, `offset` and `clip` (keyword-only), and may be
+picked several times. The three side constraints shape each location they evaluate, the
+two objectives their total `x`: `sign(x) * max(0, |x| - offset) ** exponent`
+(`clip=True`, the default) or `(x - offset) ** exponent`, sign-preserving (`clip=False`,
+which charges a location of raw 0 too and rewards one below the offset); `offset=0` is
+the 0.2.0 shaping. The side constraints are scoped: `pinned_assignments_cost` evaluates
+the fixed locations, `forbidden_assignments_cost` the locations named by a forbidden row
+and `location_capacity_cost` the locations with a capacity, so a literal offset charges
+exactly those (`constraint_costs()` reports them as `"units"`). Both formulas apply per
+evaluated location (or to the one total), not to the sum over the locations.
+`clip=False` with an offset is refused on hard (the three side constraints by default),
+because hard 0 must mean no violation: a location with slack would otherwise earn a hard
+reward that cancels another location's violation. Each pick is its own instance with its
+own knobs, its level included (`level` replaced the `hard` knob; `hard=` raises
+`TypeError`), and the instances add up:
+
+```python
+qap.solve(problem, constraints=[
+    *get_constraints()[:-1],
+    FlowDistanceCost(),                           # the flow cost
+    FlowDistanceCost(weight=10, offset=1000),     # + 10 x (what exceeds a budget of 1000)
+])
+```
+
+`qap.constraint_costs(problem, picks)` scores a pick list and keys the second pick
+`flow_distance_cost#2`; every entry reports its `offset`, `clip` and the `level` in effect.
+The CP-SAT reference takes the same picks (integral offsets; on an objective only while
+its data cannot make the total negative).
 
 ### 0.2.0
 
@@ -99,7 +138,8 @@ other C++ use cases.
     `calculate_score` / `constraint_costs` need every location (`ValueError`
     naming the missing ones; 0.1.5 raised `KeyError`), while the engine object
     scores a partial state;
-  - a constraint picked twice raises `ValueError`.
+  - a constraint picked twice raised `ValueError` (since 0.3.0 each pick is its own
+    instance, see 0.3.0 above).
 - **`SolverConfig`** is the engine's (`spent_limit_seconds`,
   `unimproved_spent_limit_seconds`, `step_count_limit`,
   `unimproved_step_count_limit`, `random_seed`, `parallel_solver_count`,
@@ -176,8 +216,11 @@ optima, determinism). `qap_plugin_test`: default assembly == monolith bit for bi
 plugin incremental == full recompute with accepted and undone moves (per-constraint
 raw costs, each constraint non-zero on some step), partial assemblies, overrides
 (unit exponent per location, global exponent on the total, per-location hard
-rounding), the cost layout, FULL_ASSERT plugin solves, raw costs by hand and the
-catalog.
+rounding), the cost layout, FULL_ASSERT plugin solves, raw costs by hand, the
+catalog, and repeated / shifted components (a hand-calculated repeat, threshold and
+literal offsets by hand, the scoped side constraints charging only their locations,
+the literal formula refused on hard at reset and kept on soft, incremental == a fresh
+recompute over a walk with accepted and undone moves, a FULL_ASSERT solve).
 
 ## Usage
 
@@ -214,6 +257,9 @@ qap.constraint_info()      # [ConstraintInfo(name='pinned_assignments_cost', def
 qap.solve(problem, time_limit_seconds=1.0, constraints=[*get_constraints()[:-1], FlowDistanceCost(weight=2)])
 raw = qap.constraint_costs(problem)                  # raw costs, re-priced in pure Python:
 score(raw), score(raw, [PinnedAssignmentsCost(level="soft"), *get_constraints()[1:]])
+# A constraint may be picked several times, each pick with its own knobs; offset / clip
+# shift the shaping (clip=True: only the flow cost beyond 20 counts for the second pick).
+score(raw, [FlowDistanceCost(), FlowDistanceCost(weight=10, offset=20)])
 ```
 
 ## Starting from an existing solution
@@ -297,7 +343,7 @@ full bijection.
    `description_en` / `description_ko` to
    `python/quadratic_assignment/constraints.py` (plus its module-level default
    instance); callers then pick, reweight or flip it:
-   `constraints=get_constraints([..., MyRuleCost(weight=5, level="hard")])`;
+   `constraints=[..., MyRuleCost(weight=5, level="hard")]`;
 5. mirror it in the CP-SAT model in
    [`benchmarks/quadratic-assignment/cpsat`](../../benchmarks/quadratic-assignment/cpsat)
    (a plugin subclassing the spec; defaults come from `constraint_info()`), with an

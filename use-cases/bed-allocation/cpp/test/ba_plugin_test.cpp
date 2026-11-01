@@ -15,6 +15,15 @@
 //       kDefaultWeight / kDefaultLevel
 //   (i) the medium level: the fold, hard() / soft() / weight on
 //       unassignedStaysCost, and incremental == full with those overrides
+//   (j) repeated components and the offset / clip knobs: a hand-calculated
+//       repeat, threshold and literal offsets by hand (the per-bed
+//       constraints evaluate the real beds, an empty one included, and never
+//       the "no bed" sentinel, which is the only unit of
+//       unassignedStaysCost), the global's total shaped once, the literal
+//       formula refused on hard at reset and kept on soft (and on the
+//       into_soft medium), incremental == a fresh recompute over a random
+//       walk and a FULL_ASSERT solve with repeated, shifted components
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -22,6 +31,7 @@
 #include <functional>
 #include <memory>
 #include <random>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -966,6 +976,24 @@ void verifyMediumLevel()
               "weight 3 stays in medium units");
     }
     {
+        const auto levels = levelsWith(
+            defaultConstraints().level("preferredPatientEquipmentCost",
+                                       optimaru::Level::Medium),
+            plan);
+        check(levels.hard == 0 && levels.medium == -306.0
+                  && levels.soft == 0.0,
+              "level(Medium): preferredPatientEquipmentCost moves onto medium");
+    }
+    {
+        const auto levels = levelsWith(
+            defaultConstraints()
+                .level("preferredPatientEquipmentCost", optimaru::Level::Medium)
+                .weight("preferredPatientEquipmentCost", 1),
+            plan);
+        check(levels.hard == 0 && levels.medium == -12.0 && levels.soft == 0.0,
+              "a weight on a moved constraint is in medium units");
+    }
+    {
         // solve(plan, calculator) reports the assembly's levels: two
         // overlapping stays for one bed, unassignedStaysCost demoted to soft.
         // Sharing costs 6000 hard, so one stay goes without a bed and its 6
@@ -1009,6 +1037,12 @@ void verifyMediumIncremental()
             {"weight 3",
              []
              { return defaultConstraints().weight("unassignedStaysCost", 3); }},
+            {"with preferredMaxRoomCapacityCost on medium",
+             []
+             {
+                 return defaultConstraints().level(
+                     "preferredMaxRoomCapacityCost", optimaru::Level::Medium);
+             }},
         };
     for (const auto &variant : variants)
     {
@@ -1054,11 +1088,315 @@ void verifyMediumIncremental()
         check(mismatches == 0,
               "unassignedStaysCost " + variant.first
                   + ": 1500 random moves, incremental == full recompute");
-        if (variant.first == "default" || variant.first == "weight 3")
+        if (variant.first != "hard" && variant.first != "soft")
         {
             check(mediumSteps > 0,
                   variant.first + ": the walk visits medium states");
         }
+    }
+    std::printf("\n");
+}
+
+// -------------------------------------------------------------------------
+// (j) Repeated components and offsets. A repeat is a fresh copy of a
+// default component (another defaultConstraints(), the one name kept, its
+// knobs re-stated) appended with addInstances(), as the Python bindings
+// build it from a pick list.
+// -------------------------------------------------------------------------
+ConstraintAssembly copyOf(const std::string &name)
+{
+    ConstraintAssembly copy = defaultConstraints();
+    copy.only({name});
+    return copy;
+}
+
+// Three beds (two rooms of capacity 2) and four 6-night stays preferring a
+// single room: s0 in b0, s1 in b1, b2 empty, s2 and s3 on the "no bed"
+// sentinel. Raw per unit (b0, b1, b2, sentinel): preferredMaxRoomCapacityCost
+// [6, 6, 0, 0] (evaluated on b0..b2), unassignedStaysCost [0, 0, 0, 12]
+// (evaluated on the sentinel), every other unit constraint 0,
+// mixedGenderRoomCost 0.
+BedPlan repeatInstance()
+{
+    BedPlan plan = makeBase();
+    const int r0 = addRoom(plan, GenderLimitation::ANY_GENDER, 2);
+    const int r1 = addRoom(plan, GenderLimitation::ANY_GENDER, 2);
+    addBed(plan, r0);
+    addBed(plan, r0);
+    addBed(plan, r1);
+    for (int value : {0, 1, 3, 3})
+    {
+        const int stay = addStay(plan, 0, 5, Gender::MALE, value);
+        plan.stays[stay].patientPreferredMaximumRoomCapacity = 1;
+    }
+    ScoreCalculator::prepare(plan);
+    return plan;
+}
+
+ConstraintAssembly repeatedAssembly()
+{
+    ConstraintAssembly assembly = defaultConstraints();
+    assembly.offset("preferredMaxRoomCapacityCost", 3.0);
+    assembly.addInstances(
+        std::move(copyOf("preferredMaxRoomCapacityCost")
+                      .weight("preferredMaxRoomCapacityCost", 0.25)
+                      .exponent("preferredMaxRoomCapacityCost", 2.0)
+                      .offset("preferredMaxRoomCapacityCost", 4.0)
+                      .clip("preferredMaxRoomCapacityCost", false)));
+    // The literal bed-conflict copy sits on soft: hard refuses the literal
+    // formula with an offset (hard 0 must mean no violation).
+    assembly.addInstances(std::move(copyOf("bedConflictCost")
+                                        .soft("bedConflictCost")
+                                        .weight("bedConflictCost", 2.0)
+                                        .offset("bedConflictCost", 1.0)
+                                        .clip("bedConflictCost", false)));
+    assembly.addInstances(std::move(copyOf("bedConflictCost")
+                                        .weight("bedConflictCost", 2.0)
+                                        .offset("bedConflictCost", 1.0)));
+    assembly.addInstances(std::move(copyOf("unassignedStaysCost")
+                                        .exponent("unassignedStaysCost", 2.0)
+                                        .offset("unassignedStaysCost", 4.0)));
+    assembly.addInstances(std::move(copyOf("unassignedStaysCost")
+                                        .soft("unassignedStaysCost")
+                                        .weight("unassignedStaysCost", 3.0)
+                                        .offset("unassignedStaysCost", -2.0)
+                                        .clip("unassignedStaysCost", false)));
+    assembly.addInstances(std::move(copyOf("mixedGenderRoomCost")
+                                        .soft("mixedGenderRoomCost")
+                                        .weight("mixedGenderRoomCost", 1.0)
+                                        .offset("mixedGenderRoomCost", 2.0)
+                                        .clip("mixedGenderRoomCost", false)));
+    assembly.offset("departmentSpecialtyCost", -1.0);
+    return assembly;
+}
+
+void verifyRepeatsAndOffsets()
+{
+    std::printf("== (j) Repeated components, offset / clip ==\n");
+    {
+        BedPlan plan = repeatInstance();
+        ConstraintAssembly assembly = copyOf("preferredMaxRoomCapacityCost");
+        assembly.addInstances(
+            std::move(copyOf("preferredMaxRoomCapacityCost")
+                          .weight("preferredMaxRoomCapacityCost", 0.5)
+                          .exponent("preferredMaxRoomCapacityCost", 2.0)));
+        const auto levels = levelsWith(std::move(assembly), plan);
+        check(levels.hard == 0 && levels.medium == 0.0
+                  && levels.soft == -(8.0 * 12 + 0.5 * 2 * 36),
+              "8 x nights + 0.5 x nights^2 per bed: -132 soft");
+        DecomposedCalculator calculator;
+        ConstraintAssembly twice = copyOf("preferredMaxRoomCapacityCost");
+        twice.addInstances(
+            std::move(copyOf("preferredMaxRoomCapacityCost")
+                          .weight("preferredMaxRoomCapacityCost", 0.5)
+                          .exponent("preferredMaxRoomCapacityCost", 2.0)));
+        std::move(twice).into(calculator);
+        calculator.resetWorkingSolution(plan);
+        calculator.calculateScore();
+        const auto entries = calculator.constraintCosts();
+        check(entries.size() == 2 && entries[0].unitCosts == entries[1].unitCosts
+                  && entries[0].unitCosts == std::vector<double>{6, 6, 0, 0}
+                  && entries[0].scoped
+                  && entries[0].units == std::vector<int>{0, 1, 2}
+                  && entries[1].weight == 0.5 && entries[1].exponent == 2.0
+                  && entries[1].defaultWeight == 8.0,
+              "two instances, the same raw costs, each with its own knobs");
+    }
+    {
+        BedPlan plan = repeatInstance();
+        // Threshold 2 per bed: 2 x (6 - 2) x 8.
+        check(levelsWith(copyOf("preferredMaxRoomCapacityCost")
+                             .offset("preferredMaxRoomCapacityCost", 2.0),
+                         plan)
+                      .soft
+                  == -8.0 * 8,
+              "threshold offset 2: 8 x 2 x 4");
+        // Literal: the empty bed b2 (raw 0) is evaluated, so it is rewarded;
+        // the sentinel is no bed and is not.
+        check(levelsWith(copyOf("preferredMaxRoomCapacityCost")
+                             .offset("preferredMaxRoomCapacityCost", 2.0)
+                             .clip("preferredMaxRoomCapacityCost", false),
+                         plan)
+                      .soft
+                  == -8.0 * (8 - 2),
+              "literal offset 2: 8 x (2 x 4 - 2), the empty bed included, not the sentinel");
+        // A negative threshold offset adds to the non-zero beds only.
+        check(levelsWith(copyOf("preferredMaxRoomCapacityCost")
+                             .offset("preferredMaxRoomCapacityCost", -1.0),
+                         plan)
+                      .soft
+                  == -8.0 * 14,
+              "threshold offset -1: 8 x 2 x 7, the empty bed stays 0");
+        // The literal bed-conflict pick on soft: (0 - 0.5) x 3 = -1.5 on each
+        // of the three beds, the empty one included: +4.5 soft (not rounded).
+        const auto conflict = levelsWith(copyOf("bedConflictCost")
+                                             .soft("bedConflictCost")
+                                             .weight("bedConflictCost", 3.0)
+                                             .offset("bedConflictCost", 0.5)
+                                             .clip("bedConflictCost", false),
+                                         plan);
+        check(conflict.hard == 0 && conflict.medium == 0.0 && conflict.soft == 4.5,
+              "bed conflict literal offset 0.5 at weight 3 on soft: 3 beds x (-1.5) -> +4.5 soft");
+        // The scoped medium constraint evaluates the sentinel only: 12 - 20.
+        const auto scoped = levelsWith(copyOf("unassignedStaysCost")
+                                           .offset("unassignedStaysCost", 20.0)
+                                           .clip("unassignedStaysCost", false),
+                                       plan);
+        check(scoped.medium == 8.0 && scoped.hard == 0 && scoped.soft == 0.0,
+              "unassigned literal offset 20: (12 - 20) on the sentinel only, +8 medium");
+        DecomposedCalculator calculator;
+        copyOf("unassignedStaysCost").into(calculator);
+        calculator.resetWorkingSolution(plan);
+        calculator.calculateScore();
+        const auto entries = calculator.constraintCosts();
+        check(entries.size() == 1 && entries[0].scoped
+                  && entries[0].units == std::vector<int>{plan.noBedValue()},
+              "unassignedStaysCost reports the sentinel as its one evaluated unit");
+        // The global's total (0) is shaped once: (0 - 2) x 1000, on soft.
+        const auto mixed = levelsWith(copyOf("mixedGenderRoomCost")
+                                          .soft("mixedGenderRoomCost")
+                                          .offset("mixedGenderRoomCost", 2.0)
+                                          .clip("mixedGenderRoomCost", false),
+                                      plan);
+        check(mixed.hard == 0 && mixed.soft == 2000.0,
+              "mixed-gender literal offset 2 on the single total, on soft: +2000 soft");
+    }
+    {
+        // On hard (the default level of bedConflictCost and
+        // mixedGenderRoomCost) the literal formula with an offset is refused
+        // at reset, whichever sign and setter order: +0.5 would reward the
+        // three beds (+6 hard, a feasible-looking score), -0.5 would charge
+        // beds that hold no conflict.
+        auto resetRefusal = [](ConstraintAssembly assembly) {
+            BedPlan plan = repeatInstance();
+            try
+            {
+                levelsWith(std::move(assembly), plan);
+            }
+            catch (const std::logic_error &error)
+            {
+                return std::string(error.what());
+            }
+            return std::string();
+        };
+        auto refusal = [](const std::string &name) {
+            return "Constraint '" + name
+                   + "' cannot use clip=false with a non-zero offset on a level that counts "
+                     "toward the hard score (hard 0 must mean no violation)";
+        };
+        check(resetRefusal(copyOf("bedConflictCost")
+                               .offset("bedConflictCost", 0.5)
+                               .clip("bedConflictCost", false))
+                      == refusal("bedConflictCost")
+                  && resetRefusal(copyOf("bedConflictCost")
+                                      .clip("bedConflictCost", false)
+                                      .offset("bedConflictCost", -0.5))
+                         == refusal("bedConflictCost"),
+              "bed conflict literal offset +-0.5 on hard: refused at reset");
+        check(resetRefusal(copyOf("mixedGenderRoomCost")
+                               .offset("mixedGenderRoomCost", 2.0)
+                               .clip("mixedGenderRoomCost", false))
+                  == refusal("mixedGenderRoomCost"),
+              "mixed-gender literal offset on its default hard level: refused at reset");
+        check(resetRefusal(copyOf("preferredMaxRoomCapacityCost")
+                               .offset("preferredMaxRoomCapacityCost", 2.0)
+                               .clip("preferredMaxRoomCapacityCost", false)
+                               .hard("preferredMaxRoomCapacityCost"))
+                      == refusal("preferredMaxRoomCapacityCost")
+                  && resetRefusal(copyOf("unassignedStaysCost")
+                                      .hard("unassignedStaysCost")
+                                      .offset("unassignedStaysCost", 20.0)
+                                      .clip("unassignedStaysCost", false))
+                         == refusal("unassignedStaysCost"),
+              "a soft / medium literal pick moved to hard (before or after): refused at reset");
+        check(resetRefusal(copyOf("bedConflictCost").offset("bedConflictCost", 0.5)).empty()
+                  && resetRefusal(copyOf("bedConflictCost").clip("bedConflictCost", false))
+                         .empty()
+                  && resetRefusal(copyOf("unassignedStaysCost")
+                                      .offset("unassignedStaysCost", 20.0)
+                                      .clip("unassignedStaysCost", false))
+                         .empty(),
+              "allowed: a hard threshold offset, hard clip=false with offset 0, and the "
+              "literal formula on the into_soft medium");
+    }
+    {
+        // Random walk: incremental == a fresh calculator of the same assembly.
+        BedPlan plan = buildRandomInstance(/*stayCount*/ 30, /*seed*/ 7);
+        ScoreCalculator::prepare(plan);
+        DecomposedCalculator calculator;
+        repeatedAssembly().into(calculator);
+        optimaru::ScoreDirector<BedPlan> director(plan, calculator);
+        std::mt19937_64 rng(321);
+        std::uniform_real_distribution<double> unit(0.0, 1.0);
+        const int stayCount = static_cast<int>(plan.stays.size());
+        const int valueCount = plan.bedCount() + 1;
+        int mismatches = 0;
+        int mediumSteps = 0;
+        double drift = 0.0;
+        const int steps = 3000;
+        for (int step = 0; step < steps; ++step)
+        {
+            if (unit(rng) < 0.75)
+            {
+                const int stay = static_cast<int>(rng() % stayCount);
+                const int value = unit(rng) < 0.05
+                                      ? -1
+                                      : static_cast<int>(rng() % valueCount);
+                director.changeVariable(stay, value);
+            }
+            else
+            {
+                const int a = static_cast<int>(rng() % stayCount);
+                const int b = static_cast<int>(rng() % stayCount);
+                const int va = plan.stays[a].bed;
+                const int vb = plan.stays[b].bed;
+                director.changeVariable(a, vb);
+                director.changeVariable(b, va);
+            }
+            BedPlan shadow = plan;
+            DecomposedCalculator fresh;
+            repeatedAssembly().into(fresh);
+            fresh.resetWorkingSolution(shadow);
+            const optimaru::HardSoftScore full = fresh.calculateScore();
+            if (fresh.levelScores().medium != 0.0)
+                ++mediumSteps;
+            const optimaru::HardSoftScore incremental = director.calculateScore();
+            drift = std::max(drift, std::fabs(full.soft - incremental.soft));
+            if (!optimaru::scoresAgree(incremental, full))
+                ++mismatches;
+        }
+        std::printf("    largest soft drift %.3g\n", drift);
+        check(mismatches == 0,
+              std::to_string(steps)
+                  + " random moves with repeated, shifted components: incremental == fresh");
+        check(mediumSteps > 0, "the walk visits medium states");
+    }
+    {
+        BedPlan plan = buildRandomInstance(/*stayCount*/ 20, /*seed*/ 11);
+        Solver::Config config;
+        config.spentLimit = std::chrono::seconds(2);
+        config.randomSeed = 5;
+        config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+        config.ruinRecreateUnimprovedStepTrigger = 200;
+        config.ruinRecreatePolishSteps = 100;
+        DecomposedCalculator calculator;
+        repeatedAssembly().into(calculator);
+        bool corrupted = false;
+        try
+        {
+            Solver solver(config);
+            solver.solve(plan, calculator);
+        }
+        catch (const optimaru::ScoreCorruptionError &e)
+        {
+            corrupted = true;
+            std::printf("  ScoreCorruptionError: %s\n", e.what());
+        }
+        check(!corrupted, "2s FULL_ASSERT solve with repeated, shifted components");
+        DecomposedCalculator fresh;
+        repeatedAssembly().into(fresh);
+        check(!corrupted && plan.score == scoreWith(fresh, plan),
+              "the reported score == a fresh recompute of the same assembly");
     }
     std::printf("\n");
 }
@@ -1077,6 +1415,7 @@ int main()
     verifyCatalog();
     verifyMediumLevel();
     verifyMediumIncremental();
+    verifyRepeatsAndOffsets();
 
     if (failures == 0)
     {

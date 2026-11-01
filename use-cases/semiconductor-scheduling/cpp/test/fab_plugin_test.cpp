@@ -10,6 +10,13 @@
 //   (g) raw costs by hand through constraintCosts(): a positive and a zero
 //       case per constraint
 //   (h) the catalog: info() == the components' kDefaultWeight / kDefaultLevel
+//   (i) repeated components and the offset / clip knobs: a hand-calculated
+//       repeat, a repeat on its own level (hard next to the soft default),
+//       threshold and literal offsets by hand on the totals (a raw 0 counts
+//       in literal mode), the literal formula refused on hard at reset and
+//       kept on soft, incremental == a fresh recompute over random walks
+//       (every repeat reads the calculator's one shared schedule view) and
+//       FULL_ASSERT solves with repeated, shifted components on both levels
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -37,6 +44,12 @@ Score scoreWith(DecomposedCalculator &calculator, SemiconductorSchedule &schedul
 {
     calculator.resetWorkingSolution(schedule);
     return calculator.calculateScore();
+}
+
+// Exact equality of both levels (the hand cases below are exact in binary).
+bool sameScore(const Score &a, const Score &b)
+{
+    return a.hard == b.hard && a.soft == b.soft;
 }
 
 // Raw cost per constraint name from constraintCosts() (one entry per global).
@@ -380,6 +393,285 @@ void verifyCatalog()
     check(flips, "(h) hard constraints demote, soft ones promote");
 }
 
+// (i) Repeated components and offsets. A repeat is a fresh copy of a
+// default component (another defaultConstraints(), the one name kept, its
+// knobs re-stated) appended with addInstances(), as the Python bindings build
+// it from a pick list. Every component is global: the offset shapes the
+// instance's total. The copies share the calculator's one "fab.schedule"
+// view, which resets once per calculator reset and decodes once per score.
+ConstraintAssembly copyOf(const std::string &name)
+{
+    ConstraintAssembly copy = defaultConstraints();
+    copy.only({name});
+    return copy;
+}
+
+Score scoreOf(ConstraintAssembly assembly, SemiconductorSchedule s)
+{
+    DecomposedCalculator calculator;
+    std::move(assembly).into(calculator);
+    return scoreWith(calculator, s);
+}
+
+// Every constraint stays in; hard and soft totals repeated or shifted in
+// both modes, a fractional hard weight on a threshold offset, a soft one made
+// hard and back. Hard refuses the literal formula with an offset, so the
+// literal copies of hard defaults sit on soft, next to a hard threshold copy
+// with the same knobs.
+ConstraintAssembly repeatedAssembly()
+{
+    ConstraintAssembly assembly = defaultConstraints();
+    assembly.offset("makespanCost", 5.0).clip("makespanCost", false);
+    assembly.offset("machineCapacityCost", 1.0);
+    assembly.addInstances(std::move(copyOf("makespanCost")
+                                        .weight("makespanCost", 0.5)
+                                        .exponent("makespanCost", 2.0)
+                                        .offset("makespanCost", 10.0)));
+    assembly.addInstances(std::move(copyOf("lotRoutePrecedenceCost")
+                                        .weight("lotRoutePrecedenceCost", 1.5)
+                                        .offset("lotRoutePrecedenceCost", 0.5)));
+    assembly.addInstances(std::move(copyOf("lotRoutePrecedenceCost")
+                                        .soft("lotRoutePrecedenceCost")
+                                        .weight("lotRoutePrecedenceCost", 1.5)
+                                        .offset("lotRoutePrecedenceCost", 0.5)
+                                        .clip("lotRoutePrecedenceCost", false)));
+    assembly.addInstances(std::move(copyOf("batchFamilyConflictCost").offset("batchFamilyConflictCost", -2.0)));
+    assembly.addInstances(std::move(copyOf("pinnedAssignmentsCost").offset("pinnedAssignmentsCost", -1.0)));
+    assembly.addInstances(std::move(copyOf("pinnedAssignmentsCost")
+                                        .soft("pinnedAssignmentsCost")
+                                        .offset("pinnedAssignmentsCost", -1.0)
+                                        .clip("pinnedAssignmentsCost", false)));
+    assembly.addInstances(std::move(copyOf("weightedTardinessCost")
+                                        .weight("weightedTardinessCost", 0.25)
+                                        .exponent("weightedTardinessCost", 1.5)
+                                        .offset("weightedTardinessCost", 20.0)
+                                        .clip("weightedTardinessCost", false)));
+    assembly.addInstances(std::move(copyOf("cycleTimeCost").hard("cycleTimeCost").offset("cycleTimeCost", 30.0)));
+    assembly.addInstances(std::move(copyOf("machineCapacityCost").soft("machineCapacityCost")));
+    return assembly;
+}
+
+void verifyRepeatsAndOffsets()
+{
+    // fabProblem(): makespan 17, cycle time 46, machine capacity 2, family
+    // conflict 8, max queue time 3, no pins (pinnedAssignmentsCost 0).
+    const SemiconductorSchedule s = fabProblem();
+    {
+        ConstraintAssembly assembly = copyOf("makespanCost");
+        assembly.addInstances(
+            std::move(copyOf("makespanCost").weight("makespanCost", 0.5).exponent("makespanCost", 2.0)));
+        DecomposedCalculator calculator;
+        assembly.into(calculator);
+        SemiconductorSchedule copy = s;
+        const Score score = scoreWith(calculator, copy);
+        check(score.hard == 0 && score.soft == -(17 + 0.5 * 289), "(i) makespan + 0.5 x makespan^2: -161.5 soft");
+        const auto entries = calculator.constraintCosts();
+        check(entries.size() == 2 && entries[0].unitCosts == entries[1].unitCosts
+                  && entries[0].unitCosts == std::vector<double>{17.0} && entries[1].weight == 0.5
+                  && entries[1].exponent == 2.0 && entries[1].defaultWeight == 1.0
+                  && entries[0].name == entries[1].name,
+              "(i) two instances, the same raw total, each with its own knobs");
+        ConstraintAssembly twice = copyOf("machineCapacityCost");
+        twice.addInstances(copyOf("machineCapacityCost"));
+        check(scoreOf(std::move(twice), s).hard == -4, "(i) identical picks count twice: 2 x 2");
+    }
+    {
+        // Each instance on its own level: the soft makespan 17 next to a hard
+        // repeat, 2 x (17 - 15) beyond its offset.
+        ConstraintAssembly assembly = copyOf("makespanCost");
+        assembly.addInstances(std::move(
+            copyOf("makespanCost").hard("makespanCost").weight("makespanCost", 2.0).offset("makespanCost", 15.0)));
+        DecomposedCalculator calculator;
+        assembly.into(calculator);
+        SemiconductorSchedule copy = s;
+        const Score score = scoreWith(calculator, copy);
+        check(score.hard == -4 && score.soft == -17.0,
+              "(i) soft makespan + a hard repeat beyond 15: -4 hard / -17 soft");
+        const auto entries = calculator.constraintCosts();
+        check(entries.size() == 2 && entries[0].level == optimaru::Level::Soft
+                  && entries[1].level == optimaru::Level::Hard && entries[1].defaultLevel == optimaru::Level::Soft,
+              "(i) the repeat reports its own level, the default stays soft");
+    }
+    check(scoreOf(copyOf("makespanCost").offset("makespanCost", 10.0), s).soft == -7.0,
+          "(i) threshold offset 10 on the makespan 17: -7");
+    check(scoreOf(copyOf("makespanCost").offset("makespanCost", 20.0).clip("makespanCost", false), s).soft == 3.0,
+          "(i) literal offset 20 on 17: 17 - 20 = -3, +3 soft");
+    // The hard defaults refuse the literal formula with an offset, so its
+    // numbers on them are checked on soft (not rounded).
+    check(sameScore(scoreOf(copyOf("pinnedAssignmentsCost")
+                                .soft("pinnedAssignmentsCost")
+                                .offset("pinnedAssignmentsCost", 2.0)
+                                .clip("pinnedAssignmentsCost", false),
+                            s),
+                    Score{0, 2.0}),
+          "(i) soft literal offset 2 on a raw 0 (no pins): charged, +2");
+    check(scoreOf(copyOf("pinnedAssignmentsCost").offset("pinnedAssignmentsCost", -1.0), s).hard == 0,
+          "(i) a negative threshold offset leaves a raw 0 at 0");
+    check(sameScore(scoreOf(copyOf("pinnedAssignmentsCost")
+                                .soft("pinnedAssignmentsCost")
+                                .offset("pinnedAssignmentsCost", -1.0)
+                                .clip("pinnedAssignmentsCost", false),
+                            s),
+                    Score{0, -1.0}),
+          "(i) a negative soft literal offset charges a raw 0: 0 + 1");
+    check(scoreOf(copyOf("batchFamilyConflictCost").offset("batchFamilyConflictCost", -2.0), s).hard == -10,
+          "(i) a negative threshold offset adds to a non-zero total: 8 + 2");
+    check(sameScore(scoreOf(copyOf("maxQueueTimeCost").offset("maxQueueTimeCost", 0.5), s), Score{-3, 0.0}),
+          "(i) a hard threshold offset rounds the total: 3 - 0.5 = 2.5 -> 3");
+    check(sameScore(scoreOf(copyOf("maxQueueTimeCost")
+                                .soft("maxQueueTimeCost")
+                                .offset("maxQueueTimeCost", 0.5)
+                                .clip("maxQueueTimeCost", false),
+                            s),
+                    Score{0, -2.5}),
+          "(i) a soft literal offset is not rounded: 3 - 0.5 = 2.5");
+    check(sameScore(scoreOf(copyOf("pinnedAssignmentsCost")
+                                .soft("pinnedAssignmentsCost")
+                                .weight("pinnedAssignmentsCost", 3.0)
+                                .offset("pinnedAssignmentsCost", 0.5)
+                                .clip("pinnedAssignmentsCost", false),
+                            s),
+                    Score{0, 1.5}),
+          "(i) soft: 3 x (0 - 0.5) = -1.5, +1.5");
+    {
+        DecomposedCalculator calculator;
+        copyOf("cycleTimeCost").offset("cycleTimeCost", 2.5).clip("cycleTimeCost", false).into(calculator);
+        SemiconductorSchedule copy = s;
+        scoreWith(calculator, copy);
+        const auto entries = calculator.constraintCosts();
+        check(entries.size() == 1 && entries[0].offset == 2.5 && !entries[0].clip && !entries[0].scoped
+                  && entries[0].unitCosts == std::vector<double>{46.0},
+              "(i) constraintCosts() reports the offset and clip, the raw total unshaped");
+    }
+    {
+        // On hard the literal formula with an offset is refused at reset,
+        // whichever sign and setter order, for a hard default and for the
+        // soft makespan moved to hard: +2 on the machine capacity total 2
+        // would score it as 0 (and +8 would turn the family conflicts' 8 into
+        // a hard 0), -1 would charge a total without a violation.
+        auto refusal = [](const std::string &name) {
+            return "Constraint '" + name
+                   + "' cannot use clip=false with a non-zero offset on a level that counts "
+                     "toward the hard score (hard 0 must mean no violation)";
+        };
+        auto resetRefusal = [&s](ConstraintAssembly assembly) {
+            try
+            {
+                scoreOf(std::move(assembly), s);
+            }
+            catch (const std::logic_error &error)
+            {
+                return std::string(error.what());
+            }
+            return std::string();
+        };
+        check(resetRefusal(copyOf("machineCapacityCost")
+                               .offset("machineCapacityCost", 2.0)
+                               .clip("machineCapacityCost", false))
+                      == refusal("machineCapacityCost")
+                  && resetRefusal(copyOf("machineCapacityCost")
+                                      .clip("machineCapacityCost", false)
+                                      .offset("machineCapacityCost", -1.0))
+                         == refusal("machineCapacityCost"),
+              "(i) machine capacity literal offset +2 / -1 on its default hard: refused at reset");
+        check(resetRefusal(copyOf("makespanCost")
+                               .offset("makespanCost", 20.0)
+                               .clip("makespanCost", false)
+                               .hard("makespanCost"))
+                  == refusal("makespanCost"),
+              "(i) makespan literal offset moved to hard afterwards: refused at reset");
+        ConstraintAssembly repeated = copyOf("lotRoutePrecedenceCost");
+        repeated.addInstances(std::move(copyOf("lotRoutePrecedenceCost")
+                                            .offset("lotRoutePrecedenceCost", 1.0)
+                                            .clip("lotRoutePrecedenceCost", false)));
+        check(resetRefusal(std::move(repeated)) == refusal("lotRoutePrecedenceCost"),
+              "(i) a hard literal repeat next to the default: refused at reset");
+        check(resetRefusal(copyOf("machineCapacityCost").offset("machineCapacityCost", 2.0)).empty()
+                  && resetRefusal(copyOf("machineCapacityCost").clip("machineCapacityCost", false)).empty()
+                  && resetRefusal(copyOf("machineCapacityCost")
+                                      .offset("machineCapacityCost", 2.0)
+                                      .clip("machineCapacityCost", false)
+                                      .soft("machineCapacityCost"))
+                         .empty(),
+              "(i) machine capacity: a threshold offset or clip=false with offset 0 on hard, and the "
+              "literal offset on soft, are allowed");
+    }
+    {
+        int mismatches = 0;
+        int moves = 0;
+        for (int instance = 0; instance < 30; ++instance)
+        {
+            SemiconductorSchedule w = randomInstance(static_cast<std::uint64_t>(instance) * 37 + 11);
+            w.warmStart = instance % 2 == 0;
+            beginSearch(w);
+            DecomposedCalculator calculator;
+            repeatedAssembly().into(calculator);
+            optimaru::ScoreDirector<SemiconductorSchedule> director(w, calculator);
+            std::mt19937_64 rng(static_cast<std::uint64_t>(instance) + 77);
+            const int n = w.rowCount();
+            for (int m = 0; m < 200; ++m, ++moves)
+            {
+                const int row = static_cast<int>(rng() % static_cast<std::uint64_t>(n));
+                const int old = w.rows[static_cast<std::size_t>(row)].value;
+                if (m % 4 == 3 && n > 1)
+                {
+                    const int other = static_cast<int>(rng() % static_cast<std::uint64_t>(n));
+                    director.beginVariableChanges();
+                    director.changeVariable(row, randomValue(w, rng, false));
+                    director.changeVariable(other, randomValue(w, rng, true));
+                    director.endVariableChanges();
+                }
+                else
+                {
+                    director.changeVariable(row, randomValue(w, rng, true));
+                    if (m % 5 == 0)
+                    {
+                        director.calculateScore();
+                        director.changeVariable(row, old);  // a rejected move
+                    }
+                }
+                const Score incremental = director.calculateScore();
+                SemiconductorSchedule copy = w;
+                DecomposedCalculator fresh;
+                repeatedAssembly().into(fresh);
+                const Score full = scoreWith(fresh, copy);
+                if (!optimaru::scoresAgree(incremental, full) && ++mismatches <= 3)
+                {
+                    std::printf("  MISMATCH instance %d move %d: incremental=%s full=%s\n", instance, m,
+                                incremental.toString().c_str(), full.toString().c_str());
+                }
+            }
+        }
+        check(mismatches == 0, "(i) " + std::to_string(moves)
+                                   + " moves with repeated, shifted components: incremental == fresh");
+    }
+    bool ok = true;
+    try
+    {
+        for (int seed = 0; seed < 4; ++seed)
+        {
+            SemiconductorSchedule w = randomInstance(950 + static_cast<std::uint64_t>(seed));
+            w.warmStart = seed % 2 == 1;
+            DecomposedCalculator calculator;
+            repeatedAssembly().into(calculator);
+            Solver::Config config;
+            config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+            config.stepCountLimit = 300;
+            config.randomSeed = static_cast<std::uint64_t>(seed);
+            Solver(config).solve(w, calculator);
+            DecomposedCalculator again;
+            repeatedAssembly().into(again);
+            ok &= optimaru::scoresAgree(w.score, scoreWith(again, w)) && !w.searching;
+        }
+    }
+    catch (const std::exception &error)
+    {
+        std::printf("  %s\n", error.what());
+        ok = false;
+    }
+    check(ok, "(i) FULL_ASSERT solves with repeated, shifted components; the score is the assembly's");
+}
+
 }  // namespace
 
 int main()
@@ -392,5 +684,6 @@ int main()
     verifySolveFullAssert();
     verifyRawCostsByHand();
     verifyCatalog();
+    verifyRepeatsAndOffsets();
     return finish("fab_plugin_test");
 }

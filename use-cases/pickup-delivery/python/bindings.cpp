@@ -450,7 +450,9 @@ PYBIND11_MODULE(_core, m)
             py::call_guard<py::gil_scoped_release>())
         // Same solve, scored by a caller-chosen constraint set (see
         // pdp_routing.constraints). The picks replace the defaults; None
-        // keeps them.
+        // keeps them. A name may be picked several times: every pick is its
+        // own instance (a fresh copy of the default component) with its own
+        // knobs.
         //
         // updateShadowVariables, not calculateScore: the plugin solve already
         // stored the score THIS calculator computed, and a full recompute
@@ -465,7 +467,8 @@ PYBIND11_MODULE(_core, m)
                const py::object &constraints)
             {
                 DecomposedCalculator calculator;
-                tfpy::applyConstraints(defaultConstraints(), constraints)
+                tfpy::applyConstraints([] { return defaultConstraints(); },
+                                       constraints)
                     .into(calculator);
                 py::gil_scoped_release release;
                 solver.solve(plan, calculator);
@@ -474,20 +477,27 @@ PYBIND11_MODULE(_core, m)
             py::arg("plan"),
             py::arg("constraints") = py::none());
 
-    // The raw per-unit costs of the default assembly on `plan` — the input
+    // The raw per-unit costs of an assembly on `plan` — the input
     // pdp_routing.constraints.score() turns into a score. Scoring once is
     // enough: re-pricing any assembly is pure Python arithmetic on these.
+    // None = the default assembly; a pick list scores exactly those picks
+    // (applyConstraints), each entry carrying its pick's knobs, the k-th pick
+    // of a name keyed "<name>#<k>".
     m.def(
         "constraint_costs",
-        [](PdpRoutePlan &plan)
+        [](PdpRoutePlan &plan, const py::object &constraints)
         {
             DecomposedCalculator calculator;
-            defaultConstraints().into(calculator);
+            tfpy::applyConstraints([] { return defaultConstraints(); },
+                                   constraints)
+                .into(calculator);
             return tfpy::constraintCosts(calculator, plan);
         },
         py::arg("plan"),
-        "Raw per-unit cost of every constraint, before weight/exponent/level "
-        "(each entry also carries the domain's medium_fold).");
+        py::arg("constraints") = py::none(),
+        "Raw per-unit cost of every constraint, before weight/exponent/offset/level "
+        "(each entry also carries the domain's medium_fold, a per-vehicle one its "
+        "evaluated units).");
 
     // The constraint names this domain scores, in default-assembly order —
     // the same strings a score breakdown reports.

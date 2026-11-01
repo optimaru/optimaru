@@ -46,7 +46,9 @@ name is the camelCase `vehicleCapacityCost`). Its raw cost is `0` when nothing
 is violated and positive otherwise; a **reward** (a quantity to maximize, such
 as knapsack's `selected_value_cost`) has a raw cost `<= 0`.
 
-A selection sets three knobs per constraint and nothing else:
+A selection is a list of picks, written as class calls
+(`[VehicleCapacityCost(), TravelTimeCost(weight=10)]`). Each pick sets five
+knobs and nothing else:
 
 - `weight` — `None` keeps the default weight, in units of the constraint's
   level.
@@ -58,7 +60,36 @@ A selection sets three knobs per constraint and nothing else:
   refuses any change of level.
 - `exponent` — `1.0` by default, `> 0`, sign-preserving; applied per unit for
   a unit constraint and to the single total for a global one, before the
-  weight. A weight of 0 contributes exactly 0 at any exponent.
+  weight.
+- `offset` — `0.0` by default, any finite number, in the unit of the raw cost;
+  keyword-only. It shifts the shaping at the same granularity as `exponent`.
+- `clip` — `True` by default; keyword-only. `True` makes the offset a
+  threshold, `sign(x) * max(0, |x| - offset) ** exponent`: only the part of a
+  raw cost `x` beyond the offset counts. `False` is the literal formula, the
+  sign-preserving `(x - offset) ** exponent`, which is negative (a reward)
+  below the offset and charges every unit the constraint evaluates, a raw 0
+  included. Each use case's README says which units those are. `clip=False`
+  with a non-zero offset is refused on hard, and on medium where medium
+  counts toward the hard score (task assigning), because hard 0 must mean no
+  violation: `ValueError: constraint 'vehicle_capacity_cost': clip=False with
+  a non-zero offset cannot be hard, because hard 0 must mean no violation; use
+  clip=True (a threshold) or another level`. The threshold (`clip=True`) is
+  allowed on every level.
+
+So `TravelTimeCost(offset=10, exponent=3)` adds `max(0, x - 10)**3` per
+vehicle, and the soft `TravelTimeCost(offset=10, exponent=3, clip=False)` adds
+`(x - 10)**3` per vehicle, an idle one included. Both formulas apply per unit,
+not to the total. With `offset=0` both modes are the plain `x ** exponent`. A
+weight of 0 contributes exactly 0 at any exponent and offset.
+
+A constraint may be picked several times. Each pick is its own instance with its
+own knobs (its level included) and, where the constraint has domain parameters,
+its own parameters. The instances are scored independently and add up, so
+`[TravelTimeCost(exponent=2), TravelTimeCost(exponent=3)]` is `x**2 + x**3`, and
+two identical picks simply count twice. An empty list is an error, and so is an
+unknown name. Each package's `constraints` module also holds ready-made default
+instances under the snake-case names (`vehicle_capacity_cost` is
+`VehicleCapacityCost()`); the docs and examples use the class calls.
 
 Some domains also have a **medium** level between hard and soft (unassigned
 visits, stays, requests, tasks, ...). Any flippable constraint may be moved onto
@@ -75,11 +106,14 @@ component). Python reads them from `<package>.constraint_info()`, one
 
 - `list_constraints()` lists the default set. Employee-scheduling lists all 30
   rules its factory accepts; its defaults are the `default_enabled` rows.
-- `constraint_costs(solution)` reports every selected constraint's raw costs as
-  `{name: {costs, weight, exponent, hard, global, level, reward,
-  level_flippable, name, label, default_weight, default_level}}`
-  (`weight` / `level` are the current knobs, `default_*` what `None` means).
-- `constraints.score(costs, selection)` re-prices them in pure Python with the
+- `constraint_costs(solution, constraints=None)` reports every selected
+  constraint's raw costs as `{key: {costs, weight, exponent, offset, clip,
+  hard, global, level, reward, level_flippable, name, label, default_weight,
+  default_level}}` (`weight` / `level` / `exponent` / `offset` / `clip` are the
+  pick's knobs, `default_*` what `None` means, `hard` is `level == "hard"`). The
+  key of the first pick of a name is the name, the k-th is `name#k`, in pick
+  order; a scoped constraint also lists the units it evaluates as `units`.
+- `constraints.score(costs, picks)` re-prices them in pure Python with the
   engine's arithmetic.
 
 ## Layout of a use case
@@ -214,7 +248,8 @@ The engine's construction heuristic assigns every still-unassigned entity
 ### Adding a hard or soft cost
 
 A constraint is one named component; its level (hard / medium / soft), weight
-and exponent are defaults the caller can override per solve (see
+and exponent are defaults the caller can override per solve, together with
+`offset` / `clip`, and a caller may pick it several times (see
 [Constraints: names and knobs](#constraints-names-and-knobs)).
 
 1. **Facts** — if the cost needs new input, add it to `domain.hpp` (and to

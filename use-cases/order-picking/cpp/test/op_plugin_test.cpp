@@ -15,6 +15,14 @@
 //       counts every (order, trolley) pair, so its zero case has no picks)
 //   (i) the catalog: info() off the default assembly == the components'
 //       kDefaultWeight / kDefaultLevel; the level/weight guards
+//   (j) repeated components and the offset / clip knobs: a hand-calculated
+//       repeat (walk + 0.5 x walk^2), threshold / literal / negative offsets
+//       by hand (an empty trolley counts in literal mode), per-trolley hard
+//       rounding, the literal formula refused on hard at reset and kept on
+//       soft, incremental == a fresh recompute over a random walk, every
+//       preview == the applied score under FULL_ASSERT and a FULL_ASSERT
+//       solve with repeated, shifted components
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -33,6 +41,7 @@
 #include "op/score_calculator.hpp"
 #include "op/solver.hpp"
 #include "optimaru/api/score/director/score_director.hpp"
+#include "optimaru/testing/preview_parity.hpp"
 
 using namespace op;
 
@@ -746,6 +755,288 @@ void verifyCatalog()
     std::printf("\n");
 }
 
+
+// -------------------------------------------------------------------------
+// (j) Repeated components and offsets. A repeat is a fresh copy of a
+// default component (another defaultConstraints(), the one name kept, its
+// knobs re-stated) appended with addInstances(), as the Python bindings
+// build it from a pick list.
+// -------------------------------------------------------------------------
+ConstraintAssembly copyOf(const std::string &name)
+{
+    ConstraintAssembly copy = defaultConstraints();
+    copy.only({name});
+    return copy;
+}
+
+// Two orders, three trolleys parked at A1L0: t0 (2 buckets of 10) picks
+// order 0 at A1L2 (6) then order 1 at A1L5 (7); t1 (1 bucket of 10) picks
+// order 0 at A1L5 (15, 2 buckets); t2 stays empty. Raw per trolley:
+// walk [5, 5, 0], walk back [5, 5, 0], orders [2, 1, 0], buckets short
+// [0, 1, 0].
+OrderPickingSolution repeatInstance()
+{
+    const WarehouseLocation origin = loc('A', 1, Side::LEFT, 0);
+    OrderPickingSolution s = makeBase(2);
+    const int t0 = addTrolley(s, 2, 10, origin);
+    const int t1 = addTrolley(s, 1, 10, origin);
+    addTrolley(s, 1, 10, origin);
+    s.trolleys[t0].pickTaskIndices
+        = {addPick(s, 0, 6, loc('A', 1, Side::LEFT, 2)), addPick(s, 1, 7, loc('A', 1, Side::LEFT, 5))};
+    s.trolleys[t1].pickTaskIndices = {addPick(s, 0, 15, loc('A', 1, Side::LEFT, 5))};
+    return s;
+}
+
+Score repeatScore(ConstraintAssembly assembly)
+{
+    OrderPickingSolution s = repeatInstance();
+    DecomposedCalculator calculator;
+    std::move(assembly).into(calculator);
+    return scoreWith(calculator, s);
+}
+
+ConstraintAssembly repeatedAssembly()
+{
+    ConstraintAssembly assembly = defaultConstraints();
+    assembly.offset("distanceFromPreviousPickTaskCost", 40.0)
+        .clip("distanceFromPreviousPickTaskCost", false);
+    assembly.offset("orderSplitByTrolleyCost", 1.0);
+    assembly.addInstances(std::move(copyOf("distanceFromPreviousPickTaskCost")
+                                        .weight("distanceFromPreviousPickTaskCost", 0.01)
+                                        .exponent("distanceFromPreviousPickTaskCost", 2.0)
+                                        .offset("distanceFromPreviousPickTaskCost", 20.0)));
+    // The literal bucket copy sits on soft: hard refuses the literal formula
+    // with an offset (hard 0 must mean no violation).
+    assembly.addInstances(std::move(copyOf("trolleyCapacityCost")
+                                        .soft("trolleyCapacityCost")
+                                        .weight("trolleyCapacityCost", 2.0)
+                                        .offset("trolleyCapacityCost", 1.0)
+                                        .clip("trolleyCapacityCost", false)));
+    assembly.addInstances(std::move(copyOf("trolleyCapacityCost")
+                                        .weight("trolleyCapacityCost", 2.0)
+                                        .offset("trolleyCapacityCost", 1.0)));
+    assembly.addInstances(std::move(copyOf("orderSplitByTrolleyCost")
+                                        .weight("orderSplitByTrolleyCost", 300.0)
+                                        .offset("orderSplitByTrolleyCost", -2.0)
+                                        .clip("orderSplitByTrolleyCost", false)));
+    assembly.addInstances(std::move(copyOf("distanceFromLastPickTaskToPathOriginCost")
+                                        .weight("distanceFromLastPickTaskToPathOriginCost", 0.5)
+                                        .offset("distanceFromLastPickTaskToPathOriginCost", -3.0)));
+    return assembly;
+}
+
+// The demo data with every pick task on a trolley, round robin.
+OrderPickingSolution assignedDemo(int trolleys, std::uint64_t seed)
+{
+    OrderPickingSolution s = buildDemoData(trolleys, 4, 60 * 40 * 20, 4, static_cast<std::int64_t>(seed));
+    for (Trolley &trolley : s.trolleys)
+        trolley.pickTaskIndices.clear();
+    for (int task = 0; task < static_cast<int>(s.pickTasks.size()); ++task)
+        s.trolleys[static_cast<std::size_t>(task) % s.trolleys.size()].pickTaskIndices.push_back(task);
+    return s;
+}
+
+void verifyRepeatsAndOffsets()
+{
+    std::printf("== (j) Repeated components, offset / clip ==\n");
+    {
+        OrderPickingSolution s = repeatInstance();
+        ConstraintAssembly assembly = copyOf("distanceFromPreviousPickTaskCost");
+        assembly.addInstances(std::move(copyOf("distanceFromPreviousPickTaskCost")
+                                            .weight("distanceFromPreviousPickTaskCost", 0.5)
+                                            .exponent("distanceFromPreviousPickTaskCost", 2.0)));
+        DecomposedCalculator calculator;
+        assembly.into(calculator);
+        checkScore("walk + 0.5 x walk^2 per trolley: -(10 + 25)", scoreWith(calculator, s), 0,
+                   -35.0);
+        const auto entries = calculator.constraintCosts();
+        check(entries.size() == 2 && entries[0].unitCosts == entries[1].unitCosts
+                  && entries[0].unitCosts == std::vector<double>{5.0, 5.0, 0.0}
+                  && entries[1].weight == 0.5 && entries[1].exponent == 2.0
+                  && entries[1].defaultWeight == 1.0 && !entries[0].scoped,
+              "two instances, the same raw costs, each with its own knobs, every trolley "
+              "evaluated");
+    }
+    checkScore("threshold offset 3 on the walk: 2 + 2",
+               repeatScore(copyOf("distanceFromPreviousPickTaskCost")
+                               .offset("distanceFromPreviousPickTaskCost", 3.0)),
+               0, -4.0);
+    checkScore("literal offset 3 on the walk: 2 + 2 - 3, the empty trolley included",
+               repeatScore(copyOf("distanceFromPreviousPickTaskCost")
+                               .offset("distanceFromPreviousPickTaskCost", 3.0)
+                               .clip("distanceFromPreviousPickTaskCost", false)),
+               0, -1.0);
+    checkScore("threshold offset -1 on the orders: 1000 x (3 + 2), the empty one 0",
+               repeatScore(copyOf("orderSplitByTrolleyCost").offset("orderSplitByTrolleyCost", -1.0)),
+               0, -5000.0);
+    checkScore("literal offset -1 on the orders: 1000 x (3 + 2 + 1)",
+               repeatScore(copyOf("orderSplitByTrolleyCost")
+                               .offset("orderSplitByTrolleyCost", -1.0)
+                               .clip("orderSplitByTrolleyCost", false)),
+               0, -6000.0);
+    // The literal bucket pick on soft: (0 - 1.5) + (1 - 1.5) + (0 - 1.5) =
+    // -3.5, the empty trolley included: +3.5 soft (not rounded).
+    checkScore("buckets literal offset 1.5 on soft: -1.5 - 0.5 - 1.5 -> +3.5 soft",
+               repeatScore(copyOf("trolleyCapacityCost")
+                               .soft("trolleyCapacityCost")
+                               .offset("trolleyCapacityCost", 1.5)
+                               .clip("trolleyCapacityCost", false)),
+               0, 3.5);
+    // A hard threshold pick rounds per trolley: the walk moved to hard at
+    // weight 0.5 beyond 2 m: llround(1.5) x 2 = 4 (a rounded total would
+    // give 3).
+    checkScore("walk on hard, threshold offset 2 at weight 0.5: llround per trolley, -4 hard",
+               repeatScore(copyOf("distanceFromPreviousPickTaskCost")
+                               .hard("distanceFromPreviousPickTaskCost")
+                               .weight("distanceFromPreviousPickTaskCost", 0.5)
+                               .offset("distanceFromPreviousPickTaskCost", 2.0)),
+               -4, 0.0);
+    {
+        // On hard the literal formula with an offset is refused at reset,
+        // whichever sign and setter order: +1.5 would reward the trolleys
+        // below it (+5 hard, so one trolley's spare buckets would cancel
+        // another's shortage), -1.5 would charge three trolleys that hold no
+        // violation.
+        auto resetRefusal = [](ConstraintAssembly assembly) {
+            try
+            {
+                repeatScore(std::move(assembly));
+            }
+            catch (const std::logic_error &error)
+            {
+                return std::string(error.what());
+            }
+            return std::string();
+        };
+        auto refusal = [](const std::string &name) {
+            return "Constraint '" + name
+                   + "' cannot use clip=false with a non-zero offset on a level that counts toward "
+                     "the hard score (hard 0 must mean no violation)";
+        };
+        check(resetRefusal(copyOf("trolleyCapacityCost")
+                               .offset("trolleyCapacityCost", 1.5)
+                               .clip("trolleyCapacityCost", false))
+                      == refusal("trolleyCapacityCost")
+                  && resetRefusal(copyOf("trolleyCapacityCost")
+                                      .clip("trolleyCapacityCost", false)
+                                      .offset("trolleyCapacityCost", -1.5))
+                         == refusal("trolleyCapacityCost"),
+              "buckets literal offset +-1.5 on hard (its default): refused at reset");
+        check(resetRefusal(copyOf("distanceFromPreviousPickTaskCost")
+                               .offset("distanceFromPreviousPickTaskCost", 3.0)
+                               .clip("distanceFromPreviousPickTaskCost", false)
+                               .hard("distanceFromPreviousPickTaskCost"))
+                  == refusal("distanceFromPreviousPickTaskCost"),
+              "walk literal offset moved to hard afterwards: refused at reset");
+        ConstraintAssembly repeated = copyOf("trolleyCapacityCost");
+        repeated.addInstances(std::move(copyOf("trolleyCapacityCost")
+                                            .offset("trolleyCapacityCost", 1.0)
+                                            .clip("trolleyCapacityCost", false)));
+        check(resetRefusal(std::move(repeated)) == refusal("trolleyCapacityCost"),
+              "a repeated bucket instance with the literal offset on hard: refused at reset");
+        check(resetRefusal(copyOf("trolleyCapacityCost").offset("trolleyCapacityCost", 1.5)).empty()
+                  && resetRefusal(copyOf("trolleyCapacityCost").clip("trolleyCapacityCost", false))
+                         .empty(),
+              "allowed on hard: a threshold offset, or clip=false with offset 0");
+    }
+    checkScore("identical instances add up: 2 x 1000 x 3",
+               repeatScore(std::move(copyOf("orderSplitByTrolleyCost")
+                                         .addInstances(copyOf("orderSplitByTrolleyCost")))),
+               0, -6000.0);
+    using Descriptor = optimaru::SolutionDescriptor<OrderPickingSolution>;
+    {
+        // Random walk: incremental == a fresh calculator of the same assembly.
+        OrderPickingSolution s = assignedDemo(4, 41);
+        DecomposedCalculator calculator;
+        repeatedAssembly().into(calculator);
+        optimaru::ScoreDirector<OrderPickingSolution> director(s, calculator);
+        std::mt19937_64 rng(43);
+        int mismatches = 0;
+        double drift = 0.0;
+        const int steps = 1500;
+        for (int step = 0; step < steps; ++step)
+        {
+            const int listCount = Descriptor::listCount(s);
+            const int from = static_cast<int>(rng() % static_cast<std::uint64_t>(listCount));
+            if (Descriptor::listSize(s, from) == 0)
+                continue;
+            const int position = static_cast<int>(
+                rng() % static_cast<std::uint64_t>(Descriptor::listSize(s, from)));
+            const int element = Descriptor::getElement(s, from, position);
+            director.removeListElement(from, position);
+            const int to = static_cast<int>(rng() % static_cast<std::uint64_t>(listCount));
+            const int insertAt = static_cast<int>(
+                rng() % static_cast<std::uint64_t>(Descriptor::listSize(s, to) + 1));
+            director.insertListElement(to, insertAt, element);
+
+            const Score incremental = director.calculateScore();
+            DecomposedCalculator fresh;
+            repeatedAssembly().into(fresh);
+            const Score full = scoreWith(fresh, s);
+            drift = std::max(drift, std::fabs(full.soft - incremental.soft));
+            if (!optimaru::scoresAgree(incremental, full))
+                ++mismatches;
+        }
+        std::printf("    largest soft drift %.3g\n", drift);
+        check(mismatches == 0,
+              std::to_string(steps)
+                  + " random list moves with repeated, shifted components: incremental == fresh");
+    }
+    {
+        // Every preview == the applied score, re-checked under FULL_ASSERT.
+        OrderPickingSolution s = assignedDemo(4, 47);
+        DecomposedCalculator calculator;
+        repeatedAssembly().into(calculator);
+        optimaru::ScoreDirector<OrderPickingSolution> director(
+            s, calculator, optimaru::EnvironmentMode::FULL_ASSERT);
+        director.calculateScore();
+        optimaru::testing::PreviewParity parity;
+        bool corrupted = false;
+        try
+        {
+            parity = optimaru::testing::runPreviewParity(director, calculator, /*seed=*/13,
+                                                         /*trials=*/3000);
+        }
+        catch (const optimaru::ScoreCorruptionError &error)
+        {
+            corrupted = true;
+            std::printf("    %s\n", error.what());
+        }
+        std::printf("    %d moves checked, %d previewed, %d declined\n", parity.checked,
+                    parity.previewed, parity.declined);
+        check(!corrupted && parity.allEqual() && parity.declined == 0 && parity.previewed > 1000,
+              "repeated, shifted components: every preview served and equal to the applied "
+              "score (FULL_ASSERT)");
+    }
+    {
+        OrderPickingSolution s = buildDemoData(3, 4, 60 * 40 * 20, 3, 37);
+        Solver::Config config;
+        config.spentLimit = std::chrono::seconds(2);
+        config.randomSeed = 3;
+        config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+        config.ruinRecreateUnimprovedStepTrigger = 200;
+        config.ruinRecreatePolishSteps = 100;
+        DecomposedCalculator calculator;
+        repeatedAssembly().into(calculator);
+        bool corrupted = false;
+        try
+        {
+            Solver solver(config);
+            solver.solve(s, calculator);
+        }
+        catch (const optimaru::ScoreCorruptionError &e)
+        {
+            corrupted = true;
+            std::printf("  ScoreCorruptionError: %s\n", e.what());
+        }
+        check(!corrupted, "2s FULL_ASSERT solve with repeated, shifted components");
+        DecomposedCalculator fresh;
+        repeatedAssembly().into(fresh);
+        check(!corrupted && optimaru::scoresAgree(s.score, scoreWith(fresh, s)),
+              "the reported score == a fresh recompute of the same assembly");
+    }
+    std::printf("\n");
+}
 }  // namespace
 
 int main()
@@ -759,6 +1050,7 @@ int main()
     verifyAssemblyBuilder();
     verifyRawCostsByHand();
     verifyCatalog();
+    verifyRepeatsAndOffsets();
 
     if (failures == 0)
     {

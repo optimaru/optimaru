@@ -15,11 +15,11 @@ from ortools.sat.python import cp_model
 from facility_location import calculate_score, constraint_costs
 from facility_location.constraints import Constraint
 from facility_location.models import FacilityLocationProblemModel
-from cpsat_plugins import ConstraintConfig
+from cpsat_plugins import ConstraintConfig, ObjectiveBuilder
 
 from .constraints import FacilityContext, REGISTRY
 
-__all__ = ["catalog", "solve"]
+__all__ = ["build_model", "catalog", "solve"]
 
 
 def catalog() -> list[dict]:
@@ -33,15 +33,16 @@ def _distance_meters(a, b) -> int:
     )
 
 
-def solve(
+def build_model(
     problem: FacilityLocationProblemModel,
-    *,
-    time_limit_seconds: float = 30.0,
-    random_seed: int = 0,
-    num_workers: int = 1,
     constraints: Iterable[ConstraintConfig | Constraint | str | Mapping] | None = None,
-) -> FacilityLocationProblemModel:
-    """Solve ``problem`` without mutating it and return a scored solution."""
+) -> tuple[cp_model.CpModel, dict[tuple[int, int], cp_model.IntVar], ObjectiveBuilder]:
+    """The CP-SAT model of ``problem`` under ``constraints``: (model, x, objective).
+
+    ``x[consumer, facility]`` are the assignment literals; the objective holds
+    one term per facility and selected instance (a constraint picked twice
+    adds two sets of terms, each with its own knobs).
+    """
     if not problem.facilities and problem.consumers:
         raise ValueError("at least one facility is required when consumers exist")
 
@@ -85,6 +86,20 @@ def solve(
     REGISTRY.build(
         FacilityContext(model, problem, x, used, overflow, distances), objective
     )
+    return model, x, objective
+
+
+def solve(
+    problem: FacilityLocationProblemModel,
+    *,
+    time_limit_seconds: float = 30.0,
+    random_seed: int = 0,
+    num_workers: int = 1,
+    constraints: Iterable[ConstraintConfig | Constraint | str | Mapping] | None = None,
+) -> FacilityLocationProblemModel:
+    """Solve ``problem`` without mutating it and return a scored solution."""
+    model, x, objective = build_model(problem, constraints)
+    facility_count = len(problem.facilities)
 
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = time_limit_seconds

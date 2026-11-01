@@ -166,7 +166,8 @@ class Solver:
     ) -> None:
         """Score the same solve with a caller-chosen constraint set
         (see assembly_line_balancing.constraints). The given list replaces the default set;
-        None keeps the default set. Single start."""
+        None keeps the default set. Single start. A name may be picked several times: each
+        pick is its own instance with its own knobs, and the instances add up."""
 
 def list_constraints() -> list[str]:
     """Constraint names scored by this domain (catalog order, snake_case):
@@ -175,15 +176,22 @@ def list_constraints() -> list[str]:
     same_station_groups_cost, different_station_pairs_cost, used_stations_cost,
     workload_imbalance_cost. The same names assembly_line_balancing.constraints uses."""
 
-def constraint_costs(problem: AssemblyLineBalancingProblem) -> dict[str, dict[str, Any]]:
-    """Raw cost of every default constraint, before weight/exponent/level, in
-    list_constraints() order: {name: {"costs": [...], "weight": float, "exponent": float,
-    "hard": bool, "global": bool, "level": "hard" | "medium" | "soft", "reward": bool,
-    "level_flippable": bool, "name": str, "label": str}}. "costs" has one entry per station
-    (0 .. station_count - 1) for a per-station constraint and one total for a global one
-    (task_precedence_cost, same_station_groups_cost, used_stations_cost,
-    workload_imbalance_cost). assembly_line_balancing.constraints.score() turns it into a
-    score."""
+def constraint_costs(
+    problem: AssemblyLineBalancingProblem, constraints: Iterable[Any] | None = ...
+) -> dict[str, dict[str, Any]]:
+    """Raw cost of every constraint, before weight/exponent/offset/level, in
+    list_constraints() order: {key: {"costs": [...], "weight": float, "exponent": float,
+    "offset": float, "clip": bool, "hard": bool, "global": bool,
+    "level": "hard" | "medium" | "soft", "reward": bool, "level_flippable": bool,
+    "name": str, "label": str, "default_weight": float, "default_level": str}}. "costs" has
+    one entry per station (0 .. station_count - 1) for a per-station constraint and one total
+    for a global one (task_precedence_cost, same_station_groups_cost, used_stations_cost,
+    workload_imbalance_cost); the scoped max_stations_cost and forbidden_task_stations_cost
+    add "units", the stations they evaluate (ascending). None = the default constraints; a
+    pick list (as for solve) scores exactly those picks, each entry carrying its pick's
+    knobs, the k-th pick of a name keyed "<name>#<k>" from the second on (each name's
+    instances together, the names in catalog order).
+    assembly_line_balancing.constraints.score() turns it into a score."""
 
 class ConstraintInfo(NamedTuple):
     """One constraint-catalog row, read off the C++ default assembly."""

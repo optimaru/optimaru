@@ -1,10 +1,14 @@
+from itertools import product
+
 import pytest
 
 import project_job as domain
 from project_job.constraints import (
+    Level,
     MakespanCost,
     NonRenewableResourceCapacityCost,
     ProjectDelayCost,
+    RenewableResourceCapacityCost,
     get_constraints,
     non_renewable_resource_capacity_cost,
     project_delay_cost,
@@ -141,7 +145,13 @@ def test_cpsat_defaults_are_the_engine_defaults() -> None:
         assert entry["reward"] == row.reward
         assert entry["default_enabled"] == row.default_enabled
         assert entry["kind"] == "either"  # every project-job constraint is flippable
-        assert entry["params"] == {"weight": None, "level": None, "exponent": 1.0}
+        assert entry["params"] == {
+            "weight": None,
+            "level": None,
+            "exponent": 1.0,
+            "offset": 0.0,
+            "clip": True,
+        }
     # The medium constraint sits on the medium level at weight 1 (medium units).
     assert {
         name: (row.default_level, row.default_weight) for name, row in engine.items()
@@ -228,8 +238,18 @@ _CAPACITY = [non_renewable_resource_capacity_cost, renewable_resource_capacity_c
             [*_CAPACITY, ProjectDelayCost(level="hard"), MakespanCost(weight=2)],
             (-1, 0, -10),
         ),
+        # level="medium" moves the doubled makespan next to the delay: 3 + 2 * 3 = 9
+        # medium days beat 1 + 2 * 5 = 11 on both paths.
+        (
+            [
+                *_CAPACITY,
+                project_delay_cost,
+                MakespanCost(level=Level.MEDIUM, weight=2),
+            ],
+            (0, -9, 0),
+        ),
     ],
-    ids=["default-medium", "medium-demoted", "medium-promoted"],
+    ids=["default-medium", "medium-demoted", "medium-promoted", "soft-to-medium"],
 )
 def test_medium_knobs_score_like_the_engine(selection, expected) -> None:
     problem = _fast_or_slow()
@@ -256,3 +276,236 @@ def test_demoting_a_hard_constraint_scores_like_the_engine() -> None:
         solved.score_hard,
         solved.score_medium * MEDIUM_UNIT + solved.score_soft,
     ) == pytest.approx(tuple(engine))
+
+
+# --- 0.3.0: repeated picks and offset / clip ---------------------------------------
+
+#: Every (mode, delay) of the two jobs of _fast_or_slow(); the SINKs stay at mode 0,
+#: delay 0. Allocation order: P-job, P-end, Q-job, Q-end.
+LAYOUTS = [
+    ([p_mode, 0, q_mode, 0], [p_delay, 0, q_delay, 0])
+    for p_mode, q_mode, p_delay, q_delay in product((0, 1), (0, 1), (0, 1), (0, 2))
+]
+
+SELECTIONS = {
+    "repeat": [
+        NonRenewableResourceCapacityCost(),
+        NonRenewableResourceCapacityCost(weight=2),
+        RenewableResourceCapacityCost(),
+        ProjectDelayCost(),
+        ProjectDelayCost(weight=3),
+        MakespanCost(),
+        MakespanCost(),
+    ],
+    # The literal formula with an offset is refused on hard: the literal copies of the
+    # hard resource constraints sit on soft, and hard takes thresholds.
+    "offsets": [
+        NonRenewableResourceCapacityCost(level="soft", offset=1, clip=False),
+        ProjectDelayCost(offset=2, clip=False),
+        MakespanCost(offset=3),
+        MakespanCost(weight=2, offset=-1, clip=False),
+    ],
+    "hard-offsets": [
+        NonRenewableResourceCapacityCost(weight=2, offset=1),
+        NonRenewableResourceCapacityCost(level="soft", weight=2, offset=1, clip=False),
+        RenewableResourceCapacityCost(offset=-1),  # no renewable resource: 0 stays 0
+        RenewableResourceCapacityCost(
+            level="soft", offset=1, clip=False
+        ),  # no renewable resource: -1 once
+        ProjectDelayCost(level="hard", offset=1),
+    ],
+    # Each pick on its own level: the stock on hard and, beyond one unit, on medium; the
+    # delay on medium and again on soft (literal); the makespan on soft and, beyond day
+    # 3, on medium.
+    "levels": [
+        NonRenewableResourceCapacityCost(),
+        NonRenewableResourceCapacityCost(level=Level.MEDIUM, weight=2, offset=1),
+        ProjectDelayCost(),
+        ProjectDelayCost(level="soft", weight=3, offset=2, clip=False),
+        MakespanCost(),
+        MakespanCost(level="medium", offset=3),
+    ],
+}
+
+
+def _engine_solve(core, selection) -> tuple[int, float]:
+    """The engine's own score of `core` under `selection`: a solve with no time keeps
+    every mode and delay as it is."""
+    kept = core.assignment()
+    config = domain.SolverConfig()
+    config.spent_limit_seconds = 0
+    domain.Solver(config).solve_with_constraints(core, selection)
+    assert core.assignment() == kept
+    return core.score.hard, core.score.medium * MEDIUM_UNIT + core.score.soft
+
+
+@pytest.mark.parametrize("selection", list(SELECTIONS.values()), ids=list(SELECTIONS))
+def test_the_cpsat_terms_equal_the_engine_on_pinned_layouts(selection) -> None:
+    """Pin each layout: the CP-SAT objective's per-level value, folded like the engine,
+    is the engine's score of that schedule under the same repeated / shifted picks (its
+    own and the score() mirror's), exactly (each global total shaped once per instance)."""
+    problem = _fast_or_slow()
+    for modes, delays in LAYOUTS:
+        proxy: dict[str, int] = {}
+        solved = solve(
+            problem,
+            time_limit_seconds=5,
+            constraints=selection,
+            _fixed_modes=modes,
+            _fixed_delays=delays,
+            _proxy_score=proxy,
+        )
+        core = solved.to_core()
+        engine = score(domain.constraint_costs(core, selection), selection)
+        assert _engine_solve(core, selection) == tuple(engine), (modes, delays)
+        folded = (proxy["hard"], proxy["medium"] * MEDIUM_UNIT + proxy["soft"])
+        assert folded == tuple(engine), (modes, delays)
+        reported = (
+            solved.score_hard,
+            solved.score_medium * MEDIUM_UNIT + solved.score_soft,
+        )
+        assert reported == tuple(engine)
+
+
+@pytest.mark.parametrize("selection", list(SELECTIONS.values()), ids=list(SELECTIONS))
+def test_repeated_and_shifted_picks_reach_the_pinned_optimum(selection) -> None:
+    """A free solve is at least as good as every pinned layout, and reports the engine's
+    score of its own solution."""
+    problem = _fast_or_slow()
+    best = max(
+        tuple(
+            score(
+                domain.constraint_costs(
+                    solve(
+                        problem,
+                        time_limit_seconds=5,
+                        constraints=selection,
+                        _fixed_modes=modes,
+                        _fixed_delays=delays,
+                    ).to_core(),
+                    selection,
+                ),
+                selection,
+            )
+        )
+        for modes, delays in LAYOUTS
+    )
+    solved = solve(problem, time_limit_seconds=5, constraints=selection)
+    engine = score(domain.constraint_costs(solved.to_core(), selection), selection)
+    reported = (
+        solved.score_hard,
+        solved.score_medium * MEDIUM_UNIT + solved.score_soft,
+    )
+    assert reported == tuple(engine)
+    assert reported >= best
+
+
+def test_mapping_selections_repeat_and_shift_like_specs() -> None:
+    """The server's {name, weight, offset, clip} dicts pick the same instances as specs."""
+    specs = [
+        NonRenewableResourceCapacityCost(),
+        ProjectDelayCost(),
+        MakespanCost(),
+        MakespanCost(weight=3, offset=4, clip=False),
+    ]
+    dicts = [
+        {"name": "non_renewable_resource_capacity_cost"},
+        {"name": "project_delay_cost"},
+        {"name": "makespan_cost"},
+        {"name": "makespan_cost", "weight": 3, "offset": 4, "clip": False},
+    ]
+    problem = _fast_or_slow()
+    assert solve(problem, time_limit_seconds=5, constraints=dicts) == solve(
+        problem, time_limit_seconds=5, constraints=specs
+    )
+
+
+def test_a_fractional_offset_is_refused_by_cpsat() -> None:
+    with pytest.raises(ValueError, match="offset must be an integer for CP-SAT"):
+        solve(
+            _fast_or_slow(),
+            time_limit_seconds=1,
+            constraints=[MakespanCost(offset=0.5)],
+        )
+
+
+# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+
+HARD_REFUSAL = (
+    "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
+    "violation; use clip=True (a threshold) or another level"
+)
+
+
+@pytest.mark.parametrize("offset", [2, -2])
+@pytest.mark.parametrize(
+    "selection",
+    [
+        lambda offset: NonRenewableResourceCapacityCost(
+            offset=offset, clip=False
+        ),  # hard
+        lambda offset: {
+            "name": "non_renewable_resource_capacity_cost",
+            "offset": offset,
+            "clip": False,
+        },
+        lambda offset: RenewableResourceCapacityCost(offset=offset, clip=False),  # hard
+        lambda offset: ProjectDelayCost(level="hard", offset=offset, clip=False),
+        lambda offset: {
+            "name": "makespan_cost",
+            "level": "hard",
+            "offset": offset,
+            "clip": False,
+        },
+    ],
+    ids=[
+        "non-renewable-spec",
+        "non-renewable-mapping",
+        "renewable-spec",
+        "delay-moved-to-hard",
+        "makespan-mapping-moved-to-hard",
+    ],
+)
+def test_the_literal_offset_is_refused_on_hard_like_the_engine(
+    selection, offset
+) -> None:
+    """The CP-SAT reference refuses the pick with the engine's and score()'s message."""
+    pick = selection(offset)
+    name = pick["name"] if isinstance(pick, dict) else pick.name
+    message = HARD_REFUSAL.format(q=repr(name))
+    for picks in (
+        [pick],
+        [NonRenewableResourceCapacityCost(), ProjectDelayCost(), pick],
+    ):
+        with pytest.raises(ValueError) as refused:
+            solve(_fast_or_slow(), time_limit_seconds=1, constraints=picks)
+        assert str(refused.value) == message
+    if not isinstance(pick, dict):
+        # The engine and the score() mirror say the same.
+        core = _fast_or_slow().to_core()
+        with pytest.raises(ValueError) as refused:
+            domain.constraint_costs(core, [pick])
+        assert str(refused.value) == message
+        with pytest.raises(ValueError) as refused:
+            score(domain.constraint_costs(core), [pick])
+        assert str(refused.value) == message
+
+
+@pytest.mark.parametrize("offset", [2, -2])
+@pytest.mark.parametrize("level", ["soft", "medium"])
+def test_the_same_literal_pick_on_soft_is_accepted(level, offset) -> None:
+    """On soft, and on medium (it folds into soft here), the literal pick solves and
+    reports the engine's score of its solution."""
+    selection = [
+        NonRenewableResourceCapacityCost(),
+        ProjectDelayCost(),
+        MakespanCost(),
+        NonRenewableResourceCapacityCost(level=level, offset=offset, clip=False),
+    ]
+    solved = solve(_fast_or_slow(), time_limit_seconds=5, constraints=selection)
+    engine = score(domain.constraint_costs(solved.to_core(), selection), selection)
+    reported = (
+        solved.score_hard,
+        solved.score_medium * MEDIUM_UNIT + solved.score_soft,
+    )
+    assert reported == tuple(engine)

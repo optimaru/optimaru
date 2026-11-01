@@ -57,6 +57,21 @@ score(raw), score(raw, [*others, UnassignedJobsCost(weight=2)])            # re-
 `ideal_end_date_time`, `maximize_jobs_assigned`, `minimize_makespan` before) and removed
 `fp.analyze()` / `ConstraintBreakdown`; `constraint_costs()` is the per-constraint surface.
 
+Every spec takes `weight=None`, `level=None` (the default level, otherwise a `Level` or its
+name: any constraint may take any of the three levels), `exponent=1.0` and the
+keyword-only `offset=0.0` / `clip=True` (`clip=True` counts only what lies beyond the
+offset, `clip=False` shapes `x - offset` as it is, per line or on a global's total, and is
+refused with an offset on hard, because hard 0 must mean no violation). Since
+0.3.0 a constraint may be picked several times; each pick is its own instance with its own
+knobs, its level included, the instances add up, and `constraint_costs(schedule, picks)`
+keys the k-th pick `<name>#<k>`:
+
+```python
+from food_packaging.constraints import MaxEndTimeCost
+
+score(raw, [MaxEndTimeCost(), MaxEndTimeCost(exponent=2, offset=30)])  # late minutes + (beyond 30)^2
+```
+
 pydantic serialization:
 
 ```python
@@ -75,7 +90,8 @@ mapping is `engine.soft = medium * 10^10 + soft` (the domain's medium fold; ever
 `food_packaging.constraints.score()` returns the folded engine-level `(hard, soft)`).
 `Score` exposes all three levels as-is, so user code never sees the mapping. Medium
 weights are in medium units (default 1): `level="hard"` on a medium constraint costs 1 hard
-per minute, `level="soft"` 1 soft per minute. For the order-preservation conditions and domain
+per minute, `level="soft"` 1 soft per minute, and `level="medium"` puts a hard or soft
+constraint on medium with its weight in medium units. For the order-preservation conditions and domain
 details see `../cpp/README.md` and the `fp/domain.hpp` comments.
 `Line.operator` (Java's basic planning variable) is reassigned by the solver with hill
 climbing between engine legs — exactly equivalent to Java with operators >= lines,

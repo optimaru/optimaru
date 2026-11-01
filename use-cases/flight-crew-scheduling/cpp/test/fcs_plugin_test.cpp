@@ -15,6 +15,14 @@
 //       case per constraint (raw 0 = no violation)
 //   (i) the catalog: info() off the default assembly == the components'
 //       kDefaultWeight / kDefaultLevel; the level/weight guards
+//   (j) repeated components and the offset / clip knobs: a hand-calculated
+//       repeat (conflicts + their square), threshold / literal / negative
+//       offsets by hand (an idle employee counts in literal mode), per-unit
+//       hard rounding, the literal formula refused on hard at reset and kept
+//       on soft, incremental == a fresh recompute over a random walk (delta,
+//       full-recost and soft components repeated and shifted) and a
+//       FULL_ASSERT solve with the same assembly
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -776,6 +784,257 @@ void verifyCatalog()
     std::printf("\n");
 }
 
+
+// -------------------------------------------------------------------------
+// (j) Repeated components and offsets. A repeat is a fresh copy of a
+// default component (another defaultConstraints(), the one name kept, its
+// knobs re-stated) appended with addInstances(), as the Python bindings
+// build it from a pick list.
+// -------------------------------------------------------------------------
+ConstraintAssembly copyOf(const std::string &name)
+{
+    ConstraintAssembly copy = defaultConstraints();
+    copy.only({name});
+    return copy;
+}
+
+// Three employees at home airport 0: E0 flies three mutually overlapping
+// round trips (3 conflict pairs), E1 one flight from airport 1 home that
+// wants an "Attendant" (1 unqualified seat, 1 first flight not from home),
+// E2 stays idle. Raw per employee: conflicts [3, 0, 0], skill [0, 1, 0],
+// first not home [0, 1, 0].
+FlightCrewSchedule repeatInstance()
+{
+    FlightCrewSchedule s = makeBase(2, 3);
+    addAssignment(s, addFlight(s, 0, 0, 0, 100), 0);
+    addAssignment(s, addFlight(s, 0, 10, 0, 100), 0);
+    addAssignment(s, addFlight(s, 0, 20, 0, 100), 0);
+    addAssignment(s, addFlight(s, 1, 200, 0, 260), 1, "Attendant");
+    return s;
+}
+
+Score repeatScore(ConstraintAssembly assembly)
+{
+    FlightCrewSchedule s = repeatInstance();
+    DecomposedCalculator calculator;
+    std::move(assembly).into(calculator);
+    return scoreWith(calculator, s);
+}
+
+// The four hard components take threshold offsets on hard; their literal
+// copies sit on soft, because hard refuses the literal formula with an
+// offset (hard 0 must mean no violation).
+ConstraintAssembly repeatedAssembly()
+{
+    ConstraintAssembly assembly = defaultConstraints();
+    assembly.offset("flightConflictCost", 1.0);
+    assembly.offset("requiredSkillCost", -1.0);
+    assembly.addInstances(std::move(copyOf("flightConflictCost")
+                                        .soft("flightConflictCost")
+                                        .offset("flightConflictCost", 1.0)
+                                        .clip("flightConflictCost", false)));
+    assembly.addInstances(std::move(copyOf("flightConflictCost")
+                                        .weight("flightConflictCost", 2.0)
+                                        .exponent("flightConflictCost", 2.0)
+                                        .offset("flightConflictCost", 1.0)));
+    assembly.addInstances(std::move(copyOf("requiredSkillCost")
+                                        .soft("requiredSkillCost")
+                                        .weight("requiredSkillCost", 30.0)
+                                        .offset("requiredSkillCost", 0.5)
+                                        .clip("requiredSkillCost", false)));
+    assembly.addInstances(std::move(copyOf("requiredSkillCost")
+                                        .weight("requiredSkillCost", 30.0)
+                                        .offset("requiredSkillCost", 0.5)));
+    assembly.addInstances(std::move(copyOf("employeeUnavailabilityCost")
+                                        .soft("employeeUnavailabilityCost")
+                                        .offset("employeeUnavailabilityCost", -2.0)
+                                        .clip("employeeUnavailabilityCost", false)));
+    assembly.addInstances(std::move(
+        copyOf("employeeUnavailabilityCost").offset("employeeUnavailabilityCost", -2.0)));
+    assembly.addInstances(std::move(copyOf("transferBetweenTwoFlightsCost")
+                                        .weight("transferBetweenTwoFlightsCost", 3.0)
+                                        .offset("transferBetweenTwoFlightsCost", 1.0)));
+    assembly.addInstances(std::move(copyOf("firstAssignmentNotDepartingFromHomeCost")
+                                        .weight("firstAssignmentNotDepartingFromHomeCost", 0.25)
+                                        .offset("firstAssignmentNotDepartingFromHomeCost", 0.5)
+                                        .clip("firstAssignmentNotDepartingFromHomeCost", false)));
+    return assembly;
+}
+
+void verifyRepeatsAndOffsets()
+{
+    std::printf("== (j) Repeated components, offset / clip ==\n");
+    {
+        FlightCrewSchedule s = repeatInstance();
+        ConstraintAssembly assembly = copyOf("flightConflictCost");
+        assembly.addInstances(std::move(copyOf("flightConflictCost")
+                                            .weight("flightConflictCost", 2.0)
+                                            .exponent("flightConflictCost", 2.0)));
+        DecomposedCalculator calculator;
+        assembly.into(calculator);
+        checkScore("10 x conflicts + 2 x conflicts^2 per employee: -(30 + 18)",
+                   scoreWith(calculator, s), -48, 0.0);
+        const auto entries = calculator.constraintCosts();
+        check(entries.size() == 2 && entries[0].unitCosts == entries[1].unitCosts
+                  && entries[0].unitCosts == std::vector<double>{3.0, 0.0, 0.0}
+                  && entries[1].weight == 2.0 && entries[1].exponent == 2.0
+                  && entries[1].defaultWeight == 10.0 && !entries[0].scoped,
+              "two instances, the same raw costs, each with its own knobs, every employee "
+              "evaluated");
+    }
+    checkScore("threshold offset 2 on the conflicts: 10 x 1",
+               repeatScore(copyOf("flightConflictCost").offset("flightConflictCost", 2.0)), -10,
+               0.0);
+    // The literal formula with an offset is refused on hard (below), so the
+    // literal picks of the hard components are scored on soft.
+    checkScore("literal offset 2 on the conflicts, on soft: 10 x (1 - 2 - 2), the idle E2 "
+               "included",
+               repeatScore(copyOf("flightConflictCost")
+                               .soft("flightConflictCost")
+                               .offset("flightConflictCost", 2.0)
+                               .clip("flightConflictCost", false)),
+               0, 30.0);
+    checkScore("threshold offset -1 on the skill: 100 x (1 + 1), the others 0",
+               repeatScore(copyOf("requiredSkillCost").offset("requiredSkillCost", -1.0)), -200,
+               0.0);
+    checkScore("literal offset -1 on the skill, on soft: 100 x (1 + 2 + 1)",
+               repeatScore(copyOf("requiredSkillCost")
+                               .soft("requiredSkillCost")
+                               .offset("requiredSkillCost", -1.0)
+                               .clip("requiredSkillCost", false)),
+               0, -400.0);
+    {
+        // A hard pick rounds per employee: with E1 on two more overlapping
+        // flights the conflicts are [3, 1, 0], and at weight 0.5 llround(1.5)
+        // + llround(0.5) = 3 (a rounded total would give 2).
+        FlightCrewSchedule s = repeatInstance();
+        addAssignment(s, addFlight(s, 0, 300, 0, 400), 1);
+        addAssignment(s, addFlight(s, 0, 310, 0, 410), 1);
+        DecomposedCalculator calculator;
+        copyOf("flightConflictCost").weight("flightConflictCost", 0.5).into(calculator);
+        checkScore("conflicts [3, 1, 0] at weight 0.5: llround per employee, -3 hard",
+                   scoreWith(calculator, s), -3, 0.0);
+    }
+    checkScore("a soft literal offset 1: 1000 x (-1 + 0 - 1) -> +2000 soft",
+               repeatScore(copyOf("firstAssignmentNotDepartingFromHomeCost")
+                               .offset("firstAssignmentNotDepartingFromHomeCost", 1.0)
+                               .clip("firstAssignmentNotDepartingFromHomeCost", false)),
+               0, 2000.0);
+    checkScore("identical instances add up: 2 x 100",
+               repeatScore(std::move(
+                   copyOf("requiredSkillCost").addInstances(copyOf("requiredSkillCost")))),
+               -200, 0.0);
+    {
+        // On hard (the default of the four hard components) the literal
+        // formula with an offset is refused at reset, whichever sign and
+        // setter order: +2 would reward E1 and E2 (+30 hard, so their slack
+        // would cancel E0's conflicts), -1 would charge employees that hold
+        // no violation.
+        auto resetRefusal = [](ConstraintAssembly assembly) {
+            try
+            {
+                repeatScore(std::move(assembly));
+            }
+            catch (const std::logic_error &error)
+            {
+                return std::string(error.what());
+            }
+            return std::string();
+        };
+        auto refusal = [](const std::string &name) {
+            return "Constraint '" + name
+                   + "' cannot use clip=false with a non-zero offset on a level that counts toward "
+                     "the hard score (hard 0 must mean no violation)";
+        };
+        check(resetRefusal(copyOf("flightConflictCost")
+                               .offset("flightConflictCost", 2.0)
+                               .clip("flightConflictCost", false))
+                      == refusal("flightConflictCost")
+                  && resetRefusal(copyOf("requiredSkillCost")
+                                      .clip("requiredSkillCost", false)
+                                      .offset("requiredSkillCost", -1.0))
+                         == refusal("requiredSkillCost"),
+              "conflicts / skill literal offset on hard (their default): refused at reset");
+        check(resetRefusal(copyOf("firstAssignmentNotDepartingFromHomeCost")
+                               .offset("firstAssignmentNotDepartingFromHomeCost", 1.0)
+                               .clip("firstAssignmentNotDepartingFromHomeCost", false)
+                               .hard("firstAssignmentNotDepartingFromHomeCost"))
+                  == refusal("firstAssignmentNotDepartingFromHomeCost"),
+              "a soft component's literal offset moved to hard afterwards: refused at reset");
+        ConstraintAssembly repeated = copyOf("flightConflictCost");
+        repeated.addInstances(std::move(copyOf("flightConflictCost")
+                                            .offset("flightConflictCost", 1.0)
+                                            .clip("flightConflictCost", false)));
+        check(resetRefusal(std::move(repeated)) == refusal("flightConflictCost"),
+              "a repeated conflict instance with the literal offset on hard: refused at reset");
+        check(resetRefusal(copyOf("flightConflictCost").offset("flightConflictCost", 2.0)).empty()
+                  && resetRefusal(copyOf("flightConflictCost").clip("flightConflictCost", false))
+                         .empty(),
+              "allowed on hard: a threshold offset, or clip=false with offset 0");
+    }
+    {
+        // Random walk: incremental == a fresh calculator of the same assembly.
+        FlightCrewSchedule s = buildRandomInstance(/*flights*/ 18, /*employees*/ 8, /*seed*/ 13);
+        ScoreCalculator::prepare(s);
+        DecomposedCalculator calculator;
+        repeatedAssembly().into(calculator);
+        optimaru::ScoreDirector<FlightCrewSchedule> director(s, calculator);
+        std::mt19937_64 rng(321);
+        std::uniform_real_distribution<double> unit(0.0, 1.0);
+        const int assignmentCount = static_cast<int>(s.flightAssignments.size());
+        const int valueCount = static_cast<int>(s.employees.size());
+        int mismatches = 0;
+        double drift = 0.0;
+        const int steps = 3000;
+        for (int step = 0; step < steps; ++step)
+        {
+            const int assignment = static_cast<int>(rng() % assignmentCount);
+            const int value
+                = unit(rng) < 0.1 ? -1 : static_cast<int>(rng() % valueCount);
+            director.changeVariable(assignment, value);
+            FlightCrewSchedule shadow = s;
+            DecomposedCalculator fresh;
+            repeatedAssembly().into(fresh);
+            const Score full = scoreWith(fresh, shadow);
+            const Score incremental = director.calculateScore();
+            drift = std::max(drift, std::fabs(full.soft - incremental.soft));
+            if (!optimaru::scoresAgree(incremental, full))
+                ++mismatches;
+        }
+        std::printf("    largest soft drift %.3g\n", drift);
+        check(mismatches == 0,
+              std::to_string(steps)
+                  + " random moves with repeated, shifted components: incremental == fresh");
+    }
+    {
+        FlightCrewSchedule s = buildRandomInstance(/*flights*/ 12, /*employees*/ 6, /*seed*/ 11);
+        Solver::Config config;
+        config.spentLimit = std::chrono::seconds(2);
+        config.randomSeed = 3;
+        config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+        config.ruinRecreateUnimprovedStepTrigger = 200;
+        config.ruinRecreatePolishSteps = 100;
+        DecomposedCalculator calculator;
+        repeatedAssembly().into(calculator);
+        bool corrupted = false;
+        try
+        {
+            Solver solver(config);
+            solver.solve(s, calculator);
+        }
+        catch (const optimaru::ScoreCorruptionError &e)
+        {
+            corrupted = true;
+            std::printf("  ScoreCorruptionError: %s\n", e.what());
+        }
+        check(!corrupted, "2s FULL_ASSERT solve with repeated, shifted components");
+        DecomposedCalculator fresh;
+        repeatedAssembly().into(fresh);
+        check(!corrupted && optimaru::scoresAgree(s.score, scoreWith(fresh, s)),
+              "the reported score == a fresh recompute of the same assembly");
+    }
+    std::printf("\n");
+}
 }  // namespace
 
 int main()
@@ -789,6 +1048,7 @@ int main()
     verifyAssemblyBuilder();
     verifyRawCostsByHand();
     verifyCatalog();
+    verifyRepeatsAndOffsets();
 
     if (failures == 0)
     {

@@ -30,13 +30,29 @@ qap.constraint_info()
 qap.solve(problem, time_limit_seconds=1.0, constraints=[*get_constraints()[:-1], FlowDistanceCost(weight=2)])
 raw = qap.constraint_costs(problem)   # {name: {"costs": [...], "weight": ..., ...}}
 score(raw), score(raw, [LocationCapacityCost(exponent=2.0)])
+# A constraint may be picked several times, each pick with its own knobs; offset / clip
+# shift the shaping (clip=True: only the flow cost beyond 1000 counts for the second pick).
+score(raw, [FlowDistanceCost(), FlowDistanceCost(weight=10, offset=1000)])
 ```
 
 The side constraints report one raw cost per location (location order) and the
-exponent shapes each one; the two objectives report one total each and the
-exponent shapes that total — the same terms 0.1.x shaped, so exponents score as
-before at the soft level. Hard contributions are rounded per location (0.1.x
-rounded the hard total once), which differs only when a hard constraint's
+exponent (with `offset` / `clip`, 0.3.0) shapes each location they evaluate (their
+`"units"`: the fixed, the forbidden-row and the capacitated locations), per location,
+not over the sum; the two objectives report one total each and the exponent shapes that
+total. `clip=False` with an offset is refused on hard, where hard 0 must mean no
+violation: `ValueError: constraint 'location_capacity_cost': clip=False with a non-zero
+offset cannot be hard, because hard 0 must mean no violation; use clip=True (a threshold)
+or another level`. On soft it is allowed.
+`constraint_costs(problem, picks)` scores a pick list, the second pick of a name keyed
+`<name>#2`. `level` is None (the default level), "hard" or "soft" (or `Level.HARD` /
+`Level.SOFT`); the domain has no medium level, so "medium" raises `ValueError`, and a
+repeat carries its own level. An objective whose data holds a negative entry (a negative
+assignment cost, or a negative flow or distance) cannot be hard, because its total can be
+negative and would cancel a broken pin: `ValueError: constraint 'assignment_cost' can have
+a negative raw cost on this problem (a bonus) and cannot be hard`; its `constraint_costs()`
+entry carries `"signed": True`. These are the same terms 0.1.x shaped, so exponents score
+as before at the soft level. Hard contributions are rounded per location (0.1.x rounded
+the hard total once), which differs only when a hard constraint's
 weighted, shaped per-location value is fractional: a fractional hard weight, or an
 exponent != 1 on `location_capacity_cost` (costs `[2, 2]` at exponent 0.5 give
 `-2`; 0.1.x gave `-3`). 0.2.0 renamed every constraint (no aliases: `fixed_assignments` ->

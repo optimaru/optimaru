@@ -170,7 +170,8 @@ class Solver:
     def solve_with_constraints(self, solution: OrderPickingSolution, constraints: Iterable[Any] | None = ...) -> None:
         """Same solve, scored by a caller-chosen constraint set (see
         `order_picking.constraints`). The picks replace the defaults; None
-        keeps them."""
+        keeps them. A name may be picked several times: each pick is its own
+        instance with its own knobs, and the instances add up."""
 
 def list_constraints() -> list[str]:
     """Constraint names scored by this domain (default assembly order, snake_case):
@@ -178,11 +179,17 @@ def list_constraints() -> list[str]:
     distance_from_last_pick_task_to_path_origin_cost, order_split_by_trolley_cost.
     The same names `order_picking.constraints` uses."""
 
-def constraint_costs(solution: OrderPickingSolution) -> dict[str, dict[str, Any]]:
-    """Raw per-trolley cost of every default constraint, before weight/exponent/level:
-    {name: {"costs": [...], "weight": float, "exponent": float, "hard": bool,
-    "global": bool, "level": "hard" | "medium" | "soft", "reward": bool,
-    "level_flippable": bool, "name": str, "label": str}}, one cost per trolley.
+def constraint_costs(
+    solution: OrderPickingSolution, constraints: Iterable[Any] | None = ...
+) -> dict[str, dict[str, Any]]:
+    """Raw per-trolley cost of every constraint, before weight/exponent/offset/level:
+    {key: {"costs": [...], "weight": float, "exponent": float, "offset": float,
+    "clip": bool, "hard": bool, "global": bool, "level": "hard" | "medium" | "soft",
+    "reward": bool, "level_flippable": bool, "name": str, "label": str,
+    "default_weight": float, "default_level": str}}, one cost per trolley (every
+    trolley is evaluated, an empty one included). None = the default constraints; a
+    pick list (as for solve) scores exactly those picks, each entry carrying its pick's
+    knobs, the k-th pick of a name keyed "<name>#<k>" from the second on.
     `order_picking.constraints.score()` turns it into a score. The only
     per-constraint surface: the travel distance is the sum of the two distance
     entries' costs, the (order, trolley) pair count the sum of

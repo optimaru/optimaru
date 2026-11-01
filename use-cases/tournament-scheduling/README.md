@@ -36,10 +36,13 @@ carries the same load. The first two are unit constraints (one cost per team, so
 shapes per team); the two imbalance constraints are global (one total, shaped as a whole).
 The rows are in `list_constraints()` order, and `tournament_scheduling.constraint_info()`
 reports exactly this table from the C++ components (`kDefaultLevel` / `kDefaultWeight`):
-every constraint is flippable (`level="hard"` / `level="soft"`), none is a reward and all four
-are scored by default (`default_enabled`). The medium level folds into the engine's soft
-level as `medium x 1e6` (`MEDIUM_SCALE`, `kMediumFold` in `cpp/include/ts/domain.hpp`); a
-medium weight is in medium units.
+every constraint is flippable onto any of the three levels (`level="hard"`, `"medium"` or
+`"soft"`, or a `Level`), none is a reward and all four are scored by default
+(`default_enabled`). The medium level folds into the engine's soft level as `medium x 1e6`
+(`MEDIUM_SCALE`, `kMediumFold` in `cpp/include/ts/domain.hpp`); a weight is in units of the
+level in effect, so a medium weight is in medium units. Any other constraint may move onto
+medium the same way (`ConfrontationCountImbalanceCost(level="medium")` charges one medium
+unit per raw unit of head-to-head unfairness), and a repeated pick carries its own level.
 
 **0.2.0:** the constraints were renamed (`one_assignment_per_date_per_team` ->
 `team_conflict_cost`, `unavailability_penalty` -> `team_unavailability_cost`,
@@ -57,6 +60,32 @@ hard per raw unit of unfairness (the total, rounded; was 1e6 per unit), `level="
 it to soft at 1 per raw unit (was a no-op that kept the 1e6), and an explicit `weight` is in
 medium units (was plain soft units that dropped the fold). `constraint_info()` /
 `ConstraintInfo` are new. Raw costs and the default score are unchanged.
+
+**0.3.0:** every constraint takes two more knobs, `offset` and `clip` (keyword-only), and
+may be picked several times. A raw cost `x` (per team for the two unit constraints, on the
+one total for the two imbalance constraints) is shaped as `sign(x) * max(0, |x| - offset)
+** exponent` (`clip=True`, the default) or `(x - offset) ** exponent`, sign-preserving
+(`clip=False`, which charges every unit the constraint evaluates, a raw 0 included, and acts
+as a reward below the offset); `offset=0` is the 0.2.0 shaping. `team_conflict_cost`
+evaluates every team; `team_unavailability_cost` is scoped to the teams with an
+unavailability fact (its `constraint_costs()` entry lists them as `"units"`), so its
+literal offset charges those teams only. Both apply per team (or on an imbalance's total),
+not to the total violation. `clip=False` with an offset is refused on hard (the two team
+constraints by default), because hard 0 must mean no violation; medium folds into soft
+here, so it takes the literal formula. Each pick is its own instance with its own knobs,
+and the instances add up:
+
+```python
+ts.solve(schedule, constraints=[
+    *get_constraints(),
+    ConfrontationCountImbalanceCost(exponent=2, offset=2),   # + (head-to-head imbalance beyond 2)^2
+])
+```
+
+`ts.constraint_costs(schedule, picks)` keys the second pick
+`confrontation_count_imbalance_cost#2`. CP-SAT takes integral offsets on the two hard
+constraints (one term per evaluated team); its imbalance surrogates have no raw-identical
+total to shift, so it refuses an offset on them (the engine takes it).
 
 The C++ side builds and tests with:
 

@@ -36,8 +36,9 @@ lines run by the same operator must not overlap.
 `list_constraints()` and `constraint_info()` report them in this order (the unit
 constraints, then the two globals); `food_packaging.constraint_info()` reports exactly
 this table from the C++ components (`kDefaultLevel` / `kDefaultWeight`). Every
-constraint is flippable (`level="hard"` / `level="soft"`), none is a reward and all five
-are scored by default (`default_enabled`).
+constraint is flippable onto any of the three levels (`level="hard"`, `"medium"` or
+`"soft"`, or a `Level`), none is a reward and all five are scored by default
+(`default_enabled`).
 
 The medium weights are in **medium units**: the domain folds the medium level into the
 engine's soft level as `engine.soft = medium * 10^10 + soft` (`kMediumFold` in
@@ -45,7 +46,9 @@ engine's soft level as `engine.soft = medium * 10^10 + soft` (`kMediumFold` in
 on every `constraint_costs()` entry). `level="hard"` makes a
 medium constraint 1 hard unit per minute, `level="soft"` 1 soft unit per minute (outside the
 fold), and a `weight` is in units of the level in effect — in the
-engine and in the CP-SAT reference alike. A solve with `constraints=` reports
+engine and in the CP-SAT reference alike. Any other constraint may move onto medium the
+same way (`SquaredMakespanCost(level="medium")` charges its squared line spans in medium
+units), and a repeated pick carries its own level. A solve with `constraints=` reports
 `schedule.score` and every `on_new_best` score from the calculator's three levels
 (`levelScores()`), not by decoding the folded soft, so a soft total of 10^10 or more stays
 on soft in both.
@@ -62,6 +65,35 @@ to soft in both solvers (it was a no-op in the engine and landed on medium in CP
 `analyze()` / `ConstraintBreakdown` are no longer exposed to Python:
 `constraint_costs()` is the one per-constraint surface. Raw costs and the default score
 are unchanged.
+
+**0.3.0:** every constraint takes two more knobs, `offset` and `clip` (keyword-only), and
+may be picked several times. A raw cost `x` (per line for the three per-line constraints,
+on the one total for the two globals) is shaped as `sign(x) * max(0, |x| - offset) **
+exponent` (`clip=True`, the default) or `(x - offset) ** exponent`, sign-preserving
+(`clip=False`, which charges every unit the constraint evaluates, a raw 0 included, and
+acts as a reward below the offset); `offset=0` is the 0.2.0 shaping. The per-line
+constraints evaluate the packaging lines, an empty one included, and never the unassigned
+pool list (it is no line; their `constraint_costs()` entries list the lines as `"units"`).
+Both apply per line (or on a global's total), not to the total violation. `clip=False` with
+an offset is refused on hard (`max_end_time_cost` and `operator_cleaning_conflict_cost` by
+default), because hard 0 must mean no violation; medium folds into soft here, so it takes
+the literal formula. Each pick is its own instance with its own knobs, and the instances add
+up:
+
+```python
+fp.solve(schedule, constraints=[
+    MaxEndTimeCost(),                         # 1 hard per minute late
+    MaxEndTimeCost(exponent=2, offset=30),    # + (minutes beyond 30)^2 per line
+    AfterIdealEndTimeCost(),
+    SquaredMakespanCost(),
+    OperatorCleaningConflictCost(),
+    UnassignedJobsCost(),
+])
+```
+
+`fp.constraint_costs(schedule, picks)` keys the second pick `max_end_time_cost#2`. The
+CP-SAT reference takes integral offsets on every constraint (one term per line, or per
+global total).
 
 ## Build/run
 

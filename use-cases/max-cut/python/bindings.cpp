@@ -265,34 +265,40 @@ PYBIND11_MODULE(_core, m)
              py::call_guard<py::gil_scoped_release>())
         // Same solve, scored by a caller-chosen constraint set (see
         // max_cut.constraints). The picks replace the defaults; None keeps
-        // them. Single start.
+        // them. Single start. A name may be picked several times: every pick
+        // is its own instance (a fresh copy of the default component) with
+        // its own knobs.
         .def(
             "solve_with_constraints",
             [](Solver &solver, MaxCutProblem &problem, const py::object &constraints)
             {
                 DecomposedCalculator calculator;
-                tfpy::applyConstraints(defaultConstraints(), constraints).into(calculator);
+                tfpy::applyConstraints([] { return defaultConstraints(); }, constraints).into(calculator);
                 py::gil_scoped_release release;
                 solver.solve(problem, calculator);
             },
             py::arg("problem"),
             py::arg("constraints") = py::none());
 
-    // The raw costs of the default assembly on `problem` — the input
-    // max_cut.constraints.score() turns into a score — in list_constraints()
-    // order: the four unit constraints per side ([side 0, side 1]), the two
-    // globals as one total.
+    // The raw costs of an assembly on `problem` — the input
+    // max_cut.constraints.score() turns into a score: the four unit
+    // constraints per side ([side 0, side 1]), the two globals as one total.
+    // None = the default assembly in list_constraints() order; a pick list
+    // scores exactly those picks (applyConstraints), each entry carrying its
+    // pick's knobs, the k-th pick of a name keyed "<name>#<k>".
     m.def(
         "constraint_costs",
-        [](MaxCutProblem &problem)
+        [](MaxCutProblem &problem, const py::object &constraints)
         {
             ScoreCalculator::prepare(problem);
             DecomposedCalculator calculator;
-            defaultConstraints().into(calculator);
+            tfpy::applyConstraints([] { return defaultConstraints(); }, constraints).into(calculator);
             return tfpy::constraintCosts(calculator, problem);
         },
         py::arg("problem"),
-        "Raw cost of every constraint (per side, or one total for the globals), before weight/exponent/level.");
+        py::arg("constraints") = py::none(),
+        "Raw cost of every constraint (per side, or one total for the globals), before "
+        "weight/exponent/offset/level.");
 
     // The constraint names this domain scores, in catalog order — the same
     // strings a score breakdown reports.

@@ -2,6 +2,7 @@
 #define QAP_CONSTRAINTS_COMMON_HPP
 
 #include <cstdint>
+#include <optional>
 #include <stdexcept>
 #include <vector>
 
@@ -63,7 +64,10 @@ namespace qap
 // penalty, 0 = no violation; the calculator negates into the score. The
 // objectives are not validated >= 0 (flows, distances and direct costs are
 // plain integers), so they may be negative: a negative total is scored as a
-// bonus, exactly like the 0.1.x Python scorer did.
+// bonus, exactly like the 0.1.x Python scorer did. On data with a negative
+// entry such an objective cannot move to hard (rawCostCanBeNegative; the
+// calculator refuses it at reset), since a negative hard total would cancel
+// a violation of the side constraints.
 //
 // Unassigned facilities (location == -1, only in a partial state a caller
 // wrote) contribute nothing, except that a fixed location whose facility is
@@ -86,6 +90,27 @@ inline void requirePrepared(const QuadraticAssignmentProblem &problem)
     {
         throw std::logic_error("qap constraints require ScoreCalculator::prepare(problem) first");
     }
+}
+
+// Whether a matrix of the facts holds a negative entry: what makes an
+// objective's total possibly negative (rawCostCanBeNegative). Read from the
+// facts themselves, so it needs no prepare().
+inline bool hasNegative(const std::vector<std::vector<std::int64_t>> &matrix)
+{
+    for (const auto &row : matrix)
+    {
+        for (std::int64_t value : row)
+        {
+            if (value < 0)
+                return true;
+        }
+    }
+    return false;
+}
+
+inline bool hasNegative(const std::optional<std::vector<std::vector<std::int64_t>>> &matrix)
+{
+    return matrix.has_value() && hasNegative(*matrix);
 }
 
 }  // namespace detail

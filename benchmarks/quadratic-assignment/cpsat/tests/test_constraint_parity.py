@@ -21,11 +21,13 @@ from itertools import permutations
 
 import pytest
 from ortools.sat.python import cp_model
-from quadratic_assignment import constraint_costs, constraint_info, list_constraints
+from quadratic_assignment import Solver, SolverConfig, constraint_costs, constraint_info, list_constraints
 from quadratic_assignment import solve as engine_solve
 from quadratic_assignment.constraints import (
     AssignmentCost,
     FlowDistanceCost,
+    ForbiddenAssignmentsCost,
+    Level,
     LocationCapacityCost,
     PinnedAssignmentsCost,
     get_constraints,
@@ -252,7 +254,7 @@ def test_cpsat_defaults_are_the_engine_defaults():
         assert entry["reward"] == row.reward
         assert entry["default_enabled"] == row.default_enabled
         assert entry["kind"] == "either"  # every quadratic-assignment constraint is flippable
-        assert entry["params"] == {"weight": None, "level": None, "exponent": 1.0}
+        assert entry["params"] == {"weight": None, "level": None, "exponent": 1.0, "offset": 0.0, "clip": True}
 
 
 def test_demoting_a_hard_constraint_scores_like_the_engine():
@@ -272,9 +274,51 @@ def test_signed_objectives_keep_the_levels_lexicographic():
     selection = [PinnedAssignmentsCost(), AssignmentCost(weight=5), FlowDistanceCost(weight=3)]
     solved = solve(Model.model_validate(SIGNED), time_limit_seconds=20, constraints=selection)
     assert (solved.score_hard, solved.score_soft) == pytest.approx(_brute_force(SIGNED, selection))
-    promoted = [PinnedAssignmentsCost(), AssignmentCost(level="hard"), FlowDistanceCost()]
-    solved = solve(Model.model_validate(SIGNED), time_limit_seconds=20, constraints=promoted)
-    assert (solved.score_hard, solved.score_soft) == pytest.approx(_brute_force(SIGNED, promoted))
+    # Promoted to hard where its data is >= 0 (the flows and distances of EVERYTHING).
+    promoted = [PinnedAssignmentsCost(), AssignmentCost(), FlowDistanceCost(level="hard")]
+    solved = solve(Model.model_validate(EVERYTHING), time_limit_seconds=20, constraints=promoted)
+    assert (solved.score_hard, solved.score_soft) == pytest.approx(_brute_force(EVERYTHING, promoted))
+
+
+SIGN_REFUSAL = "constraint {q} can have a negative raw cost on this problem (a bonus) and cannot be hard"
+
+
+@pytest.mark.parametrize(
+    ("pick", "name"),
+    [
+        (AssignmentCost(level="hard"), "assignment_cost"),
+        (AssignmentCost(level="hard", offset=3), "assignment_cost"),  # a threshold does not help
+        ({"name": "assignment_cost", "level": "hard"}, "assignment_cost"),
+        (FlowDistanceCost(level=Level.HARD), "flow_distance_cost"),
+    ],
+    ids=["assignment", "assignment-threshold", "assignment-mapping", "flow"],
+)
+def test_an_objective_whose_data_can_be_negative_is_refused_on_hard(pick, name):
+    """On SIGNED data a hard objective could be negative and cancel a broken pin: CP-SAT, the
+    engine and the score() mirror refuse it in the same words, alone and as a repeat."""
+    message = SIGN_REFUSAL.format(q=repr(name))
+    for picks in ([PinnedAssignmentsCost(), pick], [*get_constraints(), pick]):
+        assert _refusal(lambda picks=picks: build(Model.model_validate(SIGNED), picks)) == message
+        assert (
+            _refusal(lambda picks=picks: solve(Model.model_validate(SIGNED), time_limit_seconds=1, constraints=picks))
+            == message
+        )
+    if not isinstance(pick, dict):
+        core = _assigned(SIGNED, list(SIGNED["facilities"])).to_core()
+        assert _refusal(lambda: _engine_score(core, [pick])) == message
+        assert _refusal(lambda: constraint_costs(core, [pick])) == message
+        assert _refusal(lambda: score(constraint_costs(core), [pick])) == message
+
+
+def test_two_signed_objectives_on_hard_are_named_in_the_engine_order():
+    """The engine checks the sign rule at reset, in its calculator's order (the assembly's:
+    assignment_cost before flow_distance_cost), whatever the pick order."""
+    picks = [FlowDistanceCost(level="hard"), AssignmentCost(level="hard")]
+    message = SIGN_REFUSAL.format(q="'assignment_cost'")
+    assert _refusal(lambda: build(Model.model_validate(SIGNED), picks)) == message
+    core = _assigned(SIGNED, list(SIGNED["facilities"])).to_core()
+    assert _refusal(lambda: _engine_score(core, picks)) == message
+    assert _refusal(lambda: score(constraint_costs(core), picks)) == message
 
 
 def test_exponents_and_fractional_weights_stay_unsupported():
@@ -293,3 +337,215 @@ def test_selections_by_name_and_mapping_work():
     assert (solved.score_hard, solved.score_soft) == (0, -26.0)  # L1<-F2, L2<-F1: 3 + 23
     with pytest.raises(ValueError, match="unknown constraint"):
         solve(Model.model_validate(SIDE), time_limit_seconds=1, constraints=["minimize_flow_distance"])
+
+
+# --- 0.3.0: repeated picks and offset / clip ---------------------------------------
+
+SELECTIONS = {
+    "repeat": [
+        PinnedAssignmentsCost(),
+        PinnedAssignmentsCost(weight=2),
+        FlowDistanceCost(),
+        FlowDistanceCost(weight=3),
+    ],
+    # The literal formula with an offset is refused on hard: the hard picks are
+    # thresholds, the literal copies of the hard side constraints sit on soft.
+    "repeat-literal": [
+        ForbiddenAssignmentsCost(level="soft", offset=1, clip=False),
+        ForbiddenAssignmentsCost(weight=2, offset=-1),
+        LocationCapacityCost(),
+        AssignmentCost(offset=5, clip=False),
+        FlowDistanceCost(),
+    ],
+    "hard-offsets": [
+        PinnedAssignmentsCost(offset=1),
+        PinnedAssignmentsCost(level="soft", offset=1, clip=False),
+        LocationCapacityCost(offset=2),
+        LocationCapacityCost(level="soft", weight=2, offset=3, clip=False),
+        ForbiddenAssignmentsCost(offset=-2),
+        ForbiddenAssignmentsCost(level="soft", offset=-2, clip=False),
+        AssignmentCost(offset=8),
+        FlowDistanceCost(offset=60, clip=False),
+        FlowDistanceCost(offset=-5),
+    ],
+    "identical-twice": [LocationCapacityCost(), LocationCapacityCost(), AssignmentCost()],
+    # Each pick on its own level: a soft literal repeat of the hard pins, the capacity on soft
+    # with a hard threshold repeat, the soft direct cost promoted to hard (threshold) next to
+    # a soft threshold repeat, a soft forbidden repeat and the flow on both levels.
+    "levels": [
+        PinnedAssignmentsCost(),
+        PinnedAssignmentsCost(level="soft", weight=3, offset=1, clip=False),
+        LocationCapacityCost(level=Level.SOFT, weight=2),
+        LocationCapacityCost(level="hard", offset=1),
+        AssignmentCost(level="hard", weight=2, offset=8),
+        AssignmentCost(level=Level.SOFT, offset=3),
+        ForbiddenAssignmentsCost(level="soft", offset=-1),
+        FlowDistanceCost(),
+        FlowDistanceCost(level=Level.HARD, offset=60),
+    ],
+}
+
+
+def _engine_score(core, selection) -> dict:
+    """The engine's own score of the core's assignment: a zero-budget warm start keeps it."""
+    config = SolverConfig()
+    config.spent_limit_seconds = 0
+    core.warm_start = True
+    kept = core.assignment()
+    Solver(config).solve_with_constraints(core, selection)
+    assert core.assignment() == kept
+    return {"hard": core.score.hard, "soft": core.score.soft}
+
+
+@pytest.mark.parametrize("selection", list(SELECTIONS.values()), ids=list(SELECTIONS))
+def test_the_cpsat_terms_equal_the_engine_on_every_permutation(selection):
+    """Pin each of the 120 permutations of EVERYTHING: the CP-SAT objective's per-level value is
+    the engine's score of that permutation under the same repeated / shifted picks (its own and
+    the score() mirror's), exactly. The
+    side constraints are scoped (not every location is fixed, forbidden or capacitated), so a
+    literal offset matches only when CP-SAT adds terms for exactly the engine's locations."""
+    built = build(Model.model_validate(EVERYTHING), selection)
+    built.objective.minimize()
+    facilities = EVERYTHING["facilities"]
+    for perm in permutations(facilities):
+        at = [facilities.index(facility) for facility in perm]
+        model = built.model
+        model.clear_assumptions()
+        model.add_assumptions(
+            [
+                literal if at[location] == facility else literal.Not()
+                for (facility, location), literal in built.context.assigned.items()
+            ]
+        )
+        solver = cp_model.CpSolver()
+        solver.parameters.num_search_workers = 1
+        assert solver.solve(model) == cp_model.OPTIMAL
+        core = _assigned(EVERYTHING, perm).to_core()
+        engine = score(constraint_costs(core, selection), selection)
+        assert _engine_score(core, selection) == {"hard": engine.hard, "soft": engine.soft}, perm
+        assert built.objective.score(solver) == {"hard": engine.hard, "soft": engine.soft}, perm
+        # Re-pricing the default costs (each name once) gives the same per instance key.
+        assert built.objective.score_costs(constraint_costs(core)) == {"hard": engine.hard, "soft": engine.soft}
+
+
+@pytest.mark.parametrize("selection", list(SELECTIONS.values()), ids=list(SELECTIONS))
+def test_repeated_and_shifted_picks_reach_the_brute_force_optimum(selection):
+    solved = solve(Model.model_validate(EVERYTHING), time_limit_seconds=20, constraints=selection)
+    assert (solved.score_hard, solved.score_soft) == pytest.approx(_brute_force(EVERYTHING, selection))
+    engine = score(constraint_costs(solved.to_core(), selection), selection)
+    assert (solved.score_hard, solved.score_soft) == pytest.approx(tuple(engine))
+
+
+def test_mapping_selections_repeat_and_shift_like_specs():
+    """The server's {name, weight, level, offset, clip} dicts pick the same instances as specs."""
+    specs = [FlowDistanceCost(), FlowDistanceCost(weight=3, offset=20, clip=False)]
+    dicts = [{"name": "flow_distance_cost"}, {"name": "flow_distance_cost", "weight": 3, "offset": 20, "clip": False}]
+    by_specs = solve(Model.model_validate(SIDE), time_limit_seconds=5, constraints=specs)
+    assert solve(Model.model_validate(SIDE), time_limit_seconds=5, constraints=dicts) == by_specs
+    assert (by_specs.score_hard, by_specs.score_soft) == (0, -(22 + 3 * (22 - 20)))  # the identity: 22 < 23
+    # With a level per pick: the direct cost beyond 10 on hard rules the identity out (15 vs 3),
+    # and the soft literal pin earns 2 x (0 - 1) on L1 <- F2: -(23 + 3 x 3) + 2.
+    specs = [
+        *specs,
+        AssignmentCost(level="hard", offset=10),
+        PinnedAssignmentsCost(level="soft", weight=2, offset=1, clip=False),
+    ]
+    dicts = [
+        *dicts,
+        {"name": "assignment_cost", "level": "hard", "offset": 10},
+        {"name": "pinned_assignments_cost", "weight": 2, "level": "soft", "offset": 1, "clip": False},
+    ]
+    by_specs = solve(Model.model_validate(SIDE), time_limit_seconds=5, constraints=specs)
+    assert solve(Model.model_validate(SIDE), time_limit_seconds=5, constraints=dicts) == by_specs
+    assert (by_specs.score_hard, by_specs.score_soft) == (0, -(23 + 3 * (23 - 20)) + 2)
+
+
+@pytest.mark.parametrize("level", ["medium", Level.MEDIUM])
+def test_medium_is_refused_like_the_engine(level):
+    """The domain has no medium level: CP-SAT refuses the pick, a repeat too, in the engine's words."""
+    message = "constraint 'location_capacity_cost': this use case has no medium level"
+    for picks in (
+        [LocationCapacityCost(level=level)],
+        [LocationCapacityCost(), LocationCapacityCost(level=level)],
+        [{"name": "location_capacity_cost"}, {"name": "location_capacity_cost", "level": "medium"}],
+    ):
+        with pytest.raises(ValueError, match=message):
+            solve(Model.model_validate(SIDE), time_limit_seconds=1, constraints=picks)
+
+
+def test_a_fractional_offset_is_refused_by_cpsat():
+    with pytest.raises(ValueError, match="offset must be an integer for CP-SAT"):
+        solve(Model.model_validate(SIDE), time_limit_seconds=1, constraints=[FlowDistanceCost(offset=0.5)])
+
+
+@pytest.mark.parametrize(
+    ("pick", "data"),
+    [(FlowDistanceCost(offset=1), "flows and distances"), (AssignmentCost(offset=-1, clip=False), "assignment costs")],
+)
+def test_an_offset_on_a_total_that_may_be_negative_is_refused(pick, data):
+    """ObjectiveBuilder.add shapes a non-negative range: with negative flows, distances or direct
+    costs (SIGNED) an objective's offset is refused instead of shaped wrongly; offset 0 still works."""
+    with pytest.raises(ValueError, match=f"offset needs non-negative {data} for CP-SAT"):
+        solve(Model.model_validate(SIGNED), time_limit_seconds=1, constraints=[PinnedAssignmentsCost(), pick])
+    plain = [PinnedAssignmentsCost(), type(pick)()]
+    solved = solve(Model.model_validate(SIGNED), time_limit_seconds=10, constraints=plain)
+    assert (solved.score_hard, solved.score_soft) == pytest.approx(_brute_force(SIGNED, plain))
+
+
+# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+
+HARD_REFUSAL = (
+    "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
+    "violation; use clip=True (a threshold) or another level"
+)
+
+
+def _refusal(call) -> str:
+    with pytest.raises(ValueError) as refused:
+        call()
+    return str(refused.value)
+
+
+@pytest.mark.parametrize("offset", [2, -2])
+@pytest.mark.parametrize(
+    "selection",
+    [
+        lambda offset: LocationCapacityCost(offset=offset, clip=False),  # the default level, hard
+        lambda offset: {"name": "location_capacity_cost", "offset": offset, "clip": False},
+        lambda offset: FlowDistanceCost(level=Level.HARD, offset=offset, clip=False),
+        lambda offset: {"name": "flow_distance_cost", "level": "hard", "offset": offset, "clip": False},
+    ],
+    ids=["capacity-spec", "capacity-mapping", "flow-moved-to-hard", "flow-mapping"],
+)
+def test_the_literal_offset_is_refused_on_hard_like_the_engine(selection, offset):
+    """solve() and build() refuse the pick with the engine's and score()'s message, alone and
+    as a repeat next to the defaults, before any term is added (and before the objectives'
+    non-negative-data check)."""
+    pick = selection(offset)
+    name = pick["name"] if isinstance(pick, dict) else pick.name
+    message = HARD_REFUSAL.format(q=repr(name))
+    for problem in (SIDE, SIGNED):
+        for picks in ([pick], [*get_constraints(), pick]):
+            with pytest.raises(ValueError) as refused:
+                solve(Model.model_validate(problem), time_limit_seconds=1, constraints=picks)
+            assert str(refused.value) == message
+            with pytest.raises(ValueError) as refused:
+                build(Model.model_validate(problem), picks)
+            assert str(refused.value) == message
+    if not isinstance(pick, dict):
+        # The engine and the score() mirror say the same.
+        core = _assigned(SIDE, ["F1", "F2"]).to_core()
+        assert _refusal(lambda: _engine_score(core, [pick])) == message
+        assert _refusal(lambda: constraint_costs(core, [pick])) == message
+        assert _refusal(lambda: score(constraint_costs(core), [pick])) == message
+
+
+@pytest.mark.parametrize("offset", [2, -2])
+def test_the_same_literal_pick_on_soft_is_accepted(offset):
+    """The soft literal capacity, charged on the capacitated locations only, next to the hard
+    defaults reaches the brute-force optimum."""
+    selection = [*get_constraints(), LocationCapacityCost(level="soft", offset=offset, clip=False)]
+    solved = solve(Model.model_validate(EVERYTHING), time_limit_seconds=20, constraints=selection)
+    assert (solved.score_hard, solved.score_soft) == pytest.approx(_brute_force(EVERYTHING, selection))
+    engine = score(constraint_costs(solved.to_core(), selection), selection)
+    assert (solved.score_hard, solved.score_soft) == pytest.approx(tuple(engine))

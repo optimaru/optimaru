@@ -13,13 +13,13 @@ namespace pdp
 // through, exactly like the full recompute. Raw cost per vehicle = the sum
 // over its nodes of max(0, load after the node - capacity), in demand units;
 // 0 = the load never exceeds the capacity (the pool list costs 0).
-struct VehicleCapacityCost final : PdpUnitConstraint
+struct VehicleCapacityCost final : detail::PerVehicleConstraint
 {
     static constexpr double kDefaultWeight = 1.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
 
     explicit VehicleCapacityCost(double weight = kDefaultWeight)
-        : PdpUnitConstraint("vehicleCapacityCost", weight, kDefaultLevel)
+        : PerVehicleConstraint("vehicleCapacityCost", weight, kDefaultLevel)
     {
     }
     double cost(const PdpRoutePlan &plan,

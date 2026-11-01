@@ -16,6 +16,19 @@ permutation, like the engine's swap-only search).
 bound covers its whole RANGE. Flows, distances and direct costs are not
 validated >= 0, so the two objectives pass the width of their value range (with
 0 included), not just their largest value.
+
+Offsets (``terms_per_unit``): the three side constraints add one term per
+location the engine evaluates (its ``scopedUnits()``: the fixed locations, the
+locations named by a forbidden row, the capacitated locations), a term of raw
+0 included, so a pick's ``offset`` / ``clip`` shape each location exactly as
+the engine does and a literal offset charges exactly those locations. The two
+objectives add one term for their total. ``ObjectiveBuilder.add`` shapes a
+term over a non-negative range, so an offset on an objective is taken only when
+its data cannot make the total negative (no negative assignment cost, or no
+negative flow / distance); otherwise CP-SAT refuses it. On such data the
+objective cannot be hard either, the engine's sign rule (its
+``rawCostCanBeNegative``), refused in the engine's words first. A constraint
+picked several times adds one set of terms per pick.
 """
 
 from __future__ import annotations
@@ -47,6 +60,24 @@ def _add(objective: ObjectiveBuilder, name: str, terms: list, bound: int) -> Non
     objective.add(name, sum(terms), bound=bound if terms else 0)
 
 
+def _refuse_a_signed_total(objective: ObjectiveBuilder, name: str, data: str, values) -> None:
+    """A total the data can make negative: the engine's sign rule, then CP-SAT's own limit.
+
+    On data with a negative entry (the engine's ``rawCostCanBeNegative``) the
+    instance cannot be hard, in the engine's words (``refuse_signed``); and an
+    offset on such a total cannot be shaped by ``ObjectiveBuilder.add``.
+    """
+    values = list(values)
+    if not any(value < 0 for value in values):
+        return
+    objective.refuse_signed(name)
+    _spec, config = objective.selected[name]
+    if config.offset != 0:
+        raise ValueError(
+            f"constraint {name!r} offset needs non-negative {data} for CP-SAT (the total could be negative)"
+        )
+
+
 def _span(values) -> int:
     """Width of [min(0, min values), max(0, max values)]: covers every value and 0."""
     values = list(values)
@@ -58,51 +89,65 @@ def _span(values) -> int:
 class PinnedAssignmentsCost(domain.PinnedAssignmentsCost, ConstraintPlugin[QapContext]):
     """Per fixed location, 1 - x[its facility, location]."""
 
+    terms_per_unit = True  # one term per fixed location, the engine's scope
+
     def build(self, context: QapContext, objective: ObjectiveBuilder) -> None:
-        pins = [
-            (context.facility_index[facility], context.location_index[location])
+        pins = sorted(
+            (context.location_index[location], context.facility_index[facility])
             for location, facility in context.problem.fixed_assignments.items()
-        ]
-        _add(objective, self.name, [1 - context.assigned[pin] for pin in pins], len(pins))
+        )
+        for location, facility in pins:
+            objective.add(self.name, 1 - context.assigned[facility, location], bound=1)
 
 
 class ForbiddenAssignmentsCost(domain.ForbiddenAssignmentsCost, ConstraintPlugin[QapContext]):
-    """x[f, l] over the DISTINCT forbidden pairs: a row listed twice counts once, as in the engine.
+    """Per location named by a forbidden row, x[f, l] over its DISTINCT forbidden facilities:
+    a row listed twice counts once, as in the engine.
 
     (Before 0.2.0 this summed over the rows, so a repeated row counted twice here
     and once in the metaheuristic scorer.)"""
 
+    terms_per_unit = True
+
     def build(self, context: QapContext, objective: ObjectiveBuilder) -> None:
-        pairs = sorted(
-            {
-                (context.facility_index[row.facility], context.location_index[row.location])
-                for row in context.problem.forbidden_assignments
-            }
-        )
-        _add(objective, self.name, [context.assigned[pair] for pair in pairs], len(pairs))
+        forbidden: dict[int, set[int]] = {}
+        for row in context.problem.forbidden_assignments:
+            forbidden.setdefault(context.location_index[row.location], set()).add(context.facility_index[row.facility])
+        for location in sorted(forbidden):
+            facilities = sorted(forbidden[location])
+            objective.add(self.name, sum(context.assigned[f, location] for f in facilities), bound=len(facilities))
 
 
 class LocationCapacityCost(domain.LocationCapacityCost, ConstraintPlugin[QapContext]):
     """Per capacitated location, max(0, demand of its facility - capacity) (missing demand = 0)."""
 
+    terms_per_unit = True
+
     def build(self, context: QapContext, objective: ObjectiveBuilder) -> None:
         problem = context.problem
         demands = [problem.facility_demands.get(facility, 0) for facility in problem.facilities]
-        excesses = []
-        for location, capacity in problem.location_capacities.items():
-            index = context.location_index[location]
+        most = max(demands, default=0)
+        capacities = sorted(
+            (context.location_index[location], capacity) for location, capacity in problem.location_capacities.items()
+        )
+        for index, capacity in capacities:
             demand = sum(demands[f] * context.assigned[f, index] for f in range(context.size))
-            excess = context.model.new_int_var(0, max(demands, default=0), f"location_{index}_excess")
+            # One facility per location: the excess is at most the largest demand.
+            excess = context.model.new_int_var(0, most, f"location_{index}_excess")
             context.model.add(excess >= demand - capacity)
-            excesses.append(excess)
-        _add(objective, self.name, excesses, sum(demands))
+            objective.add(self.name, excess, bound=most)
 
 
 class AssignmentCost(domain.AssignmentCost, ConstraintPlugin[QapContext]):
     """sum c[f][l] * x[f, l]; 0 without an assignment_costs matrix."""
 
+    terms_per_unit = True  # a global: one term, its total
+
     def build(self, context: QapContext, objective: ObjectiveBuilder) -> None:
         costs = context.problem.assignment_costs
+        _refuse_a_signed_total(
+            objective, self.name, "assignment costs", (value for row in costs or () for value in row)
+        )
         if costs is None:
             _add(objective, self.name, [], 0)
             return
@@ -129,9 +174,17 @@ class FlowDistanceCost(domain.FlowDistanceCost, ConstraintPlugin[QapContext]):
     pinned permutation gives the engine's raw cost. Built only when the
     constraint is selected: O(n^4) bools, O(n^3) linear equalities."""
 
+    terms_per_unit = True
+
     def build(self, context: QapContext, objective: ObjectiveBuilder) -> None:
         problem = context.problem
         flows, distances = problem.flows, problem.distances
+        _refuse_a_signed_total(
+            objective,
+            self.name,
+            "flows and distances",
+            (value for matrix in (flows, distances) for row in matrix for value in row),
+        )
         n = context.size
         x = context.assigned
         model = context.model
@@ -160,6 +213,37 @@ class FlowDistanceCost(domain.FlowDistanceCost, ConstraintPlugin[QapContext]):
         distance_span = _span(value for row in distances for value in row)
         bound = sum(abs(value) for row in flows for value in row) * distance_span
         _add(objective, self.name, terms, bound)
+
+
+def signed_objectives(problem: QuadraticAssignmentProblemModel) -> dict[str, bool]:
+    """Per objective, whether its data holds a negative entry (the engine's ``rawCostCanBeNegative``)."""
+    return {
+        AssignmentCost.name: any(value < 0 for row in problem.assignment_costs or () for value in row),
+        FlowDistanceCost.name: any(
+            value < 0 for matrix in (problem.flows, problem.distances) for row in matrix for value in row
+        ),
+    }
+
+
+def refuse_signed_objectives(objective: ObjectiveBuilder, problem: QuadraticAssignmentProblemModel) -> None:
+    """The engine's sign rule for every selected objective, before any term is built.
+
+    The engine checks it when it resets, in its calculator's order: the first
+    instance of each name in the assembly's order, then the repeats in pick
+    order. So with two such picks on hard, CP-SAT names the one the engine names.
+    """
+    signed = signed_objectives(problem)
+    order = [spec.name for spec in REGISTRY.specs]
+
+    def rank(item: tuple[int, str]) -> tuple:
+        index, key = item
+        name, _, repeat = key.partition("#")
+        return (bool(repeat), index if repeat else order.index(name))
+
+    for _index, key in sorted(enumerate(objective.selected), key=rank):
+        spec, _config = objective.selected[key]
+        if signed.get(spec.name):
+            objective.refuse_signed(key)
 
 
 # Plugin order = list_constraints() order.

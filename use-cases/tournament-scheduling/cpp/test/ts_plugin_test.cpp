@@ -16,6 +16,14 @@
 //   (i) the medium level (assignmentCountImbalanceCost): default fold,
 //       hard() / soft() / an explicit weight, and incremental == full
 //       recompute under each override
+//   (j) repeated components and the offset / clip knobs: a hand-calculated
+//       repeat, threshold and literal offsets by hand (the scoped
+//       teamUnavailabilityCost evaluates only the teams with a fact), the
+//       globals' totals shaped once, the literal formula refused on hard at
+//       reset and kept on soft (and on the into_soft medium), incremental ==
+//       a fresh recompute over a random walk and a FULL_ASSERT solve with
+//       repeated, shifted components
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -23,6 +31,7 @@
 #include <functional>
 #include <memory>
 #include <random>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -705,6 +714,25 @@ void verifyMediumLevel()
                   && near(engine.soft, -(soft + 3.0 * medium * 1e6)),
               "weight 3 folds as 3 medium units x 1e6");
     }
+    {
+        const auto levels = levelsWith(
+            defaultConstraints().level("confrontationCountImbalanceCost",
+                                       optimaru::Level::Medium),
+            s);
+        check(levels.hard == 0 && near(levels.medium, -(medium + soft))
+                  && levels.soft == 0.0,
+              "level(Medium): confrontationCountImbalanceCost moves onto medium");
+    }
+    {
+        const auto levels = levelsWith(
+            defaultConstraints()
+                .level("confrontationCountImbalanceCost", optimaru::Level::Medium)
+                .weight("confrontationCountImbalanceCost", 2),
+            s);
+        check(levels.hard == 0 && near(levels.medium, -(medium + 2.0 * soft))
+                  && levels.soft == 0.0,
+              "a weight on a moved constraint is in medium units");
+    }
     std::printf("\n");
 }
 
@@ -722,6 +750,12 @@ void verifyMediumIncremental()
             {"soft", [=] { return defaultConstraints().soft(imbalance); }},
             {"weight 3",
              [=] { return defaultConstraints().weight(imbalance, 3); }},
+            {"with confrontationCountImbalanceCost on medium",
+             []
+             {
+                 return defaultConstraints().level(
+                     "confrontationCountImbalanceCost", optimaru::Level::Medium);
+             }},
         };
     for (const auto &variant : variants)
     {
@@ -756,9 +790,307 @@ void verifyMediumIncremental()
         check(mismatches == 0,
               "medium " + variant.first
                   + ": 600 random moves, incremental == full recompute");
-        if (variant.first == "default" || variant.first == "weight 3")
+        if (variant.first != "hard" && variant.first != "soft")
             check(mediumSteps > 0,
                   variant.first + ": the walk visits medium states");
+    }
+    std::printf("\n");
+}
+
+// -------------------------------------------------------------------------
+// (j) Repeated components and offsets. A repeat is a fresh copy of a
+// default component (another defaultConstraints(), the one name kept, its
+// knobs re-stated) appended with addInstances(), as the Python bindings
+// build it from a pick list.
+// -------------------------------------------------------------------------
+ConstraintAssembly copyOf(const std::string &name)
+{
+    ConstraintAssembly copy = defaultConstraints();
+    copy.only({name});
+    return copy;
+}
+
+// The (i) schedule plus three unavailability facts: T0 twice on D0 (it
+// plays D0) and T2 on D3 (it does not). Raw per team (T0, T1, T2):
+// teamUnavailabilityCost [2, 0, 0] evaluated on T0 and T2 only,
+// teamConflictCost [0, 0, 0] on every team; the globals 2.16025 (medium) and
+// 0.816497 (soft).
+TournamentSchedule repeatInstance()
+{
+    TournamentSchedule s = makeBase(/*teams*/ 3, /*days*/ 4);
+    addAssignment(s, 0, 0);
+    addAssignment(s, 0, 1);
+    addAssignment(s, 0, 2);
+    addAssignment(s, 1, 1);
+    addAssignment(s, 1, 2);
+    addAssignment(s, 2, 1);
+    addAssignment(s, 3, 1);
+    s.unavailabilityPenalties.push_back({0, 0});
+    s.unavailabilityPenalties.push_back({0, 0});
+    s.unavailabilityPenalties.push_back({2, 3});
+    return s;
+}
+
+ConstraintAssembly repeatedAssembly()
+{
+    ConstraintAssembly assembly = defaultConstraints();
+    assembly.offset("teamConflictCost", 1.0);
+    // The literal copies of the two hard constraints sit on soft: hard refuses
+    // the literal formula with an offset (hard 0 must mean no violation).
+    assembly.addInstances(std::move(copyOf("teamConflictCost")
+                                        .soft("teamConflictCost")
+                                        .weight("teamConflictCost", 2.0)
+                                        .offset("teamConflictCost", 1.0)
+                                        .clip("teamConflictCost", false)));
+    assembly.addInstances(std::move(copyOf("teamConflictCost")
+                                        .weight("teamConflictCost", 2.0)
+                                        .offset("teamConflictCost", 1.0)));
+    assembly.addInstances(std::move(copyOf("teamUnavailabilityCost")
+                                        .soft("teamUnavailabilityCost")
+                                        .exponent("teamUnavailabilityCost", 2.0)
+                                        .offset("teamUnavailabilityCost", -1.0)
+                                        .clip("teamUnavailabilityCost", false)));
+    assembly.addInstances(std::move(copyOf("teamUnavailabilityCost")
+                                        .exponent("teamUnavailabilityCost", 2.0)
+                                        .offset("teamUnavailabilityCost", -1.0)));
+    assembly.addInstances(
+        std::move(copyOf("assignmentCountImbalanceCost")
+                      .exponent("assignmentCountImbalanceCost", 2.0)
+                      .offset("assignmentCountImbalanceCost", 1.0)));
+    assembly.addInstances(
+        std::move(copyOf("assignmentCountImbalanceCost")
+                      .soft("assignmentCountImbalanceCost")
+                      .weight("assignmentCountImbalanceCost", 3.0)
+                      .offset("assignmentCountImbalanceCost", -0.5)
+                      .clip("assignmentCountImbalanceCost", false)));
+    assembly.addInstances(
+        std::move(copyOf("confrontationCountImbalanceCost")
+                      .weight("confrontationCountImbalanceCost", 0.25)
+                      .offset("confrontationCountImbalanceCost", 2.0)
+                      .clip("confrontationCountImbalanceCost", false)));
+    return assembly;
+}
+
+void verifyRepeatsAndOffsets()
+{
+    std::printf("== (j) Repeated components, offset / clip ==\n");
+    const double medium = 2.16025;
+    const double soft = 0.816497;
+    {
+        TournamentSchedule s = repeatInstance();
+        ConstraintAssembly twice = copyOf("teamUnavailabilityCost");
+        twice.addInstances(std::move(copyOf("teamUnavailabilityCost")
+                                         .weight("teamUnavailabilityCost", 2.0)
+                                         .exponent("teamUnavailabilityCost", 2.0)));
+        DecomposedCalculator calculator;
+        std::move(twice).into(calculator);
+        calculator.resetWorkingSolution(s);
+        calculator.calculateScore();
+        const auto levels = calculator.levelScores();
+        check(levels.hard == -10 && levels.medium == 0.0 && levels.soft == 0.0,
+              "facts hit + 2 x their square per team: -10 hard");
+        const auto entries = calculator.constraintCosts();
+        check(entries.size() == 2 && entries[0].unitCosts == entries[1].unitCosts
+                  && entries[0].unitCosts == std::vector<double>{2, 0, 0}
+                  && entries[0].scoped && entries[1].scoped
+                  && entries[0].units == std::vector<int>{0, 2}
+                  && entries[1].weight == 2.0 && entries[1].exponent == 2.0
+                  && entries[1].defaultWeight == 1.0,
+              "two scoped instances over T0 and T2, each with its own knobs");
+    }
+    {
+        TournamentSchedule s = repeatInstance();
+        const auto unavailable = levelsWith(copyOf("teamUnavailabilityCost")
+                                                .soft("teamUnavailabilityCost")
+                                                .offset("teamUnavailabilityCost", 3.0)
+                                                .clip("teamUnavailabilityCost", false),
+                                            s);
+        check(unavailable.hard == 0 && unavailable.soft == 4.0,
+              "unavailability literal offset 3 on soft: (2 - 3) + (0 - 3) on T0, T2 only");
+        check(levelsWith(copyOf("teamUnavailabilityCost")
+                             .offset("teamUnavailabilityCost", -1.0),
+                         s)
+                      .hard
+                  == -3,
+              "unavailability threshold offset -1: T0 only, 2 + 1");
+        const auto conflict = levelsWith(copyOf("teamConflictCost")
+                                             .soft("teamConflictCost")
+                                             .weight("teamConflictCost", 3.0)
+                                             .offset("teamConflictCost", 0.5)
+                                             .clip("teamConflictCost", false),
+                                         s);
+        check(conflict.hard == 0 && conflict.soft == 4.5,
+              "conflict literal offset 0.5 at weight 3 on soft: 3 teams x (-1.5), not rounded");
+        const auto confrontation
+            = levelsWith(copyOf("confrontationCountImbalanceCost")
+                             .offset("confrontationCountImbalanceCost", 1.0)
+                             .clip("confrontationCountImbalanceCost", false),
+                         s);
+        check(confrontation.hard == 0 && near(confrontation.soft, -(soft - 1.0)),
+              "confrontation literal offset 1 on the single total");
+        const auto assignment
+            = levelsWith(copyOf("assignmentCountImbalanceCost")
+                             .offset("assignmentCountImbalanceCost", 2.0),
+                         s);
+        check(near(assignment.medium, -(medium - 2.0)),
+              "assignment-imbalance threshold offset 2: medium -(2.16025 - 2)");
+        const auto promoted
+            = levelsWith(copyOf("assignmentCountImbalanceCost")
+                             .hard("assignmentCountImbalanceCost")
+                             .offset("assignmentCountImbalanceCost", 1.0),
+                         s);
+        check(promoted.hard == -1 && promoted.medium == 0.0,
+              "a hard threshold offset 1 on the total: llround(1.16025) -> -1 hard");
+        const auto demoted
+            = levelsWith(copyOf("assignmentCountImbalanceCost")
+                             .soft("assignmentCountImbalanceCost")
+                             .offset("assignmentCountImbalanceCost", 3.0)
+                             .clip("assignmentCountImbalanceCost", false),
+                         s);
+        check(demoted.hard == 0 && demoted.medium == 0.0 && near(demoted.soft, -(medium - 3.0)),
+              "a soft literal offset 3 on the total: +0.83975 soft (not rounded)");
+        const auto onMedium
+            = levelsWith(copyOf("assignmentCountImbalanceCost")
+                             .offset("assignmentCountImbalanceCost", 3.0)
+                             .clip("assignmentCountImbalanceCost", false),
+                         s);
+        check(onMedium.hard == 0 && near(onMedium.medium, -(medium - 3.0)),
+              "the literal offset 3 on the into_soft medium: +0.83975 medium");
+    }
+    {
+        // On hard (the default level of teamConflictCost and
+        // teamUnavailabilityCost) the literal formula with an offset is
+        // refused at reset, whichever sign and setter order: +0.5 would reward
+        // every team without a conflict (+6 hard, a feasible-looking score),
+        // -0.5 would charge teams without one.
+        auto resetRefusal = [](ConstraintAssembly assembly) {
+            TournamentSchedule s = repeatInstance();
+            try
+            {
+                levelsWith(std::move(assembly), s);
+            }
+            catch (const std::logic_error &error)
+            {
+                return std::string(error.what());
+            }
+            return std::string();
+        };
+        auto refusal = [](const std::string &name) {
+            return "Constraint '" + name
+                   + "' cannot use clip=false with a non-zero offset on a level that counts "
+                     "toward the hard score (hard 0 must mean no violation)";
+        };
+        check(resetRefusal(copyOf("teamConflictCost")
+                               .offset("teamConflictCost", 0.5)
+                               .clip("teamConflictCost", false))
+                      == refusal("teamConflictCost")
+                  && resetRefusal(copyOf("teamConflictCost")
+                                      .clip("teamConflictCost", false)
+                                      .offset("teamConflictCost", -0.5))
+                         == refusal("teamConflictCost"),
+              "conflict literal offset +-0.5 on hard: refused at reset");
+        check(resetRefusal(copyOf("teamUnavailabilityCost")
+                               .offset("teamUnavailabilityCost", 3.0)
+                               .clip("teamUnavailabilityCost", false))
+                  == refusal("teamUnavailabilityCost"),
+              "the scoped unavailability literal offset on its default hard level: refused");
+        check(resetRefusal(copyOf("confrontationCountImbalanceCost")
+                               .offset("confrontationCountImbalanceCost", 1.0)
+                               .clip("confrontationCountImbalanceCost", false)
+                               .hard("confrontationCountImbalanceCost"))
+                      == refusal("confrontationCountImbalanceCost")
+                  && resetRefusal(copyOf("assignmentCountImbalanceCost")
+                                      .hard("assignmentCountImbalanceCost")
+                                      .offset("assignmentCountImbalanceCost", 3.0)
+                                      .clip("assignmentCountImbalanceCost", false))
+                         == refusal("assignmentCountImbalanceCost"),
+              "a soft / medium literal pick moved to hard (before or after): refused at reset");
+        check(resetRefusal(copyOf("teamConflictCost").offset("teamConflictCost", 0.5)).empty()
+                  && resetRefusal(copyOf("teamConflictCost").clip("teamConflictCost", false))
+                         .empty(),
+              "allowed: a hard threshold offset and hard clip=false with offset 0");
+    }
+    {
+        // Random walk: incremental == a fresh calculator of the same assembly.
+        TournamentSchedule s = buildRandomInstance(/*teams*/ 5,
+                                                   /*days*/ 6,
+                                                   /*perDay*/ 3,
+                                                   /*seed*/ 7);
+        DecomposedCalculator calculator;
+        repeatedAssembly().into(calculator);
+        optimaru::ScoreDirector<TournamentSchedule> director(s, calculator);
+        std::mt19937_64 rng(321);
+        const int assignmentCount = static_cast<int>(s.teamAssignments.size());
+        const int valueCount = s.teamCount();
+        std::uniform_real_distribution<double> unit(0.0, 1.0);
+        int mismatches = 0;
+        int mediumSteps = 0;
+        double drift = 0.0;
+        const int steps = 3000;
+        for (int step = 0; step < steps; ++step)
+        {
+            if (unit(rng) < 0.75)
+            {
+                const int assignment = static_cast<int>(rng() % assignmentCount);
+                const int value = unit(rng) < 0.10
+                                      ? -1
+                                      : static_cast<int>(rng() % valueCount);
+                director.changeVariable(assignment, value);
+            }
+            else
+            {
+                const int a = static_cast<int>(rng() % assignmentCount);
+                const int b = static_cast<int>(rng() % assignmentCount);
+                const int va = s.teamAssignments[a].team;
+                const int vb = s.teamAssignments[b].team;
+                director.changeVariable(a, vb);
+                director.changeVariable(b, va);
+            }
+            const Score incremental = director.calculateScore();
+            TournamentSchedule shadow = s;
+            DecomposedCalculator fresh;
+            repeatedAssembly().into(fresh);
+            const Score full = scoreWith(fresh, shadow);
+            if (fresh.levelScores().medium != 0.0)
+                ++mediumSteps;
+            drift = std::max(drift, std::fabs(full.soft - incremental.soft));
+            if (!optimaru::scoresAgree(incremental, full))
+                ++mismatches;
+        }
+        std::printf("    largest soft drift %.3g\n", drift);
+        check(mismatches == 0,
+              std::to_string(steps)
+                  + " random moves with repeated, shifted components: "
+                    "incremental == fresh");
+        check(mediumSteps > 0, "the walk visits medium states");
+    }
+    {
+        TournamentSchedule s = buildRandomInstance(/*teams*/ 5,
+                                                   /*days*/ 6,
+                                                   /*perDay*/ 3,
+                                                   /*seed*/ 11);
+        Solver::Config config;
+        config.spentLimit = std::chrono::seconds(2);
+        config.randomSeed = 5;
+        config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+        DecomposedCalculator calculator;
+        repeatedAssembly().into(calculator);
+        bool corrupted = false;
+        try
+        {
+            Solver solver(config);
+            solver.solve(s, calculator);
+        }
+        catch (const optimaru::ScoreCorruptionError &e)
+        {
+            corrupted = true;
+            std::printf("  ScoreCorruptionError: %s\n", e.what());
+        }
+        check(!corrupted, "2s FULL_ASSERT solve with repeated, shifted components");
+        DecomposedCalculator fresh;
+        repeatedAssembly().into(fresh);
+        check(!corrupted && sameScore(s.score, scoreWith(fresh, s)),
+              "the reported score == a fresh recompute of the same assembly");
     }
     std::printf("\n");
 }
@@ -777,6 +1109,7 @@ int main()
     verifyCatalog();
     verifyMediumLevel();
     verifyMediumIncremental();
+    verifyRepeatsAndOffsets();
 
     if (failures == 0)
     {

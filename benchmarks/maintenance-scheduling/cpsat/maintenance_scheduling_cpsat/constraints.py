@@ -5,6 +5,13 @@ weight come from the engine's ``maintenance_scheduling.constraint_info()`` (the
 C++ components' kDefaultLevel / kDefaultWeight — e.g. after_ideal_end_date_cost
 soft 1'000'000 and tag_conflict_cost soft 1'000), so they are not restated here.
 The registry lists the plugins in ``list_constraints()`` order.
+
+Every plugin adds one term per engine unit: the four date rules one per
+(crew, start date) cell, every cell included (an empty one is the constant 0),
+the two global conflict rules one for their total. So a pick's ``offset`` /
+``clip`` shape each cell (or the total) exactly as the engine does
+(``terms_per_unit``), and a constraint picked several times adds one set of
+terms per pick.
 """
 
 from dataclasses import dataclass, field
@@ -39,6 +46,7 @@ class MaintenanceContext:
 
 class _DateBoundaryPlugin(ConstraintPlugin[MaintenanceContext]):
     boundary: ClassVar[str]
+    terms_per_unit = True  # one term per (crew, start date) cell
 
     def raw(self, job: Any, start: date, end: date) -> int:
         if self.boundary == "min_start":
@@ -52,14 +60,24 @@ class _DateBoundaryPlugin(ConstraintPlugin[MaintenanceContext]):
         return max(0, (end - job.ideal_end_date).days) if job.ideal_end_date else 0
 
     def build(self, context: MaintenanceContext, objective: ObjectiveBuilder) -> None:
-        for job_index, job in enumerate(context.problem.jobs):
-            for crew, day in context.options:
-                amount = self.raw(job, context.dates[day], context.ends[job_index][day])
-                objective.add(
-                    self.name,
-                    amount * context.x[job_index, crew, day],
-                    bound=amount,
+        jobs = context.problem.jobs
+        for crew, day in context.options:
+            amounts = [
+                (
+                    job_index,
+                    self.raw(job, context.dates[day], context.ends[job_index][day]),
                 )
+                for job_index, job in enumerate(jobs)
+            ]
+            amounts = [(job_index, amount) for job_index, amount in amounts if amount]
+            objective.add(
+                self.name,
+                sum(
+                    amount * context.x[job_index, crew, day]
+                    for job_index, amount in amounts
+                ),
+                bound=sum(amount for _, amount in amounts),
+            )
 
 
 class MinStartDateCost(domain.MinStartDateCost, _DateBoundaryPlugin):
@@ -80,8 +98,11 @@ class AfterIdealEndDateCost(domain.AfterIdealEndDateCost, _DateBoundaryPlugin):
 
 class _PairPlugin(ConstraintPlugin[MaintenanceContext]):
     same_crew_only: ClassVar[bool]
+    terms_per_unit = True  # a global constraint: one term for its total
 
     def build(self, context: MaintenanceContext, objective: ObjectiveBuilder) -> None:
+        terms: list[Any] = []
+        bound = 0
         for left in range(len(context.problem.jobs)):
             for right in range(left + 1, len(context.problem.jobs)):
                 shared_tags = len(
@@ -121,7 +142,9 @@ class _PairPlugin(ConstraintPlugin[MaintenanceContext]):
                             context.x[left, crew_left, day_left],
                             context.x[right, crew_right, day_right],
                         )
-                        objective.add(self.name, amount * both, bound=amount)
+                        terms.append(amount * both)
+                        bound += amount
+        objective.add(self.name, sum(terms), bound=bound)
 
 
 class CrewConflictCost(domain.CrewConflictCost, _PairPlugin):

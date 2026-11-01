@@ -2,42 +2,66 @@
 
 The default path (`fp.solve(schedule)`) enables all five constraints at the default weights.
 This module is the alternative path next to it: pick constraints, change weights, change
-levels, and pass the list to `solve(schedule, constraints=...)`.
+levels, shape the cost, and pass the list to `solve(schedule, constraints=...)`.
 
-The shortest route is :func:`get_constraints`. It returns the default list, so
-a "default with a small tweak" declaration fits on one line::
+A constraint list reads one way: one class call per constraint::
 
     import food_packaging as fp
     from food_packaging.constraints import (
-        SquaredMakespanCost, get_constraints, max_end_time_cost,
+        MaxEndTimeCost, SquaredMakespanCost, UnassignedJobsCost, get_constraints,
     )
 
-    fp.solve(schedule, constraints=get_constraints())           # defaults as-is
-    fp.solve(schedule, constraints=get_constraints([            # picked
-        max_end_time_cost, SquaredMakespanCost(weight=10),
-    ]))
+    fp.solve(schedule, constraints=get_constraints())           # the defaults as-is
+    fp.solve(schedule, constraints=[                             # picked
+        MaxEndTimeCost(), UnassignedJobsCost(), SquaredMakespanCost(weight=10),
+    ])
 
-Each constraint has a default instance at module level (`max_end_time_cost`,
-`unassigned_jobs_cost`, ...), so you can also pass a list of just a few. Only listed
-constraints are scored — leave one out and its term disappears from the score.
+Only listed constraints are scored — leave one out and its term disappears from the
+score. (The module also carries ready-made default instances: ``max_end_time_cost`` is
+``MaxEndTimeCost()``, and so on.)
 
-Every spec takes ``(weight=None, level=None, exponent=1.0)``:
+Every spec takes five knobs:
 
 - ``weight``   linear multiplier on the constraint cost, in units of its level.
                ``None`` = the component default (``fp.constraint_info()`` reports
                them).
 - ``level``    ``None`` = the default level, otherwise a ``Level`` or its name
                (``Level.MEDIUM`` or ``"medium"``). Any flippable constraint may
-               take any of the three levels.
-               ``after_ideal_end_time_cost`` and ``unassigned_jobs_cost`` are MEDIUM constraints by default: ``level="hard"`` makes
-               them one hard unit per minute and ``level="soft"`` one soft unit per
+               take any of the three levels. ``AfterIdealEndTimeCost`` and
+               ``UnassignedJobsCost`` are MEDIUM constraints by default:
+               ``level="hard"`` makes them one hard unit per minute and
+               ``level="soft"`` one soft unit per
                minute (outside the 10^10 medium fold), in the solver and in
                :func:`score` alike. A ``weight`` is in units of the level in effect.
 - ``exponent`` sign-preserving power shaping: ``weight * sign(c) * |c| **
                exponent``, per line for the unit constraints and on the single total
-               for the globals ``operator_cleaning_conflict_cost`` and
-               ``unassigned_jobs_cost``. 2.0 = squared, so concentrated violations
+               for the globals ``OperatorCleaningConflictCost`` and
+               ``UnassignedJobsCost``. 2.0 = squared, so concentrated violations
                grow much costlier.
+- ``offset``   (keyword) shifts that shaping, at the same granularity; 0.0 = none.
+- ``clip``     (keyword) ``True`` (the default) counts only what lies beyond the
+               offset, ``max(0, c - offset) ** exponent``; ``False`` shapes
+               ``c - offset`` as it is, so a line below the offset lowers the
+               penalty. The literal form charges every unit the constraint
+               evaluates, a raw 0 included: every line (an empty one included,
+               never the unassigned pool, which is no line) for the per-line
+               constraints, the one total for a global; a ``constraint_costs()``
+               entry lists the lines as ``"units"``. With an offset it is refused
+               on hard (``MaxEndTimeCost`` and ``OperatorCleaningConflictCost``
+               by default), because hard 0 must mean no violation; medium folds
+               into soft here, so it takes the literal formula.
+
+The same constraint may be picked several times; each pick is scored on its own with
+its own knobs and the picks add up. Lateness past the deadline per line, plus its
+square beyond 30 minutes::
+
+    fp.solve(schedule, constraints=[
+        MaxEndTimeCost(),
+        MaxEndTimeCost(exponent=2, offset=30),
+        *[spec for spec in get_constraints() if spec.name != "max_end_time_cost"],
+    ])
+
+``fp.constraint_costs(schedule, picks)`` keys the second pick ``"max_end_time_cost#2"``.
 
 Names (`name`) are the C++ component names in snake_case
 (``MaxEndTimeCost`` -> ``max_end_time_cost``). The core derives them mechanically,
@@ -179,7 +203,7 @@ class UnassignedJobsCost(Constraint):
     )
 
 
-#: Instances at the default weights (weight=None). Reference them directly when picking.
+#: Ready-made default instances (``max_end_time_cost`` is ``MaxEndTimeCost()``).
 max_end_time_cost = MaxEndTimeCost()
 after_ideal_end_time_cost = AfterIdealEndTimeCost()
 squared_makespan_cost = SquaredMakespanCost()
@@ -200,12 +224,13 @@ def get_constraints(constraints: list[Constraint] | None = None) -> list[Constra
     """Return the cost function. Without arguments, all five default constraints.
 
     When `constraints` is given, that list is used as-is — only the listed
-    constraints are scored. To change just one default, mix in the default instances::
+    constraints are scored::
 
-        get_constraints([max_end_time_cost, SquaredMakespanCost(weight=10)])
+        get_constraints([MaxEndTimeCost(), SquaredMakespanCost(weight=10)])
 
     Same contract as the C++ applyConstraints: an empty list (most likely a filter
-    that came out empty) and a constraint named twice raise ValueError.
+    that came out empty) raises ValueError; a constraint named several times is
+    scored once per pick, each with its own knobs.
     """
     return select(constraints, _DEFAULTS)
 
@@ -214,17 +239,19 @@ def score(costs: dict, constraints: list[Constraint] | None = None) -> Score:
     """Apply specs to raw constraint costs and produce a score — pure Python.
 
     ``costs`` is what `fp.constraint_costs(schedule)` returns: per constraint, the
-    **raw** cost of each unit (before weight, exponent and level rounding).
+    **raw** cost of each unit (before weight, exponent, offset and level rounding).
     Fetch it once and rescore with different weights without re-solving::
 
         raw = fp.constraint_costs(schedule)
         score(raw)                     # default set
-        score(raw, picked)             # picked list
+        score(raw, [MaxEndTimeCost(), SquaredMakespanCost(weight=10)])
+        score(raw, [MaxEndTimeCost(), MaxEndTimeCost(exponent=2, offset=30)])
 
     No solver and no search are involved. The arithmetic matches the engine —
-    each unit contributes ``weight * shape(cost, exponent)`` and hard
-    contributions are **rounded per unit** before summing (the same order as the
-    engine; rounding the total afterwards gives different values).
+    each unit contributes ``weight * shape(cost, exponent, offset, clip)`` and
+    hard contributions are **rounded per unit** before summing (the same order as
+    the engine; rounding the total afterwards gives different values). A second
+    pick of a constraint reads the same raw costs with its own knobs.
 
     When ``constraints`` is given, only those constraints are scored — the same
     semantics as `get_constraints`. Unknown names raise ValueError.

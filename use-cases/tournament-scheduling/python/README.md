@@ -21,11 +21,19 @@ read off the C++ components' `kDefaultLevel` / `kDefaultWeight`;
 constraints, one total for the two imbalance constraints) with that metadata and the
 domain's `medium_fold` (`{"kind": "into_soft", "unit": 1e6}`) on every entry.
 `tournament_scheduling.constraints` holds one spec per row (`TeamConflictCost`, ...) and the
-module-level default instances (`team_conflict_cost`, ...). Every spec takes
-`weight=None` (the default above, in units of its level), `level=None` (the default level,
-otherwise a `Level` or its name) and `exponent=1.0`. The medium constraint moved to hard costs
-1 hard per raw unit (the total, rounded), moved to soft 1 soft per raw unit, and an explicit
-weight stays in medium units.
+module-level default instances (`team_conflict_cost` is `TeamConflictCost()`, ...). Every
+spec takes `weight=None` (the default above, in units of its level), `level=None` (the
+default level, otherwise a `Level` or its name), `exponent=1.0` and the keyword-only
+`offset=0.0` / `clip=True` (`clip=True` counts only what lies beyond the offset,
+`clip=False` shapes `x - offset` as it is, and is refused with an offset on hard, because
+hard 0 must mean no violation; the scoped `team_unavailability_cost` lists the teams it
+evaluates as `"units"`). Any constraint may take any of the three levels: the
+medium constraint moved to hard costs 1 hard per raw unit (the total, rounded), moved to
+soft 1 soft per raw unit, a hard or soft constraint moved to medium 1 medium unit per raw
+unit, and an explicit weight is in units of the level in effect. A constraint may be picked
+several times (since 0.3.0); each pick is its own instance with its own knobs, its level
+included, the instances add up, and
+`constraint_costs(schedule, picks)` keys the k-th pick `<name>#<k>`.
 
 0.2.0 renamed `one_assignment_per_date_per_team` / `unavailability_penalty` /
 `fair_assignment_count_per_team` / `evenly_confrontation_count` (and the spec classes

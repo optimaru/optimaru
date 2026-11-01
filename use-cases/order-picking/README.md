@@ -11,9 +11,10 @@ Domain model, constraints and API details: [`python/`](python/README.md) and [`c
 | `distance_from_last_pick_task_to_path_origin_cost` | `DistanceFromLastPickTaskToPathOriginCost` | soft | 1 | warehouse distance (m) from the last pick back to the start; 0 for an empty trolley |
 | `order_split_by_trolley_cost` | `OrderSplitByTrolleyCost` | soft | 1000 | distinct orders with a pick on the trolley — summed, the (order, trolley) pairs. **Not** 0 for an unsplit order: an order on one trolley counts 1, so the minimum is the number of orders with assigned picks (the Java quickstart's definition, kept) |
 
-Every constraint is flippable (`level="hard"` / `level="soft"`), none is a reward and all
-four are scored by default (`default_enabled`); `order_picking.constraint_info()`
-reports exactly this table from the C++ components (`kDefaultLevel` /
+Every constraint is flippable (`level="hard"` / `level="soft"`, or `Level.HARD` /
+`Level.SOFT`; `level="medium"` raises `ValueError`, the domain has no medium level),
+none is a reward and all four are scored by default (`default_enabled`);
+`order_picking.constraint_info()` reports exactly this table from the C++ components (`kDefaultLevel` /
 `kDefaultWeight`). `order_picking.constraint_costs(solution)` is the only
 per-constraint surface: the travel distance is the sum of the two distance entries,
 the (order, trolley) pair count the sum of `order_split_by_trolley_cost`
@@ -29,6 +30,33 @@ were removed from the Python API (use `constraint_costs()`; the old
 `order_split_by_trolley` total was weighted x1000, the raw cost is the pair count). The
 C++ `ConstraintTotals` members carry the registry names now and read the components'
 `kDefaultWeight`. Raw costs, weights, levels and the default score are unchanged.
+
+**0.3.0:** every constraint takes two more knobs, `offset` and `clip` (keyword-only), and
+may be picked several times. Each trolley's raw cost `x` is shaped as
+`sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
+`(x - offset) ** exponent`, sign-preserving (`clip=False`, which lowers the penalty of
+every trolley below the offset, an empty one included); `offset=0` is the 0.2.0 shaping.
+Both apply per trolley, not to the total. `clip=False` with an offset is refused on hard
+(`trolley_capacity_cost` by default), because hard 0 must mean no violation. Each pick is
+its own instance with its own knobs, and the instances add up:
+
+```python
+from order_picking.constraints import (
+    DistanceFromLastPickTaskToPathOriginCost, DistanceFromPreviousPickTaskCost,
+    OrderSplitByTrolleyCost, TrolleyCapacityCost,
+)
+
+op.solve(solution, constraints=[
+    TrolleyCapacityCost(),
+    DistanceFromPreviousPickTaskCost(),                                     # meters walked
+    DistanceFromPreviousPickTaskCost(weight=0.1, exponent=2, offset=100),   # + 0.1 x (meters beyond 100)^2
+    DistanceFromLastPickTaskToPathOriginCost(),
+    OrderSplitByTrolleyCost(),
+])
+```
+
+`op.constraint_costs(solution, picks)` keys the second pick
+`distance_from_previous_pick_task_cost#2`. The CP-SAT reference takes integral offsets.
 
 ## Usage
 
@@ -103,7 +131,7 @@ solver's `solve` before the engine runs — the engine only fills what is still 
 4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
    `description_en` / `description_ko` to `python/order_picking/constraints.py` (plus its
    module-level default instance); callers then pick, reweight or flip it:
-   `constraints=get_constraints([..., MyRuleCost(weight=5, level="hard")])`;
+   `constraints=[..., MyRuleCost(weight=5, level="hard")]`;
 5. mirror it in the CP-SAT model in
    [`benchmarks/order-picking/cpsat`](../../benchmarks/order-picking/cpsat) (a plugin
    subclassing the spec; defaults come from `constraint_info()`) so the benchmark stays like

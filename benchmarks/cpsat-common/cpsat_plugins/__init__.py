@@ -5,7 +5,7 @@ callers select a subset, change a weight, move a term between hard/soft
 levels, and expose the same catalog to an API or UI.
 """
 
-from .plugins import ConstraintPlugin, ConstraintRegistry
+from .plugins import ConstraintPlugin, ConstraintRegistry, InstanceObjective
 from .registry import (
     ConstraintConfig,
     ConstraintSelection,
@@ -22,6 +22,7 @@ __all__ = [
     "ConstraintRegistry",
     "ConstraintSpec",
     "DomainConstraint",
+    "InstanceObjective",
     "ObjectiveBuilder",
     "resolve",
 ]

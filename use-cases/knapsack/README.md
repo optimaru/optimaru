@@ -40,11 +40,41 @@ CP-SAT reference.
 
 Every constraint is global (one raw total, kept up to date from each flip), all
 seven are scored by default (`default_enabled`), and the six hard ones are
-flippable (`level="hard"` / `level="soft"`). `selected_value_cost` is a reward: it is
-always soft — `level="hard"` raises `ValueError` in `solve`, `calculate_score`,
-`constraints.score()` and the CP-SAT reference — and its level cannot change.
+flippable (`level="hard"` / `level="soft"`, or `Level.HARD` / `Level.SOFT`;
+`level="medium"` raises `ValueError`, the domain has no medium level).
+`selected_value_cost` is a reward: it is always soft — `level="hard"` raises
+`ValueError` in `solve`, `calculate_score`, `constraints.score()` and the CP-SAT
+reference — and its level cannot change.
 `knapsack.constraint_info()` reports exactly this table from the C++ components
 (`kDefaultLevel` / `kDefaultWeight`).
+
+### 0.3.0
+
+Every constraint takes two more knobs, `offset` and `clip` (keyword-only), and may be
+picked several times. Every knapsack constraint is global, so the offset shapes its single
+raw total `x`: `sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
+`(x - offset) ** exponent`, sign-preserving (`clip=False`, which charges a total of 0 too
+and rewards a total below the offset); `offset=0` is the 0.2.0 shaping. Both apply to that
+one total, a raw 0 included. `clip=False` with an offset is refused on hard (the six
+penalties by default), because hard 0 must mean no violation: a fitting capacity total
+would otherwise turn into a hard reward that cancels another constraint's overflow. On the
+`selected_value_cost` reward (raw `-value`) a threshold offset rewards only the value
+beyond it and a literal one adds `offset` to the reward. Each pick is its own instance with
+its own knobs, its level included (`level` replaced the `hard` knob; `hard=` raises
+`TypeError`), and the instances add up:
+
+```python
+knapsack.solve(problem, constraints=[
+    KnapsackCapacityCost(),
+    ResourceCapacityCost(),                         # the resource overflow
+    ResourceCapacityCost(exponent=2, offset=10),    # + (overflow beyond 10 units)^2
+    SelectedValueCost(),
+])
+```
+
+`knapsack.constraint_costs(problem, picks)` scores a pick list and keys the second pick
+`resource_capacity_cost#2`; every entry reports its `offset`, `clip` and the `level` in
+effect. The CP-SAT reference takes the same picks (integral offsets).
 
 ### 0.2.0
 
@@ -85,7 +115,8 @@ other C++ use cases.
     `"costs"` (0.1.5: `{name: [one term per resource | entry | group | pair]}`);
   - `selected_value_cost` with `level="hard"` raises `ValueError` (0.1.5 scored a
     positive hard score);
-  - a constraint picked twice raises `ValueError`.
+  - a constraint picked twice raised `ValueError` (0.1.5 counted it twice; since
+    0.3.0 each pick is scored again).
 - **`SolverConfig`** is the engine's (the other C++ packages' knobs:
   `spent_limit_seconds`, `step_count_limit`, `unimproved_*`, `random_seed`,
   `parallel_solver_count`, `late_acceptance_size`, `full_assert`, `ruin_recreate*`,
@@ -148,7 +179,10 @@ fact), the zero budget with a seed, determinism, multi-start and validation.
 `ks_plugin_test`: default assembly == monolith bit for bit (score and raw totals),
 plugin incremental == full recompute per constraint after each move, partial
 assemblies, overrides (exponent on the total, per-constraint hard rounding), raw
-costs by hand, a FULL_ASSERT plugin solve, the catalog and the reward guards.
+costs by hand, a FULL_ASSERT plugin solve, the catalog and the reward guards, and
+repeated / shifted components (a hand-calculated repeat, threshold and literal offsets
+by hand, the literal formula refused on hard at reset and kept on soft, incremental == a
+fresh recompute over a random walk, a FULL_ASSERT solve).
 
 ## Usage
 
@@ -186,6 +220,9 @@ knapsack.constraint_info()     # [ConstraintInfo(name='knapsack_capacity_cost', 
 knapsack.solve(problem, time_limit_seconds=1.0, constraints=[*get_constraints()[:-1], SelectedValueCost(weight=2)])
 raw = knapsack.constraint_costs(problem)            # raw totals, re-priced in pure Python:
 score(raw), score(raw, [*get_constraints()[:3], ForbiddenItemsCost(level="soft"), *get_constraints()[4:]])
+# A constraint may be picked several times, each pick with its own knobs; offset / clip
+# shift the shaping of the total (clip=True: only the value beyond 10 is rewarded).
+score(raw, [SelectedValueCost(), SelectedValueCost(weight=0.5, offset=10)])
 ```
 
 ## Starting from an existing solution
@@ -241,7 +278,7 @@ Python reference-parity tests pin its results (and `with_initial_solution` uses 
 4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
    `description_en` / `description_ko` to `python/knapsack/constraints.py` (plus its
    module-level default instance); callers then pick, reweight or flip it:
-   `constraints=get_constraints([..., MyRuleCost(weight=5, level="hard")])`;
+   `constraints=[..., MyRuleCost(weight=5, level="hard")]`;
 5. mirror it in the CP-SAT model in
    [`benchmarks/knapsack/cpsat`](../../benchmarks/knapsack/cpsat) (a plugin subclassing
    the spec; defaults come from `constraint_info()`), with an exact encoding so

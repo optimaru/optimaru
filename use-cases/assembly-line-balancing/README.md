@@ -39,8 +39,10 @@ holds the exact CP-SAT reference.
 | `used_stations_cost` | `UsedStationsCost` | soft | 1 | stations with a load > 0 (the SALBP-1 objective) | global |
 | `workload_imbalance_cost` | `WorkloadImbalanceCost` | soft | **0** (opt-in) | max - min load over the used stations | global |
 
-Every constraint is flippable (`level="hard"` / `level="soft"`), none is a reward, and
-all but `workload_imbalance_cost` are scored by default (`default_enabled`);
+Every constraint is flippable (`level="hard"` / `level="soft"`, or `Level.HARD` /
+`Level.SOFT`; `level="medium"` raises `ValueError`, the domain has no medium level),
+none is a reward, and all but `workload_imbalance_cost` are scored by default
+(`default_enabled`);
 `assembly_line_balancing.constraint_info()` reports exactly this table from the C++
 components (`kDefaultLevel` / `kDefaultWeight`). An unassigned task (`station = -1`)
 contributes nothing (the engine convention): an arc, pair or group member counts
@@ -79,7 +81,8 @@ other C++ use cases.
     `{name: {"costs", "weight", "exponent", "hard", "global", "level", "reward",
     "level_flippable", "name", "label"}}` with per-station lists
     (`0 .. station_count - 1`; 0.1.5: `{name: [per station | task | group | pair]}`);
-  - a constraint picked twice raises `ValueError` (0.1.5 counted it twice).
+  - a constraint picked twice raised `ValueError` (0.1.5 counted it twice; since
+    0.3.0 each pick is scored again, see below).
 - **`SolverConfig`** is the engine's (the other C++ packages' knobs:
   `spent_limit_seconds`, `step_count_limit`, `unimproved_*`, `random_seed`,
   `parallel_solver_count`, `late_acceptance_size`, `full_assert`, `ruin_recreate*`,
@@ -98,6 +101,36 @@ other C++ use cases.
   `constraints.score()`). With `constraints=...` a solve is single-start
   (`parallel_solver_count` is ignored), as in every C++ package.
 - The JSON input/output schema of `AssemblyLineBalancingProblemModel` is unchanged.
+
+### 0.3.0
+
+Every constraint takes two more knobs, `offset` and `clip` (keyword-only), and may be
+picked several times. A raw cost `x` (per station for the six per-station constraints,
+the single total for the four globals — the granularity of `exponent`) is shaped as
+`sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
+`(x - offset) ** exponent`, sign-preserving (`clip=False`, which lowers the penalty of
+every evaluated station below the offset, an empty one included); `offset=0` is the 0.2.0
+shaping. `max_stations_cost` and `forbidden_task_stations_cost` evaluate only their own
+stations (from `max_stations` on, and the stations some task forbids), so `clip=False`
+charges those and no other; `constraint_costs()` lists them as `"units"`. Both formulas
+apply per station (or to a global's one total), not to the sum over the stations.
+`clip=False` with an offset is refused on hard (every constraint but `used_stations_cost`
+and `workload_imbalance_cost` by default), because hard 0 must mean no violation. Each pick
+is its own instance with its own knobs, its level included (`level` replaced the `hard`
+knob; `hard=` raises `TypeError`), and the instances add up:
+
+```python
+from assembly_line_balancing.constraints import UsedStationsCost, get_constraints
+
+alb.solve(problem, constraints=[
+    *get_constraints(),                        # the defaults
+    UsedStationsCost(weight=10, offset=4),     # + 10 per used station beyond the fourth
+])
+```
+
+`alb.constraint_costs(problem, picks)` keys the second pick `used_stations_cost#2` (each
+name's instances together, the names in catalog order). The CP-SAT reference takes
+integral offsets.
 
 ## cpp/
 
@@ -160,12 +193,13 @@ print(AssemblyLineBalancingProblemModel.from_core(core).station_loads)
 `constraints`:
 
 ```python
-from assembly_line_balancing.constraints import WorkloadImbalanceCost, get_constraints, score
+from assembly_line_balancing.constraints import UsedStationsCost, WorkloadImbalanceCost, get_constraints, score
 
 alb.constraint_info()          # [ConstraintInfo(name='station_capacity_cost', default_level='hard', ...), ...]
 alb.solve(problem, time_limit_seconds=1.0, constraints=[*get_constraints()[:-1], WorkloadImbalanceCost(weight=1)])
 raw = alb.constraint_costs(problem)                 # raw costs, re-priced in pure Python:
 score(raw), score(raw, [*get_constraints()[:-1], WorkloadImbalanceCost(weight=2)])
+score(raw, [UsedStationsCost(), UsedStationsCost(weight=10, offset=4)])   # a repeat, shifted
 ```
 
 ## Starting from an existing solution
@@ -223,7 +257,7 @@ pin its results.
 4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
    `description_en` / `description_ko` to `python/assembly_line_balancing/constraints.py`
    (plus its module-level default instance); callers then pick, reweight or flip it:
-   `constraints=get_constraints([..., MyRuleCost(weight=5, level="hard")])`;
+   `constraints=[..., MyRuleCost(weight=5, level="hard")]`;
 5. mirror it in the CP-SAT model in
    [`benchmarks/assembly-line-balancing/cpsat`](../../benchmarks/assembly-line-balancing/cpsat)
    (a plugin subclassing the spec; defaults come from `constraint_info()`), with an exact

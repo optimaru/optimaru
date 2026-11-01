@@ -12,6 +12,7 @@
 
 #include "es/domain.hpp"
 #include "optimaru/api/score/calculator/decomposed_score_calculator.hpp"
+#include "optimaru/api/score/director/score_director.hpp"  // EnvironmentMode
 
 namespace es {
 
@@ -59,6 +60,11 @@ public:
         // and gets its parallel starts from separate processes instead (see
         // es_scheduling.models.solve_request).
         int parallelSolverCount = 1;
+
+        // FULL_ASSERT re-verifies the incremental score against a full
+        // recompute after every move (a debugging aid for the C++ tests;
+        // orders of magnitude slower, not exposed to Python).
+        optimaru::EnvironmentMode environmentMode = optimaru::EnvironmentMode::NON_ASSERT;
 
         // Guided move selection (A: pick a skill-capable, available target
         // employee; B: bias the shift toward employees with hard violations).

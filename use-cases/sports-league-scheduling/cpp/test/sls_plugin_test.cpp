@@ -16,6 +16,14 @@
 //       constraintCosts()
 //   (i) the catalog: info() off the default assembly == the components'
 //       kDefaultWeight / kDefaultLevel; the knob guards
+//   (j) repeated components and the offset / clip knobs: hand-calculated
+//       repeats of a per-match unit rule and a global, threshold and literal
+//       offsets by hand (in literal mode every round position counts, an
+//       empty one included; a global shapes its one total), the literal
+//       formula refused on hard at reset and kept on soft, incremental ==
+//       a fresh recompute over a random walk and a FULL_ASSERT solve with
+//       repeated, shifted components
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -905,6 +913,394 @@ void verifyCatalog()
     std::printf("\n");
 }
 
+// -------------------------------------------------------------------------
+// (j) Repeated components and offsets. A repeat is a fresh copy of a
+// default component (another defaultConstraints(), the one name kept, its
+// knobs re-stated) appended with addInstances(), as the Python bindings
+// build it from a pick list.
+// -------------------------------------------------------------------------
+ConstraintAssembly copyOf(const std::string &name)
+{
+    ConstraintAssembly copy = defaultConstraints();
+    copy.only({name});
+    return copy;
+}
+
+// Four teams at the synthetic distances, round positions 0 and 1:
+// (0, 1) in round 0 and (2, 0) in round 1. Raw: startToAwayHopCost
+// [d(1, 0) = 21, 0], awayToEndHopCost [0, d(2, 0) = 31],
+// workdayClassicMatchesCost [0, 0]; homeToAwayHopCost totals d(0, 2) = 13,
+// every other global 0.
+LeagueSchedule repeatInstance()
+{
+    LeagueSchedule s = makeBaseContiguous(4, 2);
+    useSyntheticDistances(s);
+    addMatch(s, 0, 1, /*round*/ 0);
+    addMatch(s, 2, 0, /*round*/ 1);
+    ScoreCalculator::prepare(s);
+    return s;
+}
+
+// The defaults, two of them shifted (team conflict by a threshold: hard
+// refuses the literal formula with an offset), plus repeats of a per-match
+// delta rule (literal, fractional weight), a round-index pair global
+// (threshold, squared), a team-side run global (negative offset), the
+// clamped repeat rule and the derby rule (literal), and two repeats on the
+// other level than their default: team conflict demoted to soft (literal,
+// fractional weight) and the away-to-end hop promoted to hard (threshold).
+ConstraintAssembly repeatedAssembly()
+{
+    ConstraintAssembly assembly = defaultConstraints();
+    assembly.offset("teamConflictCost", 1.0);
+    assembly.offset("awayToAwayHopCost", 50.0);
+    assembly.addInstances(std::move(copyOf("startToAwayHopCost")
+                                        .weight("startToAwayHopCost", 0.5)
+                                        .offset("startToAwayHopCost", 40.0)
+                                        .clip("startToAwayHopCost", false)));
+    assembly.addInstances(std::move(copyOf("homeToAwayHopCost")
+                                        .weight("homeToAwayHopCost", 0.25)
+                                        .exponent("homeToAwayHopCost", 2.0)
+                                        .offset("homeToAwayHopCost", 30.0)));
+    assembly.addInstances(
+        std::move(copyOf("consecutiveHomeMatchesCost")
+                      .offset("consecutiveHomeMatchesCost", -1.0)));
+    assembly.addInstances(std::move(copyOf("repeatMatchOnNextDayCost")));
+    assembly.addInstances(
+        std::move(copyOf("workdayClassicMatchesCost")
+                      .offset("workdayClassicMatchesCost", 1.0)
+                      .clip("workdayClassicMatchesCost", false)));
+    assembly.addInstances(std::move(copyOf("teamConflictCost")
+                                        .soft("teamConflictCost")
+                                        .weight("teamConflictCost", 1.5)
+                                        .offset("teamConflictCost", 1.0)
+                                        .clip("teamConflictCost", false)));
+    assembly.addInstances(std::move(copyOf("awayToEndHopCost")
+                                        .hard("awayToEndHopCost")
+                                        .weight("awayToEndHopCost", 2.0)
+                                        .offset("awayToEndHopCost", 25.0)));
+    return assembly;
+}
+
+void verifyRepeatsAndOffsets()
+{
+    std::printf("== (j) Repeated components, offset / clip ==\n");
+    {
+        LeagueSchedule s = repeatInstance();
+        ConstraintAssembly assembly = copyOf("homeToAwayHopCost");
+        assembly.addInstances(std::move(copyOf("homeToAwayHopCost")
+                                            .weight("homeToAwayHopCost", 2.0)
+                                            .exponent("homeToAwayHopCost", 2.0)));
+        DecomposedCalculator calculator;
+        assembly.into(calculator);
+        checkScore("home-to-away km + 2 x km^2 on the total: -(13 + 338)",
+                   scoreWith(calculator, s),
+                   0,
+                   -351.0);
+        const auto entries = calculator.constraintCosts();
+        check(entries.size() == 2 && entries[0].unitCosts == entries[1].unitCosts
+                  && entries[0].unitCosts.size() == 1
+                  && entries[1].weight == 2.0 && entries[1].exponent == 2.0
+                  && entries[1].defaultWeight == 1.0,
+              "two global instances, the same total, each with its own knobs");
+    }
+    {
+        LeagueSchedule s = repeatInstance();
+        ConstraintAssembly assembly = copyOf("startToAwayHopCost");
+        assembly.addInstances(std::move(copyOf("startToAwayHopCost")
+                                            .weight("startToAwayHopCost", 0.5)
+                                            .exponent("startToAwayHopCost", 2.0)));
+        DecomposedCalculator calculator;
+        assembly.into(calculator);
+        checkScore("start hop + 0.5 x start hop^2 per round: -(21 + 220.5)",
+                   scoreWith(calculator, s),
+                   0,
+                   -241.5);
+    }
+    {
+        // Each instance on its own level: the soft default home-to-away hop
+        // (13) next to a hard repeat, 2 x (13 - 3) beyond its offset.
+        LeagueSchedule s = repeatInstance();
+        ConstraintAssembly assembly = copyOf("homeToAwayHopCost");
+        assembly.addInstances(std::move(copyOf("homeToAwayHopCost")
+                                            .hard("homeToAwayHopCost")
+                                            .weight("homeToAwayHopCost", 2.0)
+                                            .offset("homeToAwayHopCost", 3.0)));
+        DecomposedCalculator calculator;
+        assembly.into(calculator);
+        checkScore("soft home-to-away + a hard repeat beyond 3: -20hard",
+                   scoreWith(calculator, s),
+                   -20,
+                   -13.0);
+        const auto entries = calculator.constraintCosts();
+        check(entries.size() == 2 && entries[0].level == optimaru::Level::Soft
+                  && entries[1].level == optimaru::Level::Hard
+                  && entries[1].defaultLevel == optimaru::Level::Soft,
+              "the repeat reports its own level, the default stays soft");
+    }
+    {
+        // A soft per-round rule with a hard threshold repeat (hard refuses
+        // the literal formula with an offset): 3 x (21 - 1) on round 0, 0 on
+        // round 1: -60 hard.
+        LeagueSchedule s = repeatInstance();
+        ConstraintAssembly assembly = copyOf("startToAwayHopCost");
+        assembly.addInstances(std::move(copyOf("startToAwayHopCost")
+                                            .hard("startToAwayHopCost")
+                                            .weight("startToAwayHopCost", 3.0)
+                                            .offset("startToAwayHopCost", 1.0)));
+        DecomposedCalculator calculator;
+        assembly.into(calculator);
+        checkScore("soft start hop + a hard threshold repeat: -60hard",
+                   scoreWith(calculator, s),
+                   -60,
+                   -21.0);
+    }
+    {
+        LeagueSchedule s = repeatInstance();
+        DecomposedCalculator threshold;
+        copyOf("startToAwayHopCost")
+            .offset("startToAwayHopCost", 10.0)
+            .into(threshold);
+        checkScore("threshold offset 10: max(0, 21 - 10)",
+                   scoreWith(threshold, s),
+                   0,
+                   -11.0);
+        // Literal: round 1 (raw 0) is rewarded 10.
+        DecomposedCalculator literal;
+        copyOf("startToAwayHopCost")
+            .offset("startToAwayHopCost", 10.0)
+            .clip("startToAwayHopCost", false)
+            .into(literal);
+        checkScore("literal offset 10: (21 - 10) + (0 - 10), every round",
+                   scoreWith(literal, s),
+                   0,
+                   -1.0);
+        DecomposedCalculator negative;
+        copyOf("awayToEndHopCost")
+            .offset("awayToEndHopCost", -5.0)
+            .into(negative);
+        checkScore("threshold offset -5 adds to the non-zero round only",
+                   scoreWith(negative, s),
+                   0,
+                   -36.0);
+        DecomposedCalculator negativeLiteral;
+        copyOf("awayToEndHopCost")
+            .offset("awayToEndHopCost", -5.0)
+            .clip("awayToEndHopCost", false)
+            .into(negativeLiteral);
+        checkScore("literal offset -5 adds to every round: 5 + 36",
+                   scoreWith(negativeLiteral, s),
+                   0,
+                   -41.0);
+        // A hard threshold offset rounds per round: (21 - 0.5) x 3 = 61.5 ->
+        // 62, and the empty round stays 0.
+        DecomposedCalculator hard;
+        copyOf("startToAwayHopCost")
+            .hard("startToAwayHopCost")
+            .weight("startToAwayHopCost", 3.0)
+            .offset("startToAwayHopCost", 0.5)
+            .into(hard);
+        checkScore("hard threshold offset 0.5 at weight 3, rounded per round",
+                   scoreWith(hard, s),
+                   -62,
+                   0.0);
+        // The literal pick on soft is not rounded: 61.5 + (0 - 0.5) x 3.
+        DecomposedCalculator soft;
+        copyOf("startToAwayHopCost")
+            .weight("startToAwayHopCost", 3.0)
+            .offset("startToAwayHopCost", 0.5)
+            .clip("startToAwayHopCost", false)
+            .into(soft);
+        checkScore("soft literal offset 0.5 at weight 3: -(61.5 - 1.5)",
+                   scoreWith(soft, s),
+                   0,
+                   -60.0);
+        // A global shapes its one total.
+        DecomposedCalculator globalThreshold;
+        copyOf("homeToAwayHopCost")
+            .offset("homeToAwayHopCost", 3.0)
+            .into(globalThreshold);
+        checkScore("home-to-away threshold offset 3: 13 - 3",
+                   scoreWith(globalThreshold, s),
+                   0,
+                   -10.0);
+        DecomposedCalculator globalLiteral;
+        copyOf("homeToAwayHopCost")
+            .offset("homeToAwayHopCost", 20.0)
+            .clip("homeToAwayHopCost", false)
+            .into(globalLiteral);
+        checkScore("home-to-away literal offset 20: 13 - 20, a reward",
+                   scoreWith(globalLiteral, s),
+                   0,
+                   7.0);
+        // On soft, the literal team conflict rewards a 0 total; on hard (its
+        // default) that would be a hard reward, which the reset refuses.
+        DecomposedCalculator zeroSoft;
+        copyOf("teamConflictCost")
+            .soft("teamConflictCost")
+            .offset("teamConflictCost", 1.0)
+            .clip("teamConflictCost", false)
+            .into(zeroSoft);
+        checkScore("soft team conflict literal offset 1 on a 0 total: +1soft",
+                   scoreWith(zeroSoft, s),
+                   0,
+                   1.0);
+    }
+    {
+        // On hard the literal formula with an offset is refused at reset,
+        // whichever sign and setter order, for a hard default global and for
+        // a soft per-round rule moved to hard: +1 would reward a schedule
+        // without team conflicts (+1 hard, cancelling another violation), -1
+        // would charge a schedule that holds none.
+        auto refusal = [](const std::string &name) {
+            return "Constraint '" + name
+                   + "' cannot use clip=false with a non-zero offset on a level "
+                     "that counts toward the hard score (hard 0 must mean no "
+                     "violation)";
+        };
+        auto resetRefusal = [](ConstraintAssembly assembly) {
+            LeagueSchedule s = repeatInstance();
+            DecomposedCalculator calculator;
+            assembly.into(calculator);
+            try
+            {
+                scoreWith(calculator, s);
+            }
+            catch (const std::logic_error &error)
+            {
+                return std::string(error.what());
+            }
+            return std::string();
+        };
+        check(resetRefusal(copyOf("teamConflictCost")
+                               .offset("teamConflictCost", 1.0)
+                               .clip("teamConflictCost", false))
+                      == refusal("teamConflictCost")
+                  && resetRefusal(copyOf("teamConflictCost")
+                                      .clip("teamConflictCost", false)
+                                      .offset("teamConflictCost", -1.0))
+                         == refusal("teamConflictCost"),
+              "team conflict literal offset +-1 on hard: refused at reset");
+        check(resetRefusal(copyOf("consecutiveAwayMatchesCost")
+                               .offset("consecutiveAwayMatchesCost", 2.0)
+                               .clip("consecutiveAwayMatchesCost", false))
+                  == refusal("consecutiveAwayMatchesCost"),
+              "consecutive away literal offset on hard: refused at reset");
+        check(resetRefusal(copyOf("startToAwayHopCost")
+                               .offset("startToAwayHopCost", 10.0)
+                               .clip("startToAwayHopCost", false)
+                               .hard("startToAwayHopCost"))
+                  == refusal("startToAwayHopCost"),
+              "start hop literal offset moved to hard afterwards: refused at "
+              "reset");
+        ConstraintAssembly repeated = copyOf("teamConflictCost");
+        repeated.addInstances(std::move(copyOf("teamConflictCost")
+                                            .offset("teamConflictCost", 1.0)
+                                            .clip("teamConflictCost", false)));
+        check(resetRefusal(std::move(repeated)) == refusal("teamConflictCost"),
+              "a hard literal repeat next to the default: refused at reset");
+        check(resetRefusal(copyOf("teamConflictCost")
+                               .offset("teamConflictCost", 1.0))
+                      .empty()
+                  && resetRefusal(copyOf("teamConflictCost")
+                                      .clip("teamConflictCost", false))
+                         .empty()
+                  && resetRefusal(copyOf("teamConflictCost")
+                                      .offset("teamConflictCost", 1.0)
+                                      .clip("teamConflictCost", false)
+                                      .soft("teamConflictCost"))
+                         .empty(),
+              "team conflict: a threshold offset or clip=false with offset 0 "
+              "on hard, and the literal offset on soft, are allowed");
+    }
+    {
+        // Random walk: incremental == a fresh calculator of the same assembly.
+        LeagueSchedule s = buildRandomInstance(/*matches*/ 30, /*seed*/ 7);
+        ScoreCalculator::prepare(s);
+        DecomposedCalculator calculator;
+        repeatedAssembly().into(calculator);
+        optimaru::ScoreDirector<LeagueSchedule> director(s, calculator);
+        std::mt19937_64 rng(321);
+        std::uniform_real_distribution<double> unit(0.0, 1.0);
+        const int matchCount = s.matchCount();
+        const int valueCount = s.roundCount();
+        int mismatches = 0;
+        double drift = 0.0;
+        const int steps = 3000;
+        for (int step = 0; step < steps; ++step)
+        {
+            if (unit(rng) < 0.75)
+            {
+                const int match = static_cast<int>(rng() % matchCount);
+                const int value = unit(rng) < 0.10
+                                      ? -1
+                                      : static_cast<int>(rng() % valueCount);
+                director.changeVariable(match, value);
+            }
+            else
+            {
+                const int a = static_cast<int>(rng() % matchCount);
+                const int b = static_cast<int>(rng() % matchCount);
+                const int va = s.matches[a].round;
+                const int vb = s.matches[b].round;
+                director.changeVariable(a, vb);
+                director.changeVariable(b, va);
+            }
+            LeagueSchedule shadow = s;
+            DecomposedCalculator fresh;
+            repeatedAssembly().into(fresh);
+            const Score full = scoreWith(fresh, shadow);
+            const Score incremental = director.calculateScore();
+            drift = std::max(drift, std::fabs(full.soft - incremental.soft));
+            // The engine's FULL_ASSERT rule (scoresAgree): hard exact, soft
+            // within 1e-6 (the fractional weights accumulate a few ulps).
+            if (!optimaru::scoresAgree(incremental, full))
+            {
+                if (++mismatches <= 3)
+                {
+                    std::printf("  MISMATCH @step %d: incremental=%s full=%s\n",
+                                step,
+                                incremental.toString().c_str(),
+                                full.toString().c_str());
+                }
+            }
+        }
+        std::printf("    largest soft drift %.3g\n", drift);
+        check(mismatches == 0,
+              std::to_string(steps)
+                  + " random moves with repeated, shifted components on both "
+                    "levels: incremental == fresh");
+    }
+    {
+        LeagueSchedule s = buildRandomInstance(/*matches*/ 20, /*seed*/ 11);
+        Solver::Config config;
+        config.spentLimit = std::chrono::seconds(2);
+        config.randomSeed = 5;
+        config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+        config.ruinRecreateUnimprovedStepTrigger = 200;
+        config.ruinRecreatePolishSteps = 100;
+        DecomposedCalculator calculator;
+        repeatedAssembly().into(calculator);
+        bool corrupted = false;
+        try
+        {
+            Solver solver(config);
+            solver.solve(s, calculator);
+        }
+        catch (const optimaru::ScoreCorruptionError &e)
+        {
+            corrupted = true;
+            std::printf("  ScoreCorruptionError: %s\n", e.what());
+        }
+        check(!corrupted,
+              "2s FULL_ASSERT solve with repeated, shifted components");
+        DecomposedCalculator fresh;
+        repeatedAssembly().into(fresh);
+        check(!corrupted && optimaru::scoresAgree(s.score, scoreWith(fresh, s)),
+              "the reported score == a fresh recompute of the same assembly");
+    }
+    std::printf("\n");
+}
+
 }  // namespace
 
 int main()
@@ -918,6 +1314,7 @@ int main()
     verifyAssemblyBuilder();
     verifyRawCostsByHand();
     verifyCatalog();
+    verifyRepeatsAndOffsets();
 
     if (failures == 0)
     {

@@ -34,8 +34,28 @@ unchanged; default instances `capacity` / `setup_cost` / `distance` ->
 `facility_capacity_cost` / `facility_setup_cost` / `distance_from_facility_cost`), and the
 problem no longer carries `setup_cost_weight` / `distance_from_facility_weight`. Weights
 come only from constraint selections, e.g.
-`constraints=get_constraints([facility_capacity_cost, facility_setup_cost, DistanceFromFacilityCost(weight=5)])`
+`constraints=[FacilityCapacityCost(), FacilitySetupCost(), DistanceFromFacilityCost(weight=5)]`
 for the un-overridden Java provider. Raw costs and the default score are unchanged.
+
+**0.3.0:** every constraint takes two more knobs, `offset` and `clip` (keyword-only), and
+may be picked several times. Each facility's raw cost `x` is shaped as
+`sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
+`(x - offset) ** exponent`, sign-preserving (`clip=False`, which lowers the penalty of every
+facility below the offset, an unused one included); `offset=0` is the 0.2.0 shaping. Both
+apply per facility, not to the total. `clip=False` with an offset is refused on hard (the
+capacity constraint by default), because hard 0 must mean no violation. Each pick is its own
+instance with its own knobs, and the instances add up:
+
+```python
+fl.solve(problem, constraints=[
+    FacilityCapacityCost(),
+    FacilitySetupCost(),
+    DistanceFromFacilityCost(),                                    # 6 x distance
+    DistanceFromFacilityCost(weight=0.01, exponent=2, offset=500),  # + 0.01 x (distance beyond 500 m)^2
+])
+```
+
+`fl.constraint_costs(problem, picks)` keys the second pick `distance_from_facility_cost#2`.
 
 ## cpp/
 

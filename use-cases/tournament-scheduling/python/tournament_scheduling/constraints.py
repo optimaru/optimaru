@@ -2,41 +2,68 @@
 
 The default path (`ts.solve(schedule)`) enables all four constraints at their default weights.
 This module is the alternative path next to it: pick constraints, change weights, change
-levels, and pass the list to `solve(schedule, constraints=...)`.
+levels, shape the cost, and pass the list to `solve(schedule, constraints=...)`.
 
-The shortest route is :func:`get_constraints`. It returns the default list, so
-a "default with a small tweak" declaration fits on one line::
+A constraint list reads one way: one class call per constraint::
 
     import tournament_scheduling as ts
     from tournament_scheduling.constraints import (
-        ConfrontationCountImbalanceCost, get_constraints, team_conflict_cost,
+        ConfrontationCountImbalanceCost, TeamConflictCost, TeamUnavailabilityCost,
+        get_constraints,
     )
 
-    ts.solve(schedule, constraints=get_constraints())           # defaults as-is
-    ts.solve(schedule, constraints=get_constraints([            # picked
-        team_conflict_cost, ConfrontationCountImbalanceCost(weight=10),
-    ]))
+    ts.solve(schedule, constraints=get_constraints())           # the defaults as-is
+    ts.solve(schedule, constraints=[                             # picked
+        TeamConflictCost(), TeamUnavailabilityCost(), ConfrontationCountImbalanceCost(weight=10),
+    ])
 
-Each constraint has a default instance at module level, so you can also pass a
-list of just a few. Only listed constraints are scored — leave one out and its
-term disappears from the score.
+Only listed constraints are scored — leave one out and its term disappears from the
+score. (The module also carries ready-made default instances: ``team_conflict_cost`` is
+``TeamConflictCost()``, and so on.)
 
-Every spec takes ``(weight=None, level=None, exponent=1.0)``:
+Every spec takes five knobs:
 
 - ``weight``   linear multiplier on the constraint cost, in units of its level.
                ``None`` = the C++ component default (``ts.constraint_info()``
                lists them; every default is 1).
 - ``level``    ``None`` = the default level, otherwise a ``Level`` or its name
                (``Level.MEDIUM`` or ``"medium"``). Any flippable constraint may
-               take any of the three levels.
-               `assignment_count_imbalance_cost` is **medium**: folded into the
-               engine's soft level as ``medium * 1e6`` (``MEDIUM_SCALE``). On another level, ``level="hard"`` charges one hard unit per
-               raw unit (the global total, rounded), ``level="soft"`` one soft
-               unit per raw unit, and a ``weight`` is in units of the level in effect.
+               take any of the three levels. ``AssignmentCountImbalanceCost`` is
+               **medium** by default: folded into the engine's soft level as
+               ``medium * 1e6`` (``MEDIUM_SCALE``), like any constraint moved onto
+               medium. On another level, ``level="hard"`` charges one
+               hard unit per raw unit (the global total, rounded),
+               ``level="soft"`` one soft unit per raw unit, and a ``weight`` is in
+               units of the level in effect.
 - ``exponent`` sign-preserving power shaping: ``weight * sign(c) * |c| **
                exponent``, per team for the two hard constraints and on the
                total for the two imbalance constraints. 2.0 = squared, so
                concentrated violations grow much costlier.
+- ``offset``   (keyword) shifts that shaping, at the same granularity; 0.0 = none.
+- ``clip``     (keyword) ``True`` (the default) counts only what lies beyond the
+               offset, ``max(0, c - offset) ** exponent``; ``False`` shapes
+               ``c - offset`` as it is, so a unit below the offset lowers the
+               penalty. The literal form charges every unit the constraint
+               evaluates, a raw 0 included: every team for ``TeamConflictCost``,
+               only the teams with an unavailability fact for
+               ``TeamUnavailabilityCost`` (its ``constraint_costs()`` entry lists
+               them as ``"units"``), and the one total for an imbalance. With
+               an offset it is refused on hard (``TeamConflictCost`` and
+               ``TeamUnavailabilityCost`` by default), because hard 0 must mean
+               no violation; medium folds into soft here, so it takes the
+               literal formula.
+
+The same constraint may be picked several times; each pick is scored on its own with
+its own knobs and the picks add up. The head-to-head imbalance, plus its square
+beyond 2::
+
+    ts.solve(schedule, constraints=[
+        *get_constraints(),
+        ConfrontationCountImbalanceCost(exponent=2, offset=2),
+    ])
+
+``ts.constraint_costs(schedule, picks)`` keys the second pick
+``"confrontation_count_imbalance_cost#2"``.
 
 Names (`name`) are the C++ component names in snake_case
 (``TeamConflictCost`` -> ``team_conflict_cost``). The core derives them
@@ -148,7 +175,7 @@ class ConfrontationCountImbalanceCost(Constraint):
     )
 
 
-#: Instances at the default weights (weight=None). Reference them directly when picking.
+#: Ready-made default instances (``team_conflict_cost`` is ``TeamConflictCost()``).
 team_conflict_cost = TeamConflictCost()
 team_unavailability_cost = TeamUnavailabilityCost()
 assignment_count_imbalance_cost = AssignmentCountImbalanceCost()
@@ -167,12 +194,13 @@ def get_constraints(constraints: list[Constraint] | None = None) -> list[Constra
     """Return the cost function. Without arguments, all four default constraints.
 
     When `constraints` is given, that list is used as-is — only the listed
-    constraints are scored. To change just one default, mix in the default instances::
+    constraints are scored::
 
-        get_constraints([team_conflict_cost, ConfrontationCountImbalanceCost(weight=10)])
+        get_constraints([TeamConflictCost(), ConfrontationCountImbalanceCost(weight=10)])
 
     Same contract as the C++ applyConstraints: an empty list is an error (pass
-    None for the defaults), and naming a constraint twice is an error.
+    None for the defaults); a constraint named several times is scored once per
+    pick, each with its own knobs.
     """
     return select(constraints, _DEFAULTS)
 
@@ -181,15 +209,17 @@ def score(costs: dict, constraints: list[Constraint] | None = None) -> Score:
     """Apply specs to raw constraint costs and produce a score — pure Python.
 
     ``costs`` is what `ts.constraint_costs(schedule)` returns: per constraint, the
-    **raw** cost of each unit (before weight, exponent and level rounding).
+    **raw** cost of each unit (before weight, exponent, offset and level rounding).
     Fetch it once and rescore with different weights without re-solving::
 
         raw = ts.constraint_costs(schedule)
         score(raw)                     # default set
-        score(raw, picked)             # picked list
+        score(raw, [TeamConflictCost(), ConfrontationCountImbalanceCost(weight=10)])
+        score(raw, [TeamConflictCost(), TeamConflictCost(exponent=2, offset=1)])
 
     No solver and no search are involved. The arithmetic matches the engine —
-    each unit contributes ``weight * shape(cost, exponent)`` and hard
+    each unit contributes ``weight * shape(cost, exponent, offset, clip)`` (a
+    second pick of a constraint reads the same raw costs with its own knobs) and hard
     contributions are **rounded per unit** before summing (the same order as the
     engine's applyRaw; rounding the total afterwards gives different values).
 

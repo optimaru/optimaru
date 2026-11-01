@@ -7,6 +7,7 @@ from bin_packing.constraints import (
     BinCapacityCost,
     ColorConflictCost,
     ItemConflictCost,
+    Level,
     UsedBinsCost,
     get_constraints,
     score,
@@ -52,7 +53,7 @@ def test_cpsat_defaults_are_the_engine_defaults() -> None:
         assert entry["reward"] == row.reward
         assert entry["default_enabled"] == row.default_enabled
         assert entry["kind"] == "either"  # every bin-packing constraint is flippable
-        assert entry["params"] == {"weight": None, "level": None, "exponent": 1.0}
+        assert entry["params"] == {"weight": None, "level": None, "exponent": 1.0, "offset": 0.0, "clip": True}
 
 
 def test_exact_solver_matches_hand_calculated_optimum() -> None:
@@ -186,3 +187,134 @@ def test_demoting_capacity_scores_like_the_engine() -> None:
     engine = score(domain.constraint_costs(solved.to_core()), selection)
     assert (solved.score_hard, solved.score_soft) == pytest.approx(tuple(engine))
     assert solved.score_hard == 0
+
+
+# --- 0.3.0: repeated picks and offset / clip ---------------------------------------
+
+SELECTIONS = {
+    "repeat": [BinCapacityCost(), BinCapacityCost(weight=3, offset=1), UsedBinsCost()],
+    # The literal formula with an offset is refused on hard: the hard picks are
+    # thresholds, the literal copies of the per-bin rules sit on soft.
+    "repeat-literal": [
+        ColorConflictCost(level="soft", offset=1, clip=False),
+        ColorConflictCost(weight=2, offset=-1),
+        UsedBinsCost(),
+        UsedBinsCost(weight=5, offset=2, clip=False),
+    ],
+    "hard-offsets": [
+        BinCapacityCost(offset=2),
+        BinCapacityCost(level="soft", offset=2, clip=False),
+        ItemConflictCost(weight=2, offset=-1),
+        ItemConflictCost(level="soft", offset=1, clip=False),
+        UsedBinsCost(level="hard", offset=1),
+    ],
+    "identical-twice": [ItemConflictCost(), ItemConflictCost(), UsedBinsCost()],
+    # Each pick on its own level: a soft literal capacity next to the hard default, the
+    # bin count on hard beyond 1 next to its soft default, the conflicts moved to soft,
+    # the colour threshold named on hard.
+    "levels": [
+        BinCapacityCost(),
+        BinCapacityCost(level="soft", weight=3, offset=1, clip=False),
+        UsedBinsCost(),
+        UsedBinsCost(level=Level.HARD, offset=1),
+        ItemConflictCost(level="soft", weight=2, offset=-1),
+        ColorConflictCost(level="hard", weight=2, offset=1),
+    ],
+}
+
+
+@pytest.mark.parametrize("selection", list(SELECTIONS.values()), ids=list(SELECTIONS))
+def test_repeated_and_shifted_picks_reach_the_brute_force_optimum(selection) -> None:
+    problem = _parity_problem()
+    expected = _brute_force_score(problem, selection)
+    solved = solve(problem, time_limit_seconds=5, constraints=selection)
+    assert (solved.score_hard, solved.score_soft) == pytest.approx(tuple(expected))
+    engine = score(domain.constraint_costs(solved.to_core(), selection), selection)
+    assert (solved.score_hard, solved.score_soft) == pytest.approx(tuple(engine))
+
+
+def test_mapping_selections_repeat_and_shift_like_specs() -> None:
+    """The server's {name, weight, level, offset, clip} dicts pick the same instances as specs."""
+    specs = [
+        UsedBinsCost(),
+        UsedBinsCost(weight=3, offset=1, clip=False),
+        UsedBinsCost(level="hard", offset=2),
+    ]
+    dicts = [
+        {"name": "used_bins_cost"},
+        {"name": "used_bins_cost", "weight": 3, "offset": 1, "clip": False},
+        {"name": "used_bins_cost", "level": "hard", "offset": 2},
+    ]
+    problem = _parity_problem()
+    assert solve(problem, time_limit_seconds=5, constraints=dicts) == solve(
+        problem, time_limit_seconds=5, constraints=specs
+    )
+
+
+def test_a_fractional_offset_is_refused_by_cpsat() -> None:
+    with pytest.raises(ValueError, match="offset must be an integer for CP-SAT"):
+        solve(_parity_problem(), time_limit_seconds=1, constraints=[BinCapacityCost(offset=0.5)])
+
+
+@pytest.mark.parametrize("level", ["medium", Level.MEDIUM])
+def test_medium_is_refused_like_the_engine(level) -> None:
+    """The domain has no medium level: CP-SAT refuses the pick as the engine does, a repeat too."""
+    message = "constraint 'used_bins_cost': this use case has no medium level"
+    for selection in ([UsedBinsCost(level=level)], [UsedBinsCost(), UsedBinsCost(level=level)]):
+        with pytest.raises(ValueError, match=message):
+            solve(_parity_problem(), time_limit_seconds=1, constraints=selection)
+        with pytest.raises(ValueError, match=message):
+            domain.calculate_score(_parity_problem().to_core(), selection)
+
+
+# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+
+HARD_REFUSAL = (
+    "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
+    "violation; use clip=True (a threshold) or another level"
+)
+
+
+@pytest.mark.parametrize("offset", [2, -2])
+@pytest.mark.parametrize(
+    "selection",
+    [
+        lambda offset: BinCapacityCost(offset=offset, clip=False),  # the default level, hard
+        lambda offset: {"name": "bin_capacity_cost", "offset": offset, "clip": False},
+        lambda offset: ItemConflictCost(offset=offset, clip=False),
+        lambda offset: UsedBinsCost(level="hard", offset=offset, clip=False),
+        lambda offset: {"name": "used_bins_cost", "level": "hard", "offset": offset, "clip": False},
+    ],
+    ids=["capacity-spec", "capacity-mapping", "item-conflict-spec", "used-bins-moved-to-hard", "used-bins-mapping"],
+)
+def test_the_literal_offset_is_refused_on_hard_like_the_engine(selection, offset) -> None:
+    """The CP-SAT reference refuses the pick with the engine's and score()'s message,
+    alone and as a repeat next to the default picks."""
+    pick = selection(offset)
+    name = pick["name"] if isinstance(pick, dict) else pick.name
+    message = HARD_REFUSAL.format(q=repr(name))
+    for picks in ([pick], [*get_constraints(), pick]):
+        with pytest.raises(ValueError) as refused:
+            solve(_parity_problem(), time_limit_seconds=1, constraints=picks)
+        assert str(refused.value) == message
+    if not isinstance(pick, dict):
+        # The engine and the score() mirror say the same.
+        core = _parity_problem().to_core()
+        with pytest.raises(ValueError) as refused:
+            domain.calculate_score(core, [pick])
+        assert str(refused.value) == message
+        with pytest.raises(ValueError) as refused:
+            domain.constraint_costs(core, [pick])
+        assert str(refused.value) == message
+        with pytest.raises(ValueError) as refused:
+            score(domain.constraint_costs(core), [pick])
+        assert str(refused.value) == message
+
+
+@pytest.mark.parametrize("offset", [2, -2])
+def test_the_same_literal_pick_on_soft_is_accepted(offset) -> None:
+    selection = [BinCapacityCost(), BinCapacityCost(level="soft", offset=offset, clip=False), UsedBinsCost()]
+    problem = _parity_problem()
+    expected = _brute_force_score(problem, selection)
+    solved = solve(problem, time_limit_seconds=5, constraints=selection)
+    assert (solved.score_hard, solved.score_soft) == pytest.approx(tuple(expected))

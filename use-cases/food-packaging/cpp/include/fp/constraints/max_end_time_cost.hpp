@@ -11,18 +11,14 @@ namespace fp
 // jobs of max(0, end - maxEndTime), so 0 = every job on the line ends by its
 // deadline. Unassigned jobs are silent here; unassignedJobsCost is the term
 // that prices them. 0.2.0 migration note: was maxEndDateTime.
-struct MaxEndTimeCost final : FpUnitConstraint
+struct MaxEndTimeCost final : detail::PerLineConstraint
 {
     static constexpr double kDefaultWeight = 1.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
 
     explicit MaxEndTimeCost(double weight = kDefaultWeight)
-        : FpUnitConstraint("maxEndTimeCost", weight, kDefaultLevel)
+        : detail::PerLineConstraint("maxEndTimeCost", weight, kDefaultLevel)
     {
-    }
-    void onReset(const PackagingSchedule &schedule) override
-    {
-        detail::requirePrepared(schedule);
     }
     double cost(const PackagingSchedule &schedule,
                 int unit,

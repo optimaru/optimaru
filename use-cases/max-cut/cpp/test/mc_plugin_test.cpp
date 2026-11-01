@@ -15,6 +15,14 @@
 //   (h) raw costs by hand through constraintCosts(): positive and zero per
 //       constraint (fixture H), the edge cases, the -1 rules
 //   (i) the catalog (info() == the components' constants) and the guards
+//   (j) repeated components and the offset / clip knobs: a hand-calculated
+//       repeat, a repeat on its own level (hard next to the soft default),
+//       threshold and literal offsets by hand per side (a side of raw 0
+//       counts in literal mode) and on the globals' totals, the literal
+//       formula refused on hard at reset and kept on soft, incremental == a
+//       fresh recompute over a random walk and a FULL_ASSERT solve with
+//       repeated, shifted components on both levels
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -594,6 +602,339 @@ void verifyCatalog()
     std::printf("\n");
 }
 
+// -------------------------------------------------------------------------
+// (j) Repeated components and offsets. A repeat is a fresh copy of a
+// default component (another defaultConstraints(), the one name kept, its
+// knobs re-stated) appended with addInstances(), as the Python bindings
+// build it from a pick list. The four unit constraints shape each side, the
+// two globals their total.
+// -------------------------------------------------------------------------
+ConstraintAssembly copyOf(const std::string &name)
+{
+    ConstraintAssembly copy = defaultConstraints();
+    copy.only({name});
+    return copy;
+}
+
+// Fixture H positive: fixed [1, 0], same [1, 0], different [0, 1], size
+// [1, 1], imbalance 2, cut -2.
+MaxCutProblem hPositive()
+{
+    MaxCutProblem p = fixtureH();
+    p.side = {0, 1, 1, 1};
+    return p;
+}
+
+Score scoreOf(ConstraintAssembly assembly, MaxCutProblem p)
+{
+    DecomposedCalculator calculator;
+    std::move(assembly).into(calculator);
+    return scoreWith(calculator, p);
+}
+
+// Every kind repeated or shifted at least once: per-member deltas, pair
+// deltas, the O(1) re-cost, both member-change globals, the reward in both
+// modes, a fractional hard weight on a threshold offset (hard refuses the
+// literal formula with an offset, so the literal copies of the hard unit
+// constraints sit on soft); and repeats on the other level than their
+// default: the size bounds demoted to soft, the imbalance promoted to hard
+// (threshold).
+ConstraintAssembly repeatedAssembly()
+{
+    ConstraintAssembly assembly = defaultConstraints();
+    assembly.weight("partitionImbalanceCost", 2.0).offset("partitionImbalanceCost", 3.0);
+    assembly.offset("cutWeightCost", 5.0).clip("cutWeightCost", false);
+    assembly.addInstances(std::move(
+        copyOf("fixedPartitionCost").weight("fixedPartitionCost", 1.5).offset("fixedPartitionCost", 0.5)));
+    assembly.addInstances(std::move(copyOf("fixedPartitionCost")
+                                        .soft("fixedPartitionCost")
+                                        .weight("fixedPartitionCost", 1.5)
+                                        .offset("fixedPartitionCost", 0.5)
+                                        .clip("fixedPartitionCost", false)));
+    assembly.addInstances(std::move(copyOf("samePartitionPairsCost")
+                                        .weight("samePartitionPairsCost", 2.0)
+                                        .exponent("samePartitionPairsCost", 2.0)
+                                        .offset("samePartitionPairsCost", 1.0)));
+    assembly.addInstances(std::move(copyOf("differentPartitionPairsCost")
+                                        .soft("differentPartitionPairsCost")
+                                        .offset("differentPartitionPairsCost", -1.0)
+                                        .clip("differentPartitionPairsCost", false)));
+    assembly.addInstances(std::move(copyOf("partitionSizeBoundsCost")
+                                        .soft("partitionSizeBoundsCost")
+                                        .offset("partitionSizeBoundsCost", 2.0)));
+    assembly.addInstances(std::move(copyOf("partitionImbalanceCost")
+                                        .weight("partitionImbalanceCost", 0.5)
+                                        .exponent("partitionImbalanceCost", 2.0)
+                                        .offset("partitionImbalanceCost", -1.0)
+                                        .clip("partitionImbalanceCost", false)));
+    assembly.addInstances(std::move(copyOf("cutWeightCost")
+                                        .weight("cutWeightCost", 0.25)
+                                        .exponent("cutWeightCost", 1.5)
+                                        .offset("cutWeightCost", 10.0)));
+    assembly.addInstances(std::move(copyOf("partitionImbalanceCost")
+                                        .hard("partitionImbalanceCost")
+                                        .weight("partitionImbalanceCost", 2.0)
+                                        .offset("partitionImbalanceCost", 1.0)));
+    return assembly;
+}
+
+void verifyRepeatsAndOffsets()
+{
+    std::printf("== (j) Repeated components, offset / clip ==\n");
+    {
+        // size per side [1, 1]: (1 + 1) + 2 x (1^2 + 1^2) = 6 hard.
+        ConstraintAssembly assembly = copyOf("partitionSizeBoundsCost");
+        assembly.addInstances(std::move(copyOf("partitionSizeBoundsCost")
+                                            .weight("partitionSizeBoundsCost", 2.0)
+                                            .exponent("partitionSizeBoundsCost", 2.0)));
+        MaxCutProblem p = hPositive();
+        DecomposedCalculator calculator;
+        assembly.into(calculator);
+        const Score score = scoreWith(calculator, p);
+        check(score.hard == -6 && score.soft == 0.0, "size bounds + 2 x size^2 per side: -(2 + 4) hard");
+        const auto entries = calculator.constraintCosts();
+        check(entries.size() == 2 && entries[0].unitCosts == entries[1].unitCosts
+                  && entries[0].unitCosts == Costs{1.0, 1.0} && entries[1].weight == 2.0
+                  && entries[1].exponent == 2.0 && entries[1].defaultWeight == 1.0
+                  && entries[0].name == entries[1].name,
+              "two instances, the same raw costs per side, each with its own knobs");
+    }
+    {
+        // Each instance on its own level: the soft imbalance (2, at weight 1)
+        // next to a hard repeat, 2 x (2 - 1) beyond its offset.
+        ConstraintAssembly assembly = copyOf("partitionImbalanceCost");
+        assembly.weight("partitionImbalanceCost", 1.0);
+        assembly.addInstances(std::move(copyOf("partitionImbalanceCost")
+                                            .hard("partitionImbalanceCost")
+                                            .weight("partitionImbalanceCost", 2.0)
+                                            .offset("partitionImbalanceCost", 1.0)));
+        MaxCutProblem p = hPositive();
+        DecomposedCalculator calculator;
+        assembly.into(calculator);
+        check(sameScore(scoreWith(calculator, p), Score{-2, -2.0}),
+              "soft imbalance + a hard repeat beyond 1: -2 hard / -2 soft");
+        const auto entries = calculator.constraintCosts();
+        check(entries.size() == 2 && entries[0].level == optimaru::Level::Soft
+                  && entries[1].level == optimaru::Level::Hard && entries[1].defaultLevel == optimaru::Level::Soft,
+              "the repeat reports its own level, the default stays soft");
+    }
+    {
+        ConstraintAssembly assembly = copyOf("cutWeightCost");
+        assembly.addInstances(copyOf("cutWeightCost"));
+        check(scoreOf(std::move(assembly), hPositive()).soft == 4.0, "the cut reward picked twice: +2 x 2");
+    }
+    {
+        const MaxCutProblem p = hPositive();
+        // The four unit constraints are hard by default, which refuses the
+        // literal formula with an offset, so its numbers are checked on soft
+        // (not rounded); hard rounds a threshold per side.
+        check(sameScore(scoreOf(copyOf("differentPartitionPairsCost")
+                                    .soft("differentPartitionPairsCost")
+                                    .offset("differentPartitionPairsCost", 1.0)
+                                    .clip("differentPartitionPairsCost", false),
+                                p),
+                        Score{0, 1.0}),
+              "soft literal offset 1 on different [0, 1]: (0 - 1) + (1 - 1), the side of raw 0 is rewarded");
+        check(scoreOf(copyOf("differentPartitionPairsCost").offset("differentPartitionPairsCost", 1.0), p).hard
+                  == 0,
+              "threshold offset 1 on different [0, 1]: 0");
+        check(sameScore(scoreOf(copyOf("samePartitionPairsCost")
+                                    .soft("samePartitionPairsCost")
+                                    .offset("samePartitionPairsCost", 2.0)
+                                    .clip("samePartitionPairsCost", false),
+                                p),
+                        Score{0, 3.0}),
+              "soft literal offset 2 on same [1, 0]: (1 - 2) + (0 - 2) = -3, +3");
+        check(scoreOf(copyOf("samePartitionPairsCost").offset("samePartitionPairsCost", -1.0), p).hard == -2,
+              "a negative threshold offset adds to the non-zero side only: 1 + 1");
+        check(sameScore(scoreOf(copyOf("samePartitionPairsCost")
+                                    .soft("samePartitionPairsCost")
+                                    .offset("samePartitionPairsCost", -1.0)
+                                    .clip("samePartitionPairsCost", false),
+                                p),
+                        Score{0, -3.0}),
+              "a negative soft literal offset adds to both sides: (1 + 1) + (0 + 1)");
+        check(sameScore(scoreOf(copyOf("samePartitionPairsCost")
+                                    .soft("samePartitionPairsCost")
+                                    .offset("samePartitionPairsCost", 1.5)
+                                    .clip("samePartitionPairsCost", false),
+                                p),
+                        Score{0, 2.0}),
+              "a soft literal offset is not rounded: (1 - 1.5) + (0 - 1.5) = -2, +2");
+        check(sameScore(scoreOf(copyOf("partitionSizeBoundsCost").offset("partitionSizeBoundsCost", 0.5), p),
+                        Score{-2, 0.0}),
+              "a hard threshold offset rounds per side: llround(-0.5) + llround(-0.5) = -2");
+        check(sameScore(scoreOf(copyOf("partitionSizeBoundsCost")
+                                    .soft("partitionSizeBoundsCost")
+                                    .offset("partitionSizeBoundsCost", 1.0)
+                                    .exponent("partitionSizeBoundsCost", 3.0)
+                                    .clip("partitionSizeBoundsCost", false),
+                                p),
+                        Score{0, 0.0}),
+              "soft literal offset 1, exponent 3 on size [1, 1]: 0^3 + 0^3");
+        check(scoreOf(copyOf("partitionImbalanceCost")
+                          .weight("partitionImbalanceCost", 1.0)
+                          .offset("partitionImbalanceCost", 1.0),
+                      p)
+                      .soft
+                  == -1.0,
+              "the imbalance total 2 with a threshold offset 1: -1 soft");
+        check(scoreOf(copyOf("partitionImbalanceCost")
+                          .weight("partitionImbalanceCost", 1.0)
+                          .offset("partitionImbalanceCost", 3.0)
+                          .clip("partitionImbalanceCost", false),
+                      p)
+                      .soft
+                  == 1.0,
+              "the imbalance total 2 with a literal offset 3: shaped once, 2 - 3 = -1, +1 soft");
+        check(scoreOf(copyOf("partitionImbalanceCost")
+                          .offset("partitionImbalanceCost", 3.0)
+                          .clip("partitionImbalanceCost", false),
+                      p)
+                      .soft
+                  == 0.0,
+              "the default weight 0 contributes exactly 0, offset or not");
+        check(scoreOf(copyOf("cutWeightCost").offset("cutWeightCost", 1.0), p).soft == 1.0,
+              "the cut reward 2 with a threshold offset 1: only the 1 beyond it");
+        check(scoreOf(copyOf("cutWeightCost").offset("cutWeightCost", 1.0).clip("cutWeightCost", false), p).soft
+                  == 3.0,
+              "the cut reward 2 with a literal offset 1: -2 - 1 = -3, +3 soft");
+        DecomposedCalculator calculator;
+        copyOf("fixedPartitionCost")
+            .soft("fixedPartitionCost")
+            .offset("fixedPartitionCost", 2.5)
+            .clip("fixedPartitionCost", false)
+            .into(calculator);
+        MaxCutProblem q = hPositive();
+        scoreWith(calculator, q);
+        const auto entries = calculator.constraintCosts();
+        check(entries.size() == 1 && entries[0].offset == 2.5 && !entries[0].clip && !entries[0].scoped
+                  && entries[0].unitCosts == Costs{1.0, 0.0},
+              "constraintCosts() reports the offset and clip, the raw side costs unshaped");
+    }
+    {
+        // On hard the literal formula with an offset is refused at reset,
+        // whichever sign and setter order, for a hard default unit constraint
+        // and for the soft imbalance moved to hard: +1 on different [0, 1]
+        // would reward the clean side and score a violated pair +1 hard, -1
+        // would charge both sides of a clean partition.
+        auto refusal = [](const std::string &name) {
+            return "Constraint '" + name
+                   + "' cannot use clip=false with a non-zero offset on a level that counts "
+                     "toward the hard score (hard 0 must mean no violation)";
+        };
+        auto resetRefusal = [](ConstraintAssembly assembly) {
+            try
+            {
+                scoreOf(std::move(assembly), hPositive());
+            }
+            catch (const std::logic_error &error)
+            {
+                return std::string(error.what());
+            }
+            return std::string();
+        };
+        check(resetRefusal(copyOf("differentPartitionPairsCost")
+                               .offset("differentPartitionPairsCost", 1.0)
+                               .clip("differentPartitionPairsCost", false))
+                      == refusal("differentPartitionPairsCost")
+                  && resetRefusal(copyOf("differentPartitionPairsCost")
+                                      .clip("differentPartitionPairsCost", false)
+                                      .offset("differentPartitionPairsCost", -1.0))
+                         == refusal("differentPartitionPairsCost"),
+              "different-side literal offset +1 / -1 on its default hard: refused at reset");
+        check(resetRefusal(copyOf("partitionImbalanceCost")
+                               .weight("partitionImbalanceCost", 1.0)
+                               .offset("partitionImbalanceCost", 3.0)
+                               .clip("partitionImbalanceCost", false)
+                               .hard("partitionImbalanceCost"))
+                  == refusal("partitionImbalanceCost"),
+              "imbalance literal offset moved to hard afterwards: refused at reset");
+        ConstraintAssembly repeated = copyOf("fixedPartitionCost");
+        repeated.addInstances(std::move(
+            copyOf("fixedPartitionCost").offset("fixedPartitionCost", 2.0).clip("fixedPartitionCost", false)));
+        check(resetRefusal(std::move(repeated)) == refusal("fixedPartitionCost"),
+              "a hard literal repeat next to the default: refused at reset");
+        check(resetRefusal(copyOf("differentPartitionPairsCost").offset("differentPartitionPairsCost", 1.0)).empty()
+                  && resetRefusal(copyOf("differentPartitionPairsCost").clip("differentPartitionPairsCost", false))
+                         .empty()
+                  && resetRefusal(copyOf("differentPartitionPairsCost")
+                                      .offset("differentPartitionPairsCost", 1.0)
+                                      .clip("differentPartitionPairsCost", false)
+                                      .soft("differentPartitionPairsCost"))
+                         .empty()
+                  && resetRefusal(copyOf("cutWeightCost").offset("cutWeightCost", 1.0).clip("cutWeightCost", false))
+                         .empty(),
+              "a threshold offset or clip=false with offset 0 on hard, the literal offset on soft "
+              "and on the soft reward are allowed");
+    }
+    {
+        // Random walk: incremental == a fresh calculator of the same assembly.
+        int mismatches = 0;
+        int moves = 0;
+        double drift = 0.0;
+        for (std::uint64_t seed = 7; seed < 10; ++seed)
+        {
+            MaxCutProblem p = randomInstance(40, seed, 0.1);
+            ScoreCalculator::prepare(p);
+            DecomposedCalculator calculator;
+            repeatedAssembly().into(calculator);
+            optimaru::ScoreDirector<MaxCutProblem> director(p, calculator);
+            std::mt19937_64 rng(seed * 321);
+            std::uniform_real_distribution<double> unit(0.0, 1.0);
+            const int n = p.vertexCount();
+            for (int step = 0; step < 1000; ++step, ++moves)
+            {
+                const double u = unit(rng);
+                if (u < 0.6)
+                {
+                    const int v = static_cast<int>(rng() % n);
+                    director.changeVariable(v, unit(rng) < 0.15 ? kUnassigned : static_cast<int>(rng() % 2));
+                }
+                else
+                {
+                    director.beginVariableChanges();
+                    const int a = static_cast<int>(rng() % n);
+                    const int b = static_cast<int>(rng() % n);
+                    const int va = p.side[a];
+                    director.changeVariable(a, p.side[b]);
+                    director.changeVariable(b, va);
+                    if (u > 0.9)
+                        director.changeVariable(static_cast<int>(rng() % n), static_cast<int>(rng() % 2));
+                    director.endVariableChanges();
+                }
+                MaxCutProblem shadow = p;
+                DecomposedCalculator fresh;
+                repeatedAssembly().into(fresh);
+                const Score full = scoreWith(fresh, shadow);
+                const Score incremental = director.calculateScore();
+                drift = std::max(drift, std::fabs(full.soft - incremental.soft));
+                if (!optimaru::scoresAgree(incremental, full) && ++mismatches <= 3)
+                {
+                    std::printf("  MISMATCH seed %llu step %d: incremental=%s full=%s\n",
+                                static_cast<unsigned long long>(seed), step, incremental.toString().c_str(),
+                                full.toString().c_str());
+                }
+            }
+        }
+        std::printf("    largest soft drift %.3g\n", drift);
+        check(mismatches == 0,
+              std::to_string(moves)
+                  + " random moves with repeated, shifted components on both levels: incremental == fresh");
+    }
+    {
+        MaxCutProblem p = randomInstance(30, 11, 0.0, /*bounds=*/false);
+        if (fullAssertSolve(p, repeatedAssembly(), "FULL_ASSERT solve with repeated, shifted components"))
+        {
+            DecomposedCalculator fresh;
+            repeatedAssembly().into(fresh);
+            check(optimaru::scoresAgree(p.score, scoreWith(fresh, p)),
+                  "the reported score == a fresh recompute of the same assembly");
+        }
+    }
+    std::printf("\n");
+}
+
 }  // namespace
 
 int main()
@@ -607,6 +948,7 @@ int main()
     verifyAssemblyBuilder();
     verifyRawCostsByHand();
     verifyCatalog();
+    verifyRepeatsAndOffsets();
     if (failures)
     {
         std::printf("%d check(s) FAILED\n", failures);

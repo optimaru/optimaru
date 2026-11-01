@@ -10,8 +10,20 @@ The CP-SAT model is built from [`cpsat-common`](../cpsat-common) plugins, one pe
 constraint (`assembly_line_balancing_cpsat/constraints.py`, subclassing the domain specs; the
 defaults come from the engine's `constraint_info()`). Every encoding is exact, so the same
 assignment gives the same raw cost per constraint in both solvers
-(`cpsat/tests/test_constraint_parity.py` pins every assignment of small instances). Not
-supported on CP-SAT: `exponent != 1` and non-integer weights (refused).
+(`cpsat/tests/test_constraint_parity.py` pins every assignment of small instances).
+`level="soft"` / `level="hard"` moves a term to the soft / hard level in both solvers, and
+`level="medium"` is refused by both (`this use case has no medium level`). Not supported on
+CP-SAT: `exponent != 1` and non-integer weights (refused).
+
+**0.3.0:** a constraint may be picked several times (as specs or as
+`{"name", "weight", "level", "offset", "clip"}` mappings); each pick builds its own terms with
+its own knobs, its level included. The six per-station constraints add one term per station,
+an empty one included (`max_stations_cost` and `forbidden_task_stations_cost` exactly their
+scoped stations, as the engine evaluates them), and the four globals one term for their
+total, so an integral `offset` shapes each station (or the total) exactly as the engine does
+in both `clip` modes; a fractional offset is refused (`offset must be an integer for CP-SAT`).
+`clip=False` with an offset on a hard pick is refused with the engine's message when the
+objective is built.
 
 ```sh
 cd benchmarks/assembly-line-balancing/cpsat

@@ -7,6 +7,15 @@ The two medium constraints (``after_ideal_end_time_cost``,
 ``unassigned_jobs_cost``) land on the CP-SAT medium level at weight 1, in medium
 units, exactly like the engine (whose domain folds medium into soft at 10^10);
 ``level="soft"`` demotes them to soft on both paths.
+
+Offsets and repeats: every plugin adds one term per unit the engine evaluates
+(``terms_per_unit``), so a pick's ``offset`` / ``clip`` shape each unit exactly as
+the engine does, and a constraint picked several times adds one set of terms per
+pick. The engine's per-line constraints evaluate the packaging lines (never the
+unassigned pool); ``SquaredMakespanCost`` adds one term per line, the two
+end-time constraints one per job at offset 0 (a linear term sums to the same
+per-line raw cost) and one per line under an offset, and the two globals one for
+their total.
 """
 
 from dataclasses import dataclass
@@ -27,6 +36,7 @@ class PackagingContext:
     duration: list[int]
     unassigned: list[Any]
     end: list[Any]
+    assigned: dict[tuple[int, int], Any]
     line_busy: list[Any]
     cleaning_windows_by_operator: dict[int, list[tuple[Any, Any, Any]]]
 
@@ -34,7 +44,10 @@ class PackagingContext:
 class OperatorCleaningConflictCost(
     domain.OperatorCleaningConflictCost, ConstraintPlugin[PackagingContext]
 ):
+    terms_per_unit = True  # a global constraint: one term for its total
+
     def build(self, context: PackagingContext, objective: ObjectiveBuilder) -> None:
+        overlaps = []
         for operator, windows in context.cleaning_windows_by_operator.items():
             for left in range(len(windows)):
                 left_start, left_end, left_present = windows[left]
@@ -75,13 +88,17 @@ class OperatorCleaningConflictCost(
                     )
                     context.model.add(overlap == raw_overlap).only_enforce_if(both)
                     context.model.add(overlap == 0).only_enforce_if(both.Not())
-                    objective.add(self.name, overlap, bound=context.horizon)
+                    overlaps.append(overlap)
+        objective.add(self.name, sum(overlaps), bound=context.horizon * len(overlaps))
 
 
 class _EndTimePlugin(ConstraintPlugin[PackagingContext]):
     field: ClassVar[str]
+    terms_per_unit = True  # per job at offset 0 (linear), per line under an offset
 
     def build(self, context: PackagingContext, objective: ObjectiveBuilder) -> None:
+        _spec, config = objective.selected[self.name]
+        lateness = []
         for job, job_data in enumerate(context.problem.jobs):
             limit = datetime_to_minute(getattr(job_data, self.field)) - context.origin
             raw_late = context.model.new_int_var(
@@ -95,7 +112,23 @@ class _EndTimePlugin(ConstraintPlugin[PackagingContext]):
                 context.unassigned[job].Not()
             )
             context.model.add(late == 0).only_enforce_if(context.unassigned[job])
-            objective.add(self.name, late, bound=context.horizon)
+            if config.offset == 0:
+                objective.add(self.name, late, bound=context.horizon)
+            lateness.append(late)
+        if config.offset == 0:
+            return
+        # The engine's unit is the line: shape each line's summed lateness.
+        for line in range(len(context.problem.lines)):
+            on_line = []
+            for job, late in enumerate(lateness):
+                part = context.model.new_int_var(
+                    0, context.horizon, f"line_{line}_job_{job}_{self.field}_late"
+                )
+                assigned = context.assigned[line, job]
+                context.model.add(part == late).only_enforce_if(assigned)
+                context.model.add(part == 0).only_enforce_if(assigned.Not())
+                on_line.append(part)
+            objective.add(self.name, sum(on_line), bound=context.horizon * len(on_line))
 
 
 class MaxEndTimeCost(domain.MaxEndTimeCost, _EndTimePlugin):
@@ -107,14 +140,24 @@ class AfterIdealEndTimeCost(domain.AfterIdealEndTimeCost, _EndTimePlugin):
 
 
 class UnassignedJobsCost(domain.UnassignedJobsCost, ConstraintPlugin[PackagingContext]):
+    terms_per_unit = True  # a global constraint: one term for its total
+
     def build(self, context: PackagingContext, objective: ObjectiveBuilder) -> None:
-        for job, duration in enumerate(context.duration):
-            objective.add(self.name, duration * context.unassigned[job], bound=duration)
+        objective.add(
+            self.name,
+            sum(
+                duration * context.unassigned[job]
+                for job, duration in enumerate(context.duration)
+            ),
+            bound=sum(context.duration),
+        )
 
 
 class SquaredMakespanCost(
     domain.SquaredMakespanCost, ConstraintPlugin[PackagingContext]
 ):
+    terms_per_unit = True  # one term per line, an empty one included
+
     def build(self, context: PackagingContext, objective: ObjectiveBuilder) -> None:
         for line, busy in enumerate(context.line_busy):
             squared = context.model.new_int_var(

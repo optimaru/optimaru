@@ -6,10 +6,18 @@ defaults (level, weight, reward, flippability) come from the engine's
 ``conference_scheduling.constraint_info()`` through cpsat-common. The registry
 keeps the engine's ``list_constraints()`` order. The three ``*_diversity_cost``
 rewards add a reward term and refuse ``level="hard"``.
+
+Every engine constraint here is global (one total each), so a plugin's
+``add_terms`` hands its pieces to a ``_GlobalTotal`` and ``build`` adds them to
+the objective as ONE term, the total: a pick's ``offset`` / ``clip`` then shape
+that total exactly as the engine does (``terms_per_unit``), a total of 0
+included. A constraint picked several times adds one total per pick, each with
+its own knobs.
 """
 
 from __future__ import annotations
 
+from abc import abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, ClassVar
 
@@ -40,6 +48,63 @@ class ConferenceContext:
         return literal
 
 
+class _GlobalTotal:
+    """One plugin instance's terms, summed into the single total the engine scores.
+
+    ``add`` / ``add_reward`` collect a piece and its bound (a piece with bound 0 is
+    identically 0 and dropped); ``flush`` adds the sum once, as a penalty or as a
+    reward, under the plugin's name (which the registry's instance view maps to
+    the pick's key). Every other attribute is the objective's.
+    """
+
+    def __init__(self, objective: ObjectiveBuilder, name: str, reward: bool) -> None:
+        self._objective = objective
+        self._name = name
+        self._reward = reward
+        self._pieces: list[Any] = []
+        self._bound = 0
+
+    def _collect(self, name: str, magnitude: Any, bound: int, reward: bool) -> None:
+        if name != self._name:
+            raise ValueError(f"plugin {self._name!r} added a term for {name!r}")
+        if reward != self._reward:
+            kind = "a reward" if self._reward else "a penalty"
+            raise ValueError(f"constraint {name!r} is {kind}; its terms keep that sign")
+        bound = max(0, int(bound))
+        if bound:
+            self._pieces.append(magnitude)
+            self._bound += bound
+
+    def add(self, name: str, magnitude: Any, *, bound: int) -> None:
+        self._collect(name, magnitude, bound, reward=False)
+
+    def add_reward(self, name: str, magnitude: Any, *, bound: int) -> None:
+        self._collect(name, magnitude, bound, reward=True)
+
+    def flush(self) -> None:
+        total = sum(self._pieces) if self._pieces else 0
+        add = self._objective.add_reward if self._reward else self._objective.add
+        add(self._name, total, bound=self._bound)
+
+    def __getattr__(self, attribute: str) -> Any:
+        return getattr(self._objective, attribute)
+
+
+class _GlobalPlugin(ConstraintPlugin[ConferenceContext]):
+    """A conference constraint: its pieces add up to one total, added once."""
+
+    terms_per_unit = True  # the one term is the global total the engine shapes
+
+    def build(self, context: ConferenceContext, objective: ObjectiveBuilder) -> None:
+        total = _GlobalTotal(objective, self.name, self.spec.reward)
+        self.add_terms(context, total)
+        total.flush()
+
+    @abstractmethod
+    def add_terms(self, context: ConferenceContext, objective: _GlobalTotal) -> None:
+        """Add this constraint's pieces; ``build`` sums them into its total."""
+
+
 def _overlap(left: Any, right: Any) -> int:
     return max(
         0,
@@ -56,10 +121,8 @@ def _prohibited(prohibited: list[str], actual: list[str]) -> int:
     return len(set(prohibited) & set(actual))
 
 
-class TalkTypeIncompatibilityCost(
-    domain.TalkTypeIncompatibilityCost, ConstraintPlugin[ConferenceContext]
-):
-    def build(self, context: ConferenceContext, objective: ObjectiveBuilder) -> None:
+class TalkTypeIncompatibilityCost(domain.TalkTypeIncompatibilityCost, _GlobalPlugin):
+    def add_terms(self, context: ConferenceContext, objective: _GlobalTotal) -> None:
         for talk, talk_data in enumerate(context.problem.talks):
             for slot, slot_data in enumerate(context.problem.timeslots):
                 for room, room_data in enumerate(context.problem.rooms):
@@ -75,10 +138,8 @@ class TalkTypeIncompatibilityCost(
                     )
 
 
-class RoomUnavailabilityCost(
-    domain.RoomUnavailabilityCost, ConstraintPlugin[ConferenceContext]
-):
-    def build(self, context: ConferenceContext, objective: ObjectiveBuilder) -> None:
+class RoomUnavailabilityCost(domain.RoomUnavailabilityCost, _GlobalPlugin):
+    def add_terms(self, context: ConferenceContext, objective: _GlobalTotal) -> None:
         for talk in range(len(context.problem.talks)):
             for slot in range(len(context.problem.timeslots)):
                 for room, room_data in enumerate(context.problem.rooms):
@@ -90,10 +151,8 @@ class RoomUnavailabilityCost(
                     )
 
 
-class SpeakerUnavailabilityCost(
-    domain.SpeakerUnavailabilityCost, ConstraintPlugin[ConferenceContext]
-):
-    def build(self, context: ConferenceContext, objective: ObjectiveBuilder) -> None:
+class SpeakerUnavailabilityCost(domain.SpeakerUnavailabilityCost, _GlobalPlugin):
+    def add_terms(self, context: ConferenceContext, objective: _GlobalTotal) -> None:
         for talk, talk_data in enumerate(context.problem.talks):
             speakers = [context.problem.speakers[index] for index in talk_data.speakers]
             for slot, slot_data in enumerate(context.problem.timeslots):
@@ -107,12 +166,12 @@ class SpeakerUnavailabilityCost(
                 )
 
 
-class _TimeslotTagPlugin(ConstraintPlugin[ConferenceContext]):
+class _TimeslotTagPlugin(_GlobalPlugin):
     owner_kind: ClassVar[str]
     attribute: ClassVar[str]
     comparison: ClassVar[str]
 
-    def build(self, context: ConferenceContext, objective: ObjectiveBuilder) -> None:
+    def add_terms(self, context: ConferenceContext, objective: _GlobalTotal) -> None:
         compare = _missing if self.comparison == "missing" else _prohibited
         for talk, talk_data in enumerate(context.problem.talks):
             owners = (
@@ -133,12 +192,12 @@ class _TimeslotTagPlugin(ConstraintPlugin[ConferenceContext]):
                     )
 
 
-class _RoomTagPlugin(ConstraintPlugin[ConferenceContext]):
+class _RoomTagPlugin(_GlobalPlugin):
     owner_kind: ClassVar[str]
     attribute: ClassVar[str]
     comparison: ClassVar[str]
 
-    def build(self, context: ConferenceContext, objective: ObjectiveBuilder) -> None:
+    def add_terms(self, context: ConferenceContext, objective: _GlobalTotal) -> None:
         compare = _missing if self.comparison == "missing" else _prohibited
         for talk, talk_data in enumerate(context.problem.talks):
             owners = (
@@ -273,10 +332,8 @@ class TalkUndesiredRoomTagsCost(domain.TalkUndesiredRoomTagsCost, _RoomTagPlugin
     comparison = "prohibited"
 
 
-class TalkPrerequisiteTalksCost(
-    domain.TalkPrerequisiteTalksCost, ConstraintPlugin[ConferenceContext]
-):
-    def build(self, context: ConferenceContext, objective: ObjectiveBuilder) -> None:
+class TalkPrerequisiteTalksCost(domain.TalkPrerequisiteTalksCost, _GlobalPlugin):
+    def add_terms(self, context: ConferenceContext, objective: _GlobalTotal) -> None:
         for talk, talk_data in enumerate(context.problem.talks):
             for prerequisite in talk_data.prerequisite_talks:
                 for slot, slot_data in enumerate(context.problem.timeslots):
@@ -299,7 +356,7 @@ class TalkPrerequisiteTalksCost(
                         objective.add(self.name, amount * both, bound=amount)
 
 
-class _OverlapSharedPlugin(ConstraintPlugin[ConferenceContext]):
+class _OverlapSharedPlugin(_GlobalPlugin):
     attribute: ClassVar[str]
 
     def coefficient(self, left: Any, right: Any) -> int:
@@ -307,7 +364,7 @@ class _OverlapSharedPlugin(ConstraintPlugin[ConferenceContext]):
             set(getattr(left, self.attribute)) & set(getattr(right, self.attribute))
         )
 
-    def build(self, context: ConferenceContext, objective: ObjectiveBuilder) -> None:
+    def add_terms(self, context: ConferenceContext, objective: _GlobalTotal) -> None:
         for left in range(len(context.problem.talks)):
             a = context.problem.talks[left]
             for right in range(left + 1, len(context.problem.talks)):
@@ -363,10 +420,8 @@ class AudienceTypeThemeTrackConflictCost(
         return audience * theme
 
 
-class ConsecutiveTalksPauseCost(
-    domain.ConsecutiveTalksPauseCost, ConstraintPlugin[ConferenceContext]
-):
-    def build(self, context: ConferenceContext, objective: ObjectiveBuilder) -> None:
+class ConsecutiveTalksPauseCost(domain.ConsecutiveTalksPauseCost, _GlobalPlugin):
+    def add_terms(self, context: ConferenceContext, objective: _GlobalTotal) -> None:
         for left in range(len(context.problem.talks)):
             a = context.problem.talks[left]
             for right in range(left + 1, len(context.problem.talks)):
@@ -397,10 +452,8 @@ class ConsecutiveTalksPauseCost(
                         objective.add(self.name, combined * both, bound=combined)
 
 
-class CrowdControlRiskCost(
-    domain.CrowdControlRiskCost, ConstraintPlugin[ConferenceContext]
-):
-    def build(self, context: ConferenceContext, objective: ObjectiveBuilder) -> None:
+class CrowdControlRiskCost(domain.CrowdControlRiskCost, _GlobalPlugin):
+    def add_terms(self, context: ConferenceContext, objective: _GlobalTotal) -> None:
         risky = [
             talk
             for talk, data in enumerate(context.problem.talks)
@@ -421,8 +474,8 @@ class CrowdControlRiskCost(
                 objective.add(self.name, duration * contributes, bound=duration)
 
 
-class RoomConflictCost(domain.RoomConflictCost, ConstraintPlugin[ConferenceContext]):
-    def build(self, context: ConferenceContext, objective: ObjectiveBuilder) -> None:
+class RoomConflictCost(domain.RoomConflictCost, _GlobalPlugin):
+    def add_terms(self, context: ConferenceContext, objective: _GlobalTotal) -> None:
         for left in range(len(context.problem.talks)):
             for right in range(left + 1, len(context.problem.talks)):
                 for left_slot, left_data in enumerate(context.problem.timeslots):
@@ -440,9 +493,9 @@ class RoomConflictCost(domain.RoomConflictCost, ConstraintPlugin[ConferenceConte
 
 
 class ContentAudienceLevelFlowViolationCost(
-    domain.ContentAudienceLevelFlowViolationCost, ConstraintPlugin[ConferenceContext]
+    domain.ContentAudienceLevelFlowViolationCost, _GlobalPlugin
 ):
-    def build(self, context: ConferenceContext, objective: ObjectiveBuilder) -> None:
+    def add_terms(self, context: ConferenceContext, objective: _GlobalTotal) -> None:
         for left in range(len(context.problem.talks)):
             a = context.problem.talks[left]
             for right in range(left + 1, len(context.problem.talks)):
@@ -473,10 +526,8 @@ class ContentAudienceLevelFlowViolationCost(
                         )
 
 
-class DifferentDayTalksCost(
-    domain.DifferentDayTalksCost, ConstraintPlugin[ConferenceContext]
-):
-    def build(self, context: ConferenceContext, objective: ObjectiveBuilder) -> None:
+class DifferentDayTalksCost(domain.DifferentDayTalksCost, _GlobalPlugin):
+    def add_terms(self, context: ConferenceContext, objective: _GlobalTotal) -> None:
         for left in range(len(context.problem.talks)):
             a = context.problem.talks[left]
             for right in range(left + 1, len(context.problem.talks)):
@@ -509,10 +560,8 @@ class DifferentDayTalksCost(
                         )
 
 
-class ThemeTrackRoomChangeCost(
-    domain.ThemeTrackRoomChangeCost, ConstraintPlugin[ConferenceContext]
-):
-    def build(self, context: ConferenceContext, objective: ObjectiveBuilder) -> None:
+class ThemeTrackRoomChangeCost(domain.ThemeTrackRoomChangeCost, _GlobalPlugin):
+    def add_terms(self, context: ConferenceContext, objective: _GlobalTotal) -> None:
         room_count = len(context.problem.rooms)
         for left in range(len(context.problem.talks)):
             a = context.problem.talks[left]
@@ -558,10 +607,8 @@ class ThemeTrackRoomChangeCost(
                                 )
 
 
-class PopularTalksRoomSizeCost(
-    domain.PopularTalksRoomSizeCost, ConstraintPlugin[ConferenceContext]
-):
-    def build(self, context: ConferenceContext, objective: ObjectiveBuilder) -> None:
+class PopularTalksRoomSizeCost(domain.PopularTalksRoomSizeCost, _GlobalPlugin):
+    def add_terms(self, context: ConferenceContext, objective: _GlobalTotal) -> None:
         for left in range(len(context.problem.talks)):
             a = context.problem.talks[left]
             for right in range(left + 1, len(context.problem.talks)):
@@ -611,7 +658,7 @@ class PopularTalksRoomSizeCost(
                                 )
 
 
-class _DiversityPlugin(ConstraintPlugin[ConferenceContext]):
+class _DiversityPlugin(_GlobalPlugin):
     attribute: ClassVar[str]
 
     def values(self, talk: Any) -> list[Any]:
@@ -621,7 +668,7 @@ class _DiversityPlugin(ConstraintPlugin[ConferenceContext]):
     def pair_amount(self, left: set[Any], right: set[Any]) -> int:
         return len(left & right)
 
-    def build(self, context: ConferenceContext, objective: ObjectiveBuilder) -> None:
+    def add_terms(self, context: ConferenceContext, objective: _GlobalTotal) -> None:
         for slot, slot_data in enumerate(context.problem.timeslots):
             duration = slot_data.end_minute - slot_data.start_minute
             for left in range(len(context.problem.talks)):
@@ -657,10 +704,8 @@ class LanguageDiversityCost(domain.LanguageDiversityCost, _DiversityPlugin):
         return int(left != right)
 
 
-class SpeakerMakespanCost(
-    domain.SpeakerMakespanCost, ConstraintPlugin[ConferenceContext]
-):
-    def build(self, context: ConferenceContext, objective: ObjectiveBuilder) -> None:
+class SpeakerMakespanCost(domain.SpeakerMakespanCost, _GlobalPlugin):
+    def add_terms(self, context: ConferenceContext, objective: _GlobalTotal) -> None:
         days = sorted({slot.start_minute // 1440 for slot in context.problem.timeslots})
         if not days:
             return

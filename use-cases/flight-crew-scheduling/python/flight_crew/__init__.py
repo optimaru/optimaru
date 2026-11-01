@@ -18,7 +18,7 @@ weights as-is):
   soft 6. last_assignment_not_arriving_at_home_cost      -1000 when the last assignment arrives at
                                                an airport other than home
 The weights are the C++ components' defaults; change one through a constraint selection, e.g.
-``solve(schedule, constraints=get_constraints([..., RequiredSkillCost(weight=500)]))`` (see
+``solve(schedule, constraints=[..., RequiredSkillCost(weight=500)])`` (see
 `flight_crew.constraints`). `constraint_info()` lists every constraint with its default level
 and weight.
 
@@ -117,8 +117,9 @@ def solve(
     (best_score_limit=(0, -inf)).
 
     ``constraints`` picks the cost function directly
-    (see `flight_crew.constraints`). Only the listed constraints are scored; None
-    uses all six default constraints at their default weights::
+    (see `flight_crew.constraints`). Only the listed constraints are scored, a name
+    picked several times once per pick; None uses all six default constraints at
+    their default weights::
 
         from flight_crew.constraints import get_constraints
         fcs.solve(schedule, constraints=get_constraints())

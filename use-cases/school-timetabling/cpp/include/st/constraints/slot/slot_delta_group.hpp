@@ -70,7 +70,10 @@ struct SlotDeltaGroup final : optimaru::UnitConstraintDeltaGroup<Timetable>
     bool isBeneficial() const override { return !duplicate_ && !unsupported_; }
 
     // Every delta below is an integer count/excess, so hard members with
-    // integral weight take the calculator's direct hard-delta fast path.
+    // integral weight take the calculator's direct hard-delta fast path, and
+    // the accumulated raw costs are exact: a member at a negative threshold
+    // (clip with offset < 0, discontinuous at 0) stays on this group too,
+    // because a whole-number raw cannot drift off 0.
     bool hasIntegralRawDeltas() const override { return true; }
 
     void onReset(const Timetable &table) override

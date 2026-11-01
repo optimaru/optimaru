@@ -19,6 +19,14 @@
 //       case per constraint (raw 0 = no violation)
 //   (i) the catalog: info() off the default assembly == the components'
 //       kDefaultWeight / kDefaultLevel; the knob guards
+//   (j) repeated components and the offset / clip knobs: a hand-calculated
+//       repeat, a repeat on its own level (soft next to the hard default),
+//       threshold and literal offsets by hand per location and on the
+//       totals, the scoped side constraints charging only their evaluated
+//       locations ("units"), the literal formula refused on hard at reset
+//       and kept on soft, incremental == a fresh recompute over a random
+//       walk (accepted and undone moves) and a FULL_ASSERT solve with
+//       repeated, shifted components on both levels
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -291,6 +299,44 @@ void verifyOverrides()
           "pinned demoted to soft: 1 soft per broken pin");
     check(sameScore(scoreWith(defaultConstraints().hard("assignmentCost"), p), {-19, -22.0}),
           "assignment cost promoted to hard: -19hard");
+    {
+        // A negative direct cost makes the total possibly negative: on hard it
+        // would cancel a broken pin, so the reset refuses it; soft keeps the bonus.
+        QuadraticAssignmentProblem signedCosts = sideInstance();
+        signedCosts.assignmentCosts = std::vector<std::vector<std::int64_t>>{{-10, -10}, {-10, -10}};
+        identity(signedCosts);
+        const auto refusalOf = [](ConstraintAssembly assembly, QuadraticAssignmentProblem problem)
+        {
+            try
+            {
+                scoreWith(std::move(assembly), problem);
+            }
+            catch (const optimaru::SignedCostLevelError &error)
+            {
+                return std::string(error.what());
+            }
+            return std::string();
+        };
+        check(refusalOf(defaultConstraints().hard("assignmentCost"), signedCosts)
+                  == "Constraint 'assignmentCost' can have a negative raw cost on this problem (a bonus) "
+                     "and cannot be hard",
+              "a negative direct cost: the assignment cost cannot be promoted to hard (refused at reset)");
+        check(refusalOf(defaultConstraints().hard("assignmentCost").offset("assignmentCost", 10.0), signedCosts)
+                  != "",
+              "... nor as a hard threshold (a total of -20 is beyond -10)");
+        check(refusalOf(defaultConstraints(), signedCosts).empty()
+                  && sameScore(scoreWith(defaultConstraints(), signedCosts), {-4, -(22.0 - 20.0)}),
+              "on its default soft level the negative total is a bonus: -4hard/-2soft");
+        QuadraticAssignmentProblem signedFlows = sideInstance();
+        signedFlows.flows = {{0, -3}, {2, 0}};
+        identity(signedFlows);
+        check(refusalOf(defaultConstraints().hard("flowDistanceCost"), signedFlows)
+                  == "Constraint 'flowDistanceCost' can have a negative raw cost on this problem (a bonus) "
+                     "and cannot be hard",
+              "a negative flow: the flow cannot be promoted to hard");
+        check(refusalOf(defaultConstraints().hard("assignmentCost"), signedFlows).empty(),
+              "... while the direct costs, all >= 0 there, still may");
+    }
     // A unit exponent shapes each location: capacity [2, 0] ** 2 = 4.
     check(sameScore(scoreWith(defaultConstraints().exponent("locationCapacityCost", 2.0), p), {-6, -37.0}),
           "capacity exponent 2 shapes per location: 2^2 = 4");
@@ -503,6 +549,378 @@ void verifyCatalog()
     std::printf("\n");
 }
 
+// -------------------------------------------------------------------------
+// (j) Repeated components and offsets. A repeat is a fresh copy of a
+// default component (another defaultConstraints(), the one name kept, its
+// knobs re-stated) appended with addInstances(), as the Python bindings
+// build it from a pick list. The three side constraints shape each location
+// they evaluate (their scopedUnits()), the two objectives their total.
+// -------------------------------------------------------------------------
+ConstraintAssembly copyOf(const std::string &name)
+{
+    ConstraintAssembly copy = defaultConstraints();
+    copy.only({name});
+    return copy;
+}
+
+// The side instance at the identity: pinned [1, 0] (scope L1), forbidden
+// [0, 1] (scope L2), capacity [2, 0] (scope L1, L2), assignment 15, flow 22.
+QuadraticAssignmentProblem sideIdentity()
+{
+    QuadraticAssignmentProblem p = sideInstance();
+    identity(p);
+    return p;
+}
+
+// Three locations, one of each scope: L1 pinned to F1, (F3, L2) forbidden,
+// only L2 capacitated (10). At the identity every side constraint is 0.
+QuadraticAssignmentProblem scopedInstance()
+{
+    QuadraticAssignmentProblem p = threeFacilities();
+    p.fixedAssignments.push_back({0, 0});
+    p.forbiddenAssignments.push_back({2, 1});
+    p.locations[1].capacity = 10;
+    identity(p);
+    return p;
+}
+
+Score scoreOf(ConstraintAssembly assembly, QuadraticAssignmentProblem p)
+{
+    return scoreWith(std::move(assembly), p);
+}
+
+// Every kind repeated or shifted at least once: the two delta units, the
+// full re-cost unit, both member-change globals; literal and threshold,
+// negative offsets, a fractional hard weight; and repeats on the other level
+// than their default: the flow promoted to hard (threshold), the capacity,
+// pinned and forbidden rows on soft (literal, over their scope). Hard
+// refuses the literal formula with an offset, so the literal copies of the
+// hard side constraints sit on soft, next to a hard threshold copy.
+// `flowCopyOnHard` false keeps the hard threshold copy of the flow on soft,
+// for data with negative flows or distances, where the flow cannot be hard
+// (rawCostCanBeNegative).
+ConstraintAssembly repeatedAssembly(bool flowCopyOnHard = true)
+{
+    ConstraintAssembly assembly = defaultConstraints();
+    assembly.offset("locationCapacityCost", 1.0);
+    assembly.offset("flowDistanceCost", 50.0);
+    assembly.addInstances(std::move(copyOf("locationCapacityCost")
+                                        .soft("locationCapacityCost")
+                                        .offset("locationCapacityCost", 1.0)
+                                        .clip("locationCapacityCost", false)));
+    assembly.addInstances(std::move(
+        copyOf("pinnedAssignmentsCost").weight("pinnedAssignmentsCost", 1.5).offset("pinnedAssignmentsCost", 0.5)));
+    assembly.addInstances(std::move(copyOf("pinnedAssignmentsCost")
+                                        .soft("pinnedAssignmentsCost")
+                                        .weight("pinnedAssignmentsCost", 1.5)
+                                        .offset("pinnedAssignmentsCost", 0.5)
+                                        .clip("pinnedAssignmentsCost", false)));
+    assembly.addInstances(std::move(copyOf("forbiddenAssignmentsCost")
+                                        .exponent("forbiddenAssignmentsCost", 2.0)
+                                        .offset("forbiddenAssignmentsCost", -1.0)));
+    assembly.addInstances(std::move(copyOf("locationCapacityCost")
+                                        .weight("locationCapacityCost", 2.0)
+                                        .exponent("locationCapacityCost", 2.0)
+                                        .offset("locationCapacityCost", 2.0)));
+    assembly.addInstances(std::move(copyOf("assignmentCost")
+                                        .weight("assignmentCost", 0.5)
+                                        .offset("assignmentCost", -20.0)
+                                        .clip("assignmentCost", false)));
+    assembly.addInstances(std::move(copyOf("flowDistanceCost")
+                                        .weight("flowDistanceCost", 0.25)
+                                        .exponent("flowDistanceCost", 1.5)
+                                        .offset("flowDistanceCost", 100.0)
+                                        .level("flowDistanceCost",
+                                               flowCopyOnHard ? optimaru::Level::Hard : optimaru::Level::Soft)));
+    assembly.addInstances(std::move(copyOf("flowDistanceCost")
+                                        .weight("flowDistanceCost", 0.25)
+                                        .exponent("flowDistanceCost", 1.5)
+                                        .offset("flowDistanceCost", 100.0)
+                                        .clip("flowDistanceCost", false)));
+    assembly.addInstances(std::move(copyOf("forbiddenAssignmentsCost")
+                                        .soft("forbiddenAssignmentsCost")
+                                        .weight("forbiddenAssignmentsCost", 2.0)
+                                        .offset("forbiddenAssignmentsCost", 1.0)
+                                        .clip("forbiddenAssignmentsCost", false)));
+    return assembly;
+}
+
+void verifyRepeatsAndOffsets()
+{
+    std::printf("== (j) Repeated components, offset / clip ==\n");
+    {
+        // flow 22 + 0.5 x 22^2 = 264.
+        ConstraintAssembly assembly = copyOf("flowDistanceCost");
+        assembly.addInstances(std::move(
+            copyOf("flowDistanceCost").weight("flowDistanceCost", 0.5).exponent("flowDistanceCost", 2.0)));
+        QuadraticAssignmentProblem p = sideIdentity();
+        DecomposedCalculator calculator;
+        assembly.into(calculator);
+        const Score score = scoreWith(calculator, p);
+        check(score.hard == 0 && score.soft == -264.0, "flow + 0.5 x flow^2: -(22 + 242) soft");
+        const Costs entries = calculator.constraintCosts();
+        check(entries.size() == 2 && entries[0].unitCosts == entries[1].unitCosts
+                  && entries[0].unitCosts == std::vector<double>{22.0} && entries[1].weight == 0.5
+                  && entries[1].exponent == 2.0 && entries[1].defaultWeight == 1.0
+                  && entries[0].name == entries[1].name,
+              "two instances, the same raw total, each with its own knobs");
+    }
+    {
+        // Each instance on its own level: the hard capacity [2, 0] next to a
+        // soft repeat, 3 x (2 - 1) beyond its offset on L1.
+        ConstraintAssembly assembly = copyOf("locationCapacityCost");
+        assembly.addInstances(std::move(copyOf("locationCapacityCost")
+                                            .soft("locationCapacityCost")
+                                            .weight("locationCapacityCost", 3.0)
+                                            .offset("locationCapacityCost", 1.0)));
+        QuadraticAssignmentProblem p = sideIdentity();
+        DecomposedCalculator calculator;
+        assembly.into(calculator);
+        check(sameScore(scoreWith(calculator, p), {-2, -3.0}),
+              "hard capacity + a soft repeat beyond 1: -2 hard / -3 soft");
+        const Costs entries = calculator.constraintCosts();
+        check(entries.size() == 2 && entries[0].level == optimaru::Level::Hard
+                  && entries[1].level == optimaru::Level::Soft && entries[1].defaultLevel == optimaru::Level::Hard,
+              "the repeat reports its own level, the default stays hard");
+    }
+    {
+        ConstraintAssembly assembly = copyOf("locationCapacityCost");
+        assembly.addInstances(copyOf("locationCapacityCost"));
+        check(scoreOf(std::move(assembly), sideIdentity()).hard == -4, "capacity picked twice: 2 x 2");
+    }
+    {
+        const QuadraticAssignmentProblem p = sideIdentity();
+        check(scoreOf(copyOf("locationCapacityCost").offset("locationCapacityCost", 1.0), p).hard == -1,
+              "capacity threshold offset 1 on [2, 0]: 1 + 0");
+        // The three side constraints are hard by default, which refuses the
+        // literal formula with an offset, so its numbers are checked on soft
+        // (not rounded).
+        check(sameScore(scoreOf(copyOf("locationCapacityCost")
+                                    .soft("locationCapacityCost")
+                                    .offset("locationCapacityCost", 1.0)
+                                    .clip("locationCapacityCost", false),
+                                p),
+                        {0, 0.0}),
+              "soft capacity literal offset 1 on [2, 0]: (2 - 1) + (0 - 1), both locations in scope");
+        check(sameScore(scoreOf(copyOf("locationCapacityCost").offset("locationCapacityCost", 1.5), p), {-1, 0.0}),
+              "a hard threshold offset rounds per location: 2 - 1.5 = 0.5 -> 1, L2 stays 0");
+        check(sameScore(scoreOf(copyOf("locationCapacityCost")
+                                    .soft("locationCapacityCost")
+                                    .offset("locationCapacityCost", 2.5)
+                                    .clip("locationCapacityCost", false),
+                                p),
+                        {0, 3.0}),
+              "a soft literal offset is not rounded: (2 - 2.5) + (0 - 2.5) = -3, +3");
+        check(sameScore(scoreOf(copyOf("pinnedAssignmentsCost")
+                                    .soft("pinnedAssignmentsCost")
+                                    .offset("pinnedAssignmentsCost", 1.0)
+                                    .clip("pinnedAssignmentsCost", false),
+                                p),
+                        {0, 0.0}),
+              "soft pinned literal offset 1 on [1, 0]: only L1 is evaluated, 1 - 1 = 0 (L2 is not charged)");
+        check(scoreOf(copyOf("pinnedAssignmentsCost").offset("pinnedAssignmentsCost", -1.0), p).hard == -2,
+              "pinned threshold offset -1: the broken pin costs 1 + 1");
+        check(sameScore(scoreOf(copyOf("pinnedAssignmentsCost")
+                                    .soft("pinnedAssignmentsCost")
+                                    .offset("pinnedAssignmentsCost", -1.0)
+                                    .clip("pinnedAssignmentsCost", false),
+                                p),
+                        {0, -2.0}),
+              "soft pinned literal offset -1: L1 only, 1 + 1 (L2 is outside the scope)");
+        check(scoreOf(copyOf("flowDistanceCost").offset("flowDistanceCost", 20.0), p).soft == -2.0,
+              "flow threshold offset 20 on 22: -2 soft");
+        check(scoreOf(copyOf("flowDistanceCost").offset("flowDistanceCost", 30.0).clip("flowDistanceCost", false), p)
+                      .soft
+                  == 8.0,
+              "flow literal offset 30 on 22: shaped once, 22 - 30 = -8, +8 soft");
+        check(scoreOf(copyOf("assignmentCost").offset("assignmentCost", -5.0), p).soft == -20.0,
+              "assignment threshold offset -5 on 15: -20 soft");
+    }
+    {
+        // The scoped side constraints on an all-zero solution: a literal
+        // offset charges (#evaluated locations) x -offset, not 3 x (on soft:
+        // hard refuses it).
+        const QuadraticAssignmentProblem p = scopedInstance();
+        check(scoreOf(defaultConstraints().only({"pinnedAssignmentsCost", "forbiddenAssignmentsCost",
+                                                 "locationCapacityCost"}),
+                      p)
+                      .hard
+                  == 0,
+              "the scoped instance at the identity: every side constraint is 0");
+        for (const char *name : {"pinnedAssignmentsCost", "forbiddenAssignmentsCost", "locationCapacityCost"})
+        {
+            check(sameScore(scoreOf(copyOf(name).soft(name).offset(name, 2.0).clip(name, false), p), {0, 2.0}),
+                  std::string(name) + " soft literal offset 2: one evaluated location, +2 (not +6)");
+            check(scoreOf(copyOf(name).offset(name, 2.0), p).hard == 0,
+                  std::string(name) + " threshold offset 2: 0");
+        }
+        DecomposedCalculator calculator;
+        defaultConstraints().into(calculator);
+        QuadraticAssignmentProblem q = p;
+        scoreWith(calculator, q);
+        const Costs entries = calculator.constraintCosts();
+        check(entries.size() == 5 && entries[0].scoped && entries[0].units == std::vector<int>{0}
+                  && entries[1].scoped && entries[1].units == std::vector<int>{1} && entries[2].scoped
+                  && entries[2].units == std::vector<int>{1} && !entries[3].scoped && !entries[4].scoped
+                  && entries[0].unitCosts.size() == 3,
+              "constraintCosts(): pinned units [0], forbidden [1], capacity [1]; the objectives unscoped");
+    }
+    {
+        // On hard the literal formula with an offset is refused at reset,
+        // whichever sign and setter order, for a hard default side
+        // constraint and for the soft flow moved to hard: +2 on capacity
+        // [2, 0] would score L1's overload as 0 and reward L2's slack (+2
+        // hard), -1 would charge locations without a violation.
+        auto refusal = [](const std::string &name) {
+            return "Constraint '" + name
+                   + "' cannot use clip=false with a non-zero offset on a level that counts "
+                     "toward the hard score (hard 0 must mean no violation)";
+        };
+        auto resetRefusal = [](ConstraintAssembly assembly) {
+            try
+            {
+                scoreOf(std::move(assembly), sideIdentity());
+            }
+            catch (const std::logic_error &error)
+            {
+                return std::string(error.what());
+            }
+            return std::string();
+        };
+        check(resetRefusal(copyOf("locationCapacityCost")
+                               .offset("locationCapacityCost", 2.0)
+                               .clip("locationCapacityCost", false))
+                      == refusal("locationCapacityCost")
+                  && resetRefusal(copyOf("locationCapacityCost")
+                                      .clip("locationCapacityCost", false)
+                                      .offset("locationCapacityCost", -1.0))
+                         == refusal("locationCapacityCost"),
+              "capacity literal offset +2 / -1 on its default hard: refused at reset");
+        check(resetRefusal(copyOf("flowDistanceCost")
+                               .offset("flowDistanceCost", 30.0)
+                               .clip("flowDistanceCost", false)
+                               .hard("flowDistanceCost"))
+                  == refusal("flowDistanceCost"),
+              "flow literal offset moved to hard afterwards: refused at reset");
+        ConstraintAssembly repeated = copyOf("pinnedAssignmentsCost");
+        repeated.addInstances(std::move(
+            copyOf("pinnedAssignmentsCost").offset("pinnedAssignmentsCost", 1.0).clip("pinnedAssignmentsCost", false)));
+        check(resetRefusal(std::move(repeated)) == refusal("pinnedAssignmentsCost"),
+              "a hard literal repeat next to the default: refused at reset");
+        check(resetRefusal(copyOf("locationCapacityCost").offset("locationCapacityCost", 2.0)).empty()
+                  && resetRefusal(copyOf("locationCapacityCost").clip("locationCapacityCost", false)).empty()
+                  && resetRefusal(copyOf("locationCapacityCost")
+                                      .offset("locationCapacityCost", 2.0)
+                                      .clip("locationCapacityCost", false)
+                                      .soft("locationCapacityCost"))
+                         .empty(),
+              "capacity: a threshold offset or clip=false with offset 0 on hard, and the literal "
+              "offset on soft, are allowed");
+    }
+    {
+        // Random walk: incremental == a fresh calculator of the same assembly.
+        int mismatches = 0;
+        int checks = 0;
+        double drift = 0.0;
+        // Three rounds over data with negative entries (the flow copy on soft:
+        // it cannot be hard there), one over data without (on hard).
+        for (int round = 0; round < 4; ++round)
+        {
+            const bool signedData = round < 3;
+            QuadraticAssignmentProblem p = randomInstance(12, 17 + round, signedData);
+            std::mt19937_64 rng(321 + round);
+            place(p, randomPermutation(12, rng));
+            ScoreCalculator::prepare(p);
+            DecomposedCalculator calculator;
+            repeatedAssembly(!signedData).into(calculator);
+            optimaru::ScoreDirector<QuadraticAssignmentProblem> director(p, calculator);
+            std::uniform_int_distribution<int> facility(0, 11);
+            std::uniform_int_distribution<int> kind(0, 9);
+            for (int step = 0; step < 1000; ++step, ++checks)
+            {
+                const int a = facility(rng);
+                const int b = facility(rng);
+                const int what = kind(rng);
+                const bool accept = (step % 3) != 0;
+                const QuadraticAssignmentProblem before = p;
+                director.beginMoveEvaluation();
+                if (what < 7)
+                {
+                    const int la = p.facilities[a].location;
+                    const int lb = p.facilities[b].location;
+                    director.beginVariableChanges();
+                    director.changeVariable(a, lb);
+                    director.changeVariable(b, la);
+                    director.endVariableChanges();
+                }
+                else if (what < 9)
+                {
+                    director.changeVariable(a, p.facilities[a].location < 0 ? facility(rng) : -1);
+                }
+                else
+                {
+                    director.changeVariable(a, facility(rng));
+                }
+                director.calculateScore();
+                if (!accept)
+                {
+                    director.beginMoveRollback();
+                    director.beginVariableChanges();
+                    for (int f = 0; f < p.facilityCount(); ++f)
+                    {
+                        if (p.facilities[f].location != before.facilities[f].location)
+                            director.changeVariable(f, before.facilities[f].location);
+                    }
+                    director.endVariableChanges();
+                }
+                director.endMoveEvaluation(accept);
+                const Score incremental = director.calculateScore();
+                DecomposedCalculator fresh;
+                repeatedAssembly(!signedData).into(fresh);
+                QuadraticAssignmentProblem copy = p;
+                const Score full = scoreWith(fresh, copy);
+                drift = std::max(drift, std::fabs(full.soft - incremental.soft));
+                if (!optimaru::scoresAgree(incremental, full) && ++mismatches <= 3)
+                {
+                    std::printf("  MISMATCH round %d step %d: incremental=%s full=%s\n", round, step,
+                                incremental.toString().c_str(), full.toString().c_str());
+                }
+            }
+        }
+        std::printf("    largest soft drift %.3g\n", drift);
+        check(mismatches == 0, std::to_string(checks)
+                                   + " moves (accepted and undone) with repeated, shifted components: "
+                                     "incremental == fresh");
+    }
+    {
+        QuadraticAssignmentProblem p = randomInstance(10, 57);
+        DecomposedCalculator calculator;
+        repeatedAssembly(false).into(calculator);
+        Solver::Config config;
+        config.spentLimit = std::chrono::seconds(60);
+        config.stepCountLimit = 1500;
+        config.randomSeed = 3;
+        config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+        bool ok = true;
+        try
+        {
+            Solver(config).solve(p, calculator);
+        }
+        catch (const std::exception &error)
+        {
+            std::printf("  %s\n", error.what());
+            ok = false;
+        }
+        DecomposedCalculator fresh;
+        repeatedAssembly(false).into(fresh);
+        QuadraticAssignmentProblem copy = p;
+        check(ok && p.isBijection() && p.score && optimaru::scoresAgree(*p.score, scoreWith(fresh, copy)),
+              "FULL_ASSERT solve with repeated, shifted components: no corruption, a bijection, the "
+              "score == a fresh recompute");
+    }
+    std::printf("\n");
+}
+
 }  // namespace
 
 int main()
@@ -516,6 +934,7 @@ int main()
     verifyNames();
     verifyRawCostsByHand();
     verifyCatalog();
+    verifyRepeatsAndOffsets();
     if (failures != 0)
     {
         std::printf("%d check(s) FAILED\n", failures);

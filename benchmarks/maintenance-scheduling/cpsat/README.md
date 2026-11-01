@@ -10,8 +10,18 @@ domain specs (`MinStartDateCost`, `MaxEndDateCost`, `BeforeIdealEndDateCost`,
 `list_constraints()` order. Their default level and weight come from the engine's
 `maintenance_scheduling.constraint_info()` (since 0.2.0; before, the 1,000,000 and 1,000
 soft weights were copied here by hand), so `catalog()` equals the engine catalog and
-`level="soft"` demotes to soft in both solvers. Not supported on this exact path (rejected):
-`exponent != 1` and non-integer weights.
+`level="soft"` / `level="hard"` moves a term to the soft / hard level in both solvers;
+`level="medium"` is refused by both (`this use case has no medium level`). Not supported
+on this exact path (rejected): `exponent != 1` and non-integer weights.
+
+**0.3.0:** a constraint may be picked several times (as specs or as
+`{"name", "weight", "level", "offset", "clip"}` mappings); each pick builds its own terms
+with its own knobs, its level included. The four date rules add one term per (crew,
+start date) cell, an empty cell included, and the two conflict rules one term for their
+total, so an integral `offset` shapes each cell (or the total) exactly as the engine does
+in both `clip` modes; a fractional offset is refused (`offset must be an integer for
+CP-SAT`). `clip=False` with an offset on a hard pick is refused with the engine's message
+when the objective is built.
 
 ## Engine comparison
 

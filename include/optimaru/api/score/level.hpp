@@ -308,6 +308,14 @@ struct MediumFold {
     // BelowHard lands medium in the integral hard level, so each unit's
     // medium contribution is rounded the way a hard one is.
     constexpr bool roundsMedium() const { return kind == Kind::BelowHard; }
+    // Whether a contribution on `level` counts toward the engine's hard
+    // score: hard always, medium where it folds below hard (BelowHard).
+    // Such a level keeps "hard 0 = no violation", which is why it refuses
+    // rewards and the literal offset formula (DecomposedScoreCalculator::
+    // validateLevel, python::checkLiteralOffset).
+    constexpr bool countsTowardHard(Level level) const {
+        return level == Level::Hard || (level == Level::Medium && roundsMedium());
+    }
 
     // Domain-side Score adapter: three score levels (penalties negative) to
     // the engine's two. The decomposed calculator folds its accumulators with

@@ -5,8 +5,8 @@ timetabling and allocation problems — with 22 ready-to-use models.
 
 The solver core is C++17 and ships compiled in the wheel; you use it from
 Python. Every business rule and preference is a constraint *plugin*: switch it
-on or off, change its weight, or make it hard or soft — without touching the
-solver.
+on or off, change its weight, make it hard or soft, or pick it several times
+with different settings — without touching the solver.
 
 ```bash
 pip install optimaru
@@ -19,7 +19,7 @@ Requires Python 3.11+ (wheels for CPython 3.11–3.14). Wheels are published for
 ```python
 from optimaru import vehicle_routing as vrp
 from optimaru.vehicle_routing.constraints import (
-    TravelTimeCost, get_constraints, unassigned_visits_cost, vehicle_capacity_cost,
+    TravelTimeCost, UnassignedVisitsCost, VehicleCapacityCost, get_constraints,
 )
 
 locations = [vrp.Location(37.5665, 126.9780)]          # 0: depot
@@ -40,12 +40,22 @@ solver.solve(plan)                                      # default constraints
 print(plan.score, plan.routes())
 
 # Pick constraints and reweight them — the solver itself does not change.
-# Only the listed constraints are scored: leave out unassigned_visits_cost and
+# Only the listed constraints are scored: leave out UnassignedVisitsCost() and
 # skipping every visit becomes free.
 solver.solve_with_constraints(plan, get_constraints([
-    vehicle_capacity_cost,
-    unassigned_visits_cost,
+    VehicleCapacityCost(),
+    UnassignedVisitsCost(),
     TravelTimeCost(weight=10),
+]))
+print(plan.score, plan.routes())
+
+# Pick one constraint twice: every driving second, plus the square of the
+# seconds a route drives beyond 10 minutes.
+solver.solve_with_constraints(plan, get_constraints([
+    VehicleCapacityCost(),
+    UnassignedVisitsCost(),
+    TravelTimeCost(),
+    TravelTimeCost(exponent=2, offset=600),
 ]))
 print(plan.score, plan.routes())
 ```
@@ -55,12 +65,46 @@ Output:
 ```
 0hard/0medium/-966soft {'V1': ['C0', 'C1', 'C2']}
 0hard/0medium/-9660soft {'V1': ['C0', 'C1', 'C2']}
+0hard/0medium/-134922soft {'V1': ['C0', 'C1', 'C2']}
 ```
 
-Every constraint takes the same three knobs: `weight` (`None` = its default),
-`level` (`None` = its default level, otherwise a `Level` or its name, such as
-`Level.MEDIUM` or `"medium"`) and `exponent`. `constraint_info()` on a use case lists its constraints with their
-default level and weight.
+The last score is the 966 driving seconds plus `(966 - 600)**2 = 133956`.
+
+Every constraint takes the same five knobs:
+
+- `weight`: `None` is its default weight.
+- `level`: `None` is its default level, otherwise a `Level` or its name, such as
+  `Level.MEDIUM` or `"medium"`.
+- `exponent`: `1.0` by default; it shapes the cost of each unit (a vehicle, an
+  employee, ...) as a sign-preserving power.
+- `offset` and `clip` (keyword-only): an offset shifts that shaping. With
+  `clip=True`, the default, it is a threshold: `TravelTimeCost(offset=10,
+  exponent=3)` costs `max(0, x - 10)**3` for a vehicle that drives `x` seconds.
+  `clip=False` is the literal formula, `(x - 10)**3`, which is negative, a
+  reward, below 10. A negative threshold, `TravelTimeCost(offset=-60)`, is a
+  fixed charge: `x + 60` for every vehicle that drives at all, 0 for an idle
+  one, and the engine computes the raw cost of such a constraint exactly, so a
+  vehicle back at 0 is never charged.
+  Either formula applies per unit: per vehicle, per slot and so on, on every
+  unit the constraint evaluates, raw 0 included. It is not one formula over the
+  total violation, so with `clip=False` an idle vehicle contributes
+  `(0 - 10)**3 = -1000`.
+  `clip=False` with a non-zero offset is refused on hard, and on medium where
+  medium counts toward the hard score (task assigning), because hard 0 must
+  mean no violation: `ValueError: constraint 'vehicle_capacity_cost':
+  clip=False with a non-zero offset cannot be hard, because hard 0 must mean no
+  violation; use clip=True (a threshold) or another level`.
+
+A constraint may be picked several times. Each pick is its own instance with its
+own knobs, and the instances add up: `TravelTimeCost(exponent=2)` and
+`TravelTimeCost(exponent=3)` together cost `x**2 + x**3`. Picking a constraint
+again adds a second instance, so to change a default pick, replace it in the list
+rather than appending: `[*get_constraints(), TravelTimeCost(weight=10)]` charges
+the travel time 11 times. The examples write
+every pick as a class call; the `constraints` module also has ready-made default
+instances such as `vehicle_capacity_cost`, which is `VehicleCapacityCost()`.
+`constraint_info()` on a use case lists its constraints with their default level
+and weight.
 
 ## Use cases
 

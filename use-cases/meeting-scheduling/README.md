@@ -41,10 +41,11 @@ The first five are unit constraints (one cost per (time grain, room) cell, so `e
 shapes per cell); the other seven compare pairs of meetings and are global (one total,
 shaped as a whole). The rows are in `list_constraints()` order, and
 `meeting_scheduling.constraint_info()` reports exactly this table from the C++ components
-(`kDefaultLevel` / `kDefaultWeight`): every constraint is flippable (`level="hard"` /
-`level="soft"`), none is a reward and all twelve are scored by default (`default_enabled`).
-The medium level folds into the engine's soft level as `medium x 1e6` (`MEDIUM_SCALE`,
-`kMediumFold` in `cpp/include/ms/domain.hpp`); a medium weight is in medium units.
+(`kDefaultLevel` / `kDefaultWeight`): every constraint is flippable to any of the three
+levels (`level="hard"` / `"medium"` / `"soft"`), none is a reward and all twelve are scored
+by default (`default_enabled`). The medium level folds into the engine's soft level as
+`medium x 1e6` (`MEDIUM_SCALE`, `kMediumFold` in `cpp/include/ms/domain.hpp`); a weight is
+in units of the level in effect, so a medium weight is in medium units.
 
 **0.2.0:** the constraints were renamed (`room_conflict` -> `room_conflict_cost`,
 `avoid_overtime` -> `overtime_cost`, `required_attendance_conflict` ->
@@ -62,6 +63,28 @@ person-grain (was 1e6), `level="soft"` demotes them to soft at 1 per person-grai
 that kept the 1e6), and an explicit `weight` is in medium units. `compute_breakdown()` and the
 `Breakdown` class are gone: `constraint_costs(schedule)` is the per-constraint surface (sum a
 constraint's `costs` for the old totals). Raw costs and the default score are unchanged.
+
+**0.3.0:** every constraint takes two more knobs, `offset` and `clip` (keyword-only), and
+may be picked several times. A raw cost `x` (per cell for the five unit constraints, the
+one total for the seven pair constraints) is shaped as
+`sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
+`(x - offset) ** exponent`, sign-preserving (`clip=False`, which charges every
+(grain, room) cell of a unit constraint, an empty one included, and acts as a reward below
+the offset); `offset=0` is the 0.2.0 shaping. `clip=False` with an offset is refused on
+hard (`OvertimeCost`, `RoomConflictCost` and the other hard constraints by default), because
+hard 0 must mean no violation; it is allowed on medium, which folds into soft. Each pick is
+its own instance with its own knobs, and the instances add up;
+`ms.constraint_costs(schedule, picks)` keys the second pick `"<name>#2"`. The CP-SAT
+reference takes integral offsets on every constraint (see its README).
+
+The `hard` knob is gone in 0.3.0 (`hard=` raises `TypeError`): `level` replaces it, a
+`Level` (`Level.HARD`, `Level.MEDIUM`, `Level.SOFT`, from `meeting_scheduling.constraints`)
+or its name. Medium is no longer a default-only level: any constraint may move onto it,
+`MeetingOverlapCost(level="medium", weight=3)` charges 3 medium units per overlapping grain
+(3e6 soft after the fold). Each repeated pick carries its own level, so one constraint can
+count on two levels at once: `MeetingEndTimeCost()` plus
+`MeetingEndTimeCost(level="hard", offset=4)` also charges, on the hard level, every meeting
+whose last grain index lies beyond 4, by the grains beyond it.
 
 The C++ side builds and tests with:
 
@@ -125,7 +148,7 @@ solver's `solve` before the engine runs — the engine only fills what is still 
 4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
    `description_en` / `description_ko` to `python/meeting_scheduling/constraints.py` (plus
    its module-level default instance); callers then pick, reweight or flip it:
-   `constraints=get_constraints([..., MyRuleCost(weight=5, level="hard")])`;
+   `constraints=[..., MyRuleCost(weight=5, level="hard")]`;
 5. mirror it in the CP-SAT model in
    [`benchmarks/meeting-scheduling/cpsat`](../../benchmarks/meeting-scheduling/cpsat) (a plugin
    subclassing the spec; defaults come from `constraint_info()`) so the benchmark stays like

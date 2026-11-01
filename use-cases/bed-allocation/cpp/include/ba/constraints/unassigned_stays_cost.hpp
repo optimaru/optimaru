@@ -17,7 +17,8 @@ namespace ba
 // engine's soft level as `medium * kMediumUnit` (kMediumFold in domain.hpp),
 // and the decomposed calculator applies that fold, so the component carries
 // no 10^9 factor. hard() makes it 1 hard per night, soft() 1 soft per night
-// (outside the fold), and an explicit weight stays in medium units.
+// (outside the fold), and an explicit weight is in units of the level in
+// effect (medium by default).
 //
 // The only unit this can ever be non-zero for is the sentinel, so it declares
 // that scope and the calculator skips it on every real bed.

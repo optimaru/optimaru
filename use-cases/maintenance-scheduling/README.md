@@ -47,8 +47,9 @@ crewDate = startDateIndex * crewCount + crewIndex     # -1 == unassigned
 | `tag_conflict_cost` | `TagConflictCost` | soft | 1,000 | global total: shared tags x overlapping days summed over job pairs |
 
 The rows are in `list_constraints()` order (the four per-job unit constraints first, the two
-global ones after them). Every constraint is flippable (`level="hard"` / `level="soft"`), none is
-a reward and all six are scored by default (`default_enabled`);
+global ones after them). Every constraint is flippable (`level="hard"` / `level="soft"`, or
+`Level.HARD` / `Level.SOFT`; `level="medium"` raises `ValueError`, the domain has no medium
+level), none is a reward and all six are scored by default (`default_enabled`);
 `maintenance_scheduling.constraint_info()` reports exactly this table from the C++
 components (`kDefaultLevel` / `kDefaultWeight`), and the CP-SAT benchmark reads the same
 rows. `exponent` shapes the date rules per cell and the two global conflict rules on their
@@ -64,6 +65,30 @@ separates the constraint names from the job fields `min_start_date` / `max_end_d
 keep their names. The old names are not accepted any more (no aliases). The defaults are
 declared once, in the C++ components; the CP-SAT plugins no longer restate the 1,000,000 /
 1,000 weights. Raw costs and the default score are unchanged.
+
+**0.3.0:** every constraint takes two more knobs, `offset` and `clip` (keyword-only), and
+may be picked several times. A raw cost `x` (per cell for the four date rules, the single
+total for the two conflict rules — the granularity of `exponent`) is shaped as
+`sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
+`(x - offset) ** exponent`, sign-preserving (`clip=False`, which lowers the penalty of
+every cell below the offset, an empty one included: every crew on every start date);
+`offset=0` is the 0.2.0 shaping. Both apply per cell (or to a conflict rule's one total),
+not to the sum over the cells. `clip=False` with an offset is refused on hard (the two
+start/end date rules and `crew_conflict_cost` by default), because hard 0 must mean no
+violation. Each pick is its own instance with its own knobs, its level included (`level`
+replaced the `hard` knob; `hard=` raises `TypeError`), and the instances add up:
+
+```python
+from maintenance_scheduling.constraints import TagConflictCost, get_constraints
+
+mnt.solve(schedule, constraints=[
+    *get_constraints(),                                  # the defaults
+    TagConflictCost(weight=100, exponent=2, offset=10),  # + 100 x (tag-conflict days beyond 10)^2
+])
+```
+
+`mnt.constraint_costs(schedule, picks)` keys the second pick `tag_conflict_cost#2`. The
+CP-SAT reference takes integral offsets.
 
 Score mapping: the Java original already uses `HardSoftScore`, so it maps 1:1 onto the
 engine's HardSoftScore(int64 hard, double soft), and the soft weights
@@ -169,7 +194,7 @@ solver's `solve` before the engine runs — the engine only fills what is still 
 4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
    `description_en` / `description_ko` to `python/maintenance_scheduling/constraints.py`
    (plus its module-level default instance); callers then pick, reweight or flip it:
-   `constraints=get_constraints([..., MyRuleCost(weight=5, level="hard")])`;
+   `constraints=[..., MyRuleCost(weight=5, level="hard")]`;
 5. mirror it in the CP-SAT model in
    [`benchmarks/maintenance-scheduling/cpsat`](../../benchmarks/maintenance-scheduling/cpsat) (a
    plugin subclassing the spec; defaults come from `constraint_info()`) so the benchmark stays

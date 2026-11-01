@@ -77,11 +77,13 @@ late, when that costs less than waiting.
 | `unassigned_requests_cost` | `UnassignedRequestsCost` | medium | 1 | service minutes (rounded down) of the requests left entirely unrouted |
 
 That is the `list_constraints()` order: the sixteen per-vehicle unit constraints
-(each vehicle, plus the unassigned pool as the last unit), then the four
-request-level globals. `pdp_routing.constraint_info()` reports exactly this table
+(each vehicle, plus the unassigned pool as the last unit; only `required_vehicle_cost`
+and `squared_order_age_cost` price the pool, the others evaluate the vehicles alone),
+then the four request-level globals. `pdp_routing.constraint_info()` reports exactly this table
 from the C++ components (`kDefaultLevel` / `kDefaultWeight`). Every constraint is
-flippable (`level="hard"` / `level="soft"`), none is a reward, and every one at a weight
-above 0 is scored by default (`default_enabled`); the four opt-in objectives
+flippable onto any of the three levels (`level="hard"`, `"medium"` or `"soft"`, or a
+`Level`), none is a reward, and every one at a weight above 0 is scored by default
+(`default_enabled`); the four opt-in objectives
 (weight 0) are measured but move no score until given a weight. The route-policy
 constraints cost 0 while their vehicle field is 0. The seven core rules
 (`vehicle_capacity_cost`, `max_end_time_cost`, the three coupling rules,
@@ -94,7 +96,10 @@ the engine compares `HardSoftScore`, so medium lands in soft as
 `medium * 10^9 + soft`, which keeps the 3-level `Score` lexicographic. Its weight
 is in medium units (default 1, the same as the CP-SAT reference's). `level="hard"`
 charges one hard unit per minute; `level="soft"` one soft unit per minute, in both
-solvers; an explicit weight stays in medium units. `constraint_costs()` carries
+solvers; an explicit weight is in units of the level in effect. Any other constraint
+may move onto medium the same way (`TravelTimeCost(level="medium")` charges one medium
+unit per driving second, in both solvers too), and a repeated pick carries its own
+level. `constraint_costs()` carries
 `"medium_fold": {"kind": "into_soft", "unit": 1e9}` on every entry, so
 `pdp_routing.constraints.score()` folds exactly like the engine. A solve with
 `constraints=` reports `plan.score` and every `on_new_best` score with the three
@@ -105,6 +110,31 @@ level.
 the unit constraints, on the single total for the four globals.
 `squared_order_age_cost` squares per request inside its raw cost, so an exponent
 compounds it (exponent 2 gives a 4th power).
+
+**0.3.0:** every constraint takes two more knobs, `offset` and `clip` (keyword-only), and
+may be picked several times. A raw cost `x` (per vehicle, or a global's total) is shaped
+as `sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
+`(x - offset) ** exponent`, sign-preserving (`clip=False`, which lowers the penalty of
+every evaluated unit below the offset, an idle vehicle included; the unassigned pool is no
+vehicle and only `required_vehicle_cost` and `squared_order_age_cost` evaluate it);
+`offset=0` is the 0.2.0 shaping. Both apply per evaluated unit, not to the total.
+`clip=False` with an offset is refused on hard (by default, every constraint the table
+lists as hard), because hard 0 must mean no violation; medium folds into soft here, so it
+takes the literal formula. Each pick is its own instance with its own knobs, and the
+instances add up:
+
+```python
+from pdp_routing.constraints import TravelTimeCost, get_constraints
+
+pdp.Solver(config).solve_with_constraints(plan, [
+    *get_constraints(),                                        # the defaults
+    TravelTimeCost(weight=0.001, exponent=2, offset=7200),     # + 0.001 x (seconds beyond 2 h)^2
+])
+```
+
+`pdp.constraint_costs(plan, picks)` keys the second pick `travel_time_cost#2`; its
+per-vehicle entries list the vehicles they evaluate as `"units"`. The CP-SAT reference
+takes integral offsets on every plugin; it refuses a non-integral one.
 
 **0.2.0.** Every constraint name ends in `_cost` (C++ struct, header file, registry
 name, Python spec class, module-level default instance and catalog name):
@@ -176,8 +206,8 @@ uses the same weight. `pinned_stops_cost` uses `ScoreCalculator::kPinnedPenalty`
 (1e12), far above what the other hard rules total on real input, so no trade
 between them moves a pinned stop. If a result breaks a pin anyway, its `score`
 shows it in that unit. The CP-SAT reference enforces the three coupling rules
-structurally and refuses `level="soft"` or another weight for them; the engine
-keeps them flippable.
+structurally and refuses any level but hard (`level="medium"` or `"soft"`) or another
+weight for them; the engine keeps them flippable.
 
 ## Why the pair-aware operators exist
 
@@ -327,7 +357,7 @@ enclosing-circle helpers in `route_geometry.hpp`):
 4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
    `description_en` / `description_ko` to `python/pdp_routing/constraints.py` (plus its
    module-level default instance); callers then pick, reweight or flip it:
-   `constraints=get_constraints([..., MyRuleCost(weight=5, level="hard")])`;
+   `constraints=[..., MyRuleCost(weight=5, level="hard")]`;
 5. mirror it in the CP-SAT model in
    [`benchmarks/pickup-delivery/cpsat`](../../benchmarks/pickup-delivery/cpsat) (a plugin
    subclassing the spec; defaults come from `constraint_info()`) so the benchmark stays like

@@ -24,10 +24,11 @@ with optional item colours and conflict pairs, on this repository's C++ engine
 | `item_conflict_cost` | `ItemConflictCost` | hard | 1 | per bin: the listed conflict pairs with both items in it |
 | `used_bins_cost` | `UsedBinsCost` (global) | soft | 1 | the number of bins holding at least one item |
 
-Every constraint is flippable (`level="hard"` / `level="soft"`), none is a reward and all
-four are scored by default (`default_enabled`); `bin_packing.constraint_info()`
-reports exactly this table from the C++ components (`kDefaultLevel` /
-`kDefaultWeight`). Unassigned items contribute nothing.
+Every constraint is flippable (`level="hard"` / `level="soft"`, or `Level.HARD` /
+`Level.SOFT`; `level="medium"` raises `ValueError`, the domain has no medium level), none
+is a reward and all four are scored by default (`default_enabled`);
+`bin_packing.constraint_info()` reports exactly this table from the C++ components
+(`kDefaultLevel` / `kDefaultWeight`). Unassigned items contribute nothing.
 
 ### 0.2.0
 
@@ -88,6 +89,33 @@ reports exactly this table from the C++ components (`kDefaultLevel` /
   `problem.set_assignment([...])`; `problem.assignment()` reads them. `Score` keeps
   `==`, ordering and hashing; its repr is `<Score 0hard/-2soft>`. `problem.score` is
   read-only (set by `calculate_score` / `solve`); `Item` objects compare by identity.
+
+### 0.3.0
+
+Every constraint takes two more knobs, `offset` and `clip` (keyword-only), and may be
+picked several times. A raw cost `x` (per bin for the three per-bin constraints, the bin
+count for `used_bins_cost` — the granularity of `exponent`) is shaped as
+`sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
+`(x - offset) ** exponent`, sign-preserving (`clip=False`, which lowers the penalty of
+every bin 0..n-1 below the offset, an empty one included); `offset=0` is the 0.2.0
+shaping. Both apply per bin (or to the bin count), not to the sum over the bins.
+`clip=False` with an offset is refused on hard (the three per-bin constraints by default),
+because hard 0 must mean no violation. Each pick is its own instance with its own knobs,
+its level included (`level` replaced the `hard` knob; `hard=` raises `TypeError`), and the
+instances add up:
+
+```python
+from bin_packing.constraints import UsedBinsCost, get_constraints
+
+bp.solve(problem, constraints=[
+    *get_constraints(),                    # the defaults
+    UsedBinsCost(weight=100, offset=10),   # + 100 per bin beyond the tenth
+])
+```
+
+`bp.constraint_costs(problem, picks)` and `bp.calculate_score(problem, picks)` take the
+same picks (the second keyed `used_bins_cost#2`); only `constraints=None` uses the
+monolithic calculator. The CP-SAT reference takes integral offsets.
 
 ## cpp/
 
@@ -197,6 +225,7 @@ bp.constraint_info()                    # the catalog: name, default level / wei
 bp.solve(problem, time_limit_seconds=1.0, constraints=[*get_constraints()[:3], UsedBinsCost(weight=2)])
 raw = bp.constraint_costs(problem)      # raw per-bin costs, re-priced in pure Python
 score(raw), score(raw, [UsedBinsCost(exponent=2.0)])
+score(raw, [UsedBinsCost(), UsedBinsCost(weight=100, offset=10)])   # a repeat, shifted
 ```
 
 The JSON contract is `bin_packing.models` (`BinPackingProblemModel.model_validate(...)
@@ -261,7 +290,7 @@ different heuristic is a different `constructBins` order or rule.
 4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
    `description_en` / `description_ko` to `python/bin_packing/constraints.py` (plus its
    module-level default instance); callers then pick, reweight or flip it:
-   `constraints=get_constraints([..., MyRuleCost(weight=5, level="hard")])`;
+   `constraints=[..., MyRuleCost(weight=5, level="hard")]`;
 5. mirror it in the CP-SAT model in
    [`benchmarks/bin-packing/cpsat`](../../benchmarks/bin-packing/cpsat) (a plugin
    subclassing the spec; defaults come from `constraint_info()`) and extend its

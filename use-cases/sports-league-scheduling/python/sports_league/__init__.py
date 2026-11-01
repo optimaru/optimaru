@@ -92,8 +92,9 @@ def solve(
     (best_score_limit=(0, -inf)).
 
     ``constraints`` picks the cost function directly
-    (see `sports_league.constraints`). Only the listed constraints are scored; None
-    uses all ten default constraints at their default weights::
+    (see `sports_league.constraints`). Only the listed constraints are scored, a name
+    picked several times once per pick; None uses all ten default constraints at their
+    default weights::
 
         from sports_league.constraints import get_constraints
         sl.solve(schedule, constraints=get_constraints())

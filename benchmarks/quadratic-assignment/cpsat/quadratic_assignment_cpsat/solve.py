@@ -20,7 +20,7 @@ from quadratic_assignment import calculate_score, constraint_costs
 from quadratic_assignment.constraints import Constraint
 from quadratic_assignment.models import QuadraticAssignmentProblemModel
 
-from .constraints import REGISTRY, QapContext
+from .constraints import REGISTRY, QapContext, refuse_signed_objectives
 
 __all__ = ["Built", "build", "catalog", "solve"]
 
@@ -62,6 +62,7 @@ def build(
     # Default weights and levels come from the engine (constraint_info()); the
     # canonical problem carries none.
     objective = REGISTRY.objective(model, ("hard", "soft"), constraints)
+    refuse_signed_objectives(objective, problem)
     REGISTRY.build(context, objective)
     return Built(model, context, objective)
 

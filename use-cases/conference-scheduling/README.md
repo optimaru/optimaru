@@ -89,6 +89,33 @@ the Python `Breakdown` class are gone: `constraint_costs(schedule)` is the one
 per-constraint surface (each reward reported negated, as its raw cost <= 0), and
 `constraint_info()` is the catalog. Raw costs and the default score are unchanged.
 
+**0.3.0:** every constraint takes two more knobs, `offset` and `clip` (keyword-only), and
+may be picked several times. Each constraint's one total `x` is shaped as
+`sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
+`(x - offset) ** exponent`, sign-preserving (`clip=False`, which charges a total of 0 as
+well and acts as a reward below the offset); `offset=0` is the 0.2.0 shaping. `clip=False`
+with an offset is refused on hard (`RoomConflictCost` and the other hard constraints by
+default), because hard 0 must mean no violation. Each pick is its own instance with its own
+knobs, and the instances add up:
+
+```python
+cs.solve(schedule, constraints=[
+    *get_constraints(),                                   # the 37 defaults
+    ContentConflictCost(weight=1, exponent=2, offset=60), # + (content-conflict minutes beyond 60)^2
+])
+```
+
+`cs.constraint_costs(schedule, picks)` keys the second pick `content_conflict_cost#2`. The
+CP-SAT reference adds each plugin's terms as the one total the engine shapes, so it takes
+integral offsets on every constraint.
+
+The `hard` knob is gone in 0.3.0 (`hard=` raises `TypeError`): `level` replaces it, a
+`Level` (`Level.HARD`, `Level.SOFT`, from `conference_scheduling.constraints`) or its name.
+Each repeated pick carries its own level, so `RoomConflictCost()` and
+`RoomConflictCost(level="soft", offset=10)` charge the same room conflict once hard and once
+soft beyond ten minutes. This use case has no medium level: `level="medium"` raises
+`ValueError` before the solve starts, on both solvers and in `score()`.
+
 ## Quality benchmark and solver defaults (2026-08)
 
 `cpp/bench/quality_bench.cpp` (`cs_quality_bench <demo|scaled:N> <seed> <seconds>

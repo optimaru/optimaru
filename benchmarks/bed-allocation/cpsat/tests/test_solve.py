@@ -1,9 +1,18 @@
 from datetime import date
+from itertools import product
 
 import pytest
+from ortools.sat.python import cp_model
 
 import bed_allocation as domain
 from bed_allocation.constraints import (
+    BedConflictCost,
+    DepartmentMaxAgeCost,
+    DepartmentSpecialtyPriorityCost,
+    Level,
+    MixedGenderRoomCost,
+    PreferredMaxRoomCapacityCost,
+    PreferredPatientEquipmentCost,
     UnassignedStaysCost,
     bed_conflict_cost,
     get_constraints,
@@ -17,6 +26,7 @@ from bed_allocation.models import (
     StayModel,
 )
 from bed_allocation_cpsat import catalog, solve
+from bed_allocation_cpsat.solve import build_model
 from bed_allocation import calculate_score
 
 MEDIUM_UNIT = 1_000_000_000  # the domain's medium fold (into soft)
@@ -207,7 +217,13 @@ def test_cpsat_defaults_are_the_engine_defaults() -> None:
         assert entry["reward"] == row.reward
         assert entry["default_enabled"] == row.default_enabled
         assert entry["kind"] == "either"  # every bed-allocation constraint is flippable
-        assert entry["params"] == {"weight": None, "level": None, "exponent": 1.0}
+        assert entry["params"] == {
+            "weight": None,
+            "level": None,
+            "exponent": 1.0,
+            "offset": 0.0,
+            "clip": True,
+        }
     # The medium constraint: weight 1 in medium units on both solvers (the engine
     # used to carry 10^9 as a soft weight).
     assert engine["unassigned_stays_cost"].default_level == "medium"
@@ -273,3 +289,272 @@ def test_promoting_the_medium_constraint_scores_like_the_engine() -> None:
     solved = solve(_crowded_problem(), time_limit_seconds=2, constraints=selection)
     assert (solved.score_hard, solved.score_medium, solved.score_soft) == (-2, 0, 0)
     assert _engine_score(solved, selection) == (solved.score_hard, solved.score_soft)
+
+
+# --- 0.3.0: repeated picks and offset / clip ---------------------------------------
+
+
+def _tiny_problem() -> BedPlanModel:
+    """Two beds in one SAME_GENDER room and three overlapping stays: 27 assignments.
+
+    Every constraint family shows up somewhere: a too-old man in a department with a
+    maximum age, a woman preferring a single room and missing equipment, a specialty at
+    priority 2, mixed genders, shared beds and stays without a bed."""
+    return BedPlanModel(
+        departments=[
+            DepartmentModel(id="d", specialty_to_priority={"cardio": 2}, maximum_age=65)
+        ],
+        rooms=[
+            RoomModel(
+                id="same",
+                department_id="d",
+                capacity=2,
+                gender_limitation="SAME_GENDER",
+                equipment=["telemetry"],
+            )
+        ],
+        beds=[BedModel(id="b0", room_id="same"), BedModel(id="b1", room_id="same")],
+        stays=[
+            StayModel(
+                id="a",
+                patient_gender="FEMALE",
+                patient_age=30,
+                patient_preferred_maximum_room_capacity=1,
+                patient_preferred_equipment=["television", "telemetry"],
+                arrival_date=date(2026, 1, 1),
+                departure_date=date(2026, 1, 3),
+                specialty="cardio",
+            ),
+            StayModel(
+                id="b",
+                patient_gender="MALE",
+                patient_age=80,
+                arrival_date=date(2026, 1, 2),
+                departure_date=date(2026, 1, 3),
+                specialty="cardio",
+            ),
+            StayModel(
+                id="c",
+                patient_gender="FEMALE",
+                patient_age=30,
+                arrival_date=date(2026, 1, 1),
+                departure_date=date(2026, 1, 1),
+                specialty="other",
+            ),
+        ],
+    )
+
+
+SELECTIONS = {
+    "repeat": [
+        BedConflictCost(),
+        UnassignedStaysCost(),
+        PreferredMaxRoomCapacityCost(),
+        PreferredMaxRoomCapacityCost(weight=2, offset=1),
+        MixedGenderRoomCost(),
+    ],
+    "repeat-literal": [
+        BedConflictCost(),
+        MixedGenderRoomCost(),
+        # The literal formula with an offset is refused on hard; its copy sits on soft.
+        MixedGenderRoomCost(level="soft", weight=3, offset=1, clip=False),
+        UnassignedStaysCost(offset=3, clip=False),
+        DepartmentSpecialtyPriorityCost(offset=-1),
+        PreferredPatientEquipmentCost(offset=1, clip=False),
+    ],
+    "hard-offsets": [
+        BedConflictCost(offset=1),
+        # Hard takes thresholds only; the literal copies of the hard constraints sit on soft.
+        BedConflictCost(level="soft", weight=2, offset=2, clip=False),
+        DepartmentMaxAgeCost(offset=-3),
+        DepartmentMaxAgeCost(level="soft", offset=-3, clip=False),
+        UnassignedStaysCost(level="hard", offset=1),
+    ],
+    "identical-twice": [
+        UnassignedStaysCost(),
+        UnassignedStaysCost(),
+        BedConflictCost(),
+    ],
+    # Each pick on its own level: the preferred capacity on medium and, beyond one night,
+    # on hard; the nights without a bed on medium and again on soft (literal); the mixed
+    # gender total on medium with a literal offset; the age limit demoted to soft.
+    "levels": [
+        BedConflictCost(),
+        UnassignedStaysCost(),
+        UnassignedStaysCost(level="soft", weight=2, offset=1, clip=False),
+        PreferredMaxRoomCapacityCost(level=Level.MEDIUM),
+        PreferredMaxRoomCapacityCost(level="hard", offset=1),
+        MixedGenderRoomCost(level="medium", offset=1, clip=False),
+        DepartmentMaxAgeCost(level=Level.SOFT),
+    ],
+}
+
+
+def _folded(levels) -> tuple[int, float]:
+    """(hard, medium, soft) -> the engine-level (hard, medium * 10^9 + soft)."""
+    return levels["hard"], levels["medium"] * MEDIUM_UNIT + levels["soft"]
+
+
+def _engine_solve(core, selection) -> tuple[int, float]:
+    """The engine's own score of `core`'s assignment under `selection`: a solve with no
+    time keeps the assignment as it is."""
+    kept = core.assignment()
+    config = domain.SolverConfig()
+    config.spent_limit_seconds = 0
+    domain.Solver(config).solve_with_constraints(core, selection)
+    assert core.assignment() == kept
+    return core.score.hard, core.score.medium * MEDIUM_UNIT + core.score.soft
+
+
+def _assignments(problem):
+    values = len(problem.beds) + 1  # the beds, then the "no bed" sentinel
+    for assignment in product(range(values), repeat=len(problem.stays)):
+        core = problem.to_core()
+        core.set_assignment(list(assignment))
+        yield list(assignment), core
+
+
+@pytest.mark.parametrize("selection", list(SELECTIONS.values()), ids=list(SELECTIONS))
+def test_the_cpsat_terms_equal_the_engine_on_every_assignment(selection) -> None:
+    """Pin each of the 27 assignments: the CP-SAT objective's per-level value is the
+    engine's score of that assignment under the same repeated / shifted picks (its own
+    and the score() mirror's), exactly."""
+    problem = _tiny_problem()
+    for assignment, core in _assignments(problem):
+        model, _x, objective = build_model(problem, selection, _fixed_beds=assignment)
+        objective.minimize()
+        solver = cp_model.CpSolver()
+        assert solver.solve(model) == cp_model.OPTIMAL
+        engine = score(domain.constraint_costs(core, selection), selection)
+        assert _engine_solve(core, selection) == tuple(engine), assignment
+        assert _folded(objective.score(solver)) == tuple(engine), assignment
+        # Re-pricing the default costs (each name once) gives the same per instance key.
+        assert _folded(objective.score_costs(domain.constraint_costs(core))) == tuple(
+            engine
+        )
+
+
+@pytest.mark.parametrize("selection", list(SELECTIONS.values()), ids=list(SELECTIONS))
+def test_repeated_and_shifted_picks_reach_the_brute_force_optimum(selection) -> None:
+    problem = _tiny_problem()
+    best = max(
+        tuple(score(domain.constraint_costs(core, selection), selection))
+        for _, core in _assignments(problem)
+    )
+    solved = solve(problem, time_limit_seconds=5, constraints=selection)
+    reported = (
+        solved.score_hard,
+        solved.score_medium * MEDIUM_UNIT + solved.score_soft,
+    )
+    assert reported == pytest.approx(best)
+    assert _engine_score(solved, selection) == pytest.approx(reported)
+
+
+def test_mapping_selections_repeat_and_shift_like_specs() -> None:
+    """The server's {name, weight, offset, clip} dicts pick the same instances as specs."""
+    specs = [
+        BedConflictCost(),
+        UnassignedStaysCost(),
+        UnassignedStaysCost(weight=3, offset=1, clip=False),
+    ]
+    dicts = [
+        {"name": "bed_conflict_cost"},
+        {"name": "unassigned_stays_cost"},
+        {"name": "unassigned_stays_cost", "weight": 3, "offset": 1, "clip": False},
+    ]
+    problem = _tiny_problem()
+    assert solve(problem, time_limit_seconds=5, constraints=dicts) == solve(
+        problem, time_limit_seconds=5, constraints=specs
+    )
+
+
+def test_a_fractional_offset_is_refused_by_cpsat() -> None:
+    with pytest.raises(ValueError, match="offset must be an integer for CP-SAT"):
+        solve(
+            _tiny_problem(),
+            time_limit_seconds=1,
+            constraints=[UnassignedStaysCost(offset=0.5)],
+        )
+
+
+# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+
+HARD_REFUSAL = (
+    "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
+    "violation; use clip=True (a threshold) or another level"
+)
+
+
+@pytest.mark.parametrize("offset", [2, -2])
+@pytest.mark.parametrize(
+    "selection",
+    [
+        lambda offset: BedConflictCost(
+            offset=offset, clip=False
+        ),  # the default level, hard
+        lambda offset: {"name": "bed_conflict_cost", "offset": offset, "clip": False},
+        lambda offset: MixedGenderRoomCost(
+            offset=offset, clip=False
+        ),  # the global, hard
+        lambda offset: UnassignedStaysCost(level="hard", offset=offset, clip=False),
+        lambda offset: {
+            "name": "preferred_max_room_capacity_cost",
+            "level": "hard",
+            "offset": offset,
+            "clip": False,
+        },
+    ],
+    ids=[
+        "bed-conflict-spec",
+        "bed-conflict-mapping",
+        "mixed-gender-spec",
+        "unassigned-moved-to-hard",
+        "capacity-mapping-moved-to-hard",
+    ],
+)
+def test_the_literal_offset_is_refused_on_hard_like_the_engine(
+    selection, offset
+) -> None:
+    """The CP-SAT reference refuses the pick with the engine's and score()'s message."""
+    pick = selection(offset)
+    name = pick["name"] if isinstance(pick, dict) else pick.name
+    message = HARD_REFUSAL.format(q=repr(name))
+    for picks in ([pick], [BedConflictCost(), UnassignedStaysCost(), pick]):
+        with pytest.raises(ValueError) as refused:
+            solve(_tiny_problem(), time_limit_seconds=1, constraints=picks)
+        assert str(refused.value) == message
+        with pytest.raises(ValueError) as refused:
+            build_model(_tiny_problem(), picks)
+        assert str(refused.value) == message
+    if not isinstance(pick, dict):
+        # The engine and the score() mirror say the same.
+        core = _tiny_problem().to_core()
+        with pytest.raises(ValueError) as refused:
+            domain.constraint_costs(core, [pick])
+        assert str(refused.value) == message
+        with pytest.raises(ValueError) as refused:
+            score(domain.constraint_costs(core), [pick])
+        assert str(refused.value) == message
+
+
+@pytest.mark.parametrize("offset", [2, -2])
+def test_the_same_literal_pick_on_soft_is_accepted(offset) -> None:
+    """On soft, and on medium (it folds into soft here), the literal pick reaches the
+    brute-force optimum like the engine scores it."""
+    for level in ("soft", "medium"):
+        picks = [
+            BedConflictCost(),
+            UnassignedStaysCost(),
+            BedConflictCost(level=level, offset=offset, clip=False),
+        ]
+        problem = _tiny_problem()
+        best = max(
+            tuple(score(domain.constraint_costs(core, picks), picks))
+            for _, core in _assignments(problem)
+        )
+        solved = solve(problem, time_limit_seconds=5, constraints=picks)
+        reported = (
+            solved.score_hard,
+            solved.score_medium * MEDIUM_UNIT + solved.score_soft,
+        )
+        assert reported == pytest.approx(best)

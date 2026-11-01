@@ -10,12 +10,12 @@ namespace vrp {
 // visits of max(0, arrival time - vehicle departure time), in seconds; 0 = an
 // unused vehicle (and the pool list). Give it a weight to serve visits early
 // in the route.
-struct LatencyCost final : VrpUnitConstraint {
+struct LatencyCost final : detail::PerVehicleConstraint {
     static constexpr double kDefaultWeight = 0.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
 
     explicit LatencyCost(double weight = kDefaultWeight)
-        : VrpUnitConstraint("latencyCost", weight, kDefaultLevel) {}
+        : PerVehicleConstraint("latencyCost", weight, kDefaultLevel) {}
     double cost(const VehicleRoutePlan& p, int u, const std::vector<int>& m) const override {
         if (detail::isPool(p, u)) return 0;
         return static_cast<double>(detail::routeMetrics(p, u, m).latency);
