@@ -2,7 +2,7 @@
 
 Spot checks of individual constraint values live in `test_constraints.py`. This
 file covers the selection path that picks "which constraints are on", the five knobs
-and repeated picks.
+(the level included) and repeated picks.
 """
 
 import pickle
@@ -12,12 +12,14 @@ from types import SimpleNamespace
 import pytest
 
 import flight_crew as fc
+from flight_crew._constraint import instance_keys
 from flight_crew.constraints import (
     Constraint,
     EmployeeUnavailabilityCost,
     FirstAssignmentNotDepartingFromHomeCost,
     FlightConflictCost,
     LastAssignmentNotArrivingAtHomeCost,
+    Level,
     RequiredSkillCost,
     TransferBetweenTwoFlightsCost,
     employee_unavailability_cost,
@@ -659,3 +661,64 @@ def test_full_assert_solves_with_repeats_and_offsets(picks):
     assert python.hard == schedule.score.hard
     assert python.soft == pytest.approx(schedule.score.soft)
     assert score(fc.constraint_costs(schedule), picks) == python  # the default costs score the repeats too
+
+
+# --- Levels: hard and soft, each pick (a repeat included) on the level it names ------
+
+
+@pytest.mark.parametrize(
+    ("picks", "expected"),
+    [
+        ([RequiredSkillCost(level="soft")], (0, -100.0)),
+        ([FlightConflictCost(level=Level.SOFT)], (0, -10.0)),
+        ([LastAssignmentNotArrivingAtHomeCost(level=Level.HARD, weight=2)], (-4, 0.0)),
+        ([EmployeeUnavailabilityCost(level="hard")], (-20, 0.0)),  # the default level, named
+        # A repeat carries its own level and shaping: the hard default, soft the seats beyond
+        # one per employee (2 - 1), and soft 3 x (x - 1) per employee: 3 x (-1 + 1 - 1) = -3.
+        (
+            [
+                EmployeeUnavailabilityCost(),
+                EmployeeUnavailabilityCost(level="soft", weight=1, offset=1),
+                EmployeeUnavailabilityCost(level="soft", weight=3, offset=1, clip=False),
+            ],
+            (-20, 2.0),
+        ),
+    ],
+)
+def test_levels_by_hand_on_both_paths(picks, expected):
+    """A pick's level moves its term, with the weight in units of that level: engine == mirror == hand."""
+    assert score(fc.constraint_costs(_hand_schedule()), picks) == expected
+    raw = fc.constraint_costs(_hand_schedule(), picks)
+    for pick, key in zip(picks, instance_keys(picks)):
+        assert raw[key]["level"] == (pick.level or raw[key]["default_level"]), key
+    assert score(raw, picks) == expected
+    assert _zero_budget(picks) == expected
+
+
+@pytest.mark.parametrize("level", ["medium", Level.MEDIUM])
+def test_medium_is_refused_without_a_medium_level(level):
+    """The domain has no medium level: every path refuses the pick before scoring, a repeat too."""
+    message = "constraint 'flight_conflict_cost': this use case has no medium level"
+    pick = FlightConflictCost(level=level)  # the spec cannot know the domain
+    for picks in ([pick], [FlightConflictCost(), pick]):
+        with pytest.raises(ValueError, match=message):
+            _zero_budget(picks)
+        with pytest.raises(ValueError, match=message):
+            fc.constraint_costs(_hand_schedule(), picks)
+        with pytest.raises(ValueError, match=message):
+            score(fc.constraint_costs(_hand_schedule()), picks)
+
+
+def test_a_level_must_be_a_level():
+    with pytest.raises(TypeError, match="level must be a Level"):
+        FlightConflictCost(level=False)
+    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft', not 'firm'"):
+        FlightConflictCost(level="firm")
+    pick = SimpleNamespace(name="flight_conflict_cost", weight=None, level="firm", exponent=1.0)
+    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft', not 'firm'"):
+        _zero_budget([FlightConflictCost(), pick])
+
+
+def test_the_knob_was_renamed():
+    with pytest.raises(TypeError):
+        FlightConflictCost(hard=True)

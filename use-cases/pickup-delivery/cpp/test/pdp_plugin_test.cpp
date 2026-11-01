@@ -768,6 +768,20 @@ void verifyMediumLevel()
         check(levels.hard == 0 && levels.medium == -6.0 && levels.soft == -200.0,
               "weight 3 stays in medium units");
     }
+    {
+        const auto levels = levelsWith(
+            defaultConstraints().level("travelTimeCost", optimaru::Level::Medium), plan);
+        check(levels.hard == 0 && levels.medium == -202.0 && levels.soft == 0.0,
+              "level(Medium): travelTimeCost moves onto medium, one medium unit per second");
+    }
+    {
+        const auto levels = levelsWith(defaultConstraints()
+                                           .level("travelTimeCost", optimaru::Level::Medium)
+                                           .weight("travelTimeCost", 0.5),
+                                       plan);
+        check(levels.hard == 0 && levels.medium == -102.0 && levels.soft == 0.0,
+              "a weight on a moved constraint is in medium units");
+    }
     std::printf("\n");
 }
 
@@ -784,6 +798,10 @@ void verifyMediumIncremental()
             {"soft", [] { return defaultConstraints().soft("unassignedRequestsCost"); }},
             {"weight 3",
              [] { return defaultConstraints().weight("unassignedRequestsCost", 3); }},
+            {"with travelTimeCost on medium",
+             [] {
+                 return defaultConstraints().level("travelTimeCost", optimaru::Level::Medium);
+             }},
         };
     using Descriptor = optimaru::SolutionDescriptor<PdpRoutePlan>;
     for (const auto &variant : variants)
@@ -830,7 +848,7 @@ void verifyMediumIncremental()
         check(mismatches == 0,
               "unassignedRequestsCost " + variant.first
                   + ": 600 random list moves, incremental == full recompute");
-        if (variant.first == "default" || variant.first == "weight 3")
+        if (variant.first != "hard" && variant.first != "soft")
             check(mediumSteps > 0, variant.first + ": the walk visits medium states");
     }
     std::printf("\n");

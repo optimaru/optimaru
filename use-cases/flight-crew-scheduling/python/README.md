@@ -75,8 +75,9 @@ for a in result.flight_assignments:
 
 The score is the original `HardSoftScore` as-is (no level folding). `fc.constraint_info()`
 reports this catalog (`ConstraintInfo(name, default_level, default_weight, level_flippable,
-reward, default_enabled)`) straight from the C++ components; every constraint is flippable,
-none is a reward, all six are on by default.
+reward, default_enabled)`) straight from the C++ components; every constraint is flippable
+between hard and soft (`level="medium"` raises `ValueError`: there is no medium level), none
+is a reward, all six are on by default.
 
 Pick, re-weight or flip constraints with the specs in `flight_crew.constraints`; each takes
 `(weight=None, level=None, exponent=1.0)` (`None` = the C++ default) and the keyword-only

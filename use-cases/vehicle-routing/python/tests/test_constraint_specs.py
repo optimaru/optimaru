@@ -13,6 +13,7 @@ import pytest
 
 import vrp_routing as vrp
 from vrp_routing import constraints as specs
+from vrp_routing._constraint import instance_keys
 from vrp_routing.constraints import (
     Constraint,
     EnclosingCircleRadiusCost,
@@ -853,3 +854,46 @@ def test_naming_a_constraint_twice_scores_both_picks():
     assert get_constraints([TravelTimeCost(), TravelTimeCost()]) == [TravelTimeCost(), TravelTimeCost()]
     picks = [VehicleCapacityCost(), TravelTimeCost(weight=10), TravelTimeCost()]
     assert _zero_budget(picks) == (-1, -(10 + 1) * 900.0)
+
+
+# --- Levels: each pick, a repeat included, on the level it names --------------------
+
+
+@pytest.mark.parametrize(
+    ("picks", "expected"),
+    [
+        ([TravelTimeCost(level="medium")], (0, -900 * MEDIUM_UNIT)),
+        ([TravelTimeCost(level=Level.HARD)], (-900, 0.0)),
+        ([VehicleCapacityCost(level=Level.MEDIUM, weight=3)], (0, -3 * MEDIUM_UNIT)),  # weight in medium units
+        ([VehicleCapacityCost(level="soft")], (0, -1.0)),
+        ([UnassignedVisitsCost(level=Level.SOFT, weight=2)], (0, -16.0)),
+        ([UnassignedVisitsCost(level="hard", offset=5)], (-3, 0.0)),
+        # A repeat carries its own level and shaping: soft travel, medium beyond 400 s,
+        # and hard 2 x (x - 400) per vehicle: 2 x (-100 + 200 - 400) = -600, a hard reward.
+        (
+            [
+                TravelTimeCost(),
+                TravelTimeCost(level="medium", offset=400),
+                TravelTimeCost(level="hard", weight=2, offset=400, clip=False),
+            ],
+            (600, -900 - 200 * MEDIUM_UNIT),
+        ),
+    ],
+)
+def test_levels_by_hand_on_both_paths(picks, expected):
+    """A pick's level moves its term, with the weight in units of that level: engine == mirror == hand."""
+    assert score(vrp.constraint_costs(_hand_plan()), picks) == expected
+    raw = vrp.constraint_costs(_hand_plan(), picks)
+    for pick, key in zip(picks, instance_keys(picks)):
+        assert raw[key]["level"] == (pick.level or raw[key]["default_level"]), key
+    assert score(raw, picks) == expected
+    assert _zero_budget(picks) == expected
+
+
+def test_a_repeat_is_checked_on_its_own_level():
+    """The second pick's level is read and checked like the first's, on both paths."""
+    pick = SimpleNamespace(name="travel_time_cost", weight=None, level="firm", exponent=1.0)
+    with pytest.raises(ValueError, match="constraint 'travel_time_cost': level must be 'hard', 'medium' or 'soft'"):
+        _zero_budget([TravelTimeCost(), pick])
+    with pytest.raises(ValueError, match="constraint 'travel_time_cost': level must be 'hard', 'medium' or 'soft'"):
+        score(vrp.constraint_costs(_hand_plan()), [TravelTimeCost(), pick])

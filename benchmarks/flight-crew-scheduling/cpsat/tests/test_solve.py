@@ -9,6 +9,7 @@ from flight_crew.constraints import (
     FirstAssignmentNotDepartingFromHomeCost,
     FlightConflictCost,
     LastAssignmentNotArrivingAtHomeCost,
+    Level,
     RequiredSkillCost,
     TransferBetweenTwoFlightsCost,
     get_constraints,
@@ -229,22 +230,47 @@ SELECTIONS = {
         RequiredSkillCost(),
         LastAssignmentNotArrivingAtHomeCost(),
     ],
+    # Each pick on its own level: a soft literal skill term next to the hard default,
+    # the conflicts on soft, and the last landing once more on hard, where a negative
+    # offset adds one to every employee who lands away from home.
+    "levels": [
+        RequiredSkillCost(),
+        RequiredSkillCost(level="soft", weight=7, offset=1, clip=False),
+        FlightConflictCost(level=Level.SOFT, weight=4),
+        LastAssignmentNotArrivingAtHomeCost(),
+        LastAssignmentNotArrivingAtHomeCost(level="hard", weight=2, offset=-1),
+    ],
 }
 
 
-def _engine_of(problem, fixed, selection):
+def _assigned_core(problem, fixed):
     candidate = problem.model_copy(deep=True)
     for assignment, employee in zip(candidate.flight_assignments, fixed, strict=True):
         assignment.employee = candidate.employees[employee].id
-    core = candidate.to_core()
+    return candidate.to_core()
+
+
+def _engine_of(problem, fixed, selection):
+    """The Python score() mirror of the assignment under `selection`."""
+    core = _assigned_core(problem, fixed)
     return tuple(score(domain.constraint_costs(core, selection), selection))
+
+
+def _engine_solve(problem, fixed, selection):
+    """The engine's own score of the assignment under `selection`: a solve with no time keeps it."""
+    core = _assigned_core(problem, fixed)
+    kept = core.assignment()
+    domain.solve(core, time_limit_seconds=0, random_seed=1, constraints=selection)
+    assert core.assignment() == kept
+    return core.score.hard, core.score.soft
 
 
 @pytest.mark.parametrize("selection", list(SELECTIONS.values()), ids=list(SELECTIONS))
 def test_the_cpsat_terms_equal_the_engine_on_every_assignment(selection) -> None:
     """Pin each of the 27 assignments: the CP-SAT objective's own levels are the engine's
-    score under the same repeated / shifted picks, exactly; the reported score re-prices
-    the default costs (each name once) to the same value."""
+    score under the same repeated / shifted picks (its own and the score() mirror's),
+    exactly; the reported score re-prices the default costs (each name once) to the same
+    value."""
     problem = _three_employees()
     for fixed in product(range(3), repeat=3):
         proxy: dict[str, int] = {}
@@ -256,6 +282,7 @@ def test_the_cpsat_terms_equal_the_engine_on_every_assignment(selection) -> None
             _proxy_score=proxy,
         )
         engine = _engine_of(problem, fixed, selection)
+        assert _engine_solve(problem, fixed, selection) == engine, fixed
         assert (proxy["hard"], proxy["soft"]) == engine, fixed
         assert (solved.score_hard, solved.score_soft) == engine, fixed
 
@@ -290,3 +317,21 @@ def test_a_fractional_offset_is_refused_by_cpsat() -> None:
             time_limit_seconds=1,
             constraints=[RequiredSkillCost(offset=0.5)],
         )
+
+
+@pytest.mark.parametrize("level", ["medium", Level.MEDIUM])
+def test_medium_is_refused_like_the_engine(level) -> None:
+    """The domain has no medium level: CP-SAT refuses the pick as the engine does, a repeat too."""
+    message = "constraint 'flight_conflict_cost': this use case has no medium level"
+    for selection in (
+        [FlightConflictCost(level=level)],
+        [FlightConflictCost(), FlightConflictCost(level=level)],
+    ):
+        with pytest.raises(ValueError, match=message):
+            solve(_three_employees(), time_limit_seconds=1, constraints=selection)
+        with pytest.raises(ValueError, match=message):
+            domain.solve(
+                _three_employees().to_core(),
+                time_limit_seconds=0,
+                constraints=selection,
+            )

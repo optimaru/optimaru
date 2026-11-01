@@ -28,7 +28,7 @@ Every spec takes five knobs:
                ``op.constraint_info()`` reports the defaults.
 - ``level``    ``None`` = the default level, otherwise ``Level.HARD`` or
                ``Level.SOFT`` (or the names ``"hard"`` and ``"soft"``). This use
-               case has no medium level.
+               case has no medium level: ``level="medium"`` raises ValueError.
 - ``exponent`` sign-preserving power shaping per trolley: ``weight * sign(c) *
                |c| ** exponent``. 2.0 = squared, so concentrated violations grow
                much costlier.

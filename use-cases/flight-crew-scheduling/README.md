@@ -19,9 +19,11 @@ level). The default weights are exactly those of the Java `ConstraintProvider`:
 | `first_assignment_not_departing_from_home_cost` | `FirstAssignmentNotDepartingFromHomeCost` | soft | 1000 | earliest-departure assignments (ties all count) not leaving from home |
 | `last_assignment_not_arriving_at_home_cost` | `LastAssignmentNotArrivingAtHomeCost` | soft | 1000 | latest-departure assignments (ties all count) not landing at home |
 
-Every constraint is flippable (`level="hard"` / `level="soft"`), none is a reward and all six
-are scored by default (`default_enabled`); `flight_crew.constraint_info()` reports exactly
-this table from the C++ components (`kDefaultLevel` / `kDefaultWeight`). All six are unit
+Every constraint is flippable (`level="hard"` / `level="soft"`, or `Level.HARD` /
+`Level.SOFT`; `level="medium"` raises `ValueError`, the domain has no medium level), none
+is a reward and all six are scored by default (`default_enabled`);
+`flight_crew.constraint_info()` reports exactly this table from the C++ components
+(`kDefaultLevel` / `kDefaultWeight`). All six are unit
 constraints over one employee's itinerary, so `exponent` shapes each employee's raw cost.
 
 **0.2.0:** the constraints were renamed with the `_cost` suffix in every layer

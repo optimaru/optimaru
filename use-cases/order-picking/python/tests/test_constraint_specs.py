@@ -1,6 +1,7 @@
 """order_picking.constraints — an API for picking the cost function declaratively.
 
-"Which constraints are on", the five knobs and repeated picks are covered here.
+"Which constraints are on", the five knobs (the level included) and repeated picks are
+covered here.
 Per-constraint values are covered by `test_order_picking.py` and the C++ tests.
 """
 
@@ -11,10 +12,12 @@ from types import SimpleNamespace
 import pytest
 
 import order_picking as op
+from order_picking._constraint import instance_keys
 from order_picking.constraints import (
     Constraint,
     DistanceFromLastPickTaskToPathOriginCost,
     DistanceFromPreviousPickTaskCost,
+    Level,
     OrderSplitByTrolleyCost,
     TrolleyCapacityCost,
     distance_from_last_pick_task_to_path_origin_cost,
@@ -582,3 +585,64 @@ def test_full_assert_solves_with_repeats_and_offsets(picks):
     assert python.hard == solution.score.hard
     assert python.soft == pytest.approx(solution.score.soft)
     assert score(op.constraint_costs(solution), picks) == python  # the default costs score the repeats too
+
+
+# --- Levels: hard and soft, each pick (a repeat included) on the level it names ------
+
+
+@pytest.mark.parametrize(
+    ("picks", "expected"),
+    [
+        ([OrderSplitByTrolleyCost(level="hard")], (-3000, 0.0)),
+        ([TrolleyCapacityCost(level=Level.SOFT, weight=5)], (0, -5.0)),
+        ([DistanceFromPreviousPickTaskCost(level=Level.HARD, weight=2)], (-20, 0.0)),
+        ([TrolleyCapacityCost(level="hard")], (-1, 0.0)),  # the default level, named
+        # A repeat carries its own level and shaping: the soft walk, the hard meters beyond
+        # 3 per trolley (2 + 2), and hard 2 x (x - 6) per trolley: 2 x (-1 - 1 - 6) = -16.
+        (
+            [
+                DistanceFromPreviousPickTaskCost(),
+                DistanceFromPreviousPickTaskCost(level="hard", offset=3),
+                DistanceFromPreviousPickTaskCost(level="hard", weight=2, offset=6, clip=False),
+            ],
+            (12, -10.0),
+        ),
+    ],
+)
+def test_levels_by_hand_on_both_paths(picks, expected):
+    """A pick's level moves its term, with the weight in units of that level: engine == mirror == hand."""
+    assert score(op.constraint_costs(_hand_solution()), picks) == expected
+    raw = op.constraint_costs(_hand_solution(), picks)
+    for pick, key in zip(picks, instance_keys(picks)):
+        assert raw[key]["level"] == (pick.level or raw[key]["default_level"]), key
+    assert score(raw, picks) == expected
+    assert _zero_budget(picks) == expected
+
+
+@pytest.mark.parametrize("level", ["medium", Level.MEDIUM])
+def test_medium_is_refused_without_a_medium_level(level):
+    """The domain has no medium level: every path refuses the pick before scoring, a repeat too."""
+    message = "constraint 'order_split_by_trolley_cost': this use case has no medium level"
+    pick = OrderSplitByTrolleyCost(level=level)  # the spec cannot know the domain
+    for picks in ([pick], [OrderSplitByTrolleyCost(), pick]):
+        with pytest.raises(ValueError, match=message):
+            _zero_budget(picks)
+        with pytest.raises(ValueError, match=message):
+            op.constraint_costs(_hand_solution(), picks)
+        with pytest.raises(ValueError, match=message):
+            score(op.constraint_costs(_hand_solution()), picks)
+
+
+def test_a_level_must_be_a_level():
+    with pytest.raises(TypeError, match="level must be a Level"):
+        OrderSplitByTrolleyCost(level=False)
+    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft', not 'firm'"):
+        OrderSplitByTrolleyCost(level="firm")
+    pick = SimpleNamespace(name="order_split_by_trolley_cost", weight=None, level="firm", exponent=1.0)
+    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft', not 'firm'"):
+        _zero_budget([OrderSplitByTrolleyCost(), pick])
+
+
+def test_the_knob_was_renamed():
+    with pytest.raises(TypeError):
+        OrderSplitByTrolleyCost(hard=True)

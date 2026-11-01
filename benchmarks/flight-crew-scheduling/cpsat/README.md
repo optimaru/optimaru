@@ -14,14 +14,16 @@ One plugin per engine constraint, in `flight_crew.list_constraints()` order
 the same name (`flight_crew.constraints.RequiredSkillCost`, ...) and only adds `build()`;
 its default level and weight come from `flight_crew.constraint_info()`, so the two
 solvers cannot disagree on a default. `level="soft"` demotes a constraint to the soft level
-in both solvers. Not supported on CP-SAT (refused): `exponent != 1` and non-integer
-weights.
+and `level="hard"` promotes one to hard, in both solvers; `level="medium"` is refused on
+both (`this use case has no medium level`). Not supported on CP-SAT (refused):
+`exponent != 1` and non-integer weights.
 
 **0.3.0:** a constraint may be picked several times (as specs or as
-`{"name", "weight", "hard", "offset", "clip"}` mappings); each pick builds its own terms
-with its own knobs. Every plugin adds one term per employee, an idle one included, so an
-integral `offset` shapes each employee exactly as the engine does in both `clip` modes; a
-fractional offset is refused (`offset must be an integer for CP-SAT`).
+`{"name", "weight", "level", "offset", "clip"}` mappings); each pick builds its own terms
+with its own knobs, its level included. Every plugin adds one term per employee, an idle
+one included, so an integral `offset` shapes each employee exactly as the engine does in
+both `clip` modes; a fractional offset is refused (`offset must be an integer for
+CP-SAT`).
 
 ## Engine comparison
 

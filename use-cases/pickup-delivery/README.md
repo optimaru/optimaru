@@ -81,8 +81,9 @@ That is the `list_constraints()` order: the sixteen per-vehicle unit constraints
 and `squared_order_age_cost` price the pool, the others evaluate the vehicles alone),
 then the four request-level globals. `pdp_routing.constraint_info()` reports exactly this table
 from the C++ components (`kDefaultLevel` / `kDefaultWeight`). Every constraint is
-flippable (`level="hard"` / `level="soft"`), none is a reward, and every one at a weight
-above 0 is scored by default (`default_enabled`); the four opt-in objectives
+flippable onto any of the three levels (`level="hard"`, `"medium"` or `"soft"`, or a
+`Level`), none is a reward, and every one at a weight above 0 is scored by default
+(`default_enabled`); the four opt-in objectives
 (weight 0) are measured but move no score until given a weight. The route-policy
 constraints cost 0 while their vehicle field is 0. The seven core rules
 (`vehicle_capacity_cost`, `max_end_time_cost`, the three coupling rules,
@@ -95,7 +96,10 @@ the engine compares `HardSoftScore`, so medium lands in soft as
 `medium * 10^9 + soft`, which keeps the 3-level `Score` lexicographic. Its weight
 is in medium units (default 1, the same as the CP-SAT reference's). `level="hard"`
 charges one hard unit per minute; `level="soft"` one soft unit per minute, in both
-solvers; an explicit weight stays in medium units. `constraint_costs()` carries
+solvers; an explicit weight is in units of the level in effect. Any other constraint
+may move onto medium the same way (`TravelTimeCost(level="medium")` charges one medium
+unit per driving second, in both solvers too), and a repeated pick carries its own
+level. `constraint_costs()` carries
 `"medium_fold": {"kind": "into_soft", "unit": 1e9}` on every entry, so
 `pdp_routing.constraints.score()` folds exactly like the engine. A solve with
 `constraints=` reports `plan.score` and every `on_new_best` score with the three
@@ -199,8 +203,8 @@ uses the same weight. `pinned_stops_cost` uses `ScoreCalculator::kPinnedPenalty`
 (1e12), far above what the other hard rules total on real input, so no trade
 between them moves a pinned stop. If a result breaks a pin anyway, its `score`
 shows it in that unit. The CP-SAT reference enforces the three coupling rules
-structurally and refuses `level="soft"` or another weight for them; the engine
-keeps them flippable.
+structurally and refuses any level but hard (`level="medium"` or `"soft"`) or another
+weight for them; the engine keeps them flippable.
 
 ## Why the pair-aware operators exist
 
