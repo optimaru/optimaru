@@ -462,8 +462,10 @@ def test_score_reproduces_the_engine_score_exactly():
         [*get_constraints(), TagConflictCost(weight=100, exponent=2.0), MinStartDateCost(weight=3)],
         [
             MinStartDateCost(offset=1),
-            MinStartDateCost(offset=0.5, clip=False, weight=3),
-            CrewConflictCost(offset=2, clip=False),
+            # The literal formula with an offset is refused on hard; its copies sit on soft.
+            MinStartDateCost(level="soft", offset=0.5, clip=False, weight=3),
+            CrewConflictCost(offset=2),
+            CrewConflictCost(level="soft", offset=2, clip=False),
             AfterIdealEndDateCost(offset=-1),
             TagConflictCost(offset=5),
             TagConflictCost(offset=20, clip=False, weight=0.5),
@@ -633,22 +635,26 @@ def test_the_keys_follow_the_pick_order_of_each_name():
     ("pick", "expected"),
     [
         # Unit constraints, shaped per (start date, crew) cell: a's cell is 2 days early,
-        # the other 39 cells are 0 (and count in literal mode).
+        # the other 39 cells are 0 (and count in literal mode). The literal formula with
+        # an offset is refused on hard (min start and max end by default), so its
+        # numbers are checked on soft, where nothing is rounded.
         (MinStartDateCost(offset=1), (-1, 0.0)),
-        (MinStartDateCost(offset=1, clip=False), (-(1 - 39), 0.0)),  # the 39 empty cells are rewarded
+        (MinStartDateCost(level="soft", offset=1, clip=False), (0, -(1 - 39.0))),  # the 39 empty cells are rewarded
         (MinStartDateCost(offset=3), (0, 0.0)),
-        (MinStartDateCost(offset=3, clip=False), (-(-1 - 3 * 39), 0.0)),
+        (MinStartDateCost(level="soft", offset=3, clip=False), (0, -(-1 - 3 * 39.0))),
         (MinStartDateCost(offset=-2), (-4, 0.0)),  # a negative offset adds to every non-zero cell
-        (MinStartDateCost(offset=-2, clip=False), (-(4 + 2 * 39), 0.0)),  # ...or to every cell
+        (MinStartDateCost(level="soft", offset=-2, clip=False), (0, -(4 + 2 * 39.0))),  # ...or to every cell
         (AfterIdealEndDateCost(offset=1, exponent=2, clip=False, weight=1), (0, 39.0)),  # 39 x (0 - 1)^2, sign kept
-        (MaxEndDateCost(offset=0.5, clip=False, weight=3), (-(2 - 2 * 39), 0.0)),  # 1.5 -> 2, -1.5 -> -2: per cell
+        (MaxEndDateCost(offset=0.5, weight=3), (-2, 0.0)),  # hard rounds per cell: 1.5 -> 2, 0 -> 0
+        (MaxEndDateCost(level="soft", offset=0.5, clip=False, weight=3), (0, -(1.5 - 1.5 * 39))),  # not rounded
         # Global constraints shape their one total.
         (TagConflictCost(offset=3), (0, -1000.0)),
         (TagConflictCost(offset=6, clip=False), (0, 2000.0)),  # (4 - 6) x 1000: a reward below 6
         (TagConflictCost(offset=2, exponent=2), (0, -4000.0)),
         (TagConflictCost(offset=6, exponent=3, clip=False), (0, 8000.0)),
         (CrewConflictCost(offset=-1), (-3, 0.0)),
-        (CrewConflictCost(offset=1, clip=False, weight=1.5), (-2, 0.0)),  # 1.5 -> 2, rounded once
+        (CrewConflictCost(offset=1, weight=1.5), (-2, 0.0)),  # 1.5 -> 2, rounded once
+        (CrewConflictCost(level="soft", offset=3, clip=False, weight=1.5), (0, 1.5)),  # (2 - 3) x 1.5: a reward
     ],
 )
 def test_offsets_by_hand_on_both_paths(pick, expected):
@@ -693,13 +699,13 @@ def test_offset_zero_reproduces_the_0_2_0_scores():
         [*get_constraints(), *REPEAT, MinStartDateCost(weight=2, exponent=2)],
         [
             MinStartDateCost(),
-            MinStartDateCost(offset=1, clip=False, weight=2),
+            MinStartDateCost(level="soft", offset=1, clip=False, weight=2),
             MaxEndDateCost(offset=-1),
             BeforeIdealEndDateCost(offset=2, clip=False, weight=0.25),
             AfterIdealEndDateCost(),
             AfterIdealEndDateCost(offset=1, exponent=2, weight=10),
-            CrewConflictCost(offset=1, clip=False),
-            CrewConflictCost(),
+            CrewConflictCost(level="soft", offset=1, clip=False),
+            CrewConflictCost(offset=1),
             TagConflictCost(offset=5),
             TagConflictCost(offset=10, exponent=2, weight=0.5, clip=False),
         ],
@@ -741,19 +747,20 @@ def test_full_assert_solves_with_repeats_and_offsets(picks):
         ([MinStartDateCost(level="soft", weight=0.5)], (0, -1.0)),
         ([AfterIdealEndDateCost(level=Level.HARD, weight=2)], (-2, 0.0)),
         ([MaxEndDateCost(level="hard")], (-1, 0.0)),  # the default level, named
-        # A repeat carries its own level and shaping. Hard: min start 2, the tag total
-        # beyond 1 (3) and 2 x (4 - 6) = -4, a hard reward: -2 - 3 + 4 = -1. Soft: the
-        # default tag conflict 1000 x 4 and 3 x (x - 1) on every cell, a's 2 days early
-        # (3) and 39 empty cells (-3 each): -4000 - (3 - 117) = -3886.
+        # A repeat carries its own level and shaping. Hard: min start 2 and the tag
+        # total beyond 1 (3): -5. Soft: the default tag conflict 1000 x 4, 3 x (x - 1) on
+        # every cell, a's 2 days early (3) and 39 empty cells (-3 each), and the literal
+        # tag copy 2 x (4 - 6) = -4, a reward (refused on hard):
+        # -4000 - (3 - 117) + 4 = -3882.
         (
             [
                 MinStartDateCost(),
                 MinStartDateCost(level="soft", weight=3, offset=1, clip=False),
                 TagConflictCost(),
                 TagConflictCost(level="hard", weight=1, offset=1),
-                TagConflictCost(level=Level.HARD, weight=2, offset=6, clip=False),
+                TagConflictCost(level=Level.SOFT, weight=2, offset=6, clip=False),
             ],
-            (-1, -3886.0),
+            (-5, -3882.0),
         ),
     ],
 )
@@ -799,3 +806,85 @@ def test_the_knob_was_renamed():
         TagConflictCost(hard=True)
     with pytest.raises(TypeError):
         TagConflictCost(weight=None, hard=False)
+
+
+# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+
+HARD_REFUSAL = (
+    "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
+    "violation; use clip=True (a threshold) or another level"
+)
+
+
+def _refusal(call):
+    with pytest.raises(ValueError) as refused:
+        call()
+    return str(refused.value)
+
+
+@pytest.mark.parametrize("offset", [3.0, -3.0])
+@pytest.mark.parametrize(
+    "pick",
+    [
+        lambda offset: MinStartDateCost(offset=offset, clip=False),  # the default level, hard
+        lambda offset: MinStartDateCost(level="hard", offset=offset, clip=False),
+        lambda offset: CrewConflictCost(offset=offset, clip=False),  # a global, hard by default
+        lambda offset: TagConflictCost(level=Level.HARD, offset=offset, clip=False),
+    ],
+    ids=["min-start-default-hard", "min-start-level-hard", "crew-conflict-default-hard", "tag-moved-to-hard"],
+)
+def test_the_literal_offset_is_refused_on_hard_on_every_path(pick, offset):
+    """A positive offset would reward every cell below it, the empty ones included, so the
+    slack of 39 empty cells would cancel a's two days too early and an infeasible
+    schedule could score hard 0 (or above); a negative one would charge every cell. The
+    engine (solve, Solver, constraint_costs) and the score() mirror refuse it with the
+    same message, alone and as a repeat; so does the CP-SAT reference (its own tests)."""
+    spec = pick(offset)
+    message = HARD_REFUSAL.format(q=repr(spec.name))
+    picks = [*get_constraints(), spec]  # a repeat next to the defaults
+    assert _refusal(lambda: mnt.solve(build_schedule(), time_limit_seconds=0.1, constraints=[spec])) == message
+    assert _refusal(lambda: _zero_budget_solve(_two_jobs(), [spec])) == message
+    assert _refusal(lambda: _zero_budget_solve(_two_jobs(), picks)) == message
+    assert _refusal(lambda: mnt.constraint_costs(_two_jobs(), [spec])) == message
+    assert _refusal(lambda: score(mnt.constraint_costs(_two_jobs()), [spec])) == message
+    assert _refusal(lambda: score(mnt.constraint_costs(_two_jobs()), picks)) == message
+
+
+@pytest.mark.parametrize("offset", [3.0, -3.0])
+def test_the_same_literal_pick_on_soft_is_accepted(offset):
+    """(2 - offset) on a's cell plus 39 x (0 - offset) on the empty cells, on soft, on every path."""
+    pick = MinStartDateCost(level="soft", offset=offset, clip=False)
+    expected = (0, -(2 - offset + 39 * (0 - offset)))
+    assert score(mnt.constraint_costs(_two_jobs()), [pick]) == expected
+    raw = mnt.constraint_costs(_two_jobs(), [pick])
+    assert (raw["min_start_date_cost"]["level"], raw["min_start_date_cost"]["clip"]) == ("soft", False)
+    assert score(raw, [pick]) == expected
+    assert _engine([pick]) == expected
+    # Next to the hard default, which keeps "hard 0 = no violation": -2 hard.
+    assert _engine([MinStartDateCost(), pick]) == (-2, expected[1])
+
+
+@pytest.mark.parametrize(
+    ("pick", "expected"),
+    [
+        (MinStartDateCost(offset=3.0), (0, 0.0)),  # clip=True on hard: a threshold
+        (MinStartDateCost(offset=-3.0), (-5, 0.0)),  # 2 + 3 on a's cell only
+        (MinStartDateCost(clip=False), (-2, 0.0)),  # clip=False with offset 0: the 0.2.0 shaping
+        (MinStartDateCost(offset=0.0, clip=False), (-2, 0.0)),
+        (CrewConflictCost(offset=3.0), (0, 0.0)),
+        (CrewConflictCost(offset=0, clip=False), (-2, 0.0)),
+    ],
+)
+def test_the_allowed_combinations_on_hard(pick, expected):
+    assert score(mnt.constraint_costs(_two_jobs()), [pick]) == expected
+    assert _engine([pick]) == expected
+
+
+def test_the_refusal_comes_after_every_knob_of_a_duck_typed_pick():
+    """The engine checks once a pick's knobs are all re-stated: the level a pick moves to decides."""
+    moved = SimpleNamespace(name="min_start_date_cost", weight=None, level="soft", exponent=1.0, offset=3.0, clip=False)
+    assert _engine([moved]) == (0, 118.0)
+    kept = SimpleNamespace(name="min_start_date_cost", weight=None, level=None, exponent=1.0, offset=3.0, clip=False)
+    message = HARD_REFUSAL.format(q="'min_start_date_cost'")
+    assert _refusal(lambda: _engine([kept])) == message
+    assert _refusal(lambda: score(mnt.constraint_costs(_two_jobs()), [kept])) == message

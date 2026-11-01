@@ -19,4 +19,5 @@ with its own knobs, its level included. The three unit constraints add one term 
 round position, an empty round included, and the seven globals one term for their
 total, so an integral `offset` shapes each round (or the total) exactly as the engine
 does in both `clip` modes; a fractional offset is refused (`offset must be an integer
-for CP-SAT`).
+for CP-SAT`). `clip=False` with an offset on a hard pick is refused with the engine's
+message when the objective is built.

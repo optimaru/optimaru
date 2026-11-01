@@ -556,17 +556,18 @@ def test_the_keys_follow_the_pick_order_of_each_name():
         (AwayToEndHopCost(offset=-5), (0, -36.0)),  # a negative offset adds to every non-zero round
         (AwayToEndHopCost(offset=-5, clip=False), (0, -(5 + 36))),  # ...or to every round
         (WorkdayClassicMatchesCost(offset=1, clip=False, weight=1), (0, 2.0)),  # two derby-free rounds
-        (
-            StartToAwayHopCost(level="hard", offset=0.5, clip=False, weight=3),
-            (-(62 - 2), 0.0),
-        ),  # 61.5 -> 62, -1.5 -> -2
+        # Hard rounds per round: 61.5 -> 62, 0 -> 0. The literal formula with an offset
+        # is refused on hard, so the literal pick stays on soft: 61.5 - 1.5, not rounded.
+        (StartToAwayHopCost(level="hard", offset=0.5, weight=3), (-62, 0.0)),
+        (StartToAwayHopCost(offset=0.5, clip=False, weight=3), (0, -(61.5 - 1.5))),
         # Global constraints shape their one total.
         (HomeToAwayHopCost(offset=3), (0, -10.0)),
         (HomeToAwayHopCost(offset=20, clip=False), (0, 7.0)),  # 13 - 20: a reward below 20 km
         (HomeToAwayHopCost(offset=10, exponent=2), (0, -9.0)),
         (HomeToAwayHopCost(offset=15, exponent=3, clip=False), (0, 8.0)),
         (TeamConflictCost(offset=-1), (0, 0.0)),  # the threshold leaves a 0 at 0
-        (TeamConflictCost(offset=0.5, clip=False, weight=3), (2, 0.0)),  # -1.5 -> -2: a hard reward
+        # (0 - 0.5) x 3 = -1.5: a reward, refused on hard (its default), allowed on soft.
+        (TeamConflictCost(level="soft", offset=0.5, clip=False, weight=3), (0, 1.5)),
     ],
 )
 def test_offsets_by_hand_on_both_paths(pick, expected):
@@ -604,7 +605,7 @@ def test_offset_zero_reproduces_the_0_2_0_scores():
         [*get_constraints(), *REPEAT, StartToAwayHopCost(weight=2, exponent=2)],
         [
             *HARD_PICKS,
-            TeamConflictCost(offset=1, clip=False, weight=2),
+            TeamConflictCost(level="soft", offset=1, clip=False, weight=2),
             StartToAwayHopCost(offset=500),
             AwayToEndHopCost(offset=200, clip=False, weight=0.5),
             WorkdayClassicMatchesCost(),
@@ -631,9 +632,10 @@ def test_score_matches_the_engine_for_repeated_and_shifted_specs(specs):
         [*get_constraints(), *REPEAT, StartToAwayHopCost(weight=2, exponent=2)],
         [
             TeamConflictCost(),
-            TeamConflictCost(offset=1, clip=False, weight=2),
+            TeamConflictCost(level="soft", offset=1, clip=False, weight=2),
             ConsecutiveHomeMatchesCost(offset=-1),
-            ConsecutiveAwayMatchesCost(offset=2, clip=False),
+            ConsecutiveAwayMatchesCost(offset=2),
+            ConsecutiveAwayMatchesCost(level="soft", offset=2, clip=False),
             RepeatMatchOnNextDayCost(),
             StartToAwayHopCost(offset=500, clip=False, weight=0.25),
             AwayToEndHopCost(offset=-100),
@@ -647,7 +649,7 @@ def test_score_matches_the_engine_for_repeated_and_shifted_specs(specs):
             *get_constraints(),
             TeamConflictCost(level="soft", weight=1.5, offset=1, clip=False),
             StartToAwayHopCost(level=Level.HARD, offset=500),
-            HomeToAwayHopCost(level="hard", weight=0.5, offset=2000, clip=False),
+            HomeToAwayHopCost(level="hard", weight=0.5, offset=2000),
             WorkdayClassicMatchesCost(level="hard", weight=2),
         ],
     ],
@@ -681,17 +683,18 @@ def test_full_assert_solves_with_repeats_and_offsets(picks):
         ([StartToAwayHopCost(level=Level.HARD, weight=2)], (-42, 0.0)),
         ([TeamConflictCost(level="soft", weight=5, offset=1, clip=False)], (0, 5.0)),  # 5 x (0 - 1), soft
         ([AwayToEndHopCost(level="soft")], (0, -31.0)),  # the default level, named
-        # A repeat carries its own level and shaping. Soft: the default start hop 21 and
-        # home-to-away 13. Hard: the start hop beyond 10 per round (11 + 0) and
-        # 2 x (13 - 20) = -14 on the home-to-away total, a hard reward: -11 + 14 = 3.
+        # A repeat carries its own level and shaping. Hard: the start hop beyond 10 per
+        # round (11 + 0). Soft: the default start hop 21 and home-to-away 13, and
+        # 2 x (13 - 20) = -14 on the home-to-away total, a reward (refused on hard):
+        # -34 + 14 = -20.
         (
             [
                 StartToAwayHopCost(),
                 StartToAwayHopCost(level="hard", offset=10),
                 HomeToAwayHopCost(),
-                HomeToAwayHopCost(level=Level.HARD, weight=2, offset=20, clip=False),
+                HomeToAwayHopCost(level=Level.SOFT, weight=2, offset=20, clip=False),
             ],
-            (3, -34.0),
+            (-11, -20.0),
         ),
     ],
 )
@@ -737,3 +740,84 @@ def test_the_knob_was_renamed():
         HomeToAwayHopCost(hard=True)
     with pytest.raises(TypeError):
         TeamConflictCost(weight=None, hard=False)
+
+
+# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+
+HARD_REFUSAL = (
+    "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
+    "violation; use clip=True (a threshold) or another level"
+)
+
+
+def _refusal(call):
+    with pytest.raises(ValueError) as refused:
+        call()
+    return str(refused.value)
+
+
+@pytest.mark.parametrize("offset", [3.0, -3.0])
+@pytest.mark.parametrize(
+    "pick",
+    [
+        lambda offset: TeamConflictCost(offset=offset, clip=False),  # the default level, hard
+        lambda offset: TeamConflictCost(level="hard", offset=offset, clip=False),
+        lambda offset: ConsecutiveHomeMatchesCost(offset=offset, clip=False),
+        lambda offset: StartToAwayHopCost(level=Level.HARD, offset=offset, clip=False),
+    ],
+    ids=["team-conflict-default-hard", "team-conflict-level-hard", "consecutive-home", "start-hop-moved-to-hard"],
+)
+def test_the_literal_offset_is_refused_on_hard_on_every_path(pick, offset):
+    """A positive offset would reward a schedule without team conflicts (hard above 0) and
+    cancel another hard violation with it; a negative one would charge a schedule that
+    holds none. The engine (solve, Solver, constraint_costs) and the score() mirror
+    refuse it with the same message, alone and as a repeat; so does the CP-SAT
+    reference (its own tests)."""
+    spec = pick(offset)
+    message = HARD_REFUSAL.format(q=repr(spec.name))
+    picks = [*get_constraints(), spec]  # a repeat next to the defaults
+    assert _refusal(lambda: sl.solve(build_schedule(), time_limit_seconds=0.1, constraints=[spec])) == message
+    assert _refusal(lambda: _zero_budget_solve(_two_rounds(), [spec])) == message
+    assert _refusal(lambda: _zero_budget_solve(_two_rounds(), picks)) == message
+    assert _refusal(lambda: sl.constraint_costs(_two_rounds(), [spec])) == message
+    assert _refusal(lambda: score(sl.constraint_costs(_two_rounds()), [spec])) == message
+    assert _refusal(lambda: score(sl.constraint_costs(_two_rounds()), picks)) == message
+
+
+@pytest.mark.parametrize("offset", [3.0, -3.0])
+def test_the_same_literal_pick_on_soft_is_accepted(offset):
+    """(0 - offset) on the team-conflict total, on soft, on every path."""
+    pick = TeamConflictCost(level="soft", offset=offset, clip=False)
+    expected = (0, -(0 - offset))
+    assert score(sl.constraint_costs(_two_rounds()), [pick]) == expected
+    raw = sl.constraint_costs(_two_rounds(), [pick])
+    assert (raw["team_conflict_cost"]["level"], raw["team_conflict_cost"]["clip"]) == ("soft", False)
+    assert score(raw, [pick]) == expected
+    assert _engine([pick]) == expected
+    # Next to the hard default, which keeps "hard 0 = no violation".
+    assert _engine([TeamConflictCost(), pick]) == expected
+
+
+@pytest.mark.parametrize(
+    ("pick", "expected"),
+    [
+        (TeamConflictCost(offset=3.0), (0, 0.0)),  # clip=True on hard: a threshold
+        (TeamConflictCost(offset=-3.0), (0, 0.0)),  # ...which leaves a raw 0 at 0
+        (TeamConflictCost(clip=False), (0, 0.0)),  # clip=False with offset 0: the 0.2.0 shaping
+        (StartToAwayHopCost(level="hard", offset=-5.0), (-26, 0.0)),  # 21 + 5 on round 0 only
+        (StartToAwayHopCost(level="hard", offset=0.0, clip=False), (-21, 0.0)),
+    ],
+)
+def test_the_allowed_combinations_on_hard(pick, expected):
+    assert score(sl.constraint_costs(_two_rounds()), [pick]) == expected
+    assert _engine([pick]) == expected
+
+
+def test_the_refusal_comes_after_every_knob_of_a_duck_typed_pick():
+    """The engine checks once a pick's knobs are all re-stated: the level a pick moves to decides."""
+    moved = SimpleNamespace(name="team_conflict_cost", weight=None, level="soft", exponent=1.0, offset=3.0, clip=False)
+    assert _engine([moved]) == (0, 3.0)
+    kept = SimpleNamespace(name="team_conflict_cost", weight=None, level=None, exponent=1.0, offset=3.0, clip=False)
+    message = HARD_REFUSAL.format(q="'team_conflict_cost'")
+    assert _refusal(lambda: _engine([kept])) == message
+    assert _refusal(lambda: score(sl.constraint_costs(_two_rounds()), [kept])) == message

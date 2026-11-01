@@ -17,7 +17,8 @@
 //   (j) repeated components and the offset / clip knobs: hand-calculated
 //       repeats of a per-job and a global rule, threshold and literal
 //       offsets by hand (in literal mode every (start date, crew) cell
-//       counts, an empty one included; a global shapes its one total),
+//       counts, an empty one included; a global shapes its one total), the
+//       literal formula refused on hard at reset and kept on soft,
 //       incremental == a fresh recompute over a random walk and a
 //       FULL_ASSERT solve with repeated, shifted components
 #include <algorithm>
@@ -796,17 +797,24 @@ MaintenanceSchedule repeatInstance()
     return s;
 }
 
-// The defaults, two of them shifted, plus repeats of a per-job delta rule
-// (literal, fractional weight), a global member-change rule (threshold,
-// squared) and a soft per-job rule (negative offset), and two repeats on the
-// other level than their default: max end demoted to soft (literal,
-// fractional weight) and tag conflict promoted to hard (threshold).
+// The defaults, two of them shifted (crew conflict by a threshold: hard
+// refuses the literal formula with an offset), plus repeats of a per-job
+// delta rule (literal on soft, fractional weight), a global member-change
+// rule (threshold, squared; and literal on soft) and a soft per-job rule
+// (negative offset), and two repeats on the other level than their default:
+// max end demoted to soft (literal, fractional weight) and tag conflict
+// promoted to hard (threshold).
 ConstraintAssembly repeatedAssembly()
 {
     ConstraintAssembly assembly = defaultConstraints();
     assembly.offset("afterIdealEndDateCost", 2.0);
-    assembly.offset("crewConflictCost", 1.0).clip("crewConflictCost", false);
+    assembly.offset("crewConflictCost", 1.0);
+    assembly.addInstances(std::move(copyOf("crewConflictCost")
+                                        .soft("crewConflictCost")
+                                        .offset("crewConflictCost", 1.0)
+                                        .clip("crewConflictCost", false)));
     assembly.addInstances(std::move(copyOf("minStartDateCost")
+                                        .soft("minStartDateCost")
                                         .weight("minStartDateCost", 2.0)
                                         .offset("minStartDateCost", 1.0)
                                         .clip("minStartDateCost", false)));
@@ -914,16 +922,18 @@ void verifyRepeatsAndOffsets()
                    scoreWith(threshold, s),
                    -2,
                    0.0);
-        // Literal: the 79 empty cells are each rewarded 1.
+        // Literal, on soft (hard refuses it with an offset): the 79 empty
+        // cells are each rewarded 1.
         DecomposedCalculator literal;
         copyOf("minStartDateCost")
+            .soft("minStartDateCost")
             .offset("minStartDateCost", 1.0)
             .clip("minStartDateCost", false)
             .into(literal);
-        checkScore("literal offset 1: (3 - 1) + 79 x (0 - 1), every cell",
+        checkScore("soft literal offset 1: (3 - 1) + 79 x (0 - 1), every cell",
                    scoreWith(literal, s),
-                   77,
-                   0.0);
+                   0,
+                   77.0);
         DecomposedCalculator negative;
         copyOf("minStartDateCost")
             .offset("minStartDateCost", -2.0)
@@ -934,25 +944,37 @@ void verifyRepeatsAndOffsets()
                    0.0);
         DecomposedCalculator negativeLiteral;
         copyOf("minStartDateCost")
+            .soft("minStartDateCost")
             .offset("minStartDateCost", -2.0)
             .clip("minStartDateCost", false)
             .into(negativeLiteral);
-        checkScore("literal offset -2 adds to every cell: 5 + 79 x 2",
+        checkScore("soft literal offset -2 adds to every cell: 5 + 79 x 2",
                    scoreWith(negativeLiteral, s),
-                   -163,
-                   0.0);
-        // A hard literal offset rounds per cell: (3 - 0.5) x 3 = 7.5 -> 8,
-        // (0 - 0.5) x 3 = -1.5 -> -2 on 79 cells: 8 - 158 = -150.
+                   0,
+                   -163.0);
+        // A hard threshold offset rounds per cell: (3 - 0.5) x 3 = 7.5 -> 8,
+        // and the empty cells stay 0.
         DecomposedCalculator hard;
         copyOf("minStartDateCost")
             .weight("minStartDateCost", 3.0)
             .offset("minStartDateCost", 0.5)
-            .clip("minStartDateCost", false)
             .into(hard);
-        checkScore("hard literal offset 0.5 at weight 3, rounded per cell",
+        checkScore("hard threshold offset 0.5 at weight 3, rounded per cell",
                    scoreWith(hard, s),
-                   150,
+                   -8,
                    0.0);
+        // The same literal pick on soft is not rounded: 7.5 - 79 x 1.5.
+        DecomposedCalculator soft;
+        copyOf("minStartDateCost")
+            .soft("minStartDateCost")
+            .weight("minStartDateCost", 3.0)
+            .offset("minStartDateCost", 0.5)
+            .clip("minStartDateCost", false)
+            .into(soft);
+        checkScore("soft literal offset 0.5 at weight 3: -(7.5 - 118.5)",
+                   scoreWith(soft, s),
+                   0,
+                   111.0);
         // A global shapes its one total.
         DecomposedCalculator tagThreshold;
         copyOf("tagConflictCost").offset("tagConflictCost", 2.0).into(tagThreshold);
@@ -969,6 +991,73 @@ void verifyRepeatsAndOffsets()
                    scoreWith(tagLiteral, s),
                    0,
                    3000.0);
+    }
+    {
+        // On hard the literal formula with an offset is refused at reset,
+        // whichever sign and setter order, for a hard default (a per-cell
+        // and a global rule) and for a soft rule moved to hard: +1 would
+        // reward the 79 empty cells (+77 hard, a feasible-looking score for
+        // a job that starts too early), -1 would charge 80 cells that hold
+        // no violation.
+        auto refusal = [](const std::string &name) {
+            return "Constraint '" + name
+                   + "' cannot use clip=false with a non-zero offset on a level "
+                     "that counts toward the hard score (hard 0 must mean no "
+                     "violation)";
+        };
+        auto resetRefusal = [](ConstraintAssembly assembly) {
+            MaintenanceSchedule s = repeatInstance();
+            DecomposedCalculator calculator;
+            assembly.into(calculator);
+            try
+            {
+                scoreWith(calculator, s);
+            }
+            catch (const std::logic_error &error)
+            {
+                return std::string(error.what());
+            }
+            return std::string();
+        };
+        check(resetRefusal(copyOf("minStartDateCost")
+                               .offset("minStartDateCost", 1.0)
+                               .clip("minStartDateCost", false))
+                      == refusal("minStartDateCost")
+                  && resetRefusal(copyOf("minStartDateCost")
+                                      .clip("minStartDateCost", false)
+                                      .offset("minStartDateCost", -1.0))
+                         == refusal("minStartDateCost"),
+              "min start literal offset +-1 on hard: refused at reset");
+        check(resetRefusal(copyOf("crewConflictCost")
+                               .offset("crewConflictCost", 1.0)
+                               .clip("crewConflictCost", false))
+                  == refusal("crewConflictCost"),
+              "crew conflict (a global) literal offset on hard: refused at reset");
+        check(resetRefusal(copyOf("tagConflictCost")
+                               .offset("tagConflictCost", 8.0)
+                               .clip("tagConflictCost", false)
+                               .hard("tagConflictCost"))
+                  == refusal("tagConflictCost"),
+              "tag literal offset moved to hard afterwards: refused at reset");
+        ConstraintAssembly repeated = copyOf("minStartDateCost");
+        repeated.addInstances(std::move(copyOf("minStartDateCost")
+                                            .offset("minStartDateCost", 1.0)
+                                            .clip("minStartDateCost", false)));
+        check(resetRefusal(std::move(repeated)) == refusal("minStartDateCost"),
+              "a hard literal repeat next to the default: refused at reset");
+        check(resetRefusal(copyOf("minStartDateCost")
+                               .offset("minStartDateCost", 1.0))
+                      .empty()
+                  && resetRefusal(copyOf("minStartDateCost")
+                                      .clip("minStartDateCost", false))
+                         .empty()
+                  && resetRefusal(copyOf("minStartDateCost")
+                                      .offset("minStartDateCost", 1.0)
+                                      .clip("minStartDateCost", false)
+                                      .soft("minStartDateCost"))
+                         .empty(),
+              "min start: a threshold offset or clip=false with offset 0 on "
+              "hard, and the literal offset on soft, are allowed");
     }
     {
         // Random walk: incremental == a fresh calculator of the same assembly.

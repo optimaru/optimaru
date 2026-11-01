@@ -41,7 +41,10 @@ Every spec takes five knobs:
                below it does too. MaxStationsCost and ForbiddenTaskStationsCost
                evaluate only their own stations (from ``max_stations`` on, and the
                stations some task forbids; ``constraint_costs()`` lists them as
-               ``"units"``), so ``clip=False`` charges those and no other.
+               ``"units"``), so ``clip=False`` charges those and no other. With
+               an offset it is refused on hard (every rule but UsedStationsCost and
+               WorkloadImbalanceCost by default), because hard 0 must mean no
+               violation.
 
 The same constraint may be picked several times; each pick is scored on its own with
 its own knobs (its level included) and the picks add up. Every used station costs 1, and each one beyond

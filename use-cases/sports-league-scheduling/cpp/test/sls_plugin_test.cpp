@@ -19,7 +19,8 @@
 //   (j) repeated components and the offset / clip knobs: hand-calculated
 //       repeats of a per-match unit rule and a global, threshold and literal
 //       offsets by hand (in literal mode every round position counts, an
-//       empty one included; a global shapes its one total), incremental ==
+//       empty one included; a global shapes its one total), the literal
+//       formula refused on hard at reset and kept on soft, incremental ==
 //       a fresh recompute over a random walk and a FULL_ASSERT solve with
 //       repeated, shifted components
 #include <algorithm>
@@ -940,16 +941,17 @@ LeagueSchedule repeatInstance()
     return s;
 }
 
-// The defaults, two of them shifted, plus repeats of a per-match delta rule
-// (literal, fractional weight), a round-index pair global (threshold,
-// squared), a team-side run global (negative offset), the clamped repeat
-// rule and the derby rule (literal), and two repeats on the other level than
-// their default: team conflict demoted to soft (literal, fractional weight)
-// and the away-to-end hop promoted to hard (threshold).
+// The defaults, two of them shifted (team conflict by a threshold: hard
+// refuses the literal formula with an offset), plus repeats of a per-match
+// delta rule (literal, fractional weight), a round-index pair global
+// (threshold, squared), a team-side run global (negative offset), the
+// clamped repeat rule and the derby rule (literal), and two repeats on the
+// other level than their default: team conflict demoted to soft (literal,
+// fractional weight) and the away-to-end hop promoted to hard (threshold).
 ConstraintAssembly repeatedAssembly()
 {
     ConstraintAssembly assembly = defaultConstraints();
-    assembly.offset("teamConflictCost", 1.0).clip("teamConflictCost", false);
+    assembly.offset("teamConflictCost", 1.0);
     assembly.offset("awayToAwayHopCost", 50.0);
     assembly.addInstances(std::move(copyOf("startToAwayHopCost")
                                         .weight("startToAwayHopCost", 0.5)
@@ -1036,20 +1038,20 @@ void verifyRepeatsAndOffsets()
               "the repeat reports its own level, the default stays soft");
     }
     {
-        // A soft per-round rule with a hard literal repeat: 3 x (21 - 1) on
-        // round 0, 3 x (0 - 1) on round 1: -(60 - 3) hard.
+        // A soft per-round rule with a hard threshold repeat (hard refuses
+        // the literal formula with an offset): 3 x (21 - 1) on round 0, 0 on
+        // round 1: -60 hard.
         LeagueSchedule s = repeatInstance();
         ConstraintAssembly assembly = copyOf("startToAwayHopCost");
         assembly.addInstances(std::move(copyOf("startToAwayHopCost")
                                             .hard("startToAwayHopCost")
                                             .weight("startToAwayHopCost", 3.0)
-                                            .offset("startToAwayHopCost", 1.0)
-                                            .clip("startToAwayHopCost", false)));
+                                            .offset("startToAwayHopCost", 1.0)));
         DecomposedCalculator calculator;
         assembly.into(calculator);
-        checkScore("soft start hop + a hard literal repeat: -57hard",
+        checkScore("soft start hop + a hard threshold repeat: -60hard",
                    scoreWith(calculator, s),
-                   -57,
+                   -60,
                    -21.0);
     }
     {
@@ -1089,19 +1091,29 @@ void verifyRepeatsAndOffsets()
                    scoreWith(negativeLiteral, s),
                    0,
                    -41.0);
-        // A hard literal offset rounds per round: (21 - 0.5) x 3 = 61.5 -> 62,
-        // (0 - 0.5) x 3 = -1.5 -> -2.
+        // A hard threshold offset rounds per round: (21 - 0.5) x 3 = 61.5 ->
+        // 62, and the empty round stays 0.
         DecomposedCalculator hard;
         copyOf("startToAwayHopCost")
             .hard("startToAwayHopCost")
             .weight("startToAwayHopCost", 3.0)
             .offset("startToAwayHopCost", 0.5)
-            .clip("startToAwayHopCost", false)
             .into(hard);
-        checkScore("hard literal offset 0.5 at weight 3, rounded per round",
+        checkScore("hard threshold offset 0.5 at weight 3, rounded per round",
                    scoreWith(hard, s),
-                   -60,
+                   -62,
                    0.0);
+        // The literal pick on soft is not rounded: 61.5 + (0 - 0.5) x 3.
+        DecomposedCalculator soft;
+        copyOf("startToAwayHopCost")
+            .weight("startToAwayHopCost", 3.0)
+            .offset("startToAwayHopCost", 0.5)
+            .clip("startToAwayHopCost", false)
+            .into(soft);
+        checkScore("soft literal offset 0.5 at weight 3: -(61.5 - 1.5)",
+                   scoreWith(soft, s),
+                   0,
+                   -60.0);
         // A global shapes its one total.
         DecomposedCalculator globalThreshold;
         copyOf("homeToAwayHopCost")
@@ -1120,15 +1132,85 @@ void verifyRepeatsAndOffsets()
                    scoreWith(globalLiteral, s),
                    0,
                    7.0);
-        DecomposedCalculator zeroHard;
+        // On soft, the literal team conflict rewards a 0 total; on hard (its
+        // default) that would be a hard reward, which the reset refuses.
+        DecomposedCalculator zeroSoft;
         copyOf("teamConflictCost")
+            .soft("teamConflictCost")
             .offset("teamConflictCost", 1.0)
             .clip("teamConflictCost", false)
-            .into(zeroHard);
-        checkScore("team conflict literal offset 1 on a 0 total: a hard reward",
-                   scoreWith(zeroHard, s),
-                   1,
-                   0.0);
+            .into(zeroSoft);
+        checkScore("soft team conflict literal offset 1 on a 0 total: +1soft",
+                   scoreWith(zeroSoft, s),
+                   0,
+                   1.0);
+    }
+    {
+        // On hard the literal formula with an offset is refused at reset,
+        // whichever sign and setter order, for a hard default global and for
+        // a soft per-round rule moved to hard: +1 would reward a schedule
+        // without team conflicts (+1 hard, cancelling another violation), -1
+        // would charge a schedule that holds none.
+        auto refusal = [](const std::string &name) {
+            return "Constraint '" + name
+                   + "' cannot use clip=false with a non-zero offset on a level "
+                     "that counts toward the hard score (hard 0 must mean no "
+                     "violation)";
+        };
+        auto resetRefusal = [](ConstraintAssembly assembly) {
+            LeagueSchedule s = repeatInstance();
+            DecomposedCalculator calculator;
+            assembly.into(calculator);
+            try
+            {
+                scoreWith(calculator, s);
+            }
+            catch (const std::logic_error &error)
+            {
+                return std::string(error.what());
+            }
+            return std::string();
+        };
+        check(resetRefusal(copyOf("teamConflictCost")
+                               .offset("teamConflictCost", 1.0)
+                               .clip("teamConflictCost", false))
+                      == refusal("teamConflictCost")
+                  && resetRefusal(copyOf("teamConflictCost")
+                                      .clip("teamConflictCost", false)
+                                      .offset("teamConflictCost", -1.0))
+                         == refusal("teamConflictCost"),
+              "team conflict literal offset +-1 on hard: refused at reset");
+        check(resetRefusal(copyOf("consecutiveAwayMatchesCost")
+                               .offset("consecutiveAwayMatchesCost", 2.0)
+                               .clip("consecutiveAwayMatchesCost", false))
+                  == refusal("consecutiveAwayMatchesCost"),
+              "consecutive away literal offset on hard: refused at reset");
+        check(resetRefusal(copyOf("startToAwayHopCost")
+                               .offset("startToAwayHopCost", 10.0)
+                               .clip("startToAwayHopCost", false)
+                               .hard("startToAwayHopCost"))
+                  == refusal("startToAwayHopCost"),
+              "start hop literal offset moved to hard afterwards: refused at "
+              "reset");
+        ConstraintAssembly repeated = copyOf("teamConflictCost");
+        repeated.addInstances(std::move(copyOf("teamConflictCost")
+                                            .offset("teamConflictCost", 1.0)
+                                            .clip("teamConflictCost", false)));
+        check(resetRefusal(std::move(repeated)) == refusal("teamConflictCost"),
+              "a hard literal repeat next to the default: refused at reset");
+        check(resetRefusal(copyOf("teamConflictCost")
+                               .offset("teamConflictCost", 1.0))
+                      .empty()
+                  && resetRefusal(copyOf("teamConflictCost")
+                                      .clip("teamConflictCost", false))
+                         .empty()
+                  && resetRefusal(copyOf("teamConflictCost")
+                                      .offset("teamConflictCost", 1.0)
+                                      .clip("teamConflictCost", false)
+                                      .soft("teamConflictCost"))
+                         .empty(),
+              "team conflict: a threshold offset or clip=false with offset 0 "
+              "on hard, and the literal offset on soft, are allowed");
     }
     {
         // Random walk: incremental == a fresh calculator of the same assembly.

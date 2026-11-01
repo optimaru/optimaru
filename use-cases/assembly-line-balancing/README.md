@@ -112,9 +112,12 @@ the single total for the four globals — the granularity of `exponent`) is shap
 every evaluated station below the offset, an empty one included); `offset=0` is the 0.2.0
 shaping. `max_stations_cost` and `forbidden_task_stations_cost` evaluate only their own
 stations (from `max_stations` on, and the stations some task forbids), so `clip=False`
-charges those and no other; `constraint_costs()` lists them as `"units"`. Each pick is its
-own instance with its own knobs, its level included (`level` replaced the `hard` knob;
-`hard=` raises `TypeError`), and the instances add up:
+charges those and no other; `constraint_costs()` lists them as `"units"`. Both formulas
+apply per station (or to a global's one total), not to the sum over the stations.
+`clip=False` with an offset is refused on hard (every constraint but `used_stations_cost`
+and `workload_imbalance_cost` by default), because hard 0 must mean no violation. Each pick
+is its own instance with its own knobs, its level included (`level` replaced the `hard`
+knob; `hard=` raises `TypeError`), and the instances add up:
 
 ```python
 from assembly_line_balancing.constraints import UsedStationsCost, get_constraints

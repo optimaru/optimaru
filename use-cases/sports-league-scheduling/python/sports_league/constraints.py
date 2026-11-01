@@ -39,7 +39,9 @@ Every spec takes five knobs:
                offset, ``max(0, c - offset) ** exponent``; ``False`` shapes
                ``c - offset`` as it is, so a round below the offset — an empty one
                (cost 0) included — lowers the penalty, and a global total below it
-               does too.
+               does too. With an offset it is refused on hard (``TeamConflictCost``
+               and the other three hard globals by default), because hard 0 must
+               mean no violation.
 
 The same constraint may be picked several times; each pick is scored on its own with
 its own knobs (its level included) and the picks add up. Every away-to-away kilometre costs 1, and the

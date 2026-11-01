@@ -22,6 +22,8 @@ an empty one included (`max_stations_cost` and `forbidden_task_stations_cost` ex
 scoped stations, as the engine evaluates them), and the four globals one term for their
 total, so an integral `offset` shapes each station (or the total) exactly as the engine does
 in both `clip` modes; a fractional offset is refused (`offset must be an integer for CP-SAT`).
+`clip=False` with an offset on a hard pick is refused with the engine's message when the
+objective is built.
 
 ```sh
 cd benchmarks/assembly-line-balancing/cpsat

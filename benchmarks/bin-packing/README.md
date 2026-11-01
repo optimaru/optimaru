@@ -31,6 +31,8 @@ its own knobs, its level included. The three per-bin constraints add one term pe
 0..n-1, an empty bin included, and `used_bins_cost` one term for the bin count, so an
 integral `offset` shapes each bin (or the count) exactly as the engine does in both `clip`
 modes; a fractional offset is refused (`offset must be an integer for CP-SAT`).
+`clip=False` with an offset on a hard pick is refused with the engine's message when the
+objective is built.
 
 <!-- results:start -->
 ## Results

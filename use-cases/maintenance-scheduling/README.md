@@ -72,9 +72,11 @@ total for the two conflict rules — the granularity of `exponent`) is shaped as
 `sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
 `(x - offset) ** exponent`, sign-preserving (`clip=False`, which lowers the penalty of
 every cell below the offset, an empty one included: every crew on every start date);
-`offset=0` is the 0.2.0 shaping. Each pick is its own instance with its own knobs, its
-level included (`level` replaced the `hard` knob; `hard=` raises `TypeError`), and the
-instances add up:
+`offset=0` is the 0.2.0 shaping. Both apply per cell (or to a conflict rule's one total),
+not to the sum over the cells. `clip=False` with an offset is refused on hard (the two
+start/end date rules and `crew_conflict_cost` by default), because hard 0 must mean no
+violation. Each pick is its own instance with its own knobs, its level included (`level`
+replaced the `hard` knob; `hard=` raises `TypeError`), and the instances add up:
 
 ```python
 from maintenance_scheduling.constraints import TagConflictCost, get_constraints

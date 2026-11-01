@@ -75,6 +75,9 @@ constraints, the single total for the seven globals — the granularity of `expo
 shaped as `sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
 `(x - offset) ** exponent`, sign-preserving (`clip=False`, which lowers the penalty of
 every round below the offset, an empty one included); `offset=0` is the 0.2.0 shaping.
+Both apply per round position (or to a global's one total), not to the sum over the
+rounds. `clip=False` with an offset is refused on hard (`team_conflict_cost` and the other
+three hard globals by default), because hard 0 must mean no violation.
 Each pick is its own instance with its own knobs, its level included (`level` replaced
 the `hard` knob; `hard=` raises `TypeError`), and the instances add up:
 

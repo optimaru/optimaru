@@ -146,28 +146,32 @@ def test_quad_raw_costs_match_by_hand():
 
 SELECTIONS = {
     "repeat": [BinCapacityCost(), BinCapacityCost(weight=3, offset=1), UsedBinsCost()],
+    # The literal formula with an offset is refused on hard: the hard picks are
+    # thresholds, the literal copies of the per-bin rules sit on soft.
     "repeat-literal": [
-        ColorConflictCost(offset=1, clip=False),
+        ColorConflictCost(level="soft", offset=1, clip=False),
         ColorConflictCost(weight=2, offset=-1),
         UsedBinsCost(),
         UsedBinsCost(weight=5, offset=2, clip=False),
     ],
     "hard-offsets": [
-        BinCapacityCost(offset=2, clip=False),
+        BinCapacityCost(offset=2),
+        BinCapacityCost(level="soft", offset=2, clip=False),
         ItemConflictCost(weight=2, offset=-1),
-        ItemConflictCost(offset=1, clip=False),
+        ItemConflictCost(level="soft", offset=1, clip=False),
         UsedBinsCost(level="hard", offset=1),
     ],
     "identical-twice": [ItemConflictCost(), ItemConflictCost(), UsedBinsCost()],
     # Each pick on its own level: a soft literal capacity next to the hard default, the
-    # bin count on hard beyond 1 next to its soft default, the conflicts moved to soft.
+    # bin count on hard beyond 1 next to its soft default, the conflicts moved to soft,
+    # the colour threshold named on hard.
     "levels": [
         BinCapacityCost(),
         BinCapacityCost(level="soft", weight=3, offset=1, clip=False),
         UsedBinsCost(),
         UsedBinsCost(level=Level.HARD, offset=1),
         ItemConflictCost(level="soft", weight=2, offset=-1),
-        ColorConflictCost(level="hard", weight=2, offset=1, clip=False),
+        ColorConflictCost(level="hard", weight=2, offset=1),
     ],
 }
 
