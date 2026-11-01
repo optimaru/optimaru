@@ -35,7 +35,8 @@ constraint.
   its single total, before the weight is applied. Every pick states its
   exponent, `1.0` included, on both binding paths (`applyConstraints` and
   `applyKnobs`), the same value the Python `score()` mirror uses; a duck-typed
-  pick without one reads as `1.0`.
+  pick with `exponent=None` reads as `1.0` (a pick must still have the
+  attribute).
 - A weight of `0` contributes exactly 0 at any exponent, on every path (the
   engine's `weightedCost()` and `score()` / `score_costs()`): the shaped value
   is never computed. An opt-in constraint at weight 0 with a huge exponent

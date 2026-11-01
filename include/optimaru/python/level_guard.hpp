@@ -3,7 +3,7 @@
 
 // The knob rules of a Python pick, kept free of pybind11 so the engine tests
 // can check them: the level a pick's `hard` knob asks for (its refusals and
-// their wording; constraint_binding.hpp's wantedLevel raises them as
+// their wording; constraint_binding.hpp's restateKnobs callers raise them as
 // ValueError), and how the three knobs, once read and type-checked
 // (constraint_binding.hpp readKnobs), are re-stated on a component.
 

@@ -531,3 +531,19 @@ def test_the_cpp_calculator_refuses_an_empty_or_repeated_selection():
     # ... other parameters (or scope) do.
     es.DecomposedCalculator([MaxConsecutiveDaysCost(value=1), MaxConsecutiveDaysCost(value=2)])
     es.DecomposedCalculator([MaxConsecutiveDaysCost(value=1), MaxConsecutiveDaysCost(value=1, worker_indices=(0,))])
+
+
+def test_the_cpp_calculator_compares_parameters_by_value_like_get_constraints():
+    """A list and a tuple scope are the same parameters on every path, as in get_constraints()."""
+    a = MaxConsecutiveDaysCost(value=5, worker_indices=(0, 1))
+    b = MaxConsecutiveDaysCost(value=5, worker_indices=[0, 1])
+    with pytest.raises(ValueError, match="same parameters"):
+        es.constraints.get_constraints([a, b])
+    with pytest.raises(ValueError, match="same parameters"):
+        es.DecomposedCalculator([a, b])
+    with pytest.raises(ValueError, match="same parameters"):
+        es.constraint_costs(to_schedule(_small_input()), [a, b])
+    # A different scope is still another instance on both paths.
+    other = MaxConsecutiveDaysCost(value=5, worker_indices=[0])
+    assert len(es.constraints.get_constraints([a, other])) == 2
+    es.DecomposedCalculator([a, other])

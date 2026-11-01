@@ -23,7 +23,7 @@ line-length = 120
 extend-select = ["I"]
 
 [build-system]
-requires = ["setuptools>=61.0", "pybind11"]
+requires = ["setuptools>=61.0", "pybind11>=2.13.6"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]

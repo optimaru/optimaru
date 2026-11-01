@@ -17,7 +17,7 @@
 //       inner component's metadata, catalogInfo() for a catalog wider than
 //       the defaults
 //   (j) python::levelForHard(): the bindings' hard=True/False guard and its
-//       wording (wantedLevel / applyKnobs raise it as ValueError)
+//       wording (applyKnobs / applyConstraints raise it as ValueError)
 //   (k) LIST kind with a medium level: every preview (unit cells, a
 //       previewing global, BelowHard rounding) equals the applied score,
 //       which FULL_ASSERT checks against a full recompute
@@ -740,7 +740,7 @@ void testBindingLevelGuard() {
     std::printf("== (j) python::levelForHard: the bindings' hard=True/False guard ==\n");
     using optimaru::python::levelForHard;
     // What solve(..., constraints=[RewardCost(hard=True)]) and
-    // StructuralCost(hard=False) raise as ValueError through wantedLevel /
+    // StructuralCost(hard=False) raise as ValueError through applyConstraints /
     // applyKnobs, in the Python base's words.
     const PreferenceReward<SoftFoldTasks> reward;
     check(refusal([&] { levelForHard(reward, true, "'preference_reward'"); }) ==

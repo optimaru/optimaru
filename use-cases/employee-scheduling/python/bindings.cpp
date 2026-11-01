@@ -351,12 +351,22 @@ void addConstraintByName(DecomposedCalculator &calc,
         calc.add(std::move(built.global));
 }
 
+// Python package holding this extension (e.g. "optimaru.employee_scheduling"),
+// set when the module loads, so calculatorFor can reach the package's
+// _constraint helpers.
+std::string &packageName()
+{
+    static std::string name;
+    return name;
+}
+
 // A calculator holding exactly `constraints` (each pick added by the
 // factory), or the default assembly for None. The selection rules of the
 // Python get_constraints() (select(..., repeatable=True)): an empty list is
-// an error, and so is the same name with the same parameters twice (keyed
-// (name, repr(sorted(params.items()))), as select() keys it); the same name
-// with other parameters or scope is a separate instance.
+// an error, and so is the same name with the same parameters twice. The key
+// is the one select() uses, (name, _normalized(params)), so parameters
+// compare by value (a list and a tuple scope, or 1 and 1.0, are the same);
+// the same name with other parameters or scope is a separate instance.
 std::unique_ptr<DecomposedCalculator> calculatorFor(const py::object &constraints)
 {
     auto calc = std::make_unique<DecomposedCalculator>();
@@ -365,25 +375,25 @@ std::unique_ptr<DecomposedCalculator> calculatorFor(const py::object &constraint
         addDefaultConstraints(*calc);
         return calc;
     }
-    const py::object sorted = py::module_::import("builtins").attr("sorted");
-    std::vector<std::string> seen;
+    const py::object normalized
+        = py::module_::import((packageName() + "._constraint").c_str()).attr("_normalized");
+    py::list seen;
     for (py::handle pick : constraints)
     {
         const py::dict params = paramsOf(pick);
         const std::string name = pick.attr("name").cast<std::string>();
-        const std::string key
-            = name + '\n' + py::repr(sorted(params.attr("items")())).cast<std::string>();
-        if (std::find(seen.begin(), seen.end(), key) != seen.end())
+        const py::tuple key = py::make_tuple(name, normalized(params));
+        if (seen.contains(key))
         {
             throw py::value_error(
                 "constraint '" + name
                 + "' picked more than once with the same parameters; state each "
                   "instance once with the metadata you want");
         }
-        seen.push_back(key);
+        seen.append(key);
         addConstraintByName(*calc, pick, params);
     }
-    if (seen.empty())
+    if (seen.size() == 0)
         throw py::value_error(
             "constraints must not be empty (pass None for the defaults)");
     return calc;
@@ -393,6 +403,10 @@ std::unique_ptr<DecomposedCalculator> calculatorFor(const py::object &constraint
 
 PYBIND11_MODULE(_core, m)
 {
+    {
+        const std::string module = m.attr("__name__").cast<std::string>();
+        packageName() = module.substr(0, module.rfind('.'));
+    }
     m.doc() = "Employee shift scheduling — optimaru engine-backed C++ wrapper "
               "exposed to Python";
 

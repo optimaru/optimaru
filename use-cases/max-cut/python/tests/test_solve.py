@@ -237,7 +237,8 @@ def test_stop_at_first_feasible_has_no_soft_floor(monkeypatch):
     """stop_at_first_feasible hands the engine best_score_limit (0, -inf): only the hard level
     is compared, so no soft score, however low, misses the stop. The first 0.2.0 limit,
     (0, -1e18), was never reached by a soft score below -1e18. A soft score that low cannot
-    be built here (its default soft terms are a reward (cut_weight_cost) and an opt-in term at weight 0), so the limit itself is checked; the stop is exercised end to end
+    be built here (its default soft terms are a reward (cut_weight_cost) and an opt-in term at
+    weight 0), so the limit itself is checked; the stop is exercised end to end
     in the other packages' tests."""
     import max_cut as package
 
