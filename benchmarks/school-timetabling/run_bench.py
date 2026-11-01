@@ -16,7 +16,7 @@ both results are rescored with cpsat's validate.py (same time limit, same proble
 Track 3 (--track3, partial timetabling): a track-2 instance loses one weekday
 (--drop-day) so it cannot be filled, and both backends solve with the
 unassigned lessons relaxed (CP-SAT solve_partial, the engine with
-unassigned_lessons_cost hard=false); both are rescored with cpsat's
+unassigned_lessons_cost level=soft); both are rescored with cpsat's
 validate.py, with the weekly-period shortfall counted separately.
 
 Example:
@@ -264,7 +264,7 @@ def track3(args) -> None:
     A track-2 instance loses one weekday so that periods > cells, and both sides
     solve with unassigned_lessons_cost (weekly periods) relaxed — CP-SAT with
     `solve_partial`, the engine with the equivalent assembly
-    (`unassigned_lessons_cost` hard=false). Both
+    (`unassigned_lessons_cost` level=soft). Both
     follow the same contract, "unfilled periods are a penalty, not a hard
     violation", so the comparison is **how much was filled** (placed periods) and
     the soft quality of the result.
@@ -388,7 +388,7 @@ def track3(args) -> None:
                 problem_dict,
                 time_limit_seconds=float(args.seconds),
                 random_seed=args.seed,
-                constraints=Assembly().add("unassigned_lessons_cost", hard=False, weight=UNASSIGNED_WEIGHT),
+                constraints=Assembly().add("unassigned_lessons_cost", level="soft", weight=UNASSIGNED_WEIGHT),
             )
         except Exception as e:  # noqa: BLE001 — show backend failures in the table as they are
             rows.append(
@@ -425,7 +425,7 @@ def track3(args) -> None:
         f"## Track 3: partial timetabling — C++ canonical vs CP-SAT ({args.seconds}s, seed {args.seed})",
         "",
         f"Instances made unfillable (periods > cells) by removing weekday {args.drop_day}. Both sides relax the"
-        f" weekly periods (CP-SAT `solve_partial`, engine `unassigned_lessons_cost hard=false"
+        f" weekly periods (CP-SAT `solve_partial`, engine `unassigned_lessons_cost level=soft"
         f" weight={UNASSIGNED_WEIGHT}`).",
         "",
         "| instance | backend | status | placed/required | unassigned | hard left | soft penalty | total objective | wall |",

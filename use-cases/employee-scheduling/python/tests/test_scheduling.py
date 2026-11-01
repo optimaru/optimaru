@@ -230,16 +230,16 @@ def test_constraint_list_equals_add_by_name():
     declared = es.DecomposedCalculator(
         [
             es.RequiredSkillCost(2.0),
-            es.MinRestCost(0.25, hard=False),
-            es.UndesiredDayCost(hard=True),
+            es.MinRestCost(0.25, level="soft"),
+            es.UndesiredDayCost(level="hard"),
             es.DesiredDayCost(exponent=2.0),
             es.ShiftCountImbalanceCost(3.0),
         ]
     )
     named = es.DecomposedCalculator()
     named.add("required_skill_cost", weight=2.0)
-    named.add("min_rest_cost", weight=0.25, hard=False)
-    named.add("undesired_day_cost", hard=True)
+    named.add("min_rest_cost", weight=0.25, level="soft")
+    named.add("undesired_day_cost", level="hard")
     named.add("desired_day_cost", exponent=2.0)
     named.add("shift_count_imbalance_cost", weight=3.0)
 
@@ -273,8 +273,8 @@ def test_default_constraint_list_reproduces_builtin_score():
             {"name": "employee_unavailability_cost"},
             {"name": "shift_overlap_cost", "weight": 0.5},
             {"name": "max_one_shift_per_day_cost"},
-            {"name": "min_rest_cost", "hard": False, "weight": 0.25},
-            {"name": "undesired_day_cost", "hard": True},
+            {"name": "min_rest_cost", "level": "soft", "weight": 0.25},
+            {"name": "undesired_day_cost", "level": "hard"},
             {"name": "desired_day_cost", "weight": 0.5},
             {"name": "shift_count_imbalance_cost", "weight": 3.0},
         ],
@@ -806,7 +806,7 @@ def test_hard_override_moves_the_level():
         shift.employee_index = i % len(schedule.employees)
 
     calc = es.DecomposedCalculator()
-    calc.add("undesired_day_cost", hard=True)
+    calc.add("undesired_day_cost", level="hard")
     score = calc.score(schedule)
     assert score.hard < 0
     assert score.soft == 0
@@ -929,3 +929,9 @@ def test_worker_pairing_cost_share_and_avoid_modes():
     assert score(0, 2, True) == 0  # ... not sharing -> no penalty
     assert score(0, -1, False) == -1  # A works, B off -> one-sided
     assert score(0, -1, True) == 0
+
+
+def test_add_refuses_the_old_hard_knob():
+    """add() reads other keywords as rule parameters, where hard= would vanish silently."""
+    with pytest.raises(TypeError, match="use level="):
+        es.DecomposedCalculator().add("required_skill_cost", hard=True)

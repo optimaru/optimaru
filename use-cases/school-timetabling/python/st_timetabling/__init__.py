@@ -183,7 +183,7 @@ def _assemble_plugin(constraints):
             report[spec.name] = weight
         if spec.name == UnassignedLessonsCost.name:
             # Hard means unassigned lessons cannot occur (the engine does not enable the moves either).
-            unassigned_weight = None if spec.hard is not False else weight
+            unassigned_weight = None if spec.level != "soft" else weight
     return calculator, canon.ObjectiveWeights(**report), unassigned_weight
 
 

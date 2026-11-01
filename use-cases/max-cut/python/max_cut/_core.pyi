@@ -182,4 +182,4 @@ def constraint_info() -> list[ConstraintInfo]:
     """The constraint catalog, in list_constraints() order: the four hard
     constraints at weight 1 (flippable), partition_imbalance_cost (soft, weight 0:
     opt-in, default_enabled False), then cut_weight_cost (soft, weight 1, a
-    reward: hard=True is refused and its level cannot change)."""
+    reward: level="hard" is refused and its level cannot change)."""

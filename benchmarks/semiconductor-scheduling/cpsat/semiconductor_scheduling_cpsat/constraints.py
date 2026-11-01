@@ -9,7 +9,7 @@ Two kinds of plugin, one semantics (the engine's raw cost; 0 = no violation):
 
 - STRUCTURAL (12): the rule is posted as model constraints whenever the constraint is
   selected, so every CP-SAT solution has raw cost 0 for it and the objective term is 0.
-  These plugins refuse a selection the model cannot honour: ``hard=False`` or a weight
+  These plugins refuse a selection the model cannot honour: ``level="soft"`` or a weight
   other than None/1 (ValueError). MachineEligibilityCost is the variable layout itself:
   every operation runs exactly one eligible option (for a machine listed twice, the LAST
   option, the one the engine scores), so an ineligible assignment cannot be represented.
@@ -77,7 +77,7 @@ def _structural(plugin: ConstraintPlugin, objective: ObjectiveBuilder) -> bool:
     if selected is None:
         return False
     _spec, config = selected
-    if config.hard is False or config.weight not in (None, 1):
+    if config.level not in (None, "hard") or config.weight not in (None, 1):
         raise ValueError(f"{plugin.name}: the CP-SAT model enforces this constraint structurally (hard, weight 1)")
     return True
 

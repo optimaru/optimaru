@@ -2,7 +2,7 @@
 
 The default path (`sl.solve(schedule)`) enables all ten constraints at their default
 weights. This module is the alternative path next to it: pick constraints, change
-weights, flip hard/soft, and pass the list to `solve(schedule, constraints=...)`.
+weights, change levels, and pass the list to `solve(schedule, constraints=...)`.
 
 The shortest route is :func:`get_constraints`. It returns the default list, so
 a "default with a small tweak" declaration fits on one line::
@@ -22,12 +22,14 @@ Each constraint has a default instance at module level (`team_conflict_cost`,
 Only listed constraints are scored — leave one out and its term disappears from the
 score.
 
-Every spec takes ``(weight=None, hard=None, exponent=1.0)``:
+Every spec takes ``(weight=None, level=None, exponent=1.0)``:
 
 - ``weight``   linear multiplier on the constraint cost. ``None`` = the component
                default (1 for every constraint but `workday_classic_matches_cost`,
                whose default is 1000). ``sl.constraint_info()`` reports the defaults.
-- ``hard``     ``True`` = hard, ``False`` = soft, ``None`` = the default level.
+- ``level``    ``None`` = the default level, otherwise ``Level.HARD`` or
+               ``Level.SOFT`` (or the names ``"hard"`` and ``"soft"``). This use
+               case has no medium level.
 - ``exponent`` sign-preserving power shaping: ``weight * sign(c) * |c| **
                exponent``. 2.0 = squared, so concentrated violations grow much
                costlier. The three unit constraints (`start_to_away_hop_cost`,
@@ -45,10 +47,11 @@ Module-level instance names use the same snake_case, so they match the strings
 `list_constraints()` prints.
 """
 
-from ._constraint import Constraint, Score, score_costs, select
+from ._constraint import Constraint, Level, Score, score_costs, select
 
 __all__ = [
     "Constraint",
+    "Level",
     "Score",
     "score",
     "StartToAwayHopCost",
@@ -324,7 +327,7 @@ def score(costs: dict, constraints: list[Constraint] | None = None) -> Score:
     each unit contributes ``weight * shape(cost, exponent)`` and hard
     contributions are **rounded per unit** before summing (the same order as the
     engine's applyRaw; rounding the total afterwards gives different values).
-    ``weight=None`` / ``hard=None`` read the entry's default weight and level.
+    ``weight=None`` / ``level=None`` read the entry's default weight and level.
 
     When ``constraints`` is given, only those constraints are scored — the same
     semantics as `get_constraints`. Unknown names raise ValueError.

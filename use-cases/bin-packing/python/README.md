@@ -29,8 +29,8 @@ raw = bp.constraint_costs(problem)   # raw per-bin costs (used_bins_cost: [count
 score(raw), score(raw, [UsedBinsCost(exponent=2.0)])
 ```
 
-`weight` (None = the default, 1), `hard` (None = the default level, True = hard, False
-= soft) and `exponent` (1.0) are the only knobs. The exponent shapes each bin's cost
+`weight` (None = the default, 1), `level` (None = the default level, otherwise
+"hard" or "soft") and `exponent` (1.0) are the only knobs. The exponent shapes each bin's cost
 for the three per-bin constraints and the bin count for `used_bins_cost`; 0.1.x shaped
 colour excess per (bin, colour) and conflicts per pair, so only exponent != 1 scores
 change (totals and exponent-1 scores are identical).

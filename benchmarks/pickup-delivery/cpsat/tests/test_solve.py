@@ -77,7 +77,7 @@ def test_cpsat_defaults_are_the_engine_defaults() -> None:
         assert (
             entry["kind"] == "either"
         )  # every pickup-delivery constraint is flippable
-        assert entry["params"] == {"weight": None, "hard": None, "exponent": 1.0}
+        assert entry["params"] == {"weight": None, "level": None, "exponent": 1.0}
     assert engine["unassigned_requests_cost"].default_level == "medium"
     assert (
         next(e for e in entries if e["name"] == "unassigned_requests_cost")[
@@ -200,7 +200,7 @@ def _levels(value: str) -> dict[str, int]:
 
 
 def test_demoting_the_medium_constraint_scores_like_the_engine() -> None:
-    """hard=False moves unassigned_requests_cost to soft on BOTH solvers.
+    """level="soft" moves unassigned_requests_cost to soft on BOTH solvers.
 
     With driving hard, parking the vehicle wins: both requests are dropped and
     their 2 x 10 service minutes land on soft, not on medium."""
@@ -208,8 +208,8 @@ def test_demoting_the_medium_constraint_scores_like_the_engine() -> None:
         paired_request_cost,
         same_vehicle_cost,
         pickup_before_dropoff_cost,
-        UnassignedRequestsCost(hard=False),
-        TravelTimeCost(hard=True),
+        UnassignedRequestsCost(level="soft"),
+        TravelTimeCost(level="hard"),
     ]
     request = _two_requests()
     solved = solve_request(request, constraints=selection)
@@ -248,7 +248,7 @@ def test_default_selection_scores_like_the_engine() -> None:
 )
 @pytest.mark.parametrize(
     "knobs",
-    [{"hard": False}, {"weight": 0}, {"weight": 1}],
+    [{"level": "soft"}, {"weight": 0}, {"weight": 1}],
     ids=["soft", "weight-0", "weight-1"],
 )
 def test_structural_constraints_refuse_what_the_model_cannot_honour(
@@ -263,6 +263,6 @@ def test_structural_constraints_refuse_what_the_model_cannot_honour(
     "spec_class", [PairedRequestCost, SameVehicleCost, PickupBeforeDropoffCost]
 )
 def test_structural_constraints_accept_their_engine_default(spec_class) -> None:
-    for pick in (spec_class(), spec_class(hard=True), spec_class(weight=1000)):
+    for pick in (spec_class(), spec_class(level="hard"), spec_class(weight=1000)):
         solved = solve_request(_two_requests(timelimit=1), constraints=[pick])
         assert _levels(solved.score)["hard"] == 0

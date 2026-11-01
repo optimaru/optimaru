@@ -236,9 +236,9 @@ def test_scores_match_the_oracle_at_integer_weights(seed):
     picked: list[Constraint] = []
     for spec in specs[: rng.randint(1, len(specs))]:
         weight = rng.choice([None, 0, 1, 2, 5])
-        hard = rng.choice([None, True, False])
-        picked.append(type(spec)(weight=weight, hard=hard))
-    expected = ref.score_costs(old, [(by_old[spec.name], spec.weight, spec.hard, 1.0) for spec in picked])
+        level = rng.choice([None, "hard", "soft"])
+        picked.append(type(spec)(weight=weight, level=level))
+    expected = ref.score_costs(old, [(by_old[spec.name], spec.weight, {None: None, "hard": True, "soft": False}[spec.level], 1.0) for spec in picked])
     assert tuple(score(raw, picked)) == pytest.approx(expected)
 
 

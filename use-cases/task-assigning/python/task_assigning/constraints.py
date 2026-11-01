@@ -2,7 +2,7 @@
 
 The default path (`ta.solve(solution)`) enables all six constraints at their default
 weights. This module is the alternative path next to it: pick constraints, change weights,
-flip hard/soft, and pass the list to `solve(solution, constraints=...)`.
+change levels, and pass the list to `solve(solution, constraints=...)`.
 
 The shortest route is :func:`get_constraints`. It returns the default list, so
 a "default with a small tweak" declaration fits on one line::
@@ -21,19 +21,19 @@ Each constraint has a default instance at module level, so you can also pass a
 list of just a few. Only listed constraints are scored — leave one out and its
 term disappears from the score.
 
-Every spec takes ``(weight=None, hard=None, exponent=1.0)``:
+Every spec takes ``(weight=None, level=None, exponent=1.0)``:
 
 - ``weight``   linear multiplier on the constraint cost, in units of its level.
                ``None`` = the C++ component default (``ta.constraint_info()``
                lists them).
-- ``hard``     ``True`` = hard, ``False`` = soft, ``None`` = the default level.
+- ``level``    ``None`` = the default level, otherwise a ``Level`` or its name
+               (``Level.MEDIUM`` or ``"medium"``). Any flippable constraint may
+               take any of the three levels.
                ``unassigned_tasks_cost`` is the one **medium** constraint
                (Bendable soft[0], folded into the engine's hard level BELOW the
-               missing skills: ``engine.hard = hard * 10^9 + medium``); medium
-               is a default-only level: ``hard=True`` charges one hard unit
-               (10^9 engine-hard units) per unassigned task, ``hard=False`` one
-               soft unit per unassigned task, and an explicit ``weight`` stays in
-               medium units.
+               missing skills: ``engine.hard = hard * 10^9 + medium``): ``level="hard"`` charges one hard unit
+               (10^9 engine-hard units) per unassigned task, ``level="soft"`` one
+               soft unit per unassigned task, and a ``weight`` is in units of the level in effect.
 - ``exponent`` sign-preserving power shaping: ``weight * sign(c) * |c| **
                exponent``, per employee for the unit constraints and on the total
                for the global ``unassigned_tasks_cost``. 2.0 = squared, so
@@ -52,10 +52,11 @@ mechanically, so there is no hand-maintained alias table — check them with
 so they match the strings `list_constraints()` prints.
 """
 
-from ._constraint import Constraint, Score, score_costs, select
+from ._constraint import Constraint, Level, Score, score_costs, select
 
 __all__ = [
     "Constraint",
+    "Level",
     "Score",
     "score",
     "RequiredSkillCost",

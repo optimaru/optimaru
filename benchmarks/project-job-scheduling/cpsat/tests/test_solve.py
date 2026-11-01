@@ -141,7 +141,7 @@ def test_cpsat_defaults_are_the_engine_defaults() -> None:
         assert entry["reward"] == row.reward
         assert entry["default_enabled"] == row.default_enabled
         assert entry["kind"] == "either"  # every project-job constraint is flippable
-        assert entry["params"] == {"weight": None, "hard": None, "exponent": 1.0}
+        assert entry["params"] == {"weight": None, "level": None, "exponent": 1.0}
     # The medium constraint sits on the medium level at weight 1 (medium units).
     assert {
         name: (row.default_level, row.default_weight) for name, row in engine.items()
@@ -217,15 +217,15 @@ _CAPACITY = [non_renewable_resource_capacity_cost, renewable_resource_capacity_c
     [
         # Default (medium): the project delay dominates a doubled makespan.
         ([*_CAPACITY, project_delay_cost, MakespanCost(weight=2)], (0, -1, -10)),
-        # hard=False demotes medium to SOFT on both paths (before 0.2.0 CP-SAT kept it
+        # level="soft" demotes medium to SOFT on both paths (before 0.2.0 CP-SAT kept it
         # on medium and the engine ignored it): 3 + 2 * 3 = 9 beats 1 + 2 * 5 = 11.
         (
-            [*_CAPACITY, ProjectDelayCost(hard=False), MakespanCost(weight=2)],
+            [*_CAPACITY, ProjectDelayCost(level="soft"), MakespanCost(weight=2)],
             (0, 0, -9),
         ),
-        # hard=True: one hard unit per day of delay, not 10^9.
+        # level="hard": one hard unit per day of delay, not 10^9.
         (
-            [*_CAPACITY, ProjectDelayCost(hard=True), MakespanCost(weight=2)],
+            [*_CAPACITY, ProjectDelayCost(level="hard"), MakespanCost(weight=2)],
             (-1, 0, -10),
         ),
     ],
@@ -245,10 +245,10 @@ def test_medium_knobs_score_like_the_engine(selection, expected) -> None:
 
 
 def test_demoting_a_hard_constraint_scores_like_the_engine() -> None:
-    """hard=False on a hard constraint lands on soft in both solvers too: one unit over
+    """level="soft" on a hard constraint lands on soft in both solvers too: one unit over
     the stock (1 soft) lets both jobs run fast (delay 1, makespan 2)."""
     problem = _fast_or_slow()
-    selection = [NonRenewableResourceCapacityCost(hard=False), *get_constraints()[1:]]
+    selection = [NonRenewableResourceCapacityCost(level="soft"), *get_constraints()[1:]]
     solved = solve(problem, time_limit_seconds=5, constraints=selection)
     assert (solved.score_hard, solved.score_medium, solved.score_soft) == (0, -1, -3)
     engine = score(domain.constraint_costs(solved.to_core()), selection)

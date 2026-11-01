@@ -6,7 +6,7 @@ single cell that does not fit makes the whole problem INFEASIBLE — and the use
 cannot see why.
 
 All this does is swap the unassigned-lessons constraint for its relaxed mode —
-`UnassignedLessonsCost(hard=False)` turns "exactly" into "at most" and the
+`UnassignedLessonsCost(level="soft")` turns "exactly" into "at most" and the
 unfilled periods into a penalty. Its weight (`UNASSIGNED_WEIGHT`, the engine's
 documented soft weight) is far above the sum of the other soft terms, so every
 period that can be filled is filled and only the truly impossible ones stay
@@ -56,7 +56,7 @@ def solve_partial(problem: TimetableProblem, config: SolverConfig | None = None)
 
     config = config or SolverConfig()
     weight = config.weights.model_dump().get(UnassignedLessonsCost.name, UNASSIGNED_WEIGHT)
-    relaxed = UnassignedLessonsCost(hard=False, weight=weight)
+    relaxed = UnassignedLessonsCost(level="soft", weight=weight)
     return solve(problem, config, constraints=merge(default_constraints(config.weights), relaxed))
 
 

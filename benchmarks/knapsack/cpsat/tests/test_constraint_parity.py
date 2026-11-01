@@ -9,7 +9,7 @@ reports no violation.
 
 Then the optimum: CP-SAT's optimum equals the brute-force optimum of the
 engine's score, per constraint and for the default set; and the catalog and
-the knobs (defaults, hard=False) agree.
+the knobs (defaults, level="soft") agree.
 """
 
 from __future__ import annotations
@@ -241,13 +241,13 @@ def test_cpsat_defaults_are_the_engine_defaults():
         assert entry["reward"] == row.reward
         assert entry["default_enabled"] == row.default_enabled
         assert entry["kind"] == ("soft" if row.reward else "either")
-        assert entry["params"] == {"weight": None, "hard": None, "exponent": 1.0}
+        assert entry["params"] == {"weight": None, "level": None, "exponent": 1.0}
 
 
 def test_demoting_a_hard_constraint_scores_like_the_engine():
-    """hard=False moves the term to soft in both solvers; the CP-SAT result rescores identically."""
+    """level="soft" moves the term to soft in both solvers; the CP-SAT result rescores identically."""
     selection = [
-        ForbiddenItemsCost(hard=False) if spec.name == "forbidden_items_cost" else spec for spec in get_constraints()
+        ForbiddenItemsCost(level="soft") if spec.name == "forbidden_items_cost" else spec for spec in get_constraints()
     ]
     solved = solve(Model.model_validate(EVERYTHING), time_limit_seconds=10, constraints=selection)
     engine = score(constraint_costs(solved.to_core()), selection)
@@ -257,7 +257,7 @@ def test_demoting_a_hard_constraint_scores_like_the_engine():
 
 def test_reweighting_scores_like_the_engine():
     selection = [
-        KnapsackCapacityCost(hard=False, weight=3),
+        KnapsackCapacityCost(level="soft", weight=3),
         ResourceCapacityCost(weight=2),
         SelectedValueCost(weight=2),
     ]
@@ -267,7 +267,7 @@ def test_reweighting_scores_like_the_engine():
 
 def test_the_reward_refuses_hard_true_in_cpsat_too():
     with pytest.raises(ValueError, match="is a reward"):
-        solve(Model.model_validate(PLAIN), time_limit_seconds=1, constraints=[SelectedValueCost(hard=True)])
+        solve(Model.model_validate(PLAIN), time_limit_seconds=1, constraints=[SelectedValueCost(level="hard")])
 
 
 def test_exponents_and_fractional_weights_stay_unsupported():

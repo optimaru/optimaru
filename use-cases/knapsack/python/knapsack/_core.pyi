@@ -191,5 +191,5 @@ class ConstraintInfo(NamedTuple):
 def constraint_info() -> list[ConstraintInfo]:
     """The constraint catalog, in list_constraints() order: the six hard
     constraints at weight 1 (flippable), then selected_value_cost (soft, weight 1,
-    a reward: hard=True is refused and its level cannot change); all scored by
+    a reward: level="hard" is refused and its level cannot change); all scored by
     default (default_enabled)."""

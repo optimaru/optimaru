@@ -31,7 +31,7 @@ checks that list against the rule union and `catalog()` against
 `es_scheduling.constraint_info()` row for row. Each plugin subclasses its spec
 (`class MaxConsecutiveDaysCost(domain.MaxConsecutiveDaysCost, RulePlugin)`) and
 adds only `build()`: the default level, weight and reward flag are the engine's
-`constraint_info()` rows (read by cpsat-common), and `hard=False` demotes to soft
+`constraint_info()` rows (read by cpsat-common), and `level="soft"` demotes to soft
 exactly as in the engine. A request may hold one constraint several times; the
 k-th plugin of a name is `"<name>#<k>"`. On fixed rosters each rule must match
 the engine's calculator, including rosters with double-booked and unassigned

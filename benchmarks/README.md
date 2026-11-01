@@ -39,12 +39,12 @@ constraint-plugin contract and the comparison runner (`run_cli`).
 
 A CP-SAT constraint is a plugin that subclasses the use case's own constraint
 spec (`<Subject>Cost`), so both solvers take the same selection: the same
-names and the same `weight` / `hard` / `exponent` knobs. The plugin declares no
+names and the same `weight` / `level` / `exponent` knobs. The plugin declares no
 defaults; its level, weight, `level_flippable` and `reward` come from the
 domain's `constraint_info()`, so the two solvers cannot disagree on a default.
-`hard=False` demotes a hard or medium constraint to soft on both paths. CP-SAT
+`level="soft"` demotes a hard or medium constraint to soft on both paths. CP-SAT
 accepts only `exponent=1` and integral weights, and some constraints are
-structural in a CP-SAT model (enforced by its variables, so `hard=False` is
+structural in a CP-SAT model (enforced by its variables, so `level="soft"` is
 refused there; school-timetabling, pickup-delivery and semiconductor-scheduling
 have such constraints). Each benchmark's README (or `cpsat/README.md`) lists
 its own limits.

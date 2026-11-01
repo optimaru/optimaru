@@ -28,7 +28,7 @@ def test_hard_override_moves_term_to_soft_level() -> None:
     model = cp_model.CpModel()
     value = model.new_bool_var("value")
     objective = ObjectiveBuilder(
-        model, ("hard", "soft"), SPECS, [{"name": "capacity", "hard": False}]
+        model, ("hard", "soft"), SPECS, [{"name": "capacity", "level": "soft"}]
     )
     objective.add("capacity", value, bound=1)
     objective.minimize()
@@ -123,9 +123,9 @@ def test_canonical_cost_alias_can_sum_several_engine_components() -> None:
 class _DomainConstraint:
     name = "capacity"
 
-    def __init__(self, weight=None, hard=None, exponent=1.0):
+    def __init__(self, weight=None, level=None, exponent=1.0):
         self.weight = weight
-        self.hard = hard
+        self.level = level
         self.exponent = exponent
 
 
@@ -172,21 +172,21 @@ def _level(levels, selection):
 
 
 @pytest.mark.parametrize(
-    ("name", "hard", "expected"),
+    ("name", "level", "expected"),
     [
         ("capacity", None, "hard"),
-        ("capacity", False, "soft"),  # not levels[1] == "medium"
+        ("capacity", "soft", "soft"),  # not levels[1] == "medium"
         ("unassigned", None, "medium"),
-        ("unassigned", True, "hard"),
-        ("unassigned", False, "soft"),  # medium demotes to soft, like the engine
-        ("distance", True, "hard"),
-        ("distance", False, "soft"),
-        ("pinned", True, "hard"),  # re-stating a structural level is fine
-        ("bonus", False, "soft"),
+        ("unassigned", "hard", "hard"),
+        ("unassigned", "soft", "soft"),  # medium demotes to soft, like the engine
+        ("distance", "hard", "hard"),
+        ("distance", "soft", "soft"),
+        ("pinned", "hard", "hard"),  # re-stating a structural level is fine
+        ("bonus", "soft", "soft"),
     ],
 )
-def test_hard_knob_maps_like_the_engine(name, hard, expected) -> None:
-    assert _level(("hard", "medium", "soft"), {"name": name, "hard": hard}) == expected
+def test_level_knob_maps_like_the_engine(name, level, expected) -> None:
+    assert _level(("hard", "medium", "soft"), {"name": name, "level": level}) == expected
 
 
 def test_hard_false_lands_medium_term_on_soft_in_scores() -> None:
@@ -194,7 +194,7 @@ def test_hard_false_lands_medium_term_on_soft_in_scores() -> None:
     value = model.new_int_var(0, 3, "value")
     model.add(value == 3)
     objective = ObjectiveBuilder(
-        model, ("hard", "medium", "soft"), LEVELED, [{"name": "unassigned", "hard": False}]
+        model, ("hard", "medium", "soft"), LEVELED, [{"name": "unassigned", "level": "soft"}]
     )
     objective.add("unassigned", value, bound=3)
     objective.minimize()
@@ -206,18 +206,18 @@ def test_hard_false_lands_medium_term_on_soft_in_scores() -> None:
 
 def test_reward_refuses_hard_true() -> None:
     with pytest.raises(ValueError, match="reward and cannot be hard"):
-        _level(("hard", "soft"), {"name": "bonus", "hard": True})
+        _level(("hard", "soft"), {"name": "bonus", "level": "hard"})
 
 
 def test_non_flippable_constraint_refuses_a_level_change() -> None:
     with pytest.raises(ValueError, match="is always hard"):
-        _level(("hard", "soft"), {"name": "pinned", "hard": False})
+        _level(("hard", "soft"), {"name": "pinned", "level": "soft"})
 
 
 def test_hard_false_needs_a_soft_level() -> None:
-    """hard=False always means soft; a level set without one cannot take it."""
+    """level="soft" always means soft; a level set without one cannot take it."""
     specs = (ConstraintSpec("skill", "Skill", "hard", 1),)
-    objective = ObjectiveBuilder(cp_model.CpModel(), ("hard", "medium"), specs, [{"name": "skill", "hard": False}])
+    objective = ObjectiveBuilder(cp_model.CpModel(), ("hard", "medium"), specs, [{"name": "skill", "level": "soft"}])
     assert objective.level_of(*objective.selected["skill"]) == "soft"
     with pytest.raises(ValueError, match="unsupported score level 'soft'"):
         objective.add("skill", 1, bound=1)
@@ -328,9 +328,9 @@ def test_catalog_rows_use_the_server_vocabulary() -> None:
     }
     assert catalog["radius"]["default_enabled"] is False  # an opt-in weight-0 objective
     assert all(catalog[name]["default_enabled"] for name in ("capacity", "bonus"))
-    # Fed back as a selection, the params change nothing (hard: False would demote).
+    # Fed back as a selection, the params change nothing (any other level would move it).
     for row in catalog.values():
-        assert row["params"] == {"weight": None, "hard": None, "exponent": 1.0}
+        assert row["params"] == {"weight": None, "level": None, "exponent": 1.0}
 
 
 def test_default_enabled_and_repeated_instances_read_the_engine_row(monkeypatch) -> None:
@@ -374,8 +374,8 @@ def test_default_enabled_and_repeated_instances_read_the_engine_row(monkeypatch)
 @pytest.mark.parametrize(
     ("selection", "error", "message"),
     [
-        ({"name": "capacity", "hard": "false"}, TypeError, "hard must be True, False or None"),
-        ({"name": "capacity", "hard": 1}, TypeError, "hard must be True, False or None"),
+        ({"name": "capacity", "level": "false"}, ValueError, "level must be 'hard', 'medium' or 'soft'"),
+        ({"name": "capacity", "level": 1}, TypeError, "level must be a Level, its name or None"),
         ({"name": "capacity", "weight": True}, TypeError, "weight must be a number or None"),
         ({"name": "capacity", "weight": "2"}, TypeError, "weight must be a number or None"),
         ({"name": "capacity", "weight": -1}, ValueError, "weight must be finite and >= 0"),
@@ -383,7 +383,7 @@ def test_default_enabled_and_repeated_instances_read_the_engine_row(monkeypatch)
         ({"name": "capacity", "exponent": 0}, ValueError, "exponent must be finite and > 0"),
         ({"name": "capacity", "exponent": 2.0}, ValueError, "exponent is not supported by CP-SAT"),
         ({"name": "capacity", "enabled": "no"}, TypeError, "enabled must be True or False"),
-        (_DomainConstraint(hard="false"), TypeError, "hard must be True, False or None"),
+        (_DomainConstraint(level="false"), ValueError, "level must be 'hard', 'medium' or 'soft'"),
     ],
 )
 def test_mapping_selections_get_the_spec_knob_checks(selection, error, message) -> None:
@@ -392,17 +392,28 @@ def test_mapping_selections_get_the_spec_knob_checks(selection, error, message) 
         resolve(SPECS, [selection])
 
 
+def test_a_pick_without_a_level_is_refused_rather_than_defaulted() -> None:
+    class OldPick:
+        name = "capacity"
+        weight = None
+        hard = False
+        exponent = 1.0
+
+    with pytest.raises(AttributeError, match="level"):
+        resolve(SPECS, [OldPick()])
+
+
 def test_server_selection_shape_and_catalog_params_round_trip() -> None:
-    """{name, enabled, weight, hard, exponent} with exponent 1.0 is a valid selection."""
+    """{name, enabled, weight, level, exponent} with exponent 1.0 is a valid selection."""
     selected = resolve(
         SPECS,
         [
-            {"name": "capacity", "enabled": True, "weight": 5, "hard": None, "exponent": 1.0},
+            {"name": "capacity", "enabled": True, "weight": 5, "level": None, "exponent": 1.0},
             {"name": "distance", **SPECS[1].as_dict()["params"]},
         ],
     )
     assert selected["capacity"][1].weight == 5
-    assert selected["distance"][1].hard is None
+    assert selected["distance"][1].level is None
 
 
 def test_score_costs_round_like_llround_at_the_double_edges() -> None:

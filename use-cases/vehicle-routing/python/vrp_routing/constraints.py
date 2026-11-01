@@ -4,8 +4,8 @@ The default path (`Solver(cfg).solve(plan)`) enables the four quickstart constra
 the per-vehicle route-policy constraints cost 0 while their parameter is 0. The
 enclosing-circle radius, route duration and latency are opt-in objectives with
 default weight 0.
-This module is the alternative path next to it: pick constraints, change weights, flip
-hard/soft, and pass the list to `solve_with_constraints`.
+This module is the alternative path next to it: pick constraints, change weights, change
+levels, and pass the list to `solve_with_constraints`.
 
 The shortest route is :func:`get_constraints`. It returns the default list, so
 a "default with a small tweak" declaration fits on one line::
@@ -25,17 +25,18 @@ Each constraint has a default instance at module level, so you can also pass a
 list of just a few. Only listed constraints are scored — leave one out and its
 term disappears from the score.
 
-Every spec takes ``(weight=None, hard=None, exponent=1.0)``:
+Every spec takes ``(weight=None, level=None, exponent=1.0)``:
 
 - ``weight``   linear multiplier on the constraint cost, in units of its level.
                ``None`` = the C++ component default (``vrp.constraint_info()``
                lists them).
-- ``hard``     ``True`` = hard, ``False`` = soft, ``None`` = the default level.
+- ``level``    ``None`` = the default level, otherwise a ``Level`` or its name
+               (``Level.MEDIUM`` or ``"medium"``). Any flippable constraint may
+               take any of the three levels.
                ``unassigned_visits_cost`` is the one **medium** constraint
-               (folded into the engine's soft level as ``medium * 10^9``);
-               medium is a default-only level: ``hard=True`` charges one hard
-               unit per penalty minute, ``hard=False`` one soft unit per penalty
-               minute, and an explicit ``weight`` stays in medium units.
+               (folded into the engine's soft level as ``medium * 10^9``): ``level="hard"`` charges one hard
+               unit per penalty minute, ``level="soft"`` one soft unit per penalty
+               minute, and a ``weight`` is in units of the level in effect.
 - ``exponent`` sign-preserving power shaping: ``weight * sign(c) * |c| **
                exponent``, per vehicle for the route constraints and on the total
                for the global ``unassigned_visits_cost``. 2.0 = squared, so
@@ -52,10 +53,11 @@ calculator cannot be cloned into workers) and the driving-time-guided selection.
 Details are in the comments of `cpp/include/vrp/solver.hpp`.
 """
 
-from ._constraint import Constraint, Score, score_costs, select
+from ._constraint import Constraint, Level, Score, score_costs, select
 
 __all__ = [
     "Constraint",
+    "Level",
     "Score",
     "score",
     "VehicleCapacityCost",

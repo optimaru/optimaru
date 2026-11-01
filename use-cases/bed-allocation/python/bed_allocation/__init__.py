@@ -145,7 +145,7 @@ def solve(
         ba.solve(plan, constraints=get_constraints())
         # unassigned nights as soft instead of medium:
         others = [spec for spec in get_constraints() if spec.name != "unassigned_stays_cost"]
-        ba.solve(plan, constraints=[*others, UnassignedStaysCost(hard=False)])
+        ba.solve(plan, constraints=[*others, UnassignedStaysCost(level="soft")])
 
     The result's score then reports each term on the level the selection gave it, and so
     does every score passed to ``on_new_best``.

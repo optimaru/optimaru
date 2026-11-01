@@ -132,7 +132,7 @@ def solve(
         fp.solve(schedule, constraints=get_constraints())
         # unassigned minutes as soft instead of medium:
         others = [spec for spec in get_constraints() if spec.name != "unassigned_jobs_cost"]
-        fp.solve(schedule, constraints=[*others, UnassignedJobsCost(hard=False)])
+        fp.solve(schedule, constraints=[*others, UnassignedJobsCost(level="soft")])
 
     The result's score then reports each term on the level the selection gave it.
     """

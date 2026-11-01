@@ -29,7 +29,7 @@ struct CutWeightCost final : detail::MemberChangeConstraint
     explicit CutWeightCost(double weight = kDefaultWeight)
         : detail::MemberChangeConstraint("cutWeightCost", weight, kDefaultLevel)
     {
-        reward = true;  // raw cost <= 0; hard=True refused everywhere
+        reward = true;  // raw cost <= 0; level='hard' refused everywhere
         levelFlippable = false;
     }
 

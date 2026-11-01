@@ -17,7 +17,7 @@ of its per-side costs; 0 exactly when the engine reports no violation, `-cut` fo
 the `cut_weight_cost` reward), and that the CP-SAT optimum equals the brute-force
 optimum of the engine's score, per constraint and for the default set.
 Exponents other than 1 and fractional weights are not supported on CP-SAT (they
-raise `ValueError`); `cut_weight_cost` with `hard=True` is refused as in the
+raise `ValueError`); `cut_weight_cost` with `level="hard"` is refused as in the
 engine.
 
 ```sh

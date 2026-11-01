@@ -45,7 +45,7 @@ pj.constraint_info()
 #                 default_weight=1.0, level_flippable=True, reward=False, default_enabled=True), ...,
 #  ConstraintInfo(name='project_delay_cost', default_level='medium', default_weight=1.0, ...), ...]
 others = [spec for spec in get_constraints() if spec.name != "project_delay_cost"]
-pj.solve(core, time_limit_seconds=5.0, constraints=[*others, ProjectDelayCost(hard=False)])  # delay as soft days
+pj.solve(core, time_limit_seconds=5.0, constraints=[*others, ProjectDelayCost(level="soft")])  # delay as soft days
 score(raw), score(raw, [*others, ProjectDelayCost(weight=2)])        # re-priced in pure Python
 ```
 
@@ -76,7 +76,7 @@ score(raw), score(raw, [*others, ProjectDelayCost(weight=2)])        # re-priced
 | `makespan_cost` | `MakespanCost` | soft, 1 | latest SINK end date (a max over the projects) |
 
 `constraint_info()` reports these defaults from the C++ components. The medium weight is in
-medium units: `hard=True` on `project_delay_cost` costs 1 hard per day, `hard=False` 1 soft
+medium units: `level="hard"` on `project_delay_cost` costs 1 hard per day, `level="soft"` 1 soft
 per day, and an explicit weight stays on the medium level.
 
 0.2.0 renamed them (`non_renewable_resource_capacity`, `renewable_resource_capacity`,

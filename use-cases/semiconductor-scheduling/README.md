@@ -64,7 +64,7 @@ reports its total as one raw cost:
 | `cycle_time_cost` | `CycleTimeCost` | soft | 1 | completion - release of completed lots (= `total_cycle_time`) |
 | `makespan_cost` | `MakespanCost` | soft | 1 | latest completion among the lots' last steps (= `makespan`) |
 
-Every constraint is flippable (`hard=True` / `hard=False`), none is a reward, and all 20
+Every constraint is flippable (`level="hard"` / `level="soft"`), none is a reward, and all 20
 are scored by default (`default_enabled`); `semiconductor_scheduling.constraint_info()`
 reports exactly this table from the C++ components (`kDefaultLevel` / `kDefaultWeight`).
 The 0.1.x quirks are kept on purpose: a route overlap is charged by

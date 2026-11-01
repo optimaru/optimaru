@@ -102,7 +102,7 @@ def test_cpsat_defaults_are_the_engine_defaults() -> None:
         assert entry["reward"] == row.reward
         assert entry["default_enabled"] == row.default_enabled
         assert entry["kind"] == "either"  # every maintenance constraint is flippable
-        assert entry["params"] == {"weight": None, "hard": None, "exponent": 1.0}
+        assert entry["params"] == {"weight": None, "level": None, "exponent": 1.0}
     assert {
         name: (row.default_level, row.default_weight) for name, row in engine.items()
     } == {
@@ -127,7 +127,7 @@ def test_default_solve_scores_like_the_engine() -> None:
 
 
 def test_demoting_max_end_date_scores_like_the_engine() -> None:
-    """hard=False lands on soft in both solvers.
+    """level="soft" lands on soft in both solvers.
 
     Job a may not start before Wed and must end by Wed, which its 3 days cannot meet,
     so max_end_date_cost (or min_start_date_cost) is violated in every solution.
@@ -136,7 +136,7 @@ def test_demoting_max_end_date_scores_like_the_engine() -> None:
     same selection."""
     problem = _parity_problem()
     selection = [
-        MaxEndDateCost(hard=False) if spec.name == "max_end_date_cost" else spec
+        MaxEndDateCost(level="soft") if spec.name == "max_end_date_cost" else spec
         for spec in get_constraints()
     ]
     solved = solve(problem, time_limit_seconds=5, constraints=selection)

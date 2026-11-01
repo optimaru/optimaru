@@ -31,10 +31,11 @@ Every spec takes the same three knobs, and only those:
 
 - ``weight``   ``None`` = the component's default weight (C++ kDefaultWeight,
                in units of its level); otherwise a finite number >= 0.
-- ``hard``     ``None`` = the component's default level (hard, medium or
-               soft); ``True`` = hard; ``False`` = soft. Medium is a
-               default-only level. A reward refuses ``True``; a constraint
-               whose level is not flippable refuses any change.
+- ``level``    ``None`` = the component's default level; otherwise a
+               :class:`Level` or its name (``"hard"``, ``"medium"``, ``"soft"``).
+               ``Level.MEDIUM`` needs a domain with a medium level. A reward
+               refuses hard, and refuses medium where medium folds below hard;
+               a constraint whose level is not flippable refuses any change.
 - ``exponent`` sign-preserving power shaping, > 0 (1.0 = none): per unit for a
                unit constraint, on the single total for a global one.
 
@@ -58,11 +59,20 @@ import math
 import numbers
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, fields
+from enum import StrEnum
 from typing import Any, ClassVar, NamedTuple
 
-__all__ = ["Constraint", "Score", "instance_keys", "score_costs", "select", "shape"]
+__all__ = ["Constraint", "Level", "Score", "instance_keys", "score_costs", "select", "shape"]
 
-_KNOBS = ("weight", "hard", "exponent")
+_KNOBS = ("weight", "level", "exponent")
+
+
+class Level(StrEnum):
+    """The score level a constraint is charged on. Hard dominates medium, medium dominates soft."""
+
+    HARD = "hard"
+    MEDIUM = "medium"
+    SOFT = "soft"
 
 
 @dataclass(frozen=True)
@@ -79,7 +89,7 @@ class Constraint:
     """
 
     weight: float | None = None  # None = the component's default weight
-    hard: bool | None = None  # None = the component's default level
+    level: Level | str | None = None  # None = the component's default level
     exponent: float = 1.0
 
     name: ClassVar[str] = ""
@@ -94,21 +104,24 @@ class Constraint:
             raise TypeError(f"{cls.__name__} must set a registry `name`")
 
     def __post_init__(self):
-        _check_knobs(self.name, self.weight, self.hard, self.exponent)
+        _check_knobs(self.name, self.weight, self.level, self.exponent)
 
     def params(self) -> dict[str, Any]:
         """The domain parameters: every dataclass field but the three knobs."""
         return {field.name: getattr(self, field.name) for field in fields(self) if field.name not in _KNOBS}
 
 
-def _check_knobs(name: str, weight: Any, hard: Any, exponent: Any) -> None:
+def _check_knobs(name: str, weight: Any, level: Any, exponent: Any) -> None:
     if weight is not None:
         if isinstance(weight, bool) or not isinstance(weight, numbers.Real):
             raise TypeError(f"constraint {name!r}: weight must be a number or None, not {weight!r}")
         if not math.isfinite(weight) or weight < 0:
             raise ValueError(f"constraint {name!r}: weight must be finite and >= 0, not {weight!r}")
-    if hard is not None and not _is_bool(hard):
-        raise TypeError(f"constraint {name!r}: hard must be True, False or None, not {hard!r}")
+    if level is not None:
+        if not isinstance(level, str):
+            raise TypeError(f"constraint {name!r}: level must be a Level, its name or None, not {level!r}")
+        if level not in tuple(Level):
+            raise ValueError(f"constraint {name!r}: level must be 'hard', 'medium' or 'soft', not {level!r}")
     if isinstance(exponent, bool) or not isinstance(exponent, numbers.Real):
         raise TypeError(f"constraint {name!r}: exponent must be a number, not {exponent!r}")
     if not math.isfinite(exponent) or exponent <= 0:
@@ -288,7 +301,7 @@ def _saturate_hard(total: int) -> int:
 
 
 def _default_level(entry: Mapping[str, Any]) -> str:
-    """The level ``hard=None`` means: the component's default level.
+    """The level ``level=None`` means: the component's default level.
 
     ``constraint_costs()`` reports it as ``default_level``. An entry built
     without it (by hand, or by an older package) falls back on ``level``,
@@ -306,13 +319,22 @@ def _default_weight(entry: Mapping[str, Any]) -> float:
 
 def _level(spec: Any, entry: Mapping[str, Any]) -> str:
     default = _default_level(entry)
-    if spec.hard is None:
+    if spec.level is None:
         return default
-    wanted = "hard" if spec.hard else "soft"
-    if wanted == "hard" and entry.get("reward", False):
-        raise ValueError(f"constraint {spec.name!r} is a reward (raw cost <= 0) and cannot be hard")
+    wanted = Level(spec.level).value
+    fold = entry.get("medium_fold")
+    if wanted == "medium" and fold is None:
+        raise ValueError(f"constraint {spec.name!r}: this use case has no medium level")
+    if entry.get("reward", False):
+        if wanted == "hard":
+            raise ValueError(f"constraint {spec.name!r} is a reward (raw cost <= 0) and cannot be hard")
+        if wanted == "medium" and fold["kind"] == "below_hard":
+            raise ValueError(
+                f"constraint {spec.name!r} is a reward (raw cost <= 0) and cannot be medium here, "
+                "where medium counts toward the hard score"
+            )
     if wanted != default and not entry.get("level_flippable", True):
-        raise ValueError(f"constraint {spec.name!r} is always {default}; hard={bool(spec.hard)!r} is not allowed")
+        raise ValueError(f"constraint {spec.name!r} is always {default}; level={wanted!r} is not allowed")
     return wanted
 
 
@@ -375,7 +397,7 @@ def score_costs(costs: Mapping[str, Mapping[str, Any]], constraints: Iterable[An
             available = sorted({str(value.get("name", name)) for name, value in costs.items()})
             raise ValueError(f"unknown constraint {spec.name!r}; available: " + ", ".join(map(repr, available)))
         exponent = 1.0 if spec.exponent is None else spec.exponent
-        _check_knobs(spec.name, spec.weight, spec.hard, exponent)
+        _check_knobs(spec.name, spec.weight, spec.level, exponent)
         level = _level(spec, entry)
         weight = _default_weight(entry) if spec.weight is None else spec.weight
         values = [_contribution(spec.name, weight, cost, exponent) for cost in entry["costs"]]

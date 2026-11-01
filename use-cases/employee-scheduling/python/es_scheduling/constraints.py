@@ -6,7 +6,7 @@ takes, plus the constraint's own domain parameters::
 
     constraints = [
         RequiredSkillCost(),                         # hard, default weight
-        MinRestCost(weight=0.25, hard=False),        # demoted to a cheap soft cost
+        MinRestCost(weight=0.25, level="soft"),        # demoted to a cheap soft cost
         UndesiredDayCost(weight=2.0, per_day=True),  # soft, double weight, 1 per day
         ShiftCountImbalanceCost(exponent=2.0),
         MaxConsecutiveDaysCost(value=5, worker_indices=(0, 1)),   # scoped
@@ -20,10 +20,9 @@ The knobs (see ``_constraint.py``):
 - ``weight``   ``None`` = the component's default weight (C++ kDefaultWeight;
                1 for every employee-scheduling constraint); otherwise a
                finite number >= 0.
-- ``hard``     ``None`` = the component's default level (each class
-               docstring says which); ``True`` = hard; ``False`` = soft. The
-               two rewards (``DesiredDayCost``, ``DesiredShiftCost``) refuse
-               ``True``.
+- ``level``    ``None`` = the default level, otherwise ``Level.HARD`` or
+               ``Level.SOFT`` (or the names ``"hard"`` and ``"soft"``). This use
+               case has no medium level.
 - ``exponent`` sign-preserving power shaping, > 0: per employee for a unit
                constraint, on the single total for a global one.
 
@@ -49,11 +48,12 @@ import operator
 from dataclasses import dataclass, field
 from typing import ClassVar, Literal
 
-from ._constraint import Constraint, Score, instance_keys, score_costs, select
+from ._constraint import Constraint, Level, Score, instance_keys, score_costs, select
 from ._core import MAX_DAY
 
 __all__ = [
     "Constraint",
+    "Level",
     "Score",
     "score",
     "instance_keys",
@@ -967,7 +967,7 @@ def score(costs: dict, constraints: list[Constraint] | None = None) -> Score:
 
     `costs` must be ``constraint_costs(schedule, constraints)`` of the SAME
     list (repeated rules are keyed ``"<name>#<k>"``); None = the defaults on
-    both sides. Each spec's weight / hard / exponent re-prices its entry
+    both sides. Each spec's weight / level / exponent re-prices its entry
     without another scoring pass.
     """
     return score_costs(costs, get_constraints(constraints))

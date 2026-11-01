@@ -54,7 +54,7 @@ class ConstraintInfo(NamedTuple):
 def constraint_info() -> list[ConstraintInfo]:
     """The constraint catalog of the canonical domain, in list_constraints()
     order: per constraint its Python name, default level, default weight (the
-    C++ kDefaultWeight), whether hard=True/False may change the level (False
+    C++ kDefaultWeight), whether level may change the level (False
     for fixed_slots_cost / parallel_groups_cost), whether it is a reward, and
     whether it is scored by default."""
 
@@ -426,8 +426,8 @@ class canon:
 
             weight:   linear multiplier of the raw cost; None keeps the
                       component default.
-            hard:     None keeps the default level, True = hard, False = soft
-                      (fixed_slots_cost / parallel_groups_cost refuse False).
+            level:    None keeps the default level, otherwise "hard" or "soft"
+                      (fixed_slots_cost / parallel_groups_cost refuse "soft").
             exponent: sign-preserving power shaping:
                       contribution = weight * sign(c)*|c|^exponent.
             Unknown names raise ValueError. Adding a name twice is allowed (the

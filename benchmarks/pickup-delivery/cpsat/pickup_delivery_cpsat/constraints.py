@@ -10,7 +10,7 @@ The circuit formulation in solve.py enforces the three request-coupling rules
 (``paired_request_cost``, ``same_vehicle_cost``, ``pickup_before_dropoff_cost``)
 by construction: a request rides one vehicle or none, pickup first. Their
 plugins add no objective term (the raw cost is 0 in every CP-SAT solution) and
-refuse what the model cannot honour: ``hard=False`` or a weight other than the
+refuse what the model cannot honour: ``level="soft"`` or a weight other than the
 engine default. ``enclosing_circle_radius_cost``, ``squared_order_age_cost``,
 ``pinned_stops_cost`` and ``required_vehicle_cost`` have no CP-SAT plugin
 (engine-only; selecting them here is an unknown-constraint error).
@@ -146,19 +146,19 @@ class _StructuralPlugin(ConstraintPlugin[PdpContext]):
     the raw cost is 0 in every CP-SAT solution and nothing joins the
     objective. That is the engine's rule at its default (hard, weight 1000) —
     in the limit; the model cannot price a violation, so it refuses a
-    selection that would make one acceptable: ``hard=False``, or an explicit
+    selection that would make one acceptable: ``level="soft"``, or an explicit
     weight other than the default. Leaving the rule out of a selection does
     not lift the structure.
     """
 
     def build(self, context: PdpContext, objective: ObjectiveBuilder) -> None:
         spec, config = objective.selected[self.name]
-        if config.hard is False or (
+        if config.level not in (None, "hard") or (
             config.weight is not None and config.weight != spec.weight
         ):
             raise ValueError(
                 f"constraint {self.name!r}: the CP-SAT model enforces it structurally "
-                f"(hard, weight {spec.weight}); hard=False or another weight is not supported"
+                f"(hard, weight {spec.weight}); another level or weight is not supported"
             )
 
 

@@ -380,7 +380,7 @@ PYBIND11_MODULE(_core, m)
         // Same solve, scored by a caller-chosen constraint set (see
         // food_packaging.constraints). The picks replace the defaults; None
         // keeps them. schedule.score then reports the three levels the
-        // assembly put the terms on (a medium constraint with hard=False
+        // assembly put the terms on (a medium constraint with level='soft'
         // lands on soft).
         .def(
             "solve_with_constraints",

@@ -36,15 +36,15 @@ lines run by the same operator must not overlap.
 `list_constraints()` and `constraint_info()` report them in this order (the unit
 constraints, then the two globals); `food_packaging.constraint_info()` reports exactly
 this table from the C++ components (`kDefaultLevel` / `kDefaultWeight`). Every
-constraint is flippable (`hard=True` / `hard=False`), none is a reward and all five
+constraint is flippable (`level="hard"` / `level="soft"`), none is a reward and all five
 are scored by default (`default_enabled`).
 
 The medium weights are in **medium units**: the domain folds the medium level into the
 engine's soft level as `engine.soft = medium * 10^10 + soft` (`kMediumFold` in
 `cpp/include/fp/domain.hpp`, reported as `medium_fold: {"kind": "into_soft", "unit": 1e10}`
-on every `constraint_costs()` entry). Medium is a default-only level: `hard=True` makes a
-medium constraint 1 hard unit per minute, `hard=False` 1 soft unit per minute (outside the
-fold), and an explicit `weight` keeps it on the medium level, in medium units — in the
+on every `constraint_costs()` entry). `level="hard"` makes a
+medium constraint 1 hard unit per minute, `level="soft"` 1 soft unit per minute (outside the
+fold), and a `weight` is in units of the level in effect — in the
 engine and in the CP-SAT reference alike. A solve with `constraints=` reports
 `schedule.score` and every `on_new_best` score from the calculator's three levels
 (`levelScores()`), not by decoding the folded soft, so a soft total of 10^10 or more stays
@@ -57,7 +57,7 @@ on soft in both.
 instances, C++ structs, headers and registry names follow). The two medium constraints
 used to carry the fold as a soft weight of 10^10 (some docs said 10^9, which was never
 the value); now their default weight is 1 on the medium level and the fold belongs to the
-domain, so `hard=True` costs 1 hard per minute (was 10^10) and `hard=False` demotes them
+domain, so `level="hard"` costs 1 hard per minute (was 10^10) and `level="soft"` demotes them
 to soft in both solvers (it was a no-op in the engine and landed on medium in CP-SAT).
 `analyze()` / `ConstraintBreakdown` are no longer exposed to Python:
 `constraint_costs()` is the one per-constraint surface. Raw costs and the default score
@@ -151,7 +151,7 @@ solver's `solve` before the engine runs — the engine only fills what is still 
 4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
    `description_en` / `description_ko` to `python/food_packaging/constraints.py` (plus its
    module-level default instance); callers then pick, reweight or flip it:
-   `constraints=get_constraints([..., MyRuleCost(weight=5, hard=True)])`;
+   `constraints=get_constraints([..., MyRuleCost(weight=5, level="hard")])`;
 5. mirror it in the CP-SAT model in
    [`benchmarks/food-packaging/cpsat`](../../benchmarks/food-packaging/cpsat) (a plugin
    subclassing the spec; defaults come from `constraint_info()`) so the benchmark stays like

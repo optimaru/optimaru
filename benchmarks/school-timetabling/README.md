@@ -55,7 +55,7 @@ at the default weights).
 A track-2 instance loses one weekday (`--drop-day`, default 4 = Friday) so
 that **periods > cells**, and both sides solve with `unassigned_lessons_cost`
 (weekly periods) relaxed — CP-SAT with `solve_partial`, the engine with the
-equivalent assembly (`unassigned_lessons_cost hard=false weight=10000`, the
+equivalent assembly (`unassigned_lessons_cost level=soft weight=10000`, the
 documented soft weight `UNASSIGNED_LESSONS_SOFT_WEIGHT`). Placing everything is
 impossible from the start, so the comparison is **how much gets filled**.
 
@@ -96,20 +96,20 @@ How to read it:
 
 Its constraint registry (`teacher_scheduling/solver/registry.py`) subclasses the
 engine's specs (`st_timetabling.constraints`): the same 17 names, the same
-`(weight=None, hard=None, exponent=1.0)` knobs and the engine's defaults from
+`(weight=None, level=None, exponent=1.0)` knobs and the engine's defaults from
 `st_timetabling.constraint_info()` — nothing is restated. The hard constraints
 are CP-SAT model constraints, so on this path:
 
-- `unassigned_lessons_cost` with `hard=False` is partial timetabling (`solve_partial`).
+- `unassigned_lessons_cost` with `level="soft"` is partial timetabling (`solve_partial`).
   `weight=None` there is the engine default, 1, so a lesson would be dropped to save a single
   teacher gap (20): pass `weight=UNASSIGNED_WEIGHT` (10000, the engine's
   `UNASSIGNED_LESSONS_SOFT_WEIGHT`) for partial timetabling, as `solve_partial` does;
-- every other hard constraint refuses `hard=False`, and a weight 0 leaves it out.
+- every other hard constraint refuses `level="soft"`, and a weight 0 leaves it out.
   `fixed_slots_cost` / `parallel_groups_cost` are not flippable in the engine either; the
   other eight (`class_conflict_cost` ... `teacher_max_consecutive_periods_cost`) are model
   constraints here without a penalty form, so they are structural on CP-SAT only, although the
   catalog (read from the engine) lists them as `kind="either"`;
-- a soft constraint with `hard=True` forbids every violation (`model.add(expr == 0)`);
+- a soft constraint with `level="hard"` forbids every violation (`model.add(expr == 0)`);
 - weights must be integers and `exponent` must be 1 (a linear CP-SAT objective).
 
 `Timetable.penalties`, `validate.compute_penalties` and `SolverConfig.weights` are keyed by

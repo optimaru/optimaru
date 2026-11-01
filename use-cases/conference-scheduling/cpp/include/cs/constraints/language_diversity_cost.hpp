@@ -19,7 +19,7 @@ struct LanguageDiversityCost final : BreakdownConstraint
     explicit LanguageDiversityCost(double weight = kDefaultWeight)
         : BreakdownConstraint("languageDiversityCost", weight, kDefaultLevel)
     {
-        reward = true;  // raw cost <= 0; hard=True is refused
+        reward = true;  // raw cost <= 0; level='hard' is refused
         levelFlippable = false;
     }
     std::int64_t select(const Breakdown &breakdown) const override

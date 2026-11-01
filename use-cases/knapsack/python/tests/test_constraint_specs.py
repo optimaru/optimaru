@@ -89,7 +89,7 @@ def test_get_constraints_defaults_to_the_full_set():
 
 
 def test_module_level_instances_keep_every_default():
-    """Module-level instances keep the defaults (weight=None, hard=None, exponent=1)."""
+    """Module-level instances keep the defaults (weight=None, level=None, exponent=1)."""
     instances = (
         knapsack_capacity_cost,
         resource_capacity_cost,
@@ -100,7 +100,7 @@ def test_module_level_instances_keep_every_default():
         selected_value_cost,
     )
     for spec in instances:
-        assert (spec.weight, spec.hard, spec.exponent) == (None, None, 1.0)
+        assert (spec.weight, spec.level, spec.exponent) == (None, None, 1.0)
     assert list(instances) == get_constraints()
 
 
@@ -251,7 +251,7 @@ def test_level_can_be_flipped():
     """Demoting a hard constraint to soft moves its cost to the soft level."""
     problem = extended()
     flipped = [
-        spec if spec.name != "forbidden_items_cost" else ForbiddenItemsCost(hard=False) for spec in get_constraints()
+        spec if spec.name != "forbidden_items_cost" else ForbiddenItemsCost(level="soft") for spec in get_constraints()
     ]
     assert knapsack.calculate_score(problem, flipped) == (-4, 4.0)
     assert engine_score(problem, flipped) == (-4, 4.0)
@@ -266,8 +266,8 @@ def test_reweighting_scales_only_that_term():
 
 
 def test_the_reward_refuses_hard_true_on_every_path():
-    """selected_value_cost is a reward (raw <= 0): hard=True raises, in Python and through C++."""
-    pick = SelectedValueCost(hard=True)  # the spec itself is a plain value
+    """selected_value_cost is a reward (raw <= 0): level="hard" raises, in Python and through C++."""
+    pick = SelectedValueCost(level="hard")  # the spec itself is a plain value
     problem = extended()
     with pytest.raises(ValueError, match="is a reward"):
         score(knapsack.constraint_costs(problem), [pick])
@@ -275,11 +275,11 @@ def test_the_reward_refuses_hard_true_on_every_path():
         knapsack.calculate_score(problem, [pick])
     with pytest.raises(ValueError, match="is a reward"):
         knapsack.solve(problem, time_limit_seconds=0, constraints=[pick])
-    duck = SimpleNamespace(name="selected_value_cost", weight=None, hard=True, exponent=1.0)
+    duck = SimpleNamespace(name="selected_value_cost", weight=None, level="hard", exponent=1.0)
     with pytest.raises(ValueError, match="'selected_value_cost' is a reward"):
         knapsack.Solver(_zero()).solve_with_constraints(problem.to_core(), [duck])
-    # hard=False re-states its level: allowed, and scores like the default.
-    assert knapsack.calculate_score(problem, [SelectedValueCost(hard=False)]) == (0, 5.0)
+    # level="soft" re-states its level: allowed, and scores like the default.
+    assert knapsack.calculate_score(problem, [SelectedValueCost(level="soft")]) == (0, 5.0)
 
 
 @pytest.mark.parametrize(
@@ -301,8 +301,8 @@ def test_specs_validate_their_knobs(kwargs, error):
 
 def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     """The C++ side guards too: a duck-typed pick cannot smuggle a negative weight in."""
-    negative = SimpleNamespace(name="knapsack_capacity_cost", weight=-2.0, hard=None, exponent=1.0)
-    flat = SimpleNamespace(name="knapsack_capacity_cost", weight=None, hard=None, exponent=0.0)
+    negative = SimpleNamespace(name="knapsack_capacity_cost", weight=-2.0, level=None, exponent=1.0)
+    flat = SimpleNamespace(name="knapsack_capacity_cost", weight=None, level=None, exponent=0.0)
     for pick, message in ((negative, "weight must be finite and >= 0"), (flat, "exponent must be finite and > 0")):
         with pytest.raises(ValueError, match=message):
             knapsack.solve(basic(), time_limit_seconds=0, constraints=[pick])
@@ -313,14 +313,13 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     [
         ({"weight": True}, "weight must be a number or None, not True"),
         ({"weight": "2"}, "weight must be a number or None, not '2'"),
-        ({"hard": 1}, "hard must be True, False or None, not 1"),
-        ({"hard": "x"}, "hard must be True, False or None, not 'x'"),
+        ({"level": 1}, "level must be a Level, its name or None, not 1"),
         ({"exponent": True}, "exponent must be a number, not True"),
     ],
 )
 def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
     """The C++ path checks the knob types like _constraint.py: TypeError, the same words."""
-    pick = SimpleNamespace(name="mandatory_items_cost", weight=None, hard=None, exponent=1.0)
+    pick = SimpleNamespace(name="mandatory_items_cost", weight=None, level=None, exponent=1.0)
     for key, value in knobs.items():
         setattr(pick, key, value)
     with pytest.raises(TypeError, match=f"constraint 'mandatory_items_cost': {re.escape(message)}"):
@@ -342,7 +341,7 @@ def test_unknown_and_old_names_are_refused():
     )
     raw = knapsack.constraint_costs(extended())
     for old in (*old_names, "knapsack_capacity_costs"):
-        pick = SimpleNamespace(name=old, weight=None, hard=None, exponent=1.0)
+        pick = SimpleNamespace(name=old, weight=None, level=None, exponent=1.0)
         with pytest.raises(ValueError, match="unknown constraint"):
             knapsack.solve(basic(), time_limit_seconds=0, constraints=[pick])
         with pytest.raises(ValueError, match="unknown constraint"):
@@ -370,9 +369,9 @@ def test_empty_and_repeated_picks_are_rejected():
     [
         None,
         [knapsack_capacity_cost],
-        [ResourceCapacityCost(weight=3), MandatoryItemsCost(hard=False), selected_value_cost],
+        [ResourceCapacityCost(weight=3), MandatoryItemsCost(level="soft"), selected_value_cost],
         [SelectionGroupBoundsCost(exponent=2.0), ItemDependencyCost(weight=0.5), SelectedValueCost(weight=2)],
-        [ForbiddenItemsCost(hard=False, exponent=0.5), SelectedValueCost(exponent=1.5)],
+        [ForbiddenItemsCost(level="soft", exponent=0.5), SelectedValueCost(exponent=1.5)],
         [KnapsackCapacityCost(weight=0.5), MandatoryItemsCost(weight=0.5), ForbiddenItemsCost(weight=0.5)],
     ],
 )
@@ -411,3 +410,8 @@ def test_score_equals_the_engine_for_the_default_assembly():
     engine = knapsack.calculate_score(problem.to_core())
     python = score(knapsack.constraint_costs(problem))
     assert (python.hard, python.soft) == (engine.hard, engine.soft)
+
+
+def test_medium_is_refused_where_there_is_no_medium_level():
+    with pytest.raises(ValueError, match="this use case has no medium level"):
+        solved([KnapsackCapacityCost(level="medium")])

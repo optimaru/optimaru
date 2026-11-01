@@ -9,7 +9,7 @@ Score (HardSoftScore), at the default weights:
 - hard = -(fixed vertices off their side + split same-side pairs + different-side
   pairs left together + side-size shortfall/excess) — four constraints, hard x1 each
 - soft = +(cut weight) — `cut_weight_cost`, a reward (raw cost `-(cut weight)`),
-  soft x1; it is always soft (`hard=True` raises)
+  soft x1; it is always soft (`level="hard"` raises)
 - `partition_imbalance_cost` (`abs(n0 - n1)`) is an opt-in objective: soft, default
   weight 0
 
@@ -41,7 +41,7 @@ raw cost per side and `exponent` shapes each side; the imbalance and the cut rep
 one total. `calculate_score` / `constraint_costs` need a complete partition (a partial
 one raises `ValueError`). 0.2.0 renamed every constraint (no aliases), replaced the
 per-term lists of `constraint_costs()` by the standard dict, shapes each side instead
-of each fixed vertex / pair, rounds hard per side, refuses `hard=True` on the reward
+of each fixed vertex / pair, rounds hard per side, refuses `level="hard"` on the reward
 and partial partitions, and replaced the simulated-annealing `SolverConfig` knobs
 (`max_iterations`, `stagnation_limit`, `temperature`, `cooling_rate`) by the engine's
 (`spent_limit_seconds`, `step_count_limit`, ...); see the

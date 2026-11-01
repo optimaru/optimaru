@@ -103,7 +103,7 @@ include/optimaru/
 ├── python/constraint_binding.hpp                  pybind11 helper: Python constraint specs
 │                                                  -> ConstraintAssembly, constraint_info(),
 │                                                  constraint_costs()
-├── python/{names,level_guard}.hpp                 Python names, the hard=True/False guard
+├── python/{names,level_guard}.hpp                 Python names, the level guard
 └── testing/preview_parity.hpp                     move-preview vs applied-score harness
                                                    for a use case's calculator tests
 ```
@@ -126,7 +126,7 @@ namespaces); the directories organize the headers, the namespaces don't.
 - **Constraint plugins**: `DecomposedScoreCalculator` scores named unit and
   global components (`<Subject>Cost`). Each declares its default weight and
   level (`kDefaultWeight` / `kDefaultLevel`: hard, medium or soft); a caller
-  re-states only `weight`, `hard` / `soft` and `exponent` per solve
+  re-states only `weight`, level and `exponent` per solve
   (`ConstraintAssembly`). Rewards (raw cost <= 0) never go hard, structural
   constraints keep their level, and a domain with a medium level declares once
   how it folds into the hard/soft score (`MediumFold`).

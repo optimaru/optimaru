@@ -495,9 +495,9 @@ void bindCanon(py::module_ &canon)
         "exactly.")
         .def(py::init<>())
         // Example: DecomposedCalculator([TeacherGapCost(weight=40), ...]).
-        // Duck-typed picks (.name/.weight/.hard/.exponent), resolved and
+        // Duck-typed picks (.name/.weight/.level/.exponent), resolved and
         // checked by tfpy::applyConstraints: weight None keeps the
-        // component's kDefaultWeight, hard None its kDefaultLevel.
+        // component's kDefaultWeight, level None its kDefaultLevel.
         .def(py::init(
                  [](const py::object &constraints)
                  {
@@ -507,7 +507,7 @@ void bindCanon(py::module_ &canon)
                  }),
              py::arg("constraints"),
              "Assemble from constraint picks (duck-typed: .name, .weight, "
-             ".hard, .exponent; None = the whole default set). The picks "
+             ".level, .exponent; None = the whole default set). The picks "
              "replace the defaults; a name picked twice or an empty list is "
              "a ValueError.")
         .def(
@@ -515,13 +515,13 @@ void bindCanon(py::module_ &canon)
             [](cn::DecomposedCalculator &calc,
                const std::string &name,
                const py::object &weight,
-               const py::object &hard,
+               const py::object &level,
                const py::object &exponent)
             {
                 const py::object pick = py::module_::import("types").attr(
                     "SimpleNamespace")(py::arg("name") = name,
                                        py::arg("weight") = weight,
-                                       py::arg("hard") = hard,
+                                       py::arg("level") = level,
                                        py::arg("exponent") = exponent);
                 py::list picks;
                 picks.append(pick);
@@ -529,14 +529,14 @@ void bindCanon(py::module_ &canon)
             },
             py::arg("name"),
             py::arg("weight") = py::none(),
-            py::arg("hard") = py::none(),
+            py::arg("level") = py::none(),
             py::arg("exponent") = 1.0,
             "Add one canonical constraint by name (see CONSTRAINT_NAMES), "
             "with the same three knobs and checks as a spec:\n"
             "weight:   None = the component's default weight, else a finite "
             "number >= 0.\n"
-            "hard:     None = the default level, True = hard, False = soft "
-            "(fixed_slots_cost / parallel_groups_cost refuse False).\n"
+            "level:    None = the default level, otherwise 'hard' or 'soft' "
+            "(fixed_slots_cost / parallel_groups_cost refuse 'soft').\n"
             "exponent: sign-preserving power shaping, > 0.\n"
             "Raises ValueError for an unknown name. Adding a name twice is "
             "allowed here (their costs add up).")

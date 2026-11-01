@@ -279,8 +279,8 @@ py::dict paramsOf(const py::handle &pick)
 // kDefaultWeight / kDefaultLevel and the given parameters), wrapped in a
 // ScopedUnit when the pick has a worker / shift scope, with the pick's
 // knobs re-stated on the outermost component by tfpy::applyKnobs (weight
-// None keeps kDefaultWeight, hard None keeps kDefaultLevel; a reward refuses
-// hard=True; the type and range checks speak the Python base's words).
+// None keeps kDefaultWeight, level None keeps kDefaultLevel; a reward refuses
+// level='hard'; the type and range checks speak the Python base's words).
 //
 // Unlike tfpy::applyConstraints, the factory may add one constraint several
 // times (other parameters or scope): each instance is scored on its own and
@@ -344,7 +344,7 @@ void addConstraintByName(DecomposedCalculator &calc,
                               + name + "'");
     }
 
-    tfpy::applyKnobs(built.metadata(), pick, name);
+    tfpy::applyKnobs(built.metadata(), pick, name, optimaru::MediumFold::none());
     if (built.unit)
         calc.add(std::move(built.unit));
     else
@@ -534,7 +534,7 @@ PYBIND11_MODULE(_core, m)
         "added several times (other parameters or scope).")
         .def(py::init<>())
         // Example: DecomposedCalculator([RequiredSkillCost(weight=2.0), ...]).
-        // Duck-typed: each pick needs .name/.weight/.hard/.exponent, plus an
+        // Duck-typed: each pick needs .name/.weight/.level/.exponent, plus an
         // optional params() (or .params dict) with the domain parameters.
         // The get_constraints() rules: no empty list (build an empty
         // calculator with DecomposedCalculator() and add()), and the same
@@ -544,34 +544,39 @@ PYBIND11_MODULE(_core, m)
              py::arg("constraints"),
              "Assemble from constraint spec objects, e.g.\n"
              "DecomposedCalculator([RequiredSkillCost(), MinRestCost(weight=0.25, "
-             "hard=False), MaxConsecutiveDaysCost(value=6)]).")
+             "level='soft'), MaxConsecutiveDaysCost(value=6)]).")
         .def(
             "add",
             [](DecomposedCalculator &calc,
                const py::object &name,
                const py::object &weight,
-               const py::object &hard,
+               const py::object &level,
                const py::object &exponent,
                const py::kwargs &kwargs)
             {
+                // kwargs are domain parameters, which the factory reads by name
+                // and otherwise ignores: the old knob must not vanish there.
+                if (kwargs.contains("hard"))
+                    throw py::type_error("add() got an unexpected keyword argument "
+                                         "'hard'; use level='hard' or level='soft'");
                 // The same checks as a spec pick: a SimpleNamespace carrying
                 // the three knobs goes through the one factory path.
                 py::object pick = py::module_::import("types").attr(
                     "SimpleNamespace")(py::arg("name") = name,
                                        py::arg("weight") = weight,
-                                       py::arg("hard") = hard,
+                                       py::arg("level") = level,
                                        py::arg("exponent") = exponent);
                 addConstraintByName(calc, pick, kwargs);
             },
             py::arg("name"),
             py::arg("weight") = py::none(),
-            py::arg("hard") = py::none(),
+            py::arg("level") = py::none(),
             py::arg("exponent") = 1.0,
             "Add a built-in constraint by name (see CONSTRAINT_NAMES).\n"
             "weight:   None = the component's default weight; otherwise a "
             "linear multiplier (finite, >= 0) on its cost.\n"
-            "hard:     None keeps the constraint's default level, True = hard, "
-            "False = soft (a reward refuses True).\n"
+            "level:    None keeps the constraint's default level, otherwise "
+            "'hard' or 'soft' (a reward refuses 'hard').\n"
             "exponent: shapes the per-employee cost superlinearly, sign-"
             "preserving: contribution = weight * sign(c)*|c|^exponent. "
             "2.0 = squared, 3.0 = cubed; penalizes concentrated violations.\n"

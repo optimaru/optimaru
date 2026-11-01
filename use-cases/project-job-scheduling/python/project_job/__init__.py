@@ -164,7 +164,7 @@ def solve(
         pjs.solve(schedule, constraints=get_constraints())
         # project delay as soft days instead of medium:
         others = [spec for spec in get_constraints() if spec.name != "project_delay_cost"]
-        pjs.solve(schedule, constraints=[*others, ProjectDelayCost(hard=False)])
+        pjs.solve(schedule, constraints=[*others, ProjectDelayCost(level="soft")])
 
     The result's score then reports each term on the level the selection gave it.
     """

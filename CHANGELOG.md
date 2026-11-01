@@ -1,5 +1,36 @@
 # Changelog
 
+## Unreleased
+
+**This release breaks compatibility.** The `hard` knob is gone; `level` replaces
+it on every constraint, in all 22 use cases. No alias is kept: `hard=` raises
+`TypeError`.
+
+- `level` is `None` (the default level) or a `Level`: `Level.HARD`,
+  `Level.MEDIUM` or `Level.SOFT`, exported from each package's `constraints`
+  module. The names `"hard"`, `"medium"` and `"soft"` work too, which is what a
+  JSON selection sends. `hard=True` is now `level="hard"`, and `hard=False` is
+  `level="soft"`.
+- Medium is no longer a default-only level. On the eight use cases with a medium
+  level (bed allocation, food packaging, meeting scheduling, pickup-delivery,
+  project-job scheduling, task assigning, tournament scheduling and vehicle
+  routing), any flippable constraint can move onto it. Its weight is in medium
+  units, like every weight is in units of the level in effect.
+- `level="medium"` on a use case without a medium level raises `ValueError`
+  before the solve starts. A reward still refuses `"hard"`, and also refuses
+  `"medium"` on task assigning, where medium counts toward the hard score. A
+  constraint with `level_flippable` false still refuses any change of level.
+- Knob errors changed with it: a non-string level raises `TypeError` and an
+  unknown name raises `ValueError`. numpy booleans are no longer accepted, since
+  a level is not a boolean.
+- Every path follows the same rules: the solver, `score()` / `score_costs()`, the
+  `DecomposedCalculator.add()` of employee and school timetabling (`level=`
+  replaces `hard=`), employee scheduling's JSON rules and the CP-SAT benchmarks,
+  whose catalog rows now report `{"weight", "level", "exponent"}`.
+- The school timetabling CP-SAT constraints rename their computed `level`
+  property to `effective_level`, next to `effective_weight`, because `level` is
+  now the knob.
+
 ## 0.2.0
 
 0.2.0 puts every use case on one constraint contract. Every constraint has a

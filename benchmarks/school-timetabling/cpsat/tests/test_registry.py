@@ -216,13 +216,13 @@ def test_instance_weight_wins_over_objective_weights():
 
 
 def test_unassigned_lessons_cost_can_be_relaxed_into_a_penalty():
-    """The same constraint with hard=False allows unassigned lessons and counts them as a penalty."""
+    """The same constraint with level="soft" allows unassigned lessons and counts them as a penalty."""
     # 3 periods but only 2 periods a day -> impossible as hard, 1 period unassigned when relaxed
     problem = make_problem([course(periods_per_week=3, max_periods_per_day=3)], [teacher()], days=1, periods=2)
 
     assert _solve(problem).status == SolveStatus.INFEASIBLE
 
-    relaxed = merge(default_constraints(NO_WEIGHTS), UnassignedLessonsCost(hard=False, weight=100))
+    relaxed = merge(default_constraints(NO_WEIGHTS), UnassignedLessonsCost(level="soft", weight=100))
     timetable = _solve(problem, constraints=relaxed)
     assert timetable.status.has_solution
     assert len(timetable.lessons) == 2
@@ -235,14 +235,14 @@ def test_relaxed_unassigned_lessons_default_to_weight_one():
 
     Pass weight=UNASSIGNED_WEIGHT (10000) for partial timetabling: at 1 a lesson is dropped to
     save a single teacher gap (20)."""
-    assert UnassignedLessonsCost(hard=False).effective_weight == 1
-    assert UnassignedLessonsCost(hard=False, weight=UNASSIGNED_WEIGHT).effective_weight == UNASSIGNED_WEIGHT == 10_000
+    assert UnassignedLessonsCost(level="soft").effective_weight == 1
+    assert UnassignedLessonsCost(level="soft", weight=UNASSIGNED_WEIGHT).effective_weight == UNASSIGNED_WEIGHT == 10_000
 
 
 def test_merge_replaces_in_place_and_appends_new_names():
     """merge replaces same-named entries in place and appends only new names."""
     base = default_constraints()
-    merged = merge(base, UnassignedLessonsCost(hard=False), NoLateFriday("T1"))
+    merged = merge(base, UnassignedLessonsCost(level="soft"), NoLateFriday("T1"))
 
     assert [c.name for c in merged] == [*[c.name for c in base], "no_late_friday"]
-    assert merged[0] == UnassignedLessonsCost(hard=False)
+    assert merged[0] == UnassignedLessonsCost(level="soft")

@@ -13,7 +13,7 @@ namespace ks
 // knapsack objective. Raw cost = -(sum of selected values), one total, always
 // <= 0, so the soft score is +selected value; 0 = nothing of value is
 // selected (a reward has no "violation"). As a reward it can never be hard
-// (hard=True is refused) and its level cannot be changed. With an exponent e
+// (level='hard' is refused) and its level cannot be changed. With an exponent e
 // the contribution is -(value^e). Keeps the selected value, O(1) per flip.
 struct SelectedValueCost final : detail::SelectionConstraint
 {
@@ -23,7 +23,7 @@ struct SelectedValueCost final : detail::SelectionConstraint
     explicit SelectedValueCost(double weight = kDefaultWeight)
         : detail::SelectionConstraint("selectedValueCost", weight, kDefaultLevel)
     {
-        reward = true;  // raw cost <= 0; hard=True refused everywhere
+        reward = true;  // raw cost <= 0; level='hard' refused everywhere
         levelFlippable = false;
     }
 

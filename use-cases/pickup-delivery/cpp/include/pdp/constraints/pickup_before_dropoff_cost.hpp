@@ -11,7 +11,7 @@ namespace pdp
 // pickup on the same route. Only checked once both nodes share a vehicle;
 // sameVehicleCost prices the split case. Raw cost (global) = the number of
 // such reversed requests, so 0 = every pickup precedes its dropoff.
-// Structural on the CP-SAT path only (its plugin refuses hard=False).
+// Structural on the CP-SAT path only (its plugin refuses level='soft').
 struct PickupBeforeDropoffCost final : RequestCouplingConstraint
 {
     static constexpr double kDefaultWeight

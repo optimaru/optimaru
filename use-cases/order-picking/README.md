@@ -11,7 +11,7 @@ Domain model, constraints and API details: [`python/`](python/README.md) and [`c
 | `distance_from_last_pick_task_to_path_origin_cost` | `DistanceFromLastPickTaskToPathOriginCost` | soft | 1 | warehouse distance (m) from the last pick back to the start; 0 for an empty trolley |
 | `order_split_by_trolley_cost` | `OrderSplitByTrolleyCost` | soft | 1000 | distinct orders with a pick on the trolley — summed, the (order, trolley) pairs. **Not** 0 for an unsplit order: an order on one trolley counts 1, so the minimum is the number of orders with assigned picks (the Java quickstart's definition, kept) |
 
-Every constraint is flippable (`hard=True` / `hard=False`), none is a reward and all
+Every constraint is flippable (`level="hard"` / `level="soft"`), none is a reward and all
 four are scored by default (`default_enabled`); `order_picking.constraint_info()`
 reports exactly this table from the C++ components (`kDefaultLevel` /
 `kDefaultWeight`). `order_picking.constraint_costs(solution)` is the only
@@ -103,7 +103,7 @@ solver's `solve` before the engine runs — the engine only fills what is still 
 4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
    `description_en` / `description_ko` to `python/order_picking/constraints.py` (plus its
    module-level default instance); callers then pick, reweight or flip it:
-   `constraints=get_constraints([..., MyRuleCost(weight=5, hard=True)])`;
+   `constraints=get_constraints([..., MyRuleCost(weight=5, level="hard")])`;
 5. mirror it in the CP-SAT model in
    [`benchmarks/order-picking/cpsat`](../../benchmarks/order-picking/cpsat) (a plugin
    subclassing the spec; defaults come from `constraint_info()`) so the benchmark stays like

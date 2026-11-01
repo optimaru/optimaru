@@ -2,7 +2,7 @@
 
 The default path (`mnt.solve(schedule)`) enables all six constraints at their default
 weights (the quickstart's). This module is the alternative path next to it: pick
-constraints, change weights, flip hard/soft, and pass the list to
+constraints, change weights, change levels, and pass the list to
 `solve(schedule, constraints=...)`.
 
 The shortest route is :func:`get_constraints`. It returns the default list, so
@@ -24,14 +24,16 @@ Each constraint has a default instance at module level (`min_start_date_cost`,
 few. Only listed constraints are scored — leave one out and its term disappears from
 the score.
 
-Every spec takes ``(weight=None, hard=None, exponent=1.0)``:
+Every spec takes ``(weight=None, level=None, exponent=1.0)``:
 
 - ``weight``   linear multiplier on the constraint cost. ``None`` = the component
                default (min_start_date_cost, max_end_date_cost, crew_conflict_cost
                and before_ideal_end_date_cost 1, tag_conflict_cost 1000,
                after_ideal_end_date_cost 1'000'000); ``mnt.constraint_info()``
                reports them.
-- ``hard``     ``True`` = hard, ``False`` = soft, ``None`` = the default level.
+- ``level``    ``None`` = the default level, otherwise ``Level.HARD`` or
+               ``Level.SOFT`` (or the names ``"hard"`` and ``"soft"``). This use
+               case has no medium level.
 - ``exponent`` sign-preserving power shaping: ``weight * sign(c) * |c| **
                exponent``. 2.0 = squared, so concentrated violations grow much
                costlier. The four date rules shape per (start date, crew) cell; the
@@ -48,10 +50,11 @@ Module-level instance names use the same snake_case, so they match the strings
 apart from the job fields ``min_start_date`` / ``max_end_date`` they read.)
 """
 
-from ._constraint import Constraint, Score, score_costs, select
+from ._constraint import Constraint, Level, Score, score_costs, select
 
 __all__ = [
     "Constraint",
+    "Level",
     "Score",
     "score",
     "MinStartDateCost",

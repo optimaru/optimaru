@@ -52,7 +52,7 @@ def test_cpsat_defaults_are_the_engine_defaults() -> None:
         assert entry["reward"] == row.reward
         assert entry["default_enabled"] == row.default_enabled
         assert entry["kind"] == "either"  # every bin-packing constraint is flippable
-        assert entry["params"] == {"weight": None, "hard": None, "exponent": 1.0}
+        assert entry["params"] == {"weight": None, "level": None, "exponent": 1.0}
 
 
 def test_exact_solver_matches_hand_calculated_optimum() -> None:
@@ -67,7 +67,7 @@ def test_exact_solver_matches_hand_calculated_optimum() -> None:
 def test_exact_and_domain_classes_share_override_semantics() -> None:
     solved = solve(
         problem(),
-        constraints=[BinCapacityCost(weight=2), UsedBinsCost(weight=3, hard=True)],
+        constraints=[BinCapacityCost(weight=2), UsedBinsCost(weight=3, level="hard")],
         time_limit_seconds=2,
     )
     assert solved.score_hard == -6
@@ -164,9 +164,9 @@ def test_each_constraint_matches_brute_force_independently(constraint) -> None:
     "selection",
     [
         None,
-        [BinCapacityCost(hard=False), ColorConflictCost(), ItemConflictCost(), UsedBinsCost()],
-        [BinCapacityCost(weight=3), ColorConflictCost(hard=False, weight=2), UsedBinsCost(hard=True)],
-        [ItemConflictCost(hard=False), UsedBinsCost(weight=4)],
+        [BinCapacityCost(level="soft"), ColorConflictCost(), ItemConflictCost(), UsedBinsCost()],
+        [BinCapacityCost(weight=3), ColorConflictCost(level="soft", weight=2), UsedBinsCost(level="hard")],
+        [ItemConflictCost(level="soft"), UsedBinsCost(weight=4)],
     ],
 )
 def test_optimum_matches_the_engine_brute_force(selection) -> None:
@@ -178,10 +178,10 @@ def test_optimum_matches_the_engine_brute_force(selection) -> None:
 
 
 def test_demoting_capacity_scores_like_the_engine() -> None:
-    """hard=False lands on soft in both solvers: CP-SAT's reported score is the
+    """level="soft" lands on soft in both solvers: CP-SAT's reported score is the
     engine's score of the same solution under the same selection."""
     problem = _parity_problem()
-    selection = [BinCapacityCost(hard=False), *get_constraints()[1:]]
+    selection = [BinCapacityCost(level="soft"), *get_constraints()[1:]]
     solved = solve(problem, time_limit_seconds=2, constraints=selection)
     engine = score(domain.constraint_costs(solved.to_core()), selection)
     assert (solved.score_hard, solved.score_soft) == pytest.approx(tuple(engine))

@@ -58,8 +58,8 @@ def test_a_split_group_costs_its_distinct_stations_minus_one():
         ),
         constraints=[
             FixedTaskStationsCost(),
-            SameStationGroupsCost(hard=False, weight=2),
-            ForbiddenTaskStationsCost(hard=False),
+            SameStationGroupsCost(level="soft", weight=2),
+            ForbiddenTaskStationsCost(level="soft"),
         ],
     )
     assert [task.station for task in result.tasks] == [0, 1, 1]
@@ -85,8 +85,8 @@ def test_a_forbidden_station_listed_twice_counts_once():
         ),
         constraints=[
             FixedTaskStationsCost(),
-            SameStationGroupsCost(hard=False, weight=3),
-            ForbiddenTaskStationsCost(hard=False, weight=2),
+            SameStationGroupsCost(level="soft", weight=3),
+            ForbiddenTaskStationsCost(level="soft", weight=2),
         ],
     )
     assert [task.station for task in result.tasks] == [0, 0]

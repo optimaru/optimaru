@@ -23,7 +23,7 @@ struct AudienceTypeDiversityCost final : BreakdownConstraint
         : BreakdownConstraint(
               "audienceTypeDiversityCost", weight, kDefaultLevel)
     {
-        reward = true;  // raw cost <= 0; hard=True is refused
+        reward = true;  // raw cost <= 0; level='hard' is refused
         levelFlippable = false;
     }
     std::int64_t select(const Breakdown &breakdown) const override

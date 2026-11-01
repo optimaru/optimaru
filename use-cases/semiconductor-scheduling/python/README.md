@@ -20,7 +20,7 @@ from semiconductor_scheduling.constraints import MaxQueueTimeCost, WeightedTardi
 fab.constraint_info()
 # [ConstraintInfo(name='machine_eligibility_cost', default_level='hard', default_weight=1.0,
 #                 level_flippable=True, reward=False, default_enabled=True), ...]
-picks = [*get_constraints()[:7], MaxQueueTimeCost(hard=False), *get_constraints()[8:17],
+picks = [*get_constraints()[:7], MaxQueueTimeCost(level="soft"), *get_constraints()[8:17],
          WeightedTardinessCost(weight=50), *get_constraints()[18:]]
 fab.solve(problem, time_limit_seconds=5, constraints=picks)
 raw = fab.constraint_costs(problem)        # raw totals, re-priced in pure Python:

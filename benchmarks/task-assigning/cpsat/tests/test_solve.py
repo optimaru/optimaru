@@ -122,7 +122,7 @@ def test_cpsat_defaults_are_the_engine_defaults() -> None:
         assert entry["reward"] == row.reward
         assert entry["default_enabled"] == row.default_enabled
         assert entry["kind"] == "either"  # every task-assigning constraint is flippable
-        assert entry["params"] == {"weight": None, "hard": None, "exponent": 1.0}
+        assert entry["params"] == {"weight": None, "level": None, "exponent": 1.0}
     assert [entry["default_level"] for entry in entries] == [
         "hard",
         "soft",
@@ -137,25 +137,25 @@ def test_cpsat_defaults_are_the_engine_defaults() -> None:
     "selection",
     [
         None,
-        [RequiredSkillCost(hard=False), *get_constraints()[1:]],
-        [*get_constraints()[:-1], UnassignedTasksCost(hard=False)],
-        [*get_constraints()[:-1], UnassignedTasksCost(hard=True)],
+        [RequiredSkillCost(level="soft"), *get_constraints()[1:]],
+        [*get_constraints()[:-1], UnassignedTasksCost(level="soft")],
+        [*get_constraints()[:-1], UnassignedTasksCost(level="hard")],
     ],
     ids=["defaults", "skills-soft", "unassigned-soft", "unassigned-hard"],
 )
 def test_cpsat_scores_like_the_engine(selection) -> None:
     """CP-SAT's reported score is the engine's score of the same solution under the
-    same selection; hard=False lands on soft (from hard OR medium) in both solvers."""
+    same selection; level="soft" lands on soft (from hard OR medium) in both solvers."""
     solved = solve(generate_demo_data(), time_limit_seconds=2, constraints=selection)
     engine = score(domain.constraint_costs(solved.to_core()), selection)
     assert _engine_levels(solved) == (engine.hard, pytest.approx(engine.soft))
 
 
 def test_a_demoted_medium_term_counts_on_soft_in_both_solvers() -> None:
-    """unassigned_tasks_cost(hard=False) is one SOFT unit per unassigned task in CP-SAT
+    """unassigned_tasks_cost(level="soft") is one SOFT unit per unassigned task in CP-SAT
     and in the engine; the selection without a medium term reports soft0 = 0."""
     problem = _parity_problem()
-    selection = [UnassignedTasksCost(hard=False)]
+    selection = [UnassignedTasksCost(level="soft")]
     proxy = {}
     solved = solve(
         problem,
