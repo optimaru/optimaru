@@ -86,6 +86,12 @@ score(raw), score(raw, [WorkdayClassicMatchesCost(level="hard")])
 score(raw, [AwayToAwayHopCost(), AwayToAwayHopCost(weight=0.01, exponent=2, offset=1000)])
 ```
 
+`clip=False` shapes `x - offset` on every round position of a unit constraint, an empty
+one included (per round, not over the sum), and on a global's one total. It is refused on
+hard, where hard 0 must mean no violation: `ValueError: constraint 'team_conflict_cost':
+clip=False with a non-zero offset cannot be hard, because hard 0 must mean no violation;
+use clip=True (a threshold) or another level`. On soft it is allowed.
+
 **0.2.0:** the names gained the `_cost` suffix (`start_to_away_hop` ->
 `start_to_away_hop_cost`, ...), `matches_on_same_day` became `team_conflict_cost` and
 `classic_matches` became `workday_classic_matches_cost` (spec classes `MatchesOnSameDay` ->

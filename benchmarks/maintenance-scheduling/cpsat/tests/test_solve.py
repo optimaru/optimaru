@@ -215,15 +215,19 @@ SELECTIONS = {
         CrewConflictCost(weight=3, offset=1),
         TagConflictCost(),
     ],
+    # The literal formula with an offset is refused on hard: the hard picks are
+    # thresholds, their literal copies sit on soft.
     "repeat-literal": [
-        MinStartDateCost(offset=1, clip=False),
+        MinStartDateCost(level="soft", offset=1, clip=False),
         MinStartDateCost(weight=2, offset=-1),
         AfterIdealEndDateCost(),
         AfterIdealEndDateCost(weight=5, offset=1, clip=False),
     ],
     "hard-offsets": [
-        MaxEndDateCost(offset=1, clip=False),
-        CrewConflictCost(weight=2, offset=2, clip=False),
+        MaxEndDateCost(offset=1),
+        MaxEndDateCost(level="soft", offset=1, clip=False),
+        CrewConflictCost(weight=2, offset=2),
+        CrewConflictCost(level="soft", weight=2, offset=2, clip=False),
         TagConflictCost(offset=-1),
         BeforeIdealEndDateCost(weight=3, offset=1, clip=False),
     ],
@@ -344,3 +348,73 @@ def test_medium_is_refused_like_the_engine(level) -> None:
             domain.solve(
                 _three_days().to_core(), time_limit_seconds=0, constraints=selection
             )
+
+
+# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+
+HARD_REFUSAL = (
+    "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
+    "violation; use clip=True (a threshold) or another level"
+)
+
+
+@pytest.mark.parametrize("offset", [2, -2])
+@pytest.mark.parametrize(
+    "selection",
+    [
+        # the default level, hard
+        lambda offset: MinStartDateCost(offset=offset, clip=False),
+        lambda offset: {"name": "min_start_date_cost", "offset": offset, "clip": False},
+        # a global, hard by default
+        lambda offset: CrewConflictCost(offset=offset, clip=False),
+        lambda offset: TagConflictCost(level="hard", offset=offset, clip=False),
+        lambda offset: {
+            "name": "tag_conflict_cost",
+            "level": "hard",
+            "offset": offset,
+            "clip": False,
+        },
+    ],
+    ids=[
+        "min-start-spec",
+        "min-start-mapping",
+        "crew-conflict-spec",
+        "tag-moved-to-hard",
+        "tag-mapping",
+    ],
+)
+def test_the_literal_offset_is_refused_on_hard_like_the_engine(
+    selection, offset
+) -> None:
+    """The CP-SAT reference refuses the pick with the engine's and score()'s message,
+    alone and as a repeat next to the default picks."""
+    pick = selection(offset)
+    name = pick["name"] if isinstance(pick, dict) else pick.name
+    message = HARD_REFUSAL.format(q=repr(name))
+    for picks in ([pick], [*get_constraints(), pick]):
+        with pytest.raises(ValueError) as refused:
+            solve(_three_days(), time_limit_seconds=1, constraints=picks)
+        assert str(refused.value) == message
+    if not isinstance(pick, dict):
+        # The engine and the score() mirror say the same.
+        core = _three_days().to_core()
+        with pytest.raises(ValueError) as refused:
+            domain.constraint_costs(core, [pick])
+        assert str(refused.value) == message
+        with pytest.raises(ValueError) as refused:
+            score(domain.constraint_costs(core), [pick])
+        assert str(refused.value) == message
+
+
+@pytest.mark.parametrize("offset", [2, -2])
+def test_the_same_literal_pick_on_soft_is_accepted(offset) -> None:
+    picks = [
+        MinStartDateCost(),
+        MinStartDateCost(level="soft", offset=offset, clip=False),
+    ]
+    problem = _three_days()
+    best = max(
+        _engine_of(problem, fixed, picks) for fixed in product(_OPTIONS, repeat=2)
+    )
+    solved = solve(problem, time_limit_seconds=5, constraints=picks)
+    assert (solved.score_hard, solved.score_soft) == best

@@ -20,7 +20,8 @@ with its own knobs, its level included. The four date rules add one term per (cr
 start date) cell, an empty cell included, and the two conflict rules one term for their
 total, so an integral `offset` shapes each cell (or the total) exactly as the engine does
 in both `clip` modes; a fractional offset is refused (`offset must be an integer for
-CP-SAT`).
+CP-SAT`). `clip=False` with an offset on a hard pick is refused with the engine's message
+when the objective is built.
 
 ## Engine comparison
 

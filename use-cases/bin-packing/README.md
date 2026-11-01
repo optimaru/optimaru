@@ -98,8 +98,11 @@ count for `used_bins_cost` — the granularity of `exponent`) is shaped as
 `sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
 `(x - offset) ** exponent`, sign-preserving (`clip=False`, which lowers the penalty of
 every bin 0..n-1 below the offset, an empty one included); `offset=0` is the 0.2.0
-shaping. Each pick is its own instance with its own knobs, its level included (`level`
-replaced the `hard` knob; `hard=` raises `TypeError`), and the instances add up:
+shaping. Both apply per bin (or to the bin count), not to the sum over the bins.
+`clip=False` with an offset is refused on hard (the three per-bin constraints by default),
+because hard 0 must mean no violation. Each pick is its own instance with its own knobs,
+its level included (`level` replaced the `hard` knob; `hard=` raises `TypeError`), and the
+instances add up:
 
 ```python
 from bin_packing.constraints import UsedBinsCost, get_constraints

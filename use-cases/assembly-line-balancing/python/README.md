@@ -39,11 +39,16 @@ score(raw, [UsedStationsCost(), UsedStationsCost(weight=10, offset=4)])
 total for the globals (`task_precedence_cost`, `same_station_groups_cost`,
 `used_stations_cost`, `workload_imbalance_cost`); the keyword-only `offset` / `clip`
 shift that shaping at the same granularity (0.3.0, see the
-[use-case README](../README.md#030)). 0.2.0 renamed every constraint (no
-aliases), replaced the simulated-annealing `SolverConfig` knobs (`max_iterations`,
-`stagnation_limit`, `temperature`, `cooling_rate`) by the engine's
-(`spent_limit_seconds`, `step_count_limit`, ...), and now charges an unassigned task
-nothing; see the [use-case README](../README.md#020).
+[use-case README](../README.md#030)). `clip=False` shapes `x - offset` on every evaluated
+station, an empty one included (per station, not over the sum), so it is refused on hard,
+where hard 0 must mean no violation: `ValueError: constraint 'station_capacity_cost':
+clip=False with a non-zero offset cannot be hard, because hard 0 must mean no violation; use
+clip=True (a threshold) or another level`. On soft it is allowed.
+
+0.2.0 renamed every constraint (no aliases), replaced the simulated-annealing
+`SolverConfig` knobs (`max_iterations`, `stagnation_limit`, `temperature`,
+`cooling_rate`) by the engine's (`spent_limit_seconds`, `step_count_limit`, ...), and now
+charges an unassigned task nothing; see the [use-case README](../README.md#020).
 
 ## Install / test
 

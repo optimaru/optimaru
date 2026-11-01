@@ -340,10 +340,12 @@ def test_score_equals_the_engine_for_the_default_assembly():
         [BinCapacityCost(weight=0.5), UsedBinsCost(level="hard", weight=0.5, exponent=2.0)],
         [*get_constraints(), UsedBinsCost(weight=100, offset=1), BinCapacityCost(exponent=2)],
         [
+            # The literal formula with an offset is refused on hard; its copies sit on soft.
             BinCapacityCost(offset=1),
-            BinCapacityCost(offset=0.5, clip=False, weight=3),
+            BinCapacityCost(level="soft", offset=0.5, clip=False, weight=3),
             ColorConflictCost(offset=-1),
-            ItemConflictCost(offset=1, clip=False),
+            ItemConflictCost(offset=1),
+            ItemConflictCost(level="soft", offset=1, clip=False),
             UsedBinsCost(),
             UsedBinsCost(offset=2, exponent=2, weight=0.5, clip=False),
         ],
@@ -426,6 +428,17 @@ def test_naming_a_constraint_twice_scores_both_picks():
 
 
 # --- 0.3.0: repeated picks and the offset / clip knobs ------------------------------
+
+HARD_REFUSAL = (
+    "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
+    "violation; use clip=True (a threshold) or another level"
+)
+
+
+def _refusal(call):
+    with pytest.raises(ValueError) as refused:
+        call()
+    return str(refused.value)
 
 
 def _hand() -> bp.BinPackingProblem:
@@ -528,22 +541,26 @@ def test_the_keys_follow_the_pick_order_of_each_name():
     ("pick", "expected"),
     [
         # Per-bin constraints, shaped per bin 0..4; an empty bin (raw 0) counts in literal mode.
+        # The three per-bin constraints are hard by default, which refuses the literal
+        # formula with an offset, so its numbers are checked on soft (not rounded).
         (BinCapacityCost(offset=1), (-2, 0.0)),
-        (BinCapacityCost(offset=1, clip=False), (-(2 - 4), 0.0)),  # the four other bins are rewarded
+        (BinCapacityCost(level="soft", offset=1, clip=False), (0, -(2 - 4.0))),  # the four other bins are rewarded
         (BinCapacityCost(offset=5), (0, 0.0)),
-        (BinCapacityCost(offset=5, clip=False), (-(-2 - 4 * 5), 0.0)),
+        (BinCapacityCost(level="soft", offset=5, clip=False), (0, -(-2 - 4 * 5.0))),
         (ItemConflictCost(offset=-2), (-3, 0.0)),  # a negative offset adds to every non-zero bin
-        (ItemConflictCost(offset=-2, clip=False), (-(3 + 4 * 2), 0.0)),  # ...or to every bin
-        (ColorConflictCost(offset=0.5, clip=False, weight=3), (6, 0.0)),  # 1.5 -> 2, 4 x (-1.5 -> -2): per bin
+        (ItemConflictCost(level="soft", offset=-2, clip=False), (0, -(3 + 4 * 2.0))),  # ...or to every bin
+        (ColorConflictCost(offset=0.5, weight=3), (-2, 0.0)),  # hard rounds per bin: 1.5 -> 2, 0 -> 0
+        (ColorConflictCost(level="soft", offset=0.5, clip=False, weight=3), (0, -(1.5 - 4 * 1.5))),  # per bin
         (
-            ColorConflictCost(offset=2, exponent=2, clip=False),
-            (-(-1 - 4 * 4), 0.0),
+            ColorConflictCost(level="soft", offset=2, exponent=2, clip=False),
+            (0, -(-1 - 4 * 4.0)),
         ),  # (1 - 2)^2, 4 x (0 - 2)^2, signs kept
         # The global shapes its one count.
         (UsedBinsCost(offset=1, exponent=2), (0, -1.0)),
         (UsedBinsCost(offset=5, exponent=3, clip=False), (0, 27.0)),  # (2 - 5)^3: a reward below 5 bins
         (UsedBinsCost(offset=-1), (0, -3.0)),
-        (UsedBinsCost(level="hard", offset=0.5, clip=False, weight=3), (-5, 0.0)),  # 4.5 -> 5
+        (UsedBinsCost(level="hard", offset=0.5, weight=3), (-5, 0.0)),  # 4.5 -> 5
+        (UsedBinsCost(offset=0.5, clip=False, weight=3), (0, -4.5)),  # the literal one stays on soft
     ],
 )
 def test_offsets_by_hand_on_both_paths(pick, expected):
@@ -575,9 +592,15 @@ def test_offset_zero_reproduces_the_0_2_0_scores():
 
 
 def test_python_score_equals_cpp_calculate_score_for_random_repeats_and_offsets():
-    """Random assignments, random pick lists with repeats, offsets of both signs and both clip modes."""
+    """Random assignments, random pick lists with repeats, offsets of both signs and both clip modes.
+
+    A list with a literal offset on hard (the pick's level, or the default) is refused by
+    both paths with the same message, naming its first such pick; moved to soft, the same
+    picks score alike."""
     rng = random.Random(11)
     classes = (BinCapacityCost, ColorConflictCost, ItemConflictCost, UsedBinsCost)
+    default_level = {row.name: row.default_level for row in bp.constraint_info()}
+    refused_lists = 0
     for _ in range(60):
         problem = build_problem()
         problem.set_assignment([rng.randrange(problem.item_count()) for _ in range(problem.item_count())])
@@ -591,11 +614,31 @@ def test_python_score_equals_cpp_calculate_score_for_random_repeats_and_offsets(
             )
             for _ in range(rng.randrange(1, 7))
         ]
+
+        def literal_on_hard(spec):
+            return not spec.clip and spec.offset != 0 and (spec.level or default_level[spec.name]) == "hard"
+
+        refused = next((spec for spec in specs if literal_on_hard(spec)), None)
+        if refused is not None:
+            refused_lists += 1
+            message = HARD_REFUSAL.format(q=repr(refused.name))
+            with pytest.raises(ValueError) as engine_refusal:
+                bp.calculate_score(problem, specs)
+            with pytest.raises(ValueError) as mirror_refusal:
+                score(bp.constraint_costs(problem), specs)
+            assert str(engine_refusal.value) == str(mirror_refusal.value) == message
+            specs = [
+                type(spec)(weight=spec.weight, level="soft", exponent=spec.exponent, offset=spec.offset, clip=spec.clip)
+                if literal_on_hard(spec)
+                else spec
+                for spec in specs
+            ]
         engine = bp.calculate_score(problem, specs)
         python = score(bp.constraint_costs(problem), specs)
         assert python.hard == engine.hard
         assert python.soft == pytest.approx(engine.soft)
         assert score(bp.constraint_costs(problem, specs), specs) == python
+    assert 0 < refused_lists < 60
 
 
 def _random_problem(seed: int, items: int = 30) -> bp.BinPackingProblem:
@@ -614,10 +657,11 @@ def _random_problem(seed: int, items: int = 30) -> bp.BinPackingProblem:
         [*get_constraints(), *REPEAT, BinCapacityCost(weight=2, exponent=2)],
         [
             BinCapacityCost(),
-            BinCapacityCost(offset=1, clip=False, weight=2),
+            BinCapacityCost(level="soft", offset=1, clip=False, weight=2),
             ColorConflictCost(offset=-1),
-            ColorConflictCost(offset=0.5, clip=False, weight=3),
-            ItemConflictCost(offset=1, clip=False, exponent=2),
+            ColorConflictCost(level="soft", offset=0.5, clip=False, weight=3),
+            ItemConflictCost(offset=1, exponent=2),
+            ItemConflictCost(level="soft", offset=1, clip=False, exponent=2),
             UsedBinsCost(),
             UsedBinsCost(offset=8, exponent=2, weight=0.25),
         ],
@@ -719,3 +763,74 @@ def test_the_knob_was_renamed():
         UsedBinsCost(hard=True)
     with pytest.raises(TypeError):
         BinCapacityCost(weight=None, hard=False)
+
+
+# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+
+
+@pytest.mark.parametrize("offset", [3.0, -3.0])
+@pytest.mark.parametrize(
+    "pick",
+    [
+        lambda offset: BinCapacityCost(offset=offset, clip=False),  # the default level, hard
+        lambda offset: BinCapacityCost(level="hard", offset=offset, clip=False),
+        lambda offset: ItemConflictCost(offset=offset, clip=False),
+        lambda offset: UsedBinsCost(level=Level.HARD, offset=offset, clip=False),  # a global moved to hard
+    ],
+    ids=["capacity-default-hard", "capacity-level-hard", "item-conflict-default-hard", "used-bins-moved-to-hard"],
+)
+def test_the_literal_offset_is_refused_on_hard_on_every_path(pick, offset):
+    """A positive offset would reward every bin below it, an empty one included, so the
+    four bins with room would cancel bin 0's overload and an infeasible packing could
+    score hard 0 (or above); a negative one would charge every bin. The engine (solve,
+    Solver, calculate_score, constraint_costs) and the score() mirror refuse it with the
+    same message, alone and as a repeat; so does the CP-SAT reference (its own tests)."""
+    spec = pick(offset)
+    message = HARD_REFUSAL.format(q=repr(spec.name))
+    picks = [*get_constraints(), spec]  # a repeat next to the defaults
+    assert _refusal(lambda: bp.solve(build_problem(), config=_config(0.1), constraints=[spec])) == message
+    assert _refusal(lambda: _zero_budget_solve(_hand(), [spec])) == message
+    assert _refusal(lambda: _zero_budget_solve(_hand(), picks)) == message
+    assert _refusal(lambda: bp.calculate_score(_hand(), [spec])) == message
+    assert _refusal(lambda: bp.constraint_costs(_hand(), [spec])) == message
+    assert _refusal(lambda: score(bp.constraint_costs(_hand()), [spec])) == message
+    assert _refusal(lambda: score(bp.constraint_costs(_hand()), picks)) == message
+
+
+@pytest.mark.parametrize("offset", [3.0, -3.0])
+def test_the_same_literal_pick_on_soft_is_accepted(offset):
+    """Capacity [3, 0, 0, 0, 0] minus the offset on each of the five bins, on soft, on every path."""
+    pick = BinCapacityCost(level="soft", offset=offset, clip=False)
+    expected = (0, -(3 - 5 * offset))
+    assert score(bp.constraint_costs(_hand()), [pick]) == expected
+    raw = bp.constraint_costs(_hand(), [pick])
+    assert (raw["bin_capacity_cost"]["level"], raw["bin_capacity_cost"]["clip"]) == ("soft", False)
+    assert score(raw, [pick]) == expected
+    assert _engine([pick]) == expected
+    # Next to the hard default, which keeps "hard 0 = no violation": -3 hard.
+    assert _engine([BinCapacityCost(), pick]) == (-3, expected[1])
+
+
+@pytest.mark.parametrize(
+    ("pick", "expected"),
+    [
+        (BinCapacityCost(offset=3.0), (0, 0.0)),  # clip=True on hard: a threshold
+        (BinCapacityCost(offset=-3.0), (-6, 0.0)),  # 3 + 3 on bin 0 only
+        (BinCapacityCost(clip=False), (-3, 0.0)),  # clip=False with offset 0: the 0.2.0 shaping
+        (BinCapacityCost(offset=0.0, clip=False), (-3, 0.0)),
+        (UsedBinsCost(level="hard", offset=-3.0), (-5, 0.0)),
+    ],
+)
+def test_the_allowed_combinations_on_hard(pick, expected):
+    assert score(bp.constraint_costs(_hand()), [pick]) == expected
+    assert _engine([pick]) == expected
+
+
+def test_the_refusal_comes_after_every_knob_of_a_duck_typed_pick():
+    """The engine checks once a pick's knobs are all re-stated: the level a pick moves to decides."""
+    moved = SimpleNamespace(name="bin_capacity_cost", weight=None, level="soft", exponent=1.0, offset=3.0, clip=False)
+    assert _engine([moved]) == (0, 12.0)
+    kept = SimpleNamespace(name="bin_capacity_cost", weight=None, level=None, exponent=1.0, offset=3.0, clip=False)
+    message = HARD_REFUSAL.format(q="'bin_capacity_cost'")
+    assert _refusal(lambda: _engine([kept])) == message
+    assert _refusal(lambda: score(bp.constraint_costs(_hand()), [kept])) == message

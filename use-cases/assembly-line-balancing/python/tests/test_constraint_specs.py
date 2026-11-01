@@ -421,11 +421,13 @@ def test_score_equals_the_engine_for_the_default_assembly():
         [DifferentStationPairsCost(weight=0.5), MaxStationsCost(weight=2.5), used_stations_cost],
         [*get_constraints(), UsedStationsCost(weight=10, offset=2), StationCapacityCost(exponent=2)],
         [
+            # The literal formula with an offset is refused on hard; its copies sit on soft.
             StationCapacityCost(offset=1),
-            StationCapacityCost(offset=0.5, clip=False, weight=3),
-            TaskPrecedenceCost(offset=1, clip=False),
+            StationCapacityCost(level="soft", offset=0.5, clip=False, weight=3),
+            TaskPrecedenceCost(offset=1),
+            TaskPrecedenceCost(level="soft", offset=1, clip=False),
             SameStationGroupsCost(offset=-1),
-            DifferentStationPairsCost(offset=1, clip=False),
+            DifferentStationPairsCost(level="soft", offset=1, clip=False),
             UsedStationsCost(),
             UsedStationsCost(offset=3, exponent=2, weight=0.5),
             WorkloadImbalanceCost(weight=1, offset=2, clip=False),
@@ -557,17 +559,19 @@ def test_the_keys_follow_the_catalog_and_the_pick_order_of_each_name():
     ("pick", "expected"),
     [
         # Per-station constraints, shaped per station (V = 4); an empty station (raw 0)
-        # counts in literal mode.
-        (TaskStationBoundsCost(offset=1, clip=False), (2, 0.0)),  # 0 + -1 + -1 + 0
+        # counts in literal mode. Every hard default refuses the literal formula with an
+        # offset, so its numbers are checked on soft, where nothing is rounded.
+        (TaskStationBoundsCost(level="soft", offset=1, clip=False), (0, 2.0)),  # 0 + -1 + -1 + 0
         (StationCapacityCost(offset=-1), (-2, 0.0)),  # a negative offset adds to every non-zero station
-        (StationCapacityCost(offset=-1, clip=False), (-5, 0.0)),  # ...or to every station
-        (StationCapacityCost(offset=0.5, clip=False, weight=3), (4, 0.0)),  # 1.5 -> 2, 3 x (-1.5 -> -2): per station
+        (StationCapacityCost(level="soft", offset=-1, clip=False), (0, -5.0)),  # ...or to every station
+        (StationCapacityCost(offset=0.5, weight=3), (-2, 0.0)),  # hard rounds per station: 1.5 -> 2, 0 -> 0
+        (StationCapacityCost(level="soft", offset=0.5, clip=False, weight=3), (0, 3.0)),  # 1.5 - 3 x 1.5
         # The two scoped constraints charge only the stations they evaluate.
-        (MaxStationsCost(offset=2, clip=False), (1, 0.0)),  # station 3 only: 1 - 2
-        (ForbiddenTaskStationsCost(offset=2, clip=False), (3, 0.0)),  # stations 0, 1: (0 - 2) + (1 - 2)
+        (MaxStationsCost(level="soft", offset=2, clip=False), (0, 1.0)),  # station 3 only: 1 - 2
+        (ForbiddenTaskStationsCost(level="soft", offset=2, clip=False), (0, 3.0)),  # stations 0, 1: (0 - 2) + (1 - 2)
         (ForbiddenTaskStationsCost(offset=-1), (-2, 0.0)),
         # Global constraints shape their one total.
-        (TaskPrecedenceCost(offset=3, clip=False), (2, 0.0)),  # 1 - 3: a hard reward
+        (TaskPrecedenceCost(level="soft", offset=3, clip=False), (0, 2.0)),  # 1 - 3: a reward, refused on hard
         (SameStationGroupsCost(offset=1), (0, 0.0)),
         (UsedStationsCost(offset=1, exponent=2), (0, -4.0)),
         (UsedStationsCost(offset=5, exponent=3, clip=False), (0, 8.0)),
@@ -605,8 +609,9 @@ def test_the_scoped_constraints_report_and_charge_their_units_only():
         "units" not in entry for name, entry in raw.items() if "max_stations" not in name and "forbidden" not in name
     )
     for pick, expected in (
-        (MaxStationsCost(offset=5, clip=False), (5, 0.0)),  # one evaluated station
-        (ForbiddenTaskStationsCost(offset=5, clip=False), (10, 0.0)),  # two evaluated stations
+        # On soft: on hard (their default) the literal formula with an offset is refused.
+        (MaxStationsCost(level="soft", offset=5, clip=False), (0, 5.0)),  # one evaluated station
+        (ForbiddenTaskStationsCost(level="soft", offset=5, clip=False), (0, 10.0)),  # two evaluated stations
         (MaxStationsCost(offset=5), (0, 0.0)),  # the threshold leaves a 0 at 0
     ):
         assert score(raw, [pick]) == expected
@@ -634,14 +639,15 @@ def test_offset_zero_reproduces_the_0_2_0_scores():
         [*get_constraints(), *REPEAT, StationCapacityCost(weight=2, exponent=2)],
         [
             StationCapacityCost(),
-            StationCapacityCost(offset=1, clip=False, weight=2),
+            StationCapacityCost(level="soft", offset=1, clip=False, weight=2),
             TaskPrecedenceCost(offset=-1),
-            MaxStationsCost(offset=1, clip=False),
+            MaxStationsCost(offset=1),
+            MaxStationsCost(level="soft", offset=1, clip=False),
             TaskStationBoundsCost(offset=1),
             FixedTaskStationsCost(),
-            ForbiddenTaskStationsCost(offset=1, clip=False),
-            SameStationGroupsCost(offset=1, clip=False, weight=3),
-            DifferentStationPairsCost(offset=-1, clip=False),
+            ForbiddenTaskStationsCost(level="soft", offset=1, clip=False),
+            SameStationGroupsCost(level="soft", offset=1, clip=False, weight=3),
+            DifferentStationPairsCost(level="soft", offset=-1, clip=False),
             DifferentStationPairsCost(),
             UsedStationsCost(),
             UsedStationsCost(offset=3, exponent=2, weight=0.25),
@@ -746,3 +752,91 @@ def test_the_knob_was_renamed():
         UsedStationsCost(hard=True)
     with pytest.raises(TypeError):
         StationCapacityCost(weight=None, hard=False)
+
+
+# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+
+HARD_REFUSAL = (
+    "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
+    "violation; use clip=True (a threshold) or another level"
+)
+
+
+def _refusal(call):
+    with pytest.raises(ValueError) as refused:
+        call()
+    return str(refused.value)
+
+
+@pytest.mark.parametrize("offset", [3.0, -3.0])
+@pytest.mark.parametrize(
+    "pick",
+    [
+        lambda offset: StationCapacityCost(offset=offset, clip=False),  # the default level, hard
+        lambda offset: StationCapacityCost(level="hard", offset=offset, clip=False),
+        lambda offset: MaxStationsCost(offset=offset, clip=False),  # scoped, hard by default
+        lambda offset: TaskPrecedenceCost(offset=offset, clip=False),  # a global, hard by default
+        lambda offset: UsedStationsCost(level=Level.HARD, offset=offset, clip=False),
+    ],
+    ids=["capacity-default-hard", "capacity-level-hard", "max-stations", "precedence", "used-stations-moved-to-hard"],
+)
+def test_the_literal_offset_is_refused_on_hard_on_every_path(pick, offset):
+    """A positive offset would reward every station below it, an empty one included, so the
+    spare capacity of three stations would cancel station 3's overload and an infeasible
+    line could score hard 0 (or above); a negative one would charge every station. The
+    engine (solve, Solver, constraint_costs, calculate_score) and the score() mirror
+    refuse it with the same message, alone and as a repeat; so does the CP-SAT reference
+    (its own tests)."""
+    spec = pick(offset)
+    message = HARD_REFUSAL.format(q=repr(spec.name))
+    picks = [*get_constraints(), spec]  # a repeat next to the defaults
+    assert _refusal(lambda: alb.solve(build_problem(), config=_config(steps=10), constraints=[spec])) == message
+    assert _refusal(lambda: _zero_budget_solve(fixture_h(), [spec])) == message
+    assert _refusal(lambda: _zero_budget_solve(fixture_h(), picks)) == message
+    assert _refusal(lambda: alb.constraint_costs(fixture_h(), [spec])) == message
+    assert _refusal(lambda: alb.calculate_score(fixture_h(), [spec])) == message
+    assert _refusal(lambda: score(alb.constraint_costs(fixture_h()), [spec])) == message
+    assert _refusal(lambda: score(alb.constraint_costs(fixture_h()), picks)) == message
+
+
+@pytest.mark.parametrize("offset", [3.0, -3.0])
+def test_the_same_literal_pick_on_soft_is_accepted(offset):
+    """Capacity [0, 0, 0, 1] minus the offset on each of the four stations, on soft, on every path."""
+    pick = StationCapacityCost(level="soft", offset=offset, clip=False)
+    expected = (0, -(1 - 4 * offset))
+    assert score(alb.constraint_costs(fixture_h()), [pick]) == expected
+    raw = alb.constraint_costs(fixture_h(), [pick])
+    assert (raw["station_capacity_cost"]["level"], raw["station_capacity_cost"]["clip"]) == ("soft", False)
+    assert score(raw, [pick]) == expected
+    assert alb.calculate_score(fixture_h(), [pick]) == expected
+    assert _engine([pick]) == expected
+    # Next to the hard default, which keeps "hard 0 = no violation": -1 hard.
+    assert _engine([StationCapacityCost(), pick]) == (-1, expected[1])
+
+
+@pytest.mark.parametrize(
+    ("pick", "expected"),
+    [
+        (StationCapacityCost(offset=3.0), (0, 0.0)),  # clip=True on hard: a threshold
+        (StationCapacityCost(offset=-3.0), (-4, 0.0)),  # 1 + 3 on station 3 only
+        (StationCapacityCost(clip=False), (-1, 0.0)),  # clip=False with offset 0: the 0.2.0 shaping
+        (StationCapacityCost(offset=0.0, clip=False), (-1, 0.0)),
+        (MaxStationsCost(offset=-3.0), (-4, 0.0)),
+        (TaskPrecedenceCost(offset=-3.0), (-4, 0.0)),
+    ],
+)
+def test_the_allowed_combinations_on_hard(pick, expected):
+    assert score(alb.constraint_costs(fixture_h()), [pick]) == expected
+    assert _engine([pick]) == expected
+
+
+def test_the_refusal_comes_after_every_knob_of_a_duck_typed_pick():
+    """The engine checks once a pick's knobs are all re-stated: the level a pick moves to decides."""
+    moved = SimpleNamespace(
+        name="station_capacity_cost", weight=None, level="soft", exponent=1.0, offset=3.0, clip=False
+    )
+    assert _engine([moved]) == (0, 11.0)
+    kept = SimpleNamespace(name="station_capacity_cost", weight=None, level=None, exponent=1.0, offset=3.0, clip=False)
+    message = HARD_REFUSAL.format(q="'station_capacity_cost'")
+    assert _refusal(lambda: _engine([kept])) == message
+    assert _refusal(lambda: score(alb.constraint_costs(fixture_h()), [kept])) == message

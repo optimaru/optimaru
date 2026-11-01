@@ -39,7 +39,9 @@ Every spec takes five knobs:
                offset, ``max(0, c - offset) ** exponent``; ``False`` shapes
                ``c - offset`` as it is, so a bin below the offset — an empty one
                (cost 0) included, every bin 0 .. item count - 1 — lowers the
-               penalty, and a bin count below it does too.
+               penalty, and a bin count below it does too. With an offset it is
+               refused on hard (the three per-bin constraints by default), because
+               hard 0 must mean no violation.
 
 The same constraint may be picked several times; each pick is scored on its own with
 its own knobs (its level included) and the picks add up. Every bin costs 1, and every bin beyond the tenth

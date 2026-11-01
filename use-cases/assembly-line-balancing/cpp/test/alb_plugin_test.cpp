@@ -17,9 +17,9 @@
 //       offsets by hand (literal mode charges every evaluated station, an
 //       empty one included; the scoped maxStationsCost and
 //       forbiddenTaskStationsCost charge only their scoped stations; a global
-//       shapes its one total), incremental == a fresh recompute over random
-//       move sequences and a FULL_ASSERT solve with repeated, shifted
-//       components
+//       shapes its one total), the literal formula refused on hard at reset
+//       and kept on soft, incremental == a fresh recompute over random move
+//       sequences and a FULL_ASSERT solve with repeated, shifted components
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -490,25 +490,34 @@ ConstraintAssembly copyOf(const std::string &name)
     return copy;
 }
 
-// The defaults (workload switched on) with two of them shifted, plus repeats
-// of the scoped per-task rules (literal, one fractional), the pairwise delta
-// rule (negative literal), the no-delta capacity rule and the four globals,
-// and three repeats on the other level than their default: the station bounds
-// and the scoped forbidden stations demoted to soft (literal, fractional
-// weight), the used stations promoted to hard (threshold).
+// The defaults (workload switched on) with two of them shifted by a
+// threshold, plus repeats of the scoped per-task rules (one literal, one a
+// fractional threshold), the pairwise delta rule (negative literal), the
+// no-delta capacity rule and the four globals (precedence literal), and
+// repeats on the other level than their default: the literal copies of hard
+// rules on soft (hard refuses the literal formula with an offset), among
+// them the station bounds and the scoped forbidden stations (fractional
+// weight), and the used stations promoted to hard (threshold).
 ConstraintAssembly repeatedAssembly()
 {
     ConstraintAssembly assembly = defaultConstraints();
     assembly.weight("workloadImbalanceCost", 1.0);
     assembly.offset("stationCapacityCost", 1.0);
-    assembly.offset("taskPrecedenceCost", 1.0).clip("taskPrecedenceCost", false);
-    assembly.addInstances(std::move(
-        copyOf("maxStationsCost").weight("maxStationsCost", 2.0).offset("maxStationsCost", 1.0).clip("maxStationsCost", false)));
+    assembly.offset("taskPrecedenceCost", 1.0);
+    assembly.addInstances(std::move(copyOf("taskPrecedenceCost")
+                                        .soft("taskPrecedenceCost")
+                                        .offset("taskPrecedenceCost", 1.0)
+                                        .clip("taskPrecedenceCost", false)));
+    assembly.addInstances(std::move(copyOf("maxStationsCost")
+                                        .soft("maxStationsCost")
+                                        .weight("maxStationsCost", 2.0)
+                                        .offset("maxStationsCost", 1.0)
+                                        .clip("maxStationsCost", false)));
     assembly.addInstances(std::move(copyOf("forbiddenTaskStationsCost")
                                         .weight("forbiddenTaskStationsCost", 3.0)
-                                        .offset("forbiddenTaskStationsCost", 0.5)
-                                        .clip("forbiddenTaskStationsCost", false)));
+                                        .offset("forbiddenTaskStationsCost", 0.5)));
     assembly.addInstances(std::move(copyOf("differentStationPairsCost")
+                                        .soft("differentStationPairsCost")
                                         .offset("differentStationPairsCost", -1.0)
                                         .clip("differentStationPairsCost", false)));
     assembly.addInstances(std::move(copyOf("stationCapacityCost").exponent("stationCapacityCost", 2.0)));
@@ -597,36 +606,50 @@ void verifyRepeatsAndOffsets()
               "hard forbidden stations + a soft literal repeat on its two stations: -1 hard / +6 soft");
     }
     {
-        // Fixture H, V = 4: capacity [0, 0, 0, 1] at weight 3, literal offset
-        // 0.5: 1.5 -> 2 on station 3, -1.5 -> -2 on the three others.
+        // Fixture H, V = 4: capacity [0, 0, 0, 1] at weight 3, offset 0.5.
+        // The hard threshold rounds per station: 1.5 -> 2 on station 3, the
+        // others stay 0. The literal formula is refused on hard, so it is
+        // checked on soft, unrounded: 1.5 on station 3, -1.5 on the others.
         check(sameScore(scoreWith(copyOf("stationCapacityCost")
+                                      .weight("stationCapacityCost", 3.0)
+                                      .offset("stationCapacityCost", 0.5),
+                                  fixtureH()),
+                        Score{-2, 0.0}),
+              "hard threshold offset 0.5 at weight 3, rounded per station: -2 hard");
+        check(sameScore(scoreWith(copyOf("stationCapacityCost")
+                                      .soft("stationCapacityCost")
                                       .weight("stationCapacityCost", 3.0)
                                       .offset("stationCapacityCost", 0.5)
                                       .clip("stationCapacityCost", false),
                                   fixtureH()),
-                        Score{4, 0.0}),
-              "hard literal offset 0.5 at weight 3, rounded per station: +4 hard");
+                        Score{0, 3.0}),
+              "soft literal offset 0.5 at weight 3: 1.5 - 3 x 1.5 -> +3 soft");
         check(sameScore(scoreWith(copyOf("stationCapacityCost").offset("stationCapacityCost", -1.0), fixtureH()),
                         Score{-2, 0.0}),
               "threshold offset -1 adds to the non-zero station only");
         check(sameScore(scoreWith(copyOf("stationCapacityCost")
+                                      .soft("stationCapacityCost")
                                       .offset("stationCapacityCost", -1.0)
                                       .clip("stationCapacityCost", false),
                                   fixtureH()),
-                        Score{-5, 0.0}),
-              "literal offset -1 adds to every station: 3 x 1 + 2");
+                        Score{0, -5.0}),
+              "soft literal offset -1 adds to every station: 3 x 1 + 2");
         // Scoped: maxStationsCost evaluates station 3 only (raw 1),
         // forbiddenTaskStationsCost stations 0 and 1 (raw 0, 1).
-        check(sameScore(scoreWith(copyOf("maxStationsCost").offset("maxStationsCost", 2.0).clip("maxStationsCost", false),
+        check(sameScore(scoreWith(copyOf("maxStationsCost")
+                                      .soft("maxStationsCost")
+                                      .offset("maxStationsCost", 2.0)
+                                      .clip("maxStationsCost", false),
                                   fixtureH()),
-                        Score{1, 0.0}),
-              "max stations literal offset 2: (1 - 2) on its one station");
+                        Score{0, 1.0}),
+              "soft max stations literal offset 2: (1 - 2) on its one station");
         check(sameScore(scoreWith(copyOf("forbiddenTaskStationsCost")
+                                      .soft("forbiddenTaskStationsCost")
                                       .offset("forbiddenTaskStationsCost", 2.0)
                                       .clip("forbiddenTaskStationsCost", false),
                                   fixtureH()),
-                        Score{3, 0.0}),
-              "forbidden stations literal offset 2: (0 - 2) + (1 - 2) on its two stations");
+                        Score{0, 3.0}),
+              "soft forbidden stations literal offset 2: (0 - 2) + (1 - 2) on its two stations");
         check(sameScore(scoreWith(copyOf("usedStationsCost").offset("usedStationsCost", 5.0).clip("usedStationsCost", false),
                                   fixtureH()),
                         Score{0, 2.0}),
@@ -652,16 +675,82 @@ void verifyRepeatsAndOffsets()
                 unitsOk = unitsOk && !entry.scoped;
         }
         check(p.stationCount == 4 && unitsOk, "scoped units: max stations [3], forbidden stations [0, 1]");
-        check(sameScore(scoreWith(copyOf("maxStationsCost").offset("maxStationsCost", 5.0).clip("maxStationsCost", false),
+        check(sameScore(scoreWith(copyOf("maxStationsCost")
+                                      .soft("maxStationsCost")
+                                      .offset("maxStationsCost", 5.0)
+                                      .clip("maxStationsCost", false),
                                   fixtureZ()),
-                        Score{5, 0.0}),
-              "an all-zero max stations, literal offset 5: one evaluated station, +5");
+                        Score{0, 5.0}),
+              "an all-zero max stations, soft literal offset 5: one evaluated station, +5");
         check(sameScore(scoreWith(copyOf("forbiddenTaskStationsCost")
+                                      .soft("forbiddenTaskStationsCost")
                                       .offset("forbiddenTaskStationsCost", 5.0)
                                       .clip("forbiddenTaskStationsCost", false),
                                   fixtureZ()),
-                        Score{10, 0.0}),
-              "an all-zero forbidden stations, literal offset 5: two evaluated stations, +10");
+                        Score{0, 10.0}),
+              "an all-zero forbidden stations, soft literal offset 5: two evaluated stations, +10");
+    }
+    {
+        // On hard the literal formula with an offset is refused at reset,
+        // whichever sign and setter order, for a hard default (per station,
+        // scoped and global) and for the soft used stations moved to hard:
+        // on fixture Z (every hard term 0) +5 would reward the scoped
+        // stations (+5 hard, cancelling another violation), -5 would charge
+        // stations that hold no violation.
+        auto refusal = [](const std::string &name) {
+            return "Constraint '" + name
+                   + "' cannot use clip=false with a non-zero offset on a level that counts "
+                     "toward the hard score (hard 0 must mean no violation)";
+        };
+        auto resetRefusal = [](ConstraintAssembly assembly) {
+            try
+            {
+                scoreWith(std::move(assembly), fixtureZ());
+            }
+            catch (const std::logic_error &error)
+            {
+                return std::string(error.what());
+            }
+            return std::string();
+        };
+        check(resetRefusal(copyOf("stationCapacityCost")
+                               .offset("stationCapacityCost", 5.0)
+                               .clip("stationCapacityCost", false))
+                      == refusal("stationCapacityCost")
+                  && resetRefusal(copyOf("stationCapacityCost")
+                                      .clip("stationCapacityCost", false)
+                                      .offset("stationCapacityCost", -5.0))
+                         == refusal("stationCapacityCost"),
+              "station capacity literal offset +-5 on hard: refused at reset");
+        check(resetRefusal(copyOf("maxStationsCost").offset("maxStationsCost", 5.0).clip("maxStationsCost", false))
+                  == refusal("maxStationsCost"),
+              "scoped max stations literal offset on hard: refused at reset");
+        check(resetRefusal(copyOf("taskPrecedenceCost")
+                               .offset("taskPrecedenceCost", 1.0)
+                               .clip("taskPrecedenceCost", false))
+                  == refusal("taskPrecedenceCost"),
+              "task precedence (a global) literal offset on hard: refused at reset");
+        check(resetRefusal(copyOf("usedStationsCost")
+                               .offset("usedStationsCost", 5.0)
+                               .clip("usedStationsCost", false)
+                               .hard("usedStationsCost"))
+                  == refusal("usedStationsCost"),
+              "used stations literal offset moved to hard afterwards: refused at reset");
+        ConstraintAssembly repeated = copyOf("stationCapacityCost");
+        repeated.addInstances(std::move(copyOf("stationCapacityCost")
+                                            .offset("stationCapacityCost", 1.0)
+                                            .clip("stationCapacityCost", false)));
+        check(resetRefusal(std::move(repeated)) == refusal("stationCapacityCost"),
+              "a hard literal repeat next to the default: refused at reset");
+        check(resetRefusal(copyOf("stationCapacityCost").offset("stationCapacityCost", 5.0)).empty()
+                  && resetRefusal(copyOf("stationCapacityCost").clip("stationCapacityCost", false)).empty()
+                  && resetRefusal(copyOf("stationCapacityCost")
+                                      .offset("stationCapacityCost", 5.0)
+                                      .clip("stationCapacityCost", false)
+                                      .soft("stationCapacityCost"))
+                         .empty(),
+              "station capacity: a threshold offset or clip=false with offset 0 on hard, and the "
+              "literal offset on soft, are allowed");
     }
     {
         // Random walks: incremental == a fresh calculator of the same assembly.

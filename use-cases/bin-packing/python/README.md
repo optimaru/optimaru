@@ -39,8 +39,11 @@ knobs. The exponent shapes each bin's cost for the three per-bin constraints and
 count for `used_bins_cost`; 0.1.x shaped colour excess per (bin, colour) and conflicts per
 pair, so only exponent != 1 scores change (totals and exponent-1 scores are identical).
 `offset` / `clip` (0.3.0) shift that shaping at the same granularity: `clip=True` counts
-only what lies beyond the offset, `clip=False` shapes `cost - offset` as it is, an empty
-bin included.
+only what lies beyond the offset, `clip=False` shapes `cost - offset` as it is, on every
+bin, an empty one included (per bin, not over the sum). That is refused on hard, where
+hard 0 must mean no violation: `ValueError: constraint 'bin_capacity_cost': clip=False with
+a non-zero offset cannot be hard, because hard 0 must mean no violation; use clip=True (a
+threshold) or another level`. On soft it is allowed.
 
 ## Install / test
 

@@ -30,7 +30,8 @@
 //   (k) repeated components and the offset / clip knobs: hand-calculated
 //       repeats of a per-bin and the global rule, threshold and literal
 //       offsets by hand (literal mode charges every bin 0..n-1, an empty one
-//       included; the global shapes its one count), incremental == a fresh
+//       included; the global shapes its one count), the literal formula
+//       refused on hard at reset and kept on soft, incremental == a fresh
 //       recompute over random variable and macro moves, and a FULL_ASSERT
 //       solve with repeated, shifted components
 #include <algorithm>
@@ -736,10 +737,12 @@ Score scoreOf(ConstraintAssembly assembly, BinPackingProblem p)
 }
 
 // The defaults with two of them shifted, plus repeats of the no-delta
-// capacity rule (squared), the delta-path colour and conflict rules (literal,
-// one fractional) and the global bin count (threshold), and two repeats on
-// the other level than their default: the conflict rule demoted to soft
-// (literal, fractional weight) and the bin count promoted to hard (threshold).
+// capacity rule (squared), the delta-path colour and conflict rules (a
+// fractional hard threshold, and literal copies on soft: hard refuses the
+// literal formula with an offset) and the global bin count (threshold), and
+// two repeats on the other level than their default: the conflict rule
+// demoted to soft (literal, fractional weight) and the bin count promoted to
+// hard (threshold).
 ConstraintAssembly repeatedAssembly()
 {
     ConstraintAssembly assembly = defaultConstraints();
@@ -747,11 +750,15 @@ ConstraintAssembly repeatedAssembly()
     assembly.offset("usedBinsCost", 1.0).clip("usedBinsCost", false);
     assembly.addInstances(
         std::move(copyOf("binCapacityCost").weight("binCapacityCost", 0.5).exponent("binCapacityCost", 2.0)));
+    assembly.addInstances(std::move(
+        copyOf("colorConflictCost").weight("colorConflictCost", 3.0).offset("colorConflictCost", 0.5)));
     assembly.addInstances(std::move(copyOf("colorConflictCost")
+                                        .soft("colorConflictCost")
                                         .weight("colorConflictCost", 3.0)
                                         .offset("colorConflictCost", 0.5)
                                         .clip("colorConflictCost", false)));
     assembly.addInstances(std::move(copyOf("itemConflictCost")
+                                        .soft("itemConflictCost")
                                         .exponent("itemConflictCost", 2.0)
                                         .offset("itemConflictCost", -1.0)
                                         .clip("itemConflictCost", false)));
@@ -820,28 +827,96 @@ void verifyRepeatsAndOffsets()
         const BinPackingProblem p = everyTermPositive();
         check(sameScore(scoreOf(copyOf("binCapacityCost").offset("binCapacityCost", 3.0), p), Score{-5, 0.0}),
               "capacity threshold offset 3: 8 - 3");
-        check(sameScore(scoreOf(copyOf("binCapacityCost").offset("binCapacityCost", 3.0).clip("binCapacityCost", false),
+        // The literal formula with an offset is refused on hard (the per-bin
+        // rules' default), so its numbers are checked on soft.
+        check(sameScore(scoreOf(copyOf("binCapacityCost")
+                                    .soft("binCapacityCost")
+                                    .offset("binCapacityCost", 3.0)
+                                    .clip("binCapacityCost", false),
                                 p),
-                        Score{4, 0.0}),
-              "capacity literal offset 3: (8 - 3) + 3 x (0 - 3), every bin");
+                        Score{0, 4.0}),
+              "soft capacity literal offset 3: (8 - 3) + 3 x (0 - 3), every bin");
         check(sameScore(scoreOf(copyOf("binCapacityCost").offset("binCapacityCost", -1.0), p), Score{-9, 0.0}),
               "capacity threshold offset -1 adds to the non-zero bin only");
-        check(sameScore(scoreOf(copyOf("binCapacityCost").offset("binCapacityCost", -1.0).clip("binCapacityCost", false),
+        check(sameScore(scoreOf(copyOf("binCapacityCost")
+                                    .soft("binCapacityCost")
+                                    .offset("binCapacityCost", -1.0)
+                                    .clip("binCapacityCost", false),
                                 p),
-                        Score{-12, 0.0}),
-              "capacity literal offset -1 adds to every bin: 9 + 3");
-        // Hard literal offset rounds per bin: (1 - 0.5) x 3 = 1.5 -> 2,
-        // (0 - 0.5) x 3 = -1.5 -> -2 on three bins.
+                        Score{0, -12.0}),
+              "soft capacity literal offset -1 adds to every bin: 9 + 3");
+        // A hard threshold offset rounds per bin: (1 - 0.5) x 3 = 1.5 -> 2,
+        // the empty bins stay 0. The literal pick on soft is not rounded:
+        // 1.5 + 3 x (0 - 0.5) x 3.
         check(sameScore(scoreOf(copyOf("colorConflictCost")
+                                    .weight("colorConflictCost", 3.0)
+                                    .offset("colorConflictCost", 0.5),
+                                p),
+                        Score{-2, 0.0}),
+              "colour threshold offset 0.5 at weight 3, rounded per bin: -2 hard");
+        check(sameScore(scoreOf(copyOf("colorConflictCost")
+                                    .soft("colorConflictCost")
                                     .weight("colorConflictCost", 3.0)
                                     .offset("colorConflictCost", 0.5)
                                     .clip("colorConflictCost", false),
                                 p),
-                        Score{4, 0.0}),
-              "colour literal offset 0.5 at weight 3, rounded per bin: +4 hard");
+                        Score{0, 3.0}),
+              "soft colour literal offset 0.5 at weight 3: -(1.5 - 4.5)");
         check(sameScore(scoreOf(copyOf("usedBinsCost").offset("usedBinsCost", 5.0).clip("usedBinsCost", false), p),
                         Score{0, 3.0}),
               "used bins literal offset 5: 2 - 5, a reward");
+    }
+    {
+        // On hard the literal formula with an offset is refused at reset,
+        // whichever sign and setter order, for a hard default per-bin rule
+        // and for the soft bin count moved to hard: +3 would reward the three
+        // empty bins (+4 hard on an overloaded bin, a feasible-looking
+        // score), -1 would charge bins that hold no violation.
+        auto refusal = [](const std::string &name) {
+            return "Constraint '" + name
+                   + "' cannot use clip=false with a non-zero offset on a level that counts "
+                     "toward the hard score (hard 0 must mean no violation)";
+        };
+        auto resetRefusal = [](ConstraintAssembly assembly) {
+            try
+            {
+                scoreOf(std::move(assembly), everyTermPositive());
+            }
+            catch (const std::logic_error &error)
+            {
+                return std::string(error.what());
+            }
+            return std::string();
+        };
+        check(resetRefusal(copyOf("binCapacityCost").offset("binCapacityCost", 3.0).clip("binCapacityCost", false))
+                      == refusal("binCapacityCost")
+                  && resetRefusal(
+                         copyOf("binCapacityCost").clip("binCapacityCost", false).offset("binCapacityCost", -1.0))
+                         == refusal("binCapacityCost"),
+              "capacity literal offset +3 / -1 on hard: refused at reset");
+        check(resetRefusal(copyOf("itemConflictCost").offset("itemConflictCost", 1.0).clip("itemConflictCost", false))
+                  == refusal("itemConflictCost"),
+              "item conflict (a delta-path rule) literal offset on hard: refused at reset");
+        check(resetRefusal(copyOf("usedBinsCost")
+                               .offset("usedBinsCost", 5.0)
+                               .clip("usedBinsCost", false)
+                               .hard("usedBinsCost"))
+                  == refusal("usedBinsCost"),
+              "used bins literal offset moved to hard afterwards: refused at reset");
+        ConstraintAssembly repeated = copyOf("binCapacityCost");
+        repeated.addInstances(
+            std::move(copyOf("binCapacityCost").offset("binCapacityCost", 3.0).clip("binCapacityCost", false)));
+        check(resetRefusal(std::move(repeated)) == refusal("binCapacityCost"),
+              "a hard literal repeat next to the default: refused at reset");
+        check(resetRefusal(copyOf("binCapacityCost").offset("binCapacityCost", 3.0)).empty()
+                  && resetRefusal(copyOf("binCapacityCost").clip("binCapacityCost", false)).empty()
+                  && resetRefusal(copyOf("binCapacityCost")
+                                      .offset("binCapacityCost", 3.0)
+                                      .clip("binCapacityCost", false)
+                                      .soft("binCapacityCost"))
+                         .empty(),
+              "capacity: a threshold offset or clip=false with offset 0 on hard, and the literal "
+              "offset on soft, are allowed");
     }
     {
         // Random walk over variable changes, swaps, bin merges and the two

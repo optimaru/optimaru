@@ -54,6 +54,12 @@ score(raw), score(raw, [TagConflictCost(exponent=2.0)])
 score(raw, [TagConflictCost(), TagConflictCost(weight=100, exponent=2, offset=10)])
 ```
 
+`clip=False` shapes `x - offset` on every (start date, crew) cell, an empty one included
+(per cell, not over the sum), so it is refused on hard, where hard 0 must mean no
+violation: `ValueError: constraint 'min_start_date_cost': clip=False with a non-zero offset
+cannot be hard, because hard 0 must mean no violation; use clip=True (a threshold) or
+another level`. On soft it is allowed.
+
 Dates are epoch day integers (Java `LocalDate.toEpochDay`). To work with `datetime.date`,
 use the pydantic mirror (optional dependency `pydantic`):
 
