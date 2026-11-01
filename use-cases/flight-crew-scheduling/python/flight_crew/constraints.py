@@ -37,7 +37,9 @@ Every spec takes five knobs:
 - ``clip``     (keyword) ``True`` (the default) counts only what lies beyond the
                offset, ``max(0, c - offset) ** exponent``; ``False`` shapes
                ``c - offset`` as it is, so an employee below the offset — an idle
-               one (cost 0) included — lowers the penalty.
+               one (cost 0) included — lowers the penalty. With an offset it is
+               refused on hard (the four hard constraints by default), because
+               hard 0 must mean no violation.
 
 The same constraint may be picked several times; each pick is scored on its own with
 its own knobs and the picks add up. A conflict costs its weight, and every conflict an

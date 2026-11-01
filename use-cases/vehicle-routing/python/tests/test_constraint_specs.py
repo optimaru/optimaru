@@ -774,12 +774,16 @@ def test_a_repeated_medium_pick_adds_up():
         (TravelTimeCost(offset=-50, clip=False), (0, -1050.0)),  # ...or to every vehicle
         (TravelTimeCost(offset=500, exponent=2), (0, -(100.0**2))),
         (TravelTimeCost(offset=400, exponent=3, clip=False), (0, -(-(100**3) + 200**3 - 400**3))),
-        (VehicleCapacityCost(offset=3, clip=False), (8, 0.0)),  # (1 - 3) + (0 - 3) x 2: a hard reward below 3
-        (VehicleCapacityCost(offset=1.5, clip=False), (5, 0.0)),  # -0.5 -> -1, -1.5 -> -2 twice: per vehicle
+        (VehicleCapacityCost(offset=-0.5), (-2, 0.0)),  # hard rounds per vehicle: 1.5 -> 2, the zeros stay 0
+        # The literal formula with an offset is refused on hard; on soft it charges
+        # (1 - 3) + (0 - 3) x 2 = -8 (a reward below 3) and 2 x (-0.5 - 1.5 x 2) = -7.
+        (VehicleCapacityCost(level="soft", offset=3, clip=False), (0, 8.0)),
+        (VehicleCapacityCost(level="soft", offset=1.5, clip=False, weight=2), (0, 7.0)),
         # The global's total (8 minutes) is shaped once: (8 - 2)^2, not (5 - 2)^2 + (3 - 2)^2.
         (UnassignedVisitsCost(offset=2, exponent=2), (0, -36 * MEDIUM_UNIT)),
-        (UnassignedVisitsCost(offset=10, clip=False), (0, 2 * MEDIUM_UNIT)),
-        (UnassignedVisitsCost(offset=10, clip=False, level="hard"), (2, 0.0)),
+        (UnassignedVisitsCost(offset=10, clip=False), (0, 2 * MEDIUM_UNIT)),  # medium folds into soft
+        (UnassignedVisitsCost(offset=10, clip=False, level="soft"), (0, 2.0)),
+        (UnassignedVisitsCost(offset=10, level="hard"), (0, 0.0)),  # the threshold on hard: nothing beyond 10
     ],
 )
 def test_offsets_by_hand_on_both_paths(pick, expected):
@@ -794,7 +798,7 @@ def test_offsets_by_hand_on_both_paths(pick, expected):
 
 def test_the_route_constraints_evaluate_the_vehicles_and_not_the_pool():
     """Every per-vehicle entry lists the vehicles as its "units"; the literal offset charges
-    exactly those (3 x 2 hard on an all-zero max_stops_cost), never the pool's cell."""
+    exactly those (3 x 2 soft on an all-zero max_stops_cost), never the pool's cell."""
     raw = vrp.constraint_costs(_hand_plan())
     for name, entry in raw.items():
         if entry["global"]:
@@ -802,10 +806,10 @@ def test_the_route_constraints_evaluate_the_vehicles_and_not_the_pool():
         else:
             assert entry["units"] == [0, 1, 2], name
             assert len(entry["costs"]) == 4 and entry["costs"][3] == 0.0, name
-    pick = MaxStopsCost(offset=2, clip=False)
+    pick = MaxStopsCost(level="soft", offset=2, clip=False)  # refused on hard, its default
     assert raw["max_stops_cost"]["costs"] == [0.0, 0.0, 0.0, 0.0]
-    assert score(raw, [pick]) == (6, 0.0)
-    assert _zero_budget([pick]) == (6, 0.0)
+    assert score(raw, [pick]) == (0, 6.0)
+    assert _zero_budget([pick]) == (0, 6.0)
 
 
 def test_offset_zero_reproduces_the_0_2_0_scores():
@@ -829,7 +833,8 @@ def test_offset_zero_reproduces_the_0_2_0_scores():
         [VehicleCapacityCost(), UnassignedVisitsCost(), TravelTimeCost(), TravelTimeCost(exponent=2, offset=1000)],
         [
             VehicleCapacityCost(),
-            VehicleCapacityCost(offset=1, clip=False, weight=2),
+            VehicleCapacityCost(level="soft", offset=1, clip=False, weight=2),
+            VehicleCapacityCost(offset=1, weight=2),
             MaxEndTimeCost(),
             UnassignedVisitsCost(offset=5),
             UnassignedVisitsCost(weight=2, offset=20, clip=False),
@@ -869,14 +874,16 @@ def test_naming_a_constraint_twice_scores_both_picks():
         ([UnassignedVisitsCost(level=Level.SOFT, weight=2)], (0, -16.0)),
         ([UnassignedVisitsCost(level="hard", offset=5)], (-3, 0.0)),
         # A repeat carries its own level and shaping: soft travel, medium beyond 400 s,
-        # and hard 2 x (x - 400) per vehicle: 2 x (-100 + 200 - 400) = -600, a hard reward.
+        # hard 2 x max(0, x - 400) per vehicle, and a literal copy 2 x (x - 400) per
+        # vehicle, 2 x (-100 + 200 - 400) = -600, which may sit on soft but not on hard.
         (
             [
                 TravelTimeCost(),
                 TravelTimeCost(level="medium", offset=400),
-                TravelTimeCost(level="hard", weight=2, offset=400, clip=False),
+                TravelTimeCost(level="hard", weight=2, offset=400),
+                TravelTimeCost(level="soft", weight=2, offset=400, clip=False),
             ],
-            (600, -900 - 200 * MEDIUM_UNIT),
+            (-400, -900 + 600 - 200 * MEDIUM_UNIT),
         ),
     ],
 )
@@ -897,3 +904,87 @@ def test_a_repeat_is_checked_on_its_own_level():
         _zero_budget([TravelTimeCost(), pick])
     with pytest.raises(ValueError, match="constraint 'travel_time_cost': level must be 'hard', 'medium' or 'soft'"):
         score(vrp.constraint_costs(_hand_plan()), [TravelTimeCost(), pick])
+
+
+# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+
+HARD_REFUSAL = (
+    "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
+    "violation; use clip=True (a threshold) or another level"
+)
+
+
+def _refusal(call):
+    with pytest.raises(ValueError) as refused:
+        call()
+    return str(refused.value)
+
+
+@pytest.mark.parametrize("offset", [3.0, -3.0])
+@pytest.mark.parametrize(
+    "pick",
+    [
+        lambda offset: VehicleCapacityCost(offset=offset, clip=False),  # the default level, hard
+        lambda offset: VehicleCapacityCost(level="hard", offset=offset, clip=False),
+        lambda offset: TravelTimeCost(level="hard", offset=offset, clip=False),
+        lambda offset: UnassignedVisitsCost(level=Level.HARD, offset=offset, clip=False),  # a global
+    ],
+    ids=["capacity-default-hard", "capacity-level-hard", "travel-moved-to-hard", "unassigned-moved-to-hard"],
+)
+def test_the_literal_offset_is_refused_on_hard_on_every_path(pick, offset):
+    """A positive offset would reward the vehicles below it, so one vehicle's spare capacity
+    would cancel another's overload and an infeasible plan could score hard 0; a negative
+    one would charge every vehicle, an idle one included. The engine (solve_with_constraints,
+    constraint_costs) and the score() mirror refuse it with the same message; vehicle routing
+    has no CP-SAT reference (benchmarks/vehicle-routing takes no picks)."""
+    spec = pick(offset)
+    message = HARD_REFUSAL.format(q=repr(spec.name))
+    repeated = [type(spec)(), spec]  # a refused repeat next to its accepted first instance
+    assert _refusal(lambda: solve([spec], seconds=0.1)) == message
+    assert _refusal(lambda: _zero_budget(repeated)) == message
+    assert _refusal(lambda: vrp.constraint_costs(_hand_plan(), [spec])) == message
+    assert _refusal(lambda: vrp.constraint_costs(_hand_plan(), repeated)) == message
+    assert _refusal(lambda: score(vrp.constraint_costs(_hand_plan()), [spec])) == message
+    assert _refusal(lambda: score(vrp.constraint_costs(_hand_plan()), repeated)) == message
+
+
+@pytest.mark.parametrize("offset", [3.0, -3.0])
+def test_the_same_literal_pick_on_soft_is_accepted(offset):
+    """(1 - offset) + (0 - offset) x 2 per vehicle, on soft, on every path; never the pool."""
+    pick = VehicleCapacityCost(level="soft", offset=offset, clip=False)
+    expected = (0, -(1 - offset + 2 * (0 - offset)))
+    assert score(vrp.constraint_costs(_hand_plan()), [pick]) == expected
+    raw = vrp.constraint_costs(_hand_plan(), [pick])
+    assert (raw["vehicle_capacity_cost"]["level"], raw["vehicle_capacity_cost"]["clip"]) == ("soft", False)
+    assert score(raw, [pick]) == expected
+    assert _zero_budget([pick]) == expected
+    # Medium folds into soft here, so it takes the literal formula too.
+    medium = VehicleCapacityCost(level="medium", offset=offset, clip=False)
+    assert score(vrp.constraint_costs(_hand_plan()), [medium]) == (0, expected[1] * MEDIUM_UNIT)
+    assert _zero_budget([medium]) == (0, expected[1] * MEDIUM_UNIT)
+
+
+@pytest.mark.parametrize(
+    ("pick", "expected"),
+    [
+        (VehicleCapacityCost(offset=3.0), (0, 0.0)),  # clip=True on hard: a threshold
+        (VehicleCapacityCost(offset=-3.0), (-4, 0.0)),  # 1 + 3 on the overloaded vehicle only
+        (VehicleCapacityCost(clip=False), (-1, 0.0)),  # clip=False with offset 0: the 0.2.0 shaping
+        (VehicleCapacityCost(offset=0.0, clip=False), (-1, 0.0)),
+    ],
+)
+def test_the_allowed_combinations_on_hard(pick, expected):
+    assert score(vrp.constraint_costs(_hand_plan()), [pick]) == expected
+    assert _zero_budget([pick]) == expected
+
+
+def test_the_refusal_comes_after_every_knob_of_a_duck_typed_pick():
+    """The engine checks once a pick's knobs are all re-stated: the level a pick moves to decides."""
+    moved = SimpleNamespace(
+        name="vehicle_capacity_cost", weight=None, level="soft", exponent=1.0, offset=3.0, clip=False
+    )
+    assert _zero_budget([moved]) == (0, 8.0)
+    kept = SimpleNamespace(name="vehicle_capacity_cost", weight=None, level=None, exponent=1.0, offset=3.0, clip=False)
+    message = HARD_REFUSAL.format(q="'vehicle_capacity_cost'")
+    assert _refusal(lambda: _zero_budget([kept])) == message
+    assert _refusal(lambda: score(vrp.constraint_costs(_hand_plan()), [kept])) == message

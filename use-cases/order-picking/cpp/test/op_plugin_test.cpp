@@ -18,7 +18,8 @@
 //   (j) repeated components and the offset / clip knobs: a hand-calculated
 //       repeat (walk + 0.5 x walk^2), threshold / literal / negative offsets
 //       by hand (an empty trolley counts in literal mode), per-trolley hard
-//       rounding, incremental == a fresh recompute over a random walk, every
+//       rounding, the literal formula refused on hard at reset and kept on
+//       soft, incremental == a fresh recompute over a random walk, every
 //       preview == the applied score under FULL_ASSERT and a FULL_ASSERT
 //       solve with repeated, shifted components
 #include <algorithm>
@@ -804,10 +805,16 @@ ConstraintAssembly repeatedAssembly()
                                         .weight("distanceFromPreviousPickTaskCost", 0.01)
                                         .exponent("distanceFromPreviousPickTaskCost", 2.0)
                                         .offset("distanceFromPreviousPickTaskCost", 20.0)));
+    // The literal bucket copy sits on soft: hard refuses the literal formula
+    // with an offset (hard 0 must mean no violation).
     assembly.addInstances(std::move(copyOf("trolleyCapacityCost")
+                                        .soft("trolleyCapacityCost")
                                         .weight("trolleyCapacityCost", 2.0)
                                         .offset("trolleyCapacityCost", 1.0)
                                         .clip("trolleyCapacityCost", false)));
+    assembly.addInstances(std::move(copyOf("trolleyCapacityCost")
+                                        .weight("trolleyCapacityCost", 2.0)
+                                        .offset("trolleyCapacityCost", 1.0)));
     assembly.addInstances(std::move(copyOf("orderSplitByTrolleyCost")
                                         .weight("orderSplitByTrolleyCost", 300.0)
                                         .offset("orderSplitByTrolleyCost", -2.0)
@@ -867,13 +874,71 @@ void verifyRepeatsAndOffsets()
                                .offset("orderSplitByTrolleyCost", -1.0)
                                .clip("orderSplitByTrolleyCost", false)),
                0, -6000.0);
-    // (0 - 1.5) -> -2, (1 - 1.5) -> -1, (0 - 1.5) -> -2 per trolley: +5 (a
-    // rounded total, -3.5 -> -4, would give +4).
-    checkScore("buckets literal offset 1.5: llround per trolley, +5 hard",
+    // The literal bucket pick on soft: (0 - 1.5) + (1 - 1.5) + (0 - 1.5) =
+    // -3.5, the empty trolley included: +3.5 soft (not rounded).
+    checkScore("buckets literal offset 1.5 on soft: -1.5 - 0.5 - 1.5 -> +3.5 soft",
                repeatScore(copyOf("trolleyCapacityCost")
+                               .soft("trolleyCapacityCost")
                                .offset("trolleyCapacityCost", 1.5)
                                .clip("trolleyCapacityCost", false)),
-               5, 0.0);
+               0, 3.5);
+    // A hard threshold pick rounds per trolley: the walk moved to hard at
+    // weight 0.5 beyond 2 m: llround(1.5) x 2 = 4 (a rounded total would
+    // give 3).
+    checkScore("walk on hard, threshold offset 2 at weight 0.5: llround per trolley, -4 hard",
+               repeatScore(copyOf("distanceFromPreviousPickTaskCost")
+                               .hard("distanceFromPreviousPickTaskCost")
+                               .weight("distanceFromPreviousPickTaskCost", 0.5)
+                               .offset("distanceFromPreviousPickTaskCost", 2.0)),
+               -4, 0.0);
+    {
+        // On hard the literal formula with an offset is refused at reset,
+        // whichever sign and setter order: +1.5 would reward the trolleys
+        // below it (+5 hard, so one trolley's spare buckets would cancel
+        // another's shortage), -1.5 would charge three trolleys that hold no
+        // violation.
+        auto resetRefusal = [](ConstraintAssembly assembly) {
+            try
+            {
+                repeatScore(std::move(assembly));
+            }
+            catch (const std::logic_error &error)
+            {
+                return std::string(error.what());
+            }
+            return std::string();
+        };
+        auto refusal = [](const std::string &name) {
+            return "Constraint '" + name
+                   + "' cannot use clip=false with a non-zero offset on a level that counts toward "
+                     "the hard score (hard 0 must mean no violation)";
+        };
+        check(resetRefusal(copyOf("trolleyCapacityCost")
+                               .offset("trolleyCapacityCost", 1.5)
+                               .clip("trolleyCapacityCost", false))
+                      == refusal("trolleyCapacityCost")
+                  && resetRefusal(copyOf("trolleyCapacityCost")
+                                      .clip("trolleyCapacityCost", false)
+                                      .offset("trolleyCapacityCost", -1.5))
+                         == refusal("trolleyCapacityCost"),
+              "buckets literal offset +-1.5 on hard (its default): refused at reset");
+        check(resetRefusal(copyOf("distanceFromPreviousPickTaskCost")
+                               .offset("distanceFromPreviousPickTaskCost", 3.0)
+                               .clip("distanceFromPreviousPickTaskCost", false)
+                               .hard("distanceFromPreviousPickTaskCost"))
+                  == refusal("distanceFromPreviousPickTaskCost"),
+              "walk literal offset moved to hard afterwards: refused at reset");
+        ConstraintAssembly repeated = copyOf("trolleyCapacityCost");
+        repeated.addInstances(std::move(copyOf("trolleyCapacityCost")
+                                            .offset("trolleyCapacityCost", 1.0)
+                                            .clip("trolleyCapacityCost", false)));
+        check(resetRefusal(std::move(repeated)) == refusal("trolleyCapacityCost"),
+              "a repeated bucket instance with the literal offset on hard: refused at reset");
+        check(resetRefusal(copyOf("trolleyCapacityCost").offset("trolleyCapacityCost", 1.5)).empty()
+                  && resetRefusal(copyOf("trolleyCapacityCost").clip("trolleyCapacityCost", false))
+                         .empty(),
+              "allowed on hard: a threshold offset, or clip=false with offset 0");
+    }
     checkScore("identical instances add up: 2 x 1000 x 3",
                repeatScore(std::move(copyOf("orderSplitByTrolleyCost")
                                          .addInstances(copyOf("orderSplitByTrolleyCost")))),

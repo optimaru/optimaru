@@ -75,7 +75,11 @@ def solve_request(
     data = request.model_input
     plan = to_plan(data, name=request.name or "plan")
     model = cp_model.CpModel()
-    objective = REGISTRY.objective(model, ("hard", "medium", "soft"), constraints)
+    # The engine's medium folds into soft, so a medium pick may take the literal
+    # offset formula; hard refuses it (cpsat-common, in the engine's words).
+    objective = REGISTRY.objective(
+        model, ("hard", "medium", "soft"), constraints, medium_fold="into_soft"
+    )
     vehicle_count, delivery_count = len(data.vehicles), len(data.deliveries)
     node_count = 2 * delivery_count
     nodes = [

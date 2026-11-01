@@ -366,7 +366,8 @@ def test_score_reproduces_the_engine_score_exactly():
         [*get_constraints(), DistanceFromPreviousPickTaskCost(weight=0.5, exponent=2.0)],
         [
             TrolleyCapacityCost(),
-            TrolleyCapacityCost(offset=1, clip=False, weight=2),
+            TrolleyCapacityCost(level="soft", offset=1, clip=False, weight=2),
+            TrolleyCapacityCost(offset=1, weight=2),
             DistanceFromPreviousPickTaskCost(offset=100),
             DistanceFromPreviousPickTaskCost(offset=-5, clip=False, weight=0.25),
             DistanceFromLastPickTaskToPathOriginCost(offset=30, clip=False),
@@ -524,8 +525,13 @@ def test_the_keys_follow_the_pick_order_of_each_name():
         (OrderSplitByTrolleyCost(offset=-1), (0, -5000.0)),  # a negative offset adds to every non-zero trolley
         (OrderSplitByTrolleyCost(offset=-1, clip=False), (0, -6000.0)),  # ...or to every trolley
         (OrderSplitByTrolleyCost(offset=1, exponent=3), (0, -1000.0)),  # (2 - 1)^3 on t0 only
-        (TrolleyCapacityCost(offset=3, clip=False), (8, 0.0)),  # -3 -2 -3: a hard reward below 3
-        (TrolleyCapacityCost(offset=1.5, clip=False), (5, 0.0)),  # -1.5 -> -2, -0.5 -> -1: per trolley
+        (TrolleyCapacityCost(offset=-0.5), (-2, 0.0)),  # hard rounds per trolley: 1.5 -> 2, the zeros stay 0
+        # Hard rounds per trolley: 0.5 x (5 - 2) = 1.5 -> 2 on t0 and t1 (a rounded total gives 3).
+        (DistanceFromPreviousPickTaskCost(level="hard", weight=0.5, offset=2), (-4, 0.0)),
+        # The literal formula with an offset is refused on hard; on soft it charges
+        # -3 - 2 - 3 = -8 (a reward below 3) and 2 x (-1.5 - 0.5 - 1.5) = -7.
+        (TrolleyCapacityCost(level="soft", offset=3, clip=False), (0, 8.0)),
+        (TrolleyCapacityCost(level="soft", offset=1.5, clip=False, weight=2), (0, 7.0)),
     ],
 )
 def test_offsets_by_hand_on_both_paths(pick, expected):
@@ -559,7 +565,8 @@ def test_offset_zero_reproduces_the_0_2_0_scores():
         [*get_constraints(), DistanceFromPreviousPickTaskCost(weight=0.5, exponent=2)],
         [
             TrolleyCapacityCost(),
-            TrolleyCapacityCost(offset=1, clip=False, weight=2),
+            TrolleyCapacityCost(level="soft", offset=1, clip=False, weight=2),
+            TrolleyCapacityCost(offset=1, weight=2),
             DistanceFromPreviousPickTaskCost(),
             DistanceFromPreviousPickTaskCost(offset=40, exponent=2, weight=0.01, clip=False),
             DistanceFromLastPickTaskToPathOriginCost(offset=-3),
@@ -598,14 +605,16 @@ def test_full_assert_solves_with_repeats_and_offsets(picks):
         ([DistanceFromPreviousPickTaskCost(level=Level.HARD, weight=2)], (-20, 0.0)),
         ([TrolleyCapacityCost(level="hard")], (-1, 0.0)),  # the default level, named
         # A repeat carries its own level and shaping: the soft walk, the hard meters beyond
-        # 3 per trolley (2 + 2), and hard 2 x (x - 6) per trolley: 2 x (-1 - 1 - 6) = -16.
+        # 3 per trolley (2 + 2), hard 2 x max(0, x - 4) (2 x (1 + 1)), and a literal copy
+        # 2 x (x - 6) per trolley, 2 x (-1 - 1 - 6) = -16, which may sit on soft but not on hard.
         (
             [
                 DistanceFromPreviousPickTaskCost(),
                 DistanceFromPreviousPickTaskCost(level="hard", offset=3),
-                DistanceFromPreviousPickTaskCost(level="hard", weight=2, offset=6, clip=False),
+                DistanceFromPreviousPickTaskCost(level="hard", weight=2, offset=4),
+                DistanceFromPreviousPickTaskCost(level="soft", weight=2, offset=6, clip=False),
             ],
-            (12, -10.0),
+            (-8, -10.0 + 16),
         ),
     ],
 )
@@ -646,3 +655,85 @@ def test_a_level_must_be_a_level():
 def test_the_knob_was_renamed():
     with pytest.raises(TypeError):
         OrderSplitByTrolleyCost(hard=True)
+
+
+# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+
+HARD_REFUSAL = (
+    "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
+    "violation; use clip=True (a threshold) or another level"
+)
+
+
+def _refusal(call):
+    with pytest.raises(ValueError) as refused:
+        call()
+    return str(refused.value)
+
+
+@pytest.mark.parametrize("offset", [1.5, -1.5])
+@pytest.mark.parametrize(
+    "pick",
+    [
+        lambda offset: TrolleyCapacityCost(offset=offset, clip=False),  # the default level, hard
+        lambda offset: TrolleyCapacityCost(level="hard", offset=offset, clip=False),
+        lambda offset: DistanceFromPreviousPickTaskCost(level=Level.HARD, offset=offset, clip=False),
+    ],
+    ids=["buckets-default-hard", "buckets-level-hard", "walk-moved-to-hard"],
+)
+def test_the_literal_offset_is_refused_on_hard_on_every_path(pick, offset):
+    """A positive offset would reward the trolleys below it, so one trolley's spare buckets
+    would cancel another's shortage and an infeasible solution could score hard 0; a
+    negative one would charge every trolley, an empty one included. The engine (solve,
+    Solver, constraint_costs) and the score() mirror refuse it with the same message; the
+    CP-SAT reference's test_solve.py checks the same words."""
+    spec = pick(offset)
+    message = HARD_REFUSAL.format(q=repr(spec.name))
+    repeated = [type(spec)(), spec]  # a refused repeat next to its accepted first instance
+    assert _refusal(lambda: op.solve(build_solution(), time_limit_seconds=0.1, constraints=[spec])) == message
+    assert _refusal(lambda: _zero_budget(repeated)) == message
+    config = op.SolverConfig()
+    config.spent_limit_seconds = 0.1
+    assert _refusal(lambda: op.Solver(config).solve_with_constraints(_hand_solution(), [spec])) == message
+    assert _refusal(lambda: op.constraint_costs(_hand_solution(), [spec])) == message
+    assert _refusal(lambda: op.constraint_costs(_hand_solution(), repeated)) == message
+    assert _refusal(lambda: score(op.constraint_costs(_hand_solution()), [spec])) == message
+    assert _refusal(lambda: score(op.constraint_costs(_hand_solution()), repeated)) == message
+
+
+@pytest.mark.parametrize("offset", [3.0, -3.0])
+def test_the_same_literal_pick_on_soft_is_accepted(offset):
+    """(0 - offset) + (1 - offset) + (0 - offset) per trolley, on soft, on every path."""
+    pick = TrolleyCapacityCost(level="soft", offset=offset, clip=False)
+    expected = (0, -(1 - 3 * offset))
+    assert score(op.constraint_costs(_hand_solution()), [pick]) == expected
+    raw = op.constraint_costs(_hand_solution(), [pick])
+    assert (raw["trolley_capacity_cost"]["level"], raw["trolley_capacity_cost"]["clip"]) == ("soft", False)
+    assert score(raw, [pick]) == expected
+    assert _zero_budget([pick]) == expected
+
+
+@pytest.mark.parametrize(
+    ("pick", "expected"),
+    [
+        (TrolleyCapacityCost(offset=3.0), (0, 0.0)),  # clip=True on hard: a threshold
+        (TrolleyCapacityCost(offset=-3.0), (-4, 0.0)),  # 1 + 3 on the short trolley only
+        (TrolleyCapacityCost(clip=False), (-1, 0.0)),  # clip=False with offset 0: the 0.2.0 shaping
+        (TrolleyCapacityCost(offset=0.0, clip=False), (-1, 0.0)),
+    ],
+)
+def test_the_allowed_combinations_on_hard(pick, expected):
+    assert score(op.constraint_costs(_hand_solution()), [pick]) == expected
+    assert _zero_budget([pick]) == expected
+
+
+def test_the_refusal_comes_after_every_knob_of_a_duck_typed_pick():
+    """The engine checks once a pick's knobs are all re-stated: the level a pick moves to decides."""
+    moved = SimpleNamespace(
+        name="trolley_capacity_cost", weight=None, level="soft", exponent=1.0, offset=3.0, clip=False
+    )
+    assert _zero_budget([moved]) == (0, 8.0)
+    kept = SimpleNamespace(name="trolley_capacity_cost", weight=None, level=None, exponent=1.0, offset=3.0, clip=False)
+    message = HARD_REFUSAL.format(q="'trolley_capacity_cost'")
+    assert _refusal(lambda: _zero_budget([kept])) == message
+    assert _refusal(lambda: score(op.constraint_costs(_hand_solution()), [kept])) == message

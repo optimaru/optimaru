@@ -23,6 +23,8 @@ from flight_crew.models import (
     FlightModel,
 )
 from flight_crew_cpsat import solve
+from flight_crew_cpsat.constraints import REGISTRY
+from ortools.sat.python import cp_model
 from flight_crew import calculate_score
 
 
@@ -213,15 +215,19 @@ SELECTIONS = {
         RequiredSkillCost(weight=3, offset=1),
         FlightConflictCost(),
     ],
+    # The literal picks of hard constraints sit on soft: hard refuses the literal
+    # formula with an offset.
     "repeat-literal": [
-        EmployeeUnavailabilityCost(offset=1, clip=False),
+        EmployeeUnavailabilityCost(level="soft", offset=1, clip=False),
         EmployeeUnavailabilityCost(weight=2, offset=-1),
         TransferBetweenTwoFlightsCost(),
-        TransferBetweenTwoFlightsCost(weight=5, offset=1, clip=False),
+        TransferBetweenTwoFlightsCost(level="soft", weight=5, offset=1, clip=False),
     ],
     "hard-offsets": [
-        FlightConflictCost(offset=1, clip=False),
-        RequiredSkillCost(weight=2, offset=2, clip=False),
+        FlightConflictCost(offset=1),
+        FlightConflictCost(level="soft", offset=1, clip=False),
+        RequiredSkillCost(weight=2, offset=2),
+        RequiredSkillCost(level="soft", weight=2, offset=2, clip=False),
         FirstAssignmentNotDepartingFromHomeCost(offset=-1),
         LastAssignmentNotArrivingAtHomeCost(weight=3, offset=1, clip=False),
     ],
@@ -299,10 +305,19 @@ def test_repeated_and_shifted_picks_reach_the_brute_force_optimum(selection) -> 
 
 def test_mapping_selections_repeat_and_shift_like_specs() -> None:
     """The server's {name, weight, offset, clip} dicts pick the same instances as specs."""
-    specs = [RequiredSkillCost(), RequiredSkillCost(weight=3, offset=1, clip=False)]
+    specs = [
+        RequiredSkillCost(),
+        RequiredSkillCost(level="soft", weight=3, offset=1, clip=False),
+    ]
     dicts = [
         {"name": "required_skill_cost"},
-        {"name": "required_skill_cost", "weight": 3, "offset": 1, "clip": False},
+        {
+            "name": "required_skill_cost",
+            "level": "soft",
+            "weight": 3,
+            "offset": 1,
+            "clip": False,
+        },
     ]
     problem = _three_employees()
     assert solve(problem, time_limit_seconds=5, constraints=dicts) == solve(
@@ -335,3 +350,75 @@ def test_medium_is_refused_like_the_engine(level) -> None:
                 time_limit_seconds=0,
                 constraints=selection,
             )
+
+
+# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+
+HARD_REFUSAL = (
+    "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
+    "violation; use clip=True (a threshold) or another level"
+)
+
+
+@pytest.mark.parametrize("offset", [1, -1])
+@pytest.mark.parametrize(
+    "selection",
+    [
+        # The default level, hard.
+        lambda offset: RequiredSkillCost(offset=offset, clip=False),
+        lambda offset: {"name": "required_skill_cost", "offset": offset, "clip": False},
+        lambda offset: LastAssignmentNotArrivingAtHomeCost(
+            level="hard", offset=offset, clip=False
+        ),
+        lambda offset: {
+            "name": "last_assignment_not_arriving_at_home_cost",
+            "level": "hard",
+            "offset": offset,
+            "clip": False,
+        },
+    ],
+    ids=["skill-spec", "skill-mapping", "last-home-moved-to-hard", "last-home-mapping"],
+)
+def test_the_literal_offset_is_refused_on_hard_like_the_engine(
+    selection, offset
+) -> None:
+    """The CP-SAT reference refuses the pick with the engine's and score()'s message."""
+    pick = selection(offset)
+    name = pick["name"] if isinstance(pick, dict) else pick.name
+    message = HARD_REFUSAL.format(q=repr(name))
+    for picks in ([pick], [RequiredSkillCost(), FlightConflictCost(), pick]):
+        with pytest.raises(ValueError) as refused:
+            solve(_three_employees(), time_limit_seconds=1, constraints=picks)
+        assert str(refused.value) == message
+        with pytest.raises(ValueError) as refused:
+            REGISTRY.objective(cp_model.CpModel(), ("hard", "soft"), picks)
+        assert str(refused.value) == message
+    if not isinstance(pick, dict):
+        # The engine and the score() mirror say the same.
+        core = _three_employees().to_core()
+        with pytest.raises(ValueError) as refused:
+            domain.constraint_costs(core, [pick])
+        assert str(refused.value) == message
+        with pytest.raises(ValueError) as refused:
+            score(domain.constraint_costs(core), [pick])
+        assert str(refused.value) == message
+        with pytest.raises(ValueError) as refused:
+            domain.solve(
+                _three_employees().to_core(), time_limit_seconds=0, constraints=[pick]
+            )
+        assert str(refused.value) == message
+
+
+@pytest.mark.parametrize("offset", [1, -1])
+def test_the_same_literal_pick_on_soft_is_accepted(offset) -> None:
+    picks = [
+        RequiredSkillCost(),
+        FlightConflictCost(),
+        RequiredSkillCost(level="soft", offset=offset, clip=False),
+    ]
+    problem = _three_employees()
+    best = max(
+        _engine_of(problem, fixed, picks) for fixed in product(range(3), repeat=3)
+    )
+    solved = solve(problem, time_limit_seconds=5, constraints=picks)
+    assert (solved.score_hard, solved.score_soft) == best
