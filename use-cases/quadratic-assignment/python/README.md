@@ -46,7 +46,11 @@ or another level`. On soft it is allowed.
 `constraint_costs(problem, picks)` scores a pick list, the second pick of a name keyed
 `<name>#2`. `level` is None (the default level), "hard" or "soft" (or `Level.HARD` /
 `Level.SOFT`); the domain has no medium level, so "medium" raises `ValueError`, and a
-repeat carries its own level. These are the same terms 0.1.x shaped, so exponents score
+repeat carries its own level. An objective whose data holds a negative entry (a negative
+assignment cost, or a negative flow or distance) cannot be hard, because its total can be
+negative and would cancel a broken pin: `ValueError: constraint 'assignment_cost' can have
+a negative raw cost on this problem (a bonus) and cannot be hard`; its `constraint_costs()`
+entry carries `"signed": True`. These are the same terms 0.1.x shaped, so exponents score
 as before at the soft level. Hard contributions are rounded per location (0.1.x rounded
 the hard total once), which differs only when a hard constraint's
 weighted, shaped per-location value is fractional: a fractional hard weight, or an

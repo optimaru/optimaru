@@ -474,3 +474,55 @@ def test_the_same_literal_pick_on_soft_is_accepted(offset) -> None:
     solved = solve(_two_employees(), time_limit_seconds=5, constraints=selection)
     engine = score(domain.constraint_costs(solved.to_core(), selection), selection)
     assert _engine_levels(solved) == tuple(engine)
+
+
+@pytest.mark.parametrize(
+    ("pick", "refusal"),
+    [
+        (RequiredSkillCost(exponent=2, offset=2, clip=False), HARD_REFUSAL),
+        (
+            UnassignedTasksCost(exponent=2, offset=2, clip=False),
+            MEDIUM_REFUSAL,
+        ),  # below_hard medium
+        (
+            {"name": "required_skill_cost", "exponent": 2, "offset": 1, "clip": False},
+            HARD_REFUSAL,
+        ),
+    ],
+    ids=["hard", "medium", "mapping"],
+)
+def test_the_engine_rules_come_before_the_cpsat_exponent_limit(pick, refusal) -> None:
+    """A pick the engine refuses gets the engine's words from CP-SAT too, not "exponent is not
+    supported by CP-SAT", which comes after them (and across picks)."""
+    name = pick["name"] if isinstance(pick, dict) else pick.name
+    message = refusal.format(q=repr(name))
+    for picks in ([pick], [UnassignedTasksCost(exponent=2), pick]):
+        with pytest.raises(ValueError) as refused:
+            solve(_two_employees(), time_limit_seconds=1, constraints=picks)
+        assert str(refused.value) == message
+    if not isinstance(pick, dict):
+        core = _two_employees().to_core()
+        with pytest.raises(ValueError) as refused:
+            domain.constraint_costs(core, [pick])
+        assert str(refused.value) == message
+    with pytest.raises(ValueError, match="exponent is not supported by CP-SAT"):
+        solve(
+            _two_employees(),
+            time_limit_seconds=1,
+            constraints=[UnassignedTasksCost(exponent=2)],
+        )
+
+
+def test_an_offset_that_is_zero_as_a_double_is_accepted_like_the_engine() -> None:
+    from fractions import Fraction
+
+    pick = RequiredSkillCost(offset=Fraction(1, 10**400), clip=False)  # 0.0 as a double
+    core = _two_employees().to_core()
+    assert score(domain.constraint_costs(core), [pick]) == score(
+        domain.constraint_costs(core, [pick]), [pick]
+    )
+    solve(
+        _two_employees(),
+        time_limit_seconds=1,
+        constraints=[RequiredSkillCost(), UnassignedTasksCost(), pick],
+    )

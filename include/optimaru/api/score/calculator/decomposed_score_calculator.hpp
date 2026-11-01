@@ -147,6 +147,44 @@ struct SharedConstraintContext {
 template <typename Solution>
 struct UnitConstraint;
 
+// The sign rule's exception. A constraint whose raw cost can be negative on
+// the problem's data although it is not a reward (a signed objective, such as
+// quadratic assignment's unvalidated cost matrices: rawCostCanBeNegative) can
+// no more count toward the hard score than a reward can, because a negative
+// hard contribution cancels another violation and an infeasible solution
+// could score hard 0. Whether it can be negative depends on the data, so the
+// calculator checks it at reset (DecomposedScoreCalculator::validateLevel,
+// on the level in effect, hard or a below_hard medium). constraint() is the
+// registry name; what() names it. The Python bindings raise ValueError with
+// message(pythonName(constraint()), level()), word for word the text of the
+// Python score() mirror (_constraint.py _check_signed), on every path that
+// resets a calculator (python/constraint_binding.hpp).
+class SignedCostLevelError : public std::invalid_argument {
+public:
+    SignedCostLevelError(std::string constraint, Level level)
+        : std::invalid_argument(text("Constraint '" + constraint + "'", level)),
+          constraint_(std::move(constraint)),
+          level_(level) {}
+
+    const std::string& constraint() const noexcept { return constraint_; }
+    Level level() const noexcept { return level_; }
+
+    // The Python text, the constraint named the way the caller spells it.
+    static std::string message(const std::string& constraint, Level level) {
+        return text("constraint '" + constraint + "'", level);
+    }
+
+private:
+    static std::string text(const std::string& who, Level level) {
+        const std::string head = who + " can have a negative raw cost on this problem (a bonus) ";
+        if (level == Level::Hard) return head + "and cannot be hard";
+        return head + "and cannot be medium here, where medium counts toward the hard score";
+    }
+
+    std::string constraint_;
+    Level level_;
+};
+
 // Assembly-time metadata of one constraint, shared by the unit and global
 // bases. None of it is part of the cost: a component declares its defaults
 // (static constexpr kDefaultWeight / kDefaultLevel, passed to the base
@@ -382,6 +420,17 @@ struct UnitConstraint : ConstraintMetadata {
     // same units.
     virtual const std::vector<int>* scopedUnits() const { return nullptr; }
 
+    // Optional sign contract. A cost is >= 0 by the sign convention, a
+    // reward's <= 0. Return true when, on `solution`'s data, this
+    // constraint's raw cost can also be negative although it is not a reward
+    // (a signed objective over data that is not validated >= 0): the
+    // calculator then refuses it, at reset, on a level that counts toward the
+    // hard score (SignedCostLevelError), as it refuses a hard reward, and
+    // constraintCosts() reports it (`signedCost`). Asked at reset only while
+    // the instance sits on such a level, and by constraintCosts(); it reads
+    // the problem's facts, not the assignment.
+    virtual bool rawCostCanBeNegative(const Solution& /*solution*/) const { return false; }
+
     // Optional structural grouping contract. Constraints returning the same
     // non-empty key are compiled into one delta evaluator when at least two
     // compatible constraints are present. Metadata (weight, level, exponent,
@@ -446,6 +495,10 @@ struct GlobalConstraint : ConstraintMetadata {
         onUnitChanged(solution, unit, members);
     }
     virtual double cost() const = 0;
+
+    // The sign contract of UnitConstraint::rawCostCanBeNegative, for the
+    // single total.
+    virtual bool rawCostCanBeNegative(const Solution& /*solution*/) const { return false; }
 
     // Optional LIST-kind preview contract. The calculator serves the engine's
     // move previews (see IncrementalScoreCalculator) by re-costing the touched
@@ -521,7 +574,7 @@ public:
     }
 
     void resetWorkingSolution(Solution& workingSolution) override {
-        validateLevels();
+        validateLevels(workingSolution);
         solution_ = &workingSolution;
         if (profUnitNs_.empty() && !unitConstraints_.empty()) {
             prof_ = std::getenv("ES_PROFILE") != nullptr;
@@ -960,12 +1013,15 @@ public:
     }
 
     // Weighted total per constraint, for score explanation ("which constraint
-    // costs how much"). Cheap: sums the existing cache.
+    // costs how much"). Cheap: sums the existing cache. Like calculateScore()
+    // and constraintCosts(), it uses the knobs sampled at the last reset
+    // (SampledKnobs): an edit to a component after the reset takes effect,
+    // and is checked (validateLevel), at the next one.
     std::vector<ConstraintTotal> constraintTotals() const {
         std::vector<ConstraintTotal> totals;
         const std::size_t C = unitConstraints_.size();
         for (std::size_t c = 0; c < C; ++c) {
-            const Level level = unitConstraints_[c]->level;
+            const Level level = unitKnobs(c).level;
             double sum = 0.0;
             for (int u = 0; u < unitCount_; ++u) {
                 const std::size_t idx = static_cast<std::size_t>(u) * C + c;
@@ -976,10 +1032,13 @@ public:
             totals.push_back({unitConstraints_[c]->name, sum, level == Level::Hard, level,
                               unitConstraints_[c]->label});
         }
-        for (const auto& g : globalConstraints_) {
-            totals.push_back({g->name,
-                              weightedCost(g->weight, g->cost(), g->exponent, g->offset, g->clip),
-                              g->level == Level::Hard, g->level, g->label});
+        for (std::size_t g = 0; g < globalConstraints_.size(); ++g) {
+            const GlobalConstraint<Solution>& global = *globalConstraints_[g];
+            const SampledKnobs knobs = globalKnobs(g);
+            totals.push_back({global.name,
+                              weightedCost(knobs.weight, global.cost(), knobs.exponent,
+                                           knobs.offset, knobs.clip),
+                              knobs.level == Level::Hard, knobs.level, global.label});
         }
         return totals;
     }
@@ -1006,14 +1065,21 @@ public:
     // included, so a re-pricing caller needs that set: `scoped` is false and
     // `units` empty for a constraint that evaluates every unit (and for every
     // global).
+    //
+    // weight, exponent, level, offset and clip are the knobs the score uses,
+    // sampled at the last reset (SampledKnobs), as constraintTotals() reports
+    // them. `signedCost` is rawCostCanBeNegative() on the working solution's
+    // data (false before the first reset): the Python mirror refuses such an
+    // entry on a level that counts toward the hard score, as the calculator
+    // does at reset.
     struct ConstraintCosts {
         std::string name;
-        double weight;   // the assembly's current weight
+        double weight;   // the weight in effect (sampled at the last reset)
         double exponent;
         bool isHard;     // level == Level::Hard
         bool isGlobal;
         std::vector<double> unitCosts;
-        Level level;     // the assembly's current level
+        Level level;     // the level in effect (sampled at the last reset)
         bool reward;
         bool levelFlippable;
         std::string label;  // ConstraintMetadata::label (empty = none)
@@ -1022,10 +1088,11 @@ public:
         // weight / level unless the assembly re-stated them.
         double defaultWeight;
         Level defaultLevel;
-        double offset = 0.0;  // the assembly's current offset / clip
+        double offset = 0.0;  // the offset / clip in effect (sampled at the last reset)
         bool clip = true;
         bool scoped = false;
         std::vector<int> units;
+        bool signedCost = false;
     };
     std::vector<ConstraintCosts> constraintCosts() const {
         std::vector<ConstraintCosts> out;
@@ -1038,12 +1105,14 @@ public:
             for (int u = 0; u < unitCount_; ++u) {
                 costs.push_back(cacheRaw_[static_cast<std::size_t>(u) * C + c]);
             }
-            ConstraintCosts entry{constraint.name, constraint.weight, constraint.exponent,
-                                  constraint.level == Level::Hard, false, std::move(costs),
-                                  constraint.level, constraint.reward,
+            const SampledKnobs knobs = unitKnobs(c);
+            ConstraintCosts entry{constraint.name, knobs.weight, knobs.exponent,
+                                  knobs.level == Level::Hard, false, std::move(costs),
+                                  knobs.level, constraint.reward,
                                   constraint.levelFlippable, constraint.label,
                                   constraint.defaultWeight, constraint.defaultLevel,
-                                  constraint.offset, constraint.clip, false, {}};
+                                  knobs.offset, knobs.clip, false, {}};
+            entry.signedCost = solution_ != nullptr && constraint.rawCostCanBeNegative(*solution_);
             if (const std::vector<int>* scope = constraint.scopedUnits()) {
                 entry.scoped = true;
                 for (int u : *scope) {
@@ -1055,11 +1124,15 @@ public:
             }
             out.push_back(std::move(entry));
         }
-        for (const auto& g : globalConstraints_) {
-            ConstraintCosts entry{g->name, g->weight, g->exponent, g->level == Level::Hard, true,
-                                  {g->cost()}, g->level, g->reward, g->levelFlippable, g->label,
-                                  g->defaultWeight, g->defaultLevel, g->offset, g->clip,
-                                  false, {}};
+        for (std::size_t g = 0; g < globalConstraints_.size(); ++g) {
+            const GlobalConstraint<Solution>& global = *globalConstraints_[g];
+            const SampledKnobs knobs = globalKnobs(g);
+            ConstraintCosts entry{global.name, knobs.weight, knobs.exponent,
+                                  knobs.level == Level::Hard, true, {global.cost()}, knobs.level,
+                                  global.reward, global.levelFlippable, global.label,
+                                  global.defaultWeight, global.defaultLevel, knobs.offset,
+                                  knobs.clip, false, {}};
+            entry.signedCost = solution_ != nullptr && global.rawCostCanBeNegative(*solution_);
             out.push_back(std::move(entry));
         }
         return out;
@@ -1087,11 +1160,14 @@ private:
     // until then (ConstraintAssembly::level / offset / clip, or the setters,
     // in any order): a medium constraint needs a domain medium fold; a
     // reward can never be hard (its raw cost is <= 0, so a hard reward would
-    // push the hard score above 0); and the hard-0 rule (python::
+    // push the hard score above 0); the hard-0 rule (python::
     // checkLiteralOffset): no clip false with an offset != 0 on a level that
-    // counts toward the hard score.
+    // counts toward the hard score; and the sign rule (SignedCostLevelError):
+    // no instance whose raw cost can be negative on this problem
+    // (rawCostCanBeNegative) on such a level. The last one reads the data, so
+    // it is asked only of an instance that sits on such a level.
     template <typename Constraint>
-    static void validateLevel(const Constraint& constraint) {
+    static void validateLevel(const Constraint& constraint, const Solution& solution) {
         if (constraint.level == Level::Medium && !kMediumFold.hasMedium()) {
             throw std::logic_error("Constraint '" + constraint.name +
                                    "' is medium-level, but this domain declares no medium fold "
@@ -1107,10 +1183,14 @@ private:
                                    "' cannot use clip=false with a non-zero offset on a level that "
                                    "counts toward the hard score (hard 0 must mean no violation)");
         }
+        if (!constraint.reward && kMediumFold.countsTowardHard(constraint.level) &&
+            constraint.rawCostCanBeNegative(solution)) {
+            throw SignedCostLevelError(constraint.name, constraint.level);
+        }
     }
-    void validateLevels() const {
-        for (const auto& constraint : unitConstraints_) validateLevel(*constraint);
-        for (const auto& constraint : globalConstraints_) validateLevel(*constraint);
+    void validateLevels(const Solution& solution) const {
+        for (const auto& constraint : unitConstraints_) validateLevel(*constraint, solution);
+        for (const auto& constraint : globalConstraints_) validateLevel(*constraint, solution);
     }
 
     // Folds one weighted contribution into the right accumulator (positive =
@@ -1241,6 +1321,8 @@ private:
         std::vector<UnitDispatchEntry> metas(C);
         unitOffset_.assign(C, 0.0);
         unitClip_.assign(C, 1);
+        unitKnobs_.clear();
+        unitKnobs_.reserve(C);
         hasFullRecost_ = false;
         for (std::size_t c = 0; c < C; ++c) {
             const UnitConstraint<Solution>& constraint = *unitConstraints_[c];
@@ -1265,6 +1347,7 @@ private:
             meta.shifted = constraint.offset != 0.0;
             unitOffset_[c] = constraint.offset;
             unitClip_[c] = constraint.clip ? 1 : 0;
+            unitKnobs_.push_back(liveKnobs(constraint));
         }
         std::vector<std::size_t> applyAll;
         for (std::size_t c = 0; c < C; ++c)
@@ -1760,6 +1843,34 @@ private:
         return weightedCost(entry.weight, raw, entry.exponent, entry.offset, entry.clip);
     }
 
+    // The knobs of one instance as the score uses them: sampled at the last
+    // reset (compileUnitDispatch for a unit constraint, globalScore_ for a
+    // global), the component's own metadata for one added since or before any
+    // reset. constraintTotals() and constraintCosts() report these, so they
+    // explain calculateScore() even after a component was edited.
+    struct SampledKnobs {
+        double weight;
+        double exponent;
+        Level level;
+        double offset;
+        bool clip;
+    };
+    static SampledKnobs liveKnobs(const ConstraintMetadata& constraint) {
+        return {constraint.weight, constraint.exponent, constraint.level, constraint.offset,
+                constraint.clip};
+    }
+    SampledKnobs unitKnobs(std::size_t c) const {
+        return c < unitKnobs_.size() ? unitKnobs_[c] : liveKnobs(*unitConstraints_[c]);
+    }
+    SampledKnobs globalKnobs(std::size_t g) const {
+        if (g >= globalScore_.size() || globalScore_[g].constraint != globalConstraints_[g].get()) {
+            return liveKnobs(*globalConstraints_[g]);
+        }
+        const GlobalScoreEntry& entry = globalScore_[g];
+        const Level level = entry.isHard ? Level::Hard : entry.isMedium ? Level::Medium : Level::Soft;
+        return {entry.weight, entry.exponent, level, entry.offset, entry.clip};
+    }
+
     std::unordered_map<std::string, std::unique_ptr<SharedConstraintContext>> sharedContexts_;
     std::vector<SharedConstraintContext*> sharedContextList_;  // the same, insertion order
     std::vector<std::unique_ptr<UnitConstraint<Solution>>> unitConstraints_;
@@ -1779,6 +1890,7 @@ private:
     std::vector<char> deltaCapable_;  // supportsDelta() per unit constraint, cached at reset
     std::vector<double> unitOffset_;  // per unit constraint: offset, sampled at reset
     std::vector<char> unitClip_;      // per unit constraint: clip, sampled at reset
+    std::vector<SampledKnobs> unitKnobs_;  // per unit constraint: every knob, sampled at reset
     std::vector<char> piecewise_;     // supportsPiecewisePreview() per unit constraint
     std::vector<char> groupedDelta_;  // delta is supplied by a compiled structural group
     std::vector<char> directGroupedHardDelta_;

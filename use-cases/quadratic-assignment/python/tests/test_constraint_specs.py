@@ -394,7 +394,9 @@ def test_naming_a_constraint_twice_scores_both_picks():
         [PinnedAssignmentsCost(weight=3), LocationCapacityCost(level="soft"), flow_distance_cost],
         [LocationCapacityCost(exponent=2.0), ForbiddenAssignmentsCost(weight=0.5), FlowDistanceCost(weight=2)],
         [PinnedAssignmentsCost(level="soft", exponent=0.5), FlowDistanceCost(exponent=1.5)],
-        [PinnedAssignmentsCost(weight=0.5), ForbiddenAssignmentsCost(weight=0.5), AssignmentCost(level="hard")],
+        # The direct costs below are negative, so a promoted objective is the flow (whose data
+        # is not): see test_an_objective_that_can_be_negative_is_refused_on_hard.
+        [PinnedAssignmentsCost(weight=0.5), ForbiddenAssignmentsCost(weight=0.5), FlowDistanceCost(level="hard")],
         [*get_constraints(), LocationCapacityCost(weight=0.5, exponent=2.0), FlowDistanceCost(weight=0.5)],
         # The literal formula with an offset is refused on hard; its copies sit on soft.
         [
@@ -827,6 +829,66 @@ def test_the_allowed_combinations_on_hard(pick, expected):
     assert score(qap.constraint_costs(problem), [pick]) == expected
     assert score(qap.constraint_costs(problem, [pick]), [pick]) == expected
     assert engine_score(problem, [pick]) == expected
+
+
+SIGN_REFUSAL = "constraint {q} can have a negative raw cost on this problem (a bonus) and cannot be hard"
+
+
+def _signed(direct=None, flows=None) -> QuadraticAssignmentProblemModel:
+    """side() with negative data: a broken pin (L1 holds F1, not F2) and a direct cost of -20."""
+    problem = side()
+    problem.assignment_costs = direct or [[-10, -10], [-10, -10]]
+    if flows is not None:
+        problem.flows = flows
+    return problem
+
+
+@pytest.mark.parametrize(
+    "pick",
+    [
+        AssignmentCost(level="hard", weight=0.05),
+        AssignmentCost(level="hard", weight=0.1, offset=10),  # a threshold does not help: -20 is beyond -10
+        AssignmentCost(level=Level.HARD),
+    ],
+    ids=["weight", "threshold", "plain"],
+)
+def test_an_objective_that_can_be_negative_is_refused_on_hard(pick):
+    """Negative direct costs make assignment_cost's total negative (-20 here). On hard that
+    would be a hard reward: next to the broken pin (+1) it would score hard 0, or a positive
+    hard score alone. The engine refuses it at reset, on every path, and the score() mirror
+    refuses the same pick from soft costs ("signed" entries), in the same words."""
+    message = SIGN_REFUSAL.format(q="'assignment_cost'")
+    picks = [PinnedAssignmentsCost(), pick]
+    problem = _signed()
+    assert _refusal(lambda: qap.constraint_costs(problem, picks)) == message
+    assert _refusal(lambda: qap.calculate_score(problem, picks)) == message
+    assert _refusal(lambda: engine_solve(problem, picks)) == message
+    assert _refusal(lambda: qap.solve(_signed(), time_limit_seconds=0, constraints=[pick])) == message
+    raw = qap.constraint_costs(problem)
+    assert raw["assignment_cost"]["signed"] is True and raw["assignment_cost"]["costs"] == [-20.0]
+    assert "signed" not in raw["flow_distance_cost"]  # the flows and distances are >= 0
+    assert _refusal(lambda: score(raw, picks)) == message
+    # On its default soft level the negative total is a bonus, as before, and the pin stays hard.
+    assert score(raw, [PinnedAssignmentsCost(), AssignmentCost()]) == (-1, 20.0)
+    assert engine_score(problem, [PinnedAssignmentsCost(), AssignmentCost()]) == (-1, 20.0)
+
+
+def test_negative_flows_or_distances_keep_the_flow_off_hard():
+    flows = [[0, -3], [2, 0]]  # 4 x -3 + 5 x 2 = -2 at the identity
+    problem = _signed(direct=[[7, 1], [2, 8]], flows=flows)
+    message = SIGN_REFUSAL.format(q="'flow_distance_cost'")
+    for pick in (FlowDistanceCost(level="hard"), FlowDistanceCost(level="hard", offset=1)):
+        assert _refusal(lambda pick=pick: engine_score(problem, [pick])) == message
+        assert _refusal(lambda pick=pick: score(qap.constraint_costs(problem), [pick])) == message
+    # The direct costs are >= 0 now, so assignment_cost may move to hard (15 at the identity).
+    assert engine_score(problem, [AssignmentCost(level="hard")]) == (-15, 0.0)
+    assert score(qap.constraint_costs(problem), [AssignmentCost(level="hard")]) == (-15, 0.0)
+    # The literal-offset rule is asked first, as the engine asks it when the pick is read.
+    literal = FlowDistanceCost(level="hard", offset=1, clip=False)
+    assert _refusal(lambda: engine_score(problem, [literal])) == HARD_REFUSAL.format(q="'flow_distance_cost'")
+    assert _refusal(lambda: score(qap.constraint_costs(problem), [literal])) == HARD_REFUSAL.format(
+        q="'flow_distance_cost'"
+    )
 
 
 def test_the_refusal_comes_after_every_knob_of_a_duck_typed_pick():

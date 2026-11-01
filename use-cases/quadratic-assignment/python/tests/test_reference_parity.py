@@ -273,7 +273,11 @@ def test_random_instances_match_the_oracle(seed):
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_scores_match_the_oracle_at_integer_weights(seed):
-    """score() re-prices like 0.1.5 score_costs at integer weights and exponent 1, whatever the levels."""
+    """score() re-prices like 0.1.5 score_costs at integer weights and exponent 1, whatever the levels.
+
+    Except where 0.3.0 refuses the level: an objective whose data holds a negative entry (its
+    entry is "signed") cannot be hard, since a negative hard total would cancel a violation;
+    both paths refuse that pick in the same words."""
     rng = random.Random(1000 + seed)
     problem = _random_instance(rng)
     data = _with_assignment(problem, _random_permutation(problem, rng))
@@ -284,6 +288,21 @@ def test_scores_match_the_oracle_at_integer_weights(seed):
     picked: list[Constraint] = []
     for spec in specs[: rng.randint(1, len(specs))]:
         picked.append(type(spec)(weight=rng.choice([None, 0, 1, 2, 5]), level=rng.choice([None, "hard", "soft"])))
+    zero = qap.SolverConfig()
+    zero.spent_limit_seconds = 0
+    hard = {spec.name for spec in picked if spec.level == "hard"}
+    # In the engine's order (the assembly's, which constraint_costs() lists): it checks at reset.
+    refused = [name for name in raw if name in hard and raw[name].get("signed")]
+    if refused:
+        message = f"constraint {refused[0]!r} can have a negative raw cost on this problem (a bonus) and cannot be hard"
+        with pytest.raises(ValueError) as mirror:
+            score(raw, picked)
+        core = Model.model_validate(data).to_core()
+        core.warm_start = True
+        with pytest.raises(ValueError) as engine:
+            qap.Solver(zero).solve_with_constraints(core, picked)
+        assert str(mirror.value) == str(engine.value) == message
+        return
     expected = ref.score_costs(
         old,
         [
@@ -294,8 +313,6 @@ def test_scores_match_the_oracle_at_integer_weights(seed):
     assert tuple(score(raw, picked)) == pytest.approx(expected)
     # ... and the engine scores the same picks the same way.
     core = Model.model_validate(data).to_core()
-    zero = qap.SolverConfig()
-    zero.spent_limit_seconds = 0
     core.warm_start = True
     qap.Solver(zero).solve_with_constraints(core, picked)
     assert (core.score.hard, core.score.soft) == pytest.approx(expected)

@@ -544,6 +544,25 @@ def test_the_literal_offset_is_refused_on_hard_like_the_engine(name, knobs, offs
     assert str(refused.value) == message
 
 
+def test_an_offset_that_is_zero_as_a_double_is_no_offset_on_any_path():
+    """The engine reads float(offset): Fraction(1, 10**400) is 0.0 there, so the literal pick
+    on hard is allowed. The CP-SAT plugin and the score() mirror read the same double."""
+    from fractions import Fraction
+
+    from helpers import course, make_problem, teacher
+
+    from teacher_scheduling.solver.registry import CONSTRAINT_TYPE_BY_NAME, default_constraints, merge
+
+    tiny = Fraction(1, 10**400)
+    pick = CONSTRAINT_TYPE_BY_NAME["teacher_conflict_cost"](offset=tiny, clip=False)
+    problem = make_problem([course(periods_per_week=1)], [teacher()], days=1, periods=2)
+    config = CpsatConfig(time_limit_seconds=1.0, num_workers=1)
+    solve_cpsat(problem, config, constraints=merge(default_constraints(), pick))
+    converted = st.convert_problem(problem.model_dump(mode="json"))
+    canon.DecomposedCalculator([pick])
+    assert st.constraints.score(canon.constraint_costs(converted.table), [pick]).hard == 0
+
+
 @pytest.mark.parametrize("offset", [1, -1])
 def test_the_same_literal_pick_on_soft_scores_like_the_engine(offset):
     """teacher_gap_cost on its default soft level takes the literal formula: CP-SAT's optimum

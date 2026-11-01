@@ -187,15 +187,16 @@ def constraint_costs(
     {key: {"costs": [...], "weight": float, "exponent": float, "offset": float,
     "clip": bool, "hard": bool, "global": bool, "level": "hard" | "soft",
     "reward": bool, "level_flippable": bool, "name": str, "label": str,
-    "default_weight": float, "default_level": str[, "units": [int, ...]]}}, "level"
-    being the level in effect (the pick's, or the default) and "hard" the same as
-    level == "hard". The three side constraints list one raw cost per location
-    (location order) and are scoped: "units" holds the locations each evaluates
-    (ascending: the fixed, the forbidden-row and the capacitated locations), the only
-    ones a literal offset charges; assignment_cost and flow_distance_cost are global
-    (one total each). None = the default constraints; a pick list (as for solve)
-    scores exactly those picks, each entry carrying its pick's knobs, the k-th pick of
-    a name keyed "<name>#<k>" from the second on.
+    "default_weight": float, "default_level": str[, "units": [int, ...]][, "signed": True]}},
+    "level" being the level in effect (the pick's, or the default) and "hard" the same as
+    level == "hard". "signed" marks an objective whose data holds a negative entry (its
+    total can be negative, so it cannot be hard). The three side constraints list one
+    raw cost per location (location order) and are scoped: "units" holds the locations
+    each evaluates (ascending: the fixed, the forbidden-row and the capacitated
+    locations), the only ones a literal offset charges; assignment_cost and
+    flow_distance_cost are global (one total each). None = the default constraints; a
+    pick list (as for solve) scores exactly those picks, each entry carrying its pick's
+    knobs, the k-th pick of a name keyed "<name>#<k>" from the second on.
     quadratic_assignment.constraints.score() turns it into a score."""
 
 class ConstraintInfo(NamedTuple):

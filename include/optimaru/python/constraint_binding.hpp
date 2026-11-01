@@ -30,7 +30,8 @@
 // bindConstraintInfo() also registers the module's translator for the
 // engine's ContributionOverflowError (level.hpp, rule 1), so every package
 // raises it as OverflowError naming the constraint by its Python name, word
-// for word as the Python score() mirror does, and the private test seam
+// for word as the Python score() mirror does (and SignedCostLevelError as its
+// ValueError), and the private test seam
 // `<pkg>._core._fail_worker_thread_start(index)` (see bindWorkerThreadSeam).
 
 #include <pybind11/pybind11.h>
@@ -171,6 +172,9 @@ py::dict constraintCosts(DecomposedScoreCalculator<Solution>& calculator, Soluti
         info["default_weight"] = entry.defaultWeight;
         info["default_level"] = levelName(entry.defaultLevel);
         if (entry.scoped) info["units"] = py::cast(entry.units);
+        // The sign rule's input (SignedCostLevelError): only where it holds,
+        // so every other entry stays as it was.
+        if (entry.signedCost) info["signed"] = true;
         if (fold.hasMedium()) {
             py::dict medium;
             medium["kind"] = fold.kind == MediumFold::Kind::BelowHard ? "below_hard" : "into_soft";
@@ -203,6 +207,9 @@ py::dict constraintCosts(DecomposedScoreCalculator<Solution>& calculator, Soluti
 //   offset    absent or None (= 0.0, no shift), or a real number (not bool),
 //             finite, any sign.
 //   clip      absent or None (= True, the threshold), or True / False.
+// A numeric knob counts as the double float() makes of it (py::float_), which
+// is also what the checks above see: an offset of Fraction(1, 10**400) is 0.0
+// (no shift). _check_knobs checks and returns the same doubles.
 // The result is a Knobs (level_guard.hpp), which restateKnobs applies.
 
 namespace detail {
@@ -411,8 +418,10 @@ std::decay_t<std::invoke_result_t<Factory&>> applyConstraints(Factory&& defaults
 // Rule 1 of "The range of a score" (level.hpp) in Python's words: the
 // constraint's Python name and Python's repr() of the contribution, so a
 // solve and score(constraint_costs(...), picks) refuse the same pick with
-// the same OverflowError text. Module-local: each package's extension
-// translates the exceptions its own copy of the engine throws.
+// the same OverflowError text. The sign rule (SignedCostLevelError, thrown at
+// reset) likewise becomes the mirror's ValueError. Module-local: each
+// package's extension translates the exceptions its own copy of the engine
+// throws.
 inline void registerContributionOverflowTranslator() {
     py::register_local_exception_translator([](std::exception_ptr pending) {
         try {
@@ -422,6 +431,10 @@ inline void registerContributionOverflowTranslator() {
             const std::string text = ContributionOverflowError::message(
                     pythonName(error.constraint()), shown, error.beyondHardLimit());
             PyErr_SetString(PyExc_OverflowError, text.c_str());
+        } catch (const SignedCostLevelError& error) {
+            const std::string text =
+                    SignedCostLevelError::message(pythonName(error.constraint()), error.level());
+            PyErr_SetString(PyExc_ValueError, text.c_str());
         }
     });
 }

@@ -190,8 +190,8 @@ class ConstraintRegistry(Generic[ContextT]):
 class InstanceObjective:
     """The objective as the plugin of one repeated instance sees it.
 
-    ``add`` / ``add_reward`` under the plugin's own name land on the
-    instance's key, and ``selected[name]`` returns the instance's
+    ``add`` / ``add_reward`` / ``refuse_signed`` under the plugin's own name
+    land on the instance's key, and ``selected[name]`` returns the instance's
     ``(spec, config)``; everything else is the objective's.
     """
 
@@ -208,6 +208,9 @@ class InstanceObjective:
 
     def add_reward(self, name: str, magnitude, *, bound: int) -> None:
         self._objective.add_reward(self._target(name), magnitude, bound=bound)
+
+    def refuse_signed(self, name: str) -> None:
+        self._objective.refuse_signed(self._target(name))
 
     @property
     def selected(self) -> dict:

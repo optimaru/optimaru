@@ -24,6 +24,7 @@ import struct
 import sys
 import warnings
 from dataclasses import FrozenInstanceError, dataclass
+from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
@@ -769,6 +770,110 @@ def test_costs_from_before_0_3_cannot_score_the_literal_formula():
     assert score_costs(old, [TaskCostCost(clip=False)]) == (0, -28.0)
     # 0.3.0 costs carry "clip" and score it: [10, 6, -5, -3].
     assert score_costs(_tasks_only(costs_a()), [TaskCostCost(offset=5.0, clip=False)]) == (0, -8.0)
+
+
+# --- a numeric knob counts as the double the engine reads --------------------------
+
+_TINY = [Fraction(1, 10**400), np.longdouble("1e-4000")]  # != 0, but 0.0 as a double
+
+
+@pytest.mark.parametrize("offset", _TINY, ids=["Fraction", "longdouble"])
+def test_an_offset_that_is_zero_as_a_double_is_no_offset(offset):
+    """The engine reads float(offset) (py::float_) and sees 0.0, so the pick is allowed there.
+
+    The mirror checks and shapes the same double: the literal pick on hard is not
+    refused, and it scores exactly as offset 0.
+    """
+    assert offset != 0 and float(offset) == 0.0
+    pick = ConflictCost(offset=offset, clip=False)  # default-level hard
+    assert score_costs(costs_a(), [pick]) == score_costs(costs_a(), [ConflictCost()]) == (-3, 0.0)
+    # The literal-offset rule on its own sees the same double.
+    base._check_literal_offset("conflict_cost", "hard", offset, False, None)
+    assert base._check_knobs("conflict_cost", None, None, 1.0, offset, False) == (None, 1.0, 0.0)
+
+
+def test_numeric_knobs_are_shaped_as_doubles():
+    """A numpy.longdouble or numpy.float32 knob is scored as the double the engine scores."""
+    costs = _tasks_only(costs_a())  # task_cost_cost [15, 11, 0, 2] on soft
+    for kind in (np.longdouble, np.float32):
+        pick = TaskCostCost(weight=kind("0.1"), offset=kind("0.1"), exponent=kind("1.5"), clip=False)
+        as_doubles = TaskCostCost(
+            weight=float(kind("0.1")), offset=float(kind("0.1")), exponent=float(kind("1.5")), clip=False
+        )
+        result = score_costs(costs, [pick])
+        assert type(result.soft) is float
+        assert result == score_costs(costs, [as_doubles])
+
+
+def test_knob_ranges_are_checked_on_the_double():
+    """The engine's checks see float(value): an exponent that is 0.0 as a double is refused, a
+    weight that is -0.0 is not."""
+    with pytest.raises(ValueError) as refused:
+        TaskCostCost(exponent=Fraction(1, 10**400))
+    assert str(refused.value).startswith("constraint 'task_cost_cost': exponent must be finite and > 0, not Fraction(1, ")
+    pick = TaskCostCost(weight=Fraction(-1, 10**400))  # -0.0 as a double: weight 0
+    assert score_costs(_tasks_only(costs_a()), [pick]) == (0, 0.0)
+
+
+# --- the sign rule: a raw cost that can be negative on this problem stays off hard -------
+
+SIGN_REFUSAL = "constraint {q} can have a negative raw cost on this problem (a bonus) and cannot be {where}"
+MEDIUM_HERE = "medium here, where medium counts toward the hard score"
+
+
+def _signed_costs(fold=None):
+    """costs_a() where task_cost_cost (a unit constraint) and idle_worker_cost (a global) are
+    marked "signed", as constraint_costs() marks an objective over data that can be negative."""
+    costs = costs_a(fold)
+    for name in ("task_cost_cost", "idle_worker_cost"):
+        costs[name] = {**costs[name], "signed": True}
+    return costs
+
+
+@pytest.mark.parametrize(
+    ("pick", "fold", "where"),
+    [
+        (TaskCostCost(level="hard"), None, "hard"),
+        (TaskCostCost(level="hard", offset=5.0), None, "hard"),  # a threshold does not help
+        (IdleWorkerCost(level="hard"), INTO_SOFT, "hard"),
+        (IdleWorkerCost(), BELOW_HARD, MEDIUM_HERE),  # its default level, medium below hard
+        (TaskCostCost(level="medium"), BELOW_HARD, MEDIUM_HERE),
+    ],
+)
+def test_a_signed_entry_is_refused_where_it_counts_toward_hard(pick, fold, where):
+    with pytest.raises(ValueError) as refused:
+        score_costs(_signed_costs(fold), [pick])
+    assert str(refused.value) == SIGN_REFUSAL.format(q=repr(pick.name), where=where)
+    # Not signed, the same pick scores; signed, the pick on soft (or into-soft medium) scores.
+    score_costs(costs_a(fold), [pick])
+    score_costs(_signed_costs(fold), [type(pick)(level="soft", offset=pick.offset)])
+    score_costs(_signed_costs(INTO_SOFT), [type(pick)(level="medium")])
+
+
+def test_the_engine_reads_every_pick_before_it_resets_or_scores():
+    """The engine refuses a pick's knobs when it reads the pick, the sign rule when it resets
+    (in its calculator's order: unit constraints, then globals; first instances in the
+    assembly's order, then repeats) and an overflow when it scores. score() follows that order,
+    so the same selection fails with the same error whatever the pick order."""
+    costs = _signed_costs(INTO_SOFT)
+    literal = ConflictCost(offset=1.0, clip=False)  # refused when the engine reads it
+    overflowing = TaskCostCost(weight=1e300, exponent=10.0)  # refused when it scores
+    for picks in ([overflowing, literal], [IdleWorkerCost(level="hard"), literal]):
+        with pytest.raises(ValueError, match="clip=False with a non-zero offset cannot be hard"):
+            score_costs(costs, picks)
+    with pytest.raises(ValueError) as refused:
+        score_costs(costs, [IdleWorkerCost(level="hard"), TaskCostCost(level="hard")])
+    assert str(refused.value) == SIGN_REFUSAL.format(q="'task_cost_cost'", where="hard")  # the unit one first
+    costs["conflict_cost"] = {**costs["conflict_cost"], "signed": True}  # hard by default
+    for picks in (
+        [TaskCostCost(level="hard"), ConflictCost()],  # first instances in the assembly's order
+        [TaskCostCost(), TaskCostCost(level="hard"), ConflictCost()],  # a repeat after them
+    ):
+        with pytest.raises(ValueError) as refused:
+            score_costs(costs, picks)
+        assert str(refused.value) == SIGN_REFUSAL.format(q="'conflict_cost'", where="hard")
+    with pytest.raises(OverflowError):
+        score_costs(costs, [overflowing])
 
 
 def test_duck_typed_picks_may_leave_offset_and_clip_unset():

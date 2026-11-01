@@ -1,5 +1,7 @@
+from fractions import Fraction
 from itertools import product
 
+import numpy as np
 import pytest
 
 import facility_location as domain
@@ -376,3 +378,21 @@ def test_the_same_literal_pick_on_soft_is_accepted(offset) -> None:
     )
     solved = solve(problem, time_limit_seconds=5, constraints=picks)
     assert (solved.score_hard, solved.score_soft) == pytest.approx(best)
+
+
+@pytest.mark.parametrize(
+    "offset", [Fraction(1, 10**400), np.longdouble("1e-4000")], ids=["Fraction", "longdouble"]
+)
+def test_an_offset_that_is_zero_as_a_double_is_accepted_like_the_engine(offset) -> None:
+    """The engine reads float(offset): 0.0, so the literal pick on hard is the plain shaping.
+    The CP-SAT reference and score() read the same double instead of refusing it."""
+    pick = FacilityCapacityCost(offset=offset, clip=False)
+    mapping = {"name": "facility_capacity_cost", "offset": offset, "clip": False}
+    build_model(_three_by_three(), [pick])
+    build_model(_three_by_three(), [mapping])
+    core = _three_by_three().to_core()
+    assert score(domain.constraint_costs(core), [pick]) == score(domain.constraint_costs(core, [pick]), [pick])
+    solved = solve(_three_by_three(), time_limit_seconds=5, constraints=[pick])
+    plain = solve(_three_by_three(), time_limit_seconds=5, constraints=[FacilityCapacityCost()])
+    assert (solved.score_hard, solved.score_soft) == (plain.score_hard, plain.score_soft)
+

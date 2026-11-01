@@ -11,7 +11,11 @@ namespace qap
 // assignment_costs[f][location of f]; 0 without an assignment_costs matrix.
 // One number for the whole assignment (a GlobalConstraint, so the exponent
 // shapes the total, as the 0.1.x single-entry list did). The matrix is not
-// validated >= 0, so the total may be negative (scored as a bonus).
+// validated >= 0, so the total may be negative (scored as a bonus). When the
+// matrix holds a negative entry, rawCostCanBeNegative() says so, and the
+// calculator refuses the instance on the hard level (SignedCostLevelError):
+// a negative hard total would cancel a broken pin. Without one, the total is
+// >= 0 and may move to hard like any constraint.
 //
 // Member-change fast path: a facility joining a location adds its cost there,
 // leaving subtracts it — O(1) per event.
@@ -45,6 +49,10 @@ struct AssignmentCost final : QapMemberChangeGlobalConstraint
         total_ += joined ? cost : -cost;
     }
     double cost() const override { return static_cast<double>(total_); }
+    bool rawCostCanBeNegative(const QuadraticAssignmentProblem &problem) const override
+    {
+        return detail::hasNegative(problem.assignmentCosts);
+    }
 
 private:
     std::int64_t total_ = 0;

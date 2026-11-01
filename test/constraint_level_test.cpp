@@ -55,6 +55,14 @@
 //       member and a global, one move at a time, in a batch and through
 //       trial moves; only that instance leaves the delta path (an integral
 //       group keeps it); LIST previews skip its piecewise answer
+//   (s) the sign rule: an instance whose raw cost can be negative on the
+//       problem's data (rawCostCanBeNegative, not a reward) is refused at
+//       reset on a level that counts toward the hard score
+//       (SignedCostLevelError, both wordings), unit and global, and
+//       constraintCosts() reports it (signedCost)
+//   (t) constraintTotals() / constraintCosts() report the knobs sampled at
+//       the last reset, the ones calculateScore() uses, after a component
+//       was edited without a reset
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -2489,6 +2497,199 @@ void testExactNegativeThreshold() {
     }
     std::printf("\n");
 }
+// --- (s) the sign rule ---------------------------------------------------------
+
+// A value per task that is not validated >= 0 (a signed objective, like
+// quadratic assignment's cost matrices): the raw cost is the sum of the
+// values of the tasks a worker holds (a unit constraint) or of every
+// assigned task (a global). rawCostCanBeNegative() is true when a value is
+// negative.
+template <typename S>
+struct SignedUnitCost final : optimaru::UnitConstraint<S> {
+    explicit SignedUnitCost(std::vector<double> taskValues)
+        : optimaru::UnitConstraint<S>("signedUnitCost", 1.0, Level::Soft), values(std::move(taskValues)) {}
+    std::vector<double> values;
+    double cost(const S&, int, const std::vector<int>& members) const override {
+        double c = 0;
+        for (int t : members) c += values[t];
+        return c;
+    }
+    bool rawCostCanBeNegative(const S&) const override {
+        return std::any_of(values.begin(), values.end(), [](double v) { return v < 0.0; });
+    }
+};
+
+template <typename S>
+struct SignedGlobalCost final : optimaru::GlobalConstraint<S> {
+    explicit SignedGlobalCost(std::vector<double> taskValues)
+        : optimaru::GlobalConstraint<S>("signedGlobalCost", 1.0, Level::Soft), values(std::move(taskValues)) {}
+    std::vector<double> values;
+    std::vector<double> perUnit;
+    void reset(const S&, const std::vector<std::vector<int>>& membersPerUnit) override {
+        perUnit.assign(membersPerUnit.size(), 0.0);
+        for (std::size_t u = 0; u < membersPerUnit.size(); ++u) onUnitChanged(S{}, static_cast<int>(u), membersPerUnit[u]);
+    }
+    void onUnitChanged(const S&, int unit, const std::vector<int>& members) override {
+        double c = 0;
+        for (int t : members) c += values[t];
+        perUnit[unit] = c;
+    }
+    double cost() const override {
+        double c = 0;
+        for (double v : perUnit) c += v;
+        return c;
+    }
+    bool rawCostCanBeNegative(const S&) const override {
+        return std::any_of(values.begin(), values.end(), [](double v) { return v < 0.0; });
+    }
+};
+
+// What resetting a calculator over `component` (and a hard conflict) raises,
+// "" when it scores.
+template <typename S, typename C>
+std::string signedRefusal(std::unique_ptr<C> component, S s) {
+    optimaru::DecomposedScoreCalculator<S> calc;
+    calc.add(std::make_unique<ConflictCost<S>>());
+    calc.add(std::move(component));
+    try {
+        calc.resetWorkingSolution(s);
+        calc.calculateScore();
+    } catch (const optimaru::SignedCostLevelError& error) {
+        return error.what();
+    }
+    return "";
+}
+
+void testSignedCostLevel() {
+    std::printf("== (s) a raw cost that can be negative stays off the hard score ==\n");
+    using optimaru::SignedCostLevelError;
+    // Assignment A: worker0 {0,1,2}, worker1 {3,4}, worker3 {5}; 3 hard conflicts.
+    const std::vector<double> bonus{-1, -1, -1, 0, 0, 0};    // can be negative: -3 in total
+    const std::vector<double> plain{1, 0, 2, 0, 0, 1};       // never negative
+    const std::string hardText =
+            "Constraint 'signedGlobalCost' can have a negative raw cost on this problem (a bonus) "
+            "and cannot be hard";
+    check(SignedCostLevelError::message("signed_global_cost", Level::Hard) ==
+                  "constraint 'signed_global_cost' can have a negative raw cost on this problem (a bonus) "
+                  "and cannot be hard",
+          "the Python wording, hard (what the bindings raise as ValueError)");
+    check(SignedCostLevelError::message("signed_global_cost", Level::Medium) ==
+                  "constraint 'signed_global_cost' can have a negative raw cost on this problem (a bonus) "
+                  "and cannot be medium here, where medium counts toward the hard score",
+          "the Python wording, a below_hard medium");
+    {
+        auto global = std::make_unique<SignedGlobalCost<Tasks>>(bonus);
+        global->setLevel(Level::Hard);  // flippable: the setter cannot know the data
+        check(signedRefusal(std::move(global), assignmentA<Tasks>()) == hardText,
+              "a hard global over negative data is refused at reset (it would cancel the 3 conflicts)");
+        auto unit = std::make_unique<SignedUnitCost<Tasks>>(bonus);
+        unit->setLevel(Level::Hard);
+        check(signedRefusal(std::move(unit), assignmentA<Tasks>()) ==
+                      "Constraint 'signedUnitCost' can have a negative raw cost on this problem (a bonus) "
+                      "and cannot be hard",
+              "a hard unit constraint over negative data is refused at reset");
+    }
+    {
+        auto global = std::make_unique<SignedGlobalCost<HardFoldTasks>>(bonus);
+        global->setLevel(Level::Medium);
+        check(signedRefusal(std::move(global), assignmentA<HardFoldTasks>()) ==
+                      "Constraint 'signedGlobalCost' can have a negative raw cost on this problem (a bonus) "
+                      "and cannot be medium here, where medium counts toward the hard score",
+              "medium below hard is refused too");
+        auto intoSoft = std::make_unique<SignedGlobalCost<SoftFoldTasks>>(bonus);
+        intoSoft->setLevel(Level::Medium);
+        check(signedRefusal(std::move(intoSoft), assignmentA<SoftFoldTasks>()).empty(),
+              "medium into soft is allowed");
+    }
+    check(signedRefusal(std::make_unique<SignedGlobalCost<Tasks>>(bonus), assignmentA<Tasks>()).empty(),
+          "on soft, a negative total is a bonus as before");
+    {
+        auto global = std::make_unique<SignedGlobalCost<Tasks>>(plain);
+        global->setLevel(Level::Hard);
+        check(signedRefusal(std::move(global), assignmentA<Tasks>()).empty(),
+              "data without a negative value may sit on hard");
+    }
+    {
+        // The default level counts too, and the check runs at every reset.
+        optimaru::DecomposedScoreCalculator<Tasks> calc;
+        auto owned = std::make_unique<SignedGlobalCost<Tasks>>(bonus);
+        SignedGlobalCost<Tasks>* held = owned.get();
+        calc.add(std::move(owned));
+        Tasks s = assignmentA<Tasks>();
+        calc.resetWorkingSolution(s);
+        const auto costs = calc.constraintCosts();
+        check(costs.size() == 1 && costs[0].signedCost && costs[0].unitCosts[0] == -3.0,
+              "constraintCosts() reports signedCost on negative data (the Python \"signed\")");
+        held->setLevel(Level::Hard);
+        bool refused = false;
+        try {
+            calc.resetWorkingSolution(s);
+        } catch (const std::logic_error& error) {  // SignedCostLevelError is a logic_error too
+            refused = error.what() == hardText;
+        }
+        check(refused, "an edit to hard after a reset is refused at the next reset");
+        held->values = plain;
+        calc.resetWorkingSolution(s);
+        check(!calc.constraintCosts()[0].signedCost && calc.calculateScore().hard == -4,
+              "the same instance over plain data scores on hard (4 = 1 + 2 + 1)");
+    }
+    std::printf("\n");
+}
+
+// --- (t) reported knobs are the ones the score uses ---------------------------
+
+bool throwsLogicReset(optimaru::DecomposedScoreCalculator<Tasks>& calc, Tasks& s) {
+    try {
+        calc.resetWorkingSolution(s);
+    } catch (const std::logic_error&) {
+        return true;
+    }
+    return false;
+}
+
+void testReportedKnobsAreSampledAtReset() {
+    std::printf("== (t) constraintTotals() / constraintCosts() report the knobs of the last reset ==\n");
+    optimaru::DecomposedScoreCalculator<Tasks> calc;
+    auto global = std::make_unique<IdleWorkerCost<Tasks>>();
+    IdleWorkerCost<Tasks>* idle = global.get();
+    idle->setLevel(Level::Hard);  // 1 idle worker under assignment A
+    auto unit = std::make_unique<ConflictCost<Tasks>>();
+    ConflictCost<Tasks>* conflict = unit.get();
+    calc.add(std::move(unit));
+    calc.add(std::move(global));
+    Tasks s = assignmentA<Tasks>();
+    calc.resetWorkingSolution(s);
+    const HardSoftScore before = calc.calculateScore();
+    auto totalsOf = [&] {
+        double hard = 0, soft = 0;
+        for (const auto& total : calc.constraintTotals()) (total.isHard ? hard : soft) += total.cost;
+        return std::make_pair(hard, soft);
+    };
+    check(before.hard == -4 && totalsOf() == std::make_pair(4.0, 0.0), "after reset: 3 + 1 hard, explained");
+    // Edits through the pointers a C++ client still holds, with the
+    // validating setters, but no reset.
+    idle->setClip(false);
+    idle->setOffset(5.0);
+    idle->setWeight(3.0);
+    conflict->setLevel(Level::Soft);
+    conflict->setWeight(7.0);
+    check(same(calc.calculateScore(), before), "the score keeps the knobs of the last reset");
+    check(totalsOf() == std::make_pair(4.0, 0.0),
+          "constraintTotals() explains that score (no literal 'hard reward' of -5, no re-levelled cache)");
+    const auto costs = calc.constraintCosts();
+    check(costs.size() == 2 && costs[0].isHard && costs[0].level == Level::Hard && costs[0].weight == 1.0 &&
+                  costs[1].isHard && costs[1].offset == 0.0 && costs[1].clip && costs[1].weight == 1.0,
+          "constraintCosts() reports the sampled weight / level / offset / clip");
+    check(throwsLogicReset(calc, s), "the next reset refuses the literal offset on hard");
+    idle->setClip(true);
+    calc.resetWorkingSolution(s);
+    const auto after = calc.constraintCosts();
+    check(calc.calculateScore().hard == 0 && after[0].level == Level::Soft && after[0].weight == 7.0 &&
+                  after[1].offset == 5.0 && totalsOf() == std::make_pair(0.0, 21.0),
+          "after the reset the edits are in effect: conflicts 3 x 7 soft, 1 idle below the threshold 5");
+    std::printf("\n");
+}
+
 }  // namespace
 
 int main() {
@@ -2511,6 +2712,8 @@ int main() {
     testLiteralOffsetGuard();
     testHashInAssemblyNames();
     testExactNegativeThreshold();
+    testSignedCostLevel();
+    testReportedKnobsAreSampledAtReset();
     if (failures == 0) {
         std::printf("All constraint-level tests PASSED.\n");
         return 0;

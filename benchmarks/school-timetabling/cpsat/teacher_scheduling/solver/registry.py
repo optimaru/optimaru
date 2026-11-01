@@ -101,9 +101,10 @@ def _check_literal_offset(name: str, level: str, offset: float, clip: bool) -> N
     hard it would reward slack (one unit's slack cancelling another's
     violation) or charge units without a violation, and hard 0 must mean no
     violation. This use case has no medium level, so only hard refuses it.
-    ``level`` is the effective one.
+    ``level`` is the effective one, and the offset is compared as the double
+    the engine reads (an offset of ``Fraction(1, 10**400)`` is 0.0).
     """
-    if clip or offset == 0:
+    if clip or float(offset) == 0.0:
         return
     if level == "hard":
         raise ValueError(
@@ -165,23 +166,25 @@ class _EnginePlugin:
     def effective_weight(self) -> int:
         """The weight in effect: the knob, or the engine default when it is None. Integral on CP-SAT."""
         weight = ENGINE_DEFAULTS[self.name].default_weight if self.weight is None else self.weight
-        if float(weight) != int(weight):
+        value = float(weight)  # the double the engine reads
+        if not value.is_integer():
             raise ValueError(f"constraint {self.name!r}: CP-SAT needs an integer weight, not {weight!r}")
-        return int(weight)
+        return int(value)
 
     @property
     def effective_offset(self) -> int:
         """The offset, integral on CP-SAT (the objective is)."""
-        if not float(self.offset).is_integer():
+        offset = float(self.offset)  # the double the engine reads
+        if not offset.is_integer():
             raise ValueError(f"constraint {self.name!r} offset must be an integer for CP-SAT")
-        return int(self.offset)
+        return int(offset)
 
     def build(self, model: cp_model.CpModel, variables: TimetableVariables) -> cp_model.LinearExpr | None:
         # The engine's knob rules first (the same refusals, in the same words), then the
         # CP-SAT model's own limits.
         level = self.effective_level
         _check_literal_offset(self.name, level, self.offset, self.clip)
-        if self.exponent != 1.0:
+        if float(self.exponent) != 1.0:
             raise ValueError(f"constraint {self.name!r}: exponent {self.exponent!r} is not supported by CP-SAT")
         weight = self.effective_weight
         if self.effective_offset != 0 and level == "hard":

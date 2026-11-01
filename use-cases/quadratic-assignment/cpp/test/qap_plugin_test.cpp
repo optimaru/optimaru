@@ -299,6 +299,44 @@ void verifyOverrides()
           "pinned demoted to soft: 1 soft per broken pin");
     check(sameScore(scoreWith(defaultConstraints().hard("assignmentCost"), p), {-19, -22.0}),
           "assignment cost promoted to hard: -19hard");
+    {
+        // A negative direct cost makes the total possibly negative: on hard it
+        // would cancel a broken pin, so the reset refuses it; soft keeps the bonus.
+        QuadraticAssignmentProblem signedCosts = sideInstance();
+        signedCosts.assignmentCosts = std::vector<std::vector<std::int64_t>>{{-10, -10}, {-10, -10}};
+        identity(signedCosts);
+        const auto refusalOf = [](ConstraintAssembly assembly, QuadraticAssignmentProblem problem)
+        {
+            try
+            {
+                scoreWith(std::move(assembly), problem);
+            }
+            catch (const optimaru::SignedCostLevelError &error)
+            {
+                return std::string(error.what());
+            }
+            return std::string();
+        };
+        check(refusalOf(defaultConstraints().hard("assignmentCost"), signedCosts)
+                  == "Constraint 'assignmentCost' can have a negative raw cost on this problem (a bonus) "
+                     "and cannot be hard",
+              "a negative direct cost: the assignment cost cannot be promoted to hard (refused at reset)");
+        check(refusalOf(defaultConstraints().hard("assignmentCost").offset("assignmentCost", 10.0), signedCosts)
+                  != "",
+              "... nor as a hard threshold (a total of -20 is beyond -10)");
+        check(refusalOf(defaultConstraints(), signedCosts).empty()
+                  && sameScore(scoreWith(defaultConstraints(), signedCosts), {-4, -(22.0 - 20.0)}),
+              "on its default soft level the negative total is a bonus: -4hard/-2soft");
+        QuadraticAssignmentProblem signedFlows = sideInstance();
+        signedFlows.flows = {{0, -3}, {2, 0}};
+        identity(signedFlows);
+        check(refusalOf(defaultConstraints().hard("flowDistanceCost"), signedFlows)
+                  == "Constraint 'flowDistanceCost' can have a negative raw cost on this problem (a bonus) "
+                     "and cannot be hard",
+              "a negative flow: the flow cannot be promoted to hard");
+        check(refusalOf(defaultConstraints().hard("assignmentCost"), signedFlows).empty(),
+              "... while the direct costs, all >= 0 there, still may");
+    }
     // A unit exponent shapes each location: capacity [2, 0] ** 2 = 4.
     check(sameScore(scoreWith(defaultConstraints().exponent("locationCapacityCost", 2.0), p), {-6, -37.0}),
           "capacity exponent 2 shapes per location: 2^2 = 4");
@@ -558,7 +596,10 @@ Score scoreOf(ConstraintAssembly assembly, QuadraticAssignmentProblem p)
 // pinned and forbidden rows on soft (literal, over their scope). Hard
 // refuses the literal formula with an offset, so the literal copies of the
 // hard side constraints sit on soft, next to a hard threshold copy.
-ConstraintAssembly repeatedAssembly()
+// `flowCopyOnHard` false keeps the hard threshold copy of the flow on soft,
+// for data with negative flows or distances, where the flow cannot be hard
+// (rawCostCanBeNegative).
+ConstraintAssembly repeatedAssembly(bool flowCopyOnHard = true)
 {
     ConstraintAssembly assembly = defaultConstraints();
     assembly.offset("locationCapacityCost", 1.0);
@@ -589,7 +630,8 @@ ConstraintAssembly repeatedAssembly()
                                         .weight("flowDistanceCost", 0.25)
                                         .exponent("flowDistanceCost", 1.5)
                                         .offset("flowDistanceCost", 100.0)
-                                        .hard("flowDistanceCost")));
+                                        .level("flowDistanceCost",
+                                               flowCopyOnHard ? optimaru::Level::Hard : optimaru::Level::Soft)));
     assembly.addInstances(std::move(copyOf("flowDistanceCost")
                                         .weight("flowDistanceCost", 0.25)
                                         .exponent("flowDistanceCost", 1.5)
@@ -780,14 +822,17 @@ void verifyRepeatsAndOffsets()
         int mismatches = 0;
         int checks = 0;
         double drift = 0.0;
-        for (int round = 0; round < 3; ++round)
+        // Three rounds over data with negative entries (the flow copy on soft:
+        // it cannot be hard there), one over data without (on hard).
+        for (int round = 0; round < 4; ++round)
         {
-            QuadraticAssignmentProblem p = randomInstance(12, 17 + round);
+            const bool signedData = round < 3;
+            QuadraticAssignmentProblem p = randomInstance(12, 17 + round, signedData);
             std::mt19937_64 rng(321 + round);
             place(p, randomPermutation(12, rng));
             ScoreCalculator::prepare(p);
             DecomposedCalculator calculator;
-            repeatedAssembly().into(calculator);
+            repeatedAssembly(!signedData).into(calculator);
             optimaru::ScoreDirector<QuadraticAssignmentProblem> director(p, calculator);
             std::uniform_int_distribution<int> facility(0, 11);
             std::uniform_int_distribution<int> kind(0, 9);
@@ -831,7 +876,7 @@ void verifyRepeatsAndOffsets()
                 director.endMoveEvaluation(accept);
                 const Score incremental = director.calculateScore();
                 DecomposedCalculator fresh;
-                repeatedAssembly().into(fresh);
+                repeatedAssembly(!signedData).into(fresh);
                 QuadraticAssignmentProblem copy = p;
                 const Score full = scoreWith(fresh, copy);
                 drift = std::max(drift, std::fabs(full.soft - incremental.soft));
@@ -850,7 +895,7 @@ void verifyRepeatsAndOffsets()
     {
         QuadraticAssignmentProblem p = randomInstance(10, 57);
         DecomposedCalculator calculator;
-        repeatedAssembly().into(calculator);
+        repeatedAssembly(false).into(calculator);
         Solver::Config config;
         config.spentLimit = std::chrono::seconds(60);
         config.stepCountLimit = 1500;
@@ -867,7 +912,7 @@ void verifyRepeatsAndOffsets()
             ok = false;
         }
         DecomposedCalculator fresh;
-        repeatedAssembly().into(fresh);
+        repeatedAssembly(false).into(fresh);
         QuadraticAssignmentProblem copy = p;
         check(ok && p.isBijection() && p.score && optimaru::scoresAgree(*p.score, scoreWith(fresh, copy)),
               "FULL_ASSERT solve with repeated, shifted components: no corruption, a bijection, the "

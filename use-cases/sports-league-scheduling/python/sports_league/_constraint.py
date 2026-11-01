@@ -34,7 +34,9 @@ Every spec takes the same five knobs, and only those:
 - ``level``    ``None`` = the component's default level; otherwise a
                :class:`Level` or its name (``"hard"``, ``"medium"``, ``"soft"``).
                ``Level.MEDIUM`` needs a domain with a medium level. A reward
-               refuses hard, and refuses medium where medium folds below hard;
+               refuses hard, and refuses medium where medium folds below hard,
+               and so does a constraint whose raw cost can be negative on the
+               problem's data (``constraint_costs()`` marks it ``"signed"``);
                a constraint whose level is not flippable refuses any change.
 - ``exponent`` sign-preserving power shaping, > 0 (1.0 = none): per unit for a
                unit constraint, on the single total for a global one.
@@ -156,11 +158,24 @@ class Constraint:
         return {field.name: getattr(self, field.name) for field in fields(self) if field.name not in _KNOBS}
 
 
-def _check_knobs(name: str, weight: Any, level: Any, exponent: Any, offset: Any = 0.0, clip: Any = True) -> None:
+def _check_knobs(
+    name: str, weight: Any, level: Any, exponent: Any, offset: Any = 0.0, clip: Any = True
+) -> tuple[float | None, float, float]:
+    """Check one pick's knobs; return its weight, exponent and offset as doubles.
+
+    The engine's rules in its words (constraint_binding.hpp readKnobs). A
+    number is checked as the double ``float()`` makes of it, which is what
+    the engine reads (pybind11's ``py::float_``) and scores, and it is
+    returned as that double. So a Real that is not 0 but is 0.0 as a double,
+    such as ``Fraction(1, 10**400)``, is an offset of 0.0 on every path, and a
+    ``numpy.longdouble`` or ``numpy.float32`` knob is shaped as a double.
+    """
+    checked_weight = None
     if weight is not None:
         if isinstance(weight, bool) or not isinstance(weight, numbers.Real):
             raise TypeError(f"constraint {name!r}: weight must be a number or None, not {weight!r}")
-        if not math.isfinite(weight) or weight < 0:
+        checked_weight = float(weight)
+        if not math.isfinite(checked_weight) or checked_weight < 0:
             raise ValueError(f"constraint {name!r}: weight must be finite and >= 0, not {weight!r}")
     if level is not None:
         if not isinstance(level, str):
@@ -169,14 +184,17 @@ def _check_knobs(name: str, weight: Any, level: Any, exponent: Any, offset: Any 
             raise ValueError(f"constraint {name!r}: level must be 'hard', 'medium' or 'soft', not {level!r}")
     if isinstance(exponent, bool) or not isinstance(exponent, numbers.Real):
         raise TypeError(f"constraint {name!r}: exponent must be a number, not {exponent!r}")
-    if not math.isfinite(exponent) or exponent <= 0:
+    checked_exponent = float(exponent)
+    if not math.isfinite(checked_exponent) or checked_exponent <= 0:
         raise ValueError(f"constraint {name!r}: exponent must be finite and > 0, not {exponent!r}")
     if isinstance(offset, bool) or not isinstance(offset, numbers.Real):
         raise TypeError(f"constraint {name!r}: offset must be a number, not {offset!r}")
-    if not math.isfinite(offset):
+    checked_offset = float(offset)
+    if not math.isfinite(checked_offset):
         raise ValueError(f"constraint {name!r}: offset must be finite, not {offset!r}")
     if not _is_bool(clip):
         raise TypeError(f"constraint {name!r}: clip must be True or False, not {clip!r}")
+    return checked_weight, checked_exponent, checked_offset
 
 
 def _is_bool(value: Any) -> bool:
@@ -389,9 +407,10 @@ def _check_literal_offset(name: str, level: str, offset: float, clip: Any, fold:
     the effective one (the pick's, or the default). The threshold
     (``clip=True``) with any offset, ``offset=0`` and any combination on soft
     or on an into_soft medium are allowed. The engine refuses the same picks
-    in the same words (python::checkLiteralOffset).
+    in the same words (python::checkLiteralOffset). ``offset`` is compared
+    as the double the engine reads (see ``_check_knobs``).
     """
-    if clip or offset == 0.0:
+    if clip or float(offset) == 0.0:
         return
     if level == "hard":
         raise ValueError(
@@ -403,6 +422,48 @@ def _check_literal_offset(name: str, level: str, offset: float, clip: Any, fold:
             f"constraint {name!r}: clip=False with a non-zero offset cannot be medium here, where "
             "medium counts toward the hard score; use clip=True (a threshold) or level='soft'"
         )
+
+
+def _check_signed(name: str, level: str, entry: Mapping[str, Any], fold: tuple[str, float] | None) -> None:
+    """A raw cost that can be negative on this problem stays off the levels that count toward hard.
+
+    ``constraint_costs()`` marks such an entry ``"signed"``: the engine's
+    ``rawCostCanBeNegative``, a signed objective over data that is not
+    validated >= 0 (quadratic assignment's cost matrices). Like a reward it
+    cannot be hard, nor medium where medium folds below hard, because a
+    negative hard contribution would cancel another violation and an
+    infeasible solution could score hard 0. ``level`` is the effective one.
+    The engine refuses the same instances when it resets
+    (SignedCostLevelError), in the same words.
+    """
+    if not entry.get("signed") or entry.get("reward", False):
+        return
+    head = f"constraint {name!r} can have a negative raw cost on this problem (a bonus) "
+    if level == "hard":
+        raise ValueError(head + "and cannot be hard")
+    if level == "medium" and fold is not None and fold[0] == "below_hard":
+        raise ValueError(head + "and cannot be medium here, where medium counts toward the hard score")
+
+
+def _engine_order(read: list[tuple], costs: Mapping[str, Mapping[str, Any]]) -> list[tuple]:
+    """The picks in the order the engine's calculator holds them.
+
+    Unit constraints before global ones; within each, the first instance of
+    every name in the assembly's order (the order ``constraint_costs()``
+    lists the names in), then the repeats in pick order (each one appended
+    after the defaults). ``read`` holds ``(name, key, entry, ...)`` per pick,
+    in pick order.
+    """
+    position: dict[str, int] = {}
+    for key, entry in costs.items():
+        position.setdefault(str(entry.get("name") or key.partition("#")[0]), len(position))
+
+    def rank(item: tuple[int, tuple]) -> tuple:
+        index, (name, key, entry, *_rest) = item
+        repeat = "#" in key
+        return (bool(entry.get("global", False)), repeat, index if repeat else position.get(name, index))
+
+    return [pick for _index, pick in sorted(enumerate(read), key=rank)]
 
 
 def _evaluated(entry: Mapping[str, Any]) -> list[float]:
@@ -470,6 +531,8 @@ def score_costs(costs: Mapping[str, Mapping[str, Any]], constraints: Iterable[An
     ``clip=False`` with an offset != 0 is refused (ValueError, in the
     engine's words) on a level that counts toward the hard score: hard, or
     medium in a below_hard domain; the level is the pick's, or the default.
+    So is an entry marked ``"signed"`` (its raw cost can be negative on this
+    problem although it is not a reward) on such a level.
     It also needs costs from optimaru >= 0.3 (their entries carry
     ``"clip"``): older costs do not say which units a constraint evaluates,
     so scoring the literal formula from them raises ValueError.
@@ -479,12 +542,20 @@ def score_costs(costs: Mapping[str, Mapping[str, Any]], constraints: Iterable[An
     only add shaping, and their defaults change nothing. A missing weight,
     level or exponent stays an AttributeError, because it is more likely a
     mistake, e.g. an object still carrying ``hard``.
+
+    A numeric knob counts as the double ``float()`` makes of it, as the engine
+    reads it: an offset of ``Fraction(1, 10**400)`` is 0.0 (no shift), and a
+    ``numpy.longdouble`` weight or offset is scored as a double.
     """
     hard = 0
     soft = 0.0
     medium = 0.0
     fold = _domain_fold(costs)
     picked = list(constraints)
+    # The engine's order: it reads every pick first (the knob, level and
+    # literal-offset rules, in pick order), checks the sign rule when it
+    # resets, in its own order (_engine_order), and only then scores.
+    read = []
     for spec, key in zip(picked, instance_keys(picked)):
         entry = costs.get(key)
         if entry is None and key != spec.name and spec.name in costs and not _params_of(spec):
@@ -504,7 +575,10 @@ def score_costs(costs: Mapping[str, Mapping[str, Any]], constraints: Iterable[An
         offset = 0.0 if offset is None else offset
         clip = getattr(spec, "clip", None)
         clip = True if clip is None else clip
-        _check_knobs(spec.name, spec.weight, spec.level, exponent, offset, clip)
+        # The doubles the engine scores with (a numpy.longdouble offset is
+        # shaped as a double, a Fraction(1, 10**400) one is 0.0).
+        weight, exponent, offset = _check_knobs(spec.name, spec.weight, spec.level, exponent, offset, clip)
+        clip = bool(clip)
         level = _level(spec, entry)
         _check_literal_offset(spec.name, level, offset, clip, fold)
         if not clip and offset != 0.0 and "clip" not in entry:
@@ -515,15 +589,19 @@ def score_costs(costs: Mapping[str, Mapping[str, Any]], constraints: Iterable[An
                 "units the constraint evaluates; recompute them with constraint_costs() before scoring "
                 "clip=False with an offset"
             )
-        weight = _default_weight(entry) if spec.weight is None else spec.weight
-        values = [_contribution(spec.name, weight, cost, exponent, offset, bool(clip)) for cost in _evaluated(entry)]
+        weight = _default_weight(entry) if weight is None else weight
+        read.append((spec.name, key, entry, level, weight, exponent, offset, clip))
+    for name, _key, entry, level, *_knobs in _engine_order(read, costs):
+        _check_signed(name, level, entry, fold)
+    for name, _key, entry, level, weight, exponent, offset, clip in read:
+        values = [_contribution(name, weight, cost, exponent, offset, clip) for cost in _evaluated(entry)]
         if level == "hard":
-            hard += sum(_round_hard(spec.name, value) for value in values)
+            hard += sum(_round_hard(name, value) for value in values)
         elif level == "medium":
             if fold is None:
-                raise ValueError(f"constraint {spec.name!r} is medium-level, but the costs carry no medium_fold")
+                raise ValueError(f"constraint {name!r} is medium-level, but the costs carry no medium_fold")
             if fold[0] == "below_hard":
-                medium += sum(_round_hard(spec.name, value) for value in values)
+                medium += sum(_round_hard(name, value) for value in values)
             else:
                 medium += sum(values)
         else:

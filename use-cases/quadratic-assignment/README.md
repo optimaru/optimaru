@@ -52,7 +52,14 @@ shapes each location's cost); the two objectives are `GlobalConstraint`s on the
 engine's member-change fast path (the exponent shapes the total). Every
 constraint is flippable (`level="hard"` / `level="soft"`, or `Level.HARD` /
 `Level.SOFT`; `level="medium"` raises `ValueError`, the domain has no medium level), none
-is a reward and all five are scored by default (`default_enabled`);
+is a reward and all five are scored by default (`default_enabled`). One limit depends on
+the data: the matrices are not validated >= 0, so when `assignment_costs` holds a negative
+entry the assignment cost's total can be negative, and so can the flow cost's when a flow
+or a distance is negative. On such data that objective cannot be hard, since a negative
+hard total would cancel a broken pin and an infeasible layout could score hard 0: every
+path refuses it with `ValueError: constraint 'assignment_cost' can have a negative raw
+cost on this problem (a bonus) and cannot be hard` (`constraint_costs()` marks its entry
+`"signed": True`). On soft the negative total stays a bonus.
 `quadratic_assignment.constraint_info()` reports exactly this table from the C++
 components (`kDefaultLevel` / `kDefaultWeight`).
 

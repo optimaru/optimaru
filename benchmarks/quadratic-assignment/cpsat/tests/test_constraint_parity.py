@@ -274,9 +274,51 @@ def test_signed_objectives_keep_the_levels_lexicographic():
     selection = [PinnedAssignmentsCost(), AssignmentCost(weight=5), FlowDistanceCost(weight=3)]
     solved = solve(Model.model_validate(SIGNED), time_limit_seconds=20, constraints=selection)
     assert (solved.score_hard, solved.score_soft) == pytest.approx(_brute_force(SIGNED, selection))
-    promoted = [PinnedAssignmentsCost(), AssignmentCost(level="hard"), FlowDistanceCost()]
-    solved = solve(Model.model_validate(SIGNED), time_limit_seconds=20, constraints=promoted)
-    assert (solved.score_hard, solved.score_soft) == pytest.approx(_brute_force(SIGNED, promoted))
+    # Promoted to hard where its data is >= 0 (the flows and distances of EVERYTHING).
+    promoted = [PinnedAssignmentsCost(), AssignmentCost(), FlowDistanceCost(level="hard")]
+    solved = solve(Model.model_validate(EVERYTHING), time_limit_seconds=20, constraints=promoted)
+    assert (solved.score_hard, solved.score_soft) == pytest.approx(_brute_force(EVERYTHING, promoted))
+
+
+SIGN_REFUSAL = "constraint {q} can have a negative raw cost on this problem (a bonus) and cannot be hard"
+
+
+@pytest.mark.parametrize(
+    ("pick", "name"),
+    [
+        (AssignmentCost(level="hard"), "assignment_cost"),
+        (AssignmentCost(level="hard", offset=3), "assignment_cost"),  # a threshold does not help
+        ({"name": "assignment_cost", "level": "hard"}, "assignment_cost"),
+        (FlowDistanceCost(level=Level.HARD), "flow_distance_cost"),
+    ],
+    ids=["assignment", "assignment-threshold", "assignment-mapping", "flow"],
+)
+def test_an_objective_whose_data_can_be_negative_is_refused_on_hard(pick, name):
+    """On SIGNED data a hard objective could be negative and cancel a broken pin: CP-SAT, the
+    engine and the score() mirror refuse it in the same words, alone and as a repeat."""
+    message = SIGN_REFUSAL.format(q=repr(name))
+    for picks in ([PinnedAssignmentsCost(), pick], [*get_constraints(), pick]):
+        assert _refusal(lambda picks=picks: build(Model.model_validate(SIGNED), picks)) == message
+        assert (
+            _refusal(lambda picks=picks: solve(Model.model_validate(SIGNED), time_limit_seconds=1, constraints=picks))
+            == message
+        )
+    if not isinstance(pick, dict):
+        core = _assigned(SIGNED, list(SIGNED["facilities"])).to_core()
+        assert _refusal(lambda: _engine_score(core, [pick])) == message
+        assert _refusal(lambda: constraint_costs(core, [pick])) == message
+        assert _refusal(lambda: score(constraint_costs(core), [pick])) == message
+
+
+def test_two_signed_objectives_on_hard_are_named_in_the_engine_order():
+    """The engine checks the sign rule at reset, in its calculator's order (the assembly's:
+    assignment_cost before flow_distance_cost), whatever the pick order."""
+    picks = [FlowDistanceCost(level="hard"), AssignmentCost(level="hard")]
+    message = SIGN_REFUSAL.format(q="'assignment_cost'")
+    assert _refusal(lambda: build(Model.model_validate(SIGNED), picks)) == message
+    core = _assigned(SIGNED, list(SIGNED["facilities"])).to_core()
+    assert _refusal(lambda: _engine_score(core, picks)) == message
+    assert _refusal(lambda: score(constraint_costs(core), picks)) == message
 
 
 def test_exponents_and_fractional_weights_stay_unsupported():

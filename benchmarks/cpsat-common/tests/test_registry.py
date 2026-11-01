@@ -1,3 +1,6 @@
+from fractions import Fraction
+
+import numpy as np
 import pytest
 
 from cpsat_plugins import (
@@ -154,7 +157,7 @@ def test_registry_builds_only_selected_domain_constraint_plugins(monkeypatch) ->
 
 def test_domain_constraint_exponent_is_rejected_explicitly() -> None:
     with pytest.raises(ValueError, match="exponent is not supported"):
-        resolve(SPECS, [_DomainConstraint(exponent=2.0)])
+        ObjectiveBuilder(cp_model.CpModel(), ("hard", "soft"), SPECS, [_DomainConstraint(exponent=2.0)])
 
 
 # --- 0.2.0 knob contract ----------------------------------------------------
@@ -208,8 +211,29 @@ def test_hard_false_lands_medium_term_on_soft_in_scores() -> None:
 
 
 def test_reward_refuses_hard_true() -> None:
-    with pytest.raises(ValueError, match="reward and cannot be hard"):
+    """In the engine's words (level_guard.hpp checkedLevel), as score() raises them."""
+    with pytest.raises(ValueError) as refused:
         _level(("hard", "soft"), {"name": "bonus", "level": "hard"})
+    assert str(refused.value) == "constraint 'bonus' is a reward (raw cost <= 0) and cannot be hard"
+    # The reward refusal comes first, ahead of the literal-offset one, as in the engine.
+    with pytest.raises(ValueError) as refused:
+        _level(("hard", "soft"), {"name": "bonus", "level": "hard", "offset": 2, "clip": False})
+    assert str(refused.value) == "constraint 'bonus' is a reward (raw cost <= 0) and cannot be hard"
+
+
+def test_reward_refuses_medium_where_medium_counts_toward_hard() -> None:
+    specs = (*LEVELED, ConstraintSpec("perk", "Perk", "soft", 1, reward=True))
+    selection = [{"name": "perk", "level": "medium"}]
+    with pytest.raises(ValueError) as refused:
+        ObjectiveBuilder(cp_model.CpModel(), ("hard", "medium", "soft"), specs, selection, medium_fold="below_hard")
+    assert str(refused.value) == (
+        "constraint 'perk' is a reward (raw cost <= 0) and cannot be medium here, "
+        "where medium counts toward the hard score"
+    )
+    objective = ObjectiveBuilder(
+        cp_model.CpModel(), ("hard", "medium", "soft"), specs, selection, medium_fold="into_soft"
+    )
+    assert objective.level_of(*objective.selected["perk"]) == "medium"
 
 
 def test_non_flippable_constraint_refuses_a_level_change() -> None:
@@ -228,7 +252,7 @@ def test_hard_false_needs_a_soft_level() -> None:
 
 def test_exponent_and_fractional_weight_stay_rejected() -> None:
     with pytest.raises(ValueError, match="exponent is not supported"):
-        resolve(LEVELED, [_DomainConstraint(exponent=0.5)])
+        ObjectiveBuilder(cp_model.CpModel(), ("hard", "soft"), LEVELED, [_DomainConstraint(exponent=0.5)])
     objective = ObjectiveBuilder(
         cp_model.CpModel(), ("hard", "soft"), LEVELED, [{"name": "capacity", "weight": 0.5}]
     )
@@ -398,7 +422,7 @@ def test_default_enabled_and_repeated_instances_read_the_engine_row(monkeypatch)
 def test_mapping_selections_get_the_spec_knob_checks(selection, error, message) -> None:
     """A dict selection is checked like a spec, so the two solvers refuse the same values."""
     with pytest.raises(error, match=message):
-        resolve(SPECS, [selection])
+        ObjectiveBuilder(cp_model.CpModel(), ("hard", "soft"), SPECS, [selection])
 
 
 def test_a_pick_without_a_level_is_refused_rather_than_defaulted() -> None:
@@ -694,6 +718,118 @@ def test_the_literal_offset_refusal_reaches_every_entry_path(monkeypatch) -> Non
     objective.selected["capacity"] = (spec, ConstraintConfig(name="capacity", offset=1, clip=False))
     with pytest.raises(ValueError, match="cannot be hard"):
         objective.score_costs({"capacity": {"costs": [0]}})
+
+
+# --- the engine's rules before CP-SAT's own, on the doubles the engine reads -----------
+
+
+@pytest.mark.parametrize(
+    "offset", [Fraction(1, 10**400), np.longdouble("1e-4000")], ids=["Fraction", "longdouble"]
+)
+def test_an_offset_that_is_zero_as_a_double_is_no_offset(offset) -> None:
+    """The engine reads float(offset) and sees 0.0, so a literal pick on hard is allowed there."""
+    for selection in (
+        _DomainConstraint(offset=offset, clip=False),
+        {"name": "capacity", "offset": offset, "clip": False},
+    ):
+        objective = ObjectiveBuilder(cp_model.CpModel(), ("hard", "soft"), SPECS, [selection])
+        _spec, config = objective.selected["capacity"]
+        assert config.offset == 0.0 and type(config.offset) is float
+        objective.add("capacity", 1, bound=1)
+        assert len(objective.terms["hard"]) == 1
+
+
+def test_numeric_knobs_are_the_engine_doubles() -> None:
+    config = ConstraintConfig.parse(
+        {"name": "capacity", "weight": np.int64(3), "offset": np.float32(2), "exponent": Fraction(1)}
+    )
+    assert (config.weight, config.offset, config.exponent) == (3.0, 2.0, 1.0)
+    assert all(type(value) is float for value in (config.weight, config.offset, config.exponent))
+
+
+@pytest.mark.parametrize(
+    ("selection", "medium_fold", "message"),
+    [
+        ({"name": "capacity", "exponent": 2, "offset": 2, "clip": False}, None, HARD_REFUSAL),
+        (_DomainConstraint(exponent=2.0, offset=-1.0, clip=False), None, HARD_REFUSAL),
+        ({"name": "unassigned", "exponent": 2, "offset": 2, "clip": False}, "below_hard", MEDIUM_REFUSAL),
+    ],
+)
+def test_the_engine_rules_come_before_the_exponent_limit(selection, medium_fold, message) -> None:
+    """The engine refuses the literal pick; CP-SAT's exponent limit is only asked after that."""
+    with pytest.raises(ValueError) as refused:
+        ObjectiveBuilder(cp_model.CpModel(), ("hard", "medium", "soft"), LEVELED, [selection], medium_fold=medium_fold)
+    name = selection["name"] if isinstance(selection, dict) else selection.name
+    assert str(refused.value) == message.format(q=repr(name))
+
+
+def test_across_picks_the_engine_rules_come_first() -> None:
+    """[A(exponent=2), B(literal on hard)]: the engine refuses B, so CP-SAT does too."""
+    picks = [
+        {"name": "distance", "exponent": 2},
+        {"name": "capacity", "offset": 1, "clip": False},
+    ]
+    with pytest.raises(ValueError) as refused:
+        ObjectiveBuilder(cp_model.CpModel(), ("hard", "medium", "soft"), LEVELED, picks)
+    assert str(refused.value) == HARD_REFUSAL.format(q="'capacity'")
+    # Without B, A's exponent is what CP-SAT refuses.
+    with pytest.raises(ValueError, match="constraint 'distance' exponent is not supported by CP-SAT"):
+        ObjectiveBuilder(cp_model.CpModel(), ("hard", "medium", "soft"), LEVELED, picks[:1])
+
+
+def test_a_per_pick_plugin_is_named_by_its_constraint_in_the_engine_messages() -> None:
+    """A registry with a plugin per pick names the k-th one '<name>#<k>' (employee scheduling);
+    the engine's refusals still name the constraint."""
+    specs = (*LEVELED, ConstraintSpec("bonus#2", "Bonus", "soft", 1, level_flippable=False, reward=True))
+    for selection, message in (
+        ({"name": "bonus#2", "level": "hard"}, "constraint 'bonus' is a reward (raw cost <= 0) and cannot be hard"),
+        ({"name": "bonus#2", "level": "medium"}, "constraint 'bonus' is always soft; level='medium' is not allowed"),
+        ({"name": "bonus#2", "offset": 1, "clip": False}, None),  # soft: allowed
+    ):
+        if message is None:
+            ObjectiveBuilder(cp_model.CpModel(), ("hard", "medium", "soft"), specs, [selection])
+            continue
+        with pytest.raises(ValueError) as refused:
+            ObjectiveBuilder(cp_model.CpModel(), ("hard", "medium", "soft"), specs, [selection])
+        assert str(refused.value) == message
+    specs = (*SPECS, ConstraintSpec("capacity#2", "Capacity", "hard", 2))
+    with pytest.raises(ValueError) as refused:
+        ObjectiveBuilder(cp_model.CpModel(), ("hard", "soft"), specs, [{"name": "capacity#2", "offset": 1, "clip": False}])
+    assert str(refused.value) == HARD_REFUSAL.format(q="'capacity'")
+
+
+def test_refuse_signed_is_the_engine_sign_rule() -> None:
+    """A plugin whose data can make its raw cost negative refuses a level that counts toward hard."""
+    head = "constraint {q} can have a negative raw cost on this problem (a bonus) and cannot be "
+    levels = ("hard", "medium", "soft")
+    for selection, fold, message in (
+        ({"name": "distance", "level": "hard"}, None, head.format(q="'distance'") + "hard"),
+        ({"name": "capacity"}, None, head.format(q="'capacity'") + "hard"),  # its default level
+        (
+            {"name": "unassigned"},
+            "below_hard",
+            head.format(q="'unassigned'") + "medium here, where medium counts toward the hard score",
+        ),
+    ):
+        objective = ObjectiveBuilder(cp_model.CpModel(), levels, LEVELED, [selection], medium_fold=fold)
+        with pytest.raises(ValueError) as refused:
+            objective.refuse_signed(selection["name"])
+        assert str(refused.value) == message
+    for selection, fold in (({"name": "distance"}, None), ({"name": "unassigned"}, "into_soft")):
+        ObjectiveBuilder(cp_model.CpModel(), levels, LEVELED, [selection], medium_fold=fold).refuse_signed(
+            selection["name"]
+        )
+    # A repeat is checked under its own key, as the plugin of that instance sees it.
+    objective = ObjectiveBuilder(
+        cp_model.CpModel(), levels, LEVELED, [{"name": "distance"}, {"name": "distance", "level": "hard"}]
+    )
+    objective.refuse_signed("distance")
+    with pytest.raises(ValueError, match="'distance' can have a negative raw cost"):
+        objective.refuse_signed("distance#2")
+    from cpsat_plugins.plugins import InstanceObjective
+
+    with pytest.raises(ValueError, match="'distance' can have a negative raw cost"):
+        InstanceObjective(objective, "distance#2", "distance").refuse_signed("distance")
 
 
 def test_medium_fold_is_validated() -> None:

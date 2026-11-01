@@ -258,15 +258,19 @@ class RulePlugin(ConstraintPlugin[ScheduleContext]):
         return 1 if self.is_hard else SCALE
 
     def check_supported(self) -> None:
-        """Refuse what this model cannot express, before any variable exists."""
-        if self.exponent != 1.0:
+        """Refuse what this model cannot express, before any variable exists.
+
+        `RuleRegistry.objective` calls it once the engine's own rules (the
+        level, reward and literal-offset refusals of `ObjectiveBuilder`) have
+        passed for every pick, so a pick the engine refuses gets the engine's
+        words, as it does from `solve()`.
+        """
+        if float(self.exponent) != 1.0:
             raise ValueError(f"rule {self.name!r}: exponent is not supported by CP-SAT")
         if self.weight is not None and not float(self.weight).is_integer():
             raise ValueError(
                 f"rule {self.name!r}: weight must be an integer for CP-SAT"
             )
-        if self.level == "hard" and self.spec.reward:
-            raise ValueError(f"rule {self.name!r} is a reward and cannot be hard")
         if self.is_hard and self.fractional:
             raise ValueError(
                 f"rule {self.name!r}: a fractional cost cannot be hard for CP-SAT"
@@ -1017,7 +1021,22 @@ PLUGINS: dict[str, type[RulePlugin]] = {
 }
 
 
-def registry_for(rules: Iterable[Any]) -> ConstraintRegistry[ScheduleContext]:
+class RuleRegistry(ConstraintRegistry[ScheduleContext]):
+    """The registry of one request's rules (`registry_for`).
+
+    `objective()` checks the engine's rules for every pick first (cpsat-common's
+    `ObjectiveBuilder`, in the engine's words, under the rule's own name for a
+    repeat too), then what this model cannot express (`check_supported`).
+    """
+
+    def objective(self, *args: Any, **kwargs: Any) -> ObjectiveBuilder:
+        objective = super().objective(*args, **kwargs)
+        for plugin in self.plugins:
+            plugin.check_supported()
+        return objective
+
+
+def registry_for(rules: Iterable[Any]) -> RuleRegistry:
     """One plugin per pick (a spec, or a JSON rule model via `to_spec()`).
 
     Each plugin is built from the pick's own fields, so it carries the same
@@ -1031,12 +1050,11 @@ def registry_for(rules: Iterable[Any]) -> ConstraintRegistry[ScheduleContext]:
         plugin = PLUGINS[spec.name](
             **{f.name: getattr(spec, f.name) for f in fields(spec)}
         )
-        plugin.check_supported()
         seen[spec.name] += 1
         if seen[spec.name] > 1:
             object.__setattr__(plugin, "name", f"{spec.name}#{seen[spec.name]}")
         plugins.append(plugin)
-    return ConstraintRegistry(plugins)
+    return RuleRegistry(plugins)
 
 
 # Every constraint at its defaults, in the engine catalog's order

@@ -48,9 +48,11 @@ def selection(plugins: Sequence[RulePlugin]) -> list[ConstraintConfig]:
     return [
         ConstraintConfig(
             name=plugin.name,
-            weight=plugin.weight,
+            # The doubles the engine reads; a fractional offset stays fractional,
+            # so the engine's rules see it before check_supported refuses it.
+            weight=None if plugin.weight is None else float(plugin.weight),
             level=None if plugin.level is None else str(plugin.level),
-            offset=int(plugin.offset) * plugin.scale,
+            offset=float(plugin.offset) * plugin.scale,
             clip=plugin.clip,
         )
         for plugin in plugins

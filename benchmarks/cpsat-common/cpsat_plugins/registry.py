@@ -34,7 +34,7 @@ def _is_bool(value: Any) -> bool:
 
 def _check_knobs(
     name: str, weight: Any, level: Any, exponent: Any, offset: Any = 0.0, clip: Any = True
-) -> None:
+) -> tuple[float | None, float, float]:
     """The engine's knob rules, with the optimaru spec base's wording.
 
     A Mapping selection gets the checks a spec gets at construction, so the
@@ -43,11 +43,18 @@ def _check_knobs(
     exponent a real number, finite and > 0 (and 1.0 on CP-SAT, see
     ``_check_exponent``); offset a real number (not bool), finite (and an
     integer on CP-SAT, see ``ObjectiveBuilder.add``); clip True or False.
+
+    Like the spec base (``_check_knobs``) and the engine (``readKnobs``), a
+    number is checked as the double ``float()`` makes of it and returned as
+    that double: ``(weight, exponent, offset)``. So an offset of
+    ``Fraction(1, 10**400)`` is 0.0 here as it is for the engine.
     """
+    checked_weight = None
     if weight is not None:
         if isinstance(weight, bool) or not isinstance(weight, numbers.Real):
             raise TypeError(f"constraint {name!r}: weight must be a number or None, not {weight!r}")
-        if not math.isfinite(weight) or weight < 0:
+        checked_weight = float(weight)
+        if not math.isfinite(checked_weight) or checked_weight < 0:
             raise ValueError(f"constraint {name!r}: weight must be finite and >= 0, not {weight!r}")
     if level is not None:
         if not isinstance(level, str):
@@ -56,14 +63,17 @@ def _check_knobs(
             raise ValueError(f"constraint {name!r}: level must be 'hard', 'medium' or 'soft', not {level!r}")
     if isinstance(exponent, bool) or not isinstance(exponent, numbers.Real):
         raise TypeError(f"constraint {name!r}: exponent must be a number, not {exponent!r}")
-    if not math.isfinite(exponent) or exponent <= 0:
+    checked_exponent = float(exponent)
+    if not math.isfinite(checked_exponent) or checked_exponent <= 0:
         raise ValueError(f"constraint {name!r}: exponent must be finite and > 0, not {exponent!r}")
     if isinstance(offset, bool) or not isinstance(offset, numbers.Real):
         raise TypeError(f"constraint {name!r}: offset must be a number, not {offset!r}")
-    if not math.isfinite(offset):
+    checked_offset = float(offset)
+    if not math.isfinite(checked_offset):
         raise ValueError(f"constraint {name!r}: offset must be finite, not {offset!r}")
     if not _is_bool(clip):
         raise TypeError(f"constraint {name!r}: clip must be True or False, not {clip!r}")
+    return checked_weight, checked_exponent, checked_offset
 
 
 def _shift(value: int | float, offset: int | float, clip: bool) -> int | float:
@@ -95,9 +105,20 @@ def _is_constant(term: Any) -> bool:
     return isinstance(term, numbers.Integral)
 
 
-def _check_exponent(name: str, exponent: Any) -> None:
+def _check_exponent(name: str, exponent: float) -> None:
+    """CP-SAT's own limit, checked after the engine's rules (``ObjectiveBuilder``)."""
     if exponent != 1.0:
         raise ValueError(f"constraint {name!r} exponent is not supported by CP-SAT")
+
+
+def _constraint_name(name: str) -> str:
+    """The constraint's name, which the engine's messages use.
+
+    A registry with one plugin per pick (employee scheduling) names the k-th
+    one ``"<name>#<k>"``, its ``constraint_costs()`` key; a constraint name
+    never contains ``#``.
+    """
+    return name.partition("#")[0]
 
 
 @dataclass(frozen=True)
@@ -157,15 +178,19 @@ class ConstraintConfig:
 
     A name may appear several times: each entry is its own instance with its
     own knobs (see ``resolve``). ``offset`` / ``clip`` shape every term the
-    plugin adds (``ObjectiveBuilder.add``).
+    plugin adds (``ObjectiveBuilder.add``). ``parse`` stores the numbers as
+    the doubles the engine reads. ``exponent`` is kept so that
+    ``ObjectiveBuilder`` can refuse one other than 1.0 after the engine's own
+    rules, as the engine would refuse the pick first.
     """
 
     name: str
     enabled: bool = True
-    weight: int | None = None
+    weight: int | float | None = None
     level: str | None = None
     offset: int | float = 0
     clip: bool = True
+    exponent: float = 1.0
 
     @classmethod
     def parse(
@@ -185,14 +210,14 @@ class ConstraintConfig:
             offset = 0 if offset is None else offset
             clip = getattr(value, "clip", None)
             clip = True if clip is None else clip
-            _check_knobs(name, weight, level, exponent, offset, clip)
-            _check_exponent(name, exponent)
+            weight, exponent, offset = _check_knobs(name, weight, level, exponent, offset, clip)
             return cls(
                 name=name,
                 weight=weight,
                 level=None if level is None else str(level),
                 offset=offset,
                 clip=bool(clip),
+                exponent=exponent,
             )
         payload = dict(value)
         name = payload.pop("name", payload.pop("type", None))
@@ -216,8 +241,7 @@ class ConstraintConfig:
         offset = 0 if offset is None else offset
         clip = payload.get("clip")
         clip = True if clip is None else clip
-        _check_knobs(name, weight, level, exponent, offset, clip)
-        _check_exponent(name, exponent)
+        weight, exponent, offset = _check_knobs(name, weight, level, exponent, offset, clip)
         enabled = payload.get("enabled", True)
         if not _is_bool(enabled):
             raise TypeError(f"constraint {name!r}: enabled must be True or False, not {enabled!r}")
@@ -228,6 +252,7 @@ class ConstraintConfig:
             level=None if level is None else str(level),
             offset=offset,
             clip=bool(clip),
+            exponent=exponent,
         )
 
 
@@ -293,10 +318,12 @@ def _check_literal_offset(name: str, level: str, config: ConstraintConfig, mediu
     raise it: hard, and medium where the domain folds it below hard
     (``medium_fold="below_hard"``, task assigning), refuse the literal
     formula, because it charges every evaluated unit ``x - offset`` and hard 0
-    must mean no violation. ``level`` is the effective one.
+    must mean no violation. ``level`` is the effective one, and the offset
+    is compared as the double the engine reads.
     """
-    if config.clip or config.offset == 0:
+    if config.clip or float(config.offset) == 0.0:
         return
+    name = _constraint_name(name)
     if level == "hard":
         raise ValueError(
             f"constraint {name!r}: clip=False with a non-zero offset cannot be hard, because hard 0 "
@@ -339,15 +366,21 @@ class ObjectiveBuilder:
         self.selected = resolve(specs, constraints)
         self.terms: dict[str, list] = {level: [] for level in self.levels}
         self.bounds: dict[str, int] = {level: 0 for level in self.levels}
+        # Refuse a selection before the model is built: first the engine's
+        # rules for every instance (the engine and score() refuse such a pick
+        # in these words), then what only CP-SAT cannot model.
         for spec, config in self.selected.values():
-            self.level_of(spec, config)  # refuse a selection before the model is built
+            self.level_of(spec, config)
+        for spec, config in self.selected.values():
+            _check_exponent(_constraint_name(spec.name), config.exponent)
 
     def level_of(self, spec: ConstraintSpec, config: ConstraintConfig) -> str:
         """The level a selection lands on, with the engine's knob rules.
 
         ``level=None`` keeps the default level. ``"medium"`` needs a domain
-        with a medium level, a reward refuses ``"hard"``, and a non-flippable
-        constraint refuses any change of level. On the level it lands on,
+        with a medium level, a reward refuses ``"hard"`` (and ``"medium"``
+        with ``medium_fold="below_hard"``), and a non-flippable constraint
+        refuses any change of level. On the level it lands on,
         ``clip=False`` with an offset != 0 is refused where that level counts
         toward the hard score (hard; medium with ``medium_fold="below_hard"``).
         """
@@ -355,16 +388,48 @@ class ObjectiveBuilder:
         _check_literal_offset(spec.name, level, config, self.medium_fold)
         return level
 
+    def refuse_signed(self, name: str) -> None:
+        """The engine's sign rule, for a plugin whose data can make its raw cost negative.
+
+        A plugin over data that is not validated >= 0 (quadratic assignment's
+        cost matrices; the engine's ``rawCostCanBeNegative``) calls this when
+        its data holds a negative entry. Like a reward, such an instance
+        cannot sit on a level that counts toward the hard score (hard; medium
+        with ``medium_fold="below_hard"``), because a negative hard
+        contribution would cancel another violation. Refused in the engine's
+        words (SignedCostLevelError, as the bindings raise it). ``name`` is
+        the name the plugin adds its terms under.
+        """
+        selected = self.selected.get(name)
+        if selected is None:
+            return
+        spec, config = selected
+        if spec.reward:
+            return
+        level = self.level_of(spec, config)
+        head = f"constraint {_constraint_name(spec.name)!r} can have a negative raw cost on this problem (a bonus) "
+        if level == "hard":
+            raise ValueError(head + "and cannot be hard")
+        if level == "medium" and self.medium_fold == "below_hard":
+            raise ValueError(head + "and cannot be medium here, where medium counts toward the hard score")
+
     def _requested_level(self, spec: ConstraintSpec, config: ConstraintConfig) -> str:
+        """The engine's level rules (level_guard.hpp checkedLevel), in its words."""
         wanted = config.level
         if wanted is None:
             return spec.level
+        name = _constraint_name(spec.name)
         if wanted == "medium" and wanted not in self.levels:
-            raise ValueError(f"constraint {spec.name!r}: this use case has no medium level")
-        if wanted == "hard" and spec.reward:
-            raise ValueError(f"constraint {spec.name!r} is a reward and cannot be hard")
+            raise ValueError(f"constraint {name!r}: this use case has no medium level")
+        if spec.reward and wanted == "hard":
+            raise ValueError(f"constraint {name!r} is a reward (raw cost <= 0) and cannot be hard")
+        if spec.reward and wanted == "medium" and self.medium_fold == "below_hard":
+            raise ValueError(
+                f"constraint {name!r} is a reward (raw cost <= 0) and cannot be medium here, "
+                "where medium counts toward the hard score"
+            )
         if wanted != spec.level and not spec.level_flippable:
-            raise ValueError(f"constraint {spec.name!r} is always {spec.level}; level={wanted!r} is not allowed")
+            raise ValueError(f"constraint {name!r} is always {spec.level}; level={wanted!r} is not allowed")
         return wanted
 
     def add(self, name: str, magnitude, *, bound: int) -> None:

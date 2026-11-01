@@ -38,6 +38,21 @@ wheel.
   before the solve starts. A reward still refuses `"hard"`, and also refuses
   `"medium"` on task assigning, where medium counts toward the hard score. A
   constraint with `level_flippable` false still refuses any change of level.
+- The same holds for a constraint whose raw cost can be negative on the
+  problem's data although it is not a reward: quadratic assignment's
+  `assignment_cost` when `assignment_costs` holds a negative entry, and
+  `flow_distance_cost` when a flow or a distance is negative. A negative hard
+  total would cancel another violation, so an infeasible solution could
+  score hard 0 (a threshold offset does not help: it keeps the sign). The
+  engine refuses such an instance when it resets, on every path (`solve`,
+  `constraint_costs(solution, picks)`, the `Solver`), with
+  `ValueError: constraint {q} can have a negative raw cost on this problem
+  (a bonus) and cannot be hard` (`... and cannot be medium here, where medium
+  counts toward the hard score` on a below_hard medium).
+  `constraint_costs()` marks such an entry `"signed": True`, and `score()`
+  refuses the same picks from it in the same words; the CP-SAT reference
+  does too. On soft the negative total is a bonus, as before, and data
+  without a negative entry may still move the objective to hard.
 - Knob errors changed with it: a non-string level raises `TypeError` and an
   unknown name raises `ValueError`. numpy booleans are no longer accepted as a
   level, since a level is not a boolean.
@@ -248,6 +263,11 @@ lists the evaluated units as `"units"`.
   `offset must be finite, not inf` (`ValueError`), and
   `clip must be True or False, not 1` (`TypeError`; `numpy.bool_` is
   accepted), plus the two literal-formula refusals above (`ValueError`).
+- A numeric knob counts as the double `float()` makes of it on every path,
+  the double the bindings read: an offset of `Fraction(1, 10**400)` is
+  0.0 (no shift, so the literal formula with it is allowed on hard), and a
+  `numpy.longdouble` or `numpy.float32` weight, exponent or offset is
+  checked and shaped as a double by `score()` and the CP-SAT references too.
 - A duck-typed pick (any object with the knob attributes) must carry `name`,
   `weight`, `level` and `exponent`. `offset` and `clip` are optional and
   default to `0.0` and `True`, which change nothing. A missing weight, level
@@ -279,8 +299,11 @@ lists the evaluated units as `"units"`.
   list. employee-scheduling and school-timetabling already took one. The
   `name` / `name#k` keys are described above.
 - Entries also report `offset` and `clip`. A scoped unit constraint also
-  reports `units`, its evaluated units in ascending order. `hard` stays next
-  to `level` for older readers (it is `level == "hard"`).
+  reports `units`, its evaluated units in ascending order. An entry whose
+  raw cost can be negative on the problem's data although it is not a
+  reward carries `"signed": True` (quadratic assignment's objectives on data
+  with a negative entry; see the level rules). `hard` stays next to `level`
+  for older readers (it is `level == "hard"`).
 - `constraint_info()` rows are unchanged. The defaults of `offset` and `clip`
   are universal, like the exponent's.
 
@@ -302,6 +325,13 @@ lists the evaluated units as `"units"`.
 - Only integral offsets are accepted. A fractional one raises `offset must be
   an integer for CP-SAT`. `exponent != 1` and fractional weights are still
   refused.
+- The engine's rules (the level, reward and literal-offset refusals) are
+  checked for every pick before what only CP-SAT cannot model (an exponent
+  other than 1, a fractional weight or offset), so a pick the engine refuses
+  gets the engine's words, in its wording (`constraint 'x' is a reward (raw
+  cost <= 0) and cannot be hard`), under the constraint's name for a repeat
+  too (employee scheduling's `registry_for` plugins are named `<name>#<k>`).
+  `ConstraintConfig` keeps the pick's `exponent` for that.
 - `clip=False` with an offset on a level that counts toward the hard score is
   refused with the engine's messages when the objective is built, for every
   plugin. `ObjectiveBuilder(...)` and `ConstraintRegistry.objective(...)` take
@@ -354,8 +384,20 @@ lists the evaluated units as `"units"`.
   same picks earlier, in the Python words (`python::checkLiteralOffset`, which
   both `restateKnobs` overloads call once every knob of a pick is re-stated).
 - `DecomposedScoreCalculator::ConstraintCosts` gains `offset`, `clip`,
-  `scoped` and `units`. A component that evaluates only some units overrides
-  `scopedUnits()`.
+  `scoped`, `units` and `signedCost`. A component that evaluates only some
+  units overrides `scopedUnits()`.
+- `UnitConstraint` / `GlobalConstraint::rawCostCanBeNegative(solution)`
+  (false by default): a component over data that is not validated >= 0
+  says whether its raw cost can be negative on that data. `validateLevel`
+  then refuses it, at reset, on a level that counts toward the hard score
+  (`SignedCostLevelError`, a `std::invalid_argument`; the bindings raise it
+  as `ValueError` in the Python words). Quadratic assignment's two
+  objectives override it.
+- `constraintTotals()` and `constraintCosts()` report the knobs sampled at
+  the last reset, the ones `calculateScore()` uses, so a component edited
+  after a reset (through a pointer a C++ client still holds) no longer
+  shows a total or knobs the score does not use; the edit takes effect, and
+  is checked, at the next reset.
 - `python::applyConstraints(factory, picks)` takes a callable that returns the
   default assembly. A repeated name becomes a fresh copy of the default
   component with its own knobs, its level included, appended after the

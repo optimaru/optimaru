@@ -39,7 +39,11 @@ shapes a term over a non-negative range, so an offset on `assignment_cost` /
 `flow_distance_cost` is refused when the data can make that total negative (a negative
 direct cost, flow or distance: `offset needs non-negative ... for CP-SAT`); offset 0 keeps
 scoring signed data as before. `clip=False` with an offset on a hard pick is refused with
-the engine's message when the objective is built, before that check.
+the engine's message when the objective is built, before that check. On such data the
+objective cannot be hard in either solver (the engine's sign rule: a negative hard total
+would cancel a broken pin), refused in the engine's words before any term is built:
+`constraint 'assignment_cost' can have a negative raw cost on this problem (a bonus) and
+cannot be hard`.
 
 ```sh
 cd benchmarks/quadratic-assignment/cpsat

@@ -3,8 +3,10 @@
 import pickle
 import random
 import re
+from fractions import Fraction
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
 
 import facility_location as fl
@@ -736,3 +738,32 @@ def test_the_refusal_comes_after_every_knob_of_a_duck_typed_pick():
     message = HARD_REFUSAL.format(q="'facility_capacity_cost'")
     assert _refusal(lambda: _zero_budget_solve(_two_assigned(), [kept])) == message
     assert _refusal(lambda: score(fl.constraint_costs(_two_assigned()), [kept])) == message
+
+
+# --- a numeric knob counts as the double the engine reads ---------------------------
+
+
+@pytest.mark.parametrize("offset", [Fraction(1, 10**400), np.longdouble("1e-4000")], ids=["Fraction", "longdouble"])
+def test_an_offset_that_is_zero_as_a_double_is_no_offset_on_every_path(offset):
+    """The engine reads float(offset) and sees 0.0, so the literal pick on hard is the 0.2.0
+    shaping there; score() checks and shapes the same double instead of refusing the pick."""
+    assert offset != 0 and float(offset) == 0.0
+    pick = FacilityCapacityCost(offset=offset, clip=False)  # the default level, hard
+    expected = (-2, 0.0)
+    assert score(fl.constraint_costs(_two_assigned()), [pick]) == expected
+    assert score(fl.constraint_costs(_two_assigned(), [pick]), [pick]) == expected
+    engine = _zero_budget_solve(_two_assigned(), [pick])
+    assert (engine.score.hard, engine.score.soft) == expected
+    fl.solve(build_problem(), time_limit_seconds=0.1, constraints=[pick])
+
+
+def test_numeric_knobs_are_scored_as_doubles():
+    """A numpy.longdouble offset and weight shape like their doubles, on soft too."""
+    raw = fl.constraint_costs(_two_assigned())
+    for kind in (np.longdouble, np.float32):
+        pick = FacilityCapacityCost(level="soft", weight=kind("0.1"), offset=kind("0.1"), clip=False)
+        doubles = FacilityCapacityCost(level="soft", weight=float(kind("0.1")), offset=float(kind("0.1")), clip=False)
+        mirror = score(raw, [pick])
+        assert type(mirror.soft) is float and mirror == score(raw, [doubles])
+        engine = _zero_budget_solve(_two_assigned(), [pick])
+        assert engine.score.soft == pytest.approx(mirror.soft)

@@ -644,6 +644,61 @@ def test_the_literal_offset_is_refused_on_hard_like_the_engine(pick, offset) -> 
     assert str(refused.value) == message
 
 
+def _objective_error(picks) -> str:
+    """What the documented plugin API refuses: registry_for(picks) then objective()."""
+    registry = registry_for(picks)
+    with pytest.raises(ValueError) as refused:
+        registry.objective(
+            cp_model.CpModel(), ("hard", "soft"), selection(registry.plugins)
+        )
+    return str(refused.value)
+
+
+def test_the_plugin_api_names_a_repeated_rule_like_the_engine() -> None:
+    """The k-th plugin of a rule is named '<name>#<k>'; the engine's refusal names the rule."""
+    literal = domain.RequiredSkillCost(offset=2, clip=False)
+    message = HARD_REFUSAL.format(q="'required_skill_cost'")
+    assert _objective_error([literal]) == message
+    assert _objective_error([domain.RequiredSkillCost(), literal]) == message
+    with pytest.raises(ValueError) as refused:
+        es_scheduling.DecomposedCalculator([domain.RequiredSkillCost(), literal])
+    assert str(refused.value) == message
+    reward = (
+        "constraint 'desired_day_cost' is a reward (raw cost <= 0) and cannot be hard"
+    )
+    assert (
+        _objective_error([domain.DesiredDayCost(), domain.DesiredDayCost(level="hard")])
+        == reward
+    )
+    with pytest.raises(ValueError) as refused:
+        es_scheduling.DecomposedCalculator([domain.DesiredDayCost(level="hard")])
+    assert str(refused.value) == reward
+
+
+def test_the_engine_rules_come_before_what_cpsat_cannot_model() -> None:
+    """A pick the engine refuses gets the engine's words from the plugin API too, not the
+    CP-SAT limit (exponent, fractional offset) it would also hit."""
+    message = HARD_REFUSAL.format(q="'required_skill_cost'")
+    for pick in (
+        domain.RequiredSkillCost(exponent=2, offset=2, clip=False),
+        domain.RequiredSkillCost(offset=0.5, clip=False),
+    ):
+        assert _objective_error([pick]) == message
+    # Across picks: the engine refuses the second; CP-SAT does not stop at the first.
+    picks = [
+        domain.UndesiredDayCost(exponent=2),
+        domain.RequiredSkillCost(offset=1, clip=False),
+    ]
+    assert _objective_error(picks) == message
+    # What only CP-SAT refuses is still refused, after the engine's rules pass.
+    assert _objective_error(picks[:1]) == (
+        "rule 'undesired_day_cost': exponent is not supported by CP-SAT"
+    )
+    assert _objective_error([domain.UndesiredDayCost(offset=0.5)]) == (
+        "rule 'undesired_day_cost': offset must be an integer for CP-SAT"
+    )
+
+
 @pytest.mark.parametrize("seed", range(2))
 @pytest.mark.parametrize("offset", [1, -1])
 def test_the_same_literal_pick_on_soft_matches_the_engine(offset, seed) -> None:

@@ -25,8 +25,10 @@ the engine does and a literal offset charges exactly those locations. The two
 objectives add one term for their total. ``ObjectiveBuilder.add`` shapes a
 term over a non-negative range, so an offset on an objective is taken only when
 its data cannot make the total negative (no negative assignment cost, or no
-negative flow / distance); otherwise CP-SAT refuses it. A constraint picked
-several times adds one set of terms per pick.
+negative flow / distance); otherwise CP-SAT refuses it. On such data the
+objective cannot be hard either, the engine's sign rule (its
+``rawCostCanBeNegative``), refused in the engine's words first. A constraint
+picked several times adds one set of terms per pick.
 """
 
 from __future__ import annotations
@@ -58,10 +60,19 @@ def _add(objective: ObjectiveBuilder, name: str, terms: list, bound: int) -> Non
     objective.add(name, sum(terms), bound=bound if terms else 0)
 
 
-def _refuse_a_signed_offset(objective: ObjectiveBuilder, name: str, data: str, values) -> None:
-    """An offset on a total that may be negative cannot be shaped by ``ObjectiveBuilder.add``."""
+def _refuse_a_signed_total(objective: ObjectiveBuilder, name: str, data: str, values) -> None:
+    """A total the data can make negative: the engine's sign rule, then CP-SAT's own limit.
+
+    On data with a negative entry (the engine's ``rawCostCanBeNegative``) the
+    instance cannot be hard, in the engine's words (``refuse_signed``); and an
+    offset on such a total cannot be shaped by ``ObjectiveBuilder.add``.
+    """
+    values = list(values)
+    if not any(value < 0 for value in values):
+        return
+    objective.refuse_signed(name)
     _spec, config = objective.selected[name]
-    if config.offset != 0 and any(value < 0 for value in values):
+    if config.offset != 0:
         raise ValueError(
             f"constraint {name!r} offset needs non-negative {data} for CP-SAT (the total could be negative)"
         )
@@ -134,7 +145,7 @@ class AssignmentCost(domain.AssignmentCost, ConstraintPlugin[QapContext]):
 
     def build(self, context: QapContext, objective: ObjectiveBuilder) -> None:
         costs = context.problem.assignment_costs
-        _refuse_a_signed_offset(
+        _refuse_a_signed_total(
             objective, self.name, "assignment costs", (value for row in costs or () for value in row)
         )
         if costs is None:
@@ -168,7 +179,7 @@ class FlowDistanceCost(domain.FlowDistanceCost, ConstraintPlugin[QapContext]):
     def build(self, context: QapContext, objective: ObjectiveBuilder) -> None:
         problem = context.problem
         flows, distances = problem.flows, problem.distances
-        _refuse_a_signed_offset(
+        _refuse_a_signed_total(
             objective,
             self.name,
             "flows and distances",
@@ -202,6 +213,37 @@ class FlowDistanceCost(domain.FlowDistanceCost, ConstraintPlugin[QapContext]):
         distance_span = _span(value for row in distances for value in row)
         bound = sum(abs(value) for row in flows for value in row) * distance_span
         _add(objective, self.name, terms, bound)
+
+
+def signed_objectives(problem: QuadraticAssignmentProblemModel) -> dict[str, bool]:
+    """Per objective, whether its data holds a negative entry (the engine's ``rawCostCanBeNegative``)."""
+    return {
+        AssignmentCost.name: any(value < 0 for row in problem.assignment_costs or () for value in row),
+        FlowDistanceCost.name: any(
+            value < 0 for matrix in (problem.flows, problem.distances) for row in matrix for value in row
+        ),
+    }
+
+
+def refuse_signed_objectives(objective: ObjectiveBuilder, problem: QuadraticAssignmentProblemModel) -> None:
+    """The engine's sign rule for every selected objective, before any term is built.
+
+    The engine checks it when it resets, in its calculator's order: the first
+    instance of each name in the assembly's order, then the repeats in pick
+    order. So with two such picks on hard, CP-SAT names the one the engine names.
+    """
+    signed = signed_objectives(problem)
+    order = [spec.name for spec in REGISTRY.specs]
+
+    def rank(item: tuple[int, str]) -> tuple:
+        index, key = item
+        name, _, repeat = key.partition("#")
+        return (bool(repeat), index if repeat else order.index(name))
+
+    for _index, key in sorted(enumerate(objective.selected), key=rank):
+        spec, _config = objective.selected[key]
+        if signed.get(spec.name):
+            objective.refuse_signed(key)
 
 
 # Plugin order = list_constraints() order.
