@@ -190,7 +190,7 @@ class RuleBase(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     weight: _Weight | None = Field(default=None, description="None = the constraint's default weight")
-    level: Literal["hard", "medium", "soft"] | None = Field(
+    level: Literal["hard", "soft"] | None = Field(
         default=None, description='None = the default level; "hard" or "soft" (rewards refuse "hard")'
     )
     exponent: _Exponent = Field(default=1.0, description="sign-preserving power shaping of the cost")
@@ -211,8 +211,6 @@ class RuleBase(BaseModel):
         # the level rules the C++ component declares (constraint_info()).
         spec = self.to_spec()
         row = _catalog()[spec.name]
-        if spec.level == "medium":
-            raise ValueError(f"constraint {spec.name!r}: this use case has no medium level")
         if spec.level == "hard" and row.reward:
             raise ValueError(f"constraint {spec.name!r} is a reward (raw cost <= 0) and cannot be hard")
         if spec.level is not None and spec.level != row.default_level and not row.level_flippable:

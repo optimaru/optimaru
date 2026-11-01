@@ -392,6 +392,17 @@ def test_mapping_selections_get_the_spec_knob_checks(selection, error, message) 
         resolve(SPECS, [selection])
 
 
+def test_a_pick_without_a_level_is_refused_rather_than_defaulted() -> None:
+    class OldPick:
+        name = "capacity"
+        weight = None
+        hard = False
+        exponent = 1.0
+
+    with pytest.raises(AttributeError, match="level"):
+        resolve(SPECS, [OldPick()])
+
+
 def test_server_selection_shape_and_catalog_params_round_trip() -> None:
     """{name, enabled, weight, level, exponent} with exponent 1.0 is a valid selection."""
     selected = resolve(

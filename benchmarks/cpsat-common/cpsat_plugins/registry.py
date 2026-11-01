@@ -134,7 +134,7 @@ class ConstraintConfig:
             exponent = getattr(value, "exponent", 1.0)
             exponent = 1.0 if exponent is None else exponent
             weight = getattr(value, "weight", None)
-            level = getattr(value, "level", None)
+            level = value.level  # no default: a pick without it must not fall back in silence
             _check_knobs(name, weight, level, exponent)
             _check_exponent(name, exponent)
             return cls(name=name, weight=weight, level=None if level is None else str(level))
