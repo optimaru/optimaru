@@ -223,6 +223,7 @@ def solve(
             duration,
             unassigned,
             end,
+            assigned,
             line_busy,
             cleaning_windows_by_operator,
         ),

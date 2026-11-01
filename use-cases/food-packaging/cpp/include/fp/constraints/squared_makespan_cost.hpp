@@ -16,18 +16,14 @@ namespace fp
 // exponent shapes the raw cost of a unit before the weight, and here the
 // square is the constraint's own definition, so a caller can still shape it
 // further.
-struct SquaredMakespanCost final : FpUnitConstraint
+struct SquaredMakespanCost final : detail::PerLineConstraint
 {
     static constexpr double kDefaultWeight = 1.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
 
     explicit SquaredMakespanCost(double weight = kDefaultWeight)
-        : FpUnitConstraint("squaredMakespanCost", weight, kDefaultLevel)
+        : detail::PerLineConstraint("squaredMakespanCost", weight, kDefaultLevel)
     {
-    }
-    void onReset(const PackagingSchedule &schedule) override
-    {
-        detail::requirePrepared(schedule);
     }
     double cost(const PackagingSchedule &schedule,
                 int unit,

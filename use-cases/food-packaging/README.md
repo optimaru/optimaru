@@ -63,6 +63,31 @@ to soft in both solvers (it was a no-op in the engine and landed on medium in CP
 `constraint_costs()` is the one per-constraint surface. Raw costs and the default score
 are unchanged.
 
+**0.3.0:** every constraint takes two more knobs, `offset` and `clip` (keyword-only), and
+may be picked several times. A raw cost `x` (per line for the three per-line constraints,
+on the one total for the two globals) is shaped as `sign(x) * max(0, |x| - offset) **
+exponent` (`clip=True`, the default) or `(x - offset) ** exponent`, sign-preserving
+(`clip=False`, which charges every unit the constraint evaluates, a raw 0 included, and
+acts as a reward below the offset); `offset=0` is the 0.2.0 shaping. The per-line
+constraints evaluate the packaging lines, an empty one included, and never the unassigned
+pool list (it is no line; their `constraint_costs()` entries list the lines as `"units"`).
+Each pick is its own instance with its own knobs, and the instances add up:
+
+```python
+fp.solve(schedule, constraints=[
+    MaxEndTimeCost(),                         # 1 hard per minute late
+    MaxEndTimeCost(exponent=2, offset=30),    # + (minutes beyond 30)^2 per line
+    AfterIdealEndTimeCost(),
+    SquaredMakespanCost(),
+    OperatorCleaningConflictCost(),
+    UnassignedJobsCost(),
+])
+```
+
+`fp.constraint_costs(schedule, picks)` keys the second pick `max_end_time_cost#2`. The
+CP-SAT reference takes integral offsets on every constraint (one term per line, or per
+global total).
+
 ## Build/run
 
 ```sh

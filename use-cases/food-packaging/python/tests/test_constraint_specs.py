@@ -3,7 +3,7 @@
 Spot checks of individual constraint values live in `test_constraints.py` and the C++
 tests (one hand-calculated positive and zero case per constraint). This file covers the
 selection path that picks "which constraints are on", the catalog (`constraint_info()`),
-the three knobs and the medium level.
+the five knobs, repeated picks and the medium level.
 """
 
 import pickle
@@ -18,6 +18,7 @@ from food_packaging.constraints import (
     AfterIdealEndTimeCost,
     Constraint,
     MaxEndTimeCost,
+    OperatorCleaningConflictCost,
     SquaredMakespanCost,
     UnassignedJobsCost,
     after_ideal_end_time_cost,
@@ -410,9 +411,18 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     """The C++ side guards too: a duck-typed pick cannot smuggle a negative weight in."""
     negative = SimpleNamespace(name="max_end_time_cost", weight=-2.0, hard=None, exponent=1.0)
     flat = SimpleNamespace(name="max_end_time_cost", weight=None, hard=None, exponent=0.0)
-    for pick, message in ((negative, "weight must be finite and >= 0"), (flat, "exponent must be finite and > 0")):
+    unbounded = SimpleNamespace(name="max_end_time_cost", weight=None, hard=None, exponent=1.0, offset=float("inf"))
+    for pick, message in (
+        (negative, "weight must be finite and >= 0"),
+        (flat, "exponent must be finite and > 0"),
+        (unbounded, "offset must be finite, not inf"),
+    ):
         with pytest.raises(ValueError, match=message):
             fp.solve(build_schedule(), time_limit_seconds=0.1, constraints=[pick])
+        with pytest.raises(ValueError, match=message):
+            fp.constraint_costs(build_schedule(), [pick])
+    with pytest.raises(ValueError, match="offset must be finite, not nan"):
+        MaxEndTimeCost(offset=float("nan"))
 
 
 @pytest.mark.parametrize(
@@ -422,6 +432,10 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
         ({"hard": 1}, "hard must be True, False or None, not 1"),
         ({"hard": "x"}, "hard must be True, False or None, not 'x'"),
         ({"exponent": True}, "exponent must be a number, not True"),
+        ({"offset": "5"}, "offset must be a number, not '5'"),
+        ({"offset": False}, "offset must be a number, not False"),
+        ({"clip": 1}, "clip must be True or False, not 1"),
+        ({"clip": "no"}, "clip must be True or False, not 'no'"),
     ],
 )
 def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
@@ -453,3 +467,227 @@ def test_old_names_are_gone(old):
         fp.solve(build_schedule(), time_limit_seconds=0.05, constraints=[pick])
     with pytest.raises(ValueError, match="unknown constraint"):
         score(fp.constraint_costs(build_schedule()), [pick])
+
+
+# --- 0.3.0: repeated picks and the offset / clip knobs ------------------------------
+#
+# The hand instance is _hand_schedule(): line 0 runs J0 0..200 (ideal 200) and J1
+# 200..350 (ideal 250), line 1 is empty, a 50-minute job waits in the unassigned pool
+# list (where a zero-budget solve leaves it). Raw per unit (line 0, line 1, the pool): after_ideal_end_time_cost [100, 0, 0],
+# squared_makespan_cost [350^2, 0, 0], max_end_time_cost [0, 0, 0]; the globals
+# unassigned_jobs_cost [50] and operator_cleaning_conflict_cost [0]. The per-line
+# constraints evaluate the two lines (an empty one included), never the pool.
+
+
+def _hand_schedule():
+    schedule = _schedule([[(PA_S, 200, 200), (PA_S, 150, 250)], []], loose_jobs=[(PB, 50)])
+    schedule.unassigned_jobs = [2]
+    return schedule
+
+
+def _layout(schedule):
+    return [list(line.jobs) for line in schedule.lines], list(schedule.unassigned_jobs)
+
+
+def _zero_budget(schedule, picks):
+    """The engine's score of `schedule` under `picks`: a solve with no time keeps it as it is."""
+    before = _layout(schedule)
+    config = fp.SolverConfig()
+    config.spent_limit_seconds = 0
+    fp.Solver(config).solve_with_constraints(schedule, picks)
+    assert _layout(schedule) == before
+    return _engine(schedule.score)
+
+
+REPEAT = [SquaredMakespanCost(), SquaredMakespanCost(weight=0.5, exponent=0.5)]
+
+
+def test_naming_a_constraint_twice_scores_both_picks():
+    """Since 0.3.0 a constraint may be picked several times: each pick is scored on its own.
+
+    The later pick no longer wins in silence, nor is it an error: both are
+    instances with their own knobs, and they add up."""
+    picks = [UnassignedJobsCost(), SquaredMakespanCost(weight=10), SquaredMakespanCost()]
+    assert _zero_budget(_hand_schedule(), picks) == (0, -50 * MEDIUM_UNIT - 11 * 350**2)
+    assert get_constraints([MaxEndTimeCost(), MaxEndTimeCost()]) == [MaxEndTimeCost(), MaxEndTimeCost()]
+    schedule = build_schedule()
+    fp.solve(schedule, time_limit_seconds=0.3, random_seed=1, constraints=[*get_constraints(), *REPEAT])
+    assert score(fp.constraint_costs(schedule), [*get_constraints(), *REPEAT]) == pytest.approx(_engine(schedule.score))
+
+
+def test_a_repeated_pick_by_hand():
+    """The squared makespan plus half its square root per line: 350^2 + 0.5 x 350 = 122675."""
+    raw = fp.constraint_costs(_hand_schedule(), REPEAT)
+    assert list(raw) == ["squared_makespan_cost", "squared_makespan_cost#2"]
+    first, second = raw.values()
+    assert first["costs"] == second["costs"] == [122500.0, 0.0, 0.0]
+    assert first["units"] == second["units"] == [0, 1]  # the lines, not the pool
+    assert (first["weight"], first["exponent"], second["weight"], second["exponent"]) == (1.0, 1.0, 0.5, 0.5)
+    assert first["name"] == second["name"] == "squared_makespan_cost"
+    assert second["default_weight"] == 1.0
+    assert second["medium_fold"] == {"kind": "into_soft", "unit": float(MEDIUM_UNIT)}
+    expected = (0, -(350**2 + 0.5 * 350))
+    assert expected == (0, -122675.0)
+    assert score(raw, REPEAT) == expected
+    # The default costs hold the name once; the second pick reads the same raw costs.
+    assert score(fp.constraint_costs(_hand_schedule()), REPEAT) == expected
+    assert _zero_budget(_hand_schedule(), REPEAT) == expected
+
+
+def test_identical_picks_count_twice():
+    picks = [AfterIdealEndTimeCost(), AfterIdealEndTimeCost()]
+    assert score(fp.constraint_costs(_hand_schedule()), picks) == (0, -200 * MEDIUM_UNIT)
+    assert _zero_budget(_hand_schedule(), picks) == (0, -200 * MEDIUM_UNIT)
+    assert list(fp.constraint_costs(_hand_schedule(), picks)) == [
+        "after_ideal_end_time_cost",
+        "after_ideal_end_time_cost#2",
+    ]
+
+
+def test_the_keys_follow_the_pick_order_of_each_name():
+    picks = [
+        SquaredMakespanCost(weight=1),
+        UnassignedJobsCost(),
+        SquaredMakespanCost(weight=2),
+        MaxEndTimeCost(),
+        SquaredMakespanCost(weight=3),
+    ]
+    raw = fp.constraint_costs(_hand_schedule(), picks)
+    assert {key: entry["weight"] for key, entry in raw.items()} == {
+        "max_end_time_cost": 1.0,
+        "squared_makespan_cost": 1.0,
+        "squared_makespan_cost#2": 2.0,
+        "squared_makespan_cost#3": 3.0,
+        "unassigned_jobs_cost": 1.0,
+    }
+    assert [key for key in raw if key.startswith("squared")] == [
+        "squared_makespan_cost",
+        "squared_makespan_cost#2",
+        "squared_makespan_cost#3",
+    ]
+    expected = (0, -50 * MEDIUM_UNIT - 6 * 350**2)
+    assert score(raw, picks) == expected
+    assert _zero_budget(_hand_schedule(), picks) == expected
+
+
+def test_a_repeated_medium_pick_adds_up():
+    """Both instances stay on the medium level (folded at 10^10); a promoted repeat goes hard."""
+    picks = [AfterIdealEndTimeCost(), AfterIdealEndTimeCost(weight=2)]
+    assert score(fp.constraint_costs(_hand_schedule()), picks) == (0, -300 * MEDIUM_UNIT)
+    schedule = _hand_schedule()
+    _zero_budget(schedule, picks)
+    assert (schedule.score.hard, schedule.score.medium, schedule.score.soft) == (0, -300, 0)
+    mixed = [AfterIdealEndTimeCost(), AfterIdealEndTimeCost(hard=True), AfterIdealEndTimeCost(hard=False, offset=40)]
+    assert score(fp.constraint_costs(_hand_schedule(), mixed), mixed) == (-100, -100 * MEDIUM_UNIT - 60)
+    schedule = _hand_schedule()
+    _zero_budget(schedule, mixed)
+    assert (schedule.score.hard, schedule.score.medium, schedule.score.soft) == (-100, -100, -60)
+
+
+@pytest.mark.parametrize(
+    ("pick", "expected"),
+    [
+        # Per line: line 0 at 350^2, line 1 empty (raw 0, evaluated, so charged in literal mode).
+        (SquaredMakespanCost(offset=22500), (0, -100000.0)),
+        (SquaredMakespanCost(offset=22500, clip=False), (0, -(100000.0 - 22500))),  # the empty line is rewarded
+        (SquaredMakespanCost(offset=200000), (0, 0.0)),
+        (SquaredMakespanCost(offset=200000, clip=False), (0, -(-77500.0 - 200000))),
+        (SquaredMakespanCost(offset=-1), (0, -122501.0)),  # a negative offset adds to every non-zero line
+        (SquaredMakespanCost(offset=-1, clip=False), (0, -122502.0)),  # ...or to every line
+        (SquaredMakespanCost(offset=122000, exponent=2), (0, -(500.0**2))),
+        (AfterIdealEndTimeCost(offset=40), (0, -60 * MEDIUM_UNIT)),
+        (AfterIdealEndTimeCost(offset=40, clip=False), (0, -20 * MEDIUM_UNIT)),  # 60 + (0 - 40)
+        (AfterIdealEndTimeCost(offset=150, clip=False, hard=True), (200, 0.0)),  # (100 - 150) + (0 - 150)
+        (MaxEndTimeCost(offset=1, clip=False), (2, 0.0)),  # two lines, not the pool: a hard reward
+        (MaxEndTimeCost(weight=3, offset=0.5, clip=False), (4, 0.0)),  # -1.5 -> -2 per line
+        # The globals' totals are shaped once.
+        (UnassignedJobsCost(offset=20, exponent=2), (0, -900 * MEDIUM_UNIT)),  # (50 - 20)^2
+        (UnassignedJobsCost(offset=80, clip=False), (0, 30 * MEDIUM_UNIT)),
+        (OperatorCleaningConflictCost(offset=5, clip=False), (5, 0.0)),
+        (OperatorCleaningConflictCost(offset=5), (0, 0.0)),
+    ],
+)
+def test_offsets_by_hand_on_both_paths(pick, expected):
+    """threshold sign(x) max(0, |x| - offset)^e and literal (x - offset)^e: Python mirror == engine == hand."""
+    assert score(fp.constraint_costs(_hand_schedule()), [pick]) == expected
+    raw = fp.constraint_costs(_hand_schedule(), [pick])
+    entry = next(iter(raw.values()))
+    assert (entry["offset"], entry["clip"]) == (float(pick.offset), pick.clip)
+    assert score(raw, [pick]) == expected
+    assert _zero_budget(_hand_schedule(), [pick]) == expected
+
+
+def test_the_per_line_constraints_evaluate_the_lines_and_not_the_pool():
+    """Every per-line entry lists the lines as its "units"; the literal offset charges exactly
+    those (2 x 2 hard on an all-zero max_end_time_cost), never the pool's cell."""
+    raw = fp.constraint_costs(_hand_schedule())
+    for name, entry in raw.items():
+        if entry["global"]:
+            assert "units" not in entry and len(entry["costs"]) == 1, name
+        else:
+            assert entry["units"] == [0, 1], name
+            assert len(entry["costs"]) == 3 and entry["costs"][2] == 0.0, name
+    pick = MaxEndTimeCost(offset=2, clip=False)
+    assert raw["max_end_time_cost"]["costs"] == [0.0, 0.0, 0.0]
+    assert score(raw, [pick]) == (4, 0.0)
+    assert _zero_budget(_hand_schedule(), [pick]) == (4, 0.0)
+
+
+def test_offset_zero_reproduces_the_0_2_0_scores():
+    """offset 0 is the plain shaping in both modes, so every 0.2.0 selection scores the same."""
+    plain = [*get_constraints()[:-1], UnassignedJobsCost(exponent=2)]
+    shifted = [type(spec)(exponent=spec.exponent, offset=0.0, clip=False) for spec in plain]
+    raw, solved = _raw()
+    assert score(raw, shifted) == score(raw, plain)
+    engines = [_zero_budget(solved, picks) for picks in (plain, shifted)]
+    assert engines[0] == engines[1] == pytest.approx(score(raw, plain))
+    for entry in raw.values():
+        assert (entry["offset"], entry["clip"]) == (0.0, True)
+
+
+SELECTIONS = {
+    "repeat": [*get_constraints(), *REPEAT, AfterIdealEndTimeCost(weight=2, exponent=2)],
+    "repeat-and-offsets": [
+        MaxEndTimeCost(),
+        MaxEndTimeCost(weight=1, offset=1, clip=False),
+        AfterIdealEndTimeCost(),
+        AfterIdealEndTimeCost(offset=30, exponent=2),
+        AfterIdealEndTimeCost(offset=-5, clip=False, hard=False, weight=3),
+        SquaredMakespanCost(offset=10000),
+        SquaredMakespanCost(offset=40000, clip=False, weight=0.25),
+        OperatorCleaningConflictCost(),
+        OperatorCleaningConflictCost(offset=3, clip=False, weight=2),
+        UnassignedJobsCost(),
+        UnassignedJobsCost(offset=-10, hard=False),
+    ],
+}
+
+
+@pytest.mark.parametrize("picks", list(SELECTIONS.values()), ids=list(SELECTIONS))
+def test_score_matches_the_engine_for_repeats_and_offsets(picks):
+    raw, solved = _raw()
+    engine = _zero_budget(solved, picks)
+    python = score(fp.constraint_costs(solved, picks), picks)
+    assert python.hard == engine[0]
+    assert python.soft == pytest.approx(engine[1])
+    assert score(raw, picks) == python  # the default costs score the repeats too
+
+
+@pytest.mark.parametrize("picks", list(SELECTIONS.values()), ids=list(SELECTIONS))
+def test_full_assert_solves_with_repeats_and_offsets(picks):
+    """FULL_ASSERT re-checks the incremental score against a full recompute after every move."""
+    schedule = fp.generate_demo_data(line_count=3, job_count=12)
+    config = fp.SolverConfig()
+    config.full_assert = True
+    config.random_seed = 3
+    config.parallel_solver_count = 1
+    config.step_count_limit = 2000
+    config.spent_limit_seconds = 30
+    fp.Solver(config).solve_with_constraints(schedule, picks)
+    raw = fp.constraint_costs(schedule, picks)
+    assert len(raw) == len(picks)
+    python = score(raw, picks)
+    engine = _engine(schedule.score)
+    assert python.hard == engine[0]
+    assert python.soft == pytest.approx(engine[1])
+    assert score(fp.constraint_costs(schedule), picks) == python
