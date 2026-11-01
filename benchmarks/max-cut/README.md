@@ -17,15 +17,17 @@ of its per-side costs; 0 exactly when the engine reports no violation, `-cut` fo
 the `cut_weight_cost` reward), and that the CP-SAT optimum equals the brute-force
 optimum of the engine's score, per constraint and for the default set.
 Exponents other than 1 and fractional weights are not supported on CP-SAT (they
-raise `ValueError`); `cut_weight_cost` with `level="hard"` is refused as in the
-engine.
+raise `ValueError`); `level="soft"` / `level="hard"` moves a term to the soft / hard
+level in both solvers, `level="medium"` is refused by both (`this use case has no medium
+level`), and `cut_weight_cost` with `level="hard"` is refused as in the engine.
 
 **0.3.0:** a constraint may be picked several times (as specs or as
-`{"name", "weight", "hard", "offset", "clip"}` mappings); each pick builds its own terms with
-its own knobs. The four unit constraints add one term per side (side 0 and side 1, a side
-of raw 0 included) and the imbalance and the cut one term for their total, so an integral
-`offset` shapes each side (or the total) exactly as the engine does in both `clip` modes;
-a fractional offset is refused (`offset must be an integer for CP-SAT`).
+`{"name", "weight", "level", "offset", "clip"}` mappings); each pick builds its own terms with
+its own knobs, its level included. The four unit constraints add one term per side (side 0
+and side 1, a side of raw 0 included) and the imbalance and the cut one term for their
+total, so an integral `offset` shapes each side (or the total) exactly as the engine does
+in both `clip` modes; a fractional offset is refused (`offset must be an integer for
+CP-SAT`).
 
 ```sh
 cd benchmarks/max-cut/cpsat

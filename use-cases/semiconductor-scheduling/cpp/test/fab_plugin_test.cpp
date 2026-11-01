@@ -11,10 +11,11 @@
 //       case per constraint
 //   (h) the catalog: info() == the components' kDefaultWeight / kDefaultLevel
 //   (i) repeated components and the offset / clip knobs: a hand-calculated
-//       repeat, threshold and literal offsets by hand on the totals (a raw 0
-//       counts in literal mode), incremental == a fresh recompute over
-//       random walks (every repeat reads the calculator's one shared schedule
-//       view) and FULL_ASSERT solves with repeated, shifted components
+//       repeat, a repeat on its own level (hard next to the soft default),
+//       threshold and literal offsets by hand on the totals (a raw 0 counts
+//       in literal mode), incremental == a fresh recompute over random walks
+//       (every repeat reads the calculator's one shared schedule view) and
+//       FULL_ASSERT solves with repeated, shifted components on both levels
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -458,6 +459,23 @@ void verifyRepeatsAndOffsets()
         ConstraintAssembly twice = copyOf("machineCapacityCost");
         twice.addInstances(copyOf("machineCapacityCost"));
         check(scoreOf(std::move(twice), s).hard == -4, "(i) identical picks count twice: 2 x 2");
+    }
+    {
+        // Each instance on its own level: the soft makespan 17 next to a hard
+        // repeat, 2 x (17 - 15) beyond its offset.
+        ConstraintAssembly assembly = copyOf("makespanCost");
+        assembly.addInstances(std::move(
+            copyOf("makespanCost").hard("makespanCost").weight("makespanCost", 2.0).offset("makespanCost", 15.0)));
+        DecomposedCalculator calculator;
+        assembly.into(calculator);
+        SemiconductorSchedule copy = s;
+        const Score score = scoreWith(calculator, copy);
+        check(score.hard == -4 && score.soft == -17.0,
+              "(i) soft makespan + a hard repeat beyond 15: -4 hard / -17 soft");
+        const auto entries = calculator.constraintCosts();
+        check(entries.size() == 2 && entries[0].level == optimaru::Level::Soft
+                  && entries[1].level == optimaru::Level::Hard && entries[1].defaultLevel == optimaru::Level::Soft,
+              "(i) the repeat reports its own level, the default stays soft");
     }
     check(scoreOf(copyOf("makespanCost").offset("makespanCost", 10.0), s).soft == -7.0,
           "(i) threshold offset 10 on the makespan 17: -7");

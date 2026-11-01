@@ -26,7 +26,8 @@ Every spec takes five knobs:
                reports them. The problem carries no weights.
 - ``level``    ``None`` = the default level, otherwise ``Level.HARD`` or
                ``Level.SOFT`` (or the names ``"hard"`` and ``"soft"``). This use
-               case has no medium level.
+               case has no medium level: ``level="medium"`` raises ValueError.
+               (``level`` replaced the ``hard`` knob; ``hard=`` raises TypeError.)
 - ``exponent`` sign-preserving power shaping of the constraint's TOTAL raw cost:
                ``weight * total ** exponent`` (every constraint is global; 0.1.x shaped
                each item — a lot, a pair, a window — before summing).
@@ -37,8 +38,8 @@ Every spec takes five knobs:
                included — lowers the penalty.
 
 The same constraint may be picked several times; each pick is scored on its own with
-its own knobs and the picks add up. The makespan plus a steep penalty on every minute
-beyond 480::
+its own knobs (its level included) and the picks add up. The makespan plus a steep
+penalty on every minute beyond 480::
 
     fab.solve(problem, constraints=[
         *get_constraints()[:-1],
@@ -507,6 +508,6 @@ def score(costs: dict, constraints: list[Constraint] | None = None) -> Score:
     The arithmetic matches the engine: ``weight * shape(total, exponent, offset, clip)`` per
     constraint, hard contributions rounded per constraint (half away from zero). A second
     pick of a constraint reads the same raw total with its own knobs. Unknown names raise
-    ValueError.
+    ValueError, and so does ``level="medium"`` (no medium level here).
     """
     return score_costs(costs, get_constraints(constraints))

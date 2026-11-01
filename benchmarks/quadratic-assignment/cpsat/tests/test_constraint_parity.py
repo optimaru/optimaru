@@ -21,12 +21,13 @@ from itertools import permutations
 
 import pytest
 from ortools.sat.python import cp_model
-from quadratic_assignment import constraint_costs, constraint_info, list_constraints
+from quadratic_assignment import Solver, SolverConfig, constraint_costs, constraint_info, list_constraints
 from quadratic_assignment import solve as engine_solve
 from quadratic_assignment.constraints import (
     AssignmentCost,
     FlowDistanceCost,
     ForbiddenAssignmentsCost,
+    Level,
     LocationCapacityCost,
     PinnedAssignmentsCost,
     get_constraints,
@@ -322,13 +323,39 @@ SELECTIONS = {
         FlowDistanceCost(offset=-5),
     ],
     "identical-twice": [LocationCapacityCost(), LocationCapacityCost(), AssignmentCost()],
+    # Each pick on its own level: a soft literal repeat of the hard pins, the capacity on soft
+    # with a hard threshold repeat, the soft direct cost promoted to hard (literal) next to a
+    # soft threshold repeat, a soft forbidden repeat and the flow on both levels.
+    "levels": [
+        PinnedAssignmentsCost(),
+        PinnedAssignmentsCost(level="soft", weight=3, offset=1, clip=False),
+        LocationCapacityCost(level=Level.SOFT, weight=2),
+        LocationCapacityCost(level="hard", offset=1),
+        AssignmentCost(level="hard", weight=2, offset=8, clip=False),
+        AssignmentCost(level=Level.SOFT, offset=3),
+        ForbiddenAssignmentsCost(level="soft", offset=-1),
+        FlowDistanceCost(),
+        FlowDistanceCost(level=Level.HARD, offset=60),
+    ],
 }
+
+
+def _engine_score(core, selection) -> dict:
+    """The engine's own score of the core's assignment: a zero-budget warm start keeps it."""
+    config = SolverConfig()
+    config.spent_limit_seconds = 0
+    core.warm_start = True
+    kept = core.assignment()
+    Solver(config).solve_with_constraints(core, selection)
+    assert core.assignment() == kept
+    return {"hard": core.score.hard, "soft": core.score.soft}
 
 
 @pytest.mark.parametrize("selection", list(SELECTIONS.values()), ids=list(SELECTIONS))
 def test_the_cpsat_terms_equal_the_engine_on_every_permutation(selection):
     """Pin each of the 120 permutations of EVERYTHING: the CP-SAT objective's per-level value is
-    the engine's score of that permutation under the same repeated / shifted picks, exactly. The
+    the engine's score of that permutation under the same repeated / shifted picks (its own and
+    the score() mirror's), exactly. The
     side constraints are scoped (not every location is fixed, forbidden or capacitated), so a
     literal offset matches only when CP-SAT adds terms for exactly the engine's locations."""
     built = build(Model.model_validate(EVERYTHING), selection)
@@ -349,6 +376,7 @@ def test_the_cpsat_terms_equal_the_engine_on_every_permutation(selection):
         assert solver.solve(model) == cp_model.OPTIMAL
         core = _assigned(EVERYTHING, perm).to_core()
         engine = score(constraint_costs(core, selection), selection)
+        assert _engine_score(core, selection) == {"hard": engine.hard, "soft": engine.soft}, perm
         assert built.objective.score(solver) == {"hard": engine.hard, "soft": engine.soft}, perm
         # Re-pricing the default costs (each name once) gives the same per instance key.
         assert built.objective.score_costs(constraint_costs(core)) == {"hard": engine.hard, "soft": engine.soft}
@@ -363,12 +391,40 @@ def test_repeated_and_shifted_picks_reach_the_brute_force_optimum(selection):
 
 
 def test_mapping_selections_repeat_and_shift_like_specs():
-    """The server's {name, weight, offset, clip} dicts pick the same instances as specs."""
+    """The server's {name, weight, level, offset, clip} dicts pick the same instances as specs."""
     specs = [FlowDistanceCost(), FlowDistanceCost(weight=3, offset=20, clip=False)]
     dicts = [{"name": "flow_distance_cost"}, {"name": "flow_distance_cost", "weight": 3, "offset": 20, "clip": False}]
     by_specs = solve(Model.model_validate(SIDE), time_limit_seconds=5, constraints=specs)
     assert solve(Model.model_validate(SIDE), time_limit_seconds=5, constraints=dicts) == by_specs
     assert (by_specs.score_hard, by_specs.score_soft) == (0, -(22 + 3 * (22 - 20)))  # the identity: 22 < 23
+    # With a level per pick: the direct cost beyond 10 on hard rules the identity out (15 vs 3),
+    # and the soft literal pin earns 2 x (0 - 1) on L1 <- F2: -(23 + 3 x 3) + 2.
+    specs = [
+        *specs,
+        AssignmentCost(level="hard", offset=10),
+        PinnedAssignmentsCost(level="soft", weight=2, offset=1, clip=False),
+    ]
+    dicts = [
+        *dicts,
+        {"name": "assignment_cost", "level": "hard", "offset": 10},
+        {"name": "pinned_assignments_cost", "weight": 2, "level": "soft", "offset": 1, "clip": False},
+    ]
+    by_specs = solve(Model.model_validate(SIDE), time_limit_seconds=5, constraints=specs)
+    assert solve(Model.model_validate(SIDE), time_limit_seconds=5, constraints=dicts) == by_specs
+    assert (by_specs.score_hard, by_specs.score_soft) == (0, -(23 + 3 * (23 - 20)) + 2)
+
+
+@pytest.mark.parametrize("level", ["medium", Level.MEDIUM])
+def test_medium_is_refused_like_the_engine(level):
+    """The domain has no medium level: CP-SAT refuses the pick, a repeat too, in the engine's words."""
+    message = "constraint 'location_capacity_cost': this use case has no medium level"
+    for picks in (
+        [LocationCapacityCost(level=level)],
+        [LocationCapacityCost(), LocationCapacityCost(level=level)],
+        [{"name": "location_capacity_cost"}, {"name": "location_capacity_cost", "level": "medium"}],
+    ):
+        with pytest.raises(ValueError, match=message):
+            solve(Model.model_validate(SIDE), time_limit_seconds=1, constraints=picks)
 
 
 def test_a_fractional_offset_is_refused_by_cpsat():

@@ -1,4 +1,8 @@
-"""knapsack.constraints — an API for picking the cost function declaratively."""
+"""knapsack.constraints — an API for picking the cost function declaratively.
+
+"Which constraints are on", the catalog, the five knobs (the level included) and repeated
+picks are covered here.
+"""
 
 import pickle
 import re
@@ -7,11 +11,13 @@ from types import SimpleNamespace
 import pytest
 
 import knapsack
+from knapsack._constraint import instance_keys
 from knapsack.constraints import (
     Constraint,
     ForbiddenItemsCost,
     ItemDependencyCost,
     KnapsackCapacityCost,
+    Level,
     MandatoryItemsCost,
     ResourceCapacityCost,
     SelectedValueCost,
@@ -265,9 +271,10 @@ def test_reweighting_scales_only_that_term():
     assert knapsack.calculate_score(problem, heavier) == (-11, 5.0)
 
 
-def test_the_reward_refuses_hard_true_on_every_path():
+@pytest.mark.parametrize("level", ["hard", Level.HARD])
+def test_the_reward_refuses_level_hard_on_every_path(level):
     """selected_value_cost is a reward (raw <= 0): level="hard" raises, in Python and through C++."""
-    pick = SelectedValueCost(level="hard")  # the spec itself is a plain value
+    pick = SelectedValueCost(level=level)  # the spec itself is a plain value
     problem = extended()
     with pytest.raises(ValueError, match="is a reward"):
         score(knapsack.constraint_costs(problem), [pick])
@@ -275,6 +282,8 @@ def test_the_reward_refuses_hard_true_on_every_path():
         knapsack.calculate_score(problem, [pick])
     with pytest.raises(ValueError, match="is a reward"):
         knapsack.solve(problem, time_limit_seconds=0, constraints=[pick])
+    with pytest.raises(ValueError, match="is a reward"):
+        knapsack.constraint_costs(problem, [pick])
     duck = SimpleNamespace(name="selected_value_cost", weight=None, level="hard", exponent=1.0)
     with pytest.raises(ValueError, match="'selected_value_cost' is a reward"):
         knapsack.Solver(_zero()).solve_with_constraints(problem.to_core(), [duck])
@@ -291,7 +300,9 @@ def test_the_reward_refuses_hard_true_on_every_path():
         ({"weight": "2"}, TypeError),
         ({"exponent": 0}, ValueError),
         ({"exponent": -1.0}, ValueError),
-        ({"hard": 1}, TypeError),
+        ({"level": 1}, TypeError),
+        ({"level": "firm"}, ValueError),
+        ({"hard": True}, TypeError),  # the removed knob is an unknown keyword
     ],
 )
 def test_specs_validate_their_knobs(kwargs, error):
@@ -600,8 +611,15 @@ def test_offset_zero_reproduces_the_0_2_0_scores():
             SelectedValueCost(offset=20, clip=False),
             SelectedValueCost(weight=0.1, exponent=2, offset=5),
         ],
+        [
+            *get_constraints(),
+            KnapsackCapacityCost(level="soft", weight=1.5, offset=1, clip=False),
+            ForbiddenItemsCost(level=Level.SOFT, weight=2, offset=-1),
+            ItemDependencyCost(level="soft", exponent=2, offset=1),
+            SelectedValueCost(level="soft", weight=0.5, offset=3, clip=False),
+        ],
     ],
-    ids=["repeat", "repeat-and-offsets"],
+    ids=["repeat", "repeat-and-offsets", "repeats-on-other-levels"],
 )
 def test_full_assert_solves_with_repeats_and_offsets(picks):
     """FULL_ASSERT re-checks the incremental score against a full recompute after every move."""
@@ -621,6 +639,88 @@ def test_full_assert_solves_with_repeats_and_offsets(picks):
     assert score(knapsack.constraint_costs(core), picks) == python  # the default costs score the repeats too
 
 
-def test_medium_is_refused_where_there_is_no_medium_level():
-    with pytest.raises(ValueError, match="this use case has no medium level"):
-        solved([KnapsackCapacityCost(level="medium")])
+# --- Levels: hard and soft, each pick (a repeat included) on the level it names ------
+
+
+@pytest.mark.parametrize(
+    ("picks", "expected"),
+    [
+        ([ResourceCapacityCost(level="soft")], (0, -5.0)),
+        ([MandatoryItemsCost(level=Level.SOFT, weight=2)], (0, -6.0)),
+        ([KnapsackCapacityCost(level="soft", offset=1, clip=False)], (0, 1.0)),  # a raw 0 - 1, on soft
+        ([ForbiddenItemsCost(level=Level.HARD)], (0, 0.0)),  # the default level, named
+        ([SelectedValueCost(level=Level.SOFT)], (0, 16.0)),  # the reward's own level, named
+        # A repeat carries its own level and shaping. Hard: the resource overflow 5 and the
+        # mandatory misses beyond 1 (3 - 1). Soft: 3 x (5 - 1) on the literal resource repeat,
+        # the 3 misses, the value 16 and 2 x (16 - 10) beyond the reward's threshold:
+        # -12 - 3 + 16 + 12.
+        (
+            [
+                ResourceCapacityCost(),
+                ResourceCapacityCost(level="soft", weight=3, offset=1, clip=False),
+                MandatoryItemsCost(level="soft"),
+                MandatoryItemsCost(level=Level.HARD, offset=1),
+                SelectedValueCost(),
+                SelectedValueCost(weight=2, offset=10),
+            ],
+            (-7, 13.0),
+        ),
+    ],
+)
+def test_levels_by_hand_on_both_paths(picks, expected):
+    """A pick's level moves its term, with the weight in units of that level: engine == mirror == hand."""
+    problem = shifted()
+    assert score(knapsack.constraint_costs(problem), picks) == expected
+    raw = knapsack.constraint_costs(problem, picks)
+    for pick, key in zip(picks, instance_keys(picks), strict=True):
+        assert raw[key]["level"] == (pick.level or raw[key]["default_level"]), key
+        assert raw[key]["hard"] == (raw[key]["level"] == "hard"), key
+    assert score(raw, picks) == expected
+    assert knapsack.calculate_score(problem, picks) == expected
+    engine = engine_solve(problem, picks)
+    assert engine.assignment() == problem.to_core().assignment()
+    assert (engine.score.hard, engine.score.soft) == expected
+
+
+@pytest.mark.parametrize("level", ["medium", Level.MEDIUM])
+def test_medium_is_refused_without_a_medium_level(level):
+    """The domain has no medium level: every path refuses the pick before scoring, a repeat too."""
+    message = "constraint 'knapsack_capacity_cost': this use case has no medium level"
+    pick = KnapsackCapacityCost(level=level)  # the spec cannot know the domain
+    for picks in ([pick], [KnapsackCapacityCost(), pick]):
+        with pytest.raises(ValueError, match=message):
+            engine_solve(shifted(), picks)
+        with pytest.raises(ValueError, match=message):
+            solved(picks)
+        with pytest.raises(ValueError, match=message):
+            knapsack.constraint_costs(shifted(), picks)
+        with pytest.raises(ValueError, match=message):
+            score(knapsack.constraint_costs(shifted()), picks)
+        with pytest.raises(ValueError, match=message):
+            knapsack.calculate_score(shifted(), picks)
+    # The reward is refused the same way, before its reward rule is looked at.
+    reward = [SelectedValueCost(), SelectedValueCost(level=level)]
+    message = "constraint 'selected_value_cost': this use case has no medium level"
+    with pytest.raises(ValueError, match=message):
+        engine_solve(shifted(), reward)
+    with pytest.raises(ValueError, match=message):
+        score(knapsack.constraint_costs(shifted()), reward)
+
+
+def test_a_level_must_be_a_level():
+    with pytest.raises(TypeError, match="level must be a Level"):
+        MandatoryItemsCost(level=True)
+    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft', not 'firm'"):
+        MandatoryItemsCost(level="firm")
+    pick = SimpleNamespace(name="mandatory_items_cost", weight=None, level="firm", exponent=1.0)
+    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft', not 'firm'"):
+        engine_solve(shifted(), [MandatoryItemsCost(), pick])
+
+
+def test_the_knob_was_renamed():
+    """0.3.0 replaced hard=True / hard=False by level="hard" / level="soft"; hard= is unknown."""
+    with pytest.raises(TypeError):
+        MandatoryItemsCost(hard=True)
+    with pytest.raises(TypeError):
+        ForbiddenItemsCost(weight=None, hard=False)
+    assert MandatoryItemsCost(level="soft") == MandatoryItemsCost(level=Level.SOFT)

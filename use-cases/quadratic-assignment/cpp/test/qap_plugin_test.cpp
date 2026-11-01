@@ -20,11 +20,12 @@
 //   (i) the catalog: info() off the default assembly == the components'
 //       kDefaultWeight / kDefaultLevel; the knob guards
 //   (j) repeated components and the offset / clip knobs: a hand-calculated
-//       repeat, threshold and literal offsets by hand per location and on
-//       the totals, the scoped side constraints charging only their
-//       evaluated locations ("units"), incremental == a fresh recompute
-//       over a random walk (accepted and undone moves) and a FULL_ASSERT
-//       solve with repeated, shifted components
+//       repeat, a repeat on its own level (soft next to the hard default),
+//       threshold and literal offsets by hand per location and on the
+//       totals, the scoped side constraints charging only their evaluated
+//       locations ("units"), incremental == a fresh recompute over a random
+//       walk (accepted and undone moves) and a FULL_ASSERT solve with
+//       repeated, shifted components on both levels
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -551,7 +552,9 @@ Score scoreOf(ConstraintAssembly assembly, QuadraticAssignmentProblem p)
 
 // Every kind repeated or shifted at least once: the two delta units, the
 // full re-cost unit, both member-change globals; literal and threshold,
-// negative offsets, a fractional hard weight.
+// negative offsets, a fractional hard weight; and repeats on the other level
+// than their default: the flow promoted to hard, the forbidden rows demoted
+// to soft (literal, over their scope).
 ConstraintAssembly repeatedAssembly()
 {
     ConstraintAssembly assembly = defaultConstraints();
@@ -578,6 +581,11 @@ ConstraintAssembly repeatedAssembly()
                                         .offset("flowDistanceCost", 100.0)
                                         .clip("flowDistanceCost", false)
                                         .hard("flowDistanceCost")));
+    assembly.addInstances(std::move(copyOf("forbiddenAssignmentsCost")
+                                        .soft("forbiddenAssignmentsCost")
+                                        .weight("forbiddenAssignmentsCost", 2.0)
+                                        .offset("forbiddenAssignmentsCost", 1.0)
+                                        .clip("forbiddenAssignmentsCost", false)));
     return assembly;
 }
 
@@ -600,6 +608,24 @@ void verifyRepeatsAndOffsets()
                   && entries[1].exponent == 2.0 && entries[1].defaultWeight == 1.0
                   && entries[0].name == entries[1].name,
               "two instances, the same raw total, each with its own knobs");
+    }
+    {
+        // Each instance on its own level: the hard capacity [2, 0] next to a
+        // soft repeat, 3 x (2 - 1) beyond its offset on L1.
+        ConstraintAssembly assembly = copyOf("locationCapacityCost");
+        assembly.addInstances(std::move(copyOf("locationCapacityCost")
+                                            .soft("locationCapacityCost")
+                                            .weight("locationCapacityCost", 3.0)
+                                            .offset("locationCapacityCost", 1.0)));
+        QuadraticAssignmentProblem p = sideIdentity();
+        DecomposedCalculator calculator;
+        assembly.into(calculator);
+        check(sameScore(scoreWith(calculator, p), {-2, -3.0}),
+              "hard capacity + a soft repeat beyond 1: -2 hard / -3 soft");
+        const Costs entries = calculator.constraintCosts();
+        check(entries.size() == 2 && entries[0].level == optimaru::Level::Hard
+                  && entries[1].level == optimaru::Level::Soft && entries[1].defaultLevel == optimaru::Level::Hard,
+              "the repeat reports its own level, the default stays hard");
     }
     {
         ConstraintAssembly assembly = copyOf("locationCapacityCost");

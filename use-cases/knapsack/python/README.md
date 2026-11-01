@@ -34,7 +34,9 @@ score(raw, [MandatoryItemsCost(), MandatoryItemsCost(exponent=2, offset=1)])
 Every knapsack constraint is global: `constraint_costs()` reports one raw total per
 constraint and `exponent` (with `offset` / `clip`, 0.3.0) shapes that total;
 `constraint_costs(problem, picks)` scores a pick list, the second pick of a name keyed
-`<name>#2`. 0.2.0 renamed every constraint (no
+`<name>#2`. `level` is None (the default level), "hard" or "soft" (or `Level.HARD` /
+`Level.SOFT`); the domain has no medium level, so "medium" raises `ValueError`, and a
+repeat carries its own level. 0.2.0 renamed every constraint (no
 aliases), replaced the per-term lists of `constraint_costs()` by the standard dict,
 shapes each constraint's total instead of each term, rounds hard per constraint, refuses
 `level="hard"` on the reward, and replaced the simulated-annealing `SolverConfig` knobs

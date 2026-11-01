@@ -28,8 +28,10 @@ Every spec takes five knobs:
                ``max_cut.constraint_info()`` reports the defaults.
 - ``level``    ``None`` = the default level, otherwise ``Level.HARD`` or
                ``Level.SOFT`` (or the names ``"hard"`` and ``"soft"``). This use
-               case has no medium level. ``CutWeightCost`` is a reward and always
-               soft: ``level="hard"`` raises ValueError.
+               case has no medium level: ``level="medium"`` raises ValueError.
+               ``CutWeightCost`` is a reward and always soft: ``level="hard"``
+               raises ValueError. (``level`` replaced the ``hard`` knob; ``hard=``
+               raises TypeError.)
 - ``exponent`` sign-preserving power shaping: ``weight * sign(c) * |c| ** exponent``.
                The four unit constraints (fixed, same-side, different-side,
                size bounds) shape each SIDE's cost; the two globals (imbalance,
@@ -44,7 +46,8 @@ Every spec takes five knobs:
                to the reward.
 
 The same constraint may be picked several times; each pick is scored on its own with
-its own knobs and the picks add up. The imbalance plus its square beyond 2 vertices::
+its own knobs (its level included) and the picks add up. The imbalance plus its square
+beyond 2 vertices::
 
     max_cut.solve(problem, constraints=[
         *get_constraints()[:4],
@@ -239,7 +242,8 @@ def score(costs: dict, constraints: list[Constraint] | None = None) -> Score:
     with its own knobs.
 
     When ``constraints`` is given, only those constraints are scored — the same
-    semantics as `get_constraints`. Unknown names raise ValueError; ``level="hard"``
-    on the ``cut_weight_cost`` reward raises ValueError.
+    semantics as `get_constraints`. Unknown names raise ValueError; so do
+    ``level="medium"`` (no medium level here) and ``level="hard"`` on the
+    ``cut_weight_cost`` reward.
     """
     return score_costs(costs, get_constraints(constraints))

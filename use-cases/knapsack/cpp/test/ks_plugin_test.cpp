@@ -20,10 +20,11 @@
 //   (i) the catalog: info() off the default assembly == the components'
 //       kDefaultWeight / kDefaultLevel; the reward guards
 //   (j) repeated components and the offset / clip knobs: a hand-calculated
-//       repeat, threshold and literal offsets by hand on each global's
-//       total (a raw 0 counts in literal mode, the reward shifts further),
-//       incremental == a fresh recompute over a random walk and a
-//       FULL_ASSERT solve with repeated, shifted components
+//       repeat, a repeat on its own level (soft next to the hard default),
+//       threshold and literal offsets by hand on each global's total (a raw
+//       0 counts in literal mode, the reward shifts further), incremental ==
+//       a fresh recompute over a random walk and a FULL_ASSERT solve with
+//       repeated, shifted components on both levels
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -634,6 +635,24 @@ void verifyRepeatsAndOffsets()
               "two instances, the same raw total, each with its own knobs");
     }
     {
+        // Each instance on its own level: the hard default mandatory misses (3)
+        // next to a soft repeat, 2 x (3 - 1) beyond its offset.
+        ConstraintAssembly assembly = copyOf("mandatoryItemsCost");
+        assembly.addInstances(std::move(copyOf("mandatoryItemsCost")
+                                            .soft("mandatoryItemsCost")
+                                            .weight("mandatoryItemsCost", 2.0)
+                                            .offset("mandatoryItemsCost", 1.0)));
+        KnapsackProblem p = shiftedInstance();
+        DecomposedCalculator calculator;
+        assembly.into(calculator);
+        check(sameScore(scoreWith(calculator, p), Score{-3, -4.0}),
+              "hard mandatory + a soft repeat beyond 1: -3 hard / -4 soft");
+        const auto entries = calculator.constraintCosts();
+        check(entries.size() == 2 && entries[0].level == optimaru::Level::Hard
+                  && entries[1].level == optimaru::Level::Soft && entries[1].defaultLevel == optimaru::Level::Hard,
+              "the repeat reports its own level, the default stays hard");
+    }
+    {
         // Identical picks count twice; the reward too.
         ConstraintAssembly assembly = copyOf("selectedValueCost");
         assembly.addInstances(copyOf("selectedValueCost"));
@@ -750,7 +769,8 @@ void verifyRepeatsAndOffsets()
         }
         std::printf("    largest soft drift %.3g\n", drift);
         check(mismatches == 0,
-              std::to_string(steps) + " random moves with repeated, shifted components: incremental == fresh");
+              std::to_string(steps)
+                  + " random moves with repeated, shifted components on both levels: incremental == fresh");
     }
     {
         KnapsackProblem p = randomInstance(30, 11);

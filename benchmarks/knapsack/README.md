@@ -12,14 +12,15 @@ constraint's CP-SAT term equals the engine's `constraint_costs()` total (0 exact
 when the engine reports no violation), and that the CP-SAT optimum equals the
 brute-force optimum of the engine's score, per constraint and for the default
 set. Exponents other than 1 and fractional weights are not supported on CP-SAT
-(they raise `ValueError`); `selected_value_cost` with `level="hard"` is refused as
-in the engine.
+(they raise `ValueError`); `level="soft"` moves a hard term to soft in both solvers,
+`level="medium"` is refused by both (`this use case has no medium level`), and
+`selected_value_cost` with `level="hard"` is refused as in the engine.
 
 **0.3.0:** a constraint may be picked several times (as specs or as
-`{"name", "weight", "hard", "offset", "clip"}` mappings); each pick builds its own term with
-its own knobs. Every knapsack constraint is global and adds its single total as one term,
-so an integral `offset` shapes that total exactly as the engine does in both `clip` modes;
-a fractional offset is refused (`offset must be an integer for CP-SAT`).
+`{"name", "weight", "level", "offset", "clip"}` mappings); each pick builds its own term with
+its own knobs, its level included. Every knapsack constraint is global and adds its single
+total as one term, so an integral `offset` shapes that total exactly as the engine does in
+both `clip` modes; a fractional offset is refused (`offset must be an integer for CP-SAT`).
 
 ```sh
 cd benchmarks/knapsack/cpsat

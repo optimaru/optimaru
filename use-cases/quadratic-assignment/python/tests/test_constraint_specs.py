@@ -1,4 +1,8 @@
-"""quadratic_assignment.constraints — an API for picking the cost function declaratively."""
+"""quadratic_assignment.constraints — an API for picking the cost function declaratively.
+
+"Which constraints are on", the catalog, the five knobs (the level included) and repeated
+picks are covered here.
+"""
 
 import json
 import pickle
@@ -9,11 +13,13 @@ from types import SimpleNamespace
 import pytest
 
 import quadratic_assignment as qap
+from quadratic_assignment._constraint import instance_keys
 from quadratic_assignment.constraints import (
     AssignmentCost,
     Constraint,
     FlowDistanceCost,
     ForbiddenAssignmentsCost,
+    Level,
     LocationCapacityCost,
     PinnedAssignmentsCost,
     assignment_cost,
@@ -287,7 +293,9 @@ def test_weights_steer_the_solve():
         ({"weight": "2"}, TypeError),
         ({"exponent": 0}, ValueError),
         ({"exponent": -1.0}, ValueError),
-        ({"hard": 1}, TypeError),
+        ({"level": 1}, TypeError),
+        ({"level": "firm"}, ValueError),
+        ({"hard": True}, TypeError),  # the removed knob is an unknown keyword
     ],
 )
 def test_specs_validate_their_knobs(kwargs, error):
@@ -621,8 +629,15 @@ def test_offset_zero_reproduces_the_0_2_0_scores():
             FlowDistanceCost(offset=20, clip=False),
             FlowDistanceCost(weight=0.1, exponent=2, offset=5),
         ],
+        [
+            *get_constraints(),
+            PinnedAssignmentsCost(level="soft", weight=1.5, offset=1, clip=False),
+            LocationCapacityCost(level=Level.SOFT, weight=2, offset=-1),
+            AssignmentCost(level="hard", weight=0.5, offset=10),
+            FlowDistanceCost(level=Level.HARD, weight=0.25, offset=100, clip=False),
+        ],
     ],
-    ids=["repeat", "repeat-and-offsets"],
+    ids=["repeat", "repeat-and-offsets", "repeats-on-other-levels"],
 )
 def test_full_assert_solves_with_repeats_and_offsets(picks):
     """FULL_ASSERT re-checks the incremental score against a full recompute after every move."""
@@ -640,3 +655,85 @@ def test_full_assert_solves_with_repeats_and_offsets(picks):
     assert python.hard == core.score.hard
     assert python.soft == pytest.approx(core.score.soft)
     assert score(qap.constraint_costs(core), picks) == python  # the default costs score the repeats too
+
+
+# --- Levels: hard and soft, each pick (a repeat included) on the level it names ------
+
+
+@pytest.mark.parametrize(
+    ("picks", "expected"),
+    [
+        ([LocationCapacityCost(level="soft")], (0, -2.0)),
+        ([PinnedAssignmentsCost(level=Level.SOFT, weight=2)], (0, -2.0)),
+        ([ForbiddenAssignmentsCost(level="soft", offset=2, clip=False)], (0, 1.0)),  # L2 only: 1 - 2, on soft
+        ([FlowDistanceCost(level=Level.HARD)], (-22, 0.0)),  # the soft objective promoted
+        ([AssignmentCost(level="soft")], (0, -15.0)),  # the default level, named
+        ([PinnedAssignmentsCost(level=Level.HARD)], (-1, 0.0)),
+        # A repeat carries its own level and shaping. Hard: 2 x (22 - 20) on the flow repeat,
+        # the capacity [2, 0] and (15 - 10) on the literal assignment cost. Soft: the flow 22,
+        # 3 x ((2 - 2) + (0 - 2)) on the literal capacity repeat and the pinned L1 beyond -1
+        # (1 + 1): -22 + 6 - 2.
+        (
+            [
+                FlowDistanceCost(),
+                FlowDistanceCost(level="hard", weight=2, offset=20),
+                LocationCapacityCost(),
+                LocationCapacityCost(level=Level.SOFT, weight=3, offset=2, clip=False),
+                AssignmentCost(level=Level.HARD, offset=10, clip=False),
+                PinnedAssignmentsCost(level="soft", offset=-1),
+            ],
+            (-11, -18.0),
+        ),
+    ],
+)
+def test_levels_by_hand_on_both_paths(picks, expected):
+    """A pick's level moves its term, with the weight in units of that level: engine == mirror == hand."""
+    problem = side()
+    assert score(qap.constraint_costs(problem), picks) == expected
+    raw = qap.constraint_costs(problem, picks)
+    for pick, key in zip(picks, instance_keys(picks), strict=True):
+        assert raw[key]["level"] == (pick.level or raw[key]["default_level"]), key
+        assert raw[key]["hard"] == (raw[key]["level"] == "hard"), key
+    assert score(raw, picks) == expected
+    assert qap.calculate_score(problem, picks) == expected
+    engine = engine_solve(problem, picks)
+    assert engine.assignment() == problem.to_core().assignment()
+    assert (engine.score.hard, engine.score.soft) == expected
+
+
+@pytest.mark.parametrize("level", ["medium", Level.MEDIUM])
+def test_medium_is_refused_without_a_medium_level(level):
+    """The domain has no medium level: every path refuses the pick before scoring, a repeat too."""
+    for name, spec in (("pinned_assignments_cost", PinnedAssignmentsCost), ("flow_distance_cost", FlowDistanceCost)):
+        message = f"constraint '{name}': this use case has no medium level"
+        pick = spec(level=level)  # the spec cannot know the domain
+        for picks in ([pick], [spec(), pick]):
+            with pytest.raises(ValueError, match=message):
+                engine_solve(side(), picks)
+            with pytest.raises(ValueError, match=message):
+                solved(picks)
+            with pytest.raises(ValueError, match=message):
+                qap.constraint_costs(side(), picks)
+            with pytest.raises(ValueError, match=message):
+                score(qap.constraint_costs(side()), picks)
+            with pytest.raises(ValueError, match=message):
+                qap.calculate_score(side(), picks)
+
+
+def test_a_level_must_be_a_level():
+    with pytest.raises(TypeError, match="level must be a Level"):
+        LocationCapacityCost(level=True)
+    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft', not 'firm'"):
+        LocationCapacityCost(level="firm")
+    pick = SimpleNamespace(name="location_capacity_cost", weight=None, level="firm", exponent=1.0)
+    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft', not 'firm'"):
+        engine_solve(side(), [LocationCapacityCost(), pick])
+
+
+def test_the_knob_was_renamed():
+    """0.3.0 replaced hard=True / hard=False by level="hard" / level="soft"; hard= is unknown."""
+    with pytest.raises(TypeError):
+        FlowDistanceCost(hard=True)
+    with pytest.raises(TypeError):
+        LocationCapacityCost(weight=None, hard=False)
+    assert FlowDistanceCost(level="hard") == FlowDistanceCost(level=Level.HARD)

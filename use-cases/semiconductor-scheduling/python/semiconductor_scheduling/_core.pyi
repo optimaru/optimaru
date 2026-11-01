@@ -287,7 +287,8 @@ class Solver:
     def solve_with_constraints(self, schedule: SemiconductorSchedule, constraints: Iterable[Any] | None = ...) -> None:
         """The same search scored by a caller-chosen constraint set (single start); the
         list replaces the defaults, None keeps them. A name may be picked several times:
-        each pick is its own instance with its own knobs, and the instances add up."""
+        each pick is its own instance with its own knobs (its level included), and the
+        instances add up. There is no medium level: level="medium" raises ValueError."""
 
 def list_constraints() -> list[str]:
     """Constraint names scored by this domain (default assembly order, snake_case): the
@@ -300,11 +301,12 @@ def constraint_costs(
     weight/exponent/offset/level: {key: {"costs": [total], "weight": float,
     "exponent": float, "offset": float, "clip": bool, "hard": bool, "global": True,
     "level": "hard" | "soft", "reward": bool, "level_flippable": bool, "name": str,
-    "label": str, "default_weight": float, "default_level": str}}. Every constraint is
-    global, so "costs" holds one element. None = the default constraints; a pick list
-    (as for solve) scores exactly those picks, each entry carrying its pick's knobs, the
-    k-th pick of a name keyed "<name>#<k>" from the second on.
-    semiconductor_scheduling.constraints.score() turns it into a score."""
+    "label": str, "default_weight": float, "default_level": str}}, "level" being the
+    level in effect (the pick's, or the default) and "hard" the same as level == "hard".
+    Every constraint is global, so "costs" holds one element. None = the default
+    constraints; a pick list (as for solve) scores exactly those picks, each entry
+    carrying its pick's knobs, the k-th pick of a name keyed "<name>#<k>" from the
+    second on. semiconductor_scheduling.constraints.score() turns it into a score."""
 
 def constraint_items(schedule: SemiconductorSchedule) -> dict[str, list[int]]:
     """Per-item raw costs (0.1.x lists: one item per lot, route pair, machine, window, ...)."""

@@ -28,7 +28,8 @@ Every spec takes five knobs:
                reports the defaults.
 - ``level``    ``None`` = the default level, otherwise ``Level.HARD`` or
                ``Level.SOFT`` (or the names ``"hard"`` and ``"soft"``). This use
-               case has no medium level.
+               case has no medium level: ``level="medium"`` raises ValueError.
+               (``level`` replaced the ``hard`` knob; ``hard=`` raises TypeError.)
 - ``exponent`` sign-preserving power shaping ``weight * sign(c) * |c| ** exponent``:
                per location for the three side constraints (pinned, forbidden,
                capacity), on the single total for ``AssignmentCost`` and
@@ -46,8 +47,8 @@ Every spec takes five knobs:
                them as ``"units"``).
 
 The same constraint may be picked several times; each pick is scored on its own with
-its own knobs and the picks add up. The flow cost plus a steep penalty on what
-exceeds a budget of 1000::
+its own knobs (its level included) and the picks add up. The flow cost plus a steep
+penalty on what exceeds a budget of 1000::
 
     qap.solve(problem, constraints=[
         *get_constraints()[:-1],
@@ -224,6 +225,7 @@ def score(costs: dict, constraints: list[Constraint] | None = None) -> Score:
     pick of a constraint reads the same raw costs with its own knobs.
 
     When ``constraints`` is given, only those constraints are scored — the same
-    semantics as `get_constraints`. Unknown names raise ValueError.
+    semantics as `get_constraints`. Unknown names raise ValueError, and so does
+    ``level="medium"`` (no medium level here).
     """
     return score_costs(costs, get_constraints(constraints))

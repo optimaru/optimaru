@@ -18,11 +18,12 @@ import random
 from itertools import product
 
 import pytest
-from knapsack import constraint_costs, constraint_info, list_constraints
+from knapsack import Solver, SolverConfig, constraint_costs, constraint_info, list_constraints
 from knapsack.constraints import (
     ForbiddenItemsCost,
     ItemDependencyCost,
     KnapsackCapacityCost,
+    Level,
     MandatoryItemsCost,
     ResourceCapacityCost,
     SelectedValueCost,
@@ -268,9 +269,10 @@ def test_reweighting_scores_like_the_engine():
     assert (solved.score_hard, solved.score_soft) == pytest.approx(_brute_force(RANDOM, selection))
 
 
-def test_the_reward_refuses_hard_true_in_cpsat_too():
-    with pytest.raises(ValueError, match="is a reward"):
-        solve(Model.model_validate(PLAIN), time_limit_seconds=1, constraints=[SelectedValueCost(level="hard")])
+def test_the_reward_refuses_level_hard_in_cpsat_too():
+    for picks in ([SelectedValueCost(level="hard")], [SelectedValueCost(), SelectedValueCost(level=Level.HARD)]):
+        with pytest.raises(ValueError, match="is a reward"):
+            solve(Model.model_validate(PLAIN), time_limit_seconds=1, constraints=picks)
 
 
 def test_exponents_and_fractional_weights_stay_unsupported():
@@ -313,13 +315,38 @@ SELECTIONS = {
         SelectedValueCost(offset=-3),
     ],
     "identical-twice": [ItemDependencyCost(), ItemDependencyCost(), SelectedValueCost()],
+    # Each pick on its own level: a soft literal capacity next to the hard default, the
+    # mandatory misses on soft with a hard threshold repeat, a soft dependency repeat and
+    # the reward (always soft) shifted both ways.
+    "levels": [
+        KnapsackCapacityCost(),
+        KnapsackCapacityCost(level="soft", weight=3, offset=1, clip=False),
+        MandatoryItemsCost(level=Level.SOFT, weight=2),
+        MandatoryItemsCost(level="hard", offset=1),
+        ItemDependencyCost(level="soft", offset=-1),
+        ResourceCapacityCost(level=Level.HARD, weight=2, offset=1, clip=False),
+        SelectedValueCost(offset=10),
+        SelectedValueCost(level="soft", weight=2, offset=-3, clip=False),
+    ],
 }
+
+
+def _engine_score(core, selection) -> dict:
+    """The engine's own score of the core's selection: a zero-budget warm start keeps it."""
+    config = SolverConfig()
+    config.spent_limit_seconds = 0
+    core.warm_start = True
+    kept = core.assignment()
+    Solver(config).solve_with_constraints(core, selection)
+    assert core.assignment() == kept
+    return {"hard": core.score.hard, "soft": core.score.soft}
 
 
 @pytest.mark.parametrize("selection", list(SELECTIONS.values()), ids=list(SELECTIONS))
 def test_the_cpsat_terms_equal_the_engine_on_every_selection(selection):
     """Pin each of the 64 selections of EVERYTHING: the CP-SAT objective's per-level value is
-    the engine's score of that selection under the same repeated / shifted picks, exactly."""
+    the engine's score of that selection under the same repeated / shifted picks (its own and
+    the score() mirror's), exactly."""
     built = build(Model.model_validate(EVERYTHING), selection)
     built.objective.minimize()
     for chosen in product((False, True), repeat=len(EVERYTHING["items"])):
@@ -333,6 +360,7 @@ def test_the_cpsat_terms_equal_the_engine_on_every_selection(selection):
         assert solver.solve(model) == cp_model.OPTIMAL
         core = _selected(EVERYTHING, chosen).to_core()
         engine = score(constraint_costs(core, selection), selection)
+        assert _engine_score(core, selection) == {"hard": engine.hard, "soft": engine.soft}, chosen
         assert built.objective.score(solver) == {"hard": engine.hard, "soft": engine.soft}, chosen
         # Re-pricing the default costs (each name once) gives the same per instance key.
         assert built.objective.score_costs(constraint_costs(core)) == {"hard": engine.hard, "soft": engine.soft}
@@ -347,16 +375,36 @@ def test_repeated_and_shifted_picks_reach_the_brute_force_optimum(selection):
 
 
 def test_mapping_selections_repeat_and_shift_like_specs():
-    """The server's {name, weight, offset, clip} dicts pick the same instances as specs."""
-    specs = [KnapsackCapacityCost(), SelectedValueCost(), SelectedValueCost(weight=3, offset=4, clip=False)]
+    """The server's {name, weight, level, offset, clip} dicts pick the same instances as specs."""
+    specs = [
+        KnapsackCapacityCost(),
+        KnapsackCapacityCost(level="soft", weight=2, offset=1, clip=False),
+        SelectedValueCost(),
+        SelectedValueCost(weight=3, offset=4, clip=False),
+    ]
     dicts = [
         {"name": "knapsack_capacity_cost"},
+        {"name": "knapsack_capacity_cost", "weight": 2, "level": "soft", "offset": 1, "clip": False},
         {"name": "selected_value_cost"},
         {"name": "selected_value_cost", "weight": 3, "offset": 4, "clip": False},
     ]
     by_specs = solve(Model.model_validate(PLAIN), time_limit_seconds=5, constraints=specs)
     assert solve(Model.model_validate(PLAIN), time_limit_seconds=5, constraints=dicts) == by_specs
-    assert (by_specs.score_hard, by_specs.score_soft) == (0, 16.0 + 3 * (16 + 4))
+    # The capacity holds; its soft literal repeat charges 2 x (0 - 1) = -2 on top of the value.
+    assert (by_specs.score_hard, by_specs.score_soft) == (0, 16.0 + 2 + 3 * (16 + 4))
+
+
+@pytest.mark.parametrize("level", ["medium", Level.MEDIUM])
+def test_medium_is_refused_like_the_engine(level):
+    """The domain has no medium level: CP-SAT refuses the pick, a repeat too, in the engine's words."""
+    message = "constraint 'mandatory_items_cost': this use case has no medium level"
+    for picks in (
+        [MandatoryItemsCost(level=level)],
+        [MandatoryItemsCost(), MandatoryItemsCost(level=level)],
+        [{"name": "mandatory_items_cost"}, {"name": "mandatory_items_cost", "level": "medium"}],
+    ):
+        with pytest.raises(ValueError, match=message):
+            solve(Model.model_validate(PLAIN), time_limit_seconds=1, constraints=picks)
 
 
 def test_a_fractional_offset_is_refused_by_cpsat():

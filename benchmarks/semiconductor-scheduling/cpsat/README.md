@@ -38,13 +38,16 @@ inequality may exclude schedules the engine scores 0. Not supported on CP-SAT (r
 `exponent != 1` and non-integer weights.
 
 **0.3.0:** a constraint may be picked several times (as specs or as
-`{"name", "weight", "hard", "offset", "clip"}` mappings); each pick is built on its own
-with its own knobs (a repeated structural pick posts its rule again and is checked with its
-own weight and level). Every engine constraint is global, so a penalized plugin adds its
-total as one term and an integral `offset` shapes it exactly as the engine does in both
-`clip` modes; a fractional offset is refused (`offset must be an integer for CP-SAT`). A
-structural plugin has no term to shape: an offset on it is refused (`offset is not
-supported by this CP-SAT model`), like a weight or a level.
+`{"name", "weight", "level", "offset", "clip"}` mappings); each pick is built on its own
+with its own knobs, its level included (a repeated structural pick posts its rule again and
+is checked with its own weight and level). A penalized pick may move to the other level
+(`level="hard"` / `level="soft"`); `level="medium"` is refused as in the engine (`this use
+case has no medium level`), and a structural one refuses any level but hard. Every engine
+constraint is global, so a penalized plugin adds its total as one term and an integral
+`offset` shapes it exactly as the engine does in both `clip` modes; a fractional offset is
+refused (`offset must be an integer for CP-SAT`). A structural plugin has no term to shape:
+an offset on it is refused (`offset is not supported by this CP-SAT model`), like a weight
+or a level.
 
 ## Tests
 
@@ -54,8 +57,9 @@ engine's raw cost and a structural plugin accepts the schedule exactly when the 
 raw cost is 0 — a positive and a zero fixture per constraint (cycle time and makespan are
 positive whenever every operation is assigned). Plus the catalog parity, a demotion scored
 like the engine, the structural refusals and a C++-rescored optimum with hard 0; and
-selections with repeated and shifted picks scored exactly like the engine on every fixture
-(the objective per level == `score(constraint_costs(core, picks), picks)`).
+selections with repeated and shifted picks, each on its own level, scored exactly like the
+engine on every fixture (the objective per level == `score(constraint_costs(core, picks),
+picks)` == the C++ assembly's `calculate_score(core, picks)`), and `level="medium"` refused.
 
 ## Engine comparison
 
