@@ -2,7 +2,7 @@
 
 Spot checks of individual constraint values live in `test_constraints.py`. This
 file covers the selection path that picks "which constraints are on", the catalog
-(`constraint_info()`) and the three knobs.
+(`constraint_info()`), the five knobs and repeated picks.
 """
 
 import pickle
@@ -251,6 +251,9 @@ def test_weight_none_means_the_component_default():
         ({"exponent": 0}, ValueError),
         ({"exponent": -1.0}, ValueError),
         ({"hard": 1}, TypeError),
+        ({"offset": float("nan")}, ValueError),
+        ({"offset": "1"}, TypeError),
+        ({"clip": 0}, TypeError),
     ],
 )
 def test_specs_validate_their_knobs(kwargs, error):
@@ -273,7 +276,18 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
         hard = None
         exponent = 0.0
 
-    for pick, message in ((Negative(), "weight must be finite and >= 0"), (Flat(), "exponent must be finite and > 0")):
+    class Unbounded:
+        name = "tag_conflict_cost"
+        weight = None
+        hard = None
+        exponent = 1.0
+        offset = float("inf")
+
+    for pick, message in (
+        (Negative(), "weight must be finite and >= 0"),
+        (Flat(), "exponent must be finite and > 0"),
+        (Unbounded(), "offset must be finite, not inf"),
+    ):
         with pytest.raises(ValueError, match=message):
             mnt.solve(build_schedule(), time_limit_seconds=0.1, constraints=[pick])
 
@@ -286,6 +300,10 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
         ({"hard": 1}, "hard must be True, False or None, not 1"),
         ({"hard": "x"}, "hard must be True, False or None, not 'x'"),
         ({"exponent": True}, "exponent must be a number, not True"),
+        ({"offset": "5"}, "offset must be a number, not '5'"),
+        ({"offset": False}, "offset must be a number, not False"),
+        ({"clip": 1}, "clip must be True or False, not 1"),
+        ({"clip": "no"}, "clip must be True or False, not 'no'"),
     ],
 )
 def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
@@ -440,6 +458,15 @@ def test_score_reproduces_the_engine_score_exactly():
         [MaxEndDateCost(hard=False), min_start_date_cost, crew_conflict_cost, after_ideal_end_date_cost],
         [min_start_date_cost, max_end_date_cost, crew_conflict_cost, TagConflictCost(exponent=2.0)],
         [CrewConflictCost(exponent=2.0), BeforeIdealEndDateCost(hard=True, weight=0.5), tag_conflict_cost],
+        [*get_constraints(), TagConflictCost(weight=100, exponent=2.0), MinStartDateCost(weight=3)],
+        [
+            MinStartDateCost(offset=1),
+            MinStartDateCost(offset=0.5, clip=False, weight=3),
+            CrewConflictCost(offset=2, clip=False),
+            AfterIdealEndDateCost(offset=-1),
+            TagConflictCost(offset=5),
+            TagConflictCost(offset=20, clip=False, weight=0.5),
+        ],
     ],
 )
 def test_score_matches_the_engine_for_arbitrary_specs(specs):
@@ -491,13 +518,206 @@ def test_score_rejects_an_unknown_constraint_name():
         score(raw, [Renamed()])
 
 
-def test_naming_a_constraint_twice_is_rejected():
-    """Passing the same constraint twice must not let the later one silently win."""
-    with pytest.raises(ValueError, match="picked more than once"):
-        mnt.solve(
-            build_schedule(),
-            time_limit_seconds=0.2,
-            constraints=[crew_conflict_cost, TagConflictCost(weight=10), tag_conflict_cost],
-        )
-    with pytest.raises(ValueError, match="picked more than once"):
-        get_constraints([crew_conflict_cost, crew_conflict_cost])
+def test_naming_a_constraint_twice_scores_both_picks():
+    """Since 0.3.0 a constraint may be picked several times: each pick is scored on its own.
+
+    The later pick no longer wins in silence, nor is it an error: both are
+    instances with their own knobs, and they add up."""
+    picks = [CrewConflictCost(), TagConflictCost(weight=10), TagConflictCost()]
+    schedule = _zero_budget_solve(_two_jobs(), picks)
+    assert schedule.score.hard == -2  # two days of crew conflict
+    assert schedule.score.soft == -(10 + 1000) * 4  # both tag picks
+    assert get_constraints([CrewConflictCost(), CrewConflictCost()]) == [CrewConflictCost(), CrewConflictCost()]
+
+
+# --- 0.3.0: repeated picks and the offset / clip knobs ------------------------------
+
+
+def _two_jobs():
+    """The hand-calculated instance of test_constraint_costs_match_every_constraint_by_hand
+    without its unassigned job (a zero-budget solve would place it).
+
+    40 (start date, crew) cells: 20 business days x 2 crews. Raw: min start 2 on a's cell,
+    max end 1 and before ideal 1 on b's cell, after ideal 1 on a's cell, 0 on every other
+    cell; crew conflict total 2, tag conflict total 4.
+    """
+    return _schedule_of(
+        [
+            (mnt.Job("a", "a", 3, min_start_date=DAY_3, ideal_end_date=DAY_3, tags=["Downtown", "Crane"]), 0, DAY_1),
+            (
+                mnt.Job("b", "b", 3, max_end_date=DAY_1 + 3, ideal_end_date=DAY_1 + 5, tags=["Crane", "Downtown"]),
+                0,
+                DAY_2,
+            ),
+        ]
+    )
+
+
+def _zero_budget_solve(schedule, picks):
+    """Score a complete assignment under ``picks`` on the engine: no step is taken."""
+    config = mnt.SolverConfig()
+    config.spent_limit_seconds = 0
+    assignment = schedule.assignment()
+    mnt.Solver(config).solve_with_constraints(schedule, picks)
+    assert schedule.assignment() == assignment
+    return schedule
+
+
+def _engine(picks):
+    solved = _zero_budget_solve(_two_jobs(), picks)
+    return (solved.score.hard, solved.score.soft)
+
+
+REPEAT = [TagConflictCost(), TagConflictCost(weight=100, exponent=2)]
+
+
+def test_a_repeated_pick_by_hand():
+    """tag conflict x 1000 plus 100 x tag conflict^2 on the total: 1000 x 4 + 100 x 16 = 5600."""
+    schedule = _two_jobs()
+    assert schedule.crew_date_count() == 40
+    raw = mnt.constraint_costs(schedule, REPEAT)
+    assert list(raw) == ["tag_conflict_cost", "tag_conflict_cost#2"]
+    first, second = raw.values()
+    assert first["costs"] == second["costs"] == [4.0]
+    assert (first["weight"], first["exponent"], second["weight"], second["exponent"]) == (1000.0, 1.0, 100.0, 2.0)
+    assert first["name"] == second["name"] == "tag_conflict_cost"
+    assert second["default_weight"] == 1000.0
+    expected = (0, -(1000 * 4 + 100 * 4**2))
+    assert expected == (0, -5600)
+    assert score(raw, REPEAT) == expected
+    # The default costs hold the name once; the second pick reads the same raw costs.
+    assert score(mnt.constraint_costs(_two_jobs()), REPEAT) == expected
+    assert _engine(REPEAT) == expected
+
+
+def test_a_repeated_unit_pick_by_hand():
+    """min start per cell plus 3 x its square: a's cell is 2 days early, so -(2 + 3 x 4)."""
+    picks = [MinStartDateCost(), MinStartDateCost(weight=3, exponent=2)]
+    raw = mnt.constraint_costs(_two_jobs(), picks)
+    assert list(raw) == ["min_start_date_cost", "min_start_date_cost#2"]
+    assert raw["min_start_date_cost"]["costs"] == raw["min_start_date_cost#2"]["costs"]
+    assert score(raw, picks) == (-14, 0.0)
+    assert score(mnt.constraint_costs(_two_jobs()), picks) == (-14, 0.0)
+    assert _engine(picks) == (-14, 0.0)
+
+
+def test_identical_picks_count_twice():
+    picks = [CrewConflictCost(), CrewConflictCost()]
+    assert score(mnt.constraint_costs(_two_jobs()), picks) == (-4, 0.0)
+    assert _engine(picks) == (-4, 0.0)
+    assert list(mnt.constraint_costs(_two_jobs(), picks)) == ["crew_conflict_cost", "crew_conflict_cost#2"]
+
+
+def test_the_keys_follow_the_pick_order_of_each_name():
+    picks = [
+        TagConflictCost(weight=1),
+        MaxEndDateCost(),
+        TagConflictCost(weight=2),
+        CrewConflictCost(),
+        TagConflictCost(weight=3),
+    ]
+    raw = mnt.constraint_costs(_two_jobs(), picks)
+    assert {key: entry["weight"] for key, entry in raw.items()} == {
+        "max_end_date_cost": 1.0,
+        "crew_conflict_cost": 1.0,
+        "tag_conflict_cost": 1.0,
+        "tag_conflict_cost#2": 2.0,
+        "tag_conflict_cost#3": 3.0,
+    }
+    assert score(raw, picks) == (-(1 + 2), -(6 * 4))
+    assert _engine(picks) == score(raw, picks)
+
+
+@pytest.mark.parametrize(
+    ("pick", "expected"),
+    [
+        # Unit constraints, shaped per (start date, crew) cell: a's cell is 2 days early,
+        # the other 39 cells are 0 (and count in literal mode).
+        (MinStartDateCost(offset=1), (-1, 0.0)),
+        (MinStartDateCost(offset=1, clip=False), (-(1 - 39), 0.0)),  # the 39 empty cells are rewarded
+        (MinStartDateCost(offset=3), (0, 0.0)),
+        (MinStartDateCost(offset=3, clip=False), (-(-1 - 3 * 39), 0.0)),
+        (MinStartDateCost(offset=-2), (-4, 0.0)),  # a negative offset adds to every non-zero cell
+        (MinStartDateCost(offset=-2, clip=False), (-(4 + 2 * 39), 0.0)),  # ...or to every cell
+        (AfterIdealEndDateCost(offset=1, exponent=2, clip=False, weight=1), (0, 39.0)),  # 39 x (0 - 1)^2, sign kept
+        (MaxEndDateCost(offset=0.5, clip=False, weight=3), (-(2 - 2 * 39), 0.0)),  # 1.5 -> 2, -1.5 -> -2: per cell
+        # Global constraints shape their one total.
+        (TagConflictCost(offset=3), (0, -1000.0)),
+        (TagConflictCost(offset=6, clip=False), (0, 2000.0)),  # (4 - 6) x 1000: a reward below 6
+        (TagConflictCost(offset=2, exponent=2), (0, -4000.0)),
+        (TagConflictCost(offset=6, exponent=3, clip=False), (0, 8000.0)),
+        (CrewConflictCost(offset=-1), (-3, 0.0)),
+        (CrewConflictCost(offset=1, clip=False, weight=1.5), (-2, 0.0)),  # 1.5 -> 2, rounded once
+    ],
+)
+def test_offsets_by_hand_on_both_paths(pick, expected):
+    """threshold sign(x) max(0, |x| - offset)^e and literal (x - offset)^e: Python mirror == engine == hand."""
+    assert score(mnt.constraint_costs(_two_jobs()), [pick]) == expected
+    raw = mnt.constraint_costs(_two_jobs(), [pick])
+    entry = next(iter(raw.values()))
+    assert (entry["offset"], entry["clip"]) == (float(pick.offset), pick.clip)
+    assert "units" not in entry  # every cell is evaluated: no scoped constraint here
+    assert score(raw, [pick]) == expected
+    assert _engine([pick]) == expected
+
+
+def test_offset_zero_reproduces_the_0_2_0_scores():
+    """offset 0 is the plain shaping in both modes, so every 0.2.0 selection scores the same."""
+    plain = [*get_constraints()[:5], TagConflictCost(exponent=2)]
+    shifted = [
+        MinStartDateCost(offset=0.0, clip=False),
+        MaxEndDateCost(offset=0),
+        BeforeIdealEndDateCost(clip=False),
+        AfterIdealEndDateCost(offset=0.0),
+        CrewConflictCost(offset=0, clip=False),
+        TagConflictCost(exponent=2, offset=0.0, clip=False),
+    ]
+    schedule = _solved()
+    raw = mnt.constraint_costs(schedule)
+    assert score(raw, shifted) == score(raw, plain)
+    engines = []
+    for picks in (plain, shifted):
+        copy = build_schedule()
+        copy.set_assignment(schedule.assignment())
+        engines.append(_zero_budget_solve(copy, picks))
+    assert engines[0].assignment() == engines[1].assignment() == schedule.assignment()
+    assert (engines[0].score.hard, engines[0].score.soft) == (engines[1].score.hard, engines[1].score.soft)
+    for entry in raw.values():
+        assert (entry["offset"], entry["clip"]) == (0.0, True)
+
+
+@pytest.mark.parametrize(
+    "picks",
+    [
+        [*get_constraints(), *REPEAT, MinStartDateCost(weight=2, exponent=2)],
+        [
+            MinStartDateCost(),
+            MinStartDateCost(offset=1, clip=False, weight=2),
+            MaxEndDateCost(offset=-1),
+            BeforeIdealEndDateCost(offset=2, clip=False, weight=0.25),
+            AfterIdealEndDateCost(),
+            AfterIdealEndDateCost(offset=1, exponent=2, weight=10),
+            CrewConflictCost(offset=1, clip=False),
+            CrewConflictCost(),
+            TagConflictCost(offset=5),
+            TagConflictCost(offset=10, exponent=2, weight=0.5, clip=False),
+        ],
+    ],
+    ids=["repeat", "repeat-and-offsets"],
+)
+def test_full_assert_solves_with_repeats_and_offsets(picks):
+    """FULL_ASSERT re-checks the incremental score against a full recompute after every move."""
+    schedule = build_schedule()
+    config = mnt.SolverConfig()
+    config.full_assert = True
+    config.random_seed = 3
+    config.parallel_solver_count = 1
+    config.step_count_limit = 5000
+    config.spent_limit_seconds = 30
+    mnt.Solver(config).solve_with_constraints(schedule, picks)
+    raw = mnt.constraint_costs(schedule, picks)
+    assert len(raw) == len(picks)
+    python = score(raw, picks)
+    assert python.hard == schedule.score.hard
+    assert python.soft == pytest.approx(schedule.score.soft)
+    assert score(mnt.constraint_costs(schedule), picks) == python  # the default costs score the repeats too

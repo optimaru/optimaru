@@ -65,6 +65,27 @@ keep their names. The old names are not accepted any more (no aliases). The defa
 declared once, in the C++ components; the CP-SAT plugins no longer restate the 1,000,000 /
 1,000 weights. Raw costs and the default score are unchanged.
 
+**0.3.0:** every constraint takes two more knobs, `offset` and `clip` (keyword-only), and
+may be picked several times. A raw cost `x` (per cell for the four date rules, the single
+total for the two conflict rules — the granularity of `exponent`) is shaped as
+`sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
+`(x - offset) ** exponent`, sign-preserving (`clip=False`, which lowers the penalty of
+every cell below the offset, an empty one included: every crew on every start date);
+`offset=0` is the 0.2.0 shaping. Each pick is its own instance with its own knobs, and the
+instances add up:
+
+```python
+from maintenance_scheduling.constraints import TagConflictCost, get_constraints
+
+mnt.solve(schedule, constraints=[
+    *get_constraints(),                                  # the defaults
+    TagConflictCost(weight=100, exponent=2, offset=10),  # + 100 x (tag-conflict days beyond 10)^2
+])
+```
+
+`mnt.constraint_costs(schedule, picks)` keys the second pick `tag_conflict_cost#2`. The
+CP-SAT reference takes integral offsets.
+
 Score mapping: the Java original already uses `HardSoftScore`, so it maps 1:1 onto the
 engine's HardSoftScore(int64 hard, double soft), and the soft weights
 (1 / 1,000 / 1,000,000) are the original ones. The two pairwise constraints reduce to sums
@@ -169,7 +190,7 @@ solver's `solve` before the engine runs — the engine only fills what is still 
 4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
    `description_en` / `description_ko` to `python/maintenance_scheduling/constraints.py`
    (plus its module-level default instance); callers then pick, reweight or flip it:
-   `constraints=get_constraints([..., MyRuleCost(weight=5, hard=True)])`;
+   `constraints=[..., MyRuleCost(weight=5, hard=True)]`;
 5. mirror it in the CP-SAT model in
    [`benchmarks/maintenance-scheduling/cpsat`](../../benchmarks/maintenance-scheduling/cpsat) (a
    plugin subclassing the spec; defaults come from `constraint_info()`) so the benchmark stays

@@ -19,7 +19,7 @@ default weights:
   soft 5. after_ideal_end_date_cost   -1'000'000 per day ended after ideal_end_date
   soft 6. tag_conflict_cost           -1'000 per shared tag x overlapping day of overlapping job pairs
 Change a weight or a level through a constraint selection, e.g.
-``solve(schedule, constraints=get_constraints([..., TagConflictCost(weight=10_000)]))``
+``solve(schedule, constraints=[..., TagConflictCost(weight=10_000)])``
 (see `maintenance_scheduling.constraints`). `constraint_info()` lists every constraint with
 its default level and weight.
 
@@ -98,8 +98,9 @@ def solve(
     (best_score_limit=(0, -inf)).
 
     ``constraints`` picks the cost function directly
-    (see `maintenance_scheduling.constraints`). Only the listed constraints are scored;
-    None uses all six default constraints at their default weights::
+    (see `maintenance_scheduling.constraints`). Only the listed constraints are scored,
+    a name picked several times once per pick; None uses all six default constraints at
+    their default weights::
 
         from maintenance_scheduling.constraints import get_constraints
         mnt.solve(schedule, constraints=get_constraints())
