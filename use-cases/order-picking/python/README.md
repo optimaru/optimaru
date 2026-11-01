@@ -34,9 +34,15 @@ Pick, reweight or flip constraints with `order_picking.constraints`:
 
 ```python
 import order_picking as op
-from order_picking.constraints import OrderSplitByTrolleyCost, get_constraints, trolley_capacity_cost
+from order_picking.constraints import (
+    DistanceFromPreviousPickTaskCost, OrderSplitByTrolleyCost, TrolleyCapacityCost, score,
+)
 
-op.solve(solution, constraints=get_constraints([trolley_capacity_cost, OrderSplitByTrolleyCost(weight=100)]))
+op.solve(solution, constraints=[TrolleyCapacityCost(), OrderSplitByTrolleyCost(weight=100)])
+# A constraint may be picked several times, each pick with its own knobs; offset / clip
+# shift the shaping per trolley (clip=True: only the meters beyond 100 count).
+raw = op.constraint_costs(solution)
+score(raw, [DistanceFromPreviousPickTaskCost(), DistanceFromPreviousPickTaskCost(weight=0.1, exponent=2, offset=100)])
 ```
 
 ## Install / test
