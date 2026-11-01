@@ -1,10 +1,14 @@
 from datetime import date, datetime, timezone
+from itertools import product
 
 import pytest
 
 import flight_crew as domain
 from flight_crew.constraints import (
+    EmployeeUnavailabilityCost,
+    FirstAssignmentNotDepartingFromHomeCost,
     FlightConflictCost,
+    LastAssignmentNotArrivingAtHomeCost,
     RequiredSkillCost,
     TransferBetweenTwoFlightsCost,
     get_constraints,
@@ -144,7 +148,13 @@ def test_cpsat_defaults_are_the_engine_defaults() -> None:
         assert entry["reward"] == row.reward
         assert entry["default_enabled"] == row.default_enabled
         assert entry["kind"] == "either"  # every flight-crew constraint is flippable
-        assert entry["params"] == {"weight": None, "hard": None, "exponent": 1.0}
+        assert entry["params"] == {
+            "weight": None,
+            "hard": None,
+            "exponent": 1.0,
+            "offset": 0.0,
+            "clip": True,
+        }
 
 
 def test_default_solve_scores_like_the_engine() -> None:
@@ -182,3 +192,101 @@ def test_demoting_a_hard_constraint_scores_like_the_engine(demoted) -> None:
     engine = score(domain.constraint_costs(solved.to_core()), selection)
     assert (solved.score_hard, solved.score_soft) == pytest.approx(tuple(engine))
     assert (proxy["hard"], proxy["soft"]) == pytest.approx(tuple(engine))
+
+
+# --- 0.3.0: repeated picks and offset / clip ---------------------------------------
+
+
+def _three_employees() -> FlightCrewScheduleModel:
+    """The parity problem plus an employee e2 (home C, both skills): 27 assignments."""
+    problem = _parity_problem()
+    problem.employees.append(
+        EmployeeModel(id="e2", home_airport="C", skills=["pilot", "cabin"])
+    )
+    return problem
+
+
+SELECTIONS = {
+    "repeat": [
+        RequiredSkillCost(),
+        RequiredSkillCost(weight=3, offset=1),
+        FlightConflictCost(),
+    ],
+    "repeat-literal": [
+        EmployeeUnavailabilityCost(offset=1, clip=False),
+        EmployeeUnavailabilityCost(weight=2, offset=-1),
+        TransferBetweenTwoFlightsCost(),
+        TransferBetweenTwoFlightsCost(weight=5, offset=1, clip=False),
+    ],
+    "hard-offsets": [
+        FlightConflictCost(offset=1, clip=False),
+        RequiredSkillCost(weight=2, offset=2, clip=False),
+        FirstAssignmentNotDepartingFromHomeCost(offset=-1),
+        LastAssignmentNotArrivingAtHomeCost(weight=3, offset=1, clip=False),
+    ],
+    "identical-twice": [
+        RequiredSkillCost(),
+        RequiredSkillCost(),
+        LastAssignmentNotArrivingAtHomeCost(),
+    ],
+}
+
+
+def _engine_of(problem, fixed, selection):
+    candidate = problem.model_copy(deep=True)
+    for assignment, employee in zip(candidate.flight_assignments, fixed, strict=True):
+        assignment.employee = candidate.employees[employee].id
+    core = candidate.to_core()
+    return tuple(score(domain.constraint_costs(core, selection), selection))
+
+
+@pytest.mark.parametrize("selection", list(SELECTIONS.values()), ids=list(SELECTIONS))
+def test_the_cpsat_terms_equal_the_engine_on_every_assignment(selection) -> None:
+    """Pin each of the 27 assignments: the CP-SAT objective's own levels are the engine's
+    score under the same repeated / shifted picks, exactly; the reported score re-prices
+    the default costs (each name once) to the same value."""
+    problem = _three_employees()
+    for fixed in product(range(3), repeat=3):
+        proxy: dict[str, int] = {}
+        solved = solve(
+            problem,
+            time_limit_seconds=5,
+            constraints=selection,
+            _fixed_employees=list(fixed),
+            _proxy_score=proxy,
+        )
+        engine = _engine_of(problem, fixed, selection)
+        assert (proxy["hard"], proxy["soft"]) == engine, fixed
+        assert (solved.score_hard, solved.score_soft) == engine, fixed
+
+
+@pytest.mark.parametrize("selection", list(SELECTIONS.values()), ids=list(SELECTIONS))
+def test_repeated_and_shifted_picks_reach_the_brute_force_optimum(selection) -> None:
+    problem = _three_employees()
+    best = max(
+        _engine_of(problem, fixed, selection) for fixed in product(range(3), repeat=3)
+    )
+    solved = solve(problem, time_limit_seconds=5, constraints=selection)
+    assert (solved.score_hard, solved.score_soft) == best
+
+
+def test_mapping_selections_repeat_and_shift_like_specs() -> None:
+    """The server's {name, weight, offset, clip} dicts pick the same instances as specs."""
+    specs = [RequiredSkillCost(), RequiredSkillCost(weight=3, offset=1, clip=False)]
+    dicts = [
+        {"name": "required_skill_cost"},
+        {"name": "required_skill_cost", "weight": 3, "offset": 1, "clip": False},
+    ]
+    problem = _three_employees()
+    assert solve(problem, time_limit_seconds=5, constraints=dicts) == solve(
+        problem, time_limit_seconds=5, constraints=specs
+    )
+
+
+def test_a_fractional_offset_is_refused_by_cpsat() -> None:
+    with pytest.raises(ValueError, match="offset must be an integer for CP-SAT"):
+        solve(
+            _three_employees(),
+            time_limit_seconds=1,
+            constraints=[RequiredSkillCost(offset=0.5)],
+        )

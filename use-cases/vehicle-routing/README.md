@@ -146,7 +146,8 @@ weight 1 in medium units (it was 10^9 in soft units); `hard=False` on it now dem
 it to soft (it used to be a no-op relabel) and `hard=True` charges 1 hard unit per
 penalty minute (it used to charge 10^9); the `enclosing_circle_radius_cost` default
 instance no longer passes `weight=0` (the C++ default is 0); `get_constraints()` and
-`score()` now refuse a constraint named twice, as the C++ solve path already did;
+`score()` now refuse a constraint named twice, as the C++ solve path already did (0.3.0
+lifts that refusal again, see below);
 `constraint_info()` / `ConstraintInfo` are new.
 Raw costs and the default score are unchanged.
 

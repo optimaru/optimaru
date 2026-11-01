@@ -2,40 +2,52 @@
 
 The default path (`fcs.solve(schedule)`) enables all six constraints at their default
 weights (the Java provider's weights). This module is the alternative path next to it:
-pick constraints, change weights, flip hard/soft, and pass the list to
+pick constraints, change weights, flip hard/soft, shape the cost, and pass the list to
 `solve(schedule, constraints=...)`.
 
-The shortest route is :func:`get_constraints`. It returns the default list, so
-a "default with a small tweak" declaration fits on one line::
+A constraint list reads one way: one class call per constraint::
 
     import flight_crew as fcs
     from flight_crew.constraints import (
-        RequiredSkillCost, flight_conflict_cost, get_constraints,
+        FlightConflictCost, RequiredSkillCost, get_constraints,
     )
 
-    fcs.solve(schedule, constraints=get_constraints())          # defaults as-is
-    fcs.solve(schedule, constraints=get_constraints([           # picked
-        flight_conflict_cost, RequiredSkillCost(weight=500),
-    ]))
+    fcs.solve(schedule, constraints=get_constraints())          # the defaults as-is
+    fcs.solve(schedule, constraints=[                           # picked
+        FlightConflictCost(), RequiredSkillCost(weight=500),
+    ])
 
-Each constraint has a default instance at module level (`required_skill_cost`,
-`flight_conflict_cost`, `transfer_between_two_flights_cost`,
-`employee_unavailability_cost`, `first_assignment_not_departing_from_home_cost`,
-`last_assignment_not_arriving_at_home_cost`), so you can also pass a list of just a
-few. Only listed constraints are scored — leave one out and its term disappears from
-the score.
+Only listed constraints are scored — leave one out and its term disappears from the
+score. (The module also carries ready-made default instances: ``required_skill_cost``
+is ``RequiredSkillCost()``, and so on.)
 
-Every spec takes ``(weight=None, hard=None, exponent=1.0)``:
+Every spec takes five knobs:
 
 - ``weight``   linear multiplier on the constraint cost. ``None`` = the component
-               default (required_skill_cost 100, flight_conflict_cost 10,
-               transfer_between_two_flights_cost 1, employee_unavailability_cost 10,
+               default (RequiredSkillCost 100, FlightConflictCost 10,
+               TransferBetweenTwoFlightsCost 1, EmployeeUnavailabilityCost 10,
                the two home-airport rules 1000); ``fcs.constraint_info()`` reports them.
 - ``hard``     ``True`` = hard, ``False`` = soft, ``None`` = the default level (the
                first four are hard, the two home-airport rules soft).
 - ``exponent`` sign-preserving power shaping per employee: ``weight * sign(c) *
                |c| ** exponent``. 2.0 = squared, so concentrated violations grow much
                costlier.
+- ``offset``   (keyword) shifts that shaping per employee; 0.0 = none.
+- ``clip``     (keyword) ``True`` (the default) counts only what lies beyond the
+               offset, ``max(0, c - offset) ** exponent``; ``False`` shapes
+               ``c - offset`` as it is, so an employee below the offset — an idle
+               one (cost 0) included — lowers the penalty.
+
+The same constraint may be picked several times; each pick is scored on its own with
+its own knobs and the picks add up. A conflict costs its weight, and every conflict an
+employee has beyond the first costs its square on top::
+
+    fcs.solve(schedule, constraints=[
+        *get_constraints(),
+        FlightConflictCost(weight=10, exponent=2, offset=1),
+    ])
+
+``fcs.constraint_costs(schedule, picks)`` keys the second pick ``"flight_conflict_cost#2"``.
 
 Names (`name`) are the C++ component names in snake_case
 (``RequiredSkillCost`` -> ``required_skill_cost``). The core derives them mechanically,
@@ -191,7 +203,7 @@ class LastAssignmentNotArrivingAtHomeCost(Constraint):
     )
 
 
-#: Instances at the default weights (weight=None). Reference them directly when picking.
+#: Ready-made default instances (``required_skill_cost`` is ``RequiredSkillCost()``).
 required_skill_cost = RequiredSkillCost()
 flight_conflict_cost = FlightConflictCost()
 transfer_between_two_flights_cost = TransferBetweenTwoFlightsCost()
@@ -214,12 +226,13 @@ def get_constraints(constraints: list[Constraint] | None = None) -> list[Constra
     """Return the cost function. Without arguments, all six default constraints.
 
     When `constraints` is given, that list is used as-is — only the listed
-    constraints are scored. To change just one default, mix in the default instances::
+    constraints are scored::
 
-        get_constraints([flight_conflict_cost, RequiredSkillCost(weight=500)])
+        get_constraints([FlightConflictCost(), RequiredSkillCost(weight=500)])
 
     Same contract as the C++ applyConstraints: an empty list (most likely a filter
-    that came out empty) and a constraint named twice raise ValueError.
+    that came out empty) raises ValueError; a constraint named several times is
+    scored once per pick, each with its own knobs.
     """
     return select(constraints, _DEFAULTS)
 
@@ -228,17 +241,19 @@ def score(costs: dict, constraints: list[Constraint] | None = None) -> Score:
     """Apply specs to raw constraint costs and produce a score — pure Python.
 
     ``costs`` is what `fcs.constraint_costs(schedule)` returns: per constraint, the
-    **raw** cost of each employee (before weight, exponent and level rounding).
-    Fetch it once and rescore with different weights without re-solving::
+    **raw** cost of each employee (before weight, exponent, offset and level
+    rounding). Fetch it once and rescore with different weights without re-solving::
 
         raw = fcs.constraint_costs(schedule)
         score(raw)                     # default set
-        score(raw, picked)             # picked list
+        score(raw, [FlightConflictCost(), RequiredSkillCost(weight=500)])
+        score(raw, [FlightConflictCost(), FlightConflictCost(exponent=2, offset=1)])
 
     No solver and no search are involved. The arithmetic matches the engine —
-    each employee contributes ``weight * shape(cost, exponent)`` and hard
-    contributions are **rounded per employee** before summing (the same order as
-    the engine; rounding the total afterwards gives different values).
+    each employee contributes ``weight * shape(cost, exponent, offset, clip)`` and
+    hard contributions are **rounded per employee** before summing (the same order
+    as the engine; rounding the total afterwards gives different values). A second
+    pick of a constraint reads the same raw costs with its own knobs.
 
     When ``constraints`` is given, only those constraints are scored — the same
     semantics as `get_constraints`. Unknown names raise ValueError.

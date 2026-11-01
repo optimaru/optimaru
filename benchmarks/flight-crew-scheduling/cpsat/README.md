@@ -17,6 +17,12 @@ solvers cannot disagree on a default. `hard=False` demotes a constraint to the s
 in both solvers. Not supported on CP-SAT (refused): `exponent != 1` and non-integer
 weights.
 
+**0.3.0:** a constraint may be picked several times (as specs or as
+`{"name", "weight", "hard", "offset", "clip"}` mappings); each pick builds its own terms
+with its own knobs. Every plugin adds one term per employee, an idle one included, so an
+integral `offset` shapes each employee exactly as the engine does in both `clip` modes; a
+fractional offset is refused (`offset must be an integer for CP-SAT`).
+
 ## Engine comparison
 
 The comparison runner is owned by this use case. It builds deterministic

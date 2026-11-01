@@ -37,6 +37,25 @@ unknown now (no aliases). The defaults are declared once, as each component's
 `fcs::REQUIRED_SKILL_WEIGHT` ... `LAST_NOT_HOME_WEIGHT` constants of `domain.hpp` are gone).
 Raw costs, levels, weights and the default score are unchanged.
 
+**0.3.0:** every constraint takes two more knobs, `offset` and `clip` (keyword-only), and
+may be picked several times. Each employee's raw cost `x` is shaped as
+`sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
+`(x - offset) ** exponent`, sign-preserving (`clip=False`, which lowers the penalty of
+every employee below the offset, an idle one included); `offset=0` is the 0.2.0 shaping.
+Each pick is its own instance with its own knobs, and the instances add up:
+
+```python
+from flight_crew.constraints import FlightConflictCost, get_constraints
+
+fc.solve(problem, constraints=[
+    *get_constraints(),                                   # the defaults
+    FlightConflictCost(weight=10, exponent=2, offset=1),  # + 10 x (conflicts beyond the first)^2
+])
+```
+
+`fc.constraint_costs(schedule, picks)` keys the second pick `flight_conflict_cost#2`. The
+CP-SAT reference takes integral offsets.
+
 "Consecutive" follows the Java stream semantics: a pair (a, b) is consecutive when
 dep(a) < dep(b) and no other assignment c of the same crew member satisfies
 dep(a) <= dep(c) < dep(b) — with tied departure times, assignments at that time cannot
@@ -182,7 +201,7 @@ solver's `solve` before the engine runs — the engine only fills what is still 
 4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
    `description_en` / `description_ko` to `python/flight_crew/constraints.py` (plus its
    module-level default instance); callers then pick, reweight or flip it:
-   `constraints=get_constraints([..., MyRuleCost(weight=5, hard=True)])`;
+   `constraints=[..., MyRuleCost(weight=5, hard=True)]`;
 5. mirror it in the CP-SAT model in
    [`benchmarks/flight-crew-scheduling/cpsat`](../../benchmarks/flight-crew-scheduling/cpsat) (a
    plugin subclassing the spec; defaults come from `constraint_info()`) so the benchmark stays
