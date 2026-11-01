@@ -46,7 +46,10 @@ Every spec takes five knobs:
                included, never the "no bed" sentinel) for the per-bed
                constraints, only the sentinel for ``UnassignedStaysCost``, and
                the one total for ``MixedGenderRoomCost``; a ``constraint_costs()``
-               entry lists its evaluated units as ``"units"``.
+               entry lists its evaluated units as ``"units"``. With an offset it
+               is refused on hard (the seven hard constraints by default),
+               because hard 0 must mean no violation; medium folds into soft
+               here, so it takes the literal formula.
 
 The same constraint may be picked several times; each pick is scored on its own with
 its own knobs and the picks add up. The unassigned nights on the medium level, plus the

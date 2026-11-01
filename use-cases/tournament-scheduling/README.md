@@ -69,7 +69,10 @@ one total for the two imbalance constraints) is shaped as `sign(x) * max(0, |x| 
 as a reward below the offset); `offset=0` is the 0.2.0 shaping. `team_conflict_cost`
 evaluates every team; `team_unavailability_cost` is scoped to the teams with an
 unavailability fact (its `constraint_costs()` entry lists them as `"units"`), so its
-literal offset charges those teams only. Each pick is its own instance with its own knobs,
+literal offset charges those teams only. Both apply per team (or on an imbalance's total),
+not to the total violation. `clip=False` with an offset is refused on hard (the two team
+constraints by default), because hard 0 must mean no violation; medium folds into soft
+here, so it takes the literal formula. Each pick is its own instance with its own knobs,
 and the instances add up:
 
 ```python

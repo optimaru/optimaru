@@ -23,7 +23,10 @@ terms with its own knobs, its level included, keyed `name`, `name#2`, … like t
 `constraint_costs()`. Every plugin adds one term per engine unit (per real bed, the "no
 bed" sentinel for `unassigned_stays_cost`, one total for `mixed_gender_room_cost`), so an
 integral offset is shaped exactly as in the engine, in both modes; a fractional offset is
-refused (`offset must be an integer for CP-SAT`). `tests/test_solve.py` pins all 27
+refused (`offset must be an integer for CP-SAT`). `clip=False` with an offset is refused on
+hard with the engine's message (`constraint 'bed_conflict_cost': clip=False with a non-zero
+offset cannot be hard, ...`); medium folds into soft, as in the engine, so it takes the
+literal formula. `tests/test_solve.py` pins all 27
 assignments of a tiny instance and checks that the CP-SAT objective, the engine's own score
 and `bed_allocation.constraints.score()` agree per level under repeated, shifted and
 re-levelled picks.

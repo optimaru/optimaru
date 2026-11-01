@@ -85,7 +85,8 @@ Pick, reweight or flip them through `bed_allocation.constraints`
 Every spec takes `weight=None` (the C++ default, in units of its level), `level=None` (the
 default level, otherwise a `Level` or its name), `exponent=1.0` and the keyword-only
 `offset=0.0` / `clip=True` (`clip=True` counts only what lies beyond the offset,
-`clip=False` shapes `x - offset` as it is). `unassigned_stays_cost` is the only medium
+`clip=False` shapes `x - offset` as it is, per evaluated unit, and is refused with an offset
+on hard, because hard 0 must mean no violation). `unassigned_stays_cost` is the only medium
 constraint by default: `level="hard"` charges one hard unit per night, `level="soft"` one
 soft unit per night (outside the 10^9 fold), and an explicit weight is in units of the
 level in effect. Any constraint may take any of the three levels, so

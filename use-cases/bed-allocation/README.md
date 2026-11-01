@@ -88,8 +88,11 @@ constraint evaluates, a raw 0 included, and acts as a reward below the offset);
 `offset=0` is the 0.2.0 shaping. The per-bed constraints evaluate the real beds, an empty
 one included, and never the "no bed" sentinel (it is no bed); `unassigned_stays_cost`
 evaluates the sentinel only. A `constraint_costs()` entry lists its evaluated units as
-`"units"`, and the literal offset charges exactly those. Each pick is its own instance
-with its own knobs, and the instances add up:
+`"units"`, and the literal offset charges exactly those. Both apply per evaluated unit, not
+to the total. `clip=False` with an offset is refused on hard (by default, every constraint
+the table lists as hard), because hard 0 must mean no violation; medium folds into soft
+here, so it takes the literal formula. Each pick is its own instance with its own knobs,
+and the instances add up:
 
 ```python
 ba.solve(plan, constraints=[

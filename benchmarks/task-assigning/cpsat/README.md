@@ -26,7 +26,12 @@ the engine's `constraint_costs()`. Every plugin adds one term per employee (an i
 included; the priority end-time plugins add one per task at offset 0, which sums to the
 same per-employee raw cost) or, for `unassigned_tasks_cost`, one for its total, so an
 integral offset is shaped exactly as in the engine, in both modes; a fractional offset is
-refused (`offset must be an integer for CP-SAT`). `tests/test_solve.py` pins several layouts and checks
+refused (`offset must be an integer for CP-SAT`). The objective is built with the engine's
+medium fold (`medium_fold="below_hard"`, read off `constraint_costs()`), so `clip=False`
+with an offset is refused on hard and on medium with the engine's messages (`constraint
+'required_skill_cost': clip=False with a non-zero offset cannot be hard, ...` and
+`constraint 'unassigned_tasks_cost': clip=False with a non-zero offset cannot be medium
+here, ...`). `tests/test_solve.py` pins several layouts and checks
 that the CP-SAT objective, `task_assigning.constraints.score()` and (wherever every task
 is assigned) the engine's own score agree per level under repeated, shifted and
 re-levelled picks.

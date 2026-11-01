@@ -356,15 +356,18 @@ SELECTIONS = {
     "repeat-literal": [
         BedConflictCost(),
         MixedGenderRoomCost(),
-        MixedGenderRoomCost(weight=3, offset=1, clip=False),
+        # The literal formula with an offset is refused on hard; its copy sits on soft.
+        MixedGenderRoomCost(level="soft", weight=3, offset=1, clip=False),
         UnassignedStaysCost(offset=3, clip=False),
         DepartmentSpecialtyPriorityCost(offset=-1),
         PreferredPatientEquipmentCost(offset=1, clip=False),
     ],
     "hard-offsets": [
         BedConflictCost(offset=1),
-        BedConflictCost(weight=2, offset=2, clip=False),
-        DepartmentMaxAgeCost(offset=-3, clip=False),
+        # Hard takes thresholds only; the literal copies of the hard constraints sit on soft.
+        BedConflictCost(level="soft", weight=2, offset=2, clip=False),
+        DepartmentMaxAgeCost(offset=-3),
+        DepartmentMaxAgeCost(level="soft", offset=-3, clip=False),
         UnassignedStaysCost(level="hard", offset=1),
     ],
     "identical-twice": [
@@ -472,3 +475,86 @@ def test_a_fractional_offset_is_refused_by_cpsat() -> None:
             time_limit_seconds=1,
             constraints=[UnassignedStaysCost(offset=0.5)],
         )
+
+
+# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+
+HARD_REFUSAL = (
+    "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
+    "violation; use clip=True (a threshold) or another level"
+)
+
+
+@pytest.mark.parametrize("offset", [2, -2])
+@pytest.mark.parametrize(
+    "selection",
+    [
+        lambda offset: BedConflictCost(
+            offset=offset, clip=False
+        ),  # the default level, hard
+        lambda offset: {"name": "bed_conflict_cost", "offset": offset, "clip": False},
+        lambda offset: MixedGenderRoomCost(
+            offset=offset, clip=False
+        ),  # the global, hard
+        lambda offset: UnassignedStaysCost(level="hard", offset=offset, clip=False),
+        lambda offset: {
+            "name": "preferred_max_room_capacity_cost",
+            "level": "hard",
+            "offset": offset,
+            "clip": False,
+        },
+    ],
+    ids=[
+        "bed-conflict-spec",
+        "bed-conflict-mapping",
+        "mixed-gender-spec",
+        "unassigned-moved-to-hard",
+        "capacity-mapping-moved-to-hard",
+    ],
+)
+def test_the_literal_offset_is_refused_on_hard_like_the_engine(
+    selection, offset
+) -> None:
+    """The CP-SAT reference refuses the pick with the engine's and score()'s message."""
+    pick = selection(offset)
+    name = pick["name"] if isinstance(pick, dict) else pick.name
+    message = HARD_REFUSAL.format(q=repr(name))
+    for picks in ([pick], [BedConflictCost(), UnassignedStaysCost(), pick]):
+        with pytest.raises(ValueError) as refused:
+            solve(_tiny_problem(), time_limit_seconds=1, constraints=picks)
+        assert str(refused.value) == message
+        with pytest.raises(ValueError) as refused:
+            build_model(_tiny_problem(), picks)
+        assert str(refused.value) == message
+    if not isinstance(pick, dict):
+        # The engine and the score() mirror say the same.
+        core = _tiny_problem().to_core()
+        with pytest.raises(ValueError) as refused:
+            domain.constraint_costs(core, [pick])
+        assert str(refused.value) == message
+        with pytest.raises(ValueError) as refused:
+            score(domain.constraint_costs(core), [pick])
+        assert str(refused.value) == message
+
+
+@pytest.mark.parametrize("offset", [2, -2])
+def test_the_same_literal_pick_on_soft_is_accepted(offset) -> None:
+    """On soft, and on medium (it folds into soft here), the literal pick reaches the
+    brute-force optimum like the engine scores it."""
+    for level in ("soft", "medium"):
+        picks = [
+            BedConflictCost(),
+            UnassignedStaysCost(),
+            BedConflictCost(level=level, offset=offset, clip=False),
+        ]
+        problem = _tiny_problem()
+        best = max(
+            tuple(score(domain.constraint_costs(core, picks), picks))
+            for _, core in _assignments(problem)
+        )
+        solved = solve(problem, time_limit_seconds=5, constraints=picks)
+        reported = (
+            solved.score_hard,
+            solved.score_medium * MEDIUM_UNIT + solved.score_soft,
+        )
+        assert reported == pytest.approx(best)

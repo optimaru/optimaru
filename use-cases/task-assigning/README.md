@@ -97,8 +97,12 @@ may be picked several times. A raw cost `x` (per employee for the five unit cons
 the one total for `unassigned_tasks_cost`) is shaped as `sign(x) * max(0, |x| - offset) **
 exponent` (`clip=True`, the default) or `(x - offset) ** exponent`, sign-preserving
 (`clip=False`, which charges every employee, an idle one included, and acts as a reward
-below the offset); `offset=0` is the 0.2.0 shaping. Each pick is its own instance with its
-own knobs, and the instances add up:
+below the offset); `offset=0` is the 0.2.0 shaping. Both apply per employee (or on the
+global's total), not to the total violation. `clip=False` with an offset is refused on hard
+(`required_skill_cost` by default) and on medium (`unassigned_tasks_cost` by default),
+because medium folds below hard here, so it counts toward the hard score, and hard 0 must
+mean no violation; use a threshold (`clip=True`) there, or move the pick to soft. Each pick
+is its own instance with its own knobs, and the instances add up:
 
 ```python
 ta.solve(solution, constraints=[

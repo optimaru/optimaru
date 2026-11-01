@@ -19,8 +19,10 @@
 //   (j) repeated components and the offset / clip knobs: a hand-calculated
 //       repeat, threshold and literal offsets by hand (the scoped
 //       teamUnavailabilityCost evaluates only the teams with a fact), the
-//       globals' totals shaped once, incremental == a fresh recompute over a
-//       random walk and a FULL_ASSERT solve with repeated, shifted components
+//       globals' totals shaped once, the literal formula refused on hard at
+//       reset and kept on soft (and on the into_soft medium), incremental ==
+//       a fresh recompute over a random walk and a FULL_ASSERT solve with
+//       repeated, shifted components
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -29,6 +31,7 @@
 #include <functional>
 #include <memory>
 #include <random>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -832,14 +835,24 @@ ConstraintAssembly repeatedAssembly()
 {
     ConstraintAssembly assembly = defaultConstraints();
     assembly.offset("teamConflictCost", 1.0);
+    // The literal copies of the two hard constraints sit on soft: hard refuses
+    // the literal formula with an offset (hard 0 must mean no violation).
     assembly.addInstances(std::move(copyOf("teamConflictCost")
+                                        .soft("teamConflictCost")
                                         .weight("teamConflictCost", 2.0)
                                         .offset("teamConflictCost", 1.0)
                                         .clip("teamConflictCost", false)));
+    assembly.addInstances(std::move(copyOf("teamConflictCost")
+                                        .weight("teamConflictCost", 2.0)
+                                        .offset("teamConflictCost", 1.0)));
     assembly.addInstances(std::move(copyOf("teamUnavailabilityCost")
+                                        .soft("teamUnavailabilityCost")
                                         .exponent("teamUnavailabilityCost", 2.0)
                                         .offset("teamUnavailabilityCost", -1.0)
                                         .clip("teamUnavailabilityCost", false)));
+    assembly.addInstances(std::move(copyOf("teamUnavailabilityCost")
+                                        .exponent("teamUnavailabilityCost", 2.0)
+                                        .offset("teamUnavailabilityCost", -1.0)));
     assembly.addInstances(
         std::move(copyOf("assignmentCountImbalanceCost")
                       .exponent("assignmentCountImbalanceCost", 2.0)
@@ -887,27 +900,27 @@ void verifyRepeatsAndOffsets()
     }
     {
         TournamentSchedule s = repeatInstance();
-        check(levelsWith(copyOf("teamUnavailabilityCost")
-                             .offset("teamUnavailabilityCost", 3.0)
-                             .clip("teamUnavailabilityCost", false),
-                         s)
-                      .hard
-                  == 4,
-              "unavailability literal offset 3: (2 - 3) + (0 - 3) on T0, T2 only");
+        const auto unavailable = levelsWith(copyOf("teamUnavailabilityCost")
+                                                .soft("teamUnavailabilityCost")
+                                                .offset("teamUnavailabilityCost", 3.0)
+                                                .clip("teamUnavailabilityCost", false),
+                                            s);
+        check(unavailable.hard == 0 && unavailable.soft == 4.0,
+              "unavailability literal offset 3 on soft: (2 - 3) + (0 - 3) on T0, T2 only");
         check(levelsWith(copyOf("teamUnavailabilityCost")
                              .offset("teamUnavailabilityCost", -1.0),
                          s)
                       .hard
                   == -3,
               "unavailability threshold offset -1: T0 only, 2 + 1");
-        check(levelsWith(copyOf("teamConflictCost")
-                             .weight("teamConflictCost", 3.0)
-                             .offset("teamConflictCost", 0.5)
-                             .clip("teamConflictCost", false),
-                         s)
-                      .hard
-                  == 6,
-              "conflict literal offset 0.5 at weight 3: llround(-1.5) x 3 teams");
+        const auto conflict = levelsWith(copyOf("teamConflictCost")
+                                             .soft("teamConflictCost")
+                                             .weight("teamConflictCost", 3.0)
+                                             .offset("teamConflictCost", 0.5)
+                                             .clip("teamConflictCost", false),
+                                         s);
+        check(conflict.hard == 0 && conflict.soft == 4.5,
+              "conflict literal offset 0.5 at weight 3 on soft: 3 teams x (-1.5), not rounded");
         const auto confrontation
             = levelsWith(copyOf("confrontationCountImbalanceCost")
                              .offset("confrontationCountImbalanceCost", 1.0)
@@ -924,11 +937,78 @@ void verifyRepeatsAndOffsets()
         const auto promoted
             = levelsWith(copyOf("assignmentCountImbalanceCost")
                              .hard("assignmentCountImbalanceCost")
+                             .offset("assignmentCountImbalanceCost", 1.0),
+                         s);
+        check(promoted.hard == -1 && promoted.medium == 0.0,
+              "a hard threshold offset 1 on the total: llround(1.16025) -> -1 hard");
+        const auto demoted
+            = levelsWith(copyOf("assignmentCountImbalanceCost")
+                             .soft("assignmentCountImbalanceCost")
                              .offset("assignmentCountImbalanceCost", 3.0)
                              .clip("assignmentCountImbalanceCost", false),
                          s);
-        check(promoted.hard == 1 && promoted.medium == 0.0,
-              "a hard literal offset 3 on the total: llround(-0.83975) -> +1 hard");
+        check(demoted.hard == 0 && demoted.medium == 0.0 && near(demoted.soft, -(medium - 3.0)),
+              "a soft literal offset 3 on the total: +0.83975 soft (not rounded)");
+        const auto onMedium
+            = levelsWith(copyOf("assignmentCountImbalanceCost")
+                             .offset("assignmentCountImbalanceCost", 3.0)
+                             .clip("assignmentCountImbalanceCost", false),
+                         s);
+        check(onMedium.hard == 0 && near(onMedium.medium, -(medium - 3.0)),
+              "the literal offset 3 on the into_soft medium: +0.83975 medium");
+    }
+    {
+        // On hard (the default level of teamConflictCost and
+        // teamUnavailabilityCost) the literal formula with an offset is
+        // refused at reset, whichever sign and setter order: +0.5 would reward
+        // every team without a conflict (+6 hard, a feasible-looking score),
+        // -0.5 would charge teams without one.
+        auto resetRefusal = [](ConstraintAssembly assembly) {
+            TournamentSchedule s = repeatInstance();
+            try
+            {
+                levelsWith(std::move(assembly), s);
+            }
+            catch (const std::logic_error &error)
+            {
+                return std::string(error.what());
+            }
+            return std::string();
+        };
+        auto refusal = [](const std::string &name) {
+            return "Constraint '" + name
+                   + "' cannot use clip=false with a non-zero offset on a level that counts "
+                     "toward the hard score (hard 0 must mean no violation)";
+        };
+        check(resetRefusal(copyOf("teamConflictCost")
+                               .offset("teamConflictCost", 0.5)
+                               .clip("teamConflictCost", false))
+                      == refusal("teamConflictCost")
+                  && resetRefusal(copyOf("teamConflictCost")
+                                      .clip("teamConflictCost", false)
+                                      .offset("teamConflictCost", -0.5))
+                         == refusal("teamConflictCost"),
+              "conflict literal offset +-0.5 on hard: refused at reset");
+        check(resetRefusal(copyOf("teamUnavailabilityCost")
+                               .offset("teamUnavailabilityCost", 3.0)
+                               .clip("teamUnavailabilityCost", false))
+                  == refusal("teamUnavailabilityCost"),
+              "the scoped unavailability literal offset on its default hard level: refused");
+        check(resetRefusal(copyOf("confrontationCountImbalanceCost")
+                               .offset("confrontationCountImbalanceCost", 1.0)
+                               .clip("confrontationCountImbalanceCost", false)
+                               .hard("confrontationCountImbalanceCost"))
+                      == refusal("confrontationCountImbalanceCost")
+                  && resetRefusal(copyOf("assignmentCountImbalanceCost")
+                                      .hard("assignmentCountImbalanceCost")
+                                      .offset("assignmentCountImbalanceCost", 3.0)
+                                      .clip("assignmentCountImbalanceCost", false))
+                         == refusal("assignmentCountImbalanceCost"),
+              "a soft / medium literal pick moved to hard (before or after): refused at reset");
+        check(resetRefusal(copyOf("teamConflictCost").offset("teamConflictCost", 0.5)).empty()
+                  && resetRefusal(copyOf("teamConflictCost").clip("teamConflictCost", false))
+                         .empty(),
+              "allowed: a hard threshold offset and hard clip=false with offset 0");
     }
     {
         // Random walk: incremental == a fresh calculator of the same assembly.

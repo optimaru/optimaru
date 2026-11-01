@@ -344,11 +344,13 @@ HARD_SELECTIONS = {
         TeamUnavailabilityCost(),
         TeamUnavailabilityCost(),
     ],
+    # The literal formula with an offset is refused on hard: the literal copies of the
+    # two hard constraints sit on soft.
     "offsets": [
         TeamConflictCost(offset=1),
-        TeamConflictCost(offset=1, clip=False),
+        TeamConflictCost(level="soft", offset=1, clip=False),
         TeamUnavailabilityCost(offset=-1),
-        TeamUnavailabilityCost(weight=2, offset=3, clip=False),
+        TeamUnavailabilityCost(level="soft", weight=2, offset=3, clip=False),
     ],
     "soft-offsets": [
         TeamConflictCost(level="soft", offset=2, clip=False),
@@ -436,13 +438,19 @@ def test_mapping_selections_repeat_and_shift_like_specs() -> None:
     specs = [
         TeamConflictCost(),
         TeamUnavailabilityCost(),
-        TeamUnavailabilityCost(weight=3, offset=1, clip=False),
+        TeamUnavailabilityCost(level="soft", weight=3, offset=1, clip=False),
         AssignmentCountImbalanceCost(),
     ]
     dicts = [
         {"name": "team_conflict_cost"},
         {"name": "team_unavailability_cost"},
-        {"name": "team_unavailability_cost", "weight": 3, "offset": 1, "clip": False},
+        {
+            "name": "team_unavailability_cost",
+            "level": "soft",
+            "weight": 3,
+            "offset": 1,
+            "clip": False,
+        },
         {"name": "assignment_count_imbalance_cost"},
     ]
     problem = _parity_problem()
@@ -458,3 +466,92 @@ def test_a_fractional_offset_is_refused_by_cpsat() -> None:
             time_limit_seconds=1,
             constraints=[TeamConflictCost(offset=0.5)],
         )
+
+
+# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+
+HARD_REFUSAL = (
+    "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
+    "violation; use clip=True (a threshold) or another level"
+)
+
+
+@pytest.mark.parametrize("offset", [2, -2])
+@pytest.mark.parametrize(
+    "selection",
+    [
+        lambda offset: TeamConflictCost(
+            offset=offset, clip=False
+        ),  # the default level, hard
+        lambda offset: {"name": "team_conflict_cost", "offset": offset, "clip": False},
+        lambda offset: TeamUnavailabilityCost(
+            offset=offset, clip=False
+        ),  # scoped, hard
+        # A surrogate refuses any offset, but the literal rule speaks first, as in the engine.
+        lambda offset: AssignmentCountImbalanceCost(
+            level="hard", offset=offset, clip=False
+        ),
+        lambda offset: {
+            "name": "confrontation_count_imbalance_cost",
+            "level": "hard",
+            "offset": offset,
+            "clip": False,
+        },
+    ],
+    ids=[
+        "conflict-spec",
+        "conflict-mapping",
+        "unavailability-spec",
+        "assignment-moved-to-hard",
+        "confrontation-mapping-moved-to-hard",
+    ],
+)
+def test_the_literal_offset_is_refused_on_hard_like_the_engine(
+    selection, offset
+) -> None:
+    """The CP-SAT reference refuses the pick with the engine's and score()'s message."""
+    pick = selection(offset)
+    name = pick["name"] if isinstance(pick, dict) else pick.name
+    message = HARD_REFUSAL.format(q=repr(name))
+    for picks in ([pick], [TeamConflictCost(), TeamUnavailabilityCost(), pick]):
+        with pytest.raises(ValueError) as refused:
+            solve(_parity_problem(), time_limit_seconds=1, constraints=picks)
+        assert str(refused.value) == message
+    if not isinstance(pick, dict):
+        # The engine and the score() mirror say the same.
+        core = _parity_problem().to_core()
+        with pytest.raises(ValueError) as refused:
+            domain.constraint_costs(core, [pick])
+        assert str(refused.value) == message
+        with pytest.raises(ValueError) as refused:
+            score(domain.constraint_costs(core), [pick])
+        assert str(refused.value) == message
+
+
+@pytest.mark.parametrize("offset", [2, -2])
+@pytest.mark.parametrize("level", ["soft", "medium"])
+def test_the_same_literal_pick_on_soft_is_accepted(level, offset) -> None:
+    """On soft, and on medium (it folds into soft here), the literal pick's terms equal
+    the engine's score on every pinned layout."""
+    from ortools.sat.python import cp_model
+
+    from tournament_scheduling_cpsat import build_model
+
+    selection = [
+        TeamConflictCost(),
+        TeamUnavailabilityCost(),
+        TeamConflictCost(level=level, offset=offset, clip=False),
+        TeamUnavailabilityCost(level=level, offset=offset, clip=False),
+    ]
+    for layout in _LAYOUTS:
+        problem = _pinned(layout, _FACTS)
+        _, objective, _ = build_model(problem, selection)
+        solver = cp_model.CpSolver()
+        solver.parameters.num_search_workers = 1
+        assert objective.solve(solver) == cp_model.OPTIMAL
+        levels = objective.score(solver)
+        core = problem.to_core()
+        engine = score(domain.constraint_costs(core, selection), selection)
+        assert _engine_solve(core, selection) == tuple(engine), layout
+        folded = levels["medium"] * domain.MEDIUM_SCALE + levels["soft"]
+        assert (levels["hard"], folded) == tuple(engine), layout

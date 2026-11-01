@@ -680,13 +680,15 @@ def test_a_repeated_medium_pick_adds_up():
         (MinorPriorityTaskEndTimeCost(offset=2, exponent=2), (0, -(3**2))),
         (MinorPriorityTaskEndTimeCost(offset=3, exponent=3, clip=False), (0, -(-(3**3) + 2**3 - 3**3))),
         (SquaredMakespanCost(offset=100), (0, -SOFT1_WEIGHT * 800)),
-        # Hard picks fold by 10^9 below hard; hard rounding is per employee.
-        (RequiredSkillCost(offset=2, clip=False), (5 * MEDIUM_PER_HARD, 0.0)),  # (1-2) + (0-2) x 2
-        (RequiredSkillCost(weight=3, offset=0.5, clip=False), (2 * MEDIUM_PER_HARD, 0.0)),  # 1.5 -> 2, -1.5 -> -2 x 2
+        # Hard picks fold by 10^9 below hard; hard rounding is per employee. Hard and medium
+        # (it folds below hard here) refuse the literal formula with an offset, so its
+        # numbers are checked on soft: (1 - 2) + (0 - 2) x 2, the idle employee included.
+        (RequiredSkillCost(weight=3, offset=0.5), (-2 * MEDIUM_PER_HARD, 0.0)),  # 1.5 -> 2 on e0
+        (RequiredSkillCost(level="soft", offset=2, clip=False), (0, 5.0)),
+        (RequiredSkillCost(level="soft", weight=2, offset=0.5, clip=False), (0, 1.0)),  # 1 - 1 - 1, not rounded
         # The global's total (0 here) is shaped once.
-        (UnassignedTasksCost(offset=3, clip=False), (3, 0.0)),
+        (UnassignedTasksCost(level="soft", offset=3, clip=False), (0, 3.0)),
         (UnassignedTasksCost(offset=3), (0, 0.0)),
-        (UnassignedTasksCost(offset=3, clip=False, level="hard"), (3 * MEDIUM_PER_HARD, 0.0)),
     ],
 )
 def test_offsets_by_hand_on_both_paths(pick, expected):
@@ -703,7 +705,8 @@ def test_offsets_by_hand_on_both_paths(pick, expected):
     ("make_pick", "expected"),
     [
         (lambda tasks: UnassignedTasksCost(offset=2, exponent=2), lambda tasks: (-((tasks - 2) ** 2), 0.0)),
-        (lambda tasks: UnassignedTasksCost(offset=tasks + 5, clip=False), lambda tasks: (5, 0.0)),
+        # The literal formula with an offset stays off the below-hard medium: on soft.
+        (lambda tasks: UnassignedTasksCost(level="soft", offset=tasks + 5, clip=False), lambda tasks: (0, 5.0)),
     ],
     ids=["threshold-squared", "literal"],
 )
@@ -735,11 +738,13 @@ SELECTIONS = {
     "repeat": [*get_constraints(), *REPEAT, UnassignedTasksCost(weight=2, exponent=2)],
     "repeat-and-offsets": [
         RequiredSkillCost(),
-        RequiredSkillCost(weight=1, offset=1, clip=False),
+        RequiredSkillCost(level="soft", weight=1, offset=1, clip=False),  # hard refuses the literal formula
+        RequiredSkillCost(weight=1, offset=1),
         SquaredMakespanCost(),
         SquaredMakespanCost(weight=0.5, offset=1000000, clip=False),
         CriticalPriorityTaskEndTimeCost(offset=30),
-        MajorPriorityTaskEndTimeCost(offset=-5, clip=False, level="hard"),
+        MajorPriorityTaskEndTimeCost(offset=-5, level="hard"),
+        MajorPriorityTaskEndTimeCost(offset=-5, clip=False),
         MinorPriorityTaskEndTimeCost(exponent=2, offset=10),
         UnassignedTasksCost(),
         UnassignedTasksCost(offset=-2, level="soft", weight=3),
@@ -836,23 +841,27 @@ def test_the_knob_was_renamed():
         ([RequiredSkillCost(level="soft", weight=2)], (0, -2.0)),
         ([UnassignedTasksCost(level=Level.SOFT, offset=1, clip=False)], (0, 1.0)),
         # A repeat carries its own level and shaping: the soft critical end times, 4 x the part
-        # beyond 6 on medium, and hard (x - 12) per employee: -2 - 12 - 12 = -26, a hard reward.
+        # beyond 6 on medium, hard the part beyond 8 per employee (2), and soft (x - 12) per
+        # employee: -2 - 12 - 12 = -26, a reward (hard and medium refuse the literal formula
+        # with an offset).
         (
             [
                 CriticalPriorityTaskEndTimeCost(),
                 CriticalPriorityTaskEndTimeCost(level="medium", offset=6),
-                CriticalPriorityTaskEndTimeCost(level="hard", weight=1, offset=12, clip=False),
+                CriticalPriorityTaskEndTimeCost(level="hard", weight=1, offset=8),
+                CriticalPriorityTaskEndTimeCost(level="soft", weight=1, offset=12, clip=False),
             ],
-            (26 * MEDIUM_PER_HARD - 16, -40.0),
+            (-2 * MEDIUM_PER_HARD - 16, -40.0 + 26),
         ),
-        # The medium global repeated onto all three levels, each total (0) shaped once.
+        # The medium global repeated onto all three levels, each total (0) shaped once: a
+        # threshold adds nothing to it on hard, the literal formula charges it on soft.
         (
             [
                 UnassignedTasksCost(),
-                UnassignedTasksCost(level=Level.HARD, offset=2, clip=False),
+                UnassignedTasksCost(level=Level.HARD, offset=2),
                 UnassignedTasksCost(level=Level.SOFT, weight=3, offset=-1, clip=False),
             ],
-            (2 * MEDIUM_PER_HARD, -3.0),
+            (0, -3.0),
         ),
     ],
 )
@@ -881,3 +890,121 @@ def test_a_repeat_is_checked_on_its_own_level():
         _zero_budget(_hand(), [RequiredSkillCost(), pick])
     with pytest.raises(ValueError, match="constraint 'required_skill_cost': level must be 'hard', 'medium' or 'soft'"):
         score(ta.constraint_costs(_hand()), [RequiredSkillCost(), pick])
+
+
+# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+# Medium folds BELOW hard here (engine.hard = hard * 10^9 + medium), so medium counts
+# toward the hard score and refuses the literal formula too, with its own message.
+
+HARD_REFUSAL = (
+    "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
+    "violation; use clip=True (a threshold) or another level"
+)
+MEDIUM_REFUSAL = (
+    "constraint {q}: clip=False with a non-zero offset cannot be medium here, where medium counts "
+    "toward the hard score; use clip=True (a threshold) or level='soft'"
+)
+
+
+def _refusal(call):
+    with pytest.raises(ValueError) as refused:
+        call()
+    return str(refused.value)
+
+
+@pytest.mark.parametrize("offset", [2.5, -2.5])
+@pytest.mark.parametrize(
+    ("pick", "refusal"),
+    [
+        (lambda offset: RequiredSkillCost(offset=offset, clip=False), HARD_REFUSAL),  # the default, hard
+        (lambda offset: RequiredSkillCost(level="hard", offset=offset, clip=False), HARD_REFUSAL),
+        (lambda offset: UnassignedTasksCost(level=Level.HARD, offset=offset, clip=False), HARD_REFUSAL),
+        (lambda offset: MinorPriorityTaskEndTimeCost(level="hard", offset=offset, clip=False), HARD_REFUSAL),
+        (lambda offset: UnassignedTasksCost(offset=offset, clip=False), MEDIUM_REFUSAL),  # the default, medium
+        (lambda offset: UnassignedTasksCost(level="medium", offset=offset, clip=False), MEDIUM_REFUSAL),
+        (lambda offset: CriticalPriorityTaskEndTimeCost(level="medium", offset=offset, clip=False), MEDIUM_REFUSAL),
+        (lambda offset: SquaredMakespanCost(level=Level.MEDIUM, offset=offset, clip=False), MEDIUM_REFUSAL),
+    ],
+    ids=[
+        "required-skill-default-hard",
+        "required-skill-level-hard",
+        "unassigned-moved-to-hard",
+        "minor-moved-to-hard",
+        "unassigned-default-medium",
+        "unassigned-level-medium",
+        "critical-moved-to-medium",
+        "makespan-moved-to-medium",
+    ],
+)
+def test_the_literal_offset_is_refused_where_it_counts_toward_hard(pick, refusal, offset):
+    """A positive offset would reward the employees below it, so one employee's slack would
+    cancel another's missing skill (or a left-out task) and an infeasible plan could score
+    hard 0; a negative one would charge every employee, an idle one included. The engine
+    (solve, solve_with_constraints, constraint_costs) and the score() mirror refuse it with
+    the same message; the CP-SAT reference's test_solve.py checks the same words."""
+    spec = pick(offset)
+    message = refusal.format(q=repr(spec.name))
+    repeated = [type(spec)(), spec]  # a refused repeat next to its accepted first instance
+    assert _refusal(lambda: ta.solve(build_solution(), time_limit_seconds=0.1, constraints=[spec])) == message
+    assert _refusal(lambda: _zero_budget(_hand(), repeated)) == message
+    assert _refusal(lambda: ta.constraint_costs(_hand(), [spec])) == message
+    assert _refusal(lambda: ta.constraint_costs(_hand(), repeated)) == message
+    assert _refusal(lambda: score(ta.constraint_costs(_hand()), [spec])) == message
+    assert _refusal(lambda: score(ta.constraint_costs(_hand()), repeated)) == message
+
+
+@pytest.mark.parametrize("offset", [3.0, -3.0])
+def test_the_same_literal_pick_on_soft_is_accepted(offset):
+    """On soft: (1 - offset) + (0 - offset) x 2 per employee, the idle one included, and
+    (0 - offset) on the unassigned total, on every path."""
+    picks = [
+        RequiredSkillCost(level="soft", offset=offset, clip=False),
+        UnassignedTasksCost(level="soft", offset=offset, clip=False),
+    ]
+    expected = (0, 3 * offset - 1 + offset)
+    assert score(ta.constraint_costs(_hand()), picks) == expected
+    raw = ta.constraint_costs(_hand(), picks)
+    assert [(entry["level"], entry["clip"]) for entry in raw.values()] == [("soft", False)] * 2
+    assert score(raw, picks) == expected
+    assert _zero_budget(_hand(), picks) == expected
+    solution = build_solution()
+    full = [RequiredSkillCost(), UnassignedTasksCost(), *picks]
+    ta.solve(solution, time_limit_seconds=0.2, random_seed=1, constraints=full)
+    python = score(ta.constraint_costs(solution), full)
+    assert python.hard == engine(solution.score)[0]
+    assert python.soft == pytest.approx(engine(solution.score)[1])
+
+
+@pytest.mark.parametrize(
+    ("pick", "expected"),
+    [
+        # _hand(): required_skill [1, 0, 0] on hard, critical [10, 0, 0] moved to medium.
+        (RequiredSkillCost(offset=0.5), (-MEDIUM_PER_HARD, 0.0)),  # clip=True on hard: 0.5 -> 1
+        (RequiredSkillCost(offset=-1), (-2 * MEDIUM_PER_HARD, 0.0)),  # adds 1 to the non-zero employee only
+        (RequiredSkillCost(clip=False), (-MEDIUM_PER_HARD, 0.0)),  # clip=False with offset 0: 0.2.0
+        (RequiredSkillCost(offset=0.0, clip=False), (-MEDIUM_PER_HARD, 0.0)),
+        (CriticalPriorityTaskEndTimeCost(level="medium", offset=4), (-24, 0.0)),  # a threshold on medium
+        (CriticalPriorityTaskEndTimeCost(level="medium", clip=False), (-40, 0.0)),
+        (UnassignedTasksCost(offset=-1), (0, 0.0)),  # nothing left out: a threshold adds nothing to 0
+    ],
+)
+def test_the_allowed_combinations_on_hard_and_medium(pick, expected):
+    assert score(ta.constraint_costs(_hand()), [pick]) == expected
+    assert _zero_budget(_hand(), [pick]) == expected
+
+
+def test_the_refusal_comes_after_every_knob_of_a_duck_typed_pick():
+    """The engine checks once a pick's knobs are all re-stated: the level a pick moves to decides."""
+    moved = SimpleNamespace(
+        name="unassigned_tasks_cost", weight=None, level="soft", exponent=1.0, offset=1.0, clip=False
+    )
+    assert _zero_budget(_hand(), [moved]) == (0, 1.0)
+    kept = SimpleNamespace(name="unassigned_tasks_cost", weight=None, level=None, exponent=1.0, offset=1.0, clip=False)
+    message = MEDIUM_REFUSAL.format(q="'unassigned_tasks_cost'")
+    assert _refusal(lambda: _zero_budget(_hand(), [kept])) == message
+    assert _refusal(lambda: ta.constraint_costs(_hand(), [kept])) == message
+    assert _refusal(lambda: score(ta.constraint_costs(_hand()), [kept])) == message
+    hard = SimpleNamespace(name="required_skill_cost", weight=None, level=None, exponent=1.0, offset=1.0, clip=False)
+    message = HARD_REFUSAL.format(q="'required_skill_cost'")
+    assert _refusal(lambda: _zero_budget(_hand(), [hard])) == message
+    assert _refusal(lambda: score(ta.constraint_costs(_hand()), [hard])) == message

@@ -19,9 +19,10 @@
 //       repeat, threshold and literal offsets by hand (the per-bed
 //       constraints evaluate the real beds, an empty one included, and never
 //       the "no bed" sentinel, which is the only unit of
-//       unassignedStaysCost), the global's total shaped once,
-//       incremental == a fresh recompute over a random walk and a
-//       FULL_ASSERT solve with repeated, shifted components
+//       unassignedStaysCost), the global's total shaped once, the literal
+//       formula refused on hard at reset and kept on soft (and on the
+//       into_soft medium), incremental == a fresh recompute over a random
+//       walk and a FULL_ASSERT solve with repeated, shifted components
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -30,6 +31,7 @@
 #include <functional>
 #include <memory>
 #include <random>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -1141,10 +1143,16 @@ ConstraintAssembly repeatedAssembly()
                       .exponent("preferredMaxRoomCapacityCost", 2.0)
                       .offset("preferredMaxRoomCapacityCost", 4.0)
                       .clip("preferredMaxRoomCapacityCost", false)));
+    // The literal bed-conflict copy sits on soft: hard refuses the literal
+    // formula with an offset (hard 0 must mean no violation).
     assembly.addInstances(std::move(copyOf("bedConflictCost")
+                                        .soft("bedConflictCost")
                                         .weight("bedConflictCost", 2.0)
                                         .offset("bedConflictCost", 1.0)
                                         .clip("bedConflictCost", false)));
+    assembly.addInstances(std::move(copyOf("bedConflictCost")
+                                        .weight("bedConflictCost", 2.0)
+                                        .offset("bedConflictCost", 1.0)));
     assembly.addInstances(std::move(copyOf("unassignedStaysCost")
                                         .exponent("unassignedStaysCost", 2.0)
                                         .offset("unassignedStaysCost", 4.0)));
@@ -1219,16 +1227,16 @@ void verifyRepeatsAndOffsets()
                       .soft
                   == -8.0 * 14,
               "threshold offset -1: 8 x 2 x 7, the empty bed stays 0");
-        // A hard literal offset rounds per unit: (0 - 0.5) x 3 = -1.5 -> -2
-        // on each of the three beds, +6 hard.
-        check(levelsWith(copyOf("bedConflictCost")
-                             .weight("bedConflictCost", 3.0)
-                             .offset("bedConflictCost", 0.5)
-                             .clip("bedConflictCost", false),
-                         plan)
-                      .hard
-                  == 6,
-              "bed conflict literal offset 0.5 at weight 3: llround(-1.5) x 3 beds -> +6 hard");
+        // The literal bed-conflict pick on soft: (0 - 0.5) x 3 = -1.5 on each
+        // of the three beds, the empty one included: +4.5 soft (not rounded).
+        const auto conflict = levelsWith(copyOf("bedConflictCost")
+                                             .soft("bedConflictCost")
+                                             .weight("bedConflictCost", 3.0)
+                                             .offset("bedConflictCost", 0.5)
+                                             .clip("bedConflictCost", false),
+                                         plan);
+        check(conflict.hard == 0 && conflict.medium == 0.0 && conflict.soft == 4.5,
+              "bed conflict literal offset 0.5 at weight 3 on soft: 3 beds x (-1.5) -> +4.5 soft");
         // The scoped medium constraint evaluates the sentinel only: 12 - 20.
         const auto scoped = levelsWith(copyOf("unassignedStaysCost")
                                            .offset("unassignedStaysCost", 20.0)
@@ -1244,14 +1252,72 @@ void verifyRepeatsAndOffsets()
         check(entries.size() == 1 && entries[0].scoped
                   && entries[0].units == std::vector<int>{plan.noBedValue()},
               "unassignedStaysCost reports the sentinel as its one evaluated unit");
-        // The global's total (0) is shaped once: (0 - 2) x 1000.
-        check(levelsWith(copyOf("mixedGenderRoomCost")
-                             .offset("mixedGenderRoomCost", 2.0)
-                             .clip("mixedGenderRoomCost", false),
-                         plan)
-                      .hard
-                  == 2000,
-              "mixed-gender literal offset 2 on the single total: +2000 hard");
+        // The global's total (0) is shaped once: (0 - 2) x 1000, on soft.
+        const auto mixed = levelsWith(copyOf("mixedGenderRoomCost")
+                                          .soft("mixedGenderRoomCost")
+                                          .offset("mixedGenderRoomCost", 2.0)
+                                          .clip("mixedGenderRoomCost", false),
+                                      plan);
+        check(mixed.hard == 0 && mixed.soft == 2000.0,
+              "mixed-gender literal offset 2 on the single total, on soft: +2000 soft");
+    }
+    {
+        // On hard (the default level of bedConflictCost and
+        // mixedGenderRoomCost) the literal formula with an offset is refused
+        // at reset, whichever sign and setter order: +0.5 would reward the
+        // three beds (+6 hard, a feasible-looking score), -0.5 would charge
+        // beds that hold no conflict.
+        auto resetRefusal = [](ConstraintAssembly assembly) {
+            BedPlan plan = repeatInstance();
+            try
+            {
+                levelsWith(std::move(assembly), plan);
+            }
+            catch (const std::logic_error &error)
+            {
+                return std::string(error.what());
+            }
+            return std::string();
+        };
+        auto refusal = [](const std::string &name) {
+            return "Constraint '" + name
+                   + "' cannot use clip=false with a non-zero offset on a level that counts "
+                     "toward the hard score (hard 0 must mean no violation)";
+        };
+        check(resetRefusal(copyOf("bedConflictCost")
+                               .offset("bedConflictCost", 0.5)
+                               .clip("bedConflictCost", false))
+                      == refusal("bedConflictCost")
+                  && resetRefusal(copyOf("bedConflictCost")
+                                      .clip("bedConflictCost", false)
+                                      .offset("bedConflictCost", -0.5))
+                         == refusal("bedConflictCost"),
+              "bed conflict literal offset +-0.5 on hard: refused at reset");
+        check(resetRefusal(copyOf("mixedGenderRoomCost")
+                               .offset("mixedGenderRoomCost", 2.0)
+                               .clip("mixedGenderRoomCost", false))
+                  == refusal("mixedGenderRoomCost"),
+              "mixed-gender literal offset on its default hard level: refused at reset");
+        check(resetRefusal(copyOf("preferredMaxRoomCapacityCost")
+                               .offset("preferredMaxRoomCapacityCost", 2.0)
+                               .clip("preferredMaxRoomCapacityCost", false)
+                               .hard("preferredMaxRoomCapacityCost"))
+                      == refusal("preferredMaxRoomCapacityCost")
+                  && resetRefusal(copyOf("unassignedStaysCost")
+                                      .hard("unassignedStaysCost")
+                                      .offset("unassignedStaysCost", 20.0)
+                                      .clip("unassignedStaysCost", false))
+                         == refusal("unassignedStaysCost"),
+              "a soft / medium literal pick moved to hard (before or after): refused at reset");
+        check(resetRefusal(copyOf("bedConflictCost").offset("bedConflictCost", 0.5)).empty()
+                  && resetRefusal(copyOf("bedConflictCost").clip("bedConflictCost", false))
+                         .empty()
+                  && resetRefusal(copyOf("unassignedStaysCost")
+                                      .offset("unassignedStaysCost", 20.0)
+                                      .clip("unassignedStaysCost", false))
+                         .empty(),
+              "allowed: a hard threshold offset, hard clip=false with offset 0, and the "
+              "literal formula on the into_soft medium");
     }
     {
         // Random walk: incremental == a fresh calculator of the same assembly.

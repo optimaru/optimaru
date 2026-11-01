@@ -613,19 +613,21 @@ def test_a_repeated_medium_pick_adds_up():
     ("pick", "expected"),
     [
         # The scoped constraint evaluates T0 (2 facts hit) and T2 (0), never T1.
+        # Hard refuses the literal formula with an offset, so its numbers are checked on soft.
         (TeamUnavailabilityCost(offset=1), (-1, 0.0)),
-        (TeamUnavailabilityCost(offset=3, clip=False), (4, 0.0)),  # (2 - 3) + (0 - 3), not 3 teams
+        (TeamUnavailabilityCost(level="soft", offset=3, clip=False), (0, 4.0)),  # (2 - 3) + (0 - 3), not 3 teams
         (TeamUnavailabilityCost(offset=-1), (-3, 0.0)),  # a negative offset adds to every non-zero unit
-        (TeamUnavailabilityCost(offset=-1, clip=False), (-4, 0.0)),  # ...or to every evaluated unit
+        (TeamUnavailabilityCost(level="soft", offset=-1, clip=False), (0, -4.0)),  # ...or to every evaluated unit
         # Every team is a unit of team_conflict_cost (all three at 0 here).
-        (TeamConflictCost(offset=1, clip=False), (3, 0.0)),
-        (TeamConflictCost(weight=3, offset=0.5, clip=False), (6, 0.0)),  # -1.5 -> -2 per team
+        (TeamConflictCost(level="soft", offset=1, clip=False), (0, 3.0)),
+        (TeamConflictCost(level="soft", weight=3, offset=0.5, clip=False), (0, 4.5)),  # -1.5 per team, not rounded
         (TeamConflictCost(offset=1), (0, 0.0)),
         # The globals' totals are shaped once.
         (ConfrontationCountImbalanceCost(offset=1, clip=False), (0, -(CONFRONTATION_IMBALANCE - 1))),
         (ConfrontationCountImbalanceCost(offset=0.5, exponent=2), (0, -((CONFRONTATION_IMBALANCE - 0.5) ** 2))),
         (AssignmentCountImbalanceCost(offset=2), (0, -(ASSIGNMENT_IMBALANCE - 2) * 1e6)),
-        (AssignmentCountImbalanceCost(offset=3, clip=False, level="hard"), (1, 0.0)),  # -0.83975 -> -1
+        (AssignmentCountImbalanceCost(offset=1, level="hard"), (-1, 0.0)),  # 1.16025 -> 1, rounded on hard
+        (AssignmentCountImbalanceCost(offset=3, clip=False, level="soft"), (0, 3 - ASSIGNMENT_IMBALANCE)),
         (AssignmentCountImbalanceCost(offset=-1, level="soft"), (0, -(ASSIGNMENT_IMBALANCE + 1))),
     ],
 )
@@ -641,17 +643,18 @@ def test_offsets_by_hand_on_both_paths(pick, expected):
 
 def test_only_the_scoped_constraint_reports_units():
     """team_unavailability_cost evaluates the teams with a fact, and only it carries "units";
-    on a schedule without facts its literal offset charges nothing at all."""
+    on a schedule without facts its literal offset charges nothing at all (on soft: its hard
+    default refuses the literal formula with an offset, whatever the units)."""
     raw = ts.constraint_costs(_hand())
     assert raw["team_unavailability_cost"]["units"] == [0, 2]
     assert all("units" not in entry for key, entry in raw.items() if key != "team_unavailability_cost")
-    pick = TeamUnavailabilityCost(offset=5, clip=False)
+    pick = TeamUnavailabilityCost(level="soft", offset=5, clip=False)
     plain = ts.constraint_costs(_uneven_loads())
     assert plain["team_unavailability_cost"]["units"] == []
     assert score(plain, [pick]) == (0, 0.0)
     assert _agrees(_zero_budget(_uneven_loads(), [pick]), (0, 0.0))
     # Facts for T0 on D3 and T2 on D2, days they do not play: every raw cost is 0, and
-    # the literal offset charges the two scoped teams, 2 x 2 hard, not all three.
+    # the literal offset charges the two scoped teams, 2 x 2, not all three.
     loads = _uneven_loads()
     clear = ts.TournamentSchedule(
         loads.teams,
@@ -662,9 +665,9 @@ def test_only_the_scoped_constraint_reports_units():
     raw = ts.constraint_costs(clear)
     assert raw["team_unavailability_cost"]["costs"] == [0.0, 0.0, 0.0]
     assert raw["team_unavailability_cost"]["units"] == [0, 2]
-    pick = TeamUnavailabilityCost(offset=2, clip=False)
-    assert score(raw, [pick]) == (4, 0.0)
-    assert _agrees(_zero_budget(clear, [pick]), (4, 0.0))
+    pick = TeamUnavailabilityCost(level="soft", offset=2, clip=False)
+    assert score(raw, [pick]) == (0, 4.0)
+    assert _agrees(_zero_budget(clear, [pick]), (0, 4.0))
 
 
 def test_offset_zero_reproduces_the_0_2_0_scores():
@@ -690,9 +693,11 @@ SELECTIONS = {
     "repeat": [*get_constraints(), *REPEAT, AssignmentCountImbalanceCost(weight=2, exponent=2)],
     "repeat-and-offsets": [
         TeamConflictCost(),
-        TeamConflictCost(weight=2, offset=1, clip=False),
+        TeamConflictCost(level="soft", weight=2, offset=1, clip=False),  # hard refuses the literal formula
+        TeamConflictCost(weight=2, offset=1),
         TeamUnavailabilityCost(),
-        TeamUnavailabilityCost(offset=-1, clip=False),
+        TeamUnavailabilityCost(level="soft", offset=-1, clip=False),
+        TeamUnavailabilityCost(offset=-1),
         AssignmentCountImbalanceCost(),
         AssignmentCountImbalanceCost(offset=1, exponent=2),
         AssignmentCountImbalanceCost(offset=-0.5, clip=False, level="soft", weight=3),
@@ -826,3 +831,101 @@ def test_a_repeat_is_checked_on_its_own_level():
         _zero_budget(_hand(), [TeamConflictCost(), pick])
     with pytest.raises(ValueError, match="constraint 'team_conflict_cost': level must be 'hard', 'medium' or 'soft'"):
         score(ts.constraint_costs(_hand()), [TeamConflictCost(), pick])
+
+
+# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+
+HARD_REFUSAL = (
+    "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
+    "violation; use clip=True (a threshold) or another level"
+)
+
+
+def _refusal(call):
+    with pytest.raises(ValueError) as refused:
+        call()
+    return str(refused.value)
+
+
+@pytest.mark.parametrize("offset", [2.5, -2.5])
+@pytest.mark.parametrize(
+    "pick",
+    [
+        lambda offset: TeamConflictCost(offset=offset, clip=False),  # the default level, hard
+        lambda offset: TeamConflictCost(level="hard", offset=offset, clip=False),
+        lambda offset: TeamUnavailabilityCost(offset=offset, clip=False),  # scoped, hard by default
+        lambda offset: ConfrontationCountImbalanceCost(level="hard", offset=offset, clip=False),
+        lambda offset: AssignmentCountImbalanceCost(level=Level.HARD, offset=offset, clip=False),
+    ],
+    ids=[
+        "conflict-default-hard",
+        "conflict-level-hard",
+        "unavailability-default-hard",
+        "confrontation-moved-to-hard",
+        "assignment-moved-to-hard",
+    ],
+)
+def test_the_literal_offset_is_refused_on_hard_on_every_path(pick, offset):
+    """A positive offset would reward the teams below it, so one team's slack would cancel
+    another team's conflict and an infeasible schedule could score hard 0; a negative one
+    would charge every team, one without a conflict included. The engine (solve,
+    solve_with_constraints, constraint_costs) and the score() mirror refuse it with the same
+    message; the CP-SAT reference's test_solve.py checks the same words."""
+    spec = pick(offset)
+    message = HARD_REFUSAL.format(q=repr(spec.name))
+    repeated = [type(spec)(), spec]  # a refused repeat next to its accepted first instance
+    assert _refusal(lambda: ts.solve(build_schedule(), time_limit_seconds=0.1, constraints=[spec])) == message
+    assert _refusal(lambda: _zero_budget(_hand(), repeated)) == message
+    assert _refusal(lambda: ts.constraint_costs(_hand(), [spec])) == message
+    assert _refusal(lambda: ts.constraint_costs(_hand(), repeated)) == message
+    assert _refusal(lambda: score(ts.constraint_costs(_hand()), [spec])) == message
+    assert _refusal(lambda: score(ts.constraint_costs(_hand()), repeated)) == message
+
+
+@pytest.mark.parametrize("offset", [3.0, -3.0])
+def test_the_same_literal_pick_on_soft_is_accepted(offset):
+    """(0 - offset) on each of the three teams, on soft, on every path. Medium folds into
+    soft here (at 1e6), so it takes the literal formula too."""
+    pick = TeamConflictCost(level="soft", offset=offset, clip=False)
+    expected = (0, 3 * offset)
+    assert _agrees(score(ts.constraint_costs(_hand()), [pick]), expected)
+    raw = ts.constraint_costs(_hand(), [pick])
+    assert (raw["team_conflict_cost"]["level"], raw["team_conflict_cost"]["clip"]) == ("soft", False)
+    assert _agrees(score(raw, [pick]), expected)
+    assert _agrees(_zero_budget(_hand(), [pick]), expected)
+    schedule = build_schedule()
+    full = [TeamConflictCost(), pick]
+    ts.solve(schedule, time_limit_seconds=0.2, random_seed=1, constraints=full)
+    python = score(ts.constraint_costs(schedule), full)
+    assert python.hard == schedule.score.hard
+    assert python.soft == pytest.approx(schedule.score.soft)
+    medium = TeamConflictCost(level="medium", offset=offset, clip=False)
+    assert _agrees(score(ts.constraint_costs(_hand()), [medium]), (0, 3 * offset * 1e6))
+    assert _agrees(_zero_budget(_hand(), [medium]), (0, 3 * offset * 1e6))
+
+
+@pytest.mark.parametrize(
+    ("pick", "expected"),
+    [
+        # _hand(): team_unavailability_cost [2, 0] on T0 and T2, hard.
+        (TeamUnavailabilityCost(offset=1), (-1, 0.0)),  # clip=True on hard: a threshold
+        (TeamUnavailabilityCost(offset=-1), (-3, 0.0)),  # adds 1 to the non-zero team only
+        (TeamUnavailabilityCost(clip=False), (-2, 0.0)),  # clip=False with offset 0: the 0.2.0 shaping
+        (TeamUnavailabilityCost(offset=0.0, clip=False), (-2, 0.0)),
+        (TeamConflictCost(offset=-1), (0, 0.0)),  # no conflict: a threshold adds nothing to a raw 0
+    ],
+)
+def test_the_allowed_combinations_on_hard(pick, expected):
+    assert _agrees(score(ts.constraint_costs(_hand()), [pick]), expected)
+    assert _agrees(_zero_budget(_hand(), [pick]), expected)
+
+
+def test_the_refusal_comes_after_every_knob_of_a_duck_typed_pick():
+    """The engine checks once a pick's knobs are all re-stated: the level a pick moves to decides."""
+    moved = SimpleNamespace(name="team_conflict_cost", weight=None, level="soft", exponent=1.0, offset=1.0, clip=False)
+    assert _agrees(_zero_budget(_hand(), [moved]), (0, 3.0))
+    kept = SimpleNamespace(name="team_conflict_cost", weight=None, level=None, exponent=1.0, offset=1.0, clip=False)
+    message = HARD_REFUSAL.format(q="'team_conflict_cost'")
+    assert _refusal(lambda: _zero_budget(_hand(), [kept])) == message
+    assert _refusal(lambda: ts.constraint_costs(_hand(), [kept])) == message
+    assert _refusal(lambda: score(ts.constraint_costs(_hand()), [kept])) == message

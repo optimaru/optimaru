@@ -5,7 +5,7 @@ from __future__ import annotations
 from ortools.sat.python import cp_model
 
 from cpsat_plugins import ConstraintConfig
-from task_assigning import constraint_costs, constraint_info
+from task_assigning import TaskAssigningSolution, constraint_costs, constraint_info
 from task_assigning.constraints import Constraint
 from task_assigning.models import TaskAssigningSolutionModel
 
@@ -29,6 +29,16 @@ SOFT1_UNIT = int(
         for row in constraint_info()
         if row.name == "squared_makespan_cost"
     )
+)
+
+
+# The engine domain's medium fold kind, "below_hard": medium lands in the engine's
+# hard level, so it counts toward the hard score and refuses the literal offset
+# formula (clip=False with an offset) like hard does, with the engine's message.
+# Read from the engine (what constraint_costs() reports) rather than copied.
+MEDIUM_FOLD = next(
+    entry["medium_fold"]["kind"]
+    for entry in constraint_costs(TaskAssigningSolution([], [], [], [])).values()
 )
 
 
@@ -56,7 +66,7 @@ def solve(
     _proxy_score: dict[str, int] | None = None,
 ) -> TaskAssigningSolutionModel:
     model = cp_model.CpModel()
-    objective = REGISTRY.objective(model, LEVELS, constraints)
+    objective = REGISTRY.objective(model, LEVELS, constraints, medium_fold=MEDIUM_FOLD)
     task_count, employee_count = len(problem.tasks), len(problem.employees)
     task_type = {item.code: item for item in problem.task_types}
     duration = {

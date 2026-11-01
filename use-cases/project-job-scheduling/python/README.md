@@ -82,7 +82,8 @@ Any constraint may take any of the three levels (`MakespanCost(level="medium")` 
 medium unit per day). Every spec also takes the
 keyword-only `offset=0.0` / `clip=True`, which shift the shaping of the one total
 (`clip=True` counts only what lies beyond the offset, `clip=False` shapes `x - offset` as it
-is). A constraint may be picked several times (since 0.3.0); each pick is its own instance
+is, and is refused with an offset on hard, because hard 0 must mean no violation). A
+constraint may be picked several times (since 0.3.0); each pick is its own instance
 with its own knobs, its level included, the instances add up, and
 `constraint_costs(schedule, picks)` keys the
 k-th pick `<name>#<k>`: `score(raw, [MakespanCost(), MakespanCost(exponent=2, offset=40)])`.
