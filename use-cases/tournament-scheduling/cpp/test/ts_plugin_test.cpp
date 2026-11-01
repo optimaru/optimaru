@@ -711,6 +711,25 @@ void verifyMediumLevel()
                   && near(engine.soft, -(soft + 3.0 * medium * 1e6)),
               "weight 3 folds as 3 medium units x 1e6");
     }
+    {
+        const auto levels = levelsWith(
+            defaultConstraints().level("confrontationCountImbalanceCost",
+                                       optimaru::Level::Medium),
+            s);
+        check(levels.hard == 0 && near(levels.medium, -(medium + soft))
+                  && levels.soft == 0.0,
+              "level(Medium): confrontationCountImbalanceCost moves onto medium");
+    }
+    {
+        const auto levels = levelsWith(
+            defaultConstraints()
+                .level("confrontationCountImbalanceCost", optimaru::Level::Medium)
+                .weight("confrontationCountImbalanceCost", 2),
+            s);
+        check(levels.hard == 0 && near(levels.medium, -(medium + 2.0 * soft))
+                  && levels.soft == 0.0,
+              "a weight on a moved constraint is in medium units");
+    }
     std::printf("\n");
 }
 
@@ -728,6 +747,12 @@ void verifyMediumIncremental()
             {"soft", [=] { return defaultConstraints().soft(imbalance); }},
             {"weight 3",
              [=] { return defaultConstraints().weight(imbalance, 3); }},
+            {"with confrontationCountImbalanceCost on medium",
+             []
+             {
+                 return defaultConstraints().level(
+                     "confrontationCountImbalanceCost", optimaru::Level::Medium);
+             }},
         };
     for (const auto &variant : variants)
     {
@@ -762,7 +787,7 @@ void verifyMediumIncremental()
         check(mismatches == 0,
               "medium " + variant.first
                   + ": 600 random moves, incremental == full recompute");
-        if (variant.first == "default" || variant.first == "weight 3")
+        if (variant.first != "hard" && variant.first != "soft")
             check(mediumSteps > 0,
                   variant.first + ": the walk visits medium states");
     }

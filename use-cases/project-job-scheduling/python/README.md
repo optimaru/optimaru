@@ -77,11 +77,14 @@ score(raw), score(raw, [*others, ProjectDelayCost(weight=2)])        # re-priced
 
 `constraint_info()` reports these defaults from the C++ components. The medium weight is in
 medium units: `level="hard"` on `project_delay_cost` costs 1 hard per day, `level="soft"` 1
-soft per day, and an explicit weight stays on the medium level. Every spec also takes the
+soft per day, and an explicit weight is in units of the level in effect (medium by default).
+Any constraint may take any of the three levels (`MakespanCost(level="medium")` charges one
+medium unit per day). Every spec also takes the
 keyword-only `offset=0.0` / `clip=True`, which shift the shaping of the one total
 (`clip=True` counts only what lies beyond the offset, `clip=False` shapes `x - offset` as it
 is). A constraint may be picked several times (since 0.3.0); each pick is its own instance
-with its own knobs, the instances add up, and `constraint_costs(schedule, picks)` keys the
+with its own knobs, its level included, the instances add up, and
+`constraint_costs(schedule, picks)` keys the
 k-th pick `<name>#<k>`: `score(raw, [MakespanCost(), MakespanCost(exponent=2, offset=40)])`.
 
 0.2.0 renamed them (`non_renewable_resource_capacity`, `renewable_resource_capacity`,

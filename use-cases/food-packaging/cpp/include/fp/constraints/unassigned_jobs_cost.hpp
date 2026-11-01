@@ -16,7 +16,7 @@ namespace fp
 // The weight is in MEDIUM units (kMediumFold in domain.hpp folds medium into
 // the engine's soft level as `medium * 10^10`); hard() makes it 1 hard per
 // minute, soft() 1 soft per minute (outside the fold), and an explicit weight
-// stays in medium units.
+// is in units of the level in effect (medium by default).
 //
 // Global rather than a unit constraint on the pool list, even though this port
 // models the unassigned pool as one extra LIST: a job can also be in NO list

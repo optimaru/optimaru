@@ -38,8 +38,9 @@ ctest --test-dir build/task-assigning
 | `unassigned_tasks_cost` | `UnassignedTasksCost` | soft[0] | **medium** | 1 | global: tasks on no employee's list |
 
 This is the `list_constraints()` order (the unit constraints first, the global
-`unassigned_tasks_cost` last). Every constraint is flippable (`level="hard"` / `level="soft"`),
-none is a reward and all six are scored by default (`default_enabled`);
+`unassigned_tasks_cost` last). Every constraint is flippable onto any of the three levels
+(`level="hard"`, `"medium"` or `"soft"`, or a `Level`), none is a reward and all six are
+scored by default (`default_enabled`);
 `task_assigning.constraint_info()` reports exactly this table from the C++ components
 (`kDefaultLevel` / `kDefaultWeight`).
 
@@ -59,8 +60,11 @@ is what keeps soft[1] above soft[2] (the `Score` adapter decodes `soft1 = soft /
 is 3 hard units (3 * 10^9 engine units) per missing skill, `UnassignedTasksCost(weight=3)` 3
 medium units per task. `UnassignedTasksCost(level="hard")` is
 one hard unit per unassigned task, `UnassignedTasksCost(level="soft")` one soft unit per
-unassigned task (outside the fold), in the engine and in CP-SAT alike. A selection without
-the medium constraint still folds the hard level by 10^9.
+unassigned task (outside the fold), in the engine and in CP-SAT alike. Any other constraint
+may move onto medium the same way: `SquaredMakespanCost(level="medium", weight=1)` charges
+one medium unit per squared minute, counted in the engine's hard level below the missing
+skills and rounded per employee like a hard term, and a repeated pick carries its own level.
+A selection without the medium constraint still folds the hard level by 10^9.
 
 **0.2.0:** the constraints were renamed — `no_missing_skills` -> `required_skill_cost`,
 `minimize_unassigned_tasks` -> `unassigned_tasks_cost`, `minimize_makespan` ->

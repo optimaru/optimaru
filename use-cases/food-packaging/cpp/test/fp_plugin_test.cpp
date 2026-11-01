@@ -759,6 +759,22 @@ void verifyMediumLevel()
                     -200.0,
                     -122500.0),
           "unassignedJobsCost weight 2 stays in medium units");
+    check(levelsAre(levelsWith(defaultConstraints().level(
+                                   "squaredMakespanCost", optimaru::Level::Medium),
+                               s),
+                    0,
+                    -122650.0,
+                    0.0),
+          "level(Medium): squaredMakespanCost moves onto medium");
+    check(levelsAre(levelsWith(defaultConstraints()
+                                   .level("squaredMakespanCost",
+                                          optimaru::Level::Medium)
+                                   .weight("squaredMakespanCost", 0.5),
+                               s),
+                    0,
+                    -61400.0,
+                    0.0),
+          "a weight on a moved constraint is in medium units");
     {
         // solve(schedule, calculator) reports the assembly's levels. One
         // line, one 100-minute job: assigned it costs 100^2 = 10000 soft
@@ -825,6 +841,13 @@ void verifyMediumIncremental()
         {"unassignedJobsCost weight 2",
          "unassignedJobsCost",
          [] { return defaultConstraints().weight("unassignedJobsCost", 2); }},
+        {"squaredMakespanCost on medium",
+         "squaredMakespanCost",
+         []
+         {
+             return defaultConstraints().level("squaredMakespanCost",
+                                               optimaru::Level::Medium);
+         }},
     };
     // The raw unit sum of `name` on the calculator's working solution.
     auto rawSum = [](const DecomposedCalculator &calculator,

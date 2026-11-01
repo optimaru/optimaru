@@ -29,8 +29,9 @@ Every spec takes five knobs:
 - ``level``    ``None`` = the default level, otherwise a ``Level`` or its name
                (``Level.MEDIUM`` or ``"medium"``). Any flippable constraint may
                take any of the three levels. ``AssignmentCountImbalanceCost`` is
-               **medium**: folded into the engine's soft level as ``medium * 1e6``
-               (``MEDIUM_SCALE``). On another level, ``level="hard"`` charges one
+               **medium** by default: folded into the engine's soft level as
+               ``medium * 1e6`` (``MEDIUM_SCALE``), like any constraint moved onto
+               medium. On another level, ``level="hard"`` charges one
                hard unit per raw unit (the global total, rounded),
                ``level="soft"`` one soft unit per raw unit, and a ``weight`` is in
                units of the level in effect.

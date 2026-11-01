@@ -14,9 +14,11 @@ from types import SimpleNamespace
 import pytest
 
 import task_assigning as ta
+from task_assigning._constraint import instance_keys
 from task_assigning.constraints import (
     Constraint,
     CriticalPriorityTaskEndTimeCost,
+    Level,
     MajorPriorityTaskEndTimeCost,
     MinorPriorityTaskEndTimeCost,
     RequiredSkillCost,
@@ -773,3 +775,109 @@ def test_full_assert_solves_with_repeats_and_offsets(picks):
     assert python.hard == expected[0]
     assert python.soft == pytest.approx(expected[1])
     assert score(ta.constraint_costs(solution), picks) == python
+
+
+# --- Levels: each pick, a repeat included, on the level it names --------------------
+
+
+def test_a_soft_constraint_can_move_to_medium():
+    """On medium the critical end times land on soft0 (below hard, above every soft term),
+    and score() folds them below hard like the engine."""
+    picks = [unassigned_tasks_cost, CriticalPriorityTaskEndTimeCost(level=Level.MEDIUM)]
+    solution = build_solution()
+    ta.solve(solution, time_limit_seconds=0.6, random_seed=1, constraints=picks)
+    levels = solution.score
+    assert levels.hard == 0 and levels.soft2 == 0
+    assert levels.soft0 < 0  # every task is assigned, so this is the critical end times alone
+    assert score(ta.constraint_costs(solution), picks) == engine(levels)
+    assert score(ta.constraint_costs(solution, picks), picks) == engine(levels)
+
+
+def test_a_level_must_be_a_level():
+    with pytest.raises(TypeError, match="level must be a Level"):
+        RequiredSkillCost(level=True)
+    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft'"):
+        RequiredSkillCost(level="firm")
+    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft'"):
+        RequiredSkillCost(level="HARD")
+
+
+def test_core_refuses_an_unknown_level_like_the_python_base():
+    pick = SimpleNamespace(name="required_skill_cost", weight=None, level="firm", exponent=1.0)
+    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft', not 'firm'"):
+        ta.solve(build_solution(), time_limit_seconds=0.1, constraints=[pick])
+    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft', not 'firm'"):
+        ta.constraint_costs(_hand(), [pick])
+
+
+def test_the_knob_was_renamed():
+    """hard= is gone: a spec refuses it, and an old duck-typed pick that carries `hard` but
+    no `level` is refused on every path instead of running at the default level."""
+    with pytest.raises(TypeError):
+        RequiredSkillCost(hard=True)
+    old = SimpleNamespace(name="required_skill_cost", weight=None, hard=True, exponent=1.0)
+    with pytest.raises(AttributeError, match="level"):
+        ta.solve(build_solution(), time_limit_seconds=0.1, constraints=[old])
+    with pytest.raises(AttributeError, match="level"):
+        ta.constraint_costs(_hand(), [old])
+    with pytest.raises(AttributeError, match="level"):
+        score(ta.constraint_costs(_hand()), [old])
+
+
+@pytest.mark.parametrize(
+    ("picks", "expected"),
+    [
+        # _hand(): required_skill [1, 0, 0], squared_makespan [900, 25, 0], critical [10, 0, 0],
+        # minor [0, 5, 0], unassigned [0]. Medium folds BELOW hard: engine.hard = hard * 10^9 + medium.
+        ([CriticalPriorityTaskEndTimeCost(level="medium")], (-40, 0.0)),  # weight 4 in medium units
+        ([CriticalPriorityTaskEndTimeCost(level=Level.HARD)], (-40 * MEDIUM_PER_HARD, 0.0)),
+        ([SquaredMakespanCost(level="medium", weight=1)], (-925, 0.0)),
+        ([MinorPriorityTaskEndTimeCost(level=Level.MEDIUM, weight=0.5)], (-3, 0.0)),  # 2.5 -> 3, rounded per unit
+        ([RequiredSkillCost(level="soft", weight=2)], (0, -2.0)),
+        ([UnassignedTasksCost(level=Level.SOFT, offset=1, clip=False)], (0, 1.0)),
+        # A repeat carries its own level and shaping: the soft critical end times, 4 x the part
+        # beyond 6 on medium, and hard (x - 12) per employee: -2 - 12 - 12 = -26, a hard reward.
+        (
+            [
+                CriticalPriorityTaskEndTimeCost(),
+                CriticalPriorityTaskEndTimeCost(level="medium", offset=6),
+                CriticalPriorityTaskEndTimeCost(level="hard", weight=1, offset=12, clip=False),
+            ],
+            (26 * MEDIUM_PER_HARD - 16, -40.0),
+        ),
+        # The medium global repeated onto all three levels, each total (0) shaped once.
+        (
+            [
+                UnassignedTasksCost(),
+                UnassignedTasksCost(level=Level.HARD, offset=2, clip=False),
+                UnassignedTasksCost(level=Level.SOFT, weight=3, offset=-1, clip=False),
+            ],
+            (2 * MEDIUM_PER_HARD, -3.0),
+        ),
+    ],
+)
+def test_levels_by_hand_on_both_paths(picks, expected):
+    """A pick's level moves its term, with the weight in units of that level: engine == mirror == hand."""
+    assert score(ta.constraint_costs(_hand()), picks) == expected
+    raw = ta.constraint_costs(_hand(), picks)
+    for pick, key in zip(picks, instance_keys(picks)):
+        assert raw[key]["level"] == (pick.level or raw[key]["default_level"]), key
+    assert score(raw, picks) == expected
+    assert _zero_budget(_hand(), picks) == expected
+
+
+def test_a_repeat_on_medium_reports_its_level_unfolded():
+    """solution.score reports each Bendable level on its own: the repeat's medium term is soft0."""
+    picks = [MinorPriorityTaskEndTimeCost(), MinorPriorityTaskEndTimeCost(level="medium")]
+    solution = _hand()
+    _zero_budget(solution, picks)
+    assert (solution.score.hard, solution.score.soft0, solution.score.soft1, solution.score.soft2) == (0, -5, 0, -5)
+
+
+def test_a_repeat_is_checked_on_its_own_level():
+    """The second pick's level is read and checked like the first's, on both paths."""
+    pick = SimpleNamespace(name="required_skill_cost", weight=None, level="firm", exponent=1.0)
+    with pytest.raises(ValueError, match="constraint 'required_skill_cost': level must be 'hard', 'medium' or 'soft'"):
+        _zero_budget(_hand(), [RequiredSkillCost(), pick])
+    with pytest.raises(ValueError, match="constraint 'required_skill_cost': level must be 'hard', 'medium' or 'soft'"):
+        score(ta.constraint_costs(_hand()), [RequiredSkillCost(), pick])

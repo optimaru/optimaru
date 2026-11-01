@@ -36,8 +36,9 @@ lines run by the same operator must not overlap.
 `list_constraints()` and `constraint_info()` report them in this order (the unit
 constraints, then the two globals); `food_packaging.constraint_info()` reports exactly
 this table from the C++ components (`kDefaultLevel` / `kDefaultWeight`). Every
-constraint is flippable (`level="hard"` / `level="soft"`), none is a reward and all five
-are scored by default (`default_enabled`).
+constraint is flippable onto any of the three levels (`level="hard"`, `"medium"` or
+`"soft"`, or a `Level`), none is a reward and all five are scored by default
+(`default_enabled`).
 
 The medium weights are in **medium units**: the domain folds the medium level into the
 engine's soft level as `engine.soft = medium * 10^10 + soft` (`kMediumFold` in
@@ -45,7 +46,9 @@ engine's soft level as `engine.soft = medium * 10^10 + soft` (`kMediumFold` in
 on every `constraint_costs()` entry). `level="hard"` makes a
 medium constraint 1 hard unit per minute, `level="soft"` 1 soft unit per minute (outside the
 fold), and a `weight` is in units of the level in effect — in the
-engine and in the CP-SAT reference alike. A solve with `constraints=` reports
+engine and in the CP-SAT reference alike. Any other constraint may move onto medium the
+same way (`SquaredMakespanCost(level="medium")` charges its squared line spans in medium
+units), and a repeated pick carries its own level. A solve with `constraints=` reports
 `schedule.score` and every `on_new_best` score from the calculator's three levels
 (`levelScores()`), not by decoding the folded soft, so a soft total of 10^10 or more stays
 on soft in both.

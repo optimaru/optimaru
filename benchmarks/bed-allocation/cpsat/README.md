@@ -12,9 +12,21 @@ like the domain spec it subclasses (`BedConflictCost`, ..., `UnassignedStaysCost
 its default level and weight come from `bed_allocation.constraint_info()` (the C++
 components' `kDefaultLevel` / `kDefaultWeight`), so `catalog()` equals the engine catalog.
 The objective levels are `("hard", "medium", "soft")`; `unassigned_stays_cost` is medium
-at weight 1, `level="hard"` makes it hard and `level="soft"` soft, exactly like the engine
-(0.2.0: a demoted medium term used to stay on medium here). Not supported on CP-SAT:
-`exponent != 1` and non-integer weights (rejected).
+at weight 1, and `level="hard"`, `"medium"` or `"soft"` (or a `Level`) moves any pick onto
+that level with its weight in units of it, exactly like the engine (0.2.0: a demoted medium
+term used to stay on medium here). Not supported on CP-SAT: `exponent != 1` and
+non-integer weights (rejected).
+
+**0.3.0: repeats, `offset` and `clip`.** A constraint may be picked several times (as specs
+or as `{"name", "weight", "level", "offset", "clip"}` mappings): each pick builds its own
+terms with its own knobs, its level included, keyed `name`, `name#2`, … like the engine's
+`constraint_costs()`. Every plugin adds one term per engine unit (per real bed, the "no
+bed" sentinel for `unassigned_stays_cost`, one total for `mixed_gender_room_cost`), so an
+integral offset is shaped exactly as in the engine, in both modes; a fractional offset is
+refused (`offset must be an integer for CP-SAT`). `tests/test_solve.py` pins all 27
+assignments of a tiny instance and checks that the CP-SAT objective, the engine's own score
+and `bed_allocation.constraints.score()` agree per level under repeated, shifted and
+re-levelled picks.
 
 ## Engine comparison
 

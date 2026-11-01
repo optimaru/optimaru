@@ -12,10 +12,12 @@ each a subclass of the domain spec with only `build()`. Default levels and
 weights are not restated here: cpsat-common reads them from
 `tournament_scheduling.constraint_info()`, so they are the C++ components'
 `kDefaultLevel` / `kDefaultWeight` (`test_cpsat_defaults_are_the_engine_defaults`).
-The model has three levels, `("hard", "medium", "soft")`; `level="soft"` demotes a
-hard or medium constraint to **soft** and `level="hard"` promotes to hard, exactly as
-in the engine (`test_hard_false_demotes_to_soft_on_cpsat_too`). The reported
-score folds medium into soft with the engine's `MEDIUM_SCALE` (1e6).
+The model has three levels, `("hard", "medium", "soft")`; `level="hard"`, `"medium"`
+or `"soft"` (or a `Level`) moves any pick onto that level with its weight in units of
+it: `level="soft"` demotes a hard or medium constraint to **soft**, `level="hard"`
+promotes to hard and `level="medium"` puts a hard or soft constraint on medium, exactly
+as in the engine (`test_each_pick_lands_on_the_level_it_names_on_cpsat_too`). The
+reported score folds medium into soft with the engine's `MEDIUM_SCALE` (1e6).
 
 | Constraint | Level, weight | CP-SAT objective term | Raw-identical to the engine? |
 |---|---|---|---|
@@ -70,10 +72,12 @@ inside int64; where the active count does not divide `scale`, the term is
   the engine and 1 in CP-SAT
   (`test_confrontations_count_once_per_shared_day_on_cpsat`).
 
-Repeats and offsets (0.3.0): a constraint picked several times adds one set of terms
-per pick. The two hard plugins add one term per team the engine evaluates (every team,
-or the teams with a fact for the scoped `team_unavailability_cost`), so they take
-integral offsets and match the engine exactly under repeats and offsets
+Repeats and offsets (0.3.0): a constraint picked several times (as specs or as
+`{"name", "weight", "level", "offset", "clip"}` mappings) adds one set of terms per pick,
+with its own knobs, its level included. The two hard plugins add one term per team the
+engine evaluates (every team, or the teams with a fact for the scoped
+`team_unavailability_cost`), so they take integral offsets and match the engine's own
+score and the `score()` mirror exactly under repeated, shifted and re-levelled picks
 (`test_the_hard_terms_equal_the_engine_with_repeats_and_offsets`). The two imbalance
 surrogates have no raw-identical total to shift: CP-SAT refuses a non-zero offset on them
 (`constraint 'x' offset is not supported by this CP-SAT model`), while the engine takes it.

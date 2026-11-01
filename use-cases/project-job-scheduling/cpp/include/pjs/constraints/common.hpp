@@ -65,10 +65,14 @@ namespace pjs
 // kDefaultWeight / kDefaultLevel passed to the base constructor; they are
 // assembly-time metadata, not part of the cost. Override them per instance
 // with the constructor's weight argument or the mutable `level` / `weight` /
-// `exponent`, or by name through ConstraintAssembly (weight / hard / soft /
-// exponent). hard() / soft() move the medium
-// component to 1 hard / 1 soft unit per raw unit, and a weight is in
-// units of the level in effect. The monolithic calculators
+// `exponent` / `offset` / `clip`, or by name through ConstraintAssembly
+// (weight / level / exponent / offset / clip; hard() / soft() are
+// level(Hard) / level(Soft)). A name may be held several times
+// (ConstraintAssembly::addInstances): each instance has its own knobs, its
+// level included, and the instances add up. Any component may take any of
+// the three levels: the medium component moved to hard / soft costs 1 hard /
+// 1 soft unit per raw unit, a hard or soft one moved to medium 1 medium unit,
+// and a weight is in units of the level in effect. The monolithic calculators
 // read the same kDefaultWeight constants, which is why the default assembly
 // scores bit-for-bit like them.
 //

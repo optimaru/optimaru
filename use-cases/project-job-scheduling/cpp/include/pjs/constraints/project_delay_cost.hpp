@@ -18,7 +18,7 @@ namespace pjs
 // The weight is in MEDIUM units (kMediumFold in domain.hpp folds medium into
 // the engine's soft level as `medium * 10^9`); hard() makes it 1 hard per
 // day, soft() 1 soft per day (outside the fold), and an explicit weight
-// stays in medium units.
+// is in units of the level in effect (medium by default).
 struct ProjectDelayCost final : ScheduleAggregateConstraint
 {
     static constexpr double kDefaultWeight = 1.0;

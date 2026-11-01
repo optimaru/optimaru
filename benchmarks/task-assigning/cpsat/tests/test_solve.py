@@ -3,6 +3,7 @@ import pytest
 import task_assigning as domain
 from task_assigning.constraints import (
     CriticalPriorityTaskEndTimeCost,
+    Level,
     MajorPriorityTaskEndTimeCost,
     MinorPriorityTaskEndTimeCost,
     RequiredSkillCost,
@@ -150,12 +151,24 @@ def test_cpsat_defaults_are_the_engine_defaults() -> None:
         [RequiredSkillCost(level="soft"), *get_constraints()[1:]],
         [*get_constraints()[:-1], UnassignedTasksCost(level="soft")],
         [*get_constraints()[:-1], UnassignedTasksCost(level="hard")],
+        [
+            *get_constraints()[:2],
+            CriticalPriorityTaskEndTimeCost(level=Level.MEDIUM),
+            *get_constraints()[3:],
+        ],
     ],
-    ids=["defaults", "skills-soft", "unassigned-soft", "unassigned-hard"],
+    ids=[
+        "defaults",
+        "skills-soft",
+        "unassigned-soft",
+        "unassigned-hard",
+        "critical-medium",
+    ],
 )
 def test_cpsat_scores_like_the_engine(selection) -> None:
     """CP-SAT's reported score is the engine's score of the same solution under the
-    same selection; level="soft" lands on soft (from hard OR medium) in both solvers."""
+    same selection; level="soft" lands on soft (from hard OR medium) in both solvers,
+    and level="medium" moves a soft term onto medium (below hard) in both."""
     solved = solve(generate_demo_data(), time_limit_seconds=2, constraints=selection)
     engine = score(domain.constraint_costs(solved.to_core()), selection)
     assert _engine_levels(solved) == (engine.hard, pytest.approx(engine.soft))
@@ -218,6 +231,7 @@ LAYOUTS = [
     ([0, 0, 1, -1], [0, 40, 0, 0]),
     ([1, 1, 1, 1], [0, 40, 80, 120]),
     ([0, 1, 0, 1], [0, 0, 40, 40]),
+    ([0, 0, 0, 0], [0, 40, 80, 120]),
     ([-1, -1, -1, -1], [0, 0, 0, 0]),
 ]
 
@@ -245,15 +259,43 @@ SELECTIONS = {
         CriticalPriorityTaskEndTimeCost(level="hard", offset=10),
         UnassignedTasksCost(level="hard", offset=-1),
     ],
+    # Each pick on its own level (medium folds below hard): the missing skills on hard
+    # and again on medium; the squared makespan beyond 1600 and the critical end times
+    # (literal) on medium; the minor end times on soft and, beyond 100, on hard; the
+    # unassigned tasks on medium and on soft (literal).
+    "levels": [
+        RequiredSkillCost(),
+        RequiredSkillCost(level=Level.MEDIUM, weight=2),
+        SquaredMakespanCost(level="medium", weight=1, offset=1600),
+        CriticalPriorityTaskEndTimeCost(level="medium", offset=30, clip=False),
+        MinorPriorityTaskEndTimeCost(),
+        MinorPriorityTaskEndTimeCost(level=Level.HARD, offset=100),
+        UnassignedTasksCost(),
+        UnassignedTasksCost(level="soft", offset=1, clip=False),
+    ],
 }
+
+
+def _engine_solve(core, selection) -> tuple[int, float]:
+    """The engine's own score of `core` under `selection`: a solve with no time keeps
+    every task where it is (construction would place an unassigned one, so only call
+    this on a layout that assigns every task)."""
+    kept = core.task_lists()
+    config = domain.SolverConfig()
+    config.spent_limit_seconds = 0
+    domain.Solver(config).solve_with_constraints(core, selection)
+    assert core.task_lists() == kept
+    levels = core.score
+    return (levels.hard * 10**9 + levels.soft0, levels.soft1 * 10**7 + levels.soft2)
 
 
 @pytest.mark.parametrize("selection", list(SELECTIONS.values()), ids=list(SELECTIONS))
 def test_the_cpsat_terms_equal_the_engine_on_pinned_layouts(selection) -> None:
     """Pin each layout: the CP-SAT objective's per-level value, folded like the engine
     (hard * 10^9 + medium), is the engine's score of that solution under the same
-    repeated / shifted picks, exactly (per employee terms, an idle one included, and
-    one term for the global's total)."""
+    repeated / shifted picks (the score() mirror's, and the engine's own wherever every
+    task is assigned), exactly (per employee terms, an idle one included, and one term
+    for the global's total)."""
     problem = _two_employees()
     for employees, starts in LAYOUTS:
         proxy: dict[str, int] = {}
@@ -265,7 +307,10 @@ def test_the_cpsat_terms_equal_the_engine_on_pinned_layouts(selection) -> None:
             _fixed_starts=starts,
             _proxy_score=proxy,
         )
-        engine = score(domain.constraint_costs(solved.to_core(), selection), selection)
+        core = solved.to_core()
+        engine = score(domain.constraint_costs(core, selection), selection)
+        if -1 not in employees:
+            assert _engine_solve(core, selection) == tuple(engine), employees
         folded = (proxy["hard"] * 10**9 + proxy["medium"], proxy["soft"])
         assert folded == tuple(engine), employees
         assert _engine_levels(solved) == tuple(engine)
