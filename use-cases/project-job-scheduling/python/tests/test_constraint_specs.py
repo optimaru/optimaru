@@ -15,8 +15,10 @@ import pytest
 
 import project_job as pjs
 from project_job import constraints as specs
+from project_job._constraint import instance_keys
 from project_job.constraints import (
     Constraint,
+    Level,
     MakespanCost,
     NonRenewableResourceCapacityCost,
     ProjectDelayCost,
@@ -721,3 +723,106 @@ def test_full_assert_solves_with_repeats_and_offsets(picks):
     assert python.hard == engine[0]
     assert python.soft == pytest.approx(engine[1])
     assert score(pjs.constraint_costs(schedule), picks) == python
+
+
+# --- Levels: each pick, a repeat included, on the level it names --------------------
+
+
+def test_a_soft_constraint_can_move_to_medium():
+    """With the doubled makespan on medium next to the delay, 3 + 2 * 3 = 9 medium days beat
+    1 + 2 * 5 = 11 (at the default levels the delay alone decides: P fast)."""
+    capacity = [non_renewable_resource_capacity_cost, renewable_resource_capacity_cost]
+    picks = [*capacity, project_delay_cost, MakespanCost(level=Level.MEDIUM, weight=2)]
+    schedule = _fast_or_slow()
+    pjs.solve(schedule, time_limit_seconds=0.3, random_seed=1, constraints=picks)
+    assert (schedule.score.hard, schedule.score.medium, schedule.score.soft) == (0, -9, 0)
+    assert score(pjs.constraint_costs(schedule), picks) == _engine(schedule.score)
+
+
+def test_a_level_must_be_a_level():
+    with pytest.raises(TypeError, match="level must be a Level"):
+        MakespanCost(level=True)
+    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft'"):
+        MakespanCost(level="firm")
+    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft'"):
+        MakespanCost(level="HARD")
+
+
+def test_core_refuses_an_unknown_level_like_the_python_base():
+    pick = SimpleNamespace(name="makespan_cost", weight=None, level="firm", exponent=1.0)
+    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft', not 'firm'"):
+        pjs.solve(build_schedule(), time_limit_seconds=0.1, constraints=[pick])
+    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft', not 'firm'"):
+        pjs.constraint_costs(_late_schedule(), [pick])
+
+
+def test_the_knob_was_renamed():
+    """hard= is gone: a spec refuses it, and an old duck-typed pick that carries `hard` but
+    no `level` is refused on every path instead of running at the default level."""
+    with pytest.raises(TypeError):
+        MakespanCost(hard=True)
+    old = SimpleNamespace(name="makespan_cost", weight=None, hard=True, exponent=1.0)
+    with pytest.raises(AttributeError, match="level"):
+        pjs.solve(build_schedule(), time_limit_seconds=0.1, constraints=[old])
+    with pytest.raises(AttributeError, match="level"):
+        pjs.constraint_costs(_late_schedule(), [old])
+    with pytest.raises(AttributeError, match="level"):
+        score(pjs.constraint_costs(_late_schedule()), [old])
+
+
+@pytest.mark.parametrize(
+    ("picks", "expected"),
+    [
+        # _late_schedule(): makespan 3, delay 2, resources 0; every total shaped once.
+        ([MakespanCost(level="medium")], (0, -3 * MEDIUM_UNIT)),
+        ([MakespanCost(level=Level.HARD)], (-3, 0)),
+        ([MakespanCost(level=Level.MEDIUM, weight=2)], (0, -6 * MEDIUM_UNIT)),  # weight in medium units
+        ([RenewableResourceCapacityCost(level="medium", offset=1, clip=False)], (0, MEDIUM_UNIT)),
+        ([ProjectDelayCost(level=Level.SOFT, weight=2)], (0, -4)),
+        ([NonRenewableResourceCapacityCost(level="soft", offset=2, clip=False)], (0, 2)),
+        # A repeat carries its own level and shaping: the soft makespan, medium beyond day 1,
+        # and hard 2 x (3 - 5) = -4, a hard reward.
+        (
+            [
+                MakespanCost(),
+                MakespanCost(level="medium", offset=1),
+                MakespanCost(level="hard", weight=2, offset=5, clip=False),
+            ],
+            (4, -2 * MEDIUM_UNIT - 3),
+        ),
+        # The medium constraint repeated onto all three levels.
+        (
+            [
+                ProjectDelayCost(),
+                ProjectDelayCost(level=Level.HARD, weight=3, offset=1),
+                ProjectDelayCost(level=Level.SOFT, offset=5, clip=False),
+            ],
+            (-3, -2 * MEDIUM_UNIT + 3),
+        ),
+    ],
+)
+def test_levels_by_hand_on_both_paths(picks, expected):
+    """A pick's level moves its term, with the weight in units of that level: engine == mirror == hand."""
+    assert score(pjs.constraint_costs(_late_schedule()), picks) == expected
+    raw = pjs.constraint_costs(_late_schedule(), picks)
+    for pick, key in zip(picks, instance_keys(picks)):
+        assert raw[key]["level"] == (pick.level or raw[key]["default_level"]), key
+    assert score(raw, picks) == expected
+    assert _zero_budget(_late_schedule(), picks) == expected
+
+
+def test_a_repeat_on_medium_reports_its_level_unfolded():
+    """schedule.score reports each level on its own: the repeat's medium term is medium."""
+    picks = [ProjectDelayCost(level="soft"), MakespanCost(), MakespanCost(level="medium")]
+    schedule = _late_schedule()
+    _zero_budget(schedule, picks)
+    assert (schedule.score.hard, schedule.score.medium, schedule.score.soft) == (0, -3, -5)
+
+
+def test_a_repeat_is_checked_on_its_own_level():
+    """The second pick's level is read and checked like the first's, on both paths."""
+    pick = SimpleNamespace(name="makespan_cost", weight=None, level="firm", exponent=1.0)
+    with pytest.raises(ValueError, match="constraint 'makespan_cost': level must be 'hard', 'medium' or 'soft'"):
+        _zero_budget(_late_schedule(), [MakespanCost(), pick])
+    with pytest.raises(ValueError, match="constraint 'makespan_cost': level must be 'hard', 'medium' or 'soft'"):
+        score(pjs.constraint_costs(_late_schedule()), [MakespanCost(), pick])

@@ -36,10 +36,13 @@ carries the same load. The first two are unit constraints (one cost per team, so
 shapes per team); the two imbalance constraints are global (one total, shaped as a whole).
 The rows are in `list_constraints()` order, and `tournament_scheduling.constraint_info()`
 reports exactly this table from the C++ components (`kDefaultLevel` / `kDefaultWeight`):
-every constraint is flippable (`level="hard"` / `level="soft"`), none is a reward and all four
-are scored by default (`default_enabled`). The medium level folds into the engine's soft
-level as `medium x 1e6` (`MEDIUM_SCALE`, `kMediumFold` in `cpp/include/ts/domain.hpp`); a
-medium weight is in medium units.
+every constraint is flippable onto any of the three levels (`level="hard"`, `"medium"` or
+`"soft"`, or a `Level`), none is a reward and all four are scored by default
+(`default_enabled`). The medium level folds into the engine's soft level as `medium x 1e6`
+(`MEDIUM_SCALE`, `kMediumFold` in `cpp/include/ts/domain.hpp`); a weight is in units of the
+level in effect, so a medium weight is in medium units. Any other constraint may move onto
+medium the same way (`ConfrontationCountImbalanceCost(level="medium")` charges one medium
+unit per raw unit of head-to-head unfairness), and a repeated pick carries its own level.
 
 **0.2.0:** the constraints were renamed (`one_assignment_per_date_per_team` ->
 `team_conflict_cost`, `unavailability_penalty` -> `team_unavailability_cost`,

@@ -974,6 +974,24 @@ void verifyMediumLevel()
               "weight 3 stays in medium units");
     }
     {
+        const auto levels = levelsWith(
+            defaultConstraints().level("preferredPatientEquipmentCost",
+                                       optimaru::Level::Medium),
+            plan);
+        check(levels.hard == 0 && levels.medium == -306.0
+                  && levels.soft == 0.0,
+              "level(Medium): preferredPatientEquipmentCost moves onto medium");
+    }
+    {
+        const auto levels = levelsWith(
+            defaultConstraints()
+                .level("preferredPatientEquipmentCost", optimaru::Level::Medium)
+                .weight("preferredPatientEquipmentCost", 1),
+            plan);
+        check(levels.hard == 0 && levels.medium == -12.0 && levels.soft == 0.0,
+              "a weight on a moved constraint is in medium units");
+    }
+    {
         // solve(plan, calculator) reports the assembly's levels: two
         // overlapping stays for one bed, unassignedStaysCost demoted to soft.
         // Sharing costs 6000 hard, so one stay goes without a bed and its 6
@@ -1017,6 +1035,12 @@ void verifyMediumIncremental()
             {"weight 3",
              []
              { return defaultConstraints().weight("unassignedStaysCost", 3); }},
+            {"with preferredMaxRoomCapacityCost on medium",
+             []
+             {
+                 return defaultConstraints().level(
+                     "preferredMaxRoomCapacityCost", optimaru::Level::Medium);
+             }},
         };
     for (const auto &variant : variants)
     {
@@ -1062,7 +1086,7 @@ void verifyMediumIncremental()
         check(mismatches == 0,
               "unassignedStaysCost " + variant.first
                   + ": 1500 random moves, incremental == full recompute");
-        if (variant.first == "default" || variant.first == "weight 3")
+        if (variant.first != "hard" && variant.first != "soft")
         {
             check(mediumSteps > 0,
                   variant.first + ": the walk visits medium states");

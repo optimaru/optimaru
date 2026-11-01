@@ -216,9 +216,10 @@ class Solver:
         """Score the same solve with a caller-chosen constraint set
         (see bed_allocation.constraints). The given list replaces the default set; None
         keeps the default set. A name may be picked several times: each pick is its own
-        instance with its own knobs, and the instances add up. plan.score reports the
-        three levels the assembly put the terms on (unassigned_stays_cost with level="soft"
-        lands on soft), and so does every score passed to on_new_best."""
+        instance with its own knobs, its level included, and the instances add up.
+        plan.score reports the three levels the assembly put the terms on
+        (unassigned_stays_cost with level="soft" lands on soft, a soft constraint with
+        level="medium" on medium), and so does every score passed to on_new_best."""
 
 def list_constraints() -> list[str]:
     """Constraint names scored by this domain (default assembly order, snake_case:

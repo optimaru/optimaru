@@ -4,6 +4,7 @@ import pytest
 
 import project_job as domain
 from project_job.constraints import (
+    Level,
     MakespanCost,
     NonRenewableResourceCapacityCost,
     ProjectDelayCost,
@@ -237,8 +238,18 @@ _CAPACITY = [non_renewable_resource_capacity_cost, renewable_resource_capacity_c
             [*_CAPACITY, ProjectDelayCost(level="hard"), MakespanCost(weight=2)],
             (-1, 0, -10),
         ),
+        # level="medium" moves the doubled makespan next to the delay: 3 + 2 * 3 = 9
+        # medium days beat 1 + 2 * 5 = 11 on both paths.
+        (
+            [
+                *_CAPACITY,
+                project_delay_cost,
+                MakespanCost(level=Level.MEDIUM, weight=2),
+            ],
+            (0, -9, 0),
+        ),
     ],
-    ids=["default-medium", "medium-demoted", "medium-promoted"],
+    ids=["default-medium", "medium-demoted", "medium-promoted", "soft-to-medium"],
 )
 def test_medium_knobs_score_like_the_engine(selection, expected) -> None:
     problem = _fast_or_slow()
@@ -299,14 +310,36 @@ SELECTIONS = {
         ),  # no renewable resource: -1 once
         ProjectDelayCost(level="hard", offset=1),
     ],
+    # Each pick on its own level: the stock on hard and, beyond one unit, on medium; the
+    # delay on medium and again on soft (literal); the makespan on soft and, beyond day
+    # 3, on medium.
+    "levels": [
+        NonRenewableResourceCapacityCost(),
+        NonRenewableResourceCapacityCost(level=Level.MEDIUM, weight=2, offset=1),
+        ProjectDelayCost(),
+        ProjectDelayCost(level="soft", weight=3, offset=2, clip=False),
+        MakespanCost(),
+        MakespanCost(level="medium", offset=3),
+    ],
 }
+
+
+def _engine_solve(core, selection) -> tuple[int, float]:
+    """The engine's own score of `core` under `selection`: a solve with no time keeps
+    every mode and delay as it is."""
+    kept = core.assignment()
+    config = domain.SolverConfig()
+    config.spent_limit_seconds = 0
+    domain.Solver(config).solve_with_constraints(core, selection)
+    assert core.assignment() == kept
+    return core.score.hard, core.score.medium * MEDIUM_UNIT + core.score.soft
 
 
 @pytest.mark.parametrize("selection", list(SELECTIONS.values()), ids=list(SELECTIONS))
 def test_the_cpsat_terms_equal_the_engine_on_pinned_layouts(selection) -> None:
     """Pin each layout: the CP-SAT objective's per-level value, folded like the engine,
-    is the engine's score of that schedule under the same repeated / shifted picks,
-    exactly (each global total shaped once per instance)."""
+    is the engine's score of that schedule under the same repeated / shifted picks (its
+    own and the score() mirror's), exactly (each global total shaped once per instance)."""
     problem = _fast_or_slow()
     for modes, delays in LAYOUTS:
         proxy: dict[str, int] = {}
@@ -318,7 +351,9 @@ def test_the_cpsat_terms_equal_the_engine_on_pinned_layouts(selection) -> None:
             _fixed_delays=delays,
             _proxy_score=proxy,
         )
-        engine = score(domain.constraint_costs(solved.to_core(), selection), selection)
+        core = solved.to_core()
+        engine = score(domain.constraint_costs(core, selection), selection)
+        assert _engine_solve(core, selection) == tuple(engine), (modes, delays)
         folded = (proxy["hard"], proxy["medium"] * MEDIUM_UNIT + proxy["soft"])
         assert folded == tuple(engine), (modes, delays)
         reported = (

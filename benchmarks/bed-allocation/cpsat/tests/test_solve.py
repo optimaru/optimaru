@@ -9,6 +9,7 @@ from bed_allocation.constraints import (
     BedConflictCost,
     DepartmentMaxAgeCost,
     DepartmentSpecialtyPriorityCost,
+    Level,
     MixedGenderRoomCost,
     PreferredMaxRoomCapacityCost,
     PreferredPatientEquipmentCost,
@@ -371,12 +372,35 @@ SELECTIONS = {
         UnassignedStaysCost(),
         BedConflictCost(),
     ],
+    # Each pick on its own level: the preferred capacity on medium and, beyond one night,
+    # on hard; the nights without a bed on medium and again on soft (literal); the mixed
+    # gender total on medium with a literal offset; the age limit demoted to soft.
+    "levels": [
+        BedConflictCost(),
+        UnassignedStaysCost(),
+        UnassignedStaysCost(level="soft", weight=2, offset=1, clip=False),
+        PreferredMaxRoomCapacityCost(level=Level.MEDIUM),
+        PreferredMaxRoomCapacityCost(level="hard", offset=1),
+        MixedGenderRoomCost(level="medium", offset=1, clip=False),
+        DepartmentMaxAgeCost(level=Level.SOFT),
+    ],
 }
 
 
 def _folded(levels) -> tuple[int, float]:
     """(hard, medium, soft) -> the engine-level (hard, medium * 10^9 + soft)."""
     return levels["hard"], levels["medium"] * MEDIUM_UNIT + levels["soft"]
+
+
+def _engine_solve(core, selection) -> tuple[int, float]:
+    """The engine's own score of `core`'s assignment under `selection`: a solve with no
+    time keeps the assignment as it is."""
+    kept = core.assignment()
+    config = domain.SolverConfig()
+    config.spent_limit_seconds = 0
+    domain.Solver(config).solve_with_constraints(core, selection)
+    assert core.assignment() == kept
+    return core.score.hard, core.score.medium * MEDIUM_UNIT + core.score.soft
 
 
 def _assignments(problem):
@@ -390,7 +414,8 @@ def _assignments(problem):
 @pytest.mark.parametrize("selection", list(SELECTIONS.values()), ids=list(SELECTIONS))
 def test_the_cpsat_terms_equal_the_engine_on_every_assignment(selection) -> None:
     """Pin each of the 27 assignments: the CP-SAT objective's per-level value is the
-    engine's score of that assignment under the same repeated / shifted picks, exactly."""
+    engine's score of that assignment under the same repeated / shifted picks (its own
+    and the score() mirror's), exactly."""
     problem = _tiny_problem()
     for assignment, core in _assignments(problem):
         model, _x, objective = build_model(problem, selection, _fixed_beds=assignment)
@@ -398,6 +423,7 @@ def test_the_cpsat_terms_equal_the_engine_on_every_assignment(selection) -> None
         solver = cp_model.CpSolver()
         assert solver.solve(model) == cp_model.OPTIMAL
         engine = score(domain.constraint_costs(core, selection), selection)
+        assert _engine_solve(core, selection) == tuple(engine), assignment
         assert _folded(objective.score(solver)) == tuple(engine), assignment
         # Re-pricing the default costs (each name once) gives the same per instance key.
         assert _folded(objective.score_costs(domain.constraint_costs(core))) == tuple(

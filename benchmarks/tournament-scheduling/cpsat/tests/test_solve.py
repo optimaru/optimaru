@@ -6,6 +6,7 @@ import tournament_scheduling as domain
 from tournament_scheduling.constraints import (
     AssignmentCountImbalanceCost,
     ConfrontationCountImbalanceCost,
+    Level,
     TeamConflictCost,
     TeamUnavailabilityCost,
     get_constraints,
@@ -110,14 +111,17 @@ def test_cpsat_defaults_are_the_engine_defaults() -> None:
     assert levels["assignment_count_imbalance_cost"] == ("medium", 1)
 
 
-def test_hard_false_demotes_to_soft_on_cpsat_too() -> None:
-    """level="soft" lands on soft from a hard OR a medium default (not on medium)."""
+def test_each_pick_lands_on_the_level_it_names_on_cpsat_too() -> None:
+    """level="soft" lands on soft from a hard OR a medium default (not on medium),
+    level="hard" on hard and level="medium" on medium, a repeat on its own level."""
     from ortools.sat.python import cp_model
 
     from tournament_scheduling_cpsat.constraints import REGISTRY
 
     selection = [
         TeamConflictCost(level="soft"),
+        TeamConflictCost(level=Level.MEDIUM),
+        TeamUnavailabilityCost(level="medium"),
         AssignmentCountImbalanceCost(level="soft"),
         ConfrontationCountImbalanceCost(level="hard"),
     ]
@@ -130,6 +134,8 @@ def test_hard_false_demotes_to_soft_on_cpsat_too() -> None:
     }
     assert levels == {
         "team_conflict_cost": "soft",
+        "team_conflict_cost#2": "medium",
+        "team_unavailability_cost": "medium",
         "assignment_count_imbalance_cost": "soft",
         "confrontation_count_imbalance_cost": "hard",
     }
@@ -152,12 +158,16 @@ def test_hard_false_demotes_to_soft_on_cpsat_too() -> None:
         [TeamConflictCost(), AssignmentCountImbalanceCost(level="hard")],
         [TeamConflictCost(), AssignmentCountImbalanceCost(weight=3)],
         [TeamUnavailabilityCost(level="soft"), ConfrontationCountImbalanceCost()],
+        [TeamConflictCost(), ConfrontationCountImbalanceCost(level=Level.MEDIUM)],
+        [TeamConflictCost(level="medium"), TeamUnavailabilityCost()],
     ],
     ids=[
         "medium-demoted-to-soft",
         "medium-promoted",
         "medium-reweighted",
         "hard-demoted-to-soft",
+        "soft-to-medium",
+        "hard-to-medium",
     ],
 )
 def test_knobs_score_like_the_engine(selection) -> None:
@@ -345,7 +355,26 @@ HARD_SELECTIONS = {
         TeamUnavailabilityCost(level="soft", offset=1),
         TeamUnavailabilityCost(level="soft", offset=-2, clip=False, weight=3),
     ],
+    # Each pick on its own level: the same-day pairs on hard and (literal) on medium,
+    # the facts hit on medium beyond one per team and (literal) on soft.
+    "levels": [
+        TeamConflictCost(),
+        TeamConflictCost(level=Level.MEDIUM, offset=1, clip=False),
+        TeamUnavailabilityCost(level="medium", weight=2, offset=1),
+        TeamUnavailabilityCost(level="soft", offset=3, clip=False),
+    ],
 }
+
+
+def _engine_solve(core, selection) -> tuple[int, float]:
+    """The engine's own score of the fully pinned `core` under `selection` (a solve with
+    no time keeps every assignment)."""
+    kept = core.assignment()
+    config = domain.SolverConfig()
+    config.spent_limit_seconds = 0
+    domain.Solver(config).solve_with_constraints(core, selection)
+    assert core.assignment() == kept
+    return core.score.hard, core.score.soft
 
 
 @pytest.mark.parametrize(
@@ -353,8 +382,9 @@ HARD_SELECTIONS = {
 )
 def test_the_hard_terms_equal_the_engine_with_repeats_and_offsets(selection) -> None:
     """Pin each layout: the CP-SAT objective of the two raw-identical plugins equals the
-    engine's score under the same repeated / shifted picks, exactly (one term per team,
-    the scoped unavailability constraint only for the teams with a fact)."""
+    engine's score under the same repeated / shifted picks (its own and the score()
+    mirror's), exactly (one term per team, the scoped unavailability constraint only for
+    the teams with a fact), the medium level folded at MEDIUM_SCALE."""
     from ortools.sat.python import cp_model
 
     from tournament_scheduling_cpsat import build_model
@@ -366,9 +396,11 @@ def test_the_hard_terms_equal_the_engine_with_repeats_and_offsets(selection) -> 
         solver.parameters.num_search_workers = 1
         assert objective.solve(solver) == cp_model.OPTIMAL
         levels = objective.score(solver)
-        engine = score(domain.constraint_costs(problem.to_core(), selection), selection)
-        assert levels["medium"] == 0
-        assert (levels["hard"], levels["soft"]) == tuple(engine), layout
+        core = problem.to_core()
+        engine = score(domain.constraint_costs(core, selection), selection)
+        assert _engine_solve(core, selection) == tuple(engine), layout
+        folded = levels["medium"] * domain.MEDIUM_SCALE + levels["soft"]
+        assert (levels["hard"], folded) == tuple(engine), layout
         assert (
             objective.score_costs(domain.constraint_costs(problem.to_core())) == levels
         )

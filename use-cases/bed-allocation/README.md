@@ -44,17 +44,21 @@ ctest --test-dir build/bed-allocation
 | `mixed_gender_room_cost` | `MixedGenderRoomCost` (global) | hard | 1000 | one total: shared nights of every opposite-gender pair in one `SAME_GENDER` room |
 
 This is the `list_constraints()` order (unit constraints first, the global last). Every
-constraint is flippable (`level="hard"` / `level="soft"`), none is a reward and all twelve are
-scored by default; `bed_allocation.constraint_info()` reports exactly this table from the
-C++ components (`kDefaultLevel` / `kDefaultWeight`).
+constraint is flippable onto any of the three levels (`level="hard"`, `"medium"` or
+`"soft"`, or a `Level`), none is a reward and all twelve are scored by default;
+`bed_allocation.constraint_info()` reports exactly this table from the C++ components
+(`kDefaultLevel` / `kDefaultWeight`).
 
 The medium level folds into the engine's soft level as `medium * 10^9 + soft`
 (`kMediumFold` in `cpp/include/ba/domain.hpp`); weights are in units of their level, so
 `unassigned_stays_cost` defaults to weight **1** medium unit per night.
 `UnassignedStaysCost(level="hard")` makes it one hard unit per night,
 `UnassignedStaysCost(level="soft")` one soft unit per night (outside the fold), and an
-explicit weight stays on the medium level in medium units — in the engine, in
-`constraints.score()` and in the CP-SAT reference alike.
+explicit weight is in units of the level in effect — in the engine, in
+`constraints.score()` and in the CP-SAT reference alike. Any other constraint may move
+onto medium the same way (`PreferredMaxRoomCapacityCost(level="medium")` charges one
+medium unit per night above the preferred capacity, in both solvers too), and a repeated
+pick carries its own level.
 
 **0.2.0:** the constraints were renamed to the unified `*_cost` names (old -> new):
 `same_bed_in_same_night` -> `bed_conflict_cost`, `female_in_male_room` ->

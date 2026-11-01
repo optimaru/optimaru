@@ -630,6 +630,18 @@ void verifyMediumLevel()
     checkScore("no medium term selected: hard still folds x 10^9",
                scoreOf(defaultConstraints().only({"requiredSkillCost"}), s),
                Score{-1, 0, 0, 0});
+    checkScore("level(Medium): minorPriorityTaskEndTimeCost moves onto soft0",
+               scoreOf(defaultConstraints().level("minorPriorityTaskEndTimeCost",
+                                                  optimaru::Level::Medium),
+                       s),
+               Score{-1, -42, -1600, 0});
+    checkScore("a weight on a moved constraint is in medium units",
+               scoreOf(defaultConstraints()
+                           .level("minorPriorityTaskEndTimeCost",
+                                  optimaru::Level::Medium)
+                           .weight("minorPriorityTaskEndTimeCost", 0.5),
+                       s),
+               Score{-1, -22, -1600, 0});
     std::printf("\n");
 }
 
@@ -645,6 +657,12 @@ void verifyMediumIncremental()
             {"hard()", [] { return defaultConstraints().hard("unassignedTasksCost"); }},
             {"soft()", [] { return defaultConstraints().soft("unassignedTasksCost"); }},
             {"weight 5", [] { return defaultConstraints().weight("unassignedTasksCost", 5); }},
+            {"criticalPriorityTaskEndTimeCost on medium",
+             []
+             {
+                 return defaultConstraints().level("criticalPriorityTaskEndTimeCost",
+                                                   optimaru::Level::Medium);
+             }},
         };
     for (const auto &variant : variants)
     {
@@ -693,7 +711,7 @@ void verifyMediumIncremental()
         }
         check(mismatches == 0,
               variant.first + ": 1500 list moves, incremental == full");
-        if (variant.first == "default" || variant.first == "weight 5")
+        if (variant.first != "hard()" && variant.first != "soft()")
             check(mediumSteps > 0, variant.first + ": the walk visits medium states");
     }
     std::printf("\n");

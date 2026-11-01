@@ -49,8 +49,9 @@ stock), so each has one raw total, and the exponent shapes that total.
 
 `list_constraints()` and `constraint_info()` report them in this order;
 `project_job.constraint_info()` reports exactly this table from the C++ components
-(`kDefaultLevel` / `kDefaultWeight`). Every constraint is flippable (`level="hard"` /
-`level="soft"`), none is a reward and all four are scored by default (`default_enabled`).
+(`kDefaultLevel` / `kDefaultWeight`). Every constraint is flippable onto any of the three
+levels (`level="hard"`, `"medium"` or `"soft"`, or a `Level`), none is a reward and all four
+are scored by default (`default_enabled`).
 
 The medium weight is in **medium units**: the domain folds the medium level into the
 engine's soft level as `engine.soft = medium * 10^9 + soft` (`kMediumFold` in
@@ -58,7 +59,9 @@ engine's soft level as `engine.soft = medium * 10^9 + soft` (`kMediumFold` in
 on every `constraint_costs()` entry). `level="hard"` makes
 `project_delay_cost` 1 hard unit per day, `level="soft"` 1 soft unit per day (outside the
 fold), and a `weight` is in units of the level in effect — in the
-engine and in the CP-SAT reference alike.
+engine and in the CP-SAT reference alike. Any other constraint may move onto medium the
+same way (`MakespanCost(level="medium")` charges one medium unit per day of the makespan,
+in both solvers too), and a repeated pick carries its own level.
 
 **0.2.0:** the constraints were renamed (`non_renewable_resource_capacity` ->
 `non_renewable_resource_capacity_cost`, `renewable_resource_capacity` ->

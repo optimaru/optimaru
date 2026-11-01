@@ -13,6 +13,7 @@ import food_packaging as domain
 from food_packaging import calculate_score, constraint_costs
 from food_packaging.constraints import (
     AfterIdealEndTimeCost,
+    Level,
     MaxEndTimeCost,
     OperatorCleaningConflictCost,
     SquaredMakespanCost,
@@ -233,15 +234,26 @@ def _both_paths(selection):
         ([unassigned_jobs_cost, squared_makespan_cost], (0, 0, -10000), True),
         # level="soft" demotes medium to SOFT on both paths (before 0.2.0 CP-SAT moved
         # it to medium and the engine ignored it): 100 soft beats 10000 soft.
-        ([UnassignedJobsCost(level="soft"), squared_makespan_cost], (0, 0, -100), False),
+        (
+            [UnassignedJobsCost(level="soft"), squared_makespan_cost],
+            (0, 0, -100),
+            False,
+        ),
         # level="hard": one hard unit per minute, not 10^10.
         (
             [UnassignedJobsCost(level="hard"), SquaredMakespanCost(level="hard")],
             (-100, 0, 0),
             False,
         ),
+        # level="medium" moves the soft makespan onto medium: 100^2 medium now loses
+        # to the 100 unassigned medium minutes, so both solvers leave the job out.
+        (
+            [unassigned_jobs_cost, SquaredMakespanCost(level=Level.MEDIUM)],
+            (0, -100, 0),
+            False,
+        ),
     ],
-    ids=["default-medium", "medium-demoted", "medium-promoted"],
+    ids=["default-medium", "medium-demoted", "medium-promoted", "soft-to-medium"],
 )
 def test_medium_knobs_score_like_the_engine(selection, expected, assigned) -> None:
     solved, cpsat, engine = _both_paths(selection)
@@ -300,6 +312,19 @@ SELECTIONS = {
         UnassignedJobsCost(level="hard", offset=-1, clip=False),
         OperatorCleaningConflictCost(offset=-2),
     ],
+    # Each pick on its own level: the lateness on medium and, beyond 10 minutes per
+    # line, on soft (literal); the squared makespan on medium beyond 5000; the unassigned
+    # minutes on medium and on hard; the cleaning conflicts demoted to soft.
+    "levels": [
+        MaxEndTimeCost(level=Level.MEDIUM),
+        MaxEndTimeCost(level="soft", weight=2, offset=10, clip=False),
+        AfterIdealEndTimeCost(),
+        SquaredMakespanCost(),
+        SquaredMakespanCost(level="medium", offset=5000),
+        UnassignedJobsCost(),
+        UnassignedJobsCost(level=Level.HARD, offset=30),
+        OperatorCleaningConflictCost(level="soft", offset=1, clip=False),
+    ],
 }
 
 
@@ -308,12 +333,34 @@ def _folded(levels) -> tuple[int, float]:
     return levels["hard"], levels["medium"] * MEDIUM_UNIT + levels["soft"]
 
 
+def _engine_solve(core, selection) -> tuple[int, float]:
+    """The engine's own score of `core` under `selection`: the jobs on no line go to the
+    unassigned pool, and a solve with no time keeps the layout (and the operators)."""
+    placed = {job for line in core.lines for job in line.jobs}
+    core.unassigned_jobs = [job for job in range(len(core.jobs)) if job not in placed]
+
+    def layout():
+        lines = core.lines
+        return (
+            [list(line.jobs) for line in lines],
+            [line.operator_index for line in lines],
+            list(core.unassigned_jobs),
+        )
+
+    kept = layout()
+    config = domain.SolverConfig()
+    config.spent_limit_seconds = 0
+    domain.Solver(config).solve_with_constraints(core, selection)
+    assert layout() == kept
+    return core.score.hard, core.score.medium * MEDIUM_UNIT + core.score.soft
+
+
 @pytest.mark.parametrize("selection", list(SELECTIONS.values()), ids=list(SELECTIONS))
 def test_the_cpsat_terms_equal_the_engine_on_pinned_layouts(selection) -> None:
     """Pin each layout: the CP-SAT objective's per-level value is the engine's score of
-    that schedule under the same repeated / shifted picks, exactly (every instance adds
-    its own terms; the end-time and makespan terms are per line under an offset, the
-    globals' one per total)."""
+    that schedule under the same repeated / shifted picks (its own and the score()
+    mirror's), exactly (every instance adds its own terms; the end-time and makespan
+    terms are per line under an offset, the globals' one per total)."""
     problem = _two_line_problem()
     for orders, operators in LAYOUTS:
         proxy: dict[str, int] = {}
@@ -330,6 +377,7 @@ def test_the_cpsat_terms_equal_the_engine_on_pinned_layouts(selection) -> None:
         ]
         core = result.to_core()
         engine = score(constraint_costs(core, selection), selection)
+        assert _engine_solve(core, selection) == tuple(engine), orders
         assert _folded(proxy) == tuple(engine), orders
         assert (
             result.score_hard,

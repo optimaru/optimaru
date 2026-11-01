@@ -63,8 +63,12 @@ namespace ba
 // kDefaultWeight / kDefaultLevel passed to the base constructor; they are
 // assembly-time metadata, not part of the cost. Override them per instance
 // with the constructor's weight argument or the mutable `level` / `weight` /
-// `exponent`, or by name through ConstraintAssembly (`.hard()` / `.soft()` /
-// `.weight()`). The monolithic calculators read the same kDefaultWeight
+// `exponent` / `offset` / `clip`, or by name through ConstraintAssembly
+// (`.level()`, with `.hard()` / `.soft()` as its shortcuts, `.weight()`,
+// `.exponent()`, `.offset()`, `.clip()`); any component may take any of the
+// three levels, and a name may be held several times
+// (ConstraintAssembly::addInstances), each instance with its own knobs. The
+// monolithic calculators read the same kDefaultWeight
 // constants, which is why the default assembly scores bit-for-bit like
 // ScoreCalculator::calculateScore.
 //

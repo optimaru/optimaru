@@ -72,11 +72,15 @@ namespace ts
 //
 // The level and the weight of each component are DEFAULTS — assembly-time
 // metadata, not part of the cost. Override them per instance through the
-// assembly's knob setters (`weight` / `hard` / `soft` / `exponent`) or the
-// validated `setWeight` / `setLevel` / `setExponent` of the component
-// (`component->setLevel(optimaru::Level::Soft)`). The medium component moved
-// to hard costs 1 hard per raw unit (rounded), moved to soft 1 soft per raw
-// unit (outside the fold); an explicit weight stays in medium units.
+// assembly's knob setters (`weight` / `level` / `exponent` / `offset` /
+// `clip`; `hard` / `soft` are level(Hard) / level(Soft)) or the validated
+// `setWeight` / `setLevel` / `setExponent` / `setOffset` / `setClip` of the
+// component (`component->setLevel(optimaru::Level::Soft)`). Any component may
+// take any of the three levels: the medium component moved to hard costs 1
+// hard per raw unit (rounded), moved to soft 1 soft per raw unit (outside
+// the fold), a hard or soft one moved to medium 1 medium unit; an explicit
+// weight is in units of the level in effect. A name may be held several
+// times (ConstraintAssembly::addInstances), each instance with its own knobs.
 //
 // Cost sign convention (see decomposed_score_calculator.hpp): positive =
 // penalty; the calculator negates into the score.

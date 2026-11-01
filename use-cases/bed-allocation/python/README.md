@@ -86,11 +86,13 @@ Every spec takes `weight=None` (the C++ default, in units of its level), `level=
 default level, otherwise a `Level` or its name), `exponent=1.0` and the keyword-only
 `offset=0.0` / `clip=True` (`clip=True` counts only what lies beyond the offset,
 `clip=False` shapes `x - offset` as it is). `unassigned_stays_cost` is the only medium
-constraint: `level="hard"` charges one hard unit per night, `level="soft"` one soft unit per
-night (outside the 10^9 fold), and an explicit weight stays in medium units. A constraint
-may be picked several times (since 0.3.0); each pick is its own instance with its own
-knobs, the instances add up, and `constraint_costs(plan, picks)` keys the k-th pick
-`<name>#<k>`.
+constraint by default: `level="hard"` charges one hard unit per night, `level="soft"` one
+soft unit per night (outside the 10^9 fold), and an explicit weight is in units of the
+level in effect. Any constraint may take any of the three levels, so
+`PreferredMaxRoomCapacityCost(level="medium")` charges one medium unit per night. A
+constraint may be picked several times (since 0.3.0); each pick is its own instance with
+its own knobs, its level included, the instances add up, and
+`constraint_costs(plan, picks)` keys the k-th pick `<name>#<k>`.
 
 **0.2.0:** every constraint was renamed to the unified `*_cost` names (old -> new:
 `same_bed_in_same_night` -> `bed_conflict_cost`, `female_in_male_room` ->

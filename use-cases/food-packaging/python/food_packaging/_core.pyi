@@ -157,9 +157,10 @@ class Solver:
         """Score the same solve with a caller-chosen constraint set
         (see food_packaging.constraints). The given list replaces the default set; None
         keeps the default set. A name may be picked several times: each pick is its own
-        instance with its own knobs, and the instances add up. schedule.score reports the
-        three levels the assembly put the terms on (a medium constraint with level="soft"
-        lands on soft)."""
+        instance with its own knobs, its level included, and the instances add up.
+        schedule.score reports the three levels the assembly put the terms on (a medium
+        constraint with level="soft" lands on soft, a soft one with level="medium" on
+        medium)."""
 
 def list_constraints() -> list[str]:
     """Constraint names scored by this domain (default assembly order, snake_case:

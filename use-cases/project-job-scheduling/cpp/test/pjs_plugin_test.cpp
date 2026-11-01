@@ -786,6 +786,29 @@ void verifyMediumLevel()
               -3.0,
               -2.0),
           "projectDelayCost weight 3 stays in medium units");
+    check(levelsAre(levelsWith(defaultConstraints().level(
+                                   "makespanCost", optimaru::Level::Medium),
+                               s),
+                    -7,
+                    -3.0,
+                    0.0),
+          "level(Medium): makespanCost moves onto medium");
+    check(levelsAre(levelsWith(defaultConstraints()
+                                   .level("makespanCost", optimaru::Level::Medium)
+                                   .weight("makespanCost", 2),
+                               s),
+                    -7,
+                    -5.0,
+                    0.0),
+          "a weight on a moved constraint is in medium units");
+    check(levelsAre(levelsWith(defaultConstraints().level(
+                                   "renewableResourceCapacityCost",
+                                   optimaru::Level::Medium),
+                               s),
+                    -4,
+                    -4.0,
+                    -2.0),
+          "level(Medium): a hard constraint moves onto medium too");
     {
         // solve(schedule, calculator) reports the assembly's levels. One
         // 3-day job between the milestones, critical path 1 day: at its best
@@ -862,6 +885,12 @@ void verifyMediumIncremental()
              [] { return defaultConstraints().soft("projectDelayCost"); }},
             {"projectDelayCost weight 3",
              [] { return defaultConstraints().weight("projectDelayCost", 3); }},
+            {"makespanCost on medium",
+             []
+             {
+                 return defaultConstraints().level("makespanCost",
+                                                   optimaru::Level::Medium);
+             }},
         };
     for (const auto &[label, assembly] : variants)
     {
@@ -926,7 +955,7 @@ void verifyMediumIncremental()
         check(mismatches == 0,
               label + ": " + std::to_string(steps)
                   + " random moves, incremental == full recompute");
-        if (label == "projectDelayCost weight 3")
+        if (label == "projectDelayCost weight 3" || label == "makespanCost on medium")
             check(sawMedium, label + ": the walk scores a medium term");
     }
     std::printf("\n");

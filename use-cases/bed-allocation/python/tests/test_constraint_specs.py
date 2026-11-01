@@ -14,12 +14,15 @@ import pytest
 
 import bed_allocation as ba
 from bed_allocation import constraints as specs
+from bed_allocation._constraint import instance_keys
 from bed_allocation.constraints import (
     BedConflictCost,
     Constraint,
     DepartmentSpecialtyCost,
+    Level,
     MixedGenderRoomCost,
     PreferredMaxRoomCapacityCost,
+    PreferredPatientEquipmentCost,
     UnassignedStaysCost,
     bed_conflict_cost,
     get_constraints,
@@ -753,3 +756,110 @@ def test_full_assert_solves_with_repeats_and_offsets(picks):
     assert python.hard == engine[0]
     assert python.soft == pytest.approx(engine[1])
     assert score(ba.constraint_costs(plan), picks) == python
+
+
+# --- Levels: each pick, a repeat included, on the level it names --------------------
+
+
+def test_a_soft_constraint_can_move_to_medium():
+    """On medium at its default weight 8, a night above the preferred capacity outranks a
+    night without a bed (1 medium), so the solver leaves all four stays without a bed."""
+    picks = [bed_conflict_cost, unassigned_stays_cost]
+    soft_level = solve([*picks, preferred_max_room_capacity_cost])
+    medium_level = solve([*picks, PreferredMaxRoomCapacityCost(level=Level.MEDIUM)])
+    assert (soft_level.hard, soft_level.medium, soft_level.soft) == (0, -6, -144)
+    assert (medium_level.hard, medium_level.medium, medium_level.soft) == (0, -24, 0)
+
+
+def test_a_level_must_be_a_level():
+    with pytest.raises(TypeError, match="level must be a Level"):
+        BedConflictCost(level=True)
+    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft'"):
+        BedConflictCost(level="firm")
+    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft'"):
+        BedConflictCost(level="HARD")
+
+
+def test_core_refuses_an_unknown_level_like_the_python_base():
+    pick = SimpleNamespace(name="bed_conflict_cost", weight=None, level="firm", exponent=1.0)
+    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft', not 'firm'"):
+        ba.solve(build_plan(), time_limit_seconds=0.1, constraints=[pick])
+    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft', not 'firm'"):
+        ba.constraint_costs(build_plan(), [pick])
+
+
+def test_the_knob_was_renamed():
+    """hard= is gone: a spec refuses it, and an old duck-typed pick that carries `hard` but
+    no `level` is refused on every path instead of running at the default level."""
+    with pytest.raises(TypeError):
+        BedConflictCost(hard=True)
+    old = SimpleNamespace(name="bed_conflict_cost", weight=None, hard=True, exponent=1.0)
+    with pytest.raises(AttributeError, match="level"):
+        ba.solve(build_plan(), time_limit_seconds=0.1, constraints=[old])
+    with pytest.raises(AttributeError, match="level"):
+        ba.constraint_costs(build_plan(), [old])
+    with pytest.raises(AttributeError, match="level"):
+        score(ba.constraint_costs(build_plan()), [old])
+
+
+@pytest.mark.parametrize(
+    ("picks", "expected"),
+    [
+        # _hand_plan(): preferred capacity [6, 6, 0, 0] nights, unassigned [0, 0, 0, 12].
+        ([PreferredMaxRoomCapacityCost(level="medium")], (0, -96 * MEDIUM_UNIT)),  # weight 8 in medium units
+        ([PreferredMaxRoomCapacityCost(level=Level.HARD)], (-96, 0.0)),
+        ([PreferredMaxRoomCapacityCost(level=Level.MEDIUM, weight=1)], (0, -12 * MEDIUM_UNIT)),
+        ([PreferredMaxRoomCapacityCost(level="soft")], (0, -96.0)),
+        ([UnassignedStaysCost(level=Level.SOFT, weight=2)], (0, -24.0)),
+        ([UnassignedStaysCost(level="hard", offset=1)], (-11, 0.0)),
+        ([UnassignedStaysCost(level="medium", exponent=2, offset=10)], (0, -4 * MEDIUM_UNIT)),
+        # A repeat carries its own level and shaping: soft nights, medium beyond 4 nights per
+        # bed (2 + 2), and hard 2 x (x - 7) per real bed: 2 x (-1 - 1 - 7) = -18, a hard reward.
+        (
+            [
+                PreferredMaxRoomCapacityCost(),
+                PreferredMaxRoomCapacityCost(level="medium", offset=4),
+                PreferredMaxRoomCapacityCost(level="hard", weight=2, offset=7, clip=False),
+            ],
+            (18, -32 * MEDIUM_UNIT - 96),
+        ),
+        # The medium constraint repeated onto all three levels.
+        (
+            [
+                UnassignedStaysCost(),
+                UnassignedStaysCost(level=Level.HARD, weight=3, offset=2),
+                UnassignedStaysCost(level=Level.SOFT, offset=20, clip=False),
+            ],
+            (-30, -12 * MEDIUM_UNIT + 8),
+        ),
+    ],
+)
+def test_levels_by_hand_on_both_paths(picks, expected):
+    """A pick's level moves its term, with the weight in units of that level: engine == mirror == hand."""
+    assert score(ba.constraint_costs(_hand_plan()), picks) == expected
+    raw = ba.constraint_costs(_hand_plan(), picks)
+    for pick, key in zip(picks, instance_keys(picks)):
+        assert raw[key]["level"] == (pick.level or raw[key]["default_level"]), key
+    assert score(raw, picks) == expected
+    assert _zero_budget(_hand_plan(), picks) == expected
+
+
+def test_a_repeat_on_medium_reports_its_level_unfolded():
+    """plan.score reports each level on its own: the repeat's medium term is medium."""
+    picks = [
+        PreferredPatientEquipmentCost(),
+        PreferredMaxRoomCapacityCost(),
+        PreferredMaxRoomCapacityCost(level="medium"),
+    ]
+    plan = _hand_plan()
+    _zero_budget(plan, picks)
+    assert (plan.score.hard, plan.score.medium, plan.score.soft) == (0, -96, -96)
+
+
+def test_a_repeat_is_checked_on_its_own_level():
+    """The second pick's level is read and checked like the first's, on both paths."""
+    pick = SimpleNamespace(name="bed_conflict_cost", weight=None, level="firm", exponent=1.0)
+    with pytest.raises(ValueError, match="constraint 'bed_conflict_cost': level must be 'hard', 'medium' or 'soft'"):
+        _zero_budget(_hand_plan(), [BedConflictCost(), pick])
+    with pytest.raises(ValueError, match="constraint 'bed_conflict_cost': level must be 'hard', 'medium' or 'soft'"):
+        score(ba.constraint_costs(_hand_plan()), [BedConflictCost(), pick])

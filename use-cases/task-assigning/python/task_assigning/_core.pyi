@@ -192,7 +192,8 @@ class Solver:
         """Score the same solve with a caller-chosen constraint set
         (see task_assigning.constraints). The given list replaces the default set;
         None keeps the default set. A name may be picked several times: each pick is its
-        own instance with its own knobs, and the instances add up."""
+        own instance with its own knobs, its level included, and the instances add up.
+        A pick moved onto medium lands on soft0 (below hard)."""
 
 def list_constraints() -> list[str]:
     """Constraint names scored by this domain (default assembly order, snake_case; the unit

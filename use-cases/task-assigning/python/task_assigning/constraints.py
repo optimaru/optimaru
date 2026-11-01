@@ -28,11 +28,13 @@ Every spec takes five knobs:
 - ``level``    ``None`` = the default level, otherwise a ``Level`` or its name
                (``Level.MEDIUM`` or ``"medium"``). Any flippable constraint may
                take any of the three levels.
-               ``UnassignedTasksCost`` is the one **medium** constraint
+               ``UnassignedTasksCost`` is the one **medium** constraint by default
                (Bendable soft[0], folded into the engine's hard level BELOW the
                missing skills: ``engine.hard = hard * 10^9 + medium``): ``level="hard"`` charges one hard unit
                (10^9 engine-hard units) per unassigned task, ``level="soft"`` one
                soft unit per unassigned task, and a ``weight`` is in units of the level in effect.
+               A constraint moved onto medium counts in that below-hard level too,
+               rounded per unit like a hard one.
 - ``exponent`` sign-preserving power shaping: ``weight * sign(c) * |c| **
                exponent``, per employee for the unit constraints and on the total
                for the global ``UnassignedTasksCost``. 2.0 = squared, so

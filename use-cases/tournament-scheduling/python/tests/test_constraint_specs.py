@@ -12,10 +12,12 @@ from types import SimpleNamespace
 import pytest
 
 import tournament_scheduling as ts
+from tournament_scheduling._constraint import instance_keys
 from tournament_scheduling.constraints import (
     AssignmentCountImbalanceCost,
     ConfrontationCountImbalanceCost,
     Constraint,
+    Level,
     TeamConflictCost,
     TeamUnavailabilityCost,
     assignment_count_imbalance_cost,
@@ -726,3 +728,101 @@ def test_full_assert_solves_with_repeats_and_offsets(picks):
     assert python.hard == schedule.score.hard
     assert python.soft == pytest.approx(schedule.score.soft)
     assert score(ts.constraint_costs(schedule), picks) == python
+
+
+# --- Levels: each pick, a repeat included, on the level it names --------------------
+
+
+def test_a_soft_constraint_can_move_to_medium():
+    """On medium the head-to-head unfairness is folded at 10^6 next to the load imbalance,
+    on the solver's own score and in score() alike."""
+    picks = [team_conflict_cost, team_unavailability_cost, ConfrontationCountImbalanceCost(level=Level.MEDIUM)]
+    schedule = _solved(picks)
+    raw = ts.constraint_costs(schedule, picks)
+    assert raw["confrontation_count_imbalance_cost"]["level"] == "medium"
+    expected = -raw["confrontation_count_imbalance_cost"]["costs"][0] * ts.MEDIUM_SCALE
+    assert schedule.score.hard == 0
+    assert schedule.score.soft == pytest.approx(expected)
+    assert _agrees(score(raw, picks), (schedule.score.hard, schedule.score.soft))
+
+
+def test_a_level_must_be_a_level():
+    with pytest.raises(TypeError, match="level must be a Level"):
+        TeamConflictCost(level=True)
+    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft'"):
+        TeamConflictCost(level="firm")
+    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft'"):
+        TeamConflictCost(level="HARD")
+
+
+def test_core_refuses_an_unknown_level_like_the_python_base():
+    pick = SimpleNamespace(name="team_conflict_cost", weight=None, level="firm", exponent=1.0)
+    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft', not 'firm'"):
+        ts.solve(build_schedule(), time_limit_seconds=0.1, constraints=[pick])
+    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft', not 'firm'"):
+        ts.constraint_costs(_hand(), [pick])
+
+
+def test_the_knob_was_renamed():
+    """hard= is gone: a spec refuses it, and an old duck-typed pick that carries `hard` but
+    no `level` is refused on every path instead of running at the default level."""
+    with pytest.raises(TypeError):
+        TeamConflictCost(hard=True)
+    old = SimpleNamespace(name="team_conflict_cost", weight=None, hard=True, exponent=1.0)
+    with pytest.raises(AttributeError, match="level"):
+        ts.solve(build_schedule(), time_limit_seconds=0.1, constraints=[old])
+    with pytest.raises(AttributeError, match="level"):
+        ts.constraint_costs(_hand(), [old])
+    with pytest.raises(AttributeError, match="level"):
+        score(ts.constraint_costs(_hand()), [old])
+
+
+@pytest.mark.parametrize(
+    ("picks", "expected"),
+    [
+        # _hand(): team_unavailability [2, 0, 0] on T0 and T2, team_conflict [0, 0, 0], the
+        # globals 2.16025 (medium) and 0.816497 (soft). Medium folds into soft at 10^6.
+        ([ConfrontationCountImbalanceCost(level="medium")], (0, -CONFRONTATION_IMBALANCE * 1e6)),
+        ([ConfrontationCountImbalanceCost(level=Level.HARD)], (-1, 0.0)),  # the total rounded: 0.816497 -> 1
+        ([TeamUnavailabilityCost(level="medium", weight=3)], (0, -6e6)),  # weight in medium units
+        ([TeamConflictCost(level=Level.SOFT, offset=1, clip=False)], (0, 3.0)),  # three teams at -1
+        ([TeamUnavailabilityCost(level="soft", offset=3, clip=False)], (0, 4.0)),  # T0 and T2 only
+        ([AssignmentCountImbalanceCost(level=Level.SOFT, weight=2)], (0, -2 * ASSIGNMENT_IMBALANCE)),
+        # A repeat carries its own level and shaping: the facts hit on hard, beyond one per
+        # team on medium, and 2 x (x - 3) on soft over the scoped teams: 2 x (-1 - 3) = -8.
+        (
+            [
+                TeamUnavailabilityCost(),
+                TeamUnavailabilityCost(level="medium", offset=1),
+                TeamUnavailabilityCost(level="soft", weight=2, offset=3, clip=False),
+            ],
+            (-2, -1e6 + 8),
+        ),
+        # The medium global repeated onto all three levels, each total shaped once.
+        (
+            [
+                AssignmentCountImbalanceCost(),
+                AssignmentCountImbalanceCost(level=Level.HARD, offset=1),  # 1.16025 -> 1
+                AssignmentCountImbalanceCost(level=Level.SOFT, offset=3, clip=False),
+            ],
+            (-1, -ASSIGNMENT_IMBALANCE * 1e6 - (ASSIGNMENT_IMBALANCE - 3)),
+        ),
+    ],
+)
+def test_levels_by_hand_on_both_paths(picks, expected):
+    """A pick's level moves its term, with the weight in units of that level: engine == mirror == hand."""
+    assert _agrees(score(ts.constraint_costs(_hand()), picks), expected)
+    raw = ts.constraint_costs(_hand(), picks)
+    for pick, key in zip(picks, instance_keys(picks)):
+        assert raw[key]["level"] == (pick.level or raw[key]["default_level"]), key
+    assert _agrees(score(raw, picks), expected)
+    assert _agrees(_zero_budget(_hand(), picks), expected)
+
+
+def test_a_repeat_is_checked_on_its_own_level():
+    """The second pick's level is read and checked like the first's, on both paths."""
+    pick = SimpleNamespace(name="team_conflict_cost", weight=None, level="firm", exponent=1.0)
+    with pytest.raises(ValueError, match="constraint 'team_conflict_cost': level must be 'hard', 'medium' or 'soft'"):
+        _zero_budget(_hand(), [TeamConflictCost(), pick])
+    with pytest.raises(ValueError, match="constraint 'team_conflict_cost': level must be 'hard', 'medium' or 'soft'"):
+        score(ts.constraint_costs(_hand()), [TeamConflictCost(), pick])
