@@ -79,7 +79,7 @@ raw = cs.constraint_costs(schedule)       # re-priced in pure Python, no re-solv
 score(raw), score(raw, picks)
 ```
 
-The three `*_diversity_cost` rewards are never hard: `hard=True` raises `ValueError`
+The three `*_diversity_cost` rewards are never hard: `level="hard"` raises `ValueError`
 (in `solve`, in `score()` and on the CP-SAT path).
 
 **0.2.0:** every constraint was renamed to a `*_cost` name (`room_conflict` ->

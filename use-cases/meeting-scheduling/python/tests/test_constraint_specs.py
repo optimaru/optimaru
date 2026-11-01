@@ -116,7 +116,7 @@ def test_level_can_be_flipped():
     soft_level = solve([*HARD_PICKS, meeting_end_time_cost])
     assert soft_level.hard == 0 and soft_level.soft < 0
 
-    hard_level = solve([*HARD_PICKS, MeetingEndTimeCost(hard=True)])
+    hard_level = solve([*HARD_PICKS, MeetingEndTimeCost(level="hard")])
     assert hard_level.hard < 0
     assert hard_level.soft == 0
 
@@ -127,7 +127,7 @@ def test_unknown_constraint_name_raises():
     class Typo:
         name = "room_conflict_costs"  # trailing s
         weight = None
-        hard = None
+        level = None
         exponent = 1.0
 
     with pytest.raises(ValueError, match="unknown constraint"):
@@ -148,7 +148,7 @@ def test_spec_subclass_must_name_a_constraint():
 
 
 def test_module_level_instances_keep_every_default():
-    """Module-level instances must keep the defaults (weight=None, hard=None, exponent=1)."""
+    """Module-level instances must keep the defaults (weight=None, level=None, exponent=1)."""
     instances = (
         overtime_cost,
         room_capacity_cost,
@@ -164,7 +164,7 @@ def test_module_level_instances_keep_every_default():
         room_change_cost,
     )
     for spec in instances:
-        assert (spec.weight, spec.hard, spec.exponent) == (None, None, 1.0)
+        assert (spec.weight, spec.level, spec.exponent) == (None, None, 1.0)
     assert [spec.name for spec in instances] == ms.list_constraints()
 
 
@@ -272,13 +272,13 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     class Negative:
         name = "meeting_overlap_cost"
         weight = -2.0
-        hard = None
+        level = None
         exponent = 1.0
 
     class Flat:
         name = "meeting_overlap_cost"
         weight = None
-        hard = None
+        level = None
         exponent = 0.0
 
     for pick, message in ((Negative(), "weight must be finite and >= 0"), (Flat(), "exponent must be finite and > 0")):
@@ -291,14 +291,13 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     [
         ({"weight": True}, "weight must be a number or None, not True"),
         ({"weight": "2"}, "weight must be a number or None, not '2'"),
-        ({"hard": 1}, "hard must be True, False or None, not 1"),
-        ({"hard": "x"}, "hard must be True, False or None, not 'x'"),
+        ({"level": 1}, "level must be a Level, its name or None, not 1"),
         ({"exponent": True}, "exponent must be a number, not True"),
     ],
 )
 def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
     """The C++ path checks the knob types like _constraint.py: TypeError, the same words."""
-    pick = SimpleNamespace(name="meeting_overlap_cost", weight=None, hard=None, exponent=1.0)
+    pick = SimpleNamespace(name="meeting_overlap_cost", weight=None, level=None, exponent=1.0)
     for key, value in knobs.items():
         setattr(pick, key, value)
     with pytest.raises(TypeError, match=f"constraint 'meeting_overlap_cost': {re.escape(message)}"):
@@ -326,7 +325,7 @@ OLD_NAMES = (
 @pytest.mark.parametrize("old", OLD_NAMES)
 def test_old_names_are_gone(old):
     """0.2.0 renamed the catalog; the pre-0.2.0 names are unknown now (no aliases)."""
-    pick = SimpleNamespace(name=old, weight=None, hard=None, exponent=1.0)
+    pick = SimpleNamespace(name=old, weight=None, level=None, exponent=1.0)
     with pytest.raises(ValueError, match="unknown constraint"):
         ms.solve(build_schedule(), time_limit_seconds=0.1, constraints=[pick])
     with pytest.raises(ValueError, match="unknown constraint"):
@@ -376,14 +375,14 @@ def test_the_medium_level_folds_into_soft_at_1e6():
     ("spec", "expected"),
     [
         (PreferredAttendanceConflictCost(), (0, -2 * 1e6)),  # medium, folded
-        (PreferredAttendanceConflictCost(hard=True), (-2, 0.0)),  # one hard unit per person-grain
-        (PreferredAttendanceConflictCost(hard=False), (0, -2.0)),  # one soft unit, outside the fold
+        (PreferredAttendanceConflictCost(level="hard"), (-2, 0.0)),  # one hard unit per person-grain
+        (PreferredAttendanceConflictCost(level="soft"), (0, -2.0)),  # one soft unit, outside the fold
         (PreferredAttendanceConflictCost(weight=3), (0, -6 * 1e6)),  # the weight stays in medium units
-        (RequiredAndPreferredAttendanceConflictCost(hard=False, weight=5), (0, -10.0)),
+        (RequiredAndPreferredAttendanceConflictCost(level="soft", weight=5), (0, -10.0)),
     ],
 )
 def test_medium_knobs_score_the_same_in_python_and_in_the_engine(spec, expected):
-    """hard=True / hard=False move a medium constraint to hard / soft at one unit per raw
+    """level="hard" / level="soft" move a medium constraint to hard / soft at one unit per raw
     person-grain; an explicit weight stays in medium units. Both paths agree."""
     raw = ms.constraint_costs(_attendance_clash())
     assert score(raw, [spec]) == expected
@@ -391,8 +390,8 @@ def test_medium_knobs_score_the_same_in_python_and_in_the_engine(spec, expected)
 
 
 def test_demoting_both_mediums_scores_like_the_engine_on_a_solve():
-    """hard=False on the medium pair: the solve's own score equals the pure-Python rescoring."""
-    selection = [spec if spec.name not in MEDIUM else type(spec)(hard=False) for spec in get_constraints()]
+    """level="soft" on the medium pair: the solve's own score equals the pure-Python rescoring."""
+    selection = [spec if spec.name not in MEDIUM else type(spec)(level="soft") for spec in get_constraints()]
     schedule = _solved(selection)
     python = score(ms.constraint_costs(schedule), selection)
     assert python.hard == schedule.score.hard
@@ -434,9 +433,9 @@ def test_score_reproduces_the_engine_score_exactly():
         None,
         [room_conflict_cost],
         [*HARD_PICKS, MeetingOverlapCost(weight=60), meeting_end_time_cost],
-        [RoomConflictCost(hard=False), *HARD_PICKS[:3], meeting_overlap_cost],
+        [RoomConflictCost(level="soft"), *HARD_PICKS[:3], meeting_overlap_cost],
         [*HARD_PICKS, MeetingOverlapCost(exponent=2.0), MeetingEndTimeCost(exponent=2.0)],
-        [*HARD_PICKS, PreferredAttendanceConflictCost(hard=True), MeetingEndTimeCost(hard=True, weight=0.5)],
+        [*HARD_PICKS, PreferredAttendanceConflictCost(level="hard"), MeetingEndTimeCost(level="hard", weight=0.5)],
     ],
 )
 def test_score_matches_the_engine_for_arbitrary_specs(specs):

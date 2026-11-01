@@ -95,7 +95,7 @@ def test_cpsat_defaults_are_the_engine_defaults() -> None:
         assert entry["reward"] == row.reward
         assert entry["default_enabled"] == row.default_enabled
         assert entry["kind"] == "either"  # every tournament constraint is flippable
-        assert entry["params"] == {"weight": None, "hard": None, "exponent": 1.0}
+        assert entry["params"] == {"weight": None, "level": None, "exponent": 1.0}
     levels = {
         entry["name"]: (entry["default_level"], entry["default_weight"])
         for entry in entries
@@ -105,15 +105,15 @@ def test_cpsat_defaults_are_the_engine_defaults() -> None:
 
 
 def test_hard_false_demotes_to_soft_on_cpsat_too() -> None:
-    """hard=False lands on soft from a hard OR a medium default (not on medium)."""
+    """level="soft" lands on soft from a hard OR a medium default (not on medium)."""
     from ortools.sat.python import cp_model
 
     from tournament_scheduling_cpsat.constraints import REGISTRY
 
     selection = [
-        TeamConflictCost(hard=False),
-        AssignmentCountImbalanceCost(hard=False),
-        ConfrontationCountImbalanceCost(hard=True),
+        TeamConflictCost(level="soft"),
+        AssignmentCountImbalanceCost(level="soft"),
+        ConfrontationCountImbalanceCost(level="hard"),
     ]
     objective = REGISTRY.objective(
         cp_model.CpModel(), ("hard", "medium", "soft"), selection
@@ -140,12 +140,12 @@ def test_hard_false_demotes_to_soft_on_cpsat_too() -> None:
         [
             spec
             if spec.name != "assignment_count_imbalance_cost"
-            else type(spec)(hard=False)
+            else type(spec)(level="soft")
             for spec in get_constraints()
         ],
-        [TeamConflictCost(), AssignmentCountImbalanceCost(hard=True)],
+        [TeamConflictCost(), AssignmentCountImbalanceCost(level="hard")],
         [TeamConflictCost(), AssignmentCountImbalanceCost(weight=3)],
-        [TeamUnavailabilityCost(hard=False), ConfrontationCountImbalanceCost()],
+        [TeamUnavailabilityCost(level="soft"), ConfrontationCountImbalanceCost()],
     ],
     ids=[
         "medium-demoted-to-soft",
@@ -156,7 +156,7 @@ def test_hard_false_demotes_to_soft_on_cpsat_too() -> None:
 )
 def test_knobs_score_like_the_engine(selection) -> None:
     """The reported score of a CP-SAT solve under a selection is the engine's score of
-    that solution under the same selection (hard=False soft, hard=True hard, an
+    that solution under the same selection (level="soft" soft, level="hard" hard, an
     explicit medium weight in medium units)."""
     problem = _parity_problem()
 

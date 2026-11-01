@@ -130,7 +130,7 @@ struct ConstraintMetadata {
     // The weight and level the component was constructed with (its
     // kDefaultWeight / kDefaultLevel in every domain factory). The setters
     // below never change them, so constraintCosts() can report the default a
-    // pick's weight=None / hard=None means even after an assembler re-stated
+    // pick's weight=None / level=None means even after an assembler re-stated
     // the knobs (Python: the costs entries' default_weight / default_level).
     double defaultWeight;
     Level defaultLevel;
@@ -909,7 +909,7 @@ public:
         bool reward;
         bool levelFlippable;
         std::string label;  // ConstraintMetadata::label (empty = none)
-        // What weight=None / hard=None mean for this component
+        // What weight=None / level=None mean for this component
         // (ConstraintMetadata::defaultWeight / defaultLevel): equal to
         // weight / level unless the assembly re-stated them.
         double defaultWeight;

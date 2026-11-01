@@ -25,7 +25,7 @@ RULES = [
     domain.RequiredSkillCost(),
     # A second instance needs other parameters (the same rule with the same
     # parameters twice is refused): a scoped, demoted copy.
-    domain.RequiredSkillCost(weight=3, hard=False, worker_indices=(0, 1)),
+    domain.RequiredSkillCost(weight=3, level="soft", worker_indices=(0, 1)),
     domain.EmployeeUnavailabilityCost(),
     domain.ShiftOverlapCost(),
     domain.MaxOneShiftPerDayCost(),
@@ -205,7 +205,7 @@ def test_cpsat_defaults_are_the_engine_defaults() -> None:
         assert entry["reward"] == row.reward
         assert entry["default_enabled"] == row.default_enabled
         assert entry["kind"] == ("either" if row.level_flippable else row.default_level)
-        assert entry["params"] == {"weight": None, "hard": None, "exponent": 1.0}
+        assert entry["params"] == {"weight": None, "level": None, "exponent": 1.0}
     assert [row.name for row in engine if row.default_enabled] == [
         spec.name for spec in domain.get_constraints()
     ]
@@ -239,14 +239,14 @@ def test_repeated_rules_get_numbered_plugins() -> None:
 
 def test_a_reward_refuses_hard_on_the_cpsat_path_too() -> None:
     with pytest.raises(ValueError, match="is a reward"):
-        solve(_problem([domain.DesiredDayCost(hard=True)]))
+        solve(_problem([domain.DesiredDayCost(level="hard")]))
     with pytest.raises(ValueError, match="is a reward"):
-        solve(_problem([domain.DesiredShiftCost(hard=True, worker_indices=(0,))]))
+        solve(_problem([domain.DesiredShiftCost(level="hard", worker_indices=(0,))]))
 
 
 def test_demoting_a_hard_rule_scores_like_the_engine() -> None:
-    """hard=False lands on soft in both solvers (cpsat-common's level_of)."""
-    problem = _problem([domain.MaxConsecutiveDaysCost(value=1, hard=False)], seed=1)
+    """level="soft" lands on soft in both solvers (cpsat-common's level_of)."""
+    problem = _problem([domain.MaxConsecutiveDaysCost(value=1, level="soft")], seed=1)
     fixed = _stacked_roster(problem, 1)
     expected = constraint_costs(_with_workers(problem, fixed))
     proxy: dict[str, int] = {}
@@ -339,7 +339,7 @@ def test_imbalance_does_not_buy_an_empty_shift_at_a_soft_price() -> None:
             ],
             rules=[
                 domain.ShiftCountImbalanceCost(),
-                domain.UnassignedShiftsCost(hard=False),
+                domain.UnassignedShiftsCost(level="soft"),
             ],
         )
     )
@@ -357,9 +357,9 @@ def test_what_cannot_be_modelled_is_refused() -> None:
     with pytest.raises(ValueError, match="integer"):
         solve(_problem([domain.TargetDaysOffCost(weight=0.5)]))
     with pytest.raises(ValueError, match="fractional"):
-        solve(_problem([domain.ShiftCountImbalanceCost(hard=True)]))
+        solve(_problem([domain.ShiftCountImbalanceCost(level="hard")]))
     with pytest.raises(ValueError, match="fractional"):
-        solve(_problem([domain.AssignmentCost(hard=True, cost_per_shift=2.0)]))
+        solve(_problem([domain.AssignmentCost(level="hard", cost_per_shift=2.0)]))
     pinned = _problem([domain.RequiredSkillCost()])
     pinned.model_input.shifts[0].worker = "Worker 0"
     pinned.model_input.shifts[0].pinned = True

@@ -216,7 +216,7 @@ def test_parity_partial_solution(problem):
         problem,
         constraints=[
             *get_constraints()[1:],
-            UnassignedLessonsCost(hard=False, weight=UNASSIGNED_LESSONS_SOFT_WEIGHT),
+            UnassignedLessonsCost(level="soft", weight=UNASSIGNED_LESSONS_SOFT_WEIGHT),
         ],
         time_limit_seconds=10.0,
         random_seed=7,
@@ -274,9 +274,9 @@ def test_cpsat_defaults_are_the_engine_defaults():
     for constraint_type in CONSTRAINT_TYPES:
         assert issubclass(constraint_type, getattr(st.constraints, constraint_type.__name__))
     for constraint, row in zip(default_constraints(), st.constraint_info(), strict=True):
-        assert (constraint.weight, constraint.hard, constraint.exponent) == (None, None, 1.0)
+        assert (constraint.weight, constraint.level, constraint.exponent) == (None, None, 1.0)
         assert ENGINE_DEFAULTS[constraint.name] == row
-        assert constraint.level == row.default_level
+        assert constraint.effective_level == row.default_level
         assert constraint.effective_weight == row.default_weight
     assert CpsatConfig().weights.model_dump() == {
         row.name: row.default_weight for row in st.constraint_info() if row.default_level == "soft"
@@ -284,7 +284,7 @@ def test_cpsat_defaults_are_the_engine_defaults():
 
 
 def test_teacher_gap_made_hard_is_forbidden_on_both_paths():
-    """hard=True on a soft constraint: CP-SAT forbids every violation; the engine scores it on the hard level."""
+    """level="hard" on a soft constraint: CP-SAT forbids every violation; the engine scores it on the hard level."""
     from helpers import NO_WEIGHTS, course, make_problem, slot, teacher
 
     from teacher_scheduling.domain.solution import SolveStatus
@@ -292,7 +292,7 @@ def test_teacher_gap_made_hard_is_forbidden_on_both_paths():
     from teacher_scheduling.solver.registry import default_constraints, merge
 
     config = CpsatConfig(time_limit_seconds=5.0, num_workers=4, random_seed=7, weights=NO_WEIGHTS)
-    constraints = merge(default_constraints(NO_WEIGHTS), CpsatTeacherGapCost(hard=True))
+    constraints = merge(default_constraints(NO_WEIGHTS), CpsatTeacherGapCost(level="hard"))
     # One fixed lesson in period 1: the other must sit in period 2 (period 3 would leave a gap).
     problem = make_problem(
         [course(periods_per_week=2, max_periods_per_day=2, fixed_slots=frozenset({slot(0, 1)}))],
@@ -310,11 +310,11 @@ def test_teacher_gap_made_hard_is_forbidden_on_both_paths():
     converted = st.convert_problem(problem_dict)
     st.inject_solution(converted, [lesson.model_dump(mode="json") for lesson in result.lessons])
     selection = [
-        st.TeacherGapCost(hard=True) if spec.name == "teacher_gap_cost" else spec for spec in get_constraints()
+        st.TeacherGapCost(level="hard") if spec.name == "teacher_gap_cost" else spec for spec in get_constraints()
     ]
     assert canon.DecomposedCalculator(selection).score(converted.table).hard == 0
 
-    # Fixed lessons in periods 1 and 3 leave a gap that hard=True cannot accept.
+    # Fixed lessons in periods 1 and 3 leave a gap that level="hard" cannot accept.
     gapped = make_problem(
         [course(periods_per_week=2, max_periods_per_day=2, fixed_slots=frozenset({slot(0, 1), slot(0, 3)}))],
         [teacher()],

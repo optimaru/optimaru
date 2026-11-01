@@ -101,7 +101,7 @@ def test_level_can_be_flipped():
     soft_level = solve([*picks, squared_makespan_cost])
     assert soft_level.soft < 0  # loads the jobs and pays the makespan
 
-    hard_level = solve([*picks, SquaredMakespanCost(hard=True)])
+    hard_level = solve([*picks, SquaredMakespanCost(level="hard")])
     assert hard_level.medium < 0  # leaves the jobs off instead
     assert hard_level.soft == 0
     assert hard_level.hard == 0  # no line runs, so no hard cost either
@@ -113,7 +113,7 @@ def test_unknown_constraint_name_raises():
     class Typo:
         name = "operator_cleaning_conflict_costs"  # trailing s
         weight = None
-        hard = None
+        level = None
         exponent = 1.0
 
     with pytest.raises(ValueError, match="unknown constraint"):
@@ -136,10 +136,10 @@ def test_spec_subclass_must_name_a_constraint():
 def test_default_instance_carries_no_overrides():
     """Module-level instances must keep the defaults (weight=None)."""
     assert operator_cleaning_conflict_cost.weight is None
-    assert operator_cleaning_conflict_cost.hard is None
+    assert operator_cleaning_conflict_cost.level is None
     assert operator_cleaning_conflict_cost.exponent == 1.0
     for spec in get_constraints():
-        assert (spec.weight, spec.hard, spec.exponent) == (None, None, 1.0), spec.name
+        assert (spec.weight, spec.level, spec.exponent) == (None, None, 1.0), spec.name
         assert getattr(specs, spec.name) is spec  # the instance is named after the constraint
 
 
@@ -319,12 +319,12 @@ def test_the_medium_level_folds_into_soft():
     soft = monolithic.soft
     assert score(raw) == (0, soft - 150 * MEDIUM_UNIT)
     others = [spec for spec in get_constraints() if spec.name != "after_ideal_end_time_cost"]
-    assert score(raw, [*others, AfterIdealEndTimeCost(hard=True)]) == (-100, soft - 50 * MEDIUM_UNIT)
-    assert score(raw, [*others, AfterIdealEndTimeCost(hard=False)]) == (0, soft - 100 - 50 * MEDIUM_UNIT)
+    assert score(raw, [*others, AfterIdealEndTimeCost(level="hard")]) == (-100, soft - 50 * MEDIUM_UNIT)
+    assert score(raw, [*others, AfterIdealEndTimeCost(level="soft")]) == (0, soft - 100 - 50 * MEDIUM_UNIT)
     assert score(raw, [*others, AfterIdealEndTimeCost(weight=3)]) == (0, soft - 350 * MEDIUM_UNIT)
     others = [spec for spec in get_constraints() if spec.name != "unassigned_jobs_cost"]
-    assert score(raw, [*others, UnassignedJobsCost(hard=True)]) == (-50, soft - 100 * MEDIUM_UNIT)
-    assert score(raw, [*others, UnassignedJobsCost(hard=False)]) == (0, soft - 50 - 100 * MEDIUM_UNIT)
+    assert score(raw, [*others, UnassignedJobsCost(level="hard")]) == (-50, soft - 100 * MEDIUM_UNIT)
+    assert score(raw, [*others, UnassignedJobsCost(level="soft")]) == (0, soft - 50 - 100 * MEDIUM_UNIT)
     assert score(raw, [*others, UnassignedJobsCost(weight=2)]) == (0, soft - 200 * MEDIUM_UNIT)
 
 
@@ -335,11 +335,11 @@ def _one_job_one_line():
 
 
 def test_a_demoted_medium_constraint_is_soft_in_the_engine_too():
-    """hard=False moves unassigned_jobs_cost to soft in the solver (it was a no-op before 0.2.0).
+    """level="soft" moves unassigned_jobs_cost to soft in the solver (it was a no-op before 0.2.0).
 
     As soft, 100 unassigned minutes are cheaper than a 10000 squared makespan, so the solver
     leaves the job out, and its minutes cost soft, not medium."""
-    picks = [UnassignedJobsCost(hard=False), squared_makespan_cost]
+    picks = [UnassignedJobsCost(level="soft"), squared_makespan_cost]
     schedule = _one_job_one_line()
     fp.solve(schedule, time_limit_seconds=0.3, random_seed=1, constraints=picks)
     assert (schedule.score.hard, schedule.score.medium, schedule.score.soft) == (0, 0, -100)
@@ -356,9 +356,9 @@ def test_the_default_medium_level_keeps_the_job():
 
 
 def test_a_promoted_medium_constraint_is_one_hard_unit_per_minute():
-    """hard=True: an unassigned minute costs 1 hard (not 10^10). With the makespan also hard,
+    """level="hard": an unassigned minute costs 1 hard (not 10^10). With the makespan also hard,
     leaving the job out (100 hard) is cheaper than running it (10000 hard)."""
-    picks = [UnassignedJobsCost(hard=True), SquaredMakespanCost(hard=True)]
+    picks = [UnassignedJobsCost(level="hard"), SquaredMakespanCost(level="hard")]
     schedule = _one_job_one_line()
     fp.solve(schedule, time_limit_seconds=0.3, random_seed=1, constraints=picks)
     assert (schedule.score.hard, schedule.score.medium, schedule.score.soft) == (-100, 0, 0)
@@ -408,8 +408,8 @@ def test_specs_validate_their_knobs(kwargs, error):
 
 def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     """The C++ side guards too: a duck-typed pick cannot smuggle a negative weight in."""
-    negative = SimpleNamespace(name="max_end_time_cost", weight=-2.0, hard=None, exponent=1.0)
-    flat = SimpleNamespace(name="max_end_time_cost", weight=None, hard=None, exponent=0.0)
+    negative = SimpleNamespace(name="max_end_time_cost", weight=-2.0, level=None, exponent=1.0)
+    flat = SimpleNamespace(name="max_end_time_cost", weight=None, level=None, exponent=0.0)
     for pick, message in ((negative, "weight must be finite and >= 0"), (flat, "exponent must be finite and > 0")):
         with pytest.raises(ValueError, match=message):
             fp.solve(build_schedule(), time_limit_seconds=0.1, constraints=[pick])
@@ -419,14 +419,13 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     ("knobs", "message"),
     [
         ({"weight": True}, "weight must be a number or None, not True"),
-        ({"hard": 1}, "hard must be True, False or None, not 1"),
-        ({"hard": "x"}, "hard must be True, False or None, not 'x'"),
+        ({"level": 1}, "level must be a Level, its name or None, not 1"),
         ({"exponent": True}, "exponent must be a number, not True"),
     ],
 )
 def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
     """The C++ path checks the knob types like _constraint.py: TypeError, the same words."""
-    pick = SimpleNamespace(name="unassigned_jobs_cost", weight=None, hard=None, exponent=1.0)
+    pick = SimpleNamespace(name="unassigned_jobs_cost", weight=None, level=None, exponent=1.0)
     for key, value in knobs.items():
         setattr(pick, key, value)
     with pytest.raises(TypeError, match=f"constraint 'unassigned_jobs_cost': {re.escape(message)}"):
@@ -448,7 +447,7 @@ OLD_NAMES = [
 @pytest.mark.parametrize("old", OLD_NAMES)
 def test_old_names_are_gone(old):
     """0.2.0 renamed the catalog; the pre-0.2.0 names are unknown now (no aliases)."""
-    pick = SimpleNamespace(name=old, weight=None, hard=None, exponent=1.0)
+    pick = SimpleNamespace(name=old, weight=None, level=None, exponent=1.0)
     with pytest.raises(ValueError, match="unknown constraint"):
         fp.solve(build_schedule(), time_limit_seconds=0.05, constraints=[pick])
     with pytest.raises(ValueError, match="unknown constraint"):

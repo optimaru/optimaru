@@ -10,7 +10,7 @@ domain specs (`MinStartDateCost`, `MaxEndDateCost`, `BeforeIdealEndDateCost`,
 `list_constraints()` order. Their default level and weight come from the engine's
 `maintenance_scheduling.constraint_info()` (since 0.2.0; before, the 1,000,000 and 1,000
 soft weights were copied here by hand), so `catalog()` equals the engine catalog and
-`hard=False` demotes to soft in both solvers. Not supported on this exact path (rejected):
+`level="soft"` demotes to soft in both solvers. Not supported on this exact path (rejected):
 `exponent != 1` and non-integer weights.
 
 ## Engine comparison

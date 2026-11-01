@@ -2,7 +2,7 @@
 
 The default path (`cs.solve(schedule)`) enables all thirty-seven constraints at their
 default weights (the Java provider's). This module is the alternative path next to it:
-pick constraints, change weights, flip hard/soft, and pass the list to
+pick constraints, change weights, change levels, and pass the list to
 `solve(schedule, constraints=...)`.
 
 The shortest route is :func:`get_constraints`. It returns the default list, so
@@ -22,19 +22,21 @@ Each constraint has a default instance at module level (`room_conflict_cost`, ..
 you can also pass a list of just a few. Only listed constraints are scored — leave one
 out and its term disappears from the score.
 
-Every spec takes ``(weight=None, hard=None, exponent=1.0)``:
+Every spec takes ``(weight=None, level=None, exponent=1.0)``:
 
 - ``weight``   linear multiplier on the constraint cost. ``None`` = the component
                default (the Java provider's weight; ``cs.constraint_info()`` reports
                every default level and weight).
-- ``hard``     ``True`` = hard, ``False`` = soft, ``None`` = the default level.
+- ``level``    ``None`` = the default level, otherwise ``Level.HARD`` or
+               ``Level.SOFT`` (or the names ``"hard"`` and ``"soft"``). This use
+               case has no medium level.
 - ``exponent`` sign-preserving power shaping: ``weight * sign(c) * |c| ** exponent``.
                Every constraint here is global, so it shapes the one total. 2.0 =
                squared, so concentrated violations grow much costlier.
 
 Three terms (`audience_type_diversity_cost`, `audience_level_diversity_cost`,
 `language_diversity_cost`) are **rewards**: their raw cost is <= 0, so raising their
-weight raises the score. A reward is never hard: ``hard=True`` raises ValueError (here,
+weight raises the score. A reward is never hard: ``level="hard"`` raises ValueError (here,
 in `score()` and in the C++ core). Everything else is a penalty that flips both ways.
 
 Names (`name`) are the C++ component names in snake_case
@@ -46,10 +48,11 @@ Module-level instance names use the same snake_case, so they match the strings
 old names are unknown now.
 """
 
-from ._constraint import Constraint, Score, score_costs, select
+from ._constraint import Constraint, Level, Score, score_costs, select
 
 __all__ = [
     "Constraint",
+    "Level",
     "Score",
     "score",
     "TalkTypeIncompatibilityCost",
@@ -870,6 +873,6 @@ def score(costs: dict, constraints: list[Constraint] | None = None) -> Score:
 
     When ``constraints`` is given, only those constraints are scored — the same
     semantics as `get_constraints`. Unknown names raise ValueError, and so does
-    ``hard=True`` on a reward.
+    ``level="hard"`` on a reward.
     """
     return score_costs(costs, get_constraints(constraints))

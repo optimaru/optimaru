@@ -101,7 +101,7 @@ def test_get_constraints_defaults_to_the_full_set():
 
 
 def test_module_level_instances_keep_every_default():
-    """Module-level instances keep the defaults (weight=None, hard=None, exponent=1)."""
+    """Module-level instances keep the defaults (weight=None, level=None, exponent=1)."""
     instances = (
         fixed_partition_cost,
         same_partition_pairs_cost,
@@ -111,7 +111,7 @@ def test_module_level_instances_keep_every_default():
         cut_weight_cost,
     )
     for spec in instances:
-        assert (spec.weight, spec.hard, spec.exponent) == (None, None, 1.0)
+        assert (spec.weight, spec.level, spec.exponent) == (None, None, 1.0)
         assert spec.params() == {}
     assert list(instances) == get_constraints()
 
@@ -249,12 +249,12 @@ def test_level_can_be_flipped():
     """Demoting a hard constraint to soft moves its cost to the soft level."""
     problem = fixture_h()
     flipped = [
-        spec if spec.name != "partition_size_bounds_cost" else PartitionSizeBoundsCost(hard=False)
+        spec if spec.name != "partition_size_bounds_cost" else PartitionSizeBoundsCost(level="soft")
         for spec in get_constraints()
     ]
     assert max_cut.calculate_score(problem, flipped) == (-3, 0.0)
     assert engine_score(problem, flipped) == (-3, 0.0)
-    promoted = [*get_constraints()[:4], PartitionImbalanceCost(weight=1, hard=True), cut_weight_cost]
+    promoted = [*get_constraints()[:4], PartitionImbalanceCost(weight=1, level="hard"), cut_weight_cost]
     assert max_cut.calculate_score(problem, promoted) == (-7, 2.0)
     assert engine_score(problem, promoted) == (-7, 2.0)
 
@@ -271,8 +271,8 @@ def test_reweighting_scales_only_that_term():
 
 
 def test_the_reward_refuses_hard_true_on_every_path():
-    """cut_weight_cost is a reward (raw <= 0): hard=True raises, in Python and through C++."""
-    pick = CutWeightCost(hard=True)  # the spec itself is a plain value
+    """cut_weight_cost is a reward (raw <= 0): level="hard" raises, in Python and through C++."""
+    pick = CutWeightCost(level="hard")  # the spec itself is a plain value
     problem = fixture_h()
     with pytest.raises(ValueError, match="is a reward"):
         score(max_cut.constraint_costs(problem), [pick])
@@ -280,12 +280,12 @@ def test_the_reward_refuses_hard_true_on_every_path():
         max_cut.calculate_score(problem, [pick])
     with pytest.raises(ValueError, match="is a reward"):
         max_cut.solve(problem, time_limit_seconds=0, constraints=[pick])
-    duck = SimpleNamespace(name="cut_weight_cost", weight=None, hard=True, exponent=1.0)
+    duck = SimpleNamespace(name="cut_weight_cost", weight=None, level="hard", exponent=1.0)
     with pytest.raises(ValueError, match="'cut_weight_cost' is a reward"):
         max_cut.Solver(_zero()).solve_with_constraints(problem.to_core(), [duck])
-    # hard=False re-states its level: allowed, and scores like the default.
-    assert max_cut.calculate_score(problem, [CutWeightCost(hard=False)]) == (0, 2.0)
-    assert engine_score(problem, [CutWeightCost(hard=False)]) == (0, 2.0)
+    # level="soft" re-states its level: allowed, and scores like the default.
+    assert max_cut.calculate_score(problem, [CutWeightCost(level="soft")]) == (0, 2.0)
+    assert engine_score(problem, [CutWeightCost(level="soft")]) == (0, 2.0)
 
 
 @pytest.mark.parametrize(
@@ -307,8 +307,8 @@ def test_specs_validate_their_knobs(kwargs, error):
 
 def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     """The C++ side guards too: a duck-typed pick cannot smuggle a negative weight in."""
-    negative = SimpleNamespace(name="fixed_partition_cost", weight=-2.0, hard=None, exponent=1.0)
-    flat = SimpleNamespace(name="fixed_partition_cost", weight=None, hard=None, exponent=0.0)
+    negative = SimpleNamespace(name="fixed_partition_cost", weight=-2.0, level=None, exponent=1.0)
+    flat = SimpleNamespace(name="fixed_partition_cost", weight=None, level=None, exponent=0.0)
     for pick, message in ((negative, "weight must be finite and >= 0"), (flat, "exponent must be finite and > 0")):
         with pytest.raises(ValueError, match=message):
             max_cut.solve(plain(), time_limit_seconds=0, constraints=[pick])
@@ -319,14 +319,13 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     [
         ({"weight": True}, "weight must be a number or None, not True"),
         ({"weight": "2"}, "weight must be a number or None, not '2'"),
-        ({"hard": 1}, "hard must be True, False or None, not 1"),
-        ({"hard": "x"}, "hard must be True, False or None, not 'x'"),
+        ({"level": 1}, "level must be a Level, its name or None, not 1"),
         ({"exponent": True}, "exponent must be a number, not True"),
     ],
 )
 def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
     """The C++ path checks the knob types like _constraint.py: TypeError, the same words."""
-    pick = SimpleNamespace(name="partition_size_bounds_cost", weight=None, hard=None, exponent=1.0)
+    pick = SimpleNamespace(name="partition_size_bounds_cost", weight=None, level=None, exponent=1.0)
     for key, value in knobs.items():
         setattr(pick, key, value)
     with pytest.raises(TypeError, match=f"constraint 'partition_size_bounds_cost': {re.escape(message)}"):
@@ -347,7 +346,7 @@ def test_unknown_and_old_names_are_refused():
     )
     raw = max_cut.constraint_costs(fixture_h())
     for old in (*old_names, "cut_weight_costs"):
-        pick = SimpleNamespace(name=old, weight=None, hard=None, exponent=1.0)
+        pick = SimpleNamespace(name=old, weight=None, level=None, exponent=1.0)
         with pytest.raises(ValueError, match="unknown constraint"):
             max_cut.solve(plain(), time_limit_seconds=0, constraints=[pick])
         with pytest.raises(ValueError, match="unknown constraint"):
@@ -373,9 +372,9 @@ def test_empty_and_repeated_picks_are_rejected():
     [
         None,
         [fixed_partition_cost],
-        [SamePartitionPairsCost(weight=3), DifferentPartitionPairsCost(hard=False), cut_weight_cost],
+        [SamePartitionPairsCost(weight=3), DifferentPartitionPairsCost(level="soft"), cut_weight_cost],
         [PartitionSizeBoundsCost(exponent=2.0), PartitionImbalanceCost(weight=0.5), CutWeightCost(weight=2)],
-        [FixedPartitionCost(hard=False, exponent=0.5), CutWeightCost(exponent=1.5)],
+        [FixedPartitionCost(level="soft", exponent=0.5), CutWeightCost(exponent=1.5)],
         [
             SamePartitionPairsCost(weight=0.5),
             DifferentPartitionPairsCost(weight=0.5),

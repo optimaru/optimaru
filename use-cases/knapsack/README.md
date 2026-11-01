@@ -40,8 +40,8 @@ CP-SAT reference.
 
 Every constraint is global (one raw total, kept up to date from each flip), all
 seven are scored by default (`default_enabled`), and the six hard ones are
-flippable (`hard=True` / `hard=False`). `selected_value_cost` is a reward: it is
-always soft — `hard=True` raises `ValueError` in `solve`, `calculate_score`,
+flippable (`level="hard"` / `level="soft"`). `selected_value_cost` is a reward: it is
+always soft — `level="hard"` raises `ValueError` in `solve`, `calculate_score`,
 `constraints.score()` and the CP-SAT reference — and its level cannot change.
 `knapsack.constraint_info()` reports exactly this table from the C++ components
 (`kDefaultLevel` / `kDefaultWeight`).
@@ -83,7 +83,7 @@ other C++ use cases.
     `{name: {"costs", "weight", "exponent", "hard", "global", "level", "reward",
     "level_flippable", "name", "label"}}` with one total per constraint in
     `"costs"` (0.1.5: `{name: [one term per resource | entry | group | pair]}`);
-  - `selected_value_cost` with `hard=True` raises `ValueError` (0.1.5 scored a
+  - `selected_value_cost` with `level="hard"` raises `ValueError` (0.1.5 scored a
     positive hard score);
   - a constraint picked twice raises `ValueError`.
 - **`SolverConfig`** is the engine's (the other C++ packages' knobs:
@@ -185,7 +185,7 @@ from knapsack.constraints import ForbiddenItemsCost, SelectedValueCost, get_cons
 knapsack.constraint_info()     # [ConstraintInfo(name='knapsack_capacity_cost', default_level='hard', ...), ...]
 knapsack.solve(problem, time_limit_seconds=1.0, constraints=[*get_constraints()[:-1], SelectedValueCost(weight=2)])
 raw = knapsack.constraint_costs(problem)            # raw totals, re-priced in pure Python:
-score(raw), score(raw, [*get_constraints()[:3], ForbiddenItemsCost(hard=False), *get_constraints()[4:]])
+score(raw), score(raw, [*get_constraints()[:3], ForbiddenItemsCost(level="soft"), *get_constraints()[4:]])
 ```
 
 ## Starting from an existing solution
@@ -241,7 +241,7 @@ Python reference-parity tests pin its results (and `with_initial_solution` uses 
 4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
    `description_en` / `description_ko` to `python/knapsack/constraints.py` (plus its
    module-level default instance); callers then pick, reweight or flip it:
-   `constraints=get_constraints([..., MyRuleCost(weight=5, hard=True)])`;
+   `constraints=get_constraints([..., MyRuleCost(weight=5, level="hard")])`;
 5. mirror it in the CP-SAT model in
    [`benchmarks/knapsack/cpsat`](../../benchmarks/knapsack/cpsat) (a plugin subclassing
    the spec; defaults come from `constraint_info()`), with an exact encoding so

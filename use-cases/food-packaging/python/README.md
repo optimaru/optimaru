@@ -41,7 +41,7 @@ fp.constraint_info()
 #                 level_flippable=True, reward=False, default_enabled=True), ...,
 #  ConstraintInfo(name='unassigned_jobs_cost', default_level='medium', default_weight=1.0, ...)]
 others = [spec for spec in get_constraints() if spec.name != "unassigned_jobs_cost"]
-fp.solve(schedule, time_limit_seconds=1.0, constraints=[*others, UnassignedJobsCost(hard=False)])  # unassigned as soft
+fp.solve(schedule, time_limit_seconds=1.0, constraints=[*others, UnassignedJobsCost(level="soft")])  # unassigned as soft
 score(raw), score(raw, [*others, UnassignedJobsCost(weight=2)])            # re-priced in pure Python
 ```
 
@@ -74,8 +74,8 @@ mapping is `engine.soft = medium * 10^10 + soft` (the domain's medium fold; ever
 `constraint_costs()` entry carries it as `medium_fold`, and
 `food_packaging.constraints.score()` returns the folded engine-level `(hard, soft)`).
 `Score` exposes all three levels as-is, so user code never sees the mapping. Medium
-weights are in medium units (default 1): `hard=True` on a medium constraint costs 1 hard
-per minute, `hard=False` 1 soft per minute. For the order-preservation conditions and domain
+weights are in medium units (default 1): `level="hard"` on a medium constraint costs 1 hard
+per minute, `level="soft"` 1 soft per minute. For the order-preservation conditions and domain
 details see `../cpp/README.md` and the `fp/domain.hpp` comments.
 `Line.operator` (Java's basic planning variable) is reassigned by the solver with hill
 climbing between engine legs — exactly equivalent to Java with operators >= lines,

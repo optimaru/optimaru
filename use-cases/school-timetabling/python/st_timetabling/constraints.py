@@ -24,16 +24,16 @@ defaults with a small change" is a one-liner::
 
     st.solve(problem, constraints=Assembly().add("teacher_gap_cost", weight=40).drop("teacher_workday_cost"))
 
-Every spec takes the same three knobs, ``(weight=None, hard=None, exponent=1.0)``:
+Every spec takes the same three knobs, ``(weight=None, level=None, exponent=1.0)``:
 
 - ``weight``   linear multiplier of the constraint's raw cost. ``None`` is the
                component's default weight (the C++ kDefaultWeight: 1 for the
                hard constraints, 20/3/30/10/5/1 for the six soft ones), never
                a weight stored anywhere else. ``st.constraint_info()`` reports
                the defaults.
-- ``hard``     ``None`` keeps the default level, ``True`` makes it hard,
-               ``False`` soft. ``fixed_slots_cost`` and ``parallel_groups_cost``
-               are structural and refuse ``hard=False``.
+- ``level``    ``None`` = the default level, otherwise ``Level.HARD`` or
+               ``Level.SOFT`` (or the names ``"hard"`` and ``"soft"``). This use
+               case has no medium level.
 - ``exponent`` sign-preserving power shaping of the cost: ``weight * sign(c) *
                |c| ** exponent`` (per slot for the per-slot constraints, on the
                single total for the others). 2.0 = squared.
@@ -46,7 +46,7 @@ keys. Module-level instances at the default weights (``teacher_gap_cost``, ...)
 are ready to pick.
 """
 
-from ._constraint import Constraint, Score, score_costs, select
+from ._constraint import Constraint, Level, Score, score_costs, select
 from ._core import canon, constraint_info
 
 __all__ = [
@@ -103,7 +103,7 @@ __all__ = [
 #: a recommendation, not a default — ``weight=None`` keeps the component
 #: default (1) on either level::
 #:
-#:     UnassignedLessonsCost(hard=False, weight=UNASSIGNED_LESSONS_SOFT_WEIGHT)
+#:     UnassignedLessonsCost(level="soft", weight=UNASSIGNED_LESSONS_SOFT_WEIGHT)
 UNASSIGNED_LESSONS_SOFT_WEIGHT: float = float(canon.UNASSIGNED_LESSONS_SOFT_WEIGHT)
 
 
@@ -115,7 +115,7 @@ def list_constraints() -> list[str]:
 class UnassignedLessonsCost(Constraint):
     """Weekly periods left without a slot. Default: hard, weight 1.
 
-    Demoting it with ``hard=False`` gives **partial timetabling** (the CP-SAT
+    Demoting it with ``level="soft"`` gives **partial timetabling** (the CP-SAT
     reference's relaxed weekly-period counts): the search gains unassign moves,
     so "leave it out" becomes an option, and the unfilled periods are reported
     as ``penalties["unassigned_lessons_cost"]`` instead of a hard violation.
@@ -373,7 +373,7 @@ class FixedSlotsCost(Constraint):
     """Lessons off their course's fixed slots. Default: hard, weight 1; structural, not flippable.
 
     Always 0 in the engine: every fixed slot becomes a pinned lesson the
-    search never moves. ``hard=False`` is refused."""
+    search never moves. ``level="soft"`` is refused."""
 
     name = "fixed_slots_cost"
     label_en = "Fixed slots"
@@ -392,7 +392,7 @@ class ParallelGroupsCost(Constraint):
     """Sections of one parallel group at different times. Default: hard, weight 1; structural, not flippable.
 
     Always 0 in the engine: a parallel group is merged into one lesson per
-    weekly period. ``hard=False`` is refused."""
+    weekly period. ``level="soft"`` is refused."""
 
     name = "parallel_groups_cost"
     label_en = "Parallel groups"
@@ -464,12 +464,12 @@ def default_weights() -> dict[str, float]:
     return {row.name: row.default_weight for row in constraint_info() if row.default_level == "soft"}
 
 
-def spec_named(name: str, *, weight=None, hard=None, exponent=1.0) -> Constraint:
+def spec_named(name: str, *, weight=None, level=None, exponent=1.0) -> Constraint:
     """The spec of the constraint called ``name`` with the given knobs; unknown names raise ValueError."""
     spec_class = _SPEC_BY_NAME.get(name)
     if spec_class is None:
         raise ValueError(f"unknown constraint name: {name!r} (see list_constraints())")
-    return spec_class(weight=weight, hard=hard, exponent=exponent)
+    return spec_class(weight=weight, level=level, exponent=exponent)
 
 
 class Assembly:
@@ -502,19 +502,19 @@ class Assembly:
         constraint: str | Constraint,
         *,
         weight: float | None = None,
-        hard: bool | None = None,
+        level: Level | str | None = None,
         exponent: float = 1.0,
     ) -> "Assembly":
         """Adds a constraint (replacing one with the same name). A name builds a
-        spec from weight/hard/exponent; a spec instance is used as is (mixing an
+        spec from weight/level/exponent; a spec instance is used as is (mixing an
         instance with keyword overrides raises ValueError). Unknown names raise
         ValueError."""
         if isinstance(constraint, str):
-            spec = spec_named(constraint, weight=weight, hard=hard, exponent=exponent)
+            spec = spec_named(constraint, weight=weight, level=level, exponent=exponent)
         elif isinstance(constraint, Constraint):
-            if weight is not None or hard is not None or exponent != 1.0:
+            if weight is not None or level is not None or exponent != 1.0:
                 raise ValueError(
-                    "a spec instance cannot be combined with weight/hard/exponent (put them in the instance)"
+                    "a spec instance cannot be combined with weight/level/exponent (put them in the instance)"
                 )
             spec = constraint
         else:

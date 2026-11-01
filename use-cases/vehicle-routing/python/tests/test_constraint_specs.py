@@ -14,6 +14,7 @@ import pytest
 import vrp_routing as vrp
 from vrp_routing import constraints as specs
 from vrp_routing.constraints import (
+    Level,
     Constraint,
     EnclosingCircleRadiusCost,
     LatencyCost,
@@ -160,10 +161,46 @@ def test_level_can_be_flipped():
     assert soft_level.medium == 0  # serves every visit
     assert soft_level.soft < 0
 
-    hard_level = solve([*picks, TravelTimeCost(hard=True)]).score
+    hard_level = solve([*picks, TravelTimeCost(level="hard")]).score
     assert hard_level.medium < 0  # gives up visits instead
     assert hard_level.soft == 0
     assert hard_level.hard == 0  # nothing drives, so no hard cost either
+
+
+def test_a_soft_constraint_can_move_to_medium():
+    """On medium, travel time outranks every soft term and folds at the medium unit."""
+    picks = [unassigned_visits_cost]
+    soft_level = solve([*picks, travel_time_cost]).score
+    medium_level = solve([*picks, TravelTimeCost(level=Level.MEDIUM)]).score
+
+    assert soft_level.soft < 0
+    assert medium_level.soft == 0
+    assert medium_level.medium < 0
+
+
+def test_a_level_can_be_given_by_name():
+    named = solve([unassigned_visits_cost, TravelTimeCost(level="medium")]).score
+    member = solve([unassigned_visits_cost, TravelTimeCost(level=Level.MEDIUM)]).score
+
+    assert named.medium == member.medium
+
+
+def test_a_level_must_be_a_level():
+    with pytest.raises(TypeError, match="level must be a Level"):
+        TravelTimeCost(level=True)
+    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft'"):
+        TravelTimeCost(level="firm")
+
+
+def test_core_refuses_an_unknown_level_like_the_python_base():
+    pick = SimpleNamespace(name="unassigned_visits_cost", weight=None, level="firm", exponent=1.0)
+    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft', not 'firm'"):
+        solve([pick])
+
+
+def test_the_knob_was_renamed():
+    with pytest.raises(TypeError):
+        TravelTimeCost(hard=True)
 
 
 def test_unknown_constraint_name_raises():
@@ -172,7 +209,7 @@ def test_unknown_constraint_name_raises():
     class Typo:
         name = "travel_time_costs"  # trailing s
         weight = None
-        hard = None
+        level = None
         exponent = 1.0
 
     with pytest.raises(ValueError, match="unknown constraint"):
@@ -193,9 +230,9 @@ def test_spec_subclass_must_name_a_constraint():
 
 
 def test_default_instance_carries_no_overrides():
-    """Module-level instances must keep the defaults (weight=None, hard=None, exponent=1)."""
+    """Module-level instances must keep the defaults (weight=None, level=None, exponent=1)."""
     for spec in get_constraints():
-        assert (spec.weight, spec.hard, spec.exponent) == (None, None, 1.0)
+        assert (spec.weight, spec.level, spec.exponent) == (None, None, 1.0)
         assert (
             getattr(specs, spec.name) is spec
         )  # the instance is named after the constraint
@@ -360,11 +397,11 @@ def test_the_medium_level_folds_into_soft():
     others = [
         spec for spec in get_constraints() if spec.name != "unassigned_visits_cost"
     ]
-    assert score(raw, [*others, UnassignedVisitsCost(hard=True)]) == (
+    assert score(raw, [*others, UnassignedVisitsCost(level="hard")]) == (
         -30,
         monolithic.soft,
     )
-    assert score(raw, [*others, UnassignedVisitsCost(hard=False)]) == (
+    assert score(raw, [*others, UnassignedVisitsCost(level="soft")]) == (
         0,
         monolithic.soft - 30,
     )
@@ -375,14 +412,14 @@ def test_the_medium_level_folds_into_soft():
 
 
 def test_a_demoted_medium_constraint_is_soft_in_the_engine_too():
-    """hard=False moves unassigned_visits_cost to soft in the solver (it was a no-op before 0.2.0).
+    """level="soft" moves unassigned_visits_cost to soft in the solver (it was a no-op before 0.2.0).
 
     With driving hard, parking every vehicle wins; the dropped visits then cost
     soft minutes, not medium ones."""
     picks = [
         vehicle_capacity_cost,
-        UnassignedVisitsCost(hard=False),
-        TravelTimeCost(hard=True),
+        UnassignedVisitsCost(level="soft"),
+        TravelTimeCost(level="hard"),
     ]
     plan = solve(picks)
     assert (plan.score.hard, plan.score.medium) == (0, 0)
@@ -459,10 +496,10 @@ def test_specs_validate_their_knobs(kwargs, error):
 def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     """The C++ side guards too: a duck-typed pick cannot smuggle a negative weight in."""
     negative = SimpleNamespace(
-        name="travel_time_cost", weight=-2.0, hard=None, exponent=1.0
+        name="travel_time_cost", weight=-2.0, level=None, exponent=1.0
     )
     flat = SimpleNamespace(
-        name="travel_time_cost", weight=None, hard=None, exponent=0.0
+        name="travel_time_cost", weight=None, level=None, exponent=0.0
     )
     for pick, message in (
         (negative, "weight must be finite and >= 0"),
@@ -476,15 +513,14 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     ("knobs", "message"),
     [
         ({"weight": True}, "weight must be a number or None, not True"),
-        ({"hard": 1}, "hard must be True, False or None, not 1"),
-        ({"hard": "x"}, "hard must be True, False or None, not 'x'"),
+        ({"level": 1}, "level must be a Level, its name or None, not 1"),
         ({"exponent": True}, "exponent must be a number, not True"),
     ],
 )
 def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
     """The C++ path checks the knob types like _constraint.py: TypeError, the same words."""
     pick = SimpleNamespace(
-        name="unassigned_visits_cost", weight=None, hard=None, exponent=1.0
+        name="unassigned_visits_cost", weight=None, level=None, exponent=1.0
     )
     for key, value in knobs.items():
         setattr(pick, key, value)
@@ -535,7 +571,7 @@ OLD_NAMES = [
 @pytest.mark.parametrize("old", OLD_NAMES)
 def test_old_names_are_gone(old):
     """0.2.0 renamed the catalog; the pre-0.2.0 names are unknown now (no aliases)."""
-    pick = SimpleNamespace(name=old, weight=None, hard=None, exponent=1.0)
+    pick = SimpleNamespace(name=old, weight=None, level=None, exponent=1.0)
     with pytest.raises(ValueError, match="unknown constraint"):
         solve([pick], seconds=0.05)
     plan = small_plan()

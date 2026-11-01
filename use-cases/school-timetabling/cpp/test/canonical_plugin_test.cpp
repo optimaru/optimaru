@@ -835,7 +835,7 @@ void verifyRelaxedUnassigned()
 
     // unassignedLessonsCost soft at its documented soft weight: the 10
     // lessons that do not fit come out, and what stays is conflict-free — the
-    // CP-SAT UnassignedLessonsCost(hard=False) contract.
+    // CP-SAT UnassignedLessonsCost(level='soft') contract.
     Timetable partial = buildOverConstrained();
     DecomposedCalculator soft;
     weightedDefaults(kZeroWeights)

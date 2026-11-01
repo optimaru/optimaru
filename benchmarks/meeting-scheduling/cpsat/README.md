@@ -15,7 +15,7 @@ default level and weight of every plugin come from the engine's
 
 - The two medium constraints (`required_and_preferred_attendance_conflict_cost`,
   `preferred_attendance_conflict_cost`) sit on the CP-SAT medium level at weight 1, like
-  the engine's medium units. `hard=False` demotes them to soft and `hard=True` promotes
+  the engine's medium units. `level="soft"` demotes them to soft and `level="hard"` promotes
   them to hard, one unit per raw person-grain on both solvers.
 - The returned `score_soft` folds medium into soft with the engine's `MEDIUM_SCALE`
   (1e6), so it equals `meeting_scheduling.calculate_score` on the same assignment (0.2.0:

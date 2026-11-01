@@ -70,7 +70,7 @@ def test_json_round_trip():
         model_input=_small_input(
             rules=[
                 RequiredSkillCost(weight=2),
-                MaxConsecutiveDaysCost(value=2, hard=False, weight=3),
+                MaxConsecutiveDaysCost(value=2, level="soft", weight=3),
                 AssignmentCost(cost_per_hour=10.0, shift_costs={"Worker 01": {"Shift 0": 5.0}}),
             ]
         ),
@@ -80,8 +80,8 @@ def test_json_round_trip():
     assert clone.num_workers == 3
     assert isinstance(clone.model_input.rules[1], rule_model(MaxConsecutiveDaysCost))
     assert clone.model_input.rules[1].value == 2
-    assert clone.model_input.rules[1].hard is False
-    assert clone.model_input.rules[1].to_spec() == MaxConsecutiveDaysCost(value=2, hard=False, weight=3)
+    assert clone.model_input.rules[1].level == "soft"
+    assert clone.model_input.rules[1].to_spec() == MaxConsecutiveDaysCost(value=2, level="soft", weight=3)
 
     solution = solve_request(clone)
     round_tripped = ScheduleSolution.model_validate_json(solution.model_dump_json())
@@ -394,7 +394,7 @@ def test_there_is_one_rule_model_per_spec_in_factory_order():
         assert model.spec_class is spec
         assert model.__name__ == f"{spec.__name__}Model"  # no "Rule" suffix in 0.2.0
         assert getattr(models, model.__name__) is model  # picklable by reference
-        assert set(model.model_fields) == {"name", "weight", "hard", "exponent", *spec().params()}
+        assert set(model.model_fields) == {"name", "weight", "level", "exponent", *spec().params()}
         assert model().to_spec() == spec()
 
 
@@ -427,11 +427,11 @@ def test_a_rule_may_repeat_with_other_parameters():
         {"name": "required_skill"},  # a pre-0.2.0 name
         {"name": "required_skill_cost", "policy": "hard"},  # the pre-0.2.0 level field
         {"name": "max_consecutive_days_cost", "value": 0},  # below the spec's bound
-        {"name": "desired_day_cost", "hard": True},  # a reward is never hard
+        {"name": "desired_day_cost", "level": "hard"},  # a reward is never hard
         {"name": "shift_count_imbalance_cost", "worker_indices": [0]},  # no scope on this global
         {"name": "required_skill_cost", "weight": -1},
         {"name": "required_skill_cost", "exponent": 0},
-        {"name": "required_skill_cost", "hard": "yes"},
+        {"name": "required_skill_cost", "level": "yes"},
         {"name": "required_skill_cost", "weight": True},  # the spec refuses a bool weight
         {"name": "required_skill_cost", "weight": "2"},  # ... and a numeric string
         {"name": "required_skill_cost", "exponent": True},

@@ -58,8 +58,8 @@ Output:
 ```
 
 Every constraint takes the same three knobs: `weight` (`None` = its default),
-`hard` (`None` = its default level, `True` = hard, `False` = soft) and
-`exponent`. `constraint_info()` on a use case lists its constraints with their
+`level` (`None` = its default level, otherwise a `Level` or its name, such as
+`Level.MEDIUM` or `"medium"`) and `exponent`. `constraint_info()` on a use case lists its constraints with their
 default level and weight.
 
 ## Use cases

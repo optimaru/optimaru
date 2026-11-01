@@ -64,8 +64,8 @@ level and weight are the defaults `constraint_info()` reports:
 | 9 | `away_to_away_hop_cost` | soft | 1 | if m2.away == m1.away, dist(m1.home, m2.home) |
 | 10 | `away_to_home_hop_cost` | soft | 1 | if m2.home == m1.away, dist(m1.home, m1.away) |
 
-Each spec takes `weight=None` (the default above), `hard=None` (the default level;
-`True` = hard, `False` = soft) and `exponent=1.0` (applied per round position for the
+Each spec takes `weight=None` (the default above), `level=None` (the default level,
+otherwise `"hard"` or `"soft"`) and `exponent=1.0` (applied per round position for the
 three unit constraints, on the one total for the seven globals):
 
 ```python
@@ -77,7 +77,7 @@ sl.constraint_info()
 sl.solve(schedule, time_limit_seconds=1.0, constraints=get_constraints(
     [*get_constraints()[:2], WorkdayClassicMatchesCost(weight=10_000), *get_constraints()[3:]]))
 raw = sl.constraint_costs(schedule)       # raw costs, re-priced in pure Python:
-score(raw), score(raw, [WorkdayClassicMatchesCost(hard=True)])
+score(raw), score(raw, [WorkdayClassicMatchesCost(level="hard")])
 ```
 
 **0.2.0:** the names gained the `_cost` suffix (`start_to_away_hop` ->

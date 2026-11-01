@@ -9,7 +9,7 @@ schema on the spot — the two cannot drift apart.
     {"type": "unassigned_lessons_cost", "hard": false, "weight": 10000}
     {"type": "teacher_gap_cost", "weight": 20}
 
-Every DTO carries the engine's three knobs (weight=None, hard=None,
+Every DTO carries the engine's three knobs (weight=None, level=None,
 exponent=1.0) — the constraint classes are the engine specs. ``weight=None``
 is the engine default on either level: ``{"type": "unassigned_lessons_cost",
 "hard": false}`` costs 1 per unplaced period, so send ``"weight": 10000``

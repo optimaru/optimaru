@@ -79,7 +79,7 @@ reward, default_enabled)`) straight from the C++ components; every constraint is
 none is a reward, all six are on by default.
 
 Pick, re-weight or flip constraints with the specs in `flight_crew.constraints`; each takes
-`(weight=None, hard=None, exponent=1.0)` (`None` = the C++ default):
+`(weight=None, level=None, exponent=1.0)` (`None` = the C++ default):
 
 ```python
 from flight_crew.constraints import (
@@ -87,7 +87,7 @@ from flight_crew.constraints import (
 )
 
 fc.solve(problem, constraints=get_constraints())  # the defaults
-fc.solve(problem, constraints=[RequiredSkillCost(weight=500), FlightConflictCost(hard=False),
+fc.solve(problem, constraints=[RequiredSkillCost(weight=500), FlightConflictCost(level="soft"),
                                last_assignment_not_arriving_at_home_cost])
 ```
 

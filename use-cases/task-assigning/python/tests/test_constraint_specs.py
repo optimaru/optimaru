@@ -122,7 +122,7 @@ def test_level_can_be_flipped():
     assert soft_level.soft2 < 0
     assert soft_level.hard == 0 and soft_level.soft0 == 0
 
-    hard_level = solve([*picks, CriticalPriorityTaskEndTimeCost(hard=True)])
+    hard_level = solve([*picks, CriticalPriorityTaskEndTimeCost(level="hard")])
     assert hard_level.soft2 == 0
     assert hard_level.hard < 0
     assert hard_level.soft0 == 0
@@ -134,7 +134,7 @@ def test_unknown_constraint_name_raises():
     class Typo:
         name = "required_skills_cost"  # extra s
         weight = None
-        hard = None
+        level = None
         exponent = 1.0
 
     with pytest.raises(ValueError, match="unknown constraint"):
@@ -169,7 +169,7 @@ def test_spec_subclass_must_name_a_constraint():
 
 
 def test_module_level_instances_keep_every_default():
-    """Module-level instances must keep the defaults (weight=None, hard=None, exponent=1)."""
+    """Module-level instances must keep the defaults (weight=None, level=None, exponent=1)."""
     instances = (
         required_skill_cost,
         squared_makespan_cost,
@@ -179,7 +179,7 @@ def test_module_level_instances_keep_every_default():
         unassigned_tasks_cost,
     )
     for spec in instances:
-        assert (spec.weight, spec.hard, spec.exponent) == (None, None, 1.0)
+        assert (spec.weight, spec.level, spec.exponent) == (None, None, 1.0)
     assert list(get_constraints()) == list(instances)
 
 
@@ -304,13 +304,13 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     class Negative:
         name = "squared_makespan_cost"
         weight = -2.0
-        hard = None
+        level = None
         exponent = 1.0
 
     class Flat:
         name = "squared_makespan_cost"
         weight = None
-        hard = None
+        level = None
         exponent = 0.0
 
     for pick, message in ((Negative(), "weight must be finite and >= 0"), (Flat(), "exponent must be finite and > 0")):
@@ -323,14 +323,13 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     [
         ({"weight": True}, "weight must be a number or None, not True"),
         ({"weight": "2"}, "weight must be a number or None, not '2'"),
-        ({"hard": 1}, "hard must be True, False or None, not 1"),
-        ({"hard": "x"}, "hard must be True, False or None, not 'x'"),
+        ({"level": 1}, "level must be a Level, its name or None, not 1"),
         ({"exponent": True}, "exponent must be a number, not True"),
     ],
 )
 def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
     """The C++ path checks the knob types like _constraint.py: TypeError, the same words."""
-    pick = SimpleNamespace(name="squared_makespan_cost", weight=None, hard=None, exponent=1.0)
+    pick = SimpleNamespace(name="squared_makespan_cost", weight=None, level=None, exponent=1.0)
     for key, value in knobs.items():
         setattr(pick, key, value)
     with pytest.raises(TypeError, match=f"constraint 'squared_makespan_cost': {re.escape(message)}"):
@@ -351,7 +350,7 @@ def test_old_names_are_gone():
     )
     raw = ta.constraint_costs(build_solution())
     for old in old_names:
-        pick = SimpleNamespace(name=old, weight=None, hard=None, exponent=1.0)
+        pick = SimpleNamespace(name=old, weight=None, level=None, exponent=1.0)
         with pytest.raises(ValueError, match="unknown constraint"):
             ta.solve(build_solution(), time_limit_seconds=0.1, constraints=[pick])
         with pytest.raises(ValueError, match="unknown constraint"):
@@ -381,13 +380,13 @@ def _with_unassigned():
     ("pick", "per_task"),
     [
         (unassigned_tasks_cost, (0, -1, 0, 0)),  # medium: soft0, folded below hard
-        (UnassignedTasksCost(hard=True), (-1, 0, 0, 0)),  # one hard unit per task
-        (UnassignedTasksCost(hard=False), (0, 0, 0, -1)),  # one soft unit per task, outside the fold
+        (UnassignedTasksCost(level="hard"), (-1, 0, 0, 0)),  # one hard unit per task
+        (UnassignedTasksCost(level="soft"), (0, 0, 0, -1)),  # one soft unit per task, outside the fold
         (UnassignedTasksCost(weight=5), (0, -5, 0, 0)),  # an explicit weight stays in medium units
     ],
 )
 def test_the_engine_applies_the_medium_knobs(pick, per_task):
-    """hard=True / hard=False / weight on the medium constraint, through the C++ binding,
+    """level="hard" / level="soft" / weight on the medium constraint, through the C++ binding,
     and score() on the same raw costs agrees with the engine."""
     selection = [required_skill_cost, pick]
     solution = _nobody()
@@ -410,13 +409,13 @@ def test_the_medium_level_folds_below_hard():
 
 
 def test_score_applies_the_medium_knobs_like_the_engine():
-    """hard=True: one hard unit per task; hard=False: one soft unit per task; weight 5:
+    """level="hard": one hard unit per task; level="soft": one soft unit per task; weight 5:
     five medium units per task."""
     solution = _with_unassigned()
     raw = ta.constraint_costs(solution)
     hard = ta.calculate_score(solution).hard
-    assert score(raw, [required_skill_cost, UnassignedTasksCost(hard=True)]) == ((hard - 3) * MEDIUM_PER_HARD, 0.0)
-    assert score(raw, [required_skill_cost, UnassignedTasksCost(hard=False)]) == (hard * MEDIUM_PER_HARD, -3.0)
+    assert score(raw, [required_skill_cost, UnassignedTasksCost(level="hard")]) == ((hard - 3) * MEDIUM_PER_HARD, 0.0)
+    assert score(raw, [required_skill_cost, UnassignedTasksCost(level="soft")]) == (hard * MEDIUM_PER_HARD, -3.0)
     assert score(raw, [required_skill_cost, UnassignedTasksCost(weight=5)]) == (hard * MEDIUM_PER_HARD - 15, 0.0)
 
 
@@ -424,8 +423,8 @@ def test_score_applies_the_medium_knobs_like_the_engine():
     "selection",
     [
         [RequiredSkillCost()],
-        [RequiredSkillCost(hard=False)],
-        [UnassignedTasksCost(hard=False)],
+        [RequiredSkillCost(level="soft")],
+        [UnassignedTasksCost(level="soft")],
         [required_skill_cost, critical_priority_task_end_time_cost],
     ],
 )
@@ -467,12 +466,12 @@ def test_score_equals_the_engine_for_the_default_assembly():
     [
         None,
         [required_skill_cost],
-        [RequiredSkillCost(hard=False)],
+        [RequiredSkillCost(level="soft")],
         [required_skill_cost, unassigned_tasks_cost, SquaredMakespanCost(weight=10)],
-        [RequiredSkillCost(hard=False), unassigned_tasks_cost, squared_makespan_cost],
-        [UnassignedTasksCost(hard=False), squared_makespan_cost, minor_priority_task_end_time_cost],
+        [RequiredSkillCost(level="soft"), unassigned_tasks_cost, squared_makespan_cost],
+        [UnassignedTasksCost(level="soft"), squared_makespan_cost, minor_priority_task_end_time_cost],
         [required_skill_cost, unassigned_tasks_cost, CriticalPriorityTaskEndTimeCost(exponent=2.0)],
-        [RequiredSkillCost(exponent=2.0), MajorPriorityTaskEndTimeCost(hard=True, weight=0.5), unassigned_tasks_cost],
+        [RequiredSkillCost(exponent=2.0), MajorPriorityTaskEndTimeCost(level="hard", weight=0.5), unassigned_tasks_cost],
     ],
 )
 def test_score_matches_the_engine_for_arbitrary_specs(specs):

@@ -2,7 +2,7 @@
 
 The default path (`fl.solve(problem)`) enables all three constraints at their default
 weights. This module is the alternative path next to it: pick constraints, change
-weights, flip hard/soft, and pass the list to `solve(problem, constraints=...)`.
+weights, change levels, and pass the list to `solve(problem, constraints=...)`.
 
 The shortest route is :func:`get_constraints`. It returns the default list, so
 a "default with a small tweak" declaration fits on one line::
@@ -22,14 +22,16 @@ Default instances (`facility_capacity_cost`, `facility_setup_cost`,
 just a few. Only listed constraints are scored — leave one out and its term
 disappears from the score.
 
-Every spec takes ``(weight=None, hard=None, exponent=1.0)``:
+Every spec takes ``(weight=None, level=None, exponent=1.0)``:
 
 - ``weight``   linear multiplier on the constraint cost. ``None`` = the component
                default (facility_capacity_cost 1, facility_setup_cost 2,
                distance_from_facility_cost 6 — the distance 6 is the
                ConstraintWeightOverrides value of the Java solution). The problem
                carries no weights; ``fl.constraint_info()`` reports the defaults.
-- ``hard``     ``True`` = hard, ``False`` = soft, ``None`` = the default level.
+- ``level``    ``None`` = the default level, otherwise ``Level.HARD`` or
+               ``Level.SOFT`` (or the names ``"hard"`` and ``"soft"``). This use
+               case has no medium level.
 - ``exponent`` sign-preserving power shaping per facility: ``weight * sign(c) *
                |c| ** exponent``. 2.0 = squared, so concentrated violations grow
                much costlier.
@@ -40,10 +42,11 @@ mechanically, so there is no hand-maintained alias table — check them with
 `fl.list_constraints()`.
 """
 
-from ._constraint import Constraint, Score, score_costs, select
+from ._constraint import Constraint, Level, Score, score_costs, select
 
 __all__ = [
     "Constraint",
+    "Level",
     "Score",
     "score",
     "FacilityCapacityCost",

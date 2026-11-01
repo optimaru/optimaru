@@ -12,8 +12,8 @@ each a subclass of the domain spec with only `build()`. Default levels and
 weights are not restated here: cpsat-common reads them from
 `tournament_scheduling.constraint_info()`, so they are the C++ components'
 `kDefaultLevel` / `kDefaultWeight` (`test_cpsat_defaults_are_the_engine_defaults`).
-The model has three levels, `("hard", "medium", "soft")`; `hard=False` demotes a
-hard or medium constraint to **soft** and `hard=True` promotes to hard, exactly as
+The model has three levels, `("hard", "medium", "soft")`; `level="soft"` demotes a
+hard or medium constraint to **soft** and `level="hard"` promotes to hard, exactly as
 in the engine (`test_hard_false_demotes_to_soft_on_cpsat_too`). The reported
 score folds medium into soft with the engine's `MEDIUM_SCALE` (1e6).
 

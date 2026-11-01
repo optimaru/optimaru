@@ -122,9 +122,9 @@ def test_returned_list_is_a_fresh_copy():
 
 
 def test_module_level_instances_keep_the_default_knobs():
-    """Every default instance is at (weight=None, hard=None, exponent=1.0): the C++ defaults apply."""
+    """Every default instance is at (weight=None, level=None, exponent=1.0): the C++ defaults apply."""
     for spec in get_constraints():
-        assert (spec.weight, spec.hard, spec.exponent) == (None, None, 1.0)
+        assert (spec.weight, spec.level, spec.exponent) == (None, None, 1.0)
         assert getattr(st.constraints, spec.name) is spec
 
 
@@ -242,8 +242,8 @@ def test_solve_accepts_the_spec_list(problem):
     [
         ({"weight": True}, TypeError, "weight must be a number or None, not True"),
         ({"weight": -1.0}, ValueError, "weight must be finite and >= 0, not -1.0"),
-        ({"hard": 1}, TypeError, "hard must be True, False or None, not 1"),
-        ({"hard": "x"}, TypeError, "hard must be True, False or None, not 'x'"),
+        ({"level": 1}, TypeError, "level must be a Level, its name or None, not 1"),
+        ({"level": "x"}, ValueError, "level must be 'hard', 'medium' or 'soft', not 'x'"),
         ({"exponent": 0.0}, ValueError, "exponent must be finite and > 0, not 0.0"),
     ],
 )
@@ -251,7 +251,7 @@ def test_spec_and_core_refuse_the_same_knobs(knobs, error, message):
     """The Python base and the C++ binding refuse the same values in the same words."""
     with pytest.raises(error, match=re.escape(message)):
         TeacherGapCost(**knobs)
-    pick = SimpleNamespace(name="teacher_gap_cost", weight=None, hard=None, exponent=1.0)
+    pick = SimpleNamespace(name="teacher_gap_cost", weight=None, level=None, exponent=1.0)
     for key, value in knobs.items():
         setattr(pick, key, value)
     with pytest.raises(error, match=f"constraint 'teacher_gap_cost': {re.escape(message)}"):
@@ -262,20 +262,20 @@ def test_spec_and_core_refuse_the_same_knobs(knobs, error, message):
 
 @pytest.mark.parametrize("spec_class", [FixedSlotsCost, ParallelGroupsCost])
 def test_the_structural_constraints_refuse_soft(problem, spec_class):
-    """fixed_slots_cost / parallel_groups_cost are hard and not flippable: hard=False raises on every path
+    """fixed_slots_cost / parallel_groups_cost are hard and not flippable: level="soft" raises on every path
     (the C++ binding's level guard, the solve path and the pure-Python score)."""
-    with pytest.raises(ValueError, match="is always hard; hard=False is not allowed"):
-        canon.DecomposedCalculator([spec_class(hard=False)])
+    with pytest.raises(ValueError, match="is always hard; level='soft' is not allowed"):
+        canon.DecomposedCalculator([spec_class(level="soft")])
     with pytest.raises(ValueError, match="is always hard"):
-        canon.DecomposedCalculator().add(spec_class.name, hard=False)
+        canon.DecomposedCalculator().add(spec_class.name, level="soft")
     with pytest.raises(ValueError, match="is always hard"):
-        st.solve(problem, time_limit_seconds=0.1, constraints=[spec_class(hard=False)])
+        st.solve(problem, time_limit_seconds=0.1, constraints=[spec_class(level="soft")])
     converted = st.convert_problem(problem)
     costs = st.constraint_costs(converted.table)
     with pytest.raises(ValueError, match="is always hard"):
-        score(costs, [spec_class(hard=False)])
+        score(costs, [spec_class(level="soft")])
     # Re-stating the level is a no-op and a weight is accepted (it scales a zero).
-    calculator = canon.DecomposedCalculator([spec_class(hard=True, weight=3.0), ClassConflictCost()])
+    calculator = canon.DecomposedCalculator([spec_class(level="hard", weight=3.0), ClassConflictCost()])
     assert calculator.constraint_costs(converted.table)[spec_class.name]["weight"] == 3.0
     assert costs[spec_class.name]["costs"] == [0.0]
 
@@ -286,7 +286,7 @@ def test_the_old_names_are_unknown(old):
     with pytest.raises(ValueError, match="unknown constraint"):
         canon.DecomposedCalculator().add(old)
     with pytest.raises(ValueError, match="unknown constraint"):
-        canon.DecomposedCalculator([SimpleNamespace(name=old, weight=None, hard=None, exponent=1.0)])
+        canon.DecomposedCalculator([SimpleNamespace(name=old, weight=None, level=None, exponent=1.0)])
     with pytest.raises(ValueError, match="unknown constraint"):
         Assembly().add(old)
     assert old not in st.list_constraints()
@@ -301,5 +301,5 @@ def test_the_alias_layer_is_gone():
 
 def test_unassigned_lessons_soft_weight_is_the_documented_constant():
     assert st.UNASSIGNED_LESSONS_SOFT_WEIGHT == canon.UNASSIGNED_LESSONS_SOFT_WEIGHT == 10000.0
-    relaxed = UnassignedLessonsCost(hard=False, weight=st.UNASSIGNED_LESSONS_SOFT_WEIGHT)
-    assert (relaxed.weight, relaxed.hard) == (10000.0, False)
+    relaxed = UnassignedLessonsCost(level="soft", weight=st.UNASSIGNED_LESSONS_SOFT_WEIGHT)
+    assert (relaxed.weight, relaxed.level) == (10000.0, "soft")

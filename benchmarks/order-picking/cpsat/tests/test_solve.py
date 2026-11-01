@@ -122,7 +122,7 @@ def test_cpsat_defaults_are_the_engine_defaults():
         assert entry["reward"] == row.reward
         assert entry["default_enabled"] == row.default_enabled
         assert entry["kind"] == "either"  # every order-picking constraint is flippable
-        assert entry["params"] == {"weight": None, "hard": None, "exponent": 1.0}
+        assert entry["params"] == {"weight": None, "level": None, "exponent": 1.0}
     # The order split weighs 1000 on both paths (it was restated by hand before).
     assert engine["order_split_by_trolley_cost"].default_weight == 1000.0
 
@@ -189,10 +189,10 @@ def test_default_score_parity_on_a_violated_capacity():
 
 
 def test_demoting_capacity_scores_like_the_engine():
-    """hard=False lands on soft in both solvers: CP-SAT's reported score is the
+    """level="soft" lands on soft in both solvers: CP-SAT's reported score is the
     engine's score of the same solution under the same selection."""
     request = _short_on_buckets_request()
-    selection = [TrolleyCapacityCost(hard=False), *get_constraints()[1:]]
+    selection = [TrolleyCapacityCost(level="soft"), *get_constraints()[1:]]
     result = solve(request, constraints=selection)
     engine = _engine_score(request, result, selection)
     assert _reported(result) == (engine.hard, pytest.approx(engine.soft))
@@ -200,9 +200,9 @@ def test_demoting_capacity_scores_like_the_engine():
 
 
 def test_promoting_the_split_scores_like_the_engine():
-    """hard=True on a soft constraint lands on hard in both solvers."""
+    """level="hard" on a soft constraint lands on hard in both solvers."""
     request = _short_on_buckets_request()
-    selection = [*get_constraints()[:3], OrderSplitByTrolleyCost(hard=True, weight=2)]
+    selection = [*get_constraints()[:3], OrderSplitByTrolleyCost(level="hard", weight=2)]
     result = solve(request, constraints=selection)
     engine = _engine_score(request, result, selection)
     assert _reported(result) == (engine.hard, pytest.approx(engine.soft))

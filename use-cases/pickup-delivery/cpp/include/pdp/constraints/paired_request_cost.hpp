@@ -13,7 +13,7 @@ namespace pdp
 // 0 = every request is routed whole or not at all.
 //
 // The CP-SAT reference enforces pairing structurally (its plugin refuses
-// hard=False); the engine keeps it flippable.
+// level='soft'); the engine keeps it flippable.
 struct PairedRequestCost final : RequestCouplingConstraint
 {
     static constexpr double kDefaultWeight

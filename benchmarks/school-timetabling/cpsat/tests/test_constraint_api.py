@@ -49,11 +49,11 @@ def test_default_constraints_round_trip_through_their_dto(constraint):
 
 
 def test_parameters_are_optional_in_the_payload():
-    """An omitted parameter keeps the constraint class's default: hard=None, the engine's default level."""
+    """An omitted parameter keeps the constraint class's default: level=None, the engine's default level."""
     (restored,) = to_constraints(_LIST.validate_python([{"type": "unassigned_lessons_cost"}]))
     assert restored == UnassignedLessonsCost()
-    assert restored.hard is None
-    assert restored.level == "hard"
+    assert restored.level is None
+    assert restored.effective_level == "hard"
 
 
 def test_unknown_constraint_name_is_rejected():
@@ -68,14 +68,14 @@ def test_unknown_parameter_is_rejected():
 
 
 def test_every_constraint_takes_the_three_knobs():
-    """Every DTO carries the engine's knobs (weight / hard / exponent) and nothing else."""
+    """Every DTO carries the engine's knobs (weight / level / exponent) and nothing else."""
     for dto in CONSTRAINT_DTOS:
-        assert set(dto.model_fields) == {"type", "weight", "hard", "exponent"}
+        assert set(dto.model_fields) == {"type", "weight", "level", "exponent"}
 
 
 def test_a_structural_constraint_refuses_soft():
-    """parallel_groups_cost validates as a DTO, but hard=False is refused like in the engine (not flippable)."""
-    (relaxed,) = to_constraints(_LIST.validate_python([{"type": "parallel_groups_cost", "hard": False}]))
+    """parallel_groups_cost validates as a DTO, but level="soft" is refused like in the engine (not flippable)."""
+    (relaxed,) = to_constraints(_LIST.validate_python([{"type": "parallel_groups_cost", "level": "soft"}]))
     problem = make_problem([course(periods_per_week=1)], [teacher()], days=1, periods=2)
     config = SolverConfig(time_limit_seconds=1.0, num_workers=1, weights=NO_WEIGHTS)
     with pytest.raises(ValueError, match="is always hard"):
@@ -85,7 +85,7 @@ def test_a_structural_constraint_refuses_soft():
 # ---------------------------------------------------------------- what the CP-SAT model cannot honour
 
 #: Hard constraints this CP-SAT model states as model constraints, without a penalty form. The
-#: engine can demote them (level_flippable), this path refuses hard=False.
+#: engine can demote them (level_flippable), this path refuses level="soft".
 _STRUCTURAL_ON_CPSAT = (
     "class_conflict_cost",
     "teacher_conflict_cost",
@@ -107,8 +107,8 @@ def _solve_with(*overrides):
 @pytest.mark.parametrize("name", _STRUCTURAL_ON_CPSAT)
 def test_structural_hard_constraints_refuse_soft_on_cpsat(name):
     assert ENGINE_DEFAULTS[name].level_flippable, "the engine demotes it; only CP-SAT refuses"
-    (relaxed,) = to_constraints(_LIST.validate_python([{"type": name, "hard": False}]))
-    with pytest.raises(ValueError, match="enforces it structurally, so hard=False is not supported"):
+    (relaxed,) = to_constraints(_LIST.validate_python([{"type": name, "level": "soft"}]))
+    with pytest.raises(ValueError, match="enforces it structurally, so level='soft' is not supported"):
         _solve_with(relaxed)
 
 
@@ -174,7 +174,7 @@ def test_catalog_defaults_are_the_engine_defaults():
         assert spec.level_flippable == row.level_flippable
         assert spec.reward == row.reward
         assert spec.default_enabled == row.default_enabled
-        assert {param.name: param.default for param in spec.params} == {"weight": None, "hard": None, "exponent": 1.0}
+        assert {param.name: param.default for param in spec.params} == {"weight": None, "level": None, "exponent": 1.0}
     assert TeacherGapCost().weight is None, "the instance keeps the engine default (weight=None)"
     assert TeacherGapCost().effective_weight == 20
 
@@ -187,7 +187,7 @@ def test_solve_driven_entirely_by_dtos():
     problem = make_problem([course(periods_per_week=3, max_periods_per_day=3)], [teacher()], days=1, periods=2)
     config = SolverConfig(time_limit_seconds=5.0, num_workers=4, weights=NO_WEIGHTS)
 
-    payload = [{"type": "unassigned_lessons_cost", "hard": False, "weight": 100}]
+    payload = [{"type": "unassigned_lessons_cost", "level": "soft", "weight": 100}]
     overrides = to_constraints(_LIST.validate_python(payload))
 
     timetable = solve(problem, config, constraints=merge(default_constraints(NO_WEIGHTS), *overrides))

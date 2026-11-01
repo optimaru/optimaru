@@ -2,7 +2,7 @@
 
 The default path (`bp.solve(problem)`) enables all four constraints at their default
 weights. This module is the alternative path next to it: pick constraints, change
-weights, flip hard/soft, and pass the list to `solve(problem, constraints=...)`.
+weights, change levels, and pass the list to `solve(problem, constraints=...)`.
 
 The shortest route is :func:`get_constraints`. It returns the default list, so
 a "default with a small tweak" declaration fits on one line::
@@ -20,14 +20,16 @@ Default instances (`bin_capacity_cost`, `color_conflict_cost`, `item_conflict_co
 Only listed constraints are scored — leave one out and its term disappears from the
 score.
 
-Every spec takes ``(weight=None, hard=None, exponent=1.0)``:
+Every spec takes ``(weight=None, level=None, exponent=1.0)``:
 
 - ``weight``   linear multiplier on the constraint cost. ``None`` = the component
                default (1 for every bin-packing constraint). The problem carries no
                weights (the 0.1.x ``capacity_weight`` / ``used_bin_weight`` /
                ``color_weight`` / ``conflict_weight`` fields are gone);
                ``bp.constraint_info()`` reports the defaults.
-- ``hard``     ``True`` = hard, ``False`` = soft, ``None`` = the default level.
+- ``level``    ``None`` = the default level, otherwise ``Level.HARD`` or
+               ``Level.SOFT`` (or the names ``"hard"`` and ``"soft"``). This use
+               case has no medium level.
 - ``exponent`` sign-preserving power shaping: ``weight * sign(c) * |c| ** exponent``.
                Applied per BIN for the three per-bin constraints, and on the bin
                count for ``used_bins_cost``. (0.1.x shaped colour excess per
@@ -39,10 +41,11 @@ Names (`name`) are the C++ component names in snake_case
 so there is no hand-maintained alias table — check them with `bp.list_constraints()`.
 """
 
-from ._constraint import Constraint, Score, score_costs, select
+from ._constraint import Constraint, Level, Score, score_costs, select
 
 __all__ = [
     "Constraint",
+    "Level",
     "Score",
     "score",
     "BinCapacityCost",

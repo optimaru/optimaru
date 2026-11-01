@@ -41,8 +41,8 @@ constraint is flippable, none is a reward, all twelve are on by default. The old
 `overlapping_meetings` -> `meeting_overlap_cost`, `assign_larger_rooms_first` ->
 `larger_room_capacity_cost`, `room_stability` -> `room_change_cost`, the other four + `_cost`);
 `compute_breakdown()` / `Breakdown` are removed in favour of `constraint_costs()`. The medium
-pair now defaults to weight 1 in medium units (was 1e6 on soft): `hard=True` gives one hard
-unit per person-grain, `hard=False` one soft unit (outside the fold).
+pair now defaults to weight 1 in medium units (was 1e6 on soft): `level="hard"` gives one hard
+unit per person-grain, `level="soft"` one soft unit (outside the fold).
 
 ### Score mapping (HardMediumSoftScore → HardSoftScore)
 

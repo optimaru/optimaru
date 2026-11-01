@@ -59,8 +59,8 @@ The first four are unit constraints (`constraint_costs()` reports
 `[side 0, side 1]`), the last two globals (one total). Five are scored by
 default; `partition_imbalance_cost` has default weight 0 (`default_enabled` is
 False): give it a weight to trade cut weight for balance. Every constraint but
-the reward is flippable (`hard=True` / `hard=False`). `cut_weight_cost` is a
-reward: it is always soft — `hard=True` raises `ValueError` in `solve`,
+the reward is flippable (`level="hard"` / `level="soft"`). `cut_weight_cost` is a
+reward: it is always soft — `level="hard"` raises `ValueError` in `solve`,
 `calculate_score`, `constraints.score()` and the CP-SAT reference — and its level
 cannot change. `max_cut.constraint_info()` reports exactly this table from the
 C++ components (`kDefaultLevel` / `kDefaultWeight`).
@@ -105,7 +105,7 @@ other C++ use cases.
     and the pairs and as side 0 for the sizes); `solve` still fills it in;
   - the model refuses `partition` entries for unknown vertices and sides other
     than 0 / 1 (0.1.5 ignored them);
-  - `cut_weight_cost` with `hard=True` raises `ValueError` (0.1.5 scored a
+  - `cut_weight_cost` with `level="hard"` raises `ValueError` (0.1.5 scored a
     positive hard score);
   - a constraint picked twice raises `ValueError`.
 - **`SolverConfig`** is the engine's (the other C++ packages' knobs:
@@ -212,7 +212,7 @@ max_cut.solve(
     constraints=[*get_constraints()[:4], PartitionImbalanceCost(weight=2), cut_weight_cost],
 )
 raw = max_cut.constraint_costs(problem)             # raw costs, re-priced in pure Python:
-score(raw), score(raw, [PartitionSizeBoundsCost(hard=False), cut_weight_cost])
+score(raw), score(raw, [PartitionSizeBoundsCost(level="soft"), cut_weight_cost])
 ```
 
 ## Starting from an existing solution
@@ -273,7 +273,7 @@ Python reference-parity tests pin it.
 4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
    `description_en` / `description_ko` to `python/max_cut/constraints.py` (plus its
    module-level default instance); callers then pick, reweight or flip it:
-   `constraints=get_constraints([..., MyRuleCost(weight=5, hard=True)])`;
+   `constraints=get_constraints([..., MyRuleCost(weight=5, level="hard")])`;
 5. mirror it in the CP-SAT model in
    [`benchmarks/max-cut/cpsat`](../../benchmarks/max-cut/cpsat) (a plugin subclassing
    the spec; defaults come from `constraint_info()`), with an exact encoding so

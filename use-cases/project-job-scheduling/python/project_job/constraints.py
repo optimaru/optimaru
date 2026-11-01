@@ -1,8 +1,8 @@
 """Constraint assembly specs — an API for picking the cost function declaratively.
 
 The default path (`pjs.solve(schedule)`) enables all four constraints at the default weights.
-This module is the alternative path next to it: pick constraints, change weights, flip
-hard/soft, and pass the list to `solve(schedule, constraints=...)`.
+This module is the alternative path next to it: pick constraints, change weights, change
+levels, and pass the list to `solve(schedule, constraints=...)`.
 
 The shortest route is :func:`get_constraints`. It returns the default list, so
 a "default with a small tweak" declaration fits on one line::
@@ -21,17 +21,17 @@ Each constraint has a default instance at module level (`makespan_cost`,
 `project_delay_cost`, ...), so you can also pass a list of just a few. Only listed
 constraints are scored — leave one out and its term disappears from the score.
 
-Every spec takes ``(weight=None, hard=None, exponent=1.0)``:
+Every spec takes ``(weight=None, level=None, exponent=1.0)``:
 
 - ``weight``   linear multiplier on the constraint cost, in units of its level.
                ``None`` = the component default (``pjs.constraint_info()`` reports
                them).
-- ``hard``     ``True`` = hard, ``False`` = soft, ``None`` = the default level.
-               ``project_delay_cost`` is a MEDIUM constraint: medium is a
-               default-only level, so ``hard=True`` makes it one hard unit per day
-               and ``hard=False`` one soft unit per day (outside the 10^9 medium
-               fold), in the solver and in :func:`score` alike. An explicit
-               ``weight`` keeps it on the medium level, in medium units.
+- ``level``    ``None`` = the default level, otherwise a ``Level`` or its name
+               (``Level.MEDIUM`` or ``"medium"``). Any flippable constraint may
+               take any of the three levels.
+               ``project_delay_cost`` is a MEDIUM constraint by default: ``level="hard"`` makes it one hard unit per day
+               and ``level="soft"`` one soft unit per day (outside the 10^9 medium
+               fold), in the solver and in :func:`score` alike. A ``weight`` is in units of the level in effect.
 - ``exponent`` sign-preserving power shaping: ``weight * sign(c) * |c| **
                exponent``. All four constraints are global, so it shapes each one's
                single total. 2.0 = squared, so concentrated violations grow much
@@ -44,10 +44,11 @@ Module-level instance names use the same snake_case, so they match the strings
 `list_constraints()` prints.
 """
 
-from ._constraint import Constraint, Score, score_costs, select
+from ._constraint import Constraint, Level, Score, score_costs, select
 
 __all__ = [
     "Constraint",
+    "Level",
     "Score",
     "score",
     "NonRenewableResourceCapacityCost",

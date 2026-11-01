@@ -13,7 +13,7 @@ One plugin per engine constraint, in `flight_crew.list_constraints()` order
 `last_assignment_not_arriving_at_home_cost`). Each plugin subclasses the domain spec of
 the same name (`flight_crew.constraints.RequiredSkillCost`, ...) and only adds `build()`;
 its default level and weight come from `flight_crew.constraint_info()`, so the two
-solvers cannot disagree on a default. `hard=False` demotes a constraint to the soft level
+solvers cannot disagree on a default. `level="soft"` demotes a constraint to the soft level
 in both solvers. Not supported on CP-SAT (refused): `exponent != 1` and non-integer
 weights.
 

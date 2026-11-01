@@ -22,8 +22,8 @@ constraints, one total for the two imbalance constraints) with that metadata and
 domain's `medium_fold` (`{"kind": "into_soft", "unit": 1e6}`) on every entry.
 `tournament_scheduling.constraints` holds one spec per row (`TeamConflictCost`, ...) and the
 module-level default instances (`team_conflict_cost`, ...). Every spec takes
-`weight=None` (the default above, in units of its level), `hard=None` (the default level;
-`True` = hard, `False` = soft) and `exponent=1.0`. The medium constraint moved to hard costs
+`weight=None` (the default above, in units of its level), `level=None` (the default level,
+otherwise a `Level` or its name) and `exponent=1.0`. The medium constraint moved to hard costs
 1 hard per raw unit (the total, rounded), moved to soft 1 soft per raw unit, and an explicit
 weight stays in medium units.
 

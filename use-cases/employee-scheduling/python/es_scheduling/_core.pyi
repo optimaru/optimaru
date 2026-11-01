@@ -19,11 +19,11 @@ Two ways to define the cost function:
 
 2. Assembled (plugin): build a :class:`DecomposedCalculator` from constraint
    specs (``es_scheduling.constraints``, one class per constraint) or by name
-   with per-constraint ``weight`` / ``hard`` / ``exponent`` and domain
+   with per-constraint ``weight`` / ``level`` / ``exponent`` and domain
    parameters, then ``Solver(cfg).solve(schedule, calc)``. Every built-in
    constraint carries its own incremental (marginal-delta) evaluation and
    precomputes lookup tables at reset, so any assembly — custom weights,
-   hard/soft overrides, shaped ``exponent != 1`` included — searches
+   level overrides, shaped ``exponent != 1`` included — searches
    incrementally out of the box, at ~0.9x the built-in step rate (effectively
    parity).
 
@@ -45,7 +45,7 @@ class ConstraintSpec(Protocol):
     @property
     def weight(self) -> float | None: ...
     @property
-    def hard(self) -> bool | None: ...
+    def level(self) -> str | None: ...
     @property
     def exponent(self) -> float: ...
 
@@ -229,7 +229,7 @@ class DecomposedCalculator:
 
     Assemble from constraint spec objects (``es_scheduling.constraints``)::
 
-        DecomposedCalculator([RequiredSkillCost(), MinRestCost(weight=0.25, hard=False)])
+        DecomposedCalculator([RequiredSkillCost(), MinRestCost(weight=0.25, level="soft")])
 
     or incrementally by name via :meth:`add`. The eight defaults at their
     default weights (see :func:`default_calculator`) reproduce
@@ -240,7 +240,7 @@ class DecomposedCalculator:
     def __init__(self) -> None: ...
     @overload
     def __init__(self, constraints: Iterable[ConstraintSpec]) -> None:
-        """Duck-typed: each item only needs `.name`, `.weight`, `.hard`,
+        """Duck-typed: each item only needs `.name`, `.weight`, `.level`,
         `.exponent` (plus an optional `params()`) — the `Constraint`
         dataclasses and the pydantic rule models both qualify. Raises
         ValueError for an empty list (use ``DecomposedCalculator()`` and
@@ -261,8 +261,8 @@ class DecomposedCalculator:
         weight:   None = the component's default weight; otherwise a linear
                   multiplier (finite, >= 0) on the constraint's cost.
         hard:     True/False overrides the constraint's default level
-                  (e.g. ``add("undesired_day_cost", hard=True)`` promotes it;
-                  ``add("min_rest_cost", hard=False, weight=0.25)`` demotes it).
+                  (e.g. ``add("undesired_day_cost", level="hard")`` promotes it;
+                  ``add("min_rest_cost", level="soft", weight=0.25)`` demotes it).
                   None keeps the default. The rewards (desired_day_cost,
                   desired_shift_cost) refuse True.
         exponent: sign-preserving power shaping of the PER-EMPLOYEE cost:

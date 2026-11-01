@@ -2,7 +2,7 @@
 
 The default path (`op.solve(solution)`) enables all four constraints at their default
 weights. This module is the alternative path next to it: pick constraints, change weights,
-flip hard/soft, and pass the list to `solve(solution, constraints=...)`.
+change levels, and pass the list to `solve(solution, constraints=...)`.
 
 The shortest route is :func:`get_constraints`. It returns the default list, so
 a "default with a small tweak" declaration fits on one line::
@@ -22,12 +22,14 @@ Default instances (`trolley_capacity_cost`, `distance_from_previous_pick_task_co
 module level, so you can also pass a list of just a few. Only listed constraints are
 scored — leave one out and its term disappears from the score.
 
-Every spec takes ``(weight=None, hard=None, exponent=1.0)``:
+Every spec takes ``(weight=None, level=None, exponent=1.0)``:
 
 - ``weight``   linear multiplier on the constraint cost. ``None`` = the component
                default (order_split_by_trolley_cost 1000, the other three 1);
                ``op.constraint_info()`` reports the defaults.
-- ``hard``     ``True`` = hard, ``False`` = soft, ``None`` = the default level.
+- ``level``    ``None`` = the default level, otherwise ``Level.HARD`` or
+               ``Level.SOFT`` (or the names ``"hard"`` and ``"soft"``). This use
+               case has no medium level.
 - ``exponent`` sign-preserving power shaping per trolley: ``weight * sign(c) *
                |c| ** exponent``. 2.0 = squared, so concentrated violations grow
                much costlier.
@@ -44,10 +46,11 @@ Two knobs do not apply on the plugin path: `parallel_solver_count`
 the comments of `cpp/include/op/solver.hpp`.
 """
 
-from ._constraint import Constraint, Score, score_costs, select
+from ._constraint import Constraint, Level, Score, score_costs, select
 
 __all__ = [
     "Constraint",
+    "Level",
     "Score",
     "score",
     "TrolleyCapacityCost",

@@ -49,15 +49,15 @@ stock), so each has one raw total, and the exponent shapes that total.
 
 `list_constraints()` and `constraint_info()` report them in this order;
 `project_job.constraint_info()` reports exactly this table from the C++ components
-(`kDefaultLevel` / `kDefaultWeight`). Every constraint is flippable (`hard=True` /
-`hard=False`), none is a reward and all four are scored by default (`default_enabled`).
+(`kDefaultLevel` / `kDefaultWeight`). Every constraint is flippable (`level="hard"` /
+`level="soft"`), none is a reward and all four are scored by default (`default_enabled`).
 
 The medium weight is in **medium units**: the domain folds the medium level into the
 engine's soft level as `engine.soft = medium * 10^9 + soft` (`kMediumFold` in
 `cpp/include/pjs/domain.hpp`, reported as `medium_fold: {"kind": "into_soft", "unit": 1e9}`
-on every `constraint_costs()` entry). Medium is a default-only level: `hard=True` makes
-`project_delay_cost` 1 hard unit per day, `hard=False` 1 soft unit per day (outside the
-fold), and an explicit `weight` keeps it on the medium level, in medium units — in the
+on every `constraint_costs()` entry). `level="hard"` makes
+`project_delay_cost` 1 hard unit per day, `level="soft"` 1 soft unit per day (outside the
+fold), and a `weight` is in units of the level in effect — in the
 engine and in the CP-SAT reference alike.
 
 **0.2.0:** the constraints were renamed (`non_renewable_resource_capacity` ->
@@ -68,9 +68,9 @@ structs, headers and registry names follow: `TotalProjectDelay` -> `ProjectDelay
 `TotalMakespan` -> `MakespanCost`, ...). `makespan_cost` drops "total" because it is the
 latest end date (a max), not a total. `project_delay_cost` used to carry the fold as a soft
 weight of 10^9; now its default weight is 1 on the medium level and the fold belongs to the
-domain, so `hard=True` costs 1 hard per day (was 10^9), `hard=False` demotes it to soft in
+domain, so `level="hard"` costs 1 hard per day (was 10^9), `level="soft"` demotes it to soft in
 both solvers (it was a no-op in the engine), an explicit weight is in medium units (it used
-to replace the fold), and on CP-SAT `hard=False` on a hard constraint now lands on soft (it
+to replace the fold), and on CP-SAT `level="soft"` on a hard constraint now lands on soft (it
 landed on medium). Raw costs and the default score are unchanged.
 
 ## Starting from an existing solution
@@ -123,7 +123,7 @@ solver's `solve` before the engine runs — the engine only fills what is still 
 4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
    `description_en` / `description_ko` to `python/project_job/constraints.py` (plus its
    module-level default instance); callers then pick, reweight or flip it:
-   `constraints=get_constraints([..., MyRuleCost(weight=5, hard=True)])`;
+   `constraints=get_constraints([..., MyRuleCost(weight=5, level="hard")])`;
 5. mirror it in the CP-SAT model in
    [`benchmarks/project-job-scheduling/cpsat`](../../benchmarks/project-job-scheduling/cpsat)
    (a plugin subclassing the spec; defaults come from `constraint_info()`) so the benchmark

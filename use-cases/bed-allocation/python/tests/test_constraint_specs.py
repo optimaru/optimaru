@@ -147,7 +147,7 @@ def test_level_can_be_flipped():
     assert hard_default.medium < 0  # leaves one out instead of sharing
     assert hard_default.soft == 0
 
-    flipped = solve_crowded([BedConflictCost(hard=False), *plan_picks])
+    flipped = solve_crowded([BedConflictCost(level="soft"), *plan_picks])
     assert flipped.medium == 0  # sharing is cheaper now
     assert flipped.soft < 0
 
@@ -158,7 +158,7 @@ def test_unknown_constraint_name_raises():
     class Typo:
         name = "bed_conflict_costs"  # trailing s
         weight = None
-        hard = None
+        level = None
         exponent = 1.0
 
     with pytest.raises(ValueError, match="unknown constraint"):
@@ -181,7 +181,7 @@ def test_spec_subclass_must_name_a_constraint():
 def test_default_instance_carries_no_overrides():
     """Module-level instances must keep the defaults (weight=None)."""
     for spec in get_constraints():
-        assert (spec.weight, spec.hard, spec.exponent) == (None, None, 1.0), spec.name
+        assert (spec.weight, spec.level, spec.exponent) == (None, None, 1.0), spec.name
         assert getattr(specs, spec.name) is spec  # the instance is named after the constraint
 
 
@@ -339,17 +339,17 @@ def test_the_medium_level_folds_into_soft():
     assert (monolithic.hard, monolithic.medium, monolithic.soft) == (0, -6, -144)
     assert score(raw) == (0, monolithic.soft - 6 * MEDIUM_UNIT)
     others = [spec for spec in get_constraints() if spec.name != "unassigned_stays_cost"]
-    assert score(raw, [*others, UnassignedStaysCost(hard=True)]) == (-6, monolithic.soft)
-    assert score(raw, [*others, UnassignedStaysCost(hard=False)]) == (0, monolithic.soft - 6)
+    assert score(raw, [*others, UnassignedStaysCost(level="hard")]) == (-6, monolithic.soft)
+    assert score(raw, [*others, UnassignedStaysCost(level="soft")]) == (0, monolithic.soft - 6)
     assert score(raw, [*others, UnassignedStaysCost(weight=3)]) == (0, monolithic.soft - 18 * MEDIUM_UNIT)
 
 
 def test_a_demoted_medium_constraint_is_soft_in_the_engine_too():
-    """hard=False moves unassigned_stays_cost to soft in the solver (it was a no-op before 0.2.0).
+    """level="soft" moves unassigned_stays_cost to soft in the solver (it was a no-op before 0.2.0).
 
     Two overlapping 6-night stays for one bed: sharing costs 6000 hard, so one stay goes
     without a bed, and its nights now cost soft, not medium."""
-    picks = [bed_conflict_cost, UnassignedStaysCost(hard=False)]
+    picks = [bed_conflict_cost, UnassignedStaysCost(level="soft")]
     plan = build_crowded_plan()
     ba.solve(plan, time_limit_seconds=0.4, random_seed=1, constraints=picks)
     assert (plan.score.hard, plan.score.medium, plan.score.soft) == (0, 0, -6)
@@ -357,8 +357,8 @@ def test_a_demoted_medium_constraint_is_soft_in_the_engine_too():
 
 
 def test_a_promoted_medium_constraint_is_one_hard_unit_per_night():
-    """hard=True: unassigned nights cost 1 hard each (not 10^9), still cheaper than sharing a bed."""
-    picks = [bed_conflict_cost, UnassignedStaysCost(hard=True)]
+    """level="hard": unassigned nights cost 1 hard each (not 10^9), still cheaper than sharing a bed."""
+    picks = [bed_conflict_cost, UnassignedStaysCost(level="hard")]
     plan = build_crowded_plan()
     ba.solve(plan, time_limit_seconds=0.4, random_seed=1, constraints=picks)
     assert (plan.score.hard, plan.score.medium, plan.score.soft) == (-6, 0, 0)
@@ -412,8 +412,8 @@ def test_specs_validate_their_knobs(kwargs, error):
 
 def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     """The C++ side guards too: a duck-typed pick cannot smuggle a negative weight in."""
-    negative = SimpleNamespace(name="bed_conflict_cost", weight=-2.0, hard=None, exponent=1.0)
-    flat = SimpleNamespace(name="bed_conflict_cost", weight=None, hard=None, exponent=0.0)
+    negative = SimpleNamespace(name="bed_conflict_cost", weight=-2.0, level=None, exponent=1.0)
+    flat = SimpleNamespace(name="bed_conflict_cost", weight=None, level=None, exponent=0.0)
     for pick, message in ((negative, "weight must be finite and >= 0"), (flat, "exponent must be finite and > 0")):
         with pytest.raises(ValueError, match=message):
             ba.solve(build_plan(), time_limit_seconds=0.1, constraints=[pick])
@@ -423,14 +423,13 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     ("knobs", "message"),
     [
         ({"weight": True}, "weight must be a number or None, not True"),
-        ({"hard": 1}, "hard must be True, False or None, not 1"),
-        ({"hard": "x"}, "hard must be True, False or None, not 'x'"),
+        ({"level": 1}, "level must be a Level, its name or None, not 1"),
         ({"exponent": True}, "exponent must be a number, not True"),
     ],
 )
 def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
     """The C++ path checks the knob types like _constraint.py: TypeError, the same words."""
-    pick = SimpleNamespace(name="unassigned_stays_cost", weight=None, hard=None, exponent=1.0)
+    pick = SimpleNamespace(name="unassigned_stays_cost", weight=None, level=None, exponent=1.0)
     for key, value in knobs.items():
         setattr(pick, key, value)
     with pytest.raises(TypeError, match=f"constraint 'unassigned_stays_cost': {re.escape(message)}"):
@@ -459,7 +458,7 @@ OLD_NAMES = [
 @pytest.mark.parametrize("old", OLD_NAMES)
 def test_old_names_are_gone(old):
     """0.2.0 renamed the catalog; the pre-0.2.0 names are unknown now (no aliases)."""
-    pick = SimpleNamespace(name=old, weight=None, hard=None, exponent=1.0)
+    pick = SimpleNamespace(name=old, weight=None, level=None, exponent=1.0)
     with pytest.raises(ValueError, match="unknown constraint"):
         ba.solve(build_plan(), time_limit_seconds=0.05, constraints=[pick])
     with pytest.raises(ValueError, match="unknown constraint"):

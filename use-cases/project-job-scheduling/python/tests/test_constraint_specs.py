@@ -102,7 +102,7 @@ def test_level_can_be_flipped():
     soft_level = solve([makespan_cost])
     assert soft_level.hard == 0 and soft_level.soft < 0
 
-    hard_level = solve([MakespanCost(hard=True)])
+    hard_level = solve([MakespanCost(level="hard")])
     assert hard_level.hard < 0
     assert hard_level.soft == 0
 
@@ -113,7 +113,7 @@ def test_unknown_constraint_name_raises():
     class Typo:
         name = "makespan_costs"  # trailing s
         weight = None
-        hard = None
+        level = None
         exponent = 1.0
 
     with pytest.raises(ValueError, match="unknown constraint"):
@@ -136,10 +136,10 @@ def test_spec_subclass_must_name_a_constraint():
 def test_default_instance_carries_no_overrides():
     """Module-level instances must keep the defaults (weight=None)."""
     assert makespan_cost.weight is None
-    assert makespan_cost.hard is None
+    assert makespan_cost.level is None
     assert makespan_cost.exponent == 1.0
     for spec in get_constraints():
-        assert (spec.weight, spec.hard, spec.exponent) == (None, None, 1.0), spec.name
+        assert (spec.weight, spec.level, spec.exponent) == (None, None, 1.0), spec.name
         assert getattr(specs, spec.name) is spec  # the instance is named after the constraint
 
 
@@ -322,8 +322,8 @@ def test_the_medium_level_folds_into_soft():
     assert (monolithic.hard, monolithic.medium, monolithic.soft) == (0, -2, -3)
     assert score(raw) == (0, -3 - 2 * MEDIUM_UNIT)
     others = [spec for spec in get_constraints() if spec.name != "project_delay_cost"]
-    assert score(raw, [*others, ProjectDelayCost(hard=True)]) == (-2, -3)
-    assert score(raw, [*others, ProjectDelayCost(hard=False)]) == (0, -5)
+    assert score(raw, [*others, ProjectDelayCost(level="hard")]) == (-2, -3)
+    assert score(raw, [*others, ProjectDelayCost(level="soft")]) == (0, -5)
     assert score(raw, [*others, ProjectDelayCost(weight=3)]) == (0, -3 - 6 * MEDIUM_UNIT)
 
 
@@ -335,13 +335,13 @@ def _solve_late(picks):
 
 
 def test_the_solver_reports_the_level_the_selection_gives_the_medium_term():
-    """hard=False moves project_delay_cost to soft in the solver (it was a no-op before
-    0.2.0); hard=True makes it one hard unit per day (not 10^9)."""
+    """level="soft" moves project_delay_cost to soft in the solver (it was a no-op before
+    0.2.0); level="hard" makes it one hard unit per day (not 10^9)."""
     others = [spec for spec in get_constraints() if spec.name != "project_delay_cost"]
     default = _solve_late(get_constraints())
     assert (default.score.hard, default.score.medium, default.score.soft) == (0, -2, -3)
     assert score(pjs.constraint_costs(default)) == _engine(default.score)
-    for pick, expected in ((ProjectDelayCost(hard=False), (0, 0, -5)), (ProjectDelayCost(hard=True), (-2, 0, -3))):
+    for pick, expected in ((ProjectDelayCost(level="soft"), (0, 0, -5)), (ProjectDelayCost(level="hard"), (-2, 0, -3))):
         picks = [*others, pick]
         schedule = _solve_late(picks)
         assert (schedule.score.hard, schedule.score.medium, schedule.score.soft) == expected
@@ -404,7 +404,7 @@ def test_demoting_the_medium_term_changes_the_trade_off():
     assert (schedule.score.hard, schedule.score.medium, schedule.score.soft) == (0, -1, -10)
     assert score(pjs.constraint_costs(schedule), medium) == _engine(schedule.score)
 
-    demoted = [*capacity, ProjectDelayCost(hard=False), MakespanCost(weight=2)]
+    demoted = [*capacity, ProjectDelayCost(level="soft"), MakespanCost(weight=2)]
     schedule = _fast_or_slow()
     pjs.solve(schedule, time_limit_seconds=0.3, random_seed=1, constraints=demoted)
     assert (schedule.score.hard, schedule.score.medium, schedule.score.soft) == (0, 0, -9)
@@ -430,7 +430,7 @@ def test_the_plugin_solve_reports_each_level_unfolded():
     picks = [
         non_renewable_resource_capacity_cost,
         renewable_resource_capacity_cost,
-        ProjectDelayCost(hard=False, weight=MEDIUM_UNIT),
+        ProjectDelayCost(level="soft", weight=MEDIUM_UNIT),
         makespan_cost,
     ]
     schedule = _late_schedule()
@@ -478,8 +478,8 @@ def test_specs_validate_their_knobs(kwargs, error):
 
 def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     """The C++ side guards too: a duck-typed pick cannot smuggle a negative weight in."""
-    negative = SimpleNamespace(name="makespan_cost", weight=-2.0, hard=None, exponent=1.0)
-    flat = SimpleNamespace(name="makespan_cost", weight=None, hard=None, exponent=0.0)
+    negative = SimpleNamespace(name="makespan_cost", weight=-2.0, level=None, exponent=1.0)
+    flat = SimpleNamespace(name="makespan_cost", weight=None, level=None, exponent=0.0)
     for pick, message in ((negative, "weight must be finite and >= 0"), (flat, "exponent must be finite and > 0")):
         with pytest.raises(ValueError, match=message):
             pjs.solve(build_schedule(), time_limit_seconds=0.1, constraints=[pick])
@@ -489,14 +489,13 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     ("knobs", "message"),
     [
         ({"weight": True}, "weight must be a number or None, not True"),
-        ({"hard": 1}, "hard must be True, False or None, not 1"),
-        ({"hard": "x"}, "hard must be True, False or None, not 'x'"),
+        ({"level": 1}, "level must be a Level, its name or None, not 1"),
         ({"exponent": True}, "exponent must be a number, not True"),
     ],
 )
 def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
     """The C++ path checks the knob types like _constraint.py: TypeError, the same words."""
-    pick = SimpleNamespace(name="project_delay_cost", weight=None, hard=None, exponent=1.0)
+    pick = SimpleNamespace(name="project_delay_cost", weight=None, level=None, exponent=1.0)
     for key, value in knobs.items():
         setattr(pick, key, value)
     with pytest.raises(TypeError, match=f"constraint 'project_delay_cost': {re.escape(message)}"):
@@ -517,7 +516,7 @@ OLD_NAMES = [
 @pytest.mark.parametrize("old", OLD_NAMES)
 def test_old_names_are_gone(old):
     """0.2.0 renamed the catalog; the pre-0.2.0 names are unknown now (no aliases)."""
-    pick = SimpleNamespace(name=old, weight=None, hard=None, exponent=1.0)
+    pick = SimpleNamespace(name=old, weight=None, level=None, exponent=1.0)
     with pytest.raises(ValueError, match="unknown constraint"):
         pjs.solve(build_schedule(), time_limit_seconds=0.05, constraints=[pick])
     with pytest.raises(ValueError, match="unknown constraint"):

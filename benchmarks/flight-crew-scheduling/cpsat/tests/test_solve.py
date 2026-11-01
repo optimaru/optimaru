@@ -144,7 +144,7 @@ def test_cpsat_defaults_are_the_engine_defaults() -> None:
         assert entry["reward"] == row.reward
         assert entry["default_enabled"] == row.default_enabled
         assert entry["kind"] == "either"  # every flight-crew constraint is flippable
-        assert entry["params"] == {"weight": None, "hard": None, "exponent": 1.0}
+        assert entry["params"] == {"weight": None, "level": None, "exponent": 1.0}
 
 
 def test_default_solve_scores_like_the_engine() -> None:
@@ -158,14 +158,14 @@ def test_default_solve_scores_like_the_engine() -> None:
 @pytest.mark.parametrize(
     "demoted",
     [
-        RequiredSkillCost(hard=False),
-        FlightConflictCost(hard=False),
-        TransferBetweenTwoFlightsCost(hard=False),
+        RequiredSkillCost(level="soft"),
+        FlightConflictCost(level="soft"),
+        TransferBetweenTwoFlightsCost(level="soft"),
     ],
     ids=lambda item: item.name,
 )
 def test_demoting_a_hard_constraint_scores_like_the_engine(demoted) -> None:
-    """hard=False lands on soft in both solvers: CP-SAT's reported score is the
+    """level="soft" lands on soft in both solvers: CP-SAT's reported score is the
     engine's score of the same solution under the same selection."""
     problem = _parity_problem()
     selection = [

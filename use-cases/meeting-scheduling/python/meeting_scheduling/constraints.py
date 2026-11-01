@@ -1,8 +1,8 @@
 """Constraint assembly specs — an API for picking the cost function declaratively.
 
 The default path (`ms.solve(schedule)`) enables all twelve constraints at the provider weights.
-This module is the alternative path next to it: pick constraints, change weights, flip
-hard/soft, and pass the list to `solve(schedule, constraints=...)`.
+This module is the alternative path next to it: pick constraints, change weights, change
+levels, and pass the list to `solve(schedule, constraints=...)`.
 
 The shortest route is :func:`get_constraints`. It returns the default list, so
 a "default with a small tweak" declaration fits on one line::
@@ -21,19 +21,21 @@ Each constraint has a default instance at module level, so you can also pass a
 list of just a few. Only listed constraints are scored — leave one out and its
 term disappears from the score.
 
-Every spec takes ``(weight=None, hard=None, exponent=1.0)``:
+Every spec takes ``(weight=None, level=None, exponent=1.0)``:
 
 - ``weight``   linear multiplier on the constraint cost, in units of its level.
                ``None`` = the C++ component default (``ms.constraint_info()``
                lists them).
-- ``hard``     ``True`` = hard, ``False`` = soft, ``None`` = the default level.
+- ``level``    ``None`` = the default level, otherwise a ``Level`` or its name
+               (``Level.MEDIUM`` or ``"medium"``). Any flippable constraint may
+               take any of the three levels.
                The two attendance conflicts that are not both-required
                (`required_and_preferred_attendance_conflict_cost`,
                `preferred_attendance_conflict_cost`) are **medium**: folded into
                the engine's soft level as ``medium * 1e6`` (``MEDIUM_SCALE``).
-               Medium is a default-only level: ``hard=True`` charges one hard
-               unit per person-grain, ``hard=False`` one soft unit per
-               person-grain, and an explicit ``weight`` stays in medium units.
+               On another level, ``level="hard"`` charges one hard
+               unit per person-grain, ``level="soft"`` one soft unit per
+               person-grain, and a ``weight`` is in units of the level in effect.
 - ``exponent`` sign-preserving power shaping: ``weight * sign(c) * |c| **
                exponent``, per (grain, room) cell for the five per-meeting
                constraints and on the total for the seven pair constraints.
@@ -50,10 +52,11 @@ mechanically, so there is no hand-maintained alias table — check them with
 so they match the strings `list_constraints()` prints.
 """
 
-from ._constraint import Constraint, Score, score_costs, select
+from ._constraint import Constraint, Level, Score, score_costs, select
 
 __all__ = [
     "Constraint",
+    "Level",
     "Score",
     "score",
     "OvertimeCost",

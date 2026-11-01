@@ -16,7 +16,7 @@ def test_constraint_costs_match_hand_calculation() -> None:
     assert raw["bin_capacity_cost"]["costs"] == [5, 0, 0, 0]
     assert raw["used_bins_cost"]["costs"] == [2]
     assert score(raw) == (-5, -2.0)
-    assert score(raw, [BinCapacityCost(hard=False, weight=3), UsedBinsCost(hard=True, weight=2)]) == (-4, -15.0)
+    assert score(raw, [BinCapacityCost(level="soft", weight=3), UsedBinsCost(level="hard", weight=2)]) == (-4, -15.0)
 
 
 def test_metaheuristic_finds_two_bin_optimum() -> None:

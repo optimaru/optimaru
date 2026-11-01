@@ -216,7 +216,7 @@ class Solver:
         """Score the same solve with a caller-chosen constraint set
         (see bed_allocation.constraints). The given list replaces the default set; None
         keeps the default set. plan.score reports the three levels the assembly put the
-        terms on (unassigned_stays_cost with hard=False lands on soft), and so does every
+        terms on (unassigned_stays_cost with level="soft" lands on soft), and so does every
         score passed to on_new_best."""
 
 def list_constraints() -> list[str]:

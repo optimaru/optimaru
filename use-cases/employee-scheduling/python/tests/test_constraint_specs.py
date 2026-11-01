@@ -1,6 +1,6 @@
 """es_scheduling.constraints — one spec per constraint, the C++ catalog and the knobs.
 
-The specs carry the three knobs (weight / hard / exponent) and the domain
+The specs carry the three knobs (weight / level / exponent) and the domain
 parameters; the defaults (level, weight, reward) live in the C++ components
 and are reported by `constraint_info()`. `get_constraints()` is the entry point
 every use case shares; the rule factory (`DecomposedCalculator`,
@@ -172,7 +172,7 @@ def test_the_module_level_instances_are_the_defaults():
     for spec in SPEC_CLASSES:
         instance = getattr(specs, spec.name)
         assert type(instance) is spec
-        assert (instance.weight, instance.hard, instance.exponent) == (None, None, 1.0)
+        assert (instance.weight, instance.level, instance.exponent) == (None, None, 1.0)
         assert instance == spec()
         assert instance.name in specs.__all__ and spec.__name__ in specs.__all__
 
@@ -368,7 +368,7 @@ def test_specs_carry_the_documented_defaults():
     """Spec knobs default to weight None (= the C++ default), hard None, exponent 1.0."""
     spec = get_constraints()[0]
     assert spec.weight is None
-    assert spec.hard is None
+    assert spec.level is None
     assert spec.exponent == pytest.approx(1.0)
 
 
@@ -386,14 +386,14 @@ def test_score_reprices_raw_costs_like_the_engine():
     schedule = _assigned_roster()
     selection = [
         RequiredSkillCost(weight=2.0),
-        MinRestCost(weight=0.25, hard=False),
-        UndesiredDayCost(hard=True),
+        MinRestCost(weight=0.25, level="soft"),
+        UndesiredDayCost(level="hard"),
         DesiredDayCost(exponent=2.0),
         ShiftCountImbalanceCost(weight=3.0, exponent=2.0),
         DayPatternCost(pattern="WORK,WORK,WORK"),
         DayPatternCost(pattern="OFF,WORK", weight=2.0),
         MaxConsecutiveDaysCost(value=2, worker_indices=(0, 1)),
-        ShiftCoverageCost(min_count=2, hard=True),
+        ShiftCoverageCost(min_count=2, level="hard"),
     ]
     raw = es.constraint_costs(schedule, selection)
     engine = es.DecomposedCalculator(selection).score(schedule)
@@ -414,10 +414,10 @@ def test_repeated_rules_are_keyed_by_instance_and_labelled():
 @pytest.mark.parametrize(
     "pick",
     [
-        DesiredDayCost(hard=True),
-        DesiredDayCost(hard=True, worker_indices=(0,)),
-        DesiredShiftCost(hard=True),
-        DesiredShiftCost(hard=True, shift_indices=(0, 1)),
+        DesiredDayCost(level="hard"),
+        DesiredDayCost(level="hard", worker_indices=(0,)),
+        DesiredShiftCost(level="hard"),
+        DesiredShiftCost(level="hard", shift_indices=(0, 1)),
     ],
     ids=["desired-day", "scoped-desired-day", "desired-shift", "scoped-desired-shift"],
 )
@@ -429,14 +429,14 @@ def test_a_reward_refuses_hard_on_every_path(pick):
         es.constraint_costs(schedule, [pick])
     with pytest.raises(ValueError, match="is a reward"):
         named = es.DecomposedCalculator()
-        named.add(pick.name, hard=True, **pick.params())
+        named.add(pick.name, level="hard", **pick.params())
     with pytest.raises(ValueError, match="is a reward"):
         score(es.constraint_costs(schedule, [type(pick)(**pick.params())]), [pick])
 
 
 def test_a_reward_stays_soft_and_scoped_rewards_keep_their_metadata():
     schedule = reference_schedule()
-    assert str(es.DecomposedCalculator([DesiredDayCost(hard=False)]).score(schedule)) == str(
+    assert str(es.DecomposedCalculator([DesiredDayCost(level="soft")]).score(schedule)) == str(
         es.DecomposedCalculator([DesiredDayCost()]).score(schedule)
     )
     (entry,) = es.constraint_costs(schedule, [DesiredDayCost(worker_indices=(0,))]).values()
@@ -448,12 +448,11 @@ def test_a_reward_stays_soft_and_scoped_rewards_keep_their_metadata():
     ("knobs", "message"),
     [
         ({"weight": True}, "weight must be a number or None, not True"),
-        ({"hard": 1}, "hard must be True, False or None, not 1"),
-        ({"hard": "x"}, "hard must be True, False or None, not 'x'"),
+        ({"level": 1}, "level must be a Level, its name or None, not 1"),
     ],
 )
 def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
-    pick = SimpleNamespace(name="min_rest_cost", weight=None, hard=None, exponent=1.0)
+    pick = SimpleNamespace(name="min_rest_cost", weight=None, level=None, exponent=1.0)
     for key, value in knobs.items():
         setattr(pick, key, value)
     with pytest.raises(TypeError, match=f"constraint 'min_rest_cost': {re.escape(message)}"):
@@ -469,7 +468,7 @@ def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
     [({"weight": -2.0}, "weight must be finite and >= 0"), ({"exponent": 0.0}, "exponent must be finite and > 0")],
 )
 def test_core_refuses_invalid_knobs_from_duck_typed_picks(knobs, message):
-    pick = SimpleNamespace(name="shift_overlap_cost", weight=None, hard=None, exponent=1.0)
+    pick = SimpleNamespace(name="shift_overlap_cost", weight=None, level=None, exponent=1.0)
     for key, value in knobs.items():
         setattr(pick, key, value)
     with pytest.raises(ValueError, match=message):

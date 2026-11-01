@@ -82,7 +82,7 @@ Outside that range:
   penalties above about 9.2x10^9 weighted units saturate at -(2^63 - 1). Keep
   `RequiredSkillCost` at weight 1 (0.1.5's `NoMissingSkills` default 1e9 is now
   the fold), and give a soft term made hard a small weight
-  (`SquaredMakespanCost(hard=True, weight=1)`).
+  (`SquaredMakespanCost(level="hard", weight=1)`).
 
 ## Constraints (same semantics as Java `TaskAssigningConstraintProvider`, 6 of them)
 
@@ -98,8 +98,8 @@ Outside that range:
 `list_constraints()` / `constraint_info()` order (unit constraints first, the global
 `unassigned_tasks_cost` last). Pick, re-weight or flip them through
 `task_assigning.constraints` (`solve(solution, constraints=get_constraints([...]))`); a
-weight is in units of its level, `hard=True` makes a constraint hard (one hard unit =
-10^9 engine units), `hard=False` makes it soft. See the use-case README for the 0.2.0
+weight is in units of its level, `level="hard"` makes a constraint hard (one hard unit =
+10^9 engine units), `level="soft"` makes it soft. See the use-case README for the 0.2.0
 renames (`no_missing_skills` -> `required_skill_cost`, ...).
 
 ## Caveats

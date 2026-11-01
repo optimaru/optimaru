@@ -171,7 +171,8 @@ def test_exponent_one_scores_equal_for_any_selection():
         picked = rng.sample(list(SPEC_OF), rng.randrange(1, 5))
         picks = [(old, rng.choice([None, 0, 1, 2, 5]), rng.choice([None, True, False])) for old in picked]
         old = ref.score(ref.constraint_costs(Model.model_validate(data).model_dump()), [(*p, 1.0) for p in picks])
-        specs = [SPEC_OF[name](weight=weight, hard=hard) for name, weight, hard in picks]
+        levels = {None: None, True: "hard", False: "soft"}
+        specs = [SPEC_OF[name](weight=weight, level=levels[hard]) for name, weight, hard in picks]
         new = score(bp.constraint_costs(Model.model_validate(data).to_core()), specs)
         assert new == old
 

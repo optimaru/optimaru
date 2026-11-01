@@ -50,8 +50,10 @@ A selection sets three knobs per constraint and nothing else:
 
 - `weight` — `None` keeps the default weight, in units of the constraint's
   level.
-- `hard` — `None` keeps the default level, `True` makes it hard, `False`
-  makes it soft. A reward refuses `hard=True`, and a structural constraint
+- `level` — `None` keeps the default level. Otherwise a `Level` from the
+  package's `constraints` module, or its name: `Level.HARD` / `"hard"`,
+  `Level.MEDIUM` / `"medium"`, `Level.SOFT` / `"soft"`. `medium` needs a domain
+  with a medium level. A reward refuses `"hard"`, and a structural constraint
   (`level_flippable` false, e.g. school timetabling's `fixed_slots_cost`)
   refuses any change of level.
 - `exponent` — `1.0` by default, `> 0`, sign-preserving; applied per unit for
@@ -59,10 +61,11 @@ A selection sets three knobs per constraint and nothing else:
   weight. A weight of 0 contributes exactly 0 at any exponent.
 
 Some domains also have a **medium** level between hard and soft (unassigned
-visits, stays, requests, tasks, ...). It is a default-only level: `hard=True`
-moves such a constraint to hard and `hard=False` to soft, and its weight is in
-medium units. The domain declares once how medium folds into the engine's
-hard/soft score (`medium_fold` on every `constraint_costs()` entry).
+visits, stays, requests, tasks, ...). Any flippable constraint may be moved onto
+it, and a weight is in units of the level in effect. The domain declares once how
+medium folds into the engine's hard/soft score (`medium_fold` on every
+`constraint_costs()` entry). Where it folds below hard (task assigning), a reward
+refuses `"medium"` too.
 
 Defaults are declared once, in C++ (`kDefaultWeight` / `kDefaultLevel` on the
 component). Python reads them from `<package>.constraint_info()`, one
@@ -249,7 +252,7 @@ and exponent are defaults the caller can override per solve (see
    `<package>/constraints.py`, plus a module-level default instance
    (`my_rule_cost = MyRuleCost()`), so callers can pick it, reweight it or flip
    its level: `solve(problem, constraints=get_constraints([...,
-   MyRuleCost(weight=5, hard=True)]))`. The spec declares no defaults; they
+   MyRuleCost(weight=5, level="hard")]))`. The spec declares no defaults; they
    come from `constraint_info()`.
 6. **Tests and benchmark parity** — a hand-calculated positive and zero case
    in `<ns>_plugin_test`, full-vs-incremental and monolith-vs-plugin parity,

@@ -1,8 +1,8 @@
 """Constraint assembly specs — an API for picking the cost function declaratively.
 
 The default path (``solve(problem)``) scores all 20 constraints at their default weights.
-This module is the alternative path next to it: pick constraints, change weights, flip
-hard/soft, and pass the list to ``solve(problem, constraints=...)`` or
+This module is the alternative path next to it: pick constraints, change weights, change
+levels, and pass the list to ``solve(problem, constraints=...)`` or
 ``calculate_score(problem, constraints=...)``::
 
     import semiconductor_scheduling as fab
@@ -18,13 +18,14 @@ Default instances (``machine_eligibility_cost``, ..., ``makespan_cost``) live at
 level. Only listed constraints are scored — leave one out and its term disappears from the
 score.
 
-Every spec takes ``(weight=None, hard=None, exponent=1.0)``:
+Every spec takes ``(weight=None, level=None, exponent=1.0)``:
 
 - ``weight``   linear multiplier on the constraint cost. ``None`` = the component default
                (every constraint 1, weighted_tardiness_cost 10); ``constraint_info()``
                reports them. The problem carries no weights.
-- ``hard``     ``True`` = hard, ``False`` = soft, ``None`` = the default level (the first
-               14 constraints are hard, the last 6 soft). Every constraint flips both ways.
+- ``level``    ``None`` = the default level, otherwise ``Level.HARD`` or
+               ``Level.SOFT`` (or the names ``"hard"`` and ``"soft"``). This use
+               case has no medium level.
 - ``exponent`` sign-preserving power shaping of the constraint's TOTAL raw cost:
                ``weight * total ** exponent`` (every constraint is global; 0.1.x shaped
                each item — a lot, a pair, a window — before summing).
@@ -34,7 +35,7 @@ Names (``name``) are the C++ component names in snake_case
 ``fab.list_constraints()``.
 """
 
-from ._constraint import Constraint, Score, score_costs, select
+from ._constraint import Constraint, Level, Score, score_costs, select
 
 __all__ = [
     "AuxiliaryResourceCapacityCost",

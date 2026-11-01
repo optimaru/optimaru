@@ -2,7 +2,7 @@
 
 The default path (`max_cut.solve(problem)`) scores every default constraint at
 its default weight. This module is the alternative path next to it: pick
-constraints, change weights, flip hard/soft, and pass the list to
+constraints, change weights, change levels, and pass the list to
 `solve(problem, constraints=...)`.
 
 The shortest route is :func:`get_constraints`. It returns the default list, so
@@ -19,15 +19,15 @@ Default instances (`fixed_partition_cost`, `same_partition_pairs_cost`, ...,
 few. Only listed constraints are scored — leave one out and its term disappears
 from the score.
 
-Every spec takes ``(weight=None, hard=None, exponent=1.0)``:
+Every spec takes ``(weight=None, level=None, exponent=1.0)``:
 
 - ``weight``   linear multiplier on the constraint cost. ``None`` = the component
                default (1, except ``partition_imbalance_cost``: 0, an opt-in
                objective). The problem carries no weights;
                ``max_cut.constraint_info()`` reports the defaults.
-- ``hard``     ``True`` = hard, ``False`` = soft, ``None`` = the default level.
-               ``cut_weight_cost`` is a reward and always soft: ``hard=True``
-               raises ValueError.
+- ``level``    ``None`` = the default level, otherwise ``Level.HARD`` or
+               ``Level.SOFT`` (or the names ``"hard"`` and ``"soft"``). This use
+               case has no medium level.
 - ``exponent`` sign-preserving power shaping: ``weight * sign(c) * |c| ** exponent``.
                The four unit constraints (fixed, same-side, different-side,
                size bounds) shape each SIDE's cost; the two globals (imbalance,
@@ -39,10 +39,11 @@ mechanically, so there is no hand-maintained alias table — check them with
 `max_cut.list_constraints()`.
 """
 
-from ._constraint import Constraint, Score, score_costs, select
+from ._constraint import Constraint, Level, Score, score_costs, select
 
 __all__ = [
     "Constraint",
+    "Level",
     "Score",
     "score",
     "FixedPartitionCost",
@@ -152,11 +153,11 @@ class CutWeightCost(Constraint):
     label_ko = "컷 가중치"
     description_en = (
         "The total weight of the edges whose endpoints are on different sides, scored as a reward: the raw cost is "
-        "minus the cut weight (never positive), so a larger cut scores better. It is always soft; hard=True is refused."
+        "minus the cut weight (never positive), so a larger cut scores better. It is always soft; level='hard' is refused."
     )
     description_ko = (
         "양 끝 정점이 서로 다른 쪽에 놓인 간선의 가중치 합을 보상으로 셉니다. 원시 비용은 컷 가중치에 음수를 붙인 "
-        "값(0 이하)이므로 컷이 클수록 점수가 좋아집니다. 항상 소프트 제약이며 hard=True는 거부됩니다."
+        "값(0 이하)이므로 컷이 클수록 점수가 좋아집니다. 항상 소프트 제약이며 level='hard'는 거부됩니다."
     )
 
 
@@ -212,7 +213,7 @@ def score(costs: dict, constraints: list[Constraint] | None = None) -> Score:
     fractional hard weights).
 
     When ``constraints`` is given, only those constraints are scored — the same
-    semantics as `get_constraints`. Unknown names raise ValueError; ``hard=True``
+    semantics as `get_constraints`. Unknown names raise ValueError; ``level="hard"``
     on the ``cut_weight_cost`` reward raises ValueError.
     """
     return score_costs(costs, get_constraints(constraints))

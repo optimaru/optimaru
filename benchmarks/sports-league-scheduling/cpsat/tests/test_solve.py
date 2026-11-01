@@ -126,7 +126,7 @@ def test_cpsat_defaults_are_the_engine_defaults() -> None:
         assert entry["reward"] == row.reward
         assert entry["default_enabled"] == row.default_enabled
         assert entry["kind"] == "either"  # every sports-league constraint is flippable
-        assert entry["params"] == {"weight": None, "hard": None, "exponent": 1.0}
+        assert entry["params"] == {"weight": None, "level": None, "exponent": 1.0}
 
 
 def test_workday_derby_default_weight_is_the_engines_1000() -> None:
@@ -181,11 +181,11 @@ def test_default_selection_scores_like_the_engine() -> None:
 
 
 def test_demoting_team_conflict_scores_like_the_engine() -> None:
-    """hard=False lands on soft in both solvers: CP-SAT's reported score is the
+    """level="soft" lands on soft in both solvers: CP-SAT's reported score is the
     engine's score of the same solution under the same selection."""
     problem = _parity_problem()
     fixed_rounds = [0, 0, 2, 3, 1, 2, 1]  # "a" and "b" share team 0 on round 0
-    selection = [TeamConflictCost(hard=False), *get_constraints()[:3]]
+    selection = [TeamConflictCost(level="soft"), *get_constraints()[:3]]
     candidate = problem.model_copy(deep=True)
     for match, round_ in zip(candidate.matches, fixed_rounds, strict=True):
         match.round = round_

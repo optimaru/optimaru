@@ -12,7 +12,7 @@ like the domain spec it subclasses (`BedConflictCost`, ..., `UnassignedStaysCost
 its default level and weight come from `bed_allocation.constraint_info()` (the C++
 components' `kDefaultLevel` / `kDefaultWeight`), so `catalog()` equals the engine catalog.
 The objective levels are `("hard", "medium", "soft")`; `unassigned_stays_cost` is medium
-at weight 1, `hard=True` makes it hard and `hard=False` soft, exactly like the engine
+at weight 1, `level="hard"` makes it hard and `level="soft"` soft, exactly like the engine
 (0.2.0: a demoted medium term used to stay on medium here). Not supported on CP-SAT:
 `exponent != 1` and non-integer weights (rejected).
 

@@ -219,7 +219,7 @@ class Solver:
         """Score the same solve with a caller-chosen constraint set
         (see project_job.constraints). The given list replaces the default set; None
         keeps the default set. schedule.score reports the three levels the assembly put
-        the terms on (a medium constraint with hard=False lands on soft)."""
+        the terms on (a medium constraint with level="soft" lands on soft)."""
 
 def list_constraints() -> list[str]:
     """Constraint names scored by this domain (default assembly order, snake_case).
