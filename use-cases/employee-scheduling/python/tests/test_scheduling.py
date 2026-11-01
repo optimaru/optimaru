@@ -929,3 +929,9 @@ def test_worker_pairing_cost_share_and_avoid_modes():
     assert score(0, 2, True) == 0  # ... not sharing -> no penalty
     assert score(0, -1, False) == -1  # A works, B off -> one-sided
     assert score(0, -1, True) == 0
+
+
+def test_add_refuses_the_old_hard_knob():
+    """add() reads other keywords as rule parameters, where hard= would vanish silently."""
+    with pytest.raises(TypeError, match="use level="):
+        es.DecomposedCalculator().add("required_skill_cost", hard=True)

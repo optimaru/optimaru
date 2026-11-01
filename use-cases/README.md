@@ -64,8 +64,9 @@ Some domains also have a **medium** level between hard and soft (unassigned
 visits, stays, requests, tasks, ...). Any flippable constraint may be moved onto
 it, and a weight is in units of the level in effect. The domain declares once how
 medium folds into the engine's hard/soft score (`medium_fold` on every
-`constraint_costs()` entry). Where it folds below hard (task assigning), a reward
-refuses `"medium"` too.
+`constraint_costs()` entry). Where it folds below hard (task assigning), medium is
+whole numbers like hard: each unit's contribution is rounded, so a small fractional
+weight can round to nothing, and a reward refuses `"medium"`.
 
 Defaults are declared once, in C++ (`kDefaultWeight` / `kDefaultLevel` on the
 component). Python reads them from `<package>.constraint_info()`, one

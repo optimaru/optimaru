@@ -344,7 +344,7 @@ void addConstraintByName(DecomposedCalculator &calc,
                               + name + "'");
     }
 
-    tfpy::applyKnobs(built.metadata(), pick, name);
+    tfpy::applyKnobs(built.metadata(), pick, name, optimaru::MediumFold::none());
     if (built.unit)
         calc.add(std::move(built.unit));
     else
@@ -554,6 +554,11 @@ PYBIND11_MODULE(_core, m)
                const py::object &exponent,
                const py::kwargs &kwargs)
             {
+                // kwargs are domain parameters, which the factory reads by name
+                // and otherwise ignores: the old knob must not vanish there.
+                if (kwargs.contains("hard"))
+                    throw py::type_error("add() got an unexpected keyword argument "
+                                         "'hard'; use level='hard' or level='soft'");
                 // The same checks as a spec pick: a SimpleNamespace carrying
                 // the three knobs goes through the one factory path.
                 py::object pick = py::module_::import("types").attr(

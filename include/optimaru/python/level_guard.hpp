@@ -46,7 +46,9 @@ inline std::optional<Level> levelNamed(std::string_view name) {
 //   constraint 'x' is a reward (raw cost <= 0) and cannot be hard
 //   constraint 'x' is a reward (raw cost <= 0) and cannot be medium here, ...
 //   constraint 'x' is always hard; level='soft' is not allowed
-// `quotedName` is the Python name the way repr() spells it ("'x'"). Throws
+// `quotedName` is the Python name the way repr() spells it ("'x'"). `constraint`
+// must still be at its default level, as it is on both binding paths, which is
+// what makes constraint.level here the same as _level's default. Throws
 // std::invalid_argument.
 inline Level checkedLevel(const ConstraintMetadata& constraint, Level wanted, MediumFold fold,
                           const std::string& quotedName) {

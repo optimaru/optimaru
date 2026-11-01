@@ -20,7 +20,7 @@
 //
 // A domain whose factory builds components outside any assembly (a rule
 // list, employee-scheduling addConstraintByName) re-states each component's
-// knobs with python::applyKnobs(component, pick, shownName) and reports its
+// knobs with python::applyKnobs(component, pick, shownName, fold) and reports its
 // wider catalog with the three-argument bindConstraintInfo (see there).
 //
 // The domain builds its own default assembly and hands it over, so the fact
@@ -252,9 +252,9 @@ inline Knobs readKnobs(const py::handle& item, const std::string& shown) {
 //
 //   auto unit = std::make_unique<MaxConsecutiveDaysCost>(
 //           MaxConsecutiveDaysCost::kDefaultWeight, value);
-//   python::applyKnobs(*unit, pick, "max_consecutive_days_cost");
+//   python::applyKnobs(*unit, pick, "max_consecutive_days_cost", MediumFold::none());
 inline void applyKnobs(ConstraintMetadata& constraint, const py::handle& item,
-                       const std::string& shown, MediumFold fold = MediumFold::none()) {
+                       const std::string& shown, MediumFold fold) {
     const Knobs knobs = readKnobs(item, shown);
     try {
         restateKnobs(constraint, knobs, fold, detail::quoted(shown));

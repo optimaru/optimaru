@@ -190,12 +190,21 @@ def test_a_level_must_be_a_level():
         TravelTimeCost(level=True)
     with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft'"):
         TravelTimeCost(level="firm")
+    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft'"):
+        TravelTimeCost(level="HARD")
 
 
 def test_core_refuses_an_unknown_level_like_the_python_base():
     pick = SimpleNamespace(name="unassigned_visits_cost", weight=None, level="firm", exponent=1.0)
     with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft', not 'firm'"):
         solve([pick])
+
+
+def test_score_agrees_with_the_engine_when_a_constraint_moves_to_medium():
+    picks = [vehicle_capacity_cost, unassigned_visits_cost, TravelTimeCost(level="medium")]
+    plan = solve(picks)
+    assert score(vrp.constraint_costs(plan), picks).hard == plan.score.hard
+    assert plan.score.medium < 0
 
 
 def test_the_knob_was_renamed():

@@ -539,6 +539,12 @@ def test_medium_folds_below_hard_where_the_domain_does():
     assert score_costs(costs_a(BELOW_HARD), [TaskCostCost(level="medium")]).hard < 0
 
 
+def test_medium_below_hard_rounds_each_unit_like_hard():
+    costs = {"task_cost_cost": costs_a(BELOW_HARD)["task_cost_cost"]}
+    assert score_costs(costs, [TaskCostCost(level="medium", weight=0.01)]).hard == 0
+    assert score_costs(costs, [TaskCostCost(level="medium", weight=0.1)]).hard == -(2 + 1)
+
+
 def test_medium_needs_a_domain_with_a_medium_level():
     with pytest.raises(ValueError, match="this use case has no medium level"):
         score_costs(costs_a(), [OverloadCost(level="medium")])
