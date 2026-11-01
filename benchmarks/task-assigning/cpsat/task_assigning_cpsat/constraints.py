@@ -8,6 +8,13 @@ solvers cannot disagree on a default. The levels are the engine's three:
 soft. The Bendable soft[1]-over-soft[2] order is carried by
 ``squared_makespan_cost``'s default weight 10^7 on the one soft level, as in the
 engine.
+
+Offsets and repeats: every plugin adds one term per unit the engine evaluates
+(``terms_per_unit``): one per employee (an idle one included) for the unit
+constraints, one for the global ``unassigned_tasks_cost``'s total. The priority
+end-time plugins add one term per task at offset 0 (a linear term sums to the same
+per-employee raw cost, so the default model is unchanged) and one per employee under
+an offset. A constraint picked several times adds one set of terms per pick.
 """
 
 from dataclasses import dataclass
@@ -33,22 +40,37 @@ class TaskContext:
 
 
 class RequiredSkillCost(domain.RequiredSkillCost, ConstraintPlugin[TaskContext]):
+    terms_per_unit = True  # one term per employee
+
     def build(self, context: TaskContext, objective: ObjectiveBuilder) -> None:
-        for task_index, task in enumerate(context.problem.tasks):
-            required = set(context.task_type[task.task_type_code].required_skills)
-            for employee_index, employee in enumerate(context.problem.employees):
-                missing = len(required - set(employee.skills))
-                literal = context.assigned[employee_index, task_index]
-                objective.add(self.name, missing * literal, bound=missing)
+        for employee_index, employee in enumerate(context.problem.employees):
+            skills = set(employee.skills)
+            missing = [
+                len(
+                    set(context.task_type[task.task_type_code].required_skills) - skills
+                )
+                for task in context.problem.tasks
+            ]
+            objective.add(
+                self.name,
+                sum(
+                    count * context.assigned[employee_index, task_index]
+                    for task_index, count in enumerate(missing)
+                ),
+                bound=sum(missing),
+            )
 
 
 class UnassignedTasksCost(domain.UnassignedTasksCost, ConstraintPlugin[TaskContext]):
+    terms_per_unit = True  # a global constraint: one term for its total
+
     def build(self, context: TaskContext, objective: ObjectiveBuilder) -> None:
-        for literal in context.unassigned:
-            objective.add(self.name, literal, bound=1)
+        objective.add(self.name, sum(context.unassigned), bound=len(context.unassigned))
 
 
 class SquaredMakespanCost(domain.SquaredMakespanCost, ConstraintPlugin[TaskContext]):
+    terms_per_unit = True  # one term per employee, an idle one included
+
     def build(self, context: TaskContext, objective: ObjectiveBuilder) -> None:
         for employee, contributions in enumerate(context.contributions):
             employee_end = context.model.new_int_var(
@@ -68,8 +90,24 @@ class SquaredMakespanCost(domain.SquaredMakespanCost, ConstraintPlugin[TaskConte
 
 class _PriorityEndPlugin(ConstraintPlugin[TaskContext]):
     priority: ClassVar[str]
+    terms_per_unit = True  # per task at offset 0 (linear), per employee under an offset
 
     def build(self, context: TaskContext, objective: ObjectiveBuilder) -> None:
+        _spec, config = objective.selected[self.name]
+        if config.offset != 0:
+            # The engine's unit is the employee: shape each one's summed end times.
+            mine = [
+                task_index
+                for task_index, task in enumerate(context.problem.tasks)
+                if task.priority == self.priority
+            ]
+            for contributions in context.contributions:
+                objective.add(
+                    self.name,
+                    sum(contributions[task_index] for task_index in mine),
+                    bound=context.horizon * len(mine),
+                )
+            return
         for task_index, task in enumerate(context.problem.tasks):
             if task.priority != self.priority:
                 continue
