@@ -7,10 +7,19 @@ default level and weight of each one come from the engine's
 medium pair defaults to weight 1 on the CP-SAT medium level and
 ``consecutive_meetings_cost`` / ``meeting_overlap_cost`` to 100 / 10 on soft,
 exactly as in C++.
+
+The terms follow the engine's units, so a pick's ``offset`` / ``clip`` shape
+them exactly as the engine does (``terms_per_unit``): the five per-meeting
+constraints add one term per (grain, room) cell — the sum of every assignment
+placed there, an empty cell (a constant 0) included — and the seven pair
+constraints, global in the engine, add one term: their total. A constraint
+picked several times adds one set of terms per pick, each with its own knobs.
 """
 
 from collections import Counter
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
+from itertools import chain
 from typing import Any, ClassVar
 
 from cpsat_plugins import ConstraintPlugin, ConstraintRegistry, ObjectiveBuilder
@@ -21,6 +30,19 @@ from ortools.sat.python import cp_model
 
 def _pairs(count: int) -> int:
     return count * (count - 1) // 2
+
+
+def _add_total(
+    objective: ObjectiveBuilder, name: str, terms: Iterable[tuple[Any, int]]
+) -> None:
+    """Add a global constraint's pieces as ONE term, its total (a 0 included)."""
+    pieces = []
+    bound = 0
+    for term, amount in terms:
+        if amount:
+            pieces.append(term)
+            bound += amount
+    objective.add(name, sum(pieces) if pieces else 0, bound=bound)
 
 
 @dataclass
@@ -104,20 +126,26 @@ class _UnaryPlugin(ConstraintPlugin[MeetingContext]):
             return last
         return context.larger_room_penalty[room]
 
-    def build_rule(
-        self, context: MeetingContext, objective: ObjectiveBuilder, rule: str
-    ) -> None:
-        for assignment in range(len(context.assignment_meetings)):
-            for grain, room in context.values:
+    terms_per_unit = True  # one term per (grain, room) cell, the engine's unit
+
+    def cell_terms(
+        self, context: MeetingContext, rule: str
+    ) -> Iterator[tuple[Any, int]]:
+        """``(term, bound)`` of every (grain, room) cell: the sum over the
+        assignments placed there (a constant 0 for a cell nobody can cost)."""
+        for grain, room in context.values:
+            pieces = []
+            bound = 0
+            for assignment in range(len(context.assignment_meetings)):
                 amount = self.amount(context, assignment, grain, room, rule)
-                objective.add(
-                    self.name,
-                    amount * context.x[assignment, grain, room],
-                    bound=abs(amount),
-                )
+                if amount:
+                    pieces.append(amount * context.x[assignment, grain, room])
+                    bound += abs(amount)
+            yield (sum(pieces) if pieces else 0), bound
 
     def build(self, context: MeetingContext, objective: ObjectiveBuilder) -> None:
-        self.build_rule(context, objective, self.rule)
+        for term, bound in self.cell_terms(context, self.rule):
+            objective.add(self.name, term, bound=bound)
 
 
 class OvertimeCost(domain.OvertimeCost, _UnaryPlugin):
@@ -161,9 +189,12 @@ class _PairPlugin(ConstraintPlugin[MeetingContext]):
         )
         return required, preferred, mixed, attendance
 
-    def build_rule(
-        self, context: MeetingContext, objective: ObjectiveBuilder, rule: str
-    ) -> None:
+    terms_per_unit = True  # global in the engine: one term, the total
+
+    def pair_terms(
+        self, context: MeetingContext, rule: str
+    ) -> Iterator[tuple[Any, int]]:
+        """``(term, bound)`` of every pair placement that costs something."""
         for left in range(len(context.assignment_meetings)):
             a = context.assignment_meetings[left]
             for right in range(left + 1, len(context.assignment_meetings)):
@@ -214,10 +245,10 @@ class _PairPlugin(ConstraintPlugin[MeetingContext]):
                             context.x[left, grain_a, room_a],
                             context.x[right, grain_b, room_b],
                         )
-                        objective.add(self.name, amount * both, bound=amount)
+                        yield amount * both, amount
 
     def build(self, context: MeetingContext, objective: ObjectiveBuilder) -> None:
-        self.build_rule(context, objective, self.rule)
+        _add_total(objective, self.name, self.pair_terms(context, self.rule))
 
 
 class RoomConflictCost(domain.RoomConflictCost, _PairPlugin):
@@ -230,8 +261,16 @@ class RequiredAttendanceConflictCost(
     rule = "required_self"
 
     def build(self, context: MeetingContext, objective: ObjectiveBuilder) -> None:
-        _UnaryPlugin.build_rule(self, context, objective, "required_self")
-        _PairPlugin.build_rule(self, context, objective, "required")
+        # Global in the engine: the self term of every placement and the pair
+        # terms make one total.
+        _add_total(
+            objective,
+            self.name,
+            chain(
+                self.cell_terms(context, "required_self"),
+                self.pair_terms(context, "required"),
+            ),
+        )
 
 
 class RequiredAndPreferredAttendanceConflictCost(
@@ -240,8 +279,16 @@ class RequiredAndPreferredAttendanceConflictCost(
     rule = "mixed_self"
 
     def build(self, context: MeetingContext, objective: ObjectiveBuilder) -> None:
-        _UnaryPlugin.build_rule(self, context, objective, "mixed_self")
-        _PairPlugin.build_rule(self, context, objective, "mixed")
+        # Global in the engine: the self term of every placement and the pair
+        # terms make one total.
+        _add_total(
+            objective,
+            self.name,
+            chain(
+                self.cell_terms(context, "mixed_self"),
+                self.pair_terms(context, "mixed"),
+            ),
+        )
 
 
 class PreferredAttendanceConflictCost(
@@ -250,8 +297,16 @@ class PreferredAttendanceConflictCost(
     rule = "preferred_self"
 
     def build(self, context: MeetingContext, objective: ObjectiveBuilder) -> None:
-        _UnaryPlugin.build_rule(self, context, objective, "preferred_self")
-        _PairPlugin.build_rule(self, context, objective, "preferred")
+        # Global in the engine: the self term of every placement and the pair
+        # terms make one total.
+        _add_total(
+            objective,
+            self.name,
+            chain(
+                self.cell_terms(context, "preferred_self"),
+                self.pair_terms(context, "preferred"),
+            ),
+        )
 
 
 class ConsecutiveMeetingsCost(domain.ConsecutiveMeetingsCost, _PairPlugin):

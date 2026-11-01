@@ -21,6 +21,10 @@ from teacher_scheduling.solver.variables import TimetableVariables
 
 PenaltyTerms = dict[str, cp_model.LinearExpr]
 
+# A safe upper bound for the shaped term of a penalty count (the counts here
+# are far below it); CP-SAT needs one for the auxiliary variable.
+_SHAPED_BOUND = 10**9
+
 
 @dataclass(frozen=True)
 class DaySpan:
@@ -32,6 +36,33 @@ class DaySpan:
 
 def _sum_or_none(terms: list) -> cp_model.LinearExpr | None:
     return cp_model.LinearExpr.sum(terms) if terms else None
+
+
+def shaped(model: cp_model.CpModel, value, offset: int, clip: bool):
+    """The engine's shapeCost at exponent 1 of a non-negative penalty count ``value``.
+
+    ``clip`` (the threshold): ``max(0, value - offset)`` for an offset > 0,
+    ``value + |offset| * [value >= 1]`` for an offset < 0 (a 0 stays 0);
+    otherwise (the literal formula) ``value - offset``. Offset 0 returns
+    ``value`` itself. Exact on integral values and offsets; an int ``value``
+    (a unit no variable can reach) gives an int.
+    """
+    if offset == 0:
+        return value
+    if not clip:
+        return value - offset
+    if isinstance(value, int):
+        if value == 0:
+            return 0
+        return max(0, value - offset) if offset > 0 else value - offset
+    if offset > 0:
+        excess = model.new_int_var(0, _SHAPED_BOUND, "shaped")
+        model.add_max_equality(excess, [0, value - offset])
+        return excess
+    positive = model.new_bool_var("shaped_positive")
+    model.add(value >= 1).only_enforce_if(positive)
+    model.add(value <= 0).only_enforce_if(~positive)
+    return value + (-offset) * positive
 
 
 # ---------------------------------------------------------------- per-day shape
@@ -106,8 +137,13 @@ def _free_day_violations(variables: TimetableVariables, spans: dict[tuple[str, i
 
 def _period_preference_vars(variables: TimetableVariables, *, avoided: bool) -> list[cp_model.IntVar]:
     """avoided=True collects placements in avoided periods, False placements outside the preferred periods."""
+    return [var for slot_vars in _period_preference_by_slot(variables, avoided=avoided).values() for var in slot_vars]
+
+
+def _period_preference_by_slot(variables: TimetableVariables, *, avoided: bool) -> dict[object, list[cp_model.IntVar]]:
+    """The placements `_period_preference_vars` collects, grouped by their time slot."""
     problem = variables.problem
-    collected = []
+    collected: dict[object, list[cp_model.IntVar]] = {}
     for course in problem.courses:
         subject = problem.subject_by_id[course.subject_id]
         for slot in variables.allowed_slots[course.id]:
@@ -116,5 +152,14 @@ def _period_preference_vars(variables: TimetableVariables, *, avoided: bool) -> 
             else:
                 hit = bool(subject.preferred_periods) and slot.period not in subject.preferred_periods
             if hit:
-                collected.append(variables.x[course.id, slot])
+                collected.setdefault(slot, []).append(variables.x[course.id, slot])
     return collected
+
+
+def _period_preference_units(variables: TimetableVariables, *, avoided: bool) -> list:
+    """One penalty count per calendar slot (the engine's unit of the per-slot constraints),
+    every slot included: a slot nothing can be placed in is a constant 0."""
+    by_slot = _period_preference_by_slot(variables, avoided=avoided)
+    return [
+        cp_model.LinearExpr.sum(by_slot[slot]) if slot in by_slot else 0 for slot in variables.problem.calendar.slots
+    ]

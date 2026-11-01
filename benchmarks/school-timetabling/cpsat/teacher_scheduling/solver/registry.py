@@ -4,8 +4,9 @@ Each built-in constraint is a subclass of the engine's spec of the same
 constraint (`st_timetabling.constraints`): one name per constraint across the
 engine, this CP-SAT reference, the server and the timetable penalties
 (`unassigned_lessons_cost`, `class_conflict_cost`, ... `parallel_groups_cost`),
-and the same three knobs, ``(weight=None, hard=None, exponent=1.0)``. The
-defaults (level, weight, flippability) are the engine's — read from
+and the same five knobs, ``(weight=None, hard=None, exponent=1.0, *,
+offset=0.0, clip=True)``. The defaults (level, weight, flippability) are the
+engine's — read from
 `st_timetabling.constraint_info()`, the C++ components' kDefaultLevel /
 kDefaultWeight — never restated here.
 
@@ -39,6 +40,19 @@ The knobs on the CP-SAT path:
                flippable (the engine refuses it too).
 - ``exponent`` only 1.0 (a documented CP-SAT limitation: the objective is
                linear).
+- ``offset`` / ``clip``  an integral offset on a SOFT constraint, shaped as the
+               engine shapes it: the one total of a global constraint, or each
+               calendar slot of `avoided_period_cost` / `non_preferred_period_cost`
+               (every slot, an empty one included — the literal formula charges
+               it). ``clip=True`` counts only what lies beyond the offset,
+               ``clip=False`` shifts the penalty as it is. A hard constraint
+               (a model constraint here) and a fractional offset refuse a
+               non-zero offset.
+
+A constraint may be listed several times in `solve(constraints=...)`: each
+entry is its own instance with its own knobs, adding its own objective term
+(``Timetable.penalties`` reports each name's raw count once). `merge` keeps
+its replace-by-name semantics, like the engine's `Assembly`.
 
 A custom constraint without `weight` is looked up with
 `ObjectiveWeights.weight_for(name)`, and defaults to 1 if not found there
@@ -103,6 +117,8 @@ class _EnginePlugin:
     weight: float | None
     hard: bool | None
     exponent: float
+    offset: float
+    clip: bool
 
     @property
     def default_level(self) -> str:
@@ -131,15 +147,46 @@ class _EnginePlugin:
             raise ValueError(f"constraint {self.name!r}: CP-SAT needs an integer weight, not {weight!r}")
         return int(weight)
 
+    @property
+    def effective_offset(self) -> int:
+        """The offset, integral on CP-SAT (the objective is)."""
+        if not float(self.offset).is_integer():
+            raise ValueError(f"constraint {self.name!r} offset must be an integer for CP-SAT")
+        return int(self.offset)
+
     def build(self, model: cp_model.CpModel, variables: TimetableVariables) -> cp_model.LinearExpr | None:
         if self.exponent != 1.0:
             raise ValueError(f"constraint {self.name!r}: exponent {self.exponent!r} is not supported by CP-SAT")
         level, weight = self.level, self.effective_weight
+        if self.effective_offset != 0 and level == "hard":
+            raise ValueError(
+                f"constraint {self.name!r} offset is not supported by this CP-SAT model on the hard level "
+                "(a hard constraint is a model constraint here)"
+            )
         if level == "hard":
             if weight == 0:
                 return None  # a zero weight switches the constraint off
             return self._build_hard(model, variables)
         return self._build_soft(model, variables)
+
+    def objective_term(
+        self, model: cp_model.CpModel, variables: TimetableVariables, penalty: cp_model.LinearExpr
+    ) -> cp_model.LinearExpr | int:
+        """The term the objective weighs: ``penalty`` shaped by the offset / clip.
+
+        A global constraint shapes its one total; a per-slot one
+        (`_unit_expressions`) shapes each calendar slot and sums them."""
+        offset = self.effective_offset
+        if offset == 0:
+            return penalty
+        units = self._unit_expressions(model, variables)
+        if units is None:
+            return objective.shaped(model, penalty, offset, self.clip)
+        return sum(objective.shaped(model, unit, offset, self.clip) for unit in units)
+
+    def _unit_expressions(self, model: cp_model.CpModel, variables: TimetableVariables) -> list | None:
+        """The engine units' penalties of a per-slot constraint; None = a global one (the total)."""
+        return None
 
     def _build_hard(self, model: cp_model.CpModel, variables: TimetableVariables) -> None:  # pragma: no cover
         raise NotImplementedError
@@ -304,17 +351,23 @@ class ClassGapCost(domain.ClassGapCost, _Penalty):
 
 
 class AvoidedPeriodCost(domain.AvoidedPeriodCost, _Penalty):
-    """Lessons placed in a subject's avoided periods."""
+    """Lessons placed in a subject's avoided periods (a per-slot constraint in the engine)."""
 
     def _expression(self, model: cp_model.CpModel, variables: TimetableVariables) -> cp_model.LinearExpr | None:
         return objective._sum_or_none(objective._period_preference_vars(variables, avoided=True))
 
+    def _unit_expressions(self, model: cp_model.CpModel, variables: TimetableVariables) -> list:
+        return objective._period_preference_units(variables, avoided=True)
+
 
 class NonPreferredPeriodCost(domain.NonPreferredPeriodCost, _Penalty):
-    """Lessons placed outside a subject's preferred periods."""
+    """Lessons placed outside a subject's preferred periods (a per-slot constraint in the engine)."""
 
     def _expression(self, model: cp_model.CpModel, variables: TimetableVariables) -> cp_model.LinearExpr | None:
         return objective._sum_or_none(objective._period_preference_vars(variables, avoided=False))
+
+    def _unit_expressions(self, model: cp_model.CpModel, variables: TimetableVariables) -> list:
+        return objective._period_preference_units(variables, avoided=False)
 
 
 # ---------------------------------------------------------------- catalog
@@ -442,17 +495,40 @@ def weight_of(constraint: Constraint, weights: ObjectiveWeights) -> int:
     return weights.weight_for(constraint.name) if own is None else own
 
 
+def instance_keys(constraints: Iterable[Constraint]) -> list[str]:
+    """Each entry's key: its name, ``"<name>#<k>"`` for the k-th entry of a name (the engine's
+    constraint_costs() key rule)."""
+    seen: dict[str, int] = {}
+    keys = []
+    for constraint in constraints:
+        count = seen[constraint.name] = seen.get(constraint.name, 0) + 1
+        keys.append(constraint.name if count == 1 else f"{constraint.name}#{count}")
+    return keys
+
+
+def objective_term(
+    constraint: Constraint, model: cp_model.CpModel, variables: TimetableVariables, penalty: cp_model.LinearExpr
+) -> cp_model.LinearExpr | int:
+    """The term the objective weighs for one entry: a built-in constraint's offset-shaped penalty,
+    a custom one's penalty as it is."""
+    if isinstance(constraint, _EnginePlugin):
+        return constraint.objective_term(model, variables, penalty)
+    return penalty
+
+
 def build_all(
     model: cp_model.CpModel,
     variables: TimetableVariables,
     constraints: Iterable[Constraint],
 ) -> objective.PenaltyTerms:
-    """Assembles the constraints in order and collects, by name, the ones that returned a penalty expression."""
+    """Assembles the constraints in order and collects the ones that returned a penalty expression,
+    keyed like `instance_keys` (a constraint listed twice adds two entries)."""
+    constraints = list(constraints)
     penalties: objective.PenaltyTerms = {}
-    for constraint in constraints:
+    for key, constraint in zip(instance_keys(constraints), constraints, strict=True):
         expr = constraint.build(model, variables)
         if expr is not None:
-            penalties[constraint.name] = expr
+            penalties[key] = expr
     return penalties
 
 
@@ -484,6 +560,8 @@ __all__ = [
     "build_all",
     "constraint_specs",
     "default_constraints",
+    "instance_keys",
     "merge",
+    "objective_term",
     "weight_of",
 ]

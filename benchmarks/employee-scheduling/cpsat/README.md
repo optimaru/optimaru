@@ -63,12 +63,26 @@ fixed-point root, in five of six with `ssd / 2` and that term kept, and in one o
 four as it stands. The model has 51,657 variables on `large`, and presolve takes
 about 5.5 of the 30 seconds.
 
+## Repeated rules
+
+A rule may be listed several times (since 0.3.0 with the same parameters too):
+`registry_for` makes one plugin per entry, the k-th repeat named `"<name>#<k>"`, and
+each adds its own terms with its own knobs, as the engine adds one component per pick.
+
 ## Not modelled
 
 These are refused with a `ValueError`, not approximated:
 
 - `exponent` other than 1. It shapes a cost non-linearly, per unit.
-- A fractional `weight`, as in every CP-SAT backend here.
+- A fractional `weight`, as in every CP-SAT backend here, and a fractional `offset`.
+- An `offset` on a rule whose terms are not one per employee (runs, windows, pairs,
+  weeks, the imbalance surrogates). The engine shapes each employee's cost (or a global
+  rule's total) on its own, which only the per-employee plugins reproduce:
+  `required_skill_cost`, `employee_unavailability_cost`, `undesired_day_cost`,
+  `desired_day_cost` (one term per evaluated employee, a worker scope's in-range ones,
+  a 0 included) and `unassigned_shifts_cost` (its total). On the soft level the offset
+  moves to the `SCALE` grid with the term (`solve.selection`). Every other rule refuses
+  an offset with "offset is not supported by this CP-SAT model".
 - `assignment_cost`, `shift_count_imbalance_cost`, `weekly_minutes_gap_cost` and
   `location_imbalance_cost` with `metric="ssd"` at the hard level, even if this
   request's values are whole. Only the soft level has a fixed-point grid, and the engine

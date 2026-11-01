@@ -141,28 +141,36 @@ calc = DecomposedCalculator(rules)
 Solver(config).solve(schedule, calc)       # search AND final score use these rules
 ```
 
-Every rule takes the same three knobs, plus its own options:
+Every rule takes the same five knobs, plus its own options:
 
 | knob | meaning |
 |---|---|
 | `weight=None` | how much one unit of violation hurts; `None` is the rule's default weight (1 for every rule here), `UndesiredDayCost(weight=2.0)` hurts twice as much |
 | `hard=None` | `True` makes it a must (hard), `False` a nice-to-have (soft), `None` keeps the rule's default level; a reward refuses `True` |
 | `exponent=1.0` | `2.0` squares each person's violation, so one person suffering a lot is much worse than many suffering a little |
+| `offset=0.0` | (keyword) shifts that shaping per person (a global rule: its total); `UndesiredDayCost(offset=120)` counts only the undesired minutes beyond two hours |
+| `clip=True` | (keyword) `True` counts only what lies beyond the offset, `max(0, c - offset) ** exponent`; `False` shapes `c - offset` as it is, so everyone the rule evaluates below the offset lowers the penalty (a worker-scoped rule evaluates its workers only) |
 
 The defaults are declared once, in the C++ components (`kDefaultWeight` /
 `kDefaultLevel`); `es.constraint_info()` reports them, one
 `ConstraintInfo(name, default_level, default_weight, level_flippable, reward,
 default_enabled)` per rule, the eight defaults first.
 
-A rule may be picked **several times** with different options (two day patterns,
-one cap per worker group): each instance is scored on its own,
-`constraint_totals()` tells them apart by `label` (`"Day pattern[A,OFF,B]"`), and
-`constraint_costs()` keys the second instance `"day_pattern_cost#2"`. The same
-rule with the same options twice (the knobs alone do not make another
-instance), or an empty list, is an error: `get_constraints()`,
+A rule may be picked **several times**, with different options (two day patterns,
+one cap per worker group), other knobs (`x**2 + x**3` is two picks, `exponent=2`
+and `exponent=3`) or the same ones (identical picks simply count twice): each
+instance is scored on its own, `constraint_totals()` tells them apart by `label`
+(`"Day pattern[A,OFF,B]"`), and `constraint_costs()` keys the second instance
+`"day_pattern_cost#2"`. An empty list is an error: `get_constraints()`,
 `SchedulingInput.rules`, `DecomposedCalculator(list)` and
 `constraint_costs(schedule, list)` all refuse it. `DecomposedCalculator()` plus
-`add(...)` builds a calculator incrementally and does not check.
+`add(...)` builds a calculator incrementally (`add` takes the same knobs,
+`offset` / `clip` as keywords).
+
+**0.3.0:** the "same rule with the same options twice" refusal is gone (every pick is
+an instance), and every rule takes `offset` / `clip` (also in the JSON rule models:
+`{"name": "undesired_day_cost", "offset": 120, "clip": false}`); `offset=0` is the
+0.2.0 shaping, so existing rule lists score exactly as before.
 
 **Scope.** Every per-employee rule also takes `worker_indices` / `shift_indices`
 (engine indices; `None` = everyone): `MaxConsecutiveDaysCost(value=4,

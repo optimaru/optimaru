@@ -352,13 +352,15 @@ class canon:
         table: canon.Timetable, constraints: Iterable[canon.ConstraintSpec] | None = None
     ) -> dict[str, dict[str, Any]]:
         """Raw per-unit cost of every default constraint (or of the picked ones),
-        before weight/exponent/level, in list_constraints() order:
-        {name: {"costs": [...], "weight": float, "exponent": float, "hard": bool,
-        "global": bool, "level": "hard" | "medium" | "soft", "reward": bool,
-        "level_flippable": bool, "name": str, "label": str}}. "costs" holds one
-        value per slot for the per-slot constraints, one total for the others.
-        `st_timetabling.constraints.score(costs, selection)` turns it into the
-        engine score of any selection."""
+        before weight/exponent/offset/level, in list_constraints() order:
+        {key: {"costs": [...], "weight": float, "exponent": float, "offset": float,
+        "clip": bool, "hard": bool, "global": bool, "level": "hard" | "medium" |
+        "soft", "reward": bool, "level_flippable": bool, "name": str, "label": str,
+        "default_weight": float, "default_level": str}}. "costs" holds one value per
+        slot for the per-slot constraints, one total for the others. A name picked
+        several times is keyed "<name>#<k>" from its second pick on, next to its
+        first. `st_timetabling.constraints.score(costs, selection)` turns it into
+        the engine score of any selection."""
 
     class ConstraintSpec(Protocol):
         """Constraint-pick duck type: the `Constraint` specs of
@@ -411,9 +413,11 @@ class canon:
         def __init__(self) -> None: ...
         @overload
         def __init__(self, constraints: Iterable[canon.ConstraintSpec] | None) -> None:
-            """Duck-typed picks (`.name`/`.weight`/`.hard`/`.exponent`); None = the
-            default set. The picks replace the defaults; an empty list or a name
-            picked twice raises ValueError, a wrong knob type TypeError."""
+            """Duck-typed picks (`.name`/`.weight`/`.hard`/`.exponent`, optionally
+            `.offset`/`.clip`); None = the default set. The picks replace the
+            defaults; a name may be picked several times (each pick its own
+            instance with its own knobs, and the instances add up). An empty
+            list raises ValueError, a wrong knob type TypeError."""
 
         def add(
             self,
@@ -421,6 +425,9 @@ class canon:
             weight: float | None = None,
             hard: bool | None = None,
             exponent: float = 1.0,
+            *,
+            offset: float = 0.0,
+            clip: bool = True,
         ) -> None:
             """Adds one canonical constraint by name (`CONSTRAINT_NAMES`).
 
@@ -430,6 +437,10 @@ class canon:
                       (fixed_slots_cost / parallel_groups_cost refuse False).
             exponent: sign-preserving power shaping:
                       contribution = weight * sign(c)*|c|^exponent.
+            offset:   (keyword) shifts that shaping (0.0 = none): with clip=True
+                      (the default) weight * sign(c)*max(0, |c| - offset)^exponent,
+                      with clip=False weight * (c - offset)^exponent (sign-
+                      preserving; every slot of a per-slot constraint is charged).
             Unknown names raise ValueError. Adding a name twice is allowed (the
             costs add up)."""
 

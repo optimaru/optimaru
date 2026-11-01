@@ -234,26 +234,31 @@ class DecomposedCalculator:
     or incrementally by name via :meth:`add`. The eight defaults at their
     default weights (see :func:`default_calculator`) reproduce
     :func:`calculate_score` exactly. A constraint may be added several times
-    (other parameters or scope); each instance is scored on its own.
+    (other parameters, scope or knobs, or the same ones); each instance is
+    scored on its own with its own knobs, and the instances add up.
     """
     @overload
     def __init__(self) -> None: ...
     @overload
     def __init__(self, constraints: Iterable[ConstraintSpec]) -> None:
         """Duck-typed: each item only needs `.name`, `.weight`, `.hard`,
-        `.exponent` (plus an optional `params()`) — the `Constraint`
-        dataclasses and the pydantic rule models both qualify. Raises
+        `.exponent` (plus an optional `.offset` / `.clip` and `params()`) —
+        the `Constraint` dataclasses and the pydantic rule models both
+        qualify. A name may be picked several times: each pick is its own
+        instance with its own knobs, and the instances add up. Raises
         ValueError for an empty list (use ``DecomposedCalculator()`` and
-        ``add()`` to start empty), the same rule with the same parameters
-        twice, an unknown name, a reward made hard, a scope on a global rule
-        other than shift_coverage_cost, or an invalid knob value, and
-        TypeError for a knob of the wrong type."""
+        ``add()`` to start empty), an unknown name, a reward made hard, a
+        scope on a global rule other than shift_coverage_cost, or an invalid
+        knob value, and TypeError for a knob of the wrong type."""
     def add(
         self,
         name: str,
         weight: float | None = None,
         hard: bool | None = None,
         exponent: float = 1.0,
+        *,
+        offset: float = 0.0,
+        clip: bool = True,
         **params: object,
     ) -> None:
         """Add a built-in constraint (see `CONSTRAINT_NAMES`).
@@ -271,13 +276,22 @@ class DecomposedCalculator:
                   employee become disproportionately expensive. Shaping is
                   applied on top of the incrementally maintained raw cost, so
                   it does not slow the search down.
+        offset:   (keyword) shifts that shaping, any finite number (0.0 =
+                  none). With ``clip=True`` (the default) only what lies
+                  beyond it counts: ``sign(c) * max(0, abs(c) - offset) **
+                  exponent``; with ``clip=False`` the literal ``(c - offset)
+                  ** exponent`` (sign-preserving), which charges every
+                  employee the rule evaluates, a raw 0 included (a worker
+                  scope evaluates its employees only), and rewards below the
+                  offset.
         params:    constraint-specific options such as
                   ``pattern="Location A,OFF,Location B"`` or ``value=6``, and the
                   scope ``worker_indices`` / ``shift_indices``.
 
-        The same checks as a spec pick: ValueError for an unknown name or a
-        refused level, TypeError for a knob of the wrong type. Duplicates are
-        allowed (their costs add up).
+        The same checks as a spec pick: ValueError for an unknown name, a
+        refused level or an invalid knob value, TypeError for a knob of the
+        wrong type. Duplicates are allowed (each call is its own instance;
+        their costs add up).
         """
     def score(self, schedule: EmployeeSchedule) -> Score:
         """Score `schedule`'s current assignment with this assembly (also
@@ -298,17 +312,22 @@ def constraint_costs(
     schedule: EmployeeSchedule, constraints: Iterable[ConstraintSpec] | None = None
 ) -> dict[str, dict[str, Any]]:
     """Raw per-employee cost of every constraint instance, before
-    weight/exponent/level: {key: {"costs": [...], "weight": float, "exponent":
-    float, "hard": bool, "global": bool, "level": "hard" | "medium" | "soft",
-    "reward": bool, "level_flippable": bool, "name": str, "label": str}}.
+    weight/exponent/offset/level: {key: {"costs": [...], "weight": float,
+    "exponent": float, "offset": float, "clip": bool, "hard": bool, "global":
+    bool, "level": "hard" | "medium" | "soft", "reward": bool,
+    "level_flippable": bool, "name": str, "label": str, "default_weight":
+    float, "default_level": str[, "units": [...]]}}.
 
     ``constraints`` None = the eight defaults; otherwise the picks, built by
     the same factory as :class:`DecomposedCalculator` (an empty list raises
     ValueError). The key is the Python name, ``"<name>#<k>"`` for the k-th
     instance of a name picked more than once; ``name`` is always the plain
     name and ``label`` the instance's display text. A global constraint
-    reports its single total as a one-element list. Feed the result to
-    ``es_scheduling.constraints.score`` with the same list to re-price it."""
+    reports its single total as a one-element list. A worker-scoped rule
+    carries ``"units"``, the employee indices it evaluates (ascending, in
+    range, each once): the literal offset formula charges those and no
+    other. Feed the result to ``es_scheduling.constraints.score`` with the
+    same list to re-price it."""
 
 class ConstraintInfo(NamedTuple):
     """One constraint-catalog row, read off the C++ default and catalog assemblies."""

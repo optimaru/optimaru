@@ -1,6 +1,7 @@
 import random
 import typing
 from collections import Counter
+from itertools import product
 
 import pytest
 import es_scheduling
@@ -23,8 +24,7 @@ DAY = 24 * 60
 # appear more than once where a parameter switches to another code path.
 RULES = [
     domain.RequiredSkillCost(),
-    # A second instance needs other parameters (the same rule with the same
-    # parameters twice is refused): a scoped, demoted copy.
+    # A second instance: a scoped, demoted copy.
     domain.RequiredSkillCost(weight=3, hard=False, worker_indices=(0, 1)),
     domain.EmployeeUnavailabilityCost(),
     domain.ShiftOverlapCost(),
@@ -205,7 +205,13 @@ def test_cpsat_defaults_are_the_engine_defaults() -> None:
         assert entry["reward"] == row.reward
         assert entry["default_enabled"] == row.default_enabled
         assert entry["kind"] == ("either" if row.level_flippable else row.default_level)
-        assert entry["params"] == {"weight": None, "hard": None, "exponent": 1.0}
+        assert entry["params"] == {
+            "weight": None,
+            "hard": None,
+            "exponent": 1.0,
+            "offset": 0.0,
+            "clip": True,
+        }
     assert [row.name for row in engine if row.default_enabled] == [
         spec.name for spec in domain.get_constraints()
     ]
@@ -365,3 +371,154 @@ def test_what_cannot_be_modelled_is_refused() -> None:
     pinned.model_input.shifts[0].pinned = True
     with pytest.raises(ValueError, match="pinned"):
         solve(pinned)
+
+
+# --- 0.3.0: repeated picks and offset / clip ---------------------------------------
+
+# The plugins that add one term per engine unit (an employee, or the total of
+# unassigned_shifts_cost), so they take offsets; at values that bind on `_problem`.
+SHIFTED = [
+    domain.RequiredSkillCost(offset=1, clip=False),
+    domain.RequiredSkillCost(weight=2, offset=-1),
+    domain.EmployeeUnavailabilityCost(offset=60),
+    domain.UndesiredDayCost(offset=100, clip=False),
+    domain.UndesiredDayCost(offset=-30, per_day=True),
+    domain.UndesiredDayCost(offset=30, worker_indices=(0, 2, 2, 9), clip=False),
+    domain.DesiredDayCost(offset=200),
+    domain.DesiredDayCost(offset=100, clip=False, shift_indices=tuple(range(0, 24, 3))),
+    domain.UnassignedShiftsCost(offset=2, clip=False),
+    domain.UnassignedShiftsCost(weight=3, offset=1, hard=False),
+]
+
+
+def _engine_scaled(problem: ScheduleRequest, fixed: list[int | None]) -> dict[str, int]:
+    """The engine's score under `fixed`, soft on the model's SCALE grid (integral here)."""
+    expected = constraint_costs(_with_workers(problem, fixed))
+    soft = SCALE * expected["soft"]
+    assert soft == round(soft)
+    return {"hard": expected["hard"], "soft": round(soft)}
+
+
+@pytest.mark.parametrize("seed", range(4))
+@pytest.mark.parametrize("rule", SHIFTED, ids=lambda item: repr(item)[:80])
+def test_a_shifted_rule_matches_the_engine_on_a_fixed_roster(rule, seed) -> None:
+    """offset / clip shape each employee's term (or the total) exactly as the engine does."""
+    problem = _problem([rule], seed)
+    fixed = _stacked_roster(problem, seed)
+    proxy: dict[str, int] = {}
+    solve(problem, time_limit_seconds=5, _fixed_workers=fixed, _proxy_score=proxy)
+    assert proxy == _engine_scaled(problem, fixed)
+
+
+@pytest.mark.parametrize("seed", range(4))
+def test_repeated_and_shifted_rules_at_once_match_the_engine(seed) -> None:
+    rules = [
+        domain.RequiredSkillCost(),
+        domain.RequiredSkillCost(),  # identical: counts twice
+        *SHIFTED,
+        domain.UndesiredDayCost(),
+        domain.UndesiredDayCost(weight=2),  # the same rule again, other knobs
+        domain.MaxConsecutiveDaysCost(value=2),
+        domain.MaxConsecutiveDaysCost(value=2),
+    ]
+    problem = _problem(rules, seed)
+    fixed = _stacked_roster(problem, seed)
+    proxy: dict[str, int] = {}
+    solve(problem, time_limit_seconds=5, _fixed_workers=fixed, _proxy_score=proxy)
+    assert proxy == _engine_scaled(problem, fixed)
+    assert [plugin.name for plugin in registry_for(rules).plugins][:2] == [
+        "required_skill_cost",
+        "required_skill_cost#2",
+    ]
+
+
+def _tiny(rules: list) -> ScheduleRequest:
+    """Two workers and three shifts (one on each worker's undesired day): 3^3 rosters."""
+    workers = [
+        WorkerModel(
+            id="Worker 0", skills=["Skill A"], undesired_dates=[0], desired_dates=[2]
+        ),
+        WorkerModel(id="Worker 1", skills=["Skill B"], undesired_dates=[1]),
+    ]
+    shifts = [
+        ShiftModel(
+            id=f"Shift {day}",
+            start=day * DAY + 8 * 60,
+            end=day * DAY + 16 * 60,
+            required_skill=skill,
+        )
+        for day, skill in ((0, "Skill A"), (1, "Skill A"), (2, "Skill B"))
+    ]
+    return ScheduleRequest(
+        model_input=SchedulingInput(workers=workers, shifts=shifts, rules=rules)
+    )
+
+
+TINY = {
+    "repeat": [
+        domain.RequiredSkillCost(),
+        domain.RequiredSkillCost(),
+        domain.UndesiredDayCost(),
+    ],
+    "shifted": [
+        domain.RequiredSkillCost(offset=1, clip=False),
+        domain.UndesiredDayCost(offset=400),
+        domain.UndesiredDayCost(weight=2, offset=-60, clip=False),
+        domain.DesiredDayCost(offset=100, clip=False),
+        domain.UnassignedShiftsCost(weight=1000, offset=1, hard=False),
+    ],
+}
+
+
+@pytest.mark.parametrize("rules", list(TINY.values()), ids=list(TINY))
+def test_repeated_and_shifted_rules_reach_the_brute_force_optimum(rules) -> None:
+    problem = _tiny(rules)
+    workers = range(len(problem.model_input.workers))
+    may_stay_empty = any(rule.name == "unassigned_shifts_cost" for rule in rules)
+    choices = [*workers, None] if may_stay_empty else list(workers)
+    scores = (
+        constraint_costs(_with_workers(problem, list(fixed)))
+        for fixed in product(choices, repeat=len(problem.model_input.shifts))
+    )
+    best = max((costs["hard"], costs["soft"]) for costs in scores)
+    solved = solve(problem, time_limit_seconds=5)
+    found = constraint_costs(solved)
+    assert (found["hard"], found["soft"]) == pytest.approx(best)
+
+
+def test_json_rules_repeat_and_shift_like_specs() -> None:
+    """The server's {name, weight, offset, clip} rules pick the same instances as specs."""
+    specs = [
+        domain.UndesiredDayCost(),
+        domain.UndesiredDayCost(weight=3, offset=40, clip=False),
+    ]
+    dicts = [
+        {"name": "undesired_day_cost"},
+        {"name": "undesired_day_cost", "weight": 3, "offset": 40, "clip": False},
+    ]
+    by_spec = solve(_tiny(specs), time_limit_seconds=5)
+    by_dict = solve(_tiny(dicts), time_limit_seconds=5)
+    assert [shift.worker for shift in by_dict.model_input.shifts] == [
+        shift.worker for shift in by_spec.model_input.shifts
+    ]
+    assert constraint_costs(by_dict)["soft"] == constraint_costs(by_spec)["soft"]
+
+
+def test_an_offset_cpsat_cannot_shape_is_refused() -> None:
+    with pytest.raises(ValueError, match="offset must be an integer for CP-SAT"):
+        solve(_problem([domain.UndesiredDayCost(offset=0.5)]), time_limit_seconds=1)
+    # A rule whose terms are runs, not employees, takes no offset on this model.
+    with pytest.raises(
+        ValueError, match="offset is not supported by this CP-SAT model"
+    ):
+        solve(
+            _problem([domain.MaxConsecutiveDaysCost(value=2, offset=1)]),
+            time_limit_seconds=1,
+        )
+    assert {name for name, plugin in PLUGINS.items() if plugin.terms_per_unit} == {
+        "required_skill_cost",
+        "employee_unavailability_cost",
+        "undesired_day_cost",
+        "desired_day_cost",
+        "unassigned_shifts_cost",
+    }

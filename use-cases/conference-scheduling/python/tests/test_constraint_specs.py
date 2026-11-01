@@ -2,7 +2,7 @@
 
 Spot checks of individual constraint values live in `test_constraints.py`. This
 file covers the selection path that picks "which constraints are on", the catalog
-(`constraint_info()`) and the three knobs.
+(`constraint_info()`), the five knobs and repeated picks.
 """
 
 import pickle
@@ -19,6 +19,7 @@ from conference_scheduling.constraints import (
     ContentConflictCost,
     LanguageDiversityCost,
     RoomConflictCost,
+    SpeakerMakespanCost,
     content_conflict_cost,
     get_constraints,
     room_conflict_cost,
@@ -207,16 +208,15 @@ def test_empty_constraint_list_is_rejected():
         cs.solve(build_schedule(), time_limit_seconds=0.2, constraints=[])
 
 
-def test_naming_a_constraint_twice_is_rejected():
-    """The later pick must not silently win: state each constraint once."""
-    with pytest.raises(ValueError, match="picked more than once"):
-        cs.solve(
-            build_schedule(),
-            time_limit_seconds=0.2,
-            constraints=[room_conflict_cost, RoomConflictCost(weight=10)],
-        )
-    with pytest.raises(ValueError, match="picked more than once"):
-        get_constraints([room_conflict_cost, room_conflict_cost])
+def test_naming_a_constraint_twice_scores_both_picks():
+    """Since 0.3.0 a constraint may be picked several times: each pick is scored on its own.
+
+    The later pick no longer wins in silence, nor is it an error: both are
+    instances with their own knobs, and they add up."""
+    picks = [RoomConflictCost(), RoomConflictCost(weight=10)]
+    solved = _pinned_solve(_three_talks(), picks)
+    assert solved.score.hard == -(1000 + 10) * 60  # one 60-minute room conflict, both picks
+    assert get_constraints([RoomConflictCost(), RoomConflictCost()]) == [RoomConflictCost(), RoomConflictCost()]
 
 
 def test_spec_subclass_must_name_a_constraint():
@@ -373,9 +373,16 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     """The C++ side guards too: a duck-typed pick cannot smuggle a negative weight in."""
     negative = SimpleNamespace(name="content_conflict_cost", weight=-2.0, hard=None, exponent=1.0)
     flat = SimpleNamespace(name="content_conflict_cost", weight=None, hard=None, exponent=0.0)
-    for pick, message in ((negative, "weight must be finite and >= 0"), (flat, "exponent must be finite and > 0")):
+    unbounded = SimpleNamespace(name="content_conflict_cost", weight=None, hard=None, exponent=1.0, offset=float("inf"))
+    for pick, message in (
+        (negative, "weight must be finite and >= 0"),
+        (flat, "exponent must be finite and > 0"),
+        (unbounded, "offset must be finite, not inf"),
+    ):
         with pytest.raises(ValueError, match=message):
             cs.solve(build_schedule(), time_limit_seconds=0.1, constraints=[pick])
+    with pytest.raises(ValueError, match="offset must be finite, not nan"):
+        ContentConflictCost(offset=float("nan"))
 
 
 @pytest.mark.parametrize(
@@ -386,6 +393,10 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
         ({"hard": 1}, "hard must be True, False or None, not 1"),
         ({"hard": "x"}, "hard must be True, False or None, not 'x'"),
         ({"exponent": True}, "exponent must be a number, not True"),
+        ({"offset": "5"}, "offset must be a number, not '5'"),
+        ({"offset": False}, "offset must be a number, not False"),
+        ({"clip": 1}, "clip must be True or False, not 1"),
+        ({"clip": "no"}, "clip must be True or False, not 'no'"),
     ],
 )
 def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
@@ -508,6 +519,14 @@ def test_score_reproduces_the_engine_score_exactly():
         [RoomConflictCost(hard=False), talk_type_incompatibility_cost, content_conflict_cost],
         [*HARD_PICKS, ContentConflictCost(exponent=2.0), AudienceTypeDiversityCost(exponent=0.5)],
         [RoomConflictCost(exponent=1.5, weight=0.5), constraints.SpeakerMakespanCost(hard=True)],
+        [*HARD_PICKS, ContentConflictCost(), ContentConflictCost(weight=0.5, exponent=2.0)],
+        [*HARD_PICKS, ContentConflictCost(offset=30.0), ContentConflictCost(offset=-20.0, clip=False)],
+        [
+            *HARD_PICKS,
+            RoomConflictCost(offset=10.0, clip=False, weight=3),
+            LanguageDiversityCost(offset=50.0),
+            LanguageDiversityCost(offset=-30.0, clip=False, weight=2),
+        ],
     ],
 )
 def test_score_matches_the_engine_for_arbitrary_specs(specs):
@@ -557,3 +576,220 @@ def test_score_rejects_an_unknown_constraint_name():
 
     with pytest.raises(ValueError, match="unknown constraint"):
         score(raw, [Renamed()])
+
+
+# --- 0.3.0: repeated picks and the offset / clip knobs ------------------------------
+
+
+def _three_talks():
+    """A hand-calculated schedule (the cpp/test makeBase rooms and slots), every talk pinned.
+
+    A (speaker 0, content C) at s0 r0 and B (speaker 1, content C) at s1 r0: the
+    same 60 minutes in the same room, so room_conflict_cost 60 and
+    content_conflict_cost 60 (1 shared tag x 60). C (speaker 2, language "ko") at s0
+    r1 shares s0 with A ("en"): language_diversity_cost -60. Every other raw cost is 0.
+    """
+
+    def slot(sid, start, end):
+        return cs.Timeslot(id=sid, start_minute=start, end_minute=end, talk_types=[0])
+
+    schedule = cs.ConferenceSchedule(
+        name="hand",
+        talk_types=["B"],
+        timeslots=[
+            slot("s0", 540, 600),
+            slot("s1", 540, 600),
+            slot("s2", 570, 630),
+            slot("s3", 630, 690),
+        ],
+        rooms=[cs.Room("r0", capacity=100, talk_types=[0]), cs.Room("r1", capacity=200, talk_types=[0])],
+        speakers=[cs.Speaker(f"k{k}") for k in range(3)],
+        talks=[],
+    )
+    talks = []
+    for code, speaker, slot_index, room, extra in (
+        ("A", 0, 0, 0, {"content_tags": ["C"], "language": "en"}),
+        ("B", 1, 1, 0, {"content_tags": ["C"], "language": "en"}),
+        ("C", 2, 0, 1, {"language": "ko"}),
+    ):
+        talk = cs.Talk(code=code, speakers=[speaker], **extra)
+        talk.slot_room = schedule.slot_room_of(slot_index, room)
+        talk.pinned = True
+        talks.append(talk)
+    schedule.talks = talks
+    return schedule
+
+
+def _pinned_solve(schedule, picks):
+    """A zero-budget solve of a fully pinned schedule: the engine's score of exactly that assignment."""
+    config = cs.SolverConfig()
+    config.spent_limit_seconds = 0
+    before = schedule.assignment()
+    cs.Solver(config).solve_with_constraints(schedule, picks)
+    assert schedule.assignment() == before
+    return schedule
+
+
+def test_the_hand_schedule_raw_costs():
+    raw = {key: entry["costs"] for key, entry in cs.constraint_costs(_three_talks()).items()}
+    nonzero = {key: costs for key, costs in raw.items() if costs != [0.0]}
+    assert nonzero == {
+        "room_conflict_cost": [60.0],
+        "content_conflict_cost": [60.0],
+        "language_diversity_cost": [-60.0],
+    }
+
+
+REPEAT = [ContentConflictCost(), ContentConflictCost(weight=0.5, exponent=2)]
+
+
+def test_a_repeated_pick_by_hand():
+    """content conflict x 100 plus 0.5 x content conflict^2: 100 x 60 + 0.5 x 60^2 = 7800."""
+    raw = cs.constraint_costs(_three_talks(), REPEAT)
+    assert list(raw) == ["content_conflict_cost", "content_conflict_cost#2"]
+    first, second = raw.values()
+    assert first["costs"] == second["costs"] == [60.0]
+    assert (first["weight"], first["exponent"], second["weight"], second["exponent"]) == (100.0, 1.0, 0.5, 2.0)
+    assert first["name"] == second["name"] == "content_conflict_cost"
+    assert second["default_weight"] == 100.0
+    expected = (0, -(100 * 60 + 0.5 * 60**2))
+    assert expected == (0, -7800.0)
+    assert score(raw, REPEAT) == expected
+    # The default costs hold the name once; the second pick reads the same raw cost.
+    assert score(cs.constraint_costs(_three_talks()), REPEAT) == expected
+    engine = _pinned_solve(_three_talks(), REPEAT)
+    assert (engine.score.hard, engine.score.soft) == expected
+
+
+def test_identical_picks_count_twice():
+    picks = [RoomConflictCost(), RoomConflictCost()]
+    assert score(cs.constraint_costs(_three_talks()), picks) == (-120000, 0.0)
+    assert _pinned_solve(_three_talks(), picks).score.hard == -120000
+    assert list(cs.constraint_costs(_three_talks(), picks)) == ["room_conflict_cost", "room_conflict_cost#2"]
+
+
+def test_the_keys_follow_the_pick_order_of_each_name():
+    picks = [
+        ContentConflictCost(weight=1),
+        RoomConflictCost(),
+        ContentConflictCost(weight=2),
+        LanguageDiversityCost(),
+        ContentConflictCost(weight=3),
+    ]
+    raw = cs.constraint_costs(_three_talks(), picks)
+    assert {key: entry["weight"] for key, entry in raw.items()} == {
+        "room_conflict_cost": 1000.0,
+        "content_conflict_cost": 1.0,
+        "content_conflict_cost#2": 2.0,
+        "content_conflict_cost#3": 3.0,
+        "language_diversity_cost": 10.0,
+    }
+    assert score(raw, picks) == (-60000, -(6 * 60 - 10 * 60))
+    engine = _pinned_solve(_three_talks(), picks)
+    assert (engine.score.hard, engine.score.soft) == score(raw, picks)
+
+
+@pytest.mark.parametrize(
+    ("pick", "expected"),
+    [
+        # Every constraint is global: the offset shapes the one total (content 60, weight 100).
+        (ContentConflictCost(offset=20), (0, -100 * 40)),
+        (ContentConflictCost(offset=100), (0, 0.0)),
+        (ContentConflictCost(offset=100, clip=False), (0, -100 * (60 - 100))),  # a reward below 100
+        (ContentConflictCost(offset=10, exponent=2), (0, -100 * 50**2)),
+        (ContentConflictCost(offset=70, exponent=3, clip=False), (0, -100 * -(10**3))),
+        (ContentConflictCost(offset=-10), (0, -100 * 70)),  # a negative offset adds to a non-zero total
+        # A total of 0 (speaker_makespan_cost, weight 20): the literal formula charges it.
+        (SpeakerMakespanCost(offset=5), (0, 0.0)),
+        (SpeakerMakespanCost(offset=5, clip=False), (0, -20 * -5)),
+        (SpeakerMakespanCost(offset=-10), (0, 0.0)),  # the threshold keeps a 0 at 0
+        (SpeakerMakespanCost(offset=-10, clip=False), (0, -20 * 10)),
+        # Hard (room conflict 60, weight 1000), rounded once (the one total).
+        (RoomConflictCost(offset=10), (-1000 * 50, 0.0)),
+        (RoomConflictCost(offset=100, clip=False), (40000, 0.0)),  # a hard reward below 100
+        (RoomConflictCost(offset=59.5, clip=False, weight=3), (-2, 0.0)),  # 3 x 0.5 = 1.5 -> 2
+        # The reward (language diversity -60, weight 10): a threshold rewards only beyond the
+        # offset, a literal one shifts it further.
+        (LanguageDiversityCost(offset=20), (0, 10 * 40)),
+        (LanguageDiversityCost(offset=20, clip=False), (0, 10 * 80)),
+        (LanguageDiversityCost(offset=-20, clip=False), (0, 10 * 40)),
+        (LanguageDiversityCost(offset=-20), (0, 10 * 80)),
+    ],
+)
+def test_offsets_by_hand_on_both_paths(pick, expected):
+    """threshold sign(x) max(0, |x| - offset)^e and literal (x - offset)^e: Python mirror == engine == hand."""
+    assert score(cs.constraint_costs(_three_talks()), [pick]) == expected
+    raw = cs.constraint_costs(_three_talks(), [pick])
+    entry = next(iter(raw.values()))
+    assert (entry["offset"], entry["clip"]) == (float(pick.offset), pick.clip)
+    assert "units" not in entry  # every constraint here is global
+    assert score(raw, [pick]) == expected
+    engine = _pinned_solve(_three_talks(), [pick])
+    assert (engine.score.hard, engine.score.soft) == expected
+
+
+def test_a_second_reward_pick_still_refuses_hard():
+    with pytest.raises(ValueError, match="is a reward"):
+        _pinned_solve(_three_talks(), [LanguageDiversityCost(), LanguageDiversityCost(hard=True)])
+    with pytest.raises(ValueError, match="is a reward"):
+        score(cs.constraint_costs(_three_talks()), [LanguageDiversityCost(), LanguageDiversityCost(hard=True)])
+
+
+def test_offset_zero_reproduces_the_0_2_0_scores():
+    """offset 0 is the plain shaping in both modes, so every 0.2.0 selection scores the same."""
+    plain = [*HARD_PICKS, ContentConflictCost(exponent=2), LanguageDiversityCost()]
+    shifted = [
+        *HARD_PICKS[:2],
+        RoomConflictCost(offset=0.0, clip=False),
+        HARD_PICKS[3],
+        ContentConflictCost(exponent=2, offset=0),
+        LanguageDiversityCost(offset=0.0, clip=False),
+    ]
+    schedule = _solved()
+    raw = cs.constraint_costs(schedule)
+    assert score(raw, shifted) == score(raw, plain)
+    engines = []
+    for picks in (plain, shifted):
+        copy = build_schedule()
+        copy.set_assignment(schedule.assignment())
+        for talk in copy.talks:
+            talk.pinned = True
+        engines.append(_pinned_solve(copy, picks))
+    assert (engines[0].score.hard, engines[0].score.soft) == (engines[1].score.hard, engines[1].score.soft)
+    assert (engines[0].score.hard, engines[0].score.soft) == score(raw, plain)
+    for entry in raw.values():
+        assert (entry["offset"], entry["clip"]) == (0.0, True)
+
+
+@pytest.mark.parametrize(
+    "picks",
+    [
+        [*HARD_PICKS, *REPEAT, LanguageDiversityCost()],
+        [
+            *HARD_PICKS,
+            RoomConflictCost(offset=30, clip=False, weight=2),
+            ContentConflictCost(),
+            ContentConflictCost(offset=120, exponent=2, weight=0.25, clip=False),
+            constraints.SpeakerConflictCost(offset=-5),
+            LanguageDiversityCost(),
+            LanguageDiversityCost(offset=60, clip=False, weight=0.5),
+        ],
+    ],
+    ids=["repeat", "repeat-and-offsets"],
+)
+def test_full_assert_solves_with_repeats_and_offsets(picks):
+    """FULL_ASSERT re-checks the incremental score against a full recompute after every move."""
+    schedule = build_schedule()
+    config = cs.SolverConfig()
+    config.full_assert = True
+    config.random_seed = 3
+    config.parallel_solver_count = 1
+    config.step_count_limit = 3000
+    config.spent_limit_seconds = 30
+    cs.Solver(config).solve_with_constraints(schedule, picks)
+    raw = cs.constraint_costs(schedule, picks)
+    assert len(raw) == len(picks)
+    python = score(raw, picks)
+    assert python.hard == schedule.score.hard
+    assert python.soft == pytest.approx(schedule.score.soft)
+    assert score(cs.constraint_costs(schedule), picks) == python  # the default costs score the repeats too

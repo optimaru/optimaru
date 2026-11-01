@@ -1,7 +1,7 @@
 """es_scheduling.constraints — one spec per constraint, the C++ catalog and the knobs.
 
-The specs carry the three knobs (weight / hard / exponent) and the domain
-parameters; the defaults (level, weight, reward) live in the C++ components
+The specs carry the five knobs (weight / hard / exponent / offset / clip) and
+the domain parameters; the defaults (level, weight, reward) live in the C++ components
 and are reported by `constraint_info()`. `get_constraints()` is the entry point
 every use case shares; the rule factory (`DecomposedCalculator`,
 `constraint_costs`) may hold one constraint several times.
@@ -23,6 +23,7 @@ from es_scheduling.constraints import (
     DesiredDayCost,
     DesiredShiftCost,
     EmployeeUnavailabilityCost,
+    LocationImbalanceCost,
     MaxConsecutiveDaysCost,
     MaxOneShiftPerDayCost,
     MinRestCost,
@@ -219,11 +220,12 @@ def test_returned_list_is_a_fresh_copy():
     assert len(get_constraints()) == 8
 
 
-def test_a_rule_may_repeat_with_other_parameters_but_not_with_the_same():
+def test_a_rule_may_repeat_with_other_parameters_or_the_same():
+    """Since 0.3.0 the "same parameters twice" refusal is gone: every pick is an instance."""
     picked = get_constraints([DayPatternCost(pattern="WORK,WORK"), DayPatternCost(pattern="OFF,OFF")])
     assert len(picked) == 2
-    with pytest.raises(ValueError, match="same parameters"):
-        get_constraints([DayPatternCost(pattern="WORK,WORK"), DayPatternCost(pattern="WORK,WORK")])
+    same = [DayPatternCost(pattern="WORK,WORK"), DayPatternCost(pattern="WORK,WORK")]
+    assert get_constraints(same) == same
     scoped = get_constraints([MaxConsecutiveDaysCost(), MaxConsecutiveDaysCost(worker_indices=(0,))])
     assert len(scoped) == 2
 
@@ -450,6 +452,10 @@ def test_a_reward_stays_soft_and_scoped_rewards_keep_their_metadata():
         ({"weight": True}, "weight must be a number or None, not True"),
         ({"hard": 1}, "hard must be True, False or None, not 1"),
         ({"hard": "x"}, "hard must be True, False or None, not 'x'"),
+        ({"offset": "5"}, "offset must be a number, not '5'"),
+        ({"offset": False}, "offset must be a number, not False"),
+        ({"clip": 1}, "clip must be True or False, not 1"),
+        ({"clip": "no"}, "clip must be True or False, not 'no'"),
     ],
 )
 def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
@@ -466,7 +472,12 @@ def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
 
 @pytest.mark.parametrize(
     ("knobs", "message"),
-    [({"weight": -2.0}, "weight must be finite and >= 0"), ({"exponent": 0.0}, "exponent must be finite and > 0")],
+    [
+        ({"weight": -2.0}, "weight must be finite and >= 0"),
+        ({"exponent": 0.0}, "exponent must be finite and > 0"),
+        ({"offset": float("inf")}, "offset must be finite, not inf"),
+        ({"offset": float("nan")}, "offset must be finite, not nan"),
+    ],
 )
 def test_core_refuses_invalid_knobs_from_duck_typed_picks(knobs, message):
     pick = SimpleNamespace(name="shift_overlap_cost", weight=None, hard=None, exponent=1.0)
@@ -508,3 +519,212 @@ def test_a_scope_is_a_parameter_of_unit_rules_and_shift_coverage_only():
 def test_the_spec_bounds_are_checked(spec, fields):
     with pytest.raises(ValueError, match=f"constraint '{spec.name}': {next(iter(fields))} must be"):
         spec(**fields)
+
+
+# ---------------------------------------------------------------------------
+# 0.3.0: repeated picks and the offset / clip knobs
+# ---------------------------------------------------------------------------
+# The reference schedule's raw costs per employee (Worker 01..04): undesired
+# minutes [0, 480, 0, 0] (soft), desired minutes [-600, 0, 0, -239] (a soft
+# reward), unavailable minutes [480, 0, 0, 0] (hard), min rest [0, 0, 0, 0]
+# (hard); shift_count_imbalance_cost is global, sqrt(15 - 49/4) = 1.65831.
+
+REPEAT = [UndesiredDayCost(), UndesiredDayCost(weight=0.5, exponent=2)]
+
+
+def _engine(picks, schedule=None):
+    result = es.DecomposedCalculator(picks).score(schedule or reference_schedule())
+    return result.hard, result.soft
+
+
+def test_a_repeated_pick_by_hand():
+    """undesired minutes x 1 plus 0.5 x undesired minutes^2 per employee: 480 + 0.5 x 480^2."""
+    raw = es.constraint_costs(reference_schedule(), REPEAT)
+    assert list(raw) == ["undesired_day_cost", "undesired_day_cost#2"]
+    first, second = raw.values()
+    assert first["costs"] == second["costs"] == [0.0, 480.0, 0.0, 0.0]
+    assert (first["weight"], first["exponent"], second["weight"], second["exponent"]) == (1.0, 1.0, 0.5, 2.0)
+    assert first["name"] == second["name"] == "undesired_day_cost"
+    assert first["label"] == second["label"]
+    expected = (0, -(480 + 0.5 * 480**2))
+    assert expected == (0, -115680.0)
+    assert score(raw, REPEAT) == expected
+    assert _engine(REPEAT) == expected
+    # A rule with domain parameters (here per_day and the scope) needs its own
+    # "#2" entry: the default costs hold it once.
+    with pytest.raises(ValueError, match="picked more often than the costs hold it"):
+        score(es.constraint_costs(reference_schedule()), REPEAT)
+
+
+def test_identical_picks_count_twice():
+    picks = [UndesiredDayCost(), UndesiredDayCost()]
+    raw = es.constraint_costs(reference_schedule(), picks)
+    assert list(raw) == ["undesired_day_cost", "undesired_day_cost#2"]
+    assert score(raw, picks) == _engine(picks) == (0, -960.0)
+    totals = es.DecomposedCalculator(picks)
+    totals.score(reference_schedule())
+    assert [(t["name"], t["cost"]) for t in totals.constraint_totals()] == [
+        ("undesired_day_cost", 480.0),
+        ("undesired_day_cost", 480.0),
+    ]
+
+
+def test_the_keys_follow_the_pick_order_of_each_name():
+    picks = [
+        UndesiredDayCost(weight=1),
+        RequiredSkillCost(),
+        UndesiredDayCost(weight=2),
+        DesiredDayCost(),
+        UndesiredDayCost(weight=3),
+    ]
+    raw = es.constraint_costs(reference_schedule(), picks)
+    assert {key: entry["weight"] for key, entry in raw.items()} == {
+        "undesired_day_cost": 1.0,
+        "required_skill_cost": 1.0,
+        "undesired_day_cost#2": 2.0,
+        "desired_day_cost": 1.0,
+        "undesired_day_cost#3": 3.0,
+    }
+    assert list(raw) == specs.instance_keys(picks)
+    assert score(raw, picks) == _engine(picks) == (-1, -(6 * 480 - 839))
+
+
+@pytest.mark.parametrize(
+    ("pick", "expected"),
+    [
+        # Unit constraints, shaped per employee (four employees, raw [0, 480, 0, 0]).
+        (UndesiredDayCost(offset=100), (0, -380.0)),
+        (UndesiredDayCost(offset=100, clip=False), (0, -(380 - 3 * 100))),  # every employee
+        (UndesiredDayCost(offset=-10), (0, -490.0)),  # a negative offset adds to a non-zero cost
+        (UndesiredDayCost(offset=-10, clip=False), (0, -(490 + 3 * 10))),  # ...or to every cost
+        (UndesiredDayCost(offset=400, exponent=2), (0, -(80.0**2))),
+        # A worker scope: only employees 1 and 3 are evaluated (the literal charges two, not four).
+        (UndesiredDayCost(offset=100, clip=False, worker_indices=(1, 3, 3, 9)), (0, -(380 - 100))),
+        # The reward (raw [-600, 0, 0, -239]): a threshold rewards only beyond the offset,
+        # a literal one shifts every employee further.
+        (DesiredDayCost(offset=200), (0, 400 + 39)),
+        (DesiredDayCost(offset=200, clip=False), (0, 800 + 2 * 200 + 439)),
+        # Hard, rounded per employee: 3 x 479.5 = 1438.5 -> 1439, 3 x -0.5 = -1.5 -> -2 three times.
+        (EmployeeUnavailabilityCost(offset=0.5, clip=False, weight=3), (-(1439 - 6), 0.0)),
+        (EmployeeUnavailabilityCost(offset=80), (-400, 0.0)),
+        # min rest is 0 everywhere: the literal formula charges every evaluated employee.
+        (MinRestCost(offset=5, clip=False), (20, 0.0)),
+        (MinRestCost(offset=5), (0, 0.0)),
+    ],
+)
+def test_offsets_by_hand_on_both_paths(pick, expected):
+    """threshold sign(x) max(0, |x| - offset)^e and literal (x - offset)^e: Python mirror == engine == hand."""
+    raw = es.constraint_costs(reference_schedule(), [pick])
+    entry = next(iter(raw.values()))
+    assert (entry["offset"], entry["clip"]) == (float(pick.offset), pick.clip)
+    assert score(raw, [pick]) == expected
+    assert _engine([pick]) == expected
+
+
+def test_a_global_total_is_shaped_once():
+    raw = es.constraint_costs(reference_schedule())
+    (total,) = raw["shift_count_imbalance_cost"]["costs"]
+    for pick, expected in (
+        (ShiftCountImbalanceCost(offset=1), -(total - 1)),
+        (ShiftCountImbalanceCost(offset=2), 0.0),
+        (ShiftCountImbalanceCost(offset=2, clip=False), -(total - 2)),
+        (ShiftCountImbalanceCost(offset=1, exponent=2), -((total - 1) ** 2)),
+    ):
+        python = score(es.constraint_costs(reference_schedule(), [pick]), [pick])
+        assert python == _engine([pick])
+        assert python == (0, pytest.approx(expected, abs=1e-12))
+
+
+def test_a_scoped_rule_reports_and_charges_exactly_its_units():
+    """A worker-scoped rule evaluates its in-range employees only (ascending, each once)."""
+    pick = MinRestCost(offset=5, clip=False, worker_indices=(2, 0, 2, 9, -1))
+    raw = es.constraint_costs(reference_schedule(), [pick])
+    (entry,) = raw.values()
+    assert entry["units"] == [0, 2]
+    assert entry["costs"] == [0.0, 0.0, 0.0, 0.0]
+    assert score(raw, [pick]) == _engine([pick]) == (2 * 5, 0.0)  # 2 evaluated employees x -(0 - 5)
+    unscoped = es.constraint_costs(reference_schedule(), [MinRestCost()])
+    assert "units" not in unscoped["min_rest_cost"]
+    shift_scoped = es.constraint_costs(reference_schedule(), [MinRestCost(shift_indices=(0, 1))])
+    assert "units" not in shift_scoped["min_rest_cost"]  # a shift scope evaluates every employee
+
+
+def test_a_second_reward_pick_still_refuses_hard():
+    picks = [DesiredDayCost(), DesiredDayCost(hard=True, offset=10)]
+    with pytest.raises(ValueError, match="is a reward"):
+        es.DecomposedCalculator(picks)
+    with pytest.raises(ValueError, match="is a reward"):
+        score(es.constraint_costs(reference_schedule(), [DesiredDayCost(), DesiredDayCost()]), picks)
+
+
+def test_add_takes_the_offset_and_clip_knobs():
+    by_name = es.DecomposedCalculator()
+    by_name.add("undesired_day_cost")
+    by_name.add("undesired_day_cost", weight=0.5, exponent=2.0, offset=100, clip=False)
+    picks = [UndesiredDayCost(), UndesiredDayCost(weight=0.5, exponent=2.0, offset=100, clip=False)]
+    assert by_name.score(reference_schedule()).soft == _engine(picks)[1]
+    with pytest.raises(TypeError):
+        es.DecomposedCalculator().add("undesired_day_cost", 1.0, None, 1.0, 100.0)  # keyword-only
+
+
+def test_offset_zero_reproduces_the_0_2_0_scores():
+    """offset 0 is the plain shaping in both modes, so every 0.2.0 selection scores the same."""
+    plain = [*get_constraints(), UndesiredDayCost(exponent=2), DayPatternCost(pattern="WORK,WORK")]
+    shifted = [
+        *[type(spec)(offset=0.0, clip=False) for spec in get_constraints()],
+        UndesiredDayCost(exponent=2, offset=0),
+        DayPatternCost(pattern="WORK,WORK", offset=0.0, clip=False),
+    ]
+    schedule = _assigned_roster()
+    assert score(es.constraint_costs(schedule, shifted), shifted) == score(es.constraint_costs(schedule, plain), plain)
+    assert _engine(plain, schedule) == _engine(shifted, schedule)
+    assert str(es.DecomposedCalculator(shifted[:8]).score(reference_schedule())) == REFERENCE_SCORE
+    for entry in es.constraint_costs(schedule).values():
+        assert (entry["offset"], entry["clip"]) == (0.0, True)
+
+
+PICKS = {
+    "repeat": [*get_constraints(), *REPEAT, DayPatternCost(pattern="WORK,WORK"), DayPatternCost(pattern="WORK,WORK")],
+    "repeat-and-offsets": [
+        *get_constraints(),
+        RequiredSkillCost(offset=1, clip=False, weight=2),
+        UndesiredDayCost(offset=200, exponent=2, weight=0.01),
+        UndesiredDayCost(offset=-30, clip=False, weight=0.5),
+        DesiredDayCost(offset=60, clip=False),
+        ShiftCountImbalanceCost(offset=0.5, clip=False, weight=2),
+        MaxConsecutiveDaysCost(value=3, offset=1, worker_indices=(0, 2)),
+        MaxConsecutiveDaysCost(value=3, offset=2, clip=False, worker_indices=(1,)),
+        DayPatternCost(pattern="WORK,OFF,WORK", offset=-1),
+        LocationImbalanceCost(offset=1, clip=False),
+    ],
+}
+
+
+@pytest.mark.parametrize("picks", list(PICKS.values()), ids=list(PICKS))
+def test_score_matches_the_engine_for_repeated_and_shifted_picks(picks):
+    schedule = _assigned_roster()
+    raw = es.constraint_costs(schedule, picks)
+    # The calculator lists unit constraints before global ones; the keys are the picks'.
+    assert sorted(raw) == sorted(specs.instance_keys(picks))
+    priced = score(raw, picks)
+    engine = es.DecomposedCalculator(picks).score(schedule)
+    assert priced.hard == engine.hard
+    assert priced.soft == pytest.approx(engine.soft)
+
+
+@pytest.mark.parametrize("picks", list(PICKS.values()), ids=list(PICKS))
+def test_a_solve_with_repeated_and_shifted_picks_reports_the_mirror_score(picks):
+    """The incremental search keeps the repeated, shifted instances apart: the reported
+    score is the Python mirror's of the final roster (and a fresh recompute's)."""
+    schedule = es.make_random_roster(days=14, shifts_per_day=4, employees=5, seed=11)
+    config = es.SolverConfig()
+    config.random_seed = 3
+    config.step_count_limit = 4000
+    config.spent_limit_seconds = 30
+    calculator = es.DecomposedCalculator(picks)
+    es.Solver(config).solve(schedule, calculator)
+    reported = schedule.score
+    python = score(es.constraint_costs(schedule, picks), picks)
+    fresh = es.DecomposedCalculator(picks).score(schedule)
+    assert python.hard == reported.hard == fresh.hard
+    assert python.soft == pytest.approx(reported.soft) == pytest.approx(fresh.soft)

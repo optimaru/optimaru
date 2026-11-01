@@ -77,6 +77,9 @@ picks = [ContentConflictCost(weight=500) if c.name == "content_conflict_cost" el
 cs.solve(schedule, time_limit_seconds=5.0, constraints=picks)
 raw = cs.constraint_costs(schedule)       # re-priced in pure Python, no re-solve:
 score(raw), score(raw, picks)
+# A constraint may be picked several times, each pick with its own knobs; offset / clip
+# shift the shaping of the total (clip=True: only the minutes beyond 60 count, squared).
+score(raw, [ContentConflictCost(), ContentConflictCost(weight=1, exponent=2, offset=60)])
 ```
 
 The three `*_diversity_cost` rewards are never hard: `hard=True` raises `ValueError`
@@ -91,6 +94,16 @@ The three `*_diversity_cost` rewards are never hard: `hard=True` raises `ValueEr
 the `_cost` suffix; the full list is in the use-case README), with the spec classes and the
 module-level default instances alike. `compute_breakdown()` and `Breakdown` were removed;
 use `constraint_costs()`. Raw costs and the default score are unchanged.
+
+**0.3.0:** every constraint takes two more knobs, `offset` and `clip` (keyword-only), and
+may be picked several times. Every constraint here is global, so the one total `x` is
+shaped as `sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
+`(x - offset) ** exponent`, sign-preserving (`clip=False`, which also charges a total of 0
+and rewards a total below the offset); `offset=0` is the 0.2.0 shaping. Each pick is its
+own instance with its own knobs, the instances add up, and
+`cs.constraint_costs(schedule, picks)` keys the second pick `content_conflict_cost#2`.
+A literal offset on a reward (`AudienceTypeDiversityCost(offset=..., clip=False)`) shifts
+the reward further; a threshold offset rewards only the part beyond it.
 
 ### Value range replacement (the only semantic difference)
 

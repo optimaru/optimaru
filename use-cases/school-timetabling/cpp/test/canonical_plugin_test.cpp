@@ -21,6 +21,13 @@
 //   (i) the catalog: defaultConstraints().info() equals every component's
 //       kDefaultWeight / kDefaultLevel / flippability, in constraintOrder();
 //       the structural constraints refuse soft() and accept hard()
+//   (j) repeated components and the offset / clip knobs: a hand-calculated
+//       repeat, threshold and literal offsets by hand on a global, a
+//       per-slot and a hard constraint (literal mode charges every slot),
+//       incremental == a fresh recompute over a random walk and a
+//       FULL_ASSERT solve with repeated, shifted components — the repeated
+//       teacher-mask instances sharing the assembly's one TeacherMaskHub
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -1356,6 +1363,213 @@ void verifyCatalog()
     std::printf("\n");
 }
 
+// -------------------------------------------------------------------------
+// (j) Repeated components and offsets. A repeat is a fresh copy of a default
+// component (another defaultConstraints(hub), the one name kept, its knobs
+// re-stated) appended with addInstances(), as the Python bindings build it
+// from a pick list — every copy built on the SAME hub, so the teacher-mask
+// instances (repeats included) subscribe to one projection.
+// -------------------------------------------------------------------------
+ConstraintAssembly copyOf(const std::string &name,
+                          const std::shared_ptr<TeacherMaskHub> &hub)
+{
+    ConstraintAssembly copy = defaultConstraints(hub);
+    copy.only({name});
+    return copy;
+}
+
+// 1 day x 4 periods, one teacher and one class, lessons in periods 1 and 3:
+// teacherGapCost 1, teacherWorkdayCost 1, classGapCost 1, everything else 0.
+Timetable repeatInstance()
+{
+    const std::vector<int> grid{4};
+    Timetable t = makeGrid(grid);
+    addLesson(t, 0, 0, {0}, slotIdx(grid, 0, 1));
+    addLesson(t, 0, 1, {0}, slotIdx(grid, 0, 3));
+    ScoreCalculator::prepare(t);
+    return t;
+}
+
+ConstraintAssembly repeatedAssembly()
+{
+    const auto hub = std::make_shared<TeacherMaskHub>();
+    ConstraintAssembly assembly = defaultConstraints(hub);
+    assembly.offset("teacherGapCost", 1.0);
+    assembly.addInstances(copyOf("teacherGapCost", hub)
+                              .weight("teacherGapCost", 0.5)
+                              .exponent("teacherGapCost", 2.0)
+                              .offset("teacherGapCost", 2.0)
+                              .clip("teacherGapCost", false));
+    assembly.addInstances(copyOf("teacherMaxPeriodsCost", hub)
+                              .weight("teacherMaxPeriodsCost", 2.0)
+                              .offset("teacherMaxPeriodsCost", 1.0)
+                              .clip("teacherMaxPeriodsCost", false));
+    assembly.addInstances(copyOf("teacherWorkdayCost", hub)
+                              .offset("teacherWorkdayCost", -1.0));
+    assembly.addInstances(copyOf("classGapCost", hub)
+                              .offset("classGapCost", 1.0)
+                              .clip("classGapCost", false));
+    assembly.addInstances(copyOf("avoidedPeriodCost", hub)
+                              .weight("avoidedPeriodCost", 2.0)
+                              .offset("avoidedPeriodCost", 1.0)
+                              .clip("avoidedPeriodCost", false));
+    assembly.addInstances(copyOf("teacherConflictCost", hub)
+                              .offset("teacherConflictCost", 0.5)
+                              .clip("teacherConflictCost", false));
+    assembly.addInstances(copyOf("unassignedLessonsCost", hub)
+                              .offset("unassignedLessonsCost", 1.0));
+    return assembly;
+}
+
+Score scoreWithAssembly(ConstraintAssembly assembly, Timetable &t)
+{
+    DecomposedCalculator calc;
+    std::move(assembly).into(calc);
+    calc.resetWorkingSolution(t);
+    return calc.calculateScore();
+}
+
+void verifyRepeatsAndOffsets()
+{
+    std::printf("== (j) Repeated components, offset / clip ==\n");
+    {
+        Timetable t = repeatInstance();
+        const auto hub = std::make_shared<TeacherMaskHub>();
+        ConstraintAssembly assembly = copyOf("teacherGapCost", hub);
+        assembly.addInstances(copyOf("teacherGapCost", hub)
+                                  .weight("teacherGapCost", 0.5)
+                                  .exponent("teacherGapCost", 2.0));
+        DecomposedCalculator calc;
+        std::move(assembly).into(calc);
+        calc.resetWorkingSolution(t);
+        const Score score = calc.calculateScore();
+        check(score.hard == 0 && score.soft == -(20.0 * 1 + 0.5 * 1.0),
+              "teacher gaps x 20 + 0.5 x gaps^2 on one hub: -(20 + 0.5)");
+        const auto entries = calc.constraintCosts();
+        check(entries.size() == 2 && entries[0].unitCosts == entries[1].unitCosts
+                  && entries[0].unitCosts == std::vector<double>{1.0}
+                  && entries[1].weight == 0.5 && entries[1].exponent == 2.0,
+              "two instances, the same raw total, each with its own knobs");
+    }
+    {
+        Timetable t = repeatInstance();
+        const auto hub = std::make_shared<TeacherMaskHub>();
+        auto soft = [&](ConstraintAssembly assembly)
+        { return scoreWithAssembly(std::move(assembly), t).soft; };
+        auto hard = [&](ConstraintAssembly assembly)
+        { return scoreWithAssembly(std::move(assembly), t).hard; };
+        check(soft(copyOf("teacherGapCost", hub)
+                       .offset("teacherGapCost", 0.5))
+                  == -20.0 * 0.5,
+              "global threshold offset 0.5: 20 x (1 - 0.5)");
+        check(soft(copyOf("teacherGapCost", hub)
+                       .offset("teacherGapCost", 2.0)
+                       .clip("teacherGapCost", false))
+                  == 20.0,
+              "global literal offset 2: 20 x (1 - 2), a reward");
+        check(soft(copyOf("avoidedPeriodCost", hub)
+                       .offset("avoidedPeriodCost", 1.0))
+                  == 0.0,
+              "per-slot threshold offset 1 on four empty slots: 0");
+        check(soft(copyOf("avoidedPeriodCost", hub)
+                       .offset("avoidedPeriodCost", 1.0)
+                       .clip("avoidedPeriodCost", false))
+                  == 5.0 * 4,
+              "per-slot literal offset 1: every one of the 4 slots, 5 x 1 each");
+        check(soft(copyOf("teacherWorkdayCost", hub)
+                       .offset("teacherWorkdayCost", -1.0))
+                  == -3.0 * 2,
+              "global threshold offset -1: 3 x (1 + 1)");
+        // A hard literal pick rounds per slot: 3 x (0 - 0.5) = -1.5 -> -2.
+        checkCount("hard per-slot literal offset 0.5 at weight 3: 4 x 2",
+                   hard(copyOf("teacherConflictCost", hub)
+                            .weight("teacherConflictCost", 3.0)
+                            .offset("teacherConflictCost", 0.5)
+                            .clip("teacherConflictCost", false)),
+                   8);
+    }
+    {
+        // Random walk: incremental == a fresh calculator of the same assembly.
+        Timetable t = buildRandomInstance(/*courseCount*/ 16, /*seed*/ 23);
+        ScoreCalculator::prepare(t);
+        DecomposedCalculator calc;
+        repeatedAssembly().into(calc);
+        optimaru::ScoreDirector<Timetable> director(t, calc);
+        std::mt19937_64 rng(321);
+        std::uniform_real_distribution<double> unit(0.0, 1.0);
+        const int lessonCount = static_cast<int>(t.lessons.size());
+        int mismatches = 0;
+        const int steps = 2000;
+        for (int step = 0; step < steps; ++step)
+        {
+            if (unit(rng) < 0.75)
+            {
+                const int lesson = static_cast<int>(rng() % lessonCount);
+                const int value = unit(rng) < 0.1
+                                      ? -1
+                                      : static_cast<int>(rng() % t.slotCount());
+                director.changeVariable(lesson, value);
+            }
+            else
+            {
+                const int a = static_cast<int>(rng() % lessonCount);
+                const int b = static_cast<int>(rng() % lessonCount);
+                const int va = t.lessons[a].slot;
+                const int vb = t.lessons[b].slot;
+                director.beginVariableChanges();
+                director.changeVariable(a, vb);
+                director.changeVariable(b, va);
+                director.endVariableChanges();
+            }
+            Timetable shadow = t;
+            const Score full = scoreWithAssembly(repeatedAssembly(), shadow);
+            const Score incremental = director.calculateScore();
+            if (!optimaru::scoresAgree(incremental, full))
+            {
+                if (++mismatches <= 3)
+                {
+                    std::printf("  MISMATCH @step %d: incremental=%s full=%s\n",
+                                step,
+                                incremental.toString().c_str(),
+                                full.toString().c_str());
+                }
+            }
+        }
+        check(mismatches == 0,
+              std::to_string(steps)
+                  + " random moves with repeated, shifted components: "
+                    "incremental == fresh");
+    }
+    {
+        Timetable t = buildRandomInstance(/*courseCount*/ 8, /*seed*/ 29);
+        Solver::Config config;
+        config.spentLimit = std::chrono::seconds(2);
+        config.randomSeed = 5;
+        config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+        config.ruinRecreateUnimprovedStepTrigger = 200;
+        config.ruinRecreatePolishSteps = 100;
+        DecomposedCalculator calc;
+        repeatedAssembly().into(calc);
+        bool corrupted = false;
+        try
+        {
+            Solver solver(config);
+            solver.solve(t, calc);
+        }
+        catch (const optimaru::ScoreCorruptionError &e)
+        {
+            corrupted = true;
+            std::printf("  ScoreCorruptionError: %s\n", e.what());
+        }
+        check(!corrupted,
+              "2s FULL_ASSERT solve with repeated, shifted components");
+        const Score fresh = scoreWithAssembly(repeatedAssembly(), t);
+        check(!corrupted && optimaru::scoresAgree(t.score, fresh),
+              "the reported score == a fresh recompute of the same assembly");
+    }
+    std::printf("\n");
+}
+
 }  // namespace
 
 int main()
@@ -1369,6 +1583,7 @@ int main()
     verifyRawCostsByHand();
     verifyCatalog();
     verifySampleScaleSolve();
+    verifyRepeatsAndOffsets();
 
     if (failures == 0)
     {

@@ -18,6 +18,7 @@ the semantics of the whole pipeline, conversion and reverse conversion
 included, are pinned down.
 """
 
+import pytest
 import st_timetabling as st
 from st_timetabling import canon
 from st_timetabling.constraints import UNASSIGNED_LESSONS_SOFT_WEIGHT, UnassignedLessonsCost, get_constraints
@@ -322,3 +323,106 @@ def test_teacher_gap_made_hard_is_forbidden_on_both_paths():
         periods=3,
     )
     assert solve_cpsat(gapped, config, constraints=constraints).status == SolveStatus.INFEASIBLE
+
+
+# ---------------------------------------------------------------- 0.3.0: repeated picks, offset / clip
+
+
+def _tiny_problem():
+    """1 day x 5 periods, one teacher and class; MATH prefers periods 1-2 and avoids 5."""
+    from helpers import course, make_problem, teacher
+
+    from teacher_scheduling.domain.entities import Subject
+
+    subjects = [Subject(id="SUB", name="SUB", preferred_periods=frozenset({1, 2}), avoided_periods=frozenset({5}))]
+    return make_problem(
+        [course(periods_per_week=3, max_periods_per_day=3)], [teacher()], subjects=subjects, days=1, periods=5
+    )
+
+
+def _engine_soft(problem: TimetableProblem, result: Timetable, picks) -> float:
+    """The engine's soft score of the CP-SAT timetable under the same picks (the CP-SAT plugins are the
+    engine's specs, so they go into canon.constraint_costs as they are)."""
+    problem_dict = problem.model_dump(mode="json")
+    converted = st.convert_problem(problem_dict)
+    st.inject_solution(converted, [lesson.model_dump(mode="json") for lesson in result.lessons])
+    engine = st.constraints.score(canon.constraint_costs(converted.table, picks), picks)
+    assert engine.hard == 0
+    assert canon.DecomposedCalculator(picks).score(converted.table).soft == engine.soft
+    return engine.soft
+
+
+_REPEATS = {
+    "repeat": [("teacher_gap_cost", {}), ("teacher_gap_cost", {"weight": 2})],
+    "identical-twice": [("class_gap_cost", {}), ("class_gap_cost", {})],
+    "threshold-and-literal": [
+        ("teacher_gap_cost", {"offset": 1}),
+        ("teacher_gap_cost", {"weight": 2, "offset": 1, "clip": False}),
+        ("teacher_workday_cost", {"offset": -1}),
+    ],
+    "per-slot": [
+        ("non_preferred_period_cost", {"weight": 5, "offset": 1, "clip": False}),
+        ("avoided_period_cost", {"weight": 7, "offset": -1}),
+        ("avoided_period_cost", {"weight": 3, "offset": 1, "clip": False}),
+    ],
+}
+
+
+def _cpsat_picks(entries):
+    from helpers import NO_WEIGHTS
+
+    from teacher_scheduling.solver.registry import CONSTRAINT_TYPE_BY_NAME, default_constraints
+
+    hard = [c for c in default_constraints(NO_WEIGHTS) if c.level == "hard"]
+    return [*hard, *(CONSTRAINT_TYPE_BY_NAME[name](**knobs) for name, knobs in entries)]
+
+
+@pytest.mark.parametrize("entries", list(_REPEATS.values()), ids=list(_REPEATS))
+def test_repeated_and_shifted_picks_score_like_the_engine(entries):
+    """Every entry adds its own (shaped) objective term: the CP-SAT objective_value is the
+    engine's soft score of the same timetable under the same picks, and the optimum."""
+    from itertools import combinations
+
+    from teacher_scheduling.domain.solution import ScheduledLesson, SolveStatus
+
+    problem = _tiny_problem()
+    picks = _cpsat_picks(entries)
+    config = CpsatConfig(time_limit_seconds=10.0, num_workers=1, random_seed=7)
+    result = solve_cpsat(problem, config, constraints=picks)
+    assert result.status == SolveStatus.OPTIMAL
+    assert -_engine_soft(problem, result, picks) == result.objective_value
+    # Brute force over the 10 ways to place 3 periods in 5: CP-SAT's optimum is the engine's best.
+    course = problem.courses[0]
+    best = None
+    for periods in combinations(range(1, 6), 3):
+        lessons = tuple(
+            ScheduledLesson(
+                course_id=course.id,
+                class_group_id=course.class_group_id,
+                subject_id=course.subject_id,
+                teacher_ids=course.teacher_ids,
+                slot=lesson.slot.model_copy(update={"period": period}),
+            )
+            for lesson, period in zip(result.lessons, periods, strict=True)
+        )
+        soft = _engine_soft(problem, Timetable(status=SolveStatus.FEASIBLE, lessons=lessons), picks)
+        best = soft if best is None else max(best, soft)
+    assert -best == result.objective_value
+    # Each name's raw count is reported once, under its name.
+    names = {name for name, _ in entries}
+    assert set(result.penalties) == names
+
+
+def test_an_offset_cpsat_cannot_shape_is_refused():
+    from helpers import course, make_problem, teacher
+
+    from teacher_scheduling.solver.registry import ClassConflictCost, TeacherGapCost, default_constraints, merge
+
+    problem = make_problem([course(periods_per_week=1)], [teacher()], days=1, periods=2)
+    config = CpsatConfig(time_limit_seconds=1.0, num_workers=1)
+    with pytest.raises(ValueError, match="offset must be an integer for CP-SAT"):
+        solve_cpsat(problem, config, constraints=merge(default_constraints(), TeacherGapCost(offset=0.5)))
+    with pytest.raises(ValueError, match="offset is not supported by this CP-SAT model on the hard level"):
+        solve_cpsat(problem, config, constraints=merge(default_constraints(), ClassConflictCost(offset=1)))
+    with pytest.raises(ValueError, match="offset is not supported by this CP-SAT model on the hard level"):
+        solve_cpsat(problem, config, constraints=merge(default_constraints(), TeacherGapCost(hard=True, offset=1)))

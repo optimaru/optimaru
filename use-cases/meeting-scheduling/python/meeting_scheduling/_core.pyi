@@ -208,22 +208,28 @@ class Solver:
     def solve_with_constraints(self, schedule: MeetingSchedule, constraints: Iterable[Any] | None = ...) -> None:
         """Score the same solve with a caller-chosen constraint set
         (see meeting_scheduling.constraints). The given list replaces the default set; None
-        keeps the default set."""
+        keeps the default set. A name may be picked several times: each pick is its own
+        instance with its own knobs, and the instances add up."""
 
 def list_constraints() -> list[str]:
     """Constraint names scored by this domain (default assembly order, snake_case:
     the five per-meeting constraints, then the seven pair constraints).
     The same names meeting_scheduling.constraints uses."""
 
-def constraint_costs(schedule: MeetingSchedule, /) -> dict[str, dict[str, Any]]:
-    """Per-constraint, per-unit **raw** costs — before weight/exponent/level rounding.
+def constraint_costs(
+    schedule: MeetingSchedule, constraints: Iterable[Any] | None = ...
+) -> dict[str, dict[str, Any]]:
+    """Per-constraint, per-unit **raw** costs — before weight/exponent/offset/level rounding.
     A unit is a (time grain, room) cell; a pair (global) constraint reports one cost.
     `meeting_scheduling.constraints.score()` takes these and produces a score:
-    {name: {"costs": [...], "weight": float, "exponent": float, "hard": bool,
-    "global": bool, "level": "hard" | "medium" | "soft", "reward": bool,
-    "level_flippable": bool, "name": str, "label": str,
+    {key: {"costs": [...], "weight": float, "exponent": float, "offset": float,
+    "clip": bool, "hard": bool, "global": bool, "level": "hard" | "medium" | "soft",
+    "reward": bool, "level_flippable": bool, "name": str, "label": str,
+    "default_weight": float, "default_level": str,
     "medium_fold": {"kind": "into_soft", "unit": 1e6}}}. The medium fold belongs
-    to the domain, so EVERY entry carries it."""
+    to the domain, so EVERY entry carries it. None = the default constraints; a pick
+    list (as for solve) scores exactly those picks, each entry carrying its pick's
+    knobs, the k-th pick of a name keyed "<name>#<k>" from the second on."""
 
 class ConstraintInfo(NamedTuple):
     """One constraint-catalog row, read off the C++ default assembly."""
