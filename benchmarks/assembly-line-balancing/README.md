@@ -13,6 +13,14 @@ assignment gives the same raw cost per constraint in both solvers
 (`cpsat/tests/test_constraint_parity.py` pins every assignment of small instances). Not
 supported on CP-SAT: `exponent != 1` and non-integer weights (refused).
 
+**0.3.0:** a constraint may be picked several times (as specs or as
+`{"name", "weight", "hard", "offset", "clip"}` mappings); each pick builds its own terms with
+its own knobs. The six per-station constraints add one term per station, an empty one
+included (`max_stations_cost` and `forbidden_task_stations_cost` exactly their scoped
+stations, as the engine evaluates them), and the four globals one term for their total, so
+an integral `offset` shapes each station (or the total) exactly as the engine does in both
+`clip` modes; a fractional offset is refused (`offset must be an integer for CP-SAT`).
+
 ```sh
 cd benchmarks/assembly-line-balancing/cpsat
 uv sync --all-groups --all-extras

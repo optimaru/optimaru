@@ -77,33 +77,31 @@ def build(
         if item.color is not None:
             members.setdefault(item.color, []).append(index)
     shared = {color: items for color, items in members.items() if len(items) >= 2}
-    color_excess = []
+    color_excess: list[list] = []
     for bin_index in range(count):
+        in_bin = []
         for color, items in sorted(shared.items()):
             excess = model.new_int_var(0, len(items) - 1, f"bin_{bin_index}_color_{color}_excess")
             model.add(excess >= sum(assignments[item, bin_index] for item in items) - 1)
-            color_excess.append(excess)
+            in_bin.append(excess)
+        color_excess.append(in_bin)
     color_bound = sum(len(items) - 1 for items in shared.values())
 
     item_by_id = {item.id: index for index, item in enumerate(problem.items)}
-    conflict_violations = []
+    conflict_together: list[list] = [[] for _ in range(count)]
     for pair_index, pair in enumerate(problem.conflicts):
         left = item_by_id[pair.first]
         right = item_by_id[pair.second]
-        together = []
         for bin_index in range(count):
             both = model.new_bool_var(f"conflict_{pair_index}_bin_{bin_index}")
             model.add_multiplication_equality(both, [assignments[left, bin_index], assignments[right, bin_index]])
-            together.append(both)
-        violation = model.new_bool_var(f"conflict_{pair_index}_violated")
-        model.add(violation == sum(together))
-        conflict_violations.append(violation)
+            conflict_together[bin_index].append(both)
 
     # Default weights and levels come from the engine (constraint_info()); the
     # canonical problem carries none.
     objective = REGISTRY.objective(model, ("hard", "soft"), constraints)
     context = BinPackingContext(
-        model, problem, assignments, used, overflow, color_excess, color_bound, conflict_violations
+        model, problem, assignments, used, overflow, color_excess, color_bound, conflict_together
     )
     REGISTRY.build(context, objective)
     return Built(model, context, objective)

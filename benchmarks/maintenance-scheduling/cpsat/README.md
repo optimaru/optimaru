@@ -13,6 +13,13 @@ soft weights were copied here by hand), so `catalog()` equals the engine catalog
 `hard=False` demotes to soft in both solvers. Not supported on this exact path (rejected):
 `exponent != 1` and non-integer weights.
 
+**0.3.0:** a constraint may be picked several times (as specs or as
+`{"name", "weight", "hard", "offset", "clip"}` mappings); each pick builds its own terms
+with its own knobs. The four date rules add one term per (crew, start date) cell, an empty
+cell included, and the two conflict rules one term for their total, so an integral
+`offset` shapes each cell (or the total) exactly as the engine does in both `clip` modes;
+a fractional offset is refused (`offset must be an integer for CP-SAT`).
+
 ## Engine comparison
 
 The comparison runner is owned by this use case. It builds deterministic

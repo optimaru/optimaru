@@ -289,6 +289,9 @@ def test_weight_none_means_the_component_default():
         ({"exponent": 0}, ValueError),
         ({"exponent": -1.0}, ValueError),
         ({"hard": 1}, TypeError),
+        ({"offset": float("nan")}, ValueError),
+        ({"offset": "1"}, TypeError),
+        ({"clip": 0}, TypeError),
     ],
 )
 def test_specs_validate_their_knobs(kwargs, error):
@@ -301,6 +304,7 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     for knobs, message in (
         ({"weight": -2.0}, "weight must be finite and >= 0"),
         ({"exponent": 0.0}, "exponent must be finite and > 0"),
+        ({"offset": float("inf")}, "offset must be finite, not inf"),
     ):
         pick = SimpleNamespace(name="used_stations_cost", weight=None, hard=None, exponent=1.0)
         for key, value in knobs.items():
@@ -317,6 +321,10 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
         ({"hard": 1}, "hard must be True, False or None, not 1"),
         ({"hard": "x"}, "hard must be True, False or None, not 'x'"),
         ({"exponent": True}, "exponent must be a number, not True"),
+        ({"offset": "5"}, "offset must be a number, not '5'"),
+        ({"offset": False}, "offset must be a number, not False"),
+        ({"clip": 1}, "clip must be True or False, not 1"),
+        ({"clip": "no"}, "clip must be True or False, not 'no'"),
     ],
 )
 def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
@@ -406,6 +414,17 @@ def test_score_equals_the_engine_for_the_default_assembly():
         [StationCapacityCost(hard=False), TaskPrecedenceCost(hard=False), used_stations_cost],
         [StationCapacityCost(exponent=2.0), SameStationGroupsCost(exponent=2.0), UsedStationsCost(hard=True)],
         [DifferentStationPairsCost(weight=0.5), MaxStationsCost(weight=2.5), used_stations_cost],
+        [*get_constraints(), UsedStationsCost(weight=10, offset=2), StationCapacityCost(exponent=2)],
+        [
+            StationCapacityCost(offset=1),
+            StationCapacityCost(offset=0.5, clip=False, weight=3),
+            TaskPrecedenceCost(offset=1, clip=False),
+            SameStationGroupsCost(offset=-1),
+            DifferentStationPairsCost(offset=1, clip=False),
+            UsedStationsCost(),
+            UsedStationsCost(offset=3, exponent=2, weight=0.5),
+            WorkloadImbalanceCost(weight=1, offset=2, clip=False),
+        ],
     ],
 )
 def test_score_matches_the_engine_for_arbitrary_specs(specs):
@@ -427,15 +446,18 @@ def test_score_is_additive_over_the_picked_constraints():
     assert full.soft == pytest.approx(sum(part.soft for part in parts))
 
 
-def test_naming_a_constraint_twice_is_rejected():
-    with pytest.raises(ValueError, match="picked more than once"):
-        alb.solve(
-            build_problem(),
-            config=_config(),
-            constraints=[station_capacity_cost, UsedStationsCost(weight=10), used_stations_cost],
-        )
-    with pytest.raises(ValueError, match="picked more than once"):
-        get_constraints([station_capacity_cost, station_capacity_cost])
+def test_naming_a_constraint_twice_scores_both_picks():
+    """Since 0.3.0 a constraint may be picked several times: each pick is scored on its own.
+
+    The later pick no longer wins in silence, nor is it an error: both are
+    instances with their own knobs, and they add up."""
+    picks = [StationCapacityCost(), UsedStationsCost(weight=10), UsedStationsCost()]
+    problem = _zero_budget_solve(fixture_h(), picks)
+    assert (problem.score.hard, problem.score.soft) == (-1, -(10 + 1) * 3)
+    assert get_constraints([StationCapacityCost(), StationCapacityCost()]) == [
+        StationCapacityCost(),
+        StationCapacityCost(),
+    ]
 
 
 def test_unassigned_tasks_contribute_nothing():
@@ -446,3 +468,196 @@ def test_unassigned_tasks_contribute_nothing():
     assert {name: sum(entry["costs"]) for name, entry in raw.items()} == dict.fromkeys(NAMES, 0)
     score_ = alb.calculate_score(problem)
     assert (score_.hard, score_.soft) == (0, 0.0)
+
+
+# --- 0.3.0: repeated picks and the offset / clip knobs ------------------------------
+
+
+def _zero_budget_solve(problem, picks):
+    """Score a complete assignment under ``picks`` on the engine: a warm start, no step taken."""
+    config = alb.SolverConfig()
+    config.spent_limit_seconds = 0
+    assignment = problem.assignment()
+    problem.warm_start = True  # otherwise the solve clears the stations and constructs
+    alb.Solver(config).solve_with_constraints(problem, picks)
+    assert problem.assignment() == assignment
+    return problem
+
+
+def _engine(picks, problem=None):
+    solved = _zero_budget_solve(problem or fixture_h(), picks)
+    return (solved.score.hard, solved.score.soft)
+
+
+REPEAT = [UsedStationsCost(), UsedStationsCost(weight=10, offset=2)]
+
+
+def test_a_repeated_pick_by_hand():
+    """Fixture H uses 3 stations: 3, plus 10 x (3 - 2) for the stations beyond the second."""
+    raw = alb.constraint_costs(fixture_h(), REPEAT)
+    assert list(raw) == ["used_stations_cost", "used_stations_cost#2"]
+    first, second = raw.values()
+    assert first["costs"] == second["costs"] == [3.0]
+    assert (first["weight"], first["offset"], second["weight"], second["offset"]) == (1.0, 0.0, 10.0, 2.0)
+    assert first["name"] == second["name"] == "used_stations_cost"
+    assert second["default_weight"] == 1.0
+    expected = (0, -(3 + 10 * 1))
+    assert score(raw, REPEAT) == expected
+    # The default costs hold the name once; the second pick reads the same raw costs.
+    assert score(alb.constraint_costs(fixture_h()), REPEAT) == expected
+    assert _engine(REPEAT) == expected
+    assert alb.calculate_score(fixture_h(), REPEAT) == expected
+
+
+def test_a_repeated_unit_pick_by_hand():
+    """Station bounds [1, 0, 0, 1] plus 2 x their square per station: -(2 + 2 x 2)."""
+    picks = [TaskStationBoundsCost(), TaskStationBoundsCost(weight=2, exponent=2)]
+    raw = alb.constraint_costs(fixture_h(), picks)
+    assert list(raw) == ["task_station_bounds_cost", "task_station_bounds_cost#2"]
+    assert raw["task_station_bounds_cost"]["costs"] == raw["task_station_bounds_cost#2"]["costs"] == [1, 0, 0, 1]
+    assert score(raw, picks) == (-6, 0.0)
+    assert score(alb.constraint_costs(fixture_h()), picks) == (-6, 0.0)
+    assert _engine(picks) == (-6, 0.0)
+
+
+def test_identical_picks_count_twice():
+    picks = [TaskPrecedenceCost(), TaskPrecedenceCost()]
+    assert score(alb.constraint_costs(fixture_h()), picks) == (-2, 0.0)
+    assert _engine(picks) == (-2, 0.0)
+    assert list(alb.constraint_costs(fixture_h(), picks)) == ["task_precedence_cost", "task_precedence_cost#2"]
+
+
+def test_the_keys_follow_the_catalog_and_the_pick_order_of_each_name():
+    """Each name's instances stay together in pick order; the names keep the catalog order."""
+    picks = [
+        UsedStationsCost(weight=1),
+        StationCapacityCost(),
+        UsedStationsCost(weight=2),
+        TaskPrecedenceCost(),
+        UsedStationsCost(weight=3),
+    ]
+    raw = alb.constraint_costs(fixture_h(), picks)
+    assert [(key, entry["weight"]) for key, entry in raw.items()] == [
+        ("station_capacity_cost", 1.0),
+        ("task_precedence_cost", 1.0),
+        ("used_stations_cost", 1.0),
+        ("used_stations_cost#2", 2.0),
+        ("used_stations_cost#3", 3.0),
+    ]
+    assert score(raw, picks) == (-2, -(6 * 3))
+    assert _engine(picks) == score(raw, picks)
+
+
+@pytest.mark.parametrize(
+    ("pick", "expected"),
+    [
+        # Per-station constraints, shaped per station (V = 4); an empty station (raw 0)
+        # counts in literal mode.
+        (TaskStationBoundsCost(offset=1, clip=False), (2, 0.0)),  # 0 + -1 + -1 + 0
+        (StationCapacityCost(offset=-1), (-2, 0.0)),  # a negative offset adds to every non-zero station
+        (StationCapacityCost(offset=-1, clip=False), (-5, 0.0)),  # ...or to every station
+        (StationCapacityCost(offset=0.5, clip=False, weight=3), (4, 0.0)),  # 1.5 -> 2, 3 x (-1.5 -> -2): per station
+        # The two scoped constraints charge only the stations they evaluate.
+        (MaxStationsCost(offset=2, clip=False), (1, 0.0)),  # station 3 only: 1 - 2
+        (ForbiddenTaskStationsCost(offset=2, clip=False), (3, 0.0)),  # stations 0, 1: (0 - 2) + (1 - 2)
+        (ForbiddenTaskStationsCost(offset=-1), (-2, 0.0)),
+        # Global constraints shape their one total.
+        (TaskPrecedenceCost(offset=3, clip=False), (2, 0.0)),  # 1 - 3: a hard reward
+        (SameStationGroupsCost(offset=1), (0, 0.0)),
+        (UsedStationsCost(offset=1, exponent=2), (0, -4.0)),
+        (UsedStationsCost(offset=5, exponent=3, clip=False), (0, 8.0)),
+        (WorkloadImbalanceCost(weight=1, offset=1), (0, -2.0)),
+        (WorkloadImbalanceCost(offset=5, clip=False), (0, 0.0)),  # weight 0 (the default) contributes nothing
+    ],
+)
+def test_offsets_by_hand_on_both_paths(pick, expected):
+    """threshold sign(x) max(0, |x| - offset)^e and literal (x - offset)^e: Python mirror == engine == hand."""
+    assert score(alb.constraint_costs(fixture_h()), [pick]) == expected
+    raw = alb.constraint_costs(fixture_h(), [pick])
+    entry = next(iter(raw.values()))
+    assert (entry["offset"], entry["clip"]) == (float(pick.offset), pick.clip)
+    assert score(raw, [pick]) == expected
+    assert _engine([pick]) == expected
+
+
+def _all_zero_scoped():
+    """Fixture H with A on 0, B and C on 1, D on 2: no task beyond max_stations or on a
+    forbidden station, V = 4."""
+    problem = fixture_h()
+    problem.set_assignment([0, 1, 1, 2])
+    return problem
+
+
+def test_the_scoped_constraints_report_and_charge_their_units_only():
+    """max_stations_cost evaluates the stations from max_stations (3) on, i.e. [3];
+    forbidden_task_stations_cost the stations some task forbids, [0, 1]. A literal offset on
+    an all-zero solution charges -offset on those units, not on all four stations."""
+    raw = alb.constraint_costs(_all_zero_scoped())
+    assert raw["max_stations_cost"]["units"] == [3]
+    assert raw["forbidden_task_stations_cost"]["units"] == [0, 1]
+    assert raw["max_stations_cost"]["costs"] == raw["forbidden_task_stations_cost"]["costs"] == [0, 0, 0, 0]
+    assert all(
+        "units" not in entry for name, entry in raw.items() if "max_stations" not in name and "forbidden" not in name
+    )
+    for pick, expected in (
+        (MaxStationsCost(offset=5, clip=False), (5, 0.0)),  # one evaluated station
+        (ForbiddenTaskStationsCost(offset=5, clip=False), (10, 0.0)),  # two evaluated stations
+        (MaxStationsCost(offset=5), (0, 0.0)),  # the threshold leaves a 0 at 0
+    ):
+        assert score(raw, [pick]) == expected
+        picked = alb.constraint_costs(_all_zero_scoped(), [pick])
+        assert next(iter(picked.values()))["units"] == raw[pick.name]["units"]
+        assert score(picked, [pick]) == expected
+        assert _engine([pick], _all_zero_scoped()) == expected
+
+
+def test_offset_zero_reproduces_the_0_2_0_scores():
+    """offset 0 is the plain shaping in both modes, so every 0.2.0 selection scores the same."""
+    plain = [*get_constraints()[:-1], WorkloadImbalanceCost(weight=2, exponent=2)]
+    shifted = [type(spec)(offset=0.0, clip=bool(index % 2)) for index, spec in enumerate(get_constraints()[:-1])]
+    shifted.append(WorkloadImbalanceCost(weight=2, exponent=2, offset=0, clip=False))
+    raw = alb.constraint_costs(fixture_h())
+    assert score(raw, shifted) == score(raw, plain)
+    assert _engine(plain) == _engine(shifted) == score(raw, plain)
+    for entry in raw.values():
+        assert (entry["offset"], entry["clip"]) == (0.0, True)
+
+
+@pytest.mark.parametrize(
+    "picks",
+    [
+        [*get_constraints(), *REPEAT, StationCapacityCost(weight=2, exponent=2)],
+        [
+            StationCapacityCost(),
+            StationCapacityCost(offset=1, clip=False, weight=2),
+            TaskPrecedenceCost(offset=-1),
+            MaxStationsCost(offset=1, clip=False),
+            TaskStationBoundsCost(offset=1),
+            FixedTaskStationsCost(),
+            ForbiddenTaskStationsCost(offset=1, clip=False),
+            SameStationGroupsCost(offset=1, clip=False, weight=3),
+            DifferentStationPairsCost(offset=-1, clip=False),
+            DifferentStationPairsCost(),
+            UsedStationsCost(),
+            UsedStationsCost(offset=3, exponent=2, weight=0.25),
+            WorkloadImbalanceCost(weight=0.5, offset=2, clip=False),
+        ],
+    ],
+    ids=["repeat", "repeat-and-offsets"],
+)
+def test_full_assert_solves_with_repeats_and_offsets(picks):
+    """FULL_ASSERT re-checks the incremental score against a full recompute after every move."""
+    problem = build_model()
+    problem.max_stations = 4
+    problem.tasks[2].forbidden_stations = [0, 1]
+    core = problem.to_core()
+    config = _config(steps=5000, seed=3)
+    config.full_assert = True
+    config.parallel_solver_count = 1
+    alb.Solver(config).solve_with_constraints(core, picks)
+    raw = alb.constraint_costs(core, picks)
+    assert len(raw) == len(picks)
+    python = score(raw, picks)
+    assert python.hard == core.score.hard
+    assert python.soft == pytest.approx(core.score.soft)
+    assert score(alb.constraint_costs(core), picks) == python  # the default costs score the repeats too

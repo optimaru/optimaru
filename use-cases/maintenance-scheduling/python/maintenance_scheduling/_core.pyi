@@ -173,7 +173,8 @@ class Solver:
     def solve_with_constraints(self, schedule: MaintenanceSchedule, constraints: Iterable[Any] | None = ...) -> None:
         """Score the same solve with a caller-chosen constraint set
         (see maintenance_scheduling.constraints). The given list replaces the default set; None
-        keeps the default set."""
+        keeps the default set. A name may be picked several times: each pick is its own
+        instance with its own knobs, and the instances add up."""
 
 def list_constraints() -> list[str]:
     """Constraint names scored by this domain (snake_case; the four per-job unit
@@ -182,12 +183,18 @@ def list_constraints() -> list[str]:
     crew_conflict_cost, tag_conflict_cost.
     The same names maintenance_scheduling.constraints uses."""
 
-def constraint_costs(schedule: MaintenanceSchedule, /) -> dict[str, dict[str, Any]]:
-    """Raw cost of every default constraint, before weight/exponent/level rounding:
-    {name: {"costs": [...], "weight": float, "exponent": float, "hard": bool,
-    "global": bool, "level": "hard" | "medium" | "soft", "reward": bool,
-    "level_flippable": bool, "name": str, "label": str}}. The four date rules list one
-    cost per (start date, crew) cell; the two global conflict rules one total.
+def constraint_costs(
+    schedule: MaintenanceSchedule, constraints: Iterable[Any] | None = ...
+) -> dict[str, dict[str, Any]]:
+    """Raw cost of every constraint, before weight/exponent/offset/level rounding:
+    {key: {"costs": [...], "weight": float, "exponent": float, "offset": float,
+    "clip": bool, "hard": bool, "global": bool, "level": "hard" | "medium" | "soft",
+    "reward": bool, "level_flippable": bool, "name": str, "label": str,
+    "default_weight": float, "default_level": str}}. The four date rules list one
+    cost per (start date, crew) cell, an empty cell included; the two global conflict
+    rules one total. None = the default constraints; a pick list (as for solve) scores
+    exactly those picks, each entry carrying its pick's knobs, the k-th pick of a name
+    keyed "<name>#<k>" from the second on.
     `maintenance_scheduling.constraints.score()` takes these and produces a score."""
 
 class ConstraintInfo(NamedTuple):

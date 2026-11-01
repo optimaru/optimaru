@@ -16,6 +16,13 @@
 //       constraintCosts()
 //   (i) the catalog: info() off the default assembly == the components'
 //       kDefaultWeight / kDefaultLevel; the knob guards
+//   (j) repeated components and the offset / clip knobs: hand-calculated
+//       repeats of a per-match unit rule and a global, threshold and literal
+//       offsets by hand (in literal mode every round position counts, an
+//       empty one included; a global shapes its one total), incremental ==
+//       a fresh recompute over a random walk and a FULL_ASSERT solve with
+//       repeated, shifted components
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -905,6 +912,264 @@ void verifyCatalog()
     std::printf("\n");
 }
 
+// -------------------------------------------------------------------------
+// (j) Repeated components and offsets. A repeat is a fresh copy of a
+// default component (another defaultConstraints(), the one name kept, its
+// knobs re-stated) appended with addInstances(), as the Python bindings
+// build it from a pick list.
+// -------------------------------------------------------------------------
+ConstraintAssembly copyOf(const std::string &name)
+{
+    ConstraintAssembly copy = defaultConstraints();
+    copy.only({name});
+    return copy;
+}
+
+// Four teams at the synthetic distances, round positions 0 and 1:
+// (0, 1) in round 0 and (2, 0) in round 1. Raw: startToAwayHopCost
+// [d(1, 0) = 21, 0], awayToEndHopCost [0, d(2, 0) = 31],
+// workdayClassicMatchesCost [0, 0]; homeToAwayHopCost totals d(0, 2) = 13,
+// every other global 0.
+LeagueSchedule repeatInstance()
+{
+    LeagueSchedule s = makeBaseContiguous(4, 2);
+    useSyntheticDistances(s);
+    addMatch(s, 0, 1, /*round*/ 0);
+    addMatch(s, 2, 0, /*round*/ 1);
+    ScoreCalculator::prepare(s);
+    return s;
+}
+
+// The defaults, two of them shifted, plus repeats of a per-match delta rule
+// (literal, fractional weight), a round-index pair global (threshold,
+// squared), a team-side run global (negative offset), the clamped repeat
+// rule and the derby rule (literal).
+ConstraintAssembly repeatedAssembly()
+{
+    ConstraintAssembly assembly = defaultConstraints();
+    assembly.offset("teamConflictCost", 1.0).clip("teamConflictCost", false);
+    assembly.offset("awayToAwayHopCost", 50.0);
+    assembly.addInstances(std::move(copyOf("startToAwayHopCost")
+                                        .weight("startToAwayHopCost", 0.5)
+                                        .offset("startToAwayHopCost", 40.0)
+                                        .clip("startToAwayHopCost", false)));
+    assembly.addInstances(std::move(copyOf("homeToAwayHopCost")
+                                        .weight("homeToAwayHopCost", 0.25)
+                                        .exponent("homeToAwayHopCost", 2.0)
+                                        .offset("homeToAwayHopCost", 30.0)));
+    assembly.addInstances(
+        std::move(copyOf("consecutiveHomeMatchesCost")
+                      .offset("consecutiveHomeMatchesCost", -1.0)));
+    assembly.addInstances(std::move(copyOf("repeatMatchOnNextDayCost")));
+    assembly.addInstances(
+        std::move(copyOf("workdayClassicMatchesCost")
+                      .offset("workdayClassicMatchesCost", 1.0)
+                      .clip("workdayClassicMatchesCost", false)));
+    return assembly;
+}
+
+void verifyRepeatsAndOffsets()
+{
+    std::printf("== (j) Repeated components, offset / clip ==\n");
+    {
+        LeagueSchedule s = repeatInstance();
+        ConstraintAssembly assembly = copyOf("homeToAwayHopCost");
+        assembly.addInstances(std::move(copyOf("homeToAwayHopCost")
+                                            .weight("homeToAwayHopCost", 2.0)
+                                            .exponent("homeToAwayHopCost", 2.0)));
+        DecomposedCalculator calculator;
+        assembly.into(calculator);
+        checkScore("home-to-away km + 2 x km^2 on the total: -(13 + 338)",
+                   scoreWith(calculator, s),
+                   0,
+                   -351.0);
+        const auto entries = calculator.constraintCosts();
+        check(entries.size() == 2 && entries[0].unitCosts == entries[1].unitCosts
+                  && entries[0].unitCosts.size() == 1
+                  && entries[1].weight == 2.0 && entries[1].exponent == 2.0
+                  && entries[1].defaultWeight == 1.0,
+              "two global instances, the same total, each with its own knobs");
+    }
+    {
+        LeagueSchedule s = repeatInstance();
+        ConstraintAssembly assembly = copyOf("startToAwayHopCost");
+        assembly.addInstances(std::move(copyOf("startToAwayHopCost")
+                                            .weight("startToAwayHopCost", 0.5)
+                                            .exponent("startToAwayHopCost", 2.0)));
+        DecomposedCalculator calculator;
+        assembly.into(calculator);
+        checkScore("start hop + 0.5 x start hop^2 per round: -(21 + 220.5)",
+                   scoreWith(calculator, s),
+                   0,
+                   -241.5);
+    }
+    {
+        LeagueSchedule s = repeatInstance();
+        DecomposedCalculator threshold;
+        copyOf("startToAwayHopCost")
+            .offset("startToAwayHopCost", 10.0)
+            .into(threshold);
+        checkScore("threshold offset 10: max(0, 21 - 10)",
+                   scoreWith(threshold, s),
+                   0,
+                   -11.0);
+        // Literal: round 1 (raw 0) is rewarded 10.
+        DecomposedCalculator literal;
+        copyOf("startToAwayHopCost")
+            .offset("startToAwayHopCost", 10.0)
+            .clip("startToAwayHopCost", false)
+            .into(literal);
+        checkScore("literal offset 10: (21 - 10) + (0 - 10), every round",
+                   scoreWith(literal, s),
+                   0,
+                   -1.0);
+        DecomposedCalculator negative;
+        copyOf("awayToEndHopCost")
+            .offset("awayToEndHopCost", -5.0)
+            .into(negative);
+        checkScore("threshold offset -5 adds to the non-zero round only",
+                   scoreWith(negative, s),
+                   0,
+                   -36.0);
+        DecomposedCalculator negativeLiteral;
+        copyOf("awayToEndHopCost")
+            .offset("awayToEndHopCost", -5.0)
+            .clip("awayToEndHopCost", false)
+            .into(negativeLiteral);
+        checkScore("literal offset -5 adds to every round: 5 + 36",
+                   scoreWith(negativeLiteral, s),
+                   0,
+                   -41.0);
+        // A hard literal offset rounds per round: (21 - 0.5) x 3 = 61.5 -> 62,
+        // (0 - 0.5) x 3 = -1.5 -> -2.
+        DecomposedCalculator hard;
+        copyOf("startToAwayHopCost")
+            .hard("startToAwayHopCost")
+            .weight("startToAwayHopCost", 3.0)
+            .offset("startToAwayHopCost", 0.5)
+            .clip("startToAwayHopCost", false)
+            .into(hard);
+        checkScore("hard literal offset 0.5 at weight 3, rounded per round",
+                   scoreWith(hard, s),
+                   -60,
+                   0.0);
+        // A global shapes its one total.
+        DecomposedCalculator globalThreshold;
+        copyOf("homeToAwayHopCost")
+            .offset("homeToAwayHopCost", 3.0)
+            .into(globalThreshold);
+        checkScore("home-to-away threshold offset 3: 13 - 3",
+                   scoreWith(globalThreshold, s),
+                   0,
+                   -10.0);
+        DecomposedCalculator globalLiteral;
+        copyOf("homeToAwayHopCost")
+            .offset("homeToAwayHopCost", 20.0)
+            .clip("homeToAwayHopCost", false)
+            .into(globalLiteral);
+        checkScore("home-to-away literal offset 20: 13 - 20, a reward",
+                   scoreWith(globalLiteral, s),
+                   0,
+                   7.0);
+        DecomposedCalculator zeroHard;
+        copyOf("teamConflictCost")
+            .offset("teamConflictCost", 1.0)
+            .clip("teamConflictCost", false)
+            .into(zeroHard);
+        checkScore("team conflict literal offset 1 on a 0 total: a hard reward",
+                   scoreWith(zeroHard, s),
+                   1,
+                   0.0);
+    }
+    {
+        // Random walk: incremental == a fresh calculator of the same assembly.
+        LeagueSchedule s = buildRandomInstance(/*matches*/ 30, /*seed*/ 7);
+        ScoreCalculator::prepare(s);
+        DecomposedCalculator calculator;
+        repeatedAssembly().into(calculator);
+        optimaru::ScoreDirector<LeagueSchedule> director(s, calculator);
+        std::mt19937_64 rng(321);
+        std::uniform_real_distribution<double> unit(0.0, 1.0);
+        const int matchCount = s.matchCount();
+        const int valueCount = s.roundCount();
+        int mismatches = 0;
+        double drift = 0.0;
+        const int steps = 3000;
+        for (int step = 0; step < steps; ++step)
+        {
+            if (unit(rng) < 0.75)
+            {
+                const int match = static_cast<int>(rng() % matchCount);
+                const int value = unit(rng) < 0.10
+                                      ? -1
+                                      : static_cast<int>(rng() % valueCount);
+                director.changeVariable(match, value);
+            }
+            else
+            {
+                const int a = static_cast<int>(rng() % matchCount);
+                const int b = static_cast<int>(rng() % matchCount);
+                const int va = s.matches[a].round;
+                const int vb = s.matches[b].round;
+                director.changeVariable(a, vb);
+                director.changeVariable(b, va);
+            }
+            LeagueSchedule shadow = s;
+            DecomposedCalculator fresh;
+            repeatedAssembly().into(fresh);
+            const Score full = scoreWith(fresh, shadow);
+            const Score incremental = director.calculateScore();
+            drift = std::max(drift, std::fabs(full.soft - incremental.soft));
+            // The engine's FULL_ASSERT rule (scoresAgree): hard exact, soft
+            // within 1e-6 (the fractional weights accumulate a few ulps).
+            if (!optimaru::scoresAgree(incremental, full))
+            {
+                if (++mismatches <= 3)
+                {
+                    std::printf("  MISMATCH @step %d: incremental=%s full=%s\n",
+                                step,
+                                incremental.toString().c_str(),
+                                full.toString().c_str());
+                }
+            }
+        }
+        std::printf("    largest soft drift %.3g\n", drift);
+        check(mismatches == 0,
+              std::to_string(steps)
+                  + " random moves with repeated, shifted components: "
+                    "incremental == fresh");
+    }
+    {
+        LeagueSchedule s = buildRandomInstance(/*matches*/ 20, /*seed*/ 11);
+        Solver::Config config;
+        config.spentLimit = std::chrono::seconds(2);
+        config.randomSeed = 5;
+        config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+        config.ruinRecreateUnimprovedStepTrigger = 200;
+        config.ruinRecreatePolishSteps = 100;
+        DecomposedCalculator calculator;
+        repeatedAssembly().into(calculator);
+        bool corrupted = false;
+        try
+        {
+            Solver solver(config);
+            solver.solve(s, calculator);
+        }
+        catch (const optimaru::ScoreCorruptionError &e)
+        {
+            corrupted = true;
+            std::printf("  ScoreCorruptionError: %s\n", e.what());
+        }
+        check(!corrupted,
+              "2s FULL_ASSERT solve with repeated, shifted components");
+        DecomposedCalculator fresh;
+        repeatedAssembly().into(fresh);
+        check(!corrupted && optimaru::scoresAgree(s.score, scoreWith(fresh, s)),
+              "the reported score == a fresh recompute of the same assembly");
+    }
+    std::printf("\n");
+}
+
 }  // namespace
 
 int main()
@@ -918,6 +1183,7 @@ int main()
     verifyAssemblyBuilder();
     verifyRawCostsByHand();
     verifyCatalog();
+    verifyRepeatsAndOffsets();
 
     if (failures == 0)
     {

@@ -67,6 +67,26 @@ per-constraint surface. The CP-SAT reference reads its defaults from `constraint
 which fixes its workday-derby weight (it used 1 instead of the engine's 1000). Raw costs
 and the default score are unchanged.
 
+**0.3.0:** every constraint takes two more knobs, `offset` and `clip` (keyword-only), and
+may be picked several times. A raw cost `x` (per round position for the three unit
+constraints, the single total for the seven globals — the granularity of `exponent`) is
+shaped as `sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
+`(x - offset) ** exponent`, sign-preserving (`clip=False`, which lowers the penalty of
+every round below the offset, an empty one included); `offset=0` is the 0.2.0 shaping.
+Each pick is its own instance with its own knobs, and the instances add up:
+
+```python
+from sports_league.constraints import AwayToAwayHopCost, get_constraints
+
+sl.solve(schedule, constraints=[
+    *get_constraints(),                                        # the defaults
+    AwayToAwayHopCost(weight=0.01, exponent=2, offset=1000),  # + 0.01 x (km beyond 1000)^2
+])
+```
+
+`sl.constraint_costs(schedule, picks)` keys the second pick `away_to_away_hop_cost#2`. The
+CP-SAT reference takes integral offsets.
+
 ## Usage
 
 ```sh
@@ -145,7 +165,7 @@ solver's `solve` before the engine runs — the engine only fills what is still 
 4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
    `description_en` / `description_ko` to `python/sports_league/constraints.py` (plus its
    module-level default instance); callers then pick, reweight or flip it:
-   `constraints=get_constraints([..., MyRuleCost(weight=5, hard=True)])`;
+   `constraints=[..., MyRuleCost(weight=5, hard=True)]`;
 5. mirror it in the CP-SAT model in
    [`benchmarks/sports-league-scheduling/cpsat`](../../benchmarks/sports-league-scheduling/cpsat)
    (a plugin subclassing the spec; defaults come from `constraint_info()`) so the

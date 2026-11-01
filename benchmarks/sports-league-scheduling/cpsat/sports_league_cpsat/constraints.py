@@ -6,6 +6,13 @@ components' kDefaultLevel / kDefaultWeight), so they are not restated here.
 Before 0.2.0 the derby plugin restated only its level and so priced a workday
 derby at weight 1 instead of the engine's 1000; reading the engine's catalog
 removes that mismatch.
+
+Every plugin adds one term per engine unit: the three unit constraints
+(start_to_away_hop_cost, away_to_end_hop_cost, workday_classic_matches_cost) one
+per round position, every round included (one that cannot cost is the constant
+0), the seven globals one for their total. So a pick's ``offset`` / ``clip``
+shape each round (or the total) exactly as the engine does (``terms_per_unit``),
+and a constraint picked several times adds one set of terms per pick.
 """
 
 from dataclasses import dataclass, field
@@ -39,7 +46,10 @@ class LeagueContext:
 
 
 class TeamConflictCost(domain.TeamConflictCost, ConstraintPlugin[LeagueContext]):
+    terms_per_unit = True  # a global constraint: one term for its total
+
     def build(self, context: LeagueContext, objective: ObjectiveBuilder) -> None:
+        pairs = []
         for left in range(len(context.problem.matches)):
             a = context.problem.matches[left]
             teams = {a.home_team, a.away_team}
@@ -58,13 +68,17 @@ class TeamConflictCost(domain.TeamConflictCost, ConstraintPlugin[LeagueContext])
                                 context.x[right, right_round],
                             ],
                         )
-                        objective.add(self.name, both, bound=1)
+                        pairs.append(both)
+        objective.add(self.name, sum(pairs), bound=len(pairs))
 
 
 class RepeatMatchOnNextDayCost(
     domain.RepeatMatchOnNextDayCost, ConstraintPlugin[LeagueContext]
 ):
+    terms_per_unit = True  # a global constraint: one term for its total
+
     def build(self, context: LeagueContext, objective: ObjectiveBuilder) -> None:
+        pairs = []
         for left in range(len(context.problem.matches)):
             a = context.problem.matches[left]
             for right in range(left + 1, len(context.problem.matches)):
@@ -82,13 +96,16 @@ class RepeatMatchOnNextDayCost(
                                 context.x[right, right_round],
                             ],
                         )
-                        objective.add(self.name, both, bound=1)
+                        pairs.append(both)
+        objective.add(self.name, sum(pairs), bound=len(pairs))
 
 
 class _ConsecutiveSidePlugin(ConstraintPlugin[LeagueContext]):
     side: ClassVar[str]
+    terms_per_unit = True  # a global constraint: one term for its total
 
     def build(self, context: LeagueContext, objective: ObjectiveBuilder) -> None:
+        bad_indices = []
         for team in range(len(context.problem.teams)):
             present = []
             for round_index in range(context.max_round_index + 1):
@@ -125,7 +142,8 @@ class _ConsecutiveSidePlugin(ConstraintPlugin[LeagueContext]):
                     f"team_{team}_{self.side}_bad_{round_index}"
                 )
                 context.model.add_max_equality(bad, covering)
-                objective.add(self.name, bad, bound=1)
+                bad_indices.append(bad)
+        objective.add(self.name, sum(bad_indices), bound=len(bad_indices))
 
 
 class ConsecutiveHomeMatchesCost(
@@ -140,34 +158,55 @@ class ConsecutiveAwayMatchesCost(
     side = "away"
 
 
+def _per_round(name, context, objective, amount_of) -> None:
+    """One term per round position: the summed ``amount_of(match, round)`` of the
+    matches played there (the constant 0 when no match can cost there)."""
+    for round_, round_data in enumerate(context.problem.rounds):
+        amounts = [
+            (match, amount_of(match_data, round_data))
+            for match, match_data in enumerate(context.problem.matches)
+        ]
+        amounts = [(match, amount) for match, amount in amounts if amount]
+        objective.add(
+            name,
+            sum(amount * context.x[match, round_] for match, amount in amounts),
+            bound=sum(amount for _, amount in amounts),
+        )
+
+
 class StartToAwayHopCost(domain.StartToAwayHopCost, ConstraintPlugin[LeagueContext]):
+    terms_per_unit = True  # one term per round position
+
     def build(self, context: LeagueContext, objective: ObjectiveBuilder) -> None:
-        for match, match_data in enumerate(context.problem.matches):
-            for round_, round_data in enumerate(context.problem.rounds):
-                if (
-                    round_data.index != 0
-                    and round_data.index - 1 in context.round_position_by_index
-                ):
-                    continue
-                value = context.distance[match_data.away_team][match_data.home_team]
-                objective.add(self.name, value * context.x[match, round_], bound=value)
+        def amount(match_data, round_data) -> int:
+            if (
+                round_data.index != 0
+                and round_data.index - 1 in context.round_position_by_index
+            ):
+                return 0
+            return context.distance[match_data.away_team][match_data.home_team]
+
+        _per_round(self.name, context, objective, amount)
 
 
 class AwayToEndHopCost(domain.AwayToEndHopCost, ConstraintPlugin[LeagueContext]):
+    terms_per_unit = True  # one term per round position
+
     def build(self, context: LeagueContext, objective: ObjectiveBuilder) -> None:
-        for match, match_data in enumerate(context.problem.matches):
-            for round_, round_data in enumerate(context.problem.rounds):
-                if (
-                    round_data.index != context.max_round_index
-                    and round_data.index + 1 in context.round_position_by_index
-                ):
-                    continue
-                value = context.distance[match_data.home_team][match_data.away_team]
-                objective.add(self.name, value * context.x[match, round_], bound=value)
+        def amount(match_data, round_data) -> int:
+            if (
+                round_data.index != context.max_round_index
+                and round_data.index + 1 in context.round_position_by_index
+            ):
+                return 0
+            return context.distance[match_data.home_team][match_data.away_team]
+
+        _per_round(self.name, context, objective, amount)
 
 
 class _BetweenMatchesPlugin(ConstraintPlugin[LeagueContext]):
     transition: ClassVar[str]
+    terms_per_unit = True  # a global constraint: one term for its total
 
     def amount(self, context: LeagueContext, left: Any, right: Any) -> int:
         if self.transition == "home_to_away" and right.away_team == left.home_team:
@@ -179,6 +218,8 @@ class _BetweenMatchesPlugin(ConstraintPlugin[LeagueContext]):
         return 0
 
     def build(self, context: LeagueContext, objective: ObjectiveBuilder) -> None:
+        terms = []
+        bound = 0
         for left in range(len(context.problem.matches)):
             for right in range(len(context.problem.matches)):
                 if left == right:
@@ -201,7 +242,9 @@ class _BetweenMatchesPlugin(ConstraintPlugin[LeagueContext]):
                                 context.x[right, right_round],
                             ],
                         )
-                        objective.add(self.name, amount * both, bound=amount)
+                        terms.append(amount * both)
+                        bound += amount
+        objective.add(self.name, sum(terms), bound=bound)
 
 
 class HomeToAwayHopCost(domain.HomeToAwayHopCost, _BetweenMatchesPlugin):
@@ -219,17 +262,17 @@ class AwayToHomeHopCost(domain.AwayToHomeHopCost, _BetweenMatchesPlugin):
 class WorkdayClassicMatchesCost(
     domain.WorkdayClassicMatchesCost, ConstraintPlugin[LeagueContext]
 ):
+    terms_per_unit = True  # one term per round position
+
     def build(self, context: LeagueContext, objective: ObjectiveBuilder) -> None:
-        for match, match_data in enumerate(context.problem.matches):
-            if not match_data.classic_match:
-                continue
-            for round_, round_data in enumerate(context.problem.rounds):
-                invalid = int(not round_data.weekend_or_holiday)
-                objective.add(
-                    self.name,
-                    invalid * context.x[match, round_],
-                    bound=invalid,
-                )
+        _per_round(
+            self.name,
+            context,
+            objective,
+            lambda match_data, round_data: int(
+                match_data.classic_match and not round_data.weekend_or_holiday
+            ),
+        )
 
 
 # Plugin order = sports_league.list_constraints() order (unit constraints first).

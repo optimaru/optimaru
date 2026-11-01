@@ -52,7 +52,7 @@ def test_cpsat_defaults_are_the_engine_defaults() -> None:
         assert entry["reward"] == row.reward
         assert entry["default_enabled"] == row.default_enabled
         assert entry["kind"] == "either"  # every bin-packing constraint is flippable
-        assert entry["params"] == {"weight": None, "hard": None, "exponent": 1.0}
+        assert entry["params"] == {"weight": None, "hard": None, "exponent": 1.0, "offset": 0.0, "clip": True}
 
 
 def test_exact_solver_matches_hand_calculated_optimum() -> None:
@@ -186,3 +186,48 @@ def test_demoting_capacity_scores_like_the_engine() -> None:
     engine = score(domain.constraint_costs(solved.to_core()), selection)
     assert (solved.score_hard, solved.score_soft) == pytest.approx(tuple(engine))
     assert solved.score_hard == 0
+
+
+# --- 0.3.0: repeated picks and offset / clip ---------------------------------------
+
+SELECTIONS = {
+    "repeat": [BinCapacityCost(), BinCapacityCost(weight=3, offset=1), UsedBinsCost()],
+    "repeat-literal": [
+        ColorConflictCost(offset=1, clip=False),
+        ColorConflictCost(weight=2, offset=-1),
+        UsedBinsCost(),
+        UsedBinsCost(weight=5, offset=2, clip=False),
+    ],
+    "hard-offsets": [
+        BinCapacityCost(offset=2, clip=False),
+        ItemConflictCost(weight=2, offset=-1),
+        ItemConflictCost(offset=1, clip=False),
+        UsedBinsCost(hard=True, offset=1),
+    ],
+    "identical-twice": [ItemConflictCost(), ItemConflictCost(), UsedBinsCost()],
+}
+
+
+@pytest.mark.parametrize("selection", list(SELECTIONS.values()), ids=list(SELECTIONS))
+def test_repeated_and_shifted_picks_reach_the_brute_force_optimum(selection) -> None:
+    problem = _parity_problem()
+    expected = _brute_force_score(problem, selection)
+    solved = solve(problem, time_limit_seconds=5, constraints=selection)
+    assert (solved.score_hard, solved.score_soft) == pytest.approx(tuple(expected))
+    engine = score(domain.constraint_costs(solved.to_core(), selection), selection)
+    assert (solved.score_hard, solved.score_soft) == pytest.approx(tuple(engine))
+
+
+def test_mapping_selections_repeat_and_shift_like_specs() -> None:
+    """The server's {name, weight, offset, clip} dicts pick the same instances as specs."""
+    specs = [UsedBinsCost(), UsedBinsCost(weight=3, offset=1, clip=False)]
+    dicts = [{"name": "used_bins_cost"}, {"name": "used_bins_cost", "weight": 3, "offset": 1, "clip": False}]
+    problem = _parity_problem()
+    assert solve(problem, time_limit_seconds=5, constraints=dicts) == solve(
+        problem, time_limit_seconds=5, constraints=specs
+    )
+
+
+def test_a_fractional_offset_is_refused_by_cpsat() -> None:
+    with pytest.raises(ValueError, match="offset must be an integer for CP-SAT"):
+        solve(_parity_problem(), time_limit_seconds=1, constraints=[BinCapacityCost(offset=0.5)])

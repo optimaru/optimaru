@@ -1,7 +1,8 @@
 """sports_league.constraints — an API for picking the cost function declaratively.
 
 Spot checks of individual constraint values live in `test_constraints.py`. This
-file only covers the selection path that picks "which constraints are on".
+file covers the selection path that picks "which constraints are on", the five
+knobs and repeated picks.
 """
 
 import pickle
@@ -334,6 +335,9 @@ def test_demoting_a_hard_constraint_scores_it_as_soft():
         ({"exponent": 0}, ValueError),
         ({"exponent": -1.0}, ValueError),
         ({"hard": 1}, TypeError),
+        ({"offset": float("nan")}, ValueError),
+        ({"offset": "1"}, TypeError),
+        ({"clip": 0}, TypeError),
     ],
 )
 def test_specs_validate_their_knobs(kwargs, error):
@@ -356,7 +360,18 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
         hard = None
         exponent = 0.0
 
-    for pick, message in ((Negative(), "weight must be finite and >= 0"), (Flat(), "exponent must be finite and > 0")):
+    class Unbounded:
+        name = "workday_classic_matches_cost"
+        weight = None
+        hard = None
+        exponent = 1.0
+        offset = float("inf")
+
+    for pick, message in (
+        (Negative(), "weight must be finite and >= 0"),
+        (Flat(), "exponent must be finite and > 0"),
+        (Unbounded(), "offset must be finite, not inf"),
+    ):
         with pytest.raises(ValueError, match=message):
             sl.solve(build_schedule(), time_limit_seconds=0.1, constraints=[pick])
 
@@ -369,6 +384,10 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
         ({"hard": 1}, "hard must be True, False or None, not 1"),
         ({"hard": "x"}, "hard must be True, False or None, not 'x'"),
         ({"exponent": True}, "exponent must be a number, not True"),
+        ({"offset": "5"}, "offset must be a number, not '5'"),
+        ({"offset": False}, "offset must be a number, not False"),
+        ({"clip": 1}, "clip must be True or False, not 1"),
+        ({"clip": "no"}, "clip must be True or False, not 'no'"),
     ],
 )
 def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
@@ -382,9 +401,19 @@ def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
         WorkdayClassicMatchesCost(**knobs)
 
 
-def test_a_constraint_named_twice_is_rejected():
-    with pytest.raises(ValueError, match="picked more than once"):
-        get_constraints([team_conflict_cost, TeamConflictCost(weight=2)])
+def test_a_constraint_named_twice_scores_both_picks():
+    """Since 0.3.0 a constraint may be picked several times: each pick is scored on its own.
+
+    The later pick no longer wins in silence, nor is it an error: both are
+    instances with their own knobs, and they add up."""
+    assert get_constraints([TeamConflictCost(), TeamConflictCost(weight=2)]) == [
+        TeamConflictCost(),
+        TeamConflictCost(weight=2),
+    ]
+    picks = [TeamConflictCost(), TeamConflictCost(weight=2)]
+    solved = forced_conflict_schedule()
+    sl.solve(solved, time_limit_seconds=0.3, random_seed=1, constraints=picks)
+    assert (solved.score.hard, solved.score.soft) == (-(1 + 2), 0.0)  # the one unavoidable conflict, twice
 
 
 def test_old_names_are_gone():
@@ -409,3 +438,223 @@ def test_old_names_are_gone():
             score(raw, [pick])
     for gone in ("Breakdown", "compute_breakdown"):
         assert not hasattr(sl, gone)
+
+
+# --- 0.3.0: repeated picks and the offset / clip knobs ------------------------------
+
+
+def _two_rounds():
+    """Two round positions (indices 0, 1), four teams at synthetic distances, both matches placed.
+
+    (0, 1) in round 0 and (2, 0) in round 1. Raw: start_to_away_hop_cost [21, 0] (team 1
+    travels d(1, 0) = 21 to the season's first round), away_to_end_hop_cost [0, 31] (team 0
+    travels home from the last round, d(2, 0) = 31), workday_classic_matches_cost [0, 0];
+    the globals: home_to_away_hop_cost 13 (team 0 from its home to 2's, d(0, 2)), every
+    other total 0.
+    """
+    distance = [[0 if a == b else 10 * (a + 1) + (b + 1) for b in range(4)] for a in range(4)]
+    return sl.LeagueSchedule(
+        [sl.Team(str(t)) for t in range(4)],
+        [sl.Round(0), sl.Round(1)],
+        [sl.Match("a", 0, 1, round=0), sl.Match("b", 2, 0, round=1)],
+        distance,
+    )
+
+
+def _zero_budget_solve(schedule, picks):
+    """Score a complete assignment under ``picks`` on the engine: no step is taken."""
+    config = sl.SolverConfig()
+    config.spent_limit_seconds = 0
+    assignment = schedule.assignment()
+    sl.Solver(config).solve_with_constraints(schedule, picks)
+    assert schedule.assignment() == assignment
+    return schedule
+
+
+def _engine(picks):
+    solved = _zero_budget_solve(_two_rounds(), picks)
+    return (solved.score.hard, solved.score.soft)
+
+
+REPEAT = [HomeToAwayHopCost(), HomeToAwayHopCost(weight=2, exponent=2)]
+
+
+def test_the_hand_instance():
+    raw = sl.constraint_costs(_two_rounds())
+    assert raw["start_to_away_hop_cost"]["costs"] == [21.0, 0.0]
+    assert raw["away_to_end_hop_cost"]["costs"] == [0.0, 31.0]
+    assert raw["workday_classic_matches_cost"]["costs"] == [0.0, 0.0]
+    assert raw["home_to_away_hop_cost"]["costs"] == [13.0]
+    assert score(raw) == _engine(None) == (0, -(21 + 31 + 13))
+
+
+def test_a_repeated_pick_by_hand():
+    """home-to-away km plus 2 x its square on the total: 13 + 2 x 169 = 351."""
+    raw = sl.constraint_costs(_two_rounds(), REPEAT)
+    assert list(raw) == ["home_to_away_hop_cost", "home_to_away_hop_cost#2"]
+    first, second = raw.values()
+    assert first["costs"] == second["costs"] == [13.0]
+    assert (first["weight"], first["exponent"], second["weight"], second["exponent"]) == (1.0, 1.0, 2.0, 2.0)
+    assert first["name"] == second["name"] == "home_to_away_hop_cost"
+    assert second["default_weight"] == 1.0
+    expected = (0, -(13 + 2 * 13**2))
+    assert expected == (0, -351)
+    assert score(raw, REPEAT) == expected
+    # The default costs hold the name once; the second pick reads the same raw costs.
+    assert score(sl.constraint_costs(_two_rounds()), REPEAT) == expected
+    assert _engine(REPEAT) == expected
+
+
+def test_a_repeated_unit_pick_by_hand():
+    """start hop per round plus 0.5 x its square: -(21 + 0.5 x 441) on round 0."""
+    picks = [StartToAwayHopCost(), StartToAwayHopCost(weight=0.5, exponent=2)]
+    raw = sl.constraint_costs(_two_rounds(), picks)
+    assert list(raw) == ["start_to_away_hop_cost", "start_to_away_hop_cost#2"]
+    assert raw["start_to_away_hop_cost"]["costs"] == raw["start_to_away_hop_cost#2"]["costs"]
+    assert score(raw, picks) == (0, -241.5)
+    assert score(sl.constraint_costs(_two_rounds()), picks) == (0, -241.5)
+    assert _engine(picks) == (0, -241.5)
+
+
+def test_identical_picks_count_twice():
+    picks = [HomeToAwayHopCost(), HomeToAwayHopCost()]
+    assert score(sl.constraint_costs(_two_rounds()), picks) == (0, -26.0)
+    assert _engine(picks) == (0, -26.0)
+    assert list(sl.constraint_costs(_two_rounds(), picks)) == ["home_to_away_hop_cost", "home_to_away_hop_cost#2"]
+
+
+def test_the_keys_follow_the_pick_order_of_each_name():
+    picks = [
+        HomeToAwayHopCost(weight=1),
+        StartToAwayHopCost(),
+        HomeToAwayHopCost(weight=2),
+        TeamConflictCost(),
+        HomeToAwayHopCost(weight=3),
+    ]
+    raw = sl.constraint_costs(_two_rounds(), picks)
+    assert {key: entry["weight"] for key, entry in raw.items()} == {
+        "start_to_away_hop_cost": 1.0,
+        "team_conflict_cost": 1.0,
+        "home_to_away_hop_cost": 1.0,
+        "home_to_away_hop_cost#2": 2.0,
+        "home_to_away_hop_cost#3": 3.0,
+    }
+    assert score(raw, picks) == (0, -(21 + 6 * 13))
+    assert _engine(picks) == score(raw, picks)
+
+
+@pytest.mark.parametrize(
+    ("pick", "expected"),
+    [
+        # Unit constraints, shaped per round position; an empty round (raw 0) counts in
+        # literal mode.
+        (StartToAwayHopCost(offset=10), (0, -11.0)),
+        (StartToAwayHopCost(offset=10, clip=False), (0, -(11 - 10))),  # round 1 is rewarded
+        (StartToAwayHopCost(offset=30), (0, 0.0)),
+        (StartToAwayHopCost(offset=30, clip=False), (0, -(-9 - 30))),
+        (AwayToEndHopCost(offset=-5), (0, -36.0)),  # a negative offset adds to every non-zero round
+        (AwayToEndHopCost(offset=-5, clip=False), (0, -(5 + 36))),  # ...or to every round
+        (WorkdayClassicMatchesCost(offset=1, clip=False, weight=1), (0, 2.0)),  # two derby-free rounds
+        (StartToAwayHopCost(hard=True, offset=0.5, clip=False, weight=3), (-(62 - 2), 0.0)),  # 61.5 -> 62, -1.5 -> -2
+        # Global constraints shape their one total.
+        (HomeToAwayHopCost(offset=3), (0, -10.0)),
+        (HomeToAwayHopCost(offset=20, clip=False), (0, 7.0)),  # 13 - 20: a reward below 20 km
+        (HomeToAwayHopCost(offset=10, exponent=2), (0, -9.0)),
+        (HomeToAwayHopCost(offset=15, exponent=3, clip=False), (0, 8.0)),
+        (TeamConflictCost(offset=-1), (0, 0.0)),  # the threshold leaves a 0 at 0
+        (TeamConflictCost(offset=0.5, clip=False, weight=3), (2, 0.0)),  # -1.5 -> -2: a hard reward
+    ],
+)
+def test_offsets_by_hand_on_both_paths(pick, expected):
+    """threshold sign(x) max(0, |x| - offset)^e and literal (x - offset)^e: Python mirror == engine == hand."""
+    assert score(sl.constraint_costs(_two_rounds()), [pick]) == expected
+    raw = sl.constraint_costs(_two_rounds(), [pick])
+    entry = next(iter(raw.values()))
+    assert (entry["offset"], entry["clip"]) == (float(pick.offset), pick.clip)
+    assert "units" not in entry  # every round is evaluated: no scoped constraint here
+    assert score(raw, [pick]) == expected
+    assert _engine([pick]) == expected
+
+
+def test_offset_zero_reproduces_the_0_2_0_scores():
+    """offset 0 is the plain shaping in both modes, so every 0.2.0 selection scores the same."""
+    plain = [*get_constraints()[:9], AwayToHomeHopCost(exponent=2)]
+    shifted = [type(spec)(offset=0.0, clip=bool(index % 2)) for index, spec in enumerate(get_constraints()[:9])]
+    shifted.append(AwayToHomeHopCost(exponent=2, offset=0, clip=False))
+    raw, schedule = _raw()
+    assert score(raw, shifted) == score(raw, plain)
+    engines = []
+    for picks in (plain, shifted):
+        copy = build_schedule()
+        copy.set_assignment(schedule.assignment())
+        engines.append(_zero_budget_solve(copy, picks))
+    assert engines[0].assignment() == engines[1].assignment() == schedule.assignment()
+    assert (engines[0].score.hard, engines[0].score.soft) == (engines[1].score.hard, engines[1].score.soft)
+    for entry in raw.values():
+        assert (entry["offset"], entry["clip"]) == (0.0, True)
+
+
+@pytest.mark.parametrize(
+    "specs",
+    [
+        [*get_constraints(), *REPEAT, StartToAwayHopCost(weight=2, exponent=2)],
+        [
+            *HARD_PICKS,
+            TeamConflictCost(offset=1, clip=False, weight=2),
+            StartToAwayHopCost(offset=500),
+            AwayToEndHopCost(offset=200, clip=False, weight=0.5),
+            WorkdayClassicMatchesCost(),
+            WorkdayClassicMatchesCost(offset=-1, weight=10),
+            HomeToAwayHopCost(offset=2000),
+            AwayToAwayHopCost(offset=5000, clip=False, exponent=2, weight=0.001),
+            AwayToHomeHopCost(),
+        ],
+    ],
+    ids=["repeat", "repeat-and-offsets"],
+)
+def test_score_matches_the_engine_for_repeated_and_shifted_specs(specs):
+    schedule = build_schedule()
+    sl.solve(schedule, time_limit_seconds=0.4, random_seed=1, constraints=specs)
+    python = score(sl.constraint_costs(schedule, specs), specs)
+    assert python.hard == schedule.score.hard
+    assert python.soft == pytest.approx(schedule.score.soft)
+    assert score(sl.constraint_costs(schedule), specs) == python  # the default costs score the repeats too
+
+
+@pytest.mark.parametrize(
+    "picks",
+    [
+        [*get_constraints(), *REPEAT, StartToAwayHopCost(weight=2, exponent=2)],
+        [
+            TeamConflictCost(),
+            TeamConflictCost(offset=1, clip=False, weight=2),
+            ConsecutiveHomeMatchesCost(offset=-1),
+            ConsecutiveAwayMatchesCost(offset=2, clip=False),
+            RepeatMatchOnNextDayCost(),
+            StartToAwayHopCost(offset=500, clip=False, weight=0.25),
+            AwayToEndHopCost(offset=-100),
+            WorkdayClassicMatchesCost(offset=1, clip=False),
+            HomeToAwayHopCost(offset=2000, exponent=2, weight=0.001),
+            AwayToAwayHopCost(),
+            AwayToAwayHopCost(offset=5000, clip=False),
+            AwayToHomeHopCost(),
+        ],
+    ],
+    ids=["repeat", "repeat-and-offsets"],
+)
+def test_full_assert_solves_with_repeats_and_offsets(picks):
+    """FULL_ASSERT re-checks the incremental score against a full recompute after every move."""
+    schedule = build_schedule()
+    config = sl.SolverConfig()
+    config.full_assert = True
+    config.random_seed = 3
+    config.parallel_solver_count = 1
+    config.step_count_limit = 3000
+    config.spent_limit_seconds = 60
+    sl.Solver(config).solve_with_constraints(schedule, picks)
+    raw = sl.constraint_costs(schedule, picks)
+    assert len(raw) == len(picks)
+    python = score(raw, picks)
+    assert python.hard == schedule.score.hard
+    assert python.soft == pytest.approx(schedule.score.soft)
+    assert score(sl.constraint_costs(schedule), picks) == python

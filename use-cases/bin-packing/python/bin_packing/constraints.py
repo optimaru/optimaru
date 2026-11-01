@@ -2,25 +2,24 @@
 
 The default path (`bp.solve(problem)`) enables all four constraints at their default
 weights. This module is the alternative path next to it: pick constraints, change
-weights, flip hard/soft, and pass the list to `solve(problem, constraints=...)`.
+weights, flip hard/soft, shape the cost, and pass the list to
+`solve(problem, constraints=...)`.
 
-The shortest route is :func:`get_constraints`. It returns the default list, so
-a "default with a small tweak" declaration fits on one line::
+A constraint list reads one way: one class call per constraint::
 
     import bin_packing as bp
-    from bin_packing.constraints import UsedBinsCost, bin_capacity_cost, get_constraints
+    from bin_packing.constraints import BinCapacityCost, UsedBinsCost, get_constraints
 
-    bp.solve(problem, constraints=get_constraints())              # defaults as-is
-    bp.solve(problem, constraints=get_constraints([              # picked
-        bin_capacity_cost, UsedBinsCost(weight=10),
-    ]))
+    bp.solve(problem, constraints=get_constraints())              # the defaults as-is
+    bp.solve(problem, constraints=[                                # picked
+        BinCapacityCost(), UsedBinsCost(weight=10),
+    ])
 
-Default instances (`bin_capacity_cost`, `color_conflict_cost`, `item_conflict_cost`,
-`used_bins_cost`) live at module level, so you can also pass a list of just a few.
 Only listed constraints are scored — leave one out and its term disappears from the
-score.
+score. (The module also carries ready-made default instances: ``bin_capacity_cost``
+is ``BinCapacityCost()``, and so on.)
 
-Every spec takes ``(weight=None, hard=None, exponent=1.0)``:
+Every spec takes five knobs:
 
 - ``weight``   linear multiplier on the constraint cost. ``None`` = the component
                default (1 for every bin-packing constraint). The problem carries no
@@ -30,9 +29,26 @@ Every spec takes ``(weight=None, hard=None, exponent=1.0)``:
 - ``hard``     ``True`` = hard, ``False`` = soft, ``None`` = the default level.
 - ``exponent`` sign-preserving power shaping: ``weight * sign(c) * |c| ** exponent``.
                Applied per BIN for the three per-bin constraints, and on the bin
-               count for ``used_bins_cost``. (0.1.x shaped colour excess per
+               count for UsedBinsCost. (0.1.x shaped colour excess per
                (bin, colour) and conflicts per pair; the totals and every
                exponent-1 score are unchanged.)
+- ``offset``   (keyword) shifts that shaping, at the same granularity; 0.0 = none.
+- ``clip``     (keyword) ``True`` (the default) counts only what lies beyond the
+               offset, ``max(0, c - offset) ** exponent``; ``False`` shapes
+               ``c - offset`` as it is, so a bin below the offset — an empty one
+               (cost 0) included, every bin 0 .. item count - 1 — lowers the
+               penalty, and a bin count below it does too.
+
+The same constraint may be picked several times; each pick is scored on its own with
+its own knobs and the picks add up. Every bin costs 1, and every bin beyond the tenth
+100 on top::
+
+    bp.solve(problem, constraints=[
+        *get_constraints(),
+        UsedBinsCost(weight=100, offset=10),
+    ])
+
+``bp.constraint_costs(problem, picks)`` keys the second pick ``"used_bins_cost#2"``.
 
 Names (`name`) are the C++ component names in snake_case
 (``BinCapacityCost`` -> ``bin_capacity_cost``). The core derives them mechanically,
@@ -125,7 +141,7 @@ class UsedBinsCost(Constraint):
     description_ko = "물건이 하나라도 담긴 상자의 수입니다. 0이면 담긴 물건이 없습니다."
 
 
-#: Instances at the default weights (weight=None). Reference them directly when picking.
+#: Ready-made default instances (``bin_capacity_cost`` is ``BinCapacityCost()``).
 bin_capacity_cost = BinCapacityCost()
 color_conflict_cost = ColorConflictCost()
 item_conflict_cost = ItemConflictCost()
@@ -139,12 +155,13 @@ def get_constraints(constraints: list[Constraint] | None = None) -> list[Constra
     """Return the cost function. Without arguments, all four default constraints.
 
     When `constraints` is given, that list is used as-is — only the listed
-    constraints are scored. To change just one default, mix in the default instances::
+    constraints are scored::
 
-        get_constraints([bin_capacity_cost, color_conflict_cost, item_conflict_cost, UsedBinsCost(weight=10)])
+        get_constraints([BinCapacityCost(), ColorConflictCost(), ItemConflictCost(), UsedBinsCost(weight=10)])
 
     Same contract as the C++ applyConstraints: an empty list (most likely a filter
-    that came out empty) and a constraint named twice raise ValueError.
+    that came out empty) raises ValueError; a constraint named several times is
+    scored once per pick, each with its own knobs.
     """
     return select(constraints, _DEFAULTS)
 
@@ -154,16 +171,19 @@ def score(costs: dict, constraints: list[Constraint] | None = None) -> Score:
 
     ``costs`` is what `bp.constraint_costs(problem)` returns: per constraint, the
     **raw** cost of each bin (``used_bins_cost``: the one bin count), before weight,
-    exponent and level rounding. Fetch it once and rescore with different weights
-    without re-solving::
+    exponent, offset and level rounding. Fetch it once and rescore with different
+    weights without re-solving::
 
         raw = bp.constraint_costs(problem)
         score(raw)                                    # default set
-        score(raw, [bin_capacity_cost, UsedBinsCost(weight=10)])
+        score(raw, [BinCapacityCost(), UsedBinsCost(weight=10)])
+        score(raw, [UsedBinsCost(), UsedBinsCost(weight=100, offset=10)])
 
     No solver and no search are involved. The arithmetic matches the engine —
-    each bin contributes ``weight * shape(cost, exponent)`` and hard contributions
-    are **rounded per bin** before summing (the same order as the engine).
+    each bin contributes ``weight * shape(cost, exponent, offset, clip)`` and hard
+    contributions are **rounded per bin** before summing (the same order as the
+    engine). A second pick of a constraint reads the same raw costs with its own
+    knobs.
 
     When ``constraints`` is given, only those constraints are scored — the same
     semantics as `get_constraints`. Unknown names raise ValueError.

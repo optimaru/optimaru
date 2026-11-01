@@ -29,11 +29,16 @@ alb.constraint_info()
 alb.solve(problem, time_limit_seconds=1.0, constraints=[*get_constraints()[:-1], WorkloadImbalanceCost(weight=1)])
 raw = alb.constraint_costs(problem)       # raw costs per station (one total for a global)
 score(raw), score(raw, [UsedStationsCost(exponent=2.0)])
+# A constraint may be picked several times, each pick with its own knobs; offset / clip
+# shift the shaping (clip=True: only the used stations beyond the fourth count).
+score(raw, [UsedStationsCost(), UsedStationsCost(weight=10, offset=4)])
 ```
 
 `exponent` shapes each station's raw cost for the per-station constraints and the single
 total for the globals (`task_precedence_cost`, `same_station_groups_cost`,
-`used_stations_cost`, `workload_imbalance_cost`). 0.2.0 renamed every constraint (no
+`used_stations_cost`, `workload_imbalance_cost`); the keyword-only `offset` / `clip`
+shift that shaping at the same granularity (0.3.0, see the
+[use-case README](../README.md#030)). 0.2.0 renamed every constraint (no
 aliases), replaced the simulated-annealing `SolverConfig` knobs (`max_iterations`,
 `stagnation_limit`, `temperature`, `cooling_rate`) by the engine's
 (`spent_limit_seconds`, `step_count_limit`, ...), and now charges an unassigned task

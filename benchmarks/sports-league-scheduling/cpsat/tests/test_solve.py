@@ -1,7 +1,16 @@
+from itertools import product
+
 import pytest
 
 import sports_league as domain
 from sports_league.constraints import (
+    AwayToAwayHopCost,
+    AwayToEndHopCost,
+    AwayToHomeHopCost,
+    ConsecutiveHomeMatchesCost,
+    HomeToAwayHopCost,
+    RepeatMatchOnNextDayCost,
+    StartToAwayHopCost,
     TeamConflictCost,
     WorkdayClassicMatchesCost,
     get_constraints,
@@ -126,7 +135,13 @@ def test_cpsat_defaults_are_the_engine_defaults() -> None:
         assert entry["reward"] == row.reward
         assert entry["default_enabled"] == row.default_enabled
         assert entry["kind"] == "either"  # every sports-league constraint is flippable
-        assert entry["params"] == {"weight": None, "hard": None, "exponent": 1.0}
+        assert entry["params"] == {
+            "weight": None,
+            "hard": None,
+            "exponent": 1.0,
+            "offset": 0.0,
+            "clip": True,
+        }
 
 
 def test_workday_derby_default_weight_is_the_engines_1000() -> None:
@@ -203,3 +218,115 @@ def test_demoting_team_conflict_scores_like_the_engine() -> None:
 
     assert (proxy["hard"], proxy["soft"]) == pytest.approx(tuple(engine))
     assert (solved.score_hard, solved.score_soft) == pytest.approx(tuple(engine))
+
+
+# --- 0.3.0: repeated picks and offset / clip ---------------------------------------
+
+
+def _three_rounds() -> LeagueScheduleModel:
+    """Three teams, rounds 0-2 (1 a weekend), three matches (a derby, its return
+    fixture, one more): 27 assignments."""
+    return LeagueScheduleModel(
+        teams=[TeamModel(id=str(team)) for team in range(3)],
+        rounds=[
+            RoundModel(index=0),
+            RoundModel(index=1, weekend_or_holiday=True),
+            RoundModel(index=2),
+        ],
+        matches=[
+            MatchModel(id="a", home_team=0, away_team=1, classic_match=True),
+            MatchModel(id="b", home_team=1, away_team=0, classic_match=True),
+            MatchModel(id="c", home_team=2, away_team=0),
+        ],
+        distance_to_team=[[0, 11, 12], [21, 0, 22], [31, 32, 0]],
+    )
+
+
+SELECTIONS = {
+    "repeat": [
+        TeamConflictCost(),
+        TeamConflictCost(weight=3, offset=1),
+        HomeToAwayHopCost(),
+        StartToAwayHopCost(),
+    ],
+    "repeat-literal": [
+        StartToAwayHopCost(offset=10, clip=False),
+        StartToAwayHopCost(weight=2, offset=-3),
+        AwayToEndHopCost(),
+        AwayToEndHopCost(weight=2, offset=20, clip=False),
+        WorkdayClassicMatchesCost(offset=1, clip=False),
+    ],
+    "hard-offsets": [
+        TeamConflictCost(offset=1, clip=False),
+        RepeatMatchOnNextDayCost(weight=2, offset=-1),
+        ConsecutiveHomeMatchesCost(offset=2, clip=False),
+        AwayToAwayHopCost(hard=True, offset=10),
+        AwayToHomeHopCost(offset=5, clip=False),
+    ],
+    "identical-twice": [
+        HomeToAwayHopCost(),
+        HomeToAwayHopCost(),
+        TeamConflictCost(),
+    ],
+}
+
+
+def _engine_of(problem, fixed, selection):
+    candidate = problem.model_copy(deep=True)
+    for match, round_ in zip(candidate.matches, fixed, strict=True):
+        match.round = round_
+    core = candidate.to_core()
+    return tuple(score(domain.constraint_costs(core, selection), selection))
+
+
+@pytest.mark.parametrize("selection", list(SELECTIONS.values()), ids=list(SELECTIONS))
+def test_the_cpsat_terms_equal_the_engine_on_every_assignment(selection) -> None:
+    """Pin each of the 27 assignments: the CP-SAT objective's own levels are the engine's
+    score under the same repeated / shifted picks, exactly (every round is a term of a
+    unit constraint, an empty one included); the reported score re-prices the default
+    costs (each name once) to the same value."""
+    problem = _three_rounds()
+    for fixed in product(range(3), repeat=3):
+        proxy: dict[str, int] = {}
+        solved = solve(
+            problem,
+            time_limit_seconds=5,
+            constraints=selection,
+            _fixed_rounds=list(fixed),
+            _proxy_score=proxy,
+        )
+        engine = _engine_of(problem, fixed, selection)
+        assert (proxy["hard"], proxy["soft"]) == engine, fixed
+        assert (solved.score_hard, solved.score_soft) == engine, fixed
+
+
+@pytest.mark.parametrize("selection", list(SELECTIONS.values()), ids=list(SELECTIONS))
+def test_repeated_and_shifted_picks_reach_the_brute_force_optimum(selection) -> None:
+    problem = _three_rounds()
+    best = max(
+        _engine_of(problem, fixed, selection) for fixed in product(range(3), repeat=3)
+    )
+    solved = solve(problem, time_limit_seconds=5, constraints=selection)
+    assert (solved.score_hard, solved.score_soft) == best
+
+
+def test_mapping_selections_repeat_and_shift_like_specs() -> None:
+    """The server's {name, weight, offset, clip} dicts pick the same instances as specs."""
+    specs = [HomeToAwayHopCost(), HomeToAwayHopCost(weight=3, offset=10, clip=False)]
+    dicts = [
+        {"name": "home_to_away_hop_cost"},
+        {"name": "home_to_away_hop_cost", "weight": 3, "offset": 10, "clip": False},
+    ]
+    problem = _three_rounds()
+    assert solve(problem, time_limit_seconds=5, constraints=dicts) == solve(
+        problem, time_limit_seconds=5, constraints=specs
+    )
+
+
+def test_a_fractional_offset_is_refused_by_cpsat() -> None:
+    with pytest.raises(ValueError, match="offset must be an integer for CP-SAT"):
+        solve(
+            _three_rounds(),
+            time_limit_seconds=1,
+            constraints=[StartToAwayHopCost(offset=0.5)],
+        )

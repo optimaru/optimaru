@@ -15,7 +15,14 @@ from itertools import product
 
 import pytest
 from bin_packing import constraint_costs, constraint_info, list_constraints
-from bin_packing.constraints import get_constraints
+from bin_packing.constraints import (
+    BinCapacityCost,
+    ColorConflictCost,
+    ItemConflictCost,
+    UsedBinsCost,
+    get_constraints,
+    score,
+)
 from bin_packing.models import BinPackingProblemModel as Model
 from ortools.sat.python import cp_model
 
@@ -132,3 +139,50 @@ def test_quad_raw_costs_match_by_hand():
     for name, value in zero.items():  # {A, D} {B, C}: within capacity, colours and pairs apart
         assert _Pinned(QUAD, name).cost((0, 1, 1, 0)) == value
         assert _engine_raw(QUAD, (0, 1, 1, 0), name) == value
+
+
+# --- 0.3.0: repeated picks and offset / clip ---------------------------------------
+
+SELECTIONS = {
+    "repeat": [BinCapacityCost(), BinCapacityCost(weight=3, offset=1), UsedBinsCost()],
+    "repeat-literal": [
+        ColorConflictCost(offset=1, clip=False),
+        ColorConflictCost(weight=2, offset=-1),
+        UsedBinsCost(),
+        UsedBinsCost(weight=5, offset=2, clip=False),
+    ],
+    "hard-offsets": [
+        BinCapacityCost(offset=2, clip=False),
+        ItemConflictCost(weight=2, offset=-1),
+        ItemConflictCost(offset=1, clip=False),
+        UsedBinsCost(hard=True, offset=1),
+    ],
+    "identical-twice": [ItemConflictCost(), ItemConflictCost(), UsedBinsCost()],
+}
+
+
+@pytest.mark.parametrize("instance", list(INSTANCES))
+@pytest.mark.parametrize("selection", list(SELECTIONS.values()), ids=list(SELECTIONS))
+def test_the_cpsat_terms_equal_the_engine_on_every_assignment(instance, selection):
+    """Pin every assignment: the CP-SAT objective's per-level value is the engine's score of
+    that assignment under the same repeated / shifted picks, exactly — every bin is a term
+    of a per-bin constraint, an empty one included; re-pricing the default costs (each name
+    once) gives the same per instance key."""
+    problem = INSTANCES[instance]
+    built = build(Model.model_validate(problem), selection, symmetry_breaking=False)
+    built.objective.minimize()
+    n = len(problem["items"])
+    for bins in product(range(n), repeat=n):
+        built.model.clear_assumptions()
+        built.model.add_assumptions([built.context.assignments[item, b] for item, b in enumerate(bins)])
+        solver = cp_model.CpSolver()
+        solver.parameters.num_search_workers = 1
+        assert solver.solve(built.model) == cp_model.OPTIMAL
+        model = Model.model_validate(problem)
+        for item, bin_index in zip(model.items, bins, strict=True):
+            item.bin = bin_index
+        core = model.to_core()
+        engine = score(constraint_costs(core, selection), selection)
+        expected = {"hard": engine.hard, "soft": engine.soft}
+        assert built.objective.score(solver) == expected, bins
+        assert built.objective.score_costs(constraint_costs(core)) == expected, bins
