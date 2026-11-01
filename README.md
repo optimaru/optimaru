@@ -62,7 +62,8 @@ include/optimaru/
 │   ├── score/calculator/decomposed_score_calculator.hpp
 │   │                                              per-unit constraint plugins
 │   ├── score/calculator/constraint_assembly.hpp   default constraint set: weight / level /
-│   │                                              exponent / drop by name, info() catalog
+│   │                                              exponent / offset / clip / drop by name,
+│   │                                              repeated instances, info() catalog
 │   ├── score/director/score_director.hpp          + EnvironmentMode::FULL_ASSERT
 │   ├── score/analysis/score_analysis.hpp          ScoreAnalysis / ConstraintAnalysis
 │   └── solver/{solver.hpp, solver_factory.hpp,
@@ -126,10 +127,14 @@ namespaces); the directories organize the headers, the namespaces don't.
 - **Constraint plugins**: `DecomposedScoreCalculator` scores named unit and
   global components (`<Subject>Cost`). Each declares its default weight and
   level (`kDefaultWeight` / `kDefaultLevel`: hard, medium or soft); a caller
-  re-states only `weight`, level and `exponent` per solve
-  (`ConstraintAssembly`). Rewards (raw cost <= 0) never go hard, structural
-  constraints keep their level, and a domain with a medium level declares once
-  how it folds into the hard/soft score (`MediumFold`).
+  re-states only five knobs per solve (`ConstraintAssembly`): `weight`,
+  `level`, `exponent`, and `offset` / `clip`, which shift the shaping of a
+  raw cost `x >= 0` as a threshold (`max(0, x - offset) ** exponent`) or as
+  the literal `(x - offset) ** exponent`. A constraint may be added several
+  times (`addInstance()`), each instance with its own knobs, and the instances
+  add up. Rewards (raw cost <= 0) never go hard, structural constraints keep
+  their level, and a domain with a medium level declares once how it folds
+  into the hard/soft score (`MediumFold`).
 - **Score analysis**: `SolutionManager::analyze()` → `ScoreAnalysis` /
   `ConstraintAnalysis`, a per-constraint breakdown over the named components.
 - **Verification**: `ScoreDirector` with `EnvironmentMode::FULL_ASSERT`;
@@ -259,9 +264,11 @@ corrupted calculator, list moves under FULL_ASSERT, adaptive operator-weight
 convergence, LNS escaping a local optimum that traps hill climbing, and the
 nearby+LNS quality win on 100-city random TSP. `test/constraint_level_test.cpp`
 covers the constraint contract: levels and both medium folds, the knob guards
-(rewards, structural levels, weight and exponent checks), the catalog, exponent
-shaping, incremental-vs-recompute and preview parity with a medium level, and
-the score range (a saturating hard total, out-of-range contributions).
+(rewards, structural levels, weight, exponent, offset and clip checks), the
+catalog, exponent and offset / clip shaping, repeated instances,
+incremental-vs-recompute and preview parity with a medium level and with
+repeated and shifted components, and the score range (a saturating hard total,
+out-of-range contributions).
 
 ```sh
 cmake -B build && cmake --build build && ctest --test-dir build

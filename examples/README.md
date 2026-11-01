@@ -7,15 +7,15 @@ are saved with their outputs, so you can read them on GitHub without running any
 ## Run them
 
 ```bash
-pip install "optimaru>=0.2" matplotlib jupyter
+pip install "optimaru>=0.3" matplotlib jupyter
 jupyter lab
 ```
 
-Requires Python 3.11+ and optimaru 0.2 or later. Each notebook stands alone, so you can download a
+Requires Python 3.11+ and optimaru 0.3 or later. Each notebook stands alone, so you can download a
 single file and run it.
 
 Most solves stop on a time limit, so your scores and charts can differ a little from the saved outputs,
-depending on your machine. The saved outputs come from optimaru 0.2.0 on Linux x86-64. On another
+depending on your machine. The saved outputs come from optimaru 0.3.0 on Linux x86-64. On another
 platform the same seed can take a different path, even in a solve with a step limit.
 
 ## Where to start
@@ -28,8 +28,12 @@ explained notebook, and the others follow the same outline:
 3. Visualize the solution in the form the domain uses: a map, a Gantt chart, a timetable.
 4. Check the result without relying on the solver.
 5. Change the rules with constraint plugins, without touching the solver. Every constraint has a
-   `*_cost` name and the same three knobs, `weight`, `level` and `exponent`, and `constraint_info()`
-   lists the defaults.
+   `*_cost` name and the same five knobs: `weight`, `level`, `exponent`, and `offset` / `clip`, which
+   shift the shaping. A constraint may be picked several times, each pick with its own knobs, and
+   `constraint_info()` lists the defaults. The notebooks write each pick as a class call, such as
+   `VehicleCapacityCost()` or `TravelTimeCost(weight=10)`; the ready-made `vehicle_capacity_cost` is the
+   same as `VehicleCapacityCost()`. [`vehicle-routing.ipynb`](vehicle-routing.ipynb) shows `x² + x³`
+   built from two picks, and a threshold offset next to the literal formula.
 6. Try a what-if, then restart the search from an existing solution.
 
 ## Notebooks

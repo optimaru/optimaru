@@ -241,8 +241,9 @@ for total in calc.constraint_totals():
 ```
 
 The same rules by name: `calc = DecomposedCalculator(); calc.add("day_pattern_cost",
-pattern="Location A,OFF,Location B")` (weight, level and exponent as keyword
-arguments, `weight=None` = the default). `es.list_constraints()` lists every name.
+pattern="Location A,OFF,Location B")` (weight, level, exponent, offset and clip as
+keyword arguments, `weight=None` = the default; adding a name again adds another
+instance). `es.list_constraints()` lists every name.
 
 ### 0.2.0
 

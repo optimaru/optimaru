@@ -127,7 +127,8 @@ other C++ use cases.
     `calculate_score` / `constraint_costs` need every location (`ValueError`
     naming the missing ones; 0.1.5 raised `KeyError`), while the engine object
     scores a partial state;
-  - a constraint picked twice raises `ValueError`.
+  - a constraint picked twice raised `ValueError` (since 0.3.0 each pick is its own
+    instance, see 0.3.0 above).
 - **`SolverConfig`** is the engine's (`spent_limit_seconds`,
   `unimproved_spent_limit_seconds`, `step_count_limit`,
   `unimproved_step_count_limit`, `random_seed`, `parallel_solver_count`,

@@ -1,10 +1,23 @@
 # Changelog
 
-## Unreleased
+## 0.3.0
 
-**This release breaks compatibility.** The `hard` knob is gone; `level` replaces
-it on every constraint, in all 22 use cases. No alias is kept: `hard=` raises
-`TypeError`.
+0.3.0 changes the constraint contract of all 22 use cases in three ways:
+`level` replaces the `hard` knob, a constraint may be picked several times,
+and two new knobs, `offset` and `clip`, shift how a cost is shaped. Every
+constraint now takes five knobs: `weight`, `level`, `exponent`, `offset` and
+`clip`.
+
+**This release breaks compatibility.** The `hard` knob is gone; `level`
+replaces it on every constraint, in all 22 use cases. No alias is kept:
+`hard=` raises `TypeError`. Apart from that spelling, a 0.2.0 selection scores
+exactly as before: raw costs are unchanged, a pick that leaves `offset` and
+`clip` alone is shaped exactly as in 0.2.0, and seeded solves give the same
+results. Each package was checked against its 0.1.5 golden raw costs, and the
+repeat and offset changes against seeded 20,000-step solves on the 0.2.0
+wheel.
+
+### `level` replaces `hard`
 
 - `level` is `None` (the default level) or a `Level`: `Level.HARD`,
   `Level.MEDIUM` or `Level.SOFT`, exported from each package's `constraints`
@@ -21,66 +34,237 @@ it on every constraint, in all 22 use cases. No alias is kept: `hard=` raises
   `"medium"` on task assigning, where medium counts toward the hard score. A
   constraint with `level_flippable` false still refuses any change of level.
 - Knob errors changed with it: a non-string level raises `TypeError` and an
-  unknown name raises `ValueError`. numpy booleans are no longer accepted, since
-  a level is not a boolean.
+  unknown name raises `ValueError`. numpy booleans are no longer accepted as a
+  level, since a level is not a boolean.
 - Every path follows the same rules: the solver, `score()` / `score_costs()`, the
   `DecomposedCalculator.add()` of employee and school timetabling (`level=`
-  replaces `hard=`), employee scheduling's JSON rules and the CP-SAT benchmarks,
-  whose catalog rows now report `{"weight", "level", "exponent"}`.
+  replaces `hard=`), employee scheduling's JSON rules and the CP-SAT benchmarks.
 - The school timetabling CP-SAT constraints rename their computed `level`
   property to `effective_level`, next to `effective_weight`, because `level` is
   now the knob.
 
-Two additions to the constraint contract, which grows to five knobs (`weight`,
-`level`, `exponent`, `offset`, `clip`); a selection that leaves the new knobs
-alone scores exactly as before.
-
 ### Repeated constraints
 
-- A constraint may be picked several times, in every package and on every path
-  (`solve(constraints=...)`, `solve_request(..., constraints=...)`,
+- A constraint may be picked several times wherever a constraint list is
+  accepted: `solve(constraints=...)`, `solve_request(..., constraints=...)`,
   `get_constraints(...)`, `Solver.solve_with_constraints`,
-  `constraint_costs(solution, picks)`, `score(costs, picks)`, the CP-SAT
-  references). Each pick is its own instance with its own knobs, its own level
-  included (and, where the constraint has parameters, its own parameters),
-  scored independently; the instances add up, and identical picks simply count
-  twice. `x**2 + x**3` is two picks, `exponent=2` and `exponent=3`.
-- `constraint_costs()` keys the first instance of a name `name` and the k-th
-  `name#k`; `instance_keys()` derives the same keys from a pick list. `score()`
-  reads `name#k`, or, for a constraint without parameters, the `name` entry with
-  the k-th pick's own knobs.
-- Removed: the "picked more than once" refusal (and employee scheduling's "same
-  parameters" refusal). An empty list is still an error. School timetabling's
-  `Assembly` builder keeps its replace-by-name semantics; a plain list repeats.
-- C++: `ConstraintAssembly::addInstance()` / `emplaceInstance()` /
-  `addInstances()`; `python::applyConstraints` takes a callable returning the
-  default assembly.
+  `constraint_costs(solution, picks)`, `score(costs, picks)`,
+  employee-scheduling's `rules` and `DecomposedCalculator(list)`,
+  school-timetabling's `solve(constraints=[...])`, and the CP-SAT references.
+- Each pick is its own instance with its own knobs, its level included, and,
+  where the constraint has domain parameters, its own parameters. The
+  instances are scored independently and add up. Two identical picks simply
+  count twice; this is not an error.
+- `x**2 + x**3` is two picks:
 
-### offset and clip
+  ```python
+  constraints=[..., TravelTimeCost(exponent=2), TravelTimeCost(exponent=3)]
+  ```
 
-- Two keyword-only knobs on every constraint: `offset` (finite, any sign,
-  default `0.0`) and `clip` (default `True`). A raw cost `x` (per unit, or a
-  global's total, like `exponent`) is shaped as
-  `sign(x) * max(0, |x| - offset) ** exponent` with `clip=True` (the threshold)
-  or `shape(x - offset, exponent)` with `clip=False` (the literal formula, which
-  charges every unit the constraint evaluates, a raw 0 included, and acts as a
-  reward below the offset). `TravelTimeCost(offset=10, exponent=3)` is
-  `max(0, x - 10)**3`; `TravelTimeCost(offset=10, exponent=3, clip=False)` is
-  `(x - 10)**3`. The level does not change the shaping: the weight is in units
-  of the level in effect, as before.
-- `constraint_costs()` entries report `offset` and `clip`, and a scoped
-  constraint's evaluated `units`. The CP-SAT references take integral offsets
-  (exponent 1 only, as before); the catalog `params` read
-  `{weight, level, exponent, offset: 0.0, clip: True}`.
-- Validation in the Python base and the C++ bindings alike:
-  `offset must be a number`, `offset must be finite`,
-  `clip must be True or False`.
+  A pick may also sit on another level than its first instance:
+  `[TravelTimeCost(), TravelTimeCost(level="medium", offset=7200)]` charges
+  every driving second on soft and, per vehicle, each second beyond two hours
+  on medium as well.
+- `constraint_costs()` keys the first instance of a name `name`, and the k-th
+  instance `name#k` (k >= 2), in pick order, and `score(costs, picks)` reads
+  the same keys. For a constraint without domain parameters, `score()` also
+  accepts costs that hold the name only once (the default
+  `constraint_costs(solution)`), and reads that entry with each pick's own
+  knobs.
+- Removed: the "picked more than once" `ValueError` in every package, and
+  employee-scheduling's "same rule with the same parameters" refusal.
+- Unchanged: an empty list is still a `ValueError`, unknown names are still
+  errors, and knob validation is unchanged. The reward and fixed-level rules
+  apply to each instance, so a second pick of a reward still refuses
+  `level="hard"`.
+- The monolithic fast path scores only the default selection
+  (`constraints=None`). Any list, including one with a repeat, takes the
+  assembly path.
+- school-timetabling's `constraints.Assembly` is a builder, not a list. It
+  still holds each name once, and `add()` replaces a name that is already
+  there.
 
-### Docs
+### `offset` and `clip`
 
-- Examples use class calls only (`VehicleCapacityCost()`,
-  `TravelTimeCost(weight=10)`); the module-level default instances stay
-  (`vehicle_capacity_cost` is `VehicleCapacityCost()`).
+Every constraint takes two more keyword-only knobs:
+
+- `offset`: a float, `0.0` by default. It must be finite and may have any sign.
+- `clip`: a bool, `True` by default.
+
+Let `x` be a raw cost. As for `exponent`, that is one unit's cost for a unit
+constraint, or the single total for a global constraint. With exponent `e`,
+`x` is shaped as follows and then multiplied by the weight:
+
+| `clip` | formula | below the offset | raw cost 0 |
+| --- | --- | --- | --- |
+| `True` (the default, a threshold) | `sign(x) * max(0, \|x\| - offset) ** e` | contributes 0 | contributes 0 |
+| `False` (the literal formula) | `shape(x - offset, e)`, the sign-preserving power | negative, so a reward | contributes `shape(-offset, e)` |
+
+- With `offset=0` both modes are the 0.2.0 `shape(x, e)`, bit for bit.
+- A negative offset in threshold mode adds `|offset|` to every non-zero `x`.
+- The offset has the unit of the raw cost: seconds, minutes, meters, a count,
+  and so on, as each package's constraint table states.
+- The level does not change the shaping. The weight is in units of the level
+  in effect, as before.
+
+For a vehicle-routing travel time `x` (driving seconds per vehicle):
+
+| pick | contribution per vehicle |
+| --- | --- |
+| `TravelTimeCost(offset=10, exponent=3)` | `max(0, x - 10)**3` |
+| `TravelTimeCost(offset=10, exponent=3, clip=False)` | `(x - 10)**3`, negative below 10 |
+| `TravelTimeCost(exponent=2)` and `TravelTimeCost(exponent=3)` | `x**2 + x**3` |
+| `TravelTimeCost()` and `TravelTimeCost(weight=1e-9, exponent=3, offset=7200)` | `x + 1e-9 * max(0, x - 7200)**3` |
+
+**Which units the literal formula charges.** `clip=False` charges or rewards
+every unit the constraint evaluates, including units whose raw cost is 0. These
+are all units of its domain, or, for a scoped constraint, only its own units.
+The engine (full and incremental), the Python `score()` mirror and the CP-SAT
+references count exactly the same units:
+
+| use case | units of the unit constraints (global constraints shape their one total) |
+| --- | --- |
+| assembly-line-balancing | each station 0..n-1, an empty one included; `max_stations_cost` and `forbidden_task_stations_cost` only their own stations |
+| bed-allocation | each real bed, an empty one included, never the "no bed" sentinel; `unassigned_stays_cost` only the sentinel |
+| bin-packing | each bin 0..n-1, an empty one included |
+| conference-scheduling | every constraint is global |
+| employee-scheduling | each employee; a worker-scoped rule only its workers |
+| facility-location | each facility, an unused one included |
+| flight-crew-scheduling | each employee, an idle one included |
+| food-packaging | each packaging line, an empty one included, never the unassigned pool |
+| knapsack | every constraint is global |
+| maintenance-scheduling | each (start date, crew) cell, an empty one included |
+| max-cut | both sides, a side of raw 0 included |
+| meeting-scheduling | each (grain, room) cell, an empty one included |
+| order-picking | each trolley, an empty one included |
+| pickup-delivery | each vehicle, an idle one included, never the unassigned pool; `required_vehicle_cost` and `squared_order_age_cost` evaluate the pool too |
+| project-job-scheduling | every constraint is global |
+| quadratic-assignment | `pinned_assignments_cost`: the fixed locations; `forbidden_assignments_cost`: the locations a forbidden row names; `location_capacity_cost`: the capacitated locations |
+| school-timetabling | each calendar slot of a per-slot constraint, an empty one included |
+| semiconductor-scheduling | every constraint is global |
+| sports-league-scheduling | each round position, an empty one included |
+| task-assigning | each employee, an idle one included |
+| tournament-scheduling | `team_conflict_cost`: each team; `team_unavailability_cost`: the teams with an unavailability fact |
+| vehicle-routing | each vehicle, an idle one included, never the unassigned pool |
+
+vehicle-routing, pickup-delivery and food-packaging used to evaluate their
+per-vehicle or per-line constraints on the unassigned pool list as well, and
+bed-allocation its per-bed constraints on the "no bed" sentinel. That cell is
+always 0, so it changed nothing until the literal formula, which would have
+charged it. These constraints now evaluate only the real vehicles, lines or
+beds. `constraint_costs()` still lists the pool cell (always 0), and the entry
+lists the evaluated units as `"units"`.
+
+- A weight of 0 still contributes exactly 0 at any exponent and offset, on
+  every path.
+- The score-range rules are unchanged: a contribution must be finite, and a
+  hard one must stay below 2^62. Hard contributions are still rounded per
+  unit. A literal hard pick may go below 0; that is a hard reward, and it is
+  allowed.
+- Validation is the same in the Python base and the C++ bindings, with the
+  same messages: `constraint 'x': offset must be a number, not '5'`
+  (`TypeError`, also for `True` / `False`),
+  `offset must be finite, not inf` (`ValueError`), and
+  `clip must be True or False, not 1` (`TypeError`; `numpy.bool_` is
+  accepted).
+- Rewards (knapsack `selected_value_cost`, max-cut `cut_weight_cost`,
+  conference diversity, employee-scheduling `desired_*_cost`, the school
+  quickstart `teacher_time_efficiency_cost`) take both knobs. A threshold
+  offset rewards only the part beyond it. A literal offset shifts the whole
+  reward by `offset`.
+- `offset` and `clip` are keyword-only, so the positional order of `weight`,
+  `level`, `exponent` and of a constraint's domain parameters stays as it is.
+  `params()` leaves them out, as it leaves out the other knobs.
+- employee-scheduling: `add(...)` and the JSON rule models (`RuleBase`, so
+  every `*CostRule`) take `offset` / `clip` as knobs, for example
+  `{"name": "undesired_day_cost", "offset": 120, "clip": false}`.
+- school-timetabling: `objective_value` (the report) sums the weights of a
+  soft constraint picked several times. Like the exponent, `offset` / `clip`
+  shape the search score only. `score(constraint_costs(table, picks), picks)`
+  is the exact score of a selection. One hard instance of
+  `unassigned_lessons_cost` keeps it hard.
+
+### `constraint_costs()` and the catalog
+
+- Every package's `constraint_costs(solution, constraints=None)` scores a pick
+  list. employee-scheduling and school-timetabling already took one. The
+  `name` / `name#k` keys are described above.
+- Entries also report `offset` and `clip`. A scoped unit constraint also
+  reports `units`, its evaluated units in ascending order. `hard` stays next
+  to `level` for older readers (it is `level == "hard"`).
+- `constraint_info()` rows are unchanged. The defaults of `offset` and `clip`
+  are universal, like the exponent's.
+
+### CP-SAT reference models (`benchmarks/`)
+
+- The catalog rows' `params` read
+  `{"weight": None, "level": None, "exponent": 1.0, "offset": 0.0, "clip": True}`.
+  Spec and mapping selections take `level`, `offset` and `clip`
+  (`{"name", "weight", "level", "offset", "clip"}`).
+- Repeated picks add separate objective terms, each with its own knobs, its
+  level included. `resolve()` keys them `name`, `name#k` like the engine.
+- `ObjectiveBuilder.add()` adds one term per engine unit, or one for a
+  global's total, and shapes it exactly in both modes. In literal mode it
+  charges the constant `-weight * offset` even for a unit that is constant 0.
+- C++-vs-CP-SAT raw-cost parity holds per instance key. Each reference pins
+  every assignment of a small instance and checks
+  `objective == score(constraint_costs(core, picks), picks)` for repeats with
+  their own levels, threshold, literal and negative offsets.
+- Only integral offsets are accepted. A fractional one raises `offset must be
+  an integer for CP-SAT`. `exponent != 1` and fractional weights are still
+  refused.
+- A plugin whose terms are not one per engine unit refuses an offset
+  (`offset is not supported by this CP-SAT model`). These plugins are:
+  - employee-scheduling: every rule except `required_skill_cost`,
+    `employee_unavailability_cost`, `undesired_day_cost`, `desired_day_cost`
+    and `unassigned_shifts_cost`.
+  - semiconductor-scheduling: the 12 structural plugins.
+  - school-timetabling: the hard constraints, which are model constraints.
+  - tournament-scheduling: the two imbalance surrogates.
+
+  quadratic-assignment refuses an offset on `assignment_cost` /
+  `flow_distance_cost` when the data can make that total negative.
+
+### Engine (C++, `include/optimaru`)
+
+- `shapeCost(x, exponent, offset, clip)`. `ConstraintMetadata` gains `offset`
+  (`0.0`) and `clip` (`true`) with the setters `setOffset()` (finite, else
+  `std::invalid_argument`) and `setClip()`. Every contribution site uses it:
+  the full and incremental scores, the move previews, globals and totals.
+  Dispatch entries stay 32 bytes: a flag in the padding selects the
+  per-constraint offset and clip. The direct grouped-hard delta fold is used
+  only for instances with exponent 1 and offset 0.
+- `ConstraintAssembly::offset(name, v)` / `clip(name, b)`. `addInstance()`,
+  `emplaceInstance<C>(...)` and `addInstances(ConstraintAssembly&&)` append
+  more instances of a name. Edits and lookups by name address the first
+  instance.
+- `DecomposedScoreCalculator::ConstraintCosts` gains `offset`, `clip`,
+  `scoped` and `units`. A component that evaluates only some units overrides
+  `scopedUnits()`.
+- `python::applyConstraints(factory, picks)` takes a callable that returns the
+  default assembly. A repeated name becomes a fresh copy of the default
+  component with its own knobs, its level included, appended after the
+  first. The overload that took the assembly itself is removed. `readKnobs` /
+  `restateKnobs` / `applyKnobs` read and apply `level`, `offset` and `clip`.
+- Components that share a context or hub with their copies keep sharing the
+  calculator's one instance: semiconductor's decoded schedule (a repeat costs
+  no second decode), vehicle-routing's route sums, conference's breakdown, and
+  school's teacher-mask hub. Each package tests incremental scores against a
+  fresh recompute, and solves under FULL_ASSERT, with repeated and shifted
+  components.
+
+### Docs and examples
+
+- Docs and examples write constraint lists with class calls only:
+  `[VehicleCapacityCost(), UnassignedVisitsCost(), TravelTimeCost(weight=10)]`.
+  The snake-case module attributes stay in the API. `vehicle_capacity_cost` is
+  the ready-made `VehicleCapacityCost()`.
+- Every README describes the five knobs and the repeat rule.
+- The `examples/` notebooks use class calls and `level`, and describe the five
+  knobs. The vehicle-routing notebook has a new section that builds
+  `x**2 + x**3` from two picks and compares a threshold offset with the
+  literal formula. The notebooks need optimaru 0.3, and their saved outputs
+  come from 0.3.0.
 
 ## 0.2.0
 

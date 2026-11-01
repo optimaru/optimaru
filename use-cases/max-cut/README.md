@@ -133,7 +133,8 @@ other C++ use cases.
     than 0 / 1 (0.1.5 ignored them);
   - `cut_weight_cost` with `level="hard"` raises `ValueError` (0.1.5 scored a
     positive hard score);
-  - a constraint picked twice raises `ValueError`.
+  - a constraint picked twice raised `ValueError` (since 0.3.0 each pick is its own
+    instance, see 0.3.0 above).
 - **`SolverConfig`** is the engine's (the other C++ packages' knobs:
   `spent_limit_seconds`, `step_count_limit`, `unimproved_*`, `random_seed`,
   `parallel_solver_count`, `late_acceptance_size`, `full_assert`, `ruin_recreate*`,
