@@ -1,5 +1,7 @@
 # Builds the `optimaru` Python distribution (sdist + wheels for Linux, macOS,
-# Windows) on every PR and main push that touches it.
+# Windows) on every PR that touches it, so a build that breaks is caught before
+# the merge. A push to main builds only when it is going to publish: the PR
+# already built everything else.
 #
 # Releasing is driven by the version in pyproject.toml. On a push to main, if
 # there is no `v<version>` tag yet, the publish job:
@@ -84,6 +86,8 @@ jobs:
           echo "tag v${version} exists: ${exists} · publish: ${release}" >> "$GITHUB_STEP_SUMMARY"
 
   wheels:
+    needs: version
+    if: github.event_name != 'push' || needs.version.outputs.release == 'true'
     name: wheels (${{ matrix.os }}, ${{ matrix.python }}${{ startsWith(matrix.os, 'ubuntu') && format(' {0}', matrix.libc) || '' }})
     runs-on: ${{ matrix.os }}
     strategy:
@@ -128,6 +132,8 @@ jobs:
           path: wheelhouse/*.whl
 
   sdist:
+    needs: version
+    if: github.event_name != 'push' || needs.version.outputs.release == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
