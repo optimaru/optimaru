@@ -5,6 +5,7 @@ from itertools import product
 
 import pytest
 import es_scheduling
+from ortools.sat.python import cp_model
 from es_scheduling import constraints as domain
 from es_scheduling import models
 from es_scheduling.demo import generate_demo_data
@@ -17,6 +18,7 @@ from es_scheduling.models import (
 
 from employee_scheduling_cpsat import catalog, constraint_costs, solve
 from employee_scheduling_cpsat.constraints import PLUGINS, SCALE, registry_for
+from employee_scheduling_cpsat.solve import selection
 
 DAY = 24 * 60
 
@@ -430,6 +432,67 @@ def test_repeated_and_shifted_rules_at_once_match_the_engine(seed) -> None:
         "required_skill_cost",
         "required_skill_cost#2",
     ]
+
+
+# Each repeat on its own level, with offsets on the plugins that take them.
+LEVELS = [
+    domain.UndesiredDayCost(),
+    domain.UndesiredDayCost(level="hard", offset=100),
+    domain.EmployeeUnavailabilityCost(),
+    domain.EmployeeUnavailabilityCost(level="soft", weight=2, offset=30, clip=False),
+    domain.RequiredSkillCost(),
+    domain.RequiredSkillCost(level=domain.Level.SOFT, offset=-1),
+]
+
+
+@pytest.mark.parametrize("seed", range(4))
+def test_each_repeat_keeps_its_own_level_on_every_path(seed) -> None:
+    """CP-SAT == the engine == the Python score() mirror, each instance on its own level."""
+    problem = _problem(LEVELS, seed)
+    fixed = _stacked_roster(problem, seed)
+    candidate = _with_workers(problem, fixed)
+    specs = [rule.to_spec() for rule in candidate.model_input.rules]
+    assert [str(spec.level) if spec.level else None for spec in specs] == [
+        None,
+        "hard",
+        None,
+        "soft",
+        None,
+        "soft",
+    ]
+    schedule = models.to_schedule(candidate.model_input)
+    raw = es_scheduling.constraint_costs(schedule, specs)
+    assert [raw[key]["level"] for key in domain.instance_keys(specs)] == [
+        "soft",
+        "hard",
+        "hard",
+        "soft",
+        "hard",
+        "soft",
+    ]
+    mirror = domain.score(raw, specs)
+    engine = constraint_costs(candidate)
+    assert (engine["hard"], engine["soft"]) == (mirror.hard, pytest.approx(mirror.soft))
+    proxy: dict[str, int] = {}
+    solve(problem, time_limit_seconds=5, _fixed_workers=fixed, _proxy_score=proxy)
+    assert proxy == _engine_scaled(problem, fixed)
+    assert proxy == {"hard": mirror.hard, "soft": round(SCALE * mirror.soft)}
+
+
+@pytest.mark.parametrize("level", [domain.Level.MEDIUM, "medium"])
+def test_medium_is_refused_on_cpsat(level) -> None:
+    """No medium level here: the rule schema refuses it, and so does the registry itself
+    (the first term a medium plugin adds)."""
+    with pytest.raises(ValueError, match="'hard' or 'soft'"):
+        _problem([domain.RequiredSkillCost(), domain.RequiredSkillCost(level=level)])
+    picks = [domain.UndesiredDayCost(), domain.UndesiredDayCost(level=level)]
+    registry = registry_for(picks)
+    objective = registry.objective(
+        cp_model.CpModel(), ("hard", "soft"), selection(registry.plugins)
+    )
+    objective.add("undesired_day_cost", 0, bound=0)
+    with pytest.raises(ValueError, match="this use case has no medium level"):
+        objective.add("undesired_day_cost#2", 0, bound=0)
 
 
 def _tiny(rules: list) -> ScheduleRequest:

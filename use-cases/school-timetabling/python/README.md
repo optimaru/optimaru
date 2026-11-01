@@ -85,7 +85,7 @@ serialization mirrors live in `st_timetabling.models`.
 The default cost function is the monolithic incremental calculator (fast
 path), which scores every constraint above. Passing `constraints=` switches to
 the **plugin path** next to it: pick constraints per component, change their
-weights, change levels levels and drop some.
+weights, move them between hard and soft and drop some.
 
 ```python
 import st_timetabling as st
@@ -127,7 +127,8 @@ Rules:
   default: 1 for hard, 20/3/30/10/5/1 for the soft ones — never `weights=`,
   which belongs to the fast path and must stay at the defaults next to
   `constraints=`),
-  `level` (None keeps the default level, otherwise "hard" or "soft"),
+  `level` (None keeps the default level, otherwise "hard" or "soft", or a
+  `Level`; this use case has no medium level, so "medium" raises `ValueError`),
   `exponent` (sign-preserving power shaping) and the keyword-only `offset`
   (`0.0`) / `clip` (`True`): with an offset, `clip=True` counts only what lies
   beyond it (`max(0, c - offset) ** exponent`), `clip=False` shapes `c - offset`
@@ -141,7 +142,10 @@ Rules:
   pick, each with its own knobs (`canon.constraint_costs(table, picks)` keys the
   second `"<name>#2"`); `canon.DecomposedCalculator.add` adds another instance
   too. **0.3.0** made both possible (repeats were a `ValueError` before) and
-  added `offset` / `clip`; `offset=0` is the 0.2.0 shaping.
+  added `offset` / `clip`; `offset=0` is the 0.2.0 shaping. It also replaced
+  the `hard` knob by `level` (`hard=` raises `TypeError`), and each repeated
+  pick carries its own level: `[TeacherGapCost(), TeacherGapCost(level="hard",
+  offset=2)]` charges every gap on soft and the gaps beyond two on hard.
 - The default assembly matches the monolithic score **bit for bit** (gated by
   `tests/test_constraints.py` and the C++ `canonical_plugin_test`).
 - `penalties` in the `solve` response are always the canonical rescore (raw

@@ -6,7 +6,7 @@ takes, plus the constraint's own domain parameters::
 
     constraints = [
         RequiredSkillCost(),                         # hard, default weight
-        MinRestCost(weight=0.25, level="soft"),        # demoted to a cheap soft cost
+        MinRestCost(weight=0.25, level="soft"),      # demoted to a cheap soft cost
         UndesiredDayCost(weight=2.0, per_day=True),  # soft, double weight, 1 per day
         ShiftCountImbalanceCost(exponent=2.0),
         MaxConsecutiveDaysCost(value=5, worker_indices=(0, 1)),   # scoped
@@ -23,7 +23,7 @@ The knobs (see ``_constraint.py``):
                finite number >= 0.
 - ``level``    ``None`` = the default level, otherwise ``Level.HARD`` or
                ``Level.SOFT`` (or the names ``"hard"`` and ``"soft"``). This use
-               case has no medium level.
+               case has no medium level: ``level="medium"`` raises ValueError.
 - ``exponent`` sign-preserving power shaping, > 0: per employee for a unit
                constraint, on the single total for a global one.
 - ``offset``   (keyword) a shift of that shaping, any finite number (0.0 =
@@ -46,10 +46,11 @@ models (``es_scheduling.models``) are generated from these classes and turn
 the same bounds into pydantic constraints.
 
 One constraint may be picked several times, with different parameters, scope
-or knobs (``x**2 + x**3`` is two picks, ``exponent=2`` and ``exponent=3``) or
-with the same ones (identical picks simply count twice); the C++ factory
-scores each instance on its own, ``constraint_totals()`` tells them apart by
-label and ``constraint_costs()`` keys the k-th instance ``"<name>#<k>"``.
+or knobs, its level included (``x**2 + x**3`` is two picks, ``exponent=2``
+and ``exponent=3``) or with the same ones (identical picks simply count
+twice); the C++ factory scores each instance on its own,
+``constraint_totals()`` tells them apart by label and ``constraint_costs()``
+keys the k-th instance ``"<name>#<k>"``.
 (The module also carries ready-made default instances: ``required_skill_cost``
 is ``RequiredSkillCost()``, and so on.)
 

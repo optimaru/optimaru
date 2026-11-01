@@ -35,7 +35,7 @@ Every spec takes the same five knobs:
                the defaults.
 - ``level``    ``None`` = the default level, otherwise ``Level.HARD`` or
                ``Level.SOFT`` (or the names ``"hard"`` and ``"soft"``). This use
-               case has no medium level.
+               case has no medium level: ``level="medium"`` raises ValueError.
 - ``exponent`` sign-preserving power shaping of the cost: ``weight * sign(c) *
                |c| ** exponent`` (per slot for the per-slot constraints, on the
                single total for the others). 2.0 = squared.

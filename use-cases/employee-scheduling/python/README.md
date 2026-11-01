@@ -146,7 +146,7 @@ Every rule takes the same five knobs, plus its own options:
 | knob | meaning |
 |---|---|
 | `weight=None` | how much one unit of violation hurts; `None` is the rule's default weight (1 for every rule here), `UndesiredDayCost(weight=2.0)` hurts twice as much |
-| `level=None` | `"hard"` makes it a must, `"soft"` a nice-to-have, `None` keeps the rule's default level; a reward refuses `True` |
+| `level=None` | `"hard"` (`Level.HARD`) makes it a must, `"soft"` (`Level.SOFT`) a nice-to-have, `None` keeps the rule's default level; a reward refuses `"hard"`, and `"medium"` is refused (this use case has no medium level) |
 | `exponent=1.0` | `2.0` squares each person's violation, so one person suffering a lot is much worse than many suffering a little |
 | `offset=0.0` | (keyword) shifts that shaping per person (a global rule: its total); `UndesiredDayCost(offset=120)` counts only the undesired minutes beyond two hours |
 | `clip=True` | (keyword) `True` counts only what lies beyond the offset, `max(0, c - offset) ** exponent`; `False` shapes `c - offset` as it is, so everyone the rule evaluates below the offset lowers the penalty (a worker-scoped rule evaluates its workers only) |
@@ -170,7 +170,11 @@ instance is scored on its own, `constraint_totals()` tells them apart by `label`
 **0.3.0:** the "same rule with the same options twice" refusal is gone (every pick is
 an instance), and every rule takes `offset` / `clip` (also in the JSON rule models:
 `{"name": "undesired_day_cost", "offset": 120, "clip": false}`); `offset=0` is the
-0.2.0 shaping, so existing rule lists score exactly as before.
+0.2.0 shaping, so existing rule lists score exactly as before. The `hard` knob is gone
+(`hard=` raises `TypeError`, in a spec and in `add()`): `level` replaces it, in JSON too
+(`"level": "hard" | "soft"`), and each repeated pick carries its own, so
+`UndesiredDayCost()` plus `UndesiredDayCost(level="hard", offset=400)` makes the undesired
+minutes beyond 400 a must as well.
 
 **Scope.** Every per-employee rule also takes `worker_indices` / `shift_indices`
 (engine indices; `None` = everyone): `MaxConsecutiveDaysCost(value=4,
@@ -257,8 +261,10 @@ arguments, `weight=None` = the default). `es.list_constraints()` lists every nam
   names (`"Day pattern[...]"`) moved to the instance `label`.
 - One class per rule, the spec: the hand-written pydantic `*Rule` models are
   replaced by JSON models generated from the specs (`models.RULE_MODELS`,
-  `models.rule_model(...)`); `SchedulingInput.rules` takes specs or JSON. JSON: `policy: "hard" | "soft"` → `hard: true | false`; `weight`
-  defaults to `null` (the rule's default). Old names and `policy` are refused.
+  `models.rule_model(...)`); `SchedulingInput.rules` takes specs or JSON. JSON:
+  `policy: "hard" | "soft"` → `hard: true | false` (since 0.3.0
+  `level: "hard" | "soft"`); `weight` defaults to `null` (the rule's default).
+  Old names and `policy` are refused.
 - The generated JSON models are named `<SpecClass>Model` (no class ends in
   `Rule`), so 0.1.5 imports such as
   `from es_scheduling.models import MaxConsecutiveDaysRule` or `AssignmentCostRule`

@@ -266,10 +266,12 @@ class DecomposedCalculator:
         weight:   None = the component's default weight; otherwise a linear
                   multiplier (finite, >= 0) on the constraint's cost.
         level:    None keeps the constraint's default level, otherwise "hard"
-                  or "soft" (e.g. ``add("undesired_day_cost", level="hard")``
-                  promotes it; ``add("min_rest_cost", level="soft", weight=0.25)``
-                  demotes it). The rewards (desired_day_cost, desired_shift_cost)
-                  refuse "hard".
+                  or "soft", or a ``Level`` (e.g. ``add("undesired_day_cost",
+                  level="hard")`` promotes it; ``add("min_rest_cost",
+                  level="soft", weight=0.25)`` demotes it). The rewards
+                  (desired_day_cost, desired_shift_cost) refuse "hard"; "medium"
+                  is refused (no medium level here), and the removed ``hard=``
+                  keyword raises TypeError.
         exponent: sign-preserving power shaping of the PER-EMPLOYEE cost:
                   contribution = weight * sign(c) * abs(c) ** exponent.
                   2.0 = squared, 3.0 = cubed — concentrated violations on one

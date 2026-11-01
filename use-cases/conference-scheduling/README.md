@@ -107,6 +107,13 @@ cs.solve(schedule, constraints=[
 CP-SAT reference adds each plugin's terms as the one total the engine shapes, so it takes
 integral offsets on every constraint.
 
+The `hard` knob is gone in 0.3.0 (`hard=` raises `TypeError`): `level` replaces it, a
+`Level` (`Level.HARD`, `Level.SOFT`, from `conference_scheduling.constraints`) or its name.
+Each repeated pick carries its own level, so `RoomConflictCost()` and
+`RoomConflictCost(level="soft", offset=10)` charge the same room conflict once hard and once
+soft beyond ten minutes. This use case has no medium level: `level="medium"` raises
+`ValueError` before the solve starts, on both solvers and in `score()`.
+
 ## Quality benchmark and solver defaults (2026-08)
 
 `cpp/bench/quality_bench.cpp` (`cs_quality_bench <demo|scaled:N> <seed> <seconds>

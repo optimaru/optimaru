@@ -1293,6 +1293,16 @@ ConstraintAssembly repeatedAssembly()
     assembly.addInstances(std::move(copyOf("speakerMakespanCost")
                                         .offset("speakerMakespanCost", 100.0)
                                         .clip("speakerMakespanCost", false)));
+    // Repeats on another level than their default: a hard one soft, a soft
+    // one hard, each shifted.
+    assembly.addInstances(std::move(copyOf("roomConflictCost")
+                                        .soft("roomConflictCost")
+                                        .weight("roomConflictCost", 3.0)
+                                        .offset("roomConflictCost", 10.0)));
+    assembly.addInstances(std::move(copyOf("themeTrackConflictCost")
+                                        .hard("themeTrackConflictCost")
+                                        .offset("themeTrackConflictCost", 5.0)
+                                        .clip("themeTrackConflictCost", false)));
     return assembly;
 }
 

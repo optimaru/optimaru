@@ -101,6 +101,9 @@ per-meeting constraints, the one total for the seven pair constraints) is shaped
 empty one included, and rewards a cost below the offset); `offset=0` is the 0.2.0 shaping.
 Each pick is its own instance with its own knobs, the instances add up, and
 `ms.constraint_costs(schedule, picks)` keys the second pick `meeting_overlap_cost#2`.
+The `hard` knob is gone (`hard=` raises `TypeError`): `level` replaces it (`Level.HARD` /
+`Level.MEDIUM` / `Level.SOFT`, or the names), any constraint may move onto medium (its
+weight then in medium units, folded at 1e6), and each repeated pick carries its own level.
 
 ## Build / test
 

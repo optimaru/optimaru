@@ -54,7 +54,7 @@ class ConstraintInfo(NamedTuple):
 def constraint_info() -> list[ConstraintInfo]:
     """The constraint catalog of the canonical domain, in list_constraints()
     order: per constraint its Python name, default level, default weight (the
-    C++ kDefaultWeight), whether level may change the level (False
+    C++ kDefaultWeight), whether a pick's level may change it (False
     for fixed_slots_cost / parallel_groups_cost), whether it is a reward, and
     whether it is scored by default."""
 
@@ -365,14 +365,16 @@ class canon:
     class ConstraintSpec(Protocol):
         """Constraint-pick duck type: the `Constraint` specs of
         `st_timetabling.constraints` and `Assembly` items qualify. `weight`
-        None = the component default, `hard` None = the default level."""
+        None = the component default, `level` None = the default level
+        (otherwise "hard" or "soft", or a `Level`; this use case has no
+        medium level). `offset` / `clip` are optional (0.0 / True)."""
 
         @property
         def name(self) -> str: ...
         @property
         def weight(self) -> float | None: ...
         @property
-        def hard(self) -> bool | None: ...
+        def level(self) -> str | None: ...
         @property
         def exponent(self) -> float: ...
 
@@ -413,7 +415,7 @@ class canon:
         def __init__(self) -> None: ...
         @overload
         def __init__(self, constraints: Iterable[canon.ConstraintSpec] | None) -> None:
-            """Duck-typed picks (`.name`/`.weight`/`.hard`/`.exponent`, optionally
+            """Duck-typed picks (`.name`/`.weight`/`.level`/`.exponent`, optionally
             `.offset`/`.clip`); None = the default set. The picks replace the
             defaults; a name may be picked several times (each pick its own
             instance with its own knobs, and the instances add up). An empty

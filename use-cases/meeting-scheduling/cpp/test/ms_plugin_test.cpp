@@ -875,6 +875,16 @@ void verifyMediumIncremental()
             {"soft",
              [=] { return defaultConstraints().soft(mixed).soft(preferred); }},
             {"weight 3", [=] { return defaultConstraints().weight(mixed, 3); }},
+            // Any component may move onto medium: a unit one, a global soft
+            // one and a global hard one.
+            {"onto medium",
+             [] {
+                 using optimaru::Level;
+                 return defaultConstraints()
+                     .level("meetingEndTimeCost", Level::Medium)
+                     .level("meetingOverlapCost", Level::Medium)
+                     .level("roomConflictCost", Level::Medium);
+             }},
         };
     for (const auto &variant : variants)
     {
@@ -905,7 +915,8 @@ void verifyMediumIncremental()
         check(mismatches == 0,
               "medium " + variant.first
                   + ": 600 random moves, incremental == full recompute");
-        if (variant.first == "default" || variant.first == "weight 3")
+        if (variant.first == "default" || variant.first == "weight 3"
+            || variant.first == "onto medium")
             check(mediumSteps > 0,
                   variant.first + ": the walk visits medium states");
     }
@@ -961,6 +972,19 @@ ConstraintAssembly repeatedAssembly()
                                         .clip("roomConflictCost", false)));
     assembly.addInstances(
         std::move(copyOf(mixed).weight(mixed, 2.0).offset(mixed, 1.5)));
+    // Repeats on their own levels: a soft unit component and a hard global
+    // one moved onto medium, a medium one onto hard, each shifted.
+    using optimaru::Level;
+    assembly.addInstances(std::move(copyOf("meetingEndTimeCost")
+                                        .level("meetingEndTimeCost", Level::Medium)
+                                        .offset("meetingEndTimeCost", 6.0)));
+    assembly.addInstances(std::move(copyOf("roomConflictCost")
+                                        .level("roomConflictCost", Level::Medium)
+                                        .weight("roomConflictCost", 2.0)
+                                        .offset("roomConflictCost", 1.0)
+                                        .clip("roomConflictCost", false)));
+    assembly.addInstances(std::move(
+        copyOf(preferred).level(preferred, Level::Hard).offset(preferred, 2.0)));
     return assembly;
 }
 
@@ -1034,6 +1058,21 @@ void verifyRepeatsAndOffsets()
         check(repeated.hard == 0 && repeated.medium == -6.0
                   && repeated.soft == 0.0,
               "a repeated medium pick: 2 + 2 x 2 medium");
+        // Each repeat on its own level: end time soft (3 + 5), again on
+        // medium beyond 4 (5 - 4 = 1) and on hard at weight 2 beyond 4 (2).
+        using optimaru::Level;
+        ConstraintAssembly levels = copyOf("meetingEndTimeCost");
+        levels.addInstances(std::move(copyOf("meetingEndTimeCost")
+                                          .level("meetingEndTimeCost", Level::Medium)
+                                          .offset("meetingEndTimeCost", 4.0)));
+        levels.addInstances(std::move(copyOf("meetingEndTimeCost")
+                                          .level("meetingEndTimeCost", Level::Hard)
+                                          .weight("meetingEndTimeCost", 2.0)
+                                          .offset("meetingEndTimeCost", 4.0)));
+        const auto onLevels = levelsWith(std::move(levels), s);
+        check(onLevels.hard == -2 && onLevels.medium == -1.0
+                  && onLevels.soft == -8.0,
+              "one component repeated on three levels: -2 hard, -1 medium, -8 soft");
     }
     {
         // Random walk: incremental == a fresh calculator of the same assembly.

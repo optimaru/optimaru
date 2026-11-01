@@ -433,6 +433,7 @@ def test_a_rule_may_repeat_with_other_parameters():
         {"name": "required_skill_cost", "weight": -1},
         {"name": "required_skill_cost", "exponent": 0},
         {"name": "required_skill_cost", "level": "yes"},
+        {"name": "required_skill_cost", "level": "medium"},  # no medium level in this use case
         {"name": "required_skill_cost", "weight": True},  # the spec refuses a bool weight
         {"name": "required_skill_cost", "weight": "2"},  # ... and a numeric string
         {"name": "required_skill_cost", "exponent": True},
@@ -452,6 +453,7 @@ def test_a_rule_may_repeat_with_other_parameters():
         "weight",
         "exponent",
         "hard-type",
+        "level-medium",
         "weight-bool",
         "weight-str",
         "exponent-bool",
@@ -540,6 +542,21 @@ def test_a_repeated_rule_is_one_instance_per_entry(rules):
     assert len(model_input.rules) == 2
     solution = solve_request(ScheduleRequest(timelimit=0.05, model_input=model_input))
     assert [total.name for total in solution.rule_totals] == [rules[0].name] * 2
+
+
+def test_each_repeated_rule_keeps_its_own_level():
+    """A JSON rule repeats a spec rule on another level, with an offset: two instances, two levels."""
+    rules = [
+        MaxConsecutiveDaysCost(value=2),
+        {"name": "max_consecutive_days_cost", "value": 2, "level": "soft", "weight": 3, "offset": 1},
+    ]
+    model_input = _small_input(rules=rules)
+    assert [rule.level for rule in model_input.rules] == [None, "soft"]
+    solution = solve_request(ScheduleRequest(timelimit=0.05, model_input=model_input))
+    assert [(total.name, total.level) for total in solution.rule_totals] == [
+        ("max_consecutive_days_cost", "hard"),
+        ("max_consecutive_days_cost", "soft"),
+    ]
 
 
 def test_the_cpp_calculator_accepts_a_repeated_selection():
