@@ -5,11 +5,17 @@ function and compares them with each solver's self-reported score. The rules
 are identical to the Java quickstart's
 ``TimetableConstraintProvider`` (= C++ ``score_calculator.cpp``):
 
-- hard: roomConflict / teacherConflict / studentGroupConflict —
+- hard: room_conflict_cost / teacher_conflict_cost / class_conflict_cost —
   -1 times the sum of C(c, 2) over the lessons sharing a cell of that key.
-- soft: teacherTimeEfficiency (reward) - teacherRoomStability (penalty)
-  - studentGroupSubjectVariety (penalty). "Consecutive periods" means
+- soft: teacher_time_efficiency_cost (a reward) - teacher_room_change_cost
+  (penalty) - class_subject_repeat_cost (penalty). "Consecutive periods" means
   |Δperiod| == 1 on the same day.
+
+The result keys are those names (the quickstart model has no constraint
+registry; the names follow the canonical model's where they mean the same).
+Each key holds that constraint's raw cost, so the reward
+teacher_time_efficiency_cost is <= 0 (minus the adjacent same-teacher pairs)
+and ``hard`` / ``soft`` are minus the sums of their three keys.
 
 Usage:
     uv run evaluate.py <instance.json> <solution.json>
@@ -63,37 +69,37 @@ def score_assignment(instance: dict, assignment: list[tuple[int, int]]) -> dict:
         teacher_room[(lesson["teacher"], room)] += 1
         teacher_lessons[lesson["teacher"]] += 1
 
-    room_conflict = sum(_pairs(c) for c in cell_cnt.values())
-    teacher_conflict = sum(_pairs(c) for c in teacher_slot.values())
-    group_conflict = sum(_pairs(c) for c in group_slot.values())
+    room_pairs = sum(_pairs(c) for c in cell_cnt.values())
+    teacher_pairs = sum(_pairs(c) for c in teacher_slot.values())
+    class_pairs = sum(_pairs(c) for c in group_slot.values())
 
-    # teacherRoomStability: all pairs per teacher - same-room pairs.
+    # teacher_room_change_cost: all pairs per teacher - same-room pairs.
     same_room_pairs: Counter[str] = Counter()
     for (teacher, _), c in teacher_room.items():
         same_room_pairs[teacher] += _pairs(c)
-    stability = sum(_pairs(n) - same_room_pairs[t] for t, n in teacher_lessons.items())
+    room_change = sum(_pairs(n) - same_room_pairs[t] for t, n in teacher_lessons.items())
 
     # Consecutive-period pairs = product of the occupancy counts of adjacent cells (once per pair).
-    efficiency = sum(
+    time_efficiency = sum(
         c * teacher_slot[(teacher, next_slot[ts])] for (teacher, ts), c in teacher_slot.items() if next_slot[ts] >= 0
     )
-    variety = sum(
+    subject_repeat = sum(
         c * group_subject_slot[(group, subject, next_slot[ts])]
         for (group, subject, ts), c in group_subject_slot.items()
         if next_slot[ts] >= 0
     )
 
-    hard = -(room_conflict + teacher_conflict + group_conflict)
-    soft = efficiency - stability - variety
+    hard = -(room_pairs + teacher_pairs + class_pairs)
+    soft = -(room_change + subject_repeat - time_efficiency)
     return {
         "hard": hard,
         "soft": soft,
-        "room_conflict": room_conflict,
-        "teacher_conflict": teacher_conflict,
-        "group_conflict": group_conflict,
-        "stability": stability,
-        "efficiency": efficiency,
-        "variety": variety,
+        "room_conflict_cost": room_pairs,
+        "teacher_conflict_cost": teacher_pairs,
+        "class_conflict_cost": class_pairs,
+        "teacher_room_change_cost": room_change,
+        "teacher_time_efficiency_cost": -time_efficiency,  # a reward: raw cost <= 0
+        "class_subject_repeat_cost": subject_repeat,
     }
 
 
@@ -123,12 +129,12 @@ def main(argv: list[str]) -> int:
     print(f"EVAL score={format_score(result)} self_report={solution.get('score', 'n/a')}")
     print(
         "EVAL breakdown"
-        f" room_conflict={result['room_conflict']}"
-        f" teacher_conflict={result['teacher_conflict']}"
-        f" group_conflict={result['group_conflict']}"
-        f" efficiency={result['efficiency']}"
-        f" stability={result['stability']}"
-        f" variety={result['variety']}"
+        f" room_conflict_cost={result['room_conflict_cost']}"
+        f" teacher_conflict_cost={result['teacher_conflict_cost']}"
+        f" class_conflict_cost={result['class_conflict_cost']}"
+        f" teacher_time_efficiency_cost={result['teacher_time_efficiency_cost']}"
+        f" teacher_room_change_cost={result['teacher_room_change_cost']}"
+        f" class_subject_repeat_cost={result['class_subject_repeat_cost']}"
     )
     return 0
 

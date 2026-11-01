@@ -7,12 +7,12 @@
 #include <memory>
 #include <random>
 #include <stdexcept>
-#include <thread>
 #include <utility>
 #include <vector>
 
 #include "optimaru/api/solver/solver.hpp"
 #include "optimaru/config/solver/solver_config.hpp"
+#include "optimaru/impl/solver/worker_threads.hpp"
 #include "ts/incremental_calculator.hpp"
 #include "ts/score_calculator.hpp"
 
@@ -27,7 +27,7 @@ using Calculator = TournamentSchedulingIncrementalScoreCalculator;
 // ---------------------------------------------------------------------------
 // TeamCountMove — the domain macro move (adopted on the quality bench)
 // ---------------------------------------------------------------------------
-// Why a macro move: medium 3 (fairAssignmentCountPerTeam) is
+// Why a macro move: medium 3 (assignmentCountImbalanceCost) is
 // LoadBalance::unfairness over the teams that currently hold at least one
 // assignment — Java's constraint has no complement, so an unloaded team
 // simply drops out of the balance. With A assignments over n loaded teams the
@@ -319,9 +319,10 @@ private:
     }
 
     // Least-loaded kept team that keeps the move hard-feasible: not already
-    // playing that day (hard 1) and not unavailable on it (hard 2). Falls
-    // back to ignoring the unavailability so a drain is completed and judged
-    // by the acceptor rather than left half-done.
+    // playing that day (teamConflictCost) and not unavailable on it
+    // (teamUnavailabilityCost). Falls back to ignoring the unavailability so
+    // a drain is completed and judged by the acceptor rather than left
+    // half-done.
     int bestReplacement(int team, int day, std::mt19937_64 &rng) const
     {
         const std::vector<std::int64_t> &loads = calculator_->teamLoads();
@@ -582,32 +583,33 @@ void Solver::solve(TournamentSchedule &schedule)
     {
         std::vector<TournamentSchedule> candidates(workerCount, schedule);
         std::vector<std::exception_ptr> failures(workerCount);
-        std::vector<std::thread> workers;
-        workers.reserve(workerCount);
-        for (int i = 0; i < workerCount; ++i)
-        {
-            workers.emplace_back(
-                [this, i, &candidates, &failures]
+        // Raised by the first worker that fails: every worker's engine checks
+        // it once a step, so the others stop instead of using up their budget.
+        auto stop = std::make_shared<std::atomic<bool>>(false);
+        // A worker that cannot be started (std::system_error) stops and joins
+        // the ones already running before the error is rethrown here.
+        optimaru::runWorkerThreads(
+            workerCount, *stop,
+            [this, &candidates, &failures, &stop](int i)
+            {
+                try
                 {
-                    try
-                    {
-                        Config workerConfig = config_;
-                        workerConfig.parallelSolverCount = 1;
-                        workerConfig.randomSeed
-                            += static_cast<std::uint64_t>(i);
-                        if (i != 0)
-                            workerConfig.onNewBest = nullptr;
-                        Solver worker(std::move(workerConfig));
-                        worker.solve(candidates[i]);
-                    }
-                    catch (...)
-                    {
-                        failures[i] = std::current_exception();
-                    }
-                });
-        }
-        for (std::thread &worker : workers)
-            worker.join();
+                    Config workerConfig = config_;
+                    workerConfig.parallelSolverCount = 1;
+                    workerConfig.stopFlag = stop;
+                    workerConfig.randomSeed
+                        += static_cast<std::uint64_t>(i);
+                    if (i != 0)
+                        workerConfig.onNewBest = nullptr;
+                    Solver worker(std::move(workerConfig));
+                    worker.solve(candidates[i]);
+                }
+                catch (...)
+                {
+                    failures[i] = std::current_exception();
+                    stop->store(true);
+                }
+            });
         for (const std::exception_ptr &failure : failures)
         {
             if (failure)
@@ -662,6 +664,8 @@ void Solver::solve(TournamentSchedule &schedule)
 
     // Construction heuristic + late-acceptance local search (+ ALNS kicks).
     optimaru::Solver<TournamentSchedule> engine(std::move(engineConfig));
+    if (config_.stopFlag)
+        engine.adoptTerminateEarlyFlag(config_.stopFlag);
     if (config_.teamCountMoves)
     {
         std::unique_ptr<TeamCountMove> teamCount
@@ -692,6 +696,8 @@ void Solver::solve(
         optimaru::SolverConfig engineConfig;
         configureEngine(config_, schedule, engineConfig);
         optimaru::Solver<TournamentSchedule> engine(std::move(engineConfig));
+        if (config_.stopFlag)
+            engine.adoptTerminateEarlyFlag(config_.stopFlag);
         engine.solve(schedule, calculator);
     }
 

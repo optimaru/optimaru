@@ -2,7 +2,7 @@
 
 The default entry point is the canonical full-parity pipeline:
 `convert_problem` moves API_SPEC.md's `TimetableProblem` JSON into the
-canonical C++ domain (`_core.canon`, every constraint H1–H10 / S1–S6 of the
+canonical C++ domain (`_core.canon`, every hard and soft constraint of the
 CP-SAT reference), local search solves it, and `convert_solution` turns the
 result back into a canonical `Timetable` JSON. `solve` bundles all of it::
 
@@ -11,14 +11,17 @@ result back into a canonical `Timetable` JSON. `solve` bundles all of it::
     result = st.solve(problem_dict, time_limit_seconds=10.0, random_seed=42)
     print(result["status"], result["penalties"], result["notes"])
 
-The quickstart domain (6 teacher/class/room clash constraints, slotRoom
-composite encoding) remains available through `mode="quickstart"` and
+The quickstart domain (7 teacher/class/room terms, slotRoom composite
+encoding) remains available through `mode="quickstart"` and
 `st_timetabling.quickstart` (an approximate conversion; its limits are in the
 quickstart module docstring). The top-level classes `Timeslot`/`Room`/`Lesson`/
 `Timetable`/`Solver`/`SolverConfig` belong to the quickstart domain; the
 canonical domain classes live in the `canon` submodule (`canon.Lesson`,
 `canon.Timetable`, `canon.Solver`, `canon.SolverConfig`,
-`canon.ObjectiveWeights`, ...).
+`canon.ObjectiveWeights`, ...). The constraint catalog is the canonical one:
+`list_constraints()`, `constraint_info()` (default level / weight per
+constraint, read off the C++ components) and `constraint_costs(table)` (the raw
+per-constraint costs of a `canon.Timetable`).
 
 The cost function defaults to the monolithic incremental calculator (fast
 path); `constraints=` selects a plugin assembly instead (see `constraints.py`)::
@@ -27,16 +30,18 @@ path); `constraints=` selects a plugin assembly instead (see `constraints.py`)::
 
     result = st.solve(
         problem,
-        constraints=Assembly().add("teacher_gap", weight=40).drop("teacher_workday"),
+        constraints=Assembly().add("teacher_gap_cost", weight=40).drop("teacher_workday_cost"),
     )
 
 Pydantic mirrors (for serialization) live in `st_timetabling.models` (optional dependency).
 """
 
+import copy
 import time
 
 from . import quickstart
 from ._core import (
+    ConstraintInfo,
     Lesson,
     Room,
     Score,
@@ -46,27 +51,32 @@ from ._core import (
     Timetable,
     calculate_score,
     canon,
+    constraint_info,
 )
 from .constraints import (
+    UNASSIGNED_LESSONS_SOFT_WEIGHT,
     Assembly,
-    AvoidedPeriod,
-    BlockAdjacency,
-    ClassConflict,
-    ClassGap,
+    AvoidedPeriodCost,
+    BlockAdjacencyCost,
+    ClassConflictCost,
+    ClassGapCost,
     Constraint,
-    CourseDailyLimit,
-    NonPreferredPeriod,
-    RoomCapacity,
-    SlotNotAllowed,
-    TeacherConflict,
-    TeacherConsecutiveLimit,
-    TeacherFreeDay,
-    TeacherGap,
-    TeacherLoadLimit,
-    TeacherWorkday,
-    UnassignedLesson,
+    CourseMaxPeriodsPerDayCost,
+    DisallowedSlotCost,
+    FixedSlotsCost,
+    NonPreferredPeriodCost,
+    ParallelGroupsCost,
+    RoomCapacityCost,
+    TeacherConflictCost,
+    TeacherFreeDayCost,
+    TeacherGapCost,
+    TeacherMaxConsecutivePeriodsCost,
+    TeacherMaxPeriodsCost,
+    TeacherWorkdayCost,
+    UnassignedLessonsCost,
     get_constraints,
     list_constraints,
+    spec_named,
 )
 from .convert import (
     ConvertedProblem,
@@ -76,88 +86,104 @@ from .convert import (
     inject_solution,
 )
 
+#: The raw per-constraint costs of a `canon.Timetable` (the canonical domain):
+#: ``{name: {costs, weight, exponent, hard, global, level, reward,
+#: level_flippable, name, label}}``, in list_constraints() order.
+constraint_costs = canon.constraint_costs
+
 __all__ = [
+    "UNASSIGNED_LESSONS_SOFT_WEIGHT",
     "Assembly",
-    "AvoidedPeriod",
-    "BlockAdjacency",
-    "ClassConflict",
-    "ClassGap",
+    "AvoidedPeriodCost",
+    "BlockAdjacencyCost",
+    "ClassConflictCost",
+    "ClassGapCost",
     "Constraint",
+    "ConstraintInfo",
     "ConvertedProblem",
-    "CourseDailyLimit",
+    "CourseMaxPeriodsPerDayCost",
+    "DisallowedSlotCost",
+    "FixedSlotsCost",
     "Lesson",
-    "NonPreferredPeriod",
+    "NonPreferredPeriodCost",
     "OccupancyGroup",
+    "ParallelGroupsCost",
     "Room",
-    "RoomCapacity",
+    "RoomCapacityCost",
     "Score",
-    "SlotNotAllowed",
     "Solver",
     "SolverConfig",
-    "TeacherConflict",
-    "TeacherConsecutiveLimit",
-    "TeacherFreeDay",
-    "TeacherGap",
-    "TeacherLoadLimit",
-    "TeacherWorkday",
+    "TeacherConflictCost",
+    "TeacherFreeDayCost",
+    "TeacherGapCost",
+    "TeacherMaxConsecutivePeriodsCost",
+    "TeacherMaxPeriodsCost",
+    "TeacherWorkdayCost",
     "Timeslot",
     "Timetable",
-    "UnassignedLesson",
+    "UnassignedLessonsCost",
     "calculate_score",
     "canon",
+    "constraint_costs",
+    "constraint_info",
     "convert_problem",
     "convert_solution",
-    "inject_solution",
     "get_constraints",
+    "inject_solution",
     "list_constraints",
     "quickstart",
     "solve",
 ]
 
-# S1–S6 constraint names == ObjectiveWeights field names (used to fold the rescoring weights).
-_SOFT_NAMES = (
-    "teacher_gap",
-    "teacher_workday",
-    "teacher_free_day",
-    "class_gap",
-    "avoided_period",
-    "non_preferred_period",
-)
+# The soft constraint names == the fast path's ObjectiveWeights fields (the
+# objective_value rescoring weights): the soft rows of the catalog.
+_SOFT_NAMES = tuple(row.name for row in constraint_info() if row.default_level == "soft")
+_DEFAULT_WEIGHTS = {row.name: row.default_weight for row in constraint_info()}
 
 
-def _assemble_plugin(constraints, base_weights):
+def _weights_of(weights: "canon.ObjectiveWeights") -> dict[str, float]:
+    return {name: getattr(weights, name) for name in _SOFT_NAMES}
+
+
+def _picks_of(constraints) -> list[Constraint]:
+    """`solve(constraints=...)`'s argument as a list of specs.
+
+    An `Assembly` is taken as it is (its add() already resolved duplicates by
+    name); any other iterable of specs and/or names goes through
+    `get_constraints`, so a constraint named twice or an empty list is a
+    ValueError — the same contract as the C++ `applyConstraints`."""
+    if isinstance(constraints, Assembly):
+        return list(constraints)
+    return get_constraints([spec_named(item) if isinstance(item, str) else item for item in constraints])
+
+
+def _assemble_plugin(constraints):
     """Assembly of the plugin path: (DecomposedCalculator, ObjectiveWeights for
     rescoring, unassigned-penalty weight).
 
-    S components without an explicit weight follow ``base_weights`` (=
-    config.weights with the `weights` argument applied) — the same rule as the
-    monolithic path. The rescoring weights mirror the assembly: an overridden S
-    weight takes that value, an S term dropped from the assembly becomes 0.
-    `ObjectiveWeights` holds integers, so S weights must be integral (else
-    ValueError).
+    Each pick's ``weight=None`` is its component's default weight (the C++
+    kDefaultWeight, `constraint_info()`), the same as on the fast path. The
+    rescoring weights (objective_value) mirror the assembly: a picked soft
+    constraint takes its effective weight, a soft constraint left out of the
+    selection 0. They are plain numbers — no integer requirement.
 
-    The third value is a float only for an assembly that demotes H1
-    (`unassigned_lesson`) to soft (that component's effective weight; 0.0 when
-    it is dropped altogether) and None while it stays hard — it hands the caller
-    (`convert_solution`) whether unassigned lessons can remain in the result and
+    The third value is a float only for an assembly that demotes
+    `unassigned_lessons_cost` to soft (that component's effective weight) or
+    leaves it out altogether (0.0), and None while it stays hard — it tells
+    `convert_solution` whether unassigned lessons may remain in the result and
     what each one costs.
     """
-    assembly = constraints if isinstance(constraints, Assembly) else Assembly(constraints)
-    calculator = canon.DecomposedCalculator()
-    report = dict.fromkeys(_SOFT_NAMES, 0)  # S terms missing from the assembly are 0 in rescoring too
-    unassigned_weight: float | None = 0.0  # without H1 in the assembly, unassigned lessons are free
-    for spec in assembly:
-        weight = spec.weight
+    picks = _picks_of(constraints)
+    calculator = canon.DecomposedCalculator(picks)  # the C++ knob checks
+    report = dict.fromkeys(_SOFT_NAMES, 0.0)  # soft terms missing from the selection are 0
+    unassigned_weight: float | None = 0.0  # without the constraint, unassigned lessons are free
+    for spec in picks:
+        weight = _DEFAULT_WEIGHTS[spec.name] if spec.weight is None else float(spec.weight)
         if spec.name in report:
-            if weight is None:
-                weight = getattr(base_weights, spec.name)
-            if float(weight) != int(weight) or weight < 0:
-                raise ValueError(f"the weight of {spec.name} must be a non-negative integer (rescoring weight): {weight!r}")
-            report[spec.name] = int(weight)
-        if spec.name == UnassignedLesson.name:
+            report[spec.name] = weight
+        if spec.name == UnassignedLessonsCost.name:
             # Hard means unassigned lessons cannot occur (the engine does not enable the moves either).
-            unassigned_weight = None if spec.hard is not False else float(1.0 if weight is None else weight)
-        calculator.add(spec.name, weight=weight, hard=spec.hard, exponent=spec.exponent)
+            unassigned_weight = None if spec.hard is not False else weight
     return calculator, canon.ObjectiveWeights(**report), unassigned_weight
 
 
@@ -167,12 +193,12 @@ def _resolve_config(config, *, canonical: bool):
         return canon.SolverConfig() if canonical else SolverConfig()
     if canonical:
         if isinstance(config, canon.SolverConfig):
-            return config
+            return copy.copy(config)  # solve()'s overrides must not leak into it
         if hasattr(config, "to_canon"):
             return config.to_canon()
         raise ValueError("a canonical-mode config must be a canon.SolverConfig or an object with to_canon()")
     if isinstance(config, SolverConfig):
-        return config
+        return copy.copy(config)  # solve()'s overrides must not leak into it
     if hasattr(config, "to_core"):
         return config.to_core()
     raise ValueError("a quickstart-mode config must be a SolverConfig or an object with to_core()")
@@ -195,8 +221,8 @@ def solve(
     """High-level API: solves a canonical `TimetableProblem` dict and returns a
     canonical `Timetable` dict.
 
-    ``mode="canonical"`` (default) honours every hard H1–H10 / soft S1–S6
-    constraint of the CP-SAT reference through the st::canon domain.
+    ``mode="canonical"`` (default) honours every hard and soft constraint of
+    the CP-SAT reference through the st::canon domain.
     ``mode="quickstart"`` is the approximate quickstart-domain conversion
     (unsupported constraints are reported in notes).
 
@@ -220,41 +246,49 @@ def solve(
     (`models.SolveConfig`). None means the engine defaults (30 s budget).
     Explicit keyword arguments override config.
 
-    ``weights`` is a dict of canonical soft weights (a subset of teacher_gap /
-    teacher_workday / teacher_free_day / class_gap / avoided_period /
-    non_preferred_period; omitted keys take the cpsat defaults). Canonical mode
-    only.
+    ``weights`` is a dict of soft weights for the default fast path, keyed by
+    the soft constraint names (a subset of teacher_gap_cost /
+    teacher_workday_cost / teacher_free_day_cost / class_gap_cost /
+    avoided_period_cost / non_preferred_period_cost; omitted keys keep the
+    component defaults 20/3/30/10/5/1). It becomes ``config.weights``
+    (`canon.ObjectiveWeights`, which rejects a bool, a non-finite or a negative
+    weight). Canonical mode only. Next to ``constraints`` it must equal the
+    defaults, like ``config.weights`` — a selection carries its own weights.
 
-    ``constraints`` is a plugin constraint assembly (canonical mode only; see
-    the `constraints` module): an `Assembly` or an iterable of specs/names.
-    ``None`` (default) keeps the monolithic incremental calculator's fast path —
-    the default path's behaviour is unchanged. When given, the search runs on
-    the assembled `canon.DecomposedCalculator`: S components without an explicit
-    weight follow ``weights``, and the search is single-start
-    (parallel_solver_count ignored). The response's penalties are always the
-    canonical rescore (raw S1–S6 counts, independent of the assembly), and
-    objective_value uses the effective S weights of the assembly (an override
-    takes its value, a dropped term 0) — hence S weights must be non-negative
-    integers. status also follows the canonical hard rescore (e.g. an assembly
-    that demotes a hard constraint to soft and then violates it is INFEASIBLE).
+    ``constraints`` is a plugin constraint selection (canonical mode only; see
+    the `constraints` module): an `Assembly`, or an iterable of specs and/or
+    names (a constraint named twice or an empty list raises ValueError).
+    ``None`` (default) keeps the monolithic incremental calculator's fast path.
+    When given, the search runs on the assembled `canon.DecomposedCalculator`:
+    a pick's ``weight=None`` is the component default (never ``weights`` /
+    ``config.weights``, which must then stay at the defaults), and the search
+    is single-start (parallel_solver_count ignored). The response's penalties
+    are always the canonical rescore (raw soft counts, independent of the
+    selection), and objective_value uses the selection's effective soft
+    weights (a picked soft constraint its weight, one left out 0). status also
+    follows the canonical hard rescore (e.g. a selection that demotes a hard
+    constraint to soft and then violates it is INFEASIBLE).
 
-    Only an assembly that demotes H1 (`unassigned_lesson`) to soft accepts
-    unassigned lessons as a **result** (the same contract as cpsat's
-    `WeeklyPeriodCounts(hard=false)`, i.e. partial timetabling): the search gains
-    unassign moves, unfilled periods are reported as
-    `penalties["weekly_period_counts"]` instead of a hard violation, and status
-    comes from the hard rescore without that term. One unassigned period costs
-    that component's weight — keep it above the sum of the other soft terms
-    (cpsat default 10000) so every period that can be filled is filled.
+    Only a selection that demotes `unassigned_lessons_cost` to soft accepts
+    unassigned lessons as a **result** (partial timetabling, the CP-SAT
+    reference's relaxed weekly-period counts): the search gains unassign
+    moves, the unfilled periods are reported as
+    `penalties["unassigned_lessons_cost"]` instead of a hard violation, and
+    status comes from the hard rescore without that term. One unassigned
+    period costs that component's weight — give it
+    `UNASSIGNED_LESSONS_SOFT_WEIGHT` (10000), above the sum of the other soft
+    terms, so every period that can be filled is filled.
 
     ``stop_at_first_feasible`` stops as soon as hard 0 is reached
-    (best_score_limit=(0, -1e18)). Do not combine it with an assembly relaxing
-    H1 — a solution that drops every lesson is hard 0 too and would stop there.
+    (best_score_limit=(0, -inf)). Do not combine it with a selection relaxing
+    `unassigned_lessons_cost` — a solution that drops every lesson is hard 0
+    too and would stop there.
 
     The returned dict follows API_SPEC.md's response shape (status/lessons/
     objective_value/best_objective_bound/wall_time_seconds/penalties/notes).
-    In canonical mode penalties are the raw S1–S6 counts and objective_value the
-    weighted penalty sum — the same unit as the cpsat backend.
+    In canonical mode penalties are the raw soft counts keyed by the soft
+    constraint names and objective_value the weighted penalty sum — the same
+    unit as the cpsat backend.
     """
     if mode not in ("canonical", "quickstart"):
         raise ValueError(f"unknown mode: {mode!r} (canonical | quickstart)")
@@ -272,11 +306,20 @@ def solve(
     if parallel_solver_count is not None:
         cfg.parallel_solver_count = parallel_solver_count
     if stop_at_first_feasible:
-        cfg.best_score_limit = (0, -1e18)
+        cfg.best_score_limit = (0, float("-inf"))
     if on_new_best is not None:
         cfg.on_new_best = on_new_best
     if weights is not None:
+        unknown = sorted(set(weights) - set(_SOFT_NAMES))
+        if unknown:
+            raise ValueError(f"unknown soft weight(s) {unknown}; the weights are keyed by {list(_SOFT_NAMES)}")
         cfg.weights = canon.ObjectiveWeights(**weights)
+    # weights= / config.weights at the defaults (e.g. a full default dict) are harmless next to a
+    # selection; anything else would be silently ignored, so it raises.
+    if constraints is not None and canonical and _weights_of(cfg.weights) != _weights_of(canon.ObjectiveWeights()):
+        raise ValueError(
+            "weights / config.weights apply to the default fast path only; with constraints=, give each pick its weight"
+        )
 
     if initial_solution is not None and not (isinstance(initial_solution, dict) and "lessons" in initial_solution):
         raise ValueError("initial_solution has no lessons")
@@ -287,19 +330,21 @@ def solve(
             inject_solution(converted, initial_solution["lessons"])
         unassigned_weight = None
         if constraints is None:
-            # Default: the monolithic incremental calculator's fast path (unchanged).
+            # Default: the monolithic incremental calculator's fast path.
+            report_weights = cfg.weights
             start = time.perf_counter()
             canon.Solver(cfg).solve(converted.table)
             wall = time.perf_counter() - start
         else:
             # Plugin path: search with the assembled calculator; the rescoring
-            # weights (convert_solution's objective_value) mirror the assembly.
-            calculator, report_weights, unassigned_weight = _assemble_plugin(constraints, cfg.weights)
+            # weights (convert_solution's objective_value) mirror the selection.
+            calculator, report_weights, unassigned_weight = _assemble_plugin(constraints)
             start = time.perf_counter()
             canon.Solver(cfg).solve(converted.table, calculator)
             wall = time.perf_counter() - start
-            converted.table.weights = report_weights
-        return convert_solution(converted, wall_time_seconds=wall, unassigned_weight=unassigned_weight)
+        return convert_solution(
+            converted, wall_time_seconds=wall, unassigned_weight=unassigned_weight, weights=report_weights
+        )
 
     converted = quickstart.convert_problem(problem)
     if initial_solution is not None:

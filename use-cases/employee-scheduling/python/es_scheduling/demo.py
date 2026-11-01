@@ -9,15 +9,12 @@ import random
 from collections import Counter
 
 from ._core import minutes
+from .constraints import MaxConsecutiveDaysCost, MaxWeeklyMinutesCost, ShiftCoverageCost, UnassignedShiftsCost
 from .models import (
-    MaxConsecutiveDaysRule,
-    MaxWeeklyMinutesRule,
     ScheduleRequest,
     SchedulingInput,
-    ShiftCoverageRule,
     ShiftModel,
     SolverSettings,
-    UnassignedShiftRule,
     WorkerModel,
     default_rules,
 )
@@ -99,10 +96,10 @@ def generate_demo_data(seed: int = 7, workers: int = 12, days: int = 14) -> Sche
             shifts=[shift for day in range(days) for shift in _shifts(day, max(1, workers // 2))],
             rules=[
                 *default_rules(),
-                UnassignedShiftRule(),
-                MaxConsecutiveDaysRule(value=6),
-                MaxWeeklyMinutesRule(minutes=40 * 60),
-                ShiftCoverageRule(worker_skill="Skill A", min_count=1, weight=100.0),
+                UnassignedShiftsCost(),
+                MaxConsecutiveDaysCost(value=6),
+                MaxWeeklyMinutesCost(minutes=40 * 60),
+                ShiftCoverageCost(worker_skill="Skill A", min_count=1, weight=100.0),
             ],
         ),
     )

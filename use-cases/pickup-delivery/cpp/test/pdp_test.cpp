@@ -2,6 +2,8 @@
 // calculator against the full recompute, and the engine integration.
 #include <chrono>
 #include <cstdio>
+#include <limits>
+#include <cmath>
 #include <cstdlib>
 #include <random>
 #include <stdexcept>
@@ -399,7 +401,7 @@ constexpr Seconds kLineService = 1000;
 
 struct LineRequest
 {
-    int requiredVehicle;
+    int requiredVehicleIndex;
     Seconds pickupClose;
 };
 
@@ -446,7 +448,7 @@ PdpRoutePlan buildLine(const std::vector<Seconds> &homes,
                                            2 * request + 1,
                                            1,
                                            0,
-                                           requests[r].requiredVehicle});
+                                           requests[r].requiredVehicleIndex});
     }
     plan.drivingSeconds.assign(places.size(),
                                std::vector<Seconds>(places.size(), 0));
@@ -459,10 +461,11 @@ PdpRoutePlan buildLine(const std::vector<Seconds> &homes,
 }
 
 // No search at all, so these are the construction's own decisions. The default
-// score does not read requiredVehicle, so the checks look at the routes.
+// (monolithic) score has no requiredVehicleCost, so the checks look at the
+// routes.
 void testConstructionRespectsRequiredVehicle()
 {
-    std::printf("== Construction and requiredVehicle ==\n");
+    std::printf("== Construction and the required vehicle ==\n");
     Solver::Config config;
     config.spentLimit = std::chrono::milliseconds(0);
 
@@ -505,10 +508,40 @@ void testConstructionRespectsRequiredVehicle()
     std::printf("\n");
 }
 
+// -------------------------------------------------------------------------
+// stop_at_first_feasible's best-score limit (0, INT64_MIN, INT64_MIN): the
+// engine compares hard only (soft -inf), so no soft score, however low,
+// misses the stop. Through toEngineScore the sentinel folded into a finite
+// engine soft that a soft score below it never reached.
+// -------------------------------------------------------------------------
+void verifyStopAtFirstFeasibleLimit()
+{
+    std::printf("== stop_at_first_feasible's limit is hard-only ==\n");
+    const optimaru::HardSoftScore limit
+        = toEngineScoreLimit(Score{0, kNoLevelFloor, kNoLevelFloor});
+    check(limit.hard == 0 && std::isinf(limit.soft) && limit.soft < 0.0,
+          "(0, INT64_MIN, INT64_MIN) -> engine limit (0, -inf)");
+    check(optimaru::HardSoftScore{0, -1e30} >= limit
+              && toEngineScore(Score{0, -5, -(1LL << 62)}) >= limit,
+          "a feasible score with any soft (-1e30; medium -5, soft -2^62) reaches it");
+    check(!(optimaru::HardSoftScore{-1, 0.0} >= limit),
+          "an infeasible score does not");
+    check(toEngineScoreLimit(Score{0, kNoLevelFloor, 0}).soft
+                  == -std::numeric_limits<double>::infinity()
+              && toEngineScoreLimit(Score{0, 0, kNoLevelFloor}).soft
+                     == -std::numeric_limits<double>::infinity(),
+          "INT64_MIN on medium or on soft drops the soft-side floor");
+    const Score other{-2, -3, -5};
+    check(toEngineScoreLimit(other) == toEngineScore(other),
+          "any other limit folds like a score");
+    std::printf("\n");
+}
+
 }  // namespace
 
 int main()
 {
+    verifyStopAtFirstFeasibleLimit();
     testCouplingConstraints();
     testIncrementalMatchesFullRecompute();
     testSolveIntegrity();

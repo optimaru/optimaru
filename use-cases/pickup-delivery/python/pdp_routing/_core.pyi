@@ -4,15 +4,17 @@ Times are integer seconds from a common day start. The plan is the planning
 solution: each vehicle's ordered `node_indices` is the planning list variable;
 a stop in no route is unassigned and lands in `unassigned_node_indices`.
 
-Score (HardMediumSoft, lexicographic): hard = capacity peak + time-window
-lateness + the coupling rules (a request is routed whole, on one vehicle,
-pickup before dropoff); medium = -(service minutes of unrouted requests);
-soft = -(total driving seconds).
+Score (HardMediumSoft, lexicographic), at the default weights: hard =
+capacity peak + time-window lateness + the coupling rules (a request is
+routed whole, on one vehicle, pickup before dropoff); medium = -(service
+minutes of unrouted requests), folded into the engine's soft as
+medium * 10^9; soft = -(total driving seconds). The weights are the C++
+components' defaults (constraint_info()).
 """
 
 import enum
 from collections.abc import Iterable
-from typing import Any, Callable
+from typing import Any, Callable, Literal, NamedTuple
 
 class AcceptorType(enum.Enum):
     """Local-search acceptance criterion."""
@@ -182,7 +184,9 @@ class SolverConfig:
     unimproved_step_count_limit: int
     unimproved_spent_limit_seconds: float
     best_score_limit: tuple[int, int, int]
-    """(hard, medium, soft): stop early once bestScore >= this."""
+    """(hard, medium, soft): stop early once bestScore >= this. -(2**63) on
+    medium or soft means no floor on the soft side (only hard is compared), so
+    (0, -(2**63), -(2**63)) stops at the first feasible solution."""
 
     # --- engine ---
     random_seed: int
@@ -255,6 +259,7 @@ class SolverConfig:
     driving_time_nearby_probability: float
 
     on_new_best: Callable[[int, Score], None] | None
+    """Called with (step, score) on each new best, in the levels of the final plan.score."""
 
 class Solver:
     """Construction heuristic + local search + adaptive ruin & recreate, with
@@ -267,14 +272,42 @@ class Solver:
     ) -> None:
         """Score the same solve with a caller-chosen constraint set
         (see pdp_routing.constraints). The given list replaces the default set;
-        None keeps the default set."""
+        None keeps the default set. plan.score and on_new_best report the three
+        levels unfolded, so a soft total of 10^9 or more stays soft."""
 
 def list_constraints() -> list[str]:
-    """Constraint names scored by this domain (default assembly order, snake_case).
+    """Constraint names scored by this domain (default assembly order, snake_case):
+    the sixteen per-vehicle constraints (vehicle_capacity_cost ... required_vehicle_cost),
+    then the four request-level globals (paired_request_cost, same_vehicle_cost,
+    pickup_before_dropoff_cost, unassigned_requests_cost).
     The same names pdp_routing.constraints uses."""
 
-def constraint_costs(solution, /) -> dict[str, dict]:
+def constraint_costs(plan: PdpRoutePlan) -> dict[str, dict[str, Any]]:
     """Per-constraint, per-unit **raw** costs — before weight/exponent/level rounding.
-    `pdp_routing.constraints.score()` takes these and produces a score.
-    {name: {"costs": [...], "weight": w, "exponent": e,
-            "hard": bool, "global": bool}}."""
+    A unit is a vehicle (plus the unassigned pool as the last unit); a global
+    constraint reports one cost. `pdp_routing.constraints.score()` takes these and
+    produces a score:
+    {name: {"costs": [...], "weight": float, "exponent": float, "hard": bool,
+    "global": bool, "level": "hard" | "medium" | "soft", "reward": bool,
+    "level_flippable": bool, "name": str, "label": str,
+    "medium_fold": {"kind": "into_soft", "unit": 1e9}}}. The medium fold belongs
+    to the domain, so EVERY entry carries it."""
+
+class ConstraintInfo(NamedTuple):
+    """One constraint-catalog row, read off the C++ default assembly."""
+
+    name: str
+    default_level: Literal["hard", "medium", "soft"]
+    default_weight: float
+    level_flippable: bool
+    reward: bool
+    default_enabled: bool
+
+def constraint_info() -> list[ConstraintInfo]:
+    """The constraint catalog, in list_constraints() order: the default level and
+    weight of each constraint (unassigned_requests_cost is medium at weight 1 in
+    medium units; pinned_stops_cost hard at 1e12; the coupling rules and
+    required_vehicle_cost hard at 1000). All flippable, none a reward;
+    default_enabled is False for the opt-in weight-0 objectives
+    (enclosing_circle_radius_cost, route_duration_cost, latency_cost,
+    squared_order_age_cost)."""

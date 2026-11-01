@@ -3,9 +3,10 @@
 The formulation, deterministic comparison instances, and CLI entry point live
 together in this use-case package.
 
-`es_scheduling` scores through `DecomposedCalculator` and has no
-`constraint_costs` of its own, so `PACKAGE` names this package, whose
-`constraint_costs` calls that calculator. It is still the engine's score.
+`es_scheduling.constraint_costs` takes an engine schedule and the rule list,
+while the runner hands over a request, so `PACKAGE` names this package, whose
+`constraint_costs(request)` builds the engine's `DecomposedCalculator` from the
+request's rules. It is still the engine's score.
 """
 
 from __future__ import annotations

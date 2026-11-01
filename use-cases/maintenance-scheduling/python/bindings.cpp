@@ -284,17 +284,15 @@ PYBIND11_MODULE(_core, m)
         "demo; pass a fixed Monday epoch day for reproducibility.");
 
     py::class_<Solver::Config> config(m, "SolverConfig", py::module_local());
+
+    optimaru::python::bindConfigCopy(config);
     config.def(py::init<>())
         .def_property(
             "spent_limit_seconds",
             [](const Solver::Config &c)
             { return std::chrono::duration<double>(c.spentLimit).count(); },
             [](Solver::Config &c, double s)
-            {
-                c.spentLimit
-                    = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        std::chrono::duration<double>(s));
-            })
+            { c.spentLimit = optimaru::python::secondsToMillis(s, "spent_limit_seconds"); })
         .def_property(
             "unimproved_spent_limit_seconds",
             [](const Solver::Config &c)
@@ -303,14 +301,7 @@ PYBIND11_MODULE(_core, m)
                     .count();
             },
             [](Solver::Config &c, double s)
-            {
-                if (s < 0.0)
-                    throw py::value_error(
-                        "unimproved_spent_limit_seconds must be non-negative");
-                c.unimprovedSpentLimit
-                    = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        std::chrono::duration<double>(s));
-            })
+            { c.unimprovedSpentLimit = optimaru::python::secondsToMillis(s, "unimproved_spent_limit_seconds"); })
         .def_readwrite("step_count_limit", &Solver::Config::stepCountLimit)
         .def_readwrite("unimproved_step_count_limit",
                        &Solver::Config::unimprovedStepCountLimit)
@@ -377,15 +368,15 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("swap_move_weight", &Solver::Config::swapMoveWeight)
         // Guided selection (see cpp/src/solver.cpp): change moves draw the
         // start date from the job's own [minStart, idealEnd] window, seed on
-        // jobs sitting in a tagConflict, and prefer a crew that is free for
-        // the whole span.
+        // jobs sitting in a tagConflictCost, and prefer a crew that is free
+        // for the whole span.
         .def_readwrite("window_value_probability",
                        &Solver::Config::windowValueProbability)
         .def_readwrite("hot_job_probability",
                        &Solver::Config::hotJobProbability)
         .def_readwrite("free_crew_candidates",
                        &Solver::Config::freeCrewCandidates)
-        // Early termination once bestScore >= (hard, soft), e.g. (0, -1e18)
+        // Early termination once bestScore >= (hard, soft), e.g. (0, -inf)
         // stops at the first feasible solution.
         .def_property(
             "best_score_limit",
@@ -451,4 +442,10 @@ PYBIND11_MODULE(_core, m)
         "list_constraints",
         [] { return tfpy::constraintNames(defaultConstraints()); },
         "Constraint names available to maintenance_scheduling.constraints.");
+
+    // The constraint catalog, read off the same default assembly:
+    // constraint_info() -> [ConstraintInfo(name, default_level,
+    // default_weight, level_flippable, reward, default_enabled), ...] in
+    // list_constraints() order. The defaults live in the C++ components only.
+    tfpy::bindConstraintInfo(m, [] { return defaultConstraints(); });
 }

@@ -61,7 +61,7 @@ class TimeGrainModel(BaseModel):
 
 
 class RoomModel(BaseModel):
-    """A meeting room. capacity feeds the required room capacity hard constraint."""
+    """A meeting room. capacity feeds the hard room_capacity_cost (and larger_room_capacity_cost)."""
 
     model_config = ConfigDict(extra="forbid")
 

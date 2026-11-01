@@ -6,7 +6,9 @@ grain (15-minute units) and a room. The Java entity's two planning variables
 ``grain_room = time_grain_pos * room_count + room_index`` (-1 == unassigned).
 Constraints have the same semantics as the Java ConstraintProvider (5 hard + 2 medium +
 5 soft; HardMediumSoftScore is folded as ``soft = -(medium * MEDIUM_SCALE + raw soft)``,
-MEDIUM_SCALE == 1e6)::
+MEDIUM_SCALE == 1e6). ``constraint_info()`` lists each constraint's default level and
+weight (the medium pair at weight 1, in medium units); ``constraint_costs(schedule)`` gives
+the raw per-constraint costs::
 
     import meeting_scheduling as ms
 
@@ -19,10 +21,12 @@ pydantic mirror `models.MeetingScheduleModel` (converted, solved, returned as a 
 The pydantic mirror (for serialization) is in `meeting_scheduling.models` (optional dependency).
 """
 
+import copy
+
 from ._core import (
     GRAIN_LENGTH_IN_MINUTES,
     MEDIUM_SCALE,
-    Breakdown,
+    ConstraintInfo,
     Meeting,
     MeetingAssignment,
     MeetingSchedule,
@@ -33,8 +37,8 @@ from ._core import (
     SolverConfig,
     TimeGrain,
     calculate_score,
-    compute_breakdown,
     constraint_costs,
+    constraint_info,
     demo_data,
     list_constraints,
 )
@@ -42,7 +46,7 @@ from ._core import (
 __all__ = [
     "GRAIN_LENGTH_IN_MINUTES",
     "MEDIUM_SCALE",
-    "Breakdown",
+    "ConstraintInfo",
     "Meeting",
     "MeetingAssignment",
     "MeetingSchedule",
@@ -53,7 +57,7 @@ __all__ = [
     "SolverConfig",
     "TimeGrain",
     "calculate_score",
-    "compute_breakdown",
+    "constraint_info",
     "list_constraints",
     "constraint_costs",
     "demo_data",
@@ -90,7 +94,7 @@ def solve(
 
     ``config`` becomes the base settings (None = engine defaults: 30 s budget);
     explicit keyword arguments override config. ``stop_at_first_feasible``
-    stops as soon as hard 0 is reached (best_score_limit=(0, -1e18)).
+    stops as soon as hard 0 is reached (best_score_limit=(0, -inf)).
 
     ``constraints`` picks the cost function directly
     (see `meeting_scheduling.constraints`). Only the listed constraints are scored;
@@ -99,7 +103,8 @@ def solve(
         from meeting_scheduling.constraints import get_constraints
         ms.solve(schedule, constraints=get_constraints())
     """
-    cfg = config if config is not None else SolverConfig()
+    # A copy: the keyword overrides below must not leak into the caller's config.
+    cfg = copy.copy(config) if config is not None else SolverConfig()
     if time_limit_seconds is not None:
         cfg.spent_limit_seconds = time_limit_seconds
     if random_seed is not None:
@@ -107,7 +112,7 @@ def solve(
     if parallel_solver_count is not None:
         cfg.parallel_solver_count = parallel_solver_count
     if stop_at_first_feasible:
-        cfg.best_score_limit = (0, -1e18)
+        cfg.best_score_limit = (0, float("-inf"))
     if on_new_best is not None:
         cfg.on_new_best = on_new_best
 

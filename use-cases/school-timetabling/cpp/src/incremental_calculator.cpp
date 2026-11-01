@@ -29,9 +29,9 @@ void SchoolTimetablingIncrementalScoreCalculator::resetWorkingSolution(
 
     conflictPairs_ = 0;
     unavailable_ = 0;
-    stability_ = 0;
-    efficiency_ = 0;
-    variety_ = 0;
+    roomChange_ = 0;
+    adjacentPairs_ = 0;
+    subjectRepeat_ = 0;
 
     assign_.assign(workingSolution.lessons.size(), -1);
     for (int i = 0; i < static_cast<int>(workingSolution.lessons.size()); ++i)
@@ -56,43 +56,44 @@ void SchoolTimetablingIncrementalScoreCalculator::insert(int lessonIndex,
     const int next = table_->nextSlot[ts];
     const int prev = table_->prevSlot[ts];
 
-    // hard 1: roomConflict — the slotRoom value IS the (timeslot, room) cell.
+    // hard 1: roomConflictCost — the slotRoom value IS the (timeslot, room)
+    // cell.
     conflictPairs_ += slotRoomCnt_[slotRoom]++;
 
-    // hard 2 + soft 6: teacherConflict / teacherTimeEfficiency.
+    // hard 2 + soft 6: teacherConflictCost / teacherTimeEfficiencyCost.
     conflictPairs_ += teacherSlotCnt_[teacherSlotOffset(lesson.teacherId, ts)];
     if (next >= 0)
-        efficiency_
+        adjacentPairs_
             += teacherSlotCnt_[teacherSlotOffset(lesson.teacherId, next)];
     if (prev >= 0)
-        efficiency_
+        adjacentPairs_
             += teacherSlotCnt_[teacherSlotOffset(lesson.teacherId, prev)];
     ++teacherSlotCnt_[teacherSlotOffset(lesson.teacherId, ts)];
 
-    // hard 3: studentGroupConflict.
+    // hard 3: classConflictCost.
     conflictPairs_ += groupSlotCnt_[groupSlotOffset(lesson.groupId, ts)]++;
 
-    // soft 7: studentGroupSubjectVariety.
+    // soft 7: classSubjectRepeatCost.
     if (next >= 0)
     {
-        variety_ += groupSubjectSlotCnt_[groupSubjectSlotOffset(
+        subjectRepeat_ += groupSubjectSlotCnt_[groupSubjectSlotOffset(
             lesson.groupSubjectId, next)];
     }
     if (prev >= 0)
     {
-        variety_ += groupSubjectSlotCnt_[groupSubjectSlotOffset(
+        subjectRepeat_ += groupSubjectSlotCnt_[groupSubjectSlotOffset(
             lesson.groupSubjectId, prev)];
     }
     ++groupSubjectSlotCnt_[groupSubjectSlotOffset(lesson.groupSubjectId, ts)];
 
-    // hard 4: teacherUnavailable.
+    // hard 4: teacherUnavailabilityCost.
     if (ScoreCalculator::teacherUnavailableAt(*table_, lesson.teacherId, ts))
         ++unavailable_;
 
-    // soft 5: teacherRoomStability — the lesson pairs with all n current
+    // soft 5: teacherRoomChangeCost — the lesson pairs with all n current
     // lessons of its teacher, of which c_room share its room.
-    stability_ += teacherLessons_[lesson.teacherId]
-                  - teacherRoomCnt_[teacherRoomOffset(lesson.teacherId, room)];
+    roomChange_ += teacherLessons_[lesson.teacherId]
+                   - teacherRoomCnt_[teacherRoomOffset(lesson.teacherId, room)];
     ++teacherLessons_[lesson.teacherId];
     ++teacherRoomCnt_[teacherRoomOffset(lesson.teacherId, room)];
 }
@@ -113,10 +114,10 @@ void SchoolTimetablingIncrementalScoreCalculator::retract(int lessonIndex,
     --teacherSlotCnt_[teacherSlotOffset(lesson.teacherId, ts)];
     conflictPairs_ -= teacherSlotCnt_[teacherSlotOffset(lesson.teacherId, ts)];
     if (next >= 0)
-        efficiency_
+        adjacentPairs_
             -= teacherSlotCnt_[teacherSlotOffset(lesson.teacherId, next)];
     if (prev >= 0)
-        efficiency_
+        adjacentPairs_
             -= teacherSlotCnt_[teacherSlotOffset(lesson.teacherId, prev)];
 
     conflictPairs_ -= --groupSlotCnt_[groupSlotOffset(lesson.groupId, ts)];
@@ -124,12 +125,12 @@ void SchoolTimetablingIncrementalScoreCalculator::retract(int lessonIndex,
     --groupSubjectSlotCnt_[groupSubjectSlotOffset(lesson.groupSubjectId, ts)];
     if (next >= 0)
     {
-        variety_ -= groupSubjectSlotCnt_[groupSubjectSlotOffset(
+        subjectRepeat_ -= groupSubjectSlotCnt_[groupSubjectSlotOffset(
             lesson.groupSubjectId, next)];
     }
     if (prev >= 0)
     {
-        variety_ -= groupSubjectSlotCnt_[groupSubjectSlotOffset(
+        subjectRepeat_ -= groupSubjectSlotCnt_[groupSubjectSlotOffset(
             lesson.groupSubjectId, prev)];
     }
 
@@ -138,8 +139,8 @@ void SchoolTimetablingIncrementalScoreCalculator::retract(int lessonIndex,
 
     --teacherLessons_[lesson.teacherId];
     --teacherRoomCnt_[teacherRoomOffset(lesson.teacherId, room)];
-    stability_ -= teacherLessons_[lesson.teacherId]
-                  - teacherRoomCnt_[teacherRoomOffset(lesson.teacherId, room)];
+    roomChange_ -= teacherLessons_[lesson.teacherId]
+                   - teacherRoomCnt_[teacherRoomOffset(lesson.teacherId, room)];
 }
 
 void SchoolTimetablingIncrementalScoreCalculator::beforeVariableChanged(
@@ -164,7 +165,8 @@ Score SchoolTimetablingIncrementalScoreCalculator::calculateScore()
 {
     Score score;
     score.hard = -(conflictPairs_ + unavailable_);
-    score.soft = static_cast<double>(efficiency_ - stability_ - variety_);
+    score.soft
+        = static_cast<double>(adjacentPairs_ - roomChange_ - subjectRepeat_);
     return score;
 }
 

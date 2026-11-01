@@ -1,15 +1,22 @@
 """Order picking — C++ core (C++ port of the order-picking example model) with Python helpers.
 
 `Side`, `WarehouseLocation`, `Order`, `PickTask`, `Trolley`,
-`OrderPickingSolution`, `Score`, `ConstraintTotals`, `Solver`, `SolverConfig`
+`OrderPickingSolution`, `Score`, `ConstraintInfo`, `Solver`, `SolverConfig`
 and the module functions come from the compiled C++ core (`_core`). The
 solution is the planning solution: each trolley's ordered `pick_task_indices`
 list is the planning list variable; `trolley_index` / `previous_pick_task` /
 `next_pick_task` on a pick task are the shadow variables derived from it.
 
-Score convention (HardSoft, mirroring the Java quickstart 1:1):
-hard = -(missing trolley buckets), soft = -(travel distance in meters +
-1000 * per-order distinct-trolley count). hard 0 == feasible.
+Score convention (HardSoft, mirroring the Java quickstart 1:1), at the default
+weights:
+  hard = -(missing trolley buckets)                     # trolley_capacity_cost
+  soft = -(travel distance in meters                    # distance_from_previous_pick_task_cost
+                                                        #   + distance_from_last_pick_task_to_path_origin_cost
+           + 1000 x per-order distinct-trolley count)   # order_split_by_trolley_cost
+hard 0 == feasible. `constraint_costs(solution)` gives every constraint's raw
+per-trolley cost (the only per-constraint surface), `constraint_info()` every
+constraint with its default level and weight; change one through a constraint
+selection (see `order_picking.constraints`).
 
 Quick start::
 
@@ -23,8 +30,10 @@ pydantic request/response models (JSON in/out) live in
 `order_picking.models` (optional dependency).
 """
 
+import copy
+
 from ._core import (
-    ConstraintTotals,
+    ConstraintInfo,
     Order,
     OrderPickingSolution,
     PickTask,
@@ -37,15 +46,15 @@ from ._core import (
     build_demo_data,
     calculate_distance,
     calculate_score,
-    calculate_totals,
     constraint_costs,
+    constraint_info,
     distance_to_travel,
     list_constraints,
     update_shadow_variables,
 )
 
 __all__ = [
-    "ConstraintTotals",
+    "ConstraintInfo",
     "Order",
     "OrderPickingSolution",
     "PickTask",
@@ -58,13 +67,13 @@ __all__ = [
     "build_demo_data",
     "calculate_distance",
     "calculate_score",
-    "calculate_totals",
     "distance_to_travel",
     "solve",
     "update_shadow_variables",
     "with_initial_solution",
     "list_constraints",
     "constraint_costs",
+    "constraint_info",
 ]
 
 
@@ -94,7 +103,7 @@ def solve(
 
     ``config`` (a `SolverConfig`) is the base configuration; the explicit
     keyword arguments override it. ``stop_at_first_feasible`` terminates as
-    soon as hard 0 is reached (best_score_limit=(0, -1e18)). The default time
+    soon as hard 0 is reached (best_score_limit=(0, -inf)). The default time
     budget is the engine's 30s.
 
     ``constraints`` picks the cost function (see `order_picking.constraints`).
@@ -104,7 +113,8 @@ def solve(
         from order_picking.constraints import get_constraints
         op.solve(solution, constraints=get_constraints())
     """
-    cfg = config if config is not None else SolverConfig()
+    # A copy: the keyword overrides below must not leak into the caller's config.
+    cfg = copy.copy(config) if config is not None else SolverConfig()
     if time_limit_seconds is not None:
         cfg.spent_limit_seconds = time_limit_seconds
     if random_seed is not None:
@@ -112,7 +122,7 @@ def solve(
     if parallel_solver_count is not None:
         cfg.parallel_solver_count = parallel_solver_count
     if stop_at_first_feasible:
-        cfg.best_score_limit = (0, -1e18)
+        cfg.best_score_limit = (0, float("-inf"))
     if on_new_best is not None:
         cfg.on_new_best = on_new_best
     if constraints is None:

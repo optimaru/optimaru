@@ -6,7 +6,10 @@ from ._core import CONSTRAINT_NAMES, Employee, EmployeeSchedule, Shift, minutes
 
 
 def list_constraints():
-    """Constraint names available to `DecomposedCalculator.add`."""
+    """Every constraint name the rule factory accepts (`DecomposedCalculator.add`,
+    the spec classes), in factory order — the eight defaults and the 22 opt-in
+    rules. `constraint_info()` has one row per name, the defaults first and
+    marked ``default_enabled``; `constraints.get_constraints()` is the default set."""
     return list(CONSTRAINT_NAMES)
 
 

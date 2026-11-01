@@ -17,10 +17,12 @@ namespace mnt
 // ---------------------------------------------------------------------------
 // The Java quickstart already uses HardSoftScore, so the engine's
 // HardSoftScore (int64 hard, double soft) maps 1:1 — no level remapping is
-// needed. The soft weights are kept verbatim from the Java
-// ConstraintProvider: beforeIdealEndDate x1, tagConflict x1'000,
-// afterIdealEndDate x1'000'000 per day. All contributions are integral, so
-// the double soft field stays exact.
+// needed (no medium level, so no optimaru::MediumFoldOf specialization). The
+// soft weights are kept verbatim from the Java ConstraintProvider:
+// beforeIdealEndDateCost x1, tagConflictCost x1'000, afterIdealEndDateCost
+// x1'000'000 per day — the components' kDefaultWeight
+// (mnt/constraints/*_cost.hpp). All contributions are integral, so the
+// double soft field stays exact.
 using Score = optimaru::HardSoftScore;
 
 // ---------------------------------------------------------------------------

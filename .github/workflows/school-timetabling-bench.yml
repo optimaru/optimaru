@@ -13,9 +13,9 @@
 #   Track 2 — the canonical full-constraint model (H1~H10 + S1~S6), the C++
 #     canonical solver (st_timetabling) vs CP-SAT (teacher_scheduling); both
 #     solutions are re-scored by the CP-SAT package's validate.py.
-#   Track 3 — the same model with H1 relaxed (partial timetabling): a day is removed so
-#     the periods no longer fit, and both solvers may leave lessons
-#     unassigned. Track 2 asks "who packs a solvable instance better", track 3
+#   Track 3 — the same model with unassigned_lessons_cost relaxed (partial
+#     timetabling): a day is removed so the periods no longer fit, and both
+#     solvers may leave lessons unassigned. Track 2 asks "who packs a solvable instance better", track 3
 #     asks "who gives up better" — the two regimes rank the solvers
 #     differently, so both are reported.
 name: school-timetabling-bench
@@ -117,7 +117,7 @@ jobs:
           uv run run_bench.py --track2 --sizes S,M,L --seconds "$SECONDS_BUDGET" \
             --out-dir "$QBENCH_DIR"
 
-      - name: Track 3 — partial solving with H1 relaxed (C++ canonical vs CP-SAT)
+      - name: Track 3 — partial solving with unassigned lessons relaxed (C++ canonical vs CP-SAT)
         working-directory: benchmarks/school-timetabling
         run: |
           uv run run_bench.py --track3 --sizes S,M,L --seconds "$SECONDS_BUDGET" \

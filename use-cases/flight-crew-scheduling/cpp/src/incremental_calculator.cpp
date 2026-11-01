@@ -1,6 +1,9 @@
 #include "fcs/incremental_calculator.hpp"
 
 #include <algorithm>
+#include <cstdint>
+
+#include "monolithic_weights.hpp"
 
 namespace fcs
 {
@@ -120,12 +123,12 @@ void FlightCrewIncrementalScoreCalculator::refreshEmployee(int employeeIndex)
 Score FlightCrewIncrementalScoreCalculator::calculateScore()
 {
     Score score;
-    score.hard = -(REQUIRED_SKILL_WEIGHT * missingSkill_
-                   + FLIGHT_CONFLICT_WEIGHT * conflictPairs_
-                   + TRANSFER_WEIGHT * transfers_
-                   + UNAVAILABILITY_WEIGHT * unavailable_);
-    score.soft = -(FIRST_NOT_HOME_WEIGHT * static_cast<double>(firstNotHome_)
-                   + LAST_NOT_HOME_WEIGHT * static_cast<double>(lastNotHome_));
+    score.hard = -(kRequiredSkillWeight * missingSkill_
+                   + kFlightConflictWeight * conflictPairs_
+                   + kTransferWeight * transfers_
+                   + kUnavailabilityWeight * unavailable_);
+    score.soft = -(kFirstNotHomeWeight * static_cast<double>(firstNotHome_)
+                   + kLastNotHomeWeight * static_cast<double>(lastNotHome_));
     if (score.soft == 0.0)
         score.soft = 0.0;  // normalize -0.0
     return score;

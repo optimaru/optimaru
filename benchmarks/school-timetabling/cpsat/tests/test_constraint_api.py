@@ -15,8 +15,9 @@ from teacher_scheduling.api import CONSTRAINT_DTOS, ConstraintDto, catalog, to_c
 from teacher_scheduling.solver.config import SolverConfig
 from teacher_scheduling.solver.registry import (
     CONSTRAINT_TYPES,
-    TeacherGap,
-    WeeklyPeriodCounts,
+    ENGINE_DEFAULTS,
+    TeacherGapCost,
+    UnassignedLessonsCost,
     default_constraints,
     merge,
 )
@@ -48,10 +49,11 @@ def test_default_constraints_round_trip_through_their_dto(constraint):
 
 
 def test_parameters_are_optional_in_the_payload():
-    """An omitted parameter keeps the constraint class's default."""
-    (restored,) = to_constraints(_LIST.validate_python([{"type": "weekly_period_counts"}]))
-    assert restored == WeeklyPeriodCounts()
-    assert restored.hard is True
+    """An omitted parameter keeps the constraint class's default: hard=None, the engine's default level."""
+    (restored,) = to_constraints(_LIST.validate_python([{"type": "unassigned_lessons_cost"}]))
+    assert restored == UnassignedLessonsCost()
+    assert restored.hard is None
+    assert restored.level == "hard"
 
 
 def test_unknown_constraint_name_is_rejected():
@@ -62,22 +64,97 @@ def test_unknown_constraint_name_is_rejected():
 def test_unknown_parameter_is_rejected():
     """A misspelt parameter must not be silently ignored."""
     with pytest.raises(ValidationError):
-        _LIST.validate_python([{"type": "teacher_gap", "wieght": 3}])
+        _LIST.validate_python([{"type": "teacher_gap_cost", "wieght": 3}])
 
 
-def test_hard_only_constraint_takes_no_parameters():
+def test_every_constraint_takes_the_three_knobs():
+    """Every DTO carries the engine's knobs (weight / hard / exponent) and nothing else."""
+    for dto in CONSTRAINT_DTOS:
+        assert set(dto.model_fields) == {"type", "weight", "hard", "exponent"}
+
+
+def test_a_structural_constraint_refuses_soft():
+    """parallel_groups_cost validates as a DTO, but hard=False is refused like in the engine (not flippable)."""
+    (relaxed,) = to_constraints(_LIST.validate_python([{"type": "parallel_groups_cost", "hard": False}]))
+    problem = make_problem([course(periods_per_week=1)], [teacher()], days=1, periods=2)
+    config = SolverConfig(time_limit_seconds=1.0, num_workers=1, weights=NO_WEIGHTS)
+    with pytest.raises(ValueError, match="is always hard"):
+        solve(problem, config, constraints=merge(default_constraints(NO_WEIGHTS), relaxed))
+
+
+# ---------------------------------------------------------------- what the CP-SAT model cannot honour
+
+#: Hard constraints this CP-SAT model states as model constraints, without a penalty form. The
+#: engine can demote them (level_flippable), this path refuses hard=False.
+_STRUCTURAL_ON_CPSAT = (
+    "class_conflict_cost",
+    "teacher_conflict_cost",
+    "disallowed_slot_cost",
+    "room_capacity_cost",
+    "course_max_periods_per_day_cost",
+    "block_adjacency_cost",
+    "teacher_max_periods_cost",
+    "teacher_max_consecutive_periods_cost",
+)
+
+
+def _solve_with(*overrides):
+    problem = make_problem([course(periods_per_week=1)], [teacher()], days=1, periods=2)
+    config = SolverConfig(time_limit_seconds=1.0, num_workers=1, weights=NO_WEIGHTS)
+    return solve(problem, config, constraints=merge(default_constraints(NO_WEIGHTS), *overrides))
+
+
+@pytest.mark.parametrize("name", _STRUCTURAL_ON_CPSAT)
+def test_structural_hard_constraints_refuse_soft_on_cpsat(name):
+    assert ENGINE_DEFAULTS[name].level_flippable, "the engine demotes it; only CP-SAT refuses"
+    (relaxed,) = to_constraints(_LIST.validate_python([{"type": name, "hard": False}]))
+    with pytest.raises(ValueError, match="enforces it structurally, so hard=False is not supported"):
+        _solve_with(relaxed)
+
+
+@pytest.mark.parametrize(
+    ("constraint", "message"),
+    [
+        (TeacherGapCost(exponent=2.0), "exponent 2.0 is not supported by CP-SAT"),
+        (TeacherGapCost(weight=2.5), "CP-SAT needs an integer weight"),
+    ],
+    ids=["exponent", "non-integer-weight"],
+)
+def test_knobs_a_linear_integer_objective_cannot_honour_raise(constraint, message):
+    with pytest.raises(ValueError, match=message):
+        _solve_with(constraint)
+
+
+@pytest.mark.parametrize(
+    "old",
+    [
+        "weekly_period_counts",
+        "class_group_conflicts",
+        "teacher_conflicts",
+        "room_capacity",
+        "daily_course_limits",
+        "block_periods",
+        "teacher_workload",
+        "teacher_consecutive_limits",
+        "teacher_gap",
+        "fixed_slots",
+        "parallel_groups",
+    ],
+)
+def test_the_old_dto_names_are_rejected(old):
     with pytest.raises(ValidationError):
-        _LIST.validate_python([{"type": "parallel_groups", "hard": False}])
+        _LIST.validate_python([{"type": old}])
 
 
 # ---------------------------------------------------------------- catalog
 
 
-def test_catalog_classifies_hard_soft_and_either():
+def test_catalog_classifies_by_the_engine_flippability():
+    """kind is "either" for a flippable constraint, else its fixed level (the engine's level_flippable)."""
     kinds = {spec.name: spec.kind for spec in catalog()}
-    assert kinds["weekly_period_counts"] == "either", "H1 can be relaxed"
-    assert kinds["parallel_groups"] == "hard"
-    assert kinds["teacher_gap"] == "soft"
+    assert kinds["unassigned_lessons_cost"] == "either", "unassigned lessons can be relaxed"
+    assert kinds["teacher_gap_cost"] == "either"
+    assert kinds["parallel_groups_cost"] == kinds["fixed_slots_cost"] == "hard"
 
 
 def test_catalog_covers_every_registered_constraint():
@@ -85,10 +162,21 @@ def test_catalog_covers_every_registered_constraint():
     assert all(spec.label for spec in catalog()), "labels shown to users must not be empty"
 
 
-def test_catalog_default_weight_matches_the_class_default():
-    weights = {spec.name: spec.default_weight for spec in catalog()}
-    assert weights["teacher_gap"] == TeacherGap().weight
-    assert weights["parallel_groups"] == 0, "hard constraints without a weight are 0"
+def test_catalog_defaults_are_the_engine_defaults():
+    """The catalog reads the engine's constraint_info(): same names, order, levels, weights, flippability."""
+    import st_timetabling as st
+
+    engine = st.constraint_info()
+    assert [spec.name for spec in catalog()] == [row.name for row in engine] == list(st.list_constraints())
+    for spec, row in zip(catalog(), engine, strict=True):
+        assert spec.default_level == row.default_level
+        assert spec.default_weight == row.default_weight
+        assert spec.level_flippable == row.level_flippable
+        assert spec.reward == row.reward
+        assert spec.default_enabled == row.default_enabled
+        assert {param.name: param.default for param in spec.params} == {"weight": None, "hard": None, "exponent": 1.0}
+    assert TeacherGapCost().weight is None, "the instance keeps the engine default (weight=None)"
+    assert TeacherGapCost().effective_weight == 20
 
 
 # ---------------------------------------------------------------- end to end
@@ -99,12 +187,12 @@ def test_solve_driven_entirely_by_dtos():
     problem = make_problem([course(periods_per_week=3, max_periods_per_day=3)], [teacher()], days=1, periods=2)
     config = SolverConfig(time_limit_seconds=5.0, num_workers=4, weights=NO_WEIGHTS)
 
-    payload = [{"type": "weekly_period_counts", "hard": False, "weight": 100}]
+    payload = [{"type": "unassigned_lessons_cost", "hard": False, "weight": 100}]
     overrides = to_constraints(_LIST.validate_python(payload))
 
     timetable = solve(problem, config, constraints=merge(default_constraints(NO_WEIGHTS), *overrides))
     assert timetable.status.has_solution
-    assert timetable.penalties["weekly_period_counts"] == 1
+    assert timetable.penalties["unassigned_lessons_cost"] == 1
     assert timetable.objective_value == 100
 
 
@@ -118,9 +206,9 @@ def test_dto_overrides_only_the_named_constraint():
     )
     config = SolverConfig(time_limit_seconds=5.0, num_workers=4, weights=NO_WEIGHTS)
 
-    overrides = to_constraints(_LIST.validate_python([{"type": "teacher_gap", "weight": 0}]))
+    overrides = to_constraints(_LIST.validate_python([{"type": "teacher_gap_cost", "weight": 0}]))
     timetable = solve(problem, config, constraints=merge(default_constraints(NO_WEIGHTS), *overrides))
 
     assert timetable.status.has_solution
-    # With H2 (fixed placement) alive, the two cells land exactly where specified.
+    # With fixed_slots_cost (fixed placement) alive, the two cells land exactly where specified.
     assert {lesson.slot.period for lesson in timetable.lessons} == {1, 3}

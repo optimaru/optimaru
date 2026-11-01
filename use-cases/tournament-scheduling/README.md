@@ -19,7 +19,46 @@ result = ts.solve(schedule, time_limit_seconds=5.0, random_seed=42)
 print(result.score_hard, result.score_soft)
 ```
 
-`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, a full `config` (`tournament_scheduling.SolverConfig`) and `constraints` (see below). The C++ side builds and tests with:
+`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, a full `config` (`tournament_scheduling.SolverConfig`) and `constraints` (see below).
+
+## Constraints
+
+| Constraint (Python name) | C++ component | Default level | Default weight | Raw cost (0 = no violation) |
+|---|---|---|---|---|
+| `team_conflict_cost` | `TeamConflictCost` | hard | 1 | per team: pairs of its assignments on the same day (`C(c, 2)` per day) |
+| `team_unavailability_cost` | `TeamUnavailabilityCost` | hard | 1 | per team: its unavailability facts whose day holds at least one of its assignments (per fact, not per assignment) |
+| `assignment_count_imbalance_cost` | `AssignmentCountImbalanceCost` | medium | 1 | LoadBalance unfairness of the per-team assignment counts over the teams with at least one assignment |
+| `confrontation_count_imbalance_cost` | `ConfrontationCountImbalanceCost` | soft | 1 | LoadBalance unfairness of the per-team-pair confrontation counts (same-day assignment pairs) over the pairs that meet |
+
+The unfairness is `round6(sqrt(sum(load^2) - sum(load)^2 / n))` (6 significant figures,
+HALF_EVEN) over the `n` items with a load of at least 1, so 0 means every loaded team (pair)
+carries the same load. The first two are unit constraints (one cost per team, so `exponent`
+shapes per team); the two imbalance constraints are global (one total, shaped as a whole).
+The rows are in `list_constraints()` order, and `tournament_scheduling.constraint_info()`
+reports exactly this table from the C++ components (`kDefaultLevel` / `kDefaultWeight`):
+every constraint is flippable (`hard=True` / `hard=False`), none is a reward and all four
+are scored by default (`default_enabled`). The medium level folds into the engine's soft
+level as `medium x 1e6` (`MEDIUM_SCALE`, `kMediumFold` in `cpp/include/ts/domain.hpp`); a
+medium weight is in medium units.
+
+**0.2.0:** the constraints were renamed (`one_assignment_per_date_per_team` ->
+`team_conflict_cost`, `unavailability_penalty` -> `team_unavailability_cost`,
+`fair_assignment_count_per_team` -> `assignment_count_imbalance_cost`,
+`evenly_confrontation_count` -> `confrontation_count_imbalance_cost`; the spec classes and
+the module-level default instances follow, e.g. `EvenlyConfrontationCount` /
+`evenly_confrontation_count` -> `ConfrontationCountImbalanceCost` /
+`confrontation_count_imbalance_cost`). The spec class `constraints.UnavailabilityPenalty` is
+now `TeamUnavailabilityCost`, so it no longer shares its name with the
+`UnavailabilityPenalty` fact (which, like `UnavailabilityPenaltyModel` and the
+`unavailability_penalties` field, keeps its name); the C++ component is
+`TeamUnavailabilityCost` (was `UnavailabilityPenaltyConstraint`). The medium constraint now
+defaults to weight 1 in medium units (was 1e6 on the soft level), so `hard=True` charges 1
+hard per raw unit of unfairness (the total, rounded; was 1e6 per unit), `hard=False` demotes
+it to soft at 1 per raw unit (was a no-op that kept the 1e6), and an explicit `weight` is in
+medium units (was plain soft units that dropped the fold). `constraint_info()` /
+`ConstraintInfo` are new. Raw costs and the default score are unchanged.
+
+The C++ side builds and tests with:
 
 ```sh
 cmake -S use-cases/tournament-scheduling/cpp -B build/tournament-scheduling && cmake --build build/tournament-scheduling -j
@@ -41,7 +80,7 @@ Assignments are matched by id. An assignment the solution leaves out is placed b
 
 ## Extending
 
-Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-c-engine-use-case).
+Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-use-case).
 The planning variable is **BASIC**; the domain solver that configures the
 engine is `cpp/include/ts/solver.hpp` + `cpp/src/solver.cpp`.
 
@@ -57,21 +96,34 @@ Decreasing ordering, or pre-assign part of the solution in the domain
 solver's `solve` before the engine runs — the engine only fills what is still unassigned.
 
 **Adding a hard or soft cost.** One file per constraint under
-`cpp/include/ts/constraints/` (currently `evenly_confrontation_count`, `fair_assignment_count_per_team`, `one_assignment_per_date_per_team`, `unavailability_penalty`):
-1. add `constraints/<name>.hpp` (a `UnitConstraint` or `GlobalConstraint`;
-   positive cost = penalty, the level and weight are constructor defaults);
+`cpp/include/ts/constraints/` (currently `assignment_count_imbalance_cost`,
+`confrontation_count_imbalance_cost`, `team_conflict_cost`, `team_unavailability_cost`, plus
+`common.hpp` with the calculator aliases and the member-change global base):
+1. add `constraints/<subject>_cost.hpp` with `struct <Subject>Cost` (a `UnitConstraint` or
+   `GlobalConstraint`; positive raw cost = penalty, 0 = no violation) declaring
+   `static constexpr double kDefaultWeight` and
+   `static constexpr optimaru::Level kDefaultLevel`, an
+   `explicit <Subject>Cost(double weight = kDefaultWeight)` constructor and the registry
+   name `"<subject>Cost"` (the struct name with a lower-case first letter);
 2. include it in `cpp/include/ts/constraints.hpp` and `emplace` it in
    `defaultConstraints()` if it belongs to the default set;
 3. for a default constraint, add the same raw cost to
-   `score_calculator` / `incremental_calculator` — `ts_plugin_test` checks
-   they agree bit for bit;
-4. add a `Constraint` spec with the snake_case `name` to
-   `python/tournament_scheduling/constraints.py`; callers then pick, reweight or flip it:
-   `constraints=get_constraints([..., MyRule(weight=5, hard=True)])`;
+   `score_calculator` / `incremental_calculator`, weighted by the component's
+   `kDefaultWeight` (`kHardWeight<...>` / `kMediumWeight<...>` / `kSoftWeight<...>`) —
+   `ts_plugin_test` checks they agree bit for bit — and a positive and a zero
+   hand-calculated case to `ts_test` / `ts_plugin_test`;
+4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
+   `description_en` / `description_ko` to `python/tournament_scheduling/constraints.py` (plus
+   its module-level default instance); callers then pick, reweight or flip it:
+   `constraints=get_constraints([..., MyRuleCost(weight=5, hard=True)])`;
 5. mirror it in the CP-SAT model in
-   [`benchmarks/tournament-scheduling/cpsat`](../../benchmarks/tournament-scheduling/cpsat) so the
-   benchmark stays like for like.
+   [`benchmarks/tournament-scheduling/cpsat`](../../benchmarks/tournament-scheduling/cpsat) (a plugin
+   subclassing the spec; defaults come from `constraint_info()`) so the benchmark stays like
+   for like, and state there whether its CP-SAT term is raw-identical to the engine's.
 
 ## Benchmark
 
 [`benchmarks/tournament-scheduling`](../../benchmarks/tournament-scheduling) compares this use case with OR-Tools CP-SAT on the same instances.
+The CP-SAT model is raw-identical to the engine for the two hard constraints only; the two
+imbalance constraints minimize an integral variance surrogate there (see
+[its README](../../benchmarks/tournament-scheduling/cpsat/README.md#constraints-and-parity-with-the-engine)).

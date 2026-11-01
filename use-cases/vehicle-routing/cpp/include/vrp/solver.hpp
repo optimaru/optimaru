@@ -1,11 +1,13 @@
 #ifndef VRP_SOLVER_HPP
 #define VRP_SOLVER_HPP
 
+#include <atomic>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <limits>
+#include <memory>
 #include <utility>
 #include <vector>
 
@@ -230,8 +232,16 @@ public:
         optimaru::EnvironmentMode environmentMode
             = optimaru::EnvironmentMode::NON_ASSERT;
 
-        // Optional progress callback: (steps, bestScore).
+        // Optional progress callback: (steps, bestScore). bestScore has the
+        // same three levels as the final plan.score of the same solve: on the
+        // plugin path both are read off the calculator before the medium fold,
+        // so a soft total of 10^9 or more stays on soft in both.
         std::function<void(std::int64_t, const Score &)> onNewBest;
+        // Set by solve() on each parallel worker's copy, not by a caller (and
+        // not bound to Python): the first worker that fails raises it, and the
+        // other workers' engines stop at their next step instead of running out
+        // their budget before the error reaches the caller.
+        std::shared_ptr<std::atomic<bool>> stopFlag;
     };
 
     Solver() = default;
@@ -246,11 +256,12 @@ public:
     // vrp/constraints.hpp): pick components and weights, then pass the
     // assembly here. The same search applies, driving-time nearby selection
     // included. Weights come from the assembly, NOT from the quickstart level
-    // defaults. The final plan.score is computed by THIS calculator (decoded
-    // back into the HardMediumSoft levels) and the calculator is left primed
-    // on the final solution, so constraintTotals() explains exactly that
-    // score. Single-start: the caller-owned calculator cannot be cloned, so
-    // parallelSolverCount is ignored.
+    // defaults. The final plan.score and every onNewBest score are computed
+    // by THIS calculator (its three levels read off levelScores(), before the
+    // medium fold) and the calculator is left primed on the final solution,
+    // so constraintTotals() explains exactly that score. Single-start: the
+    // caller-owned calculator cannot be cloned, so parallelSolverCount is
+    // ignored.
     void solve(VehicleRoutePlan &plan,
                optimaru::DecomposedScoreCalculator<VehicleRoutePlan> &calculator);
 

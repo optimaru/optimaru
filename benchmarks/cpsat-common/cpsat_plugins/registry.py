@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 import math
+import numbers
 import time
 from typing import Any, Protocol, TypeAlias
 
@@ -12,28 +13,100 @@ from ortools.sat.python import cp_model
 _FOLD_LIMIT = 2**62
 
 
+def _round_half_away(value: float) -> int:
+    """llround, exactly (the optimaru ``_constraint`` helper's formula).
+
+    ``value - trunc(value)`` is exact for a double, where ``value + 0.5`` is
+    not (0.49999999999999994 would round up).
+    """
+    whole = math.trunc(value)
+    fraction = value - whole
+    return whole + (1 if fraction >= 0.5 else -1 if fraction <= -0.5 else 0)
+
+
+def _is_bool(value: Any) -> bool:
+    """bool, or numpy's bool scalar, without importing numpy."""
+    if isinstance(value, bool):
+        return True
+    kind = type(value)
+    return kind.__module__ == "numpy" and kind.__name__ in ("bool_", "bool")
+
+
+def _check_knobs(name: str, weight: Any, hard: Any, exponent: Any) -> None:
+    """The engine's knob rules, with the optimaru spec base's wording.
+
+    A Mapping selection gets the checks a spec gets at construction, so the
+    two solvers refuse the same values: weight None or a real number (not
+    bool), finite and >= 0; hard None, True or False; exponent a real number,
+    finite and > 0 (and 1.0 on CP-SAT, see ``_check_exponent``).
+    """
+    if weight is not None:
+        if isinstance(weight, bool) or not isinstance(weight, numbers.Real):
+            raise TypeError(f"constraint {name!r}: weight must be a number or None, not {weight!r}")
+        if not math.isfinite(weight) or weight < 0:
+            raise ValueError(f"constraint {name!r}: weight must be finite and >= 0, not {weight!r}")
+    if hard is not None and not _is_bool(hard):
+        raise TypeError(f"constraint {name!r}: hard must be True, False or None, not {hard!r}")
+    if isinstance(exponent, bool) or not isinstance(exponent, numbers.Real):
+        raise TypeError(f"constraint {name!r}: exponent must be a number, not {exponent!r}")
+    if not math.isfinite(exponent) or exponent <= 0:
+        raise ValueError(f"constraint {name!r}: exponent must be finite and > 0, not {exponent!r}")
+
+
+def _check_exponent(name: str, exponent: Any) -> None:
+    if exponent != 1.0:
+        raise ValueError(f"constraint {name!r} exponent is not supported by CP-SAT")
+
+
 @dataclass(frozen=True)
 class ConstraintSpec:
-    """One catalog entry and its default score semantics."""
+    """One catalog entry and its default score semantics.
+
+    ``level`` and ``weight`` are the defaults (for a migrated domain, the
+    engine's constraint_info() row). ``level_flippable`` False means hard=True
+    / hard=False may not move the constraint off its level; ``reward`` means
+    the raw cost is <= 0 and hard=True is refused. Both paths reject the same
+    selections. ``default_enabled`` is the row's ``default_enabled`` (None:
+    ``weight > 0``, the rule for a domain whose catalog is its default set).
+    """
 
     name: str
     label: str
     level: str
-    weight: int = 1
+    weight: int | float = 1
     description: str = ""
     label_en: str = ""
     description_en: str = ""
+    level_flippable: bool = True
+    reward: bool = False
+    default_enabled: bool | None = None
 
     def as_dict(self) -> dict[str, Any]:
+        """The catalog row, in the server's ConstraintInfo vocabulary (knob_plan §5).
+
+        ``kind`` is ``"either"`` when hard=True/False may move the constraint,
+        else its fixed level (a non-flippable constraint is hard or soft: the
+        medium level is default-only and always flippable). ``params`` are
+        the selection knobs at "keep the default" — fed back as a selection
+        they change nothing (``hard: False`` would demote, so it is ``None``).
+        """
+        if self.level_flippable:
+            kind = "either"
+        else:
+            kind = "hard" if self.level == "hard" else "soft"
         return {
             "name": self.name,
             "label": self.label,
             "description": self.description,
             "label_en": self.label_en,
             "description_en": self.description_en,
-            "kind": "hard" if self.level == "hard" else "soft",
-            "default_enabled": True,
-            "params": {"weight": self.weight, "hard": self.level == "hard"},
+            "kind": kind,
+            "default_enabled": self.weight > 0 if self.default_enabled is None else self.default_enabled,
+            "default_level": self.level,
+            "default_weight": self.weight,
+            "level_flippable": self.level_flippable,
+            "reward": self.reward,
+            "params": {"weight": None, "hard": None, "exponent": 1.0},
         }
 
 
@@ -55,26 +128,42 @@ class ConstraintConfig:
         if isinstance(value, str):
             return cls(name=value)
         if not isinstance(value, Mapping) and hasattr(value, "name"):
+            name = str(value.name)
             exponent = getattr(value, "exponent", 1.0)
-            if exponent != 1.0:
-                raise ValueError(
-                    f"constraint {value.name!r} exponent is not supported by CP-SAT"
-                )
-            return cls(
-                name=str(value.name),
-                weight=getattr(value, "weight", None),
-                hard=getattr(value, "hard", None),
-            )
+            exponent = 1.0 if exponent is None else exponent
+            weight = getattr(value, "weight", None)
+            hard = getattr(value, "hard", None)
+            _check_knobs(name, weight, hard, exponent)
+            _check_exponent(name, exponent)
+            return cls(name=name, weight=weight, hard=None if hard is None else bool(hard))
         payload = dict(value)
         name = payload.pop("name", payload.pop("type", None))
         if name is None:
             raise ValueError("constraint config needs 'name' or 'type'")
-        unknown = set(payload) - {"enabled", "weight", "hard"}
+        # The catalog row's params ({weight, hard, exponent}) and the server's
+        # ConstraintSelection {name, enabled, weight, hard, exponent} are both
+        # valid selections; only an exponent other than 1.0 is CP-SAT-only.
+        unknown = set(payload) - {"enabled", "weight", "hard", "exponent"}
         if unknown:
             raise ValueError(
                 f"unknown constraint parameters for {name!r}: {sorted(unknown)}"
             )
-        return cls(name=str(name), **payload)
+        name = str(name)
+        exponent = payload.pop("exponent", 1.0)
+        exponent = 1.0 if exponent is None else exponent
+        weight = payload.get("weight")
+        hard = payload.get("hard")
+        _check_knobs(name, weight, hard, exponent)
+        _check_exponent(name, exponent)
+        enabled = payload.get("enabled", True)
+        if not _is_bool(enabled):
+            raise TypeError(f"constraint {name!r}: enabled must be True or False, not {enabled!r}")
+        return cls(
+            name=name,
+            enabled=bool(enabled),
+            weight=weight,
+            hard=None if hard is None else bool(hard),
+        )
 
 
 class DomainConstraint(Protocol):
@@ -133,17 +222,36 @@ class ObjectiveBuilder:
         self.terms: dict[str, list] = {level: [] for level in self.levels}
         self.bounds: dict[str, int] = {level: 0 for level in self.levels}
 
+    def level_of(self, spec: ConstraintSpec, config: ConstraintConfig) -> str:
+        """The level a selection lands on, with the engine's knob rules.
+
+        ``hard=None`` keeps the default level, ``hard=True`` is hard and
+        ``hard=False`` is soft, from a hard OR a medium default (the engine's
+        ``soft()``), so both solvers demote the same way. A reward refuses
+        hard=True; a non-flippable constraint refuses any change of level.
+        """
+        level = spec.level
+        if config.hard is None:
+            return level
+        if config.hard:
+            if spec.reward:
+                raise ValueError(f"constraint {spec.name!r} is a reward and cannot be hard")
+            wanted = "hard"
+        else:
+            wanted = "soft"
+        if wanted != level and not spec.level_flippable:
+            raise ValueError(
+                f"constraint {spec.name!r} is always {level}; hard={config.hard!r} is not allowed"
+            )
+        return wanted
+
     def add(self, name: str, magnitude, *, bound: int) -> None:
         """Add a non-negative raw penalty and a valid magnitude upper bound."""
         selected = self.selected.get(name)
         if selected is None:
             return
         spec, config = selected
-        level = spec.level
-        if config.hard is True:
-            level = "hard"
-        elif config.hard is False and level == "hard":
-            level = self.levels[1] if len(self.levels) > 1 else "hard"
+        level = self.level_of(spec, config)
         if level not in self.terms:
             raise ValueError(
                 f"constraint {name!r} uses unsupported score level {level!r}"
@@ -253,11 +361,7 @@ class ObjectiveBuilder:
         aliases = aliases or {}
         totals: dict[str, int | float] = {level: 0 for level in self.levels}
         for name, (spec, config) in self.selected.items():
-            level = spec.level
-            if config.hard is True:
-                level = "hard"
-            elif config.hard is False and level == "hard":
-                level = self.levels[1] if len(self.levels) > 1 else "hard"
+            level = self.level_of(spec, config)
             weight = spec.weight if config.weight is None else config.weight
             source_names = aliases.get(name, name)
             if isinstance(source_names, str):
@@ -271,10 +375,7 @@ class ObjectiveBuilder:
                 # Match DecomposedScoreCalculator: each unit contribution is
                 # rounded independently, half away from zero.
                 totals[level] += sum(
-                    math.floor(weight * value + 0.5)
-                    if weight * value >= 0
-                    else math.ceil(weight * value - 0.5)
-                    for value in raw_values
+                    _round_half_away(weight * value) for value in raw_values
                 )
             else:
                 totals[level] += weight * sum(raw_values)

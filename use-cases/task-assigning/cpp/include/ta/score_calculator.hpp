@@ -22,17 +22,18 @@ public:
     static void updateShadowVariables(TaskAssigningSolution &solution);
 
     // Recomputes shadow variables, then the Bendable score, storing it in
-    // solution.score and returning it. Constraints (all penalties):
-    //   hard[0]  noMissingSkills          missing skill count per task
-    //   soft[0]  minimizeUnassignedTasks  1 per unassigned task
-    //   soft[1]  minimizeMakespan         endTime^2 per employee
-    //   soft[2]  criticalPriorityTaskEndTime  endTime x 4
-    //            majorPriorityTaskEndTime     endTime x 2
-    //            minorPriorityTaskEndTime     endTime x 1
+    // solution.score and returning it. Constraints (all penalties, at the
+    // components' default weights):
+    //   hard[0]  requiredSkillCost        missing skill count per task
+    //   soft[0]  unassignedTasksCost      1 per unassigned task (medium)
+    //   soft[1]  squaredMakespanCost      endTime^2 per employee
+    //   soft[2]  criticalPriorityTaskEndTimeCost  endTime x 4
+    //            majorPriorityTaskEndTimeCost     endTime x 2
+    //            minorPriorityTaskEndTimeCost     endTime x 1
     static Score calculateScore(TaskAssigningSolution &solution);
 
-    // calculateScore mapped into the engine's HardSoftScore (see the mapping
-    // rule in ta/domain.hpp).
+    // calculateScore mapped into the engine's HardSoftScore through the
+    // domain's medium fold (see the mapping rule in ta/domain.hpp).
     static optimaru::HardSoftScore
     calculateEngineScore(TaskAssigningSolution &solution);
 };

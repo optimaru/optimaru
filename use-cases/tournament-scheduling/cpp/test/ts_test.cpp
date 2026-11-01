@@ -78,7 +78,7 @@ void addAssignment(TournamentSchedule &s, int day, int team = -1)
 // (a) Each constraint against hand-computed scores. Reference values:
 //   sqrt(1/2)  -> 0.707107   sqrt(2)    -> 1.41421
 //   sqrt(2/3)  -> 0.816497   sqrt(10/7) -> 1.19523   (6 s.f., HALF_EVEN)
-// The engine soft = -(medium * 1e6 + soft), see ts::kMediumScale.
+// The engine soft = -(medium * 1e6 + soft), see ts::kMediumFold.
 // -------------------------------------------------------------------------
 void verifyConstraints()
 {
@@ -97,9 +97,9 @@ void verifyConstraints()
               < 1e-12,
           "unfairness({11,11,10,10,10,10,10}) == 1.19523");
 
-    // hard 1: oneAssignmentPerDatePerTeam — the Java test scenario: T0 three
-    // times on D0 (3 pairs), T1 on D1 and D2 (0 pairs). Medium: loads {3, 2}
-    // -> 0.707107; no confrontations (same-team pairs are excluded).
+    // hard 1: teamConflictCost — the Java test scenario: T0 three times on
+    // D0 (3 pairs), T1 on D1 and D2 (0 pairs). Medium: loads {3, 2} ->
+    // 0.707107; no confrontations (same-team pairs are excluded).
     {
         TournamentSchedule s = makeBase(3, 3);
         addAssignment(s, 0, 0);
@@ -107,12 +107,12 @@ void verifyConstraints()
         addAssignment(s, 0, 0);
         addAssignment(s, 1, 1);
         addAssignment(s, 2, 1);
-        checkScore("oneAssignmentPerDatePerTeam (Java test)",
+        checkScore("teamConflictCost (Java test)",
                    ScoreCalculator::calculateScore(s),
                    -3,
                    -707107.0);
     }
-    // hard 2: unavailabilityPenalty — the Java test scenario: penalties
+    // hard 2: teamUnavailabilityCost — the Java test scenario: penalties
     // (T0, D0) and (T1, D1) both hit (+ T1 twice on D1 = 1 hard pair).
     // Medium: loads {1, 3} -> sqrt(2) = 1.41421.
     {
@@ -123,7 +123,7 @@ void verifyConstraints()
         addAssignment(s, 2, 1);
         s.unavailabilityPenalties.push_back({0, 0});
         s.unavailabilityPenalties.push_back({1, 1});
-        checkScore("unavailabilityPenalty (Java test)",
+        checkScore("teamUnavailabilityCost (Java test)",
                    ScoreCalculator::calculateScore(s),
                    -3,
                    -1414210.0);
@@ -133,7 +133,7 @@ void verifyConstraints()
         TournamentSchedule s = makeBase(3, 3);
         addAssignment(s, 0, 0);
         s.unavailabilityPenalties.push_back({2, 0});
-        checkScore("unavailabilityPenalty miss",
+        checkScore("teamUnavailabilityCost miss",
                    ScoreCalculator::calculateScore(s),
                    0,
                    0.0);
@@ -144,38 +144,38 @@ void verifyConstraints()
         addAssignment(s, 0, 0);
         s.unavailabilityPenalties.push_back({0, 0});
         s.unavailabilityPenalties.push_back({0, 0});
-        checkScore("unavailabilityPenalty duplicate facts",
+        checkScore("teamUnavailabilityCost duplicate facts",
                    ScoreCalculator::calculateScore(s),
                    -2,
                    0.0);
     }
-    // medium 3: fairAssignmentCountPerTeam — the Java test scenario: one
+    // medium 3: assignmentCountImbalanceCost — the Java test scenario: one
     // assignment each -> perfectly fair, everything 0.
     {
         TournamentSchedule s = makeBase(3, 3);
         addAssignment(s, 0, 0);
         addAssignment(s, 1, 1);
         addAssignment(s, 2, 2);
-        checkScore("fairAssignmentCountPerTeam fair",
+        checkScore("assignmentCountImbalanceCost fair",
                    ScoreCalculator::calculateScore(s),
                    0,
                    0.0);
         // T2 twice while everyone else once: loads {1, 1, 2} -> 0.816497.
         // Confrontations: only (T0, T2) on D0, a single loaded pair -> 0.
         addAssignment(s, 0, 2);
-        checkScore("fairAssignmentCountPerTeam unfair",
+        checkScore("assignmentCountImbalanceCost unfair",
                    ScoreCalculator::calculateScore(s),
                    0,
                    -816497.0);
     }
-    // soft 4: evenlyConfrontationCount — the Java test scenario: three teams
-    // meet pairwise once on D0 -> perfectly even, everything 0.
+    // soft 4: confrontationCountImbalanceCost — the Java test scenario: three
+    // teams meet pairwise once on D0 -> perfectly even, everything 0.
     {
         TournamentSchedule s = makeBase(3, 3);
         addAssignment(s, 0, 0);
         addAssignment(s, 0, 1);
         addAssignment(s, 0, 2);
-        checkScore("evenlyConfrontationCount even",
+        checkScore("confrontationCountImbalanceCost even",
                    ScoreCalculator::calculateScore(s),
                    0,
                    0.0);
@@ -183,7 +183,7 @@ void verifyConstraints()
         // 0.816497 soft; loads {1,1,2} -> 0.816497 medium; T2's day pair -> 1
         // hard.
         addAssignment(s, 0, 2);
-        checkScore("evenlyConfrontationCount uneven",
+        checkScore("confrontationCountImbalanceCost uneven",
                    ScoreCalculator::calculateScore(s),
                    -1,
                    -816497.816497);
@@ -414,7 +414,7 @@ void verifyPinnedSolve()
 }
 
 // -------------------------------------------------------------------------
-// (e) The loaded-team-count macro move: fairAssignmentCountPerTeam balances
+// (e) The loaded-team-count macro move: assignmentCountImbalanceCost balances
 // over the LOADED teams only, so 72 assignments over 7 teams can never beat
 // unfairness sqrt(10/7), while the same 72 over 4 teams (18 each, every pair
 // meeting 18 times) scores a perfect 0hard/0soft. Reaching it means emptying

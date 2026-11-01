@@ -269,21 +269,17 @@ PYBIND11_MODULE(_core, m)
     m.def("calculate_score",
           &ScoreCalculator::calculateScore,
           py::arg("solution"),
-          "Full recompute of the Bendable score (re-derives the task shadow "
-          "variables and stores solution.score).");
+          "Full recompute of the Bendable score at the default weights "
+          "(re-derives the task shadow variables and stores solution.score).");
 
-    py::class_<Solver::Config>(m, "SolverConfig", py::module_local())
+    optimaru::python::bindConfigCopy(py::class_<Solver::Config>(m, "SolverConfig", py::module_local()))
         .def(py::init<>())
         .def_property(
             "spent_limit_seconds",
             [](const Solver::Config &c)
             { return std::chrono::duration<double>(c.spentLimit).count(); },
             [](Solver::Config &c, double s)
-            {
-                c.spentLimit
-                    = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        std::chrono::duration<double>(s));
-            })
+            { c.spentLimit = optimaru::python::secondsToMillis(s, "spent_limit_seconds"); })
         .def_property(
             "unimproved_spent_limit_seconds",
             [](const Solver::Config &c)
@@ -292,14 +288,7 @@ PYBIND11_MODULE(_core, m)
                     .count();
             },
             [](Solver::Config &c, double s)
-            {
-                if (s < 0.0)
-                    throw py::value_error(
-                        "unimproved_spent_limit_seconds must be non-negative");
-                c.unimprovedSpentLimit
-                    = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        std::chrono::duration<double>(s));
-            })
+            { c.unimprovedSpentLimit = optimaru::python::secondsToMillis(s, "unimproved_spent_limit_seconds"); })
         .def_readwrite("step_count_limit", &Solver::Config::stepCountLimit)
         .def_readwrite("unimproved_step_count_limit",
                        &Solver::Config::unimprovedStepCountLimit)
@@ -371,7 +360,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("tail_swap_move_weight",
                        &Solver::Config::tailSwapMoveWeight)
         // Early termination once bestScore >= (hard, soft0, soft1, soft2),
-        // e.g. (0, 0, -2**62, -2**62) stops at the first feasible,
+        // e.g. (0, 0, -2**63, -2**63) stops at the first feasible,
         // fully-assigned solution.
         .def_property(
             "best_score_limit",
@@ -428,6 +417,8 @@ PYBIND11_MODULE(_core, m)
     // The raw per-unit costs of the default assembly on `solution` — the input
     // task_assigning.constraints.score() turns into a score. Scoring once is
     // enough: re-pricing any assembly is pure Python arithmetic on these.
+    // Every entry carries the domain's medium fold ("medium_fold":
+    // {"kind": "below_hard", "unit": 1e9}), so score() folds like the engine.
     m.def(
         "constraint_costs",
         [](TaskAssigningSolution &solution)
@@ -445,4 +436,10 @@ PYBIND11_MODULE(_core, m)
         "list_constraints",
         [] { return tfpy::constraintNames(defaultConstraints()); },
         "Constraint names available to task_assigning.constraints.");
+
+    // The constraint catalog, read off the same default assembly:
+    // constraint_info() -> [ConstraintInfo(name, default_level,
+    // default_weight, level_flippable, reward, default_enabled), ...] in
+    // list_constraints() order. The defaults live in the C++ components only.
+    tfpy::bindConstraintInfo(m, [] { return defaultConstraints(); });
 }

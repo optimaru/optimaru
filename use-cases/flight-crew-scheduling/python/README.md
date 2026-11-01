@@ -64,13 +64,38 @@ for a in result.flight_assignments:
 
 ## Constraints (the Java ConstraintProvider as-is, HardSoftScore)
 
-| Constraint | Level | Penalty |
-|---|---|---|
-| requiredSkill | hard | -100 per assignment without the skill |
-| flightConflict | hard | -10 per time-overlapping same-crew assignment pair |
-| transferBetweenTwoFlights | hard | -1 per consecutive assignment pair whose airports do not connect |
-| employeeUnavailability | hard | -10 per assignment on an unavailable day |
-| firstAssignmentNotDepartingFromHome | soft | -1000 |
-| lastAssignmentNotArrivingAtHome | soft | -1000 |
+| Constraint (Python name) | C++ component | Default level | Default weight | Raw cost per employee (0 = no violation) |
+|---|---|---|---|---|
+| `required_skill_cost` | `RequiredSkillCost` | hard | 100 | assignments without the seat's skill |
+| `flight_conflict_cost` | `FlightConflictCost` | hard | 10 | time-overlapping assignment pairs |
+| `transfer_between_two_flights_cost` | `TransferBetweenTwoFlightsCost` | hard | 1 | consecutive assignment pairs whose airports do not connect |
+| `employee_unavailability_cost` | `EmployeeUnavailabilityCost` | hard | 10 | assignments on an unavailable day |
+| `first_assignment_not_departing_from_home_cost` | `FirstAssignmentNotDepartingFromHomeCost` | soft | 1000 | earliest assignments not departing from home |
+| `last_assignment_not_arriving_at_home_cost` | `LastAssignmentNotArrivingAtHomeCost` | soft | 1000 | latest assignments not arriving at home |
 
-The score is the original `HardSoftScore` as-is (no level folding).
+The score is the original `HardSoftScore` as-is (no level folding). `fc.constraint_info()`
+reports this catalog (`ConstraintInfo(name, default_level, default_weight, level_flippable,
+reward, default_enabled)`) straight from the C++ components; every constraint is flippable,
+none is a reward, all six are on by default.
+
+Pick, re-weight or flip constraints with the specs in `flight_crew.constraints`; each takes
+`(weight=None, hard=None, exponent=1.0)` (`None` = the C++ default):
+
+```python
+from flight_crew.constraints import (
+    FlightConflictCost, RequiredSkillCost, get_constraints, last_assignment_not_arriving_at_home_cost,
+)
+
+fc.solve(problem, constraints=get_constraints())  # the defaults
+fc.solve(problem, constraints=[RequiredSkillCost(weight=500), FlightConflictCost(hard=False),
+                               last_assignment_not_arriving_at_home_cost])
+```
+
+`fc.constraint_costs(schedule)` returns the raw per-employee costs and
+`flight_crew.constraints.score(costs, constraints)` rescores them in pure Python with the
+engine's arithmetic.
+
+**0.2.0:** every constraint name gained the `_cost` suffix (`required_skill` ->
+`required_skill_cost`, `RequiredSkill` -> `RequiredSkillCost`, the default instance
+`required_skill` -> `required_skill_cost`, and likewise for the other five); the old names
+are refused as unknown. Defaults, raw costs and scores are unchanged.

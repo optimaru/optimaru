@@ -1,10 +1,12 @@
 #ifndef MNT_SOLVER_HPP
 #define MNT_SOLVER_HPP
 
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <functional>
 #include <limits>
+#include <memory>
 #include <utility>
 #include <vector>
 
@@ -101,7 +103,7 @@ public:
         // guides; 0 disables the guidance.
         double windowValueProbability = 1.0;
         // Probability that a move seeds on a "hot" job — one currently inside
-        // a tagConflict. 0 disables.
+        // a tagConflictCost (two jobs sharing a tag on one day). 0 disables.
         double hotJobProbability = 0.5;
         // How many random crews a guided change move tries before settling
         // for a random one, looking for a crew that is free for the job's
@@ -109,6 +111,11 @@ public:
         int freeCrewCandidates = 4;
 
         std::function<void(std::int64_t, const Score &)> onNewBest;
+        // Set by solve() on each parallel worker's copy, not by a caller (and
+        // not bound to Python): the first worker that fails raises it, and the
+        // other workers' engines stop at their next step instead of running out
+        // their budget before the error reaches the caller.
+        std::shared_ptr<std::atomic<bool>> stopFlag;
     };
 
     Solver() = default;
@@ -120,8 +127,9 @@ public:
 
     // Solves with a caller-assembled plugin calculator (see
     // mnt/constraints.hpp): pick components and weights, then pass the
-    // assembly here. Weights come from the assembly, NOT from the quickstart
-    // defaults. The final schedule.score is computed by THIS calculator and
+    // assembly here. Weights and levels come from the assembly (each
+    // component's kDefaultWeight / kDefaultLevel unless the caller changed
+    // them). The final schedule.score is computed by THIS calculator and
     // the calculator is left primed on the final solution, so
     // constraintTotals() explains exactly that score.
     //

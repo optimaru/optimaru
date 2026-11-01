@@ -17,14 +17,14 @@ namespace st::canon
 // Moved verbatim out of canonical_solver.cpp — one operator per file, the
 // domain-side counterpart of the engine's generic/ruin layout.
 
-// Smart same-class swap (a SmartChangeMove-style pattern):
-// pick a seed lesson — preferring one involved in a hard violation while any
-// exists — evaluate the swap with up to `candidateCount` random classmates
-// through the score director, and apply the best one. Same-class swaps keep
-// the class occupancy multiset untouched (H3-neutral on dense instances), so
-// this concentrates search effort on the moves that can actually improve.
-// Selection between this operator and the built-in move mix is adaptive
-// (roulette wheel on move outcomes).
+// Smart same-class swap (a SmartChangeMove-style pattern): pick a seed lesson —
+// preferring one involved in a hard violation while any exists — evaluate the
+// swap with up to `candidateCount` random classmates through the score
+// director, and apply the best one. Same-class swaps keep the class occupancy
+// multiset untouched (class-conflict-neutral on dense instances), so this
+// concentrates search effort on the moves that can actually improve. Selection
+// between this operator and the built-in move mix is adaptive (roulette wheel
+// on move outcomes).
 //
 // HotSource abstracts where the violation guidance lives — the monolithic
 // calculator's hot sets or the decomposed calculator's penalized units. It

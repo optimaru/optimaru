@@ -6,16 +6,25 @@
 //   (b) incremental score == full recompute across 3000 random moves driven
 //       through the engine's ScoreDirector protocol (plugin path)
 //   (c) partial assemblies: each component in isolation, hand-computed
-//   (d) weight / isHard overrides
+//   (d) weight / level / exponent overrides
 //   (e) constraintTotals() explains exactly the reported score
 //   (f) a 2-second solve(schedule, calculator) under FULL_ASSERT
+//   (g) raw costs by hand through constraintCosts(): one positive and one
+//       zero case per constraint (unweighted, before exponent and level)
+//   (h) the catalog (defaultConstraints().info()) == the components'
+//       kDefaultWeight / kDefaultLevel
+//   (i) the medium level (assignmentCountImbalanceCost): default fold,
+//       hard() / soft() / an explicit weight, and incremental == full
+//       recompute under each override
 #include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <functional>
 #include <memory>
 #include <random>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "optimaru/api/score/director/score_director.hpp"
@@ -234,20 +243,20 @@ void verifyPartialAssemblies()
 {
     std::printf("== (c) Single-component assemblies ==\n");
 
-    {  // oneAssignmentPerDatePerTeam alone: three assignments of one team on
+    {  // teamConflictCost alone: three assignments of one team on
         // one day -> C(3, 2) = 3 pairs.
         TournamentSchedule s = makeBase(/*teams*/ 2, /*days*/ 2);
         addAssignment(s, 0, 0);
         addAssignment(s, 0, 0);
         addAssignment(s, 0, 0);
         DecomposedCalculator calculator;
-        calculator.emplace<OneAssignmentPerDatePerTeam>();
-        checkScore("oneAssignmentPerDatePerTeam alone",
+        calculator.emplace<TeamConflictCost>();
+        checkScore("teamConflictCost alone",
                    scoreWith(calculator, s),
                    -3,
                    0.0);
     }
-    {  // unavailabilityPenalty alone: one fact, one hit — and a second
+    {  // teamUnavailabilityCost alone: one fact, one hit — and a second
         // assignment in the same cell still costs one (per fact, not per
         // assignment).
         TournamentSchedule s = makeBase(/*teams*/ 2, /*days*/ 2);
@@ -255,8 +264,8 @@ void verifyPartialAssemblies()
         addAssignment(s, 1, 0);
         addAssignment(s, 1, 0);
         DecomposedCalculator calculator;
-        calculator.emplace<UnavailabilityPenaltyConstraint>();
-        checkScore("unavailabilityPenalty alone (per fact)",
+        calculator.emplace<TeamUnavailabilityCost>();
+        checkScore("teamUnavailabilityCost alone (per fact)",
                    scoreWith(calculator, s),
                    -1,
                    0.0);
@@ -266,20 +275,20 @@ void verifyPartialAssemblies()
         s.unavailabilityPenalties.push_back({0, 1});
         addAssignment(s, 0, 0);
         DecomposedCalculator calculator;
-        calculator.emplace<UnavailabilityPenaltyConstraint>();
-        checkScore("unavailabilityPenalty silent off the day",
+        calculator.emplace<TeamUnavailabilityCost>();
+        checkScore("teamUnavailabilityCost silent off the day",
                    scoreWith(calculator, s),
                    0,
                    0.0);
     }
-    {  // fairAssignmentCountPerTeam alone: loads 2 and 0 -> only the loaded
+    {  // assignmentCountImbalanceCost alone: loads 2 and 0 -> only the loaded
         // team enters the balance, so the unfairness is 0.
         TournamentSchedule s = makeBase(/*teams*/ 2, /*days*/ 2);
         addAssignment(s, 0, 0);
         addAssignment(s, 1, 0);
         DecomposedCalculator calculator;
-        calculator.emplace<FairAssignmentCountPerTeam>();
-        checkScore("fairAssignmentCountPerTeam, single loaded team",
+        calculator.emplace<AssignmentCountImbalanceCost>();
+        checkScore("assignmentCountImbalanceCost, single loaded team",
                    scoreWith(calculator, s),
                    0,
                    0.0);
@@ -290,24 +299,24 @@ void verifyPartialAssemblies()
         addAssignment(s, 1, 0);
         addAssignment(s, 2, 1);
         DecomposedCalculator calculator;
-        calculator.emplace<FairAssignmentCountPerTeam>();
+        calculator.emplace<AssignmentCountImbalanceCost>();
         const double expected
             = -ScoreCalculator::unfairnessFromAggregates(3, 5, 2)
               * kMediumScale;
-        checkScore("fairAssignmentCountPerTeam, loads 2 and 1",
+        checkScore("assignmentCountImbalanceCost, loads 2 and 1",
                    scoreWith(calculator, s),
                    0,
                    expected);
     }
-    {  // evenlyConfrontationCount alone: one confronting pair -> a single
-        // loaded item, so the unfairness is 0 (and the medium level is not
-        // in this assembly at all).
+    {  // confrontationCountImbalanceCost alone: one confronting pair -> a
+        // single loaded item, so the unfairness is 0 (and the medium level is
+        // not in this assembly at all).
         TournamentSchedule s = makeBase(/*teams*/ 2, /*days*/ 1);
         addAssignment(s, 0, 0);
         addAssignment(s, 0, 1);
         DecomposedCalculator calculator;
-        calculator.emplace<EvenlyConfrontationCount>();
-        checkScore("evenlyConfrontationCount, single pair",
+        calculator.emplace<ConfrontationCountImbalanceCost>();
+        checkScore("confrontationCountImbalanceCost, single pair",
                    scoreWith(calculator, s),
                    0,
                    0.0);
@@ -328,18 +337,18 @@ void verifyOverrides()
 
     {
         DecomposedCalculator calculator;
-        calculator.emplace<OneAssignmentPerDatePerTeam>(10.0);
-        checkScore("oneAssignmentPerDatePerTeam re-weighted to 10",
+        calculator.emplace<TeamConflictCost>(10.0);
+        checkScore("teamConflictCost re-weighted to 10",
                    scoreWith(calculator, s),
                    -30,
                    0.0);
     }
     {
         DecomposedCalculator calculator;
-        auto component = std::make_unique<OneAssignmentPerDatePerTeam>();
-        component->isHard = false;
+        auto component = std::make_unique<TeamConflictCost>();
+        component->setLevel(optimaru::Level::Soft);
         calculator.add(std::move(component));
-        checkScore("oneAssignmentPerDatePerTeam demoted to soft",
+        checkScore("teamConflictCost demoted to soft",
                    scoreWith(calculator, s),
                    0,
                    -3.0);
@@ -347,10 +356,10 @@ void verifyOverrides()
     {
         // exponent 2 shapes the raw pair count (3) before the weight.
         DecomposedCalculator calculator;
-        auto component = std::make_unique<OneAssignmentPerDatePerTeam>();
-        component->exponent = 2.0;
+        auto component = std::make_unique<TeamConflictCost>();
+        component->setExponent(2.0);
         calculator.add(std::move(component));
-        checkScore("oneAssignmentPerDatePerTeam with exponent 2",
+        checkScore("teamConflictCost with exponent 2",
                    scoreWith(calculator, s),
                    -9,
                    0.0);
@@ -376,10 +385,18 @@ void verifyConstraintTotals()
     addDefaultConstraints(calculator);
     const Score score = scoreWith(calculator, s);
 
+    // A medium total is in medium units: fold it like the calculator does.
     double hard = 0.0;
     double soft = 0.0;
     for (const optimaru::ConstraintTotal &total : calculator.constraintTotals())
-        (total.isHard ? hard : soft) += total.cost;
+    {
+        if (total.level == optimaru::Level::Hard)
+            hard += total.cost;
+        else if (total.level == optimaru::Level::Medium)
+            soft += total.cost * kMediumFold.unit;
+        else
+            soft += total.cost;
+    }
     check(std::fabs(-hard - static_cast<double>(score.hard)) < 1e-9
               && std::fabs(-soft - score.soft) < 1e-6,
           "per-constraint totals sum to the reported score");
@@ -431,6 +448,321 @@ void verifyFullAssertSolve()
     std::printf("\n");
 }
 
+// -------------------------------------------------------------------------
+// (g) Raw costs by hand: one positive and one zero case per constraint,
+// read through constraintCosts() (unweighted, before exponent and level).
+// -------------------------------------------------------------------------
+std::vector<double> rawCosts(TournamentSchedule &s, const std::string &name)
+{
+    DecomposedCalculator calculator;
+    addDefaultConstraints(calculator);
+    calculator.resetWorkingSolution(s);
+    calculator.calculateScore();
+    for (const auto &entry : calculator.constraintCosts())
+    {
+        if (entry.name == name)
+            return entry.unitCosts;
+    }
+    return {};
+}
+
+void checkRaw(const std::string &label,
+              TournamentSchedule &s,
+              const std::string &name,
+              const std::vector<double> &expected)
+{
+    const std::vector<double> actual = rawCosts(s, name);
+    bool ok = actual.size() == expected.size();
+    for (std::size_t i = 0; ok && i < actual.size(); ++i)
+        ok = std::fabs(actual[i] - expected[i]) < 1e-12;
+    std::string got;
+    for (double value : actual)
+        got += (got.empty() ? "" : ", ") + std::to_string(value);
+    check(ok, label + " (raw {" + got + "})");
+}
+
+void verifyRawCostsByHand()
+{
+    std::printf("== (g) Raw costs by hand ==\n");
+    {  // teamConflictCost, per team: T0 three times on D0 -> C(3, 2) = 3
+        // pairs (its single D1 game adds none); T1 once on D1 -> 0.
+        TournamentSchedule positive = makeBase(/*teams*/ 2, /*days*/ 2);
+        addAssignment(positive, 0, 0);
+        addAssignment(positive, 0, 0);
+        addAssignment(positive, 0, 0);
+        addAssignment(positive, 1, 0);
+        addAssignment(positive, 1, 1);
+        checkRaw("teamConflictCost: 3 same-day pairs on T0",
+                 positive,
+                 "teamConflictCost",
+                 {3.0, 0.0});
+        // Every team at most once per day.
+        TournamentSchedule zero = makeBase(/*teams*/ 2, /*days*/ 2);
+        addAssignment(zero, 0, 0);
+        addAssignment(zero, 1, 0);
+        addAssignment(zero, 0, 1);
+        checkRaw("teamConflictCost: nobody plays twice a day",
+                 zero,
+                 "teamConflictCost",
+                 {0.0, 0.0});
+    }
+    {  // teamUnavailabilityCost, per team: two facts on (T0, D1), where T0
+        // plays twice -> 2 (per fact, not per assignment); T1's fact is on D0
+        // but it plays D1 -> 0.
+        TournamentSchedule positive = makeBase(/*teams*/ 2, /*days*/ 2);
+        positive.unavailabilityPenalties.push_back({0, 1});
+        positive.unavailabilityPenalties.push_back({0, 1});
+        positive.unavailabilityPenalties.push_back({1, 0});
+        addAssignment(positive, 1, 0);
+        addAssignment(positive, 1, 0);
+        addAssignment(positive, 1, 1);
+        checkRaw("teamUnavailabilityCost: two facts hit on T0",
+                 positive,
+                 "teamUnavailabilityCost",
+                 {2.0, 0.0});
+        // The same facts, every team playing on an available day.
+        TournamentSchedule zero = makeBase(/*teams*/ 2, /*days*/ 2);
+        zero.unavailabilityPenalties.push_back({0, 1});
+        zero.unavailabilityPenalties.push_back({1, 0});
+        addAssignment(zero, 0, 0);
+        addAssignment(zero, 1, 1);
+        checkRaw("teamUnavailabilityCost: no fact hit",
+                 zero,
+                 "teamUnavailabilityCost",
+                 {0.0, 0.0});
+    }
+    {  // assignmentCountImbalanceCost (global): loads {2, 1} ->
+        // sqrt(5 - 9/2) = sqrt(1/2) = 0.707107 (6 s.f.).
+        TournamentSchedule positive = makeBase(/*teams*/ 2, /*days*/ 3);
+        addAssignment(positive, 0, 0);
+        addAssignment(positive, 1, 0);
+        addAssignment(positive, 2, 1);
+        checkRaw("assignmentCountImbalanceCost: loads {2, 1}",
+                 positive,
+                 "assignmentCountImbalanceCost",
+                 {0.707107});
+        // Loads {1, 1} (an unloaded third team does not enter the balance).
+        TournamentSchedule zero = makeBase(/*teams*/ 3, /*days*/ 2);
+        addAssignment(zero, 0, 0);
+        addAssignment(zero, 1, 1);
+        checkRaw("assignmentCountImbalanceCost: loads {1, 1}",
+                 zero,
+                 "assignmentCountImbalanceCost",
+                 {0.0});
+    }
+    {  // confrontationCountImbalanceCost (global): T0, T1, T2, T2 on D0 ->
+        // pair counts (0,1)=1 (0,2)=2 (1,2)=2: sqrt(9 - 25/3) = sqrt(2/3)
+        // = 0.816497.
+        TournamentSchedule positive = makeBase(/*teams*/ 3, /*days*/ 1);
+        addAssignment(positive, 0, 0);
+        addAssignment(positive, 0, 1);
+        addAssignment(positive, 0, 2);
+        addAssignment(positive, 0, 2);
+        checkRaw("confrontationCountImbalanceCost: pair counts {1, 2, 2}",
+                 positive,
+                 "confrontationCountImbalanceCost",
+                 {0.816497});
+        // Every pair meets once.
+        TournamentSchedule zero = makeBase(/*teams*/ 3, /*days*/ 1);
+        addAssignment(zero, 0, 0);
+        addAssignment(zero, 0, 1);
+        addAssignment(zero, 0, 2);
+        checkRaw("confrontationCountImbalanceCost: pair counts {1, 1, 1}",
+                 zero,
+                 "confrontationCountImbalanceCost",
+                 {0.0});
+    }
+    std::printf("\n");
+}
+
+// -------------------------------------------------------------------------
+// (h) The catalog read off the default assembly == the components' constants.
+// -------------------------------------------------------------------------
+template <typename Component>
+bool rowIs(const optimaru::ConstraintInfo &row,
+           const char *name,
+           optimaru::Level level,
+           double weight,
+           bool isGlobal)
+{
+    return row.name == name && row.defaultLevel == Component::kDefaultLevel
+           && row.defaultWeight == Component::kDefaultWeight
+           && row.defaultLevel == level && row.defaultWeight == weight
+           && row.levelFlippable && !row.reward && row.isGlobal == isGlobal
+           && row.defaultEnabled;
+}
+
+void verifyCatalog()
+{
+    std::printf("== (h) Catalog == component constants ==\n");
+    using optimaru::Level;
+    const auto rows = defaultConstraints().info();
+    check(rows.size() == 4, "4 catalog rows");
+    if (rows.size() != 4)
+        return;
+    // Unit constraints first, then the globals, in emplace order: the
+    // list_constraints() order.
+    check(rowIs<TeamConflictCost>(
+              rows[0], "teamConflictCost", Level::Hard, 1.0, false)
+              && rowIs<TeamUnavailabilityCost>(
+                  rows[1], "teamUnavailabilityCost", Level::Hard, 1.0, false)
+              && rowIs<AssignmentCountImbalanceCost>(
+                  rows[2],
+                  "assignmentCountImbalanceCost",
+                  Level::Medium,
+                  1.0,
+                  true)
+              && rowIs<ConfrontationCountImbalanceCost>(
+                  rows[3],
+                  "confrontationCountImbalanceCost",
+                  Level::Soft,
+                  1.0,
+                  true),
+          "info() == the components' kDefaultWeight / kDefaultLevel");
+    check(kMediumFold.kind == optimaru::MediumFold::Kind::IntoSoft
+              && kMediumFold.unit == kMediumScale && kMediumScale == 1e6,
+          "the domain folds medium into soft at 1e6");
+    std::printf("\n");
+}
+
+// -------------------------------------------------------------------------
+// (i) The medium level: assignmentCountImbalanceCost.
+// -------------------------------------------------------------------------
+DecomposedCalculator::LevelScores levelsWith(ConstraintAssembly assembly,
+                                             TournamentSchedule &s)
+{
+    DecomposedCalculator calculator;
+    std::move(assembly).into(calculator);
+    calculator.resetWorkingSolution(s);
+    calculator.calculateScore();
+    return calculator.levelScores();
+}
+
+bool near(double actual, double expected)
+{
+    return std::fabs(actual - expected) < 1e-9;
+}
+
+void verifyMediumLevel()
+{
+    std::printf("== (i) Medium level ==\n");
+    // D0: T0, T1, T2; D1: T1, T2; D2: T1; D3: T1. Loads {1, 4, 2}:
+    // sqrt(21 - 49/3) = sqrt(14/3) = 2.16025 medium. Confrontations
+    // (0,1)=1 (0,2)=1 (1,2)=2: sqrt(6 - 16/3) = sqrt(2/3) = 0.816497 soft.
+    // Nobody plays twice a day: 0 hard.
+    TournamentSchedule s = makeBase(/*teams*/ 3, /*days*/ 4);
+    addAssignment(s, 0, 0);
+    addAssignment(s, 0, 1);
+    addAssignment(s, 0, 2);
+    addAssignment(s, 1, 1);
+    addAssignment(s, 1, 2);
+    addAssignment(s, 2, 1);
+    addAssignment(s, 3, 1);
+    const double medium = 2.16025;
+    const double soft = 0.816497;
+
+    const Score monolithic = ScoreCalculator::calculateScore(s);
+    check(monolithic.hard == 0 && near(monolithic.soft, -(soft + medium * 1e6)),
+          "monolithic: medium folded into soft x 1e6");
+    {
+        DecomposedCalculator calculator;
+        addDefaultConstraints(calculator);
+        const Score engine = scoreWith(calculator, s);
+        check(engine.hard == monolithic.hard && engine.soft == monolithic.soft,
+              "default assembly: the fold equals the monolithic score "
+              "bit-for-bit");
+        const auto levels = calculator.levelScores();
+        check(levels.hard == 0 && near(levels.medium, -medium)
+                  && near(levels.soft, -soft),
+              "levelScores() reports the unfolded levels");
+    }
+    const char *imbalance = "assignmentCountImbalanceCost";
+    {
+        // A global hard contribution is rounded once: llround(2.16025) = 2.
+        const auto levels = levelsWith(defaultConstraints().hard(imbalance), s);
+        check(levels.hard == -2 && levels.medium == 0.0
+                  && near(levels.soft, -soft),
+              "hard(): one hard unit per raw unit (rounded)");
+    }
+    {
+        const auto levels = levelsWith(defaultConstraints().soft(imbalance), s);
+        check(levels.hard == 0 && levels.medium == 0.0
+                  && near(levels.soft, -(soft + medium)),
+              "soft(): one soft unit per raw unit, outside the fold");
+    }
+    {
+        const auto levels
+            = levelsWith(defaultConstraints().weight(imbalance, 3), s);
+        check(levels.hard == 0 && near(levels.medium, -3.0 * medium)
+                  && near(levels.soft, -soft),
+              "weight 3 stays in medium units");
+    }
+    {
+        DecomposedCalculator calculator;
+        defaultConstraints().weight(imbalance, 3).into(calculator);
+        const Score engine = scoreWith(calculator, s);
+        check(engine.hard == 0
+                  && near(engine.soft, -(soft + 3.0 * medium * 1e6)),
+              "weight 3 folds as 3 medium units x 1e6");
+    }
+    std::printf("\n");
+}
+
+// Incremental == full recompute with the medium term overridden, through the
+// ScoreDirector protocol.
+void verifyMediumIncremental()
+{
+    std::printf("== (i) Medium overrides: incremental == full ==\n");
+    const char *imbalance = "assignmentCountImbalanceCost";
+    const std::vector<
+        std::pair<std::string, std::function<ConstraintAssembly()>>>
+        variants{
+            {"default", [] { return defaultConstraints(); }},
+            {"hard", [=] { return defaultConstraints().hard(imbalance); }},
+            {"soft", [=] { return defaultConstraints().soft(imbalance); }},
+            {"weight 3",
+             [=] { return defaultConstraints().weight(imbalance, 3); }},
+        };
+    for (const auto &variant : variants)
+    {
+        TournamentSchedule s = buildRandomInstance(/*teams*/ 5,
+                                                   /*days*/ 6,
+                                                   /*perDay*/ 3,
+                                                   /*seed*/ 17);
+        DecomposedCalculator calculator;
+        variant.second().into(calculator);
+        optimaru::ScoreDirector<TournamentSchedule> director(s, calculator);
+        std::mt19937_64 rng(41);
+        std::uniform_real_distribution<double> unit(0.0, 1.0);
+        const int assignmentCount = static_cast<int>(s.teamAssignments.size());
+        int mismatches = 0;
+        int mediumSteps = 0;
+        for (int step = 0; step < 600; ++step)
+        {
+            const int assignment = static_cast<int>(rng() % assignmentCount);
+            const int value = unit(rng) < 0.10
+                                  ? -1
+                                  : static_cast<int>(rng() % s.teamCount());
+            director.changeVariable(assignment, value);
+            const Score incremental = director.calculateScore();
+            DecomposedCalculator fresh;
+            variant.second().into(fresh);
+            const Score full = scoreWith(fresh, s);
+            if (fresh.levelScores().medium != 0.0)
+                ++mediumSteps;
+            if (incremental.hard != full.hard || incremental.soft != full.soft)
+                ++mismatches;
+        }
+        check(mismatches == 0,
+              "medium " + variant.first
+                  + ": 600 random moves, incremental == full recompute");
+        if (variant.first == "default" || variant.first == "weight 3")
+            check(mediumSteps > 0,
+                  variant.first + ": the walk visits medium states");
+    }
+    std::printf("\n");
+}
+
 }  // namespace
 
 int main()
@@ -441,6 +773,10 @@ int main()
     verifyOverrides();
     verifyConstraintTotals();
     verifyFullAssertSolve();
+    verifyRawCostsByHand();
+    verifyCatalog();
+    verifyMediumLevel();
+    verifyMediumIncremental();
 
     if (failures == 0)
     {

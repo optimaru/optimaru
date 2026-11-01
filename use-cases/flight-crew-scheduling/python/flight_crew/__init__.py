@@ -3,17 +3,24 @@
 A port of the `flight-crew-scheduling` example model: a BASIC-variable problem
 that picks a crew member (employee) for every crew seat of a flight (FlightAssignment).
 
-Constraints (HardSoftScore, with the Java ConstraintProvider's weights as-is):
-  hard 1. requiredSkill               -100 per assignment without the skill
-  hard 2. flightConflict              -10 per time-overlapping assignment pair of one crew member
-  hard 3. transferBetweenTwoFlights   -1 per pair of departure-consecutive assignments whose
-                                      airports do not connect (arrival airport != next
-                                      departure airport)
-  hard 4. employeeUnavailability      -10 per assignment of a crew member unavailable on the flight date
-  soft 5. firstAssignmentNotDepartingFromHome  -1000 when the first assignment departs
-                                      from an airport other than home
-  soft 6. lastAssignmentNotArrivingAtHome      -1000 when the last assignment arrives at an
-                                      airport other than home
+Constraints (HardSoftScore), at the default weights (the Java ConstraintProvider's
+weights as-is):
+  hard 1. required_skill_cost                  -100 per assignment without the skill
+  hard 2. flight_conflict_cost                 -10 per time-overlapping assignment pair of one
+                                               crew member
+  hard 3. transfer_between_two_flights_cost    -1 per pair of departure-consecutive assignments
+                                               whose airports do not connect (arrival airport !=
+                                               next departure airport)
+  hard 4. employee_unavailability_cost         -10 per assignment of a crew member unavailable on
+                                               the flight date
+  soft 5. first_assignment_not_departing_from_home_cost  -1000 when the first assignment departs
+                                               from an airport other than home
+  soft 6. last_assignment_not_arriving_at_home_cost      -1000 when the last assignment arrives at
+                                               an airport other than home
+The weights are the C++ components' defaults; change one through a constraint selection, e.g.
+``solve(schedule, constraints=get_constraints([..., RequiredSkillCost(weight=500)]))`` (see
+`flight_crew.constraints`). `constraint_info()` lists every constraint with its default level
+and weight.
 
 The high-level entry point is `solve`. It takes a pydantic model (optional dependency)
 or a dict and returns the solved model::
@@ -27,8 +34,11 @@ There is also a low-level path that builds engine objects (`FlightCrewSchedule`)
 and uses `Solver` (no pydantic needed). The pydantic mirror is in `flight_crew.models`.
 """
 
+import copy
+
 from ._core import (
     Airport,
+    ConstraintInfo,
     Employee,
     Flight,
     FlightAssignment,
@@ -38,11 +48,13 @@ from ._core import (
     SolverConfig,
     calculate_score,
     constraint_costs,
+    constraint_info,
     list_constraints,
 )
 
 __all__ = [
     "Airport",
+    "ConstraintInfo",
     "Employee",
     "Flight",
     "FlightAssignment",
@@ -54,6 +66,7 @@ __all__ = [
     "solve",
     "list_constraints",
     "constraint_costs",
+    "constraint_info",
     "with_initial_solution",
 ]
 
@@ -72,7 +85,7 @@ def _resolve_config(config) -> SolverConfig:
     if config is None:
         return SolverConfig()
     if isinstance(config, SolverConfig):
-        return config
+        return copy.copy(config)  # solve()'s overrides must not leak into it
     if hasattr(config, "to_core"):
         return config.to_core()
     raise ValueError("config must be a SolverConfig or an object with to_core() (models.SolveConfig)")
@@ -101,11 +114,11 @@ def solve(
     (30 s budget). Explicit keyword arguments override config.
 
     ``stop_at_first_feasible`` stops as soon as hard 0 is reached
-    (best_score_limit=(0, -1e18)).
+    (best_score_limit=(0, -inf)).
 
     ``constraints`` picks the cost function directly
     (see `flight_crew.constraints`). Only the listed constraints are scored; None
-    uses all six default constraints::
+    uses all six default constraints at their default weights::
 
         from flight_crew.constraints import get_constraints
         fcs.solve(schedule, constraints=get_constraints())
@@ -118,7 +131,7 @@ def solve(
     if parallel_solver_count is not None:
         cfg.parallel_solver_count = parallel_solver_count
     if stop_at_first_feasible:
-        cfg.best_score_limit = (0, -1e18)
+        cfg.best_score_limit = (0, float("-inf"))
     if on_new_best is not None:
         cfg.on_new_best = on_new_best
 

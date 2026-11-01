@@ -3,10 +3,30 @@
 
 #include <cstddef>
 
+#include "st/canonical_constraints.hpp"
 #include "st/canonical_score_calculator.hpp"
 
 namespace st::canon
 {
+
+namespace
+{
+
+// The hard default weights, read off the components (as in
+// canonical_score_calculator.cpp). Integral, so the hard total stays integer
+// arithmetic.
+template <typename Component> constexpr std::int64_t hardWeight()
+{
+    static_assert(Component::kDefaultLevel == optimaru::Level::Hard,
+                  "a hard total term must be a hard constraint");
+    static_assert(static_cast<double>(
+                      static_cast<std::int64_t>(Component::kDefaultWeight))
+                      == Component::kDefaultWeight,
+                  "the monolithic calculator assumes integral hard weights");
+    return static_cast<std::int64_t>(Component::kDefaultWeight);
+}
+
+}  // namespace
 
 void CanonicalIncrementalScoreCalculator::resetWorkingSolution(
     Timetable &workingSolution)
@@ -168,15 +188,16 @@ void CanonicalIncrementalScoreCalculator::insert(int lessonIndex, int slot)
     const std::uint16_t bit
         = static_cast<std::uint16_t>(1U << (table_->periodOfSlot[slot] - 1));
 
-    --unassigned_;  // H1
+    --unassigned_;  // unassignedLessonsCost
 
     if (lesson.allowedSlot[slot] == 0)
     {
-        ++notAllowed_;  // H5
+        ++notAllowed_;  // disallowedSlotCost
         hotNotAllowed_.set(lessonIndex, true);
     }
 
-    // H3 + S4: class occupancy (one unit per merged lesson).
+    // classConflictCost + classGapCost: class occupancy (one unit per
+    // merged lesson).
     {
         const std::size_t cell = slotOffset(lesson.classGroupId, slot);
         int &cnt = classSlotCnt_[cell];
@@ -194,7 +215,8 @@ void CanonicalIncrementalScoreCalculator::insert(int lessonIndex, int slot)
         }
     }
 
-    // H4 + H9/H10 + S1~S3: every teacher of the lesson occupies the slot.
+    // teacherConflictCost + the teacher-mask family: every teacher of the
+    // lesson occupies the slot.
     for (int t : lesson.teachers)
     {
         const std::size_t cell = slotOffset(t, slot);
@@ -210,7 +232,7 @@ void CanonicalIncrementalScoreCalculator::insert(int lessonIndex, int slot)
         }
     }
 
-    // H6: room-demand excess per (type, slot).
+    // roomCapacityCost: room-demand excess per (type, slot).
     for (int type = 0; type < table_->roomTypeCount; ++type)
     {
         const int demand = lesson.roomTypeDemand[type];
@@ -225,7 +247,7 @@ void CanonicalIncrementalScoreCalculator::insert(int lessonIndex, int slot)
         hotRoomCells_.set(static_cast<int>(cell), cnt > capacity);
     }
 
-    // H7: per-course daily excess.
+    // courseMaxPeriodsPerDayCost: per-course daily excess.
     {
         const std::size_t cell = dayOffset(lesson.courseKey, day);
         int &cnt = courseDayCnt_[cell];
@@ -236,8 +258,8 @@ void CanonicalIncrementalScoreCalculator::insert(int lessonIndex, int slot)
         hotCourseDays_.set(static_cast<int>(cell), cnt > limit);
     }
 
-    // S5/S6: one hit per preference unit (per member course of a merged
-    // lesson).
+    // avoidedPeriodCost / nonPreferredPeriodCost: one hit per preference
+    // unit (per member course of a merged lesson).
     for (const auto &[avoided, preferred] : lesson.preferenceUnits)
     {
         if ((avoided & bit) != 0)
@@ -246,7 +268,7 @@ void CanonicalIncrementalScoreCalculator::insert(int lessonIndex, int slot)
             ++nonPreferred_;
     }
 
-    // H8: recompute the whole (small) block group.
+    // blockAdjacencyCost: recompute the whole (small) block group.
     if (lesson.blockGroup >= 0)
         refreshBlock(lesson.blockGroup);
 }
@@ -260,11 +282,11 @@ void CanonicalIncrementalScoreCalculator::retract(int lessonIndex, int slot)
     const std::uint16_t bit
         = static_cast<std::uint16_t>(1U << (table_->periodOfSlot[slot] - 1));
 
-    ++unassigned_;  // H1
+    ++unassigned_;  // unassignedLessonsCost
 
     if (lesson.allowedSlot[slot] == 0)
     {
-        --notAllowed_;  // H5
+        --notAllowed_;  // disallowedSlotCost
         hotNotAllowed_.set(lessonIndex, false);
     }
 
@@ -366,12 +388,13 @@ int CanonicalIncrementalScoreCalculator::hotLesson(std::mt19937_64 &rng) const
         return -1;
     std::uint64_t r = rng() % total;
 
-    // H5: the hot key IS the lesson.
+    // disallowedSlotCost: the hot key IS the lesson.
     if (r < hotNotAllowed_.size())
         return hotNotAllowed_.items()[r];
     r -= hotNotAllowed_.size();
 
-    // H3: one of the lessons of the overfull (class, slot) cell.
+    // classConflictCost: one of the lessons of the overfull (class, slot)
+    // cell.
     if (r < hotClassCells_.size())
     {
         const int key = hotClassCells_.items()[r];
@@ -382,7 +405,8 @@ int CanonicalIncrementalScoreCalculator::hotLesson(std::mt19937_64 &rng) const
     }
     r -= hotClassCells_.size();
 
-    // H4: one of the lessons of the overfull (teacher, slot) cell.
+    // teacherConflictCost: one of the lessons of the overfull
+    // (teacher, slot) cell.
     if (r < hotTeacherCells_.size())
     {
         const int key = hotTeacherCells_.items()[r];
@@ -393,7 +417,8 @@ int CanonicalIncrementalScoreCalculator::hotLesson(std::mt19937_64 &rng) const
     }
     r -= hotTeacherCells_.size();
 
-    // H6: one of the demanding lessons at the over-capacity (type, slot).
+    // roomCapacityCost: one of the demanding lessons at the over-capacity
+    // (type, slot).
     if (r < hotRoomCells_.size())
     {
         const int key = hotRoomCells_.items()[r];
@@ -404,7 +429,8 @@ int CanonicalIncrementalScoreCalculator::hotLesson(std::mt19937_64 &rng) const
     }
     r -= hotRoomCells_.size();
 
-    // H7: one of the course's lessons on the over-limit day.
+    // courseMaxPeriodsPerDayCost: one of the course's lessons on the
+    // over-limit day.
     if (r < hotCourseDays_.size())
     {
         const int key = hotCourseDays_.items()[r];
@@ -416,7 +442,7 @@ int CanonicalIncrementalScoreCalculator::hotLesson(std::mt19937_64 &rng) const
     }
     r -= hotCourseDays_.size();
 
-    // H8: one of the broken block group's members.
+    // blockAdjacencyCost: one of the broken block group's members.
     if (r < hotBlocks_.size())
     {
         return pickLesson(table_->blockMembers[hotBlocks_.items()[r]],
@@ -425,7 +451,8 @@ int CanonicalIncrementalScoreCalculator::hotLesson(std::mt19937_64 &rng) const
     }
     r -= hotBlocks_.size();
 
-    // H9 daily / H10: one of the teacher's lessons on the excess day.
+    // teacherMaxPeriodsCost daily / teacherMaxConsecutivePeriodsCost: one
+    // of the teacher's lessons on the excess day.
     if (r < hotTeacherDays_.size())
     {
         const int key = hotTeacherDays_.items()[r];
@@ -437,7 +464,7 @@ int CanonicalIncrementalScoreCalculator::hotLesson(std::mt19937_64 &rng) const
     }
     r -= hotTeacherDays_.size();
 
-    // H9 weekly: any lesson of the over-loaded teacher.
+    // teacherMaxPeriodsCost weekly: any lesson of the over-loaded teacher.
     return pickLesson(lessonsOfTeacher_[hotTeachersWeek_.items()[r]],
                       rng,
                       [](int) { return true; });
@@ -519,16 +546,29 @@ bool CanonicalIncrementalScoreCalculator::hotSetsConsistent() const
 
 Score CanonicalIncrementalScoreCalculator::calculateScore()
 {
-    const std::int64_t hard = unassigned_ + classPairs_ + teacherPairs_
-                              + notAllowed_ + roomExcess_ + courseExcess_
-                              + blockTotal_ + teacherDailyExcess_
-                              + teacherWeeklyExcess_ + consecutiveExcess_;
-    const ObjectiveWeights &w = table_->weights;
-    const std::int64_t penalty
-        = w.teacherGap * teacherGap_ + w.teacherWorkday * teacherWorkday_
-          + w.teacherFreeDay * teacherFreeDay_ + w.classGap * classGap_
-          + w.avoidedPeriod * avoided_ + w.nonPreferredPeriod * nonPreferred_;
-    return {-hard, -static_cast<double>(penalty)};
+    // The same arithmetic as Breakdown::hardTotal / softPenalty, so FULL_ASSERT
+    // and the tests compare bit for bit. fixedSlotsCost / parallelGroupsCost
+    // are 0 by construction and carry no term.
+    const std::int64_t hard
+        = hardWeight<UnassignedLessonsCost>() * unassigned_
+          + hardWeight<ClassConflictCost>() * classPairs_
+          + hardWeight<TeacherConflictCost>() * teacherPairs_
+          + hardWeight<DisallowedSlotCost>() * notAllowed_
+          + hardWeight<RoomCapacityCost>() * roomExcess_
+          + hardWeight<CourseMaxPeriodsPerDayCost>() * courseExcess_
+          + hardWeight<BlockAdjacencyCost>() * blockTotal_
+          + hardWeight<TeacherMaxPeriodsCost>()
+                * (teacherDailyExcess_ + teacherWeeklyExcess_)
+          + hardWeight<TeacherMaxConsecutivePeriodsCost>() * consecutiveExcess_;
+    const ObjectiveWeights &w = weights_;
+    const double penalty
+        = w.teacherGapCost * static_cast<double>(teacherGap_)
+          + w.teacherWorkdayCost * static_cast<double>(teacherWorkday_)
+          + w.teacherFreeDayCost * static_cast<double>(teacherFreeDay_)
+          + w.classGapCost * static_cast<double>(classGap_)
+          + w.avoidedPeriodCost * static_cast<double>(avoided_)
+          + w.nonPreferredPeriodCost * static_cast<double>(nonPreferred_);
+    return {-hard, -penalty};
 }
 
 }  // namespace st::canon

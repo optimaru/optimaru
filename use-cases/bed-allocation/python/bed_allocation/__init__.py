@@ -11,9 +11,16 @@ planning variable::
 
 Score convention (HardMediumSoftScore, as in the Java quickstart): hard is bed/gender/
 age/required-equipment violations (0 == feasible), medium is the nights of unassigned
-stays, soft is preference penalties (room size/specialty/preferred equipment).
-Lexicographic comparison (hard first). Internally it maps onto HardSoftScore(int64, double)
-as `engine.soft = medium * 10**9 + soft` (level order preserved).
+stays (`unassigned_stays_cost`), soft is preference penalties (room size/specialty/
+preferred equipment). Lexicographic comparison (hard first). Internally it maps onto
+HardSoftScore(int64, double) as `engine.soft = medium * 10**9 + soft` (the domain's medium
+fold; level order preserved).
+
+The constraints and their defaults (level, weight in units of that level) live in the C++
+components; `constraint_info()` reports them and `list_constraints()` lists the names::
+
+    {row.name: (row.default_level, row.default_weight) for row in ba.constraint_info()}
+    # {'bed_conflict_cost': ('hard', 1000.0), ..., 'unassigned_stays_cost': ('medium', 1.0), ...}
 
 The high-level entry point is `solve`::
 
@@ -27,9 +34,12 @@ The high-level entry point is `solve`::
 The pydantic mirror (for serialization) is in `bed_allocation.models` (optional dependency).
 """
 
+import copy
+
 from ._core import (
     Bed,
     BedPlan,
+    ConstraintInfo,
     Department,
     Gender,
     GenderLimitation,
@@ -40,12 +50,14 @@ from ._core import (
     Stay,
     calculate_score,
     constraint_costs,
+    constraint_info,
     list_constraints,
 )
 
 __all__ = [
     "Bed",
     "BedPlan",
+    "ConstraintInfo",
     "Department",
     "Gender",
     "GenderLimitation",
@@ -58,6 +70,7 @@ __all__ = [
     "solve",
     "list_constraints",
     "constraint_costs",
+    "constraint_info",
     "with_initial_solution",
 ]
 
@@ -82,7 +95,8 @@ def _build_config(
     on_new_best,
     config,
 ) -> SolverConfig:
-    cfg = config if config is not None else SolverConfig()
+    # A copy: the keyword overrides below must not leak into the caller's config.
+    cfg = copy.copy(config) if config is not None else SolverConfig()
     if time_limit_seconds is not None:
         cfg.spent_limit_seconds = time_limit_seconds
     if random_seed is not None:
@@ -90,8 +104,9 @@ def _build_config(
     if parallel_solver_count is not None:
         cfg.parallel_solver_count = parallel_solver_count
     if stop_at_first_feasible:
-        # Stop as soon as hard 0 is reached (medium/soft have an effectively -inf floor).
-        cfg.best_score_limit = (0, -(2**62), -(2**62))
+        # Stop as soon as hard 0 is reached: -(2**63) on medium/soft is "no floor", so the
+        # engine compares hard only and no soft total, however low, misses the stop.
+        cfg.best_score_limit = (0, -(2**63), -(2**63))
     if full_assert:
         cfg.full_assert = True
     if on_new_best is not None:
@@ -126,8 +141,14 @@ def solve(
     (see `bed_allocation.constraints`). Only the listed constraints are scored;
     None uses all twelve default constraints::
 
-        from bed_allocation.constraints import get_constraints
+        from bed_allocation.constraints import UnassignedStaysCost, get_constraints
         ba.solve(plan, constraints=get_constraints())
+        # unassigned nights as soft instead of medium:
+        others = [spec for spec in get_constraints() if spec.name != "unassigned_stays_cost"]
+        ba.solve(plan, constraints=[*others, UnassignedStaysCost(hard=False)])
+
+    The result's score then reports each term on the level the selection gave it, and so
+    does every score passed to ``on_new_best``.
     """
     cfg = _build_config(
         time_limit_seconds=time_limit_seconds,

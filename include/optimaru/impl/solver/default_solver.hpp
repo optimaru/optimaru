@@ -4,9 +4,10 @@
 #include <algorithm>
 #include <atomic>
 #include <cstdint>
+#include <exception>
 #include <functional>
 #include <memory>
-#include <thread>
+#include <mutex>
 #include <utility>
 #include <vector>
 
@@ -22,6 +23,7 @@
 #include "optimaru/impl/localsearch/default_local_search_phase.hpp"
 #include "optimaru/impl/localsearch/decider/acceptor/acceptor.hpp"
 #include "optimaru/impl/solver/termination/termination.hpp"
+#include "optimaru/impl/solver/worker_threads.hpp"
 #include "optimaru/preview/api/move/operators.hpp"
 
 namespace optimaru {
@@ -94,7 +96,8 @@ public:
         ScoreDirector<Solution> director(solution, calculator, config_.environmentMode,
                                          variableListeners_.empty() ? nullptr
                                                                     : &variableListeners_);
-        SolverTermination termination(config_.termination, terminateEarly_.get());
+        SolverTermination termination(config_.termination, terminateEarly_.get(),
+                                      runStop_.get());
         buildNearby(solution);
         DefaultConstructionHeuristicPhase<Solution>::run(director, config_.constructionHeuristic);
         DefaultLocalSearchPhase<Solution> localSearch(config_, nearby_, moveOperators_,
@@ -115,6 +118,7 @@ public:
         ChainedCalculatorBridge<Solution> bridge(calculator);
         DefaultSolver<ChainedWorkingSolution<Solution>> inner(config_);
         inner.adoptTerminateEarlyFlag(terminateEarly_);
+        inner.runStop_ = runStop_;
         if (acceptorFactory_) inner.setAcceptorFactory(acceptorFactory_);
         for (const auto& listener : variableListeners_) {
             inner.addVariableListener(
@@ -123,8 +127,11 @@ public:
         return inner.solve(working, bridge);
     }
 
-    // Internal: lets a wrapping solver (the CHAINED facade) share its
-    // cooperative-stop flag with the inner solver.
+    // Shares a cooperative-stop flag with this solver: setting it has the
+    // effect of terminateEarly(), and terminateEarly() sets it. The CHAINED
+    // facade hands its flag to its inner solver this way, and a domain's own
+    // parallel worker pool gives every worker's solver one flag, which the
+    // first worker that fails raises so the others stop at their next step.
     void adoptTerminateEarlyFlag(std::shared_ptr<std::atomic<bool>> flag) {
         terminateEarly_ = std::move(flag);
     }
@@ -133,10 +140,20 @@ public:
     // copies of the solution (seeds randomSeed + i), keeping the best.
     // calculatorFactory() is invoked once per start, on the calling thread.
     // Solution must be copy-constructible and copy-assignable.
+    // Exception-safe: an exception thrown inside a start (a raising
+    // onNewBest callback, a FULL_ASSERT score corruption, bad_alloc) is
+    // caught on its worker thread, the other starts are told to stop at
+    // their next step, every thread is joined, and the first exception is
+    // rethrown on the calling thread (the solution is left as it was). A
+    // thread that cannot be created (std::system_error) stops and joins the
+    // starts already running before the error is rethrown
+    // (runWorkerThreads). terminateEarly() on this solver reaches every start.
     // Note: registered custom operators and variable listeners are per-Solver
     // (possibly stateful), so multi-start threads run with the built-ins only
     // — do NOT combine solveMultiStart() with a calculator that reads shadow
-    // variables (their listeners would be missing in the threads).
+    // variables (their listeners would be missing in the threads). The
+    // acceptor factory (setAcceptorFactory) IS shared: every start calls it
+    // for an acceptor of its own, so it must be safe to call concurrently.
     template <typename CalculatorFactory>
     HardSoftScore solveMultiStart(Solution& solution, CalculatorFactory&& calculatorFactory) {
         requirePinnedValues<Descriptor>(solution);
@@ -153,19 +170,32 @@ public:
         calculators.reserve(starts);
         for (int i = 0; i < starts; ++i) calculators.push_back(calculatorFactory());
 
-        std::vector<std::thread> threads;
-        threads.reserve(starts);
-        for (int i = 0; i < starts; ++i) {
-            threads.emplace_back([this, i, &copies, &scores, &calculators] {
+        // Raised by the first start that fails; every start checks it once a
+        // step (SolverTermination's stop flag).
+        auto stop = std::make_shared<std::atomic<bool>>(false);
+        std::mutex failureMutex;
+        std::exception_ptr firstFailure;
+        runWorkerThreads(starts, *stop, [this, &copies, &scores, &calculators, &stop,
+                                         &failureMutex, &firstFailure](int i) {
+            try {
                 SolverConfig threadConfig = config_;
                 threadConfig.randomSeed = config_.randomSeed + static_cast<std::uint64_t>(i);
                 threadConfig.multiStartCount = 1;
                 if (i != 0) threadConfig.onNewBest = nullptr;  // only thread 0 reports
                 DefaultSolver threadSolver(std::move(threadConfig));
+                if (acceptorFactory_) threadSolver.setAcceptorFactory(acceptorFactory_);
+                threadSolver.adoptTerminateEarlyFlag(terminateEarly_);
+                threadSolver.runStop_ = stop;
                 scores[i] = threadSolver.solve(copies[i], *calculators[i]);
-            });
-        }
-        for (std::thread& t : threads) t.join();
+            } catch (...) {
+                {
+                    std::lock_guard<std::mutex> lock(failureMutex);
+                    if (!firstFailure) firstFailure = std::current_exception();
+                }
+                stop->store(true);
+            }
+        });
+        if (firstFailure) std::rethrow_exception(firstFailure);
 
         int bestIndex = 0;
         for (int i = 1; i < starts; ++i) {
@@ -176,6 +206,10 @@ public:
     }
 
 private:
+    // The CHAINED facade hands its run-scoped stop flag to its inner solver.
+    template <typename>
+    friend class DefaultSolver;
+
     SolverConfig config_;
     NearbyNeighborhoods nearby_;
     std::vector<std::unique_ptr<MoveOperator<Solution>>> moveOperators_;
@@ -185,6 +219,8 @@ private:
     // shared_ptr so the solver object stays movable (SolverManager jobs).
     std::shared_ptr<std::atomic<bool>> terminateEarly_ =
             std::make_shared<std::atomic<bool>>(false);
+    // Run-scoped stop of one multi-start start (null outside solveMultiStart).
+    std::shared_ptr<std::atomic<bool>> runStop_;
 
     void buildNearby(const Solution& solution) {
         const NearbySelectionConfig& nearbyConfig = config_.localSearch.nearby;

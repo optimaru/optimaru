@@ -13,15 +13,18 @@ namespace pdp
 // ---------------------------------------------------------------------------
 // PdpIncrementalScoreCalculator
 // ---------------------------------------------------------------------------
-// The PDP constraints split into two groups with very different locality:
+// The seven core PDP constraints (at the components' kDefaultWeight) split
+// into two groups with very different locality:
 //
-//  - Per-route terms (capacity peak, lateness, driving time) decompose exactly
-//    like vehicle-routing's: one walk of a touched route re-derives all three.
+//  - Per-route terms (vehicleCapacityCost's peak, maxEndTimeCost's lateness,
+//    travelTimeCost's driving time) decompose exactly like vehicle-routing's:
+//    one walk of a touched route re-derives all three.
 //
-//  - Coupling terms (paired / same-vehicle / pickup-before-dropoff) are NOT
-//    per-route: they read both nodes of a request, which may sit in different
-//    lists. They are maintained per *request* instead, in pairPenalty_, and
-//    only the requests touching a changed list are recomputed.
+//  - Coupling terms (pairedRequestCost / sameVehicleCost /
+//    pickupBeforeDropoffCost) are NOT per-route: they read both nodes of a
+//    request, which may sit in different lists. They are maintained per
+//    *request* instead, in pairPenalty_, and only the requests touching a
+//    changed list are recomputed.
 //
 // The bookkeeping that makes the second group work: beforeListChanged snapshots
 // the list's old membership, and afterListChanged compares it with the new one

@@ -6,16 +6,24 @@
 //   (b) incremental score == full recompute across 3000 random moves driven
 //       through the engine's ScoreDirector protocol (plugin path)
 //   (c) partial assemblies: removing one component removes exactly that term
-//   (d) weight / isHard overrides
+//   (d) weight / level / exponent overrides
 //   (e) constraintTotals() explains exactly the reported score
 //   (f) a 2-second solve(plan, calculator) under FULL_ASSERT
+//   (g) every component's raw cost by hand (constraintCosts()): one positive
+//       and one zero case each
+//   (h) the catalog read off the default assembly == the components'
+//       kDefaultWeight / kDefaultLevel
+//   (i) the medium level: the fold, hard() / soft() / weight on
+//       unassignedStaysCost, and incremental == full with those overrides
 #include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <functional>
 #include <memory>
 #include <random>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "ba/constraints.hpp"
@@ -320,33 +328,36 @@ void verifyPartialAssemblies()
 {
     std::printf("== (c) Single-component assemblies ==\n");
 
-    {  // femaleInMaleRoom alone: 50 * 6 nights, nothing else.
+    {  // femaleInMaleRoomCost alone: 50 * 6 nights, nothing else.
         BedPlan plan = makeBase();
         const int bed
             = addBed(plan, addRoom(plan, GenderLimitation::MALE_ONLY));
         addStay(plan, 0, 5, Gender::FEMALE, bed);
         ScoreCalculator::prepare(plan);
         DecomposedCalculator calculator;
-        calculator.emplace<FemaleInMaleRoom>();
-        checkScore(
-            "femaleInMaleRoom alone", scoreWith(calculator, plan), -300, 0, 0);
+        calculator.emplace<FemaleInMaleRoomCost>();
+        checkScore("femaleInMaleRoomCost alone",
+                   scoreWith(calculator, plan),
+                   -300,
+                   0,
+                   0);
     }
-    {  // sameBedInSameNight alone: two full-overlap stays, 1000 * 6.
+    {  // bedConflictCost alone: two full-overlap stays, 1000 * 6.
         BedPlan plan = makeBase();
         const int bed = addBed(plan, addRoom(plan));
         addStay(plan, 0, 5, Gender::MALE, bed);
         addStay(plan, 0, 5, Gender::MALE, bed);
         ScoreCalculator::prepare(plan);
         DecomposedCalculator calculator;
-        calculator.emplace<SameBedInSameNight>();
-        checkScore("sameBedInSameNight alone",
+        calculator.emplace<BedConflictCost>();
+        checkScore("bedConflictCost alone",
                    scoreWith(calculator, plan),
                    -6000,
                    0,
                    0);
     }
-    {  // differentGenderInSameGenderRoomInSameNight alone: the pair spans two
-        // beds of one SAME_GENDER room, which is why it is a global.
+    {  // mixedGenderRoomCost alone: the pair spans two beds of one
+        // SAME_GENDER room, which is why it is a global.
         BedPlan plan = makeBase();
         const int room
             = addRoom(plan, GenderLimitation::SAME_GENDER, /*capacity*/ 2);
@@ -354,21 +365,21 @@ void verifyPartialAssemblies()
         addStay(plan, 0, 5, Gender::MALE, addBed(plan, room));
         ScoreCalculator::prepare(plan);
         DecomposedCalculator calculator;
-        calculator.emplace<DifferentGenderInSameGenderRoomInSameNight>();
-        checkScore("differentGenderInSameGenderRoom alone",
+        calculator.emplace<MixedGenderRoomCost>();
+        checkScore("mixedGenderRoomCost alone",
                    scoreWith(calculator, plan),
                    -6000,
                    0,
                    0);
     }
-    {  // assignEveryPatientToABed alone: the sentinel costs 6 medium.
+    {  // unassignedStaysCost alone: the sentinel costs 6 medium.
         BedPlan plan = makeBase();
         addBed(plan, addRoom(plan));
         addStay(plan, 0, 5, Gender::MALE, plan.noBedValue());
         ScoreCalculator::prepare(plan);
         DecomposedCalculator calculator;
-        calculator.emplace<AssignEveryPatientToABed>();
-        checkScore("assignEveryPatientToABed alone",
+        calculator.emplace<UnassignedStaysCost>();
+        checkScore("unassignedStaysCost alone",
                    scoreWith(calculator, plan),
                    0,
                    -6,
@@ -380,8 +391,8 @@ void verifyPartialAssemblies()
         addStay(plan, 0, 5, Gender::MALE, bed);
         ScoreCalculator::prepare(plan);
         DecomposedCalculator calculator;
-        calculator.emplace<AssignEveryPatientToABed>();
-        checkScore("assignEveryPatientToABed silent in a real bed",
+        calculator.emplace<UnassignedStaysCost>();
+        checkScore("unassignedStaysCost silent in a real bed",
                    scoreWith(calculator, plan),
                    0,
                    0,
@@ -404,8 +415,8 @@ void verifyOverrides()
 
     {
         DecomposedCalculator calculator;
-        calculator.emplace<FemaleInMaleRoom>(10.0);
-        checkScore("femaleInMaleRoom re-weighted to 10",
+        calculator.emplace<FemaleInMaleRoomCost>(10.0);
+        checkScore("femaleInMaleRoomCost re-weighted to 10",
                    scoreWith(calculator, plan),
                    -60,
                    0,
@@ -415,10 +426,10 @@ void verifyOverrides()
         // Demoted to soft: the hard level empties out, the soft level takes
         // the same 300 penalty units.
         DecomposedCalculator calculator;
-        auto component = std::make_unique<FemaleInMaleRoom>();
-        component->isHard = false;
+        auto component = std::make_unique<FemaleInMaleRoomCost>();
+        component->level = optimaru::Level::Soft;
         calculator.add(std::move(component));
-        checkScore("femaleInMaleRoom demoted to soft",
+        checkScore("femaleInMaleRoomCost demoted to soft",
                    scoreWith(calculator, plan),
                    0,
                    0,
@@ -428,10 +439,10 @@ void verifyOverrides()
         // exponent 2 shapes the raw cost (6 nights) before the weight:
         // 50 * 36 = 1800.
         DecomposedCalculator calculator;
-        auto component = std::make_unique<FemaleInMaleRoom>();
+        auto component = std::make_unique<FemaleInMaleRoomCost>();
         component->exponent = 2.0;
         calculator.add(std::move(component));
-        checkScore("femaleInMaleRoom with exponent 2",
+        checkScore("femaleInMaleRoomCost with exponent 2",
                    scoreWith(calculator, plan),
                    -1800,
                    0,
@@ -458,10 +469,19 @@ void verifyConstraintTotals()
     calculator.resetWorkingSolution(plan);
     const optimaru::HardSoftScore score = calculator.calculateScore();
 
+    // A medium total is in medium units (cost is not multiplied by the
+    // fold), so it folds into soft the way the score does.
     double hard = 0.0;
     double soft = 0.0;
     for (const optimaru::ConstraintTotal &total : calculator.constraintTotals())
-        (total.isHard ? hard : soft) += total.cost;
+    {
+        if (total.level == optimaru::Level::Hard)
+            hard += total.cost;
+        else if (total.level == optimaru::Level::Medium)
+            soft += total.cost * static_cast<double>(kMediumUnit);
+        else
+            soft += total.cost;
+    }
     check(std::fabs(-hard - static_cast<double>(score.hard)) < 1e-9
               && std::fabs(-soft - score.soft) < 1e-3,
           "per-constraint totals sum to the reported score");
@@ -510,6 +530,539 @@ void verifyFullAssertSolve()
     std::printf("\n");
 }
 
+// -------------------------------------------------------------------------
+// (g) Raw costs by hand: every component's per-unit raw cost (beds in order,
+// then the "no bed" sentinel; one entry for the global), read through
+// constraintCosts() off the default assembly. One positive and one zero case
+// per component; the stays span 6 nights ([0, 5]) unless stated otherwise.
+// -------------------------------------------------------------------------
+std::vector<double> rawCosts(BedPlan plan, const std::string &name)
+{
+    ScoreCalculator::prepare(plan);
+    DecomposedCalculator calculator;
+    addDefaultConstraints(calculator);
+    calculator.resetWorkingSolution(plan);
+    calculator.calculateScore();
+    for (const auto &entry : calculator.constraintCosts())
+    {
+        if (entry.name == name)
+            return entry.unitCosts;
+    }
+    std::printf("  no constraint named %s\n", name.c_str());
+    return {};
+}
+
+void byHand(const std::string &name,
+            const std::function<BedPlan()> &positive,
+            const std::vector<double> &positiveCosts,
+            const std::function<BedPlan()> &zero,
+            const std::vector<double> &zeroCosts)
+{
+    check(rawCosts(positive(), name) == positiveCosts, name + " positive");
+    check(rawCosts(zero(), name) == zeroCosts, name + " zero");
+}
+
+// One room holding two beds (b0, b1) — units {b0, b1, sentinel}.
+BedPlan twoBedRoom(GenderLimitation limitation = GenderLimitation::ANY_GENDER,
+                   int capacity = 2,
+                   std::vector<std::string> equipment = {})
+{
+    BedPlan plan = makeBase();
+    const int room
+        = addRoom(plan, limitation, capacity, std::move(equipment));
+    addBed(plan, room);
+    addBed(plan, room);
+    return plan;
+}
+
+void verifyRawCostsByHand()
+{
+    std::printf("== (g) Raw costs by hand ==\n");
+    const std::vector<double> none{0.0, 0.0, 0.0};
+
+    // b0 holds [0, 5] and [3, 9]: 3 shared nights; b1 holds one stay alone.
+    byHand(
+        "bedConflictCost",
+        []
+        {
+            BedPlan p = twoBedRoom();
+            addStay(p, 0, 5, Gender::MALE, 0);
+            addStay(p, 3, 9, Gender::MALE, 0);
+            addStay(p, 0, 5, Gender::MALE, 1);
+            return p;
+        },
+        {3.0, 0.0, 0.0},
+        []
+        {  // back to back in b0: no shared night.
+            BedPlan p = twoBedRoom();
+            addStay(p, 0, 2, Gender::MALE, 0);
+            addStay(p, 3, 9, Gender::MALE, 0);
+            return p;
+        },
+        none);
+    // A female stay (6 nights) in b0 of a MALE_ONLY room; a male one in b1.
+    byHand(
+        "femaleInMaleRoomCost",
+        []
+        {
+            BedPlan p = twoBedRoom(GenderLimitation::MALE_ONLY);
+            addStay(p, 0, 5, Gender::FEMALE, 0);
+            addStay(p, 0, 5, Gender::MALE, 1);
+            return p;
+        },
+        {6.0, 0.0, 0.0},
+        []
+        {  // the same female stay in a FEMALE_ONLY room.
+            BedPlan p = twoBedRoom(GenderLimitation::FEMALE_ONLY);
+            addStay(p, 0, 5, Gender::FEMALE, 0);
+            return p;
+        },
+        none);
+    byHand(
+        "maleInFemaleRoomCost",
+        []
+        {
+            BedPlan p = twoBedRoom(GenderLimitation::FEMALE_ONLY);
+            addStay(p, 0, 5, Gender::FEMALE, 0);
+            addStay(p, 0, 5, Gender::MALE, 1);
+            return p;
+        },
+        {0.0, 6.0, 0.0},
+        []
+        {
+            BedPlan p = twoBedRoom(GenderLimitation::MALE_ONLY);
+            addStay(p, 0, 5, Gender::MALE, 1);
+            return p;
+        },
+        none);
+    // The global: a female [0, 5] in b0 and a male [3, 9] in b1 of one
+    // SAME_GENDER room share 3 nights.
+    byHand(
+        "mixedGenderRoomCost",
+        []
+        {
+            BedPlan p = twoBedRoom(GenderLimitation::SAME_GENDER);
+            addStay(p, 0, 5, Gender::FEMALE, 0);
+            addStay(p, 3, 9, Gender::MALE, 1);
+            return p;
+        },
+        {3.0},
+        []
+        {  // the same pair in an ANY_GENDER room.
+            BedPlan p = twoBedRoom(GenderLimitation::ANY_GENDER);
+            addStay(p, 0, 5, Gender::FEMALE, 0);
+            addStay(p, 3, 9, Gender::MALE, 1);
+            return p;
+        },
+        {0.0});
+    // Minimum age 18: a 5-year-old in b0 (6 nights), a 30-year-old in b1.
+    byHand(
+        "departmentMinAgeCost",
+        []
+        {
+            BedPlan p = twoBedRoom();
+            p.departments[0].minimumAge = 18;
+            p.stays[addStay(p, 0, 5, Gender::MALE, 0)].patientAge = 5;
+            addStay(p, 0, 5, Gender::MALE, 1);
+            return p;
+        },
+        {6.0, 0.0, 0.0},
+        []
+        {  // exactly the minimum age is allowed.
+            BedPlan p = twoBedRoom();
+            p.departments[0].minimumAge = 18;
+            p.stays[addStay(p, 0, 5, Gender::MALE, 0)].patientAge = 18;
+            return p;
+        },
+        none);
+    byHand(
+        "departmentMaxAgeCost",
+        []
+        {
+            BedPlan p = twoBedRoom();
+            p.departments[0].maximumAge = 18;
+            addStay(p, 0, 5, Gender::MALE, 0);  // age 30
+            return p;
+        },
+        {6.0, 0.0, 0.0},
+        []
+        {
+            BedPlan p = twoBedRoom();
+            p.departments[0].maximumAge = 18;
+            p.stays[addStay(p, 0, 5, Gender::MALE, 0)].patientAge = 18;
+            return p;
+        },
+        none);
+    // The room has telemetry and oxygen, the stay needs television too: one
+    // item missing, so the quickstart charges the 2 PRESENT items x 6 nights.
+    byHand(
+        "requiredPatientEquipmentCost",
+        []
+        {
+            BedPlan p = twoBedRoom(
+                GenderLimitation::ANY_GENDER, 2, {"telemetry", "oxygen"});
+            p.stays[addStay(p, 0, 5, Gender::MALE, 1)].patientRequiredEquipment
+                = {"television", "telemetry", "oxygen"};
+            return p;
+        },
+        {0.0, 12.0, 0.0},
+        []
+        {  // all required items present.
+            BedPlan p = twoBedRoom(
+                GenderLimitation::ANY_GENDER, 2, {"telemetry", "oxygen"});
+            p.stays[addStay(p, 0, 5, Gender::MALE, 1)].patientRequiredEquipment
+                = {"telemetry", "oxygen"};
+            return p;
+        },
+        none);
+    {  // The kept quirk: a room with NONE of the required items costs 0.
+        BedPlan p = twoBedRoom();
+        p.stays[addStay(p, 0, 5, Gender::MALE, 0)].patientRequiredEquipment
+            = {"television"};
+        check(rawCosts(p, "requiredPatientEquipmentCost") == none,
+              "requiredPatientEquipmentCost none present (quirk kept)");
+    }
+    // Two stays (6 + 3 nights) on the sentinel, one in b0: 9 on the sentinel.
+    byHand(
+        "unassignedStaysCost",
+        []
+        {
+            BedPlan p = twoBedRoom();
+            addStay(p, 0, 5, Gender::MALE, p.noBedValue());
+            addStay(p, 0, 2, Gender::MALE, p.noBedValue());
+            addStay(p, 0, 5, Gender::MALE, 0);
+            return p;
+        },
+        {0.0, 0.0, 9.0},
+        []
+        {  // every stay in a bed; an uninitialized stay is not on the
+            // sentinel and costs nothing either.
+            BedPlan p = twoBedRoom();
+            addStay(p, 0, 5, Gender::MALE, 0);
+            addStay(p, 0, 5, Gender::MALE, -1);
+            return p;
+        },
+        none);
+    // Room capacity 3, the patient prefers at most 2.
+    byHand(
+        "preferredMaxRoomCapacityCost",
+        []
+        {
+            BedPlan p = twoBedRoom(GenderLimitation::ANY_GENDER, 3);
+            p.stays[addStay(p, 0, 5, Gender::MALE, 0)]
+                .patientPreferredMaximumRoomCapacity = 2;
+            return p;
+        },
+        {6.0, 0.0, 0.0},
+        []
+        {
+            BedPlan p = twoBedRoom(GenderLimitation::ANY_GENDER, 3);
+            p.stays[addStay(p, 0, 5, Gender::MALE, 0)]
+                .patientPreferredMaximumRoomCapacity = 3;
+            return p;
+        },
+        none);
+    // The department offers only "default" (priority 1).
+    byHand(
+        "departmentSpecialtyCost",
+        []
+        {
+            BedPlan p = twoBedRoom();
+            addStay(p, 0, 5, Gender::MALE, 1, "spec9");
+            return p;
+        },
+        {0.0, 6.0, 0.0},
+        []
+        {
+            BedPlan p = twoBedRoom();
+            addStay(p, 0, 5, Gender::MALE, 1, "default");
+            return p;
+        },
+        none);
+    // Offered at priority 3: (3 - 1) x 6 nights.
+    byHand(
+        "departmentSpecialtyPriorityCost",
+        []
+        {
+            BedPlan p = twoBedRoom();
+            p.departments[0].specialtyToPriority = {{"spec1", 3}};
+            addStay(p, 0, 5, Gender::MALE, 0, "spec1");
+            return p;
+        },
+        {12.0, 0.0, 0.0},
+        []
+        {  // priority 1, and a specialty not offered at all (silent here:
+            // departmentSpecialtyCost prices it).
+            BedPlan p = twoBedRoom();
+            p.departments[0].specialtyToPriority = {{"spec1", 1}};
+            addStay(p, 0, 5, Gender::MALE, 0, "spec1");
+            addStay(p, 0, 5, Gender::MALE, 1, "spec9");
+            return p;
+        },
+        none);
+    // The room has telemetry; the stay prefers television and oxygen too:
+    // 2 missing x 6 nights.
+    byHand(
+        "preferredPatientEquipmentCost",
+        []
+        {
+            BedPlan p
+                = twoBedRoom(GenderLimitation::ANY_GENDER, 2, {"telemetry"});
+            p.stays[addStay(p, 0, 5, Gender::MALE, 0)]
+                .patientPreferredEquipment
+                = {"television", "oxygen", "telemetry"};
+            return p;
+        },
+        {12.0, 0.0, 0.0},
+        []
+        {
+            BedPlan p
+                = twoBedRoom(GenderLimitation::ANY_GENDER, 2, {"telemetry"});
+            p.stays[addStay(p, 0, 5, Gender::MALE, 0)]
+                .patientPreferredEquipment = {"telemetry"};
+            return p;
+        },
+        none);
+    std::printf("\n");
+}
+
+// -------------------------------------------------------------------------
+// (h) The catalog read off the default assembly == the components' constants.
+// -------------------------------------------------------------------------
+template <typename Component>
+bool rowIs(const optimaru::ConstraintInfo &row,
+           const char *name,
+           optimaru::Level level,
+           double weight,
+           bool isGlobal)
+{
+    return row.name == name && row.defaultLevel == Component::kDefaultLevel
+           && row.defaultWeight == Component::kDefaultWeight
+           && row.defaultLevel == level && row.defaultWeight == weight
+           && row.levelFlippable && !row.reward && row.isGlobal == isGlobal
+           && row.defaultEnabled;
+}
+
+void verifyCatalog()
+{
+    std::printf("== (h) Catalog == component constants ==\n");
+    using optimaru::Level;
+    const auto rows = defaultConstraints().info();
+    check(rows.size() == 12, "12 catalog rows");
+    if (rows.size() != 12)
+        return;
+    // Unit constraints first, then the global, in emplace order: the
+    // list_constraints() order (mixedGenderRoomCost last).
+    check(rowIs<BedConflictCost>(
+              rows[0], "bedConflictCost", Level::Hard, 1000.0, false)
+              && rowIs<FemaleInMaleRoomCost>(
+                  rows[1], "femaleInMaleRoomCost", Level::Hard, 50.0, false)
+              && rowIs<MaleInFemaleRoomCost>(
+                  rows[2], "maleInFemaleRoomCost", Level::Hard, 50.0, false)
+              && rowIs<DepartmentMinAgeCost>(
+                  rows[3], "departmentMinAgeCost", Level::Hard, 100.0, false)
+              && rowIs<DepartmentMaxAgeCost>(
+                  rows[4], "departmentMaxAgeCost", Level::Hard, 100.0, false)
+              && rowIs<RequiredPatientEquipmentCost>(
+                  rows[5],
+                  "requiredPatientEquipmentCost",
+                  Level::Hard,
+                  50.0,
+                  false)
+              && rowIs<UnassignedStaysCost>(
+                  rows[6], "unassignedStaysCost", Level::Medium, 1.0, false)
+              && rowIs<PreferredMaxRoomCapacityCost>(
+                  rows[7],
+                  "preferredMaxRoomCapacityCost",
+                  Level::Soft,
+                  8.0,
+                  false)
+              && rowIs<DepartmentSpecialtyCost>(
+                  rows[8], "departmentSpecialtyCost", Level::Soft, 10.0, false)
+              && rowIs<DepartmentSpecialtyPriorityCost>(
+                  rows[9],
+                  "departmentSpecialtyPriorityCost",
+                  Level::Soft,
+                  10.0,
+                  false)
+              && rowIs<PreferredPatientEquipmentCost>(
+                  rows[10],
+                  "preferredPatientEquipmentCost",
+                  Level::Soft,
+                  50.0,
+                  false)
+              && rowIs<MixedGenderRoomCost>(
+                  rows[11], "mixedGenderRoomCost", Level::Hard, 1000.0, true),
+          "info() == the components' kDefaultWeight / kDefaultLevel");
+    std::vector<std::string> infoNames;
+    for (const auto &row : rows)
+        infoNames.push_back(row.name);
+    check(infoNames == defaultConstraints().names(),
+          "info() rows in names() order");
+    std::printf("\n");
+}
+
+// -------------------------------------------------------------------------
+// (i) The medium level: unassignedStaysCost.
+// -------------------------------------------------------------------------
+optimaru::DecomposedScoreCalculator<BedPlan>::LevelScores
+levelsWith(ConstraintAssembly assembly, BedPlan &plan)
+{
+    DecomposedCalculator calculator;
+    std::move(assembly).into(calculator);
+    calculator.resetWorkingSolution(plan);
+    calculator.calculateScore();
+    return calculator.levelScores();
+}
+
+void verifyMediumLevel()
+{
+    std::printf("== (i) Medium level ==\n");
+    // One stay (6 nights) on the sentinel, one in b0 missing one preferred
+    // item: 6 medium nights and 50 * 6 = 300 soft.
+    BedPlan plan = twoBedRoom();
+    addStay(plan, 0, 5, Gender::MALE, plan.noBedValue());
+    plan.stays[addStay(plan, 0, 5, Gender::MALE, 0)].patientPreferredEquipment
+        = {"television"};
+    const Score monolithic = ScoreCalculator::calculateScore(plan);
+    checkScore("the hand plan", monolithic, 0, -6, -300);
+
+    {
+        DecomposedCalculator calculator;
+        addDefaultConstraints(calculator);
+        calculator.resetWorkingSolution(plan);
+        const optimaru::HardSoftScore engine = calculator.calculateScore();
+        check(engine.hard == 0
+                  && engine.soft
+                         == -300.0 - 6.0 * static_cast<double>(kMediumUnit),
+              "default: medium folded into soft x 10^9");
+        check(engine.hard == toEngineScore(monolithic).hard
+                  && engine.soft == toEngineScore(monolithic).soft,
+              "default: the fold equals the monolithic Score adapter");
+        const auto levels = calculator.levelScores();
+        check(levels.hard == 0 && levels.medium == -6.0
+                  && levels.soft == -300.0,
+              "levelScores() reports the unfolded levels");
+    }
+    {
+        const auto levels = levelsWith(
+            defaultConstraints().hard("unassignedStaysCost"), plan);
+        check(levels.hard == -6 && levels.medium == 0.0
+                  && levels.soft == -300.0,
+              "hard(): one hard unit per raw night");
+    }
+    {
+        const auto levels = levelsWith(
+            defaultConstraints().soft("unassignedStaysCost"), plan);
+        check(levels.hard == 0 && levels.medium == 0.0
+                  && levels.soft == -306.0,
+              "soft(): one soft unit per raw night, outside the fold");
+    }
+    {
+        const auto levels = levelsWith(
+            defaultConstraints().weight("unassignedStaysCost", 3), plan);
+        check(levels.hard == 0 && levels.medium == -18.0
+                  && levels.soft == -300.0,
+              "weight 3 stays in medium units");
+    }
+    {
+        // solve(plan, calculator) reports the assembly's levels: two
+        // overlapping stays for one bed, unassignedStaysCost demoted to soft.
+        // Sharing costs 6000 hard, so one stay goes without a bed and its 6
+        // nights land on SOFT (not medium).
+        BedPlan crowded = makeBase();
+        addBed(crowded, addRoom(crowded));
+        addStay(crowded, 0, 5);
+        addStay(crowded, 0, 5);
+        Solver::Config config;
+        config.spentLimit = std::chrono::milliseconds(300);
+        config.randomSeed = 1;
+        DecomposedCalculator calculator;
+        ConstraintAssembly{}
+            .emplace<BedConflictCost>()
+            .emplace<UnassignedStaysCost>()
+            .soft("unassignedStaysCost")
+            .into(calculator);
+        Solver(config).solve(crowded, calculator);
+        checkScore("solve() with unassignedStaysCost demoted",
+                   crowded.score,
+                   0,
+                   0,
+                   -6);
+    }
+    std::printf("\n");
+}
+
+// Incremental == full recompute with the medium term overridden, through the
+// ScoreDirector protocol (change and swap moves over the whole value range).
+void verifyMediumIncremental()
+{
+    std::printf("== (i) Medium overrides: incremental == full ==\n");
+    const std::vector<
+        std::pair<std::string, std::function<ConstraintAssembly()>>>
+        variants{
+            {"default", [] { return defaultConstraints(); }},
+            {"hard",
+             [] { return defaultConstraints().hard("unassignedStaysCost"); }},
+            {"soft",
+             [] { return defaultConstraints().soft("unassignedStaysCost"); }},
+            {"weight 3",
+             []
+             { return defaultConstraints().weight("unassignedStaysCost", 3); }},
+        };
+    for (const auto &variant : variants)
+    {
+        BedPlan plan = buildRandomInstance(/*stayCount*/ 24, /*seed*/ 17);
+        ScoreCalculator::prepare(plan);
+        DecomposedCalculator calculator;
+        variant.second().into(calculator);
+        optimaru::ScoreDirector<BedPlan> director(plan, calculator);
+        std::mt19937_64 rng(41);
+        const int stayCount = static_cast<int>(plan.stays.size());
+        const int valueCount = plan.bedCount() + 1;
+        int mismatches = 0;
+        int mediumSteps = 0;
+        for (int step = 0; step < 1500; ++step)
+        {
+            if (rng() % 4 != 0)
+            {
+                director.changeVariable(
+                    static_cast<int>(rng() % stayCount),
+                    static_cast<int>(rng() % valueCount));
+            }
+            else
+            {
+                const int a = static_cast<int>(rng() % stayCount);
+                const int b = static_cast<int>(rng() % stayCount);
+                const int va = plan.stays[a].bed;
+                const int vb = plan.stays[b].bed;
+                director.changeVariable(a, vb);
+                director.changeVariable(b, va);
+            }
+            const optimaru::HardSoftScore incremental
+                = director.calculateScore();
+            DecomposedCalculator fresh;
+            variant.second().into(fresh);
+            fresh.resetWorkingSolution(plan);
+            const optimaru::HardSoftScore full = fresh.calculateScore();
+            if (fresh.levelScores().medium != 0.0)
+                ++mediumSteps;
+            if (incremental.hard != full.hard
+                || std::fabs(incremental.soft - full.soft) > 1e-6)
+                ++mismatches;
+        }
+        check(mismatches == 0,
+              "unassignedStaysCost " + variant.first
+                  + ": 1500 random moves, incremental == full recompute");
+        if (variant.first == "default" || variant.first == "weight 3")
+        {
+            check(mediumSteps > 0,
+                  variant.first + ": the walk visits medium states");
+        }
+    }
+    std::printf("\n");
+}
+
 }  // namespace
 
 int main()
@@ -520,6 +1073,10 @@ int main()
     verifyOverrides();
     verifyConstraintTotals();
     verifyFullAssertSolve();
+    verifyRawCostsByHand();
+    verifyCatalog();
+    verifyMediumLevel();
+    verifyMediumIncremental();
 
     if (failures == 0)
     {

@@ -19,17 +19,18 @@ namespace ms
 // each is a sum of C(count, 2) (or count-product) terms over per-offset
 // occupancy counters, and moving one assignment only touches its own
 // durationInGrains offsets:
-//   - hard 1 (roomConflict):      per (room, offset) cell counts
-//   - hard 3 (requiredAttendanceConflict):   per (person, offset) required
+//   - hard 1 (roomConflictCost):  per (room, offset) cell counts
+//   - hard 3 (requiredAttendanceConflictCost): per (person, offset) required
 //     counts; the two-phase insert order (required first, then preferred)
 //     also reproduces the Java same-meeting (required, preferred) join
-//   - medium 6/7 (required+preferred / preferred conflicts): per (person,
-//     offset) preferred counts and required x preferred cross products
-//   - soft 10 (overlappingMeetings): per offset counts over all rooms
-//   - soft 9 (oneBreakBetweenConsecutiveMeetings): start/end counts per
-//     offset; a change touches only offsets start-1 and last+1
+//   - medium 6/7 (requiredAndPreferredAttendanceConflictCost /
+//     preferredAttendanceConflictCost): per (person, offset) preferred
+//     counts and required x preferred cross products
+//   - soft 10 (meetingOverlapCost): per offset counts over all rooms
+//   - soft 9 (consecutiveMeetingsCost): start/end counts per offset; a
+//     change touches only offsets start-1 and last+1
 // The unary constraints (2, 4, 5, 8, 11) are O(1) table lookups, and soft 12
-// (roomStability) walks the precomputed shared-attendee neighbors of the one
+// (roomChangeCost) walks the precomputed shared-attendee neighbors of the one
 // changed meeting — O(neighbors), not O(solution).
 //
 // beforeVariableChanged retracts the assignment's contribution while
@@ -55,7 +56,7 @@ private:
 
     // Decoded grainRoom of every assigned assignment (valid where assign_ >=
     // 0), plus flat copies of the per-grain facts and per-meeting durations.
-    // Pure caches — they only exist so the room-stability neighbor walk reads
+    // Pure caches — they only exist so the roomChangeCost neighbor walk reads
     // flat int arrays instead of dividing grainRooms and gathering through
     // TimeGrain / Meeting structs on every pair test (the delta path is >90%
     // of solve time; see the tuning history in solver.hpp).
@@ -74,33 +75,35 @@ private:
     std::vector<int> startCnt_;       // assignments starting at offset
     std::vector<int> endCnt_;         // assignments ending at offset
 
-    // Running totals (counted positive; signs/weights in calculateScore).
-    std::int64_t roomConflict_ = 0;  // hard 1
-    std::int64_t overtime_ = 0;      // hard 2
-    std::int64_t reqConflict_ = 0;   // hard 3
-    std::int64_t capacity_ = 0;      // hard 4
-    std::int64_t sameDay_ = 0;       // hard 5
-    std::int64_t reqPref_ = 0;       // medium 6
-    std::int64_t prefConflict_ = 0;  // medium 7
-    std::int64_t asap_ = 0;          // soft 8
-    std::int64_t breaks_ = 0;        // soft 9 (x100)
-    std::int64_t overlapping_ = 0;   // soft 10 (x10)
-    std::int64_t largerRooms_ = 0;   // soft 11
-    std::int64_t stability_ = 0;     // soft 12
+    // Running raw totals, one per constraint and named after its registry
+    // name (counted positive; signs, the components' kDefaultWeight and the
+    // medium fold are applied in calculateScore).
+    std::int64_t roomConflictCost_ = 0;                            // hard 1
+    std::int64_t overtimeCost_ = 0;                                // hard 2
+    std::int64_t requiredAttendanceConflictCost_ = 0;              // hard 3
+    std::int64_t roomCapacityCost_ = 0;                            // hard 4
+    std::int64_t dayCrossingCost_ = 0;                             // hard 5
+    std::int64_t requiredAndPreferredAttendanceConflictCost_ = 0;  // medium 6
+    std::int64_t preferredAttendanceConflictCost_ = 0;             // medium 7
+    std::int64_t meetingEndTimeCost_ = 0;                          // soft 8
+    std::int64_t consecutiveMeetingsCost_ = 0;  // soft 9 (x100)
+    std::int64_t meetingOverlapCost_ = 0;       // soft 10 (x10)
+    std::int64_t largerRoomCapacityCost_ = 0;   // soft 11
+    std::int64_t roomChangeCost_ = 0;           // soft 12
 
     void insert(int assignmentIndex, int grainRoom);
     void retract(int assignmentIndex, int grainRoom);
 
-    // Room-stability pair test between the changed assignment (start grain
+    // roomChangeCost pair test between the changed assignment (start grain
     // position posA, room roomA, meeting meetingA) and another assigned
     // assignment (posB, roomB, meetingB); returns true when the Java
     // constraint matches. Reads only the flat caches above.
-    bool stabilityPairMatches(int posA,
-                              int roomA,
-                              int meetingA,
-                              int posB,
-                              int roomB,
-                              int meetingB) const;
+    bool roomChangePairMatches(int posA,
+                               int roomA,
+                               int meetingA,
+                               int posB,
+                               int roomB,
+                               int meetingB) const;
 
     std::size_t roomGrainOffset(int room, int offset) const
     {

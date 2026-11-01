@@ -4,29 +4,31 @@ from __future__ import annotations
 
 from ortools.sat.python import cp_model
 
-from cpsat_plugins import ConstraintConfig
-from tournament_scheduling import calculate_score, constraint_costs
+from cpsat_plugins import ConstraintConfig, ObjectiveBuilder
+from tournament_scheduling import MEDIUM_SCALE, calculate_score, constraint_costs
 from tournament_scheduling.constraints import Constraint
 from tournament_scheduling.models import TournamentScheduleModel
 
 from .constraints import REGISTRY, TournamentContext
 
-__all__ = ["catalog", "solve"]
+__all__ = ["build_model", "catalog", "solve"]
 
 
 def catalog() -> list[dict]:
     return REGISTRY.catalog()
 
 
-def solve(
+def build_model(
     problem: TournamentScheduleModel,
-    *,
-    time_limit_seconds: float = 30.0,
-    random_seed: int = 0,
-    num_workers: int = 1,
     constraints: list[ConstraintConfig | Constraint | str | dict] | None = None,
-) -> TournamentScheduleModel:
-    """Optimize hard constraints, team load, then confrontation balance."""
+) -> tuple[cp_model.CpModel, ObjectiveBuilder, dict[tuple[int, int], cp_model.IntVar]]:
+    """The CP-SAT model of `problem` under `constraints`: (model, objective, x).
+
+    ``x[assignment, team]`` is the assignment's team choice. The objective holds
+    the selected plugins' terms per level (hard, medium, soft): the engine's raw
+    cost for the two hard constraints and the scaled-variance surrogate for the
+    two imbalance constraints (see `tournament_scheduling_cpsat.constraints`).
+    """
     if problem.team_assignments and not problem.teams:
         raise ValueError("at least one team is required when assignments exist")
     model = cp_model.CpModel()
@@ -67,7 +69,25 @@ def solve(
             cell[team, day] = occupied
 
     REGISTRY.build(TournamentContext(model, problem, x, by_day, cell), objective)
+    return model, objective, x
 
+
+def solve(
+    problem: TournamentScheduleModel,
+    *,
+    time_limit_seconds: float = 30.0,
+    random_seed: int = 0,
+    num_workers: int = 1,
+    constraints: list[ConstraintConfig | Constraint | str | dict] | None = None,
+) -> TournamentScheduleModel:
+    """Optimize hard constraints, team load, then confrontation balance.
+
+    The search minimizes the CP-SAT model of `build_model` (a surrogate for the
+    two imbalance constraints); the returned score is the engine's, rescored
+    from `constraint_costs()` under the same selection.
+    """
+    model, objective, x = build_model(problem, constraints)
+    team_count = len(problem.teams)
 
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = time_limit_seconds
@@ -87,9 +107,11 @@ def solve(
     core = solved.to_core()
     calculate_score(core)
     result = TournamentScheduleModel.from_core(core)
-    # Sum-of-squares is a monotone search surrogate for square-root
-    # unfairness; reporting always uses the canonical constraint calculation.
+    # The scaled variance is a search surrogate for the square-root
+    # unfairness (not raw-identical); reporting always uses the canonical
+    # constraint calculation, with medium folded into soft by the engine's own
+    # factor (MEDIUM_SCALE = 1e6, the domain's kMediumFold).
     score = objective.score_costs(constraint_costs(core))
     result.score_hard = score["hard"]
-    result.score_soft = score["medium"] * 1_000_000 + score["soft"]
+    result.score_soft = score["medium"] * MEDIUM_SCALE + score["soft"]
     return result

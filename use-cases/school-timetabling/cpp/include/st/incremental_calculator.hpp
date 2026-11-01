@@ -16,15 +16,16 @@ namespace st
 //
 // Every constraint is a function of occupancy counts, so a single variable
 // change is O(1):
-//   - hard 1-3 (room/teacher/group conflict): C(c, 2) pair sums per occupancy
-//     cell. Moving one lesson in/out of a cell with c other members changes
-//     the pair count by exactly c.
-//   - hard 4 (teacherUnavailable): one flat-table lookup per change.
-//   - soft 5 (teacherRoomStability): different-room pairs per teacher =
+//   - hard 1-3 (roomConflictCost / teacherConflictCost / classConflictCost):
+//     C(c, 2) pair sums per occupancy cell. Moving one lesson in/out of a
+//     cell with c other members changes the pair count by exactly c.
+//   - hard 4 (teacherUnavailabilityCost): one flat-table lookup per change.
+//   - soft 5 (teacherRoomChangeCost): different-room pairs per teacher =
 //     C(n, 2) - sum_r C(c_r, 2), maintained from the per-teacher lesson count
 //     n and per-room counts c_r (insert delta: n - c_room, counts before the
 //     insert; retract mirrors it).
-//   - soft 6/7 (consecutive periods): adjacent-cell count products; a change
+//   - soft 6/7 (teacherTimeEfficiencyCost / classSubjectRepeatCost,
+//     consecutive periods): adjacent-cell count products; a change
 //     touches only the prevSlot/nextSlot cells of its (key, timeslot).
 //
 // beforeVariableChanged retracts the lesson's contribution while slotRoom
@@ -58,10 +59,10 @@ private:
 
     // Running totals (all counted positive; signs applied in calculateScore).
     std::int64_t conflictPairs_ = 0;  // hard 1 + 2 + 3
-    std::int64_t unavailable_ = 0;    // hard 4
-    std::int64_t stability_ = 0;      // soft 5 (penalty)
-    std::int64_t efficiency_ = 0;     // soft 6 (reward)
-    std::int64_t variety_ = 0;        // soft 7 (penalty)
+    std::int64_t unavailable_ = 0;    // hard 4: teacherUnavailabilityCost
+    std::int64_t roomChange_ = 0;     // soft 5: teacherRoomChangeCost
+    std::int64_t adjacentPairs_ = 0;  // soft 6: teacherTimeEfficiencyCost
+    std::int64_t subjectRepeat_ = 0;  // soft 7: classSubjectRepeatCost
 
     void insert(int lessonIndex, int slotRoom);
     void retract(int lessonIndex, int slotRoom);

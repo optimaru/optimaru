@@ -4,10 +4,17 @@ The `food-packaging` example model ported onto `include/optimaru/` (the header-o
 engine). Files:
 
 - `include/fp/domain.hpp` — domain structs, the HardMediumSoft↔HardSoft score
-  mapping (`kMediumUnit = 10^10`), the LIST `SolutionDescriptor` specialization
-  (including the position translation that hides the pinned prefix from the engine view)
+  mapping (`kMediumUnit = 10^10`, declared once as `kMediumFold =
+  MediumFold::intoSoft(10^10)` and registered with `MediumFoldOf<PackagingSchedule>`), the
+  LIST `SolutionDescriptor` specialization (including the position translation that hides
+  the pinned prefix from the engine view)
+- `include/fp/constraints/*_cost.hpp` — one plugin component per constraint
+  (`MaxEndTimeCost`, `AfterIdealEndTimeCost`, `SquaredMakespanCost`,
+  `OperatorCleaningConflictCost`, `UnassignedJobsCost`), each declaring its
+  `kDefaultWeight` / `kDefaultLevel`; `include/fp/constraints.hpp` assembles the default set
 - `include/fp/score_calculator.hpp` — the full-recompute reference implementation
-  (`prepare` / `updateShadowVariables` / `calculateScore` / `analyze`)
+  (`prepare` / `updateShadowVariables` / `calculateScore` / `analyze`, whose
+  `ConstraintBreakdown` members carry the registry names; C++ only)
 - `include/fp/incremental_calculator.hpp` — incremental calculator on the before/after
   LIST hooks, O(changed line length) (re-derives the shadow chain per line)
 - `include/fp/solver.hpp` — engine wrapper. `Line.operator` (Java's second planning
@@ -18,13 +25,18 @@ engine). Files:
 - `test/fp_test.cpp` — per-constraint hand-computed cases, 2000 random LIST moves
   cross-checked incremental==full, FULL_ASSERT solve, pinning/pool/operator/
   demo checks
+- `test/fp_plugin_test.cpp` — the plugin assembly == the monolith, plugin incremental ==
+  full, raw costs by hand (a positive and a zero case per constraint), the catalog
+  (`info()` == the components' constants), the medium level (fold, `hard()` / `soft()` /
+  weight), FULL_ASSERT plugin solves and `onNewBest` reporting the same levels as the
+  final `schedule.score`
 
 ## Build
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j4
-./build/fp_test && ./build/fp_demo
+./build/fp_test && ./build/fp_plugin_test && ./build/fp_demo
 ```
 
 ## Semantic notes (vs Java)

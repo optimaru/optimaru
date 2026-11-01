@@ -4,11 +4,15 @@ A port of the facility-location example model: one BASIC planning variable
 (`Consumer.facility`, a facility index, -1 = unassigned) picks one facility
 per consumer.
 
-Score (HardSoftScore):
-  hard = -(sum over used facilities of max(0, assigned demand - capacity))  # capacity
-  soft = -(2 x setup cost of used facilities + 6 x consumer-facility distance)  # setup + distance
+Score (HardSoftScore), at the default weights:
+  hard = -(sum over used facilities of max(0, assigned demand - capacity))  # facility_capacity_cost
+  soft = -(2 x setup cost of used facilities                                 # facility_setup_cost
+           + 6 x consumer-facility distance)                                 # distance_from_facility_cost
 The distance weight 6 is the ConstraintWeightOverrides value of the Java solution (the
-provider default is 5); change it with `problem.distance_from_facility_weight`.
+provider default is 5). The problem carries no weights: change one through a constraint
+selection, e.g. ``solve(problem, constraints=get_constraints([..., DistanceFromFacilityCost(weight=5)]))``
+(see `facility_location.constraints`). `constraint_info()` lists every constraint with its
+default level and weight.
 
 Basic usage::
 
@@ -21,7 +25,10 @@ Basic usage::
 The pydantic mirror (for serialization) is in `facility_location.models` (optional dependency).
 """
 
+import copy
+
 from ._core import (
+    ConstraintInfo,
     Consumer,
     Facility,
     FacilityLocationProblem,
@@ -31,10 +38,12 @@ from ._core import (
     SolverConfig,
     calculate_score,
     constraint_costs,
+    constraint_info,
     list_constraints,
 )
 
 __all__ = [
+    "ConstraintInfo",
     "Consumer",
     "Facility",
     "FacilityLocationProblem",
@@ -46,6 +55,7 @@ __all__ = [
     "solve",
     "list_constraints",
     "constraint_costs",
+    "constraint_info",
     "with_initial_solution",
 ]
 
@@ -79,12 +89,13 @@ def solve(
 
     ``constraints`` picks the cost function directly
     (see `facility_location.constraints`). Only the listed constraints are scored;
-    None uses all three default constraints::
+    None uses all three default constraints at their default weights::
 
         from facility_location.constraints import get_constraints
         fl.solve(problem, constraints=get_constraints())
     """
-    cfg = config if config is not None else SolverConfig()
+    # A copy: the keyword overrides below must not leak into the caller's config.
+    cfg = copy.copy(config) if config is not None else SolverConfig()
     if time_limit_seconds is not None:
         cfg.spent_limit_seconds = time_limit_seconds
     if random_seed is not None:
@@ -92,7 +103,7 @@ def solve(
     if parallel_solver_count is not None:
         cfg.parallel_solver_count = parallel_solver_count
     if stop_at_first_feasible:
-        cfg.best_score_limit = (0, -1e18)
+        cfg.best_score_limit = (0, float("-inf"))
     if on_new_best is not None:
         cfg.on_new_best = on_new_best
 

@@ -51,6 +51,8 @@ def solve(
     distance = problem.distance_to_team or [
         [0] * len(problem.teams) for _ in problem.teams
     ]
+    # Default weights and levels come from the engine (constraint_info()); the
+    # canonical problem carries none.
     objective = REGISTRY.objective(model, ("hard", "soft"), constraints)
     REGISTRY.build(
         LeagueContext(

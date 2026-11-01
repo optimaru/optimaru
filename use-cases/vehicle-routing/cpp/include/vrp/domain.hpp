@@ -4,11 +4,13 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <vector>
 
 #include "optimaru/api/domain/solution_descriptor.hpp"
 #include "optimaru/api/score/buildin/hard_soft_score.hpp"
+#include "optimaru/api/score/level.hpp"
 
 namespace vrp
 {
@@ -47,7 +49,15 @@ constexpr Seconds NULL_TIME = -1;  // stands in for a null LocalDateTime
 //   |medium| < 9*10^6 (service minutes of the unassigned visits == ~17 years),
 // which holds with an enormous margin at any instance size this solver is
 // used on. Feasibility stays hard-only, exactly like Java.
+//
+// The fold is declared ONCE, here: toEngineScore below packs the monolithic
+// Score with it, and the MediumFoldOf<VehicleRoutePlan> specialization at the
+// end of this header hands the same constant to the decomposed calculator,
+// which keeps a separate medium accumulator. A medium constraint's weight is
+// therefore in medium units (unassignedVisitsCost: 1), never 10^9.
 constexpr std::int64_t kMediumUnit = 1000000000LL;  // 10^9
+constexpr optimaru::MediumFold kMediumFold
+    = optimaru::MediumFold::intoSoft(static_cast<double>(kMediumUnit));
 
 struct Score
 {
@@ -83,7 +93,27 @@ struct Score
 
 inline optimaru::HardSoftScore toEngineScore(const Score &s)
 {
-    return {s.hard, static_cast<double>(s.medium * kMediumUnit + s.soft)};
+    // soft + medium * 10^9: exact for the integral levels of this domain
+    // (|engine soft| < 2^53), i.e. the old `medium * kMediumUnit + soft`.
+    return kMediumFold.toEngine(s.hard,
+                                static_cast<double>(s.medium),
+                                static_cast<double>(s.soft));
+}
+
+// A best-score LIMIT (Solver::Config::bestScoreLimit) in engine terms.
+// kNoLevelFloor (INT64_MIN) on the medium or the soft level means "no floor
+// on the soft side": the engine's soft limit becomes -inf, so only the hard
+// level is compared and no soft score, however low, can miss the stop.
+// stop_at_first_feasible passes (0, kNoLevelFloor, kNoLevelFloor). Through
+// toEngineScore the sentinel would fold into a finite engine soft that a
+// low enough soft score never reaches. Any other limit folds as a score.
+constexpr std::int64_t kNoLevelFloor = std::numeric_limits<std::int64_t>::min();
+
+inline optimaru::HardSoftScore toEngineScoreLimit(const Score &limit)
+{
+    if (limit.medium == kNoLevelFloor || limit.soft == kNoLevelFloor)
+        return {limit.hard, -std::numeric_limits<double>::infinity()};
+    return toEngineScore(limit);
 }
 
 // Inverse of toEngineScore. Every constraint penalizes (medium and soft are
@@ -91,7 +121,7 @@ inline optimaru::HardSoftScore toEngineScore(const Score &s)
 // on both — decodes the two levels exactly.
 inline Score fromEngineScore(const optimaru::HardSoftScore &e)
 {
-    const auto combined = static_cast<std::int64_t>(std::llround(e.soft));
+    const auto combined = optimaru::roundScoreLevel(e.soft, "soft");
     return {e.hard, combined / kMediumUnit, combined % kMediumUnit};
 }
 
@@ -127,8 +157,8 @@ struct Visit
 
     // Medium-level cost of leaving this visit unrouted.
     //
-    // The Java quickstart's maximizeVisitsAssigned penalizes an unassigned
-    // visit by its service duration in minutes, which kUnassignedPenaltyAuto
+    // The Java quickstart penalizes an unassigned visit on its medium level
+    // by its service duration in minutes, which kUnassignedPenaltyAuto
     // (the default) reproduces exactly. That rule is degenerate whenever
     // service durations are small or zero — the penalty rounds to 0, "route
     // nothing" scores 0hard/0medium/0soft, and dropping every visit becomes
@@ -257,7 +287,7 @@ struct VehicleRoutePlan
 // swap and the LNS ruin — the solver could never assign a dropped visit back,
 // nor drop an unprofitable one. Modelling the pool as a real list makes
 // assignment and unassignment ordinary relocate moves, which is what lets the
-// medium-level maximizeVisitsAssigned constraint actually be optimized.
+// medium-level unassignedVisitsCost constraint actually be optimized.
 template <> struct optimaru::SolutionDescriptor<vrp::VehicleRoutePlan>
 {
     static constexpr optimaru::VariableKind kind = optimaru::VariableKind::LIST;
@@ -322,6 +352,16 @@ template <> struct optimaru::SolutionDescriptor<vrp::VehicleRoutePlan>
         std::vector<int> &list = listOf(s, listIndex);
         std::reverse(list.begin() + first, list.begin() + last + 1);
     }
+};
+
+// ---------------------------------------------------------------------------
+// Medium fold registration
+// ---------------------------------------------------------------------------
+// The decomposed calculator folds its medium accumulator with the domain's
+// kMediumFold (see the Score adapter above).
+template <> struct optimaru::MediumFoldOf<vrp::VehicleRoutePlan>
+{
+    static constexpr optimaru::MediumFold value = vrp::kMediumFold;
 };
 
 #endif  // VRP_DOMAIN_HPP

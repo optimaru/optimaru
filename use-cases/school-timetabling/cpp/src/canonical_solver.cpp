@@ -5,7 +5,6 @@
 #include <memory>
 #include <random>
 #include <stdexcept>
-#include <thread>
 #include <utility>
 #include <vector>
 
@@ -17,6 +16,7 @@
 #include "st/moves/unassign.hpp"
 #include "optimaru/api/solver/solver.hpp"
 #include "optimaru/config/solver/solver_config.hpp"
+#include "optimaru/impl/solver/worker_threads.hpp"
 
 namespace st::canon
 {
@@ -79,7 +79,8 @@ GuidedSetup configureEngine(const Solver::Config &config,
 
     // Guided value selection: change moves only draw slots the lesson is
     // allowed on (its allowedSlot table), so the search never wanders into
-    // H5 territory. Lessons allowed nowhere fall back to uniform-random (-1).
+    // disallowedSlotCost territory. Lessons allowed nowhere fall back to
+    // uniform-random (-1).
     setup.allowedSlots = std::make_shared<std::vector<std::vector<int>>>();
     setup.allowedSlots->reserve(table.lessons.size());
     for (const Lesson &lesson : table.lessons)
@@ -162,11 +163,10 @@ GuidedSetup configureEngine(const Solver::Config &config,
 
 void Solver::solve(Timetable &table)
 {
-    table.weights = config_.weights;
     ScoreCalculator::prepare(table);  // normalize ids / derived tables
     if (table.lessons.empty() || table.slotCount() == 0)
     {
-        ScoreCalculator::calculateScore(table);
+        ScoreCalculator::calculateScore(table, config_.weights);
         return;
     }
     if (config_.ruinRecreateRewards.size() != 4)
@@ -185,32 +185,33 @@ void Solver::solve(Timetable &table)
     {
         std::vector<Timetable> candidates(workerCount, table);
         std::vector<std::exception_ptr> failures(workerCount);
-        std::vector<std::thread> workers;
-        workers.reserve(workerCount);
-        for (int i = 0; i < workerCount; ++i)
-        {
-            workers.emplace_back(
-                [this, i, &candidates, &failures]
+        // Raised by the first worker that fails: every worker's engine checks
+        // it once a step, so the others stop instead of using up their budget.
+        auto stop = std::make_shared<std::atomic<bool>>(false);
+        // A worker that cannot be started (std::system_error) stops and joins
+        // the ones already running before the error is rethrown here.
+        optimaru::runWorkerThreads(
+            workerCount, *stop,
+            [this, &candidates, &failures, &stop](int i)
+            {
+                try
                 {
-                    try
-                    {
-                        Config workerConfig = config_;
-                        workerConfig.parallelSolverCount = 1;
-                        workerConfig.randomSeed
-                            += static_cast<std::uint64_t>(i);
-                        if (i != 0)
-                            workerConfig.onNewBest = nullptr;
-                        Solver worker(std::move(workerConfig));
-                        worker.solve(candidates[i]);
-                    }
-                    catch (...)
-                    {
-                        failures[i] = std::current_exception();
-                    }
-                });
-        }
-        for (std::thread &worker : workers)
-            worker.join();
+                    Config workerConfig = config_;
+                    workerConfig.parallelSolverCount = 1;
+                    workerConfig.stopFlag = stop;
+                    workerConfig.randomSeed
+                        += static_cast<std::uint64_t>(i);
+                    if (i != 0)
+                        workerConfig.onNewBest = nullptr;
+                    Solver worker(std::move(workerConfig));
+                    worker.solve(candidates[i]);
+                }
+                catch (...)
+                {
+                    failures[i] = std::current_exception();
+                    stop->store(true);
+                }
+            });
         for (const std::exception_ptr &failure : failures)
         {
             if (failure)
@@ -232,7 +233,7 @@ void Solver::solve(Timetable &table)
     // The single calculator instance of this (single-start) solve. Created
     // before the engine so the guided-selection hooks can bind to it; the
     // engine resets it on the working solution at solve start.
-    CanonicalIncrementalScoreCalculator calculator;
+    CanonicalIncrementalScoreCalculator calculator(config_.weights);
 
     // Violation-guided entity selection (the es guided-moves pattern): with
     // probability hotLessonProbability the moved lesson is drawn from the
@@ -253,6 +254,8 @@ void Solver::solve(Timetable &table)
 
     // Construction heuristic + late-acceptance local search (+ ALNS kicks).
     optimaru::Solver<Timetable> engine(std::move(engineConfig));
+    if (config_.stopFlag)
+        engine.adoptTerminateEarlyFlag(config_.stopFlag);
     if (config_.smartClassSwapMoves)
     {
         engine.addMoveOperator(
@@ -267,7 +270,7 @@ void Solver::solve(Timetable &table)
     engine.solve(table, calculator);
 
     // The authoritative final score: a full recompute on the best solution.
-    table.score = ScoreCalculator::calculateScore(table);
+    table.score = ScoreCalculator::calculateScore(table, config_.weights);
 }
 
 void Solver::solve(Timetable &table,
@@ -307,6 +310,8 @@ void Solver::solve(Timetable &table,
     }
 
     optimaru::Solver<Timetable> engine(std::move(engineConfig));
+    if (config_.stopFlag)
+        engine.adoptTerminateEarlyFlag(config_.stopFlag);
     if (config_.smartClassSwapMoves)
     {
         engine.addMoveOperator(
@@ -318,7 +323,8 @@ void Solver::solve(Timetable &table,
                 &hotSource));
     }
     // Only worth a slot in the move mix when the assembly prices unassignment
-    // as a soft penalty; with H1 hard, unassigning is always a hard loss.
+    // as a soft penalty; with unassignedLessonsCost hard, unassigning is
+    // always a hard loss.
     if (allowsUnassigned(calculator))
     {
         engine.addMoveOperator(

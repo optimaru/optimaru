@@ -6,7 +6,6 @@
 #include <memory>
 #include <random>
 #include <stdexcept>
-#include <thread>
 #include <utility>
 #include <vector>
 
@@ -14,6 +13,7 @@
 #include "cs/score_calculator.hpp"
 #include "optimaru/api/solver/solver_factory.hpp"
 #include "optimaru/config/solver/solver_config.hpp"
+#include "optimaru/impl/solver/worker_threads.hpp"
 
 namespace cs
 {
@@ -139,32 +139,33 @@ void Solver::solve(ConferenceSchedule &schedule)
     {
         std::vector<ConferenceSchedule> candidates(workerCount, schedule);
         std::vector<std::exception_ptr> failures(workerCount);
-        std::vector<std::thread> workers;
-        workers.reserve(workerCount);
-        for (int i = 0; i < workerCount; ++i)
-        {
-            workers.emplace_back(
-                [this, i, &candidates, &failures]
+        // Raised by the first worker that fails: every worker's engine checks
+        // it once a step, so the others stop instead of using up their budget.
+        auto stop = std::make_shared<std::atomic<bool>>(false);
+        // A worker that cannot be started (std::system_error) stops and joins
+        // the ones already running before the error is rethrown here.
+        optimaru::runWorkerThreads(
+            workerCount, *stop,
+            [this, &candidates, &failures, &stop](int i)
+            {
+                try
                 {
-                    try
-                    {
-                        Config workerConfig = config_;
-                        workerConfig.parallelSolverCount = 1;
-                        workerConfig.randomSeed
-                            += static_cast<std::uint64_t>(i);
-                        if (i != 0)
-                            workerConfig.onNewBest = nullptr;
-                        Solver worker(std::move(workerConfig));
-                        worker.solve(candidates[i]);
-                    }
-                    catch (...)
-                    {
-                        failures[i] = std::current_exception();
-                    }
-                });
-        }
-        for (std::thread &worker : workers)
-            worker.join();
+                    Config workerConfig = config_;
+                    workerConfig.parallelSolverCount = 1;
+                    workerConfig.stopFlag = stop;
+                    workerConfig.randomSeed
+                        += static_cast<std::uint64_t>(i);
+                    if (i != 0)
+                        workerConfig.onNewBest = nullptr;
+                    Solver worker(std::move(workerConfig));
+                    worker.solve(candidates[i]);
+                }
+                catch (...)
+                {
+                    failures[i] = std::current_exception();
+                    stop->store(true);
+                }
+            });
         for (const std::exception_ptr &failure : failures)
         {
             if (failure)
@@ -272,10 +273,15 @@ void Solver::solve(ConferenceSchedule &schedule)
         auto engine = optimaru::SolverFactory<ConferenceSchedule>::create(
                           std::move(segmentConfig))
                           .buildSolver();
+        if (config_.stopFlag)
+            engine.adoptTerminateEarlyFlag(config_.stopFlag);
         lastStep = 0;
         best = engine.solve(schedule, calculator);
         stepOffset += lastStep + 1;
         if (best >= config_.bestScoreLimit)
+            break;
+        // A sibling parallel worker failed: no further segments.
+        if (config_.stopFlag && config_.stopFlag->load())
             break;
     }
 
@@ -298,8 +304,11 @@ void Solver::solve(
         // One segment, one start: both the segmented restarts and the
         // parallel workers need a calculator of their own, and a
         // caller-assembled plugin cannot be cloned.
+        optimaru::SolverConfig engineConfig = buildEngineConfig(config_, schedule);
+        // The progress callback, as on the segmented default path.
+        engineConfig.onNewBest = config_.onNewBest;
         auto engine = optimaru::SolverFactory<ConferenceSchedule>::create(
-                          buildEngineConfig(config_, schedule))
+                          std::move(engineConfig))
                           .buildSolver();
         engine.solve(schedule, calculator);
     }

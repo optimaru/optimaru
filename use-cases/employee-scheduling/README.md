@@ -40,7 +40,7 @@ ctest --test-dir build/employee-scheduling
 
 ## Extending
 
-Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-c-engine-use-case).
+Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-use-case).
 The planning variable is **BASIC**; the domain solver that configures the
 engine is `cpp/include/es/solver.hpp` + `cpp/src/solver.cpp`.
 
@@ -59,22 +59,42 @@ unassigned, so pre-assigning part of the solution (`ShiftModel.worker`, or
 `with_initial_solution`) keeps that part as the starting point.
 
 **Adding a hard or soft cost.** One file per constraint under
-`cpp/include/es/constraints/`:
-1. add `constraints/<name>.hpp` (a `UnitConstraint` or `GlobalConstraint`;
-   positive cost = penalty, the level and weight are constructor defaults);
-2. include it in `cpp/include/es/constraints.hpp` and add it to
-   `addDefaultConstraints` if it belongs to the default set;
+`cpp/include/es/constraints/` (`<subject>_cost.hpp`: `required_skill_cost`,
+`employee_unavailability_cost`, `shift_overlap_cost`, `max_one_shift_per_day_cost`,
+`min_rest_cost`, `undesired_day_cost`, `desired_day_cost`, `desired_shift_cost`,
+`shift_count_imbalance_cost`, `max_consecutive_days_cost`, `min_consecutive_days_cost`,
+`max_consecutive_days_off_cost`, `rest_after_consecutive_work_cost`,
+`max_weekly_minutes_cost`, `min_weekly_minutes_cost`, `min_weekly_rest_days_cost`,
+`assignment_cost`, `unassigned_shifts_cost`, `shift_count_gap_cost`,
+`weekly_minutes_gap_cost`, `shift_coverage_cost`, `location_run_length_cost`,
+`rest_after_location_run_cost`, `location_run_gap_cost`, `worker_location_count_cost`,
+`day_pattern_cost`, `target_days_off_cost`, `worker_day_count_in_range_cost`,
+`location_imbalance_cost`, `worker_pairing_cost`; the family bases and `scoped_unit.hpp`
+sit next to them):
+1. add `constraints/<subject>_cost.hpp` with `struct <Subject>Cost` (a `UnitConstraint` or
+   `GlobalConstraint`; positive raw cost = penalty, 0 = no violation) declaring
+   `static constexpr double kDefaultWeight` and `static constexpr optimaru::Level kDefaultLevel`,
+   an `explicit <Subject>Cost(double weight = kDefaultWeight, <parameters with neutral
+   defaults>)` constructor, the registry name `"<subject>Cost"` (the struct name with a
+   lower-case first letter) and, when it is parametrized, a `label` for the instance;
+2. include it in `cpp/include/es/constraints.hpp`, `emplace` it in `catalogConstraints()`
+   and, if it belongs to the default set, in `defaultConstraints()`;
 3. for a default constraint, add the same raw cost to
-   `score_calculator` / `incremental_calculator` — `es_demo` and
-   `tests/test_scheduling.py` check they agree;
-4. register its name in `addConstraintByName` and `CONSTRAINT_NAMES` in
-   `python/bindings.cpp`;
-5. add a `Constraint` spec with the snake_case `name` to
-   `python/es_scheduling/constraints.py`, and a rule model to
-   `python/es_scheduling/models.py` if it should be reachable from JSON.
+   `score_calculator` / `incremental_calculator` (the `static_assert`s there read the
+   components' `kDefaultWeight` / `kDefaultLevel`) — `es_demo` and `es_plugin_test` check
+   they agree bit for bit;
+4. add its entry to the rule factory in `python/bindings.cpp` (`factory()`: the Python
+   name and a builder reading its parameters); `CONSTRAINT_NAMES` and the
+   "available:" list follow from that table;
+5. add a spec class with the snake_case `name`, `label_en` / `label_ko` /
+   `description_en` / `description_ko`, its parameters as dataclass fields and their
+   `bounds` to `python/es_scheduling/constraints.py`, plus its module-level default
+   instance and its place in `SPEC_CLASSES`; the JSON rule model is generated from it.
+   Add a hand-calculated positive and zero case to `tests/test_constraint_costs.py`;
 6. mirror it in the CP-SAT model in
-   [`benchmarks/employee-scheduling/cpsat`](../../benchmarks/employee-scheduling/cpsat) so the
-   benchmark stays like for like.
+   [`benchmarks/employee-scheduling/cpsat`](../../benchmarks/employee-scheduling/cpsat) (a
+   plugin subclassing the spec; defaults come from `constraint_info()`) so the benchmark
+   stays like for like.
 
 ## Benchmark
 

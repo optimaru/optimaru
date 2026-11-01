@@ -3,7 +3,13 @@ from datetime import date, datetime, timezone
 import pytest
 
 import flight_crew as domain
-from flight_crew.constraints import get_constraints
+from flight_crew.constraints import (
+    FlightConflictCost,
+    RequiredSkillCost,
+    TransferBetweenTwoFlightsCost,
+    get_constraints,
+    score,
+)
 
 from flight_crew.models import (
     EmployeeModel,
@@ -113,3 +119,66 @@ def test_each_constraint_matches_domain_on_a_fixed_itinerary(constraint) -> None
     )
 
     assert sum(proxy.values()) == pytest.approx(expected)
+
+
+def test_cpsat_defaults_are_the_engine_defaults() -> None:
+    """No hand-copied defaults: the CP-SAT catalog equals constraint_info()."""
+    from flight_crew_cpsat import catalog
+
+    engine = {row.name: row for row in domain.constraint_info()}
+    entries = catalog()
+    assert [entry["name"] for entry in entries] == domain.list_constraints()
+    assert [entry["name"] for entry in entries] == [
+        "required_skill_cost",
+        "flight_conflict_cost",
+        "transfer_between_two_flights_cost",
+        "employee_unavailability_cost",
+        "first_assignment_not_departing_from_home_cost",
+        "last_assignment_not_arriving_at_home_cost",
+    ]
+    for entry in entries:
+        row = engine[entry["name"]]
+        assert entry["default_level"] == row.default_level
+        assert entry["default_weight"] == row.default_weight
+        assert entry["level_flippable"] == row.level_flippable
+        assert entry["reward"] == row.reward
+        assert entry["default_enabled"] == row.default_enabled
+        assert entry["kind"] == "either"  # every flight-crew constraint is flippable
+        assert entry["params"] == {"weight": None, "hard": None, "exponent": 1.0}
+
+
+def test_default_solve_scores_like_the_engine() -> None:
+    """The default selection: CP-SAT's reported score is the engine's score of the solution."""
+    problem = _parity_problem()
+    solved = solve(problem, time_limit_seconds=5)
+    engine = domain.calculate_score(solved.to_core())
+    assert (solved.score_hard, solved.score_soft) == (engine.hard, engine.soft)
+
+
+@pytest.mark.parametrize(
+    "demoted",
+    [
+        RequiredSkillCost(hard=False),
+        FlightConflictCost(hard=False),
+        TransferBetweenTwoFlightsCost(hard=False),
+    ],
+    ids=lambda item: item.name,
+)
+def test_demoting_a_hard_constraint_scores_like_the_engine(demoted) -> None:
+    """hard=False lands on soft in both solvers: CP-SAT's reported score is the
+    engine's score of the same solution under the same selection."""
+    problem = _parity_problem()
+    selection = [
+        demoted if spec.name == demoted.name else spec for spec in get_constraints()
+    ]
+    proxy = {}
+    solved = solve(
+        problem,
+        time_limit_seconds=5,
+        constraints=selection,
+        _fixed_employees=[0, 0, 0],
+        _proxy_score=proxy,
+    )
+    engine = score(domain.constraint_costs(solved.to_core()), selection)
+    assert (solved.score_hard, solved.score_soft) == pytest.approx(tuple(engine))
+    assert (proxy["hard"], proxy["soft"]) == pytest.approx(tuple(engine))

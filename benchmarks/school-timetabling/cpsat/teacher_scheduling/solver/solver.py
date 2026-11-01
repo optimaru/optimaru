@@ -29,9 +29,11 @@ def solve(
 ) -> Timetable:
     """Builds the model (variables -> constraints), solves it with CP-SAT and converts the result to a Timetable.
 
-    With constraints None, assembles the default configuration (hard H1–H10, soft
-    S1–S6) with the `config.weights` weights. A given constraint list is the whole
-    list — to keep the defaults use `registry.merge(default_constraints(), ...)`.
+    With constraints None, assembles the default configuration (every engine
+    constraint at its default level) with the `config.weights` soft weights. A
+    given constraint list is the whole list — to keep the defaults use
+    `registry.merge(default_constraints(), ...)`; a built-in constraint's
+    ``weight=None`` is the engine default, not `config.weights`.
     Solutions obtained with relaxed or injected custom constraints are outside the
     scope of `validate.validate_timetable` (see the `teacher_scheduling.solver.registry` docstring).
     """

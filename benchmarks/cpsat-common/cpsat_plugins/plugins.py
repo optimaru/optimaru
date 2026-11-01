@@ -5,13 +5,21 @@ optimaru engine. A CP-SAT plugin subclasses the matching domain
 constraint and this mixin, and owns the code that adds its expression to the
 model. The solver therefore only creates planning variables and asks the
 registry to build the selected plugins.
+
+Default level and weight come from the engine. Every domain package exposes
+``constraint_info()``, and the plugin's ``spec`` reads its row:
+``default_level``, ``default_weight``, ``level_flippable`` and ``reward`` are
+the C++ component's constants, so the two solvers cannot disagree on a
+default. A plugin must NOT restate ``default_level`` / ``default_weight``;
+doing so raises TypeError, and so does a plugin whose domain package has no
+``constraint_info()``.
 """
 
 from __future__ import annotations
 
+import sys
 from abc import ABC, abstractmethod
-from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import replace
+from collections.abc import Iterable, Sequence
 from typing import Any, Generic, TypeVar
 
 from ortools.sat.python import cp_model
@@ -20,33 +28,84 @@ from .registry import ConstraintSelection, ConstraintSpec, ObjectiveBuilder
 
 ContextT = TypeVar("ContextT")
 
+# Per domain package: {constraint name: its constraint_info() row}.
+_ENGINE_CATALOGS: dict[str, dict[str, Any]] = {}
+
+
+def engine_constraint_info(cls: type) -> dict[str, Any] | None:
+    """The ``constraint_info()`` rows of the domain package ``cls`` derives from.
+
+    Walks the MRO and, for each class, its module's parent packages
+    (``facility_location.constraints`` -> ``facility_location``), returning the
+    first package's catalog keyed by name. None when no package in the chain
+    exposes ``constraint_info``.
+    """
+    for base in cls.__mro__:
+        package_name = getattr(base, "__module__", "").rpartition(".")[0]
+        while package_name:
+            cached = _ENGINE_CATALOGS.get(package_name)
+            if cached is not None:
+                return cached
+            provider = getattr(sys.modules.get(package_name), "constraint_info", None)
+            if callable(provider):
+                catalog = {row.name: row for row in provider()}
+                _ENGINE_CATALOGS[package_name] = catalog
+                return catalog
+            package_name = package_name.rpartition(".")[0]
+    return None
+
 
 class ConstraintPlugin(ABC, Generic[ContextT]):
-    """Engine-specific builder mixed into a domain ``Constraint`` subclass."""
+    """Engine-specific builder mixed into a domain ``Constraint`` subclass.
 
-    default_level: str
-    default_weight: int = 1
+    Its defaults are the domain's ``constraint_info()`` row for its name.
+    """
+
     label: str = ""
 
     @property
     def spec(self) -> ConstraintSpec:
+        cls = type(self)
         name = getattr(self, "name", "")
         if not name:
-            raise TypeError(f"{type(self).__name__} must inherit a named Constraint")
+            raise TypeError(f"{cls.__name__} must inherit a named Constraint")
+        level, weight, flippable, reward, enabled = self._defaults(name)
         return ConstraintSpec(
             name=name,
-            label=self.label
-            or getattr(type(self), "label_en", "")
-            or type(self).__name__,
-            level=self.default_level,
-            weight=self.default_weight,
-            description=(
-                getattr(type(self), "description_en", "")
-                or (type(self).__doc__ or "").strip()
-            ),
-            label_en=getattr(type(self), "label_en", ""),
-            description_en=getattr(type(self), "description_en", ""),
+            label=self.label or getattr(cls, "label_en", "") or cls.__name__,
+            level=level,
+            weight=weight,
+            description=(getattr(cls, "description_en", "") or (cls.__doc__ or "").strip()),
+            label_en=getattr(cls, "label_en", ""),
+            description_en=getattr(cls, "description_en", ""),
+            level_flippable=flippable,
+            reward=reward,
+            default_enabled=enabled,
         )
+
+    def _defaults(self, name: str) -> tuple[str, int | float, bool, bool, bool | None]:
+        cls = type(self)
+        catalog = engine_constraint_info(cls)
+        if catalog is None:
+            raise TypeError(
+                f"{cls.__name__} must derive from a domain constraint whose package exposes constraint_info()"
+            )
+        for attr in ("default_level", "default_weight"):
+            if getattr(self, attr, None) is not None:
+                raise TypeError(
+                    f"{cls.__name__}.{attr} restates an engine default; "
+                    f"{name!r} takes it from the domain's constraint_info()"
+                )
+        # A plugin per instance of a repeated rule is named "<name>#<k>"
+        # (the constraint_costs() key rule); its row is the plain name's.
+        row = catalog.get(name.partition("#")[0])
+        if row is None:
+            raise TypeError(f"{cls.__name__}: {name!r} is not in the domain's constraint_info()")
+        weight = row.default_weight
+        if float(weight).is_integer():
+            weight = int(weight)  # CP-SAT objectives are integral
+        enabled = getattr(row, "default_enabled", None)
+        return row.default_level, weight, row.level_flippable, row.reward, enabled
 
     @abstractmethod
     def build(self, context: ContextT, objective: ObjectiveBuilder) -> None:
@@ -73,15 +132,9 @@ class ConstraintRegistry(Generic[ContextT]):
         model: cp_model.CpModel,
         levels: Sequence[str],
         constraints: Iterable[ConstraintSelection] | None,
-        *,
-        default_weights: Mapping[str, int] | None = None,
     ) -> ObjectiveBuilder:
-        default_weights = default_weights or {}
-        specs = tuple(
-            replace(spec, weight=default_weights.get(spec.name, spec.weight))
-            for spec in self.specs
-        )
-        return ObjectiveBuilder(model, levels, specs, constraints)
+        """The objective over this registry's specs; defaults come from constraint_info()."""
+        return ObjectiveBuilder(model, levels, self.specs, constraints)
 
     def build(self, context: ContextT, objective: ObjectiveBuilder) -> None:
         for name in objective.selected:

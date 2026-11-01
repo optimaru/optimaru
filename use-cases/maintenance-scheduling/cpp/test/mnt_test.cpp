@@ -17,6 +17,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <limits>
 #include <random>
 #include <string>
 #include <vector>
@@ -127,138 +128,138 @@ void verifyConstraints()
     std::printf("== (a) Verifying each constraint (Java test cases) ==\n");
     const std::vector<std::string> none;
 
-    // crewConflict: same crew + overlapping days, -overlap hard.
-    checkScore("crewConflict same day",
+    // crewConflictCost: same crew + overlapping days, -overlap hard.
+    checkScore("crewConflictCost same day",
                scoreOf({{1, kNoDate, kNoDate, kNoDate, none, 0, DAY_1},
                         {1, kNoDate, kNoDate, kNoDate, none, 0, DAY_1}}),
                -1,
                0);
-    checkScore("crewConflict different day",
+    checkScore("crewConflictCost different day",
                scoreOf({{1, kNoDate, kNoDate, kNoDate, none, 0, DAY_1},
                         {1, kNoDate, kNoDate, kNoDate, none, 0, DAY_2}}),
                0,
                0);
     // [Mon,Thu) vs [Tue,Fri): overlap Tue+Wed = 2.
-    checkScore("crewConflict 3d jobs shifted by 1",
+    checkScore("crewConflictCost 3d jobs shifted by 1",
                scoreOf({{3, kNoDate, kNoDate, kNoDate, none, 0, DAY_1},
                         {3, kNoDate, kNoDate, kNoDate, none, 0, DAY_2}}),
                -2,
                0);
-    checkScore("crewConflict different crews",
+    checkScore("crewConflictCost different crews",
                scoreOf({{1, kNoDate, kNoDate, kNoDate, none, 0, DAY_1},
                         {1, kNoDate, kNoDate, kNoDate, none, 1, DAY_1}}),
                0,
                0);
     // Calendar-day overlap includes weekends inside both intervals:
     // dur 6 from Friday covers [Fri, Sat+8) = 8 calendar days.
-    checkScore("crewConflict overlap counts weekend days",
+    checkScore("crewConflictCost overlap counts weekend days",
                scoreOf({{6, kNoDate, kNoDate, kNoDate, none, 0, FRIDAY},
                         {6, kNoDate, kNoDate, kNoDate, none, 0, FRIDAY}}),
                -8,
                0);
 
-    // minStartDate: -days started early, hard.
-    checkScore("minStartDate on time",
+    // minStartDateCost: -days started early, hard.
+    checkScore("minStartDateCost on time",
                scoreOf({{1, DAY_2, kNoDate, kNoDate, none, 0, DAY_2}}),
                0,
                0);
-    checkScore("minStartDate later is fine",
+    checkScore("minStartDateCost later is fine",
                scoreOf({{1, DAY_1, kNoDate, kNoDate, none, 0, DAY_3}}),
                0,
                0);
-    checkScore("minStartDate 2 days early",
+    checkScore("minStartDateCost 2 days early",
                scoreOf({{1, DAY_3, kNoDate, kNoDate, none, 0, DAY_1}}),
                -2,
                0);
-    checkScore("minStartDate independent of duration",
+    checkScore("minStartDateCost independent of duration",
                scoreOf({{4, DAY_3, kNoDate, kNoDate, none, 0, DAY_1}}),
                -2,
                0);
 
-    // maxEndDate: -days ended late, hard. end(dur 1 @ Tue) = Wed.
-    checkScore("maxEndDate 1 day late",
+    // maxEndDateCost: -days ended late, hard. end(dur 1 @ Tue) = Wed.
+    checkScore("maxEndDateCost 1 day late",
                scoreOf({{1, kNoDate, DAY_2, kNoDate, none, 0, DAY_2}}),
                -1,
                0);
     // end(dur 1 @ Wed) = Thu; Thu - Mon = 3.
-    checkScore("maxEndDate 3 days late",
+    checkScore("maxEndDateCost 3 days late",
                scoreOf({{1, kNoDate, DAY_1, kNoDate, none, 0, DAY_3}}),
                -3,
                0);
-    checkScore("maxEndDate on time",
+    checkScore("maxEndDateCost on time",
                scoreOf({{1, kNoDate, DAY_3, kNoDate, none, 0, DAY_1}}),
                0,
                0);
     // end(dur 4 @ Mon) = Fri; Fri - Wed = 2.
-    checkScore("maxEndDate 2 days late (dur 4)",
+    checkScore("maxEndDateCost 2 days late (dur 4)",
                scoreOf({{4, kNoDate, DAY_3, kNoDate, none, 0, DAY_1}}),
                -2,
                0);
 
-    // beforeIdealEndDate: -days ended early, soft x1 (duration 0 cases,
+    // beforeIdealEndDateCost: -days ended early, soft x1 (duration 0 cases,
     // exactly the Java test; end == start).
-    checkScore("beforeIdealEndDate on time",
+    checkScore("beforeIdealEndDateCost on time",
                scoreOf({{0, kNoDate, kNoDate, DAY_2, none, 0, DAY_2}}),
                0,
                0);
-    // end(=DAY_3) is AFTER ideal DAY_1: the afterIdealEndDate constraint
+    // end(=DAY_3) is AFTER ideal DAY_1: the afterIdealEndDateCost constraint
     // cross-fires with 2 days x 1'000'000 (the Java verifier isolates
-    // beforeIdealEndDate and sees 0).
-    checkScore("beforeIdealEndDate later (after fires)",
+    // beforeIdealEndDateCost and sees 0).
+    checkScore("beforeIdealEndDateCost later (after fires)",
                scoreOf({{0, kNoDate, kNoDate, DAY_1, none, 0, DAY_3}}),
                0,
                -2'000'000);
-    checkScore("beforeIdealEndDate 2 days early",
+    checkScore("beforeIdealEndDateCost 2 days early",
                scoreOf({{0, kNoDate, kNoDate, DAY_3, none, 0, DAY_1}}),
                0,
                -2);
 
-    // afterIdealEndDate: -days ended late, soft x1'000'000.
-    checkScore("afterIdealEndDate 1 day late",
+    // afterIdealEndDateCost: -days ended late, soft x1'000'000.
+    checkScore("afterIdealEndDateCost 1 day late",
                scoreOf({{1, kNoDate, kNoDate, DAY_2, none, 0, DAY_2}}),
                0,
                -1'000'000);
-    checkScore("afterIdealEndDate 3 days late",
+    checkScore("afterIdealEndDateCost 3 days late",
                scoreOf({{1, kNoDate, kNoDate, DAY_1, none, 0, DAY_3}}),
                0,
                -3'000'000);
-    // end(dur 1 @ Mon) = Tue, 1 day BEFORE ideal Wed: beforeIdealEndDate
+    // end(dur 1 @ Mon) = Tue, 1 day BEFORE ideal Wed: beforeIdealEndDateCost
     // cross-fires with -1 (the Java verifier sees after == 0).
-    checkScore("afterIdealEndDate earlier (before fires)",
+    checkScore("afterIdealEndDateCost earlier (before fires)",
                scoreOf({{1, kNoDate, kNoDate, DAY_3, none, 0, DAY_1}}),
                0,
                -1);
-    checkScore("afterIdealEndDate 2 days late (dur 4)",
+    checkScore("afterIdealEndDateCost 2 days late (dur 4)",
                scoreOf({{4, kNoDate, kNoDate, DAY_3, none, 0, DAY_1}}),
                0,
                -2'000'000);
 
-    // tagConflict: -1'000 x shared tags x overlapping days, soft. Both jobs
-    // are on the SAME crew like in the Java test, so crewConflict adds
+    // tagConflictCost: -1'000 x shared tags x overlapping days, soft. Both jobs
+    // are on the SAME crew like in the Java test, so crewConflictCost adds
     // -overlap hard on the overlapping cases.
     checkScore(
-        "tagConflict no overlap",
+        "tagConflictCost no overlap",
         scoreOf(
             {{1, kNoDate, kNoDate, kNoDate, {"Downtown"}, 0, DAY_1},
              {1, kNoDate, kNoDate, kNoDate, {"Downtown", "Crane"}, 0, DAY_3}}),
         0,
         0);
     checkScore(
-        "tagConflict 1 tag 1 day",
+        "tagConflictCost 1 tag 1 day",
         scoreOf(
             {{1, kNoDate, kNoDate, kNoDate, {"Downtown"}, 0, DAY_1},
              {1, kNoDate, kNoDate, kNoDate, {"Downtown", "Crane"}, 0, DAY_1}}),
         -1,
         -1'000);
     checkScore(
-        "tagConflict disjoint tags",
+        "tagConflictCost disjoint tags",
         scoreOf(
             {{1, kNoDate, kNoDate, kNoDate, {"Downtown"}, 0, DAY_1},
              {1, kNoDate, kNoDate, kNoDate, {"Uptown", "Crane"}, 0, DAY_1}}),
         -1,
         0);
     checkScore(
-        "tagConflict 2 tags 1 day",
+        "tagConflictCost 2 tags 1 day",
         scoreOf(
             {{1, kNoDate, kNoDate, kNoDate, {"Downtown", "Crane"}, 0, DAY_2},
              {1, kNoDate, kNoDate, kNoDate, {"Downtown", "Crane"}, 0, DAY_2}}),
@@ -266,7 +267,7 @@ void verifyConstraints()
         -2'000);
     // [Mon,Sat) vs [Tue,Fri): overlap 3 days x 2 tags = 6.
     checkScore(
-        "tagConflict 2 tags 3 days",
+        "tagConflictCost 2 tags 3 days",
         scoreOf(
             {{5, kNoDate, kNoDate, kNoDate, {"Downtown", "Crane"}, 0, DAY_1},
              {3, kNoDate, kNoDate, kNoDate, {"Downtown", "Crane"}, 0, DAY_2}}),
@@ -403,7 +404,7 @@ void verifyIncremental()
 // (b2) The hot (tag, day) set the solver's entityRecommender samples from is
 // maintained incrementally inside insert/retract, so — like the score itself
 // — it has to survive a random walk. It must be exactly the set of cells
-// occupied by two or more jobs (the cells that carry a tagConflict).
+// occupied by two or more jobs (the cells that carry a tagConflictCost).
 // -------------------------------------------------------------------------
 void verifyHotTagCells()
 {
@@ -550,7 +551,7 @@ void verifyDemoAndPinnedSolve()
 
     Solver::Config config;
     config.spentLimit = std::chrono::seconds(8);
-    config.bestScoreLimit = Score{0, -1e18};  // stop at first feasible
+    config.bestScoreLimit = Score{0, -std::numeric_limits<double>::infinity()};  // stop at first feasible
     config.randomSeed = 5;
     Solver solver(config);
     solver.solve(s);

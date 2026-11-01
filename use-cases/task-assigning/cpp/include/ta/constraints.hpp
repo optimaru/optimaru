@@ -12,13 +12,15 @@
 // to change. Adding a component is a file plus a line here (and a line in
 // addDefaultConstraints below when it belongs to the default assembly).
 
+#include <cstdint>
+
 #include "ta/constraints/common.hpp"
-#include "ta/constraints/critical_priority_task_end_time.hpp"
-#include "ta/constraints/major_priority_task_end_time.hpp"
-#include "ta/constraints/minimize_makespan.hpp"
-#include "ta/constraints/minimize_unassigned_tasks.hpp"
-#include "ta/constraints/minor_priority_task_end_time.hpp"
-#include "ta/constraints/no_missing_skills.hpp"
+#include "ta/constraints/critical_priority_task_end_time_cost.hpp"
+#include "ta/constraints/major_priority_task_end_time_cost.hpp"
+#include "ta/constraints/minor_priority_task_end_time_cost.hpp"
+#include "ta/constraints/required_skill_cost.hpp"
+#include "ta/constraints/squared_makespan_cost.hpp"
+#include "ta/constraints/unassigned_tasks_cost.hpp"
 
 namespace ta
 {
@@ -26,17 +28,20 @@ namespace ta
 // ---------------------------------------------------------------------------
 // Standard assembly
 // ---------------------------------------------------------------------------
-// The full provider at the quickstart's Bendable level weights. This assembly
-// scores bit-for-bit like ScoreCalculator::calculateScore and the monolithic
-// incremental calculator.
+// The full provider at the components' default weights and levels (each
+// component's kDefaultWeight / kDefaultLevel; constraint_info() reads them off
+// this assembly). It scores bit-for-bit like ScoreCalculator::calculateScore
+// and the monolithic incremental calculator. The calculator scores the unit
+// constraints first and the global unassignedTasksCost after them, which is
+// the list_constraints() order.
 //
 // `defaultConstraints()` hands the whole set back as a ConstraintAssembly,
 // so a caller states only what differs from it:
 //
 //     DecomposedCalculator calc;
 //     defaultConstraints()
-//         .weight("criticalPriorityTaskEndTime", 2)
-//         .drop("majorPriorityTaskEndTime")
+//         .weight("criticalPriorityTaskEndTimeCost", 2)
+//         .drop("majorPriorityTaskEndTimeCost")
 //         .into(calc);
 //
 // `addDefaultConstraints(calc)` is the same set poured straight into a
@@ -44,18 +49,45 @@ namespace ta
 inline ConstraintAssembly defaultConstraints()
 {
     ConstraintAssembly assembly;
-    assembly.emplace<NoMissingSkills>();
-    assembly.emplace<MinimizeUnassignedTasks>();
-    assembly.emplace<MinimizeMakespan>();
-    assembly.emplace<CriticalPriorityTaskEndTime>();
-    assembly.emplace<MajorPriorityTaskEndTime>();
-    assembly.emplace<MinorPriorityTaskEndTime>();
+    assembly.emplace<RequiredSkillCost>();
+    assembly.emplace<UnassignedTasksCost>();
+    assembly.emplace<SquaredMakespanCost>();
+    assembly.emplace<CriticalPriorityTaskEndTimeCost>();
+    assembly.emplace<MajorPriorityTaskEndTimeCost>();
+    assembly.emplace<MinorPriorityTaskEndTimeCost>();
     return assembly;
 }
 
 inline void addDefaultConstraints(DecomposedCalculator &calculator)
 {
     defaultConstraints().into(calculator);
+}
+
+// The soft[2] end-time weight of each priority in the monolithic calculators:
+// the three priority components' kDefaultWeight (x 4 / x 2 / x 1), read here
+// so the monoliths never re-type them.
+inline std::int64_t priorityWeight(Priority priority)
+{
+    constexpr auto kCritical
+        = static_cast<std::int64_t>(CriticalPriorityTaskEndTimeCost::kDefaultWeight);
+    constexpr auto kMajor
+        = static_cast<std::int64_t>(MajorPriorityTaskEndTimeCost::kDefaultWeight);
+    constexpr auto kMinor
+        = static_cast<std::int64_t>(MinorPriorityTaskEndTimeCost::kDefaultWeight);
+    static_assert(kCritical == CriticalPriorityTaskEndTimeCost::kDefaultWeight
+                      && kMajor == MajorPriorityTaskEndTimeCost::kDefaultWeight
+                      && kMinor == MinorPriorityTaskEndTimeCost::kDefaultWeight,
+                  "the monolithic calculators assume integral priority weights");
+    switch (priority)
+    {
+    case Priority::CRITICAL:
+        return kCritical;
+    case Priority::MAJOR:
+        return kMajor;
+    case Priority::MINOR:
+    default:
+        return kMinor;
+    }
 }
 
 }  // namespace ta

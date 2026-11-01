@@ -5,6 +5,7 @@
 // Also doubles as reference code for writing a SolutionDescriptor and an
 // IncrementalScoreCalculator against this engine.
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -13,10 +14,13 @@
 #include <numeric>
 #include <stdexcept>
 #include <string>
+#include <system_error>
+#include <thread>
 #include <utility>
 #include <vector>
 
 #include "optimaru/api/score/calculator/constraint_assembly.hpp"
+#include "optimaru/impl/solver/worker_threads.hpp"
 #include "optimaru/testing/preview_parity.hpp"
 #include "optimaru/optimaru.hpp"
 
@@ -250,6 +254,20 @@ void testTerminations(const HardSoftScore& optimum) {
         double sec = std::chrono::duration<double>(Clock::now() - t0).count();
         check(sec < 5.0, "unimprovedSpentLimit terminates early (" + std::to_string(sec) + "s)");
     }
+    {   // The cooling gradient follows a step limit when it is further along
+        // than the wall clock (simulated annealing on a step-limited run).
+        optimaru::TerminationConfig termination;
+        termination.spentLimit = std::chrono::seconds(30);
+        termination.stepCountLimit = 1000;
+        optimaru::SolverTermination stepLimited(termination);
+        stepLimited.isTerminated(250, HardSoftScore{0, 0.0}, /*forceTimeCheck=*/true);
+        check(std::fabs(stepLimited.timeGradient() - 0.25) < 0.01,
+              "timeGradient() = step fraction (0.25) on a step-limited run");
+        termination.stepCountLimit = 0;
+        optimaru::SolverTermination timeOnly(termination);
+        timeOnly.isTerminated(250, HardSoftScore{0, 0.0}, /*forceTimeCheck=*/true);
+        check(timeOnly.timeGradient() < 0.01, "timeGradient() = time fraction without a step limit");
+    }
 }
 
 void testEnvironmentMode() {
@@ -300,6 +318,112 @@ void testMultiStartAndFfd(const HardSoftScore& optimum) {
         HardSoftScore result = solver.solveMultiStart(
                 s, [] { return std::make_unique<TaskAssignmentCalculator>(); });
         check(result == optimum && fullScore(s) == optimum, "multi-start (4 threads) optimum");
+    }
+    {   // A start that throws (here: a raising onNewBest, as a Python callback
+        // that raises does): caught on its thread, the siblings stop, and the
+        // exception comes out of solveMultiStart on the calling thread
+        // instead of std::terminate.
+        TaskAssignment s = buildTaskInstance();
+        const TaskAssignment before = s;
+        optimaru::SolverConfig config;
+        config.termination.spentLimit = std::chrono::seconds(30);
+        config.multiStartCount = 3;
+        config.onNewBest = [](std::int64_t, const HardSoftScore&) {
+            throw std::runtime_error("boom");
+        };
+        optimaru::Solver<TaskAssignment> solver(config);
+        const auto start = std::chrono::steady_clock::now();
+        std::string caught;
+        try {
+            solver.solveMultiStart(s, [] { return std::make_unique<TaskAssignmentCalculator>(); });
+        } catch (const std::runtime_error& error) {
+            caught = error.what();
+        }
+        const double seconds =
+                std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+        check(caught == "boom", "multi-start rethrows a start's exception on the calling thread");
+        check(seconds < 10.0, "the other starts stop once one fails (no 30 s wait)");
+        check(s.assignment == before.assignment, "a failed multi-start leaves the solution as it was");
+    }
+    {   // A thread that cannot be created (std::system_error, here injected
+        // through the test seam before start 1): the start already running
+        // is stopped and joined, and the error comes out of solveMultiStart
+        // instead of std::terminate (a joinable std::thread destroyed).
+        TaskAssignment s = buildTaskInstance();
+        const TaskAssignment before = s;
+        optimaru::SolverConfig config;
+        config.termination.spentLimit = std::chrono::seconds(30);
+        config.multiStartCount = 3;
+        optimaru::Solver<TaskAssignment> solver(config);
+        optimaru::workerThreadStartHook = [](int index) {
+            if (index == 1) {
+                throw std::system_error(std::make_error_code(std::errc::resource_unavailable_try_again),
+                                        "injected thread creation failure");
+            }
+        };
+        const auto start = std::chrono::steady_clock::now();
+        bool caught = false;
+        try {
+            solver.solveMultiStart(s, [] { return std::make_unique<TaskAssignmentCalculator>(); });
+        } catch (const std::system_error& error) {
+            caught = std::string(error.what()).find("injected") != std::string::npos;
+        }
+        optimaru::workerThreadStartHook = nullptr;
+        const double seconds =
+                std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+        check(caught, "multi-start rethrows a thread creation failure on the calling thread");
+        check(seconds < 10.0, "the start already running is stopped and joined (no 30 s wait)");
+        check(s.assignment == before.assignment,
+              "a multi-start that could not start leaves the solution as it was");
+    }
+    {   // runWorkerThreads itself: the failure on the very first thread, and
+        // on a later one, with the workers that did start all joined.
+        std::atomic<bool> stop{false};
+        std::atomic<int> ran{0};
+        optimaru::workerThreadStartHook = [](int index) {
+            if (index == 2) throw std::system_error(std::make_error_code(std::errc::not_enough_memory));
+        };
+        bool caught = false;
+        try {
+            optimaru::runWorkerThreads(4, stop, [&stop, &ran](int) {
+                while (!stop.load()) std::this_thread::yield();
+                ++ran;
+            });
+        } catch (const std::system_error&) {
+            caught = true;
+        }
+        check(caught && stop.load() && ran.load() == 2,
+              "runWorkerThreads: a failure at thread 2 sets stop, joins threads 0 and 1, rethrows");
+        stop.store(false);
+        optimaru::workerThreadStartHook = [](int) {
+            throw std::system_error(std::make_error_code(std::errc::resource_unavailable_try_again));
+        };
+        caught = false;
+        try {
+            optimaru::runWorkerThreads(3, stop, [](int) {});
+        } catch (const std::system_error&) {
+            caught = true;
+        }
+        check(caught && stop.load(), "runWorkerThreads: a failure at thread 0 is rethrown too");
+        optimaru::workerThreadStartHook = nullptr;
+        stop.store(false);
+        std::vector<int> seen(5, 0);
+        optimaru::runWorkerThreads(5, stop, [&seen](int i) { seen[static_cast<std::size_t>(i)] = i + 1; });
+        check(seen == std::vector<int>({1, 2, 3, 4, 5}) && !stop.load(),
+              "runWorkerThreads runs work(i) once per index and joins them all");
+    }
+    {   // terminateEarly() reaches every start.
+        TaskAssignment s = buildTaskInstance();
+        optimaru::SolverConfig config;
+        config.termination.spentLimit = std::chrono::seconds(30);
+        config.multiStartCount = 3;
+        optimaru::Solver<TaskAssignment> solver(config);
+        solver.terminateEarly();
+        const auto start = std::chrono::steady_clock::now();
+        solver.solveMultiStart(s, [] { return std::make_unique<TaskAssignmentCalculator>(); });
+        const double seconds =
+                std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+        check(seconds < 10.0, "terminateEarly() stops every multi-start start");
     }
     {   // First Fit Decreasing: initialize high-cost tasks first.
         TaskAssignment s = buildSeparableInstance();
@@ -1277,7 +1401,7 @@ void testScoreAnalysis(const HardSoftScore& optimum) {
 struct TaConflict final : optimaru::UnitConstraint<TaskAssignment> {
     std::vector<std::vector<char>> adj;
     TaConflict(const TaskAssignment& s, double weight)
-            : UnitConstraint("conflict", weight, /*hard=*/true),
+            : UnitConstraint("conflict", weight, optimaru::Level::Hard),
               adj(s.assignment.size(), std::vector<char>(s.assignment.size(), 0)) {
         for (auto [a, b] : s.conflicts) adj[a][b] = adj[b][a] = 1;
     }
@@ -1304,7 +1428,8 @@ struct TaConflict final : optimaru::UnitConstraint<TaskAssignment> {
 template <bool WithDelta>
 struct TaCost final : optimaru::UnitConstraint<TaskAssignment> {
     explicit TaCost(double weight, double exp = 1.0)
-            : UnitConstraint(WithDelta ? "cost" : "cost (no delta)", weight, /*hard=*/false) {
+            : UnitConstraint(WithDelta ? "cost" : "cost (no delta)", weight,
+                             optimaru::Level::Soft) {
         exponent = exp;
     }
     double cost(const TaskAssignment& s, int unit,
@@ -1322,7 +1447,7 @@ struct TaCost final : optimaru::UnitConstraint<TaskAssignment> {
 
 struct TaBalance final : optimaru::GlobalConstraint<TaskAssignment> {
     explicit TaBalance(double weight)
-            : GlobalConstraint("balance", weight, /*hard=*/false) {}
+            : GlobalConstraint("balance", weight, optimaru::Level::Soft) {}
     std::vector<long> counts;
     void reset(const TaskAssignment&,
                const std::vector<std::vector<int>>& membersPerUnit) override {
@@ -1461,7 +1586,7 @@ void testDecomposedDeltaCalculator() {
 // three-route TSP for every move kind; a global without the contract must
 // switch previews off for the whole assembly.
 struct TspRouteLength final : optimaru::UnitConstraint<TspSolution> {
-    TspRouteLength() : UnitConstraint("routeLength", 1.0, false) {}
+    TspRouteLength() : UnitConstraint("routeLength", 1.0, optimaru::Level::Soft) {}
     double cost(const TspSolution& s, int, const std::vector<int>& members) const override {
         return routeLength(s, members);
     }
@@ -1470,7 +1595,8 @@ struct TspRouteLength final : optimaru::UnitConstraint<TspSolution> {
 // Longest route across the fleet: a statistic that does not decompose, with
 // the per-route lengths kept so a preview can re-take the maximum.
 struct TspLongestRoute final : optimaru::GlobalConstraint<TspSolution> {
-    explicit TspLongestRoute(bool previews) : GlobalConstraint("longestRoute", 1.0, false), previews_(previews) {}
+    explicit TspLongestRoute(bool previews)
+        : GlobalConstraint("longestRoute", 1.0, optimaru::Level::Soft), previews_(previews) {}
     void reset(const TspSolution& s, const std::vector<std::vector<int>>& members) override {
         lengths_.clear();
         for (const auto& m : members) lengths_.push_back(routeLength(s, m));
@@ -1554,7 +1680,7 @@ struct TspSumsContext final : optimaru::SharedConstraintContext {
 
 struct TspRouteLengthSums final : optimaru::UnitConstraint<TspSolution> {
     explicit TspRouteLengthSums(bool piecewise = true)
-        : UnitConstraint("routeLength", 1.0, false), piecewise_(piecewise) {}
+        : UnitConstraint("routeLength", 1.0, optimaru::Level::Soft), piecewise_(piecewise) {}
     const char* sharedContextKey() const override { return "tsp.sums"; }
     std::unique_ptr<optimaru::SharedConstraintContext> createSharedContext() const override {
         return std::make_unique<TspSumsContext>();
@@ -1581,7 +1707,7 @@ struct TspRouteLengthSums final : optimaru::UnitConstraint<TspSolution> {
 };
 
 struct TspLongestRouteSums final : optimaru::GlobalConstraint<TspSolution> {
-    TspLongestRouteSums() : GlobalConstraint("longestRoute", 1.0, false) {}
+    TspLongestRouteSums() : GlobalConstraint("longestRoute", 1.0, optimaru::Level::Soft) {}
     const char* sharedContextKey() const override { return "tsp.sums"; }
     std::unique_ptr<optimaru::SharedConstraintContext> createSharedContext() const override {
         return std::make_unique<TspSumsContext>();

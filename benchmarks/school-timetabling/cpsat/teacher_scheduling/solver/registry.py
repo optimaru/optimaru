@@ -1,24 +1,48 @@
 """Constraint catalog — a plugin registry with one class per constraint.
 
-A class's fields are the constraint's parameters and `name` is its API
-identifier. `solve()` takes a single list of these objects — no separate hard
-and soft lists; each constraint decides itself whether to block with
-`model.add()` (hard) or return a penalty expression (soft). When `build()`
-returns None it acted as a hard constraint only; an expression it returns
-becomes the penalty term named `name`.
+Each built-in constraint is a subclass of the engine's spec of the same
+constraint (`st_timetabling.constraints`): one name per constraint across the
+engine, this CP-SAT reference, the server and the timetable penalties
+(`unassigned_lessons_cost`, `class_conflict_cost`, ... `parallel_groups_cost`),
+and the same three knobs, ``(weight=None, hard=None, exponent=1.0)``. The
+defaults (level, weight, flippability) are the engine's — read from
+`st_timetabling.constraint_info()`, the C++ components' kDefaultLevel /
+kDefaultWeight — never restated here.
 
-    from teacher_scheduling.solver.registry import WeeklyPeriodCounts, default_constraints, merge
+`solve()` takes a single list of these objects — no separate hard and soft
+lists; each constraint decides itself whether to block with `model.add()`
+(hard) or return a penalty expression (soft). When `build()` returns None it
+acted as a hard constraint only; an expression it returns becomes the penalty
+term named `name`.
+
+    from teacher_scheduling.solver.registry import UnassignedLessonsCost, default_constraints, merge
 
     # Turn unfillable periods into a very expensive penalty instead of INFEASIBLE (= solve_partial)
     timetable = solve(
         problem,
         config,
-        constraints=merge(default_constraints(), WeeklyPeriodCounts(hard=False, weight=10_000)),
+        constraints=merge(default_constraints(), UnassignedLessonsCost(hard=False, weight=10_000)),
     )
 
-Weights come from the constraint instance's `weight` field. A custom
-constraint without `weight` is looked up with `ObjectiveWeights.weight_for(name)`,
-and defaults to 1 if not found there either.
+The knobs on the CP-SAT path:
+
+- ``weight``   ``None`` = the engine default; otherwise a non-negative integer
+               (CP-SAT objectives are integral). On a hard constraint the
+               weight only switches it: 0 leaves it out, anything else
+               enforces it.
+- ``hard``     ``None`` = the default level. ``True`` on a soft constraint
+               forbids every violation (``model.add(expr == 0)``); ``False``
+               on ``unassigned_lessons_cost`` is partial timetabling (at most
+               the weekly periods, the shortfall a penalty). The other hard
+               constraints are model constraints here and refuse ``False``;
+               ``fixed_slots_cost`` / ``parallel_groups_cost`` are never
+               flippable (the engine refuses it too).
+- ``exponent`` only 1.0 (a documented CP-SAT limitation: the objective is
+               linear).
+
+A custom constraint without `weight` is looked up with
+`ObjectiveWeights.weight_for(name)`, and defaults to 1 if not found there
+either.
 
 The catalog (`CONSTRAINT_TYPES` / `constraint_specs()`) is the single source a
 caller reads to learn "which constraints can be switched on, with which
@@ -26,9 +50,8 @@ parameters". A separately maintained list of names would drift from the
 solver, so read it from here rather than copying it by hand.
 
 Note: `validate.validate_timetable` / `compute_penalties` check against the
-default configuration (hard H1–H10, soft S1–S6) only. Whether a solution
-obtained with relaxed or injected custom constraints respects those rules is
-for the caller to verify.
+default configuration only. Whether a solution obtained with relaxed or
+injected custom constraints respects those rules is for the caller to verify.
 """
 
 from collections.abc import Iterable, Sequence
@@ -36,14 +59,21 @@ from dataclasses import dataclass, fields
 from typing import Any, ClassVar, Protocol, runtime_checkable
 
 from ortools.sat.python import cp_model
+from st_timetabling import constraint_info as _engine_constraint_info
+from st_timetabling import constraints as domain
 
 from teacher_scheduling.solver import constraints as hard_impl
 from teacher_scheduling.solver import objective
 from teacher_scheduling.solver.config import ObjectiveWeights
 from teacher_scheduling.solver.variables import TimetableVariables
 
-#: Default penalty per unassigned period. Clearly larger than the sum of the other soft terms.
-UNASSIGNED_WEIGHT = 10_000
+#: Penalty per unassigned period in partial timetabling: the engine's documented soft weight of
+#: unassigned_lessons_cost (C++ UnassignedLessonsCost::kSoftWeight). Clearly larger than the sum
+#: of the other soft terms.
+UNASSIGNED_WEIGHT = int(domain.UNASSIGNED_LESSONS_SOFT_WEIGHT)
+
+#: The engine's catalog rows, by name: the default level / weight / flippability of each constraint.
+ENGINE_DEFAULTS: dict[str, Any] = {row.name: row for row in _engine_constraint_info()}
 
 
 @runtime_checkable
@@ -61,50 +91,69 @@ class Constraint(Protocol):
     def build(self, model: cp_model.CpModel, variables: TimetableVariables) -> cp_model.LinearExpr | None: ...
 
 
-# ---------------------------------------------------------------- hard constraints (H1–H10)
+class _EnginePlugin:
+    """The CP-SAT side of one engine constraint spec: the knob rules and `build()`.
 
-
-@dataclass(frozen=True)
-class WeeklyPeriodCounts:
-    """H1: weekly periods per course.
-
-    `hard=True` matches them exactly; `hard=False` relaxes to "at most" and
-    turns unfilled periods into a penalty — Comcigan's "unassigned list" works
-    this way. With the relaxed mode's `weight` above the sum of the other soft
-    terms, every period that can be filled is filled and only the truly
-    impossible ones stay unassigned.
+    Mixed into a subclass of the matching `st_timetabling.constraints` spec, so
+    the name, the labels and the knob fields (weight / hard / exponent) are the
+    spec's own.
     """
 
-    name: ClassVar[str] = "weekly_period_counts"
-    label: ClassVar[str] = "Weekly periods met"
+    name: ClassVar[str]
+    weight: float | None
+    hard: bool | None
+    exponent: float
 
-    hard: bool = True
-    weight: int = UNASSIGNED_WEIGHT
+    @property
+    def default_level(self) -> str:
+        return ENGINE_DEFAULTS[self.name].default_level
+
+    @property
+    def level(self) -> str:
+        """The level the knobs ask for, with the engine's rules (hard=None keeps the default)."""
+        row = ENGINE_DEFAULTS[self.name]
+        if self.hard is None:
+            return row.default_level
+        wanted = "hard" if self.hard else "soft"
+        if wanted == "hard" and row.reward:
+            raise ValueError(f"constraint {self.name!r} is a reward (raw cost <= 0) and cannot be hard")
+        if wanted != row.default_level and not row.level_flippable:
+            raise ValueError(
+                f"constraint {self.name!r} is always {row.default_level}; hard={self.hard!r} is not allowed"
+            )
+        return wanted
+
+    @property
+    def effective_weight(self) -> int:
+        """The weight in effect: the knob, or the engine default when it is None. Integral on CP-SAT."""
+        weight = ENGINE_DEFAULTS[self.name].default_weight if self.weight is None else self.weight
+        if float(weight) != int(weight):
+            raise ValueError(f"constraint {self.name!r}: CP-SAT needs an integer weight, not {weight!r}")
+        return int(weight)
 
     def build(self, model: cp_model.CpModel, variables: TimetableVariables) -> cp_model.LinearExpr | None:
-        if self.hard:
-            hard_impl._add_weekly_period_counts(model, variables)
-            return None
+        if self.exponent != 1.0:
+            raise ValueError(f"constraint {self.name!r}: exponent {self.exponent!r} is not supported by CP-SAT")
+        level, weight = self.level, self.effective_weight
+        if level == "hard":
+            if weight == 0:
+                return None  # a zero weight switches the constraint off
+            return self._build_hard(model, variables)
+        return self._build_soft(model, variables)
 
-        for course in variables.problem.courses:
-            model.add(sum(variables.course_vars(course.id)) <= course.periods_per_week)
-        # A parallel group counts only its representative course. H5 ties the whole
-        # group to the same times, so its unassigned periods are always equal; counting
-        # every member would charge one missing cell group-size times and unfairly
-        # favour parallel groups over ordinary courses.
-        terms = [
-            course.periods_per_week - sum(variables.course_vars(course.id))
-            for course in variables.occupancy_representatives()
-        ]
-        return sum(terms) if terms else None
+    def _build_hard(self, model: cp_model.CpModel, variables: TimetableVariables) -> None:  # pragma: no cover
+        raise NotImplementedError
+
+    def _build_soft(self, model: cp_model.CpModel, variables: TimetableVariables) -> cp_model.LinearExpr | None:
+        raise ValueError(
+            f"constraint {self.name!r}: the CP-SAT model enforces it structurally, so hard=False is not supported"
+        )
 
 
-@dataclass(frozen=True)
-class _HardOnly:
-    """Common body of hard constraints that are only switched on or off, without parameters."""
+class _Structural(_EnginePlugin):
+    """A hard constraint the CP-SAT model states directly (`model.add`), without a penalty form."""
 
-    def build(self, model: cp_model.CpModel, variables: TimetableVariables) -> None:
-        """Returns no penalty expression (None), so it acts as a hard constraint only."""
+    def _build_hard(self, model: cp_model.CpModel, variables: TimetableVariables) -> None:
         self._impl(model, variables)
 
     @staticmethod
@@ -112,191 +161,185 @@ class _HardOnly:
         raise NotImplementedError
 
 
-@dataclass(frozen=True)
-class FixedSlots(_HardOnly):
-    """H2: fixed-time placement."""
+class _Penalty(_EnginePlugin):
+    """A soft constraint: a penalty expression, or with hard=True a constraint that it is 0."""
 
-    name: ClassVar[str] = "fixed_slots"
-    label: ClassVar[str] = "Fixed placements / forbidden times"
-    _impl = staticmethod(hard_impl._add_fixed_slots)
+    def _build_hard(self, model: cp_model.CpModel, variables: TimetableVariables) -> None:
+        expr = self._expression(model, variables)
+        if expr is not None:
+            model.add(expr == 0)
 
+    def _build_soft(self, model: cp_model.CpModel, variables: TimetableVariables) -> cp_model.LinearExpr | None:
+        return self._expression(model, variables)
 
-@dataclass(frozen=True)
-class ParallelGroups(_HardOnly):
-    """H5: parallel sections run together."""
-
-    name: ClassVar[str] = "parallel_groups"
-    label: ClassVar[str] = "Parallel sections together"
-    _impl = staticmethod(hard_impl._add_parallel_groups)
-
-
-@dataclass(frozen=True)
-class ClassGroupConflicts(_HardOnly):
-    """H3: no class clashes."""
-
-    name: ClassVar[str] = "class_group_conflicts"
-    label: ClassVar[str] = "No double-booked class"
-    _impl = staticmethod(hard_impl._add_class_group_conflicts)
+    def _expression(
+        self, model: cp_model.CpModel, variables: TimetableVariables
+    ) -> cp_model.LinearExpr | None:  # pragma: no cover
+        raise NotImplementedError
 
 
-@dataclass(frozen=True)
-class TeacherConflicts(_HardOnly):
-    """H4: no teacher clashes."""
-
-    name: ClassVar[str] = "teacher_conflicts"
-    label: ClassVar[str] = "No double-booked teacher"
-    _impl = staticmethod(hard_impl._add_teacher_conflicts)
+# ---------------------------------------------------------------- hard constraints
 
 
-@dataclass(frozen=True)
-class RoomCapacity(_HardOnly):
-    """H6: special-room capacity."""
+class UnassignedLessonsCost(domain.UnassignedLessonsCost, _EnginePlugin):
+    """Weekly periods per course.
 
-    name: ClassVar[str] = "room_capacity"
-    label: ClassVar[str] = "Special-room capacity"
-    _impl = staticmethod(hard_impl._add_room_capacity)
+    Hard (the default) matches them exactly; ``hard=False`` relaxes to "at
+    most" and turns unfilled periods into a penalty — Comcigan's "unassigned
+    list" works this way. With the relaxed mode's `weight` above the sum of the
+    other soft terms (`UNASSIGNED_WEIGHT`), every period that can be filled is
+    filled and only the truly impossible ones stay unassigned.
+    """
 
+    def _build_hard(self, model: cp_model.CpModel, variables: TimetableVariables) -> None:
+        hard_impl._add_unassigned_lessons_cost(model, variables)
 
-@dataclass(frozen=True)
-class DailyCourseLimits(_HardOnly):
-    """H7: daily maximum periods per course."""
-
-    name: ClassVar[str] = "daily_course_limits"
-    label: ClassVar[str] = "Daily periods per course"
-    _impl = staticmethod(hard_impl._add_daily_course_limits)
-
-
-@dataclass(frozen=True)
-class BlockPeriods(_HardOnly):
-    """H8: block time (consecutive periods)."""
-
-    name: ClassVar[str] = "block_periods"
-    label: ClassVar[str] = "Consecutive blocks"
-    _impl = staticmethod(hard_impl._add_block_periods)
-
-
-@dataclass(frozen=True)
-class TeacherWorkload(_HardOnly):
-    """H9: daily/weekly maximum periods per teacher."""
-
-    name: ClassVar[str] = "teacher_workload"
-    label: ClassVar[str] = "Teacher period caps"
-    _impl = staticmethod(hard_impl._add_teacher_workload)
+    def _build_soft(self, model: cp_model.CpModel, variables: TimetableVariables) -> cp_model.LinearExpr | None:
+        for course in variables.problem.courses:
+            model.add(sum(variables.course_vars(course.id)) <= course.periods_per_week)
+        # A parallel group counts only its representative course. The parallel-groups rule ties
+        # the whole group to the same times, so its unassigned periods are always equal; counting
+        # every member would charge one missing cell group-size times and unfairly favour parallel
+        # groups over ordinary courses (the engine's merged lesson is one lesson too).
+        terms = [
+            course.periods_per_week - sum(variables.course_vars(course.id))
+            for course in variables.occupancy_representatives()
+        ]
+        return sum(terms) if terms else None
 
 
-@dataclass(frozen=True)
-class TeacherConsecutiveLimits(_HardOnly):
-    """H10: teacher consecutive-lessons limit."""
+class FixedSlotsCost(domain.FixedSlotsCost, _Structural):
+    """Fixed-time placement (never flippable)."""
 
-    name: ClassVar[str] = "teacher_consecutive_limits"
-    label: ClassVar[str] = "Teacher consecutive lessons"
-    _impl = staticmethod(hard_impl._add_teacher_consecutive_limits)
+    _impl = staticmethod(hard_impl._add_fixed_slots_cost)
 
 
-# ---------------------------------------------------------------- soft terms (S1–S6)
+class ParallelGroupsCost(domain.ParallelGroupsCost, _Structural):
+    """Parallel sections run together (never flippable)."""
+
+    _impl = staticmethod(hard_impl._add_parallel_groups_cost)
 
 
-@dataclass(frozen=True)
-class TeacherGap:
-    """S1: idle periods in the middle of a teacher's day."""
+class ClassConflictCost(domain.ClassConflictCost, _Structural):
+    """No class clashes."""
 
-    name: ClassVar[str] = "teacher_gap"
-    label: ClassVar[str] = "Minimise teacher gaps"
+    _impl = staticmethod(hard_impl._add_class_conflict_cost)
 
-    weight: int = 20
 
-    def build(self, model: cp_model.CpModel, variables: TimetableVariables) -> cp_model.LinearExpr | None:
+class TeacherConflictCost(domain.TeacherConflictCost, _Structural):
+    """No teacher clashes."""
+
+    _impl = staticmethod(hard_impl._add_teacher_conflict_cost)
+
+
+class DisallowedSlotCost(domain.DisallowedSlotCost, _Structural):
+    """Lessons only on allowed times: structural here — CP-SAT never creates a variable for a forbidden
+    time or an unavailable teacher/class (variables.py), so there is nothing to add."""
+
+    @staticmethod
+    def _impl(model: cp_model.CpModel, variables: TimetableVariables) -> None:
+        return None
+
+
+class RoomCapacityCost(domain.RoomCapacityCost, _Structural):
+    """Special-room capacity."""
+
+    _impl = staticmethod(hard_impl._add_room_capacity_cost)
+
+
+class CourseMaxPeriodsPerDayCost(domain.CourseMaxPeriodsPerDayCost, _Structural):
+    """Daily maximum periods per course."""
+
+    _impl = staticmethod(hard_impl._add_course_max_periods_per_day_cost)
+
+
+class BlockAdjacencyCost(domain.BlockAdjacencyCost, _Structural):
+    """Block time (consecutive periods)."""
+
+    _impl = staticmethod(hard_impl._add_block_adjacency_cost)
+
+
+class TeacherMaxPeriodsCost(domain.TeacherMaxPeriodsCost, _Structural):
+    """Daily/weekly maximum periods per teacher."""
+
+    _impl = staticmethod(hard_impl._add_teacher_max_periods_cost)
+
+
+class TeacherMaxConsecutivePeriodsCost(domain.TeacherMaxConsecutivePeriodsCost, _Structural):
+    """Teacher consecutive-lessons limit."""
+
+    _impl = staticmethod(hard_impl._add_teacher_max_consecutive_periods_cost)
+
+
+# ---------------------------------------------------------------- soft constraints
+
+
+class TeacherGapCost(domain.TeacherGapCost, _Penalty):
+    """Idle periods in the middle of a teacher's day."""
+
+    def _expression(self, model: cp_model.CpModel, variables: TimetableVariables) -> cp_model.LinearExpr | None:
         return objective._sum_or_none([span.gap for span in variables.teacher_day_spans().values()])
 
 
-@dataclass(frozen=True)
-class TeacherWorkday:
-    """S2: number of teacher working days."""
+class TeacherWorkdayCost(domain.TeacherWorkdayCost, _Penalty):
+    """Number of teacher working days."""
 
-    name: ClassVar[str] = "teacher_workday"
-    label: ClassVar[str] = "Minimise teacher working days"
-
-    weight: int = 3
-
-    def build(self, model: cp_model.CpModel, variables: TimetableVariables) -> cp_model.LinearExpr | None:
+    def _expression(self, model: cp_model.CpModel, variables: TimetableVariables) -> cp_model.LinearExpr | None:
         return objective._sum_or_none([span.working for span in variables.teacher_day_spans().values()])
 
 
-@dataclass(frozen=True)
-class TeacherFreeDay:
-    """S3: lessons placed on a requested free day."""
+class TeacherFreeDayCost(domain.TeacherFreeDayCost, _Penalty):
+    """Worked requested free days: a teacher's working day on one of their preferred free days."""
 
-    name: ClassVar[str] = "teacher_free_day"
-    label: ClassVar[str] = "Teacher requested free days"
-
-    weight: int = 30
-
-    def build(self, model: cp_model.CpModel, variables: TimetableVariables) -> cp_model.LinearExpr | None:
+    def _expression(self, model: cp_model.CpModel, variables: TimetableVariables) -> cp_model.LinearExpr | None:
         spans = variables.teacher_day_spans()
         return objective._sum_or_none(objective._free_day_violations(variables, spans))
 
 
-@dataclass(frozen=True)
-class ClassGap:
-    """S4: idle periods in the middle of a class's day."""
+class ClassGapCost(domain.ClassGapCost, _Penalty):
+    """Idle periods in the middle of a class's day."""
 
-    name: ClassVar[str] = "class_gap"
-    label: ClassVar[str] = "Minimise class gaps"
-
-    weight: int = 10
-
-    def build(self, model: cp_model.CpModel, variables: TimetableVariables) -> cp_model.LinearExpr | None:
+    def _expression(self, model: cp_model.CpModel, variables: TimetableVariables) -> cp_model.LinearExpr | None:
         return objective._sum_or_none([span.gap for span in variables.class_day_spans().values()])
 
 
-@dataclass(frozen=True)
-class AvoidedPeriod:
-    """S5: lessons placed in a subject's avoided periods."""
+class AvoidedPeriodCost(domain.AvoidedPeriodCost, _Penalty):
+    """Lessons placed in a subject's avoided periods."""
 
-    name: ClassVar[str] = "avoided_period"
-    label: ClassVar[str] = "Avoid avoided periods"
-
-    weight: int = 5
-
-    def build(self, model: cp_model.CpModel, variables: TimetableVariables) -> cp_model.LinearExpr | None:
+    def _expression(self, model: cp_model.CpModel, variables: TimetableVariables) -> cp_model.LinearExpr | None:
         return objective._sum_or_none(objective._period_preference_vars(variables, avoided=True))
 
 
-@dataclass(frozen=True)
-class NonPreferredPeriod:
-    """S6: lessons placed outside a subject's preferred periods."""
+class NonPreferredPeriodCost(domain.NonPreferredPeriodCost, _Penalty):
+    """Lessons placed outside a subject's preferred periods."""
 
-    name: ClassVar[str] = "non_preferred_period"
-    label: ClassVar[str] = "Favour preferred periods"
-
-    weight: int = 1
-
-    def build(self, model: cp_model.CpModel, variables: TimetableVariables) -> cp_model.LinearExpr | None:
+    def _expression(self, model: cp_model.CpModel, variables: TimetableVariables) -> cp_model.LinearExpr | None:
         return objective._sum_or_none(objective._period_preference_vars(variables, avoided=False))
 
 
 # ---------------------------------------------------------------- catalog
 
-#: Every registered constraint. The order is the default assembly order (hard H1–H10 -> soft S1–S6).
-#: A class added here appears automatically in the DTOs (`teacher_scheduling.api`)
-#: and in the catalog.
+#: Every registered constraint, in the engine's list_constraints() order (the default assembly
+#: order). A class added here appears automatically in the DTOs (`teacher_scheduling.api`) and in
+#: the catalog.
 CONSTRAINT_TYPES: tuple[type[Constraint], ...] = (
-    WeeklyPeriodCounts,  # H1
-    FixedSlots,  # H2
-    ParallelGroups,  # H5
-    ClassGroupConflicts,  # H3
-    TeacherConflicts,  # H4
-    RoomCapacity,  # H6
-    DailyCourseLimits,  # H7
-    BlockPeriods,  # H8
-    TeacherWorkload,  # H9
-    TeacherConsecutiveLimits,  # H10
-    TeacherGap,  # S1
-    TeacherWorkday,  # S2
-    TeacherFreeDay,  # S3
-    ClassGap,  # S4
-    AvoidedPeriod,  # S5
-    NonPreferredPeriod,  # S6
+    UnassignedLessonsCost,
+    ClassConflictCost,
+    TeacherConflictCost,
+    DisallowedSlotCost,
+    RoomCapacityCost,
+    CourseMaxPeriodsPerDayCost,
+    BlockAdjacencyCost,
+    TeacherMaxPeriodsCost,
+    TeacherMaxConsecutivePeriodsCost,
+    TeacherGapCost,
+    TeacherWorkdayCost,
+    TeacherFreeDayCost,
+    ClassGapCost,
+    AvoidedPeriodCost,
+    NonPreferredPeriodCost,
+    FixedSlotsCost,
+    ParallelGroupsCost,
 )
 
 CONSTRAINT_TYPE_BY_NAME: dict[str, type[Constraint]] = {c.name: c for c in CONSTRAINT_TYPES}
@@ -313,21 +356,19 @@ class ConstraintParam:
 
 @dataclass(frozen=True)
 class ConstraintSpec:
-    """One catalog row: what can be switched on, and how."""
+    """One catalog row: what can be switched on, and how — with the engine's defaults."""
 
     name: str
     label: str
-    #: `"hard"` cannot be switched off or relaxed, `"soft"` is a weighted penalty only,
-    #: `"either"` implements both modes through its `hard` parameter.
+    #: `"either"` when hard=True/False may move the constraint, else its fixed level (the
+    #: engine's `level_flippable`).
     kind: str
     params: tuple[ConstraintParam, ...]
-
-    @property
-    def default_weight(self) -> int:
-        for param in self.params:
-            if param.name == "weight":
-                return param.default
-        return 0
+    default_level: str = "hard"
+    default_weight: int | float = 1
+    level_flippable: bool = True
+    reward: bool = False
+    default_enabled: bool = True
 
 
 def _params_of(constraint_type: type[Constraint]) -> tuple[ConstraintParam, ...]:
@@ -338,37 +379,46 @@ def _params_of(constraint_type: type[Constraint]) -> tuple[ConstraintParam, ...]
 
 
 def constraint_specs() -> tuple[ConstraintSpec, ...]:
-    """Names/labels/parameters of the registered constraints. Read this instead of a hand-copied list."""
+    """Names/labels/parameters/defaults of the registered constraints, from the engine's catalog.
+
+    Read this instead of a hand-copied list."""
     specs = []
     for constraint_type in CONSTRAINT_TYPES:
-        params = _params_of(constraint_type)
-        names = {param.name for param in params}
-        if "hard" in names:
-            kind = "either"
-        elif "weight" in names:
-            kind = "soft"
-        else:
-            kind = "hard"
-        specs.append(ConstraintSpec(name=constraint_type.name, label=constraint_type.label, kind=kind, params=params))
+        row = ENGINE_DEFAULTS[constraint_type.name]
+        weight = row.default_weight
+        specs.append(
+            ConstraintSpec(
+                name=constraint_type.name,
+                label=constraint_type.label_en,
+                kind="either" if row.level_flippable else row.default_level,
+                params=_params_of(constraint_type),
+                default_level=row.default_level,
+                default_weight=int(weight) if float(weight).is_integer() else weight,
+                level_flippable=row.level_flippable,
+                reward=row.reward,
+                default_enabled=row.default_enabled,
+            )
+        )
     return tuple(specs)
 
 
 def default_constraints(weights: ObjectiveWeights | None = None) -> tuple[Constraint, ...]:
-    """Assembles the default configuration (hard H1–H10 + soft S1–S6) with default parameters.
+    """Assembles the default configuration with default parameters.
 
-    Given `weights`, overrides `weight` only for the names **actually present
-    there** — so that existing calls passing weights via `ObjectiveWeights` keep
-    working. `weight_for`'s default of 1 must not leak in for unknown names,
-    hence the presence check.
+    Given `weights`, sets `weight` of the soft constraints whose names are
+    **actually present there** — so that calls passing weights via
+    `ObjectiveWeights` keep working (its extra fields name custom terms, and a
+    hard constraint never takes its weight from there). `weight_for`'s default
+    of 1 must not leak in for unknown names, hence the presence check.
     """
     given = weights.model_dump() if weights is not None else {}
     built = []
     for constraint_type in CONSTRAINT_TYPES:
-        kwargs: dict[str, Any] = {}
         name = constraint_type.name
-        if name in given and any(param.name == "weight" for param in _params_of(constraint_type)):
-            kwargs["weight"] = given[name]
-        built.append(constraint_type(**kwargs))
+        if name in given and ENGINE_DEFAULTS[name].default_level == "soft":
+            built.append(constraint_type(weight=given[name]))
+        else:
+            built.append(constraint_type())
     return tuple(built)
 
 
@@ -384,7 +434,10 @@ def merge(base: Sequence[Constraint], *overrides: Constraint) -> tuple[Constrain
 
 
 def weight_of(constraint: Constraint, weights: ObjectiveWeights) -> int:
-    """A constraint's weight. The instance's `weight` is the source; otherwise looked up in `weights`."""
+    """A constraint's weight. A built-in constraint's knob (None = the engine default) is the
+    source; a custom one's own `weight`, otherwise looked up in `weights`."""
+    if isinstance(constraint, _EnginePlugin):
+        return constraint.effective_weight
     own = getattr(constraint, "weight", None)
     return weights.weight_for(constraint.name) if own is None else own
 
@@ -406,26 +459,28 @@ def build_all(
 __all__ = [
     "CONSTRAINT_TYPES",
     "CONSTRAINT_TYPE_BY_NAME",
+    "ENGINE_DEFAULTS",
     "UNASSIGNED_WEIGHT",
-    "AvoidedPeriod",
-    "BlockPeriods",
-    "ClassGap",
-    "ClassGroupConflicts",
+    "AvoidedPeriodCost",
+    "BlockAdjacencyCost",
+    "ClassConflictCost",
+    "ClassGapCost",
     "Constraint",
     "ConstraintParam",
     "ConstraintSpec",
-    "DailyCourseLimits",
-    "FixedSlots",
-    "NonPreferredPeriod",
-    "ParallelGroups",
-    "RoomCapacity",
-    "TeacherConflicts",
-    "TeacherConsecutiveLimits",
-    "TeacherFreeDay",
-    "TeacherGap",
-    "TeacherWorkday",
-    "TeacherWorkload",
-    "WeeklyPeriodCounts",
+    "CourseMaxPeriodsPerDayCost",
+    "DisallowedSlotCost",
+    "FixedSlotsCost",
+    "NonPreferredPeriodCost",
+    "ParallelGroupsCost",
+    "RoomCapacityCost",
+    "TeacherConflictCost",
+    "TeacherFreeDayCost",
+    "TeacherGapCost",
+    "TeacherMaxConsecutivePeriodsCost",
+    "TeacherMaxPeriodsCost",
+    "TeacherWorkdayCost",
+    "UnassignedLessonsCost",
     "build_all",
     "constraint_specs",
     "default_constraints",

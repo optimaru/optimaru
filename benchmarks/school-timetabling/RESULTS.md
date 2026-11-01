@@ -10,16 +10,18 @@ OR-Tools CP-SAT on the same instances and the same wall-clock budget. The benchm
 There are three tracks. Track 1 measures how well the solvers handle "the
 same six constraints" (pure search performance); track 2 measures the quality
 of the C++ canonical solver against CP-SAT on the full real-world model; track
-3 relaxes H1 on an instance with one weekday removed and compares how much
+3 relaxes `unassigned_lessons_cost` on an instance with one weekday removed and compares how much
 each solver fills (partial timetabling; see README.md "Track 3"). CI publishes
 all three tables; the tables below cover tracks 1 and 2.
 
 ### Track 1 — the quickstart's six constraints
 
-- **Constraints**: exactly the original Java quickstart's six — roomConflict /
-  teacherConflict / studentGroupConflict (hard), teacherRoomStability /
-  teacherTimeEfficiency / studentGroupSubjectVariety (soft). The
-  `teacherUnavailable` extension of this repository's C++ domain gets empty
+- **Constraints**: exactly the original Java quickstart's six — room_conflict_cost /
+  teacher_conflict_cost / class_conflict_cost (hard), teacher_room_change_cost /
+  teacher_time_efficiency_cost / class_subject_repeat_cost (soft; the Java
+  roomConflict / teacherConflict / studentGroupConflict, teacherRoomStability /
+  teacherTimeEfficiency / studentGroupSubjectVariety). The
+  teacher_unavailability_cost extension of this repository's C++ domain gets empty
   data in these instances, so it contributes 0 (fairness).
 - **Instances**: `use-cases/school-timetabling/cpp/bench/st_quality_bench.cpp`
   generates them deterministically and dumps JSON; both solvers read the
@@ -47,8 +49,8 @@ all three tables; the tables below cover tracks 1 and 2.
 
 ### Track 2 — full canonical constraints, C++ canonical vs CP-SAT
 
-- **Model**: this repository's canonical `TimetableProblem` (hard H1–H10 +
-  soft S1–S6 — blocks, merged parallel sections, team teaching, teacher
+- **Model**: this repository's canonical `TimetableProblem` (every hard and
+  soft canonical constraint — blocks, merged parallel sections, team teaching, teacher
   unavailability and weekly/consecutive caps, special-room demand, fixed
   placements). Same as the
   [`API_SPEC.md`](../../use-cases/school-timetabling/API_SPEC.md) contract.
@@ -266,7 +268,7 @@ uv run run_bench.py --sizes S,M,L --seconds 10 \
 # 3) Track 2: full canonical constraints (out/RESULTS_track2.md)
 uv run run_bench.py --track2 --sizes S,M,L --seconds 10
 
-# 4) Track 3: partial timetabling, H1 relaxed (out/RESULTS_track3.md)
+# 4) Track 3: partial timetabling, unassigned_lessons_cost relaxed (out/RESULTS_track3.md)
 uv run run_bench.py --track3 --sizes S,M,L --seconds 10
 ```
 

@@ -1,70 +1,112 @@
-"""Exact CP-SAT formulation for one-dimensional bin packing."""
+"""Exact CP-SAT formulation for one-dimensional bin packing.
+
+The returned object uses the canonical ``BinPackingProblemModel`` JSON contract.
+Every item goes in exactly one of the bins 0..n-1 (n = item count, the engine's
+value range too); hard costs are optimized lexicographically before the soft
+ones, matching the engine's ``HardSoftScore``, and the result is re-scored by the
+shared C++ evaluator (``constraint_costs``) under the same selection.
+"""
 
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
+from dataclasses import dataclass
 
 from bin_packing import calculate_score, constraint_costs
-from bin_packing import constraints as domain_constraints
 from bin_packing.constraints import Constraint
 from bin_packing.models import BinPackingProblemModel
-from cpsat_plugins import ConstraintConfig
+from cpsat_plugins import ConstraintConfig, ObjectiveBuilder
 from ortools.sat.python import cp_model
 
 from .constraints import REGISTRY, BinPackingContext
 
-__all__ = ["catalog", "solve"]
+__all__ = ["Built", "build", "catalog", "solve"]
 
 
 def catalog() -> list[dict]:
     return REGISTRY.catalog()
 
 
-def _selection_payload(constraints):
-    if constraints is None:
-        return None
-    payload = []
-    for value in constraints:
-        if isinstance(value, str):
-            row = {"name": value}
-        elif isinstance(value, Mapping):
-            row = dict(value)
-        else:
-            row = {
-                "name": value.name,
-                "weight": value.weight,
-                "hard": value.hard,
-                "exponent": getattr(value, "exponent", 1.0),
-            }
-        exponent = row.pop("exponent", 1.0)
-        if exponent != 1.0:
-            raise ValueError(
-                f"constraint {row.get('name')!r} exponent is not supported by CP-SAT"
-            )
-        payload.append({key: item for key, item in row.items() if item is not None})
-    return payload
+@dataclass(frozen=True)
+class Built:
+    """A built model: the CP-SAT model, its variables and the selected objective."""
+
+    model: cp_model.CpModel
+    context: BinPackingContext
+    objective: ObjectiveBuilder
 
 
-def _score_constraints(payload):
-    if payload is None:
-        return None
-    classes = {
-        "bin_capacity": domain_constraints.BinCapacity,
-        "color_compatibility": domain_constraints.ColorCompatibility,
-        "item_conflicts": domain_constraints.ItemConflicts,
-        "minimize_bins": domain_constraints.MinimizeBins,
+def build(
+    problem: BinPackingProblemModel,
+    constraints: Iterable[ConstraintConfig | Constraint | str | Mapping] | None = None,
+    *,
+    symmetry_breaking: bool = True,
+) -> Built:
+    """Build the CP-SAT model of `problem` under a constraint selection (None = the defaults).
+
+    Bins are interchangeable, so ``symmetry_breaking`` puts item 0 in bin 0 and makes
+    the used bins a prefix 0..k-1 (every constraint is invariant under relabelling
+    bins, so this loses no optimum); pass False to pin an arbitrary assignment.
+    """
+    model = cp_model.CpModel()
+    count = len(problem.items)
+    total_weight = sum(item.weight for item in problem.items)
+    assignments = {
+        (item, bin_index): model.new_bool_var(f"item_{item}_bin_{bin_index}")
+        for item in range(count)
+        for bin_index in range(count)
     }
-    selected = []
-    for row in payload:
-        if not row.get("enabled", True):
-            continue
-        name = row["name"]
-        if name not in classes:
-            raise ValueError(
-                f"unknown constraint {name!r}; available: {sorted(classes)}"
-            )
-        selected.append(classes[name](weight=row.get("weight"), hard=row.get("hard")))
-    return selected
+    used = [model.new_bool_var(f"bin_{bin_index}_used") for bin_index in range(count)]
+    overflow = []
+    for item in range(count):
+        model.add_exactly_one(assignments[item, bin_index] for bin_index in range(count))
+    for bin_index in range(count):
+        model.add_max_equality(used[bin_index], [assignments[item, bin_index] for item in range(count)])
+        load = sum(problem.items[item].weight * assignments[item, bin_index] for item in range(count))
+        excess = model.new_int_var(0, total_weight, f"bin_{bin_index}_overflow")
+        model.add(excess >= load - problem.bin_capacity)
+        overflow.append(excess)
+        if symmetry_breaking and bin_index + 1 < count:
+            model.add(used[bin_index] >= used[bin_index + 1])
+    if symmetry_breaking and count:
+        model.add(assignments[0, 0] == 1)
+
+    # Only a colour two or more items carry can conflict (as the engine's colour classes).
+    members: dict[str, list[int]] = {}
+    for index, item in enumerate(problem.items):
+        if item.color is not None:
+            members.setdefault(item.color, []).append(index)
+    shared = {color: items for color, items in members.items() if len(items) >= 2}
+    color_excess = []
+    for bin_index in range(count):
+        for color, items in sorted(shared.items()):
+            excess = model.new_int_var(0, len(items) - 1, f"bin_{bin_index}_color_{color}_excess")
+            model.add(excess >= sum(assignments[item, bin_index] for item in items) - 1)
+            color_excess.append(excess)
+    color_bound = sum(len(items) - 1 for items in shared.values())
+
+    item_by_id = {item.id: index for index, item in enumerate(problem.items)}
+    conflict_violations = []
+    for pair_index, pair in enumerate(problem.conflicts):
+        left = item_by_id[pair.first]
+        right = item_by_id[pair.second]
+        together = []
+        for bin_index in range(count):
+            both = model.new_bool_var(f"conflict_{pair_index}_bin_{bin_index}")
+            model.add_multiplication_equality(both, [assignments[left, bin_index], assignments[right, bin_index]])
+            together.append(both)
+        violation = model.new_bool_var(f"conflict_{pair_index}_violated")
+        model.add(violation == sum(together))
+        conflict_violations.append(violation)
+
+    # Default weights and levels come from the engine (constraint_info()); the
+    # canonical problem carries none.
+    objective = REGISTRY.objective(model, ("hard", "soft"), constraints)
+    context = BinPackingContext(
+        model, problem, assignments, used, overflow, color_excess, color_bound, conflict_violations
+    )
+    REGISTRY.build(context, objective)
+    return Built(model, context, objective)
 
 
 def solve(
@@ -75,127 +117,26 @@ def solve(
     num_workers: int = 1,
     constraints: Iterable[ConstraintConfig | Constraint | str | Mapping] | None = None,
 ) -> BinPackingProblemModel:
-    selection_payload = _selection_payload(constraints)
-    item_count = len(problem.items)
-    if item_count == 0:
-        core = problem.to_core()
-        calculate_score(core)
-        return BinPackingProblemModel.from_core(core)
-
-    model = cp_model.CpModel()
-    assignments = {
-        (item, bin_index): model.new_bool_var(f"item_{item}_bin_{bin_index}")
-        for item in range(item_count)
-        for bin_index in range(item_count)
-    }
-    used = [
-        model.new_bool_var(f"bin_{bin_index}_used") for bin_index in range(item_count)
-    ]
-    overflow = []
-    color_excess = []
-    conflict_violations = []
-
-    for item in range(item_count):
-        model.add_exactly_one(
-            assignments[item, bin_index] for bin_index in range(item_count)
-        )
-    for bin_index in range(item_count):
-        members = [assignments[item, bin_index] for item in range(item_count)]
-        model.add_max_equality(used[bin_index], members)
-        load = sum(
-            problem.items[item].weight * assignments[item, bin_index]
-            for item in range(item_count)
-        )
-        excess = model.new_int_var(
-            0, sum(item.weight for item in problem.items), f"bin_{bin_index}_overflow"
-        )
-        model.add(excess >= load - problem.bin_capacity)
-        overflow.append(excess)
-        if bin_index + 1 < item_count:
-            model.add(used[bin_index] >= used[bin_index + 1])
-    colors = sorted({item.color for item in problem.items if item.color is not None})
-    for bin_index in range(item_count):
-        for color in colors:
-            count = sum(
-                assignments[item, bin_index]
-                for item in range(item_count)
-                if problem.items[item].color == color
-            )
-            excess = model.new_int_var(
-                0, item_count, f"bin_{bin_index}_color_{color}_excess"
-            )
-            model.add(excess >= count - 1)
-            color_excess.append(excess)
-    item_by_id = {item.id: index for index, item in enumerate(problem.items)}
-    for pair_index, pair in enumerate(problem.conflicts):
-        left = item_by_id[pair.first]
-        right = item_by_id[pair.second]
-        same_bin_terms = []
-        for bin_index in range(item_count):
-            together = model.new_bool_var(f"conflict_{pair_index}_bin_{bin_index}")
-            model.add_multiplication_equality(
-                together,
-                [assignments[left, bin_index], assignments[right, bin_index]],
-            )
-            same_bin_terms.append(together)
-        violation = model.new_bool_var(f"conflict_{pair_index}_violated")
-        model.add(violation == sum(same_bin_terms))
-        conflict_violations.append(violation)
-    model.add(assignments[0, 0] == 1)
-
-    objective = REGISTRY.objective(
-        model,
-        ("hard", "soft"),
-        selection_payload,
-        default_weights={
-            "bin_capacity": problem.capacity_weight,
-            "color_compatibility": problem.color_weight,
-            "item_conflicts": problem.conflict_weight,
-            "minimize_bins": problem.used_bin_weight,
-        },
-    )
-    REGISTRY.build(
-        BinPackingContext(
-            model,
-            problem,
-            assignments,
-            used,
-            overflow,
-            color_excess,
-            conflict_violations,
-        ),
-        objective,
-    )
-
-    solver = cp_model.CpSolver()
-    solver.parameters.max_time_in_seconds = time_limit_seconds
-    solver.parameters.random_seed = random_seed
-    solver.parameters.num_search_workers = max(1, num_workers)
-    status = objective.solve(solver)
-    if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-        raise RuntimeError(
-            f"CP-SAT did not find a solution (status={solver.status_name(status)})"
-        )
-
+    """Solve ``problem`` without mutating it and return a scored solution."""
+    built = build(problem, constraints)
     solved = problem.model_copy(deep=True)
-    for item_index, item in enumerate(solved.items):
-        item.bin = next(
-            bin_index
-            for bin_index in range(item_count)
-            if solver.value(assignments[item_index, bin_index])
-        )
+    solved.warm_start = False
+    if problem.items:
+        solver = cp_model.CpSolver()
+        solver.parameters.max_time_in_seconds = time_limit_seconds
+        solver.parameters.random_seed = random_seed
+        solver.parameters.num_search_workers = max(1, num_workers)
+        status = built.objective.solve(solver)
+        if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+            raise RuntimeError(f"CP-SAT did not find a solution (status={solver.status_name(status)})")
+        count = len(problem.items)
+        for index, item in enumerate(solved.items):
+            item.bin = next(b for b in range(count) if solver.value(built.context.assignments[index, b]))
 
     core = solved.to_core()
     calculate_score(core)
     result = BinPackingProblemModel.from_core(core)
-    scoring_constraints = _score_constraints(selection_payload)
-    if scoring_constraints == []:
-        result.score_hard = 0
-        result.score_soft = 0.0
-    else:
-        selected_score = domain_constraints.score(
-            constraint_costs(core), scoring_constraints
-        )
-        result.score_hard = selected_score.hard
-        result.score_soft = selected_score.soft
+    selected_score = built.objective.score_costs(constraint_costs(core))
+    result.score_hard = selected_score["hard"]
+    result.score_soft = float(selected_score["soft"])
     return result

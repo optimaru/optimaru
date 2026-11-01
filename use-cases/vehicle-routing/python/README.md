@@ -45,9 +45,17 @@ print(plan.routes())                   # {"V1": ["C1"]}
 - Times are integer **seconds from a common day start** (`8 * 3600` = 08:00).
 - The driving-time matrix is precomputed from the haversine distance when the
   plan is constructed.
-- Score (`HardMediumSoft`, lexicographic): **hard** = capacity excess +
-  time-window lateness (0 = feasible), **medium** = −(service minutes of
-  unassigned visits), **soft** = −(total driving seconds).
+- Score (`HardMediumSoft`, lexicographic), at the default weights: **hard** =
+  capacity excess (`vehicle_capacity_cost`) + time-window lateness
+  (`max_end_time_cost`) (0 = feasible), **medium** = −(penalty minutes of
+  unassigned visits, `unassigned_visits_cost`; folded into the engine's soft as
+  `medium * 10^9`), **soft** = −(total driving seconds, `travel_time_cost`).
+- `vrp.constraint_info()` lists every constraint with its default level and
+  weight (the C++ components' `kDefaultLevel` / `kDefaultWeight`);
+  `vrp_routing.constraints` picks, re-weights and flips them for
+  `Solver.solve_with_constraints` / `solve_request(..., constraints=...)`. The
+  constraint table and the 0.2.0 renames are in the
+  [use-case README](../README.md#constraints).
 
 The default VRP configuration also enables a PyVRP-style granular descent:
 nearby route pairs are searched with best-improvement relocate, swap, 2-opt,
@@ -81,6 +89,8 @@ Everything round-trips through JSON (`model_validate_json` /
 ```
 bindings.cpp             pybind11 module (PYBIND11_MODULE(_core)) — thin wrapper
 vrp_routing/__init__.py  re-exports the core
+vrp_routing/constraints.py  the constraint specs (one class per C++ component)
+vrp_routing/_constraint.py  the shared spec base (a synced copy; never edit by hand)
 vrp_routing/models.py    pydantic request/response layer (optional)
 setup.py, pyproject.toml build (links ../cpp)
 tests/                   correctness + model tests (pytest)

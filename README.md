@@ -35,7 +35,7 @@ An unchanged version publishes nothing.
 include/optimaru/     the engine (header-only, one header per class)
 test/                 engine tests
 use-cases/<slug>/     22 problems built on the engine: C++ domain + solver
-                      and a pybind11 package (or a small pure-Python model)
+                      and a pybind11 package
 examples/             one Jupyter notebook per use case, with visualizations
 benchmarks/<slug>/    the same problems against OR-Tools (CP-SAT, or the
                       Routing solver for VRP);
@@ -53,13 +53,16 @@ include/optimaru/
 │   │                                              (VariableKind::BASIC | LIST | CHAINED)
 │   ├── domain/variable/variable_listener.hpp      shadow variables
 │   ├── score/buildin/hard_soft_score.hpp          HardSoftScore
+│   ├── score/level.hpp                            Level (hard / medium / soft),
+│   │                                              MediumFold
 │   ├── score/calculator/incremental_score_calculator.hpp
 │   ├── score/calculator/chained_incremental_score_calculator.hpp
 │   ├── score/calculator/composite_incremental_score_calculator.hpp
 │   │                                              cost components, weighted sum
 │   ├── score/calculator/decomposed_score_calculator.hpp
 │   │                                              per-unit constraint plugins
-│   ├── score/calculator/constraint_assembly.hpp   default constraint set, weight/soft/drop by name
+│   ├── score/calculator/constraint_assembly.hpp   default constraint set: weight / level /
+│   │                                              exponent / drop by name, info() catalog
 │   ├── score/director/score_director.hpp          + EnvironmentMode::FULL_ASSERT
 │   ├── score/analysis/score_analysis.hpp          ScoreAnalysis / ConstraintAnalysis
 │   └── solver/{solver.hpp, solver_factory.hpp,
@@ -98,7 +101,9 @@ include/optimaru/
 ├── preview/api/move/operators.hpp                 custom MoveOperator / RuinOperator
 │                                                  registration (experimental API)
 ├── python/constraint_binding.hpp                  pybind11 helper: Python constraint specs
-│                                                  -> ConstraintAssembly
+│                                                  -> ConstraintAssembly, constraint_info(),
+│                                                  constraint_costs()
+├── python/{names,level_guard}.hpp                 Python names, the hard=True/False guard
 └── testing/preview_parity.hpp                     move-preview vs applied-score harness
                                                    for a use case's calculator tests
 ```
@@ -118,6 +123,13 @@ namespaces); the directories organize the headers, the namespaces don't.
   written as an `IncrementalScoreCalculator` (list hooks included) or composed
   from named cost components with `CompositeIncrementalScoreCalculator`.
   Move evaluation stays incremental (O(delta)).
+- **Constraint plugins**: `DecomposedScoreCalculator` scores named unit and
+  global components (`<Subject>Cost`). Each declares its default weight and
+  level (`kDefaultWeight` / `kDefaultLevel`: hard, medium or soft); a caller
+  re-states only `weight`, `hard` / `soft` and `exponent` per solve
+  (`ConstraintAssembly`). Rewards (raw cost <= 0) never go hard, structural
+  constraints keep their level, and a domain with a medium level declares once
+  how it folds into the hard/soft score (`MediumFold`).
 - **Score analysis**: `SolutionManager::analyze()` → `ScoreAnalysis` /
   `ConstraintAnalysis`, a per-constraint breakdown over the named components.
 - **Verification**: `ScoreDirector` with `EnvironmentMode::FULL_ASSERT`;
@@ -240,11 +252,16 @@ QAPLIB, SALBP).
 ## Tests
 
 `test/engine_test.cpp` verifies every feature against brute force on two toy
-domains (BASIC task assignment, LIST TSP): all six acceptors, all four
-terminations, FFD ordering, multi-start, FULL_ASSERT catching a deliberately
+domains (BASIC task assignment, LIST TSP): six of the seven acceptors (all but
+Record-to-Record Travel), all five terminations, FFD ordering, multi-start
+(and its exception safety), FULL_ASSERT catching a deliberately
 corrupted calculator, list moves under FULL_ASSERT, adaptive operator-weight
 convergence, LNS escaping a local optimum that traps hill climbing, and the
-nearby+LNS quality win on 100-city random TSP.
+nearby+LNS quality win on 100-city random TSP. `test/constraint_level_test.cpp`
+covers the constraint contract: levels and both medium folds, the knob guards
+(rewards, structural levels, weight and exponent checks), the catalog, exponent
+shaping, incremental-vs-recompute and preview parity with a medium level, and
+the score range (a saturating hard total, out-of-range contributions).
 
 ```sh
 cmake -B build && cmake --build build && ctest --test-dir build

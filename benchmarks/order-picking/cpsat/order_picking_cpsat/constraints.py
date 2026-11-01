@@ -1,4 +1,10 @@
-"""Class-based CP-SAT plugins for order picking."""
+"""Class-based CP-SAT plugins for order picking.
+
+Each plugin subclasses the domain spec of the same name; its default level and
+weight come from the engine's ``order_picking.constraint_info()`` (the C++
+components' kDefaultLevel / kDefaultWeight), so they are not restated here.
+The registry keeps the ``list_constraints()`` order.
+"""
 
 from dataclasses import dataclass
 from typing import Any
@@ -23,23 +29,19 @@ class OrderPickingContext:
     overflow: list[Any]
 
 
-class RequiredNumberOfBuckets(
-    domain.RequiredNumberOfBuckets, ConstraintPlugin[OrderPickingContext]
+class TrolleyCapacityCost(
+    domain.TrolleyCapacityCost, ConstraintPlugin[OrderPickingContext]
 ):
-    default_level = "hard"
-
     def build(self, context: OrderPickingContext, objective: ObjectiveBuilder) -> None:
         bound = sum(len(order.items) for order in context.request.orders)
         for overflow in context.overflow:
             objective.add(self.name, overflow, bound=bound)
 
 
-class MinimizeDistanceFromPreviousPickTask(
-    domain.MinimizeDistanceFromPreviousPickTask,
+class DistanceFromPreviousPickTaskCost(
+    domain.DistanceFromPreviousPickTaskCost,
     ConstraintPlugin[OrderPickingContext],
 ):
-    default_level = "soft"
-
     def build(self, context: OrderPickingContext, objective: ObjectiveBuilder) -> None:
         from order_picking import _core
 
@@ -53,12 +55,10 @@ class MinimizeDistanceFromPreviousPickTask(
             objective.add(self.name, distance * literal, bound=distance)
 
 
-class MinimizeDistanceFromLastPickTaskToPathOrigin(
-    domain.MinimizeDistanceFromLastPickTaskToPathOrigin,
+class DistanceFromLastPickTaskToPathOriginCost(
+    domain.DistanceFromLastPickTaskToPathOriginCost,
     ConstraintPlugin[OrderPickingContext],
 ):
-    default_level = "soft"
-
     def build(self, context: OrderPickingContext, objective: ObjectiveBuilder) -> None:
         from order_picking import _core
 
@@ -69,12 +69,9 @@ class MinimizeDistanceFromLastPickTaskToPathOrigin(
             objective.add(self.name, distance * literal, bound=distance)
 
 
-class MinimizeOrderSplitByTrolley(
-    domain.MinimizeOrderSplitByTrolley, ConstraintPlugin[OrderPickingContext]
+class OrderSplitByTrolleyCost(
+    domain.OrderSplitByTrolleyCost, ConstraintPlugin[OrderPickingContext]
 ):
-    default_level = "soft"
-    default_weight = 1_000
-
     def build(self, context: OrderPickingContext, objective: ObjectiveBuilder) -> None:
         for used in context.order_used.values():
             objective.add(self.name, used, bound=1)
@@ -82,9 +79,9 @@ class MinimizeOrderSplitByTrolley(
 
 REGISTRY = ConstraintRegistry(
     [
-        RequiredNumberOfBuckets(),
-        MinimizeDistanceFromPreviousPickTask(),
-        MinimizeDistanceFromLastPickTaskToPathOrigin(),
-        MinimizeOrderSplitByTrolley(),
+        TrolleyCapacityCost(),
+        DistanceFromPreviousPickTaskCost(),
+        DistanceFromLastPickTaskToPathOriginCost(),
+        OrderSplitByTrolleyCost(),
     ]
 )

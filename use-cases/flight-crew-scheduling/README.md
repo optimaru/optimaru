@@ -7,17 +7,35 @@ that picks a crew member (`employee`) for every crew seat of a flight (`FlightAs
 ## Score mapping
 
 The Java original uses `HardSoftScore` (two integer levels), so it maps onto the engine's
-`HardSoftScore(int64 hard, double soft)` **as-is (identity)**. No level folding. The
-constraint weights are also exactly those of the Java `ConstraintProvider`:
+`HardSoftScore(int64 hard, double soft)` **as-is (identity)**. No level folding (no medium
+level). The default weights are exactly those of the Java `ConstraintProvider`:
 
-| Constraint | Level | Penalty |
-|---|---|---|
-| requiredSkill | hard | -100 per assignment |
-| flightConflict | hard | -10 per overlapping same-crew assignment pair |
-| transferBetweenTwoFlights | hard | -1 per disconnected consecutive assignment pair |
-| employeeUnavailability | hard | -10 per assignment on an unavailable day |
-| firstAssignmentNotDepartingFromHome | soft | -1000 |
-| lastAssignmentNotArrivingAtHome | soft | -1000 |
+| Constraint (Python name) | C++ component | Default level | Default weight | Raw cost per employee (0 = no violation) |
+|---|---|---|---|---|
+| `required_skill_cost` | `RequiredSkillCost` | hard | 100 | assignments whose seat skill the employee lacks |
+| `flight_conflict_cost` | `FlightConflictCost` | hard | 10 | pairs of the employee's assignments whose flights overlap in time |
+| `transfer_between_two_flights_cost` | `TransferBetweenTwoFlightsCost` | hard | 1 | departure-consecutive pairs whose arrival airport differs from the next departure airport |
+| `employee_unavailability_cost` | `EmployeeUnavailabilityCost` | hard | 10 | assignments touching an unavailable day (departure through arrival date) |
+| `first_assignment_not_departing_from_home_cost` | `FirstAssignmentNotDepartingFromHomeCost` | soft | 1000 | earliest-departure assignments (ties all count) not leaving from home |
+| `last_assignment_not_arriving_at_home_cost` | `LastAssignmentNotArrivingAtHomeCost` | soft | 1000 | latest-departure assignments (ties all count) not landing at home |
+
+Every constraint is flippable (`hard=True` / `hard=False`), none is a reward and all six
+are scored by default (`default_enabled`); `flight_crew.constraint_info()` reports exactly
+this table from the C++ components (`kDefaultLevel` / `kDefaultWeight`). All six are unit
+constraints over one employee's itinerary, so `exponent` shapes each employee's raw cost.
+
+**0.2.0:** the constraints were renamed with the `_cost` suffix in every layer
+(`required_skill` -> `required_skill_cost`, `flight_conflict` -> `flight_conflict_cost`,
+`transfer_between_two_flights` -> `transfer_between_two_flights_cost`,
+`employee_unavailability` -> `employee_unavailability_cost`,
+`first_assignment_not_departing_from_home` -> `first_assignment_not_departing_from_home_cost`,
+`last_assignment_not_arriving_at_home` -> `last_assignment_not_arriving_at_home_cost`; the
+spec classes, module-level default instances, C++ structs/headers and registry names follow,
+e.g. `RequiredSkill` -> `RequiredSkillCost` / `"requiredSkillCost"`). The old names are
+unknown now (no aliases). The defaults are declared once, as each component's
+`kDefaultWeight` / `kDefaultLevel`; the monolithic calculators read the same constants (the
+`fcs::REQUIRED_SKILL_WEIGHT` ... `LAST_NOT_HOME_WEIGHT` constants of `domain.hpp` are gone).
+Raw costs, levels, weights and the default score are unchanged.
 
 "Consecutive" follows the Java stream semantics: a pair (a, b) is consecutive when
 dep(a) < dep(b) and no other assignment c of the same crew member satisfies
@@ -30,7 +48,8 @@ start a pair, and all ties at the later end count. first/last also count all tie
 cd cpp
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j4
-./build/fcs_test      # per-constraint hand checks + random walk + FULL_ASSERT + pinned
+./build/fcs_test         # per-constraint hand checks + random walk + FULL_ASSERT + pinned
+./build/fcs_plugin_test  # plugin assembly == monolith, raw costs by hand, catalog, overrides
 ./build/fcs_demo 10   # reproduces the Java DemoDataGenerator scale, 10 s solve
 
 cd ../python
@@ -45,9 +64,18 @@ seats, ~50 crew members) and reaches feasible (hard 0) within 10 s.
 
 - `cpp/include/fcs/domain.hpp` — domain + `SolutionDescriptor` specialization
   (including the pinned extension)
+- `cpp/include/fcs/constraints/` — one component per constraint:
+  `required_skill_cost.hpp`, `flight_conflict_cost.hpp`,
+  `transfer_between_two_flights_cost.hpp`, `employee_unavailability_cost.hpp`,
+  `first_assignment_not_departing_from_home_cost.hpp`,
+  `last_assignment_not_arriving_at_home_cost.hpp` (+ `common.hpp`);
+  `cpp/include/fcs/constraints.hpp` assembles the default set (`defaultConstraints()`)
 - `cpp/src/score_calculator.cpp` — full recompute (the reference)
 - `cpp/src/incremental_calculator.cpp` — before/after hooks, per-crew-member
   O(delta) incremental scoring
+- `cpp/src/monolithic_weights.hpp` — the component defaults both monolithic
+  calculators read, with compile-time checks that the hard weights are whole
+  numbers and the levels match the components
 - `cpp/src/solver.cpp` — engine wrapper (LA + ALNS)
 - `python/` — pybind11 package `flight_crew` (with the pydantic v2 mirror;
   see `python/README.md` for usage)
@@ -120,7 +148,7 @@ Assignments are matched by id. An assignment the solution leaves out is placed b
 
 ## Extending
 
-Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-c-engine-use-case).
+Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-use-case).
 The planning variable is **BASIC**; the domain solver that configures the
 engine is `cpp/include/fcs/solver.hpp` + `cpp/src/solver.cpp`.
 
@@ -136,20 +164,29 @@ Decreasing ordering, or pre-assign part of the solution in the domain
 solver's `solve` before the engine runs — the engine only fills what is still unassigned.
 
 **Adding a hard or soft cost.** One file per constraint under
-`cpp/include/fcs/constraints/` (currently `employee_unavailability`, `first_assignment_not_departing_from_home`, `flight_conflict`, `last_assignment_not_arriving_at_home`, `required_skill`, `transfer_between_two_flights`):
-1. add `constraints/<name>.hpp` (a `UnitConstraint` or `GlobalConstraint`;
-   positive cost = penalty, the level and weight are constructor defaults);
+`cpp/include/fcs/constraints/` (currently `required_skill_cost`, `flight_conflict_cost`,
+`transfer_between_two_flights_cost`, `employee_unavailability_cost`,
+`first_assignment_not_departing_from_home_cost`, `last_assignment_not_arriving_at_home_cost`):
+1. add `constraints/<subject>_cost.hpp` with `struct <Subject>Cost` (a `UnitConstraint` or
+   `GlobalConstraint`, or the domain's `PerAssignmentConstraint` / `ItineraryConstraint`;
+   positive raw cost = penalty, 0 = no violation) declaring
+   `static constexpr double kDefaultWeight` and `static constexpr optimaru::Level kDefaultLevel`,
+   an `explicit <Subject>Cost(double weight = kDefaultWeight)` constructor and the registry
+   name `"<subject>Cost"` (the struct name with a lower-case first letter);
 2. include it in `cpp/include/fcs/constraints.hpp` and `emplace` it in
    `defaultConstraints()` if it belongs to the default set;
 3. for a default constraint, add the same raw cost to
-   `score_calculator` / `incremental_calculator` — `fcs_plugin_test` checks
-   they agree bit for bit;
-4. add a `Constraint` spec with the snake_case `name` to
-   `python/flight_crew/constraints.py`; callers then pick, reweight or flip it:
-   `constraints=get_constraints([..., MyRule(weight=5, hard=True)])`;
+   `score_calculator` / `incremental_calculator`, weighted by the component's
+   `kDefaultWeight` — `fcs_plugin_test` checks they agree bit for bit — and a positive and a
+   zero hand-calculated case to `fcs_test` / `fcs_plugin_test`;
+4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
+   `description_en` / `description_ko` to `python/flight_crew/constraints.py` (plus its
+   module-level default instance); callers then pick, reweight or flip it:
+   `constraints=get_constraints([..., MyRuleCost(weight=5, hard=True)])`;
 5. mirror it in the CP-SAT model in
-   [`benchmarks/flight-crew-scheduling/cpsat`](../../benchmarks/flight-crew-scheduling/cpsat) so the
-   benchmark stays like for like.
+   [`benchmarks/flight-crew-scheduling/cpsat`](../../benchmarks/flight-crew-scheduling/cpsat) (a
+   plugin subclassing the spec; defaults come from `constraint_info()`) so the benchmark stays
+   like for like.
 
 ## Benchmark
 

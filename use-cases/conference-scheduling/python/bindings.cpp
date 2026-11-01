@@ -337,103 +337,30 @@ PYBIND11_MODULE(_core, m)
             },
             py::arg("assignment"));
 
-    py::class_<Breakdown>(m, "Breakdown", py::module_local())
-        .def_readonly("talk_type_compatibility",
-                      &Breakdown::talkTypeCompatibility)
-        .def_readonly("room_unavailable_timeslot",
-                      &Breakdown::roomUnavailableTimeslot)
-        .def_readonly("room_conflict", &Breakdown::roomConflict)
-        .def_readonly("speaker_unavailable_timeslot",
-                      &Breakdown::speakerUnavailableTimeslot)
-        .def_readonly("speaker_conflict", &Breakdown::speakerConflict)
-        .def_readonly("talk_prerequisite_talks",
-                      &Breakdown::talkPrerequisiteTalks)
-        .def_readonly("talk_mutually_exclusive_talks_tags",
-                      &Breakdown::talkMutuallyExclusiveTalksTags)
-        .def_readonly("consecutive_talks_pause",
-                      &Breakdown::consecutiveTalksPause)
-        .def_readonly("crowd_control", &Breakdown::crowdControl)
-        .def_readonly("speaker_required_timeslot_tags",
-                      &Breakdown::speakerRequiredTimeslotTags)
-        .def_readonly("speaker_prohibited_timeslot_tags",
-                      &Breakdown::speakerProhibitedTimeslotTags)
-        .def_readonly("talk_required_timeslot_tags",
-                      &Breakdown::talkRequiredTimeslotTags)
-        .def_readonly("talk_prohibited_timeslot_tags",
-                      &Breakdown::talkProhibitedTimeslotTags)
-        .def_readonly("speaker_required_room_tags",
-                      &Breakdown::speakerRequiredRoomTags)
-        .def_readonly("speaker_prohibited_room_tags",
-                      &Breakdown::speakerProhibitedRoomTags)
-        .def_readonly("talk_required_room_tags",
-                      &Breakdown::talkRequiredRoomTags)
-        .def_readonly("talk_prohibited_room_tags",
-                      &Breakdown::talkProhibitedRoomTags)
-        .def_readonly("theme_track_conflict", &Breakdown::themeTrackConflict)
-        .def_readonly("theme_track_room_stability",
-                      &Breakdown::themeTrackRoomStability)
-        .def_readonly("sector_conflict", &Breakdown::sectorConflict)
-        .def_readonly("audience_type_theme_track_conflict",
-                      &Breakdown::audienceTypeThemeTrackConflict)
-        .def_readonly("content_audience_level_flow_violation",
-                      &Breakdown::contentAudienceLevelFlowViolation)
-        .def_readonly("content_conflict", &Breakdown::contentConflict)
-        .def_readonly("same_day_talks", &Breakdown::sameDayTalks)
-        .def_readonly("popular_talks", &Breakdown::popularTalks)
-        .def_readonly("speaker_preferred_timeslot_tags",
-                      &Breakdown::speakerPreferredTimeslotTags)
-        .def_readonly("speaker_undesired_timeslot_tags",
-                      &Breakdown::speakerUndesiredTimeslotTags)
-        .def_readonly("talk_preferred_timeslot_tags",
-                      &Breakdown::talkPreferredTimeslotTags)
-        .def_readonly("talk_undesired_timeslot_tags",
-                      &Breakdown::talkUndesiredTimeslotTags)
-        .def_readonly("speaker_preferred_room_tags",
-                      &Breakdown::speakerPreferredRoomTags)
-        .def_readonly("speaker_undesired_room_tags",
-                      &Breakdown::speakerUndesiredRoomTags)
-        .def_readonly("talk_preferred_room_tags",
-                      &Breakdown::talkPreferredRoomTags)
-        .def_readonly("talk_undesired_room_tags",
-                      &Breakdown::talkUndesiredRoomTags)
-        .def_readonly("speaker_makespan", &Breakdown::speakerMakespan)
-        .def_readonly("audience_type_diversity",
-                      &Breakdown::audienceTypeDiversity)
-        .def_readonly("audience_level_diversity",
-                      &Breakdown::audienceLevelDiversity)
-        .def_readonly("language_diversity", &Breakdown::languageDiversity)
-        .def("hard_total", &Breakdown::hardTotal)
-        .def("soft_penalty_total", &Breakdown::softPenaltyTotal)
-        .def("soft_reward_total", &Breakdown::softRewardTotal)
-        .def("to_score", &Breakdown::toScore);
+    // No Breakdown class and no compute_breakdown() (removed in 0.2.0):
+    // constraint_costs() is the one per-constraint surface. The C++
+    // cs::Breakdown keeps its members, named after the registry names.
 
     m.def("calculate_score",
           &ScoreCalculator::calculateScore,
           py::arg("schedule"),
           "Full recompute of the HardSoftScore (also stores schedule.score).");
-    m.def("compute_breakdown",
-          &ScoreCalculator::computeBreakdown,
-          py::arg("schedule"),
-          "Full per-constraint recompute (match-unit totals; the constraint "
-          "weights are applied by hard_total/soft_*_total).");
     m.def("prepare",
           &ScoreCalculator::prepare,
           py::arg("schedule"),
           "Normalize the instance in place (idempotent; also run by "
-          "calculate_score / compute_breakdown / Solver.solve).");
+          "calculate_score / constraint_costs / Solver.solve).");
 
     py::class_<Solver::Config> config(m, "SolverConfig", py::module_local());
+
+    optimaru::python::bindConfigCopy(config);
     config.def(py::init<>())
         .def_property(
             "spent_limit_seconds",
             [](const Solver::Config &c)
             { return std::chrono::duration<double>(c.spentLimit).count(); },
             [](Solver::Config &c, double s)
-            {
-                c.spentLimit
-                    = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        std::chrono::duration<double>(s));
-            })
+            { c.spentLimit = optimaru::python::secondsToMillis(s, "spent_limit_seconds"); })
         .def_property(
             "unimproved_spent_limit_seconds",
             [](const Solver::Config &c)
@@ -442,14 +369,7 @@ PYBIND11_MODULE(_core, m)
                     .count();
             },
             [](Solver::Config &c, double s)
-            {
-                if (s < 0.0)
-                    throw py::value_error(
-                        "unimproved_spent_limit_seconds must be non-negative");
-                c.unimprovedSpentLimit
-                    = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        std::chrono::duration<double>(s));
-            })
+            { c.unimprovedSpentLimit = optimaru::python::secondsToMillis(s, "unimproved_spent_limit_seconds"); })
         .def_readwrite("step_count_limit", &Solver::Config::stepCountLimit)
         .def_readwrite("unimproved_step_count_limit",
                        &Solver::Config::unimprovedStepCountLimit)
@@ -540,7 +460,7 @@ PYBIND11_MODULE(_core, m)
         // quickstart's per-TalkType value ranges; see cs/solver.hpp).
         .def_readwrite("compatible_value_probability",
                        &Solver::Config::compatibleValueProbability)
-        // Early termination once bestScore >= (hard, soft), e.g. (0, -1e18)
+        // Early termination once bestScore >= (hard, soft), e.g. (0, -inf)
         // stops at the first feasible solution.
         .def_property(
             "best_score_limit",
@@ -598,12 +518,19 @@ PYBIND11_MODULE(_core, m)
             return tfpy::constraintCosts(calculator, schedule);
         },
         py::arg("schedule"),
-        "Raw per-unit cost of every constraint, before weight/exponent/level.");
+        "Raw cost of every default constraint (one global total each), before "
+        "weight/exponent/level; the three *_diversity_cost rewards are <= 0.");
 
     // The constraint names this domain scores, in default-assembly order —
-    // the same strings a score breakdown reports.
+    // the same strings constraint_costs() reports.
     m.def(
         "list_constraints",
         [] { return tfpy::constraintNames(defaultConstraints()); },
         "Constraint names available to conference_scheduling.constraints.");
+
+    // The constraint catalog, read off the same default assembly:
+    // constraint_info() -> [ConstraintInfo(name, default_level,
+    // default_weight, level_flippable, reward, default_enabled), ...] in
+    // list_constraints() order. The defaults live in the C++ components only.
+    tfpy::bindConstraintInfo(m, [] { return defaultConstraints(); });
 }

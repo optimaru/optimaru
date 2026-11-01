@@ -14,6 +14,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdio>
+#include <limits>
 #include <random>
 #include <string>
 #include <utility>
@@ -118,7 +119,8 @@ void verifyConstraints()
     std::printf("== (a) Constraints vs hand-computed scores ==\n");
 
     {
-        // Java noMissingSkills: employee has skill "3"; tasks require
+        // requiredSkillCost (the Java provider test): employee has skill "3";
+        // tasks require
         // {1,2} / {3} / {5} -> 3 missing skills in total.
         Builder b;
         const int e = b.addEmployee({"3"});
@@ -128,11 +130,12 @@ void verifyConstraints()
         b.assign(e, {t1, t2, t3});
         ScoreCalculator::calculateScore(b.solution);
         check(b.solution.score.hard == -3,
-              "noMissingSkills penalizes 3 (got "
+              "requiredSkillCost penalizes 3 (got "
                   + std::to_string(-b.solution.score.hard) + ")");
     }
     {
-        // Java minimizeUnassignedTasks: 3 tasks, 1 assigned -> penalty 2.
+        // unassignedTasksCost (the Java provider test): 3 tasks, 1 assigned
+        // -> penalty 2 on the medium level (soft[0]).
         Builder b;
         const int e = b.addEmployee({});
         b.addTask(1);
@@ -141,11 +144,12 @@ void verifyConstraints()
         b.assign(e, {t3});
         ScoreCalculator::calculateScore(b.solution);
         check(b.solution.score.soft0 == -2,
-              "minimizeUnassignedTasks penalizes 2 (got "
+              "unassignedTasksCost penalizes 2 (got "
                   + std::to_string(-b.solution.score.soft0) + ")");
     }
     {
-        // Java criticalPriorityTaskEndTime: HIGH affinity (x1), duration 10,
+        // criticalPriorityTaskEndTimeCost (the Java provider test): HIGH
+        // affinity (x1), duration 10,
         // minStartTime 1 -> endTime 11, penalty 11 * 4 = 44. The given MINOR
         // task stays unassigned (it contributes nothing to soft[2]).
         Builder b;
@@ -155,11 +159,12 @@ void verifyConstraints()
         b.assign(e, {t1});
         ScoreCalculator::calculateScore(b.solution);
         check(b.solution.score.soft2 == -44,
-              "criticalPriorityTaskEndTime penalizes 44 (got "
+              "criticalPriorityTaskEndTimeCost penalizes 44 (got "
                   + std::to_string(-b.solution.score.soft2) + ")");
     }
     {
-        // Java majorPriorityTaskEndTime: endTime 11, x2 = 22.
+        // majorPriorityTaskEndTimeCost (the Java provider test): endTime 11,
+        // x2 = 22.
         Builder b;
         const int e = b.addEmployee({}, {Affinity::HIGH});
         const int t1 = b.addTask(10, {}, Priority::MAJOR, 1);
@@ -167,11 +172,12 @@ void verifyConstraints()
         b.assign(e, {t1});
         ScoreCalculator::calculateScore(b.solution);
         check(b.solution.score.soft2 == -22,
-              "majorPriorityTaskEndTime penalizes 22 (got "
+              "majorPriorityTaskEndTimeCost penalizes 22 (got "
                   + std::to_string(-b.solution.score.soft2) + ")");
     }
     {
-        // Java minorPriorityTaskEndTime: endTime 11, x1 = 11.
+        // minorPriorityTaskEndTimeCost (the Java provider test): endTime 11,
+        // x1 = 11.
         Builder b;
         const int e = b.addEmployee({}, {Affinity::HIGH});
         const int t1 = b.addTask(10, {}, Priority::MINOR, 1);
@@ -179,11 +185,11 @@ void verifyConstraints()
         b.assign(e, {t1});
         ScoreCalculator::calculateScore(b.solution);
         check(b.solution.score.soft2 == -11,
-              "minorPriorityTaskEndTime penalizes 11 (got "
+              "minorPriorityTaskEndTimeCost penalizes 11 (got "
                   + std::to_string(-b.solution.score.soft2) + ")");
     }
     {
-        // minimizeMakespan, re-derived with consistent chained start times
+        // squaredMakespanCost, re-derived with consistent chained start times
         // (the Java test fixed startTime shadows by hand):
         //   employee1 (MEDIUM = x2): task1 dur 10 minStart 1 -> start 1,
         //     end 21; task2 dur 20 minStart 2 -> start max(21,2)=21, end 61.
@@ -200,7 +206,7 @@ void verifyConstraints()
         b.assign(e2, {t3});
         ScoreCalculator::calculateScore(b.solution);
         check(b.solution.score.soft1 == -3725,
-              "minimizeMakespan penalizes 61^2 + 2^2 = 3725 (got "
+              "squaredMakespanCost penalizes 61^2 + 2^2 = 3725 (got "
                   + std::to_string(-b.solution.score.soft1) + ")");
         // Shadow variables re-derived like the Java supplier chain.
         check(b.solution.tasks[t2].startTime == 21
@@ -507,10 +513,39 @@ void verifyFeasibleSolve()
     std::printf("\n");
 }
 
+// -------------------------------------------------------------------------
+// stop_at_first_feasible's best-score limit (0, 0, INT64_MIN, INT64_MIN):
+// hard and soft0 (folded into the engine's hard level) compared exactly,
+// soft -inf, so no soft score, however low, misses the stop.
+// -------------------------------------------------------------------------
+void verifyStopAtFirstFeasibleLimit()
+{
+    std::printf("== stop_at_first_feasible's limit ==\n");
+    const optimaru::HardSoftScore limit
+        = toEngineScoreLimit(Score{0, 0, kNoLevelFloor, kNoLevelFloor});
+    check(limit.hard == 0 && std::isinf(limit.soft) && limit.soft < 0.0,
+          "(0, 0, INT64_MIN, INT64_MIN) -> engine limit (0, -inf)");
+    check(optimaru::HardSoftScore{0, -1e30} >= limit
+              && toEngineScore(Score{0, 0, -(1LL << 40), -(1LL << 62)}) >= limit,
+          "every skill met and every task assigned, any soft: reaches it");
+    check(!(toEngineScore(Score{0, -1, 0, 0}) >= limit)
+              && !(toEngineScore(Score{-1, 0, 0, 0}) >= limit),
+          "an unassigned task or a missing skill does not");
+    const optimaru::HardSoftScore lax
+        = toEngineScoreLimit(Score{0, -2, kNoLevelFloor, 0});
+    check(lax.hard == -2 && lax.soft == -std::numeric_limits<double>::infinity(),
+          "soft0 keeps its floor (-2 unassigned) while soft1 has none");
+    const Score other{-2, -3, -5, -7};
+    check(toEngineScoreLimit(other) == toEngineScore(other),
+          "any other limit folds like a score");
+    std::printf("\n");
+}
+
 }  // namespace
 
 int main()
 {
+    verifyStopAtFirstFeasibleLimit();
     verifyConstraints();
     verifyIncremental();
     verifyFullAssertSolve();

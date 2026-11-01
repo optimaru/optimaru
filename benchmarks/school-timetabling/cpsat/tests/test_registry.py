@@ -15,8 +15,9 @@ from teacher_scheduling.domain.enums import Weekday
 from teacher_scheduling.domain.solution import SolveStatus
 from teacher_scheduling.solver.config import ObjectiveWeights, SolverConfig
 from teacher_scheduling.solver.registry import (
+    UNASSIGNED_WEIGHT,
     Constraint,
-    WeeklyPeriodCounts,
+    UnassignedLessonsCost,
     default_constraints,
     merge,
 )
@@ -152,7 +153,7 @@ def test_custom_soft_steers_away_from_first_period():
     assert {lesson.slot.period for lesson in timetable.lessons} == {2, 3}
     assert timetable.penalties["first_period_load"] == 0
     # Default terms are reported as well (terms with nothing to count are omitted as before).
-    assert {"teacher_gap", "teacher_workday", "class_gap"} <= set(timetable.penalties)
+    assert {"teacher_gap_cost", "teacher_workday_cost", "class_gap_cost"} <= set(timetable.penalties)
 
 
 def test_custom_soft_counts_forced_first_period():
@@ -186,7 +187,7 @@ def test_unspecified_custom_weight_defaults_to_one():
 
 def test_weight_for_declared_extra_and_unknown_names():
     weights = ObjectiveWeights(first_period_load=2)
-    assert weights.weight_for("teacher_gap") == 20  # declared fields keep their defaults
+    assert weights.weight_for("teacher_gap_cost") == 20  # declared fields keep their defaults
     assert weights.weight_for("first_period_load") == 2  # a custom term given as an extra
     assert weights.weight_for("unknown_term") == 1  # an unspecified custom term is 1
 
@@ -211,28 +212,37 @@ def test_instance_weight_wins_over_objective_weights():
     assert timetable.objective_value == 5
 
 
-# ---------------------------------------------------------------- relaxing H1 (hard <-> soft)
+# ---------------------------------------------------------------- relaxing unassigned_lessons_cost (hard <-> soft)
 
 
-def test_weekly_period_counts_can_be_relaxed_into_a_penalty():
+def test_unassigned_lessons_cost_can_be_relaxed_into_a_penalty():
     """The same constraint with hard=False allows unassigned lessons and counts them as a penalty."""
     # 3 periods but only 2 periods a day -> impossible as hard, 1 period unassigned when relaxed
     problem = make_problem([course(periods_per_week=3, max_periods_per_day=3)], [teacher()], days=1, periods=2)
 
     assert _solve(problem).status == SolveStatus.INFEASIBLE
 
-    relaxed = merge(default_constraints(NO_WEIGHTS), WeeklyPeriodCounts(hard=False, weight=100))
+    relaxed = merge(default_constraints(NO_WEIGHTS), UnassignedLessonsCost(hard=False, weight=100))
     timetable = _solve(problem, constraints=relaxed)
     assert timetable.status.has_solution
     assert len(timetable.lessons) == 2
-    assert timetable.penalties["weekly_period_counts"] == 1
+    assert timetable.penalties["unassigned_lessons_cost"] == 1
     assert timetable.objective_value == 100
+
+
+def test_relaxed_unassigned_lessons_default_to_weight_one():
+    """weight=None is the engine default, 1, on either level — not the partial-timetabling weight.
+
+    Pass weight=UNASSIGNED_WEIGHT (10000) for partial timetabling: at 1 a lesson is dropped to
+    save a single teacher gap (20)."""
+    assert UnassignedLessonsCost(hard=False).effective_weight == 1
+    assert UnassignedLessonsCost(hard=False, weight=UNASSIGNED_WEIGHT).effective_weight == UNASSIGNED_WEIGHT == 10_000
 
 
 def test_merge_replaces_in_place_and_appends_new_names():
     """merge replaces same-named entries in place and appends only new names."""
     base = default_constraints()
-    merged = merge(base, WeeklyPeriodCounts(hard=False), NoLateFriday("T1"))
+    merged = merge(base, UnassignedLessonsCost(hard=False), NoLateFriday("T1"))
 
     assert [c.name for c in merged] == [*[c.name for c in base], "no_late_friday"]
-    assert merged[0] == WeeklyPeriodCounts(hard=False)
+    assert merged[0] == UnassignedLessonsCost(hard=False)

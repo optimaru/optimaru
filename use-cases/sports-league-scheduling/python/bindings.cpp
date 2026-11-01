@@ -143,44 +143,21 @@ PYBIND11_MODULE(_core, m)
             },
             py::arg("assignment"));
 
-    py::class_<Breakdown>(m, "Breakdown", py::module_local())
-        .def_readonly("matches_on_same_day", &Breakdown::matchesOnSameDay)
-        .def_readonly("consecutive_home_matches",
-                      &Breakdown::consecutiveHomeMatches)
-        .def_readonly("consecutive_away_matches",
-                      &Breakdown::consecutiveAwayMatches)
-        .def_readonly("repeat_match_on_next_day",
-                      &Breakdown::repeatMatchOnNextDay)
-        .def_readonly("start_to_away_hop", &Breakdown::startToAwayHop)
-        .def_readonly("home_to_away_hop", &Breakdown::homeToAwayHop)
-        .def_readonly("away_to_away_hop", &Breakdown::awayToAwayHop)
-        .def_readonly("away_to_home_hop", &Breakdown::awayToHomeHop)
-        .def_readonly("away_to_end_hop", &Breakdown::awayToEndHop)
-        .def_readonly("classic_match_count", &Breakdown::classicMatchCount)
-        .def("hard_total", &Breakdown::hardTotal)
-        .def("soft_total", &Breakdown::softTotal);
-
     m.def("calculate_score",
           &ScoreCalculator::calculateScore,
           py::arg("schedule"),
           "Full recompute of the HardSoftScore (also stores schedule.score).");
-    m.def("compute_breakdown",
-          &ScoreCalculator::computeBreakdown,
-          py::arg("schedule"),
-          "Full per-constraint recompute (the ten quickstart constraints).");
+    // No Breakdown / compute_breakdown (removed in 0.2.0): constraint_costs()
+    // is the only per-constraint surface.
 
-    py::class_<Solver::Config>(m, "SolverConfig", py::module_local())
+    optimaru::python::bindConfigCopy(py::class_<Solver::Config>(m, "SolverConfig", py::module_local()))
         .def(py::init<>())
         .def_property(
             "spent_limit_seconds",
             [](const Solver::Config &c)
             { return std::chrono::duration<double>(c.spentLimit).count(); },
             [](Solver::Config &c, double s)
-            {
-                c.spentLimit
-                    = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        std::chrono::duration<double>(s));
-            })
+            { c.spentLimit = optimaru::python::secondsToMillis(s, "spent_limit_seconds"); })
         .def_property(
             "unimproved_spent_limit_seconds",
             [](const Solver::Config &c)
@@ -189,14 +166,7 @@ PYBIND11_MODULE(_core, m)
                     .count();
             },
             [](Solver::Config &c, double s)
-            {
-                if (s < 0.0)
-                    throw py::value_error(
-                        "unimproved_spent_limit_seconds must be non-negative");
-                c.unimprovedSpentLimit
-                    = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        std::chrono::duration<double>(s));
-            })
+            { c.unimprovedSpentLimit = optimaru::python::secondsToMillis(s, "unimproved_spent_limit_seconds"); })
         .def_readwrite("step_count_limit", &Solver::Config::stepCountLimit)
         .def_readwrite("unimproved_step_count_limit",
                        &Solver::Config::unimprovedStepCountLimit)
@@ -269,7 +239,7 @@ PYBIND11_MODULE(_core, m)
         // Tournament size of the travel-guided entity selection (1 = uniform).
         .def_readwrite("costliest_match_sample",
                        &Solver::Config::costliestMatchSample)
-        // Early termination once bestScore >= (hard, soft), e.g. (0, -1e18)
+        // Early termination once bestScore >= (hard, soft), e.g. (0, -inf)
         // stops at the first feasible solution.
         .def_property(
             "best_score_limit",
@@ -326,12 +296,20 @@ PYBIND11_MODULE(_core, m)
             return tfpy::constraintCosts(calculator, schedule);
         },
         py::arg("schedule"),
-        "Raw per-unit cost of every constraint, before weight/exponent/level.");
+        "Raw per-unit cost of every default constraint, before "
+        "weight/exponent/level.");
 
-    // The constraint names this domain scores, in default-assembly order —
-    // the same strings a score breakdown reports.
+    // The constraint names this domain scores, in default-assembly order
+    // (unit constraints first, then the globals) — the keys of
+    // constraint_costs().
     m.def(
         "list_constraints",
         [] { return tfpy::constraintNames(defaultConstraints()); },
         "Constraint names available to sports_league.constraints.");
+
+    // The constraint catalog, read off the same default assembly:
+    // constraint_info() -> [ConstraintInfo(name, default_level,
+    // default_weight, level_flippable, reward, default_enabled), ...] in
+    // list_constraints() order. The defaults live in the C++ components only.
+    tfpy::bindConstraintInfo(m, [] { return defaultConstraints(); });
 }

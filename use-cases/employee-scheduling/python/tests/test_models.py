@@ -7,23 +7,31 @@ import pytest
 
 pytest.importorskip("pydantic")
 
+from pydantic import ValidationError  # noqa: E402
+
 import es_scheduling as es  # noqa: E402
 from es_scheduling import models  # noqa: E402
+from es_scheduling.constraints import (  # noqa: E402
+    SPEC_CLASSES,
+    AssignmentCost,
+    DayPatternCost,
+    MaxConsecutiveDaysCost,
+    RequiredSkillCost,
+    UnassignedShiftsCost,
+    WorkerDayCountInRangeCost,
+)
 from es_scheduling.demo import generate_demo_data  # noqa: E402
 from es_scheduling.models import (  # noqa: E402
-    AssignmentCostRule,
-    MaxConsecutiveDaysRule,
-    RequiredSkillRule,
+    RULE_MODELS,
     RuleTotal,
     ScheduleRequest,
     ScheduleSolution,
     SchedulingInput,
     ShiftModel,
     SolverSettings,
-    UnassignedShiftRule,
-    WorkerDayCountInRuleRange,
     WorkerModel,
     default_rules,
+    rule_model,
     solve_request,
     to_schedule,
 )
@@ -44,7 +52,7 @@ def _small_input(**kwargs):
 def test_solve_request_end_to_end():
     request = ScheduleRequest(
         timelimit=0.3,
-        model_input=_small_input(rules=default_rules() + [UnassignedShiftRule()]),
+        model_input=_small_input(rules=default_rules() + [UnassignedShiftsCost()]),
         settings=SolverSettings(random_seed=7),
     )
     solution = solve_request(request)
@@ -52,7 +60,7 @@ def test_solve_request_end_to_end():
     assert not solution.unassigned
     assigned = [a.shift_id for lst in solution.schedule.values() for a in lst]
     assert sorted(assigned) == ["Shift 0", "Shift 1", "Shift 2", "Shift 3"]
-    assert {t.name for t in solution.rule_totals} >= {"Missing required skill", "Unassigned shift"}
+    assert {t.name for t in solution.rule_totals} >= {"required_skill_cost", "unassigned_shifts_cost"}
 
 
 def test_json_round_trip():
@@ -61,18 +69,19 @@ def test_json_round_trip():
         num_workers=3,
         model_input=_small_input(
             rules=[
-                RequiredSkillRule(weight=2),
-                MaxConsecutiveDaysRule(value=2, policy="soft", weight=3),
-                AssignmentCostRule(cost_per_hour=10.0, shift_costs={"Worker 01": {"Shift 0": 5.0}}),
+                RequiredSkillCost(weight=2),
+                MaxConsecutiveDaysCost(value=2, hard=False, weight=3),
+                AssignmentCost(cost_per_hour=10.0, shift_costs={"Worker 01": {"Shift 0": 5.0}}),
             ]
         ),
     )
     # The discriminated union must survive JSON serialization.
     clone = ScheduleRequest.model_validate_json(request.model_dump_json())
     assert clone.num_workers == 3
-    assert isinstance(clone.model_input.rules[1], MaxConsecutiveDaysRule)
+    assert isinstance(clone.model_input.rules[1], rule_model(MaxConsecutiveDaysCost))
     assert clone.model_input.rules[1].value == 2
-    assert clone.model_input.rules[1].hard is False  # policy="soft"
+    assert clone.model_input.rules[1].hard is False
+    assert clone.model_input.rules[1].to_spec() == MaxConsecutiveDaysCost(value=2, hard=False, weight=3)
 
     solution = solve_request(clone)
     round_tripped = ScheduleSolution.model_validate_json(solution.model_dump_json())
@@ -82,7 +91,7 @@ def test_json_round_trip():
 def test_solver_settings_expose_engine_knobs():
     request = ScheduleRequest(
         timelimit=0.2,
-        model_input=_small_input(rules=default_rules() + [UnassignedShiftRule()]),
+        model_input=_small_input(rules=default_rules() + [UnassignedShiftsCost()]),
         settings=SolverSettings(
             random_seed=9,
             guided_moves=False,
@@ -148,13 +157,13 @@ def test_solver_settings_reject_invalid_ruin_options():
 
 
 def test_rules_flow_into_calculator_unchanged():
-    """A pydantic rule list is a valid constraint-spec list for the core."""
+    """A pydantic rule list is a valid constraint-spec list for the core, and so are its specs."""
     schedule = to_schedule(_small_input())
     for shift in schedule.shifts:
         shift.employee_index = 0
-    calc = es.DecomposedCalculator([MaxConsecutiveDaysRule(value=2)])
-    score = calc.score(schedule)
-    assert score.hard == -2  # 4-day run, 2 over the cap
+    rule = rule_model("max_consecutive_days_cost")(value=2)
+    assert es.DecomposedCalculator([rule]).score(schedule).hard == -2  # 4-day run, 2 over the cap
+    assert es.DecomposedCalculator([rule.to_spec()]).score(schedule).hard == -2
 
 
 def test_preassigned_unknown_worker_raises():
@@ -185,8 +194,11 @@ def test_a_shift_cannot_run_past_the_last_day():
 @pytest.mark.parametrize("bounds", [{"lo": -1}, {"hi": 36526}, {"hi": -2}], ids=["lo", "hi", "below-default"])
 def test_a_day_range_outside_the_limit_fails_when_built(bounds):
     with pytest.raises(ValueError):
-        WorkerDayCountInRuleRange(**bounds)
-    assert WorkerDayCountInRuleRange(lo=0, hi=36525).hi == 36525
+        WorkerDayCountInRangeCost(**bounds)
+    with pytest.raises(ValueError):
+        rule_model(WorkerDayCountInRangeCost)(**bounds)
+    assert WorkerDayCountInRangeCost(lo=0, hi=36525).hi == 36525
+    assert rule_model(WorkerDayCountInRangeCost)(lo=0, hi=36525).hi == 36525
 
 
 def test_a_pinned_shift_without_a_worker_fails_when_built():
@@ -322,7 +334,15 @@ def _candidate(score_hard, score_soft, coverage_cost=0.0, is_hard=False):
         score_hard=score_hard,
         score_soft=score_soft,
         feasible=score_hard == 0,
-        rule_totals=[RuleTotal(name="Shift coverage[any 1..]", cost=coverage_cost, is_hard=is_hard)],
+        rule_totals=[
+            RuleTotal(
+                name="shift_coverage_cost",
+                label="Shift coverage[any 1..inf]",
+                cost=coverage_cost,
+                level="hard" if is_hard else "soft",
+                is_hard=is_hard,
+            )
+        ],
     )
 
 
@@ -357,5 +377,173 @@ def test_selection_leaves_a_hard_coverage_rule_alone(monkeypatch):
 def test_selection_finds_the_coverage_rule_by_its_engine_name():
     request = generate_demo_data(seed=3, workers=8, days=7)
     request.timelimit = 0.05
-    names = [total.name for total in solve_request(request).rule_totals]
-    assert any(name.startswith("Shift coverage") for name in names), names
+    totals = solve_request(request).rule_totals
+    coverage = [total for total in totals if total.name == "shift_coverage_cost"]
+    assert [total.label for total in coverage] == ["Shift coverage[Skill A 1..inf]"], totals
+
+
+# ---------------------------------------------------------------------------
+# The rule models are generated from the constraint specs
+# ---------------------------------------------------------------------------
+
+
+def test_there_is_one_rule_model_per_spec_in_factory_order():
+    assert list(RULE_MODELS) == [spec.name for spec in SPEC_CLASSES] == list(es.CONSTRAINT_NAMES)
+    for spec in SPEC_CLASSES:
+        model = rule_model(spec)
+        assert model.spec_class is spec
+        assert model.__name__ == f"{spec.__name__}Model"  # no "Rule" suffix in 0.2.0
+        assert getattr(models, model.__name__) is model  # picklable by reference
+        assert set(model.model_fields) == {"name", "weight", "hard", "exponent", *spec().params()}
+        assert model().to_spec() == spec()
+
+
+def test_default_rules_are_the_default_specs():
+    assert [rule.to_spec() for rule in default_rules()] == es.constraints.get_constraints()
+
+
+def test_spec_instances_and_json_dicts_are_both_rules():
+    (first,) = _small_input(rules=[MaxConsecutiveDaysCost(value=2)]).rules
+    (second,) = _small_input(rules=[{"name": "max_consecutive_days_cost", "value": 2}]).rules
+    assert first == second
+    assert first.to_spec() == MaxConsecutiveDaysCost(value=2)
+
+
+def test_a_rule_may_repeat_with_other_parameters():
+    request = ScheduleRequest(
+        timelimit=0.05,
+        model_input=_small_input(rules=[DayPatternCost(pattern="WORK,WORK"), DayPatternCost(pattern="OFF,WORK")]),
+    )
+    solution = solve_request(request)
+    assert [(t.name, t.label, t.level) for t in solution.rule_totals] == [
+        ("day_pattern_cost", "Day pattern[WORK,WORK]", "soft"),
+        ("day_pattern_cost", "Day pattern[OFF,WORK]", "soft"),
+    ]
+
+
+@pytest.mark.parametrize(
+    "rule",
+    [
+        {"name": "required_skill"},  # a pre-0.2.0 name
+        {"name": "required_skill_cost", "policy": "hard"},  # the pre-0.2.0 level field
+        {"name": "max_consecutive_days_cost", "value": 0},  # below the spec's bound
+        {"name": "desired_day_cost", "hard": True},  # a reward is never hard
+        {"name": "shift_count_imbalance_cost", "worker_indices": [0]},  # no scope on this global
+        {"name": "required_skill_cost", "weight": -1},
+        {"name": "required_skill_cost", "exponent": 0},
+        {"name": "required_skill_cost", "hard": "yes"},
+        {"name": "required_skill_cost", "weight": True},  # the spec refuses a bool weight
+        {"name": "required_skill_cost", "weight": "2"},  # ... and a numeric string
+        {"name": "required_skill_cost", "exponent": True},
+        {"name": "required_skill_cost", "exponent": "2"},
+    ],
+    ids=[
+        "old-name",
+        "policy",
+        "bound",
+        "reward-hard",
+        "global-scope",
+        "weight",
+        "exponent",
+        "hard-type",
+        "weight-bool",
+        "weight-str",
+        "exponent-bool",
+        "exponent-str",
+    ],
+)
+def test_a_bad_rule_fails_validation(rule):
+    with pytest.raises(ValidationError):
+        SchedulingInput.model_validate({**_small_input().model_dump(), "rules": [rule]})
+
+
+def test_the_json_schema_carries_the_spec_bounds():
+    schema = rule_model(MaxConsecutiveDaysCost).model_json_schema()
+    assert schema["properties"]["name"]["const"] == "max_consecutive_days_cost"
+    assert schema["properties"]["value"]["minimum"] == 1
+    assert schema["properties"]["weight"]["anyOf"][0]["minimum"] == 0
+    day_range = rule_model(WorkerDayCountInRangeCost).model_json_schema()["properties"]
+    assert day_range["hi"]["minimum"] == -1 and day_range["hi"]["maximum"] == es.MAX_DAY
+
+
+def test_integral_json_knobs_stay_numbers():
+    """weight 2 (a JSON integer) is a number, not a type error."""
+    rule = SchedulingInput.model_validate(
+        {**_small_input().model_dump(), "rules": [{"name": "required_skill_cost", "weight": 2, "exponent": 1}]}
+    ).rules[0]
+    assert rule.to_spec() == RequiredSkillCost(weight=2.0)
+
+
+def test_no_generated_model_is_named_rule():
+    """The per-constraint JSON models end in "Model", never in "Rule" (0.1.5 names do not import)."""
+    assert not [name for name in dir(models) if name.endswith("CostRule")]
+    with pytest.raises(ImportError):
+        exec("from es_scheduling.models import AssignmentCostRule", {})
+    assert "MaxConsecutiveDaysCostModel" in SchedulingInput.model_json_schema()["$defs"]
+
+
+def test_assigning_specs_to_rules_is_validated():
+    """input.rules = [specs] after construction goes through the validators (it skipped them)."""
+    model_input = _small_input()
+    model_input.rules = [RequiredSkillCost(), MaxConsecutiveDaysCost(value=2)]
+    assert [rule.to_spec() for rule in model_input.rules] == [RequiredSkillCost(), MaxConsecutiveDaysCost(value=2)]
+    solution = solve_request(ScheduleRequest(timelimit=0.05, model_input=model_input))
+    assert {total.name for total in solution.rule_totals} == {"required_skill_cost", "max_consecutive_days_cost"}
+    with pytest.raises(ValidationError):
+        model_input.rules = [{"name": "max_consecutive_days_cost", "value": 0}]
+
+
+def test_an_unvalidated_spec_in_rules_still_solves():
+    """An in-place edit bypasses pydantic; the solve still takes a spec found there."""
+    model_input = _small_input()
+    model_input.rules.append(MaxConsecutiveDaysCost(value=2))
+    solution = solve_request(ScheduleRequest(timelimit=0.05, model_input=model_input))
+    assert "max_consecutive_days_cost" in {total.name for total in solution.rule_totals}
+
+
+@pytest.mark.parametrize(
+    "rules",
+    [
+        [],
+        [RequiredSkillCost(), RequiredSkillCost()],
+        [MaxConsecutiveDaysCost(value=2), {"name": "max_consecutive_days_cost", "value": 2}],
+    ],
+    ids=["empty", "same-twice", "spec-and-json-twice"],
+)
+def test_an_empty_or_repeated_rule_list_is_refused(rules):
+    """The get_constraints() rules hold for SchedulingInput.rules too (both were scored)."""
+    with pytest.raises(ValidationError, match="must not be empty|same parameters"):
+        _small_input(rules=rules)
+
+
+def test_the_cpp_calculator_refuses_an_empty_or_repeated_selection():
+    """DecomposedCalculator(list) follows get_constraints(); add() still builds incrementally."""
+    with pytest.raises(ValueError, match="must not be empty"):
+        es.DecomposedCalculator([])
+    with pytest.raises(ValueError, match="same parameters"):
+        es.DecomposedCalculator([MaxConsecutiveDaysCost(value=1), MaxConsecutiveDaysCost(value=1)])
+    schedule = to_schedule(_small_input())
+    with pytest.raises(ValueError, match="same parameters"):
+        es.constraint_costs(schedule, [DayPatternCost(pattern="WORK,WORK")] * 2)
+    # Other knobs alone do not make another instance (select() keys name and parameters) ...
+    with pytest.raises(ValueError, match="same parameters"):
+        es.DecomposedCalculator([MaxConsecutiveDaysCost(value=1), MaxConsecutiveDaysCost(value=1, weight=2)])
+    # ... other parameters (or scope) do.
+    es.DecomposedCalculator([MaxConsecutiveDaysCost(value=1), MaxConsecutiveDaysCost(value=2)])
+    es.DecomposedCalculator([MaxConsecutiveDaysCost(value=1), MaxConsecutiveDaysCost(value=1, worker_indices=(0,))])
+
+
+def test_the_cpp_calculator_compares_parameters_by_value_like_get_constraints():
+    """A list and a tuple scope are the same parameters on every path, as in get_constraints()."""
+    a = MaxConsecutiveDaysCost(value=5, worker_indices=(0, 1))
+    b = MaxConsecutiveDaysCost(value=5, worker_indices=[0, 1])
+    with pytest.raises(ValueError, match="same parameters"):
+        es.constraints.get_constraints([a, b])
+    with pytest.raises(ValueError, match="same parameters"):
+        es.DecomposedCalculator([a, b])
+    with pytest.raises(ValueError, match="same parameters"):
+        es.constraint_costs(to_schedule(_small_input()), [a, b])
+    # A different scope is still another instance on both paths.
+    other = MaxConsecutiveDaysCost(value=5, worker_indices=[0])
+    assert len(es.constraints.get_constraints([a, other])) == 2
+    es.DecomposedCalculator([a, other])

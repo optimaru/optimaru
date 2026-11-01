@@ -13,6 +13,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <limits>
 #include <random>
 #include <string>
 #include <vector>
@@ -127,25 +128,25 @@ void verifyConstraints()
 {
     std::printf("== (a) Verifying each constraint in isolation ==\n");
 
-    // hard 2: femaleInMaleRoom — 50 * 6 nights.
+    // hard 2: femaleInMaleRoomCost — 50 * 6 nights.
     {
         BedPlan plan = makeBase();
         const int bed
             = addBed(plan, addRoom(plan, GenderLimitation::MALE_ONLY));
         addStay(plan, 0, 5, Gender::FEMALE, bed);
-        checkScore("femaleInMaleRoom",
+        checkScore("femaleInMaleRoomCost",
                    ScoreCalculator::calculateScore(plan),
                    -300,
                    0,
                    0);
     }
-    // hard 3: maleInFemaleRoom — 50 * 6 nights.
+    // hard 3: maleInFemaleRoomCost — 50 * 6 nights.
     {
         BedPlan plan = makeBase();
         const int bed
             = addBed(plan, addRoom(plan, GenderLimitation::FEMALE_ONLY));
         addStay(plan, 0, 5, Gender::MALE, bed);
-        checkScore("maleInFemaleRoom",
+        checkScore("maleInFemaleRoomCost",
                    ScoreCalculator::calculateScore(plan),
                    -300,
                    0,
@@ -163,13 +164,13 @@ void verifyConstraints()
                    0,
                    0);
     }
-    // hard 1: sameBedInSameNight — full overlap: 1000 * 6 nights.
+    // hard 1: bedConflictCost — full overlap: 1000 * 6 nights.
     {
         BedPlan plan = makeBase();
         const int bed = addBed(plan, addRoom(plan));
         addStay(plan, 0, 5, Gender::MALE, bed);
         addStay(plan, 0, 5, Gender::MALE, bed);
-        checkScore("sameBedInSameNight full overlap",
+        checkScore("bedConflictCost full overlap",
                    ScoreCalculator::calculateScore(plan),
                    -6000,
                    0,
@@ -181,7 +182,7 @@ void verifyConstraints()
         const int bed = addBed(plan, addRoom(plan));
         addStay(plan, 0, 5, Gender::MALE, bed);
         addStay(plan, 3, 9, Gender::MALE, bed);
-        checkScore("sameBedInSameNight partial overlap",
+        checkScore("bedConflictCost partial overlap",
                    ScoreCalculator::calculateScore(plan),
                    -3000,
                    0,
@@ -193,20 +194,20 @@ void verifyConstraints()
         const int bed = addBed(plan, addRoom(plan));
         addStay(plan, 0, 2, Gender::MALE, bed);
         addStay(plan, 4, 6, Gender::MALE, bed);
-        checkScore("sameBedInSameNight disjoint",
+        checkScore("bedConflictCost disjoint",
                    ScoreCalculator::calculateScore(plan),
                    0,
                    0,
                    0);
     }
-    // hard 4: differentGenderInSameGenderRoomInSameNight — 1000 * 6.
+    // hard 4: mixedGenderRoomCost — 1000 * 6.
     {
         BedPlan plan = makeBase();
         const int room
             = addRoom(plan, GenderLimitation::SAME_GENDER, /*capacity*/ 2);
         addStay(plan, 0, 5, Gender::FEMALE, addBed(plan, room));
         addStay(plan, 0, 5, Gender::MALE, addBed(plan, room));
-        checkScore("differentGenderInSameGenderRoom",
+        checkScore("mixedGenderRoomCost",
                    ScoreCalculator::calculateScore(plan),
                    -6000,
                    0,
@@ -238,33 +239,33 @@ void verifyConstraints()
                    0,
                    0);
     }
-    // hard 5: departmentMinimumAge — 100 * 6 nights.
+    // hard 5: departmentMinAgeCost — 100 * 6 nights.
     {
         BedPlan plan = makeBase();
         plan.departments[0].minimumAge = 18;
         const int bed = addBed(plan, addRoom(plan));
         const int stay = addStay(plan, 0, 5, Gender::MALE, bed);
         plan.stays[stay].patientAge = 5;
-        checkScore("departmentMinimumAge",
+        checkScore("departmentMinAgeCost",
                    ScoreCalculator::calculateScore(plan),
                    -600,
                    0,
                    0);
     }
-    // hard 6: departmentMaximumAge — 100 * 6 nights.
+    // hard 6: departmentMaxAgeCost — 100 * 6 nights.
     {
         BedPlan plan = makeBase();
         plan.departments[0].maximumAge = 18;
         const int bed = addBed(plan, addRoom(plan));
         const int stay = addStay(plan, 0, 5, Gender::MALE, bed);
         plan.stays[stay].patientAge = 42;
-        checkScore("departmentMaximumAge",
+        checkScore("departmentMaxAgeCost",
                    ScoreCalculator::calculateScore(plan),
                    -600,
                    0,
                    0);
     }
-    // hard 7: requiredPatientEquipment — the room misses "television" but
+    // hard 7: requiredPatientEquipmentCost — the room misses "television" but
     // has "telemetry": 50 * 6 nights * 1 present (the quickstart's
     // test-pinned semantics: weigh by the PRESENT required equipment).
     {
@@ -274,7 +275,7 @@ void verifyConstraints()
             addRoom(plan, GenderLimitation::ANY_GENDER, 1, {"telemetry"}));
         const int stay = addStay(plan, 0, 5, Gender::MALE, bed);
         plan.stays[stay].patientRequiredEquipment = {"television", "telemetry"};
-        checkScore("requiredPatientEquipment partial",
+        checkScore("requiredPatientEquipmentCost partial",
                    ScoreCalculator::calculateScore(plan),
                    -300,
                    0,
@@ -287,7 +288,7 @@ void verifyConstraints()
         const int bed = addBed(plan, addRoom(plan));
         const int stay = addStay(plan, 0, 5, Gender::MALE, bed);
         plan.stays[stay].patientRequiredEquipment = {"television"};
-        checkScore("requiredPatientEquipment none present",
+        checkScore("requiredPatientEquipmentCost none present",
                    ScoreCalculator::calculateScore(plan),
                    0,
                    0,
@@ -303,18 +304,18 @@ void verifyConstraints()
                                        {"telemetry", "television"}));
         const int stay = addStay(plan, 0, 5, Gender::MALE, bed);
         plan.stays[stay].patientRequiredEquipment = {"television"};
-        checkScore("requiredPatientEquipment all present",
+        checkScore("requiredPatientEquipmentCost all present",
                    ScoreCalculator::calculateScore(plan),
                    0,
                    0,
                    0);
     }
-    // medium 8: assignEveryPatientToABed — the "no bed" sentinel.
+    // medium 8: unassignedStaysCost — the "no bed" sentinel.
     {
         BedPlan plan = makeBase();
         addBed(plan, addRoom(plan));
         addStay(plan, 0, 5, Gender::MALE, /*bed*/ 1);  // noBedValue() == 1
-        checkScore("assignEveryPatientToABed (no bed)",
+        checkScore("unassignedStaysCost (no bed)",
                    ScoreCalculator::calculateScore(plan),
                    0,
                    -6,
@@ -331,14 +332,14 @@ void verifyConstraints()
                    0,
                    0);
     }
-    // soft 9: preferredMaximumRoomCapacity — 8 * 6 nights.
+    // soft 9: preferredMaxRoomCapacityCost — 8 * 6 nights.
     {
         BedPlan plan = makeBase();
         const int bed = addBed(
             plan, addRoom(plan, GenderLimitation::ANY_GENDER, /*capacity*/ 6));
         const int stay = addStay(plan, 0, 5, Gender::MALE, bed);
         plan.stays[stay].patientPreferredMaximumRoomCapacity = 3;
-        checkScore("preferredMaximumRoomCapacity",
+        checkScore("preferredMaxRoomCapacityCost",
                    ScoreCalculator::calculateScore(plan),
                    0,
                    0,
@@ -351,13 +352,13 @@ void verifyConstraints()
             plan, addRoom(plan, GenderLimitation::ANY_GENDER, /*capacity*/ 3));
         const int stay = addStay(plan, 0, 5, Gender::MALE, bed);
         plan.stays[stay].patientPreferredMaximumRoomCapacity = 3;
-        checkScore("preferredMaximumRoomCapacity within",
+        checkScore("preferredMaxRoomCapacityCost within",
                    ScoreCalculator::calculateScore(plan),
                    0,
                    0,
                    0);
     }
-    // soft 10: departmentSpecialty — 10 * 6 nights for the stay whose
+    // soft 10: departmentSpecialtyCost — 10 * 6 nights for the stay whose
     // specialty the department does not offer (the Java test's two-stay
     // setup: spec1 offered, spec2 not).
     {
@@ -368,13 +369,13 @@ void verifyConstraints()
         addStay(plan, 0, 5, Gender::MALE, bed, "spec1");
         const int bed2 = addBed(plan, plan.beds[bed].room);
         addStay(plan, 0, 5, Gender::MALE, bed2, "spec2");
-        checkScore("departmentSpecialty",
+        checkScore("departmentSpecialtyCost",
                    ScoreCalculator::calculateScore(plan),
                    0,
                    0,
                    -60);
     }
-    // soft 11: departmentSpecialtyNotFirstPriority — 10 * (2 - 1) * 6 for
+    // soft 11: departmentSpecialtyPriorityCost — 10 * (2 - 1) * 6 for
     // the priority-2 specialty; the priority-1 one costs nothing.
     {
         BedPlan plan = makeBase();
@@ -384,13 +385,13 @@ void verifyConstraints()
         addStay(plan, 0, 5, Gender::MALE, bed, "spec1");
         const int bed2 = addBed(plan, plan.beds[bed].room);
         addStay(plan, 0, 5, Gender::MALE, bed2, "spec2");
-        checkScore("departmentSpecialtyNotFirstPriority",
+        checkScore("departmentSpecialtyPriorityCost",
                    ScoreCalculator::calculateScore(plan),
                    0,
                    0,
                    -60);
     }
-    // soft 12: preferredPatientEquipment — 50 * 6 nights * 1 missing.
+    // soft 12: preferredPatientEquipmentCost — 50 * 6 nights * 1 missing.
     {
         BedPlan plan = makeBase();
         const int bed = addBed(
@@ -399,7 +400,7 @@ void verifyConstraints()
         const int stay = addStay(plan, 0, 5, Gender::MALE, bed);
         plan.stays[stay].patientPreferredEquipment
             = {"television", "telemetry"};
-        checkScore("preferredPatientEquipment",
+        checkScore("preferredPatientEquipmentCost",
                    ScoreCalculator::calculateScore(plan),
                    0,
                    0,
@@ -695,10 +696,40 @@ void verifyEmptyNightStays()
     std::printf("\n");
 }
 
+// -------------------------------------------------------------------------
+// stop_at_first_feasible's best-score limit (0, INT64_MIN, INT64_MIN): the
+// engine compares hard only (soft -inf), so no soft score, however low,
+// misses the stop. Through toEngineScore the sentinel folded into a finite
+// engine soft that a soft score below it never reached.
+// -------------------------------------------------------------------------
+void verifyStopAtFirstFeasibleLimit()
+{
+    std::printf("== stop_at_first_feasible's limit is hard-only ==\n");
+    const optimaru::HardSoftScore limit
+        = toEngineScoreLimit(Score{0, kNoLevelFloor, kNoLevelFloor});
+    check(limit.hard == 0 && std::isinf(limit.soft) && limit.soft < 0.0,
+          "(0, INT64_MIN, INT64_MIN) -> engine limit (0, -inf)");
+    check(optimaru::HardSoftScore{0, -1e30} >= limit
+              && toEngineScore(Score{0, -5, -(1LL << 62)}) >= limit,
+          "a feasible score with any soft (-1e30; medium -5, soft -2^62) reaches it");
+    check(!(optimaru::HardSoftScore{-1, 0.0} >= limit),
+          "an infeasible score does not");
+    check(toEngineScoreLimit(Score{0, kNoLevelFloor, 0}).soft
+                  == -std::numeric_limits<double>::infinity()
+              && toEngineScoreLimit(Score{0, 0, kNoLevelFloor}).soft
+                     == -std::numeric_limits<double>::infinity(),
+          "INT64_MIN on medium or on soft drops the soft-side floor");
+    const Score other{-2, -3, -5};
+    check(toEngineScoreLimit(other) == toEngineScore(other),
+          "any other limit folds like a score");
+    std::printf("\n");
+}
+
 }  // namespace
 
 int main()
 {
+    verifyStopAtFirstFeasibleLimit();
     verifyConstraints();
     verifyIncremental();
     verifyFullAssertSolve();

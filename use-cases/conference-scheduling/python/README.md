@@ -22,15 +22,18 @@ import conference_scheduling as cs
 schedule = cs.demo_conference()  # reproduces Java DemoDataGenerator (15 talks / 6 slots / 5 rooms)
 cs.solve(schedule, time_limit_seconds=10.0, random_seed=42)
 print(schedule.score)  # e.g. 0hard/-54420soft
-print(cs.compute_breakdown(schedule).content_conflict)
+print(cs.constraint_costs(schedule)["content_conflict_cost"]["costs"])  # raw, before the weight
 ```
 
 - `solve(schedule, *, time_limit_seconds, random_seed, parallel_solver_count,
-  stop_at_first_feasible, on_new_best, config)` — solves in place and returns it.
-  `config` accepts a `SolverConfig` or a `models.SolveConfig`.
-- `calculate_score` / `compute_breakdown` — full recompute of all 37 constraints
-  and per-constraint match-unit totals (`hard_total`/`soft_penalty_total`/
-  `soft_reward_total` apply the weights).
+  stop_at_first_feasible, on_new_best, config, constraints)` — solves in place and
+  returns it. `config` accepts a `SolverConfig` or a `models.SolveConfig`;
+  `constraints` picks the cost function (see below).
+- `calculate_score` — full recompute of all 37 constraints at their default weights.
+- `constraint_costs(schedule)` — every constraint's raw cost (one global total each;
+  the three rewards report it negated, <= 0), before weight, exponent and level: the
+  one per-constraint surface. `constraint_info()` — the catalog (default level and
+  weight, `level_flippable`, `reward`, `default_enabled`), read off the C++ components.
 - Serialization is the pydantic v2 mirror in `conference_scheduling.models`
   (`ConferenceScheduleModel.from_core / to_core`, `SolveConfig`).
 
@@ -41,26 +44,60 @@ The Java original already uses `HardSoftScore`, so it maps identically onto the 
 (0 == feasible), soft = weighted rewards (diversity) − penalties (preferences/conflicts)
 (always integer-valued, held in the engine's double field).
 
-## Constraints (all of Java `ConferenceSchedulingConstraintProvider`, 16 hard + 20 soft)
+## Constraints (all of Java `ConferenceSchedulingConstraintProvider`, 16 hard + 20 soft, plus the synthetic one)
 
-hard: `roomUnavailableTimeslot` (100k/min) `roomConflict` (1k/overlap min)
-`speakerUnavailableTimeslot` (100/min·speaker) `speakerConflict` (10/overlap min·shared speaker)
-`talkPrerequisiteTalks` (10/summed min) `talkMutuallyExclusiveTalksTags`
-`consecutiveTalksPause` `crowdControl` + 8 required/prohibited timeslot/room tag rules
-(talk/speaker × required/prohibited × timeslot/room, 1/tag·min)
+hard: `talk_type_incompatibility_cost` (100k/min, synthetic, see below)
+`room_unavailability_cost` (100k/min) `room_conflict_cost` (1k/overlap min)
+`speaker_unavailability_cost` (100/min·speaker) `speaker_conflict_cost` (10/overlap min·shared speaker)
+`talk_prerequisite_talks_cost` (10/summed min) `talk_mutually_exclusive_talks_tags_cost`
+`consecutive_talks_pause_cost` `crowd_control_risk_cost` + 8 required/prohibited timeslot/room
+tag rules (`<talk|speaker>_<required|prohibited>_<timeslot|room>_tags_cost`, 1/tag·min)
 
-soft: `themeTrackConflict` `themeTrackRoomStability` `sectorConflict` (-10 each)
-`audienceTypeDiversity`(+1) `audienceTypeThemeTrackConflict`(-1)
-`audienceLevelDiversity`(+1) `contentAudienceLevelFlowViolation`(-10)
-`contentConflict`(-100) `languageDiversity`(+10) `sameDayTalks`(-10)
-`popularTalks` (-10) + 8 preferred/undesired tag rules (-20 each) + `speakerMakespan` (-20)
+soft: `theme_track_conflict_cost` `theme_track_room_change_cost` `sector_conflict_cost` (-10 each)
+`audience_type_diversity_cost` (+1, reward) `audience_type_theme_track_conflict_cost` (-1)
+`audience_level_diversity_cost` (+1, reward) `content_audience_level_flow_violation_cost` (-10)
+`content_conflict_cost` (-100) `language_diversity_cost` (+10, reward) `different_day_talks_cost` (-10)
+`popular_talks_room_size_cost` (-10) + 8 preferred/undesired tag rules
+(`<talk|speaker>_<preferred|undesired>_<timeslot|room>_tags_cost`, -20 each) +
+`speaker_makespan_cost` (-20)
+
+The full table (C++ component, default level and weight, raw cost) is in the
+[use-case README](../README.md#constraints-hardsoftscore--the-engine-score-type-as-is);
+`cs.constraint_info()` reports the same defaults. Pick, re-weight or flip constraints
+with `conference_scheduling.constraints`:
+
+```python
+from conference_scheduling.constraints import ContentConflictCost, get_constraints, score
+
+cs.constraint_info()
+# [ConstraintInfo(name='talk_type_incompatibility_cost', default_level='hard',
+#                 default_weight=100000.0, level_flippable=True, reward=False,
+#                 default_enabled=True), ...]
+picks = [ContentConflictCost(weight=500) if c.name == "content_conflict_cost" else c for c in get_constraints()]
+cs.solve(schedule, time_limit_seconds=5.0, constraints=picks)
+raw = cs.constraint_costs(schedule)       # re-priced in pure Python, no re-solve:
+score(raw), score(raw, picks)
+```
+
+The three `*_diversity_cost` rewards are never hard: `hard=True` raises `ValueError`
+(in `solve`, in `score()` and on the CP-SAT path).
+
+**0.2.0:** every constraint was renamed to a `*_cost` name (`room_conflict` ->
+`room_conflict_cost`, `talk_type_compatibility` -> `talk_type_incompatibility_cost`,
+`room_unavailable_timeslot` / `speaker_unavailable_timeslot` -> `room_unavailability_cost` /
+`speaker_unavailability_cost`, `crowd_control` -> `crowd_control_risk_cost`,
+`theme_track_room_stability` -> `theme_track_room_change_cost`, `same_day_talks` ->
+`different_day_talks_cost`, `popular_talks` -> `popular_talks_room_size_cost`, the rest gain
+the `_cost` suffix; the full list is in the use-case README), with the spec classes and the
+module-level default instances alike. `compute_breakdown()` and `Breakdown` were removed;
+use `constraint_costs()`. Raw costs and the default score are unchanged.
 
 ### Value range replacement (the only semantic difference)
 
 Java restricts a Talk's value range to TalkType-compatible timeslots/rooms with
 `@ValueRangeProvider`. This engine's BASIC variable is one global (timeslot × room)
 grid, so the port gets the same effect with the synthetic hard constraint
-`talkTypeCompatibility` (100k × max(min,1), per incompatible slot/room) — it never fires
+`talk_type_incompatibility_cost` (100k × max(min,1), per incompatible slot/room) — it never fires
 on a solution that is feasible in Java, and the search is biased toward compatible
 cells by `compatible_value_probability` (default 0.9).
 

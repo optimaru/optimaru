@@ -268,7 +268,8 @@ def solve_request(request: RoutePlanRequest, *, constraints=None) -> RouteSoluti
     cfg.parallel_solver_count = request.num_workers
     _apply_solver_parameters(cfg, request.solver_parameters)
     if request.stop_at_first_feasible:
-        cfg.best_score_limit = (0, 0, -(2**62))
+        # Hard 0: -(2**63) on medium/soft is "no floor" (the engine compares hard only).
+        cfg.best_score_limit = (0, -(2**63), -(2**63))
     solver = _core.Solver(cfg)
     has_route_policy = any(
         v.max_travel_time

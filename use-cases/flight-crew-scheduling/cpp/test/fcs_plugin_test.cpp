@@ -6,15 +6,23 @@
 //   (b) incremental score == full recompute across 3000 random moves driven
 //       through the engine's ScoreDirector protocol (plugin path)
 //   (c) partial assemblies: each component in isolation, hand-computed
-//   (d) weight / isHard overrides
+//   (d) weight / level overrides: re-weighted, demoted to soft, promoted to
+//       hard, exponent shaping
 //   (e) constraintTotals() explains exactly the reported score
 //   (f) a 2-second solve(schedule, calculator) under FULL_ASSERT
+//   (g) the defaultConstraints() builder: named edits == by-hand assembly
+//   (h) each component's raw cost, hand-calculated: a positive and a zero
+//       case per constraint (raw 0 = no violation)
+//   (i) the catalog: info() off the default assembly == the components'
+//       kDefaultWeight / kDefaultLevel; the level/weight guards
 #include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <functional>
 #include <memory>
 #include <random>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -256,47 +264,52 @@ void verifyPartialAssemblies()
 {
     std::printf("== (c) Single-component assemblies ==\n");
 
-    {  // requiredSkill alone: the employee is a Pilot, the seat wants "1".
+    {  // requiredSkillCost alone: the employee is a Pilot, the seat wants "1".
         FlightCrewSchedule s = makeBase(2, 1);
         const int f = addFlight(s, 0, 0, 1, 60);
         addAssignment(s, f, 0, "1");
         DecomposedCalculator calculator;
-        calculator.emplace<RequiredSkill>();
-        checkScore("requiredSkill alone", scoreWith(calculator, s), -100, 0.0);
+        calculator.emplace<RequiredSkillCost>();
+        checkScore(
+            "requiredSkillCost alone", scoreWith(calculator, s), -100, 0.0);
     }
     {  // The right skill: silent.
         FlightCrewSchedule s = makeBase(2, 1);
         const int f = addFlight(s, 0, 0, 1, 60);
         addAssignment(s, f, 0, "Pilot");
         DecomposedCalculator calculator;
-        calculator.emplace<RequiredSkill>();
-        checkScore("requiredSkill satisfied", scoreWith(calculator, s), 0, 0.0);
+        calculator.emplace<RequiredSkillCost>();
+        checkScore(
+            "requiredSkillCost satisfied", scoreWith(calculator, s), 0, 0.0);
     }
-    {  // flightConflict alone: two overlapping flights on one employee.
+    {  // flightConflictCost alone: two overlapping flights on one employee.
         FlightCrewSchedule s = makeBase(2, 1);
         addAssignment(s, addFlight(s, 0, 0, 0, 10), 0);
         addAssignment(s, addFlight(s, 0, 1, 0, 11), 0);
         DecomposedCalculator calculator;
-        calculator.emplace<FlightConflict>();
-        checkScore("flightConflict alone", scoreWith(calculator, s), -10, 0.0);
+        calculator.emplace<FlightConflictCost>();
+        checkScore(
+            "flightConflictCost alone", scoreWith(calculator, s), -10, 0.0);
     }
     {  // Back to back, not overlapping: silent.
         FlightCrewSchedule s = makeBase(2, 1);
         addAssignment(s, addFlight(s, 0, 0, 0, 10), 0);
         addAssignment(s, addFlight(s, 0, 10, 0, 20), 0);
         DecomposedCalculator calculator;
-        calculator.emplace<FlightConflict>();
-        checkScore(
-            "flightConflict, back to back", scoreWith(calculator, s), 0, 0.0);
+        calculator.emplace<FlightConflictCost>();
+        checkScore("flightConflictCost, back to back",
+                   scoreWith(calculator, s),
+                   0,
+                   0.0);
     }
-    {  // transferBetweenTwoFlights alone: lands at airport 1, next leaves
+    {  // transferBetweenTwoFlightsCost alone: lands at airport 1, next leaves
         // from airport 0.
         FlightCrewSchedule s = makeBase(2, 1);
         addAssignment(s, addFlight(s, 0, 0, 1, 10), 0);
         addAssignment(s, addFlight(s, 0, 20, 0, 30), 0);
         DecomposedCalculator calculator;
-        calculator.emplace<TransferBetweenTwoFlights>();
-        checkScore("transferBetweenTwoFlights alone",
+        calculator.emplace<TransferBetweenTwoFlightsCost>();
+        checkScore("transferBetweenTwoFlightsCost alone",
                    scoreWith(calculator, s),
                    -1,
                    0.0);
@@ -306,35 +319,37 @@ void verifyPartialAssemblies()
         addAssignment(s, addFlight(s, 0, 0, 1, 10), 0);
         addAssignment(s, addFlight(s, 1, 20, 0, 30), 0);
         DecomposedCalculator calculator;
-        calculator.emplace<TransferBetweenTwoFlights>();
-        checkScore("transferBetweenTwoFlights, connected",
+        calculator.emplace<TransferBetweenTwoFlightsCost>();
+        checkScore("transferBetweenTwoFlightsCost, connected",
                    scoreWith(calculator, s),
                    0,
                    0.0);
     }
-    {  // employeeUnavailability alone: a day-0 flight on an employee who is
+    {  // employeeUnavailabilityCost alone: a day-0 flight on an employee who is
         // unavailable that day.
         FlightCrewSchedule s = makeBase(2, 1);
         s.employees[0].unavailableDays = {0};
         addAssignment(s, addFlight(s, 0, 0, 1, 60), 0);
         DecomposedCalculator calculator;
-        calculator.emplace<EmployeeUnavailability>();
-        checkScore(
-            "employeeUnavailability alone", scoreWith(calculator, s), -10, 0.0);
+        calculator.emplace<EmployeeUnavailabilityCost>();
+        checkScore("employeeUnavailabilityCost alone",
+                   scoreWith(calculator, s),
+                   -10,
+                   0.0);
     }
     {  // The two home-airport rules: the single flight is both first and
         // last, leaving from airport 1 (home is 0) and landing at 1.
         FlightCrewSchedule s = makeBase(2, 1);
         addAssignment(s, addFlight(s, 1, 0, 1, 60), 0);
         DecomposedCalculator first;
-        first.emplace<FirstAssignmentNotDepartingFromHome>();
-        checkScore("firstAssignmentNotDepartingFromHome alone",
+        first.emplace<FirstAssignmentNotDepartingFromHomeCost>();
+        checkScore("firstAssignmentNotDepartingFromHomeCost alone",
                    scoreWith(first, s),
                    0,
                    -1000.0);
         DecomposedCalculator last;
-        last.emplace<LastAssignmentNotArrivingAtHome>();
-        checkScore("lastAssignmentNotArrivingAtHome alone",
+        last.emplace<LastAssignmentNotArrivingAtHomeCost>();
+        checkScore("lastAssignmentNotArrivingAtHomeCost alone",
                    scoreWith(last, s),
                    0,
                    -1000.0);
@@ -353,18 +368,18 @@ void verifyOverrides()
 
     {
         DecomposedCalculator calculator;
-        calculator.emplace<RequiredSkill>(1.0);
-        checkScore("requiredSkill re-weighted to 1",
+        calculator.emplace<RequiredSkillCost>(1.0);
+        checkScore("requiredSkillCost re-weighted to 1",
                    scoreWith(calculator, s),
                    -1,
                    0.0);
     }
     {
         DecomposedCalculator calculator;
-        auto component = std::make_unique<RequiredSkill>();
-        component->isHard = false;
+        auto component = std::make_unique<RequiredSkillCost>();
+        component->level = optimaru::Level::Soft;
         calculator.add(std::move(component));
-        checkScore("requiredSkill demoted to soft",
+        checkScore("requiredSkillCost demoted to soft",
                    scoreWith(calculator, s),
                    0,
                    -100.0);
@@ -376,12 +391,27 @@ void verifyOverrides()
         addAssignment(two, addFlight(two, 0, 0, 1, 60), 0, "1");
         addAssignment(two, addFlight(two, 0, 100, 1, 160), 0, "1");
         DecomposedCalculator calculator;
-        auto component = std::make_unique<RequiredSkill>();
+        auto component = std::make_unique<RequiredSkillCost>();
         component->exponent = 2.0;
         calculator.add(std::move(component));
-        checkScore("requiredSkill with exponent 2",
+        checkScore("requiredSkillCost with exponent 2",
                    scoreWith(calculator, two),
                    -400,
+                   0.0);
+    }
+    {
+        // A soft rule promoted to hard keeps its weight in the new level:
+        // the single flight leaves from airport 1 (home 0) -> 1000 hard.
+        FlightCrewSchedule away = makeBase(2, 1);
+        addAssignment(away, addFlight(away, 1, 0, 0, 60), 0);
+        DecomposedCalculator calculator;
+        auto component
+            = std::make_unique<FirstAssignmentNotDepartingFromHomeCost>();
+        component->level = optimaru::Level::Hard;
+        calculator.add(std::move(component));
+        checkScore("firstAssignmentNotDepartingFromHomeCost promoted to hard",
+                   scoreWith(calculator, away),
+                   -1000,
                    0.0);
     }
     std::printf("\n");
@@ -456,6 +486,296 @@ void verifyFullAssertSolve()
     std::printf("\n");
 }
 
+
+// -------------------------------------------------------------------------
+// (g) The defaultConstraints() builder: named edits == by-hand assembly.
+// -------------------------------------------------------------------------
+void verifyAssemblyBuilder()
+{
+    std::printf("== (g) defaultConstraints() builder ==\n");
+    FlightCrewSchedule s
+        = buildRandomInstance(/*flights*/ 12, /*employees*/ 6, /*seed*/ 17);
+    ScoreCalculator::prepare(s);
+    std::mt19937_64 rng(21);
+    for (FlightAssignment &assignment : s.flightAssignments)
+        assignment.employee = static_cast<int>(rng() % s.employees.size());
+
+    // By hand: the default set with transfer demoted to soft, unavailability
+    // re-weighted to 2 and the last-not-home rule left out.
+    DecomposedCalculator byHand;
+    {
+        byHand.emplace<RequiredSkillCost>();
+        byHand.emplace<FlightConflictCost>();
+        auto transfer = std::make_unique<TransferBetweenTwoFlightsCost>();
+        transfer->level = optimaru::Level::Soft;
+        byHand.add(std::move(transfer));
+        byHand.emplace<EmployeeUnavailabilityCost>(2.0);
+        byHand.emplace<FirstAssignmentNotDepartingFromHomeCost>();
+    }
+    const Score expected = scoreWith(byHand, s);
+
+    // By name: the same three edits, one expression.
+    DecomposedCalculator built;
+    defaultConstraints()
+        .soft("transferBetweenTwoFlightsCost")
+        .weight("employeeUnavailabilityCost", 2)
+        .drop("lastAssignmentNotArrivingAtHomeCost")
+        .into(built);
+    check(sameScore(scoreWith(built, s), expected),
+          "named edits == the same assembly listed by hand");
+
+    // The default assembly, untouched, still matches the monolith.
+    DecomposedCalculator plain;
+    defaultConstraints().into(plain);
+    check(sameScore(scoreWith(plain, s), ScoreCalculator::calculateScore(s)),
+          "defaultConstraints() alone == the monolithic score");
+
+    // A typo must not quietly leave the cost function as it was.
+    bool threw = false;
+    try
+    {
+        defaultConstraints().weight("requiredSkillCosts", 4);  // trailing s
+    }
+    catch (const std::invalid_argument &)
+    {
+        threw = true;
+    }
+    check(threw, "an unknown name is refused (std::invalid_argument)");
+
+    // only() isolates a subset: just the two home-airport rules.
+    DecomposedCalculator isolated;
+    defaultConstraints()
+        .only({"firstAssignmentNotDepartingFromHomeCost",
+               "lastAssignmentNotArrivingAtHomeCost"})
+        .into(isolated);
+    DecomposedCalculator homeRules;
+    homeRules.emplace<FirstAssignmentNotDepartingFromHomeCost>();
+    homeRules.emplace<LastAssignmentNotArrivingAtHomeCost>();
+    const Score softOnly = scoreWith(isolated, s);
+    check(softOnly.hard == 0
+              && sameScore(softOnly, scoreWith(homeRules, s)),
+          "only() scores exactly the named constraints");
+    std::printf("\n");
+}
+
+// -------------------------------------------------------------------------
+// (h) Each component's raw cost on hand-built instances: one violating
+// (positive) case and one clean (zero) case per constraint, read through
+// constraintCosts() — the raw per-employee numbers before weight and level.
+// -------------------------------------------------------------------------
+std::vector<double> rawCosts(FlightCrewSchedule &schedule,
+                             const std::string &name)
+{
+    ScoreCalculator::prepare(schedule);
+    DecomposedCalculator calculator;
+    addDefaultConstraints(calculator);
+    calculator.resetWorkingSolution(schedule);
+    calculator.calculateScore();
+    for (const auto &entry : calculator.constraintCosts())
+    {
+        if (entry.name == name)
+            return entry.unitCosts;
+    }
+    return {};
+}
+
+void verifyRawCostsByHand()
+{
+    std::printf("== (h) Raw costs by hand, positive and zero ==\n");
+    using Costs = std::vector<double>;
+    {
+        // E0 holds two seats wanting "Attendant" (it is a Pilot) and one
+        // Pilot seat -> 2; E1 holds one Pilot seat -> 0.
+        FlightCrewSchedule s = makeBase(2, 2);
+        addAssignment(s, addFlight(s, 0, 0, 0, 60), 0, "Attendant");
+        addAssignment(s, addFlight(s, 0, 100, 0, 160), 0, "Attendant");
+        addAssignment(s, addFlight(s, 0, 200, 0, 260), 0, "Pilot");
+        addAssignment(s, addFlight(s, 0, 300, 0, 360), 1, "Pilot");
+        check(rawCosts(s, "requiredSkillCost") == Costs{2.0, 0.0},
+              "requiredSkillCost: [2, 0] (two unqualified seats on E0)");
+    }
+    {
+        // Every seat matches the crew member's skill.
+        FlightCrewSchedule s = makeBase(2, 2);
+        addAssignment(s, addFlight(s, 0, 0, 0, 60), 0, "Pilot");
+        addAssignment(s, addFlight(s, 0, 100, 0, 160), 1, "Pilot");
+        check(rawCosts(s, "requiredSkillCost") == Costs{0.0, 0.0},
+              "requiredSkillCost: [0, 0] all qualified");
+    }
+    {
+        // E0: [0,100) x [10,100) x [20,100) -> C(3,2) = 3 pairs; E1 alone.
+        FlightCrewSchedule s = makeBase(2, 2);
+        addAssignment(s, addFlight(s, 0, 0, 0, 100), 0);
+        addAssignment(s, addFlight(s, 0, 10, 0, 100), 0);
+        addAssignment(s, addFlight(s, 0, 20, 0, 100), 0);
+        addAssignment(s, addFlight(s, 0, 0, 0, 100), 1);
+        check(rawCosts(s, "flightConflictCost") == Costs{3.0, 0.0},
+              "flightConflictCost: [3, 0] (three mutually overlapping)");
+    }
+    {
+        // Touching flights ([0,10) then [10,20)) do not overlap.
+        FlightCrewSchedule s = makeBase(2, 2);
+        addAssignment(s, addFlight(s, 0, 0, 0, 10), 0);
+        addAssignment(s, addFlight(s, 0, 10, 0, 20), 0);
+        check(rawCosts(s, "flightConflictCost") == Costs{0.0, 0.0},
+              "flightConflictCost: [0, 0] back to back");
+    }
+    {
+        // E0 lands at 1 twice and leaves from 0 next: 0->1, 0->1, 0->1 ->
+        // two broken connections (the Java case); E1 has no flights.
+        FlightCrewSchedule s = makeBase(2, 2);
+        addAssignment(s, addFlight(s, 0, 0, 1, 10), 0);
+        addAssignment(s, addFlight(s, 0, 11, 1, 12), 0);
+        addAssignment(s, addFlight(s, 0, 13, 1, 14), 0);
+        check(rawCosts(s, "transferBetweenTwoFlightsCost") == Costs{2.0, 0.0},
+              "transferBetweenTwoFlightsCost: [2, 0] (Java case)");
+    }
+    {
+        // A connected chain 0->1, 1->0.
+        FlightCrewSchedule s = makeBase(2, 2);
+        addAssignment(s, addFlight(s, 0, 0, 1, 10), 0);
+        addAssignment(s, addFlight(s, 1, 20, 0, 30), 0);
+        check(rawCosts(s, "transferBetweenTwoFlightsCost") == Costs{0.0, 0.0},
+              "transferBetweenTwoFlightsCost: [0, 0] connected chain");
+    }
+    {
+        // E1 is unavailable on day 5: one flight departs that day, one
+        // departs day 4 and lands on day 5, one flies on day 6 -> 2.
+        FlightCrewSchedule s = makeBase(2, 2);
+        s.employees[1].unavailableDays = {5};
+        const Minutes day = MINUTES_PER_DAY;
+        addAssignment(s, addFlight(s, 0, 5 * day, 0, 5 * day + 10), 1);
+        addAssignment(s, addFlight(s, 0, 4 * day, 0, 5 * day + 10), 1);
+        addAssignment(s, addFlight(s, 0, 6 * day, 0, 6 * day + 10), 1);
+        addAssignment(s, addFlight(s, 0, 5 * day, 0, 5 * day + 10), 0);
+        check(rawCosts(s, "employeeUnavailabilityCost") == Costs{0.0, 2.0},
+              "employeeUnavailabilityCost: [0, 2] (day 5 at departure and "
+              "during a flight)");
+    }
+    {
+        // Flying on the day after the unavailable one.
+        FlightCrewSchedule s = makeBase(2, 2);
+        s.employees[0].unavailableDays = {5};
+        const Minutes day = MINUTES_PER_DAY;
+        addAssignment(s, addFlight(s, 0, 6 * day, 0, 6 * day + 10), 0);
+        check(rawCosts(s, "employeeUnavailabilityCost") == Costs{0.0, 0.0},
+              "employeeUnavailabilityCost: [0, 0] available");
+    }
+    {
+        // E0 (home 0): two flights tied on the earliest departure, both
+        // leaving airport 1 -> 2 (ties all count); E1 (home 0) leaves home.
+        FlightCrewSchedule s = makeBase(2, 2);
+        addAssignment(s, addFlight(s, 1, 0, 0, 10), 0);
+        addAssignment(s, addFlight(s, 1, 0, 0, 10), 0);
+        addAssignment(s, addFlight(s, 0, 0, 0, 10), 1);
+        check(rawCosts(s, "firstAssignmentNotDepartingFromHomeCost")
+                  == Costs{2.0, 0.0},
+              "firstAssignmentNotDepartingFromHomeCost: [2, 0] (a tie)");
+    }
+    {
+        // Both rosters start at home (E1 has none at all).
+        FlightCrewSchedule s = makeBase(2, 2);
+        addAssignment(s, addFlight(s, 0, 0, 1, 10), 0);
+        addAssignment(s, addFlight(s, 1, 20, 1, 30), 0);
+        check(rawCosts(s, "firstAssignmentNotDepartingFromHomeCost")
+                  == Costs{0.0, 0.0},
+              "firstAssignmentNotDepartingFromHomeCost: [0, 0] from home");
+    }
+    {
+        // E1 (home 0) ends the roster at airport 1; E0 ends at home.
+        FlightCrewSchedule s = makeBase(2, 2);
+        addAssignment(s, addFlight(s, 0, 0, 1, 10), 0);
+        addAssignment(s, addFlight(s, 1, 20, 0, 30), 0);
+        addAssignment(s, addFlight(s, 0, 0, 1, 10), 1);
+        check(rawCosts(s, "lastAssignmentNotArrivingAtHomeCost")
+                  == Costs{0.0, 1.0},
+              "lastAssignmentNotArrivingAtHomeCost: [0, 1]");
+    }
+    {
+        // A home round trip.
+        FlightCrewSchedule s = makeBase(2, 2);
+        addAssignment(s, addFlight(s, 0, 0, 1, 10), 0);
+        addAssignment(s, addFlight(s, 1, 20, 0, 30), 0);
+        check(rawCosts(s, "lastAssignmentNotArrivingAtHomeCost")
+                  == Costs{0.0, 0.0},
+              "lastAssignmentNotArrivingAtHomeCost: [0, 0] back home");
+    }
+    std::printf("\n");
+}
+
+// -------------------------------------------------------------------------
+// (i) The catalog read off the default assembly is exactly the components'
+// constants, and the level/weight guards hold on the domain's assembly.
+// -------------------------------------------------------------------------
+bool throwsInvalid(const std::function<void()> &edit)
+{
+    try
+    {
+        edit();
+    }
+    catch (const std::invalid_argument &)
+    {
+        return true;
+    }
+    return false;
+}
+
+template <typename Component>
+bool rowIs(const optimaru::ConstraintInfo &row,
+           const char *name,
+           optimaru::Level level,
+           double weight)
+{
+    return row.name == name && row.defaultLevel == Component::kDefaultLevel
+           && row.defaultWeight == Component::kDefaultWeight
+           && row.defaultLevel == level && row.defaultWeight == weight
+           && row.levelFlippable && !row.reward && !row.isGlobal
+           && row.defaultEnabled;
+}
+
+void verifyCatalog()
+{
+    std::printf("== (i) Catalog and guards ==\n");
+    using optimaru::Level;
+    const auto rows = defaultConstraints().info();
+    check(rows.size() == 6
+              && rowIs<RequiredSkillCost>(
+                  rows[0], "requiredSkillCost", Level::Hard, 100.0)
+              && rowIs<FlightConflictCost>(
+                  rows[1], "flightConflictCost", Level::Hard, 10.0)
+              && rowIs<TransferBetweenTwoFlightsCost>(
+                  rows[2], "transferBetweenTwoFlightsCost", Level::Hard, 1.0)
+              && rowIs<EmployeeUnavailabilityCost>(
+                  rows[3], "employeeUnavailabilityCost", Level::Hard, 10.0)
+              && rowIs<FirstAssignmentNotDepartingFromHomeCost>(
+                  rows[4],
+                  "firstAssignmentNotDepartingFromHomeCost",
+                  Level::Soft,
+                  1000.0)
+              && rowIs<LastAssignmentNotArrivingAtHomeCost>(
+                  rows[5],
+                  "lastAssignmentNotArrivingAtHomeCost",
+                  Level::Soft,
+                  1000.0),
+          "info(): hard 100 / 10 / 1 / 10, soft 1000 / 1000; all "
+          "flippable, no reward, no global, all default-enabled");
+    check(!throwsInvalid([] { defaultConstraints().soft("requiredSkillCost"); })
+              && !throwsInvalid(
+                  []
+                  {
+                      defaultConstraints().hard(
+                          "lastAssignmentNotArrivingAtHomeCost");
+                  }),
+          "every level flips both ways");
+    check(throwsInvalid(
+              [] { defaultConstraints().weight("flightConflictCost", -1.0); }),
+          "a negative weight is refused");
+    check(throwsInvalid(
+              [] { defaultConstraints().exponent("flightConflictCost", 0.0); }),
+          "a non-positive exponent is refused");
+    std::printf("\n");
+}
+
 }  // namespace
 
 int main()
@@ -466,6 +786,9 @@ int main()
     verifyOverrides();
     verifyConstraintTotals();
     verifyFullAssertSolve();
+    verifyAssemblyBuilder();
+    verifyRawCostsByHand();
+    verifyCatalog();
 
     if (failures == 0)
     {

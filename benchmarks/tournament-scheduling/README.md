@@ -2,9 +2,15 @@
 
 The [`tournament-scheduling`](../../use-cases/tournament-scheduling) use case against **OR-Tools CP-SAT**
 ([`cpsat/`](cpsat), package `tournament_scheduling_cpsat`). The CP-SAT model implements the
-same constraints under the same names and units, so both answers are
-rescored by the use case's own evaluator; parity tests in `cpsat/tests`
-keep the two cost definitions identical.
+same four constraints under the same names, with the defaults read from the engine's
+`constraint_info()`, and both answers are rescored by the use case's own evaluator.
+Only the two hard constraints (`team_conflict_cost`, `team_unavailability_cost`) are
+raw-identical to the engine; the two imbalance constraints
+(`assignment_count_imbalance_cost`, `confrontation_count_imbalance_cost`) minimize an
+integral variance surrogate (`scale * ssd`) instead of the engine's
+`round6(sqrt(ssd))`, and the confrontation surrogate counts a pair once per shared
+day. Exactly where the two paths agree and where they do not, and the tests that
+pin both down: [`cpsat/README.md`](cpsat/README.md#constraints-and-parity-with-the-engine).
 
 ```sh
 cd benchmarks/tournament-scheduling/cpsat

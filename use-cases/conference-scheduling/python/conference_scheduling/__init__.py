@@ -1,8 +1,8 @@
 """Conference scheduling — Python wrapper of the C++ solver on the optimaru engine.
 
-`Timeslot`/`Room`/`Speaker`/`Talk`/`ConferenceSchedule`/`Score`/`Breakdown`/
-`Solver`/`SolverConfig`/`calculate_score`/`compute_breakdown` come from the compiled
-C++ core (`_core`). `Talk.slot_room` is the planning variable
+`Timeslot`/`Room`/`Speaker`/`Talk`/`ConferenceSchedule`/`Score`/`Solver`/
+`SolverConfig`/`calculate_score`/`constraint_costs`/`constraint_info` come from the
+compiled C++ core (`_core`). `Talk.slot_room` is the planning variable
 (-1 == unassigned; the value is the composite encoding timeslot_index * room_count + room_index),
 and solve changes it and `score` in place::
 
@@ -12,13 +12,23 @@ and solve changes it and `score` in place::
     cs.solve(schedule, time_limit_seconds=10.0, random_seed=42)
     print(schedule.score, schedule.assignment())
 
+Score (HardSoftScore): the 37 constraints at their default weights (the Java
+provider's), 17 hard and 20 soft; three of the soft ones (`*_diversity_cost`) are
+rewards. `constraint_costs(schedule)` gives every constraint's raw cost (the only
+per-constraint surface since 0.2.0, which removed `Breakdown`/`compute_breakdown`), and
+`constraint_info()` lists every constraint with its default level and weight. Pick or
+re-weight constraints with `solve(..., constraints=...)` (see
+`conference_scheduling.constraints`).
+
 The pydantic mirror (for serialization) is in `conference_scheduling.models`
 (optional dependency).
 """
 
+import copy
+
 from ._core import (
-    Breakdown,
     ConferenceSchedule,
+    ConstraintInfo,
     Room,
     Score,
     Solver,
@@ -27,16 +37,16 @@ from ._core import (
     Talk,
     Timeslot,
     calculate_score,
-    compute_breakdown,
     constraint_costs,
+    constraint_info,
     list_constraints,
     prepare,
 )
 from .demo import demo_conference
 
 __all__ = [
-    "Breakdown",
     "ConferenceSchedule",
+    "ConstraintInfo",
     "Room",
     "Score",
     "Solver",
@@ -45,9 +55,9 @@ __all__ = [
     "Talk",
     "Timeslot",
     "calculate_score",
-    "compute_breakdown",
     "list_constraints",
     "constraint_costs",
+    "constraint_info",
     "demo_conference",
     "prepare",
     "solve",
@@ -83,12 +93,19 @@ def solve(
     Explicit keyword arguments override config.
 
     ``stop_at_first_feasible`` stops as soon as hard 0 is reached
-    (best_score_limit=(0, -1e18)).
+    (best_score_limit=(0, -inf)).
+
+    ``constraints`` picks the cost function directly (see
+    `conference_scheduling.constraints`). Only the listed constraints are scored;
+    None uses all 37 default constraints at their default weights::
+
+        from conference_scheduling.constraints import get_constraints
+        cs.solve(schedule, constraints=get_constraints())
     """
     if config is None:
         cfg = SolverConfig()
     elif isinstance(config, SolverConfig):
-        cfg = config
+        cfg = copy.copy(config)  # the overrides below must not leak into it
     elif hasattr(config, "to_core"):
         cfg = config.to_core()
     else:
@@ -100,7 +117,7 @@ def solve(
     if parallel_solver_count is not None:
         cfg.parallel_solver_count = parallel_solver_count
     if stop_at_first_feasible:
-        cfg.best_score_limit = (0, -1e18)
+        cfg.best_score_limit = (0, float("-inf"))
     if on_new_best is not None:
         cfg.on_new_best = on_new_best
 

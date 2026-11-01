@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -61,7 +62,7 @@ void testJavaFixtures()
     checkEqual("drivingTime L2->L3", plan.drivingTime(loc2, loc3), 639);
     checkEqual("drivingTime L1->L3", plan.drivingTime(home, loc3), 941);
 
-    // vehicleCapacity: capacity 100, demands 80 + 40 -> 20 over.
+    // vehicleCapacityCost: capacity 100, demands 80 + 40 -> 20 over.
     plan.vehicles = {Vehicle{"1", 100, home, hourMinute(7, 0), {}}};
     plan.visits = {
         Visit{"2", "John", loc2, 80, hourMinute(8, 0), hourMinute(10, 0), 30 * 60,
@@ -71,18 +72,18 @@ void testJavaFixtures()
     };
     plan.vehicles[0].visitIndices = {0, 1};
     Score s = ScoreCalculator::calculateScore(plan);
-    checkEqual("vehicleCapacity hard penalty", -s.hard, 20);
-    // minimizeTravelTime: the route is open by default, so only
+    checkEqual("vehicleCapacityCost hard penalty", -s.hard, 20);
+    // travelTimeCost: the route is open by default, so only
     // home->L2->L3 = 843 + 639 = 1482 is driven.
-    checkEqual("minimizeTravelTime soft penalty (open route)", -s.soft, 1482);
+    checkEqual("travelTimeCost soft penalty (open route)", -s.soft, 1482);
     // With returnToDepot the Java round trip home->L2->L3->home is charged:
     // 843 + 639 + 941 = 2423.
     plan.vehicles[0].returnToDepot = true;
     s = ScoreCalculator::calculateScore(plan);
-    checkEqual("minimizeTravelTime soft penalty (return to depot)", -s.soft, 2423);
+    checkEqual("travelTimeCost soft penalty (return to depot)", -s.soft, 2423);
     plan.vehicles[0].returnToDepot = false;
 
-    // maximizeVisitsAssigned: one unassigned visit with a 30-minute service
+    // unassignedVisitsCost: one unassigned visit with a 30-minute service
     // duration is penalized by 30 on the medium level.
     VehicleRoutePlan plan2;
     addLocation(plan2, 49.288087, 16.562172);
@@ -93,7 +94,7 @@ void testJavaFixtures()
                           30 * 60, -1, NULL_TIME}};
     // Left out of every route == unassigned.
     Score s2 = ScoreCalculator::calculateScore(plan2);
-    checkEqual("maximizeVisitsAssigned medium penalty", -s2.medium, 30);
+    checkEqual("unassignedVisitsCost medium penalty", -s2.medium, 30);
     std::printf("\n");
 }
 
@@ -633,10 +634,40 @@ void testPreviewsMatchAppliedScore(bool nonMetric, bool waiting = false,
     check(parity.declined == 0, "every preview is served");
     std::printf("\n");
 }
+// -------------------------------------------------------------------------
+// stop_at_first_feasible's best-score limit (0, INT64_MIN, INT64_MIN): the
+// engine compares hard only (soft -inf), so no soft score, however low,
+// misses the stop. Through toEngineScore the sentinel folded into a finite
+// engine soft that a soft score below it never reached.
+// -------------------------------------------------------------------------
+void verifyStopAtFirstFeasibleLimit()
+{
+    std::printf("== stop_at_first_feasible's limit is hard-only ==\n");
+    const optimaru::HardSoftScore limit
+        = toEngineScoreLimit(Score{0, kNoLevelFloor, kNoLevelFloor});
+    check(limit.hard == 0 && std::isinf(limit.soft) && limit.soft < 0.0,
+          "(0, INT64_MIN, INT64_MIN) -> engine limit (0, -inf)");
+    check(optimaru::HardSoftScore{0, -1e30} >= limit
+              && toEngineScore(Score{0, -5, -(1LL << 62)}) >= limit,
+          "a feasible score with any soft (-1e30; medium -5, soft -2^62) reaches it");
+    check(!(optimaru::HardSoftScore{-1, 0.0} >= limit),
+          "an infeasible score does not");
+    check(toEngineScoreLimit(Score{0, kNoLevelFloor, 0}).soft
+                  == -std::numeric_limits<double>::infinity()
+              && toEngineScoreLimit(Score{0, 0, kNoLevelFloor}).soft
+                     == -std::numeric_limits<double>::infinity(),
+          "INT64_MIN on medium or on soft drops the soft-side floor");
+    const Score other{-2, -3, -5};
+    check(toEngineScoreLimit(other) == toEngineScore(other),
+          "any other limit folds like a score");
+    std::printf("\n");
+}
+
 }  // namespace
 
 int main()
 {
+    verifyStopAtFirstFeasibleLimit();
     testJavaFixtures();
     testScorePacking();
     testIncrementalMatchesFullRecompute();

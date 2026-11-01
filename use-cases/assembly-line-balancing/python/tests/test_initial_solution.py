@@ -18,7 +18,23 @@ def _problem(**fields) -> AssemblyLineBalancingProblemModel:
 
 
 def _no_search() -> SolverConfig:
-    return SolverConfig(max_iterations=0)
+    """Construction only: a zero time budget stops before the first step (step_count_limit = 0 means "no limit")."""
+    config = SolverConfig()
+    config.spent_limit_seconds = 0
+    return config
+
+
+def _steps(count: int, seed: int) -> SolverConfig:
+    """A bounded, deterministic search: `count` steps, a wall clock that is never reached."""
+    config = SolverConfig()
+    config.spent_limit_seconds = 600
+    config.step_count_limit = count
+    config.random_seed = seed
+    return config
+
+
+def _score(problem) -> tuple[int, float]:
+    return (problem.score_hard, problem.score_soft)
 
 
 def _stations(problem) -> dict[str, int]:
@@ -58,7 +74,7 @@ def test_solved_result_feeds_back(as_dict):
     assert seeded.warm_start is True
     solve(seeded, config=_no_search())
     assert _stations(seeded) == _stations(solved)
-    assert (seeded.score_hard, seeded.score_soft) == (solved.score_hard, solved.score_soft)
+    assert _score(seeded) == _score(solved)
 
 
 def test_search_from_a_seed_never_scores_below_it():
@@ -66,7 +82,8 @@ def test_search_from_a_seed_never_scores_below_it():
         _problem(), {"tasks": [{"id": "A", "station": 0}, {"id": "B", "station": 1}, {"id": "C", "station": 2}]}
     )
     seed_score = calculate_score(seeded.model_copy(deep=True))
-    assert tuple(solve(seeded, config=SolverConfig(max_iterations=500, random_seed=1))) >= tuple(seed_score)
+    result = solve(seeded, config=_steps(500, seed=1))
+    assert (result.hard, result.soft) >= (seed_score.hard, seed_score.soft)
 
 
 def test_partial_seed_keeps_its_part_and_constructs_the_rest():
@@ -96,9 +113,14 @@ def test_unseeded_task_still_goes_to_its_fixed_station():
 
 
 def test_station_above_the_task_count_is_accepted_without_max_stations():
-    # solve can return such indices itself: its move draws from max(station) + 2.
+    # solve can return such indices itself: the construction may overflow past the task count.
     seeded = with_initial_solution(_problem(), {"tasks": [{"id": "A", "station": 7}]})
     assert seeded.tasks[0].station == 7
+    solve(seeded, config=_no_search())
+    # The construction pointer starts at the seed: C joins A on 7, B overflows to 8.
+    assert _stations(seeded) == {"A": 7, "B": 8, "C": 7}
+    assert seeded.score_hard == 0
+    assert seeded.station_loads == [0, 0, 0, 0, 0, 0, 0, 5, 3]
 
 
 @pytest.mark.parametrize(
@@ -129,12 +151,12 @@ def test_hard_infeasible_result_feeds_back_unchanged():
         cycle_time=5, max_stations=1, tasks=[TaskModel(id="A", duration=3), TaskModel(id="B", duration=3)]
     )
     solved = problem.model_copy(deep=True)
-    solve(solved, config=SolverConfig(max_iterations=50, random_seed=1))
+    solve(solved, config=_steps(50, seed=1))
     assert solved.score_hard < 0
     seeded = with_initial_solution(problem, solved.model_dump(mode="json"))
     solve(seeded, config=_no_search())
     assert _stations(seeded) == _stations(solved)
-    assert (seeded.score_hard, seeded.score_soft) == (solved.score_hard, solved.score_soft)
+    assert _score(seeded) == _score(solved)
 
 
 def test_duplicate_task_raises():
@@ -164,8 +186,8 @@ def test_plain_solve_still_ignores_input_stations():
     for task in preset.tasks:
         task.station = 2
     assert preset.warm_start is False
-    solve(fresh, time_limit_seconds=0.05, random_seed=5)
-    solve(preset, time_limit_seconds=0.05, random_seed=5)
+    solve(fresh, config=_steps(200, seed=5))
+    solve(preset, config=_steps(200, seed=5))
     assert _stations(fresh) == _stations(preset)
 
 

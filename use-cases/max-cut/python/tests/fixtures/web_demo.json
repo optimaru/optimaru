@@ -1,0 +1,24 @@
+{
+    "vertices": ["A", "B", "C", "D", "E", "F", "G", "H"],
+    "fixed_partition": { "A": 0 },
+    "same_partition_pairs": [{ "first": "B", "second": "E" }],
+    "different_partition_pairs": [{ "first": "C", "second": "F" }],
+    "min_partition_size": 4,
+    "max_partition_size": 4,
+    "edges": [
+        { "source": "A", "target": "B", "weight": 7 },
+        { "source": "A", "target": "C", "weight": 4 },
+        { "source": "A", "target": "H", "weight": 6 },
+        { "source": "B", "target": "D", "weight": 8 },
+        { "source": "B", "target": "E", "weight": 3 },
+        { "source": "C", "target": "D", "weight": 5 },
+        { "source": "C", "target": "F", "weight": 9 },
+        { "source": "D", "target": "G", "weight": 6 },
+        { "source": "E", "target": "F", "weight": 4 },
+        { "source": "E", "target": "H", "weight": 7 },
+        { "source": "F", "target": "G", "weight": 5 },
+        { "source": "G", "target": "H", "weight": 8 },
+        { "source": "B", "target": "G", "weight": 2 },
+        { "source": "C", "target": "E", "weight": 3 }
+    ]
+}

@@ -1,4 +1,13 @@
-"""Class-based CP-SAT plugins for food packaging."""
+"""Class-based CP-SAT plugins for food packaging.
+
+Each plugin subclasses the domain spec of the same name; its default level and
+weight come from the engine's ``food_packaging.constraint_info()`` (the C++
+components' kDefaultLevel / kDefaultWeight), so they are not restated here.
+The two medium constraints (``after_ideal_end_time_cost``,
+``unassigned_jobs_cost``) land on the CP-SAT medium level at weight 1, in medium
+units, exactly like the engine (whose domain folds medium into soft at 10^10);
+``hard=False`` demotes them to soft on both paths.
+"""
 
 from dataclasses import dataclass
 from typing import Any, ClassVar
@@ -22,11 +31,9 @@ class PackagingContext:
     cleaning_windows_by_operator: dict[int, list[tuple[Any, Any, Any]]]
 
 
-class OperatorCleaningConflict(
-    domain.OperatorCleaningConflict, ConstraintPlugin[PackagingContext]
+class OperatorCleaningConflictCost(
+    domain.OperatorCleaningConflictCost, ConstraintPlugin[PackagingContext]
 ):
-    default_level = "hard"
-
     def build(self, context: PackagingContext, objective: ObjectiveBuilder) -> None:
         for operator, windows in context.cleaning_windows_by_operator.items():
             for left in range(len(windows)):
@@ -71,7 +78,7 @@ class OperatorCleaningConflict(
                     objective.add(self.name, overlap, bound=context.horizon)
 
 
-class _EndDatePlugin(ConstraintPlugin[PackagingContext]):
+class _EndTimePlugin(ConstraintPlugin[PackagingContext]):
     field: ClassVar[str]
 
     def build(self, context: PackagingContext, objective: ObjectiveBuilder) -> None:
@@ -91,29 +98,23 @@ class _EndDatePlugin(ConstraintPlugin[PackagingContext]):
             objective.add(self.name, late, bound=context.horizon)
 
 
-class MaxEndDateTime(domain.MaxEndDateTime, _EndDatePlugin):
-    default_level = "hard"
+class MaxEndTimeCost(domain.MaxEndTimeCost, _EndTimePlugin):
     field = "max_end_time"
 
 
-class IdealEndDateTime(domain.IdealEndDateTime, _EndDatePlugin):
-    default_level = "medium"
+class AfterIdealEndTimeCost(domain.AfterIdealEndTimeCost, _EndTimePlugin):
     field = "ideal_end_time"
 
 
-class MaximizeJobsAssigned(
-    domain.MaximizeJobsAssigned, ConstraintPlugin[PackagingContext]
-):
-    default_level = "medium"
-
+class UnassignedJobsCost(domain.UnassignedJobsCost, ConstraintPlugin[PackagingContext]):
     def build(self, context: PackagingContext, objective: ObjectiveBuilder) -> None:
         for job, duration in enumerate(context.duration):
             objective.add(self.name, duration * context.unassigned[job], bound=duration)
 
 
-class MinimizeMakespan(domain.MinimizeMakespan, ConstraintPlugin[PackagingContext]):
-    default_level = "soft"
-
+class SquaredMakespanCost(
+    domain.SquaredMakespanCost, ConstraintPlugin[PackagingContext]
+):
     def build(self, context: PackagingContext, objective: ObjectiveBuilder) -> None:
         for line, busy in enumerate(context.line_busy):
             squared = context.model.new_int_var(
@@ -123,12 +124,14 @@ class MinimizeMakespan(domain.MinimizeMakespan, ConstraintPlugin[PackagingContex
             objective.add(self.name, squared, bound=context.horizon**2)
 
 
+# Plugin order = food_packaging.list_constraints() order (unit constraints
+# first, then the globals), so catalog() lists the engine's catalog.
 REGISTRY = ConstraintRegistry(
     [
-        MaxEndDateTime(),
-        OperatorCleaningConflict(),
-        IdealEndDateTime(),
-        MaximizeJobsAssigned(),
-        MinimizeMakespan(),
+        MaxEndTimeCost(),
+        AfterIdealEndTimeCost(),
+        SquaredMakespanCost(),
+        OperatorCleaningConflictCost(),
+        UnassignedJobsCost(),
     ]
 )

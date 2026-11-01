@@ -50,31 +50,57 @@ leave such a task unassigned — see the caveat below).
 ## Score mapping (BendableScore [1]hard/[3]soft -> engine HardSoftScore)
 
 The original score type is `BendableScore(hardLevels=1, softLevels=3)`; the engine only
-has `HardSoftScore(int64 hard, double soft)`. The mapping rule
-(`cpp/include/ta/domain.hpp`, the same approach as the 10^9 offset precedent of
-bed-allocation):
+has `HardSoftScore(int64 hard, double soft)`, and its constraints score on three levels
+(hard, medium, soft). The mapping rule (`cpp/include/ta/domain.hpp`):
 
 ```
-engine.hard = hard  * 10^9 + soft0      # both levels are integers, exact in int64
-engine.soft = soft1 * 10^7 + soft2      # within a double (exact up to 2^53)
+hard[0] -> hard, soft[0] -> medium, soft[1] and soft[2] -> soft
+engine.hard = hard  * 10^9 + soft0      # the medium level folds below hard (belowHard(10^9))
+engine.soft = soft1 * 10^7 + soft2      # squared_makespan_cost's default weight is 10^7
 ```
+
+Both are exact: the hard level in int64, the soft level within a double (exact up to 2^53).
+`constraint_costs()` reports the fold on every entry
+(`"medium_fold": {"kind": "below_hard", "unit": 1e9}`), and
+`task_assigning.constraints.score()` folds the same way.
 
 Level priority holds while `|soft0| < 10^9` (task count), `|soft2| < 10^7`
-(weighted endTime sum), `|soft1| < 9x10^8` (sum of endTime^2). It stays exact up to
-horizons of tens of thousands of minutes — the same practical range in which Java's
-int-based BendableScore does not overflow. The Python `Score` exposes all four levels
-(`hard`/`soft0`/`soft1`/`soft2`) as-is.
+(weighted endTime sum), `|soft1| < 9x10^8` (sum of endTime^2). At the default
+weights and exponent 1 it stays exact up to horizons of tens of thousands of
+minutes — the same practical range in which Java's int-based BendableScore does not
+overflow. The Python `Score` exposes all four levels (`hard`/`soft0`/`soft1`/`soft2`)
+as-is; `soft1` / `soft2` are the soft level split by 10^7, so they are the two terms
+only at the default weights.
+
+Outside that range:
+
+- `SquaredMakespanCost(exponent=2)` shapes the already squared cost again
+  (endTime^4 per employee), which leaves the exact 2^53 window from an end time of
+  about 173 minutes on one employee; a soft level beyond int64 raises
+  `OverflowError` instead of decoding to nonsense.
+- The `below_hard` fold leaves the hard level 1/10^9 of the int64 range: hard
+  penalties above about 9.2x10^9 weighted units saturate at -(2^63 - 1). Keep
+  `RequiredSkillCost` at weight 1 (0.1.5's `NoMissingSkills` default 1e9 is now
+  the fold), and give a soft term made hard a small weight
+  (`SquaredMakespanCost(hard=True, weight=1)`).
 
 ## Constraints (same semantics as Java `TaskAssigningConstraintProvider`, 6 of them)
 
-| Level | Constraint | Penalty |
-|---|---|---|
-| hard[0] | noMissingSkills | required task skills the employee lacks |
-| soft[0] | minimizeUnassignedTasks | 1 per unassigned task |
-| soft[1] | minimizeMakespan | endTime^2 per employee (shortens late finishers first) |
-| soft[2] | criticalPriorityTaskEndTime | endTime x 4 of CRITICAL tasks |
-| soft[2] | majorPriorityTaskEndTime | endTime x 2 of MAJOR tasks |
-| soft[2] | minorPriorityTaskEndTime | endTime x 1 of MINOR tasks |
+| Bendable level | Constraint (Python name) | C++ component | Default level | Default weight | Raw cost (0 = no violation) |
+|---|---|---|---|---|---|
+| hard[0] | `required_skill_cost` | `RequiredSkillCost` | hard | 1 | required task skills the employee lacks |
+| soft[1] | `squared_makespan_cost` | `SquaredMakespanCost` | soft | 10^7 | endTime^2 per employee (shortens late finishers first) |
+| soft[2] | `critical_priority_task_end_time_cost` | `CriticalPriorityTaskEndTimeCost` | soft | 4 | endTime of CRITICAL tasks |
+| soft[2] | `major_priority_task_end_time_cost` | `MajorPriorityTaskEndTimeCost` | soft | 2 | endTime of MAJOR tasks |
+| soft[2] | `minor_priority_task_end_time_cost` | `MinorPriorityTaskEndTimeCost` | soft | 1 | endTime of MINOR tasks |
+| soft[0] | `unassigned_tasks_cost` | `UnassignedTasksCost` | medium | 1 | 1 per unassigned task |
+
+`list_constraints()` / `constraint_info()` order (unit constraints first, the global
+`unassigned_tasks_cost` last). Pick, re-weight or flip them through
+`task_assigning.constraints` (`solve(solution, constraints=get_constraints([...]))`); a
+weight is in units of its level, `hard=True` makes a constraint hard (one hard unit =
+10^9 engine units), `hard=False` makes it soft. See the use-case README for the 0.2.0
+renames (`no_missing_skills` -> `required_skill_cost`, ...).
 
 ## Caveats
 

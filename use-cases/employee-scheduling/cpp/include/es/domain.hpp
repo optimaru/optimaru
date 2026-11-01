@@ -52,7 +52,7 @@ struct Employee {
     std::set<DayIndex> desiredDates;
     // Location-specific work preferences: (day, location) pairs the worker wants.
     // Rewarded only when assigned a shift of that location on that day (see the
-    // DesiredShift constraint) — stricter than desiredDates, which rewards any
+    // DesiredShiftCost constraint) — stricter than desiredDates, which rewards any
     // work that day. Kept after the 5 date/skill fields so 5-arg brace-inits and
     // the pybind Employee constructor still compile.
     std::set<std::pair<DayIndex, std::string>> desiredShifts;

@@ -1,7 +1,12 @@
 import pytest
 
 import meeting_scheduling as domain
-from meeting_scheduling.constraints import get_constraints
+from meeting_scheduling.constraints import (
+    PreferredAttendanceConflictCost,
+    RequiredAndPreferredAttendanceConflictCost,
+    get_constraints,
+    score,
+)
 from meeting_scheduling.models import (
     MeetingAssignmentModel,
     MeetingModel,
@@ -14,7 +19,7 @@ from meeting_scheduling_cpsat import solve
 from meeting_scheduling import calculate_score
 
 
-def test_room_conflict_is_avoided() -> None:
+def test_room_conflict_cost_is_avoided() -> None:
     problem = MeetingScheduleModel(
         people=[],
         time_grains=[
@@ -108,3 +113,120 @@ def test_each_constraint_matches_domain_on_fixed_meetings(constraint) -> None:
     )
 
     assert sum(proxy.values()) == pytest.approx(expected)
+
+
+def _fixed_candidate(
+    problem: MeetingScheduleModel, fixed: list[int]
+) -> MeetingScheduleModel:
+    candidate = problem.model_copy(deep=True)
+    for assignment, grain_room in zip(
+        candidate.meeting_assignments, fixed, strict=True
+    ):
+        assignment.grain_room = grain_room
+    return candidate
+
+
+def test_cpsat_defaults_are_the_engine_defaults() -> None:
+    """Every plugin reads its default level and weight from constraint_info()."""
+    from meeting_scheduling_cpsat import catalog
+
+    engine = {row.name: row for row in domain.constraint_info()}
+    entries = catalog()
+    assert [entry["name"] for entry in entries] == domain.list_constraints()
+    for entry in entries:
+        row = engine[entry["name"]]
+        assert entry["default_level"] == row.default_level
+        assert entry["default_weight"] == row.default_weight
+        assert entry["level_flippable"] == row.level_flippable
+        assert entry["reward"] == row.reward
+        assert entry["default_enabled"] == row.default_enabled
+        assert entry["kind"] == "either"  # every meeting constraint is flippable
+        assert entry["params"] == {"weight": None, "hard": None, "exponent": 1.0}
+    levels = {
+        entry["name"]: (entry["default_level"], entry["default_weight"])
+        for entry in entries
+    }
+    # The values the plugins used to restate by hand now come from C++.
+    assert levels["required_and_preferred_attendance_conflict_cost"] == ("medium", 1.0)
+    assert levels["preferred_attendance_conflict_cost"] == ("medium", 1.0)
+    assert levels["consecutive_meetings_cost"] == ("soft", 100.0)
+    assert levels["meeting_overlap_cost"] == ("soft", 10.0)
+
+
+def test_default_score_folds_medium_like_the_engine() -> None:
+    """The returned score folds the medium level into soft with the engine's 1e6."""
+    problem = _parity_problem()
+    fixed = [4, 4, 13]
+    expected = domain.calculate_score(_fixed_candidate(problem, fixed).to_core())
+    raw = domain.constraint_costs(_fixed_candidate(problem, fixed).to_core())
+    assert (
+        sum(sum(raw[name]["costs"]) for name in raw if raw[name]["level"] == "medium")
+        > 0
+    )
+
+    proxy = {}
+    solved = solve(
+        problem, time_limit_seconds=2, _fixed_grain_rooms=fixed, _proxy_score=proxy
+    )
+
+    assert (solved.score_hard, solved.score_soft) == (expected.hard, expected.soft)
+    # The CP-SAT model itself puts the medium terms on its medium level.
+    assert proxy["medium"] < 0
+    assert proxy["hard"] == expected.hard
+    assert proxy["medium"] * domain.MEDIUM_SCALE + proxy["soft"] == pytest.approx(
+        expected.soft
+    )
+
+
+@pytest.mark.parametrize(
+    ("selection", "expect_medium_empty"),
+    [
+        (
+            [
+                spec
+                if spec.name
+                not in (
+                    "required_and_preferred_attendance_conflict_cost",
+                    "preferred_attendance_conflict_cost",
+                )
+                else type(spec)(hard=False)
+                for spec in get_constraints()
+            ],
+            True,
+        ),
+        (
+            [
+                PreferredAttendanceConflictCost(hard=True),
+                RequiredAndPreferredAttendanceConflictCost(weight=3),
+            ],
+            False,
+        ),
+    ],
+    ids=["medium-demoted-to-soft", "medium-promoted-and-reweighted"],
+)
+def test_medium_knobs_score_like_the_engine(selection, expect_medium_empty) -> None:
+    """hard=False demotes a medium constraint to soft and hard=True promotes it to
+    hard on both solvers (one unit per raw person-grain); an explicit weight stays
+    in medium units."""
+    problem = _parity_problem()
+    fixed = [4, 4, 13]
+    proxy = {}
+
+    solved = solve(
+        problem,
+        time_limit_seconds=2,
+        constraints=selection,
+        _fixed_grain_rooms=fixed,
+        _proxy_score=proxy,
+    )
+
+    engine = score(domain.constraint_costs(solved.to_core()), selection)
+    assert (solved.score_hard, solved.score_soft) == pytest.approx(tuple(engine))
+    # The CP-SAT model itself puts each demoted/promoted medium term on the
+    # level the engine charges it to, not only the re-derived returned score.
+    assert proxy["hard"] == engine.hard
+    assert proxy["medium"] * domain.MEDIUM_SCALE + proxy["soft"] == pytest.approx(
+        engine.soft
+    )
+    if expect_medium_empty:
+        assert proxy["medium"] == 0

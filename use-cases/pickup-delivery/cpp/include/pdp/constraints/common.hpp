@@ -16,21 +16,21 @@ namespace pdp
 // ---------------------------------------------------------------------------
 // Plugin-style constraint components (the school-timetabling pattern)
 // ---------------------------------------------------------------------------
-// The seven PDPTW constraints, split into one small component each on the
-// engine's DecomposedScoreCalculator — an optional assembly path NEXT TO
+// The PDPTW constraints, split into one small component each on the engine's
+// DecomposedScoreCalculator — an optional assembly path NEXT TO
 // ScoreCalculator::calculateScore and the monolithic incremental calculator,
-// which stay the tuned default path.
+// which stay the tuned default path for the seven core rules.
 //
 // Unit choice: with the LIST descriptor the calculator's unit is one LIST,
 // i.e. one vehicle; members are its nodes IN ROUTE ORDER. The descriptor
 // exposes the unassigned pool as one extra list after the vehicles, so every
 // per-route component steps over it (detail::isPool).
 //
-// Three rules are per-route sums and run as UnitConstraints. The three
-// coupling rules relate a request's pickup to its dropoff — which may sit in
-// different routes, which is the whole point of the rule — and
-// unassignedRequests counts requests in no route at all, so those four are
-// GlobalConstraints.
+// The per-route rules run as UnitConstraints. The three coupling rules relate
+// a request's pickup to its dropoff — which may sit in different routes, which
+// is the whole point of the rule — and unassignedRequestsCost counts requests
+// in no route at all, so those four are GlobalConstraints
+// (RequestCouplingConstraint below).
 //
 // A component never reads the Node shadow variables (vehicleIndex,
 // arrivalTime): walkRoute below re-derives the arrival chain from the unit's
@@ -38,18 +38,34 @@ namespace pdp
 // (solution, unit, members) as the engine's contract requires. The LIST path
 // re-costs a touched route whole, so no delta contract is needed.
 //
-// Score levels: HardMediumSoft folded into the engine's HardSoftScore as
-// `soft = medium * kMediumUnit + soft` (see domain.hpp), so the medium
-// component carries that factor in its default weight. The three coupling
-// rules default to ScoreCalculator::kCouplingPenalty, which is far above a
-// typical lateness so the search repairs broken pairs before polishing time
-// windows — and, being an ordinary weight here, is now a one-argument change.
+// Naming: one header per component, named after its struct
+// (MaxTravelTimeCost -> max_travel_time_cost.hpp). The registry name is the
+// struct name with a lower-case first letter ("maxTravelTimeCost"); Python
+// sees it through pythonName() ("max_travel_time_cost").
+//
+// Defaults: each component declares them once, as static constexpr
+// kDefaultWeight / kDefaultLevel passed to the base constructor. They are
+// assembly-time metadata, not part of the cost. Override them per instance
+// with the constructor's weight argument or the mutable `level` / `weight` /
+// `exponent` (validated setters setWeight / setLevel / setExponent), or by
+// name through ConstraintAssembly. Read the level with `isHard()` or `level`.
+//
+// Score levels: HardMediumSoft. The medium level (unassignedRequestsCost) is
+// folded into the engine's HardSoftScore by the calculator as
+// `soft = medium * kMediumUnit + soft` (kMediumFold in domain.hpp), so a
+// medium weight is in medium units: weight 1 = one medium unit per minute.
+// The three coupling rules and requiredVehicleCost default to
+// ScoreCalculator::kCouplingPenalty, which is far above a typical lateness so
+// the search repairs broken pairs before polishing time windows;
+// pinnedStopsCost defaults to ScoreCalculator::kPinnedPenalty. The opt-in
+// objectives (enclosingCircleRadiusCost, routeDurationCost, latencyCost,
+// squaredOrderAgeCost) default to weight 0.
 //
 //   DecomposedCalculator calc;
-//   defaultConstraints()              // the whole default set
-//       .weight("...", 2)            // ... then only what differs
-//       .soft("...")
-//       .drop("...")
+//   defaultConstraints()                     // the whole default set
+//       .weight("travelTimeCost", 2)         // ... then only what differs
+//       .soft("vehicleCapacityCost")
+//       .drop("pairedRequestCost")
 //       .into(calc);
 //   solver.solve(plan, calc);
 //
@@ -57,14 +73,10 @@ namespace pdp
 // `ConstraintAssembly{}` when you would rather list components from
 // scratch than start from the defaults.
 //
-// The level and the weight of each component are DEFAULTS — assembly-time
-// metadata, not part of the cost. Override them per instance via the mutable
-// `isHard` / `weight` / `exponent`.
-//
 // Cost sign convention (see decomposed_score_calculator.hpp): positive =
-// penalty; the calculator negates into the score. An assembly of all seven
-// components at their default weights therefore scores bit-for-bit like
-// ScoreCalculator::calculateScore.
+// penalty, 0 = no violation; the calculator negates into the score. The
+// default assembly therefore scores bit-for-bit like
+// ScoreCalculator::calculateScore on a plan without route policies.
 
 using DecomposedCalculator = optimaru::DecomposedScoreCalculator<PdpRoutePlan>;
 using ConstraintAssembly = optimaru::ConstraintAssembly<PdpRoutePlan>;

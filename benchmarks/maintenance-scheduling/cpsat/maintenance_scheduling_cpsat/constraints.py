@@ -1,4 +1,11 @@
-"""Class-based CP-SAT plugins for maintenance scheduling."""
+"""Class-based CP-SAT plugins for maintenance scheduling.
+
+Each plugin subclasses the domain spec of the same name; its default level and
+weight come from the engine's ``maintenance_scheduling.constraint_info()`` (the
+C++ components' kDefaultLevel / kDefaultWeight — e.g. after_ideal_end_date_cost
+soft 1'000'000 and tag_conflict_cost soft 1'000), so they are not restated here.
+The registry lists the plugins in ``list_constraints()`` order.
+"""
 
 from dataclasses import dataclass, field
 from datetime import date
@@ -55,24 +62,19 @@ class _DateBoundaryPlugin(ConstraintPlugin[MaintenanceContext]):
                 )
 
 
-class MinStartDate(domain.MinStartDate, _DateBoundaryPlugin):
-    default_level = "hard"
+class MinStartDateCost(domain.MinStartDateCost, _DateBoundaryPlugin):
     boundary = "min_start"
 
 
-class MaxEndDate(domain.MaxEndDate, _DateBoundaryPlugin):
-    default_level = "hard"
+class MaxEndDateCost(domain.MaxEndDateCost, _DateBoundaryPlugin):
     boundary = "max_end"
 
 
-class BeforeIdealEndDate(domain.BeforeIdealEndDate, _DateBoundaryPlugin):
-    default_level = "soft"
+class BeforeIdealEndDateCost(domain.BeforeIdealEndDateCost, _DateBoundaryPlugin):
     boundary = "before_ideal"
 
 
-class AfterIdealEndDate(domain.AfterIdealEndDate, _DateBoundaryPlugin):
-    default_level = "soft"
-    default_weight = 1_000_000
+class AfterIdealEndDateCost(domain.AfterIdealEndDateCost, _DateBoundaryPlugin):
     boundary = "after_ideal"
 
 
@@ -122,24 +124,21 @@ class _PairPlugin(ConstraintPlugin[MaintenanceContext]):
                         objective.add(self.name, amount * both, bound=amount)
 
 
-class CrewConflict(domain.CrewConflict, _PairPlugin):
-    default_level = "hard"
+class CrewConflictCost(domain.CrewConflictCost, _PairPlugin):
     same_crew_only = True
 
 
-class TagConflict(domain.TagConflict, _PairPlugin):
-    default_level = "soft"
-    default_weight = 1_000
+class TagConflictCost(domain.TagConflictCost, _PairPlugin):
     same_crew_only = False
 
 
 REGISTRY = ConstraintRegistry(
     [
-        CrewConflict(),
-        MinStartDate(),
-        MaxEndDate(),
-        BeforeIdealEndDate(),
-        AfterIdealEndDate(),
-        TagConflict(),
+        MinStartDateCost(),
+        MaxEndDateCost(),
+        BeforeIdealEndDateCost(),
+        AfterIdealEndDateCost(),
+        CrewConflictCost(),
+        TagConflictCost(),
     ]
 )

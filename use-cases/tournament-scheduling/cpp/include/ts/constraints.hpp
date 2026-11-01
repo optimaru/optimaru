@@ -12,11 +12,11 @@
 // to change. Adding a component is a file plus a line here (and a line in
 // addDefaultConstraints below when it belongs to the default assembly).
 
+#include "ts/constraints/assignment_count_imbalance_cost.hpp"
 #include "ts/constraints/common.hpp"
-#include "ts/constraints/evenly_confrontation_count.hpp"
-#include "ts/constraints/fair_assignment_count_per_team.hpp"
-#include "ts/constraints/one_assignment_per_date_per_team.hpp"
-#include "ts/constraints/unavailability_penalty.hpp"
+#include "ts/constraints/confrontation_count_imbalance_cost.hpp"
+#include "ts/constraints/team_conflict_cost.hpp"
+#include "ts/constraints/team_unavailability_cost.hpp"
 
 namespace ts
 {
@@ -24,19 +24,20 @@ namespace ts
 // ---------------------------------------------------------------------------
 // Standard assembly
 // ---------------------------------------------------------------------------
-// The full provider at the quickstart's level weights. This assembly scores
-// bit-for-bit like ScoreCalculator::calculateScore and the monolithic
-// incremental calculator — both unfairness values go through the same
-// ScoreCalculator::unfairnessFromAggregates, and the medium level is folded at
-// the same kMediumScale.
+// The full provider at the components' default weights and levels
+// (kDefaultWeight / kDefaultLevel). This assembly scores bit-for-bit like
+// ScoreCalculator::calculateScore and the monolithic incremental calculator —
+// both unfairness values go through the same
+// ScoreCalculator::unfairnessFromAggregates, and the medium level is folded
+// with the same kMediumFold (domain.hpp).
 //
 // `defaultConstraints()` hands the whole set back as a ConstraintAssembly,
 // so a caller states only what differs from it:
 //
 //     DecomposedCalculator calc;
 //     defaultConstraints()
-//         .weight("evenlyConfrontationCount", 2)
-//         .drop("fairAssignmentCountPerTeam")
+//         .weight("confrontationCountImbalanceCost", 2)
+//         .drop("assignmentCountImbalanceCost")
 //         .into(calc);
 //
 // `addDefaultConstraints(calc)` is the same set poured straight into a
@@ -44,10 +45,10 @@ namespace ts
 inline ConstraintAssembly defaultConstraints()
 {
     ConstraintAssembly assembly;
-    assembly.emplace<OneAssignmentPerDatePerTeam>();
-    assembly.emplace<UnavailabilityPenaltyConstraint>();
-    assembly.emplace<FairAssignmentCountPerTeam>();
-    assembly.emplace<EvenlyConfrontationCount>();
+    assembly.emplace<TeamConflictCost>();
+    assembly.emplace<TeamUnavailabilityCost>();
+    assembly.emplace<AssignmentCountImbalanceCost>();
+    assembly.emplace<ConfrontationCountImbalanceCost>();
     return assembly;
 }
 

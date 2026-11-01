@@ -311,18 +311,14 @@ PYBIND11_MODULE(_core, m)
         .value("ALPHA_UCB", optimaru::OperatorSelectionType::ALPHA_UCB)
         .value("RANDOM", optimaru::OperatorSelectionType::RANDOM);
 
-    py::class_<Solver::Config>(m, "SolverConfig", py::module_local())
+    optimaru::python::bindConfigCopy(py::class_<Solver::Config>(m, "SolverConfig", py::module_local()))
         .def(py::init<>())
         .def_property(
             "spent_limit_seconds",
             [](const Solver::Config &c)
             { return std::chrono::duration<double>(c.spentLimit).count(); },
             [](Solver::Config &c, double s)
-            {
-                c.spentLimit
-                    = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        std::chrono::duration<double>(s));
-            })
+            { c.spentLimit = optimaru::python::secondsToMillis(s, "spent_limit_seconds"); })
         .def_property(
             "best_score_limit",
             [](const Solver::Config &c)
@@ -349,11 +345,7 @@ PYBIND11_MODULE(_core, m)
                     .count();
             },
             [](Solver::Config &c, double s)
-            {
-                c.unimprovedSpentLimit
-                    = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        std::chrono::duration<double>(s));
-            })
+            { c.unimprovedSpentLimit = optimaru::python::secondsToMillis(s, "unimproved_spent_limit_seconds"); })
         .def_readwrite("parallel_solver_count",
                        &Solver::Config::parallelSolverCount)
         .def_readwrite("first_fit_decreasing",
@@ -451,7 +443,11 @@ PYBIND11_MODULE(_core, m)
                 solver.solve(plan);
                 ScoreCalculator::calculateScore(plan);
             },
-            py::arg("plan"))
+            py::arg("plan"),
+            // Released for the solve: with parallel_solver_count > 1 the
+            // workers copy, call and destroy the on_new_best wrapper, each
+            // of which takes the GIL back (holding it here deadlocked).
+            py::call_guard<py::gil_scoped_release>())
         // Same solve, scored by a caller-chosen constraint set (see
         // pdp_routing.constraints). The picks replace the defaults; None
         // keeps them.
@@ -460,11 +456,8 @@ PYBIND11_MODULE(_core, m)
         // stored the score THIS calculator computed, and a full recompute
         // would overwrite it with the monolithic default one.
         //
-        // The GIL is held for the duration, matching this package's plain
-        // solve() above — neither releases it, so a long solve blocks other
-        // Python threads here. Deliberate: the caller-owned calculator is not
-        // cloned across workers on this path, so there is no worker thread
-        // that would need the GIL back for an on_new_best callback.
+        // The picks are read with the GIL held; the solve itself releases it
+        // like solve() above (an on_new_best callback takes it back).
         .def(
             "solve_with_constraints",
             [](Solver &solver,
@@ -474,6 +467,7 @@ PYBIND11_MODULE(_core, m)
                 DecomposedCalculator calculator;
                 tfpy::applyConstraints(defaultConstraints(), constraints)
                     .into(calculator);
+                py::gil_scoped_release release;
                 solver.solve(plan, calculator);
                 ScoreCalculator::updateShadowVariables(plan);
             },
@@ -492,7 +486,8 @@ PYBIND11_MODULE(_core, m)
             return tfpy::constraintCosts(calculator, plan);
         },
         py::arg("plan"),
-        "Raw per-unit cost of every constraint, before weight/exponent/level.");
+        "Raw per-unit cost of every constraint, before weight/exponent/level "
+        "(each entry also carries the domain's medium_fold).");
 
     // The constraint names this domain scores, in default-assembly order —
     // the same strings a score breakdown reports.
@@ -500,4 +495,11 @@ PYBIND11_MODULE(_core, m)
         "list_constraints",
         [] { return tfpy::constraintNames(defaultConstraints()); },
         "Constraint names available to pdp_routing.constraints.");
+
+    // The constraint catalog, read off the same default assembly:
+    // constraint_info() -> [ConstraintInfo(name, default_level,
+    // default_weight, level_flippable, reward, default_enabled), ...] in
+    // list_constraints() order. The defaults live in the C++ components only
+    // (unassigned_requests_cost: medium, weight 1 in medium units).
+    tfpy::bindConstraintInfo(m, [] { return defaultConstraints(); });
 }

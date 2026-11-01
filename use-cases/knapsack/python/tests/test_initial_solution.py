@@ -16,7 +16,17 @@ def _problem() -> KnapsackProblemModel:
 
 
 def _no_search() -> SolverConfig:
-    return SolverConfig(max_iterations=0)
+    """The zero time budget: the solve returns the construction (or the seed) unchanged."""
+    config = SolverConfig()
+    config.spent_limit_seconds = 0
+    return config
+
+
+def _steps(count: int, seed: int) -> SolverConfig:
+    config = SolverConfig()
+    config.step_count_limit = count
+    config.random_seed = seed
+    return config
 
 
 def _selected(problem) -> set[str]:
@@ -73,7 +83,8 @@ def test_solved_result_feeds_back(as_dict):
 def test_search_from_a_seed_never_scores_below_it():
     seeded = with_initial_solution(_problem(), {"items": [{"id": item_id, "selected": False} for item_id in "ABC"]})
     seed_score = calculate_score(seeded.model_copy(deep=True))
-    assert tuple(solve(seeded, config=SolverConfig(max_iterations=500, random_seed=1))) >= tuple(seed_score)
+    result = solve(seeded, config=_steps(500, seed=1))
+    assert (result.hard, result.soft) >= (seed_score.hard, seed_score.soft)
 
 
 def test_partial_seed_keeps_its_part_and_fills_the_rest_around_its_load():
@@ -136,7 +147,7 @@ def test_hard_infeasible_result_feeds_back_unchanged():
         items=[ItemModel(id="A", weight=5, value=1), ItemModel(id="B", weight=1, value=1)],
     )
     solved = problem.model_copy(deep=True)
-    solve(solved, config=SolverConfig(max_iterations=50, random_seed=1))
+    solve(solved, config=_steps(50, seed=1))
     assert solved.score_hard < 0
     seeded = with_initial_solution(problem, solved.model_dump(mode="json"))
     solve(seeded, config=_no_search())

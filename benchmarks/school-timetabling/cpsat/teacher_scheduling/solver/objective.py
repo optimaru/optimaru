@@ -5,12 +5,12 @@ turned into penalties. Which terms are used with which weights is decided by
 the constraint classes in `registry`; this module only builds the expressions
 they call.
 
-S1 minimise teacher gaps        idle periods between a day's first and last lesson
-S2 minimise teacher workdays    give teachers days without lessons
-S3 respect requested free days
-S4 minimise class gaps          no holes in the middle of a class's day
-S5 avoid avoided periods        e.g. PE not in period 1 or period 5 (right after lunch)
-S6 favour preferred periods     e.g. core subjects in the morning
+teacher_gap_cost           idle periods between a day's first and last lesson
+teacher_workday_cost       give teachers days without lessons
+teacher_free_day_cost      respect requested free days (worked requested free days)
+class_gap_cost             no holes in the middle of a class's day
+avoided_period_cost        e.g. PE not in period 1 or period 5 (right after lunch)
+non_preferred_period_cost  e.g. core subjects in the morning
 """
 
 from dataclasses import dataclass

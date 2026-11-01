@@ -2,6 +2,7 @@
 
 #include <cstddef>
 
+#include "ms/constraints.hpp"
 #include "ms/score_calculator.hpp"
 
 namespace ms
@@ -23,18 +24,18 @@ void MeetingSchedulingIncrementalScoreCalculator::resetWorkingSolution(
     startCnt_.assign(span_ + 1, 0);
     endCnt_.assign(span_ + 1, 0);
 
-    roomConflict_ = 0;
-    overtime_ = 0;
-    reqConflict_ = 0;
-    capacity_ = 0;
-    sameDay_ = 0;
-    reqPref_ = 0;
-    prefConflict_ = 0;
-    asap_ = 0;
-    breaks_ = 0;
-    overlapping_ = 0;
-    largerRooms_ = 0;
-    stability_ = 0;
+    roomConflictCost_ = 0;
+    overtimeCost_ = 0;
+    requiredAttendanceConflictCost_ = 0;
+    roomCapacityCost_ = 0;
+    dayCrossingCost_ = 0;
+    requiredAndPreferredAttendanceConflictCost_ = 0;
+    preferredAttendanceConflictCost_ = 0;
+    meetingEndTimeCost_ = 0;
+    consecutiveMeetingsCost_ = 0;
+    meetingOverlapCost_ = 0;
+    largerRoomCapacityCost_ = 0;
+    roomChangeCost_ = 0;
 
     const int assignmentCount
         = static_cast<int>(workingSolution.meetingAssignments.size());
@@ -109,8 +110,8 @@ void MeetingSchedulingIncrementalScoreCalculator::insert(int assignmentIndex,
             ++roomCells[off];
             ++anyCells[off];
         }
-        roomConflict_ += roomSum;
-        overlapping_ += anySum;
+        roomConflictCost_ += roomSum;
+        meetingOverlapCost_ += anySum;
     }
 
     // hard 3 + medium 6 phase 1 (required attendances): counting required
@@ -130,8 +131,8 @@ void MeetingSchedulingIncrementalScoreCalculator::insert(int assignmentIndex,
         }
         for (int off = startOffset; off <= lastOffset; ++off)
             ++reqCells[off];
-        reqConflict_ += reqSum;
-        reqPref_ += prefSum;
+        requiredAttendanceConflictCost_ += reqSum;
+        requiredAndPreferredAttendanceConflictCost_ += prefSum;
     }
     // medium 6 + 7 phase 2 (preferred attendances).
     for (int person : meeting.preferredAttendees)
@@ -147,48 +148,48 @@ void MeetingSchedulingIncrementalScoreCalculator::insert(int assignmentIndex,
         }
         for (int off = startOffset; off <= lastOffset; ++off)
             ++prefCells[off];
-        prefConflict_ += prefSum;
-        reqPref_ += reqSum;
+        preferredAttendanceConflictCost_ += prefSum;
+        requiredAndPreferredAttendanceConflictCost_ += reqSum;
     }
 
     // soft 9: back-to-back pairs with meetings ending right before us or
     // starting right after us (own marks not yet counted; a meeting cannot
     // pair with itself since lastOffset + 1 > startOffset).
     if (startOffset > 0)
-        breaks_ += endCnt_[startOffset - 1];
-    breaks_ += startCnt_[lastOffset + 1];
+        consecutiveMeetingsCost_ += endCnt_[startOffset - 1];
+    consecutiveMeetingsCost_ += startCnt_[lastOffset + 1];
     ++startCnt_[startOffset];
     ++endCnt_[lastOffset];
 
     // hard 2, 4, 5 + soft 8, 11: unary lookups.
     const int lastIndex = startIndex + duration - 1;
     if (s.grainCountAtOffset(lastOffset) == 0)
-        overtime_ += lastIndex;
+        overtimeCost_ += lastIndex;
     const int shortage
         = s.requiredCapacityOf[assignment.meeting] - s.rooms[room].capacity;
     if (shortage > 0)
-        capacity_ += shortage;
-    sameDay_ += s.grainCountAtOffset(lastOffset)
-                - s.grainCountAtOffsetOnDay(lastOffset, dayOfPos_[pos]);
-    asap_ += lastIndex;
-    largerRooms_ += s.largerRoomPenalty[room];
+        roomCapacityCost_ += shortage;
+    dayCrossingCost_ += s.grainCountAtOffset(lastOffset)
+                        - s.grainCountAtOffsetOnDay(lastOffset, dayOfPos_[pos]);
+    meetingEndTimeCost_ += lastIndex;
+    largerRoomCapacityCost_ += s.largerRoomPenalty[room];
 
-    // soft 12: room stability against the assigned shared-attendee
+    // soft 12: roomChangeCost against the assigned shared-attendee
     // neighbors of this meeting.
     for (const auto &[otherMeeting, weight] :
-         s.stabilityNeighbors[assignment.meeting])
+         s.roomChangeNeighbors[assignment.meeting])
     {
         const int j = s.assignmentOfMeeting[otherMeeting];
         if (j < 0 || assign_[j] < 0)
             continue;
-        if (stabilityPairMatches(pos,
-                                 room,
-                                 assignment.meeting,
-                                 posOf_[j],
-                                 roomOf_[j],
-                                 otherMeeting))
+        if (roomChangePairMatches(pos,
+                                  room,
+                                  assignment.meeting,
+                                  posOf_[j],
+                                  roomOf_[j],
+                                  otherMeeting))
         {
-            stability_ += weight;
+            roomChangeCost_ += weight;
         }
     }
 }
@@ -211,19 +212,19 @@ void MeetingSchedulingIncrementalScoreCalculator::retract(int assignmentIndex,
     const int lastOffset = startOffset + duration - 1;
 
     for (const auto &[otherMeeting, weight] :
-         s.stabilityNeighbors[assignment.meeting])
+         s.roomChangeNeighbors[assignment.meeting])
     {
         const int j = s.assignmentOfMeeting[otherMeeting];
         if (j < 0 || assign_[j] < 0)
             continue;
-        if (stabilityPairMatches(pos,
-                                 room,
-                                 assignment.meeting,
-                                 posOf_[j],
-                                 roomOf_[j],
-                                 otherMeeting))
+        if (roomChangePairMatches(pos,
+                                  room,
+                                  assignment.meeting,
+                                  posOf_[j],
+                                  roomOf_[j],
+                                  otherMeeting))
         {
-            stability_ -= weight;
+            roomChangeCost_ -= weight;
         }
     }
 
@@ -242,8 +243,8 @@ void MeetingSchedulingIncrementalScoreCalculator::retract(int assignmentIndex,
         }
         for (int off = startOffset; off <= lastOffset; ++off)
             --prefCells[off];
-        prefConflict_ -= prefSum - duration;
-        reqPref_ -= reqSum;
+        preferredAttendanceConflictCost_ -= prefSum - duration;
+        requiredAndPreferredAttendanceConflictCost_ -= reqSum;
     }
     for (int person : meeting.requiredAttendees)
     {
@@ -258,8 +259,8 @@ void MeetingSchedulingIncrementalScoreCalculator::retract(int assignmentIndex,
         }
         for (int off = startOffset; off <= lastOffset; ++off)
             --reqCells[off];
-        reqConflict_ -= reqSum - duration;
-        reqPref_ -= prefSum;
+        requiredAttendanceConflictCost_ -= reqSum - duration;
+        requiredAndPreferredAttendanceConflictCost_ -= prefSum;
     }
 
     {
@@ -277,30 +278,30 @@ void MeetingSchedulingIncrementalScoreCalculator::retract(int assignmentIndex,
             --roomCells[off];
             --anyCells[off];
         }
-        roomConflict_ -= roomSum - duration;
-        overlapping_ -= anySum - duration;
+        roomConflictCost_ -= roomSum - duration;
+        meetingOverlapCost_ -= anySum - duration;
     }
 
     --startCnt_[startOffset];
     --endCnt_[lastOffset];
     if (startOffset > 0)
-        breaks_ -= endCnt_[startOffset - 1];
-    breaks_ -= startCnt_[lastOffset + 1];
+        consecutiveMeetingsCost_ -= endCnt_[startOffset - 1];
+    consecutiveMeetingsCost_ -= startCnt_[lastOffset + 1];
 
     const int lastIndex = startIndex + duration - 1;
     if (s.grainCountAtOffset(lastOffset) == 0)
-        overtime_ -= lastIndex;
+        overtimeCost_ -= lastIndex;
     const int shortage
         = s.requiredCapacityOf[assignment.meeting] - s.rooms[room].capacity;
     if (shortage > 0)
-        capacity_ -= shortage;
-    sameDay_ -= s.grainCountAtOffset(lastOffset)
-                - s.grainCountAtOffsetOnDay(lastOffset, dayOfPos_[pos]);
-    asap_ -= lastIndex;
-    largerRooms_ -= s.largerRoomPenalty[room];
+        roomCapacityCost_ -= shortage;
+    dayCrossingCost_ -= s.grainCountAtOffset(lastOffset)
+                        - s.grainCountAtOffsetOnDay(lastOffset, dayOfPos_[pos]);
+    meetingEndTimeCost_ -= lastIndex;
+    largerRoomCapacityCost_ -= s.largerRoomPenalty[room];
 }
 
-bool MeetingSchedulingIncrementalScoreCalculator::stabilityPairMatches(
+bool MeetingSchedulingIncrementalScoreCalculator::roomChangePairMatches(
     int posA, int roomA, int meetingA, int posB, int roomB, int meetingB) const
 {
     if (roomA == roomB)
@@ -343,15 +344,28 @@ void MeetingSchedulingIncrementalScoreCalculator::afterVariableChanged(
 
 Score MeetingSchedulingIncrementalScoreCalculator::calculateScore()
 {
-    Score score;
-    score.hard
-        = -(roomConflict_ + overtime_ + reqConflict_ + capacity_ + sameDay_);
-    const std::int64_t medium = reqPref_ + prefConflict_;
+    // The default assembly's weights (the components' kDefaultWeight) and the
+    // domain's medium fold, like ScoreCalculator::toScore.
+    const std::int64_t hard
+        = kHardWeight<RoomConflictCost> * roomConflictCost_
+          + kHardWeight<OvertimeCost> * overtimeCost_
+          + kHardWeight<RequiredAttendanceConflictCost>
+                * requiredAttendanceConflictCost_
+          + kHardWeight<RoomCapacityCost> * roomCapacityCost_
+          + kHardWeight<DayCrossingCost> * dayCrossingCost_;
+    const std::int64_t medium
+        = kMediumWeight<RequiredAndPreferredAttendanceConflictCost>
+              * requiredAndPreferredAttendanceConflictCost_
+          + kMediumWeight<PreferredAttendanceConflictCost>
+                * preferredAttendanceConflictCost_;
     const std::int64_t soft
-        = asap_ + 100 * breaks_ + 10 * overlapping_ + largerRooms_ + stability_;
-    score.soft = -(static_cast<double>(medium) * kMediumScale
-                   + static_cast<double>(soft));
-    return score;
+        = kSoftWeight<MeetingEndTimeCost> * meetingEndTimeCost_
+          + kSoftWeight<ConsecutiveMeetingsCost> * consecutiveMeetingsCost_
+          + kSoftWeight<MeetingOverlapCost> * meetingOverlapCost_
+          + kSoftWeight<LargerRoomCapacityCost> * largerRoomCapacityCost_
+          + kSoftWeight<RoomChangeCost> * roomChangeCost_;
+    return kMediumFold.toEngine(
+        -hard, -static_cast<double>(medium), -static_cast<double>(soft));
 }
 
 }  // namespace ms

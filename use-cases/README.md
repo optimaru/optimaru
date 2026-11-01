@@ -5,36 +5,80 @@ Each directory is an independent problem built on the engine in
 CP-SAT / Routing) never live here — they are in
 [`benchmarks/`](../benchmarks).
 
-| Use case | Kind | Python package |
-| --- | --- | --- |
-| [assembly-line-balancing](assembly-line-balancing) | pure Python | `assembly_line_balancing` |
-| [bed-allocation](bed-allocation) | C++ engine | `bed_allocation` |
-| [bin-packing](bin-packing) | pure Python | `bin_packing` |
-| [conference-scheduling](conference-scheduling) | C++ engine | `conference_scheduling` |
-| [employee-scheduling](employee-scheduling) | C++ engine | `es_scheduling` |
-| [facility-location](facility-location) | C++ engine | `facility_location` |
-| [flight-crew-scheduling](flight-crew-scheduling) | C++ engine | `flight_crew` |
-| [food-packaging](food-packaging) | C++ engine | `food_packaging` |
-| [knapsack](knapsack) | pure Python | `knapsack` |
-| [maintenance-scheduling](maintenance-scheduling) | C++ engine | `maintenance_scheduling` |
-| [max-cut](max-cut) | pure Python | `max_cut` |
-| [meeting-scheduling](meeting-scheduling) | C++ engine | `meeting_scheduling` |
-| [order-picking](order-picking) | C++ engine | `order_picking` |
-| [pickup-delivery](pickup-delivery) | C++ engine | `pdp_routing` |
-| [project-job-scheduling](project-job-scheduling) | C++ engine | `project_job` |
-| [quadratic-assignment](quadratic-assignment) | pure Python | `quadratic_assignment` |
-| [school-timetabling](school-timetabling) | C++ engine | `st_timetabling` |
-| [semiconductor-scheduling](semiconductor-scheduling) | pure Python | `semiconductor_scheduling` |
-| [sports-league-scheduling](sports-league-scheduling) | C++ engine | `sports_league` |
-| [task-assigning](task-assigning) | C++ engine | `task_assigning` |
-| [tournament-scheduling](tournament-scheduling) | C++ engine | `tournament_scheduling` |
-| [vehicle-routing](vehicle-routing) | C++ engine | `vrp_routing` |
+| Use case | Python package |
+| --- | --- |
+| [assembly-line-balancing](assembly-line-balancing) | `assembly_line_balancing` |
+| [bed-allocation](bed-allocation) | `bed_allocation` |
+| [bin-packing](bin-packing) | `bin_packing` |
+| [conference-scheduling](conference-scheduling) | `conference_scheduling` |
+| [employee-scheduling](employee-scheduling) | `es_scheduling` |
+| [facility-location](facility-location) | `facility_location` |
+| [flight-crew-scheduling](flight-crew-scheduling) | `flight_crew` |
+| [food-packaging](food-packaging) | `food_packaging` |
+| [knapsack](knapsack) | `knapsack` |
+| [maintenance-scheduling](maintenance-scheduling) | `maintenance_scheduling` |
+| [max-cut](max-cut) | `max_cut` |
+| [meeting-scheduling](meeting-scheduling) | `meeting_scheduling` |
+| [order-picking](order-picking) | `order_picking` |
+| [pickup-delivery](pickup-delivery) | `pdp_routing` |
+| [project-job-scheduling](project-job-scheduling) | `project_job` |
+| [quadratic-assignment](quadratic-assignment) | `quadratic_assignment` |
+| [school-timetabling](school-timetabling) | `st_timetabling` |
+| [semiconductor-scheduling](semiconductor-scheduling) | `semiconductor_scheduling` |
+| [sports-league-scheduling](sports-league-scheduling) | `sports_league` |
+| [task-assigning](task-assigning) | `task_assigning` |
+| [tournament-scheduling](tournament-scheduling) | `tournament_scheduling` |
+| [vehicle-routing](vehicle-routing) | `vrp_routing` |
 
-**C++ engine** use cases run the optimaru metaheuristics; **pure Python**
-ones are small reference implementations with their own simulated-annealing
-loop and do not use the engine.
+Every use case is a C++ domain on the optimaru engine with a pybind11 Python
+package; they all share one constraint contract (below). The six that started
+as pure-Python reference implementations (assembly-line-balancing,
+bin-packing, knapsack, max-cut, quadratic-assignment and
+semiconductor-scheduling) were ported in 0.2.0; each keeps its old Python
+scorer as `python/tests/reference_<package>.py`, an oracle the C++ costs are
+tested against.
 
-## Layout of a C++ engine use case
+## Constraints: names and knobs
+
+Every constraint is one named component, `<Subject>Cost` in C++ and Python and
+`<subject>_cost` as its Python name (`vehicle_capacity_cost`; the C++ registry
+name is the camelCase `vehicleCapacityCost`). Its raw cost is `0` when nothing
+is violated and positive otherwise; a **reward** (a quantity to maximize, such
+as knapsack's `selected_value_cost`) has a raw cost `<= 0`.
+
+A selection sets three knobs per constraint and nothing else:
+
+- `weight` — `None` keeps the default weight, in units of the constraint's
+  level.
+- `hard` — `None` keeps the default level, `True` makes it hard, `False`
+  makes it soft. A reward refuses `hard=True`, and a structural constraint
+  (`level_flippable` false, e.g. school timetabling's `fixed_slots_cost`)
+  refuses any change of level.
+- `exponent` — `1.0` by default, `> 0`, sign-preserving; applied per unit for
+  a unit constraint and to the single total for a global one, before the
+  weight. A weight of 0 contributes exactly 0 at any exponent.
+
+Some domains also have a **medium** level between hard and soft (unassigned
+visits, stays, requests, tasks, ...). It is a default-only level: `hard=True`
+moves such a constraint to hard and `hard=False` to soft, and its weight is in
+medium units. The domain declares once how medium folds into the engine's
+hard/soft score (`medium_fold` on every `constraint_costs()` entry).
+
+Defaults are declared once, in C++ (`kDefaultWeight` / `kDefaultLevel` on the
+component). Python reads them from `<package>.constraint_info()`, one
+`ConstraintInfo` row per constraint with the fields `name`, `default_level`,
+`default_weight`, `level_flippable`, `reward` and `default_enabled`.
+
+- `list_constraints()` lists the default set. Employee-scheduling lists all 30
+  rules its factory accepts; its defaults are the `default_enabled` rows.
+- `constraint_costs(solution)` reports every selected constraint's raw costs as
+  `{name: {costs, weight, exponent, hard, global, level, reward,
+  level_flippable, name, label, default_weight, default_level}}`
+  (`weight` / `level` are the current knobs, `default_*` what `None` means).
+- `constraints.score(costs, selection)` re-prices them in pure Python with the
+  engine's arithmetic.
+
+## Layout of a use case
 
 ```
 <slug>/
@@ -46,14 +90,16 @@ loop and do not use the engine.
 │   │   ├── score_calculator.hpp       full (reference) score
 │   │   ├── incremental_calculator.hpp tuned incremental score (default path)
 │   │   ├── constraints.hpp            default constraint assembly
-│   │   ├── constraints/<name>.hpp     one plugin component per constraint
+│   │   ├── constraints/*_cost.hpp     one plugin component per constraint
 │   │   └── solver.hpp                 domain Solver: Config -> engine wiring
 │   ├── src/*.cpp
 │   └── test/<ns>_test.cpp, <ns>_plugin_test.cpp
 └── python/
     ├── bindings.cpp                   pybind11 module <package>._core
     ├── setup.py, pyproject.toml
-    └── <package>/{__init__,models,constraints}.py, _core.pyi
+    ├── <package>/{__init__,models,constraints}.py, _core.pyi
+    └── <package>/_constraint.py       synced copy of the shared constraint-spec
+                                       base (scripts/check_constraint_base.py)
 ```
 
 Build and test:
@@ -98,11 +144,11 @@ The contract is the same everywhere:
 
 School timetabling takes dicts, so it uses a keyword instead:
 `solve(problem, initial_solution=previous)`. Each use case's README lists its
-exceptions. To stop right after the start, use a zero time limit:
-`step_count_limit = 0` means no limit. The pure-Python use cases keep a minimum
-budget, so they stop with `SolverConfig(max_iterations=0)` instead.
+exceptions. To stop right after the start, use a zero time limit
+(`spent_limit_seconds = 0`, or `time_limit_seconds=0` where `solve()` takes
+one); `step_count_limit = 0` means no limit, not zero steps.
 
-## Extending a C++ engine use case
+## Extending a use case
 
 ### Adding a move
 
@@ -163,58 +209,58 @@ The engine's construction heuristic assigns every still-unassigned entity
 
 ### Adding a hard or soft cost
 
-A constraint is one named component; its level (hard / soft) and weight are
-defaults the caller can override per solve.
+A constraint is one named component; its level (hard / medium / soft), weight
+and exponent are defaults the caller can override per solve (see
+[Constraints: names and knobs](#constraints-names-and-knobs)).
 
 1. **Facts** — if the cost needs new input, add it to `domain.hpp` (and to
-   `models.py`'s `to_core()` / `from_core()` and `bindings.cpp`).
-2. **Component** — add `cpp/include/<ns>/constraints/<name>.hpp`. Most costs
-   are a `UnitConstraint` (a pure function of one unit — an entity or a list
-   — and its members); costs that belong to no unit (e.g. "unassigned
-   count") are a `GlobalConstraint`. Positive cost = penalty, `0` = no
-   violation:
+   `models.py`'s `to_core()` / `from_core()` and `bindings.cpp`). Domain
+   parameters belong to the canonical model, with field descriptions; weights,
+   seeds and time limits never do.
+2. **Component** — add `cpp/include/<ns>/constraints/<subject>_cost.hpp`.
+   Most costs are a `UnitConstraint` (a pure function of one unit — an entity
+   or a list — and its members); costs that belong to no unit (e.g.
+   "unassigned count") are a `GlobalConstraint`. Positive cost = penalty, `0` =
+   no violation:
 
    ```cpp
-   struct MyRule final : MyUnitConstraint {
-       explicit MyRule(double weight = 1.0)
-           : MyUnitConstraint("myRule", weight, /*hard=*/false) {}
+   struct MyRuleCost final : MyUnitConstraint {
+       static constexpr double kDefaultWeight = 1.0;
+       static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
+       explicit MyRuleCost(double weight = kDefaultWeight)
+           : MyUnitConstraint("myRuleCost", weight, kDefaultLevel) {}
        double cost(const MySolution& s, int unit,
                    const std::vector<int>& members) const override { ... }
    };
    ```
 
+   A reward sets `reward = true` in its constructor (raw cost `<= 0`, never
+   hard); a structural constraint sets `levelFlippable = false`.
 3. **Assembly** — include it in `constraints.hpp` and `emplace` it in
    `defaultConstraints()` if it belongs to the default set. Python sees it
-   automatically under its snake_case name (`list_constraints()`).
+   automatically under its snake_case name (`list_constraints()`,
+   `constraint_info()`).
 4. **Default fast path** — if it is in the default set, add the same raw cost
-   to `score_calculator` and `incremental_calculator`;
-   `<ns>_plugin_test` checks that the plugin assembly and the monolithic
-   calculators agree bit for bit.
-5. **Python spec** — add a `Constraint` subclass with `name = "my_rule"` to
-   `<package>/constraints.py` so callers can pick it, reweight it or flip its
-   level: `solve(problem, constraints=get_constraints([..., MyRule(weight=5,
-   hard=True)]))`.
+   to `score_calculator` and `incremental_calculator`, reading the
+   component's `kDefaultWeight`; `<ns>_plugin_test` checks that the plugin
+   assembly and the monolithic calculators agree bit for bit.
+5. **Python spec** — add a `Constraint` subclass with `name = "my_rule_cost"`
+   and `label_en` / `label_ko` / `description_en` / `description_ko` to
+   `<package>/constraints.py`, plus a module-level default instance
+   (`my_rule_cost = MyRuleCost()`), so callers can pick it, reweight it or flip
+   its level: `solve(problem, constraints=get_constraints([...,
+   MyRuleCost(weight=5, hard=True)]))`. The spec declares no defaults; they
+   come from `constraint_info()`.
 6. **Tests and benchmark parity** — a hand-calculated positive and zero case
-   in `<ns>_plugin_test`, and the same cost in the CP-SAT model under
-   `benchmarks/<slug>/cpsat` so the comparison stays like for like.
+   in `<ns>_plugin_test`, full-vs-incremental and monolith-vs-plugin parity,
+   and the same cost in the CP-SAT model under `benchmarks/<slug>/cpsat` (a
+   plugin subclassing the spec) so the comparison stays like for like.
 
-## Extending a pure Python use case
+## Building the Python packages standalone
 
-Everything is in `python/<package>/`. Bin-packing is the exception: its
-solver, moves and `constraint_costs()` live in `_core.py` (see
-[its README](bin-packing/README.md#extending)); the rest of this section
-describes assembly-line-balancing, knapsack, max-cut, quadratic-assignment
-and semiconductor-scheduling:
-
-- **Move** — the `neighbor(state, rng)` function inside `solve()` in
-  `__init__.py` returns one random neighbour of the current state; add a new
-  kind of change there (choose among kinds with `rng`).
-- **Construction heuristic** — the `initial` state built at the top of
-  `solve()` (e.g. knapsack's greedy by value/weight ratio).
-- **Hard / soft cost** — add a `Constraint` subclass with `name`, `label`
-  and `default_hard` to `constraints.py`, register it in the default list
-  there, and return its raw cost under the same name from
-  `constraint_costs()` in `__init__.py`.
-
-The annealing loop itself is `common.anneal` (temperature, cooling rate,
-stagnation restart, multi-start via `parallel_solver_count`).
+`uv sync` in `<slug>/python` builds that package's `_core` extension from
+`../cpp/src/*.cpp`. Each `setup.py` uses a small `build_ext` subclass that
+keeps those objects inside the build's own temporary directory, so standalone
+builds of several use cases can run in parallel. uv caches the editable build
+by `pyproject.toml` / `setup.py` only: after deleting an in-place `_core*.so`
+or changing C++ sources, re-sync with `uv sync --reinstall-package <package>`.

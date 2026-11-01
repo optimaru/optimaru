@@ -5,7 +5,7 @@ from __future__ import annotations
 from ortools.sat.python import cp_model
 
 from cpsat_plugins import ConstraintConfig
-from task_assigning import constraint_costs
+from task_assigning import constraint_costs, constraint_info
 from task_assigning.constraints import Constraint
 from task_assigning.models import TaskAssigningSolutionModel
 
@@ -15,9 +15,33 @@ __all__ = ["catalog", "solve"]
 
 AFFINITY_MULTIPLIER = {"NONE": 4, "LOW": 3, "MEDIUM": 2, "HIGH": 1}
 
+# The engine's three levels: required_skill_cost hard, unassigned_tasks_cost
+# medium, the rest soft.
+LEVELS = ("hard", "medium", "soft")
+
+# The Bendable soft[1] and soft[2] share the soft level: the soft[1]-over-soft[2]
+# order is carried by squared_makespan_cost's default weight (kMakespanUnit,
+# 10^7), as in the engine, and the engine's Score adapter decodes the two with
+# it. Read from the engine catalog rather than copied.
+SOFT1_UNIT = int(
+    next(
+        row.default_weight
+        for row in constraint_info()
+        if row.name == "squared_makespan_cost"
+    )
+)
+
 
 def catalog() -> list[dict]:
     return REGISTRY.catalog()
+
+
+def _split_soft(soft: int) -> tuple[int, int]:
+    """(soft1, soft2) from the soft level, the way the engine's fromEngineScore decodes
+    it (C++ integer division and remainder, truncating toward zero)."""
+    magnitude = abs(int(soft))
+    sign = -1 if soft < 0 else 1
+    return sign * (magnitude // SOFT1_UNIT), sign * (magnitude % SOFT1_UNIT)
 
 
 def solve(
@@ -32,11 +56,7 @@ def solve(
     _proxy_score: dict[str, int] | None = None,
 ) -> TaskAssigningSolutionModel:
     model = cp_model.CpModel()
-    objective = REGISTRY.objective(
-        model,
-        ("hard", "soft0", "soft1", "soft2"),
-        constraints,
-    )
+    objective = REGISTRY.objective(model, LEVELS, constraints)
     task_count, employee_count = len(problem.tasks), len(problem.employees)
     task_type = {item.code: item for item in problem.task_types}
     duration = {
@@ -161,7 +181,6 @@ def solve(
         )
     score = objective.score_costs(constraint_costs(solved.to_core()))
     solved.score_hard = score["hard"]
-    solved.score_soft0 = score["soft0"]
-    solved.score_soft1 = score["soft1"]
-    solved.score_soft2 = score["soft2"]
+    solved.score_soft0 = score["medium"]  # the Bendable soft[0]: the medium level
+    solved.score_soft1, solved.score_soft2 = _split_soft(score["soft"])
     return solved

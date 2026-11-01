@@ -15,6 +15,7 @@ from tournament_scheduling import (
     TournamentSchedule,
     UnavailabilityPenalty,
     calculate_score,
+    constraint_costs,
     unfairness,
 )
 
@@ -40,7 +41,7 @@ def test_unfairness_spot_values():
     assert unfairness([11, 11, 10, 10, 10, 10, 10]) == pytest.approx(1.19523, abs=1e-12)  # sqrt(10/7)
 
 
-def test_one_assignment_per_date_per_team():
+def test_team_conflict_cost():
     # Java test: T0 on D0 three times (3 pairs), T1 on D1/D2 (0 pairs) -> hard -3.
     # medium: loads {3, 2} -> 0.707107; no head-to-heads (same-team pairs are excluded).
     schedule = make_schedule([(0, 0), (0, 0), (0, 0), (1, 1), (2, 1)])
@@ -49,7 +50,7 @@ def test_one_assignment_per_date_per_team():
     assert score.soft == pytest.approx(-707107.0, abs=1e-6)
 
 
-def test_unavailability_penalty():
+def test_team_unavailability_cost():
     # Java test: unavailable (T0,D0)/(T1,D1) both hit + T1 twice on D1 (1 pair).
     schedule = make_schedule(
         [(0, 0), (1, 1), (1, 1), (2, 1)],
@@ -60,14 +61,14 @@ def test_unavailability_penalty():
     assert score.soft == pytest.approx(-(unfairness([1, 3]) * MEDIUM_SCALE), abs=1e-6)
 
 
-def test_unavailability_penalty_miss():
+def test_team_unavailability_cost_miss():
     schedule = make_schedule([(0, 0)], penalties=[(2, 0)])
     score = calculate_score(schedule)
     assert score.hard == 0
     assert score.soft == 0.0
 
 
-def test_fair_assignment_count_per_team():
+def test_assignment_count_imbalance_cost():
     # Java test: once per team -> perfectly fair.
     schedule = make_schedule([(0, 0), (1, 1), (2, 2)])
     score = calculate_score(schedule)
@@ -80,7 +81,7 @@ def test_fair_assignment_count_per_team():
     assert score.soft == pytest.approx(-816497.0, abs=1e-6)
 
 
-def test_evenly_confrontation_count():
+def test_confrontation_count_imbalance_cost():
     # Java test: three teams meet each other once on D0 -> perfectly even.
     schedule = make_schedule([(0, 0), (0, 1), (0, 2)])
     score = calculate_score(schedule)
@@ -99,3 +100,26 @@ def test_unassigned_contributes_nothing():
     score = calculate_score(schedule)
     assert score.hard == 0
     assert score.soft == 0.0
+
+
+@pytest.mark.parametrize(
+    ("name", "assignments", "penalties", "expected"),
+    [
+        # T0 three times on D0 -> C(3, 2) = 3 pairs; T1 and T2 once.
+        ("team_conflict_cost", [(0, 0), (0, 0), (0, 0), (1, 1), (2, 2)], (), [3.0, 0.0, 0.0]),
+        ("team_conflict_cost", [(0, 0), (1, 0), (0, 1)], (), [0.0, 0.0, 0.0]),
+        # Two facts on (T0, D1) where T0 plays twice -> 2 (per fact); T1's fact is on D0, it plays D1.
+        ("team_unavailability_cost", [(1, 0), (1, 0), (1, 1)], [(0, 1), (0, 1), (1, 0)], [2.0, 0.0, 0.0]),
+        ("team_unavailability_cost", [(0, 0), (1, 1)], [(0, 1), (1, 0)], [0.0, 0.0, 0.0]),
+        # Loads {2, 1} -> sqrt(1/2); loads {1, 1, 1} -> 0.
+        ("assignment_count_imbalance_cost", [(0, 0), (1, 0), (2, 1)], (), [0.707107]),
+        ("assignment_count_imbalance_cost", [(0, 0), (1, 1), (2, 2)], (), [0.0]),
+        # Head-to-heads (0,1)=1 (0,2)=2 (1,2)=2 -> sqrt(2/3); every pair once -> 0.
+        ("confrontation_count_imbalance_cost", [(0, 0), (0, 1), (0, 2), (0, 2)], (), [0.816497]),
+        ("confrontation_count_imbalance_cost", [(0, 0), (0, 1), (0, 2)], (), [0.0]),
+    ],
+)
+def test_raw_costs_by_hand(name, assignments, penalties, expected):
+    """constraint_costs() per constraint: one positive and one zero case each (raw, unweighted)."""
+    costs = constraint_costs(make_schedule(assignments, penalties))[name]["costs"]
+    assert costs == pytest.approx(expected, abs=1e-12)

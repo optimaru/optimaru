@@ -27,25 +27,27 @@ namespace cs
 //     O(timeslots x tags-of-the-talk): tag-conflict terms read per-slot
 //     per-tag counts (theme/sector/content/mutex, the theme x audience joint
 //     table, per-level content counts for the flow constraint, per-level and
-//     per-language counts for the diversity rewards), roomConflict reads a
-//     (slot, room) occupancy grid, and popularTalks reads per-capacity-class
-//     Fenwick trees over the favorite-count ranks (count + duration-sum
-//     prefixes). The only per-talk sweeps left are the genuinely sparse
-//     relations: talks sharing a speaker (speakerConflict, pause) and the
-//     prerequisite adjacency, both walked over precompiled short lists. All
-//     aggregate sums are integer, so the totals are bit-identical to the
-//     former O(n) pair sweep;
-//   - occupancy-shaped (crowdControl): per-timeslot risk>0 counters with the
-//     slot total maintained under the counter change, O(1);
-//   - grouped (speakerMakespan): per-speaker day counters; a change refreshes
-//     only the changed talk's speakers, O(speakers x days).
+//     per-language counts for the diversity rewards), roomConflictCost reads
+//     a (slot, room) occupancy grid, and popularTalksRoomSizeCost reads
+//     per-capacity-class Fenwick trees over the favorite-count ranks (count +
+//     duration-sum prefixes). The only per-talk sweeps left are the genuinely
+//     sparse relations: talks sharing a speaker (speakerConflictCost, pause)
+//     and the prerequisite adjacency, both walked over precompiled short
+//     lists. All aggregate sums are integer, so the totals are bit-identical
+//     to the former O(n) pair sweep;
+//   - occupancy-shaped (crowdControlRiskCost): per-timeslot risk>0 counters
+//     with the slot total maintained under the counter change, O(1);
+//   - grouped (speakerMakespanCost): per-speaker day counters; a change
+//     refreshes only the changed talk's speakers, O(speakers x days).
 //
 // beforeVariableChanged retracts the talk's contribution while slotRoom
 // still holds the OLD value; afterVariableChanged inserts the NEW value.
 // Unassigned talks (slotRoom == -1) contribute nothing, so the construction
 // heuristic can score partially initialized solutions. The full-recompute
 // reference is ScoreCalculator::calculateScore (checked in the tests and
-// under EnvironmentMode::FULL_ASSERT).
+// under EnvironmentMode::FULL_ASSERT). Every weight is a component's
+// kDefaultWeight (cs/constraints/*_cost.hpp), read once at the top of
+// incremental_calculator.cpp: this is the default assembly, hand-tuned.
 class ConferenceSchedulingIncrementalScoreCalculator final
     : public optimaru::IncrementalScoreCalculator<ConferenceSchedule>
 {
@@ -124,7 +126,7 @@ private:
     std::vector<int> levelCnt_;       // slot x L
     std::vector<int> langCnt_;        // slot x G
 
-    // popularTalks: per capacity class (distinct room capacities,
+    // popularTalksRoomSizeCost: per capacity class (distinct room capacities,
     // ascending), Fenwick trees over the dense favorite-count rank storing
     // talk counts and slot-duration sums.
     int capDim_ = 0;                         // K distinct capacities
@@ -137,13 +139,15 @@ private:
     std::vector<int> capTotalCnt_;           // K
     std::vector<std::int64_t> capTotalDur_;  // K
 
-    // crowdControl occupancy: risk>0 talks per timeslot, with the weighted
-    // unit total maintained under every counter change.
+    // crowdControlRiskCost occupancy: risk>0 talks per timeslot, with the raw
+    // unit total maintained under every counter change (weighted in
+    // calculateScore).
     std::vector<int> crowdCnt_;
     std::int64_t crowdUnits_ = 0;
 
-    // speakerMakespan: assigned-talk counts per (speaker, dense day) and the
-    // weighted unit total, refreshed per affected speaker.
+    // speakerMakespanCost: assigned-talk counts per (speaker, dense day) and
+    // the raw unit total, refreshed per affected speaker (weighted in
+    // calculateScore).
     std::vector<int> speakerDayCnt_;
     std::int64_t makespanUnits_ = 0;
 
@@ -166,7 +170,7 @@ private:
     // aggregates.
     void applyAggregates(int talkIndex, int slot, int room, int sign);
     void addUnaryContribution(int talkIndex, int slot, int room, int sign);
-    // crowdControl slot units under a counter change (f(k) = k >= 3 ?
+    // crowdControlRiskCost slot units under a counter change (f(k) = k >= 3 ?
     // k * slotDur : 0).
     void applyCrowdDelta(int slot, int newCount, int oldCount);
     std::int64_t makespanUnitsOf(int speaker) const;

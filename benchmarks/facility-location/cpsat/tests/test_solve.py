@@ -3,7 +3,12 @@ from itertools import product
 import pytest
 
 import facility_location as domain
-from facility_location.constraints import DistanceFromFacility, get_constraints, score
+from facility_location.constraints import (
+    DistanceFromFacilityCost,
+    FacilityCapacityCost,
+    get_constraints,
+    score,
+)
 from facility_location.models import (
     ConsumerModel,
     FacilityLocationProblemModel,
@@ -104,7 +109,9 @@ def test_explicit_constraint_list_replaces_defaults() -> None:
     )
 
     solved = solve(
-        problem, time_limit_seconds=2, constraints=[{"type": "distance_from_facility"}]
+        problem,
+        time_limit_seconds=2,
+        constraints=[{"type": "distance_from_facility_cost"}],
     )
 
     assert solved.consumers[0].facility == 0
@@ -137,7 +144,7 @@ def test_accepts_the_same_domain_constraint_object_as_the_engine() -> None:
     solved = solve(
         problem,
         time_limit_seconds=2,
-        constraints=[DistanceFromFacility(weight=10)],
+        constraints=[DistanceFromFacilityCost(weight=10)],
     )
 
     assert solved.consumers[0].facility == 0
@@ -192,3 +199,32 @@ def test_each_constraint_matches_brute_force_independently(constraint) -> None:
     solved = solve(problem, time_limit_seconds=2, constraints=[constraint])
 
     assert (solved.score_hard, solved.score_soft) == pytest.approx(expected)
+
+
+def test_cpsat_defaults_are_the_engine_defaults() -> None:
+    """No hand-copied defaults: the CP-SAT catalog equals constraint_info()."""
+    from facility_location_cpsat import catalog
+
+    engine = {row.name: row for row in domain.constraint_info()}
+    entries = catalog()
+    assert [entry["name"] for entry in entries] == domain.list_constraints()
+    for entry in entries:
+        row = engine[entry["name"]]
+        assert entry["default_level"] == row.default_level
+        assert entry["default_weight"] == row.default_weight
+        assert entry["level_flippable"] == row.level_flippable
+        assert entry["reward"] == row.reward
+        assert entry["default_enabled"] == row.default_enabled
+        assert entry["kind"] == "either"  # every facility-location constraint is flippable
+        assert entry["params"] == {"weight": None, "hard": None, "exponent": 1.0}
+
+
+def test_demoting_capacity_scores_like_the_engine() -> None:
+    """hard=False lands on soft in both solvers: CP-SAT's reported score is the
+    engine's score of the same solution under the same selection."""
+    problem = _parity_problem()
+    selection = [FacilityCapacityCost(hard=False), *get_constraints()[1:]]
+    solved = solve(problem, time_limit_seconds=2, constraints=selection)
+    engine = score(domain.constraint_costs(solved.to_core()), selection)
+    assert (solved.score_hard, solved.score_soft) == pytest.approx(tuple(engine))
+    assert solved.score_hard == 0

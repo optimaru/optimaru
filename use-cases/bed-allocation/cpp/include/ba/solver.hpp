@@ -1,10 +1,12 @@
 #ifndef BA_SOLVER_HPP
 #define BA_SOLVER_HPP
 
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <functional>
 #include <limits>
+#include <memory>
 #include <utility>
 #include <vector>
 
@@ -90,6 +92,11 @@ public:
         int nearbySize = 20;
 
         std::function<void(std::int64_t, const Score &)> onNewBest;
+        // Set by solve() on each parallel worker's copy, not by a caller (and
+        // not bound to Python): the first worker that fails raises it, and the
+        // other workers' engines stop at their next step instead of running out
+        // their budget before the error reaches the caller.
+        std::shared_ptr<std::atomic<bool>> stopFlag;
     };
 
     Solver() = default;
@@ -104,12 +111,14 @@ public:
     // ba/constraints.hpp): pick components and weights, then pass the
     // assembly here. The same search applies — construction heuristic,
     // late-acceptance local search, ALNS kicks and the date-window nearby
-    // selection. Weights come from the assembly, NOT from the quickstart
-    // defaults. The final plan.score is computed by THIS calculator (decoded
-    // back into the HardMediumSoft levels) and the calculator is left primed
-    // on the final solution, so constraintTotals() explains exactly that
-    // score. Single-start: the caller-owned calculator cannot be cloned, so
-    // parallelSolverCount is ignored.
+    // selection. Weights and levels come from the assembly (the components'
+    // kDefaultWeight / kDefaultLevel unless the caller changed them). The
+    // final plan.score is computed by THIS calculator (its three level
+    // accumulators, calculator.levelScores()), and onNewBest reports every new
+    // best the same way, so the last reported score equals plan.score. The
+    // calculator is left primed on the final solution, so constraintTotals()
+    // explains exactly that score. Single-start: the caller-owned calculator
+    // cannot be cloned, so parallelSolverCount is ignored.
     void solve(BedPlan &plan,
                optimaru::DecomposedScoreCalculator<BedPlan> &calculator);
 

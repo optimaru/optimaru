@@ -1,0 +1,24 @@
+{
+    "facilities": ["Assembly", "Warehouse", "Paint", "Inspection", "Packing", "Office"],
+    "locations": ["North", "East", "South", "West", "Center", "Annex"],
+    "fixed_assignments": { "Annex": "Office" },
+    "forbidden_assignments": [{ "facility": "Assembly", "location": "Annex" }],
+    "facility_demands": { "Assembly": 8, "Warehouse": 7, "Paint": 6, "Inspection": 4, "Packing": 5, "Office": 2 },
+    "location_capacities": { "North": 8, "East": 8, "South": 8, "West": 8, "Center": 8, "Annex": 2 },
+    "flows": [
+        [0, 8, 5, 2, 7, 1],
+        [8, 0, 3, 4, 9, 2],
+        [5, 3, 0, 8, 4, 1],
+        [2, 4, 8, 0, 6, 3],
+        [7, 9, 4, 6, 0, 2],
+        [1, 2, 1, 3, 2, 0]
+    ],
+    "distances": [
+        [0, 2, 5, 4, 2, 6],
+        [2, 0, 3, 5, 1, 4],
+        [5, 3, 0, 2, 3, 5],
+        [4, 5, 2, 0, 4, 3],
+        [2, 1, 3, 4, 0, 3],
+        [6, 4, 5, 3, 3, 0]
+    ]
+}

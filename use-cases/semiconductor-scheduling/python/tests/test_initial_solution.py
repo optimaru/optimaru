@@ -20,8 +20,20 @@ from semiconductor_scheduling.models import (
 )
 
 
+def _config(**fields) -> SolverConfig:
+    config = SolverConfig()
+    for name, value in fields.items():
+        setattr(config, name, value)
+    return config
+
+
 def _no_search() -> SolverConfig:
-    return SolverConfig(max_iterations=0)
+    """The zero-budget idiom: the solve returns its start (0.1.x: max_iterations=0)."""
+    return _config(spent_limit_seconds=0)
+
+
+def _raw(problem, name: str) -> float:
+    return sum(constraint_costs(problem)[name]["costs"])
 
 
 def _option(machine_id: str, duration: int, preference_cost: int = 0) -> MachineOptionModel:
@@ -118,16 +130,16 @@ def test_complete_seed_comes_back_unchanged_with_zero_budget():
 def test_decoder_turns_a_feasible_seed_into_a_worse_schedule():
     # This is why solve scores a complete seed directly: decoding left-shifts A to 0-2, and B then waits 8.
     seeded = with_initial_solution(_queue_problem(), {"assignments": QUEUE_SEED})
-    assert sum(constraint_costs(seeded)["maximum_queue_time"]) == 0
+    assert _raw(seeded, "max_queue_time_cost") == 0
     decoded = seeded.model_copy(update={"assignments": _decoded(seeded)})
-    assert sum(constraint_costs(decoded)["maximum_queue_time"]) == 7
+    assert _raw(decoded, "max_queue_time_cost") == 7
 
 
 def test_seed_the_decoder_cannot_keep_is_never_lost_to_the_search():
     for random_seed in range(5):
         seeded = with_initial_solution(_queue_problem(), {"assignments": QUEUE_SEED})
         seed_score = calculate_score(seeded.model_copy(deep=True))
-        config = SolverConfig(max_iterations=200, stagnation_limit=20, random_seed=random_seed)
+        config = _config(step_count_limit=200, random_seed=random_seed)
         assert tuple(solve(seeded, config=config)) >= tuple(seed_score)
 
 
@@ -147,7 +159,7 @@ def test_seed_with_idle_time_stays_as_given_until_the_search_runs():
     assert seeded.assignments == [AssignmentModel(**row) for row in idle]
 
     searched = with_initial_solution(_choice_problem(), {"assignments": idle})
-    assert tuple(solve(searched, config=SolverConfig(max_iterations=100, random_seed=1))) > tuple(seed_score)
+    assert tuple(solve(searched, config=_config(step_count_limit=100, random_seed=1))) > tuple(seed_score)
 
 
 @pytest.mark.parametrize("as_dict", [False, True])
@@ -182,10 +194,10 @@ def test_seed_against_a_pin_is_scored_as_given_and_the_search_restores_the_pin()
     seed = [_assignment("L1", "O", "M1", 5, 8), _assignment("L2", "O", "M1", 0, 3)]
     seeded = with_initial_solution(_choice_problem(pinned_assignments=[pin]), {"assignments": seed})
     solve(seeded, config=_no_search())
-    assert constraint_costs(seeded)["pinned_assignments"] == [1]
+    assert _raw(seeded, "pinned_assignments_cost") == 1
     searched = with_initial_solution(_choice_problem(pinned_assignments=[pin]), {"assignments": seed})
-    solve(searched, config=SolverConfig(max_iterations=100, random_seed=1))
-    assert constraint_costs(searched)["pinned_assignments"] == [0]
+    solve(searched, config=_config(step_count_limit=100, random_seed=1))
+    assert _raw(searched, "pinned_assignments_cost") == 0
 
 
 def test_left_out_pinned_operation_stays_on_its_pin():
@@ -246,7 +258,7 @@ def test_hard_infeasible_result_feeds_back_unchanged():
         ],
     )
     solved = problem.model_copy(deep=True)
-    solve(solved, config=SolverConfig(max_iterations=50, random_seed=1))
+    solve(solved, config=_config(step_count_limit=50, random_seed=1))
     assert solved.score_hard < 0
     seeded = with_initial_solution(problem, solved.model_dump(mode="json"))
     solve(seeded, config=_no_search())
@@ -286,7 +298,7 @@ def test_input_problem_is_not_mutated():
     seeded = with_initial_solution(problem, {"assignments": QUEUE_SEED})
     assert seeded.score_hard is None
     assert seeded.makespan is None
-    solve(seeded, config=SolverConfig(max_iterations=50, random_seed=1))
+    solve(seeded, config=_config(step_count_limit=50, random_seed=1))
     assert problem.model_dump() == before
 
 
@@ -294,8 +306,8 @@ def test_plain_solve_still_ignores_input_assignments():
     fresh = _queue_problem()
     preset = _queue_problem(assignments=[AssignmentModel(**row) for row in QUEUE_SEED])
     assert preset.warm_start is False
-    solve(fresh, config=SolverConfig(max_iterations=200, random_seed=5))
-    solve(preset, config=SolverConfig(max_iterations=200, random_seed=5))
+    solve(fresh, config=_config(step_count_limit=200, random_seed=5))
+    solve(preset, config=_config(step_count_limit=200, random_seed=5))
     assert fresh.assignments == preset.assignments
 
 

@@ -1,8 +1,36 @@
 #include "vrp/score_calculator.hpp"
 
 #include <algorithm>
+#include <cstdint>
+
+#include "vrp/constraints/max_end_time_cost.hpp"
+#include "vrp/constraints/travel_time_cost.hpp"
+#include "vrp/constraints/unassigned_visits_cost.hpp"
+#include "vrp/constraints/vehicle_capacity_cost.hpp"
 
 namespace vrp {
+
+namespace {
+
+// The monolithic score is the core of the default assembly, so it reads the
+// same constants the components carry. Integral, so every level is computed
+// in int64 (the medium weight is in medium units; toEngineScore folds it).
+constexpr auto kCapacityWeight = static_cast<std::int64_t>(VehicleCapacityCost::kDefaultWeight);
+constexpr auto kTimeWindowWeight = static_cast<std::int64_t>(MaxEndTimeCost::kDefaultWeight);
+constexpr auto kUnassignedWeight = static_cast<std::int64_t>(UnassignedVisitsCost::kDefaultWeight);
+constexpr auto kTravelWeight = static_cast<std::int64_t>(TravelTimeCost::kDefaultWeight);
+static_assert(kCapacityWeight == VehicleCapacityCost::kDefaultWeight
+                      && kTimeWindowWeight == MaxEndTimeCost::kDefaultWeight
+                      && kUnassignedWeight == UnassignedVisitsCost::kDefaultWeight
+                      && kTravelWeight == TravelTimeCost::kDefaultWeight,
+              "the monolithic calculator assumes integral default weights");
+static_assert(VehicleCapacityCost::kDefaultLevel == optimaru::Level::Hard
+                      && MaxEndTimeCost::kDefaultLevel == optimaru::Level::Hard
+                      && UnassignedVisitsCost::kDefaultLevel == optimaru::Level::Medium
+                      && TravelTimeCost::kDefaultLevel == optimaru::Level::Soft,
+              "the monolithic calculator assumes the components' levels");
+
+}  // namespace
 
 std::int64_t ScoreCalculator::ceilToMinutes(Seconds seconds) {
     if (seconds <= 0) return 0;
@@ -47,7 +75,7 @@ Score ScoreCalculator::calculateScore(VehicleRoutePlan& plan) {
 
     Score score;
 
-    // --- Hard: vehicleCapacity ---
+    // --- Hard: vehicleCapacityCost ---
     // penalize (totalDemand - capacity) when a vehicle is overloaded.
     for (const Vehicle& vehicle : plan.vehicles) {
         int totalDemand = 0;
@@ -55,11 +83,11 @@ Score ScoreCalculator::calculateScore(VehicleRoutePlan& plan) {
             totalDemand += plan.visits[visitIdx].demand;
         }
         if (totalDemand > vehicle.capacity) {
-            score.hard -= (totalDemand - vehicle.capacity);
+            score.hard -= kCapacityWeight * (totalDemand - vehicle.capacity);
         }
     }
 
-    // --- Hard: serviceFinishedAfterMaxEndTime ---
+    // --- Hard: maxEndTimeCost ---
     // A visit is late when arrivalTime + serviceDuration is after maxEndTime;
     // penalize by the overshoot rounded up to whole minutes. (Faithful to the
     // Java quickstart, which measures from arrivalTime, not startServiceTime.)
@@ -67,20 +95,21 @@ Score ScoreCalculator::calculateScore(VehicleRoutePlan& plan) {
         if (visit.vehicleIndex < 0) continue;  // unassigned: no arrival time
         Seconds serviceFinished = visit.arrivalTime + visit.serviceDuration;
         if (serviceFinished > visit.maxEndTime) {
-            score.hard -= ceilToMinutes(serviceFinished - visit.maxEndTime);
+            score.hard -= kTimeWindowWeight * ceilToMinutes(serviceFinished - visit.maxEndTime);
         }
     }
 
-    // --- Medium: maximizeVisitsAssigned ---
+    // --- Medium: unassignedVisitsCost ---
     // penalize each unassigned visit by its unassigned penalty (by default
-    // its service duration in minutes -- see Visit::unassignedPenalty).
+    // its service duration in minutes -- see Visit::unassignedPenalty), in
+    // medium units: toEngineScore folds them into soft x 10^9.
     for (const Visit& visit : plan.visits) {
         if (visit.vehicleIndex < 0) {
-            score.medium -= visit.unassignedPenalty();
+            score.medium -= kUnassignedWeight * visit.unassignedPenalty();
         }
     }
 
-    // --- Soft: minimizeTravelTime ---
+    // --- Soft: travelTimeCost ---
     // penalize each vehicle's total driving time: home -> visits..., plus the
     // leg back home when the vehicle returns to its depot.
     for (const Vehicle& vehicle : plan.vehicles) {
@@ -93,7 +122,7 @@ Score ScoreCalculator::calculateScore(VehicleRoutePlan& plan) {
             prevLocation = loc;
         }
         total += vehicle.homeLeg(plan.drivingSeconds, prevLocation);
-        score.soft -= total;
+        score.soft -= kTravelWeight * total;
     }
 
     plan.score = score;

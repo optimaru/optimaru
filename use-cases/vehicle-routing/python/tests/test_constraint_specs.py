@@ -1,21 +1,33 @@
 """vrp_routing.constraints — an API for picking the cost function declaratively.
 
-"Which constraints are on" is the only path covered here. Per-constraint values
-are covered by `test_routing.py` and the C++ tests.
+"Which constraints are on", the catalog (`constraint_info()`), the three knobs and
+the medium level are covered here. Per-constraint values are covered by
+`test_routing.py` and the C++ tests (one hand-calculated positive and zero case each).
 """
+
+import pickle
+import re
+from types import SimpleNamespace
 
 import pytest
 
 import vrp_routing as vrp
+from vrp_routing import constraints as specs
 from vrp_routing.constraints import (
     Constraint,
-    MinimizeTravelTime,
-    score,
+    EnclosingCircleRadiusCost,
+    LatencyCost,
+    RouteDurationCost,
+    TravelTimeCost,
+    UnassignedVisitsCost,
     get_constraints,
-    maximize_visits_assigned,
-    minimize_travel_time,
-    vehicle_capacity,
+    score,
+    travel_time_cost,
+    unassigned_visits_cost,
+    vehicle_capacity_cost,
 )
+
+MEDIUM_UNIT = 1_000_000_000  # the domain's medium fold (into soft)
 
 
 def small_plan():
@@ -56,23 +68,23 @@ def solve(constraints=None, seconds=0.4, seed=7):
 
 def test_list_constraints_matches_the_spec_names():
     """Names carried by specs must be names the core actually knows."""
-    # Unit constraints first, the global constraint (maximize_visits_assigned) after.
+    # Unit constraints first, the global constraint (unassigned_visits_cost) after.
     available = vrp.list_constraints()
     assert available == [
-        "vehicle_capacity",
-        "service_finished_after_max_end_time",
-        "minimize_travel_time",
-        "max_travel_time",
-        "max_route_duration",
-        "vehicle_end_time",
-        "max_stops",
-        "max_route_radius",
-        "minimize_enclosing_circle_radius",
-        "min_capacity_utilization",
-        "minimize_route_duration",
-        "minimize_latency",
+        "vehicle_capacity_cost",
+        "max_end_time_cost",
+        "travel_time_cost",
+        "max_travel_time_cost",
+        "max_route_duration_cost",
+        "vehicle_max_end_time_cost",
+        "max_stops_cost",
+        "max_route_radius_cost",
+        "enclosing_circle_radius_cost",
+        "min_capacity_utilization_cost",
+        "route_duration_cost",
+        "latency_cost",
         "vehicle_fixed_cost",
-        "maximize_visits_assigned",
+        "unassigned_visits_cost",
     ]
     for spec in get_constraints():
         assert spec.name in available
@@ -82,11 +94,11 @@ def test_get_constraints_defaults_to_the_full_set():
     assert [spec.name for spec in get_constraints()] == vrp.list_constraints()
 
 
-def test_constraint_catalog_has_labels_and_descriptions():
+def test_every_spec_has_labels_and_descriptions_in_both_languages():
     for spec in get_constraints():
-        constraint_type = type(spec)
-        assert constraint_type.label_en
-        assert constraint_type.description_en
+        cls = type(spec)
+        for attr in ("label_en", "label_ko", "description_en", "description_ko"):
+            assert getattr(cls, attr), f"{cls.__name__}.{attr} is empty"
 
 
 def test_route_policy_costs_are_exposed():
@@ -101,12 +113,12 @@ def test_route_policy_costs_are_exposed():
     vehicle.max_route_radius_meters = 1
     plan.rebuild_unassigned_pool()
     costs = vrp.constraint_costs(plan)
-    assert costs["max_stops"]["costs"][0] == 1
-    assert costs["max_travel_time"]["costs"][0] > 0
-    assert costs["max_route_duration"]["costs"][0] > 0
-    assert costs["vehicle_end_time"]["costs"][0] > 0
+    assert costs["max_stops_cost"]["costs"][0] == 1
+    assert costs["max_travel_time_cost"]["costs"][0] > 0
+    assert costs["max_route_duration_cost"]["costs"][0] > 0
+    assert costs["vehicle_max_end_time_cost"]["costs"][0] > 0
     assert costs["vehicle_fixed_cost"]["costs"][0] == 25
-    assert costs["max_route_radius"]["costs"][0] > 0
+    assert costs["max_route_radius_cost"]["costs"][0] > 0
 
 
 def test_default_constraints_reproduce_the_monolithic_cost_function():
@@ -123,15 +135,15 @@ def test_picking_a_subset_drops_the_other_terms():
     baseline = solve(get_constraints()).score
     assert baseline.soft < 0
 
-    without_travel = solve([vehicle_capacity, maximize_visits_assigned]).score
+    without_travel = solve([vehicle_capacity_cost, unassigned_visits_cost]).score
     assert without_travel.soft == 0
 
 
 def test_reweighting_one_constraint_scales_only_that_term():
     """Raising only the travel-time weight grows soft only; hard stays put."""
-    picks = [vehicle_capacity, maximize_visits_assigned]
-    base = solve([*picks, minimize_travel_time]).score
-    heavier = solve([*picks, MinimizeTravelTime(weight=10)]).score
+    picks = [vehicle_capacity_cost, unassigned_visits_cost]
+    base = solve([*picks, travel_time_cost]).score
+    heavier = solve([*picks, TravelTimeCost(weight=10)]).score
     assert heavier.hard == base.hard
     assert heavier.soft < base.soft  # penalty, so more negative
 
@@ -142,13 +154,13 @@ def test_level_can_be_flipped():
     With soft travel time, every visit gets served and the cost is paid in soft.
     Promoted to hard, driving itself becomes a hard cost while unassigned stays
     medium — levels are lexicographic — so the solver parks the vehicles."""
-    picks = [maximize_visits_assigned]
+    picks = [unassigned_visits_cost]
 
-    soft_level = solve([*picks, minimize_travel_time]).score
+    soft_level = solve([*picks, travel_time_cost]).score
     assert soft_level.medium == 0  # serves every visit
     assert soft_level.soft < 0
 
-    hard_level = solve([*picks, MinimizeTravelTime(hard=True)]).score
+    hard_level = solve([*picks, TravelTimeCost(hard=True)]).score
     assert hard_level.medium < 0  # gives up visits instead
     assert hard_level.soft == 0
     assert hard_level.hard == 0  # nothing drives, so no hard cost either
@@ -158,7 +170,7 @@ def test_unknown_constraint_name_raises():
     """A typo must not silently leave the cost function unchanged."""
 
     class Typo:
-        name = "minimize_travel_times"  # trailing s
+        name = "travel_time_costs"  # trailing s
         weight = None
         hard = None
         exponent = 1.0
@@ -181,10 +193,14 @@ def test_spec_subclass_must_name_a_constraint():
 
 
 def test_default_instance_carries_no_overrides():
-    """Module-level instances must keep the defaults (weight=None)."""
-    assert minimize_travel_time.weight is None
-    assert minimize_travel_time.hard is None
-    assert minimize_travel_time.exponent == 1.0
+    """Module-level instances must keep the defaults (weight=None, hard=None, exponent=1)."""
+    for spec in get_constraints():
+        assert (spec.weight, spec.hard, spec.exponent) == (None, None, 1.0)
+        assert (
+            getattr(specs, spec.name) is spec
+        )  # the instance is named after the constraint
+    # The opt-in objectives no longer pass an explicit weight=0: the C++ default is 0.
+    assert specs.enclosing_circle_radius_cost.weight is None
 
 
 # --- Pure-Python scoring (constraint_costs -> score) ------------------------
@@ -205,9 +221,9 @@ def test_score_reproduces_the_engine_hard_level():
 def test_score_is_additive_over_the_picked_constraints():
     """The total score is the sum of per-constraint scores — unlisted terms simply drop out."""
     raw, _ = _raw()
-    specs = get_constraints()
-    full = score(raw, specs)
-    parts = [score(raw, [spec]) for spec in specs]
+    picked = get_constraints()
+    full = score(raw, picked)
+    parts = [score(raw, [spec]) for spec in picked]
     assert full.hard == sum(part.hard for part in parts)
     assert full.soft == pytest.approx(sum(part.soft for part in parts))
 
@@ -215,9 +231,9 @@ def test_score_is_additive_over_the_picked_constraints():
 def test_score_reweighting_is_linear_without_rescoring():
     """Changing only the weight scales that term linearly — no rescoring."""
     raw, _ = _raw()
-    base = score(raw, [minimize_travel_time])
-    ten = score(raw, [MinimizeTravelTime(weight=10)])
-    factor = 10 / raw[minimize_travel_time.name]["weight"]
+    base = score(raw, [travel_time_cost])
+    ten = score(raw, [TravelTimeCost(weight=10)])
+    factor = 10 / raw[travel_time_cost.name]["weight"]
     if base.hard:
         assert ten.hard == pytest.approx(base.hard * factor, rel=1e-6)
     else:
@@ -233,3 +249,354 @@ def test_score_rejects_an_unknown_constraint_name():
 
     with pytest.raises(ValueError, match="unknown constraint"):
         score(raw, [Renamed()])
+
+
+# --- The catalog: constraint_info() ------------------------------------------
+
+# (name, default_level, default_weight, default_enabled), list_constraints() order.
+EXPECTED_INFO = [
+    ("vehicle_capacity_cost", "hard", 1.0, True),
+    ("max_end_time_cost", "hard", 1.0, True),
+    ("travel_time_cost", "soft", 1.0, True),
+    ("max_travel_time_cost", "hard", 1.0, True),
+    ("max_route_duration_cost", "hard", 1.0, True),
+    ("vehicle_max_end_time_cost", "hard", 1.0, True),
+    ("max_stops_cost", "hard", 1.0, True),
+    ("max_route_radius_cost", "hard", 1.0, True),
+    ("enclosing_circle_radius_cost", "soft", 0.0, False),
+    ("min_capacity_utilization_cost", "soft", 1.0, True),
+    ("route_duration_cost", "soft", 0.0, False),
+    ("latency_cost", "soft", 0.0, False),
+    ("vehicle_fixed_cost", "soft", 1.0, True),
+    ("unassigned_visits_cost", "medium", 1.0, True),
+]
+
+
+def test_constraint_info_reports_the_cpp_defaults():
+    """The defaults live in C++ only; constraint_info() reads them off the default assembly."""
+    rows = vrp.constraint_info()
+    assert [row.name for row in rows] == vrp.list_constraints()
+    assert [
+        (row.name, row.default_level, row.default_weight, row.default_enabled)
+        for row in rows
+    ] == EXPECTED_INFO
+    # Every constraint is flippable and none is a reward.
+    assert all(row.level_flippable and not row.reward for row in rows)
+
+
+def test_constraint_info_rows_are_plain_values():
+    row = vrp.constraint_info()[-1]
+    assert isinstance(row, vrp.ConstraintInfo)
+    assert row._asdict() == {
+        "name": "unassigned_visits_cost",
+        "default_level": "medium",
+        "default_weight": 1.0,
+        "level_flippable": True,
+        "reward": False,
+        "default_enabled": True,
+    }
+    assert repr(row).startswith("ConstraintInfo(name='unassigned_visits_cost'")
+    assert pickle.loads(pickle.dumps(vrp.constraint_info())) == vrp.constraint_info()
+    assert vrp.ConstraintInfo.__module__ == vrp._core.__name__
+
+
+def test_constraint_info_matches_the_raw_cost_metadata():
+    """constraint_costs() reports the same defaults and carries the domain's medium fold on every entry."""
+    plan = small_plan()
+    plan.rebuild_unassigned_pool()
+    raw = vrp.constraint_costs(plan)
+    assert list(raw) == vrp.list_constraints()
+    for row in vrp.constraint_info():
+        entry = raw[row.name]
+        assert (entry["weight"], entry["level"], entry["hard"]) == (
+            row.default_weight,
+            row.default_level,
+            row.default_level == "hard",
+        )
+        assert (entry["level_flippable"], entry["reward"], entry["global"]) == (
+            True,
+            False,
+            row.name == "unassigned_visits_cost",
+        )
+        assert (entry["name"], entry["label"]) == (row.name, "")
+        assert entry["medium_fold"] == {"kind": "into_soft", "unit": float(MEDIUM_UNIT)}
+
+
+# --- The knobs ------------------------------------------------------------------
+
+
+def _engine(score_):
+    """The engine-level (hard, soft) of a HardMediumSoft plan score (medium folded into soft)."""
+    return score_.hard, score_.medium * MEDIUM_UNIT + score_.soft
+
+
+def _half_served_plan():
+    """V1 serves C0-C2 (demand 6 = capacity); C3-C5 (600 s of service each) are left out: 30 medium minutes."""
+    plan = small_plan()
+    plan.vehicles[0].visit_indices = [0, 1, 2]
+    plan.rebuild_unassigned_pool()
+    return plan
+
+
+def test_weight_none_means_the_component_default():
+    """weight=None scores exactly like the explicit C++ default weights."""
+    explicit = [
+        type(spec)(weight=weight)
+        for spec, (_, _, weight, _) in zip(get_constraints(), EXPECTED_INFO)
+    ]
+    plan = _half_served_plan()
+    raw = vrp.constraint_costs(plan)
+    assert score(raw) == score(raw, explicit)
+    assert score(raw) == _engine(vrp.calculate_score(plan))
+
+
+def test_the_medium_level_folds_into_soft():
+    plan = _half_served_plan()
+    raw = vrp.constraint_costs(plan)
+    assert raw["unassigned_visits_cost"]["costs"] == [30.0]
+    monolithic = vrp.calculate_score(plan)
+    assert (monolithic.hard, monolithic.medium) == (0, -30)
+    assert score(raw) == (0, monolithic.soft - 30 * MEDIUM_UNIT)
+    others = [
+        spec for spec in get_constraints() if spec.name != "unassigned_visits_cost"
+    ]
+    assert score(raw, [*others, UnassignedVisitsCost(hard=True)]) == (
+        -30,
+        monolithic.soft,
+    )
+    assert score(raw, [*others, UnassignedVisitsCost(hard=False)]) == (
+        0,
+        monolithic.soft - 30,
+    )
+    assert score(raw, [*others, UnassignedVisitsCost(weight=3)]) == (
+        0,
+        monolithic.soft - 90 * MEDIUM_UNIT,
+    )
+
+
+def test_a_demoted_medium_constraint_is_soft_in_the_engine_too():
+    """hard=False moves unassigned_visits_cost to soft in the solver (it was a no-op before 0.2.0).
+
+    With driving hard, parking every vehicle wins; the dropped visits then cost
+    soft minutes, not medium ones."""
+    picks = [
+        vehicle_capacity_cost,
+        UnassignedVisitsCost(hard=False),
+        TravelTimeCost(hard=True),
+    ]
+    plan = solve(picks)
+    assert (plan.score.hard, plan.score.medium) == (0, 0)
+    assert plan.score.soft == -60  # all six visits dropped, 10 minutes each
+    assert score(vrp.constraint_costs(plan), picks) == (
+        plan.score.hard,
+        plan.score.soft,
+    )
+
+
+def test_the_plugin_solve_reports_each_level_unfolded():
+    """plan.score on the plugin path reads the calculator's three levels, not a decoded fold.
+
+    A soft total of 10^9 or more stays on the soft level instead of spilling into medium."""
+    weight = 10_000_000
+    picks = [
+        vehicle_capacity_cost,
+        unassigned_visits_cost,
+        TravelTimeCost(weight=weight),
+    ]
+    plan = solve(picks)
+    raw = vrp.constraint_costs(plan)
+    travel = sum(raw["travel_time_cost"]["costs"])
+    unrouted = sum(raw["unassigned_visits_cost"]["costs"])
+    assert travel * weight >= MEDIUM_UNIT  # the case a decoded fold would misfile
+    assert (plan.score.hard, plan.score.medium, plan.score.soft) == (
+        0,
+        -unrouted,
+        -weight * travel,
+    )
+    assert score(raw, picks) == _engine(plan.score)
+
+
+def test_on_new_best_reports_the_levels_of_the_final_score():
+    """on_new_best on the plugin path reports the same three levels as plan.score.
+
+    The last new best is the returned solution, so with a soft total of 10^9 or
+    more its report still equals plan.score instead of a decoded fold."""
+    weight = 10_000_000
+    picks = [
+        vehicle_capacity_cost,
+        unassigned_visits_cost,
+        TravelTimeCost(weight=weight),
+    ]
+    reports = []
+    plan = small_plan()
+    cfg = vrp.SolverConfig()
+    cfg.spent_limit_seconds = 0.4
+    cfg.random_seed = 7
+    cfg.on_new_best = lambda _step, best: reports.append(
+        (best.hard, best.medium, best.soft)
+    )
+    vrp.Solver(cfg).solve_with_constraints(plan, picks)
+    final = (plan.score.hard, plan.score.medium, plan.score.soft)
+    assert final[2] <= -MEDIUM_UNIT
+    assert reports and reports[-1] == final
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "error"),
+    [
+        ({"weight": -1}, ValueError),
+        ({"weight": float("nan")}, ValueError),
+        ({"weight": "2"}, TypeError),
+        ({"exponent": 0}, ValueError),
+        ({"hard": 1}, TypeError),
+    ],
+)
+def test_specs_validate_their_knobs(kwargs, error):
+    with pytest.raises(error):
+        TravelTimeCost(**kwargs)
+
+
+def test_core_refuses_invalid_knobs_from_duck_typed_picks():
+    """The C++ side guards too: a duck-typed pick cannot smuggle a negative weight in."""
+    negative = SimpleNamespace(
+        name="travel_time_cost", weight=-2.0, hard=None, exponent=1.0
+    )
+    flat = SimpleNamespace(
+        name="travel_time_cost", weight=None, hard=None, exponent=0.0
+    )
+    for pick, message in (
+        (negative, "weight must be finite and >= 0"),
+        (flat, "exponent must be finite and > 0"),
+    ):
+        with pytest.raises(ValueError, match=message):
+            solve([pick])
+
+
+@pytest.mark.parametrize(
+    ("knobs", "message"),
+    [
+        ({"weight": True}, "weight must be a number or None, not True"),
+        ({"hard": 1}, "hard must be True, False or None, not 1"),
+        ({"hard": "x"}, "hard must be True, False or None, not 'x'"),
+        ({"exponent": True}, "exponent must be a number, not True"),
+    ],
+)
+def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
+    """The C++ path checks the knob types like _constraint.py: TypeError, the same words."""
+    pick = SimpleNamespace(
+        name="unassigned_visits_cost", weight=None, hard=None, exponent=1.0
+    )
+    for key, value in knobs.items():
+        setattr(pick, key, value)
+    with pytest.raises(
+        TypeError, match=f"constraint 'unassigned_visits_cost': {re.escape(message)}"
+    ):
+        solve([pick])
+    with pytest.raises(TypeError, match=re.escape(message)):
+        UnassignedVisitsCost(**knobs)
+
+
+@pytest.mark.parametrize(
+    "spec_class", [EnclosingCircleRadiusCost, RouteDurationCost, LatencyCost]
+)
+def test_the_weight_zero_objectives_are_opt_in(spec_class):
+    """Weight 0 by default: listed and measured, but they move no score until weighted."""
+    plan = small_plan()
+    plan.vehicles[0].visit_indices = [0, 1, 2]
+    plan.vehicles[1].visit_indices = [3, 4, 5]
+    plan.rebuild_unassigned_pool()
+    raw = vrp.constraint_costs(plan)
+    name = spec_class.name
+    assert sum(raw[name]["costs"]) > 0
+    assert score(raw, [getattr(specs, name)]) == (0, 0.0)
+    assert score(raw, [spec_class(weight=1)]).soft == pytest.approx(
+        -sum(raw[name]["costs"])
+    )
+
+
+# 0.2.0 migration: the pre-0.2.0 catalog names (vehicle_fixed_cost kept its name).
+OLD_NAMES = [
+    "vehicle_capacity",
+    "service_finished_after_max_end_time",
+    "minimize_travel_time",
+    "max_travel_time",
+    "max_route_duration",
+    "vehicle_end_time",
+    "max_stops",
+    "max_route_radius",
+    "minimize_enclosing_circle_radius",
+    "min_capacity_utilization",
+    "minimize_route_duration",
+    "minimize_latency",
+    "maximize_visits_assigned",
+]
+
+
+@pytest.mark.parametrize("old", OLD_NAMES)
+def test_old_names_are_gone(old):
+    """0.2.0 renamed the catalog; the pre-0.2.0 names are unknown now (no aliases)."""
+    pick = SimpleNamespace(name=old, weight=None, hard=None, exponent=1.0)
+    with pytest.raises(ValueError, match="unknown constraint"):
+        solve([pick], seconds=0.05)
+    plan = small_plan()
+    plan.rebuild_unassigned_pool()
+    with pytest.raises(ValueError, match="unknown constraint"):
+        score(vrp.constraint_costs(plan), [pick])
+
+
+def test_on_new_best_with_two_workers_neither_hangs_nor_aborts():
+    """Solver.solve releases the GIL, so two workers can call back (and raise) into Python."""
+    cfg = vrp.SolverConfig()
+    cfg.spent_limit_seconds = 0.3
+    cfg.parallel_solver_count = 2
+    calls = []
+    cfg.on_new_best = lambda _step, best: calls.append(best)
+    plan = small_plan()
+    vrp.Solver(cfg).solve(plan)
+    assert calls  # returned (a held GIL deadlocked here)
+
+    def boom(_step, _best):
+        raise RuntimeError("boom")
+
+    cfg.on_new_best = boom
+    with pytest.raises(RuntimeError, match="boom"):
+        vrp.Solver(cfg).solve(small_plan())
+
+
+def test_a_raising_on_new_best_stops_every_parallel_worker():
+    """Four workers and a 30 s budget: the callback's exception (worker 0) stops the other
+    workers too, so it reaches the caller at once instead of after their whole budget."""
+    import time
+
+    def boom(_step, _score):
+        raise RuntimeError("boom")
+
+    cfg = vrp.SolverConfig()
+    cfg.spent_limit_seconds = 30.0
+    cfg.parallel_solver_count = 4
+    cfg.on_new_best = boom
+    started = time.monotonic()
+    with pytest.raises(RuntimeError, match="boom"):
+        vrp.Solver(cfg).solve(small_plan())
+    assert time.monotonic() - started < 10.0
+
+
+def test_a_worker_thread_that_cannot_start_raises_instead_of_aborting():
+    """Creating worker thread 1 fails (std::system_error, injected through the module's test
+    seam): the worker already running is stopped and joined, and the error reaches the caller
+    at once. A joinable std::thread destroyed on that path used to call std::terminate."""
+    import time
+
+    from vrp_routing import _core
+
+    cfg = vrp.SolverConfig()
+    cfg.spent_limit_seconds = 30.0
+    cfg.parallel_solver_count = 4
+    _core._fail_worker_thread_start(1)
+    try:
+        started = time.monotonic()
+        with pytest.raises(RuntimeError, match="injected worker thread creation failure"):
+            vrp.Solver(cfg).solve(small_plan())
+        assert time.monotonic() - started < 10.0
+    finally:
+        _core._fail_worker_thread_start(-1)

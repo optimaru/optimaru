@@ -1,7 +1,7 @@
 """Sports league scheduling — Python wrapper of the C++ solver on the optimaru engine.
 
-`Team`/`Round`/`Match`/`LeagueSchedule`/`Score`/`Breakdown`/`Solver`/
-`SolverConfig`/`calculate_score`/`compute_breakdown` come from the compiled C++ core
+`Team`/`Round`/`Match`/`LeagueSchedule`/`Score`/`Solver`/`SolverConfig`/
+`calculate_score`/`constraint_costs`/`constraint_info` come from the compiled C++ core
 (`_core`). `Match.round` is the planning variable (-1 == unassigned; the value is a
 position in `LeagueSchedule.rounds`), and solve changes it and `score`
 in place::
@@ -13,11 +13,21 @@ in place::
              stop_at_first_feasible=True)
     print(schedule.score, schedule.assignment())
 
+Score (HardSoftScore), at the default weights: hard = -(team_conflict_cost +
+consecutive_home_matches_cost + consecutive_away_matches_cost +
+repeat_match_on_next_day_cost), soft = -(the five *_hop_cost travel terms in km +
+1000 x workday_classic_matches_cost). `constraint_costs(schedule)` gives the raw cost of
+every constraint (the only per-constraint surface since 0.2.0); `constraint_info()`
+lists every constraint with its default level and weight. Change a weight or a level
+through a constraint selection (see `sports_league.constraints`).
+
 The pydantic mirror (for serialization) is in `sports_league.models` (optional dependency).
 """
 
+import copy
+
 from ._core import (
-    Breakdown,
+    ConstraintInfo,
     LeagueSchedule,
     Match,
     Round,
@@ -26,14 +36,14 @@ from ._core import (
     SolverConfig,
     Team,
     calculate_score,
-    compute_breakdown,
     constraint_costs,
+    constraint_info,
     list_constraints,
 )
 from .demo import demo_schedule
 
 __all__ = [
-    "Breakdown",
+    "ConstraintInfo",
     "LeagueSchedule",
     "Match",
     "Round",
@@ -42,9 +52,9 @@ __all__ = [
     "SolverConfig",
     "Team",
     "calculate_score",
-    "compute_breakdown",
     "list_constraints",
     "constraint_costs",
+    "constraint_info",
     "demo_schedule",
     "solve",
     "with_initial_solution",
@@ -79,19 +89,19 @@ def solve(
     Explicit keyword arguments override config.
 
     ``stop_at_first_feasible`` stops as soon as hard 0 is reached
-    (best_score_limit=(0, -1e18)).
+    (best_score_limit=(0, -inf)).
 
     ``constraints`` picks the cost function directly
     (see `sports_league.constraints`). Only the listed constraints are scored; None
-    uses all ten default constraints::
+    uses all ten default constraints at their default weights::
 
         from sports_league.constraints import get_constraints
-        sls.solve(schedule, constraints=get_constraints())
+        sl.solve(schedule, constraints=get_constraints())
     """
     if config is None:
         cfg = SolverConfig()
     elif isinstance(config, SolverConfig):
-        cfg = config
+        cfg = copy.copy(config)  # the overrides below must not leak into it
     elif hasattr(config, "to_core"):
         cfg = config.to_core()
     else:
@@ -103,7 +113,7 @@ def solve(
     if parallel_solver_count is not None:
         cfg.parallel_solver_count = parallel_solver_count
     if stop_at_first_feasible:
-        cfg.best_score_limit = (0, -1e18)
+        cfg.best_score_limit = (0, float("-inf"))
     if on_new_best is not None:
         cfg.on_new_best = on_new_best
 

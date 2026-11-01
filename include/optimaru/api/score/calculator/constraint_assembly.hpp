@@ -1,6 +1,7 @@
 #ifndef OPTIMARU_API_SCORE_CALCULATOR_CONSTRAINT_ASSEMBLY_HPP
 #define OPTIMARU_API_SCORE_CALCULATOR_CONSTRAINT_ASSEMBLY_HPP
 
+#include <cmath>
 #include <cstddef>
 #include <initializer_list>
 #include <memory>
@@ -13,6 +14,27 @@
 
 namespace optimaru {
 
+// One row of a domain's constraint catalog: the component's registry name and
+// the defaults it was constructed with. What `<pkg>.constraint_info()`
+// reports (python/constraint_binding.hpp). Read off the DEFAULT assembly
+// (ConstraintAssembly::info()), or off the default assembly plus a catalog
+// assembly for a domain that can build more constraints than it scores by
+// default (catalogInfo() below).
+struct ConstraintInfo {
+    std::string name;      // the registry name ("facilityCapacityCost")
+    Level defaultLevel;
+    double defaultWeight;  // in units of defaultLevel
+    bool levelFlippable;
+    bool reward;
+    bool isGlobal;
+    // Scored when the caller names no constraints: in the default assembly
+    // AND at a default weight > 0. False for an opt-in objective whose
+    // default weight is 0 (vehicle-routing EnclosingCircleRadiusCost) and for
+    // a constraint only a catalog assembly holds (employee-scheduling
+    // MaxConsecutiveDaysCost). The server catalog's default_enabled.
+    bool defaultEnabled = true;
+};
+
 // ---------------------------------------------------------------------------
 // ConstraintAssembly
 // ---------------------------------------------------------------------------
@@ -21,18 +43,18 @@ namespace optimaru {
 // in one expression.
 //
 //   DecomposedCalculator calc;
-//   defaultConstraints()                     // every default already in
-//       .weight("facility setup cost", 4)    // ... only what you care about
-//       .soft("facility capacity")
-//       .drop("distance from facility")
+//   defaultConstraints()                         // every default already in
+//       .weight("facilitySetupCost", 4)          // ... only what you care about
+//       .soft("facilityCapacityCost")
+//       .drop("distanceFromFacilityCost")
 //       .into(calc);
 //   solver.solve(problem, calc);
 //
 // Without it the same edit means reaching for the components by type, which
 // costs three lines and a std::move just to flip one level:
 //
-//   auto component = std::make_unique<FacilityCapacity>();
-//   component->isHard = false;
+//   auto component = std::make_unique<FacilityCapacityCost>();
+//   component->level = optimaru::Level::Soft;
 //   calc.add(std::move(component));
 //   calc.emplace<FacilitySetupCost>(4.0);
 //   ...and re-listing every constraint you did NOT want to change.
@@ -94,35 +116,54 @@ public:
     // --- adjusting --------------------------------------------------------
     // The level, the weight and the exponent are assembly-time metadata, not
     // part of any cost, which is exactly why they can be re-stated here.
+    // Every setter validates what it is given and throws std::invalid_argument
+    // (the Python bindings surface it as ValueError); the rules live in
+    // ConstraintMetadata::setWeight/setLevel/setExponent:
+    //   weight    finite and >= 0, in units of the constraint's level
+    //   exponent  finite and > 0
+    //   level     a reward can never be Hard; a constraint whose
+    //             levelFlippable is false keeps its level (re-stating the
+    //             level it already has is accepted as a no-op)
 
     ConstraintAssembly& weight(const std::string& name, double weight) & {
-        require(name, [weight](auto& constraint) { constraint.weight = weight; });
+        require(name).setWeight(weight);
         return *this;
     }
     ConstraintAssembly&& weight(const std::string& name, double weight) && {
         this->weight(name, weight);  // the parameter shadows the method name
         return std::move(*this);
     }
-    ConstraintAssembly& hard(const std::string& name) & {
-        require(name, [](auto& constraint) { constraint.isHard = true; });
+    // Any level, Medium included (the domain must declare a medium fold, or
+    // the calculator throws at reset). Python clients only reach hard() and
+    // soft(): medium is a default-only level there.
+    ConstraintAssembly& level(const std::string& name, Level level) & {
+        require(name).setLevel(level);
         return *this;
     }
+    ConstraintAssembly&& level(const std::string& name, Level level) && {
+        this->level(name, level);  // the parameter shadows the method
+        return std::move(*this);
+    }
+    // hard(name) == level(name, Level::Hard): throws for a reward and for a
+    // non-flippable soft constraint. A medium constraint becomes hard at the
+    // same weight (one hard unit per raw unit).
+    ConstraintAssembly& hard(const std::string& name) & { return level(name, Level::Hard); }
     ConstraintAssembly&& hard(const std::string& name) && {
         hard(name);
         return std::move(*this);
     }
-    ConstraintAssembly& soft(const std::string& name) & {
-        require(name, [](auto& constraint) { constraint.isHard = false; });
-        return *this;
-    }
+    // soft(name) == level(name, Level::Soft): demotes a hard or a medium
+    // constraint; throws for a non-flippable hard one.
+    ConstraintAssembly& soft(const std::string& name) & { return level(name, Level::Soft); }
     ConstraintAssembly&& soft(const std::string& name) && {
         soft(name);
         return std::move(*this);
     }
-    // Sign-preserving power shaping applied per unit before the weight; 2 makes
-    // concentrated violations disproportionately expensive.
+    // Sign-preserving power shaping: per unit before the weight for a unit
+    // constraint, on the single total for a global one. 2 makes concentrated
+    // violations disproportionately expensive.
     ConstraintAssembly& exponent(const std::string& name, double exponent) & {
-        require(name, [exponent](auto& constraint) { constraint.exponent = exponent; });
+        require(name).setExponent(exponent);
         return *this;
     }
     ConstraintAssembly&& exponent(const std::string& name, double exponent) && {
@@ -182,6 +223,33 @@ public:
     }
     std::size_t size() const { return units_.size() + globals_.size(); }
     bool empty() const { return size() == 0; }
+
+    // The metadata of one component, or nullptr. Read-only: edits go through
+    // the validating setters above.
+    const ConstraintMetadata* find(const std::string& name) const {
+        if (const Unit* unit = findIn(units_, name)) return unit;
+        if (const Global* global = findIn(globals_, name)) return global;
+        return nullptr;
+    }
+
+    // The catalog rows of this assembly, in assembly order (units first, then
+    // globals, like names()). Read off a domain's DEFAULT assembly this is its
+    // constraint catalog, so every default lives in exactly one place: the
+    // component's constructor (kDefaultWeight / kDefaultLevel).
+    // defaultEnabled = weight > 0 (an assembly holds what it scores).
+    std::vector<ConstraintInfo> info() const {
+        std::vector<ConstraintInfo> rows;
+        rows.reserve(size());
+        for (const auto& c : units_) {
+            rows.push_back({c->name, c->level, c->weight, c->levelFlippable, c->reward, false,
+                            c->weight > 0.0});
+        }
+        for (const auto& c : globals_) {
+            rows.push_back({c->name, c->level, c->weight, c->levelFlippable, c->reward, true,
+                            c->weight > 0.0});
+        }
+        return rows;
+    }
 
     // --- spending ---------------------------------------------------------
 
@@ -251,19 +319,11 @@ private:
         keepOnly(globals_, names);
     }
 
-    // Applies `apply` to the named constraint, whichever kind it is. The two
-    // constraint types share the metadata field names, so one generic lambda
-    // covers both.
-    template <typename F>
-    void require(const std::string& name, F&& apply) {
-        if (Unit* unit = findIn(units_, name)) {
-            apply(*unit);
-            return;
-        }
-        if (Global* global = findIn(globals_, name)) {
-            apply(*global);
-            return;
-        }
+    // The named constraint's metadata, whichever kind it is (both bases share
+    // ConstraintMetadata). Throws with the available names when it misses.
+    ConstraintMetadata& require(const std::string& name) {
+        if (Unit* unit = findIn(units_, name)) return *unit;
+        if (Global* global = findIn(globals_, name)) return *global;
         throw std::invalid_argument("Constraint '" + name + "' is not in this assembly; it holds " +
                                     nameList());
     }
@@ -280,6 +340,51 @@ private:
     std::vector<std::unique_ptr<Unit>> units_;
     std::vector<std::unique_ptr<Global>> globals_;
 };
+
+// ---------------------------------------------------------------------------
+// catalogInfo: the catalog of a domain that builds more than its defaults
+// ---------------------------------------------------------------------------
+// Most domains score every constraint they have by default, so their catalog
+// is `defaultConstraints().info()`. A domain whose factory can build
+// constraints that are NOT in the default set (employee-scheduling: eight
+// defaults, about thirty buildable rules) keeps a second assembly,
+// `catalogConstraints()`, holding one instance of every buildable constraint
+// at its default parameters and weight, and reports
+//
+//   catalogInfo(defaultConstraints(), catalogConstraints())
+//
+// = the default rows first (defaults order, defaultEnabled = weight > 0),
+// then each catalog row whose name is not a default (catalog order,
+// defaultEnabled = false). So the catalog starts with list_constraints() and
+// every name the factory accepts has exactly one row. A name in both
+// assemblies must agree on its level, weight, flippability, reward and kind,
+// or this throws std::logic_error: two declarations of one default would be
+// the drift the catalog exists to prevent.
+template <typename Solution>
+std::vector<ConstraintInfo> catalogInfo(const ConstraintAssembly<Solution>& defaults,
+                                        const ConstraintAssembly<Solution>& catalog) {
+    std::vector<ConstraintInfo> rows = defaults.info();
+    const std::size_t defaultCount = rows.size();
+    for (ConstraintInfo& row : catalog.info()) {
+        bool known = false;
+        for (std::size_t i = 0; i < defaultCount; ++i) {
+            const ConstraintInfo& d = rows[i];
+            if (d.name != row.name) continue;
+            known = true;
+            if (d.defaultLevel != row.defaultLevel || d.defaultWeight != row.defaultWeight ||
+                d.levelFlippable != row.levelFlippable || d.reward != row.reward ||
+                d.isGlobal != row.isGlobal) {
+                throw std::logic_error("Constraint '" + row.name +
+                                       "' is declared differently in the default and the "
+                                       "catalog assembly");
+            }
+        }
+        if (known) continue;
+        row.defaultEnabled = false;
+        rows.push_back(std::move(row));
+    }
+    return rows;
+}
 
 }  // namespace optimaru
 

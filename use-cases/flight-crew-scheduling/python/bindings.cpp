@@ -205,18 +205,14 @@ PYBIND11_MODULE(_core, m)
           py::arg("schedule"),
           "Full recompute of the HardSoftScore (also stores schedule.score).");
 
-    py::class_<Solver::Config>(m, "SolverConfig", py::module_local())
+    optimaru::python::bindConfigCopy(py::class_<Solver::Config>(m, "SolverConfig", py::module_local()))
         .def(py::init<>())
         .def_property(
             "spent_limit_seconds",
             [](const Solver::Config &c)
             { return std::chrono::duration<double>(c.spentLimit).count(); },
             [](Solver::Config &c, double s)
-            {
-                c.spentLimit
-                    = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        std::chrono::duration<double>(s));
-            })
+            { c.spentLimit = optimaru::python::secondsToMillis(s, "spent_limit_seconds"); })
         .def_property(
             "unimproved_spent_limit_seconds",
             [](const Solver::Config &c)
@@ -225,14 +221,7 @@ PYBIND11_MODULE(_core, m)
                     .count();
             },
             [](Solver::Config &c, double s)
-            {
-                if (s < 0.0)
-                    throw py::value_error(
-                        "unimproved_spent_limit_seconds must be non-negative");
-                c.unimprovedSpentLimit
-                    = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        std::chrono::duration<double>(s));
-            })
+            { c.unimprovedSpentLimit = optimaru::python::secondsToMillis(s, "unimproved_spent_limit_seconds"); })
         .def_readwrite("step_count_limit", &Solver::Config::stepCountLimit)
         .def_readwrite("unimproved_step_count_limit",
                        &Solver::Config::unimprovedStepCountLimit)
@@ -297,7 +286,7 @@ PYBIND11_MODULE(_core, m)
                        &Solver::Config::ruinRecreatePolishSteps)
         .def_readwrite("change_move_weight", &Solver::Config::changeMoveWeight)
         .def_readwrite("swap_move_weight", &Solver::Config::swapMoveWeight)
-        // Early termination once bestScore >= (hard, soft), e.g. (0, -1e18)
+        // Early termination once bestScore >= (hard, soft), e.g. (0, -inf)
         // stops at the first feasible solution.
         .def_property(
             "best_score_limit",
@@ -355,7 +344,8 @@ PYBIND11_MODULE(_core, m)
             return tfpy::constraintCosts(calculator, schedule);
         },
         py::arg("schedule"),
-        "Raw per-unit cost of every constraint, before weight/exponent/level.");
+        "Raw per-employee cost of every default constraint, before "
+        "weight/exponent/level.");
 
     // The constraint names this domain scores, in default-assembly order —
     // the same strings a score breakdown reports.
@@ -363,4 +353,10 @@ PYBIND11_MODULE(_core, m)
         "list_constraints",
         [] { return tfpy::constraintNames(defaultConstraints()); },
         "Constraint names available to flight_crew.constraints.");
+
+    // The constraint catalog, read off the same default assembly:
+    // constraint_info() -> [ConstraintInfo(name, default_level,
+    // default_weight, level_flippable, reward, default_enabled), ...] in
+    // list_constraints() order. The defaults live in the C++ components only.
+    tfpy::bindConstraintInfo(m, [] { return defaultConstraints(); });
 }

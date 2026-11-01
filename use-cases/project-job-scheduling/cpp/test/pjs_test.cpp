@@ -10,6 +10,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <limits>
 #include <random>
 #include <stdexcept>
 #include <string>
@@ -112,13 +113,13 @@ void verifyConstraints()
 {
     std::printf("== (a) Verifying each constraint in isolation ==\n");
 
-    // hard 1: nonRenewableResourceCapacity — requirements 7 + 6 against
+    // hard 1: nonRenewableResourceCapacityCost — requirements 7 + 6 against
     // capacity 10 (dates are irrelevant): penalizes 13 - 10 = 3.
     {
         ProjectJobSchedule s = makeBase(10, /*renewable*/ false, 0);
         addJob(s, JobType::STANDARD, 10, 7, {}, 100);
         addJob(s, JobType::STANDARD, 10, 6, {}, 100);
-        checkScore("nonRenewableResourceCapacity",
+        checkScore("nonRenewableResourceCapacityCost",
                    ScoreCalculator::calculateScore(s),
                    -3,
                    0,
@@ -129,13 +130,13 @@ void verifyConstraints()
         ProjectJobSchedule s = makeBase(13, /*renewable*/ false, 0);
         addJob(s, JobType::STANDARD, 10, 7, {}, 100);
         addJob(s, JobType::STANDARD, 10, 6, {}, 100);
-        checkScore("nonRenewable within capacity",
+        checkScore("nonRenewableResourceCapacityCost within capacity",
                    ScoreCalculator::calculateScore(s),
                    0,
                    0,
                    0);
     }
-    // hard 2: renewableResourceCapacity — requirements 7 (days 101..110)
+    // hard 2: renewableResourceCapacityCost — requirements 7 (days 101..110)
     // and 5 (days 102..111) against capacity 10: 9 overlap days x 2 = 18.
     // predecessorsDoneDate 1 / 2 comes from duration-1 / duration-2
     // predecessors (the Java test presets the shadow directly).
@@ -145,7 +146,7 @@ void verifyConstraints()
         const int p2 = addJob(s, JobType::STANDARD, 2, 0, {}, 0);
         const int a1 = addJob(s, JobType::STANDARD, 10, 7, {p1}, 100);
         const int a2 = addJob(s, JobType::STANDARD, 10, 5, {p2}, 100);
-        checkScore("renewableResourceCapacity",
+        checkScore("renewableResourceCapacityCost",
                    ScoreCalculator::calculateScore(s),
                    -18,
                    0,
@@ -160,30 +161,32 @@ void verifyConstraints()
                   && s.allocations[a2].endDate == 112,
               "shadow chain of allocation 2 (done=2, start=102, end=112)");
     }
-    // medium 3 + soft 4 (+ hard 2): the Java totalProjectDelay case — SINK
-    // ends 111 and 112 against criticalPathEndDate 100 -> medium 11 + 12 =
-    // 23; makespan max(111, 112) = 112; the renewable overlap is 18 again.
+    // medium 3 + soft 4 (+ hard 2): the Java provider test's project-delay
+    // case (projectDelayCost + makespanCost) — SINK ends 111 and 112 against
+    // criticalPathEndDate 100 -> medium 11 + 12 = 23; makespan
+    // max(111, 112) = 112; the renewable overlap is 18 again.
     {
         ProjectJobSchedule s = makeBase(10, /*renewable*/ true, 100);
         const int p1 = addJob(s, JobType::STANDARD, 1, 0, {}, 0);
         const int p2 = addJob(s, JobType::STANDARD, 2, 0, {}, 0);
         addJob(s, JobType::SINK, 10, 7, {p1}, 100);
         addJob(s, JobType::SINK, 10, 5, {p2}, 100);
-        checkScore("totalProjectDelay + totalMakespan",
+        checkScore("projectDelayCost + makespanCost",
                    ScoreCalculator::calculateScore(s),
                    -18,
                    -23,
                    -112);
     }
     // medium 3: no penalty when the sinks end before the critical path end
-    // (the Java totalMakespan case: criticalPathDuration 155).
+    // (the Java provider test's makespan case, makespanCost:
+    // criticalPathDuration 155).
     {
         ProjectJobSchedule s = makeBase(10, /*renewable*/ true, 155);
         const int p1 = addJob(s, JobType::STANDARD, 1, 0, {}, 0);
         const int p2 = addJob(s, JobType::STANDARD, 2, 0, {}, 0);
         addJob(s, JobType::SINK, 10, 7, {p1}, 100);
         addJob(s, JobType::SINK, 10, 5, {p2}, 100);
-        checkScore("totalMakespan (delay not positive)",
+        checkScore("makespanCost (projectDelayCost 0)",
                    ScoreCalculator::calculateScore(s),
                    -18,
                    0,
@@ -531,10 +534,40 @@ void verifySolve()
     std::printf("\n");
 }
 
+// -------------------------------------------------------------------------
+// stop_at_first_feasible's best-score limit (0, INT64_MIN, INT64_MIN): the
+// engine compares hard only (soft -inf), so no soft score, however low,
+// misses the stop. Through toEngineScore the sentinel folded into a finite
+// engine soft that a soft score below it never reached.
+// -------------------------------------------------------------------------
+void verifyStopAtFirstFeasibleLimit()
+{
+    std::printf("== stop_at_first_feasible's limit is hard-only ==\n");
+    const optimaru::HardSoftScore limit
+        = toEngineScoreLimit(Score{0, kNoLevelFloor, kNoLevelFloor});
+    check(limit.hard == 0 && std::isinf(limit.soft) && limit.soft < 0.0,
+          "(0, INT64_MIN, INT64_MIN) -> engine limit (0, -inf)");
+    check(optimaru::HardSoftScore{0, -1e30} >= limit
+              && toEngineScore(Score{0, -5, -(1LL << 62)}) >= limit,
+          "a feasible score with any soft (-1e30; medium -5, soft -2^62) reaches it");
+    check(!(optimaru::HardSoftScore{-1, 0.0} >= limit),
+          "an infeasible score does not");
+    check(toEngineScoreLimit(Score{0, kNoLevelFloor, 0}).soft
+                  == -std::numeric_limits<double>::infinity()
+              && toEngineScoreLimit(Score{0, 0, kNoLevelFloor}).soft
+                     == -std::numeric_limits<double>::infinity(),
+          "INT64_MIN on medium or on soft drops the soft-side floor");
+    const Score other{-2, -3, -5};
+    check(toEngineScoreLimit(other) == toEngineScore(other),
+          "any other limit folds like a score");
+    std::printf("\n");
+}
+
 }  // namespace
 
 int main()
 {
+    verifyStopAtFirstFeasibleLimit();
     verifyConstraints();
     verifyIncremental();
     verifyFullAssertSolve();

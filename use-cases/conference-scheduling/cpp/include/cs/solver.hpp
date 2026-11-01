@@ -1,10 +1,12 @@
 #ifndef CS_SOLVER_HPP
 #define CS_SOLVER_HPP
 
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <functional>
 #include <limits>
+#include <memory>
 #include <utility>
 #include <vector>
 
@@ -22,9 +24,9 @@ namespace cs
 // moves and the engine's adaptive ruin-and-recreate (ALNS) it biases value
 // selection toward the talk's type-compatible (timeslot, room) cells — the
 // engine's global value range stands in for the quickstart's per-TalkType
-// value ranges, with the synthetic talkTypeCompatibility hard constraint
-// penalizing the stragglers (see cs/domain.hpp) — and it spends the budget as
-// a sequence of restarted local-search runs (see restartSegments).
+// value ranges, with the synthetic talkTypeIncompatibilityCost hard
+// constraint penalizing the stragglers (see cs/domain.hpp) — and it spends the
+// budget as a sequence of restarted local-search runs (see restartSegments).
 class Solver
 {
 public:
@@ -121,6 +123,11 @@ public:
         double compatibleValueProbability = 0.9;
 
         std::function<void(std::int64_t, const Score &)> onNewBest;
+        // Set by solve() on each parallel worker's copy, not by a caller (and
+        // not bound to Python): the first worker that fails raises it, and the
+        // other workers' engines stop at their next step instead of running out
+        // their budget before the error reaches the caller.
+        std::shared_ptr<std::atomic<bool>> stopFlag;
     };
 
     Solver() = default;

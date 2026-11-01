@@ -28,6 +28,27 @@ for allocation in result.allocations:
 `models.ProjectJobScheduleModel` (the pydantic mirror for JSON serialization, id
 references). `stop_at_first_feasible=True` stops as soon as hard 0 is reached.
 
+Per-constraint raw costs (all four constraints are global: one total each), the
+constraints' defaults and how to change them:
+
+```python
+from project_job.constraints import ProjectDelayCost, get_constraints, score
+
+core = schedule.to_core()
+pj.solve(core, time_limit_seconds=5.0, random_seed=42)
+raw = pj.constraint_costs(core)
+print({name: entry["costs"] for name, entry in raw.items()})
+# {'non_renewable_resource_capacity_cost': [0.0], 'renewable_resource_capacity_cost': [0.0],
+#  'project_delay_cost': [...], 'makespan_cost': [...]}
+pj.constraint_info()
+# [ConstraintInfo(name='non_renewable_resource_capacity_cost', default_level='hard',
+#                 default_weight=1.0, level_flippable=True, reward=False, default_enabled=True), ...,
+#  ConstraintInfo(name='project_delay_cost', default_level='medium', default_weight=1.0, ...), ...]
+others = [spec for spec in get_constraints() if spec.name != "project_delay_cost"]
+pj.solve(core, time_limit_seconds=5.0, constraints=[*others, ProjectDelayCost(hard=False)])  # delay as soft days
+score(raw), score(raw, [*others, ProjectDelayCost(weight=2)])        # re-priced in pure Python
+```
+
 ## Domain (as in the Java quickstart)
 
 - **Project** — `release_date` + `critical_path_duration`. Used only as the reference date
@@ -47,17 +68,29 @@ references). `stop_at_first_feasible=True` stops as soon as hard 0 is reached.
 
 ## Constraints (HardMediumSoftScore, all penalties)
 
-| Constraint | Level | What it measures |
-|---|---|---|
-| nonRenewableResourceCapacity | hard | excess of total use over capacity per non-renewable resource |
-| renewableResourceCapacity | hard | excess of use over capacity per renewable resource × day |
-| totalProjectDelay | medium | sum of SINK end date − critical path end date (positive only) |
-| totalMakespan | soft | latest SINK end date |
+| Python name | C++ component | Default | Raw cost (0 = no violation) |
+|---|---|---|---|
+| `non_renewable_resource_capacity_cost` | `NonRenewableResourceCapacityCost` | hard, 1 | excess of total use over capacity, summed over the non-renewable resources |
+| `renewable_resource_capacity_cost` | `RenewableResourceCapacityCost` | hard, 1 | excess of use over capacity, summed over renewable resource × day |
+| `project_delay_cost` | `ProjectDelayCost` | medium, 1 | sum of SINK end date − critical path end date (positive only), in days |
+| `makespan_cost` | `MakespanCost` | soft, 1 | latest SINK end date (a max over the projects) |
+
+`constraint_info()` reports these defaults from the C++ components. The medium weight is in
+medium units: `hard=True` on `project_delay_cost` costs 1 hard per day, `hard=False` 1 soft
+per day, and an explicit weight stays on the medium level.
+
+0.2.0 renamed them (`non_renewable_resource_capacity`, `renewable_resource_capacity`,
+`total_project_delay`, `total_makespan` before; classes `NonRenewableResourceCapacity`,
+`RenewableResourceCapacity`, `TotalProjectDelay`, `TotalMakespan`), and the medium default
+weight moved from 10^9 (soft) to 1 (medium units).
 
 ## Score mapping
 
 Java uses `HardMediumSoftScore`; the engine only knows `HardSoftScore(int64 hard, double
-soft)`. The same offset mapping as bed-allocation/meeting-scheduling is used:
+soft)`. The same offset mapping as bed-allocation/meeting-scheduling is used, declared once
+as the domain's medium fold (`kMediumFold` in `../cpp/include/pjs/domain.hpp`; every
+`constraint_costs()` entry carries it as `medium_fold`, and
+`project_job.constraints.score()` returns the folded engine-level `(hard, soft)`):
 
 ```
 engine.hard = hard

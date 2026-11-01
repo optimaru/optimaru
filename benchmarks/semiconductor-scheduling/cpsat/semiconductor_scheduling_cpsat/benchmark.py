@@ -53,8 +53,13 @@ def _build(lot_count: int, seed: int) -> Any:
                 )
             )
         lots.append(
-            LotModel(id=f"L{lot}", product=f"P{lot % 3}", release_time=rng.randint(0, 10),
-                     due_time=rng.randint(40, 80), operations=operations)
+            LotModel(
+                id=f"L{lot}",
+                product=f"P{lot % 3}",
+                release_time=rng.randint(0, 10),
+                due_time=rng.randint(40, 80),
+                operations=operations,
+            )
         )
     return SemiconductorScheduleModel(lots=lots, machines=machines)
 

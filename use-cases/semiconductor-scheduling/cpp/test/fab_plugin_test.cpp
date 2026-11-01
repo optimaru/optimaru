@@ -1,0 +1,396 @@
+// fab_plugin_test — the plugin assembly (fab/constraints.hpp):
+//   (a) the default assembly == the monolithic score bit-for-bit, in data
+//       mode and in search mode, on 300 random states
+//   (b) plugin incremental == full recompute, per constraint, on random
+//       ScoreDirector walks in which every constraint becomes non-zero
+//   (c) each component alone reports exactly its term
+//   (d) weight / level / exponent overrides match hand arithmetic
+//   (e) constraintTotals() explains exactly the reported score
+//   (f) solve(schedule, calculator) under FULL_ASSERT
+//   (g) raw costs by hand through constraintCosts(): a positive and a zero
+//       case per constraint
+//   (h) the catalog: info() == the components' kDefaultWeight / kDefaultLevel
+#include <cmath>
+#include <cstdint>
+#include <cstdio>
+#include <functional>
+#include <map>
+#include <memory>
+#include <random>
+#include <stdexcept>
+#include <string>
+#include <vector>
+
+#include "fab/constraints.hpp"
+#include "fab/score_calculator.hpp"
+#include "fab/solver.hpp"
+#include "fab_test_support.hpp"
+#include "optimaru/api/score/director/score_director.hpp"
+
+using namespace fab;
+using namespace fabtest;
+
+namespace
+{
+
+Score scoreWith(DecomposedCalculator &calculator, SemiconductorSchedule &schedule)
+{
+    calculator.resetWorkingSolution(schedule);
+    return calculator.calculateScore();
+}
+
+// Raw cost per constraint name from constraintCosts() (one entry per global).
+std::map<std::string, double> rawByName(SemiconductorSchedule &schedule)
+{
+    DecomposedCalculator calculator;
+    addDefaultConstraints(calculator);
+    calculator.resetWorkingSolution(schedule);
+    calculator.calculateScore();
+    std::map<std::string, double> out;
+    for (const auto &entry : calculator.constraintCosts())
+        out[entry.name] = entry.unitCosts.size() == 1 ? entry.unitCosts[0] : -1.0;
+    return out;
+}
+
+void randomizeValues(SemiconductorSchedule &s, std::mt19937_64 &rng)
+{
+    for (OperationRow &row : s.rows)
+        row.value = randomValue(s, rng, true);
+}
+
+// (a)
+void verifyAssemblyParity()
+{
+    int mismatches = 0;
+    DecomposedCalculator calculator;
+    addDefaultConstraints(calculator);
+    std::mt19937_64 rng(5);
+    for (int round = 0; round < 300; ++round)
+    {
+        SemiconductorSchedule s = randomInstance(static_cast<std::uint64_t>(round) + 17);
+        // data mode
+        const Score data = scoreWith(calculator, s);
+        SemiconductorSchedule copy = s;
+        if (!(data == ScoreCalculator::calculateScore(copy)))
+            ++mismatches;
+        // search mode, at a random state (seed or not)
+        s.warmStart = round % 2 == 0;
+        beginSearch(s);
+        if (round % 3 != 0)
+            randomizeValues(s, rng);
+        if (!(scoreWith(calculator, s) == ScoreCalculator::searchStateScore(s)))
+            ++mismatches;
+    }
+    check(mismatches == 0, "(a) default assembly == monolith on 300 random states (data + search mode)");
+}
+
+// The raw cost of every constraint of `calculator` (one global each), in
+// Term order; a constraint the assembly lacks reads -1.
+RawTotals rawOfAssembly(const DecomposedCalculator &calculator)
+{
+    RawTotals out;
+    out.fill(-1);
+    for (const auto &entry : calculator.constraintCosts())
+    {
+        for (int t = 0; t < kTermCount; ++t)
+        {
+            if (entry.name == kTermNames[t] && entry.unitCosts.size() == 1)
+                out[static_cast<std::size_t>(t)] = static_cast<std::int64_t>(entry.unitCosts[0]);
+        }
+    }
+    return out;
+}
+
+// (b)
+void verifyIncremental()
+{
+    int mismatches = 0;
+    TermHits hits;
+    for (int instance = 0; instance < 60; ++instance)
+    {
+        SemiconductorSchedule s = randomInstance(static_cast<std::uint64_t>(instance) * 31 + 3);
+        s.warmStart = instance % 2 == 0;
+        beginSearch(s);
+        DecomposedCalculator calculator;
+        addDefaultConstraints(calculator);
+        optimaru::ScoreDirector<SemiconductorSchedule> director(s, calculator);
+        std::mt19937_64 rng(static_cast<std::uint64_t>(instance));
+        const int n = s.rowCount();
+        for (int m = 0; m < 300; ++m)
+        {
+            const int row = static_cast<int>(rng() % static_cast<std::uint64_t>(n));
+            const int old = s.rows[static_cast<std::size_t>(row)].value;
+            if (m % 4 == 3 && n > 1)
+            {
+                const int other = static_cast<int>(rng() % static_cast<std::uint64_t>(n));
+                director.beginVariableChanges();
+                director.changeVariable(row, randomValue(s, rng, false));
+                director.changeVariable(other, randomValue(s, rng, true));
+                director.endVariableChanges();
+            }
+            else
+            {
+                director.changeVariable(row, randomValue(s, rng, true));
+                if (m % 5 == 0)
+                {
+                    director.calculateScore();
+                    director.changeVariable(row, old);  // a rejected move
+                }
+            }
+            // Every constraint's raw cost, then the score.
+            const Score score = director.calculateScore();
+            const RawTotals full = ScoreCalculator::searchStateRawCosts(s);
+            if (!(rawOfAssembly(calculator) == full && score == ScoreCalculator::searchStateScore(s)))
+                ++mismatches;
+            if (!atSeed(s))
+                hits.add(full);
+        }
+    }
+    check(mismatches == 0, "(b) plugin incremental == full recompute, per constraint, on 60 x 300 moves");
+    check(hits.missing().empty(),
+          "(b) every constraint is non-zero in some decoded state of the walk (never: " + hits.missing() + ")");
+    std::printf("  (b) the rarest term is non-zero in %lld decoded states\n", static_cast<long long>(hits.fewest()));
+}
+
+// (c)
+void verifyComponentsAlone()
+{
+    int mismatches = 0;
+    for (int round = 0; round < 40; ++round)
+    {
+        SemiconductorSchedule s = randomInstance(static_cast<std::uint64_t>(round) + 500);
+        const RawTotals raw = ScoreCalculator::rawCosts(s);
+        for (int t = 0; t < kTermCount; ++t)
+        {
+            DecomposedCalculator calculator;
+            defaultConstraints().only({kTermNames[t]}).into(calculator);
+            const Score score = scoreWith(calculator, s);
+            const std::int64_t expected = raw[static_cast<std::size_t>(t)];
+            const double weight = t == static_cast<int>(Term::WeightedTardinessCost) ? 10.0 : 1.0;
+            const bool ok = t < kHardTermCount ? score.hard == -expected && score.soft == 0.0
+                                               : score.hard == 0 && score.soft == -weight * expected;
+            if (!ok)
+                ++mismatches;
+        }
+    }
+    check(mismatches == 0, "(c) each component alone scores exactly its term");
+}
+
+// tests/test_semiconductor_scheduling.py::_fab_problem with its assignments.
+SemiconductorSchedule fabProblem()
+{
+    Builder b;
+    b.machine("M1", "PHOTO", 1, 1, {{3, 5}}).machine("M2", "PHOTO").machine("F1", "DIFF", 2, 2);
+    b.setup("PHOTO", "X", "Y", 3).transport("PHOTO", "DIFF", 3);
+    b.lot("L1", 2, 12, 2).op("PHOTO", "X", {{"M1", 4, 1}}, {}, 0, 3).op("DIFF", "X", {{"F1", 5}});
+    b.lot("L2", 0, 30).op("PHOTO", "Y", {{"M1", 4}}).op("DIFF", "Y", {{"F1", 5}});
+    b.lot("L3", 0, 30).op("DIFF", "X", {{"F1", 5}});
+    b.assign("L1", "PHOTO", "M1", 0, 4).assign("L1", "DIFF", "F1", 10, 15);
+    b.assign("L2", "PHOTO", "M1", 2, 6).assign("L2", "DIFF", "F1", 11, 16);
+    b.assign("L3", "DIFF", "F1", 12, 17);
+    return b.build();
+}
+
+// (d)
+void verifyOverrides()
+{
+    SemiconductorSchedule s = fabProblem();
+    // hard 26, soft 135 at the defaults (fab_test).
+    {
+        DecomposedCalculator calculator;
+        defaultConstraints().soft("machineCapacityCost").into(calculator);
+        const Score score = scoreWith(calculator, s);
+        check(score.hard == -24 && score.soft == -137.0, "(d) machineCapacityCost demoted: 2 moves to soft");
+    }
+    {
+        DecomposedCalculator calculator;
+        defaultConstraints().weight("weightedTardinessCost", 4).hard("makespanCost").into(calculator);
+        const Score score = scoreWith(calculator, s);
+        check(score.hard == -(26 + 17) && score.soft == -(1.0 + 3 + 8 + 4 * 6 + 46),
+              "(d) tardiness weight 4, makespan made hard");
+    }
+    {
+        DecomposedCalculator calculator;
+        defaultConstraints().exponent("batchFamilyConflictCost", 2.0).exponent("cycleTimeCost", 0.5).into(calculator);
+        const Score score = scoreWith(calculator, s);
+        check(score.hard == -(26 - 8 + 64), "(d) exponent 2 shapes the family conflict TOTAL: 8 -> 64");
+        check(std::fabs(score.soft - (-(1.0 + 3 + 8 + 60 + std::sqrt(46.0) + 17))) < 1e-9,
+              "(d) exponent 0.5 shapes the cycle-time total");
+    }
+    {
+        DecomposedCalculator calculator;
+        defaultConstraints().weight("maxQueueTimeCost", 0.5).into(calculator);
+        // 0.5 * 3 = 1.5 rounds half away from zero to 2, per constraint.
+        check(scoreWith(calculator, s).hard == -(26 - 3 + 2), "(d) fractional hard weight rounds per constraint");
+    }
+}
+
+// (e)
+void verifyTotals()
+{
+    SemiconductorSchedule s = fabProblem();
+    DecomposedCalculator calculator;
+    defaultConstraints().weight("makespanCost", 3).soft("lotRoutePrecedenceCost").into(calculator);
+    const Score score = scoreWith(calculator, s);
+    double hard = 0;
+    double soft = 0;
+    for (const auto &total : calculator.constraintTotals())
+        (total.isHard ? hard : soft) += total.cost;
+    check(score.hard == -static_cast<std::int64_t>(hard) && score.soft == -soft,
+          "(e) constraintTotals() sum to the score");
+}
+
+// (f)
+void verifySolveFullAssert()
+{
+    bool ok = true;
+    try
+    {
+        for (int seed = 0; seed < 4; ++seed)
+        {
+            SemiconductorSchedule s = randomInstance(900 + static_cast<std::uint64_t>(seed));
+            s.warmStart = seed % 2 == 1;
+            DecomposedCalculator calculator;
+            defaultConstraints().weight("weightedTardinessCost", 2).into(calculator);
+            Solver::Config config;
+            config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+            config.stepCountLimit = 300;
+            config.randomSeed = static_cast<std::uint64_t>(seed);
+            Solver(config).solve(s, calculator);
+            DecomposedCalculator again;
+            defaultConstraints().weight("weightedTardinessCost", 2).into(again);
+            ok &= scoreWith(again, s) == s.score && !s.searching;
+        }
+    }
+    catch (const std::exception &error)
+    {
+        std::printf("  %s\n", error.what());
+        ok = false;
+    }
+    check(ok, "(f) solve(schedule, calculator) under FULL_ASSERT; the score is the assembly's");
+}
+
+// (g) raw costs by hand, through constraintCosts().
+void verifyRawCostsByHand()
+{
+    SemiconductorSchedule s = fabProblem();
+    auto raw = rawByName(s);
+    const std::map<std::string, double> expected{
+        {"machineEligibilityCost", 0},  {"lotRoutePrecedenceCost", 2}, {"machineCapacityCost", 2},
+        {"batchCapacityCost", 3},       {"batchFamilyConflictCost", 8}, {"missingSetupTimeCost", 5},
+        {"machineUnavailabilityCost", 3}, {"maxQueueTimeCost", 3},     {"minQueueTimeCost", 0},
+        {"missingTransportTimeCost", 0}, {"auxiliaryResourceCapacityCost", 0},
+        {"auxiliaryResourceUnavailabilityCost", 0}, {"pinnedAssignmentsCost", 0}, {"maxCycleTimeCost", 0},
+        {"machinePreferenceCost", 1},   {"minBatchSizeCost", 3},      {"machineLoadImbalanceCost", 8},
+        {"weightedTardinessCost", 6},   {"cycleTimeCost", 46},        {"makespanCost", 17},
+    };
+    check(raw == expected, "(g) fab fixture: every raw cost by hand");
+
+    Builder r;
+    r.machine("M1", "G1").machine("M2", "G2").resource("RETICLE", 1, {{3, 5}});
+    r.lot("L1", 0, 20, 1, 6).op("O1", "F", {{"M1", 4}}, {"RETICLE"}, 4).op("O2", "F", {{"M2", 2}});
+    r.lot("L2", 0, 20).op("O1", "F", {{"M1", 4}}, {"RETICLE"});
+    r.pin("L1", "O1", "M1", 1, 5);
+    r.assign("L1", "O1", "M1", 0, 4).assign("L1", "O2", "M2", 6, 8).assign("L2", "O1", "M1", 2, 6);
+    SemiconductorSchedule rs = r.build();
+    raw = rawByName(rs);
+    check(raw["minQueueTimeCost"] == 2 && raw["auxiliaryResourceCapacityCost"] == 2
+              && raw["auxiliaryResourceUnavailabilityCost"] == 3 && raw["pinnedAssignmentsCost"] == 1
+              && raw["maxCycleTimeCost"] == 2 && raw["machineEligibilityCost"] == 0,
+          "(g) resource fixture: min queue 2, resource 2 and 3, pin 1, max cycle 2");
+
+    // A feasible schedule: every term but cycle time and makespan is 0.
+    Builder z;
+    z.machine("M1", "G1", 1, 1, {{20, 25}}).machine("M2", "G1").machine("F1", "G2", 2, 2);
+    z.resource("R", 1, {{30, 35}});
+    z.setup("G1", "A", "B", 2).transport("G1", "G2", 1);
+    z.lot("L1", 0, 50, 1, 40).op("O1", "A", {{"M1", 4}}, {"R"}, 1, 10).op("O2", "X", {{"F1", 5}});
+    z.lot("L2", 0, 50).op("O1", "B", {{"M1", 3}}).op("O2", "X", {{"F1", 5}});
+    z.lot("L3", 0, 50).op("O1", "B", {{"M2", 7}});
+    z.pin("L1", "O1", "M1", 0, 4);
+    z.assign("L1", "O1", "M1", 0, 4).assign("L2", "O1", "M1", 6, 9);
+    z.assign("L1", "O2", "F1", 10, 15, "B1").assign("L2", "O2", "F1", 10, 15, "B1");
+    z.assign("L3", "O1", "M2", 0, 7);
+    SemiconductorSchedule zs = z.build();
+    raw = rawByName(zs);
+    bool zero = true;
+    for (const auto &[name, value] : raw)
+    {
+        if (name != "cycleTimeCost" && name != "makespanCost")
+            zero &= value == 0.0;
+    }
+    check(zero && raw["cycleTimeCost"] == 37 && raw["makespanCost"] == 15,
+          "(g) feasible fixture: 18 terms 0, cycle 37, makespan 15");
+    zs.assignments.clear();
+    raw = rawByName(zs);
+    check(raw["cycleTimeCost"] == 0 && raw["makespanCost"] == 0 && raw["weightedTardinessCost"] == 0,
+          "(g) nothing completed: cycle time, makespan, tardiness 0");
+}
+
+// (h)
+template <typename Component>
+bool rowIs(const optimaru::ConstraintInfo &row, const char *name, optimaru::Level level, double weight)
+{
+    return row.name == name && row.defaultLevel == Component::kDefaultLevel
+           && row.defaultWeight == Component::kDefaultWeight && row.defaultLevel == level
+           && row.defaultWeight == weight && row.levelFlippable && !row.reward && row.isGlobal
+           && row.defaultEnabled;
+}
+
+void verifyCatalog()
+{
+    using L = optimaru::Level;
+    const auto rows = defaultConstraints().info();
+    bool ok = rows.size() == 20;
+    ok = ok && rowIs<MachineEligibilityCost>(rows[0], "machineEligibilityCost", L::Hard, 1.0)
+         && rowIs<LotRoutePrecedenceCost>(rows[1], "lotRoutePrecedenceCost", L::Hard, 1.0)
+         && rowIs<MachineCapacityCost>(rows[2], "machineCapacityCost", L::Hard, 1.0)
+         && rowIs<BatchCapacityCost>(rows[3], "batchCapacityCost", L::Hard, 1.0)
+         && rowIs<BatchFamilyConflictCost>(rows[4], "batchFamilyConflictCost", L::Hard, 1.0)
+         && rowIs<MissingSetupTimeCost>(rows[5], "missingSetupTimeCost", L::Hard, 1.0)
+         && rowIs<MachineUnavailabilityCost>(rows[6], "machineUnavailabilityCost", L::Hard, 1.0)
+         && rowIs<MaxQueueTimeCost>(rows[7], "maxQueueTimeCost", L::Hard, 1.0)
+         && rowIs<MinQueueTimeCost>(rows[8], "minQueueTimeCost", L::Hard, 1.0)
+         && rowIs<MissingTransportTimeCost>(rows[9], "missingTransportTimeCost", L::Hard, 1.0)
+         && rowIs<AuxiliaryResourceCapacityCost>(rows[10], "auxiliaryResourceCapacityCost", L::Hard, 1.0)
+         && rowIs<AuxiliaryResourceUnavailabilityCost>(rows[11], "auxiliaryResourceUnavailabilityCost", L::Hard, 1.0)
+         && rowIs<PinnedAssignmentsCost>(rows[12], "pinnedAssignmentsCost", L::Hard, 1.0)
+         && rowIs<MaxCycleTimeCost>(rows[13], "maxCycleTimeCost", L::Hard, 1.0)
+         && rowIs<MachinePreferenceCost>(rows[14], "machinePreferenceCost", L::Soft, 1.0)
+         && rowIs<MinBatchSizeCost>(rows[15], "minBatchSizeCost", L::Soft, 1.0)
+         && rowIs<MachineLoadImbalanceCost>(rows[16], "machineLoadImbalanceCost", L::Soft, 1.0)
+         && rowIs<WeightedTardinessCost>(rows[17], "weightedTardinessCost", L::Soft, 10.0)
+         && rowIs<CycleTimeCost>(rows[18], "cycleTimeCost", L::Soft, 1.0)
+         && rowIs<MakespanCost>(rows[19], "makespanCost", L::Soft, 1.0);
+    check(ok, "(h) info() == the components' constants, in list order");
+    bool registryOrder = true;
+    for (int t = 0; t < kTermCount; ++t)
+        registryOrder &= rows[static_cast<std::size_t>(t)].name == kTermNames[t];
+    check(registryOrder, "(h) catalog order == Term order");
+    // Every constraint flips both ways.
+    bool flips = true;
+    try
+    {
+        defaultConstraints().soft("pinnedAssignmentsCost").hard("makespanCost");
+    }
+    catch (const std::invalid_argument &)
+    {
+        flips = false;
+    }
+    check(flips, "(h) hard constraints demote, soft ones promote");
+}
+
+}  // namespace
+
+int main()
+{
+    verifyAssemblyParity();
+    verifyIncremental();
+    verifyComponentsAlone();
+    verifyOverrides();
+    verifyTotals();
+    verifySolveFullAssert();
+    verifyRawCostsByHand();
+    verifyCatalog();
+    return finish("fab_plugin_test");
+}

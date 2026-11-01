@@ -4,15 +4,17 @@ Reads the instance JSON dumped by the C++ `st_quality_bench` and looks for a
 lesson → (timeslot, room) assignment. The score scale is the quickstart's six
 constraints, shared by both solvers:
 
-- the 3 hard ones (roomConflict/teacherConflict/studentGroupConflict) are CP-SAT
-  hard constraints → any solution found has hard == 0.
-- the 3 soft ones are the objective: maximize efficiency - stability - variety.
-  * teacherRoomStability: per teacher, the lesson pairs in different rooms. Each
+- the 3 hard ones (room_conflict_cost / teacher_conflict_cost / class_conflict_cost)
+  are CP-SAT hard constraints → any solution found has hard == 0.
+- the 3 soft ones are the objective: maximize the adjacent same-teacher pairs
+  (teacher_time_efficiency_cost, a reward whose raw cost is minus that count)
+  - teacher_room_change_cost - class_subject_repeat_cost.
+  * teacher_room_change_cost: per teacher, the lesson pairs in different rooms. Each
     pair reifies same_room[i][j] ↔ (room_i == room_j): all pairs - same-room pairs.
-  * teacherTimeEfficiency: pairs of adjacent periods (same day, Δperiod == 1)
+  * teacher_time_efficiency_cost: pairs of adjacent periods (same day, Δperiod == 1)
     a teacher occupies. Teacher×slot occupancy is 0/1 thanks to the hard
     constraints, so an adjacent pair is an AND.
-  * studentGroupSubjectVariety: pairs of adjacent periods a (class, subject) occupies.
+  * class_subject_repeat_cost: pairs of adjacent periods a (class, subject) occupies.
 
 The output uses the same scale as C++ (`st_quality_bench`),
 "QBENCH_CPSAT_FINAL score=Xhard/Ysoft" (+ the best trajectory / first_feasible),
@@ -83,7 +85,7 @@ def solve_instance(
     slot = [model.new_int_var(0, slot_count - 1, f"slot_{i}") for i in range(len(lessons))]
     room = [model.new_int_var(0, room_count - 1, f"room_{i}") for i in range(len(lessons))]
 
-    # hard 1 roomConflict: one lesson per (timeslot, room) cell. AllDifferent over
+    # hard 1 room_conflict_cost: one lesson per (timeslot, room) cell. AllDifferent over
     # the composite cell value (the same as the C++ slotRoom encoding).
     cell = []
     for i in range(len(lessons)):
@@ -92,7 +94,8 @@ def solve_instance(
         cell.append(c)
     model.add_all_different(cell)
 
-    # hard 2 + 3: lessons of the same teacher/class take different timeslots.
+    # hard 2 + 3 (teacher_conflict_cost / class_conflict_cost): lessons of the same teacher/class take
+    # different timeslots.
     for members in by_teacher.values():
         if len(members) > 1:
             model.add_all_different([slot[i] for i in members])
@@ -110,9 +113,9 @@ def solve_instance(
             x[i, s] = b
 
     objective: list = []
-    offset = 0  # constant term: all pairs per teacher (stability = constant - same-room pairs)
+    offset = 0  # constant term: all pairs per teacher (room changes = constant - same-room pairs)
 
-    # soft: teacherRoomStability, flipped into maximize Σ same_room.
+    # soft: teacher_room_change_cost, flipped into maximize Σ same_room.
     for members in by_teacher.values():
         offset += len(members) * (len(members) - 1) // 2
         for a in range(len(members)):
@@ -123,7 +126,7 @@ def solve_instance(
                 model.add(room[i] != room[j]).only_enforce_if(~same)
                 objective.append(same)
 
-    # soft: teacherTimeEfficiency (a reward). Teacher×slot occupancy is 0/1 thanks to the
+    # soft: teacher_time_efficiency_cost (a reward). Teacher×slot occupancy is 0/1 thanks to the
     # hard constraints → an adjacent pair is an AND. As a reward only the upper bound (≤) is needed; the solver pushes it up.
     for teacher, members in by_teacher.items():
         for s in range(slot_count):
@@ -137,7 +140,7 @@ def solve_instance(
             model.add(adj <= occ_next)
             objective.append(adj)
 
-    # soft: studentGroupSubjectVariety (a penalty). As a penalty only the lower bound (≥) is needed.
+    # soft: class_subject_repeat_cost (a penalty). As a penalty only the lower bound (≥) is needed.
     for (group, subject), members in by_group_subject.items():
         for s in range(slot_count):
             nxt = next_slot[s]

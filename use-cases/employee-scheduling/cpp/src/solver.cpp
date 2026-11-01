@@ -12,7 +12,6 @@
 #include <random>
 #include <stdexcept>
 #include <string>
-#include <thread>
 #include <utility>
 #include <vector>
 
@@ -20,6 +19,7 @@
 #include "es/score_calculator.hpp"
 #include "optimaru/api/score/director/score_director.hpp"
 #include "optimaru/api/solver/solver.hpp"
+#include "optimaru/impl/solver/worker_threads.hpp"
 
 namespace es {
 
@@ -793,6 +793,8 @@ void greedyHardRepair(const Solver::Config& config, EmployeeSchedule& schedule,
     // strict improvement is applied: two equal repairs could undo each other
     // until the step limit.
     if (Clock::now() >= deadline) return;
+    // A sibling parallel worker failed (see Config::stopFlag): skip the repair.
+    if (config.stopFlag && config.stopFlag->load()) return;
     optimaru::ScoreDirector<EmployeeSchedule> director(schedule, calculator);
     Score current = director.calculateScore();
     if (current.hard >= 0) return;
@@ -944,6 +946,7 @@ void runEngine(const Solver::Config& config, EmployeeSchedule& schedule,
     }
 
     optimaru::Solver<EmployeeSchedule> engine(std::move(engineConfig));
+    if (config.stopFlag) engine.adoptTerminateEarlyFlag(config.stopFlag);
     PenalizedGetter penalizedRef = penalized;
     ShiftsOfGetter shiftsOfRef = shiftsOf;
     if (config.guidedMoves && config.smartChangeMoves) {
@@ -981,23 +984,25 @@ void Solver::solve(EmployeeSchedule& schedule) {
     if (workerCount > 1) {
         std::vector<EmployeeSchedule> candidates(workerCount, schedule);
         std::vector<std::exception_ptr> failures(workerCount);
-        std::vector<std::thread> workers;
-        workers.reserve(workerCount);
-        for (int i = 0; i < workerCount; ++i) {
-            workers.emplace_back([this, i, &candidates, &failures] {
-                try {
-                    Config workerConfig = config_;
-                    workerConfig.parallelSolverCount = 1;
-                    workerConfig.randomSeed += static_cast<std::uint64_t>(i);
-                    if (i != 0) workerConfig.onNewBest = nullptr;
-                    Solver worker(std::move(workerConfig));
-                    worker.solve(candidates[i]);
-                } catch (...) {
-                    failures[i] = std::current_exception();
-                }
-            });
-        }
-        for (std::thread& worker : workers) worker.join();
+        // Raised by the first worker that fails: every worker's engine checks
+        // it once a step, so the others stop instead of using up their budget.
+        auto stop = std::make_shared<std::atomic<bool>>(false);
+        // A worker that cannot be started (std::system_error) stops and joins
+        // the ones already running before the error is rethrown here.
+        optimaru::runWorkerThreads(workerCount, *stop, [this, &candidates, &failures, &stop](int i) {
+            try {
+                Config workerConfig = config_;
+                workerConfig.parallelSolverCount = 1;
+                workerConfig.stopFlag = stop;
+                workerConfig.randomSeed += static_cast<std::uint64_t>(i);
+                if (i != 0) workerConfig.onNewBest = nullptr;
+                Solver worker(std::move(workerConfig));
+                worker.solve(candidates[i]);
+            } catch (...) {
+                failures[i] = std::current_exception();
+                stop->store(true);
+            }
+        });
         for (const std::exception_ptr& failure : failures) {
             if (failure) std::rethrow_exception(failure);
         }

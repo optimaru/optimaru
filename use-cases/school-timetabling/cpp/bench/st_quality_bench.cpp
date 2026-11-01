@@ -1,9 +1,10 @@
 // Quality benchmark driver for the C++ school-timetabling port.
 //
 // Track-1 comparison logic is the Java quickstart's SIX constraints
-// (roomConflict / teacherConflict / studentGroupConflict hard,
-// teacherRoomStability / teacherTimeEfficiency / studentGroupSubjectVariety
-// soft). This repo's teacherUnavailable extension is deliberately left EMPTY
+// (roomConflictCost / teacherConflictCost / classConflictCost hard,
+// teacherRoomChangeCost / teacherTimeEfficiencyCost / classSubjectRepeatCost
+// soft). This repo's teacherUnavailabilityCost extension (the
+// teacherUnavailable map) is deliberately left EMPTY
 // in every generated instance so it contributes 0 and the comparison against
 // the CP-SAT model stays fair.
 //
@@ -152,7 +153,7 @@ buildInstance(int classes, int teachers, int rooms, std::uint64_t seed)
 // 7 lessons whose fixed assignment hits every constraint with a nonzero
 // contribution. Expected score (see the pairwise counting in
 // score_calculator.cpp): hard = -(1 room + 1 teacher + 1 group) = -3,
-// soft = efficiency 3 - stability 4 - variety 2 = -3.
+// soft = teacherTimeEfficiencyCost 3 - teacherRoomChangeCost 4 - classSubjectRepeatCost 2 = -3.
 // -------------------------------------------------------------------------
 Timetable buildCrossCheck()
 {

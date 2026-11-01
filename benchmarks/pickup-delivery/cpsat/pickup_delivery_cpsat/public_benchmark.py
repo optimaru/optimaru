@@ -14,14 +14,14 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from pdp_routing.constraints import (
-    minimize_travel_time,
-    paired_request,
-    pickup_before_dropoff,
-    same_vehicle,
-    service_finished_after_max_end_time,
-    unassigned_requests,
-    vehicle_capacity,
-    vehicle_end_time,
+    max_end_time_cost,
+    paired_request_cost,
+    pickup_before_dropoff_cost,
+    same_vehicle_cost,
+    travel_time_cost,
+    unassigned_requests_cost,
+    vehicle_capacity_cost,
+    vehicle_max_end_time_cost,
 )
 from pdp_routing.models import (
     DeliveryModel,
@@ -45,23 +45,24 @@ DEFAULT_INSTANCE = "lc101"
 # not a claim of bit-identical floating-point distance to Hexaly.
 DISTANCE_SCALE = 1
 ENGINE_CONSTRAINTS = [
-    vehicle_capacity,
-    service_finished_after_max_end_time,
-    minimize_travel_time,
-    vehicle_end_time,
-    paired_request,
-    same_vehicle,
-    pickup_before_dropoff,
-    unassigned_requests,
+    vehicle_capacity_cost,
+    max_end_time_cost,
+    travel_time_cost,
+    vehicle_max_end_time_cost,
+    paired_request_cost,
+    same_vehicle_cost,
+    pickup_before_dropoff_cost,
+    unassigned_requests_cost,
 ]
-# Pairing, same-vehicle and precedence are structural CP-SAT constraints, not
-# objective plugins, so only their scored counterparts are selected here.
+# Pairing, same-vehicle and precedence are structural in the CP-SAT model
+# (their plugins add no objective term), so only the scored counterparts are
+# selected here.
 CPSAT_CONSTRAINTS = [
-    vehicle_capacity,
-    service_finished_after_max_end_time,
-    minimize_travel_time,
-    vehicle_end_time,
-    unassigned_requests,
+    vehicle_capacity_cost,
+    max_end_time_cost,
+    travel_time_cost,
+    vehicle_max_end_time_cost,
+    unassigned_requests_cost,
 ]
 
 
@@ -166,12 +167,28 @@ def synthetic_instance(request_count: int, seed: int = 0) -> PdptwInstance:
         latest = int(horizon - back - direct - 2 * service - 2 * width)
         ready = rng.randint(math.ceil(to_pickup), max(math.ceil(to_pickup), latest))
         drop_ready = ready + service + math.ceil(direct)
-        nodes.append(Node(pickup_id, px, py, demand, ready, ready + width, service, 0, dropoff_id))
         nodes.append(
-            Node(dropoff_id, dx, dy, -demand, drop_ready, drop_ready + width, service, pickup_id, 0)
+            Node(
+                pickup_id, px, py, demand, ready, ready + width, service, 0, dropoff_id
+            )
+        )
+        nodes.append(
+            Node(
+                dropoff_id,
+                dx,
+                dy,
+                -demand,
+                drop_ready,
+                drop_ready + width,
+                service,
+                pickup_id,
+                0,
+            )
         )
     vehicles = max(2, math.ceil(request_count / 3))
-    return PdptwInstance(f"synthetic-{request_count}-s{seed}", vehicles, 200, depot, tuple(nodes))
+    return PdptwInstance(
+        f"synthetic-{request_count}-s{seed}", vehicles, 200, depot, tuple(nodes)
+    )
 
 
 def load_instance(name: str, cache_dir: Path) -> PdptwInstance:
@@ -376,7 +393,9 @@ def main(argv: list[str] | None = None) -> int:
         try:
             used, distance = rescore(instance, selected, solution.routes)
         except ValueError as exc:  # incomplete or rule-breaking plan
-            print(f"{backend:6} rejected: {exc} elapsed={elapsed:.2f}s score={solution.score}")
+            print(
+                f"{backend:6} rejected: {exc} elapsed={elapsed:.2f}s score={solution.score}"
+            )
             continue
         if solution.total_driving_seconds != distance:
             raise ValueError("solver report and independent distance disagree")

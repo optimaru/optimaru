@@ -1,6 +1,22 @@
-"""Constraint spot checks: re-verifies some hand-computed cases of the C++ tests (a) through the Python bindings."""
+"""Constraint spot checks: re-verifies some hand-computed cases of the C++ tests (a) through the Python bindings.
+
+The raw costs come from `constraint_costs()` (every constraint is global: one total
+each), the only per-constraint surface since 0.2.0; the three rewards report their
+total negated (raw <= 0).
+"""
 
 import conference_scheduling as cs
+from conference_scheduling.constraints import score
+
+
+def raw_totals(schedule):
+    """Raw cost per constraint name (the one total of each global constraint)."""
+    return {name: sum(entry["costs"]) for name, entry in cs.constraint_costs(schedule).items()}
+
+
+def default_score(schedule):
+    """The default score, rebuilt in pure Python from the raw costs."""
+    return score(cs.constraint_costs(schedule))
 
 
 def make_base() -> cs.ConferenceSchedule:
@@ -43,9 +59,9 @@ def test_room_conflict():
     c = make_base()
     place(c, "A", [0], 0, 0)
     place(c, "B", [1], 1, 0)  # same times (distinct slots), same room
-    b = cs.compute_breakdown(c)
-    assert b.room_conflict == 60
-    assert b.to_score().hard == -60000
+    raw = raw_totals(c)
+    assert raw["room_conflict_cost"] == 60
+    assert default_score(c).hard == -60000
     assert cs.calculate_score(c).hard == -60000
 
 
@@ -53,52 +69,54 @@ def test_speaker_conflict_and_pause():
     c = make_base()
     place(c, "A", [0, 1], 0, 0)
     place(c, "B", [0, 1], 1, 1)
-    b = cs.compute_breakdown(c)
-    assert b.speaker_conflict == 120  # 2 shared speakers x 60 overlap
-    assert b.consecutive_talks_pause == 120  # overlapping pair, no pause
-    assert b.to_score().hard == -(10 * 120 + 120)
+    raw = raw_totals(c)
+    assert raw["speaker_conflict_cost"] == 120  # 2 shared speakers x 60 overlap
+    assert raw["consecutive_talks_pause_cost"] == 120  # overlapping pair, no pause
+    assert default_score(c).hard == -(10 * 120 + 120)
 
 
-def test_talk_type_compatibility_synthetic():
+def test_talk_type_incompatibility_synthetic():
     c = make_base()
     c.talk_types = ["B", "L"]
     place(c, "A", [0], 0, 0, talk_type=1)  # "L" talk in "B"-only slot+room
-    b = cs.compute_breakdown(c)
-    assert b.talk_type_compatibility == 120
-    assert b.to_score().hard == -12000000
+    raw = raw_totals(c)
+    assert raw["talk_type_incompatibility_cost"] == 120
+    assert default_score(c).hard == -12000000
 
 
 def test_prerequisite_and_popular():
     c = make_base()
     place(c, "A", [0], 3, 2, favorite_count=10)  # 630-690, capacity 300
     place(c, "B", [1], 0, 0, favorite_count=20, prerequisite_talks=[0])
-    b = cs.compute_breakdown(c)
+    raw = raw_totals(c)
     # A (prerequisite) ends 690 > B starts 540: violated, combined 120.
-    assert b.talk_prerequisite_talks == 120
+    assert raw["talk_prerequisite_talks_cost"] == 120
     # B is more favorited but sits in the smaller room.
-    assert b.popular_talks == 120
+    assert raw["popular_talks_room_size_cost"] == 120
 
 
 def test_diversity_rewards():
     c = make_base()
     place(c, "A", [0], 0, 0, audience_types=["Dev"], audience_level=1)
     place(c, "B", [1], 0, 1, audience_types=["Dev"], audience_level=2, language="de")
-    b = cs.compute_breakdown(c)
-    assert b.audience_type_diversity == 60
-    assert b.audience_level_diversity == 60
-    assert b.language_diversity == 60
-    score = b.to_score()
-    assert score.hard == 0
-    assert score.soft == 720  # 1*60 + 1*60 + 10*60
+    raw = raw_totals(c)
+    # Rewards: constraint_costs() reports each reward negated (raw <= 0).
+    assert -raw["audience_type_diversity_cost"] == 60
+    assert -raw["audience_level_diversity_cost"] == 60
+    assert -raw["language_diversity_cost"] == 60
+    total = default_score(c)
+    assert total.hard == 0
+    assert total.soft == 720  # 1*60 + 1*60 + 10*60
+    assert cs.calculate_score(c).soft == total.soft
 
 
 def test_speaker_makespan():
     c = make_base()
     place(c, "A", [0], 0, 0)  # day 0
     place(c, "B", [0], 5, 1)  # day 2 -> span 2 -> one 8h day
-    b = cs.compute_breakdown(c)
-    assert b.speaker_makespan == 480
-    assert b.to_score().soft == -20 * 480
+    raw = raw_totals(c)
+    assert raw["speaker_makespan_cost"] == 480
+    assert default_score(c).soft == -20 * 480
 
 
 def test_tag_constraints():
@@ -118,12 +136,12 @@ def test_tag_constraints():
         required_timeslot_tags=["TS", "X"],  # missing X
         undesired_room_tags=["RM"],  # prevailing RM
     )
-    b = cs.compute_breakdown(c)
-    assert b.talk_required_timeslot_tags == 60
-    assert b.talk_undesired_room_tags == 60
-    score = b.to_score()
-    assert score.hard == -60
-    assert score.soft == -20 * 60
+    raw = raw_totals(c)
+    assert raw["talk_required_timeslot_tags_cost"] == 60
+    assert raw["talk_undesired_room_tags_cost"] == 60
+    total = default_score(c)
+    assert total.hard == -60
+    assert total.soft == -20 * 60
 
 
 def test_unassigned_contributes_nothing():
@@ -132,6 +150,6 @@ def test_unassigned_contributes_nothing():
     talks = c.talks
     talks.append(cs.Talk(code="B", speakers=[0]))  # unassigned
     c.talks = talks
-    score = cs.calculate_score(c)
-    assert score.hard == 0
-    assert score.soft == 0
+    total = cs.calculate_score(c)
+    assert total.hard == 0
+    assert total.soft == 0

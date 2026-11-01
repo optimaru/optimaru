@@ -5,11 +5,13 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>  // std::vector / std::set / std::string conversions
 
+#include <algorithm>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
-#include <optional>
+#include <stdexcept>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -18,6 +20,7 @@
 #include "es/score_calculator.hpp"
 #include "es/solver.hpp"
 #include "optimaru/optimaru.hpp"
+#include "optimaru/python/constraint_binding.hpp"
 
 namespace py = pybind11;
 using namespace es;
@@ -25,8 +28,11 @@ using namespace es;
 namespace
 {
 
-// Typed getters for the per-constraint parameter dict (spec-class extra
-// fields, e.g. MaxConsecutiveDays.value).
+namespace tfpy = optimaru::python;
+
+// Typed getters for the per-constraint parameter dict (the spec's domain
+// fields, e.g. MaxConsecutiveDaysCost.value). A missing key or None keeps
+// the fallback, which is the C++ component's own constructor default.
 template <typename T>
 T param(const py::dict &params, const char *key, T fallback)
 {
@@ -38,163 +44,272 @@ T param(const py::dict &params, const char *key, T fallback)
     return v.cast<T>();
 }
 
-// Plugin registry: constraint name -> component. The names are the
-// Python-facing identifiers; the display names are used in constraint_totals.
-// `hard` overrides the constraint's default hard/soft level; `exponent` shapes the per-unit
-// cost superlinearly (see shapeCost in the engine header); `params` carries
-// constraint-specific options.
-void addConstraintByName(DecomposedCalculator &calc,
-                         const std::string &name,
-                         double weight,
-                         std::optional<bool> hard,
-                         double exponent,
-                         const py::dict &params)
+// One component the factory built, at its kDefaultWeight / kDefaultLevel:
+// a unit constraint or a global one.
+struct Built
 {
     std::unique_ptr<EsUnitConstraint> unit;
     std::unique_ptr<EsGlobalConstraint> global;
-    if (name == "required_skill")
-        unit = std::make_unique<RequiredSkill>(weight);
-    else if (name == "unavailable_employee")
-        unit = std::make_unique<UnavailableEmployee>(weight);
-    else if (name == "overlapping_shift")
-        unit = std::make_unique<OverlappingShift>(weight);
-    else if (name == "one_shift_per_day")
-        unit = std::make_unique<MaxOneShiftPerDay>(weight);
-    else if (name == "min_rest")
-        unit = std::make_unique<MinimumRest>(
-            weight,
-            param<Minutes>(
-                params, "min_gap_minutes", ScoreCalculator::MIN_REST_MINUTES));
-    else if (name == "undesired_day")
-        unit = std::make_unique<UndesiredDay>(
-            weight, param<bool>(params, "per_day", false));
-    else if (name == "desired_day")
-        unit = std::make_unique<DesiredDay>(
-            weight, param<bool>(params, "per_day", false));
-    else if (name == "desired_shift")
-        unit = std::make_unique<DesiredShift>(weight);
-    else if (name == "max_consecutive_days")
-        unit = std::make_unique<MaxConsecutiveDays>(
-            weight, param<int>(params, "value", 6));
-    else if (name == "min_consecutive_days")
-        unit = std::make_unique<MinConsecutiveDays>(
-            weight, param<int>(params, "value", 2));
-    else if (name == "max_consecutive_off")
-        unit = std::make_unique<MaxConsecutiveOff>(
-            weight, param<int>(params, "value", 3));
-    else if (name == "rest_after_consecutive_work")
-        unit = std::make_unique<RestAfterConsecutiveWork>(
-            weight,
-            param<int>(params, "work_days", 6),
-            param<int>(params, "rest_days", 3));
-    else if (name == "max_weekly_minutes")
-        unit = std::make_unique<MaxWeeklyMinutes>(
-            weight,
-            param<Minutes>(params, "minutes", 40 * 60),
-            param<int>(params, "week_anchor", 0));
-    else if (name == "min_weekly_minutes")
-        unit = std::make_unique<MinWeeklyMinutes>(
-            weight, param<Minutes>(params, "minutes", 8 * 60));
-    else if (name == "min_weekly_rest_days")
-        unit = std::make_unique<MinWeeklyRestDays>(
-            weight, param<int>(params, "value", 1));
-    else if (name == "assignment_cost")
-        unit = std::make_unique<AssignmentCost>(
-            weight,
-            param<double>(params, "cost_per_hour", 0.0),
-            param<double>(params, "cost_per_shift", 0.0),
-            param<AssignmentCost::CostMatrix>(params, "shift_costs", {}));
-    else if (name == "balance_assignments")
-        global = std::make_unique<BalanceShiftAssignments>(weight);
-    else if (name == "unassigned_shift")
-        global = std::make_unique<UnassignedShift>(weight);
-    else if (name == "balance_min_max_gap")
-        global = std::make_unique<BalanceMinMaxGap>(
-            weight, param<int>(params, "tolerance", 0));
-    else if (name == "balance_weekly_minutes_gap")
-        global = std::make_unique<BalanceWeeklyMinutesGap>(
-            weight, param<int>(params, "tolerance_minutes", 120));
-    else if (name == "shift_coverage")
-        global = std::make_unique<ShiftCoverage>(
-            weight,
-            param<std::string>(params, "worker_skill", std::string()),
-            param<int>(params, "min_count", 0),
-            param<int>(params, "max_count", -1),
-            param<std::vector<int>>(params, "worker_indices", {}),
-            param<std::vector<int>>(params, "shift_indices", {}));
-    else if (name == "location_run")
-        unit = std::make_unique<LocationRun>(
-            weight,
-            param<std::string>(params, "location", std::string()),
-            param<int>(params, "min_run", 0),
-            param<int>(params, "max_run", -1),
-            param<bool>(params, "waive_min_at_end", true));
-    else if (name == "rest_after_location_run")
-        unit = std::make_unique<RestAfterLocationRun>(
-            weight,
-            param<std::string>(params, "location", std::string()),
-            param<int>(params, "rest_days", 1));
-    else if (name == "location_run_gap")
-        unit = std::make_unique<LocationRunGap>(
-            weight,
-            param<std::string>(params, "location", std::string()),
-            param<int>(params, "min_gap", 0));
-    else if (name == "worker_location_count")
-        unit = std::make_unique<WorkerLocationCount>(
-            weight,
-            param<std::string>(params, "location", std::string()),
-            param<std::string>(params, "worker_skill", std::string()),
-            param<int>(params, "min_count", 0),
-            param<int>(params, "max_count", -1));
-    else if (name == "day_pattern")
-        unit = std::make_unique<DayPattern>(
-            weight, param<std::string>(params, "pattern", std::string()));
-    else if (name == "target_days_off")
-        unit = std::make_unique<TargetDaysOff>(
-            weight,
-            param<std::vector<int>>(params, "target_days", {}),
-            param<int>(params, "min_count", 0));
-    else if (name == "worker_day_count_in_range")
-        unit = std::make_unique<WorkerDayCountInRange>(
-            weight,
-            param<int>(params, "lo", 0),
-            param<int>(params, "hi", -1),
-            param<int>(params, "min_count", 0),
-            param<int>(params, "max_count", -1),
-            param<std::string>(params, "location", std::string()));
-    else if (name == "worker_pair_same_shift")
-        global = std::make_unique<WorkerPairSameShift>(
-            weight,
-            param<int>(params, "anchor", -1),
-            param<int>(params, "paired", -1),
-            param<std::vector<int>>(params, "bucket_days", {}),
-            param<std::vector<std::string>>(params, "bucket_locations", {}),
-            param<bool>(params, "penalty", false));
-    else if (name == "balance_location")
-        global = std::make_unique<BalanceLocation>(
-            weight,
-            param<std::string>(params, "location", std::string()),
-            param<std::string>(params, "worker_skill", std::string()),
-            param<std::string>(params, "metric", std::string("ssd")),
-            param<int>(params, "tolerance", 0),
-            param<std::vector<int>>(params, "off_target_days", {}));
-    else
+    optimaru::ConstraintMetadata &metadata()
     {
-        throw py::value_error(
-            "unknown constraint '" + name
-            + "'; available: required_skill, unavailable_employee, "
-              "overlapping_shift, one_shift_per_day, min_rest, "
-              "undesired_day, desired_day, desired_shift, balance_assignments, "
-              "max_consecutive_days, min_consecutive_days, "
-              "max_consecutive_off, "
-              "rest_after_consecutive_work, "
-              "max_weekly_minutes, min_weekly_minutes, min_weekly_rest_days, "
-              "assignment_cost, unassigned_shift, balance_min_max_gap, "
-              "balance_weekly_minutes_gap, shift_coverage, location_run, "
-              "rest_after_location_run, location_run_gap, "
-              "worker_location_count, "
-              "day_pattern, target_days_off, balance_location");
+        if (unit)
+            return *unit;
+        return *global;
     }
+};
+
+template <typename C, typename... Args>
+Built unitOf(Args &&...args)
+{
+    Built built;
+    built.unit = std::make_unique<C>(C::kDefaultWeight, std::forward<Args>(args)...);
+    return built;
+}
+
+template <typename C, typename... Args>
+Built globalOf(Args &&...args)
+{
+    Built built;
+    built.global = std::make_unique<C>(C::kDefaultWeight, std::forward<Args>(args)...);
+    return built;
+}
+
+// The rule factory: Python name -> builder, in CONSTRAINT_NAMES order. ONE
+// table: CONSTRAINT_NAMES, the "available:" list of an unknown name and the
+// lookup all read it, and es::catalogConstraints() holds the same components
+// (tests/test_constraint_specs.py checks the two agree). Each builder passes
+// the component's kDefaultWeight and reads the domain parameters after it;
+// the knobs are applied afterwards (applyKnobs), on the outermost component.
+struct FactoryEntry
+{
+    const char *name;
+    Built (*build)(const py::dict &params);
+};
+
+const std::vector<FactoryEntry> &factory()
+{
+    static const std::vector<FactoryEntry> table = {
+        {"required_skill_cost",
+         [](const py::dict &) { return unitOf<RequiredSkillCost>(); }},
+        {"employee_unavailability_cost",
+         [](const py::dict &) { return unitOf<EmployeeUnavailabilityCost>(); }},
+        {"shift_overlap_cost",
+         [](const py::dict &) { return unitOf<ShiftOverlapCost>(); }},
+        {"max_one_shift_per_day_cost",
+         [](const py::dict &) { return unitOf<MaxOneShiftPerDayCost>(); }},
+        {"min_rest_cost",
+         [](const py::dict &p)
+         {
+             return unitOf<MinRestCost>(param<Minutes>(
+                 p, "min_gap_minutes", ScoreCalculator::MIN_REST_MINUTES));
+         }},
+        {"undesired_day_cost",
+         [](const py::dict &p)
+         { return unitOf<UndesiredDayCost>(param<bool>(p, "per_day", false)); }},
+        {"desired_day_cost",
+         [](const py::dict &p)
+         { return unitOf<DesiredDayCost>(param<bool>(p, "per_day", false)); }},
+        {"desired_shift_cost",
+         [](const py::dict &) { return unitOf<DesiredShiftCost>(); }},
+        {"shift_count_imbalance_cost",
+         [](const py::dict &) { return globalOf<ShiftCountImbalanceCost>(); }},
+        {"max_consecutive_days_cost",
+         [](const py::dict &p)
+         { return unitOf<MaxConsecutiveDaysCost>(param<int>(p, "value", 6)); }},
+        {"min_consecutive_days_cost",
+         [](const py::dict &p)
+         { return unitOf<MinConsecutiveDaysCost>(param<int>(p, "value", 2)); }},
+        {"max_consecutive_days_off_cost",
+         [](const py::dict &p)
+         { return unitOf<MaxConsecutiveDaysOffCost>(param<int>(p, "value", 3)); }},
+        {"rest_after_consecutive_work_cost",
+         [](const py::dict &p)
+         {
+             return unitOf<RestAfterConsecutiveWorkCost>(
+                 param<int>(p, "work_days", 6), param<int>(p, "rest_days", 3));
+         }},
+        {"max_weekly_minutes_cost",
+         [](const py::dict &p)
+         {
+             return unitOf<MaxWeeklyMinutesCost>(
+                 param<Minutes>(p, "minutes", 40 * 60),
+                 param<int>(p, "week_anchor", 0));
+         }},
+        {"min_weekly_minutes_cost",
+         [](const py::dict &p)
+         {
+             return unitOf<MinWeeklyMinutesCost>(
+                 param<Minutes>(p, "minutes", 8 * 60),
+                 param<int>(p, "week_anchor", 0));
+         }},
+        {"min_weekly_rest_days_cost",
+         [](const py::dict &p)
+         { return unitOf<MinWeeklyRestDaysCost>(param<int>(p, "value", 1)); }},
+        {"assignment_cost",
+         [](const py::dict &p)
+         {
+             return unitOf<AssignmentCost>(
+                 param<double>(p, "cost_per_hour", 0.0),
+                 param<double>(p, "cost_per_shift", 0.0),
+                 param<AssignmentCost::CostMatrix>(p, "shift_costs", {}));
+         }},
+        {"unassigned_shifts_cost",
+         [](const py::dict &) { return globalOf<UnassignedShiftsCost>(); }},
+        {"shift_count_gap_cost",
+         [](const py::dict &p)
+         { return globalOf<ShiftCountGapCost>(param<int>(p, "tolerance", 0)); }},
+        {"weekly_minutes_gap_cost",
+         [](const py::dict &p)
+         {
+             return globalOf<WeeklyMinutesGapCost>(
+                 param<int>(p, "tolerance_minutes", 120));
+         }},
+        {"shift_coverage_cost",
+         [](const py::dict &p)
+         {
+             // Scoped natively: its groups derive from the shift set.
+             return globalOf<ShiftCoverageCost>(
+                 param<std::string>(p, "worker_skill", std::string()),
+                 param<int>(p, "min_count", 0),
+                 param<int>(p, "max_count", -1),
+                 param<std::vector<int>>(p, "worker_indices", {}),
+                 param<std::vector<int>>(p, "shift_indices", {}));
+         }},
+        {"location_run_length_cost",
+         [](const py::dict &p)
+         {
+             return unitOf<LocationRunLengthCost>(
+                 param<std::string>(p, "location", std::string()),
+                 param<int>(p, "min_run", 0),
+                 param<int>(p, "max_run", -1),
+                 param<bool>(p, "waive_min_at_end", true));
+         }},
+        {"rest_after_location_run_cost",
+         [](const py::dict &p)
+         {
+             return unitOf<RestAfterLocationRunCost>(
+                 param<std::string>(p, "location", std::string()),
+                 param<int>(p, "rest_days", 1));
+         }},
+        {"location_run_gap_cost",
+         [](const py::dict &p)
+         {
+             return unitOf<LocationRunGapCost>(
+                 param<std::string>(p, "location", std::string()),
+                 param<int>(p, "min_gap", 0));
+         }},
+        {"worker_location_count_cost",
+         [](const py::dict &p)
+         {
+             return unitOf<WorkerLocationCountCost>(
+                 param<std::string>(p, "location", std::string()),
+                 param<std::string>(p, "worker_skill", std::string()),
+                 param<int>(p, "min_count", 0),
+                 param<int>(p, "max_count", -1));
+         }},
+        {"day_pattern_cost",
+         [](const py::dict &p)
+         {
+             return unitOf<DayPatternCost>(
+                 param<std::string>(p, "pattern", std::string()));
+         }},
+        {"target_days_off_cost",
+         [](const py::dict &p)
+         {
+             return unitOf<TargetDaysOffCost>(
+                 param<std::vector<int>>(p, "target_days", {}),
+                 param<int>(p, "min_count", 0));
+         }},
+        {"worker_day_count_in_range_cost",
+         [](const py::dict &p)
+         {
+             return unitOf<WorkerDayCountInRangeCost>(
+                 param<int>(p, "lo", 0),
+                 param<int>(p, "hi", -1),
+                 param<int>(p, "min_count", 0),
+                 param<int>(p, "max_count", -1),
+                 param<std::string>(p, "location", std::string()));
+         }},
+        {"location_imbalance_cost",
+         [](const py::dict &p)
+         {
+             return globalOf<LocationImbalanceCost>(
+                 param<std::string>(p, "location", std::string()),
+                 param<std::string>(p, "worker_skill", std::string()),
+                 param<std::string>(p, "metric", std::string("ssd")),
+                 param<int>(p, "tolerance", 0),
+                 param<std::vector<int>>(p, "off_target_days", {}));
+         }},
+        {"worker_pairing_cost",
+         [](const py::dict &p)
+         {
+             return globalOf<WorkerPairingCost>(
+                 param<int>(p, "anchor", -1),
+                 param<int>(p, "paired", -1),
+                 param<std::vector<int>>(p, "bucket_days", {}),
+                 param<std::vector<std::string>>(p, "bucket_locations", {}),
+                 param<bool>(p, "penalty", false));
+         }},
+    };
+    return table;
+}
+
+std::vector<std::string> factoryNames()
+{
+    std::vector<std::string> names;
+    for (const FactoryEntry &entry : factory())
+        names.emplace_back(entry.name);
+    return names;
+}
+
+// The domain parameters of one pick: `params()` (the shared spec base and
+// the pydantic rule models), a plain `params` dict, or none at all (a
+// duck-typed pick that only carries the knobs).
+py::dict paramsOf(const py::handle &pick)
+{
+    py::object params = py::getattr(pick, "params", py::none());
+    if (params.is_none())
+        return py::dict();
+    if (PyCallable_Check(params.ptr()))
+        params = params();
+    return params.cast<py::dict>();
+}
+
+// Builds one pick and adds it to `calc`: the factory component (at its
+// kDefaultWeight / kDefaultLevel and the given parameters), wrapped in a
+// ScopedUnit when the pick has a worker / shift scope, with the pick's
+// knobs re-stated on the outermost component by tfpy::applyKnobs (weight
+// None keeps kDefaultWeight, hard None keeps kDefaultLevel; a reward refuses
+// hard=True; the type and range checks speak the Python base's words).
+//
+// Unlike tfpy::applyConstraints, the factory may add one constraint several
+// times (other parameters or scope): each instance is scored on its own and
+// told apart by its label, and constraint_costs() keys the k-th instance
+// "<name>#<k>".
+void addConstraintByName(DecomposedCalculator &calc,
+                         const py::handle &pick,
+                         const py::dict &params)
+{
+    const std::string name = pick.attr("name").cast<std::string>();
+    const FactoryEntry *entry = nullptr;
+    for (const FactoryEntry &candidate : factory())
+        if (name == candidate.name)
+            entry = &candidate;
+    if (entry == nullptr)
+    {
+        std::string known;
+        for (const FactoryEntry &candidate : factory())
+            known += (known.empty() ? "" : ", ") + std::string(candidate.name);
+        throw py::value_error("unknown constraint '" + name
+                              + "'; available: " + known);
+    }
+    Built built = entry->build(params);
+    if (tfpy::pythonName(built.metadata().name) != name)
+    {
+        throw std::logic_error("factory entry '" + name + "' builds '"
+                               + built.metadata().name + "'");
+    }
+
     // Optional rule scope (see ScopedUnit): restrict this constraint to a
     // subset of workers / shifts. Indices are resolved by the caller and
     // arrive as params "worker_indices" / "shift_indices" (absent or None =
@@ -203,7 +318,7 @@ void addConstraintByName(DecomposedCalculator &calc,
     { return params.contains(key) && !params[key].is_none(); };
     const bool hasWorkerScope = hasIdx("worker_indices");
     const bool hasShiftScope = hasIdx("shift_indices");
-    if (unit && (hasWorkerScope || hasShiftScope))
+    if (built.unit && (hasWorkerScope || hasShiftScope))
     {
         std::vector<int> workerIdx
             = hasWorkerScope ? params["worker_indices"].cast<std::vector<int>>()
@@ -211,44 +326,87 @@ void addConstraintByName(DecomposedCalculator &calc,
         std::vector<int> shiftIdx
             = hasShiftScope ? params["shift_indices"].cast<std::vector<int>>()
                             : std::vector<int>{};
-        unit = std::make_unique<ScopedUnit>(std::move(unit),
-                                            weight,
-                                            std::move(workerIdx),
-                                            std::move(shiftIdx),
-                                            hasWorkerScope,
-                                            hasShiftScope);
+        built.unit = std::make_unique<ScopedUnit>(std::move(built.unit),
+                                                  std::move(workerIdx),
+                                                  std::move(shiftIdx),
+                                                  hasWorkerScope,
+                                                  hasShiftScope);
     }
-    else if (global && (hasWorkerScope || hasShiftScope)
-             && name != "shift_coverage")
+    else if (built.global && (hasWorkerScope || hasShiftScope)
+             && name != "shift_coverage_cost")
     {
-        // shift_coverage consumes worker_indices/shift_indices natively (its
-        // groups derive from the shift set); other globals don't support scope.
+        // shift_coverage_cost consumes worker_indices/shift_indices natively
+        // (its groups derive from the shift set); other globals don't
+        // support scope.
         throw py::value_error("rule scope (worker_indices/shift_indices) is "
                               "not yet supported for "
                               "the global constraint '"
                               + name + "'");
     }
 
-    if (unit)
-    {
-        if (hard)
-            unit->isHard = *hard;
-        unit->exponent = exponent;
-        calc.add(std::move(unit));
-    }
+    tfpy::applyKnobs(built.metadata(), pick, name);
+    if (built.unit)
+        calc.add(std::move(built.unit));
     else
+        calc.add(std::move(built.global));
+}
+
+// Python package holding this extension (e.g. "optimaru.employee_scheduling"),
+// set when the module loads, so calculatorFor can reach the package's
+// _constraint helpers.
+std::string &packageName()
+{
+    static std::string name;
+    return name;
+}
+
+// A calculator holding exactly `constraints` (each pick added by the
+// factory), or the default assembly for None. The selection rules of the
+// Python get_constraints() (select(..., repeatable=True)): an empty list is
+// an error, and so is the same name with the same parameters twice. The key
+// is the one select() uses, (name, _normalized(params)), so parameters
+// compare by value (a list and a tuple scope, or 1 and 1.0, are the same);
+// the same name with other parameters or scope is a separate instance.
+std::unique_ptr<DecomposedCalculator> calculatorFor(const py::object &constraints)
+{
+    auto calc = std::make_unique<DecomposedCalculator>();
+    if (constraints.is_none())
     {
-        if (hard)
-            global->isHard = *hard;
-        global->exponent = exponent;
-        calc.add(std::move(global));
+        addDefaultConstraints(*calc);
+        return calc;
     }
+    const py::object normalized
+        = py::module_::import((packageName() + "._constraint").c_str()).attr("_normalized");
+    py::list seen;
+    for (py::handle pick : constraints)
+    {
+        const py::dict params = paramsOf(pick);
+        const std::string name = pick.attr("name").cast<std::string>();
+        const py::tuple key = py::make_tuple(name, normalized(params));
+        if (seen.contains(key))
+        {
+            throw py::value_error(
+                "constraint '" + name
+                + "' picked more than once with the same parameters; state each "
+                  "instance once with the metadata you want");
+        }
+        seen.append(key);
+        addConstraintByName(*calc, pick, params);
+    }
+    if (seen.size() == 0)
+        throw py::value_error(
+            "constraints must not be empty (pass None for the defaults)");
+    return calc;
 }
 
 }  // namespace
 
 PYBIND11_MODULE(_core, m)
 {
+    {
+        const std::string module = m.attr("__name__").cast<std::string>();
+        packageName() = module.substr(0, module.rfind('.'));
+    }
     m.doc() = "Employee shift scheduling — optimaru engine-backed C++ wrapper "
               "exposed to Python";
 
@@ -363,7 +521,7 @@ PYBIND11_MODULE(_core, m)
           "schedule.score).");
 
     // ------------------------------------------------------------------
-    // Plugin-style cost assembly: pick constraints and weights from Python.
+    // Plugin-style cost assembly: pick constraints and knobs from Python.
     // ------------------------------------------------------------------
     py::class_<DecomposedCalculator>(
         m,
@@ -371,59 +529,54 @@ PYBIND11_MODULE(_core, m)
         "Pluggable score calculator: assemble constraints — either from a "
         "list of constraint specs (see es_scheduling.constraints) or "
         "incrementally via add(name, ...) — then pass to "
-        "Solver.solve(schedule, calc). All eight defaults at weight 1 "
-        "reproduce calculate_score exactly.")
+        "Solver.solve(schedule, calc). The eight defaults at their default "
+        "weights reproduce calculate_score exactly. A constraint may be "
+        "added several times (other parameters or scope).")
         .def(py::init<>())
-        // Example: DecomposedCalculator([RequiredSkill(2.0), ...]).
-        // Duck-typed: each spec needs .name/.weight/.hard/.exponent, plus an
-        // optional .params dict for constraint-specific options.
-        .def(py::init(
-                 [](const py::iterable &constraints)
-                 {
-                     auto calc = std::make_unique<DecomposedCalculator>();
-                     for (py::handle spec : constraints)
-                     {
-                         py::dict params;
-                         if (py::hasattr(spec, "params"))
-                             params = spec.attr("params").cast<py::dict>();
-                         addConstraintByName(
-                             *calc,
-                             spec.attr("name").cast<std::string>(),
-                             spec.attr("weight").cast<double>(),
-                             spec.attr("hard").cast<std::optional<bool>>(),
-                             spec.attr("exponent").cast<double>(),
-                             params);
-                     }
-                     return calc;
-                 }),
+        // Example: DecomposedCalculator([RequiredSkillCost(weight=2.0), ...]).
+        // Duck-typed: each pick needs .name/.weight/.hard/.exponent, plus an
+        // optional params() (or .params dict) with the domain parameters.
+        // The get_constraints() rules: no empty list (build an empty
+        // calculator with DecomposedCalculator() and add()), and the same
+        // rule with the same parameters at most once.
+        .def(py::init([](const py::iterable &constraints)
+                      { return calculatorFor(constraints); }),
              py::arg("constraints"),
              "Assemble from constraint spec objects, e.g.\n"
-             "DecomposedCalculator([RequiredSkill(), MinimumRest(0.25, "
-             "hard=False), MaxConsecutiveDays(value=6)]).")
+             "DecomposedCalculator([RequiredSkillCost(), MinRestCost(weight=0.25, "
+             "hard=False), MaxConsecutiveDaysCost(value=6)]).")
         .def(
             "add",
             [](DecomposedCalculator &calc,
-               const std::string &name,
-               double weight,
-               std::optional<bool> hard,
-               double exponent,
+               const py::object &name,
+               const py::object &weight,
+               const py::object &hard,
+               const py::object &exponent,
                const py::kwargs &kwargs)
             {
-                addConstraintByName(calc, name, weight, hard, exponent, kwargs);
+                // The same checks as a spec pick: a SimpleNamespace carrying
+                // the three knobs goes through the one factory path.
+                py::object pick = py::module_::import("types").attr(
+                    "SimpleNamespace")(py::arg("name") = name,
+                                       py::arg("weight") = weight,
+                                       py::arg("hard") = hard,
+                                       py::arg("exponent") = exponent);
+                addConstraintByName(calc, pick, kwargs);
             },
             py::arg("name"),
-            py::arg("weight") = 1.0,
-            py::arg("hard") = std::nullopt,
+            py::arg("weight") = py::none(),
+            py::arg("hard") = py::none(),
             py::arg("exponent") = 1.0,
             "Add a built-in constraint by name (see CONSTRAINT_NAMES).\n"
-            "weight:   linear multiplier on the constraint's cost.\n"
-            "hard:     True/False overrides the constraint's default hard/soft "
-            "level (None keeps the default).\n"
+            "weight:   None = the component's default weight; otherwise a "
+            "linear multiplier (finite, >= 0) on its cost.\n"
+            "hard:     None keeps the constraint's default level, True = hard, "
+            "False = soft (a reward refuses True).\n"
             "exponent: shapes the per-employee cost superlinearly, sign-"
             "preserving: contribution = weight * sign(c)*|c|^exponent. "
             "2.0 = squared, 3.0 = cubed; penalizes concentrated violations.\n"
             "Extra keyword arguments become constraint-specific parameters "
-            "(e.g. add('max_consecutive_days', value=6)).")
+            "(e.g. add('max_consecutive_days_cost', value=6)).")
         .def(
             "score",
             [](DecomposedCalculator &calc, EmployeeSchedule &schedule)
@@ -447,48 +600,26 @@ PYBIND11_MODULE(_core, m)
                      calc.constraintTotals())
                 {
                     py::dict d;
-                    d["name"] = t.name;
-                    d["cost"] = t.cost;  // weighted; positive = penalizing
+                    d["name"] = tfpy::pythonName(t.name);
+                    d["label"] = t.label;  // the instance's display text
+                    d["cost"] = t.cost;    // weighted; positive = penalizing
+                    d["level"] = optimaru::levelName(t.level);
                     d["is_hard"] = t.isHard;
                     out.append(d);
                 }
                 return out;
             },
-            "Weighted cost per constraint for the last scored/solved solution "
-            "(positive = penalizing, negative = rewarding).")
+            "Weighted cost per constraint instance for the last scored/solved "
+            "solution (positive = penalizing, negative = rewarding): "
+            "{name, label, cost, level, is_hard}.")
         .def_property_readonly("delta_group_count",
                                &DecomposedCalculator::deltaGroupCount,
                                "Number of structural delta groups compiled by "
                                "the last reset/solve.");
 
-    m.attr("CONSTRAINT_NAMES") = py::make_tuple("required_skill",
-                                                "unavailable_employee",
-                                                "overlapping_shift",
-                                                "one_shift_per_day",
-                                                "min_rest",
-                                                "undesired_day",
-                                                "desired_day",
-                                                "desired_shift",
-                                                "balance_assignments",
-                                                "max_consecutive_days",
-                                                "min_consecutive_days",
-                                                "max_consecutive_off",
-                                                "rest_after_consecutive_work",
-                                                "max_weekly_minutes",
-                                                "min_weekly_minutes",
-                                                "min_weekly_rest_days",
-                                                "assignment_cost",
-                                                "unassigned_shift",
-                                                "balance_min_max_gap",
-                                                "balance_weekly_minutes_gap",
-                                                "shift_coverage",
-                                                "location_run",
-                                                "rest_after_location_run",
-                                                "location_run_gap",
-                                                "worker_location_count",
-                                                "day_pattern",
-                                                "target_days_off",
-                                                "balance_location");
+    // The names the rule factory accepts, in factory order: one table (see
+    // factory() above) also behind the "available:" list of an unknown name.
+    m.attr("CONSTRAINT_NAMES") = py::tuple(py::cast(factoryNames()));
 
     m.def(
         "default_calculator",
@@ -498,21 +629,41 @@ PYBIND11_MODULE(_core, m)
             addDefaultConstraints(*calc);
             return calc;
         },
-        "A DecomposedCalculator preloaded with all eight default constraints "
-        "at weight 1 (equivalent to the built-in score).");
+        "A DecomposedCalculator preloaded with the eight default constraints "
+        "at their default weights (equivalent to the built-in score).");
 
-    py::class_<Solver::Config>(m, "SolverConfig")
+    m.def(
+        "constraint_costs",
+        [](EmployeeSchedule &schedule, const py::object &constraints)
+        {
+            ScoreCalculator::prepare(schedule);
+            auto calc = calculatorFor(constraints);
+            return tfpy::constraintCosts(*calc, schedule);
+        },
+        py::arg("schedule"),
+        py::arg("constraints") = py::none(),
+        "Raw per-employee cost of every constraint instance (the eight "
+        "defaults for None), before weight/exponent/level: {key: {costs, "
+        "weight, exponent, hard, global, level, reward, level_flippable, name, "
+        "label}}. The k-th instance of a name picked more than once is keyed "
+        "'<name>#<k>'.");
+
+    // The constraint catalog: the eight defaults (default_enabled=True),
+    // then every other constraint the factory builds (default_enabled=False),
+    // read off es::defaultConstraints() / es::catalogConstraints().
+    tfpy::bindConstraintInfo(
+        m,
+        [] { return defaultConstraints(); },
+        [] { return catalogConstraints(); });
+
+    optimaru::python::bindConfigCopy(py::class_<Solver::Config>(m, "SolverConfig"))
         .def(py::init<>())
         .def_property(
             "spent_limit_seconds",
             [](const Solver::Config &c)
             { return std::chrono::duration<double>(c.spentLimit).count(); },
             [](Solver::Config &c, double s)
-            {
-                c.spentLimit
-                    = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        std::chrono::duration<double>(s));
-            })
+            { c.spentLimit = optimaru::python::secondsToMillis(s, "spent_limit_seconds"); })
         .def_property(
             "unimproved_spent_limit_seconds",
             [](const Solver::Config &c)
@@ -521,14 +672,7 @@ PYBIND11_MODULE(_core, m)
                     .count();
             },
             [](Solver::Config &c, double s)
-            {
-                if (s < 0.0)
-                    throw py::value_error(
-                        "unimproved_spent_limit_seconds must be non-negative");
-                c.unimprovedSpentLimit
-                    = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        std::chrono::duration<double>(s));
-            })
+            { c.unimprovedSpentLimit = optimaru::python::secondsToMillis(s, "unimproved_spent_limit_seconds"); })
         .def_property(
             "no_improvement_limit_seconds",
             [](const Solver::Config &c)
@@ -537,14 +681,7 @@ PYBIND11_MODULE(_core, m)
                     .count();
             },
             [](Solver::Config &c, double s)
-            {
-                if (s < 0.0)
-                    throw py::value_error(
-                        "no_improvement_limit_seconds must be non-negative");
-                c.unimprovedSpentLimit
-                    = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        std::chrono::duration<double>(s));
-            })
+            { c.unimprovedSpentLimit = optimaru::python::secondsToMillis(s, "no_improvement_limit_seconds"); })
         .def_readwrite("step_count_limit", &Solver::Config::stepCountLimit)
         .def_readwrite("unimproved_step_count_limit",
                        &Solver::Config::unimprovedStepCountLimit)
@@ -684,7 +821,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("or_opt_move_weight", &Solver::Config::orOptMoveWeight)
         .def_readwrite("tail_swap_move_weight",
                        &Solver::Config::tailSwapMoveWeight)
-        // Early termination once bestScore >= (hard, soft), e.g. (0, -1e18)
+        // Early termination once bestScore >= (hard, soft), e.g. (0, -inf)
         // stops at the first feasible solution.
         .def_property(
             "best_score_limit",

@@ -2,10 +2,15 @@
 
 #include <cstddef>
 
+#include "ts/constraints.hpp"
 #include "ts/score_calculator.hpp"
 
 namespace ts
 {
+
+// The monolithic incremental score is the default assembly
+// (ts/constraints.hpp): the components' kDefaultWeight constants, checked to
+// be integral and on the level they are summed into.
 
 void TournamentSchedulingIncrementalScoreCalculator::resetWorkingSolution(
     TournamentSchedule &workingSolution)
@@ -71,15 +76,18 @@ void TournamentSchedulingIncrementalScoreCalculator::insert(int assignmentIndex,
     const int day = schedule_->teamAssignments[assignmentIndex].day;
     const std::size_t cell = cellOffset(team, day);
 
-    // hard 1: joining a cell with c members adds c same-team same-day pairs.
+    // hard 1 (teamConflictCost): joining a cell with c members adds c
+    // same-team same-day pairs.
     const int c = cellCnt_[cell];
     pairSum_ += c;
-    // hard 2: the cell's occupancy crosses 0 -> 1: its penalty facts hit.
+    // hard 2 (teamUnavailabilityCost): the cell's occupancy crosses 0 -> 1:
+    // its penalty facts hit.
     if (c == 0)
         unavailHit_ += penaltyCnt_[cell];
 
-    // soft 4: one new confrontation with every other team's assignment on
-    // this day (same-team pairs are excluded by the Java lessThan(teamId)).
+    // soft 4 (confrontationCountImbalanceCost): one new confrontation with
+    // every other team's assignment on this day (same-team pairs are excluded
+    // by the Java lessThan(teamId)).
     for (int u = 0; u < teamCount_; ++u)
     {
         if (u == team)
@@ -90,7 +98,7 @@ void TournamentSchedulingIncrementalScoreCalculator::insert(int assignmentIndex,
     }
     ++cellCnt_[cell];
 
-    // medium 3: the team's load grows by 1.
+    // medium 3 (assignmentCountImbalanceCost): the team's load grows by 1.
     const std::int64_t load = teamLoad_[team];
     if (load == 0)
         ++balN_;
@@ -151,11 +159,15 @@ void TournamentSchedulingIncrementalScoreCalculator::afterVariableChanged(
 Score TournamentSchedulingIncrementalScoreCalculator::calculateScore()
 {
     Score score;
-    score.hard = -(pairSum_ + unavailHit_);
+    score.hard = -(kHardWeight<TeamConflictCost> * pairSum_
+                   + kHardWeight<TeamUnavailabilityCost> * unavailHit_);
     score.soft = ScoreCalculator::combinedSoft(
-        ScoreCalculator::unfairnessFromAggregates(balSum_, balSumSq_, balN_),
-        ScoreCalculator::unfairnessFromAggregates(
-            confSum_, confSumSq_, confN_));
+        static_cast<double>(kMediumWeight<AssignmentCountImbalanceCost>)
+            * ScoreCalculator::unfairnessFromAggregates(
+                balSum_, balSumSq_, balN_),
+        static_cast<double>(kSoftWeight<ConfrontationCountImbalanceCost>)
+            * ScoreCalculator::unfairnessFromAggregates(
+                confSum_, confSumSq_, confN_));
     return score;
 }
 

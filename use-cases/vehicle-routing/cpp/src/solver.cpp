@@ -1,17 +1,18 @@
 #include "vrp/solver.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <exception>
 #include <limits>
 #include <memory>
 #include <stdexcept>
-#include <thread>
 #include <utility>
 #include <vector>
 
 #include "optimaru/api/solver/solver.hpp"
 #include "optimaru/config/solver/solver_config.hpp"
+#include "optimaru/impl/solver/worker_threads.hpp"
 #include "vrp/incremental_calculator.hpp"
 #include "vrp/score_calculator.hpp"
 
@@ -31,31 +32,32 @@ void solveInParallel(const Solver::Config &config, VehicleRoutePlan &plan,
     std::vector<VehicleRoutePlan> candidates(static_cast<std::size_t>(workerCount),
                                              plan);
     std::vector<std::exception_ptr> failures(static_cast<std::size_t>(workerCount));
-    std::vector<std::thread> workers;
-    workers.reserve(static_cast<std::size_t>(workerCount));
-    for (int i = 0; i < workerCount; ++i)
-    {
-        workers.emplace_back(
-            [&config, i, &candidates, &failures]
+    // Raised by the first worker that fails: every worker's engine checks
+    // it once a step, so the others stop instead of using up their budget.
+    auto stop = std::make_shared<std::atomic<bool>>(false);
+    // A worker that cannot be started (std::system_error) stops and joins
+    // the ones already running before the error is rethrown here.
+    optimaru::runWorkerThreads(
+        workerCount, *stop,
+        [&config, &candidates, &failures, &stop](int i)
+        {
+            try
             {
-                try
-                {
-                    Solver::Config workerConfig = config;
-                    workerConfig.parallelSolverCount = 1;
-                    workerConfig.randomSeed += static_cast<std::uint64_t>(i);
-                    if (i != 0)
-                        workerConfig.onNewBest = nullptr;  // only worker 0 reports
-                    Solver worker(std::move(workerConfig));
-                    worker.solve(candidates[static_cast<std::size_t>(i)]);
-                }
-                catch (...)
-                {
-                    failures[static_cast<std::size_t>(i)] = std::current_exception();
-                }
-            });
-    }
-    for (std::thread &worker : workers)
-        worker.join();
+                Solver::Config workerConfig = config;
+                workerConfig.parallelSolverCount = 1;
+                workerConfig.stopFlag = stop;
+                workerConfig.randomSeed += static_cast<std::uint64_t>(i);
+                if (i != 0)
+                    workerConfig.onNewBest = nullptr;  // only worker 0 reports
+                Solver worker(std::move(workerConfig));
+                worker.solve(candidates[static_cast<std::size_t>(i)]);
+            }
+            catch (...)
+            {
+                failures[static_cast<std::size_t>(i)] = std::current_exception();
+                stop->store(true);
+            }
+        });
     for (const std::exception_ptr &failure : failures)
     {
         if (failure)
@@ -102,7 +104,7 @@ optimaru::SolverConfig buildEngineConfig(const Solver::Config &config,
     if (config.bestScoreLimit.medium != std::numeric_limits<std::int64_t>::max())
     {
         engineConfig.termination.bestScoreLimit
-            = toEngineScore(config.bestScoreLimit);
+            = toEngineScoreLimit(config.bestScoreLimit);
     }
     engineConfig.termination.unimprovedSpentLimit = config.unimprovedSpentLimit;
     engineConfig.termination.stepCountLimit = config.stepCountLimit;
@@ -231,6 +233,17 @@ optimaru::SolverConfig buildEngineConfig(const Solver::Config &config,
     return engineConfig;
 }
 
+// The plugin path's Score: the calculator's three accumulators before the
+// medium fold, each level rounded on its own. Decoding the folded engine soft
+// instead would file a soft total of 10^9 or more under medium.
+Score levelScore(const optimaru::DecomposedScoreCalculator<VehicleRoutePlan> &calculator)
+{
+    const auto levels = calculator.levelScores();
+    return Score{static_cast<std::int64_t>(levels.hard),
+                 optimaru::roundScoreLevel(levels.medium, "medium"),
+                 optimaru::roundScoreLevel(levels.soft, "soft")};
+}
+
 }  // namespace
 
 void Solver::solve(VehicleRoutePlan &plan)
@@ -265,6 +278,8 @@ void Solver::solve(VehicleRoutePlan &plan)
     optimaru::SolverConfig engineConfig = buildEngineConfig(config_, plan);
     VehicleRoutingIncrementalScoreCalculator calculator;
     optimaru::Solver<VehicleRoutePlan> engine(std::move(engineConfig));
+    if (config_.stopFlag)
+        engine.adoptTerminateEarlyFlag(config_.stopFlag);
     engine.solve(plan, calculator);
 
     // The authoritative final score: a full recompute on the best solution.
@@ -283,8 +298,22 @@ void Solver::solve(
     }
     if (!plan.visits.empty() && !plan.vehicles.empty())
     {
-        optimaru::Solver<VehicleRoutePlan> engine(
-            buildEngineConfig(config_, plan));
+        optimaru::SolverConfig engineConfig = buildEngineConfig(config_, plan);
+        if (config_.onNewBest)
+        {
+            // Report the same three levels as the final plan.score below. The
+            // engine calls onNewBest right after the working solution became
+            // the new best, so the calculator's accumulators hold exactly that
+            // solution; the folded engine score it passes is not decoded.
+            auto callback = config_.onNewBest;
+            engineConfig.onNewBest
+                = [callback, &calculator](std::int64_t step,
+                                          const optimaru::HardSoftScore &)
+            { callback(step, levelScore(calculator)); };
+        }
+        optimaru::Solver<VehicleRoutePlan> engine(std::move(engineConfig));
+        if (config_.stopFlag)
+            engine.adoptTerminateEarlyFlag(config_.stopFlag);
         engine.solve(plan, calculator);
     }
 
@@ -292,10 +321,12 @@ void Solver::solve(
     // solution — the plugin components derive their own chain and never write
     // these — then score it with the caller's constraint assembly, leaving the
     // calculator primed on it so constraintTotals() explains exactly this
-    // score.
+    // score. The three levels come straight from the calculator's
+    // accumulators (levelScore() above), like every onNewBest report.
     ScoreCalculator::updateShadowVariables(plan);
     calculator.resetWorkingSolution(plan);
-    plan.score = fromEngineScore(calculator.calculateScore());
+    calculator.calculateScore();
+    plan.score = levelScore(calculator);
 }
 
 }  // namespace vrp

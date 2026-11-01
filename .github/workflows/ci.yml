@@ -20,6 +20,8 @@ jobs:
         run: cmake --build build -j4
       - name: Test
         run: ctest --test-dir build --output-on-failure --no-tests=error
+      - name: Constraint-spec base copies in sync
+        run: python3 scripts/check_constraint_base.py --require-all
 
   use-case-cpp:
     name: ${{ matrix.use_case }} (C++)
@@ -28,18 +30,24 @@ jobs:
       fail-fast: false
       matrix:
         use_case:
+          - assembly-line-balancing
           - bed-allocation
+          - bin-packing
           - conference-scheduling
           - employee-scheduling
           - facility-location
           - flight-crew-scheduling
           - food-packaging
+          - knapsack
           - maintenance-scheduling
+          - max-cut
           - meeting-scheduling
           - order-picking
           - pickup-delivery
           - project-job-scheduling
+          - quadratic-assignment
           - school-timetabling
+          - semiconductor-scheduling
           - sports-league-scheduling
           - task-assigning
           - tournament-scheduling

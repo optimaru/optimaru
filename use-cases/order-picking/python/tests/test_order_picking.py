@@ -69,8 +69,19 @@ def test_warehouse_distance_java_cases():
         assert op.calculate_distance(location(*end), location(*start)) == expected
 
 
-def test_required_number_of_buckets_java_case():
-    """The Java requiredNumberOfBucketsWithPenalization case: penalizes by 5."""
+def raw_total(solution, name):
+    """One constraint's raw cost summed over the trolleys (constraint_costs)."""
+    return sum(op.constraint_costs(solution)[name]["costs"])
+
+
+def weighted_total(solution, name):
+    """The same at the constraint's default weight (what the score charges)."""
+    entry = op.constraint_costs(solution)[name]
+    return entry["weight"] * sum(entry["costs"])
+
+
+def test_trolley_capacity_cost_java_case():
+    """The Java bucket-shortage case (OrderPickingConstraintProviderTest): penalizes by 5."""
     origin = location(*ORIGIN_ARGS)
     orders = [op.Order("order1"), op.Order("order2")]
     volumes = {
@@ -88,13 +99,12 @@ def test_required_number_of_buckets_java_case():
     solution.trolleys[0].pick_task_indices = assignment[0]
     solution.trolleys[1].pick_task_indices = assignment[1]
 
-    totals = op.calculate_totals(solution)
-    assert totals.required_number_of_buckets == 5
+    assert raw_total(solution, "trolley_capacity_cost") == 5
     assert op.calculate_score(solution).hard == -5
 
 
 def test_order_split_java_case():
-    """The Java minimizeOrderSplitByTrolley case: (3 + 1) * 1000."""
+    """The Java order-split case: (3 + 1) * 1000 at the default weight."""
     origin = location(*ORIGIN_ARGS)
     orders = [op.Order("order1"), op.Order("order2")]
     picks = [op.PickTask(f"p{i}", 0 if i < 4 else 1, 1, origin) for i in range(8)]
@@ -105,8 +115,8 @@ def test_order_split_java_case():
     solution.trolleys[2].pick_task_indices = [3]
     solution.trolleys[3].pick_task_indices = [4, 5, 6, 7]
 
-    totals = op.calculate_totals(solution)
-    assert totals.order_split_by_trolley == 4000
+    assert weighted_total(solution, "order_split_by_trolley_cost") == 4000
+    assert op.calculate_score(solution).soft == -4000
 
 
 def test_distance_constraints_and_shadows():
@@ -124,9 +134,12 @@ def test_distance_constraints_and_shadows():
     assert solution.pick_tasks[5].trolley_index == -1  # unassigned
 
     # The two distance constraints add up to the round trips.
-    totals = op.calculate_totals(solution)
     round_trips = op.distance_to_travel(solution, 0) + op.distance_to_travel(solution, 1)
-    assert totals.distance_from_previous_pick_task + totals.distance_from_last_pick_task_to_path_origin == round_trips
+    assert (
+        raw_total(solution, "distance_from_previous_pick_task_cost")
+        + raw_total(solution, "distance_from_last_pick_task_to_path_origin_cost")
+        == round_trips
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -243,6 +256,12 @@ def test_pydantic_models_round_trip():
     assert sum(len(stops) for stops in solution.routes.values()) == 10
     assert solution.total_distance > 0
     assert solution.order_split_count >= 2  # at least one trolley per order
+    # Both come from constraint_costs() (raw, default constraints): the round
+    # trips and the (order, trolley) pairs of the returned routes.
+    assert solution.total_distance == sum(solution.distance_by_trolley.values())
+    assert solution.order_split_count == sum(
+        len({stop.order_id for stop in stops}) for stops in solution.routes.values()
+    )
     assert set(solution.distance_by_trolley) == {"1", "2"}
     round_tripped = models.OrderPickingResponse.model_validate_json(solution.model_dump_json())
     assert round_tripped == solution
@@ -270,3 +289,74 @@ def test_invalid_location_rejected():
         op.WarehouseLocation(column=0, shelving_row=3, side=op.Side.LEFT, row=0)
     with pytest.raises(ValueError):
         op.WarehouseLocation(column=0, shelving_row=0, side=op.Side.LEFT, row=11)
+
+
+def test_a_raising_on_new_best_stops_every_parallel_worker():
+    """Four workers and a 30 s budget: the callback's exception (worker 0) stops the other
+    workers too, so it reaches the caller at once instead of after their whole budget."""
+    import time
+
+    def boom(_step, _score):
+        raise RuntimeError("boom")
+
+    started = time.monotonic()
+    with pytest.raises(RuntimeError, match="boom"):
+        op.solve(
+            op.build_demo_data(),
+            time_limit_seconds=30.0,
+            parallel_solver_count=4,
+            on_new_best=boom,
+        )
+    assert time.monotonic() - started < 10.0
+
+
+def test_a_worker_thread_that_cannot_start_raises_instead_of_aborting():
+    """Creating worker thread 1 fails (std::system_error, injected through the module's test
+    seam): the worker already running is stopped and joined, and the error reaches the caller
+    at once. A joinable std::thread destroyed on that path used to call std::terminate."""
+    import time
+
+    from order_picking import _core
+
+    _core._fail_worker_thread_start(1)
+    try:
+        started = time.monotonic()
+        with pytest.raises(RuntimeError, match="injected worker thread creation failure"):
+            op.solve(op.build_demo_data(), time_limit_seconds=30.0, parallel_solver_count=4)
+        assert time.monotonic() - started < 10.0
+    finally:
+        _core._fail_worker_thread_start(-1)
+
+
+def test_stop_at_first_feasible_stops_whatever_the_soft_total():
+    """stop_at_first_feasible compares the hard level only (best_score_limit (0, -inf)).
+
+    Every enabled soft penalty at weight 1e21 puts the soft score far below -1e18 at the
+    first feasible solution: the solve still stops there instead of running its whole
+    30 s. The first 0.2.0 limit, (0, -1e18), was never reached by such a score.
+    """
+    import dataclasses
+    import time
+
+    import order_picking as package
+    from order_picking.constraints import get_constraints
+
+    info = {row.name: row for row in package.constraint_info()}
+
+    def heavy(spec):
+        row = info[spec.name]
+        soft_penalty = row.default_level == "soft" and row.default_enabled and not row.reward
+        return dataclasses.replace(spec, weight=1e21) if soft_penalty else spec
+
+    seen = []
+    started = time.monotonic()
+    package.solve(
+        op.build_demo_data(),
+        time_limit_seconds=30.0,
+        random_seed=1,
+        stop_at_first_feasible=True,
+        on_new_best=lambda _step, score: seen.append(score),
+        constraints=[heavy(spec) for spec in get_constraints()],
+    )
+    assert time.monotonic() - started < 20.0
+    assert seen[-1].hard == 0 and seen[-1].soft < -1e18

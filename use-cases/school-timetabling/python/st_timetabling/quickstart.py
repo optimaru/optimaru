@@ -21,9 +21,9 @@ type". Therefore:
   room) conceptually always happen in the class's own room, so room_id is
   always null in the result (the API_SPEC convention). Should the engine put a
   regular lesson in another room, that is harmless canonically — class clashes
-  are already prevented by studentGroupConflict.
+  are already prevented by class_conflict_cost.
 - Lessons needing a special room have the real special rooms of that
-  room_type as candidates. The engine's roomConflict prevents double use of a
+  room_type as candidates. The engine's room_conflict_cost prevents double use of a
   special room as a hard constraint, but cannot prevent a lesson from landing
   'outside' the special rooms (in a placeholder room, say). So the result
   conversion re-matches each timeslot's lessons to the free special rooms of
@@ -280,7 +280,9 @@ def inject_solution(converted: ConvertedProblem, lessons: list[dict]) -> None:
     for course_id, slots in by_course.items():
         indices = free_lessons.get(course_id, [])
         if len(slots) > len(indices):
-            raise ValueError(f"[{course_id}] {len(slots)} slots besides its fixed ones, for {len(indices)} free lessons")
+            raise ValueError(
+                f"[{course_id}] {len(slots)} slots besides its fixed ones, for {len(indices)} free lessons"
+            )
         course = converted.courses_by_id[course_id]
         required = converted.subjects_by_id[course["subject_id"]].get("required_room_type")
         candidates = (

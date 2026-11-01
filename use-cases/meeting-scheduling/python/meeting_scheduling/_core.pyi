@@ -3,23 +3,26 @@
 The compiled module wraps the C++ domain in `use-cases/meeting-scheduling/cpp`,
 which imports the generic engine in `include/optimaru`.
 
-Constraints of the Java quickstart (HardMediumSoftScore) and the score mapping:
-  hard 1. roomConflict          -1 per overlapping grain of two meetings in one room
-  hard 2. avoidOvertime         -lastTimeGrainIndex when no TimeGrain exists at the
-                                last grain index
-  hard 3. requiredAttendanceConflict  -1 per overlapping grain of pairs sharing a required attendee
-  hard 4. requiredRoomCapacity  -(shortfall) when needed seats (required+preferred)
-                                exceed the room capacity
-  hard 5. startAndEndOnSameDay  -1 when start and end days differ
-  med  6. requiredAndPreferredAttendanceConflict  -1 per overlapping grain of
-                                (required, preferred) pairs
-  med  7. preferredAttendanceConflict  -1 per overlap of pairs sharing a preferred attendee
-  soft 8. doMeetingsAsSoonAsPossible  -lastTimeGrainIndex (per meeting)
-  soft 9. oneBreakBetweenConsecutiveMeetings  -100 per adjacent meeting pair
-  soft 10. overlappingMeetings  -10 per overlapping grain of distinct meetings
-  soft 11. assignLargerRoomsFirst  -(capacity difference) per larger room
-  soft 12. roomStability        -1 when an attendee's consecutive (gap <= 2 grains)
-                                meetings change room
+Constraints of the Java quickstart (HardMediumSoftScore) and the score mapping
+(registry names; default weights per raw unit):
+  hard 1. room_conflict_cost        -1 per overlapping grain of two meetings in one room
+  hard 2. overtime_cost             -lastTimeGrainIndex when no TimeGrain exists at the
+                                    last grain index
+  hard 3. required_attendance_conflict_cost  -1 per overlapping grain of pairs sharing a
+                                    required attendee
+  hard 4. room_capacity_cost        -(shortfall) when needed seats (required+preferred)
+                                    exceed the room capacity
+  hard 5. day_crossing_cost         -1 when start and end days differ
+  med  6. required_and_preferred_attendance_conflict_cost  -1 medium per overlapping
+                                    grain of (required, preferred) pairs
+  med  7. preferred_attendance_conflict_cost  -1 medium per overlap of pairs sharing a
+                                    preferred attendee
+  soft 8. meeting_end_time_cost     -lastTimeGrainIndex (per meeting)
+  soft 9. consecutive_meetings_cost  -100 per adjacent meeting pair
+  soft 10. meeting_overlap_cost     -10 per overlapping grain of distinct meetings
+  soft 11. larger_room_capacity_cost  -(capacity difference) per larger room
+  soft 12. room_change_cost         -1 when an attendee's consecutive (gap <= 2 grains)
+                                    meetings change room
 
 The engine score is HardSoftScore(hard int, soft float), so medium is folded into
 soft: ``soft = -(medium penalty * MEDIUM_SCALE + raw soft penalty)``
@@ -32,7 +35,7 @@ from its start grain, and every overlap constraint is computed over that whole s
 """
 
 from collections.abc import Callable, Iterable, Sequence
-from typing import Any
+from typing import Any, Literal, NamedTuple
 
 MEDIUM_SCALE: float
 GRAIN_LENGTH_IN_MINUTES: int
@@ -69,7 +72,7 @@ class TimeGrain:
     starting_minute_of_day: int
 
 class Room:
-    """Problem fact: a meeting room (capacity is used by hard 4 / soft 11)."""
+    """Problem fact: a meeting room (capacity is used by room_capacity_cost / larger_room_capacity_cost)."""
     def __init__(self, id: str, name: str = "", capacity: int = 0) -> None: ...
     id: str
     name: str
@@ -154,43 +157,8 @@ class MeetingSchedule:
     def set_assignment(self, assignment: Sequence[int]) -> None:
         """Bulk-write planning variables (length must equal the number of assignments)."""
 
-class Breakdown:
-    """Raw violation counts per constraint (before weights; exactly the amounts the
-    Java ConstraintProvider penalizes)."""
-    @property
-    def room_conflict_grains(self) -> int: ...
-    @property
-    def overtime_sum(self) -> int: ...
-    @property
-    def required_conflict_grains(self) -> int: ...
-    @property
-    def room_capacity_shortage(self) -> int: ...
-    @property
-    def start_end_day_violations(self) -> int: ...
-    @property
-    def required_preferred_conflict_grains(self) -> int: ...
-    @property
-    def preferred_conflict_grains(self) -> int: ...
-    @property
-    def last_grain_index_sum(self) -> int: ...
-    @property
-    def consecutive_meeting_pairs(self) -> int: ...
-    @property
-    def overlapping_meeting_grains(self) -> int: ...
-    @property
-    def larger_room_capacity_sum(self) -> int: ...
-    @property
-    def room_stability_violations(self) -> int: ...
-    def hard_total(self) -> int: ...
-    def medium_total(self) -> int: ...
-    def soft_total(self) -> int:
-        """Sum with soft weights applied (x1/x100/x10)."""
-
 def calculate_score(schedule: MeetingSchedule) -> Score:
     """Full recalculation (also stored in schedule.score)."""
-
-def compute_breakdown(schedule: MeetingSchedule) -> Breakdown:
-    """Full recalculation per constraint (raw violation counts)."""
 
 def demo_data() -> MeetingSchedule:
     """Reproduces Java DemoDataGenerator (the same draws as java.util.Random(0)):
@@ -227,7 +195,7 @@ class SolverConfig:
     """Probability that a change move draws only start grains that keep the meeting
     within one day (0 disables)."""
     best_score_limit: tuple[int, float]
-    """Stop early once bestScore >= (hard, soft); (0, -1e18) stops at the first
+    """Stop early once bestScore >= (hard, soft); (0, -inf) stops at the first
     feasible."""
     on_new_best: Callable[[int, Score], None] | None
 
@@ -243,11 +211,34 @@ class Solver:
         keeps the default set."""
 
 def list_constraints() -> list[str]:
-    """Constraint names scored by this domain (default assembly order, snake_case).
+    """Constraint names scored by this domain (default assembly order, snake_case:
+    the five per-meeting constraints, then the seven pair constraints).
     The same names meeting_scheduling.constraints uses."""
 
-def constraint_costs(solution, /) -> dict[str, dict]:
+def constraint_costs(schedule: MeetingSchedule, /) -> dict[str, dict[str, Any]]:
     """Per-constraint, per-unit **raw** costs — before weight/exponent/level rounding.
-    `meeting_scheduling.constraints.score()` takes these and produces a score.
-    {name: {"costs": [...], "weight": w, "exponent": e,
-            "hard": bool, "global": bool}}."""
+    A unit is a (time grain, room) cell; a pair (global) constraint reports one cost.
+    `meeting_scheduling.constraints.score()` takes these and produces a score:
+    {name: {"costs": [...], "weight": float, "exponent": float, "hard": bool,
+    "global": bool, "level": "hard" | "medium" | "soft", "reward": bool,
+    "level_flippable": bool, "name": str, "label": str,
+    "medium_fold": {"kind": "into_soft", "unit": 1e6}}}. The medium fold belongs
+    to the domain, so EVERY entry carries it."""
+
+class ConstraintInfo(NamedTuple):
+    """One constraint-catalog row, read off the C++ default assembly."""
+
+    name: str
+    default_level: Literal["hard", "medium", "soft"]
+    default_weight: float
+    level_flippable: bool
+    reward: bool
+    default_enabled: bool
+
+def constraint_info() -> list[ConstraintInfo]:
+    """The constraint catalog, in list_constraints() order: the default level and
+    weight of each constraint (required_and_preferred_attendance_conflict_cost and
+    preferred_attendance_conflict_cost are medium at weight 1 in medium units;
+    consecutive_meetings_cost soft at 100, meeting_overlap_cost soft at 10; every
+    other constraint at weight 1). All flippable, none a reward, all enabled by
+    default."""

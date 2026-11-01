@@ -1,10 +1,12 @@
 #ifndef FL_SOLVER_HPP
 #define FL_SOLVER_HPP
 
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <functional>
 #include <limits>
+#include <memory>
 #include <utility>
 #include <vector>
 
@@ -122,6 +124,11 @@ public:
         double closeFacilityMigrateProbability = 0.25;
 
         std::function<void(std::int64_t, const Score &)> onNewBest;
+        // Set by solve() on each parallel worker's copy, not by a caller (and
+        // not bound to Python): the first worker that fails raises it, and the
+        // other workers' engines stop at their next step instead of running out
+        // their budget before the error reaches the caller.
+        std::shared_ptr<std::atomic<bool>> stopFlag;
     };
 
     Solver() = default;
@@ -135,7 +142,7 @@ public:
     // fl/constraints.hpp): pick components and weights, then pass the
     // assembly here. The same search applies — construction heuristic,
     // late-acceptance local search, ALNS kicks and CloseFacilityMove. Weights
-    // come from the assembly, NOT from the problem's weight fields. The final
+    // and levels come from the assembly (the problem carries none). The final
     // problem.score is computed by THIS calculator and the calculator is left
     // primed on the final solution, so constraintTotals() explains exactly
     // that score. Single-start: the caller-owned calculator cannot be cloned,

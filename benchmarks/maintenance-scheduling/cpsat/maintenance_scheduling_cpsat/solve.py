@@ -87,11 +87,12 @@ def solve(
     ends = [
         [_end_date(day, job.duration_in_days) for day in dates] for job in problem.jobs
     ]
+    # Default weights and levels come from the engine (constraint_info()); the
+    # canonical problem carries none.
     objective = REGISTRY.objective(model, ("hard", "soft"), constraints)
     REGISTRY.build(
         MaintenanceContext(model, problem, dates, options, x, ends), objective
     )
-
 
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = time_limit_seconds

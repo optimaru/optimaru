@@ -1,0 +1,30 @@
+{
+    "bin_capacity": 100,
+    "items": [
+        { "id": "I01", "weight": 48, "color": "red" },
+        { "id": "I02", "weight": 30, "color": "blue" },
+        { "id": "I03", "weight": 19, "color": "green" },
+        { "id": "I04", "weight": 36, "color": "yellow" },
+        { "id": "I05", "weight": 36 },
+        { "id": "I06", "weight": 27 },
+        { "id": "I07", "weight": 42, "color": "red" },
+        { "id": "I08", "weight": 42, "color": "blue" },
+        { "id": "I09", "weight": 42, "color": "green" },
+        { "id": "I10", "weight": 42, "color": "yellow" },
+        { "id": "I11", "weight": 42 },
+        { "id": "I12", "weight": 42 },
+        { "id": "I13", "weight": 24 },
+        { "id": "I14", "weight": 24 },
+        { "id": "I15", "weight": 51, "color": "red" },
+        { "id": "I16", "weight": 49, "color": "blue" },
+        { "id": "I17", "weight": 55 },
+        { "id": "I18", "weight": 45 },
+        { "id": "I19", "weight": 33 },
+        { "id": "I20", "weight": 17 }
+    ],
+    "conflicts": [
+        { "first": "I01", "second": "I16" },
+        { "first": "I07", "second": "I18" },
+        { "first": "I10", "second": "I19" }
+    ]
+}

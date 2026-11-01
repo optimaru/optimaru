@@ -1,5 +1,6 @@
 """Scaled-down demo solve: reaches feasible + high-level solve() + pinned seats kept."""
 
+import time
 from datetime import date, datetime, timedelta
 
 import pytest
@@ -122,3 +123,62 @@ def test_unavailability_affects_score():
         employee.unavailable_days = [date(2026, 8, 10)]
     result = fc.solve(model, time_limit_seconds=2.0, random_seed=5)
     assert result.score_hard == -40  # 4 seats x -10
+
+
+def _boom(_step, _score):
+    raise RuntimeError("boom")
+
+
+def test_a_raising_on_new_best_raises_from_a_multi_start_solve():
+    """Two parallel starts: the callback's exception reaches Python instead of aborting the process,
+    and the other start stops at once instead of running out its 10 s budget."""
+    started = time.monotonic()
+    with pytest.raises(RuntimeError, match="boom"):
+        fc.solve(
+            _mini_problem(),
+            time_limit_seconds=10.0,
+            parallel_solver_count=2,
+            on_new_best=_boom,
+        )
+    assert time.monotonic() - started < 8.0
+
+
+def test_a_worker_thread_that_cannot_start_raises_instead_of_aborting():
+    """Creating worker thread 1 fails (std::system_error, injected through the module's test
+    seam): the worker already running is stopped and joined, and the error reaches the caller
+    at once. A joinable std::thread destroyed on that path used to call std::terminate."""
+    from flight_crew import _core
+
+    _core._fail_worker_thread_start(1)
+    try:
+        started = time.monotonic()
+        with pytest.raises(RuntimeError, match="injected worker thread creation failure"):
+            fc.solve(_mini_problem(), time_limit_seconds=30.0, parallel_solver_count=4)
+        assert time.monotonic() - started < 10.0
+    finally:
+        _core._fail_worker_thread_start(-1)
+
+
+def test_stop_at_first_feasible_has_no_soft_floor(monkeypatch):
+    """stop_at_first_feasible hands the engine best_score_limit (0, -inf): only the hard level
+    is compared, so no soft score, however low, misses the stop. The first 0.2.0 limit,
+    (0, -1e18), was never reached by a soft score below -1e18. A soft score that low cannot
+    be built here (its soft terms are 0 at the first feasible schedule of the test instance), so
+    the limit itself is checked; the stop is exercised end to end
+    in the other packages' tests."""
+    import flight_crew as package
+
+    seen = []
+
+    class Captured(Exception):
+        pass
+
+    class Capture:
+        def __init__(self, cfg):
+            seen.append(cfg.best_score_limit)
+            raise Captured
+
+    monkeypatch.setattr(package, "Solver", Capture)
+    with pytest.raises(Captured):
+        package.solve(_mini_problem(), stop_at_first_feasible=True)
+    assert seen == [(0, float("-inf"))]

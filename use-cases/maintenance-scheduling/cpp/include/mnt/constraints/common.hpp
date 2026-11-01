@@ -29,18 +29,18 @@ namespace mnt
 // to no unit and so contribute nothing.
 //
 // The four date rules are per-job terms of that cell and derive from
-// PerJobConstraint below. The two pairwise rules (crewConflict, tagConflict)
-// compare jobs that share a crew or a tag on some DAY, which spans cells —
-// two jobs of one crew starting on different dates sit in different units —
-// so they run as GlobalConstraints on the onMemberChanged fast path, keeping
-// the same per-(crew, day) / per-(tag, day) occupancy counters the monolithic
-// calculator does.
+// PerJobConstraint below. The two pairwise rules (crewConflictCost,
+// tagConflictCost) compare jobs that share a crew or a tag on some DAY,
+// which spans cells — two jobs of one crew starting on different dates sit
+// in different units — so they run as GlobalConstraints on the
+// onMemberChanged fast path, keeping the same per-(crew, day) /
+// per-(tag, day) occupancy counters the monolithic calculator does.
 //
 //   DecomposedCalculator calc;
-//   defaultConstraints()              // the whole default set
-//       .weight("...", 2)            // ... then only what differs
-//       .soft("...")
-//       .drop("...")
+//   defaultConstraints()                         // the whole default set
+//       .weight("afterIdealEndDateCost", 2)      // ... then only what differs
+//       .soft("maxEndDateCost")
+//       .drop("beforeIdealEndDateCost")
 //       .into(calc);
 //   solver.solve(schedule, calc);
 //
@@ -48,16 +48,24 @@ namespace mnt
 // `ConstraintAssembly{}` when you would rather list components from
 // scratch than start from the defaults.
 //
-// The "Hard:"/"Soft:" level and the weight of each component are DEFAULTS —
+// Each component declares its defaults once, as static constexpr
+// kDefaultWeight / kDefaultLevel passed to the base constructor; they are
 // assembly-time metadata, not part of the cost. Override them per instance
-// via the mutable `isHard` / `weight` / `exponent`. The Java soft weights
-// (x 1 beforeIdeal, x 1'000 tagConflict, x 1'000'000 afterIdeal) are exactly
-// these defaults, so re-pricing a term is a one-argument change.
+// with the constructor's weight argument or the mutable `level` / `weight` /
+// `exponent`, or by name through ConstraintAssembly. The Java soft weights
+// (x 1 beforeIdealEndDateCost, x 1'000 tagConflictCost, x 1'000'000
+// afterIdealEndDateCost) are exactly these defaults, so re-pricing a term is
+// a one-argument change; the monolithic calculators read the same
+// kDefaultWeight constants.
+//
+// Registry names are the struct names with a lower-case first letter
+// ("crewConflictCost"); Python sees them through pythonName()
+// ("crew_conflict_cost").
 //
 // Cost sign convention (see decomposed_score_calculator.hpp): positive =
-// penalty; the calculator negates into the score. An assembly of all six
-// components at their default weights therefore scores bit-for-bit like
-// ScoreCalculator::calculateScore.
+// penalty, 0 = no violation; the calculator negates into the score. An
+// assembly of all six components at their default weights therefore scores
+// bit-for-bit like ScoreCalculator::calculateScore.
 //
 // Every component requires ScoreCalculator::prepare(schedule) to have run
 // (the solve() overload and the monolithic path both call it).

@@ -5,13 +5,14 @@ The problem is the planning solution: each consumer's `facility` (an index
 into `problem.facilities`, -1 == unassigned) is the single BASIC planning
 variable.
 
-Score (HardSoftScore, lexicographic): hard = -(over-capacity demand summed
-over used facilities), soft = -(setup_cost_weight * used facilities' setup
-cost + distance_from_facility_weight * consumer->facility meters).
+Score (HardSoftScore, lexicographic), at the default weights: hard =
+-(over-capacity demand summed over used facilities), soft = -(2 * used
+facilities' setup cost + 6 * consumer->facility meters). The weights are the
+C++ components' defaults (constraint_info()); the problem carries none.
 """
 
 from collections.abc import Callable, Iterable
-from typing import Any
+from typing import Any, Literal, NamedTuple
 
 class Score:
     @property
@@ -64,11 +65,6 @@ class FacilityLocationProblem:
     consumers: list[Consumer]
     south_west_corner: Location
     north_east_corner: Location
-    setup_cost_weight: int
-    """Soft weight of the setup-cost constraint (Java provider: ofSoft(2))."""
-    distance_from_facility_weight: int
-    """Soft weight of the distance constraint. Default 6 = the quickstart
-    solution's ConstraintWeightOverrides value (provider default 5)."""
     @property
     def score(self) -> Score: ...
     def facility_count(self) -> int: ...
@@ -138,7 +134,7 @@ class SolverConfig:
     """Probability that an emptied facility's consumers migrate together to one
     alternative site instead of being redistributed over the open ones."""
     best_score_limit: tuple[int, float]
-    """(hard, soft): stop early once bestScore >= this. (0, -1e18) stops at
+    """(hard, soft): stop early once bestScore >= this. (0, -inf) stops at
     the first feasible solution."""
     on_new_best: Callable[[int, Score], None] | None
 
@@ -155,8 +151,30 @@ class Solver:
         keeps the default set."""
 
 def list_constraints() -> list[str]:
-    """Constraint names scored by this domain (default assembly order, snake_case).
+    """Constraint names scored by this domain (default assembly order, snake_case):
+    facility_capacity_cost, facility_setup_cost, distance_from_facility_cost.
     The same names facility_location.constraints uses."""
 
-def constraint_costs(solution, /) -> dict[str, dict]:
-    """Return the raw per-constraint cost breakdown."""
+def constraint_costs(problem: FacilityLocationProblem) -> dict[str, dict[str, Any]]:
+    """Raw per-facility cost of every default constraint, before weight/exponent/level:
+    {name: {"costs": [...], "weight": float, "exponent": float, "hard": bool,
+    "global": bool, "level": "hard" | "medium" | "soft", "reward": bool,
+    "level_flippable": bool, "name": str, "label": str}}. facility_location.constraints.score()
+    turns it into a score. (A domain with a medium level adds "medium_fold" to every
+    entry; a name held more than once is keyed "<name>#<k>" from its second instance.)"""
+
+class ConstraintInfo(NamedTuple):
+    """One constraint-catalog row, read off the C++ default assembly."""
+
+    name: str
+    default_level: Literal["hard", "medium", "soft"]
+    default_weight: float
+    level_flippable: bool
+    reward: bool
+    default_enabled: bool
+
+def constraint_info() -> list[ConstraintInfo]:
+    """The constraint catalog, in list_constraints() order:
+    facility_capacity_cost (hard, 1), facility_setup_cost (soft, 2),
+    distance_from_facility_cost (soft, 6); all flippable, none a reward, all
+    scored by default (default_enabled)."""

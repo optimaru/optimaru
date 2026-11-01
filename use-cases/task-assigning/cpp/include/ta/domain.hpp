@@ -4,11 +4,13 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <vector>
 
 #include "optimaru/api/domain/solution_descriptor.hpp"
 #include "optimaru/api/score/buildin/hard_soft_score.hpp"
+#include "optimaru/api/score/level.hpp"
 
 namespace ta
 {
@@ -26,17 +28,29 @@ constexpr Minutes kNullTime = -1;  // stands in for a null startTime (Long)
 // Score  (BendableScore [1]hard/[3]soft mirror)
 // ---------------------------------------------------------------------------
 // The Java quickstart scores with BendableScore(hardLevels=1, softLevels=3):
-//   hard[0]  noMissingSkills            (missing skill count)
-//   soft[0]  minimizeUnassignedTasks    (1 per unassigned task)
-//   soft[1]  minimizeMakespan           (employee endTime^2 each)
-//   soft[2]  {critical|major|minor}PriorityTaskEndTime
+//   hard[0]  requiredSkillCost          (missing skill count)
+//   soft[0]  unassignedTasksCost        (1 per unassigned task)
+//   soft[1]  squaredMakespanCost        (employee endTime^2 each)
+//   soft[2]  {critical|major|minor}PriorityTaskEndTimeCost
 //            (endTime x 4 / x 2 / x 1)
-// The generic engine (include/optimaru/) only knows HardSoftScore(int64 hard, double
-// soft). Mapping rule (level priority preserved, cf. the bed-allocation
-// HardMediumSoft mapping with a 10^9 offset):
+// The generic engine (include/optimaru/) only knows HardSoftScore(int64 hard,
+// double soft); its constraints score on three levels (hard, medium, soft).
+// Mapping rule (level priority preserved):
 //
-//   engine.hard = hard * kMissingSkillUnit + soft0   (kMissingSkillUnit=10^9)
-//   engine.soft = soft1 * kMakespanUnit + soft2      (kMakespanUnit    =10^7)
+//   hard[0] -> Level::Hard, soft[0] -> Level::Medium, soft[1] and soft[2]
+//   -> Level::Soft, folded as
+//   engine.hard = hard * kMissingSkillUnit + soft0   (kMediumFold:
+//                 MediumFold::belowHard(kMissingSkillUnit = 10^9))
+//   engine.soft = soft1 * kMakespanUnit + soft2      (kMakespanUnit = 10^7)
+//
+// The medium level folds BELOW hard: one hard unit (a missing skill) weighs
+// 10^9 medium units (unassigned tasks). The two soft levels share the
+// engine's one soft level, and soft[1] stays above soft[2] because
+// squaredMakespanCost's default weight IS kMakespanUnit (the components
+// declare their defaults; the fold carries no weight). At the default weights
+// the decomposed calculator (MediumFoldOf below) and this adapter produce the
+// same engine score bit for bit; an explicit weight stays in units of its
+// level (a medium weight in tasks, a hard one in missing skills).
 //
 // All four levels penalize whole units (skill counts / task counts / squared
 // minutes / weighted minutes), so every component is a non-positive integer:
@@ -54,11 +68,13 @@ constexpr Minutes kNullTime = -1;  // stands in for a null startTime (Long)
 // have soft0 == 0, so feasibility coincides with the Java hard level.
 constexpr std::int64_t kMissingSkillUnit = 1000000000LL;
 constexpr std::int64_t kMakespanUnit = 10000000LL;
+constexpr optimaru::MediumFold kMediumFold
+    = optimaru::MediumFold::belowHard(kMissingSkillUnit);
 
 struct Score
 {
     std::int64_t hard = 0;   // hard[0]: missing skills
-    std::int64_t soft0 = 0;  // soft[0]: unassigned tasks
+    std::int64_t soft0 = 0;  // soft[0]: unassigned tasks (the medium level)
     std::int64_t soft1 = 0;  // soft[1]: sum of employee endTime^2
     std::int64_t soft2 = 0;  // soft[2]: priority-weighted task end times
 
@@ -92,19 +108,39 @@ struct Score
     }
 };
 
+// hard -> hard, soft0 -> medium (below hard), soft1 * kMakespanUnit + soft2
+// -> soft, through the domain's medium fold.
 inline optimaru::HardSoftScore toEngineScore(const Score &s)
 {
-    return {s.hard * kMissingSkillUnit + s.soft0,
-            static_cast<double>(s.soft1) * static_cast<double>(kMakespanUnit)
-                + static_cast<double>(s.soft2)};
+    return kMediumFold.toEngine(
+        s.hard,
+        static_cast<double>(s.soft0),
+        static_cast<double>(s.soft1) * static_cast<double>(kMakespanUnit)
+            + static_cast<double>(s.soft2));
+}
+
+// A best-score LIMIT (Solver::Config::bestScoreLimit) in engine terms.
+// kNoLevelFloor (INT64_MIN) on soft1 or soft2 means "no floor on the soft
+// levels": the engine's soft limit becomes -inf, so only hard and soft0 (the
+// levels folded into the engine's hard level, compared exactly) count and no
+// soft score, however low, can miss the stop. stop_at_first_feasible passes
+// (0, 0, kNoLevelFloor, kNoLevelFloor): every skill met and every task
+// assigned. Any other limit folds as a score.
+constexpr std::int64_t kNoLevelFloor = std::numeric_limits<std::int64_t>::min();
+
+inline optimaru::HardSoftScore toEngineScoreLimit(const Score &limit)
+{
+    if (limit.soft1 == kNoLevelFloor || limit.soft2 == kNoLevelFloor)
+        return {toEngineScore({limit.hard, limit.soft0, 0, 0}).hard,
+                -std::numeric_limits<double>::infinity()};
+    return toEngineScore(limit);
 }
 
 // Inverse of toEngineScore. Every constraint penalizes (all levels <= 0 and
 // integral), so truncating integer division decodes the levels exactly.
 inline Score fromEngineScore(const optimaru::HardSoftScore &e)
 {
-    const std::int64_t combinedSoft
-        = static_cast<std::int64_t>(std::llround(e.soft));
+    const std::int64_t combinedSoft = optimaru::roundScoreLevel(e.soft, "soft");
     return {e.hard / kMissingSkillUnit,
             e.hard % kMissingSkillUnit,
             combinedSoft / kMakespanUnit,
@@ -146,22 +182,6 @@ enum class Priority
     MAJOR,
     CRITICAL
 };
-
-// The soft[2] end-time weight of each priority (the Java constraints'
-// x 1 / x 2 / x 4 factors).
-inline std::int64_t priorityWeight(Priority priority)
-{
-    switch (priority)
-    {
-    case Priority::CRITICAL:
-        return 4;
-    case Priority::MAJOR:
-        return 2;
-    case Priority::MINOR:
-    default:
-        return 1;
-    }
-}
 
 // ---------------------------------------------------------------------------
 // Customer  (problem fact)
@@ -336,6 +356,13 @@ template <> struct optimaru::SolutionDescriptor<ta::TaskAssigningSolution>
         std::vector<int> &tasks = s.employees[listIndex].tasks;
         std::reverse(tasks.begin() + first, tasks.begin() + last + 1);
     }
+};
+
+// The domain's medium fold for the decomposed calculator (see the Score
+// adapter above): unassignedTasksCost (Level::Medium) folds below hard.
+template <> struct optimaru::MediumFoldOf<ta::TaskAssigningSolution>
+{
+    static constexpr optimaru::MediumFold value = ta::kMediumFold;
 };
 
 #endif  // TA_DOMAIN_HPP

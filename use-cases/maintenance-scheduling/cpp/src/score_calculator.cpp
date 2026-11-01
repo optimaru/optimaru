@@ -5,8 +5,54 @@
 #include <string>
 #include <unordered_map>
 
+#include "mnt/constraints/after_ideal_end_date_cost.hpp"
+#include "mnt/constraints/before_ideal_end_date_cost.hpp"
+#include "mnt/constraints/crew_conflict_cost.hpp"
+#include "mnt/constraints/max_end_date_cost.hpp"
+#include "mnt/constraints/min_start_date_cost.hpp"
+#include "mnt/constraints/tag_conflict_cost.hpp"
+#include "optimaru/api/score/level.hpp"
+
 namespace mnt
 {
+
+namespace
+{
+
+// The monolithic score is the default assembly, so it reads the same
+// constants the components carry. Integral, so both levels are computed in
+// int64 exactly like the Java long arithmetic.
+constexpr auto kCrewWeight
+    = static_cast<std::int64_t>(CrewConflictCost::kDefaultWeight);
+constexpr auto kMinStartWeight
+    = static_cast<std::int64_t>(MinStartDateCost::kDefaultWeight);
+constexpr auto kMaxEndWeight
+    = static_cast<std::int64_t>(MaxEndDateCost::kDefaultWeight);
+constexpr auto kBeforeIdealWeight
+    = static_cast<std::int64_t>(BeforeIdealEndDateCost::kDefaultWeight);
+constexpr auto kAfterIdealWeight
+    = static_cast<std::int64_t>(AfterIdealEndDateCost::kDefaultWeight);
+constexpr auto kTagWeight
+    = static_cast<std::int64_t>(TagConflictCost::kDefaultWeight);
+static_assert(
+    kCrewWeight == CrewConflictCost::kDefaultWeight
+        && kMinStartWeight == MinStartDateCost::kDefaultWeight
+        && kMaxEndWeight == MaxEndDateCost::kDefaultWeight
+        && kBeforeIdealWeight == BeforeIdealEndDateCost::kDefaultWeight
+        && kAfterIdealWeight == AfterIdealEndDateCost::kDefaultWeight
+        && kTagWeight == TagConflictCost::kDefaultWeight,
+    "the monolithic calculator assumes integral default weights");
+static_assert(CrewConflictCost::kDefaultLevel == optimaru::Level::Hard
+                  && MinStartDateCost::kDefaultLevel == optimaru::Level::Hard
+                  && MaxEndDateCost::kDefaultLevel == optimaru::Level::Hard
+                  && BeforeIdealEndDateCost::kDefaultLevel
+                         == optimaru::Level::Soft
+                  && AfterIdealEndDateCost::kDefaultLevel
+                         == optimaru::Level::Soft
+                  && TagConflictCost::kDefaultLevel == optimaru::Level::Soft,
+              "the monolithic calculator assumes the default levels");
+
+}  // namespace
 
 void ScoreCalculator::prepare(MaintenanceSchedule &schedule)
 {
@@ -96,10 +142,10 @@ Score ScoreCalculator::calculateScore(MaintenanceSchedule &schedule)
     std::vector<int> tagDayCnt(
         static_cast<std::size_t>(schedule.tagCount) * dayCount, 0);
 
-    std::int64_t minStartViolation = 0;  // hard 2 (days)
-    std::int64_t maxEndViolation = 0;    // hard 3 (days)
-    std::int64_t beforeIdeal = 0;        // soft 4 (days)
-    std::int64_t afterIdeal = 0;         // soft 5 (days)
+    std::int64_t minStartViolation = 0;  // hard 2: minStartDateCost (days)
+    std::int64_t maxEndViolation = 0;    // hard 3: maxEndDateCost (days)
+    std::int64_t beforeIdeal = 0;  // soft 4: beforeIdealEndDateCost (days)
+    std::int64_t afterIdeal = 0;   // soft 5: afterIdealEndDateCost (days)
 
     for (const Job &job : schedule.jobs)
     {
@@ -135,18 +181,22 @@ Score ScoreCalculator::calculateScore(MaintenanceSchedule &schedule)
         }
     }
 
-    // hard 1: crewConflict — summed pairwise overlap in days.
+    // hard 1: crewConflictCost — summed pairwise overlap in days.
     std::int64_t crewOverlap = 0;
     for (int c : crewDayCnt)
         crewOverlap += pairs(c);
-    // soft 6: tagConflict — summed pairwise overlap in (shared tag, day).
+    // soft 6: tagConflictCost — summed pairwise overlap in (shared tag, day).
     std::int64_t tagOverlap = 0;
     for (int c : tagDayCnt)
         tagOverlap += pairs(c);
 
-    score.hard = -(crewOverlap + minStartViolation + maxEndViolation);
-    score.soft = -static_cast<double>(beforeIdeal + 1'000 * tagOverlap
-                                      + 1'000'000 * afterIdeal);
+    score.hard = -(kCrewWeight * crewOverlap
+                   + kMinStartWeight * minStartViolation
+                   + kMaxEndWeight * maxEndViolation);
+    score.soft = optimaru::withoutNegativeZero(-static_cast<double>(
+        kBeforeIdealWeight * beforeIdeal
+        + kTagWeight * tagOverlap
+        + kAfterIdealWeight * afterIdeal));
 
     schedule.score = score;
     return score;

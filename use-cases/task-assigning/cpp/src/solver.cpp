@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <memory>
 #include <stdexcept>
+#include <utility>
 
 #include "ta/incremental_calculator.hpp"
 #include "ta/score_calculator.hpp"
@@ -35,7 +36,7 @@ optimaru::SolverConfig buildEngineConfig(const Solver::Config &config,
     }
     engineConfig.termination.spentLimit = config.spentLimit;
     engineConfig.termination.bestScoreLimit
-        = toEngineScore(config.bestScoreLimit);
+        = toEngineScoreLimit(config.bestScoreLimit);
     engineConfig.termination.unimprovedSpentLimit = config.unimprovedSpentLimit;
     engineConfig.termination.stepCountLimit = config.stepCountLimit;
     engineConfig.termination.unimprovedStepCountLimit
@@ -61,6 +62,23 @@ optimaru::SolverConfig buildEngineConfig(const Solver::Config &config,
     lns.rewards = config.ruinRecreateRewards;
     lns.polishSteps = config.ruinRecreatePolishSteps;
     return engineConfig;
+}
+
+// The domain Score of a plugin calculator, read from its three accumulators
+// (levelScores(), before the BelowHard fold) rather than decoded from the
+// folded engine hard: the decode would misfile a medium total of 10^9 or more
+// as hard units and turns a saturated fold into nonsense. Only the soft level
+// is still split into soft1 / soft2 by kMakespanUnit (exact at the default
+// weights; see Score).
+Score levelScoreOf(
+    const optimaru::DecomposedScoreCalculator<TaskAssigningSolution> &calculator)
+{
+    const auto levels = calculator.levelScores();
+    const std::int64_t soft = optimaru::roundScoreLevel(levels.soft, "soft");
+    return {static_cast<std::int64_t>(levels.hard),
+            optimaru::roundScoreLevel(levels.medium, "medium"),
+            soft / kMakespanUnit,
+            soft % kMakespanUnit};
 }
 
 }  // namespace
@@ -113,8 +131,20 @@ void Solver::solve(
     {
         // Single-start: the caller-owned calculator cannot be cloned, so the
         // multi-start factory would have nothing to hand its extra workers.
+        optimaru::SolverConfig engineConfig = buildEngineConfig(config_, solution, 1);
+        if (config_.onNewBest)
+        {
+            // The engine reports a new best right after the working solution
+            // became it, so the calculator holds exactly that solution:
+            // report its levels like the final solution.score below.
+            auto callback = config_.onNewBest;
+            engineConfig.onNewBest
+                = [callback, &calculator](std::int64_t step,
+                                          const optimaru::HardSoftScore &)
+            { callback(step, levelScoreOf(calculator)); };
+        }
         auto engine = optimaru::SolverFactory<TaskAssigningSolution>::create(
-                          buildEngineConfig(config_, solution, 1))
+                          std::move(engineConfig))
                           .buildSolver();
         engine.solve(solution, calculator);
     }
@@ -125,7 +155,8 @@ void Solver::solve(
     // constraintTotals() explains exactly this score.
     ScoreCalculator::updateShadowVariables(solution);
     calculator.resetWorkingSolution(solution);
-    solution.score = fromEngineScore(calculator.calculateScore());
+    calculator.calculateScore();
+    solution.score = levelScoreOf(calculator);
 }
 
 }  // namespace ta

@@ -12,10 +12,10 @@
 // defaultConstraints() below when it belongs to the default assembly).
 
 #include "pjs/constraints/common.hpp"
-#include "pjs/constraints/non_renewable_resource_capacity.hpp"
-#include "pjs/constraints/renewable_resource_capacity.hpp"
-#include "pjs/constraints/total_makespan.hpp"
-#include "pjs/constraints/total_project_delay.hpp"
+#include "pjs/constraints/makespan_cost.hpp"
+#include "pjs/constraints/non_renewable_resource_capacity_cost.hpp"
+#include "pjs/constraints/project_delay_cost.hpp"
+#include "pjs/constraints/renewable_resource_capacity_cost.hpp"
 
 namespace pjs
 {
@@ -23,17 +23,18 @@ namespace pjs
 // ---------------------------------------------------------------------------
 // Standard assembly
 // ---------------------------------------------------------------------------
-// The full provider at the quickstart's level weights. This assembly scores
-// bit-for-bit like ScoreCalculator::calculateScore and the monolithic
-// incremental calculator.
+// The full provider at the components' default weights and levels
+// (kDefaultWeight / kDefaultLevel; constraint_info() reads them off this
+// assembly). It scores bit-for-bit like ScoreCalculator::calculateScore and
+// the monolithic incremental calculator.
 //
 // `defaultConstraints()` hands the whole set back as a ConstraintAssembly,
 // so a caller states only what differs from it:
 //
 //     DecomposedCalculator calc;
 //     defaultConstraints()
-//         .weight("nonRenewableResourceCapacity", 2)
-//         .drop("renewableResourceCapacity")
+//         .weight("nonRenewableResourceCapacityCost", 2)
+//         .drop("renewableResourceCapacityCost")
 //         .into(calc);
 //
 // `addDefaultConstraints(calc)` is the same set poured straight into a
@@ -41,10 +42,10 @@ namespace pjs
 inline ConstraintAssembly defaultConstraints()
 {
     ConstraintAssembly assembly;
-    assembly.emplace<NonRenewableResourceCapacity>();
-    assembly.emplace<RenewableResourceCapacity>();
-    assembly.emplace<TotalProjectDelay>();
-    assembly.emplace<TotalMakespan>();
+    assembly.emplace<NonRenewableResourceCapacityCost>();
+    assembly.emplace<RenewableResourceCapacityCost>();
+    assembly.emplace<ProjectDelayCost>();
+    assembly.emplace<MakespanCost>();
     return assembly;
 }
 

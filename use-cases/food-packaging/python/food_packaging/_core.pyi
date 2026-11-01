@@ -1,7 +1,26 @@
-"""Typed stubs for the pybind11 extension food_packaging._core."""
+"""Typed stubs for the pybind11 extension food_packaging._core.
+
+Score convention (HardMediumSoftScore, as in the Java quickstart; all penalties), at
+the default weights (the C++ components' kDefaultWeight, see constraint_info()):
+  hard   1. max_end_time_cost                minutes past Job.max_end_time, x -1
+  hard   2. operator_cleaning_conflict_cost  overlapping cleaning minutes on lines of one
+                                             operator, x -1 (global)
+  medium 3. after_ideal_end_time_cost        minutes past Job.ideal_end_time, x -1
+                                             (medium units)
+  medium 4. unassigned_jobs_cost             duration minutes of jobs on no line, x -1
+                                             (medium units, global)
+  soft   5. squared_makespan_cost            (end of a line's last job - line start)^2,
+                                             x -1
+
+Internally the engine uses HardSoftScore(int64 hard, double soft), mapped as
+`engine.soft = medium * 10**10 + soft` (the domain's medium fold, "into_soft" with unit
+10**10; level priority holds while |soft| < 10**10 and |medium| < 9 * 10**5; see
+cpp/include/fp/domain.hpp). Medium weights are in medium units: the two medium
+constraints' default weight is 1, not 10**10.
+"""
 
 from collections.abc import Callable, Iterable
-from typing import Any
+from typing import Any, Literal, NamedTuple
 
 class Score:
     def __init__(self, hard: int = 0, medium: int = 0, soft: int = 0) -> None: ...
@@ -13,19 +32,6 @@ class Score:
     def soft(self) -> int: ...
     def is_feasible(self) -> bool: ...
     def __eq__(self, other: object) -> bool: ...
-
-class ConstraintBreakdown:
-    @property
-    def max_end_date_time(self) -> int: ...
-    @property
-    def operator_cleaning_conflict(self) -> int: ...
-    @property
-    def ideal_end_date_time(self) -> int: ...
-    @property
-    def maximize_jobs_assigned(self) -> int: ...
-    @property
-    def minimize_makespan(self) -> int: ...
-    def to_score(self) -> Score: ...
 
 class Product:
     id: str
@@ -109,7 +115,6 @@ class PackagingSchedule:
     def update_shadow_variables(self) -> None: ...
 
 def calculate_score(schedule: PackagingSchedule) -> Score: ...
-def analyze(schedule: PackagingSchedule) -> ConstraintBreakdown: ...
 def assign_missing_operators(schedule: PackagingSchedule) -> None: ...
 def improve_operator_assignment(schedule: PackagingSchedule) -> bool: ...
 def generate_demo_data(line_count: int = 5, job_count: int = 100) -> PackagingSchedule: ...
@@ -139,6 +144,10 @@ class SolverConfig:
     tail_swap_move_weight: float
     best_score_limit: tuple[int, float]
     on_new_best: Callable[[int, Score], None] | None
+    """Progress callback (steps, best score). The score has the same three levels as the
+    final schedule.score: with solve_with_constraints both come from the chosen
+    constraints' hard / medium / soft totals, so a soft total of 10^10 or more stays on
+    soft instead of spilling into medium."""
     def __init__(self) -> None: ...
 
 class Solver:
@@ -147,14 +156,37 @@ class Solver:
     def solve_with_constraints(self, schedule: PackagingSchedule, constraints: Iterable[Any] | None = ...) -> None:
         """Score the same solve with a caller-chosen constraint set
         (see food_packaging.constraints). The given list replaces the default set; None
-        keeps the default set."""
+        keeps the default set. schedule.score reports the three levels the assembly put
+        the terms on (a medium constraint with hard=False lands on soft)."""
 
 def list_constraints() -> list[str]:
-    """Constraint names scored by this domain (default assembly order, snake_case).
-    The same names food_packaging.constraints uses."""
+    """Constraint names scored by this domain (default assembly order, snake_case:
+    the unit constraints, then the globals operator_cleaning_conflict_cost and
+    unassigned_jobs_cost). The same names food_packaging.constraints uses."""
 
-def constraint_costs(solution, /) -> dict[str, dict]:
-    """Per-constraint, per-unit **raw** costs — before weight/exponent/level rounding.
-    `food_packaging.constraints.score()` takes these and produces a score.
-    {name: {"costs": [...], "weight": w, "exponent": e,
-            "hard": bool, "global": bool}}."""
+def constraint_costs(schedule: PackagingSchedule, /) -> dict[str, dict[str, Any]]:
+    """Raw per-unit cost of every default constraint, before weight/exponent/level:
+    {name: {"costs": [...], "weight": float, "exponent": float, "hard": bool,
+    "global": bool, "level": "hard" | "medium" | "soft", "reward": bool,
+    "level_flippable": bool, "name": str, "label": str,
+    "medium_fold": {"kind": "into_soft", "unit": 1e10}}}. Units are the lists (the
+    packaging lines in order, then the unassigned pool); a global constraint has one
+    entry. `medium_fold` is on EVERY entry (the fold belongs to the domain), and
+    `food_packaging.constraints.score()` applies it. The only per-constraint surface
+    since 0.2.0 (analyze() / ConstraintBreakdown were removed)."""
+
+class ConstraintInfo(NamedTuple):
+    """One constraint-catalog row, read off the C++ default assembly."""
+
+    name: str
+    default_level: Literal["hard", "medium", "soft"]
+    default_weight: float
+    level_flippable: bool
+    reward: bool
+    default_enabled: bool
+
+def constraint_info() -> list[ConstraintInfo]:
+    """The constraint catalog, in list_constraints() order: each component's default
+    level and weight (in units of that level; after_ideal_end_time_cost and
+    unassigned_jobs_cost are medium, weight 1), whether its level may be flipped,
+    whether it is a reward, and whether it is scored when no constraints are given."""

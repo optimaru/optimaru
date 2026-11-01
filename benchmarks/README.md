@@ -37,3 +37,19 @@ that depends on `use-cases/<slug>/python` by path, so a run always measures
 the engine in this checkout. [`cpsat-common`](cpsat-common) holds the shared
 constraint-plugin contract and the comparison runner (`run_cli`).
 
+A CP-SAT constraint is a plugin that subclasses the use case's own constraint
+spec (`<Subject>Cost`), so both solvers take the same selection: the same
+names and the same `weight` / `hard` / `exponent` knobs. The plugin declares no
+defaults; its level, weight, `level_flippable` and `reward` come from the
+domain's `constraint_info()`, so the two solvers cannot disagree on a default.
+`hard=False` demotes a hard or medium constraint to soft on both paths. CP-SAT
+accepts only `exponent=1` and integral weights, and some constraints are
+structural in a CP-SAT model (enforced by its variables, so `hard=False` is
+refused there; school-timetabling, pickup-delivery and semiconductor-scheduling
+have such constraints). Each benchmark's README (or `cpsat/README.md`) lists
+its own limits.
+
+The assembly-line-balancing, bin-packing and quadratic-assignment tables on
+public instance sets still hold numbers measured with the 0.1.x pure-Python
+engines; the 0.2.0 C++ ports have not been re-measured on those archives yet
+(see each README).

@@ -30,7 +30,6 @@ def test_json_round_trip_preserves_everything():
     assert [f.id for f in rebuilt.facilities] == [f.id for f in problem.facilities]
     assert rebuilt.facilities[1].setup_cost == 30000
     assert rebuilt.south_west_corner.latitude == 51.44
-    assert rebuilt.distance_from_facility_weight == 6
 
     # The score fields captured the solved values...
     assert model.score_hard == problem.score.hard
@@ -40,14 +39,17 @@ def test_json_round_trip_preserves_everything():
     assert (recomputed.hard, recomputed.soft) == (problem.score.hard, problem.score.soft)
 
 
-def test_weight_overrides_survive_round_trip():
-    problem = sample_problem()
-    problem.distance_from_facility_weight = 5
-    problem.setup_cost_weight = 3
-    model = models.FacilityLocationProblemModel.from_core(problem)
-    rebuilt = model.to_core()
-    assert rebuilt.distance_from_facility_weight == 5
-    assert rebuilt.setup_cost_weight == 3
+@pytest.mark.parametrize("field", ["setup_cost_weight", "distance_from_facility_weight"])
+def test_the_removed_weight_fields_are_refused(field):
+    """0.2.0: the canonical model carries no weights; they come from constraint selections only."""
+    from pydantic import ValidationError
+
+    data = models.FacilityLocationProblemModel.from_core(sample_problem()).model_dump()
+    assert field not in data
+    data[field] = 2
+    with pytest.raises(ValidationError):
+        models.FacilityLocationProblemModel.model_validate(data)
+    assert not hasattr(sample_problem(), field)
 
 
 def test_extra_fields_are_rejected():

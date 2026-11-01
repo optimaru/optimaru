@@ -16,12 +16,15 @@ namespace fl
 // Score
 // ---------------------------------------------------------------------------
 // The quickstart scores with HardSoftScore, exactly the engine's score type,
-// so the mapping is the identity:
+// so the mapping is the identity and there is no medium level (no
+// optimaru::MediumFoldOf specialization; a domain WITH a medium level declares
+// its fold next to its Score adapter, see optimaru/api/score/level.hpp):
 //   hard = -(sum over used facilities of max(0, usedDemand - capacity))
-//   soft = -(setupCostWeight * sum of used facilities' setup cost
-//            + distanceFromFacilityWeight * sum of consumer->facility meters)
-// Both levels are integral (Java uses long); the engine stores soft in a
-// double, which is exact for these magnitudes (< 2^53).
+//   soft = -(2 * sum of used facilities' setup cost
+//            + 6 * sum of consumer->facility meters)
+// The weights are the components' kDefaultWeight (fl/constraints/*.hpp); the
+// problem carries none. Both levels are integral (Java uses long); the engine
+// stores soft in a double, which is exact for these magnitudes (< 2^53).
 using Score = optimaru::HardSoftScore;
 
 // ---------------------------------------------------------------------------
@@ -95,14 +98,11 @@ struct FacilityLocationProblem
     Location southWestCorner{-90.0, -180.0};
     Location northEastCorner{90.0, 180.0};
 
-    // Constraint weights. setupCostWeight mirrors the provider's fixed
-    // HardSoftScore.ofSoft(2). distanceFromFacilityWeight defaults to 6
-    // because the Java solution demonstrates ConstraintWeightOverrides:
-    // the provider declares ofSoft(5), but every FacilityLocationProblem
-    // carries an override map {"distance from facility": ofSoft(6)} — so 6
-    // is the effective weight of the quickstart.
-    std::int64_t setupCostWeight = 2;
-    std::int64_t distanceFromFacilityWeight = 6;
+    // No constraint weights here (removed in 0.2.0): the defaults are the
+    // components' kDefaultWeight (setup 2 = the provider's ofSoft(2); distance
+    // 6 = the quickstart solution's ConstraintWeightOverrides value over the
+    // provider's ofSoft(5)), and a caller re-weights through a constraint
+    // assembly instead.
 
     Score score;
 

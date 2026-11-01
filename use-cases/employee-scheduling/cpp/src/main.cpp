@@ -54,84 +54,84 @@ Shift makeShift(const std::string& id, Minutes start, Minutes end,
 void verifyConstraints() {
     std::printf("== Verifying each constraint in isolation ==\n");
 
-    // 1) Missing required skill: employee has no skills -> ONE_HARD.
+    // 1) requiredSkillCost: employee has no skills -> ONE_HARD.
     {
         EmployeeSchedule s = oneEmployee(/*skills=*/{});
         s.shifts.push_back(makeShift("case 1.0", dt(0, 9, 0), dt(0, 17, 0), "X"));
         Score sc = ScoreCalculator::calculateScore(s);
-        check("required skill", sc.hard, sc.soft, -1, 0);
+        check("requiredSkillCost", sc.hard, sc.soft, -1, 0);
     }
 
-    // 2) Overlapping shifts: 11:00-12:00 overlap = 60 min. Same day also trips
-    //    oneShiftPerDay (-1). Total hard = -(60 + 1).
+    // 2) shiftOverlapCost: 11:00-12:00 overlap = 60 min. Same day also trips
+    //    maxOneShiftPerDayCost (-1). Total hard = -(60 + 1).
     {
         EmployeeSchedule s = oneEmployee();
         s.shifts.push_back(makeShift("case 2.1", dt(0, 8, 0), dt(0, 12, 0)));
         s.shifts.push_back(makeShift("case 2.2", dt(0, 11, 0), dt(0, 13, 0)));
         Score sc = ScoreCalculator::calculateScore(s);
-        check("overlap (+oneShiftPerDay)", sc.hard, sc.soft, -(60 + 1), 0);
+        check("shiftOverlapCost (+maxOneShiftPerDayCost)", sc.hard, sc.soft, -(60 + 1), 0);
     }
 
-    // 3) Max one shift per day, non-overlapping same-day pair -> -1 only.
+    // 3) maxOneShiftPerDayCost, non-overlapping same-day pair -> -1 only.
     {
         EmployeeSchedule s = oneEmployee();
         s.shifts.push_back(makeShift("case 3.1", dt(0, 8, 0), dt(0, 10, 0)));
         s.shifts.push_back(makeShift("case 3.2", dt(0, 12, 0), dt(0, 14, 0)));
         Score sc = ScoreCalculator::calculateScore(s);
-        // gap = 12:00 - 10:00 = 120 min < 600 -> 10h penalty (600-120)=480,
-        // plus oneShiftPerDay -1.
-        check("oneShiftPerDay + 10h(sameday)", sc.hard, sc.soft, -(1 + 480), 0);
+        // gap = 12:00 - 10:00 = 120 min < 600 -> minRestCost (600-120)=480,
+        // plus maxOneShiftPerDayCost -1.
+        check("maxOneShiftPerDayCost + minRestCost", sc.hard, sc.soft, -(1 + 480), 0);
     }
 
-    // 4) At least 10 hours between two shifts on different days.
+    // 4) minRestCost: at least 10 hours between two shifts on different days.
     //    gap = day1 03:00 - day0 22:00 = 300 min -> penalty 600-300 = 300.
     {
         EmployeeSchedule s = oneEmployee();
         s.shifts.push_back(makeShift("case 4.1", dt(0, 20, 0), dt(0, 22, 0)));
         s.shifts.push_back(makeShift("case 4.2", dt(1, 3, 0), dt(1, 5, 0)));
         Score sc = ScoreCalculator::calculateScore(s);
-        check("at least 10h between shifts", sc.hard, sc.soft, -300, 0);
+        check("minRestCost", sc.hard, sc.soft, -300, 0);
     }
 
-    // 5) Unavailable employee: 8h shift on an unavailable day -> hard -480.
+    // 5) employeeUnavailabilityCost: 8h shift on an unavailable day -> hard -480.
     {
         EmployeeSchedule s = oneEmployee();
         s.employees[0].unavailableDates = {0};
         s.shifts.push_back(makeShift("case 5.0", dt(0, 9, 0), dt(0, 17, 0)));
         Score sc = ScoreCalculator::calculateScore(s);
-        check("unavailable employee", sc.hard, sc.soft, -480, 0);
+        check("employeeUnavailabilityCost", sc.hard, sc.soft, -480, 0);
     }
 
-    // 6) Undesired day: soft penalty by overlapping minutes.
+    // 6) undesiredDayCost: soft penalty by overlapping minutes.
     {
         EmployeeSchedule s = oneEmployee();
         s.employees[0].undesiredDates = {0};
         s.shifts.push_back(makeShift("case 6.0", dt(0, 9, 0), dt(0, 17, 0)));
         Score sc = ScoreCalculator::calculateScore(s);
-        check("undesired day (soft)", sc.hard, sc.soft, 0, -480);
+        check("undesiredDayCost (soft)", sc.hard, sc.soft, 0, -480);
     }
 
-    // 7) Desired day: soft reward by overlapping minutes.
+    // 7) desiredDayCost: soft reward by overlapping minutes.
     {
         EmployeeSchedule s = oneEmployee();
         s.employees[0].desiredDates = {0};
         s.shifts.push_back(makeShift("case 7.0", dt(0, 9, 0), dt(0, 17, 0)));
         Score sc = ScoreCalculator::calculateScore(s);
-        check("desired day (soft reward)", sc.hard, sc.soft, 0, +480);
+        check("desiredDayCost (soft reward)", sc.hard, sc.soft, 0, +480);
     }
 
-    // 8) At least 10h between shifts, gap == 0 (back-to-back across midnight).
-    //    A zero gap still counts as a gap, so it is penalized 600 - 0. Different
-    //    start days => no oneShiftPerDay; no overlap.
+    // 8) minRestCost, gap == 0 (back-to-back across midnight). A zero gap
+    //    still counts as a gap, so it is penalized 600 - 0. Different start
+    //    days => no maxOneShiftPerDayCost; no overlap.
     {
         EmployeeSchedule s = oneEmployee();
         s.shifts.push_back(makeShift("case 8.1", dt(0, 16, 0), dt(1, 0, 0)));  // ends midnight
         s.shifts.push_back(makeShift("case 8.2", dt(1, 0, 0), dt(1, 8, 0)));   // starts midnight
         Score sc = ScoreCalculator::calculateScore(s);
-        check("10h between, gap=0 (<=)", sc.hard, sc.soft, -600, 0);
+        check("minRestCost, gap=0 (<=)", sc.hard, sc.soft, -600, 0);
     }
 
-    // 9) Load balancing: 3 employees, shift counts [2,1,1] on separate far-apart
+    // 9) shiftCountImbalanceCost: 3 employees, shift counts [2,1,1] on separate far-apart
     //    days (no other penalties). unfairness = sqrt(6 - 16/3) = sqrt(0.66667).
     {
         EmployeeSchedule s;
@@ -147,10 +147,10 @@ void verifyConstraints() {
         add("case 9.3", 9, 2);  // third worker: 1 shift
         Score sc = ScoreCalculator::calculateScore(s);
         // sqrt(6 - 16/3) = sqrt(0.666667) = 0.81649658 -> 6 sig figs -> 0.816497
-        check("load balance [2,1,1]", sc.hard, sc.soft, 0, -0.816497);
+        check("shiftCountImbalanceCost [2,1,1]", sc.hard, sc.soft, 0, -0.816497);
     }
 
-    // 10) Load balancing with a zero-shift employee (complement): counts [2,0,0]
+    // 10) shiftCountImbalanceCost with a zero-shift employee (complement): counts [2,0,0]
     //    over 3 employees => unfairness = sqrt(4 - 4/3) = sqrt(2.66667).
     {
         EmployeeSchedule s;
@@ -164,7 +164,7 @@ void verifyConstraints() {
         add("case 10.0", 0, 0); add("case 10.1", 3, 0);   // first worker: 2 shifts; the others: 0
         Score sc = ScoreCalculator::calculateScore(s);
         // sqrt(4 - 4/3) = sqrt(2.666667) = 1.63299316 -> 6 sig figs -> 1.63299
-        check("load balance [2,0,0] (complement)", sc.hard, sc.soft, 0, -1.63299);
+        check("shiftCountImbalanceCost [2,0,0]", sc.hard, sc.soft, 0, -1.63299);
     }
 
     std::printf("\n");

@@ -42,15 +42,18 @@ namespace pjs
 //
 // Score levels: the quickstart scores with HardMediumSoftScore, which this
 // domain folds into the engine's HardSoftScore as
-// `soft = medium * kMediumUnit + soft` (see domain.hpp). The medium-level
-// component (totalProjectDelay) therefore carries the kMediumUnit factor in
-// its default weight.
+// `soft = medium * kMediumUnit + soft` (kMediumUnit = 10^9; kMediumFold and
+// the MediumFoldOf<ProjectJobSchedule> specialization in domain.hpp). The
+// medium component (projectDelayCost) declares Level::Medium at weight 1, in
+// medium units; the decomposed calculator keeps a separate medium
+// accumulator and applies the fold, so no component carries the 10^9 factor
+// in its weight.
 //
 //   DecomposedCalculator calc;
-//   defaultConstraints()              // the whole default set
-//       .weight("...", 2)            // ... then only what differs
-//       .soft("...")
-//       .drop("...")
+//   defaultConstraints()                    // the whole default set ...
+//       .weight("nonRenewableResourceCapacityCost", 2)  // ... then only
+//       .soft("renewableResourceCapacityCost")          //     what differs
+//       .drop("makespanCost")
 //       .into(calc);
 //   solver.solve(schedule, calc);
 //
@@ -58,14 +61,24 @@ namespace pjs
 // `ConstraintAssembly{}` when you would rather list components from
 // scratch than start from the defaults.
 //
-// The level and the weight of each component are DEFAULTS — assembly-time
-// metadata, not part of the cost. Override them per instance via the mutable
-// `isHard` / `weight` / `exponent`.
+// Each component declares its defaults once, as static constexpr
+// kDefaultWeight / kDefaultLevel passed to the base constructor; they are
+// assembly-time metadata, not part of the cost. Override them per instance
+// with the constructor's weight argument or the mutable `level` / `weight` /
+// `exponent`, or by name through ConstraintAssembly (weight / hard / soft /
+// exponent). Medium is a default-only level: hard() / soft() move the medium
+// component to 1 hard / 1 soft unit per raw unit, and an explicit weight
+// keeps it on the medium level, in medium units. The monolithic calculators
+// read the same kDefaultWeight constants, which is why the default assembly
+// scores bit-for-bit like them.
+//
+// Registry names are the struct names with a lower-case first letter
+// ("makespanCost"); Python sees them through pythonName() ("makespan_cost").
 //
 // Cost sign convention (see decomposed_score_calculator.hpp): positive =
-// penalty; the calculator negates into the score. An assembly of all four
-// components at their default weights therefore scores bit-for-bit like
-// ScoreCalculator::calculateScore.
+// penalty, 0 = no violation; the calculator negates into the score. An
+// assembly of all four components at their default weights therefore scores
+// bit-for-bit like ScoreCalculator::calculateScore.
 //
 // Every component requires ScoreCalculator::prepare(schedule) to have run
 // (the solve() overload and the monolithic path both call it).

@@ -1,30 +1,33 @@
 #ifndef ST_CANONICAL_SOLVER_HPP
 #define ST_CANONICAL_SOLVER_HPP
 
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <functional>
 #include <limits>
+#include <memory>
 #include <utility>
 #include <vector>
 
 #include "st/canonical_domain.hpp"
+#include "st/objective_weights.hpp"
 #include "optimaru/api/score/calculator/decomposed_score_calculator.hpp"
 #include "optimaru/api/score/director/score_director.hpp"
 
 namespace st::canon
 {
 
-// Thin domain-side wrapper around the generic engine in include/optimaru/ for the
-// canonical domain, following the st::Solver pattern. On top of the built-in
-// change/swap moves and the engine's adaptive ruin-and-recreate (ALNS, on by
-// default) it wires the domain guidance adopted on the track-2 bench:
+// Thin domain-side wrapper around the generic engine in include/optimaru/ for
+// the canonical domain, following the st::Solver pattern. On top of the
+// built-in change/swap moves and the engine's adaptive ruin-and-recreate (ALNS,
+// on by default) it wires the domain guidance adopted on the track-2 bench:
 //   - a valueRecommender that only proposes slots from the moved lesson's
-//     allowedSlot table, so H5-violating slots are never even suggested;
+//     allowedSlot table, so disallowed slots are never even suggested;
 //   - an entityRecommender preferring lessons involved in a hard violation
 //     (the incremental calculator's hot sets — es guided-moves pattern);
 //   - same-class nearby neighborhoods biasing swap partners to classmates
-//     (H3-neutral swaps) and driving the LNS related ruin;
+//     (class-conflict-neutral swaps) and driving the LNS related ruin;
 //   - a SmartClassSwapMove operator (best-of-k classmate swap in the soft
 //     phase; builtin-equivalent single move in the hard phase);
 //   - a construction-heuristic difficulty order (block members, team-teaching
@@ -102,7 +105,7 @@ public:
 
         // Violation-guided entity selection (the es guided-moves pattern):
         // with this probability the moved lesson is drawn from the lessons
-        // currently involved in a hard violation (H3~H10 hot sets in the
+        // currently involved in a hard violation (the hard hot sets in the
         // incremental calculator). Falls back to uniform selection once
         // feasible. 0 disables the hook entirely.
         double hotLessonProbability = 0.7;
@@ -128,7 +131,7 @@ public:
 
         // Same-class nearby selection. Canonical instances are typically
         // fully packed per class (weekly hours == slot count), where a change
-        // move almost always creates a class conflict (H3) and the productive
+        // move almost always creates a class conflict and the productive
         // move is a swap between two lessons of the SAME class (class
         // occupancy is conflict-neutral by construction). The nearby distance
         // meter makes classmates each other's nearest neighbors, which biases
@@ -142,19 +145,27 @@ public:
         // small instances from over-focusing.
         double sameClassNearbyProbability = 0.5;
 
-        // S1~S6 weights, copied onto the Timetable at the start of solve()
-        // (mirrors the CP-SAT SolverConfig carrying ObjectiveWeights).
+        // The soft weights of the monolithic fast path, solve(table) only
+        // (the model carries none). Default: the soft components'
+        // kDefaultWeight. solve(table, calculator) ignores them — the
+        // assembly's components carry their own weights.
         ObjectiveWeights weights;
 
         std::function<void(std::int64_t, const Score &)> onNewBest;
+        // Set by solve() on each parallel worker's copy, not by a caller (and
+        // not bound to Python): the first worker that fails raises it, and the
+        // other workers' engines stop at their next step instead of running out
+        // their budget before the error reaches the caller.
+        std::shared_ptr<std::atomic<bool>> stopFlag;
     };
 
     Solver() = default;
     explicit Solver(Config config) : config_(std::move(config)) {}
 
-    // Solves in place: copies config_.weights into table.weights, mutates
-    // lessons[*].slot and stores the best score found in table.score. Pinned
-    // lessons keep their assignment.
+    // Solves in place on the monolithic calculator (hard at the components'
+    // kDefaultWeight, soft at config_.weights): mutates lessons[*].slot and
+    // stores the best score found in table.score. Pinned lessons keep their
+    // assignment.
     void solve(Timetable &table);
 
     // Solves with a caller-assembled plugin calculator (see
@@ -162,8 +173,8 @@ public:
     // the assembly here (the es Solver pattern). The same guided search
     // applies — value guidance from the allowedSlot tables, violation
     // guidance (entity recommender + the smart same-class swap operator)
-    // from the calculator's penalizedUnits()/membersPerUnit(). Soft weights
-    // come from the assembly, NOT from config_.weights / table.weights. The
+    // from the calculator's penalizedUnits()/membersPerUnit(). Weights come
+    // from the assembly, NOT from config_.weights. The
     // final table.score is computed by THIS calculator and the calculator is
     // left primed on the final solution, so constraintTotals() explains
     // exactly that score. Single-start: the caller-owned calculator cannot

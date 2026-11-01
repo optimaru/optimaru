@@ -1,34 +1,39 @@
 """Constraint assembly specs — an API for picking the cost function declaratively.
 
-The default path (`op.solve(solution)`) enables all four constraints at the quickstart weights.
-This module is the alternative path next to it: pick constraints, change weights, flip
-hard/soft, and pass the list to `solve(solution, constraints=...)`.
+The default path (`op.solve(solution)`) enables all four constraints at their default
+weights. This module is the alternative path next to it: pick constraints, change weights,
+flip hard/soft, and pass the list to `solve(solution, constraints=...)`.
 
 The shortest route is :func:`get_constraints`. It returns the default list, so
 a "default with a small tweak" declaration fits on one line::
 
     import order_picking as op
     from order_picking.constraints import (
-        MinimizeOrderSplitByTrolley, get_constraints, required_number_of_buckets,
+        OrderSplitByTrolleyCost, get_constraints, trolley_capacity_cost,
     )
 
     op.solve(solution, constraints=get_constraints())           # defaults as-is
     op.solve(solution, constraints=get_constraints([            # picked
-        required_number_of_buckets, MinimizeOrderSplitByTrolley(weight=100),
+        trolley_capacity_cost, OrderSplitByTrolleyCost(weight=100),
     ]))
 
-Each constraint has a default instance at module level, so you can also pass a
-list of just a few. Only listed constraints are scored — leave one out and its
-term disappears from the score.
+Default instances (`trolley_capacity_cost`, `distance_from_previous_pick_task_cost`,
+`distance_from_last_pick_task_to_path_origin_cost`, `order_split_by_trolley_cost`) live at
+module level, so you can also pass a list of just a few. Only listed constraints are
+scored — leave one out and its term disappears from the score.
 
 Every spec takes ``(weight=None, hard=None, exponent=1.0)``:
 
-- ``weight``   linear multiplier on the constraint cost. ``None`` = component default.
-- ``hard``     ``True``/``False`` flips the default level; ``None`` keeps it.
-- ``exponent`` sign-preserving power shaping: ``weight * sign(c) * |c| **
-               exponent``. 2.0 = squared, so concentrated violations grow much costlier.
+- ``weight``   linear multiplier on the constraint cost. ``None`` = the component
+               default (order_split_by_trolley_cost 1000, the other three 1);
+               ``op.constraint_info()`` reports the defaults.
+- ``hard``     ``True`` = hard, ``False`` = soft, ``None`` = the default level.
+- ``exponent`` sign-preserving power shaping per trolley: ``weight * sign(c) *
+               |c| ** exponent``. 2.0 = squared, so concentrated violations grow
+               much costlier.
 
-Names (`name`) are the C++ component names in snake_case. The core derives them
+Names (`name`) are the C++ component names in snake_case
+(``TrolleyCapacityCost`` -> ``trolley_capacity_cost``). The core derives them
 mechanically, so there is no hand-maintained alias table — check them with
 `op.list_constraints()`. Module-level instance names use the same snake_case,
 so they match the strings `list_constraints()` prints.
@@ -39,90 +44,123 @@ Two knobs do not apply on the plugin path: `parallel_solver_count`
 the comments of `cpp/include/op/solver.hpp`.
 """
 
-import math
-from dataclasses import dataclass
-from typing import ClassVar, NamedTuple
+from ._constraint import Constraint, Score, score_costs, select
 
 __all__ = [
     "Constraint",
     "Score",
     "score",
-    "RequiredNumberOfBuckets",
-    "MinimizeDistanceFromPreviousPickTask",
-    "MinimizeDistanceFromLastPickTaskToPathOrigin",
-    "MinimizeOrderSplitByTrolley",
-    "required_number_of_buckets",
-    "minimize_distance_from_previous_pick_task",
-    "minimize_distance_from_last_pick_task_to_path_origin",
-    "minimize_order_split_by_trolley",
+    "TrolleyCapacityCost",
+    "DistanceFromPreviousPickTaskCost",
+    "DistanceFromLastPickTaskToPathOriginCost",
+    "OrderSplitByTrolleyCost",
+    "trolley_capacity_cost",
+    "distance_from_previous_pick_task_cost",
+    "distance_from_last_pick_task_to_path_origin_cost",
+    "order_split_by_trolley_cost",
     "get_constraints",
 ]
 
 
-@dataclass(frozen=True)
-class Constraint:
-    """Spec selecting one constraint: weight / level / shaping."""
-
-    weight: float | None = None  # None = component default weight
-    hard: bool | None = None  # None = component default level
-    exponent: float = 1.0
-    name: ClassVar[str] = ""
-
-    def __init_subclass__(cls, **kwargs):
-        super().__init_subclass__(**kwargs)
-        if not cls.name:
-            raise TypeError(f"{cls.__name__} must set a registry `name`")
-
-
-class RequiredNumberOfBuckets(Constraint):
+class TrolleyCapacityCost(Constraint):
     """Buckets a trolley is short of. Default: hard, weight 1.
 
     Orders never share buckets, so bucket counts round up the volume of **each
     order** on the trolley — that rounding is exactly why splitting an order over
     several trolleys wastes capacity."""
 
-    name = "required_number_of_buckets"
+    name = "trolley_capacity_cost"
+    label_en = "Trolley bucket capacity"
+    label_ko = "트롤리 버킷 용량"
+    description_en = (
+        "Buckets a trolley needs beyond the buckets it carries. Each order on the trolley "
+        "rounds its own volume up to whole buckets (orders never share a bucket). One unit "
+        "of cost is one missing bucket on one trolley; 0 means every trolley has enough buckets."
+    )
+    description_ko = (
+        "트롤리에 필요한 버킷 수가 실제로 실은 버킷 수를 넘는 만큼을 더합니다. 주문끼리는 버킷을 "
+        "나눠 쓰지 않으므로 트롤리 위의 주문마다 부피를 버킷 단위로 올림해 셉니다. 모자란 버킷 "
+        "1개가 비용 1이며, 0이면 모든 트롤리의 버킷이 충분합니다."
+    )
 
 
-class MinimizeDistanceFromPreviousPickTask(Constraint):
+class DistanceFromPreviousPickTaskCost(Constraint):
     """Travel distance from each pick to the next. Default: soft, weight 1.
 
     For the first pick, the trolley's parking spot stands in as the "previous location"."""
 
-    name = "minimize_distance_from_previous_pick_task"
+    name = "distance_from_previous_pick_task_cost"
+    label_en = "Distance between picks"
+    label_ko = "피킹 지점 간 이동 거리"
+    description_en = (
+        "The distance a trolley travels from its start location to its first pick and from "
+        "each pick to the next, in meters (the way back is a separate constraint). One unit "
+        "of cost is one meter; 0 means no trolley has to travel to its picks."
+    )
+    description_ko = (
+        "트롤리가 출발 위치에서 첫 피킹 지점까지, 그리고 피킹 지점에서 다음 피킹 지점까지 이동하는 "
+        "거리(미터)를 더합니다(돌아오는 길은 별도 제약입니다). 1미터가 비용 1이며, 0이면 어떤 "
+        "트롤리도 피킹하러 이동할 필요가 없습니다."
+    )
 
 
-class MinimizeDistanceFromLastPickTaskToPathOrigin(Constraint):
+class DistanceFromLastPickTaskToPathOriginCost(Constraint):
     """Distance from the last pick back to the starting point. Default: soft, weight 1.
 
     An empty trolley never leaves, so it costs nothing."""
 
-    name = "minimize_distance_from_last_pick_task_to_path_origin"
+    name = "distance_from_last_pick_task_to_path_origin_cost"
+    label_en = "Distance back to the start"
+    label_ko = "출발 위치로 돌아오는 거리"
+    description_en = (
+        "The distance from a trolley's last pick back to its start location, in meters. "
+        "One unit of cost is one meter; 0 means every trolley ends its round where it "
+        "started (an empty trolley never leaves)."
+    )
+    description_ko = (
+        "트롤리의 마지막 피킹 지점에서 출발 위치로 돌아오는 거리(미터)를 더합니다. 1미터가 비용 1이며, "
+        "0이면 모든 트롤리가 출발한 곳에서 피킹을 마칩니다(빈 트롤리는 출발하지 않습니다)."
+    )
 
 
-class MinimizeOrderSplitByTrolley(Constraint):
+class OrderSplitByTrolleyCost(Constraint):
     """Number of (order, trolley) pairs. Default: soft, weight 1000.
 
     An order shared by three trolleys costs three times one carried by a single
     trolley. Deliberately expensive relative to the distance terms — orders arriving
-    in pieces become a packing problem downstream."""
+    in pieces become a packing problem downstream. Unlike the other constraints the
+    raw cost is never 0 while picks are assigned: an order carried whole by one
+    trolley still counts 1 (the quickstart's definition, kept)."""
 
-    name = "minimize_order_split_by_trolley"
+    name = "order_split_by_trolley_cost"
+    label_en = "Order-trolley pairs (order splits)"
+    label_ko = "주문-트롤리 쌍(주문 분할)"
+    description_en = (
+        "The number of (order, trolley) pairs: for each trolley, how many different orders "
+        "have a pick on it. An order kept on one trolley counts 1 and one spread over three "
+        "trolleys counts 3, so the minimum is the number of orders with assigned picks; "
+        "0 only when no pick is assigned."
+    )
+    description_ko = (
+        "(주문, 트롤리) 쌍의 수를 셉니다. 트롤리마다 그 트롤리에 피킹이 하나라도 있는 서로 다른 "
+        "주문의 수를 더한 값입니다. 한 트롤리에 모인 주문은 1, 트롤리 세 대에 나뉜 주문은 3이므로 "
+        "최솟값은 피킹이 배정된 주문의 수이고, 배정된 피킹이 없을 때만 0입니다."
+    )
 
 
-#: Instances at the default weights. Reference them directly when picking.
-required_number_of_buckets = RequiredNumberOfBuckets()
-minimize_distance_from_previous_pick_task = MinimizeDistanceFromPreviousPickTask()
-minimize_distance_from_last_pick_task_to_path_origin = MinimizeDistanceFromLastPickTaskToPathOrigin()
-minimize_order_split_by_trolley = MinimizeOrderSplitByTrolley()
+#: Instances at the default weights (weight=None). Reference them directly when picking.
+trolley_capacity_cost = TrolleyCapacityCost()
+distance_from_previous_pick_task_cost = DistanceFromPreviousPickTaskCost()
+distance_from_last_pick_task_to_path_origin_cost = DistanceFromLastPickTaskToPathOriginCost()
+order_split_by_trolley_cost = OrderSplitByTrolleyCost()
 
-#: Default set — same order as `op.list_constraints()`.
-_DEFAULTS: list[Constraint] = [
-    required_number_of_buckets,
-    minimize_distance_from_previous_pick_task,
-    minimize_distance_from_last_pick_task_to_path_origin,
-    minimize_order_split_by_trolley,
-]
+# The default set, in list_constraints() order.
+_DEFAULTS = (
+    trolley_capacity_cost,
+    distance_from_previous_pick_task_cost,
+    distance_from_last_pick_task_to_path_origin_cost,
+    order_split_by_trolley_cost,
+)
 
 
 def get_constraints(constraints: list[Constraint] | None = None) -> list[Constraint]:
@@ -131,37 +169,20 @@ def get_constraints(constraints: list[Constraint] | None = None) -> list[Constra
     When `constraints` is given, that list is used as-is — only the listed
     constraints are scored. To change just one default, mix in the default instances::
 
-        get_constraints([required_number_of_buckets, MinimizeOrderSplitByTrolley(weight=100)])
+        get_constraints([trolley_capacity_cost, OrderSplitByTrolleyCost(weight=100)])
+
+    Same contract as the C++ applyConstraints: an empty list is an error (a
+    filter that came out empty must not silently flip to "score everything"),
+    and so is naming the same constraint twice.
     """
-    if constraints is None:
-        return list(_DEFAULTS)
-    if not constraints:
-        # Same contract as C++ applyConstraints: an empty list means "score
-        # nothing", which is most likely a mistake. A filter that happens to come
-        # out empty must not silently flip to "score everything".
-        raise ValueError("constraints must not be empty (pass None for the defaults)")
-    return list(constraints)
-
-
-class Score(NamedTuple):
-    """(hard, soft) returned by `score()`. Both are penalties, so <= 0."""
-
-    hard: int
-    soft: float
-
-
-def _shape(cost: float, exponent: float) -> float:
-    """Sign-preserving power. Rewards (negative costs) never flip into penalties."""
-    if exponent == 1.0 or cost == 0.0:
-        return cost
-    return -((-cost) ** exponent) if cost < 0.0 else cost**exponent
+    return select(constraints, _DEFAULTS)
 
 
 def score(costs: dict, constraints: list[Constraint] | None = None) -> Score:
     """Apply specs to raw constraint costs and produce a score — pure Python.
 
     ``costs`` is what `op.constraint_costs(solution)` returns: per constraint, the
-    **raw** cost of each unit (before weight, exponent and level rounding).
+    **raw** cost of each trolley (before weight, exponent and level rounding).
     Fetch it once and rescore with different weights without re-solving::
 
         raw = op.constraint_costs(solution)
@@ -169,30 +190,11 @@ def score(costs: dict, constraints: list[Constraint] | None = None) -> Score:
         score(raw, picked)             # picked list
 
     No solver and no search are involved. The arithmetic matches the engine —
-    each unit contributes ``weight * shape(cost, exponent)`` and hard
+    each trolley contributes ``weight * shape(cost, exponent)`` and hard
     contributions are **rounded per unit** before summing (the same order as the
     engine's applyRaw; rounding the total afterwards gives different values).
 
     When ``constraints`` is given, only those constraints are scored — the same
     semantics as `get_constraints`. Unknown names raise ValueError.
     """
-    hard = 0
-    soft = 0.0
-    for spec in get_constraints(constraints):
-        entry = costs.get(spec.name)
-        if entry is None:
-            raise ValueError(
-                f"unknown constraint {spec.name!r}; available: " + ", ".join(repr(name) for name in sorted(costs))
-            )
-        weight = entry["weight"] if spec.weight is None else spec.weight
-        is_hard = entry["hard"] if spec.hard is None else spec.hard
-        exponent = spec.exponent
-        for cost in entry["costs"]:
-            value = weight * _shape(cost, exponent)
-            if is_hard:
-                # Round per unit contribution like the engine (half-away-from-zero
-                # like llround; Python's round is banker's rounding).
-                hard += int(math.floor(value + 0.5) if value >= 0 else math.ceil(value - 0.5))
-            else:
-                soft += value
-    return Score(-hard, -soft if soft != 0.0 else 0.0)
+    return score_costs(costs, get_constraints(constraints))

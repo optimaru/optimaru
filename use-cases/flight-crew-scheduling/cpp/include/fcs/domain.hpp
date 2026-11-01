@@ -38,17 +38,13 @@ inline DayIndex dayOf(Minutes m)
 // ---------------------------------------------------------------------------
 // The Java quickstart scores with HardSoftScore (both levels int) — exactly
 // the engine's HardSoftScore(int64 hard, double soft), so the mapping is the
-// identity: no level folding is needed. The Java constraint weights are kept
-// verbatim below.
+// identity and there is no medium level (no optimaru::MediumFoldOf
+// specialization). The Java FlightCrewSchedulingConstraintProvider weights
+// (100 / 10 / 1 / 10 hard, 1000 / 1000 soft) are the components'
+// kDefaultWeight (fcs/constraints/*_cost.hpp), declared there once; the
+// monolithic calculators read the same constants (before 0.2.0 they were
+// re-typed here as REQUIRED_SKILL_WEIGHT ... LAST_NOT_HOME_WEIGHT).
 using Score = optimaru::HardSoftScore;
-
-// Java FlightCrewSchedulingConstraintProvider weights.
-constexpr std::int64_t REQUIRED_SKILL_WEIGHT = 100;  // hard
-constexpr std::int64_t FLIGHT_CONFLICT_WEIGHT = 10;  // hard
-constexpr std::int64_t TRANSFER_WEIGHT = 1;          // hard
-constexpr std::int64_t UNAVAILABILITY_WEIGHT = 10;   // hard
-constexpr double FIRST_NOT_HOME_WEIGHT = 1000.0;     // soft
-constexpr double LAST_NOT_HOME_WEIGHT = 1000.0;      // soft
 
 // ---------------------------------------------------------------------------
 // Airport  (problem fact)

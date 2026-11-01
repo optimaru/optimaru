@@ -17,7 +17,18 @@ def _problem() -> BinPackingProblemModel:
 
 
 def _no_search() -> SolverConfig:
-    return SolverConfig(max_iterations=0)
+    """Zero budget: the engine stops before its first step (0.1.x spelled it max_iterations=0)."""
+    config = SolverConfig()
+    config.spent_limit_seconds = 0
+    return config
+
+
+def _steps(count: int, seed: int) -> SolverConfig:
+    """A deterministic search of `count` steps (0.1.x spelled it max_iterations=count)."""
+    config = SolverConfig()
+    config.step_count_limit = count
+    config.random_seed = seed
+    return config
 
 
 def _bins(problem) -> dict[str, int]:
@@ -68,52 +79,39 @@ def test_search_from_a_seed_never_scores_below_it():
     solution = {"items": [{"id": item_id, "bin": index} for index, item_id in enumerate("ABCD")]}
     seeded = with_initial_solution(_problem(), solution).to_core()
     seed_score = _core.calculate_score(seeded)
-    assert solve(seeded, config=SolverConfig(max_iterations=500, random_seed=1)) >= seed_score
+    assert solve(seeded, config=_steps(500, 1)) >= seed_score
 
 
-def test_partial_seed_is_completed_by_first_fit_before_the_search():
+def test_partial_seed_is_completed_by_best_fit_before_the_search():
     seeded = with_initial_solution(_problem(), {"items": [{"id": "B", "bin": 0}, {"id": "D", "bin": 0}]}).to_core()
     solve(seeded, config=_no_search())
     assert _bins(seeded) == {"A": 1, "B": 0, "C": 2, "D": 0}
 
 
-def test_partial_seed_never_reaches_the_moves_with_minus_one(monkeypatch):
-    seen = []
-    empty_bin = _core._try_empty_bin
-    compact = _core._compact
+def test_partial_seed_never_reaches_the_search_with_minus_one():
+    """The construction completes a partial seed before the engine starts.
 
-    def checked_empty_bin(assignments, *args):
-        seen.append(min(assignments))
-        return empty_bin(assignments, *args)
-
-    def checked_compact(assignments):
-        seen.append(min(assignments))
-        return compact(assignments)
-
-    monkeypatch.setattr(_core, "_try_empty_bin", checked_empty_bin)
-    monkeypatch.setattr(_core, "_compact", checked_compact)
+    (0.1.x checked this by monkeypatching its Python moves; the C++ moves are covered by
+    bp_test.cpp's construction and FULL_ASSERT checks.) A zero-budget solve returns exactly
+    what the search would start from.
+    """
     seeded = with_initial_solution(_problem(), {"items": [{"id": "A", "bin": 0}]}).to_core()
-    solve(seeded, config=SolverConfig(max_iterations=300, random_seed=2))
-    assert seen
-    assert min(seen) >= 0
+    solve(seeded, config=_no_search())
     assert all(item.bin >= 0 for item in seeded.items)
+    searched = with_initial_solution(_problem(), {"items": [{"id": "A", "bin": 0}]}).to_core()
+    solve(searched, config=_steps(300, 2))
+    assert all(item.bin >= 0 for item in searched.items)
 
 
-def test_stagnation_restarts_from_the_seed_not_from_first_fit(monkeypatch):
-    calls = []
-    first_fit = _core._first_fit
-
-    def recording_first_fit(weights, capacity, order, seed=None):
-        calls.append(seed)
-        return first_fit(weights, capacity, order, seed)
-
-    monkeypatch.setattr(_core, "_first_fit", recording_first_fit)
-    seeded = with_initial_solution(
-        _problem(),
-        {"items": [{"id": "A", "bin": 0}, {"id": "B", "bin": 1}, {"id": "C", "bin": 2}, {"id": "D", "bin": 2}]},
-    ).to_core()
-    solve(seeded, config=SolverConfig(max_iterations=200, stagnation_limit=1, random_seed=4))
-    assert calls == [[0, 1, 2, 2]]
+def test_seeded_zero_budget_result_stays_inside_the_bins_and_feeds_back():
+    """0.1.x could place an item that fits nowhere in bin n; the port opens the lowest empty bin."""
+    problem = BinPackingProblemModel(bin_capacity=5, items=[{"id": "A", "weight": 2}, {"id": "B", "weight": 9}])
+    seeded = with_initial_solution(problem, {"items": [{"id": "A", "bin": 1}]}).to_core()
+    solve(seeded, config=_no_search())
+    assert _bins(seeded) == {"A": 1, "B": 0}
+    again = with_initial_solution(problem, BinPackingProblemModel.from_core(seeded)).to_core()
+    assert solve(again, config=_no_search()) == seeded.score
+    assert _bins(again) == _bins(seeded)
 
 
 def test_warm_start_round_trips_through_the_core_problem():
@@ -131,7 +129,7 @@ def test_gapped_seed_bins_are_kept_and_searched():
     solve(seeded, config=_no_search())
     assert _bins(seeded) == {"A": 3, "B": 1, "C": 1, "D": 3}
     searched = with_initial_solution(_problem(), solution).to_core()
-    assert solve(searched, config=SolverConfig(max_iterations=300, random_seed=1)).hard == 0
+    assert solve(searched, config=_steps(300, 1)).hard == 0
 
 
 def test_item_at_minus_one_counts_as_left_out_and_prior_bins_are_replaced():
@@ -173,7 +171,7 @@ def test_malformed_solution_raises(solution):
 def test_hard_infeasible_result_feeds_back_unchanged():
     problem = BinPackingProblemModel(bin_capacity=5, items=[{"id": "A", "weight": 9}, {"id": "B", "weight": 2}])
     core = problem.to_core()
-    score = solve(core, config=SolverConfig(max_iterations=50, random_seed=1))
+    score = solve(core, config=_steps(50, 1))
     assert score.hard < 0
     seeded = with_initial_solution(problem, BinPackingProblemModel.from_core(core).model_dump(mode="json")).to_core()
     assert solve(seeded, config=_no_search()) == score
@@ -196,7 +194,8 @@ def test_plain_solve_still_ignores_input_bins():
     fresh = BinPackingProblem(10, [Item("A", 8), Item("B", 7), Item("C", 3), Item("D", 2)])
     preset = BinPackingProblem(10, [Item("A", 8, 0), Item("B", 7, 0), Item("C", 3, 0), Item("D", 2, 0)])
     assert preset.warm_start is False
-    assert solve(fresh, time_limit_seconds=0.05, random_seed=5) == solve(preset, time_limit_seconds=0.05, random_seed=5)
+    # A step limit, not a wall clock, so the two searches are identical.
+    assert solve(fresh, config=_steps(2000, 5)) == solve(preset, config=_steps(2000, 5))
     assert _bins(fresh) == _bins(preset)
 
 

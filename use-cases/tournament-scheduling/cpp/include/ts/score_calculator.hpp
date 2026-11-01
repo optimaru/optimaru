@@ -15,16 +15,19 @@ namespace ts
 // calculateScore does a full recompute — the reference the incremental
 // calculator is checked against (in the tests and under FULL_ASSERT).
 //
-// Constraints (Java HardMediumSoftBigDecimalScore, mapped per ts::Score):
-//   hard 1. oneAssignmentPerDatePerTeam  -1 per assignment pair with the same
+// Constraints (Java HardMediumSoftBigDecimalScore, mapped per ts::Score;
+// default weights per unit are the components' kDefaultWeight, see
+// ts/constraints/<subject>_cost.hpp):
+//   hard 1. teamConflictCost             -1 per assignment pair with the same
 //                                        team on the same day (C(c, 2) per
 //                                        (team, day) cell)
-//   hard 2. unavailabilityPenalty        -1 per UnavailabilityPenalty fact
+//   hard 2. teamUnavailabilityCost       -1 per UnavailabilityPenalty fact
 //                                        whose (team, day) has >= 1 assignment
-//   med  3. fairAssignmentCountPerTeam   -unfairness of the per-team
+//   med  3. assignmentCountImbalanceCost -unfairness of the per-team
 //                                        assignment counts (teams with >= 1
 //                                        assignment; no complement in Java)
-//   soft 4. evenlyConfrontationCount     -unfairness of the confrontation
+//   soft 4. confrontationCountImbalanceCost
+//                                        -unfairness of the confrontation
 //                                        counts per team pair: one
 //                                        confrontation per same-day
 //                                        assignment pair with teamId1 <
@@ -55,12 +58,16 @@ public:
 
     static double unfairness(const std::vector<std::int64_t> &loads);
 
-    // The one shared soft assembly (medium folded per ts::kMediumScale); both
-    // calculators call this so FULL_ASSERT compares bit-identical doubles.
-    static double combinedSoft(double mediumUnfairness, double softUnfairness)
+    // The one shared soft assembly: the weighted medium and soft penalties
+    // (counted positive) folded with the domain's kMediumFold, i.e.
+    // -(soft + medium * 1e6) — the same arithmetic the decomposed calculator
+    // applies to its medium accumulator. Both calculators call this so
+    // FULL_ASSERT compares bit-identical doubles.
+    static double combinedSoft(double mediumPenalty, double softPenalty)
     {
-        const double penalty = mediumUnfairness * kMediumScale + softUnfairness;
-        return penalty == 0.0 ? 0.0 : -penalty;  // normalize -0.0
+        const double soft
+            = kMediumFold.toEngine(0, -mediumPenalty, -softPenalty).soft;
+        return soft == 0.0 ? 0.0 : soft;  // normalize -0.0
     }
 };
 

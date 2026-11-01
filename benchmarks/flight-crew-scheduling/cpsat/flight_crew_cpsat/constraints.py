@@ -1,4 +1,9 @@
-"""Class-based CP-SAT plugins for flight-crew scheduling."""
+"""Class-based CP-SAT plugins for flight-crew scheduling.
+
+Each plugin subclasses the domain spec of the same name and only adds ``build()``;
+its default level and weight are read from ``flight_crew.constraint_info()`` (the
+C++ components' kDefaultLevel / kDefaultWeight), never restated here.
+"""
 
 from dataclasses import dataclass, field
 from datetime import timedelta
@@ -32,10 +37,7 @@ class FlightCrewContext:
         return self._and_cache[key]
 
 
-class RequiredSkill(domain.RequiredSkill, ConstraintPlugin[FlightCrewContext]):
-    default_level = "hard"
-    default_weight = 100
-
+class RequiredSkillCost(domain.RequiredSkillCost, ConstraintPlugin[FlightCrewContext]):
     def build(self, context: FlightCrewContext, objective: ObjectiveBuilder) -> None:
         for assignment, assignment_data in enumerate(
             context.problem.flight_assignments
@@ -51,12 +53,9 @@ class RequiredSkill(domain.RequiredSkill, ConstraintPlugin[FlightCrewContext]):
                 )
 
 
-class EmployeeUnavailability(
-    domain.EmployeeUnavailability, ConstraintPlugin[FlightCrewContext]
+class EmployeeUnavailabilityCost(
+    domain.EmployeeUnavailabilityCost, ConstraintPlugin[FlightCrewContext]
 ):
-    default_level = "hard"
-    default_weight = 10
-
     def build(self, context: FlightCrewContext, objective: ObjectiveBuilder) -> None:
         for assignment, flight in enumerate(context.flights):
             covered_days = {
@@ -80,10 +79,9 @@ class EmployeeUnavailability(
                 )
 
 
-class FlightConflict(domain.FlightConflict, ConstraintPlugin[FlightCrewContext]):
-    default_level = "hard"
-    default_weight = 10
-
+class FlightConflictCost(
+    domain.FlightConflictCost, ConstraintPlugin[FlightCrewContext]
+):
     def build(self, context: FlightCrewContext, objective: ObjectiveBuilder) -> None:
         for left in range(len(context.flights)):
             for right in range(left + 1, len(context.flights)):
@@ -103,11 +101,9 @@ class FlightConflict(domain.FlightConflict, ConstraintPlugin[FlightCrewContext])
                     )
 
 
-class TransferBetweenTwoFlights(
-    domain.TransferBetweenTwoFlights, ConstraintPlugin[FlightCrewContext]
+class TransferBetweenTwoFlightsCost(
+    domain.TransferBetweenTwoFlightsCost, ConstraintPlugin[FlightCrewContext]
 ):
-    default_level = "hard"
-
     def build(self, context: FlightCrewContext, objective: ObjectiveBuilder) -> None:
         for (left, right, _employee), arc in context.transitions.items():
             invalid = int(
@@ -117,13 +113,10 @@ class TransferBetweenTwoFlights(
             objective.add(self.name, invalid * arc, bound=invalid)
 
 
-class FirstAssignmentNotDepartingFromHome(
-    domain.FirstAssignmentNotDepartingFromHome,
+class FirstAssignmentNotDepartingFromHomeCost(
+    domain.FirstAssignmentNotDepartingFromHomeCost,
     ConstraintPlugin[FlightCrewContext],
 ):
-    default_level = "soft"
-    default_weight = 1_000
-
     def build(self, context: FlightCrewContext, objective: ObjectiveBuilder) -> None:
         for (assignment, employee), literal in context.first.items():
             invalid = int(
@@ -133,13 +126,10 @@ class FirstAssignmentNotDepartingFromHome(
             objective.add(self.name, invalid * literal, bound=invalid)
 
 
-class LastAssignmentNotArrivingAtHome(
-    domain.LastAssignmentNotArrivingAtHome,
+class LastAssignmentNotArrivingAtHomeCost(
+    domain.LastAssignmentNotArrivingAtHomeCost,
     ConstraintPlugin[FlightCrewContext],
 ):
-    default_level = "soft"
-    default_weight = 1_000
-
     def build(self, context: FlightCrewContext, objective: ObjectiveBuilder) -> None:
         for (assignment, employee), literal in context.last.items():
             invalid = int(
@@ -149,13 +139,14 @@ class LastAssignmentNotArrivingAtHome(
             objective.add(self.name, invalid * literal, bound=invalid)
 
 
+# Plugin order = flight_crew.list_constraints() order.
 REGISTRY = ConstraintRegistry(
     [
-        RequiredSkill(),
-        FlightConflict(),
-        TransferBetweenTwoFlights(),
-        EmployeeUnavailability(),
-        FirstAssignmentNotDepartingFromHome(),
-        LastAssignmentNotArrivingAtHome(),
+        RequiredSkillCost(),
+        FlightConflictCost(),
+        TransferBetweenTwoFlightsCost(),
+        EmployeeUnavailabilityCost(),
+        FirstAssignmentNotDepartingFromHomeCost(),
+        LastAssignmentNotArrivingAtHomeCost(),
     ]
 )

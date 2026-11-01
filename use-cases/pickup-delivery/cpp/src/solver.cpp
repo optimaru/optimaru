@@ -1,13 +1,13 @@
 #include "pdp/solver.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <exception>
 #include <limits>
 #include <memory>
 #include <stdexcept>
 #include <string>
-#include <thread>
 #include <utility>
 #include <vector>
 
@@ -15,6 +15,7 @@
 #include "pdp/score_calculator.hpp"
 #include "optimaru/api/solver/solver.hpp"
 #include "optimaru/config/solver/solver_config.hpp"
+#include "optimaru/impl/solver/worker_threads.hpp"
 #include "optimaru/preview/api/move/operators.hpp"
 
 namespace pdp
@@ -728,32 +729,33 @@ void solveInParallel(const Solver::Config &config,
                                          plan);
     std::vector<std::exception_ptr> failures(
         static_cast<std::size_t>(workerCount));
-    std::vector<std::thread> workers;
-    workers.reserve(static_cast<std::size_t>(workerCount));
-    for (int i = 0; i < workerCount; ++i)
-    {
-        workers.emplace_back(
-            [&config, i, &candidates, &failures]
+    // Raised by the first worker that fails: every worker's engine checks
+    // it once a step, so the others stop instead of using up their budget.
+    auto stop = std::make_shared<std::atomic<bool>>(false);
+    // A worker that cannot be started (std::system_error) stops and joins
+    // the ones already running before the error is rethrown here.
+    optimaru::runWorkerThreads(
+        workerCount, *stop,
+        [&config, &candidates, &failures, &stop](int i)
+        {
+            try
             {
-                try
-                {
-                    Solver::Config workerConfig = config;
-                    workerConfig.parallelSolverCount = 1;
-                    workerConfig.randomSeed += static_cast<std::uint64_t>(i);
-                    if (i != 0)
-                        workerConfig.onNewBest = nullptr;
-                    Solver(std::move(workerConfig))
-                        .solve(candidates[static_cast<std::size_t>(i)]);
-                }
-                catch (...)
-                {
-                    failures[static_cast<std::size_t>(i)]
-                        = std::current_exception();
-                }
-            });
-    }
-    for (std::thread &worker : workers)
-        worker.join();
+                Solver::Config workerConfig = config;
+                workerConfig.parallelSolverCount = 1;
+                workerConfig.stopFlag = stop;
+                workerConfig.randomSeed += static_cast<std::uint64_t>(i);
+                if (i != 0)
+                    workerConfig.onNewBest = nullptr;
+                Solver(std::move(workerConfig))
+                    .solve(candidates[static_cast<std::size_t>(i)]);
+            }
+            catch (...)
+            {
+                failures[static_cast<std::size_t>(i)]
+                    = std::current_exception();
+                stop->store(true);
+            }
+        });
     for (const std::exception_ptr &failure : failures)
     {
         if (failure)
@@ -814,7 +816,7 @@ optimaru::SolverConfig buildEngineConfig(const Solver::Config &config,
     if (config.bestScoreLimit.medium
         != std::numeric_limits<std::int64_t>::max())
         engineConfig.termination.bestScoreLimit
-            = toEngineScore(config.bestScoreLimit);
+            = toEngineScoreLimit(config.bestScoreLimit);
     engineConfig.termination.unimprovedSpentLimit = config.unimprovedSpentLimit;
     engineConfig.termination.stepCountLimit = config.stepCountLimit;
     engineConfig.termination.unimprovedStepCountLimit
@@ -919,6 +921,18 @@ optimaru::SolverConfig buildEngineConfig(const Solver::Config &config,
     return engineConfig;
 }
 
+// The domain Score of a plugin calculator, read from its three accumulators
+// (levelScores(), before the medium fold) rather than decoded from the folded
+// engine soft, which would file a soft total of 10^9 or more under medium.
+Score levelScoreOf(
+    const optimaru::DecomposedScoreCalculator<PdpRoutePlan> &calculator)
+{
+    const auto levels = calculator.levelScores();
+    return {static_cast<std::int64_t>(levels.hard),
+            optimaru::roundScoreLevel(levels.medium, "medium"),
+            optimaru::roundScoreLevel(levels.soft, "soft")};
+}
+
 }  // namespace
 
 void Solver::solve(PdpRoutePlan &plan)
@@ -951,6 +965,8 @@ void Solver::solve(PdpRoutePlan &plan)
     optimaru::SolverConfig engineConfig = buildEngineConfig(config_, plan);
     PdpIncrementalScoreCalculator calculator;
     optimaru::Solver<PdpRoutePlan> engine(std::move(engineConfig));
+    if (config_.stopFlag)
+        engine.adoptTerminateEarlyFlag(config_.stopFlag);
     if (config_.pairMoves)
     {
         engine.addMoveOperator(std::make_unique<PairRelocateMove>(
@@ -980,10 +996,25 @@ void Solver::solve(
         constructPairs(plan, config_.firstFitDecreasing);
     if (!plan.nodes.empty() && !plan.vehicles.empty())
     {
+        optimaru::SolverConfig engineConfig = buildEngineConfig(config_, plan);
+        if (config_.onNewBest)
+        {
+            // The engine reports a new best right after the working solution
+            // became it, so the calculator's accumulators hold exactly that
+            // solution: report its levels the same way as the final
+            // plan.score below, not the decoded engine fold.
+            auto callback = config_.onNewBest;
+            engineConfig.onNewBest
+                = [callback, &calculator](std::int64_t step,
+                                          const optimaru::HardSoftScore &)
+            { callback(step, levelScoreOf(calculator)); };
+        }
         // The pair-aware operators only read the plan (which request a node
         // belongs to, where its partner sits), never the calculator, so the
         // plugin path keeps them — they are what makes a PDP search work.
-        optimaru::Solver<PdpRoutePlan> engine(buildEngineConfig(config_, plan));
+        optimaru::Solver<PdpRoutePlan> engine(std::move(engineConfig));
+        if (config_.stopFlag)
+            engine.adoptTerminateEarlyFlag(config_.stopFlag);
         if (config_.pairMoves)
         {
             engine.addMoveOperator(std::make_unique<PairRelocateMove>(
@@ -1006,7 +1037,7 @@ void Solver::solve(
     // exactly this score.
     ScoreCalculator::updateShadowVariables(plan);
     calculator.resetWorkingSolution(plan);
-    plan.score = fromEngineScore(calculator.calculateScore());
+    plan.score = levelScoreOf(calculator);
 }
 
 }  // namespace pdp

@@ -1,7 +1,12 @@
 import pytest
 
 import conference_scheduling as domain
-from conference_scheduling.constraints import get_constraints, score
+from conference_scheduling.constraints import (
+    AudienceTypeDiversityCost,
+    LanguageDiversityCost,
+    get_constraints,
+    score,
+)
 from conference_scheduling.models import (
     ConferenceScheduleModel,
     RoomModel,
@@ -24,7 +29,7 @@ def test_smoke_and_plugin_catalog():
         talks=[TalkModel(code="T", talk_type=0)],
     )
     result = solve(
-        problem, time_limit_seconds=2, constraints=["talk_type_compatibility"]
+        problem, time_limit_seconds=2, constraints=["talk_type_incompatibility_cost"]
     )
     assert result.talks[0].slot_room == 0
     assert result.score_hard == 0
@@ -162,3 +167,72 @@ def test_each_constraint_matches_domain_on_a_fixed_schedule(constraint) -> None:
     )
 
     assert (proxy["hard"], proxy["soft"]) == pytest.approx(expected)
+
+
+def test_cpsat_defaults_are_the_engine_defaults() -> None:
+    """The plugin catalog reads every default off the engine's constraint_info()."""
+    engine = {row.name: row for row in domain.constraint_info()}
+    entries = catalog()
+    assert [entry["name"] for entry in entries] == domain.list_constraints()
+    for entry in entries:
+        row = engine[entry["name"]]
+        assert entry["default_level"] == row.default_level
+        assert entry["default_weight"] == row.default_weight
+        assert entry["level_flippable"] == row.level_flippable
+        assert entry["reward"] == row.reward
+        assert entry["default_enabled"] == row.default_enabled
+        # The three *_diversity_cost rewards stay soft; everything else flips.
+        assert entry["kind"] == ("soft" if row.reward else "either")
+        assert entry["params"] == {"weight": None, "hard": None, "exponent": 1.0}
+    assert [entry["name"] for entry in entries if entry["reward"]] == [
+        "audience_type_diversity_cost",
+        "audience_level_diversity_cost",
+        "language_diversity_cost",
+    ]
+
+
+def _fixed_candidate(problem, fixed):
+    candidate = problem.model_copy(deep=True)
+    for talk, slot_room in zip(candidate.talks, fixed, strict=True):
+        talk.slot_room = slot_room
+    return candidate
+
+
+def test_level_flips_score_like_the_engine() -> None:
+    """hard=False demotes and hard=True promotes on both solvers alike."""
+    problem = _parity_problem()
+    fixed = [0, 0, 3, 5]
+    flipped = {"room_conflict_cost", "speaker_conflict_cost", "crowd_control_risk_cost"}
+    selection = [
+        type(spec)(hard=False) if spec.name in flipped else spec
+        for spec in get_constraints()
+    ]
+    selection = [
+        type(spec)(hard=True) if spec.name == "theme_track_conflict_cost" else spec
+        for spec in selection
+    ]
+    expected = score(
+        domain.constraint_costs(_fixed_candidate(problem, fixed).to_core()), selection
+    )
+    proxy = {}
+    solved = solve(
+        problem,
+        time_limit_seconds=2,
+        constraints=selection,
+        _fixed_slot_rooms=fixed,
+        _proxy_score=proxy,
+    )
+    assert (proxy["hard"], proxy["soft"]) == pytest.approx(expected)
+    assert (solved.score_hard, solved.score_soft) == pytest.approx(expected)
+
+
+@pytest.mark.parametrize("spec", [AudienceTypeDiversityCost, LanguageDiversityCost])
+def test_a_reward_is_never_hard_on_cpsat(spec) -> None:
+    with pytest.raises(ValueError, match="is a reward"):
+        solve(_parity_problem(), time_limit_seconds=1, constraints=[spec(hard=True)])
+
+
+def test_old_names_are_unknown() -> None:
+    for old in ("talk_type_compatibility", "room_conflict", "same_day_talks"):
+        with pytest.raises(ValueError, match="unknown constraint"):
+            solve(_parity_problem(), time_limit_seconds=1, constraints=[old])

@@ -5,12 +5,16 @@
 //   - the quickstart port (st::Timetable, slotRoom composite encoding) at the
 //     module top level, unchanged for backwards compatibility;
 //   - the canonical full-parity domain (st::canon) in the `canon` submodule,
-//     mirroring the CP-SAT reference package's H1~H10 / S1~S6 semantics.
+//     mirroring the CP-SAT reference package's constraints under the same
+//     names (unassigned_lessons_cost ... parallel_groups_cost). Its catalog
+//     is the package's: constraint_info() / ConstraintInfo at the top level.
 #include <pybind11/functional.h>  // std::function <-> Python callable (on_new_best)
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>  // std::vector / std::set / std::map / std::string conversions
 
+#include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -23,10 +27,13 @@
 #include "st/canonical_score_calculator.hpp"
 #include "st/canonical_solver.hpp"
 #include "st/domain.hpp"
+#include "st/objective_weights.hpp"
 #include "st/score_calculator.hpp"
 #include "st/solver.hpp"
+#include "optimaru/python/constraint_binding.hpp"
 
 namespace py = pybind11;
+namespace tfpy = optimaru::python;
 using namespace st;
 namespace cn = st::canon;
 
@@ -35,8 +42,8 @@ namespace
 
 // The quickstart and canonical Solver::Config structs share every engine
 // field, so both bindings come from this one helper; the mode-specific
-// fields (canonical `weights` and the guided-search knobs, the quickstart
-// same-group nearby knobs) are bound next to each class below.
+// fields (the canonical fast-path `weights` and guided-search knobs, the
+// quickstart same-group nearby knobs) are bound next to each class below.
 template <typename Config> void bindSolverConfigCommon(py::class_<Config> &cls)
 {
     cls.def(py::init<>())
@@ -45,27 +52,15 @@ template <typename Config> void bindSolverConfigCommon(py::class_<Config> &cls)
             [](const Config &c)
             { return std::chrono::duration<double>(c.spentLimit).count(); },
             [](Config &c, double s)
-            {
-                c.spentLimit
-                    = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        std::chrono::duration<double>(s));
-            })
+            { c.spentLimit = optimaru::python::secondsToMillis(s, "spent_limit_seconds"); })
         .def_property(
             "unimproved_spent_limit_seconds",
-            [](const Config &c)
-            {
+            [](const Config &c) {
                 return std::chrono::duration<double>(c.unimprovedSpentLimit)
                     .count();
             },
             [](Config &c, double s)
-            {
-                if (s < 0.0)
-                    throw py::value_error(
-                        "unimproved_spent_limit_seconds must be non-negative");
-                c.unimprovedSpentLimit
-                    = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        std::chrono::duration<double>(s));
-            })
+            { c.unimprovedSpentLimit = optimaru::python::secondsToMillis(s, "unimproved_spent_limit_seconds"); })
         .def_readwrite("step_count_limit", &Config::stepCountLimit)
         .def_readwrite("unimproved_step_count_limit",
                        &Config::unimprovedStepCountLimit)
@@ -97,8 +92,7 @@ template <typename Config> void bindSolverConfigCommon(py::class_<Config> &cls)
         // recompute after every move (debugging aid; much slower).
         .def_property(
             "full_assert",
-            [](const Config &c)
-            {
+            [](const Config &c) {
                 return c.environmentMode
                        == optimaru::EnvironmentMode::FULL_ASSERT;
             },
@@ -138,12 +132,11 @@ template <typename Config> void bindSolverConfigCommon(py::class_<Config> &cls)
         .def_readwrite("descent_max_sweeps", &Config::descentMaxSweeps)
         .def_readwrite("change_move_weight", &Config::changeMoveWeight)
         .def_readwrite("swap_move_weight", &Config::swapMoveWeight)
-        // Early termination once bestScore >= (hard, soft), e.g. (0, -1e18)
+        // Early termination once bestScore >= (hard, soft), e.g. (0, -inf)
         // stops at the first feasible solution.
         .def_property(
             "best_score_limit",
-            [](const Config &c)
-            {
+            [](const Config &c) {
                 return py::make_tuple(c.bestScoreLimit.hard,
                                       c.bestScoreLimit.soft);
             },
@@ -155,88 +148,72 @@ template <typename Config> void bindSolverConfigCommon(py::class_<Config> &cls)
         .def_readwrite("on_new_best", &Config::onNewBest);
 }
 
-// Plugin registry: constraint name ->
-// st::canon component (see st/canonical_constraints.hpp). The names are the
-// Python-facing identifiers; the S1~S6 ones match the Breakdown/penalties
-// keys and the ObjectiveWeights fields. `weight` std::nullopt keeps the
-// component's default (hard H* = 1, soft S* = the CP-SAT ObjectiveWeights
-// default); `hard` overrides the component's default hard/soft level;
-// `exponent` shapes the per-unit cost superlinearly (see shapeCost in the
-// engine header).
-void addCanonConstraintByName(cn::DecomposedCalculator &calc,
-                              const std::string &name,
-                              std::optional<double> weight,
-                              std::optional<bool> hard,
-                              double exponent)
+// ---------------------------------------------------------------------------
+// Canonical constraint picks -> the standard resolve path
+// ---------------------------------------------------------------------------
+// The Python names are pythonName() of the components' registry names
+// (teacherGapCost -> teacher_gap_cost), resolved against the default
+// assembly by tfpy::applyConstraints — no name table of our own. The one
+// domain-specific piece is the TeacherMaskHub: the five teacher-mask
+// components of ONE calculator share one projection, so a pick added to a
+// calculator that already holds family members joins their hub
+// (cn::sharedTeacherMaskHub) — the factory is defaultConstraints(hub).
+
+// The constraints `picks` names (None = the whole default set), with their
+// knobs applied, poured into `calc`.
+void addPicks(cn::DecomposedCalculator &calc, const py::object &picks)
 {
-    const cn::ObjectiveWeights defaults;
-    const auto w = [&](double fallback) { return weight.value_or(fallback); };
-    std::unique_ptr<cn::CanonUnitConstraint> unit;
-    std::unique_ptr<cn::CanonGlobalConstraint> global;
-    if (name == "unassigned_lesson")
-        global = std::make_unique<cn::UnassignedLesson>(w(1.0));
-    else if (name == "class_conflict")
-        unit = std::make_unique<cn::ClassConflict>(w(1.0));
-    else if (name == "teacher_conflict")
-        unit = std::make_unique<cn::TeacherConflict>(w(1.0));
-    else if (name == "slot_not_allowed")
-        unit = std::make_unique<cn::SlotNotAllowed>(w(1.0));
-    else if (name == "room_capacity")
-        unit = std::make_unique<cn::RoomCapacity>(w(1.0));
-    else if (name == "course_daily_limit")
-        global = std::make_unique<cn::CourseDailyLimit>(w(1.0));
-    else if (name == "block_adjacency")
-        global = std::make_unique<cn::BlockAdjacency>(w(1.0));
-    // The H9/H10/S1~S3 mask family shares one projection per calculator:
-    // adopt the hub of an already-added family member (nullptr = the new
-    // component creates its own, becoming the hub other members adopt).
-    else if (name == "teacher_load_limit")
-        global = std::make_unique<cn::TeacherLoadLimit>(
-            w(1.0), cn::sharedTeacherMaskHub(calc));
-    else if (name == "teacher_consecutive_limit")
-        global = std::make_unique<cn::TeacherConsecutiveLimit>(
-            w(1.0), cn::sharedTeacherMaskHub(calc));
-    else if (name == "teacher_gap")
-        global = std::make_unique<cn::TeacherGap>(
-            w(defaults.teacherGap), cn::sharedTeacherMaskHub(calc));
-    else if (name == "teacher_workday")
-        global = std::make_unique<cn::TeacherWorkday>(
-            w(defaults.teacherWorkday), cn::sharedTeacherMaskHub(calc));
-    else if (name == "teacher_free_day")
-        global = std::make_unique<cn::TeacherFreeDay>(
-            w(defaults.teacherFreeDay), cn::sharedTeacherMaskHub(calc));
-    else if (name == "class_gap")
-        global = std::make_unique<cn::ClassGap>(w(defaults.classGap));
-    else if (name == "avoided_period")
-        unit = std::make_unique<cn::AvoidedPeriod>(w(defaults.avoidedPeriod));
-    else if (name == "non_preferred_period")
-        unit = std::make_unique<cn::NonPreferredPeriod>(
-            w(defaults.nonPreferredPeriod));
-    else
+    tfpy::applyConstraints(
+        cn::defaultConstraints(cn::sharedTeacherMaskHub(calc)), picks)
+        .into(calc);
+}
+
+// The catalog order (the default set's emplace order) as Python names.
+std::vector<std::string> catalogNames()
+{
+    std::vector<std::string> names;
+    for (const std::string &name : cn::constraintOrder())
+        names.push_back(tfpy::pythonName(name));
+    return names;
+}
+
+// constraint_info() rows in the catalog order (ConstraintAssembly::info()
+// lists the unit constraints before the global ones).
+std::vector<optimaru::ConstraintInfo> catalogRows()
+{
+    const std::vector<optimaru::ConstraintInfo> rows
+        = cn::defaultConstraints().info();
+    std::vector<optimaru::ConstraintInfo> ordered;
+    for (const std::string &name : cn::constraintOrder())
     {
-        throw py::value_error(
-            "unknown constraint '" + name
-            + "'; available: unassigned_lesson, class_conflict, "
-              "teacher_conflict, slot_not_allowed, room_capacity, "
-              "course_daily_limit, block_adjacency, teacher_load_limit, "
-              "teacher_consecutive_limit, teacher_gap, teacher_workday, "
-              "teacher_free_day, class_gap, avoided_period, "
-              "non_preferred_period");
+        for (const optimaru::ConstraintInfo &row : rows)
+        {
+            if (row.name == name)
+                ordered.push_back(row);
+        }
     }
-    if (unit)
+    return ordered;
+}
+
+// tfpy::constraintCosts(calc, table) with its entries in the catalog order.
+py::dict orderedConstraintCosts(cn::DecomposedCalculator &calc,
+                                cn::Timetable &table)
+{
+    cn::ScoreCalculator::prepare(table);
+    const py::dict costs = tfpy::constraintCosts(calc, table);
+    py::dict ordered;
+    for (const std::string &name : catalogNames())
     {
-        if (hard)
-            unit->isHard = *hard;
-        unit->exponent = exponent;
-        calc.add(std::move(unit));
+        const py::str key(name);
+        if (costs.contains(key))
+            ordered[key] = costs[key];
     }
-    else
+    for (const auto &item : costs)  // anything outside the catalog order
     {
-        if (hard)
-            global->isHard = *hard;
-        global->exponent = exponent;
-        calc.add(std::move(global));
+        if (!ordered.contains(item.first))
+            ordered[item.first] = item.second;
     }
+    return ordered;
 }
 
 // The canonical domain keeps allowedSlot as std::vector<char> (a compact
@@ -251,40 +228,125 @@ void allowedSlotFromPython(cn::Lesson &lesson, const std::vector<bool> &table)
     lesson.allowedSlot.assign(table.begin(), table.end());
 }
 
+// The fields of canon.ObjectiveWeights, by Python name.
+struct WeightField
+{
+    const char *name;
+    double cn::ObjectiveWeights::*member;
+};
+
+constexpr WeightField kWeightFields[] = {
+    {"teacher_gap_cost", &cn::ObjectiveWeights::teacherGapCost},
+    {"teacher_workday_cost", &cn::ObjectiveWeights::teacherWorkdayCost},
+    {"teacher_free_day_cost", &cn::ObjectiveWeights::teacherFreeDayCost},
+    {"class_gap_cost", &cn::ObjectiveWeights::classGapCost},
+    {"avoided_period_cost", &cn::ObjectiveWeights::avoidedPeriodCost},
+    {"non_preferred_period_cost",
+     &cn::ObjectiveWeights::nonPreferredPeriodCost},
+};
+
+// One fast-path soft weight (an ObjectiveWeights argument or field), checked
+// like a constraint pick's weight knob and in the same words: a real number
+// (not a bool), finite and >= 0.
+double checkedWeight(const char *field, const py::object &value)
+{
+    const std::string label
+        = std::string("ObjectiveWeights.") + field + ": weight must be ";
+    const std::string shown = py::repr(value).cast<std::string>();
+    if (py::isinstance<py::bool_>(value)
+        || !py::isinstance(value,
+                           py::module_::import("numbers").attr("Real")))
+        throw py::type_error(label + "a number, not " + shown);
+    const double weight = py::float_(value).cast<double>();
+    if (!std::isfinite(weight) || weight < 0.0)
+        throw py::value_error(label + "finite and >= 0, not " + shown);
+    return weight;
+}
+
 void bindCanon(py::module_ &canon)
 {
-    py::class_<cn::ObjectiveWeights>(canon, "ObjectiveWeights", py::module_local())
+    // The soft weights of the monolithic fast path (SolverConfig.weights),
+    // named like the soft constraints; the defaults are the components'
+    // kDefaultWeight. Never part of the model, never read by the plugin path.
+    const cn::ObjectiveWeights defaultWeights{};
+    py::class_<cn::ObjectiveWeights> objectiveWeights(
+        canon,
+        "ObjectiveWeights",
+        py::module_local(),
+        "Soft weights of the monolithic fast path (solve(...) without "
+        "constraints=), one per soft constraint; the defaults are the C++ "
+        "components' kDefaultWeight.");
+    objectiveWeights
         .def(py::init(
-                 [](int teacherGap,
-                    int teacherWorkday,
-                    int teacherFreeDay,
-                    int classGap,
-                    int avoidedPeriod,
-                    int nonPreferredPeriod)
+                 [](const py::object &teacherGapCost,
+                    const py::object &teacherWorkdayCost,
+                    const py::object &teacherFreeDayCost,
+                    const py::object &classGapCost,
+                    const py::object &avoidedPeriodCost,
+                    const py::object &nonPreferredPeriodCost)
                  {
                      cn::ObjectiveWeights w;
-                     w.teacherGap = teacherGap;
-                     w.teacherWorkday = teacherWorkday;
-                     w.teacherFreeDay = teacherFreeDay;
-                     w.classGap = classGap;
-                     w.avoidedPeriod = avoidedPeriod;
-                     w.nonPreferredPeriod = nonPreferredPeriod;
+                     w.teacherGapCost
+                         = checkedWeight("teacher_gap_cost", teacherGapCost);
+                     w.teacherWorkdayCost = checkedWeight(
+                         "teacher_workday_cost", teacherWorkdayCost);
+                     w.teacherFreeDayCost = checkedWeight(
+                         "teacher_free_day_cost", teacherFreeDayCost);
+                     w.classGapCost
+                         = checkedWeight("class_gap_cost", classGapCost);
+                     w.avoidedPeriodCost = checkedWeight(
+                         "avoided_period_cost", avoidedPeriodCost);
+                     w.nonPreferredPeriodCost
+                         = checkedWeight("non_preferred_period_cost",
+                                         nonPreferredPeriodCost);
                      return w;
                  }),
-             py::arg("teacher_gap") = 20,
-             py::arg("teacher_workday") = 3,
-             py::arg("teacher_free_day") = 30,
-             py::arg("class_gap") = 10,
-             py::arg("avoided_period") = 5,
-             py::arg("non_preferred_period") = 1)
-        .def_readwrite("teacher_gap", &cn::ObjectiveWeights::teacherGap)
-        .def_readwrite("teacher_workday", &cn::ObjectiveWeights::teacherWorkday)
-        .def_readwrite("teacher_free_day",
-                       &cn::ObjectiveWeights::teacherFreeDay)
-        .def_readwrite("class_gap", &cn::ObjectiveWeights::classGap)
-        .def_readwrite("avoided_period", &cn::ObjectiveWeights::avoidedPeriod)
-        .def_readwrite("non_preferred_period",
-                       &cn::ObjectiveWeights::nonPreferredPeriod);
+             py::arg("teacher_gap_cost") = defaultWeights.teacherGapCost,
+             py::arg("teacher_workday_cost")
+             = defaultWeights.teacherWorkdayCost,
+             py::arg("teacher_free_day_cost")
+             = defaultWeights.teacherFreeDayCost,
+             py::arg("class_gap_cost") = defaultWeights.classGapCost,
+             py::arg("avoided_period_cost") = defaultWeights.avoidedPeriodCost,
+             py::arg("non_preferred_period_cost")
+             = defaultWeights.nonPreferredPeriodCost)
+        .def("__eq__",
+             [](const cn::ObjectiveWeights &a, const cn::ObjectiveWeights &b)
+             {
+                 return a.teacherGapCost == b.teacherGapCost
+                        && a.teacherWorkdayCost == b.teacherWorkdayCost
+                        && a.teacherFreeDayCost == b.teacherFreeDayCost
+                        && a.classGapCost == b.classGapCost
+                        && a.avoidedPeriodCost == b.avoidedPeriodCost
+                        && a.nonPreferredPeriodCost == b.nonPreferredPeriodCost;
+             })
+        .def(
+            "__repr__",
+            [](const cn::ObjectiveWeights &w)
+            {
+                return py::str(
+                           "ObjectiveWeights(teacher_gap_cost={}, "
+                           "teacher_workday_cost={}, teacher_free_day_cost={}, "
+                           "class_gap_cost={}, avoided_period_cost={}, "
+                           "non_preferred_period_cost={})")
+                    .format(w.teacherGapCost,
+                            w.teacherWorkdayCost,
+                            w.teacherFreeDayCost,
+                            w.classGapCost,
+                            w.avoidedPeriodCost,
+                            w.nonPreferredPeriodCost);
+            });
+    // The fields reject what the constructor rejects.
+    for (const WeightField &field : kWeightFields)
+    {
+        objectiveWeights.def_property(
+            field.name,
+            [member = field.member](const cn::ObjectiveWeights &w)
+            { return w.*member; },
+            [member = field.member, name = field.name](
+                cn::ObjectiveWeights &w, const py::object &value)
+            { w.*member = checkedWeight(name, value); });
+    }
 
     py::class_<cn::Lesson>(canon, "Lesson", py::module_local())
         .def(py::init(
@@ -321,10 +383,12 @@ void bindCanon(py::module_ &canon)
         .def_readwrite("course_key", &cn::Lesson::courseKey)
         .def_readwrite("teachers", &cn::Lesson::teachers)
         .def_readwrite("room_type_demand", &cn::Lesson::roomTypeDemand)
-        // Per-slot permission table (H5); empty = every slot allowed.
+        // Per-slot permission table (disallowed_slot_cost); empty = every
+        // slot allowed.
         .def_property(
             "allowed_slot", &allowedSlotToPython, &allowedSlotFromPython)
-        // S5/S6 units: one (avoided_mask, preferred_mask) pair per member
+        // Preference units (avoided_period_cost / non_preferred_period_cost):
+        // one (avoided_mask, preferred_mask) pair per member
         // course of a merged lesson; empty = derive from the courseKey masks.
         .def_readwrite("preference_units", &cn::Lesson::preferenceUnits)
         .def_readwrite("block_group", &cn::Lesson::blockGroup)
@@ -364,13 +428,12 @@ void bindCanon(py::module_ &canon)
         .def_readwrite("teacher_preferred_free_days",
                        &cn::Timetable::teacherPreferredFreeDays)
         .def_readwrite("course_daily_limit", &cn::Timetable::courseDailyLimit)
-        // Per-courseKey period masks (bit = period - 1), the default S5/S6
+        // Per-courseKey period masks (bit = period - 1), the default
         // preference unit for lessons without explicit preference_units.
         .def_readwrite("course_avoided_period_mask",
                        &cn::Timetable::courseAvoidedPeriodMask)
         .def_readwrite("course_preferred_period_mask",
                        &cn::Timetable::coursePreferredPeriodMask)
-        .def_readwrite("weights", &cn::Timetable::weights)
         .def_readonly("score", &cn::Timetable::score)
         .def_readonly("prepared", &cn::Timetable::prepared)
         .def("slot_count", &cn::Timetable::slotCount)
@@ -398,120 +461,85 @@ void bindCanon(py::module_ &canon)
             },
             py::arg("assignment"));
 
-    // Per-constraint violation counts (the exact semantics of the CP-SAT
-    // package's validate.py: hard H1~H10 counts and raw soft S1~S6 counts).
-    py::class_<cn::Breakdown>(canon, "Breakdown", py::module_local())
-        .def_readonly("unassigned", &cn::Breakdown::unassigned)
-        .def_readonly("class_conflicts", &cn::Breakdown::classConflicts)
-        .def_readonly("teacher_conflicts", &cn::Breakdown::teacherConflicts)
-        .def_readonly("slot_not_allowed", &cn::Breakdown::slotNotAllowed)
-        .def_readonly("room_over_capacity", &cn::Breakdown::roomOverCapacity)
-        .def_readonly("course_daily_excess", &cn::Breakdown::courseDailyExcess)
-        .def_readonly("block_breaks", &cn::Breakdown::blockBreaks)
-        .def_readonly("teacher_daily_excess",
-                      &cn::Breakdown::teacherDailyExcess)
-        .def_readonly("teacher_weekly_excess",
-                      &cn::Breakdown::teacherWeeklyExcess)
-        .def_readonly("consecutive_excess", &cn::Breakdown::consecutiveExcess)
-        .def_readonly("teacher_gap", &cn::Breakdown::teacherGap)
-        .def_readonly("teacher_workday", &cn::Breakdown::teacherWorkday)
-        .def_readonly("teacher_free_day", &cn::Breakdown::teacherFreeDay)
-        .def_readonly("class_gap", &cn::Breakdown::classGap)
-        .def_readonly("avoided_period", &cn::Breakdown::avoidedPeriod)
-        .def_readonly("non_preferred_period",
-                      &cn::Breakdown::nonPreferredPeriod)
-        .def("hard_total", &cn::Breakdown::hardTotal)
-        .def("soft_penalty", &cn::Breakdown::softPenalty, py::arg("weights"))
-        // The raw soft counts keyed like the CP-SAT Timetable.penalties dict.
-        .def("penalties",
-             [](const cn::Breakdown &b)
-             {
-                 py::dict d;
-                 d["teacher_gap"] = b.teacherGap;
-                 d["teacher_workday"] = b.teacherWorkday;
-                 d["teacher_free_day"] = b.teacherFreeDay;
-                 d["class_gap"] = b.classGap;
-                 d["avoided_period"] = b.avoidedPeriod;
-                 d["non_preferred_period"] = b.nonPreferredPeriod;
-                 return d;
-             });
-
     canon.def("calculate_score",
-              &cn::ScoreCalculator::calculateScore,
+              py::overload_cast<cn::Timetable &>(
+                  &cn::ScoreCalculator::calculateScore),
               py::arg("table"),
-              "Full recompute of the HardSoftScore (also stores table.score).");
-    canon.def("compute_breakdown",
-              &cn::ScoreCalculator::computeBreakdown,
+              "Full recompute of the HardSoftScore at the default weights "
+              "(also stores table.score).");
+    canon.def("calculate_score",
+              py::overload_cast<cn::Timetable &, const cn::ObjectiveWeights &>(
+                  &cn::ScoreCalculator::calculateScore),
               py::arg("table"),
-              "Full per-constraint recompute (H1~H10 / S1~S6 counts).");
+              py::arg("weights"),
+              "Full recompute with the soft terms at `weights` (the fast "
+              "path's ObjectiveWeights; also stores table.score).");
     canon.def("prepare",
               &cn::ScoreCalculator::prepare,
               py::arg("table"),
               "Normalize the instance in place (idempotent; also run by "
-              "compute_breakdown / calculate_score / Solver.solve).");
+              "calculate_score / constraint_costs / Solver.solve).");
 
     // ------------------------------------------------------------------
-    // Plugin-style cost assembly: pick
-    // canonical constraints and weights from Python, then pass the assembly
-    // to Solver.solve(table, calc).
+    // Plugin-style cost assembly: pick canonical constraints and their knobs
+    // from Python, then pass the assembly to Solver.solve(table, calc).
     // ------------------------------------------------------------------
     py::class_<cn::DecomposedCalculator>(
         canon,
-        "DecomposedCalculator", py::module_local(),
+        "DecomposedCalculator",
+        py::module_local(),
         "Pluggable score calculator: assemble canonical constraints — either "
-        "from an iterable of constraint specs (see st_timetabling."
-        "constraints) or incrementally via add(name, ...) — then pass to "
-        "Solver.solve(table, calc). The full default set (see "
-        "default_calculator) reproduces canon.calculate_score exactly when "
-        "its weights equal table.weights.")
+        "from constraint picks (see st_timetabling.constraints) or one by one "
+        "via add(name, ...) — then pass to Solver.solve(table, calc). The "
+        "default set (default_calculator) reproduces canon.calculate_score "
+        "exactly.")
         .def(py::init<>())
-        // Example: DecomposedCalculator([TeacherGap(40), ...]).
-        // Duck-typed: each spec needs .name/.weight/.hard/.exponent (the
-        // st_timetabling.constraints dataclasses and Assembly items qualify;
-        // weight None keeps the component default).
+        // Example: DecomposedCalculator([TeacherGapCost(weight=40), ...]).
+        // Duck-typed picks (.name/.weight/.hard/.exponent), resolved and
+        // checked by tfpy::applyConstraints: weight None keeps the
+        // component's kDefaultWeight, hard None its kDefaultLevel.
         .def(py::init(
-                 [](const py::iterable &constraints)
+                 [](const py::object &constraints)
                  {
                      auto calc = std::make_unique<cn::DecomposedCalculator>();
-                     for (py::handle spec : constraints)
-                     {
-                         addCanonConstraintByName(
-                             *calc,
-                             spec.attr("name").cast<std::string>(),
-                             spec.attr("weight").cast<std::optional<double>>(),
-                             spec.attr("hard").cast<std::optional<bool>>(),
-                             spec.attr("exponent").cast<double>());
-                     }
+                     addPicks(*calc, constraints);
                      return calc;
                  }),
              py::arg("constraints"),
-             "Assemble from constraint spec objects (duck-typed: .name, "
-             ".weight, .hard, .exponent), e.g.\n"
-             "DecomposedCalculator(Assembly().add('teacher_gap', "
-             "weight=40)).")
+             "Assemble from constraint picks (duck-typed: .name, .weight, "
+             ".hard, .exponent; None = the whole default set). The picks "
+             "replace the defaults; a name picked twice or an empty list is "
+             "a ValueError.")
         .def(
             "add",
             [](cn::DecomposedCalculator &calc,
                const std::string &name,
-               std::optional<double> weight,
-               std::optional<bool> hard,
-               double exponent)
-            { addCanonConstraintByName(calc, name, weight, hard, exponent); },
+               const py::object &weight,
+               const py::object &hard,
+               const py::object &exponent)
+            {
+                const py::object pick = py::module_::import("types").attr(
+                    "SimpleNamespace")(py::arg("name") = name,
+                                       py::arg("weight") = weight,
+                                       py::arg("hard") = hard,
+                                       py::arg("exponent") = exponent);
+                py::list picks;
+                picks.append(pick);
+                addPicks(calc, picks);
+            },
             py::arg("name"),
-            py::arg("weight") = std::nullopt,
-            py::arg("hard") = std::nullopt,
+            py::arg("weight") = py::none(),
+            py::arg("hard") = py::none(),
             py::arg("exponent") = 1.0,
-            "Add a built-in canonical constraint by name (see "
-            "CONSTRAINT_NAMES).\n"
-            "weight:   linear multiplier on the constraint's cost; None keeps "
-            "the component default (hard H* = 1, soft S* = the CP-SAT "
-            "ObjectiveWeights default).\n"
-            "hard:     True/False overrides the constraint's default "
-            "hard/soft level (None keeps the default).\n"
-            "exponent: sign-preserving power shaping of the per-unit cost: "
-            "contribution = weight * sign(c)*|c|^exponent.\n"
-            "Raises ValueError for an unknown name. Duplicates are allowed "
-            "(their costs add up).")
+            "Add one canonical constraint by name (see CONSTRAINT_NAMES), "
+            "with the same three knobs and checks as a spec:\n"
+            "weight:   None = the component's default weight, else a finite "
+            "number >= 0.\n"
+            "hard:     None = the default level, True = hard, False = soft "
+            "(fixed_slots_cost / parallel_groups_cost refuse False).\n"
+            "exponent: sign-preserving power shaping, > 0.\n"
+            "Raises ValueError for an unknown name. Adding a name twice is "
+            "allowed here (their costs add up).")
         .def(
             "score",
             [](cn::DecomposedCalculator &calc, cn::Timetable &table)
@@ -530,58 +558,94 @@ void bindCanon(py::module_ &canon)
             "constraint_totals",
             [](const cn::DecomposedCalculator &calc)
             {
+                // In the catalog order, like constraint_costs():
+                // constraintTotals() lists the unit constraints before the
+                // global ones. Anything outside the catalog comes last.
+                const std::vector<std::string> order = cn::constraintOrder();
+                const auto rank = [&order](const std::string &name)
+                {
+                    return std::find(order.begin(), order.end(), name)
+                           - order.begin();
+                };
+                std::vector<optimaru::ConstraintTotal> totals
+                    = calc.constraintTotals();
+                std::stable_sort(totals.begin(),
+                                 totals.end(),
+                                 [&rank](const optimaru::ConstraintTotal &a,
+                                         const optimaru::ConstraintTotal &b)
+                                 { return rank(a.name) < rank(b.name); });
                 py::list out;
-                for (const optimaru::ConstraintTotal &t :
-                     calc.constraintTotals())
+                for (const optimaru::ConstraintTotal &t : totals)
                 {
                     py::dict d;
-                    d["name"] = t.name;
+                    d["name"] = tfpy::pythonName(t.name);
+                    d["label"] = t.label;
                     d["cost"] = t.cost;  // weighted; positive = penalizing
+                    d["level"] = optimaru::levelName(t.level);
                     d["is_hard"] = t.isHard;
                     out.append(d);
                 }
                 return out;
             },
             "Weighted cost per constraint for the last scored/solved "
-            "solution (positive = penalizing).")
+            "solution (positive = penalizing): {name, label, cost, level, "
+            "is_hard}, in list_constraints() order.")
+        .def(
+            "constraint_costs",
+            [](cn::DecomposedCalculator &calc, cn::Timetable &table)
+            { return orderedConstraintCosts(calc, table); },
+            py::arg("table"),
+            "Raw per-unit costs of this assembly's constraints on `table` "
+            "(the constraint_costs() dict shape; re-primes the calculator).")
         .def_property_readonly("delta_group_count",
                                &cn::DecomposedCalculator::deltaGroupCount,
                                "Number of structural delta groups compiled by "
                                "the last reset/solve.");
 
-    canon.attr("CONSTRAINT_NAMES") = py::make_tuple("unassigned_lesson",
-                                                    "class_conflict",
-                                                    "teacher_conflict",
-                                                    "slot_not_allowed",
-                                                    "room_capacity",
-                                                    "course_daily_limit",
-                                                    "block_adjacency",
-                                                    "teacher_load_limit",
-                                                    "teacher_consecutive_limit",
-                                                    "teacher_gap",
-                                                    "teacher_workday",
-                                                    "teacher_free_day",
-                                                    "class_gap",
-                                                    "avoided_period",
-                                                    "non_preferred_period");
+    canon.attr("CONSTRAINT_NAMES") = py::tuple(py::cast(catalogNames()));
+
+    // The documented weight of unassigned_lessons_cost demoted to soft
+    // (partial timetabling): UnassignedLessonsCost::kSoftWeight.
+    canon.attr("UNASSIGNED_LESSONS_SOFT_WEIGHT")
+        = cn::UnassignedLessonsCost::kSoftWeight;
 
     canon.def(
         "default_calculator",
-        [](const cn::ObjectiveWeights &weights)
+        []
         {
             auto calc = std::make_unique<cn::DecomposedCalculator>();
-            cn::addCanonicalConstraints(*calc, weights);
+            cn::addDefaultConstraints(*calc);
             return calc;
         },
-        py::arg("weights") = cn::ObjectiveWeights{},
-        "A DecomposedCalculator preloaded with the full canonical set: "
-        "H1~H10 hard at weight 1 plus S1~S6 soft at `weights` (default: the "
-        "CP-SAT ObjectiveWeights defaults). With weights == table.weights it "
-        "scores bit-for-bit like canon.calculate_score.");
+        "A DecomposedCalculator preloaded with the default set, every "
+        "component at its default weight and level. Scores bit-for-bit "
+        "like canon.calculate_score.");
 
-    py::class_<cn::Solver::Config> config(canon, "SolverConfig", py::module_local());
+    // The raw per-unit costs of the default set (or of `constraints`, the
+    // same picks as solve(constraints=...)), before weight / exponent /
+    // level — what st_timetabling.constraints.score() turns into a score.
+    canon.def(
+        "constraint_costs",
+        [](cn::Timetable &table, const py::object &constraints)
+        {
+            cn::DecomposedCalculator calc;
+            addPicks(calc, constraints);
+            return orderedConstraintCosts(calc, table);
+        },
+        py::arg("table"),
+        py::arg("constraints") = py::none(),
+        "Raw per-unit cost of every default constraint (or of the picked "
+        "ones), before weight/exponent/level: {name: {costs, weight, "
+        "exponent, hard, global, level, reward, level_flippable, name, "
+        "label}}, in list_constraints() order.");
+
+    py::class_<cn::Solver::Config> config(
+        canon, "SolverConfig", py::module_local());
+
+    optimaru::python::bindConfigCopy(config);
     bindSolverConfigCommon(config);
-    // S1~S6 weights, copied onto the Timetable at the start of solve().
+    // The fast path's soft weights (solve(table) only; the model carries
+    // none, the plugin path's components carry their own).
     config.def_readwrite("weights", &cn::Solver::Config::weights);
     // Same-class nearby swap bias (see canonical_solver.hpp).
     config.def_readwrite("same_class_nearby",
@@ -597,7 +661,8 @@ void bindCanon(py::module_ &canon)
     config.def_readwrite("smart_class_swap_candidates",
                          &cn::Solver::Config::smartClassSwapCandidates);
     // Best-of-k width of the re-assign move — only in play when the assembly
-    // demotes H1 to soft (partial timetabling; see canonical_solver.hpp for the sweep).
+    // demotes unassigned_lessons_cost to soft (partial timetabling; see
+    // canonical_solver.hpp for the sweep).
     config.def_readwrite("reassign_candidates",
                          &cn::Solver::Config::reassignCandidates);
 
@@ -757,6 +822,8 @@ PYBIND11_MODULE(_core, m)
           "Full recompute of the HardSoftScore (also stores table.score).");
 
     py::class_<Solver::Config> config(m, "SolverConfig", py::module_local());
+
+    optimaru::python::bindConfigCopy(config);
     bindSolverConfigCommon(config);
     // Same-group nearby swap bias (see st/solver.hpp).
     config.def_readwrite("same_group_nearby", &Solver::Config::sameGroupNearby);
@@ -774,8 +841,23 @@ PYBIND11_MODULE(_core, m)
              py::call_guard<py::gil_scoped_release>());
 
     // Canonical full-parity domain (st::canon): the CP-SAT reference
-    // package's hard H1~H10 / soft S1~S6 with validate.py semantics.
+    // package's hard and soft constraints with validate.py semantics.
     py::module_ canonModule = m.def_submodule(
         "canon", "Canonical full-parity school-timetabling domain (st::canon)");
     bindCanon(canonModule);
+
+    // The package's constraint catalog — the canonical domain's (the
+    // quickstart model has no registry): constraint_info() ->
+    // [ConstraintInfo(name, default_level, default_weight, level_flippable,
+    // reward, default_enabled)], read off the C++ components'
+    // kDefaultWeight / kDefaultLevel, in list_constraints() order. Bound on
+    // the top-level module so ConstraintInfo pickles by reference. The rows
+    // go through bindInfoRows directly (not bindConstraintInfo) only to keep
+    // the catalog order, which ConstraintAssembly::info() does not.
+    tfpy::detail::bindInfoRows(m, [] { return catalogRows(); });
+    m.def(
+        "list_constraints",
+        [] { return catalogNames(); },
+        "The canonical constraint names, in catalog order (the same as "
+        "canon.CONSTRAINT_NAMES).");
 }

@@ -6,15 +6,22 @@
 //   (b) incremental score == full recompute across 3000 random moves driven
 //       through the engine's ScoreDirector protocol (plugin path)
 //   (c) partial assemblies: each component in isolation, hand-computed
-//   (d) weight / isHard overrides
+//   (d) weight / level overrides
 //   (e) constraintTotals() explains exactly the reported score
 //   (f) a 2-second solve(schedule, calculator) under FULL_ASSERT
+//   (g) the defaultConstraints() builder: named edits == by-hand assembly
+//   (h) each component's raw cost, hand-calculated: a positive and a zero
+//       case per constraint (raw 0 = no violation)
+//   (i) the catalog: info() off the default assembly == the components'
+//       kDefaultWeight / kDefaultLevel; the level and knob guards
 #include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <functional>
 #include <memory>
 #include <random>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -243,19 +250,21 @@ void verifyPartialAssemblies()
 {
     std::printf("== (c) Single-component assemblies ==\n");
 
-    {  // crewConflict alone: two 5-business-day jobs on the same crew and
-        // start date overlap on all 7 calendar days they span.
+    {  // crewConflictCost alone: two 5-business-day jobs on the same crew
+        // and start date overlap on all 5 calendar days they span
+        // ([Mon, Sat)).
         MaintenanceSchedule s = makeBase();
         addJob(s, 5);
         addJob(s, 5);
         ScoreCalculator::prepare(s);
         s.jobs[0].crewDate = s.crewDateOf(0, 0);
         s.jobs[1].crewDate = s.crewDateOf(0, 0);
-        const std::int64_t days
-            = s.endDateFor(5, 0) - s.startDates[0];  // 5 business days -> 7
+        // 5 business days from a Monday -> 5
+        const std::int64_t days = s.endDateFor(5, 0) - s.startDates[0];
         DecomposedCalculator calculator;
-        calculator.emplace<CrewConflict>();
-        checkScore("crewConflict alone", scoreWith(calculator, s), -days, 0.0);
+        calculator.emplace<CrewConflictCost>();
+        checkScore(
+            "crewConflictCost alone", scoreWith(calculator, s), -days, 0.0);
     }
     {  // Same two jobs on DIFFERENT crews: no conflict at all.
         MaintenanceSchedule s = makeBase();
@@ -265,14 +274,14 @@ void verifyPartialAssemblies()
         s.jobs[0].crewDate = s.crewDateOf(0, 0);
         s.jobs[1].crewDate = s.crewDateOf(0, 1);
         DecomposedCalculator calculator;
-        calculator.emplace<CrewConflict>();
-        checkScore("crewConflict silent across crews",
+        calculator.emplace<CrewConflictCost>();
+        checkScore("crewConflictCost silent across crews",
                    scoreWith(calculator, s),
                    0,
                    0.0);
     }
-    {  // tagConflict alone: the same two jobs on different crews, sharing one
-        // tag, at 1'000 per overlapping day.
+    {  // tagConflictCost alone: the same two jobs on different crews,
+        // sharing one tag, at 1'000 per overlapping day.
         MaintenanceSchedule s = makeBase();
         addJob(s, 5, {"Downtown"});
         addJob(s, 5, {"Downtown"});
@@ -281,51 +290,54 @@ void verifyPartialAssemblies()
         s.jobs[1].crewDate = s.crewDateOf(0, 1);
         const std::int64_t days = s.endDateFor(5, 0) - s.startDates[0];
         DecomposedCalculator calculator;
-        calculator.emplace<TagConflict>();
-        checkScore("tagConflict alone",
+        calculator.emplace<TagConflictCost>();
+        checkScore("tagConflictCost alone",
                    scoreWith(calculator, s),
                    0,
                    -1000.0 * static_cast<double>(days));
     }
-    {  // minStartDate alone: starting 3 days early costs 3.
+    {  // minStartDateCost alone: starting 3 days early costs 3.
         MaintenanceSchedule s = makeBase();
         addJob(s, 2, {}, /*minStartDate*/ DAY_1 + 3);
         ScoreCalculator::prepare(s);
         s.jobs[0].crewDate = s.crewDateOf(0, 0);  // starts on DAY_1
         DecomposedCalculator calculator;
-        calculator.emplace<MinStartDate>();
-        checkScore("minStartDate alone", scoreWith(calculator, s), -3, 0.0);
+        calculator.emplace<MinStartDateCost>();
+        checkScore("minStartDateCost alone", scoreWith(calculator, s), -3, 0.0);
     }
-    {  // maxEndDate alone: a 2-business-day job from DAY_1 ends on DAY_1 + 2,
-        // one day past a DAY_1 + 1 deadline.
+    {  // maxEndDateCost alone: a 2-business-day job from DAY_1 ends on
+        // DAY_1 + 2, one day past a DAY_1 + 1 deadline.
         MaintenanceSchedule s = makeBase();
         addJob(s, 2, {}, kNoDate, /*maxEndDate*/ DAY_1 + 1);
         ScoreCalculator::prepare(s);
         s.jobs[0].crewDate = s.crewDateOf(0, 0);
         DecomposedCalculator calculator;
-        calculator.emplace<MaxEndDate>();
-        checkScore("maxEndDate alone", scoreWith(calculator, s), -1, 0.0);
+        calculator.emplace<MaxEndDateCost>();
+        checkScore("maxEndDateCost alone", scoreWith(calculator, s), -1, 0.0);
     }
-    {  // beforeIdealEndDate alone: ending on DAY_1 + 2 with an ideal of
+    {  // beforeIdealEndDateCost alone: ending on DAY_1 + 2 with an ideal of
         // DAY_1 + 5 is 3 days early, at weight 1.
         MaintenanceSchedule s = makeBase();
         addJob(s, 2, {}, kNoDate, kNoDate, /*idealEndDate*/ DAY_1 + 5);
         ScoreCalculator::prepare(s);
         s.jobs[0].crewDate = s.crewDateOf(0, 0);
         DecomposedCalculator calculator;
-        calculator.emplace<BeforeIdealEndDate>();
+        calculator.emplace<BeforeIdealEndDateCost>();
         checkScore(
-            "beforeIdealEndDate alone", scoreWith(calculator, s), 0, -3.0);
+            "beforeIdealEndDateCost alone", scoreWith(calculator, s), 0, -3.0);
     }
-    {  // afterIdealEndDate alone: the same job one day late costs 1'000'000.
+    {  // afterIdealEndDateCost alone: the same job one day late costs
+        // 1'000'000.
         MaintenanceSchedule s = makeBase();
         addJob(s, 2, {}, kNoDate, kNoDate, /*idealEndDate*/ DAY_1 + 1);
         ScoreCalculator::prepare(s);
         s.jobs[0].crewDate = s.crewDateOf(0, 0);
         DecomposedCalculator calculator;
-        calculator.emplace<AfterIdealEndDate>();
-        checkScore(
-            "afterIdealEndDate alone", scoreWith(calculator, s), 0, -1000000.0);
+        calculator.emplace<AfterIdealEndDateCost>();
+        checkScore("afterIdealEndDateCost alone",
+                   scoreWith(calculator, s),
+                   0,
+                   -1000000.0);
     }
     std::printf("\n");
 }
@@ -343,28 +355,32 @@ void verifyOverrides()
 
     {
         DecomposedCalculator calculator;
-        calculator.emplace<MinStartDate>(10.0);
-        checkScore("minStartDate re-weighted to 10",
+        calculator.emplace<MinStartDateCost>(10.0);
+        checkScore("minStartDateCost re-weighted to 10",
                    scoreWith(calculator, s),
                    -30,
                    0.0);
     }
     {
         DecomposedCalculator calculator;
-        auto component = std::make_unique<MinStartDate>();
-        component->isHard = false;
+        auto component = std::make_unique<MinStartDateCost>();
+        component->level = optimaru::Level::Soft;
         calculator.add(std::move(component));
-        checkScore(
-            "minStartDate demoted to soft", scoreWith(calculator, s), 0, -3.0);
+        checkScore("minStartDateCost demoted to soft",
+                   scoreWith(calculator, s),
+                   0,
+                   -3.0);
     }
     {
         // exponent 2 shapes the raw day count (3) before the weight.
         DecomposedCalculator calculator;
-        auto component = std::make_unique<MinStartDate>();
+        auto component = std::make_unique<MinStartDateCost>();
         component->exponent = 2.0;
         calculator.add(std::move(component));
-        checkScore(
-            "minStartDate with exponent 2", scoreWith(calculator, s), -9, 0.0);
+        checkScore("minStartDateCost with exponent 2",
+                   scoreWith(calculator, s),
+                   -9,
+                   0.0);
     }
     std::printf("\n");
 }
@@ -436,6 +452,314 @@ void verifyFullAssertSolve()
     std::printf("\n");
 }
 
+
+// -------------------------------------------------------------------------
+// (g) defaultConstraints(): named edits on the default set.
+// -------------------------------------------------------------------------
+void verifyAssemblyBuilder()
+{
+    std::printf("== (g) defaultConstraints() builder ==\n");
+    MaintenanceSchedule s = buildRandomInstance(/*jobCount*/ 16, /*seed*/ 21);
+    ScoreCalculator::prepare(s);
+    std::mt19937_64 rng(8);
+    for (Job &job : s.jobs)
+        job.crewDate = static_cast<int>(rng() % s.crewDateCount());
+
+    // By hand: maxEndDateCost demoted to soft, afterIdealEndDateCost at
+    // weight 2, beforeIdealEndDateCost dropped, the rest at their defaults.
+    DecomposedCalculator byHand;
+    {
+        byHand.emplace<CrewConflictCost>();
+        byHand.emplace<MinStartDateCost>();
+        auto maxEnd = std::make_unique<MaxEndDateCost>();
+        maxEnd->level = optimaru::Level::Soft;
+        byHand.add(std::move(maxEnd));
+        byHand.emplace<AfterIdealEndDateCost>(2.0);
+        byHand.emplace<TagConflictCost>();
+    }
+    const Score expected = scoreWith(byHand, s);
+
+    // By name: the same three edits, one expression.
+    DecomposedCalculator built;
+    defaultConstraints()
+        .soft("maxEndDateCost")
+        .weight("afterIdealEndDateCost", 2)
+        .drop("beforeIdealEndDateCost")
+        .into(built);
+    check(sameScore(scoreWith(built, s), expected),
+          "named edits == the same assembly listed by hand");
+
+    // The default assembly, untouched, still matches the monolith.
+    DecomposedCalculator plain;
+    defaultConstraints().into(plain);
+    check(sameScore(scoreWith(plain, s), ScoreCalculator::calculateScore(s)),
+          "defaultConstraints() alone == the monolithic score");
+
+    // A typo must not quietly leave the cost function as it was.
+    bool threw = false;
+    try
+    {
+        defaultConstraints().weight("tagConflictCosts", 4);  // trailing s
+    }
+    catch (const std::invalid_argument &)
+    {
+        threw = true;
+    }
+    check(threw, "an unknown name is refused (std::invalid_argument)");
+
+    // only() isolates a subset: just the crew rule, nothing else scored.
+    DecomposedCalculator isolated;
+    defaultConstraints().only({"crewConflictCost"}).into(isolated);
+    DecomposedCalculator crewOnly;
+    crewOnly.emplace<CrewConflictCost>();
+    check(sameScore(scoreWith(isolated, s), scoreWith(crewOnly, s)),
+          "only() scores exactly the named constraint");
+    std::printf("\n");
+}
+
+// -------------------------------------------------------------------------
+// (h) Each component's raw cost on hand-built instances: one violating
+// (positive) case and one clean (zero) case per constraint, read through
+// constraintCosts() — the raw numbers before weight, exponent and level.
+// Per-job rules report one cost per (start date, crew) cell; the two
+// pairwise rules are global and report a single total.
+// -------------------------------------------------------------------------
+DecomposedCalculator::ConstraintCosts rawCosts(MaintenanceSchedule &schedule,
+                                               const std::string &name)
+{
+    ScoreCalculator::prepare(schedule);
+    DecomposedCalculator calculator;
+    addDefaultConstraints(calculator);
+    calculator.resetWorkingSolution(schedule);
+    calculator.calculateScore();
+    for (const auto &entry : calculator.constraintCosts())
+    {
+        if (entry.name == name)
+            return entry;
+    }
+    throw std::logic_error("no constraint named " + name);
+}
+
+// The per-cell list of a per-job rule with `value` in cell `crewDate` and 0
+// everywhere else.
+std::vector<double> oneCell(const MaintenanceSchedule &schedule,
+                            int crewDate,
+                            double value)
+{
+    std::vector<double> costs(
+        static_cast<std::size_t>(schedule.crewDateCount()), 0.0);
+    costs[static_cast<std::size_t>(crewDate)] = value;
+    return costs;
+}
+
+void verifyRawCostsByHand()
+{
+    std::printf("== (h) Raw costs by hand, positive and zero ==\n");
+    {
+        // Two 5-business-day jobs, both on crew 0 from DAY_1 (a Monday):
+        // [Mon, Sat) = [DAY_1, DAY_1 + 5) each (the exclusive end may land
+        // on a Saturday), so they overlap on 5 calendar days.
+        MaintenanceSchedule s = makeBase();
+        addJob(s, 5);
+        addJob(s, 5);
+        ScoreCalculator::prepare(s);
+        s.jobs[0].crewDate = s.crewDateOf(0, 0);
+        s.jobs[1].crewDate = s.crewDateOf(0, 0);
+        const auto entry = rawCosts(s, "crewConflictCost");
+        check(entry.isGlobal && entry.unitCosts == std::vector<double>{5.0},
+              "crewConflictCost: [5] (same crew, 5 shared days)");
+    }
+    {
+        // The same two jobs on different crews.
+        MaintenanceSchedule s = makeBase();
+        addJob(s, 5);
+        addJob(s, 5);
+        ScoreCalculator::prepare(s);
+        s.jobs[0].crewDate = s.crewDateOf(0, 0);
+        s.jobs[1].crewDate = s.crewDateOf(0, 1);
+        check(rawCosts(s, "crewConflictCost").unitCosts
+                  == std::vector<double>{0.0},
+              "crewConflictCost: [0] on different crews");
+    }
+    {
+        // Two 1-day jobs on different crews on DAY_1, sharing BOTH tags:
+        // 1 shared day x 2 shared tags = 2.
+        MaintenanceSchedule s = makeBase();
+        addJob(s, 1, {"Downtown", "Park"});
+        addJob(s, 1, {"Park", "Downtown", "Airport"});
+        ScoreCalculator::prepare(s);
+        s.jobs[0].crewDate = s.crewDateOf(0, 0);
+        s.jobs[1].crewDate = s.crewDateOf(0, 1);
+        const auto entry = rawCosts(s, "tagConflictCost");
+        check(entry.isGlobal && entry.unitCosts == std::vector<double>{2.0},
+              "tagConflictCost: [2] (2 shared tags x 1 day)");
+    }
+    {
+        // Shared tag, but the second job runs the next day: no overlap.
+        MaintenanceSchedule s = makeBase();
+        addJob(s, 1, {"Downtown"});
+        addJob(s, 1, {"Downtown"});
+        ScoreCalculator::prepare(s);
+        s.jobs[0].crewDate = s.crewDateOf(0, 0);
+        s.jobs[1].crewDate = s.crewDateOf(1, 1);
+        check(rawCosts(s, "tagConflictCost").unitCosts
+                  == std::vector<double>{0.0},
+              "tagConflictCost: [0] on consecutive days");
+    }
+    {
+        // Starts on DAY_1, may start on DAY_1 + 3 at the earliest.
+        MaintenanceSchedule s = makeBase();
+        addJob(s, 2, {}, /*minStartDate*/ DAY_1 + 3);
+        ScoreCalculator::prepare(s);
+        s.jobs[0].crewDate = s.crewDateOf(0, 1);
+        check(rawCosts(s, "minStartDateCost").unitCosts
+                  == oneCell(s, s.crewDateOf(0, 1), 3.0),
+              "minStartDateCost: 3 in the job's cell, 0 elsewhere");
+    }
+    {
+        // Starts exactly on its minStartDate.
+        MaintenanceSchedule s = makeBase();
+        addJob(s, 2, {}, /*minStartDate*/ DAY_1);
+        ScoreCalculator::prepare(s);
+        s.jobs[0].crewDate = s.crewDateOf(0, 0);
+        check(rawCosts(s, "minStartDateCost").unitCosts
+                  == oneCell(s, s.crewDateOf(0, 0), 0.0),
+              "minStartDateCost: all 0 when starting on minStartDate");
+    }
+    {
+        // 2 business days from DAY_1 ends (exclusive) on DAY_1 + 2, one day
+        // past a DAY_1 + 1 maxEndDate.
+        MaintenanceSchedule s = makeBase();
+        addJob(s, 2, {}, kNoDate, /*maxEndDate*/ DAY_1 + 1);
+        ScoreCalculator::prepare(s);
+        s.jobs[0].crewDate = s.crewDateOf(0, 0);
+        check(rawCosts(s, "maxEndDateCost").unitCosts
+                  == oneCell(s, s.crewDateOf(0, 0), 1.0),
+              "maxEndDateCost: 1 in the job's cell, 0 elsewhere");
+    }
+    {
+        // The same job with maxEndDate DAY_1 + 2: ends exactly in time.
+        MaintenanceSchedule s = makeBase();
+        addJob(s, 2, {}, kNoDate, /*maxEndDate*/ DAY_1 + 2);
+        ScoreCalculator::prepare(s);
+        s.jobs[0].crewDate = s.crewDateOf(0, 0);
+        check(rawCosts(s, "maxEndDateCost").unitCosts
+                  == oneCell(s, s.crewDateOf(0, 0), 0.0),
+              "maxEndDateCost: all 0 when ending on maxEndDate");
+    }
+    {
+        // Ends on DAY_1 + 2, ideally on DAY_1 + 5: 3 days early.
+        MaintenanceSchedule s = makeBase();
+        addJob(s, 2, {}, kNoDate, kNoDate, /*idealEndDate*/ DAY_1 + 5);
+        ScoreCalculator::prepare(s);
+        s.jobs[0].crewDate = s.crewDateOf(0, 0);
+        check(rawCosts(s, "beforeIdealEndDateCost").unitCosts
+                  == oneCell(s, s.crewDateOf(0, 0), 3.0),
+              "beforeIdealEndDateCost: 3 in the job's cell, 0 elsewhere");
+        check(rawCosts(s, "afterIdealEndDateCost").unitCosts
+                  == oneCell(s, s.crewDateOf(0, 0), 0.0),
+              "afterIdealEndDateCost: all 0 when ending early");
+    }
+    {
+        // Ends on DAY_1 + 2, ideally on DAY_1 + 1: 1 day late.
+        MaintenanceSchedule s = makeBase();
+        addJob(s, 2, {}, kNoDate, kNoDate, /*idealEndDate*/ DAY_1 + 1);
+        ScoreCalculator::prepare(s);
+        s.jobs[0].crewDate = s.crewDateOf(0, 0);
+        check(rawCosts(s, "afterIdealEndDateCost").unitCosts
+                  == oneCell(s, s.crewDateOf(0, 0), 1.0),
+              "afterIdealEndDateCost: 1 in the job's cell, 0 elsewhere");
+        check(rawCosts(s, "beforeIdealEndDateCost").unitCosts
+                  == oneCell(s, s.crewDateOf(0, 0), 0.0),
+              "beforeIdealEndDateCost: all 0 when ending late");
+    }
+    {
+        // Ends exactly on its idealEndDate: neither side fires.
+        MaintenanceSchedule s = makeBase();
+        addJob(s, 2, {}, kNoDate, kNoDate, /*idealEndDate*/ DAY_1 + 2);
+        ScoreCalculator::prepare(s);
+        s.jobs[0].crewDate = s.crewDateOf(0, 0);
+        const std::vector<double> zero = oneCell(s, s.crewDateOf(0, 0), 0.0);
+        check(rawCosts(s, "beforeIdealEndDateCost").unitCosts == zero
+                  && rawCosts(s, "afterIdealEndDateCost").unitCosts == zero,
+              "before/afterIdealEndDateCost: all 0 when ending on the ideal "
+              "date");
+    }
+    std::printf("\n");
+}
+
+// -------------------------------------------------------------------------
+// (i) The catalog read off the default assembly is exactly the components'
+// constants, and the level/weight guards hold on the domain's assembly.
+// -------------------------------------------------------------------------
+bool throwsInvalid(const std::function<void()> &edit)
+{
+    try
+    {
+        edit();
+    }
+    catch (const std::invalid_argument &)
+    {
+        return true;
+    }
+    return false;
+}
+
+template <typename Component>
+bool rowIs(const optimaru::ConstraintInfo &row,
+           const char *name,
+           optimaru::Level level,
+           double weight,
+           bool isGlobal)
+{
+    return row.name == name && row.defaultLevel == Component::kDefaultLevel
+           && row.defaultWeight == Component::kDefaultWeight
+           && row.defaultLevel == level && row.defaultWeight == weight
+           && row.levelFlippable && !row.reward && row.isGlobal == isGlobal
+           && row.defaultEnabled;
+}
+
+void verifyCatalog()
+{
+    std::printf("== (i) Catalog and guards ==\n");
+    using optimaru::Level;
+    const auto rows = defaultConstraints().info();
+    // Unit constraints first, then the globals: the list_constraints()
+    // order.
+    check(rows.size() == 6
+              && rowIs<MinStartDateCost>(
+                  rows[0], "minStartDateCost", Level::Hard, 1.0, false)
+              && rowIs<MaxEndDateCost>(
+                  rows[1], "maxEndDateCost", Level::Hard, 1.0, false)
+              && rowIs<BeforeIdealEndDateCost>(
+                  rows[2], "beforeIdealEndDateCost", Level::Soft, 1.0, false)
+              && rowIs<AfterIdealEndDateCost>(rows[3],
+                                              "afterIdealEndDateCost",
+                                              Level::Soft,
+                                              1000000.0,
+                                              false)
+              && rowIs<CrewConflictCost>(
+                  rows[4], "crewConflictCost", Level::Hard, 1.0, true)
+              && rowIs<TagConflictCost>(
+                  rows[5], "tagConflictCost", Level::Soft, 1000.0, true),
+          "info(): crew/minStart/maxEnd hard 1, beforeIdeal soft 1, "
+          "afterIdeal soft 1e6, tag soft 1e3; all flippable, no reward, all "
+          "default-enabled; crew and tag global");
+    check(!throwsInvalid([] { defaultConstraints().soft("crewConflictCost"); })
+              && !throwsInvalid(
+                  [] { defaultConstraints().hard("tagConflictCost"); })
+              && !throwsInvalid(
+                  [] { defaultConstraints().hard("afterIdealEndDateCost"); }),
+          "every level flips both ways");
+    check(throwsInvalid(
+              [] { defaultConstraints().weight("tagConflictCost", -2.0); }),
+          "a negative weight is refused");
+    check(throwsInvalid(
+              [] { defaultConstraints().exponent("maxEndDateCost", 0.0); }),
+          "a non-positive exponent is refused");
+    std::printf("\n");
+}
+
 }  // namespace
 
 int main()
@@ -446,6 +770,9 @@ int main()
     verifyOverrides();
     verifyConstraintTotals();
     verifyFullAssertSolve();
+    verifyAssemblyBuilder();
+    verifyRawCostsByHand();
+    verifyCatalog();
 
     if (failures == 0)
     {

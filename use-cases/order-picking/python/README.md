@@ -16,15 +16,28 @@ Pick order items onto trolleys in a warehouse (5 shelf columns A-E x 3 rows, lef
 
 ## Constraints (full port of the Java `OrderPickingConstraintProvider`)
 
-| Level | Constraint | What it measures |
-| --- | --- | --- |
-| hard | requiredNumberOfBuckets | when the sum of required buckets per order (`ceil(order volume / bucket capacity)`, orders never share a bucket) exceeds the trolley's buckets, the excess |
-| soft | minimizeDistanceFromPreviousPickTask | warehouse distance from the previous pick (the trolley's start for the first pick) |
-| soft | minimizeDistanceFromLastPickTaskToPathOrigin | distance from the last pick back to the start |
-| soft | minimizeOrderSplitByTrolley | trolleys an order spans (countDistinct) x 1000 |
+| Constraint (Python name) | C++ component | Default level | Default weight | Raw cost per trolley (0 = no violation) |
+| --- | --- | --- | --- | --- |
+| `trolley_capacity_cost` | `TrolleyCapacityCost` | hard | 1 | buckets short: the sum of required buckets per order (`ceil(order volume / bucket capacity)`, orders never share a bucket) beyond the trolley's buckets |
+| `distance_from_previous_pick_task_cost` | `DistanceFromPreviousPickTaskCost` | soft | 1 | warehouse distance from the previous pick (the trolley's start for the first pick) |
+| `distance_from_last_pick_task_to_path_origin_cost` | `DistanceFromLastPickTaskToPathOriginCost` | soft | 1 | distance from the last pick back to the start |
+| `order_split_by_trolley_cost` | `OrderSplitByTrolleyCost` | soft | 1000 | distinct orders on the trolley (summed: the trolleys an order spans, countDistinct); an unsplit order still counts 1 |
 
 Score mapping: Java `HardSoftScore`(int) → engine `HardSoftScore(int64 hard, double soft)`
-1:1 (hard = -bucket shortfall, soft = -(travel distance + 1000 x order splits)). No level folding.
+1:1 (hard = -bucket shortfall, soft = -(travel distance + 1000 x (order, trolley) pairs)). No level folding.
+`order_picking.constraint_info()` lists the table's defaults (read off the C++ components),
+`order_picking.constraint_costs(solution)` the raw per-trolley costs — the only per-constraint
+surface since 0.2.0 (`ConstraintTotals` / `calculate_totals()` are gone; the old names
+`required_number_of_buckets` and `minimize_*` are unknown now, see the use-case README).
+
+Pick, reweight or flip constraints with `order_picking.constraints`:
+
+```python
+import order_picking as op
+from order_picking.constraints import OrderSplitByTrolleyCost, get_constraints, trolley_capacity_cost
+
+op.solve(solution, constraints=get_constraints([trolley_capacity_cost, OrderSplitByTrolleyCost(weight=100)]))
+```
 
 ## Install / test
 

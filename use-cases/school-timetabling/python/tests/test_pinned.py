@@ -1,4 +1,4 @@
-"""fixed_slots -> pinned conversion (H2) and pins kept after solve (canonical domain)."""
+"""fixed_slots -> pinned conversion (fixed_slots_cost) and pins kept after solve (canonical domain)."""
 
 import pytest
 import st_timetabling as st
@@ -25,7 +25,7 @@ def test_pinned_lesson_survives_solve(problem):
     cfg = canon.SolverConfig()
     cfg.spent_limit_seconds = 10.0
     cfg.random_seed = 7
-    cfg.best_score_limit = (0, -1e18)  # stop at the first feasible solution
+    cfg.best_score_limit = (0, float("-inf"))  # stop at the first feasible solution
     canon.Solver(cfg).solve(conv.table)
 
     assert conv.table.assignment()[pinned_index] == expected

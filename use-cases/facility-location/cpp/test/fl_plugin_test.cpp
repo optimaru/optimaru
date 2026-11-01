@@ -6,14 +6,20 @@
 //   (b) incremental score == full recompute across 3000 random moves driven
 //       through the engine's ScoreDirector protocol (plugin path)
 //   (c) partial assemblies: removing one component removes exactly that term
-//   (d) weight / isHard overrides: capacity demoted to soft, distance
-//       weight doubled
+//   (d) weight / level overrides: capacity demoted to soft, setup weight
+//       doubled, exponent shaping
 //   (e) constraintTotals() explains exactly the reported score
 //   (f) a 2-second solve(problem, calculator) under FULL_ASSERT
 //   (g) the defaultConstraints() builder: named edits == by-hand assembly
+//   (h) each component's raw cost, hand-calculated: a positive and a zero
+//       case per constraint (raw 0 = no violation)
+//   (i) the catalog: info() off the default assembly == the components'
+//       kDefaultWeight / kDefaultLevel; the level guards
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <functional>
+#include <memory>
 #include <random>
 #include <stdexcept>
 #include <string>
@@ -106,7 +112,7 @@ void verifyAssemblyParity()
     ScoreCalculator::prepare(p);
 
     DecomposedCalculator calculator;
-    addDefaultConstraints(calculator, p);
+    addDefaultConstraints(calculator);
 
     std::mt19937_64 rng(99);
     std::uniform_real_distribution<double> unit(0.0, 1.0);
@@ -155,7 +161,7 @@ void verifyIncremental()
     ScoreCalculator::prepare(p);
 
     DecomposedCalculator calculator;
-    addDefaultConstraints(calculator, p);
+    addDefaultConstraints(calculator);
     optimaru::ScoreDirector<FacilityLocationProblem> director(p, calculator);
     FacilityLocationProblem shadow = p;
 
@@ -240,23 +246,23 @@ void verifyPartialAssemblies()
     // 18 demand on a capacity of 10 -> 8 over; setup 1000; distance 0.
     {
         DecomposedCalculator calculator;
-        addDefaultConstraints(calculator, p);
+        addDefaultConstraints(calculator);
         const Score score = scoreWith(calculator, p);
         check(score.hard == -8 && std::fabs(score.soft - -2000.0) < 1e-9,
               "full assembly: -8hard / -2000soft (2 * 1000 setup)");
     }
     {
         DecomposedCalculator calculator;
-        calculator.emplace<FacilitySetupCost>(2.0);
-        calculator.emplace<DistanceFromFacility>(6.0);
+        calculator.emplace<FacilitySetupCost>();
+        calculator.emplace<DistanceFromFacilityCost>();
         const Score score = scoreWith(calculator, p);
         check(score.hard == 0 && std::fabs(score.soft - -2000.0) < 1e-9,
-              "without FacilityCapacity: the hard term disappears");
+              "without FacilityCapacityCost: the hard term disappears");
     }
     {
         DecomposedCalculator calculator;
-        calculator.emplace<FacilityCapacity>();
-        calculator.emplace<DistanceFromFacility>(6.0);
+        calculator.emplace<FacilityCapacityCost>();
+        calculator.emplace<DistanceFromFacilityCost>();
         const Score score = scoreWith(calculator, p);
         check(score.hard == -8 && std::fabs(score.soft) < 1e-9,
               "without FacilitySetupCost: the setup term disappears");
@@ -290,12 +296,12 @@ void verifyOverrides()
         // Capacity demoted to soft at weight 3: 4 over -> 12 soft, and the
         // hard level empties out.
         DecomposedCalculator calculator;
-        auto capacity = std::make_unique<FacilityCapacity>(3.0);
-        capacity->isHard = false;
+        auto capacity = std::make_unique<FacilityCapacityCost>(3.0);
+        capacity->level = optimaru::Level::Soft;
         calculator.add(std::move(capacity));
         const Score score = scoreWith(calculator, p);
         check(score.hard == 0 && std::fabs(score.soft - -12.0) < 1e-9,
-              "FacilityCapacity demoted to soft at weight 3");
+              "FacilityCapacityCost demoted to soft at weight 3");
     }
     {
         // Doubling the setup weight doubles exactly that term.
@@ -308,11 +314,11 @@ void verifyOverrides()
     {
         // exponent 2 shapes the raw cost before the weight: 4^2 = 16.
         DecomposedCalculator calculator;
-        auto capacity = std::make_unique<FacilityCapacity>(1.0);
+        auto capacity = std::make_unique<FacilityCapacityCost>();
         capacity->exponent = 2.0;
         calculator.add(std::move(capacity));
         const Score score = scoreWith(calculator, p);
-        check(score.hard == -16, "FacilityCapacity with exponent 2");
+        check(score.hard == -16, "FacilityCapacityCost with exponent 2");
     }
     std::printf("\n");
 }
@@ -335,7 +341,7 @@ void verifyConstraintTotals()
         consumer.facility = static_cast<int>(rng() % p.facilityCount());
 
     DecomposedCalculator calculator;
-    addDefaultConstraints(calculator, p);
+    addDefaultConstraints(calculator);
     const Score score = scoreWith(calculator, p);
 
     double hard = 0.0;
@@ -373,7 +379,7 @@ void verifyFullAssertSolve()
     config.ruinRecreatePolishSteps = 100;
 
     DecomposedCalculator calculator;
-    addDefaultConstraints(calculator, p);
+    addDefaultConstraints(calculator);
 
     bool corrupted = false;
     try
@@ -418,8 +424,8 @@ void verifyAssemblyBuilder()
     // By hand: the way the same edit reads without the builder.
     DecomposedCalculator byHand;
     {
-        auto capacity = std::make_unique<FacilityCapacity>();
-        capacity->isHard = false;
+        auto capacity = std::make_unique<FacilityCapacityCost>();
+        capacity->level = optimaru::Level::Soft;
         byHand.add(std::move(capacity));
         byHand.emplace<FacilitySetupCost>(4.0);
     }
@@ -427,25 +433,25 @@ void verifyAssemblyBuilder()
 
     // By name: same three edits, one expression.
     DecomposedCalculator built;
-    defaultConstraints(p)
-        .soft("facility capacity")
-        .weight("facility setup cost", 4)
-        .drop("distance from facility")
+    defaultConstraints()
+        .soft("facilityCapacityCost")
+        .weight("facilitySetupCost", 4)
+        .drop("distanceFromFacilityCost")
         .into(built);
     check(sameScore(scoreWith(built, p), expected),
           "named edits == the same assembly listed by hand");
 
     // The default assembly, untouched, still matches the monolith.
     DecomposedCalculator plain;
-    defaultConstraints(p).into(plain);
+    defaultConstraints().into(plain);
     check(sameScore(scoreWith(plain, p), ScoreCalculator::calculateScore(p)),
-          "defaultConstraints(problem) alone == the monolithic score");
+          "defaultConstraints() alone == the monolithic score");
 
     // A typo must not quietly leave the cost function as it was.
     bool threw = false;
     try
     {
-        defaultConstraints(p).weight("facility setup costs", 4);  // trailing s
+        defaultConstraints().weight("facilitySetupCosts", 4);  // trailing s
     }
     catch (const std::invalid_argument &)
     {
@@ -456,10 +462,180 @@ void verifyAssemblyBuilder()
 
     // only() isolates a subset: just the hard rule, nothing else scored.
     DecomposedCalculator isolated;
-    defaultConstraints(p).only({"facility capacity"}).into(isolated);
+    defaultConstraints().only({"facilityCapacityCost"}).into(isolated);
     const Score hardOnly = scoreWith(isolated, p);
     check(hardOnly.soft == 0.0 && hardOnly.hard != 0,
           "only() scores exactly the named constraint");
+    std::printf("\n");
+}
+
+// -------------------------------------------------------------------------
+// (h) Each component's raw cost on hand-built instances: one violating
+// (positive) case and one clean (zero) case per constraint, read through
+// constraintCosts() — the raw per-unit numbers before weight and level.
+// Degree offsets are binary-exact (0.25 deg = 27750 m, see fl_test).
+// -------------------------------------------------------------------------
+std::vector<double> rawCosts(FacilityLocationProblem &problem,
+                             const std::string &name)
+{
+    ScoreCalculator::prepare(problem);
+    DecomposedCalculator calculator;
+    addDefaultConstraints(calculator);
+    calculator.resetWorkingSolution(problem);
+    calculator.calculateScore();
+    for (const auto &entry : calculator.constraintCosts())
+    {
+        if (entry.name == name)
+            return entry.unitCosts;
+    }
+    return {};
+}
+
+// F0 at the origin (setup 100, capacity 10), F1 0.25 deg east (setup 40,
+// capacity 50); each case places its own consumers.
+FacilityLocationProblem twoFacilities()
+{
+    FacilityLocationProblem p;
+    for (int f = 0; f < 2; ++f)
+    {
+        Facility facility;
+        facility.id = "F" + std::to_string(f);
+        facility.location = {0.0, f == 0 ? 0.0 : 0.25};
+        facility.setupCost = f == 0 ? 100 : 40;
+        facility.capacity = f == 0 ? 10 : 50;
+        p.facilities.push_back(facility);
+    }
+    return p;
+}
+
+void addConsumerAt(FacilityLocationProblem &p,
+                   double longitude,
+                   std::int64_t demand,
+                   int facility)
+{
+    Consumer consumer;
+    consumer.id = "C" + std::to_string(p.consumers.size());
+    consumer.location = {0.0, longitude};
+    consumer.demand = demand;
+    consumer.facility = facility;
+    p.consumers.push_back(consumer);
+}
+
+void verifyRawCostsByHand()
+{
+    std::printf("== (h) Raw costs by hand, positive and zero ==\n");
+    {
+        // F0 carries 8 + 7 = 15 on capacity 10 -> 5; F1 carries 3 on 50 -> 0.
+        FacilityLocationProblem p = twoFacilities();
+        addConsumerAt(p, 0.0, 8, 0);
+        addConsumerAt(p, 0.0, 7, 0);
+        addConsumerAt(p, 0.25, 3, 1);
+        check(rawCosts(p, "facilityCapacityCost")
+                  == std::vector<double>{5.0, 0.0},
+              "facilityCapacityCost: [5, 0] (15 on 10; 3 on 50)");
+    }
+    {
+        // Exactly at capacity on both facilities.
+        FacilityLocationProblem p = twoFacilities();
+        addConsumerAt(p, 0.0, 10, 0);
+        addConsumerAt(p, 0.25, 50, 1);
+        check(rawCosts(p, "facilityCapacityCost")
+                  == std::vector<double>{0.0, 0.0},
+              "facilityCapacityCost: [0, 0] exactly at capacity");
+    }
+    {
+        // Only F1 is used, by two consumers: its setup is paid once.
+        FacilityLocationProblem p = twoFacilities();
+        addConsumerAt(p, 0.25, 1, 1);
+        addConsumerAt(p, 0.25, 1, 1);
+        check(rawCosts(p, "facilitySetupCost")
+                  == std::vector<double>{0.0, 40.0},
+              "facilitySetupCost: [0, 40] (F1 used twice, paid once)");
+    }
+    {
+        // Nothing assigned, nothing open.
+        FacilityLocationProblem p = twoFacilities();
+        addConsumerAt(p, 0.0, 1, -1);
+        check(rawCosts(p, "facilitySetupCost") == std::vector<double>{0.0, 0.0},
+              "facilitySetupCost: [0, 0] with every consumer unassigned");
+    }
+    {
+        // A consumer at the origin served by F1 (0.25 deg away) -> 27750 m
+        // on F1; F0's own consumer stands on it.
+        FacilityLocationProblem p = twoFacilities();
+        addConsumerAt(p, 0.0, 1, 0);
+        addConsumerAt(p, 0.0, 1, 1);
+        check(rawCosts(p, "distanceFromFacilityCost")
+                  == std::vector<double>{0.0, 27750.0},
+              "distanceFromFacilityCost: [0, 27750]");
+    }
+    {
+        // Every consumer on top of its facility.
+        FacilityLocationProblem p = twoFacilities();
+        addConsumerAt(p, 0.0, 1, 0);
+        addConsumerAt(p, 0.25, 1, 1);
+        check(rawCosts(p, "distanceFromFacilityCost")
+                  == std::vector<double>{0.0, 0.0},
+              "distanceFromFacilityCost: [0, 0] on top of the facilities");
+    }
+    std::printf("\n");
+}
+
+// -------------------------------------------------------------------------
+// (i) The catalog read off the default assembly is exactly the components'
+// constants, and the level/weight guards hold on the domain's assembly.
+// -------------------------------------------------------------------------
+bool throwsInvalid(const std::function<void()> &edit)
+{
+    try
+    {
+        edit();
+    }
+    catch (const std::invalid_argument &)
+    {
+        return true;
+    }
+    return false;
+}
+
+template <typename Component>
+bool rowIs(const optimaru::ConstraintInfo &row,
+           const char *name,
+           optimaru::Level level,
+           double weight)
+{
+    return row.name == name && row.defaultLevel == Component::kDefaultLevel
+           && row.defaultWeight == Component::kDefaultWeight
+           && row.defaultLevel == level && row.defaultWeight == weight
+           && row.levelFlippable && !row.reward && !row.isGlobal
+           && row.defaultEnabled;
+}
+
+void verifyCatalog()
+{
+    std::printf("== (i) Catalog and guards ==\n");
+    const auto rows = defaultConstraints().info();
+    check(rows.size() == 3
+              && rowIs<FacilityCapacityCost>(
+                  rows[0], "facilityCapacityCost", optimaru::Level::Hard, 1.0)
+              && rowIs<FacilitySetupCost>(
+                  rows[1], "facilitySetupCost", optimaru::Level::Soft, 2.0)
+              && rowIs<DistanceFromFacilityCost>(rows[2],
+                                                 "distanceFromFacilityCost",
+                                                 optimaru::Level::Soft,
+                                                 6.0),
+          "info(): capacity hard 1, setup soft 2, distance soft 6; all "
+          "flippable, no reward, no global, all default-enabled");
+    check(!throwsInvalid([] { defaultConstraints().soft("facilityCapacityCost"); })
+              && !throwsInvalid(
+                  [] { defaultConstraints().hard("distanceFromFacilityCost"); }),
+          "every level flips both ways");
+    check(throwsInvalid(
+              [] { defaultConstraints().weight("facilitySetupCost", -2.0); }),
+          "a negative weight is refused");
+    check(throwsInvalid(
+              [] { defaultConstraints().exponent("facilitySetupCost", 0.0); }),
+          "a non-positive exponent is refused");
     std::printf("\n");
 }
 
@@ -474,6 +650,8 @@ int main()
     verifyConstraintTotals();
     verifyFullAssertSolve();
     verifyAssemblyBuilder();
+    verifyRawCostsByHand();
+    verifyCatalog();
 
     if (failures == 0)
     {
