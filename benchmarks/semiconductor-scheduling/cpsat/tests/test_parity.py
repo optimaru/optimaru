@@ -17,8 +17,15 @@ import pytest
 import semiconductor_scheduling as domain
 from semiconductor_scheduling.constraints import (
     CycleTimeCost,
+    LotRoutePrecedenceCost,
     MachineCapacityCost,
+    MachineEligibilityCost,
+    MachineLoadImbalanceCost,
+    MachinePreferenceCost,
+    MakespanCost,
+    MaxCycleTimeCost,
     MaxQueueTimeCost,
+    MinBatchSizeCost,
     WeightedTardinessCost,
     get_constraints,
     score,
@@ -308,7 +315,7 @@ def test_cpsat_defaults_are_the_engine_defaults() -> None:
         assert entry["reward"] == row.reward
         assert entry["default_enabled"] == row.default_enabled
         assert entry["kind"] == "either"  # every constraint is flippable in the engine
-        assert entry["params"] == {"weight": None, "hard": None, "exponent": 1.0}
+        assert entry["params"] == {"weight": None, "hard": None, "exponent": 1.0, "offset": 0.0, "clip": True}
 
 
 def test_demoting_max_queue_time_scores_like_the_engine() -> None:
@@ -332,3 +339,91 @@ def test_a_cpsat_optimum_rescored_by_the_engine_is_hard_feasible() -> None:
     assert (solved.score_hard, solved.score_soft) == tuple(domain.calculate_score(solved.to_core()))
     raw = domain.constraint_costs(solved)
     assert all(raw[name]["costs"] == [0.0] for name in STRUCTURAL)
+
+
+# --- 0.3.0: repeated picks and offset / clip ---------------------------------------
+
+SELECTIONS = {
+    "repeat": [MakespanCost(), MakespanCost(weight=2), CycleTimeCost(), CycleTimeCost()],
+    "repeat-literal": [
+        MakespanCost(offset=20, clip=False),
+        MakespanCost(weight=3, offset=-2),
+        WeightedTardinessCost(offset=2, clip=False),
+        MachinePreferenceCost(offset=1, clip=False),
+    ],
+    "hard-offsets": [
+        MaxQueueTimeCost(offset=1),
+        MaxQueueTimeCost(weight=2, offset=5, clip=False),
+        MaxCycleTimeCost(offset=1, clip=False),
+        MinBatchSizeCost(hard=True, offset=1),
+        MachineLoadImbalanceCost(offset=-1, clip=False),
+    ],
+    "with-structural": [
+        MachineEligibilityCost(),
+        LotRoutePrecedenceCost(),
+        LotRoutePrecedenceCost(),
+        MakespanCost(offset=10),
+        CycleTimeCost(offset=5, clip=False),
+    ],
+}
+
+
+@pytest.mark.parametrize("fixture", sorted(set(FIXTURES) - {"zero-wrong-duration"}))
+@pytest.mark.parametrize("selection", list(SELECTIONS.values()), ids=list(SELECTIONS))
+def test_repeated_and_shifted_picks_match_the_engine_on_fixed_assignments(selection, fixture) -> None:
+    """Every operation fixed: the CP-SAT objective of a selection with repeats and offsets is
+    the engine's score of that schedule under the same picks, exactly, per level. A selected
+    structural rule the schedule breaks makes the model infeasible instead."""
+    build, assignments = FIXTURES[fixture]
+    core = build(assignments).to_core()
+    raw = domain.constraint_costs(core)
+    if any(spec.name in STRUCTURAL and raw[spec.name]["costs"][0] > 0 for spec in selection):
+        with pytest.raises(RuntimeError, match="INFEASIBLE"):
+            solve(build([]), time_limit_seconds=5, constraints=selection, _fixed_assignments=assignments)
+        return
+    proxy: dict[str, int] = {}
+    solve(build([]), time_limit_seconds=5, constraints=selection, _fixed_assignments=assignments, _proxy_score=proxy)
+    engine = score(domain.constraint_costs(core, selection), selection)
+    assert proxy == {"hard": engine.hard, "soft": engine.soft}
+    assert score(raw, selection) == engine  # the default costs score the repeats too
+
+
+def test_the_fixtures_exercise_the_selections() -> None:
+    """At least one fixture keeps the structural picks feasible and every offset bites."""
+    build, assignments = FIXTURES["zero"]
+    raw = domain.constraint_costs(build(assignments).to_core())
+    assert raw["lot_route_precedence_cost"]["costs"] == [0.0]
+    assert raw["makespan_cost"]["costs"][0] > 10 and raw["cycle_time_cost"]["costs"][0] > 0
+
+
+@pytest.mark.parametrize("selection", list(SELECTIONS.values()), ids=list(SELECTIONS))
+def test_a_solve_with_repeats_and_offsets_reports_the_engine_score(selection) -> None:
+    proxy: dict[str, int] = {}
+    solved = solve(_zero([]), time_limit_seconds=10, constraints=selection, _proxy_score=proxy)
+    engine = score(domain.constraint_costs(solved.to_core(), selection), selection)
+    assert (solved.score_hard, solved.score_soft) == pytest.approx(tuple(engine))
+    assert (solved.score_hard, solved.score_soft) == (proxy["hard"], proxy["soft"])
+
+
+def test_mapping_selections_repeat_and_shift_like_specs() -> None:
+    """The server's {name, weight, offset, clip} dicts pick the same instances as specs."""
+    specs = [MakespanCost(), MakespanCost(weight=3, offset=4, clip=False)]
+    dicts = [{"name": "makespan_cost"}, {"name": "makespan_cost", "weight": 3, "offset": 4, "clip": False}]
+    by_specs = solve(_fab([]), time_limit_seconds=5, constraints=specs, _fixed_assignments=FAB)
+    by_dicts = solve(_fab([]), time_limit_seconds=5, constraints=dicts, _fixed_assignments=FAB)
+    assert (by_dicts.score_hard, by_dicts.score_soft) == (by_specs.score_hard, by_specs.score_soft)
+    assert (by_specs.score_hard, by_specs.score_soft) == (0, -(17 + 3 * (17 - 4)))
+
+
+def test_a_fractional_offset_is_refused_by_cpsat() -> None:
+    with pytest.raises(ValueError, match="offset must be an integer for CP-SAT"):
+        solve(_fab([]), time_limit_seconds=1, constraints=[MakespanCost(offset=0.5)])
+
+
+def test_structural_plugins_refuse_an_offset_and_check_every_instance() -> None:
+    """A structural plugin has no term to shape: the registry refuses its offset. A repeated
+    structural pick is checked with its own knobs."""
+    with pytest.raises(ValueError, match="'machine_capacity_cost' offset is not supported by this CP-SAT model"):
+        solve(_fab([]), time_limit_seconds=1, constraints=[MachineCapacityCost(offset=1)])
+    with pytest.raises(ValueError, match="enforces this constraint structurally"):
+        solve(_fab([]), time_limit_seconds=1, constraints=[MachineCapacityCost(), MachineCapacityCost(weight=2)])

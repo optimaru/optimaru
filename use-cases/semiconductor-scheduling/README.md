@@ -72,6 +72,29 @@ The 0.1.x quirks are kept on purpose: a route overlap is charged by
 `missing_transport_time_cost` (no entry); `makespan_cost` reads only the lots' last
 steps; `machine_preference_cost` charges even on a duration mismatch.
 
+### 0.3.0
+
+Every constraint takes two more knobs, `offset` and `clip` (keyword-only), and may be
+picked several times. Every constraint is global, so the offset shapes its single raw
+total `x`: `sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
+`(x - offset) ** exponent`, sign-preserving (`clip=False`, which charges a total of 0 too
+and rewards a total below the offset); `offset=0` is the 0.2.0 shaping. Each pick is its
+own instance with its own knobs, and the instances add up (every instance reads the
+calculator's one shared schedule view, so a repeat costs no second decode):
+
+```python
+fab.solve(problem, constraints=[
+    *get_constraints()[:-1],
+    MakespanCost(),                              # the makespan
+    MakespanCost(weight=100, offset=480),        # + 100 x (every minute beyond 480)
+])
+```
+
+`fab.constraint_costs(problem, picks)` scores a pick list and keys the second pick
+`makespan_cost#2`; every entry reports its `offset` and `clip`. The CP-SAT reference takes
+the same picks (integral offsets on its eight penalized constraints; its twelve
+structural ones refuse an offset like a weight or a level).
+
 ### 0.2.0
 
 - **Names**: `machine_eligibility` -> `machine_eligibility_cost`, `lot_route_precedence` ->
@@ -175,7 +198,9 @@ pins so that pin overlaps reach the capacity and family-conflict terms), solver 
 (zero budget, seeds never lost, multi-start, FULL_ASSERT, a failed solve), int64 overflow.
 `fab_plugin_test`: default assembly == monolith (data and search mode), plugin incremental
 == full per constraint, components alone, overrides, `constraintTotals()`, raw costs by
-hand, the catalog.
+hand, the catalog, and repeated / shifted components (a hand-calculated repeat, threshold
+and literal offsets by hand, incremental == a fresh recompute over random walks, FULL_ASSERT
+solves).
 
 ## python/
 
