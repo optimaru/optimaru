@@ -84,29 +84,47 @@ jobs:
           echo "tag v${version} exists: ${exists} · publish: ${release}" >> "$GITHUB_STEP_SUMMARY"
 
   wheels:
-    name: wheels (${{ matrix.os }})
+    name: wheels (${{ matrix.os }}, ${{ matrix.python }}${{ startsWith(matrix.os, 'ubuntu') && format(' {0}', matrix.libc) || '' }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
+      # One job per OS x CPython version (and per libc on Linux), so the
+      # builds run side by side instead of one after another in a single job.
+      # Each job still compiles its 22 extensions in parallel (setup.py
+      # ParallelCompile uses every core of the runner).
       matrix:
         # Native runners per architecture: no QEMU emulation, no cross-compiling.
         os:
-          - ubuntu-latest      # manylinux / musllinux x86_64
-          - ubuntu-24.04-arm   # manylinux / musllinux aarch64
+          - ubuntu-latest      # x86_64
+          - ubuntu-24.04-arm   # aarch64
           - macos-latest       # arm64
           - macos-15-intel     # x86_64
           - windows-latest     # AMD64
+        python: [cp311, cp312, cp313, cp314]
+        libc: [manylinux, musllinux]
+        exclude:
+          # macOS and Windows have no libc split: keep one job per version.
+          - os: macos-latest
+            libc: musllinux
+          - os: macos-15-intel
+            libc: musllinux
+          - os: windows-latest
+            libc: musllinux
+    env:
+      # Linux: cpXYZ-manylinux_* or cpXYZ-musllinux_*; macOS and Windows: cpXYZ-*.
+      CIBW_BUILD: ${{ startsWith(matrix.os, 'ubuntu') && format('{0}-{1}_*', matrix.python, matrix.libc) || format('{0}-*', matrix.python) }}
     steps:
       - uses: actions/checkout@v4
 
-      # Settings (cp311–cp314, smoke-test import of all use cases) live in
-      # pyproject.toml [tool.cibuildwheel]. v3.1 still shipped CPython 3.14.0rc2,
-      # on which current pydantic fails to import (typing._eval_type signature).
+      # Settings (skip list, smoke-test import of all use cases) live in
+      # pyproject.toml [tool.cibuildwheel]; CIBW_BUILD above narrows each job to
+      # one CPython version. v3.1 still shipped CPython 3.14.0rc2, on which
+      # current pydantic fails to import (typing._eval_type signature).
       - uses: pypa/cibuildwheel@v4.3.1
 
       - uses: actions/upload-artifact@v4
         with:
-          name: wheels-${{ matrix.os }}
+          name: wheels-${{ matrix.os }}-${{ matrix.python }}${{ startsWith(matrix.os, 'ubuntu') && format('-{0}', matrix.libc) || '' }}
           path: wheelhouse/*.whl
 
   sdist:
