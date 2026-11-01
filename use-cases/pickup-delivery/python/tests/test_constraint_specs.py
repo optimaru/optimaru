@@ -12,9 +12,11 @@ from types import SimpleNamespace
 import pdp_routing as pdp
 import pytest
 from pdp_routing import constraints as specs
+from pdp_routing._constraint import instance_keys
 from pdp_routing.constraints import (
     Constraint,
     LatencyCost,
+    Level,
     MaxEndTimeCost,
     MaxStopsCost,
     PairedRequestCost,
@@ -177,6 +179,44 @@ def test_level_can_be_flipped():
     hard_level = solve([*picks, TravelTimeCost(level="hard")]).score
     assert hard_level.medium < 0  # gives up requests instead
     assert hard_level.soft == 0
+
+
+def test_a_soft_constraint_can_move_to_medium():
+    """On medium, travel time outranks every soft term and folds at the medium unit."""
+    picks = [paired_request_cost, same_vehicle_cost, unassigned_requests_cost]
+    soft_level = solve([*picks, travel_time_cost]).score
+    medium_level = solve([*picks, TravelTimeCost(level=Level.MEDIUM)]).score
+
+    assert soft_level.soft < 0
+    assert medium_level.soft == 0
+    assert medium_level.medium < 0
+
+
+def test_a_level_must_be_a_level():
+    with pytest.raises(TypeError, match="level must be a Level"):
+        TravelTimeCost(level=True)
+    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft'"):
+        TravelTimeCost(level="firm")
+    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft'"):
+        TravelTimeCost(level="HARD")
+
+
+def test_core_refuses_an_unknown_level_like_the_python_base():
+    pick = SimpleNamespace(name="unassigned_requests_cost", weight=None, level="firm", exponent=1.0)
+    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft', not 'firm'"):
+        solve([pick])
+
+
+def test_score_agrees_with_the_engine_when_a_constraint_moves_to_medium():
+    picks = [paired_request_cost, same_vehicle_cost, unassigned_requests_cost, TravelTimeCost(level="medium")]
+    plan = solve(picks)
+    assert score(pdp.constraint_costs(plan), picks) == _engine(plan.score)
+    assert score(pdp.constraint_costs(plan, picks), picks) == _engine(plan.score)
+
+
+def test_the_knob_was_renamed():
+    with pytest.raises(TypeError):
+        TravelTimeCost(hard=True)
 
 
 def test_unknown_constraint_name_raises():
@@ -939,3 +979,46 @@ def test_naming_a_constraint_twice_scores_both_picks():
     assert get_constraints([TravelTimeCost(), TravelTimeCost()]) == [TravelTimeCost(), TravelTimeCost()]
     picks = [VehicleCapacityCost(), TravelTimeCost(weight=10), TravelTimeCost()]
     assert _zero_budget(picks) == (-2, -(10 + 1) * 600.0)
+
+
+# --- Levels: each pick, a repeat included, on the level it names --------------------
+
+
+@pytest.mark.parametrize(
+    ("picks", "expected"),
+    [
+        ([TravelTimeCost(level="medium")], (0, -600 * MEDIUM_UNIT)),
+        ([TravelTimeCost(level=Level.HARD)], (-600, 0.0)),
+        ([VehicleCapacityCost(level=Level.MEDIUM, weight=3)], (0, -6 * MEDIUM_UNIT)),  # weight in medium units
+        ([VehicleCapacityCost(level="soft")], (0, -2.0)),
+        ([UnassignedRequestsCost(level=Level.SOFT, weight=2)], (0, -8.0)),
+        ([UnassignedRequestsCost(level="hard", offset=1)], (-3, 0.0)),
+        # A repeat carries its own level and shaping: soft travel, medium beyond 300 s,
+        # and hard 2 x (x - 300) per vehicle: 2 x (-100 + 100 - 300) = -600, a hard reward.
+        (
+            [
+                TravelTimeCost(),
+                TravelTimeCost(level="medium", offset=300),
+                TravelTimeCost(level="hard", weight=2, offset=300, clip=False),
+            ],
+            (600, -600 - 100 * MEDIUM_UNIT),
+        ),
+    ],
+)
+def test_levels_by_hand_on_both_paths(picks, expected):
+    """A pick's level moves its term, with the weight in units of that level: engine == mirror == hand."""
+    assert score(pdp.constraint_costs(_hand_plan()), picks) == expected
+    raw = pdp.constraint_costs(_hand_plan(), picks)
+    for pick, key in zip(picks, instance_keys(picks)):
+        assert raw[key]["level"] == (pick.level or raw[key]["default_level"]), key
+    assert score(raw, picks) == expected
+    assert _zero_budget(picks) == expected
+
+
+def test_a_repeat_is_checked_on_its_own_level():
+    """The second pick's level is read and checked like the first's, on both paths."""
+    pick = SimpleNamespace(name="travel_time_cost", weight=None, level="firm", exponent=1.0)
+    with pytest.raises(ValueError, match="constraint 'travel_time_cost': level must be 'hard', 'medium' or 'soft'"):
+        _zero_budget([TravelTimeCost(), pick])
+    with pytest.raises(ValueError, match="constraint 'travel_time_cost': level must be 'hard', 'medium' or 'soft'"):
+        score(pdp.constraint_costs(_hand_plan()), [TravelTimeCost(), pick])

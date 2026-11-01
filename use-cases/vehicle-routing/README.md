@@ -70,10 +70,11 @@ That is the `list_constraints()` order: the thirteen per-vehicle unit constraint
 (each vehicle; `constraint_costs()` lists the unassigned pool as one more cell, always
 0, which no route constraint evaluates), then the global `unassigned_visits_cost`. `vrp_routing.constraint_info()` reports exactly this
 table from the C++ components (`kDefaultLevel` / `kDefaultWeight`). Every
-constraint is flippable (`level="hard"` / `level="soft"`), none is a reward, and every
-one at a weight above 0 is scored by default (`default_enabled`); the three opt-in
-objectives (weight 0) are measured but move no score until given a weight. The
-route-policy constraints cost 0 while their vehicle field is 0. The four core rules
+constraint is flippable onto any of the three levels (`level="hard"`, `"medium"` or
+`"soft"`, or a `Level`), none is a reward, and every one at a weight above 0 is scored
+by default (`default_enabled`); the three opt-in objectives (weight 0) are measured
+but move no score until given a weight. The route-policy constraints cost 0 while their
+vehicle field is 0. The four core rules
 (`vehicle_capacity_cost`, `max_end_time_cost`, `unassigned_visits_cost`,
 `travel_time_cost`) are also the monolithic `ScoreCalculator` and the incremental
 calculator, which read the same constants.
@@ -83,8 +84,10 @@ domain declares its fold once (`kMediumFold = intoSoft(10^9)` in `domain.hpp`):
 the engine compares `HardSoftScore`, so medium lands in soft as
 `medium * 10^9 + soft`, which keeps the 3-level `Score` lexicographic. Its weight
 is in medium units (default 1). `level="hard"` charges one hard unit per penalty
-minute; `level="soft"` one soft unit per penalty minute; an explicit weight stays in
-medium units. `constraint_costs()` carries
+minute; `level="soft"` one soft unit per penalty minute; an explicit weight is in units
+of the level in effect. Any other constraint may move onto medium the same way
+(`TravelTimeCost(level="medium")` charges one medium unit per driving second), and a
+repeated pick carries its own level. `constraint_costs()` carries
 `"medium_fold": {"kind": "into_soft", "unit": 1e9}` on every entry, so
 `vrp_routing.constraints.score()` folds exactly like the engine. A plugin-path
 solve (`constraints=`) reports `plan.score` and every `on_new_best` score from

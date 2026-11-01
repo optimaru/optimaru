@@ -4,6 +4,7 @@ import pdp_routing as domain
 import pytest
 from ortools.sat.python import cp_model
 from pdp_routing.constraints import (
+    Level,
     MaxEndTimeCost,
     MaxStopsCost,
     PairedRequestCost,
@@ -261,8 +262,8 @@ def test_default_selection_scores_like_the_engine() -> None:
 )
 @pytest.mark.parametrize(
     "knobs",
-    [{"level": "soft"}, {"weight": 0}, {"weight": 1}],
-    ids=["soft", "weight-0", "weight-1"],
+    [{"level": "soft"}, {"level": "medium"}, {"weight": 0}, {"weight": 1}],
+    ids=["soft", "medium", "weight-0", "weight-1"],
 )
 def test_structural_constraints_refuse_what_the_model_cannot_honour(
     spec_class, knobs
@@ -353,15 +354,34 @@ def _route_sets():
             yield dict(combination)
 
 
-def _engine_levels(request, routes, selection):
-    """The engine's (hard, folded soft) for `routes` under `selection`, and the plan's costs."""
+def _routed_plan(request, routes):
     plan = to_plan(request.model_input)
     node_by_id = {node.id: i for i, node in enumerate(plan.nodes)}
     for vehicle in plan.vehicles:
         vehicle.node_indices = [node_by_id[stop_id] for stop_id in routes[vehicle.id]]
     plan.rebuild_unassigned_pool()
+    return plan
+
+
+def _engine_levels(request, routes, selection):
+    """The Python score() mirror's (hard, folded soft) for `routes` under `selection`, and the plan's costs."""
+    plan = _routed_plan(request, routes)
     engine = score(domain.constraint_costs(plan, selection), selection)
     return (engine.hard, engine.soft), domain.constraint_costs(plan)
+
+
+def _engine_solve(request, routes, selection):
+    """The engine's own score of `routes` under `selection`: a solve with no time (and no
+    pair construction, which would route the pool) keeps the routes as they are."""
+    plan = _routed_plan(request, routes)
+    kept = [list(vehicle.node_indices) for vehicle in plan.vehicles]
+    cfg = domain.SolverConfig()
+    cfg.spent_limit_seconds = 0
+    cfg.random_seed = 1
+    cfg.pair_construction_heuristic = False
+    domain.Solver(cfg).solve_with_constraints(plan, selection)
+    assert [list(vehicle.node_indices) for vehicle in plan.vehicles] == kept
+    return plan.score.hard, plan.score.medium * MEDIUM_UNIT + plan.score.soft
 
 
 SELECTIONS = {
@@ -385,18 +405,31 @@ SELECTIONS = {
         UnassignedRequestsCost(),
     ],
     "identical-twice": [TravelTimeCost(), TravelTimeCost(), UnassignedRequestsCost()],
+    # Each pick on its own level: medium travel beyond 150 s, a soft literal capacity,
+    # the unassigned minutes twice (medium, then soft with a literal offset).
+    "levels": [
+        VehicleCapacityCost(),
+        VehicleCapacityCost(level="soft", weight=5, offset=1, clip=False),
+        UnassignedRequestsCost(),
+        UnassignedRequestsCost(level="soft", weight=2, offset=3, clip=False),
+        TravelTimeCost(),
+        TravelTimeCost(level=Level.MEDIUM, offset=150),
+        MaxEndTimeCost(level="medium"),
+    ],
 }
 
 
 @pytest.mark.parametrize("selection", list(SELECTIONS.values()), ids=list(SELECTIONS))
 def test_the_cpsat_terms_equal_the_engine_on_every_solution(selection) -> None:
     """Pin each of the 19 solutions: the CP-SAT objective's levels are the engine's score
-    of those routes under the same repeated / shifted picks, exactly."""
+    of those routes under the same repeated / shifted picks (its own and the score()
+    mirror's), exactly."""
     request = _line_request(timelimit=5)
     for routes in _route_sets():
         solved = solve_request(request, constraints=selection, _fixed_routes=routes)
         levels = _levels(solved.score)
         engine, costs = _engine_levels(request, routes, selection)
+        assert _engine_solve(request, routes, selection) == engine, routes
         assert (
             levels["hard"],
             levels["soft"] + levels["medium"] * MEDIUM_UNIT,

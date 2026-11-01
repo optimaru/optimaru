@@ -11,9 +11,10 @@ Domain model, constraints and API details: [`python/`](python/README.md) and [`c
 | `distance_from_last_pick_task_to_path_origin_cost` | `DistanceFromLastPickTaskToPathOriginCost` | soft | 1 | warehouse distance (m) from the last pick back to the start; 0 for an empty trolley |
 | `order_split_by_trolley_cost` | `OrderSplitByTrolleyCost` | soft | 1000 | distinct orders with a pick on the trolley — summed, the (order, trolley) pairs. **Not** 0 for an unsplit order: an order on one trolley counts 1, so the minimum is the number of orders with assigned picks (the Java quickstart's definition, kept) |
 
-Every constraint is flippable (`level="hard"` / `level="soft"`), none is a reward and all
-four are scored by default (`default_enabled`); `order_picking.constraint_info()`
-reports exactly this table from the C++ components (`kDefaultLevel` /
+Every constraint is flippable (`level="hard"` / `level="soft"`, or `Level.HARD` /
+`Level.SOFT`; `level="medium"` raises `ValueError`, the domain has no medium level),
+none is a reward and all four are scored by default (`default_enabled`);
+`order_picking.constraint_info()` reports exactly this table from the C++ components (`kDefaultLevel` /
 `kDefaultWeight`). `order_picking.constraint_costs(solution)` is the only
 per-constraint surface: the travel distance is the sum of the two distance entries,
 the (order, trolley) pair count the sum of `order_split_by_trolley_cost`

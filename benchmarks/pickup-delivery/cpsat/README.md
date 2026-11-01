@@ -12,8 +12,8 @@ Each plugin in `pickup_delivery_cpsat/constraints.py` subclasses the engine spec
 the same name (`pdp_routing.constraints`) and only builds its CP-SAT expression; the
 default level and weight come from `pdp_routing.constraint_info()`, so the two
 solvers cannot disagree on a default. Selections use the engine's names and knobs
-(`weight=None` = default, `level=None` = default level, `level="soft"` = soft — from a
-hard or the medium level, as in the engine). `exponent != 1` and non-integer
+(`weight=None` = default, `level=None` = default level, `level="hard"`, `"medium"` or
+`"soft"` moves a pick onto that level, as in the engine). `exponent != 1` and non-integer
 weights are rejected (a CP-SAT-only limitation). The objective is lexicographic over
 `("hard", "medium", "soft")`; `unassigned_requests_cost` is medium at weight 1, the
 engine's default in medium units.
@@ -21,14 +21,15 @@ engine's default in medium units.
 - `paired_request_cost`, `same_vehicle_cost`, `pickup_before_dropoff_cost` are
   structural here: the circuit model assigns a request to one vehicle or none and
   orders its pickup first, so their raw cost is always 0 and they add no objective
-  term. Their plugins refuse `level="soft"` and any weight other than the engine
-  default (1000); leaving them out of a selection does not lift the structure.
+  term. Their plugins refuse any level but hard (`level="medium"` or `"soft"`) and any
+  weight other than the engine default (1000); leaving them out of a selection does not
+  lift the structure.
 - `enclosing_circle_radius_cost`, `squared_order_age_cost`, `pinned_stops_cost` and
   `required_vehicle_cost` have no CP-SAT plugin (engine-only); naming them here is an
   unknown-constraint error.
 
 **0.3.0: repeats, `offset` and `clip`.** A constraint may be picked several times (as
-specs or as `{"name", "weight", "hard", "offset", "clip"}` mappings): each pick builds its
+specs or as `{"name", "weight", "level", "offset", "clip"}` mappings): each pick builds its
 own terms with its own knobs, keyed `name`, `name#2`, … like the engine's
 `constraint_costs()`. Every plugin adds one term per engine unit — per vehicle, idle ones
 included (a constant 0 where the vehicle's limit is unset), never the unassigned pool,

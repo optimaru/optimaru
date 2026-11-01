@@ -15,6 +15,7 @@ from itertools import permutations, product
 from order_picking.constraints import (
     DistanceFromLastPickTaskToPathOriginCost,
     DistanceFromPreviousPickTaskCost,
+    Level,
     OrderSplitByTrolleyCost,
     TrolleyCapacityCost,
     get_constraints,
@@ -264,11 +265,29 @@ def _routes():
                 yield [list(first), list(second)]
 
 
-def _engine_of(request, routes, selection):
+def _routed(request, routes):
     canonical = to_solution(request)
     for trolley, route in zip(canonical.trolleys, routes, strict=True):
         trolley.pick_task_indices = route
+    return canonical
+
+
+def _engine_of(request, routes, selection):
+    """The Python score() mirror of `routes` under `selection`."""
+    canonical = _routed(request, routes)
     return score(constraint_costs(canonical, selection), selection)
+
+
+def _engine_solve(request, routes, selection):
+    """The engine's own score of `routes` under `selection`: a solve with no time keeps them."""
+    solved = domain.solve(
+        _routed(request, routes),
+        time_limit_seconds=0,
+        random_seed=1,
+        constraints=selection,
+    )
+    assert [list(trolley.pick_task_indices) for trolley in solved.trolleys] == routes
+    return solved.score.hard, solved.score.soft
 
 
 SELECTIONS = {
@@ -293,14 +312,24 @@ SELECTIONS = {
         OrderSplitByTrolleyCost(),
         DistanceFromPreviousPickTaskCost(),
     ],
+    # Each pick on its own level: a soft literal capacity next to the hard default, the
+    # walk on hard beyond 4 next to the soft default, the order split moved to hard.
+    "levels": [
+        TrolleyCapacityCost(),
+        TrolleyCapacityCost(level="soft", weight=3, offset=1, clip=False),
+        DistanceFromPreviousPickTaskCost(),
+        DistanceFromPreviousPickTaskCost(level=Level.HARD, offset=4),
+        OrderSplitByTrolleyCost(level="hard", weight=2),
+    ],
 }
 
 
 @pytest.mark.parametrize("selection", list(SELECTIONS.values()), ids=list(SELECTIONS))
 def test_the_cpsat_terms_equal_the_engine_on_every_solution(selection):
     """Pin each of the 24 solutions: the CP-SAT objective's own levels are the engine's
-    score of those routes under the same repeated / shifted picks, exactly; the reported
-    score re-prices the default costs (each name once) to the same value."""
+    score of those routes under the same repeated / shifted picks (its own and the
+    score() mirror's), exactly; the reported score re-prices the default costs (each name
+    once) to the same value."""
     request = _three_picks()
     routes = list(_routes())
     assert len(routes) == 24
@@ -310,6 +339,7 @@ def test_the_cpsat_terms_equal_the_engine_on_every_solution(selection):
             request, constraints=selection, _fixed_routes=fixed, _proxy_score=proxy
         )
         engine = _engine_of(request, fixed, selection)
+        assert _engine_solve(request, fixed, selection) == tuple(engine), fixed
         assert (proxy["hard"], proxy["soft"]) == (engine.hard, engine.soft), fixed
         assert _reported(result) == (engine.hard, engine.soft), fixed
 
@@ -346,3 +376,21 @@ def test_a_fractional_offset_is_refused_by_cpsat():
         solve(
             _three_picks(timelimit=1), constraints=[OrderSplitByTrolleyCost(offset=0.5)]
         )
+
+
+@pytest.mark.parametrize("level", ["medium", Level.MEDIUM])
+def test_medium_is_refused_like_the_engine(level):
+    """The domain has no medium level: CP-SAT refuses the pick as the engine does, a repeat too."""
+    message = (
+        "constraint 'order_split_by_trolley_cost': this use case has no medium level"
+    )
+    for selection in (
+        [OrderSplitByTrolleyCost(level=level)],
+        [OrderSplitByTrolleyCost(), OrderSplitByTrolleyCost(level=level)],
+    ):
+        with pytest.raises(ValueError, match=message):
+            solve(_three_picks(timelimit=1), constraints=selection)
+        with pytest.raises(ValueError, match=message):
+            domain.solve(
+                to_solution(_three_picks()), time_limit_seconds=0, constraints=selection
+            )

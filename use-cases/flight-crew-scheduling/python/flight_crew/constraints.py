@@ -29,7 +29,7 @@ Every spec takes five knobs:
                the two home-airport rules 1000); ``fcs.constraint_info()`` reports them.
 - ``level``    ``None`` = the default level, otherwise ``Level.HARD`` or
                ``Level.SOFT`` (or the names ``"hard"`` and ``"soft"``). This use
-               case has no medium level.
+               case has no medium level: ``level="medium"`` raises ValueError.
 - ``exponent`` sign-preserving power shaping per employee: ``weight * sign(c) *
                |c| ** exponent``. 2.0 = squared, so concentrated violations grow much
                costlier.

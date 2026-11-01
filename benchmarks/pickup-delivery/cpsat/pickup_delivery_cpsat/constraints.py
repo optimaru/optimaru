@@ -10,8 +10,8 @@ The circuit formulation in solve.py enforces the three request-coupling rules
 (``paired_request_cost``, ``same_vehicle_cost``, ``pickup_before_dropoff_cost``)
 by construction: a request rides one vehicle or none, pickup first. Their
 plugins add no objective term (the raw cost is 0 in every CP-SAT solution) and
-refuse what the model cannot honour: ``level="soft"`` or a weight other than the
-engine default. ``enclosing_circle_radius_cost``, ``squared_order_age_cost``,
+refuse what the model cannot honour: a level other than hard or a weight other
+than the engine default. ``enclosing_circle_radius_cost``, ``squared_order_age_cost``,
 ``pinned_stops_cost`` and ``required_vehicle_cost`` have no CP-SAT plugin
 (engine-only; selecting them here is an unknown-constraint error).
 
@@ -181,9 +181,9 @@ class _StructuralPlugin(ConstraintPlugin[PdpContext]):
     the raw cost is 0 in every CP-SAT solution and nothing joins the
     objective. That is the engine's rule at its default (hard, weight 1000) —
     in the limit; the model cannot price a violation, so it refuses a
-    selection that would make one acceptable: ``level="soft"``, or an explicit
-    weight other than the default. Leaving the rule out of a selection does
-    not lift the structure.
+    selection that would make one acceptable: a level other than hard
+    (``"medium"`` or ``"soft"``), or an explicit weight other than the
+    default. Leaving the rule out of a selection does not lift the structure.
     """
 
     # Its total is 0 in every CP-SAT solution: one constant term, so an offset
