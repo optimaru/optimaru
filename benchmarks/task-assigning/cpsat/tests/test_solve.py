@@ -22,6 +22,7 @@ from task_assigning.models import (
 )
 from task_assigning import calculate_score
 from task_assigning_cpsat import catalog, solve
+from task_assigning_cpsat.solve import MEDIUM_FOLD
 
 
 def test_smoke_and_plugin_catalog():
@@ -245,29 +246,33 @@ SELECTIONS = {
         UnassignedTasksCost(),
         UnassignedTasksCost(weight=3),
     ],
+    # Hard and medium (it folds below hard) refuse the literal formula with an offset:
+    # the literal copies of the hard and medium constraints sit on soft.
     "offsets": [
-        RequiredSkillCost(offset=1, clip=False),
+        RequiredSkillCost(level="soft", offset=1, clip=False),
         SquaredMakespanCost(offset=2000),
         CriticalPriorityTaskEndTimeCost(offset=30, clip=False),
         MajorPriorityTaskEndTimeCost(offset=-5),
         MinorPriorityTaskEndTimeCost(offset=50, clip=False),
         MinorPriorityTaskEndTimeCost(weight=2, offset=60),
-        UnassignedTasksCost(offset=2, clip=False),
+        UnassignedTasksCost(level="soft", offset=2, clip=False),
     ],
     "hard-offsets": [
-        RequiredSkillCost(weight=2, offset=1, clip=False),
+        RequiredSkillCost(weight=2, offset=1),
+        RequiredSkillCost(level="soft", weight=2, offset=1, clip=False),
         CriticalPriorityTaskEndTimeCost(level="hard", offset=10),
         UnassignedTasksCost(level="hard", offset=-1),
+        UnassignedTasksCost(offset=1),
     ],
     # Each pick on its own level (medium folds below hard): the missing skills on hard
     # and again on medium; the squared makespan beyond 1600 and the critical end times
-    # (literal) on medium; the minor end times on soft and, beyond 100, on hard; the
+    # beyond 30 on medium; the minor end times on soft and, beyond 100, on hard; the
     # unassigned tasks on medium and on soft (literal).
     "levels": [
         RequiredSkillCost(),
         RequiredSkillCost(level=Level.MEDIUM, weight=2),
         SquaredMakespanCost(level="medium", weight=1, offset=1600),
-        CriticalPriorityTaskEndTimeCost(level="medium", offset=30, clip=False),
+        CriticalPriorityTaskEndTimeCost(level="medium", offset=30),
         MinorPriorityTaskEndTimeCost(),
         MinorPriorityTaskEndTimeCost(level=Level.HARD, offset=100),
         UnassignedTasksCost(),
@@ -321,13 +326,19 @@ def test_mapping_selections_repeat_and_shift_like_specs() -> None:
     specs = [
         RequiredSkillCost(),
         UnassignedTasksCost(),
-        UnassignedTasksCost(weight=3, offset=1, clip=False),
+        UnassignedTasksCost(level="soft", weight=3, offset=1, clip=False),
         MinorPriorityTaskEndTimeCost(offset=20, clip=False),
     ]
     dicts = [
         {"name": "required_skill_cost"},
         {"name": "unassigned_tasks_cost"},
-        {"name": "unassigned_tasks_cost", "weight": 3, "offset": 1, "clip": False},
+        {
+            "name": "unassigned_tasks_cost",
+            "level": "soft",
+            "weight": 3,
+            "offset": 1,
+            "clip": False,
+        },
         {"name": "minor_priority_task_end_time_cost", "offset": 20, "clip": False},
     ]
     problem = _two_employees()
@@ -351,3 +362,115 @@ def test_a_fractional_offset_is_refused_by_cpsat() -> None:
             time_limit_seconds=1,
             constraints=[UnassignedTasksCost(offset=0.5)],
         )
+
+
+# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+# Medium folds below hard here, so it counts toward the hard score and refuses the
+# literal formula too (the objective is built with medium_fold="below_hard").
+
+HARD_REFUSAL = (
+    "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
+    "violation; use clip=True (a threshold) or another level"
+)
+MEDIUM_REFUSAL = (
+    "constraint {q}: clip=False with a non-zero offset cannot be medium here, where medium counts "
+    "toward the hard score; use clip=True (a threshold) or level='soft'"
+)
+
+
+def test_the_objective_takes_the_engine_medium_fold() -> None:
+    assert MEDIUM_FOLD == "below_hard"
+
+
+@pytest.mark.parametrize("offset", [2, -2])
+@pytest.mark.parametrize(
+    ("selection", "refusal"),
+    [
+        (
+            lambda offset: RequiredSkillCost(offset=offset, clip=False),
+            HARD_REFUSAL,
+        ),  # the default, hard
+        (
+            lambda offset: {
+                "name": "required_skill_cost",
+                "offset": offset,
+                "clip": False,
+            },
+            HARD_REFUSAL,
+        ),
+        (
+            lambda offset: UnassignedTasksCost(level="hard", offset=offset, clip=False),
+            HARD_REFUSAL,
+        ),
+        (
+            lambda offset: UnassignedTasksCost(offset=offset, clip=False),
+            MEDIUM_REFUSAL,
+        ),  # the default, medium
+        (
+            lambda offset: {
+                "name": "unassigned_tasks_cost",
+                "offset": offset,
+                "clip": False,
+            },
+            MEDIUM_REFUSAL,
+        ),
+        (
+            lambda offset: CriticalPriorityTaskEndTimeCost(
+                level=Level.MEDIUM, offset=offset, clip=False
+            ),
+            MEDIUM_REFUSAL,
+        ),
+        (
+            lambda offset: {
+                "name": "squared_makespan_cost",
+                "level": "medium",
+                "offset": offset,
+                "clip": False,
+            },
+            MEDIUM_REFUSAL,
+        ),
+    ],
+    ids=[
+        "required-skill-spec",
+        "required-skill-mapping",
+        "unassigned-moved-to-hard",
+        "unassigned-default-medium",
+        "unassigned-mapping-medium",
+        "critical-moved-to-medium",
+        "makespan-mapping-moved-to-medium",
+    ],
+)
+def test_the_literal_offset_is_refused_like_the_engine(
+    selection, refusal, offset
+) -> None:
+    """The CP-SAT reference refuses the pick with the engine's and score()'s message."""
+    pick = selection(offset)
+    name = pick["name"] if isinstance(pick, dict) else pick.name
+    message = refusal.format(q=repr(name))
+    for picks in ([pick], [RequiredSkillCost(), UnassignedTasksCost(), pick]):
+        with pytest.raises(ValueError) as refused:
+            solve(_two_employees(), time_limit_seconds=1, constraints=picks)
+        assert str(refused.value) == message
+    if not isinstance(pick, dict):
+        # The engine and the score() mirror say the same.
+        core = _two_employees().to_core()
+        with pytest.raises(ValueError) as refused:
+            domain.constraint_costs(core, [pick])
+        assert str(refused.value) == message
+        with pytest.raises(ValueError) as refused:
+            score(domain.constraint_costs(core), [pick])
+        assert str(refused.value) == message
+
+
+@pytest.mark.parametrize("offset", [2, -2])
+def test_the_same_literal_pick_on_soft_is_accepted(offset) -> None:
+    """On soft the literal picks solve and report the engine's score of the solution."""
+    selection = [
+        RequiredSkillCost(),
+        UnassignedTasksCost(),
+        RequiredSkillCost(level="soft", offset=offset, clip=False),
+        UnassignedTasksCost(level="soft", offset=offset, clip=False),
+    ]
+    solved = solve(_two_employees(), time_limit_seconds=5, constraints=selection)
+    engine = score(domain.constraint_costs(solved.to_core(), selection), selection)
+    assert _engine_levels(solved) == tuple(engine)

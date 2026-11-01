@@ -23,6 +23,9 @@ plugins add one term per line (an empty one included, never the pool; at offset 
 they add one per job, which sums to the same per-line raw cost), the makespan plugin
 always one per line, and the two globals one term for their total, so an integral
 offset is shaped exactly as in the engine, in both modes; a fractional offset is
-refused (`offset must be an integer for CP-SAT`). `tests/test_solve.py` pins several layouts and checks that the CP-SAT
+refused (`offset must be an integer for CP-SAT`). `clip=False` with an offset is refused
+on hard with the engine's message (`constraint 'max_end_time_cost': clip=False with a
+non-zero offset cannot be hard, ...`); medium folds into soft, as in the engine, so it
+takes the literal formula. `tests/test_solve.py` pins several layouts and checks that the CP-SAT
 objective, the engine's own score and `food_packaging.constraints.score()` agree per
 level under repeated, shifted and re-levelled picks.

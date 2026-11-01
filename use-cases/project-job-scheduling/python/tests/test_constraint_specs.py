@@ -649,11 +649,14 @@ def test_a_repeated_medium_pick_adds_up():
         (MakespanCost(offset=5, exponent=3, clip=False), (0, 8.0)),  # (3 - 5)^3
         (ProjectDelayCost(offset=1), (0, -1 * MEDIUM_UNIT)),
         (ProjectDelayCost(offset=4, clip=False), (0, 2 * MEDIUM_UNIT)),
-        (ProjectDelayCost(offset=4, clip=False, level="hard"), (2, 0.0)),
-        (RenewableResourceCapacityCost(offset=1, clip=False), (1, 0.0)),  # once, not per resource or day
+        # The literal formula with an offset is refused on hard (the resource constraints'
+        # default), so its numbers are checked on soft.
+        (ProjectDelayCost(offset=4, clip=False, level="soft"), (0, 2.0)),
+        (ProjectDelayCost(offset=1, level="hard"), (-1, 0.0)),  # hard takes the threshold
+        (RenewableResourceCapacityCost(level="soft", offset=1, clip=False), (0, 1.0)),  # once, not per day
         (RenewableResourceCapacityCost(offset=-2), (0, 0.0)),  # a raw 0 stays 0 under the threshold
-        (RenewableResourceCapacityCost(offset=-2, clip=False), (-2, 0.0)),
-        (NonRenewableResourceCapacityCost(weight=3, offset=0.5, clip=False), (2, 0.0)),  # -1.5 -> -2
+        (RenewableResourceCapacityCost(level="soft", offset=-2, clip=False), (0, -2.0)),
+        (NonRenewableResourceCapacityCost(level="soft", weight=4, offset=0.5, clip=False), (0, 2.0)),
     ],
 )
 def test_offsets_by_hand_on_both_paths(pick, expected):
@@ -683,7 +686,8 @@ SELECTIONS = {
     "repeat": [*get_constraints(), *REPEAT, ProjectDelayCost(weight=2, exponent=2)],
     "repeat-and-offsets": [
         NonRenewableResourceCapacityCost(),
-        NonRenewableResourceCapacityCost(offset=1, clip=False),
+        NonRenewableResourceCapacityCost(level="soft", offset=1, clip=False),  # hard refuses the literal formula
+        NonRenewableResourceCapacityCost(offset=1),
         RenewableResourceCapacityCost(),
         RenewableResourceCapacityCost(offset=-1),
         ProjectDelayCost(),
@@ -781,14 +785,16 @@ def test_the_knob_was_renamed():
         ([ProjectDelayCost(level=Level.SOFT, weight=2)], (0, -4)),
         ([NonRenewableResourceCapacityCost(level="soft", offset=2, clip=False)], (0, 2)),
         # A repeat carries its own level and shaping: the soft makespan, medium beyond day 1,
-        # and hard 2 x (3 - 5) = -4, a hard reward.
+        # hard 2 x beyond day 2, and soft 2 x (3 - 5) = -4, a reward (hard refuses the literal
+        # formula with an offset).
         (
             [
                 MakespanCost(),
                 MakespanCost(level="medium", offset=1),
-                MakespanCost(level="hard", weight=2, offset=5, clip=False),
+                MakespanCost(level="hard", weight=2, offset=2),
+                MakespanCost(level="soft", weight=2, offset=5, clip=False),
             ],
-            (4, -2 * MEDIUM_UNIT - 3),
+            (-2, -2 * MEDIUM_UNIT - 3 + 4),
         ),
         # The medium constraint repeated onto all three levels.
         (
@@ -826,3 +832,104 @@ def test_a_repeat_is_checked_on_its_own_level():
         _zero_budget(_late_schedule(), [MakespanCost(), pick])
     with pytest.raises(ValueError, match="constraint 'makespan_cost': level must be 'hard', 'medium' or 'soft'"):
         score(pjs.constraint_costs(_late_schedule()), [MakespanCost(), pick])
+
+
+# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+
+HARD_REFUSAL = (
+    "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
+    "violation; use clip=True (a threshold) or another level"
+)
+
+
+def _refusal(call):
+    with pytest.raises(ValueError) as refused:
+        call()
+    return str(refused.value)
+
+
+@pytest.mark.parametrize("offset", [2.5, -2.5])
+@pytest.mark.parametrize(
+    "pick",
+    [
+        lambda offset: RenewableResourceCapacityCost(offset=offset, clip=False),  # the default level, hard
+        lambda offset: RenewableResourceCapacityCost(level="hard", offset=offset, clip=False),
+        lambda offset: NonRenewableResourceCapacityCost(offset=offset, clip=False),  # hard by default
+        lambda offset: MakespanCost(level="hard", offset=offset, clip=False),
+        lambda offset: ProjectDelayCost(level=Level.HARD, offset=offset, clip=False),
+    ],
+    ids=[
+        "renewable-default-hard",
+        "renewable-level-hard",
+        "non-renewable-default-hard",
+        "makespan-moved-to-hard",
+        "delay-moved-to-hard",
+    ],
+)
+def test_the_literal_offset_is_refused_on_hard_on_every_path(pick, offset):
+    """Every constraint here is global: a positive offset would turn an overload below it
+    into a hard reward that cancels another hard violation, so an infeasible schedule
+    could score hard 0; a negative one would charge a schedule without any overload. The
+    engine (solve, solve_with_constraints, constraint_costs) and the score() mirror refuse
+    it with the same message; the CP-SAT reference's test_solve.py checks the same words."""
+    spec = pick(offset)
+    message = HARD_REFUSAL.format(q=repr(spec.name))
+    repeated = [type(spec)(), spec]  # a refused repeat next to its accepted first instance
+    assert _refusal(lambda: pjs.solve(build_schedule(), time_limit_seconds=0.1, constraints=[spec])) == message
+    assert _refusal(lambda: _zero_budget(_late_schedule(), repeated)) == message
+    assert _refusal(lambda: pjs.constraint_costs(_late_schedule(), [spec])) == message
+    assert _refusal(lambda: pjs.constraint_costs(_late_schedule(), repeated)) == message
+    assert _refusal(lambda: score(pjs.constraint_costs(_late_schedule()), [spec])) == message
+    assert _refusal(lambda: score(pjs.constraint_costs(_late_schedule()), repeated)) == message
+
+
+@pytest.mark.parametrize("offset", [3.0, -3.0])
+def test_the_same_literal_pick_on_soft_is_accepted(offset):
+    """(0 - offset) on the renewable total, on soft, on every path. Medium folds into soft
+    here, so it takes the literal formula too."""
+    pick = RenewableResourceCapacityCost(level="soft", offset=offset, clip=False)
+    expected = (0, offset)
+    assert score(pjs.constraint_costs(_late_schedule()), [pick]) == expected
+    raw = pjs.constraint_costs(_late_schedule(), [pick])
+    entry = raw["renewable_resource_capacity_cost"]
+    assert (entry["level"], entry["clip"]) == ("soft", False)
+    assert score(raw, [pick]) == expected
+    assert _zero_budget(_late_schedule(), [pick]) == expected
+    schedule = build_schedule()
+    full = [RenewableResourceCapacityCost(), pick]
+    pjs.solve(schedule, time_limit_seconds=0.2, random_seed=1, constraints=full)
+    assert score(pjs.constraint_costs(schedule), full) == pytest.approx(_engine(schedule.score))
+    medium = RenewableResourceCapacityCost(level="medium", offset=offset, clip=False)
+    assert score(pjs.constraint_costs(_late_schedule()), [medium]) == (0, offset * MEDIUM_UNIT)
+    assert _zero_budget(_late_schedule(), [medium]) == (0, offset * MEDIUM_UNIT)
+
+
+@pytest.mark.parametrize(
+    ("pick", "expected"),
+    [
+        # _late_schedule(): the project delay total (2 days) moved to hard.
+        (ProjectDelayCost(level="hard", offset=1), (-1, 0.0)),  # clip=True on hard: a threshold
+        (ProjectDelayCost(level="hard", offset=-1), (-3, 0.0)),  # adds 1 to the non-zero total
+        (ProjectDelayCost(level="hard", clip=False), (-2, 0.0)),  # clip=False with offset 0: 0.2.0
+        (ProjectDelayCost(level="hard", offset=0.0, clip=False), (-2, 0.0)),
+        (RenewableResourceCapacityCost(offset=-1), (0, 0.0)),  # no overload: a threshold adds nothing to 0
+    ],
+)
+def test_the_allowed_combinations_on_hard(pick, expected):
+    assert score(pjs.constraint_costs(_late_schedule()), [pick]) == expected
+    assert _zero_budget(_late_schedule(), [pick]) == expected
+
+
+def test_the_refusal_comes_after_every_knob_of_a_duck_typed_pick():
+    """The engine checks once a pick's knobs are all re-stated: the level a pick moves to decides."""
+    moved = SimpleNamespace(
+        name="renewable_resource_capacity_cost", weight=None, level="soft", exponent=1.0, offset=1.0, clip=False
+    )
+    assert _zero_budget(_late_schedule(), [moved]) == (0, 1.0)
+    kept = SimpleNamespace(
+        name="renewable_resource_capacity_cost", weight=None, level=None, exponent=1.0, offset=1.0, clip=False
+    )
+    message = HARD_REFUSAL.format(q="'renewable_resource_capacity_cost'")
+    assert _refusal(lambda: _zero_budget(_late_schedule(), [kept])) == message
+    assert _refusal(lambda: pjs.constraint_costs(_late_schedule(), [kept])) == message
+    assert _refusal(lambda: score(pjs.constraint_costs(_late_schedule()), [kept])) == message

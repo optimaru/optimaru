@@ -297,16 +297,20 @@ SELECTIONS = {
         MakespanCost(),
         MakespanCost(),
     ],
+    # The literal formula with an offset is refused on hard: the literal copies of the
+    # hard resource constraints sit on soft, and hard takes thresholds.
     "offsets": [
-        NonRenewableResourceCapacityCost(offset=1, clip=False),
+        NonRenewableResourceCapacityCost(level="soft", offset=1, clip=False),
         ProjectDelayCost(offset=2, clip=False),
         MakespanCost(offset=3),
         MakespanCost(weight=2, offset=-1, clip=False),
     ],
     "hard-offsets": [
-        NonRenewableResourceCapacityCost(weight=2, offset=1, clip=False),
+        NonRenewableResourceCapacityCost(weight=2, offset=1),
+        NonRenewableResourceCapacityCost(level="soft", weight=2, offset=1, clip=False),
+        RenewableResourceCapacityCost(offset=-1),  # no renewable resource: 0 stays 0
         RenewableResourceCapacityCost(
-            offset=1, clip=False
+            level="soft", offset=1, clip=False
         ),  # no renewable resource: -1 once
         ProjectDelayCost(level="hard", offset=1),
     ],
@@ -423,3 +427,85 @@ def test_a_fractional_offset_is_refused_by_cpsat() -> None:
             time_limit_seconds=1,
             constraints=[MakespanCost(offset=0.5)],
         )
+
+
+# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+
+HARD_REFUSAL = (
+    "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
+    "violation; use clip=True (a threshold) or another level"
+)
+
+
+@pytest.mark.parametrize("offset", [2, -2])
+@pytest.mark.parametrize(
+    "selection",
+    [
+        lambda offset: NonRenewableResourceCapacityCost(
+            offset=offset, clip=False
+        ),  # hard
+        lambda offset: {
+            "name": "non_renewable_resource_capacity_cost",
+            "offset": offset,
+            "clip": False,
+        },
+        lambda offset: RenewableResourceCapacityCost(offset=offset, clip=False),  # hard
+        lambda offset: ProjectDelayCost(level="hard", offset=offset, clip=False),
+        lambda offset: {
+            "name": "makespan_cost",
+            "level": "hard",
+            "offset": offset,
+            "clip": False,
+        },
+    ],
+    ids=[
+        "non-renewable-spec",
+        "non-renewable-mapping",
+        "renewable-spec",
+        "delay-moved-to-hard",
+        "makespan-mapping-moved-to-hard",
+    ],
+)
+def test_the_literal_offset_is_refused_on_hard_like_the_engine(
+    selection, offset
+) -> None:
+    """The CP-SAT reference refuses the pick with the engine's and score()'s message."""
+    pick = selection(offset)
+    name = pick["name"] if isinstance(pick, dict) else pick.name
+    message = HARD_REFUSAL.format(q=repr(name))
+    for picks in (
+        [pick],
+        [NonRenewableResourceCapacityCost(), ProjectDelayCost(), pick],
+    ):
+        with pytest.raises(ValueError) as refused:
+            solve(_fast_or_slow(), time_limit_seconds=1, constraints=picks)
+        assert str(refused.value) == message
+    if not isinstance(pick, dict):
+        # The engine and the score() mirror say the same.
+        core = _fast_or_slow().to_core()
+        with pytest.raises(ValueError) as refused:
+            domain.constraint_costs(core, [pick])
+        assert str(refused.value) == message
+        with pytest.raises(ValueError) as refused:
+            score(domain.constraint_costs(core), [pick])
+        assert str(refused.value) == message
+
+
+@pytest.mark.parametrize("offset", [2, -2])
+@pytest.mark.parametrize("level", ["soft", "medium"])
+def test_the_same_literal_pick_on_soft_is_accepted(level, offset) -> None:
+    """On soft, and on medium (it folds into soft here), the literal pick solves and
+    reports the engine's score of its solution."""
+    selection = [
+        NonRenewableResourceCapacityCost(),
+        ProjectDelayCost(),
+        MakespanCost(),
+        NonRenewableResourceCapacityCost(level=level, offset=offset, clip=False),
+    ]
+    solved = solve(_fast_or_slow(), time_limit_seconds=5, constraints=selection)
+    engine = score(domain.constraint_costs(solved.to_core(), selection), selection)
+    reported = (
+        solved.score_hard,
+        solved.score_medium * MEDIUM_UNIT + solved.score_soft,
+    )
+    assert reported == tuple(engine)

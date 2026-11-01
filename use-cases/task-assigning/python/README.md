@@ -103,7 +103,9 @@ weight is in units of its level, `level="hard"` makes a constraint hard (one har
 missing skills, rounded per unit like hard), `level="soft"` makes it soft. The keyword-only
 `offset=0.0` / `clip=True`
 shift the shaping per employee (or on the global's total): `clip=True` counts only what
-lies beyond the offset, `clip=False` shapes `x - offset` as it is. A constraint may be
+lies beyond the offset, `clip=False` shapes `x - offset` as it is. `clip=False` with an
+offset is refused on hard and on medium, which counts toward the hard score here, because
+hard 0 must mean no violation. A constraint may be
 picked several times (since 0.3.0); each pick is its own instance with its own knobs, its
 level included, the instances add up, and `constraint_costs(solution, picks)` keys the k-th pick
 `<name>#<k>`. See the use-case README for the 0.2.0 renames (`no_missing_skills` ->

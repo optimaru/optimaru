@@ -17,9 +17,10 @@
 //       constants, and the knob guards
 //   (j) repeated components and the offset / clip knobs: a hand-calculated
 //       repeat, threshold and literal offsets by hand (an idle employee is
-//       an evaluated unit), the global's total shaped once, incremental == a
-//       fresh recompute over a random LIST walk and a FULL_ASSERT solve with
-//       repeated, shifted components
+//       an evaluated unit), the global's total shaped once, the literal
+//       formula refused at reset on hard and on the below-hard medium and
+//       kept on soft, incremental == a fresh recompute over a random LIST
+//       walk and a FULL_ASSERT solve with repeated, shifted components
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -965,10 +966,17 @@ ConstraintAssembly repeatedAssembly()
                                         .weight("squaredMakespanCost", 0.5)
                                         .offset("squaredMakespanCost", 1e6)
                                         .clip("squaredMakespanCost", false)));
+    // The literal required-skill copy sits on soft: hard (and the below-hard
+    // medium) refuse the literal formula with an offset (hard 0 must mean no
+    // violation).
     assembly.addInstances(std::move(copyOf("requiredSkillCost")
+                                        .soft("requiredSkillCost")
                                         .weight("requiredSkillCost", 2.0)
                                         .offset("requiredSkillCost", 1.0)
                                         .clip("requiredSkillCost", false)));
+    assembly.addInstances(std::move(copyOf("requiredSkillCost")
+                                        .weight("requiredSkillCost", 2.0)
+                                        .offset("requiredSkillCost", 1.0)));
     assembly.addInstances(std::move(copyOf("unassignedTasksCost")
                                         .exponent("unassignedTasksCost", 2.0)
                                         .offset("unassignedTasksCost", 1.0)));
@@ -1030,21 +1038,97 @@ void verifyRepeatsAndOffsets()
                       .soft
                   == -2.0 * 31,
               "threshold offset -1 adds to the non-zero employee only");
+        const auto skill = levelsWith(copyOf("requiredSkillCost")
+                                          .soft("requiredSkillCost")
+                                          .weight("requiredSkillCost", 3.0)
+                                          .offset("requiredSkillCost", 0.5)
+                                          .clip("requiredSkillCost", false),
+                                      s);
+        check(skill.hard == 0 && skill.medium == 0.0 && skill.soft == 1.5,
+              "required-skill literal offset 0.5 at weight 3 on soft: 1.5 - 1.5 "
+              "twice, the idle employee included: +1.5 soft (not rounded)");
+        // A hard threshold still rounds per employee: (1 - 0.5) x 3 = 1.5 -> 2.
         check(levelsWith(copyOf("requiredSkillCost")
                              .weight("requiredSkillCost", 3.0)
-                             .offset("requiredSkillCost", 0.5)
-                             .clip("requiredSkillCost", false),
+                             .offset("requiredSkillCost", 0.5),
                          s)
                       .hard
-                  == 2,
-              "required-skill literal offset 0.5 at weight 3: 1.5 -> 2, -1.5 -> "
-              "-2 twice, +2 hard");
+                  == -2,
+              "required-skill threshold offset 0.5 at weight 3 on hard: 1.5 -> -2 hard");
         const auto global = levelsWith(copyOf("unassignedTasksCost")
+                                           .soft("unassignedTasksCost")
                                            .offset("unassignedTasksCost", 3.0)
                                            .clip("unassignedTasksCost", false),
                                        s);
-        check(global.medium == 3.0 && global.hard == 0,
-              "unassigned literal offset 3 on the single total: +3 medium");
+        check(global.soft == 3.0 && global.medium == 0.0 && global.hard == 0,
+              "unassigned literal offset 3 on the single total, on soft: +3 soft");
+    }
+    {
+        // Hard, and medium (it folds below hard here), refuse the literal
+        // formula with an offset at reset, whichever sign and setter order:
+        // +0.5 would reward the employees without a missing skill, -0.5 would
+        // charge every employee, an idle one included; +3 on the unassigned
+        // total would reward a plan that leaves no task out.
+        auto resetRefusal = [](ConstraintAssembly assembly) {
+            TaskAssigningSolution s = repeatInstance();
+            try
+            {
+                levelsWith(std::move(assembly), s);
+            }
+            catch (const std::logic_error &error)
+            {
+                return std::string(error.what());
+            }
+            return std::string();
+        };
+        auto refusal = [](const std::string &name) {
+            return "Constraint '" + name
+                   + "' cannot use clip=false with a non-zero offset on a level that counts "
+                     "toward the hard score (hard 0 must mean no violation)";
+        };
+        check(resetRefusal(copyOf("requiredSkillCost")
+                               .offset("requiredSkillCost", 0.5)
+                               .clip("requiredSkillCost", false))
+                      == refusal("requiredSkillCost")
+                  && resetRefusal(copyOf("requiredSkillCost")
+                                      .clip("requiredSkillCost", false)
+                                      .offset("requiredSkillCost", -0.5))
+                         == refusal("requiredSkillCost"),
+              "required-skill literal offset +-0.5 on hard: refused at reset");
+        check(resetRefusal(copyOf("unassignedTasksCost")
+                               .offset("unassignedTasksCost", 3.0)
+                               .clip("unassignedTasksCost", false))
+                      == refusal("unassignedTasksCost")
+                  && resetRefusal(copyOf("unassignedTasksCost")
+                                      .clip("unassignedTasksCost", false)
+                                      .offset("unassignedTasksCost", -3.0))
+                         == refusal("unassignedTasksCost"),
+              "unassigned literal offset +-3 on its default below-hard medium: refused at reset");
+        check(resetRefusal(copyOf("criticalPriorityTaskEndTimeCost")
+                               .offset("criticalPriorityTaskEndTimeCost", 4.0)
+                               .clip("criticalPriorityTaskEndTimeCost", false)
+                               .level("criticalPriorityTaskEndTimeCost", optimaru::Level::Medium))
+                      == refusal("criticalPriorityTaskEndTimeCost")
+                  && resetRefusal(copyOf("criticalPriorityTaskEndTimeCost")
+                                      .hard("criticalPriorityTaskEndTimeCost")
+                                      .offset("criticalPriorityTaskEndTimeCost", 4.0)
+                                      .clip("criticalPriorityTaskEndTimeCost", false))
+                         == refusal("criticalPriorityTaskEndTimeCost"),
+              "a soft literal pick moved to medium (after) or hard (before): refused at reset");
+        check(resetRefusal(copyOf("requiredSkillCost").offset("requiredSkillCost", 0.5)).empty()
+                  && resetRefusal(copyOf("requiredSkillCost").clip("requiredSkillCost", false))
+                         .empty()
+                  && resetRefusal(copyOf("unassignedTasksCost").offset("unassignedTasksCost", 3.0))
+                         .empty()
+                  && resetRefusal(copyOf("unassignedTasksCost").clip("unassignedTasksCost", false))
+                         .empty()
+                  && resetRefusal(copyOf("unassignedTasksCost")
+                                      .soft("unassignedTasksCost")
+                                      .offset("unassignedTasksCost", 3.0)
+                                      .clip("unassignedTasksCost", false))
+                         .empty(),
+              "allowed: thresholds on hard and medium, clip=false with offset 0 on "
+              "both, and the literal formula on soft");
     }
     {
         // Random LIST walk: incremental == a fresh calculator of the same

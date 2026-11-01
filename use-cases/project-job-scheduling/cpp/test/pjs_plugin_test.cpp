@@ -18,8 +18,10 @@
 //   (j) incremental == full recompute with the medium term overridden
 //   (k) repeated components and the offset / clip knobs: a hand-calculated
 //       repeat, threshold and literal offsets by hand on the global totals
-//       (each shaped once), incremental == a fresh recompute over a random
-//       walk and a FULL_ASSERT solve with repeated, shifted components
+//       (each shaped once), the literal formula refused on hard at reset and
+//       kept on soft (and on the into_soft medium), incremental == a fresh
+//       recompute over a random walk and a FULL_ASSERT solve with repeated,
+//       shifted components
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -983,11 +985,18 @@ ConstraintAssembly repeatedAssembly()
                                         .weight("makespanCost", 2.0)
                                         .offset("makespanCost", 10.0)
                                         .clip("makespanCost", false)));
+    // The literal renewable copy sits on soft: hard refuses the literal
+    // formula with an offset (hard 0 must mean no violation).
     assembly.addInstances(
         std::move(copyOf("renewableResourceCapacityCost")
+                      .soft("renewableResourceCapacityCost")
                       .weight("renewableResourceCapacityCost", 2.0)
                       .offset("renewableResourceCapacityCost", 1.0)
                       .clip("renewableResourceCapacityCost", false)));
+    assembly.addInstances(
+        std::move(copyOf("renewableResourceCapacityCost")
+                      .weight("renewableResourceCapacityCost", 2.0)
+                      .offset("renewableResourceCapacityCost", 1.0)));
     assembly.addInstances(std::move(copyOf("projectDelayCost")
                                         .exponent("projectDelayCost", 2.0)
                                         .offset("projectDelayCost", 1.0)));
@@ -1038,13 +1047,14 @@ void verifyRepeatsAndOffsets()
                         0.0),
               "renewable threshold offset 1: (3 - 1) once");
         check(levelsAre(levelsWith(copyOf("renewableResourceCapacityCost")
+                                       .soft("renewableResourceCapacityCost")
                                        .offset("renewableResourceCapacityCost", 5.0)
                                        .clip("renewableResourceCapacityCost", false),
                                    s),
-                        2,
+                        0,
                         0.0,
-                        0.0),
-              "renewable literal offset 5: (3 - 5) once, +2 hard");
+                        2.0),
+              "renewable literal offset 5 on soft: (3 - 5) once, +2 soft");
         check(levelsAre(levelsWith(copyOf("nonRenewableResourceCapacityCost")
                                        .offset("nonRenewableResourceCapacityCost", -1.0),
                                    s),
@@ -1054,13 +1064,22 @@ void verifyRepeatsAndOffsets()
               "non-renewable threshold offset -1: 4 + 1");
         check(levelsAre(levelsWith(copyOf("nonRenewableResourceCapacityCost")
                                        .weight("nonRenewableResourceCapacityCost", 3.0)
-                                       .offset("nonRenewableResourceCapacityCost", 3.5)
-                                       .clip("nonRenewableResourceCapacityCost", false),
+                                       .offset("nonRenewableResourceCapacityCost", 3.5),
                                    s),
                         -2,
                         0.0,
                         0.0),
-              "non-renewable literal offset 3.5 at weight 3: 1.5 -> 2 hard");
+              "non-renewable threshold offset 3.5 at weight 3: 1.5 -> 2 hard");
+        check(levelsAre(levelsWith(copyOf("nonRenewableResourceCapacityCost")
+                                       .soft("nonRenewableResourceCapacityCost")
+                                       .weight("nonRenewableResourceCapacityCost", 3.0)
+                                       .offset("nonRenewableResourceCapacityCost", 3.5)
+                                       .clip("nonRenewableResourceCapacityCost", false),
+                                   s),
+                        0,
+                        0.0,
+                        -1.5),
+              "non-renewable literal offset 3.5 at weight 3 on soft: -1.5 soft (not rounded)");
         check(levelsAre(levelsWith(copyOf("projectDelayCost")
                                        .offset("projectDelayCost", 3.0)
                                        .clip("projectDelayCost", false),
@@ -1077,6 +1096,66 @@ void verifyRepeatsAndOffsets()
                         0.0,
                         -1.0),
               "makespan threshold offset 1, exponent 3: (2 - 1)^3");
+    }
+    {
+        // On hard (the default level of both resource constraints) the literal
+        // formula with an offset is refused at reset, whichever sign and
+        // setter order: +5 would turn the renewable overload of 3 into a +2
+        // hard reward, -1 would charge a schedule without any overload.
+        auto resetRefusal = [](ConstraintAssembly assembly) {
+            ProjectJobSchedule s = handSchedule(10, 10, 1);
+            try
+            {
+                levelsWith(std::move(assembly), s);
+            }
+            catch (const std::logic_error &error)
+            {
+                return std::string(error.what());
+            }
+            return std::string();
+        };
+        auto refusal = [](const std::string &name) {
+            return "Constraint '" + name
+                   + "' cannot use clip=false with a non-zero offset on a level that counts "
+                     "toward the hard score (hard 0 must mean no violation)";
+        };
+        check(resetRefusal(copyOf("renewableResourceCapacityCost")
+                               .offset("renewableResourceCapacityCost", 5.0)
+                               .clip("renewableResourceCapacityCost", false))
+                      == refusal("renewableResourceCapacityCost")
+                  && resetRefusal(copyOf("renewableResourceCapacityCost")
+                                      .clip("renewableResourceCapacityCost", false)
+                                      .offset("renewableResourceCapacityCost", -1.0))
+                         == refusal("renewableResourceCapacityCost"),
+              "renewable literal offset +5 / -1 on hard: refused at reset");
+        check(resetRefusal(copyOf("nonRenewableResourceCapacityCost")
+                               .offset("nonRenewableResourceCapacityCost", 3.5)
+                               .clip("nonRenewableResourceCapacityCost", false))
+                  == refusal("nonRenewableResourceCapacityCost"),
+              "non-renewable literal offset on its default hard level: refused at reset");
+        check(resetRefusal(copyOf("makespanCost")
+                               .offset("makespanCost", 5.0)
+                               .clip("makespanCost", false)
+                               .hard("makespanCost"))
+                      == refusal("makespanCost")
+                  && resetRefusal(copyOf("projectDelayCost")
+                                      .hard("projectDelayCost")
+                                      .offset("projectDelayCost", 3.0)
+                                      .clip("projectDelayCost", false))
+                         == refusal("projectDelayCost"),
+              "a soft / medium literal pick moved to hard (before or after): refused at reset");
+        check(resetRefusal(copyOf("renewableResourceCapacityCost")
+                               .offset("renewableResourceCapacityCost", 5.0))
+                      .empty()
+                  && resetRefusal(copyOf("renewableResourceCapacityCost")
+                                      .clip("renewableResourceCapacityCost", false))
+                         .empty()
+                  && resetRefusal(copyOf("projectDelayCost")
+                                      .offset("projectDelayCost", 3.0)
+                                      .clip("projectDelayCost", false))
+                         .empty(),
+              "allowed: a hard threshold offset, hard clip=false with offset 0, and the "
+              "literal formula on the into_soft medium");
     }
     {
         // Random walk: incremental == a fresh calculator of the same assembly.

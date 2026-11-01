@@ -80,8 +80,10 @@ landed on medium). Raw costs and the default score are unchanged.
 may be picked several times. All four constraints are global, so each instance shapes its
 one total `x` once: `sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default)
 or `(x - offset) ** exponent`, sign-preserving (`clip=False`, which acts as a reward below
-the offset, e.g. a makespan under a target day); `offset=0` is the 0.2.0 shaping. Each pick
-is its own instance with its own knobs, and the instances add up:
+the offset, e.g. a makespan under a target day); `offset=0` is the 0.2.0 shaping.
+`clip=False` with an offset is refused on hard (the two resource constraints by default),
+because hard 0 must mean no violation; medium folds into soft here, so it takes the literal
+formula. Each pick is its own instance with its own knobs, and the instances add up:
 
 ```python
 pj.solve(core, constraints=[

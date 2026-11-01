@@ -298,18 +298,22 @@ SELECTIONS = {
         UnassignedJobsCost(),
         OperatorCleaningConflictCost(),
     ],
+    # The literal formula with an offset is refused on hard: the literal copies of the
+    # hard constraints sit on soft, and hard takes thresholds.
     "offsets": [
         MaxEndTimeCost(offset=5),
-        MaxEndTimeCost(offset=10, clip=False),
+        MaxEndTimeCost(level="soft", offset=10, clip=False),
         AfterIdealEndTimeCost(offset=-3),
         SquaredMakespanCost(offset=5000, clip=False),
         UnassignedJobsCost(offset=60, clip=False),
-        OperatorCleaningConflictCost(weight=3, offset=2, clip=False),
+        OperatorCleaningConflictCost(level="soft", weight=3, offset=2, clip=False),
     ],
     "hard-offsets": [
-        MaxEndTimeCost(weight=2, offset=3, clip=False),
+        MaxEndTimeCost(weight=2, offset=3),
+        MaxEndTimeCost(level="soft", weight=2, offset=3, clip=False),
         AfterIdealEndTimeCost(level="hard", offset=20),
-        UnassignedJobsCost(level="hard", offset=-1, clip=False),
+        UnassignedJobsCost(level="hard", offset=-1),
+        UnassignedJobsCost(level="soft", offset=-1, clip=False),
         OperatorCleaningConflictCost(offset=-2),
     ],
     # Each pick on its own level: the lateness on medium and, beyond 10 minutes per
@@ -424,3 +428,76 @@ def test_a_fractional_offset_is_refused_by_cpsat() -> None:
             time_limit_seconds=1,
             constraints=[SquaredMakespanCost(offset=0.5)],
         )
+
+
+# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+
+HARD_REFUSAL = (
+    "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
+    "violation; use clip=True (a threshold) or another level"
+)
+
+
+@pytest.mark.parametrize("offset", [2, -2])
+@pytest.mark.parametrize(
+    "selection",
+    [
+        lambda offset: MaxEndTimeCost(
+            offset=offset, clip=False
+        ),  # the default level, hard
+        lambda offset: {"name": "max_end_time_cost", "offset": offset, "clip": False},
+        lambda offset: OperatorCleaningConflictCost(
+            offset=offset, clip=False
+        ),  # a global, hard
+        lambda offset: UnassignedJobsCost(level="hard", offset=offset, clip=False),
+        lambda offset: {
+            "name": "squared_makespan_cost",
+            "level": "hard",
+            "offset": offset,
+            "clip": False,
+        },
+    ],
+    ids=[
+        "max-end-spec",
+        "max-end-mapping",
+        "cleaning-conflict-spec",
+        "unassigned-moved-to-hard",
+        "makespan-mapping-moved-to-hard",
+    ],
+)
+def test_the_literal_offset_is_refused_on_hard_like_the_engine(
+    selection, offset
+) -> None:
+    """The CP-SAT reference refuses the pick with the engine's and score()'s message."""
+    pick = selection(offset)
+    name = pick["name"] if isinstance(pick, dict) else pick.name
+    message = HARD_REFUSAL.format(q=repr(name))
+    for picks in ([pick], [MaxEndTimeCost(), UnassignedJobsCost(), pick]):
+        with pytest.raises(ValueError) as refused:
+            solve(_one_job_one_line(), time_limit_seconds=1, constraints=picks)
+        assert str(refused.value) == message
+    if not isinstance(pick, dict):
+        # The engine and the score() mirror say the same.
+        core = _one_job_one_line().to_core()
+        with pytest.raises(ValueError) as refused:
+            constraint_costs(core, [pick])
+        assert str(refused.value) == message
+        with pytest.raises(ValueError) as refused:
+            score(constraint_costs(core), [pick])
+        assert str(refused.value) == message
+
+
+@pytest.mark.parametrize("offset", [2, -2])
+@pytest.mark.parametrize("level", ["soft", "medium"])
+def test_the_same_literal_pick_on_soft_is_accepted(level, offset) -> None:
+    """On soft, and on medium (it folds into soft here), the literal pick charges the one
+    line (0 - offset) whether or not the job runs, on both solvers alike."""
+    selection = [
+        SquaredMakespanCost(),
+        UnassignedJobsCost(),
+        MaxEndTimeCost(level=level, offset=offset, clip=False),
+    ]
+    solved, cpsat, engine = _both_paths(selection)
+    expected = (0, 0, -10000 + offset) if level == "soft" else (0, offset, -10000)
+    assert cpsat == engine == expected
+    assert solved.lines[0].job_ids == ["J"]

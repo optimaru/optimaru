@@ -21,9 +21,10 @@
 //   (k) repeated components and the offset / clip knobs: a hand-calculated
 //       repeat, threshold and literal offsets by hand (the per-line
 //       constraints evaluate every line, an empty one included, never the
-//       unassigned pool), the globals' totals shaped once, incremental == a
-//       fresh recompute over a random LIST walk and a FULL_ASSERT solve with
-//       repeated, shifted components
+//       unassigned pool), the globals' totals shaped once, the literal
+//       formula refused on hard at reset and kept on soft (and on the
+//       into_soft medium), incremental == a fresh recompute over a random
+//       LIST walk and a FULL_ASSERT solve with repeated, shifted components
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -1038,10 +1039,16 @@ ConstraintAssembly repeatedAssembly()
                                         .weight("squaredMakespanCost", 0.25)
                                         .offset("squaredMakespanCost", 40000.0)
                                         .clip("squaredMakespanCost", false)));
+    // The literal copies of the hard constraints sit on soft: hard refuses
+    // the literal formula with an offset (hard 0 must mean no violation).
     assembly.addInstances(std::move(copyOf("maxEndTimeCost")
+                                        .soft("maxEndTimeCost")
                                         .weight("maxEndTimeCost", 2.0)
                                         .offset("maxEndTimeCost", 1.0)
                                         .clip("maxEndTimeCost", false)));
+    assembly.addInstances(std::move(copyOf("maxEndTimeCost")
+                                        .weight("maxEndTimeCost", 2.0)
+                                        .offset("maxEndTimeCost", 1.0)));
     assembly.addInstances(std::move(copyOf("afterIdealEndTimeCost")
                                         .exponent("afterIdealEndTimeCost", 2.0)
                                         .offset("afterIdealEndTimeCost", 30.0)));
@@ -1052,9 +1059,14 @@ ConstraintAssembly repeatedAssembly()
                                         .clip("afterIdealEndTimeCost", false)));
     assembly.addInstances(
         std::move(copyOf("operatorCleaningConflictCost")
+                      .soft("operatorCleaningConflictCost")
                       .weight("operatorCleaningConflictCost", 2.0)
                       .offset("operatorCleaningConflictCost", 3.0)
                       .clip("operatorCleaningConflictCost", false)));
+    assembly.addInstances(
+        std::move(copyOf("operatorCleaningConflictCost")
+                      .weight("operatorCleaningConflictCost", 2.0)
+                      .offset("operatorCleaningConflictCost", 3.0)));
     assembly.addInstances(std::move(copyOf("unassignedJobsCost")
                                         .soft("unassignedJobsCost")
                                         .offset("unassignedJobsCost", -10.0)));
@@ -1111,15 +1123,16 @@ void verifyRepeatsAndOffsets()
                         -122501.0),
               "threshold offset -1 adds to the non-zero line only");
         check(levelsAre(levelsWith(copyOf("maxEndTimeCost")
+                                       .soft("maxEndTimeCost")
                                        .weight("maxEndTimeCost", 3.0)
                                        .offset("maxEndTimeCost", 0.5)
                                        .clip("maxEndTimeCost", false),
                                    s),
-                        4,
+                        0,
                         0.0,
-                        0.0),
-              "max end literal offset 0.5 at weight 3: llround(-1.5) x 2 lines "
-              "-> +4 hard");
+                        3.0),
+              "max end literal offset 0.5 at weight 3 on soft: 2 lines x (-1.5) "
+              "-> +3 soft, not the pool");
         check(levelsAre(levelsWith(copyOf("afterIdealEndTimeCost")
                                        .offset("afterIdealEndTimeCost", 40.0)
                                        .clip("afterIdealEndTimeCost", false),
@@ -1137,13 +1150,72 @@ void verifyRepeatsAndOffsets()
                         0.0),
               "unassigned threshold offset 20, exponent 2 on the total: (50 - 20)^2");
         check(levelsAre(levelsWith(copyOf("operatorCleaningConflictCost")
+                                       .soft("operatorCleaningConflictCost")
                                        .offset("operatorCleaningConflictCost", 5.0)
                                        .clip("operatorCleaningConflictCost", false),
                                    s),
-                        5,
+                        0,
                         0.0,
-                        0.0),
-              "cleaning-conflict literal offset 5 on the single total: +5 hard");
+                        5.0),
+              "cleaning-conflict literal offset 5 on the single total, on soft: +5 soft");
+    }
+    {
+        // On hard (the default level of maxEndTimeCost and
+        // operatorCleaningConflictCost) the literal formula with an offset is
+        // refused at reset, whichever sign and setter order: +0.5 would
+        // reward both lines (+4 hard, a feasible-looking score), -0.5 would
+        // charge lines that end in time.
+        auto resetRefusal = [](ConstraintAssembly assembly) {
+            PackagingSchedule s = repeatSchedule();
+            try
+            {
+                levelsWith(std::move(assembly), s);
+            }
+            catch (const std::logic_error &error)
+            {
+                return std::string(error.what());
+            }
+            return std::string();
+        };
+        auto refusal = [](const std::string &name) {
+            return "Constraint '" + name
+                   + "' cannot use clip=false with a non-zero offset on a level that counts "
+                     "toward the hard score (hard 0 must mean no violation)";
+        };
+        check(resetRefusal(copyOf("maxEndTimeCost")
+                               .offset("maxEndTimeCost", 0.5)
+                               .clip("maxEndTimeCost", false))
+                      == refusal("maxEndTimeCost")
+                  && resetRefusal(copyOf("maxEndTimeCost")
+                                      .clip("maxEndTimeCost", false)
+                                      .offset("maxEndTimeCost", -0.5))
+                         == refusal("maxEndTimeCost"),
+              "max end literal offset +-0.5 on hard: refused at reset");
+        check(resetRefusal(copyOf("operatorCleaningConflictCost")
+                               .offset("operatorCleaningConflictCost", 5.0)
+                               .clip("operatorCleaningConflictCost", false))
+                  == refusal("operatorCleaningConflictCost"),
+              "cleaning-conflict literal offset on its default hard level: refused at reset");
+        check(resetRefusal(copyOf("squaredMakespanCost")
+                               .offset("squaredMakespanCost", 22500.0)
+                               .clip("squaredMakespanCost", false)
+                               .hard("squaredMakespanCost"))
+                      == refusal("squaredMakespanCost")
+                  && resetRefusal(copyOf("afterIdealEndTimeCost")
+                                      .hard("afterIdealEndTimeCost")
+                                      .offset("afterIdealEndTimeCost", 40.0)
+                                      .clip("afterIdealEndTimeCost", false))
+                         == refusal("afterIdealEndTimeCost"),
+              "a soft / medium literal pick moved to hard (before or after): refused at reset");
+        check(resetRefusal(copyOf("maxEndTimeCost").offset("maxEndTimeCost", 0.5)).empty()
+                  && resetRefusal(copyOf("maxEndTimeCost").clip("maxEndTimeCost", false))
+                         .empty()
+                  && resetRefusal(copyOf("afterIdealEndTimeCost")
+                                      .offset("afterIdealEndTimeCost", 40.0)
+                                      .clip("afterIdealEndTimeCost", false))
+                         .empty(),
+              "allowed: a hard threshold offset, hard clip=false with offset 0, and the "
+              "literal formula on the into_soft medium");
     }
     {
         // Random LIST walk: incremental == a fresh calculator of the same

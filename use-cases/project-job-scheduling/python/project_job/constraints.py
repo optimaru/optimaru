@@ -40,7 +40,10 @@ Every spec takes five knobs:
 - ``clip``     (keyword) ``True`` (the default) counts only what lies beyond the
                offset, ``max(0, c - offset) ** exponent``; ``False`` shapes
                ``c - offset`` as it is, so a total below the offset lowers the
-               penalty (a makespan under a target day is rewarded).
+               penalty (a makespan under a target day is rewarded). With an
+               offset it is refused on hard (both resource constraints by
+               default), because hard 0 must mean no violation; medium folds
+               into soft here, so it takes the literal formula.
 
 The same constraint may be picked several times; each pick is scored on its own with
 its own knobs and the picks add up. The makespan, plus the square of the days beyond

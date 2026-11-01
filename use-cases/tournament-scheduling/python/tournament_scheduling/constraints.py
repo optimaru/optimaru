@@ -47,7 +47,11 @@ Every spec takes five knobs:
                evaluates, a raw 0 included: every team for ``TeamConflictCost``,
                only the teams with an unavailability fact for
                ``TeamUnavailabilityCost`` (its ``constraint_costs()`` entry lists
-               them as ``"units"``), and the one total for an imbalance.
+               them as ``"units"``), and the one total for an imbalance. With
+               an offset it is refused on hard (``TeamConflictCost`` and
+               ``TeamUnavailabilityCost`` by default), because hard 0 must mean
+               no violation; medium folds into soft here, so it takes the
+               literal formula.
 
 The same constraint may be picked several times; each pick is scored on its own with
 its own knobs and the picks add up. The head-to-head imbalance, plus its square

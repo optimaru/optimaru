@@ -46,7 +46,10 @@ Every spec takes five knobs:
                evaluates, a raw 0 included: every line (an empty one included,
                never the unassigned pool, which is no line) for the per-line
                constraints, the one total for a global; a ``constraint_costs()``
-               entry lists the lines as ``"units"``.
+               entry lists the lines as ``"units"``. With an offset it is refused
+               on hard (``MaxEndTimeCost`` and ``OperatorCleaningConflictCost``
+               by default), because hard 0 must mean no violation; medium folds
+               into soft here, so it takes the literal formula.
 
 The same constraint may be picked several times; each pick is scored on its own with
 its own knobs and the picks add up. Lateness past the deadline per line, plus its

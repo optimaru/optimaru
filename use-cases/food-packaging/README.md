@@ -74,7 +74,11 @@ exponent` (`clip=True`, the default) or `(x - offset) ** exponent`, sign-preserv
 acts as a reward below the offset); `offset=0` is the 0.2.0 shaping. The per-line
 constraints evaluate the packaging lines, an empty one included, and never the unassigned
 pool list (it is no line; their `constraint_costs()` entries list the lines as `"units"`).
-Each pick is its own instance with its own knobs, and the instances add up:
+Both apply per line (or on a global's total), not to the total violation. `clip=False` with
+an offset is refused on hard (`max_end_time_cost` and `operator_cleaning_conflict_cost` by
+default), because hard 0 must mean no violation; medium folds into soft here, so it takes
+the literal formula. Each pick is its own instance with its own knobs, and the instances add
+up:
 
 ```python
 fp.solve(schedule, constraints=[

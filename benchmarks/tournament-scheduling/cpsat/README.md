@@ -81,6 +81,10 @@ score and the `score()` mirror exactly under repeated, shifted and re-levelled p
 (`test_the_hard_terms_equal_the_engine_with_repeats_and_offsets`). The two imbalance
 surrogates have no raw-identical total to shift: CP-SAT refuses a non-zero offset on them
 (`constraint 'x' offset is not supported by this CP-SAT model`), while the engine takes it.
+`clip=False` with an offset is refused on hard with the engine's message, before any
+surrogate refusal (`constraint 'team_conflict_cost': clip=False with a non-zero offset
+cannot be hard, ...`); medium folds into soft, as in the engine, so it takes the literal
+formula.
 
 The reported score never uses the surrogate: `solve()` rescores the solution
 through the engine's `constraint_costs()` under the same selection, so a CP-SAT
