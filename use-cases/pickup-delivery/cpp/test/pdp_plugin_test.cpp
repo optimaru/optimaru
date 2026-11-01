@@ -23,6 +23,10 @@
 //       on soft and medium, incremental == a fresh recompute over a random
 //       walk, every preview == the applied score under FULL_ASSERT and a
 //       FULL_ASSERT solve with repeated, shifted components
+//   (m) negative thresholds (a fixed charge per non-zero unit, real-valued
+//       radius included): previews == applied score under FULL_ASSERT, a
+//       FULL_ASSERT solve, and after a 20000-step solve plan.score == a fresh
+//       recompute == the last (incremental) onNewBest report
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -1221,6 +1225,113 @@ void verifyRepeatsAndOffsets()
     }
     std::printf("\n");
 }
+
+// -------------------------------------------------------------------------
+// (m) Negative thresholds. The threshold with an offset < 0 is a fixed
+// charge per unit with a non-zero raw cost: it jumps at 0, so a raw cost
+// that should be 0 must be exactly 0 on every path. The enclosing radius is
+// real-valued (meters); the travel and route times are whole seconds; the
+// capacity threshold sits on hard. The calculator previews these instances
+// through cost() on the written-out route (never the shared sums) and costs
+// every applied route with cost(), so previews, the incremental score and a
+// fresh recompute agree; the last onNewBest report (the incremental score of
+// the best solution) is plan.score (a fresh recompute of it).
+// -------------------------------------------------------------------------
+ConstraintAssembly negativeThresholdAssembly()
+{
+    ConstraintAssembly assembly = defaultConstraints();
+    assembly.offset("travelTimeCost", -60.0);
+    assembly.offset("vehicleCapacityCost", -0.5);
+    assembly.weight("enclosingCircleRadiusCost", 0.01).offset("enclosingCircleRadiusCost", -60.0);
+    assembly.weight("routeDurationCost", 0.001).offset("routeDurationCost", -60.0);
+    assembly.offset("unassignedRequestsCost", -1.0);
+    assembly.addInstances(std::move(copyOf("travelTimeCost")
+                                        .weight("travelTimeCost", 1e-4)
+                                        .exponent("travelTimeCost", 2.0)
+                                        .offset("travelTimeCost", -30.0)));
+    return assembly;
+}
+
+void verifyNegativeThresholds()
+{
+    std::printf("== (m) Negative thresholds: a fixed charge, computed exactly ==\n");
+    {
+        // The coupling globals have no preview contract, so the previews are
+        // checked on the unit components alone.
+        PdpRoutePlan plan = buildRandomInstance(12, 3, /*seed=*/23);
+        std::mt19937_64 layout(37);
+        randomizeRoutes(plan, layout, /*poolRate=*/0.15);
+        plan.rebuildUnassignedPool();
+        DecomposedCalculator calculator;
+        negativeThresholdAssembly()
+            .only({"vehicleCapacityCost", "maxEndTimeCost", "travelTimeCost",
+                   "enclosingCircleRadiusCost", "routeDurationCost"})
+            .into(calculator);
+        optimaru::ScoreDirector<PdpRoutePlan> director(plan, calculator,
+                                                       optimaru::EnvironmentMode::FULL_ASSERT);
+        director.calculateScore();
+        optimaru::testing::PreviewParity parity;
+        bool corrupted = false;
+        try
+        {
+            parity = optimaru::testing::runPreviewParity(director, calculator, /*seed=*/71,
+                                                         /*trials=*/3000);
+        }
+        catch (const optimaru::ScoreCorruptionError &error)
+        {
+            corrupted = true;
+            std::printf("    %s\n", error.what());
+        }
+        std::printf("    %d moves checked, %d previewed, %d declined\n", parity.checked,
+                    parity.previewed, parity.declined);
+        check(!corrupted && parity.allEqual() && parity.declined == 0 && parity.previewed > 1000,
+              "negative thresholds: every preview equal to the applied score (FULL_ASSERT)");
+    }
+    {
+        PdpRoutePlan plan = buildRandomInstance(14, 3, /*seed=*/23);
+        plan.rebuildUnassignedPool();
+        Solver::Config config;
+        config.spentLimit = std::chrono::seconds(2);
+        config.randomSeed = 11;
+        config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+        config.ruinRecreateUnimprovedStepTrigger = 200;
+        config.ruinRecreatePolishSteps = 100;
+        DecomposedCalculator calculator;
+        negativeThresholdAssembly().into(calculator);
+        bool corrupted = false;
+        try
+        {
+            Solver(config).solve(plan, calculator);
+        }
+        catch (const optimaru::ScoreCorruptionError &e)
+        {
+            corrupted = true;
+            std::printf("  ScoreCorruptionError: %s\n", e.what());
+        }
+        check(!corrupted, "2s FULL_ASSERT solve with negative thresholds");
+    }
+    {
+        PdpRoutePlan plan = buildRandomInstance(14, 3, /*seed=*/23);
+        plan.rebuildUnassignedPool();
+        Solver::Config config;
+        config.spentLimit = std::chrono::seconds(10);
+        config.stepCountLimit = 20000;
+        config.randomSeed = 13;
+        std::vector<Score> reports;
+        config.onNewBest = [&](std::int64_t, const Score &best) { reports.push_back(best); };
+        DecomposedCalculator calculator;
+        negativeThresholdAssembly().into(calculator);
+        Solver(config).solve(plan, calculator);
+        const auto levels = levelsWith(negativeThresholdAssembly(), plan);
+        check(plan.score.hard == levels.hard
+                  && plan.score.medium == optimaru::roundScoreLevel(levels.medium, "medium")
+                  && plan.score.soft == optimaru::roundScoreLevel(levels.soft, "soft"),
+              "20000 steps: plan.score == a fresh recompute of the same assembly");
+        check(!reports.empty() && reports.back() == plan.score,
+              "the last onNewBest report (incremental) == plan.score (fresh)");
+    }
+    std::printf("\n");
+}
 }  // namespace
 
 int main()
@@ -1238,6 +1349,7 @@ int main()
     verifyMediumLevel();
     verifyMediumIncremental();
     verifyRepeatsAndOffsets();
+    verifyNegativeThresholds();
 
     if (failures == 0)
     {

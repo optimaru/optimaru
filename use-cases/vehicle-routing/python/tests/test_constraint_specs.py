@@ -6,6 +6,7 @@ picks and the medium level are covered here. Per-constraint values are covered b
 """
 
 import pickle
+import random
 import re
 from types import SimpleNamespace
 
@@ -21,6 +22,7 @@ from vrp_routing.constraints import (
     Level,
     MaxEndTimeCost,
     MaxStopsCost,
+    MinCapacityUtilizationCost,
     RouteDurationCost,
     TravelTimeCost,
     UnassignedVisitsCost,
@@ -988,3 +990,81 @@ def test_the_refusal_comes_after_every_knob_of_a_duck_typed_pick():
     message = HARD_REFUSAL.format(q="'vehicle_capacity_cost'")
     assert _refusal(lambda: _zero_budget([kept])) == message
     assert _refusal(lambda: score(vrp.constraint_costs(_hand_plan()), [kept])) == message
+
+
+# --- Negative thresholds: a fixed charge per non-zero vehicle, computed exactly -----
+
+
+def _random_plan(visit_count=40, vehicle_count=5, seed=11, min_load_ratio=0.0):
+    """A seeded plan around Seoul: real-valued coordinates, so radii are real-valued meters,
+    and with a min_load_ratio a real-valued utilization shortfall (capacity 24 x ratio)."""
+    rng = random.Random(seed)
+    locations = [
+        vrp.Location(37.55 + rng.uniform(-0.02, 0.02), 126.98 + rng.uniform(-0.02, 0.02))
+        for _ in range(vehicle_count)
+    ]
+    visits = []
+    for i in range(visit_count):
+        locations.append(vrp.Location(37.45 + rng.uniform(0, 0.2), 126.85 + rng.uniform(0, 0.3)))
+        due = rng.choice((12, 16, 20)) * 3600
+        visits.append(vrp.Visit(f"C{i}", f"Customer {i}", vehicle_count + i, rng.randint(1, 4), 8 * 3600, due, 600))
+    vehicles = [
+        vrp.Vehicle(f"V{k}", 24, k, departure_time=7 * 3600, min_load_ratio=min_load_ratio)
+        for k in range(vehicle_count)
+    ]
+    return vrp.VehicleRoutePlan("negative-thresholds", locations, vehicles, visits)
+
+
+def _replacing(base, *picks):
+    """`base` with each name's first pick replaced by the pick of that name in `picks`.
+
+    Replacing, not appending: a second pick of a name is a second instance."""
+    by_name = {pick.name: pick for pick in picks}
+    chosen = [by_name.pop(spec.name, spec) for spec in base]
+    return chosen + list(by_name.values())
+
+
+# Whole seconds and integral weights: every contribution is a whole number, so the
+# Python mirror reproduces the engine's levels exactly.
+WHOLE_SECONDS = _replacing(
+    get_constraints(),
+    VehicleCapacityCost(offset=-0.5),  # hard: 0.5 extra per overloaded vehicle, rounded per vehicle
+    UnassignedVisitsCost(offset=-1),
+    TravelTimeCost(offset=-60),  # 60 s extra per vehicle that drives at all
+    RouteDurationCost(weight=1, offset=-60),
+    LatencyCost(weight=1, offset=-300),
+) + [TravelTimeCost(exponent=2, offset=-30)]  # a second instance, appended on purpose
+# Real-valued raw costs: the enclosing radius (meters) and the utilization shortfall
+# (demand units below 24 x 0.55 = 13.2).
+REAL_VALUED = _replacing(
+    WHOLE_SECONDS,
+    EnclosingCircleRadiusCost(weight=0.01, offset=-60),
+    MinCapacityUtilizationCost(weight=1000, offset=-0.05),
+)
+
+
+@pytest.mark.parametrize("picks", [WHOLE_SECONDS, REAL_VALUED], ids=["whole-seconds", "real-valued"])
+def test_a_long_solve_with_negative_thresholds_scores_exactly(picks):
+    """The threshold with an offset < 0 jumps at 0 (0 for an idle vehicle, |offset| ** e for
+    any other), so a rounding residue on a raw cost that should be 0 would be charged in
+    full. The engine computes those raw costs exactly: after a long seeded solve the last
+    on_new_best report (the incremental score of the best solution) is plan.score (a fresh
+    recompute), and the Python re-pricing of constraint_costs() is that score."""
+    reports = []
+    plan = _random_plan(min_load_ratio=0.55 if picks is REAL_VALUED else 0.0)
+    cfg = vrp.SolverConfig()
+    cfg.spent_limit_seconds = 60
+    cfg.step_count_limit = 15_000
+    cfg.random_seed = 5
+    cfg.on_new_best = lambda _step, best: reports.append((best.hard, best.medium, best.soft))
+    vrp.Solver(cfg).solve_with_constraints(plan, picks)
+    final = (plan.score.hard, plan.score.medium, plan.score.soft)
+    assert len(reports) > 1 and reports[-1] == final
+    python = score(vrp.constraint_costs(plan, picks), picks)
+    assert score(vrp.constraint_costs(plan), picks) == python  # the default costs say the same
+    if picks is WHOLE_SECONDS:
+        assert python == _engine(plan.score)
+    else:
+        # plan.score rounds its soft level to a whole number; the mirror keeps the fraction.
+        assert python.hard == plan.score.hard
+        assert abs(python.soft - _engine(plan.score)[1]) <= 0.5 + 1e-3

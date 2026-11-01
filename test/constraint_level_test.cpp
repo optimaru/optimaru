@@ -47,6 +47,13 @@
 //       hard constraint, the allowed cases) on both restateKnobs paths, and
 //       DecomposedScoreCalculator::validateLevel at reset (the C++ API in
 //       any order, direct components, later edits)
+//   (r) the threshold with a negative offset (a fixed charge per non-zero
+//       unit, discontinuous at 0) gets exact raw costs: with real-valued
+//       deltas, incremental == fresh bit for bit and a unit back at raw 0
+//       contributes 0, for a unit constraint (hard and soft), a delta-group
+//       member and a global, one move at a time, in a batch and through
+//       trial moves; only that instance leaves the delta path (an integral
+//       group keeps it); LIST previews skip its piecewise answer
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -2001,6 +2008,438 @@ void testLiteralOffsetGuard() {
 }
 }  // namespace
 
+// --- (r) a negative threshold is computed exactly ---------------------------
+// Real-valued raw costs: four workers, tasks with a load in tenths (BASIC),
+// and the same loads on lists (LIST). No medium level.
+namespace {
+struct Loads {
+    int workerCount = 4;
+    std::vector<double> load{0.1, 0.2, 0.7, 0.3, 0.6, 0.4};
+    std::vector<int> assignment = std::vector<int>(6, -1);
+};
+struct LoadRoutes : Routes {
+    std::vector<double> load;
+};
+}  // namespace
+
+template <>
+struct optimaru::SolutionDescriptor<Loads> : TasksDescriptor<Loads> {};
+template <>
+struct optimaru::SolutionDescriptor<LoadRoutes> : RoutesDescriptor<LoadRoutes> {};
+
+namespace {
+
+// The summed load of a worker's tasks. cost() counts its calls, which shows
+// the dispatch: an instance on the delta path is costed at reset only.
+template <typename S>
+struct LoadCost : optimaru::UnitConstraint<S> {
+    explicit LoadCost(Level level = Level::Soft, const char* name = "loadCost")
+        : optimaru::UnitConstraint<S>(name, 1.0, level) {}
+    mutable long costCalls = 0;
+    double cost(const S& s, int, const std::vector<int>& members) const override {
+        ++costCalls;
+        double total = 0.0;
+        for (int t : members) total += s.load[t];
+        return total;
+    }
+    bool supportsDelta() const override { return true; }
+    double deltaCost(const S& s, int, const std::vector<int>&, int entity) const override {
+        return s.load[entity];
+    }
+};
+
+// The same cost through a compiled delta group: kGroupedApply, or with
+// integral raw deltas the group that keeps a negative threshold.
+template <typename S, bool Integral>
+struct LoadGroup final : optimaru::UnitConstraintDeltaGroup<S> {
+    std::vector<std::size_t> owned;
+    void add(std::size_t index, const optimaru::UnitConstraint<S>&) override {
+        owned.push_back(index);
+    }
+    const std::vector<std::size_t>& indexes() const override { return owned; }
+    bool hasIntegralRawDeltas() const override { return Integral; }
+    void onReset(const S&) override {}
+    void evaluate(const S& s, int, const std::vector<int>&, int entity, double* deltas) override {
+        for (std::size_t index : owned) deltas[index] = s.load[entity];
+    }
+};
+template <typename S, bool Integral>
+struct GroupedLoadCost final : LoadCost<S> {
+    explicit GroupedLoadCost(Level level = Level::Soft, double offset = 0.0)
+        : LoadCost<S>(level, Integral ? "integralLoadCost" : "groupedLoadCost") {
+        this->setOffset(offset);
+    }
+    const char* deltaGroupKey() const override { return Integral ? "integralLoad" : "load"; }
+    std::unique_ptr<optimaru::UnitConstraintDeltaGroup<S>> createDeltaGroup() const override {
+        return std::make_unique<LoadGroup<S, Integral>>();
+    }
+};
+
+// A global over the same loads that keeps each worker's sum and adds them up
+// in worker order at every cost(): exact, the recipe GlobalConstraint asks
+// for (no running sum of real-valued differences).
+template <typename S>
+struct TotalLoadCost final : optimaru::GlobalConstraint<S> {
+    TotalLoadCost() : optimaru::GlobalConstraint<S>("totalLoadCost", 1.0, Level::Soft) {}
+    std::vector<double> perWorker;
+    static double sumOf(const S& s, const std::vector<int>& members) {
+        double total = 0.0;
+        for (int t : members) total += s.load[t];
+        return total;
+    }
+    void reset(const S& s, const std::vector<std::vector<int>>& membersPerUnit) override {
+        perWorker.clear();
+        for (const auto& m : membersPerUnit) perWorker.push_back(sumOf(s, m));
+    }
+    void onUnitChanged(const S& s, int unit, const std::vector<int>& members) override {
+        perWorker[unit] = sumOf(s, members);
+    }
+    double cost() const override {
+        double total = 0.0;
+        for (double v : perWorker) total += v;
+        return total;
+    }
+};
+
+// LIST: the load beyond 0.2 on a route. cost() sums the route; the piecewise
+// answer subtracts running sums of the source lists, as prefix sums do, so
+// it can round where cost() does not: route [0.1, 0.2] -> moving 0.2 out is
+// (0.1 + 0.2) - 0.1 = 0.20000000000000004 by the sums, 0.2 by cost().
+template <typename S>
+struct ExcessLoadCost final : optimaru::UnitConstraint<S> {
+    ExcessLoadCost() : optimaru::UnitConstraint<S>("excessLoadCost", 1.0, Level::Soft) {}
+    mutable long piecewiseCalls = 0;
+    static double excess(double load) { return load > 0.2 ? load - 0.2 : 0.0; }
+    double cost(const S& s, int, const std::vector<int>& members) const override {
+        double total = 0.0;
+        for (int c : members) total += s.load[c];
+        return excess(total);
+    }
+    bool supportsPiecewisePreview() const override { return true; }
+    bool piecewiseCost(const S& s, int, const optimaru::ListPiece* pieces, int count,
+                       double& out) const override {
+        ++piecewiseCalls;
+        double total = 0.0;
+        for (int i = 0; i < count; ++i) {
+            const optimaru::ListPiece& piece = pieces[i];
+            if (piece.detached()) {
+                total += s.load[piece.begin];
+                continue;
+            }
+            double before = 0.0, upTo = 0.0;  // running sums of the source list
+            const std::vector<int>& route = s.routes[piece.list];
+            for (int p = 0; p < piece.end; ++p) {
+                if (p < piece.begin) before += s.load[route[p]];
+                upTo += s.load[route[p]];
+            }
+            total += upTo - before;
+        }
+        out = excess(total);
+        return true;
+    }
+};
+
+using LoadCalc = optimaru::DecomposedScoreCalculator<Loads>;
+using LoadAssembly = optimaru::ConstraintAssembly<Loads>;
+
+bool identical(const HardSoftScore& a, const HardSoftScore& b) {
+    return a.hard == b.hard && a.soft == b.soft;
+}
+
+// A threshold at offset -1 (a fixed charge of 1 per non-zero worker) on one
+// component, the rest of the assembly as given.
+LoadAssembly negativeThreshold(LoadAssembly assembly, const std::string& name) {
+    return std::move(assembly).offset(name, -1.0).clip(name, true);
+}
+
+HardSoftScore freshScore(const std::function<LoadAssembly()>& build, Loads& s) {
+    LoadCalc fresh;
+    build().into(fresh);
+    fresh.resetWorkingSolution(s);
+    return fresh.calculateScore();
+}
+
+void move(LoadCalc& calc, Loads& s, int task, int worker) {
+    calc.beforeVariableChanged(task);
+    s.assignment[task] = worker;
+    calc.afterVariableChanged(task);
+}
+
+template <typename C>
+const C& component(const LoadCalc& calc, std::size_t index) {
+    return dynamic_cast<const C&>(*calc.unitConstraintList()[index]);
+}
+
+// Worker 0 takes tasks 0 (0.1) and 1 (0.2) and gives them back, one move at a
+// time, in a batch, and in a rejected trial: after each step the incremental
+// score is bit for bit the fresh one, and the worker back at raw 0
+// contributes 0 (an accumulated raw would be ((0.1 + 0.2) - 0.1) - 0.2 =
+// 2.8e-17, charged the whole fixed charge). Each assembly has one soft cell
+// in play at a time, so the soft running total is exact too.
+void exactSequence(const std::string& label, const std::function<LoadAssembly()>& build) {
+    Loads s;
+    LoadCalc calc;
+    build().into(calc);
+    calc.resetWorkingSolution(s);
+    bool agree = true;
+    auto step = [&](int task, int worker) {
+        move(calc, s, task, worker);
+        agree &= identical(calc.calculateScore(), freshScore(build, s));
+    };
+    step(0, 0);
+    step(1, 0);
+    step(0, -1);
+    step(1, -1);
+    const HardSoftScore zero{0, 0.0};
+    check(agree && identical(calc.calculateScore(), zero),
+          label + ": one move at a time, incremental == fresh, back at 0 contributes 0");
+    bool rawZero = true;
+    for (const auto& entry : calc.constraintCosts()) rawZero &= entry.unitCosts[0] == 0.0;
+    check(rawZero, label + ": the raw cost of the emptied worker is exactly 0");
+
+    calc.beginVariableChanges();
+    move(calc, s, 0, 0);
+    move(calc, s, 1, 0);
+    calc.endVariableChanges();
+    agree = identical(calc.calculateScore(), freshScore(build, s));
+    calc.beginVariableChanges();
+    move(calc, s, 0, -1);
+    move(calc, s, 1, -1);
+    calc.endVariableChanges();
+    check(agree && identical(calc.calculateScore(), zero),
+          label + ": in a batch (a compound move), back at 0 contributes 0");
+
+    move(calc, s, 0, 0);
+    move(calc, s, 1, 0);
+    calc.beginMoveEvaluation();
+    calc.beginVariableChanges();
+    move(calc, s, 1, 1);
+    move(calc, s, 0, 1);
+    calc.endVariableChanges();
+    agree = identical(calc.calculateScore(), freshScore(build, s));
+    calc.beginMoveRollback();
+    calc.beginVariableChanges();
+    move(calc, s, 0, 0);
+    move(calc, s, 1, 0);
+    calc.endVariableChanges();
+    calc.endMoveEvaluation(false);
+    agree &= identical(calc.calculateScore(), freshScore(build, s));
+    calc.beginMoveEvaluation();
+    move(calc, s, 0, -1);
+    move(calc, s, 1, -1);
+    calc.endMoveEvaluation(true);
+    check(agree && identical(calc.calculateScore(), zero),
+          label + ": a rejected and an accepted trial move, back at 0 contributes 0");
+}
+
+// Random moves (single, batched, rejected trials) over all six tasks: the
+// hard level of the negative threshold equals the fresh one exactly, soft
+// to rounding, and wherever the fresh raw is 0 the incremental raw is 0 too.
+// The unshifted control instance stays on the delta path, and its
+// accumulated raw does drift off 0 (the premise of the fix).
+void exactRandomWalk() {
+    auto build = [] {
+        LoadAssembly assembly;
+        assembly.emplace<LoadCost<Loads>>(Level::Hard, "hardLoadCost");
+        assembly.emplace<LoadCost<Loads>>(Level::Soft, "softLoadCost");
+        assembly.emplace<LoadCost<Loads>>(Level::Soft, "controlLoadCost");
+        assembly.weight("hardLoadCost", 2.0);  // 2 (x + 1): never a rounding tie in tenths
+        return negativeThreshold(negativeThreshold(std::move(assembly), "hardLoadCost"),
+                                 "softLoadCost");
+    };
+    Loads s;
+    LoadCalc calc;
+    build().into(calc);
+    calc.resetWorkingSolution(s);
+    std::mt19937_64 rng(29);
+    bool hardExact = true, softClose = true, zerosExact = true;
+    int controlDrift = 0;
+    for (int step = 0; step < 3000; ++step) {
+        const int kind = static_cast<int>(rng() % 4);
+        const int t1 = static_cast<int>(rng() % 6), t2 = static_cast<int>(rng() % 6);
+        const int w1 = static_cast<int>(rng() % 5) - 1, w2 = static_cast<int>(rng() % 5) - 1;
+        const int old1 = s.assignment[t1], old2 = s.assignment[t2];
+        if (kind == 0) {
+            move(calc, s, t1, w1);
+        } else {
+            if (kind == 3) calc.beginMoveEvaluation();
+            calc.beginVariableChanges();
+            move(calc, s, t1, w1);
+            move(calc, s, t2, w2);
+            calc.endVariableChanges();
+            if (kind == 3) {
+                calc.calculateScore();
+                calc.beginMoveRollback();
+                calc.beginVariableChanges();
+                move(calc, s, t2, old2);
+                move(calc, s, t1, old1);
+                calc.endVariableChanges();
+                calc.endMoveEvaluation(false);
+            }
+        }
+        LoadCalc fresh;
+        build().into(fresh);
+        fresh.resetWorkingSolution(s);
+        const HardSoftScore a = calc.calculateScore(), b = fresh.calculateScore();
+        hardExact &= a.hard == b.hard;
+        softClose &= std::fabs(a.soft - b.soft) < 1e-9;
+        const auto mine = calc.constraintCosts(), theirs = fresh.constraintCosts();
+        for (std::size_t c = 0; c < mine.size(); ++c) {
+            for (std::size_t u = 0; u < theirs[c].unitCosts.size(); ++u) {
+                if (theirs[c].unitCosts[u] != 0.0) continue;
+                if (mine[c].name == "controlLoadCost") {
+                    controlDrift += mine[c].unitCosts[u] != 0.0;
+                } else {
+                    zerosExact &= mine[c].unitCosts[u] == 0.0;
+                }
+            }
+        }
+    }
+    check(hardExact && softClose, "random walk: incremental == fresh (hard exactly) over 3000 moves");
+    check(zerosExact, "random walk: a raw that is 0 from scratch is exactly 0 incrementally");
+    check(controlDrift > 0, "random walk: the unshifted control's accumulated raw drifts off 0 (" +
+                                    std::to_string(controlDrift) + " cells), harmlessly");
+    check(component<LoadCost<Loads>>(calc, 2).costCalls == 4,
+          "the unshifted control stays on the delta path (cost() at reset only)");
+}
+
+void testExactNegativeThreshold() {
+    std::printf("== (r) a negative threshold is a fixed charge, computed exactly ==\n");
+    check(((0.1 + 0.2) - 0.1) - 0.2 != 0.0,
+          "premise: raw + d - d with real-valued deltas leaves a residue");
+    check(optimaru::shapeCost(2.8e-17, 1.0, -1.0, true) == 1.0 &&
+                  optimaru::shapeCost(0.0, 1.0, -1.0, true) == 0.0,
+          "premise: the threshold at offset -1 charges 1 for any non-zero raw, 0 for 0");
+    check(optimaru::shapingJumpsAtZero(-1.0, true) && !optimaru::shapingJumpsAtZero(-1.0, false) &&
+                  !optimaru::shapingJumpsAtZero(1.0, true) && !optimaru::shapingJumpsAtZero(0.0, true),
+          "shapingJumpsAtZero: only clip=true with offset < 0");
+
+    exactSequence("unit constraint (kVirtualDelta), soft", [] {
+        LoadAssembly assembly;
+        assembly.emplace<LoadCost<Loads>>();
+        return negativeThreshold(std::move(assembly), "loadCost");
+    });
+    exactSequence("unit constraint (kVirtualDelta), hard", [] {
+        LoadAssembly assembly;
+        assembly.emplace<LoadCost<Loads>>(Level::Hard);
+        return negativeThreshold(std::move(assembly), "loadCost");
+    });
+    exactSequence("delta-group members (kGroupedApply), soft and hard", [] {
+        LoadAssembly assembly;  // a group needs two members
+        assembly.emplace<GroupedLoadCost<Loads, false>>(Level::Soft, -1.0);
+        assembly.emplaceInstance<GroupedLoadCost<Loads, false>>(Level::Hard, -1.0);
+        return assembly;
+    });
+    exactSequence("global constraint, soft", [] {
+        LoadAssembly assembly;
+        assembly.emplace<TotalLoadCost<Loads>>();
+        return negativeThreshold(std::move(assembly), "totalLoadCost");
+    });
+
+    {
+        // Which instances leave the delta path: only the negative threshold.
+        LoadCalc calc;
+        LoadAssembly assembly;
+        assembly.emplace<LoadCost<Loads>>(Level::Soft, "plain");
+        assembly.emplace<LoadCost<Loads>>(Level::Soft, "literalNegative");
+        assembly.emplace<LoadCost<Loads>>(Level::Soft, "thresholdPositive");
+        assembly.emplace<LoadCost<Loads>>(Level::Soft, "thresholdNegative");
+        std::move(assembly)
+                .offset("literalNegative", -1.0)
+                .clip("literalNegative", false)
+                .offset("thresholdPositive", 1.0)
+                .offset("thresholdNegative", -1.0)
+                .into(calc);
+        Loads s;
+        calc.resetWorkingSolution(s);
+        for (int t = 0; t < 6; ++t) move(calc, s, t, t % 4);
+        auto calls = [&](std::size_t i) { return component<LoadCost<Loads>>(calc, i).costCalls; };
+        check(calls(0) == 4 && calls(1) == 4 && calls(2) == 4,
+              "offset 0, the literal formula and a positive threshold keep the delta path");
+        check(calls(3) == 4 + 6, "the negative threshold re-runs cost() on every touched worker");
+    }
+    {
+        // A group with integral raw deltas accumulates exactly and keeps the
+        // group path, negative threshold included.
+        auto build = [] {
+            LoadAssembly assembly;
+            assembly.emplace<GroupedLoadCost<Loads, true>>();
+            assembly.emplaceInstance<GroupedLoadCost<Loads, true>>();
+            return negativeThreshold(std::move(assembly), "integralLoadCost");
+        };
+        Loads s;
+        s.load = {1.0, 2.0, 7.0, 3.0, 6.0, 4.0};
+        LoadCalc calc;
+        build().into(calc);
+        calc.resetWorkingSolution(s);
+        bool agree = true;
+        for (int t = 0; t < 6; ++t) {
+            move(calc, s, t, t % 3);
+            agree &= identical(calc.calculateScore(), freshScore(build, s));
+        }
+        for (int t = 0; t < 6; ++t) {
+            move(calc, s, t, -1);
+            agree &= identical(calc.calculateScore(), freshScore(build, s));
+        }
+        check(agree && identical(calc.calculateScore(), {0, 0.0}) &&
+                      component<LoadCost<Loads>>(calc, 0).costCalls == 4,
+              "integral group: exact on the group path (cost() at reset only)");
+    }
+    exactRandomWalk();
+
+    {
+        // LIST previews: the negative threshold previews through cost() on the
+        // written-out list, never its piecewise answer, so every preview is
+        // the applied score (FULL_ASSERT: a full recompute).
+        LoadRoutes probe;
+        probe.routes = {{0, 1}};
+        probe.load = {0.1, 0.2};
+        ExcessLoadCost<LoadRoutes> excess;
+        const optimaru::ListPiece moved{0, 1, 2, false};
+        double piecewise = -1.0;
+        excess.piecewiseCost(probe, 0, &moved, 1, piecewise);
+        check(piecewise != 0.0 && excess.cost(probe, 0, {1}) == 0.0,
+              "premise: the running-sum answer rounds off 0 where cost() is exactly 0");
+
+        for (const double offset : {-1.0, 0.0}) {
+            LoadRoutes s;
+            for (int c = 0; c < 12; ++c) {
+                s.city.emplace_back(c, c);
+                s.demand.push_back(1);
+                s.load.push_back(0.1 * (1 + c % 3));
+            }
+            s.routes = {{0, 1, 2, 3}, {4, 5, 6, 7}, {8, 9}, {10, 11}};
+            optimaru::DecomposedScoreCalculator<LoadRoutes> calc;
+            optimaru::ConstraintAssembly<LoadRoutes> assembly;
+            assembly.emplace<ExcessLoadCost<LoadRoutes>>();
+            std::move(assembly).offset("excessLoadCost", offset).into(calc);
+            optimaru::ScoreDirector<LoadRoutes> director(s, calc,
+                                                         optimaru::EnvironmentMode::FULL_ASSERT);
+            director.calculateScore();
+            optimaru::testing::PreviewParity parity;
+            bool corrupted = false;
+            try {
+                parity = optimaru::testing::runPreviewParity(director, calc, 61, 3000);
+            } catch (const optimaru::ScoreCorruptionError& error) {
+                corrupted = true;
+                std::printf("    %s\n", error.what());
+            }
+            const long calls =
+                    dynamic_cast<const ExcessLoadCost<LoadRoutes>&>(*calc.unitConstraintList()[0])
+                            .piecewiseCalls;
+            if (offset < 0.0) {
+                check(!corrupted && parity.allEqual() && parity.checked > 1000 && calls == 0,
+                      "LIST, offset -1: every preview equals the applied score, through cost()");
+            } else {
+                check(!corrupted && parity.allEqual() && calls > 0,
+                      "LIST, offset 0: the piecewise answer still serves the previews");
+            }
+        }
+    }
+    std::printf("\n");
+}
+}  // namespace
+
 int main() {
     testLevelMetadata();
     testMediumFold();
@@ -2019,6 +2458,7 @@ int main() {
     testOffsetClip();
     testInstances();
     testLiteralOffsetGuard();
+    testExactNegativeThreshold();
     if (failures == 0) {
         std::printf("All constraint-level tests PASSED.\n");
         return 0;

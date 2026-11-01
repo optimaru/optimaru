@@ -15,12 +15,15 @@ from pdp_routing import constraints as specs
 from pdp_routing._constraint import instance_keys
 from pdp_routing.constraints import (
     Constraint,
+    EnclosingCircleRadiusCost,
     LatencyCost,
     Level,
     MaxEndTimeCost,
     MaxStopsCost,
+    MinCapacityUtilizationCost,
     PairedRequestCost,
     RequiredVehicleCost,
+    RouteDurationCost,
     SameVehicleCost,
     SquaredOrderAgeCost,
     TravelTimeCost,
@@ -1131,3 +1134,65 @@ def test_the_refusal_comes_after_every_knob_of_a_duck_typed_pick():
     message = HARD_REFUSAL.format(q="'vehicle_capacity_cost'")
     assert _refusal(lambda: _zero_budget([kept])) == message
     assert _refusal(lambda: score(pdp.constraint_costs(_hand_plan()), [kept])) == message
+
+
+# --- Negative thresholds: a fixed charge per non-zero vehicle, computed exactly -----
+
+
+def _replacing(base, *picks):
+    """`base` with each name's first pick replaced by the pick of that name in `picks`.
+
+    Replacing, not appending: a second pick of a name is a second instance."""
+    by_name = {pick.name: pick for pick in picks}
+    chosen = [by_name.pop(spec.name, spec) for spec in base]
+    return chosen + list(by_name.values())
+
+
+# Whole seconds and integral weights: every contribution is a whole number, so the
+# Python mirror reproduces the engine's levels exactly.
+WHOLE_SECONDS = _replacing(
+    get_constraints(),
+    VehicleCapacityCost(offset=-0.5),  # hard: 0.5 extra per overloaded vehicle, rounded per vehicle
+    UnassignedRequestsCost(offset=-1),
+    TravelTimeCost(offset=-60),  # 60 s extra per vehicle that drives at all
+    RouteDurationCost(weight=1, offset=-60),
+    LatencyCost(weight=1, offset=-300),
+) + [TravelTimeCost(exponent=2, offset=-30)]  # a second instance, appended on purpose
+# Real-valued raw costs: the enclosing radius (meters) and the utilization shortfall.
+REAL_VALUED = _replacing(
+    WHOLE_SECONDS,
+    EnclosingCircleRadiusCost(weight=0.01, offset=-60),
+    MinCapacityUtilizationCost(weight=1000, offset=-0.05),
+)
+
+
+@pytest.mark.parametrize("picks", [WHOLE_SECONDS, REAL_VALUED], ids=["whole-seconds", "real-valued"])
+def test_a_long_solve_with_negative_thresholds_scores_exactly(picks):
+    """The threshold with an offset < 0 jumps at 0 (0 for an idle vehicle, |offset| ** e for
+    any other), so a rounding residue on a raw cost that should be 0 would be charged in
+    full. The engine computes those raw costs exactly: after a long seeded solve the last
+    on_new_best report (the incremental score of the best solution) is plan.score (a fresh
+    recompute), and the Python re-pricing of constraint_costs() is that score."""
+    reports = []
+    plan = pdp.build_random_instance(16, 4, seed=7)
+    if picks is REAL_VALUED:
+        vehicles = plan.vehicles
+        for vehicle in vehicles:
+            vehicle.min_load_ratio = 0.55
+        plan.vehicles = vehicles
+    cfg = pdp.SolverConfig()
+    cfg.spent_limit_seconds = 60
+    cfg.step_count_limit = 15_000
+    cfg.random_seed = 5
+    cfg.on_new_best = lambda _step, best: reports.append((best.hard, best.medium, best.soft))
+    pdp.Solver(cfg).solve_with_constraints(plan, picks)
+    final = (plan.score.hard, plan.score.medium, plan.score.soft)
+    assert len(reports) > 1 and reports[-1] == final
+    python = score(pdp.constraint_costs(plan, picks), picks)
+    assert score(pdp.constraint_costs(plan), picks) == python  # the default costs say the same
+    if picks is WHOLE_SECONDS:
+        assert python == _engine(plan.score)
+    else:
+        # plan.score rounds its soft level to a whole number; the mirror keeps the fraction.
+        assert python.hard == plan.score.hard
+        assert abs(python.soft - _engine(plan.score)[1]) <= 0.5 + 1e-3

@@ -79,14 +79,19 @@ inline Level checkedLevel(const ConstraintMetadata& constraint, Level wanted, Me
     return wanted;
 }
 
-// Checks a pick once ALL of its knobs are re-stated (so the order of the
-// setters does not matter), on the component's effective state: a level that
-// counts toward the hard score (hard, or medium where it folds below hard:
-// MediumFold::countsTowardHard) refuses clip=False with a non-zero offset,
-// because hard 0 must mean no violation. The level is the pick's, or the
-// component's default when the pick leaves it unset, a structural
-// (non-flippable) hard one included. In the words of the Python base
-// (_constraint.py _check_literal_offset):
+// The hard-0 rule, stated here once (the other comments refer here): a level
+// that counts toward the hard score (hard, or medium where it folds below
+// hard: MediumFold::countsTowardHard) refuses clip=False with a non-zero
+// offset, because hard 0 must mean no violation. The literal formula charges
+// every evaluated unit shapeCost(x - offset), a raw 0 included: a positive
+// offset rewards the units below it, so one unit's slack would cancel
+// another's violation; a negative one charges units without any violation.
+// The level is the pick's, or the component's default when the pick leaves
+// it unset, a structural (non-flippable) hard one included.
+//
+// This checks a pick once ALL of its knobs are re-stated (so the order of the
+// setters does not matter), on the component's effective state, in the
+// words of the Python base (_constraint.py _check_literal_offset):
 //   constraint 'x': clip=False with a non-zero offset cannot be hard, because
 //       hard 0 must mean no violation; use clip=True (a threshold) or another
 //       level

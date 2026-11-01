@@ -71,6 +71,10 @@ struct EmployeeAssignmentDeltaGroup final
     }
 
     const std::vector<std::size_t>& indexes() const override { return indexes_; }
+    // Every member's delta is a whole number (a shift count, overlap or rest
+    // minutes), so the accumulated raw costs are exact: a member at a negative
+    // threshold (clip with offset < 0, discontinuous at 0) keeps this group,
+    // because a whole-number raw cannot drift off 0.
     bool hasIntegralRawDeltas() const override { return true; }
 
     bool isBeneficial() const override {
