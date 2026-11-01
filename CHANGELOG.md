@@ -10,7 +10,12 @@ constraint now takes five knobs: `weight`, `level`, `exponent`, `offset` and
 
 **This release breaks compatibility.** The `hard` knob is gone; `level`
 replaces it on every constraint, in all 22 use cases. No alias is kept:
-`hard=` raises `TypeError`. Apart from that spelling, a 0.2.0 selection scores
+`hard=` raises `TypeError: hard= was removed in optimaru 0.3.0; use
+level='hard' or level='soft' (level=None keeps the default)`. A constraint may
+now be picked several times, and picking it again adds a second instance: to
+change a default pick, replace it in the list rather than appending (an
+appended `TravelTimeCost(weight=10)` next to the default `TravelTimeCost()`
+charges the travel time 11 times). Apart from those, a 0.2.0 selection scores
 exactly as before: raw costs are unchanged, a pick that leaves `offset` and
 `clip` alone is shaped exactly as in 0.2.0, and seeded solves give the same
 results. Each package was checked against its 0.1.5 golden raw costs, and the
@@ -36,6 +41,13 @@ wheel.
 - Knob errors changed with it: a non-string level raises `TypeError` and an
   unknown name raises `ValueError`. numpy booleans are no longer accepted as a
   level, since a level is not a boolean.
+- `hard=` raises the same `TypeError` (quoted above) on every path that takes
+  knobs as keywords: a constraint class (`TravelTimeCost(hard=True)`),
+  employee scheduling's JSON rules (`{"name": ..., "hard": true}`, a
+  validation error with that text) and the `DecomposedCalculator.add()` of
+  employee scheduling and school timetabling. A duck-typed pick object that
+  carries `hard` but no `level` stays an `AttributeError` (see the
+  duck-typing rule below).
 - Every path follows the same rules: the solver, `score()` / `score_costs()`, the
   `DecomposedCalculator.add()` of employee and school timetabling (`level=`
   replaces `hard=`), employee scheduling's JSON rules and the CP-SAT benchmarks.
@@ -54,7 +66,9 @@ wheel.
 - Each pick is its own instance with its own knobs, its level included, and,
   where the constraint has domain parameters, its own parameters. The
   instances are scored independently and add up. Two identical picks simply
-  count twice; this is not an error.
+  count twice; this is not an error. So picking a constraint again adds a
+  second instance: to change a default pick, replace it in the list rather
+  than appending.
 - `x**2 + x**3` is two picks:
 
   ```python
@@ -73,6 +87,11 @@ wheel.
   domain parameters, `score()` also accepts costs that hold the name only once
   (the default `constraint_costs(solution)`), and reads that entry with each
   pick's own knobs.
+- Because of those keys a constraint name must not contain `#`. A
+  `Constraint` subclass named so raises `ValueError` when it is defined; the
+  engine's `ConstraintAssembly` refuses such a component when it is added
+  (`std::invalid_argument`), and `constraint_costs()` refuses the name
+  (`ValueError`).
 - Removed: the "picked more than once" `ValueError` in every package, and
   employee-scheduling's "same rule with the same parameters" refusal.
 - Unchanged: an empty list is still a `ValueError`, unknown names are still
@@ -106,7 +125,19 @@ constraint, or the single total for a global constraint. With exponent `e`,
 | `False` (the literal formula) | `shape(x - offset, e)`, the sign-preserving power | negative, so a reward | contributes `shape(-offset, e)` |
 
 - With `offset=0` both modes are the 0.2.0 `shape(x, e)`, bit for bit.
-- A negative offset in threshold mode adds `|offset|` to every non-zero `x`.
+- A negative offset in threshold mode adds `|offset|` to every non-zero `x`:
+  a fixed charge per unit whose raw cost is not 0 (at least `|offset| ** e`),
+  and nothing for a unit at raw 0. Because the shaping jumps at 0, the engine
+  computes these raw costs exactly: an instance with `clip=True` and
+  `offset < 0` is re-costed from scratch on every unit a move touches, and
+  previewed the same way, instead of accumulating real-valued deltas, where
+  a unit back at 0 could keep a residue of 1e-16 and pay the whole charge. A
+  unit back at raw 0 contributes exactly 0, and incremental scores equal a
+  recompute from scratch. Every other combination keeps the incremental
+  delta path (the literal formula and positive thresholds are continuous at
+  0), and so do groups with whole-number deltas (school timetabling's slot
+  constraints, employee scheduling's assignment rules), which accumulate
+  exactly.
 - The offset has the unit of the raw cost: seconds, minutes, meters, a count,
   and so on, as each package's constraint table states.
 - The level does not change the shaping. The weight is in units of the level
@@ -222,6 +253,9 @@ lists the evaluated units as `"units"`.
   default to `0.0` and `True`, which change nothing. A missing weight, level
   or exponent stays an `AttributeError`, since it is more likely a mistake,
   such as an object still carrying `hard`.
+- That is the duck-typing contract of `score()` / `score_costs()` and the
+  bindings. The `Constraint` classes are stricter: they state every knob, so
+  `offset=None` or `clip=None` there is a `TypeError`.
 - Rewards (knapsack `selected_value_cost`, max-cut `cut_weight_cost`,
   conference diversity, employee-scheduling `desired_*_cost`, the school
   quickstart `teacher_time_efficiency_cost`) take both knobs. A threshold
@@ -289,7 +323,16 @@ lists the evaluated units as `"units"`.
 
 ### Engine (C++, `include/optimaru`)
 
-- `shapeCost(x, exponent, offset, clip)`. `ConstraintMetadata` gains `offset`
+- `shapeCost(x, exponent, offset, clip)`, the one statement of the formula,
+  and `shapingJumpsAtZero(offset, clip)` (`clip && offset < 0`). At reset the
+  calculator routes an instance whose shaping jumps at 0 to the full re-cost
+  dispatch (`kFullRecost`: `cost()` on every touched unit, in batches and
+  through the trial snapshot) unless it is a member of a delta group with
+  `hasIntegralRawDeltas()`, and its LIST previews skip `piecewiseCost()` and
+  run `cost()` on the written-out candidate. Globals are asked `cost()` /
+  `previewCost()` at every score, never accumulated; a global whose total can
+  be fractional should compute it exactly (every global in the 22 use cases
+  keeps integral aggregates or recomputes its total). `ConstraintMetadata` gains `offset`
   (`0.0`) and `clip` (`true`) with the setters `setOffset()` (finite, else
   `std::invalid_argument`) and `setClip()`. Every contribution site uses it:
   the full and incremental scores, the move previews, globals and totals.

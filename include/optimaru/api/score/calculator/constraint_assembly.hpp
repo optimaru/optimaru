@@ -185,10 +185,9 @@ public:
     //   level     a reward can never be Hard; a constraint whose
     //             levelFlippable is false keeps its level (re-stating the
     //             level it already has is accepted as a no-op)
-    // A rule that spans several knobs is checked by the calculator at reset
-    // (std::logic_error), so the setters may come in any order: clip(false)
-    // with an offset != 0 on a level that counts toward the hard score
-    // (DecomposedScoreCalculator::validateLevel).
+    // The rule that spans several knobs (the hard-0 rule, python::
+    // checkLiteralOffset) is checked at reset (validateLevel), so the
+    // setters may come in any order.
 
     ConstraintAssembly& weight(const std::string& name, double weight) & {
         require(name).setWeight(weight);
@@ -235,12 +234,8 @@ public:
         this->exponent(name, exponent);  // the parameter shadows the method
         return std::move(*this);
     }
-    // The shift of the shaping, applied with the exponent (per unit for a
-    // unit constraint, on the total for a global): with clip (the default)
-    // sign(x) * max(0, |x| - offset)^exponent, the threshold; without it
-    // (clip(name, false)) the literal (x - offset)^exponent, sign-preserving,
-    // which rewards every evaluated unit below the offset (shapeCost in
-    // decomposed_score_calculator.hpp).
+    // The offset and clip knobs of the shaping: see shapeCost
+    // (decomposed_score_calculator.hpp) for the formula.
     ConstraintAssembly& offset(const std::string& name, double offset) & {
         require(name).setOffset(offset);
         return *this;

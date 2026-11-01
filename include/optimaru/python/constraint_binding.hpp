@@ -342,11 +342,8 @@ inline void applyKnobs(ConstraintMetadata& constraint, const py::handle& item,
 //             explicit 1.0 (or None) resets a default assembly component
 //             built with another exponent, as the Python score() reads it
 //   offset    0.0 = no shift, else finite (any sign); always applied
-//   clip      True = the threshold sign(x) * max(0, |x| - offset)^exponent,
-//             False = the literal (x - offset)^exponent, per evaluated unit;
-//             always applied. With an offset != 0 it is refused on a level
-//             that counts toward the hard score (checkLiteralOffset, once
-//             all knobs of the pick are re-stated).
+//   clip      True = the threshold, False = the literal formula (shapeCost);
+//             always applied. The hard-0 rule: checkLiteralOffset.
 // (readKnobs above). A wrong type is a TypeError, every other refusal a
 // ValueError, each naming the constraint by its Python name, in the words
 // of the Python base.

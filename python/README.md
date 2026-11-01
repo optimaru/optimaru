@@ -81,7 +81,10 @@ Every constraint takes the same five knobs:
   `clip=True`, the default, it is a threshold: `TravelTimeCost(offset=10,
   exponent=3)` costs `max(0, x - 10)**3` for a vehicle that drives `x` seconds.
   `clip=False` is the literal formula, `(x - 10)**3`, which is negative, a
-  reward, below 10.
+  reward, below 10. A negative threshold, `TravelTimeCost(offset=-60)`, is a
+  fixed charge: `x + 60` for every vehicle that drives at all, 0 for an idle
+  one, and the engine computes the raw cost of such a constraint exactly, so a
+  vehicle back at 0 is never charged.
   Either formula applies per unit: per vehicle, per slot and so on, on every
   unit the constraint evaluates, raw 0 included. It is not one formula over the
   total violation, so with `clip=False` an idle vehicle contributes
@@ -94,7 +97,10 @@ Every constraint takes the same five knobs:
 
 A constraint may be picked several times. Each pick is its own instance with its
 own knobs, and the instances add up: `TravelTimeCost(exponent=2)` and
-`TravelTimeCost(exponent=3)` together cost `x**2 + x**3`. The examples write
+`TravelTimeCost(exponent=3)` together cost `x**2 + x**3`. Picking a constraint
+again adds a second instance, so to change a default pick, replace it in the list
+rather than appending: `[*get_constraints(), TravelTimeCost(weight=10)]` charges
+the travel time 11 times. The examples write
 every pick as a class call; the `constraints` module also has ready-made default
 instances such as `vehicle_capacity_cost`, which is `VehicleCapacityCost()`.
 `constraint_info()` on a use case lists its constraints with their default level
