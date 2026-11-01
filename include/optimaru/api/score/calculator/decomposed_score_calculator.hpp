@@ -359,8 +359,8 @@ struct UnitConstraint : ConstraintMetadata {
 
     // Optional structural grouping contract. Constraints returning the same
     // non-empty key are compiled into one delta evaluator when at least two
-    // compatible constraints are present. Metadata (weight, level, exponent)
-    // remains calculator-owned and therefore fully customizable.
+    // compatible constraints are present. Metadata (weight, level, exponent,
+    // offset, clip) remains calculator-owned and therefore fully customizable.
     virtual const char* deltaGroupKey() const { return nullptr; }
     virtual std::unique_ptr<UnitConstraintDeltaGroup<Solution>> createDeltaGroup() const {
         return nullptr;

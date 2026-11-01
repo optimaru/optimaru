@@ -20,7 +20,7 @@ struct SlotDeltaGroup;
 // member into ONE SlotDeltaGroup evaluate per member change — dense
 // per-lesson tables plus the monolithic (owner, slot) count maps replace the
 // six per-constraint deltaCost calls (which re-scan the slot's members).
-// Metadata (weight / level / exponent) stays calculator-owned, so the knobs
+// Metadata (weight / level / exponent / offset / clip) stays calculator-owned, so the knobs
 // keep working unchanged.
 struct GroupableSlotConstraint : CanonUnitConstraint
 {
