@@ -104,7 +104,7 @@ def test_level_can_be_flipped():
     soft_level = solve([trolley_capacity_cost, order_split_by_trolley_cost])
     assert soft_level.hard == 0 and soft_level.soft < 0
 
-    hard_level = solve([trolley_capacity_cost, OrderSplitByTrolleyCost(hard=True)])
+    hard_level = solve([trolley_capacity_cost, OrderSplitByTrolleyCost(level="hard")])
     assert hard_level.hard < 0
     assert hard_level.soft == 0
 
@@ -115,7 +115,7 @@ def test_unknown_constraint_name_raises():
     class Typo:
         name = "order_split_by_trolley_costs"  # trailing s
         weight = None
-        hard = None
+        level = None
         exponent = 1.0
 
     with pytest.raises(ValueError, match="unknown constraint"):
@@ -152,9 +152,9 @@ def test_spec_subclass_must_name_a_constraint():
 
 
 def test_default_instance_carries_no_overrides():
-    """Module-level instances must keep the defaults (weight=None, hard=None, exponent=1)."""
+    """Module-level instances must keep the defaults (weight=None, level=None, exponent=1)."""
     for spec in get_constraints():
-        assert (spec.weight, spec.hard, spec.exponent) == (None, None, 1.0)
+        assert (spec.weight, spec.level, spec.exponent) == (None, None, 1.0)
     assert get_constraints() == [
         trolley_capacity_cost,
         distance_from_previous_pick_task_cost,
@@ -258,19 +258,19 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     class Negative:
         name = "order_split_by_trolley_cost"
         weight = -2.0
-        hard = None
+        level = None
         exponent = 1.0
 
     class Flat:
         name = "order_split_by_trolley_cost"
         weight = None
-        hard = None
+        level = None
         exponent = 0.0
 
     class Unbounded:
         name = "order_split_by_trolley_cost"
         weight = None
-        hard = None
+        level = None
         exponent = 1.0
         offset = float("inf")
 
@@ -290,8 +290,7 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     [
         ({"weight": True}, "weight must be a number or None, not True"),
         ({"weight": "2"}, "weight must be a number or None, not '2'"),
-        ({"hard": 1}, "hard must be True, False or None, not 1"),
-        ({"hard": "x"}, "hard must be True, False or None, not 'x'"),
+        ({"level": 1}, "level must be a Level, its name or None, not 1"),
         ({"exponent": True}, "exponent must be a number, not True"),
         ({"offset": "5"}, "offset must be a number, not '5'"),
         ({"offset": False}, "offset must be a number, not False"),
@@ -301,7 +300,7 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
 )
 def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
     """The C++ path checks the knob types like _constraint.py: TypeError, the same words."""
-    pick = SimpleNamespace(name="order_split_by_trolley_cost", weight=None, hard=None, exponent=1.0)
+    pick = SimpleNamespace(name="order_split_by_trolley_cost", weight=None, level=None, exponent=1.0)
     for key, value in knobs.items():
         setattr(pick, key, value)
     with pytest.raises(TypeError, match=f"constraint 'order_split_by_trolley_cost': {re.escape(message)}"):
@@ -322,7 +321,7 @@ def test_old_names_are_gone():
         class Old:
             name = old
             weight = None
-            hard = None
+            level = None
             exponent = 1.0
 
         with pytest.raises(ValueError, match="unknown constraint"):
@@ -358,9 +357,9 @@ def test_score_reproduces_the_engine_score_exactly():
 @pytest.mark.parametrize(
     "specs",
     [
-        [TrolleyCapacityCost(hard=False), *get_constraints()[1:]],
+        [TrolleyCapacityCost(level="soft"), *get_constraints()[1:]],
         [*get_constraints()[:3], OrderSplitByTrolleyCost(weight=10, exponent=2.0)],
-        [TrolleyCapacityCost(exponent=2.0), DistanceFromPreviousPickTaskCost(hard=True, weight=0.5)],
+        [TrolleyCapacityCost(exponent=2.0), DistanceFromPreviousPickTaskCost(level="hard", weight=0.5)],
         [*get_constraints(), DistanceFromPreviousPickTaskCost(weight=0.5, exponent=2.0)],
         [
             TrolleyCapacityCost(),

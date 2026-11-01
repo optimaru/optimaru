@@ -283,8 +283,14 @@ def test_scores_match_the_oracle_at_integer_weights(seed):
     rng.shuffle(specs)
     picked: list[Constraint] = []
     for spec in specs[: rng.randint(1, len(specs))]:
-        picked.append(type(spec)(weight=rng.choice([None, 0, 1, 2, 5]), hard=rng.choice([None, True, False])))
-    expected = ref.score_costs(old, [(OLD_OF[spec.name], spec.weight, spec.hard, 1.0) for spec in picked])
+        picked.append(type(spec)(weight=rng.choice([None, 0, 1, 2, 5]), level=rng.choice([None, "hard", "soft"])))
+    expected = ref.score_costs(
+        old,
+        [
+            (OLD_OF[spec.name], spec.weight, {None: None, "hard": True, "soft": False}[spec.level], 1.0)
+            for spec in picked
+        ],
+    )
     assert tuple(score(raw, picked)) == pytest.approx(expected)
     # ... and the engine scores the same picks the same way.
     core = Model.model_validate(data).to_core()
@@ -307,7 +313,7 @@ def test_every_constraint_shapes_like_the_oracle(seed, exponent):
     raw = _cpp_costs(data)
     old = ref.constraint_costs(_dump(data))
     for name, spec_class in SPECS.items():
-        picked = [spec_class(exponent=exponent, hard=False, weight=2)]
+        picked = [spec_class(exponent=exponent, level="soft", weight=2)]
         expected = ref.score_costs(old, [(OLD_OF[name], 2, False, exponent)])
         assert tuple(score(raw, picked)) == pytest.approx(expected), name
         nonzero = sorted(value for value in raw[name]["costs"] if value != 0)

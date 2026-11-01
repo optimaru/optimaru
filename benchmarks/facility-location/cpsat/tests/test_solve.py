@@ -219,14 +219,14 @@ def test_cpsat_defaults_are_the_engine_defaults() -> None:
         assert entry["reward"] == row.reward
         assert entry["default_enabled"] == row.default_enabled
         assert entry["kind"] == "either"  # every facility-location constraint is flippable
-        assert entry["params"] == {"weight": None, "hard": None, "exponent": 1.0, "offset": 0.0, "clip": True}
+        assert entry["params"] == {"weight": None, "level": None, "exponent": 1.0, "offset": 0.0, "clip": True}
 
 
 def test_demoting_capacity_scores_like_the_engine() -> None:
-    """hard=False lands on soft in both solvers: CP-SAT's reported score is the
+    """level="soft" lands on soft in both solvers: CP-SAT's reported score is the
     engine's score of the same solution under the same selection."""
     problem = _parity_problem()
-    selection = [FacilityCapacityCost(hard=False), *get_constraints()[1:]]
+    selection = [FacilityCapacityCost(level="soft"), *get_constraints()[1:]]
     solved = solve(problem, time_limit_seconds=2, constraints=selection)
     engine = score(domain.constraint_costs(solved.to_core()), selection)
     assert (solved.score_hard, solved.score_soft) == pytest.approx(tuple(engine))

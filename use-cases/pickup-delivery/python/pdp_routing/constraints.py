@@ -4,8 +4,8 @@ The default path (`Solver(cfg).solve(plan)`) enables the seven core PDPTW constr
 the per-vehicle route-policy constraints cost 0 while their parameter is 0. Route
 duration, latency, the enclosing-circle radius and the squared order age are opt-in
 objectives with default weight 0.
-This module is the alternative path next to it: pick constraints, change weights, flip
-hard/soft, shape the cost, and pass the list to `solve_with_constraints`.
+This module is the alternative path next to it: pick constraints, change weights, change
+levels, shape the cost, and pass the list to `solve_with_constraints`.
 
 A constraint list reads one way: one class call per constraint::
 
@@ -31,12 +31,13 @@ Every spec takes five knobs:
 - ``weight``   linear multiplier on the constraint cost, in units of its level.
                ``None`` = the C++ component default (``pdp.constraint_info()``
                lists them).
-- ``hard``     ``True`` = hard, ``False`` = soft, ``None`` = the default level.
-               ``UnassignedRequestsCost`` is the one **medium** constraint
-               (folded into the engine's soft level as ``medium * 10^9``);
-               medium is a default-only level: ``hard=True`` charges one hard
-               unit per minute, ``hard=False`` one soft unit per minute, and an
-               explicit ``weight`` stays in medium units.
+- ``level``    ``None`` = the default level, otherwise a ``Level`` or its name
+               (``Level.MEDIUM`` or ``"medium"``). Any flippable constraint may
+               take any of the three levels. ``UnassignedRequestsCost`` is the one
+               **medium** constraint (folded into the engine's soft level as
+               ``medium * 10^9``): ``level="hard"`` charges one hard unit per
+               minute, ``level="soft"`` one soft unit per minute, and a
+               ``weight`` is in units of the level in effect.
 - ``exponent`` sign-preserving power shaping: ``weight * sign(c) * |c| **
                exponent``, per vehicle for the route constraints and on the total
                for the four request-level (global) ones. 2.0 = squared, so
@@ -76,10 +77,11 @@ calculator cannot be cloned into workers). The pair-aware move/ruin operators re
 the plan, not the calculator, so they still run.
 """
 
-from ._constraint import Constraint, Score, score_costs, select
+from ._constraint import Constraint, Level, Score, score_costs, select
 
 __all__ = [
     "Constraint",
+    "Level",
     "Score",
     "score",
     "VehicleCapacityCost",

@@ -89,7 +89,7 @@ solver's `solve` before the engine runs — the engine only fills what is still 
 4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
    `description_en` / `description_ko` to `python/st_timetabling/constraints.py` (plus its
    module-level default instance and its place in `_DEFAULTS`); callers then pick, reweight
-   or flip it: `constraints=get_constraints([..., MyRuleCost(weight=5, hard=True)])`;
+   or flip it: `constraints=get_constraints([..., MyRuleCost(weight=5, level="hard")])`;
 5. mirror it in the CP-SAT model in
    [`benchmarks/school-timetabling/cpsat`](../../benchmarks/school-timetabling/cpsat) (a
    plugin subclassing the spec in `teacher_scheduling/solver/registry.py`; defaults come from

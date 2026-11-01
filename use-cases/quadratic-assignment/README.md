@@ -50,7 +50,7 @@ holds the exact CP-SAT reference.
 The three side constraints are `UnitConstraint`s over the locations (the exponent
 shapes each location's cost); the two objectives are `GlobalConstraint`s on the
 engine's member-change fast path (the exponent shapes the total). Every
-constraint is flippable (`hard=True` / `hard=False`), none is a reward and all
+constraint is flippable (`level="hard"` / `level="soft"`), none is a reward and all
 five are scored by default (`default_enabled`); `quadratic_assignment.constraint_info()`
 reports exactly this table from the C++ components (`kDefaultLevel` /
 `kDefaultWeight`).
@@ -242,7 +242,7 @@ from quadratic_assignment.constraints import FlowDistanceCost, PinnedAssignments
 qap.constraint_info()      # [ConstraintInfo(name='pinned_assignments_cost', default_level='hard', ...), ...]
 qap.solve(problem, time_limit_seconds=1.0, constraints=[*get_constraints()[:-1], FlowDistanceCost(weight=2)])
 raw = qap.constraint_costs(problem)                  # raw costs, re-priced in pure Python:
-score(raw), score(raw, [PinnedAssignmentsCost(hard=False), *get_constraints()[1:]])
+score(raw), score(raw, [PinnedAssignmentsCost(level="soft"), *get_constraints()[1:]])
 # A constraint may be picked several times, each pick with its own knobs; offset / clip
 # shift the shaping (clip=True: only the flow cost beyond 20 counts for the second pick).
 score(raw, [FlowDistanceCost(), FlowDistanceCost(weight=10, offset=20)])
@@ -329,7 +329,7 @@ full bijection.
    `description_en` / `description_ko` to
    `python/quadratic_assignment/constraints.py` (plus its module-level default
    instance); callers then pick, reweight or flip it:
-   `constraints=[..., MyRuleCost(weight=5, hard=True)]`;
+   `constraints=[..., MyRuleCost(weight=5, level="hard")]`;
 5. mirror it in the CP-SAT model in
    [`benchmarks/quadratic-assignment/cpsat`](../../benchmarks/quadratic-assignment/cpsat)
    (a plugin subclassing the spec; defaults come from `constraint_info()`), with an

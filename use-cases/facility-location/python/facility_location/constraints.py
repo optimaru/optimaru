@@ -2,7 +2,7 @@
 
 The default path (`fl.solve(problem)`) enables all three constraints at their default
 weights. This module is the alternative path next to it: pick constraints, change
-weights, flip hard/soft, shape the cost, and pass the list to
+weights, change levels, shape the cost, and pass the list to
 `solve(problem, constraints=...)`.
 
 A constraint list reads one way: one class call per constraint::
@@ -28,7 +28,9 @@ Every spec takes five knobs:
                DistanceFromFacilityCost 6 — the distance 6 is the
                ConstraintWeightOverrides value of the Java solution). The problem
                carries no weights; ``fl.constraint_info()`` reports the defaults.
-- ``hard``     ``True`` = hard, ``False`` = soft, ``None`` = the default level.
+- ``level``    ``None`` = the default level, otherwise ``Level.HARD`` or
+               ``Level.SOFT`` (or the names ``"hard"`` and ``"soft"``). This use
+               case has no medium level.
 - ``exponent`` sign-preserving power shaping per facility: ``weight * sign(c) *
                |c| ** exponent``. 2.0 = squared, so concentrated violations grow
                much costlier.
@@ -58,10 +60,11 @@ mechanically, so there is no hand-maintained alias table — check them with
 `fl.list_constraints()`.
 """
 
-from ._constraint import Constraint, Score, score_costs, select
+from ._constraint import Constraint, Level, Score, score_costs, select
 
 __all__ = [
     "Constraint",
+    "Level",
     "Score",
     "score",
     "FacilityCapacityCost",

@@ -82,7 +82,7 @@ score(raw), score(raw, picks)
 score(raw, [ContentConflictCost(), ContentConflictCost(weight=1, exponent=2, offset=60)])
 ```
 
-The three `*_diversity_cost` rewards are never hard: `hard=True` raises `ValueError`
+The three `*_diversity_cost` rewards are never hard: `level="hard"` raises `ValueError`
 (in `solve`, in `score()` and on the CP-SAT path).
 
 **0.2.0:** every constraint was renamed to a `*_cost` name (`room_conflict` ->

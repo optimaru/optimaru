@@ -23,7 +23,7 @@ plus a response with a per-worker schedule and violation report:
 Everything round-trips through JSON (`ScheduleRequest.model_validate_json`,
 `solution.model_dump_json`), so this doubles as a service API contract. A rule
 in JSON is ``{"name": "max_consecutive_days_cost", "weight": 2, "value": 6}``:
-the spec's ``name``, its knobs (``weight`` / ``hard`` / ``exponent`` /
+the spec's ``name``, its knobs (``weight`` / ``level`` / ``exponent`` /
 ``offset`` / ``clip``) and its domain parameters.
 
 There is ONE class per constraint: the spec in `es_scheduling.constraints`.
@@ -153,7 +153,7 @@ class ShiftModel(BaseModel):
 # bounds from the spec's `bounds`), and `name` as the discriminator. No second
 # field list to drift.
 
-_KNOBS = ("weight", "hard", "exponent", "offset", "clip")
+_KNOBS = ("weight", "level", "exponent", "offset", "clip")
 
 
 _CATALOG: dict[str, Any] | None = None
@@ -182,12 +182,12 @@ _Offset = Annotated[float, Field(allow_inf_nan=False), BeforeValidator(_a_real_n
 class RuleBase(BaseModel):
     """One rule as JSON: the spec's knobs and parameters; `to_spec()` is the spec.
 
-    ``weight`` None = the component's default weight; ``hard`` None = its
-    default level, True = hard, False = soft; ``exponent`` > 0 shapes the cost;
+    ``weight`` None = the component's default weight; ``level`` None = its
+    default level, otherwise "hard" or "soft"; ``exponent`` > 0 shapes the cost;
     ``offset`` (finite, any sign) shifts that shaping and ``clip`` says what
     happens below the offset (True: only what lies beyond it counts; False:
     the literal ``(cost - offset) ** exponent``). A rule is also a valid pick
-    for ``DecomposedCalculator`` (it carries ``name`` / ``weight`` / ``hard`` /
+    for ``DecomposedCalculator`` (it carries ``name`` / ``weight`` / ``level`` /
     ``exponent`` / ``offset`` / ``clip`` and ``params()``). The knobs take the
     values the spec takes: ``weight: true`` or ``"2"`` is refused here as the
     spec refuses it.
@@ -196,8 +196,8 @@ class RuleBase(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     weight: _Weight | None = Field(default=None, description="None = the constraint's default weight")
-    hard: StrictBool | None = Field(
-        default=None, description="None = the default level; true = hard; false = soft (rewards refuse true)"
+    level: Literal["hard", "soft"] | None = Field(
+        default=None, description='None = the default level; "hard" or "soft" (rewards refuse "hard")'
     )
     exponent: _Exponent = Field(default=1.0, description="sign-preserving power shaping of the cost")
     offset: _Offset = Field(
@@ -231,12 +231,11 @@ class RuleBase(BaseModel):
         # the level rules the C++ component declares (constraint_info()).
         spec = self.to_spec()
         row = _catalog()[spec.name]
-        if spec.hard is True and row.reward:
+        if spec.level == "hard" and row.reward:
             raise ValueError(f"constraint {spec.name!r} is a reward (raw cost <= 0) and cannot be hard")
-        wanted = None if spec.hard is None else ("hard" if spec.hard else "soft")
-        if wanted is not None and wanted != row.default_level and not row.level_flippable:
+        if spec.level is not None and spec.level != row.default_level and not row.level_flippable:
             raise ValueError(
-                f"constraint {spec.name!r} is always {row.default_level}; hard={spec.hard!r} is not allowed"
+                f"constraint {spec.name!r} is always {row.default_level}; level={str(spec.level)!r} is not allowed"
             )
         return self
 

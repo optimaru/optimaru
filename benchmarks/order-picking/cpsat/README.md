@@ -8,7 +8,7 @@ the same name (`TrolleyCapacityCost`, `DistanceFromPreviousPickTaskCost`,
 `DistanceFromLastPickTaskToPathOriginCost`, `OrderSplitByTrolleyCost`, in
 `list_constraints()` order). Their default level and weight come from the
 engine's `order_picking.constraint_info()`, so the catalog cannot drift from the
-C++ components (`tests/test_solve.py` checks it); `hard=False` / `hard=True`
+C++ components (`tests/test_solve.py` checks it); `level="soft"` / `level="hard"`
 moves a term to the soft / hard level on both solvers. Like every CP-SAT
 reference, `exponent != 1` and non-integer weights are rejected.
 

@@ -196,7 +196,12 @@ def test_constraint_costs_and_default_score_equal_the_oracle(name, data):
 
 def _old_selection(specs: list[Constraint]) -> list[dict]:
     return [
-        {"name": OLD_OF[spec.name], "weight": spec.weight, "hard": spec.hard, "exponent": spec.exponent}
+        {
+            "name": OLD_OF[spec.name],
+            "weight": spec.weight,
+            "hard": {None: None, "hard": True, "soft": False}[spec.level],
+            "exponent": spec.exponent,
+        }
         for spec in specs
     ]
 
@@ -207,8 +212,8 @@ def _random_selection(rng: random.Random) -> list[Constraint]:
     selection = []
     for spec in picked:
         weight = rng.choice([None, 0, 1, 2, 5])
-        hard = rng.choice([None, False]) if spec.name == "cut_weight_cost" else rng.choice([None, True, False])
-        selection.append(type(spec)(weight=weight, hard=hard))
+        level = rng.choice([None, "soft"]) if spec.name == "cut_weight_cost" else rng.choice([None, "hard", "soft"])
+        selection.append(type(spec)(weight=weight, level=level))
     return selection
 
 
@@ -287,7 +292,7 @@ def test_a_hard_reward_is_refused_where_0_1_5_scored_it():
     dumped = _dump(data)
     assert ref.score_costs(ref.constraint_costs(dumped), [{"name": "maximize_cut_weight", "hard": True}]) == (5, 0.0)
     with pytest.raises(ValueError, match="is a reward"):
-        score(max_cut.constraint_costs(Model.model_validate(data)), [CutWeightCost(hard=True)])
+        score(max_cut.constraint_costs(Model.model_validate(data)), [CutWeightCost(level="hard")])
 
 
 def test_a_partial_partition_is_refused_where_0_1_5_scored_it():

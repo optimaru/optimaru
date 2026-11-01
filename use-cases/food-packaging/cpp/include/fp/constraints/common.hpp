@@ -69,9 +69,9 @@ namespace fp
 // `exponent` / `offset` / `clip`, or by name through ConstraintAssembly
 // (weight / hard / soft / exponent / offset / clip). A name may be held
 // several times (ConstraintAssembly::addInstances): each instance has its own
-// knobs and the instances add up. Medium is a default-only level: hard() / soft() move a medium
-// component to 1 hard / 1 soft unit per raw unit, and an explicit weight
-// keeps it on the medium level, in medium units. The monolithic calculators
+// knobs and the instances add up. hard() / soft() move a medium component to
+// 1 hard / 1 soft unit per raw unit, and a weight is in units of the level in
+// effect. The monolithic calculators
 // read the same kDefaultWeight constants, which is why the default assembly
 // scores bit-for-bit like them.
 //

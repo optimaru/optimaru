@@ -36,7 +36,7 @@ carries the same load. The first two are unit constraints (one cost per team, so
 shapes per team); the two imbalance constraints are global (one total, shaped as a whole).
 The rows are in `list_constraints()` order, and `tournament_scheduling.constraint_info()`
 reports exactly this table from the C++ components (`kDefaultLevel` / `kDefaultWeight`):
-every constraint is flippable (`hard=True` / `hard=False`), none is a reward and all four
+every constraint is flippable (`level="hard"` / `level="soft"`), none is a reward and all four
 are scored by default (`default_enabled`). The medium level folds into the engine's soft
 level as `medium x 1e6` (`MEDIUM_SCALE`, `kMediumFold` in `cpp/include/ts/domain.hpp`); a
 medium weight is in medium units.
@@ -52,8 +52,8 @@ now `TeamUnavailabilityCost`, so it no longer shares its name with the
 `UnavailabilityPenalty` fact (which, like `UnavailabilityPenaltyModel` and the
 `unavailability_penalties` field, keeps its name); the C++ component is
 `TeamUnavailabilityCost` (was `UnavailabilityPenaltyConstraint`). The medium constraint now
-defaults to weight 1 in medium units (was 1e6 on the soft level), so `hard=True` charges 1
-hard per raw unit of unfairness (the total, rounded; was 1e6 per unit), `hard=False` demotes
+defaults to weight 1 in medium units (was 1e6 on the soft level), so `level="hard"` charges 1
+hard per raw unit of unfairness (the total, rounded; was 1e6 per unit), `level="soft"` demotes
 it to soft at 1 per raw unit (was a no-op that kept the 1e6), and an explicit `weight` is in
 medium units (was plain soft units that dropped the fold). `constraint_info()` /
 `ConstraintInfo` are new. Raw costs and the default score are unchanged.
@@ -138,7 +138,7 @@ solver's `solve` before the engine runs — the engine only fills what is still 
 4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
    `description_en` / `description_ko` to `python/tournament_scheduling/constraints.py` (plus
    its module-level default instance); callers then pick, reweight or flip it:
-   `constraints=get_constraints([..., MyRuleCost(weight=5, hard=True)])`;
+   `constraints=get_constraints([..., MyRuleCost(weight=5, level="hard")])`;
 5. mirror it in the CP-SAT model in
    [`benchmarks/tournament-scheduling/cpsat`](../../benchmarks/tournament-scheduling/cpsat) (a plugin
    subclassing the spec; defaults come from `constraint_info()`) so the benchmark stays like

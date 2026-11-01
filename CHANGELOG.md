@@ -1,5 +1,87 @@
 # Changelog
 
+## Unreleased
+
+**This release breaks compatibility.** The `hard` knob is gone; `level` replaces
+it on every constraint, in all 22 use cases. No alias is kept: `hard=` raises
+`TypeError`.
+
+- `level` is `None` (the default level) or a `Level`: `Level.HARD`,
+  `Level.MEDIUM` or `Level.SOFT`, exported from each package's `constraints`
+  module. The names `"hard"`, `"medium"` and `"soft"` work too, which is what a
+  JSON selection sends. `hard=True` is now `level="hard"`, and `hard=False` is
+  `level="soft"`.
+- Medium is no longer a default-only level. On the eight use cases with a medium
+  level (bed allocation, food packaging, meeting scheduling, pickup-delivery,
+  project-job scheduling, task assigning, tournament scheduling and vehicle
+  routing), any flippable constraint can move onto it. Its weight is in medium
+  units, like every weight is in units of the level in effect.
+- `level="medium"` on a use case without a medium level raises `ValueError`
+  before the solve starts. A reward still refuses `"hard"`, and also refuses
+  `"medium"` on task assigning, where medium counts toward the hard score. A
+  constraint with `level_flippable` false still refuses any change of level.
+- Knob errors changed with it: a non-string level raises `TypeError` and an
+  unknown name raises `ValueError`. numpy booleans are no longer accepted, since
+  a level is not a boolean.
+- Every path follows the same rules: the solver, `score()` / `score_costs()`, the
+  `DecomposedCalculator.add()` of employee and school timetabling (`level=`
+  replaces `hard=`), employee scheduling's JSON rules and the CP-SAT benchmarks,
+  whose catalog rows now report `{"weight", "level", "exponent"}`.
+- The school timetabling CP-SAT constraints rename their computed `level`
+  property to `effective_level`, next to `effective_weight`, because `level` is
+  now the knob.
+
+Two additions to the constraint contract, which grows to five knobs (`weight`,
+`level`, `exponent`, `offset`, `clip`); a selection that leaves the new knobs
+alone scores exactly as before.
+
+### Repeated constraints
+
+- A constraint may be picked several times, in every package and on every path
+  (`solve(constraints=...)`, `solve_request(..., constraints=...)`,
+  `get_constraints(...)`, `Solver.solve_with_constraints`,
+  `constraint_costs(solution, picks)`, `score(costs, picks)`, the CP-SAT
+  references). Each pick is its own instance with its own knobs, its own level
+  included (and, where the constraint has parameters, its own parameters),
+  scored independently; the instances add up, and identical picks simply count
+  twice. `x**2 + x**3` is two picks, `exponent=2` and `exponent=3`.
+- `constraint_costs()` keys the first instance of a name `name` and the k-th
+  `name#k`; `instance_keys()` derives the same keys from a pick list. `score()`
+  reads `name#k`, or, for a constraint without parameters, the `name` entry with
+  the k-th pick's own knobs.
+- Removed: the "picked more than once" refusal (and employee scheduling's "same
+  parameters" refusal). An empty list is still an error. School timetabling's
+  `Assembly` builder keeps its replace-by-name semantics; a plain list repeats.
+- C++: `ConstraintAssembly::addInstance()` / `emplaceInstance()` /
+  `addInstances()`; `python::applyConstraints` takes a callable returning the
+  default assembly.
+
+### offset and clip
+
+- Two keyword-only knobs on every constraint: `offset` (finite, any sign,
+  default `0.0`) and `clip` (default `True`). A raw cost `x` (per unit, or a
+  global's total, like `exponent`) is shaped as
+  `sign(x) * max(0, |x| - offset) ** exponent` with `clip=True` (the threshold)
+  or `shape(x - offset, exponent)` with `clip=False` (the literal formula, which
+  charges every unit the constraint evaluates, a raw 0 included, and acts as a
+  reward below the offset). `TravelTimeCost(offset=10, exponent=3)` is
+  `max(0, x - 10)**3`; `TravelTimeCost(offset=10, exponent=3, clip=False)` is
+  `(x - 10)**3`. The level does not change the shaping: the weight is in units
+  of the level in effect, as before.
+- `constraint_costs()` entries report `offset` and `clip`, and a scoped
+  constraint's evaluated `units`. The CP-SAT references take integral offsets
+  (exponent 1 only, as before); the catalog `params` read
+  `{weight, level, exponent, offset: 0.0, clip: True}`.
+- Validation in the Python base and the C++ bindings alike:
+  `offset must be a number`, `offset must be finite`,
+  `clip must be True or False`.
+
+### Docs
+
+- Examples use class calls only (`VehicleCapacityCost()`,
+  `TravelTimeCost(weight=10)`); the module-level default instances stay
+  (`vehicle_capacity_cost` is `VehicleCapacityCost()`).
+
 ## 0.2.0
 
 0.2.0 puts every use case on one constraint contract. Every constraint has a

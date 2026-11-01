@@ -82,11 +82,11 @@ each from the C++ components (`kDefaultLevel` / `kDefaultWeight`):
 
 Pick, reweight or flip them through `bed_allocation.constraints`
 (`ba.solve(plan, constraints=[BedConflictCost(), UnassignedStaysCost(weight=3), ...])`).
-Every spec takes `weight=None` (the C++ default, in units of its level), `hard=None` (the
-default level; `True` = hard, `False` = soft), `exponent=1.0` and the keyword-only
+Every spec takes `weight=None` (the C++ default, in units of its level), `level=None` (the
+default level, otherwise a `Level` or its name), `exponent=1.0` and the keyword-only
 `offset=0.0` / `clip=True` (`clip=True` counts only what lies beyond the offset,
 `clip=False` shapes `x - offset` as it is). `unassigned_stays_cost` is the only medium
-constraint: `hard=True` charges one hard unit per night, `hard=False` one soft unit per
+constraint: `level="hard"` charges one hard unit per night, `level="soft"` one soft unit per
 night (outside the 10^9 fold), and an explicit weight stays in medium units. A constraint
 may be picked several times (since 0.3.0); each pick is its own instance with its own
 knobs, the instances add up, and `constraint_costs(plan, picks)` keys the k-th pick
@@ -104,7 +104,7 @@ knobs, the instances add up, and `constraint_costs(plan, picks)` keys the k-th p
 `department_specialty_not_first_priority` -> `department_specialty_priority_cost`,
 `preferred_patient_equipment` -> `preferred_patient_equipment_cost`; spec classes and
 module-level instances likewise). `unassigned_stays_cost` defaults to weight 1 in medium
-units (before: a soft weight of 10^9) and `hard=False` now demotes it to soft in the
+units (before: a soft weight of 10^9) and `level="soft"` now demotes it to soft in the
 engine as well. The package re-exports `ConstraintInfo` / `constraint_info()`. Raw costs
 and the default score are unchanged.
 

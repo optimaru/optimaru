@@ -75,7 +75,7 @@ contribution = −( weight × sign(c)·|c|^exponent )
 to the hard or soft level. A penalty (`c > 0`) subtracts from the score. A reward
 (`DesiredDayCost`, `DesiredShiftCost`) has a negative cost and adds to it, which is
 why a good schedule can show a positive soft score. A reward is always soft:
-`hard=True` on it raises `ValueError`.
+`level="hard"` on it raises `ValueError`.
 
 **Worked example.** `-602hard/357.34soft`, the fixed instance in
 `tests/_reference.py`:
@@ -98,7 +98,7 @@ be met or the budget was too short; `constraint_totals()` shows which rule is st
 - `hard` is always a whole number: each (employee, rule) hard contribution is
   rounded, so fractional weights still give integer totals. `soft` may be
   fractional.
-- `weight` scales a rule linearly, `hard=True/False` moves it between levels, and
+- `weight` scales a rule linearly, `level` moves it between levels, and
   `exponent` bends it: with `exponent=2.0`, one employee with 4 violation units
   costs 16, while four employees with 1 unit each cost 4.
 - Units differ per rule (counts or minutes). Pick weights to convert them into one
@@ -146,7 +146,7 @@ Every rule takes the same five knobs, plus its own options:
 | knob | meaning |
 |---|---|
 | `weight=None` | how much one unit of violation hurts; `None` is the rule's default weight (1 for every rule here), `UndesiredDayCost(weight=2.0)` hurts twice as much |
-| `hard=None` | `True` makes it a must (hard), `False` a nice-to-have (soft), `None` keeps the rule's default level; a reward refuses `True` |
+| `level=None` | `"hard"` makes it a must, `"soft"` a nice-to-have, `None` keeps the rule's default level; a reward refuses `True` |
 | `exponent=1.0` | `2.0` squares each person's violation, so one person suffering a lot is much worse than many suffering a little |
 | `offset=0.0` | (keyword) shifts that shaping per person (a global rule: its total); `UndesiredDayCost(offset=120)` counts only the undesired minutes beyond two hours |
 | `clip=True` | (keyword) `True` counts only what lies beyond the offset, `max(0, c - offset) ** exponent`; `False` shapes `c - offset` as it is, so everyone the rule evaluates below the offset lowers the penalty (a worker-scoped rule evaluates its workers only) |
@@ -237,7 +237,7 @@ for total in calc.constraint_totals():
 ```
 
 The same rules by name: `calc = DecomposedCalculator(); calc.add("day_pattern_cost",
-pattern="Location A,OFF,Location B")` (weight, hard and exponent as keyword
+pattern="Location A,OFF,Location B")` (weight, level and exponent as keyword
 arguments, `weight=None` = the default). `es.list_constraints()` lists every name.
 
 ### 0.2.0
@@ -281,7 +281,7 @@ arguments, `weight=None` = the default). `es.list_constraints()` lists every nam
   `weekly_minutes_gap_cost`, `location_imbalance_cost`, `worker_pairing_cost`)
   refuse them, even as `null`; in 0.1.5 every rule accepted them.
 - `weight=None` everywhere (also `DecomposedCalculator.add`); the defaults come
-  from C++ (`constraint_info()`). The two rewards refuse `hard=True`.
+  from C++ (`constraint_info()`). The two rewards refuse `level="hard"`.
 - New: `constraint_costs(schedule, constraints)`, `constraint_info()`, the 10
   rule-only constraints as spec classes, `UndesiredDayCost.per_day`,
   `DesiredDayCost.per_day`, `MaxWeeklyMinutesCost.week_anchor`,
@@ -330,7 +330,7 @@ print(solution.model_dump_json())        # ready to send over the wire
 
 `ScheduleRequest.model_validate_json(...)` accepts the same JSON back: the rule
 list is a discriminated union generated from the specs, so
-`{"name": "max_consecutive_days_cost", "value": 6, "hard": false}` picks the right
+`{"name": "max_consecutive_days_cost", "value": 6, "level": "soft"}` picks the right
 rule model, and `rule.to_spec()` is the `MaxConsecutiveDaysCost` it states.
 `solution.rule_totals` explains the score per rule instance (`name`, `label`,
 `cost`, `level`).
@@ -430,7 +430,7 @@ Every rule ships its own incremental evaluation: when the solver moves one shift
 between two employees, only the change is recomputed
 (`UnitConstraint::deltaCost`), and rules precompute lookup tables once per solve
 (`UnitConstraint::onReset`). See the use case's
-[README](../README.md#extending) for the steps. Weights, hard/soft flips and
+[README](../README.md#extending) for the steps. Weights, level changes and
 exponents need no code.
 
 ## Files

@@ -24,7 +24,7 @@ with optional item colours and conflict pairs, on this repository's C++ engine
 | `item_conflict_cost` | `ItemConflictCost` | hard | 1 | per bin: the listed conflict pairs with both items in it |
 | `used_bins_cost` | `UsedBinsCost` (global) | soft | 1 | the number of bins holding at least one item |
 
-Every constraint is flippable (`hard=True` / `hard=False`), none is a reward and all
+Every constraint is flippable (`level="hard"` / `level="soft"`), none is a reward and all
 four are scored by default (`default_enabled`); `bin_packing.constraint_info()`
 reports exactly this table from the C++ components (`kDefaultLevel` /
 `kDefaultWeight`). Unassigned items contribute nothing.
@@ -285,7 +285,7 @@ different heuristic is a different `constructBins` order or rule.
 4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
    `description_en` / `description_ko` to `python/bin_packing/constraints.py` (plus its
    module-level default instance); callers then pick, reweight or flip it:
-   `constraints=[..., MyRuleCost(weight=5, hard=True)]`;
+   `constraints=[..., MyRuleCost(weight=5, level="hard")]`;
 5. mirror it in the CP-SAT model in
    [`benchmarks/bin-packing/cpsat`](../../benchmarks/bin-packing/cpsat) (a plugin
    subclassing the spec; defaults come from `constraint_info()`) and extend its

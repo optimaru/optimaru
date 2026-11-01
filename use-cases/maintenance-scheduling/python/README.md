@@ -33,7 +33,7 @@ Score (HardSoftScore), at the default weights:
 The constraint names carry a `_cost` suffix since 0.2.0 (`crew_conflict` ->
 `crew_conflict_cost`, ...; the job fields `min_start_date` / `max_end_date` keep their
 names). Pick, re-weight or flip constraints with `maintenance_scheduling.constraints`, and read
-the defaults with `mnt.constraint_info()`. Each spec takes `(weight=None, hard=None,
+the defaults with `mnt.constraint_info()`. Each spec takes `(weight=None, level=None,
 exponent=1.0)` and the keyword-only `offset=0.0` / `clip=True`, and a constraint may be
 picked several times, each pick with its own knobs:
 

@@ -74,9 +74,9 @@ total per schedule), scored by default and weighed in minutes.
 `conference_scheduling.constraint_info()` reports exactly this table from the C++
 components (`kDefaultLevel` / `kDefaultWeight`), and the monolithic calculators read the
 same constants. The three `*_diversity_cost` rows are **rewards**: their raw cost is <= 0,
-they are never hard (`hard=True` raises `ValueError` on both solvers) and their level is
+they are never hard (`level="hard"` raises `ValueError` on both solvers) and their level is
 not flippable (`level_flippable=False`). Every other constraint flips both ways
-(`hard=True` / `hard=False`). `audience_type_diversity_cost` rewards same-timeslot pairs
+(`level="hard"` / `level="soft"`). `audience_type_diversity_cost` rewards same-timeslot pairs
 that SHARE an audience type, despite its name; 0.2.0 keeps that arithmetic (rename only).
 `exponent` shapes the one total of each constraint (they are all global).
 
@@ -238,7 +238,7 @@ solver's `solve` before the engine runs — the engine only fills what is still 
 4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
    `description_en` / `description_ko` to `python/conference_scheduling/constraints.py`
    (plus its module-level default instance); callers then pick, reweight or flip it:
-   `constraints=get_constraints([..., MyRuleCost(weight=5, hard=True)])`;
+   `constraints=get_constraints([..., MyRuleCost(weight=5, level="hard")])`;
 5. mirror it in the CP-SAT model in
    [`benchmarks/conference-scheduling/cpsat`](../../benchmarks/conference-scheduling/cpsat) (a
    plugin subclassing the spec; defaults come from `constraint_info()`) so the benchmark

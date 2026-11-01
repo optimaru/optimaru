@@ -49,7 +49,7 @@ def selection(plugins: Sequence[RulePlugin]) -> list[ConstraintConfig]:
         ConstraintConfig(
             name=plugin.name,
             weight=plugin.weight,
-            hard=plugin.hard,
+            level=None if plugin.level is None else str(plugin.level),
             offset=int(plugin.offset) * plugin.scale,
             clip=plugin.clip,
         )
@@ -105,7 +105,7 @@ def solve(
             model.add(unassigned[s] == 0)
 
     registry = registry_for(rules)
-    # Each plugin is itself the selection (name, weight, hard, offset, clip);
+    # Each plugin is itself the selection (name, weight, level, offset, clip);
     # the defaults come from the engine's constraint_info() rows. A repeated
     # rule is its own plugin "<name>#<k>", so it adds its own terms.
     objective = registry.objective(model, ("hard", "soft"), selection(registry.plugins))

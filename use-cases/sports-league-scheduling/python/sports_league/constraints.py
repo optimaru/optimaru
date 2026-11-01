@@ -2,7 +2,7 @@
 
 The default path (`sl.solve(schedule)`) enables all ten constraints at their default
 weights. This module is the alternative path next to it: pick constraints, change
-weights, flip hard/soft, shape the cost, and pass the list to
+weights, change levels, shape the cost, and pass the list to
 `solve(schedule, constraints=...)`.
 
 A constraint list reads one way: one class call per constraint::
@@ -26,7 +26,9 @@ Every spec takes five knobs:
 - ``weight``   linear multiplier on the constraint cost. ``None`` = the component
                default (1 for every constraint but WorkdayClassicMatchesCost,
                whose default is 1000). ``sl.constraint_info()`` reports the defaults.
-- ``hard``     ``True`` = hard, ``False`` = soft, ``None`` = the default level.
+- ``level``    ``None`` = the default level, otherwise ``Level.HARD`` or
+               ``Level.SOFT`` (or the names ``"hard"`` and ``"soft"``). This use
+               case has no medium level.
 - ``exponent`` sign-preserving power shaping: ``weight * sign(c) * |c| **
                exponent``. 2.0 = squared, so concentrated violations grow much
                costlier. The three unit constraints (StartToAwayHopCost,
@@ -61,10 +63,11 @@ Module-level instance names use the same snake_case, so they match the strings
 `list_constraints()` prints.
 """
 
-from ._constraint import Constraint, Score, score_costs, select
+from ._constraint import Constraint, Level, Score, score_costs, select
 
 __all__ = [
     "Constraint",
+    "Level",
     "Score",
     "score",
     "StartToAwayHopCost",
@@ -342,7 +345,7 @@ def score(costs: dict, constraints: list[Constraint] | None = None) -> Score:
     each unit contributes ``weight * shape(cost, exponent, offset, clip)`` and hard
     contributions are **rounded per unit** before summing (the same order as the
     engine's applyRaw; rounding the total afterwards gives different values).
-    ``weight=None`` / ``hard=None`` read the entry's default weight and level. A
+    ``weight=None`` / ``level=None`` read the entry's default weight and level. A
     second pick of a constraint reads the same raw costs with its own knobs.
 
     When ``constraints`` is given, only those constraints are scored — the same

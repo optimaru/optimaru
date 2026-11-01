@@ -112,7 +112,7 @@ def test_level_can_be_flipped():
     soft_level = solve([*picks, before_ideal_end_date_cost])
     assert soft_level.hard == 0
 
-    hard_level = solve([*picks, type(before_ideal_end_date_cost)(hard=True)])
+    hard_level = solve([*picks, type(before_ideal_end_date_cost)(level="hard")])
     assert hard_level.soft == 0
 
 
@@ -122,7 +122,7 @@ def test_unknown_constraint_name_raises():
     class Typo:
         name = "tag_conflict_costs"  # trailing s
         weight = None
-        hard = None
+        level = None
         exponent = 1.0
 
     with pytest.raises(ValueError, match="unknown constraint"):
@@ -143,7 +143,7 @@ def test_spec_subclass_must_name_a_constraint():
 
 
 def test_module_level_instances_keep_every_default():
-    """Module-level instances must keep the defaults (weight=None, hard=None, exponent=1)."""
+    """Module-level instances must keep the defaults (weight=None, level=None, exponent=1)."""
     for spec in (
         min_start_date_cost,
         max_end_date_cost,
@@ -152,7 +152,7 @@ def test_module_level_instances_keep_every_default():
         crew_conflict_cost,
         tag_conflict_cost,
     ):
-        assert (spec.weight, spec.hard, spec.exponent) == (None, None, 1.0)
+        assert (spec.weight, spec.level, spec.exponent) == (None, None, 1.0)
     assert [spec.name for spec in get_constraints()] == [
         "min_start_date_cost",
         "max_end_date_cost",
@@ -267,19 +267,19 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     class Negative:
         name = "tag_conflict_cost"
         weight = -2.0
-        hard = None
+        level = None
         exponent = 1.0
 
     class Flat:
         name = "tag_conflict_cost"
         weight = None
-        hard = None
+        level = None
         exponent = 0.0
 
     class Unbounded:
         name = "tag_conflict_cost"
         weight = None
-        hard = None
+        level = None
         exponent = 1.0
         offset = float("inf")
 
@@ -297,8 +297,7 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     [
         ({"weight": True}, "weight must be a number or None, not True"),
         ({"weight": "2"}, "weight must be a number or None, not '2'"),
-        ({"hard": 1}, "hard must be True, False or None, not 1"),
-        ({"hard": "x"}, "hard must be True, False or None, not 'x'"),
+        ({"level": 1}, "level must be a Level, its name or None, not 1"),
         ({"exponent": True}, "exponent must be a number, not True"),
         ({"offset": "5"}, "offset must be a number, not '5'"),
         ({"offset": False}, "offset must be a number, not False"),
@@ -308,7 +307,7 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
 )
 def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
     """The C++ path checks the knob types like _constraint.py: TypeError, the same words."""
-    pick = SimpleNamespace(name="tag_conflict_cost", weight=None, hard=None, exponent=1.0)
+    pick = SimpleNamespace(name="tag_conflict_cost", weight=None, level=None, exponent=1.0)
     for key, value in knobs.items():
         setattr(pick, key, value)
     with pytest.raises(TypeError, match=f"constraint 'tag_conflict_cost': {re.escape(message)}"):
@@ -331,7 +330,7 @@ def test_old_names_are_gone():
         class Old:
             name = old
             weight = None
-            hard = None
+            level = None
             exponent = 1.0
 
         with pytest.raises(ValueError, match="unknown constraint"):
@@ -455,9 +454,9 @@ def test_score_reproduces_the_engine_score_exactly():
     [
         None,
         [crew_conflict_cost, TagConflictCost(weight=10_000)],
-        [MaxEndDateCost(hard=False), min_start_date_cost, crew_conflict_cost, after_ideal_end_date_cost],
+        [MaxEndDateCost(level="soft"), min_start_date_cost, crew_conflict_cost, after_ideal_end_date_cost],
         [min_start_date_cost, max_end_date_cost, crew_conflict_cost, TagConflictCost(exponent=2.0)],
-        [CrewConflictCost(exponent=2.0), BeforeIdealEndDateCost(hard=True, weight=0.5), tag_conflict_cost],
+        [CrewConflictCost(exponent=2.0), BeforeIdealEndDateCost(level="hard", weight=0.5), tag_conflict_cost],
         [*get_constraints(), TagConflictCost(weight=100, exponent=2.0), MinStartDateCost(weight=3)],
         [
             MinStartDateCost(offset=1),

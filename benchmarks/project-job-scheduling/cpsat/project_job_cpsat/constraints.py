@@ -5,7 +5,7 @@ weight come from the engine's ``project_job.constraint_info()`` (the C++
 components' kDefaultLevel / kDefaultWeight), so they are not restated here.
 The medium constraint (``project_delay_cost``) lands on the CP-SAT medium level
 at weight 1, in medium units, exactly like the engine (whose domain folds
-medium into soft at 10^9); ``hard=False`` demotes it to soft on both paths.
+medium into soft at 10^9); ``level="soft"`` demotes it to soft on both paths.
 
 Offsets and repeats: all four engine constraints are global, so every plugin adds
 exactly one term, its total (``terms_per_unit``): a pick's ``offset`` / ``clip``

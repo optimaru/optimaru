@@ -81,7 +81,7 @@ That is the `list_constraints()` order: the sixteen per-vehicle unit constraints
 and `squared_order_age_cost` price the pool, the others evaluate the vehicles alone),
 then the four request-level globals. `pdp_routing.constraint_info()` reports exactly this table
 from the C++ components (`kDefaultLevel` / `kDefaultWeight`). Every constraint is
-flippable (`hard=True` / `hard=False`), none is a reward, and every one at a weight
+flippable (`level="hard"` / `level="soft"`), none is a reward, and every one at a weight
 above 0 is scored by default (`default_enabled`); the four opt-in objectives
 (weight 0) are measured but move no score until given a weight. The route-policy
 constraints cost 0 while their vehicle field is 0. The seven core rules
@@ -93,8 +93,8 @@ constraints cost 0 while their vehicle field is 0. The seven core rules
 domain declares its fold once (`kMediumFold = intoSoft(10^9)` in `domain.hpp`):
 the engine compares `HardSoftScore`, so medium lands in soft as
 `medium * 10^9 + soft`, which keeps the 3-level `Score` lexicographic. Its weight
-is in medium units (default 1, the same as the CP-SAT reference's). `hard=True`
-charges one hard unit per minute; `hard=False` one soft unit per minute, in both
+is in medium units (default 1, the same as the CP-SAT reference's). `level="hard"`
+charges one hard unit per minute; `level="soft"` one soft unit per minute, in both
 solvers; an explicit weight stays in medium units. `constraint_costs()` carries
 `"medium_fold": {"kind": "into_soft", "unit": 1e9}` on every entry, so
 `pdp_routing.constraints.score()` folds exactly like the engine. A solve with
@@ -162,8 +162,8 @@ becomes `vehicle_max_end_time_cost` so the two do not clash. The model FIELDS ke
 their names (`max_stops`, `pinned_stops`, `required_vehicle`, `max_travel_time`,
 `max_route_duration`, `max_end_time`, `max_route_radius_meters`). Other changes:
 `unassigned_requests_cost` defaults to weight 1 in medium units (it was 10^9 in
-soft units), `hard=False` on it now demotes it to soft in the engine as in CP-SAT
-(it used to be a no-op relabel), and `hard=True` charges 1 hard unit per minute
+soft units), `level="soft"` on it now demotes it to soft in the engine as in CP-SAT
+(it used to be a no-op relabel), and `level="hard"` charges 1 hard unit per minute
 (it used to charge 10^9); the `enclosing_circle_radius_cost` default instance no
 longer passes `weight=0` (the C++ default is 0); `constraint_info()` /
 `ConstraintInfo` are new. Raw costs and the default score are unchanged.
@@ -199,7 +199,7 @@ uses the same weight. `pinned_stops_cost` uses `ScoreCalculator::kPinnedPenalty`
 (1e12), far above what the other hard rules total on real input, so no trade
 between them moves a pinned stop. If a result breaks a pin anyway, its `score`
 shows it in that unit. The CP-SAT reference enforces the three coupling rules
-structurally and refuses `hard=False` or another weight for them; the engine
+structurally and refuses `level="soft"` or another weight for them; the engine
 keeps them flippable.
 
 ## Why the pair-aware operators exist
@@ -350,7 +350,7 @@ enclosing-circle helpers in `route_geometry.hpp`):
 4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
    `description_en` / `description_ko` to `python/pdp_routing/constraints.py` (plus its
    module-level default instance); callers then pick, reweight or flip it:
-   `constraints=[..., MyRuleCost(weight=5, hard=True)]`;
+   `constraints=[..., MyRuleCost(weight=5, level="hard")]`;
 5. mirror it in the CP-SAT model in
    [`benchmarks/pickup-delivery/cpsat`](../../benchmarks/pickup-delivery/cpsat) (a plugin
    subclassing the spec; defaults come from `constraint_info()`) so the benchmark stays like

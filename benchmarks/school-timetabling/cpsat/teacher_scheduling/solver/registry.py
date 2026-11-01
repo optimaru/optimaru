@@ -4,7 +4,7 @@ Each built-in constraint is a subclass of the engine's spec of the same
 constraint (`st_timetabling.constraints`): one name per constraint across the
 engine, this CP-SAT reference, the server and the timetable penalties
 (`unassigned_lessons_cost`, `class_conflict_cost`, ... `parallel_groups_cost`),
-and the same five knobs, ``(weight=None, hard=None, exponent=1.0, *,
+and the same five knobs, ``(weight=None, level=None, exponent=1.0, *,
 offset=0.0, clip=True)``. The defaults (level, weight, flippability) are the
 engine's — read from
 `st_timetabling.constraint_info()`, the C++ components' kDefaultLevel /
@@ -22,7 +22,7 @@ term named `name`.
     timetable = solve(
         problem,
         config,
-        constraints=merge(default_constraints(), UnassignedLessonsCost(hard=False, weight=10_000)),
+        constraints=merge(default_constraints(), UnassignedLessonsCost(level="soft", weight=10_000)),
     )
 
 The knobs on the CP-SAT path:
@@ -31,11 +31,11 @@ The knobs on the CP-SAT path:
                (CP-SAT objectives are integral). On a hard constraint the
                weight only switches it: 0 leaves it out, anything else
                enforces it.
-- ``hard``     ``None`` = the default level. ``True`` on a soft constraint
-               forbids every violation (``model.add(expr == 0)``); ``False``
+- ``level``    ``None`` = the default level. ``"hard"`` on a soft constraint
+               forbids every violation (``model.add(expr == 0)``); ``"soft"``
                on ``unassigned_lessons_cost`` is partial timetabling (at most
                the weekly periods, the shortfall a penalty). The other hard
-               constraints are model constraints here and refuse ``False``;
+               constraints are model constraints here and refuse ``"soft"``;
                ``fixed_slots_cost`` / ``parallel_groups_cost`` are never
                flippable (the engine refuses it too).
 - ``exponent`` only 1.0 (a documented CP-SAT limitation: the objective is
@@ -109,13 +109,13 @@ class _EnginePlugin:
     """The CP-SAT side of one engine constraint spec: the knob rules and `build()`.
 
     Mixed into a subclass of the matching `st_timetabling.constraints` spec, so
-    the name, the labels and the knob fields (weight / hard / exponent) are the
-    spec's own.
+    the name, the labels and the knob fields (weight / level / exponent / offset /
+    clip) are the spec's own.
     """
 
     name: ClassVar[str]
     weight: float | None
-    hard: bool | None
+    level: str | None
     exponent: float
     offset: float
     clip: bool
@@ -125,18 +125,18 @@ class _EnginePlugin:
         return ENGINE_DEFAULTS[self.name].default_level
 
     @property
-    def level(self) -> str:
-        """The level the knobs ask for, with the engine's rules (hard=None keeps the default)."""
+    def effective_level(self) -> str:
+        """The level the knobs ask for, with the engine's rules (level=None keeps the default)."""
         row = ENGINE_DEFAULTS[self.name]
-        if self.hard is None:
+        if self.level is None:
             return row.default_level
-        wanted = "hard" if self.hard else "soft"
+        wanted = str(self.level)
+        if wanted == "medium":
+            raise ValueError(f"constraint {self.name!r}: this use case has no medium level")
         if wanted == "hard" and row.reward:
             raise ValueError(f"constraint {self.name!r} is a reward (raw cost <= 0) and cannot be hard")
         if wanted != row.default_level and not row.level_flippable:
-            raise ValueError(
-                f"constraint {self.name!r} is always {row.default_level}; hard={self.hard!r} is not allowed"
-            )
+            raise ValueError(f"constraint {self.name!r} is always {row.default_level}; level={wanted!r} is not allowed")
         return wanted
 
     @property
@@ -157,7 +157,7 @@ class _EnginePlugin:
     def build(self, model: cp_model.CpModel, variables: TimetableVariables) -> cp_model.LinearExpr | None:
         if self.exponent != 1.0:
             raise ValueError(f"constraint {self.name!r}: exponent {self.exponent!r} is not supported by CP-SAT")
-        level, weight = self.level, self.effective_weight
+        level, weight = self.effective_level, self.effective_weight
         if self.effective_offset != 0 and level == "hard":
             raise ValueError(
                 f"constraint {self.name!r} offset is not supported by this CP-SAT model on the hard level "
@@ -193,7 +193,7 @@ class _EnginePlugin:
 
     def _build_soft(self, model: cp_model.CpModel, variables: TimetableVariables) -> cp_model.LinearExpr | None:
         raise ValueError(
-            f"constraint {self.name!r}: the CP-SAT model enforces it structurally, so hard=False is not supported"
+            f"constraint {self.name!r}: the CP-SAT model enforces it structurally, so level='soft' is not supported"
         )
 
 
@@ -209,7 +209,7 @@ class _Structural(_EnginePlugin):
 
 
 class _Penalty(_EnginePlugin):
-    """A soft constraint: a penalty expression, or with hard=True a constraint that it is 0."""
+    """A soft constraint: a penalty expression, or with level="hard" a constraint that it is 0."""
 
     def _build_hard(self, model: cp_model.CpModel, variables: TimetableVariables) -> None:
         expr = self._expression(model, variables)
@@ -231,7 +231,7 @@ class _Penalty(_EnginePlugin):
 class UnassignedLessonsCost(domain.UnassignedLessonsCost, _EnginePlugin):
     """Weekly periods per course.
 
-    Hard (the default) matches them exactly; ``hard=False`` relaxes to "at
+    Hard (the default) matches them exactly; ``level="soft"`` relaxes to "at
     most" and turns unfilled periods into a penalty — Comcigan's "unassigned
     list" works this way. With the relaxed mode's `weight` above the sum of the
     other soft terms (`UNASSIGNED_WEIGHT`), every period that can be filled is
@@ -413,7 +413,7 @@ class ConstraintSpec:
 
     name: str
     label: str
-    #: `"either"` when hard=True/False may move the constraint, else its fixed level (the
+    #: `"either"` when a selection may move the constraint, else its fixed level (the
     #: engine's `level_flippable`).
     kind: str
     params: tuple[ConstraintParam, ...]

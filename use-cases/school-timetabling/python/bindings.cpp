@@ -508,9 +508,9 @@ void bindCanon(py::module_ &canon)
         "exactly.")
         .def(py::init<>())
         // Example: DecomposedCalculator([TeacherGapCost(weight=40), ...]).
-        // Duck-typed picks (.name/.weight/.hard/.exponent, optionally
+        // Duck-typed picks (.name/.weight/.level/.exponent, optionally
         // .offset/.clip), resolved and checked by tfpy::applyConstraints:
-        // weight None keeps the component's kDefaultWeight, hard None its
+        // weight None keeps the component's kDefaultWeight, level None its
         // kDefaultLevel; a name picked several times is one instance per
         // pick.
         .def(py::init(
@@ -522,7 +522,7 @@ void bindCanon(py::module_ &canon)
                  }),
              py::arg("constraints"),
              "Assemble from constraint picks (duck-typed: .name, .weight, "
-             ".hard, .exponent, optionally .offset / .clip; None = the whole "
+             ".level, .exponent, optionally .offset / .clip; None = the whole "
              "default set). The picks replace the defaults; a name picked "
              "several times is one instance per pick, each with its own "
              "knobs (their costs add up); an empty list is a ValueError.")
@@ -531,7 +531,7 @@ void bindCanon(py::module_ &canon)
             [](cn::DecomposedCalculator &calc,
                const std::string &name,
                const py::object &weight,
-               const py::object &hard,
+               const py::object &level,
                const py::object &exponent,
                const py::object &offset,
                const py::object &clip)
@@ -539,7 +539,7 @@ void bindCanon(py::module_ &canon)
                 const py::object pick = py::module_::import("types").attr(
                     "SimpleNamespace")(py::arg("name") = name,
                                        py::arg("weight") = weight,
-                                       py::arg("hard") = hard,
+                                       py::arg("level") = level,
                                        py::arg("exponent") = exponent,
                                        py::arg("offset") = offset,
                                        py::arg("clip") = clip);
@@ -549,7 +549,7 @@ void bindCanon(py::module_ &canon)
             },
             py::arg("name"),
             py::arg("weight") = py::none(),
-            py::arg("hard") = py::none(),
+            py::arg("level") = py::none(),
             py::arg("exponent") = 1.0,
             py::kw_only(),
             py::arg("offset") = 0.0,
@@ -558,8 +558,8 @@ void bindCanon(py::module_ &canon)
             "with the same five knobs and checks as a spec:\n"
             "weight:   None = the component's default weight, else a finite "
             "number >= 0.\n"
-            "hard:     None = the default level, True = hard, False = soft "
-            "(fixed_slots_cost / parallel_groups_cost refuse False).\n"
+            "level:    None = the default level, otherwise 'hard' or 'soft' "
+            "(fixed_slots_cost / parallel_groups_cost refuse 'soft').\n"
             "exponent: sign-preserving power shaping, > 0.\n"
             "offset:   (keyword) a shift of that shaping, finite (0 = none); "
             "clip=True (the default) counts only what lies beyond it, "

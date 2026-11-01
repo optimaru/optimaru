@@ -28,7 +28,7 @@ explained notebook, and the others follow the same outline:
 3. Visualize the solution in the form the domain uses: a map, a Gantt chart, a timetable.
 4. Check the result without relying on the solver.
 5. Change the rules with constraint plugins, without touching the solver. Every constraint has a
-   `*_cost` name and the same three knobs, `weight`, `hard` and `exponent`, and `constraint_info()`
+   `*_cost` name and the same three knobs, `weight`, `level` and `exponent`, and `constraint_info()`
    lists the defaults.
 6. Try a what-if, then restart the search from an existing solution.
 

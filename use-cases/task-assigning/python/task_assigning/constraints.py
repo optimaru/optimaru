@@ -2,7 +2,7 @@
 
 The default path (`ta.solve(solution)`) enables all six constraints at their default
 weights. This module is the alternative path next to it: pick constraints, change weights,
-flip hard/soft, shape the cost, and pass the list to `solve(solution, constraints=...)`.
+change levels, shape the cost, and pass the list to `solve(solution, constraints=...)`.
 
 A constraint list reads one way: one class call per constraint::
 
@@ -25,14 +25,14 @@ Every spec takes five knobs:
 - ``weight``   linear multiplier on the constraint cost, in units of its level.
                ``None`` = the C++ component default (``ta.constraint_info()``
                lists them).
-- ``hard``     ``True`` = hard, ``False`` = soft, ``None`` = the default level.
+- ``level``    ``None`` = the default level, otherwise a ``Level`` or its name
+               (``Level.MEDIUM`` or ``"medium"``). Any flippable constraint may
+               take any of the three levels.
                ``UnassignedTasksCost`` is the one **medium** constraint
                (Bendable soft[0], folded into the engine's hard level BELOW the
-               missing skills: ``engine.hard = hard * 10^9 + medium``); medium
-               is a default-only level: ``hard=True`` charges one hard unit
-               (10^9 engine-hard units) per unassigned task, ``hard=False`` one
-               soft unit per unassigned task, and an explicit ``weight`` stays in
-               medium units.
+               missing skills: ``engine.hard = hard * 10^9 + medium``): ``level="hard"`` charges one hard unit
+               (10^9 engine-hard units) per unassigned task, ``level="soft"`` one
+               soft unit per unassigned task, and a ``weight`` is in units of the level in effect.
 - ``exponent`` sign-preserving power shaping: ``weight * sign(c) * |c| **
                exponent``, per employee for the unit constraints and on the total
                for the global ``UnassignedTasksCost``. 2.0 = squared, so
@@ -68,10 +68,11 @@ mechanically, so there is no hand-maintained alias table — check them with
 so they match the strings `list_constraints()` prints.
 """
 
-from ._constraint import Constraint, Score, score_costs, select
+from ._constraint import Constraint, Level, Score, score_costs, select
 
 __all__ = [
     "Constraint",
+    "Level",
     "Score",
     "score",
     "RequiredSkillCost",

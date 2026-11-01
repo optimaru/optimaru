@@ -191,7 +191,7 @@ def _assemble_plugin(constraints):
         if spec.name == UnassignedLessonsCost.name:
             # Hard means unassigned lessons cannot occur (the engine does not enable the moves
             # either); one hard instance is enough.
-            if spec.hard is not False:
+            if spec.level != "soft":
                 unassigned_weight = None
             elif unassigned_weight is not None:
                 unassigned_weight += weight

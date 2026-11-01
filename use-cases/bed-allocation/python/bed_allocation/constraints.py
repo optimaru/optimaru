@@ -2,7 +2,7 @@
 
 The default path (`ba.solve(plan)`) enables all twelve constraints at their default
 weights (the quickstart's). This module is the alternative path next to it: pick
-constraints, change weights, flip hard/soft, shape the cost, and pass the list to
+constraints, change weights, change levels, shape the cost, and pass the list to
 `solve(plan, constraints=...)`.
 
 A constraint list reads one way: one class call per constraint::
@@ -26,12 +26,13 @@ Every spec takes five knobs:
 - ``weight``   linear multiplier on the constraint cost, in units of its level.
                ``None`` = the component default (``ba.constraint_info()`` reports
                them; the plan carries none).
-- ``hard``     ``True`` = hard, ``False`` = soft, ``None`` = the default level.
-               ``UnassignedStaysCost`` is the one MEDIUM constraint: medium is a
-               default-only level, so ``hard=True`` makes it one hard unit per
-               night and ``hard=False`` one soft unit per night (outside the 10^9
-               medium fold), in the solver and in :func:`score` alike. An explicit
-               ``weight`` keeps it on the medium level, in medium units.
+- ``level``    ``None`` = the default level, otherwise a ``Level`` or its name
+               (``Level.MEDIUM`` or ``"medium"``). Any flippable constraint may
+               take any of the three levels. ``UnassignedStaysCost`` is the one
+               MEDIUM constraint by default: ``level="hard"`` makes it one hard
+               unit per night and ``level="soft"`` one soft unit per night
+               (outside the 10^9 medium fold), in the solver and in :func:`score`
+               alike. A ``weight`` is in units of the level in effect.
 - ``exponent`` sign-preserving power shaping: ``weight * sign(c) * |c| **
                exponent``, per bed for the unit constraints and on the single total
                for the global ``MixedGenderRoomCost``. 2.0 = squared, so
@@ -66,10 +67,11 @@ mechanically, so there is no hand-maintained alias table — check them with
 so they match the strings `list_constraints()` prints.
 """
 
-from ._constraint import Constraint, Score, score_costs, select
+from ._constraint import Constraint, Level, Score, score_costs, select
 
 __all__ = [
     "Constraint",
+    "Level",
     "Score",
     "score",
     "BedConflictCost",

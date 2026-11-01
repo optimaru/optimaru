@@ -70,7 +70,7 @@ That is the `list_constraints()` order: the thirteen per-vehicle unit constraint
 (each vehicle; `constraint_costs()` lists the unassigned pool as one more cell, always
 0, which no route constraint evaluates), then the global `unassigned_visits_cost`. `vrp_routing.constraint_info()` reports exactly this
 table from the C++ components (`kDefaultLevel` / `kDefaultWeight`). Every
-constraint is flippable (`hard=True` / `hard=False`), none is a reward, and every
+constraint is flippable (`level="hard"` / `level="soft"`), none is a reward, and every
 one at a weight above 0 is scored by default (`default_enabled`); the three opt-in
 objectives (weight 0) are measured but move no score until given a weight. The
 route-policy constraints cost 0 while their vehicle field is 0. The four core rules
@@ -82,8 +82,8 @@ calculator, which read the same constants.
 domain declares its fold once (`kMediumFold = intoSoft(10^9)` in `domain.hpp`):
 the engine compares `HardSoftScore`, so medium lands in soft as
 `medium * 10^9 + soft`, which keeps the 3-level `Score` lexicographic. Its weight
-is in medium units (default 1). `hard=True` charges one hard unit per penalty
-minute; `hard=False` one soft unit per penalty minute; an explicit weight stays in
+is in medium units (default 1). `level="hard"` charges one hard unit per penalty
+minute; `level="soft"` one soft unit per penalty minute; an explicit weight stays in
 medium units. `constraint_costs()` carries
 `"medium_fold": {"kind": "into_soft", "unit": 1e9}` on every entry, so
 `vrp_routing.constraints.score()` folds exactly like the engine. A plugin-path
@@ -142,8 +142,8 @@ name, Python spec class, module-level default instance and catalog name):
 names (`max_travel_time`, `max_route_duration`, `max_end_time`, `max_stops`,
 `max_route_radius_meters`, `min_load_ratio`, `fixed_cost`,
 `unassigned_penalty_minutes`). Other changes: `unassigned_visits_cost` defaults to
-weight 1 in medium units (it was 10^9 in soft units); `hard=False` on it now demotes
-it to soft (it used to be a no-op relabel) and `hard=True` charges 1 hard unit per
+weight 1 in medium units (it was 10^9 in soft units); `level="soft"` on it now demotes
+it to soft (it used to be a no-op relabel) and `level="hard"` charges 1 hard unit per
 penalty minute (it used to charge 10^9); the `enclosing_circle_radius_cost` default
 instance no longer passes `weight=0` (the C++ default is 0); `get_constraints()` and
 `score()` now refuse a constraint named twice, as the C++ solve path already did (0.3.0
@@ -191,7 +191,7 @@ shared prefix sums in `route_sums.hpp` and the enclosing-circle helpers in
 4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
    `description_en` / `description_ko` to `python/vrp_routing/constraints.py` (plus its
    module-level default instance); callers then pick, reweight or flip it:
-   `constraints=[..., MyRuleCost(weight=5, hard=True)]`.
+   `constraints=[..., MyRuleCost(weight=5, level="hard")]`.
 
 The CVRP benchmark scores plain distance, so a new cost does not change it.
 

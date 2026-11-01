@@ -182,8 +182,8 @@ def test_level_can_be_flipped():
     hard_level = solve(
         [
             *picks,
-            type(theme_track_conflict_cost)(hard=True),
-            type(content_conflict_cost)(hard=True),
+            type(theme_track_conflict_cost)(level="hard"),
+            type(content_conflict_cost)(level="hard"),
         ]
     )
     assert hard_level.soft == 0
@@ -195,7 +195,7 @@ def test_unknown_constraint_name_raises():
     class Typo:
         name = "room_conflict_costs"  # trailing s
         weight = None
-        hard = None
+        level = None
         exponent = 1.0
 
     with pytest.raises(ValueError, match="unknown constraint"):
@@ -227,11 +227,11 @@ def test_spec_subclass_must_name_a_constraint():
 
 
 def test_module_level_instances_keep_every_default():
-    """Module-level instances must keep the defaults (weight=None, hard=None, exponent=1)."""
+    """Module-level instances must keep the defaults (weight=None, level=None, exponent=1)."""
     defaults = get_constraints()
     assert [spec.name for spec in defaults] == EXPECTED_NAMES
     for spec in defaults:
-        assert (spec.weight, spec.hard, spec.exponent) == (None, None, 1.0)
+        assert (spec.weight, spec.level, spec.exponent) == (None, None, 1.0)
         assert getattr(constraints, spec.name) is spec  # instance name == registry name
         assert type(spec).__name__ in constraints.__all__ and spec.name in constraints.__all__
 
@@ -371,9 +371,11 @@ def test_specs_validate_their_knobs(kwargs, error):
 
 def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     """The C++ side guards too: a duck-typed pick cannot smuggle a negative weight in."""
-    negative = SimpleNamespace(name="content_conflict_cost", weight=-2.0, hard=None, exponent=1.0)
-    flat = SimpleNamespace(name="content_conflict_cost", weight=None, hard=None, exponent=0.0)
-    unbounded = SimpleNamespace(name="content_conflict_cost", weight=None, hard=None, exponent=1.0, offset=float("inf"))
+    negative = SimpleNamespace(name="content_conflict_cost", weight=-2.0, level=None, exponent=1.0)
+    flat = SimpleNamespace(name="content_conflict_cost", weight=None, level=None, exponent=0.0)
+    unbounded = SimpleNamespace(
+        name="content_conflict_cost", weight=None, level=None, exponent=1.0, offset=float("inf")
+    )
     for pick, message in (
         (negative, "weight must be finite and >= 0"),
         (flat, "exponent must be finite and > 0"),
@@ -390,8 +392,7 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     [
         ({"weight": True}, "weight must be a number or None, not True"),
         ({"weight": "2"}, "weight must be a number or None, not '2'"),
-        ({"hard": 1}, "hard must be True, False or None, not 1"),
-        ({"hard": "x"}, "hard must be True, False or None, not 'x'"),
+        ({"level": 1}, "level must be a Level, its name or None, not 1"),
         ({"exponent": True}, "exponent must be a number, not True"),
         ({"offset": "5"}, "offset must be a number, not '5'"),
         ({"offset": False}, "offset must be a number, not False"),
@@ -401,7 +402,7 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
 )
 def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
     """The C++ path checks the knob types like _constraint.py: TypeError, the same words."""
-    pick = SimpleNamespace(name="content_conflict_cost", weight=None, hard=None, exponent=1.0)
+    pick = SimpleNamespace(name="content_conflict_cost", weight=None, level=None, exponent=1.0)
     for key, value in knobs.items():
         setattr(pick, key, value)
     with pytest.raises(TypeError, match=f"constraint 'content_conflict_cost': {re.escape(message)}"):
@@ -412,11 +413,11 @@ def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
 
 @pytest.mark.parametrize("name", REWARDS)
 def test_a_reward_is_never_hard(name):
-    """The three *_diversity_cost rewards (raw <= 0) refuse hard=True in the C++ path and in score()."""
-    spec = type(getattr(constraints, name))(hard=True)
+    """The three *_diversity_cost rewards (raw <= 0) refuse level="hard" in the C++ path and in score()."""
+    spec = type(getattr(constraints, name))(level="hard")
     with pytest.raises(ValueError, match="is a reward"):
         cs.solve(build_schedule(), time_limit_seconds=0.1, constraints=[*HARD_PICKS, spec])
-    duck = SimpleNamespace(name=name, weight=None, hard=True, exponent=1.0)
+    duck = SimpleNamespace(name=name, weight=None, level="hard", exponent=1.0)
     with pytest.raises(ValueError, match="is a reward"):
         cs.solve(build_schedule(), time_limit_seconds=0.1, constraints=[duck])
     with pytest.raises(ValueError, match="is a reward"):
@@ -424,16 +425,16 @@ def test_a_reward_is_never_hard(name):
 
 
 def test_a_reward_stays_soft_and_raises_the_score():
-    """hard=False re-states a reward's level (a no-op); re-weighting keeps the sign."""
+    """level="soft" re-states a reward's level (a no-op); re-weighting keeps the sign."""
     schedule = _solved()
     raw = cs.constraint_costs(schedule)
     reward = raw["audience_type_diversity_cost"]["costs"][0]
     assert reward < 0  # the demo's solution earns it
-    assert score(raw, [AudienceTypeDiversityCost(hard=False)]) == score(raw, [AudienceTypeDiversityCost()])
+    assert score(raw, [AudienceTypeDiversityCost(level="soft")]) == score(raw, [AudienceTypeDiversityCost()])
     three = score(raw, [AudienceTypeDiversityCost(weight=3)])
     assert three.hard == 0 and three.soft == -3 * reward > 0
-    assert score(raw, [LanguageDiversityCost(hard=False)]) == score(raw, [LanguageDiversityCost()])
-    solved = _solved([*HARD_PICKS, AudienceTypeDiversityCost(hard=False, weight=2)])
+    assert score(raw, [LanguageDiversityCost(level="soft")]) == score(raw, [LanguageDiversityCost()])
+    solved = _solved([*HARD_PICKS, AudienceTypeDiversityCost(level="soft", weight=2)])
     assert score(cs.constraint_costs(solved), [*HARD_PICKS, AudienceTypeDiversityCost(weight=2)]) == (
         solved.score.hard,
         pytest.approx(solved.score.soft),
@@ -482,7 +483,7 @@ def test_old_names_are_gone():
         "language_diversity",
     ]:
         assert old not in cs.list_constraints()
-        pick = SimpleNamespace(name=old, weight=None, hard=None, exponent=1.0)
+        pick = SimpleNamespace(name=old, weight=None, level=None, exponent=1.0)
         with pytest.raises(ValueError, match="unknown constraint"):
             cs.solve(build_schedule(), time_limit_seconds=0.1, constraints=[pick])
 
@@ -516,9 +517,9 @@ def test_score_reproduces_the_engine_score_exactly():
         None,
         HARD_PICKS,
         [*HARD_PICKS, ContentConflictCost(weight=500), LanguageDiversityCost(weight=30)],
-        [RoomConflictCost(hard=False), talk_type_incompatibility_cost, content_conflict_cost],
+        [RoomConflictCost(level="soft"), talk_type_incompatibility_cost, content_conflict_cost],
         [*HARD_PICKS, ContentConflictCost(exponent=2.0), AudienceTypeDiversityCost(exponent=0.5)],
-        [RoomConflictCost(exponent=1.5, weight=0.5), constraints.SpeakerMakespanCost(hard=True)],
+        [RoomConflictCost(exponent=1.5, weight=0.5), constraints.SpeakerMakespanCost(level="hard")],
         [*HARD_PICKS, ContentConflictCost(), ContentConflictCost(weight=0.5, exponent=2.0)],
         [*HARD_PICKS, ContentConflictCost(offset=30.0), ContentConflictCost(offset=-20.0, clip=False)],
         [
@@ -730,9 +731,9 @@ def test_offsets_by_hand_on_both_paths(pick, expected):
 
 def test_a_second_reward_pick_still_refuses_hard():
     with pytest.raises(ValueError, match="is a reward"):
-        _pinned_solve(_three_talks(), [LanguageDiversityCost(), LanguageDiversityCost(hard=True)])
+        _pinned_solve(_three_talks(), [LanguageDiversityCost(), LanguageDiversityCost(level="hard")])
     with pytest.raises(ValueError, match="is a reward"):
-        score(cs.constraint_costs(_three_talks()), [LanguageDiversityCost(), LanguageDiversityCost(hard=True)])
+        score(cs.constraint_costs(_three_talks()), [LanguageDiversityCost(), LanguageDiversityCost(level="hard")])
 
 
 def test_offset_zero_reproduces_the_0_2_0_scores():

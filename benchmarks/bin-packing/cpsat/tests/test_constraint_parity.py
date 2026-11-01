@@ -155,7 +155,7 @@ SELECTIONS = {
         BinCapacityCost(offset=2, clip=False),
         ItemConflictCost(weight=2, offset=-1),
         ItemConflictCost(offset=1, clip=False),
-        UsedBinsCost(hard=True, offset=1),
+        UsedBinsCost(level="hard", offset=1),
     ],
     "identical-twice": [ItemConflictCost(), ItemConflictCost(), UsedBinsCost()],
 }

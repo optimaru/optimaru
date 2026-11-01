@@ -315,19 +315,19 @@ def test_cpsat_defaults_are_the_engine_defaults() -> None:
         assert entry["reward"] == row.reward
         assert entry["default_enabled"] == row.default_enabled
         assert entry["kind"] == "either"  # every constraint is flippable in the engine
-        assert entry["params"] == {"weight": None, "hard": None, "exponent": 1.0, "offset": 0.0, "clip": True}
+        assert entry["params"] == {"weight": None, "level": None, "exponent": 1.0, "offset": 0.0, "clip": True}
 
 
 def test_demoting_max_queue_time_scores_like_the_engine() -> None:
     problem = _fab([])
-    selection = [MaxQueueTimeCost(hard=False), WeightedTardinessCost(weight=2), CycleTimeCost()]
+    selection = [MaxQueueTimeCost(level="soft"), WeightedTardinessCost(weight=2), CycleTimeCost()]
     solved = solve(problem, time_limit_seconds=5, constraints=selection, _fixed_assignments=FAB)
     engine = score(domain.constraint_costs(solved.to_core()), selection)
     assert (solved.score_hard, solved.score_soft) == pytest.approx(tuple(engine))
     assert solved.score_hard == 0 and solved.score_soft == -(3 + 2 * 6 + 46)
 
 
-@pytest.mark.parametrize("knobs", [{"hard": False}, {"weight": 2}, {"weight": 0}])
+@pytest.mark.parametrize("knobs", [{"level": "soft"}, {"weight": 2}, {"weight": 0}])
 def test_structural_plugins_refuse_what_they_cannot_honour(knobs) -> None:
     with pytest.raises(ValueError, match="enforces this constraint structurally"):
         solve(_fab([]), time_limit_seconds=1, constraints=[MachineCapacityCost(**knobs)])
@@ -355,7 +355,7 @@ SELECTIONS = {
         MaxQueueTimeCost(offset=1),
         MaxQueueTimeCost(weight=2, offset=5, clip=False),
         MaxCycleTimeCost(offset=1, clip=False),
-        MinBatchSizeCost(hard=True, offset=1),
+        MinBatchSizeCost(level="hard", offset=1),
         MachineLoadImbalanceCost(offset=-1, clip=False),
     ],
     "with-structural": [

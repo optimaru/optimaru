@@ -5,7 +5,7 @@ One plugin per engine constraint, subclassing its spec
 defaults (level, weight, reward, flippability) come from the engine's
 ``conference_scheduling.constraint_info()`` through cpsat-common. The registry
 keeps the engine's ``list_constraints()`` order. The three ``*_diversity_cost``
-rewards add a reward term and refuse ``hard=True``.
+rewards add a reward term and refuse ``level="hard"``.
 
 Every engine constraint here is global (one total each), so a plugin's
 ``add_terms`` hands its pieces to a ``_GlobalTotal`` and ``build`` adds them to

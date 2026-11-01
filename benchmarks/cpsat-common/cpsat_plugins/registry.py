@@ -33,24 +33,27 @@ def _is_bool(value: Any) -> bool:
 
 
 def _check_knobs(
-    name: str, weight: Any, hard: Any, exponent: Any, offset: Any = 0.0, clip: Any = True
+    name: str, weight: Any, level: Any, exponent: Any, offset: Any = 0.0, clip: Any = True
 ) -> None:
     """The engine's knob rules, with the optimaru spec base's wording.
 
     A Mapping selection gets the checks a spec gets at construction, so the
     two solvers refuse the same values: weight None or a real number (not
-    bool), finite and >= 0; hard None, True or False; exponent a real number,
-    finite and > 0 (and 1.0 on CP-SAT, see ``_check_exponent``); offset a real
-    number (not bool), finite (and an integer on CP-SAT, see
-    ``ObjectiveBuilder.add``); clip True or False.
+    bool), finite and >= 0; level None, or "hard", "medium" or "soft";
+    exponent a real number, finite and > 0 (and 1.0 on CP-SAT, see
+    ``_check_exponent``); offset a real number (not bool), finite (and an
+    integer on CP-SAT, see ``ObjectiveBuilder.add``); clip True or False.
     """
     if weight is not None:
         if isinstance(weight, bool) or not isinstance(weight, numbers.Real):
             raise TypeError(f"constraint {name!r}: weight must be a number or None, not {weight!r}")
         if not math.isfinite(weight) or weight < 0:
             raise ValueError(f"constraint {name!r}: weight must be finite and >= 0, not {weight!r}")
-    if hard is not None and not _is_bool(hard):
-        raise TypeError(f"constraint {name!r}: hard must be True, False or None, not {hard!r}")
+    if level is not None:
+        if not isinstance(level, str):
+            raise TypeError(f"constraint {name!r}: level must be a Level, its name or None, not {level!r}")
+        if level not in ("hard", "medium", "soft"):
+            raise ValueError(f"constraint {name!r}: level must be 'hard', 'medium' or 'soft', not {level!r}")
     if isinstance(exponent, bool) or not isinstance(exponent, numbers.Real):
         raise TypeError(f"constraint {name!r}: exponent must be a number, not {exponent!r}")
     if not math.isfinite(exponent) or exponent <= 0:
@@ -102,9 +105,9 @@ class ConstraintSpec:
     """One catalog entry and its default score semantics.
 
     ``level`` and ``weight`` are the defaults (for a migrated domain, the
-    engine's constraint_info() row). ``level_flippable`` False means hard=True
-    / hard=False may not move the constraint off its level; ``reward`` means
-    the raw cost is <= 0 and hard=True is refused. Both paths reject the same
+    engine's constraint_info() row). ``level_flippable`` False means a selection's level
+    may not move the constraint off its level; ``reward`` means the raw cost
+    is <= 0 and level="hard" is refused. Both paths reject the same
     selections. ``default_enabled`` is the row's ``default_enabled`` (None:
     ``weight > 0``, the rule for a domain whose catalog is its default set).
     """
@@ -123,12 +126,10 @@ class ConstraintSpec:
     def as_dict(self) -> dict[str, Any]:
         """The catalog row, in the server's ConstraintInfo vocabulary (knob_plan §5).
 
-        ``kind`` is ``"either"`` when hard=True/False may move the constraint,
-        else its fixed level (a non-flippable constraint is hard or soft: the
-        medium level is default-only and always flippable). ``params`` are
-        the five selection knobs at "keep the default" — fed back as a
-        selection they change nothing (``hard: False`` would demote, so it is
-        ``None``).
+        ``kind`` is ``"either"`` when a selection may move the constraint,
+        else its fixed level (a non-flippable constraint is hard or soft).
+        ``params`` are the five selection knobs at "keep the default" — fed
+        back as a selection they change nothing (so ``level`` is ``None``).
         """
         if self.level_flippable:
             kind = "either"
@@ -146,7 +147,7 @@ class ConstraintSpec:
             "default_weight": self.weight,
             "level_flippable": self.level_flippable,
             "reward": self.reward,
-            "params": {"weight": None, "hard": None, "exponent": 1.0, "offset": 0.0, "clip": True},
+            "params": {"weight": None, "level": None, "exponent": 1.0, "offset": 0.0, "clip": True},
         }
 
 
@@ -162,7 +163,7 @@ class ConstraintConfig:
     name: str
     enabled: bool = True
     weight: int | None = None
-    hard: bool | None = None
+    level: str | None = None
     offset: int | float = 0
     clip: bool = True
 
@@ -179,17 +180,17 @@ class ConstraintConfig:
             exponent = getattr(value, "exponent", 1.0)
             exponent = 1.0 if exponent is None else exponent
             weight = getattr(value, "weight", None)
-            hard = getattr(value, "hard", None)
+            level = value.level  # no default: a pick without it must not fall back in silence
             offset = getattr(value, "offset", None)
             offset = 0 if offset is None else offset
             clip = getattr(value, "clip", None)
             clip = True if clip is None else clip
-            _check_knobs(name, weight, hard, exponent, offset, clip)
+            _check_knobs(name, weight, level, exponent, offset, clip)
             _check_exponent(name, exponent)
             return cls(
                 name=name,
                 weight=weight,
-                hard=None if hard is None else bool(hard),
+                level=None if level is None else str(level),
                 offset=offset,
                 clip=bool(clip),
             )
@@ -197,11 +198,11 @@ class ConstraintConfig:
         name = payload.pop("name", payload.pop("type", None))
         if name is None:
             raise ValueError("constraint config needs 'name' or 'type'")
-        # The catalog row's params ({weight, hard, exponent, offset, clip}) and
-        # the server's ConstraintSelection {name, enabled, weight, hard,
+        # The catalog row's params ({weight, level, exponent, offset, clip})
+        # and the server's ConstraintSelection {name, enabled, weight, level,
         # exponent[, offset, clip]} are both valid selections; only an
         # exponent other than 1.0 is CP-SAT-only.
-        unknown = set(payload) - {"enabled", "weight", "hard", "exponent", "offset", "clip"}
+        unknown = set(payload) - {"enabled", "weight", "level", "exponent", "offset", "clip"}
         if unknown:
             raise ValueError(
                 f"unknown constraint parameters for {name!r}: {sorted(unknown)}"
@@ -210,12 +211,12 @@ class ConstraintConfig:
         exponent = payload.pop("exponent", 1.0)
         exponent = 1.0 if exponent is None else exponent
         weight = payload.get("weight")
-        hard = payload.get("hard")
+        level = payload.get("level")
         offset = payload.get("offset")
         offset = 0 if offset is None else offset
         clip = payload.get("clip")
         clip = True if clip is None else clip
-        _check_knobs(name, weight, hard, exponent, offset, clip)
+        _check_knobs(name, weight, level, exponent, offset, clip)
         _check_exponent(name, exponent)
         enabled = payload.get("enabled", True)
         if not _is_bool(enabled):
@@ -224,7 +225,7 @@ class ConstraintConfig:
             name=name,
             enabled=bool(enabled),
             weight=weight,
-            hard=None if hard is None else bool(hard),
+            level=None if level is None else str(level),
             offset=offset,
             clip=bool(clip),
         )
@@ -238,7 +239,7 @@ class DomainConstraint(Protocol):
 
     name: str
     weight: float | None
-    hard: bool | None
+    level: str | None
     exponent: float
 
 
@@ -302,24 +303,19 @@ class ObjectiveBuilder:
     def level_of(self, spec: ConstraintSpec, config: ConstraintConfig) -> str:
         """The level a selection lands on, with the engine's knob rules.
 
-        ``hard=None`` keeps the default level, ``hard=True`` is hard and
-        ``hard=False`` is soft, from a hard OR a medium default (the engine's
-        ``soft()``), so both solvers demote the same way. A reward refuses
-        hard=True; a non-flippable constraint refuses any change of level.
+        ``level=None`` keeps the default level. ``"medium"`` needs a domain
+        with a medium level, a reward refuses ``"hard"``, and a non-flippable
+        constraint refuses any change of level.
         """
-        level = spec.level
-        if config.hard is None:
-            return level
-        if config.hard:
-            if spec.reward:
-                raise ValueError(f"constraint {spec.name!r} is a reward and cannot be hard")
-            wanted = "hard"
-        else:
-            wanted = "soft"
-        if wanted != level and not spec.level_flippable:
-            raise ValueError(
-                f"constraint {spec.name!r} is always {level}; hard={config.hard!r} is not allowed"
-            )
+        wanted = config.level
+        if wanted is None:
+            return spec.level
+        if wanted == "medium" and wanted not in self.levels:
+            raise ValueError(f"constraint {spec.name!r}: this use case has no medium level")
+        if wanted == "hard" and spec.reward:
+            raise ValueError(f"constraint {spec.name!r} is a reward and cannot be hard")
+        if wanted != spec.level and not spec.level_flippable:
+            raise ValueError(f"constraint {spec.name!r} is always {spec.level}; level={wanted!r} is not allowed")
         return wanted
 
     def add(self, name: str, magnitude, *, bound: int) -> None:

@@ -1,8 +1,8 @@
 """Constraint assembly specs — an API for picking the cost function declaratively.
 
 The default path (`pjs.solve(schedule)`) enables all four constraints at the default weights.
-This module is the alternative path next to it: pick constraints, change weights, flip
-hard/soft, shape the cost, and pass the list to `solve(schedule, constraints=...)`.
+This module is the alternative path next to it: pick constraints, change weights, change
+levels, shape the cost, and pass the list to `solve(schedule, constraints=...)`.
 
 A constraint list reads one way: one class call per constraint::
 
@@ -25,12 +25,13 @@ Every spec takes five knobs:
 - ``weight``   linear multiplier on the constraint cost, in units of its level.
                ``None`` = the component default (``pjs.constraint_info()`` reports
                them).
-- ``hard``     ``True`` = hard, ``False`` = soft, ``None`` = the default level.
-               ``ProjectDelayCost`` is a MEDIUM constraint: medium is a
-               default-only level, so ``hard=True`` makes it one hard unit per day
-               and ``hard=False`` one soft unit per day (outside the 10^9 medium
-               fold), in the solver and in :func:`score` alike. An explicit
-               ``weight`` keeps it on the medium level, in medium units.
+- ``level``    ``None`` = the default level, otherwise a ``Level`` or its name
+               (``Level.MEDIUM`` or ``"medium"``). Any flippable constraint may
+               take any of the three levels. ``ProjectDelayCost`` is a MEDIUM
+               constraint by default: ``level="hard"`` makes it one hard unit per
+               day and ``level="soft"`` one soft unit per day (outside the 10^9
+               medium fold), in the solver and in :func:`score` alike. A
+               ``weight`` is in units of the level in effect.
 - ``exponent`` sign-preserving power shaping: ``weight * sign(c) * |c| **
                exponent``. All four constraints are global, so it shapes each one's
                single total. 2.0 = squared, so concentrated violations grow much
@@ -59,10 +60,11 @@ Module-level instance names use the same snake_case, so they match the strings
 `list_constraints()` prints.
 """
 
-from ._constraint import Constraint, Score, score_costs, select
+from ._constraint import Constraint, Level, Score, score_costs, select
 
 __all__ = [
     "Constraint",
+    "Level",
     "Score",
     "score",
     "NonRenewableResourceCapacityCost",

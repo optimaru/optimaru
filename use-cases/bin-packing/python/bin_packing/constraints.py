@@ -2,7 +2,7 @@
 
 The default path (`bp.solve(problem)`) enables all four constraints at their default
 weights. This module is the alternative path next to it: pick constraints, change
-weights, flip hard/soft, shape the cost, and pass the list to
+weights, change levels, shape the cost, and pass the list to
 `solve(problem, constraints=...)`.
 
 A constraint list reads one way: one class call per constraint::
@@ -26,7 +26,9 @@ Every spec takes five knobs:
                weights (the 0.1.x ``capacity_weight`` / ``used_bin_weight`` /
                ``color_weight`` / ``conflict_weight`` fields are gone);
                ``bp.constraint_info()`` reports the defaults.
-- ``hard``     ``True`` = hard, ``False`` = soft, ``None`` = the default level.
+- ``level``    ``None`` = the default level, otherwise ``Level.HARD`` or
+               ``Level.SOFT`` (or the names ``"hard"`` and ``"soft"``). This use
+               case has no medium level.
 - ``exponent`` sign-preserving power shaping: ``weight * sign(c) * |c| ** exponent``.
                Applied per BIN for the three per-bin constraints, and on the bin
                count for UsedBinsCost. (0.1.x shaped colour excess per
@@ -55,10 +57,11 @@ Names (`name`) are the C++ component names in snake_case
 so there is no hand-maintained alias table — check them with `bp.list_constraints()`.
 """
 
-from ._constraint import Constraint, Score, score_costs, select
+from ._constraint import Constraint, Level, Score, score_costs, select
 
 __all__ = [
     "Constraint",
+    "Level",
     "Score",
     "score",
     "BinCapacityCost",

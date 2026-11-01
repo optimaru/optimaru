@@ -1,8 +1,8 @@
 """Constraint assembly specs — an API for picking the cost function declaratively.
 
 The default path (`ts.solve(schedule)`) enables all four constraints at their default weights.
-This module is the alternative path next to it: pick constraints, change weights, flip
-hard/soft, shape the cost, and pass the list to `solve(schedule, constraints=...)`.
+This module is the alternative path next to it: pick constraints, change weights, change
+levels, shape the cost, and pass the list to `solve(schedule, constraints=...)`.
 
 A constraint list reads one way: one class call per constraint::
 
@@ -26,13 +26,14 @@ Every spec takes five knobs:
 - ``weight``   linear multiplier on the constraint cost, in units of its level.
                ``None`` = the C++ component default (``ts.constraint_info()``
                lists them; every default is 1).
-- ``hard``     ``True`` = hard, ``False`` = soft, ``None`` = the default level.
-               `AssignmentCountImbalanceCost` is **medium**: folded into the
-               engine's soft level as ``medium * 1e6`` (``MEDIUM_SCALE``). Medium
-               is a default-only level: ``hard=True`` charges one hard unit per
-               raw unit (the global total, rounded), ``hard=False`` one soft
-               unit per raw unit, and an explicit ``weight`` stays in medium
-               units.
+- ``level``    ``None`` = the default level, otherwise a ``Level`` or its name
+               (``Level.MEDIUM`` or ``"medium"``). Any flippable constraint may
+               take any of the three levels. ``AssignmentCountImbalanceCost`` is
+               **medium**: folded into the engine's soft level as ``medium * 1e6``
+               (``MEDIUM_SCALE``). On another level, ``level="hard"`` charges one
+               hard unit per raw unit (the global total, rounded),
+               ``level="soft"`` one soft unit per raw unit, and a ``weight`` is in
+               units of the level in effect.
 - ``exponent`` sign-preserving power shaping: ``weight * sign(c) * |c| **
                exponent``, per team for the two hard constraints and on the
                total for the two imbalance constraints. 2.0 = squared, so
@@ -66,10 +67,11 @@ mechanically, so there is no hand-maintained alias table — check them with
 so they match the strings `list_constraints()` prints.
 """
 
-from ._constraint import Constraint, Score, score_costs, select
+from ._constraint import Constraint, Level, Score, score_costs, select
 
 __all__ = [
     "Constraint",
+    "Level",
     "Score",
     "score",
     "TeamConflictCost",

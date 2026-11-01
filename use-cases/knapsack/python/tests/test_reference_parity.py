@@ -287,7 +287,7 @@ def test_random_instances_match_the_oracle(seed):
 def test_scores_match_the_oracle_at_integer_weights(seed):
     """score() re-prices like 0.1.5 score_costs at integer weights and exponent 1, whatever the levels.
 
-    (hard=True on the selected_value_cost reward is left out: 0.1.5 scored it as a positive hard
+    (level="hard" on the selected_value_cost reward is left out: 0.1.5 scored it as a positive hard
     term, 0.2.0 refuses it — see test_a_hard_reward_is_refused_now.)"""
     rng = random.Random(1000 + seed)
     problem = _random_instance(rng)
@@ -300,9 +300,15 @@ def test_scores_match_the_oracle_at_integer_weights(seed):
     picked: list[Constraint] = []
     for spec in specs[: rng.randint(1, len(specs))]:
         weight = rng.choice([None, 0, 1, 2, 5])
-        hard = rng.choice([None, False] if spec.name == "selected_value_cost" else [None, True, False])
-        picked.append(type(spec)(weight=weight, hard=hard))
-    expected = ref.score_costs(old, [(by_old[spec.name], spec.weight, spec.hard, 1.0) for spec in picked])
+        level = rng.choice([None, "soft"] if spec.name == "selected_value_cost" else [None, "hard", "soft"])
+        picked.append(type(spec)(weight=weight, level=level))
+    expected = ref.score_costs(
+        old,
+        [
+            (by_old[spec.name], spec.weight, {None: None, "hard": True, "soft": False}[spec.level], 1.0)
+            for spec in picked
+        ],
+    )
     assert tuple(score(raw, picked)) == pytest.approx(expected)
     # ... and the engine scores the same picks the same way.
     core = Model.model_validate(data).to_core()
@@ -323,7 +329,7 @@ def test_single_term_constraints_shape_like_the_oracle(seed, exponent):
     data = _with_selection(problem, _random_selection(problem, rng))
     raw = knapsack.constraint_costs(Model.model_validate(data).to_core())
     old = ref.constraint_costs(_dump(data))
-    picked = [KnapsackCapacityCost(exponent=exponent, hard=False), SelectedValueCost(exponent=exponent, weight=2)]
+    picked = [KnapsackCapacityCost(exponent=exponent, level="soft"), SelectedValueCost(exponent=exponent, weight=2)]
     expected = ref.score_costs(old, [("capacity", None, False, exponent), ("maximize_value", 2, None, exponent)])
     assert tuple(score(raw, picked)) == pytest.approx(expected)
 
@@ -365,4 +371,4 @@ def test_a_hard_reward_is_refused_now():
     assert ref.score_costs(old, [("maximize_value", None, True, 1.0)]) == (5, 0.0)
     raw = knapsack.constraint_costs(Model.model_validate(data).to_core())
     with pytest.raises(ValueError, match="is a reward"):
-        score(raw, [SelectedValueCost(hard=True)])
+        score(raw, [SelectedValueCost(level="hard")])

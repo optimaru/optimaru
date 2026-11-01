@@ -171,11 +171,11 @@ def test_level_can_be_flipped():
         task.station = 0
     core = problem.to_core()
     assert alb.calculate_score(core).hard < 0
-    selection = [StationCapacityCost(hard=False), TaskPrecedenceCost(hard=False)]
+    selection = [StationCapacityCost(level="soft"), TaskPrecedenceCost(level="soft")]
     raw = alb.constraint_costs(core)
     assert score(raw, selection).hard == 0
     assert score(raw, selection).soft == -(16)  # 24 - 8 on station 0
-    promoted = score(raw, [UsedStationsCost(hard=True)])
+    promoted = score(raw, [UsedStationsCost(level="hard")])
     assert (promoted.hard, promoted.soft) == (-1, 0.0)
 
 
@@ -185,7 +185,7 @@ def test_unknown_constraint_name_raises():
     class Typo:
         name = "station_capacity_costs"  # trailing s
         weight = None
-        hard = None
+        level = None
         exponent = 1.0
 
     with pytest.raises(ValueError, match="unknown constraint"):
@@ -206,7 +206,7 @@ def test_spec_subclass_must_name_a_constraint():
 
 def test_module_level_instances_keep_every_default():
     for spec in INSTANCES:
-        assert (spec.weight, spec.hard, spec.exponent) == (None, None, 1.0)
+        assert (spec.weight, spec.level, spec.exponent) == (None, None, 1.0)
     assert [spec.name for spec in INSTANCES] == NAMES
     assert get_constraints() == list(INSTANCES)
 
@@ -306,7 +306,7 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
         ({"exponent": 0.0}, "exponent must be finite and > 0"),
         ({"offset": float("inf")}, "offset must be finite, not inf"),
     ):
-        pick = SimpleNamespace(name="used_stations_cost", weight=None, hard=None, exponent=1.0)
+        pick = SimpleNamespace(name="used_stations_cost", weight=None, level=None, exponent=1.0)
         for key, value in knobs.items():
             setattr(pick, key, value)
         with pytest.raises(ValueError, match=message):
@@ -318,8 +318,7 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     [
         ({"weight": True}, "weight must be a number or None, not True"),
         ({"weight": "2"}, "weight must be a number or None, not '2'"),
-        ({"hard": 1}, "hard must be True, False or None, not 1"),
-        ({"hard": "x"}, "hard must be True, False or None, not 'x'"),
+        ({"level": 1}, "level must be a Level, its name or None, not 1"),
         ({"exponent": True}, "exponent must be a number, not True"),
         ({"offset": "5"}, "offset must be a number, not '5'"),
         ({"offset": False}, "offset must be a number, not False"),
@@ -329,7 +328,7 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
 )
 def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
     """The C++ path checks the knob types like _constraint.py: TypeError, the same words."""
-    pick = SimpleNamespace(name="used_stations_cost", weight=None, hard=None, exponent=1.0)
+    pick = SimpleNamespace(name="used_stations_cost", weight=None, level=None, exponent=1.0)
     for key, value in knobs.items():
         setattr(pick, key, value)
     with pytest.raises(TypeError, match=f"constraint 'used_stations_cost': {re.escape(message)}"):
@@ -355,7 +354,7 @@ def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
 )
 def test_old_names_are_gone(old):
     """0.2.0 renamed the catalog; the pre-0.2.0 names are unknown now (no aliases)."""
-    pick = SimpleNamespace(name=old, weight=None, hard=None, exponent=1.0)
+    pick = SimpleNamespace(name=old, weight=None, level=None, exponent=1.0)
     with pytest.raises(ValueError, match="unknown constraint"):
         alb.solve(build_problem(), config=_config(), constraints=[pick])
     with pytest.raises(ValueError, match="unknown constraint"):
@@ -411,8 +410,8 @@ def test_score_equals_the_engine_for_the_default_assembly():
         None,
         [station_capacity_cost],
         [*get_constraints()[:-1], WorkloadImbalanceCost(weight=3)],
-        [StationCapacityCost(hard=False), TaskPrecedenceCost(hard=False), used_stations_cost],
-        [StationCapacityCost(exponent=2.0), SameStationGroupsCost(exponent=2.0), UsedStationsCost(hard=True)],
+        [StationCapacityCost(level="soft"), TaskPrecedenceCost(level="soft"), used_stations_cost],
+        [StationCapacityCost(exponent=2.0), SameStationGroupsCost(exponent=2.0), UsedStationsCost(level="hard")],
         [DifferentStationPairsCost(weight=0.5), MaxStationsCost(weight=2.5), used_stations_cost],
         [*get_constraints(), UsedStationsCost(weight=10, offset=2), StationCapacityCost(exponent=2)],
         [

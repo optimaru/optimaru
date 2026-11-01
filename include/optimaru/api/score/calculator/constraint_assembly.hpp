@@ -193,8 +193,8 @@ public:
         return std::move(*this);
     }
     // Any level, Medium included (the domain must declare a medium fold, or
-    // the calculator throws at reset). Python clients only reach hard() and
-    // soft(): medium is a default-only level there.
+    // the calculator throws at reset; Python picks are refused earlier, by
+    // python::checkedLevel).
     ConstraintAssembly& level(const std::string& name, Level level) & {
         require(name).setLevel(level);
         return *this;

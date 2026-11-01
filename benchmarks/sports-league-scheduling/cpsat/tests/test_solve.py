@@ -137,7 +137,7 @@ def test_cpsat_defaults_are_the_engine_defaults() -> None:
         assert entry["kind"] == "either"  # every sports-league constraint is flippable
         assert entry["params"] == {
             "weight": None,
-            "hard": None,
+            "level": None,
             "exponent": 1.0,
             "offset": 0.0,
             "clip": True,
@@ -196,11 +196,11 @@ def test_default_selection_scores_like_the_engine() -> None:
 
 
 def test_demoting_team_conflict_scores_like_the_engine() -> None:
-    """hard=False lands on soft in both solvers: CP-SAT's reported score is the
+    """level="soft" lands on soft in both solvers: CP-SAT's reported score is the
     engine's score of the same solution under the same selection."""
     problem = _parity_problem()
     fixed_rounds = [0, 0, 2, 3, 1, 2, 1]  # "a" and "b" share team 0 on round 0
-    selection = [TeamConflictCost(hard=False), *get_constraints()[:3]]
+    selection = [TeamConflictCost(level="soft"), *get_constraints()[:3]]
     candidate = problem.model_copy(deep=True)
     for match, round_ in zip(candidate.matches, fixed_rounds, strict=True):
         match.round = round_
@@ -260,7 +260,7 @@ SELECTIONS = {
         TeamConflictCost(offset=1, clip=False),
         RepeatMatchOnNextDayCost(weight=2, offset=-1),
         ConsecutiveHomeMatchesCost(offset=2, clip=False),
-        AwayToAwayHopCost(hard=True, offset=10),
+        AwayToAwayHopCost(level="hard", offset=10),
         AwayToHomeHopCost(offset=5, clip=False),
     ],
     "identical-twice": [

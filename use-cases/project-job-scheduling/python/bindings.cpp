@@ -396,7 +396,7 @@ PYBIND11_MODULE(_core, m)
         // keeps them. A name may be picked several times: every pick is its
         // own instance (a fresh copy of the default component) with its own
         // knobs. schedule.score then reports the three levels the assembly
-        // put the terms on (a medium constraint with hard=False lands on
+        // put the terms on (a medium constraint with level='soft' lands on
         // soft).
         .def(
             "solve_with_constraints",

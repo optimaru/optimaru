@@ -85,7 +85,7 @@ serialization mirrors live in `st_timetabling.models`.
 The default cost function is the monolithic incremental calculator (fast
 path), which scores every constraint above. Passing `constraints=` switches to
 the **plugin path** next to it: pick constraints per component, change their
-weights, flip hard/soft levels and drop some.
+weights, change levels levels and drop some.
 
 ```python
 import st_timetabling as st
@@ -116,7 +116,7 @@ from st_timetabling import canon
 from st_timetabling.constraints import ClassConflictCost, TeacherConflictCost, TeacherGapCost
 
 calc = canon.DecomposedCalculator([ClassConflictCost(), TeacherConflictCost(), TeacherGapCost(weight=40)])
-calc.add("teacher_max_periods_cost", hard=False, weight=5)  # demote it to a soft penalty
+calc.add("teacher_max_periods_cost", level="soft", weight=5)  # demote it to a soft penalty
 score = calc.score(converted.table)  # score a fixed assignment (stored in table.score)
 print(calc.constraint_totals())  # weighted cost per constraint: {name, label, cost, level, is_hard}
 ```
@@ -127,14 +127,14 @@ Rules:
   default: 1 for hard, 20/3/30/10/5/1 for the soft ones — never `weights=`,
   which belongs to the fast path and must stay at the defaults next to
   `constraints=`),
-  `hard` (None keeps the default level, True = hard, False = soft),
+  `level` (None keeps the default level, otherwise "hard" or "soft"),
   `exponent` (sign-preserving power shaping) and the keyword-only `offset`
   (`0.0`) / `clip` (`True`): with an offset, `clip=True` counts only what lies
   beyond it (`max(0, c - offset) ** exponent`), `clip=False` shapes `c - offset`
   as it is (every slot of a per-slot constraint is charged). Bad names raise
   `ValueError`, a wrong knob type `TypeError`, in the same words on the Python
   and the C++ path. `fixed_slots_cost` / `parallel_groups_cost` refuse
-  `hard=False`.
+  `level="soft"`.
 - `Assembly.add` **replaces** an existing entry with the same name (override
   semantics: an Assembly holds each name once); a plain list goes through
   `get_constraints`, where a name picked several times is one instance per
@@ -155,7 +155,7 @@ Rules:
   violating it is INFEASIBLE.
 - **`unassigned_lessons_cost` is the exception**: demoted to soft, unassigned
   lessons become a **result** instead of a violation (the same contract as
-  cpsat's `UnassignedLessonsCost(hard=False)` = `solve_partial`). The search
+  cpsat's `UnassignedLessonsCost(level="soft")` = `solve_partial`). The search
   gains unassign moves, so "leave it out" becomes an option; unfilled periods
   are reported as `penalties["unassigned_lessons_cost"]`, and `status` comes
   from the hard constraints without that term.
@@ -164,7 +164,7 @@ Rules:
   # Leave unfillable periods unassigned instead of INFEASIBLE (partial timetabling).
   st.solve(
       problem_dict,
-      constraints=Assembly().add("unassigned_lessons_cost", hard=False, weight=st.UNASSIGNED_LESSONS_SOFT_WEIGHT),
+      constraints=Assembly().add("unassigned_lessons_cost", level="soft", weight=st.UNASSIGNED_LESSONS_SOFT_WEIGHT),
   )
   ```
 

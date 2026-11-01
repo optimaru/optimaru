@@ -14,7 +14,7 @@ namespace pdp
 //
 // Silent when the request is half-routed or fully unrouted: pairedRequestCost
 // and unassignedRequestsCost price those cases, so each rule stays one term.
-// Structural on the CP-SAT path only (its plugin refuses hard=False).
+// Structural on the CP-SAT path only (its plugin refuses level='soft').
 struct SameVehicleCost final : RequestCouplingConstraint
 {
     static constexpr double kDefaultWeight

@@ -9,7 +9,7 @@ Score (HardSoftScore), at the default weights:
   + selected forbidden entries + selection-group shortfall/excess + unmet item
   dependencies) — six constraints, hard x1 each
 - soft = +(selected value) — `selected_value_cost`, a reward (raw cost
-  `-(selected value)`), soft x1; it is always soft (`hard=True` raises)
+  `-(selected value)`), soft x1; it is always soft (`level="hard"` raises)
 
 The problem carries no weights. Pick, re-weight or flip constraints with
 `knapsack.constraints`, and read the defaults with `knapsack.constraint_info()`:
@@ -37,7 +37,7 @@ constraint and `exponent` (with `offset` / `clip`, 0.3.0) shapes that total;
 `<name>#2`. 0.2.0 renamed every constraint (no
 aliases), replaced the per-term lists of `constraint_costs()` by the standard dict,
 shapes each constraint's total instead of each term, rounds hard per constraint, refuses
-`hard=True` on the reward, and replaced the simulated-annealing `SolverConfig` knobs
+`level="hard"` on the reward, and replaced the simulated-annealing `SolverConfig` knobs
 (`max_iterations`, `stagnation_limit`, `temperature`, `cooling_rate`) by the engine's
 (`spent_limit_seconds`, `step_count_limit`, ...); see the
 [use-case README](../README.md#020).

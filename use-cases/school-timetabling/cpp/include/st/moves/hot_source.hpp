@@ -52,7 +52,7 @@ private:
 
 // Does the assembly treat "unassigned" as a modelling choice?
 // unassignedLessonsCost demoted to soft is exactly the CP-SAT reference's
-// UnassignedLessonsCost(hard=False) contract: unmet periods become a (heavy)
+// UnassignedLessonsCost(level='soft') contract: unmet periods become a (heavy)
 // penalty instead of an infeasible model. An assembly without it at all
 // says the same thing even louder — it puts no price on unassigned lessons.
 bool allowsUnassigned(

@@ -44,15 +44,15 @@ ctest --test-dir build/bed-allocation
 | `mixed_gender_room_cost` | `MixedGenderRoomCost` (global) | hard | 1000 | one total: shared nights of every opposite-gender pair in one `SAME_GENDER` room |
 
 This is the `list_constraints()` order (unit constraints first, the global last). Every
-constraint is flippable (`hard=True` / `hard=False`), none is a reward and all twelve are
+constraint is flippable (`level="hard"` / `level="soft"`), none is a reward and all twelve are
 scored by default; `bed_allocation.constraint_info()` reports exactly this table from the
 C++ components (`kDefaultLevel` / `kDefaultWeight`).
 
 The medium level folds into the engine's soft level as `medium * 10^9 + soft`
 (`kMediumFold` in `cpp/include/ba/domain.hpp`); weights are in units of their level, so
 `unassigned_stays_cost` defaults to weight **1** medium unit per night.
-`UnassignedStaysCost(hard=True)` makes it one hard unit per night,
-`UnassignedStaysCost(hard=False)` one soft unit per night (outside the fold), and an
+`UnassignedStaysCost(level="hard")` makes it one hard unit per night,
+`UnassignedStaysCost(level="soft")` one soft unit per night (outside the fold), and an
 explicit weight stays on the medium level in medium units — in the engine, in
 `constraints.score()` and in the CP-SAT reference alike.
 
@@ -71,7 +71,7 @@ module-level instances likewise, e.g. `SameBedInSameNight` / `same_bed_in_same_n
 `BedConflictCost` / `bed_conflict_cost`; C++ structs, headers and registry names follow the
 same table). The old names are unknown now (no aliases). `unassigned_stays_cost` is a
 real medium constraint: its default weight is 1 medium unit (was a soft weight of 10^9),
-`hard=False` now demotes it to soft in the engine too (it was a no-op), and `hard=True`
+`level="soft"` now demotes it to soft in the engine too (it was a no-op), and `level="hard"`
 gives one hard unit per night. Raw costs and the default score are unchanged;
 `solve(..., constraints=...)` reports the levels the selection put the terms on.
 
@@ -154,7 +154,7 @@ solver's `solve` before the engine runs — the engine only fills what is still 
 4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
    `description_en` / `description_ko` to `python/bed_allocation/constraints.py` (plus its
    module-level default instance); callers then pick, reweight or flip it:
-   `constraints=get_constraints([..., MyRuleCost(weight=5, hard=True)])`;
+   `constraints=get_constraints([..., MyRuleCost(weight=5, level="hard")])`;
 5. mirror it in the CP-SAT model in
    [`benchmarks/bed-allocation/cpsat`](../../benchmarks/bed-allocation/cpsat) (a plugin
    subclassing the spec; defaults come from `constraint_info()`) so the benchmark stays like

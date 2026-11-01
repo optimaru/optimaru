@@ -2,7 +2,7 @@
 
 The default path (`quadratic_assignment.solve(problem)`) scores every default
 constraint at its default weight. This module is the alternative path next to
-it: pick constraints, change weights, flip hard/soft, shape the cost, and pass the
+it: pick constraints, change weights, change levels, shape the cost, and pass the
 list to `solve(problem, constraints=...)`.
 
 A constraint list reads one way: one class call per constraint::
@@ -26,8 +26,9 @@ Every spec takes five knobs:
                default (1 for every quadratic-assignment constraint). The problem
                carries no weights; ``quadratic_assignment.constraint_info()``
                reports the defaults.
-- ``hard``     ``True`` = hard, ``False`` = soft, ``None`` = the default level.
-               Every constraint flips both ways.
+- ``level``    ``None`` = the default level, otherwise ``Level.HARD`` or
+               ``Level.SOFT`` (or the names ``"hard"`` and ``"soft"``). This use
+               case has no medium level.
 - ``exponent`` sign-preserving power shaping ``weight * sign(c) * |c| ** exponent``:
                per location for the three side constraints (pinned, forbidden,
                capacity), on the single total for ``AssignmentCost`` and
@@ -62,10 +63,11 @@ mechanically, so there is no hand-maintained alias table — check them with
 `quadratic_assignment.list_constraints()`.
 """
 
-from ._constraint import Constraint, Score, score_costs, select
+from ._constraint import Constraint, Level, Score, score_costs, select
 
 __all__ = [
     "Constraint",
+    "Level",
     "Score",
     "score",
     "PinnedAssignmentsCost",

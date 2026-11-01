@@ -113,7 +113,7 @@ def test_reweighting_one_constraint_scales_only_that_term():
 def test_level_can_be_flipped():
     """Demoting a hard constraint to soft moves its penalty to the soft level."""
     hard_level = solve([flight_conflict_cost, last_assignment_not_arriving_at_home_cost])
-    soft_level = solve([FlightConflictCost(hard=False), last_assignment_not_arriving_at_home_cost])
+    soft_level = solve([FlightConflictCost(level="soft"), last_assignment_not_arriving_at_home_cost])
     # Only the level carrying the same cost differs.
     assert hard_level.hard <= 0
     assert soft_level.hard == 0
@@ -125,7 +125,7 @@ def test_unknown_constraint_name_raises():
     class Typo:
         name = "required_skill_costs"  # trailing s
         weight = None
-        hard = None
+        level = None
         exponent = 1.0
 
     with pytest.raises(ValueError, match="unknown constraint"):
@@ -146,7 +146,7 @@ def test_spec_subclass_must_name_a_constraint():
 
 
 def test_module_level_instances_keep_every_default():
-    """Module-level instances must keep the defaults (weight=None, hard=None, exponent=1)."""
+    """Module-level instances must keep the defaults (weight=None, level=None, exponent=1)."""
     instances = (
         required_skill_cost,
         flight_conflict_cost,
@@ -156,7 +156,7 @@ def test_module_level_instances_keep_every_default():
         last_assignment_not_arriving_at_home_cost,
     )
     for spec in instances:
-        assert (spec.weight, spec.hard, spec.exponent) == (None, None, 1.0)
+        assert (spec.weight, spec.level, spec.exponent) == (None, None, 1.0)
     assert list(instances) == get_constraints()
     assert [spec.name for spec in instances] == fc.list_constraints()
 
@@ -236,11 +236,11 @@ def test_score_rejects_an_unknown_constraint_name():
         [required_skill_cost],
         [RequiredSkillCost(weight=500), flight_conflict_cost, last_assignment_not_arriving_at_home_cost],
         [
-            FlightConflictCost(hard=False),
-            TransferBetweenTwoFlightsCost(hard=False),
+            FlightConflictCost(level="soft"),
+            TransferBetweenTwoFlightsCost(level="soft"),
             last_assignment_not_arriving_at_home_cost,
         ],
-        [required_skill_cost, FirstAssignmentNotDepartingFromHomeCost(hard=True, weight=0.5)],
+        [required_skill_cost, FirstAssignmentNotDepartingFromHomeCost(level="hard", weight=0.5)],
         [LastAssignmentNotArrivingAtHomeCost(exponent=2.0), EmployeeUnavailabilityCost(exponent=2.0)],
         [*get_constraints(), FlightConflictCost(weight=3, exponent=2.0)],
         [
@@ -375,19 +375,19 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     class Negative:
         name = "flight_conflict_cost"
         weight = -2.0
-        hard = None
+        level = None
         exponent = 1.0
 
     class Flat:
         name = "flight_conflict_cost"
         weight = None
-        hard = None
+        level = None
         exponent = 0.0
 
     class Unbounded:
         name = "flight_conflict_cost"
         weight = None
-        hard = None
+        level = None
         exponent = 1.0
         offset = float("inf")
 
@@ -407,8 +407,7 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     [
         ({"weight": True}, "weight must be a number or None, not True"),
         ({"weight": "2"}, "weight must be a number or None, not '2'"),
-        ({"hard": 1}, "hard must be True, False or None, not 1"),
-        ({"hard": "x"}, "hard must be True, False or None, not 'x'"),
+        ({"level": 1}, "level must be a Level, its name or None, not 1"),
         ({"exponent": True}, "exponent must be a number, not True"),
         ({"offset": "5"}, "offset must be a number, not '5'"),
         ({"offset": False}, "offset must be a number, not False"),
@@ -418,7 +417,7 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
 )
 def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
     """The C++ path checks the knob types like _constraint.py: TypeError, the same words."""
-    pick = SimpleNamespace(name="flight_conflict_cost", weight=None, hard=None, exponent=1.0)
+    pick = SimpleNamespace(name="flight_conflict_cost", weight=None, level=None, exponent=1.0)
     for key, value in knobs.items():
         setattr(pick, key, value)
     with pytest.raises(TypeError, match=f"constraint 'flight_conflict_cost': {re.escape(message)}"):
@@ -440,7 +439,7 @@ def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
 )
 def test_old_names_are_gone(old):
     """0.2.0 renamed the catalog; the pre-0.2.0 names are unknown now (no aliases)."""
-    pick = SimpleNamespace(name=old, weight=None, hard=None, exponent=1.0)
+    pick = SimpleNamespace(name=old, weight=None, level=None, exponent=1.0)
     with pytest.raises(ValueError, match="unknown constraint"):
         solve([pick])
     with pytest.raises(ValueError, match="unknown constraint"):

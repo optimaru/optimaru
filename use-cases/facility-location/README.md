@@ -21,7 +21,7 @@ The classic FLP: pick one facility for every consumer.
 | `facility_setup_cost` | `FacilitySetupCost` | soft | 2 | its setup cost while it serves at least one consumer |
 | `distance_from_facility_cost` | `DistanceFromFacilityCost` | soft | 6 | summed consumer-to-facility distance (m) |
 
-Every constraint is flippable (`hard=True` / `hard=False`), none is a reward and all
+Every constraint is flippable (`level="hard"` / `level="soft"`), none is a reward and all
 three are scored by default (`default_enabled`);
 `facility_location.constraint_info()` reports exactly this table from the C++
 components (`kDefaultLevel` / `kDefaultWeight`). The distance weight **6** is the
@@ -176,7 +176,7 @@ solver's `solve` before the engine runs — the engine only fills what is still 
 4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
    `description_en` / `description_ko` to `python/facility_location/constraints.py` (plus its
    module-level default instance); callers then pick, reweight or flip it:
-   `constraints=get_constraints([..., MyRuleCost(weight=5, hard=True)])`;
+   `constraints=get_constraints([..., MyRuleCost(weight=5, level="hard")])`;
 5. mirror it in the CP-SAT model in
    [`benchmarks/facility-location/cpsat`](../../benchmarks/facility-location/cpsat) (a plugin
    subclassing the spec; defaults come from `constraint_info()`) so the benchmark stays like

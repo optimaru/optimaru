@@ -39,7 +39,7 @@ holds the exact CP-SAT reference.
 | `used_stations_cost` | `UsedStationsCost` | soft | 1 | stations with a load > 0 (the SALBP-1 objective) | global |
 | `workload_imbalance_cost` | `WorkloadImbalanceCost` | soft | **0** (opt-in) | max - min load over the used stations | global |
 
-Every constraint is flippable (`hard=True` / `hard=False`), none is a reward, and
+Every constraint is flippable (`level="hard"` / `level="soft"`), none is a reward, and
 all but `workload_imbalance_cost` are scored by default (`default_enabled`);
 `assembly_line_balancing.constraint_info()` reports exactly this table from the C++
 components (`kDefaultLevel` / `kDefaultWeight`). An unassigned task (`station = -1`)
@@ -251,7 +251,7 @@ pin its results.
 4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
    `description_en` / `description_ko` to `python/assembly_line_balancing/constraints.py`
    (plus its module-level default instance); callers then pick, reweight or flip it:
-   `constraints=[..., MyRuleCost(weight=5, hard=True)]`;
+   `constraints=[..., MyRuleCost(weight=5, level="hard")]`;
 5. mirror it in the CP-SAT model in
    [`benchmarks/assembly-line-balancing/cpsat`](../../benchmarks/assembly-line-balancing/cpsat)
    (a plugin subclassing the spec; defaults come from `constraint_info()`), with an exact

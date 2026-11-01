@@ -240,9 +240,9 @@ class ScheduleContext:
 class RulePlugin(ConstraintPlugin[ScheduleContext]):
     """CP-SAT formulation mixed into one domain spec (the plugin is the rule).
 
-    The level is the engine's: ``hard=None`` keeps the C++ component's default
-    level (the ``constraint_info()`` row, `spec.level`), True is hard, False is
-    soft — the rule `ObjectiveBuilder.level_of` applies too.
+    The level is the engine's: ``level=None`` keeps the C++ component's default
+    level (the ``constraint_info()`` row, `spec.level`), otherwise ``"hard"`` or
+    ``"soft"`` — the rule `ObjectiveBuilder.level_of` applies too.
     """
 
     # Whether the raw cost can be fractional. Only the soft level has a fixed-point
@@ -251,7 +251,7 @@ class RulePlugin(ConstraintPlugin[ScheduleContext]):
 
     @property
     def is_hard(self) -> bool:
-        return self.spec.level == "hard" if self.hard is None else bool(self.hard)
+        return (self.spec.level if self.level is None else self.level) == "hard"
 
     @property
     def scale(self) -> int:
@@ -265,7 +265,7 @@ class RulePlugin(ConstraintPlugin[ScheduleContext]):
             raise ValueError(
                 f"rule {self.name!r}: weight must be an integer for CP-SAT"
             )
-        if self.hard is True and self.spec.reward:
+        if self.level == "hard" and self.spec.reward:
             raise ValueError(f"rule {self.name!r} is a reward and cannot be hard")
         if self.is_hard and self.fractional:
             raise ValueError(

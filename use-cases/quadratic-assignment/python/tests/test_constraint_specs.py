@@ -100,7 +100,7 @@ def test_get_constraints_defaults_to_the_full_set():
 
 
 def test_module_level_instances_keep_every_default():
-    """Module-level instances keep the defaults (weight=None, hard=None, exponent=1)."""
+    """Module-level instances keep the defaults (weight=None, level=None, exponent=1)."""
     instances = (
         pinned_assignments_cost,
         forbidden_assignments_cost,
@@ -109,7 +109,7 @@ def test_module_level_instances_keep_every_default():
         flow_distance_cost,
     )
     for spec in instances:
-        assert (spec.weight, spec.hard, spec.exponent) == (None, None, 1.0)
+        assert (spec.weight, spec.level, spec.exponent) == (None, None, 1.0)
     assert list(instances) == get_constraints()
 
 
@@ -245,12 +245,12 @@ def test_level_can_be_flipped():
     """Demoting a hard constraint moves its cost to the soft level; promoting a soft one, to hard."""
     problem = side()
     flipped = [
-        spec if spec.name != "location_capacity_cost" else LocationCapacityCost(hard=False)
+        spec if spec.name != "location_capacity_cost" else LocationCapacityCost(level="soft")
         for spec in get_constraints()
     ]
     assert qap.calculate_score(problem, flipped) == (-2, -39.0)
     assert engine_score(problem, flipped) == (-2, -39.0)
-    promoted = [spec if spec.name != "assignment_cost" else AssignmentCost(hard=True) for spec in get_constraints()]
+    promoted = [spec if spec.name != "assignment_cost" else AssignmentCost(level="hard") for spec in get_constraints()]
     assert qap.calculate_score(problem, promoted) == (-19, -22.0)
     assert engine_score(problem, promoted) == (-19, -22.0)
 
@@ -297,9 +297,9 @@ def test_specs_validate_their_knobs(kwargs, error):
 
 def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     """The C++ side guards too: a duck-typed pick cannot smuggle a negative weight in."""
-    negative = SimpleNamespace(name="flow_distance_cost", weight=-2.0, hard=None, exponent=1.0)
-    flat = SimpleNamespace(name="flow_distance_cost", weight=None, hard=None, exponent=0.0)
-    unbounded = SimpleNamespace(name="flow_distance_cost", weight=None, hard=None, exponent=1.0, offset=float("inf"))
+    negative = SimpleNamespace(name="flow_distance_cost", weight=-2.0, level=None, exponent=1.0)
+    flat = SimpleNamespace(name="flow_distance_cost", weight=None, level=None, exponent=0.0)
+    unbounded = SimpleNamespace(name="flow_distance_cost", weight=None, level=None, exponent=1.0, offset=float("inf"))
     for pick, message in (
         (negative, "weight must be finite and >= 0"),
         (flat, "exponent must be finite and > 0"),
@@ -318,8 +318,7 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     [
         ({"weight": True}, "weight must be a number or None, not True"),
         ({"weight": "2"}, "weight must be a number or None, not '2'"),
-        ({"hard": 1}, "hard must be True, False or None, not 1"),
-        ({"hard": "x"}, "hard must be True, False or None, not 'x'"),
+        ({"level": 1}, "level must be a Level, its name or None, not 1"),
         ({"exponent": True}, "exponent must be a number, not True"),
         ({"offset": "5"}, "offset must be a number, not '5'"),
         ({"offset": False}, "offset must be a number, not False"),
@@ -329,7 +328,7 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
 )
 def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
     """The C++ path checks the knob types like _constraint.py: TypeError, the same words."""
-    pick = SimpleNamespace(name="location_capacity_cost", weight=None, hard=None, exponent=1.0)
+    pick = SimpleNamespace(name="location_capacity_cost", weight=None, level=None, exponent=1.0)
     for key, value in knobs.items():
         setattr(pick, key, value)
     with pytest.raises(TypeError, match=f"constraint 'location_capacity_cost': {re.escape(message)}"):
@@ -349,7 +348,7 @@ def test_unknown_and_old_names_are_refused():
     )
     raw = qap.constraint_costs(side())
     for old in (*old_names, "fixed_assignments_cost", "flow_distance"):
-        pick = SimpleNamespace(name=old, weight=None, hard=None, exponent=1.0)
+        pick = SimpleNamespace(name=old, weight=None, level=None, exponent=1.0)
         with pytest.raises(ValueError, match="unknown constraint"):
             qap.solve(three(), time_limit_seconds=0, constraints=[pick])
         with pytest.raises(ValueError, match="unknown constraint"):
@@ -384,10 +383,10 @@ def test_naming_a_constraint_twice_scores_both_picks():
     [
         None,
         [flow_distance_cost],
-        [PinnedAssignmentsCost(weight=3), LocationCapacityCost(hard=False), flow_distance_cost],
+        [PinnedAssignmentsCost(weight=3), LocationCapacityCost(level="soft"), flow_distance_cost],
         [LocationCapacityCost(exponent=2.0), ForbiddenAssignmentsCost(weight=0.5), FlowDistanceCost(weight=2)],
-        [PinnedAssignmentsCost(hard=False, exponent=0.5), FlowDistanceCost(exponent=1.5)],
-        [PinnedAssignmentsCost(weight=0.5), ForbiddenAssignmentsCost(weight=0.5), AssignmentCost(hard=True)],
+        [PinnedAssignmentsCost(level="soft", exponent=0.5), FlowDistanceCost(exponent=1.5)],
+        [PinnedAssignmentsCost(weight=0.5), ForbiddenAssignmentsCost(weight=0.5), AssignmentCost(level="hard")],
         [*get_constraints(), LocationCapacityCost(weight=0.5, exponent=2.0), FlowDistanceCost(weight=0.5)],
         [
             LocationCapacityCost(offset=1.0),
@@ -532,7 +531,7 @@ def test_the_keys_follow_the_pick_order_of_each_name():
         (PinnedAssignmentsCost(offset=-1), (-2, 0.0)),
         (PinnedAssignmentsCost(offset=-1, clip=False), (-2, 0.0)),  # still L1 only
         (ForbiddenAssignmentsCost(offset=3, clip=False), (2, 0.0)),  # L2 only: 1 - 3
-        (ForbiddenAssignmentsCost(hard=False, offset=0.5), (0, -0.5)),
+        (ForbiddenAssignmentsCost(level="soft", offset=0.5), (0, -0.5)),
         # The objectives shape their single total: flow 22, assignment 15.
         (FlowDistanceCost(offset=20), (0, -2.0)),
         (FlowDistanceCost(offset=30, clip=False), (0, 8.0)),  # 22 - 30 below the offset: a bonus
@@ -617,7 +616,7 @@ def test_offset_zero_reproduces_the_0_2_0_scores():
             PinnedAssignmentsCost(offset=1, clip=False, weight=2),
             ForbiddenAssignmentsCost(offset=-1),
             LocationCapacityCost(),
-            LocationCapacityCost(offset=1, exponent=2, weight=0.5, hard=False),
+            LocationCapacityCost(offset=1, exponent=2, weight=0.5, level="soft"),
             AssignmentCost(offset=-10, clip=False),
             FlowDistanceCost(offset=20, clip=False),
             FlowDistanceCost(weight=0.1, exponent=2, offset=5),

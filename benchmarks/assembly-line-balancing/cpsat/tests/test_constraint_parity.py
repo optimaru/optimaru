@@ -206,13 +206,13 @@ def test_cpsat_defaults_are_the_engine_defaults():
         assert entry["reward"] == row.reward
         assert entry["default_enabled"] == row.default_enabled
         assert entry["kind"] == "either"  # every assembly-line constraint is flippable
-        assert entry["params"] == {"weight": None, "hard": None, "exponent": 1.0, "offset": 0.0, "clip": True}
+        assert entry["params"] == {"weight": None, "level": None, "exponent": 1.0, "offset": 0.0, "clip": True}
     assert {entry["name"]: entry["default_enabled"] for entry in entries}["workload_imbalance_cost"] is False
 
 
 def test_demoting_hard_constraints_scores_like_the_engine():
-    """hard=False lands on soft in both solvers: the reported score is the engine's under the same selection."""
-    selection = [StationCapacityCost(hard=False), TaskPrecedenceCost(hard=False), *get_constraints()[2:]]
+    """level="soft" lands on soft in both solvers: the reported score is the engine's under the same selection."""
+    selection = [StationCapacityCost(level="soft"), TaskPrecedenceCost(level="soft"), *get_constraints()[2:]]
     solved = solve(Model.model_validate(FIXTURE_H), time_limit_seconds=10, constraints=selection)
     engine = score(constraint_costs(solved.to_core()), selection)
     assert (solved.score_hard, solved.score_soft) == pytest.approx(tuple(engine))

@@ -64,8 +64,8 @@ level and weight are the defaults `constraint_info()` reports:
 | 9 | `away_to_away_hop_cost` | soft | 1 | if m2.away == m1.away, dist(m1.home, m2.home) |
 | 10 | `away_to_home_hop_cost` | soft | 1 | if m2.home == m1.away, dist(m1.home, m1.away) |
 
-Each spec takes `weight=None` (the default above), `hard=None` (the default level;
-`True` = hard, `False` = soft), `exponent=1.0` (applied per round position for the
+Each spec takes `weight=None` (the default above), `level=None` (the default level,
+otherwise `"hard"` or `"soft"`), `exponent=1.0` (applied per round position for the
 three unit constraints, on the one total for the seven globals) and the keyword-only
 `offset=0.0` / `clip=True`; a constraint may be picked several times, each pick with its
 own knobs:
@@ -80,7 +80,7 @@ sl.solve(schedule, time_limit_seconds=1.0, constraints=[
     *get_constraints()[:2], WorkdayClassicMatchesCost(weight=10_000), *get_constraints()[3:],
 ])
 raw = sl.constraint_costs(schedule)       # raw costs, re-priced in pure Python:
-score(raw), score(raw, [WorkdayClassicMatchesCost(hard=True)])
+score(raw), score(raw, [WorkdayClassicMatchesCost(level="hard")])
 # offset / clip shift the shaping (clip=True: only the km beyond 1000 count).
 score(raw, [AwayToAwayHopCost(), AwayToAwayHopCost(weight=0.01, exponent=2, offset=1000)])
 ```

@@ -16,7 +16,7 @@
 //   (i) knob setters on a bare component, labels, wrappers that copy their
 //       inner component's metadata, catalogInfo() for a catalog wider than
 //       the defaults
-//   (j) python::levelForHard(): the bindings' hard=True/False guard and its
+//   (j) python::checkedLevel(): the bindings' level guard and its
 //       wording (applyKnobs / applyConstraints raise it as ValueError)
 //   (k) LIST kind with a medium level: every preview (unit cells, a
 //       previewing global, BelowHard rounding) equals the applied score,
@@ -30,7 +30,7 @@
 //       (applyConstraints, applyKnobs); the exponent is always applied, so
 //       an explicit 1.0 resets a component built with another exponent
 //   (n) constraintCosts() reports each component's default weight / level
-//       next to the re-stated ones (what weight=None / hard=None mean)
+//       next to the re-stated ones (what weight=None / level=None mean)
 //   (o) offset / clip: the threshold sign(x) max(0, |x| - offset)^e and the
 //       literal (x - offset)^e, by hand, per unit for a unit constraint
 //       (zero-raw units and a scoped constraint's units in literal mode,
@@ -748,34 +748,53 @@ std::string refusal(const std::function<void()>& edit) {
 }
 
 void testBindingLevelGuard() {
-    std::printf("== (j) python::levelForHard: the bindings' hard=True/False guard ==\n");
-    using optimaru::python::levelForHard;
-    // What solve(..., constraints=[RewardCost(hard=True)]) and
-    // StructuralCost(hard=False) raise as ValueError through applyConstraints /
+    std::printf("== (j) python::checkedLevel: the bindings' level guard ==\n");
+    using optimaru::MediumFold;
+    using optimaru::python::checkedLevel;
+    using optimaru::python::levelNamed;
+    const MediumFold none = MediumFold::none();
+    const MediumFold intoSoft = MediumFold::intoSoft(1000.0);
+    const MediumFold belowHard = MediumFold::belowHard(100);
+    check(levelNamed("hard") == Level::Hard && levelNamed("medium") == Level::Medium &&
+                  levelNamed("soft") == Level::Soft && !levelNamed("Hard") && !levelNamed(""),
+          "a level is named exactly 'hard', 'medium' or 'soft'");
+    // What solve(..., constraints=[RewardCost(level="hard")]) and
+    // StructuralCost(level="soft") raise as ValueError through applyConstraints /
     // applyKnobs, in the Python base's words.
     const PreferenceReward<SoftFoldTasks> reward;
-    check(refusal([&] { levelForHard(reward, true, "'preference_reward'"); }) ==
+    check(refusal([&] { checkedLevel(reward, Level::Hard, intoSoft, "'preference_reward'"); }) ==
                   "constraint 'preference_reward' is a reward (raw cost <= 0) and cannot be hard",
-          "hard=True on a reward is refused: 'is a reward'");
-    check(levelForHard(reward, false, "'preference_reward'") == Level::Soft,
-          "hard=False on a soft reward re-states its level");
+          "level='hard' on a reward is refused: 'is a reward'");
+    check(checkedLevel(reward, Level::Soft, intoSoft, "'preference_reward'") == Level::Soft,
+          "level='soft' on a soft reward re-states its level");
+    check(refusal([&] { checkedLevel(reward, Level::Medium, belowHard, "'preference_reward'"); }) ==
+                  "constraint 'preference_reward' is a reward (raw cost <= 0) and cannot be "
+                  "medium here, where medium counts toward the hard score",
+          "level='medium' on a reward is refused where medium lands in the hard level");
     const ForbiddenWorkerCost<SoftFoldTasks> forbidden;
-    check(refusal([&] { levelForHard(forbidden, false, "'forbidden_worker_cost'"); }) ==
-                  "constraint 'forbidden_worker_cost' is always hard; hard=False is not allowed",
-          "hard=False on a non-flippable hard constraint is refused: 'is always hard'");
-    check(levelForHard(forbidden, true, "'forbidden_worker_cost'") == Level::Hard,
-          "hard=True on it re-states its level");
+    check(refusal([&] { checkedLevel(forbidden, Level::Soft, intoSoft, "'forbidden_worker_cost'"); }) ==
+                  "constraint 'forbidden_worker_cost' is always hard; level='soft' is not allowed",
+          "level='soft' on a non-flippable hard constraint is refused: 'is always hard'");
+    check(refusal([&] { checkedLevel(forbidden, Level::Medium, intoSoft, "'forbidden_worker_cost'"); }) ==
+                  "constraint 'forbidden_worker_cost' is always hard; level='medium' is not allowed",
+          "level='medium' on it is refused too");
+    check(checkedLevel(forbidden, Level::Hard, intoSoft, "'forbidden_worker_cost'") == Level::Hard,
+          "level='hard' on it re-states its level");
     const OverloadCost<SoftFoldTasks> overload;
-    check(levelForHard(overload, false, "'overload_cost'") == Level::Soft &&
-                  levelForHard(overload, true, "'overload_cost'") == Level::Hard,
-          "a flippable medium constraint: hard=False -> soft, hard=True -> hard");
+    check(checkedLevel(overload, Level::Soft, intoSoft, "'overload_cost'") == Level::Soft &&
+                  checkedLevel(overload, Level::Hard, intoSoft, "'overload_cost'") == Level::Hard &&
+                  checkedLevel(overload, Level::Medium, intoSoft, "'overload_cost'") == Level::Medium,
+          "a flippable medium constraint takes every level");
+    check(refusal([&] { checkedLevel(overload, Level::Medium, none, "'overload_cost'"); }) ==
+                  "constraint 'overload_cost': this use case has no medium level",
+          "level='medium' on a domain without a medium fold is refused");
     OverloadCost<SoftFoldTasks> fixedMedium;
     fixedMedium.levelFlippable = false;
-    check(refusal([&] { levelForHard(fixedMedium, false, "'overload_cost'"); }) ==
-                          "constraint 'overload_cost' is always medium; hard=False is not allowed" &&
-                  refusal([&] { levelForHard(fixedMedium, true, "'overload_cost'"); }) ==
-                          "constraint 'overload_cost' is always medium; hard=True is not allowed",
-          "a non-flippable medium constraint refuses both hard=True and hard=False");
+    check(refusal([&] { checkedLevel(fixedMedium, Level::Soft, intoSoft, "'overload_cost'"); }) ==
+                          "constraint 'overload_cost' is always medium; level='soft' is not allowed" &&
+                  refusal([&] { checkedLevel(fixedMedium, Level::Hard, intoSoft, "'overload_cost'"); }) ==
+                          "constraint 'overload_cost' is always medium; level='hard' is not allowed",
+          "a non-flippable medium constraint refuses level='hard' and level='soft'");
     std::printf("\n");
 }
 
@@ -1183,22 +1202,27 @@ void testRestateKnobs() {
         auto assembly = defaults<SoftFoldTasks>();
         Knobs knobs;
         knobs.weight = 5.0;
-        knobs.hard = false;
+        knobs.level = Level::Soft;
         restateKnobs(assembly, "conflictCost", knobs, "'conflict_cost'");
         const optimaru::ConstraintMetadata* conflict = assembly.find("conflictCost");
         check(conflict->weight == 5.0 && conflict->level == Level::Soft,
-              "weight 5, hard=False: re-stated on the assembly");
-        Knobs keep;  // weight / hard unset keep the component's defaults
+              "weight 5, level soft: re-stated on the assembly");
+        Knobs keep;  // weight / level unset keep the component's defaults
         restateKnobs(assembly, "overloadCost", keep, "'overload_cost'");
         const optimaru::ConstraintMetadata* overload = assembly.find("overloadCost");
         check(overload->weight == 1.0 && overload->level == Level::Medium,
-              "weight / hard unset keep the default weight and the medium level");
+              "weight / level unset keep the default weight and the medium level");
         Knobs hard;
-        hard.hard = true;
+        hard.level = Level::Hard;
         check(refusal([&] {
                   restateKnobs(assembly, "preferenceReward", hard, "'preference_reward'");
               }) == "constraint 'preference_reward' is a reward (raw cost <= 0) and cannot be hard",
-              "hard=True on a reward is refused in the Python base's words");
+              "level='hard' on a reward is refused in the Python base's words");
+        Knobs medium;
+        medium.level = Level::Medium;
+        restateKnobs(assembly, "taskCostCost", medium, "'task_cost_cost'");
+        check(assembly.find("taskCostCost")->level == Level::Medium,
+              "level='medium' moves a soft constraint onto the medium level");
     }
     {
         // applyKnobs' path: a component built outside any assembly.
@@ -1206,16 +1230,16 @@ void testRestateKnobs() {
         bare.setExponent(2.0);
         Knobs knobs;
         knobs.exponent = 1.0;
-        restateKnobs(bare, knobs, "'task_cost_cost'");
+        restateKnobs(bare, knobs, optimaru::MediumFold::none(), "'task_cost_cost'");
         check(bare.exponent == 1.0,
               "the component path applies an explicit 1.0 the same way as the assembly path");
         Knobs soft;
-        soft.hard = false;
+        soft.level = Level::Soft;
         soft.weight = 2.5;
         ForbiddenWorkerCost<Tasks> forbidden;
-        check(refusal([&] { restateKnobs(forbidden, soft, "'forbidden_worker_cost'"); }) ==
-                      "constraint 'forbidden_worker_cost' is always hard; hard=False is not allowed",
-              "hard=False on a non-flippable component is refused on the component path too");
+        check(refusal([&] { restateKnobs(forbidden, soft, kSoftFold, "'forbidden_worker_cost'"); }) ==
+                      "constraint 'forbidden_worker_cost' is always hard; level='soft' is not allowed",
+              "level='soft' on a non-flippable component is refused on the component path too");
     }
     std::printf("\n");
 }
@@ -1435,7 +1459,8 @@ void testOffsetClip() {
         knobs.offset = -2.0;
         knobs.clip = false;
         TaskCostCost<Tasks> bare;
-        optimaru::python::restateKnobs(bare, knobs, "'task_cost_cost'");
+        optimaru::python::restateKnobs(bare, knobs, optimaru::MediumFold::none(),
+                                       "'task_cost_cost'");
         check(bare.offset == -2.0 && !bare.clip, "restateKnobs applies offset / clip to a component");
     }
     {

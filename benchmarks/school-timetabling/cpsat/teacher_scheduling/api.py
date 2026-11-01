@@ -6,13 +6,13 @@ fields, and `type` is the discriminator naming the constraint. There is no
 generated code file, so adding a parameter to a constraint updates the API
 schema on the spot — the two cannot drift apart.
 
-    {"type": "unassigned_lessons_cost", "hard": false, "weight": 10000}
+    {"type": "unassigned_lessons_cost", "level": "soft", "weight": 10000}
     {"type": "teacher_gap_cost", "weight": 20}
 
-Every DTO carries the engine's five knobs (weight=None, hard=None,
+Every DTO carries the engine's five knobs (weight=None, level=None,
 exponent=1.0, offset=0.0, clip=True) — the constraint classes are the engine
 specs. ``weight=None`` is the engine default on either level:
-``{"type": "unassigned_lessons_cost", "hard": false}`` costs 1 per unplaced
+``{"type": "unassigned_lessons_cost", "level": "soft"}`` costs 1 per unplaced
 period, so send ``"weight": 10000`` (`registry.UNASSIGNED_WEIGHT`) for partial
 timetabling.
 

@@ -54,7 +54,7 @@ print(plan.routes())                   # {"V1": ["C1"]}
   weight (the C++ components' `kDefaultLevel` / `kDefaultWeight`);
   `vrp_routing.constraints` picks, re-weights and flips them for
   `Solver.solve_with_constraints` / `solve_request(..., constraints=...)`. Every
-  constraint takes five knobs (`weight`, `hard`, `exponent` and the keyword-only
+  constraint takes five knobs (`weight`, `level`, `exponent` and the keyword-only
   `offset` / `clip`) and may be picked several times, each pick with its own knobs
   (`[TravelTimeCost(), TravelTimeCost(exponent=2, offset=3600)]` is the driving time
   plus the square of every second beyond one hour per vehicle). The constraint table,

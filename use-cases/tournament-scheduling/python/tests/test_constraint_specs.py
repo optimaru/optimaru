@@ -103,7 +103,7 @@ def test_level_can_be_flipped():
     soft_level = solve([team_conflict_cost, confrontation_count_imbalance_cost])
     assert soft_level.hard == 0 and soft_level.soft < 0
 
-    hard_level = solve([team_conflict_cost, ConfrontationCountImbalanceCost(hard=True)])
+    hard_level = solve([team_conflict_cost, ConfrontationCountImbalanceCost(level="hard")])
     assert hard_level.hard < 0
     assert hard_level.soft == 0
 
@@ -122,7 +122,7 @@ def test_spec_subclass_must_name_a_constraint():
 
 
 def test_module_level_instances_keep_every_default():
-    """Module-level instances must keep the defaults (weight=None, hard=None, exponent=1)."""
+    """Module-level instances must keep the defaults (weight=None, level=None, exponent=1)."""
     instances = (
         team_conflict_cost,
         team_unavailability_cost,
@@ -130,7 +130,7 @@ def test_module_level_instances_keep_every_default():
         confrontation_count_imbalance_cost,
     )
     for spec in instances:
-        assert (spec.weight, spec.hard, spec.exponent) == (None, None, 1.0)
+        assert (spec.weight, spec.level, spec.exponent) == (None, None, 1.0)
     assert [spec.name for spec in instances] == ts.list_constraints()
 
 
@@ -237,19 +237,19 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     class Negative:
         name = "confrontation_count_imbalance_cost"
         weight = -2.0
-        hard = None
+        level = None
         exponent = 1.0
 
     class Flat:
         name = "confrontation_count_imbalance_cost"
         weight = None
-        hard = None
+        level = None
         exponent = 0.0
 
     class Unbounded:
         name = "confrontation_count_imbalance_cost"
         weight = None
-        hard = None
+        level = None
         exponent = 1.0
         offset = float("inf")
 
@@ -271,8 +271,7 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     [
         ({"weight": True}, "weight must be a number or None, not True"),
         ({"weight": "2"}, "weight must be a number or None, not '2'"),
-        ({"hard": 1}, "hard must be True, False or None, not 1"),
-        ({"hard": "x"}, "hard must be True, False or None, not 'x'"),
+        ({"level": 1}, "level must be a Level, its name or None, not 1"),
         ({"exponent": True}, "exponent must be a number, not True"),
         ({"offset": "5"}, "offset must be a number, not '5'"),
         ({"offset": False}, "offset must be a number, not False"),
@@ -283,7 +282,7 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
 def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
     """The C++ path checks the knob types like _constraint.py: TypeError, the same words."""
     name = "confrontation_count_imbalance_cost"
-    pick = SimpleNamespace(name=name, weight=None, hard=None, exponent=1.0)
+    pick = SimpleNamespace(name=name, weight=None, level=None, exponent=1.0)
     for key, value in knobs.items():
         setattr(pick, key, value)
     with pytest.raises(TypeError, match=f"constraint '{name}': {re.escape(message)}"):
@@ -303,7 +302,7 @@ OLD_NAMES = (
 @pytest.mark.parametrize("old", OLD_NAMES)
 def test_old_names_are_gone(old):
     """0.2.0 renamed the catalog; the pre-0.2.0 names are unknown now (no aliases)."""
-    pick = SimpleNamespace(name=old, weight=None, hard=None, exponent=1.0)
+    pick = SimpleNamespace(name=old, weight=None, level=None, exponent=1.0)
     with pytest.raises(ValueError, match="unknown constraint"):
         ts.solve(build_schedule(), time_limit_seconds=0.1, constraints=[pick])
     with pytest.raises(ValueError, match="unknown constraint"):
@@ -322,7 +321,7 @@ NEAR_MISSES = (
 @pytest.mark.parametrize("typo", NEAR_MISSES)
 def test_a_near_miss_of_a_name_is_unknown(typo):
     """A name one suffix off a real one is still unknown, never a silent match."""
-    pick = SimpleNamespace(name=typo, weight=None, hard=None, exponent=1.0)
+    pick = SimpleNamespace(name=typo, weight=None, level=None, exponent=1.0)
     with pytest.raises(ValueError, match="unknown constraint"):
         ts.solve(build_schedule(), time_limit_seconds=0.1, constraints=[pick])
     with pytest.raises(ValueError, match="unknown constraint"):
@@ -368,14 +367,14 @@ def test_the_medium_level_folds_into_soft_at_1e6():
     ("spec", "expected"),
     [
         (AssignmentCountImbalanceCost(), (0, -2.16025 * 1e6)),  # medium, folded
-        (AssignmentCountImbalanceCost(hard=True), (-2, 0.0)),  # one hard unit per raw unit, the total rounded
-        (AssignmentCountImbalanceCost(hard=False), (0, -2.16025)),  # one soft unit, outside the fold
+        (AssignmentCountImbalanceCost(level="hard"), (-2, 0.0)),  # one hard unit per raw unit, the total rounded
+        (AssignmentCountImbalanceCost(level="soft"), (0, -2.16025)),  # one soft unit, outside the fold
         (AssignmentCountImbalanceCost(weight=3), (0, -3 * 2.16025 * 1e6)),  # the weight stays in medium units
-        (AssignmentCountImbalanceCost(hard=False, weight=5), (0, -5 * 2.16025)),
+        (AssignmentCountImbalanceCost(level="soft", weight=5), (0, -5 * 2.16025)),
     ],
 )
 def test_medium_knobs_score_the_same_in_python_and_in_the_engine(spec, expected):
-    """hard=True / hard=False move the medium constraint to hard / soft at one unit per raw
+    """level="hard" / level="soft" move the medium constraint to hard / soft at one unit per raw
     unit; an explicit weight stays in medium units. Both paths agree."""
     raw = ts.constraint_costs(_uneven_loads())
     python = score(raw, [spec])
@@ -385,8 +384,8 @@ def test_medium_knobs_score_the_same_in_python_and_in_the_engine(spec, expected)
 
 
 def test_demoting_the_medium_scores_like_the_engine_on_a_solve():
-    """hard=False on the medium term: the solve's own score equals the pure-Python rescoring."""
-    selection = [spec if spec.name != MEDIUM else type(spec)(hard=False) for spec in get_constraints()]
+    """level="soft" on the medium term: the solve's own score equals the pure-Python rescoring."""
+    selection = [spec if spec.name != MEDIUM else type(spec)(level="soft") for spec in get_constraints()]
     schedule = _solved(selection)
     python = score(ts.constraint_costs(schedule), selection)
     assert python.hard == schedule.score.hard
@@ -428,9 +427,9 @@ def test_score_reproduces_the_engine_score_exactly():
         None,
         [team_conflict_cost],
         [team_conflict_cost, team_unavailability_cost, ConfrontationCountImbalanceCost(weight=50)],
-        [TeamUnavailabilityCost(hard=False), team_conflict_cost, confrontation_count_imbalance_cost],
+        [TeamUnavailabilityCost(level="soft"), team_conflict_cost, confrontation_count_imbalance_cost],
         [team_conflict_cost, team_unavailability_cost, ConfrontationCountImbalanceCost(exponent=2.0)],
-        [TeamConflictCost(exponent=2.0), team_unavailability_cost, AssignmentCountImbalanceCost(hard=True)],
+        [TeamConflictCost(exponent=2.0), team_unavailability_cost, AssignmentCountImbalanceCost(level="hard")],
     ],
 )
 def test_score_matches_the_engine_for_arbitrary_specs(specs):
@@ -600,8 +599,8 @@ def test_a_repeated_medium_pick_adds_up():
     assert _agrees(_zero_budget(_hand(), picks), expected)
     mixed = [
         AssignmentCountImbalanceCost(),
-        AssignmentCountImbalanceCost(hard=True),
-        AssignmentCountImbalanceCost(hard=False, offset=1),
+        AssignmentCountImbalanceCost(level="hard"),
+        AssignmentCountImbalanceCost(level="soft", offset=1),
     ]
     expected = (-2, -ASSIGNMENT_IMBALANCE * 1e6 - (ASSIGNMENT_IMBALANCE - 1))
     assert _agrees(score(ts.constraint_costs(_hand(), mixed), mixed), expected)
@@ -624,8 +623,8 @@ def test_a_repeated_medium_pick_adds_up():
         (ConfrontationCountImbalanceCost(offset=1, clip=False), (0, -(CONFRONTATION_IMBALANCE - 1))),
         (ConfrontationCountImbalanceCost(offset=0.5, exponent=2), (0, -((CONFRONTATION_IMBALANCE - 0.5) ** 2))),
         (AssignmentCountImbalanceCost(offset=2), (0, -(ASSIGNMENT_IMBALANCE - 2) * 1e6)),
-        (AssignmentCountImbalanceCost(offset=3, clip=False, hard=True), (1, 0.0)),  # -0.83975 -> -1
-        (AssignmentCountImbalanceCost(offset=-1, hard=False), (0, -(ASSIGNMENT_IMBALANCE + 1))),
+        (AssignmentCountImbalanceCost(offset=3, clip=False, level="hard"), (1, 0.0)),  # -0.83975 -> -1
+        (AssignmentCountImbalanceCost(offset=-1, level="soft"), (0, -(ASSIGNMENT_IMBALANCE + 1))),
     ],
 )
 def test_offsets_by_hand_on_both_paths(pick, expected):
@@ -694,7 +693,7 @@ SELECTIONS = {
         TeamUnavailabilityCost(offset=-1, clip=False),
         AssignmentCountImbalanceCost(),
         AssignmentCountImbalanceCost(offset=1, exponent=2),
-        AssignmentCountImbalanceCost(offset=-0.5, clip=False, hard=False, weight=3),
+        AssignmentCountImbalanceCost(offset=-0.5, clip=False, level="soft", weight=3),
         ConfrontationCountImbalanceCost(offset=0.5),
         ConfrontationCountImbalanceCost(offset=2, clip=False, weight=0.25),
     ],

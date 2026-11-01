@@ -86,7 +86,7 @@ def test_level_can_be_flipped():
     # Push demand 12 into a capacity-5 facility to force a violation.
     for consumer in problem.consumers:
         consumer.facility = 0
-    soft_capacity = FacilityCapacityCost(hard=False)
+    soft_capacity = FacilityCapacityCost(level="soft")
     assert fl.calculate_score(problem).hard < 0
     fl.solve(problem, time_limit_seconds=0.2, random_seed=1, constraints=[soft_capacity])
     assert problem.score.hard == 0
@@ -98,7 +98,7 @@ def test_unknown_constraint_name_raises():
     class Typo:
         name = "facility_setup_costs"  # trailing s
         weight = None
-        hard = None
+        level = None
         exponent = 1.0
 
     with pytest.raises(ValueError, match="unknown constraint"):
@@ -119,9 +119,9 @@ def test_spec_subclass_must_name_a_constraint():
 
 
 def test_module_level_instances_keep_every_default():
-    """Module-level instances must keep the defaults (weight=None, hard=None, exponent=1)."""
+    """Module-level instances must keep the defaults (weight=None, level=None, exponent=1)."""
     for spec in (facility_capacity_cost, facility_setup_cost, distance_from_facility_cost):
-        assert (spec.weight, spec.hard, spec.exponent) == (None, None, 1.0)
+        assert (spec.weight, spec.level, spec.exponent) == (None, None, 1.0)
     assert [spec.name for spec in get_constraints()] == [
         "facility_capacity_cost",
         "facility_setup_cost",
@@ -222,19 +222,19 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     class Negative:
         name = "facility_setup_cost"
         weight = -2.0
-        hard = None
+        level = None
         exponent = 1.0
 
     class Flat:
         name = "facility_setup_cost"
         weight = None
-        hard = None
+        level = None
         exponent = 0.0
 
     class Unbounded:
         name = "facility_setup_cost"
         weight = None
-        hard = None
+        level = None
         exponent = 1.0
         offset = float("inf")
 
@@ -254,8 +254,7 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     [
         ({"weight": True}, "weight must be a number or None, not True"),
         ({"weight": "2"}, "weight must be a number or None, not '2'"),
-        ({"hard": 1}, "hard must be True, False or None, not 1"),
-        ({"hard": "x"}, "hard must be True, False or None, not 'x'"),
+        ({"level": 1}, "level must be a Level, its name or None, not 1"),
         ({"exponent": True}, "exponent must be a number, not True"),
         ({"offset": "5"}, "offset must be a number, not '5'"),
         ({"offset": False}, "offset must be a number, not False"),
@@ -265,7 +264,7 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
 )
 def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
     """The C++ path checks the knob types like _constraint.py: TypeError, the same words."""
-    pick = SimpleNamespace(name="facility_setup_cost", weight=None, hard=None, exponent=1.0)
+    pick = SimpleNamespace(name="facility_setup_cost", weight=None, level=None, exponent=1.0)
     for key, value in knobs.items():
         setattr(pick, key, value)
     with pytest.raises(TypeError, match=f"constraint 'facility_setup_cost': {re.escape(message)}"):
@@ -276,9 +275,9 @@ def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
 
 def test_core_accepts_numpy_scalars_like_the_python_base():
     numpy = pytest.importorskip("numpy")
-    pick = SimpleNamespace(name="facility_capacity_cost", weight=numpy.float64(3.0), hard=numpy.False_, exponent=1.0)
+    pick = SimpleNamespace(name="facility_capacity_cost", weight=numpy.float64(3.0), level="soft", exponent=1.0)
     problem = _solved([pick])
-    spec = FacilityCapacityCost(weight=numpy.float64(3.0), hard=numpy.False_)
+    spec = FacilityCapacityCost(weight=numpy.float64(3.0), level="soft")
     assert score(fl.constraint_costs(problem), [spec]) == (problem.score.hard, pytest.approx(problem.score.soft))
 
 
@@ -289,7 +288,7 @@ def test_old_names_are_gone():
         class Old:
             name = old
             weight = None
-            hard = None
+            level = None
             exponent = 1.0
 
         with pytest.raises(ValueError, match="unknown constraint"):
@@ -351,9 +350,9 @@ def test_score_equals_the_engine_for_the_default_assembly():
         None,
         [capacity],
         [capacity, setup_cost, DistanceFromFacilityCost(weight=60)],
-        [FacilityCapacityCost(hard=False), setup_cost, distance],
+        [FacilityCapacityCost(level="soft"), setup_cost, distance],
         [capacity, setup_cost, DistanceFromFacilityCost(exponent=2.0)],
-        [FacilityCapacityCost(exponent=2.0), FacilitySetupCost(hard=True, weight=0.5), distance],
+        [FacilityCapacityCost(exponent=2.0), FacilitySetupCost(level="hard", weight=0.5), distance],
         [capacity, setup_cost, distance, DistanceFromFacilityCost(weight=0.5, exponent=2.0)],
         [capacity, setup_cost, DistanceFromFacilityCost(offset=10000.0), DistanceFromFacilityCost(offset=-50.0)],
         [capacity, FacilitySetupCost(offset=500.0, clip=False), DistanceFromFacilityCost(offset=20000.0, clip=False)],

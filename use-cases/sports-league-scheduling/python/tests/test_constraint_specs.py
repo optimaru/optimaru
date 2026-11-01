@@ -132,7 +132,7 @@ def test_level_can_be_flipped():
     soft_level = solve([*HARD_PICKS, *HOPS])
     assert soft_level.hard == 0 and soft_level.soft < 0
 
-    hard_level = solve([*HARD_PICKS, *(type(hop)(hard=True) for hop in HOPS)])
+    hard_level = solve([*HARD_PICKS, *(type(hop)(level="hard") for hop in HOPS)])
     assert hard_level.hard < 0
     assert hard_level.soft == 0
 
@@ -143,7 +143,7 @@ def test_unknown_constraint_name_raises():
     class Typo:
         name = "workday_classic_match_cost"  # missing the es of matches
         weight = None
-        hard = None
+        level = None
         exponent = 1.0
 
     with pytest.raises(ValueError, match="unknown constraint"):
@@ -164,9 +164,9 @@ def test_spec_subclass_must_name_a_constraint():
 
 
 def test_default_instances_carry_no_overrides():
-    """Module-level instances must keep the defaults (weight=None, hard=None, exponent 1)."""
+    """Module-level instances must keep the defaults (weight=None, level=None, exponent 1)."""
     for spec in get_constraints():
-        assert (spec.weight, spec.hard, spec.exponent) == (None, None, 1.0)
+        assert (spec.weight, spec.level, spec.exponent) == (None, None, 1.0)
 
 
 def test_every_spec_has_the_four_labels():
@@ -304,10 +304,10 @@ def test_weight_none_means_the_component_default():
 
 
 def test_demoting_a_hard_constraint_scores_it_as_soft():
-    """hard=False moves the raw cost to the soft level, in the engine and in score()."""
+    """level="soft" moves the raw cost to the soft level, in the engine and in score()."""
     schedule = build_schedule()
     schedule.set_assignment([0] * schedule.match_count())  # every match in round 0
-    demoted = [TeamConflictCost(hard=False)]
+    demoted = [TeamConflictCost(level="soft")]
     raw = sl.constraint_costs(schedule)
     pairs = sum(raw["team_conflict_cost"]["costs"])
     assert pairs > 0
@@ -315,7 +315,7 @@ def test_demoting_a_hard_constraint_scores_it_as_soft():
     assert score(raw, [team_conflict_cost]) == (-pairs, 0.0)
     # The engine path agrees. One round and two matches sharing team 0 make the
     # conflict unavoidable, so the solve reports a non-zero cost on whichever level
-    # the selection puts it (a binding that ignored hard=False would report -1hard).
+    # the selection puts it (a binding that ignored level="soft" would report -1hard).
     demoted_solve = forced_conflict_schedule()
     sl.solve(demoted_solve, time_limit_seconds=0.3, random_seed=1, constraints=demoted)
     assert (demoted_solve.score.hard, demoted_solve.score.soft) == (0, -1.0)
@@ -351,19 +351,19 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     class Negative:
         name = "workday_classic_matches_cost"
         weight = -2.0
-        hard = None
+        level = None
         exponent = 1.0
 
     class Flat:
         name = "workday_classic_matches_cost"
         weight = None
-        hard = None
+        level = None
         exponent = 0.0
 
     class Unbounded:
         name = "workday_classic_matches_cost"
         weight = None
-        hard = None
+        level = None
         exponent = 1.0
         offset = float("inf")
 
@@ -381,8 +381,7 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     [
         ({"weight": True}, "weight must be a number or None, not True"),
         ({"weight": "2"}, "weight must be a number or None, not '2'"),
-        ({"hard": 1}, "hard must be True, False or None, not 1"),
-        ({"hard": "x"}, "hard must be True, False or None, not 'x'"),
+        ({"level": 1}, "level must be a Level, its name or None, not 1"),
         ({"exponent": True}, "exponent must be a number, not True"),
         ({"offset": "5"}, "offset must be a number, not '5'"),
         ({"offset": False}, "offset must be a number, not False"),
@@ -392,7 +391,7 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
 )
 def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
     """The C++ path checks the knob types like _constraint.py: TypeError, the same words."""
-    pick = SimpleNamespace(name="workday_classic_matches_cost", weight=None, hard=None, exponent=1.0)
+    pick = SimpleNamespace(name="workday_classic_matches_cost", weight=None, level=None, exponent=1.0)
     for key, value in knobs.items():
         setattr(pick, key, value)
     with pytest.raises(TypeError, match=f"constraint 'workday_classic_matches_cost': {re.escape(message)}"):
@@ -431,7 +430,7 @@ def test_old_names_are_gone():
         "away_to_end_hop",
         "classic_matches",
     ]:
-        pick = SimpleNamespace(name=old, weight=None, hard=None, exponent=1.0)
+        pick = SimpleNamespace(name=old, weight=None, level=None, exponent=1.0)
         with pytest.raises(ValueError, match="unknown constraint"):
             sl.solve(build_schedule(), time_limit_seconds=0.1, constraints=[pick])
         with pytest.raises(ValueError, match="unknown constraint"):
@@ -555,7 +554,10 @@ def test_the_keys_follow_the_pick_order_of_each_name():
         (AwayToEndHopCost(offset=-5), (0, -36.0)),  # a negative offset adds to every non-zero round
         (AwayToEndHopCost(offset=-5, clip=False), (0, -(5 + 36))),  # ...or to every round
         (WorkdayClassicMatchesCost(offset=1, clip=False, weight=1), (0, 2.0)),  # two derby-free rounds
-        (StartToAwayHopCost(hard=True, offset=0.5, clip=False, weight=3), (-(62 - 2), 0.0)),  # 61.5 -> 62, -1.5 -> -2
+        (
+            StartToAwayHopCost(level="hard", offset=0.5, clip=False, weight=3),
+            (-(62 - 2), 0.0),
+        ),  # 61.5 -> 62, -1.5 -> -2
         # Global constraints shape their one total.
         (HomeToAwayHopCost(offset=3), (0, -10.0)),
         (HomeToAwayHopCost(offset=20, clip=False), (0, 7.0)),  # 13 - 20: a reward below 20 km

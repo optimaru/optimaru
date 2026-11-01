@@ -174,7 +174,7 @@ def test_level_can_be_flipped():
     assert soft_level.medium == 0  # carries every request
     assert soft_level.soft < 0
 
-    hard_level = solve([*picks, TravelTimeCost(hard=True)]).score
+    hard_level = solve([*picks, TravelTimeCost(level="hard")]).score
     assert hard_level.medium < 0  # gives up requests instead
     assert hard_level.soft == 0
 
@@ -185,7 +185,7 @@ def test_unknown_constraint_name_raises():
     class Typo:
         name = "same_vehicle_costs"  # trailing s
         weight = None
-        hard = None
+        level = None
         exponent = 1.0
 
     with pytest.raises(ValueError, match="unknown constraint"):
@@ -206,9 +206,9 @@ def test_spec_subclass_must_name_a_constraint():
 
 
 def test_default_instance_carries_no_overrides():
-    """Module-level instances must keep the defaults (weight=None, hard=None, exponent=1)."""
+    """Module-level instances must keep the defaults (weight=None, level=None, exponent=1)."""
     for spec in get_constraints():
-        assert (spec.weight, spec.hard, spec.exponent) == (None, None, 1.0)
+        assert (spec.weight, spec.level, spec.exponent) == (None, None, 1.0)
         assert (
             getattr(specs, spec.name) is spec
         )  # the instance is named after the constraint
@@ -467,11 +467,11 @@ def test_the_medium_level_folds_into_soft():
     others = [
         spec for spec in get_constraints() if spec.name != "unassigned_requests_cost"
     ]
-    assert score(raw, [*others, UnassignedRequestsCost(hard=True)]) == (
+    assert score(raw, [*others, UnassignedRequestsCost(level="hard")]) == (
         -10,
         monolithic.soft,
     )
-    assert score(raw, [*others, UnassignedRequestsCost(hard=False)]) == (
+    assert score(raw, [*others, UnassignedRequestsCost(level="soft")]) == (
         0,
         monolithic.soft - 10,
     )
@@ -482,15 +482,15 @@ def test_the_medium_level_folds_into_soft():
 
 
 def test_a_demoted_medium_constraint_is_soft_in_the_engine_too():
-    """hard=False moves unassigned_requests_cost to soft in the solver (it was a no-op before 0.2.0).
+    """level="soft" moves unassigned_requests_cost to soft in the solver (it was a no-op before 0.2.0).
 
     With driving hard, parking every vehicle wins; the dropped requests then cost
     soft minutes, not medium ones."""
     picks = [
         paired_request_cost,
         same_vehicle_cost,
-        UnassignedRequestsCost(hard=False),
-        TravelTimeCost(hard=True),
+        UnassignedRequestsCost(level="soft"),
+        TravelTimeCost(level="hard"),
     ]
     plan = solve(picks)
     assert (plan.score.hard, plan.score.medium) == (0, 0)
@@ -526,7 +526,7 @@ def test_the_plugin_solve_reports_each_level_unfolded():
         paired_request_cost,
         same_vehicle_cost,
         pickup_before_dropoff_cost,
-        UnassignedRequestsCost(hard=False, weight=MEDIUM_UNIT),
+        UnassignedRequestsCost(level="soft", weight=MEDIUM_UNIT),
         TravelTimeCost(weight=weight),
     ]
     plan, reported = _solve_reporting(
@@ -579,13 +579,13 @@ def test_specs_validate_their_knobs(kwargs, error):
 def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     """The C++ side guards too: a duck-typed pick cannot smuggle a negative weight in."""
     negative = SimpleNamespace(
-        name="travel_time_cost", weight=-2.0, hard=None, exponent=1.0
+        name="travel_time_cost", weight=-2.0, level=None, exponent=1.0
     )
     flat = SimpleNamespace(
-        name="travel_time_cost", weight=None, hard=None, exponent=0.0
+        name="travel_time_cost", weight=None, level=None, exponent=0.0
     )
     unbounded = SimpleNamespace(
-        name="travel_time_cost", weight=None, hard=None, exponent=1.0, offset=float("inf")
+        name="travel_time_cost", weight=None, level=None, exponent=1.0, offset=float("inf")
     )
     for pick, message in (
         (negative, "weight must be finite and >= 0"),
@@ -602,8 +602,7 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     ("knobs", "message"),
     [
         ({"weight": True}, "weight must be a number or None, not True"),
-        ({"hard": 1}, "hard must be True, False or None, not 1"),
-        ({"hard": "x"}, "hard must be True, False or None, not 'x'"),
+        ({"level": 1}, "level must be a Level, its name or None, not 1"),
         ({"exponent": True}, "exponent must be a number, not True"),
         ({"offset": "5"}, "offset must be a number, not '5'"),
         ({"offset": False}, "offset must be a number, not False"),
@@ -614,7 +613,7 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
 def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
     """The C++ path checks the knob types like _constraint.py: TypeError, the same words."""
     pick = SimpleNamespace(
-        name="unassigned_requests_cost", weight=None, hard=None, exponent=1.0
+        name="unassigned_requests_cost", weight=None, level=None, exponent=1.0
     )
     for key, value in knobs.items():
         setattr(pick, key, value)
@@ -664,7 +663,7 @@ OLD_NAMES = [
 @pytest.mark.parametrize("old", OLD_NAMES)
 def test_old_names_are_gone(old):
     """0.2.0 renamed the catalog; the pre-0.2.0 names are unknown now (no aliases)."""
-    pick = SimpleNamespace(name=old, weight=None, hard=None, exponent=1.0)
+    pick = SimpleNamespace(name=old, weight=None, level=None, exponent=1.0)
     with pytest.raises(ValueError, match="unknown constraint"):
         solve([pick], seconds=0.05)
     plan = build_plan()
@@ -857,7 +856,7 @@ def test_a_repeated_medium_pick_adds_up():
         # The globals' totals are shaped once.
         (UnassignedRequestsCost(offset=2, exponent=2), (0, -4 * MEDIUM_UNIT)),
         (UnassignedRequestsCost(offset=6, clip=False), (0, 2 * MEDIUM_UNIT)),
-        (UnassignedRequestsCost(offset=6, clip=False, hard=True), (2, 0.0)),
+        (UnassignedRequestsCost(offset=6, clip=False, level="hard"), (2, 0.0)),
         (PairedRequestCost(offset=1, clip=False), (1000, 0.0)),  # 0 broken pairs, 1 below the offset
     ],
 )

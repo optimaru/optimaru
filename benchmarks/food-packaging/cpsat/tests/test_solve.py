@@ -171,7 +171,7 @@ def test_cpsat_defaults_are_the_engine_defaults() -> None:
         assert entry["kind"] == "either"  # every food-packaging constraint is flippable
         assert entry["params"] == {
             "weight": None,
-            "hard": None,
+            "level": None,
             "exponent": 1.0,
             "offset": 0.0,
             "clip": True,
@@ -231,12 +231,12 @@ def _both_paths(selection):
     [
         # Default (medium): the unassigned minutes dominate the soft makespan.
         ([unassigned_jobs_cost, squared_makespan_cost], (0, 0, -10000), True),
-        # hard=False demotes medium to SOFT on both paths (before 0.2.0 CP-SAT moved
+        # level="soft" demotes medium to SOFT on both paths (before 0.2.0 CP-SAT moved
         # it to medium and the engine ignored it): 100 soft beats 10000 soft.
-        ([UnassignedJobsCost(hard=False), squared_makespan_cost], (0, 0, -100), False),
-        # hard=True: one hard unit per minute, not 10^10.
+        ([UnassignedJobsCost(level="soft"), squared_makespan_cost], (0, 0, -100), False),
+        # level="hard": one hard unit per minute, not 10^10.
         (
-            [UnassignedJobsCost(hard=True), SquaredMakespanCost(hard=True)],
+            [UnassignedJobsCost(level="hard"), SquaredMakespanCost(level="hard")],
             (-100, 0, 0),
             False,
         ),
@@ -253,9 +253,9 @@ def test_medium_knobs_score_like_the_engine(selection, expected, assigned) -> No
 
 
 def test_demoting_a_hard_constraint_scores_like_the_engine() -> None:
-    """hard=False on a hard constraint lands on soft in both solvers too."""
+    """level="soft" on a hard constraint lands on soft in both solvers too."""
     problem = _one_job_one_line(deadline_minutes=60)  # the job ends 40 minutes late
-    selection = [MaxEndTimeCost(hard=False), *get_constraints()[1:]]
+    selection = [MaxEndTimeCost(level="soft"), *get_constraints()[1:]]
     solved = solve(problem, time_limit_seconds=5, constraints=selection)
     engine = score(constraint_costs(solved.to_core()), selection)
     assert solved.score_hard == 0
@@ -296,8 +296,8 @@ SELECTIONS = {
     ],
     "hard-offsets": [
         MaxEndTimeCost(weight=2, offset=3, clip=False),
-        AfterIdealEndTimeCost(hard=True, offset=20),
-        UnassignedJobsCost(hard=True, offset=-1, clip=False),
+        AfterIdealEndTimeCost(level="hard", offset=20),
+        UnassignedJobsCost(level="hard", offset=-1, clip=False),
         OperatorCleaningConflictCost(offset=-2),
     ],
 }

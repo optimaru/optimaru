@@ -25,7 +25,7 @@ come from `semiconductor_scheduling.constraint_info()`, and the catalog equals i
   `missing_transport_time_cost`, `auxiliary_resource_capacity_cost` (cumulative, one
   demand per listing), `auxiliary_resource_unavailability_cost`, `pinned_assignments_cost`.
   A selected structural constraint is posted as model constraints, so its raw cost is 0 on
-  every CP-SAT solution; `hard=False` or a weight other than 1 is refused (ValueError). An
+  every CP-SAT solution; `level="soft"` or a weight other than 1 is refused (ValueError). An
   unselected one is not enforced.
 - **Penalized (8)**: `max_queue_time_cost` and `max_cycle_time_cost` (hard by default),
   `machine_preference_cost`, `min_batch_size_cost` (groups of equal start and family),

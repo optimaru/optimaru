@@ -6,7 +6,7 @@ components' kDefaultLevel / kDefaultWeight), so they are not restated here.
 The two medium constraints (``after_ideal_end_time_cost``,
 ``unassigned_jobs_cost``) land on the CP-SAT medium level at weight 1, in medium
 units, exactly like the engine (whose domain folds medium into soft at 10^10);
-``hard=False`` demotes them to soft on both paths.
+``level="soft"`` demotes them to soft on both paths.
 
 Offsets and repeats: every plugin adds one term per unit the engine evaluates
 (``terms_per_unit``), so a pick's ``offset`` / ``clip`` shape each unit exactly as

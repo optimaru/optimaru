@@ -20,7 +20,7 @@
 //
 // A domain whose factory builds components outside any assembly (a rule
 // list, employee-scheduling addConstraintByName) re-states each component's
-// knobs with python::applyKnobs(component, pick, shownName) and reports its
+// knobs with python::applyKnobs(component, pick, shownName, fold) and reports its
 // wider catalog with the three-argument bindConstraintInfo (see there).
 //
 // The domain builds its own default assembly and hands it over, so the fact
@@ -123,7 +123,7 @@ std::vector<std::string> constraintNames(const ConstraintAssembly<Solution>& ass
 // weight / level / exponent / offset / clip  the calculator's CURRENT
 //        metadata, which is the picks' when the domain's constraint_costs()
 //        takes a selection.
-// default_weight / default_level  what weight=None / hard=None mean for the
+// default_weight / default_level  what weight=None / level=None mean for the
 //        component (ConstraintMetadata::defaultWeight / defaultLevel): the
 //        Python score() reads these, so re-pricing costs computed under one
 //        selection with another leaves an unset knob at the real default.
@@ -171,13 +171,14 @@ py::dict constraintCosts(DecomposedScoreCalculator<Solution>& calculator, Soluti
 // ---------------------------------------------------------------------------
 // The five knobs of one pick, read the way the Python base reads them
 // ---------------------------------------------------------------------------
-// The picks are duck-typed (any object with name/weight/hard/exponent, and
+// The picks are duck-typed (any object with name/weight/level/exponent, and
 // optionally offset/clip), so the C++ side checks the types itself, with the
 // same rules and the same wording as `_constraint.py` (_check_knobs /
 // _level): what one path refuses, the other refuses too.
 //   weight    None, or a real number (numbers.Real, but not bool), finite
 //             and >= 0. TypeError / ValueError.
-//   hard      None, True or False (a numpy.bool_ counts as a bool). TypeError.
+//   level     None, or a string spelling a level ("hard", "medium", "soft"),
+//             which a Python Level is. TypeError / ValueError.
 //   exponent  None (= 1.0, no shaping: a duck-typed pick may leave it unset),
 //             or a real number (not bool), finite and > 0.
 //   offset    absent or None (= 0.0, no shift), or a real number (not bool),
@@ -209,7 +210,7 @@ inline bool isRealNumber(const py::handle& value) {
     return py::isinstance(value, real);
 }
 
-// bool or numpy.bool_ (the only bool-like values hard accepts).
+// bool or numpy.bool_ (the only bool-like values clip accepts).
 inline bool isBool(const py::handle& value) {
     if (py::isinstance<py::bool_>(value)) return true;
     const py::handle type = py::type::handle_of(value);
@@ -238,13 +239,17 @@ inline Knobs readKnobs(const py::handle& item, const std::string& shown) {
         }
         knobs.weight = value;
     }
-    const py::object hard = item.attr("hard");
-    if (!hard.is_none()) {
-        if (!detail::isBool(hard)) {
-            throw py::type_error(label + ": hard must be True, False or None, not " +
-                                 detail::reprOf(hard));
+    const py::object level = item.attr("level");
+    if (!level.is_none()) {
+        if (!py::isinstance<py::str>(level)) {
+            throw py::type_error(label + ": level must be a Level, its name or None, not " +
+                                 detail::reprOf(level));
         }
-        knobs.hard = PyObject_IsTrue(hard.ptr()) == 1;
+        knobs.level = levelNamed(level.cast<std::string>());
+        if (!knobs.level) {
+            throw py::value_error(label + ": level must be 'hard', 'medium' or 'soft', not " +
+                                  detail::reprOf(level));
+        }
     }
     const py::object exponent = item.attr("exponent");
     if (!exponent.is_none()) {
@@ -293,12 +298,12 @@ inline Knobs readKnobs(const py::handle& item, const std::string& shown) {
 //
 //   auto unit = std::make_unique<MaxConsecutiveDaysCost>(
 //           MaxConsecutiveDaysCost::kDefaultWeight, value);
-//   python::applyKnobs(*unit, pick, "max_consecutive_days_cost");
+//   python::applyKnobs(*unit, pick, "max_consecutive_days_cost", MediumFold::none());
 inline void applyKnobs(ConstraintMetadata& constraint, const py::handle& item,
-                       const std::string& shown) {
+                       const std::string& shown, MediumFold fold) {
     const Knobs knobs = readKnobs(item, shown);
     try {
-        restateKnobs(constraint, knobs, detail::quoted(shown));
+        restateKnobs(constraint, knobs, fold, detail::quoted(shown));
     } catch (const std::invalid_argument& error) {
         throw py::value_error(error.what());
     }
@@ -307,13 +312,13 @@ inline void applyKnobs(ConstraintMetadata& constraint, const py::handle& item,
 // Applies the constraint picks coming from Python (<pkg>.constraints) to a
 // domain's default assembly: the name of a component plus the metadata to
 // re-state on it. Duck-typed on purpose — any object carrying
-// name/weight/hard/exponent (and optionally offset/clip) works, which is what
+// name/weight/level/exponent (and optionally offset/clip) works, which is what
 // lets the spec dataclasses stay plain Python. The five knobs:
 //   weight    None = the component's kDefaultWeight (in units of its level),
 //             else a finite number >= 0
-//   hard      None = the component's kDefaultLevel (hard, medium or soft),
-//             True = hard, False = soft. A reward refuses True; a constraint
-//             whose level is not flippable refuses any change of level.
+//   level     None = the component's kDefaultLevel, otherwise "hard",
+//             "medium" or "soft" (a Python Level). See checkedLevel for what
+//             a domain or a constraint refuses.
 //   exponent  1.0 = no shaping, else finite and > 0; always applied, so an
 //             explicit 1.0 (or None) resets a default assembly component
 //             built with another exponent, as the Python score() reads it
@@ -475,8 +480,8 @@ void bindInfoRows(py::module_& m, Rows rowsOf) {
     rowType.attr("__doc__") =
             "One catalog row: the constraint's Python name, its default level "
             "('hard' | 'medium' | 'soft'), its default weight (in units of that "
-            "level), whether hard=True/False may change the level, whether it is "
-            "a reward (raw cost <= 0; hard=True is refused), and whether it is "
+            "level), whether a pick's level may change it, whether it is a "
+            "reward (raw cost <= 0; level='hard' is refused), and whether it is "
             "scored when no constraints are named (in the default set at a "
             "default weight > 0).";
     m.attr("ConstraintInfo") = rowType;

@@ -151,7 +151,7 @@ def test_cpsat_defaults_are_the_engine_defaults() -> None:
         assert entry["kind"] == "either"  # every meeting constraint is flippable
         assert entry["params"] == {
             "weight": None,
-            "hard": None,
+            "level": None,
             "exponent": 1.0,
             "offset": 0.0,
             "clip": True,
@@ -203,14 +203,14 @@ def test_default_score_folds_medium_like_the_engine() -> None:
                     "required_and_preferred_attendance_conflict_cost",
                     "preferred_attendance_conflict_cost",
                 )
-                else type(spec)(hard=False)
+                else type(spec)(level="soft")
                 for spec in get_constraints()
             ],
             True,
         ),
         (
             [
-                PreferredAttendanceConflictCost(hard=True),
+                PreferredAttendanceConflictCost(level="hard"),
                 RequiredAndPreferredAttendanceConflictCost(weight=3),
             ],
             False,
@@ -219,7 +219,7 @@ def test_default_score_folds_medium_like_the_engine() -> None:
     ids=["medium-demoted-to-soft", "medium-promoted-and-reweighted"],
 )
 def test_medium_knobs_score_like_the_engine(selection, expect_medium_empty) -> None:
-    """hard=False demotes a medium constraint to soft and hard=True promotes it to
+    """level="soft" demotes a medium constraint to soft and level="hard" promotes it to
     hard on both solvers (one unit per raw person-grain); an explicit weight stays
     in medium units."""
     problem = _parity_problem()

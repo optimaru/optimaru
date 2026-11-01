@@ -193,7 +193,7 @@ def test_cpsat_defaults_are_the_engine_defaults() -> None:
         assert entry["kind"] == ("soft" if row.reward else "either")
         assert entry["params"] == {
             "weight": None,
-            "hard": None,
+            "level": None,
             "exponent": 1.0,
             "offset": 0.0,
             "clip": True,
@@ -213,16 +213,16 @@ def _fixed_candidate(problem, fixed):
 
 
 def test_level_flips_score_like_the_engine() -> None:
-    """hard=False demotes and hard=True promotes on both solvers alike."""
+    """level="soft" demotes and level="hard" promotes on both solvers alike."""
     problem = _parity_problem()
     fixed = [0, 0, 3, 5]
     flipped = {"room_conflict_cost", "speaker_conflict_cost", "crowd_control_risk_cost"}
     selection = [
-        type(spec)(hard=False) if spec.name in flipped else spec
+        type(spec)(level="soft") if spec.name in flipped else spec
         for spec in get_constraints()
     ]
     selection = [
-        type(spec)(hard=True) if spec.name == "theme_track_conflict_cost" else spec
+        type(spec)(level="hard") if spec.name == "theme_track_conflict_cost" else spec
         for spec in selection
     ]
     expected = score(
@@ -243,7 +243,7 @@ def test_level_flips_score_like_the_engine() -> None:
 @pytest.mark.parametrize("spec", [AudienceTypeDiversityCost, LanguageDiversityCost])
 def test_a_reward_is_never_hard_on_cpsat(spec) -> None:
     with pytest.raises(ValueError, match="is a reward"):
-        solve(_parity_problem(), time_limit_seconds=1, constraints=[spec(hard=True)])
+        solve(_parity_problem(), time_limit_seconds=1, constraints=[spec(level="hard")])
 
 
 def test_old_names_are_unknown() -> None:

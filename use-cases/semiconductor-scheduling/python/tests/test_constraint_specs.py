@@ -92,7 +92,7 @@ def test_module_level_instances_keep_every_default():
         spec = getattr(specs, name)
         assert isinstance(spec, Constraint)
         assert spec.name == name
-        assert (spec.weight, spec.hard, spec.exponent) == (None, None, 1.0)
+        assert (spec.weight, spec.level, spec.exponent) == (None, None, 1.0)
 
 
 def test_every_spec_has_labels_and_descriptions_in_both_languages():
@@ -184,7 +184,7 @@ def test_score_equals_the_engine_under_random_knobs():
             picks.append(
                 type(spec)(
                     weight=rng.choice([None, 0, 0.5, 2, 3.25]),
-                    hard=rng.choice([None, True, False]),
+                    level=rng.choice([None, "hard", "soft"]),
                     exponent=rng.choice([1.0, 1.0, 2.0, 0.5]),
                 )
             )
@@ -225,7 +225,7 @@ def test_levels_flip_both_ways():
     raw = fab.constraint_costs(problem)
     capacity = raw["machine_capacity_cost"]["costs"][0]
     makespan = raw["makespan_cost"]["costs"][0]
-    picked = [MachineCapacityCost(hard=False), specs.MakespanCost(hard=True)]
+    picked = [MachineCapacityCost(level="soft"), specs.MakespanCost(level="hard")]
     result = fab.calculate_score(problem, picked)
     assert (result.hard, result.soft) == (-makespan, -capacity if capacity else 0.0)
 
@@ -246,9 +246,9 @@ def test_specs_validate_their_knobs(kwargs, error):
 
 
 def test_core_refuses_invalid_knobs_from_duck_typed_picks():
-    negative = SimpleNamespace(name="makespan_cost", weight=-2.0, hard=None, exponent=1.0)
-    flat = SimpleNamespace(name="makespan_cost", weight=None, hard=None, exponent=0.0)
-    unbounded = SimpleNamespace(name="makespan_cost", weight=None, hard=None, exponent=1.0, offset=float("inf"))
+    negative = SimpleNamespace(name="makespan_cost", weight=-2.0, level=None, exponent=1.0)
+    flat = SimpleNamespace(name="makespan_cost", weight=None, level=None, exponent=0.0)
+    unbounded = SimpleNamespace(name="makespan_cost", weight=None, level=None, exponent=1.0, offset=float("inf"))
     for pick, message in (
         (negative, "weight must be finite and >= 0"),
         (flat, "exponent must be finite and > 0"),
@@ -268,8 +268,7 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     ("knobs", "message"),
     [
         ({"weight": True}, "weight must be a number or None, not True"),
-        ({"hard": 1}, "hard must be True, False or None, not 1"),
-        ({"hard": "x"}, "hard must be True, False or None, not 'x'"),
+        ({"level": 1}, "level must be a Level, its name or None, not 1"),
         ({"offset": "5"}, "offset must be a number, not '5'"),
         ({"offset": False}, "offset must be a number, not False"),
         ({"clip": 1}, "clip must be True or False, not 1"),
@@ -277,7 +276,7 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     ],
 )
 def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
-    pick = SimpleNamespace(name="makespan_cost", weight=None, hard=None, exponent=1.0)
+    pick = SimpleNamespace(name="makespan_cost", weight=None, level=None, exponent=1.0)
     for key, value in knobs.items():
         setattr(pick, key, value)
     with pytest.raises(TypeError, match=f"constraint 'makespan_cost': {re.escape(message)}"):
@@ -289,7 +288,7 @@ def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
 @pytest.mark.parametrize("old", OLD_NAMES)
 def test_old_names_are_unknown(old):
     """0.2.0 renamed the catalog; the 0.1.x names are gone (no aliases)."""
-    pick = SimpleNamespace(name=old, weight=None, hard=None, exponent=1.0)
+    pick = SimpleNamespace(name=old, weight=None, level=None, exponent=1.0)
     with pytest.raises(ValueError, match="unknown constraint"):
         fab.calculate_score(_problem(), [pick])
     with pytest.raises(ValueError, match="unknown constraint"):
@@ -414,7 +413,7 @@ def test_the_keys_follow_the_pick_order_of_each_name():
         (MachineCapacityCost(weight=3, offset=0.5, clip=False), (2, 0.0)),  # 3 x -0.5 = -1.5 -> -2
         (WeightedTardinessCost(offset=2), (0, -100.0)),  # the default weight 10 x (12 - 2)
         (WeightedTardinessCost(weight=0, offset=2, clip=False), (0, 0.0)),  # weight 0 contributes 0
-        (specs.CycleTimeCost(hard=True, offset=1), (-10, 0.0)),
+        (specs.CycleTimeCost(level="hard", offset=1), (-10, 0.0)),
     ],
 )
 def test_offsets_by_hand_on_both_paths(pick, expected):
@@ -457,7 +456,7 @@ def test_score_equals_the_engine_with_repeats_and_offsets():
                 picks.append(
                     type(spec)(
                         weight=rng.choice([None, 0, 0.5, 2]),
-                        hard=rng.choice([None, True, False]),
+                        level=rng.choice([None, "hard", "soft"]),
                         exponent=rng.choice([1.0, 1.0, 2.0, 0.5]),
                         offset=rng.choice([0.0, 0.0, 1.0, 2.5, -1.0, 10.0]),
                         clip=rng.choice([True, False]),

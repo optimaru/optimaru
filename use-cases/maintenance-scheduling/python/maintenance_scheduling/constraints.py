@@ -2,7 +2,7 @@
 
 The default path (`mnt.solve(schedule)`) enables all six constraints at their default
 weights (the quickstart's). This module is the alternative path next to it: pick
-constraints, change weights, flip hard/soft, shape the cost, and pass the list to
+constraints, change weights, change levels, shape the cost, and pass the list to
 `solve(schedule, constraints=...)`.
 
 A constraint list reads one way: one class call per constraint::
@@ -27,7 +27,9 @@ Every spec takes five knobs:
                default (MinStartDateCost, MaxEndDateCost, CrewConflictCost and
                BeforeIdealEndDateCost 1, TagConflictCost 1000,
                AfterIdealEndDateCost 1'000'000); ``mnt.constraint_info()`` reports them.
-- ``hard``     ``True`` = hard, ``False`` = soft, ``None`` = the default level.
+- ``level``    ``None`` = the default level, otherwise ``Level.HARD`` or
+               ``Level.SOFT`` (or the names ``"hard"`` and ``"soft"``). This use
+               case has no medium level.
 - ``exponent`` sign-preserving power shaping: ``weight * sign(c) * |c| **
                exponent``. 2.0 = squared, so concentrated violations grow much
                costlier. The four date rules shape per (start date, crew) cell; the
@@ -61,10 +63,11 @@ Module-level instance names use the same snake_case, so they match the strings
 apart from the job fields ``min_start_date`` / ``max_end_date`` they read.)
 """
 
-from ._constraint import Constraint, Score, score_costs, select
+from ._constraint import Constraint, Level, Score, score_costs, select
 
 __all__ = [
     "Constraint",
+    "Level",
     "Score",
     "score",
     "MinStartDateCost",

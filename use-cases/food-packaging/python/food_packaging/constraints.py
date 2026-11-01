@@ -1,8 +1,8 @@
 """Constraint assembly specs — an API for picking the cost function declaratively.
 
 The default path (`fp.solve(schedule)`) enables all five constraints at the default weights.
-This module is the alternative path next to it: pick constraints, change weights, flip
-hard/soft, shape the cost, and pass the list to `solve(schedule, constraints=...)`.
+This module is the alternative path next to it: pick constraints, change weights, change
+levels, shape the cost, and pass the list to `solve(schedule, constraints=...)`.
 
 A constraint list reads one way: one class call per constraint::
 
@@ -25,13 +25,14 @@ Every spec takes five knobs:
 - ``weight``   linear multiplier on the constraint cost, in units of its level.
                ``None`` = the component default (``fp.constraint_info()`` reports
                them).
-- ``hard``     ``True`` = hard, ``False`` = soft, ``None`` = the default level.
-               ``AfterIdealEndTimeCost`` and ``UnassignedJobsCost`` are MEDIUM
-               constraints: medium is a default-only level, so ``hard=True`` makes
-               them one hard unit per minute and ``hard=False`` one soft unit per
+- ``level``    ``None`` = the default level, otherwise a ``Level`` or its name
+               (``Level.MEDIUM`` or ``"medium"``). Any flippable constraint may
+               take any of the three levels. ``AfterIdealEndTimeCost`` and
+               ``UnassignedJobsCost`` are MEDIUM constraints by default:
+               ``level="hard"`` makes them one hard unit per minute and
+               ``level="soft"`` one soft unit per
                minute (outside the 10^10 medium fold), in the solver and in
-               :func:`score` alike. An explicit ``weight`` keeps them on the medium
-               level, in medium units.
+               :func:`score` alike. A ``weight`` is in units of the level in effect.
 - ``exponent`` sign-preserving power shaping: ``weight * sign(c) * |c| **
                exponent``, per line for the unit constraints and on the single total
                for the globals ``OperatorCleaningConflictCost`` and
@@ -66,10 +67,11 @@ Module-level instance names use the same snake_case, so they match the strings
 `list_constraints()` prints.
 """
 
-from ._constraint import Constraint, Score, score_costs, select
+from ._constraint import Constraint, Level, Score, score_costs, select
 
 __all__ = [
     "Constraint",
+    "Level",
     "Score",
     "score",
     "MaxEndTimeCost",

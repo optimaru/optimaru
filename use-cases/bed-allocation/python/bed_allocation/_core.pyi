@@ -217,7 +217,7 @@ class Solver:
         (see bed_allocation.constraints). The given list replaces the default set; None
         keeps the default set. A name may be picked several times: each pick is its own
         instance with its own knobs, and the instances add up. plan.score reports the
-        three levels the assembly put the terms on (unassigned_stays_cost with hard=False
+        three levels the assembly put the terms on (unassigned_stays_cost with level="soft"
         lands on soft), and so does every score passed to on_new_best."""
 
 def list_constraints() -> list[str]:

@@ -41,8 +41,8 @@ The first five are unit constraints (one cost per (time grain, room) cell, so `e
 shapes per cell); the other seven compare pairs of meetings and are global (one total,
 shaped as a whole). The rows are in `list_constraints()` order, and
 `meeting_scheduling.constraint_info()` reports exactly this table from the C++ components
-(`kDefaultLevel` / `kDefaultWeight`): every constraint is flippable (`hard=True` /
-`hard=False`), none is a reward and all twelve are scored by default (`default_enabled`).
+(`kDefaultLevel` / `kDefaultWeight`): every constraint is flippable (`level="hard"` /
+`level="soft"`), none is a reward and all twelve are scored by default (`default_enabled`).
 The medium level folds into the engine's soft level as `medium x 1e6` (`MEDIUM_SCALE`,
 `kMediumFold` in `cpp/include/ms/domain.hpp`); a medium weight is in medium units.
 
@@ -57,8 +57,8 @@ The medium level folds into the engine's soft level as `medium x 1e6` (`MEDIUM_S
 `larger_room_capacity_cost`, `room_stability` -> `room_change_cost`; the spec classes and the
 module-level default instances follow, e.g. `OverlappingMeetings` / `overlapping_meetings` ->
 `MeetingOverlapCost` / `meeting_overlap_cost`). The two medium constraints now default to
-weight 1 in medium units (was 1e6 on the soft level), so `hard=True` charges 1 hard per
-person-grain (was 1e6), `hard=False` demotes them to soft at 1 per person-grain (was a no-op
+weight 1 in medium units (was 1e6 on the soft level), so `level="hard"` charges 1 hard per
+person-grain (was 1e6), `level="soft"` demotes them to soft at 1 per person-grain (was a no-op
 that kept the 1e6), and an explicit `weight` is in medium units. `compute_breakdown()` and the
 `Breakdown` class are gone: `constraint_costs(schedule)` is the per-constraint surface (sum a
 constraint's `costs` for the old totals). Raw costs and the default score are unchanged.
@@ -136,7 +136,7 @@ solver's `solve` before the engine runs — the engine only fills what is still 
 4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
    `description_en` / `description_ko` to `python/meeting_scheduling/constraints.py` (plus
    its module-level default instance); callers then pick, reweight or flip it:
-   `constraints=[..., MyRuleCost(weight=5, hard=True)]`;
+   `constraints=[..., MyRuleCost(weight=5, level="hard")]`;
 5. mirror it in the CP-SAT model in
    [`benchmarks/meeting-scheduling/cpsat`](../../benchmarks/meeting-scheduling/cpsat) (a plugin
    subclassing the spec; defaults come from `constraint_info()`) so the benchmark stays like

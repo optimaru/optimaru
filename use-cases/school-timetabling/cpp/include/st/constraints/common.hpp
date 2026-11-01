@@ -37,7 +37,7 @@ namespace st::canon
 // and kDefaultLevel once, and takes the weight as its first constructor
 // argument. The level and the weight are assembly-time metadata, not part of
 // the cost: re-state them with ConstraintAssembly::weight / hard / soft /
-// exponent (or the Python weight / hard / exponent knobs), or write
+// exponent (or the Python weight / level / exponent knobs), or write
 // `component->level = optimaru::Level::Soft`. The two structural components
 // (fixedSlotsCost, parallelGroupsCost) are not level-flippable.
 //

@@ -58,7 +58,7 @@ namespace es {
 //     one unit of raw cost is, and that 0 means no violation.
 // The level is assembly-time metadata, not part of the cost: re-state it per
 // instance with `level` / setLevel() (ConstraintAssembly hard()/soft(),
-// Python hard=True/False). Same for `weight` and `exponent`.
+// Python level). Same for `weight` and `exponent`.
 //
 // Cost sign convention (see decomposed_score_calculator.hpp): positive =
 // penalty, negative = reward; the calculator negates into the score.

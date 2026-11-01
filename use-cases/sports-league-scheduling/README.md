@@ -51,7 +51,7 @@ score_calculator.hpp`):
 
 The order is `list_constraints()`: the three unit constraints (one cost per round
 position) first, then the seven global constraints (one total each). Every constraint is
-flippable (`hard=True` / `hard=False`), none is a reward and all ten are scored by default
+flippable (`level="hard"` / `level="soft"`), none is a reward and all ten are scored by default
 (`default_enabled`); `sports_league.constraint_info()` reports exactly this table from the
 C++ components (`kDefaultLevel` / `kDefaultWeight`). The consecutive rules charge the
 whole run length (a run of 4 costs 4), as the Java provider does.
@@ -165,7 +165,7 @@ solver's `solve` before the engine runs — the engine only fills what is still 
 4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
    `description_en` / `description_ko` to `python/sports_league/constraints.py` (plus its
    module-level default instance); callers then pick, reweight or flip it:
-   `constraints=[..., MyRuleCost(weight=5, hard=True)]`;
+   `constraints=[..., MyRuleCost(weight=5, level="hard")]`;
 5. mirror it in the CP-SAT model in
    [`benchmarks/sports-league-scheduling/cpsat`](../../benchmarks/sports-league-scheduling/cpsat)
    (a plugin subclassing the spec; defaults come from `constraint_info()`) so the

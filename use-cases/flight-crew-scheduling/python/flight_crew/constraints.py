@@ -2,7 +2,7 @@
 
 The default path (`fcs.solve(schedule)`) enables all six constraints at their default
 weights (the Java provider's weights). This module is the alternative path next to it:
-pick constraints, change weights, flip hard/soft, shape the cost, and pass the list to
+pick constraints, change weights, change levels, shape the cost, and pass the list to
 `solve(schedule, constraints=...)`.
 
 A constraint list reads one way: one class call per constraint::
@@ -27,8 +27,9 @@ Every spec takes five knobs:
                default (RequiredSkillCost 100, FlightConflictCost 10,
                TransferBetweenTwoFlightsCost 1, EmployeeUnavailabilityCost 10,
                the two home-airport rules 1000); ``fcs.constraint_info()`` reports them.
-- ``hard``     ``True`` = hard, ``False`` = soft, ``None`` = the default level (the
-               first four are hard, the two home-airport rules soft).
+- ``level``    ``None`` = the default level, otherwise ``Level.HARD`` or
+               ``Level.SOFT`` (or the names ``"hard"`` and ``"soft"``). This use
+               case has no medium level.
 - ``exponent`` sign-preserving power shaping per employee: ``weight * sign(c) *
                |c| ** exponent``. 2.0 = squared, so concentrated violations grow much
                costlier.
@@ -56,10 +57,11 @@ Module-level instance names use the same snake_case, so they match the strings
 `list_constraints()` prints.
 """
 
-from ._constraint import Constraint, Score, score_costs, select
+from ._constraint import Constraint, Level, Score, score_costs, select
 
 __all__ = [
     "Constraint",
+    "Level",
     "Score",
     "score",
     "RequiredSkillCost",

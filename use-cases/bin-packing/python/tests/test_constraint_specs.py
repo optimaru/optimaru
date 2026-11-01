@@ -97,9 +97,14 @@ def test_level_can_be_flipped():
     problem = build_problem()
     problem.set_assignment([0, 0, 0, 0, 0])  # 20 into a capacity-10 bin, two reds, C-D together
     assert bp.calculate_score(problem).hard == -(10 + 1 + 1)
-    demoted = [BinCapacityCost(hard=False), ColorConflictCost(hard=False), ItemConflictCost(hard=False), used_bins_cost]
+    demoted = [
+        BinCapacityCost(level="soft"),
+        ColorConflictCost(level="soft"),
+        ItemConflictCost(level="soft"),
+        used_bins_cost,
+    ]
     assert bp.calculate_score(problem, demoted) == bp.Score(0, -(10 + 1 + 1 + 1))
-    assert bp.calculate_score(problem, [UsedBinsCost(hard=True)]) == bp.Score(-1, 0.0)
+    assert bp.calculate_score(problem, [UsedBinsCost(level="hard")]) == bp.Score(-1, 0.0)
 
 
 def test_calculate_score_with_constraints_stores_the_score():
@@ -112,7 +117,7 @@ def test_calculate_score_with_constraints_stores_the_score():
 
 def test_unknown_constraint_name_raises():
     """A typo must not silently leave the cost function unchanged."""
-    typo = SimpleNamespace(name="used_bin_cost", weight=None, hard=None, exponent=1.0)
+    typo = SimpleNamespace(name="used_bin_cost", weight=None, level=None, exponent=1.0)
     with pytest.raises(ValueError, match="unknown constraint"):
         solve([typo])
 
@@ -133,9 +138,9 @@ def test_spec_subclass_must_name_a_constraint():
 
 
 def test_module_level_instances_keep_every_default():
-    """Module-level instances must keep the defaults (weight=None, hard=None, exponent=1)."""
+    """Module-level instances must keep the defaults (weight=None, level=None, exponent=1)."""
     for spec in (bin_capacity_cost, color_conflict_cost, item_conflict_cost, used_bins_cost):
-        assert (spec.weight, spec.hard, spec.exponent) == (None, None, 1.0)
+        assert (spec.weight, spec.level, spec.exponent) == (None, None, 1.0)
     assert [spec.name for spec in get_constraints()] == NAMES
 
 
@@ -256,9 +261,9 @@ def test_specs_validate_their_knobs(kwargs, error):
 
 def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     """The C++ side guards too: a duck-typed pick cannot smuggle a negative weight in."""
-    negative = SimpleNamespace(name="used_bins_cost", weight=-2.0, hard=None, exponent=1.0)
-    flat = SimpleNamespace(name="used_bins_cost", weight=None, hard=None, exponent=0.0)
-    unbounded = SimpleNamespace(name="used_bins_cost", weight=None, hard=None, exponent=1.0, offset=float("inf"))
+    negative = SimpleNamespace(name="used_bins_cost", weight=-2.0, level=None, exponent=1.0)
+    flat = SimpleNamespace(name="used_bins_cost", weight=None, level=None, exponent=0.0)
+    unbounded = SimpleNamespace(name="used_bins_cost", weight=None, level=None, exponent=1.0, offset=float("inf"))
     for pick, message in (
         (negative, "weight must be finite and >= 0"),
         (flat, "exponent must be finite and > 0"),
@@ -275,8 +280,7 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     [
         ({"weight": True}, "weight must be a number or None, not True"),
         ({"weight": "2"}, "weight must be a number or None, not '2'"),
-        ({"hard": 1}, "hard must be True, False or None, not 1"),
-        ({"hard": "x"}, "hard must be True, False or None, not 'x'"),
+        ({"level": 1}, "level must be a Level, its name or None, not 1"),
         ({"exponent": True}, "exponent must be a number, not True"),
         ({"offset": "5"}, "offset must be a number, not '5'"),
         ({"offset": False}, "offset must be a number, not False"),
@@ -286,7 +290,7 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
 )
 def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
     """The C++ path checks the knob types like _constraint.py: TypeError, the same words."""
-    pick = SimpleNamespace(name="used_bins_cost", weight=None, hard=None, exponent=1.0)
+    pick = SimpleNamespace(name="used_bins_cost", weight=None, level=None, exponent=1.0)
     for key, value in knobs.items():
         setattr(pick, key, value)
     with pytest.raises(TypeError, match=f"constraint 'used_bins_cost': {re.escape(message)}"):
@@ -298,7 +302,7 @@ def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
 def test_old_names_are_gone():
     """0.2.0 renamed the catalog; the pre-0.2.0 names are unknown now (no aliases)."""
     for old in ("bin_capacity", "color_compatibility", "item_conflicts", "minimize_bins"):
-        pick = SimpleNamespace(name=old, weight=None, hard=None, exponent=1.0)
+        pick = SimpleNamespace(name=old, weight=None, level=None, exponent=1.0)
         with pytest.raises(ValueError, match="unknown constraint"):
             solve([pick])
         with pytest.raises(ValueError, match="unknown constraint"):
@@ -325,9 +329,9 @@ def test_score_equals_the_engine_for_the_default_assembly():
         None,
         [bin_capacity_cost],
         [bin_capacity_cost, color_conflict_cost, item_conflict_cost, UsedBinsCost(weight=60)],
-        [BinCapacityCost(hard=False), color_conflict_cost, item_conflict_cost, used_bins_cost],
+        [BinCapacityCost(level="soft"), color_conflict_cost, item_conflict_cost, used_bins_cost],
         [BinCapacityCost(exponent=2.0), ColorConflictCost(exponent=3.0), item_conflict_cost, used_bins_cost],
-        [BinCapacityCost(weight=0.5), UsedBinsCost(hard=True, weight=0.5, exponent=2.0)],
+        [BinCapacityCost(weight=0.5), UsedBinsCost(level="hard", weight=0.5, exponent=2.0)],
         [*get_constraints(), UsedBinsCost(weight=100, offset=1), BinCapacityCost(exponent=2)],
         [
             BinCapacityCost(offset=1),
@@ -358,7 +362,7 @@ def test_python_score_equals_cpp_calculate_score_for_random_specs():
         specs = [
             cls(
                 weight=rng.choice([None, 0, 0.5, 1, 3]),
-                hard=rng.choice([None, True, False]),
+                level=rng.choice([None, "hard", "soft"]),
                 exponent=rng.choice([1.0, 0.5, 2.0, 3.0]),
             )
             for cls in picked
@@ -533,7 +537,7 @@ def test_the_keys_follow_the_pick_order_of_each_name():
         (UsedBinsCost(offset=1, exponent=2), (0, -1.0)),
         (UsedBinsCost(offset=5, exponent=3, clip=False), (0, 27.0)),  # (2 - 5)^3: a reward below 5 bins
         (UsedBinsCost(offset=-1), (0, -3.0)),
-        (UsedBinsCost(hard=True, offset=0.5, clip=False, weight=3), (-5, 0.0)),  # 4.5 -> 5
+        (UsedBinsCost(level="hard", offset=0.5, clip=False, weight=3), (-5, 0.0)),  # 4.5 -> 5
     ],
 )
 def test_offsets_by_hand_on_both_paths(pick, expected):
@@ -574,7 +578,7 @@ def test_python_score_equals_cpp_calculate_score_for_random_repeats_and_offsets(
         specs = [
             rng.choice(classes)(
                 weight=rng.choice([None, 0, 0.5, 1, 3]),
-                hard=rng.choice([None, True, False]),
+                level=rng.choice([None, "hard", "soft"]),
                 exponent=rng.choice([1.0, 0.5, 2.0, 3.0]),
                 offset=rng.choice([0, 0.5, 1, 2, -1, -0.25]),
                 clip=rng.choice([True, False]),

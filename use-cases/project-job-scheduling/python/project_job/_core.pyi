@@ -220,7 +220,7 @@ class Solver:
         (see project_job.constraints). The given list replaces the default set; None
         keeps the default set. A name may be picked several times: each pick is its own
         instance with its own knobs, and the instances add up. schedule.score reports the
-        three levels the assembly put the terms on (a medium constraint with hard=False
+        three levels the assembly put the terms on (a medium constraint with level="soft"
         lands on soft)."""
 
 def list_constraints() -> list[str]:

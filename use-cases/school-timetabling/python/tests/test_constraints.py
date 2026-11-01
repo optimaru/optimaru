@@ -175,7 +175,7 @@ def test_drop_component(problem):
 #
 # Demoting unassigned_lessons_cost to soft makes "leave it out" a search option
 # (unassign moves). The same contract as the CP-SAT reference's
-# UnassignedLessonsCost(hard=False) = solve_partial.
+# UnassignedLessonsCost(level="soft") = solve_partial.
 
 
 def _over_constrained(problem: dict) -> dict:
@@ -187,7 +187,7 @@ def _over_constrained(problem: dict) -> dict:
 def test_relaxed_unassigned_lessons_return_a_partial_timetable(problem):
     """Unfillable periods stay unassigned instead of being hard violations."""
     problem = _over_constrained(problem)
-    relaxed = Assembly().add("unassigned_lessons_cost", hard=False, weight=UNASSIGNED_LESSONS_SOFT_WEIGHT)
+    relaxed = Assembly().add("unassigned_lessons_cost", level="soft", weight=UNASSIGNED_LESSONS_SOFT_WEIGHT)
 
     strict = st.solve(problem, time_limit_seconds=5.0, random_seed=7)
     partial = st.solve(problem, constraints=relaxed, time_limit_seconds=5.0, random_seed=7)
@@ -217,7 +217,7 @@ def test_relaxed_unassigned_lessons_do_not_unassign_what_fits(problem):
     """
     result = st.solve(
         problem,
-        constraints=[*st.get_constraints()[1:], UnassignedLessonsCost(hard=False, weight=10_000)],
+        constraints=[*st.get_constraints()[1:], UnassignedLessonsCost(level="soft", weight=10_000)],
         time_limit_seconds=10.0,
         random_seed=7,
     )
@@ -276,7 +276,7 @@ def test_one_hard_instance_keeps_unassigned_lessons_hard(problem):
     """unassigned_lessons_cost picked twice, once hard: no partial timetable (no unassign moves)."""
     picks = [
         *[spec for spec in Assembly() if spec.name != "unassigned_lessons_cost"],
-        UnassignedLessonsCost(hard=False, weight=UNASSIGNED_LESSONS_SOFT_WEIGHT),
+        UnassignedLessonsCost(level="soft", weight=UNASSIGNED_LESSONS_SOFT_WEIGHT),
         UnassignedLessonsCost(),
     ]
     result = st.solve(_over_constrained(problem), constraints=picks, time_limit_seconds=2.0, random_seed=7)
@@ -286,8 +286,8 @@ def test_one_hard_instance_keeps_unassigned_lessons_hard(problem):
     # Both soft: a partial timetable, each unplaced period costing the sum of the weights.
     soft_twice = [
         *[spec for spec in Assembly() if spec.name != "unassigned_lessons_cost"],
-        UnassignedLessonsCost(hard=False, weight=UNASSIGNED_LESSONS_SOFT_WEIGHT),
-        UnassignedLessonsCost(hard=False, weight=1),
+        UnassignedLessonsCost(level="soft", weight=UNASSIGNED_LESSONS_SOFT_WEIGHT),
+        UnassignedLessonsCost(level="soft", weight=1),
     ]
     partial = st.solve(_over_constrained(problem), constraints=soft_twice, time_limit_seconds=5.0, random_seed=7)
     assert partial["status"] == "FEASIBLE"

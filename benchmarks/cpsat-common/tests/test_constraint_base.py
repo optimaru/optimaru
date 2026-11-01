@@ -35,6 +35,7 @@ sys.modules[_SPEC.name] = base  # dataclasses resolve their module through sys.m
 _SPEC.loader.exec_module(base)
 
 Constraint = base.Constraint
+Level = base.Level
 Score = base.Score
 score_costs = base.score_costs
 select = base.select
@@ -145,13 +146,13 @@ INTO_SOFT = ("into_soft", 1000.0)
             [ConflictCost(), ForbiddenWorkerCost()],
             (-400, 0.0),
         ),  # no medium term selected
-        ([*DEFAULTS[:1], OverloadCost(hard=False), *DEFAULTS[2:]], (-401, -27.5)),
+        ([*DEFAULTS[:1], OverloadCost(level="soft"), *DEFAULTS[2:]], (-401, -27.5)),
         (
             [
                 *DEFAULTS[:1],
-                OverloadCost(hard=False),
+                OverloadCost(level="soft"),
                 *DEFAULTS[2:5],
-                IdleWorkerCost(hard=False),
+                IdleWorkerCost(level="soft"),
             ],
             (-400, -28.5),
         ),
@@ -173,11 +174,11 @@ def test_below_hard_folds_the_whole_score(selection, expected):
     [
         (DEFAULTS, (-4, -(26.5 + 2 * 1000.0))),
         (
-            [*DEFAULTS[:1], OverloadCost(hard=True), *DEFAULTS[2:]],
+            [*DEFAULTS[:1], OverloadCost(level="hard"), *DEFAULTS[2:]],
             (-5, -1026.5),
         ),  # 1 hard per raw unit
         (
-            [*DEFAULTS[:1], OverloadCost(hard=False), *DEFAULTS[2:]],
+            [*DEFAULTS[:1], OverloadCost(level="soft"), *DEFAULTS[2:]],
             (-4, -1027.5),
         ),  # 1 soft per raw unit
         (
@@ -198,7 +199,7 @@ def test_a_medium_term_needs_a_fold():
         score_costs(costs_a(None), [OverloadCost()])
     # ... while the same raw costs demoted to soft score fine.
     assert score_costs(
-        costs_a(None), [OverloadCost(hard=False), IdleWorkerCost(hard=False)]
+        costs_a(None), [OverloadCost(level="soft"), IdleWorkerCost(level="soft")]
     ) == (0, -2.0)
 
 
@@ -214,15 +215,15 @@ def test_disagreeing_folds_are_refused():
 
 def test_a_reward_refuses_hard_true():
     with pytest.raises(ValueError, match="is a reward"):
-        score_costs(costs_a(INTO_SOFT), [PreferenceReward(hard=True)])
-    # hard=False re-states its level: allowed.
-    assert score_costs(costs_a(INTO_SOFT), [PreferenceReward(hard=False)]) == (0, 1.5)
+        score_costs(costs_a(INTO_SOFT), [PreferenceReward(level="hard")])
+    # level="soft" re-states its level: allowed.
+    assert score_costs(costs_a(INTO_SOFT), [PreferenceReward(level="soft")]) == (0, 1.5)
 
 
 def test_a_non_flippable_constraint_keeps_its_level():
-    with pytest.raises(ValueError, match="is always hard; hard=False is not allowed"):
-        score_costs(costs_a(INTO_SOFT), [ForbiddenWorkerCost(hard=False)])
-    assert score_costs(costs_a(INTO_SOFT), [ForbiddenWorkerCost(hard=True)]) == (
+    with pytest.raises(ValueError, match="is always hard; level='soft' is not allowed"):
+        score_costs(costs_a(INTO_SOFT), [ForbiddenWorkerCost(level="soft")])
+    assert score_costs(costs_a(INTO_SOFT), [ForbiddenWorkerCost(level="hard")]) == (
         -1,
         0.0,
     )
@@ -296,7 +297,7 @@ def test_unset_knobs_mean_the_default_even_for_costs_of_another_selection():
 
     employee-scheduling and school-timetabling compute costs for a selection: an
     entry there holds that selection's weight and level, and ``default_weight`` /
-    ``default_level`` (what weight=None / hard=None mean). Re-pricing with
+    ``default_level`` (what weight=None / level=None mean). Re-pricing with
     another selection must read the defaults, not the first selection's knobs.
     """
     costs = {
@@ -315,7 +316,7 @@ def test_unset_knobs_mean_the_default_even_for_costs_of_another_selection():
     # Unset knobs: conflict back at hard x1 (3 hard), overload back at medium (1 x 1000 soft).
     assert score_costs(costs, [ConflictCost(), OverloadCost()]) == (-3, -1000.0)
     # The first selection's knobs, stated explicitly, reproduce its score.
-    assert score_costs(costs, [ConflictCost(weight=5.0, hard=False), OverloadCost(hard=True)]) == (-1, -15.0)
+    assert score_costs(costs, [ConflictCost(weight=5.0, level="soft"), OverloadCost(level="hard")]) == (-1, -15.0)
     # An entry without the default keys (hand-made, older package) reads level / weight.
     legacy = {"conflict_cost": _entry([2.0, 1.0], level="soft", weight=5.0, name="conflict_cost")}
     assert score_costs(legacy, [ConflictCost()]) == (0, -15.0)
@@ -329,9 +330,9 @@ def test_a_non_flippable_check_uses_the_default_level():
             "default_weight": 1.0,
         }
     }
-    with pytest.raises(ValueError, match="is always hard; hard=False is not allowed"):
-        score_costs(costs, [ForbiddenWorkerCost(hard=False)])
-    assert score_costs(costs, [ForbiddenWorkerCost(hard=True)]) == (-1, 0.0)
+    with pytest.raises(ValueError, match="is always hard; level='soft' is not allowed"):
+        score_costs(costs, [ForbiddenWorkerCost(level="soft")])
+    assert score_costs(costs, [ForbiddenWorkerCost(level="hard")]) == (-1, 0.0)
 
 
 def test_an_unknown_name_is_refused():
@@ -354,8 +355,9 @@ def test_an_unknown_name_is_refused():
         ({"weight": float("nan")}, ValueError, "weight must be finite and >= 0"),
         ({"weight": True}, TypeError, "weight must be a number or None"),
         ({"weight": "2"}, TypeError, "weight must be a number or None"),
-        ({"hard": 1}, TypeError, "hard must be True, False or None"),
-        ({"hard": "yes"}, TypeError, "hard must be True, False or None"),
+        ({"level": 1}, TypeError, "level must be a Level, its name or None"),
+        ({"level": True}, TypeError, "level must be a Level, its name or None"),
+        ({"level": "yes"}, ValueError, "level must be 'hard', 'medium' or 'soft'"),
         ({"exponent": 0}, ValueError, "exponent must be finite and > 0"),
         ({"exponent": False}, TypeError, "exponent must be a number"),
         ({"offset": float("nan")}, ValueError, "offset must be finite, not nan"),
@@ -375,7 +377,7 @@ def test_specs_validate_their_knobs(kwargs, error, message):
 
 def test_numpy_scalars_are_accepted_like_python_ones():
     numpy = pytest.importorskip("numpy")
-    spec = ConflictCost(weight=numpy.float64(2.0), hard=numpy.True_)
+    spec = ConflictCost(weight=numpy.float64(2.0))
     assert score_costs(costs_a(INTO_SOFT), [spec]).hard == -6
     with pytest.raises(TypeError, match="weight must be a number or None"):
         ConflictCost(weight=numpy.True_)
@@ -420,7 +422,7 @@ def test_select_contract():
 
 def test_the_two_new_knobs_are_keyword_only_and_default_to_the_0_2_0_shaping():
     spec = ConflictCost(2, None, 3.0)
-    assert (spec.weight, spec.hard, spec.exponent, spec.offset, spec.clip) == (2, None, 3.0, 0.0, True)
+    assert (spec.weight, spec.level, spec.exponent, spec.offset, spec.clip) == (2, None, 3.0, 0.0, True)
     with pytest.raises(TypeError):
         ConflictCost(2, None, 3.0, 5.0)  # offset is keyword-only
     assert ConflictCost(offset=-2.5, clip=False).offset == -2.5
@@ -646,7 +648,7 @@ def test_duck_typed_picks_may_leave_offset_and_clip_unset():
     class Pick:
         name = "task_cost_cost"
         weight = None
-        hard = None
+        level = None
         exponent = 1.0
 
     assert score_costs(_tasks_only(costs_a()), [Pick()]) == (0, -28.0)
@@ -663,3 +665,58 @@ def test_score_is_a_named_tuple():
     result = score_costs(costs_a(INTO_SOFT), [ConflictCost()])
     assert isinstance(result, Score)
     assert (result.hard, result.soft) == (-3, 0.0)
+
+
+def test_a_level_can_be_named_or_a_member():
+    for chosen in (Level.SOFT, "soft"):
+        assert score_costs(costs_a(INTO_SOFT), [OverloadCost(level=chosen)]) == score_costs(
+            costs_a(INTO_SOFT), [OverloadCost(level=Level.SOFT)]
+        )
+
+
+def test_a_level_is_a_string_for_json_selections():
+    assert Level.MEDIUM == "medium"
+    assert [level.value for level in Level] == ["hard", "medium", "soft"]
+
+
+def test_the_old_knob_is_gone():
+    with pytest.raises(TypeError):
+        OverloadCost(hard=True)
+
+
+def test_a_soft_constraint_can_move_onto_medium():
+    soft = score_costs(costs_a(INTO_SOFT), [TaskCostCost()])
+    medium = score_costs(costs_a(INTO_SOFT), [TaskCostCost(level=Level.MEDIUM)])
+    assert medium.soft == pytest.approx(soft.soft * INTO_SOFT[1])
+
+
+def test_medium_folds_below_hard_where_the_domain_does():
+    assert score_costs(costs_a(BELOW_HARD), [TaskCostCost(level="medium")]).hard < 0
+
+
+def test_medium_below_hard_rounds_each_unit_like_hard():
+    costs = {"task_cost_cost": costs_a(BELOW_HARD)["task_cost_cost"]}
+    assert score_costs(costs, [TaskCostCost(level="medium", weight=0.01)]).hard == 0
+    assert score_costs(costs, [TaskCostCost(level="medium", weight=0.1)]).hard == -(2 + 1)
+
+
+def test_medium_needs_a_domain_with_a_medium_level():
+    with pytest.raises(ValueError, match="this use case has no medium level"):
+        score_costs(costs_a(), [OverloadCost(level="medium")])
+
+
+def test_a_reward_may_be_medium_only_where_medium_stays_out_of_hard():
+    def flippable(fold):
+        costs = costs_a(fold)
+        costs["preference_reward"]["level_flippable"] = True
+        return costs
+
+    moved = score_costs(flippable(INTO_SOFT), [PreferenceReward(level="medium")])
+    assert moved.soft == pytest.approx(0.5 * 3.0 * INTO_SOFT[1])
+    with pytest.raises(ValueError, match="cannot be medium here"):
+        score_costs(flippable(BELOW_HARD), [PreferenceReward(level="medium")])
+
+
+def test_a_structural_constraint_keeps_its_level_against_medium():
+    with pytest.raises(ValueError, match="level='medium' is not allowed"):
+        score_costs(costs_a(INTO_SOFT), [ForbiddenWorkerCost(level="medium")])

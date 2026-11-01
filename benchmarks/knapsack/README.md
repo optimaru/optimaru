@@ -12,7 +12,7 @@ constraint's CP-SAT term equals the engine's `constraint_costs()` total (0 exact
 when the engine reports no violation), and that the CP-SAT optimum equals the
 brute-force optimum of the engine's score, per constraint and for the default
 set. Exponents other than 1 and fractional weights are not supported on CP-SAT
-(they raise `ValueError`); `selected_value_cost` with `hard=True` is refused as
+(they raise `ValueError`); `selected_value_cost` with `level="hard"` is refused as
 in the engine.
 
 **0.3.0:** a constraint may be picked several times (as specs or as

@@ -19,7 +19,7 @@ level). The default weights are exactly those of the Java `ConstraintProvider`:
 | `first_assignment_not_departing_from_home_cost` | `FirstAssignmentNotDepartingFromHomeCost` | soft | 1000 | earliest-departure assignments (ties all count) not leaving from home |
 | `last_assignment_not_arriving_at_home_cost` | `LastAssignmentNotArrivingAtHomeCost` | soft | 1000 | latest-departure assignments (ties all count) not landing at home |
 
-Every constraint is flippable (`hard=True` / `hard=False`), none is a reward and all six
+Every constraint is flippable (`level="hard"` / `level="soft"`), none is a reward and all six
 are scored by default (`default_enabled`); `flight_crew.constraint_info()` reports exactly
 this table from the C++ components (`kDefaultLevel` / `kDefaultWeight`). All six are unit
 constraints over one employee's itinerary, so `exponent` shapes each employee's raw cost.
@@ -201,7 +201,7 @@ solver's `solve` before the engine runs — the engine only fills what is still 
 4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
    `description_en` / `description_ko` to `python/flight_crew/constraints.py` (plus its
    module-level default instance); callers then pick, reweight or flip it:
-   `constraints=[..., MyRuleCost(weight=5, hard=True)]`;
+   `constraints=[..., MyRuleCost(weight=5, level="hard")]`;
 5. mirror it in the CP-SAT model in
    [`benchmarks/flight-crew-scheduling/cpsat`](../../benchmarks/flight-crew-scheduling/cpsat) (a
    plugin subclassing the spec; defaults come from `constraint_info()`) so the benchmark stays

@@ -218,7 +218,7 @@ def test_cpsat_defaults_are_the_engine_defaults() -> None:
         assert entry["kind"] == "either"  # every bed-allocation constraint is flippable
         assert entry["params"] == {
             "weight": None,
-            "hard": None,
+            "level": None,
             "exponent": 1.0,
             "offset": 0.0,
             "clip": True,
@@ -274,17 +274,17 @@ def test_default_selection_scores_like_the_engine() -> None:
 
 
 def test_demoting_the_medium_constraint_scores_like_the_engine() -> None:
-    """hard=False moves unassigned_stays_cost to soft on BOTH solvers (CP-SAT used to
+    """level="soft" moves unassigned_stays_cost to soft on BOTH solvers (CP-SAT used to
     keep a demoted medium term on medium)."""
-    selection = [bed_conflict_cost, UnassignedStaysCost(hard=False)]
+    selection = [bed_conflict_cost, UnassignedStaysCost(level="soft")]
     solved = solve(_crowded_problem(), time_limit_seconds=2, constraints=selection)
     assert (solved.score_hard, solved.score_medium, solved.score_soft) == (0, 0, -2)
     assert _engine_score(solved, selection) == (solved.score_hard, solved.score_soft)
 
 
 def test_promoting_the_medium_constraint_scores_like_the_engine() -> None:
-    """hard=True: one hard unit per night without a bed, still cheaper than sharing."""
-    selection = [bed_conflict_cost, UnassignedStaysCost(hard=True)]
+    """level="hard": one hard unit per night without a bed, still cheaper than sharing."""
+    selection = [bed_conflict_cost, UnassignedStaysCost(level="hard")]
     solved = solve(_crowded_problem(), time_limit_seconds=2, constraints=selection)
     assert (solved.score_hard, solved.score_medium, solved.score_soft) == (-2, 0, 0)
     assert _engine_score(solved, selection) == (solved.score_hard, solved.score_soft)
@@ -364,7 +364,7 @@ SELECTIONS = {
         BedConflictCost(offset=1),
         BedConflictCost(weight=2, offset=2, clip=False),
         DepartmentMaxAgeCost(offset=-3, clip=False),
-        UnassignedStaysCost(hard=True, offset=1),
+        UnassignedStaysCost(level="hard", offset=1),
     ],
     "identical-twice": [
         UnassignedStaysCost(),

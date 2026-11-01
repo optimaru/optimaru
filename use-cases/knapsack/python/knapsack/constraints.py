@@ -2,7 +2,7 @@
 
 The default path (`knapsack.solve(problem)`) scores every default constraint at
 its default weight. This module is the alternative path next to it: pick
-constraints, change weights, flip hard/soft, shape the cost, and pass the list to
+constraints, change weights, change levels, shape the cost, and pass the list to
 `solve(problem, constraints=...)`.
 
 A constraint list reads one way: one class call per constraint::
@@ -27,9 +27,10 @@ Every spec takes five knobs:
 - ``weight``   linear multiplier on the constraint cost. ``None`` = the component
                default (1 for every knapsack constraint). The problem carries no
                weights; ``knapsack.constraint_info()`` reports the defaults.
-- ``hard``     ``True`` = hard, ``False`` = soft, ``None`` = the default level.
-               ``SelectedValueCost`` is a reward and always soft:
-               ``hard=True`` raises ValueError.
+- ``level``    ``None`` = the default level, otherwise ``Level.HARD`` or
+               ``Level.SOFT`` (or the names ``"hard"`` and ``"soft"``). This use
+               case has no medium level. ``SelectedValueCost`` is a reward and
+               always soft: ``level="hard"`` raises ValueError.
 - ``exponent`` sign-preserving power shaping: ``weight * sign(c) * |c| ** exponent``
                on each constraint's single total (every knapsack constraint is
                global), e.g. the summed resource overflow.
@@ -61,10 +62,11 @@ mechanically, so there is no hand-maintained alias table — check them with
 `knapsack.list_constraints()`.
 """
 
-from ._constraint import Constraint, Score, score_costs, select
+from ._constraint import Constraint, Level, Score, score_costs, select
 
 __all__ = [
     "Constraint",
+    "Level",
     "Score",
     "score",
     "KnapsackCapacityCost",
@@ -191,11 +193,11 @@ class SelectedValueCost(Constraint):
     label_ko = "선택 물품 가치"
     description_en = (
         "The total value of the selected items, scored as a reward: the raw cost is minus the selected value "
-        "(never positive), so a larger value scores better. It is always soft; hard=True is refused."
+        "(never positive), so a larger value scores better. It is always soft; level='hard' is refused."
     )
     description_ko = (
         "선택한 물품의 가치 합을 보상으로 셉니다. 원시 비용은 이 가치 합에 음수를 붙인 값(0 이하)이므로 "
-        "가치가 클수록 점수가 좋아집니다. 항상 소프트 제약이며 hard=True는 거부됩니다."
+        "가치가 클수록 점수가 좋아집니다. 항상 소프트 제약이며 level='hard'는 거부됩니다."
     )
 
 
@@ -255,7 +257,7 @@ def score(costs: dict, constraints: list[Constraint] | None = None) -> Score:
     with its own knobs.
 
     When ``constraints`` is given, only those constraints are scored — the same
-    semantics as `get_constraints`. Unknown names raise ValueError; ``hard=True``
+    semantics as `get_constraints`. Unknown names raise ValueError; ``level="hard"``
     on the ``selected_value_cost`` reward raises ValueError.
     """
     return score_costs(costs, get_constraints(constraints))

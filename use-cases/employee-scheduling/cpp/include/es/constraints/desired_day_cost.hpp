@@ -9,7 +9,7 @@ namespace es {
 // minutes of its assigned, non-pinned shifts on its desired days, or with
 // `perDay` minus 1 per such shift: raw <= 0, and 0 = no desired day is
 // worked (nothing earned). A reward can never be hard (reward = true,
-// levelFlippable = false: hard() / hard=True throw).
+// levelFlippable = false: hard() / level='hard' throw).
 struct DesiredDayCost final : DateOverlapConstraint {
     static constexpr double kDefaultWeight = 1.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;

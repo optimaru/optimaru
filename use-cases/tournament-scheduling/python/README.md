@@ -22,8 +22,8 @@ constraints, one total for the two imbalance constraints) with that metadata and
 domain's `medium_fold` (`{"kind": "into_soft", "unit": 1e6}`) on every entry.
 `tournament_scheduling.constraints` holds one spec per row (`TeamConflictCost`, ...) and the
 module-level default instances (`team_conflict_cost` is `TeamConflictCost()`, ...). Every
-spec takes `weight=None` (the default above, in units of its level), `hard=None` (the
-default level; `True` = hard, `False` = soft), `exponent=1.0` and the keyword-only
+spec takes `weight=None` (the default above, in units of its level), `level=None` (the
+default level, otherwise a `Level` or its name), `exponent=1.0` and the keyword-only
 `offset=0.0` / `clip=True` (`clip=True` counts only what lies beyond the offset,
 `clip=False` shapes `x - offset` as it is; the scoped `team_unavailability_cost` lists the
 teams it evaluates as `"units"`). The medium constraint moved to hard costs 1 hard per raw

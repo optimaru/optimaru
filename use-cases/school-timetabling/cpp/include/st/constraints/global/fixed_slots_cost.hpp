@@ -14,9 +14,9 @@ namespace st::canon
 // lesson can leave its fixed slot. (A pinned lesson without any slot is an
 // unplaced period, which unassignedLessonsCost charges.)
 //
-// It is a real component so the catalog, the weight/hard/exponent knobs and
+// It is a real component so the catalog, the weight/level/exponent knobs and
 // constraint_costs() cover fixed_slots_cost like every other constraint:
-// hard=False is refused (soft() throws), hard=True is a no-op, a weight or
+// level='soft' is refused (soft() throws), level='hard' is a no-op, a weight or
 // an exponent are accepted and scale a zero.
 struct FixedSlotsCost final : MemberChangeGlobalConstraint
 {
