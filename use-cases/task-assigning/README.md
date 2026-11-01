@@ -88,6 +88,25 @@ skill, as in the engine); before, CP-SAT moved it to soft0. The folded CP-SAT ob
 longer fits one int64 for the demo, so CP-SAT optimizes the three levels one after another
 (cpsat-common's staged solve).
 
+**0.3.0:** every constraint takes two more knobs, `offset` and `clip` (keyword-only), and
+may be picked several times. A raw cost `x` (per employee for the five unit constraints, on
+the one total for `unassigned_tasks_cost`) is shaped as `sign(x) * max(0, |x| - offset) **
+exponent` (`clip=True`, the default) or `(x - offset) ** exponent`, sign-preserving
+(`clip=False`, which charges every employee, an idle one included, and acts as a reward
+below the offset); `offset=0` is the 0.2.0 shaping. Each pick is its own instance with its
+own knobs, and the instances add up:
+
+```python
+ta.solve(solution, constraints=[
+    *get_constraints(),
+    CriticalPriorityTaskEndTimeCost(exponent=2, offset=120),  # + (critical end times beyond 120)^2
+])
+```
+
+`ta.constraint_costs(solution, picks)` keys the second pick
+`critical_priority_task_end_time_cost#2`. The CP-SAT reference takes integral offsets on
+every constraint (one term per employee, one for the global total).
+
 ## Starting from an existing solution
 
 ```python

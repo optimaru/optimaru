@@ -154,22 +154,31 @@ class Solver:
     def solve_with_constraints(self, schedule: TournamentSchedule, constraints: Iterable[Any] | None = ...) -> None:
         """Score the same solve with a caller-chosen constraint set
         (see tournament_scheduling.constraints). The given list replaces the default set; None
-        keeps the default set."""
+        keeps the default set. A name may be picked several times: each pick is its own
+        instance with its own knobs, and the instances add up."""
 
 def list_constraints() -> list[str]:
     """Constraint names scored by this domain (default assembly order, snake_case:
     the two per-team constraints, then the two imbalance constraints).
     The same names tournament_scheduling.constraints uses."""
 
-def constraint_costs(schedule: TournamentSchedule, /) -> dict[str, dict[str, Any]]:
-    """Per-constraint, per-unit **raw** costs — before weight/exponent/level rounding.
+def constraint_costs(
+    schedule: TournamentSchedule, constraints: Iterable[Any] | None = ...
+) -> dict[str, dict[str, Any]]:
+    """Per-constraint, per-unit **raw** costs — before weight/exponent/offset/level rounding.
     A unit is a team; the two imbalance (global) constraints report one cost.
     `tournament_scheduling.constraints.score()` takes these and produces a score:
-    {name: {"costs": [...], "weight": float, "exponent": float, "hard": bool,
-    "global": bool, "level": "hard" | "medium" | "soft", "reward": bool,
-    "level_flippable": bool, "name": str, "label": str,
-    "medium_fold": {"kind": "into_soft", "unit": 1e6}}}. The medium fold belongs
-    to the domain, so EVERY entry carries it."""
+    {key: {"costs": [...], "weight": float, "exponent": float, "offset": float,
+    "clip": bool, "hard": bool, "global": bool, "level": "hard" | "medium" | "soft",
+    "reward": bool, "level_flippable": bool, "name": str, "label": str,
+    "default_weight": float, "default_level": str,
+    "medium_fold": {"kind": "into_soft", "unit": 1e6}}}. The scoped
+    team_unavailability_cost also carries "units": the teams with an unavailability
+    fact, the only ones it evaluates (a literal offset, clip=False, charges those and
+    no other team). None = the default constraints; a pick list (as for solve) scores
+    exactly those picks, each entry carrying its pick's knobs, the k-th pick of a name
+    keyed "<name>#<k>" from the second on. The medium fold belongs to the domain, so
+    EVERY entry carries it."""
 
 class ConstraintInfo(NamedTuple):
     """One constraint-catalog row, read off the C++ default assembly."""

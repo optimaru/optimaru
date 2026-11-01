@@ -73,6 +73,25 @@ both solvers (it was a no-op in the engine), an explicit weight is in medium uni
 to replace the fold), and on CP-SAT `hard=False` on a hard constraint now lands on soft (it
 landed on medium). Raw costs and the default score are unchanged.
 
+**0.3.0:** every constraint takes two more knobs, `offset` and `clip` (keyword-only), and
+may be picked several times. All four constraints are global, so each instance shapes its
+one total `x` once: `sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default)
+or `(x - offset) ** exponent`, sign-preserving (`clip=False`, which acts as a reward below
+the offset, e.g. a makespan under a target day); `offset=0` is the 0.2.0 shaping. Each pick
+is its own instance with its own knobs, and the instances add up:
+
+```python
+pj.solve(core, constraints=[
+    *get_constraints(),
+    MakespanCost(exponent=2, offset=40),   # + (days beyond day 40)^2
+])
+```
+
+`pj.constraint_costs(core, picks)` keys the second pick `makespan_cost#2`. The domain
+`Score` keeps integer levels, so fractional weights round in `schedule.score` (as before);
+`constraints.score()` reports the exact engine value. The CP-SAT reference takes integral
+offsets on every constraint (one term per global total).
+
 ## Starting from an existing solution
 
 `with_initial_solution(problem, solution)` returns a copy of `problem` whose search starts from `solution`, which is the model a solve returned or that model as a JSON dict:

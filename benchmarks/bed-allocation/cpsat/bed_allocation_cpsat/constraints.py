@@ -4,6 +4,13 @@ Each plugin subclasses the domain spec of the same name and carries only ``build
 its default level and weight come from ``bed_allocation.constraint_info()`` (the C++
 components' kDefaultLevel / kDefaultWeight), so nothing is restated here. The registry
 keeps the ``list_constraints()`` order (the global ``MixedGenderRoomCost`` last).
+
+Every plugin adds one term per unit the engine evaluates: the per-bed constraints one
+per real bed (an empty one included; the "no bed" sentinel is no bed), the scoped
+``UnassignedStaysCost`` one for the sentinel only, and the global ``MixedGenderRoomCost``
+one for its total. A pick's ``offset`` / ``clip`` therefore shape each unit exactly as
+the engine does (``terms_per_unit``), and a constraint picked several times adds one set
+of terms per pick.
 """
 
 from dataclasses import dataclass, field
@@ -40,16 +47,23 @@ class BedContext:
 
 
 class UnassignedStaysCost(domain.UnassignedStaysCost, ConstraintPlugin[BedContext]):
+    terms_per_unit = True  # scoped to the sentinel: its one unit
+
     def build(self, context: BedContext, objective: ObjectiveBuilder) -> None:
-        for stay, stay_data in enumerate(context.problem.stays):
-            nights = context.nights(stay_data)
-            objective.add(
-                self.name, nights * context.x[stay, context.no_bed], bound=nights
-            )
+        nights = [context.nights(stay) for stay in context.problem.stays]
+        objective.add(
+            self.name,
+            sum(
+                count * context.x[stay, context.no_bed]
+                for stay, count in enumerate(nights)
+            ),
+            bound=sum(nights),
+        )
 
 
 class _StayRoomPlugin(ConstraintPlugin[BedContext]):
     rule: ClassVar[str]
+    terms_per_unit = True  # one term per real bed
 
     def amount(self, stay: Any, room: Any, department: Any, nights: int) -> int:
         if self.rule == "female_in_male":
@@ -94,15 +108,20 @@ class _StayRoomPlugin(ConstraintPlugin[BedContext]):
         return nights * len(set(stay.patient_preferred_equipment) - set(room.equipment))
 
     def build(self, context: BedContext, objective: ObjectiveBuilder) -> None:
-        for stay_index, stay in enumerate(context.problem.stays):
-            nights = context.nights(stay)
-            for bed, room in enumerate(context.room_of_bed):
-                amount = self.amount(
-                    stay, room, context.departments[room.department_id], nights
-                )
-                objective.add(
-                    self.name, amount * context.x[stay_index, bed], bound=amount
-                )
+        stays = context.problem.stays
+        for bed, room in enumerate(context.room_of_bed):
+            department = context.departments[room.department_id]
+            amounts = [
+                self.amount(stay, room, department, context.nights(stay))
+                for stay in stays
+            ]
+            objective.add(
+                self.name,
+                sum(
+                    amount * context.x[stay, bed] for stay, amount in enumerate(amounts)
+                ),
+                bound=sum(amounts),
+            )
 
 
 class FemaleInMaleRoomCost(domain.FemaleInMaleRoomCost, _StayRoomPlugin):
@@ -150,7 +169,12 @@ class PreferredPatientEquipmentCost(
 
 
 class BedConflictCost(domain.BedConflictCost, ConstraintPlugin[BedContext]):
+    terms_per_unit = True  # one term per real bed
+
     def build(self, context: BedContext, objective: ObjectiveBuilder) -> None:
+        bed_count = len(context.problem.beds)
+        terms: list[list[Any]] = [[] for _ in range(bed_count)]
+        bounds = [0] * bed_count
         for left in range(len(context.problem.stays)):
             for right in range(left + 1, len(context.problem.stays)):
                 a, b = context.problem.stays[left], context.problem.stays[right]
@@ -162,17 +186,25 @@ class BedConflictCost(domain.BedConflictCost, ConstraintPlugin[BedContext]):
                     ).days
                     + 1,
                 )
-                for bed in range(len(context.problem.beds)):
+                for bed in range(bed_count):
                     both = context.both(
                         ("same_bed", left, right, bed),
                         context.x[left, bed],
                         context.x[right, bed],
                     )
-                    objective.add(self.name, overlap * both, bound=overlap)
+                    if overlap:
+                        terms[bed].append(overlap * both)
+                        bounds[bed] += overlap
+        for bed in range(bed_count):
+            objective.add(self.name, sum(terms[bed]), bound=bounds[bed])
 
 
 class MixedGenderRoomCost(domain.MixedGenderRoomCost, ConstraintPlugin[BedContext]):
+    terms_per_unit = True  # a global constraint: one term for its total
+
     def build(self, context: BedContext, objective: ObjectiveBuilder) -> None:
+        terms: list[Any] = []
+        bound = 0
         for left in range(len(context.problem.stays)):
             for right in range(left + 1, len(context.problem.stays)):
                 a, b = context.problem.stays[left], context.problem.stays[right]
@@ -213,7 +245,9 @@ class MixedGenderRoomCost(domain.MixedGenderRoomCost, ConstraintPlugin[BedContex
                         left_in_room,
                         right_in_room,
                     )
-                    objective.add(self.name, overlap * both, bound=overlap)
+                    terms.append(overlap * both)
+                    bound += overlap
+        objective.add(self.name, sum(terms), bound=bound)
 
 
 REGISTRY = ConstraintRegistry(

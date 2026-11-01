@@ -6,6 +6,11 @@ components' kDefaultLevel / kDefaultWeight), so they are not restated here.
 The medium constraint (``project_delay_cost``) lands on the CP-SAT medium level
 at weight 1, in medium units, exactly like the engine (whose domain folds
 medium into soft at 10^9); ``hard=False`` demotes it to soft on both paths.
+
+Offsets and repeats: all four engine constraints are global, so every plugin adds
+exactly one term, its total (``terms_per_unit``): a pick's ``offset`` / ``clip``
+shape that total once, as the engine does, and a constraint picked several times
+adds one term per pick.
 """
 
 from dataclasses import dataclass
@@ -31,7 +36,11 @@ class ProjectContext:
 class RenewableResourceCapacityCost(
     domain.RenewableResourceCapacityCost, ConstraintPlugin[ProjectContext]
 ):
+    terms_per_unit = True  # a global constraint: one term for its total
+
     def build(self, context: ProjectContext, objective: ObjectiveBuilder) -> None:
+        excesses = []
+        bound = 0
         for resource in context.problem.resources:
             if not resource.renewable:
                 continue
@@ -70,13 +79,19 @@ class RenewableResourceCapacityCost(
                 context.model.add_max_equality(
                     excess, [0, sum(active_demands) - resource.capacity]
                 )
-                objective.add(self.name, excess, bound=total_demand)
+                excesses.append(excess)
+                bound += total_demand
+        objective.add(self.name, sum(excesses), bound=bound)
 
 
 class NonRenewableResourceCapacityCost(
     domain.NonRenewableResourceCapacityCost, ConstraintPlugin[ProjectContext]
 ):
+    terms_per_unit = True  # a global constraint: one term for its total
+
     def build(self, context: ProjectContext, objective: ObjectiveBuilder) -> None:
+        excesses = []
+        bound = 0
         for resource in context.problem.resources:
             if not resource.renewable:
                 terms = context.nonrenewable_terms[resource.id]
@@ -93,10 +108,14 @@ class NonRenewableResourceCapacityCost(
                 context.model.add_max_equality(
                     excess, [0, sum(terms) - resource.capacity]
                 )
-                objective.add(self.name, excess, bound=total)
+                excesses.append(excess)
+                bound += total
+        objective.add(self.name, sum(excesses), bound=bound)
 
 
 class ProjectDelayCost(domain.ProjectDelayCost, ConstraintPlugin[ProjectContext]):
+    terms_per_unit = True  # a global constraint: one term for its total
+
     def build(self, context: ProjectContext, objective: ObjectiveBuilder) -> None:
         objective.add(
             self.name,
@@ -106,6 +125,8 @@ class ProjectDelayCost(domain.ProjectDelayCost, ConstraintPlugin[ProjectContext]
 
 
 class MakespanCost(domain.MakespanCost, ConstraintPlugin[ProjectContext]):
+    terms_per_unit = True  # a global constraint: one term for its total
+
     def build(self, context: ProjectContext, objective: ObjectiveBuilder) -> None:
         objective.add(self.name, context.makespan, bound=context.horizon)
 

@@ -2,8 +2,9 @@
 
 Spot checks of individual constraint values live in `test_constraints.py`. This
 file covers the selection path that picks "which constraints are on", the catalog
-(`constraint_info()`), the knobs, and the pure-Python `score()` against the engine —
-including the domain's medium level (`unassigned_tasks_cost`, folded below hard).
+(`constraint_info()`), the five knobs, repeated picks, and the pure-Python `score()`
+against the engine — including the domain's medium level (`unassigned_tasks_cost`,
+folded below hard).
 """
 
 import pickle
@@ -149,16 +150,19 @@ def test_empty_constraint_list_is_rejected():
         get_constraints([])
 
 
-def test_naming_a_constraint_twice_is_rejected():
-    """The later pick must not silently win: state each constraint once."""
-    with pytest.raises(ValueError, match="picked more than once"):
-        ta.solve(
-            build_solution(),
-            time_limit_seconds=0.2,
-            constraints=[required_skill_cost, SquaredMakespanCost(weight=10), squared_makespan_cost],
-        )
-    with pytest.raises(ValueError, match="picked more than once"):
-        get_constraints([required_skill_cost, required_skill_cost])
+def test_naming_a_constraint_twice_scores_both_picks():
+    """Since 0.3.0 a constraint may be picked several times: each pick is scored on its own.
+
+    The later pick no longer wins in silence, nor is it an error: both are
+    instances with their own knobs, and they add up."""
+    picks = [RequiredSkillCost(), SquaredMakespanCost(weight=10), SquaredMakespanCost()]
+    assert _zero_budget(_hand(), picks) == (-MEDIUM_PER_HARD, -(10 + SOFT1_WEIGHT) * (900 + 25))
+    solution = build_solution()
+    ta.solve(solution, time_limit_seconds=0.2, random_seed=1, constraints=picks)
+    python = score(ta.constraint_costs(solution, picks), picks)
+    assert python.hard == engine(solution.score)[0]
+    assert python.soft == pytest.approx(engine(solution.score)[1])
+    assert get_constraints([RequiredSkillCost(), RequiredSkillCost()]) == [RequiredSkillCost(), RequiredSkillCost()]
 
 
 def test_spec_subclass_must_name_a_constraint():
@@ -313,9 +317,24 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
         hard = None
         exponent = 0.0
 
-    for pick, message in ((Negative(), "weight must be finite and >= 0"), (Flat(), "exponent must be finite and > 0")):
+    class Unbounded:
+        name = "squared_makespan_cost"
+        weight = None
+        hard = None
+        exponent = 1.0
+        offset = float("inf")
+
+    for pick, message in (
+        (Negative(), "weight must be finite and >= 0"),
+        (Flat(), "exponent must be finite and > 0"),
+        (Unbounded(), "offset must be finite, not inf"),
+    ):
         with pytest.raises(ValueError, match=message):
             ta.solve(build_solution(), time_limit_seconds=0.1, constraints=[pick])
+        with pytest.raises(ValueError, match=message):
+            ta.constraint_costs(build_solution(), [pick])
+    with pytest.raises(ValueError, match="offset must be finite, not nan"):
+        SquaredMakespanCost(offset=float("nan"))
 
 
 @pytest.mark.parametrize(
@@ -326,6 +345,10 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
         ({"hard": 1}, "hard must be True, False or None, not 1"),
         ({"hard": "x"}, "hard must be True, False or None, not 'x'"),
         ({"exponent": True}, "exponent must be a number, not True"),
+        ({"offset": "5"}, "offset must be a number, not '5'"),
+        ({"offset": False}, "offset must be a number, not False"),
+        ({"clip": 1}, "clip must be True or False, not 1"),
+        ({"clip": "no"}, "clip must be True or False, not 'no'"),
     ],
 )
 def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
@@ -521,3 +544,229 @@ def test_score_rejects_an_unknown_constraint_name():
 
     with pytest.raises(ValueError, match="unknown constraint"):
         score(raw, [Renamed()])
+
+
+# --- 0.3.0: repeated picks and the offset / clip knobs ------------------------------
+#
+# The hand instance is _hand(): e0 (no skills) runs t0 (critical, 0..10, needs skill x)
+# and t1 (major, 10..30), e1 runs t2 (minor, 0..5), e2 is idle; every task is assigned
+# (construction would place an unassigned one even at a zero budget). Raw per employee
+# (e0, e1, e2): required_skill_cost [1, 0, 0], squared_makespan_cost [900, 25, 0],
+# critical [10, 0, 0], major [30, 0, 0], minor [0, 5, 0]; unassigned_tasks_cost [0].
+# Every employee is an evaluated unit, the idle one included.
+
+
+def _hand():
+    types = [
+        ta.TaskType("A", base_duration=10, required_skills=["x"]),
+        ta.TaskType("B", base_duration=20),
+        ta.TaskType("C", base_duration=5),
+    ]
+    employees = [
+        ta.Employee(f"e{i}", affinity_by_customer=[ta.Affinity.HIGH], tasks=tasks)
+        for i, tasks in enumerate([[0, 1], [2], []])
+    ]
+    tasks = [
+        ta.Task("t0", task_type=0, customer=0, priority=ta.Priority.CRITICAL),
+        ta.Task("t1", task_type=1, customer=0, priority=ta.Priority.MAJOR),
+        ta.Task("t2", task_type=2, customer=0, priority=ta.Priority.MINOR),
+    ]
+    return ta.TaskAssigningSolution(types, [ta.Customer("c")], tasks, employees)
+
+
+def _zero_budget(solution, picks):
+    """The engine's score of `solution` under `picks`: a solve with no time keeps it as it is."""
+    before = solution.task_lists()
+    config = ta.SolverConfig()
+    config.spent_limit_seconds = 0
+    ta.Solver(config).solve_with_constraints(solution, picks)
+    assert solution.task_lists() == before
+    return engine(solution.score)
+
+
+REPEAT = [CriticalPriorityTaskEndTimeCost(), CriticalPriorityTaskEndTimeCost(weight=0.5, exponent=2)]
+
+
+def test_a_repeated_pick_by_hand():
+    """4 x the critical end times plus 0.5 x their square per employee: 4 x 10 + 0.5 x 10^2 = 90."""
+    raw = ta.constraint_costs(_hand(), REPEAT)
+    assert list(raw) == ["critical_priority_task_end_time_cost", "critical_priority_task_end_time_cost#2"]
+    first, second = raw.values()
+    assert first["costs"] == second["costs"] == [10.0, 0.0, 0.0]
+    assert "units" not in first  # every employee is evaluated
+    assert (first["weight"], first["exponent"], second["weight"], second["exponent"]) == (4.0, 1.0, 0.5, 2.0)
+    assert first["name"] == second["name"] == "critical_priority_task_end_time_cost"
+    assert second["default_weight"] == 4.0
+    assert second["medium_fold"] == {"kind": "below_hard", "unit": 1e9}
+    expected = (0, -(4 * 10 + 0.5 * 10**2))
+    assert expected == (0, -90.0)
+    assert score(raw, REPEAT) == expected
+    # The default costs hold the name once; the second pick reads the same raw costs.
+    assert score(ta.constraint_costs(_hand()), REPEAT) == expected
+    assert _zero_budget(_hand(), REPEAT) == expected
+
+
+def test_identical_picks_count_twice():
+    picks = [MinorPriorityTaskEndTimeCost(), MinorPriorityTaskEndTimeCost()]
+    assert score(ta.constraint_costs(_hand()), picks) == (0, -10.0)
+    assert _zero_budget(_hand(), picks) == (0, -10.0)
+    assert list(ta.constraint_costs(_hand(), picks)) == [
+        "minor_priority_task_end_time_cost",
+        "minor_priority_task_end_time_cost#2",
+    ]
+
+
+def test_the_keys_follow_the_pick_order_of_each_name():
+    picks = [
+        MinorPriorityTaskEndTimeCost(weight=1),
+        UnassignedTasksCost(),
+        MinorPriorityTaskEndTimeCost(weight=2),
+        RequiredSkillCost(),
+        MinorPriorityTaskEndTimeCost(weight=3),
+    ]
+    raw = ta.constraint_costs(_hand(), picks)
+    assert {key: entry["weight"] for key, entry in raw.items()} == {
+        "required_skill_cost": 1.0,
+        "minor_priority_task_end_time_cost": 1.0,
+        "minor_priority_task_end_time_cost#2": 2.0,
+        "minor_priority_task_end_time_cost#3": 3.0,
+        "unassigned_tasks_cost": 1.0,
+    }
+    assert [key for key in raw if key.startswith("minor")] == [
+        "minor_priority_task_end_time_cost",
+        "minor_priority_task_end_time_cost#2",
+        "minor_priority_task_end_time_cost#3",
+    ]
+    expected = (-MEDIUM_PER_HARD, -30.0)
+    assert score(raw, picks) == expected
+    assert _zero_budget(_hand(), picks) == expected
+
+
+def test_a_repeated_medium_pick_adds_up():
+    """Both instances stay on the medium level (folded below hard); a promoted repeat goes hard.
+
+    No employees: every demo task stays unassigned, so the engine scores that state."""
+    picks = [UnassignedTasksCost(), UnassignedTasksCost(weight=2)]
+    tasks = len(_nobody().tasks)
+    assert score(ta.constraint_costs(_nobody()), picks) == (-3 * tasks, 0.0)
+    solution = _nobody()
+    ta.solve(solution, time_limit_seconds=0.1, constraints=picks)
+    assert (solution.score.hard, solution.score.soft0) == (0, -3 * tasks)
+    assert engine(solution.score) == (-3 * tasks, 0.0)
+    mixed = [UnassignedTasksCost(), UnassignedTasksCost(hard=True), UnassignedTasksCost(hard=False, offset=-1)]
+    expected = (-tasks * MEDIUM_PER_HARD - tasks, -(tasks + 1.0))
+    assert score(ta.constraint_costs(_nobody(), mixed), mixed) == expected
+    solution = _nobody()
+    ta.solve(solution, time_limit_seconds=0.1, constraints=mixed)
+    assert (solution.score.hard, solution.score.soft0) == (-tasks, -tasks)
+    assert engine(solution.score) == expected
+
+
+@pytest.mark.parametrize(
+    ("pick", "expected"),
+    [
+        # Per employee: e2 is idle (raw 0, evaluated, so charged in literal mode).
+        (CriticalPriorityTaskEndTimeCost(offset=4), (0, -4 * 6)),
+        (CriticalPriorityTaskEndTimeCost(offset=4, clip=False), (0, -4 * (6 - 4 - 4))),  # e1, e2 are rewarded
+        (CriticalPriorityTaskEndTimeCost(offset=20), (0, 0.0)),
+        (CriticalPriorityTaskEndTimeCost(offset=20, clip=False), (0, -4 * (-10 - 20 - 20))),
+        (MajorPriorityTaskEndTimeCost(offset=-1), (0, -2 * 31)),  # a negative offset adds to every non-zero unit
+        (MajorPriorityTaskEndTimeCost(offset=-1, clip=False), (0, -2 * (31 + 1 + 1))),  # ...or to every unit
+        (MinorPriorityTaskEndTimeCost(offset=2, exponent=2), (0, -(3**2))),
+        (MinorPriorityTaskEndTimeCost(offset=3, exponent=3, clip=False), (0, -(-(3**3) + 2**3 - 3**3))),
+        (SquaredMakespanCost(offset=100), (0, -SOFT1_WEIGHT * 800)),
+        # Hard picks fold by 10^9 below hard; hard rounding is per employee.
+        (RequiredSkillCost(offset=2, clip=False), (5 * MEDIUM_PER_HARD, 0.0)),  # (1-2) + (0-2) x 2
+        (RequiredSkillCost(weight=3, offset=0.5, clip=False), (2 * MEDIUM_PER_HARD, 0.0)),  # 1.5 -> 2, -1.5 -> -2 x 2
+        # The global's total (0 here) is shaped once.
+        (UnassignedTasksCost(offset=3, clip=False), (3, 0.0)),
+        (UnassignedTasksCost(offset=3), (0, 0.0)),
+        (UnassignedTasksCost(offset=3, clip=False, hard=True), (3 * MEDIUM_PER_HARD, 0.0)),
+    ],
+)
+def test_offsets_by_hand_on_both_paths(pick, expected):
+    """threshold sign(x) max(0, |x| - offset)^e and literal (x - offset)^e: Python mirror == engine == hand."""
+    assert score(ta.constraint_costs(_hand()), [pick]) == expected
+    raw = ta.constraint_costs(_hand(), [pick])
+    entry = next(iter(raw.values()))
+    assert (entry["offset"], entry["clip"]) == (float(pick.offset), pick.clip)
+    assert score(raw, [pick]) == expected
+    assert _zero_budget(_hand(), [pick]) == expected
+
+
+@pytest.mark.parametrize(
+    ("make_pick", "expected"),
+    [
+        (lambda tasks: UnassignedTasksCost(offset=2, exponent=2), lambda tasks: (-((tasks - 2) ** 2), 0.0)),
+        (lambda tasks: UnassignedTasksCost(offset=tasks + 5, clip=False), lambda tasks: (5, 0.0)),
+    ],
+    ids=["threshold-squared", "literal"],
+)
+def test_the_global_total_is_shaped_once(make_pick, expected):
+    """Every demo task unassigned: the total, not each task, is shaped ((N - 2)^2, not N x 0)."""
+    tasks = len(_nobody().tasks)
+    pick = make_pick(tasks)
+    assert score(ta.constraint_costs(_nobody(), [pick]), [pick]) == expected(tasks)
+    solution = _nobody()
+    ta.solve(solution, time_limit_seconds=0.1, constraints=[pick])
+    assert engine(solution.score) == expected(tasks)
+
+
+def test_offset_zero_reproduces_the_0_2_0_scores():
+    """offset 0 is the plain shaping in both modes, so every 0.2.0 selection scores the same."""
+    plain = [*get_constraints()[:-1], UnassignedTasksCost(exponent=2)]
+    shifted = [type(spec)(exponent=spec.exponent, offset=0.0, clip=False) for spec in plain]
+    raw, solved = _raw()
+    assert score(raw, shifted) == score(raw, plain)
+    engines = [_zero_budget(solved, picks) for picks in (plain, shifted)]
+    assert engines[0] == engines[1]
+    assert engines[0][0] == score(raw, plain)[0]
+    assert engines[0][1] == pytest.approx(score(raw, plain)[1])
+    for entry in raw.values():
+        assert (entry["offset"], entry["clip"]) == (0.0, True)
+
+
+SELECTIONS = {
+    "repeat": [*get_constraints(), *REPEAT, UnassignedTasksCost(weight=2, exponent=2)],
+    "repeat-and-offsets": [
+        RequiredSkillCost(),
+        RequiredSkillCost(weight=1, offset=1, clip=False),
+        SquaredMakespanCost(),
+        SquaredMakespanCost(weight=0.5, offset=1000000, clip=False),
+        CriticalPriorityTaskEndTimeCost(offset=30),
+        MajorPriorityTaskEndTimeCost(offset=-5, clip=False, hard=True),
+        MinorPriorityTaskEndTimeCost(exponent=2, offset=10),
+        UnassignedTasksCost(),
+        UnassignedTasksCost(offset=-2, hard=False, weight=3),
+    ],
+}
+
+
+@pytest.mark.parametrize("picks", list(SELECTIONS.values()), ids=list(SELECTIONS))
+def test_score_matches_the_engine_for_repeats_and_offsets(picks):
+    raw, solved = _raw()
+    expected = _zero_budget(solved, picks)
+    python = score(ta.constraint_costs(solved, picks), picks)
+    assert python.hard == expected[0]
+    assert python.soft == pytest.approx(expected[1])
+    assert score(raw, picks) == python  # the default costs score the repeats too
+
+
+@pytest.mark.parametrize("picks", list(SELECTIONS.values()), ids=list(SELECTIONS))
+def test_full_assert_solves_with_repeats_and_offsets(picks):
+    """FULL_ASSERT re-checks the incremental score against a full recompute after every move."""
+    solution = build_solution()
+    config = ta.SolverConfig()
+    config.full_assert = True
+    config.random_seed = 3
+    config.parallel_solver_count = 1
+    config.step_count_limit = 2000
+    config.spent_limit_seconds = 30
+    ta.Solver(config).solve_with_constraints(solution, picks)
+    raw = ta.constraint_costs(solution, picks)
+    assert len(raw) == len(picks)
+    python = score(raw, picks)
+    expected = engine(solution.score)
+    assert python.hard == expected[0]
+    assert python.soft == pytest.approx(expected[1])
+    assert score(ta.constraint_costs(solution), picks) == python

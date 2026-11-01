@@ -3,7 +3,7 @@
 Spot checks of individual constraint values live in `test_constraints.py` and the C++
 tests (one hand-calculated positive and zero case per constraint). This file covers the
 selection path that picks "which constraints are on", the catalog (`constraint_info()`),
-the three knobs and the medium level.
+the five knobs, repeated picks and the medium level.
 """
 
 import pickle
@@ -20,6 +20,7 @@ from project_job.constraints import (
     MakespanCost,
     NonRenewableResourceCapacityCost,
     ProjectDelayCost,
+    RenewableResourceCapacityCost,
     get_constraints,
     makespan_cost,
     non_renewable_resource_capacity_cost,
@@ -480,9 +481,18 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     """The C++ side guards too: a duck-typed pick cannot smuggle a negative weight in."""
     negative = SimpleNamespace(name="makespan_cost", weight=-2.0, hard=None, exponent=1.0)
     flat = SimpleNamespace(name="makespan_cost", weight=None, hard=None, exponent=0.0)
-    for pick, message in ((negative, "weight must be finite and >= 0"), (flat, "exponent must be finite and > 0")):
+    unbounded = SimpleNamespace(name="makespan_cost", weight=None, hard=None, exponent=1.0, offset=float("inf"))
+    for pick, message in (
+        (negative, "weight must be finite and >= 0"),
+        (flat, "exponent must be finite and > 0"),
+        (unbounded, "offset must be finite, not inf"),
+    ):
         with pytest.raises(ValueError, match=message):
             pjs.solve(build_schedule(), time_limit_seconds=0.1, constraints=[pick])
+        with pytest.raises(ValueError, match=message):
+            pjs.constraint_costs(build_schedule(), [pick])
+    with pytest.raises(ValueError, match="offset must be finite, not nan"):
+        MakespanCost(offset=float("nan"))
 
 
 @pytest.mark.parametrize(
@@ -492,6 +502,10 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
         ({"hard": 1}, "hard must be True, False or None, not 1"),
         ({"hard": "x"}, "hard must be True, False or None, not 'x'"),
         ({"exponent": True}, "exponent must be a number, not True"),
+        ({"offset": "5"}, "offset must be a number, not '5'"),
+        ({"offset": False}, "offset must be a number, not False"),
+        ({"clip": 1}, "clip must be True or False, not 1"),
+        ({"clip": "no"}, "clip must be True or False, not 'no'"),
     ],
 )
 def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
@@ -522,3 +536,189 @@ def test_old_names_are_gone(old):
         pjs.solve(build_schedule(), time_limit_seconds=0.05, constraints=[pick])
     with pytest.raises(ValueError, match="unknown constraint"):
         score(pjs.constraint_costs(build_schedule()), [pick])
+
+
+# --- 0.3.0: repeated picks and the offset / clip knobs ------------------------------
+#
+# The hand instance is _late_schedule(): one 3-day job, 2 days of project delay (medium),
+# makespan 3 (soft), no resource use. All four constraints are global, so a pick's
+# exponent / offset / clip shape each total once. The domain Score holds integer levels,
+# so the engine comparisons use integral weights.
+
+
+def _zero_budget(schedule, picks):
+    """The engine's score of `schedule` under `picks`: a solve with no time keeps it as it is."""
+    before = schedule.assignment()
+    config = pjs.SolverConfig()
+    config.spent_limit_seconds = 0
+    pjs.Solver(config).solve_with_constraints(schedule, picks)
+    assert schedule.assignment() == before
+    return _engine(schedule.score)
+
+
+REPEAT = [MakespanCost(), MakespanCost(weight=2, exponent=2)]
+
+
+def test_naming_a_constraint_twice_scores_both_picks():
+    """Since 0.3.0 a constraint may be picked several times: each pick is scored on its own.
+
+    The later pick no longer wins in silence, nor is it an error: both are
+    instances with their own knobs, and they add up."""
+    picks = [ProjectDelayCost(), MakespanCost(weight=10), MakespanCost()]
+    assert _zero_budget(_late_schedule(), picks) == (0, -2 * MEDIUM_UNIT - 11 * 3)
+    assert get_constraints([MakespanCost(), MakespanCost()]) == [MakespanCost(), MakespanCost()]
+    schedule = build_schedule()
+    pjs.solve(schedule, time_limit_seconds=0.3, random_seed=1, constraints=[*get_constraints(), *REPEAT])
+    assert score(pjs.constraint_costs(schedule), [*get_constraints(), *REPEAT]) == pytest.approx(
+        _engine(schedule.score)
+    )
+
+
+def test_a_repeated_pick_by_hand():
+    """The makespan plus twice its square: 3 + 2 x 3^2 = 21."""
+    raw = pjs.constraint_costs(_late_schedule(), REPEAT)
+    assert list(raw) == ["makespan_cost", "makespan_cost#2"]
+    first, second = raw.values()
+    assert first["costs"] == second["costs"] == [3.0]
+    assert first["global"] and "units" not in first
+    assert (first["weight"], first["exponent"], second["weight"], second["exponent"]) == (1.0, 1.0, 2.0, 2.0)
+    assert first["name"] == second["name"] == "makespan_cost"
+    assert second["default_weight"] == 1.0
+    assert second["medium_fold"] == {"kind": "into_soft", "unit": float(MEDIUM_UNIT)}
+    expected = (0, -(3 + 2 * 3**2))
+    assert expected == (0, -21)
+    assert score(raw, REPEAT) == expected
+    # The default costs hold the name once; the second pick reads the same raw costs.
+    assert score(pjs.constraint_costs(_late_schedule()), REPEAT) == expected
+    assert _zero_budget(_late_schedule(), REPEAT) == expected
+
+
+def test_identical_picks_count_twice():
+    picks = [MakespanCost(), MakespanCost()]
+    assert score(pjs.constraint_costs(_late_schedule()), picks) == (0, -6.0)
+    assert _zero_budget(_late_schedule(), picks) == (0, -6.0)
+    assert list(pjs.constraint_costs(_late_schedule(), picks)) == ["makespan_cost", "makespan_cost#2"]
+
+
+def test_the_keys_follow_the_pick_order_of_each_name():
+    picks = [
+        MakespanCost(weight=1),
+        ProjectDelayCost(),
+        MakespanCost(weight=2),
+        NonRenewableResourceCapacityCost(),
+        MakespanCost(weight=3),
+    ]
+    raw = pjs.constraint_costs(_late_schedule(), picks)
+    assert {key: entry["weight"] for key, entry in raw.items()} == {
+        "non_renewable_resource_capacity_cost": 1.0,
+        "project_delay_cost": 1.0,
+        "makespan_cost": 1.0,
+        "makespan_cost#2": 2.0,
+        "makespan_cost#3": 3.0,
+    }
+    assert [key for key in raw if key.startswith("makespan")] == ["makespan_cost", "makespan_cost#2", "makespan_cost#3"]
+    expected = (0, -2 * MEDIUM_UNIT - 18)
+    assert score(raw, picks) == expected
+    assert _zero_budget(_late_schedule(), picks) == expected
+
+
+def test_a_repeated_medium_pick_adds_up():
+    """Both instances stay on the medium level (folded at 10^9); a promoted repeat goes hard."""
+    picks = [ProjectDelayCost(), ProjectDelayCost(weight=2)]
+    assert score(pjs.constraint_costs(_late_schedule()), picks) == (0, -6 * MEDIUM_UNIT)
+    schedule = _late_schedule()
+    _zero_budget(schedule, picks)
+    assert (schedule.score.hard, schedule.score.medium, schedule.score.soft) == (0, -6, 0)
+    mixed = [ProjectDelayCost(), ProjectDelayCost(hard=True), ProjectDelayCost(hard=False, offset=1)]
+    assert score(pjs.constraint_costs(_late_schedule(), mixed), mixed) == (-2, -2 * MEDIUM_UNIT - 1)
+    schedule = _late_schedule()
+    _zero_budget(schedule, mixed)
+    assert (schedule.score.hard, schedule.score.medium, schedule.score.soft) == (-2, -2, -1)
+
+
+@pytest.mark.parametrize(
+    ("pick", "expected"),
+    [
+        # Each global's single total is shaped once: makespan 3, delay 2, resources 0.
+        (MakespanCost(offset=1), (0, -2.0)),
+        (MakespanCost(offset=5), (0, 0.0)),
+        (MakespanCost(offset=5, clip=False), (0, 2.0)),  # a makespan under day 5 is rewarded
+        (MakespanCost(offset=-1), (0, -4.0)),  # a negative offset adds to a non-zero total
+        (MakespanCost(offset=1, exponent=3), (0, -8.0)),
+        (MakespanCost(offset=5, exponent=3, clip=False), (0, 8.0)),  # (3 - 5)^3
+        (ProjectDelayCost(offset=1), (0, -1 * MEDIUM_UNIT)),
+        (ProjectDelayCost(offset=4, clip=False), (0, 2 * MEDIUM_UNIT)),
+        (ProjectDelayCost(offset=4, clip=False, hard=True), (2, 0.0)),
+        (RenewableResourceCapacityCost(offset=1, clip=False), (1, 0.0)),  # once, not per resource or day
+        (RenewableResourceCapacityCost(offset=-2), (0, 0.0)),  # a raw 0 stays 0 under the threshold
+        (RenewableResourceCapacityCost(offset=-2, clip=False), (-2, 0.0)),
+        (NonRenewableResourceCapacityCost(weight=3, offset=0.5, clip=False), (2, 0.0)),  # -1.5 -> -2
+    ],
+)
+def test_offsets_by_hand_on_both_paths(pick, expected):
+    """threshold sign(x) max(0, |x| - offset)^e and literal (x - offset)^e: Python mirror == engine == hand."""
+    assert score(pjs.constraint_costs(_late_schedule()), [pick]) == expected
+    raw = pjs.constraint_costs(_late_schedule(), [pick])
+    entry = next(iter(raw.values()))
+    assert (entry["offset"], entry["clip"]) == (float(pick.offset), pick.clip)
+    assert score(raw, [pick]) == expected
+    assert _zero_budget(_late_schedule(), [pick]) == expected
+
+
+def test_offset_zero_reproduces_the_0_2_0_scores():
+    """offset 0 is the plain shaping in both modes, so every 0.2.0 selection scores the same."""
+    plain = [*get_constraints()[:-1], MakespanCost(exponent=2)]
+    shifted = [type(spec)(exponent=spec.exponent, offset=0.0, clip=False) for spec in plain]
+    raw, solved = _raw()
+    assert score(raw, shifted) == score(raw, plain)
+    engines = [_zero_budget(solved, picks) for picks in (plain, shifted)]
+    assert engines[0] == engines[1] == score(raw, plain)
+    for entry in raw.values():
+        assert (entry["offset"], entry["clip"]) == (0.0, True)
+        assert "units" not in entry
+
+
+SELECTIONS = {
+    "repeat": [*get_constraints(), *REPEAT, ProjectDelayCost(weight=2, exponent=2)],
+    "repeat-and-offsets": [
+        NonRenewableResourceCapacityCost(),
+        NonRenewableResourceCapacityCost(offset=1, clip=False),
+        RenewableResourceCapacityCost(),
+        RenewableResourceCapacityCost(offset=-1),
+        ProjectDelayCost(),
+        ProjectDelayCost(offset=5, exponent=2),
+        ProjectDelayCost(offset=-2, clip=False, hard=False, weight=3),
+        MakespanCost(offset=20),
+        MakespanCost(offset=40, clip=False, weight=2),
+    ],
+}
+
+
+@pytest.mark.parametrize("picks", list(SELECTIONS.values()), ids=list(SELECTIONS))
+def test_score_matches_the_engine_for_repeats_and_offsets(picks):
+    raw, solved = _raw()
+    engine = _zero_budget(solved, picks)
+    python = score(pjs.constraint_costs(solved, picks), picks)
+    assert python.hard == engine[0]
+    assert python.soft == pytest.approx(engine[1])
+    assert score(raw, picks) == python  # the default costs score the repeats too
+
+
+@pytest.mark.parametrize("picks", list(SELECTIONS.values()), ids=list(SELECTIONS))
+def test_full_assert_solves_with_repeats_and_offsets(picks):
+    """FULL_ASSERT re-checks the incremental score against a full recompute after every move."""
+    schedule = build_schedule()
+    config = pjs.SolverConfig()
+    config.full_assert = True
+    config.random_seed = 3
+    config.parallel_solver_count = 1
+    config.step_count_limit = 2000
+    config.spent_limit_seconds = 30
+    pjs.Solver(config).solve_with_constraints(schedule, picks)
+    raw = pjs.constraint_costs(schedule, picks)
+    assert len(raw) == len(picks)
+    python = score(raw, picks)
+    engine = _engine(schedule.score)
+    assert python.hard == engine[0]
+    assert python.soft == pytest.approx(engine[1])
+    assert score(pjs.constraint_costs(schedule), picks) == python

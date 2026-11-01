@@ -97,10 +97,15 @@ Outside that range:
 
 `list_constraints()` / `constraint_info()` order (unit constraints first, the global
 `unassigned_tasks_cost` last). Pick, re-weight or flip them through
-`task_assigning.constraints` (`solve(solution, constraints=get_constraints([...]))`); a
+`task_assigning.constraints` (`solve(solution, constraints=[RequiredSkillCost(), ...])`); a
 weight is in units of its level, `hard=True` makes a constraint hard (one hard unit =
-10^9 engine units), `hard=False` makes it soft. See the use-case README for the 0.2.0
-renames (`no_missing_skills` -> `required_skill_cost`, ...).
+10^9 engine units), `hard=False` makes it soft. The keyword-only `offset=0.0` / `clip=True`
+shift the shaping per employee (or on the global's total): `clip=True` counts only what
+lies beyond the offset, `clip=False` shapes `x - offset` as it is. A constraint may be
+picked several times (since 0.3.0); each pick is its own instance with its own knobs, the
+instances add up, and `constraint_costs(solution, picks)` keys the k-th pick
+`<name>#<k>`. See the use-case README for the 0.2.0 renames (`no_missing_skills` ->
+`required_skill_cost`, ...).
 
 ## Caveats
 

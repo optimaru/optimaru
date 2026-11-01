@@ -75,6 +75,31 @@ real medium constraint: its default weight is 1 medium unit (was a soft weight o
 gives one hard unit per night. Raw costs and the default score are unchanged;
 `solve(..., constraints=...)` reports the levels the selection put the terms on.
 
+**0.3.0:** every constraint takes two more knobs, `offset` and `clip` (keyword-only), and
+may be picked several times. A raw cost `x` (per real bed for the per-bed constraints, on
+the one total for the global `mixed_gender_room_cost`) is shaped as
+`sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
+`(x - offset) ** exponent`, sign-preserving (`clip=False`, which charges every unit the
+constraint evaluates, a raw 0 included, and acts as a reward below the offset);
+`offset=0` is the 0.2.0 shaping. The per-bed constraints evaluate the real beds, an empty
+one included, and never the "no bed" sentinel (it is no bed); `unassigned_stays_cost`
+evaluates the sentinel only. A `constraint_costs()` entry lists its evaluated units as
+`"units"`, and the literal offset charges exactly those. Each pick is its own instance
+with its own knobs, and the instances add up:
+
+```python
+ba.solve(plan, constraints=[
+    BedConflictCost(),
+    UnassignedStaysCost(),                         # 1 medium unit per unassigned night
+    UnassignedStaysCost(exponent=2, offset=10),    # + (unassigned nights beyond 10)^2
+    PreferredMaxRoomCapacityCost(),
+])
+```
+
+`ba.constraint_costs(plan, picks)` keys the second pick `unassigned_stays_cost#2`. The
+CP-SAT reference takes integral offsets on every constraint (one term per evaluated unit,
+one for the global total).
+
 ## Starting from an existing solution
 
 `with_initial_solution(problem, solution)` returns a copy of `problem` whose search starts from `solution`, which is the model a solve returned or that model as a JSON dict:

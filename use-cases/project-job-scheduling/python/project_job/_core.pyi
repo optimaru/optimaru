@@ -218,21 +218,29 @@ class Solver:
     def solve_with_constraints(self, schedule: ProjectJobSchedule, constraints: Iterable[Any] | None = ...) -> None:
         """Score the same solve with a caller-chosen constraint set
         (see project_job.constraints). The given list replaces the default set; None
-        keeps the default set. schedule.score reports the three levels the assembly put
-        the terms on (a medium constraint with hard=False lands on soft)."""
+        keeps the default set. A name may be picked several times: each pick is its own
+        instance with its own knobs, and the instances add up. schedule.score reports the
+        three levels the assembly put the terms on (a medium constraint with hard=False
+        lands on soft)."""
 
 def list_constraints() -> list[str]:
     """Constraint names scored by this domain (default assembly order, snake_case).
     The same names project_job.constraints uses."""
 
-def constraint_costs(schedule: ProjectJobSchedule, /) -> dict[str, dict[str, Any]]:
-    """Raw cost of every default constraint, before weight/exponent/level:
-    {name: {"costs": [...], "weight": float, "exponent": float, "hard": bool,
-    "global": bool, "level": "hard" | "medium" | "soft", "reward": bool,
-    "level_flippable": bool, "name": str, "label": str,
+def constraint_costs(
+    schedule: ProjectJobSchedule, constraints: Iterable[Any] | None = ...
+) -> dict[str, dict[str, Any]]:
+    """Raw cost of every constraint, before weight/exponent/offset/level:
+    {key: {"costs": [...], "weight": float, "exponent": float, "offset": float,
+    "clip": bool, "hard": bool, "global": bool, "level": "hard" | "medium" | "soft",
+    "reward": bool, "level_flippable": bool, "name": str, "label": str,
+    "default_weight": float, "default_level": str,
     "medium_fold": {"kind": "into_soft", "unit": 1e9}}}. All four constraints are
-    global, so each "costs" list holds the one total. `medium_fold` is on EVERY entry
-    (the fold belongs to the domain), and `project_job.constraints.score()` applies it."""
+    global, so each "costs" list holds the one total, which exponent / offset / clip
+    shape once. None = the default constraints; a pick list (as for solve) scores
+    exactly those picks, each entry carrying its pick's knobs, the k-th pick of a name
+    keyed "<name>#<k>" from the second on. `medium_fold` is on EVERY entry (the fold
+    belongs to the domain), and `project_job.constraints.score()` applies it."""
 
 class ConstraintInfo(NamedTuple):
     """One constraint-catalog row, read off the C++ default assembly."""

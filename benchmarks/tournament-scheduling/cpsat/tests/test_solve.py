@@ -95,7 +95,13 @@ def test_cpsat_defaults_are_the_engine_defaults() -> None:
         assert entry["reward"] == row.reward
         assert entry["default_enabled"] == row.default_enabled
         assert entry["kind"] == "either"  # every tournament constraint is flippable
-        assert entry["params"] == {"weight": None, "hard": None, "exponent": 1.0}
+        assert entry["params"] == {
+            "weight": None,
+            "hard": None,
+            "exponent": 1.0,
+            "offset": 0.0,
+            "clip": True,
+        }
     levels = {
         entry["name"]: (entry["default_level"], entry["default_weight"])
         for entry in entries
@@ -312,3 +318,111 @@ def test_confrontation_alone_can_miss_the_engine_optimum() -> None:
     assert solved.team_assignments[-1].team == 1
     assert (solved.score_hard, solved.score_soft) == pytest.approx((0, -engine[1]))
     assert -solved.score_soft > min(engine.values())
+
+
+# --- 0.3.0: repeated picks and offset / clip ---------------------------------------
+
+#: Fully pinned layouts with unavailability facts: T0 twice on D0, T2 on D3. T1 has no
+#: fact, so the scoped team_unavailability_cost evaluates (and offsets charge) T0 and T2.
+_FACTS = [(0, 0), (0, 0), (2, 3)]
+_LAYOUTS = [_UNEVEN, _EVEN, _DOUBLE_BOOKED, [(0, 0), (0, 0), (0, 0), (1, 1)]]
+
+HARD_SELECTIONS = {
+    "repeat": [
+        TeamConflictCost(),
+        TeamConflictCost(weight=2),
+        TeamUnavailabilityCost(),
+        TeamUnavailabilityCost(),
+    ],
+    "offsets": [
+        TeamConflictCost(offset=1),
+        TeamConflictCost(offset=1, clip=False),
+        TeamUnavailabilityCost(offset=-1),
+        TeamUnavailabilityCost(weight=2, offset=3, clip=False),
+    ],
+    "soft-offsets": [
+        TeamConflictCost(hard=False, offset=2, clip=False),
+        TeamUnavailabilityCost(hard=False, offset=1),
+        TeamUnavailabilityCost(hard=False, offset=-2, clip=False, weight=3),
+    ],
+}
+
+
+@pytest.mark.parametrize(
+    "selection", list(HARD_SELECTIONS.values()), ids=list(HARD_SELECTIONS)
+)
+def test_the_hard_terms_equal_the_engine_with_repeats_and_offsets(selection) -> None:
+    """Pin each layout: the CP-SAT objective of the two raw-identical plugins equals the
+    engine's score under the same repeated / shifted picks, exactly (one term per team,
+    the scoped unavailability constraint only for the teams with a fact)."""
+    from ortools.sat.python import cp_model
+
+    from tournament_scheduling_cpsat import build_model
+
+    for layout in _LAYOUTS:
+        problem = _pinned(layout, _FACTS)
+        _, objective, _ = build_model(problem, selection)
+        solver = cp_model.CpSolver()
+        solver.parameters.num_search_workers = 1
+        assert objective.solve(solver) == cp_model.OPTIMAL
+        levels = objective.score(solver)
+        engine = score(domain.constraint_costs(problem.to_core(), selection), selection)
+        assert levels["medium"] == 0
+        assert (levels["hard"], levels["soft"]) == tuple(engine), layout
+        assert (
+            objective.score_costs(domain.constraint_costs(problem.to_core())) == levels
+        )
+
+
+def test_repeated_imbalance_surrogates_solve_and_report_the_engine_score() -> None:
+    """A repeated imbalance pick adds a second surrogate; the reported score is the
+    engine's, under the same repeated selection."""
+    selection = [
+        *get_constraints(),
+        AssignmentCountImbalanceCost(weight=2),
+        ConfrontationCountImbalanceCost(hard=False, weight=3),
+    ]
+    solved = solve(_parity_problem(), time_limit_seconds=5, constraints=selection)
+    engine = score(domain.constraint_costs(solved.to_core(), selection), selection)
+    assert (solved.score_hard, solved.score_soft) == pytest.approx(tuple(engine))
+
+
+def test_an_imbalance_offset_is_refused_by_the_surrogate() -> None:
+    """The surrogates have no raw-identical total to shift: CP-SAT refuses an offset there."""
+    for pick in (
+        AssignmentCountImbalanceCost(offset=1),
+        ConfrontationCountImbalanceCost(offset=1, clip=False),
+    ):
+        with pytest.raises(
+            ValueError, match="offset is not supported by this CP-SAT model"
+        ):
+            solve(_parity_problem(), time_limit_seconds=1, constraints=[pick])
+
+
+def test_mapping_selections_repeat_and_shift_like_specs() -> None:
+    """The server's {name, weight, offset, clip} dicts pick the same instances as specs."""
+    specs = [
+        TeamConflictCost(),
+        TeamUnavailabilityCost(),
+        TeamUnavailabilityCost(weight=3, offset=1, clip=False),
+        AssignmentCountImbalanceCost(),
+    ]
+    dicts = [
+        {"name": "team_conflict_cost"},
+        {"name": "team_unavailability_cost"},
+        {"name": "team_unavailability_cost", "weight": 3, "offset": 1, "clip": False},
+        {"name": "assignment_count_imbalance_cost"},
+    ]
+    problem = _parity_problem()
+    assert solve(problem, time_limit_seconds=5, constraints=dicts) == solve(
+        problem, time_limit_seconds=5, constraints=specs
+    )
+
+
+def test_a_fractional_offset_is_refused_by_cpsat() -> None:
+    with pytest.raises(ValueError, match="offset must be an integer for CP-SAT"):
+        solve(
+            _parity_problem(),
+            time_limit_seconds=1,
+            constraints=[TeamConflictCost(offset=0.5)],
+        )

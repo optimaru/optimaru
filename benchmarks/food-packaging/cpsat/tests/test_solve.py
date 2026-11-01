@@ -12,7 +12,9 @@ import pytest
 import food_packaging as domain
 from food_packaging import calculate_score, constraint_costs
 from food_packaging.constraints import (
+    AfterIdealEndTimeCost,
     MaxEndTimeCost,
+    OperatorCleaningConflictCost,
     SquaredMakespanCost,
     UnassignedJobsCost,
     get_constraints,
@@ -91,8 +93,8 @@ def test_large_horizon_keeps_objective_within_cp_sat_integer_domain():
     assert len(result.lines[0].job_ids) == 10
 
 
-@pytest.mark.parametrize("constraint", get_constraints(), ids=lambda item: item.name)
-def test_each_cpsat_constraint_matches_shared_raw_cost(constraint):
+def _two_line_problem() -> PackagingScheduleModel:
+    """Two lines, two operators, five jobs with deadlines in reach (cleanups 40 / 60)."""
     start = datetime(2026, 1, 1)
     products = [
         ProductModel(
@@ -118,7 +120,7 @@ def test_each_cpsat_constraint_matches_shared_raw_cost(constraint):
             max_end_time=start + timedelta(minutes=maximum),
         )
 
-    problem = PackagingScheduleModel(
+    return PackagingScheduleModel(
         from_date=start.date(),
         to_date=(start + timedelta(days=1)).date(),
         products=products,
@@ -135,6 +137,11 @@ def test_each_cpsat_constraint_matches_shared_raw_cost(constraint):
             job("J4", "A", 50, 20, 30),
         ],
     )
+
+
+@pytest.mark.parametrize("constraint", get_constraints(), ids=lambda item: item.name)
+def test_each_cpsat_constraint_matches_shared_raw_cost(constraint):
+    problem = _two_line_problem()
     proxy: dict[str, int] = {}
     result = solve(
         problem,
@@ -162,7 +169,13 @@ def test_cpsat_defaults_are_the_engine_defaults() -> None:
         assert entry["reward"] == row.reward
         assert entry["default_enabled"] == row.default_enabled
         assert entry["kind"] == "either"  # every food-packaging constraint is flippable
-        assert entry["params"] == {"weight": None, "hard": None, "exponent": 1.0}
+        assert entry["params"] == {
+            "weight": None,
+            "hard": None,
+            "exponent": 1.0,
+            "offset": 0.0,
+            "clip": True,
+        }
     # The two medium constraints sit on the medium level at weight 1 (medium units).
     assert {
         name: (row.default_level, row.default_weight) for name, row in engine.items()
@@ -250,3 +263,116 @@ def test_demoting_a_hard_constraint_scores_like_the_engine() -> None:
         solved.score_hard,
         solved.score_medium * MEDIUM_UNIT + solved.score_soft,
     ) == pytest.approx(tuple(engine))
+
+
+# --- 0.3.0: repeated picks and offset / clip ---------------------------------------
+
+#: Pinned layouts of _two_line_problem(): (job order per line, operator per line). They
+#: cover an empty line, pooled jobs, a shared operator (cleaning conflicts) and lateness.
+LAYOUTS = [
+    ([[0, 1], [2, 3]], [0, 0]),
+    ([[0, 1, 2], []], [0, 1]),
+    ([[4, 3], [2, 1, 0]], [1, 1]),
+    ([[2, 0, 4], [3]], [0, 0]),
+    ([[], []], [0, 1]),
+]
+
+SELECTIONS = {
+    "repeat": [
+        MaxEndTimeCost(),
+        MaxEndTimeCost(weight=2),
+        SquaredMakespanCost(),
+        SquaredMakespanCost(),
+        UnassignedJobsCost(),
+        OperatorCleaningConflictCost(),
+    ],
+    "offsets": [
+        MaxEndTimeCost(offset=5),
+        MaxEndTimeCost(offset=10, clip=False),
+        AfterIdealEndTimeCost(offset=-3),
+        SquaredMakespanCost(offset=5000, clip=False),
+        UnassignedJobsCost(offset=60, clip=False),
+        OperatorCleaningConflictCost(weight=3, offset=2, clip=False),
+    ],
+    "hard-offsets": [
+        MaxEndTimeCost(weight=2, offset=3, clip=False),
+        AfterIdealEndTimeCost(hard=True, offset=20),
+        UnassignedJobsCost(hard=True, offset=-1, clip=False),
+        OperatorCleaningConflictCost(offset=-2),
+    ],
+}
+
+
+def _folded(levels) -> tuple[int, float]:
+    """(hard, medium, soft) -> the engine-level (hard, medium * 10^10 + soft)."""
+    return levels["hard"], levels["medium"] * MEDIUM_UNIT + levels["soft"]
+
+
+@pytest.mark.parametrize("selection", list(SELECTIONS.values()), ids=list(SELECTIONS))
+def test_the_cpsat_terms_equal_the_engine_on_pinned_layouts(selection) -> None:
+    """Pin each layout: the CP-SAT objective's per-level value is the engine's score of
+    that schedule under the same repeated / shifted picks, exactly (every instance adds
+    its own terms; the end-time and makespan terms are per line under an offset, the
+    globals' one per total)."""
+    problem = _two_line_problem()
+    for orders, operators in LAYOUTS:
+        proxy: dict[str, int] = {}
+        result = solve(
+            problem,
+            time_limit_seconds=5,
+            constraints=selection,
+            _fixed_line_orders=orders,
+            _fixed_operator_by_line=operators,
+            _proxy_score=proxy,
+        )
+        assert [line.job_ids for line in result.lines] == [
+            [problem.jobs[job].id for job in order] for order in orders
+        ]
+        core = result.to_core()
+        engine = score(constraint_costs(core, selection), selection)
+        assert _folded(proxy) == tuple(engine), orders
+        assert (
+            result.score_hard,
+            result.score_medium * MEDIUM_UNIT + result.score_soft,
+        ) == tuple(engine)
+
+
+def test_repeated_and_shifted_picks_solve_like_the_engine() -> None:
+    """One job, one line, the unassigned term picked twice with a literal offset of 150:
+    running the job (0 unassigned minutes) rewards (0 - 150) x 2 = 300 medium, leaving it
+    out only (100 - 150) x 2 = 100, so both solvers run it and pay its 100^2 soft."""
+    selection = [
+        SquaredMakespanCost(),
+        UnassignedJobsCost(offset=150, clip=False),
+        UnassignedJobsCost(offset=150, clip=False),
+    ]
+    solved, cpsat, engine = _both_paths(selection)
+    assert cpsat == engine == (0, 300, -10000)
+    assert solved.lines[0].job_ids == ["J"]
+
+
+def test_mapping_selections_repeat_and_shift_like_specs() -> None:
+    """The server's {name, weight, offset, clip} dicts pick the same instances as specs."""
+    specs = [
+        SquaredMakespanCost(),
+        UnassignedJobsCost(),
+        UnassignedJobsCost(weight=3, offset=40, clip=False),
+    ]
+    dicts = [
+        {"name": "squared_makespan_cost"},
+        {"name": "unassigned_jobs_cost"},
+        {"name": "unassigned_jobs_cost", "weight": 3, "offset": 40, "clip": False},
+    ]
+    problem = _one_job_one_line()
+    assert solve(problem, time_limit_seconds=5, constraints=dicts) == solve(
+        problem, time_limit_seconds=5, constraints=specs
+    )
+
+
+def test_a_fractional_offset_is_refused_by_cpsat() -> None:
+    with pytest.raises(ValueError, match="offset must be an integer for CP-SAT"):
+        solve(
+            _one_job_one_line(),
+            time_limit_seconds=1,
+            constraints=[SquaredMakespanCost(offset=0.5)],
+        )

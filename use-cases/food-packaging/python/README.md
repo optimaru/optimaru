@@ -57,6 +57,19 @@ score(raw), score(raw, [*others, UnassignedJobsCost(weight=2)])            # re-
 `ideal_end_date_time`, `maximize_jobs_assigned`, `minimize_makespan` before) and removed
 `fp.analyze()` / `ConstraintBreakdown`; `constraint_costs()` is the per-constraint surface.
 
+Every spec takes `weight=None`, `hard=None`, `exponent=1.0` and the keyword-only
+`offset=0.0` / `clip=True` (`clip=True` counts only what lies beyond the offset,
+`clip=False` shapes `x - offset` as it is, per line or on a global's total). Since 0.3.0 a
+constraint may be picked several times; each pick is its own instance with its own knobs,
+the instances add up, and `constraint_costs(schedule, picks)` keys the k-th pick
+`<name>#<k>`:
+
+```python
+from food_packaging.constraints import MaxEndTimeCost
+
+score(raw, [MaxEndTimeCost(), MaxEndTimeCost(exponent=2, offset=30)])  # late minutes + (beyond 30)^2
+```
+
 pydantic serialization:
 
 ```python

@@ -16,6 +16,11 @@
 //   (i) the medium level (projectDelayCost): the default fold, hard(),
 //       soft() and an explicit weight; solve() reports the assembly's levels
 //   (j) incremental == full recompute with the medium term overridden
+//   (k) repeated components and the offset / clip knobs: a hand-calculated
+//       repeat, threshold and literal offsets by hand on the global totals
+//       (each shaped once), incremental == a fresh recompute over a random
+//       walk and a FULL_ASSERT solve with repeated, shifted components
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -927,6 +932,218 @@ void verifyMediumIncremental()
     std::printf("\n");
 }
 
+// -------------------------------------------------------------------------
+// (k) Repeated components and offsets. A repeat is a fresh copy of a
+// default component (another defaultConstraints(), the one name kept, its
+// knobs re-stated) appended with addInstances(), as the Python bindings
+// build it from a pick list. All four components are global: the exponent,
+// offset and clip shape each instance's one total.
+// -------------------------------------------------------------------------
+ConstraintAssembly copyOf(const std::string &name)
+{
+    ConstraintAssembly copy = defaultConstraints();
+    copy.only({name});
+    return copy;
+}
+
+ConstraintAssembly repeatedAssembly()
+{
+    ConstraintAssembly assembly = defaultConstraints();
+    assembly.offset("makespanCost", 3.0);
+    assembly.addInstances(std::move(copyOf("makespanCost")
+                                        .weight("makespanCost", 2.0)
+                                        .offset("makespanCost", 10.0)
+                                        .clip("makespanCost", false)));
+    assembly.addInstances(
+        std::move(copyOf("renewableResourceCapacityCost")
+                      .weight("renewableResourceCapacityCost", 2.0)
+                      .offset("renewableResourceCapacityCost", 1.0)
+                      .clip("renewableResourceCapacityCost", false)));
+    assembly.addInstances(std::move(copyOf("projectDelayCost")
+                                        .exponent("projectDelayCost", 2.0)
+                                        .offset("projectDelayCost", 1.0)));
+    assembly.addInstances(std::move(copyOf("projectDelayCost")
+                                        .soft("projectDelayCost")
+                                        .weight("projectDelayCost", 3.0)
+                                        .offset("projectDelayCost", -2.0)
+                                        .clip("projectDelayCost", false)));
+    assembly.addInstances(
+        std::move(copyOf("nonRenewableResourceCapacityCost")
+                      .offset("nonRenewableResourceCapacityCost", -1.0)));
+    return assembly;
+}
+
+void verifyRepeatsAndOffsets()
+{
+    std::printf("== (k) Repeated components, offset / clip ==\n");
+    // The (g) hand schedule: raw non-renewable 4, renewable 3 (hard), project
+    // delay 1 (medium), makespan 2 (soft).
+    {
+        ProjectJobSchedule s = handSchedule(10, 10, 1);
+        ScoreCalculator::prepare(s);
+        ConstraintAssembly twice = copyOf("makespanCost");
+        twice.addInstances(std::move(copyOf("makespanCost")
+                                         .weight("makespanCost", 2.0)
+                                         .exponent("makespanCost", 2.0)));
+        DecomposedCalculator calculator;
+        std::move(twice).into(calculator);
+        calculator.resetWorkingSolution(s);
+        calculator.calculateScore();
+        check(levelsAre(calculator.levelScores(), 0, 0.0, -(2.0 + 2.0 * 4)),
+              "makespan + 2 x makespan^2: -10 soft");
+        const auto entries = calculator.constraintCosts();
+        check(entries.size() == 2 && entries[0].unitCosts == entries[1].unitCosts
+                  && entries[0].unitCosts == std::vector<double>{2.0}
+                  && entries[0].isGlobal && entries[1].isGlobal
+                  && entries[1].weight == 2.0 && entries[1].exponent == 2.0
+                  && entries[1].defaultWeight == 1.0,
+              "two global instances, the same total, each with its own knobs");
+    }
+    {
+        ProjectJobSchedule s = handSchedule(10, 10, 1);
+        check(levelsAre(levelsWith(copyOf("renewableResourceCapacityCost")
+                                       .offset("renewableResourceCapacityCost", 1.0),
+                                   s),
+                        -2,
+                        0.0,
+                        0.0),
+              "renewable threshold offset 1: (3 - 1) once");
+        check(levelsAre(levelsWith(copyOf("renewableResourceCapacityCost")
+                                       .offset("renewableResourceCapacityCost", 5.0)
+                                       .clip("renewableResourceCapacityCost", false),
+                                   s),
+                        2,
+                        0.0,
+                        0.0),
+              "renewable literal offset 5: (3 - 5) once, +2 hard");
+        check(levelsAre(levelsWith(copyOf("nonRenewableResourceCapacityCost")
+                                       .offset("nonRenewableResourceCapacityCost", -1.0),
+                                   s),
+                        -5,
+                        0.0,
+                        0.0),
+              "non-renewable threshold offset -1: 4 + 1");
+        check(levelsAre(levelsWith(copyOf("nonRenewableResourceCapacityCost")
+                                       .weight("nonRenewableResourceCapacityCost", 3.0)
+                                       .offset("nonRenewableResourceCapacityCost", 3.5)
+                                       .clip("nonRenewableResourceCapacityCost", false),
+                                   s),
+                        -2,
+                        0.0,
+                        0.0),
+              "non-renewable literal offset 3.5 at weight 3: 1.5 -> 2 hard");
+        check(levelsAre(levelsWith(copyOf("projectDelayCost")
+                                       .offset("projectDelayCost", 3.0)
+                                       .clip("projectDelayCost", false),
+                                   s),
+                        0,
+                        2.0,
+                        0.0),
+              "project delay literal offset 3: (1 - 3), +2 medium");
+        check(levelsAre(levelsWith(copyOf("makespanCost")
+                                       .offset("makespanCost", 1.0)
+                                       .exponent("makespanCost", 3.0),
+                                   s),
+                        0,
+                        0.0,
+                        -1.0),
+              "makespan threshold offset 1, exponent 3: (2 - 1)^3");
+    }
+    {
+        // Random walk: incremental == a fresh calculator of the same assembly.
+        ProjectJobSchedule s = buildRandomInstance(/*projects*/ 2,
+                                                   /*standardPerProject*/ 6,
+                                                   /*seed*/ 7,
+                                                   /*delayRangeSize*/ 12);
+        ScoreCalculator::prepare(s);
+        DecomposedCalculator calculator;
+        repeatedAssembly().into(calculator);
+        optimaru::ScoreDirector<ProjectJobSchedule> director(s, calculator);
+        ProjectJobSchedule shadow = s;
+        std::mt19937_64 rng(321);
+        std::vector<int> movable;
+        for (int a = 0; a < s.allocationCount(); ++a)
+        {
+            if (s.jobTypeOf(a) == JobType::STANDARD)
+                movable.push_back(a);
+        }
+        std::uniform_real_distribution<double> unit(0.0, 1.0);
+        int mismatches = 0;
+        int mediumSteps = 0;
+        const int steps = 1500;
+        for (int step = 0; step < steps; ++step)
+        {
+            const int a = movable[rng() % movable.size()];
+            if (unit(rng) < 0.75)
+            {
+                director.changeVariable(
+                    a,
+                    unit(rng) < 0.10
+                        ? -1
+                        : static_cast<int>(rng() % s.valueCount()));
+            }
+            else
+            {
+                const int b = movable[rng() % movable.size()];
+                const int va = s.allocations[a].modeDelay;
+                const int vb = s.allocations[b].modeDelay;
+                director.changeVariable(a, vb);
+                director.changeVariable(b, va);
+            }
+            for (int i = 0; i < s.allocationCount(); ++i)
+                shadow.allocations[i].modeDelay = s.allocations[i].modeDelay;
+            DecomposedCalculator fresh;
+            repeatedAssembly().into(fresh);
+            fresh.resetWorkingSolution(shadow);
+            const optimaru::HardSoftScore full = fresh.calculateScore();
+            const optimaru::HardSoftScore incremental = director.calculateScore();
+            const LevelScores levels = calculator.levelScores();
+            const LevelScores fullLevels = fresh.levelScores();
+            if (fullLevels.medium != 0.0)
+                ++mediumSteps;
+            if (!optimaru::scoresAgree(incremental, full)
+                || levels.hard != fullLevels.hard
+                || levels.medium != fullLevels.medium
+                || levels.soft != fullLevels.soft)
+                ++mismatches;
+        }
+        check(mismatches == 0,
+              std::to_string(steps)
+                  + " random moves with repeated, shifted components: "
+                    "incremental == fresh");
+        check(mediumSteps > 0, "the walk visits medium states");
+    }
+    {
+        ProjectJobSchedule s = buildRandomInstance(/*projects*/ 2,
+                                                   /*standardPerProject*/ 5,
+                                                   /*seed*/ 11,
+                                                   /*delayRangeSize*/ 10);
+        Solver::Config config;
+        config.spentLimit = std::chrono::seconds(2);
+        config.randomSeed = 5;
+        config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+        DecomposedCalculator calculator;
+        repeatedAssembly().into(calculator);
+        bool corrupted = false;
+        try
+        {
+            Solver solver(config);
+            solver.solve(s, calculator);
+        }
+        catch (const optimaru::ScoreCorruptionError &e)
+        {
+            corrupted = true;
+            std::printf("  ScoreCorruptionError: %s\n", e.what());
+        }
+        check(!corrupted, "2s FULL_ASSERT solve with repeated, shifted components");
+        DecomposedCalculator fresh;
+        repeatedAssembly().into(fresh);
+        check(!corrupted && s.score == scoreWith(fresh, s),
+              "the reported score == a fresh recompute of the same assembly");
+    }
+    std::printf("\n");
+}
+
 }  // namespace
 
 int main()
@@ -941,6 +1158,7 @@ int main()
     verifyCatalog();
     verifyMediumLevel();
     verifyMediumIncremental();
+    verifyRepeatsAndOffsets();
 
     if (failures == 0)
     {
