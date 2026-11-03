@@ -3,7 +3,7 @@ name = "knapsack-cpsat"
 version = "0.1.0"
 description = "Exact CP-SAT backend for knapsack"
 requires-python = ">=3.11,<4.0"
-dependencies = ["cpsat-plugins>=0.1.0", "knapsack", "ortools>=9.10", "pydantic>=2.5"]
+dependencies = ["external-solver", "cpsat-plugins>=0.1.0", "knapsack", "ortools>=9.10", "pydantic>=2.5"]
 
 [dependency-groups]
 dev = ["pytest", "ruff"]
@@ -11,7 +11,13 @@ dev = ["pytest", "ruff"]
 [project.scripts]
 knapsack-compare = "knapsack_cpsat.benchmark:main"
 
+[tool.uv]
+# external-solver depends on the published optimaru; the benchmarks measure the
+# engine in this checkout instead (cpsat_plugins.checkout), so it is not installed.
+override-dependencies = ["optimaru; sys_platform == 'never'"]
+
 [tool.uv.sources]
+external-solver = { git = "https://github.com/optimaru/external-solver", tag = "v0.1.0" }
 cpsat-plugins = { path = "../../cpsat-common", editable = true }
 knapsack = { path = "../../../use-cases/knapsack/python", editable = true }
 

@@ -16,7 +16,7 @@ uv run --project cpsat python -m bin_packing_cpsat.benchmark --seconds 1 --worke
 uv run --project cpsat python -m bench.quality --seconds 2 --seeds 1,2,3 --check
 ```
 
-The CP-SAT plugins (`cpsat/bin_packing_cpsat/constraints.py`) subclass the use case's
+The CP-SAT plugins ([`external_solver.bin_packing.constraints`](https://github.com/optimaru/external-solver/tree/main/src/external_solver/bin_packing/constraints.py)) subclass the use case's
 constraint specs (`bin_capacity_cost`, `color_conflict_cost`, `item_conflict_cost`,
 `used_bins_cost`) and take their default levels and weights from
 `bin_packing.constraint_info()`. `cpsat/tests/test_constraint_parity.py` pins every

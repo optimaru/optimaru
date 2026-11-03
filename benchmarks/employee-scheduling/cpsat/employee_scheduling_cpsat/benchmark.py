@@ -18,7 +18,7 @@ from cpsat_plugins.benchmark import run_cli
 from es_scheduling.models import ScheduleRequest
 
 NAME = "employee-scheduling"
-PACKAGE = "employee_scheduling_cpsat"
+PACKAGE = "external_solver.employee_scheduling"
 CPSAT_EXACT = False
 CPSAT_CAVEAT = (
     "unfairness is sqrt(ssd) rounded to 6 significant figures; the CP-SAT objective "
@@ -71,7 +71,7 @@ def self_report(problem: Roster) -> tuple[int, float] | None:
 
 
 def solve_cpsat(problem: Roster, seconds: float, seed: int, workers: int) -> Roster:
-    from employee_scheduling_cpsat import solve
+    from external_solver.employee_scheduling import solve
 
     return solve(
         problem,

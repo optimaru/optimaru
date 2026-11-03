@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "OR-Tools CP-SAT reference for the bin-packing use case."
 requires-python = ">=3.11,<4.0"
 dependencies = [
+    "external-solver",
     "bin_packing",
     "cpsat-plugins",
     "ortools>=9.10",
@@ -16,7 +17,13 @@ dev = ["pytest", "ruff"]
 [project.scripts]
 bin-packing-compare = "bin_packing_cpsat.benchmark:main"
 
+[tool.uv]
+# external-solver depends on the published optimaru; the benchmarks measure the
+# engine in this checkout instead (cpsat_plugins.checkout), so it is not installed.
+override-dependencies = ["optimaru; sys_platform == 'never'"]
+
 [tool.uv.sources]
+external-solver = { git = "https://github.com/optimaru/external-solver", tag = "v0.1.0" }
 bin_packing = { path = "../../../use-cases/bin-packing/python", editable = true }
 cpsat-plugins = { path = "../../cpsat-common", editable = true }
 

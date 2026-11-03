@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "OR-Tools CP-SAT backend for flight crew scheduling."
 requires-python = ">=3.11,<4.0"
 dependencies = [
+    "external-solver",
     "cpsat-plugins",
     "flight_crew",
     "ortools>=9.10",
@@ -16,7 +17,13 @@ dev = ["pytest"]
 [project.scripts]
 flight-crew-compare = "flight_crew_cpsat.benchmark:main"
 
+[tool.uv]
+# external-solver depends on the published optimaru; the benchmarks measure the
+# engine in this checkout instead (cpsat_plugins.checkout), so it is not installed.
+override-dependencies = ["optimaru; sys_platform == 'never'"]
+
 [tool.uv.sources]
+external-solver = { git = "https://github.com/optimaru/external-solver", tag = "v0.1.0" }
 flight_crew = { path = "../../../use-cases/flight-crew-scheduling/python", editable = true }
 cpsat-plugins = { path = "../../cpsat-common", editable = true }
 

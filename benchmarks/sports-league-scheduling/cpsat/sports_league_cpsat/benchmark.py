@@ -44,7 +44,7 @@ def solve_engine(problem: Any, seconds: float, seed: int) -> None:
 def solve_cpsat(problem: Any, seconds: float, seed: int, workers: int) -> Any:
     from sports_league.models import LeagueScheduleModel
 
-    from sports_league_cpsat import solve
+    from external_solver.sports_league_scheduling import solve
 
     solved = solve(
         LeagueScheduleModel.from_core(problem),

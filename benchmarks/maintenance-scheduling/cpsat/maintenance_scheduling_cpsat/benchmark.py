@@ -49,9 +49,8 @@ def solve_engine(problem: Any, seconds: float, seed: int) -> None:
 
 
 def solve_cpsat(problem: Any, seconds: float, seed: int, workers: int) -> Any:
+    from external_solver.maintenance_scheduling import solve
     from maintenance_scheduling.models import MaintenanceScheduleModel
-
-    from maintenance_scheduling_cpsat import solve
 
     solved = solve(
         MaintenanceScheduleModel.from_core(problem),

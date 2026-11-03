@@ -8,7 +8,7 @@ shares `pdp_routing.models` with the C++ backend.
 
 ## Constraints (0.2.0)
 
-Each plugin in `pickup_delivery_cpsat/constraints.py` subclasses the engine spec of
+Each plugin in [`external_solver.pickup_delivery.constraints`](https://github.com/optimaru/external-solver/tree/main/src/external_solver/pickup_delivery/constraints.py) subclasses the engine spec of
 the same name (`pdp_routing.constraints`) and only builds its CP-SAT expression; the
 default level and weight come from `pdp_routing.constraint_info()`, so the two
 solvers cannot disagree on a default. Selections use the engine's names and knobs

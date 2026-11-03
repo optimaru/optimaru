@@ -42,11 +42,12 @@ def _run_engine(problem, seconds: float, seed: int) -> dict:
 
 
 def _run_cpsat(problem, seconds: float, seed: int, workers: int) -> dict:
-    import assembly_line_balancing_cpsat
+    import assembly_line_balancing_cpsat  # noqa: F401 - points external_solver at the checkout engine
+    from external_solver import assembly_line_balancing as cpsat
 
     started = time.perf_counter()
     try:
-        solved = assembly_line_balancing_cpsat.solve(
+        solved = cpsat.solve(
             problem,
             time_limit_seconds=seconds,
             random_seed=seed,

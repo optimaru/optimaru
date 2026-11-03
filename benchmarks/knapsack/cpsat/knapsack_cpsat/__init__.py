@@ -1,5 +1,10 @@
-"""CP-SAT reference for :mod:`knapsack` (the exact solver of the comparison)."""
+"""Engine vs CP-SAT comparison for knapsack.
 
-from .solve import Built, build, catalog, solve
+The CP-SAT model is ``external_solver.knapsack`` (github.com/optimaru/external-solver).
+Importing this package points it at the engine in this checkout, so both solvers
+use the same ``knapsack`` (see ``cpsat_plugins.checkout``).
+"""
 
-__all__ = ["Built", "build", "catalog", "solve"]
+from cpsat_plugins.checkout import use_checkout_engine
+
+use_checkout_engine("knapsack")

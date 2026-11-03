@@ -1,28 +1,11 @@
-"""Small, dependency-light constraint registry shared by CP-SAT backends.
+"""Shared pieces of the engine vs CP-SAT benchmarks.
 
-Each backend owns its domain formulation. This package only standardizes how
-callers select a subset, change a weight, move a term between hard/soft
-levels, and expose the same catalog to an API or UI.
+The CP-SAT models and their constraint-plugin contract live in external-solver
+(github.com/optimaru/external-solver). This package holds the comparison runner
+(``benchmark.run_cli``) and ``checkout.use_checkout_engine``, which points those
+models at the engine in this checkout.
 """
 
-from .plugins import ConstraintPlugin, ConstraintRegistry, InstanceObjective
-from .registry import (
-    ConstraintConfig,
-    ConstraintSelection,
-    ConstraintSpec,
-    DomainConstraint,
-    ObjectiveBuilder,
-    resolve,
-)
+from .checkout import use_checkout_engine
 
-__all__ = [
-    "ConstraintConfig",
-    "ConstraintSelection",
-    "ConstraintPlugin",
-    "ConstraintRegistry",
-    "ConstraintSpec",
-    "DomainConstraint",
-    "InstanceObjective",
-    "ObjectiveBuilder",
-    "resolve",
-]
+__all__ = ["use_checkout_engine"]

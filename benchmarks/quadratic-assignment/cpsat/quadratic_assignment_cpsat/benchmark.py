@@ -101,7 +101,7 @@ def solve_engine(problem: Any, seconds: float, seed: int) -> None:
 
 
 def solve_cpsat(problem: Any, seconds: float, seed: int, workers: int) -> Any:
-    from quadratic_assignment_cpsat import solve
+    from external_solver.quadratic_assignment import solve
 
     return solve(problem, time_limit_seconds=seconds, random_seed=seed, num_workers=workers)
 

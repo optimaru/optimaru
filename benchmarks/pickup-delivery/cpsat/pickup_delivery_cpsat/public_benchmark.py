@@ -13,6 +13,7 @@ import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
+from external_solver.pickup_delivery import solve_request as solve_cpsat_request
 from pdp_routing.constraints import (
     max_end_time_cost,
     paired_request_cost,
@@ -33,8 +34,6 @@ from pdp_routing.models import (
 from pdp_routing.models import (
     solve_request as solve_engine_request,
 )
-
-from .solve import solve_request as solve_cpsat_request
 
 ARCHIVE_URL = "https://www.hexaly.com/examples/pdptw.zip"
 ARCHIVE_SHA256 = "d396d712e879edb73adcdaa420e2c13bcc6b086d83f790a404692faae49dd26e"

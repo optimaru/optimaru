@@ -84,7 +84,7 @@ def solve_engine(problem: Any, seconds: float, seed: int) -> None:
 
 
 def solve_cpsat(problem: Any, seconds: float, seed: int, workers: int) -> Any:
-    from order_picking_cpsat import solve_request
+    from external_solver.order_picking import solve_request
 
     request = _REQUESTS[id(problem)].model_copy(
         update={"timelimit": seconds, "random_seed": seed, "num_workers": workers}

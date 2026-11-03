@@ -37,11 +37,12 @@ def _run_engine(problem, seconds: float, seed: int) -> dict:
 
 
 def _run_cpsat(problem, seconds: float, seed: int, workers: int) -> dict:
-    import bin_packing_cpsat
+    import bin_packing_cpsat  # noqa: F401 - points external_solver at the checkout engine
+    from external_solver import bin_packing as cpsat
 
     started = time.perf_counter()
     try:
-        solved = bin_packing_cpsat.solve(
+        solved = cpsat.solve(
             problem,
             time_limit_seconds=seconds,
             random_seed=seed,

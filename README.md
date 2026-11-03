@@ -164,7 +164,7 @@ examples/             one Jupyter notebook per use case, with visualizations
 benchmarks/<slug>/    the same problems against OR-Tools (CP-SAT, or the
                       Routing solver for VRP);
                       competing solvers live only here
-benchmarks/cpsat-common/  shared CP-SAT constraint-plugin contract
+benchmarks/cpsat-common/  comparison runner; points external-solver at this checkout
 ```
 
 ## Engine layout

@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import project_job as pjs
+from external_solver.project_job_scheduling import solve as solve_cpsat
 from project_job.models import (
     AllocationModel,
     ExecutionModeModel,
@@ -22,8 +23,6 @@ from project_job.models import (
     ResourceModel,
     ResourceRequirementModel,
 )
-
-from .solve import solve as solve_cpsat
 
 ARCHIVE_URL = "https://www.hexaly.com/examples/rcpsp.zip"
 ARCHIVE_SHA256 = "71c5012250ed5e2a7c02da701211144bb0a2b22935ae94e4a02bbb8d06b9f17b"
