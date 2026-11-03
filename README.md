@@ -1,17 +1,12 @@
 # optimaru
 
-A dependency-free, header-only C++17 metaheuristic solver engine for
-real-world combinatorial optimization — scheduling, routing and assignment.
-
-The engine contains **no domain code** — problems consume it as a library.
-Worked use cases live in [`use-cases/`](use-cases), runnable notebooks with
-visualizations in [`examples/`](examples) and public benchmark harnesses in
-[`benchmarks/`](benchmarks).
+A metaheuristic optimization engine for real-world scheduling, routing and
+assignment, with 22 ready-to-use models you call from Python.
 
 optimaru comes in a free edition and a paid edition; this repository is the
 free, open-source edition.
 
-## Install (Python)
+## Quick start
 
 ```bash
 pip install optimaru
@@ -20,8 +15,6 @@ pip install optimaru
 One package with every use case as a subpackage — `optimaru.vehicle_routing`,
 `optimaru.school_timetabling`, … — compiled for Linux, macOS and Windows
 (Python 3.11+). No C++ toolchain is needed.
-
-## Usage
 
 ```python
 from optimaru import vehicle_routing as vrp
@@ -59,18 +52,108 @@ several times. `constraint_info()` on a use case lists its constraints and
 their defaults. More in [`python/README.md`](python/README.md) and the
 [notebooks](examples).
 
-## Building and releasing
+## Use cases
 
-The distribution is built from this repository by [`setup.py`](setup.py), which
-reuses each use case's own `python/setup.py`.
+[`use-cases/README.md`](use-cases/README.md) lists all 22 use cases and
+explains how to extend one — adding a move, changing the construction
+heuristic, adding a hard or soft cost. Each use case's README has a short
+usage example and the same guide with its own file names.
 
-**Releasing:** bump `version` in [`pyproject.toml`](pyproject.toml) in a PR and
-merge it. On the push to `main`, if there is no `v<version>` tag yet,
-[`wheels.yml`](.github/workflows/wheels.yml) builds the wheels and sdist, uploads
-them to PyPI, then creates the `v<version>` tag and GitHub release. An unchanged
-version neither builds nor publishes on `main`; PRs always build.
+Scheduling: bed allocation, conference, employee shifts, flight crew, food
+packaging, maintenance, meeting, project-job (RCPSP), school timetabling,
+semiconductor fab, sports league, task assigning, tournament. Routing:
+vehicle routing (CVRPTW), pickup & delivery (PDPTW), order picking. Assignment and packing:
+facility location, bin packing, knapsack, quadratic assignment, max-cut,
+assembly-line balancing.
+
+```sh
+cd use-cases/<slug>/python && uv sync --all-groups --all-extras && uv run pytest
+```
+
+## Benchmarks
+
+[`benchmarks/README.md`](benchmarks/README.md) lists every comparison. In
+short: every use case is compared with OR-Tools CP-SAT on the same instances
+and rescored by the use case's own evaluator; vehicle routing is compared with
+the OR-Tools Routing solver on CVRPLIB Set X, and school
+timetabling with OR-Tools CP-SAT. Pickup & delivery,
+project-job scheduling, bin packing, quadratic assignment and assembly-line
+balancing also run on public instance sets (Li & Lim, Patterson, Hexaly BPP,
+QAPLIB, SALBP).
+
+## Features
+
+- **Planning variables**: BASIC (entity → value), LIST (ordered lists of
+  elements) and CHAINED (previous pointers/anchors, solved through a
+  synchronized list view so the full LIST move repertoire applies).
+- **Shadow variables** via `VariableListener<Solution>`
+  (`Solver::addVariableListener()`); FULL_ASSERT also catches stale shadows.
+- **Scoring**: `HardSoftScore` (int64 hard, double soft); constraints are
+  written as an `IncrementalScoreCalculator` (list hooks included) or composed
+  from named cost components with `CompositeIncrementalScoreCalculator`.
+  Move evaluation stays incremental (O(delta)).
+- **Constraint plugins**: `DecomposedScoreCalculator` scores named unit and
+  global components (`<Subject>Cost`). Each declares its default weight and
+  level (`kDefaultWeight` / `kDefaultLevel`: hard, medium or soft); a caller
+  re-states only five knobs per solve (`ConstraintAssembly`): `weight`,
+  `level`, `exponent`, and `offset` / `clip`, which shift the shaping of a
+  raw cost `x >= 0` as a threshold (`max(0, x - offset) ** exponent`) or as
+  the literal `(x - offset) ** exponent`, per unit (each vehicle, slot, ...),
+  not on the total. A constraint may be added several times
+  (`addInstance()`), each instance with its own knobs, and the instances add
+  up. Rewards (raw cost <= 0) never go hard, the literal formula with an
+  offset never lands on a level that counts toward the hard score (so hard 0
+  still means no violation), structural constraints keep their level, and a
+  domain with a medium level declares once how it folds into the hard/soft
+  score (`MediumFold`).
+- **Score analysis**: `SolutionManager::analyze()` → `ScoreAnalysis` /
+  `ConstraintAnalysis`, a per-constraint breakdown over the named components.
+- **Verification**: `ScoreDirector` with `EnvironmentMode::FULL_ASSERT`;
+  score corruption throws `ScoreCorruptionError`.
+- **Construction heuristics**: First Fit, First Fit Decreasing, cheapest
+  insertion for list variables.
+- **Acceptors**: Hill Climbing, Late Acceptance, Entity Tabu, Simulated
+  Annealing, Great Deluge, Step Counting Hill Climbing, Record-to-Record Travel.
+- **Terminations**: spent / unimproved-spent / step count /
+  unimproved-step-count / best score, OR-composed.
+- **Moves**: change/swap (BASIC); relocate / swap / 2-opt / Or-opt / 2-opt\*
+  tail swap / CROSS-exchange (LIST), mixed by weight in `MoveSelectorConfig`.
+- **Nearby selection**: `NearbySelectionConfig::distanceMeter` biases moves
+  toward k-nearest neighbors.
+- **Ruin & recreate**: adaptive ALNS — random/related/worst/SISR/route ruin +
+  regret-k (default k=3, nearby-restricted) recreate + polish, adaptive operator
+  weights (roulette wheel by default; segmented roulette, alpha-UCB, random).
+- **Solving**: `SolverFactory` / `Solver` / `SolverConfig`; async background
+  solving with `SolverManager` / `SolverJob` / `SolverStatus` and
+  `terminateEarly()`; `solveMultiStart()` (N independent starts, best wins).
+- **Custom moves** (`preview/api/move`): `addMoveOperator` /
+  `addRuinOperator` / `setAcceptorFactory`.
+
+Multithreaded *move* evaluation is deliberately excluded: it only pays when a
+single score calculation is expensive (ms-scale); at this engine's ~200ns
+moves, per-step thread synchronization would cost more than it saves — use
+`solveMultiStart()` to occupy cores instead. Also out of scope:
+exhaustive/partitioned search and REST layers.
+
+## Performance features
+
+- **Nearby selection**: on spatial problems a distant relocate/swap is almost
+  never an improvement, so moves are biased toward k-nearest neighbors. The
+  same lists drive the LNS related ruin and the nearby-restricted repair.
+- **LNS / ALNS**: escapes the local optima that acceptor-only search cannot
+  leave — verified in the tests: hill climbing alone stays trapped on a
+  conflicted instance, hill climbing + LNS reaches the global optimum.
+- Measured on 100-city random TSP (5-seed sweep): nearby + LNS beats plain
+  local search on every seed even with HALF the outer step budget
+  (mean tour 2514 → 2409).
 
 ## Repository layout
+
+The engine is dependency-free, header-only C++17 and contains **no domain
+code** — problems consume it as a library. Worked use cases live in
+[`use-cases/`](use-cases), runnable notebooks with visualizations in
+[`examples/`](examples) and public benchmark harnesses in
+[`benchmarks/`](benchmarks).
 
 ```
 include/optimaru/     the engine (header-only, one header per class)
@@ -154,101 +237,6 @@ include/optimaru/
 `optimaru::python` helpers (and small `detail` / `chained` helper
 namespaces); the directories organize the headers, the namespaces don't.
 
-## Features
-
-- **Planning variables**: BASIC (entity → value), LIST (ordered lists of
-  elements) and CHAINED (previous pointers/anchors, solved through a
-  synchronized list view so the full LIST move repertoire applies).
-- **Shadow variables** via `VariableListener<Solution>`
-  (`Solver::addVariableListener()`); FULL_ASSERT also catches stale shadows.
-- **Scoring**: `HardSoftScore` (int64 hard, double soft); constraints are
-  written as an `IncrementalScoreCalculator` (list hooks included) or composed
-  from named cost components with `CompositeIncrementalScoreCalculator`.
-  Move evaluation stays incremental (O(delta)).
-- **Constraint plugins**: `DecomposedScoreCalculator` scores named unit and
-  global components (`<Subject>Cost`). Each declares its default weight and
-  level (`kDefaultWeight` / `kDefaultLevel`: hard, medium or soft); a caller
-  re-states only five knobs per solve (`ConstraintAssembly`): `weight`,
-  `level`, `exponent`, and `offset` / `clip`, which shift the shaping of a
-  raw cost `x >= 0` as a threshold (`max(0, x - offset) ** exponent`) or as
-  the literal `(x - offset) ** exponent`, per unit (each vehicle, slot, ...),
-  not on the total. A constraint may be added several times
-  (`addInstance()`), each instance with its own knobs, and the instances add
-  up. Rewards (raw cost <= 0) never go hard, the literal formula with an
-  offset never lands on a level that counts toward the hard score (so hard 0
-  still means no violation), structural constraints keep their level, and a
-  domain with a medium level declares once how it folds into the hard/soft
-  score (`MediumFold`).
-- **Score analysis**: `SolutionManager::analyze()` → `ScoreAnalysis` /
-  `ConstraintAnalysis`, a per-constraint breakdown over the named components.
-- **Verification**: `ScoreDirector` with `EnvironmentMode::FULL_ASSERT`;
-  score corruption throws `ScoreCorruptionError`.
-- **Construction heuristics**: First Fit, First Fit Decreasing, cheapest
-  insertion for list variables.
-- **Acceptors**: Hill Climbing, Late Acceptance, Entity Tabu, Simulated
-  Annealing, Great Deluge, Step Counting Hill Climbing, Record-to-Record Travel.
-- **Terminations**: spent / unimproved-spent / step count /
-  unimproved-step-count / best score, OR-composed.
-- **Moves**: change/swap (BASIC); relocate / swap / 2-opt / Or-opt / 2-opt\*
-  tail swap / CROSS-exchange (LIST), mixed by weight in `MoveSelectorConfig`.
-- **Nearby selection**: `NearbySelectionConfig::distanceMeter` biases moves
-  toward k-nearest neighbors.
-- **Ruin & recreate**: adaptive ALNS — random/related/worst/SISR/route ruin +
-  regret-k (default k=3, nearby-restricted) recreate + polish, adaptive operator
-  weights (roulette wheel by default; segmented roulette, alpha-UCB, random).
-- **Solving**: `SolverFactory` / `Solver` / `SolverConfig`; async background
-  solving with `SolverManager` / `SolverJob` / `SolverStatus` and
-  `terminateEarly()`; `solveMultiStart()` (N independent starts, best wins).
-- **Custom moves** (`preview/api/move`): `addMoveOperator` /
-  `addRuinOperator` / `setAcceptorFactory`.
-
-Multithreaded *move* evaluation is deliberately excluded: it only pays when a
-single score calculation is expensive (ms-scale); at this engine's ~200ns
-moves, per-step thread synchronization would cost more than it saves — use
-`solveMultiStart()` to occupy cores instead. Also out of scope:
-exhaustive/partitioned search and REST layers.
-
-## Performance features
-
-- **Nearby selection**: on spatial problems a distant relocate/swap is almost
-  never an improvement, so moves are biased toward k-nearest neighbors. The
-  same lists drive the LNS related ruin and the nearby-restricted repair.
-- **LNS / ALNS**: escapes the local optima that acceptor-only search cannot
-  leave — verified in the tests: hill climbing alone stays trapped on a
-  conflicted instance, hill climbing + LNS reaches the global optimum.
-- Measured on 100-city random TSP (5-seed sweep): nearby + LNS beats plain
-  local search on every seed even with HALF the outer step budget
-  (mean tour 2514 → 2409).
-
-## Use cases
-
-[`use-cases/README.md`](use-cases/README.md) lists all 22 use cases and
-explains how to extend one — adding a move, changing the construction
-heuristic, adding a hard or soft cost. Each use case's README has a short
-usage example and the same guide with its own file names.
-
-Scheduling: bed allocation, conference, employee shifts, flight crew, food
-packaging, maintenance, meeting, project-job (RCPSP), school timetabling,
-semiconductor fab, sports league, task assigning, tournament. Routing:
-vehicle routing (CVRPTW), pickup & delivery (PDPTW), order picking. Assignment and packing:
-facility location, bin packing, knapsack, quadratic assignment, max-cut,
-assembly-line balancing.
-
-```sh
-cd use-cases/<slug>/python && uv sync --all-groups --all-extras && uv run pytest
-```
-
-## Benchmarks
-
-[`benchmarks/README.md`](benchmarks/README.md) lists every comparison. In
-short: every use case is compared with OR-Tools CP-SAT on the same instances
-and rescored by the use case's own evaluator; vehicle routing is compared with
-the OR-Tools Routing solver on CVRPLIB Set X, and school
-timetabling with OR-Tools CP-SAT. Pickup & delivery,
-project-job scheduling, bin packing, quadratic assignment and assembly-line
-balancing also run on public instance sets (Li & Lim, Patterson, Hexaly BPP,
-QAPLIB, SALBP).
-
 ## Tests
 
 `test/engine_test.cpp` verifies every feature against brute force on two toy
@@ -269,6 +257,17 @@ out-of-range contributions).
 ```sh
 cmake -B build && cmake --build build && ctest --test-dir build
 ```
+
+## Building and releasing
+
+The distribution is built from this repository by [`setup.py`](setup.py), which
+reuses each use case's own `python/setup.py`.
+
+**Releasing:** bump `version` in [`pyproject.toml`](pyproject.toml) in a PR and
+merge it. On the push to `main`, if there is no `v<version>` tag yet,
+[`wheels.yml`](.github/workflows/wheels.yml) builds the wheels and sdist, uploads
+them to PyPI, then creates the `v<version>` tag and GitHub release. An unchanged
+version neither builds nor publishes on `main`; PRs always build.
 
 ## License
 
