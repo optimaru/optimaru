@@ -99,9 +99,8 @@ def solve_engine(problem: Any, seconds: float, seed: int) -> None:
 
 
 def solve_cpsat(problem: Any, seconds: float, seed: int, workers: int) -> Any:
+    from external_solver.facility_location import solve
     from facility_location.models import FacilityLocationProblemModel
-
-    from facility_location_cpsat import solve
 
     solved = solve(
         FacilityLocationProblemModel.from_core(problem),

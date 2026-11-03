@@ -59,8 +59,7 @@ def solve_engine(problem: Any, seconds: float, seed: int) -> None:
 
 def solve_cpsat(problem: Any, seconds: float, seed: int, workers: int) -> Any:
     from assembly_line_balancing.models import AssemblyLineBalancingProblemModel
-
-    from assembly_line_balancing_cpsat import solve
+    from external_solver.assembly_line_balancing import solve
 
     solved = solve(
         AssemblyLineBalancingProblemModel.from_core(problem),

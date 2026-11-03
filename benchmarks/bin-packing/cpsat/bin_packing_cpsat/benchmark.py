@@ -63,8 +63,7 @@ def solve_engine(problem: Any, seconds: float, seed: int) -> None:
 
 def solve_cpsat(problem: Any, seconds: float, seed: int, workers: int) -> Any:
     from bin_packing.models import BinPackingProblemModel
-
-    from bin_packing_cpsat import solve
+    from external_solver.bin_packing import solve
 
     solved = solve(
         BinPackingProblemModel.from_core(problem),

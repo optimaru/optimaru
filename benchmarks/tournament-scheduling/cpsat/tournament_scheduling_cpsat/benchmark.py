@@ -102,9 +102,8 @@ def solve_engine(problem: Any, seconds: float, seed: int) -> None:
 
 
 def solve_cpsat(problem: Any, seconds: float, seed: int, workers: int) -> Any:
+    from external_solver.tournament_scheduling import solve
     from tournament_scheduling.models import TournamentScheduleModel
-
-    from tournament_scheduling_cpsat import solve
 
     solved = solve(
         TournamentScheduleModel.from_core(problem),

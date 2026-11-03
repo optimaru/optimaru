@@ -44,7 +44,7 @@ def solve_engine(problem: Any, seconds: float, seed: int) -> None:
 def solve_cpsat(problem: Any, seconds: float, seed: int, workers: int) -> Any:
     from task_assigning.models import TaskAssigningSolutionModel
 
-    from task_assigning_cpsat import solve
+    from external_solver.task_assigning import solve
 
     solved = solve(
         TaskAssigningSolutionModel.from_core(problem),

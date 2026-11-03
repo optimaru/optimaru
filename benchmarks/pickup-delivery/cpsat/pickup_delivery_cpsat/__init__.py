@@ -1,7 +1,10 @@
-"""CP-SAT backend for :mod:`pdp_routing`."""
+"""Engine vs CP-SAT comparison for pickup-delivery.
 
-from .solve import catalog, solve_request
+The CP-SAT model is ``external_solver.pickup_delivery`` (github.com/optimaru/external-solver).
+Importing this package points it at the engine in this checkout, so both solvers
+use the same ``pdp_routing`` (see ``cpsat_plugins.checkout``).
+"""
 
-solve = solve_request
+from cpsat_plugins.checkout import use_checkout_engine
 
-__all__ = ["catalog", "solve", "solve_request"]
+use_checkout_engine("pdp_routing")

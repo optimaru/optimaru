@@ -1,12 +1,12 @@
 [project]
 name = "cpsat-plugins"
 version = "0.1.0"
-description = "Shared constraint/objective plugin contract for CP-SAT alternatives."
+description = "Comparison runner shared by the engine vs CP-SAT benchmarks."
 requires-python = ">=3.11,<4.0"
-dependencies = ["ortools>=9.10"]
+dependencies = []
 
 [project.optional-dependencies]
-dev = ["pytest"]
+dev = ["pytest", "numpy"]
 
 [tool.setuptools]
 packages = ["cpsat_plugins"]

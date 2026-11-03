@@ -6,8 +6,8 @@ on SALBP-1 instances (the Otto et al. SALBP archive from assembly-line-balancing
 Hexaly), downloaded on demand and checksum-verified ([`bench/data.py`](bench/data.py)). Both
 answers are rescored by the use case's own evaluator (`constraint_costs()`).
 
-The CP-SAT model is built from [`cpsat-common`](../cpsat-common) plugins, one per engine
-constraint (`assembly_line_balancing_cpsat/constraints.py`, subclassing the domain specs; the
+The CP-SAT model is built from [external-solver](https://github.com/optimaru/external-solver) plugins, one per engine
+constraint ([`external_solver.assembly_line_balancing.constraints`](https://github.com/optimaru/external-solver/tree/main/src/external_solver/assembly_line_balancing/constraints.py), subclassing the domain specs; the
 defaults come from the engine's `constraint_info()`). Every encoding is exact, so the same
 assignment gives the same raw cost per constraint in both solvers
 (`cpsat/tests/test_constraint_parity.py` pins every assignment of small instances).

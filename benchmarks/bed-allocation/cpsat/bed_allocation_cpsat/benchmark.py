@@ -169,8 +169,7 @@ def self_report(problem: Any) -> tuple[float, ...]:
 
 def solve_cpsat(problem: Any, seconds: float, seed: int, workers: int) -> Any:
     from bed_allocation.models import BedPlanModel
-
-    from bed_allocation_cpsat import solve
+    from external_solver.bed_allocation import solve
 
     solved = solve(
         BedPlanModel.from_core(problem),

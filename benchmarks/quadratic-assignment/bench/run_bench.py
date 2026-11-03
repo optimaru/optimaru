@@ -44,11 +44,12 @@ def _run_engine(problem, seconds: float, seed: int) -> dict:
 
 
 def _run_cpsat(problem, seconds: float, seed: int, workers: int) -> dict:
-    import quadratic_assignment_cpsat
+    import quadratic_assignment_cpsat  # noqa: F401 - points external_solver at the checkout engine
+    from external_solver import quadratic_assignment as cpsat
 
     started = time.perf_counter()
     try:
-        solved = quadratic_assignment_cpsat.solve(
+        solved = cpsat.solve(
             problem,
             time_limit_seconds=seconds,
             random_seed=seed,

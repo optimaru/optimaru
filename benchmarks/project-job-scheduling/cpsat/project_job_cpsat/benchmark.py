@@ -153,9 +153,8 @@ def self_report(problem: Any) -> tuple[float, ...]:
 
 
 def solve_cpsat(problem: Any, seconds: float, seed: int, workers: int) -> Any:
+    from external_solver.project_job_scheduling import solve
     from project_job.models import ProjectJobScheduleModel
-
-    from project_job_cpsat import solve
 
     solved = solve(
         ProjectJobScheduleModel.from_core(problem),

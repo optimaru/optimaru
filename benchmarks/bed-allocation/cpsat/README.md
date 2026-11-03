@@ -6,7 +6,7 @@ result with the shared engine evaluator.
 
 ## Constraints
 
-`bed_allocation_cpsat/constraints.py` holds one plugin per engine constraint, named
+[`external_solver.bed_allocation.constraints`](https://github.com/optimaru/external-solver/tree/main/src/external_solver/bed_allocation/constraints.py) holds one plugin per engine constraint, named
 like the domain spec it subclasses (`BedConflictCost`, ..., `UnassignedStaysCost`, ...,
 `MixedGenderRoomCost`), in `list_constraints()` order. A plugin carries only `build()`:
 its default level and weight come from `bed_allocation.constraint_info()` (the C++

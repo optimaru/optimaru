@@ -32,10 +32,18 @@ taken as the result.
 | [task-assigning](task-assigning) | OR-Tools CP-SAT | quickstart demo |
 | [tournament-scheduling](tournament-scheduling) | OR-Tools CP-SAT | generated |
 
-Each CP-SAT model lives in `benchmarks/<slug>/cpsat` as its own `uv` project
-that depends on `use-cases/<slug>/python` by path, so a run always measures
-the engine in this checkout. [`cpsat-common`](cpsat-common) holds the shared
-constraint-plugin contract and the comparison runner (`run_cli`).
+The CP-SAT models come from
+[external-solver](https://github.com/optimaru/external-solver), installed from
+its GitHub release tag (`external_solver.<subpackage>`); the models and their
+own tests live there. Each comparison is a `uv` project in
+`benchmarks/<slug>/cpsat` that depends on `use-cases/<slug>/python` by path, so
+a run always measures the engine in this checkout. Importing the project's
+package calls `cpsat_plugins.checkout.use_checkout_engine`, which registers that
+checkout package as `optimaru.<subpackage>`, so external-solver builds and scores
+with the same engine module; the published `optimaru` wheel is not installed
+(`override-dependencies`). [`cpsat-common`](cpsat-common) holds that helper and
+the comparison runner (`run_cli`). To pick up a new external-solver release,
+bump the `tag` in each project's `[tool.uv.sources]` and run `uv lock`.
 
 A CP-SAT constraint is a plugin that subclasses the use case's own constraint
 spec (`<Subject>Cost`), so both solvers take the same selection: the same

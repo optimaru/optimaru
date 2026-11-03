@@ -2,7 +2,7 @@
 
 The [`semiconductor-scheduling`](../../use-cases/semiconductor-scheduling) use case against **OR-Tools CP-SAT**
 ([`cpsat/`](cpsat), package `semiconductor_scheduling_cpsat`). The CP-SAT model implements the
-same constraints under the same names and units, as `cpsat_plugins` plugins of the domain
+same constraints under the same names and units, as external-solver plugins of the domain
 specs, so both answers are rescored by the use case's own C++ evaluator; parity tests in
 `cpsat/tests` keep the two cost definitions identical (formulation notes:
 [`cpsat/README.md`](cpsat/README.md)).

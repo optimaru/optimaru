@@ -44,7 +44,7 @@ def solve_engine(problem: Any, seconds: float, seed: int) -> None:
 def solve_cpsat(problem: Any, seconds: float, seed: int, workers: int) -> Any:
     from conference_scheduling.models import ConferenceScheduleModel
 
-    from conference_scheduling_cpsat import solve
+    from external_solver.conference_scheduling import solve
 
     solved = solve(
         ConferenceScheduleModel.from_core(problem),

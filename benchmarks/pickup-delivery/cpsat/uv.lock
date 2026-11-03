@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.11, <4.0"
 resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'win32'",
@@ -12,6 +12,9 @@ resolution-markers = [
     "python_full_version < '3.12' and sys_platform == 'emscripten'",
     "python_full_version < '3.12' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
+
+[manifest]
+overrides = [{ name = "optimaru", marker = "sys_platform == 'never'" }]
 
 [[package]]
 name = "absl-py"
@@ -44,16 +47,20 @@ wheels = [
 name = "cpsat-plugins"
 version = "0.1.0"
 source = { editable = "../../cpsat-common" }
-dependencies = [
-    { name = "ortools" },
-]
 
 [package.metadata]
-requires-dist = [
-    { name = "ortools", specifier = ">=9.10" },
-    { name = "pytest", marker = "extra == 'dev'" },
-]
+requires-dist = [{ name = "pytest", marker = "extra == 'dev'" }]
 provides-extras = ["dev"]
+
+[[package]]
+name = "external-solver"
+version = "0.1.0"
+source = { git = "https://github.com/optimaru/external-solver?tag=v0.1.0#964a068e8118be26bccdc7cafc518a0cc234fea1" }
+dependencies = [
+    { name = "optimaru", marker = "sys_platform == 'never'" },
+    { name = "ortools" },
+    { name = "pydantic" },
+]
 
 [[package]]
 name = "immutabledict"
@@ -239,6 +246,15 @@ wheels = [
 ]
 
 [[package]]
+name = "optimaru"
+version = "0.3.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pydantic" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ea/fb/1d935be3d86e3d6efe6e3593ddc0a1e26e9e87013f471ac7e36640b0bdf6/optimaru-0.3.0.tar.gz", hash = "sha256:9d34dfac1aa5a63397151a6b3abd3bb7ca67940db0c35b02098fc31ab0eb57f1", size = 1441548, upload-time = "2026-11-01T18:47:18.177Z" }
+
+[[package]]
 name = "ortools"
 version = "9.15.6755"
 source = { registry = "https://pypi.org/simple" }
@@ -360,6 +376,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "cpsat-plugins" },
+    { name = "external-solver" },
     { name = "ortools" },
     { name = "pdp-routing" },
     { name = "pydantic" },
@@ -373,6 +390,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "cpsat-plugins", editable = "../../cpsat-common" },
+    { name = "external-solver", git = "https://github.com/optimaru/external-solver?tag=v0.1.0" },
     { name = "ortools", specifier = ">=9.10" },
     { name = "pdp-routing", editable = "../../../use-cases/pickup-delivery/python" },
     { name = "pydantic", specifier = ">=2" },

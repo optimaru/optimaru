@@ -7,9 +7,9 @@ by the shared engine evaluator.
 
 ## Constraints and parity with the engine
 
-One plugin per engine constraint (`tournament_scheduling_cpsat/constraints.py`),
+One plugin per engine constraint ([`external_solver.tournament_scheduling.constraints`](https://github.com/optimaru/external-solver/tree/main/src/external_solver/tournament_scheduling/constraints.py)),
 each a subclass of the domain spec with only `build()`. Default levels and
-weights are not restated here: cpsat-common reads them from
+weights are not restated here: external-solver reads them from
 `tournament_scheduling.constraint_info()`, so they are the C++ components'
 `kDefaultLevel` / `kDefaultWeight` (`test_cpsat_defaults_are_the_engine_defaults`).
 The model has three levels, `("hard", "medium", "soft")`; `level="hard"`, `"medium"`

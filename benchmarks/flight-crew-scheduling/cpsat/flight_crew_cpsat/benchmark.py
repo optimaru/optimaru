@@ -169,9 +169,8 @@ def solve_engine(problem: Any, seconds: float, seed: int) -> None:
 
 
 def solve_cpsat(problem: Any, seconds: float, seed: int, workers: int) -> Any:
+    from external_solver.flight_crew_scheduling import solve
     from flight_crew.models import FlightCrewScheduleModel
-
-    from flight_crew_cpsat import solve
 
     solved = solve(
         FlightCrewScheduleModel.from_core(problem),
