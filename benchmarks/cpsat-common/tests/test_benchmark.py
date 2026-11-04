@@ -65,3 +65,20 @@ def test_a_stalled_cpsat_run_is_stopped_at_the_deadline() -> None:
     assert time.perf_counter() - started < 30
     assert run.score is None
     assert run.status == "no solution in time"
+
+
+def test_a_folded_medium_level_is_shown_on_its_own():
+    from cpsat_plugins.benchmark import Score, _unfold_medium
+
+    def fold(kind, unit):
+        return {"some_cost": {"medium_fold": {"kind": kind, "unit": unit}}}
+
+    into_soft = _unfold_medium(Score((0, -9_000_000_020.0), ("hard", "soft")), fold("into_soft", 1e9))
+    assert (into_soft.levels, into_soft.names) == ((0, -9, -20.0), ("hard", "medium", "soft"))
+    below_hard = _unfold_medium(Score((-2_000_003, -5.0), ("hard", "soft")), fold("below_hard", 1e6))
+    assert below_hard.levels == (-2, -3, -5.0)
+    # Order is kept: a better folded score is still the better unfolded one.
+    worse = _unfold_medium(Score((0, -10_000_000_000.0), ("hard", "soft")), fold("into_soft", 1e9))
+    assert worse < into_soft
+    plain = Score((0, -5.0), ("hard", "soft"))
+    assert _unfold_medium(plain, {"some_cost": {}}) is plain

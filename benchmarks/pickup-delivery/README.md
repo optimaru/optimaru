@@ -33,22 +33,23 @@ square, half in six clusters, service time 90, one vehicle per three requests.
 
 | Requests | engine (vehicles / distance) | CP-SAT (vehicles / distance) |
 | --- | --- | --- |
-| 50 | **13 / 3,446** | incomplete — drops requests (0hard/-24medium/-3501soft) |
+| 50 | **13 / 3,446** | incomplete — its routes leave stops uncovered (0hard/-141medium/-254soft) |
 | 100 | **24 / 6,045** | no solution in 30 s |
 | 200 | **43 / 11,300** | no solution in 30 s |
-| 400 | **83 / 21,617** | not run — the model was still being built after 10 min at 11 GB |
+| 400 | **83 / 21,617** | not run — the model was still being built after 10 min at 11 GB (2026-10-29) |
 
 **Li & Lim `lc101`**, first 10 of 53 requests (the public runner's default):
 
 | Solver | Vehicles | Distance | Time |
 | --- | --- | --- | --- |
 | engine | 2 | **156.000** | 30.0 s |
-| CP-SAT | 2 | **156.000** | 3.1 s |
+| CP-SAT | 2 | **156.000** | 3.2 s |
 
 At 10 requests both reach the same plan and CP-SAT proves it first; the exact model stops
 scaling by 50–100 requests.
 
-Measured 2026-10-29 on one Apple Silicon Mac (16 cores), 30 s per solver and instance. The
+Measured 2026-11-04 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance (the 400-request
+row from 2026-10-29, not re-run). The
 engine runs single-threaded; CP-SAT uses 8 workers and its time includes model construction.
 Single runs — a snapshot, not a statistical study.
 <!-- results:end -->

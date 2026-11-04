@@ -300,9 +300,7 @@ The report shows the raw objective and gap to the QAPLIB best-known solution.
 Hexaly's website publishes a 1.1% aggregate gap at 60 seconds, not its
 per-instance assignments, so the script labels that number as an external
 aggregate rather than pretending it is a directly reproduced solver run.
-The checked-in local snapshot in [`bench/RESULTS.md`](../../benchmarks/quadratic-assignment/bench/RESULTS.md)
-holds **0.1.x numbers** (the pure-Python engine): it has not been re-measured for the 0.2.0 C++ engine,
-because the QAPLIB archive download was not reachable when 0.2.0 was prepared.
+The checked-in local snapshot is [`bench/RESULTS.md`](../../benchmarks/quadratic-assignment/bench/RESULTS.md).
 
 ## Extending
 

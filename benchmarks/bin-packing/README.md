@@ -39,17 +39,16 @@ objective is built.
 
 Hexaly example instances. Lower is better; the best value is bold.
 
-| Instance | Items | Capacity lower bound | engine (0.1.x, pure Python) | CP-SAT |
+| Instance | Items | Capacity lower bound | optimaru engine | CP-SAT |
 | --- | --- | --- | --- | --- |
 | t60_00 | 60 | 20 | **21** | **21** |
 | u120_04 | 120 | 50 | **50** | **50** |
-| u250_03 | 250 | 100 | 101 | not run (size cap) |
+| u250_03 | 250 | 100 | **100** | not run (size cap) |
 
-Bins used. CP-SAT runs only up to the exact-model size cap (`--exact-max-size`). **The engine column
-holds 0.1.x numbers** (the pure-Python simulated annealing): the 0.2.0 C++ engine has not been
-re-measured on these instances yet, because the Hexaly download was unreachable from the machine
-that did the port (on generated instances of the same families it matches or beats the 0.1.x
-annealing, see [below](#search-quality-against-015)). Measured 2026-10-29 on one Apple Silicon Mac (16 cores), 30 s per solver and instance. The engine runs single-threaded; CP-SAT uses 8 workers and its time includes model construction. Single runs — a snapshot, not a statistical study.
+Bins used. CP-SAT runs only up to the exact-model size cap (`--exact-max-size`). Measured 2026-11-04
+with the C++ engine on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs
+single-threaded; CP-SAT uses 8 workers and its time includes model construction. Single runs — a
+snapshot, not a statistical study.
 <!-- results:end -->
 
 ## Search quality against 0.1.5

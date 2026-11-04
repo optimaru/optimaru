@@ -40,13 +40,13 @@ Recorded results: [`bench/RESULTS.md`](bench/RESULTS.md).
 
 SALBP large data set (n=100). Lower is better; the best value is bold.
 
-| Instance | Tasks | Best known | engine (0.1.5, pure Python) | CP-SAT |
+| Instance | Tasks | Best known | optimaru engine | CP-SAT |
 | --- | --- | --- | --- | --- |
-| instance_n=100_1 | 100 | 23 | 26 | **23** |
-| instance_n=100_10 | 100 | 22 | 25 | **22** |
-| instance_n=100_100 | 100 | 25 | 29 | **25** |
+| instance_n=100_1 | 100 | 23 | 24 | **23** |
+| instance_n=100_10 | 100 | 22 | **22** | **22** |
+| instance_n=100_100 | 100 | 25 | 26 | **25** |
 
-Stations used. **The engine column holds 0.1.5 numbers** (the pure-Python simulated
-annealing): the 0.2.0 C++ engine (CloseStationMove, the precedence-window recommender) has not
-been re-measured on the archive yet. Measured 2026-10-29 on one Apple Silicon Mac (16 cores), 30 s per solver and instance. The engine runs single-threaded; CP-SAT uses 8 workers and its time includes model construction. Single runs — a snapshot, not a statistical study.
+Stations used. Measured 2026-11-04 with the C++ engine on one Apple M4 Max Mac (16 cores), 30 s per solver and instance,
+seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its time includes model
+construction (it proved these optima in 2–6 s). Single runs — a snapshot, not a statistical study.
 <!-- results:end -->

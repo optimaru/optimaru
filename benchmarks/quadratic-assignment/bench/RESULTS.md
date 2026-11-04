@@ -1,18 +1,14 @@
 # QAPLIB benchmark snapshot
 
-**0.1.x numbers.** These were measured with the 0.1.x pure-Python engine
-(simulated annealing) and have not been re-measured for the 0.2.0 C++ engine:
-the QAPLIB archive download was not reachable when 0.2.0 was prepared. Re-run
-`bench/run_bench.py` before comparing them with current results.
+Measured on 2026-11-04 with the C++ engine on an Apple M4 Max (16 logical CPUs), one engine
+process, seed 1, 30 s per instance. The solve budget excludes archive download and parsing.
+The solution is re-scored by `quadratic_assignment.constraint_costs`.
 
-Measured on 2026-08-17 with an Apple M4 Pro (14 logical CPUs, 48 GiB), macOS
-26.3.1, one engine process, seed 1. The solve budget excludes archive download
-and parsing. The solution is re-scored by `quadratic_assignment.constraint_costs`.
-
-| instance | tasks | solver (0.1.x) | budget | objective | QAPLIB BKS | gap |
+| instance | tasks | solver | budget | objective | QAPLIB BKS | gap |
 | --- | ---: | --- | ---: | ---: | ---: | ---: |
-| `tai30a` | 30 | engine | 60 s | 1,859,862 | 1,818,146 | 2.29% |
-| `nug30` | 30 | engine | 60 s | 6,156 | 6,124 | 0.52% |
+| `nug30` | 30 | engine | 30 s | 6,256 | 6,124 | 2.16% |
+| `lipa30a` | 30 | engine | 30 s | 13,403 | 13,178 | 1.71% |
+| `tai30a` | 30 | engine | 30 s | 1,883,012 | 1,818,146 | 3.57% |
 
 Hexaly reports a 1.1% average 60-second gap over 26 Taillard instances. Only
 `tai30a` above belongs to that family, so this table must not be read as an

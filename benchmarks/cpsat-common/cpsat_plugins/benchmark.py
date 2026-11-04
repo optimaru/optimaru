@@ -81,8 +81,34 @@ class BenchmarkCase(Protocol):
 def score_solution(package: str, solution: Any) -> Score:
     module = importlib.import_module(package)
     specs = importlib.import_module(f"{package}.constraints")
-    result = specs.score(module.constraint_costs(solution))
-    return Score(tuple(result), tuple(result._fields))
+    costs = module.constraint_costs(solution)
+    result = specs.score(costs)
+    return _unfold_medium(Score(tuple(result), tuple(result._fields)), costs)
+
+
+def _unfold_medium(score: Score, costs: Any) -> Score:
+    """Show a folded medium level on its own, as ``hard/medium/soft``.
+
+    A domain with a medium level reports a two-level engine score with medium
+    folded into soft (``into_soft``) or below hard (``below_hard``) at a fixed
+    ``unit``; every cost entry carries that ``medium_fold``. Splitting it back
+    keeps the order of the scores and makes the table readable: a folded soft
+    of -9000000020 at unit 1e9 is medium -9, soft -20.
+    """
+    folds = [entry.get("medium_fold") for entry in costs.values() if isinstance(entry, dict)]
+    fold = next((item for item in folds if item), None)
+    if fold is None or score.names != ("hard", "soft"):
+        return score
+    hard, soft = score.levels
+    unit = float(fold["unit"])
+    if fold["kind"] == "into_soft":
+        medium = int(soft / unit)
+        return Score((hard, medium, soft - medium * unit), ("hard", "medium", "soft"))
+    if fold["kind"] == "below_hard":
+        # The hard number holds hard * unit + medium.
+        whole = int(hard / unit)
+        return Score((whole, hard - whole * unit, soft), ("hard", "medium", "soft"))
+    return score
 
 
 def _self_report(case: Any, problem: Any) -> tuple[float, ...] | None:

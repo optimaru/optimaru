@@ -75,9 +75,9 @@ all three tables; the tables below cover tracks 1 and 2.
   section of
   [`use-cases/school-timetabling/python/README.md`](../../use-cases/school-timetabling/python/README.md).
 
-## Latest measurement (local, 2026-10-29)
+## Latest measurement (local, 2026-11-04)
 
-Environment: one Apple Silicon Mac (16 cores), **30 s** per instance per
+Environment: one Apple M4 Max Mac (16 cores), **30 s** per instance per
 solver, seed 1, one run. CP-SAT is OR-Tools 9.15 (8 workers). The
 cross-check gate passed.
 
@@ -85,22 +85,22 @@ cross-check gate passed.
 
 | instance | solver | final (rescored) | first feasible | moves/s |
 | --- | --- | --- | --- | --- |
-| S: 6 classes/12 teachers/7 rooms | **cpp** | **0hard/175soft** | 0 ms | 16,128,822 |
-| S | cpsat | 0hard/164soft | 1531 ms | n/a |
-| M: 12 classes/20 teachers/13 rooms | **cpp** | **0hard/350soft** | 3 ms | 16,237,379 |
-| M | cpsat | 0hard/-16soft | 6313 ms | n/a |
-| L: 24 classes/40 teachers/25 rooms | **cpp** | **0hard/676soft** | 11 ms | 12,304,885 |
+| S: 6 classes/12 teachers/7 rooms | **cpp** | **0hard/175soft** | 0 ms | 16,373,075 |
+| S | cpsat | 0hard/164soft | 1598 ms | n/a |
+| M: 12 classes/20 teachers/13 rooms | **cpp** | **0hard/350soft** | 3 ms | 16,241,783 |
+| M | cpsat | 0hard/-204soft | 6313 ms | n/a |
+| L: 24 classes/40 teachers/25 rooms | **cpp** | **0hard/676soft** | 11 ms | 12,091,404 |
 | L | cpsat | n/a (no feasible solution within 30 s, UNKNOWN) | n/a | n/a |
 
 ### Track 2 (weighted penalty: lower is better; validate.py rescoring)
 
 | instance | backend | status | hard violations | weighted penalty |
 | --- | --- | --- | --- | --- |
-| canonical_S | cpsat (8 workers) | FEASIBLE | 0 | 234 |
+| canonical_S | cpsat (8 workers) | FEASIBLE | 0 | 320 |
 | canonical_S | **engine (1 thread)** | FEASIBLE | 0 | **231** |
-| canonical_M | cpsat (8 workers) | FEASIBLE | 0 | 1326 |
+| canonical_M | cpsat (8 workers) | FEASIBLE | 0 | 1208 |
 | canonical_M | **engine (1 thread)** | FEASIBLE | 0 | **1151** |
-| canonical_L | cpsat (8 workers) | FEASIBLE | 0 | 3185 |
+| canonical_L | cpsat (8 workers) | FEASIBLE | 0 | 3222 |
 | canonical_L | **engine (1 thread)** | FEASIBLE | 0 | **2606** |
 
 The section below is the earlier 10 s measurement that the tuning history
