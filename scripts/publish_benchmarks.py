@@ -321,8 +321,11 @@ def write_homepage(
         + const("meta", "", meta)
         + "\n"
         + const("planning", ": PlanningRow[]", planning)
+        + "\n"
         + const("routing", ": RoutingRow[]", routing)
+        + "\n"
         + const("timetabling", ": TimetablingRow[]", timetabling)
+        + "\n"
         + const("publicRows", ": PublicRow[]", public)
     )
 
