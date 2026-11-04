@@ -80,5 +80,10 @@ def test_a_folded_medium_level_is_shown_on_its_own():
     # Order is kept: a better folded score is still the better unfolded one.
     worse = _unfold_medium(Score((0, -10_000_000_000.0), ("hard", "soft")), fold("into_soft", 1e9))
     assert worse < into_soft
+    # The solver's self-report is checked against the engine's folded levels.
+    from cpsat_plugins.benchmark import SolverRun
+
+    assert SolverRun("engine", into_soft, 1.0, self_report=(0, -9_000_000_020.0)).crosscheck == ""
+    assert "MISMATCH" in SolverRun("engine", into_soft, 1.0, self_report=(0, -9_001_000_020.0)).crosscheck
     plain = Score((0, -5.0), ("hard", "soft"))
     assert _unfold_medium(plain, {"some_cost": {}}) is plain

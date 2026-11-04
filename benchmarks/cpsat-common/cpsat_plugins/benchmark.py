@@ -23,6 +23,8 @@ from typing import Any, Protocol
 class Score:
     levels: tuple[float, ...]
     names: tuple[str, ...] = field(default=(), compare=False)
+    #: The engine's own levels when a medium level was unfolded for display (`_unfold_medium`).
+    folded: tuple[float, ...] | None = field(default=None, compare=False)
 
     def __str__(self) -> str:
         names = self.names or ("hard", "medium", "soft")[-len(self.levels) :]
@@ -45,11 +47,13 @@ class SolverRun:
     def crosscheck(self) -> str:
         if self.self_report is None or self.score is None:
             return ""
-        if len(self.self_report) != len(self.score.levels):
-            return f"LEVEL SHAPE self={self.self_report} rescore={self.score.levels}"
-        for reported, rescored in zip(self.self_report, self.score.levels, strict=True):
+        # A solver reports the engine's levels, so compare with those, not the unfolded display.
+        rescore = self.score.folded or self.score.levels
+        if len(self.self_report) != len(rescore):
+            return f"LEVEL SHAPE self={self.self_report} rescore={rescore}"
+        for reported, rescored in zip(self.self_report, rescore, strict=True):
             if abs(reported - rescored) > 1e-6 * max(1.0, abs(reported)):
-                return f"MISMATCH self={self.self_report} rescore={self.score.levels}"
+                return f"MISMATCH self={self.self_report} rescore={rescore}"
         return ""
 
 
@@ -103,11 +107,11 @@ def _unfold_medium(score: Score, costs: Any) -> Score:
     unit = float(fold["unit"])
     if fold["kind"] == "into_soft":
         medium = int(soft / unit)
-        return Score((hard, medium, soft - medium * unit), ("hard", "medium", "soft"))
+        return Score((hard, medium, soft - medium * unit), ("hard", "medium", "soft"), score.levels)
     if fold["kind"] == "below_hard":
         # The hard number holds hard * unit + medium.
         whole = int(hard / unit)
-        return Score((whole, hard - whole * unit, soft), ("hard", "medium", "soft"))
+        return Score((whole, hard - whole * unit, soft), ("hard", "medium", "soft"), score.levels)
     return score
 
 
