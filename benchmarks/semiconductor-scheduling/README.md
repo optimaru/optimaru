@@ -20,12 +20,12 @@ its time includes model construction.
 <!-- results:start -->
 ## Results
 
-Scores come from the use case's own evaluator. Higher is better; ties are all bold.
+Every cell is the score of that solver's final solution under the use case's own rules, re-scored by its evaluator. Higher is better; ties are all bold.
 
 | Instance | Size | optimaru engine | OR-Tools CP-SAT |
 | --- | --- | --- | --- |
 | lots6 | 6 lots / 6 machines | **0hard/-163soft** | **0hard/-163soft** |
-| lots12 | 12 lots / 6 machines | 0hard/-430soft | **0hard/-429soft** |
+| lots12 | 12 lots / 6 machines | 0hard/-415soft | **0hard/-411soft** |
 
-Measured 2026-10-31 on a shared 4-CPU Linux container, 10 s per solver and instance, seed 1. The engine (the 0.2.0 C++ port, simulated annealing) ran single-threaded; CP-SAT used 2 workers and its time includes model construction. Single runs — treat small differences as noise. (0.1.x, the pure-Python engine, reached -167 / -437 in 30 s.)
+Measured 2026-11-04 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its time includes model construction. Single runs — treat small differences as noise.
 <!-- results:end -->

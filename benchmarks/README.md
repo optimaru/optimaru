@@ -63,7 +63,3 @@ with the engine's message, when the objective is built: hard 0 must mean no
 violation. Each benchmark's README (or `cpsat/README.md`) lists its own
 limits, including the plugins that refuse an offset.
 
-The assembly-line-balancing, bin-packing and quadratic-assignment tables on
-public instance sets still hold numbers measured with the 0.1.x pure-Python
-engines; the 0.2.0 C++ ports have not been re-measured on those archives yet
-(see each README).

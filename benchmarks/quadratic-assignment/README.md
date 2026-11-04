@@ -72,14 +72,12 @@ uv run --project cpsat pytest -q cpsat/tests
 uv run --project cpsat python -m bench.run_bench --seconds 60
 ```
 
-Recorded results: [`bench/RESULTS.md`](bench/RESULTS.md) — **0.1.x numbers** (the pure-Python
-engine); not re-measured for the 0.2.0 C++ engine, because the QAPLIB archive download was not reachable
-when 0.2.0 was prepared.
+Recorded results: [`bench/RESULTS.md`](bench/RESULTS.md).
 
 <!-- results:start -->
 ## Results
 
-Small instances, engine vs CP-SAT. Scores come from the use case's own evaluator. Higher is better.
+Every cell is the score of that solver's final solution under the use case's own rules, re-scored by its evaluator. Higher is better; ties are all bold.
 
 | Instance | Size | optimaru engine | OR-Tools CP-SAT |
 | --- | --- | --- | --- |
@@ -87,18 +85,18 @@ Small instances, engine vs CP-SAT. Scores come from the use case's own evaluator
 | random8 | 8 facilities | **0hard/-1130soft** | **0hard/-1130soft** |
 | random10 | 10 facilities | **0hard/-1766soft** | **0hard/-1766soft** |
 
-Measured 2026-10-31 with the 0.2.0 C++ engine on a shared 4-core Linux container, 10 s per solver and
-instance, seed 1. The engine runs single-threaded; CP-SAT uses 2 workers and its time includes model
-construction. Single runs — a snapshot, not a statistical study.
-
-QAPLIB (Hexaly example instances). **0.1.x numbers**: measured with the 0.1.x pure-Python engine, 30 s
-per solver and instance on one Apple Silicon Mac, 2026-10-29, and not re-measured for the 0.2.0 C++
-engine (the archive download was not reachable). Lower is better. CP-SAT runs only up to the exact-model
-size cap (`--exact-max-size`); these n=30 instances are above it.
-
-| Instance | Size | QAPLIB best known | engine (0.1.x) | CP-SAT |
-| --- | --- | --- | --- | --- |
-| nug30 | 30 | 6124 | 6,156 | not run (size cap) |
-| lipa30a | 30 | 13178 | 13,395 | not run (size cap) |
-| tai30a | 30 | 1818146 | 1,864,536 | not run (size cap) |
+Measured 2026-11-04 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its time includes model construction. Single runs — treat small differences as noise.
 <!-- results:end -->
+
+## QAPLIB
+
+QAPLIB (Hexaly example instances), measured 2026-11-04 with the C++ engine on one Apple M4 Max Mac (16 cores), 30 s per
+solver and instance, seed 1, the engine single-threaded. Lower is better. CP-SAT runs only up to the
+exact-model size cap (`--exact-max-size`); these n=30 instances are above it.
+
+| Instance | Size | QAPLIB best known | optimaru engine | CP-SAT |
+| --- | --- | --- | --- | --- |
+| nug30 | 30 | 6124 | 6,256 (2.16%) | not run (size cap) |
+| lipa30a | 30 | 13178 | 13,403 (1.71%) | not run (size cap) |
+| tai30a | 30 | 1818146 | 1,883,012 (3.57%) | not run (size cap) |
+

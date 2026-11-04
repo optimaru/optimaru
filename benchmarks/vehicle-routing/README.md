@@ -72,16 +72,18 @@ vrp_benchmark/
 tests/
 ```
 
+<!-- results:start -->
 ## Results
 
-One median instance per bucket, 30 s per run, seed 0, single-threaded, one
-Apple Silicon Mac (16 cores), 2026-10-29. Gap to the best-known solution; every route is
-re-verified by the harness. Single runs — a snapshot, not a statistical study.
+One median instance per CVRPLIB Set X size bucket. Gap to the best-known solution; every route is re-verified by the harness. Lower is better; the best value is bold.
 
 | Instance | Customers | engine | ortools |
 |---|---:|---:|---:|
 | X-n153-k22 | 152 | **1.25%** | 1 unassigned |
 | X-n289-k60 | 288 | **2.58%** | 2 unassigned |
 | X-n491-k59 | 490 | **2.07%** | 9.39% |
-| X-n701-k44 | 700 | **1.92%** | 8.94% |
-| X-n895-k37 | 894 | **5.52%** | 5 unassigned |
+| X-n701-k44 | 700 | **1.95%** | 8.98% |
+| X-n895-k37 | 894 | **5.55%** | 5 unassigned |
+
+Measured 2026-11-04 on one Apple M4 Max Mac (16 cores), 30 s per run, seed 0, single-threaded. Single runs — a snapshot, not a statistical study.
+<!-- results:end -->
