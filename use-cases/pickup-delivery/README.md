@@ -1,5 +1,8 @@
 # Pickup and Delivery with Time Windows (PDPTW)
 
+Derived from the Timefold Quickstarts `vehicle-routing` example (Apache-2.0), translated
+and modified; see the repository [NOTICE](../../NOTICE).
+
 A transport **request** is a pickup and a dropoff that **one** vehicle must
 serve, **pickup first**, without ever exceeding its capacity in between.
 

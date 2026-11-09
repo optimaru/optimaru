@@ -127,3 +127,12 @@ and `constraint_info()` their defaults.
 
 optimaru comes in a free, open-source edition (this package, Apache-2.0) and
 an Enterprise edition (coming soon).
+
+## License
+
+Apache-2.0. The engine and several use cases are derived from
+[Timefold Solver](https://github.com/TimefoldAI/timefold-solver) and
+[Timefold Quickstarts](https://github.com/TimefoldAI/timefold-quickstarts)
+(both Apache-2.0); the wheel ships `LICENSE` and `NOTICE`, and the
+[NOTICE](https://github.com/optimaru/optimaru/blob/main/NOTICE) file lists the
+attribution. optimaru is not affiliated with or endorsed by Timefold BV.

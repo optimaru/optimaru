@@ -1,5 +1,8 @@
 # Order Picking
 
+Derived from the Timefold Quickstarts `order-picking` example (Apache-2.0), translated
+and modified; see the repository [NOTICE](../../NOTICE).
+
 Domain model, constraints and API details: [`python/`](python/README.md) and [`cpp/`](cpp/README.md).
 
 ## Constraints (HardSoftScore — the engine score type as-is, no mapping)
