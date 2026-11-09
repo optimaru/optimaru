@@ -7,8 +7,8 @@
 
 #include "ms/domain.hpp"
 #include "ms/score_calculator.hpp"
-#include "optimaru/api/score/calculator/constraint_assembly.hpp"
-#include "optimaru/api/score/calculator/decomposed_score_calculator.hpp"
+#include "optimaru/score/constraint_assembly.hpp"
+#include "optimaru/score/decomposed_objective.hpp"
 
 namespace ms
 {
@@ -18,7 +18,7 @@ namespace ms
 // ---------------------------------------------------------------------------
 // The twelve constraints of the reference meeting-scheduling
 // MeetingSchedulingConstraintProvider, split into one small component each on
-// the engine's DecomposedScoreCalculator — an optional assembly path NEXT TO
+// the engine's DecomposedObjective — an optional assembly path NEXT TO
 // the monolithic MeetingSchedulingIncrementalScoreCalculator, which stays the
 // tuned default fast path.
 //
@@ -49,8 +49,8 @@ namespace ms
 // same constants (score_calculator.cpp / incremental_calculator.cpp).
 //
 // Score levels: the quickstart scores with HardMediumSoftScore. This domain
-// keeps the engine's HardSoftScore and declares how its medium level folds
-// into soft ONCE, in domain.hpp (kMediumFold = intoSoft(kMediumScale = 1e6),
+// keeps the engine's Score and declares how its medium level folds
+// into soft ONCE, in domain.hpp (kMediumFold = into_soft(kMediumScale = 1e6),
 // registered through optimaru::MediumFoldOf<MeetingSchedule>). The two medium
 // components are `Level::Medium` at weight 1 in medium units, the decomposed
 // calculator keeps a separate medium accumulator and folds it with that
@@ -72,8 +72,8 @@ namespace ms
 // metadata, not part of the cost. Override them per instance through the
 // assembly's knob setters (`weight` / `level` (or its `hard` / `soft`
 // shorthands) / `exponent` / `offset` / `clip`) or the validated
-// `setWeight` / `setLevel` / `setExponent` / `setOffset` of the component
-// (`component->setLevel(optimaru::Level::Medium)`). Any component may take
+// `set_weight` / `set_level` / `set_exponent` / `set_offset` of the component
+// (`component->set_level(optimaru::Level::Medium)`). Any component may take
 // any of the three levels. A medium component moved to hard costs 1 hard per
 // raw unit, moved to soft 1 soft per raw unit (outside the fold); an explicit
 // weight stays in units of the level in effect.
@@ -81,13 +81,13 @@ namespace ms
 // Cost sign convention (see decomposed_score_calculator.hpp): positive =
 // penalty; the calculator negates into the score. An assembly of all twelve
 // components at their default weights therefore scores bit-for-bit like
-// ScoreCalculator::calculateScore.
+// ScoreCalculator::score.
 //
 // Every component requires ScoreCalculator::prepare(schedule) to have run
 // (the solve() overload and the monolithic path both call it).
 
 using DecomposedCalculator
-    = optimaru::DecomposedScoreCalculator<MeetingSchedule>;
+    = optimaru::DecomposedObjective<MeetingSchedule>;
 using ConstraintAssembly = optimaru::ConstraintAssembly<MeetingSchedule>;
 using MsUnitConstraint = optimaru::UnitConstraint<MeetingSchedule>;
 using MsGlobalConstraint = optimaru::GlobalConstraint<MeetingSchedule>;
@@ -166,7 +166,7 @@ struct PerAssignmentConstraint : MsUnitConstraint
                                   int unit,
                                   int assignmentIndex) const = 0;
 
-    void onReset(const MeetingSchedule &schedule) override
+    void on_reset(const MeetingSchedule &schedule) override
     {
         detail::requirePrepared(schedule);
     }
@@ -179,8 +179,8 @@ struct PerAssignmentConstraint : MsUnitConstraint
             total += assignmentCost(schedule, unit, assignmentIndex);
         return total;
     }
-    bool supportsDelta() const override { return true; }
-    double deltaCost(const MeetingSchedule &schedule,
+    bool supports_delta() const override { return true; }
+    double delta_cost(const MeetingSchedule &schedule,
                      int unit,
                      const std::vector<int> & /*members*/,
                      int entity) const override
@@ -203,8 +203,8 @@ struct AssignmentPairConstraint : MsGlobalConstraint
 {
     using MsGlobalConstraint::MsGlobalConstraint;
 
-    bool supportsMemberChange() const override { return true; }
-    void onUnitChanged(const MeetingSchedule & /*schedule*/,
+    bool supports_member_change() const override { return true; }
+    void on_unit_changed(const MeetingSchedule & /*schedule*/,
                        int /*unit*/,
                        const std::vector<int> & /*members*/) override
     {
@@ -214,14 +214,14 @@ struct AssignmentPairConstraint : MsGlobalConstraint
     }
 
     void reset(const MeetingSchedule &schedule,
-               const std::vector<std::vector<int>> &membersPerUnit) override
+               const std::vector<std::vector<int>> &members_per_unit) override
     {
         detail::requirePrepared(schedule);
         placed_.assign(schedule.meetingAssignments.size(), -1);
         total_ = 0;
-        for (std::size_t unit = 0; unit < membersPerUnit.size(); ++unit)
+        for (std::size_t unit = 0; unit < members_per_unit.size(); ++unit)
         {
-            for (int assignmentIndex : membersPerUnit[unit])
+            for (int assignmentIndex : members_per_unit[unit])
             {
                 total_ += marginal(
                     schedule, assignmentIndex, static_cast<int>(unit));
@@ -230,7 +230,7 @@ struct AssignmentPairConstraint : MsGlobalConstraint
         }
     }
 
-    void onMemberChanged(const MeetingSchedule &schedule,
+    void on_member_changed(const MeetingSchedule &schedule,
                          int unit,
                          const std::vector<int> & /*members*/,
                          int entity,
@@ -282,7 +282,7 @@ struct AttendanceArcConstraint : AssignmentPairConstraint
     using AssignmentPairConstraint::AssignmentPairConstraint;
 
     void reset(const MeetingSchedule &schedule,
-               const std::vector<std::vector<int>> &membersPerUnit) override
+               const std::vector<std::vector<int>> &members_per_unit) override
     {
         arcsByMeeting_.assign(schedule.meetings.size(), {});
         for (std::size_t i = 0; i < schedule.conflictArcs.size(); ++i)
@@ -292,7 +292,7 @@ struct AttendanceArcConstraint : AssignmentPairConstraint
             if (arc.meeting2 != arc.meeting1)
                 arcsByMeeting_[arc.meeting2].push_back(static_cast<int>(i));
         }
-        AssignmentPairConstraint::reset(schedule, membersPerUnit);
+        AssignmentPairConstraint::reset(schedule, members_per_unit);
     }
 
 protected:

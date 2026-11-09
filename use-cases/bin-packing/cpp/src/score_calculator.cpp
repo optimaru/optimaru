@@ -175,7 +175,7 @@ RawCosts ScoreCalculator::rawCosts(BinPackingProblem &problem)
     return raw;
 }
 
-Score ScoreCalculator::calculateScore(BinPackingProblem &problem)
+Score ScoreCalculator::score(BinPackingProblem &problem)
 {
     const RawCosts raw = rawCosts(problem);
     Score score;

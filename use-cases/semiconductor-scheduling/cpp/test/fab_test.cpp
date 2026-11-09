@@ -16,7 +16,7 @@
 #include "fab/score_calculator.hpp"
 #include "fab/solver.hpp"
 #include "fab_test_support.hpp"
-#include "optimaru/api/score/director/score_director.hpp"
+#include "optimaru/model/editor.hpp"
 
 using namespace fab;
 using namespace fabtest;
@@ -365,7 +365,7 @@ void testHandCalculated()
     // The default score of the fab fixture.
     {
         SemiconductorSchedule s = fabProblem(true).build();
-        const Score score = ScoreCalculator::calculateScore(s);
+        const Score score = ScoreCalculator::score(s);
         check(score.hard == -(2 + 2 + 3 + 8 + 5 + 3 + 3), "fab: hard = -26");
         check(score.soft == -(1.0 + 3 + 8 + 10 * 6 + 46 + 17), "fab: soft = -135");
         check(s.makespan == 17 && s.totalWeightedTardiness == 6 && s.totalCycleTime == 46 && s.scored,
@@ -388,7 +388,7 @@ void testIncrementalMatchesFull(int instances, int moves)
         s.warmStart = seed % 3 == 0;
         beginSearch(s);
         SemiconductorIncrementalScoreCalculator calculator;
-        optimaru::ScoreDirector<SemiconductorSchedule> director(s, calculator);
+        optimaru::Editor<SemiconductorSchedule> editor(s, calculator);
         std::mt19937_64 rng(static_cast<std::uint64_t>(seed));
         const int n = s.rowCount();
         // Every constraint's raw cost, then the score.
@@ -397,7 +397,7 @@ void testIncrementalMatchesFull(int instances, int moves)
             const RawTotals incremental = calculator.rawTotals();
             const RawTotals full = ScoreCalculator::searchStateRawCosts(s);
             const bool same
-                = incremental == full && director.calculateScore() == ScoreCalculator::searchStateScore(s);
+                = incremental == full && editor.score() == ScoreCalculator::searchStateScore(s);
             if (!same && mismatches++ < 5)
                 std::printf("  mismatch: instance %d after %s\n", seed, what);
             if (!atSeed(s))
@@ -411,11 +411,11 @@ void testIncrementalMatchesFull(int instances, int moves)
             const int value = s.rows[static_cast<std::size_t>(row)].value;
             if (kind == 0)
             {
-                director.changeVariable(row, randomValue(s, rng, true));
+                editor.assign(row, randomValue(s, rng, true));
             }
             else if (kind == 1 && value >= 0)
             {
-                director.changeVariable(row, s.valueOf(s.rankOf(value), static_cast<int>(rng() % s.maxOptionCount)));
+                editor.assign(row, s.valueOf(s.rankOf(value), static_cast<int>(rng() % s.maxOptionCount)));
             }
             else if (kind == 2 && n > 1)
             {
@@ -423,36 +423,36 @@ void testIncrementalMatchesFull(int instances, int moves)
                 const int v2 = s.rows[static_cast<std::size_t>(other)].value;
                 if (value >= 0 && v2 >= 0)
                 {
-                    director.beginVariableChanges();
-                    director.changeVariable(row, s.valueOf(s.rankOf(v2), s.slotOf(value)));
-                    director.changeVariable(other, s.valueOf(s.rankOf(value), s.slotOf(v2)));
-                    director.endVariableChanges();
+                    editor.begin_batch();
+                    editor.assign(row, s.valueOf(s.rankOf(v2), s.slotOf(value)));
+                    editor.assign(other, s.valueOf(s.rankOf(value), s.slotOf(v2)));
+                    editor.end_batch();
                 }
             }
             else if (kind == 3)
             {
-                director.beginVariableChanges();
+                editor.begin_batch();
                 for (int k = 0; k < 3; ++k)
                 {
                     const int r = static_cast<int>(rng() % static_cast<std::uint64_t>(n));
-                    director.changeVariable(r, randomValue(s, rng, false));
+                    editor.assign(r, randomValue(s, rng, false));
                 }
-                director.endVariableChanges();
+                editor.end_batch();
             }
             else if (kind == 4)
             {
                 // A rejected move: apply, score, undo by the inverse write.
-                director.changeVariable(row, randomValue(s, rng, false));
-                director.calculateScore();
-                director.changeVariable(row, value);
+                editor.assign(row, randomValue(s, rng, false));
+                editor.score();
+                editor.assign(row, value);
             }
             else if (s.seedComplete && rng() % 4 == 0)
             {
                 // Back to the seed state.
-                director.beginVariableChanges();
+                editor.begin_batch();
                 for (int r = 0; r < n; ++r)
-                    director.changeVariable(r, s.seedValues[static_cast<std::size_t>(r)]);
-                director.endVariableChanges();
+                    editor.assign(r, s.seedValues[static_cast<std::size_t>(r)]);
+                editor.end_batch();
             }
             verify("a move");
         }
@@ -473,14 +473,14 @@ void testSuffixDecode()
     SemiconductorSchedule s = fabProblem(false).build();
     beginSearch(s);
     SemiconductorIncrementalScoreCalculator calculator;
-    optimaru::ScoreDirector<SemiconductorSchedule> director(s, calculator);
-    director.calculateScore();
+    optimaru::Editor<SemiconductorSchedule> editor(s, calculator);
+    editor.score();
     const std::int64_t full = calculator.evaluator().decodedSteps();
     // The row with the highest rank (identity ranks: the last row) is ready
     // late; moving its slot re-decodes at most the tail.
     const int last = s.rowCount() - 1;
-    director.changeVariable(last, s.valueOf(s.rankOf(s.rows[static_cast<std::size_t>(last)].value), 0));
-    director.calculateScore();
+    editor.assign(last, s.valueOf(s.rankOf(s.rows[static_cast<std::size_t>(last)].value), 0));
+    editor.score();
     const std::int64_t after = calculator.evaluator().decodedSteps();
     check(after - full < full, "a late change re-decodes fewer steps than a full decode");
 }
@@ -491,14 +491,14 @@ void testSuffixDecode()
 
 Score scoreWithAssembly(DecomposedCalculator &calculator, SemiconductorSchedule &schedule)
 {
-    calculator.resetWorkingSolution(schedule);
-    return calculator.calculateScore();
+    calculator.rebuild(schedule);
+    return calculator.score();
 }
 
 Solver::Config zeroBudget()
 {
     Solver::Config config;
-    config.spentLimit = std::chrono::milliseconds(0);
+    config.time_limit = std::chrono::milliseconds(0);
     return config;
 }
 
@@ -528,23 +528,23 @@ void testSolver()
         b.assign("L2", "X", "M2", 0, 10).assign("L1", "A", "M1", 7, 9).assign("L1", "B", "M2", 10, 12);
         SemiconductorSchedule s = b.build();
         SemiconductorSchedule copy = s;
-        const Score seedScore = ScoreCalculator::calculateScore(copy);
+        const Score seedScore = ScoreCalculator::score(copy);
         s.warmStart = true;
         Solver::Config config;
-        config.stepCountLimit = 200;
-        config.randomSeed = static_cast<std::uint64_t>(seed);
+        config.step_limit = 200;
+        config.seed = static_cast<std::uint64_t>(seed);
         Solver(config).solve(s);
         check(s.score >= seedScore, "a solve is never worse than its seed (seed " + std::to_string(seed) + ")");
     }
     {
         SemiconductorSchedule s = randomInstance(42);
         Solver::Config config;
-        config.stepCountLimit = 500;
+        config.step_limit = 500;
         config.parallelSolverCount = 4;
-        config.randomSeed = 3;
+        config.seed = 3;
         Solver(config).solve(s);
         SemiconductorSchedule rescored = s;
-        check(ScoreCalculator::calculateScore(rescored) == s.score, "parallel starts: the stored score rescored");
+        check(ScoreCalculator::score(rescored) == s.score, "parallel starts: the stored score rescored");
         check(static_cast<int>(s.assignments.size()) == s.rowCount(), "parallel starts: every row assigned");
     }
     {
@@ -556,9 +556,9 @@ void testSolver()
                 SemiconductorSchedule s = randomInstance(1000 + static_cast<std::uint64_t>(seed));
                 s.warmStart = seed % 2 == 0;
                 Solver::Config config;
-                config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
-                config.stepCountLimit = 400;
-                config.randomSeed = static_cast<std::uint64_t>(seed);
+                config.score_checks = optimaru::ScoreChecks::Full;
+                config.step_limit = 400;
+                config.seed = static_cast<std::uint64_t>(seed);
                 Solver(config).solve(s);
             }
         }
@@ -580,9 +580,9 @@ void testSolver()
             SemiconductorSchedule s = b.build();
             s.warmStart = warm;
             SemiconductorSchedule copy = s;
-            const Score before = ScoreCalculator::calculateScore(copy);
+            const Score before = ScoreCalculator::score(copy);
             Solver::Config config;
-            config.stepCountLimit = 20;
+            config.step_limit = 20;
             bool thrown = false;
             try
             {
@@ -599,12 +599,12 @@ void testSolver()
             }
             DecomposedCalculator again;
             addDefaultConstraints(again);
-            again.resetWorkingSolution(s);
+            again.rebuild(s);
             SemiconductorSchedule rescored = s;
             const std::string what = std::string(warm ? "warm" : "cold") + (plugin ? ", plugin" : "");
             check(thrown && !s.searching && !s.seedComplete && s.seedValues.empty() && s.seedAssignments.empty(),
                   "a failed solve leaves search mode (" + what + ")");
-            check(again.calculateScore() == before && ScoreCalculator::calculateScore(rescored) == before,
+            check(again.score() == before && ScoreCalculator::score(rescored) == before,
                   "after a failed solve both paths score the assignments (" + what + ")");
         }
     }
@@ -614,11 +614,11 @@ void testSolver()
         b.assign("L1", "O", "M1", 4, 7).assign("L2", "O", "M1", 7, 10);
         SemiconductorSchedule s = b.build();
         SemiconductorSchedule copy = s;
-        const Score seedScore = ScoreCalculator::calculateScore(copy);
+        const Score seedScore = ScoreCalculator::score(copy);
         s.warmStart = true;
         Solver::Config config;
-        config.stepCountLimit = 100;
-        config.randomSeed = 1;
+        config.step_limit = 100;
+        config.seed = 1;
         Solver(config).solve(s);
         check(s.score > seedScore, "the search improves a seed with idle time");
     }
@@ -662,11 +662,11 @@ void testCheckedArithmetic()
         return b.build();
     };
     SemiconductorSchedule exact = oneLot(std::int64_t{1} << 30);
-    ScoreCalculator::calculateScore(exact);
+    ScoreCalculator::score(exact);
     check(exact.totalWeightedTardiness == (std::int64_t{1} << 30) * ((std::int64_t{1} << 30) - 1),
           "a 2^60 tardiness is exact");
     SemiconductorSchedule huge = oneLot(std::int64_t{1} << 40);
-    check(throws([&] { ScoreCalculator::calculateScore(huge); }), "a tardiness beyond int64 throws (monolith)");
+    check(throws([&] { ScoreCalculator::score(huge); }), "a tardiness beyond int64 throws (monolith)");
     DecomposedCalculator calculator;
     addDefaultConstraints(calculator);
     check(throws([&] { scoreWithAssembly(calculator, huge); }), "a tardiness beyond int64 throws (plugin path)");
@@ -681,8 +681,8 @@ void testCatalog()
     int hard = 0;
     for (const auto &row : rows)
     {
-        hard += row.defaultLevel == optimaru::Level::Hard ? 1 : 0;
-        check(row.levelFlippable && !row.reward && row.isGlobal && row.defaultEnabled,
+        hard += row.default_level == optimaru::Level::Hard ? 1 : 0;
+        check(row.level_flippable && !row.reward && row.is_global && row.default_enabled,
               row.name + ": flippable, not a reward, global, enabled");
     }
     check(hard == 14, "14 hard constraints by default");

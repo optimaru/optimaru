@@ -27,14 +27,14 @@ struct ParallelGroupsCost final : MemberChangeGlobalConstraint
         : MemberChangeGlobalConstraint(
               "parallelGroupsCost", weight, kDefaultLevel)
     {
-        levelFlippable = false;  // structural: merged lessons, never split
+        level_flippable = false;  // structural: merged lessons, never split
     }
     void reset(const Timetable &table,
                const std::vector<std::vector<int>> & /*members*/) override
     {
         detail::requirePrepared(table);
     }
-    void onMemberChanged(const Timetable & /*table*/,
+    void on_member_changed(const Timetable & /*table*/,
                          int /*unit*/,
                          const std::vector<int> & /*members*/,
                          int /*entity*/,

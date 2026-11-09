@@ -1,10 +1,10 @@
 """Type stubs for `knapsack._core` — the knapsack C++ solver.
 
 The problem is the planning solution: each item's `selected` (1 = selected,
-0 = not, -1 = undecided, counted as not selected) is the single BASIC
+0 = not, -1 = undecided, counted as not selected) is the single assignment-shape
 planning variable.
 
-Score (HardSoftScore, lexicographic), at the default weights: hard =
+Score (hard/soft, lexicographic), at the default weights: hard =
 -(weight over capacity + resource overflow + unselected mandatory entries +
 selected forbidden entries + selection-group shortfall/excess + unmet item
 dependencies), soft = +(selected value), a reward. The weights are the C++
@@ -100,7 +100,7 @@ class KnapsackProblem:
         """Bulk write of the planning variable (each value -1, 0 or 1)."""
 
 def calculate_score(problem: KnapsackProblem) -> Score:
-    """Full recompute of the HardSoftScore at the default constraints (also stores
+    """Full recompute of the score at the default constraints (also stores
     problem.score). Raises ValueError on invalid facts."""
 
 def greedy_selection(problem: KnapsackProblem, fixed: list[int]) -> list[bool]:
@@ -142,7 +142,7 @@ class SolverConfig:
     swap_move_weight: float
     """A swap move trades a selected item for an unselected one."""
     descent_weight: float
-    """BASIC best-improvement descent strategy weight. 0 = off."""
+    """Assignment-shape best-improvement descent strategy weight. 0 = off."""
     nearby_probability: float
     """Bias swap partners toward items of similar weight with this
     probability. 0 = off (uniform-random)."""

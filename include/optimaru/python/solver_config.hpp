@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
-// Part of the optimaru engine, a modified derivative of Timefold Solver (Apache-2.0). See NOTICE.
+// Part of the optimaru engine; portions derive from Timefold Solver (Apache-2.0). See NOTICE.
 
 #ifndef OPTIMARU_PYTHON_SOLVER_CONFIG_HPP
 #define OPTIMARU_PYTHON_SOLVER_CONFIG_HPP
 
 // Shared rules for every package's Python SolverConfig binding.
 //
-//   secondsToMillis(s, "spent_limit_seconds")
+//   seconds_to_millis(s, "spent_limit_seconds")
 //       A time limit in seconds (spent_limit_seconds,
 //       unimproved_spent_limit_seconds, ...) must be finite and >= 0, and at
 //       most kMaxTimeLimitSeconds (1e9 s, about 31.7 years), else
@@ -17,7 +17,7 @@
 //       packages refused a negative limit. 0 is a valid limit (construction
 //       only).
 //
-//   bindConfigCopy(py::class_<Config>(m, "SolverConfig", ...))
+//   bind_config_copy(py::class_<Config>(m, "SolverConfig", ...))
 //       SolverConfig.__copy__ / __deepcopy__ (the C++ copy, on_new_best
 //       included), so a package's solve(config=cfg, ...) can apply its
 //       keyword overrides to a copy and leave the caller's config alone.
@@ -40,7 +40,7 @@ namespace python {
 // and is still far beyond any real budget.
 inline constexpr double kMaxTimeLimitSeconds = 1e9;
 
-inline std::chrono::milliseconds secondsToMillis(double seconds, const char* name) {
+inline std::chrono::milliseconds seconds_to_millis(double seconds, const char* name) {
     const auto shown = [seconds] {
         return pybind11::repr(pybind11::float_(seconds)).cast<std::string>();
     };
@@ -58,7 +58,7 @@ inline std::chrono::milliseconds secondsToMillis(double seconds, const char* nam
 }
 
 template <typename Class>
-Class& bindConfigCopy(Class& cls) {
+Class& bind_config_copy(Class& cls) {
     using Config = typename Class::type;
     cls.def("__copy__", [](const Config& config) { return Config(config); });
     cls.def(
@@ -68,8 +68,8 @@ Class& bindConfigCopy(Class& cls) {
 }
 
 template <typename Class>
-Class bindConfigCopy(Class&& cls) {
-    bindConfigCopy(cls);
+Class bind_config_copy(Class&& cls) {
+    bind_config_copy(cls);
     return std::move(cls);
 }
 

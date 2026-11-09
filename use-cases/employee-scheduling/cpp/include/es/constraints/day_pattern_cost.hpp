@@ -87,18 +87,18 @@ struct DayPatternCost final : EsUnitConstraint {
             start = comma + 1;
         }
     }
-    const char* sharedContextKey() const override { return "es.day-pattern-projection.v1"; }
-    std::unique_ptr<optimaru::SharedConstraintContext> createSharedContext() const override {
+    const char* shared_context_key() const override { return "es.day-pattern-projection.v1"; }
+    std::unique_ptr<optimaru::SharedConstraintContext> create_shared_context() const override {
         return std::make_unique<DayPatternProjectionContext>();
     }
-    void bindSharedContext(optimaru::SharedConstraintContext& context) override {
+    void bind_shared_context(optimaru::SharedConstraintContext& context) override {
         auto* typed = dynamic_cast<DayPatternProjectionContext*>(&context);
         if (typed == nullptr) throw std::logic_error("Invalid DayPatternCost shared context type");
         context_ = typed;
         contextIsShared_ = true;
     }
-    void onReset(const EmployeeSchedule& s) override {
-        if (!contextIsShared_) localContext_.beginReset();
+    void on_reset(const EmployeeSchedule& s) override {
+        if (!contextIsShared_) localContext_.begin_reset();
         context_->prepare(s);
         tokenCode_.resize(tokens_.size());
         notCode_.assign(tokens_.size(), DayPatternProjectionContext::NEVER);

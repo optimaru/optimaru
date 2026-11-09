@@ -38,13 +38,13 @@ struct OperatorCleaningConflictCost final : FpGlobalConstraint
 
     void
     reset(const PackagingSchedule &schedule,
-          const std::vector<std::vector<int>> & /*membersPerUnit*/) override
+          const std::vector<std::vector<int>> & /*members_per_unit*/) override
     {
         detail::requirePrepared(schedule);
         schedule_ = &schedule;
         dirty_ = true;
     }
-    void onUnitChanged(const PackagingSchedule &schedule,
+    void on_unit_changed(const PackagingSchedule &schedule,
                        int /*unit*/,
                        const std::vector<int> & /*members*/) override
     {
@@ -87,8 +87,8 @@ struct OperatorCleaningConflictCost final : FpGlobalConstraint
             {
                 if (lineOf_[b] < 0)
                     continue;
-                if (schedule.lines[lineOf_[a]].operatorIndex
-                    != schedule.lines[lineOf_[b]].operatorIndex)
+                if (schedule.lines[lineOf_[a]].operator_index
+                    != schedule.lines[lineOf_[b]].operator_index)
                     continue;
                 const Minutes start
                     = std::max(startCleaning_[a], startCleaning_[b]);

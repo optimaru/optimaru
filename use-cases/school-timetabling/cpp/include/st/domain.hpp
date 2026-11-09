@@ -6,8 +6,8 @@
 #include <string>
 #include <vector>
 
-#include "optimaru/api/domain/solution_descriptor.hpp"
-#include "optimaru/api/score/buildin/hard_soft_score.hpp"
+#include "optimaru/model/solution_traits.hpp"
+#include "optimaru/score/score.hpp"
 
 namespace st
 {
@@ -18,7 +18,7 @@ namespace st
 // The score type comes from the generic engine (include/optimaru/). All seven school
 // timetabling constraints count whole lesson pairs / lessons, so both levels
 // stay integral (soft is stored in the engine's double field).
-using Score = optimaru::HardSoftScore;
+using Score = optimaru::Score;
 
 // ---------------------------------------------------------------------------
 // Timeslot  (problem fact)
@@ -94,7 +94,7 @@ struct Timetable
     Score score;
 
     // Set once by ScoreCalculator::prepare; guards against re-interning the
-    // teacher/group ids on every calculateScore call.
+    // teacher/group ids on every score call.
     bool prepared = false;
 
     // Filled by ScoreCalculator::prepare:
@@ -122,28 +122,28 @@ struct Timetable
 }  // namespace st
 
 // ---------------------------------------------------------------------------
-// SolutionDescriptor specialization  (the @PlanningEntity/@PlanningVariable
+// SolutionTraits specialization  (the @PlanningEntity/@PlanningVariable
 // annotations of the C++ engine): entities are lessons, the planning variable
 // is Lesson::slotRoom, the value range is the (timeslot x room) grid.
 // ---------------------------------------------------------------------------
-template <> struct optimaru::SolutionDescriptor<st::Timetable>
+template <> struct optimaru::SolutionTraits<st::Timetable>
 {
-    static constexpr optimaru::VariableKind kind
-        = optimaru::VariableKind::BASIC;
-    static int entityCount(const st::Timetable &t)
+    static constexpr optimaru::Shape shape
+        = optimaru::Shape::Assignment;
+    static int entity_count(const st::Timetable &t)
     {
         return static_cast<int>(t.lessons.size());
     }
-    static int valueCount(const st::Timetable &t) { return t.slotRoomCount(); }
-    static int getVariable(const st::Timetable &t, int lessonIndex)
+    static int value_count(const st::Timetable &t) { return t.slotRoomCount(); }
+    static int value_of(const st::Timetable &t, int lessonIndex)
     {
         return t.lessons[lessonIndex].slotRoom;
     }
-    static void setVariable(st::Timetable &t, int lessonIndex, int slotRoom)
+    static void assign(st::Timetable &t, int lessonIndex, int slotRoom)
     {
         t.lessons[lessonIndex].slotRoom = slotRoom;
     }
-    static bool isPinned(const st::Timetable &t, int lessonIndex)
+    static bool is_pinned(const st::Timetable &t, int lessonIndex)
     {
         return t.lessons[lessonIndex].pinned;
     }

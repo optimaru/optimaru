@@ -33,15 +33,15 @@ struct UnassignedLessonsCost final : MemberChangeGlobalConstraint
     {
     }
     void reset(const Timetable &table,
-               const std::vector<std::vector<int>> &membersPerUnit) override
+               const std::vector<std::vector<int>> &members_per_unit) override
     {
         detail::requirePrepared(table);
         lessonCount_ = static_cast<std::int64_t>(table.lessons.size());
         assigned_ = 0;
-        for (const std::vector<int> &members : membersPerUnit)
+        for (const std::vector<int> &members : members_per_unit)
             assigned_ += static_cast<std::int64_t>(members.size());
     }
-    void onMemberChanged(const Timetable & /*table*/,
+    void on_member_changed(const Timetable & /*table*/,
                          int /*unit*/,
                          const std::vector<int> & /*members*/,
                          int /*entity*/,

@@ -1,15 +1,15 @@
 // Plugin-assembly (fl/constraints.hpp) tests, engine test/ style: check() + a
 // non-zero exit on any failure.
-//   (a) the default assembly on the engine's DecomposedScoreCalculator
+//   (a) the default assembly on the engine's DecomposedObjective
 //       reproduces the monolithic score bit-for-bit on 500 random
 //       assignments (including unassigned consumers)
 //   (b) incremental score == full recompute across 3000 random moves driven
-//       through the engine's ScoreDirector protocol (plugin path)
+//       through the engine's Editor protocol (plugin path)
 //   (c) partial assemblies: removing one component removes exactly that term
 //   (d) weight / level overrides: capacity demoted to soft, setup weight
 //       doubled, exponent shaping
-//   (e) constraintTotals() explains exactly the reported score
-//   (f) a 2-second solve(problem, calculator) under FULL_ASSERT
+//   (e) constraint_totals() explains exactly the reported score
+//   (f) a 2-second solve(problem, calculator) under ScoreChecks::Full
 //   (g) the defaultConstraints() builder: named edits == by-hand assembly
 //   (h) each component's raw cost, hand-calculated: a positive and a zero
 //       case per constraint (raw 0 = no violation)
@@ -19,7 +19,7 @@
 //       repeat (distance + 0.5 x distance^2), threshold and literal offsets
 //       by hand (an unused facility counts in literal mode), the literal
 //       formula refused on hard at reset and kept on soft, incremental == a
-//       fresh recompute over a random walk and a FULL_ASSERT solve with
+//       fresh recompute over a random walk and a ScoreChecks::Full solve with
 //       repeated, shifted components
 #include <algorithm>
 #include <cmath>
@@ -36,7 +36,7 @@
 #include "fl/domain.hpp"
 #include "fl/score_calculator.hpp"
 #include "fl/solver.hpp"
-#include "optimaru/api/score/director/score_director.hpp"
+#include "optimaru/model/editor.hpp"
 
 using namespace fl;
 
@@ -99,8 +99,8 @@ FacilityLocationProblem buildRandomInstance(int facilityCount,
 Score scoreWith(DecomposedCalculator &calculator,
                 FacilityLocationProblem &problem)
 {
-    calculator.resetWorkingSolution(problem);
-    return calculator.calculateScore();
+    calculator.rebuild(problem);
+    return calculator.score();
 }
 
 // -------------------------------------------------------------------------
@@ -135,15 +135,15 @@ void verifyAssemblyParity()
                       : static_cast<int>(rng() % p.facilityCount());
         }
         const Score plugin = scoreWith(calculator, p);
-        const Score monolithic = ScoreCalculator::calculateScore(p);
+        const Score monolithic = ScoreCalculator::score(p);
         if (!sameScore(plugin, monolithic))
         {
             if (++mismatches <= 3)
             {
                 std::printf("  MISMATCH @round %d: plugin=%s monolithic=%s\n",
                             round,
-                            plugin.toString().c_str(),
-                            monolithic.toString().c_str());
+                            plugin.str().c_str(),
+                            monolithic.str().c_str());
             }
         }
     }
@@ -154,7 +154,7 @@ void verifyAssemblyParity()
 
 // -------------------------------------------------------------------------
 // (b) Incremental score == full recompute across a random walk of change and
-// swap moves, driven through the ScoreDirector so the plugin path's
+// swap moves, driven through the Editor so the plugin path's
 // before/set/after hook contract is exercised exactly like in the engine.
 // -------------------------------------------------------------------------
 void verifyIncremental()
@@ -169,12 +169,12 @@ void verifyIncremental()
 
     DecomposedCalculator calculator;
     addDefaultConstraints(calculator);
-    optimaru::ScoreDirector<FacilityLocationProblem> director(p, calculator);
+    optimaru::Editor<FacilityLocationProblem> editor(p, calculator);
     FacilityLocationProblem shadow = p;
 
     std::mt19937_64 rng(123);
     const int consumerCount = p.consumerCount();
-    const int valueCount = p.facilityCount();
+    const int value_count = p.facilityCount();
     std::uniform_real_distribution<double> unit(0.0, 1.0);
 
     int mismatches = 0;
@@ -186,8 +186,8 @@ void verifyIncremental()
             const int consumer = static_cast<int>(rng() % consumerCount);
             const int value = (unit(rng) < 0.10)
                                   ? -1
-                                  : static_cast<int>(rng() % valueCount);
-            director.changeVariable(consumer, value);
+                                  : static_cast<int>(rng() % value_count);
+            editor.assign(consumer, value);
         }
         else
         {
@@ -195,21 +195,21 @@ void verifyIncremental()
             const int b = static_cast<int>(rng() % consumerCount);
             const int va = p.consumers[a].facility;
             const int vb = p.consumers[b].facility;
-            director.changeVariable(a, vb);
-            director.changeVariable(b, va);
+            editor.assign(a, vb);
+            editor.assign(b, va);
         }
         for (int i = 0; i < consumerCount; ++i)
             shadow.consumers[i].facility = p.consumers[i].facility;
-        const Score full = ScoreCalculator::calculateScore(shadow);
-        const Score incremental = director.calculateScore();
+        const Score full = ScoreCalculator::score(shadow);
+        const Score incremental = editor.score();
         if (!sameScore(full, incremental))
         {
             if (++mismatches <= 3)
             {
                 std::printf("  MISMATCH @step %d: incremental=%s full=%s\n",
                             step,
-                            incremental.toString().c_str(),
-                            full.toString().c_str());
+                            incremental.str().c_str(),
+                            full.str().c_str());
             }
         }
     }
@@ -331,7 +331,7 @@ void verifyOverrides()
 }
 
 // -------------------------------------------------------------------------
-// (e) constraintTotals(): the per-constraint breakdown adds up to the score
+// (e) constraint_totals(): the per-constraint breakdown adds up to the score
 // the same assembly reports.
 // -------------------------------------------------------------------------
 void verifyConstraintTotals()
@@ -353,20 +353,20 @@ void verifyConstraintTotals()
 
     double hard = 0.0;
     double soft = 0.0;
-    for (const optimaru::ConstraintTotal &total : calculator.constraintTotals())
+    for (const optimaru::ConstraintTotal &total : calculator.constraint_totals())
     {
-        (total.isHard ? hard : soft) += total.cost;
+        (total.is_hard ? hard : soft) += total.cost;
     }
     check(std::fabs(-hard - static_cast<double>(score.hard)) < 1e-9
               && std::fabs(-soft - score.soft) < 1e-9,
           "per-constraint totals sum to the reported score");
-    check(calculator.constraintTotals().size() == 3,
+    check(calculator.constraint_totals().size() == 3,
           "one total per assembled component");
     std::printf("\n");
 }
 
 // -------------------------------------------------------------------------
-// (f) FULL_ASSERT solve on the plugin path: the engine cross-checks the
+// (f) ScoreChecks::Full solve on the plugin path: the engine cross-checks the
 // incremental score against a full reset + recompute after every move.
 // -------------------------------------------------------------------------
 void verifyFullAssertSolve()
@@ -379,9 +379,9 @@ void verifyFullAssertSolve()
                                                     /*slack*/ 2);
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(2);
-    config.randomSeed = 3;
-    config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+    config.time_limit = std::chrono::seconds(2);
+    config.seed = 3;
+    config.score_checks = optimaru::ScoreChecks::Full;
     config.ruinRecreateUnimprovedStepTrigger = 200;
     config.ruinRecreatePolishSteps = 100;
 
@@ -394,7 +394,7 @@ void verifyFullAssertSolve()
         Solver solver(config);
         solver.solve(p, calculator);
     }
-    catch (const optimaru::ScoreCorruptionError &e)
+    catch (const optimaru::ScoreMismatchError &e)
     {
         corrupted = true;
         std::printf("  ScoreCorruptionError: %s\n", e.what());
@@ -402,7 +402,7 @@ void verifyFullAssertSolve()
     check(!corrupted, "2s FULL_ASSERT plugin solve without score corruption");
     if (!corrupted)
     {
-        const Score recomputed = ScoreCalculator::calculateScore(p);
+        const Score recomputed = ScoreCalculator::score(p);
         check(sameScore(p.score, recomputed),
               "plugin-reported score == monolithic full recompute");
         check(p.score.hard == 0, "plugin solve reaches 0hard");
@@ -451,7 +451,7 @@ void verifyAssemblyBuilder()
     // The default assembly, untouched, still matches the monolith.
     DecomposedCalculator plain;
     defaultConstraints().into(plain);
-    check(sameScore(scoreWith(plain, p), ScoreCalculator::calculateScore(p)),
+    check(sameScore(scoreWith(plain, p), ScoreCalculator::score(p)),
           "defaultConstraints() alone == the monolithic score");
 
     // A typo must not quietly leave the cost function as it was.
@@ -479,7 +479,7 @@ void verifyAssemblyBuilder()
 // -------------------------------------------------------------------------
 // (h) Each component's raw cost on hand-built instances: one violating
 // (positive) case and one clean (zero) case per constraint, read through
-// constraintCosts() — the raw per-unit numbers before weight and level.
+// constraint_costs() — the raw per-unit numbers before weight and level.
 // Degree offsets are binary-exact (0.25 deg = 27750 m, see fl_test).
 // -------------------------------------------------------------------------
 std::vector<double> rawCosts(FacilityLocationProblem &problem,
@@ -488,12 +488,12 @@ std::vector<double> rawCosts(FacilityLocationProblem &problem,
     ScoreCalculator::prepare(problem);
     DecomposedCalculator calculator;
     addDefaultConstraints(calculator);
-    calculator.resetWorkingSolution(problem);
-    calculator.calculateScore();
-    for (const auto &entry : calculator.constraintCosts())
+    calculator.rebuild(problem);
+    calculator.score();
+    for (const auto &entry : calculator.constraint_costs())
     {
         if (entry.name == name)
-            return entry.unitCosts;
+            return entry.unit_costs;
     }
     return {};
 }
@@ -611,11 +611,11 @@ bool rowIs(const optimaru::ConstraintInfo &row,
            optimaru::Level level,
            double weight)
 {
-    return row.name == name && row.defaultLevel == Component::kDefaultLevel
-           && row.defaultWeight == Component::kDefaultWeight
-           && row.defaultLevel == level && row.defaultWeight == weight
-           && row.levelFlippable && !row.reward && !row.isGlobal
-           && row.defaultEnabled;
+    return row.name == name && row.default_level == Component::kDefaultLevel
+           && row.default_weight == Component::kDefaultWeight
+           && row.default_level == level && row.default_weight == weight
+           && row.level_flippable && !row.reward && !row.is_global
+           && row.default_enabled;
 }
 
 void verifyCatalog()
@@ -650,7 +650,7 @@ void verifyCatalog()
 // -------------------------------------------------------------------------
 // (j) Repeated components and offsets. A repeat is a fresh copy of a
 // default component (another defaultConstraints(), the one name kept, its
-// knobs re-stated) appended with addInstances(), as the Python bindings
+// knobs re-stated) appended with add_instances(), as the Python bindings
 // build it from a pick list.
 // -------------------------------------------------------------------------
 ConstraintAssembly copyOf(const std::string &name)
@@ -677,22 +677,22 @@ ConstraintAssembly repeatedAssembly()
 {
     ConstraintAssembly assembly = defaultConstraints();
     assembly.offset("facilitySetupCost", 30000.0);
-    assembly.addInstances(std::move(copyOf("distanceFromFacilityCost")
+    assembly.add_instances(std::move(copyOf("distanceFromFacilityCost")
                                         .weight("distanceFromFacilityCost", 0.001)
                                         .exponent("distanceFromFacilityCost", 2.0)
                                         .offset("distanceFromFacilityCost", 4000.0)
                                         .clip("distanceFromFacilityCost", false)));
     // The literal capacity copy sits on soft: hard refuses the literal
     // formula with an offset (hard 0 must mean no violation).
-    assembly.addInstances(std::move(copyOf("facilityCapacityCost")
+    assembly.add_instances(std::move(copyOf("facilityCapacityCost")
                                         .soft("facilityCapacityCost")
                                         .weight("facilityCapacityCost", 2.0)
                                         .offset("facilityCapacityCost", 1.0)
                                         .clip("facilityCapacityCost", false)));
-    assembly.addInstances(std::move(copyOf("facilityCapacityCost")
+    assembly.add_instances(std::move(copyOf("facilityCapacityCost")
                                         .weight("facilityCapacityCost", 2.0)
                                         .offset("facilityCapacityCost", 1.0)));
-    assembly.addInstances(std::move(copyOf("facilitySetupCost")
+    assembly.add_instances(std::move(copyOf("facilitySetupCost")
                                         .weight("facilitySetupCost", 0.25)
                                         .offset("facilitySetupCost", -1000.0)));
     return assembly;
@@ -704,7 +704,7 @@ void verifyRepeatsAndOffsets()
     {
         FacilityLocationProblem p = repeatInstance();
         ConstraintAssembly assembly = copyOf("distanceFromFacilityCost");
-        assembly.addInstances(std::move(copyOf("distanceFromFacilityCost")
+        assembly.add_instances(std::move(copyOf("distanceFromFacilityCost")
                                             .weight("distanceFromFacilityCost", 0.5)
                                             .exponent("distanceFromFacilityCost", 2.0)));
         DecomposedCalculator calculator;
@@ -712,10 +712,10 @@ void verifyRepeatsAndOffsets()
         const Score score = scoreWith(calculator, p);
         check(score.hard == 0 && score.soft == -(6.0 * 27750 + 0.5 * 27750.0 * 27750.0),
               "distance x 6 + 0.5 x distance^2: -(166500 + 385031250) soft");
-        const auto entries = calculator.constraintCosts();
-        check(entries.size() == 2 && entries[0].unitCosts == entries[1].unitCosts
+        const auto entries = calculator.constraint_costs();
+        check(entries.size() == 2 && entries[0].unit_costs == entries[1].unit_costs
                   && entries[1].weight == 0.5 && entries[1].exponent == 2.0
-                  && entries[1].defaultWeight == 6.0,
+                  && entries[1].default_weight == 6.0,
               "two instances, the same raw costs, each with its own knobs");
     }
     {
@@ -804,7 +804,7 @@ void verifyRepeatsAndOffsets()
         ScoreCalculator::prepare(p);
         DecomposedCalculator calculator;
         repeatedAssembly().into(calculator);
-        optimaru::ScoreDirector<FacilityLocationProblem> director(p, calculator);
+        optimaru::Editor<FacilityLocationProblem> editor(p, calculator);
         std::mt19937_64 rng(321);
         std::uniform_real_distribution<double> unit(0.0, 1.0);
         int mismatches = 0;
@@ -814,17 +814,17 @@ void verifyRepeatsAndOffsets()
         {
             const int consumer = static_cast<int>(rng() % p.consumerCount());
             const int value = unit(rng) < 0.1 ? -1 : static_cast<int>(rng() % p.facilityCount());
-            director.changeVariable(consumer, value);
+            editor.assign(consumer, value);
             FacilityLocationProblem shadow = p;
             DecomposedCalculator fresh;
             repeatedAssembly().into(fresh);
             const Score full = scoreWith(fresh, shadow);
-            const Score incremental = director.calculateScore();
+            const Score incremental = editor.score();
             drift = std::max(drift, std::fabs(full.soft - incremental.soft));
-            // The engine's FULL_ASSERT rule (scoresAgree): hard exact, soft
+            // The engine's ScoreChecks::Full rule (scores_agree): hard exact, soft
             // within 1e-6. The fractional weights (0.001 x distance^2,
             // 0.25 x setup) leave a few ulps of accumulation drift.
-            if (!optimaru::scoresAgree(incremental, full))
+            if (!optimaru::scores_agree(incremental, full))
                 ++mismatches;
         }
         std::printf("    largest soft drift %.3g\n", drift);
@@ -835,9 +835,9 @@ void verifyRepeatsAndOffsets()
     {
         FacilityLocationProblem p = buildRandomInstance(6, 20, 11, 15, 2);
         Solver::Config config;
-        config.spentLimit = std::chrono::seconds(2);
-        config.randomSeed = 5;
-        config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+        config.time_limit = std::chrono::seconds(2);
+        config.seed = 5;
+        config.score_checks = optimaru::ScoreChecks::Full;
         DecomposedCalculator calculator;
         repeatedAssembly().into(calculator);
         bool corrupted = false;
@@ -846,7 +846,7 @@ void verifyRepeatsAndOffsets()
             Solver solver(config);
             solver.solve(p, calculator);
         }
-        catch (const optimaru::ScoreCorruptionError &e)
+        catch (const optimaru::ScoreMismatchError &e)
         {
             corrupted = true;
             std::printf("  ScoreCorruptionError: %s\n", e.what());

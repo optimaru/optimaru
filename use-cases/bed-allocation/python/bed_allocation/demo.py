@@ -1,10 +1,9 @@
-"""Python reproduction of the Java quickstart `DemoDataGenerator`.
+"""The demo instance, modelled on the quickstart's demo data.
 
 Builds a demo instance of the same scale and distributions: 1 department (3 specialties),
 10 SAME_GENDER rooms (capacity 8x1 + 1x2 + 1x3 = 13 beds), 28 nights, ~75 sequential
 stays per room timeline (gender 50/50, age buckets, preferred capacity, required/preferred
-equipment distributions). Java's java.util.Random stream is not reproduced — distributions
-and scale are the reference.
+equipment distributions), drawn from a seeded ``random.Random``.
 """
 
 import random
@@ -17,7 +16,7 @@ __all__ = ["generate_demo_data"]
 SPECIALTIES = ("Specialty1", "Specialty2", "Specialty3")
 EQUIPMENT_TYPES = ("telemetry", "television", "oxygen", "nitrogen")
 
-# Fixed reference date for reproducibility (Java uses the first Monday of the current month).
+# Fixed reference date, so the instance does not depend on today's date.
 BASE_DATE = date(2026, 8, 3)
 
 

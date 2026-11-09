@@ -33,24 +33,24 @@ int main(int argc, char **argv)
 
     plan.rebuildUnassignedPool();
     std::printf("  initial (all unassigned): %s\n",
-                ScoreCalculator::calculateScore(plan).toString().c_str());
+                ScoreCalculator::score(plan).str().c_str());
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(seconds);
-    config.randomSeed = 2;
+    config.time_limit = std::chrono::seconds(seconds);
+    config.seed = 2;
     config.pairMoves = pairMoves;
     config.pairRuin = pairMoves;
-    config.onNewBest = [](std::int64_t step, const Score &s)
+    config.on_new_best = [](std::int64_t step, const Score &s)
     {
         std::printf("    new best @step %-8lld %s\n",
                     static_cast<long long>(step),
-                    s.toString().c_str());
+                    s.str().c_str());
     };
     Solver(config).solve(plan);
 
     std::printf("  final score: %s  (feasible=%s)\n",
-                plan.score.toString().c_str(),
-                plan.score.isFeasible() ? "true" : "false");
+                plan.score.str().c_str(),
+                plan.score.feasible() ? "true" : "false");
     for (const Vehicle &vehicle : plan.vehicles)
     {
         std::printf("    vehicle %s (cap %d): %zu stops\n",

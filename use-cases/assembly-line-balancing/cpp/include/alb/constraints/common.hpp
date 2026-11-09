@@ -6,8 +6,8 @@
 
 #include "alb/domain.hpp"
 #include "alb/score_calculator.hpp"
-#include "optimaru/api/score/calculator/constraint_assembly.hpp"
-#include "optimaru/api/score/calculator/decomposed_score_calculator.hpp"
+#include "optimaru/score/constraint_assembly.hpp"
+#include "optimaru/score/decomposed_objective.hpp"
 
 namespace alb
 {
@@ -16,7 +16,7 @@ namespace alb
 // Plugin-style constraint components
 // ---------------------------------------------------------------------------
 // The ten assembly-line-balancing constraints, one small component each on the
-// engine's DecomposedScoreCalculator — the assembly path NEXT TO the
+// engine's DecomposedObjective — the assembly path NEXT TO the
 // monolithic AssemblyLineBalancingIncrementalScoreCalculator, which stays the
 // tuned default fast path.
 //
@@ -30,7 +30,7 @@ namespace alb
 //     below) are UnitConstraints: the exponent shapes each station's raw cost.
 //   - The cross-station costs (taskPrecedenceCost, sameStationGroupsCost,
 //     usedStationsCost, workloadImbalanceCost) are GlobalConstraints on the
-//     onMemberChanged fast path: the exponent shapes their single total.
+//     on_member_changed fast path: the exponent shapes their single total.
 //
 //   DecomposedCalculator calc;
 //   defaultConstraints()                         // the whole default set
@@ -52,7 +52,7 @@ namespace alb
 // constants, which is why the default assembly scores bit-for-bit like them.
 //
 // Registry names are the struct names with a lower-case first letter
-// ("stationCapacityCost"); Python sees them through pythonName()
+// ("stationCapacityCost"); Python sees them through python_name()
 // ("station_capacity_cost").
 //
 // Cost sign convention (see decomposed_score_calculator.hpp): positive =
@@ -68,7 +68,7 @@ namespace alb
 // planning variables and the member lists agree at every call.
 
 using DecomposedCalculator
-    = optimaru::DecomposedScoreCalculator<AssemblyLineBalancingProblem>;
+    = optimaru::DecomposedObjective<AssemblyLineBalancingProblem>;
 using ConstraintAssembly
     = optimaru::ConstraintAssembly<AssemblyLineBalancingProblem>;
 using AlbUnitConstraint
@@ -108,7 +108,7 @@ struct PerTaskConstraint : AlbUnitConstraint
                             int station,
                             int task) const = 0;
 
-    void onReset(const AssemblyLineBalancingProblem &problem) override
+    void on_reset(const AssemblyLineBalancingProblem &problem) override
     {
         detail::requirePrepared(problem);
     }
@@ -121,8 +121,8 @@ struct PerTaskConstraint : AlbUnitConstraint
             total += taskCost(problem, unit, task);
         return total;
     }
-    bool supportsDelta() const override { return true; }
-    double deltaCost(const AssemblyLineBalancingProblem &problem,
+    bool supports_delta() const override { return true; }
+    double delta_cost(const AssemblyLineBalancingProblem &problem,
                      int unit,
                      const std::vector<int> & /*members*/,
                      int entity) const override
@@ -136,13 +136,13 @@ struct PerTaskConstraint : AlbUnitConstraint
 // ---------------------------------------------------------------------------
 // Shared base of the four globals: all of them run on the member-change fast
 // path (every join / leave is delivered directly, also inside a batch), so
-// onUnitChanged is unreachable.
+// on_unit_changed is unreachable.
 struct MemberChangeGlobalConstraint : AlbGlobalConstraint
 {
     using AlbGlobalConstraint::AlbGlobalConstraint;
 
-    bool supportsMemberChange() const override { return true; }
-    void onUnitChanged(const AssemblyLineBalancingProblem & /*problem*/,
+    bool supports_member_change() const override { return true; }
+    void on_unit_changed(const AssemblyLineBalancingProblem & /*problem*/,
                        int /*unit*/,
                        const std::vector<int> & /*members*/) override
     {

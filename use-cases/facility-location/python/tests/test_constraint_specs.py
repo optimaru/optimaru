@@ -643,7 +643,7 @@ def _random_instance(seed, facilities=6, consumers=24):
     ids=["repeat", "repeat-and-offsets"],
 )
 def test_full_assert_solves_with_repeats_and_offsets(picks):
-    """FULL_ASSERT re-checks the incremental score against a full recompute after every move."""
+    """ScoreChecks::Full re-checks the incremental score against a full recompute after every move."""
     problem = _random_instance(5)
     config = fl.SolverConfig()
     config.full_assert = True

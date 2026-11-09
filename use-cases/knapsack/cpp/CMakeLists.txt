@@ -29,14 +29,14 @@ target_link_libraries(ks_demo PRIVATE ks_core)
 target_compile_options(ks_demo PRIVATE -Wall -Wextra)
 
 # Monolithic path: per-constraint hand checks, the greedy construction,
-# incremental == full recompute on random moves, FULL_ASSERT and brute-force
+# incremental == full recompute on random moves, ScoreChecks::Full and brute-force
 # solves.
 add_executable(ks_test test/ks_test.cpp)
 target_link_libraries(ks_test PRIVATE ks_core)
 target_compile_options(ks_test PRIVATE -Wall -Wextra)
 
 # Plugin-assembly path (ks/constraints.hpp): the same score decomposed into
-# one component per constraint on the engine's DecomposedScoreCalculator,
+# one component per constraint on the engine's DecomposedObjective,
 # checked bit-for-bit against the monolithic calculators.
 add_executable(ks_plugin_test test/ks_plugin_test.cpp)
 target_link_libraries(ks_plugin_test PRIVATE ks_core)

@@ -31,12 +31,12 @@ static_assert(kDistanceWeight
 
 }  // namespace
 
-void OrderPickingIncrementalScoreCalculator::resetWorkingSolution(
-    OrderPickingSolution &workingSolution)
+void OrderPickingIncrementalScoreCalculator::rebuild(
+    OrderPickingSolution &solution)
 {
-    solution_ = &workingSolution;
-    trolleyCount_ = static_cast<int>(workingSolution.trolleys.size());
-    orderCount_ = static_cast<int>(workingSolution.orders.size());
+    solution_ = &solution;
+    trolleyCount_ = static_cast<int>(solution.trolleys.size());
+    orderCount_ = static_cast<int>(solution.orders.size());
 
     volume_.assign(static_cast<std::size_t>(orderCount_) * trolleyCount_, 0);
     count_.assign(static_cast<std::size_t>(orderCount_) * trolleyCount_, 0);
@@ -52,9 +52,9 @@ void OrderPickingIncrementalScoreCalculator::resetWorkingSolution(
 
     for (int t = 0; t < trolleyCount_; ++t)
     {
-        for (int pickIndex : workingSolution.trolleys[t].pickTaskIndices)
+        for (int pickIndex : solution.trolleys[t].pickTaskIndices)
         {
-            const PickTask &task = workingSolution.pickTasks[pickIndex];
+            const PickTask &task = solution.pickTasks[pickIndex];
             volume_[cell(task.orderIndex, t)] += task.volume;
             if (count_[cell(task.orderIndex, t)]++ == 0)
             {
@@ -62,7 +62,7 @@ void OrderPickingIncrementalScoreCalculator::resetWorkingSolution(
                 ++splitTotal_;
             }
         }
-        const Trolley &trolley = workingSolution.trolleys[t];
+        const Trolley &trolley = solution.trolleys[t];
         const std::int64_t required = requiredBuckets(t);
         required_[t] = required;
         shortage_[t] = required > trolley.bucketCount
@@ -74,7 +74,7 @@ void OrderPickingIncrementalScoreCalculator::resetWorkingSolution(
     }
 }
 
-void OrderPickingIncrementalScoreCalculator::beforeListChanged(int listIndex)
+void OrderPickingIncrementalScoreCalculator::before_list_edit(int listIndex)
 {
     // Retract the trolley's whole contribution against its OLD contents.
     shortageTotal_ -= shortage_[listIndex];
@@ -91,7 +91,7 @@ void OrderPickingIncrementalScoreCalculator::beforeListChanged(int listIndex)
     }
 }
 
-void OrderPickingIncrementalScoreCalculator::afterListChanged(int listIndex)
+void OrderPickingIncrementalScoreCalculator::after_list_edit(int listIndex)
 {
     // Insert the trolley's contribution from its NEW contents.
     for (int pickIndex : solution_->trolleys[listIndex].pickTaskIndices)
@@ -114,7 +114,7 @@ void OrderPickingIncrementalScoreCalculator::afterListChanged(int listIndex)
     distTotal_ += dist_[listIndex];
 }
 
-Score OrderPickingIncrementalScoreCalculator::calculateScore()
+Score OrderPickingIncrementalScoreCalculator::score()
 {
     return {-kCapacityWeight * shortageTotal_,
             static_cast<double>(

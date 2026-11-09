@@ -188,7 +188,7 @@ def test_repack_moves_close_the_bins_colours_and_conflicts_keep_open():
 
 @pytest.mark.parametrize("shaped", [False, True])
 def test_full_assert_solve_with_the_macro_moves(shaped):
-    """FULL_ASSERT re-checks the incremental score after every move, RepackMove and
+    """ScoreChecks::Full re-checks the incremental score after every move, RepackMove and
     EmptyBinMove included, on the default calculator and on a re-weighted assembly."""
     problem = coloured_instance(seed=7, count=40)
     picks = (

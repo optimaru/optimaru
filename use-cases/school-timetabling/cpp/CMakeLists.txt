@@ -49,7 +49,7 @@ target_compile_options(canonical_test PRIVATE -Wall -Wextra)
 
 # Plugin-assembly path (st/canonical_constraints.hpp): the same hard and
 # soft constraints decomposed into one component each on the engine's
-# DecomposedScoreCalculator, checked bit-for-bit against the monolithic
+# DecomposedObjective, checked bit-for-bit against the monolithic
 # calculators.
 add_executable(canonical_plugin_test test/canonical_plugin_test.cpp)
 target_link_libraries(canonical_plugin_test PRIVATE st_canon)

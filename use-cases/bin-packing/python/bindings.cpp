@@ -55,7 +55,7 @@ PYBIND11_MODULE(_core, m)
              py::arg("soft") = 0.0)
         .def_readonly("hard", &Score::hard)
         .def_readonly("soft", &Score::soft)
-        .def("is_feasible", &Score::isFeasible)
+        .def("is_feasible", &Score::feasible)
         // Lexicographic (hard first), the engine's own ordering.
         .def(py::self == py::self)
         .def("__ne__", [](const Score &a, const Score &b) { return !(a == b); })
@@ -65,8 +65,8 @@ PYBIND11_MODULE(_core, m)
         .def(py::self >= py::self)
         .def("__hash__",
              [](const Score &s) { return py::hash(py::make_tuple(s.hard, s.soft)); })
-        .def("__str__", &Score::toString)
-        .def("__repr__", [](const Score &s) { return "<Score " + s.toString() + ">"; });
+        .def("__str__", &Score::str)
+        .def("__repr__", [](const Score &s) { return "<Score " + s.str() + ">"; });
 
     py::class_<Item>(m, "Item", py::module_local())
         .def(py::init(
@@ -154,7 +154,7 @@ PYBIND11_MODULE(_core, m)
             },
             py::arg("assignment"));
 
-    // Full recompute of the HardSoftScore (also stores problem.score).
+    // Full recompute of the Score (also stores problem.score).
     // constraints=None scores the default set (the monolithic calculator,
     // which knows the default picks only); a list scores exactly those picks
     // on the assembly path (see bin_packing.constraints), a name picked
@@ -164,33 +164,33 @@ PYBIND11_MODULE(_core, m)
         [](BinPackingProblem &problem, const py::object &constraints)
         {
             if (constraints.is_none())
-                return ScoreCalculator::calculateScore(problem);
+                return ScoreCalculator::score(problem);
             ScoreCalculator::prepare(problem);
             DecomposedCalculator calculator;
-            tfpy::applyConstraints([] { return defaultConstraints(); }, constraints).into(calculator);
-            calculator.resetWorkingSolution(problem);
-            problem.score = calculator.calculateScore();
+            tfpy::apply_constraints([] { return defaultConstraints(); }, constraints).into(calculator);
+            calculator.rebuild(problem);
+            problem.score = calculator.score();
             return problem.score;
         },
         py::arg("problem"),
         py::arg("constraints") = py::none(),
-        "Full recompute of the HardSoftScore (also stores problem.score).");
+        "Full recompute of the score (also stores problem.score).");
 
-    optimaru::python::bindConfigCopy(py::class_<Solver::Config>(m, "SolverConfig", py::module_local()))
+    optimaru::python::bind_config_copy(py::class_<Solver::Config>(m, "SolverConfig", py::module_local()))
         .def(py::init<>())
         .def_property(
             "spent_limit_seconds",
-            [](const Solver::Config &c) { return std::chrono::duration<double>(c.spentLimit).count(); },
+            [](const Solver::Config &c) { return std::chrono::duration<double>(c.time_limit).count(); },
             [](Solver::Config &c, double s)
-            { c.spentLimit = optimaru::python::secondsToMillis(s, "spent_limit_seconds"); })
+            { c.time_limit = optimaru::python::seconds_to_millis(s, "spent_limit_seconds"); })
         .def_property(
             "unimproved_spent_limit_seconds",
-            [](const Solver::Config &c) { return std::chrono::duration<double>(c.unimprovedSpentLimit).count(); },
+            [](const Solver::Config &c) { return std::chrono::duration<double>(c.stall_time_limit).count(); },
             [](Solver::Config &c, double s)
-            { c.unimprovedSpentLimit = optimaru::python::secondsToMillis(s, "unimproved_spent_limit_seconds"); })
-        .def_readwrite("step_count_limit", &Solver::Config::stepCountLimit)
-        .def_readwrite("unimproved_step_count_limit", &Solver::Config::unimprovedStepCountLimit)
-        .def_readwrite("random_seed", &Solver::Config::randomSeed)
+            { c.stall_time_limit = optimaru::python::seconds_to_millis(s, "unimproved_spent_limit_seconds"); })
+        .def_readwrite("step_count_limit", &Solver::Config::step_limit)
+        .def_readwrite("unimproved_step_count_limit", &Solver::Config::stall_step_limit)
+        .def_readwrite("random_seed", &Solver::Config::seed)
         .def_property(
             "parallel_solver_count",
             [](const Solver::Config &c) { return c.parallelSolverCount; },
@@ -204,24 +204,24 @@ PYBIND11_MODULE(_core, m)
         // (clamp(8 * items, 400, 3200)).
         .def_property(
             "late_acceptance_size",
-            [](const Solver::Config &c) { return c.lateAcceptanceSize; },
+            [](const Solver::Config &c) { return c.history_length; },
             [](Solver::Config &c, std::int64_t size)
             {
                 if (size < 0)
                     throw py::value_error("late_acceptance_size must be >= 0 (0 = auto)");
-                c.lateAcceptanceSize = static_cast<std::size_t>(size);
+                c.history_length = static_cast<std::size_t>(size);
             })
-        // FULL_ASSERT re-verifies the incremental score against a full
+        // ScoreChecks::Full re-verifies the incremental score against a full
         // recompute after every move (debugging aid; much slower).
         .def_property(
             "full_assert",
-            [](const Solver::Config &c) { return c.environmentMode == optimaru::EnvironmentMode::FULL_ASSERT; },
+            [](const Solver::Config &c) { return c.score_checks == optimaru::ScoreChecks::Full; },
             [](Solver::Config &c, bool on)
             {
-                c.environmentMode
-                    = on ? optimaru::EnvironmentMode::FULL_ASSERT : optimaru::EnvironmentMode::NON_ASSERT;
+                c.score_checks
+                    = on ? optimaru::ScoreChecks::Full : optimaru::ScoreChecks::Off;
             })
-        .def_readwrite("ruin_recreate", &Solver::Config::ruinRecreate)
+        .def_readwrite("ruin_recreate", &Solver::Config::ruin_recreate)
         .def_readwrite("ruin_recreate_unimproved_step_trigger", &Solver::Config::ruinRecreateUnimprovedStepTrigger)
         .def_readwrite("ruin_recreate_min_ruin_fraction", &Solver::Config::ruinRecreateMinRuinFraction)
         .def_readwrite("ruin_recreate_max_ruin_fraction", &Solver::Config::ruinRecreateMaxRuinFraction)
@@ -238,19 +238,19 @@ PYBIND11_MODULE(_core, m)
             })
         .def_readwrite("ruin_recreate_polish_steps", &Solver::Config::ruinRecreatePolishSteps)
         // Destroy-and-repair as an ordinary acceptor-judged move (engine
-        // ruinRecreate.asMoveWeight). 0 disables it.
+        // ruin_recreate.as_move_weight). 0 disables it.
         .def_readwrite("ruin_recreate_as_move_weight", &Solver::Config::ruinRecreateAsMoveWeight)
         .def_readwrite("ruin_recreate_as_move_max_ruin", &Solver::Config::ruinRecreateAsMoveMaxRuin)
-        .def_readwrite("change_move_weight", &Solver::Config::changeMoveWeight)
-        .def_readwrite("swap_move_weight", &Solver::Config::swapMoveWeight)
+        .def_readwrite("change_move_weight", &Solver::Config::change_weight)
+        .def_readwrite("swap_move_weight", &Solver::Config::swap_weight)
         // Guided change-move targets: the bin of a random other item (a bin
         // in use). probability 0 = off (uniform over all n bins).
         .def_readwrite("value_recommender_probability", &Solver::Config::valueRecommenderProbability)
         // BASIC best-improvement descent strategy weight. 0 = off.
-        .def_readwrite("descent_weight", &Solver::Config::descentWeight)
+        .def_readwrite("descent_weight", &Solver::Config::descent_weight)
         // Gate on how often a step may draw a macro move (EmptyBinMove,
         // RepackMove). 1 = engine default (unrestricted).
-        .def_readwrite("custom_move_probability", &Solver::Config::customMoveProbability)
+        .def_readwrite("custom_move_probability", &Solver::Config::custom_move_probability)
         // EmptyBinMove: the domain macro move that empties one light bin in a
         // single step (see cpp/include/bp/moves.hpp).
         .def_readwrite("empty_bin_moves", &Solver::Config::emptyBinMoves)
@@ -280,13 +280,13 @@ PYBIND11_MODULE(_core, m)
         // stops at the first feasible solution.
         .def_property(
             "best_score_limit",
-            [](const Solver::Config &c) { return py::make_tuple(c.bestScoreLimit.hard, c.bestScoreLimit.soft); },
+            [](const Solver::Config &c) { return py::make_tuple(c.target_score.hard, c.target_score.soft); },
             [](Solver::Config &c, std::pair<std::int64_t, double> hs)
-            { c.bestScoreLimit = Score{hs.first, hs.second}; })
+            { c.target_score = Score{hs.first, hs.second}; })
         // Callback fired on every new best solution: on_new_best(step, score).
         // The pybind11 wrapper re-acquires the GIL, so it is safe from the
         // parallel workers too.
-        .def_readwrite("on_new_best", &Solver::Config::onNewBest);
+        .def_readwrite("on_new_best", &Solver::Config::on_new_best);
 
     py::class_<Solver>(m, "Solver", py::module_local())
         .def(py::init<>())
@@ -307,7 +307,7 @@ PYBIND11_MODULE(_core, m)
             [](Solver &solver, BinPackingProblem &problem, const py::object &constraints)
             {
                 DecomposedCalculator calculator;
-                tfpy::applyConstraints([] { return defaultConstraints(); }, constraints).into(calculator);
+                tfpy::apply_constraints([] { return defaultConstraints(); }, constraints).into(calculator);
                 py::gil_scoped_release release;
                 solver.solve(problem, calculator);
             },
@@ -318,7 +318,7 @@ PYBIND11_MODULE(_core, m)
     // bin_packing.constraints.score() turns into a score. Scoring once is
     // enough: re-pricing any assembly is pure Python arithmetic on these.
     // None = the default assembly; a pick list scores exactly those picks
-    // (applyConstraints), each entry carrying its pick's knobs, the k-th pick
+    // (apply_constraints), each entry carrying its pick's knobs, the k-th pick
     // of a name keyed "<name>#<k>".
     m.def(
         "constraint_costs",
@@ -326,8 +326,8 @@ PYBIND11_MODULE(_core, m)
         {
             ScoreCalculator::prepare(problem);
             DecomposedCalculator calculator;
-            tfpy::applyConstraints([] { return defaultConstraints(); }, constraints).into(calculator);
-            return tfpy::constraintCosts(calculator, problem);
+            tfpy::apply_constraints([] { return defaultConstraints(); }, constraints).into(calculator);
+            return tfpy::constraint_costs(calculator, problem);
         },
         py::arg("problem"),
         py::arg("constraints") = py::none(),
@@ -336,12 +336,12 @@ PYBIND11_MODULE(_core, m)
     // The constraint names this domain scores, in default-assembly order.
     m.def(
         "list_constraints",
-        [] { return tfpy::constraintNames(defaultConstraints()); },
+        [] { return tfpy::constraint_names(defaultConstraints()); },
         "Constraint names available to bin_packing.constraints.");
 
     // The constraint catalog, read off the same default assembly:
     // constraint_info() -> [ConstraintInfo(name, default_level,
     // default_weight, level_flippable, reward, default_enabled), ...] in
     // list_constraints() order. The defaults live in the C++ components only.
-    tfpy::bindConstraintInfo(m, [] { return defaultConstraints(); });
+    tfpy::bind_constraint_info(m, [] { return defaultConstraints(); });
 }

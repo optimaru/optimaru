@@ -9,7 +9,7 @@ def test_demo_data_shape():
     assert schedule.timeslot_count() == 6
     assert schedule.room_count() == 5
     assert len(schedule.speakers) == 12
-    # Reproduces the java.util.Random(0) draws: S01's theme/content tags are deterministic.
+    # The tag draws are seeded: S01's theme/content tags are deterministic.
     assert schedule.talks[0].theme_track_tags[0] in ("Optimization", "AI", "Cloud")
     codes = [t.code for t in schedule.talks]
     assert codes[0] == "S01" and codes[-1] == "S15"

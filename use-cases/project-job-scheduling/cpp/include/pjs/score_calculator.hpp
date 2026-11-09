@@ -8,8 +8,8 @@ namespace pjs
 
 // Port of the reference ProjectJobSchedulingConstraintProvider.
 //
-// calculateScore does a full recompute — the reference the incremental
-// calculator is checked against (in the tests and under FULL_ASSERT).
+// score does a full recompute — the reference the incremental
+// calculator is checked against (in the tests and under ScoreChecks::Full).
 //
 // Constraints (HardMediumSoftScore, all penalties), at the components'
 // kDefaultWeight (1 each; the medium weight is in medium units):
@@ -48,20 +48,20 @@ class ScoreCalculator
 public:
     // Full recompute; also refreshes every allocation's derived dates and
     // stores schedule.score.
-    static Score calculateScore(ProjectJobSchedule &schedule);
+    static Score score(ProjectJobSchedule &schedule);
 
     // The same recompute in the engine's score type (see toEngineScore).
-    static optimaru::HardSoftScore
+    static optimaru::Score
     calculateEngineScore(ProjectJobSchedule &schedule)
     {
-        return toEngineScore(calculateScore(schedule));
+        return toEngineScore(score(schedule));
     }
 
     // Validates the instance (indices in range, every job has at least one
     // execution mode, precedence graph acyclic — throws
     // std::invalid_argument otherwise), computes maxModeCount, the successor
     // lists and a topological order. Idempotent (guarded by
-    // ProjectJobSchedule::prepared). Must run before scoring; calculateScore
+    // ProjectJobSchedule::prepared). Must run before scoring; score
     // and Solver::solve call it.
     static void prepare(ProjectJobSchedule &schedule);
 

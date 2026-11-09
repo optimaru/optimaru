@@ -8,8 +8,8 @@
 
 #include "st/incremental_calculator.hpp"
 #include "st/score_calculator.hpp"
-#include "optimaru/api/solver/solver_factory.hpp"
-#include "optimaru/config/solver/solver_config.hpp"
+#include "optimaru/solver.hpp"
+#include "optimaru/settings.hpp"
 
 namespace st
 {
@@ -19,7 +19,7 @@ void Solver::solve(Timetable &table)
     ScoreCalculator::prepare(table);  // intern ids / build slot adjacency
     if (table.lessons.empty() || table.slotRoomCount() == 0)
     {
-        ScoreCalculator::calculateScore(table);
+        ScoreCalculator::score(table);
         return;
     }
     if (config_.ruinRecreateRewards.size() != 4)
@@ -28,50 +28,50 @@ void Solver::solve(Timetable &table)
             "ruinRecreateRewards must contain exactly 4 values");
     }
 
-    optimaru::SolverConfig engineConfig;
-    engineConfig.randomSeed = config_.randomSeed;
-    engineConfig.environmentMode = config_.environmentMode;
-    engineConfig.multiStartCount = std::max(1, config_.parallelSolverCount);
-    engineConfig.onNewBest = config_.onNewBest;
-    engineConfig.termination.spentLimit = config_.spentLimit;
-    engineConfig.termination.bestScoreLimit = config_.bestScoreLimit;
-    engineConfig.termination.unimprovedSpentLimit
-        = config_.unimprovedSpentLimit;
-    engineConfig.termination.stepCountLimit = config_.stepCountLimit;
-    engineConfig.termination.unimprovedStepCountLimit
-        = config_.unimprovedStepCountLimit;
-    // lateAcceptanceSize 0 = auto-scale with the instance (see Config).
-    engineConfig.localSearch.acceptor.lateAcceptanceSize
-        = config_.lateAcceptanceSize != 0
-              ? config_.lateAcceptanceSize
+    optimaru::Settings engineConfig;
+    engineConfig.seed = config_.seed;
+    engineConfig.score_checks = config_.score_checks;
+    engineConfig.parallel_starts = std::max(1, config_.parallelSolverCount);
+    engineConfig.on_new_best = config_.on_new_best;
+    engineConfig.limits.time_limit = config_.time_limit;
+    engineConfig.limits.target_score = config_.target_score;
+    engineConfig.limits.stall_time_limit
+        = config_.stall_time_limit;
+    engineConfig.limits.step_limit = config_.step_limit;
+    engineConfig.limits.stall_step_limit
+        = config_.stall_step_limit;
+    // history_length 0 = auto-scale with the instance (see Config).
+    engineConfig.search.acceptance.history_length
+        = config_.history_length != 0
+              ? config_.history_length
               : std::clamp<std::size_t>(8 * table.lessons.size(), 400, 3200);
-    engineConfig.localSearch.moveSelector.changeMoveWeight
-        = config_.changeMoveWeight;
-    engineConfig.localSearch.moveSelector.swapMoveWeight
-        = config_.swapMoveWeight;
-    auto &lns = engineConfig.localSearch.ruinRecreate;
-    lns.enabled = config_.ruinRecreate;
-    lns.unimprovedStepTrigger = config_.ruinRecreateUnimprovedStepTrigger;
-    lns.minRuinFraction = config_.ruinRecreateMinRuinFraction;
-    lns.maxRuinFraction = config_.ruinRecreateMaxRuinFraction;
-    lns.maxRuinCount = config_.ruinRecreateMaxRuinCount;
-    lns.operatorDecay = config_.ruinRecreateOperatorDecay;
+    engineConfig.search.moves.change_weight
+        = config_.change_weight;
+    engineConfig.search.moves.swap_weight
+        = config_.swap_weight;
+    auto &lns = engineConfig.search.ruin_recreate;
+    lns.enabled = config_.ruin_recreate;
+    lns.unimproved_step_trigger = config_.ruinRecreateUnimprovedStepTrigger;
+    lns.min_ruin_fraction = config_.ruinRecreateMinRuinFraction;
+    lns.max_ruin_fraction = config_.ruinRecreateMaxRuinFraction;
+    lns.max_ruin_count = config_.ruinRecreateMaxRuinCount;
+    lns.operator_decay = config_.ruinRecreateOperatorDecay;
     lns.rewards = config_.ruinRecreateRewards;
-    lns.polishSteps = config_.ruinRecreatePolishSteps;
+    lns.polish_steps = config_.ruinRecreatePolishSteps;
     // AUTO as-move weight (negative sentinel): budget-share 0.2 inside the
     // measured [900, 1300]-cell pay-off window, off outside it (see Config).
     if (config_.ruinRecreateAsMoveWeight < 0.0)
     {
         const int cells = table.slotRoomCount();
-        lns.asMoveWeight = (cells >= 900 && cells <= 1300) ? 0.2 / cells : 0.0;
+        lns.as_move_weight = (cells >= 900 && cells <= 1300) ? 0.2 / cells : 0.0;
     }
     else
     {
-        lns.asMoveWeight = config_.ruinRecreateAsMoveWeight;
+        lns.as_move_weight = config_.ruinRecreateAsMoveWeight;
     }
-    lns.asMoveMaxRuin = config_.ruinRecreateAsMoveMaxRuin;
-    engineConfig.localSearch.descentWeight = config_.descentWeight;
-    engineConfig.localSearch.descentMaxSweeps = config_.descentMaxSweeps;
+    lns.as_move_max_ruin = config_.ruinRecreateAsMoveMaxRuin;
+    engineConfig.search.descent_weight = config_.descent_weight;
+    engineConfig.search.descent_max_sweeps = config_.descent_max_sweeps;
 
     // Same-group nearby neighborhoods (see Config::sameGroupNearby): the
     // groupId is interned by prepare().
@@ -87,11 +87,11 @@ void Solver::solve(Timetable &table)
         }
         const std::size_t maxGroupSize
             = *std::max_element(groupSize.begin(), groupSize.end());
-        engineConfig.localSearch.nearby.distanceMeter = [groupOf](int a, int b)
+        engineConfig.search.nearby.distance = [groupOf](int a, int b)
         { return (*groupOf)[a] == (*groupOf)[b] ? 0.0 : 1.0; };
-        engineConfig.localSearch.nearby.size
+        engineConfig.search.nearby.size
             = std::max(1, static_cast<int>(maxGroupSize) - 1);
-        engineConfig.localSearch.nearby.probability
+        engineConfig.search.nearby.probability
             = config_.sameGroupNearbyProbability;
     }
 
@@ -101,9 +101,8 @@ void Solver::solve(Timetable &table)
     // nearby meter above is a pure read of the classOf table, so it is safe
     // across the multi-start threads.
     auto engine
-        = optimaru::SolverFactory<Timetable>::create(std::move(engineConfig))
-              .buildSolver();
-    engine.solveMultiStart(
+        = optimaru::Solver<Timetable>(std::move(engineConfig));
+    engine.solve_multistart(
         table,
         []
         {
@@ -112,7 +111,7 @@ void Solver::solve(Timetable &table)
         });
 
     // The authoritative final score: a full recompute on the best solution.
-    table.score = ScoreCalculator::calculateScore(table);
+    table.score = ScoreCalculator::score(table);
 }
 
 }  // namespace st

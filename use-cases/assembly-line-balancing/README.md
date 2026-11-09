@@ -8,9 +8,9 @@ the standard SALBP-1 formulation (Scholl 1999; Otto, Otto & Scholl 2013).
 [`benchmarks/assembly-line-balancing/cpsat`](../../benchmarks/assembly-line-balancing/cpsat)
 holds the exact CP-SAT reference.
 
-## Domain (BASIC variable)
+## Domain (assignment shape)
 
-- `Task.station` — the only planning variable: a station index (0-based), `-1` =
+- `Task.station` — the only decision variable: a station index (0-based), `-1` =
   unassigned. Stations are not bounded above by the facts: a solve freezes the
   value range at `max(task count, 1 + max station)` after its construction
   (`problem.station_count`; CP-SAT searches `0..n-1`).
@@ -23,7 +23,7 @@ holds the exact CP-SAT reference.
 - `warm_start` — start from the stations on the tasks (tasks at `-1` go through the
   construction); a plain solve ignores input stations. Every solve resets it.
 
-## Constraints (HardSoftScore — the engine score type as-is, no mapping)
+## Constraints (Score — the engine score type as-is, no mapping)
 
 | Constraint (Python name) | C++ component | Default level | Default weight | Raw cost (0 = no violation) | Unit |
 |---|---|---|---|---|---|
@@ -133,7 +133,7 @@ integral offsets.
 
 ## cpp/
 
-- `include/alb/domain.hpp` — domain + `optimaru::SolutionDescriptor` specialization
+- `include/alb/domain.hpp` — domain + `optimaru::SolutionTraits` specialization
 - `include/alb/constraints/` — one component per constraint: `station_capacity_cost.hpp`,
   `task_precedence_cost.hpp`, `max_stations_cost.hpp`, `task_station_bounds_cost.hpp`,
   `fixed_task_stations_cost.hpp`, `forbidden_task_stations_cost.hpp`,
@@ -158,7 +158,7 @@ ctest --test-dir build/assembly-line-balancing --output-on-failure --no-tests=er
 
 `alb_test`: per-constraint hand checks (positive and zero), the construction cases,
 incremental == full recompute over random change / swap / unassign / batch moves,
-FULL_ASSERT solves, determinism and multi-start. `alb_plugin_test`: default assembly ==
+ScoreChecks::Full solves, determinism and multi-start. `alb_plugin_test`: default assembly ==
 monolith (score and every raw total), plugin incremental == reset, partial assemblies,
 overrides, raw costs by hand per station, the catalog.
 
@@ -223,15 +223,15 @@ print({task.id: task.station for task in warm.tasks}, warm.stations_used)
 ## Extending
 
 Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-use-case).
-The planning variable is **BASIC**; the domain solver that configures the engine is
+The solution has the **assignment** shape; the domain solver that configures the engine is
 `cpp/include/alb/solver.hpp` + `cpp/src/solver.cpp`.
 
 **Adding a move.** The engine already mixes change / swap moves (weights in
 `Solver::Config`). `CloseStationMove` (empties a station by moving its tasks, in
 topological order, into their precedence windows) is defined and registered in
 `cpp/src/solver.cpp` (`runEngine`) — use it as the template. A new move is an
-`optimaru::MoveOperator<…>` registered with `engine.addMoveOperator(...)`; a ruin for
-LNS is a `RuinOperator` registered with `engine.addRuinOperator(...)`.
+`optimaru::MoveOperator<…>` registered with `engine.add_move_operator(...)`; a ruin for
+LNS is a `RuinOperator` registered with `engine.add_ruin_operator(...)`.
 
 **Changing the construction heuristic.** `cpp/src/construction.cpp` places every task
 before the engine starts (the engine only fills what is still unassigned). It is the

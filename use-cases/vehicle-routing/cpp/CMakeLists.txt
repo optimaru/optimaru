@@ -37,8 +37,8 @@ target_link_libraries(vrp_test PRIVATE vrp_core)
 target_compile_options(vrp_test PRIVATE -Wall -Wextra)
 
 # Plugin-assembly path (vrp/constraints.hpp): the same provider decomposed
-# into one component each on the engine's DecomposedScoreCalculator, checked
-# bit-for-bit against ScoreCalculator::calculateScore.
+# into one component each on the engine's DecomposedObjective, checked
+# bit-for-bit against ScoreCalculator::score.
 add_executable(vrp_plugin_test test/vrp_plugin_test.cpp)
 target_link_libraries(vrp_plugin_test PRIVATE vrp_core)
 target_compile_options(vrp_plugin_test PRIVATE -Wall -Wextra)

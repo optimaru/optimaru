@@ -32,7 +32,7 @@ def instances() -> dict[str, Callable[[], Any]]:
 
 
 def describe(problem: Any) -> str:
-    return "Java quickstart demo (24 meetings)"
+    return "demo (24 meetings)"
 
 
 def solve_engine(problem: Any, seconds: float, seed: int) -> None:

@@ -2,9 +2,9 @@
 
 The pybind11 package of the max-cut use case (`../cpp`). Splits the vertices of a
 weighted graph into two sides — the side of each vertex (0 or 1) is the only
-planning variable; a vertex in `fixed_partition` is pinned.
+decision variable; a vertex in `fixed_partition` is pinned.
 
-Score (HardSoftScore), at the default weights:
+Score, at the default weights:
 
 - hard = -(fixed vertices off their side + split same-side pairs + different-side
   pairs left together + side-size shortfall/excess) — four constraints, hard x1 each

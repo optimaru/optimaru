@@ -28,7 +28,7 @@ struct TeamUnavailabilityCost final : TsUnitConstraint
         : TsUnitConstraint("teamUnavailabilityCost", weight, kDefaultLevel)
     {
     }
-    void onReset(const TournamentSchedule &schedule) override
+    void on_reset(const TournamentSchedule &schedule) override
     {
         // Per team: the days it is unavailable on, WITH duplicates — one
         // entry per fact, which is what the per-fact count means.
@@ -47,7 +47,7 @@ struct TeamUnavailabilityCost final : TsUnitConstraint
         }
         occupied_.assign(schedule.dayCount(), 0);
     }
-    const std::vector<int> *scopedUnits() const override { return &scoped_; }
+    const std::vector<int> *scoped_units() const override { return &scoped_; }
     double cost(const TournamentSchedule &schedule,
                 int unit,
                 const std::vector<int> &members) const override

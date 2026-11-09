@@ -28,32 +28,32 @@ template <typename Component> constexpr std::int64_t hardWeight()
 
 }  // namespace
 
-void CanonicalIncrementalScoreCalculator::resetWorkingSolution(
-    Timetable &workingSolution)
+void CanonicalIncrementalScoreCalculator::rebuild(
+    Timetable &solution)
 {
-    ScoreCalculator::prepare(workingSolution);
-    table_ = &workingSolution;
-    slotCount_ = workingSolution.slotCount();
-    dayCount_ = workingSolution.dayCount;
+    ScoreCalculator::prepare(solution);
+    table_ = &solution;
+    slotCount_ = solution.slotCount();
+    dayCount_ = solution.dayCount;
 
     classSlotCnt_.assign(
-        static_cast<std::size_t>(workingSolution.classCount) * slotCount_, 0);
+        static_cast<std::size_t>(solution.classCount) * slotCount_, 0);
     teacherSlotCnt_.assign(
-        static_cast<std::size_t>(workingSolution.teacherCount) * slotCount_, 0);
+        static_cast<std::size_t>(solution.teacherCount) * slotCount_, 0);
     roomDemandCnt_.assign(
-        static_cast<std::size_t>(workingSolution.roomTypeCount) * slotCount_,
+        static_cast<std::size_t>(solution.roomTypeCount) * slotCount_,
         0);
     courseDayCnt_.assign(
-        static_cast<std::size_t>(workingSolution.courseCount) * dayCount_, 0);
+        static_cast<std::size_t>(solution.courseCount) * dayCount_, 0);
     teacherDayMask_.assign(
-        static_cast<std::size_t>(workingSolution.teacherCount) * dayCount_, 0);
+        static_cast<std::size_t>(solution.teacherCount) * dayCount_, 0);
     classDayMask_.assign(
-        static_cast<std::size_t>(workingSolution.classCount) * dayCount_, 0);
-    teacherWeekCnt_.assign(workingSolution.teacherCount, 0);
-    blockViol_.assign(workingSolution.blockGroupCount, 0);
+        static_cast<std::size_t>(solution.classCount) * dayCount_, 0);
+    teacherWeekCnt_.assign(solution.teacherCount, 0);
+    blockViol_.assign(solution.blockGroupCount, 0);
 
     const int lessonCountForMaps
-        = static_cast<int>(workingSolution.lessons.size());
+        = static_cast<int>(solution.lessons.size());
     hotClassCells_.reset(classSlotCnt_.size());
     hotTeacherCells_.reset(teacherSlotCnt_.size());
     hotNotAllowed_.reset(lessonCountForMaps);
@@ -62,18 +62,18 @@ void CanonicalIncrementalScoreCalculator::resetWorkingSolution(
     hotBlocks_.reset(blockViol_.size());
     hotTeacherDays_.reset(teacherDayMask_.size());
     hotTeachersWeek_.reset(teacherWeekCnt_.size());
-    lessonsOfClass_.assign(workingSolution.classCount, {});
-    lessonsOfTeacher_.assign(workingSolution.teacherCount, {});
-    lessonsOfCourse_.assign(workingSolution.courseCount, {});
-    lessonsOfRoomType_.assign(workingSolution.roomTypeCount, {});
+    lessonsOfClass_.assign(solution.classCount, {});
+    lessonsOfTeacher_.assign(solution.teacherCount, {});
+    lessonsOfCourse_.assign(solution.courseCount, {});
+    lessonsOfRoomType_.assign(solution.roomTypeCount, {});
     for (int i = 0; i < lessonCountForMaps; ++i)
     {
-        const Lesson &lesson = workingSolution.lessons[i];
+        const Lesson &lesson = solution.lessons[i];
         lessonsOfClass_[lesson.classGroupId].push_back(i);
         for (int t : lesson.teachers)
             lessonsOfTeacher_[t].push_back(i);
         lessonsOfCourse_[lesson.courseKey].push_back(i);
-        for (int type = 0; type < workingSolution.roomTypeCount; ++type)
+        for (int type = 0; type < solution.roomTypeCount; ++type)
         {
             if (lesson.roomTypeDemand[type] > 0)
                 lessonsOfRoomType_[type].push_back(i);
@@ -96,12 +96,12 @@ void CanonicalIncrementalScoreCalculator::resetWorkingSolution(
     avoided_ = 0;
     nonPreferred_ = 0;
 
-    const int lessonCount = static_cast<int>(workingSolution.lessons.size());
+    const int lessonCount = static_cast<int>(solution.lessons.size());
     unassigned_ = lessonCount;
     assign_.assign(lessonCount, -1);
     for (int i = 0; i < lessonCount; ++i)
     {
-        const int slot = workingSolution.lessons[i].slot;
+        const int slot = solution.lessons[i].slot;
         if (slot >= 0)
         {
             assign_[i] = slot;
@@ -361,7 +361,7 @@ void CanonicalIncrementalScoreCalculator::retract(int lessonIndex, int slot)
         refreshBlock(lesson.blockGroup);
 }
 
-void CanonicalIncrementalScoreCalculator::beforeVariableChanged(int lessonIndex)
+void CanonicalIncrementalScoreCalculator::before_assign(int lessonIndex)
 {
     const int old = assign_[lessonIndex];
     assign_[lessonIndex] = -1;
@@ -369,7 +369,7 @@ void CanonicalIncrementalScoreCalculator::beforeVariableChanged(int lessonIndex)
         retract(lessonIndex, old);  // unassigned: nothing to retract
 }
 
-void CanonicalIncrementalScoreCalculator::afterVariableChanged(int lessonIndex)
+void CanonicalIncrementalScoreCalculator::after_assign(int lessonIndex)
 {
     const int now = table_->lessons[lessonIndex].slot;  // the new value
     assign_[lessonIndex] = now;
@@ -544,9 +544,9 @@ bool CanonicalIncrementalScoreCalculator::hotSetsConsistent() const
     return true;
 }
 
-Score CanonicalIncrementalScoreCalculator::calculateScore()
+Score CanonicalIncrementalScoreCalculator::score()
 {
-    // The same arithmetic as Breakdown::hardTotal / softPenalty, so FULL_ASSERT
+    // The same arithmetic as Breakdown::hardTotal / softPenalty, so ScoreChecks::Full
     // and the tests compare bit for bit. fixedSlotsCost / parallelGroupsCost
     // are 0 by construction and carry no term.
     const std::int64_t hard

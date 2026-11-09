@@ -3,8 +3,8 @@
 //   (a) every constraint verified against hand-computed scores (the Java
 //       TournamentScheduleConstraintProviderTest scenarios and more)
 //   (b) incremental score == full recompute across a long random walk driven
-//       through the engine's ScoreDirector protocol (before/set/after)
-//   (c) a small instance solved under EnvironmentMode::FULL_ASSERT
+//       through the engine's Editor protocol (before/set/after)
+//   (c) a small instance solved under ScoreChecks::ScoreChecks::Full
 //   (d) pinned assignments keep their team through a solve
 //   (e) the loaded-team-count macro move reaches an optimum that no
 //       change/swap move can reach
@@ -15,7 +15,7 @@
 #include <string>
 #include <vector>
 
-#include "optimaru/api/score/director/score_director.hpp"
+#include "optimaru/model/editor.hpp"
 #include "ts/domain.hpp"
 #include "ts/incremental_calculator.hpp"
 #include "ts/score_calculator.hpp"
@@ -45,7 +45,7 @@ void checkScore(const std::string &label,
     std::printf("  [%s] %-44s got=%s expected=%ldhard/%gsoft\n",
                 ok ? "PASS" : "FAIL",
                 label.c_str(),
-                actual.toString().c_str(),
+                actual.str().c_str(),
                 expectedHard,
                 expectedSoft);
     if (!ok)
@@ -108,7 +108,7 @@ void verifyConstraints()
         addAssignment(s, 1, 1);
         addAssignment(s, 2, 1);
         checkScore("teamConflictCost (Java test)",
-                   ScoreCalculator::calculateScore(s),
+                   ScoreCalculator::score(s),
                    -3,
                    -707107.0);
     }
@@ -124,7 +124,7 @@ void verifyConstraints()
         s.unavailabilityPenalties.push_back({0, 0});
         s.unavailabilityPenalties.push_back({1, 1});
         checkScore("teamUnavailabilityCost (Java test)",
-                   ScoreCalculator::calculateScore(s),
+                   ScoreCalculator::score(s),
                    -3,
                    -1414210.0);
     }
@@ -134,7 +134,7 @@ void verifyConstraints()
         addAssignment(s, 0, 0);
         s.unavailabilityPenalties.push_back({2, 0});
         checkScore("teamUnavailabilityCost miss",
-                   ScoreCalculator::calculateScore(s),
+                   ScoreCalculator::score(s),
                    0,
                    0.0);
     }
@@ -145,7 +145,7 @@ void verifyConstraints()
         s.unavailabilityPenalties.push_back({0, 0});
         s.unavailabilityPenalties.push_back({0, 0});
         checkScore("teamUnavailabilityCost duplicate facts",
-                   ScoreCalculator::calculateScore(s),
+                   ScoreCalculator::score(s),
                    -2,
                    0.0);
     }
@@ -157,14 +157,14 @@ void verifyConstraints()
         addAssignment(s, 1, 1);
         addAssignment(s, 2, 2);
         checkScore("assignmentCountImbalanceCost fair",
-                   ScoreCalculator::calculateScore(s),
+                   ScoreCalculator::score(s),
                    0,
                    0.0);
         // T2 twice while everyone else once: loads {1, 1, 2} -> 0.816497.
         // Confrontations: only (T0, T2) on D0, a single loaded pair -> 0.
         addAssignment(s, 0, 2);
         checkScore("assignmentCountImbalanceCost unfair",
-                   ScoreCalculator::calculateScore(s),
+                   ScoreCalculator::score(s),
                    0,
                    -816497.0);
     }
@@ -176,7 +176,7 @@ void verifyConstraints()
         addAssignment(s, 0, 1);
         addAssignment(s, 0, 2);
         checkScore("confrontationCountImbalanceCost even",
-                   ScoreCalculator::calculateScore(s),
+                   ScoreCalculator::score(s),
                    0,
                    0.0);
         // + T2 again on D0: confrontations (0,1)=1 (0,2)=2 (1,2)=2 ->
@@ -184,7 +184,7 @@ void verifyConstraints()
         // hard.
         addAssignment(s, 0, 2);
         checkScore("confrontationCountImbalanceCost uneven",
-                   ScoreCalculator::calculateScore(s),
+                   ScoreCalculator::score(s),
                    -1,
                    -816497.816497);
     }
@@ -198,7 +198,7 @@ void verifyConstraints()
         addAssignment(s, 0, 0);
         addAssignment(s, 0, 1);
         checkScore("confrontation multiplicity",
-                   ScoreCalculator::calculateScore(s),
+                   ScoreCalculator::score(s),
                    -1,
                    -707107.0);
     }
@@ -209,7 +209,7 @@ void verifyConstraints()
         addAssignment(s, 0, -1);
         addAssignment(s, 0, 1);
         checkScore("unassigned contributes nothing",
-                   ScoreCalculator::calculateScore(s),
+                   ScoreCalculator::score(s),
                    0,
                    0.0);
     }
@@ -220,7 +220,7 @@ void verifyConstraints()
         s.teamAssignments.back().pinned = true;
         addAssignment(s, 0, 0);
         checkScore("pinned assignment still scored",
-                   ScoreCalculator::calculateScore(s),
+                   ScoreCalculator::score(s),
                    -1,
                    0.0);
     }
@@ -266,7 +266,7 @@ buildRandomInstance(int teamCount, int dayCount, int perDay, std::uint64_t seed)
 
 // -------------------------------------------------------------------------
 // (b) Incremental score == full recompute across a random walk of change and
-// swap moves (including unassignments), driven through the ScoreDirector so
+// swap moves (including unassignments), driven through the Editor so
 // the before/set/after hook contract is exercised exactly like in the
 // engine.
 // -------------------------------------------------------------------------
@@ -279,12 +279,12 @@ void verifyIncremental()
                                                /*seed*/ 7);
 
     TournamentSchedulingIncrementalScoreCalculator calc;
-    optimaru::ScoreDirector<TournamentSchedule> director(s, calc);
+    optimaru::Editor<TournamentSchedule> editor(s, calc);
     TournamentSchedule shadow = s;
 
     std::mt19937_64 rng(123);
     const int assignmentCount = static_cast<int>(s.teamAssignments.size());
-    const int valueCount = s.teamCount();
+    const int value_count = s.teamCount();
     std::uniform_real_distribution<double> unit(0.0, 1.0);
 
     int mismatches = 0;
@@ -298,8 +298,8 @@ void verifyIncremental()
             const int assignment = static_cast<int>(rng() % assignmentCount);
             const int value = (unit(rng) < 0.10)
                                   ? -1
-                                  : static_cast<int>(rng() % valueCount);
-            director.changeVariable(assignment, value);
+                                  : static_cast<int>(rng() % value_count);
+            editor.assign(assignment, value);
         }
         else
         {
@@ -308,16 +308,16 @@ void verifyIncremental()
             const int b = static_cast<int>(rng() % assignmentCount);
             const int va = s.teamAssignments[a].team;
             const int vb = s.teamAssignments[b].team;
-            director.changeVariable(a, vb);
-            director.changeVariable(b, va);
+            editor.assign(a, vb);
+            editor.assign(b, va);
         }
         // Full recompute on the same assignment.
         for (int i = 0; i < assignmentCount; ++i)
         {
             shadow.teamAssignments[i].team = s.teamAssignments[i].team;
         }
-        const Score full = ScoreCalculator::calculateScore(shadow);
-        const Score incremental = director.calculateScore();
+        const Score full = ScoreCalculator::score(shadow);
+        const Score incremental = editor.score();
         if (full.hard != incremental.hard
             || std::fabs(full.soft - incremental.soft) > 1e-9)
         {
@@ -325,8 +325,8 @@ void verifyIncremental()
             {
                 std::printf("  MISMATCH @step %d: incremental=%s full=%s\n",
                             step,
-                            incremental.toString().c_str(),
-                            full.toString().c_str());
+                            incremental.str().c_str(),
+                            full.str().c_str());
             }
         }
     }
@@ -337,9 +337,9 @@ void verifyIncremental()
 }
 
 // -------------------------------------------------------------------------
-// (c) FULL_ASSERT solve: the engine cross-checks the incremental score
+// (c) ScoreChecks::Full solve: the engine cross-checks the incremental score
 // against a full reset + recompute after every single move and throws
-// ScoreCorruptionError on any divergence.
+// ScoreMismatchError on any divergence.
 // -------------------------------------------------------------------------
 void verifyFullAssertSolve()
 {
@@ -350,10 +350,10 @@ void verifyFullAssertSolve()
                                                /*seed*/ 11);
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(2);
-    config.randomSeed = 3;
-    config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
-    // Kick early so the LNS ruin/recreate path also runs under FULL_ASSERT.
+    config.time_limit = std::chrono::seconds(2);
+    config.seed = 3;
+    config.score_checks = optimaru::ScoreChecks::Full;
+    // Kick early so the LNS ruin/recreate path also runs under ScoreChecks::Full.
     config.ruinRecreateUnimprovedStepTrigger = 200;
     config.ruinRecreatePolishSteps = 100;
 
@@ -365,7 +365,7 @@ void verifyFullAssertSolve()
         solver.solve(s);
         final = s.score;
     }
-    catch (const optimaru::ScoreCorruptionError &e)
+    catch (const optimaru::ScoreMismatchError &e)
     {
         corrupted = true;
         std::printf("  ScoreCorruptionError: %s\n", e.what());
@@ -373,7 +373,7 @@ void verifyFullAssertSolve()
     check(!corrupted, "2s FULL_ASSERT solve without score corruption");
     if (!corrupted)
     {
-        const Score recomputed = ScoreCalculator::calculateScore(s);
+        const Score recomputed = ScoreCalculator::score(s);
         check(final.hard == recomputed.hard
                   && std::fabs(final.soft - recomputed.soft) < 1e-9,
               "solver-reported score == full recompute");
@@ -396,8 +396,8 @@ void verifyPinnedSolve()
     s.teamAssignments[0].pinned = true;
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(1);
-    config.randomSeed = 5;
+    config.time_limit = std::chrono::seconds(1);
+    config.seed = 5;
     Solver solver(config);
     solver.solve(s);
 
@@ -433,8 +433,8 @@ void verifyTeamCountMove()
     }
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(2);
-    config.randomSeed = 42;
+    config.time_limit = std::chrono::seconds(2);
+    config.seed = 42;
     Solver solver(config);
     solver.solve(s);
 

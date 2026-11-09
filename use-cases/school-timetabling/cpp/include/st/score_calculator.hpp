@@ -14,10 +14,10 @@ namespace st
 // terms carry the same *Cost names as the canonical model where they mean the
 // same thing (teacherConflictCost, classConflictCost).
 //
-// calculateScore does a full recompute — the reference the incremental
-// calculator is checked against (in the tests and under FULL_ASSERT).
+// score does a full recompute — the reference the incremental
+// calculator is checked against (in the tests and under ScoreChecks::Full).
 //
-// Constraints (HardSoftScore):
+// Constraints (Score):
 //   hard 1. roomConflictCost          -1 per lesson pair in the same
 //                                        timeslot and room
 //   hard 2. teacherConflictCost       -1 per same-teacher lesson pair in the
@@ -40,12 +40,12 @@ namespace st
 class ScoreCalculator
 {
 public:
-    static Score calculateScore(Timetable &table);
+    static Score score(Timetable &table);
 
     // Interns teachers, student groups and (group, subject) pairs into dense
     // integer ids, builds the same-day period adjacency (nextSlot/prevSlot)
     // and flattens teacherUnavailable for O(1) lookup. Idempotent (guarded by
-    // Timetable::prepared). Must run before scoring; calculateScore/solve
+    // Timetable::prepared). Must run before scoring; score/solve
     // call it.
     static void prepare(Timetable &table);
 

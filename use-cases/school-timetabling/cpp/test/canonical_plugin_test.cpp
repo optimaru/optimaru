@@ -1,15 +1,15 @@
 // Plugin-assembly (st/canonical_constraints.hpp) tests, engine test/ style:
 // check() + a non-zero exit on any failure.
-//   (a) the full default assembly on the engine's DecomposedScoreCalculator
+//   (a) the full default assembly on the engine's DecomposedObjective
 //       reproduces the monolithic score bit-for-bit on 500 random
 //       assignments (including unassigned lessons)
 //   (b) incremental score == full recompute across 3000 random moves driven
-//       through the engine's ScoreDirector protocol (plugin path)
+//       through the engine's Editor protocol (plugin path)
 //   (c) partial assemblies: removing one component removes exactly that
 //       term, on hand-computed instances
 //   (d) weight / level overrides: teacherMaxPeriodsCost demoted to soft,
 //       teacherGapCost weight doubled
-//   (e) a 2-second solve(table, calculator) under FULL_ASSERT (custom move
+//   (e) a 2-second solve(table, calculator) under ScoreChecks::Full (custom move
 //       operators included)
 //   (f) unassignedLessonsCost demoted to soft turns "leave it unassigned"
 //       into a move the search can make (partial timetabling), and leaves it
@@ -17,7 +17,7 @@
 //   (g) the plugin-path solve reaches hard 0 on the CP-SAT-sample-scale
 //       school within a 20-second budget
 //   (h) raw costs by hand: one positive and one zero case per constraint,
-//       read through constraintCosts()
+//       read through constraint_costs()
 //   (i) the catalog: defaultConstraints().info() equals every component's
 //       kDefaultWeight / kDefaultLevel / flippability, in constraintOrder();
 //       the structural constraints refuse soft() and accept hard()
@@ -27,7 +27,7 @@
 //       the literal formula refused on hard at reset (a structural one
 //       included) and kept on soft, incremental == a fresh recompute over a
 //       random walk and a
-//       FULL_ASSERT solve with repeated, shifted components — the repeated
+//       ScoreChecks::Full solve with repeated, shifted components — the repeated
 //       teacher-mask instances sharing the assembly's one TeacherMaskHub
 #include <algorithm>
 #include <chrono>
@@ -48,7 +48,7 @@
 #include "st/canonical_incremental_calculator.hpp"
 #include "st/canonical_score_calculator.hpp"
 #include "st/canonical_solver.hpp"
-#include "optimaru/api/score/director/score_director.hpp"
+#include "optimaru/model/editor.hpp"
 
 using namespace st::canon;
 
@@ -292,16 +292,16 @@ void verifyAssemblyParity()
         }
         const Score full
             = ScoreCalculator::computeBreakdown(t).toScore(ObjectiveWeights{});
-        calc.resetWorkingSolution(t);
-        const Score assembled = calc.calculateScore();
+        calc.rebuild(t);
+        const Score assembled = calc.score();
         if (assembled.hard != full.hard || assembled.soft != full.soft)
         {
             if (++mismatches <= 3)
             {
                 std::printf("  MISMATCH @round %d: assembly=%s full=%s\n",
                             round,
-                            assembled.toString().c_str(),
-                            full.toString().c_str());
+                            assembled.str().c_str(),
+                            full.str().c_str());
             }
         }
     }
@@ -325,10 +325,10 @@ void verifyAssemblyParity()
                 = unit(rng) < 0.10 ? -1 : static_cast<int>(rng() % slotCount);
         }
         const Score full = ScoreCalculator::computeBreakdown(t).toScore(custom);
-        weighted.resetWorkingSolution(t);
-        monolithic.resetWorkingSolution(t);
-        const Score assembled = weighted.calculateScore();
-        const Score incremental = monolithic.calculateScore();
+        weighted.rebuild(t);
+        monolithic.rebuild(t);
+        const Score assembled = weighted.score();
+        const Score incremental = monolithic.score();
         if (assembled.hard != full.hard || assembled.soft != full.soft
             || incremental.hard != full.hard || incremental.soft != full.soft)
         {
@@ -342,10 +342,10 @@ void verifyAssemblyParity()
     // The per-constraint breakdown must add up to the score it explains.
     double hardTotal = 0.0;
     double softTotal = 0.0;
-    for (const optimaru::ConstraintTotal &total : calc.constraintTotals())
+    for (const optimaru::ConstraintTotal &total : calc.constraint_totals())
         (total.level == optimaru::Level::Hard ? hardTotal : softTotal)
             += total.cost;
-    const Score score = calc.calculateScore();
+    const Score score = calc.score();
     check(hardTotal == static_cast<double>(-score.hard)
               && softTotal == -score.soft,
           "constraintTotals() sums to the assembled score");
@@ -353,7 +353,7 @@ void verifyAssemblyParity()
 }
 
 // -------------------------------------------------------------------------
-// (b) Incremental score == full recompute across a ScoreDirector-driven
+// (b) Incremental score == full recompute across a Editor-driven
 // random walk of change and swap moves (including unassignments) — the
 // before/set/after hook contract, on the plugin path.
 // -------------------------------------------------------------------------
@@ -365,12 +365,12 @@ void verifyIncremental()
 
     DecomposedCalculator calc;
     addCanonicalConstraints(calc);
-    optimaru::ScoreDirector<Timetable> director(t, calc);
+    optimaru::Editor<Timetable> editor(t, calc);
     Timetable shadow = t;
 
     std::mt19937_64 rng(123);
     const int lessonCount = static_cast<int>(t.lessons.size());
-    const int valueCount = t.slotCount();
+    const int value_count = t.slotCount();
     std::uniform_real_distribution<double> unit(0.0, 1.0);
 
     int mismatches = 0;
@@ -384,8 +384,8 @@ void verifyIncremental()
             const int lesson = static_cast<int>(rng() % lessonCount);
             const int value = (unit(rng) < 0.10)
                                   ? -1
-                                  : static_cast<int>(rng() % valueCount);
-            director.changeVariable(lesson, value);
+                                  : static_cast<int>(rng() % value_count);
+            editor.assign(lesson, value);
         }
         else
         {
@@ -394,25 +394,25 @@ void verifyIncremental()
             const int b = static_cast<int>(rng() % lessonCount);
             const int va = t.lessons[a].slot;
             const int vb = t.lessons[b].slot;
-            director.beginVariableChanges();
-            director.changeVariable(a, vb);
-            director.changeVariable(b, va);
-            director.endVariableChanges();
+            editor.begin_batch();
+            editor.assign(a, vb);
+            editor.assign(b, va);
+            editor.end_batch();
         }
         // Full recompute on the same assignment.
         for (int i = 0; i < lessonCount; ++i)
             shadow.lessons[i].slot = t.lessons[i].slot;
         const Score full = ScoreCalculator::computeBreakdown(shadow).toScore(
             ObjectiveWeights{});
-        const Score incremental = director.calculateScore();
+        const Score incremental = editor.score();
         if (full.hard != incremental.hard || full.soft != incremental.soft)
         {
             if (++mismatches <= 3)
             {
                 std::printf("  MISMATCH @step %d: incremental=%s full=%s\n",
                             step,
-                            incremental.toString().c_str(),
-                            full.toString().c_str());
+                            incremental.str().c_str(),
+                            full.str().c_str());
             }
         }
     }
@@ -443,21 +443,21 @@ void verifyPartialAssemblies()
 
         DecomposedCalculator full;
         assembleExcept(full, kZeroWeights, "");
-        full.resetWorkingSolution(t);
-        checkCount("case1 full assembly hard", -full.calculateScore().hard, 2);
+        full.rebuild(t);
+        checkCount("case1 full assembly hard", -full.score().hard, 2);
 
         DecomposedCalculator noTeacherConflict;
         assembleExcept(noTeacherConflict, kZeroWeights, "teacherConflictCost");
-        noTeacherConflict.resetWorkingSolution(t);
+        noTeacherConflict.rebuild(t);
         checkCount("case1 without teacherConflictCost: the class pair",
-                   -noTeacherConflict.calculateScore().hard,
+                   -noTeacherConflict.score().hard,
                    1);
 
         DecomposedCalculator noClassConflict;
         assembleExcept(noClassConflict, kZeroWeights, "classConflictCost");
-        noClassConflict.resetWorkingSolution(t);
+        noClassConflict.rebuild(t);
         checkCount("case1 without classConflictCost: the teacher pair",
-                   -noClassConflict.calculateScore().hard,
+                   -noClassConflict.score().hard,
                    1);
     }
 
@@ -474,8 +474,8 @@ void verifyPartialAssemblies()
 
         DecomposedCalculator full;
         assembleExcept(full, ObjectiveWeights{}, "");
-        full.resetWorkingSolution(t);
-        const Score fullScore = full.calculateScore();
+        full.rebuild(t);
+        const Score fullScore = full.score();
         checkCount("case2 full assembly soft penalty",
                    static_cast<std::int64_t>(-fullScore.soft),
                    93);
@@ -483,10 +483,10 @@ void verifyPartialAssemblies()
 
         DecomposedCalculator noTeacherGap;
         assembleExcept(noTeacherGap, ObjectiveWeights{}, "teacherGapCost");
-        noTeacherGap.resetWorkingSolution(t);
+        noTeacherGap.rebuild(t);
         checkCount(
             "case2 without teacherGapCost: 93 - 20*3",
-            static_cast<std::int64_t>(-noTeacherGap.calculateScore().soft),
+            static_cast<std::int64_t>(-noTeacherGap.score().soft),
             33);
     }
 
@@ -501,16 +501,16 @@ void verifyPartialAssemblies()
 
         DecomposedCalculator full;
         assembleExcept(full, kZeroWeights, "");
-        full.resetWorkingSolution(t);
+        full.rebuild(t);
         checkCount("case3 full assembly hard (unassignedLessonsCost x2)",
-                   -full.calculateScore().hard,
+                   -full.score().hard,
                    2);
 
         DecomposedCalculator noUnassigned;
         assembleExcept(noUnassigned, kZeroWeights, "unassignedLessonsCost");
-        noUnassigned.resetWorkingSolution(t);
+        noUnassigned.rebuild(t);
         checkCount("case3 without unassignedLessonsCost: hard clean",
-                   -noUnassigned.calculateScore().hard,
+                   -noUnassigned.score().hard,
                    0);
     }
     std::printf("\n");
@@ -536,8 +536,8 @@ void verifyOverrides()
 
         DecomposedCalculator hardCalc;
         assembleExcept(hardCalc, kZeroWeights, "");
-        hardCalc.resetWorkingSolution(t);
-        const Score hardScore = hardCalc.calculateScore();
+        hardCalc.rebuild(t);
+        const Score hardScore = hardCalc.score();
         checkCount(
             "teacherMaxPeriodsCost default: 1 hard point", -hardScore.hard, 1);
         checkCount("teacherMaxPeriodsCost default: soft clean",
@@ -549,8 +549,8 @@ void verifyOverrides()
         auto maxPeriods = std::make_unique<TeacherMaxPeriodsCost>(7.0);
         maxPeriods->level = optimaru::Level::Soft;  // same cost, soft level
         softCalc.add(std::move(maxPeriods));
-        softCalc.resetWorkingSolution(t);
-        const Score softScore = softCalc.calculateScore();
+        softCalc.rebuild(t);
+        const Score softScore = softCalc.score();
         checkCount(
             "teacherMaxPeriodsCost demoted: hard clean", -softScore.hard, 0);
         checkCount("teacherMaxPeriodsCost demoted: soft = 7 * 1",
@@ -570,18 +570,18 @@ void verifyOverrides()
         DecomposedCalculator calc;
         assembleExcept(calc, ObjectiveWeights{}, "teacherGapCost");
         calc.emplace<TeacherGapCost>(2.0 * TeacherGapCost::kDefaultWeight);
-        calc.resetWorkingSolution(t);
+        calc.rebuild(t);
         checkCount("teacherGapCost doubled: 93 + 20*3",
-                   static_cast<std::int64_t>(-calc.calculateScore().soft),
+                   static_cast<std::int64_t>(-calc.score().soft),
                    153);
     }
     std::printf("\n");
 }
 
 // -------------------------------------------------------------------------
-// (e) FULL_ASSERT solve on the plugin path: the engine cross-checks the
+// (e) ScoreChecks::Full solve on the plugin path: the engine cross-checks the
 // decomposed incremental score against a full reset + recompute after every
-// move (custom move operators included) and throws ScoreCorruptionError on
+// move (custom move operators included) and throws ScoreMismatchError on
 // any divergence.
 // -------------------------------------------------------------------------
 void verifyFullAssertSolve()
@@ -590,10 +590,10 @@ void verifyFullAssertSolve()
     Timetable t = buildRandomInstance(/*courseCount*/ 8, /*seed*/ 11);
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(2);
-    config.randomSeed = 3;
-    config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
-    // Kick early so the LNS ruin/recreate path also runs under FULL_ASSERT.
+    config.time_limit = std::chrono::seconds(2);
+    config.seed = 3;
+    config.score_checks = optimaru::ScoreChecks::Full;
+    // Kick early so the LNS ruin/recreate path also runs under ScoreChecks::Full.
     config.ruinRecreateUnimprovedStepTrigger = 200;
     config.ruinRecreatePolishSteps = 100;
 
@@ -608,7 +608,7 @@ void verifyFullAssertSolve()
         solver.solve(t, calc);
         final = t.score;
     }
-    catch (const optimaru::ScoreCorruptionError &e)
+    catch (const optimaru::ScoreMismatchError &e)
     {
         corrupted = true;
         std::printf("  ScoreCorruptionError: %s\n", e.what());
@@ -622,8 +622,8 @@ void verifyFullAssertSolve()
             = ScoreCalculator::computeBreakdown(t).toScore(ObjectiveWeights{});
         check(final.hard == recomputed.hard && final.soft == recomputed.soft,
               "plugin-reported score == monolithic full recompute");
-        check(calc.calculateScore().hard == final.hard
-                  && calc.calculateScore().soft == final.soft,
+        check(calc.score().hard == final.hard
+                  && calc.score().soft == final.soft,
               "calculator left primed on the final solution");
     }
     std::printf("\n");
@@ -764,9 +764,9 @@ void verifySampleScaleSolve()
                 6);
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(20);
-    config.bestScoreLimit = Score{0, -std::numeric_limits<double>::infinity()};
-    config.randomSeed = 1;
+    config.time_limit = std::chrono::seconds(20);
+    config.target_score = Score{0, -std::numeric_limits<double>::infinity()};
+    config.seed = 1;
     config.weights = ObjectiveWeights{};  // ignored on the plugin path
 
     DecomposedCalculator calc;
@@ -781,7 +781,7 @@ void verifySampleScaleSolve()
 
     const Breakdown b = ScoreCalculator::computeBreakdown(d.t);
     std::printf(
-        "  solved in %.1fs, score %s\n", seconds, d.t.score.toString().c_str());
+        "  solved in %.1fs, score %s\n", seconds, d.t.score.str().c_str());
     checkCount("sample-scale hard total", b.hardTotal(), 0);
     check(seconds <= 20.5, "finished within the 20s budget");
     check(d.t.score.hard == -b.hardTotal()
@@ -823,8 +823,8 @@ void verifyRelaxedUnassigned()
                 "choice ==\n");
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(3);
-    config.randomSeed = 1;
+    config.time_limit = std::chrono::seconds(3);
+    config.seed = 1;
     config.weights = kZeroWeights;
 
     // unassignedLessonsCost hard (the default): every lesson takes a slot and
@@ -864,7 +864,7 @@ void verifyRelaxedUnassigned()
 }
 
 // -------------------------------------------------------------------------
-// (h) Raw costs by hand, through constraintCosts(): one positive and one
+// (h) Raw costs by hand, through constraint_costs(): one positive and one
 // zero case per constraint (before weight, exponent and level).
 // -------------------------------------------------------------------------
 using Build = std::function<void(Timetable &)>;
@@ -879,14 +879,14 @@ double rawCost(const Build &build, const std::string &name)
     ScoreCalculator::prepare(t);
     DecomposedCalculator calc;
     addDefaultConstraints(calc);
-    calc.resetWorkingSolution(t);
-    calc.calculateScore();  // primes the per-unit cache
-    for (const auto &entry : calc.constraintCosts())
+    calc.rebuild(t);
+    calc.score();  // primes the per-unit cache
+    for (const auto &entry : calc.constraint_costs())
     {
         if (entry.name != name)
             continue;
         double total = 0.0;
-        for (double cost : entry.unitCosts)
+        for (double cost : entry.unit_costs)
             total += cost;
         return total;
     }
@@ -1210,11 +1210,11 @@ bool rowIs(const optimaru::ConstraintInfo &row,
            double weight,
            bool flippable = true)
 {
-    return row.name == name && row.defaultLevel == Component::kDefaultLevel
-           && row.defaultWeight == Component::kDefaultWeight
-           && row.defaultLevel == level && row.defaultWeight == weight
-           && row.levelFlippable == flippable && !row.reward
-           && row.defaultEnabled;
+    return row.name == name && row.default_level == Component::kDefaultLevel
+           && row.default_weight == Component::kDefaultWeight
+           && row.default_level == level && row.default_weight == weight
+           && row.level_flippable == flippable && !row.reward
+           && row.default_enabled;
 }
 
 template <typename F> bool throwsInvalidArgument(F &&f)
@@ -1368,7 +1368,7 @@ void verifyCatalog()
 // -------------------------------------------------------------------------
 // (j) Repeated components and offsets. A repeat is a fresh copy of a default
 // component (another defaultConstraints(hub), the one name kept, its knobs
-// re-stated) appended with addInstances(), as the Python bindings build it
+// re-stated) appended with add_instances(), as the Python bindings build it
 // from a pick list — every copy built on the SAME hub, so the teacher-mask
 // instances (repeats included) subscribe to one projection.
 // -------------------------------------------------------------------------
@@ -1397,7 +1397,7 @@ ConstraintAssembly repeatedAssembly()
     const auto hub = std::make_shared<TeacherMaskHub>();
     ConstraintAssembly assembly = defaultConstraints(hub);
     assembly.offset("teacherGapCost", 1.0);
-    assembly.addInstances(copyOf("teacherGapCost", hub)
+    assembly.add_instances(copyOf("teacherGapCost", hub)
                               .weight("teacherGapCost", 0.5)
                               .exponent("teacherGapCost", 2.0)
                               .offset("teacherGapCost", 2.0)
@@ -1405,37 +1405,37 @@ ConstraintAssembly repeatedAssembly()
     // The literal copies of hard components sit on soft: hard refuses the
     // literal formula with an offset (hard 0 must mean no violation). The
     // hard copies are thresholds.
-    assembly.addInstances(copyOf("teacherMaxPeriodsCost", hub)
+    assembly.add_instances(copyOf("teacherMaxPeriodsCost", hub)
                               .soft("teacherMaxPeriodsCost")
                               .weight("teacherMaxPeriodsCost", 2.0)
                               .offset("teacherMaxPeriodsCost", 1.0)
                               .clip("teacherMaxPeriodsCost", false));
-    assembly.addInstances(copyOf("teacherMaxPeriodsCost", hub)
+    assembly.add_instances(copyOf("teacherMaxPeriodsCost", hub)
                               .weight("teacherMaxPeriodsCost", 2.0)
                               .offset("teacherMaxPeriodsCost", 1.0));
-    assembly.addInstances(copyOf("teacherWorkdayCost", hub)
+    assembly.add_instances(copyOf("teacherWorkdayCost", hub)
                               .offset("teacherWorkdayCost", -1.0));
-    assembly.addInstances(copyOf("classGapCost", hub)
+    assembly.add_instances(copyOf("classGapCost", hub)
                               .offset("classGapCost", 1.0)
                               .clip("classGapCost", false));
-    assembly.addInstances(copyOf("avoidedPeriodCost", hub)
+    assembly.add_instances(copyOf("avoidedPeriodCost", hub)
                               .weight("avoidedPeriodCost", 2.0)
                               .offset("avoidedPeriodCost", 1.0)
                               .clip("avoidedPeriodCost", false));
-    assembly.addInstances(copyOf("teacherConflictCost", hub)
+    assembly.add_instances(copyOf("teacherConflictCost", hub)
                               .soft("teacherConflictCost")
                               .offset("teacherConflictCost", 0.5)
                               .clip("teacherConflictCost", false));
-    assembly.addInstances(copyOf("teacherConflictCost", hub)
+    assembly.add_instances(copyOf("teacherConflictCost", hub)
                               .offset("teacherConflictCost", 0.5));
-    assembly.addInstances(copyOf("unassignedLessonsCost", hub)
+    assembly.add_instances(copyOf("unassignedLessonsCost", hub)
                               .offset("unassignedLessonsCost", 1.0));
     // Repeats on another level than their default: a soft one hard, a hard
     // one soft, each shifted.
-    assembly.addInstances(copyOf("teacherGapCost", hub)
+    assembly.add_instances(copyOf("teacherGapCost", hub)
                               .hard("teacherGapCost")
                               .offset("teacherGapCost", 2.0));
-    assembly.addInstances(copyOf("classConflictCost", hub)
+    assembly.add_instances(copyOf("classConflictCost", hub)
                               .soft("classConflictCost")
                               .weight("classConflictCost", 5.0)
                               .offset("classConflictCost", -1.0)
@@ -1447,8 +1447,8 @@ Score scoreWithAssembly(ConstraintAssembly assembly, Timetable &t)
 {
     DecomposedCalculator calc;
     std::move(assembly).into(calc);
-    calc.resetWorkingSolution(t);
-    return calc.calculateScore();
+    calc.rebuild(t);
+    return calc.score();
 }
 
 void verifyRepeatsAndOffsets()
@@ -1458,18 +1458,18 @@ void verifyRepeatsAndOffsets()
         Timetable t = repeatInstance();
         const auto hub = std::make_shared<TeacherMaskHub>();
         ConstraintAssembly assembly = copyOf("teacherGapCost", hub);
-        assembly.addInstances(copyOf("teacherGapCost", hub)
+        assembly.add_instances(copyOf("teacherGapCost", hub)
                                   .weight("teacherGapCost", 0.5)
                                   .exponent("teacherGapCost", 2.0));
         DecomposedCalculator calc;
         std::move(assembly).into(calc);
-        calc.resetWorkingSolution(t);
-        const Score score = calc.calculateScore();
+        calc.rebuild(t);
+        const Score score = calc.score();
         check(score.hard == 0 && score.soft == -(20.0 * 1 + 0.5 * 1.0),
               "teacher gaps x 20 + 0.5 x gaps^2 on one hub: -(20 + 0.5)");
-        const auto entries = calc.constraintCosts();
-        check(entries.size() == 2 && entries[0].unitCosts == entries[1].unitCosts
-                  && entries[0].unitCosts == std::vector<double>{1.0}
+        const auto entries = calc.constraint_costs();
+        check(entries.size() == 2 && entries[0].unit_costs == entries[1].unit_costs
+                  && entries[0].unit_costs == std::vector<double>{1.0}
                   && entries[1].weight == 0.5 && entries[1].exponent == 2.0,
               "two instances, the same raw total, each with its own knobs");
     }
@@ -1569,7 +1569,7 @@ void verifyRepeatsAndOffsets()
               "a soft literal offset moved to hard, and the structural fixed "
               "slots / parallel groups: refused at reset");
         ConstraintAssembly repeated = copyOf("teacherConflictCost", hub);
-        repeated.addInstances(copyOf("teacherConflictCost", hub)
+        repeated.add_instances(copyOf("teacherConflictCost", hub)
                                   .offset("teacherConflictCost", 0.5)
                                   .clip("teacherConflictCost", false));
         check(resetRefusal(std::move(repeated)) == refusal("teacherConflictCost"),
@@ -1597,7 +1597,7 @@ void verifyRepeatsAndOffsets()
         ScoreCalculator::prepare(t);
         DecomposedCalculator calc;
         repeatedAssembly().into(calc);
-        optimaru::ScoreDirector<Timetable> director(t, calc);
+        optimaru::Editor<Timetable> editor(t, calc);
         std::mt19937_64 rng(321);
         std::uniform_real_distribution<double> unit(0.0, 1.0);
         const int lessonCount = static_cast<int>(t.lessons.size());
@@ -1611,7 +1611,7 @@ void verifyRepeatsAndOffsets()
                 const int value = unit(rng) < 0.1
                                       ? -1
                                       : static_cast<int>(rng() % t.slotCount());
-                director.changeVariable(lesson, value);
+                editor.assign(lesson, value);
             }
             else
             {
@@ -1619,22 +1619,22 @@ void verifyRepeatsAndOffsets()
                 const int b = static_cast<int>(rng() % lessonCount);
                 const int va = t.lessons[a].slot;
                 const int vb = t.lessons[b].slot;
-                director.beginVariableChanges();
-                director.changeVariable(a, vb);
-                director.changeVariable(b, va);
-                director.endVariableChanges();
+                editor.begin_batch();
+                editor.assign(a, vb);
+                editor.assign(b, va);
+                editor.end_batch();
             }
             Timetable shadow = t;
             const Score full = scoreWithAssembly(repeatedAssembly(), shadow);
-            const Score incremental = director.calculateScore();
-            if (!optimaru::scoresAgree(incremental, full))
+            const Score incremental = editor.score();
+            if (!optimaru::scores_agree(incremental, full))
             {
                 if (++mismatches <= 3)
                 {
                     std::printf("  MISMATCH @step %d: incremental=%s full=%s\n",
                                 step,
-                                incremental.toString().c_str(),
-                                full.toString().c_str());
+                                incremental.str().c_str(),
+                                full.str().c_str());
                 }
             }
         }
@@ -1646,9 +1646,9 @@ void verifyRepeatsAndOffsets()
     {
         Timetable t = buildRandomInstance(/*courseCount*/ 8, /*seed*/ 29);
         Solver::Config config;
-        config.spentLimit = std::chrono::seconds(2);
-        config.randomSeed = 5;
-        config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+        config.time_limit = std::chrono::seconds(2);
+        config.seed = 5;
+        config.score_checks = optimaru::ScoreChecks::Full;
         config.ruinRecreateUnimprovedStepTrigger = 200;
         config.ruinRecreatePolishSteps = 100;
         DecomposedCalculator calc;
@@ -1659,7 +1659,7 @@ void verifyRepeatsAndOffsets()
             Solver solver(config);
             solver.solve(t, calc);
         }
-        catch (const optimaru::ScoreCorruptionError &e)
+        catch (const optimaru::ScoreMismatchError &e)
         {
             corrupted = true;
             std::printf("  ScoreCorruptionError: %s\n", e.what());
@@ -1667,7 +1667,7 @@ void verifyRepeatsAndOffsets()
         check(!corrupted,
               "2s FULL_ASSERT solve with repeated, shifted components");
         const Score fresh = scoreWithAssembly(repeatedAssembly(), t);
-        check(!corrupted && optimaru::scoresAgree(t.score, fresh),
+        check(!corrupted && optimaru::scores_agree(t.score, fresh),
               "the reported score == a fresh recompute of the same assembly");
     }
     std::printf("\n");

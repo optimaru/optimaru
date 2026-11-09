@@ -322,7 +322,7 @@ def test_shaped_assembly_solves_on_the_incremental_path():
 
 
 def test_employee_specific_moves_keep_incremental_score_exact():
-    """The stronger employee-domain moves still go through ScoreDirector, so a
+    """The stronger employee-domain moves still go through Editor, so a
     solved schedule must match a fresh calculator rebuild."""
 
     schedule = es.make_random_roster(days=10, shifts_per_day=5, employees=9, seed=17)
@@ -836,7 +836,7 @@ def test_day_pattern_projection_context_is_calculator_owned_and_rebuilt():
 
     schedule.shifts[0].location = "Morning"
     schedule.shifts[2].location = "Evening"
-    # resetWorkingSolution advances the context generation and rebuilds the
+    # rebuild advances the context generation and rebuilds the
     # projection from the mutated problem facts.
     assert evening_first.score(schedule).soft == 0
     assert morning_first.score(schedule).soft == -1

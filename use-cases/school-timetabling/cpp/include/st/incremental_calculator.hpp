@@ -5,14 +5,14 @@
 #include <vector>
 
 #include "st/domain.hpp"
-#include "optimaru/api/score/calculator/incremental_score_calculator.hpp"
+#include "optimaru/score/objective.hpp"
 
 namespace st
 {
 
 // The school-timetabling implementation of the engine's
-// optimaru::IncrementalScoreCalculator — the C++ analog of implementing
-// Java's IncrementalScoreCalculator instead of a ConstraintProvider.
+// optimaru::Objective — the C++ analog of implementing
+// Java's Objective instead of a ConstraintProvider.
 //
 // Every constraint is a function of occupancy counts, so a single variable
 // change is O(1):
@@ -28,20 +28,20 @@ namespace st
 //     consecutive periods): adjacent-cell count products; a change
 //     touches only the prevSlot/nextSlot cells of its (key, timeslot).
 //
-// beforeVariableChanged retracts the lesson's contribution while slotRoom
-// still holds the OLD value; afterVariableChanged inserts the NEW value.
+// before_assign retracts the lesson's contribution while slotRoom
+// still holds the OLD value; after_assign inserts the NEW value.
 // Unassigned lessons (slotRoom == -1) contribute nothing, so the construction
 // heuristic can score partially initialized solutions. The full-recompute
-// reference is ScoreCalculator::calculateScore (checked in the tests and
-// under EnvironmentMode::FULL_ASSERT).
+// reference is ScoreCalculator::score (checked in the tests and
+// under ScoreChecks::ScoreChecks::Full).
 class SchoolTimetablingIncrementalScoreCalculator final
-    : public optimaru::IncrementalScoreCalculator<Timetable>
+    : public optimaru::Objective<Timetable>
 {
 public:
-    void resetWorkingSolution(Timetable &workingSolution) override;
-    void beforeVariableChanged(int lessonIndex) override;
-    void afterVariableChanged(int lessonIndex) override;
-    Score calculateScore() override;
+    void rebuild(Timetable &solution) override;
+    void before_assign(int lessonIndex) override;
+    void after_assign(int lessonIndex) override;
+    Score score() override;
 
 private:
     Timetable *table_ = nullptr;
@@ -57,7 +57,7 @@ private:
     std::vector<int> teacherLessons_;
     std::vector<int> teacherRoomCnt_;
 
-    // Running totals (all counted positive; signs applied in calculateScore).
+    // Running totals (all counted positive; signs applied in score).
     std::int64_t conflictPairs_ = 0;  // hard 1 + 2 + 3
     std::int64_t unavailable_ = 0;    // hard 4: teacherUnavailabilityCost
     std::int64_t roomChange_ = 0;     // soft 5: teacherRoomChangeCost

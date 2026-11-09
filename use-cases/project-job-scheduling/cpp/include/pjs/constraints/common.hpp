@@ -8,8 +8,8 @@
 
 #include "pjs/domain.hpp"
 #include "pjs/score_calculator.hpp"
-#include "optimaru/api/score/calculator/constraint_assembly.hpp"
-#include "optimaru/api/score/calculator/decomposed_score_calculator.hpp"
+#include "optimaru/score/constraint_assembly.hpp"
+#include "optimaru/score/decomposed_objective.hpp"
 
 namespace pjs
 {
@@ -19,7 +19,7 @@ namespace pjs
 // ---------------------------------------------------------------------------
 // The four constraints of the reference project-job-scheduling
 // ProjectJobSchedulingConstraintProvider, split into one small component each
-// on the engine's DecomposedScoreCalculator — an optional assembly path NEXT
+// on the engine's DecomposedObjective — an optional assembly path NEXT
 // TO the monolithic ProjectJobSchedulingIncrementalScoreCalculator, which
 // stays the tuned default fast path.
 //
@@ -41,7 +41,7 @@ namespace pjs
 // trade this assembly path is for: composability, not peak throughput.
 //
 // Score levels: the quickstart scores with HardMediumSoftScore, which this
-// domain folds into the engine's HardSoftScore as
+// domain folds into the engine's Score as
 // `soft = medium * kMediumUnit + soft` (kMediumUnit = 10^9; kMediumFold and
 // the MediumFoldOf<ProjectJobSchedule> specialization in domain.hpp). The
 // medium component (projectDelayCost) declares Level::Medium at weight 1, in
@@ -68,7 +68,7 @@ namespace pjs
 // `exponent` / `offset` / `clip`, or by name through ConstraintAssembly
 // (weight / level / exponent / offset / clip; hard() / soft() are
 // level(Hard) / level(Soft)). A name may be held several times
-// (ConstraintAssembly::addInstances): each instance has its own knobs, its
+// (ConstraintAssembly::add_instances): each instance has its own knobs, its
 // level included, and the instances add up. Any component may take any of
 // the three levels: the medium component moved to hard / soft costs 1 hard /
 // 1 soft unit per raw unit, a hard or soft one moved to medium 1 medium unit,
@@ -77,18 +77,18 @@ namespace pjs
 // scores bit-for-bit like them.
 //
 // Registry names are the struct names with a lower-case first letter
-// ("makespanCost"); Python sees them through pythonName() ("makespan_cost").
+// ("makespanCost"); Python sees them through python_name() ("makespan_cost").
 //
 // Cost sign convention (see decomposed_score_calculator.hpp): positive =
 // penalty, 0 = no violation; the calculator negates into the score. An
 // assembly of all four components at their default weights therefore scores
-// bit-for-bit like ScoreCalculator::calculateScore.
+// bit-for-bit like ScoreCalculator::score.
 //
 // Every component requires ScoreCalculator::prepare(schedule) to have run
 // (the solve() overload and the monolithic path both call it).
 
 using DecomposedCalculator
-    = optimaru::DecomposedScoreCalculator<ProjectJobSchedule>;
+    = optimaru::DecomposedObjective<ProjectJobSchedule>;
 using ConstraintAssembly = optimaru::ConstraintAssembly<ProjectJobSchedule>;
 using PjsUnitConstraint = optimaru::UnitConstraint<ProjectJobSchedule>;
 using PjsGlobalConstraint = optimaru::GlobalConstraint<ProjectJobSchedule>;
@@ -155,13 +155,13 @@ struct ScheduleAggregateConstraint : PjsGlobalConstraint
 
     void
     reset(const ProjectJobSchedule &schedule,
-          const std::vector<std::vector<int>> & /*membersPerUnit*/) override
+          const std::vector<std::vector<int>> & /*members_per_unit*/) override
     {
         detail::requirePrepared(schedule);
         schedule_ = &schedule;
         dirty_ = true;
     }
-    void onUnitChanged(const ProjectJobSchedule &schedule,
+    void on_unit_changed(const ProjectJobSchedule &schedule,
                        int /*unit*/,
                        const std::vector<int> & /*members*/) override
     {

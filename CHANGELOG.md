@@ -2,6 +2,44 @@
 
 ## Unreleased
 
+- **Background solves fail safely.** An exception thrown inside a
+  `solve_in_background()` job (a `ScoreMismatchError` under
+  `ScoreChecks::Full`, a throwing `on_new_best`) used to terminate the process;
+  `wait()` now rethrows it. Assigning a new job over a running one used to free
+  the solver its thread was still using; it now stops and joins the old solve
+  first.
+- **Demo instances drawn with the platform's own RNGs.** The demo generators of
+  conference, food-packaging, maintenance, meeting, order-picking, sports-league
+  and tournament scheduling no longer replicate `java.util.Random` draw for draw.
+  The C++ generators use `std::mt19937_64` (with hand-written bounded draws, so a
+  seed gives the same instance on every standard library) and the Python ones
+  `random.Random`. Each demo keeps its shape and scale and is still
+  deterministic, but the instances themselves are new (e.g.
+  `order_picking.build_demo_data()` now has 107 pick tasks instead of 114), so
+  scores on them differ from earlier releases. The affected benchmark rows are
+  re-measured. **Python API change:** `conference_scheduling.demo.JavaRandom`
+  and `sports_league.demo.JavaRandom`, the replicas both modules exported, are
+  removed. A shared `optimaru::PortableRandom` (`include/optimaru/portable_random.hpp`)
+  now provides the C++ draws.
+- **Engine restructured; C++ API renamed.** The engine under `include/optimaru/`
+  no longer mirrors Timefold Solver's Java package layout or names: the headers
+  are grouped by role (`model/`, `score/`, `construct/`, `accept/`, `select/`,
+  `stop/`, `search/`, `moves/`, `ruin_recreate/`), functions and members are
+  snake_case, and the core types are renamed (`HardSoftScore` → `Score`,
+  `SolutionDescriptor` → `SolutionTraits` with `Shape::{Assignment, Sequence,
+  Chain}`, `IncrementalScoreCalculator` → `Objective`,
+  `DecomposedScoreCalculator` → `DecomposedObjective`, `ScoreDirector` →
+  `Editor`, `VariableListener` → `DerivedState`, `SolverConfig` → `Settings`
+  with `limits` / `construction` / `search`, `EnvironmentMode::FULL_ASSERT` →
+  `ScoreChecks::Full`). `SolverFactory` is gone (construct
+  `Solver<S>(settings)`), and `SolverManager` / `SolutionManager` became the
+  free functions `solve_in_background`, `explain_score` and `rescore`. The
+  termination criteria are one `StopCondition` instead of a class per criterion.
+  C++ code built on the engine must be updated; the Python API, its config keys
+  and the JSON contracts are unchanged (apart from the demo helpers noted
+  above), and solves give identical results for the same seed. NOTICE and every
+  engine header now describe the engine's origin as restructured from a port of
+  Timefold Solver.
 - **Corrected license attribution.** NOTICE now states that the engine is
   derived from Timefold Solver (itself derived from OptaPlanner and OptaPy),
   lists every use case and benchmark harness derived from Timefold

@@ -5,28 +5,28 @@
 #include <vector>
 
 #include "es/domain.hpp"
-#include "optimaru/api/score/calculator/incremental_score_calculator.hpp"
+#include "optimaru/score/objective.hpp"
 
 namespace es {
 
 // The employee-scheduling implementation of the engine's
-// optimaru::IncrementalScoreCalculator.
+// optimaru::Objective.
 //
 // The score decomposes per employee: every pairwise constraint is within a
 // single employee, and per-shift constraints belong to that shift's employee.
 // The only cross-employee term is the load-balancing "unfairness", a closed-form
 // function of the per-employee shift counts.
 //
-// beforeVariableChanged retracts the shift's *marginal* contribution from its
+// before_assign retracts the shift's *marginal* contribution from its
 // current employee (its per-shift penalty plus its pairs with that employee's
-// other shifts); afterVariableChanged inserts it into the new employee —
+// other shifts); after_assign inserts it into the new employee —
 // proportional to shifts per employee, independent of the total shift count.
 // Shifts left unassigned (employeeIndex == -1) contribute nothing, so the
 // construction heuristic can score partially initialized solutions. All
 // helpers are shared with ScoreCalculator's full recompute, so the incremental
 // score is correct by construction.
 class EmployeeSchedulingIncrementalScoreCalculator final
-    : public optimaru::IncrementalScoreCalculator<EmployeeSchedule> {
+    : public optimaru::Objective<EmployeeSchedule> {
 public:
     static constexpr std::size_t DEFAULT_PAIR_CACHE_BUDGET_BYTES = 64U * 1024U * 1024U;
 
@@ -34,10 +34,10 @@ public:
             std::size_t pairCacheBudgetBytes = DEFAULT_PAIR_CACHE_BUDGET_BYTES)
         : pairCacheBudgetBytes_(pairCacheBudgetBytes) {}
 
-    void resetWorkingSolution(EmployeeSchedule& workingSolution) override;
-    void beforeVariableChanged(int shiftIndex) override;
-    void afterVariableChanged(int shiftIndex) override;
-    Score calculateScore() override;
+    void rebuild(EmployeeSchedule& solution) override;
+    void before_assign(int shiftIndex) override;
+    void after_assign(int shiftIndex) override;
+    Score score() override;
 
     // For violation-guided move selection: shift lists per employee, and the
     // set of employees that currently have a hard-constraint penalty (>0).
@@ -94,7 +94,7 @@ private:
     // membership/removal (penalizedPos_[e] = index in penalized_, or -1).
     std::vector<int> penalized_;
     std::vector<int> penalizedPos_;
-    void setPenalized(int e, bool on);
+    void set_penalized(int e, bool on);
 
     // Day-bucket maintenance for the sparse marginal path (no-ops disabled).
     void bucketInsert(int e, int s);

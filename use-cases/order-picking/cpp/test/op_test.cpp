@@ -6,10 +6,10 @@
 //       OrderPickingConstraintProviderTest hand-computed cases
 //   (c) shadow variables (trolley / previous / next) re-derived from lists
 //   (d) incremental score == full recompute across a long random walk driven
-//       through the engine's ScoreDirector protocol (before/mutate/after)
+//       through the engine's Editor protocol (before/mutate/after)
 //   (e) demo-data reproduction invariants (catalog, family shelvings,
 //       determinism)
-//   (f) a demo instance solved under EnvironmentMode::FULL_ASSERT, plus a
+//   (f) a demo instance solved under ScoreChecks::ScoreChecks::Full, plus a
 //       plain solve that must reach feasibility
 #include <cmath>
 #include <cstdio>
@@ -23,7 +23,7 @@
 #include "op/incremental_calculator.hpp"
 #include "op/score_calculator.hpp"
 #include "op/solver.hpp"
-#include "optimaru/api/score/director/score_director.hpp"
+#include "optimaru/model/editor.hpp"
 
 using namespace op;
 
@@ -268,7 +268,7 @@ void verifyConstraints()
         s.orders = {{"order1"}};
         addTrolley(s, 1, 1, origin);
         addPick(s, 0, 1000, loc('E', 3, Side::RIGHT, 9));  // in no list
-        const Score score = ScoreCalculator::calculateScore(s);
+        const Score score = ScoreCalculator::score(s);
         check(score.hard == 0 && score.soft == 0.0,
               "unassigned pick task contributes nothing");
     }
@@ -319,7 +319,7 @@ void verifyShadowVariables()
 
 // -------------------------------------------------------------------------
 // (d) Incremental score == full recompute across a random walk of list
-// mutations, driven through the ScoreDirector protocol.
+// mutations, driven through the Editor protocol.
 // -------------------------------------------------------------------------
 void verifyIncrementalAgainstFull()
 {
@@ -329,7 +329,7 @@ void verifyIncrementalAgainstFull()
     const int trolleyCount = static_cast<int>(s.trolleys.size());
 
     OrderPickingIncrementalScoreCalculator calculator;
-    optimaru::ScoreDirector<OrderPickingSolution> director(s, calculator);
+    optimaru::Editor<OrderPickingSolution> editor(s, calculator);
 
     std::mt19937_64 rng(42);
     auto randomInt = [&rng](int bound)
@@ -359,12 +359,12 @@ void verifyIncrementalAgainstFull()
             const int element = randomInt(taskCount);
             const auto [t, p] = findElement(element);
             if (t != -1)
-                director.removeListElement(t, p);
+                editor.remove(t, p);
             const int target = randomInt(trolleyCount);
             const int position = randomInt(
                 static_cast<int>(s.trolleys[target].pickTaskIndices.size())
                 + 1);
-            director.insertListElement(target, position, element);
+            editor.insert(target, position, element);
         }
         else if (op < 85)
         {
@@ -380,7 +380,7 @@ void verifyIncrementalAgainstFull()
                 std::swap(first, last);
             if (first == last)
                 continue;
-            director.reverseListSegment(t, first, last);
+            editor.reverse(t, first, last);
         }
         else
         {
@@ -390,12 +390,12 @@ void verifyIncrementalAgainstFull()
             const auto [t, p] = findElement(element);
             if (t == -1)
                 continue;
-            director.removeListElement(t, p);
+            editor.remove(t, p);
         }
 
-        const Score incremental = director.calculateScore();
+        const Score incremental = editor.score();
         OrderPickingSolution copy = s;
-        const Score full = ScoreCalculator::calculateScore(copy);
+        const Score full = ScoreCalculator::score(copy);
         if (incremental.hard != full.hard
             || std::fabs(incremental.soft - full.soft) > 1e-9)
         {
@@ -404,8 +404,8 @@ void verifyIncrementalAgainstFull()
                 std::printf("    mismatch after op %d: incremental=%s "
                             "full=%s\n",
                             i,
-                            incremental.toString().c_str(),
-                            full.toString().c_str());
+                            incremental.str().c_str(),
+                            full.str().c_str());
             }
         }
     }
@@ -464,7 +464,7 @@ void verifyDemoData()
                      == s.pickTasks[i].location.side
               && again.pickTasks[i].location.row == s.pickTasks[i].location.row;
     }
-    check(same, "generation is deterministic (java.util.Random(37) replay)");
+    check(same, "generation is deterministic (seed 37)");
 
     bool throws = false;
     try
@@ -479,30 +479,30 @@ void verifyDemoData()
 }
 
 // -------------------------------------------------------------------------
-// (f) Solving: FULL_ASSERT consistency + feasibility on the demo instance.
+// (f) Solving: ScoreChecks::Full consistency + feasibility on the demo instance.
 // -------------------------------------------------------------------------
 void verifySolve()
 {
     std::printf("== (f) Solve: FULL_ASSERT + feasibility ==\n");
 
-    // FULL_ASSERT: every move's incremental score re-verified against a full
-    // recompute; ScoreCorruptionError fails the test. Small instance + short
+    // ScoreChecks::Full: every move's incremental score re-verified against a full
+    // recompute; ScoreMismatchError fails the test. Small instance + short
     // LNS cycles keep the quadratic assert cost inside the 2s budget while
     // still exercising the ruin/recreate paths.
     {
         OrderPickingSolution s = buildDemoData(3, 4, 60 * 40 * 20, 3, 37);
         Solver::Config config;
-        config.spentLimit = std::chrono::seconds(2);
-        config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+        config.time_limit = std::chrono::seconds(2);
+        config.score_checks = optimaru::ScoreChecks::Full;
         config.ruinRecreateUnimprovedStepTrigger = 100;
         config.ruinRecreatePolishSteps = 50;
-        config.randomSeed = 1;
+        config.seed = 1;
         bool threw = false;
         try
         {
             Solver(config).solve(s);
         }
-        catch (const optimaru::ScoreCorruptionError &)
+        catch (const optimaru::ScoreMismatchError &)
         {
             threw = true;
         }
@@ -510,13 +510,13 @@ void verifySolve()
     }
 
     // Plain solve on the full demo instance: must assign every pick exactly
-    // once and reach hard 0 (the Java demo dataset is comfortably feasible).
+    // once and reach hard 0 (the demo warehouse is comfortably feasible).
     {
         OrderPickingSolution s = buildDemoData();
         Solver::Config config;
-        config.spentLimit = std::chrono::seconds(4);
-        config.bestScoreLimit = {0, -std::numeric_limits<double>::infinity()};  // stop once feasible
-        config.randomSeed = 7;
+        config.time_limit = std::chrono::seconds(4);
+        config.target_score = {0, -std::numeric_limits<double>::infinity()};  // stop once feasible
+        config.seed = 7;
         Solver(config).solve(s);
 
         std::vector<int> seen(s.pickTasks.size(), 0);
@@ -527,11 +527,11 @@ void verifySolve()
         for (int count : seen)
             conserved = conserved && count == 1;
         check(conserved, "every pick task assigned exactly once");
-        check(s.score.isFeasible(),
-              "feasible (hard 0) reached, score " + s.score.toString());
+        check(s.score.feasible(),
+              "feasible (hard 0) reached, score " + s.score.str());
 
         OrderPickingSolution copy = s;
-        const Score recomputed = ScoreCalculator::calculateScore(copy);
+        const Score recomputed = ScoreCalculator::score(copy);
         check(s.score.hard == recomputed.hard
                   && std::fabs(s.score.soft - recomputed.soft) < 1e-9,
               "returned score matches a from-scratch recompute");

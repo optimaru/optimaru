@@ -5,7 +5,7 @@ C++ port (`../cpp`, generic engine in `include/optimaru`) with pybind11
 bindings on top.
 
 Assigns each meeting a starting time grain (15-minute units) and a room. The Java
-entity's two planning variables (`startingTimeGrain`, `room`) become one BASIC variable
+entity's two planning variables (`startingTimeGrain`, `room`) become one assignment variable
 via the composite encoding `grain_room = time_grain_pos * room_count + room_index`
 (-1 == unassigned), and a meeting occupies `duration_in_grains` consecutive grains from
 its start — every overlap constraint is computed over that whole span.
@@ -44,9 +44,9 @@ constraint is flippable, none is a reward, all twelve are on by default. The old
 pair now defaults to weight 1 in medium units (was 1e6 on soft): `level="hard"` gives one hard
 unit per person-grain, `level="soft"` one soft unit (outside the fold).
 
-### Score mapping (HardMediumSoftScore → HardSoftScore)
+### Score mapping (HardMediumSoftScore → Score)
 
-The engine score is `HardSoftScore(hard int64, soft double)`, so Java's medium level
+The engine score is `Score(hard int64, soft double)`, so Java's medium level
 is folded into soft:
 
 ```
@@ -65,7 +65,7 @@ below 1e6 — always the case on realistic instances. The fold is declared once 
 ```python
 import meeting_scheduling as ms
 
-schedule = ms.demo_data()  # reproduces Java DemoDataGenerator (24 meetings, 160 grains)
+schedule = ms.demo_data()  # the demo instance (24 meetings, 160 grains)
 result = ms.solve(schedule, time_limit_seconds=10.0, random_seed=42)
 raw = ms.constraint_costs(result)
 medium = sum(sum(e["costs"]) * e["weight"] for e in raw.values() if e["level"] == "medium")
@@ -124,9 +124,8 @@ uv run pytest -q
   `room_capacity_cost`, with room == null) score differently only in that state; on fully assigned solutions the
   semantics match exactly. In this port an unassigned (-1) entity contributes no score
   (engine contract).
-- `demo_data()` reproduces `java.util.Random(0)` and makes the same draws as the Java
-  demo, but pins the calendar dates to dayOfYear 200..203 (Java uses 4 days from
-  "tomorrow").
+- `demo_data()` is deterministic: its draws come from a seeded `std::mt19937_64` and the
+  calendar dates are pinned to dayOfYear 200..203.
 
 ## Solver defaults and quality bench (2026-08-18)
 

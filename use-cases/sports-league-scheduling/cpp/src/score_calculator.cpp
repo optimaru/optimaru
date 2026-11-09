@@ -7,7 +7,7 @@
 #include <vector>
 
 #include "sls/constraints.hpp"
-#include "optimaru/api/score/level.hpp"
+#include "optimaru/score/levels.hpp"
 
 namespace sls
 {
@@ -244,14 +244,14 @@ Breakdown ScoreCalculator::computeBreakdown(LeagueSchedule &schedule)
     return b;
 }
 
-Score ScoreCalculator::calculateScore(LeagueSchedule &schedule)
+Score ScoreCalculator::score(LeagueSchedule &schedule)
 {
     const Breakdown b = computeBreakdown(schedule);
     Score score;
     score.hard = -b.hardTotal();
     // Not `0.0 - x`: GCC folds that into a negation for an integer x, which
     // gives -0.0 for a zero total.
-    score.soft = optimaru::withoutNegativeZero(-static_cast<double>(b.softTotal()));
+    score.soft = optimaru::without_negative_zero(-static_cast<double>(b.softTotal()));
     schedule.score = score;
     return score;
 }

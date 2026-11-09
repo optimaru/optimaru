@@ -3,11 +3,11 @@
 Lots follow re-entrant routes over alternative tools (batch tools included), with
 sequence-dependent setups, inter-tool transport, queue-time windows, maintenance windows,
 auxiliary resources and pinned operations. The search state is one machine choice and one
-priority rank per operation, folded into one BASIC planning value per operation row
+priority rank per operation, folded into one assignment-shape planning value per operation row
 (``rank * K + slot``); the C++ serial schedule-generation decoder turns it into the
 schedule (``assignments``), exactly like 0.1.x's Python decoder did.
 
-Score (HardSoftScore), at the default weights: hard = the sum of the 14 hard constraints,
+Score, at the default weights: hard = the sum of the 14 hard constraints,
 soft = preference + minimum batch fill + load imbalance + 10 x weighted tardiness + cycle
 time + makespan (see `semiconductor_scheduling.constraints`; ``constraint_info()`` lists
 every default level and weight).

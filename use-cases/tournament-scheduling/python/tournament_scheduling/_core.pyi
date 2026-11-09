@@ -13,7 +13,7 @@ Constraints of the Java quickstart (HardMediumSoftBigDecimalScore) and the score
   soft 4. confrontation_count_imbalance_cost  LoadBalance unfairness of head-to-head counts per
                                               team pair
 
-The engine score is HardSoftScore(hard int, soft float), so medium is folded into
+The engine score is Score(hard int, soft float), so medium is folded into
 soft: ``soft = -(medium unfairness * MEDIUM_SCALE + soft unfairness)``
 (MEDIUM_SCALE == 1e6; medium always dominates soft). "Unfairness" is
 load-balance unfairness — sqrt(sum(load^2) - sum(load)^2 / n) rounded

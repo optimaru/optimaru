@@ -15,31 +15,31 @@ namespace
 {
 
 void solveRandomInstance(int visitCount, int vehicleCount, int seconds,
-                         bool ruinRecreate)
+                         bool ruin_recreate)
 {
     std::printf(
         "== Solving a random Firenze-like instance (%d visits, %d vehicles, %ds,"
         " ALNS %s) ==\n",
-        visitCount, vehicleCount, seconds, ruinRecreate ? "on" : "off");
+        visitCount, vehicleCount, seconds, ruin_recreate ? "on" : "off");
     VehicleRoutePlan plan = buildRandomInstance(visitCount, vehicleCount, /*seed=*/2);
 
     plan.rebuildUnassignedPool();
-    const Score initial = ScoreCalculator::calculateScore(plan);
-    std::printf("  initial (all unassigned): %s\n", initial.toString().c_str());
+    const Score initial = ScoreCalculator::score(plan);
+    std::printf("  initial (all unassigned): %s\n", initial.str().c_str());
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(seconds);
-    config.randomSeed = 2;
-    config.ruinRecreate = ruinRecreate;
-    config.onNewBest = [](std::int64_t step, const Score &s)
+    config.time_limit = std::chrono::seconds(seconds);
+    config.seed = 2;
+    config.ruin_recreate = ruin_recreate;
+    config.on_new_best = [](std::int64_t step, const Score &s)
     {
         std::printf("    new best @step %-8lld %s\n", static_cast<long long>(step),
-                    s.toString().c_str());
+                    s.str().c_str());
     };
     Solver(config).solve(plan);
 
-    std::printf("  final score: %s  (feasible=%s)\n", plan.score.toString().c_str(),
-                plan.score.isFeasible() ? "true" : "false");
+    std::printf("  final score: %s  (feasible=%s)\n", plan.score.str().c_str(),
+                plan.score.feasible() ? "true" : "false");
     for (const Vehicle &vehicle : plan.vehicles)
     {
         std::printf("    vehicle %s (cap %d): %zu visits\n", vehicle.id.c_str(),
@@ -57,13 +57,13 @@ int main(int argc, char **argv)
     const int visits = (argc > 1) ? std::atoi(argv[1]) : 25;
     const int vehicles = (argc > 2) ? std::atoi(argv[2]) : 6;
     const int seconds = (argc > 3) ? std::atoi(argv[3]) : 3;
-    bool ruinRecreate = true;
+    bool ruin_recreate = true;
     for (int i = 1; i < argc; ++i)
     {
         if (std::strcmp(argv[i], "--no-alns") == 0)
-            ruinRecreate = false;
+            ruin_recreate = false;
     }
 
-    solveRandomInstance(visits, vehicles, seconds, ruinRecreate);
+    solveRandomInstance(visits, vehicles, seconds, ruin_recreate);
     return 0;
 }

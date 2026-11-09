@@ -32,7 +32,7 @@ target_link_libraries(ts_test PRIVATE ts_core)
 target_compile_options(ts_test PRIVATE -Wall -Wextra)
 
 # Plugin-assembly path (ts/constraints.hpp): the same provider decomposed into
-# one component each on the engine's DecomposedScoreCalculator, checked
+# one component each on the engine's DecomposedObjective, checked
 # bit-for-bit against the monolithic calculators.
 add_executable(ts_plugin_test test/ts_plugin_test.cpp)
 target_link_libraries(ts_plugin_test PRIVATE ts_core)

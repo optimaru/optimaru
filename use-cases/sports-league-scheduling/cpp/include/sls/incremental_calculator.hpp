@@ -7,14 +7,14 @@
 #include <vector>
 
 #include "sls/domain.hpp"
-#include "optimaru/api/score/calculator/incremental_score_calculator.hpp"
+#include "optimaru/score/objective.hpp"
 
 namespace sls
 {
 
 // The sports-league-scheduling implementation of the engine's
-// optimaru::IncrementalScoreCalculator — the C++ analog of implementing
-// Java's IncrementalScoreCalculator instead of a ConstraintProvider.
+// optimaru::Objective — the C++ analog of implementing
+// Java's Objective instead of a ConstraintProvider.
 //
 // Every constraint couples a match only to matches on the same or an
 // adjacent round index, so a single variable change is O(delta):
@@ -32,23 +32,23 @@ namespace sls
 //   - soft 5/9 (startToAwayHopCost / awayToEndHopCost) and soft 10
 //     (workdayClassicMatchesCost): O(1) lookups.
 //
-// calculateScore weights the running totals with the components'
+// score weights the running totals with the components'
 // kDefaultWeight (the default assembly, computed in int64).
 //
-// beforeVariableChanged retracts the match's contribution while `round`
-// still holds the OLD value; afterVariableChanged inserts the NEW value.
+// before_assign retracts the match's contribution while `round`
+// still holds the OLD value; after_assign inserts the NEW value.
 // Unassigned matches (round == -1) contribute nothing, so the construction
 // heuristic can score partially initialized solutions. The full-recompute
-// reference is ScoreCalculator::calculateScore (checked in the tests and
-// under EnvironmentMode::FULL_ASSERT).
+// reference is ScoreCalculator::score (checked in the tests and
+// under ScoreChecks::ScoreChecks::Full).
 class SportsLeagueIncrementalScoreCalculator final
-    : public optimaru::IncrementalScoreCalculator<LeagueSchedule>
+    : public optimaru::Objective<LeagueSchedule>
 {
 public:
-    void resetWorkingSolution(LeagueSchedule &workingSolution) override;
-    void beforeVariableChanged(int matchIndex) override;
-    void afterVariableChanged(int matchIndex) override;
-    Score calculateScore() override;
+    void rebuild(LeagueSchedule &solution) override;
+    void before_assign(int matchIndex) override;
+    void after_assign(int matchIndex) override;
+    Score score() override;
 
     // Tournament selection on the per-match soft cost (see matchCost_): the
     // most expensive of `sample` randomly drawn matches. Drives the solver's
@@ -79,7 +79,7 @@ private:
     std::vector<int> pairCnt_;  // orderedPairId x roundIndex
 
     // Raw running totals (all counted positive; weights and signs applied in
-    // calculateScore).
+    // score).
     std::int64_t teamConflict_ = 0;  // hard 1, teamConflictCost
     std::int64_t consecutive_ = 0;   // hard 2 + 3, consecutive*MatchesCost
     std::int64_t repeat_ = 0;        // hard 4, repeatMatchOnNextDayCost
@@ -94,7 +94,7 @@ private:
     // Soft penalty each match currently carries: its own start/end hop and
     // classic penalty plus every hop pair it takes part in, credited to both
     // matches of the pair, each term at its component's kDefaultWeight (as in
-    // calculateScore). Updated by exactly the same deltas as the running
+    // score). Updated by exactly the same deltas as the running
     // totals above, so it needs no extra scans; an unassigned match is 0.
     // Read only by the guided selection (costliestMatch) — never by the score.
     std::vector<std::int64_t> matchCost_;

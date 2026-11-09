@@ -29,7 +29,7 @@ struct OrderSplitByTrolleyCost final : OpUnitConstraint
         : OpUnitConstraint("orderSplitByTrolleyCost", weight, kDefaultLevel)
     {
     }
-    void onReset(const OrderPickingSolution &solution) override
+    void on_reset(const OrderPickingSolution &solution) override
     {
         seen_.assign(solution.orders.size(), 0);
     }

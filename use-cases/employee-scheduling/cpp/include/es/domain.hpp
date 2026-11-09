@@ -9,8 +9,8 @@
 #include <utility>
 #include <vector>
 
-#include "optimaru/api/score/buildin/hard_soft_score.hpp"
-#include "optimaru/api/domain/solution_descriptor.hpp"
+#include "optimaru/score/score.hpp"
+#include "optimaru/model/solution_traits.hpp"
 
 namespace es {
 
@@ -38,7 +38,7 @@ inline DayIndex dayOf(Minutes m) { return m / MINUTES_PER_DAY; }
 // ---------------------------------------------------------------------------
 // The score type comes from the generic engine; hard penalties are
 // whole numbers, soft carries the fractional load-balancing "unfairness".
-using Score = optimaru::HardSoftScore;
+using Score = optimaru::Score;
 
 // ---------------------------------------------------------------------------
 // Employee
@@ -105,25 +105,25 @@ struct EmployeeSchedule {
 }  // namespace es
 
 // ---------------------------------------------------------------------------
-// SolutionDescriptor specialization: entities are shifts, the planning variable
+// SolutionTraits specialization: entities are shifts, the planning variable
 // is Shift::employeeIndex, the value range is the employee list.
 // ---------------------------------------------------------------------------
 template <>
-struct optimaru::SolutionDescriptor<es::EmployeeSchedule> {
-    static constexpr optimaru::VariableKind kind = optimaru::VariableKind::BASIC;
-    static int entityCount(const es::EmployeeSchedule& s) {
+struct optimaru::SolutionTraits<es::EmployeeSchedule> {
+    static constexpr optimaru::Shape shape = optimaru::Shape::Assignment;
+    static int entity_count(const es::EmployeeSchedule& s) {
         return static_cast<int>(s.shifts.size());
     }
-    static int valueCount(const es::EmployeeSchedule& s) {
+    static int value_count(const es::EmployeeSchedule& s) {
         return static_cast<int>(s.employees.size());
     }
-    static int getVariable(const es::EmployeeSchedule& s, int shiftIndex) {
+    static int value_of(const es::EmployeeSchedule& s, int shiftIndex) {
         return s.shifts[shiftIndex].employeeIndex;
     }
-    static void setVariable(es::EmployeeSchedule& s, int shiftIndex, int employeeIndex) {
+    static void assign(es::EmployeeSchedule& s, int shiftIndex, int employeeIndex) {
         s.shifts[shiftIndex].employeeIndex = employeeIndex;
     }
-    static bool isPinned(const es::EmployeeSchedule& s, int shiftIndex) {
+    static bool is_pinned(const es::EmployeeSchedule& s, int shiftIndex) {
         return s.shifts[shiftIndex].pinned;
     }
 };

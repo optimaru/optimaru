@@ -58,7 +58,7 @@ namespace st::canon
 // The full canonical set, every component at its kDefaultWeight /
 // kDefaultLevel: nine hard constraints at weight 1, the six soft ones at
 // 20/3/30/10/5/1, and the two structural ones (always 0). It scores
-// bit-for-bit like ScoreCalculator::calculateScore and the monolithic
+// bit-for-bit like ScoreCalculator::score and the monolithic
 // incremental calculator at their default ObjectiveWeights.
 //
 // `defaultConstraints()` hands the set back as a ConstraintAssembly, so a

@@ -13,7 +13,7 @@ struct LocationPresenceBase : EsUnitConstraint {
     LocationPresenceBase(std::string name, double weight, optimaru::Level level,
                          std::string location)
         : EsUnitConstraint(std::move(name), weight, level), loc_(std::move(location)) {}
-    void onReset(const EmployeeSchedule& s) override {
+    void on_reset(const EmployeeSchedule& s) override {
         horizon_ = 0;
         day_.resize(s.shifts.size());
         match_.resize(s.shifts.size());

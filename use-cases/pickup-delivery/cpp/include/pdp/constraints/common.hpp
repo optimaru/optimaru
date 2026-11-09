@@ -8,8 +8,8 @@
 
 #include "pdp/domain.hpp"
 #include "pdp/score_calculator.hpp"
-#include "optimaru/api/score/calculator/constraint_assembly.hpp"
-#include "optimaru/api/score/calculator/decomposed_score_calculator.hpp"
+#include "optimaru/score/constraint_assembly.hpp"
+#include "optimaru/score/decomposed_objective.hpp"
 
 namespace pdp
 {
@@ -18,8 +18,8 @@ namespace pdp
 // Plugin-style constraint components (the school-timetabling pattern)
 // ---------------------------------------------------------------------------
 // The PDPTW constraints, split into one small component each on the engine's
-// DecomposedScoreCalculator — an optional assembly path NEXT TO
-// ScoreCalculator::calculateScore and the monolithic incremental calculator,
+// DecomposedObjective — an optional assembly path NEXT TO
+// ScoreCalculator::score and the monolithic incremental calculator,
 // which stay the tuned default path for the seven core rules.
 //
 // Unit choice: with the LIST descriptor the calculator's unit is one LIST,
@@ -44,20 +44,20 @@ namespace pdp
 // Naming: one header per component, named after its struct
 // (MaxTravelTimeCost -> max_travel_time_cost.hpp). The registry name is the
 // struct name with a lower-case first letter ("maxTravelTimeCost"); Python
-// sees it through pythonName() ("max_travel_time_cost").
+// sees it through python_name() ("max_travel_time_cost").
 //
 // Defaults: each component declares them once, as static constexpr
 // kDefaultWeight / kDefaultLevel passed to the base constructor. They are
 // assembly-time metadata, not part of the cost. Override them per instance
 // with the constructor's weight argument or the mutable `level` / `weight` /
-// `exponent` / `offset` / `clip` (validated setters setWeight / setLevel /
-// setExponent / setOffset / setClip), or by name through ConstraintAssembly.
-// Read the level with `isHard()` or `level`. A name may be held several times
-// (ConstraintAssembly::addInstances): each instance has its own knobs and the
+// `exponent` / `offset` / `clip` (validated setters set_weight / set_level /
+// set_exponent / set_offset / set_clip), or by name through ConstraintAssembly.
+// Read the level with `is_hard()` or `level`. A name may be held several times
+// (ConstraintAssembly::add_instances): each instance has its own knobs and the
 // instances add up.
 //
 // Score levels: HardMediumSoft. The medium level (unassignedRequestsCost) is
-// folded into the engine's HardSoftScore by the calculator as
+// folded into the engine's Score by the calculator as
 // `soft = medium * kMediumUnit + soft` (kMediumFold in domain.hpp), so a
 // medium weight is in medium units: weight 1 = one medium unit per minute.
 // The three coupling rules and requiredVehicleCost default to
@@ -82,9 +82,9 @@ namespace pdp
 // Cost sign convention (see decomposed_score_calculator.hpp): positive =
 // penalty, 0 = no violation; the calculator negates into the score. The
 // default assembly therefore scores bit-for-bit like
-// ScoreCalculator::calculateScore on a plan without route policies.
+// ScoreCalculator::score on a plan without route policies.
 
-using DecomposedCalculator = optimaru::DecomposedScoreCalculator<PdpRoutePlan>;
+using DecomposedCalculator = optimaru::DecomposedObjective<PdpRoutePlan>;
 using ConstraintAssembly = optimaru::ConstraintAssembly<PdpRoutePlan>;
 using PdpUnitConstraint = optimaru::UnitConstraint<PdpRoutePlan>;
 using PdpGlobalConstraint = optimaru::GlobalConstraint<PdpRoutePlan>;
@@ -106,10 +106,10 @@ inline bool isPool(const PdpRoutePlan &plan, int unit)
 }
 
 // The base of every per-vehicle component: a unit constraint that EVALUATES
-// the vehicles and not the pool list (scopedUnits() = 0 .. vehicles - 1, set
+// the vehicles and not the pool list (scoped_units() = 0 .. vehicles - 1, set
 // at reset). The pool's cost is 0 either way, so no score changes; what the
 // scope decides is where the literal offset formula (clip = false) charges
-// shapeCost(0 - offset): every vehicle, an idle one included, and never the
+// shape_cost(0 - offset): every vehicle, an idle one included, and never the
 // pool, which is no vehicle. constraint_costs() reports the scope as
 // "units", so the Python score() charges the same vehicles. The two
 // components that DO price the pool (requiredVehicleCost,
@@ -118,12 +118,12 @@ struct PerVehicleConstraint : PdpUnitConstraint
 {
     using PdpUnitConstraint::PdpUnitConstraint;
 
-    void onReset(const PdpRoutePlan &plan) override
+    void on_reset(const PdpRoutePlan &plan) override
     {
         vehicles_.resize(plan.vehicles.size());
         std::iota(vehicles_.begin(), vehicles_.end(), 0);
     }
-    const std::vector<int> *scopedUnits() const override { return &vehicles_; }
+    const std::vector<int> *scoped_units() const override { return &vehicles_; }
 
 private:
     std::vector<int> vehicles_;
@@ -233,21 +233,21 @@ struct RequestCouplingConstraint : PdpGlobalConstraint
                                      int dropoffPosition) const = 0;
 
     void reset(const PdpRoutePlan &plan,
-               const std::vector<std::vector<int>> &membersPerUnit) override
+               const std::vector<std::vector<int>> &members_per_unit) override
     {
         plan_ = &plan;
         unitOf_.assign(plan.nodes.size(), -1);
         positionOf_.assign(plan.nodes.size(), -1);
-        for (std::size_t unit = 0; unit < membersPerUnit.size(); ++unit)
+        for (std::size_t unit = 0; unit < members_per_unit.size(); ++unit)
         {
             if (detail::isPool(plan, static_cast<int>(unit)))
                 continue;
-            record(static_cast<int>(unit), membersPerUnit[unit]);
+            record(static_cast<int>(unit), members_per_unit[unit]);
         }
         recompute();
     }
 
-    void onUnitChanged(const PdpRoutePlan &plan,
+    void on_unit_changed(const PdpRoutePlan &plan,
                        int unit,
                        const std::vector<int> &members) override
     {

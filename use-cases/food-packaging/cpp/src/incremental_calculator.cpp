@@ -114,11 +114,11 @@ std::int64_t FoodPackagingIncrementalScoreCalculator::pairOverlap(
     return total;
 }
 
-void FoodPackagingIncrementalScoreCalculator::resetWorkingSolution(
-    PackagingSchedule &workingSolution)
+void FoodPackagingIncrementalScoreCalculator::rebuild(
+    PackagingSchedule &solution)
 {
-    schedule_ = &workingSolution;
-    const int lineCount = workingSolution.lineCount();
+    schedule_ = &solution;
+    const int lineCount = solution.lineCount();
 
     // The operator assignment is fixed for the duration of one engine run
     // (fp::Solver re-optimizes it BETWEEN runs), so the same-operator line
@@ -130,8 +130,8 @@ void FoodPackagingIncrementalScoreCalculator::resetWorkingSolution(
         for (int m = 0; m < lineCount; ++m)
         {
             if (m != l
-                && workingSolution.lines[m].operatorIndex
-                       == workingSolution.lines[l].operatorIndex)
+                && solution.lines[m].operator_index
+                       == solution.lines[l].operator_index)
                 sameOperatorLines_[l].push_back(m);
         }
     }
@@ -144,7 +144,7 @@ void FoodPackagingIncrementalScoreCalculator::resetWorkingSolution(
     conflictTotal_ = 0;
     assignedDuration_ = 0;
     totalDuration_ = 0;
-    for (const Job &job : workingSolution.jobs)
+    for (const Job &job : solution.jobs)
         totalDuration_ += job.durationMinutes;
 
     for (int l = 0; l < lineCount; ++l)
@@ -170,7 +170,7 @@ void FoodPackagingIncrementalScoreCalculator::resetWorkingSolution(
     }
 }
 
-void FoodPackagingIncrementalScoreCalculator::beforeListChanged(int listIndex)
+void FoodPackagingIncrementalScoreCalculator::before_list_edit(int listIndex)
 {
     if (listIndex >= schedule_->lineCount())
         return;  // pool: membership is scored via assignedDuration_ only
@@ -188,7 +188,7 @@ void FoodPackagingIncrementalScoreCalculator::beforeListChanged(int listIndex)
     }
 }
 
-void FoodPackagingIncrementalScoreCalculator::afterListChanged(int listIndex)
+void FoodPackagingIncrementalScoreCalculator::after_list_edit(int listIndex)
 {
     if (listIndex >= schedule_->lineCount())
         return;
@@ -211,7 +211,7 @@ void FoodPackagingIncrementalScoreCalculator::afterListChanged(int listIndex)
     }
 }
 
-Score FoodPackagingIncrementalScoreCalculator::currentScore() const
+Score FoodPackagingIncrementalScoreCalculator::current_score() const
 {
     return {-(kMaxEndWeight * totalHardLate_
               + kCleaningConflictWeight * conflictTotal_),
@@ -220,10 +220,10 @@ Score FoodPackagingIncrementalScoreCalculator::currentScore() const
             -(kMakespanWeight * totalMakespanSq_)};
 }
 
-optimaru::HardSoftScore
-FoodPackagingIncrementalScoreCalculator::calculateScore()
+optimaru::Score
+FoodPackagingIncrementalScoreCalculator::score()
 {
-    return toEngineScore(currentScore());
+    return toEngineScore(current_score());
 }
 
 }  // namespace fp

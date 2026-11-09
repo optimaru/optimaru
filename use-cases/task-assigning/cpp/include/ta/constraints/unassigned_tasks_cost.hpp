@@ -27,19 +27,19 @@ struct UnassignedTasksCost final : TaGlobalConstraint
     {
     }
     void reset(const TaskAssigningSolution &solution,
-               const std::vector<std::vector<int>> &membersPerUnit) override
+               const std::vector<std::vector<int>> &members_per_unit) override
     {
         taskCount_ = static_cast<std::int64_t>(solution.tasks.size());
-        sizes_.assign(membersPerUnit.size(), 0);
+        sizes_.assign(members_per_unit.size(), 0);
         assigned_ = 0;
-        for (std::size_t unit = 0; unit < membersPerUnit.size(); ++unit)
+        for (std::size_t unit = 0; unit < members_per_unit.size(); ++unit)
         {
             sizes_[unit]
-                = static_cast<std::int64_t>(membersPerUnit[unit].size());
+                = static_cast<std::int64_t>(members_per_unit[unit].size());
             assigned_ += sizes_[unit];
         }
     }
-    void onUnitChanged(const TaskAssigningSolution & /*solution*/,
+    void on_unit_changed(const TaskAssigningSolution & /*solution*/,
                        int unit,
                        const std::vector<int> &members) override
     {

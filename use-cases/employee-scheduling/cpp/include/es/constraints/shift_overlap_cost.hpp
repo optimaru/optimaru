@@ -14,7 +14,7 @@ struct ShiftOverlapCost final : GroupableAssignmentConstraint {
 
     explicit ShiftOverlapCost(double weight = kDefaultWeight)
         : GroupableAssignmentConstraint("shiftOverlapCost", weight, kDefaultLevel) {}
-    void onReset(const EmployeeSchedule& s) override {
+    void on_reset(const EmployeeSchedule& s) override {
         start_.resize(s.shifts.size());
         end_.resize(s.shifts.size());
         for (std::size_t i = 0; i < s.shifts.size(); ++i) {
@@ -32,8 +32,8 @@ struct ShiftOverlapCost final : GroupableAssignmentConstraint {
         }
         return static_cast<double>(c);
     }
-    bool supportsDelta() const override { return true; }
-    double deltaCost(const EmployeeSchedule&, int /*unit*/,
+    bool supports_delta() const override { return true; }
+    double delta_cost(const EmployeeSchedule&, int /*unit*/,
                      const std::vector<int>& members, int entity) const override {
         std::int64_t c = 0;
         for (int i : members) {

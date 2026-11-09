@@ -6,8 +6,8 @@
 #include <string>
 #include <vector>
 
-#include "optimaru/api/domain/solution_descriptor.hpp"
-#include "optimaru/api/score/buildin/hard_soft_score.hpp"
+#include "optimaru/model/solution_traits.hpp"
+#include "optimaru/score/score.hpp"
 
 namespace mnt
 {
@@ -15,15 +15,15 @@ namespace mnt
 // ---------------------------------------------------------------------------
 // Score
 // ---------------------------------------------------------------------------
-// The Java quickstart already uses HardSoftScore, so the engine's
-// HardSoftScore (int64 hard, double soft) maps 1:1 — no level remapping is
+// The Java quickstart already uses Score, so the engine's
+// Score (int64 hard, double soft) maps 1:1 — no level remapping is
 // needed (no medium level, so no optimaru::MediumFoldOf specialization). The
 // soft weights are kept verbatim from the Java ConstraintProvider:
 // beforeIdealEndDateCost x1, tagConflictCost x1'000, afterIdealEndDateCost
 // x1'000'000 per day — the components' kDefaultWeight
 // (mnt/constraints/*_cost.hpp). All contributions are integral, so the
 // double soft field stays exact.
-using Score = optimaru::HardSoftScore;
+using Score = optimaru::Score;
 
 // ---------------------------------------------------------------------------
 // Dates
@@ -120,7 +120,7 @@ struct MaintenanceSchedule
     Score score;
 
     // Set once by ScoreCalculator::prepare; guards against rebuilding the
-    // derived tables on every calculateScore call.
+    // derived tables on every score call.
     bool prepared = false;
 
     // Filled by ScoreCalculator::prepare:
@@ -160,32 +160,32 @@ struct MaintenanceSchedule
 }  // namespace mnt
 
 // ---------------------------------------------------------------------------
-// SolutionDescriptor specialization (the @PlanningEntity/@PlanningVariable
+// SolutionTraits specialization (the @PlanningEntity/@PlanningVariable
 // annotations of the C++ engine): entities are jobs, the planning variable is
 // Job::crewDate, the value range is the (startDate x crew) grid.
 // ---------------------------------------------------------------------------
-template <> struct optimaru::SolutionDescriptor<mnt::MaintenanceSchedule>
+template <> struct optimaru::SolutionTraits<mnt::MaintenanceSchedule>
 {
-    static constexpr optimaru::VariableKind kind
-        = optimaru::VariableKind::BASIC;
-    static int entityCount(const mnt::MaintenanceSchedule &s)
+    static constexpr optimaru::Shape shape
+        = optimaru::Shape::Assignment;
+    static int entity_count(const mnt::MaintenanceSchedule &s)
     {
         return static_cast<int>(s.jobs.size());
     }
-    static int valueCount(const mnt::MaintenanceSchedule &s)
+    static int value_count(const mnt::MaintenanceSchedule &s)
     {
         return s.crewDateCount();
     }
-    static int getVariable(const mnt::MaintenanceSchedule &s, int jobIndex)
+    static int value_of(const mnt::MaintenanceSchedule &s, int jobIndex)
     {
         return s.jobs[jobIndex].crewDate;
     }
     static void
-    setVariable(mnt::MaintenanceSchedule &s, int jobIndex, int crewDate)
+    assign(mnt::MaintenanceSchedule &s, int jobIndex, int crewDate)
     {
         s.jobs[jobIndex].crewDate = crewDate;
     }
-    static bool isPinned(const mnt::MaintenanceSchedule &s, int jobIndex)
+    static bool is_pinned(const mnt::MaintenanceSchedule &s, int jobIndex)
     {
         return s.jobs[jobIndex].pinned;
     }

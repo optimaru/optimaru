@@ -6,8 +6,8 @@
 #include <stdexcept>
 #include <vector>
 
-#include "optimaru/api/score/calculator/constraint_assembly.hpp"
-#include "optimaru/api/score/calculator/decomposed_score_calculator.hpp"
+#include "optimaru/score/constraint_assembly.hpp"
+#include "optimaru/score/decomposed_objective.hpp"
 #include "ts/domain.hpp"
 #include "ts/score_calculator.hpp"
 
@@ -19,7 +19,7 @@ namespace ts
 // ---------------------------------------------------------------------------
 // The four constraints of the reference tournament-scheduling
 // TournamentScheduleConstraintProvider, split into one small component each on
-// the engine's DecomposedScoreCalculator — an optional assembly path NEXT TO
+// the engine's DecomposedObjective — an optional assembly path NEXT TO
 // the monolithic TournamentSchedulingIncrementalScoreCalculator, which stays
 // the tuned default fast path.
 //
@@ -31,7 +31,7 @@ namespace ts
 // The two hard rules are per-team sums and run as UnitConstraints. Both
 // load-balance rules are statistics ACROSS units — an unfairness over the
 // per-team loads, and one over the per-team-PAIR confrontation counts — so
-// they run as GlobalConstraints on the onMemberChanged fast path, maintaining
+// they run as GlobalConstraints on the on_member_changed fast path, maintaining
 // exactly the aggregates the monolithic calculator keeps.
 //
 // Names and defaults: every component is one `<Subject>Cost` struct in
@@ -49,8 +49,8 @@ namespace ts
 //   confrontationCountImbalanceCost  soft,   1  unfairness of per-pair counts
 //
 // Score levels: the quickstart scores with HardMediumSoftBigDecimalScore. This
-// domain keeps the engine's HardSoftScore and declares how its medium level
-// folds into soft ONCE, in domain.hpp (kMediumFold = intoSoft(kMediumScale =
+// domain keeps the engine's Score and declares how its medium level
+// folds into soft ONCE, in domain.hpp (kMediumFold = into_soft(kMediumScale =
 // 1e6), registered through optimaru::MediumFoldOf<TournamentSchedule>). The
 // medium component is `Level::Medium` at weight 1 in medium units; the
 // decomposed calculator keeps a separate medium accumulator and folds it with
@@ -74,19 +74,19 @@ namespace ts
 // metadata, not part of the cost. Override them per instance through the
 // assembly's knob setters (`weight` / `level` / `exponent` / `offset` /
 // `clip`; `hard` / `soft` are level(Hard) / level(Soft)) or the validated
-// `setWeight` / `setLevel` / `setExponent` / `setOffset` / `setClip` of the
-// component (`component->setLevel(optimaru::Level::Soft)`). Any component may
+// `set_weight` / `set_level` / `set_exponent` / `set_offset` / `set_clip` of the
+// component (`component->set_level(optimaru::Level::Soft)`). Any component may
 // take any of the three levels: the medium component moved to hard costs 1
 // hard per raw unit (rounded), moved to soft 1 soft per raw unit (outside
 // the fold), a hard or soft one moved to medium 1 medium unit; an explicit
 // weight is in units of the level in effect. A name may be held several
-// times (ConstraintAssembly::addInstances), each instance with its own knobs.
+// times (ConstraintAssembly::add_instances), each instance with its own knobs.
 //
 // Cost sign convention (see decomposed_score_calculator.hpp): positive =
 // penalty; the calculator negates into the score.
 
 using DecomposedCalculator
-    = optimaru::DecomposedScoreCalculator<TournamentSchedule>;
+    = optimaru::DecomposedObjective<TournamentSchedule>;
 using ConstraintAssembly = optimaru::ConstraintAssembly<TournamentSchedule>;
 using TsUnitConstraint = optimaru::UnitConstraint<TournamentSchedule>;
 using TsGlobalConstraint = optimaru::GlobalConstraint<TournamentSchedule>;
@@ -132,13 +132,13 @@ inline int dayOf(const TournamentSchedule &schedule, int assignmentIndex)
 // ---------------------------------------------------------------------------
 // Cross-unit global constraints
 // ---------------------------------------------------------------------------
-// Shared base: supportsMemberChange() routes everything through
-// onMemberChanged; the unit-diff hook is unreachable for BASIC solutions.
+// Shared base: supports_member_change() routes everything through
+// on_member_changed; the unit-diff hook is unreachable for BASIC solutions.
 struct MemberChangeGlobalConstraint : TsGlobalConstraint
 {
     using TsGlobalConstraint::TsGlobalConstraint;
-    bool supportsMemberChange() const override { return true; }
-    void onUnitChanged(const TournamentSchedule & /*schedule*/,
+    bool supports_member_change() const override { return true; }
+    void on_unit_changed(const TournamentSchedule & /*schedule*/,
                        int /*unit*/,
                        const std::vector<int> & /*members*/) override
     {

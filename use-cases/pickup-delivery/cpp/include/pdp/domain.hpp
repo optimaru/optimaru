@@ -8,9 +8,9 @@
 #include <string>
 #include <vector>
 
-#include "optimaru/api/domain/solution_descriptor.hpp"
-#include "optimaru/api/score/buildin/hard_soft_score.hpp"
-#include "optimaru/api/score/level.hpp"
+#include "optimaru/model/solution_traits.hpp"
+#include "optimaru/score/score.hpp"
+#include "optimaru/score/levels.hpp"
 
 namespace pdp
 {
@@ -37,7 +37,7 @@ constexpr Seconds NULL_TIME = -1;
 // HardMediumSoftScore
 // ---------------------------------------------------------------------------
 // Same convention and packing as the vehicle-routing port: the engine speaks
-// HardSoftScore(int64 hard, double soft), so medium and soft share the soft
+// Score(int64 hard, double soft), so medium and soft share the soft
 // level with a 10^9 multiplier. See vrp/domain.hpp for the magnitude analysis;
 // the bounds are identical here (|soft| = driving seconds, |medium| = service
 // minutes of unassigned requests).
@@ -49,7 +49,7 @@ constexpr Seconds NULL_TIME = -1;
 // therefore in medium units (unassignedRequestsCost: 1), never 10^9.
 constexpr std::int64_t kMediumUnit = 1000000000LL;  // 10^9
 constexpr optimaru::MediumFold kMediumFold
-    = optimaru::MediumFold::intoSoft(static_cast<double>(kMediumUnit));
+    = optimaru::MediumFold::into_soft(static_cast<double>(kMediumUnit));
 
 struct Score
 {
@@ -57,7 +57,7 @@ struct Score
     std::int64_t medium = 0;
     std::int64_t soft = 0;
 
-    bool isFeasible() const { return hard >= 0; }
+    bool feasible() const { return hard >= 0; }
 
     bool operator<(const Score &o) const
     {
@@ -75,23 +75,23 @@ struct Score
         return hard == o.hard && medium == o.medium && soft == o.soft;
     }
 
-    std::string toString() const
+    std::string str() const
     {
         return std::to_string(hard) + "hard/" + std::to_string(medium)
                + "medium/" + std::to_string(soft) + "soft";
     }
 };
 
-inline optimaru::HardSoftScore toEngineScore(const Score &s)
+inline optimaru::Score toEngineScore(const Score &s)
 {
     // soft + medium * 10^9: exact for the integral levels of this domain
     // (|engine soft| < 2^53), i.e. the old `medium * kMediumUnit + soft`.
-    return kMediumFold.toEngine(s.hard,
+    return kMediumFold.to_engine(s.hard,
                                 static_cast<double>(s.medium),
                                 static_cast<double>(s.soft));
 }
 
-// A best-score LIMIT (Solver::Config::bestScoreLimit) in engine terms.
+// A best-score LIMIT (Solver::Config::target_score) in engine terms.
 // kNoLevelFloor (INT64_MIN) on the medium or the soft level means "no floor
 // on the soft side": the engine's soft limit becomes -inf, so only the hard
 // level is compared and no soft score, however low, can miss the stop.
@@ -100,16 +100,16 @@ inline optimaru::HardSoftScore toEngineScore(const Score &s)
 // low enough soft score never reaches. Any other limit folds as a score.
 constexpr std::int64_t kNoLevelFloor = std::numeric_limits<std::int64_t>::min();
 
-inline optimaru::HardSoftScore toEngineScoreLimit(const Score &limit)
+inline optimaru::Score toEngineScoreLimit(const Score &limit)
 {
     if (limit.medium == kNoLevelFloor || limit.soft == kNoLevelFloor)
         return {limit.hard, -std::numeric_limits<double>::infinity()};
     return toEngineScore(limit);
 }
 
-inline Score fromEngineScore(const optimaru::HardSoftScore &e)
+inline Score fromEngineScore(const optimaru::Score &e)
 {
-    const auto combined = optimaru::roundScoreLevel(e.soft, "soft");
+    const auto combined = optimaru::round_score_level(e.soft, "soft");
     return {e.hard, combined / kMediumUnit, combined % kMediumUnit};
 }
 
@@ -259,70 +259,70 @@ struct PdpRoutePlan
 }  // namespace pdp
 
 // ---------------------------------------------------------------------------
-// SolutionDescriptor specialization
+// SolutionTraits specialization
 // ---------------------------------------------------------------------------
 // Same shape as vehicle-routing's: vehicles are the list owners, nodes are the
 // elements, and list index vehicles.size() is the virtual unassigned pool.
-template <> struct optimaru::SolutionDescriptor<pdp::PdpRoutePlan>
+template <> struct optimaru::SolutionTraits<pdp::PdpRoutePlan>
 {
-    static constexpr optimaru::VariableKind kind = optimaru::VariableKind::LIST;
+    static constexpr optimaru::Shape shape = optimaru::Shape::Sequence;
 
-    static int unassignedList(const pdp::PdpRoutePlan &s)
+    static int unassigned_list(const pdp::PdpRoutePlan &s)
     {
         return static_cast<int>(s.vehicles.size());
     }
 
-    static int listCount(const pdp::PdpRoutePlan &s)
+    static int list_count(const pdp::PdpRoutePlan &s)
     {
         return static_cast<int>(s.vehicles.size()) + 1;
     }
-    static int elementCount(const pdp::PdpRoutePlan &s)
+    static int element_count(const pdp::PdpRoutePlan &s)
     {
         return static_cast<int>(s.nodes.size());
     }
 
-    static std::vector<int> &listOf(pdp::PdpRoutePlan &s, int listIndex)
+    static std::vector<int> &list_of(pdp::PdpRoutePlan &s, int listIndex)
     {
-        return listIndex == unassignedList(s)
+        return listIndex == unassigned_list(s)
                    ? s.unassignedNodeIndices
                    : s.vehicles[listIndex].nodeIndices;
     }
-    static const std::vector<int> &listOf(const pdp::PdpRoutePlan &s,
+    static const std::vector<int> &list_of(const pdp::PdpRoutePlan &s,
                                           int listIndex)
     {
-        return listIndex == unassignedList(s)
+        return listIndex == unassigned_list(s)
                    ? s.unassignedNodeIndices
                    : s.vehicles[listIndex].nodeIndices;
     }
 
-    static int listSize(const pdp::PdpRoutePlan &s, int listIndex)
+    static int list_size(const pdp::PdpRoutePlan &s, int listIndex)
     {
-        return static_cast<int>(listOf(s, listIndex).size());
+        return static_cast<int>(list_of(s, listIndex).size());
     }
     static int
-    getElement(const pdp::PdpRoutePlan &s, int listIndex, int position)
+    element_at(const pdp::PdpRoutePlan &s, int listIndex, int position)
     {
-        return listOf(s, listIndex)[static_cast<std::size_t>(position)];
+        return list_of(s, listIndex)[static_cast<std::size_t>(position)];
     }
-    static void insertElement(pdp::PdpRoutePlan &s,
+    static void insert_element(pdp::PdpRoutePlan &s,
                               int listIndex,
                               int position,
                               int element)
     {
-        std::vector<int> &list = listOf(s, listIndex);
+        std::vector<int> &list = list_of(s, listIndex);
         list.insert(list.begin() + position, element);
     }
-    static int removeElement(pdp::PdpRoutePlan &s, int listIndex, int position)
+    static int remove_element(pdp::PdpRoutePlan &s, int listIndex, int position)
     {
-        std::vector<int> &list = listOf(s, listIndex);
+        std::vector<int> &list = list_of(s, listIndex);
         const int element = list[static_cast<std::size_t>(position)];
         list.erase(list.begin() + position);
         return element;
     }
     static void
-    reverseSegment(pdp::PdpRoutePlan &s, int listIndex, int first, int last)
+    reverse_segment(pdp::PdpRoutePlan &s, int listIndex, int first, int last)
     {
-        std::vector<int> &list = listOf(s, listIndex);
+        std::vector<int> &list = list_of(s, listIndex);
         std::reverse(list.begin() + first, list.begin() + last + 1);
     }
 };

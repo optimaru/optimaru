@@ -83,16 +83,18 @@ QAPLIB, SALBP).
 
 ## Features
 
-- **Planning variables**: BASIC (entity → value), LIST (ordered lists of
-  elements) and CHAINED (previous pointers/anchors, solved through a
-  synchronized list view so the full LIST move repertoire applies).
-- **Shadow variables** via `VariableListener<Solution>`
-  (`Solver::addVariableListener()`); FULL_ASSERT also catches stale shadows.
-- **Scoring**: `HardSoftScore` (int64 hard, double soft); constraints are
-  written as an `IncrementalScoreCalculator` (list hooks included) or composed
-  from named cost components with `CompositeIncrementalScoreCalculator`.
-  Move evaluation stays incremental (O(delta)).
-- **Constraint plugins**: `DecomposedScoreCalculator` scores named unit and
+- **Solution shapes** (`SolutionTraits<Solution>`): assignment (each entity
+  takes a value), sequence (ordered lists of elements) and chain (predecessor
+  links from anchors, solved through a synchronized list view so every
+  sequence move applies).
+- **Derived state** via `DerivedState<Solution>`
+  (`Solver::add_derived_state()`): values computed from the decisions, kept up
+  to date around every write; `ScoreChecks::Full` also catches stale ones.
+- **Scoring**: `Score` (int64 hard, double soft); constraints are written as an
+  incremental `Objective` (assignment and list hooks) or summed from named
+  components with `WeightedObjective`. Move evaluation stays incremental
+  (O(change)).
+- **Constraint plugins**: `DecomposedObjective` scores named unit and
   global components (`<Subject>Cost`). Each declares its default weight and
   level (`kDefaultWeight` / `kDefaultLevel`: hard, medium or soft); a caller
   re-states only five knobs per solve (`ConstraintAssembly`): `weight`,
@@ -100,39 +102,40 @@ QAPLIB, SALBP).
   raw cost `x >= 0` as a threshold (`max(0, x - offset) ** exponent`) or as
   the literal `(x - offset) ** exponent`, per unit (each vehicle, slot, ...),
   not on the total. A constraint may be added several times
-  (`addInstance()`), each instance with its own knobs, and the instances add
+  (`add_instance()`), each instance with its own knobs, and the instances add
   up. Rewards (raw cost <= 0) never go hard, the literal formula with an
   offset never lands on a level that counts toward the hard score (so hard 0
   still means no violation), structural constraints keep their level, and a
   domain with a medium level declares once how it folds into the hard/soft
   score (`MediumFold`).
-- **Score analysis**: `SolutionManager::analyze()` → `ScoreAnalysis` /
-  `ConstraintAnalysis`, a per-constraint breakdown over the named components.
-- **Verification**: `ScoreDirector` with `EnvironmentMode::FULL_ASSERT`;
-  score corruption throws `ScoreCorruptionError`.
-- **Construction heuristics**: First Fit, First Fit Decreasing, cheapest
-  insertion for list variables.
-- **Acceptors**: Hill Climbing, Late Acceptance, Entity Tabu, Simulated
-  Annealing, Great Deluge, Step Counting Hill Climbing, Record-to-Record Travel.
-- **Terminations**: spent / unimproved-spent / step count /
-  unimproved-step-count / best score, OR-composed.
-- **Moves**: change/swap (BASIC); relocate / swap / 2-opt / Or-opt / 2-opt\*
-  tail swap / CROSS-exchange (LIST), mixed by weight in `MoveSelectorConfig`.
-- **Nearby selection**: `NearbySelectionConfig::distanceMeter` biases moves
-  toward k-nearest neighbors.
+- **Score explanation**: `explain_score()` → `ScoreBreakdown`, a
+  per-constraint split over the named components; `rescore()` recomputes a
+  score from scratch.
+- **Verification**: `ScoreChecks::Full` compares every incremental score with
+  a full recompute and throws `ScoreMismatchError` on a difference.
+- **Construction**: first fit, first fit decreasing, cheapest insertion for
+  sequences.
+- **Acceptors**: hill climbing, late acceptance, entity tabu, simulated
+  annealing, great deluge, step counting hill climbing, record-to-record travel.
+- **Limits** (`Limits`): wall time, stall time, steps, stall steps, target
+  score; the first one reached ends the solve.
+- **Moves**: change / swap (assignment); relocate / swap / 2-opt / Or-opt /
+  2-opt\* tail swap / CROSS-exchange (sequence), mixed by weight in `MoveMix`.
+- **Nearby selection**: `NeighborSettings::distance` biases moves toward
+  k-nearest neighbours.
 - **Ruin & recreate**: adaptive ALNS — random/related/worst/SISR/route ruin +
   regret-k (default k=3, nearby-restricted) recreate + polish, adaptive operator
-  weights (roulette wheel by default; segmented roulette, alpha-UCB, random).
-- **Solving**: `SolverFactory` / `Solver` / `SolverConfig`; async background
-  solving with `SolverManager` / `SolverJob` / `SolverStatus` and
-  `terminateEarly()`; `solveMultiStart()` (N independent starts, best wins).
-- **Custom moves** (`preview/api/move`): `addMoveOperator` /
-  `addRuinOperator` / `setAcceptorFactory`.
+  weights (roulette wheel by default; segmented roulette, alpha-UCB, uniform).
+- **Solving**: `Solver<Solution>(settings).solve(solution, objective)`;
+  `solve_in_background()` → `BackgroundSolve` (`status()`, `request_stop()`,
+  `wait()`); `solve_multistart()` (N independent starts, best wins).
+- **Custom operators** (`search/operators.hpp`): `add_move_operator` /
+  `add_ruin_operator` / `set_acceptor_factory`.
 
 Multithreaded *move* evaluation is deliberately excluded: it only pays when a
 single score calculation is expensive (ms-scale); at this engine's ~200ns
 moves, per-step thread synchronization would cost more than it saves — use
-`solveMultiStart()` to occupy cores instead. Also out of scope:
+`solve_multistart()` to occupy cores instead. Also out of scope:
 exhaustive/partitioned search and REST layers.
 
 ## Performance features
@@ -156,7 +159,7 @@ code** — problems consume it as a library. Worked use cases live in
 [`benchmarks/`](benchmarks).
 
 ```
-include/optimaru/     the engine (header-only, one header per class)
+include/optimaru/     the engine (header-only)
 test/                 engine tests
 use-cases/<slug>/     22 problems built on the engine: C++ domain + solver
                       and a pybind11 package
@@ -169,85 +172,72 @@ benchmarks/cpsat-common/  comparison runner; points external-solver at this chec
 
 ## Engine layout
 
-The engine is a C++ reimplementation, with modifications, of the
-[Timefold Solver](https://github.com/TimefoldAI/timefold-solver) core
-(Apache-2.0); see [NOTICE](NOTICE).
-
 ```
 include/optimaru/
-├── optimaru.hpp                       umbrella include for consumers
-├── api/
-│   ├── domain/solution_descriptor.hpp             planning variable description
-│   │                                              (VariableKind::BASIC | LIST | CHAINED)
-│   ├── domain/variable/variable_listener.hpp      shadow variables
-│   ├── score/buildin/hard_soft_score.hpp          HardSoftScore
-│   ├── score/level.hpp                            Level (hard / medium / soft),
-│   │                                              MediumFold
-│   ├── score/calculator/incremental_score_calculator.hpp
-│   ├── score/calculator/chained_incremental_score_calculator.hpp
-│   ├── score/calculator/composite_incremental_score_calculator.hpp
-│   │                                              cost components, weighted sum
-│   ├── score/calculator/decomposed_score_calculator.hpp
-│   │                                              per-unit constraint plugins
-│   ├── score/calculator/constraint_assembly.hpp   default constraint set: weight / level /
-│   │                                              exponent / offset / clip / drop by name,
-│   │                                              repeated instances, info() catalog
-│   ├── score/director/score_director.hpp          + EnvironmentMode::FULL_ASSERT
-│   ├── score/analysis/score_analysis.hpp          ScoreAnalysis / ConstraintAnalysis
-│   └── solver/{solver.hpp, solver_factory.hpp,
-│               solution_manager.hpp, solver_manager.hpp}
-├── config/                            SolverConfig as plain structs
-│   ├── solver/solver_config.hpp
-│   ├── solver/termination/termination_config.hpp
-│   ├── constructionheuristic/construction_heuristic_config.hpp
-│   ├── localsearch/local_search_config.hpp        + RuinRecreateConfig (ALNS)
-│   ├── localsearch/decider/acceptor/local_search_acceptor_config.hpp
-│   ├── heuristic/selector/move_selector_config.hpp  move mix weights (union selector)
-│   └── heuristic/selector/common/nearby/nearby_selection_config.hpp
-├── impl/
-│   ├── solver/default_solver.hpp                  phase orchestration, multi-start
-│   ├── solver/termination/                        termination_criterion.hpp (plugin point),
-│   │                                              one file per criterion, solver_termination.hpp
-│   │                                              (OR-composite); termination.hpp = umbrella
-│   ├── constructionheuristic/default_construction_heuristic_phase.hpp
-│   ├── localsearch/default_local_search_phase.hpp step loop, sampled moves, LNS
-│   ├── localsearch/list_move.hpp                  the LIST moves every strategy
-│   │                                              previews / applies / undoes
-│   ├── localsearch/element_index.hpp              element -> (list, position)
-│   ├── localsearch/solution_snapshot.hpp          whole and list-wise restore
-│   ├── localsearch/strategy/                      Descent, EjectionChain,
-│   │                                              IteratedLocalSearch, ...
-│   ├── localsearch/decider/acceptor/              one class per subdirectory:
-│   │   ├── acceptor.hpp                           hillclimbing/ lateacceptance/
-│   │   │                                          tabu/ simulatedannealing/
-│   │   │                                          greatdeluge/ stepcountinghillclimbing/
-│   │   │                                          recordtorecordtravel/
-│   ├── heuristic/selector/common/nearby/nearby_neighborhoods.hpp
-│   └── heuristic/selector/move/generic/           ruin/ one ruin operator per file;
-│                                                  select/ LnsOutcome + roulette / segmented /
-│                                                  alpha-UCB / random schemes;
-│                                                  ruin_recreate_selector.hpp = umbrella + factory
-├── preview/api/move/operators.hpp                 custom MoveOperator / RuinOperator
-│                                                  registration (experimental API)
-├── python/constraint_binding.hpp                  pybind11 helper: Python constraint specs
-│                                                  -> ConstraintAssembly, constraint_info(),
-│                                                  constraint_costs()
-├── python/{names,level_guard}.hpp                 Python names, the level guard
-└── testing/preview_parity.hpp                     move-preview vs applied-score harness
-                                                   for a use case's calculator tests
+├── optimaru.hpp            umbrella include for consumers
+├── solver.hpp              Solver: construction, then search; multi-start
+├── background_solve.hpp    solve_in_background / BackgroundSolve
+├── explain.hpp             explain_score / rescore
+├── settings.hpp            Settings, Limits, AcceptanceSettings, MoveMix,
+│                           NeighborSettings, RuinRecreateSettings, ...
+├── worker_threads.hpp      thread start-up / shutdown for parallel pools
+├── model/                  the solution as the engine sees it
+│   ├── solution_traits.hpp SolutionTraits, Shape (Assignment | Sequence | Chain),
+│   │                       pinning, chain link encoding
+│   ├── derived_state.hpp   values derived from the decisions
+│   ├── editor.hpp          every write, bracketed by the objective's hooks
+│   ├── chain_view.hpp      the list view a chain solve runs on
+│   ├── element_index.hpp   element -> (list, position)
+│   ├── snapshot.hpp        whole and list-wise restore
+│   └── neighborhoods.hpp   k-nearest-neighbour lists
+├── score/                  scoring
+│   ├── score.hpp           Score, ScoreChecks, ScoreMismatchError
+│   ├── levels.hpp          Level (hard / medium / soft), MediumFold
+│   ├── objective.hpp       Objective: the incremental scoring contract
+│   ├── chain_objective.hpp, weighted_objective.hpp
+│   ├── decomposed_objective.hpp   per-unit and global constraint plugins
+│   ├── constraint_assembly.hpp    default constraint set: weight / level /
+│   │                              exponent / offset / clip / drop by name,
+│   │                              repeated instances, info() catalog
+│   └── breakdown.hpp       ScoreBreakdown / ConstraintScore
+├── construct/              the initial solution: first fit (decreasing),
+│                           cheapest insertion
+├── accept/                 Acceptor and one file per rule: hill climbing, late
+│                           acceptance, entity tabu, simulated annealing, great
+│                           deluge, step counting, record-to-record travel
+├── select/                 adaptive operator selection: MoveOutcome, roulette
+│                           wheel, segmented roulette, alpha-UCB, uniform
+├── stop/                   when a solve ends (StopCondition) and the throttle
+│                           long-running moves consult it through
+├── search/                 the step loop (local_search) and the plugin points
+│                           for custom operators (MoveOperator / RuinOperator)
+├── moves/                  every move the step loop draws: the sequence moves
+│                           (list_move) and their previews, descent, ejection
+│                           chain, iterated local search, route elimination
+├── ruin_recreate/          one destroy-and-repair unit: the ruin operators
+│                           (random, related, worst, SISR, route), the greedy /
+│                           regret-k recreate, and ruin_recreate_move, which
+│                           applies them as an ordinary move (the stagnation
+│                           kick uses the same parts)
+├── python/                 pybind11 helpers: constraint specs ->
+│                           ConstraintAssembly, constraint_info(),
+│                           constraint_costs(), names, the level guard
+└── testing/                preview-vs-applied-score harness for a use case's
+                            objective tests
 ```
 
 `optimaru::` is one flat namespace apart from the `optimaru::testing` and
-`optimaru::python` helpers (and small `detail` / `chained` helper
-namespaces); the directories organize the headers, the namespaces don't.
+`optimaru::python` helpers (and small `detail` / `chain` helper namespaces);
+the directories organize the headers, the namespaces don't. Functions and
+members are snake_case, types PascalCase.
 
 ## Tests
 
 `test/engine_test.cpp` verifies every feature against brute force on two toy
-domains (BASIC task assignment, LIST TSP): six of the seven acceptors (all but
-Record-to-Record Travel), all five terminations, FFD ordering, multi-start
-(and its exception safety), FULL_ASSERT catching a deliberately
-corrupted calculator, list moves under FULL_ASSERT, adaptive operator-weight
+domains (task assignment, TSP): six of the seven acceptors (all but
+record-to-record travel), all five limits, FFD ordering, multi-start
+(and its exception safety), `ScoreChecks::Full` catching a deliberately
+corrupted objective, list moves under `ScoreChecks::Full`, adaptive operator-weight
 convergence, LNS escaping a local optimum that traps hill climbing, and the
 nearby+LNS quality win on 100-city random TSP. `test/constraint_level_test.cpp`
 covers the constraint contract: levels and both medium folds, the knob guards
@@ -277,10 +267,12 @@ version neither builds nor publishes on `main`; PRs always build.
 
 [Apache License 2.0](LICENSE). See [NOTICE](NOTICE) for attribution.
 
-The engine and several of the use cases are derived from Apache-2.0 works —
-[Timefold Solver](https://github.com/TimefoldAI/timefold-solver) and
-[Timefold Quickstarts](https://github.com/TimefoldAI/timefold-quickstarts) —
-translated into C++ and Python and modified; [NOTICE](NOTICE) lists exactly
-which parts. When you redistribute optimaru or a derivative of it, include
-both [LICENSE](LICENSE) and [NOTICE](NOTICE). optimaru is not affiliated with
-or endorsed by Timefold BV.
+The engine began as a C++ port of parts of
+[Timefold Solver](https://github.com/TimefoldAI/timefold-solver) and has since
+been restructured with its own layout, names and API; portions still derive
+from it. Several use cases translate examples from
+[Timefold Quickstarts](https://github.com/TimefoldAI/timefold-quickstarts).
+Both are Apache-2.0; [NOTICE](NOTICE) lists exactly which parts derive from
+which. When you redistribute optimaru or a derivative of it, include both
+[LICENSE](LICENSE) and [NOTICE](NOTICE). optimaru is not affiliated with or
+endorsed by Timefold BV.

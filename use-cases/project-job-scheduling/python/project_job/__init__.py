@@ -6,7 +6,7 @@ solver on the optimaru engine.
 `calculate_score` come from the compiled C++ core (`_core`).
 
 The Java quickstart's two planning variables (executionMode, delay∈[0, 500)) are
-ported as one composite-encoded BASIC variable `Allocation.mode_delay`::
+ported as one composite-encoded assignment-shape variable `Allocation.mode_delay`::
 
     -1                                  uninitialized (no resource use;
                                         dates pass through with delay 0/duration 0)
@@ -28,7 +28,7 @@ Score convention (HardMediumSoftScore, as in the Java quickstart), at the defaul
                                                   path end, positive only), in days
   soft   4. makespan_cost                         the latest sink end date
 (0 hard == feasible). Lexicographic comparison (hard first). Internally it maps onto
-HardSoftScore(int64, double) with the domain's medium fold
+Score(int64, double) with the domain's medium fold
 `engine.soft = medium * 10**9 + soft` (level order preserved).
 
 The constraints and their defaults (level, weight in units of that level) live in the C++

@@ -32,7 +32,7 @@ target_link_libraries(pjs_test PRIVATE pjs_core)
 target_compile_options(pjs_test PRIVATE -Wall -Wextra)
 
 # Plugin-assembly path (pjs/constraints.hpp): the same provider decomposed
-# into one component each on the engine's DecomposedScoreCalculator, checked
+# into one component each on the engine's DecomposedObjective, checked
 # bit-for-bit against the monolithic calculators.
 add_executable(pjs_plugin_test test/pjs_plugin_test.cpp)
 target_link_libraries(pjs_plugin_test PRIVATE pjs_core)

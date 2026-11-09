@@ -13,7 +13,7 @@ time and a suitable room.
 
 Room mapping strategy
 ---------------------
-The engine knows a single BASIC variable per entity (slotRoom composite
+The engine knows a single assignment-shape variable per entity (slotRoom composite
 encoding) and has no hard constraint saying "this lesson needs this room
 type". Therefore:
 

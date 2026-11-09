@@ -9,14 +9,14 @@
 #include <vector>
 
 #include "bp/domain.hpp"
-#include "optimaru/preview/api/move/operators.hpp"
+#include "optimaru/search/operators.hpp"
 
 namespace bp
 {
 
 // The domain's macro moves, registered with the engine by Solver (see
 // solver.cpp, runEngine). Header-only so the tests can drive them through a
-// ScoreDirector directly. Both read the derived facts of
+// Editor directly. Both read the derived facts of
 // ScoreCalculator::prepare (every solve and every calculator reset runs it).
 
 // ---------------------------------------------------------------------------
@@ -47,7 +47,7 @@ public:
                std::mt19937_64 &rng,
                std::vector<int> &entities) override
     {
-        BinPackingProblem &problem = ctx.director.workingSolution();
+        BinPackingProblem &problem = ctx.editor.solution();
         const int n = problem.itemCount();
         const std::int64_t capacity = problem.binCapacity;
 
@@ -116,22 +116,22 @@ public:
         }
 
         lastSource_ = source;
-        ctx.director.beginVariableChanges();
+        ctx.editor.begin_batch();
         for (std::size_t m = 0; m < members_.size(); ++m)
         {
-            ctx.director.changeVariable(members_[m], targets_[m]);
+            ctx.editor.assign(members_[m], targets_[m]);
             entities.push_back(members_[m]);
         }
-        ctx.director.endVariableChanges();
+        ctx.editor.end_batch();
         return true;
     }
 
-    void undoLast(optimaru::OperatorContext<BinPackingProblem> &ctx) override
+    void undo_last(optimaru::OperatorContext<BinPackingProblem> &ctx) override
     {
-        ctx.director.beginVariableChanges();
+        ctx.editor.begin_batch();
         for (int item : members_)
-            ctx.director.changeVariable(item, lastSource_);
-        ctx.director.endVariableChanges();
+            ctx.editor.assign(item, lastSource_);
+        ctx.editor.end_batch();
     }
 
 private:
@@ -209,7 +209,7 @@ public:
                std::mt19937_64 &rng,
                std::vector<int> &entities) override
     {
-        BinPackingProblem &problem = ctx.director.workingSolution();
+        BinPackingProblem &problem = ctx.editor.solution();
         const int n = problem.itemCount();
         const std::int64_t capacity = problem.binCapacity;
 
@@ -353,22 +353,22 @@ public:
         }
         if (moved_.empty())
             return false;  // every item went back where it was
-        ctx.director.beginVariableChanges();
+        ctx.editor.begin_batch();
         for (const std::pair<int, int> &move : moved_)
         {
-            ctx.director.changeVariable(move.first, plan_[move.first]);
+            ctx.editor.assign(move.first, plan_[move.first]);
             entities.push_back(move.first);
         }
-        ctx.director.endVariableChanges();
+        ctx.editor.end_batch();
         return true;
     }
 
-    void undoLast(optimaru::OperatorContext<BinPackingProblem> &ctx) override
+    void undo_last(optimaru::OperatorContext<BinPackingProblem> &ctx) override
     {
-        ctx.director.beginVariableChanges();
+        ctx.editor.begin_batch();
         for (const std::pair<int, int> &move : moved_)
-            ctx.director.changeVariable(move.first, move.second);
-        ctx.director.endVariableChanges();
+            ctx.editor.assign(move.first, move.second);
+        ctx.editor.end_batch();
     }
 
 private:

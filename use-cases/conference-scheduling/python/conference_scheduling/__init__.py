@@ -12,7 +12,7 @@ and solve changes it and `score` in place::
     cs.solve(schedule, time_limit_seconds=10.0, random_seed=42)
     print(schedule.score, schedule.assignment())
 
-Score (HardSoftScore): the 37 constraints at their default weights (the Java
+Score: the 37 constraints at their default weights (the Java
 provider's), 17 hard and 20 soft; three of the soft ones (`*_diversity_cost`) are
 rewards. `constraint_costs(schedule)` gives every constraint's raw cost (the only
 per-constraint surface since 0.2.0, which removed `Breakdown`/`compute_breakdown`), and

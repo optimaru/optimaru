@@ -86,12 +86,12 @@ inline void addDefaultConstraints(DecomposedCalculator& calc) {
 // Every component the rule factory (python/bindings.cpp addConstraintByName)
 // can build, once each, at its default parameters and kDefaultWeight /
 // kDefaultLevel, in factory order (= CONSTRAINT_NAMES): the catalog behind
-// constraint_info() (optimaru::catalogInfo(defaultConstraints(),
+// constraint_info() (optimaru::catalog_info(defaultConstraints(),
 // catalogConstraints()) = the eight defaults first, then the 22 rule-only
-// constraints with defaultEnabled = false; ConstraintAssembly::info() lists
+// constraints with default_enabled = false; ConstraintAssembly::info() lists
 // unit constraints before global ones, so those 22 come as 16 units, then 6
 // globals). The defaults are restated so this reads as the complete list;
-// catalogInfo checks that both assemblies declare them identically. A new
+// catalog_info checks that both assemblies declare them identically. A new
 // component is a line here AND a factory entry.
 inline ConstraintAssembly catalogConstraints() {
     ConstraintAssembly assembly;

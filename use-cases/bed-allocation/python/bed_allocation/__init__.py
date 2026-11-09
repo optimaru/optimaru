@@ -13,7 +13,7 @@ Score convention (HardMediumSoftScore, as in the Java quickstart): hard is bed/g
 age/required-equipment violations (0 == feasible), medium is the nights of unassigned
 stays (`unassigned_stays_cost`), soft is preference penalties (room size/specialty/
 preferred equipment). Lexicographic comparison (hard first). Internally it maps onto
-HardSoftScore(int64, double) as `engine.soft = medium * 10**9 + soft` (the domain's medium
+Score(int64, double) as `engine.soft = medium * 10**9 + soft` (the domain's medium
 fold; level order preserved).
 
 The constraints and their defaults (level, weight in units of that level) live in the C++

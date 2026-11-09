@@ -13,10 +13,10 @@
 #include "alb/construction.hpp"
 #include "alb/incremental_calculator.hpp"
 #include "alb/score_calculator.hpp"
-#include "optimaru/api/solver/solver.hpp"
-#include "optimaru/config/solver/solver_config.hpp"
-#include "optimaru/impl/solver/worker_threads.hpp"
-#include "optimaru/preview/api/move/operators.hpp"
+#include "optimaru/solver.hpp"
+#include "optimaru/settings.hpp"
+#include "optimaru/worker_threads.hpp"
+#include "optimaru/search/operators.hpp"
 
 namespace alb
 {
@@ -89,7 +89,7 @@ public:
                std::mt19937_64 &rng,
                std::vector<int> &entities) override
     {
-        AssemblyLineBalancingProblem &problem = ctx.director.workingSolution();
+        AssemblyLineBalancingProblem &problem = ctx.editor.solution();
         const int stationCount = problem.stationCount;
         const int taskCount = problem.taskCount();
 
@@ -132,25 +132,25 @@ public:
         count_[victim] = 0;
         lastVictim_ = victim;
 
-        ctx.director.beginVariableChanges();
+        ctx.editor.begin_batch();
         for (int t : members_)
         {
             const int target = pickTarget(problem, t, victim);
-            ctx.director.changeVariable(t, target);
+            ctx.editor.assign(t, target);
             load_[target] += problem.tasks[t].duration;
             ++count_[target];
             entities.push_back(t);
         }
-        ctx.director.endVariableChanges();
+        ctx.editor.end_batch();
         return true;
     }
 
-    void undoLast(optimaru::OperatorContext<AssemblyLineBalancingProblem> &ctx) override
+    void undo_last(optimaru::OperatorContext<AssemblyLineBalancingProblem> &ctx) override
     {
-        ctx.director.beginVariableChanges();
+        ctx.editor.begin_batch();
         for (int t : members_)
-            ctx.director.changeVariable(t, lastVictim_);
-        ctx.director.endVariableChanges();
+            ctx.editor.assign(t, lastVictim_);
+        ctx.editor.end_batch();
     }
 
 private:
@@ -235,25 +235,25 @@ std::shared_ptr<const std::vector<int>> construct(AssemblyLineBalancingProblem &
 void runEngine(const Solver::Config &config,
                AssemblyLineBalancingProblem &problem,
                const std::shared_ptr<const std::vector<int>> &rank,
-               optimaru::IncrementalScoreCalculator<AssemblyLineBalancingProblem> &calculator)
+               optimaru::Objective<AssemblyLineBalancingProblem> &calculator)
 {
-    optimaru::SolverConfig engineConfig;
-    engineConfig.randomSeed = config.randomSeed;
-    engineConfig.environmentMode = config.environmentMode;
-    engineConfig.onNewBest = config.onNewBest;
-    engineConfig.termination.spentLimit = config.spentLimit;
-    engineConfig.termination.bestScoreLimit = config.bestScoreLimit;
-    engineConfig.termination.unimprovedSpentLimit = config.unimprovedSpentLimit;
-    engineConfig.termination.stepCountLimit = config.stepCountLimit;
-    engineConfig.termination.unimprovedStepCountLimit = config.unimprovedStepCountLimit;
-    engineConfig.localSearch.acceptor.lateAcceptanceSize
-        = config.lateAcceptanceSize != 0
-              ? config.lateAcceptanceSize
+    optimaru::Settings engineConfig;
+    engineConfig.seed = config.seed;
+    engineConfig.score_checks = config.score_checks;
+    engineConfig.on_new_best = config.on_new_best;
+    engineConfig.limits.time_limit = config.time_limit;
+    engineConfig.limits.target_score = config.target_score;
+    engineConfig.limits.stall_time_limit = config.stall_time_limit;
+    engineConfig.limits.step_limit = config.step_limit;
+    engineConfig.limits.stall_step_limit = config.stall_step_limit;
+    engineConfig.search.acceptance.history_length
+        = config.history_length != 0
+              ? config.history_length
               : std::clamp<std::size_t>(8 * problem.tasks.size(), 400, 3200);
-    engineConfig.localSearch.moveSelector.changeMoveWeight = config.changeMoveWeight;
-    engineConfig.localSearch.moveSelector.swapMoveWeight = config.swapMoveWeight;
-    engineConfig.localSearch.customMoveProbability = config.customMoveProbability;
-    engineConfig.localSearch.descentWeight = config.descentWeight;
+    engineConfig.search.moves.change_weight = config.change_weight;
+    engineConfig.search.moves.swap_weight = config.swap_weight;
+    engineConfig.search.custom_move_probability = config.custom_move_probability;
+    engineConfig.search.descent_weight = config.descent_weight;
 
     // Guided change-move targets: the task's current precedence / domain
     // window (-1 falls back to the engine's uniform draw). The engine solves
@@ -263,7 +263,7 @@ void runEngine(const Solver::Config &config,
     {
         const AssemblyLineBalancingProblem &live = problem;
         const double p = config.valueRecommenderProbability;
-        engineConfig.localSearch.valueRecommender
+        engineConfig.search.value_hint
             = [&live, p](std::mt19937_64 &rng, int task) -> int
         {
             std::uniform_real_distribution<double> unit(0.0, 1.0);
@@ -281,23 +281,23 @@ void runEngine(const Solver::Config &config,
         };
     }
 
-    auto &lns = engineConfig.localSearch.ruinRecreate;
-    lns.enabled = config.ruinRecreate;
-    lns.unimprovedStepTrigger = config.ruinRecreateUnimprovedStepTrigger;
-    lns.minRuinFraction = config.ruinRecreateMinRuinFraction;
-    lns.maxRuinFraction = config.ruinRecreateMaxRuinFraction;
-    lns.maxRuinCount = config.ruinRecreateMaxRuinCount;
-    lns.operatorDecay = config.ruinRecreateOperatorDecay;
+    auto &lns = engineConfig.search.ruin_recreate;
+    lns.enabled = config.ruin_recreate;
+    lns.unimproved_step_trigger = config.ruinRecreateUnimprovedStepTrigger;
+    lns.min_ruin_fraction = config.ruinRecreateMinRuinFraction;
+    lns.max_ruin_fraction = config.ruinRecreateMaxRuinFraction;
+    lns.max_ruin_count = config.ruinRecreateMaxRuinCount;
+    lns.operator_decay = config.ruinRecreateOperatorDecay;
     lns.rewards = config.ruinRecreateRewards;
-    lns.polishSteps = config.ruinRecreatePolishSteps;
-    lns.asMoveWeight = config.ruinRecreateAsMoveWeight;
-    lns.asMoveMaxRuin = config.ruinRecreateAsMoveMaxRuin;
+    lns.polish_steps = config.ruinRecreatePolishSteps;
+    lns.as_move_weight = config.ruinRecreateAsMoveWeight;
+    lns.as_move_max_ruin = config.ruinRecreateAsMoveMaxRuin;
 
     optimaru::Solver<AssemblyLineBalancingProblem> engine(std::move(engineConfig));
-    if (config.stopFlag)
-        engine.adoptTerminateEarlyFlag(config.stopFlag);
+    if (config.stop_flag)
+        engine.share_stop_flag(config.stop_flag);
     if (config.closeStationMoves && problem.stationCount >= 2)
-        engine.addMoveOperator(std::make_unique<CloseStationMove>(rank));
+        engine.add_move_operator(std::make_unique<CloseStationMove>(rank));
     engine.solve(problem, calculator);
 }
 
@@ -316,7 +316,7 @@ void searchConstructed(const Solver::Config &config,
     AssemblyLineBalancingIncrementalScoreCalculator calculator;
     runEngine(config, problem, rank, calculator);
     // The authoritative final score: a full recompute on the best solution.
-    problem.score = ScoreCalculator::calculateScore(problem);
+    problem.score = ScoreCalculator::score(problem);
 }
 
 }  // namespace
@@ -328,7 +328,7 @@ void Solver::solve(AssemblyLineBalancingProblem &problem)
     problem.warmStart = false;  // a seed is used once
     if (problem.tasks.empty())
     {
-        ScoreCalculator::calculateScore(problem);
+        ScoreCalculator::score(problem);
         return;
     }
 
@@ -347,7 +347,7 @@ void Solver::solve(AssemblyLineBalancingProblem &problem)
         auto stop = std::make_shared<std::atomic<bool>>(false);
         // A worker that cannot be started (std::system_error) stops and joins
         // the ones already running before the error is rethrown here.
-        optimaru::runWorkerThreads(
+        optimaru::run_worker_threads(
             workerCount, *stop,
             [this, &candidates, &failures, &stop, &rank](int i)
             {
@@ -355,10 +355,10 @@ void Solver::solve(AssemblyLineBalancingProblem &problem)
                 {
                     Config workerConfig = config_;
                     workerConfig.parallelSolverCount = 1;
-                    workerConfig.stopFlag = stop;
-                    workerConfig.randomSeed += static_cast<std::uint64_t>(i);
+                    workerConfig.stop_flag = stop;
+                    workerConfig.seed += static_cast<std::uint64_t>(i);
                     if (i != 0)
-                        workerConfig.onNewBest = nullptr;
+                        workerConfig.on_new_best = nullptr;
                     searchConstructed(workerConfig, candidates[i], rank);
                 }
                 catch (...)
@@ -386,7 +386,7 @@ void Solver::solve(AssemblyLineBalancingProblem &problem)
 }
 
 void Solver::solve(AssemblyLineBalancingProblem &problem,
-                   optimaru::DecomposedScoreCalculator<AssemblyLineBalancingProblem> &calculator)
+                   optimaru::DecomposedObjective<AssemblyLineBalancingProblem> &calculator)
 {
     requireRewards(config_);
     const std::shared_ptr<const std::vector<int>> rank = construct(problem);
@@ -396,9 +396,9 @@ void Solver::solve(AssemblyLineBalancingProblem &problem,
 
     // Score the final solution with the caller's constraint assembly (custom
     // weights included) and leave the calculator primed on it, so
-    // constraintTotals() explains exactly this score.
-    calculator.resetWorkingSolution(problem);
-    problem.score = calculator.calculateScore();
+    // constraint_totals() explains exactly this score.
+    calculator.rebuild(problem);
+    problem.score = calculator.score();
 }
 
 }  // namespace alb

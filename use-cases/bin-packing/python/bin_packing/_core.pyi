@@ -1,10 +1,10 @@
 """Type stubs for `bin_packing._core` — the bin-packing C++ solver.
 
 The problem is the planning solution: each item's `bin` (a 0-based bin index
-into the n identical bins, -1 == unassigned) is the single BASIC planning
+into the n identical bins, -1 == unassigned) is the single assignment-shape planning
 variable.
 
-Score (HardSoftScore, lexicographic), at the default weights (1 each): hard =
+Score (hard/soft, lexicographic), at the default weights (1 each): hard =
 -(load above capacity + items beyond the first of their colour in a bin +
 conflict pairs sharing a bin), soft = -(bins in use). The weights are the C++
 components' defaults (constraint_info()); the problem carries none.
@@ -69,7 +69,7 @@ class BinPackingProblem:
         """Bulk write of the planning variable (range-checked when scored or solved)."""
 
 def calculate_score(problem: BinPackingProblem, constraints: Iterable[Any] | None = ...) -> Score:
-    """Full recompute of the HardSoftScore (also stores problem.score). None scores the
+    """Full recompute of the score (also stores problem.score). None scores the
     default set; a list scores exactly those picks (see bin_packing.constraints), a
     name picked several times once per pick.
     ValueError for a bin_capacity <= 0, a repeated id, a weight <= 0, a bad conflict
@@ -106,7 +106,7 @@ class SolverConfig:
     """Probability that a change move draws the item's new bin as the bin of a
     random other item (a bin in use) instead of uniformly over all n bins."""
     descent_weight: float
-    """BASIC best-improvement descent strategy weight. 0 = off."""
+    """Assignment-shape best-improvement descent strategy weight. 0 = off."""
     custom_move_probability: float
     """Gate on how often a step may draw one of the macro moves (EmptyBinMove,
     RepackMove); 1 = unrestricted."""

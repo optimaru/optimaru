@@ -32,7 +32,7 @@ struct ConfrontationCountImbalanceCost final : MemberChangeGlobalConstraint
     }
 
     void reset(const TournamentSchedule &schedule,
-               const std::vector<std::vector<int>> &membersPerUnit) override
+               const std::vector<std::vector<int>> &members_per_unit) override
     {
         teamCount_ = schedule.teamCount();
         dayCount_ = schedule.dayCount();
@@ -41,14 +41,14 @@ struct ConfrontationCountImbalanceCost final : MemberChangeGlobalConstraint
         sum_ = 0;
         sumSquares_ = 0;
         loaded_ = 0;
-        for (std::size_t unit = 0; unit < membersPerUnit.size(); ++unit)
+        for (std::size_t unit = 0; unit < members_per_unit.size(); ++unit)
         {
-            for (int assignment : membersPerUnit[unit])
+            for (int assignment : members_per_unit[unit])
                 apply(schedule, static_cast<int>(unit), assignment, true);
         }
     }
 
-    void onMemberChanged(const TournamentSchedule &schedule,
+    void on_member_changed(const TournamentSchedule &schedule,
                          int unit,
                          const std::vector<int> & /*members*/,
                          int entity,

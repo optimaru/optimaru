@@ -11,7 +11,7 @@ namespace es {
 // set — the requested LOCATION must match, not just the day (being given
 // another location earns nothing). Raw cost per employee = minus 1 per
 // satisfied preference: raw <= 0, and 0 = no wish is granted. A reward can
-// never be hard (reward = true, levelFlippable = false).
+// never be hard (reward = true, level_flippable = false).
 struct DesiredShiftCost final : GroupableAssignmentConstraint {
     static constexpr double kDefaultWeight = 1.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
@@ -19,9 +19,9 @@ struct DesiredShiftCost final : GroupableAssignmentConstraint {
     explicit DesiredShiftCost(double weight = kDefaultWeight)
         : GroupableAssignmentConstraint("desiredShiftCost", weight, kDefaultLevel) {
         reward = true;
-        levelFlippable = false;
+        level_flippable = false;
     }
-    void onReset(const EmployeeSchedule& s) override {
+    void on_reset(const EmployeeSchedule& s) override {
         shiftCount_ = static_cast<int>(s.shifts.size());
         match_.assign(s.employees.size() * s.shifts.size(), 0);
         for (std::size_t e = 0; e < s.employees.size(); ++e) {
@@ -40,8 +40,8 @@ struct DesiredShiftCost final : GroupableAssignmentConstraint {
         for (int i : members) c += row[i];
         return -c;  // reward
     }
-    bool supportsDelta() const override { return true; }
-    double deltaCost(const EmployeeSchedule&, int unit, const std::vector<int>&,
+    bool supports_delta() const override { return true; }
+    double delta_cost(const EmployeeSchedule&, int unit, const std::vector<int>&,
                      int entity) const override {
         return memberDelta(unit, entity);
     }

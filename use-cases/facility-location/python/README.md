@@ -2,9 +2,9 @@
 
 The pybind11 package of the facility-location example-model port (`../cpp`).
 Picks one facility per consumer — `Consumer.facility` is the only
-planning variable (facility index, -1 = unassigned).
+decision variable (facility index, -1 = unassigned).
 
-Score (HardSoftScore), at the default weights:
+Score, at the default weights:
 
 - hard = -(sum over used facilities of `max(0, assigned demand - capacity)`) — `facility_capacity_cost`, hard x1
 - soft = -(2 x setup cost of used facilities + 6 x consumer-facility distance (m)) —

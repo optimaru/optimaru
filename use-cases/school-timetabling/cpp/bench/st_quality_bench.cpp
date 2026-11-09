@@ -235,7 +235,7 @@ void dumpInstance(const Timetable &t, const std::string &path)
 void dumpSolution(const Timetable &t, const std::string &path)
 {
     std::ofstream out(path);
-    out << "{\n  \"solver\": \"cpp\",\n  \"score\": \"" << t.score.toString()
+    out << "{\n  \"solver\": \"cpp\",\n  \"score\": \"" << t.score.str()
         << "\",\n  \"assignment\": [\n";
     for (std::size_t i = 0; i < t.lessons.size(); ++i)
     {
@@ -267,8 +267,8 @@ int runCrossCheck(const std::string &outPath)
     Timetable t = buildCrossCheck();
     dumpInstance(t, outPath);
     ScoreCalculator calc;
-    const Score score = calc.calculateScore(t);
-    std::printf("CROSSCHECK_SCORE=%s\n", score.toString().c_str());
+    const Score score = calc.score(t);
+    std::printf("CROSSCHECK_SCORE=%s\n", score.str().c_str());
     return 0;
 }
 
@@ -307,8 +307,8 @@ int main(int argc, char **argv)
         static_cast<unsigned long long>(seed));
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(seconds);
-    config.randomSeed = seed;
+    config.time_limit = std::chrono::seconds(seconds);
+    config.seed = seed;
     if (argc >= 8)
         config.parallelSolverCount = std::max(1, std::atoi(argv[7]));
     // Optional knob overrides for A/B tuning sweeps (unset = solver
@@ -321,7 +321,7 @@ int main(int argc, char **argv)
     if (const char *v = std::getenv("ST_BENCH_NEARBY_PROB"))
         config.sameGroupNearbyProbability = std::atof(v);
     if (const char *v = std::getenv("ST_BENCH_LA_SIZE"))
-        config.lateAcceptanceSize = static_cast<std::size_t>(std::atoll(v));
+        config.history_length = static_cast<std::size_t>(std::atoll(v));
     const auto t0 = std::chrono::steady_clock::now();
     // Sustained move-evaluation speed, estimated from the improvement
     // trajectory (each engine step evaluates one move) — comparable with the
@@ -329,7 +329,7 @@ int main(int argc, char **argv)
     long long lastStep = 0;
     long long lastMs = 0;
     bool feasibleSeen = false;
-    config.onNewBest = [&t0, &lastStep, &lastMs, &feasibleSeen](
+    config.on_new_best = [&t0, &lastStep, &lastMs, &feasibleSeen](
                            std::int64_t step, const Score &sc)
     {
         const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -346,7 +346,7 @@ int main(int argc, char **argv)
         std::printf("QBENCH_CPP best t=%lldms step=%lld score=%s\n",
                     static_cast<long long>(ms),
                     static_cast<long long>(step),
-                    sc.toString().c_str());
+                    sc.str().c_str());
     };
     Solver solver(config);
     solver.solve(table);
@@ -357,8 +357,8 @@ int main(int argc, char **argv)
                                          / static_cast<double>(lastMs)
                                    : 0.0;
     std::printf("QBENCH_CPP_FINAL score=%s feasible=%s moves_per_sec=%.0f\n",
-                table.score.toString().c_str(),
-                table.score.isFeasible() ? "true" : "false",
+                table.score.str().c_str(),
+                table.score.feasible() ? "true" : "false",
                 movesPerSec);
     return 0;
 }

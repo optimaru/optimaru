@@ -9,8 +9,8 @@
 
 #include "sls/domain.hpp"
 #include "sls/score_calculator.hpp"
-#include "optimaru/api/score/calculator/constraint_assembly.hpp"
-#include "optimaru/api/score/calculator/decomposed_score_calculator.hpp"
+#include "optimaru/score/constraint_assembly.hpp"
+#include "optimaru/score/decomposed_objective.hpp"
 
 namespace sls
 {
@@ -20,7 +20,7 @@ namespace sls
 // ---------------------------------------------------------------------------
 // The ten constraints of the reference sports-league-scheduling
 // SportsLeagueSchedulingConstraintProvider, split into one small component
-// each on the engine's DecomposedScoreCalculator — an optional assembly path
+// each on the engine's DecomposedObjective — an optional assembly path
 // NEXT TO the monolithic SportsLeagueSchedulingIncrementalScoreCalculator,
 // which stays the tuned default fast path.
 //
@@ -32,7 +32,7 @@ namespace sls
 // position (LeagueSchedule::roundIndexOf), and most of them relate matches on
 // ADJACENT indices, which no single unit owns. So only the three rules that
 // read one match and its own round are UnitConstraints; the rest are
-// GlobalConstraints on the onMemberChanged fast path, over one of three
+// GlobalConstraints on the on_member_changed fast path, over one of three
 // shared bases below:
 //
 //   RoundIndexPairConstraint  a sum over match PAIRS keyed by round index
@@ -73,7 +73,7 @@ namespace sls
 //     and so the Python constraint_info() and the CP-SAT reference's
 //     defaults — read them off the components; nothing restates them;
 //   - the level is the `level` member (optimaru::Level::Hard / Soft; this
-//     domain has no medium level), `isHard()` reads it. Weight, level and
+//     domain has no medium level), `is_hard()` reads it. Weight, level and
 //     exponent are assembly-time metadata, not part of the cost: override
 //     them per instance through the validated setters or the assembly's
 //     named edits. The travel-hop rules cost plain kilometres at weight 1,
@@ -82,13 +82,13 @@ namespace sls
 // Cost sign convention (see decomposed_score_calculator.hpp): positive =
 // penalty, 0 = no violation; the calculator negates into the score. An
 // assembly of all ten components at their default weights therefore scores
-// bit-for-bit like ScoreCalculator::calculateScore.
+// bit-for-bit like ScoreCalculator::score.
 //
 // Every component requires ScoreCalculator::prepare(schedule) to have run
 // (the solve() overload and the monolithic path both call it).
 
 using DecomposedCalculator
-    = optimaru::DecomposedScoreCalculator<LeagueSchedule>;
+    = optimaru::DecomposedObjective<LeagueSchedule>;
 using ConstraintAssembly = optimaru::ConstraintAssembly<LeagueSchedule>;
 using SlsUnitConstraint = optimaru::UnitConstraint<LeagueSchedule>;
 using SlsGlobalConstraint = optimaru::GlobalConstraint<LeagueSchedule>;
@@ -149,7 +149,7 @@ struct PerMatchConstraint : SlsUnitConstraint
                              int unit,
                              int matchIndex) const = 0;
 
-    void onReset(const LeagueSchedule &schedule) override
+    void on_reset(const LeagueSchedule &schedule) override
     {
         detail::requirePrepared(schedule);
     }
@@ -162,8 +162,8 @@ struct PerMatchConstraint : SlsUnitConstraint
             total += matchCost(schedule, unit, matchIndex);
         return total;
     }
-    bool supportsDelta() const override { return true; }
-    double deltaCost(const LeagueSchedule &schedule,
+    bool supports_delta() const override { return true; }
+    double delta_cost(const LeagueSchedule &schedule,
                      int unit,
                      const std::vector<int> & /*members*/,
                      int entity) const override
@@ -182,8 +182,8 @@ struct RoundIndexPairConstraint : SlsGlobalConstraint
 {
     using SlsGlobalConstraint::SlsGlobalConstraint;
 
-    bool supportsMemberChange() const override { return true; }
-    void onUnitChanged(const LeagueSchedule & /*schedule*/,
+    bool supports_member_change() const override { return true; }
+    void on_unit_changed(const LeagueSchedule & /*schedule*/,
                        int /*unit*/,
                        const std::vector<int> & /*members*/) override
     {
@@ -193,16 +193,16 @@ struct RoundIndexPairConstraint : SlsGlobalConstraint
     }
 
     void reset(const LeagueSchedule &schedule,
-               const std::vector<std::vector<int>> &membersPerUnit) override
+               const std::vector<std::vector<int>> &members_per_unit) override
     {
         detail::requirePrepared(schedule);
         indexCount_ = schedule.maxRoundIndex + 1;
         byIndex_.assign(indexCount_ > 0 ? indexCount_ : 0, {});
         total_ = 0;
-        for (std::size_t unit = 0; unit < membersPerUnit.size(); ++unit)
+        for (std::size_t unit = 0; unit < members_per_unit.size(); ++unit)
         {
             const int index = schedule.roundIndexOf(static_cast<int>(unit));
-            for (int matchIndex : membersPerUnit[unit])
+            for (int matchIndex : members_per_unit[unit])
             {
                 total_ += marginal(schedule, matchIndex, index);
                 byIndex_[index].push_back(matchIndex);
@@ -210,7 +210,7 @@ struct RoundIndexPairConstraint : SlsGlobalConstraint
         }
     }
 
-    void onMemberChanged(const LeagueSchedule &schedule,
+    void on_member_changed(const LeagueSchedule &schedule,
                          int unit,
                          const std::vector<int> & /*members*/,
                          int entity,
@@ -272,8 +272,8 @@ struct TeamSideRunConstraint : SlsGlobalConstraint
     // Which team of the match this side tracks (home or away).
     virtual int teamOf(const Match &match) const = 0;
 
-    bool supportsMemberChange() const override { return true; }
-    void onUnitChanged(const LeagueSchedule & /*schedule*/,
+    bool supports_member_change() const override { return true; }
+    void on_unit_changed(const LeagueSchedule & /*schedule*/,
                        int /*unit*/,
                        const std::vector<int> & /*members*/) override
     {
@@ -283,7 +283,7 @@ struct TeamSideRunConstraint : SlsGlobalConstraint
     }
 
     void reset(const LeagueSchedule &schedule,
-               const std::vector<std::vector<int>> &membersPerUnit) override
+               const std::vector<std::vector<int>> &members_per_unit) override
     {
         detail::requirePrepared(schedule);
         indexCount_ = schedule.maxRoundIndex + 1;
@@ -292,10 +292,10 @@ struct TeamSideRunConstraint : SlsGlobalConstraint
         row_.assign(indexCount_, 0);
         penaltyPerTeam_.assign(schedule.teamCount(), 0);
         total_ = 0;
-        for (std::size_t unit = 0; unit < membersPerUnit.size(); ++unit)
+        for (std::size_t unit = 0; unit < members_per_unit.size(); ++unit)
         {
             const int index = schedule.roundIndexOf(static_cast<int>(unit));
-            for (int matchIndex : membersPerUnit[unit])
+            for (int matchIndex : members_per_unit[unit])
             {
                 const int team = teamOf(schedule.matches[matchIndex]);
                 ++counts_[static_cast<std::size_t>(team) * indexCount_ + index];
@@ -305,7 +305,7 @@ struct TeamSideRunConstraint : SlsGlobalConstraint
             rescore(team);
     }
 
-    void onMemberChanged(const LeagueSchedule &schedule,
+    void on_member_changed(const LeagueSchedule &schedule,
                          int unit,
                          const std::vector<int> & /*members*/,
                          int entity,

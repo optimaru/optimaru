@@ -58,12 +58,12 @@ int main(int argc, char **argv)
     BinPackingProblem problem = buildDemoProblem();
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(seconds);
-    config.randomSeed = 42;
+    config.time_limit = std::chrono::seconds(seconds);
+    config.seed = 42;
     Solver solver(config);
     solver.solve(problem);
 
-    std::printf("score %s, %d bins\n", problem.score.toString().c_str(), problem.binsUsed());
+    std::printf("score %s, %d bins\n", problem.score.str().c_str(), problem.binsUsed());
     const std::vector<std::int64_t> loads = problem.binLoads();
     for (std::size_t bin = 0; bin < loads.size(); ++bin)
     {
@@ -75,7 +75,7 @@ int main(int argc, char **argv)
         }
         std::printf("\n");
     }
-    if (!problem.score.isFeasible())
+    if (!problem.score.feasible())
     {
         std::fprintf(stderr, "infeasible result\n");
         return 1;

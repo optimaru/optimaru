@@ -38,7 +38,7 @@ target_link_libraries(ms_quality_bench PRIVATE ms_core)
 target_compile_options(ms_quality_bench PRIVATE -Wall -Wextra)
 
 # Plugin-assembly path (ms/constraints.hpp): the same provider decomposed into
-# one component each on the engine's DecomposedScoreCalculator, checked
+# one component each on the engine's DecomposedObjective, checked
 # bit-for-bit against the monolithic calculators.
 add_executable(ms_plugin_test test/ms_plugin_test.cpp)
 target_link_libraries(ms_plugin_test PRIVATE ms_core)

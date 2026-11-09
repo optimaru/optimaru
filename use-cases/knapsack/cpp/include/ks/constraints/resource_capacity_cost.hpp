@@ -29,14 +29,14 @@ struct ResourceCapacityCost final : detail::SelectionConstraint
     }
 
     void reset(const KnapsackProblem &problem,
-               const std::vector<std::vector<int>> &membersPerUnit) override
+               const std::vector<std::vector<int>> &members_per_unit) override
     {
         detail::requirePrepared(problem);
         capacity_.clear();
         for (const Resource &resource : problem.resources)
             capacity_.push_back(resource.capacity);
         usage_.assign(capacity_.size(), 0);
-        const std::vector<char> selected = detail::selectedFlags(problem, membersPerUnit);
+        const std::vector<char> selected = detail::selectedFlags(problem, members_per_unit);
         for (std::size_t i = 0; i < selected.size(); ++i)
         {
             if (!selected[i])

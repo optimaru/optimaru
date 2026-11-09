@@ -18,7 +18,7 @@ struct TravelTimeCost final : detail::SummedUnitConstraint {
     explicit TravelTimeCost(double weight = kDefaultWeight)
         : SummedUnitConstraint("travelTimeCost", weight, kDefaultLevel) {}
 
-    bool piecewiseCost(const VehicleRoutePlan& plan, int unit, const optimaru::ListPiece* pieces,
+    bool piecewise_cost(const VehicleRoutePlan& plan, int unit, const optimaru::ListPiece* pieces,
                        int count, double& out) const override {
         if (detail::isPool(plan, unit)) {
             out = 0.0;

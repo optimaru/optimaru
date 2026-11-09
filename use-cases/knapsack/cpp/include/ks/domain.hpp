@@ -8,8 +8,8 @@
 #include <utility>
 #include <vector>
 
-#include "optimaru/api/domain/solution_descriptor.hpp"
-#include "optimaru/api/score/buildin/hard_soft_score.hpp"
+#include "optimaru/model/solution_traits.hpp"
+#include "optimaru/score/score.hpp"
 
 namespace ks
 {
@@ -17,7 +17,7 @@ namespace ks
 // ---------------------------------------------------------------------------
 // Score
 // ---------------------------------------------------------------------------
-// The engine's HardSoftScore, so the mapping is the identity and there is no
+// The engine's Score, so the mapping is the identity and there is no
 // medium level (no optimaru::MediumFoldOf specialization). At the default
 // weights (the components' kDefaultWeight, ks/constraints/*.hpp):
 //   hard = -(weight overflow + resource overflows + unselected mandatory
@@ -26,7 +26,7 @@ namespace ks
 //   soft = +(total selected value)       // selectedValueCost is a reward
 // The problem carries no weights. Every level is integral; soft is stored in
 // a double, exact below 2^53.
-using Score = optimaru::HardSoftScore;
+using Score = optimaru::Score;
 
 // The planning variable's values. -1 exists only transiently (the engine's
 // ruin-and-recreate, or a C++ caller leaving an item undecided); every
@@ -120,7 +120,7 @@ struct KnapsackProblem
     Score score;
 
     // --- derived data, rebuilt by ScoreCalculator::prepare ----------------
-    // Every entry point (solve, calculateScore, greedySelection, the Python
+    // Every entry point (solve, score, greedySelection, the Python
     // constraint_costs) re-runs prepare, so a problem edited after a solve is
     // never scored against stale indexes. The calculators read these.
     bool prepared = false;
@@ -177,25 +177,25 @@ struct KnapsackProblem
 }  // namespace ks
 
 // ---------------------------------------------------------------------------
-// SolutionDescriptor specialization: entities are the items, the planning
+// SolutionTraits specialization: entities are the items, the planning
 // variable is Item::selected, the value range is {0 = not selected,
 // 1 = selected}. With two values the engine's change move is a flip and its
 // swap move trades a selected item for an unselected one.
 // ---------------------------------------------------------------------------
-template <> struct optimaru::SolutionDescriptor<ks::KnapsackProblem>
+template <> struct optimaru::SolutionTraits<ks::KnapsackProblem>
 {
-    static constexpr optimaru::VariableKind kind
-        = optimaru::VariableKind::BASIC;
-    static int entityCount(const ks::KnapsackProblem &problem)
+    static constexpr optimaru::Shape shape
+        = optimaru::Shape::Assignment;
+    static int entity_count(const ks::KnapsackProblem &problem)
     {
         return problem.itemCount();
     }
-    static int valueCount(const ks::KnapsackProblem & /*problem*/) { return 2; }
-    static int getVariable(const ks::KnapsackProblem &problem, int itemIndex)
+    static int value_count(const ks::KnapsackProblem & /*problem*/) { return 2; }
+    static int value_of(const ks::KnapsackProblem &problem, int itemIndex)
     {
         return problem.items[itemIndex].selected;
     }
-    static void setVariable(ks::KnapsackProblem &problem,
+    static void assign(ks::KnapsackProblem &problem,
                             int itemIndex,
                             int value)
     {

@@ -12,8 +12,8 @@ namespace ts
 // Port of the reference tournament-scheduling
 // TournamentScheduleConstraintProvider.
 //
-// calculateScore does a full recompute — the reference the incremental
-// calculator is checked against (in the tests and under FULL_ASSERT).
+// score does a full recompute — the reference the incremental
+// calculator is checked against (in the tests and under ScoreChecks::Full).
 //
 // Constraints (Java HardMediumSoftBigDecimalScore, mapped per ts::Score;
 // default weights per unit are the components' kDefaultWeight, see
@@ -42,7 +42,7 @@ namespace ts
 class ScoreCalculator
 {
 public:
-    static Score calculateScore(TournamentSchedule &schedule);
+    static Score score(TournamentSchedule &schedule);
 
     // --- shared building blocks (also used by the incremental calculator) ---
 
@@ -62,11 +62,11 @@ public:
     // (counted positive) folded with the domain's kMediumFold, i.e.
     // -(soft + medium * 1e6) — the same arithmetic the decomposed calculator
     // applies to its medium accumulator. Both calculators call this so
-    // FULL_ASSERT compares bit-identical doubles.
+    // ScoreChecks::Full compares bit-identical doubles.
     static double combinedSoft(double mediumPenalty, double softPenalty)
     {
         const double soft
-            = kMediumFold.toEngine(0, -mediumPenalty, -softPenalty).soft;
+            = kMediumFold.to_engine(0, -mediumPenalty, -softPenalty).soft;
         return soft == 0.0 ? 0.0 : soft;  // normalize -0.0
     }
 };

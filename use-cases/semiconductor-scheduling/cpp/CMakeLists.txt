@@ -38,7 +38,7 @@ target_link_libraries(fab_test PRIVATE fab_core)
 target_compile_options(fab_test PRIVATE -Wall -Wextra)
 
 # Plugin-assembly path (fab/constraints.hpp): the same terms as one component
-# each on the engine's DecomposedScoreCalculator, checked bit-for-bit against
+# each on the engine's DecomposedObjective, checked bit-for-bit against
 # the monolithic calculators.
 add_executable(fab_plugin_test test/fab_plugin_test.cpp)
 target_link_libraries(fab_plugin_test PRIVATE fab_core)

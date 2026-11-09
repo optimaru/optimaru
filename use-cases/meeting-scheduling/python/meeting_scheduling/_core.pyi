@@ -24,11 +24,11 @@ Constraints of the Java quickstart (HardMediumSoftScore) and the score mapping
   soft 12. room_change_cost         -1 when an attendee's consecutive (gap <= 2 grains)
                                     meetings change room
 
-The engine score is HardSoftScore(hard int, soft float), so medium is folded into
+The engine score is Score(hard int, soft float), so medium is folded into
 soft: ``soft = -(medium penalty * MEDIUM_SCALE + raw soft penalty)``
 (MEDIUM_SCALE == 1e6; medium always dominates soft).
 
-The Java entity's two planning variables (startingTimeGrain, room) become one BASIC
+The Java entity's two planning variables (startingTimeGrain, room) become one assignment-shape
 variable via the composite encoding ``grain_room = time_grain_pos * room_count + room_index``
 (-1 == unassigned). A meeting occupies duration_in_grains consecutive grain indices
 from its start grain, and every overlap constraint is computed over that whole span.
@@ -161,8 +161,7 @@ def calculate_score(schedule: MeetingSchedule) -> Score:
     """Full recalculation (also stored in schedule.score)."""
 
 def demo_data() -> MeetingSchedule:
-    """Reproduces Java DemoDataGenerator (the same draws as java.util.Random(0)):
-    20 people, 160 time grains, 3 rooms, 24 meetings."""
+    """The demo instance (deterministic): 20 people, 160 time grains, 3 rooms, 24 meetings."""
 
 class SolverConfig:
     """Engine settings (default: 30 s budget, late acceptance + ALNS)."""

@@ -1,68 +1,29 @@
-// Demo: the quickstart's DemoDataGenerator reproduced in C++ — 14 South
+// Demo: the demo league, modelled on the quickstart's demo — 14 South
 // American teams, 32 rounds, 182 matches (every ordered pair), ~5% classic
-// matches picked with java.util.Random(0) exactly like the Java code plus the
-// symmetric closure. The only divergence: Java flags weekend rounds from
-// LocalDate.now(); this demo pins round 0 to a fixed Wednesday so the
-// instance is deterministic.
+// matches drawn from a seeded std::mt19937_64 plus the symmetric closure.
+// Round 0 is pinned to a Wednesday so the instance is deterministic.
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <string>
 #include <vector>
+#include <random>
 
 #include "sls/domain.hpp"
 #include "sls/score_calculator.hpp"
 #include "sls/solver.hpp"
+#include "optimaru/portable_random.hpp"
 
 using namespace sls;
 
 namespace
 {
 
-// java.util.Random (48-bit LCG), enough for nextInt(bound) — reproduces the
-// quickstart's classic-match sampling bit for bit.
-class JavaRandom
-{
-public:
-    explicit JavaRandom(std::int64_t seed)
-        : seed_((static_cast<std::uint64_t>(seed) ^ kMultiplier) & kMask)
-    {
-    }
-
-    int nextInt(int bound)
-    {
-        if ((bound & -bound) == bound)  // power of two
-        {
-            return static_cast<int>(
-                (static_cast<std::int64_t>(bound) * next(31)) >> 31);
-        }
-        int bits;
-        int val;
-        do
-        {
-            bits = next(31);
-            val = bits % bound;
-        } while (bits - val + (bound - 1) < 0);
-        return val;
-    }
-
-private:
-    static constexpr std::uint64_t kMultiplier = 0x5DEECE66DULL;
-    static constexpr std::uint64_t kAddend = 0xBULL;
-    static constexpr std::uint64_t kMask = (1ULL << 48) - 1;
-
-    int next(int bits)
-    {
-        seed_ = (seed_ * kMultiplier + kAddend) & kMask;
-        return static_cast<int>(seed_ >> (48 - bits));
-    }
-
-    std::uint64_t seed_;
-};
+// Seeded, platform-independent draws (see optimaru/portable_random.hpp).
+using DemoRandom = optimaru::PortableRandom;
 
 constexpr int ROUNDS = 32;
-// Java flags rounds landing on Saturday/Sunday of LocalDate.now(); the demo
-// pins round 0 to Wednesday (0=Mon .. 6=Sun) for determinism.
+// Round 0 is a Wednesday (0=Mon .. 6=Sun), so the weekend rounds are fixed.
 constexpr int FIRST_ROUND_DAY_OF_WEEK = 2;
 
 const int DISTANCE_IN_KM[14][14] = {
@@ -165,7 +126,7 @@ const char *TEAM_NAMES[14] = {"Cruzeiro",
 LeagueSchedule generateDemoData()
 {
     LeagueSchedule schedule;
-    JavaRandom random(0);
+    DemoRandom random(0);
 
     // Rounds: weekends flagged from the pinned first day of week.
     for (int i = 0; i < ROUNDS; ++i)
@@ -203,15 +164,14 @@ LeagueSchedule generateDemoData()
         }
     }
 
-    // 5% classic matches — the Java applyRandomValue loop with Random(0):
-    // pick the nextInt(size)-th non-classic match, `size` shrinking by one
-    // per pick.
+    // 5% classic matches: pick the k-th non-classic match, k uniform in
+    // [0, size), `size` shrinking by one per pick.
     const int classicPicks
         = static_cast<int>(schedule.matches.size() * 0.05);  // 9
     int size = static_cast<int>(schedule.matches.size());
     for (int pick = 0; pick < classicPicks && size > 0; ++pick, --size)
     {
-        int skip = random.nextInt(size);
+        int skip = random.next_int(size);
         for (Match &match : schedule.matches)
         {
             if (match.classicMatch)
@@ -282,20 +242,20 @@ int main(int argc, char **argv)
                 seconds);
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(seconds);
-    config.randomSeed = 42;
-    config.onNewBest = [](std::int64_t step, const Score &score)
+    config.time_limit = std::chrono::seconds(seconds);
+    config.seed = 42;
+    config.on_new_best = [](std::int64_t step, const Score &score)
     {
         std::printf("    new best @step %-8lld %s\n",
                     static_cast<long long>(step),
-                    score.toString().c_str());
+                    score.str().c_str());
     };
     Solver solver(config);
     solver.solve(schedule);
 
     std::printf("\n  final score: %s  (feasible=%s)\n\n",
-                schedule.score.toString().c_str(),
-                schedule.score.isFeasible() ? "true" : "false");
+                schedule.score.str().c_str(),
+                schedule.score.feasible() ? "true" : "false");
     printSchedule(schedule);
 
     const Breakdown b = ScoreCalculator::computeBreakdown(schedule);

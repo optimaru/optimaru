@@ -4,8 +4,8 @@
 #include <string>
 #include <vector>
 
-#include "optimaru/api/domain/solution_descriptor.hpp"
-#include "optimaru/api/score/buildin/hard_soft_score.hpp"
+#include "optimaru/model/solution_traits.hpp"
+#include "optimaru/score/score.hpp"
 
 namespace sls
 {
@@ -13,11 +13,11 @@ namespace sls
 // ---------------------------------------------------------------------------
 // Score
 // ---------------------------------------------------------------------------
-// The Java quickstart already uses HardSoftScore, so the mapping onto the
-// engine's HardSoftScore(int64 hard, double soft) is the identity: hard is
+// The Java quickstart already uses Score, so the mapping onto the
+// engine's Score(int64 hard, double soft) is the identity: hard is
 // the violation count sum, soft is the (integral) travel-distance / classic
 // penalty sum stored in the engine's double field. No level remapping needed.
-using Score = optimaru::HardSoftScore;
+using Score = optimaru::Score;
 
 // ---------------------------------------------------------------------------
 // Team  (problem fact)
@@ -89,7 +89,7 @@ struct LeagueSchedule
     Score score;
 
     // Set once by ScoreCalculator::prepare; guards against re-interning the
-    // ordered-pair ids on every calculateScore call.
+    // ordered-pair ids on every score call.
     bool prepared = false;
 
     // Filled by ScoreCalculator::prepare:
@@ -116,27 +116,27 @@ struct LeagueSchedule
 }  // namespace sls
 
 // ---------------------------------------------------------------------------
-// SolutionDescriptor specialization  (the @PlanningEntity/@PlanningVariable
+// SolutionTraits specialization  (the @PlanningEntity/@PlanningVariable
 // annotations of the C++ engine): entities are matches, the planning variable
 // is Match::round, the value range is the rounds vector.
 // ---------------------------------------------------------------------------
-template <> struct optimaru::SolutionDescriptor<sls::LeagueSchedule>
+template <> struct optimaru::SolutionTraits<sls::LeagueSchedule>
 {
-    static constexpr optimaru::VariableKind kind
-        = optimaru::VariableKind::BASIC;
-    static int entityCount(const sls::LeagueSchedule &s)
+    static constexpr optimaru::Shape shape
+        = optimaru::Shape::Assignment;
+    static int entity_count(const sls::LeagueSchedule &s)
     {
         return static_cast<int>(s.matches.size());
     }
-    static int valueCount(const sls::LeagueSchedule &s)
+    static int value_count(const sls::LeagueSchedule &s)
     {
         return static_cast<int>(s.rounds.size());
     }
-    static int getVariable(const sls::LeagueSchedule &s, int matchIndex)
+    static int value_of(const sls::LeagueSchedule &s, int matchIndex)
     {
         return s.matches[matchIndex].round;
     }
-    static void setVariable(sls::LeagueSchedule &s, int matchIndex, int round)
+    static void assign(sls::LeagueSchedule &s, int matchIndex, int round)
     {
         s.matches[matchIndex].round = round;
     }

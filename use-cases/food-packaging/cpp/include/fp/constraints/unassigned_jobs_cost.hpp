@@ -39,7 +39,7 @@ struct UnassignedJobsCost final : FpGlobalConstraint
 
     void
     reset(const PackagingSchedule &schedule,
-          const std::vector<std::vector<int>> & /*membersPerUnit*/) override
+          const std::vector<std::vector<int>> & /*members_per_unit*/) override
     {
         detail::requirePrepared(schedule);
         totalMinutes_ = 0;
@@ -54,7 +54,7 @@ struct UnassignedJobsCost final : FpGlobalConstraint
         }
     }
 
-    void onUnitChanged(const PackagingSchedule &schedule,
+    void on_unit_changed(const PackagingSchedule &schedule,
                        int unit,
                        const std::vector<int> & /*members*/) override
     {

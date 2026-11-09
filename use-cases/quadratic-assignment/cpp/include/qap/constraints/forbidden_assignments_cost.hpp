@@ -22,7 +22,7 @@ struct ForbiddenAssignmentsCost final : QapUnitConstraint
         : QapUnitConstraint("forbiddenAssignmentsCost", weight, kDefaultLevel)
     {
     }
-    void onReset(const QuadraticAssignmentProblem &problem) override
+    void on_reset(const QuadraticAssignmentProblem &problem) override
     {
         detail::requirePrepared(problem);
         scope_ = &problem.forbiddenLocations;
@@ -36,15 +36,15 @@ struct ForbiddenAssignmentsCost final : QapUnitConstraint
             count += problem.isForbidden(facility, unit) ? 1 : 0;
         return static_cast<double>(count);
     }
-    bool supportsDelta() const override { return true; }
-    double deltaCost(const QuadraticAssignmentProblem &problem,
+    bool supports_delta() const override { return true; }
+    double delta_cost(const QuadraticAssignmentProblem &problem,
                      int unit,
                      const std::vector<int> & /*members*/,
                      int entity) const override
     {
         return problem.isForbidden(entity, unit) ? 1.0 : 0.0;
     }
-    const std::vector<int> *scopedUnits() const override { return scope_; }
+    const std::vector<int> *scoped_units() const override { return scope_; }
 
 private:
     const std::vector<int> *scope_ = nullptr;

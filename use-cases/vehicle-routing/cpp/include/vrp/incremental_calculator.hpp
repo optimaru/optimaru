@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <vector>
 
-#include "optimaru/api/score/calculator/incremental_score_calculator.hpp"
+#include "optimaru/score/objective.hpp"
 #include "vrp/domain.hpp"
 
 namespace vrp
@@ -15,8 +15,8 @@ namespace vrp
 // VehicleRoutingIncrementalScoreCalculator
 // ---------------------------------------------------------------------------
 // The vehicle-routing implementation of the engine's
-// optimaru::IncrementalScoreCalculator — the C++ analog of implementing Java's
-// IncrementalScoreCalculator instead of a ConstraintProvider.
+// optimaru::Objective — the C++ analog of implementing Java's
+// Objective instead of a ConstraintProvider.
 //
 // Every constraint in VehicleRoutingConstraintProvider decomposes per route,
 // which is what makes this cheap: a move touches at most two lists, so a step
@@ -34,13 +34,13 @@ namespace vrp
 // same pass). The medium level belongs to the virtual unassigned-pool list —
 // its contribution is just the service minutes of whatever sits in it.
 //
-// beforeListChanged retracts the list's contribution while it still holds the
-// OLD contents; afterListChanged inserts the NEW contents. The calculator
+// before_list_edit retracts the list's contribution while it still holds the
+// OLD contents; after_list_edit inserts the NEW contents. The calculator
 // reads the route lists directly and never the shadow fields (vehicleIndex /
 // arrivalTime), so it stays correct while the engine mutates lists mid-move;
 // the shadows are refreshed by ScoreCalculator afterwards. The full-recompute
-// reference is ScoreCalculator::calculateScore, checked in the tests and under
-// EnvironmentMode::FULL_ASSERT.
+// reference is ScoreCalculator::score, checked in the tests and under
+// ScoreChecks::ScoreChecks::Full.
 //
 // NOTE (measured 2026-08-18, do not redo without new evidence): a
 // suffix-recompute cache (per-vehicle walk states + route copy, resume the
@@ -51,19 +51,19 @@ namespace vrp
 // means +3.1pp (X-n491) / +1.1pp (X-n701) WORSE and 0 paired wins, with
 // X-n289 bit-identical on all 6 seeds.
 class VehicleRoutingIncrementalScoreCalculator final
-    : public optimaru::IncrementalScoreCalculator<VehicleRoutePlan>
+    : public optimaru::Objective<VehicleRoutePlan>
 {
 public:
-    void resetWorkingSolution(VehicleRoutePlan &workingSolution) override;
-    void beforeListChanged(int listIndex) override;
-    void afterListChanged(int listIndex) override;
-    optimaru::HardSoftScore calculateScore() override;
+    void rebuild(VehicleRoutePlan &solution) override;
+    void before_list_edit(int listIndex) override;
+    void after_list_edit(int listIndex) override;
+    optimaru::Score score() override;
 
-    // Move previews (see IncrementalScoreCalculator). A candidate route is a
+    // Move previews (see Objective). A candidate route is a
     // handful of pieces of existing lists. On a plan where no visit ever
     // waits for its window to open, every piece's load, service and driving
     // total is a difference of per-list prefix sums kept up to date in
-    // afterListChanged(), so a preview is O(1); lateness is the one term that
+    // after_list_edit(), so a preview is O(1); lateness is the one term that
     // is not a prefix sum, so the sums answer only when no visit can be late
     // on the candidate route (its finish time stays under the earliest
     // deadline of the lists it draws from). Otherwise, and on a plan with
@@ -79,29 +79,29 @@ public:
     // maxRouteRadiusMeters) are scored by the decomposed constraint plugins,
     // whose calculator previews a move by re-costing the candidate routes per
     // component (O(route) rather than O(1), always served). Adding a term
-    // here means adding it to evaluateElements, previewRuns / previewInsert
+    // here means adding it to evaluateElements, previewRuns / preview_insert
     // (falling back to the walk when it is not a prefix sum) and the plugin
     // together.
-    bool previewSegmentMove(int fromList, int start, int len, int toList, int insertAt,
-                            optimaru::HardSoftScore &out) override;
-    bool previewSwap(int l1, int p1, int l2, int p2, optimaru::HardSoftScore &out) override;
-    bool previewReverse(int list, int first, int last,
-                        optimaru::HardSoftScore &out) override;
-    bool previewTailSwap(int l1, int c1, int l2, int c2,
-                         optimaru::HardSoftScore &out) override;
-    bool previewExchange(int l1, int p1, int len1, int l2, int p2, int len2,
-                         optimaru::HardSoftScore &out) override;
-    bool previewInsert(int list, int pos, int element, optimaru::HardSoftScore &out) override;
+    bool preview_segment_move(int fromList, int start, int len, int toList, int insert_at,
+                            optimaru::Score &out) override;
+    bool preview_swap(int l1, int p1, int l2, int p2, optimaru::Score &out) override;
+    bool preview_reverse(int list, int first, int last,
+                        optimaru::Score &out) override;
+    bool preview_tail_swap(int l1, int c1, int l2, int c2,
+                         optimaru::Score &out) override;
+    bool preview_exchange(int l1, int p1, int len1, int l2, int p2, int len2,
+                         optimaru::Score &out) override;
+    bool preview_insert(int list, int pos, int element, optimaru::Score &out) override;
     // Every kind above is served once the working solution is set.
-    bool supportsPreviews() const override { return previewsEnabled(); }
+    bool has_previews() const override { return previewsEnabled(); }
 
     // The HardMediumSoft view of the current state, for callers that want the
     // three levels without decoding the packed engine score.
-    Score currentScore() const;
+    Score current_score() const;
 
 private:
     // A contiguous run [begin, end) of one list, traversed forward or reversed.
-    // (A detached element never appears as a piece: previewInsert scores it
+    // (A detached element never appears as a piece: preview_insert scores it
     // as a direct delta instead.)
     struct Piece
     {
@@ -151,15 +151,15 @@ private:
         }
         // Insert `piece` so that it starts at element `index` of the run,
         // splitting the piece that position falls in.
-        void insertAt(int index, const Piece &piece);
+        void insert_at(int index, const Piece &piece);
     };
 
     void rebuildCache(int listIndex);
-    bool previewRuns(const Run *runs, int runCount, optimaru::HardSoftScore &out) const;
+    bool previewRuns(const Run *runs, int runCount, optimaru::Score &out) const;
     // The exact O(route) path: materialize and walk. Used on a plan with
     // waiting and whenever the cached sums cannot rule lateness out.
-    bool previewRunsByWalk(const Run *runs, int runCount, optimaru::HardSoftScore &out) const;
-    bool previewInsertByWalk(int list, int pos, int element, optimaru::HardSoftScore &out) const;
+    bool previewRunsByWalk(const Run *runs, int runCount, optimaru::Score &out) const;
+    bool previewInsertByWalk(int list, int pos, int element, optimaru::Score &out) const;
     bool previewsEnabled() const { return plan_ != nullptr; }
     // Earliest deadline among the elements [begin, end) of a cached list.
     Seconds minEndOf(const ListCache &cache, const std::vector<int> &elements, std::size_t begin,
@@ -170,7 +170,7 @@ private:
                    ? plan_->unassignedVisitIndices
                    : plan_->vehicles[static_cast<std::size_t>(list)].visitIndices;
     }
-    int listSize(int list) const { return static_cast<int>(elementsOf(list).size()); }
+    int list_size(int list) const { return static_cast<int>(elementsOf(list).size()); }
 
     // Per-vehicle terms, all derived in one walk of the route.
     struct RouteTerms

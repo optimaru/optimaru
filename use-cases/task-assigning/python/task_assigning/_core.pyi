@@ -3,7 +3,7 @@
 The compiled module wraps the C++ domain in `use-cases/task-assigning/cpp`,
 which imports the generic engine in `include/optimaru`.
 
-The planning variable is each `Employee.tasks` (LIST): the ordered list of task
+The planning variable is each `Employee.tasks` (sequence shape): the ordered list of task
 indices the employee performs back to back. A task in no list is unassigned
 (the Java original's `@PlanningListVariable(allowsUnassignedValues = true)`).
 The shadow values `Task.employee` (-1 == unassigned) / `Task.start_time` (-1 == null)
@@ -18,7 +18,7 @@ at the default weights (constraint_info()):
            major_priority_task_end_time_cost     endTime x 2 (soft, 2)
            minor_priority_task_end_time_cost     endTime x 1 (soft, 1)
 
-Internally the engine uses HardSoftScore(int64 hard, double soft). The medium level (soft0)
+Internally the engine uses Score(int64 hard, double soft). The medium level (soft0)
 folds below hard and the soft level packs soft1 above soft2:
   engine.hard = hard * 10**9 + soft0     (medium_fold {"kind": "below_hard", "unit": 1e9})
   engine.soft = soft1 * 10**7 + soft2    (squared_makespan_cost's default weight 10**7)
@@ -80,7 +80,7 @@ class TaskType:
     required_skills: list[str]
 
 class Task:
-    """Planning entity (LIST element): one task. task_type/customer are
+    """Planning entity (sequence element): one task. task_type/customer are
     indices into the solution lists."""
     def __init__(
         self,

@@ -28,14 +28,14 @@ target_link_libraries(qap_demo PRIVATE qap_core)
 target_compile_options(qap_demo PRIVATE -Wall -Wextra)
 
 # Monolithic path: per-constraint hand checks, incremental == full recompute
-# on random moves, FULL_ASSERT, warm starts, the bijection guard and
+# on random moves, ScoreChecks::Full, warm starts, the bijection guard and
 # brute-force solves.
 add_executable(qap_test test/qap_test.cpp)
 target_link_libraries(qap_test PRIVATE qap_core)
 target_compile_options(qap_test PRIVATE -Wall -Wextra)
 
 # Plugin-assembly path (qap/constraints.hpp): the same score decomposed into
-# one component per constraint on the engine's DecomposedScoreCalculator,
+# one component per constraint on the engine's DecomposedObjective,
 # checked bit-for-bit against the monolithic calculators.
 add_executable(qap_plugin_test test/qap_plugin_test.cpp)
 target_link_libraries(qap_plugin_test PRIVATE qap_core)

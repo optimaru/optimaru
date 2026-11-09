@@ -6,12 +6,12 @@
 //       isolates one constraint per assertion; a full-score calculator
 //       cannot, so cross-firing constraints are accounted for in comments)
 //   (b) incremental score == full recompute across a long random walk driven
-//       through the engine's ScoreDirector protocol (before/set/after)
+//       through the engine's Editor protocol (before/set/after)
 //   (b2) the incrementally maintained hot (tag, day) set (the solver's
 //       violation-guided entity selection reads it) == a brute-force
 //       recomputation, across the same kind of random walk
-//   (c) a small instance solved under EnvironmentMode::FULL_ASSERT
-//   (d) the SMALL Java demo instance reaches 0hard; pinned jobs keep their
+//   (c) a small instance solved under ScoreChecks::ScoreChecks::Full
+//   (d) the SMALL demo instance reaches 0hard; pinned jobs keep their
 //       assignment through a solve
 #include <algorithm>
 #include <chrono>
@@ -27,7 +27,7 @@
 #include "mnt/incremental_calculator.hpp"
 #include "mnt/score_calculator.hpp"
 #include "mnt/solver.hpp"
-#include "optimaru/api/score/director/score_director.hpp"
+#include "optimaru/model/editor.hpp"
 
 using namespace mnt;
 
@@ -53,7 +53,7 @@ void checkScore(const std::string &label,
     std::printf("  [%s] %-42s got=%s expected=%lldhard/%gsoft\n",
                 ok ? "PASS" : "FAIL",
                 label.c_str(),
-                actual.toString().c_str(),
+                actual.str().c_str(),
                 expectedHard,
                 expectedSoft);
     if (!ok)
@@ -117,7 +117,7 @@ Score scoreOf(const std::vector<JobSpec> &specs)
         check(dateIndex >= 0, "test start date is a business day in range");
         s.jobs[i].crewDate = s.crewDateOf(dateIndex, spec.crewIndex);
     }
-    return ScoreCalculator::calculateScore(s);
+    return ScoreCalculator::score(s);
 }
 
 // -------------------------------------------------------------------------
@@ -334,7 +334,7 @@ MaintenanceSchedule buildRandomInstance(int jobCount, std::uint64_t seed)
 
 // -------------------------------------------------------------------------
 // (b) Incremental score == full recompute across a random walk of change and
-// swap moves (including unassignments), driven through the ScoreDirector so
+// swap moves (including unassignments), driven through the Editor so
 // the before/set/after hook contract is exercised exactly like in the
 // engine.
 // -------------------------------------------------------------------------
@@ -345,12 +345,12 @@ void verifyIncremental()
     ScoreCalculator::prepare(s);
 
     MaintenanceSchedulingIncrementalScoreCalculator calc;
-    optimaru::ScoreDirector<MaintenanceSchedule> director(s, calc);
+    optimaru::Editor<MaintenanceSchedule> editor(s, calc);
     MaintenanceSchedule shadow = s;
 
     std::mt19937_64 rng(123);
     const int jobCount = static_cast<int>(s.jobs.size());
-    const int valueCount = s.crewDateCount();
+    const int value_count = s.crewDateCount();
     std::uniform_real_distribution<double> unit(0.0, 1.0);
 
     int mismatches = 0;
@@ -364,8 +364,8 @@ void verifyIncremental()
             const int job = static_cast<int>(rng() % jobCount);
             const int value = (unit(rng) < 0.10)
                                   ? -1
-                                  : static_cast<int>(rng() % valueCount);
-            director.changeVariable(job, value);
+                                  : static_cast<int>(rng() % value_count);
+            editor.assign(job, value);
         }
         else
         {
@@ -374,14 +374,14 @@ void verifyIncremental()
             const int b = static_cast<int>(rng() % jobCount);
             const int va = s.jobs[a].crewDate;
             const int vb = s.jobs[b].crewDate;
-            director.changeVariable(a, vb);
-            director.changeVariable(b, va);
+            editor.assign(a, vb);
+            editor.assign(b, va);
         }
         // Full recompute on the same assignment.
         for (int i = 0; i < jobCount; ++i)
             shadow.jobs[i].crewDate = s.jobs[i].crewDate;
-        const Score full = ScoreCalculator::calculateScore(shadow);
-        const Score incremental = director.calculateScore();
+        const Score full = ScoreCalculator::score(shadow);
+        const Score incremental = editor.score();
         if (full.hard != incremental.hard
             || std::fabs(full.soft - incremental.soft) > 1e-9)
         {
@@ -389,8 +389,8 @@ void verifyIncremental()
             {
                 std::printf("  MISMATCH @step %d: incremental=%s full=%s\n",
                             step,
-                            incremental.toString().c_str(),
-                            full.toString().c_str());
+                            incremental.str().c_str(),
+                            full.str().c_str());
             }
         }
     }
@@ -401,7 +401,7 @@ void verifyIncremental()
 }
 
 // -------------------------------------------------------------------------
-// (b2) The hot (tag, day) set the solver's entityRecommender samples from is
+// (b2) The hot (tag, day) set the solver's entity_hint samples from is
 // maintained incrementally inside insert/retract, so — like the score itself
 // — it has to survive a random walk. It must be exactly the set of cells
 // occupied by two or more jobs (the cells that carry a tagConflictCost).
@@ -413,11 +413,11 @@ void verifyHotTagCells()
     ScoreCalculator::prepare(s);
 
     MaintenanceSchedulingIncrementalScoreCalculator calc;
-    optimaru::ScoreDirector<MaintenanceSchedule> director(s, calc);
+    optimaru::Editor<MaintenanceSchedule> editor(s, calc);
 
     std::mt19937_64 rng(4242);
     const int jobCount = static_cast<int>(s.jobs.size());
-    const int valueCount = s.crewDateCount();
+    const int value_count = s.crewDateCount();
     std::uniform_real_distribution<double> unit(0.0, 1.0);
 
     int mismatches = 0;
@@ -426,9 +426,9 @@ void verifyHotTagCells()
     for (int step = 0; step < steps; ++step)
     {
         const int job = static_cast<int>(rng() % jobCount);
-        director.changeVariable(
-            job, unit(rng) < 0.10 ? -1 : static_cast<int>(rng() % valueCount));
-        director.calculateScore();
+        editor.assign(
+            job, unit(rng) < 0.10 ? -1 : static_cast<int>(rng() % value_count));
+        editor.score();
 
         // Brute-force reference: count the occupants of every (tag, day) cell.
         std::vector<int> counts(
@@ -480,9 +480,9 @@ void verifyHotTagCells()
 }
 
 // -------------------------------------------------------------------------
-// (c) FULL_ASSERT solve: the engine cross-checks the incremental score
+// (c) ScoreChecks::Full solve: the engine cross-checks the incremental score
 // against a full reset + recompute after every single move and throws
-// ScoreCorruptionError on any divergence.
+// ScoreMismatchError on any divergence.
 // -------------------------------------------------------------------------
 void verifyFullAssertSolve()
 {
@@ -490,10 +490,10 @@ void verifyFullAssertSolve()
     MaintenanceSchedule s = buildRandomInstance(/*jobCount*/ 16, /*seed*/ 11);
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(2);
-    config.randomSeed = 3;
-    config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
-    // Kick early so the LNS ruin/recreate path also runs under FULL_ASSERT.
+    config.time_limit = std::chrono::seconds(2);
+    config.seed = 3;
+    config.score_checks = optimaru::ScoreChecks::Full;
+    // Kick early so the LNS ruin/recreate path also runs under ScoreChecks::Full.
     config.ruinRecreateUnimprovedStepTrigger = 200;
     config.ruinRecreatePolishSteps = 100;
 
@@ -505,7 +505,7 @@ void verifyFullAssertSolve()
         solver.solve(s);
         final = s.score;
     }
-    catch (const optimaru::ScoreCorruptionError &e)
+    catch (const optimaru::ScoreMismatchError &e)
     {
         corrupted = true;
         std::printf("  ScoreCorruptionError: %s\n", e.what());
@@ -513,7 +513,7 @@ void verifyFullAssertSolve()
     check(!corrupted, "2s FULL_ASSERT solve without score corruption");
     if (!corrupted)
     {
-        const Score recomputed = ScoreCalculator::calculateScore(s);
+        const Score recomputed = ScoreCalculator::score(s);
         check(final.hard == recomputed.hard
                   && std::fabs(final.soft - recomputed.soft) < 1e-9,
               "solver-reported score == full recompute");
@@ -522,7 +522,7 @@ void verifyFullAssertSolve()
 }
 
 // -------------------------------------------------------------------------
-// (d) The Java SMALL demo instance (fixed Monday for reproducibility)
+// (d) The SMALL demo instance (fixed Monday for reproducibility)
 // reaches 0hard, and a pinned job keeps its assignment through a solve.
 // -------------------------------------------------------------------------
 void verifyDemoAndPinnedSolve()
@@ -530,7 +530,7 @@ void verifyDemoAndPinnedSolve()
     std::printf("== (d) SMALL demo reaches 0hard; pinning holds ==\n");
     MaintenanceSchedule s = generateDemoData(DemoData::SMALL, DAY_1);
     check(static_cast<int>(s.jobs.size()) == 14 && s.crewCount() == 3,
-          "SMALL demo: 3 crews, 14 jobs (Java jobListSize)");
+          "SMALL demo: 3 crews, 14 jobs");
     ScoreCalculator::prepare(s);
 
     // Pin job 0 to its earliest in-window start on Gamma crew.
@@ -550,9 +550,9 @@ void verifyDemoAndPinnedSolve()
     s.jobs[0].pinned = true;
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(8);
-    config.bestScoreLimit = Score{0, -std::numeric_limits<double>::infinity()};  // stop at first feasible
-    config.randomSeed = 5;
+    config.time_limit = std::chrono::seconds(8);
+    config.target_score = Score{0, -std::numeric_limits<double>::infinity()};  // stop at first feasible
+    config.seed = 5;
     Solver solver(config);
     solver.solve(s);
 

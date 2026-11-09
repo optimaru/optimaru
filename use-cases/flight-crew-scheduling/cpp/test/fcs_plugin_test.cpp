@@ -1,15 +1,15 @@
 // Plugin-assembly (fcs/constraints.hpp) tests, engine test/ style: check() + a
 // non-zero exit on any failure.
-//   (a) the default assembly on the engine's DecomposedScoreCalculator
+//   (a) the default assembly on the engine's DecomposedObjective
 //       reproduces the monolithic score bit-for-bit on 500 random
 //       assignments (unassigned seats included)
 //   (b) incremental score == full recompute across 3000 random moves driven
-//       through the engine's ScoreDirector protocol (plugin path)
+//       through the engine's Editor protocol (plugin path)
 //   (c) partial assemblies: each component in isolation, hand-computed
 //   (d) weight / level overrides: re-weighted, demoted to soft, promoted to
 //       hard, exponent shaping
-//   (e) constraintTotals() explains exactly the reported score
-//   (f) a 2-second solve(schedule, calculator) under FULL_ASSERT
+//   (e) constraint_totals() explains exactly the reported score
+//   (f) a 2-second solve(schedule, calculator) under ScoreChecks::Full
 //   (g) the defaultConstraints() builder: named edits == by-hand assembly
 //   (h) each component's raw cost, hand-calculated: a positive and a zero
 //       case per constraint (raw 0 = no violation)
@@ -21,7 +21,7 @@
 //       hard rounding, the literal formula refused on hard at reset and kept
 //       on soft, incremental == a fresh recompute over a random walk (delta,
 //       full-recost and soft components repeated and shifted) and a
-//       FULL_ASSERT solve with the same assembly
+//       ScoreChecks::Full solve with the same assembly
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -38,7 +38,7 @@
 #include "fcs/domain.hpp"
 #include "fcs/score_calculator.hpp"
 #include "fcs/solver.hpp"
-#include "optimaru/api/score/director/score_director.hpp"
+#include "optimaru/model/editor.hpp"
 
 using namespace fcs;
 
@@ -64,7 +64,7 @@ void checkScore(const std::string &label,
     std::printf("  [%s] %-48s got=%s expected=%lldhard/%gsoft\n",
                 ok ? "PASS" : "FAIL",
                 label.c_str(),
-                actual.toString().c_str(),
+                actual.str().c_str(),
                 expectedHard,
                 expectedSoft);
     if (!ok)
@@ -154,8 +154,8 @@ buildRandomInstance(int flightCount, int employeeCount, std::uint64_t seed)
 Score scoreWith(DecomposedCalculator &calculator, FlightCrewSchedule &s)
 {
     ScoreCalculator::prepare(s);  // idempotent; the components require it
-    calculator.resetWorkingSolution(s);
-    return calculator.calculateScore();
+    calculator.rebuild(s);
+    return calculator.score();
 }
 
 // -------------------------------------------------------------------------
@@ -185,15 +185,15 @@ void verifyAssemblyParity()
                                       : static_cast<int>(rng() % employeeCount);
         }
         const Score plugin = scoreWith(calculator, s);
-        const Score monolithic = ScoreCalculator::calculateScore(s);
+        const Score monolithic = ScoreCalculator::score(s);
         if (!sameScore(plugin, monolithic))
         {
             if (++mismatches <= 3)
             {
                 std::printf("  MISMATCH @round %d: plugin=%s monolithic=%s\n",
                             round,
-                            plugin.toString().c_str(),
-                            monolithic.toString().c_str());
+                            plugin.str().c_str(),
+                            monolithic.str().c_str());
             }
         }
     }
@@ -214,12 +214,12 @@ void verifyIncremental()
 
     DecomposedCalculator calculator;
     addDefaultConstraints(calculator);
-    optimaru::ScoreDirector<FlightCrewSchedule> director(s, calculator);
+    optimaru::Editor<FlightCrewSchedule> editor(s, calculator);
     FlightCrewSchedule shadow = s;
 
     std::mt19937_64 rng(123);
     const int assignmentCount = static_cast<int>(s.flightAssignments.size());
-    const int valueCount = static_cast<int>(s.employees.size());
+    const int value_count = static_cast<int>(s.employees.size());
     std::uniform_real_distribution<double> unit(0.0, 1.0);
 
     int mismatches = 0;
@@ -231,8 +231,8 @@ void verifyIncremental()
             const int assignment = static_cast<int>(rng() % assignmentCount);
             const int value = (unit(rng) < 0.10)
                                   ? -1
-                                  : static_cast<int>(rng() % valueCount);
-            director.changeVariable(assignment, value);
+                                  : static_cast<int>(rng() % value_count);
+            editor.assign(assignment, value);
         }
         else
         {
@@ -240,22 +240,22 @@ void verifyIncremental()
             const int b = static_cast<int>(rng() % assignmentCount);
             const int va = s.flightAssignments[a].employee;
             const int vb = s.flightAssignments[b].employee;
-            director.changeVariable(a, vb);
-            director.changeVariable(b, va);
+            editor.assign(a, vb);
+            editor.assign(b, va);
         }
         for (int i = 0; i < assignmentCount; ++i)
             shadow.flightAssignments[i].employee
                 = s.flightAssignments[i].employee;
-        const Score full = ScoreCalculator::calculateScore(shadow);
-        const Score incremental = director.calculateScore();
+        const Score full = ScoreCalculator::score(shadow);
+        const Score incremental = editor.score();
         if (!sameScore(full, incremental))
         {
             if (++mismatches <= 3)
             {
                 std::printf("  MISMATCH @step %d: incremental=%s full=%s\n",
                             step,
-                            incremental.toString().c_str(),
-                            full.toString().c_str());
+                            incremental.str().c_str(),
+                            full.str().c_str());
             }
         }
     }
@@ -426,7 +426,7 @@ void verifyOverrides()
 }
 
 // -------------------------------------------------------------------------
-// (e) constraintTotals(): the per-constraint breakdown adds up.
+// (e) constraint_totals(): the per-constraint breakdown adds up.
 // -------------------------------------------------------------------------
 void verifyConstraintTotals()
 {
@@ -444,18 +444,18 @@ void verifyConstraintTotals()
 
     double hard = 0.0;
     double soft = 0.0;
-    for (const optimaru::ConstraintTotal &total : calculator.constraintTotals())
-        (total.isHard ? hard : soft) += total.cost;
+    for (const optimaru::ConstraintTotal &total : calculator.constraint_totals())
+        (total.is_hard ? hard : soft) += total.cost;
     check(std::fabs(-hard - static_cast<double>(score.hard)) < 1e-9
               && std::fabs(-soft - score.soft) < 1e-6,
           "per-constraint totals sum to the reported score");
-    check(calculator.constraintTotals().size() == 6,
+    check(calculator.constraint_totals().size() == 6,
           "one total per assembled component");
     std::printf("\n");
 }
 
 // -------------------------------------------------------------------------
-// (f) FULL_ASSERT solve on the plugin path.
+// (f) ScoreChecks::Full solve on the plugin path.
 // -------------------------------------------------------------------------
 void verifyFullAssertSolve()
 {
@@ -464,9 +464,9 @@ void verifyFullAssertSolve()
         = buildRandomInstance(/*flights*/ 12, /*employees*/ 6, /*seed*/ 11);
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(2);
-    config.randomSeed = 3;
-    config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+    config.time_limit = std::chrono::seconds(2);
+    config.seed = 3;
+    config.score_checks = optimaru::ScoreChecks::Full;
     config.ruinRecreateUnimprovedStepTrigger = 200;
     config.ruinRecreatePolishSteps = 100;
 
@@ -479,7 +479,7 @@ void verifyFullAssertSolve()
         Solver solver(config);
         solver.solve(s, calculator);
     }
-    catch (const optimaru::ScoreCorruptionError &e)
+    catch (const optimaru::ScoreMismatchError &e)
     {
         corrupted = true;
         std::printf("  ScoreCorruptionError: %s\n", e.what());
@@ -487,7 +487,7 @@ void verifyFullAssertSolve()
     check(!corrupted, "2s FULL_ASSERT plugin solve without score corruption");
     if (!corrupted)
     {
-        const Score recomputed = ScoreCalculator::calculateScore(s);
+        const Score recomputed = ScoreCalculator::score(s);
         check(sameScore(s.score, recomputed),
               "plugin-reported score == monolithic full recompute");
     }
@@ -535,7 +535,7 @@ void verifyAssemblyBuilder()
     // The default assembly, untouched, still matches the monolith.
     DecomposedCalculator plain;
     defaultConstraints().into(plain);
-    check(sameScore(scoreWith(plain, s), ScoreCalculator::calculateScore(s)),
+    check(sameScore(scoreWith(plain, s), ScoreCalculator::score(s)),
           "defaultConstraints() alone == the monolithic score");
 
     // A typo must not quietly leave the cost function as it was.
@@ -569,7 +569,7 @@ void verifyAssemblyBuilder()
 // -------------------------------------------------------------------------
 // (h) Each component's raw cost on hand-built instances: one violating
 // (positive) case and one clean (zero) case per constraint, read through
-// constraintCosts() — the raw per-employee numbers before weight and level.
+// constraint_costs() — the raw per-employee numbers before weight and level.
 // -------------------------------------------------------------------------
 std::vector<double> rawCosts(FlightCrewSchedule &schedule,
                              const std::string &name)
@@ -577,12 +577,12 @@ std::vector<double> rawCosts(FlightCrewSchedule &schedule,
     ScoreCalculator::prepare(schedule);
     DecomposedCalculator calculator;
     addDefaultConstraints(calculator);
-    calculator.resetWorkingSolution(schedule);
-    calculator.calculateScore();
-    for (const auto &entry : calculator.constraintCosts())
+    calculator.rebuild(schedule);
+    calculator.score();
+    for (const auto &entry : calculator.constraint_costs())
     {
         if (entry.name == name)
-            return entry.unitCosts;
+            return entry.unit_costs;
     }
     return {};
 }
@@ -734,11 +734,11 @@ bool rowIs(const optimaru::ConstraintInfo &row,
            optimaru::Level level,
            double weight)
 {
-    return row.name == name && row.defaultLevel == Component::kDefaultLevel
-           && row.defaultWeight == Component::kDefaultWeight
-           && row.defaultLevel == level && row.defaultWeight == weight
-           && row.levelFlippable && !row.reward && !row.isGlobal
-           && row.defaultEnabled;
+    return row.name == name && row.default_level == Component::kDefaultLevel
+           && row.default_weight == Component::kDefaultWeight
+           && row.default_level == level && row.default_weight == weight
+           && row.level_flippable && !row.reward && !row.is_global
+           && row.default_enabled;
 }
 
 void verifyCatalog()
@@ -788,7 +788,7 @@ void verifyCatalog()
 // -------------------------------------------------------------------------
 // (j) Repeated components and offsets. A repeat is a fresh copy of a
 // default component (another defaultConstraints(), the one name kept, its
-// knobs re-stated) appended with addInstances(), as the Python bindings
+// knobs re-stated) appended with add_instances(), as the Python bindings
 // build it from a pick list.
 // -------------------------------------------------------------------------
 ConstraintAssembly copyOf(const std::string &name)
@@ -829,32 +829,32 @@ ConstraintAssembly repeatedAssembly()
     ConstraintAssembly assembly = defaultConstraints();
     assembly.offset("flightConflictCost", 1.0);
     assembly.offset("requiredSkillCost", -1.0);
-    assembly.addInstances(std::move(copyOf("flightConflictCost")
+    assembly.add_instances(std::move(copyOf("flightConflictCost")
                                         .soft("flightConflictCost")
                                         .offset("flightConflictCost", 1.0)
                                         .clip("flightConflictCost", false)));
-    assembly.addInstances(std::move(copyOf("flightConflictCost")
+    assembly.add_instances(std::move(copyOf("flightConflictCost")
                                         .weight("flightConflictCost", 2.0)
                                         .exponent("flightConflictCost", 2.0)
                                         .offset("flightConflictCost", 1.0)));
-    assembly.addInstances(std::move(copyOf("requiredSkillCost")
+    assembly.add_instances(std::move(copyOf("requiredSkillCost")
                                         .soft("requiredSkillCost")
                                         .weight("requiredSkillCost", 30.0)
                                         .offset("requiredSkillCost", 0.5)
                                         .clip("requiredSkillCost", false)));
-    assembly.addInstances(std::move(copyOf("requiredSkillCost")
+    assembly.add_instances(std::move(copyOf("requiredSkillCost")
                                         .weight("requiredSkillCost", 30.0)
                                         .offset("requiredSkillCost", 0.5)));
-    assembly.addInstances(std::move(copyOf("employeeUnavailabilityCost")
+    assembly.add_instances(std::move(copyOf("employeeUnavailabilityCost")
                                         .soft("employeeUnavailabilityCost")
                                         .offset("employeeUnavailabilityCost", -2.0)
                                         .clip("employeeUnavailabilityCost", false)));
-    assembly.addInstances(std::move(
+    assembly.add_instances(std::move(
         copyOf("employeeUnavailabilityCost").offset("employeeUnavailabilityCost", -2.0)));
-    assembly.addInstances(std::move(copyOf("transferBetweenTwoFlightsCost")
+    assembly.add_instances(std::move(copyOf("transferBetweenTwoFlightsCost")
                                         .weight("transferBetweenTwoFlightsCost", 3.0)
                                         .offset("transferBetweenTwoFlightsCost", 1.0)));
-    assembly.addInstances(std::move(copyOf("firstAssignmentNotDepartingFromHomeCost")
+    assembly.add_instances(std::move(copyOf("firstAssignmentNotDepartingFromHomeCost")
                                         .weight("firstAssignmentNotDepartingFromHomeCost", 0.25)
                                         .offset("firstAssignmentNotDepartingFromHomeCost", 0.5)
                                         .clip("firstAssignmentNotDepartingFromHomeCost", false)));
@@ -867,18 +867,18 @@ void verifyRepeatsAndOffsets()
     {
         FlightCrewSchedule s = repeatInstance();
         ConstraintAssembly assembly = copyOf("flightConflictCost");
-        assembly.addInstances(std::move(copyOf("flightConflictCost")
+        assembly.add_instances(std::move(copyOf("flightConflictCost")
                                             .weight("flightConflictCost", 2.0)
                                             .exponent("flightConflictCost", 2.0)));
         DecomposedCalculator calculator;
         assembly.into(calculator);
         checkScore("10 x conflicts + 2 x conflicts^2 per employee: -(30 + 18)",
                    scoreWith(calculator, s), -48, 0.0);
-        const auto entries = calculator.constraintCosts();
-        check(entries.size() == 2 && entries[0].unitCosts == entries[1].unitCosts
-                  && entries[0].unitCosts == std::vector<double>{3.0, 0.0, 0.0}
+        const auto entries = calculator.constraint_costs();
+        check(entries.size() == 2 && entries[0].unit_costs == entries[1].unit_costs
+                  && entries[0].unit_costs == std::vector<double>{3.0, 0.0, 0.0}
                   && entries[1].weight == 2.0 && entries[1].exponent == 2.0
-                  && entries[1].defaultWeight == 10.0 && !entries[0].scoped,
+                  && entries[1].default_weight == 10.0 && !entries[0].scoped,
               "two instances, the same raw costs, each with its own knobs, every employee "
               "evaluated");
     }
@@ -922,7 +922,7 @@ void verifyRepeatsAndOffsets()
                0, 2000.0);
     checkScore("identical instances add up: 2 x 100",
                repeatScore(std::move(
-                   copyOf("requiredSkillCost").addInstances(copyOf("requiredSkillCost")))),
+                   copyOf("requiredSkillCost").add_instances(copyOf("requiredSkillCost")))),
                -200, 0.0);
     {
         // On hard (the default of the four hard components) the literal
@@ -962,7 +962,7 @@ void verifyRepeatsAndOffsets()
                   == refusal("firstAssignmentNotDepartingFromHomeCost"),
               "a soft component's literal offset moved to hard afterwards: refused at reset");
         ConstraintAssembly repeated = copyOf("flightConflictCost");
-        repeated.addInstances(std::move(copyOf("flightConflictCost")
+        repeated.add_instances(std::move(copyOf("flightConflictCost")
                                             .offset("flightConflictCost", 1.0)
                                             .clip("flightConflictCost", false)));
         check(resetRefusal(std::move(repeated)) == refusal("flightConflictCost"),
@@ -978,11 +978,11 @@ void verifyRepeatsAndOffsets()
         ScoreCalculator::prepare(s);
         DecomposedCalculator calculator;
         repeatedAssembly().into(calculator);
-        optimaru::ScoreDirector<FlightCrewSchedule> director(s, calculator);
+        optimaru::Editor<FlightCrewSchedule> editor(s, calculator);
         std::mt19937_64 rng(321);
         std::uniform_real_distribution<double> unit(0.0, 1.0);
         const int assignmentCount = static_cast<int>(s.flightAssignments.size());
-        const int valueCount = static_cast<int>(s.employees.size());
+        const int value_count = static_cast<int>(s.employees.size());
         int mismatches = 0;
         double drift = 0.0;
         const int steps = 3000;
@@ -990,15 +990,15 @@ void verifyRepeatsAndOffsets()
         {
             const int assignment = static_cast<int>(rng() % assignmentCount);
             const int value
-                = unit(rng) < 0.1 ? -1 : static_cast<int>(rng() % valueCount);
-            director.changeVariable(assignment, value);
+                = unit(rng) < 0.1 ? -1 : static_cast<int>(rng() % value_count);
+            editor.assign(assignment, value);
             FlightCrewSchedule shadow = s;
             DecomposedCalculator fresh;
             repeatedAssembly().into(fresh);
             const Score full = scoreWith(fresh, shadow);
-            const Score incremental = director.calculateScore();
+            const Score incremental = editor.score();
             drift = std::max(drift, std::fabs(full.soft - incremental.soft));
-            if (!optimaru::scoresAgree(incremental, full))
+            if (!optimaru::scores_agree(incremental, full))
                 ++mismatches;
         }
         std::printf("    largest soft drift %.3g\n", drift);
@@ -1009,9 +1009,9 @@ void verifyRepeatsAndOffsets()
     {
         FlightCrewSchedule s = buildRandomInstance(/*flights*/ 12, /*employees*/ 6, /*seed*/ 11);
         Solver::Config config;
-        config.spentLimit = std::chrono::seconds(2);
-        config.randomSeed = 3;
-        config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+        config.time_limit = std::chrono::seconds(2);
+        config.seed = 3;
+        config.score_checks = optimaru::ScoreChecks::Full;
         config.ruinRecreateUnimprovedStepTrigger = 200;
         config.ruinRecreatePolishSteps = 100;
         DecomposedCalculator calculator;
@@ -1022,7 +1022,7 @@ void verifyRepeatsAndOffsets()
             Solver solver(config);
             solver.solve(s, calculator);
         }
-        catch (const optimaru::ScoreCorruptionError &e)
+        catch (const optimaru::ScoreMismatchError &e)
         {
             corrupted = true;
             std::printf("  ScoreCorruptionError: %s\n", e.what());
@@ -1030,7 +1030,7 @@ void verifyRepeatsAndOffsets()
         check(!corrupted, "2s FULL_ASSERT solve with repeated, shifted components");
         DecomposedCalculator fresh;
         repeatedAssembly().into(fresh);
-        check(!corrupted && optimaru::scoresAgree(s.score, scoreWith(fresh, s)),
+        check(!corrupted && optimaru::scores_agree(s.score, scoreWith(fresh, s)),
               "the reported score == a fresh recompute of the same assembly");
     }
     std::printf("\n");

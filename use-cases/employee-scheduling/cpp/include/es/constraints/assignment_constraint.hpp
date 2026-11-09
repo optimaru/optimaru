@@ -12,8 +12,8 @@ struct EmployeeAssignmentDeltaGroup;
 // common structural key and evaluates all present constraints as one group.
 struct GroupableAssignmentConstraint : EsUnitConstraint {
     using EsUnitConstraint::EsUnitConstraint;
-    const char* deltaGroupKey() const override;
-    std::unique_ptr<optimaru::UnitConstraintDeltaGroup<EmployeeSchedule>> createDeltaGroup()
+    const char* delta_group_key() const override;
+    std::unique_ptr<optimaru::UnitConstraintDeltaGroup<EmployeeSchedule>> create_delta_group()
             const override;
 };
 

@@ -11,9 +11,9 @@
 
 #include "cs/incremental_calculator.hpp"
 #include "cs/score_calculator.hpp"
-#include "optimaru/api/solver/solver_factory.hpp"
-#include "optimaru/config/solver/solver_config.hpp"
-#include "optimaru/impl/solver/worker_threads.hpp"
+#include "optimaru/solver.hpp"
+#include "optimaru/settings.hpp"
+#include "optimaru/worker_threads.hpp"
 
 namespace cs
 {
@@ -24,44 +24,44 @@ namespace
 // Shared engine wiring for both solve() overloads: termination, late
 // acceptance, the move mix, the ALNS knobs and whatever guided selection the
 // domain config asks for.
-optimaru::SolverConfig buildEngineConfig(const Solver::Config &config,
+optimaru::Settings buildEngineConfig(const Solver::Config &config,
                                          const ConferenceSchedule &schedule)
 {
-    optimaru::SolverConfig engineConfig;
-    engineConfig.randomSeed = config.randomSeed;
-    engineConfig.environmentMode = config.environmentMode;
-    engineConfig.multiStartCount = 1;  // parallel starts are fanned out above
-    engineConfig.termination.spentLimit = config.spentLimit;
-    engineConfig.termination.bestScoreLimit = config.bestScoreLimit;
-    engineConfig.termination.unimprovedSpentLimit = config.unimprovedSpentLimit;
-    engineConfig.termination.stepCountLimit = config.stepCountLimit;
-    engineConfig.termination.unimprovedStepCountLimit
-        = config.unimprovedStepCountLimit;
-    // lateAcceptanceSize 0 = auto-scale with the instance (see Config).
-    engineConfig.localSearch.acceptor.lateAcceptanceSize
-        = config.lateAcceptanceSize != 0
-              ? config.lateAcceptanceSize
+    optimaru::Settings engineConfig;
+    engineConfig.seed = config.seed;
+    engineConfig.score_checks = config.score_checks;
+    engineConfig.parallel_starts = 1;  // parallel starts are fanned out above
+    engineConfig.limits.time_limit = config.time_limit;
+    engineConfig.limits.target_score = config.target_score;
+    engineConfig.limits.stall_time_limit = config.stall_time_limit;
+    engineConfig.limits.step_limit = config.step_limit;
+    engineConfig.limits.stall_step_limit
+        = config.stall_step_limit;
+    // history_length 0 = auto-scale with the instance (see Config).
+    engineConfig.search.acceptance.history_length
+        = config.history_length != 0
+              ? config.history_length
               : std::clamp<std::size_t>(8 * schedule.talks.size(), 800, 3200);
-    engineConfig.localSearch.moveSelector.changeMoveWeight
-        = config.changeMoveWeight;
-    engineConfig.localSearch.moveSelector.swapMoveWeight
-        = config.swapMoveWeight;
-    auto &lns = engineConfig.localSearch.ruinRecreate;
-    lns.enabled = config.ruinRecreate;
-    lns.unimprovedStepTrigger = config.ruinRecreateUnimprovedStepTrigger;
-    lns.minRuinFraction = config.ruinRecreateMinRuinFraction;
-    lns.maxRuinFraction = config.ruinRecreateMaxRuinFraction;
-    lns.maxRuinCount = config.ruinRecreateMaxRuinCount;
-    lns.operatorDecay = config.ruinRecreateOperatorDecay;
+    engineConfig.search.moves.change_weight
+        = config.change_weight;
+    engineConfig.search.moves.swap_weight
+        = config.swap_weight;
+    auto &lns = engineConfig.search.ruin_recreate;
+    lns.enabled = config.ruin_recreate;
+    lns.unimproved_step_trigger = config.ruinRecreateUnimprovedStepTrigger;
+    lns.min_ruin_fraction = config.ruinRecreateMinRuinFraction;
+    lns.max_ruin_fraction = config.ruinRecreateMaxRuinFraction;
+    lns.max_ruin_count = config.ruinRecreateMaxRuinCount;
+    lns.operator_decay = config.ruinRecreateOperatorDecay;
     lns.rewards = config.ruinRecreateRewards;
-    lns.polishSteps = config.ruinRecreatePolishSteps;
-    // asMoveWeight < 0 = auto: the budget-share rule (weight * valueRange
+    lns.polish_steps = config.ruinRecreatePolishSteps;
+    // as_move_weight < 0 = auto: the budget-share rule (weight * valueRange
     // ~ 0.2; see Config).
-    lns.asMoveWeight = config.ruinRecreateAsMoveWeight >= 0.0
+    lns.as_move_weight = config.ruinRecreateAsMoveWeight >= 0.0
                            ? config.ruinRecreateAsMoveWeight
                            : 0.2 / std::max(1, schedule.slotRoomCount());
-    lns.asMoveMaxRuin = config.ruinRecreateAsMoveMaxRuin;
-    engineConfig.localSearch.descentWeight = config.descentWeight;
+    lns.as_move_max_ruin = config.ruinRecreateAsMoveMaxRuin;
+    engineConfig.search.descent_weight = config.descent_weight;
 
     // Per-talk type-compatible (timeslot, room) cells: the stand-in for the
     // quickstart's per-TalkType value ranges. Change moves draw from this
@@ -86,7 +86,7 @@ optimaru::SolverConfig buildEngineConfig(const Solver::Config &config,
         }
         compatibleValues->push_back(std::move(values));
     }
-    engineConfig.constructionHeuristic.entityDifficulty
+    engineConfig.construction.difficulty
         = [compatibleValues](int talkIndex)
     {
         // Fewer compatible cells == harder; First Fit Decreasing.
@@ -95,7 +95,7 @@ optimaru::SolverConfig buildEngineConfig(const Solver::Config &config,
     if (config.compatibleValueProbability > 0.0)
     {
         const double probability = config.compatibleValueProbability;
-        engineConfig.localSearch.valueRecommender
+        engineConfig.search.value_hint
             = [compatibleValues, probability](std::mt19937_64 &rng,
                                               int talkIndex) -> int
         {
@@ -119,7 +119,7 @@ void Solver::solve(ConferenceSchedule &schedule)
     ScoreCalculator::prepare(schedule);  // intern tags / flatten tables
     if (schedule.talks.empty() || schedule.slotRoomCount() == 0)
     {
-        ScoreCalculator::calculateScore(schedule);
+        ScoreCalculator::score(schedule);
         return;
     }
     if (config_.ruinRecreateRewards.size() != 4)
@@ -132,7 +132,7 @@ void Solver::solve(ConferenceSchedule &schedule)
     // engine's built-in multi-start: the budget is driven from this side (see
     // the restart segments below), and the engine's multi-start would instead
     // hand every thread one unsegmented full-budget run. Worker i solves its
-    // own copy with randomSeed + i; the best final score wins. (The
+    // own copy with seed + i; the best final score wins. (The
     // school-timetabling canonical solver fans out here for the same reason.)
     const int workerCount = std::max(1, config_.parallelSolverCount);
     if (workerCount > 1)
@@ -144,7 +144,7 @@ void Solver::solve(ConferenceSchedule &schedule)
         auto stop = std::make_shared<std::atomic<bool>>(false);
         // A worker that cannot be started (std::system_error) stops and joins
         // the ones already running before the error is rethrown here.
-        optimaru::runWorkerThreads(
+        optimaru::run_worker_threads(
             workerCount, *stop,
             [this, &candidates, &failures, &stop](int i)
             {
@@ -152,11 +152,11 @@ void Solver::solve(ConferenceSchedule &schedule)
                 {
                     Config workerConfig = config_;
                     workerConfig.parallelSolverCount = 1;
-                    workerConfig.stopFlag = stop;
-                    workerConfig.randomSeed
+                    workerConfig.stop_flag = stop;
+                    workerConfig.seed
                         += static_cast<std::uint64_t>(i);
                     if (i != 0)
-                        workerConfig.onNewBest = nullptr;
+                        workerConfig.on_new_best = nullptr;
                     Solver worker(std::move(workerConfig));
                     worker.solve(candidates[i]);
                 }
@@ -181,7 +181,7 @@ void Solver::solve(ConferenceSchedule &schedule)
         return;
     }
 
-    optimaru::SolverConfig engineConfig = buildEngineConfig(config_, schedule);
+    optimaru::Settings engineConfig = buildEngineConfig(config_, schedule);
 
     // Construction heuristic + late-acceptance local search (+ ALNS kicks),
     // run as `restartSegments` consecutive segments over the one wall-clock
@@ -202,15 +202,15 @@ void Solver::solve(ConferenceSchedule &schedule)
     // Segmenting is skipped whenever a step- or unimproved-based termination
     // is configured, since those count per run and segmenting would silently
     // multiply them.
-    const bool segmentable = config_.stepCountLimit == 0
-                             && config_.unimprovedStepCountLimit == 0
-                             && config_.unimprovedSpentLimit.count() == 0
-                             && config_.spentLimit.count() > 0;
+    const bool segmentable = config_.step_limit == 0
+                             && config_.stall_step_limit == 0
+                             && config_.stall_time_limit.count() == 0
+                             && config_.time_limit.count() > 0;
     const int segments = segmentable ? std::max(1, config_.restartSegments) : 1;
-    const auto deadline = std::chrono::steady_clock::now() + config_.spentLimit;
+    const auto deadline = std::chrono::steady_clock::now() + config_.time_limit;
 
     // The engine's step counter restarts with each segment; keep the
-    // reported step numbers monotone across segments for onNewBest
+    // reported step numbers monotone across segments for on_new_best
     // consumers.
     std::int64_t stepOffset = 0;
     std::int64_t lastStep = 0;
@@ -221,7 +221,7 @@ void Solver::solve(ConferenceSchedule &schedule)
     ConferenceSchedulingIncrementalScoreCalculator calculator;
     for (int segment = 0; segment < segments; ++segment)
     {
-        optimaru::SolverConfig segmentConfig = engineConfig;
+        optimaru::Settings segmentConfig = engineConfig;
         if (segments > 1)
         {
             const auto now = std::chrono::steady_clock::now();
@@ -230,20 +230,20 @@ void Solver::solve(ConferenceSchedule &schedule)
                                                                         - now);
             if (segment > 0 && remaining.count() <= 0)
                 break;
-            segmentConfig.termination.spentLimit = std::max(
+            segmentConfig.limits.time_limit = std::max(
                 std::chrono::milliseconds(1), remaining / (segments - segment));
             // A distinct stream per segment, kept far away from the
             // parallel-worker offsets above.
-            segmentConfig.randomSeed
-                = config_.randomSeed
+            segmentConfig.seed
+                = config_.seed
                   + static_cast<std::uint64_t>(segment) * 0x9E3779B97F4A7C15ULL;
         }
-        segmentConfig.onNewBest
+        segmentConfig.on_new_best
             = [&lastStep, &stepOffset, this](std::int64_t step, const Score &sc)
         {
             lastStep = step;
-            if (config_.onNewBest)
-                config_.onNewBest(stepOffset + step, sc);
+            if (config_.on_new_best)
+                config_.on_new_best(stepOffset + step, sc);
         };
         // Violation-guided entity selection (see Config::hotTalkProbability):
         // rejection-sample a few uniform draws against the calculator's O(1)
@@ -252,7 +252,7 @@ void Solver::solve(ConferenceSchedule &schedule)
         {
             const double probability = config_.hotTalkProbability;
             const int talkCount = static_cast<int>(schedule.talks.size());
-            segmentConfig.localSearch.entityRecommender
+            segmentConfig.search.entity_hint
                 = [&calculator, probability, talkCount](
                       std::mt19937_64 &rng) -> int
             {
@@ -270,28 +270,27 @@ void Solver::solve(ConferenceSchedule &schedule)
             };
         }
 
-        auto engine = optimaru::SolverFactory<ConferenceSchedule>::create(
-                          std::move(segmentConfig))
-                          .buildSolver();
-        if (config_.stopFlag)
-            engine.adoptTerminateEarlyFlag(config_.stopFlag);
+        auto engine = optimaru::Solver<ConferenceSchedule>(
+                          std::move(segmentConfig));
+        if (config_.stop_flag)
+            engine.share_stop_flag(config_.stop_flag);
         lastStep = 0;
         best = engine.solve(schedule, calculator);
         stepOffset += lastStep + 1;
-        if (best >= config_.bestScoreLimit)
+        if (best >= config_.target_score)
             break;
         // A sibling parallel worker failed: no further segments.
-        if (config_.stopFlag && config_.stopFlag->load())
+        if (config_.stop_flag && config_.stop_flag->load())
             break;
     }
 
     // The authoritative final score: a full recompute on the best solution.
-    schedule.score = ScoreCalculator::calculateScore(schedule);
+    schedule.score = ScoreCalculator::score(schedule);
 }
 
 void Solver::solve(
     ConferenceSchedule &schedule,
-    optimaru::DecomposedScoreCalculator<ConferenceSchedule> &calculator)
+    optimaru::DecomposedObjective<ConferenceSchedule> &calculator)
 {
     ScoreCalculator::prepare(schedule);
     if (config_.ruinRecreateRewards.size() != 4)
@@ -304,20 +303,19 @@ void Solver::solve(
         // One segment, one start: both the segmented restarts and the
         // parallel workers need a calculator of their own, and a
         // caller-assembled plugin cannot be cloned.
-        optimaru::SolverConfig engineConfig = buildEngineConfig(config_, schedule);
+        optimaru::Settings engineConfig = buildEngineConfig(config_, schedule);
         // The progress callback, as on the segmented default path.
-        engineConfig.onNewBest = config_.onNewBest;
-        auto engine = optimaru::SolverFactory<ConferenceSchedule>::create(
-                          std::move(engineConfig))
-                          .buildSolver();
+        engineConfig.on_new_best = config_.on_new_best;
+        auto engine = optimaru::Solver<ConferenceSchedule>(
+                          std::move(engineConfig));
         engine.solve(schedule, calculator);
     }
 
     // Score the final solution with the caller's constraint assembly (custom
     // weights included) and leave the calculator primed on it, so
-    // constraintTotals() explains exactly this score.
-    calculator.resetWorkingSolution(schedule);
-    schedule.score = calculator.calculateScore();
+    // constraint_totals() explains exactly this score.
+    calculator.rebuild(schedule);
+    schedule.score = calculator.score();
 }
 
 }  // namespace cs

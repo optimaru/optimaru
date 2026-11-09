@@ -1,18 +1,17 @@
 #!/usr/bin/env python3
-"""Require the Apache-2.0 SPDX header and Timefold derivation notice on every engine header.
+"""Require the Apache-2.0 SPDX header and the origin notice on every engine header.
 
-The engine under ``include/optimaru/`` is derived from Timefold Solver (see NOTICE), so
-each file carries, as its first two lines::
+Each file under ``include/optimaru/`` starts with these two lines::
 
     // SPDX-License-Identifier: Apache-2.0
-    // Part of the optimaru engine, a modified derivative of Timefold Solver (Apache-2.0). See NOTICE.
+    // Part of the optimaru engine; portions derive from Timefold Solver (Apache-2.0). See NOTICE.
 
     python3 scripts/check_license_headers.py     # exit 1 and list every file without it
 
-The second line is applied to every engine file on purpose. It speaks of the engine as a
-whole (a modified derivative of Timefold Solver, the section 4(b) notice), so it holds for
-files that implement published algorithms or were added by optimaru as well as for those
-translated from Timefold Solver. Use-case sources are out of scope; NOTICE and each use
+The second line speaks of the engine as a whole, so it is the same on every engine file:
+the engine began as a C++ port of parts of Timefold Solver and was later restructured
+(see NOTICE), and the line is the modification notice of Apache-2.0 section 4(b) for the
+parts that still derive from it. Use-case sources are out of scope; NOTICE and each use
 case's README give their notice per directory.
 
 A UTF-8 BOM and CRLF line endings are tolerated. Run from anywhere; paths resolve
@@ -28,7 +27,7 @@ ROOT = Path(__file__).resolve().parent.parent
 ENGINE = ROOT / "include" / "optimaru"
 HEADER = (
     "// SPDX-License-Identifier: Apache-2.0\n"
-    "// Part of the optimaru engine, a modified derivative of Timefold Solver (Apache-2.0). See NOTICE.\n"
+    "// Part of the optimaru engine; portions derive from Timefold Solver (Apache-2.0). See NOTICE.\n"
 )
 SUFFIXES = {".hpp", ".h", ".hh", ".hxx", ".ipp", ".inl", ".tpp", ".cpp", ".cc", ".cxx"}
 

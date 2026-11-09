@@ -8,13 +8,13 @@
 
 #include "alb/domain.hpp"
 #include "alb/score_calculator.hpp"
-#include "optimaru/api/score/calculator/incremental_score_calculator.hpp"
+#include "optimaru/score/objective.hpp"
 
 namespace alb
 {
 
 // The assembly-line-balancing implementation of the engine's
-// optimaru::IncrementalScoreCalculator: the default constraint set at the
+// optimaru::Objective: the default constraint set at the
 // components' kDefaultWeight, hand-fused into one set of aggregates.
 //
 // A task change touches only its old and new station and its own arcs,
@@ -32,19 +32,19 @@ namespace alb
 //   - workloadImbalanceCost: default weight 0, so it is maintained (an
 //     ordered multiset of the non-zero loads) only if that default changes.
 //
-// beforeVariableChanged retracts the task while `station` still holds the OLD
-// value; afterVariableChanged inserts the NEW value. Unassigned tasks
+// before_assign retracts the task while `station` still holds the OLD
+// value; after_assign inserts the NEW value. Unassigned tasks
 // (station == -1) contribute nothing. The full-recompute reference is
-// ScoreCalculator::calculateScore (checked in the tests and under
-// EnvironmentMode::FULL_ASSERT). Requires ScoreCalculator::prepare(problem).
+// ScoreCalculator::score (checked in the tests and under
+// ScoreChecks::ScoreChecks::Full). Requires ScoreCalculator::prepare(problem).
 class AssemblyLineBalancingIncrementalScoreCalculator final
-    : public optimaru::IncrementalScoreCalculator<AssemblyLineBalancingProblem>
+    : public optimaru::Objective<AssemblyLineBalancingProblem>
 {
 public:
-    void resetWorkingSolution(AssemblyLineBalancingProblem &workingSolution) override;
-    void beforeVariableChanged(int taskIndex) override;
-    void afterVariableChanged(int taskIndex) override;
-    Score calculateScore() override;
+    void rebuild(AssemblyLineBalancingProblem &solution) override;
+    void before_assign(int taskIndex) override;
+    void after_assign(int taskIndex) override;
+    Score score() override;
 
     // The maintained raw total of every default constraint (what
     // ScoreCalculator::rawCosts recomputes), for the full-vs-incremental
@@ -64,7 +64,7 @@ private:
     std::vector<int> groupDistinct_;
     std::multiset<std::int64_t> usedLoads_;  // only while workload is weighted
 
-    // Raw totals (positive; weights applied in calculateScore).
+    // Raw totals (positive; weights applied in score).
     std::int64_t overCapacity_ = 0;
     std::int64_t reversedArcs_ = 0;
     std::int64_t beyondMaxStations_ = 0;

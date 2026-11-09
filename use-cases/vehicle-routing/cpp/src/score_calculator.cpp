@@ -70,7 +70,7 @@ void ScoreCalculator::updateShadowVariables(VehicleRoutePlan& plan) {
     }
 }
 
-Score ScoreCalculator::calculateScore(VehicleRoutePlan& plan) {
+Score ScoreCalculator::score(VehicleRoutePlan& plan) {
     updateShadowVariables(plan);
 
     Score score;

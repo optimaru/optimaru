@@ -29,15 +29,15 @@ struct UsedStationsCost final : MemberChangeGlobalConstraint
     }
 
     void reset(const AssemblyLineBalancingProblem &problem,
-               const std::vector<std::vector<int>> &membersPerUnit) override
+               const std::vector<std::vector<int>> &members_per_unit) override
     {
         detail::requirePrepared(problem);
         used_ = 0;
-        for (const std::vector<int> &members : membersPerUnit)
+        for (const std::vector<int> &members : members_per_unit)
             used_ += members.empty() ? 0 : 1;
     }
 
-    void onMemberChanged(const AssemblyLineBalancingProblem & /*problem*/,
+    void on_member_changed(const AssemblyLineBalancingProblem & /*problem*/,
                          int /*unit*/,
                          const std::vector<int> &members,
                          int /*entity*/,

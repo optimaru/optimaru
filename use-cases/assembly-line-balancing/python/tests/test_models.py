@@ -100,7 +100,7 @@ def test_the_model_and_the_core_solve_alike():
 
 @pytest.mark.parametrize("constraints", [None, [*get_constraints()[:-1], WorkloadImbalanceCost(weight=1)]])
 def test_full_assert_solves_on_both_paths(constraints):
-    """FULL_ASSERT cross-checks the incremental score after every move (monolith and plugin assembly)."""
+    """ScoreChecks::Full cross-checks the incremental score after every move (monolith and plugin assembly)."""
     config = alb.SolverConfig()
     config.spent_limit_seconds = 600
     config.step_count_limit = 2000

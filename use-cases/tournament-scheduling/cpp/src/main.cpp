@@ -1,16 +1,18 @@
-// Tournament-scheduling demo: reproduces the Java quickstart's
-// DemoDataGenerator (7 teams, 18 days, 4 match slots per day, 12
-// unavailability penalties drawn with java.util.Random(0)) and solves it,
+// Tournament-scheduling demo: builds the demo tournament (7 teams, 18 days,
+// 4 match slots per day, 12 unavailability penalties drawn from a seeded
+// std::mt19937_64) and solves it,
 // asserting a feasible (0hard) schedule.
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <string>
 #include <vector>
+#include <random>
 
 #include "ts/domain.hpp"
 #include "ts/score_calculator.hpp"
 #include "ts/solver.hpp"
+#include "optimaru/portable_random.hpp"
 
 using namespace ts;
 
@@ -21,52 +23,13 @@ constexpr int DAY_COUNT = 18;
 constexpr int ASSIGNMENTS_PER_DAY = 4;
 constexpr int UNAVAILABILITY_PENALTY_COUNT = 12;
 
-// Faithful replica of java.util.Random (48-bit LCG), so the demo's
-// unavailability penalties match the Java generator's Random(0) draw exactly.
-class JavaRandom
-{
-public:
-    explicit JavaRandom(std::int64_t seed)
-        : seed_((static_cast<std::uint64_t>(seed) ^ kMultiplier) & kMask)
-    {
-    }
+// Seeded, platform-independent draws (see optimaru/portable_random.hpp).
+using DemoRandom = optimaru::PortableRandom;
 
-    int nextInt(int bound)
-    {
-        // bound 7 / 18 are not powers of two: the rejection path of
-        // java.util.Random.nextInt(int).
-        if ((bound & -bound) == bound)  // power of two
-        {
-            return static_cast<int>(
-                (static_cast<std::int64_t>(bound) * next(31)) >> 31);
-        }
-        std::int64_t bits, val;
-        do
-        {
-            bits = next(31);
-            val = bits % bound;
-            // Java retries when `bits - val + (bound - 1)` overflows int32.
-        } while (bits - val + (bound - 1) >= (std::int64_t{1} << 31));
-        return static_cast<int>(val);
-    }
-
-private:
-    std::int64_t next(int bits)
-    {
-        seed_ = (seed_ * kMultiplier + kAddend) & kMask;
-        return static_cast<std::int64_t>(seed_ >> (48 - bits));
-    }
-
-    static constexpr std::uint64_t kMultiplier = 0x5DEECE66DULL;
-    static constexpr std::uint64_t kAddend = 0xBULL;
-    static constexpr std::uint64_t kMask = (1ULL << 48) - 1;
-    std::uint64_t seed_;
-};
-
-// The Java DemoDataGenerator, verbatim: teams, days, penalties, assignments.
+// The demo instance: teams, days, penalties, assignments.
 TournamentSchedule generateDemoData()
 {
-    JavaRandom random(0);
+    DemoRandom random(0);
     TournamentSchedule schedule;
     schedule.teams = {{"Maarten"},
                       {"Geoffrey"},
@@ -81,8 +44,8 @@ TournamentSchedule generateDemoData()
     while (static_cast<int>(schedule.unavailabilityPenalties.size())
            < UNAVAILABILITY_PENALTY_COUNT)
     {
-        const int team = random.nextInt(schedule.teamCount());
-        const int day = random.nextInt(schedule.dayCount());
+        const int team = random.next_int(schedule.teamCount());
+        const int day = random.next_int(schedule.dayCount());
         bool duplicate = false;
         for (const UnavailabilityPenalty &penalty :
              schedule.unavailabilityPenalties)
@@ -197,20 +160,20 @@ int main(int argc, char **argv)
                 seconds);
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(seconds);
-    config.randomSeed = 42;
-    config.onNewBest = [](std::int64_t step, const Score &score)
+    config.time_limit = std::chrono::seconds(seconds);
+    config.seed = 42;
+    config.on_new_best = [](std::int64_t step, const Score &score)
     {
         std::printf("    new best @step %-8lld %s\n",
                     static_cast<long long>(step),
-                    score.toString().c_str());
+                    score.str().c_str());
     };
     Solver solver(config);
     solver.solve(schedule);
 
     std::printf("\n  final score: %s  (feasible=%s)\n",
-                schedule.score.toString().c_str(),
-                schedule.score.isFeasible() ? "true" : "false");
+                schedule.score.str().c_str(),
+                schedule.score.feasible() ? "true" : "false");
     // Decompose back into the Java score levels for readability.
     {
         std::vector<std::int64_t> loads;

@@ -548,7 +548,7 @@ def test_score_equals_the_engine_with_repeats_and_offsets():
     ids=["repeat", "repeat-and-offsets", "repeats-on-other-levels"],
 )
 def test_full_assert_solves_with_repeats_and_offsets(picks):
-    """FULL_ASSERT re-checks the incremental score against a full recompute after every move."""
+    """ScoreChecks::Full re-checks the incremental score against a full recompute after every move."""
     problem = _problem(8)
     result = fab.solve(problem, random_seed=3, full_assert=True, config=_steps(300), constraints=picks)
     raw = fab.constraint_costs(problem, picks)

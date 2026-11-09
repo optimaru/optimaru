@@ -6,13 +6,13 @@
 
 #include "ks/domain.hpp"
 #include "ks/score_calculator.hpp"
-#include "optimaru/api/score/calculator/incremental_score_calculator.hpp"
+#include "optimaru/score/objective.hpp"
 
 namespace ks
 {
 
 // The knapsack implementation of the engine's
-// optimaru::IncrementalScoreCalculator: the monolithic fast path of the
+// optimaru::Objective: the monolithic fast path of the
 // default constraints (ks/score_calculator.hpp lists them).
 //
 // It keeps a copy of the selection and the aggregates of every constraint —
@@ -21,24 +21,24 @@ namespace ks
 // selected count per group and the violation sum, the unmet dependencies — so
 // flipping one item costs O(its resources + groups + dependencies).
 //
-// beforeVariableChanged is a no-op (the copy still holds the old state);
-// afterVariableChanged compares the item's new value with the copy and, if
+// before_assign is a no-op (the copy still holds the old state);
+// after_assign compares the item's new value with the copy and, if
 // "selected" changed, retracts and re-inserts the touched terms. -1
 // (undecided) counts as not selected. The full-recompute reference is
-// ScoreCalculator::calculateScore (checked in the tests and under
-// EnvironmentMode::FULL_ASSERT). Requires ScoreCalculator::prepare(problem).
+// ScoreCalculator::score (checked in the tests and under
+// ScoreChecks::ScoreChecks::Full). Requires ScoreCalculator::prepare(problem).
 class KnapsackIncrementalScoreCalculator final
-    : public optimaru::IncrementalScoreCalculator<KnapsackProblem>
+    : public optimaru::Objective<KnapsackProblem>
 {
 public:
-    void resetWorkingSolution(KnapsackProblem &workingSolution) override;
-    void beforeVariableChanged(int itemIndex) override;
-    void afterVariableChanged(int itemIndex) override;
-    Score calculateScore() override;
+    void rebuild(KnapsackProblem &solution) override;
+    void before_assign(int itemIndex) override;
+    void after_assign(int itemIndex) override;
+    Score score() override;
 
     // The raw cost of every default constraint, read from the running
     // totals (the same fields as ScoreCalculator::rawCosts).
-    // calculateScore() weighs exactly these; the tests compare them with
+    // score() weighs exactly these; the tests compare them with
     // ScoreCalculator::rawCosts after every move.
     RawCosts totals() const;
 
@@ -50,7 +50,7 @@ private:
     std::vector<std::int64_t> groupCount_;  // selected items per group
 
     // Running raw totals, all >= 0 (signs and weights applied in
-    // calculateScore).
+    // score).
     std::int64_t load_ = 0;              // knapsackCapacityCost input
     std::int64_t resourceOverflow_ = 0;  // resourceCapacityCost
     std::int64_t missingMandatory_ = 0;  // mandatoryItemsCost

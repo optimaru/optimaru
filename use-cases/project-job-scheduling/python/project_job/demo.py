@@ -1,11 +1,10 @@
-"""Python reproduction of the Java quickstart `DemoDataGenerator`.
+"""The demo instance, modelled on the quickstart's demo data.
 
 Builds a demo instance of the same scale and distributions: 2 projects (release 0/4,
 critical path 10/19), 7 resources (global renewable with capacity 16 + per project one
 renewable / two non-renewable), 12 jobs per project (SOURCE + 10 STANDARD + SINK),
 STANDARD jobs with 3 execution modes (duration 1..5, demand on 1..3 resources x 1..5),
-1 (54%) / 2 (27%) / 3 (19%) successor jobs. Java's java.util.Random stream is not
-reproduced — distributions and scale are the reference.
+1 (54%) / 2 (27%) / 3 (19%) successor jobs, drawn from a seeded ``random.Random``.
 """
 
 import random

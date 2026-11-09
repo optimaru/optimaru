@@ -133,7 +133,7 @@ ScoreCalculator::calculateTotals(OrderPickingSolution &solution)
     return totals;
 }
 
-Score ScoreCalculator::calculateScore(OrderPickingSolution &solution)
+Score ScoreCalculator::score(OrderPickingSolution &solution)
 {
     solution.score = calculateTotals(solution).toScore();
     return solution.score;

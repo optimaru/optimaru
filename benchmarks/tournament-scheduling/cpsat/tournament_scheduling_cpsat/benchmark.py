@@ -6,11 +6,12 @@ together in this use-case package.
 
 from __future__ import annotations
 
+import random
 import sys
 from collections.abc import Callable
 from typing import Any
 
-from cpsat_plugins.benchmark import JavaRandom, run_cli
+from cpsat_plugins.benchmark import run_cli
 
 NAME = "tournament-scheduling"
 PACKAGE = "tournament_scheduling"
@@ -27,19 +28,18 @@ TEAM_NAMES = ["Maarten", "Geoffrey", "Lukas", "Chris", "Fred", "Radek", "Maciej"
 def _build(
     day_count: int, per_day: int, penalty_count: int, team_names: list[str]
 ) -> Any:
-    """The Java DemoDataGenerator, via the same `Random(0)` stream the C++ demo
-    replicates — so the `demo` instance is the one `ts_demo` and the C++ tests
-    solve, not a lookalike."""
+    """A tournament with `penalty_count` distinct (team, day) unavailabilities
+    drawn from a seeded ``random.Random`` (the same instance on every run)."""
     import tournament_scheduling as ts
 
-    random = JavaRandom(0)
+    rng = random.Random(0)
     teams = [ts.Team(name) for name in team_names]
     days = [ts.Day(d) for d in range(day_count)]
 
     penalties: list[tuple[int, int]] = []
     while len(penalties) < penalty_count:
-        team = random.next_int(len(teams))
-        day = random.next_int(len(days))
+        team = int(rng.random() * len(teams))
+        day = int(rng.random() * len(days))
         if (team, day) not in penalties:
             penalties.append((team, day))
 

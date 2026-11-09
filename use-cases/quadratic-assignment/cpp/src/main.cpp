@@ -63,23 +63,23 @@ QuadraticAssignmentProblem randomInstance(int n, std::uint64_t seed)
 
 bool run(const char *title, QuadraticAssignmentProblem problem, int seconds)
 {
-    ScoreCalculator::calculateScore(problem);
+    ScoreCalculator::score(problem);
     std::printf("== %s (n=%d, %d s) ==\n", title, problem.facilityCount(), seconds);
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(seconds);
-    config.randomSeed = 42;
-    config.onNewBest = [](std::int64_t step, const Score &score)
-    { std::printf("    new best @step %-8lld %s\n", static_cast<long long>(step), score.toString().c_str()); };
+    config.time_limit = std::chrono::seconds(seconds);
+    config.seed = 42;
+    config.on_new_best = [](std::int64_t step, const Score &score)
+    { std::printf("    new best @step %-8lld %s\n", static_cast<long long>(step), score.str().c_str()); };
     Solver(config).solve(problem);
     std::printf("  final score: %s  total cost %lld  bijection=%s\n",
-                problem.score->toString().c_str(),
+                problem.score->str().c_str(),
                 static_cast<long long>(problem.totalCost()),
                 problem.isBijection() ? "true" : "false");
     const std::vector<int> assignment = problem.assignment();
     for (int l = 0; l < problem.locationCount() && l < 8; ++l)
         std::printf("    %-8s <- %s\n", problem.locations[l].id.c_str(), problem.facilities[assignment[l]].id.c_str());
     std::printf("\n");
-    return problem.isBijection() && problem.score->isFeasible();
+    return problem.isBijection() && problem.score->feasible();
 }
 
 }  // namespace

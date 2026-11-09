@@ -9,9 +9,9 @@
 namespace mnt
 {
 
-// Faithful port of the quickstart's DemoDataGenerator, including a replica
-// of java.util.Random(17) so the generated instances match the Java demo
-// bit for bit (same durations, windows and tags per job).
+// The demo instances, modelled on the quickstart's demo data. Durations,
+// windows and tags are drawn from a seeded std::mt19937_64 (seed 17), so a
+// size gives the same instance on every platform.
 //   SMALL: 3 crews, 8 weeks, 14 jobs   LARGE: 5 crews, 16 weeks, 48 jobs
 enum class DemoData
 {
@@ -19,16 +19,14 @@ enum class DemoData
     LARGE
 };
 
-// `fromDate` is the calendar start (Java uses the next Monday after today;
-// pass nextMonday(todayEpochDay()) for the same behavior, or any fixed
-// Monday for reproducible tests).
+// `fromDate` is the calendar start: nextMonday(todayEpochDay()) for a
+// schedule starting next week, or any fixed Monday for reproducible tests.
 MaintenanceSchedule generateDemoData(DemoData demoData, std::int64_t fromDate);
 
 // Today's date (UTC) as an epoch day.
 std::int64_t todayEpochDay();
 
-// The next Monday STRICTLY after `epochDay` (Java's
-// TemporalAdjusters.next(DayOfWeek.MONDAY)).
+// The next Monday STRICTLY after `epochDay`.
 std::int64_t nextMonday(std::int64_t epochDay);
 
 // ISO yyyy-mm-dd for printing epoch days.

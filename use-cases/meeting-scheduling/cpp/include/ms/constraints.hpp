@@ -36,7 +36,7 @@ namespace ms
 // The full provider at the quickstart's level weights — each component at its
 // own kDefaultLevel / kDefaultWeight (the medium pair at weight 1 in medium
 // units; the domain's kMediumFold puts them on the engine's soft level). This
-// assembly scores bit-for-bit like ScoreCalculator::calculateScore and the
+// assembly scores bit-for-bit like ScoreCalculator::score and the
 // monolithic incremental calculator. It is also the catalog behind
 // constraint_info() (the Python bindings), in this order.
 //

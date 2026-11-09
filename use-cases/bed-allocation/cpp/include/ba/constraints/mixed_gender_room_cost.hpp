@@ -32,17 +32,17 @@ struct MixedGenderRoomCost final : MemberChangeGlobalConstraint
     }
 
     void reset(const BedPlan &plan,
-               const std::vector<std::vector<int>> &membersPerUnit) override
+               const std::vector<std::vector<int>> &members_per_unit) override
     {
         detail::requirePrepared(plan);
         occupants_.assign(plan.rooms.size(), {});
         total_ = 0;
-        for (std::size_t unit = 0; unit < membersPerUnit.size(); ++unit)
+        for (std::size_t unit = 0; unit < members_per_unit.size(); ++unit)
         {
             const int room = roomOfSameGenderBed(plan, static_cast<int>(unit));
             if (room < 0)
                 continue;
-            for (int stayIndex : membersPerUnit[unit])
+            for (int stayIndex : members_per_unit[unit])
             {
                 total_ += pairNights(plan, occupants_[room], stayIndex);
                 occupants_[room].push_back(stayIndex);
@@ -50,7 +50,7 @@ struct MixedGenderRoomCost final : MemberChangeGlobalConstraint
         }
     }
 
-    void onMemberChanged(const BedPlan &plan,
+    void on_member_changed(const BedPlan &plan,
                          int unit,
                          const std::vector<int> & /*members*/,
                          int entity,

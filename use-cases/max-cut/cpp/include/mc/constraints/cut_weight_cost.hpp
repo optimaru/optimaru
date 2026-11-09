@@ -15,7 +15,7 @@ namespace mc
 // default weight); 0 means no edge is cut, the worst value, not "no
 // violation". A self-loop is never cut; parallel edges add up; an edge with
 // an unassigned endpoint is not cut. It is never hard (reward,
-// levelFlippable = false: hard() / setLevel(Hard) throw). The shaping is
+// level_flippable = false: hard() / set_level(Hard) throw). The shaping is
 // sign-preserving, so the exponent semantics are those of 0.1.x.
 //
 // Keeps its own copy of the sides; a join or leave of vertex e walks e's CSR
@@ -30,16 +30,16 @@ struct CutWeightCost final : detail::MemberChangeConstraint
         : detail::MemberChangeConstraint("cutWeightCost", weight, kDefaultLevel)
     {
         reward = true;  // raw cost <= 0; level='hard' refused everywhere
-        levelFlippable = false;
+        level_flippable = false;
     }
 
-    void reset(const MaxCutProblem &problem, const std::vector<std::vector<int>> &membersPerUnit) override
+    void reset(const MaxCutProblem &problem, const std::vector<std::vector<int>> &members_per_unit) override
     {
         detail::requirePrepared(problem);
         side_.assign(problem.vertexIds.size(), kUnassigned);
-        for (int s = 0; s < static_cast<int>(membersPerUnit.size()); ++s)
+        for (int s = 0; s < static_cast<int>(members_per_unit.size()); ++s)
         {
-            for (int v : membersPerUnit[s])
+            for (int v : members_per_unit[s])
                 side_[v] = s;
         }
         cut_ = 0;
@@ -52,7 +52,7 @@ struct CutWeightCost final : detail::MemberChangeConstraint
         }
     }
 
-    void onMemberChanged(const MaxCutProblem &problem,
+    void on_member_changed(const MaxCutProblem &problem,
                          int unit,
                          const std::vector<int> & /*members*/,
                          int vertex,

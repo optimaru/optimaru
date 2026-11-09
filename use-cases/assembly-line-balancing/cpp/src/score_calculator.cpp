@@ -228,7 +228,7 @@ RawCosts ScoreCalculator::rawCosts(AssemblyLineBalancingProblem &problem)
     return raw;
 }
 
-Score ScoreCalculator::calculateScore(AssemblyLineBalancingProblem &problem)
+Score ScoreCalculator::score(AssemblyLineBalancingProblem &problem)
 {
     const RawCosts raw = rawCosts(problem);
     Score score;

@@ -4,8 +4,8 @@
 //       Java ProjectJobSchedulingConstraintProviderTest cases (the shadow
 //       chain included), plus composite-encoding and pass-through checks
 //   (b) incremental score == full recompute across a long random walk driven
-//       through the engine's ScoreDirector protocol (before/set/after)
-//   (c) a small instance solved under EnvironmentMode::FULL_ASSERT
+//       through the engine's Editor protocol (before/set/after)
+//   (c) a small instance solved under ScoreChecks::ScoreChecks::Full
 //   (d) a demo-sized solve reaches feasibility and keeps pinned allocations
 #include <chrono>
 #include <cmath>
@@ -20,7 +20,7 @@
 #include "pjs/incremental_calculator.hpp"
 #include "pjs/score_calculator.hpp"
 #include "pjs/solver.hpp"
-#include "optimaru/api/score/director/score_director.hpp"
+#include "optimaru/model/editor.hpp"
 
 using namespace pjs;
 
@@ -48,7 +48,7 @@ void checkScore(const std::string &label,
     std::printf("  [%s] %-44s got=%s expected=%ldhard/%ldmedium/%ldsoft\n",
                 ok ? "PASS" : "FAIL",
                 label.c_str(),
-                actual.toString().c_str(),
+                actual.str().c_str(),
                 expectedHard,
                 expectedMedium,
                 expectedSoft);
@@ -120,7 +120,7 @@ void verifyConstraints()
         addJob(s, JobType::STANDARD, 10, 7, {}, 100);
         addJob(s, JobType::STANDARD, 10, 6, {}, 100);
         checkScore("nonRenewableResourceCapacityCost",
-                   ScoreCalculator::calculateScore(s),
+                   ScoreCalculator::score(s),
                    -3,
                    0,
                    0);
@@ -131,7 +131,7 @@ void verifyConstraints()
         addJob(s, JobType::STANDARD, 10, 7, {}, 100);
         addJob(s, JobType::STANDARD, 10, 6, {}, 100);
         checkScore("nonRenewableResourceCapacityCost within capacity",
-                   ScoreCalculator::calculateScore(s),
+                   ScoreCalculator::score(s),
                    0,
                    0,
                    0);
@@ -147,7 +147,7 @@ void verifyConstraints()
         const int a1 = addJob(s, JobType::STANDARD, 10, 7, {p1}, 100);
         const int a2 = addJob(s, JobType::STANDARD, 10, 5, {p2}, 100);
         checkScore("renewableResourceCapacityCost",
-                   ScoreCalculator::calculateScore(s),
+                   ScoreCalculator::score(s),
                    -18,
                    0,
                    0);
@@ -172,7 +172,7 @@ void verifyConstraints()
         addJob(s, JobType::SINK, 10, 7, {p1}, 100);
         addJob(s, JobType::SINK, 10, 5, {p2}, 100);
         checkScore("projectDelayCost + makespanCost",
-                   ScoreCalculator::calculateScore(s),
+                   ScoreCalculator::score(s),
                    -18,
                    -23,
                    -112);
@@ -187,7 +187,7 @@ void verifyConstraints()
         addJob(s, JobType::SINK, 10, 7, {p1}, 100);
         addJob(s, JobType::SINK, 10, 5, {p2}, 100);
         checkScore("makespanCost (projectDelayCost 0)",
-                   ScoreCalculator::calculateScore(s),
+                   ScoreCalculator::score(s),
                    -18,
                    0,
                    -112);
@@ -220,13 +220,13 @@ void verifyConstraints()
         check(s.maxModeCount == 3, "maxModeCount over all jobs");
         // delay 4, slot 2: value = 4 * 3 + 2 = 14 -> mode 2 % 2 = 0 (dur 3).
         s.allocations[narrowAllocation].modeDelay = s.valueOf(4, 2);
-        ScoreCalculator::calculateScore(s);
+        ScoreCalculator::score(s);
         check(s.allocations[narrowAllocation].startDate == 4
                   && s.allocations[narrowAllocation].endDate == 7,
               "slot 2 of a 2-mode job decodes to mode 0 (start 4, end 7)");
         // delay 4, slot 1 -> mode 1 (dur 7).
         s.allocations[narrowAllocation].modeDelay = s.valueOf(4, 1);
-        ScoreCalculator::calculateScore(s);
+        ScoreCalculator::score(s);
         check(s.allocations[narrowAllocation].endDate == 11,
               "slot 1 of a 2-mode job decodes to mode 1 (end 11)");
     }
@@ -238,7 +238,7 @@ void verifyConstraints()
         const int b = addJob(s, JobType::STANDARD, 5, 9, {a});  // unassigned
         const int c = addJob(s, JobType::STANDARD, 3, 1, {b}, 0);
         checkScore("unassigned contributes no usage",
-                   ScoreCalculator::calculateScore(s),
+                   ScoreCalculator::score(s),
                    0,
                    0,
                    0);
@@ -254,12 +254,12 @@ void verifyConstraints()
         const int standard = addJob(s, JobType::STANDARD, 1, 1, {source}, 0);
         const int sink = addJob(s, JobType::SINK, 0, 0, {standard}, 0);
         using Descriptor
-            = optimaru::SolutionDescriptor<pjs::ProjectJobSchedule>;
-        check(Descriptor::isPinned(s, source) && Descriptor::isPinned(s, sink)
-                  && !Descriptor::isPinned(s, standard),
+            = optimaru::SolutionTraits<pjs::ProjectJobSchedule>;
+        check(Descriptor::is_pinned(s, source) && Descriptor::is_pinned(s, sink)
+                  && !Descriptor::is_pinned(s, standard),
               "SOURCE/SINK pinned, STANDARD not");
         s.allocations[standard].pinned = true;
-        check(Descriptor::isPinned(s, standard), "user-pinned STANDARD");
+        check(Descriptor::is_pinned(s, standard), "user-pinned STANDARD");
     }
     // prepare() rejects a precedence cycle.
     {
@@ -371,7 +371,7 @@ ProjectJobSchedule buildRandomInstance(int projectCount,
 
 // -------------------------------------------------------------------------
 // (b) Incremental score == full recompute across a random walk of change and
-// swap moves (including unassignments), driven through the ScoreDirector so
+// swap moves (including unassignments), driven through the Editor so
 // the before/set/after hook contract is exercised exactly like in the
 // engine. Every move can shift whole successor subgraphs, so this covers the
 // shadow-chain re-propagation.
@@ -386,12 +386,12 @@ void verifyIncremental()
     ScoreCalculator::prepare(t);
 
     ProjectJobSchedulingIncrementalScoreCalculator calc;
-    optimaru::ScoreDirector<ProjectJobSchedule> director(t, calc);
+    optimaru::Editor<ProjectJobSchedule> editor(t, calc);
     ProjectJobSchedule shadow = t;
 
     std::mt19937_64 rng(123);
     const int allocationCount = t.allocationCount();
-    const int valueCount = t.valueCount();
+    const int value_count = t.value_count();
     std::uniform_real_distribution<double> unit(0.0, 1.0);
 
     int mismatches = 0;
@@ -405,8 +405,8 @@ void verifyIncremental()
             const int allocation = static_cast<int>(rng() % allocationCount);
             const int value = (unit(rng) < 0.10)
                                   ? -1
-                                  : static_cast<int>(rng() % valueCount);
-            director.changeVariable(allocation, value);
+                                  : static_cast<int>(rng() % value_count);
+            editor.assign(allocation, value);
         }
         else
         {
@@ -415,17 +415,17 @@ void verifyIncremental()
             const int b = static_cast<int>(rng() % allocationCount);
             const int va = t.allocations[a].modeDelay;
             const int vb = t.allocations[b].modeDelay;
-            director.changeVariable(a, vb);
-            director.changeVariable(b, va);
+            editor.assign(a, vb);
+            editor.assign(b, va);
         }
         // Full recompute on the same assignment.
         for (int i = 0; i < allocationCount; ++i)
         {
             shadow.allocations[i].modeDelay = t.allocations[i].modeDelay;
         }
-        const optimaru::HardSoftScore full
+        const optimaru::Score full
             = ScoreCalculator::calculateEngineScore(shadow);
-        const optimaru::HardSoftScore incremental = director.calculateScore();
+        const optimaru::Score incremental = editor.score();
         if (full.hard != incremental.hard
             || std::fabs(full.soft - incremental.soft) > 1e-9)
         {
@@ -433,8 +433,8 @@ void verifyIncremental()
             {
                 std::printf("  MISMATCH @step %d: incremental=%s full=%s\n",
                             step,
-                            incremental.toString().c_str(),
-                            full.toString().c_str());
+                            incremental.str().c_str(),
+                            full.str().c_str());
             }
         }
     }
@@ -445,9 +445,9 @@ void verifyIncremental()
 }
 
 // -------------------------------------------------------------------------
-// (c) FULL_ASSERT solve: the engine cross-checks the incremental score
+// (c) ScoreChecks::Full solve: the engine cross-checks the incremental score
 // against a full reset + recompute after every single move and throws
-// ScoreCorruptionError on any divergence.
+// ScoreMismatchError on any divergence.
 // -------------------------------------------------------------------------
 void verifyFullAssertSolve()
 {
@@ -458,10 +458,10 @@ void verifyFullAssertSolve()
                                                /*delayRangeSize*/ 30);
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(2);
-    config.randomSeed = 3;
-    config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
-    // Kick early so the LNS ruin/recreate path also runs under FULL_ASSERT.
+    config.time_limit = std::chrono::seconds(2);
+    config.seed = 3;
+    config.score_checks = optimaru::ScoreChecks::Full;
+    // Kick early so the LNS ruin/recreate path also runs under ScoreChecks::Full.
     config.ruinRecreateUnimprovedStepTrigger = 200;
     config.ruinRecreatePolishSteps = 100;
 
@@ -473,7 +473,7 @@ void verifyFullAssertSolve()
         solver.solve(t);
         final = t.score;
     }
-    catch (const optimaru::ScoreCorruptionError &e)
+    catch (const optimaru::ScoreMismatchError &e)
     {
         corrupted = true;
         std::printf("  ScoreCorruptionError: %s\n", e.what());
@@ -481,7 +481,7 @@ void verifyFullAssertSolve()
     check(!corrupted, "2s FULL_ASSERT solve without score corruption");
     if (!corrupted)
     {
-        const Score recomputed = ScoreCalculator::calculateScore(t);
+        const Score recomputed = ScoreCalculator::score(t);
         check(final == recomputed, "solver-reported score == full recompute");
     }
     std::printf("\n");
@@ -506,10 +506,10 @@ void verifySolve()
     t.allocations[pinnedStandard].pinned = true;
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(5);
-    config.randomSeed = 5;
+    config.time_limit = std::chrono::seconds(5);
+    config.seed = 5;
     // Early exit at feasibility keeps the test fast.
-    config.bestScoreLimit = Score{0, -(1LL << 40), -(1LL << 40)};
+    config.target_score = Score{0, -(1LL << 40), -(1LL << 40)};
     Solver solver(config);
     solver.solve(t);
 
@@ -543,14 +543,14 @@ void verifySolve()
 void verifyStopAtFirstFeasibleLimit()
 {
     std::printf("== stop_at_first_feasible's limit is hard-only ==\n");
-    const optimaru::HardSoftScore limit
+    const optimaru::Score limit
         = toEngineScoreLimit(Score{0, kNoLevelFloor, kNoLevelFloor});
     check(limit.hard == 0 && std::isinf(limit.soft) && limit.soft < 0.0,
           "(0, INT64_MIN, INT64_MIN) -> engine limit (0, -inf)");
-    check(optimaru::HardSoftScore{0, -1e30} >= limit
+    check(optimaru::Score{0, -1e30} >= limit
               && toEngineScore(Score{0, -5, -(1LL << 62)}) >= limit,
           "a feasible score with any soft (-1e30; medium -5, soft -2^62) reaches it");
-    check(!(optimaru::HardSoftScore{-1, 0.0} >= limit),
+    check(!(optimaru::Score{-1, 0.0} >= limit),
           "an infeasible score does not");
     check(toEngineScoreLimit(Score{0, kNoLevelFloor, 0}).soft
                   == -std::numeric_limits<double>::infinity()

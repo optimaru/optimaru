@@ -25,12 +25,12 @@ constexpr auto kFlowWeight = static_cast<std::int64_t>(FlowDistanceCost::kDefaul
 
 }  // namespace
 
-void QuadraticAssignmentIncrementalScoreCalculator::resetWorkingSolution(
-    QuadraticAssignmentProblem &workingSolution)
+void QuadraticAssignmentIncrementalScoreCalculator::rebuild(
+    QuadraticAssignmentProblem &solution)
 {
-    ScoreCalculator::prepare(workingSolution);
-    problem_ = &workingSolution;
-    const int n = workingSolution.n;
+    ScoreCalculator::prepare(solution);
+    problem_ = &solution;
+    const int n = solution.n;
     location_.assign(static_cast<std::size_t>(n), -1);
     load_.assign(static_cast<std::size_t>(n), 0);
     forbidden_ = 0;
@@ -40,10 +40,10 @@ void QuadraticAssignmentIncrementalScoreCalculator::resetWorkingSolution(
 
     // Every fixed location starts violated (nothing stands anywhere yet);
     // each insert of its facility there repairs it.
-    pinned_ = static_cast<std::int64_t>(workingSolution.fixedLocations.size());
+    pinned_ = static_cast<std::int64_t>(solution.fixedLocations.size());
     for (int f = 0; f < n; ++f)
     {
-        const int l = workingSolution.facilities[f].location;
+        const int l = solution.facilities[f].location;
         if (l >= 0)
             insert(f, l);
     }
@@ -120,21 +120,21 @@ void QuadraticAssignmentIncrementalScoreCalculator::retract(int facility, int lo
     location_[facility] = -1;
 }
 
-void QuadraticAssignmentIncrementalScoreCalculator::beforeVariableChanged(int facilityIndex)
+void QuadraticAssignmentIncrementalScoreCalculator::before_assign(int facilityIndex)
 {
     const int old = location_[facilityIndex];
     if (old >= 0)
         retract(facilityIndex, old);  // unassigned: nothing to retract
 }
 
-void QuadraticAssignmentIncrementalScoreCalculator::afterVariableChanged(int facilityIndex)
+void QuadraticAssignmentIncrementalScoreCalculator::after_assign(int facilityIndex)
 {
     const int now = problem_->facilities[facilityIndex].location;  // the new value
     if (now >= 0)
         insert(facilityIndex, now);  // now unassigned: nothing to insert
 }
 
-Score QuadraticAssignmentIncrementalScoreCalculator::calculateScore()
+Score QuadraticAssignmentIncrementalScoreCalculator::score()
 {
     Score score;
     score.hard = -(kPinnedWeight * pinned_ + kForbiddenWeight * forbidden_ + kCapacityWeight * overCapacity_);

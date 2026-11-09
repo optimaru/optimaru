@@ -14,7 +14,7 @@ struct RequiredSkillCost final : GroupableAssignmentConstraint {
 
     explicit RequiredSkillCost(double weight = kDefaultWeight)
         : GroupableAssignmentConstraint("requiredSkillCost", weight, kDefaultLevel) {}
-    void onReset(const EmployeeSchedule& s) override {
+    void on_reset(const EmployeeSchedule& s) override {
         shiftCount_ = static_cast<int>(s.shifts.size());
         miss_.assign(s.employees.size() * s.shifts.size(), 0);
         for (std::size_t e = 0; e < s.employees.size(); ++e) {
@@ -36,8 +36,8 @@ struct RequiredSkillCost final : GroupableAssignmentConstraint {
             if (!s.shifts[i].pinned) c += row[i];  // pinned = settled history, not re-judged
         return c;
     }
-    bool supportsDelta() const override { return true; }
-    double deltaCost(const EmployeeSchedule& s, int unit, const std::vector<int>&,
+    bool supports_delta() const override { return true; }
+    double delta_cost(const EmployeeSchedule& s, int unit, const std::vector<int>&,
                      int entity) const override {
         return memberDelta(s, unit, entity);
     }

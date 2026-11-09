@@ -6,20 +6,20 @@
 //       values and isolates one constraint; a full-score calculator cannot,
 //       so every expectation here accounts for all five constraints)
 //   (b) incremental score == full recompute across a long random walk of
-//       LIST moves driven through the engine's ScoreDirector protocol,
+//       LIST moves driven through the engine's Editor protocol,
 //       with shared operators, a pinned line prefix and a pinned
 //       unassigned job in play
-//   (c) a small instance solved under EnvironmentMode::FULL_ASSERT
+//   (c) a small instance solved under ScoreChecks::ScoreChecks::Full
 //       (including the LNS ruin/recreate path)
 //   (d) pinned jobs keep their exact position / stay unassigned through a
 //       solve; the unassigned pool works as the allowsUnassignedValues
 //       stand-in
 //   (e) operator-assignment helpers (Java's Line.operator variable, handled
 //       by the wrapper's alternating loop)
-//   (f) the Java demo instance (Random(37) replica) has the expected shape
+//   (f) the demo instance (seed 37) has the expected shape
 //       and reaches 0hard
 //   (g) HardMediumSoft <-> engine HardSoft mapping roundtrip (the domain's
-//       medium fold, intoSoft(10^10)) + input validation errors
+//       medium fold, into_soft(10^10)) + input validation errors
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -34,7 +34,7 @@
 #include "fp/incremental_calculator.hpp"
 #include "fp/score_calculator.hpp"
 #include "fp/solver.hpp"
-#include "optimaru/api/score/director/score_director.hpp"
+#include "optimaru/model/editor.hpp"
 
 using namespace fp;
 
@@ -58,8 +58,8 @@ void checkScore(const std::string &label,
     std::printf("  [%s] %-46s got=%s expected=%s\n",
                 ok ? "PASS" : "FAIL",
                 label.c_str(),
-                actual.toString().c_str(),
-                expected.toString().c_str());
+                actual.str().c_str(),
+                expected.str().c_str());
     if (!ok)
         ++failures;
 }
@@ -116,14 +116,14 @@ int addJob(PackagingSchedule &s, const JobSpec &spec)
 }
 
 void addLine(PackagingSchedule &s,
-             int operatorIndex,
+             int operator_index,
              const std::vector<JobSpec> &specs)
 {
     Line line;
     line.id = std::to_string(s.lines.size());
     line.name = "Line " + line.id;
     line.startDateTime = 0;
-    line.operatorIndex = operatorIndex;
+    line.operator_index = operator_index;
     for (const JobSpec &spec : specs)
         line.jobs.push_back(addJob(s, spec));
     s.lines.push_back(std::move(line));
@@ -154,7 +154,7 @@ void verifyConstraints()
         PackagingSchedule s = baseSchedule(1);
         addLine(s, 0, {{PA_S, 200, BIG, 200}, {PA_S, 150, BIG, 250}});
         checkScore("maxEndTimeCost 100 minutes late",
-                   ScoreCalculator::calculateScore(s),
+                   ScoreCalculator::score(s),
                    {-100, 0, -350 * 350});
     }
     {
@@ -164,7 +164,7 @@ void verifyConstraints()
         PackagingSchedule s = baseSchedule(1);
         addLine(s, 0, {{PB, 100}, {PA_S, 100}});
         checkScore("cleanup chain (B -> A small = 60)",
-                   ScoreCalculator::calculateScore(s),
+                   ScoreCalculator::score(s),
                    {0, 0, -260 * 260});
         const Job &j1 = s.jobs[1];
         check(j1.lineIndex == 0 && j1.startCleaningDateTime == 100
@@ -186,7 +186,7 @@ void verifyConstraints()
         addLine(s, 0, {{PB, 30}, {PA_S, 100}});
         addLine(s, 1, {{PB, 5}, {PA_S, 100}});
         checkScore("operatorCleaningConflictCost 40 overlap minutes",
-                   ScoreCalculator::calculateScore(s),
+                   ScoreCalculator::score(s),
                    {-40, 0, -(170 * 170 + 190 * 190 + 165 * 165)});
     }
     {
@@ -195,7 +195,7 @@ void verifyConstraints()
         PackagingSchedule s = baseSchedule(1);
         addLine(s, 0, {{PA_S, 200, 200, BIG}, {PA_S, 150, 250, BIG}});
         checkScore("afterIdealEndTimeCost 100 minutes late",
-                   ScoreCalculator::calculateScore(s),
+                   ScoreCalculator::score(s),
                    {0, -100, -350 * 350});
     }
     {
@@ -206,7 +206,7 @@ void verifyConstraints()
         addJob(s, {PA_S, 200});                           // loose
         s.unassignedJobs.push_back(addJob(s, {PB, 50}));  // pooled
         checkScore("unassignedJobsCost 250 unassigned minutes",
-                   ScoreCalculator::calculateScore(s),
+                   ScoreCalculator::score(s),
                    {0, -250, -100 * 100});
     }
     {
@@ -218,7 +218,7 @@ void verifyConstraints()
         addLine(s, 1, {{PA_S, 200}, {PB, 1000}});
         addJob(s, {PA_S, 6000});
         checkScore("squaredMakespanCost 100^2 + 1240^2",
-                   ScoreCalculator::calculateScore(s),
+                   ScoreCalculator::score(s),
                    {0, -6000, -(100 * 100 + 1240 * 1240)});
     }
     {
@@ -226,7 +226,7 @@ void verifyConstraints()
         PackagingSchedule s = baseSchedule(1);
         addLine(s, 0, {});
         checkScore("empty line scores 0",
-                   ScoreCalculator::calculateScore(s),
+                   ScoreCalculator::score(s),
                    {0, 0, 0});
     }
     std::printf("\n");
@@ -265,7 +265,7 @@ PackagingSchedule buildRandomInstance(int jobCount, std::uint64_t seed)
         line.id = std::to_string(l);
         line.name = "Line " + line.id;
         line.startDateTime = 0;
-        line.operatorIndex = l % 2;  // lines share operators
+        line.operator_index = l % 2;  // lines share operators
         s.lines.push_back(std::move(line));
     }
 
@@ -300,7 +300,7 @@ PackagingSchedule buildRandomInstance(int jobCount, std::uint64_t seed)
 
 // -------------------------------------------------------------------------
 // (b) Incremental == full recompute across a random LIST-move walk driven
-// through the ScoreDirector (the exact before/mutate/after protocol the
+// through the Editor (the exact before/mutate/after protocol the
 // engine uses), against the independently coded full calculator.
 // -------------------------------------------------------------------------
 void verifyIncremental()
@@ -309,12 +309,12 @@ void verifyIncremental()
     PackagingSchedule s = buildRandomInstance(/*jobCount*/ 30, /*seed*/ 7);
     ScoreCalculator::prepare(s);
 
-    using Descriptor = optimaru::SolutionDescriptor<PackagingSchedule>;
+    using Descriptor = optimaru::SolutionTraits<PackagingSchedule>;
     FoodPackagingIncrementalScoreCalculator calculator;
-    optimaru::ScoreDirector<PackagingSchedule> director(s, calculator);
+    optimaru::Editor<PackagingSchedule> editor(s, calculator);
 
     std::mt19937_64 rng(123);
-    const int listCount = Descriptor::listCount(s);
+    const int list_count = Descriptor::list_count(s);
     int mismatches = 0;
     const int steps = 2000;
     for (int step = 0; step < steps; ++step)
@@ -324,50 +324,50 @@ void verifyIncremental()
         {
             // Relocate: remove a random element, insert at a random slot
             // (possibly the pool == unassign, exactly the engine's move).
-            int from = static_cast<int>(rng() % listCount);
-            while (Descriptor::listSize(s, from) == 0)
-                from = static_cast<int>(rng() % listCount);
+            int from = static_cast<int>(rng() % list_count);
+            while (Descriptor::list_size(s, from) == 0)
+                from = static_cast<int>(rng() % list_count);
             const int fromPos = static_cast<int>(
                 rng()
-                % static_cast<std::uint64_t>(Descriptor::listSize(s, from)));
-            const int element = director.removeListElement(from, fromPos);
-            const int to = static_cast<int>(rng() % listCount);
+                % static_cast<std::uint64_t>(Descriptor::list_size(s, from)));
+            const int element = editor.remove(from, fromPos);
+            const int to = static_cast<int>(rng() % list_count);
             const int toPos = static_cast<int>(
                 rng()
-                % static_cast<std::uint64_t>(Descriptor::listSize(s, to) + 1));
-            director.insertListElement(to, toPos, element);
+                % static_cast<std::uint64_t>(Descriptor::list_size(s, to) + 1));
+            editor.insert(to, toPos, element);
         }
         else if (kind == 3)
         {
             // Swap two elements across (possibly equal) lists.
-            int l1 = static_cast<int>(rng() % listCount);
-            while (Descriptor::listSize(s, l1) == 0)
-                l1 = static_cast<int>(rng() % listCount);
-            int l2 = static_cast<int>(rng() % listCount);
-            while (Descriptor::listSize(s, l2) == 0)
-                l2 = static_cast<int>(rng() % listCount);
+            int l1 = static_cast<int>(rng() % list_count);
+            while (Descriptor::list_size(s, l1) == 0)
+                l1 = static_cast<int>(rng() % list_count);
+            int l2 = static_cast<int>(rng() % list_count);
+            while (Descriptor::list_size(s, l2) == 0)
+                l2 = static_cast<int>(rng() % list_count);
             const int p1 = static_cast<int>(
                 rng()
-                % static_cast<std::uint64_t>(Descriptor::listSize(s, l1)));
+                % static_cast<std::uint64_t>(Descriptor::list_size(s, l1)));
             const int p2 = static_cast<int>(
                 rng()
-                % static_cast<std::uint64_t>(Descriptor::listSize(s, l2)));
+                % static_cast<std::uint64_t>(Descriptor::list_size(s, l2)));
             if (l1 == l2 && p1 == p2)
                 continue;
-            const int e1 = Descriptor::getElement(s, l1, p1);
-            const int e2 = Descriptor::getElement(s, l2, p2);
-            director.removeListElement(l1, p1);
-            director.insertListElement(l1, p1, e2);
-            director.removeListElement(l2, p2);
-            director.insertListElement(l2, p2, e1);
+            const int e1 = Descriptor::element_at(s, l1, p1);
+            const int e2 = Descriptor::element_at(s, l2, p2);
+            editor.remove(l1, p1);
+            editor.insert(l1, p1, e2);
+            editor.remove(l2, p2);
+            editor.insert(l2, p2, e1);
         }
         else
         {
             // 2-opt: reverse a random segment.
-            int l = static_cast<int>(rng() % listCount);
-            while (Descriptor::listSize(s, l) < 2)
-                l = static_cast<int>(rng() % listCount);
-            const int size = Descriptor::listSize(s, l);
+            int l = static_cast<int>(rng() % list_count);
+            while (Descriptor::list_size(s, l) < 2)
+                l = static_cast<int>(rng() % list_count);
+            const int size = Descriptor::list_size(s, l);
             int first
                 = static_cast<int>(rng() % static_cast<std::uint64_t>(size));
             int last
@@ -376,13 +376,13 @@ void verifyIncremental()
                 std::swap(first, last);
             if (first == last)
                 continue;
-            director.reverseListSegment(l, first, last);
+            editor.reverse(l, first, last);
         }
 
-        const optimaru::HardSoftScore incremental = director.calculateScore();
+        const optimaru::Score incremental = editor.score();
         PackagingSchedule shadow = s;  // full recompute on a copy
-        const optimaru::HardSoftScore full
-            = toEngineScore(ScoreCalculator::calculateScore(shadow));
+        const optimaru::Score full
+            = toEngineScore(ScoreCalculator::score(shadow));
         if (incremental.hard != full.hard
             || std::fabs(incremental.soft - full.soft) > 1e-9)
         {
@@ -390,8 +390,8 @@ void verifyIncremental()
             {
                 std::printf("  MISMATCH @step %d: incremental=%s full=%s\n",
                             step,
-                            incremental.toString().c_str(),
-                            full.toString().c_str());
+                            incremental.str().c_str(),
+                            full.str().c_str());
             }
         }
     }
@@ -408,9 +408,9 @@ void verifyIncremental()
 }
 
 // -------------------------------------------------------------------------
-// (c) FULL_ASSERT solve: the engine cross-checks the incremental score
+// (c) ScoreChecks::Full solve: the engine cross-checks the incremental score
 // against a full reset + recompute after every single move (including the
-// LNS ruin/recreate path) and throws ScoreCorruptionError on divergence.
+// LNS ruin/recreate path) and throws ScoreMismatchError on divergence.
 // -------------------------------------------------------------------------
 void verifyFullAssertSolve()
 {
@@ -418,10 +418,10 @@ void verifyFullAssertSolve()
     PackagingSchedule s = buildRandomInstance(/*jobCount*/ 14, /*seed*/ 11);
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(2);
-    config.randomSeed = 3;
-    config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
-    // Kick early so ruin/recreate also runs under FULL_ASSERT.
+    config.time_limit = std::chrono::seconds(2);
+    config.seed = 3;
+    config.score_checks = optimaru::ScoreChecks::Full;
+    // Kick early so ruin/recreate also runs under ScoreChecks::Full.
     config.ruinRecreateUnimprovedStepTrigger = 200;
     config.ruinRecreatePolishSteps = 100;
 
@@ -433,7 +433,7 @@ void verifyFullAssertSolve()
         solver.solve(s);
         final = s.score;
     }
-    catch (const optimaru::ScoreCorruptionError &e)
+    catch (const optimaru::ScoreMismatchError &e)
     {
         corrupted = true;
         std::printf("  ScoreCorruptionError: %s\n", e.what());
@@ -441,7 +441,7 @@ void verifyFullAssertSolve()
     check(!corrupted, "2s FULL_ASSERT solve without score corruption");
     if (!corrupted)
     {
-        const Score recomputed = ScoreCalculator::calculateScore(s);
+        const Score recomputed = ScoreCalculator::score(s);
         check(final == recomputed, "solver-reported score == full recompute");
     }
     std::printf("\n");
@@ -456,8 +456,8 @@ void verifyPinnedSolve()
     PackagingSchedule s = buildRandomInstance(/*jobCount*/ 20, /*seed*/ 21);
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(3);
-    config.randomSeed = 5;
+    config.time_limit = std::chrono::seconds(3);
+    config.seed = 5;
     Solver solver(config);
     solver.solve(s);
 
@@ -481,7 +481,7 @@ void verifyPinnedSolve()
         eachOnce = eachOnce && membership[j] == 1;
     check(eachOnce, "every job in exactly one list after the solve");
 
-    const Score recomputed = ScoreCalculator::calculateScore(s);
+    const Score recomputed = ScoreCalculator::score(s);
     check(s.score == recomputed, "reported score == full recompute");
     std::printf("\n");
 }
@@ -498,8 +498,8 @@ void verifyOperatorAssignment()
         addLine(s, -1, {});
         addLine(s, -1, {});
         assignMissingOperators(s);
-        check(s.lines[0].operatorIndex == 0 && s.lines[1].operatorIndex == 1
-                  && s.lines[2].operatorIndex == 2,
+        check(s.lines[0].operator_index == 0 && s.lines[1].operator_index == 1
+                  && s.lines[2].operator_index == 2,
               "seeding is injective while operators remain (0,1,2)");
     }
     {
@@ -525,11 +525,11 @@ void verifyOperatorAssignment()
 }
 
 // -------------------------------------------------------------------------
-// (f) The Java demo instance: shape checks + a solve to 0hard.
+// (f) The demo instance: shape checks + a solve to 0hard.
 // -------------------------------------------------------------------------
 void verifyDemo()
 {
-    std::printf("== (f) Java demo instance (Random(37) replica) ==\n");
+    std::printf("== (f) demo instance (seed 37) ==\n");
     PackagingSchedule s = generateDemoData();
     check(static_cast<int>(s.products.size()) == 60,
           "60 products (10 ingredients x 6)");
@@ -570,14 +570,14 @@ void verifyDemo()
     check(cleanupOk, "cleanup matrix: self 0, others 10 or [30, 60)");
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(15);
-    config.bestScoreLimit = {0, -std::numeric_limits<double>::infinity()};  // stop at the first feasible
-    config.randomSeed = 1;
+    config.time_limit = std::chrono::seconds(15);
+    config.target_score = {0, -std::numeric_limits<double>::infinity()};  // stop at the first feasible
+    config.seed = 1;
     Solver solver(config);
     solver.solve(s);
     check(s.score.hard == 0,
-          "demo reaches 0hard (got " + s.score.toString() + ")");
-    check(s.score == ScoreCalculator::calculateScore(s),
+          "demo reaches 0hard (got " + s.score.str() + ")");
+    check(s.score == ScoreCalculator::score(s),
           "reported score == full recompute");
     std::printf("\n");
 }
@@ -610,7 +610,7 @@ void verifyMappingAndValidation()
                              == kMediumFold.unit;
         for (const Score &score : samples)
         {
-            const optimaru::HardSoftScore engine = toEngineScore(score);
+            const optimaru::Score engine = toEngineScore(score);
             packed = packed && engine.hard == score.hard
                      && engine.soft
                             == static_cast<double>(score.medium * kMediumUnit
@@ -632,7 +632,7 @@ void verifyMappingAndValidation()
         bool threw = false;
         try
         {
-            ScoreCalculator::calculateScore(s);
+            ScoreCalculator::score(s);
         }
         catch (const std::invalid_argument &)
         {

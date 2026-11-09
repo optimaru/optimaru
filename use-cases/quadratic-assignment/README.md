@@ -10,10 +10,10 @@ assignment problem.
 [`benchmarks/quadratic-assignment/cpsat`](../../benchmarks/quadratic-assignment/cpsat)
 holds the exact CP-SAT reference.
 
-## Domain (BASIC variable)
+## Domain (assignment shape)
 
-- `Facility.location` — the only planning variable: an index into `locations`,
-  `-1` = unassigned. A `DecomposedScoreCalculator` unit is one location; its
+- `Facility.location` — the only decision variable: an index into `locations`,
+  `-1` = unassigned. A `DecomposedObjective` unit is one location; its
   members are the facilities standing there.
 - The solver keeps the facilities a **permutation** of the locations: it starts
   from the identity (facility `i` at location `i`) or a warm-start bijection and
@@ -35,7 +35,7 @@ holds the exact CP-SAT reference.
   model's assignment must be representable (known ids, no facility twice):
   `to_core()` raises `ValueError` otherwise, so `solve(model)` does too.
 
-## Constraints (HardSoftScore — the engine score type as-is, no mapping)
+## Constraints (Score — the engine score type as-is, no mapping)
 
 | Constraint (Python name) | C++ component | Default level | Default weight | Raw cost (0 = no violation) |
 |---|---|---|---|---|
@@ -182,7 +182,7 @@ other C++ use cases.
 
 ## cpp/
 
-- `include/qap/domain.hpp` — domain + `optimaru::SolutionDescriptor` specialization
+- `include/qap/domain.hpp` — domain + `optimaru::SolutionTraits` specialization
 - `include/qap/constraints/` — one component per constraint:
   `pinned_assignments_cost.hpp`, `forbidden_assignments_cost.hpp`,
   `location_capacity_cost.hpp`, `assignment_cost.hpp`, `flow_distance_cost.hpp`
@@ -209,16 +209,16 @@ facility pinned twice, missing demand / capacity, negative costs, an empty pinne
 location), `prepare()` validation, incremental == full recompute (score and every
 constraint's raw total, each constraint non-zero on some step) over random swap /
 unassign / change sequences, and the solver (zero budget keeps the start, warm-start
-rules, n = 0 / 1, single / parallel / FULL_ASSERT solves stay bijections, brute-force
+rules, n = 0 / 1, single / parallel / ScoreChecks::Full solves stay bijections, brute-force
 optima, determinism). `qap_plugin_test`: default assembly == monolith bit for bit,
 plugin incremental == full recompute with accepted and undone moves (per-constraint
 raw costs, each constraint non-zero on some step), partial assemblies, overrides
 (unit exponent per location, global exponent on the total, per-location hard
-rounding), the cost layout, FULL_ASSERT plugin solves, raw costs by hand, the
+rounding), the cost layout, ScoreChecks::Full plugin solves, raw costs by hand, the
 catalog, and repeated / shifted components (a hand-calculated repeat, threshold and
 literal offsets by hand, the scoped side constraints charging only their locations,
 the literal formula refused on hard at reset and kept on soft, incremental == a fresh
-recompute over a walk with accepted and undone moves, a FULL_ASSERT solve).
+recompute over a walk with accepted and undone moves, a ScoreChecks::Full solve).
 
 ## Usage
 
@@ -299,14 +299,14 @@ The checked-in local snapshot is [`bench/RESULTS.md`](../../benchmarks/quadratic
 ## Extending
 
 Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-use-case).
-The planning variable is **BASIC**; the domain solver that configures the engine is
+The solution has the **assignment** shape; the domain solver that configures the engine is
 `cpp/include/qap/solver.hpp` + `cpp/src/solver.cpp`.
 
-**Adding a move.** The engine runs swap moves only (`changeMoveWeight = 0`,
-`swapMoveWeight = 1` in `cpp/src/solver.cpp`). A new move must keep the
+**Adding a move.** The engine runs swap moves only (`change_weight = 0`,
+`swap_weight = 1` in `cpp/src/solver.cpp`). A new move must keep the
 permutation (a 3-cycle rotation, a best-partner swap): an
-`optimaru::MoveOperator<…>` registered with `engine.addMoveOperator(...)` in
-`cpp/src/solver.cpp`, run under FULL_ASSERT. Registered operators do not reach the
+`optimaru::MoveOperator<…>` registered with `engine.add_move_operator(...)` in
+`cpp/src/solver.cpp`, run under ScoreChecks::Full. Registered operators do not reach the
 engine's multi-start threads, so a solver that registers one runs its own worker
 threads (see facility-location's `CloseFacilityMove`).
 

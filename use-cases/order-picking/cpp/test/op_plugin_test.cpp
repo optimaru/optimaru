@@ -1,14 +1,14 @@
 // Plugin-assembly (op/constraints.hpp) tests, engine test/ style: check() + a
 // non-zero exit on any failure.
-//   (a) the default assembly on the engine's DecomposedScoreCalculator
+//   (a) the default assembly on the engine's DecomposedObjective
 //       reproduces the monolithic score bit-for-bit on 300 random list
 //       layouts (unassigned pick tasks included)
 //   (b) incremental score == full recompute across 2000 random LIST moves
-//       driven through the engine's ScoreDirector protocol (plugin path)
+//       driven through the engine's Editor protocol (plugin path)
 //   (c) partial assemblies: each component in isolation, hand-computed
 //   (d) weight / level overrides
-//   (e) constraintTotals() explains exactly the reported score
-//   (f) a 2-second solve(solution, calculator) under FULL_ASSERT
+//   (e) constraint_totals() explains exactly the reported score
+//   (f) a 2-second solve(solution, calculator) under ScoreChecks::Full
 //   (g) the defaultConstraints() builder: named edits == by-hand assembly
 //   (h) each component's raw cost, hand-calculated: a positive and a zero
 //       case per constraint (raw 0 = no violation; orderSplitByTrolleyCost
@@ -20,7 +20,7 @@
 //       by hand (an empty trolley counts in literal mode), per-trolley hard
 //       rounding, the literal formula refused on hard at reset and kept on
 //       soft, incremental == a fresh recompute over a random walk, every
-//       preview == the applied score under FULL_ASSERT and a FULL_ASSERT
+//       preview == the applied score under ScoreChecks::Full and a ScoreChecks::Full
 //       solve with repeated, shifted components
 #include <algorithm>
 #include <chrono>
@@ -40,7 +40,7 @@
 #include "op/domain.hpp"
 #include "op/score_calculator.hpp"
 #include "op/solver.hpp"
-#include "optimaru/api/score/director/score_director.hpp"
+#include "optimaru/model/editor.hpp"
 #include "optimaru/testing/preview_parity.hpp"
 
 using namespace op;
@@ -67,7 +67,7 @@ void checkScore(const std::string &label,
     std::printf("  [%s] %-52s got=%s expected=%lldhard/%gsoft\n",
                 ok ? "PASS" : "FAIL",
                 label.c_str(),
-                actual.toString().c_str(),
+                actual.str().c_str(),
                 expectedHard,
                 expectedSoft);
     if (!ok)
@@ -128,8 +128,8 @@ OrderPickingSolution makeBase(int orderCount)
 
 Score scoreWith(DecomposedCalculator &calculator, OrderPickingSolution &s)
 {
-    calculator.resetWorkingSolution(s);
-    return calculator.calculateScore();
+    calculator.rebuild(s);
+    return calculator.score();
 }
 
 // -------------------------------------------------------------------------
@@ -162,15 +162,15 @@ void verifyAssemblyParity()
             s.trolleys[trolley].pickTaskIndices.push_back(t);
         }
         const Score plugin = scoreWith(calculator, s);
-        const Score monolithic = ScoreCalculator::calculateScore(s);
+        const Score monolithic = ScoreCalculator::score(s);
         if (!sameScore(plugin, monolithic))
         {
             if (++mismatches <= 3)
             {
                 std::printf("  MISMATCH @round %d: plugin=%s monolithic=%s\n",
                             round,
-                            plugin.toString().c_str(),
-                            monolithic.toString().c_str());
+                            plugin.str().c_str(),
+                            monolithic.str().c_str());
             }
         }
     }
@@ -181,7 +181,7 @@ void verifyAssemblyParity()
 
 // -------------------------------------------------------------------------
 // (b) Incremental score == full recompute across a random walk of LIST
-// mutations, driven through the ScoreDirector.
+// mutations, driven through the Editor.
 // -------------------------------------------------------------------------
 void verifyIncremental()
 {
@@ -192,7 +192,7 @@ void verifyIncremental()
 
     DecomposedCalculator calculator;
     addDefaultConstraints(calculator);
-    optimaru::ScoreDirector<OrderPickingSolution> director(s, calculator);
+    optimaru::Editor<OrderPickingSolution> editor(s, calculator);
 
     std::mt19937_64 rng(2024);
     std::uniform_real_distribution<double> unit(0.0, 1.0);
@@ -227,7 +227,7 @@ void verifyIncremental()
             const int trolley = static_cast<int>(rng() % trolleyCount);
             const int position = static_cast<int>(
                 rng() % (s.trolleys[trolley].pickTaskIndices.size() + 1));
-            director.insertListElement(trolley, position, task);
+            editor.insert(trolley, position, task);
             taskList[task] = trolley;
         }
         else if (dice < 0.55)
@@ -235,7 +235,7 @@ void verifyIncremental()
             const int task = static_cast<int>(rng() % taskCount);
             if (taskList[task] < 0)
                 continue;
-            director.removeListElement(taskList[task],
+            editor.remove(taskList[task],
                                        indexWithin(taskList[task], task));
             taskList[task] = -1;
             unassigned.push_back(task);
@@ -245,12 +245,12 @@ void verifyIncremental()
             const int task = static_cast<int>(rng() % taskCount);
             if (taskList[task] < 0)
                 continue;
-            director.removeListElement(taskList[task],
+            editor.remove(taskList[task],
                                        indexWithin(taskList[task], task));
             const int trolley = static_cast<int>(rng() % trolleyCount);
             const int position = static_cast<int>(
                 rng() % (s.trolleys[trolley].pickTaskIndices.size() + 1));
-            director.insertListElement(trolley, position, task);
+            editor.insert(trolley, position, task);
             taskList[task] = trolley;
         }
         else
@@ -264,19 +264,19 @@ void verifyIncremental()
             int last = static_cast<int>(rng() % size);
             if (first > last)
                 std::swap(first, last);
-            director.reverseListSegment(trolley, first, last);
+            editor.reverse(trolley, first, last);
         }
 
-        const Score incremental = director.calculateScore();
-        const Score full = ScoreCalculator::calculateScore(s);
+        const Score incremental = editor.score();
+        const Score full = ScoreCalculator::score(s);
         if (!sameScore(full, incremental))
         {
             if (++mismatches <= 3)
             {
                 std::printf("  MISMATCH @step %d: incremental=%s full=%s\n",
                             step,
-                            incremental.toString().c_str(),
-                            full.toString().c_str());
+                            incremental.str().c_str(),
+                            full.str().c_str());
             }
         }
     }
@@ -411,7 +411,7 @@ void verifyOverrides()
 }
 
 // -------------------------------------------------------------------------
-// (e) constraintTotals(): the per-constraint breakdown adds up.
+// (e) constraint_totals(): the per-constraint breakdown adds up.
 // -------------------------------------------------------------------------
 void verifyConstraintTotals()
 {
@@ -430,18 +430,18 @@ void verifyConstraintTotals()
 
     double hard = 0.0;
     double soft = 0.0;
-    for (const optimaru::ConstraintTotal &total : calculator.constraintTotals())
-        (total.isHard ? hard : soft) += total.cost;
+    for (const optimaru::ConstraintTotal &total : calculator.constraint_totals())
+        (total.is_hard ? hard : soft) += total.cost;
     check(std::fabs(-hard - static_cast<double>(score.hard)) < 1e-9
               && std::fabs(-soft - score.soft) < 1e-6,
           "per-constraint totals sum to the reported score");
-    check(calculator.constraintTotals().size() == 4,
+    check(calculator.constraint_totals().size() == 4,
           "one total per assembled component");
     std::printf("\n");
 }
 
 // -------------------------------------------------------------------------
-// (f) FULL_ASSERT solve on the plugin path.
+// (f) ScoreChecks::Full solve on the plugin path.
 // -------------------------------------------------------------------------
 void verifyFullAssertSolve()
 {
@@ -449,9 +449,9 @@ void verifyFullAssertSolve()
     OrderPickingSolution s = buildDemoData(3, 4, 60 * 40 * 20, 3, 37);
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(2);
-    config.randomSeed = 3;
-    config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+    config.time_limit = std::chrono::seconds(2);
+    config.seed = 3;
+    config.score_checks = optimaru::ScoreChecks::Full;
     config.ruinRecreateUnimprovedStepTrigger = 200;
     config.ruinRecreatePolishSteps = 100;
 
@@ -464,7 +464,7 @@ void verifyFullAssertSolve()
         Solver solver(config);
         solver.solve(s, calculator);
     }
-    catch (const optimaru::ScoreCorruptionError &e)
+    catch (const optimaru::ScoreMismatchError &e)
     {
         corrupted = true;
         std::printf("  ScoreCorruptionError: %s\n", e.what());
@@ -472,7 +472,7 @@ void verifyFullAssertSolve()
     check(!corrupted, "2s FULL_ASSERT plugin solve without score corruption");
     if (!corrupted)
     {
-        const Score recomputed = ScoreCalculator::calculateScore(s);
+        const Score recomputed = ScoreCalculator::score(s);
         check(sameScore(s.score, recomputed),
               "plugin-reported score == monolithic full recompute");
     }
@@ -518,7 +518,7 @@ void verifyAssemblyBuilder()
     // The default assembly, untouched, still matches the monolith.
     DecomposedCalculator plain;
     defaultConstraints().into(plain);
-    check(sameScore(scoreWith(plain, s), ScoreCalculator::calculateScore(s)),
+    check(sameScore(scoreWith(plain, s), ScoreCalculator::score(s)),
           "defaultConstraints() alone == the monolithic score");
 
     // A typo must not quietly leave the cost function as it was.
@@ -556,7 +556,7 @@ void verifyAssemblyBuilder()
 // -------------------------------------------------------------------------
 // (h) Each component's raw cost on hand-built instances: one violating
 // (positive) case and one clean (zero) case per constraint, read through
-// constraintCosts() — the raw per-trolley numbers before weight and level.
+// constraint_costs() — the raw per-trolley numbers before weight and level.
 // Same-shelving, same-side distances are the row difference (op_test (a)).
 // -------------------------------------------------------------------------
 std::vector<double> rawCosts(OrderPickingSolution &solution,
@@ -564,12 +564,12 @@ std::vector<double> rawCosts(OrderPickingSolution &solution,
 {
     DecomposedCalculator calculator;
     addDefaultConstraints(calculator);
-    calculator.resetWorkingSolution(solution);
-    calculator.calculateScore();
-    for (const auto &entry : calculator.constraintCosts())
+    calculator.rebuild(solution);
+    calculator.score();
+    for (const auto &entry : calculator.constraint_costs())
     {
         if (entry.name == name)
-            return entry.unitCosts;
+            return entry.unit_costs;
     }
     return {};
 }
@@ -706,11 +706,11 @@ bool rowIs(const optimaru::ConstraintInfo &row,
            optimaru::Level level,
            double weight)
 {
-    return row.name == name && row.defaultLevel == Component::kDefaultLevel
-           && row.defaultWeight == Component::kDefaultWeight
-           && row.defaultLevel == level && row.defaultWeight == weight
-           && row.levelFlippable && !row.reward && !row.isGlobal
-           && row.defaultEnabled;
+    return row.name == name && row.default_level == Component::kDefaultLevel
+           && row.default_weight == Component::kDefaultWeight
+           && row.default_level == level && row.default_weight == weight
+           && row.level_flippable && !row.reward && !row.is_global
+           && row.default_enabled;
 }
 
 void verifyCatalog()
@@ -759,7 +759,7 @@ void verifyCatalog()
 // -------------------------------------------------------------------------
 // (j) Repeated components and offsets. A repeat is a fresh copy of a
 // default component (another defaultConstraints(), the one name kept, its
-// knobs re-stated) appended with addInstances(), as the Python bindings
+// knobs re-stated) appended with add_instances(), as the Python bindings
 // build it from a pick list.
 // -------------------------------------------------------------------------
 ConstraintAssembly copyOf(const std::string &name)
@@ -801,25 +801,25 @@ ConstraintAssembly repeatedAssembly()
     assembly.offset("distanceFromPreviousPickTaskCost", 40.0)
         .clip("distanceFromPreviousPickTaskCost", false);
     assembly.offset("orderSplitByTrolleyCost", 1.0);
-    assembly.addInstances(std::move(copyOf("distanceFromPreviousPickTaskCost")
+    assembly.add_instances(std::move(copyOf("distanceFromPreviousPickTaskCost")
                                         .weight("distanceFromPreviousPickTaskCost", 0.01)
                                         .exponent("distanceFromPreviousPickTaskCost", 2.0)
                                         .offset("distanceFromPreviousPickTaskCost", 20.0)));
     // The literal bucket copy sits on soft: hard refuses the literal formula
     // with an offset (hard 0 must mean no violation).
-    assembly.addInstances(std::move(copyOf("trolleyCapacityCost")
+    assembly.add_instances(std::move(copyOf("trolleyCapacityCost")
                                         .soft("trolleyCapacityCost")
                                         .weight("trolleyCapacityCost", 2.0)
                                         .offset("trolleyCapacityCost", 1.0)
                                         .clip("trolleyCapacityCost", false)));
-    assembly.addInstances(std::move(copyOf("trolleyCapacityCost")
+    assembly.add_instances(std::move(copyOf("trolleyCapacityCost")
                                         .weight("trolleyCapacityCost", 2.0)
                                         .offset("trolleyCapacityCost", 1.0)));
-    assembly.addInstances(std::move(copyOf("orderSplitByTrolleyCost")
+    assembly.add_instances(std::move(copyOf("orderSplitByTrolleyCost")
                                         .weight("orderSplitByTrolleyCost", 300.0)
                                         .offset("orderSplitByTrolleyCost", -2.0)
                                         .clip("orderSplitByTrolleyCost", false)));
-    assembly.addInstances(std::move(copyOf("distanceFromLastPickTaskToPathOriginCost")
+    assembly.add_instances(std::move(copyOf("distanceFromLastPickTaskToPathOriginCost")
                                         .weight("distanceFromLastPickTaskToPathOriginCost", 0.5)
                                         .offset("distanceFromLastPickTaskToPathOriginCost", -3.0)));
     return assembly;
@@ -842,18 +842,18 @@ void verifyRepeatsAndOffsets()
     {
         OrderPickingSolution s = repeatInstance();
         ConstraintAssembly assembly = copyOf("distanceFromPreviousPickTaskCost");
-        assembly.addInstances(std::move(copyOf("distanceFromPreviousPickTaskCost")
+        assembly.add_instances(std::move(copyOf("distanceFromPreviousPickTaskCost")
                                             .weight("distanceFromPreviousPickTaskCost", 0.5)
                                             .exponent("distanceFromPreviousPickTaskCost", 2.0)));
         DecomposedCalculator calculator;
         assembly.into(calculator);
         checkScore("walk + 0.5 x walk^2 per trolley: -(10 + 25)", scoreWith(calculator, s), 0,
                    -35.0);
-        const auto entries = calculator.constraintCosts();
-        check(entries.size() == 2 && entries[0].unitCosts == entries[1].unitCosts
-                  && entries[0].unitCosts == std::vector<double>{5.0, 5.0, 0.0}
+        const auto entries = calculator.constraint_costs();
+        check(entries.size() == 2 && entries[0].unit_costs == entries[1].unit_costs
+                  && entries[0].unit_costs == std::vector<double>{5.0, 5.0, 0.0}
                   && entries[1].weight == 0.5 && entries[1].exponent == 2.0
-                  && entries[1].defaultWeight == 1.0 && !entries[0].scoped,
+                  && entries[1].default_weight == 1.0 && !entries[0].scoped,
               "two instances, the same raw costs, each with its own knobs, every trolley "
               "evaluated");
     }
@@ -929,7 +929,7 @@ void verifyRepeatsAndOffsets()
                   == refusal("distanceFromPreviousPickTaskCost"),
               "walk literal offset moved to hard afterwards: refused at reset");
         ConstraintAssembly repeated = copyOf("trolleyCapacityCost");
-        repeated.addInstances(std::move(copyOf("trolleyCapacityCost")
+        repeated.add_instances(std::move(copyOf("trolleyCapacityCost")
                                             .offset("trolleyCapacityCost", 1.0)
                                             .clip("trolleyCapacityCost", false)));
         check(resetRefusal(std::move(repeated)) == refusal("trolleyCapacityCost"),
@@ -941,40 +941,40 @@ void verifyRepeatsAndOffsets()
     }
     checkScore("identical instances add up: 2 x 1000 x 3",
                repeatScore(std::move(copyOf("orderSplitByTrolleyCost")
-                                         .addInstances(copyOf("orderSplitByTrolleyCost")))),
+                                         .add_instances(copyOf("orderSplitByTrolleyCost")))),
                0, -6000.0);
-    using Descriptor = optimaru::SolutionDescriptor<OrderPickingSolution>;
+    using Descriptor = optimaru::SolutionTraits<OrderPickingSolution>;
     {
         // Random walk: incremental == a fresh calculator of the same assembly.
         OrderPickingSolution s = assignedDemo(4, 41);
         DecomposedCalculator calculator;
         repeatedAssembly().into(calculator);
-        optimaru::ScoreDirector<OrderPickingSolution> director(s, calculator);
+        optimaru::Editor<OrderPickingSolution> editor(s, calculator);
         std::mt19937_64 rng(43);
         int mismatches = 0;
         double drift = 0.0;
         const int steps = 1500;
         for (int step = 0; step < steps; ++step)
         {
-            const int listCount = Descriptor::listCount(s);
-            const int from = static_cast<int>(rng() % static_cast<std::uint64_t>(listCount));
-            if (Descriptor::listSize(s, from) == 0)
+            const int list_count = Descriptor::list_count(s);
+            const int from = static_cast<int>(rng() % static_cast<std::uint64_t>(list_count));
+            if (Descriptor::list_size(s, from) == 0)
                 continue;
             const int position = static_cast<int>(
-                rng() % static_cast<std::uint64_t>(Descriptor::listSize(s, from)));
-            const int element = Descriptor::getElement(s, from, position);
-            director.removeListElement(from, position);
-            const int to = static_cast<int>(rng() % static_cast<std::uint64_t>(listCount));
-            const int insertAt = static_cast<int>(
-                rng() % static_cast<std::uint64_t>(Descriptor::listSize(s, to) + 1));
-            director.insertListElement(to, insertAt, element);
+                rng() % static_cast<std::uint64_t>(Descriptor::list_size(s, from)));
+            const int element = Descriptor::element_at(s, from, position);
+            editor.remove(from, position);
+            const int to = static_cast<int>(rng() % static_cast<std::uint64_t>(list_count));
+            const int insert_at = static_cast<int>(
+                rng() % static_cast<std::uint64_t>(Descriptor::list_size(s, to) + 1));
+            editor.insert(to, insert_at, element);
 
-            const Score incremental = director.calculateScore();
+            const Score incremental = editor.score();
             DecomposedCalculator fresh;
             repeatedAssembly().into(fresh);
             const Score full = scoreWith(fresh, s);
             drift = std::max(drift, std::fabs(full.soft - incremental.soft));
-            if (!optimaru::scoresAgree(incremental, full))
+            if (!optimaru::scores_agree(incremental, full))
                 ++mismatches;
         }
         std::printf("    largest soft drift %.3g\n", drift);
@@ -983,37 +983,37 @@ void verifyRepeatsAndOffsets()
                   + " random list moves with repeated, shifted components: incremental == fresh");
     }
     {
-        // Every preview == the applied score, re-checked under FULL_ASSERT.
+        // Every preview == the applied score, re-checked under ScoreChecks::Full.
         OrderPickingSolution s = assignedDemo(4, 47);
         DecomposedCalculator calculator;
         repeatedAssembly().into(calculator);
-        optimaru::ScoreDirector<OrderPickingSolution> director(
-            s, calculator, optimaru::EnvironmentMode::FULL_ASSERT);
-        director.calculateScore();
+        optimaru::Editor<OrderPickingSolution> editor(
+            s, calculator, optimaru::ScoreChecks::Full);
+        editor.score();
         optimaru::testing::PreviewParity parity;
         bool corrupted = false;
         try
         {
-            parity = optimaru::testing::runPreviewParity(director, calculator, /*seed=*/13,
+            parity = optimaru::testing::run_preview_parity(editor, calculator, /*seed=*/13,
                                                          /*trials=*/3000);
         }
-        catch (const optimaru::ScoreCorruptionError &error)
+        catch (const optimaru::ScoreMismatchError &error)
         {
             corrupted = true;
             std::printf("    %s\n", error.what());
         }
         std::printf("    %d moves checked, %d previewed, %d declined\n", parity.checked,
                     parity.previewed, parity.declined);
-        check(!corrupted && parity.allEqual() && parity.declined == 0 && parity.previewed > 1000,
+        check(!corrupted && parity.all_equal() && parity.declined == 0 && parity.previewed > 1000,
               "repeated, shifted components: every preview served and equal to the applied "
               "score (FULL_ASSERT)");
     }
     {
         OrderPickingSolution s = buildDemoData(3, 4, 60 * 40 * 20, 3, 37);
         Solver::Config config;
-        config.spentLimit = std::chrono::seconds(2);
-        config.randomSeed = 3;
-        config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+        config.time_limit = std::chrono::seconds(2);
+        config.seed = 3;
+        config.score_checks = optimaru::ScoreChecks::Full;
         config.ruinRecreateUnimprovedStepTrigger = 200;
         config.ruinRecreatePolishSteps = 100;
         DecomposedCalculator calculator;
@@ -1024,7 +1024,7 @@ void verifyRepeatsAndOffsets()
             Solver solver(config);
             solver.solve(s, calculator);
         }
-        catch (const optimaru::ScoreCorruptionError &e)
+        catch (const optimaru::ScoreMismatchError &e)
         {
             corrupted = true;
             std::printf("  ScoreCorruptionError: %s\n", e.what());
@@ -1032,7 +1032,7 @@ void verifyRepeatsAndOffsets()
         check(!corrupted, "2s FULL_ASSERT solve with repeated, shifted components");
         DecomposedCalculator fresh;
         repeatedAssembly().into(fresh);
-        check(!corrupted && optimaru::scoresAgree(s.score, scoreWith(fresh, s)),
+        check(!corrupted && optimaru::scores_agree(s.score, scoreWith(fresh, s)),
               "the reported score == a fresh recompute of the same assembly");
     }
     std::printf("\n");

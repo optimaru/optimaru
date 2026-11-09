@@ -19,19 +19,19 @@ struct ShiftCountImbalanceCost final : EsGlobalConstraint {
         : EsGlobalConstraint("shiftCountImbalanceCost", weight, kDefaultLevel) {}
 
     void reset(const EmployeeSchedule& /*s*/,
-               const std::vector<std::vector<int>>& membersPerUnit) override {
-        n_ = static_cast<int>(membersPerUnit.size());
+               const std::vector<std::vector<int>>& members_per_unit) override {
+        n_ = static_cast<int>(members_per_unit.size());
         counts_.assign(n_, 0);
         sum_ = 0;
         sumSq_ = 0;
         for (int u = 0; u < n_; ++u) {
-            long c = static_cast<long>(membersPerUnit[u].size());
+            long c = static_cast<long>(members_per_unit[u].size());
             counts_[u] = c;
             sum_ += c;
             sumSq_ += c * c;
         }
     }
-    void onUnitChanged(const EmployeeSchedule& /*s*/, int unit,
+    void on_unit_changed(const EmployeeSchedule& /*s*/, int unit,
                        const std::vector<int>& members) override {
         long oldCount = counts_[unit];
         long newCount = static_cast<long>(members.size());
@@ -39,10 +39,10 @@ struct ShiftCountImbalanceCost final : EsGlobalConstraint {
         sumSq_ += newCount * newCount - oldCount * oldCount;
         counts_[unit] = newCount;
     }
-    bool supportsMemberChange() const override { return true; }
-    void onMemberChanged(const EmployeeSchedule& s, int unit,
+    bool supports_member_change() const override { return true; }
+    void on_member_changed(const EmployeeSchedule& s, int unit,
                          const std::vector<int>& members, int, bool) override {
-        onUnitChanged(s, unit, members);
+        on_unit_changed(s, unit, members);
     }
     double cost() const override {
         return ScoreCalculator::unfairnessFromAggregates(sum_, sumSq_, n_);

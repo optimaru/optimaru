@@ -5,14 +5,14 @@
 #include <vector>
 
 #include "ms/domain.hpp"
-#include "optimaru/api/score/calculator/incremental_score_calculator.hpp"
+#include "optimaru/score/objective.hpp"
 
 namespace ms
 {
 
 // The meeting-scheduling implementation of the engine's
-// optimaru::IncrementalScoreCalculator — the C++ analog of implementing
-// Java's IncrementalScoreCalculator instead of a ConstraintProvider.
+// optimaru::Objective — the C++ analog of implementing
+// Java's Objective instead of a ConstraintProvider.
 //
 // All overlap-weighted pair constraints decompose over grain-index units:
 // two meetings' overlap == the number of grain offsets they both occupy, so
@@ -33,20 +33,20 @@ namespace ms
 // (roomChangeCost) walks the precomputed shared-attendee neighbors of the one
 // changed meeting — O(neighbors), not O(solution).
 //
-// beforeVariableChanged retracts the assignment's contribution while
-// grainRoom still holds the OLD value; afterVariableChanged inserts the NEW
+// before_assign retracts the assignment's contribution while
+// grainRoom still holds the OLD value; after_assign inserts the NEW
 // value. Unassigned assignments (grainRoom == -1) contribute nothing, so the
 // construction heuristic can score partially initialized solutions. The
-// full-recompute reference is ScoreCalculator::calculateScore (checked in
-// the tests and under EnvironmentMode::FULL_ASSERT).
+// full-recompute reference is ScoreCalculator::score (checked in
+// the tests and under ScoreChecks::ScoreChecks::Full).
 class MeetingSchedulingIncrementalScoreCalculator final
-    : public optimaru::IncrementalScoreCalculator<MeetingSchedule>
+    : public optimaru::Objective<MeetingSchedule>
 {
 public:
-    void resetWorkingSolution(MeetingSchedule &workingSolution) override;
-    void beforeVariableChanged(int assignmentIndex) override;
-    void afterVariableChanged(int assignmentIndex) override;
-    Score calculateScore() override;
+    void rebuild(MeetingSchedule &solution) override;
+    void before_assign(int assignmentIndex) override;
+    void after_assign(int assignmentIndex) override;
+    Score score() override;
 
 private:
     MeetingSchedule *schedule_ = nullptr;
@@ -77,7 +77,7 @@ private:
 
     // Running raw totals, one per constraint and named after its registry
     // name (counted positive; signs, the components' kDefaultWeight and the
-    // medium fold are applied in calculateScore).
+    // medium fold are applied in score).
     std::int64_t roomConflictCost_ = 0;                            // hard 1
     std::int64_t overtimeCost_ = 0;                                // hard 2
     std::int64_t requiredAttendanceConflictCost_ = 0;              // hard 3

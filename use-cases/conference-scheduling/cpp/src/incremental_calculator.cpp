@@ -104,16 +104,16 @@ int densify(const std::vector<std::vector<int>> &poolIds,
 
 }  // namespace
 
-void ConferenceSchedulingIncrementalScoreCalculator::resetWorkingSolution(
-    ConferenceSchedule &workingSolution)
+void ConferenceSchedulingIncrementalScoreCalculator::rebuild(
+    ConferenceSchedule &solution)
 {
-    ScoreCalculator::prepare(workingSolution);
-    schedule_ = &workingSolution;
-    slotCount_ = workingSolution.timeslotCount();
-    roomCount_ = workingSolution.roomCount();
-    talkCount_ = workingSolution.talkCount();
-    dayCount_ = workingSolution.dayCount;
-    const ConferenceSchedule &s = workingSolution;
+    ScoreCalculator::prepare(solution);
+    schedule_ = &solution;
+    slotCount_ = solution.timeslotCount();
+    roomCount_ = solution.roomCount();
+    talkCount_ = solution.talkCount();
+    dayCount_ = solution.dayCount;
+    const ConferenceSchedule &s = solution;
 
     // Dense per-family tag ids.
     themeDim_ = densify(s.talkThemeIds, themeD_);
@@ -751,7 +751,7 @@ void ConferenceSchedulingIncrementalScoreCalculator::retract(int talkIndex,
     }
 }
 
-void ConferenceSchedulingIncrementalScoreCalculator::beforeVariableChanged(
+void ConferenceSchedulingIncrementalScoreCalculator::before_assign(
     int talkIndex)
 {
     const int old = assign_[talkIndex];
@@ -760,7 +760,7 @@ void ConferenceSchedulingIncrementalScoreCalculator::beforeVariableChanged(
     assign_[talkIndex] = -1;
 }
 
-void ConferenceSchedulingIncrementalScoreCalculator::afterVariableChanged(
+void ConferenceSchedulingIncrementalScoreCalculator::after_assign(
     int talkIndex)
 {
     const int now = schedule_->talks[talkIndex].slotRoom;  // the new value
@@ -769,7 +769,7 @@ void ConferenceSchedulingIncrementalScoreCalculator::afterVariableChanged(
     assign_[talkIndex] = now;
 }
 
-Score ConferenceSchedulingIncrementalScoreCalculator::calculateScore()
+Score ConferenceSchedulingIncrementalScoreCalculator::score()
 {
     Score score;
     score.hard = hardBase_ - kCrowdWeight * crowdUnits_;

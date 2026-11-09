@@ -28,14 +28,14 @@ target_link_libraries(mc_demo PRIVATE mc_core)
 target_compile_options(mc_demo PRIVATE -Wall -Wextra)
 
 # Monolithic path: per-constraint hand checks, the start partition,
-# incremental == full recompute on random moves, FULL_ASSERT, exact-size,
+# incremental == full recompute on random moves, ScoreChecks::Full, exact-size,
 # pinning, zero-budget and brute-force solves.
 add_executable(mc_test test/mc_test.cpp)
 target_link_libraries(mc_test PRIVATE mc_core)
 target_compile_options(mc_test PRIVATE -Wall -Wextra)
 
 # Plugin-assembly path (mc/constraints.hpp): the same score decomposed into
-# one component per constraint on the engine's DecomposedScoreCalculator,
+# one component per constraint on the engine's DecomposedObjective,
 # checked bit-for-bit against the monolithic calculators.
 add_executable(mc_plugin_test test/mc_plugin_test.cpp)
 target_link_libraries(mc_plugin_test PRIVATE mc_core)

@@ -10,9 +10,9 @@
 #include <utility>
 #include <vector>
 
-#include "optimaru/api/solver/solver.hpp"
-#include "optimaru/config/solver/solver_config.hpp"
-#include "optimaru/impl/solver/worker_threads.hpp"
+#include "optimaru/solver.hpp"
+#include "optimaru/settings.hpp"
+#include "optimaru/worker_threads.hpp"
 #include "vrp/incremental_calculator.hpp"
 #include "vrp/score_calculator.hpp"
 
@@ -23,7 +23,7 @@ namespace
 {
 
 // Multi-start: independent workers on copies of the plan, best final score
-// wins. The engine has its own solveMultiStart(), but it runs the threads with
+// wins. The engine has its own solve_multistart(), but it runs the threads with
 // the built-in configuration only; going through Solver keeps every worker on
 // the exact config the caller asked for.
 void solveInParallel(const Solver::Config &config, VehicleRoutePlan &plan,
@@ -37,7 +37,7 @@ void solveInParallel(const Solver::Config &config, VehicleRoutePlan &plan,
     auto stop = std::make_shared<std::atomic<bool>>(false);
     // A worker that cannot be started (std::system_error) stops and joins
     // the ones already running before the error is rethrown here.
-    optimaru::runWorkerThreads(
+    optimaru::run_worker_threads(
         workerCount, *stop,
         [&config, &candidates, &failures, &stop](int i)
         {
@@ -45,10 +45,10 @@ void solveInParallel(const Solver::Config &config, VehicleRoutePlan &plan,
             {
                 Solver::Config workerConfig = config;
                 workerConfig.parallelSolverCount = 1;
-                workerConfig.stopFlag = stop;
-                workerConfig.randomSeed += static_cast<std::uint64_t>(i);
+                workerConfig.stop_flag = stop;
+                workerConfig.seed += static_cast<std::uint64_t>(i);
                 if (i != 0)
-                    workerConfig.onNewBest = nullptr;  // only worker 0 reports
+                    workerConfig.on_new_best = nullptr;  // only worker 0 reports
                 Solver worker(std::move(workerConfig));
                 worker.solve(candidates[static_cast<std::size_t>(i)]);
             }
@@ -82,34 +82,34 @@ namespace
 // acceptance, the LIST move mix, the ALNS knobs and the driving-time nearby
 // selection (all pure problem-fact lookups, so they apply to the plugin path
 // too).
-optimaru::SolverConfig buildEngineConfig(const Solver::Config &config,
+optimaru::Settings buildEngineConfig(const Solver::Config &config,
                                          const VehicleRoutePlan &plan)
 {
-    optimaru::SolverConfig engineConfig;
-    engineConfig.randomSeed = config.randomSeed;
-    engineConfig.environmentMode = config.environmentMode;
-    engineConfig.multiStartCount = 1;
-    if (config.onNewBest)
+    optimaru::Settings engineConfig;
+    engineConfig.seed = config.seed;
+    engineConfig.score_checks = config.score_checks;
+    engineConfig.parallel_starts = 1;
+    if (config.on_new_best)
     {
-        auto callback = config.onNewBest;
-        engineConfig.onNewBest
-            = [callback](std::int64_t step, const optimaru::HardSoftScore &score)
+        auto callback = config.on_new_best;
+        engineConfig.on_new_best
+            = [callback](std::int64_t step, const optimaru::Score &score)
         { callback(step, fromEngineScore(score)); };
     }
 
-    engineConfig.termination.spentLimit = config.spentLimit;
+    engineConfig.limits.time_limit = config.time_limit;
     // The "never fires" sentinel is int64 max on every level, which would
     // overflow the medium*10^9 packing; leave the engine's own never-fires
     // default in place instead.
-    if (config.bestScoreLimit.medium != std::numeric_limits<std::int64_t>::max())
+    if (config.target_score.medium != std::numeric_limits<std::int64_t>::max())
     {
-        engineConfig.termination.bestScoreLimit
-            = toEngineScoreLimit(config.bestScoreLimit);
+        engineConfig.limits.target_score
+            = toEngineScoreLimit(config.target_score);
     }
-    engineConfig.termination.unimprovedSpentLimit = config.unimprovedSpentLimit;
-    engineConfig.termination.stepCountLimit = config.stepCountLimit;
-    engineConfig.termination.unimprovedStepCountLimit
-        = config.unimprovedStepCountLimit;
+    engineConfig.limits.stall_time_limit = config.stall_time_limit;
+    engineConfig.limits.step_limit = config.step_limit;
+    engineConfig.limits.stall_step_limit
+        = config.stall_step_limit;
 
     // First Fit Decreasing: place the hardest visits while the routes are
     // still empty enough to accommodate them. "Hardest" is the tightest time
@@ -119,7 +119,7 @@ optimaru::SolverConfig buildEngineConfig(const Solver::Config &config,
     if (config.firstFitDecreasing)
     {
         const VehicleRoutePlan *facts = &plan;
-        engineConfig.constructionHeuristic.entityDifficulty = [facts](int visitIndex)
+        engineConfig.construction.difficulty = [facts](int visitIndex)
         {
             const Visit &visit = facts->visits[static_cast<std::size_t>(visitIndex)];
             const double window = static_cast<double>(
@@ -128,9 +128,9 @@ optimaru::SolverConfig buildEngineConfig(const Solver::Config &config,
         };
     }
 
-    auto &acceptor = engineConfig.localSearch.acceptor;
-    acceptor.acceptorType = config.acceptorType;
-    // lateAcceptanceSize 0 = auto-scale with the instance (see Config). The
+    auto &acceptor = engineConfig.search.acceptance;
+    acceptor.rule = config.rule;
+    // history_length 0 = auto-scale with the instance (see Config). The
     // horizon shrinks as the instance grows: steps get slower with route
     // count/length, and what matters is the horizon in wall-time, not in
     // steps. Measured on CVRPLIB Set X (10s, 6 seeds, all paired wins 6-0 vs
@@ -138,73 +138,73 @@ optimaru::SolverConfig buildEngineConfig(const Solver::Config &config,
     // mean gap), n=491 is flat across 50-200 (6.8% vs 40.7%), n=700 wants
     // ~100 (8.3% vs 42.5%). The old grow-with-n rule pushed 300+ customer
     // instances 18-34pp off the pace at fixed budget.
-    acceptor.lateAcceptanceSize
-        = config.lateAcceptanceSize != 0
-              ? config.lateAcceptanceSize
+    acceptor.history_length
+        = config.history_length != 0
+              ? config.history_length
               : std::clamp<std::size_t>(
                     60000 / std::max<std::size_t>(plan.visits.size(), 1), 100,
                     400);
-    acceptor.recordToRecordTravelStartGap = config.recordToRecordStartGap;
-    acceptor.recordToRecordTravelEndGap = config.recordToRecordEndGap;
+    acceptor.rrt_start_gap = config.recordToRecordStartGap;
+    acceptor.rrt_end_gap = config.recordToRecordEndGap;
 
-    auto &moves = engineConfig.localSearch.moveSelector;
-    moves.relocateMoveWeight = config.relocateMoveWeight;
-    moves.listSwapMoveWeight = config.listSwapMoveWeight;
-    moves.twoOptMoveWeight = config.twoOptMoveWeight;
-    moves.orOptMoveWeight = config.orOptMoveWeight;
-    moves.tailSwapMoveWeight = config.tailSwapMoveWeight;
-    moves.interExchangeMoveWeight = config.interExchangeMoveWeight;
-    moves.interExchangeMaxSegment = config.interExchangeMaxSegment;
+    auto &moves = engineConfig.search.moves;
+    moves.relocate_weight = config.relocate_weight;
+    moves.list_swap_weight = config.list_swap_weight;
+    moves.two_opt_weight = config.two_opt_weight;
+    moves.or_opt_weight = config.or_opt_weight;
+    moves.tail_swap_weight = config.tail_swap_weight;
+    moves.cross_exchange_weight = config.cross_exchange_weight;
+    moves.cross_exchange_max_run = config.cross_exchange_max_run;
 
-    auto &lns = engineConfig.localSearch.ruinRecreate;
-    lns.enabled = config.ruinRecreate;
-    lns.unimprovedStepTrigger = config.ruinRecreateUnimprovedStepTrigger;
-    lns.minRuinFraction = config.ruinRecreateMinRuinFraction;
-    lns.maxRuinFraction = config.ruinRecreateMaxRuinFraction;
-    lns.maxRuinCount = config.ruinRecreateMaxRuinCount;
-    lns.polishSteps = config.ruinRecreatePolishSteps;
-    lns.asMoveWeight = config.ruinRecreateAsMoveWeight;
-    lns.asMoveMaxRuin = config.ruinRecreateAsMoveMaxRuin;
-    engineConfig.localSearch.descentWeight = config.descentWeight;
-    engineConfig.localSearch.descentMaxSweeps = config.descentMaxSweeps;
-    engineConfig.localSearch.descentListAdvanced = config.granularDescent;
-    engineConfig.localSearch.descentListMaxSegment = config.granularDescentMaxSegment;
-    engineConfig.localSearch.descentListCandidateRoutes = config.granularDescentCandidateRoutes;
-    engineConfig.localSearch.routeEliminationWeight
-        = config.routeEliminationWeight;
-    engineConfig.localSearch.routeEliminationMaxSize
-        = config.routeEliminationMaxSize;
-    engineConfig.localSearch.ejectionChainWeight = config.ejectionChainWeight;
+    auto &lns = engineConfig.search.ruin_recreate;
+    lns.enabled = config.ruin_recreate;
+    lns.unimproved_step_trigger = config.ruinRecreateUnimprovedStepTrigger;
+    lns.min_ruin_fraction = config.ruinRecreateMinRuinFraction;
+    lns.max_ruin_fraction = config.ruinRecreateMaxRuinFraction;
+    lns.max_ruin_count = config.ruinRecreateMaxRuinCount;
+    lns.polish_steps = config.ruinRecreatePolishSteps;
+    lns.as_move_weight = config.ruinRecreateAsMoveWeight;
+    lns.as_move_max_ruin = config.ruinRecreateAsMoveMaxRuin;
+    engineConfig.search.descent_weight = config.descent_weight;
+    engineConfig.search.descent_max_sweeps = config.descent_max_sweeps;
+    engineConfig.search.descent_list_advanced = config.granularDescent;
+    engineConfig.search.descent_list_max_segment = config.granularDescentMaxSegment;
+    engineConfig.search.descent_list_candidate_routes = config.granularDescentCandidateRoutes;
+    engineConfig.search.route_elimination_weight
+        = config.route_elimination_weight;
+    engineConfig.search.route_elimination_max_size
+        = config.route_elimination_max_size;
+    engineConfig.search.ejection_chain_weight = config.ejection_chain_weight;
     // The virtual unassigned pool is the list after the vehicles: the chains
     // seed from it, and no repair or descent ever parks a visit in it (on a
     // tightly loaded fleet that is where a ruin's leftover would go, and the
     // kick that makes it the incumbent then stalls the search; see
-    // LocalSearchConfig::unassignedList).
-    engineConfig.localSearch.unassignedList
-        = optimaru::SolutionDescriptor<VehicleRoutePlan>::unassignedList(plan);
-    engineConfig.localSearch.ejectionChainMaxSteps = config.ejectionChainMaxSteps;
-    engineConfig.localSearch.ejectionChainCandidateLists
-        = config.ejectionChainCandidateLists;
-    engineConfig.localSearch.iteratedLocalSearchWeight = config.iteratedLocalSearchWeight;
-    engineConfig.localSearch.iteratedLocalSearchMinRuin = config.iteratedLocalSearchMinRuin;
-    engineConfig.localSearch.iteratedLocalSearchMaxRuin = config.iteratedLocalSearchMaxRuin;
-    engineConfig.localSearch.iteratedLocalSearchMaxSegment
-        = config.iteratedLocalSearchMaxSegment;
-    engineConfig.localSearch.iteratedLocalSearchMaxEvaluations
-        = config.iteratedLocalSearchMaxEvaluations;
-    engineConfig.localSearch.ejectionChainMaxEvaluations
-        = config.ejectionChainMaxEvaluations;
-    lns.selectionType = config.ruinRecreateSelectionType;
-    lns.operatorDecay = config.ruinRecreateOperatorDecay;
+    // SearchSettings::unassigned_list).
+    engineConfig.search.unassigned_list
+        = optimaru::SolutionTraits<VehicleRoutePlan>::unassigned_list(plan);
+    engineConfig.search.ejection_chain_max_steps = config.ejection_chain_max_steps;
+    engineConfig.search.ejection_chain_candidate_lists
+        = config.ejection_chain_candidate_lists;
+    engineConfig.search.iterated_local_search_weight = config.iterated_local_search_weight;
+    engineConfig.search.iterated_local_search_min_ruin = config.iterated_local_search_min_ruin;
+    engineConfig.search.iterated_local_search_max_ruin = config.iterated_local_search_max_ruin;
+    engineConfig.search.iterated_local_search_max_segment
+        = config.iterated_local_search_max_segment;
+    engineConfig.search.iterated_local_search_max_evaluations
+        = config.iterated_local_search_max_evaluations;
+    engineConfig.search.ejection_chain_max_evaluations
+        = config.ejection_chain_max_evaluations;
+    lns.selection_type = config.ruinRecreateSelectionType;
+    lns.operator_decay = config.ruinRecreateOperatorDecay;
     lns.rewards = config.ruinRecreateRewards;
-    lns.selectionSegmentLength = config.ruinRecreateSelectionSegmentLength;
-    lns.selectionAlpha = config.ruinRecreateSelectionAlpha;
-    lns.sisrRuin = config.sisrRuin;
-    lns.routeRuin = config.routeRuin;
-    lns.sisrMaxStringRemovals = config.sisrMaxStringRemovals;
-    lns.sisrMaxStringSize = config.sisrMaxStringSize;
-    lns.regretK = config.regretK;
-    lns.blinkRate = config.blinkRate;
+    lns.selection_segment_length = config.ruinRecreateSelectionSegmentLength;
+    lns.selection_alpha = config.ruinRecreateSelectionAlpha;
+    lns.sisr_ruin = config.sisr_ruin;
+    lns.route_ruin = config.route_ruin;
+    lns.sisr_max_string_removals = config.sisr_max_string_removals;
+    lns.sisr_max_string_size = config.sisr_max_string_size;
+    lns.regret_k = config.regret_k;
+    lns.blink_rate = config.blink_rate;
 
     // Driving-time nearby neighborhoods over the visits. The meter reads a
     // snapshot of the visits' location indices plus the precomputed matrix —
@@ -217,17 +217,17 @@ optimaru::SolverConfig buildEngineConfig(const Solver::Config &config,
             locationOfVisit->push_back(visit.locationIndex);
         auto matrix = std::make_shared<std::vector<std::vector<Seconds>>>(
             plan.drivingSeconds);
-        engineConfig.localSearch.nearby.distanceMeter
+        engineConfig.search.nearby.distance
             = [locationOfVisit, matrix](int a, int b)
         {
             return static_cast<double>(
                 (*matrix)[static_cast<std::size_t>((*locationOfVisit)[a])]
                          [static_cast<std::size_t>((*locationOfVisit)[b])]);
         };
-        engineConfig.localSearch.nearby.size
+        engineConfig.search.nearby.size
             = std::max(1, std::min(config.drivingTimeNearbySize,
                                    static_cast<int>(plan.visits.size()) - 1));
-        engineConfig.localSearch.nearby.probability
+        engineConfig.search.nearby.probability
             = config.drivingTimeNearbyProbability;
     }
     return engineConfig;
@@ -236,12 +236,12 @@ optimaru::SolverConfig buildEngineConfig(const Solver::Config &config,
 // The plugin path's Score: the calculator's three accumulators before the
 // medium fold, each level rounded on its own. Decoding the folded engine soft
 // instead would file a soft total of 10^9 or more under medium.
-Score levelScore(const optimaru::DecomposedScoreCalculator<VehicleRoutePlan> &calculator)
+Score levelScore(const optimaru::DecomposedObjective<VehicleRoutePlan> &calculator)
 {
-    const auto levels = calculator.levelScores();
+    const auto levels = calculator.level_scores();
     return Score{static_cast<std::int64_t>(levels.hard),
-                 optimaru::roundScoreLevel(levels.medium, "medium"),
-                 optimaru::roundScoreLevel(levels.soft, "soft")};
+                 optimaru::round_score_level(levels.medium, "medium"),
+                 optimaru::round_score_level(levels.soft, "soft")};
 }
 
 }  // namespace
@@ -259,7 +259,7 @@ void Solver::solve(VehicleRoutePlan &plan)
 
     if (plan.vehicles.empty() || plan.visits.empty())
     {
-        ScoreCalculator::calculateScore(plan);
+        ScoreCalculator::score(plan);
         return;
     }
     if (config_.ruinRecreateRewards.size() != 4)
@@ -275,21 +275,21 @@ void Solver::solve(VehicleRoutePlan &plan)
         return;
     }
 
-    optimaru::SolverConfig engineConfig = buildEngineConfig(config_, plan);
+    optimaru::Settings engineConfig = buildEngineConfig(config_, plan);
     VehicleRoutingIncrementalScoreCalculator calculator;
     optimaru::Solver<VehicleRoutePlan> engine(std::move(engineConfig));
-    if (config_.stopFlag)
-        engine.adoptTerminateEarlyFlag(config_.stopFlag);
+    if (config_.stop_flag)
+        engine.share_stop_flag(config_.stop_flag);
     engine.solve(plan, calculator);
 
     // The authoritative final score: a full recompute on the best solution.
     // Also refreshes the shadow variables (vehicleIndex / arrivalTime).
-    plan.score = ScoreCalculator::calculateScore(plan);
+    plan.score = ScoreCalculator::score(plan);
 }
 
 void Solver::solve(
     VehicleRoutePlan &plan,
-    optimaru::DecomposedScoreCalculator<VehicleRoutePlan> &calculator)
+    optimaru::DecomposedObjective<VehicleRoutePlan> &calculator)
 {
     if (config_.ruinRecreateRewards.size() != 4)
     {
@@ -298,34 +298,34 @@ void Solver::solve(
     }
     if (!plan.visits.empty() && !plan.vehicles.empty())
     {
-        optimaru::SolverConfig engineConfig = buildEngineConfig(config_, plan);
-        if (config_.onNewBest)
+        optimaru::Settings engineConfig = buildEngineConfig(config_, plan);
+        if (config_.on_new_best)
         {
             // Report the same three levels as the final plan.score below. The
-            // engine calls onNewBest right after the working solution became
+            // engine calls on_new_best right after the working solution became
             // the new best, so the calculator's accumulators hold exactly that
             // solution; the folded engine score it passes is not decoded.
-            auto callback = config_.onNewBest;
-            engineConfig.onNewBest
+            auto callback = config_.on_new_best;
+            engineConfig.on_new_best
                 = [callback, &calculator](std::int64_t step,
-                                          const optimaru::HardSoftScore &)
+                                          const optimaru::Score &)
             { callback(step, levelScore(calculator)); };
         }
         optimaru::Solver<VehicleRoutePlan> engine(std::move(engineConfig));
-        if (config_.stopFlag)
-            engine.adoptTerminateEarlyFlag(config_.stopFlag);
+        if (config_.stop_flag)
+            engine.share_stop_flag(config_.stop_flag);
         engine.solve(plan, calculator);
     }
 
     // Refresh the shadow variables (vehicleIndex / arrivalTime) on the best
     // solution — the plugin components derive their own chain and never write
     // these — then score it with the caller's constraint assembly, leaving the
-    // calculator primed on it so constraintTotals() explains exactly this
+    // calculator primed on it so constraint_totals() explains exactly this
     // score. The three levels come straight from the calculator's
-    // accumulators (levelScore() above), like every onNewBest report.
+    // accumulators (levelScore() above), like every on_new_best report.
     ScoreCalculator::updateShadowVariables(plan);
-    calculator.resetWorkingSolution(plan);
-    calculator.calculateScore();
+    calculator.rebuild(plan);
+    calculator.score();
     plan.score = levelScore(calculator);
 }
 

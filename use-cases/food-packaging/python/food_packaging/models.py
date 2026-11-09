@@ -70,7 +70,7 @@ class OperatorModel(BaseModel):
 
 
 class JobModel(BaseModel):
-    """Planning entity (an element of the LIST variable). LineModel.job_ids is the source
+    """Planning entity (an element of the list variable). LineModel.job_ids is the source
     of truth for the assignment; line_id and start_cleaning/start_production/end are
     result-only shadow fields (ignored by to_core). min_start_time and priority are read
     by no constraint, the same as in Java."""

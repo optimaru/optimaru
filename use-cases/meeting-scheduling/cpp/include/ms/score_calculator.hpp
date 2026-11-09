@@ -44,8 +44,8 @@ struct Breakdown
 
 // Port of the reference meeting-scheduling MeetingSchedulingConstraintProvider.
 //
-// calculateScore does a full recompute — the reference the incremental
-// calculator is checked against (in the tests and under FULL_ASSERT).
+// score does a full recompute — the reference the incremental
+// calculator is checked against (in the tests and under ScoreChecks::Full).
 //
 // Constraints (level in brackets; default weights per unit, the components'
 // kDefaultWeight):
@@ -82,7 +82,7 @@ struct Breakdown
 class ScoreCalculator
 {
 public:
-    static Score calculateScore(MeetingSchedule &schedule);
+    static Score score(MeetingSchedule &schedule);
 
     // --- shared building blocks (also used by the plugin components) ---
 
@@ -115,7 +115,7 @@ public:
     // -(medium * kMediumScale + soft)).
     static Score toScore(const Breakdown &breakdown)
     {
-        return kMediumFold.toEngine(
+        return kMediumFold.to_engine(
             -breakdown.hardTotal(),
             -static_cast<double>(breakdown.mediumTotal()),
             -static_cast<double>(breakdown.softTotal()));
@@ -124,7 +124,7 @@ public:
     // Builds the derived tables on MeetingSchedule (grain occupancy span,
     // larger-room penalties, attendance conflict arcs, 1:1 meeting <->
     // assignment map). Idempotent (guarded by MeetingSchedule::prepared).
-    // Must run before scoring; calculateScore/solve call it. Throws
+    // Must run before scoring; score/solve call it. Throws
     // std::invalid_argument on a malformed instance (bad indices, duration
     // < 1, or two assignments sharing one meeting).
     static void prepare(MeetingSchedule &schedule);

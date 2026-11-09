@@ -12,7 +12,7 @@ the default weights (the C++ components' kDefaultWeight, see constraint_info()):
   soft   5. squared_makespan_cost            (end of a line's last job - line start)^2,
                                              x -1
 
-Internally the engine uses HardSoftScore(int64 hard, double soft), mapped as
+Internally the engine uses Score(int64 hard, double soft), mapped as
 `engine.soft = medium * 10**10 + soft` (the domain's medium fold, "into_soft" with unit
 10**10; level priority holds while |soft| < 10**10 and |medium| < 9 * 10**5; see
 cpp/include/fp/domain.hpp). Medium weights are in medium units: the two medium

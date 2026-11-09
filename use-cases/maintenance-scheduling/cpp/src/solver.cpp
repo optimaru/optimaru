@@ -12,9 +12,9 @@
 
 #include "mnt/incremental_calculator.hpp"
 #include "mnt/score_calculator.hpp"
-#include "optimaru/api/solver/solver.hpp"
-#include "optimaru/config/solver/solver_config.hpp"
-#include "optimaru/impl/solver/worker_threads.hpp"
+#include "optimaru/solver.hpp"
+#include "optimaru/settings.hpp"
+#include "optimaru/worker_threads.hpp"
 
 namespace mnt
 {
@@ -87,41 +87,41 @@ DateWindows buildDateWindows(const MaintenanceSchedule &schedule)
 
 // Shared engine wiring for both solve() overloads: termination, late
 // acceptance, the BASIC move mix and the ALNS knobs.
-optimaru::SolverConfig buildEngineConfig(const Solver::Config &config,
+optimaru::Settings buildEngineConfig(const Solver::Config &config,
                                          const MaintenanceSchedule &schedule)
 {
-    optimaru::SolverConfig engineConfig;
-    engineConfig.randomSeed = config.randomSeed;
-    engineConfig.environmentMode = config.environmentMode;
-    engineConfig.onNewBest = config.onNewBest;
-    engineConfig.termination.spentLimit = config.spentLimit;
-    engineConfig.termination.bestScoreLimit = config.bestScoreLimit;
-    engineConfig.termination.unimprovedSpentLimit = config.unimprovedSpentLimit;
-    engineConfig.termination.stepCountLimit = config.stepCountLimit;
-    engineConfig.termination.unimprovedStepCountLimit
-        = config.unimprovedStepCountLimit;
-    // lateAcceptanceSize 0 = auto-scale with the instance (see Config).
-    engineConfig.localSearch.acceptor.lateAcceptanceSize
-        = config.lateAcceptanceSize != 0
-              ? config.lateAcceptanceSize
+    optimaru::Settings engineConfig;
+    engineConfig.seed = config.seed;
+    engineConfig.score_checks = config.score_checks;
+    engineConfig.on_new_best = config.on_new_best;
+    engineConfig.limits.time_limit = config.time_limit;
+    engineConfig.limits.target_score = config.target_score;
+    engineConfig.limits.stall_time_limit = config.stall_time_limit;
+    engineConfig.limits.step_limit = config.step_limit;
+    engineConfig.limits.stall_step_limit
+        = config.stall_step_limit;
+    // history_length 0 = auto-scale with the instance (see Config).
+    engineConfig.search.acceptance.history_length
+        = config.history_length != 0
+              ? config.history_length
               : std::clamp<std::size_t>(8 * schedule.jobs.size(), 400, 3200);
-    engineConfig.localSearch.moveSelector.changeMoveWeight
-        = config.changeMoveWeight;
-    engineConfig.localSearch.moveSelector.swapMoveWeight
-        = config.swapMoveWeight;
-    auto &lns = engineConfig.localSearch.ruinRecreate;
-    lns.enabled = config.ruinRecreate;
-    lns.unimprovedStepTrigger = config.ruinRecreateUnimprovedStepTrigger;
-    lns.minRuinFraction = config.ruinRecreateMinRuinFraction;
-    lns.maxRuinFraction = config.ruinRecreateMaxRuinFraction;
-    lns.maxRuinCount = config.ruinRecreateMaxRuinCount;
-    lns.operatorDecay = config.ruinRecreateOperatorDecay;
+    engineConfig.search.moves.change_weight
+        = config.change_weight;
+    engineConfig.search.moves.swap_weight
+        = config.swap_weight;
+    auto &lns = engineConfig.search.ruin_recreate;
+    lns.enabled = config.ruin_recreate;
+    lns.unimproved_step_trigger = config.ruinRecreateUnimprovedStepTrigger;
+    lns.min_ruin_fraction = config.ruinRecreateMinRuinFraction;
+    lns.max_ruin_fraction = config.ruinRecreateMaxRuinFraction;
+    lns.max_ruin_count = config.ruinRecreateMaxRuinCount;
+    lns.operator_decay = config.ruinRecreateOperatorDecay;
     lns.rewards = config.ruinRecreateRewards;
-    lns.polishSteps = config.ruinRecreatePolishSteps;
-    lns.asMoveWeight = config.ruinRecreateAsMoveWeight;
-    lns.asMoveMaxRuin = config.ruinRecreateAsMoveMaxRuin;
-    engineConfig.localSearch.descentWeight = config.descentWeight;
-    engineConfig.localSearch.descentMaxSweeps = config.descentMaxSweeps;
+    lns.polish_steps = config.ruinRecreatePolishSteps;
+    lns.as_move_weight = config.ruinRecreateAsMoveWeight;
+    lns.as_move_max_ruin = config.ruinRecreateAsMoveMaxRuin;
+    engineConfig.search.descent_weight = config.descent_weight;
+    engineConfig.search.descent_max_sweeps = config.descent_max_sweeps;
     return engineConfig;
 }
 
@@ -132,7 +132,7 @@ void Solver::solve(MaintenanceSchedule &schedule)
     ScoreCalculator::prepare(schedule);  // intern tags / build date tables
     if (schedule.jobs.empty() || schedule.crewDateCount() == 0)
     {
-        ScoreCalculator::calculateScore(schedule);
+        ScoreCalculator::score(schedule);
         return;
     }
     if (config_.ruinRecreateRewards.size() != 4)
@@ -156,7 +156,7 @@ void Solver::solve(MaintenanceSchedule &schedule)
         auto stop = std::make_shared<std::atomic<bool>>(false);
         // A worker that cannot be started (std::system_error) stops and joins
         // the ones already running before the error is rethrown here.
-        optimaru::runWorkerThreads(
+        optimaru::run_worker_threads(
             workerCount, *stop,
             [this, &candidates, &failures, &stop](int i)
             {
@@ -164,11 +164,11 @@ void Solver::solve(MaintenanceSchedule &schedule)
                 {
                     Config workerConfig = config_;
                     workerConfig.parallelSolverCount = 1;
-                    workerConfig.stopFlag = stop;
-                    workerConfig.randomSeed
+                    workerConfig.stop_flag = stop;
+                    workerConfig.seed
                         += static_cast<std::uint64_t>(i);
                     if (i != 0)
-                        workerConfig.onNewBest = nullptr;
+                        workerConfig.on_new_best = nullptr;
                     Solver worker(std::move(workerConfig));
                     worker.solve(candidates[i]);
                 }
@@ -193,7 +193,7 @@ void Solver::solve(MaintenanceSchedule &schedule)
         return;
     }
 
-    optimaru::SolverConfig engineConfig = buildEngineConfig(config_, schedule);
+    optimaru::Settings engineConfig = buildEngineConfig(config_, schedule);
 
     // The single calculator instance of this solve. Created before the engine
     // so the guided-selection hooks can bind to it; the engine resets it on
@@ -217,7 +217,7 @@ void Solver::solve(MaintenanceSchedule &schedule)
         const int crewCount = schedule.crewCount();
         const int freeCrewCandidates = config_.freeCrewCandidates;
         const MaintenanceSchedule *s = &schedule;
-        engineConfig.localSearch.valueRecommender
+        engineConfig.search.value_hint
             = [windows,
                probability,
                crewCount,
@@ -280,7 +280,7 @@ void Solver::solve(MaintenanceSchedule &schedule)
             config_.hotJobProbability
             * static_cast<double>(std::numeric_limits<std::uint64_t>::max()));
         const MaintenanceSchedule *s = &schedule;
-        engineConfig.localSearch.entityRecommender =
+        engineConfig.search.entity_hint =
             [&calculator, tagJobs, hotThreshold, s](std::mt19937_64 &rng) -> int
         {
             // Cheap first: with no tagConflictCost there is nothing to guide
@@ -312,17 +312,17 @@ void Solver::solve(MaintenanceSchedule &schedule)
 
     // Construction heuristic + late-acceptance local search (+ ALNS kicks).
     optimaru::Solver<MaintenanceSchedule> engine(std::move(engineConfig));
-    if (config_.stopFlag)
-        engine.adoptTerminateEarlyFlag(config_.stopFlag);
+    if (config_.stop_flag)
+        engine.share_stop_flag(config_.stop_flag);
     engine.solve(schedule, calculator);
 
     // The authoritative final score: a full recompute on the best solution.
-    schedule.score = ScoreCalculator::calculateScore(schedule);
+    schedule.score = ScoreCalculator::score(schedule);
 }
 
 void Solver::solve(
     MaintenanceSchedule &schedule,
-    optimaru::DecomposedScoreCalculator<MaintenanceSchedule> &calculator)
+    optimaru::DecomposedObjective<MaintenanceSchedule> &calculator)
 {
     ScoreCalculator::prepare(schedule);  // intern tags / build date tables
     if (config_.ruinRecreateRewards.size() != 4)
@@ -336,20 +336,20 @@ void Solver::solve(
         // calculator's live occupancy and hot-cell state, which a
         // caller-assembled plugin does not expose. The built-in move mix plus
         // the ALNS kicks remain.
-        optimaru::SolverConfig engineConfig
+        optimaru::Settings engineConfig
             = buildEngineConfig(config_, schedule);
 
         optimaru::Solver<MaintenanceSchedule> engine(std::move(engineConfig));
-        if (config_.stopFlag)
-            engine.adoptTerminateEarlyFlag(config_.stopFlag);
+        if (config_.stop_flag)
+            engine.share_stop_flag(config_.stop_flag);
         engine.solve(schedule, calculator);
     }
 
     // Score the final solution with the caller's constraint assembly (custom
     // weights included) and leave the calculator primed on it, so
-    // constraintTotals() explains exactly this score.
-    calculator.resetWorkingSolution(schedule);
-    schedule.score = calculator.calculateScore();
+    // constraint_totals() explains exactly this score.
+    calculator.rebuild(schedule);
+    schedule.score = calculator.score();
 }
 
 }  // namespace mnt

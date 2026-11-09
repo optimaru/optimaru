@@ -18,7 +18,7 @@ namespace bp
 // sum: red x3 + blue x2 in one bin at exponent 2 is 3^2 = 9, not 2^2 + 1^2.
 //
 // Delta contract: a member joining a bin changes max(0, n_c - 1) by exactly
-// 1 when another member already has its colour, else by 0 — so deltaCost is
+// 1 when another member already has its colour, else by 0 — so delta_cost is
 // that indicator, O(members) on the precomputed colour classes (O(1) for an
 // item whose colour no other item has).
 struct ColorConflictCost final : BpUnitConstraint
@@ -30,7 +30,7 @@ struct ColorConflictCost final : BpUnitConstraint
         : BpUnitConstraint("colorConflictCost", weight, kDefaultLevel)
     {
     }
-    void onReset(const BinPackingProblem &problem) override
+    void on_reset(const BinPackingProblem &problem) override
     {
         detail::requirePrepared(problem);
         seen_.assign(static_cast<std::size_t>(problem.colorClassCount), 0);
@@ -59,8 +59,8 @@ struct ColorConflictCost final : BpUnitConstraint
         }
         return static_cast<double>(excess);
     }
-    bool supportsDelta() const override { return true; }
-    double deltaCost(const BinPackingProblem &problem,
+    bool supports_delta() const override { return true; }
+    double delta_cost(const BinPackingProblem &problem,
                      int /*unit*/,
                      const std::vector<int> &members,
                      int entity) const override

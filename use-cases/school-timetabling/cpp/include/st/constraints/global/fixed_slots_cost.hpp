@@ -26,14 +26,14 @@ struct FixedSlotsCost final : MemberChangeGlobalConstraint
     explicit FixedSlotsCost(double weight = kDefaultWeight)
         : MemberChangeGlobalConstraint("fixedSlotsCost", weight, kDefaultLevel)
     {
-        levelFlippable = false;  // structural: pinned lessons, never scored
+        level_flippable = false;  // structural: pinned lessons, never scored
     }
     void reset(const Timetable &table,
                const std::vector<std::vector<int>> & /*members*/) override
     {
         detail::requirePrepared(table);
     }
-    void onMemberChanged(const Timetable & /*table*/,
+    void on_member_changed(const Timetable & /*table*/,
                          int /*unit*/,
                          const std::vector<int> & /*members*/,
                          int /*entity*/,

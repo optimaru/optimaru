@@ -7,8 +7,8 @@
 #include <string>
 #include <vector>
 
-#include "optimaru/api/domain/solution_descriptor.hpp"
-#include "optimaru/api/score/buildin/hard_soft_score.hpp"
+#include "optimaru/model/solution_traits.hpp"
+#include "optimaru/score/score.hpp"
 
 namespace qap
 {
@@ -16,7 +16,7 @@ namespace qap
 // ---------------------------------------------------------------------------
 // Score
 // ---------------------------------------------------------------------------
-// The engine's HardSoftScore, so the mapping is the identity and there is no
+// The engine's Score, so the mapping is the identity and there is no
 // medium level (no optimaru::MediumFoldOf specialization). At the default
 // weights (every component's kDefaultWeight is 1):
 //   hard = -(pinned locations not holding their facility
@@ -25,7 +25,7 @@ namespace qap
 //   soft = -(direct assignment cost + flow-distance cost)
 // Both levels are integral; the engine stores soft in a double, which is
 // exact below 2^53.
-using Score = optimaru::HardSoftScore;
+using Score = optimaru::Score;
 
 // ---------------------------------------------------------------------------
 // Facility  (@PlanningEntity)
@@ -98,7 +98,7 @@ struct QuadraticAssignmentProblem
     bool warmStart = false;
 
     // The score last computed on this problem: nullopt until it is scored
-    // (ScoreCalculator::calculateScore or a solve), then the result of that
+    // (ScoreCalculator::score or a solve), then the result of that
     // call. Not reset by later writes to the assignment or the facts.
     std::optional<Score> score;
 
@@ -115,7 +115,7 @@ struct QuadraticAssignmentProblem
     std::vector<int> fixedFacilityOf;                 // per location, -1 = not fixed
     std::vector<std::vector<int>> fixedLocationsOf;   // per facility
     std::vector<char> forbidden;                      // f * n + l, deduplicated
-    // The locations each unit constraint can be non-zero on (scopedUnits()).
+    // The locations each unit constraint can be non-zero on (scoped_units()).
     std::vector<int> fixedLocations;
     std::vector<int> forbiddenLocations;
     std::vector<int> capacitatedLocations;
@@ -221,27 +221,27 @@ struct QuadraticAssignmentProblem
 }  // namespace qap
 
 // ---------------------------------------------------------------------------
-// SolutionDescriptor specialization: entities are facilities, the planning
+// SolutionTraits specialization: entities are facilities, the planning
 // variable is Facility::location, the value range is the location list. A
-// DecomposedScoreCalculator unit is therefore one LOCATION, its members the
+// DecomposedObjective unit is therefore one LOCATION, its members the
 // facilities standing there (exactly one in a bijection).
 // ---------------------------------------------------------------------------
-template <> struct optimaru::SolutionDescriptor<qap::QuadraticAssignmentProblem>
+template <> struct optimaru::SolutionTraits<qap::QuadraticAssignmentProblem>
 {
-    static constexpr optimaru::VariableKind kind = optimaru::VariableKind::BASIC;
-    static int entityCount(const qap::QuadraticAssignmentProblem &problem)
+    static constexpr optimaru::Shape shape = optimaru::Shape::Assignment;
+    static int entity_count(const qap::QuadraticAssignmentProblem &problem)
     {
         return problem.facilityCount();
     }
-    static int valueCount(const qap::QuadraticAssignmentProblem &problem)
+    static int value_count(const qap::QuadraticAssignmentProblem &problem)
     {
         return problem.locationCount();
     }
-    static int getVariable(const qap::QuadraticAssignmentProblem &problem, int facilityIndex)
+    static int value_of(const qap::QuadraticAssignmentProblem &problem, int facilityIndex)
     {
         return problem.facilities[facilityIndex].location;
     }
-    static void setVariable(qap::QuadraticAssignmentProblem &problem, int facilityIndex, int locationIndex)
+    static void assign(qap::QuadraticAssignmentProblem &problem, int facilityIndex, int locationIndex)
     {
         problem.facilities[facilityIndex].location = locationIndex;
     }

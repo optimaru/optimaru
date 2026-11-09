@@ -23,7 +23,7 @@ def test_demo_data_shape():
     assert len(model.days) == 18
     assert len(model.unavailability_penalties) == 12
     assert len(model.team_assignments) == 72
-    # (team, day) pairs must be unique (the Java generator's dedupe).
+    # (team, day) pairs must be unique.
     pairs = {(p.team, p.day) for p in model.unavailability_penalties}
     assert len(pairs) == 12
     # 4 slots per day, unique ids.

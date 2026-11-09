@@ -11,10 +11,10 @@
 
 #include "fl/incremental_calculator.hpp"
 #include "fl/score_calculator.hpp"
-#include "optimaru/api/solver/solver.hpp"
-#include "optimaru/config/solver/solver_config.hpp"
-#include "optimaru/impl/solver/worker_threads.hpp"
-#include "optimaru/preview/api/move/operators.hpp"
+#include "optimaru/solver.hpp"
+#include "optimaru/settings.hpp"
+#include "optimaru/worker_threads.hpp"
+#include "optimaru/search/operators.hpp"
 
 namespace fl
 {
@@ -64,7 +64,7 @@ public:
                std::mt19937_64 &rng,
                std::vector<int> &entities) override
     {
-        FacilityLocationProblem &problem = ctx.director.workingSolution();
+        FacilityLocationProblem &problem = ctx.editor.solution();
         const int facilityCount = problem.facilityCount();
         const int consumerCount = problem.consumerCount();
 
@@ -117,27 +117,27 @@ public:
         }
 
         lastVictim_ = victim;
-        ctx.director.beginVariableChanges();
+        ctx.editor.begin_batch();
         for (int c : members_)
         {
             const int target
                 = migrate ? migrationTarget : pickTarget(problem, c, victim);
-            ctx.director.changeVariable(c, target);
+            ctx.editor.assign(c, target);
             ++count_[target];
             load_[target] += problem.consumers[c].demand;
             entities.push_back(c);
         }
-        ctx.director.endVariableChanges();
+        ctx.editor.end_batch();
         return true;
     }
 
     void
-    undoLast(optimaru::OperatorContext<FacilityLocationProblem> &ctx) override
+    undo_last(optimaru::OperatorContext<FacilityLocationProblem> &ctx) override
     {
-        ctx.director.beginVariableChanges();
+        ctx.editor.begin_batch();
         for (int c : members_)
-            ctx.director.changeVariable(c, lastVictim_);
-        ctx.director.endVariableChanges();
+            ctx.editor.assign(c, lastVictim_);
+        ctx.editor.end_batch();
     }
 
 private:
@@ -243,41 +243,41 @@ buildFacilityPreference(const FacilityLocationProblem &problem, int keep)
 void runEngine(
     const Solver::Config &config,
     FacilityLocationProblem &problem,
-    optimaru::IncrementalScoreCalculator<FacilityLocationProblem> &calculator)
+    optimaru::Objective<FacilityLocationProblem> &calculator)
 {
-    optimaru::SolverConfig engineConfig;
-    engineConfig.randomSeed = config.randomSeed;
-    engineConfig.environmentMode = config.environmentMode;
-    engineConfig.onNewBest = config.onNewBest;
-    engineConfig.termination.spentLimit = config.spentLimit;
-    engineConfig.termination.bestScoreLimit = config.bestScoreLimit;
-    engineConfig.termination.unimprovedSpentLimit = config.unimprovedSpentLimit;
-    engineConfig.termination.stepCountLimit = config.stepCountLimit;
-    engineConfig.termination.unimprovedStepCountLimit
-        = config.unimprovedStepCountLimit;
-    // lateAcceptanceSize 0 = auto-scale with the instance (see Config).
-    engineConfig.localSearch.acceptor.lateAcceptanceSize
-        = config.lateAcceptanceSize != 0
-              ? config.lateAcceptanceSize
+    optimaru::Settings engineConfig;
+    engineConfig.seed = config.seed;
+    engineConfig.score_checks = config.score_checks;
+    engineConfig.on_new_best = config.on_new_best;
+    engineConfig.limits.time_limit = config.time_limit;
+    engineConfig.limits.target_score = config.target_score;
+    engineConfig.limits.stall_time_limit = config.stall_time_limit;
+    engineConfig.limits.step_limit = config.step_limit;
+    engineConfig.limits.stall_step_limit
+        = config.stall_step_limit;
+    // history_length 0 = auto-scale with the instance (see Config).
+    engineConfig.search.acceptance.history_length
+        = config.history_length != 0
+              ? config.history_length
               : std::clamp<std::size_t>(
                     8 * problem.consumers.size(), 400, 3200);
-    engineConfig.localSearch.moveSelector.changeMoveWeight
-        = config.changeMoveWeight;
-    engineConfig.localSearch.moveSelector.swapMoveWeight
-        = config.swapMoveWeight;
-    engineConfig.localSearch.customMoveProbability
-        = config.customMoveProbability;
-    engineConfig.localSearch.descentWeight = config.descentWeight;
+    engineConfig.search.moves.change_weight
+        = config.change_weight;
+    engineConfig.search.moves.swap_weight
+        = config.swap_weight;
+    engineConfig.search.custom_move_probability
+        = config.custom_move_probability;
+    engineConfig.search.descent_weight = config.descent_weight;
 
     // Nearby selection: consumer-to-consumer Euclidean degree distance (the
     // ordering is what matters, so the sqrt/meter scaling is skipped). The
     // problem outlives the engine run, so capturing it by reference is safe.
     if (config.nearbyProbability > 0.0 && config.nearbySize > 0)
     {
-        engineConfig.localSearch.nearby.probability = config.nearbyProbability;
-        engineConfig.localSearch.nearby.size = config.nearbySize;
+        engineConfig.search.nearby.probability = config.nearbyProbability;
+        engineConfig.search.nearby.size = config.nearbySize;
         const FacilityLocationProblem &fixed = problem;
-        engineConfig.localSearch.nearby.distanceMeter = [&fixed](int a, int b)
+        engineConfig.search.nearby.distance = [&fixed](int a, int b)
         {
             const Location &la = fixed.consumers[a].location;
             const Location &lb = fixed.consumers[b].location;
@@ -307,7 +307,7 @@ void runEngine(
                               ? preference
                               : buildFacilityPreference(problem, valueKeep);
         const double p = config.valueRecommenderProbability;
-        engineConfig.localSearch.valueRecommender
+        engineConfig.search.value_hint
             = [valuePreference, valueKeep, p](std::mt19937_64 &rng,
                                               int entityIndex) -> int
         {
@@ -320,24 +320,24 @@ void runEngine(
         };
     }
 
-    auto &lns = engineConfig.localSearch.ruinRecreate;
-    lns.enabled = config.ruinRecreate;
-    lns.unimprovedStepTrigger = config.ruinRecreateUnimprovedStepTrigger;
-    lns.minRuinFraction = config.ruinRecreateMinRuinFraction;
-    lns.maxRuinFraction = config.ruinRecreateMaxRuinFraction;
-    lns.maxRuinCount = config.ruinRecreateMaxRuinCount;
-    lns.operatorDecay = config.ruinRecreateOperatorDecay;
+    auto &lns = engineConfig.search.ruin_recreate;
+    lns.enabled = config.ruin_recreate;
+    lns.unimproved_step_trigger = config.ruinRecreateUnimprovedStepTrigger;
+    lns.min_ruin_fraction = config.ruinRecreateMinRuinFraction;
+    lns.max_ruin_fraction = config.ruinRecreateMaxRuinFraction;
+    lns.max_ruin_count = config.ruinRecreateMaxRuinCount;
+    lns.operator_decay = config.ruinRecreateOperatorDecay;
     lns.rewards = config.ruinRecreateRewards;
-    lns.polishSteps = config.ruinRecreatePolishSteps;
-    lns.asMoveWeight = config.ruinRecreateAsMoveWeight;
-    lns.asMoveMaxRuin = config.ruinRecreateAsMoveMaxRuin;
+    lns.polish_steps = config.ruinRecreatePolishSteps;
+    lns.as_move_weight = config.ruinRecreateAsMoveWeight;
+    lns.as_move_max_ruin = config.ruinRecreateAsMoveMaxRuin;
 
     optimaru::Solver<FacilityLocationProblem> engine(std::move(engineConfig));
-    if (config.stopFlag)
-        engine.adoptTerminateEarlyFlag(config.stopFlag);
+    if (config.stop_flag)
+        engine.share_stop_flag(config.stop_flag);
     if (preference)
     {
-        engine.addMoveOperator(std::make_unique<CloseFacilityMove>(
+        engine.add_move_operator(std::make_unique<CloseFacilityMove>(
             preference,
             preferenceKeep,
             config.closeFacilityMigrateProbability));
@@ -352,7 +352,7 @@ void Solver::solve(FacilityLocationProblem &problem)
     ScoreCalculator::prepare(problem);  // distance matrix
     if (problem.consumers.empty() || problem.facilities.empty())
     {
-        ScoreCalculator::calculateScore(problem);
+        ScoreCalculator::score(problem);
         return;
     }
     if (config_.ruinRecreateRewards.size() != 4)
@@ -376,7 +376,7 @@ void Solver::solve(FacilityLocationProblem &problem)
         auto stop = std::make_shared<std::atomic<bool>>(false);
         // A worker that cannot be started (std::system_error) stops and joins
         // the ones already running before the error is rethrown here.
-        optimaru::runWorkerThreads(
+        optimaru::run_worker_threads(
             workerCount, *stop,
             [this, &candidates, &failures, &stop](int i)
             {
@@ -384,11 +384,11 @@ void Solver::solve(FacilityLocationProblem &problem)
                 {
                     Config workerConfig = config_;
                     workerConfig.parallelSolverCount = 1;
-                    workerConfig.stopFlag = stop;
-                    workerConfig.randomSeed
+                    workerConfig.stop_flag = stop;
+                    workerConfig.seed
                         += static_cast<std::uint64_t>(i);
                     if (i != 0)
-                        workerConfig.onNewBest = nullptr;
+                        workerConfig.on_new_best = nullptr;
                     Solver worker(std::move(workerConfig));
                     worker.solve(candidates[i]);
                 }
@@ -417,12 +417,12 @@ void Solver::solve(FacilityLocationProblem &problem)
     runEngine(config_, problem, calculator);
 
     // The authoritative final score: a full recompute on the best solution.
-    problem.score = ScoreCalculator::calculateScore(problem);
+    problem.score = ScoreCalculator::score(problem);
 }
 
 void Solver::solve(
     FacilityLocationProblem &problem,
-    optimaru::DecomposedScoreCalculator<FacilityLocationProblem> &calculator)
+    optimaru::DecomposedObjective<FacilityLocationProblem> &calculator)
 {
     ScoreCalculator::prepare(problem);  // distance matrix
     if (config_.ruinRecreateRewards.size() != 4)
@@ -435,9 +435,9 @@ void Solver::solve(
 
     // Score the final solution with the caller's constraint assembly (custom
     // weights included) and leave the calculator primed on it, so
-    // constraintTotals() explains exactly this score.
-    calculator.resetWorkingSolution(problem);
-    problem.score = calculator.calculateScore();
+    // constraint_totals() explains exactly this score.
+    calculator.rebuild(problem);
+    problem.score = calculator.score();
 }
 
 }  // namespace fl

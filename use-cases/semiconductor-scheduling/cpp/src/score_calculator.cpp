@@ -430,7 +430,7 @@ void ScoreCalculator::storeTotals(SemiconductorSchedule &schedule, const RawTota
     schedule.totalCycleTime = raw[termIndex(Term::CycleTimeCost)];
 }
 
-Score ScoreCalculator::calculateScore(SemiconductorSchedule &schedule)
+Score ScoreCalculator::score(SemiconductorSchedule &schedule)
 {
     prepare(schedule);
     const RawTotals raw = rawCosts(schedule);

@@ -10,7 +10,7 @@
 #include "mnt/constraints/min_start_date_cost.hpp"
 #include "mnt/constraints/tag_conflict_cost.hpp"
 #include "mnt/score_calculator.hpp"
-#include "optimaru/api/score/level.hpp"
+#include "optimaru/score/levels.hpp"
 
 namespace mnt
 {
@@ -52,20 +52,20 @@ static_assert(CrewConflictCost::kDefaultLevel == optimaru::Level::Hard
 
 }  // namespace
 
-void MaintenanceSchedulingIncrementalScoreCalculator::resetWorkingSolution(
-    MaintenanceSchedule &workingSolution)
+void MaintenanceSchedulingIncrementalScoreCalculator::rebuild(
+    MaintenanceSchedule &solution)
 {
-    ScoreCalculator::prepare(workingSolution);
-    schedule_ = &workingSolution;
-    dayCount_ = workingSolution.dayCount;
+    ScoreCalculator::prepare(solution);
+    schedule_ = &solution;
+    dayCount_ = solution.dayCount;
 
     crewDayCnt_.assign(
-        static_cast<std::size_t>(workingSolution.crewCount()) * dayCount_, 0);
+        static_cast<std::size_t>(solution.crewCount()) * dayCount_, 0);
     tagDayCnt_.assign(
-        static_cast<std::size_t>(workingSolution.tagCount) * dayCount_, 0);
+        static_cast<std::size_t>(solution.tagCount) * dayCount_, 0);
     hotCells_.clear();
     hotCellPos_.assign(
-        static_cast<std::size_t>(workingSolution.tagCount) * dayCount_, -1);
+        static_cast<std::size_t>(solution.tagCount) * dayCount_, -1);
 
     crewOverlap_ = 0;
     minStartViolation_ = 0;
@@ -74,10 +74,10 @@ void MaintenanceSchedulingIncrementalScoreCalculator::resetWorkingSolution(
     afterIdeal_ = 0;
     tagOverlap_ = 0;
 
-    assign_.assign(workingSolution.jobs.size(), -1);
-    for (int i = 0; i < static_cast<int>(workingSolution.jobs.size()); ++i)
+    assign_.assign(solution.jobs.size(), -1);
+    for (int i = 0; i < static_cast<int>(solution.jobs.size()); ++i)
     {
-        const int crewDate = workingSolution.jobs[i].crewDate;
+        const int crewDate = solution.jobs[i].crewDate;
         assign_[i] = crewDate;
         if (crewDate >= 0)
             insert(i, crewDate);
@@ -166,7 +166,7 @@ void MaintenanceSchedulingIncrementalScoreCalculator::retract(int jobIndex,
     }
 }
 
-void MaintenanceSchedulingIncrementalScoreCalculator::beforeVariableChanged(
+void MaintenanceSchedulingIncrementalScoreCalculator::before_assign(
     int jobIndex)
 {
     const int old = assign_[jobIndex];
@@ -175,7 +175,7 @@ void MaintenanceSchedulingIncrementalScoreCalculator::beforeVariableChanged(
     assign_[jobIndex] = -1;
 }
 
-void MaintenanceSchedulingIncrementalScoreCalculator::afterVariableChanged(
+void MaintenanceSchedulingIncrementalScoreCalculator::after_assign(
     int jobIndex)
 {
     const int now = schedule_->jobs[jobIndex].crewDate;  // the new value
@@ -184,13 +184,13 @@ void MaintenanceSchedulingIncrementalScoreCalculator::afterVariableChanged(
         insert(jobIndex, now);  // now unassigned: nothing to insert
 }
 
-Score MaintenanceSchedulingIncrementalScoreCalculator::calculateScore()
+Score MaintenanceSchedulingIncrementalScoreCalculator::score()
 {
     Score score;
     score.hard = -(kCrewWeight * crewOverlap_
                    + kMinStartWeight * minStartViolation_
                    + kMaxEndWeight * maxEndViolation_);
-    score.soft = optimaru::withoutNegativeZero(-static_cast<double>(
+    score.soft = optimaru::without_negative_zero(-static_cast<double>(
         kBeforeIdealWeight * beforeIdeal_
         + kTagWeight * tagOverlap_
         + kAfterIdealWeight * afterIdeal_));

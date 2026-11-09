@@ -3,7 +3,7 @@
 The compiled module wraps the C++ domain in `use-cases/project-job-scheduling/cpp`,
 which imports the generic engine in `include/optimaru`.
 
-The only planning variable is `Allocation.mode_delay` (BASIC int) — a composite
+The only planning variable is `Allocation.mode_delay` (assignment-shape int) — a composite
 encoding of the Java quickstart's two variables (executionMode, delay∈[0, delay_range_size))::
 
     -1                                  uninitialized (no resource use;
@@ -29,7 +29,7 @@ the default weights (the C++ components' kDefaultWeight, see constraint_info()):
                                                   (medium units, global)
   soft   4. makespan_cost                         -(latest SINK end date) (global)
 
-Internally the engine uses HardSoftScore(int64 hard, double soft), mapped as
+Internally the engine uses Score(int64 hard, double soft), mapped as
 `engine.soft = medium * 10**9 + soft` (the domain's medium fold, "into_soft" with unit
 10**9; level priority holds while |soft| < 10**9; see cpp/include/pjs/domain.hpp for
 the exact rules). Medium weights are in medium units: project_delay_cost's default
@@ -158,7 +158,7 @@ class ProjectJobSchedule:
     def max_mode_count(self) -> int: ...
     def allocation_count(self) -> int: ...
     def value_count(self) -> int:
-        """delay_range_size * max_mode_count (size of the BASIC value range)."""
+        """delay_range_size * max_mode_count (size of the assignment-shape value range)."""
     def encode_value(self, delay: int, mode_slot: int) -> int:
         """delay * max_mode_count + mode_slot. A job's mode index is always a
         valid slot."""
@@ -187,7 +187,7 @@ class SolverConfig:
     late_acceptance_size: int
     """0 = automatic: clamp(8 * allocations, 400, 3200)."""
     full_assert: bool
-    """FULL_ASSERT: compares the incremental score to a full recompute after every move
+    """Full score checks: compares the incremental score to a full recompute after every move
     (for debugging; very slow)."""
     ruin_recreate: bool
     ruin_recreate_unimproved_step_trigger: int

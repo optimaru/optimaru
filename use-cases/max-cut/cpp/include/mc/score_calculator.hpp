@@ -29,11 +29,11 @@ struct RawCosts
 
 // The max-cut score, monolithic.
 //
-// calculateScore does a full recompute straight from the facts (it reads none
+// score does a full recompute straight from the facts (it reads none
 // of the derived indexes) — the reference the incremental calculator and the
-// plugin assembly are checked against, in the tests and under FULL_ASSERT.
+// plugin assembly are checked against, in the tests and under ScoreChecks::Full.
 //
-// Constraints (HardSoftScore), the default assembly of mc/constraints.hpp at
+// Constraints (Score), the default assembly of mc/constraints.hpp at
 // the components' kDefaultWeight:
 //   hard 1. fixedPartitionCost           fixed vertices off their fixed side
 //   hard 2. samePartitionPairsCost       same-side pairs split (charged to
@@ -50,9 +50,9 @@ class ScoreCalculator
 public:
     // Runs prepare(), then the full recompute; stores problem.score and sets
     // problem.scored.
-    static Score calculateScore(MaxCutProblem &problem);
+    static Score score(MaxCutProblem &problem);
 
-    // The raw costs (no prepare needed beyond valid indices; calculateScore
+    // The raw costs (no prepare needed beyond valid indices; score
     // runs prepare first).
     static RawCosts rawCosts(const MaxCutProblem &problem);
 
