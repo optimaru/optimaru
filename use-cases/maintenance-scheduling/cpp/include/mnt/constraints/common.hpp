@@ -8,8 +8,8 @@
 
 #include "mnt/domain.hpp"
 #include "mnt/score_calculator.hpp"
-#include "optimaru/api/score/calculator/constraint_assembly.hpp"
-#include "optimaru/api/score/calculator/decomposed_score_calculator.hpp"
+#include "optimaru/constraint_assembly.hpp"
+#include "optimaru/decomposed_objective.hpp"
 
 namespace mnt
 {
@@ -19,7 +19,7 @@ namespace mnt
 // ---------------------------------------------------------------------------
 // The six constraints of the reference maintenance-scheduling
 // MaintenanceScheduleConstraintProvider, split into one small component each
-// on the engine's DecomposedScoreCalculator — an optional assembly path NEXT
+// on the engine's DecomposedObjective — an optional assembly path NEXT
 // TO the monolithic MaintenanceSchedulingIncrementalScoreCalculator, which
 // stays the tuned default fast path.
 //
@@ -33,7 +33,7 @@ namespace mnt
 // tagConflictCost) compare jobs that share a crew or a tag on some DAY,
 // which spans cells — two jobs of one crew starting on different dates sit
 // in different units — so they run as GlobalConstraints on the
-// onMemberChanged fast path, keeping the same per-(crew, day) /
+// on_member_changed fast path, keeping the same per-(crew, day) /
 // per-(tag, day) occupancy counters the monolithic calculator does.
 //
 //   DecomposedCalculator calc;
@@ -59,19 +59,19 @@ namespace mnt
 // kDefaultWeight constants.
 //
 // Registry names are the struct names with a lower-case first letter
-// ("crewConflictCost"); Python sees them through pythonName()
+// ("crewConflictCost"); Python sees them through python_name()
 // ("crew_conflict_cost").
 //
 // Cost sign convention (see decomposed_score_calculator.hpp): positive =
 // penalty, 0 = no violation; the calculator negates into the score. An
 // assembly of all six components at their default weights therefore scores
-// bit-for-bit like ScoreCalculator::calculateScore.
+// bit-for-bit like ScoreCalculator::score.
 //
 // Every component requires ScoreCalculator::prepare(schedule) to have run
 // (the solve() overload and the monolithic path both call it).
 
 using DecomposedCalculator
-    = optimaru::DecomposedScoreCalculator<MaintenanceSchedule>;
+    = optimaru::DecomposedObjective<MaintenanceSchedule>;
 using ConstraintAssembly = optimaru::ConstraintAssembly<MaintenanceSchedule>;
 using MntUnitConstraint = optimaru::UnitConstraint<MaintenanceSchedule>;
 using MntGlobalConstraint = optimaru::GlobalConstraint<MaintenanceSchedule>;
@@ -119,7 +119,7 @@ struct PerJobConstraint : MntUnitConstraint
                            int unit,
                            int jobIndex) const = 0;
 
-    void onReset(const MaintenanceSchedule &schedule) override
+    void on_reset(const MaintenanceSchedule &schedule) override
     {
         detail::requirePrepared(schedule);
     }
@@ -132,8 +132,8 @@ struct PerJobConstraint : MntUnitConstraint
             total += jobCost(schedule, unit, jobIndex);
         return total;
     }
-    bool supportsDelta() const override { return true; }
-    double deltaCost(const MaintenanceSchedule &schedule,
+    bool supports_delta() const override { return true; }
+    double delta_cost(const MaintenanceSchedule &schedule,
                      int unit,
                      const std::vector<int> & /*members*/,
                      int entity) const override
@@ -163,8 +163,8 @@ struct DayOverlapGlobalConstraint : MntGlobalConstraint
                           int jobIndex,
                           std::vector<int> &owners) const = 0;
 
-    bool supportsMemberChange() const override { return true; }
-    void onUnitChanged(const MaintenanceSchedule & /*schedule*/,
+    bool supports_member_change() const override { return true; }
+    void on_unit_changed(const MaintenanceSchedule & /*schedule*/,
                        int /*unit*/,
                        const std::vector<int> & /*members*/) override
     {
@@ -174,21 +174,21 @@ struct DayOverlapGlobalConstraint : MntGlobalConstraint
     }
 
     void reset(const MaintenanceSchedule &schedule,
-               const std::vector<std::vector<int>> &membersPerUnit) override
+               const std::vector<std::vector<int>> &members_per_unit) override
     {
         detail::requirePrepared(schedule);
         dayCount_ = schedule.dayCount;
         occupancy_.assign(
             static_cast<std::size_t>(ownerCount(schedule)) * dayCount_, 0);
         overlap_ = 0;
-        for (std::size_t unit = 0; unit < membersPerUnit.size(); ++unit)
+        for (std::size_t unit = 0; unit < members_per_unit.size(); ++unit)
         {
-            for (int jobIndex : membersPerUnit[unit])
+            for (int jobIndex : members_per_unit[unit])
                 apply(schedule, static_cast<int>(unit), jobIndex, true);
         }
     }
 
-    void onMemberChanged(const MaintenanceSchedule &schedule,
+    void on_member_changed(const MaintenanceSchedule &schedule,
                          int unit,
                          const std::vector<int> & /*members*/,
                          int entity,

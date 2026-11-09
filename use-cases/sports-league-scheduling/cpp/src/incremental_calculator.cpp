@@ -5,7 +5,7 @@
 
 #include "sls/constraints.hpp"
 #include "sls/score_calculator.hpp"
-#include "optimaru/api/score/level.hpp"
+#include "optimaru/levels.hpp"
 
 namespace sls
 {
@@ -63,21 +63,21 @@ regionPenalty(const std::vector<int> &cnt, std::size_t base, int l, int r)
 
 }  // namespace
 
-void SportsLeagueIncrementalScoreCalculator::resetWorkingSolution(
-    LeagueSchedule &workingSolution)
+void SportsLeagueIncrementalScoreCalculator::rebuild(
+    LeagueSchedule &solution)
 {
-    ScoreCalculator::prepare(workingSolution);
-    schedule_ = &workingSolution;
-    indexCount_ = workingSolution.maxRoundIndex + 1;
+    ScoreCalculator::prepare(solution);
+    schedule_ = &solution;
+    indexCount_ = solution.maxRoundIndex + 1;
 
     roundMatches_.assign(indexCount_, {});
-    posInRound_.assign(workingSolution.matches.size(), -1);
+    posInRound_.assign(solution.matches.size(), -1);
     homeCnt_.assign(
-        static_cast<std::size_t>(workingSolution.teamCount()) * indexCount_, 0);
+        static_cast<std::size_t>(solution.teamCount()) * indexCount_, 0);
     awayCnt_.assign(
-        static_cast<std::size_t>(workingSolution.teamCount()) * indexCount_, 0);
+        static_cast<std::size_t>(solution.teamCount()) * indexCount_, 0);
     pairCnt_.assign(
-        static_cast<std::size_t>(workingSolution.pairCount) * indexCount_, 0);
+        static_cast<std::size_t>(solution.pairCount) * indexCount_, 0);
 
     teamConflict_ = 0;
     consecutive_ = 0;
@@ -89,12 +89,12 @@ void SportsLeagueIncrementalScoreCalculator::resetWorkingSolution(
     endHop_ = 0;
     classic_ = 0;
 
-    matchCost_.assign(workingSolution.matches.size(), 0);
+    matchCost_.assign(solution.matches.size(), 0);
 
-    assign_.assign(workingSolution.matches.size(), -1);
-    for (int m = 0; m < workingSolution.matchCount(); ++m)
+    assign_.assign(solution.matches.size(), -1);
+    for (int m = 0; m < solution.matchCount(); ++m)
     {
-        const int round = workingSolution.matches[m].round;
+        const int round = solution.matches[m].round;
         assign_[m] = round;
         if (round >= 0)
             insert(m, round);
@@ -394,7 +394,7 @@ int SportsLeagueIncrementalScoreCalculator::costliestMatch(std::mt19937_64 &rng,
     return best;
 }
 
-void SportsLeagueIncrementalScoreCalculator::beforeVariableChanged(
+void SportsLeagueIncrementalScoreCalculator::before_assign(
     int matchIndex)
 {
     const int old = assign_[matchIndex];
@@ -403,7 +403,7 @@ void SportsLeagueIncrementalScoreCalculator::beforeVariableChanged(
     assign_[matchIndex] = -1;
 }
 
-void SportsLeagueIncrementalScoreCalculator::afterVariableChanged(
+void SportsLeagueIncrementalScoreCalculator::after_assign(
     int matchIndex)
 {
     const int now = schedule_->matches[matchIndex].round;  // the new value
@@ -412,14 +412,14 @@ void SportsLeagueIncrementalScoreCalculator::afterVariableChanged(
         insert(matchIndex, now);  // now unassigned: nothing to insert
 }
 
-Score SportsLeagueIncrementalScoreCalculator::calculateScore()
+Score SportsLeagueIncrementalScoreCalculator::score()
 {
     Score score;
     score.hard = -(kTeamConflictWeight * teamConflict_
                    + kConsecutiveWeight * consecutive_
                    + kRepeatWeight * repeat_);
     // Not `0.0 - x` (GCC folds it into a negation: -0.0 for a zero total).
-    score.soft = optimaru::withoutNegativeZero(
+    score.soft = optimaru::without_negative_zero(
         -static_cast<double>(kStartHopWeight * startHop_
                              + kHomeAwayHopWeight * homeAwayHop_
                              + kAwayAwayHopWeight * awayAwayHop_

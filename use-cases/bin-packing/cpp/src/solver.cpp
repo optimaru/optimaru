@@ -14,10 +14,10 @@
 #include "bp/incremental_calculator.hpp"
 #include "bp/moves.hpp"
 #include "bp/score_calculator.hpp"
-#include "optimaru/api/solver/solver.hpp"
-#include "optimaru/config/solver/solver_config.hpp"
-#include "optimaru/impl/solver/worker_threads.hpp"
-#include "optimaru/preview/api/move/operators.hpp"
+#include "optimaru/solver.hpp"
+#include "optimaru/settings.hpp"
+#include "optimaru/worker_threads.hpp"
+#include "optimaru/search/operators.hpp"
 
 namespace bp
 {
@@ -72,29 +72,29 @@ void prepareSolve(BinPackingProblem &problem)
 // finds nothing left to place: constructBins assigned every item.
 void runEngine(const Solver::Config &config,
                BinPackingProblem &problem,
-               optimaru::IncrementalScoreCalculator<BinPackingProblem> &calculator)
+               optimaru::Objective<BinPackingProblem> &calculator)
 {
-    optimaru::SolverConfig engineConfig;
-    engineConfig.randomSeed = config.randomSeed;
-    engineConfig.environmentMode = config.environmentMode;
-    engineConfig.onNewBest = config.onNewBest;
-    engineConfig.termination.spentLimit = config.spentLimit;
-    engineConfig.termination.bestScoreLimit = config.bestScoreLimit;
-    engineConfig.termination.unimprovedSpentLimit = config.unimprovedSpentLimit;
-    engineConfig.termination.stepCountLimit = config.stepCountLimit;
-    engineConfig.termination.unimprovedStepCountLimit
-        = config.unimprovedStepCountLimit;
-    // lateAcceptanceSize 0 = auto-scale with the instance (see Config).
-    engineConfig.localSearch.acceptor.lateAcceptanceSize
-        = config.lateAcceptanceSize != 0
-              ? config.lateAcceptanceSize
+    optimaru::Settings engineConfig;
+    engineConfig.seed = config.seed;
+    engineConfig.score_checks = config.score_checks;
+    engineConfig.on_new_best = config.on_new_best;
+    engineConfig.limits.time_limit = config.time_limit;
+    engineConfig.limits.target_score = config.target_score;
+    engineConfig.limits.stall_time_limit = config.stall_time_limit;
+    engineConfig.limits.step_limit = config.step_limit;
+    engineConfig.limits.stall_step_limit
+        = config.stall_step_limit;
+    // history_length 0 = auto-scale with the instance (see Config).
+    engineConfig.search.acceptance.history_length
+        = config.history_length != 0
+              ? config.history_length
               : std::clamp<std::size_t>(8 * problem.items.size(), 400, 3200);
-    engineConfig.localSearch.moveSelector.changeMoveWeight
-        = config.changeMoveWeight;
-    engineConfig.localSearch.moveSelector.swapMoveWeight = config.swapMoveWeight;
-    engineConfig.localSearch.customMoveProbability
-        = config.customMoveProbability;
-    engineConfig.localSearch.descentWeight = config.descentWeight;
+    engineConfig.search.moves.change_weight
+        = config.change_weight;
+    engineConfig.search.moves.swap_weight = config.swap_weight;
+    engineConfig.search.custom_move_probability
+        = config.custom_move_probability;
+    engineConfig.search.descent_weight = config.descent_weight;
 
     // Guided change-move targets: the bin of a uniformly drawn other item (a
     // bin in use; -1 falls back to the engine's uniform draw over all n
@@ -104,7 +104,7 @@ void runEngine(const Solver::Config &config,
     {
         const BinPackingProblem &live = problem;
         const double p = config.valueRecommenderProbability;
-        engineConfig.localSearch.valueRecommender
+        engineConfig.search.value_hint
             = [&live, p](std::mt19937_64 &rng, int item) -> int
         {
             std::uniform_real_distribution<double> unit(0.0, 1.0);
@@ -118,26 +118,26 @@ void runEngine(const Solver::Config &config,
         };
     }
 
-    auto &lns = engineConfig.localSearch.ruinRecreate;
-    lns.enabled = config.ruinRecreate;
-    lns.unimprovedStepTrigger = config.ruinRecreateUnimprovedStepTrigger;
-    lns.minRuinFraction = config.ruinRecreateMinRuinFraction;
-    lns.maxRuinFraction = config.ruinRecreateMaxRuinFraction;
-    lns.maxRuinCount = config.ruinRecreateMaxRuinCount;
-    lns.operatorDecay = config.ruinRecreateOperatorDecay;
+    auto &lns = engineConfig.search.ruin_recreate;
+    lns.enabled = config.ruin_recreate;
+    lns.unimproved_step_trigger = config.ruinRecreateUnimprovedStepTrigger;
+    lns.min_ruin_fraction = config.ruinRecreateMinRuinFraction;
+    lns.max_ruin_fraction = config.ruinRecreateMaxRuinFraction;
+    lns.max_ruin_count = config.ruinRecreateMaxRuinCount;
+    lns.operator_decay = config.ruinRecreateOperatorDecay;
     lns.rewards = config.ruinRecreateRewards;
-    lns.polishSteps = config.ruinRecreatePolishSteps;
-    lns.asMoveWeight = config.ruinRecreateAsMoveWeight;
-    lns.asMoveMaxRuin = config.ruinRecreateAsMoveMaxRuin;
+    lns.polish_steps = config.ruinRecreatePolishSteps;
+    lns.as_move_weight = config.ruinRecreateAsMoveWeight;
+    lns.as_move_max_ruin = config.ruinRecreateAsMoveMaxRuin;
 
     optimaru::Solver<BinPackingProblem> engine(std::move(engineConfig));
-    if (config.stopFlag)
-        engine.adoptTerminateEarlyFlag(config.stopFlag);
+    if (config.stop_flag)
+        engine.share_stop_flag(config.stop_flag);
     if (config.emptyBinMoves && problem.itemCount() >= 2)
-        engine.addMoveOperator(std::make_unique<EmptyBinMove>(config.emptyBinCandidates));
+        engine.add_move_operator(std::make_unique<EmptyBinMove>(config.emptyBinCandidates));
     if (config.repackMoves && problem.itemCount() >= 2)
     {
-        engine.addMoveOperator(
+        engine.add_move_operator(
             std::make_unique<RepackMove>(config.emptyBinCandidates, config.repackPartnerBins));
     }
     engine.solve(problem, calculator);
@@ -163,7 +163,7 @@ void searchOneStart(const Solver::Config &config,
     runEngine(config, problem, calculator);
     compactIfMoved(problem, start);
     // The authoritative final score: a full recompute on the best solution.
-    problem.score = ScoreCalculator::calculateScore(problem);
+    problem.score = ScoreCalculator::score(problem);
 }
 
 }  // namespace
@@ -175,7 +175,7 @@ void Solver::solve(BinPackingProblem &problem)
     problem.warmStart = false;  // a seed is used once
     if (problem.items.empty())
     {
-        ScoreCalculator::calculateScore(problem);
+        ScoreCalculator::score(problem);
         return;
     }
 
@@ -202,7 +202,7 @@ void Solver::solve(BinPackingProblem &problem)
     auto stop = std::make_shared<std::atomic<bool>>(false);
     // A worker that cannot be started (std::system_error) stops and joins
     // the ones already running before the error is rethrown here.
-    optimaru::runWorkerThreads(
+    optimaru::run_worker_threads(
         workerCount, *stop,
         [this, seeded, &descending, &candidates, &failures, &stop](int i)
         {
@@ -210,11 +210,11 @@ void Solver::solve(BinPackingProblem &problem)
             {
                 Config workerConfig = config_;
                 workerConfig.parallelSolverCount = 1;
-                workerConfig.stopFlag = stop;
-                workerConfig.randomSeed += static_cast<std::uint64_t>(i);
+                workerConfig.stop_flag = stop;
+                workerConfig.seed += static_cast<std::uint64_t>(i);
                 if (i != 0)
-                    workerConfig.onNewBest = nullptr;
-                std::mt19937_64 rng(workerConfig.randomSeed);
+                    workerConfig.on_new_best = nullptr;
+                std::mt19937_64 rng(workerConfig.seed);
                 const std::vector<int> order
                     = (i == 0 || seeded) ? descending
                                          : tieShuffledOrder(candidates[i], rng);
@@ -241,7 +241,7 @@ void Solver::solve(BinPackingProblem &problem)
 }
 
 void Solver::solve(BinPackingProblem &problem,
-                   optimaru::DecomposedScoreCalculator<BinPackingProblem> &calculator)
+                   optimaru::DecomposedObjective<BinPackingProblem> &calculator)
 {
     requireRewards(config_);
     prepareSolve(problem);
@@ -256,9 +256,9 @@ void Solver::solve(BinPackingProblem &problem,
 
     // Score the final solution with the caller's constraint assembly (custom
     // weights included) and leave the calculator primed on it, so
-    // constraintTotals() explains exactly this score.
-    calculator.resetWorkingSolution(problem);
-    problem.score = calculator.calculateScore();
+    // constraint_totals() explains exactly this score.
+    calculator.rebuild(problem);
+    problem.score = calculator.score();
 }
 
 }  // namespace bp

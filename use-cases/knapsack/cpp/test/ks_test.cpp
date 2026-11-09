@@ -7,7 +7,7 @@
 //       score and every constraint's raw total after each move, and every
 //       constraint non-zero at some point of the walk
 //   (3) the greedy construction (the 0.1.x expectations, ties, fixed items)
-//   (4) the solver: FULL_ASSERT, brute-force optima, the zero budget with a
+//   (4) the solver: ScoreChecks::Full, brute-force optima, the zero budget with a
 //       seed, reproducibility under a step limit, multi-start, validation
 #include <chrono>
 #include <cmath>
@@ -26,7 +26,7 @@
 #include "ks/score_calculator.hpp"
 #include "ks/solver.hpp"
 #include "ks_fixtures.hpp"
-#include "optimaru/api/score/director/score_director.hpp"
+#include "optimaru/editor.hpp"
 
 using namespace ks;
 using namespace ks_test;
@@ -38,13 +38,13 @@ namespace
 // current selection; checks that they agree and returns the full one.
 Score scoreBothWays(KnapsackProblem &problem, const std::string &label)
 {
-    const Score full = ScoreCalculator::calculateScore(problem);
+    const Score full = ScoreCalculator::score(problem);
     KnapsackIncrementalScoreCalculator incremental;
-    incremental.resetWorkingSolution(problem);
-    const Score fast = incremental.calculateScore();
+    incremental.rebuild(problem);
+    const Score fast = incremental.score();
     if (!sameScore(full, fast))
     {
-        check(false, label + ": incremental " + fast.toString() + " != full " + full.toString());
+        check(false, label + ": incremental " + fast.str() + " != full " + full.str());
     }
     return full;
 }
@@ -53,7 +53,7 @@ void expectScore(KnapsackProblem &problem, std::int64_t hard, double soft, const
 {
     const Score score = scoreBothWays(problem, label);
     check(score.hard == hard && std::fabs(score.soft - soft) < 1e-9,
-          label + " -> " + score.toString());
+          label + " -> " + score.str());
 }
 
 // -------------------------------------------------------------------------
@@ -203,7 +203,7 @@ void verifyIncrementalWalk()
         KnapsackProblem p = randomInstance(12 + static_cast<int>(seed) * 4, seed, 0.1);
         ScoreCalculator::prepare(p);
         KnapsackIncrementalScoreCalculator calculator;
-        optimaru::ScoreDirector<KnapsackProblem> director(p, calculator);
+        optimaru::Editor<KnapsackProblem> editor(p, calculator);
         KnapsackProblem shadow = p;
         std::mt19937_64 rng(seed * 101);
         std::uniform_real_distribution<double> unit(0.0, 1.0);
@@ -215,30 +215,30 @@ void verifyIncrementalWalk()
             {
                 const int item = static_cast<int>(rng() % n);
                 const int value = unit(rng) < 0.15 ? kUndecided : static_cast<int>(rng() % 2);
-                director.changeVariable(item, value);
+                editor.assign(item, value);
             }
             else
             {
                 // A swap (or a random 3-item batch) as one composite change.
-                director.beginVariableChanges();
+                editor.begin_batch();
                 const int a = static_cast<int>(rng() % n);
                 const int b = static_cast<int>(rng() % n);
                 const int va = p.items[a].selected;
-                director.changeVariable(a, p.items[b].selected);
-                director.changeVariable(b, va);
+                editor.assign(a, p.items[b].selected);
+                editor.assign(b, va);
                 if (u > 0.9)
-                    director.changeVariable(static_cast<int>(rng() % n), static_cast<int>(rng() % 2));
-                director.endVariableChanges();
+                    editor.assign(static_cast<int>(rng() % n), static_cast<int>(rng() % 2));
+                editor.end_batch();
             }
             for (int i = 0; i < n; ++i)
                 shadow.items[i].selected = p.items[i].selected;
-            const Score full = ScoreCalculator::calculateScore(shadow);
-            const Score incremental = director.calculateScore();
+            const Score full = ScoreCalculator::score(shadow);
+            const Score incremental = editor.score();
             if (!sameScore(full, incremental) && ++mismatches <= 3)
             {
                 std::printf("  MISMATCH seed %llu step %d: incremental=%s full=%s\n",
                             static_cast<unsigned long long>(seed), step,
-                            incremental.toString().c_str(), full.toString().c_str());
+                            incremental.str().c_str(), full.str().c_str());
             }
             const std::vector<std::int64_t> expected = catalogOrder(ScoreCalculator::rawCosts(shadow));
             const std::vector<std::int64_t> running = catalogOrder(calculator.totals());
@@ -327,7 +327,7 @@ Score bruteForceOptimum(KnapsackProblem problem)
     {
         for (int i = 0; i < n; ++i)
             problem.items[i].selected = (mask >> i) & 1u ? kSelected : kNotSelected;
-        const Score score = ScoreCalculator::calculateScore(problem);
+        const Score score = ScoreCalculator::score(problem);
         if (score > best)
             best = score;
     }
@@ -341,13 +341,13 @@ void verifySolver()
 {
     std::printf("== (4) Solver ==\n");
     {
-        // FULL_ASSERT re-checks every incremental score against a reset.
+        // ScoreChecks::Full re-checks every incremental score against a reset.
         KnapsackProblem p = randomInstance(30, 77);
         Solver::Config config;
-        config.spentLimit = std::chrono::milliseconds(1000);
-        config.stepCountLimit = 4000;
-        config.randomSeed = 3;
-        config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+        config.time_limit = std::chrono::milliseconds(1000);
+        config.step_limit = 4000;
+        config.seed = 3;
+        config.score_checks = optimaru::ScoreChecks::Full;
         config.ruinRecreateUnimprovedStepTrigger = 200;  // exercise the -1 ruins too
         bool ok = true;
         try
@@ -360,7 +360,7 @@ void verifySolver()
             ok = false;
         }
         KnapsackProblem rescored = p;
-        check(ok && sameScore(p.score, ScoreCalculator::calculateScore(rescored)),
+        check(ok && sameScore(p.score, ScoreCalculator::score(rescored)),
               "FULL_ASSERT solve with ALNS kicks: no score corruption, score = full recompute");
     }
     {
@@ -373,15 +373,15 @@ void verifySolver()
             KnapsackProblem p = randomInstance(8 + static_cast<int>(seed % 6), seed, 0.0, false);
             const Score optimum = bruteForceOptimum(p);
             Solver::Config config;
-            config.spentLimit = std::chrono::milliseconds(5000);
-            config.stepCountLimit = 30000;
-            config.randomSeed = seed;
+            config.time_limit = std::chrono::milliseconds(5000);
+            config.step_limit = 30000;
+            config.seed = seed;
             Solver(config).solve(p);
             if (sameScore(p.score, optimum))
                 ++reached;
             else
                 std::printf("  seed %llu: %s, optimum %s\n", static_cast<unsigned long long>(seed),
-                            p.score.toString().c_str(), optimum.toString().c_str());
+                            p.score.str().c_str(), optimum.str().c_str());
         }
         check(reached == instances, "random 0/1 knapsacks with <= 13 items reach the brute-force optimum");
     }
@@ -402,19 +402,19 @@ void verifySolver()
             const Score optimum = bruteForceOptimum(p);
             KnapsackProblem start = p;
             Solver::Config zero;
-            zero.spentLimit = std::chrono::milliseconds(0);
+            zero.time_limit = std::chrono::milliseconds(0);
             Solver(zero).solve(start);
             Solver::Config config;
-            config.spentLimit = std::chrono::milliseconds(30000);
-            config.stepCountLimit = 20000;
-            config.randomSeed = seed;
+            config.time_limit = std::chrono::milliseconds(30000);
+            config.step_limit = 20000;
+            config.seed = seed;
             Solver(config).solve(p);
             bounded = bounded && p.score >= start.score && p.score <= optimum;
             if (sameScore(p.score, optimum))
                 ++reached;
             else
                 std::printf("  seed %llu: %s, optimum %s\n", static_cast<unsigned long long>(seed),
-                            p.score.toString().c_str(), optimum.toString().c_str());
+                            p.score.str().c_str(), optimum.str().c_str());
         }
         check(bounded, "instances with every fact: construction <= solved <= brute-force optimum");
         check(reached == instances,
@@ -427,7 +427,7 @@ void verifySolver()
         select(p, {0, 1, 2});
         p.warmStart = true;
         Solver::Config config;
-        config.spentLimit = std::chrono::milliseconds(0);
+        config.time_limit = std::chrono::milliseconds(0);
         Solver(config).solve(p);
         check(p.assignment() == std::vector<int>{1, 1, 1} && p.score.hard == -5 && !p.warmStart,
               "warm start + zero budget: the seed unchanged, warmStart cleared");
@@ -447,9 +447,9 @@ void verifySolver()
         KnapsackProblem a = randomInstance(60, 5);
         KnapsackProblem b = a;
         Solver::Config config;
-        config.spentLimit = std::chrono::milliseconds(20000);
-        config.stepCountLimit = 3000;
-        config.randomSeed = 9;
+        config.time_limit = std::chrono::milliseconds(20000);
+        config.step_limit = 3000;
+        config.seed = 9;
         Solver(config).solve(a);
         Solver(config).solve(b);
         check(a.assignment() == b.assignment() && sameScore(a.score, b.score),
@@ -458,14 +458,14 @@ void verifySolver()
     {
         KnapsackProblem p = randomInstance(80, 6);
         Solver::Config config;
-        config.spentLimit = std::chrono::milliseconds(300);
+        config.time_limit = std::chrono::milliseconds(300);
         config.parallelSolverCount = 4;
-        config.randomSeed = 1;
+        config.seed = 1;
         std::int64_t calls = 0;
-        config.onNewBest = [&calls](std::int64_t, const Score &) { ++calls; };
+        config.on_new_best = [&calls](std::int64_t, const Score &) { ++calls; };
         Solver(config).solve(p);
         KnapsackProblem rescored = p;
-        check(sameScore(p.score, ScoreCalculator::calculateScore(rescored)) && calls > 0,
+        check(sameScore(p.score, ScoreCalculator::score(rescored)) && calls > 0,
               "parallelSolverCount 4: a consistent best solution, on_new_best fired");
     }
     {

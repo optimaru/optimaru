@@ -33,16 +33,16 @@ struct AssignmentCountImbalanceCost final : MemberChangeGlobalConstraint
     {
     }
     void reset(const TournamentSchedule & /*schedule*/,
-               const std::vector<std::vector<int>> &membersPerUnit) override
+               const std::vector<std::vector<int>> &members_per_unit) override
     {
-        loads_.assign(membersPerUnit.size(), 0);
+        loads_.assign(members_per_unit.size(), 0);
         sum_ = 0;
         sumSquares_ = 0;
         loaded_ = 0;
-        for (std::size_t unit = 0; unit < membersPerUnit.size(); ++unit)
+        for (std::size_t unit = 0; unit < members_per_unit.size(); ++unit)
         {
             const std::int64_t load
-                = static_cast<std::int64_t>(membersPerUnit[unit].size());
+                = static_cast<std::int64_t>(members_per_unit[unit].size());
             loads_[unit] = load;
             if (load == 0)
                 continue;
@@ -51,7 +51,7 @@ struct AssignmentCountImbalanceCost final : MemberChangeGlobalConstraint
             ++loaded_;
         }
     }
-    void onMemberChanged(const TournamentSchedule & /*schedule*/,
+    void on_member_changed(const TournamentSchedule & /*schedule*/,
                          int unit,
                          const std::vector<int> & /*members*/,
                          int /*entity*/,

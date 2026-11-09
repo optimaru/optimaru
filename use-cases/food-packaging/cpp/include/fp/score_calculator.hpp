@@ -74,7 +74,7 @@ public:
 
     // updateShadowVariables + the five constraints; stores the score in
     // schedule.score and returns it.
-    static Score calculateScore(PackagingSchedule &schedule);
+    static Score score(PackagingSchedule &schedule);
 
     // Same recompute, split per constraint (raw magnitudes; see toScore()).
     // C++ only (tests); Python reads constraint_costs() instead.

@@ -15,7 +15,7 @@ with optional item colours and conflict pairs, on this repository's C++ engine
   reversed, counts per listing).
 - `warm_start` — start the search from the items' bins (see below); every solve clears it.
 
-## Constraints (HardSoftScore — the engine score type as-is, no mapping)
+## Constraints (Score — the engine score type as-is, no mapping)
 
 | Constraint (Python name) | C++ component | Default level | Default weight | Raw cost (0 = no violation) |
 |---|---|---|---|---|
@@ -119,7 +119,7 @@ monolithic calculator. The CP-SAT reference takes integral offsets.
 
 ## cpp/
 
-- `include/bp/domain.hpp` — domain + `optimaru::SolutionDescriptor` specialization
+- `include/bp/domain.hpp` — domain + `optimaru::SolutionTraits` specialization
 - `include/bp/constraints/` — one component per constraint: `bin_capacity_cost.hpp`,
   `color_conflict_cost.hpp`, `item_conflict_cost.hpp`, `used_bins_cost.hpp`
   (+ `common.hpp`); `include/bp/constraints.hpp` assembles the default set
@@ -146,16 +146,16 @@ ctest --test-dir build/bin-packing --output-on-failure   # bp_test + bp_plugin_t
 incremental), 5000 random moves incremental == full (the score and each constraint's
 raw total after every move, each constraint non-zero during the walk; flat and
 hash-map colour counts), the construction against 0.1.x, zero-budget / warm-start
-behaviour, FULL_ASSERT solve, samples, parallel starts, compaction, fact checks, and
+behaviour, ScoreChecks::Full solve, samples, parallel starts, compaction, fact checks, and
 the macro moves: hand cases (`RepackMove` empties a bin `EmptyBinMove` can only empty
 into a clash, with and without a partner bin) and a walk of thousands of applied and
 undone moves, incremental == full after each apply and each undo, an undo restoring
 the assignment exactly, `RepackMove` never adding a hard violation, once plain and once
-under a FULL_ASSERT director.
+under a ScoreChecks::Full editor.
 `bp_plugin_test`: plugin assembly == monolith (score and per-constraint totals),
 plugin incremental == full (every unit cost after every move, for the defaults and
 with exponents != 1 and fractional hard weights), partial assemblies, overrides
-(including the per-bin exponent), `constraintTotals()`, FULL_ASSERT plugin solve,
+(including the per-bin exponent), `constraint_totals()`, ScoreChecks::Full plugin solve,
 raw costs by hand, the catalog, and the macro-move walk on the plugin path.
 
 ## Search
@@ -264,8 +264,8 @@ use). `EmptyBinMove` (moves every item of a light bin into the other bins in one
 and `RepackMove` (re-places the items of a few light bins without a clash) are defined
 in `cpp/include/bp/moves.hpp` and registered in `cpp/src/solver.cpp` (`runEngine`) —
 use them as the template, and give a new move a walk in `bp_test` (j). A new move is an `optimaru::MoveOperator<…>` registered with
-`engine.addMoveOperator(...)` next to the engine construction in `cpp/src/solver.cpp`;
-a ruin for LNS is a `RuinOperator` registered with `engine.addRuinOperator(...)`.
+`engine.add_move_operator(...)` next to the engine construction in `cpp/src/solver.cpp`;
+a ruin for LNS is a `RuinOperator` registered with `engine.add_ruin_operator(...)`.
 
 **Changing the construction heuristic.** The domain places every item before the
 engine runs (`cpp/src/construction.cpp`: best fit over the items by decreasing

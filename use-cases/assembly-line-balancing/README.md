@@ -24,7 +24,7 @@ holds the exact CP-SAT reference.
 - `warm_start` — start from the stations on the tasks (tasks at `-1` go through the
   construction); a plain solve ignores input stations. Every solve resets it.
 
-## Constraints (HardSoftScore — the engine score type as-is, no mapping)
+## Constraints (Score — the engine score type as-is, no mapping)
 
 | Constraint (Python name) | C++ component | Default level | Default weight | Raw cost (0 = no violation) | Unit |
 |---|---|---|---|---|---|
@@ -134,7 +134,7 @@ integral offsets.
 
 ## cpp/
 
-- `include/alb/domain.hpp` — domain + `optimaru::SolutionDescriptor` specialization
+- `include/alb/domain.hpp` — domain + `optimaru::SolutionTraits` specialization
 - `include/alb/constraints/` — one component per constraint: `station_capacity_cost.hpp`,
   `task_precedence_cost.hpp`, `max_stations_cost.hpp`, `task_station_bounds_cost.hpp`,
   `fixed_task_stations_cost.hpp`, `forbidden_task_stations_cost.hpp`,
@@ -159,7 +159,7 @@ ctest --test-dir build/assembly-line-balancing --output-on-failure --no-tests=er
 
 `alb_test`: per-constraint hand checks (positive and zero), the construction cases,
 incremental == full recompute over random change / swap / unassign / batch moves,
-FULL_ASSERT solves, determinism and multi-start. `alb_plugin_test`: default assembly ==
+ScoreChecks::Full solves, determinism and multi-start. `alb_plugin_test`: default assembly ==
 monolith (score and every raw total), plugin incremental == reset, partial assemblies,
 overrides, raw costs by hand per station, the catalog.
 
@@ -231,8 +231,8 @@ The planning variable is **BASIC**; the domain solver that configures the engine
 `Solver::Config`). `CloseStationMove` (empties a station by moving its tasks, in
 topological order, into their precedence windows) is defined and registered in
 `cpp/src/solver.cpp` (`runEngine`) — use it as the template. A new move is an
-`optimaru::MoveOperator<…>` registered with `engine.addMoveOperator(...)`; a ruin for
-LNS is a `RuinOperator` registered with `engine.addRuinOperator(...)`.
+`optimaru::MoveOperator<…>` registered with `engine.add_move_operator(...)`; a ruin for
+LNS is a `RuinOperator` registered with `engine.add_ruin_operator(...)`.
 
 **Changing the construction heuristic.** `cpp/src/construction.cpp` places every task
 before the engine starts (the engine only fills what is still unassigned). It is the

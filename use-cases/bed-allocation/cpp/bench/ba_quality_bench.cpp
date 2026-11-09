@@ -167,7 +167,7 @@ int main(int argc, char **argv)
         {
             plan.stays[s].bed = static_cast<int>(s) % (plan.bedCount() + 1);
         }
-        ba::ScoreCalculator::calculateScore(plan);
+        ba::ScoreCalculator::score(plan);
         std::printf("CROSSCHECK file=%s hard=%lld medium=%lld soft=%lld\n",
                     path.c_str(),
                     static_cast<long long>(plan.score.hard),
@@ -178,10 +178,10 @@ int main(int argc, char **argv)
 
     std::int64_t lastStep = 0;
     ba::Solver::Config config;
-    config.spentLimit = std::chrono::milliseconds(
+    config.time_limit = std::chrono::milliseconds(
         static_cast<std::int64_t>(seconds * 1000.0));
-    config.randomSeed = seed;
-    config.onNewBest = [&lastStep](std::int64_t step, const ba::Score &)
+    config.seed = seed;
+    config.on_new_best = [&lastStep](std::int64_t step, const ba::Score &)
     { lastStep = step; };
     ba::Solver solver(config);
     solver.solve(plan);

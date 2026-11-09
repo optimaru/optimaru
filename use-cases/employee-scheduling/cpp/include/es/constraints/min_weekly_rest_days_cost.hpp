@@ -20,7 +20,7 @@ struct MinWeeklyRestDaysCost final : EsUnitConstraint {
     explicit MinWeeklyRestDaysCost(double weight = kDefaultWeight, int value = 1)
         : EsUnitConstraint("minWeeklyRestDaysCost", weight, kDefaultLevel),
           maxWorkDays_(7 - value) {}
-    void onReset(const EmployeeSchedule& s) override {
+    void on_reset(const EmployeeSchedule& s) override {
         weeks_ = 0;
         horizon_ = 0;
         day_.resize(s.shifts.size());

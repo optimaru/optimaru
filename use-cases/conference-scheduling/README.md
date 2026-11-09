@@ -22,12 +22,12 @@ one composite BASIC variable `slotRoom = timeslotIndex * roomCount + roomIndex`
 
 ```sh
 cd cpp && cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j4
-./build/cs_test         # per-constraint hand checks + incremental==full + FULL_ASSERT solve
+./build/cs_test         # per-constraint hand checks + incremental==full + ScoreChecks::Full solve
 ./build/cs_plugin_test  # plugin assembly == monolith, raw costs by hand, catalog, guards
 ./build/cs_demo 10
 ```
 
-## Constraints (HardSoftScore — the engine score type as-is)
+## Constraints (Score — the engine score type as-is)
 
 All 36 constraints of the Java `ConferenceSchedulingConstraintProvider` plus the port's
 synthetic `talk_type_incompatibility_cost`: 17 hard and 20 soft. Every one is global (one
@@ -147,11 +147,11 @@ Two changed defaults / structures:
   a (slot,room) occupancy grid (`room_conflict_cost`), per-capacity-class favorite-rank
   Fenwick trees (`popular_talks_room_size_cost`), and adjacency lists only for the truly sparse relations (shared
   speakers, prerequisites). Every sum is an integer, so scores are bit-identical (pinned
-  by the full-vs-incremental 3000-move random walk / FULL_ASSERT / plugin equivalence
+  by the full-vs-incremental 3000-move random walk / ScoreChecks::Full / plugin equivalence
   gates); moves/s go up ~7-10x at scaled:200, which accounts for most of the quality gain
   in the table above, especially at 120/200.
 - **Automatic `ruinRecreateAsMoveWeight` default** — ruin & recreate also runs as an
-  ordinary move judged by the acceptor (engine `RuinRecreateConfig::asMoveWeight`). The
+  ordinary move judged by the acceptor (engine `RuinRecreateSettings::asMoveWeight`). The
   default negative value = automatic `0.2 / slotRoomCount` (the budget-share rule of
   benchmarks/school-timetabling/RESULTS.md; 1.6e-3 for this domain's 126 cells). Sweeping
   the weight at scaled:120, 0.8e-3 / 3e-3 lose and only 1.6e-3 wins, so the rule value is
@@ -167,7 +167,7 @@ Knobs that were measured but stay off by default (bench key = config field):
   so the default is 0. It does reach feasibility faster (84->19 ms at 60).
 - `descent=` / `descentWeight` — default 0 for the same reason as ST (not unmeasured: in ST
   BASIC descent was weaker than as-move, and here as-move replaces it).
-- `la=` (`lateAcceptanceSize`) — even after aggregation raised throughput 3-10x,
+- `la=` (`history_length`) — even after aggregation raised throughput 3-10x,
   480/2000 (@120) and 3200/6400 (@200) all failed to beat the automatic value
   `clamp(8 x talk, 800, 3200)`. Kept automatic.
 
@@ -221,12 +221,12 @@ engine is `cpp/include/cs/solver.hpp` + `cpp/src/solver.cpp`.
 
 **Adding a move.** The engine already mixes change / swap moves
 (weights in `Solver::Config`). This use case relies on the engine's generic moves only; it has no domain move yet. A new move is a
-`optimaru::MoveOperator<…>` registered with `engine.addMoveOperator(...)` next
+`optimaru::MoveOperator<…>` registered with `engine.add_move_operator(...)` next
 to the engine construction in `cpp/src/solver.cpp`; a ruin for LNS is a
-`RuinOperator` registered with `engine.addRuinOperator(...)`.
+`RuinOperator` registered with `engine.add_ruin_operator(...)`.
 
-**Changing the construction heuristic.** `entityDifficulty` is already set in `cpp/src/solver.cpp` (talks are placed hardest-first). Set
-`engineConfig.constructionHeuristic.entityDifficulty` for First Fit
+**Changing the construction heuristic.** `difficulty` is already set in `cpp/src/solver.cpp` (talks are placed hardest-first). Set
+`engineConfig.construction.difficulty` for First Fit
 Decreasing ordering, or pre-assign part of the solution in the domain
 solver's `solve` before the engine runs — the engine only fills what is still unassigned.
 

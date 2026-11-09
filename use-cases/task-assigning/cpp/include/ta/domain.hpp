@@ -8,9 +8,9 @@
 #include <string>
 #include <vector>
 
-#include "optimaru/api/domain/solution_descriptor.hpp"
-#include "optimaru/api/score/buildin/hard_soft_score.hpp"
-#include "optimaru/api/score/level.hpp"
+#include "optimaru/solution_traits.hpp"
+#include "optimaru/score.hpp"
+#include "optimaru/levels.hpp"
 
 namespace ta
 {
@@ -33,14 +33,14 @@ constexpr Minutes kNullTime = -1;  // stands in for a null startTime (Long)
 //   soft[1]  squaredMakespanCost        (employee endTime^2 each)
 //   soft[2]  {critical|major|minor}PriorityTaskEndTimeCost
 //            (endTime x 4 / x 2 / x 1)
-// The generic engine (include/optimaru/) only knows HardSoftScore(int64 hard,
+// The generic engine (include/optimaru/) only knows Score(int64 hard,
 // double soft); its constraints score on three levels (hard, medium, soft).
 // Mapping rule (level priority preserved):
 //
 //   hard[0] -> Level::Hard, soft[0] -> Level::Medium, soft[1] and soft[2]
 //   -> Level::Soft, folded as
 //   engine.hard = hard * kMissingSkillUnit + soft0   (kMediumFold:
-//                 MediumFold::belowHard(kMissingSkillUnit = 10^9))
+//                 MediumFold::below_hard(kMissingSkillUnit = 10^9))
 //   engine.soft = soft1 * kMakespanUnit + soft2      (kMakespanUnit = 10^7)
 //
 // The medium level folds BELOW hard: one hard unit (a missing skill) weighs
@@ -62,14 +62,14 @@ constexpr Minutes kNullTime = -1;  // stands in for a null startTime (Long)
 //    That covers instances whose horizon is tens of thousands of minutes —
 //    the same practical range where the Java int-based BendableScore does
 //    not overflow either.
-// One semantic wrinkle: the engine's isFeasible() (engine.hard >= 0) now
+// One semantic wrinkle: the engine's feasible() (engine.hard >= 0) now
 // also requires soft0 == 0. Because the engine's LIST local search keeps
 // every task assigned once construction finished, final solutions always
 // have soft0 == 0, so feasibility coincides with the Java hard level.
 constexpr std::int64_t kMissingSkillUnit = 1000000000LL;
 constexpr std::int64_t kMakespanUnit = 10000000LL;
 constexpr optimaru::MediumFold kMediumFold
-    = optimaru::MediumFold::belowHard(kMissingSkillUnit);
+    = optimaru::MediumFold::below_hard(kMissingSkillUnit);
 
 struct Score
 {
@@ -78,7 +78,7 @@ struct Score
     std::int64_t soft1 = 0;  // soft[1]: sum of employee endTime^2
     std::int64_t soft2 = 0;  // soft[2]: priority-weighted task end times
 
-    bool isFeasible() const { return hard >= 0; }
+    bool feasible() const { return hard >= 0; }
 
     bool operator<(const Score &o) const
     {
@@ -99,8 +99,8 @@ struct Score
                && soft2 == o.soft2;
     }
 
-    // BendableScore.toString() style: [0]hard/[0/-3725/-77]soft
-    std::string toString() const
+    // BendableScore.str() style: [0]hard/[0/-3725/-77]soft
+    std::string str() const
     {
         return "[" + std::to_string(hard) + "]hard/[" + std::to_string(soft0)
                + "/" + std::to_string(soft1) + "/" + std::to_string(soft2)
@@ -110,16 +110,16 @@ struct Score
 
 // hard -> hard, soft0 -> medium (below hard), soft1 * kMakespanUnit + soft2
 // -> soft, through the domain's medium fold.
-inline optimaru::HardSoftScore toEngineScore(const Score &s)
+inline optimaru::Score toEngineScore(const Score &s)
 {
-    return kMediumFold.toEngine(
+    return kMediumFold.to_engine(
         s.hard,
         static_cast<double>(s.soft0),
         static_cast<double>(s.soft1) * static_cast<double>(kMakespanUnit)
             + static_cast<double>(s.soft2));
 }
 
-// A best-score LIMIT (Solver::Config::bestScoreLimit) in engine terms.
+// A best-score LIMIT (Solver::Config::target_score) in engine terms.
 // kNoLevelFloor (INT64_MIN) on soft1 or soft2 means "no floor on the soft
 // levels": the engine's soft limit becomes -inf, so only hard and soft0 (the
 // levels folded into the engine's hard level, compared exactly) count and no
@@ -128,7 +128,7 @@ inline optimaru::HardSoftScore toEngineScore(const Score &s)
 // assigned. Any other limit folds as a score.
 constexpr std::int64_t kNoLevelFloor = std::numeric_limits<std::int64_t>::min();
 
-inline optimaru::HardSoftScore toEngineScoreLimit(const Score &limit)
+inline optimaru::Score toEngineScoreLimit(const Score &limit)
 {
     if (limit.soft1 == kNoLevelFloor || limit.soft2 == kNoLevelFloor)
         return {toEngineScore({limit.hard, limit.soft0, 0, 0}).hard,
@@ -138,9 +138,9 @@ inline optimaru::HardSoftScore toEngineScoreLimit(const Score &limit)
 
 // Inverse of toEngineScore. Every constraint penalizes (all levels <= 0 and
 // integral), so truncating integer division decodes the levels exactly.
-inline Score fromEngineScore(const optimaru::HardSoftScore &e)
+inline Score fromEngineScore(const optimaru::Score &e)
 {
-    const std::int64_t combinedSoft = optimaru::roundScoreLevel(e.soft, "soft");
+    const std::int64_t combinedSoft = optimaru::round_score_level(e.soft, "soft");
     return {e.hard / kMissingSkillUnit,
             e.hard % kMissingSkillUnit,
             combinedSoft / kMakespanUnit,
@@ -305,34 +305,34 @@ struct TaskAssigningSolution
 }  // namespace ta
 
 // ---------------------------------------------------------------------------
-// SolutionDescriptor specialization  (the @PlanningEntity/@PlanningListVariable
+// SolutionTraits specialization  (the @PlanningEntity/@PlanningListVariable
 // annotations of the C++ engine): the lists are the employees' ordered task
 // index sequences, the elements are the tasks. A task missing from every list
 // is unassigned (allowsUnassignedValues = true); the engine's construction
 // heuristic assigns every task and local search keeps them assigned. The Java
-// quickstart has no @PlanningPin, so no isPinned hook is declared.
+// quickstart has no @PlanningPin, so no is_pinned hook is declared.
 // ---------------------------------------------------------------------------
-template <> struct optimaru::SolutionDescriptor<ta::TaskAssigningSolution>
+template <> struct optimaru::SolutionTraits<ta::TaskAssigningSolution>
 {
-    static constexpr optimaru::VariableKind kind = optimaru::VariableKind::LIST;
-    static int listCount(const ta::TaskAssigningSolution &s)
+    static constexpr optimaru::Shape shape = optimaru::Shape::Sequence;
+    static int list_count(const ta::TaskAssigningSolution &s)
     {
         return static_cast<int>(s.employees.size());
     }
-    static int elementCount(const ta::TaskAssigningSolution &s)
+    static int element_count(const ta::TaskAssigningSolution &s)
     {
         return static_cast<int>(s.tasks.size());
     }
-    static int listSize(const ta::TaskAssigningSolution &s, int listIndex)
+    static int list_size(const ta::TaskAssigningSolution &s, int listIndex)
     {
         return static_cast<int>(s.employees[listIndex].tasks.size());
     }
     static int
-    getElement(const ta::TaskAssigningSolution &s, int listIndex, int position)
+    element_at(const ta::TaskAssigningSolution &s, int listIndex, int position)
     {
         return s.employees[listIndex].tasks[position];
     }
-    static void insertElement(ta::TaskAssigningSolution &s,
+    static void insert_element(ta::TaskAssigningSolution &s,
                               int listIndex,
                               int position,
                               int element)
@@ -341,14 +341,14 @@ template <> struct optimaru::SolutionDescriptor<ta::TaskAssigningSolution>
         tasks.insert(tasks.begin() + position, element);
     }
     static int
-    removeElement(ta::TaskAssigningSolution &s, int listIndex, int position)
+    remove_element(ta::TaskAssigningSolution &s, int listIndex, int position)
     {
         std::vector<int> &tasks = s.employees[listIndex].tasks;
         const int element = tasks[position];
         tasks.erase(tasks.begin() + position);
         return element;
     }
-    static void reverseSegment(ta::TaskAssigningSolution &s,
+    static void reverse_segment(ta::TaskAssigningSolution &s,
                                int listIndex,
                                int first,
                                int last)

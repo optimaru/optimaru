@@ -12,10 +12,10 @@
 
 #include "op/incremental_calculator.hpp"
 #include "op/score_calculator.hpp"
-#include "optimaru/api/solver/solver.hpp"
-#include "optimaru/config/solver/solver_config.hpp"
-#include "optimaru/impl/solver/worker_threads.hpp"
-#include "optimaru/preview/api/move/operators.hpp"
+#include "optimaru/solver.hpp"
+#include "optimaru/settings.hpp"
+#include "optimaru/worker_threads.hpp"
+#include "optimaru/search/operators.hpp"
 
 namespace op
 {
@@ -67,7 +67,7 @@ public:
                std::mt19937_64 &rng,
                std::vector<int> &entities) override
     {
-        OrderPickingSolution &s = ctx.director.workingSolution();
+        OrderPickingSolution &s = ctx.editor.solution();
         const int orderCount = static_cast<int>(s.orders.size());
 
         candidates_.clear();
@@ -92,14 +92,14 @@ public:
         return relocateFallback(ctx, rng, entities);
     }
 
-    void undoLast(optimaru::OperatorContext<OrderPickingSolution> &ctx) override
+    void undo_last(optimaru::OperatorContext<OrderPickingSolution> &ctx) override
     {
-        OrderPickingSolution &s = ctx.director.workingSolution();
+        OrderPickingSolution &s = ctx.editor.solution();
         for (const auto &[trolley, list] : saved_)
         {
-            ctx.director.beginListChange(trolley);
+            ctx.editor.begin_list_edit(trolley);
             s.trolleys[trolley].pickTaskIndices = list;
-            ctx.director.endListChange(trolley);
+            ctx.editor.end_list_edit(trolley);
         }
         saved_.clear();
     }
@@ -160,7 +160,7 @@ private:
                         std::vector<int> &entities,
                         int order)
     {
-        OrderPickingSolution &s = ctx.director.workingSolution();
+        OrderPickingSolution &s = ctx.editor.solution();
         const int trolleyCount = static_cast<int>(s.trolleys.size());
 
         // The order's largest-volume holder — the natural merge target and
@@ -279,7 +279,7 @@ private:
                            std::mt19937_64 &rng,
                            std::vector<int> &entities)
     {
-        OrderPickingSolution &s = ctx.director.workingSolution();
+        OrderPickingSolution &s = ctx.editor.solution();
         const int trolleyCount = static_cast<int>(s.trolleys.size());
         const int orderCount = static_cast<int>(s.orders.size());
         if (trolleyCount < 2 || orderCount == 0)
@@ -384,11 +384,11 @@ private:
                      int order,
                      int from)
     {
-        OrderPickingSolution &s = ctx.director.workingSolution();
+        OrderPickingSolution &s = ctx.editor.solution();
         std::vector<int> &list = s.trolleys[from].pickTaskIndices;
         saved_.emplace_back(from, list);
         const std::vector<int> &old = saved_.back().second;
-        ctx.director.beginListChange(from);
+        ctx.editor.begin_list_edit(from);
         auto keep = list.begin();
         for (int element : old)
         {
@@ -398,7 +398,7 @@ private:
                 *keep++ = element;
         }
         list.erase(keep, list.end());
-        ctx.director.endListChange(from);
+        ctx.editor.end_list_edit(from);
     }
 
     // Cheapest-insertion of moved_[first, last) into `target`'s route. The
@@ -408,10 +408,10 @@ private:
                      std::size_t first,
                      std::size_t last)
     {
-        OrderPickingSolution &s = ctx.director.workingSolution();
+        OrderPickingSolution &s = ctx.editor.solution();
         const Trolley &trolley = s.trolleys[target];
         std::vector<int> &list = s.trolleys[target].pickTaskIndices;
-        ctx.director.beginListChange(target);
+        ctx.editor.begin_list_edit(target);
         for (std::size_t i = first; i < last; ++i)
         {
             const int element = moved_[i];
@@ -420,7 +420,7 @@ private:
                                 s, trolley, s.pickTasks[element].location),
                         element);
         }
-        ctx.director.endListChange(target);
+        ctx.editor.end_list_edit(target);
     }
 
     // Last resort when even the order-level moves find nothing: relocate one
@@ -433,10 +433,10 @@ private:
                           std::mt19937_64 &rng,
                           std::vector<int> &entities)
     {
-        OrderPickingSolution &s = ctx.director.workingSolution();
-        const int elementCount = static_cast<int>(s.pickTasks.size());
+        OrderPickingSolution &s = ctx.editor.solution();
+        const int element_count = static_cast<int>(s.pickTasks.size());
         const int trolleyCount = static_cast<int>(s.trolleys.size());
-        if (elementCount == 0 || trolleyCount < 2)
+        if (element_count == 0 || trolleyCount < 2)
             return false;
 
         int element = -1;
@@ -444,11 +444,11 @@ private:
         for (int attempt = 0; attempt < 8 && element < 0; ++attempt)
         {
             const int e = static_cast<int>(
-                rng() % static_cast<std::uint64_t>(elementCount));
-            if (ctx.elementList[e] >= 0)
+                rng() % static_cast<std::uint64_t>(element_count));
+            if (ctx.element_list[e] >= 0)
             {
                 element = e;
-                source = ctx.elementList[e];
+                source = ctx.element_list[e];
             }
         }
         if (element < 0)
@@ -462,9 +462,9 @@ private:
         saved_.emplace_back(source, s.trolleys[source].pickTaskIndices);
         saved_.emplace_back(destination,
                             s.trolleys[destination].pickTaskIndices);
-        ctx.director.removeListElement(source, ctx.elementPosition[element]);
+        ctx.editor.remove(source, ctx.element_position[element]);
         const Trolley &destinationTrolley = s.trolleys[destination];
-        ctx.director.insertListElement(
+        ctx.editor.insert(
             destination,
             cheapestPosition(
                 s, destinationTrolley, s.pickTasks[element].location),
@@ -488,41 +488,41 @@ namespace
 // acceptance, the LIST move mix, the ALNS knobs and the distance-nearby
 // selection (all pure problem-fact lookups, so they apply to the plugin path
 // too).
-optimaru::SolverConfig buildEngineConfig(const Solver::Config &config,
+optimaru::Settings buildEngineConfig(const Solver::Config &config,
                                          const OrderPickingSolution &solution)
 {
-    optimaru::SolverConfig engineConfig;
-    engineConfig.randomSeed = config.randomSeed;
-    engineConfig.environmentMode = config.environmentMode;
-    engineConfig.multiStartCount = 1;
-    engineConfig.onNewBest = config.onNewBest;
-    engineConfig.termination.spentLimit = config.spentLimit;
-    engineConfig.termination.bestScoreLimit = config.bestScoreLimit;
-    engineConfig.termination.unimprovedSpentLimit = config.unimprovedSpentLimit;
-    engineConfig.termination.stepCountLimit = config.stepCountLimit;
-    engineConfig.termination.unimprovedStepCountLimit
-        = config.unimprovedStepCountLimit;
-    // lateAcceptanceSize 0 = auto-scale with the instance (see Config).
-    engineConfig.localSearch.acceptor.lateAcceptanceSize
-        = config.lateAcceptanceSize != 0
-              ? config.lateAcceptanceSize
+    optimaru::Settings engineConfig;
+    engineConfig.seed = config.seed;
+    engineConfig.score_checks = config.score_checks;
+    engineConfig.parallel_starts = 1;
+    engineConfig.on_new_best = config.on_new_best;
+    engineConfig.limits.time_limit = config.time_limit;
+    engineConfig.limits.target_score = config.target_score;
+    engineConfig.limits.stall_time_limit = config.stall_time_limit;
+    engineConfig.limits.step_limit = config.step_limit;
+    engineConfig.limits.stall_step_limit
+        = config.stall_step_limit;
+    // history_length 0 = auto-scale with the instance (see Config).
+    engineConfig.search.acceptance.history_length
+        = config.history_length != 0
+              ? config.history_length
               : std::clamp<std::size_t>(
                     4 * solution.pickTasks.size(), 200, 1600);
-    auto &moves = engineConfig.localSearch.moveSelector;
-    moves.relocateMoveWeight = config.relocateMoveWeight;
-    moves.listSwapMoveWeight = config.listSwapMoveWeight;
-    moves.twoOptMoveWeight = config.twoOptMoveWeight;
-    moves.orOptMoveWeight = config.orOptMoveWeight;
-    moves.tailSwapMoveWeight = config.tailSwapMoveWeight;
-    auto &lns = engineConfig.localSearch.ruinRecreate;
-    lns.enabled = config.ruinRecreate;
-    lns.unimprovedStepTrigger = config.ruinRecreateUnimprovedStepTrigger;
-    lns.minRuinFraction = config.ruinRecreateMinRuinFraction;
-    lns.maxRuinFraction = config.ruinRecreateMaxRuinFraction;
-    lns.maxRuinCount = config.ruinRecreateMaxRuinCount;
-    lns.operatorDecay = config.ruinRecreateOperatorDecay;
+    auto &moves = engineConfig.search.moves;
+    moves.relocate_weight = config.relocate_weight;
+    moves.list_swap_weight = config.list_swap_weight;
+    moves.two_opt_weight = config.two_opt_weight;
+    moves.or_opt_weight = config.or_opt_weight;
+    moves.tail_swap_weight = config.tail_swap_weight;
+    auto &lns = engineConfig.search.ruin_recreate;
+    lns.enabled = config.ruin_recreate;
+    lns.unimproved_step_trigger = config.ruinRecreateUnimprovedStepTrigger;
+    lns.min_ruin_fraction = config.ruinRecreateMinRuinFraction;
+    lns.max_ruin_fraction = config.ruinRecreateMaxRuinFraction;
+    lns.max_ruin_count = config.ruinRecreateMaxRuinCount;
+    lns.operator_decay = config.ruinRecreateOperatorDecay;
     lns.rewards = config.ruinRecreateRewards;
-    lns.polishSteps = config.ruinRecreatePolishSteps;
+    lns.polish_steps = config.ruinRecreatePolishSteps;
 
     // Warehouse-distance nearby neighborhoods over the pick tasks (see
     // Config::distanceNearby). The meter reads a snapshot of the pick
@@ -533,17 +533,17 @@ optimaru::SolverConfig buildEngineConfig(const Solver::Config &config,
         locations->reserve(solution.pickTasks.size());
         for (const PickTask &task : solution.pickTasks)
             locations->push_back(task.location);
-        engineConfig.localSearch.nearby.distanceMeter
+        engineConfig.search.nearby.distance
             = [locations](int a, int b)
         {
             return static_cast<double>(
                 calculateDistance((*locations)[a], (*locations)[b]));
         };
-        engineConfig.localSearch.nearby.size = std::max(
+        engineConfig.search.nearby.size = std::max(
             1,
             std::min(config.distanceNearbySize,
                      static_cast<int>(solution.pickTasks.size()) - 1));
-        engineConfig.localSearch.nearby.probability
+        engineConfig.search.nearby.probability
             = config.distanceNearbyProbability;
     }
 
@@ -556,7 +556,7 @@ void Solver::solve(OrderPickingSolution &solution)
 {
     if (solution.trolleys.empty() || solution.pickTasks.empty())
     {
-        ScoreCalculator::calculateScore(solution);
+        ScoreCalculator::score(solution);
         return;
     }
     if (config_.ruinRecreateRewards.size() != 4)
@@ -580,7 +580,7 @@ void Solver::solve(OrderPickingSolution &solution)
         auto stop = std::make_shared<std::atomic<bool>>(false);
         // A worker that cannot be started (std::system_error) stops and joins
         // the ones already running before the error is rethrown here.
-        optimaru::runWorkerThreads(
+        optimaru::run_worker_threads(
             workerCount, *stop,
             [this, &candidates, &failures, &stop](int i)
             {
@@ -588,11 +588,11 @@ void Solver::solve(OrderPickingSolution &solution)
                 {
                     Config workerConfig = config_;
                     workerConfig.parallelSolverCount = 1;
-                    workerConfig.stopFlag = stop;
-                    workerConfig.randomSeed
+                    workerConfig.stop_flag = stop;
+                    workerConfig.seed
                         += static_cast<std::uint64_t>(i);
                     if (i != 0)
-                        workerConfig.onNewBest = nullptr;
+                        workerConfig.on_new_best = nullptr;
                     Solver worker(std::move(workerConfig));
                     worker.solve(candidates[i]);
                 }
@@ -617,29 +617,29 @@ void Solver::solve(OrderPickingSolution &solution)
         return;
     }
 
-    optimaru::SolverConfig engineConfig = buildEngineConfig(config_, solution);
+    optimaru::Settings engineConfig = buildEngineConfig(config_, solution);
     // Construction heuristic (cheapest insertion) + late-acceptance local
     // search (+ ALNS kicks), with the order-consolidation operator joining
     // the built-in move mix under adaptive selection.
     OrderPickingIncrementalScoreCalculator calculator;
     optimaru::Solver<OrderPickingSolution> engine(std::move(engineConfig));
-    if (config_.stopFlag)
-        engine.adoptTerminateEarlyFlag(config_.stopFlag);
+    if (config_.stop_flag)
+        engine.share_stop_flag(config_.stop_flag);
     if (config_.orderConsolidateMoves)
     {
-        engine.addMoveOperator(
+        engine.add_move_operator(
             std::make_unique<OrderConsolidateMove>(&calculator));
     }
     engine.solve(solution, calculator);
 
     // The authoritative final score: a full recompute on the best solution.
     // Also refreshes the shadow variables (trolley / previous / next).
-    solution.score = ScoreCalculator::calculateScore(solution);
+    solution.score = ScoreCalculator::score(solution);
 }
 
 void Solver::solve(
     OrderPickingSolution &solution,
-    optimaru::DecomposedScoreCalculator<OrderPickingSolution> &calculator)
+    optimaru::DecomposedObjective<OrderPickingSolution> &calculator)
 {
     if (config_.ruinRecreateRewards.size() != 4)
     {
@@ -659,11 +659,11 @@ void Solver::solve(
 
     // Refresh the shadow variables (trolley / previous / next) on the best
     // solution, then score it with the caller's constraint assembly, leaving
-    // the calculator primed on it so constraintTotals() explains exactly this
+    // the calculator primed on it so constraint_totals() explains exactly this
     // score.
     ScoreCalculator::updateShadowVariables(solution);
-    calculator.resetWorkingSolution(solution);
-    solution.score = calculator.calculateScore();
+    calculator.rebuild(solution);
+    solution.score = calculator.score();
 }
 
 }  // namespace op

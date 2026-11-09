@@ -32,7 +32,7 @@ target_link_libraries(fl_test PRIVATE fl_core)
 target_compile_options(fl_test PRIVATE -Wall -Wextra)
 
 # Plugin-assembly path (fl/constraints.hpp): the same provider decomposed into
-# one component each on the engine's DecomposedScoreCalculator, checked
+# one component each on the engine's DecomposedObjective, checked
 # bit-for-bit against the monolithic calculators.
 add_executable(fl_plugin_test test/fl_plugin_test.cpp)
 target_link_libraries(fl_plugin_test PRIVATE fl_core)

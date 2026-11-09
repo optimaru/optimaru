@@ -46,9 +46,9 @@ class no longer shadows the `UnavailabilityPenalty` fact, which keeps its name.
 `n` is the number of items with load ≥ 1 (the Java original has no complement, so teams
 without assignments / pairs without head-to-heads are not counted).
 
-## Score mapping (HardMediumSoftBigDecimalScore → HardSoftScore)
+## Score mapping (HardMediumSoftBigDecimalScore → Score)
 
-The engine score is `HardSoftScore(hard int64, soft double)`, so Java's three levels are
+The engine score is `Score(hard int64, soft double)`, so Java's three levels are
 folded into two (the same as the `cpp/include/ts/domain.hpp` comments):
 
 ```
@@ -100,7 +100,7 @@ objects. Pin an assignment with `TeamAssignmentModel.pinned=True`
 ```bash
 cd ../cpp
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j4
-./build/ts_test    # hand-computed constraint cases + 3000 random moves incremental==full + FULL_ASSERT solve
+./build/ts_test    # hand-computed constraint cases + 3000 random moves incremental==full + ScoreChecks::Full solve
 ./build/ts_plugin_test  # default assembly == monolith, raw costs by hand, catalog, medium knobs
 ./build/ts_demo 10 # reproduces the Java demo, 10 s solve, asserts feasible (0hard)
 ```

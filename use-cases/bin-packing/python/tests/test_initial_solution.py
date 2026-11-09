@@ -92,7 +92,7 @@ def test_partial_seed_never_reaches_the_search_with_minus_one():
     """The construction completes a partial seed before the engine starts.
 
     (0.1.x checked this by monkeypatching its Python moves; the C++ moves are covered by
-    bp_test.cpp's construction and FULL_ASSERT checks.) A zero-budget solve returns exactly
+    bp_test.cpp's construction and ScoreChecks::Full checks.) A zero-budget solve returns exactly
     what the search would start from.
     """
     seeded = with_initial_solution(_problem(), {"items": [{"id": "A", "bin": 0}]}).to_core()

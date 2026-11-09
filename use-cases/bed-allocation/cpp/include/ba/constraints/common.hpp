@@ -8,8 +8,8 @@
 
 #include "ba/domain.hpp"
 #include "ba/score_calculator.hpp"
-#include "optimaru/api/score/calculator/constraint_assembly.hpp"
-#include "optimaru/api/score/calculator/decomposed_score_calculator.hpp"
+#include "optimaru/constraint_assembly.hpp"
+#include "optimaru/decomposed_objective.hpp"
 
 namespace ba
 {
@@ -19,7 +19,7 @@ namespace ba
 // ---------------------------------------------------------------------------
 // The twelve constraints of the reference bed-allocation
 // BedAllocationConstraintProvider, split into one small component each on the
-// engine's DecomposedScoreCalculator — an optional assembly path NEXT TO the
+// engine's DecomposedObjective — an optional assembly path NEXT TO the
 // monolithic BedAllocationIncrementalScoreCalculator, which stays the tuned
 // default fast path.
 //
@@ -36,10 +36,10 @@ namespace ba
 // bedConflictCost is a sum over pairs INSIDE one bed, so it is a unit
 // constraint with an exact pairwise delta. Only mixedGenderRoomCost spans
 // units (its pairs share a ROOM, and a room holds several beds), so it runs
-// as a GlobalConstraint on the onMemberChanged fast path.
+// as a GlobalConstraint on the on_member_changed fast path.
 //
 // Score levels: the quickstart scores with HardMediumSoftScore, which this
-// domain folds into the engine's HardSoftScore as
+// domain folds into the engine's Score as
 // `soft = medium * kMediumUnit + soft` (kMediumFold in domain.hpp, registered
 // as optimaru::MediumFoldOf<BedPlan>). The decomposed calculator keeps a
 // separate medium accumulator and applies that fold itself, so a medium
@@ -67,13 +67,13 @@ namespace ba
 // (`.level()`, with `.hard()` / `.soft()` as its shortcuts, `.weight()`,
 // `.exponent()`, `.offset()`, `.clip()`); any component may take any of the
 // three levels, and a name may be held several times
-// (ConstraintAssembly::addInstances), each instance with its own knobs. The
+// (ConstraintAssembly::add_instances), each instance with its own knobs. The
 // monolithic calculators read the same kDefaultWeight
 // constants, which is why the default assembly scores bit-for-bit like
-// ScoreCalculator::calculateScore.
+// ScoreCalculator::score.
 //
 // Registry names are the struct names with a lower-case first letter
-// ("bedConflictCost"); Python sees them through pythonName()
+// ("bedConflictCost"); Python sees them through python_name()
 // ("bed_conflict_cost").
 //
 // Cost sign convention (see decomposed_score_calculator.hpp): positive =
@@ -82,7 +82,7 @@ namespace ba
 // Every component requires ScoreCalculator::prepare(plan) to have run (the
 // solve() overload and the monolithic path both call it).
 
-using DecomposedCalculator = optimaru::DecomposedScoreCalculator<BedPlan>;
+using DecomposedCalculator = optimaru::DecomposedObjective<BedPlan>;
 using ConstraintAssembly = optimaru::ConstraintAssembly<BedPlan>;
 using BaUnitConstraint = optimaru::UnitConstraint<BedPlan>;
 using BaGlobalConstraint = optimaru::GlobalConstraint<BedPlan>;
@@ -106,10 +106,10 @@ inline bool isRealBed(const BedPlan &plan, int value)
 }
 
 // The units a per-bed component EVALUATES: the real beds 0 .. bedCount - 1,
-// set at reset (its scopedUnits()). The "no bed" sentinel is no bed, so it is
+// set at reset (its scoped_units()). The "no bed" sentinel is no bed, so it is
 // not one of them. Its cost is 0 either way, so no score changes; what the
 // scope decides is where the literal offset formula (clip = false) charges
-// shapeCost(0 - offset): every real bed, an empty one included, and never the
+// shape_cost(0 - offset): every real bed, an empty one included, and never the
 // sentinel. constraint_costs() reports the scope as "units", so the Python
 // score() charges the same beds.
 class RealBeds
@@ -143,7 +143,7 @@ struct PerStayConstraint : BaUnitConstraint
     virtual double stayCost(const BedPlan &plan, int unit, int stayIndex) const
         = 0;
 
-    void onReset(const BedPlan &plan) override
+    void on_reset(const BedPlan &plan) override
     {
         detail::requirePrepared(plan);
     }
@@ -156,8 +156,8 @@ struct PerStayConstraint : BaUnitConstraint
             total += stayCost(plan, unit, stayIndex);
         return total;
     }
-    bool supportsDelta() const override { return true; }
-    double deltaCost(const BedPlan &plan,
+    bool supports_delta() const override { return true; }
+    double delta_cost(const BedPlan &plan,
                      int unit,
                      const std::vector<int> & /*members*/,
                      int entity) const override
@@ -173,12 +173,12 @@ struct PerStayRoomConstraint : PerStayConstraint
 {
     using PerStayConstraint::PerStayConstraint;
 
-    void onReset(const BedPlan &plan) override
+    void on_reset(const BedPlan &plan) override
     {
-        PerStayConstraint::onReset(plan);
+        PerStayConstraint::on_reset(plan);
         beds_.reset(plan);
     }
-    const std::vector<int> *scopedUnits() const override
+    const std::vector<int> *scoped_units() const override
     {
         return beds_.units();
     }
@@ -202,13 +202,13 @@ private:
 // ---------------------------------------------------------------------------
 // Cross-unit global constraints
 // ---------------------------------------------------------------------------
-// Shared base: supportsMemberChange() routes everything through
-// onMemberChanged; the unit-diff hook is unreachable for BASIC solutions.
+// Shared base: supports_member_change() routes everything through
+// on_member_changed; the unit-diff hook is unreachable for BASIC solutions.
 struct MemberChangeGlobalConstraint : BaGlobalConstraint
 {
     using BaGlobalConstraint::BaGlobalConstraint;
-    bool supportsMemberChange() const override { return true; }
-    void onUnitChanged(const BedPlan & /*plan*/,
+    bool supports_member_change() const override { return true; }
+    void on_unit_changed(const BedPlan & /*plan*/,
                        int /*unit*/,
                        const std::vector<int> & /*members*/) override
     {

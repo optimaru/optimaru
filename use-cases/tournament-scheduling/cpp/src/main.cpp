@@ -197,20 +197,20 @@ int main(int argc, char **argv)
                 seconds);
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(seconds);
-    config.randomSeed = 42;
-    config.onNewBest = [](std::int64_t step, const Score &score)
+    config.time_limit = std::chrono::seconds(seconds);
+    config.seed = 42;
+    config.on_new_best = [](std::int64_t step, const Score &score)
     {
         std::printf("    new best @step %-8lld %s\n",
                     static_cast<long long>(step),
-                    score.toString().c_str());
+                    score.str().c_str());
     };
     Solver solver(config);
     solver.solve(schedule);
 
     std::printf("\n  final score: %s  (feasible=%s)\n",
-                schedule.score.toString().c_str(),
-                schedule.score.isFeasible() ? "true" : "false");
+                schedule.score.str().c_str(),
+                schedule.score.feasible() ? "true" : "false");
     // Decompose back into the Java score levels for readability.
     {
         std::vector<std::int64_t> loads;

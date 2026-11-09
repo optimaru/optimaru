@@ -15,7 +15,7 @@ namespace mc
 // (1 on its vertex's side); a repeated pair counts once per entry.
 //
 // cost() is a pure function of (unit, members) (a pair counts only when both
-// endpoints are inside the unit). deltaCost(e) =
+// endpoints are inside the unit). delta_cost(e) =
 //   #{pairs naming e and w != e, w on side u}  +  #{(e, e) self-pairs}
 // read from the CSR incidence (O(pair degree)); partner sides come from the
 // working solution (see common.hpp for why that is exact).
@@ -29,7 +29,7 @@ struct DifferentPartitionPairsCost final : McUnitConstraint
     {
     }
 
-    void onReset(const MaxCutProblem &problem) override
+    void on_reset(const MaxCutProblem &problem) override
     {
         detail::requirePrepared(problem);
     }
@@ -46,8 +46,8 @@ struct DifferentPartitionPairsCost final : McUnitConstraint
         return total;
     }
 
-    bool supportsDelta() const override { return true; }
-    double deltaCost(const MaxCutProblem &problem,
+    bool supports_delta() const override { return true; }
+    double delta_cost(const MaxCutProblem &problem,
                      int unit,
                      const std::vector<int> & /*members*/,
                      int vertex) const override

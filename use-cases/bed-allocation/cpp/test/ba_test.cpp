@@ -4,8 +4,8 @@
 //       (the Java BedAllocationConstraintProviderTest cases, scaled by the
 //       constraint weights)
 //   (b) incremental score == full recompute across a long random walk driven
-//       through the engine's ScoreDirector protocol (before/set/after)
-//   (c) a small instance solved under EnvironmentMode::FULL_ASSERT
+//       through the engine's Editor protocol (before/set/after)
+//   (c) a small instance solved under ScoreChecks::ScoreChecks::Full
 //   (d) a plain solve reaches hard 0 and initializes every stay
 //   (e) a parallelSolverCount > 1 solve returns a consistently scored winner
 //   (f) stays with no night in house occupy nothing in the per-night
@@ -22,7 +22,7 @@
 #include "ba/incremental_calculator.hpp"
 #include "ba/score_calculator.hpp"
 #include "ba/solver.hpp"
-#include "optimaru/api/score/director/score_director.hpp"
+#include "optimaru/editor.hpp"
 
 using namespace ba;
 
@@ -50,7 +50,7 @@ void checkScore(const std::string &label,
     std::printf("  [%s] %-44s got=%s expected=%ldhard/%ldmedium/%ldsoft\n",
                 ok ? "PASS" : "FAIL",
                 label.c_str(),
-                actual.toString().c_str(),
+                actual.str().c_str(),
                 expectedHard,
                 expectedMedium,
                 expectedSoft);
@@ -135,7 +135,7 @@ void verifyConstraints()
             = addBed(plan, addRoom(plan, GenderLimitation::MALE_ONLY));
         addStay(plan, 0, 5, Gender::FEMALE, bed);
         checkScore("femaleInMaleRoomCost",
-                   ScoreCalculator::calculateScore(plan),
+                   ScoreCalculator::score(plan),
                    -300,
                    0,
                    0);
@@ -147,7 +147,7 @@ void verifyConstraints()
             = addBed(plan, addRoom(plan, GenderLimitation::FEMALE_ONLY));
         addStay(plan, 0, 5, Gender::MALE, bed);
         checkScore("maleInFemaleRoomCost",
-                   ScoreCalculator::calculateScore(plan),
+                   ScoreCalculator::score(plan),
                    -300,
                    0,
                    0);
@@ -159,7 +159,7 @@ void verifyConstraints()
             = addBed(plan, addRoom(plan, GenderLimitation::FEMALE_ONLY));
         addStay(plan, 0, 5, Gender::FEMALE, bed);
         checkScore("female in FEMALE_ONLY ok",
-                   ScoreCalculator::calculateScore(plan),
+                   ScoreCalculator::score(plan),
                    0,
                    0,
                    0);
@@ -171,7 +171,7 @@ void verifyConstraints()
         addStay(plan, 0, 5, Gender::MALE, bed);
         addStay(plan, 0, 5, Gender::MALE, bed);
         checkScore("bedConflictCost full overlap",
-                   ScoreCalculator::calculateScore(plan),
+                   ScoreCalculator::score(plan),
                    -6000,
                    0,
                    0);
@@ -183,7 +183,7 @@ void verifyConstraints()
         addStay(plan, 0, 5, Gender::MALE, bed);
         addStay(plan, 3, 9, Gender::MALE, bed);
         checkScore("bedConflictCost partial overlap",
-                   ScoreCalculator::calculateScore(plan),
+                   ScoreCalculator::score(plan),
                    -3000,
                    0,
                    0);
@@ -195,7 +195,7 @@ void verifyConstraints()
         addStay(plan, 0, 2, Gender::MALE, bed);
         addStay(plan, 4, 6, Gender::MALE, bed);
         checkScore("bedConflictCost disjoint",
-                   ScoreCalculator::calculateScore(plan),
+                   ScoreCalculator::score(plan),
                    0,
                    0,
                    0);
@@ -208,7 +208,7 @@ void verifyConstraints()
         addStay(plan, 0, 5, Gender::FEMALE, addBed(plan, room));
         addStay(plan, 0, 5, Gender::MALE, addBed(plan, room));
         checkScore("mixedGenderRoomCost",
-                   ScoreCalculator::calculateScore(plan),
+                   ScoreCalculator::score(plan),
                    -6000,
                    0,
                    0);
@@ -221,7 +221,7 @@ void verifyConstraints()
         addStay(plan, 0, 5, Gender::MALE, addBed(plan, room));
         addStay(plan, 0, 5, Gender::MALE, addBed(plan, room));
         checkScore("same gender in SAME_GENDER room ok",
-                   ScoreCalculator::calculateScore(plan),
+                   ScoreCalculator::score(plan),
                    0,
                    0,
                    0);
@@ -234,7 +234,7 @@ void verifyConstraints()
         addStay(plan, 0, 5, Gender::FEMALE, addBed(plan, room));
         addStay(plan, 0, 5, Gender::MALE, addBed(plan, room));
         checkScore("mixed genders in ANY_GENDER room ok",
-                   ScoreCalculator::calculateScore(plan),
+                   ScoreCalculator::score(plan),
                    0,
                    0,
                    0);
@@ -247,7 +247,7 @@ void verifyConstraints()
         const int stay = addStay(plan, 0, 5, Gender::MALE, bed);
         plan.stays[stay].patientAge = 5;
         checkScore("departmentMinAgeCost",
-                   ScoreCalculator::calculateScore(plan),
+                   ScoreCalculator::score(plan),
                    -600,
                    0,
                    0);
@@ -260,7 +260,7 @@ void verifyConstraints()
         const int stay = addStay(plan, 0, 5, Gender::MALE, bed);
         plan.stays[stay].patientAge = 42;
         checkScore("departmentMaxAgeCost",
-                   ScoreCalculator::calculateScore(plan),
+                   ScoreCalculator::score(plan),
                    -600,
                    0,
                    0);
@@ -276,7 +276,7 @@ void verifyConstraints()
         const int stay = addStay(plan, 0, 5, Gender::MALE, bed);
         plan.stays[stay].patientRequiredEquipment = {"television", "telemetry"};
         checkScore("requiredPatientEquipmentCost partial",
-                   ScoreCalculator::calculateScore(plan),
+                   ScoreCalculator::score(plan),
                    -300,
                    0,
                    0);
@@ -289,7 +289,7 @@ void verifyConstraints()
         const int stay = addStay(plan, 0, 5, Gender::MALE, bed);
         plan.stays[stay].patientRequiredEquipment = {"television"};
         checkScore("requiredPatientEquipmentCost none present",
-                   ScoreCalculator::calculateScore(plan),
+                   ScoreCalculator::score(plan),
                    0,
                    0,
                    0);
@@ -305,7 +305,7 @@ void verifyConstraints()
         const int stay = addStay(plan, 0, 5, Gender::MALE, bed);
         plan.stays[stay].patientRequiredEquipment = {"television"};
         checkScore("requiredPatientEquipmentCost all present",
-                   ScoreCalculator::calculateScore(plan),
+                   ScoreCalculator::score(plan),
                    0,
                    0,
                    0);
@@ -316,7 +316,7 @@ void verifyConstraints()
         addBed(plan, addRoom(plan));
         addStay(plan, 0, 5, Gender::MALE, /*bed*/ 1);  // noBedValue() == 1
         checkScore("unassignedStaysCost (no bed)",
-                   ScoreCalculator::calculateScore(plan),
+                   ScoreCalculator::score(plan),
                    0,
                    -6,
                    0);
@@ -327,7 +327,7 @@ void verifyConstraints()
         addBed(plan, addRoom(plan));
         addStay(plan, 0, 5, Gender::MALE, -1);
         checkScore("uninitialized contributes nothing",
-                   ScoreCalculator::calculateScore(plan),
+                   ScoreCalculator::score(plan),
                    0,
                    0,
                    0);
@@ -340,7 +340,7 @@ void verifyConstraints()
         const int stay = addStay(plan, 0, 5, Gender::MALE, bed);
         plan.stays[stay].patientPreferredMaximumRoomCapacity = 3;
         checkScore("preferredMaxRoomCapacityCost",
-                   ScoreCalculator::calculateScore(plan),
+                   ScoreCalculator::score(plan),
                    0,
                    0,
                    -48);
@@ -353,7 +353,7 @@ void verifyConstraints()
         const int stay = addStay(plan, 0, 5, Gender::MALE, bed);
         plan.stays[stay].patientPreferredMaximumRoomCapacity = 3;
         checkScore("preferredMaxRoomCapacityCost within",
-                   ScoreCalculator::calculateScore(plan),
+                   ScoreCalculator::score(plan),
                    0,
                    0,
                    0);
@@ -370,7 +370,7 @@ void verifyConstraints()
         const int bed2 = addBed(plan, plan.beds[bed].room);
         addStay(plan, 0, 5, Gender::MALE, bed2, "spec2");
         checkScore("departmentSpecialtyCost",
-                   ScoreCalculator::calculateScore(plan),
+                   ScoreCalculator::score(plan),
                    0,
                    0,
                    -60);
@@ -386,7 +386,7 @@ void verifyConstraints()
         const int bed2 = addBed(plan, plan.beds[bed].room);
         addStay(plan, 0, 5, Gender::MALE, bed2, "spec2");
         checkScore("departmentSpecialtyPriorityCost",
-                   ScoreCalculator::calculateScore(plan),
+                   ScoreCalculator::score(plan),
                    0,
                    0,
                    -60);
@@ -401,7 +401,7 @@ void verifyConstraints()
         plan.stays[stay].patientPreferredEquipment
             = {"television", "telemetry"};
         checkScore("preferredPatientEquipmentCost",
-                   ScoreCalculator::calculateScore(plan),
+                   ScoreCalculator::score(plan),
                    0,
                    0,
                    -300);
@@ -488,7 +488,7 @@ BedPlan buildRandomInstance(int stayCount, std::uint64_t seed)
 // -------------------------------------------------------------------------
 // (b) Incremental score == full recompute across a random walk of change and
 // swap moves (including unassignments to -1 and to the "no bed" sentinel),
-// driven through the ScoreDirector so the before/set/after hook contract is
+// driven through the Editor so the before/set/after hook contract is
 // exercised exactly like in the engine.
 // -------------------------------------------------------------------------
 void verifyIncremental()
@@ -497,12 +497,12 @@ void verifyIncremental()
     BedPlan plan = buildRandomInstance(/*stayCount*/ 30, /*seed*/ 7);
 
     BedAllocationIncrementalScoreCalculator calc;
-    optimaru::ScoreDirector<BedPlan> director(plan, calc);
+    optimaru::Editor<BedPlan> editor(plan, calc);
     BedPlan shadow = plan;
 
     std::mt19937_64 rng(123);
     const int stayCount = static_cast<int>(plan.stays.size());
-    const int valueCount = plan.bedCount() + 1;  // beds + "no bed" sentinel
+    const int value_count = plan.bedCount() + 1;  // beds + "no bed" sentinel
     std::uniform_real_distribution<double> unit(0.0, 1.0);
 
     int mismatches = 0;
@@ -517,8 +517,8 @@ void verifyIncremental()
             const int stay = static_cast<int>(rng() % stayCount);
             const int value = (unit(rng) < 0.10)
                                   ? -1
-                                  : static_cast<int>(rng() % valueCount);
-            director.changeVariable(stay, value);
+                                  : static_cast<int>(rng() % value_count);
+            editor.assign(stay, value);
         }
         else
         {
@@ -527,15 +527,15 @@ void verifyIncremental()
             const int b = static_cast<int>(rng() % stayCount);
             const int va = plan.stays[a].bed;
             const int vb = plan.stays[b].bed;
-            director.changeVariable(a, vb);
-            director.changeVariable(b, va);
+            editor.assign(a, vb);
+            editor.assign(b, va);
         }
         // Full recompute on the same assignment.
         for (int i = 0; i < stayCount; ++i)
             shadow.stays[i].bed = plan.stays[i].bed;
-        const optimaru::HardSoftScore full
+        const optimaru::Score full
             = ScoreCalculator::calculateEngineScore(shadow);
-        const optimaru::HardSoftScore incremental = director.calculateScore();
+        const optimaru::Score incremental = editor.score();
         if (full.hard != incremental.hard
             || std::fabs(full.soft - incremental.soft) > 1e-9)
         {
@@ -543,8 +543,8 @@ void verifyIncremental()
             {
                 std::printf("  MISMATCH @step %d: incremental=%s full=%s\n",
                             step,
-                            incremental.toString().c_str(),
-                            full.toString().c_str());
+                            incremental.str().c_str(),
+                            full.str().c_str());
             }
         }
     }
@@ -555,15 +555,15 @@ void verifyIncremental()
     // The three-level round trip through the engine encoding is exact.
     const Score decoded
         = fromEngineScore(ScoreCalculator::calculateEngineScore(plan));
-    ScoreCalculator::calculateScore(plan);
+    ScoreCalculator::score(plan);
     check(decoded == plan.score, "fromEngineScore(toEngineScore(s)) == s");
     std::printf("\n");
 }
 
 // -------------------------------------------------------------------------
-// (c) FULL_ASSERT solve: the engine cross-checks the incremental score
+// (c) ScoreChecks::Full solve: the engine cross-checks the incremental score
 // against a full reset + recompute after every single move and throws
-// ScoreCorruptionError on any divergence.
+// ScoreMismatchError on any divergence.
 // -------------------------------------------------------------------------
 void verifyFullAssertSolve()
 {
@@ -571,10 +571,10 @@ void verifyFullAssertSolve()
     BedPlan plan = buildRandomInstance(/*stayCount*/ 20, /*seed*/ 11);
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(2);
-    config.randomSeed = 3;
-    config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
-    // Kick early so the LNS ruin/recreate path also runs under FULL_ASSERT.
+    config.time_limit = std::chrono::seconds(2);
+    config.seed = 3;
+    config.score_checks = optimaru::ScoreChecks::Full;
+    // Kick early so the LNS ruin/recreate path also runs under ScoreChecks::Full.
     config.ruinRecreateUnimprovedStepTrigger = 200;
     config.ruinRecreatePolishSteps = 100;
 
@@ -586,7 +586,7 @@ void verifyFullAssertSolve()
         solver.solve(plan);
         finalScore = plan.score;
     }
-    catch (const optimaru::ScoreCorruptionError &e)
+    catch (const optimaru::ScoreMismatchError &e)
     {
         corrupted = true;
         std::printf("  ScoreCorruptionError: %s\n", e.what());
@@ -594,7 +594,7 @@ void verifyFullAssertSolve()
     check(!corrupted, "2s FULL_ASSERT solve without score corruption");
     if (!corrupted)
     {
-        const Score recomputed = ScoreCalculator::calculateScore(plan);
+        const Score recomputed = ScoreCalculator::score(plan);
         check(finalScore == recomputed,
               "solver-reported score == full recompute");
     }
@@ -611,8 +611,8 @@ void verifyFeasibleSolve()
     BedPlan plan = buildRandomInstance(/*stayCount*/ 24, /*seed*/ 21);
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(2);
-    config.randomSeed = 5;
+    config.time_limit = std::chrono::seconds(2);
+    config.seed = 5;
     Solver solver(config);
     solver.solve(plan);
 
@@ -638,14 +638,14 @@ void verifyParallelSolve()
     BedPlan plan = buildRandomInstance(/*stayCount*/ 24, /*seed*/ 31);
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(1);
-    config.randomSeed = 5;
+    config.time_limit = std::chrono::seconds(1);
+    config.seed = 5;
     config.parallelSolverCount = 4;
     Solver solver(config);
     solver.solve(plan);
 
     BedPlan recomputed = plan;
-    check(ScoreCalculator::calculateScore(recomputed) == plan.score,
+    check(ScoreCalculator::score(recomputed) == plan.score,
           "4 workers: reported score == full recompute");
     check(plan.score.hard == 0, "4 workers: reaches 0hard");
     bool allInitialized = true;
@@ -676,20 +676,20 @@ void verifyEmptyNightStays()
     addStay(plan, 0, 9, Gender::MALE, bed);
 
     BedAllocationIncrementalScoreCalculator calc;
-    optimaru::ScoreDirector<BedPlan> director(plan, calc);
+    optimaru::Editor<BedPlan> editor(plan, calc);
     BedPlan shadow = plan;
     check(ScoreCalculator::calculateEngineScore(shadow).hard
-              == director.calculateScore().hard,
+              == editor.score().hard,
           "zero-night stays: incremental == full recompute");
 
-    // Moving one of them through the director must stay consistent.
-    director.changeVariable(0, plan.noBedValue());
-    director.changeVariable(1, bed + 1);
+    // Moving one of them through the editor must stay consistent.
+    editor.assign(0, plan.noBedValue());
+    editor.assign(1, bed + 1);
     for (std::size_t i = 0; i < plan.stays.size(); ++i)
         shadow.stays[i].bed = plan.stays[i].bed;
-    const optimaru::HardSoftScore full
+    const optimaru::Score full
         = ScoreCalculator::calculateEngineScore(shadow);
-    const optimaru::HardSoftScore incremental = director.calculateScore();
+    const optimaru::Score incremental = editor.score();
     check(full.hard == incremental.hard
               && std::fabs(full.soft - incremental.soft) < 1e-9,
           "zero-night stays: incremental == full after moves");
@@ -705,14 +705,14 @@ void verifyEmptyNightStays()
 void verifyStopAtFirstFeasibleLimit()
 {
     std::printf("== stop_at_first_feasible's limit is hard-only ==\n");
-    const optimaru::HardSoftScore limit
+    const optimaru::Score limit
         = toEngineScoreLimit(Score{0, kNoLevelFloor, kNoLevelFloor});
     check(limit.hard == 0 && std::isinf(limit.soft) && limit.soft < 0.0,
           "(0, INT64_MIN, INT64_MIN) -> engine limit (0, -inf)");
-    check(optimaru::HardSoftScore{0, -1e30} >= limit
+    check(optimaru::Score{0, -1e30} >= limit
               && toEngineScore(Score{0, -5, -(1LL << 62)}) >= limit,
           "a feasible score with any soft (-1e30; medium -5, soft -2^62) reaches it");
-    check(!(optimaru::HardSoftScore{-1, 0.0} >= limit),
+    check(!(optimaru::Score{-1, 0.0} >= limit),
           "an infeasible score does not");
     check(toEngineScoreLimit(Score{0, kNoLevelFloor, 0}).soft
                   == -std::numeric_limits<double>::infinity()

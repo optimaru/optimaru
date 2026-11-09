@@ -213,7 +213,7 @@ ScoreCalculator::itineraryStats(const FlightCrewSchedule &schedule,
     return stats;
 }
 
-Score ScoreCalculator::calculateScore(FlightCrewSchedule &schedule)
+Score ScoreCalculator::score(FlightCrewSchedule &schedule)
 {
     prepare(schedule);
 

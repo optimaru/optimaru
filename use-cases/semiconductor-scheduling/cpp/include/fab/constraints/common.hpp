@@ -9,8 +9,8 @@
 #include "fab/domain.hpp"
 #include "fab/evaluator.hpp"
 #include "fab/score_terms.hpp"
-#include "optimaru/api/score/calculator/constraint_assembly.hpp"
-#include "optimaru/api/score/calculator/decomposed_score_calculator.hpp"
+#include "optimaru/constraint_assembly.hpp"
+#include "optimaru/decomposed_objective.hpp"
 
 namespace fab
 {
@@ -19,7 +19,7 @@ namespace fab
 // Plugin-style constraint components
 // ---------------------------------------------------------------------------
 // The 20 constraints of the fab, one component each on the engine's
-// DecomposedScoreCalculator — the composable path NEXT TO the monolithic
+// DecomposedObjective — the composable path NEXT TO the monolithic
 // calculators (fab/score_calculator.hpp, fab/incremental_calculator.hpp),
 // which stay the default fast path.
 //
@@ -53,7 +53,7 @@ namespace fab
 // through ConstraintAssembly. The schedule carries no weights.
 //
 // Registry names are the struct names with a lower-case first letter
-// ("machineCapacityCost"); Python sees them through pythonName()
+// ("machineCapacityCost"); Python sees them through python_name()
 // ("machine_capacity_cost").
 //
 // Global constraints shape their TOTAL: exponent e scores weight * total^e
@@ -63,7 +63,7 @@ namespace fab
 // penalty, 0 = no violation; the calculator negates into the score. Every
 // component requires ScoreCalculator::prepare(schedule) to have run.
 
-using DecomposedCalculator = optimaru::DecomposedScoreCalculator<SemiconductorSchedule>;
+using DecomposedCalculator = optimaru::DecomposedObjective<SemiconductorSchedule>;
 using ConstraintAssembly = optimaru::ConstraintAssembly<SemiconductorSchedule>;
 using FabGlobalConstraint = optimaru::GlobalConstraint<SemiconductorSchedule>;
 
@@ -106,41 +106,41 @@ private:
 // does the rest.
 struct ScheduleViewConstraint : FabGlobalConstraint
 {
-    ScheduleViewConstraint(std::string constraintName, double constraintWeight,
+    ScheduleViewConstraint(std::string constraint_name, double constraintWeight,
                            optimaru::Level constraintLevel, Term term)
-        : FabGlobalConstraint(std::move(constraintName), constraintWeight, constraintLevel),
+        : FabGlobalConstraint(std::move(constraint_name), constraintWeight, constraintLevel),
           term_(term)
     {
     }
 
     Term term() const { return term_; }
 
-    const char *sharedContextKey() const override { return "fab.schedule"; }
-    std::unique_ptr<optimaru::SharedConstraintContext> createSharedContext() const override
+    const char *shared_context_key() const override { return "fab.schedule"; }
+    std::unique_ptr<optimaru::SharedConstraintContext> create_shared_context() const override
     {
         return std::make_unique<ScheduleView>();
     }
-    void bindSharedContext(optimaru::SharedConstraintContext &context) override
+    void bind_shared_context(optimaru::SharedConstraintContext &context) override
     {
         view_ = static_cast<ScheduleView *>(&context);
     }
 
     void reset(const SemiconductorSchedule &schedule,
-               const std::vector<std::vector<int>> & /*membersPerUnit*/) override
+               const std::vector<std::vector<int>> & /*members_per_unit*/) override
     {
         detail::requirePrepared(schedule);
         view_->resetOnce(schedule);
     }
     // A row's value moved: every component hears it; the view keeps one mark.
-    bool supportsMemberChange() const override { return true; }
-    void onMemberChanged(const SemiconductorSchedule & /*schedule*/, int /*unit*/,
+    bool supports_member_change() const override { return true; }
+    void on_member_changed(const SemiconductorSchedule & /*schedule*/, int /*unit*/,
                          const std::vector<int> & /*members*/, int row, bool /*joined*/) override
     {
         view_->markChanged(row);
     }
-    // Not called while supportsMemberChange() holds; a unit notification
+    // Not called while supports_member_change() holds; a unit notification
     // cannot say who left, so it re-reads every row.
-    void onUnitChanged(const SemiconductorSchedule & /*schedule*/, int /*unit*/,
+    void on_unit_changed(const SemiconductorSchedule & /*schedule*/, int /*unit*/,
                        const std::vector<int> & /*members*/) override
     {
         view_->markAllChanged();

@@ -25,9 +25,9 @@ struct ForbiddenTaskStationsCost final : PerTaskConstraint
         : PerTaskConstraint("forbiddenTaskStationsCost", weight, kDefaultLevel)
     {
     }
-    void onReset(const AssemblyLineBalancingProblem &problem) override
+    void on_reset(const AssemblyLineBalancingProblem &problem) override
     {
-        PerTaskConstraint::onReset(problem);
+        PerTaskConstraint::on_reset(problem);
         scoped_.clear();
         for (const std::vector<int> &forbidden : problem.forbiddenSorted)
         {
@@ -47,7 +47,7 @@ struct ForbiddenTaskStationsCost final : PerTaskConstraint
         const std::vector<int> &forbidden = problem.forbiddenSorted[task];
         return std::binary_search(forbidden.begin(), forbidden.end(), station) ? 1.0 : 0.0;
     }
-    const std::vector<int> *scopedUnits() const override { return &scoped_; }
+    const std::vector<int> *scoped_units() const override { return &scoped_; }
 
 private:
     std::vector<int> scoped_;

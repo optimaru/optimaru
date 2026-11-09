@@ -12,9 +12,9 @@
 
 #include "ba/incremental_calculator.hpp"
 #include "ba/score_calculator.hpp"
-#include "optimaru/api/solver/solver.hpp"
-#include "optimaru/config/solver/solver_config.hpp"
-#include "optimaru/impl/solver/worker_threads.hpp"
+#include "optimaru/solver.hpp"
+#include "optimaru/settings.hpp"
+#include "optimaru/worker_threads.hpp"
 
 namespace ba
 {
@@ -22,53 +22,53 @@ namespace ba
 namespace
 {
 
-// Translates a domain Config into the engine's SolverConfig: termination,
+// Translates a domain Config into the engine's Settings: termination,
 // late acceptance, the move mix, the ALNS knobs and the nearby distance
 // meter. The meter closes over `plan`, so the caller must keep that solution
 // alive for the whole solve.
 void configureEngine(const Solver::Config &config,
                      const BedPlan &plan,
-                     optimaru::SolverConfig &engineConfig)
+                     optimaru::Settings &engineConfig)
 {
-    engineConfig.randomSeed = config.randomSeed;
-    engineConfig.environmentMode = config.environmentMode;
-    if (config.onNewBest)
+    engineConfig.seed = config.seed;
+    engineConfig.score_checks = config.score_checks;
+    if (config.on_new_best)
     {
-        auto onNewBest = config.onNewBest;
-        engineConfig.onNewBest =
-            [onNewBest](std::int64_t step, const optimaru::HardSoftScore &score)
-        { onNewBest(step, fromEngineScore(score)); };
+        auto on_new_best = config.on_new_best;
+        engineConfig.on_new_best =
+            [on_new_best](std::int64_t step, const optimaru::Score &score)
+        { on_new_best(step, fromEngineScore(score)); };
     }
-    engineConfig.termination.spentLimit = config.spentLimit;
-    engineConfig.termination.bestScoreLimit
-        = toEngineScoreLimit(config.bestScoreLimit);
-    engineConfig.termination.unimprovedSpentLimit = config.unimprovedSpentLimit;
-    engineConfig.termination.stepCountLimit = config.stepCountLimit;
-    engineConfig.termination.unimprovedStepCountLimit
-        = config.unimprovedStepCountLimit;
-    // lateAcceptanceSize 0 = auto-scale with the instance (see Config).
-    engineConfig.localSearch.acceptor.lateAcceptanceSize
-        = config.lateAcceptanceSize != 0
-              ? config.lateAcceptanceSize
+    engineConfig.limits.time_limit = config.time_limit;
+    engineConfig.limits.target_score
+        = toEngineScoreLimit(config.target_score);
+    engineConfig.limits.stall_time_limit = config.stall_time_limit;
+    engineConfig.limits.step_limit = config.step_limit;
+    engineConfig.limits.stall_step_limit
+        = config.stall_step_limit;
+    // history_length 0 = auto-scale with the instance (see Config).
+    engineConfig.search.acceptance.history_length
+        = config.history_length != 0
+              ? config.history_length
               : std::clamp<std::size_t>(8 * plan.stays.size(), 8000, 12000);
-    engineConfig.localSearch.moveSelector.changeMoveWeight
-        = config.changeMoveWeight;
-    engineConfig.localSearch.moveSelector.swapMoveWeight
-        = config.swapMoveWeight;
+    engineConfig.search.moves.change_weight
+        = config.change_weight;
+    engineConfig.search.moves.swap_weight
+        = config.swap_weight;
     // R2 SCREEN: BASIC exhaustive descent at the budget-share rule
     // weight x valueRange = 0.2 (the small-value-range
     // regime).
-    engineConfig.localSearch.descentWeight
+    engineConfig.search.descent_weight
         = 0.2 / static_cast<double>(plan.beds.size() + 1);
-    auto &lns = engineConfig.localSearch.ruinRecreate;
-    lns.enabled = config.ruinRecreate;
-    lns.unimprovedStepTrigger = config.ruinRecreateUnimprovedStepTrigger;
-    lns.minRuinFraction = config.ruinRecreateMinRuinFraction;
-    lns.maxRuinFraction = config.ruinRecreateMaxRuinFraction;
-    lns.maxRuinCount = config.ruinRecreateMaxRuinCount;
-    lns.operatorDecay = config.ruinRecreateOperatorDecay;
+    auto &lns = engineConfig.search.ruin_recreate;
+    lns.enabled = config.ruin_recreate;
+    lns.unimproved_step_trigger = config.ruinRecreateUnimprovedStepTrigger;
+    lns.min_ruin_fraction = config.ruinRecreateMinRuinFraction;
+    lns.max_ruin_fraction = config.ruinRecreateMaxRuinFraction;
+    lns.max_ruin_count = config.ruinRecreateMaxRuinCount;
+    lns.operator_decay = config.ruinRecreateOperatorDecay;
     lns.rewards = config.ruinRecreateRewards;
-    lns.polishSteps = config.ruinRecreatePolishSteps;
+    lns.polish_steps = config.ruinRecreatePolishSteps;
 
     // Nearby selection over the stays' date windows: two stays are close when
     // they occupy nearly the same nights. Such a pair can trade beds without
@@ -78,7 +78,7 @@ void configureEngine(const Solver::Config &config,
     if (config.nearbyProbability > 0.0)
     {
         const BedPlan *planPtr = &plan;
-        engineConfig.localSearch.nearby.distanceMeter = [planPtr](int a, int b)
+        engineConfig.search.nearby.distance = [planPtr](int a, int b)
         {
             const Stay &x = planPtr->stays[a];
             const Stay &y = planPtr->stays[b];
@@ -86,65 +86,65 @@ void configureEngine(const Solver::Config &config,
                 std::abs(x.arrivalDay - y.arrivalDay)
                 + std::abs(x.departureDay - y.departureDay));
         };
-        engineConfig.localSearch.nearby.size = std::max(1, config.nearbySize);
-        engineConfig.localSearch.nearby.probability = config.nearbyProbability;
+        engineConfig.search.nearby.size = std::max(1, config.nearbySize);
+        engineConfig.search.nearby.probability = config.nearbyProbability;
     }
 }
 
 // The domain Score of a plugin calculator, read from its three level
-// accumulators (levelScores(), before the medium fold) rather than decoded
+// accumulators (level_scores(), before the medium fold) rather than decoded
 // from the folded engine soft, which would file a soft total of 10^9 or more
 // (or the fraction of a non-integral medium total) under the wrong level.
 Score levelScoreOf(
-    const optimaru::DecomposedScoreCalculator<BedPlan> &calculator)
+    const optimaru::DecomposedObjective<BedPlan> &calculator)
 {
-    const auto levels = calculator.levelScores();
+    const auto levels = calculator.level_scores();
     return Score{static_cast<std::int64_t>(levels.hard),
-                 optimaru::roundScoreLevel(levels.medium, "medium"),
-                 optimaru::roundScoreLevel(levels.soft, "soft")};
+                 optimaru::round_score_level(levels.medium, "medium"),
+                 optimaru::round_score_level(levels.soft, "soft")};
 }
 
 // One single-threaded solve on the monolithic fast path. The calculator
 // instance is this solve's own; the engine resets it on the working solution
 // at solve start. Its fixed default weights keep every level integral and,
 // below ~4.3 million stay-nights, the soft total under 10^9 (the Score adapter
-// in domain.hpp), so the engine score onNewBest decodes has exactly the levels
+// in domain.hpp), so the engine score on_new_best decodes has exactly the levels
 // of the final full recompute.
 void solveSingle(const Solver::Config &config, BedPlan &plan)
 {
-    optimaru::SolverConfig engineConfig;
+    optimaru::Settings engineConfig;
     configureEngine(config, plan, engineConfig);
 
     BedAllocationIncrementalScoreCalculator calculator;
     optimaru::Solver<BedPlan> engine(std::move(engineConfig));
-    if (config.stopFlag)
-        engine.adoptTerminateEarlyFlag(config.stopFlag);
+    if (config.stop_flag)
+        engine.share_stop_flag(config.stop_flag);
     engine.solve(plan, calculator);
 }
 
 // One single-threaded solve driven by a caller-assembled plugin calculator.
-// onNewBest reports the calculator's own levels, the same way as the final
+// on_new_best reports the calculator's own levels, the same way as the final
 // plan.score of Solver::solve(plan, calculator): the engine announces a new
 // best right after the working solution became it, so the accumulators hold
 // exactly that solution at that moment.
 void solveSingle(const Solver::Config &config,
                  BedPlan &plan,
-                 optimaru::DecomposedScoreCalculator<BedPlan> &calculator)
+                 optimaru::DecomposedObjective<BedPlan> &calculator)
 {
-    optimaru::SolverConfig engineConfig;
+    optimaru::Settings engineConfig;
     configureEngine(config, plan, engineConfig);
-    if (config.onNewBest)
+    if (config.on_new_best)
     {
-        auto onNewBest = config.onNewBest;
-        engineConfig.onNewBest
-            = [onNewBest, &calculator](std::int64_t step,
-                                       const optimaru::HardSoftScore &)
-        { onNewBest(step, levelScoreOf(calculator)); };
+        auto on_new_best = config.on_new_best;
+        engineConfig.on_new_best
+            = [on_new_best, &calculator](std::int64_t step,
+                                       const optimaru::Score &)
+        { on_new_best(step, levelScoreOf(calculator)); };
     }
 
     optimaru::Solver<BedPlan> engine(std::move(engineConfig));
-    if (config.stopFlag)
-        engine.adoptTerminateEarlyFlag(config.stopFlag);
+    if (config.stop_flag)
+        engine.share_stop_flag(config.stop_flag);
     engine.solve(plan, calculator);
 }
 
@@ -155,7 +155,7 @@ void Solver::solve(BedPlan &plan)
     ScoreCalculator::prepare(plan);  // intern equipment ids / priorities
     if (plan.stays.empty())
     {
-        ScoreCalculator::calculateScore(plan);
+        ScoreCalculator::score(plan);
         return;
     }
     if (config_.ruinRecreateRewards.size() != 4)
@@ -179,7 +179,7 @@ void Solver::solve(BedPlan &plan)
         auto stop = std::make_shared<std::atomic<bool>>(false);
         // A worker that cannot be started (std::system_error) stops and joins
         // the ones already running before the error is rethrown here.
-        optimaru::runWorkerThreads(
+        optimaru::run_worker_threads(
             workerCount, *stop,
             [this, &candidates, &failures, &stop](int i)
             {
@@ -187,13 +187,13 @@ void Solver::solve(BedPlan &plan)
                 {
                     Config workerConfig = config_;
                     workerConfig.parallelSolverCount = 1;
-                    workerConfig.stopFlag = stop;
-                    workerConfig.randomSeed
+                    workerConfig.stop_flag = stop;
+                    workerConfig.seed
                         += static_cast<std::uint64_t>(i);
                     if (i != 0)
-                        workerConfig.onNewBest = nullptr;
+                        workerConfig.on_new_best = nullptr;
                     solveSingle(workerConfig, candidates[i]);
-                    ScoreCalculator::calculateScore(candidates[i]);
+                    ScoreCalculator::score(candidates[i]);
                 }
                 catch (...)
                 {
@@ -220,11 +220,11 @@ void Solver::solve(BedPlan &plan)
     solveSingle(config_, plan);
 
     // The authoritative final score: a full recompute on the best solution.
-    ScoreCalculator::calculateScore(plan);
+    ScoreCalculator::score(plan);
 }
 
 void Solver::solve(BedPlan &plan,
-                   optimaru::DecomposedScoreCalculator<BedPlan> &calculator)
+                   optimaru::DecomposedObjective<BedPlan> &calculator)
 {
     ScoreCalculator::prepare(plan);  // intern equipment ids / priorities
     if (config_.ruinRecreateRewards.size() != 4)
@@ -237,12 +237,12 @@ void Solver::solve(BedPlan &plan,
 
     // Score the final solution with the caller's constraint assembly (custom
     // weights and levels included) and leave the calculator primed on it, so
-    // constraintTotals() explains exactly this score. The three levels come
-    // straight from the calculator's accumulators (levelScores(), before the
+    // constraint_totals() explains exactly this score. The three levels come
+    // straight from the calculator's accumulators (level_scores(), before the
     // medium fold) rather than from decoding the folded engine score, so a
     // demoted or re-weighted term lands on the level the assembly gave it.
-    // onNewBest reported the scores of this solve the same way.
-    calculator.resetWorkingSolution(plan);
+    // on_new_best reported the scores of this solve the same way.
+    calculator.rebuild(plan);
     plan.score = levelScoreOf(calculator);
 }
 

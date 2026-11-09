@@ -29,21 +29,21 @@ int main()
                 static_cast<int>(solution.pickTasks.size()));
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(10);
+    config.time_limit = std::chrono::seconds(10);
     // Every pick assigned and no trolley short on buckets: hard 0. Stop as
     // soon as a feasible solution is reached? No — keep polishing the travel
     // distance for the full budget, like the quickstart does.
-    config.randomSeed = 0;
-    config.onNewBest = [](std::int64_t step, const Score &score)
+    config.seed = 0;
+    config.on_new_best = [](std::int64_t step, const Score &score)
     {
         std::printf("  new best at step %6lld: %s\n",
                     static_cast<long long>(step),
-                    score.toString().c_str());
+                    score.str().c_str());
     };
     Solver(config).solve(solution);
 
     const ConstraintTotals totals = ScoreCalculator::calculateTotals(solution);
-    std::printf("\nFinal score: %s\n", solution.score.toString().c_str());
+    std::printf("\nFinal score: %s\n", solution.score.str().c_str());
     std::printf("  bucket shortage (hard):    %lld\n",
                 static_cast<long long>(totals.trolleyCapacityCost));
     std::printf("  travel distance:           %lld m\n",
@@ -78,11 +78,11 @@ int main()
     std::size_t assigned = 0;
     for (const Trolley &trolley : solution.trolleys)
         assigned += trolley.pickTaskIndices.size();
-    if (!solution.score.isFeasible() || assigned != solution.pickTasks.size())
+    if (!solution.score.feasible() || assigned != solution.pickTasks.size())
     {
         std::printf("\nFAILED: expected a feasible, fully assigned plan "
                     "(got %s, %d/%d assigned)\n",
-                    solution.score.toString().c_str(),
+                    solution.score.str().c_str(),
                     static_cast<int>(assigned),
                     static_cast<int>(solution.pickTasks.size()));
         return EXIT_FAILURE;

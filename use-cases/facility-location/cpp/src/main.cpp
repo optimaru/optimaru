@@ -119,20 +119,20 @@ int main(int argc, char **argv)
                 seconds);
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(seconds);
-    config.randomSeed = 42;
-    config.onNewBest = [](std::int64_t step, const Score &score)
+    config.time_limit = std::chrono::seconds(seconds);
+    config.seed = 42;
+    config.on_new_best = [](std::int64_t step, const Score &score)
     {
         std::printf("    new best @step %-8lld %s\n",
                     static_cast<long long>(step),
-                    score.toString().c_str());
+                    score.str().c_str());
     };
     Solver solver(config);
     solver.solve(problem);
 
     std::printf("\n  final score: %s  (feasible=%s)\n\n",
-                problem.score.toString().c_str(),
-                problem.score.isFeasible() ? "true" : "false");
+                problem.score.str().c_str(),
+                problem.score.feasible() ? "true" : "false");
     printSummary(problem);
 
     bool allAssigned = true;

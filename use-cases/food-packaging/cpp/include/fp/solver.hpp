@@ -9,8 +9,8 @@
 #include <vector>
 
 #include "fp/domain.hpp"
-#include "optimaru/api/score/calculator/decomposed_score_calculator.hpp"
-#include "optimaru/api/score/director/score_director.hpp"
+#include "optimaru/decomposed_objective.hpp"
+#include "optimaru/editor.hpp"
 
 namespace fp
 {
@@ -28,8 +28,7 @@ void assignMissingOperators(PackagingSchedule &schedule);
 // zeroes the conflict).
 bool improveOperatorAssignment(PackagingSchedule &schedule);
 
-// Thin domain-side wrapper around the generic engine in include/optimaru/ — the C++
-// analog of a quickstart building a SolverFactory from a SolverConfig. It
+// Thin domain-side wrapper around the generic engine in include/optimaru/. It
 // wires up the incremental score calculator and delegates the job-list
 // variable to optimaru::Solver<PackagingSchedule> with the engine's LIST
 // moves (relocate/swap/2-opt/or-opt/tail-swap) and adaptive
@@ -53,35 +52,35 @@ public:
         // Wall-clock budget, mirroring termination.spent-limit (30s in the
         // quickstart's application.properties). Shared across all
         // engine legs.
-        std::chrono::milliseconds spentLimit{std::chrono::seconds(30)};
+        std::chrono::milliseconds time_limit{std::chrono::seconds(30)};
 
-        // Stop early once bestScore >= bestScoreLimit, as the ENGINE score
+        // Stop early once bestScore >= target_score, as the ENGINE score
         // (hard = Java hard; soft = medium * kMediumUnit + soft). E.g.
         // {0, -inf} stops at the first hard-feasible solution. The default
         // never fires.
-        optimaru::HardSoftScore bestScoreLimit{
+        optimaru::Score target_score{
             std::numeric_limits<std::int64_t>::max(),
             std::numeric_limits<double>::infinity()};
         // Optional early exits per engine leg; 0 disables each criterion.
-        std::chrono::milliseconds unimprovedSpentLimit{0};
-        std::int64_t stepCountLimit = 0;
-        std::int64_t unimprovedStepCountLimit = 0;
+        std::chrono::milliseconds stall_time_limit{0};
+        std::int64_t step_limit = 0;
+        std::int64_t stall_step_limit = 0;
 
         // Late-acceptance history length. 0 (the default) = auto:
         // clamp(8 * unpinned job count, 400, 3200).
-        std::size_t lateAcceptanceSize = 0;
-        std::uint64_t randomSeed = 0;
+        std::size_t history_length = 0;
+        std::uint64_t seed = 0;
 
         // Independent parallel starts (the engine's multi-start) per leg:
-        // each worker receives randomSeed + i and the leg's full budget; the
+        // each worker receives seed + i and the leg's full budget; the
         // best solution wins.
         int parallelSolverCount = 1;
 
-        // FULL_ASSERT re-verifies the incremental score against a full
+        // ScoreChecks::Full re-verifies the incremental score against a full
         // recompute after every move (debugging aid; orders of magnitude
         // slower).
-        optimaru::EnvironmentMode environmentMode
-            = optimaru::EnvironmentMode::NON_ASSERT;
+        optimaru::ScoreChecks score_checks
+            = optimaru::ScoreChecks::Off;
 
         // Operator-alternation rounds. 0 = auto: 1 when no two lines share
         // an operator after seeding (the conflict constraint can never
@@ -92,7 +91,7 @@ public:
         // Adaptive ruin-and-recreate kicks when the search stagnates (the
         // engine's ALNS). Auto-disabled for tiny instances (< 4 movable
         // jobs).
-        bool ruinRecreate = true;
+        bool ruin_recreate = true;
         std::int64_t ruinRecreateUnimprovedStepTrigger = 5000;
         double ruinRecreateMinRuinFraction = 0.10;
         double ruinRecreateMaxRuinFraction = 0.30;
@@ -111,11 +110,11 @@ public:
         // insertions) and is the only move that empties/fills the unassigned
         // pool; swap-heavy and segment-heavy mixes lost on the shared
         // instance.
-        double relocateMoveWeight = 0.55;
-        double listSwapMoveWeight = 0.25;
-        double twoOptMoveWeight = 0.08;
-        double orOptMoveWeight = 0.07;
-        double tailSwapMoveWeight = 0.05;
+        double relocate_weight = 0.55;
+        double list_swap_weight = 0.25;
+        double two_opt_weight = 0.08;
+        double or_opt_weight = 0.07;
+        double tail_swap_weight = 0.05;
 
         // Nearby selection over the cleanup matrix: distance(a, b) =
         // cleanup(a -> b) + cleanup(b -> a), tie-broken by |idealEnd
@@ -139,14 +138,14 @@ public:
         // reads the calculator's three levels before the medium fold, so a
         // soft total of 10^10 or more stays on soft there. With multiple
         // legs/starts, step counts restart per leg and only worker 0 reports.
-        std::function<void(std::int64_t, const Score &)> onNewBest;
+        std::function<void(std::int64_t, const Score &)> on_new_best;
     };
 
     Solver() = default;
     explicit Solver(Config config) : config_(std::move(config)) {}
 
     // Solves in place: mutates lines[*].jobs / unassignedJobs (and
-    // lines[*].operatorIndex where sharing forces alternation), refreshes
+    // lines[*].operator_index where sharing forces alternation), refreshes
     // every job's shadow variables and stores the best score found in
     // schedule.score. Pinned jobs keep their exact position (or stay
     // unassigned).
@@ -156,10 +155,10 @@ public:
     // fp/constraints.hpp): pick components and weights, then pass the
     // assembly here. Weights and levels come from the assembly (the
     // components' kDefaultWeight / kDefaultLevel unless the caller changed
-    // them). The final schedule.score and every onNewBest score are computed
+    // them). The final schedule.score and every on_new_best score are computed
     // by THIS calculator (its three level accumulators,
-    // calculator.levelScores(), before the medium fold) and the calculator is
-    // left primed on the final solution, so constraintTotals() explains
+    // calculator.level_scores(), before the medium fold) and the calculator is
+    // left primed on the final solution, so constraint_totals() explains
     // exactly that score.
     //
     // Two knobs do not apply on this path: parallelSolverCount and
@@ -168,7 +167,7 @@ public:
     // one start, with the same move mix, nearby selection and ALNS kicks.
     void
     solve(PackagingSchedule &schedule,
-          optimaru::DecomposedScoreCalculator<PackagingSchedule> &calculator);
+          optimaru::DecomposedObjective<PackagingSchedule> &calculator);
 
 private:
     Config config_;

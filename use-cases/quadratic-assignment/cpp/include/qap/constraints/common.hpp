@@ -6,8 +6,8 @@
 #include <stdexcept>
 #include <vector>
 
-#include "optimaru/api/score/calculator/constraint_assembly.hpp"
-#include "optimaru/api/score/calculator/decomposed_score_calculator.hpp"
+#include "optimaru/constraint_assembly.hpp"
+#include "optimaru/decomposed_objective.hpp"
 #include "qap/domain.hpp"
 #include "qap/score_calculator.hpp"
 
@@ -18,7 +18,7 @@ namespace qap
 // Plugin-style constraint components
 // ---------------------------------------------------------------------------
 // The five quadratic-assignment constraints, one small component each on the
-// engine's DecomposedScoreCalculator — an assembly path NEXT TO the
+// engine's DecomposedObjective — an assembly path NEXT TO the
 // monolithic QuadraticAssignmentIncrementalScoreCalculator, which stays the
 // tuned default fast path.
 //
@@ -57,7 +57,7 @@ namespace qap
 // constants, which is why the default assembly scores bit-for-bit like them.
 //
 // Registry names are the struct names with a lower-case first letter
-// ("pinnedAssignmentsCost"); Python sees them through pythonName()
+// ("pinnedAssignmentsCost"); Python sees them through python_name()
 // ("pinned_assignments_cost").
 //
 // Cost sign convention (see decomposed_score_calculator.hpp): positive =
@@ -65,7 +65,7 @@ namespace qap
 // objectives are not validated >= 0 (flows, distances and direct costs are
 // plain integers), so they may be negative: a negative total is scored as a
 // bonus, exactly like the 0.1.x Python scorer did. On data with a negative
-// entry such an objective cannot move to hard (rawCostCanBeNegative; the
+// entry such an objective cannot move to hard (raw_cost_can_be_negative; the
 // calculator refuses it at reset), since a negative hard total would cancel
 // a violation of the side constraints.
 //
@@ -76,7 +76,7 @@ namespace qap
 // Every component requires ScoreCalculator::prepare(problem) to have run
 // (the solve() overloads and the monolithic path both call it).
 
-using DecomposedCalculator = optimaru::DecomposedScoreCalculator<QuadraticAssignmentProblem>;
+using DecomposedCalculator = optimaru::DecomposedObjective<QuadraticAssignmentProblem>;
 using ConstraintAssembly = optimaru::ConstraintAssembly<QuadraticAssignmentProblem>;
 using QapUnitConstraint = optimaru::UnitConstraint<QuadraticAssignmentProblem>;
 using QapGlobalConstraint = optimaru::GlobalConstraint<QuadraticAssignmentProblem>;
@@ -93,7 +93,7 @@ inline void requirePrepared(const QuadraticAssignmentProblem &problem)
 }
 
 // Whether a matrix of the facts holds a negative entry: what makes an
-// objective's total possibly negative (rawCostCanBeNegative). Read from the
+// objective's total possibly negative (raw_cost_can_be_negative). Read from the
 // facts themselves, so it needs no prepare().
 inline bool hasNegative(const std::vector<std::vector<std::int64_t>> &matrix)
 {
@@ -117,13 +117,13 @@ inline bool hasNegative(const std::optional<std::vector<std::vector<std::int64_t
 
 // A GlobalConstraint maintained purely from member joins / leaves (the
 // engine's BASIC fast path): the calculator never diffs a unit for it, so
-// onUnitChanged is unreachable.
+// on_unit_changed is unreachable.
 struct QapMemberChangeGlobalConstraint : QapGlobalConstraint
 {
     using QapGlobalConstraint::QapGlobalConstraint;
 
-    bool supportsMemberChange() const override { return true; }
-    void onUnitChanged(const QuadraticAssignmentProblem & /*problem*/,
+    bool supports_member_change() const override { return true; }
+    void on_unit_changed(const QuadraticAssignmentProblem & /*problem*/,
                        int /*unit*/,
                        const std::vector<int> & /*members*/) override
     {

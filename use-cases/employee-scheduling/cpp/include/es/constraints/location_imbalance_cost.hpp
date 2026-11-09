@@ -34,7 +34,7 @@ struct LocationImbalanceCost final : EsGlobalConstraint {
                 "]";  // display only; never a lookup key
     }
     void reset(const EmployeeSchedule& s,
-               const std::vector<std::vector<int>>& membersPerUnit) override {
+               const std::vector<std::vector<int>>& members_per_unit) override {
         match_.resize(s.shifts.size());
         day_.resize(s.shifts.size());
         horizon_ = 0;
@@ -49,12 +49,12 @@ struct LocationImbalanceCost final : EsGlobalConstraint {
         if (useOff_)
             for (int d : target_)
                 if (d >= 0 && d < horizon_ && !isTarget_[d]) { isTarget_[d] = 1; ++nTarget_; }
-        applies_.assign(membersPerUnit.size(), skill_.empty() ? 1 : 0);
+        applies_.assign(members_per_unit.size(), skill_.empty() ? 1 : 0);
         if (!skill_.empty())
             for (std::size_t e = 0; e < s.employees.size(); ++e)
                 applies_[e] = s.employees[e].skills.count(skill_) ? 1 : 0;
         seen_.assign(horizon_, 0);
-        counts_.assign(membersPerUnit.size(), 0);
+        counts_.assign(members_per_unit.size(), 0);
         sum_ = 0;
         sumSq_ = 0;
         applicableCount_ = 0;
@@ -62,8 +62,8 @@ struct LocationImbalanceCost final : EsGlobalConstraint {
         minCount_ = static_cast<int>(histogram_.size()) - 1;
         maxCount_ = 0;
         gapMetric_ = metric_ == "gap";
-        for (std::size_t u = 0; u < membersPerUnit.size(); ++u) {
-            counts_[u] = computeCount(membersPerUnit[u]);
+        for (std::size_t u = 0; u < members_per_unit.size(); ++u) {
+            counts_[u] = computeCount(members_per_unit[u]);
             if (!applies_[u]) continue;
             const long count = counts_[u];
             sum_ += count;
@@ -75,7 +75,7 @@ struct LocationImbalanceCost final : EsGlobalConstraint {
         }
         tightenHistogram();
     }
-    void onUnitChanged(const EmployeeSchedule&, int unit,
+    void on_unit_changed(const EmployeeSchedule&, int unit,
                        const std::vector<int>& members) override {
         if (!applies_[unit]) return;
         updateCount(unit, computeCount(members));

@@ -7,8 +7,8 @@
 #include <string>
 #include <vector>
 
-#include "optimaru/api/domain/solution_descriptor.hpp"
-#include "optimaru/api/score/buildin/hard_soft_score.hpp"
+#include "optimaru/solution_traits.hpp"
+#include "optimaru/score.hpp"
 
 namespace mc
 {
@@ -16,7 +16,7 @@ namespace mc
 // ---------------------------------------------------------------------------
 // Score
 // ---------------------------------------------------------------------------
-// The engine's HardSoftScore, so the mapping is the identity and there is no
+// The engine's Score, so the mapping is the identity and there is no
 // medium level (no optimaru::MediumFoldOf specialization). At the default
 // weights (the components' kDefaultWeight, mc/constraints/*.hpp):
 //   hard = -(fixed vertices off their side + split same-side pairs
@@ -25,7 +25,7 @@ namespace mc
 //          (partitionImbalanceCost is opt-in: default weight 0)
 // The problem carries no weights. Every level is integral; soft is stored in
 // a double, exact below 2^53.
-using Score = optimaru::HardSoftScore;
+using Score = optimaru::Score;
 
 // The planning variable's values: side 0 or side 1. -1 exists only
 // transiently (the engine's ruin-and-recreate) or in a problem a C++ caller
@@ -98,10 +98,10 @@ struct MaxCutProblem
 
     // --- result ------------------------------------------------------------
     Score score;
-    bool scored = false;  // set by ScoreCalculator::calculateScore and solve
+    bool scored = false;  // set by ScoreCalculator::score and solve
 
     // --- derived data, rebuilt by ScoreCalculator::prepare ----------------
-    // Every entry point (solve, calculateScore, the Python constraint_costs)
+    // Every entry point (solve, score, the Python constraint_costs)
     // re-runs prepare, so a problem edited after a solve is never scored
     // against stale indexes. The incremental calculator and the components
     // read these.
@@ -125,14 +125,14 @@ struct MaxCutProblem
 
     int vertexCount() const { return static_cast<int>(vertexIds.size()); }
     int minSize() const { return minPartitionSize.value_or(0); }
-    int maxSize() const { return maxPartitionSize.value_or(vertexCount()); }
+    int max_size() const { return maxPartitionSize.value_or(vertexCount()); }
     // The 0.1.x rule: both bounds given and equal.
     bool exactSize() const
     {
         return minPartitionSize.has_value() && maxPartitionSize.has_value()
                && *minPartitionSize == *maxPartitionSize;
     }
-    bool isPinned(int vertex) const
+    bool is_pinned(int vertex) const
     {
         return static_cast<std::size_t>(vertex) < fixedSide.size() && fixedSide[vertex] >= 0;
     }
@@ -140,7 +140,7 @@ struct MaxCutProblem
     {
         int movable = 0;
         for (int v = 0; v < vertexCount(); ++v)
-            movable += isPinned(v) ? 0 : 1;
+            movable += is_pinned(v) ? 0 : 1;
         return movable;
     }
     int sideSize(int s) const
@@ -192,20 +192,20 @@ struct MaxCutProblem
 }  // namespace mc
 
 // ---------------------------------------------------------------------------
-// SolutionDescriptor specialization: entities are the vertices, the planning
+// SolutionTraits specialization: entities are the vertices, the planning
 // variable is MaxCutProblem::side, the value range is {0, 1} (unit = value =
 // side). With two values the engine's change move is a flip and its swap
 // move exchanges a side-0 and a side-1 vertex (the side sizes stay). A
 // vertex with fixedSide >= 0 is pinned: never moved, swapped or ruined.
 // ---------------------------------------------------------------------------
-template <> struct optimaru::SolutionDescriptor<mc::MaxCutProblem>
+template <> struct optimaru::SolutionTraits<mc::MaxCutProblem>
 {
-    static constexpr optimaru::VariableKind kind = optimaru::VariableKind::BASIC;
-    static int entityCount(const mc::MaxCutProblem &problem) { return problem.vertexCount(); }
-    static int valueCount(const mc::MaxCutProblem & /*problem*/) { return mc::kSideCount; }
-    static int getVariable(const mc::MaxCutProblem &problem, int vertex) { return problem.side[vertex]; }
-    static void setVariable(mc::MaxCutProblem &problem, int vertex, int value) { problem.side[vertex] = value; }
-    static bool isPinned(const mc::MaxCutProblem &problem, int vertex) { return problem.isPinned(vertex); }
+    static constexpr optimaru::Shape shape = optimaru::Shape::Assignment;
+    static int entity_count(const mc::MaxCutProblem &problem) { return problem.vertexCount(); }
+    static int value_count(const mc::MaxCutProblem & /*problem*/) { return mc::kSideCount; }
+    static int value_of(const mc::MaxCutProblem &problem, int vertex) { return problem.side[vertex]; }
+    static void assign(mc::MaxCutProblem &problem, int vertex, int value) { problem.side[vertex] = value; }
+    static bool is_pinned(const mc::MaxCutProblem &problem, int vertex) { return problem.is_pinned(vertex); }
 };
 
 #endif  // MC_DOMAIN_HPP

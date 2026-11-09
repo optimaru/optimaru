@@ -12,13 +12,13 @@ namespace st::canon
 // of a rolled-back move, so exactly reversible aggregates stay consistent)
 // ---------------------------------------------------------------------------
 
-// Shared base: supportsMemberChange() routes everything through
-// onMemberChanged; the unit-diff hook is unreachable for BASIC solutions.
+// Shared base: supports_member_change() routes everything through
+// on_member_changed; the unit-diff hook is unreachable for BASIC solutions.
 struct MemberChangeGlobalConstraint : CanonGlobalConstraint
 {
     using CanonGlobalConstraint::CanonGlobalConstraint;
-    bool supportsMemberChange() const override { return true; }
-    void onUnitChanged(const Timetable & /*table*/,
+    bool supports_member_change() const override { return true; }
+    void on_unit_changed(const Timetable & /*table*/,
                        int /*unit*/,
                        const std::vector<int> & /*members*/) override
     {

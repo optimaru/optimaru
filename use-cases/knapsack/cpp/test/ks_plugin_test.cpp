@@ -1,19 +1,19 @@
 // Plugin-assembly (ks/constraints.hpp) tests, engine test/ style: check() + a
 // non-zero exit on any failure.
-//   (a) the default assembly on the engine's DecomposedScoreCalculator
+//   (a) the default assembly on the engine's DecomposedObjective
 //       reproduces the monolithic score bit-for-bit on 500 random
 //       assignments (including undecided items), and every raw total equals
 //       ScoreCalculator::rawCosts
 //   (b) incremental == full recompute across 3000 random moves driven
-//       through the engine's ScoreDirector protocol (plugin path): after
+//       through the engine's Editor protocol (plugin path): after
 //       each move the score and every constraint's raw total equal the full
 //       recompute's, and every constraint is non-zero at some point of the
 //       walk
 //   (c) partial assemblies: removing one component removes exactly its term
 //   (d) weight / level / exponent overrides (globals shape their total; hard
 //       rounds once per constraint)
-//   (e) constraintTotals() explains exactly the reported score
-//   (f) a FULL_ASSERT solve(problem, calculator)
+//   (e) constraint_totals() explains exactly the reported score
+//   (f) a ScoreChecks::Full solve(problem, calculator)
 //   (g) the defaultConstraints() builder: named edits == by-hand assembly
 //   (h) each component's raw cost, hand-calculated: a positive and a zero
 //       case per constraint (raw 0 = no violation)
@@ -24,7 +24,7 @@
 //       threshold and literal offsets by hand on each global's total (a raw
 //       0 counts in literal mode, the reward shifts further), the literal
 //       formula refused on hard at reset and kept on soft, incremental ==
-//       a fresh recompute over a random walk and a FULL_ASSERT solve with
+//       a fresh recompute over a random walk and a ScoreChecks::Full solve with
 //       repeated, shifted components on both levels
 #include <algorithm>
 #include <chrono>
@@ -43,7 +43,7 @@
 #include "ks/score_calculator.hpp"
 #include "ks/solver.hpp"
 #include "ks_fixtures.hpp"
-#include "optimaru/api/score/director/score_director.hpp"
+#include "optimaru/editor.hpp"
 
 using namespace ks;
 using namespace ks_test;
@@ -55,18 +55,18 @@ namespace
 Score scoreWith(DecomposedCalculator &calculator, KnapsackProblem &problem)
 {
     ScoreCalculator::prepare(problem);
-    calculator.resetWorkingSolution(problem);
-    return calculator.calculateScore();
+    calculator.rebuild(problem);
+    return calculator.score();
 }
 
 // One raw total per assembled component, in assembly order.
 std::vector<double> rawTotals(const DecomposedCalculator &calculator)
 {
     std::vector<double> totals;
-    for (const auto &entry : calculator.constraintCosts())
+    for (const auto &entry : calculator.constraint_costs())
     {
         double sum = 0.0;
-        for (double cost : entry.unitCosts)
+        for (double cost : entry.unit_costs)
             sum += cost;
         totals.push_back(sum);
     }
@@ -102,11 +102,11 @@ void verifyAssemblyParity()
         DecomposedCalculator calculator;
         addDefaultConstraints(calculator);
         const Score plugin = scoreWith(calculator, p);
-        const Score monolithic = ScoreCalculator::calculateScore(p);
+        const Score monolithic = ScoreCalculator::score(p);
         if (!(plugin == monolithic) && ++mismatches <= 3)
         {
             std::printf("  MISMATCH @round %d: plugin=%s monolithic=%s\n", round,
-                        plugin.toString().c_str(), monolithic.toString().c_str());
+                        plugin.str().c_str(), monolithic.str().c_str());
         }
         if (rawTotals(calculator) != expectedTotals(ScoreCalculator::rawCosts(p)) && ++costMismatches <= 3)
             std::printf("  RAW COST MISMATCH @round %d\n", round);
@@ -127,7 +127,7 @@ void verifyIncremental()
     ScoreCalculator::prepare(p);
     DecomposedCalculator calculator;
     addDefaultConstraints(calculator);
-    optimaru::ScoreDirector<KnapsackProblem> director(p, calculator);
+    optimaru::Editor<KnapsackProblem> editor(p, calculator);
     KnapsackProblem shadow = p;
 
     std::mt19937_64 rng(123);
@@ -143,26 +143,26 @@ void verifyIncremental()
         {
             const int item = static_cast<int>(rng() % n);
             const int value = unit(rng) < 0.15 ? kUndecided : static_cast<int>(rng() % 2);
-            director.changeVariable(item, value);
+            editor.assign(item, value);
         }
         else
         {
-            director.beginVariableChanges();
+            editor.begin_batch();
             const int a = static_cast<int>(rng() % n);
             const int b = static_cast<int>(rng() % n);
             const int va = p.items[a].selected;
-            director.changeVariable(a, p.items[b].selected);
-            director.changeVariable(b, va);
-            director.endVariableChanges();
+            editor.assign(a, p.items[b].selected);
+            editor.assign(b, va);
+            editor.end_batch();
         }
         for (int i = 0; i < n; ++i)
             shadow.items[i].selected = p.items[i].selected;
-        const Score full = ScoreCalculator::calculateScore(shadow);
-        const Score incremental = director.calculateScore();
+        const Score full = ScoreCalculator::score(shadow);
+        const Score incremental = editor.score();
         if (!(full == incremental) && ++mismatches <= 3)
         {
             std::printf("  MISMATCH @step %d: incremental=%s full=%s\n", step,
-                        incremental.toString().c_str(), full.toString().c_str());
+                        incremental.str().c_str(), full.str().c_str());
         }
         const std::vector<double> expected = expectedTotals(ScoreCalculator::rawCosts(shadow));
         const std::vector<double> running = rawTotals(calculator);
@@ -286,7 +286,7 @@ void verifyOverrides()
 }
 
 // -------------------------------------------------------------------------
-// (e) constraintTotals() explains the score.
+// (e) constraint_totals() explains the score.
 // -------------------------------------------------------------------------
 void verifyConstraintTotals()
 {
@@ -297,30 +297,30 @@ void verifyConstraintTotals()
     const Score score = scoreWith(calculator, p);
     double hard = 0.0;
     double soft = 0.0;
-    for (const optimaru::ConstraintTotal &total : calculator.constraintTotals())
-        (total.isHard ? hard : soft) += total.cost;
+    for (const optimaru::ConstraintTotal &total : calculator.constraint_totals())
+        (total.is_hard ? hard : soft) += total.cost;
     check(std::fabs(-hard - static_cast<double>(score.hard)) < 1e-9 && std::fabs(-soft - score.soft) < 1e-9,
           "per-constraint totals sum to the reported score");
-    check(calculator.constraintTotals().size() == 7, "one total per assembled component");
+    check(calculator.constraint_totals().size() == 7, "one total per assembled component");
     bool oneEach = true;
-    for (const auto &entry : calculator.constraintCosts())
-        oneEach = oneEach && entry.isGlobal && entry.unitCosts.size() == 1;
+    for (const auto &entry : calculator.constraint_costs())
+        oneEach = oneEach && entry.is_global && entry.unit_costs.size() == 1;
     check(oneEach, "constraintCosts(): every component is global with one raw total");
     std::printf("\n");
 }
 
 // -------------------------------------------------------------------------
-// (f) FULL_ASSERT solve on the plugin path.
+// (f) ScoreChecks::Full solve on the plugin path.
 // -------------------------------------------------------------------------
 void verifyFullAssertSolve()
 {
     std::printf("== (f) FULL_ASSERT plugin solve ==\n");
     KnapsackProblem p = randomInstance(30, 11);
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(1);
-    config.stepCountLimit = 4000;
-    config.randomSeed = 3;
-    config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+    config.time_limit = std::chrono::seconds(1);
+    config.step_limit = 4000;
+    config.seed = 3;
+    config.score_checks = optimaru::ScoreChecks::Full;
     config.ruinRecreateUnimprovedStepTrigger = 200;
     config.ruinRecreatePolishSteps = 100;
     DecomposedCalculator calculator;
@@ -330,7 +330,7 @@ void verifyFullAssertSolve()
     {
         Solver(config).solve(p, calculator);
     }
-    catch (const optimaru::ScoreCorruptionError &e)
+    catch (const optimaru::ScoreMismatchError &e)
     {
         corrupted = true;
         std::printf("  ScoreCorruptionError: %s\n", e.what());
@@ -339,7 +339,7 @@ void verifyFullAssertSolve()
     if (!corrupted)
     {
         KnapsackProblem rescored = p;
-        check(sameScore(p.score, ScoreCalculator::calculateScore(rescored)),
+        check(sameScore(p.score, ScoreCalculator::score(rescored)),
               "plugin-reported score == monolithic full recompute");
     }
     std::printf("\n");
@@ -358,7 +358,7 @@ void verifyAssemblyBuilder()
         byHand.emplace<ResourceCapacityCost>(4.0);
         byHand.emplace<MandatoryItemsCost>();
         auto forbidden = std::make_unique<ForbiddenItemsCost>();
-        forbidden->setLevel(optimaru::Level::Soft);
+        forbidden->set_level(optimaru::Level::Soft);
         byHand.add(std::move(forbidden));
         byHand.emplace<SelectionGroupBoundsCost>();
         byHand.emplace<SelectedValueCost>();
@@ -373,7 +373,7 @@ void verifyAssemblyBuilder()
     check(sameScore(scoreWith(built, p), expected), "named edits == the same assembly listed by hand");
     DecomposedCalculator plain;
     defaultConstraints().into(plain);
-    check(sameScore(scoreWith(plain, p), ScoreCalculator::calculateScore(p)),
+    check(sameScore(scoreWith(plain, p), ScoreCalculator::score(p)),
           "defaultConstraints() alone == the monolithic score");
     bool threw = false;
     try
@@ -389,17 +389,17 @@ void verifyAssemblyBuilder()
 }
 
 // -------------------------------------------------------------------------
-// (h) Raw costs by hand, read through constraintCosts().
+// (h) Raw costs by hand, read through constraint_costs().
 // -------------------------------------------------------------------------
 std::vector<double> rawCosts(KnapsackProblem &problem, const std::string &name)
 {
     DecomposedCalculator calculator;
     addDefaultConstraints(calculator);
     scoreWith(calculator, problem);
-    for (const auto &entry : calculator.constraintCosts())
+    for (const auto &entry : calculator.constraint_costs())
     {
         if (entry.name == name)
-            return entry.unitCosts;
+            return entry.unit_costs;
     }
     return {};
 }
@@ -480,10 +480,10 @@ template <typename Component>
 bool rowIs(const optimaru::ConstraintInfo &row, const char *name, optimaru::Level level, double weight,
            bool reward = false)
 {
-    return row.name == name && row.defaultLevel == Component::kDefaultLevel
-           && row.defaultWeight == Component::kDefaultWeight && row.defaultLevel == level
-           && row.defaultWeight == weight && row.levelFlippable == !reward && row.reward == reward
-           && row.isGlobal && row.defaultEnabled;
+    return row.name == name && row.default_level == Component::kDefaultLevel
+           && row.default_weight == Component::kDefaultWeight && row.default_level == level
+           && row.default_weight == weight && row.level_flippable == !reward && row.reward == reward
+           && row.is_global && row.default_enabled;
 }
 
 void verifyCatalog()
@@ -502,9 +502,9 @@ void verifyCatalog()
           "info() == the components' constants, in catalog order");
     check(throwsInvalid([] { defaultConstraints().hard("selectedValueCost"); }),
           "hard() on the selectedValueCost reward throws");
-    check(throwsInvalid([] { SelectedValueCost().setLevel(Level::Hard); }),
+    check(throwsInvalid([] { SelectedValueCost().set_level(Level::Hard); }),
           "SelectedValueCost::setLevel(Hard) throws");
-    check(throwsInvalid([] { SelectedValueCost().setLevel(Level::Medium); }),
+    check(throwsInvalid([] { SelectedValueCost().set_level(Level::Medium); }),
           "the reward's level is not flippable: setLevel(Medium) throws");
     check(!throwsInvalid([] { defaultConstraints().soft("selectedValueCost"); }),
           "soft() on the reward re-states its level: a no-op");
@@ -521,7 +521,7 @@ void verifyCatalog()
         bool threw = false;
         try
         {
-            calculator.resetWorkingSolution(p);
+            calculator.rebuild(p);
         }
         catch (const std::logic_error &)
         {
@@ -537,7 +537,7 @@ void verifyCatalog()
         bool threw = false;
         try
         {
-            calculator.resetWorkingSolution(p);
+            calculator.rebuild(p);
         }
         catch (const std::logic_error &)
         {
@@ -551,7 +551,7 @@ void verifyCatalog()
 // -------------------------------------------------------------------------
 // (j) Repeated components and offsets. A repeat is a fresh copy of a
 // default component (another defaultConstraints(), the one name kept, its
-// knobs re-stated) appended with addInstances(), as the Python bindings
+// knobs re-stated) appended with add_instances(), as the Python bindings
 // build it from a pick list. Every knapsack constraint is global, so the
 // offset shapes each instance's single total.
 // -------------------------------------------------------------------------
@@ -594,29 +594,29 @@ ConstraintAssembly repeatedAssembly()
     ConstraintAssembly assembly = defaultConstraints();
     assembly.offset("resourceCapacityCost", 3.0);
     assembly.offset("selectedValueCost", 40.0).clip("selectedValueCost", false);
-    assembly.addInstances(std::move(copyOf("resourceCapacityCost")
+    assembly.add_instances(std::move(copyOf("resourceCapacityCost")
                                         .weight("resourceCapacityCost", 0.5)
                                         .exponent("resourceCapacityCost", 2.0)));
-    assembly.addInstances(std::move(
+    assembly.add_instances(std::move(
         copyOf("knapsackCapacityCost").weight("knapsackCapacityCost", 2.0).offset("knapsackCapacityCost", 5.0)));
-    assembly.addInstances(std::move(copyOf("knapsackCapacityCost")
+    assembly.add_instances(std::move(copyOf("knapsackCapacityCost")
                                         .soft("knapsackCapacityCost")
                                         .weight("knapsackCapacityCost", 2.0)
                                         .offset("knapsackCapacityCost", 5.0)
                                         .clip("knapsackCapacityCost", false)));
-    assembly.addInstances(std::move(copyOf("mandatoryItemsCost").offset("mandatoryItemsCost", -1.0)));
-    assembly.addInstances(std::move(
+    assembly.add_instances(std::move(copyOf("mandatoryItemsCost").offset("mandatoryItemsCost", -1.0)));
+    assembly.add_instances(std::move(
         copyOf("forbiddenItemsCost").weight("forbiddenItemsCost", 1.5).offset("forbiddenItemsCost", -0.5)));
-    assembly.addInstances(std::move(copyOf("forbiddenItemsCost")
+    assembly.add_instances(std::move(copyOf("forbiddenItemsCost")
                                         .soft("forbiddenItemsCost")
                                         .weight("forbiddenItemsCost", 1.5)
                                         .offset("forbiddenItemsCost", -0.5)
                                         .clip("forbiddenItemsCost", false)));
-    assembly.addInstances(std::move(copyOf("selectionGroupBoundsCost")
+    assembly.add_instances(std::move(copyOf("selectionGroupBoundsCost")
                                         .exponent("selectionGroupBoundsCost", 3.0)
                                         .offset("selectionGroupBoundsCost", 1.0)));
-    assembly.addInstances(std::move(copyOf("itemDependencyCost").soft("itemDependencyCost")));
-    assembly.addInstances(std::move(copyOf("selectedValueCost")
+    assembly.add_instances(std::move(copyOf("itemDependencyCost").soft("itemDependencyCost")));
+    assembly.add_instances(std::move(copyOf("selectedValueCost")
                                         .weight("selectedValueCost", 0.25)
                                         .exponent("selectedValueCost", 2.0)
                                         .offset("selectedValueCost", 10.0)));
@@ -629,7 +629,7 @@ void verifyRepeatsAndOffsets()
     {
         // mandatory x 1 + 2 x mandatory^2: 3 + 2 x 9 = 21 hard.
         ConstraintAssembly assembly = copyOf("mandatoryItemsCost");
-        assembly.addInstances(std::move(copyOf("mandatoryItemsCost")
+        assembly.add_instances(std::move(copyOf("mandatoryItemsCost")
                                             .weight("mandatoryItemsCost", 2.0)
                                             .exponent("mandatoryItemsCost", 2.0)));
         KnapsackProblem p = shiftedInstance();
@@ -637,17 +637,17 @@ void verifyRepeatsAndOffsets()
         assembly.into(calculator);
         const Score score = scoreWith(calculator, p);
         check(score.hard == -21 && score.soft == 0.0, "mandatory + 2 x mandatory^2: -(3 + 18) hard");
-        const auto entries = calculator.constraintCosts();
-        check(entries.size() == 2 && entries[0].unitCosts == entries[1].unitCosts
-                  && entries[0].unitCosts == Costs{3.0} && entries[1].weight == 2.0 && entries[1].exponent == 2.0
-                  && entries[1].defaultWeight == 1.0 && entries[0].name == entries[1].name,
+        const auto entries = calculator.constraint_costs();
+        check(entries.size() == 2 && entries[0].unit_costs == entries[1].unit_costs
+                  && entries[0].unit_costs == Costs{3.0} && entries[1].weight == 2.0 && entries[1].exponent == 2.0
+                  && entries[1].default_weight == 1.0 && entries[0].name == entries[1].name,
               "two instances, the same raw total, each with its own knobs");
     }
     {
         // Each instance on its own level: the hard default mandatory misses (3)
         // next to a soft repeat, 2 x (3 - 1) beyond its offset.
         ConstraintAssembly assembly = copyOf("mandatoryItemsCost");
-        assembly.addInstances(std::move(copyOf("mandatoryItemsCost")
+        assembly.add_instances(std::move(copyOf("mandatoryItemsCost")
                                             .soft("mandatoryItemsCost")
                                             .weight("mandatoryItemsCost", 2.0)
                                             .offset("mandatoryItemsCost", 1.0)));
@@ -656,15 +656,15 @@ void verifyRepeatsAndOffsets()
         assembly.into(calculator);
         check(sameScore(scoreWith(calculator, p), Score{-3, -4.0}),
               "hard mandatory + a soft repeat beyond 1: -3 hard / -4 soft");
-        const auto entries = calculator.constraintCosts();
+        const auto entries = calculator.constraint_costs();
         check(entries.size() == 2 && entries[0].level == optimaru::Level::Hard
-                  && entries[1].level == optimaru::Level::Soft && entries[1].defaultLevel == optimaru::Level::Hard,
+                  && entries[1].level == optimaru::Level::Soft && entries[1].default_level == optimaru::Level::Hard,
               "the repeat reports its own level, the default stays hard");
     }
     {
         // Identical picks count twice; the reward too.
         ConstraintAssembly assembly = copyOf("selectedValueCost");
-        assembly.addInstances(copyOf("selectedValueCost"));
+        assembly.add_instances(copyOf("selectedValueCost"));
         check(scoreOf(std::move(assembly), shiftedInstance()).soft == 32.0, "the reward picked twice: +2 x 16");
     }
     {
@@ -738,9 +738,9 @@ void verifyRepeatsAndOffsets()
             .into(calculator);
         KnapsackProblem q = shiftedInstance();
         scoreWith(calculator, q);
-        const auto entries = calculator.constraintCosts();
+        const auto entries = calculator.constraint_costs();
         check(entries.size() == 1 && entries[0].offset == 2.5 && !entries[0].clip && !entries[0].scoped
-                  && entries[0].unitCosts == Costs{5.0},
+                  && entries[0].unit_costs == Costs{5.0},
               "constraintCosts() reports the offset and clip, the raw total unshaped");
     }
     {
@@ -782,7 +782,7 @@ void verifyRepeatsAndOffsets()
                   == refusal("itemDependencyCost"),
               "dependency literal offset moved back to hard afterwards: refused at reset");
         ConstraintAssembly repeated = copyOf("resourceCapacityCost");
-        repeated.addInstances(std::move(
+        repeated.add_instances(std::move(
             copyOf("resourceCapacityCost").offset("resourceCapacityCost", 7.0).clip("resourceCapacityCost", false)));
         check(resetRefusal(std::move(repeated)) == refusal("resourceCapacityCost"),
               "a hard literal repeat next to the default: refused at reset");
@@ -806,7 +806,7 @@ void verifyRepeatsAndOffsets()
         ScoreCalculator::prepare(p);
         DecomposedCalculator calculator;
         repeatedAssembly().into(calculator);
-        optimaru::ScoreDirector<KnapsackProblem> director(p, calculator);
+        optimaru::Editor<KnapsackProblem> editor(p, calculator);
         std::mt19937_64 rng(321);
         std::uniform_real_distribution<double> unit(0.0, 1.0);
         const int n = p.itemCount();
@@ -818,28 +818,28 @@ void verifyRepeatsAndOffsets()
             if (unit(rng) < 0.6)
             {
                 const int item = static_cast<int>(rng() % n);
-                director.changeVariable(item, unit(rng) < 0.15 ? kUndecided : static_cast<int>(rng() % 2));
+                editor.assign(item, unit(rng) < 0.15 ? kUndecided : static_cast<int>(rng() % 2));
             }
             else
             {
-                director.beginVariableChanges();
+                editor.begin_batch();
                 const int a = static_cast<int>(rng() % n);
                 const int b = static_cast<int>(rng() % n);
                 const int va = p.items[a].selected;
-                director.changeVariable(a, p.items[b].selected);
-                director.changeVariable(b, va);
-                director.endVariableChanges();
+                editor.assign(a, p.items[b].selected);
+                editor.assign(b, va);
+                editor.end_batch();
             }
             KnapsackProblem shadow = p;
             DecomposedCalculator fresh;
             repeatedAssembly().into(fresh);
             const Score full = scoreWith(fresh, shadow);
-            const Score incremental = director.calculateScore();
+            const Score incremental = editor.score();
             drift = std::max(drift, std::fabs(full.soft - incremental.soft));
-            if (!optimaru::scoresAgree(incremental, full) && ++mismatches <= 3)
+            if (!optimaru::scores_agree(incremental, full) && ++mismatches <= 3)
             {
                 std::printf("  MISMATCH @step %d: incremental=%s full=%s\n", step,
-                            incremental.toString().c_str(), full.toString().c_str());
+                            incremental.str().c_str(), full.str().c_str());
             }
         }
         std::printf("    largest soft drift %.3g\n", drift);
@@ -850,10 +850,10 @@ void verifyRepeatsAndOffsets()
     {
         KnapsackProblem p = randomInstance(30, 11);
         Solver::Config config;
-        config.spentLimit = std::chrono::seconds(2);
-        config.stepCountLimit = 4000;
-        config.randomSeed = 5;
-        config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+        config.time_limit = std::chrono::seconds(2);
+        config.step_limit = 4000;
+        config.seed = 5;
+        config.score_checks = optimaru::ScoreChecks::Full;
         config.ruinRecreateUnimprovedStepTrigger = 200;
         config.ruinRecreatePolishSteps = 100;
         DecomposedCalculator calculator;
@@ -863,7 +863,7 @@ void verifyRepeatsAndOffsets()
         {
             Solver(config).solve(p, calculator);
         }
-        catch (const optimaru::ScoreCorruptionError &e)
+        catch (const optimaru::ScoreMismatchError &e)
         {
             corrupted = true;
             std::printf("  ScoreCorruptionError: %s\n", e.what());
@@ -871,7 +871,7 @@ void verifyRepeatsAndOffsets()
         check(!corrupted, "FULL_ASSERT solve with repeated, shifted components");
         DecomposedCalculator fresh;
         repeatedAssembly().into(fresh);
-        check(!corrupted && optimaru::scoresAgree(p.score, scoreWith(fresh, p)),
+        check(!corrupted && optimaru::scores_agree(p.score, scoreWith(fresh, p)),
               "the reported score == a fresh recompute of the same assembly");
     }
     std::printf("\n");

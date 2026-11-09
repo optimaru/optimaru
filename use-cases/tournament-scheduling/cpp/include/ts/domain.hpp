@@ -5,9 +5,9 @@
 #include <string>
 #include <vector>
 
-#include "optimaru/api/domain/solution_descriptor.hpp"
-#include "optimaru/api/score/buildin/hard_soft_score.hpp"
-#include "optimaru/api/score/level.hpp"
+#include "optimaru/solution_traits.hpp"
+#include "optimaru/score.hpp"
+#include "optimaru/levels.hpp"
 
 namespace ts
 {
@@ -16,7 +16,7 @@ namespace ts
 // Score
 // ---------------------------------------------------------------------------
 // The Java quickstart scores with HardMediumSoftBigDecimalScore; the engine
-// provides HardSoftScore(int64 hard, double soft). Mapping rule (also in the
+// provides Score(int64 hard, double soft). Mapping rule (also in the
 // README):
 //
 //   hard  = Java hard, unchanged (whole violation counts; 0 == feasible)
@@ -35,12 +35,12 @@ namespace ts
 // decomposed calculator, which keeps a separate medium accumulator. The
 // medium constraint's weight is therefore in medium units (default 1), never
 // 1e6.
-using Score = optimaru::HardSoftScore;
+using Score = optimaru::Score;
 
 // The medium -> soft folding offset (see the Score comment above).
 constexpr double kMediumScale = 1e6;
 constexpr optimaru::MediumFold kMediumFold
-    = optimaru::MediumFold::intoSoft(kMediumScale);
+    = optimaru::MediumFold::into_soft(kMediumScale);
 
 // ---------------------------------------------------------------------------
 // Team  (problem fact, @PlanningId id == its index in TournamentSchedule::
@@ -113,33 +113,33 @@ struct TournamentSchedule
 }  // namespace ts
 
 // ---------------------------------------------------------------------------
-// SolutionDescriptor specialization (the @PlanningEntity/@PlanningVariable
+// SolutionTraits specialization (the @PlanningEntity/@PlanningVariable
 // annotations of the C++ engine): entities are the team assignments, the
 // planning variable is TeamAssignment::team, the value range is the teams
 // list (@ValueRangeProvider on TournamentSchedule::teams).
 // ---------------------------------------------------------------------------
-template <> struct optimaru::SolutionDescriptor<ts::TournamentSchedule>
+template <> struct optimaru::SolutionTraits<ts::TournamentSchedule>
 {
-    static constexpr optimaru::VariableKind kind
-        = optimaru::VariableKind::BASIC;
-    static int entityCount(const ts::TournamentSchedule &s)
+    static constexpr optimaru::Shape shape
+        = optimaru::Shape::Assignment;
+    static int entity_count(const ts::TournamentSchedule &s)
     {
         return static_cast<int>(s.teamAssignments.size());
     }
-    static int valueCount(const ts::TournamentSchedule &s)
+    static int value_count(const ts::TournamentSchedule &s)
     {
         return s.teamCount();
     }
-    static int getVariable(const ts::TournamentSchedule &s, int assignmentIndex)
+    static int value_of(const ts::TournamentSchedule &s, int assignmentIndex)
     {
         return s.teamAssignments[assignmentIndex].team;
     }
     static void
-    setVariable(ts::TournamentSchedule &s, int assignmentIndex, int team)
+    assign(ts::TournamentSchedule &s, int assignmentIndex, int team)
     {
         s.teamAssignments[assignmentIndex].team = team;
     }
-    static bool isPinned(const ts::TournamentSchedule &s, int assignmentIndex)
+    static bool is_pinned(const ts::TournamentSchedule &s, int assignmentIndex)
     {
         return s.teamAssignments[assignmentIndex].pinned;
     }

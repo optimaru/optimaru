@@ -78,13 +78,13 @@ PYBIND11_MODULE(_core, m)
     m.doc() = "Quadratic assignment — optimaru engine-backed C++ wrapper exposed to Python";
 
     // Every class is module_local: the server's isolated runtime loads several
-    // domains whose classes share names (Score, SolverConfig, Solver).
+    // domains whose classes share names (Score, Settings, Solver).
     py::class_<Score>(m, "Score", py::module_local())
         .def_readonly("hard", &Score::hard)
         .def_readonly("soft", &Score::soft)
-        .def("is_feasible", &Score::isFeasible)
-        .def("__str__", &Score::toString)
-        .def("__repr__", [](const Score &s) { return "<Score " + s.toString() + ">"; });
+        .def("is_feasible", &Score::feasible)
+        .def("__str__", &Score::str)
+        .def("__repr__", [](const Score &s) { return "<Score " + s.str() + ">"; });
 
     py::class_<Facility>(m, "Facility", py::module_local())
         .def(py::init(
@@ -198,36 +198,36 @@ PYBIND11_MODULE(_core, m)
 
     m.def(
         "calculate_score",
-        [](QuadraticAssignmentProblem &problem) { return ScoreCalculator::calculateScore(problem); },
+        [](QuadraticAssignmentProblem &problem) { return ScoreCalculator::score(problem); },
         py::arg("problem"),
         "Full recompute of the HardSoftScore at the default constraints (also "
         "stores problem.score).");
 
-    py::enum_<optimaru::AcceptorType>(m, "AcceptorType", py::module_local())
-        .value("HILL_CLIMBING", optimaru::AcceptorType::HILL_CLIMBING)
-        .value("LATE_ACCEPTANCE", optimaru::AcceptorType::LATE_ACCEPTANCE)
-        .value("ENTITY_TABU", optimaru::AcceptorType::ENTITY_TABU)
-        .value("SIMULATED_ANNEALING", optimaru::AcceptorType::SIMULATED_ANNEALING)
-        .value("GREAT_DELUGE", optimaru::AcceptorType::GREAT_DELUGE)
-        .value("STEP_COUNTING_HILL_CLIMBING", optimaru::AcceptorType::STEP_COUNTING_HILL_CLIMBING)
-        .value("RECORD_TO_RECORD_TRAVEL", optimaru::AcceptorType::RECORD_TO_RECORD_TRAVEL);
+    py::enum_<optimaru::AcceptanceRule>(m, "AcceptorType", py::module_local())
+        .value("HILL_CLIMBING", optimaru::AcceptanceRule::HillClimbing)
+        .value("LATE_ACCEPTANCE", optimaru::AcceptanceRule::LateAcceptance)
+        .value("ENTITY_TABU", optimaru::AcceptanceRule::EntityTabu)
+        .value("SIMULATED_ANNEALING", optimaru::AcceptanceRule::SimulatedAnnealing)
+        .value("GREAT_DELUGE", optimaru::AcceptanceRule::GreatDeluge)
+        .value("STEP_COUNTING_HILL_CLIMBING", optimaru::AcceptanceRule::StepCountingHillClimbing)
+        .value("RECORD_TO_RECORD_TRAVEL", optimaru::AcceptanceRule::RecordToRecordTravel);
 
-    optimaru::python::bindConfigCopy(py::class_<Solver::Config>(m, "SolverConfig", py::module_local()))
+    optimaru::python::bind_config_copy(py::class_<Solver::Config>(m, "SolverConfig", py::module_local()))
         .def(py::init<>())
         .def_property(
             "spent_limit_seconds",
-            [](const Solver::Config &c) { return std::chrono::duration<double>(c.spentLimit).count(); },
+            [](const Solver::Config &c) { return std::chrono::duration<double>(c.time_limit).count(); },
             [](Solver::Config &c, double s)
-            { c.spentLimit = optimaru::python::secondsToMillis(s, "spent_limit_seconds"); })
+            { c.time_limit = optimaru::python::seconds_to_millis(s, "spent_limit_seconds"); })
         .def_property(
             "unimproved_spent_limit_seconds",
-            [](const Solver::Config &c) { return std::chrono::duration<double>(c.unimprovedSpentLimit).count(); },
+            [](const Solver::Config &c) { return std::chrono::duration<double>(c.stall_time_limit).count(); },
             [](Solver::Config &c, double s)
-            { c.unimprovedSpentLimit = optimaru::python::secondsToMillis(s, "unimproved_spent_limit_seconds"); })
+            { c.stall_time_limit = optimaru::python::seconds_to_millis(s, "unimproved_spent_limit_seconds"); })
         // 0 = no step limit.
-        .def_readwrite("step_count_limit", &Solver::Config::stepCountLimit)
-        .def_readwrite("unimproved_step_count_limit", &Solver::Config::unimprovedStepCountLimit)
-        .def_readwrite("random_seed", &Solver::Config::randomSeed)
+        .def_readwrite("step_count_limit", &Solver::Config::step_limit)
+        .def_readwrite("unimproved_step_count_limit", &Solver::Config::stall_step_limit)
+        .def_readwrite("random_seed", &Solver::Config::seed)
         .def_property(
             "parallel_solver_count",
             [](const Solver::Config &c) { return c.parallelSolverCount; },
@@ -238,25 +238,25 @@ PYBIND11_MODULE(_core, m)
                 c.parallelSolverCount = count;
             })
         // The local-search acceptor (LATE_ACCEPTANCE by default).
-        .def_readwrite("acceptor_type", &Solver::Config::acceptorType)
+        .def_readwrite("acceptor_type", &Solver::Config::rule)
         // 0 = auto: clamp(8 * facilities, 400, 3200).
         .def_property(
             "late_acceptance_size",
-            [](const Solver::Config &c) { return c.lateAcceptanceSize; },
+            [](const Solver::Config &c) { return c.history_length; },
             [](Solver::Config &c, std::int64_t size)
             {
                 if (size < 0)
                     throw py::value_error("late_acceptance_size must be >= 0 (0 = auto)");
-                c.lateAcceptanceSize = static_cast<std::size_t>(size);
+                c.history_length = static_cast<std::size_t>(size);
             })
         .def_property(
             "entity_tabu_size",
-            [](const Solver::Config &c) { return c.entityTabuSize; },
+            [](const Solver::Config &c) { return c.tabu_tenure; },
             [](Solver::Config &c, int size)
             {
                 if (size < 0)
                     throw py::value_error("entity_tabu_size must be >= 0");
-                c.entityTabuSize = size;
+                c.tabu_tenure = size;
             })
         // SIMULATED_ANNEALING: (0, 0) = auto, soft = the fraction below x
         // |the start's soft score| (the semiconductor-scheduling rule).
@@ -264,14 +264,14 @@ PYBIND11_MODULE(_core, m)
             "simulated_annealing_starting_temperature",
             [](const Solver::Config &c)
             {
-                return py::make_tuple(c.simulatedAnnealingStartingTemperature.hard,
-                                      c.simulatedAnnealingStartingTemperature.soft);
+                return py::make_tuple(c.start_temperature.hard,
+                                      c.start_temperature.soft);
             },
             [](Solver::Config &c, std::pair<std::int64_t, double> hs)
             {
                 if (hs.first < 0 || !(hs.second >= 0.0) || !std::isfinite(hs.second))
                     throw py::value_error("simulated_annealing_starting_temperature must be finite and >= 0");
-                c.simulatedAnnealingStartingTemperature = Score{hs.first, hs.second};
+                c.start_temperature = Score{hs.first, hs.second};
             })
         .def_property(
             "simulated_annealing_temperature_fraction",
@@ -282,23 +282,23 @@ PYBIND11_MODULE(_core, m)
                     throw py::value_error("simulated_annealing_temperature_fraction must be finite and > 0");
                 c.simulatedAnnealingTemperatureFraction = f;
             })
-        // FULL_ASSERT re-verifies the incremental score against a full
+        // ScoreChecks::Full re-verifies the incremental score against a full
         // recompute after every move (debugging aid; much slower).
         .def_property(
             "full_assert",
-            [](const Solver::Config &c) { return c.environmentMode == optimaru::EnvironmentMode::FULL_ASSERT; },
+            [](const Solver::Config &c) { return c.score_checks == optimaru::ScoreChecks::Full; },
             [](Solver::Config &c, bool on)
-            { c.environmentMode = on ? optimaru::EnvironmentMode::FULL_ASSERT : optimaru::EnvironmentMode::NON_ASSERT; })
+            { c.score_checks = on ? optimaru::ScoreChecks::Full : optimaru::ScoreChecks::Off; })
         // Early termination once bestScore >= (hard, soft), e.g. (0, -inf)
         // stops at the first feasible solution.
         .def_property(
             "best_score_limit",
-            [](const Solver::Config &c) { return py::make_tuple(c.bestScoreLimit.hard, c.bestScoreLimit.soft); },
-            [](Solver::Config &c, std::pair<std::int64_t, double> hs) { c.bestScoreLimit = Score{hs.first, hs.second}; })
+            [](const Solver::Config &c) { return py::make_tuple(c.target_score.hard, c.target_score.soft); },
+            [](Solver::Config &c, std::pair<std::int64_t, double> hs) { c.target_score = Score{hs.first, hs.second}; })
         // Callback fired on every new best solution: on_new_best(step, score).
         // The pybind11 wrapper re-acquires the GIL, so it is safe from the
         // multi-start worker threads too.
-        .def_readwrite("on_new_best", &Solver::Config::onNewBest);
+        .def_readwrite("on_new_best", &Solver::Config::on_new_best);
 
     py::class_<Solver>(m, "Solver", py::module_local())
         .def(py::init<>())
@@ -321,7 +321,7 @@ PYBIND11_MODULE(_core, m)
             [](Solver &solver, QuadraticAssignmentProblem &problem, const py::object &constraints)
             {
                 DecomposedCalculator calculator;
-                tfpy::applyConstraints([] { return defaultConstraints(); }, constraints).into(calculator);
+                tfpy::apply_constraints([] { return defaultConstraints(); }, constraints).into(calculator);
                 py::gil_scoped_release release;
                 solver.solve(problem, calculator);
             },
@@ -333,7 +333,7 @@ PYBIND11_MODULE(_core, m)
     // side constraints per location (in location order; each also reports the
     // locations it evaluates as "units"), the two objectives as one total
     // each. None = the default assembly in list_constraints() order; a pick
-    // list scores exactly those picks (applyConstraints), each entry carrying
+    // list scores exactly those picks (apply_constraints), each entry carrying
     // its pick's knobs, the k-th pick of a name keyed "<name>#<k>".
     m.def(
         "constraint_costs",
@@ -341,8 +341,8 @@ PYBIND11_MODULE(_core, m)
         {
             ScoreCalculator::prepare(problem);
             DecomposedCalculator calculator;
-            tfpy::applyConstraints([] { return defaultConstraints(); }, constraints).into(calculator);
-            return tfpy::constraintCosts(calculator, problem);
+            tfpy::apply_constraints([] { return defaultConstraints(); }, constraints).into(calculator);
+            return tfpy::constraint_costs(calculator, problem);
         },
         py::arg("problem"),
         py::arg("constraints") = py::none(),
@@ -352,12 +352,12 @@ PYBIND11_MODULE(_core, m)
     // strings a score breakdown reports.
     m.def(
         "list_constraints",
-        [] { return tfpy::constraintNames(defaultConstraints()); },
+        [] { return tfpy::constraint_names(defaultConstraints()); },
         "Constraint names available to quadratic_assignment.constraints.");
 
     // The constraint catalog, read off the same default assembly:
     // constraint_info() -> [ConstraintInfo(name, default_level,
     // default_weight, level_flippable, reward, default_enabled), ...] in
     // list_constraints() order. The defaults live in the C++ components only.
-    tfpy::bindConstraintInfo(m, [] { return defaultConstraints(); });
+    tfpy::bind_constraint_info(m, [] { return defaultConstraints(); });
 }

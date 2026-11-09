@@ -376,7 +376,7 @@ Breakdown ScoreCalculator::computeBreakdown(MeetingSchedule &schedule)
     return b;
 }
 
-Score ScoreCalculator::calculateScore(MeetingSchedule &schedule)
+Score ScoreCalculator::score(MeetingSchedule &schedule)
 {
     const Score score = toScore(computeBreakdown(schedule));
     schedule.score = score;

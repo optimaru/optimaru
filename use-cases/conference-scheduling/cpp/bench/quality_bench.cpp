@@ -10,7 +10,7 @@
 // Usage: cs_quality_bench <demo|scaled:<talks>> <seed> <seconds> [key=value..]
 // Knobs (bench-only overrides of Solver::Config, for A/B sweeps):
 //   compatProb= la= change= swap= alnsTrigger= alnsPolish= minRuin= maxRuin=
-//   maxRuinCount= decay= segments= asMove= asMoveMaxRuin= descent=
+//   max_ruin_count= decay= segments= asMove= as_move_max_ruin= descent=
 
 #include <chrono>
 #include <cstdint>
@@ -442,8 +442,8 @@ int main(int argc, char **argv)
     }
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(seconds);
-    config.randomSeed = seed;
+    config.time_limit = std::chrono::seconds(seconds);
+    config.seed = seed;
     config.parallelSolverCount = 1;
     for (int a = 4; a < argc; ++a)
     {
@@ -458,11 +458,11 @@ int main(int argc, char **argv)
         if (key == "compatProb")
             config.compatibleValueProbability = value;
         else if (key == "la")
-            config.lateAcceptanceSize = static_cast<std::size_t>(value);
+            config.history_length = static_cast<std::size_t>(value);
         else if (key == "change")
-            config.changeMoveWeight = value;
+            config.change_weight = value;
         else if (key == "swap")
-            config.swapMoveWeight = value;
+            config.swap_weight = value;
         else if (key == "alnsTrigger")
             config.ruinRecreateUnimprovedStepTrigger
                 = static_cast<std::int64_t>(value);
@@ -483,7 +483,7 @@ int main(int argc, char **argv)
         else if (key == "asMoveMaxRuin")
             config.ruinRecreateAsMoveMaxRuin = static_cast<int>(value);
         else if (key == "descent")
-            config.descentWeight = value;
+            config.descent_weight = value;
         else if (key == "hot")
             config.hotTalkProbability = value;
         else
@@ -509,7 +509,7 @@ int main(int argc, char **argv)
     long long lastStep = 0;
     long long lastMs = 0;
     long long feasibleMs = -1;
-    config.onNewBest = [&t0, &lastStep, &lastMs, &feasibleMs](std::int64_t step,
+    config.on_new_best = [&t0, &lastStep, &lastMs, &feasibleMs](std::int64_t step,
                                                               const Score &sc)
     {
         const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -522,7 +522,7 @@ int main(int argc, char **argv)
         std::printf("CS_BENCH best t=%lldms step=%lld score=%s\n",
                     static_cast<long long>(ms),
                     static_cast<long long>(step),
-                    sc.toString().c_str());
+                    sc.str().c_str());
     };
 
     Solver solver(config);
@@ -538,7 +538,7 @@ int main(int argc, char **argv)
                 "first_feasible_ms=%lld moves_per_sec=%.0f\n",
                 static_cast<long long>(conference.score.hard),
                 conference.score.soft,
-                conference.score.isFeasible() ? "true" : "false",
+                conference.score.feasible() ? "true" : "false",
                 feasibleMs,
                 movesPerSec);
     return 0;

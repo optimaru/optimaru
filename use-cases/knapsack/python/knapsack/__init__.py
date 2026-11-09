@@ -4,7 +4,7 @@ The 0/1 knapsack with multidimensional resource capacities, mandatory and
 forbidden items, selection-group bounds and item dependencies: one BASIC
 planning variable (`Item.selected`, 1 = selected, 0 = not) per item.
 
-Score (HardSoftScore), at the default weights:
+Score, at the default weights:
   hard = -(weight over capacity + resource overflow + unselected mandatory items
            + selected forbidden items + selection-group shortfall/excess
            + unmet item dependencies)

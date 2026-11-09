@@ -41,8 +41,8 @@ print(sum(sl.constraint_costs(schedule)["away_to_away_hop_cost"]["costs"]))  # r
 
 ## Score mapping
 
-The Java original already uses `HardSoftScore`, so it maps identically onto the engine's
-`HardSoftScore(int64 hard, double soft)`: hard = minus the violation count (0 == feasible),
+The Java original already uses `Score`, so it maps identically onto the engine's
+`Score(int64 hard, double soft)`: hard = minus the violation count (0 == feasible),
 soft = minus the travel distance (km) plus workday derby penalties (1000 per match) (soft is
 always integer-valued, held in the engine's double field).
 

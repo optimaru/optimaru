@@ -40,7 +40,7 @@ struct WorkerDayCountInRangeCost final : EsUnitConstraint {
                                         ".." + std::to_string(hi));
         }
     }
-    void onReset(const EmployeeSchedule& s) override {
+    void on_reset(const EmployeeSchedule& s) override {
         day_.resize(s.shifts.size());
         match_.resize(s.shifts.size());
         dayBit_.resize(s.shifts.size());

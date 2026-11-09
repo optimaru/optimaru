@@ -33,7 +33,7 @@ target_link_libraries(op_test PRIVATE op_core)
 target_compile_options(op_test PRIVATE -Wall -Wextra)
 
 # Plugin-assembly path (op/constraints.hpp): the same provider decomposed into
-# one component each on the engine's DecomposedScoreCalculator, checked
+# one component each on the engine's DecomposedObjective, checked
 # bit-for-bit against the monolithic calculators.
 add_executable(op_plugin_test test/op_plugin_test.cpp)
 target_link_libraries(op_plugin_test PRIVATE op_core)

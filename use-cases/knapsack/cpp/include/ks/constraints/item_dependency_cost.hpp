@@ -30,10 +30,10 @@ struct ItemDependencyCost final : detail::SelectionConstraint
     }
 
     void reset(const KnapsackProblem &problem,
-               const std::vector<std::vector<int>> &membersPerUnit) override
+               const std::vector<std::vector<int>> &members_per_unit) override
     {
         detail::requirePrepared(problem);
-        selected_ = detail::selectedFlags(problem, membersPerUnit);
+        selected_ = detail::selectedFlags(problem, members_per_unit);
         unmet_ = 0;
         for (const Dependency &dependency : problem.dependencies)
             unmet_ += unmetOf(dependency);

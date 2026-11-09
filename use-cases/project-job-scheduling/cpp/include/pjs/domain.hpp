@@ -7,9 +7,9 @@
 #include <string>
 #include <vector>
 
-#include "optimaru/api/domain/solution_descriptor.hpp"
-#include "optimaru/api/score/buildin/hard_soft_score.hpp"
-#include "optimaru/api/score/level.hpp"
+#include "optimaru/solution_traits.hpp"
+#include "optimaru/score.hpp"
+#include "optimaru/levels.hpp"
 
 namespace pjs
 {
@@ -18,7 +18,7 @@ namespace pjs
 // Score  (HardMediumSoftScore mirror)
 // ---------------------------------------------------------------------------
 // The Java quickstart scores with HardMediumSoftScore; the generic engine
-// (include/optimaru/) only knows HardSoftScore(int64 hard, double soft). Mapping rule
+// (include/optimaru/) only knows Score(int64 hard, double soft). Mapping rule
 // (the bed-allocation / meeting-scheduling precedent):
 //
 //   engine.hard = hard
@@ -41,7 +41,7 @@ namespace pjs
 // weight.)
 constexpr std::int64_t kMediumUnit = 1000000000LL;
 constexpr optimaru::MediumFold kMediumFold
-    = optimaru::MediumFold::intoSoft(static_cast<double>(kMediumUnit));
+    = optimaru::MediumFold::into_soft(static_cast<double>(kMediumUnit));
 
 struct Score
 {
@@ -49,7 +49,7 @@ struct Score
     std::int64_t medium = 0;
     std::int64_t soft = 0;
 
-    bool isFeasible() const { return hard >= 0; }
+    bool feasible() const { return hard >= 0; }
 
     bool operator<(const Score &o) const
     {
@@ -67,24 +67,24 @@ struct Score
         return hard == o.hard && medium == o.medium && soft == o.soft;
     }
 
-    std::string toString() const
+    std::string str() const
     {
         return std::to_string(hard) + "hard/" + std::to_string(medium)
                + "medium/" + std::to_string(soft) + "soft";
     }
 };
 
-inline optimaru::HardSoftScore toEngineScore(const Score &s)
+inline optimaru::Score toEngineScore(const Score &s)
 {
     // soft + medium * 10^9: for the integral levels of this domain the same
     // value as the old `medium * kMediumUnit + soft` (exact while
     // |engine soft| < 2^53, see above).
-    return kMediumFold.toEngine(s.hard,
+    return kMediumFold.to_engine(s.hard,
                                 static_cast<double>(s.medium),
                                 static_cast<double>(s.soft));
 }
 
-// A best-score LIMIT (Solver::Config::bestScoreLimit) in engine terms.
+// A best-score LIMIT (Solver::Config::target_score) in engine terms.
 // kNoLevelFloor (INT64_MIN) on the medium or the soft level means "no floor
 // on the soft side": the engine's soft limit becomes -inf, so only the hard
 // level is compared and no soft score, however low, can miss the stop.
@@ -93,7 +93,7 @@ inline optimaru::HardSoftScore toEngineScore(const Score &s)
 // low enough soft score never reaches. Any other limit folds as a score.
 constexpr std::int64_t kNoLevelFloor = std::numeric_limits<std::int64_t>::min();
 
-inline optimaru::HardSoftScore toEngineScoreLimit(const Score &limit)
+inline optimaru::Score toEngineScoreLimit(const Score &limit)
 {
     if (limit.medium == kNoLevelFloor || limit.soft == kNoLevelFloor)
         return {limit.hard, -std::numeric_limits<double>::infinity()};
@@ -102,9 +102,9 @@ inline optimaru::HardSoftScore toEngineScoreLimit(const Score &limit)
 
 // Inverse of toEngineScore. Every constraint penalizes (medium/soft <= 0 and
 // integral), so truncating integer division decodes the two levels exactly.
-inline Score fromEngineScore(const optimaru::HardSoftScore &e)
+inline Score fromEngineScore(const optimaru::Score &e)
 {
-    const std::int64_t combined = optimaru::roundScoreLevel(e.soft, "soft");
+    const std::int64_t combined = optimaru::round_score_level(e.soft, "soft");
     return {e.hard, combined / kMediumUnit, combined % kMediumUnit};
 }
 
@@ -219,7 +219,7 @@ struct Job
 // subgraph of a changed allocation). Like the Java suppliers, an unassigned
 // allocation passes dates through with delay 0 / duration 0 and contributes
 // no resource usage. The fields below hold the last full recompute
-// (ScoreCalculator::calculateScore fills them; Solver::solve leaves them
+// (ScoreCalculator::score fills them; Solver::solve leaves them
 // consistent with the final assignment).
 struct Allocation
 {
@@ -270,7 +270,7 @@ struct ProjectJobSchedule
 
     // --- composite modeDelay encoding helpers (see Allocation) ---
     int allocationCount() const { return static_cast<int>(allocations.size()); }
-    int valueCount() const { return delayRangeSize * maxModeCount; }
+    int value_count() const { return delayRangeSize * maxModeCount; }
     int executionModeCountOf(int allocationIndex) const
     {
         return static_cast<int>(
@@ -309,37 +309,37 @@ struct ProjectJobSchedule
 }  // namespace pjs
 
 // ---------------------------------------------------------------------------
-// SolutionDescriptor specialization  (the @PlanningEntity/@PlanningVariable
+// SolutionTraits specialization  (the @PlanningEntity/@PlanningVariable
 // annotations of the C++ engine): entities are allocations, the planning
 // variable is Allocation::modeDelay, the value range is the (delay x
-// executionMode) grid. isPinned mirrors Java's @PlanningPin + setPinned:
+// executionMode) grid. is_pinned mirrors Java's @PlanningPin + setPinned:
 // SOURCE/SINK allocations are always pinned, STANDARD ones when the user
-// flags them. valueCount reads maxModeCount, so ScoreCalculator::prepare must
+// flags them. value_count reads maxModeCount, so ScoreCalculator::prepare must
 // have run (Solver::solve and both calculators call it).
 // ---------------------------------------------------------------------------
-template <> struct optimaru::SolutionDescriptor<pjs::ProjectJobSchedule>
+template <> struct optimaru::SolutionTraits<pjs::ProjectJobSchedule>
 {
-    static constexpr optimaru::VariableKind kind
-        = optimaru::VariableKind::BASIC;
-    static int entityCount(const pjs::ProjectJobSchedule &s)
+    static constexpr optimaru::Shape shape
+        = optimaru::Shape::Assignment;
+    static int entity_count(const pjs::ProjectJobSchedule &s)
     {
         return s.allocationCount();
     }
-    static int valueCount(const pjs::ProjectJobSchedule &s)
+    static int value_count(const pjs::ProjectJobSchedule &s)
     {
-        return s.valueCount();
+        return s.value_count();
     }
-    static int getVariable(const pjs::ProjectJobSchedule &s,
+    static int value_of(const pjs::ProjectJobSchedule &s,
                            int allocationIndex)
     {
         return s.allocations[allocationIndex].modeDelay;
     }
     static void
-    setVariable(pjs::ProjectJobSchedule &s, int allocationIndex, int value)
+    assign(pjs::ProjectJobSchedule &s, int allocationIndex, int value)
     {
         s.allocations[allocationIndex].modeDelay = value;
     }
-    static bool isPinned(const pjs::ProjectJobSchedule &s, int allocationIndex)
+    static bool is_pinned(const pjs::ProjectJobSchedule &s, int allocationIndex)
     {
         return s.jobTypeOf(allocationIndex) != pjs::JobType::STANDARD
                || s.allocations[allocationIndex].pinned;

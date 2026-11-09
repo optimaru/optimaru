@@ -23,13 +23,13 @@ struct BedConflictCost final : BaUnitConstraint
         : BaUnitConstraint("bedConflictCost", weight, kDefaultLevel)
     {
     }
-    void onReset(const BedPlan &plan) override
+    void on_reset(const BedPlan &plan) override
     {
         detail::requirePrepared(plan);
         beds_.reset(plan);
     }
     // The real beds; the sentinel is no bed (detail::RealBeds).
-    const std::vector<int> *scopedUnits() const override
+    const std::vector<int> *scoped_units() const override
     {
         return beds_.units();
     }
@@ -48,8 +48,8 @@ struct BedConflictCost final : BaUnitConstraint
         }
         return static_cast<double>(nights);
     }
-    bool supportsDelta() const override { return true; }
-    double deltaCost(const BedPlan &plan,
+    bool supports_delta() const override { return true; }
+    double delta_cost(const BedPlan &plan,
                      int unit,
                      const std::vector<int> &members,
                      int entity) const override

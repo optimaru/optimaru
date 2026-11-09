@@ -9,7 +9,7 @@
 #include "es/incremental_calculator.hpp"
 #include "es/score_calculator.hpp"
 #include "es/solver.hpp"
-#include "optimaru/api/score/director/score_director.hpp"
+#include "optimaru/editor.hpp"
 
 using namespace es;
 
@@ -58,7 +58,7 @@ void verifyConstraints() {
     {
         EmployeeSchedule s = oneEmployee(/*skills=*/{});
         s.shifts.push_back(makeShift("case 1.0", dt(0, 9, 0), dt(0, 17, 0), "X"));
-        Score sc = ScoreCalculator::calculateScore(s);
+        Score sc = ScoreCalculator::score(s);
         check("requiredSkillCost", sc.hard, sc.soft, -1, 0);
     }
 
@@ -68,7 +68,7 @@ void verifyConstraints() {
         EmployeeSchedule s = oneEmployee();
         s.shifts.push_back(makeShift("case 2.1", dt(0, 8, 0), dt(0, 12, 0)));
         s.shifts.push_back(makeShift("case 2.2", dt(0, 11, 0), dt(0, 13, 0)));
-        Score sc = ScoreCalculator::calculateScore(s);
+        Score sc = ScoreCalculator::score(s);
         check("shiftOverlapCost (+maxOneShiftPerDayCost)", sc.hard, sc.soft, -(60 + 1), 0);
     }
 
@@ -77,7 +77,7 @@ void verifyConstraints() {
         EmployeeSchedule s = oneEmployee();
         s.shifts.push_back(makeShift("case 3.1", dt(0, 8, 0), dt(0, 10, 0)));
         s.shifts.push_back(makeShift("case 3.2", dt(0, 12, 0), dt(0, 14, 0)));
-        Score sc = ScoreCalculator::calculateScore(s);
+        Score sc = ScoreCalculator::score(s);
         // gap = 12:00 - 10:00 = 120 min < 600 -> minRestCost (600-120)=480,
         // plus maxOneShiftPerDayCost -1.
         check("maxOneShiftPerDayCost + minRestCost", sc.hard, sc.soft, -(1 + 480), 0);
@@ -89,7 +89,7 @@ void verifyConstraints() {
         EmployeeSchedule s = oneEmployee();
         s.shifts.push_back(makeShift("case 4.1", dt(0, 20, 0), dt(0, 22, 0)));
         s.shifts.push_back(makeShift("case 4.2", dt(1, 3, 0), dt(1, 5, 0)));
-        Score sc = ScoreCalculator::calculateScore(s);
+        Score sc = ScoreCalculator::score(s);
         check("minRestCost", sc.hard, sc.soft, -300, 0);
     }
 
@@ -98,7 +98,7 @@ void verifyConstraints() {
         EmployeeSchedule s = oneEmployee();
         s.employees[0].unavailableDates = {0};
         s.shifts.push_back(makeShift("case 5.0", dt(0, 9, 0), dt(0, 17, 0)));
-        Score sc = ScoreCalculator::calculateScore(s);
+        Score sc = ScoreCalculator::score(s);
         check("employeeUnavailabilityCost", sc.hard, sc.soft, -480, 0);
     }
 
@@ -107,7 +107,7 @@ void verifyConstraints() {
         EmployeeSchedule s = oneEmployee();
         s.employees[0].undesiredDates = {0};
         s.shifts.push_back(makeShift("case 6.0", dt(0, 9, 0), dt(0, 17, 0)));
-        Score sc = ScoreCalculator::calculateScore(s);
+        Score sc = ScoreCalculator::score(s);
         check("undesiredDayCost (soft)", sc.hard, sc.soft, 0, -480);
     }
 
@@ -116,7 +116,7 @@ void verifyConstraints() {
         EmployeeSchedule s = oneEmployee();
         s.employees[0].desiredDates = {0};
         s.shifts.push_back(makeShift("case 7.0", dt(0, 9, 0), dt(0, 17, 0)));
-        Score sc = ScoreCalculator::calculateScore(s);
+        Score sc = ScoreCalculator::score(s);
         check("desiredDayCost (soft reward)", sc.hard, sc.soft, 0, +480);
     }
 
@@ -127,7 +127,7 @@ void verifyConstraints() {
         EmployeeSchedule s = oneEmployee();
         s.shifts.push_back(makeShift("case 8.1", dt(0, 16, 0), dt(1, 0, 0)));  // ends midnight
         s.shifts.push_back(makeShift("case 8.2", dt(1, 0, 0), dt(1, 8, 0)));   // starts midnight
-        Score sc = ScoreCalculator::calculateScore(s);
+        Score sc = ScoreCalculator::score(s);
         check("minRestCost, gap=0 (<=)", sc.hard, sc.soft, -600, 0);
     }
 
@@ -145,7 +145,7 @@ void verifyConstraints() {
         add("case 9.0", 0, 0); add("case 9.1", 3, 0);   // first worker: 2 shifts (days 0, 3)
         add("case 9.2", 6, 1);  // second worker: 1 shift
         add("case 9.3", 9, 2);  // third worker: 1 shift
-        Score sc = ScoreCalculator::calculateScore(s);
+        Score sc = ScoreCalculator::score(s);
         // sqrt(6 - 16/3) = sqrt(0.666667) = 0.81649658 -> 6 sig figs -> 0.816497
         check("shiftCountImbalanceCost [2,1,1]", sc.hard, sc.soft, 0, -0.816497);
     }
@@ -162,7 +162,7 @@ void verifyConstraints() {
             s.shifts.push_back(sh);
         };
         add("case 10.0", 0, 0); add("case 10.1", 3, 0);   // first worker: 2 shifts; the others: 0
-        Score sc = ScoreCalculator::calculateScore(s);
+        Score sc = ScoreCalculator::score(s);
         // sqrt(4 - 4/3) = sqrt(2.666667) = 1.63299316 -> 6 sig figs -> 1.63299
         check("shiftCountImbalanceCost [2,0,0]", sc.hard, sc.soft, 0, -1.63299);
     }
@@ -212,17 +212,17 @@ void solveDemo(int days, int shiftsPerDay, int seconds) {
                 days, shiftsPerDay, days * shiftsPerDay, schedule.employees.size(), seconds);
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(seconds);
-    config.randomSeed = 42;
-    config.onNewBest = [](std::int64_t step, const Score& sc) {
+    config.time_limit = std::chrono::seconds(seconds);
+    config.seed = 42;
+    config.on_new_best = [](std::int64_t step, const Score& sc) {
         std::printf("    new best @step %-8lld %s\n", static_cast<long long>(step),
-                    sc.toString().c_str());
+                    sc.str().c_str());
     };
     Solver solver(config);
     solver.solve(schedule);
 
-    std::printf("  final score: %s  (feasible=%s)\n", schedule.score.toString().c_str(),
-                schedule.score.isFeasible() ? "true" : "false");
+    std::printf("  final score: %s  (feasible=%s)\n", schedule.score.str().c_str(),
+                schedule.score.feasible() ? "true" : "false");
 
     std::vector<int> load(schedule.employees.size(), 0);
     for (const Shift& shift : schedule.shifts)
@@ -237,7 +237,7 @@ void solveDemo(int days, int shiftsPerDay, int seconds) {
 // -------------------------------------------------------------------------
 // Verifies the incremental calculator stays exactly in sync with a full
 // recompute across a long random walk of change/swap moves, driven through
-// the engine's ScoreDirector protocol (before/set/after).
+// the engine's Editor protocol (before/set/after).
 // -------------------------------------------------------------------------
 void verifyIncremental() {
     std::printf("== Verifying incremental scoring == full recompute ==\n");
@@ -246,7 +246,7 @@ void verifyIncremental() {
     for (int i = 0; i < static_cast<int>(s.shifts.size()); ++i) s.shifts[i].employeeIndex = i % employeeCount;
 
     EmployeeSchedulingIncrementalScoreCalculator calc;
-    optimaru::ScoreDirector<EmployeeSchedule> director(s, calc);
+    optimaru::Editor<EmployeeSchedule> editor(s, calc);
     EmployeeSchedule shadow = s;
     std::mt19937_64 rng(123);
     std::uniform_int_distribution<int> shiftPick(0, static_cast<int>(s.shifts.size()) - 1);
@@ -257,22 +257,22 @@ void verifyIncremental() {
     const int steps = 50000;
     for (int step = 0; step < steps; ++step) {
         if (unit(rng) < 0.75) {
-            director.changeVariable(shiftPick(rng), empPick(rng));  // ChangeMove
+            editor.assign(shiftPick(rng), empPick(rng));  // ChangeMove
         } else {
             int s1 = shiftPick(rng), s2 = shiftPick(rng);           // SwapMove
             int v1 = s.shifts[s1].employeeIndex, v2 = s.shifts[s2].employeeIndex;
-            director.changeVariable(s1, v2);
-            director.changeVariable(s2, v1);
+            editor.assign(s1, v2);
+            editor.assign(s2, v1);
         }
         // Full recompute on the same assignment.
         for (int i = 0; i < static_cast<int>(shadow.shifts.size()); ++i)
             shadow.shifts[i].employeeIndex = s.shifts[i].employeeIndex;
-        Score full = ScoreCalculator::calculateScore(shadow);
-        Score incremental = director.calculateScore();
+        Score full = ScoreCalculator::score(shadow);
+        Score incremental = editor.score();
         if (full.hard != incremental.hard || std::fabs(full.soft - incremental.soft) > 1e-9) {
             if (++mismatches <= 3) {
                 std::printf("  MISMATCH @step %d: incremental=%s full=%s\n", step,
-                            incremental.toString().c_str(), full.toString().c_str());
+                            incremental.str().c_str(), full.str().c_str());
             }
         }
     }
@@ -289,18 +289,18 @@ void verifyIncremental() {
     EmployeeSchedule fallbackSchedule = s;
     EmployeeSchedule fallbackShadow = s;
     EmployeeSchedulingIncrementalScoreCalculator fallbackCalc(/*pairCacheBudgetBytes=*/0);
-    optimaru::ScoreDirector<EmployeeSchedule> fallbackDirector(fallbackSchedule, fallbackCalc);
+    optimaru::Editor<EmployeeSchedule> fallbackDirector(fallbackSchedule, fallbackCalc);
     std::mt19937_64 fallbackRng(456);
     int fallbackMismatches = 0;
     for (int step = 0; step < 5000; ++step) {
         const int shift = static_cast<int>(fallbackRng() % fallbackSchedule.shifts.size());
         const int employee = static_cast<int>(fallbackRng() % employeeCount);
-        fallbackDirector.changeVariable(shift, employee);
+        fallbackDirector.assign(shift, employee);
         for (int i = 0; i < static_cast<int>(fallbackShadow.shifts.size()); ++i) {
             fallbackShadow.shifts[i].employeeIndex = fallbackSchedule.shifts[i].employeeIndex;
         }
-        const Score full = ScoreCalculator::calculateScore(fallbackShadow);
-        const Score incremental = fallbackDirector.calculateScore();
+        const Score full = ScoreCalculator::score(fallbackShadow);
+        const Score incremental = fallbackDirector.score();
         if (full.hard != incremental.hard || std::fabs(full.soft - incremental.soft) > 1e-9) {
             ++fallbackMismatches;
         }

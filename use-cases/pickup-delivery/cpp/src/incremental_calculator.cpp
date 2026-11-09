@@ -37,17 +37,17 @@ constexpr auto kTravelWeight
 
 }  // namespace
 
-void PdpIncrementalScoreCalculator::resetWorkingSolution(
-    PdpRoutePlan &workingSolution)
+void PdpIncrementalScoreCalculator::rebuild(
+    PdpRoutePlan &solution)
 {
-    plan_ = &workingSolution;
+    plan_ = &solution;
     vehicleCount_ = static_cast<int>(plan_->vehicles.size());
     const std::size_t nodeCount = plan_->nodes.size();
     const std::size_t deliveryCount = plan_->deliveries.size();
 
     // Rebuild the node index. nodeList_ holds the TRUE list index, pool
     // included — not "-1 for unassigned". Ownership has to be recorded
-    // literally so afterListChanged can tell "this node left my list" from
+    // literally so after_list_edit can tell "this node left my list" from
     // "this node was already re-homed by an earlier hook pair" (see there).
     // routeOf() is what translates an index back into a vehicle or "unrouted".
     nodeList_.assign(nodeCount, -1);
@@ -55,7 +55,7 @@ void PdpIncrementalScoreCalculator::resetWorkingSolution(
     for (int l = 0; l <= vehicleCount_; ++l)
     {
         const std::vector<int> &members
-            = optimaru::SolutionDescriptor<PdpRoutePlan>::listOf(*plan_, l);
+            = optimaru::SolutionTraits<PdpRoutePlan>::list_of(*plan_, l);
         for (std::size_t p = 0; p < members.size(); ++p)
         {
             nodeList_[static_cast<std::size_t>(members[p])] = l;
@@ -119,13 +119,13 @@ void PdpIncrementalScoreCalculator::flushDeliveries()
     pendingDeliveries_.clear();
 }
 
-void PdpIncrementalScoreCalculator::beforeListChanged(int listIndex)
+void PdpIncrementalScoreCalculator::before_list_edit(int listIndex)
 {
-    using Descriptor = optimaru::SolutionDescriptor<PdpRoutePlan>;
+    using Descriptor = optimaru::SolutionTraits<PdpRoutePlan>;
 
-    // Snapshot the old membership so afterListChanged can tell which nodes
+    // Snapshot the old membership so after_list_edit can tell which nodes
     // left the list (they become unassigned) from which merely moved within it.
-    const std::vector<int> &members = Descriptor::listOf(*plan_, listIndex);
+    const std::vector<int> &members = Descriptor::list_of(*plan_, listIndex);
     oldMembers_.assign(members.begin(), members.end());
 
     for (int nodeIndex : oldMembers_)
@@ -141,9 +141,9 @@ void PdpIncrementalScoreCalculator::beforeListChanged(int listIndex)
     }
 }
 
-void PdpIncrementalScoreCalculator::afterListChanged(int listIndex)
+void PdpIncrementalScoreCalculator::after_list_edit(int listIndex)
 {
-    using Descriptor = optimaru::SolutionDescriptor<PdpRoutePlan>;
+    using Descriptor = optimaru::SolutionTraits<PdpRoutePlan>;
 
     // Release the nodes that were here — but ONLY those this list still owns.
     // A composite move (the engine's cross-list element swap, or the pair move
@@ -162,7 +162,7 @@ void PdpIncrementalScoreCalculator::afterListChanged(int listIndex)
     }
     oldMembers_.clear();
 
-    const std::vector<int> &members = Descriptor::listOf(*plan_, listIndex);
+    const std::vector<int> &members = Descriptor::list_of(*plan_, listIndex);
     for (std::size_t p = 0; p < members.size(); ++p)
     {
         const auto n = static_cast<std::size_t>(members[p]);
@@ -262,7 +262,7 @@ PdpIncrementalScoreCalculator::unassignedMinutes(int deliveryIndex) const
     return (pickup.serviceDuration + dropoff.serviceDuration) / 60;
 }
 
-Score PdpIncrementalScoreCalculator::currentScore() const
+Score PdpIncrementalScoreCalculator::current_score() const
 {
     return Score{-(kCapacityWeight * capacityTotal_
                    + kTimeWindowWeight * latenessTotal_ + couplingTotal_),
@@ -270,9 +270,9 @@ Score PdpIncrementalScoreCalculator::currentScore() const
                  -kTravelWeight * drivingTotal_};
 }
 
-optimaru::HardSoftScore PdpIncrementalScoreCalculator::calculateScore()
+optimaru::Score PdpIncrementalScoreCalculator::score()
 {
-    return toEngineScore(currentScore());
+    return toEngineScore(current_score());
 }
 
 }  // namespace pdp

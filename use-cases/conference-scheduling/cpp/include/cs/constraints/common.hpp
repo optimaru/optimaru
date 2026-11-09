@@ -8,8 +8,8 @@
 
 #include "cs/domain.hpp"
 #include "cs/score_calculator.hpp"
-#include "optimaru/api/score/calculator/constraint_assembly.hpp"
-#include "optimaru/api/score/calculator/decomposed_score_calculator.hpp"
+#include "optimaru/constraint_assembly.hpp"
+#include "optimaru/decomposed_objective.hpp"
 
 namespace cs
 {
@@ -20,7 +20,7 @@ namespace cs
 // The 36 constraints of the reference conference-scheduling
 // ConferenceSchedulingConstraintProvider (16 hard + 20 soft, plus the port's
 // synthetic talkTypeIncompatibilityCost), split into one small component each
-// on the engine's DecomposedScoreCalculator — an optional assembly path NEXT TO
+// on the engine's DecomposedObjective — an optional assembly path NEXT TO
 // the monolithic ConferenceSchedulingIncrementalScoreCalculator, which stays
 // the tuned default fast path.
 //
@@ -45,7 +45,7 @@ namespace cs
 // What that buys, which the monolithic path cannot offer:
 //   - assemble any SUBSET of the 36 rules;
 //   - re-weight or re-level any of them per instance;
-//   - read exact per-constraint totals through constraintTotals().
+//   - read exact per-constraint totals through constraint_totals().
 // What it costs: a move on this path is one full O(talks^2) recompute instead
 // of an incremental update. That is the trade — this is the composability
 // path, not the throughput path. Reach for the monolithic calculator when you
@@ -73,22 +73,22 @@ namespace cs
 // the same kDefaultWeight constants.
 //
 // Registry names are the struct names with a lower-case first letter
-// ("roomConflictCost"); Python sees them through pythonName()
+// ("roomConflictCost"); Python sees them through python_name()
 // ("room_conflict_cost"). Each Breakdown member carries the same name.
 //
 // Cost sign convention (see decomposed_score_calculator.hpp): positive =
 // penalty, 0 = no violation, NEGATIVE = reward. The three *DiversityCost rules
 // are rewards in the Java provider and return negative costs here (they are
-// marked `reward = true; levelFlippable = false;`, so hard() and any level
+// marked `reward = true; level_flippable = false;`, so hard() and any level
 // change are refused), which is why an assembly of all 37 components at their
-// default weights reproduces ScoreCalculator::calculateScore bit-for-bit,
+// default weights reproduces ScoreCalculator::score bit-for-bit,
 // rewards included.
 //
 // Every component requires ScoreCalculator::prepare(schedule) to have run
 // (the solve() overload and the monolithic path both call it).
 
 using DecomposedCalculator
-    = optimaru::DecomposedScoreCalculator<ConferenceSchedule>;
+    = optimaru::DecomposedObjective<ConferenceSchedule>;
 using ConstraintAssembly = optimaru::ConstraintAssembly<ConferenceSchedule>;
 using CsUnitConstraint = optimaru::UnitConstraint<ConferenceSchedule>;
 using CsGlobalConstraint = optimaru::GlobalConstraint<ConferenceSchedule>;
@@ -153,20 +153,20 @@ struct BreakdownConstraint : CsGlobalConstraint
     // return a NEGATIVE value (see the sign convention above).
     virtual std::int64_t select(const Breakdown &breakdown) const = 0;
 
-    const char *sharedContextKey() const override { return "cs.breakdown"; }
+    const char *shared_context_key() const override { return "cs.breakdown"; }
     std::unique_ptr<optimaru::SharedConstraintContext>
-    createSharedContext() const override
+    create_shared_context() const override
     {
         return std::make_unique<BreakdownProjection>();
     }
-    void bindSharedContext(optimaru::SharedConstraintContext &context) override
+    void bind_shared_context(optimaru::SharedConstraintContext &context) override
     {
         projection_ = static_cast<BreakdownProjection *>(&context);
     }
 
     void
     reset(const ConferenceSchedule &schedule,
-          const std::vector<std::vector<int>> & /*membersPerUnit*/) override
+          const std::vector<std::vector<int>> & /*members_per_unit*/) override
     {
         if (!schedule.prepared)
         {
@@ -176,7 +176,7 @@ struct BreakdownConstraint : CsGlobalConstraint
         schedule_ = &schedule;
         projection_->invalidate();
     }
-    void onUnitChanged(const ConferenceSchedule &schedule,
+    void on_unit_changed(const ConferenceSchedule &schedule,
                        int /*unit*/,
                        const std::vector<int> & /*members*/) override
     {

@@ -5,14 +5,14 @@
 #include <vector>
 
 #include "ba/domain.hpp"
-#include "optimaru/api/score/calculator/incremental_score_calculator.hpp"
+#include "optimaru/objective.hpp"
 
 namespace ba
 {
 
 // The bed-allocation implementation of the engine's
-// optimaru::IncrementalScoreCalculator — the C++ analog of implementing
-// Java's IncrementalScoreCalculator instead of a ConstraintProvider.
+// optimaru::Objective — the C++ analog of implementing
+// Java's Objective instead of a ConstraintProvider.
 //
 // A stay's contribution decomposes into
 //   - a per-stay part (hard 2/3/5/6/7, medium 8, soft 9~12): a pure function
@@ -29,29 +29,29 @@ namespace ba
 //     occupant lists grew with the planning horizon and dominated the hot
 //     path on long-horizon instances.
 //
-// beforeVariableChanged retracts the stay's contribution while `bed` still
-// holds the OLD value; afterVariableChanged inserts the NEW value.
+// before_assign retracts the stay's contribution while `bed` still
+// holds the OLD value; after_assign inserts the NEW value.
 // Uninitialized stays (bed == -1) contribute nothing, so the construction
 // heuristic can score partially initialized solutions; the "no bed" sentinel
 // contributes only its medium penalty (unassignedStaysCost, folded into the
 // engine soft level by toEngineScore). The full-recompute reference is
-// ScoreCalculator::calculateScore (checked in the tests and under
-// EnvironmentMode::FULL_ASSERT).
+// ScoreCalculator::score (checked in the tests and under
+// ScoreChecks::ScoreChecks::Full).
 class BedAllocationIncrementalScoreCalculator final
-    : public optimaru::IncrementalScoreCalculator<BedPlan>
+    : public optimaru::Objective<BedPlan>
 {
 public:
-    void resetWorkingSolution(BedPlan &workingSolution) override;
-    void beforeVariableChanged(int stayIndex) override;
-    void afterVariableChanged(int stayIndex) override;
-    optimaru::HardSoftScore calculateScore() override;
+    void rebuild(BedPlan &solution) override;
+    void before_assign(int stayIndex) override;
+    void after_assign(int stayIndex) override;
+    optimaru::Score score() override;
 
 private:
     BedPlan *plan_ = nullptr;
     std::vector<int> assign_;  // planning value per stay (-1 uninitialized)
 
     // Per-(stay, room) single-stay impact table, rebuilt by
-    // resetWorkingSolution. ScoreCalculator::singleStayImpact is a pure
+    // rebuild. ScoreCalculator::singleStayImpact is a pure
     // function of (stay, room-of-bed) over problem facts that never change
     // during a solve (equipment loops + branch chain), so the delta path
     // looks it up instead of re-deriving it on every insert/retract. Real
@@ -72,7 +72,7 @@ private:
                                          // SAME_GENDER rooms only
 
     // Running totals (positive penalty units; signs applied in
-    // calculateScore).
+    // score).
     std::int64_t hardSingles_ = 0;
     std::int64_t hardBedPairs_ = 0;
     std::int64_t hardRoomPairs_ = 0;

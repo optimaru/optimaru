@@ -84,7 +84,7 @@ calculator, which read the same constants.
 
 **The medium level.** `unassigned_visits_cost` is the domain's medium level. The
 domain declares its fold once (`kMediumFold = intoSoft(10^9)` in `domain.hpp`):
-the engine compares `HardSoftScore`, so medium lands in soft as
+the engine compares `Score`, so medium lands in soft as
 `medium * 10^9 + soft`, which keeps the 3-level `Score` lexicographic. Its weight
 is in medium units (default 1). `level="hard"` charges one hard unit per penalty
 minute; `level="soft"` one soft unit per penalty minute; an explicit weight is in units
@@ -168,12 +168,12 @@ engine is `cpp/include/vrp/solver.hpp` + `cpp/src/solver.cpp`.
 
 **Adding a move.** The engine already mixes relocate / swap / 2-opt / Or-opt / 2-opt\* tail swap moves
 (weights in `Solver::Config`). This use case relies on the engine's generic moves only; it has no domain move yet. A new move is a
-`optimaru::MoveOperator<…>` registered with `engine.addMoveOperator(...)` next
+`optimaru::MoveOperator<…>` registered with `engine.add_move_operator(...)` next
 to the engine construction in `cpp/src/solver.cpp`; a ruin for LNS is a
-`RuinOperator` registered with `engine.addRuinOperator(...)`.
+`RuinOperator` registered with `engine.add_ruin_operator(...)`.
 
-**Changing the construction heuristic.** `entityDifficulty` is already set in `cpp/src/solver.cpp` (tightest time window and largest demand first). Set
-`engineConfig.constructionHeuristic.entityDifficulty` for First Fit
+**Changing the construction heuristic.** `difficulty` is already set in `cpp/src/solver.cpp` (tightest time window and largest demand first). Set
+`engineConfig.construction.difficulty` for First Fit
 Decreasing ordering, or pre-assign part of the solution in the domain
 solver's `solve` before the engine runs — the engine only fills what is still unassigned.
 

@@ -95,7 +95,7 @@ constraints cost 0 while their vehicle field is 0. The seven core rules
 
 **The medium level.** `unassigned_requests_cost` is the domain's medium level. The
 domain declares its fold once (`kMediumFold = intoSoft(10^9)` in `domain.hpp`):
-the engine compares `HardSoftScore`, so medium lands in soft as
+the engine compares `Score`, so medium lands in soft as
 `medium * 10^9 + soft`, which keeps the 3-level `Score` lexicographic. Its weight
 is in medium units (default 1, the same as the CP-SAT reference's). `level="hard"`
 charges one hard unit per minute; `level="soft"` one soft unit per minute, in both
@@ -263,7 +263,7 @@ not travel time.
 
 ## Scoring: two implementations, checked against each other
 
-`ScoreCalculator::calculateScore` is the full recompute and the readable
+`ScoreCalculator::score` is the full recompute and the readable
 statement of the constraints. `PdpIncrementalScoreCalculator` is what the
 engine calls during search: per-route terms (capacity peak, lateness, driving)
 are re-derived per touched route, while the coupling terms are maintained
@@ -275,7 +275,7 @@ destination list's hook pair, which runs *before* the source list's — so
 "release everything that was in my list" has to check that the index still
 points at this list, or it strands a stop that is in fact routed. Getting that
 wrong produced a score that disagreed with the recompute by exactly one
-coupling penalty; `FULL_ASSERT` caught it, and `pdp_test` now covers it
+coupling penalty; `ScoreChecks::Full` caught it, and `pdp_test` now covers it
 directly, including the transient half-assigned states the engine passes
 through mid-move.
 
@@ -327,12 +327,12 @@ engine is `cpp/include/pdp/solver.hpp` + `cpp/src/solver.cpp`.
 
 **Adding a move.** The engine already mixes relocate / swap / 2-opt / Or-opt / 2-opt\* tail swap moves
 (weights in `Solver::Config`). `PairRelocateMove` / `PairExchangeMove` (move a pickup together with its drop-off) and the `PairRuin` ruin operator are defined and registered in `cpp/src/solver.cpp` — use them as templates. A new move is a
-`optimaru::MoveOperator<…>` registered with `engine.addMoveOperator(...)` next
+`optimaru::MoveOperator<…>` registered with `engine.add_move_operator(...)` next
 to the engine construction in `cpp/src/solver.cpp`; a ruin for LNS is a
-`RuinOperator` registered with `engine.addRuinOperator(...)`.
+`RuinOperator` registered with `engine.add_ruin_operator(...)`.
 
-**Changing the construction heuristic.** Both levers are used: `entityDifficulty` and a domain constructor (`constructPairs`, which inserts each pickup with its drop-off) in `cpp/src/solver.cpp`; the engine heuristic fills whatever is left. Set
-`engineConfig.constructionHeuristic.entityDifficulty` for First Fit
+**Changing the construction heuristic.** Both levers are used: `difficulty` and a domain constructor (`constructPairs`, which inserts each pickup with its drop-off) in `cpp/src/solver.cpp`; the engine heuristic fills whatever is left. Set
+`engineConfig.construction.difficulty` for First Fit
 Decreasing ordering, or pre-assign part of the solution in the domain
 solver's `solve` before the engine runs — the engine only fills what is still unassigned.
 

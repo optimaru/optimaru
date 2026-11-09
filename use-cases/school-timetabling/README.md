@@ -62,12 +62,12 @@ engine is `cpp/include/st/canonical_solver.hpp` + `cpp/src/canonical_solver.cpp`
 
 **Adding a move.** The engine already mixes change / swap moves
 (weights in `Solver::Config`). `SmartClassSwapMove`, `ReassignMove` and `UnassignMove` live in `cpp/include/st/moves/` and are registered in `cpp/src/canonical_solver.cpp` — add a new move as another file there. A new move is a
-`optimaru::MoveOperator<…>` registered with `engine.addMoveOperator(...)` next
+`optimaru::MoveOperator<…>` registered with `engine.add_move_operator(...)` next
 to the engine construction in `cpp/src/canonical_solver.cpp`; a ruin for LNS is a
-`RuinOperator` registered with `engine.addRuinOperator(...)`.
+`RuinOperator` registered with `engine.add_ruin_operator(...)`.
 
-**Changing the construction heuristic.** `entityDifficulty` is already set in `cpp/src/canonical_solver.cpp`. Set
-`engineConfig.constructionHeuristic.entityDifficulty` for First Fit
+**Changing the construction heuristic.** `difficulty` is already set in `cpp/src/canonical_solver.cpp`. Set
+`engineConfig.construction.difficulty` for First Fit
 Decreasing ordering, or pre-assign part of the solution in the domain
 solver's `solve` before the engine runs — the engine only fills what is still unassigned.
 

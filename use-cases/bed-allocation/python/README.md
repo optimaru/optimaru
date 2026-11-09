@@ -42,9 +42,9 @@ adding one sentinel to the value range: the search can move a stay to "no bed", 
 that stay is penalized per night at the medium level (`unassigned_stays_cost`). So hard 0
 is always reachable (every hard violation can be resolved by giving up the assignment).
 
-## Score mapping (HardMediumSoftScore -> engine HardSoftScore)
+## Score mapping (HardMediumSoftScore -> engine Score)
 
-The original score type is `HardMediumSoftScore`; the engine only has `HardSoftScore(int64 hard,
+The original score type is `HardMediumSoftScore`; the engine only has `Score(int64 hard,
 double soft)`. The mapping rule (`cpp/include/ba/domain.hpp`):
 
 ```

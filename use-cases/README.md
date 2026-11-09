@@ -124,7 +124,7 @@ component). Python reads them from `<package>.constraint_info()`, one
 │   ├── CMakeLists.txt
 │   ├── include/<ns>/
 │   │   ├── domain.hpp                 problem facts, planning variable, Score,
-│   │   │                              SolutionDescriptor specialization
+│   │   │                              SolutionTraits specialization
 │   │   ├── score_calculator.hpp       full (reference) score
 │   │   ├── incremental_calculator.hpp tuned incremental score (default path)
 │   │   ├── constraints.hpp            default constraint assembly
@@ -195,7 +195,7 @@ swap for BASIC variables; relocate / swap / 2-opt / Or-opt / 2-opt\* tail swap
 for LIST variables. Their weights are `Solver::Config` fields (exposed to
 Python as `*_move_weight`). A domain move is a
 `optimaru::MoveOperator<Solution>`
-([`preview/api/move/operators.hpp`](../include/optimaru/preview/api/move/operators.hpp)):
+([`search/operators.hpp`](../include/optimaru/search/operators.hpp)):
 
 ```cpp
 class MyMove final : public optimaru::MoveOperator<MySolution> {
@@ -213,15 +213,15 @@ Register it where the use case's `Solver` builds the engine (in
 `cpp/src/solver.cpp`):
 
 ```cpp
-engine.addMoveOperator(std::make_unique<MyMove>());
+engine.add_move_operator(std::make_unique<MyMove>());
 ```
 
 The engine picks among the built-in mix and every registered operator
 adaptively (roulette wheel rewarded by move outcome). For large-neighbourhood
 search, implement `optimaru::RuinOperator<Solution>` instead — it only
 chooses which entities to ruin; the engine removes and greedily recreates
-them — and register it with `engine.addRuinOperator(...)`. Run the solver
-once with `full_assert` on (`EnvironmentMode::FULL_ASSERT`) after adding a
+them — and register it with `engine.add_ruin_operator(...)`. Run the solver
+once with `full_assert` on (`ScoreChecks::Full`) after adding a
 move: it fails fast if the move leaves the incremental score stale.
 
 ### Adding or changing the construction heuristic
@@ -229,12 +229,12 @@ move: it fails fast if the move leaves the incremental score stale.
 The engine's construction heuristic assigns every still-unassigned entity
 (LIST: element) by cheapest insertion. Two levers:
 
-1. **Order** — set `ConstructionHeuristicConfig::entityDifficulty` in the
+1. **Order** — set `ConstructionSettings::difficulty` in the
    use case's engine config; entities are then placed in decreasing
    difficulty (First Fit Decreasing) instead of index order:
 
    ```cpp
-   engineConfig.constructionHeuristic.entityDifficulty =
+   engineConfig.construction.difficulty =
        [&](int entity) { return demandOf(entity); };   // hardest first
    ```
 

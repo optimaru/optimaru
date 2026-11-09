@@ -8,7 +8,7 @@
 //       (unassigned) transitions on random instances using every fact: the
 //       score and every constraint's raw total after each move, each
 //       constraint non-zero at some point of the walk
-//   (3) the solver: FULL_ASSERT (ALNS kicks included), the exact-size
+//   (3) the solver: ScoreChecks::Full (ALNS kicks included), the exact-size
 //       contract, pinning under multi-start, a worker exception rethrown, the
 //       zero budget, an empty graph, brute-force optima, reproducibility
 //       under a step limit, validation
@@ -27,7 +27,7 @@
 #include "mc/score_calculator.hpp"
 #include "mc/solver.hpp"
 #include "mc_fixtures.hpp"
-#include "optimaru/api/score/director/score_director.hpp"
+#include "optimaru/editor.hpp"
 
 using namespace mc;
 using namespace mc_test;
@@ -39,19 +39,19 @@ namespace
 // current partition; checks that they agree and returns the full one.
 Score scoreBothWays(MaxCutProblem &problem, const std::string &label)
 {
-    const Score full = ScoreCalculator::calculateScore(problem);
+    const Score full = ScoreCalculator::score(problem);
     MaxCutIncrementalScoreCalculator incremental;
-    incremental.resetWorkingSolution(problem);
-    const Score fast = incremental.calculateScore();
+    incremental.rebuild(problem);
+    const Score fast = incremental.score();
     if (!sameScore(full, fast))
-        check(false, label + ": incremental " + fast.toString() + " != full " + full.toString());
+        check(false, label + ": incremental " + fast.str() + " != full " + full.str());
     return full;
 }
 
 void expectScore(MaxCutProblem &problem, std::int64_t hard, double soft, const std::string &label)
 {
     const Score score = scoreBothWays(problem, label);
-    check(score.hard == hard && score.soft == soft, label + " -> " + score.toString());
+    check(score.hard == hard && score.soft == soft, label + " -> " + score.str());
 }
 
 bool pairIs(const std::int64_t (&costs)[kSideCount], std::int64_t a, std::int64_t b)
@@ -203,7 +203,7 @@ void verifyIncrementalWalk()
         MaxCutProblem p = randomInstance(1 + static_cast<int>((seed * 7) % 40), seed, 0.1);
         ScoreCalculator::prepare(p);
         MaxCutIncrementalScoreCalculator calculator;
-        optimaru::ScoreDirector<MaxCutProblem> director(p, calculator);
+        optimaru::Editor<MaxCutProblem> editor(p, calculator);
         MaxCutProblem shadow = p;
         std::mt19937_64 rng(seed * 101);
         std::uniform_real_distribution<double> unit(0.0, 1.0);
@@ -215,30 +215,30 @@ void verifyIncrementalWalk()
             {
                 const int v = static_cast<int>(rng() % n);
                 const int value = unit(rng) < 0.15 ? kUnassigned : static_cast<int>(rng() % 2);
-                director.changeVariable(v, value);
+                editor.assign(v, value);
             }
             else
             {
                 // A swap (or a random 3-vertex batch) as one composite change.
-                director.beginVariableChanges();
+                editor.begin_batch();
                 const int a = static_cast<int>(rng() % n);
                 const int b = static_cast<int>(rng() % n);
                 const int va = p.side[a];
-                director.changeVariable(a, p.side[b]);
-                director.changeVariable(b, va);
+                editor.assign(a, p.side[b]);
+                editor.assign(b, va);
                 if (u > 0.9)
-                    director.changeVariable(static_cast<int>(rng() % n), static_cast<int>(rng() % 2));
-                director.endVariableChanges();
+                    editor.assign(static_cast<int>(rng() % n), static_cast<int>(rng() % 2));
+                editor.end_batch();
             }
             shadow.side = p.side;
-            const Score full = ScoreCalculator::calculateScore(shadow);
+            const Score full = ScoreCalculator::score(shadow);
             const RawCosts raw = ScoreCalculator::rawCosts(shadow);
-            const Score incremental = director.calculateScore();
+            const Score incremental = editor.score();
             if (!sameScore(full, incremental) && ++mismatches <= 3)
             {
                 std::printf("  MISMATCH seed %llu step %d: incremental=%s full=%s\n",
-                            static_cast<unsigned long long>(seed), step, incremental.toString().c_str(),
-                            full.toString().c_str());
+                            static_cast<unsigned long long>(seed), step, incremental.str().c_str(),
+                            full.str().c_str());
             }
             // Per constraint, so opposite errors in two terms cannot cancel
             // out and the weight-0 imbalance is checked too.
@@ -270,9 +270,9 @@ void verifyIncrementalWalk()
 Solver::Config steps(std::int64_t count, std::uint64_t seed)
 {
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(30);
-    config.stepCountLimit = count;
-    config.randomSeed = seed;
+    config.time_limit = std::chrono::seconds(30);
+    config.step_limit = count;
+    config.seed = seed;
     return config;
 }
 
@@ -288,18 +288,18 @@ bool solvesCleanly(MaxCutProblem &p, const Solver::Config &config)
         return false;
     }
     MaxCutProblem rescored = p;
-    return sameScore(p.score, ScoreCalculator::calculateScore(rescored));
+    return sameScore(p.score, ScoreCalculator::score(rescored));
 }
 
 void verifySolver()
 {
     std::printf("== (3) Solver ==\n");
     {
-        // FULL_ASSERT re-checks every incremental score against a reset; the
+        // ScoreChecks::Full re-checks every incremental score against a reset; the
         // early ALNS trigger exercises the -1 ruins too.
         MaxCutProblem p = randomInstance(30, 77, 0.0, /*bounds=*/false);
         Solver::Config config = steps(4000, 3);
-        config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+        config.score_checks = optimaru::ScoreChecks::Full;
         config.ruinRecreateUnimprovedStepTrigger = 200;
         config.ruinRecreatePolishSteps = 200;
         config.ruinRecreateAsMoveWeight = 0.05;
@@ -310,8 +310,8 @@ void verifySolver()
         MaxCutProblem p = randomInstance(30, 78, 0.0, /*bounds=*/false);
         p.minPartitionSize = p.maxPartitionSize = 15;
         Solver::Config config = steps(4000, 4);
-        config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
-        config.changeMoveWeight = 1.0;
+        config.score_checks = optimaru::ScoreChecks::Full;
+        config.change_weight = 1.0;
         config.ruinRecreateUnimprovedStepTrigger = 50;
         check(solvesCleanly(p, config), "FULL_ASSERT exact-size solve: no score corruption");
     }
@@ -326,8 +326,8 @@ void verifySolver()
         wrong.side = {1, 1, 1, 0};
         wrong.warmStart = true;
         Solver::Config config = steps(500, 1);
-        config.changeMoveWeight = 1.0;
-        config.swapMoveWeight = 0.0;
+        config.change_weight = 1.0;
+        config.swap_weight = 0.0;
         config.ruinRecreateUnimprovedStepTrigger = 10;
         Solver(config).solve(right);
         Solver(config).solve(wrong);
@@ -361,14 +361,14 @@ void verifySolver()
         check(pinned, "random instance: no fixed vertex moved (ALNS kicks, 3 starts)");
     }
     {
-        // An exception in a parallel worker (here a throwing onNewBest on
+        // An exception in a parallel worker (here a throwing on_new_best on
         // worker 0) is rethrown by solve() once every worker has joined,
         // instead of terminating the process; it also stops the other
         // workers, which would otherwise run the whole 30 s budget.
         MaxCutProblem p = randomInstance(40, 31, 0.0, /*bounds=*/false);
         Solver::Config config;
         config.parallelSolverCount = 3;
-        config.onNewBest = [](std::int64_t, const Score &) { throw std::runtime_error("onNewBest failed"); };
+        config.on_new_best = [](std::int64_t, const Score &) { throw std::runtime_error("onNewBest failed"); };
         const auto start = std::chrono::steady_clock::now();
         bool rethrown = false;
         try
@@ -386,7 +386,7 @@ void verifySolver()
     {
         // The zero budget returns the start partition, scored.
         Solver::Config none;
-        none.spentLimit = std::chrono::milliseconds(0);
+        none.time_limit = std::chrono::milliseconds(0);
         MaxCutProblem p = graph({"A", "B", "C", "D"}, {{0, 1, 2}, {1, 2, 3}, {2, 3, 4}});
         p.side = {1, 1, 1, 1};  // ignored: no warm start
         Solver(none).solve(p);
@@ -427,8 +427,8 @@ void verifySolver()
                 p.maxPartitionSize.reset();
             const Score optimum = bruteForceOptimum(p);
             Solver::Config config = steps(20000, seed);
-            config.spentLimit = std::chrono::seconds(5);
-            config.bestScoreLimit = optimum;
+            config.time_limit = std::chrono::seconds(5);
+            config.target_score = optimum;
             // Same-side pairs chain vertices into clusters that only move
             // together; a single flip of a cluster member always loses hard
             // first, so plain late acceptance can stall on such an instance.

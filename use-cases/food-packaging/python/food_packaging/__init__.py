@@ -20,7 +20,7 @@ Times are exchanged as "minutes" (int64) from a shared origin (the demo instance
 Monday 00:00 == minute 0; the pydantic mirror `food_packaging.models` converts between
 epoch minutes and `datetime.datetime`).
 
-Constraints (Java uses HardMediumSoftScore; the mapping onto engine HardSoftScore is
+Constraints (Java uses HardMediumSoftScore; the mapping onto engine Score is
 the domain's medium fold engine.soft = medium * 10^10 + soft, and the order is
 preserved exactly while |soft| < 10^10 and |medium| < 9*10^5):
   hard   1. max_end_time_cost                -1 per minute past max_end_time

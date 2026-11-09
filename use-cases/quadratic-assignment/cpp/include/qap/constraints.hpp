@@ -32,7 +32,7 @@ namespace qap
 //   assignmentCost             soft, weight 1   (global)
 //   flowDistanceCost           soft, weight 1   (global)
 //
-// This assembly scores bit-for-bit like ScoreCalculator::calculateScore and
+// This assembly scores bit-for-bit like ScoreCalculator::score and
 // the monolithic incremental calculator (all read the same kDefaultWeight
 // constants). It is also the domain's constraint catalog: constraint_info()
 // reads the defaults off it, so they live in the component constructors and

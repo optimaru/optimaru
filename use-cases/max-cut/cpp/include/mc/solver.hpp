@@ -9,8 +9,8 @@
 #include <vector>
 
 #include "mc/domain.hpp"
-#include "optimaru/api/score/calculator/decomposed_score_calculator.hpp"
-#include "optimaru/api/score/director/score_director.hpp"
+#include "optimaru/decomposed_objective.hpp"
+#include "optimaru/editor.hpp"
 
 namespace mc
 {
@@ -25,8 +25,8 @@ namespace mc
 //
 // Exact-size mode (problem.exactSize(): min_partition_size ==
 // max_partition_size, both given) keeps the 0.1.x contract "the search never
-// changes the side sizes": the solver then forces changeMoveWeight = 0,
-// swapMoveWeight = 1 and turns ruin-and-recreate (kicks and the as-move),
+// changes the side sizes": the solver then forces change_weight = 0,
+// swap_weight = 1 and turns ruin-and-recreate (kicks and the as-move),
 // descent off, whatever the Config says; with fewer than two movable vertices
 // it skips the search. A seed of the wrong size keeps that size (and its hard
 // penalty); so does the default start when fixed vertices unbalance it.
@@ -37,39 +37,39 @@ public:
     {
         // Wall-clock budget. 0 stops before the first step: the solve then
         // returns the start partition unchanged (scored).
-        std::chrono::milliseconds spentLimit{std::chrono::seconds(30)};
+        std::chrono::milliseconds time_limit{std::chrono::seconds(30)};
 
-        // Stop early once bestScore >= bestScoreLimit. Default is above every
+        // Stop early once bestScore >= target_score. Default is above every
         // achievable score, so it never fires.
-        Score bestScoreLimit{std::numeric_limits<std::int64_t>::max(),
+        Score target_score{std::numeric_limits<std::int64_t>::max(),
                              std::numeric_limits<double>::infinity()};
         // Optional early exits; 0 disables each criterion (so
-        // stepCountLimit = 0 means "no step limit", not "no search").
-        std::chrono::milliseconds unimprovedSpentLimit{0};
-        std::int64_t stepCountLimit = 0;
-        std::int64_t unimprovedStepCountLimit = 0;
+        // step_limit = 0 means "no step limit", not "no search").
+        std::chrono::milliseconds stall_time_limit{0};
+        std::int64_t step_limit = 0;
+        std::int64_t stall_step_limit = 0;
 
         // Late-acceptance history length. 0 (the default) = auto:
         // clamp(8 * vertex count, 400, 3200).
-        std::size_t lateAcceptanceSize = 0;
-        std::uint64_t randomSeed = 0;
+        std::size_t history_length = 0;
+        std::uint64_t seed = 0;
 
         // Independent parallel starts: worker thread i searches its own copy
-        // of the start partition with randomSeed + i and the full budget; the
-        // best score wins. Only worker 0 calls onNewBest. An exception in a
-        // worker (a throwing onNewBest included) stops the other workers and
+        // of the start partition with seed + i and the full budget; the
+        // best score wins. Only worker 0 calls on_new_best. An exception in a
+        // worker (a throwing on_new_best included) stops the other workers and
         // is rethrown by solve(). Ignored by the constraint-assembly overload.
         int parallelSolverCount = 1;
 
-        // FULL_ASSERT re-verifies the incremental score against a full
+        // ScoreChecks::Full re-verifies the incremental score against a full
         // recompute after every move (debugging aid; much slower).
-        optimaru::EnvironmentMode environmentMode = optimaru::EnvironmentMode::NON_ASSERT;
+        optimaru::ScoreChecks score_checks = optimaru::ScoreChecks::Off;
 
         // Adaptive ruin-and-recreate kicks when the search stagnates (the
         // engine's ALNS): a batch of free vertices is unassigned and the
         // engine's greedy recreate puts each back on its better side.
         // Ignored in exact-size mode.
-        bool ruinRecreate = true;
+        bool ruin_recreate = true;
         std::int64_t ruinRecreateUnimprovedStepTrigger = 5000;
         double ruinRecreateMinRuinFraction = 0.10;
         double ruinRecreateMaxRuinFraction = 0.30;
@@ -78,7 +78,7 @@ public:
         std::vector<double> ruinRecreateRewards{33.0, 9.0, 3.0, 0.0};
         std::int64_t ruinRecreatePolishSteps = 5000;
         // Destroy-and-repair as an ordinary acceptor-judged move (engine
-        // ruinRecreate.asMoveWeight). 0 (default) disables it; ignored in
+        // ruin_recreate.as_move_weight). 0 (default) disables it; ignored in
         // exact-size mode.
         double ruinRecreateAsMoveWeight = 0.0;
         int ruinRecreateAsMoveMaxRuin = 12;
@@ -86,15 +86,15 @@ public:
         // BASIC move mix. Weights are relative; 0 disables a move. With two
         // sides a change move is a flip; a swap move exchanges a side-0 and a
         // side-1 vertex (the sizes stay). Exact-size mode forces 0 / 1.
-        double changeMoveWeight = 0.8;
-        double swapMoveWeight = 0.2;
+        double change_weight = 0.8;
+        double swap_weight = 0.2;
 
         // BASIC best-improvement descent strategy weight (engine
-        // localSearch.descentWeight). 0 (default) = off; ignored in
+        // local_search.descent_weight). 0 (default) = off; ignored in
         // exact-size mode.
-        double descentWeight = 0.0;
+        double descent_weight = 0.0;
 
-        std::function<void(std::int64_t, const Score &)> onNewBest;
+        std::function<void(std::int64_t, const Score &)> on_new_best;
     };
 
     Solver() = default;
@@ -116,10 +116,10 @@ public:
     // mc/constraints.hpp): pick components and weights, then pass the
     // assembly here. The same start partition and search apply. The final
     // problem.score is computed by THIS calculator and the calculator is left
-    // primed on the final solution, so constraintTotals() explains exactly
+    // primed on the final solution, so constraint_totals() explains exactly
     // that score. Single-start: the caller-owned calculator cannot be cloned,
     // so parallelSolverCount is ignored.
-    void solve(MaxCutProblem &problem, optimaru::DecomposedScoreCalculator<MaxCutProblem> &calculator);
+    void solve(MaxCutProblem &problem, optimaru::DecomposedObjective<MaxCutProblem> &calculator);
 
 private:
     Config config_;

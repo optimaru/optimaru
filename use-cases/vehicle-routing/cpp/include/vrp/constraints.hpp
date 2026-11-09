@@ -37,7 +37,7 @@ namespace vrp {
 // ---------------------------------------------------------------------------
 // The full provider plus the route policies, each at its component's
 // kDefaultWeight / kDefaultLevel. This assembly scores bit-for-bit like
-// ScoreCalculator::calculateScore on a plan without route policies (the
+// ScoreCalculator::score on a plan without route policies (the
 // policy components cost 0 there, the opt-in objectives weigh 0). Units come
 // before the global in list_constraints() / constraint_info(), so
 // unassignedVisitsCost is listed last.

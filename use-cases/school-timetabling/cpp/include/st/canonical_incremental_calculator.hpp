@@ -8,7 +8,7 @@
 
 #include "st/canonical_domain.hpp"
 #include "st/objective_weights.hpp"
-#include "optimaru/api/score/calculator/incremental_score_calculator.hpp"
+#include "optimaru/objective.hpp"
 
 namespace st::canon
 {
@@ -51,7 +51,7 @@ private:
     std::vector<int> pos_;
 };
 
-// The canonical domain's optimaru::IncrementalScoreCalculator.
+// The canonical domain's optimaru::Objective.
 //
 // The core state is a 16-bit busy-period mask per (owner, day) — owner being
 // a teacher or a class — derived from per-(owner, slot) occupancy counts (a
@@ -78,14 +78,14 @@ private:
 // the ObjectiveWeights given at construction (default: the soft components'
 // kDefaultWeight) — the model carries no weights.
 //
-// beforeVariableChanged retracts the lesson's contribution while `slot` still
-// holds the OLD value; afterVariableChanged inserts the NEW value. Unassigned
+// before_assign retracts the lesson's contribution while `slot` still
+// holds the OLD value; after_assign inserts the NEW value. Unassigned
 // lessons (slot == -1) contribute only unassignedLessonsCost, so the
 // construction heuristic can score partially initialized solutions. The
 // full-recompute reference is ScoreCalculator::computeBreakdown (checked in
-// the tests and under EnvironmentMode::FULL_ASSERT).
+// the tests and under ScoreChecks::ScoreChecks::Full).
 class CanonicalIncrementalScoreCalculator final
-    : public optimaru::IncrementalScoreCalculator<Timetable>
+    : public optimaru::Objective<Timetable>
 {
 public:
     explicit CanonicalIncrementalScoreCalculator(ObjectiveWeights weights
@@ -94,10 +94,10 @@ public:
     {
     }
 
-    void resetWorkingSolution(Timetable &workingSolution) override;
-    void beforeVariableChanged(int lessonIndex) override;
-    void afterVariableChanged(int lessonIndex) override;
-    Score calculateScore() override;
+    void rebuild(Timetable &solution) override;
+    void before_assign(int lessonIndex) override;
+    void after_assign(int lessonIndex) override;
+    Score score() override;
 
     // Violation-guided selection (the es guided-moves pattern): a uniformly
     // random lesson among those currently involved in a hard violation,
@@ -141,7 +141,7 @@ private:
     std::vector<std::pair<int, int>> blockScratch_;
 
     // Running raw totals (all counted positive; weights and signs applied in
-    // calculateScore), one per constraint.
+    // score), one per constraint.
     std::int64_t unassigned_ = 0;           // unassignedLessonsCost
     std::int64_t classPairs_ = 0;           // classConflictCost
     std::int64_t teacherPairs_ = 0;         // teacherConflictCost

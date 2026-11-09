@@ -63,7 +63,7 @@ namespace cs
 // All 36 provider constraints plus the port's synthetic
 // talkTypeIncompatibilityCost, each at its component default (kDefaultWeight /
 // kDefaultLevel = the Java weights and levels). This assembly scores
-// bit-for-bit like ScoreCalculator::calculateScore and the monolithic
+// bit-for-bit like ScoreCalculator::score and the monolithic
 // incremental calculator, rewards included: both read the same constants.
 // The order is the catalog order (list_constraints() / constraint_info()).
 //

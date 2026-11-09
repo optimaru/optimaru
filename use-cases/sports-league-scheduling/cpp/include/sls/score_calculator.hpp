@@ -39,10 +39,10 @@ struct Breakdown
 // Port of the reference sports-league-scheduling
 // SportsLeagueSchedulingConstraintProvider.
 //
-// calculateScore does a full recompute — the reference the incremental
-// calculator is checked against (in the tests and under FULL_ASSERT).
+// score does a full recompute — the reference the incremental
+// calculator is checked against (in the tests and under ScoreChecks::Full).
 //
-// Constraints (HardSoftScore; round adjacency is by Round::index), each at
+// Constraints (Score; round adjacency is by Round::index), each at
 // its component's default weight:
 //   hard 1. teamConflictCost          -1 per match pair in the same round
 //                                        sharing at least one team (a pair
@@ -79,7 +79,7 @@ public:
     // is penalized by its length (the quickstart's MAX_CONSECUTIVE_MATCHES).
     static constexpr int MAX_CONSECUTIVE = 4;
 
-    static Score calculateScore(LeagueSchedule &schedule);
+    static Score score(LeagueSchedule &schedule);
     static Breakdown computeBreakdown(LeagueSchedule &schedule);
 
     // --- shared building blocks (also used by the plugin components) ---
@@ -96,7 +96,7 @@ public:
     // Interns the ordered (home, away) team pairs into dense ids, resolves
     // each match's reversed-pair id, fills the round-index existence table
     // and zero-fills a missing distance matrix. Idempotent (guarded by
-    // LeagueSchedule::prepared). Must run before scoring; calculateScore /
+    // LeagueSchedule::prepared). Must run before scoring; score /
     // solve call it.
     static void prepare(LeagueSchedule &schedule);
 };

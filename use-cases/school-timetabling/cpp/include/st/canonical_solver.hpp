@@ -12,8 +12,8 @@
 
 #include "st/canonical_domain.hpp"
 #include "st/objective_weights.hpp"
-#include "optimaru/api/score/calculator/decomposed_score_calculator.hpp"
-#include "optimaru/api/score/director/score_director.hpp"
+#include "optimaru/decomposed_objective.hpp"
+#include "optimaru/editor.hpp"
 
 namespace st::canon
 {
@@ -22,9 +22,9 @@ namespace st::canon
 // the canonical domain, following the st::Solver pattern. On top of the
 // built-in change/swap moves and the engine's adaptive ruin-and-recreate (ALNS,
 // on by default) it wires the domain guidance adopted on the track-2 bench:
-//   - a valueRecommender that only proposes slots from the moved lesson's
+//   - a value_hint that only proposes slots from the moved lesson's
 //     allowedSlot table, so disallowed slots are never even suggested;
-//   - an entityRecommender preferring lessons involved in a hard violation
+//   - an entity_hint preferring lessons involved in a hard violation
 //     (the incremental calculator's hot sets — es guided-moves pattern);
 //   - same-class nearby neighborhoods biasing swap partners to classmates
 //     (class-conflict-neutral swaps) and driving the LNS related ruin;
@@ -41,39 +41,39 @@ public:
     {
         // Wall-clock budget (the CP-SAT package's SOLVER_TIME_LIMIT_SECONDS
         // analog).
-        std::chrono::milliseconds spentLimit{std::chrono::seconds(30)};
+        std::chrono::milliseconds time_limit{std::chrono::seconds(30)};
 
-        // Stop early once bestScore >= bestScoreLimit. Default is above every
-        // achievable score, so it never fires (termination is by spentLimit).
-        Score bestScoreLimit{std::numeric_limits<std::int64_t>::max(),
+        // Stop early once bestScore >= target_score. Default is above every
+        // achievable score, so it never fires (termination is by time_limit).
+        Score target_score{std::numeric_limits<std::int64_t>::max(),
                              std::numeric_limits<double>::infinity()};
         // Optional early exits; 0 disables each criterion.
-        std::chrono::milliseconds unimprovedSpentLimit{0};
-        std::int64_t stepCountLimit = 0;
-        std::int64_t unimprovedStepCountLimit = 0;
+        std::chrono::milliseconds stall_time_limit{0};
+        std::int64_t step_limit = 0;
+        std::int64_t stall_step_limit = 0;
 
         // Late-acceptance history length. 0 (the default) = auto: clamp(4 *
         // lessonCount, 400, 3200) — on the track-2 bench the small instance
         // prefers ~800 while the mid/large ones profit from 1600+, and 4x
         // the lesson count tracks that optimum across sizes.
-        std::size_t lateAcceptanceSize = 0;
-        std::uint64_t randomSeed = 0;
+        std::size_t history_length = 0;
+        std::uint64_t seed = 0;
 
         // Independent parallel starts (the engine's multi-start): each worker
-        // receives randomSeed + i and the full wall-clock budget; the best
+        // receives seed + i and the full wall-clock budget; the best
         // solution wins.
         int parallelSolverCount = 1;
 
-        // FULL_ASSERT re-verifies the incremental score against a full
+        // ScoreChecks::Full re-verifies the incremental score against a full
         // recompute after every move (debugging aid; orders of magnitude
         // slower).
-        optimaru::EnvironmentMode environmentMode
-            = optimaru::EnvironmentMode::NON_ASSERT;
+        optimaru::ScoreChecks score_checks
+            = optimaru::ScoreChecks::Off;
 
         // Adaptive ruin-and-recreate kicks when the search stagnates (the
         // engine's ALNS) — essential on dense instances where plain LA local
         // search locks into a local optimum.
-        bool ruinRecreate = true;
+        bool ruin_recreate = true;
         std::int64_t ruinRecreateUnimprovedStepTrigger = 5000;
         double ruinRecreateMinRuinFraction = 0.10;
         double ruinRecreateMaxRuinFraction = 0.30;
@@ -84,24 +84,24 @@ public:
 
         // Destroy-and-repair as an ORDINARY acceptor-judged move, on top of
         // the stagnation kick above (engine
-        // RuinRecreateConfig::asMoveWeight). Probability that a step is a
+        // RuinRecreateSettings::as_move_weight). Probability that a step is a
         // small ruin + greedy repair instead of a sampled change/swap; a
         // rejected one is rolled back like any other move.
         double ruinRecreateAsMoveWeight = 0.0;
         int ruinRecreateAsMoveMaxRuin = 12;
 
         // Best-improvement descent over one nearby lesson pair (engine
-        // LocalSearchConfig::descentWeight): enumerate every allowed period
+        // SearchSettings::descent_weight): enumerate every allowed period
         // for both lessons plus their swap, apply the best improving one,
         // repeat until the pair is locally optimal. Always improving, so it
         // bypasses the acceptor. One descent costs ~2 * periodCount score
         // evaluations, so the weight is a fraction of a percent.
-        double descentWeight = 0.0;
-        int descentMaxSweeps = 4;
+        double descent_weight = 0.0;
+        int descent_max_sweeps = 4;
 
         // BASIC move mix. Weights are relative; 0 disables a move.
-        double changeMoveWeight = 0.75;
-        double swapMoveWeight = 0.25;
+        double change_weight = 0.75;
+        double swap_weight = 0.25;
 
         // Violation-guided entity selection (the es guided-moves pattern):
         // with this probability the moved lesson is drawn from the lessons
@@ -151,12 +151,12 @@ public:
         // assembly's components carry their own weights.
         ObjectiveWeights weights;
 
-        std::function<void(std::int64_t, const Score &)> onNewBest;
+        std::function<void(std::int64_t, const Score &)> on_new_best;
         // Set by solve() on each parallel worker's copy, not by a caller (and
         // not bound to Python): the first worker that fails raises it, and the
         // other workers' engines stop at their next step instead of running out
         // their budget before the error reaches the caller.
-        std::shared_ptr<std::atomic<bool>> stopFlag;
+        std::shared_ptr<std::atomic<bool>> stop_flag;
     };
 
     Solver() = default;
@@ -173,14 +173,14 @@ public:
     // the assembly here (the es Solver pattern). The same guided search
     // applies — value guidance from the allowedSlot tables, violation
     // guidance (entity recommender + the smart same-class swap operator)
-    // from the calculator's penalizedUnits()/membersPerUnit(). Weights come
+    // from the calculator's penalized_units()/members_per_unit(). Weights come
     // from the assembly, NOT from config_.weights. The
     // final table.score is computed by THIS calculator and the calculator is
-    // left primed on the final solution, so constraintTotals() explains
+    // left primed on the final solution, so constraint_totals() explains
     // exactly that score. Single-start: the caller-owned calculator cannot
     // be cloned, so parallelSolverCount is ignored.
     void solve(Timetable &table,
-               optimaru::DecomposedScoreCalculator<Timetable> &calculator);
+               optimaru::DecomposedObjective<Timetable> &calculator);
 
 private:
     Config config_;

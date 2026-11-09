@@ -52,9 +52,9 @@ struct ConstraintTotals
 
 // Port of OrderPickingConstraintProvider as a full recompute — the reference
 // the incremental calculator is checked against (in the tests and under
-// EnvironmentMode::FULL_ASSERT).
+// ScoreChecks::ScoreChecks::Full).
 //
-// Constraints (HardSoftScore), the default assembly of op/constraints.hpp at
+// Constraints (Score), the default assembly of op/constraints.hpp at
 // the components' kDefaultWeight (see ConstraintTotals):
 //   hard 1. trolleyCapacityCost                        weight 1
 //   soft 2. distanceFromPreviousPickTaskCost           weight 1
@@ -81,9 +81,9 @@ public:
     // transcription of the Java constraint definitions.
     static ConstraintTotals calculateTotals(OrderPickingSolution &solution);
 
-    // calculateTotals folded into the HardSoftScore, stored in solution.score
+    // calculateTotals folded into the Score, stored in solution.score
     // and returned.
-    static Score calculateScore(OrderPickingSolution &solution);
+    static Score score(OrderPickingSolution &solution);
 
     // Buckets needed for one order's volume on one trolley:
     // ceil(orderVolume / bucketVolume) — buckets are not shared across

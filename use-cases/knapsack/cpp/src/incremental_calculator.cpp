@@ -35,15 +35,15 @@ static_assert(kCapacityWeight == KnapsackCapacityCost::kDefaultWeight
 
 }  // namespace
 
-void KnapsackIncrementalScoreCalculator::resetWorkingSolution(KnapsackProblem &workingSolution)
+void KnapsackIncrementalScoreCalculator::rebuild(KnapsackProblem &solution)
 {
-    if (!workingSolution.prepared)
+    if (!solution.prepared)
     {
         throw std::logic_error("KnapsackIncrementalScoreCalculator requires "
                                "ScoreCalculator::prepare(problem) first");
     }
-    problem_ = &workingSolution;
-    const KnapsackProblem &problem = workingSolution;
+    problem_ = &solution;
+    const KnapsackProblem &problem = solution;
     const int n = problem.itemCount();
     selected_.assign(n, 0);
     usage_.assign(problem.resources.size(), 0);
@@ -82,12 +82,12 @@ void KnapsackIncrementalScoreCalculator::resetWorkingSolution(KnapsackProblem &w
         unmetDependencies_ += unmetOf(static_cast<int>(d));
 }
 
-void KnapsackIncrementalScoreCalculator::beforeVariableChanged(int /*itemIndex*/)
+void KnapsackIncrementalScoreCalculator::before_assign(int /*itemIndex*/)
 {
-    // selected_ still holds the old state; afterVariableChanged diffs it.
+    // selected_ still holds the old state; after_assign diffs it.
 }
 
-void KnapsackIncrementalScoreCalculator::afterVariableChanged(int itemIndex)
+void KnapsackIncrementalScoreCalculator::after_assign(int itemIndex)
 {
     const bool on = problem_->items[itemIndex].isSelected();
     if (on != static_cast<bool>(selected_[itemIndex]))
@@ -160,7 +160,7 @@ RawCosts KnapsackIncrementalScoreCalculator::totals() const
     return raw;
 }
 
-Score KnapsackIncrementalScoreCalculator::calculateScore()
+Score KnapsackIncrementalScoreCalculator::score()
 {
     const RawCosts raw = totals();
     Score score;

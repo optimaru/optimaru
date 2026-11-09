@@ -22,7 +22,7 @@ struct TrolleyCapacityCost final : OpUnitConstraint
         : OpUnitConstraint("trolleyCapacityCost", weight, kDefaultLevel)
     {
     }
-    void onReset(const OrderPickingSolution &solution) override
+    void on_reset(const OrderPickingSolution &solution) override
     {
         volume_.assign(solution.orders.size(), 0);
     }

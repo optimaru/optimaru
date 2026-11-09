@@ -4,7 +4,7 @@ The pybind11 package of the semiconductor fab use case (`../cpp`, namespace `fab
 Pydantic models (`semiconductor_scheduling.models`) are the primary API: the web demo and
 the server speak them, and `solve` writes its result back into the model it is given.
 
-Score (HardSoftScore), at the default weights:
+Score, at the default weights:
 
 - hard = -(the raw costs of the 14 hard constraints, weight 1 each)
 - soft = -(machine_preference_cost + min_batch_size_cost + machine_load_imbalance_cost

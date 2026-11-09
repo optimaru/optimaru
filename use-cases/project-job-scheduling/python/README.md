@@ -95,7 +95,7 @@ weight moved from 10^9 (soft) to 1 (medium units).
 
 ## Score mapping
 
-Java uses `HardMediumSoftScore`; the engine only knows `HardSoftScore(int64 hard, double
+Java uses `HardMediumSoftScore`; the engine only knows `Score(int64 hard, double
 soft)`. The same offset mapping as bed-allocation/meeting-scheduling is used, declared once
 as the domain's medium fold (`kMediumFold` in `../cpp/include/pjs/domain.hpp`; every
 `constraint_costs()` entry carries it as `medium_fold`, and

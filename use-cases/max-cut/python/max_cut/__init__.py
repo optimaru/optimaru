@@ -4,7 +4,7 @@ Weighted Max-Cut with fixed vertex sides, same-side and different-side pairs,
 side-size bounds and an optional balance term: one BASIC planning variable (the
 side, 0 or 1) per vertex; a fixed vertex is pinned and never moves.
 
-Score (HardSoftScore), at the default weights:
+Score, at the default weights:
   hard = -(fixed vertices off their side + split same-side pairs
            + different-side pairs left together + side-size shortfall/excess)
   soft = +(cut weight)                         # cut_weight_cost is a reward

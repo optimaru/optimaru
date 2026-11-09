@@ -31,13 +31,13 @@ struct TaskPrecedenceCost final : MemberChangeGlobalConstraint
     }
 
     void reset(const AssemblyLineBalancingProblem &problem,
-               const std::vector<std::vector<int>> &membersPerUnit) override
+               const std::vector<std::vector<int>> &members_per_unit) override
     {
         detail::requirePrepared(problem);
         station_.assign(problem.tasks.size(), -1);
-        for (std::size_t unit = 0; unit < membersPerUnit.size(); ++unit)
+        for (std::size_t unit = 0; unit < members_per_unit.size(); ++unit)
         {
-            for (int task : membersPerUnit[unit])
+            for (int task : members_per_unit[unit])
                 station_[task] = static_cast<int>(unit);
         }
         reversed_ = 0;
@@ -50,7 +50,7 @@ struct TaskPrecedenceCost final : MemberChangeGlobalConstraint
         }
     }
 
-    void onMemberChanged(const AssemblyLineBalancingProblem &problem,
+    void on_member_changed(const AssemblyLineBalancingProblem &problem,
                          int unit,
                          const std::vector<int> & /*members*/,
                          int entity,

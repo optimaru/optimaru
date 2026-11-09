@@ -5,8 +5,8 @@
 #include <string>
 #include <vector>
 
-#include "optimaru/api/domain/solution_descriptor.hpp"
-#include "optimaru/api/score/buildin/hard_soft_score.hpp"
+#include "optimaru/solution_traits.hpp"
+#include "optimaru/score.hpp"
 
 namespace cs
 {
@@ -14,12 +14,12 @@ namespace cs
 // ---------------------------------------------------------------------------
 // Score
 // ---------------------------------------------------------------------------
-// The Java quickstart already uses HardSoftScore, so the mapping onto the
-// engine's HardSoftScore(int64 hard, double soft) is the identity: hard is
+// The Java quickstart already uses Score, so the mapping onto the
+// engine's Score(int64 hard, double soft) is the identity: hard is
 // the weighted violation-minute sum (0 == feasible), soft is the (always
 // integral) weighted preference/diversity balance stored in the engine's
 // double field. No level remapping needed.
-using Score = optimaru::HardSoftScore;
+using Score = optimaru::Score;
 
 // ---------------------------------------------------------------------------
 // Timeslot  (problem fact, half of the planning value)
@@ -154,7 +154,7 @@ struct ConferenceSchedule
     Score score;
 
     // Set once by ScoreCalculator::prepare; guards against re-interning the
-    // tag/day tables on every calculateScore call.
+    // tag/day tables on every score call.
     bool prepared = false;
 
     // --- filled by ScoreCalculator::prepare -------------------------------
@@ -203,7 +203,7 @@ struct ConferenceSchedule
 }  // namespace cs
 
 // ---------------------------------------------------------------------------
-// SolutionDescriptor specialization  (the @PlanningEntity/@PlanningVariable
+// SolutionTraits specialization  (the @PlanningEntity/@PlanningVariable
 // annotations of the C++ engine): entities are talks, the planning variable
 // is Talk::slotRoom, the value range is the (timeslot x room) grid.
 //
@@ -214,28 +214,28 @@ struct ConferenceSchedule
 // talkTypeIncompatibilityCost instead (see cs/score_calculator.hpp) and biases
 // the search toward compatible values (see cs/solver.hpp).
 // ---------------------------------------------------------------------------
-template <> struct optimaru::SolutionDescriptor<cs::ConferenceSchedule>
+template <> struct optimaru::SolutionTraits<cs::ConferenceSchedule>
 {
-    static constexpr optimaru::VariableKind kind
-        = optimaru::VariableKind::BASIC;
-    static int entityCount(const cs::ConferenceSchedule &s)
+    static constexpr optimaru::Shape shape
+        = optimaru::Shape::Assignment;
+    static int entity_count(const cs::ConferenceSchedule &s)
     {
         return static_cast<int>(s.talks.size());
     }
-    static int valueCount(const cs::ConferenceSchedule &s)
+    static int value_count(const cs::ConferenceSchedule &s)
     {
         return s.slotRoomCount();
     }
-    static int getVariable(const cs::ConferenceSchedule &s, int talkIndex)
+    static int value_of(const cs::ConferenceSchedule &s, int talkIndex)
     {
         return s.talks[talkIndex].slotRoom;
     }
     static void
-    setVariable(cs::ConferenceSchedule &s, int talkIndex, int slotRoom)
+    assign(cs::ConferenceSchedule &s, int talkIndex, int slotRoom)
     {
         s.talks[talkIndex].slotRoom = slotRoom;
     }
-    static bool isPinned(const cs::ConferenceSchedule &s, int talkIndex)
+    static bool is_pinned(const cs::ConferenceSchedule &s, int talkIndex)
     {
         return s.talks[talkIndex].pinned;
     }

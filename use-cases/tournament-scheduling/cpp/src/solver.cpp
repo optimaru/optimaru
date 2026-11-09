@@ -10,9 +10,9 @@
 #include <utility>
 #include <vector>
 
-#include "optimaru/api/solver/solver.hpp"
-#include "optimaru/config/solver/solver_config.hpp"
-#include "optimaru/impl/solver/worker_threads.hpp"
+#include "optimaru/solver.hpp"
+#include "optimaru/settings.hpp"
+#include "optimaru/worker_threads.hpp"
 #include "ts/incremental_calculator.hpp"
 #include "ts/score_calculator.hpp"
 
@@ -116,10 +116,10 @@ public:
         if (!selectDrainSet(loaded - target, rng))
             return applyRandomChange(ctx, rng, entities);
 
-        TournamentSchedule &schedule = ctx.director.workingSolution();
+        TournamentSchedule &schedule = ctx.editor.solution();
         const int assignmentCount
             = static_cast<int>(schedule.teamAssignments.size());
-        ctx.director.beginVariableChanges();
+        ctx.editor.begin_batch();
         for (int i = 0; i < assignmentCount; ++i)
         {
             const TeamAssignment &assignment = schedule.teamAssignments[i];
@@ -131,21 +131,21 @@ public:
                 continue;
             touched_.emplace_back(i, assignment.team);
             entities.push_back(i);
-            ctx.director.changeVariable(i, replacement);
+            ctx.editor.assign(i, replacement);
         }
-        ctx.director.endVariableChanges();
+        ctx.editor.end_batch();
         clearDrainSet();
         if (touched_.empty())
             return applyRandomChange(ctx, rng, entities);
         return true;
     }
 
-    void undoLast(optimaru::OperatorContext<TournamentSchedule> &ctx) override
+    void undo_last(optimaru::OperatorContext<TournamentSchedule> &ctx) override
     {
-        ctx.director.beginVariableChanges();
+        ctx.editor.begin_batch();
         for (auto it = touched_.rbegin(); it != touched_.rend(); ++it)
-            ctx.director.changeVariable(it->first, it->second);
-        ctx.director.endVariableChanges();
+            ctx.editor.assign(it->first, it->second);
+        ctx.editor.end_batch();
         touched_.clear();
     }
 
@@ -255,7 +255,7 @@ private:
                    std::vector<int> &entities,
                    int target)
     {
-        TournamentSchedule &schedule = ctx.director.workingSolution();
+        TournamentSchedule &schedule = ctx.editor.solution();
         const std::vector<std::int64_t> &loads = calculator_->teamLoads();
         pool_.clear();
         for (std::size_t t = 0; t < loads.size(); ++t)
@@ -278,7 +278,7 @@ private:
         const std::int64_t fairShare
             = static_cast<std::int64_t>(schedule.teamAssignments.size())
               / target;
-        ctx.director.beginVariableChanges();
+        ctx.editor.begin_batch();
         for (int i = 0; i < need; ++i)
         {
             const int team = pool_[i];
@@ -310,11 +310,11 @@ private:
                 touched_.emplace_back(donor,
                                       schedule.teamAssignments[donor].team);
                 entities.push_back(donor);
-                ctx.director.changeVariable(donor, team);
+                ctx.editor.assign(donor, team);
                 ++taken;
             }
         }
-        ctx.director.endVariableChanges();
+        ctx.editor.end_batch();
         return !touched_.empty();
     }
 
@@ -374,7 +374,7 @@ private:
                            std::mt19937_64 &rng,
                            std::vector<int> &entities)
     {
-        TournamentSchedule &schedule = ctx.director.workingSolution();
+        TournamentSchedule &schedule = ctx.editor.solution();
         const int assignmentCount
             = static_cast<int>(schedule.teamAssignments.size());
         const int teamCount = schedule.teamCount();
@@ -400,7 +400,7 @@ private:
             ++v;
         touched_.emplace_back(e, oldTeam);
         entities.push_back(e);
-        ctx.director.changeVariable(e, v);
+        ctx.editor.assign(e, v);
         return true;
     }
 
@@ -447,41 +447,41 @@ double idealPenaltyFor(int loadedTeams,
 // Engine configuration shared by every start.
 void configureEngine(const Solver::Config &config,
                      const TournamentSchedule &schedule,
-                     optimaru::SolverConfig &engineConfig)
+                     optimaru::Settings &engineConfig)
 {
-    engineConfig.randomSeed = config.randomSeed;
-    engineConfig.environmentMode = config.environmentMode;
-    engineConfig.onNewBest = config.onNewBest;
-    engineConfig.termination.spentLimit = config.spentLimit;
-    engineConfig.termination.bestScoreLimit = config.bestScoreLimit;
-    engineConfig.termination.unimprovedSpentLimit = config.unimprovedSpentLimit;
-    engineConfig.termination.stepCountLimit = config.stepCountLimit;
-    engineConfig.termination.unimprovedStepCountLimit
-        = config.unimprovedStepCountLimit;
-    // lateAcceptanceSize 0 = auto-scale with the instance (see Config).
-    engineConfig.localSearch.acceptor.lateAcceptanceSize
-        = config.lateAcceptanceSize != 0
-              ? config.lateAcceptanceSize
+    engineConfig.seed = config.seed;
+    engineConfig.score_checks = config.score_checks;
+    engineConfig.on_new_best = config.on_new_best;
+    engineConfig.limits.time_limit = config.time_limit;
+    engineConfig.limits.target_score = config.target_score;
+    engineConfig.limits.stall_time_limit = config.stall_time_limit;
+    engineConfig.limits.step_limit = config.step_limit;
+    engineConfig.limits.stall_step_limit
+        = config.stall_step_limit;
+    // history_length 0 = auto-scale with the instance (see Config).
+    engineConfig.search.acceptance.history_length
+        = config.history_length != 0
+              ? config.history_length
               : std::clamp<std::size_t>(
                     8 * schedule.teamAssignments.size(), 400, 3200);
-    engineConfig.localSearch.moveSelector.changeMoveWeight
-        = config.changeMoveWeight;
-    engineConfig.localSearch.moveSelector.swapMoveWeight
-        = config.swapMoveWeight;
-    engineConfig.localSearch.descentWeight = config.descentWeight;
-    engineConfig.localSearch.customMoveProbability
-        = config.customMoveProbability;
-    auto &lns = engineConfig.localSearch.ruinRecreate;
-    lns.asMoveWeight = config.ruinRecreateAsMoveWeight;
-    lns.asMoveMaxRuin = config.ruinRecreateAsMoveMaxRuin;
-    lns.enabled = config.ruinRecreate;
-    lns.unimprovedStepTrigger = config.ruinRecreateUnimprovedStepTrigger;
-    lns.minRuinFraction = config.ruinRecreateMinRuinFraction;
-    lns.maxRuinFraction = config.ruinRecreateMaxRuinFraction;
-    lns.maxRuinCount = config.ruinRecreateMaxRuinCount;
-    lns.operatorDecay = config.ruinRecreateOperatorDecay;
+    engineConfig.search.moves.change_weight
+        = config.change_weight;
+    engineConfig.search.moves.swap_weight
+        = config.swap_weight;
+    engineConfig.search.descent_weight = config.descent_weight;
+    engineConfig.search.custom_move_probability
+        = config.custom_move_probability;
+    auto &lns = engineConfig.search.ruin_recreate;
+    lns.as_move_weight = config.ruinRecreateAsMoveWeight;
+    lns.as_move_max_ruin = config.ruinRecreateAsMoveMaxRuin;
+    lns.enabled = config.ruin_recreate;
+    lns.unimproved_step_trigger = config.ruinRecreateUnimprovedStepTrigger;
+    lns.min_ruin_fraction = config.ruinRecreateMinRuinFraction;
+    lns.max_ruin_fraction = config.ruinRecreateMaxRuinFraction;
+    lns.max_ruin_count = config.ruinRecreateMaxRuinCount;
+    lns.operator_decay = config.ruinRecreateOperatorDecay;
     lns.rewards = config.ruinRecreateRewards;
-    lns.polishSteps = config.ruinRecreatePolishSteps;
+    lns.polish_steps = config.ruinRecreatePolishSteps;
 }
 
 // Builds the macro-move operator for this instance, or nullptr when reshaping
@@ -564,7 +564,7 @@ void Solver::solve(TournamentSchedule &schedule)
 {
     if (schedule.teamAssignments.empty() || schedule.teamCount() == 0)
     {
-        ScoreCalculator::calculateScore(schedule);
+        ScoreCalculator::score(schedule);
         return;
     }
     if (config_.ruinRecreateRewards.size() != 4)
@@ -588,7 +588,7 @@ void Solver::solve(TournamentSchedule &schedule)
         auto stop = std::make_shared<std::atomic<bool>>(false);
         // A worker that cannot be started (std::system_error) stops and joins
         // the ones already running before the error is rethrown here.
-        optimaru::runWorkerThreads(
+        optimaru::run_worker_threads(
             workerCount, *stop,
             [this, &candidates, &failures, &stop](int i)
             {
@@ -596,11 +596,11 @@ void Solver::solve(TournamentSchedule &schedule)
                 {
                     Config workerConfig = config_;
                     workerConfig.parallelSolverCount = 1;
-                    workerConfig.stopFlag = stop;
-                    workerConfig.randomSeed
+                    workerConfig.stop_flag = stop;
+                    workerConfig.seed
                         += static_cast<std::uint64_t>(i);
                     if (i != 0)
-                        workerConfig.onNewBest = nullptr;
+                        workerConfig.on_new_best = nullptr;
                     Solver worker(std::move(workerConfig));
                     worker.solve(candidates[i]);
                 }
@@ -625,7 +625,7 @@ void Solver::solve(TournamentSchedule &schedule)
         return;
     }
 
-    optimaru::SolverConfig engineConfig;
+    optimaru::Settings engineConfig;
     configureEngine(config_, schedule, engineConfig);
 
     // The single calculator instance of this start, created before the engine
@@ -633,7 +633,7 @@ void Solver::solve(TournamentSchedule &schedule)
     // resets it on the working solution at solve start.
     Calculator calculator;
 
-    if (config_.valueRecommender)
+    if (config_.value_hint)
     {
         // Guided change values: uniform among the teams that can take this
         // assignment's day without breaking a hard constraint (not already
@@ -643,7 +643,7 @@ void Solver::solve(TournamentSchedule &schedule)
         const TournamentSchedule *solutionPtr = &schedule;
         const Calculator *calculatorPtr = &calculator;
         const int teamCount = schedule.teamCount();
-        engineConfig.localSearch.valueRecommender
+        engineConfig.search.value_hint
             = [solutionPtr, calculatorPtr, teamCount](std::mt19937_64 &rng,
                                                       int entityIndex) -> int
         {
@@ -664,24 +664,24 @@ void Solver::solve(TournamentSchedule &schedule)
 
     // Construction heuristic + late-acceptance local search (+ ALNS kicks).
     optimaru::Solver<TournamentSchedule> engine(std::move(engineConfig));
-    if (config_.stopFlag)
-        engine.adoptTerminateEarlyFlag(config_.stopFlag);
+    if (config_.stop_flag)
+        engine.share_stop_flag(config_.stop_flag);
     if (config_.teamCountMoves)
     {
         std::unique_ptr<TeamCountMove> teamCount
             = makeTeamCountMove(schedule, &calculator);
         if (teamCount)
-            engine.addMoveOperator(std::move(teamCount));
+            engine.add_move_operator(std::move(teamCount));
     }
     engine.solve(schedule, calculator);
 
     // The authoritative final score: a full recompute on the best solution.
-    schedule.score = ScoreCalculator::calculateScore(schedule);
+    schedule.score = ScoreCalculator::score(schedule);
 }
 
 void Solver::solve(
     TournamentSchedule &schedule,
-    optimaru::DecomposedScoreCalculator<TournamentSchedule> &calculator)
+    optimaru::DecomposedObjective<TournamentSchedule> &calculator)
 {
     if (config_.ruinRecreateRewards.size() != 4)
     {
@@ -693,19 +693,19 @@ void Solver::solve(
         // No TeamCountMove here: that operator reads the monolithic
         // calculator's live aggregates, which a caller-assembled plugin does
         // not expose. The built-in move mix plus the ALNS kicks remain.
-        optimaru::SolverConfig engineConfig;
+        optimaru::Settings engineConfig;
         configureEngine(config_, schedule, engineConfig);
         optimaru::Solver<TournamentSchedule> engine(std::move(engineConfig));
-        if (config_.stopFlag)
-            engine.adoptTerminateEarlyFlag(config_.stopFlag);
+        if (config_.stop_flag)
+            engine.share_stop_flag(config_.stop_flag);
         engine.solve(schedule, calculator);
     }
 
     // Score the final solution with the caller's constraint assembly (custom
     // weights included) and leave the calculator primed on it, so
-    // constraintTotals() explains exactly this score.
-    calculator.resetWorkingSolution(schedule);
-    schedule.score = calculator.calculateScore();
+    // constraint_totals() explains exactly this score.
+    calculator.rebuild(schedule);
+    schedule.score = calculator.score();
 }
 
 }  // namespace ts

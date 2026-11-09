@@ -5,14 +5,14 @@
 #include <vector>
 
 #include "op/domain.hpp"
-#include "optimaru/api/score/calculator/incremental_score_calculator.hpp"
+#include "optimaru/objective.hpp"
 
 namespace op
 {
 
 // The order-picking implementation of the engine's
-// optimaru::IncrementalScoreCalculator — the C++ analog of implementing
-// Java's IncrementalScoreCalculator instead of a ConstraintProvider.
+// optimaru::Objective — the C++ analog of implementing
+// Java's Objective instead of a ConstraintProvider.
 //
 // LIST-kind hooks, per-trolley granularity (the vehicle-routing pattern): a
 // move touches at most two trolleys, and every constraint decomposes into
@@ -28,24 +28,24 @@ namespace op
 //   - soft order split (orderSplitByTrolleyCost): countDistinct(trolley) per
 //     order == number of t with count_[o][t] > 0, maintained on the 0 <-> >0
 //     transitions.
-// calculateScore applies the components' kDefaultWeight (1 / 1 / 1 / 1000).
+// score applies the components' kDefaultWeight (1 / 1 / 1 / 1000).
 //
-// beforeListChanged retracts the trolley's contribution while its list still
-// has the OLD contents; afterListChanged inserts the NEW contents. Pick tasks
+// before_list_edit retracts the trolley's contribution while its list still
+// has the OLD contents; after_list_edit inserts the NEW contents. Pick tasks
 // in no list contribute nothing (the construction heuristic scores partially
 // initialized solutions). This calculator reads the pick lists directly and
 // never the shadow fields, so it stays correct while the engine mutates
 // lists mid-move (shadows are refreshed by ScoreCalculator afterwards). The
-// full-recompute reference is ScoreCalculator::calculateScore (checked in
-// the tests and under EnvironmentMode::FULL_ASSERT).
+// full-recompute reference is ScoreCalculator::score (checked in
+// the tests and under ScoreChecks::ScoreChecks::Full).
 class OrderPickingIncrementalScoreCalculator final
-    : public optimaru::IncrementalScoreCalculator<OrderPickingSolution>
+    : public optimaru::Objective<OrderPickingSolution>
 {
 public:
-    void resetWorkingSolution(OrderPickingSolution &workingSolution) override;
-    void beforeListChanged(int listIndex) override;
-    void afterListChanged(int listIndex) override;
-    Score calculateScore() override;
+    void rebuild(OrderPickingSolution &solution) override;
+    void before_list_edit(int listIndex) override;
+    void after_list_edit(int listIndex) override;
+    Score score() override;
 
     // Read-only views of the live (order, trolley) presence table and the
     // per-trolley bucket demand, used by the order-consolidation move

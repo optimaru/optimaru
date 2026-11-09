@@ -30,11 +30,11 @@ ctest --test-dir build/project-job-scheduling
 ```
 
 `pjs_test` hand-checks the monolithic score (the Java provider-test cases), incremental ==
-full recompute and a FULL_ASSERT solve; `pjs_plugin_test` checks the default assembly ==
+full recompute and a ScoreChecks::Full solve; `pjs_plugin_test` checks the default assembly ==
 the monolith, the raw costs by hand (one positive and one zero case per constraint), the
 catalog and the medium knobs.
 
-## Constraints (HardMediumSoftScore, folded into the engine's HardSoftScore)
+## Constraints (HardMediumSoftScore, folded into the engine's Score)
 
 `cpp/include/pjs/constraints/` holds one component per constraint
 (`non_renewable_resource_capacity_cost.hpp`, `renewable_resource_capacity_cost.hpp`,
@@ -121,12 +121,12 @@ engine is `cpp/include/pjs/solver.hpp` + `cpp/src/solver.cpp`.
 
 **Adding a move.** The engine already mixes change / swap moves
 (weights in `Solver::Config`). This use case relies on the engine's generic moves only; it has no domain move yet. A new move is a
-`optimaru::MoveOperator<…>` registered with `engine.addMoveOperator(...)` next
+`optimaru::MoveOperator<…>` registered with `engine.add_move_operator(...)` next
 to the engine construction in `cpp/src/solver.cpp`; a ruin for LNS is a
-`RuinOperator` registered with `engine.addRuinOperator(...)`.
+`RuinOperator` registered with `engine.add_ruin_operator(...)`.
 
 **Changing the construction heuristic.** Entities are placed in index order (First Fit). Set
-`engineConfig.constructionHeuristic.entityDifficulty` for First Fit
+`engineConfig.construction.difficulty` for First Fit
 Decreasing ordering, or pre-assign part of the solution in the domain
 solver's `solve` before the engine runs — the engine only fills what is still unassigned.
 

@@ -4,8 +4,8 @@
 //       hand-computed counts, several reproducing the
 //       CP-SAT package's test cases (benchmarks/school-timetabling/cpsat/tests)
 //   (b) incremental score == full recompute across a long random walk driven
-//       through the engine's ScoreDirector protocol (before/set/after)
-//   (c) a mid-size instance solved under EnvironmentMode::FULL_ASSERT
+//       through the engine's Editor protocol (before/set/after)
+//   (c) a mid-size instance solved under ScoreChecks::ScoreChecks::Full
 //   (d) block / merged-lesson / team-teaching solves: hard 0 plus the
 //       structural property each feature promises
 //   (e) a CP-SAT-sample-scale school (6 classes, 15 teachers, 34 slots)
@@ -24,7 +24,7 @@
 #include "st/canonical_incremental_calculator.hpp"
 #include "st/canonical_score_calculator.hpp"
 #include "st/canonical_solver.hpp"
-#include "optimaru/api/score/director/score_director.hpp"
+#include "optimaru/editor.hpp"
 
 using namespace st::canon;
 
@@ -528,7 +528,7 @@ void verifySoftConstraints()
         // teacherGapCost 1, teacherWorkdayCost 1, teacherFreeDayCost 1,
         // classGapCost 1, avoidedPeriodCost 1: soft =
         // -(20 + 3 + 30 + 10 + 5) = -68.
-        const Score score = ScoreCalculator::calculateScore(t);
+        const Score score = ScoreCalculator::score(t);
         checkCount("weighted soft assembly",
                    static_cast<std::int64_t>(-score.soft),
                    68);
@@ -540,7 +540,7 @@ void verifySoftConstraints()
 
 // -------------------------------------------------------------------------
 // Random feature-complete instance for the incremental cross-check and the
-// FULL_ASSERT solve: team teaching, blocks, room demand, period masks,
+// ScoreChecks::Full solve: team teaching, blocks, room demand, period masks,
 // tight teacher limits, all soft weights on.
 // -------------------------------------------------------------------------
 const std::vector<int> kGridRandom{5, 5, 5, 4};
@@ -621,7 +621,7 @@ Timetable buildRandomInstance(int courseCount, std::uint64_t seed)
 
 // -------------------------------------------------------------------------
 // (b) Incremental score == full recompute across a random walk of change and
-// swap moves (including unassignments), driven through the ScoreDirector so
+// swap moves (including unassignments), driven through the Editor so
 // the before/set/after hook contract is exercised exactly like in the engine.
 // -------------------------------------------------------------------------
 void verifyIncremental()
@@ -635,12 +635,12 @@ void verifyIncremental()
                 t.blockGroupCount);
 
     CanonicalIncrementalScoreCalculator calc;
-    optimaru::ScoreDirector<Timetable> director(t, calc);
+    optimaru::Editor<Timetable> editor(t, calc);
     Timetable shadow = t;
 
     std::mt19937_64 rng(123);
     const int lessonCount = static_cast<int>(t.lessons.size());
-    const int valueCount = t.slotCount();
+    const int value_count = t.slotCount();
     std::uniform_real_distribution<double> unit(0.0, 1.0);
 
     int mismatches = 0;
@@ -655,8 +655,8 @@ void verifyIncremental()
             const int lesson = static_cast<int>(rng() % lessonCount);
             const int value = (unit(rng) < 0.10)
                                   ? -1
-                                  : static_cast<int>(rng() % valueCount);
-            director.changeVariable(lesson, value);
+                                  : static_cast<int>(rng() % value_count);
+            editor.assign(lesson, value);
         }
         else
         {
@@ -665,17 +665,17 @@ void verifyIncremental()
             const int b = static_cast<int>(rng() % lessonCount);
             const int va = t.lessons[a].slot;
             const int vb = t.lessons[b].slot;
-            director.beginVariableChanges();
-            director.changeVariable(a, vb);
-            director.changeVariable(b, va);
-            director.endVariableChanges();
+            editor.begin_batch();
+            editor.assign(a, vb);
+            editor.assign(b, va);
+            editor.end_batch();
         }
         // Full recompute on the same assignment.
         for (int i = 0; i < lessonCount; ++i)
             shadow.lessons[i].slot = t.lessons[i].slot;
         const Score full = ScoreCalculator::computeBreakdown(shadow).toScore(
             ObjectiveWeights{});
-        const Score incremental = director.calculateScore();
+        const Score incremental = editor.score();
         if (!calc.hotSetsConsistent())
             ++hotMismatches;
         if (full.hard != incremental.hard
@@ -685,8 +685,8 @@ void verifyIncremental()
             {
                 std::printf("  MISMATCH @step %d: incremental=%s full=%s\n",
                             step,
-                            incremental.toString().c_str(),
-                            full.toString().c_str());
+                            incremental.str().c_str(),
+                            full.str().c_str());
             }
         }
     }
@@ -699,9 +699,9 @@ void verifyIncremental()
 }
 
 // -------------------------------------------------------------------------
-// (c) FULL_ASSERT solve: the engine cross-checks the incremental score
+// (c) ScoreChecks::Full solve: the engine cross-checks the incremental score
 // against a full reset + recompute after every single move and throws
-// ScoreCorruptionError on any divergence.
+// ScoreMismatchError on any divergence.
 // -------------------------------------------------------------------------
 void verifyFullAssertSolve()
 {
@@ -709,10 +709,10 @@ void verifyFullAssertSolve()
     Timetable t = buildRandomInstance(/*courseCount*/ 8, /*seed*/ 11);
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(2);
-    config.randomSeed = 3;
-    config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
-    // Kick early so the LNS ruin/recreate path also runs under FULL_ASSERT.
+    config.time_limit = std::chrono::seconds(2);
+    config.seed = 3;
+    config.score_checks = optimaru::ScoreChecks::Full;
+    // Kick early so the LNS ruin/recreate path also runs under ScoreChecks::Full.
     config.ruinRecreateUnimprovedStepTrigger = 200;
     config.ruinRecreatePolishSteps = 100;
 
@@ -724,7 +724,7 @@ void verifyFullAssertSolve()
         solver.solve(t);
         final = t.score;
     }
-    catch (const optimaru::ScoreCorruptionError &e)
+    catch (const optimaru::ScoreMismatchError &e)
     {
         corrupted = true;
         std::printf("  ScoreCorruptionError: %s\n", e.what());
@@ -732,7 +732,7 @@ void verifyFullAssertSolve()
     check(!corrupted, "2s FULL_ASSERT solve without score corruption");
     if (!corrupted)
     {
-        const Score recomputed = ScoreCalculator::calculateScore(t);
+        const Score recomputed = ScoreCalculator::score(t);
         check(final.hard == recomputed.hard
                   && std::fabs(final.soft - recomputed.soft) < 1e-9,
               "solver-reported score == full recompute");
@@ -747,9 +747,9 @@ void verifyFullAssertSolve()
 Solver::Config quickSolveConfig(std::uint64_t seed)
 {
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(2);
-    config.bestScoreLimit = Score{0, -std::numeric_limits<double>::infinity()};
-    config.randomSeed = seed;
+    config.time_limit = std::chrono::seconds(2);
+    config.target_score = Score{0, -std::numeric_limits<double>::infinity()};
+    config.seed = seed;
     config.weights = kZeroWeights;  // pure satisfaction, like cpsat's tests
     return config;
 }
@@ -999,9 +999,9 @@ void verifySampleScaleSolve()
                 6);
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(20);
-    config.bestScoreLimit = Score{0, -std::numeric_limits<double>::infinity()};
-    config.randomSeed = 1;
+    config.time_limit = std::chrono::seconds(20);
+    config.target_score = Score{0, -std::numeric_limits<double>::infinity()};
+    config.seed = 1;
     config.parallelSolverCount = 4;
     config.weights = ObjectiveWeights{};  // CP-SAT default weights
 
@@ -1014,7 +1014,7 @@ void verifySampleScaleSolve()
 
     const Breakdown b = ScoreCalculator::computeBreakdown(d.t);
     std::printf(
-        "  solved in %.1fs, score %s\n", seconds, d.t.score.toString().c_str());
+        "  solved in %.1fs, score %s\n", seconds, d.t.score.str().c_str());
     checkCount("sample-scale hard total", b.hardTotal(), 0);
     check(seconds <= 20.5, "finished within the 20s budget");
 

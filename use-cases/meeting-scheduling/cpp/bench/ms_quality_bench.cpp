@@ -10,7 +10,7 @@
 // Usage: ms_quality_bench <demo|scaled:<meetings>> <seed> <seconds> [k=v ...]
 // Knobs (bench-only overrides of Solver::Config, for A/B sweeps):
 //   la= change= swap= alnsTrigger= alnsPolish= minRuin= maxRuin=
-//   maxRuinCount= decay= dayFit= asMove= asMoveRuin=
+//   max_ruin_count= decay= dayFit= asMove= asMoveRuin=
 
 #include <algorithm>
 #include <chrono>
@@ -225,8 +225,8 @@ int main(int argc, char **argv)
     }
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(seconds);
-    config.randomSeed = seed;
+    config.time_limit = std::chrono::seconds(seconds);
+    config.seed = seed;
     config.parallelSolverCount = 1;
     for (int a = 4; a < argc; ++a)
     {
@@ -239,11 +239,11 @@ int main(int argc, char **argv)
         const std::string key(argv[a], eq - argv[a]);
         const double value = std::atof(eq + 1);
         if (key == "la")
-            config.lateAcceptanceSize = static_cast<std::size_t>(value);
+            config.history_length = static_cast<std::size_t>(value);
         else if (key == "change")
-            config.changeMoveWeight = value;
+            config.change_weight = value;
         else if (key == "swap")
-            config.swapMoveWeight = value;
+            config.swap_weight = value;
         else if (key == "alnsTrigger")
             config.ruinRecreateUnimprovedStepTrigger
                 = static_cast<std::int64_t>(value);
@@ -284,7 +284,7 @@ int main(int argc, char **argv)
     long long lastStep = 0;
     long long lastMs = 0;
     long long feasibleMs = -1;
-    config.onNewBest = [&t0, &lastStep, &lastMs, &feasibleMs](std::int64_t step,
+    config.on_new_best = [&t0, &lastStep, &lastMs, &feasibleMs](std::int64_t step,
                                                               const Score &sc)
     {
         const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -310,7 +310,7 @@ int main(int argc, char **argv)
                 static_cast<long long>(breakdown.hardTotal()),
                 static_cast<long long>(breakdown.mediumTotal()),
                 static_cast<long long>(breakdown.softTotal()),
-                schedule.score.isFeasible() ? "true" : "false",
+                schedule.score.feasible() ? "true" : "false",
                 feasibleMs,
                 movesPerSec);
     return 0;

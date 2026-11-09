@@ -38,7 +38,7 @@ struct ShiftCoverageCost final : EsGlobalConstraint {
     }
 
     void reset(const EmployeeSchedule& s,
-               const std::vector<std::vector<int>>& membersPerUnit) override {
+               const std::vector<std::vector<int>>& members_per_unit) override {
         std::vector<std::uint8_t> shiftIn(s.shifts.size(), shiftIdx_.empty() ? 1 : 0);
         for (int i : shiftIdx_)
             if (i >= 0 && i < static_cast<int>(s.shifts.size())) shiftIn[i] = 1;
@@ -60,25 +60,25 @@ struct ShiftCoverageCost final : EsGlobalConstraint {
         }
         nGroups_ = static_cast<int>(gmap.size());
 
-        std::vector<std::uint8_t> workerIn(membersPerUnit.size(), workerIdx_.empty() ? 1 : 0);
+        std::vector<std::uint8_t> workerIn(members_per_unit.size(), workerIdx_.empty() ? 1 : 0);
         for (int u : workerIdx_)
-            if (u >= 0 && u < static_cast<int>(membersPerUnit.size())) workerIn[u] = 1;
-        hasSkill_.assign(membersPerUnit.size(), 0);
+            if (u >= 0 && u < static_cast<int>(members_per_unit.size())) workerIn[u] = 1;
+        hasSkill_.assign(members_per_unit.size(), 0);
         for (std::size_t u = 0; u < s.employees.size(); ++u) {
             const bool skillOk = skill_.empty() || s.employees[u].skills.count(skill_);
             hasSkill_[u] = (skillOk && workerIn[u]) ? 1 : 0;
         }
-        members_ = membersPerUnit;
+        members_ = members_per_unit;
         groupCount_.assign(nGroups_, 0);
-        for (std::size_t u = 0; u < membersPerUnit.size(); ++u) {
+        for (std::size_t u = 0; u < members_per_unit.size(); ++u) {
             if (hasSkill_[u])
-                for (int i : membersPerUnit[u])
+                for (int i : members_per_unit[u])
                     if (groupOf_[i] >= 0) ++groupCount_[groupOf_[i]];
         }
         totalCost_ = 0;
         for (int count : groupCount_) totalCost_ += groupCost(count);
     }
-    void onUnitChanged(const EmployeeSchedule&, int unit,
+    void on_unit_changed(const EmployeeSchedule&, int unit,
                        const std::vector<int>& members) override {
         if (hasSkill_[unit]) {
             for (int i : members_[unit])
@@ -88,8 +88,8 @@ struct ShiftCoverageCost final : EsGlobalConstraint {
         }
         members_[unit] = members;
     }
-    bool supportsMemberChange() const override { return true; }
-    void onMemberChanged(const EmployeeSchedule&, int unit, const std::vector<int>&,
+    bool supports_member_change() const override { return true; }
+    void on_member_changed(const EmployeeSchedule&, int unit, const std::vector<int>&,
                          int entity, bool joined) override {
         if (hasSkill_[unit] && groupOf_[entity] >= 0) changeGroup(groupOf_[entity], joined ? 1 : -1);
     }

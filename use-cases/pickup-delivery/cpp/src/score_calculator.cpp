@@ -88,7 +88,7 @@ void ScoreCalculator::updateShadowVariables(PdpRoutePlan &plan)
     }
 }
 
-Score ScoreCalculator::calculateScore(PdpRoutePlan &plan)
+Score ScoreCalculator::score(PdpRoutePlan &plan)
 {
     updateShadowVariables(plan);
 

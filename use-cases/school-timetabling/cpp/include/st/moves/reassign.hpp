@@ -22,7 +22,7 @@ namespace st::canon
 // Dropping is easy to steer: a lesson that carries a hard violation is a hot
 // lesson, so the guidance points straight at it. Coming back has no such signal
 // — unassignedLessonsCost is a global constraint, so an unassigned lesson never
-// shows up in penalizedUnits(), and once the search reaches hard 0 (which the
+// shows up in penalized_units(), and once the search reaches hard 0 (which the
 // relaxed model does almost immediately, by dropping) nothing points at the
 // lessons waiting outside. The builtin change move can place them, but it draws
 // one random allowed slot: on a dense timetable that lands on a conflict almost
@@ -30,7 +30,7 @@ namespace st::canon
 // than the instance requires.
 //
 // This operator closes that loop: seed on an UNASSIGNED lesson and evaluate up
-// to `candidateCount` placements through the score director, applying the best
+// to `candidateCount` placements through the score editor, applying the best
 // (the SmartClassSwapMove best-of-k pattern). Blocks move as a unit — a whole
 // consecutive run on one day — because blockAdjacencyCost prices a half-placed
 // block as a violation, so putting one member back alone would never survive.
@@ -51,7 +51,7 @@ public:
                std::mt19937_64 &rng,
                std::vector<int> &entities) override
     {
-        Timetable &table = ctx.director.workingSolution();
+        Timetable &table = ctx.editor.solution();
         const int lesson = seedUnassigned(table, rng);
         if (lesson < 0)
             return false;
@@ -68,7 +68,7 @@ public:
             if (!drawPlacement(table, group, lesson, rng, candidate))
                 continue;
             apply(ctx, candidate);
-            const Score score = ctx.director.calculateScore();
+            const Score score = ctx.editor.score();
             revert(ctx, candidate);
             if (!found || score > bestScore)
             {
@@ -87,7 +87,7 @@ public:
         return true;
     }
 
-    void undoLast(optimaru::OperatorContext<Timetable> &ctx) override
+    void undo_last(optimaru::OperatorContext<Timetable> &ctx) override
     {
         revert(ctx, last_);
     }
@@ -168,19 +168,19 @@ private:
     static void apply(optimaru::OperatorContext<Timetable> &ctx,
                       const std::vector<std::pair<int, int>> &placement)
     {
-        ctx.director.beginVariableChanges();
+        ctx.editor.begin_batch();
         for (const auto &[member, slot] : placement)
-            ctx.director.changeVariable(member, slot);
-        ctx.director.endVariableChanges();
+            ctx.editor.assign(member, slot);
+        ctx.editor.end_batch();
     }
 
     static void revert(optimaru::OperatorContext<Timetable> &ctx,
                        const std::vector<std::pair<int, int>> &placement)
     {
-        ctx.director.beginVariableChanges();
+        ctx.editor.begin_batch();
         for (const auto &[member, _] : placement)
-            ctx.director.changeVariable(member, -1);
-        ctx.director.endVariableChanges();
+            ctx.editor.assign(member, -1);
+        ctx.editor.end_batch();
     }
 
     std::shared_ptr<std::vector<std::vector<int>>> allowedSlots_;

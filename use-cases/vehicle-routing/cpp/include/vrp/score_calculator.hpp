@@ -25,12 +25,12 @@ class ScoreCalculator {
 public:
     // Recomputes every visit's shadow variables (vehicleIndex, arrivalTime)
     // from the current vehicle.visitIndices lists. Must be called before
-    // calculateScore whenever routes change.
+    // score whenever routes change.
     static void updateShadowVariables(VehicleRoutePlan& plan);
 
     // Recomputes shadow variables, then the HardMediumSoftScore, storing it in
     // plan.score and returning it.
-    static Score calculateScore(VehicleRoutePlan& plan);
+    static Score score(VehicleRoutePlan& plan);
 
 private:
     // Ceil of a positive second-count to whole minutes, matching

@@ -29,7 +29,7 @@ struct ItemConflictCost final : BpUnitConstraint
         : BpUnitConstraint("itemConflictCost", weight, kDefaultLevel)
     {
     }
-    void onReset(const BinPackingProblem &problem) override
+    void on_reset(const BinPackingProblem &problem) override
     {
         detail::requirePrepared(problem);
         mark_.assign(problem.items.size(), 0);
@@ -51,8 +51,8 @@ struct ItemConflictCost final : BpUnitConstraint
             mark_[item] = 0;
         return static_cast<double>(twice / 2);
     }
-    bool supportsDelta() const override { return true; }
-    double deltaCost(const BinPackingProblem &problem,
+    bool supports_delta() const override { return true; }
+    double delta_cost(const BinPackingProblem &problem,
                      int /*unit*/,
                      const std::vector<int> &members,
                      int entity) const override

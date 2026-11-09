@@ -265,20 +265,20 @@ int main(int argc, char **argv)
                 seconds);
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(seconds);
-    config.randomSeed = 42;
-    config.onNewBest = [](std::int64_t step, const Score &score)
+    config.time_limit = std::chrono::seconds(seconds);
+    config.seed = 42;
+    config.on_new_best = [](std::int64_t step, const Score &score)
     {
         std::printf("    new best @step %-8lld %s\n",
                     static_cast<long long>(step),
-                    score.toString().c_str());
+                    score.str().c_str());
     };
     Solver solver(config);
     solver.solve(conference);
 
     std::printf("\n  final score: %s  (feasible=%s)\n\n",
-                conference.score.toString().c_str(),
-                conference.score.isFeasible() ? "true" : "false");
+                conference.score.str().c_str(),
+                conference.score.feasible() ? "true" : "false");
     printSchedule(conference);
 
     bool allAssigned = true;

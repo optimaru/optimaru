@@ -6,8 +6,8 @@
 #include <string>
 #include <vector>
 
-#include "optimaru/api/domain/solution_descriptor.hpp"
-#include "optimaru/api/score/buildin/hard_soft_score.hpp"
+#include "optimaru/solution_traits.hpp"
+#include "optimaru/score.hpp"
 
 namespace fl
 {
@@ -15,7 +15,7 @@ namespace fl
 // ---------------------------------------------------------------------------
 // Score
 // ---------------------------------------------------------------------------
-// The quickstart scores with HardSoftScore, exactly the engine's score type,
+// The quickstart scores with Score, exactly the engine's score type,
 // so the mapping is the identity and there is no medium level (no
 // optimaru::MediumFoldOf specialization; a domain WITH a medium level declares
 // its fold next to its Score adapter, see optimaru/api/score/level.hpp):
@@ -25,7 +25,7 @@ namespace fl
 // The weights are the components' kDefaultWeight (fl/constraints/*.hpp); the
 // problem carries none. Both levels are integral (Java uses long); the engine
 // stores soft in a double, which is exact for these magnitudes (< 2^53).
-using Score = optimaru::HardSoftScore;
+using Score = optimaru::Score;
 
 // ---------------------------------------------------------------------------
 // Location  (problem fact)
@@ -107,7 +107,7 @@ struct FacilityLocationProblem
     Score score;
 
     // Set once by ScoreCalculator::prepare; guards against rebuilding the
-    // distance matrix on every calculateScore call.
+    // distance matrix on every score call.
     bool prepared = false;
 
     // Filled by ScoreCalculator::prepare: consumer->facility meters,
@@ -188,29 +188,29 @@ struct FacilityLocationProblem
 }  // namespace fl
 
 // ---------------------------------------------------------------------------
-// SolutionDescriptor specialization  (the @PlanningEntity/@PlanningVariable
+// SolutionTraits specialization  (the @PlanningEntity/@PlanningVariable
 // annotations of the C++ engine): entities are consumers, the planning
 // variable is Consumer::facility, the value range is the facility list
 // (@ValueRangeProvider on FacilityLocationProblem::facilities).
 // ---------------------------------------------------------------------------
-template <> struct optimaru::SolutionDescriptor<fl::FacilityLocationProblem>
+template <> struct optimaru::SolutionTraits<fl::FacilityLocationProblem>
 {
-    static constexpr optimaru::VariableKind kind
-        = optimaru::VariableKind::BASIC;
-    static int entityCount(const fl::FacilityLocationProblem &problem)
+    static constexpr optimaru::Shape shape
+        = optimaru::Shape::Assignment;
+    static int entity_count(const fl::FacilityLocationProblem &problem)
     {
         return problem.consumerCount();
     }
-    static int valueCount(const fl::FacilityLocationProblem &problem)
+    static int value_count(const fl::FacilityLocationProblem &problem)
     {
         return problem.facilityCount();
     }
-    static int getVariable(const fl::FacilityLocationProblem &problem,
+    static int value_of(const fl::FacilityLocationProblem &problem,
                            int consumerIndex)
     {
         return problem.consumers[consumerIndex].facility;
     }
-    static void setVariable(fl::FacilityLocationProblem &problem,
+    static void assign(fl::FacilityLocationProblem &problem,
                             int consumerIndex,
                             int facilityIndex)
     {

@@ -4,8 +4,8 @@
 //       a violating (positive) and a clean (zero) case each, at the
 //       components' kDefaultWeight (1 / 2 / 6)
 //   (b) incremental score == full recompute across a long random walk driven
-//       through the engine's ScoreDirector protocol (before/set/after)
-//   (c) a small instance solved under EnvironmentMode::FULL_ASSERT
+//       through the engine's Editor protocol (before/set/after)
+//   (c) a small instance solved under ScoreChecks::ScoreChecks::Full
 //   (d) a demo-scale instance reaches 0hard with every consumer assigned
 //   (e) the parallel multi-start path (its own workers, so CloseFacilityMove
 //       is registered in each) returns a consistent best solution
@@ -21,7 +21,7 @@
 #include "fl/incremental_calculator.hpp"
 #include "fl/score_calculator.hpp"
 #include "fl/solver.hpp"
-#include "optimaru/api/score/director/score_director.hpp"
+#include "optimaru/editor.hpp"
 
 using namespace fl;
 
@@ -47,7 +47,7 @@ void checkScore(const std::string &label,
     std::printf("  [%s] %-42s got=%s expected=%ldhard/%gsoft\n",
                 ok ? "PASS" : "FAIL",
                 label.c_str(),
-                actual.toString().c_str(),
+                actual.str().c_str(),
                 expectedHard,
                 expectedSoft);
     if (!ok)
@@ -99,7 +99,7 @@ void verifyConstraints()
         addConsumer(p, 0, 0, /*demand*/ 15, /*facility*/ 0);
         addConsumer(p, 0, 0, /*demand*/ 15, /*facility*/ 0);
         checkScore("facilityCapacityCost overflow",
-                   ScoreCalculator::calculateScore(p),
+                   ScoreCalculator::score(p),
                    -10,
                    0);
     }
@@ -109,7 +109,7 @@ void verifyConstraints()
         addFacility(p, 0, 0, 0, 20);
         addConsumer(p, 0, 0, 15, 0);
         checkScore("facilityCapacityCost within (zero)",
-                   ScoreCalculator::calculateScore(p),
+                   ScoreCalculator::score(p),
                    0,
                    0);
     }
@@ -121,7 +121,7 @@ void verifyConstraints()
         addFacility(p, 0, 0, 0, 20);
         addConsumer(p, 0, 0, 15, 1);
         checkScore("facilityCapacityCost ignores unused",
-                   ScoreCalculator::calculateScore(p),
+                   ScoreCalculator::score(p),
                    0,
                    0);
     }
@@ -131,7 +131,7 @@ void verifyConstraints()
         addFacility(p, 0, 0, /*setupCost*/ 1000, /*capacity*/ 100);
         addConsumer(p, 0, 0, 1, 0);
         checkScore("setupCost used once",
-                   ScoreCalculator::calculateScore(p),
+                   ScoreCalculator::score(p),
                    0,
                    -2000);
     }
@@ -142,7 +142,7 @@ void verifyConstraints()
         addConsumer(p, 0, 0, 1, 0);
         addConsumer(p, 0, 0, 1, 0);
         checkScore("setupCost not repeated",
-                   ScoreCalculator::calculateScore(p),
+                   ScoreCalculator::score(p),
                    0,
                    -2000);
     }
@@ -154,7 +154,7 @@ void verifyConstraints()
         addConsumer(p, 0, 0, 1, 0);
         addConsumer(p, 0, 0, 1, 1);
         checkScore("setupCost per used facility",
-                   ScoreCalculator::calculateScore(p),
+                   ScoreCalculator::score(p),
                    0,
                    -3000);
     }
@@ -165,7 +165,7 @@ void verifyConstraints()
         addFacility(p, 0, 0, /*setupCost*/ 0, /*capacity*/ 100);
         addConsumer(p, 0, 0, 1, 1);
         checkScore("setupCost unused facility (zero)",
-                   ScoreCalculator::calculateScore(p),
+                   ScoreCalculator::score(p),
                    0,
                    0);
     }
@@ -175,7 +175,7 @@ void verifyConstraints()
         addFacility(p, 0, 0, 0, 100);
         addConsumer(p, 0, 0.25, 1, 0);
         checkScore("distance 0.25 deg x weight 6",
-                   ScoreCalculator::calculateScore(p),
+                   ScoreCalculator::score(p),
                    0,
                    -166500);
     }
@@ -185,7 +185,7 @@ void verifyConstraints()
         addFacility(p, 0, 0, 0, 100);
         addConsumer(p, 0.75, 1.0, 1, 0);
         checkScore("distance 3-4-5 triangle",
-                   ScoreCalculator::calculateScore(p),
+                   ScoreCalculator::score(p),
                    0,
                    -832500);
     }
@@ -195,7 +195,7 @@ void verifyConstraints()
         addFacility(p, 0.5, 0.5, 0, 100);
         addConsumer(p, 0.5, 0.5, 1, 0);
         checkScore("distance on the facility (zero)",
-                   ScoreCalculator::calculateScore(p),
+                   ScoreCalculator::score(p),
                    0,
                    0);
     }
@@ -205,7 +205,7 @@ void verifyConstraints()
         addFacility(p, 0, 0, 1000, 5);
         addConsumer(p, 0, 0.25, 10);  // unassigned
         checkScore("unassigned contributes nothing",
-                   ScoreCalculator::calculateScore(p),
+                   ScoreCalculator::score(p),
                    0,
                    0);
     }
@@ -220,7 +220,7 @@ void verifyConstraints()
         addConsumer(p, 0, 0, 8, 0);
         addConsumer(p, 0, 0, 7, 0);
         addConsumer(p, 0, 0.75, 3, 1);
-        checkScore("combined", ScoreCalculator::calculateScore(p), -5, -167100);
+        checkScore("combined", ScoreCalculator::score(p), -5, -167100);
     }
     std::printf("\n");
 }
@@ -262,7 +262,7 @@ FacilityLocationProblem buildRandomInstance(int facilityCount,
 
 // -------------------------------------------------------------------------
 // (b) Incremental score == full recompute across a random walk of change and
-// swap moves (including unassignments), driven through the ScoreDirector so
+// swap moves (including unassignments), driven through the Editor so
 // the before/set/after hook contract is exercised exactly like in the
 // engine.
 // -------------------------------------------------------------------------
@@ -277,12 +277,12 @@ void verifyIncremental()
                               /*slack*/ 1);  // tight: over-capacity happens
 
     FacilityLocationIncrementalScoreCalculator calc;
-    optimaru::ScoreDirector<FacilityLocationProblem> director(p, calc);
+    optimaru::Editor<FacilityLocationProblem> editor(p, calc);
     FacilityLocationProblem shadow = p;
 
     std::mt19937_64 rng(123);
     const int consumerCount = p.consumerCount();
-    const int valueCount = p.facilityCount();
+    const int value_count = p.facilityCount();
     std::uniform_real_distribution<double> unit(0.0, 1.0);
 
     int mismatches = 0;
@@ -296,8 +296,8 @@ void verifyIncremental()
             const int consumer = static_cast<int>(rng() % consumerCount);
             const int value = (unit(rng) < 0.10)
                                   ? -1
-                                  : static_cast<int>(rng() % valueCount);
-            director.changeVariable(consumer, value);
+                                  : static_cast<int>(rng() % value_count);
+            editor.assign(consumer, value);
         }
         else
         {
@@ -306,16 +306,16 @@ void verifyIncremental()
             const int b = static_cast<int>(rng() % consumerCount);
             const int va = p.consumers[a].facility;
             const int vb = p.consumers[b].facility;
-            director.changeVariable(a, vb);
-            director.changeVariable(b, va);
+            editor.assign(a, vb);
+            editor.assign(b, va);
         }
         // Full recompute on the same assignment.
         for (int i = 0; i < consumerCount; ++i)
         {
             shadow.consumers[i].facility = p.consumers[i].facility;
         }
-        const Score full = ScoreCalculator::calculateScore(shadow);
-        const Score incremental = director.calculateScore();
+        const Score full = ScoreCalculator::score(shadow);
+        const Score incremental = editor.score();
         if (full.hard != incremental.hard
             || std::fabs(full.soft - incremental.soft) > 1e-9)
         {
@@ -323,8 +323,8 @@ void verifyIncremental()
             {
                 std::printf("  MISMATCH @step %d: incremental=%s full=%s\n",
                             step,
-                            incremental.toString().c_str(),
-                            full.toString().c_str());
+                            incremental.str().c_str(),
+                            full.str().c_str());
             }
         }
     }
@@ -335,9 +335,9 @@ void verifyIncremental()
 }
 
 // -------------------------------------------------------------------------
-// (c) FULL_ASSERT solve: the engine cross-checks the incremental score
+// (c) ScoreChecks::Full solve: the engine cross-checks the incremental score
 // against a full reset + recompute after every single move and throws
-// ScoreCorruptionError on any divergence.
+// ScoreMismatchError on any divergence.
 // -------------------------------------------------------------------------
 void verifyFullAssertSolve()
 {
@@ -349,10 +349,10 @@ void verifyFullAssertSolve()
                                                     /*slack*/ 2);
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(2);
-    config.randomSeed = 3;
-    config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
-    // Kick early so the LNS ruin/recreate path also runs under FULL_ASSERT.
+    config.time_limit = std::chrono::seconds(2);
+    config.seed = 3;
+    config.score_checks = optimaru::ScoreChecks::Full;
+    // Kick early so the LNS ruin/recreate path also runs under ScoreChecks::Full.
     config.ruinRecreateUnimprovedStepTrigger = 200;
     config.ruinRecreatePolishSteps = 100;
 
@@ -364,7 +364,7 @@ void verifyFullAssertSolve()
         solver.solve(p);
         final = p.score;
     }
-    catch (const optimaru::ScoreCorruptionError &e)
+    catch (const optimaru::ScoreMismatchError &e)
     {
         corrupted = true;
         std::printf("  ScoreCorruptionError: %s\n", e.what());
@@ -372,7 +372,7 @@ void verifyFullAssertSolve()
     check(!corrupted, "2s FULL_ASSERT solve without score corruption");
     if (!corrupted)
     {
-        const Score recomputed = ScoreCalculator::calculateScore(p);
+        const Score recomputed = ScoreCalculator::score(p);
         check(final.hard == recomputed.hard
                   && std::fabs(final.soft - recomputed.soft) < 1e-9,
               "solver-reported score == full recompute");
@@ -395,8 +395,8 @@ void verifyDemoScaleSolve()
                                                     /*slack*/ 5);
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(3);
-    config.randomSeed = 5;
+    config.time_limit = std::chrono::seconds(3);
+    config.seed = 5;
     Solver solver(config);
     solver.solve(p);
 
@@ -408,7 +408,7 @@ void verifyDemoScaleSolve()
     }
     check(allAssigned, "every consumer assigned after the solve");
     check(p.score.hard == 0, "demo-scale instance reaches 0hard");
-    const Score recomputed = ScoreCalculator::calculateScore(p);
+    const Score recomputed = ScoreCalculator::score(p);
     check(p.score.hard == recomputed.hard
               && std::fabs(p.score.soft - recomputed.soft) < 1e-9,
           "solver-reported score == full recompute");
@@ -431,8 +431,8 @@ void verifyParallelSolve()
                                                     /*slack*/ 4);
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(2);
-    config.randomSeed = 9;
+    config.time_limit = std::chrono::seconds(2);
+    config.seed = 9;
     config.parallelSolverCount = 3;
     Solver solver(config);
     solver.solve(p);
@@ -445,7 +445,7 @@ void verifyParallelSolve()
     }
     check(allAssigned, "every consumer assigned after the parallel solve");
     check(p.score.hard == 0, "parallel solve reaches 0hard");
-    const Score recomputed = ScoreCalculator::calculateScore(p);
+    const Score recomputed = ScoreCalculator::score(p);
     check(p.score.hard == recomputed.hard
               && std::fabs(p.score.soft - recomputed.soft) < 1e-9,
           "winning worker's score == full recompute");

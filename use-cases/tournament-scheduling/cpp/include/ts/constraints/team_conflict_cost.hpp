@@ -21,7 +21,7 @@ struct TeamConflictCost final : TsUnitConstraint
         : TsUnitConstraint("teamConflictCost", weight, kDefaultLevel)
     {
     }
-    void onReset(const TournamentSchedule &schedule) override
+    void on_reset(const TournamentSchedule &schedule) override
     {
         perDay_.assign(schedule.dayCount(), 0);
     }
@@ -38,8 +38,8 @@ struct TeamConflictCost final : TsUnitConstraint
             perDay_[detail::dayOf(schedule, assignment)] = 0;
         return static_cast<double>(pairs);
     }
-    bool supportsDelta() const override { return true; }
-    double deltaCost(const TournamentSchedule &schedule,
+    bool supports_delta() const override { return true; }
+    double delta_cost(const TournamentSchedule &schedule,
                      int /*unit*/,
                      const std::vector<int> &members,
                      int entity) const override

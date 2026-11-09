@@ -11,8 +11,8 @@
 
 #include "fp/incremental_calculator.hpp"
 #include "fp/score_calculator.hpp"
-#include "optimaru/api/solver/solver_factory.hpp"
-#include "optimaru/config/solver/solver_config.hpp"
+#include "optimaru/solver.hpp"
+#include "optimaru/settings.hpp"
 
 namespace fp
 {
@@ -71,8 +71,8 @@ bool anySharedOperator(const PackagingSchedule &schedule)
     {
         for (int b = a + 1; b < lineCount; ++b)
         {
-            if (schedule.lines[a].operatorIndex
-                == schedule.lines[b].operatorIndex)
+            if (schedule.lines[a].operator_index
+                == schedule.lines[b].operator_index)
                 return true;
         }
     }
@@ -80,16 +80,16 @@ bool anySharedOperator(const PackagingSchedule &schedule)
 }
 
 // The plugin path's Score: the calculator's three accumulators before the
-// medium fold (levelScores()), each level rounded on its own. Decoding the
+// medium fold (level_scores()), each level rounded on its own. Decoding the
 // folded engine soft instead would file a soft total of 10^10 or more under
 // medium.
 Score levelScoreOf(
-    const optimaru::DecomposedScoreCalculator<PackagingSchedule> &calculator)
+    const optimaru::DecomposedObjective<PackagingSchedule> &calculator)
 {
-    const auto levels = calculator.levelScores();
+    const auto levels = calculator.level_scores();
     return Score{static_cast<std::int64_t>(levels.hard),
-                 optimaru::roundScoreLevel(levels.medium, "medium"),
-                 optimaru::roundScoreLevel(levels.soft, "soft")};
+                 optimaru::round_score_level(levels.medium, "medium"),
+                 optimaru::round_score_level(levels.soft, "soft")};
 }
 
 }  // namespace
@@ -102,12 +102,12 @@ void assignMissingOperators(PackagingSchedule &schedule)
     std::vector<int> used(operatorCount, 0);
     for (const Line &line : schedule.lines)
     {
-        if (line.operatorIndex >= 0)
-            ++used[line.operatorIndex];
+        if (line.operator_index >= 0)
+            ++used[line.operator_index];
     }
     for (Line &line : schedule.lines)
     {
-        if (line.operatorIndex >= 0)
+        if (line.operator_index >= 0)
             continue;
         int best = 0;
         for (int o = 1; o < operatorCount; ++o)
@@ -115,7 +115,7 @@ void assignMissingOperators(PackagingSchedule &schedule)
             if (used[o] < used[best])
                 best = o;
         }
-        line.operatorIndex = best;
+        line.operator_index = best;
         ++used[best];
     }
 }
@@ -142,7 +142,7 @@ bool improveOperatorAssignment(PackagingSchedule &schedule)
 
     std::vector<int> assign(lineCount);
     for (int l = 0; l < lineCount; ++l)
-        assign[l] = schedule.lines[l].operatorIndex;
+        assign[l] = schedule.lines[l].operator_index;
 
     bool changedAny = false;
     for (bool improved = true; improved;)
@@ -175,7 +175,7 @@ bool improveOperatorAssignment(PackagingSchedule &schedule)
         }
     }
     for (int l = 0; l < lineCount; ++l)
-        schedule.lines[l].operatorIndex = assign[l];
+        schedule.lines[l].operator_index = assign[l];
     return changedAny;
 }
 
@@ -194,7 +194,7 @@ void Solver::solve(PackagingSchedule &schedule)
     {
         // Nothing searchable: score the instance as-is (Java would leave
         // the jobs unassigned too when there are no lines).
-        ScoreCalculator::calculateScore(schedule);
+        ScoreCalculator::score(schedule);
         return;
     }
 
@@ -208,7 +208,7 @@ void Solver::solve(PackagingSchedule &schedule)
               : (anySharedOperator(schedule) && !schedule.operators.empty()
                      ? 5
                      : 1);
-    const auto deadline = std::chrono::steady_clock::now() + config_.spentLimit;
+    const auto deadline = std::chrono::steady_clock::now() + config_.time_limit;
 
     for (int round = 0; round < rounds; ++round)
     {
@@ -218,50 +218,50 @@ void Solver::solve(PackagingSchedule &schedule)
         if (remaining <= std::chrono::milliseconds(0))
             break;
 
-        optimaru::SolverConfig engineConfig;
-        engineConfig.randomSeed = config_.randomSeed
+        optimaru::Settings engineConfig;
+        engineConfig.seed = config_.seed
                                   + static_cast<std::uint64_t>(round)
                                         * static_cast<std::uint64_t>(std::max(
                                             1, config_.parallelSolverCount));
-        engineConfig.environmentMode = config_.environmentMode;
-        engineConfig.multiStartCount = std::max(1, config_.parallelSolverCount);
-        if (config_.onNewBest)
+        engineConfig.score_checks = config_.score_checks;
+        engineConfig.parallel_starts = std::max(1, config_.parallelSolverCount);
+        if (config_.on_new_best)
         {
-            auto callback = config_.onNewBest;
-            engineConfig.onNewBest
+            auto callback = config_.on_new_best;
+            engineConfig.on_new_best
                 = [callback](std::int64_t step,
-                             const optimaru::HardSoftScore &score)
+                             const optimaru::Score &score)
             { callback(step, fromEngineScore(score)); };
         }
-        engineConfig.termination.spentLimit = remaining / (rounds - round);
-        engineConfig.termination.bestScoreLimit = config_.bestScoreLimit;
-        engineConfig.termination.unimprovedSpentLimit
-            = config_.unimprovedSpentLimit;
-        engineConfig.termination.stepCountLimit = config_.stepCountLimit;
-        engineConfig.termination.unimprovedStepCountLimit
-            = config_.unimprovedStepCountLimit;
-        engineConfig.localSearch.acceptor.lateAcceptanceSize
-            = config_.lateAcceptanceSize != 0
-                  ? config_.lateAcceptanceSize
+        engineConfig.limits.time_limit = remaining / (rounds - round);
+        engineConfig.limits.target_score = config_.target_score;
+        engineConfig.limits.stall_time_limit
+            = config_.stall_time_limit;
+        engineConfig.limits.step_limit = config_.step_limit;
+        engineConfig.limits.stall_step_limit
+            = config_.stall_step_limit;
+        engineConfig.search.acceptance.history_length
+            = config_.history_length != 0
+                  ? config_.history_length
                   : std::clamp<std::size_t>(
                         8 * static_cast<std::size_t>(movableJobs), 400, 3200);
-        auto &moves = engineConfig.localSearch.moveSelector;
-        moves.relocateMoveWeight = config_.relocateMoveWeight;
-        moves.listSwapMoveWeight = config_.listSwapMoveWeight;
-        moves.twoOptMoveWeight = config_.twoOptMoveWeight;
-        moves.orOptMoveWeight = config_.orOptMoveWeight;
-        moves.tailSwapMoveWeight = config_.tailSwapMoveWeight;
+        auto &moves = engineConfig.search.moves;
+        moves.relocate_weight = config_.relocate_weight;
+        moves.list_swap_weight = config_.list_swap_weight;
+        moves.two_opt_weight = config_.two_opt_weight;
+        moves.or_opt_weight = config_.or_opt_weight;
+        moves.tail_swap_weight = config_.tail_swap_weight;
         if (config_.nearbyProbability > 0 && movableJobs >= 2)
         {
-            engineConfig.localSearch.nearby.probability
+            engineConfig.search.nearby.probability
                 = config_.nearbyProbability;
-            engineConfig.localSearch.nearby.size = config_.nearbySize;
+            engineConfig.search.nearby.size = config_.nearbySize;
             // Element ids are engine ids; the meter reads only immutable
             // problem facts (products, cleanup matrix, id mapping), so the
             // lambda stays valid across the engine's worker copies. Missing
             // cleanup pairs rank as "very far" instead of throwing (the
             // meter must never evaluate score semantics).
-            engineConfig.localSearch.nearby.distanceMeter
+            engineConfig.search.nearby.distance
                 = [&schedule](int a, int b)
             {
                 const Job &jobA = schedule.jobs[schedule.engineToJob[a]];
@@ -279,23 +279,22 @@ void Solver::solve(PackagingSchedule &schedule)
                 return changeover * 1e6 + idealGap;
             };
         }
-        auto &lns = engineConfig.localSearch.ruinRecreate;
-        lns.enabled = config_.ruinRecreate && movableJobs >= 4;
-        lns.unimprovedStepTrigger = config_.ruinRecreateUnimprovedStepTrigger;
-        lns.minRuinFraction = config_.ruinRecreateMinRuinFraction;
-        lns.maxRuinFraction = config_.ruinRecreateMaxRuinFraction;
-        lns.maxRuinCount = config_.ruinRecreateMaxRuinCount;
-        lns.operatorDecay = config_.ruinRecreateOperatorDecay;
+        auto &lns = engineConfig.search.ruin_recreate;
+        lns.enabled = config_.ruin_recreate && movableJobs >= 4;
+        lns.unimproved_step_trigger = config_.ruinRecreateUnimprovedStepTrigger;
+        lns.min_ruin_fraction = config_.ruinRecreateMinRuinFraction;
+        lns.max_ruin_fraction = config_.ruinRecreateMaxRuinFraction;
+        lns.max_ruin_count = config_.ruinRecreateMaxRuinCount;
+        lns.operator_decay = config_.ruinRecreateOperatorDecay;
         lns.rewards = config_.ruinRecreateRewards;
-        lns.polishSteps = config_.ruinRecreatePolishSteps;
+        lns.polish_steps = config_.ruinRecreatePolishSteps;
 
         // Construction heuristic (cheapest insertion over lines + the
         // unassigned pool) + late-acceptance local search with ALNS kicks;
         // each start gets its own calculator instance (they are stateful).
-        auto engine = optimaru::SolverFactory<PackagingSchedule>::create(
-                          std::move(engineConfig))
-                          .buildSolver();
-        const optimaru::HardSoftScore best = engine.solveMultiStart(
+        auto engine = optimaru::Solver<PackagingSchedule>(
+                          std::move(engineConfig));
+        const optimaru::Score best = engine.solve_multistart(
             schedule,
             []
             {
@@ -303,7 +302,7 @@ void Solver::solve(PackagingSchedule &schedule)
                     FoodPackagingIncrementalScoreCalculator>();
             });
 
-        if (best >= config_.bestScoreLimit)
+        if (best >= config_.target_score)
             break;
         // Keep running the remaining legs even when the operator assignment
         // reaches a fixed point: a leg still searches the job lists (fresh
@@ -321,12 +320,12 @@ void Solver::solve(PackagingSchedule &schedule)
 
     // The authoritative final score: a full recompute on the best solution
     // (also refreshes the job shadow variables for the caller).
-    schedule.score = ScoreCalculator::calculateScore(schedule);
+    schedule.score = ScoreCalculator::score(schedule);
 }
 
 void Solver::solve(
     PackagingSchedule &schedule,
-    optimaru::DecomposedScoreCalculator<PackagingSchedule> &calculator)
+    optimaru::DecomposedObjective<PackagingSchedule> &calculator)
 {
     ScoreCalculator::prepare(schedule);
     if (config_.ruinRecreateRewards.size() != 4)
@@ -343,47 +342,47 @@ void Solver::solve(
         // multi-start workers both need calculators of their own, and a
         // caller-assembled plugin cannot be cloned. The move mix, the
         // changeover-nearby selection and the ALNS kicks are the same.
-        optimaru::SolverConfig engineConfig;
-        engineConfig.randomSeed = config_.randomSeed;
-        engineConfig.environmentMode = config_.environmentMode;
-        engineConfig.multiStartCount = 1;
-        if (config_.onNewBest)
+        optimaru::Settings engineConfig;
+        engineConfig.seed = config_.seed;
+        engineConfig.score_checks = config_.score_checks;
+        engineConfig.parallel_starts = 1;
+        if (config_.on_new_best)
         {
             // Report the same three levels as the final schedule.score below.
-            // The engine calls onNewBest right after the working solution
+            // The engine calls on_new_best right after the working solution
             // became the new best, so the calculator's accumulators hold
             // exactly that solution; the folded engine score it passes is not
             // decoded.
-            auto callback = config_.onNewBest;
-            engineConfig.onNewBest
+            auto callback = config_.on_new_best;
+            engineConfig.on_new_best
                 = [callback, &calculator](std::int64_t step,
-                                          const optimaru::HardSoftScore &)
+                                          const optimaru::Score &)
             { callback(step, levelScoreOf(calculator)); };
         }
-        engineConfig.termination.spentLimit = config_.spentLimit;
-        engineConfig.termination.bestScoreLimit = config_.bestScoreLimit;
-        engineConfig.termination.unimprovedSpentLimit
-            = config_.unimprovedSpentLimit;
-        engineConfig.termination.stepCountLimit = config_.stepCountLimit;
-        engineConfig.termination.unimprovedStepCountLimit
-            = config_.unimprovedStepCountLimit;
-        engineConfig.localSearch.acceptor.lateAcceptanceSize
-            = config_.lateAcceptanceSize != 0
-                  ? config_.lateAcceptanceSize
+        engineConfig.limits.time_limit = config_.time_limit;
+        engineConfig.limits.target_score = config_.target_score;
+        engineConfig.limits.stall_time_limit
+            = config_.stall_time_limit;
+        engineConfig.limits.step_limit = config_.step_limit;
+        engineConfig.limits.stall_step_limit
+            = config_.stall_step_limit;
+        engineConfig.search.acceptance.history_length
+            = config_.history_length != 0
+                  ? config_.history_length
                   : std::clamp<std::size_t>(
                         8 * static_cast<std::size_t>(movableJobs), 400, 3200);
-        auto &moves = engineConfig.localSearch.moveSelector;
-        moves.relocateMoveWeight = config_.relocateMoveWeight;
-        moves.listSwapMoveWeight = config_.listSwapMoveWeight;
-        moves.twoOptMoveWeight = config_.twoOptMoveWeight;
-        moves.orOptMoveWeight = config_.orOptMoveWeight;
-        moves.tailSwapMoveWeight = config_.tailSwapMoveWeight;
+        auto &moves = engineConfig.search.moves;
+        moves.relocate_weight = config_.relocate_weight;
+        moves.list_swap_weight = config_.list_swap_weight;
+        moves.two_opt_weight = config_.two_opt_weight;
+        moves.or_opt_weight = config_.or_opt_weight;
+        moves.tail_swap_weight = config_.tail_swap_weight;
         if (config_.nearbyProbability > 0 && movableJobs >= 2)
         {
-            engineConfig.localSearch.nearby.probability
+            engineConfig.search.nearby.probability
                 = config_.nearbyProbability;
-            engineConfig.localSearch.nearby.size = config_.nearbySize;
-            engineConfig.localSearch.nearby.distanceMeter
+            engineConfig.search.nearby.size = config_.nearbySize;
+            engineConfig.search.nearby.distance
                 = [&schedule](int a, int b)
             {
                 const Job &jobA = schedule.jobs[schedule.engineToJob[a]];
@@ -401,32 +400,31 @@ void Solver::solve(
                 return changeover * 1e6 + idealGap;
             };
         }
-        auto &lns = engineConfig.localSearch.ruinRecreate;
-        lns.enabled = config_.ruinRecreate && movableJobs >= 4;
-        lns.unimprovedStepTrigger = config_.ruinRecreateUnimprovedStepTrigger;
-        lns.minRuinFraction = config_.ruinRecreateMinRuinFraction;
-        lns.maxRuinFraction = config_.ruinRecreateMaxRuinFraction;
-        lns.maxRuinCount = config_.ruinRecreateMaxRuinCount;
-        lns.operatorDecay = config_.ruinRecreateOperatorDecay;
+        auto &lns = engineConfig.search.ruin_recreate;
+        lns.enabled = config_.ruin_recreate && movableJobs >= 4;
+        lns.unimproved_step_trigger = config_.ruinRecreateUnimprovedStepTrigger;
+        lns.min_ruin_fraction = config_.ruinRecreateMinRuinFraction;
+        lns.max_ruin_fraction = config_.ruinRecreateMaxRuinFraction;
+        lns.max_ruin_count = config_.ruinRecreateMaxRuinCount;
+        lns.operator_decay = config_.ruinRecreateOperatorDecay;
         lns.rewards = config_.ruinRecreateRewards;
-        lns.polishSteps = config_.ruinRecreatePolishSteps;
+        lns.polish_steps = config_.ruinRecreatePolishSteps;
 
-        auto engine = optimaru::SolverFactory<PackagingSchedule>::create(
-                          std::move(engineConfig))
-                          .buildSolver();
+        auto engine = optimaru::Solver<PackagingSchedule>(
+                          std::move(engineConfig));
         engine.solve(schedule, calculator);
     }
 
     // Refresh the job shadow variables on the best solution (the plugin
     // components derive their own chain and never write these), then score it
     // with the caller's constraint assembly (custom weights and levels
-    // included), leaving the calculator primed on it so constraintTotals()
+    // included), leaving the calculator primed on it so constraint_totals()
     // explains exactly this score. The three levels come straight from the
-    // calculator's accumulators (levelScoreOf() above, like every onNewBest
+    // calculator's accumulators (levelScoreOf() above, like every on_new_best
     // report) rather than from decoding the folded engine score, so a demoted
     // or re-weighted term lands on the level the assembly gave it.
     ScoreCalculator::updateShadowVariables(schedule);
-    calculator.resetWorkingSolution(schedule);
+    calculator.rebuild(schedule);
     schedule.score = levelScoreOf(calculator);
 }
 

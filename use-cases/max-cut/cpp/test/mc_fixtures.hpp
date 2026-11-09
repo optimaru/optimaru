@@ -165,7 +165,7 @@ inline Score bruteForceOptimum(MaxCutProblem problem)
         }
         if (!keeps)
             continue;
-        const Score score = ScoreCalculator::calculateScore(problem);
+        const Score score = ScoreCalculator::score(problem);
         if (best < score)
             best = score;
     }

@@ -25,14 +25,14 @@ struct PartitionImbalanceCost final : detail::MemberChangeConstraint
     {
     }
 
-    void reset(const MaxCutProblem &problem, const std::vector<std::vector<int>> &membersPerUnit) override
+    void reset(const MaxCutProblem &problem, const std::vector<std::vector<int>> &members_per_unit) override
     {
         detail::requirePrepared(problem);
         for (int s = 0; s < kSideCount; ++s)
-            count_[s] = s < static_cast<int>(membersPerUnit.size()) ? static_cast<int>(membersPerUnit[s].size()) : 0;
+            count_[s] = s < static_cast<int>(members_per_unit.size()) ? static_cast<int>(members_per_unit[s].size()) : 0;
     }
 
-    void onMemberChanged(const MaxCutProblem & /*problem*/,
+    void on_member_changed(const MaxCutProblem & /*problem*/,
                          int unit,
                          const std::vector<int> & /*members*/,
                          int /*vertex*/,

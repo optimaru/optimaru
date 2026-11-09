@@ -6,8 +6,8 @@
 #include <string>
 #include <vector>
 
-#include "optimaru/api/domain/solution_descriptor.hpp"
-#include "optimaru/api/score/buildin/hard_soft_score.hpp"
+#include "optimaru/solution_traits.hpp"
+#include "optimaru/score.hpp"
 
 namespace fcs
 {
@@ -36,15 +36,15 @@ inline DayIndex dayOf(Minutes m)
 // ---------------------------------------------------------------------------
 // Score
 // ---------------------------------------------------------------------------
-// The Java quickstart scores with HardSoftScore (both levels int) — exactly
-// the engine's HardSoftScore(int64 hard, double soft), so the mapping is the
+// The Java quickstart scores with Score (both levels int) — exactly
+// the engine's Score(int64 hard, double soft), so the mapping is the
 // identity and there is no medium level (no optimaru::MediumFoldOf
 // specialization). The Java FlightCrewSchedulingConstraintProvider weights
 // (100 / 10 / 1 / 10 hard, 1000 / 1000 soft) are the components'
 // kDefaultWeight (fcs/constraints/*_cost.hpp), declared there once; the
 // monolithic calculators read the same constants (before 0.2.0 they were
 // re-typed here as REQUIRED_SKILL_WEIGHT ... LAST_NOT_HOME_WEIGHT).
-using Score = optimaru::HardSoftScore;
+using Score = optimaru::Score;
 
 // ---------------------------------------------------------------------------
 // Airport  (problem fact)
@@ -122,7 +122,7 @@ struct FlightCrewSchedule
     Score score;
 
     // Set once by ScoreCalculator::prepare; guards against re-interning the
-    // skill ids on every calculateScore call.
+    // skill ids on every score call.
     bool prepared = false;
 
     // Filled by ScoreCalculator::prepare:
@@ -180,35 +180,35 @@ struct FlightCrewSchedule
 }  // namespace fcs
 
 // ---------------------------------------------------------------------------
-// SolutionDescriptor specialization  (the @PlanningEntity/@PlanningVariable
+// SolutionTraits specialization  (the @PlanningEntity/@PlanningVariable
 // annotations of the C++ engine): entities are flight assignments, the
 // planning variable is FlightAssignment::employee, the value range is the
 // employee list.
 // ---------------------------------------------------------------------------
-template <> struct optimaru::SolutionDescriptor<fcs::FlightCrewSchedule>
+template <> struct optimaru::SolutionTraits<fcs::FlightCrewSchedule>
 {
-    static constexpr optimaru::VariableKind kind
-        = optimaru::VariableKind::BASIC;
-    static int entityCount(const fcs::FlightCrewSchedule &s)
+    static constexpr optimaru::Shape shape
+        = optimaru::Shape::Assignment;
+    static int entity_count(const fcs::FlightCrewSchedule &s)
     {
         return static_cast<int>(s.flightAssignments.size());
     }
-    static int valueCount(const fcs::FlightCrewSchedule &s)
+    static int value_count(const fcs::FlightCrewSchedule &s)
     {
         return static_cast<int>(s.employees.size());
     }
-    static int getVariable(const fcs::FlightCrewSchedule &s,
+    static int value_of(const fcs::FlightCrewSchedule &s,
                            int assignmentIndex)
     {
         return s.flightAssignments[assignmentIndex].employee;
     }
-    static void setVariable(fcs::FlightCrewSchedule &s,
+    static void assign(fcs::FlightCrewSchedule &s,
                             int assignmentIndex,
                             int employeeIndex)
     {
         s.flightAssignments[assignmentIndex].employee = employeeIndex;
     }
-    static bool isPinned(const fcs::FlightCrewSchedule &s, int assignmentIndex)
+    static bool is_pinned(const fcs::FlightCrewSchedule &s, int assignmentIndex)
     {
         return s.flightAssignments[assignmentIndex].pinned;
     }

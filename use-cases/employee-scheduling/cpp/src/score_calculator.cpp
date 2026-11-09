@@ -190,7 +190,7 @@ double ScoreCalculator::unfairness(const std::vector<long>& loads) {
     return unfairnessFromAggregates(sum, sumSq, static_cast<int>(loads.size()));
 }
 
-Score ScoreCalculator::calculateScore(EmployeeSchedule& schedule) {
+Score ScoreCalculator::score(EmployeeSchedule& schedule) {
     prepare(schedule);
     Score score;
     const auto& shifts = schedule.shifts;

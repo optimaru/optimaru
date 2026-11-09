@@ -33,7 +33,7 @@ target_link_libraries(mnt_test PRIVATE mnt_core)
 target_compile_options(mnt_test PRIVATE -Wall -Wextra)
 
 # Plugin-assembly path (mnt/constraints.hpp): the same provider decomposed
-# into one component each on the engine's DecomposedScoreCalculator, checked
+# into one component each on the engine's DecomposedObjective, checked
 # bit-for-bit against the monolithic calculators.
 add_executable(mnt_plugin_test test/mnt_plugin_test.cpp)
 target_link_libraries(mnt_plugin_test PRIVATE mnt_core)

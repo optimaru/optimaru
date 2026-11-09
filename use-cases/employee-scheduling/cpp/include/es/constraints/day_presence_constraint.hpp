@@ -12,7 +12,7 @@ namespace es {
 struct DayPresenceConstraint : EsUnitConstraint {
     DayPresenceConstraint(std::string name, double weight, optimaru::Level level)
         : EsUnitConstraint(std::move(name), weight, level) {}
-    void onReset(const EmployeeSchedule& s) override {
+    void on_reset(const EmployeeSchedule& s) override {
         horizon_ = 0;
         day_.resize(s.shifts.size());
         for (std::size_t i = 0; i < s.shifts.size(); ++i) {

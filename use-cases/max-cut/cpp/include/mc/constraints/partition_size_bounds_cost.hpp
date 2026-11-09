@@ -26,7 +26,7 @@ struct PartitionSizeBoundsCost final : McUnitConstraint
     {
     }
 
-    void onReset(const MaxCutProblem &problem) override
+    void on_reset(const MaxCutProblem &problem) override
     {
         detail::requirePrepared(problem);
     }
@@ -34,7 +34,7 @@ struct PartitionSizeBoundsCost final : McUnitConstraint
     double cost(const MaxCutProblem &problem, int /*unit*/, const std::vector<int> &members) const override
     {
         const int n = static_cast<int>(members.size());
-        return static_cast<double>(std::max(0, problem.minSize() - n) + std::max(0, n - problem.maxSize()));
+        return static_cast<double>(std::max(0, problem.minSize() - n) + std::max(0, n - problem.max_size()));
     }
 };
 

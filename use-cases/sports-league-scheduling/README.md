@@ -23,7 +23,7 @@ every match (`Match`) of the league (one BASIC variable: `Match::round`).
 
 ```sh
 cd cpp && cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j4
-./build/sls_test         # constraint hand checks + incremental==full over 3000 moves + FULL_ASSERT solve
+./build/sls_test         # constraint hand checks + incremental==full over 3000 moves + ScoreChecks::Full solve
 ./build/sls_plugin_test  # plugin assembly == monolith, raw costs by hand, catalog, overrides
 ./build/sls_demo 10      # reproduces the Java demo (14 teams/32 rounds/182 matches), 10 s solve, checks 0hard
 
@@ -32,8 +32,8 @@ cd ../python && uv venv && uv pip install -e . pytest pydantic && uv run pytest 
 
 ## Score mapping
 
-The Java original already uses `HardSoftScore`, so it maps identically onto the engine's
-`HardSoftScore(int64 hard, double soft)` (soft stored as an integer value in the double).
+The Java original already uses `Score`, so it maps identically onto the engine's
+`Score(int64 hard, double soft)` (soft stored as an integer value in the double).
 The 10 constraints have the same semantics as Java `SportsLeagueSchedulingConstraintProvider`
 (more detail in `python/README.md` and the comments in `cpp/include/sls/
 score_calculator.hpp`):
@@ -142,12 +142,12 @@ engine is `cpp/include/sls/solver.hpp` + `cpp/src/solver.cpp`.
 
 **Adding a move.** The engine already mixes change / swap moves
 (weights in `Solver::Config`). This use case relies on the engine's generic moves only; it has no domain move yet. A new move is a
-`optimaru::MoveOperator<…>` registered with `engine.addMoveOperator(...)` next
+`optimaru::MoveOperator<…>` registered with `engine.add_move_operator(...)` next
 to the engine construction in `cpp/src/solver.cpp`; a ruin for LNS is a
-`RuinOperator` registered with `engine.addRuinOperator(...)`.
+`RuinOperator` registered with `engine.add_ruin_operator(...)`.
 
 **Changing the construction heuristic.** Entities are placed in index order (First Fit). Set
-`engineConfig.constructionHeuristic.entityDifficulty` for First Fit
+`engineConfig.construction.difficulty` for First Fit
 Decreasing ordering, or pre-assign part of the solution in the domain
 solver's `solve` before the engine runs — the engine only fills what is still unassigned.
 

@@ -9,8 +9,8 @@
 
 #include "ms/incremental_calculator.hpp"
 #include "ms/score_calculator.hpp"
-#include "optimaru/api/solver/solver_factory.hpp"
-#include "optimaru/config/solver/solver_config.hpp"
+#include "optimaru/solver.hpp"
+#include "optimaru/settings.hpp"
 
 namespace ms
 {
@@ -65,40 +65,40 @@ namespace
 void runEngine(
     const Solver::Config &config,
     MeetingSchedule &schedule,
-    optimaru::IncrementalScoreCalculator<MeetingSchedule> &calculator,
-    int multiStartCount)
+    optimaru::Objective<MeetingSchedule> &calculator,
+    int parallel_starts)
 {
-    optimaru::SolverConfig engineConfig;
-    engineConfig.randomSeed = config.randomSeed;
-    engineConfig.environmentMode = config.environmentMode;
-    engineConfig.onNewBest = config.onNewBest;
-    engineConfig.termination.spentLimit = config.spentLimit;
-    engineConfig.termination.bestScoreLimit = config.bestScoreLimit;
-    engineConfig.termination.unimprovedSpentLimit = config.unimprovedSpentLimit;
-    engineConfig.termination.stepCountLimit = config.stepCountLimit;
-    engineConfig.termination.unimprovedStepCountLimit
-        = config.unimprovedStepCountLimit;
-    // lateAcceptanceSize 0 = auto-scale with the instance (see Config).
-    engineConfig.localSearch.acceptor.lateAcceptanceSize
-        = config.lateAcceptanceSize != 0
-              ? config.lateAcceptanceSize
+    optimaru::Settings engineConfig;
+    engineConfig.seed = config.seed;
+    engineConfig.score_checks = config.score_checks;
+    engineConfig.on_new_best = config.on_new_best;
+    engineConfig.limits.time_limit = config.time_limit;
+    engineConfig.limits.target_score = config.target_score;
+    engineConfig.limits.stall_time_limit = config.stall_time_limit;
+    engineConfig.limits.step_limit = config.step_limit;
+    engineConfig.limits.stall_step_limit
+        = config.stall_step_limit;
+    // history_length 0 = auto-scale with the instance (see Config).
+    engineConfig.search.acceptance.history_length
+        = config.history_length != 0
+              ? config.history_length
               : std::clamp<std::size_t>(
                     128 * schedule.meetingAssignments.size(), 3200, 6400);
-    engineConfig.localSearch.moveSelector.changeMoveWeight
-        = config.changeMoveWeight;
-    engineConfig.localSearch.moveSelector.swapMoveWeight
-        = config.swapMoveWeight;
-    auto &lns = engineConfig.localSearch.ruinRecreate;
-    lns.enabled = config.ruinRecreate;
-    lns.unimprovedStepTrigger = config.ruinRecreateUnimprovedStepTrigger;
-    lns.minRuinFraction = config.ruinRecreateMinRuinFraction;
-    lns.maxRuinFraction = config.ruinRecreateMaxRuinFraction;
-    lns.maxRuinCount = config.ruinRecreateMaxRuinCount;
-    lns.operatorDecay = config.ruinRecreateOperatorDecay;
+    engineConfig.search.moves.change_weight
+        = config.change_weight;
+    engineConfig.search.moves.swap_weight
+        = config.swap_weight;
+    auto &lns = engineConfig.search.ruin_recreate;
+    lns.enabled = config.ruin_recreate;
+    lns.unimproved_step_trigger = config.ruinRecreateUnimprovedStepTrigger;
+    lns.min_ruin_fraction = config.ruinRecreateMinRuinFraction;
+    lns.max_ruin_fraction = config.ruinRecreateMaxRuinFraction;
+    lns.max_ruin_count = config.ruinRecreateMaxRuinCount;
+    lns.operator_decay = config.ruinRecreateOperatorDecay;
     lns.rewards = config.ruinRecreateRewards;
-    lns.polishSteps = config.ruinRecreatePolishSteps;
-    lns.asMoveWeight = config.ruinRecreateAsMoveWeight;
-    lns.asMoveMaxRuin = config.ruinRecreateAsMoveMaxRuin;
+    lns.polish_steps = config.ruinRecreatePolishSteps;
+    lns.as_move_weight = config.ruinRecreateAsMoveWeight;
+    lns.as_move_max_ruin = config.ruinRecreateAsMoveMaxRuin;
 
     // Guided value selection over the composite (grain x room) value range:
     // with probability dayFitValueProbability a change move draws its start
@@ -121,7 +121,7 @@ void runEngine(
         const double dayFitProbability = config.dayFitValueProbability;
         const MeetingSchedule *working = &schedule;
         const std::vector<std::vector<int>> *starts = &dayFitStarts;
-        engineConfig.localSearch.valueRecommender
+        engineConfig.search.value_hint
             = [working, starts, dayFitProbability](std::mt19937_64 &rng,
                                                    int assignmentIndex) -> int
         {
@@ -139,10 +139,9 @@ void runEngine(
         };
     }
 
-    engineConfig.multiStartCount = multiStartCount;
-    auto engine = optimaru::SolverFactory<MeetingSchedule>::create(
-                      std::move(engineConfig))
-                      .buildSolver();
+    engineConfig.parallel_starts = parallel_starts;
+    auto engine = optimaru::Solver<MeetingSchedule>(
+                      std::move(engineConfig));
     engine.solve(schedule, calculator);
 }
 
@@ -153,7 +152,7 @@ void Solver::solve(MeetingSchedule &schedule)
     ScoreCalculator::prepare(schedule);  // build the derived tables
     if (schedule.meetingAssignments.empty() || schedule.grainRoomCount() == 0)
     {
-        ScoreCalculator::calculateScore(schedule);
+        ScoreCalculator::score(schedule);
         return;
     }
     if (config_.ruinRecreateRewards.size() != 4)
@@ -169,12 +168,12 @@ void Solver::solve(MeetingSchedule &schedule)
               std::max(1, config_.parallelSolverCount));
 
     // The authoritative final score: a full recompute on the best solution.
-    schedule.score = ScoreCalculator::calculateScore(schedule);
+    schedule.score = ScoreCalculator::score(schedule);
 }
 
 void Solver::solve(
     MeetingSchedule &schedule,
-    optimaru::DecomposedScoreCalculator<MeetingSchedule> &calculator)
+    optimaru::DecomposedObjective<MeetingSchedule> &calculator)
 {
     ScoreCalculator::prepare(schedule);
     if (config_.ruinRecreateRewards.size() != 4)
@@ -191,9 +190,9 @@ void Solver::solve(
 
     // Score the final solution with the caller's constraint assembly (custom
     // weights included) and leave the calculator primed on it, so
-    // constraintTotals() explains exactly this score.
-    calculator.resetWorkingSolution(schedule);
-    schedule.score = calculator.calculateScore();
+    // constraint_totals() explains exactly this score.
+    calculator.rebuild(schedule);
+    schedule.score = calculator.score();
 }
 
 }  // namespace ms

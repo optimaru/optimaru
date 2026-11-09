@@ -24,7 +24,7 @@ for i, job in enumerate(schedule.jobs):
     print(job.name, crew.name, schedule.job_start_date(i), schedule.job_end_date(i))
 ```
 
-Score (HardSoftScore), at the default weights:
+Score, at the default weights:
 
 - hard = -(`min_start_date_cost` + `max_end_date_cost` + `crew_conflict_cost`), each x1
 - soft = -(`before_ideal_end_date_cost` x1 + `after_ideal_end_date_cost` x1,000,000 +

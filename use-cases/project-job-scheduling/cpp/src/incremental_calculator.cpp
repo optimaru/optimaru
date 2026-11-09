@@ -33,18 +33,18 @@ inline std::int64_t overCapacity(std::int64_t used, int capacity)
 }
 }  // namespace
 
-void ProjectJobSchedulingIncrementalScoreCalculator::resetWorkingSolution(
-    ProjectJobSchedule &workingSolution)
+void ProjectJobSchedulingIncrementalScoreCalculator::rebuild(
+    ProjectJobSchedule &solution)
 {
-    schedule_ = &workingSolution;
-    ScoreCalculator::prepare(workingSolution);
+    schedule_ = &solution;
+    ScoreCalculator::prepare(solution);
     // The full recompute is the semantic reference; reuse it to derive the
     // dates, then rebuild the internal aggregates from scratch.
-    ScoreCalculator::updateDates(workingSolution);
+    ScoreCalculator::updateDates(solution);
 
-    const int allocationCount = workingSolution.allocationCount();
+    const int allocationCount = solution.allocationCount();
     const int resourceCount
-        = static_cast<int>(workingSolution.resources.size());
+        = static_cast<int>(solution.resources.size());
 
     assign_.assign(allocationCount, -1);
     modeIdx_.assign(allocationCount, -1);
@@ -63,38 +63,38 @@ void ProjectJobSchedulingIncrementalScoreCalculator::resetWorkingSolution(
     touched_.reserve(allocationCount);
     topologicalPosition_.assign(allocationCount, 0);
     for (int pos = 0;
-         pos < static_cast<int>(workingSolution.topologicalOrder.size());
+         pos < static_cast<int>(solution.topologicalOrder.size());
          ++pos)
     {
-        topologicalPosition_[workingSolution.topologicalOrder[pos]] = pos;
+        topologicalPosition_[solution.topologicalOrder[pos]] = pos;
     }
 
     for (int a = 0; a < allocationCount; ++a)
     {
-        const Allocation &allocation = workingSolution.allocations[a];
+        const Allocation &allocation = solution.allocations[a];
         const int value = allocation.modeDelay;
         assign_[a] = value;
         modeIdx_[a] = value < 0
                           ? -1
-                          : workingSolution.executionModeIndexOfValue(a, value);
+                          : solution.executionModeIndexOfValue(a, value);
         start_[a] = allocation.startDate;
         end_[a] = allocation.endDate;
         applyNonRenewable(a, modeIdx_[a], +1);
         applyRenewable(a, modeIdx_[a], start_[a], end_[a], +1);
-        if (workingSolution.jobTypeOf(a) == JobType::SINK)
+        if (solution.jobTypeOf(a) == JobType::SINK)
         {
             mediumTotal_ += std::max(
-                0, end_[a] - workingSolution.projectCriticalPathEndDateOf(a));
+                0, end_[a] - solution.projectCriticalPathEndDateOf(a));
             sinkAllocations_.push_back(a);
         }
     }
 }
 
-void ProjectJobSchedulingIncrementalScoreCalculator::beforeVariableChanged(
+void ProjectJobSchedulingIncrementalScoreCalculator::before_assign(
     int /*allocationIndex*/)
 {
     // All bookkeeping diffs against the recorded state in
-    // afterVariableChanged; nothing to retract here.
+    // after_assign; nothing to retract here.
 }
 
 void ProjectJobSchedulingIncrementalScoreCalculator::applyRenewable(
@@ -170,7 +170,7 @@ int ProjectJobSchedulingIncrementalScoreCalculator::predecessorsDoneDate(
     return doneDate;
 }
 
-void ProjectJobSchedulingIncrementalScoreCalculator::afterVariableChanged(
+void ProjectJobSchedulingIncrementalScoreCalculator::after_assign(
     int allocationIndex)
 {
     ProjectJobSchedule &schedule = *schedule_;
@@ -272,8 +272,8 @@ void ProjectJobSchedulingIncrementalScoreCalculator::afterVariableChanged(
     touched_.clear();
 }
 
-optimaru::HardSoftScore
-ProjectJobSchedulingIncrementalScoreCalculator::calculateScore()
+optimaru::Score
+ProjectJobSchedulingIncrementalScoreCalculator::score()
 {
     std::int64_t makespan = 0;
     for (int s : sinkAllocations_)

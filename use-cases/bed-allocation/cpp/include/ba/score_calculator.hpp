@@ -10,8 +10,8 @@ namespace ba
 
 // Port of the reference bed-allocation BedAllocationConstraintProvider.
 //
-// calculateScore does a full recompute — the reference the incremental
-// calculator is checked against (in the tests and under FULL_ASSERT).
+// score does a full recompute — the reference the incremental
+// calculator is checked against (in the tests and under ScoreChecks::Full).
 //
 // Constraints (HardMediumSoftScore; every one penalizes stay-nights), the
 // default assembly of ba/constraints.hpp at the components' kDefaultWeight
@@ -64,18 +64,18 @@ class ScoreCalculator
 {
 public:
     // Full recompute; also stores plan.score.
-    static Score calculateScore(BedPlan &plan);
+    static Score score(BedPlan &plan);
 
     // The same recompute in the engine's score type (see toEngineScore).
-    static optimaru::HardSoftScore calculateEngineScore(BedPlan &plan)
+    static optimaru::Score calculateEngineScore(BedPlan &plan)
     {
-        return toEngineScore(calculateScore(plan));
+        return toEngineScore(score(plan));
     }
 
     // Interns the equipment names into dense ids, flattens the room
     // equipment table and resolves each stay's specialty priority per
     // department. Idempotent (guarded by BedPlan::prepared). Must run before
-    // scoring; calculateScore/solve call it.
+    // scoring; score/solve call it.
     static void prepare(BedPlan &plan);
 
     // --- shared building blocks (positive penalty units) ---

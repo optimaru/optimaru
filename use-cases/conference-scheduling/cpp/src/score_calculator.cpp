@@ -548,7 +548,7 @@ ScoreCalculator::breakdownOfPrepared(const ConferenceSchedule &schedule)
     return b;
 }
 
-Score ScoreCalculator::calculateScore(ConferenceSchedule &schedule)
+Score ScoreCalculator::score(ConferenceSchedule &schedule)
 {
     const Score score = computeBreakdown(schedule).toScore();
     schedule.score = score;

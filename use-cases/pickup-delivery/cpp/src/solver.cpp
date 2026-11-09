@@ -13,10 +13,10 @@
 
 #include "pdp/incremental_calculator.hpp"
 #include "pdp/score_calculator.hpp"
-#include "optimaru/api/solver/solver.hpp"
-#include "optimaru/config/solver/solver_config.hpp"
-#include "optimaru/impl/solver/worker_threads.hpp"
-#include "optimaru/preview/api/move/operators.hpp"
+#include "optimaru/solver.hpp"
+#include "optimaru/settings.hpp"
+#include "optimaru/worker_threads.hpp"
+#include "optimaru/search/operators.hpp"
 
 namespace pdp
 {
@@ -24,7 +24,7 @@ namespace pdp
 namespace
 {
 
-using Descriptor = optimaru::SolutionDescriptor<PdpRoutePlan>;
+using Descriptor = optimaru::SolutionTraits<PdpRoutePlan>;
 
 // Whether a request's coupling rules currently hold, read from the engine's
 // live element index (O(1), no scoring).
@@ -32,16 +32,16 @@ bool pairIntact(const PdpRoutePlan &plan,
                 const optimaru::OperatorContext<PdpRoutePlan> &ctx,
                 const Delivery &delivery)
 {
-    const int pool = Descriptor::unassignedList(plan);
-    const int pickupList = ctx.elementList[delivery.pickupNodeIndex];
-    const int dropoffList = ctx.elementList[delivery.dropoffNodeIndex];
+    const int pool = Descriptor::unassigned_list(plan);
+    const int pickupList = ctx.element_list[delivery.pickupNodeIndex];
+    const int dropoffList = ctx.element_list[delivery.dropoffNodeIndex];
     if (pickupList != dropoffList)
         return false;
     if (pickupList == pool)
         return true;  // both parked: a dropped request is coupled, just
                       // unrouted
-    return ctx.elementPosition[delivery.pickupNodeIndex]
-           < ctx.elementPosition[delivery.dropoffNodeIndex];
+    return ctx.element_position[delivery.pickupNodeIndex]
+           < ctx.element_position[delivery.dropoffNodeIndex];
 }
 
 // ---------------------------------------------------------------------------
@@ -80,12 +80,12 @@ public:
                std::mt19937_64 &rng,
                std::vector<int> &entities) override
     {
-        PdpRoutePlan &plan = ctx.director.workingSolution();
+        PdpRoutePlan &plan = ctx.editor.solution();
         const int deliveryCount = static_cast<int>(plan.deliveries.size());
         const int vehicleCount = static_cast<int>(plan.vehicles.size());
         if (deliveryCount == 0 || vehicleCount == 0)
             return false;
-        const int pool = Descriptor::unassignedList(plan);
+        const int pool = Descriptor::unassigned_list(plan);
 
         std::uniform_real_distribution<double> unit(0.0, 1.0);
 
@@ -133,8 +133,8 @@ public:
         int dropoffAnchor = -1;
         int greedyPickupPos = -1;
         int greedyDropoffPos = -1;
-        const bool currentlyPooled = ctx.elementList[pickup] == pool
-                                     && ctx.elementList[dropoff] == pool;
+        const bool currentlyPooled = ctx.element_list[pickup] == pool
+                                     && ctx.element_list[dropoff] == pool;
 
         if (currentlyPooled)
         {
@@ -163,7 +163,7 @@ public:
                           : routedNeighbor(ctx, plan, pickup, pool, rng);
                 if (pickupAnchor >= 0)
                 {
-                    target = ctx.elementList[pickupAnchor];
+                    target = ctx.element_list[pickupAnchor];
                     // A neighbour of the dropoff sitting in the SAME route is
                     // the natural place for the second stop.
                     const int candidate
@@ -183,23 +183,23 @@ public:
 
         // Save every list we are about to touch, for the undo.
         saved_.clear();
-        save(plan, ctx.elementList[pickup]);
-        save(plan, ctx.elementList[dropoff]);
+        save(plan, ctx.element_list[pickup]);
+        save(plan, ctx.element_list[dropoff]);
         save(plan, target);
 
         // Detach both stops, then re-insert them together.
         removeNode(ctx, plan, pickup);
         removeNode(ctx, plan, dropoff);
 
-        const std::vector<int> &targetList = Descriptor::listOf(plan, target);
+        const std::vector<int> &targetList = Descriptor::list_of(plan, target);
         const int targetSize = static_cast<int>(targetList.size());
         if (target == pool)
         {
             // Order is meaningless in the pool; append both.
-            ctx.director.beginListChange(target);
-            Descriptor::insertElement(plan, target, targetSize, pickup);
-            Descriptor::insertElement(plan, target, targetSize + 1, dropoff);
-            ctx.director.endListChange(target);
+            ctx.editor.begin_list_edit(target);
+            Descriptor::insert_element(plan, target, targetSize, pickup);
+            Descriptor::insert_element(plan, target, targetSize + 1, dropoff);
+            ctx.editor.end_list_edit(target);
         }
         else
         {
@@ -240,10 +240,10 @@ public:
                 // at or after pickupPos one place to the right.
                 ++dropoffPos;
             }
-            ctx.director.beginListChange(target);
-            Descriptor::insertElement(plan, target, pickupPos, pickup);
-            Descriptor::insertElement(plan, target, dropoffPos, dropoff);
-            ctx.director.endListChange(target);
+            ctx.editor.begin_list_edit(target);
+            Descriptor::insert_element(plan, target, pickupPos, pickup);
+            Descriptor::insert_element(plan, target, dropoffPos, dropoff);
+            ctx.editor.end_list_edit(target);
         }
 
         entities.push_back(pickup);
@@ -251,14 +251,14 @@ public:
         return true;
     }
 
-    void undoLast(optimaru::OperatorContext<PdpRoutePlan> &ctx) override
+    void undo_last(optimaru::OperatorContext<PdpRoutePlan> &ctx) override
     {
-        PdpRoutePlan &plan = ctx.director.workingSolution();
+        PdpRoutePlan &plan = ctx.editor.solution();
         for (const auto &[listIndex, contents] : saved_)
         {
-            ctx.director.beginListChange(listIndex);
-            Descriptor::listOf(plan, listIndex) = contents;
-            ctx.director.endListChange(listIndex);
+            ctx.editor.begin_list_edit(listIndex);
+            Descriptor::list_of(plan, listIndex) = contents;
+            ctx.editor.end_list_edit(listIndex);
         }
         saved_.clear();
     }
@@ -393,7 +393,7 @@ private:
         for (std::size_t i = 0; i < neighbors.size(); ++i)
         {
             const int candidate = neighbors[(start + i) % neighbors.size()];
-            const int list = ctx.elementList[candidate];
+            const int list = ctx.element_list[candidate];
             if (list < 0 || list == pool)
                 continue;
             if (candidate == node || candidate == plan.partnerOf(node))
@@ -418,7 +418,7 @@ private:
         for (std::size_t i = 0; i < neighbors.size(); ++i)
         {
             const int candidate = neighbors[(start + i) % neighbors.size()];
-            if (ctx.elementList[candidate] != list)
+            if (ctx.element_list[candidate] != list)
                 continue;
             if (candidate == node || candidate == plan.partnerOf(node))
                 continue;
@@ -446,25 +446,25 @@ private:
             if (entry.first == listIndex)
                 return;  // already saved
         }
-        saved_.emplace_back(listIndex, Descriptor::listOf(plan, listIndex));
+        saved_.emplace_back(listIndex, Descriptor::list_of(plan, listIndex));
     }
 
-    // Removes a node from whichever list holds it, through the director so the
+    // Removes a node from whichever list holds it, through the editor so the
     // calculator sees the change.
     static void removeNode(optimaru::OperatorContext<PdpRoutePlan> &ctx,
                            PdpRoutePlan &plan,
                            int node)
     {
-        const int listIndex = ctx.elementList[node];
+        const int listIndex = ctx.element_list[node];
         if (listIndex < 0)
             return;
-        std::vector<int> &list = Descriptor::listOf(plan, listIndex);
+        std::vector<int> &list = Descriptor::list_of(plan, listIndex);
         const auto at = std::find(list.begin(), list.end(), node);
         if (at == list.end())
             return;  // already removed (pickup and dropoff share a list)
-        ctx.director.beginListChange(listIndex);
+        ctx.editor.begin_list_edit(listIndex);
         list.erase(at);
-        ctx.director.endListChange(listIndex);
+        ctx.editor.end_list_edit(listIndex);
     }
 
     double repairProbability_;
@@ -551,10 +551,10 @@ public:
                std::mt19937_64 &rng,
                std::vector<int> &entities) override
     {
-        PdpRoutePlan &plan = ctx.director.workingSolution();
+        PdpRoutePlan &plan = ctx.editor.solution();
         if (plan.deliveries.size() < 2)
             return false;
-        const int pool = Descriptor::unassignedList(plan);
+        const int pool = Descriptor::unassigned_list(plan);
         for (int attempt = 0; attempt < 12; ++attempt)
         {
             const int a = static_cast<int>(rng() % plan.deliveries.size());
@@ -563,20 +563,20 @@ public:
                 continue;
             const Delivery &da = plan.deliveries[static_cast<std::size_t>(a)];
             const Delivery &db = plan.deliveries[static_cast<std::size_t>(b)];
-            const int listA = ctx.elementList[da.pickupNodeIndex];
-            const int listB = ctx.elementList[db.pickupNodeIndex];
+            const int listA = ctx.element_list[da.pickupNodeIndex];
+            const int listB = ctx.element_list[db.pickupNodeIndex];
             if (listA < 0 || listB < 0 || listA == listB || listA == pool
                 || listB == pool || !pairIntact(plan, ctx, da)
                 || !pairIntact(plan, ctx, db))
                 continue;
 
             saved_.clear();
-            saved_.emplace_back(listA, Descriptor::listOf(plan, listA));
-            saved_.emplace_back(listB, Descriptor::listOf(plan, listB));
-            const int pickupPosA = ctx.elementPosition[da.pickupNodeIndex];
-            const int dropoffPosA = ctx.elementPosition[da.dropoffNodeIndex];
-            const int pickupPosB = ctx.elementPosition[db.pickupNodeIndex];
-            const int dropoffPosB = ctx.elementPosition[db.dropoffNodeIndex];
+            saved_.emplace_back(listA, Descriptor::list_of(plan, listA));
+            saved_.emplace_back(listB, Descriptor::list_of(plan, listB));
+            const int pickupPosA = ctx.element_position[da.pickupNodeIndex];
+            const int dropoffPosA = ctx.element_position[da.dropoffNodeIndex];
+            const int pickupPosB = ctx.element_position[db.pickupNodeIndex];
+            const int dropoffPosB = ctx.element_position[db.dropoffNodeIndex];
 
             erasePair(ctx, plan, listA, da);
             erasePair(ctx, plan, listB, db);
@@ -592,14 +592,14 @@ public:
         return false;
     }
 
-    void undoLast(optimaru::OperatorContext<PdpRoutePlan> &ctx) override
+    void undo_last(optimaru::OperatorContext<PdpRoutePlan> &ctx) override
     {
-        PdpRoutePlan &plan = ctx.director.workingSolution();
+        PdpRoutePlan &plan = ctx.editor.solution();
         for (const auto &[list, contents] : saved_)
         {
-            ctx.director.beginListChange(list);
-            Descriptor::listOf(plan, list) = contents;
-            ctx.director.endListChange(list);
+            ctx.editor.begin_list_edit(list);
+            Descriptor::list_of(plan, list) = contents;
+            ctx.editor.end_list_edit(list);
         }
         saved_.clear();
     }
@@ -610,15 +610,15 @@ private:
                           int list,
                           const Delivery &delivery)
     {
-        ctx.director.beginListChange(list);
-        auto &route = Descriptor::listOf(plan, list);
+        ctx.editor.begin_list_edit(list);
+        auto &route = Descriptor::list_of(plan, list);
         route.erase(
             std::remove(route.begin(), route.end(), delivery.pickupNodeIndex),
             route.end());
         route.erase(
             std::remove(route.begin(), route.end(), delivery.dropoffNodeIndex),
             route.end());
-        ctx.director.endListChange(list);
+        ctx.editor.end_list_edit(list);
     }
 
     static void insertPair(optimaru::OperatorContext<PdpRoutePlan> &ctx,
@@ -628,17 +628,17 @@ private:
                            int pickupPosition,
                            int dropoffPosition)
     {
-        auto &route = Descriptor::listOf(plan, list);
+        auto &route = Descriptor::list_of(plan, list);
         const int p
             = std::clamp(pickupPosition, 0, static_cast<int>(route.size()));
         // Preserve roughly the replaced request's span while guaranteeing
         // strict pickup-before-dropoff after the first insertion shifts it.
         const int d = std::clamp(
             dropoffPosition, p + 1, static_cast<int>(route.size()) + 1);
-        ctx.director.beginListChange(list);
+        ctx.editor.begin_list_edit(list);
         route.insert(route.begin() + p, delivery.pickupNodeIndex);
         route.insert(route.begin() + d, delivery.dropoffNodeIndex);
-        ctx.director.endListChange(list);
+        ctx.editor.end_list_edit(list);
     }
 
     std::vector<std::pair<int, std::vector<int>>> saved_;
@@ -661,11 +661,11 @@ class PairRuin final : public optimaru::RuinOperator<PdpRoutePlan>
 public:
     const char *name() const override { return "pairRuin"; }
 
-    std::vector<int> selectRuinSet(optimaru::OperatorContext<PdpRoutePlan> &ctx,
+    std::vector<int> select_ruin_set(optimaru::OperatorContext<PdpRoutePlan> &ctx,
                                    int ruinCount,
                                    std::mt19937_64 &rng) override
     {
-        const PdpRoutePlan &plan = ctx.director.workingSolution();
+        const PdpRoutePlan &plan = ctx.editor.solution();
         const int nodeCount = static_cast<int>(plan.nodes.size());
         if (nodeCount == 0)
             return {};
@@ -734,7 +734,7 @@ void solveInParallel(const Solver::Config &config,
     auto stop = std::make_shared<std::atomic<bool>>(false);
     // A worker that cannot be started (std::system_error) stops and joins
     // the ones already running before the error is rethrown here.
-    optimaru::runWorkerThreads(
+    optimaru::run_worker_threads(
         workerCount, *stop,
         [&config, &candidates, &failures, &stop](int i)
         {
@@ -742,10 +742,10 @@ void solveInParallel(const Solver::Config &config,
             {
                 Solver::Config workerConfig = config;
                 workerConfig.parallelSolverCount = 1;
-                workerConfig.stopFlag = stop;
-                workerConfig.randomSeed += static_cast<std::uint64_t>(i);
+                workerConfig.stop_flag = stop;
+                workerConfig.seed += static_cast<std::uint64_t>(i);
                 if (i != 0)
-                    workerConfig.onNewBest = nullptr;
+                    workerConfig.on_new_best = nullptr;
                 Solver(std::move(workerConfig))
                     .solve(candidates[static_cast<std::size_t>(i)]);
             }
@@ -797,30 +797,30 @@ void checkRequiredVehicles(const PdpRoutePlan &plan)
 // acceptance, the LIST move mix, the ALNS knobs and the driving-time nearby
 // selection (all pure problem-fact lookups, so they apply to the plugin path
 // too).
-optimaru::SolverConfig buildEngineConfig(const Solver::Config &config,
+optimaru::Settings buildEngineConfig(const Solver::Config &config,
                                          const PdpRoutePlan &plan)
 {
-    optimaru::SolverConfig engineConfig;
-    engineConfig.randomSeed = config.randomSeed;
-    engineConfig.environmentMode = config.environmentMode;
-    engineConfig.multiStartCount = 1;
-    if (config.onNewBest)
+    optimaru::Settings engineConfig;
+    engineConfig.seed = config.seed;
+    engineConfig.score_checks = config.score_checks;
+    engineConfig.parallel_starts = 1;
+    if (config.on_new_best)
     {
-        auto callback = config.onNewBest;
-        engineConfig.onNewBest =
-            [callback](std::int64_t step, const optimaru::HardSoftScore &score)
+        auto callback = config.on_new_best;
+        engineConfig.on_new_best =
+            [callback](std::int64_t step, const optimaru::Score &score)
         { callback(step, fromEngineScore(score)); };
     }
 
-    engineConfig.termination.spentLimit = config.spentLimit;
-    if (config.bestScoreLimit.medium
+    engineConfig.limits.time_limit = config.time_limit;
+    if (config.target_score.medium
         != std::numeric_limits<std::int64_t>::max())
-        engineConfig.termination.bestScoreLimit
-            = toEngineScoreLimit(config.bestScoreLimit);
-    engineConfig.termination.unimprovedSpentLimit = config.unimprovedSpentLimit;
-    engineConfig.termination.stepCountLimit = config.stepCountLimit;
-    engineConfig.termination.unimprovedStepCountLimit
-        = config.unimprovedStepCountLimit;
+        engineConfig.limits.target_score
+            = toEngineScoreLimit(config.target_score);
+    engineConfig.limits.stall_time_limit = config.stall_time_limit;
+    engineConfig.limits.step_limit = config.step_limit;
+    engineConfig.limits.stall_step_limit
+        = config.stall_step_limit;
 
     // Construction order: place a request's pickup right before its dropoff by
     // giving the pair adjacent difficulty, tightest window first. The stops are
@@ -830,7 +830,7 @@ optimaru::SolverConfig buildEngineConfig(const Solver::Config &config,
     if (config.firstFitDecreasing)
     {
         const PdpRoutePlan *facts = &plan;
-        engineConfig.constructionHeuristic.entityDifficulty
+        engineConfig.construction.difficulty
             = [facts](int nodeIndex)
         {
             const Node &node
@@ -847,53 +847,53 @@ optimaru::SolverConfig buildEngineConfig(const Solver::Config &config,
         };
     }
 
-    auto &acceptor = engineConfig.localSearch.acceptor;
-    acceptor.acceptorType = config.acceptorType;
-    acceptor.lateAcceptanceSize
-        = config.lateAcceptanceSize != 0
-              ? config.lateAcceptanceSize
+    auto &acceptor = engineConfig.search.acceptance;
+    acceptor.rule = config.rule;
+    acceptor.history_length
+        = config.history_length != 0
+              ? config.history_length
               : (plan.nodes.size() > 60
                      ? 5
                      : std::clamp<std::size_t>(
                            4 * plan.nodes.size(), 200, 1600));
-    acceptor.recordToRecordTravelStartGap = config.recordToRecordStartGap;
-    acceptor.recordToRecordTravelEndGap = config.recordToRecordEndGap;
+    acceptor.rrt_start_gap = config.recordToRecordStartGap;
+    acceptor.rrt_end_gap = config.recordToRecordEndGap;
 
-    auto &moves = engineConfig.localSearch.moveSelector;
-    moves.relocateMoveWeight = config.relocateMoveWeight;
-    moves.listSwapMoveWeight = config.listSwapMoveWeight;
-    moves.twoOptMoveWeight = config.twoOptMoveWeight;
-    moves.orOptMoveWeight = config.orOptMoveWeight;
-    moves.tailSwapMoveWeight = config.tailSwapMoveWeight;
-    moves.interExchangeMoveWeight = config.interExchangeMoveWeight;
-    moves.interExchangeMaxSegment = config.interExchangeMaxSegment;
+    auto &moves = engineConfig.search.moves;
+    moves.relocate_weight = config.relocate_weight;
+    moves.list_swap_weight = config.list_swap_weight;
+    moves.two_opt_weight = config.two_opt_weight;
+    moves.or_opt_weight = config.or_opt_weight;
+    moves.tail_swap_weight = config.tail_swap_weight;
+    moves.cross_exchange_weight = config.cross_exchange_weight;
+    moves.cross_exchange_max_run = config.cross_exchange_max_run;
 
-    auto &lns = engineConfig.localSearch.ruinRecreate;
-    lns.enabled = config.ruinRecreate;
-    lns.unimprovedStepTrigger = config.ruinRecreateUnimprovedStepTrigger;
-    lns.minRuinFraction = config.ruinRecreateMinRuinFraction;
-    lns.maxRuinFraction = config.ruinRecreateMaxRuinFraction;
-    lns.maxRuinCount = config.ruinRecreateMaxRuinCount;
-    lns.polishSteps = config.ruinRecreatePolishSteps;
-    lns.asMoveWeight = config.ruinRecreateAsMoveWeight;
-    lns.asMoveMaxRuin = config.ruinRecreateAsMoveMaxRuin;
-    engineConfig.localSearch.descentWeight = config.descentWeight;
-    engineConfig.localSearch.descentMaxSweeps = config.descentMaxSweeps;
-    engineConfig.localSearch.routeEliminationWeight
-        = config.routeEliminationWeight;
-    engineConfig.localSearch.routeEliminationMaxSize
-        = config.routeEliminationMaxSize;
-    lns.selectionType = config.ruinRecreateSelectionType;
-    lns.operatorDecay = config.ruinRecreateOperatorDecay;
+    auto &lns = engineConfig.search.ruin_recreate;
+    lns.enabled = config.ruin_recreate;
+    lns.unimproved_step_trigger = config.ruinRecreateUnimprovedStepTrigger;
+    lns.min_ruin_fraction = config.ruinRecreateMinRuinFraction;
+    lns.max_ruin_fraction = config.ruinRecreateMaxRuinFraction;
+    lns.max_ruin_count = config.ruinRecreateMaxRuinCount;
+    lns.polish_steps = config.ruinRecreatePolishSteps;
+    lns.as_move_weight = config.ruinRecreateAsMoveWeight;
+    lns.as_move_max_ruin = config.ruinRecreateAsMoveMaxRuin;
+    engineConfig.search.descent_weight = config.descent_weight;
+    engineConfig.search.descent_max_sweeps = config.descent_max_sweeps;
+    engineConfig.search.route_elimination_weight
+        = config.route_elimination_weight;
+    engineConfig.search.route_elimination_max_size
+        = config.route_elimination_max_size;
+    lns.selection_type = config.ruinRecreateSelectionType;
+    lns.operator_decay = config.ruinRecreateOperatorDecay;
     lns.rewards = config.ruinRecreateRewards;
-    lns.selectionSegmentLength = config.ruinRecreateSelectionSegmentLength;
-    lns.selectionAlpha = config.ruinRecreateSelectionAlpha;
-    lns.sisrRuin = config.sisrRuin;
-    lns.routeRuin = config.routeRuin;
-    lns.sisrMaxStringRemovals = config.sisrMaxStringRemovals;
-    lns.sisrMaxStringSize = config.sisrMaxStringSize;
-    lns.regretK = config.regretK;
-    lns.blinkRate = config.blinkRate;
+    lns.selection_segment_length = config.ruinRecreateSelectionSegmentLength;
+    lns.selection_alpha = config.ruinRecreateSelectionAlpha;
+    lns.sisr_ruin = config.sisr_ruin;
+    lns.route_ruin = config.route_ruin;
+    lns.sisr_max_string_removals = config.sisr_max_string_removals;
+    lns.sisr_max_string_size = config.sisr_max_string_size;
+    lns.regret_k = config.regret_k;
+    lns.blink_rate = config.blink_rate;
 
     if (config.drivingTimeNearby && plan.nodes.size() > 1)
     {
@@ -903,18 +903,18 @@ optimaru::SolverConfig buildEngineConfig(const Solver::Config &config,
             locationOfNode->push_back(node.locationIndex);
         auto matrix = std::make_shared<std::vector<std::vector<Seconds>>>(
             plan.drivingSeconds);
-        engineConfig.localSearch.nearby.distanceMeter
+        engineConfig.search.nearby.distance
             = [locationOfNode, matrix](int a, int b)
         {
             return static_cast<double>(
                 (*matrix)[static_cast<std::size_t>((*locationOfNode)[a])]
                          [static_cast<std::size_t>((*locationOfNode)[b])]);
         };
-        engineConfig.localSearch.nearby.size
+        engineConfig.search.nearby.size
             = std::max(1,
                        std::min(config.drivingTimeNearbySize,
                                 static_cast<int>(plan.nodes.size()) - 1));
-        engineConfig.localSearch.nearby.probability
+        engineConfig.search.nearby.probability
             = config.drivingTimeNearbyProbability;
     }
 
@@ -922,15 +922,15 @@ optimaru::SolverConfig buildEngineConfig(const Solver::Config &config,
 }
 
 // The domain Score of a plugin calculator, read from its three accumulators
-// (levelScores(), before the medium fold) rather than decoded from the folded
+// (level_scores(), before the medium fold) rather than decoded from the folded
 // engine soft, which would file a soft total of 10^9 or more under medium.
 Score levelScoreOf(
-    const optimaru::DecomposedScoreCalculator<PdpRoutePlan> &calculator)
+    const optimaru::DecomposedObjective<PdpRoutePlan> &calculator)
 {
-    const auto levels = calculator.levelScores();
+    const auto levels = calculator.level_scores();
     return {static_cast<std::int64_t>(levels.hard),
-            optimaru::roundScoreLevel(levels.medium, "medium"),
-            optimaru::roundScoreLevel(levels.soft, "soft")};
+            optimaru::round_score_level(levels.medium, "medium"),
+            optimaru::round_score_level(levels.soft, "soft")};
 }
 
 }  // namespace
@@ -946,7 +946,7 @@ void Solver::solve(PdpRoutePlan &plan)
 
     if (plan.vehicles.empty() || plan.nodes.empty())
     {
-        ScoreCalculator::calculateScore(plan);
+        ScoreCalculator::score(plan);
         return;
     }
     if (config_.ruinRecreateRewards.size() != 4)
@@ -962,29 +962,29 @@ void Solver::solve(PdpRoutePlan &plan)
         return;
     }
 
-    optimaru::SolverConfig engineConfig = buildEngineConfig(config_, plan);
+    optimaru::Settings engineConfig = buildEngineConfig(config_, plan);
     PdpIncrementalScoreCalculator calculator;
     optimaru::Solver<PdpRoutePlan> engine(std::move(engineConfig));
-    if (config_.stopFlag)
-        engine.adoptTerminateEarlyFlag(config_.stopFlag);
+    if (config_.stop_flag)
+        engine.share_stop_flag(config_.stop_flag);
     if (config_.pairMoves)
     {
-        engine.addMoveOperator(std::make_unique<PairRelocateMove>(
+        engine.add_move_operator(std::make_unique<PairRelocateMove>(
             config_.pairRepairProbability, config_.pairAssignmentProbability));
     }
     if (config_.pairExchangeMoves
         && static_cast<int>(plan.nodes.size()) >= config_.pairExchangeMinNodes)
-        engine.addMoveOperator(std::make_unique<PairExchangeMove>());
+        engine.add_move_operator(std::make_unique<PairExchangeMove>());
     if (config_.pairRuin)
-        engine.addRuinOperator(std::make_unique<PairRuin>());
+        engine.add_ruin_operator(std::make_unique<PairRuin>());
     engine.solve(plan, calculator);
 
-    plan.score = ScoreCalculator::calculateScore(plan);
+    plan.score = ScoreCalculator::score(plan);
 }
 
 void Solver::solve(
     PdpRoutePlan &plan,
-    optimaru::DecomposedScoreCalculator<PdpRoutePlan> &calculator)
+    optimaru::DecomposedObjective<PdpRoutePlan> &calculator)
 {
     checkRequiredVehicles(plan);
     if (config_.ruinRecreateRewards.size() != 4)
@@ -996,47 +996,47 @@ void Solver::solve(
         constructPairs(plan, config_.firstFitDecreasing);
     if (!plan.nodes.empty() && !plan.vehicles.empty())
     {
-        optimaru::SolverConfig engineConfig = buildEngineConfig(config_, plan);
-        if (config_.onNewBest)
+        optimaru::Settings engineConfig = buildEngineConfig(config_, plan);
+        if (config_.on_new_best)
         {
             // The engine reports a new best right after the working solution
             // became it, so the calculator's accumulators hold exactly that
             // solution: report its levels the same way as the final
             // plan.score below, not the decoded engine fold.
-            auto callback = config_.onNewBest;
-            engineConfig.onNewBest
+            auto callback = config_.on_new_best;
+            engineConfig.on_new_best
                 = [callback, &calculator](std::int64_t step,
-                                          const optimaru::HardSoftScore &)
+                                          const optimaru::Score &)
             { callback(step, levelScoreOf(calculator)); };
         }
         // The pair-aware operators only read the plan (which request a node
         // belongs to, where its partner sits), never the calculator, so the
         // plugin path keeps them — they are what makes a PDP search work.
         optimaru::Solver<PdpRoutePlan> engine(std::move(engineConfig));
-        if (config_.stopFlag)
-            engine.adoptTerminateEarlyFlag(config_.stopFlag);
+        if (config_.stop_flag)
+            engine.share_stop_flag(config_.stop_flag);
         if (config_.pairMoves)
         {
-            engine.addMoveOperator(std::make_unique<PairRelocateMove>(
+            engine.add_move_operator(std::make_unique<PairRelocateMove>(
                 config_.pairRepairProbability,
                 config_.pairAssignmentProbability));
         }
         if (config_.pairExchangeMoves
             && static_cast<int>(plan.nodes.size())
                    >= config_.pairExchangeMinNodes)
-            engine.addMoveOperator(std::make_unique<PairExchangeMove>());
+            engine.add_move_operator(std::make_unique<PairExchangeMove>());
         if (config_.pairRuin)
-            engine.addRuinOperator(std::make_unique<PairRuin>());
+            engine.add_ruin_operator(std::make_unique<PairRuin>());
         engine.solve(plan, calculator);
     }
 
     // Refresh the node shadow variables (vehicleIndex / arrivalTime) on the
     // best solution — the plugin components derive their own chain and never
     // write these — then score it with the caller's constraint assembly,
-    // leaving the calculator primed on it so constraintTotals() explains
+    // leaving the calculator primed on it so constraint_totals() explains
     // exactly this score.
     ScoreCalculator::updateShadowVariables(plan);
-    calculator.resetWorkingSolution(plan);
+    calculator.rebuild(plan);
     plan.score = levelScoreOf(calculator);
 }
 

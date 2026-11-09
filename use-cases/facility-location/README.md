@@ -14,7 +14,7 @@ The classic FLP: pick one facility for every consumer.
   count), so it is a plain problem fact.
 - Distance = `ceil(Euclidean degree distance x 111 km)` (Java `Location.getDistanceTo`).
 
-## Constraints (HardSoftScore — the engine score type as-is, no mapping)
+## Constraints (Score — the engine score type as-is, no mapping)
 
 | Constraint (Python name) | C++ component | Default level | Default weight | Raw cost per facility (0 = no violation) |
 |---|---|---|---|---|
@@ -60,7 +60,7 @@ fl.solve(problem, constraints=[
 
 ## cpp/
 
-- `include/fl/domain.hpp` — domain + `optimaru::SolutionDescriptor` specialization
+- `include/fl/domain.hpp` — domain + `optimaru::SolutionTraits` specialization
 - `include/fl/constraints/` — one component per constraint: `facility_capacity_cost.hpp`,
   `facility_setup_cost.hpp`, `distance_from_facility_cost.hpp` (+ `common.hpp`);
   `include/fl/constraints.hpp` assembles the default set (`defaultConstraints()`)
@@ -74,7 +74,7 @@ fl.solve(problem, constraints=[
 cd cpp
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j4
-./build/fl_test         # per-constraint hand checks + 3000 random moves incremental==full + FULL_ASSERT solve
+./build/fl_test         # per-constraint hand checks + 3000 random moves incremental==full + ScoreChecks::Full solve
 ./build/fl_plugin_test  # plugin assembly == monolith, raw costs by hand, catalog, overrides
 ./build/fl_demo 10   # 10 s solve; checks hard 0 + every consumer assigned (exit 0)
 ```
@@ -153,12 +153,12 @@ engine is `cpp/include/fl/solver.hpp` + `cpp/src/solver.cpp`.
 
 **Adding a move.** The engine already mixes change / swap moves
 (weights in `Solver::Config`). `CloseFacilityMove` (empties a facility by moving all its consumers) is defined and registered in `cpp/src/solver.cpp` (`runEngine`) — use it as the template. A new move is a
-`optimaru::MoveOperator<…>` registered with `engine.addMoveOperator(...)` next
+`optimaru::MoveOperator<…>` registered with `engine.add_move_operator(...)` next
 to the engine construction in `cpp/src/solver.cpp`; a ruin for LNS is a
-`RuinOperator` registered with `engine.addRuinOperator(...)`.
+`RuinOperator` registered with `engine.add_ruin_operator(...)`.
 
 **Changing the construction heuristic.** Entities are placed in index order (First Fit). Set
-`engineConfig.constructionHeuristic.entityDifficulty` for First Fit
+`engineConfig.construction.difficulty` for First Fit
 Decreasing ordering, or pre-assign part of the solution in the domain
 solver's `solve` before the engine runs — the engine only fills what is still unassigned.
 

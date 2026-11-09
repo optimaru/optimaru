@@ -36,7 +36,7 @@ namespace fp
 //
 // The medium weights are in medium units; the domain's kMediumFold (10^10,
 // domain.hpp) folds them into the engine's soft level. This assembly scores
-// bit-for-bit like ScoreCalculator::calculateScore and the monolithic
+// bit-for-bit like ScoreCalculator::score and the monolithic
 // incremental calculator (both read the same kDefaultWeight constants). It is
 // also the domain's constraint catalog: constraint_info() reads the defaults
 // off it, so they live in the component constructors and nowhere else.

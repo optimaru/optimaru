@@ -23,7 +23,7 @@ Pick order items onto trolleys in a warehouse (5 shelf columns A-E x 3 rows, lef
 | `distance_from_last_pick_task_to_path_origin_cost` | `DistanceFromLastPickTaskToPathOriginCost` | soft | 1 | distance from the last pick back to the start |
 | `order_split_by_trolley_cost` | `OrderSplitByTrolleyCost` | soft | 1000 | distinct orders on the trolley (summed: the trolleys an order spans, countDistinct); an unsplit order still counts 1 |
 
-Score mapping: Java `HardSoftScore`(int) → engine `HardSoftScore(int64 hard, double soft)`
+Score mapping: Java `Score`(int) → engine `Score(int64 hard, double soft)`
 1:1 (hard = -bucket shortfall, soft = -(travel distance + 1000 x (order, trolley) pairs)). No level folding:
 the domain has no medium level, so `level="medium"` raises `ValueError` (`level="hard"` / `"soft"`
 flip any constraint).
@@ -74,5 +74,5 @@ response = solve_request(OrderPickingRequest.model_validate(request_dict))
 print(response.feasible, response.distance_by_trolley)
 ```
 
-`SolverConfig` adjusts the engine knobs (time budget, LIST move weights, ALNS, nearby, FULL_ASSERT,
+`SolverConfig` adjusts the engine knobs (time budget, LIST move weights, ALNS, nearby, ScoreChecks::Full,
 `parallel_solver_count` multistart, ...) — see `_core.pyi`.

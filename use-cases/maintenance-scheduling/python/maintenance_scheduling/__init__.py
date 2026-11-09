@@ -10,7 +10,7 @@ Dates are exchanged as epoch days (days since 1970-01-01, Java LocalDate.toEpoch
 The pydantic mirror (`maintenance_scheduling.models`, optional dependency) converts to
 and from `datetime.date`.
 
-Constraints (HardSoftScore — same semantics as the Java ConstraintProvider), at the
+Constraints (Score — same semantics as the Java ConstraintProvider), at the
 default weights:
   hard 1. crew_conflict_cost          -overlapping days per overlapping job pair on the same crew
   hard 2. min_start_date_cost         -1 per day started before min_start_date

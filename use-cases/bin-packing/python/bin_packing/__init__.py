@@ -4,7 +4,7 @@ Uniform-capacity one-dimensional bin packing with optional item colours and
 conflict pairs: one BASIC planning variable (`Item.bin`, a 0-based bin index,
 -1 = unassigned) puts every item in one of n identical bins.
 
-Score (HardSoftScore), at the default weights (1 each):
+Score, at the default weights (1 each):
   hard = -(load above capacity, per bin          # bin_capacity_cost
            + items beyond the first of their colour, per bin   # color_conflict_cost
            + conflict pairs sharing a bin)        # item_conflict_cost

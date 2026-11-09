@@ -4,7 +4,7 @@ Mirrors `_core`'s Team/Day/UnavailabilityPenalty/TeamAssignment/TournamentSchedu
 1:1. Teams/days are referenced by list index (instead of Java's object references; by
 convention Team's @PlanningId == teams index and Day's dateIndex == days index).
 
-Score mapping (Java HardMediumSoftBigDecimalScore -> engine HardSoftScore):
+Score mapping (Java HardMediumSoftBigDecimalScore -> engine Score):
 ``score_hard`` is the Java hard as-is, ``score_soft`` is
 ``-(medium unfairness * 1e6 + soft unfairness)`` — folded with a 1e6 offset so medium
 (per-team assignment balance) always dominates soft (head-to-head balance)::

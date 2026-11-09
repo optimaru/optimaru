@@ -3,7 +3,7 @@
 A port of the `flight-crew-scheduling` example model: a BASIC-variable problem
 that picks a crew member (employee) for every crew seat of a flight (FlightAssignment).
 
-Constraints (HardSoftScore), at the default weights (the Java ConstraintProvider's
+Constraints (Score), at the default weights (the Java ConstraintProvider's
 weights as-is):
   hard 1. required_skill_cost                  -100 per assignment without the skill
   hard 2. flight_conflict_cost                 -10 per time-overlapping assignment pair of one

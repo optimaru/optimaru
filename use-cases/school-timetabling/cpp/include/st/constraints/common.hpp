@@ -12,8 +12,8 @@
 
 #include "st/canonical_domain.hpp"
 #include "st/canonical_score_calculator.hpp"
-#include "optimaru/api/score/calculator/constraint_assembly.hpp"
-#include "optimaru/api/score/calculator/decomposed_score_calculator.hpp"
+#include "optimaru/constraint_assembly.hpp"
+#include "optimaru/decomposed_objective.hpp"
 
 namespace st::canon
 {
@@ -22,14 +22,14 @@ namespace st::canon
 // Plugin-style constraint components
 // ---------------------------------------------------------------------------
 // The canonical rules, one small component each on the engine's
-// DecomposedScoreCalculator — an optional assembly path NEXT TO the
+// DecomposedObjective — an optional assembly path NEXT TO the
 // monolithic CanonicalIncrementalScoreCalculator, which stays the tuned
 // default fast path.
 //
 // Naming: one header per constraint, <subject>_cost.hpp; the struct is
 // <Subject>Cost and its registry name the struct name with a lower-case
 // first letter ("teacherGapCost"), which Python sees as teacher_gap_cost
-// (optimaru::python::pythonName). That one name is the constraint's name in
+// (optimaru::python::python_name). That one name is the constraint's name in
 // every layer: list_constraints(), constraint_info(), constraint_costs(),
 // the specs, the CP-SAT plugins and the Timetable.penalties keys.
 //
@@ -46,9 +46,9 @@ namespace st::canon
 // i.e. one timeslot; members are the lessons currently assigned to it. The
 // per-slot rules (class/teacher conflicts, disallowed slots, room capacity,
 // avoided / non-preferred periods) therefore decompose as UnitConstraints
-// with exact deltaCost, while everything whose state spans slots — per
+// with exact delta_cost, while everything whose state spans slots — per
 // teacher, class, course or block group — runs as a GlobalConstraint on the
-// onMemberChanged fast path, maintaining exactly the aggregates the
+// on_member_changed fast path, maintaining exactly the aggregates the
 // monolithic calculator keeps (occupancy counts folded into per-(owner, day)
 // busy masks). Every metric goes through the shared ScoreCalculator building
 // blocks (pairs/max0/gapOf/runExcessOf/blockViolation), so the default
@@ -57,7 +57,7 @@ namespace st::canon
 //
 // Two structural fast paths close most of the plugin path's dispatch cost
 // against the monolithic calculator, without changing any cost definition:
-//   - the per-slot family carries a deltaGroupKey, so the calculator
+//   - the per-slot family carries a delta_group_key, so the calculator
 //     compiles every present member into ONE SlotDeltaGroup evaluate per
 //     member change (monolithic count maps instead of member re-scans);
 //   - the per-(teacher, day) mask family shares ONE TeacherMaskHub
@@ -74,7 +74,7 @@ namespace st::canon
 // Every component requires ScoreCalculator::prepare(table) to have run (the
 // solve() overload and the monolithic path both call it).
 
-using DecomposedCalculator = optimaru::DecomposedScoreCalculator<Timetable>;
+using DecomposedCalculator = optimaru::DecomposedObjective<Timetable>;
 using ConstraintAssembly = optimaru::ConstraintAssembly<Timetable>;
 using CanonUnitConstraint = optimaru::UnitConstraint<Timetable>;
 using CanonGlobalConstraint = optimaru::GlobalConstraint<Timetable>;

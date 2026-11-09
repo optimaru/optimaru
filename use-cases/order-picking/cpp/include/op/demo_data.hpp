@@ -22,7 +22,7 @@ OrderPickingSolution buildDemoData(int trolleysCount = 5,
                                    int bucketCount = 4,
                                    int bucketCapacity = 60 * 40 * 20,
                                    int ordersCount = 8,
-                                   std::int64_t randomSeed = 37);
+                                   std::int64_t seed = 37);
 
 // The largest product volume in the demo catalog
 // (DemoDataGenerator.getMaxProductSize).

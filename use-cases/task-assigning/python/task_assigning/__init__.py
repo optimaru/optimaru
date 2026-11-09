@@ -23,7 +23,7 @@ at the default weights:
   soft[1]  squared_makespan_cost        endTime^2 per employee
   soft[2]  {critical|major|minor}_priority_task_end_time_cost
                                         endTime x 4 / x 2 / x 1
-Internally it maps onto HardSoftScore(int64, double) as
+Internally it maps onto Score(int64, double) as
 `engine.hard = hard * 10**9 + soft0` (the medium level folds below hard) and
 `engine.soft = soft1 * 10**7 + soft2` (squared_makespan_cost's default weight is 10**7);
 level order preserved, see cpp/include/ta/domain.hpp for the exact rules.

@@ -7,9 +7,9 @@
 #include <stdexcept>
 #include <utility>
 
-#include "optimaru/api/solver/solver.hpp"
-#include "optimaru/config/solver/solver_config.hpp"
-#include "optimaru/impl/localsearch/decider/acceptor/simulatedannealing/simulated_annealing_acceptor.hpp"
+#include "optimaru/solver.hpp"
+#include "optimaru/settings.hpp"
+#include "optimaru/search/acceptors.hpp"
 #include "qap/incremental_calculator.hpp"
 #include "qap/score_calculator.hpp"
 
@@ -20,44 +20,44 @@ namespace
 {
 
 // The engine configuration shared by both solve() overloads: swap moves only
-// (changeMoveWeight 0 with a positive swap weight; the engine falls back to a
+// (change_weight 0 with a positive swap weight; the engine falls back to a
 // change move only when BOTH are 0, so the swap weight stays 1), every
 // value-assigning strategy off (their engine defaults are off already; set
 // here so a future default cannot switch them on behind the permutation's
 // back). The engine's construction heuristic finds nothing to place: the
 // start is a complete permutation.
-optimaru::SolverConfig engineConfigOf(const Solver::Config &config, const QuadraticAssignmentProblem &problem, int starts)
+optimaru::Settings engineConfigOf(const Solver::Config &config, const QuadraticAssignmentProblem &problem, int starts)
 {
-    optimaru::SolverConfig engineConfig;
-    engineConfig.randomSeed = config.randomSeed;
-    engineConfig.environmentMode = config.environmentMode;
-    engineConfig.multiStartCount = starts;
-    engineConfig.onNewBest = config.onNewBest;
-    engineConfig.termination.spentLimit = config.spentLimit;
-    engineConfig.termination.bestScoreLimit = config.bestScoreLimit;
-    engineConfig.termination.unimprovedSpentLimit = config.unimprovedSpentLimit;
-    engineConfig.termination.stepCountLimit = config.stepCountLimit;
-    engineConfig.termination.unimprovedStepCountLimit = config.unimprovedStepCountLimit;
+    optimaru::Settings engineConfig;
+    engineConfig.seed = config.seed;
+    engineConfig.score_checks = config.score_checks;
+    engineConfig.parallel_starts = starts;
+    engineConfig.on_new_best = config.on_new_best;
+    engineConfig.limits.time_limit = config.time_limit;
+    engineConfig.limits.target_score = config.target_score;
+    engineConfig.limits.stall_time_limit = config.stall_time_limit;
+    engineConfig.limits.step_limit = config.step_limit;
+    engineConfig.limits.stall_step_limit = config.stall_step_limit;
 
-    auto &acceptor = engineConfig.localSearch.acceptor;
-    acceptor.acceptorType = config.acceptorType;
-    acceptor.lateAcceptanceSize = config.lateAcceptanceSize != 0
-                                      ? config.lateAcceptanceSize
+    auto &acceptor = engineConfig.search.acceptance;
+    acceptor.rule = config.rule;
+    acceptor.history_length = config.history_length != 0
+                                      ? config.history_length
                                       : std::clamp<std::size_t>(8 * problem.facilities.size(), 400, 3200);
-    acceptor.entityTabuSize = config.entityTabuSize;
-    acceptor.simulatedAnnealingStartingTemperature = config.simulatedAnnealingStartingTemperature;
+    acceptor.tabu_tenure = config.tabu_tenure;
+    acceptor.start_temperature = config.start_temperature;
 
-    auto &local = engineConfig.localSearch;
-    local.moveSelector.changeMoveWeight = 0.0;
-    local.moveSelector.swapMoveWeight = 1.0;
-    local.ruinRecreate.enabled = false;
-    local.ruinRecreate.asMoveWeight = 0.0;
-    local.descentWeight = 0.0;
-    local.routeEliminationWeight = 0.0;
-    local.ejectionChainWeight = 0.0;
-    local.iteratedLocalSearchWeight = 0.0;
-    local.valueRecommender = nullptr;
-    local.entityRecommender = nullptr;
+    auto &local = engineConfig.search;
+    local.moves.change_weight = 0.0;
+    local.moves.swap_weight = 1.0;
+    local.ruin_recreate.enabled = false;
+    local.ruin_recreate.as_move_weight = 0.0;
+    local.descent_weight = 0.0;
+    local.route_elimination_weight = 0.0;
+    local.ejection_chain_weight = 0.0;
+    local.iterated_local_search_weight = 0.0;
+    local.value_hint = nullptr;
+    local.entity_hint = nullptr;
     return engineConfig;
 }
 
@@ -65,7 +65,7 @@ void requireConfig(const Solver::Config &config)
 {
     if (config.parallelSolverCount <= 0)
         throw std::invalid_argument("parallelSolverCount must be positive");
-    if (config.entityTabuSize < 0)
+    if (config.tabu_tenure < 0)
         throw std::invalid_argument("entityTabuSize must be >= 0");
     if (!(config.simulatedAnnealingTemperatureFraction > 0.0))
         throw std::invalid_argument("simulatedAnnealingTemperatureFraction must be > 0");
@@ -77,9 +77,9 @@ void requireConfig(const Solver::Config &config)
 // engine config, see engineConfigOf.)
 bool autoTemperature(const Solver::Config &config)
 {
-    return config.acceptorType == optimaru::AcceptorType::SIMULATED_ANNEALING
-           && config.simulatedAnnealingStartingTemperature.hard == 0
-           && config.simulatedAnnealingStartingTemperature.soft == 0.0;
+    return config.rule == optimaru::AcceptanceRule::SimulatedAnnealing
+           && config.start_temperature.hard == 0
+           && config.start_temperature.soft == 0.0;
 }
 
 void installAutoTemperature(const Solver::Config &config,
@@ -88,11 +88,11 @@ void installAutoTemperature(const Solver::Config &config,
     if (!autoTemperature(config))
         return;
     const double fraction = config.simulatedAnnealingTemperatureFraction;
-    engine.setAcceptorFactory(
-        [fraction](const optimaru::HardSoftScore &start) -> std::unique_ptr<optimaru::Acceptor>
+    engine.set_acceptor_factory(
+        [fraction](const optimaru::Score &start) -> std::unique_ptr<optimaru::Acceptor>
         {
             const double soft = std::max(1.0, fraction * std::fabs(start.soft));
-            return std::make_unique<optimaru::SimulatedAnnealingAcceptor>(optimaru::HardSoftScore{0, soft});
+            return std::make_unique<optimaru::SimulatedAnnealing>(optimaru::Score{0, soft});
         });
 }
 
@@ -137,16 +137,16 @@ void Solver::solve(QuadraticAssignmentProblem &problem)
         const int starts = std::max(1, config_.parallelSolverCount);
         optimaru::Solver<QuadraticAssignmentProblem> engine(engineConfigOf(config_, problem, starts));
         installAutoTemperature(config_, engine);
-        engine.solveMultiStart(problem,
+        engine.solve_multistart(problem,
                                [] { return std::make_unique<QuadraticAssignmentIncrementalScoreCalculator>(); });
     }
     requireBijection(problem);
     // The authoritative final score: a full recompute on the best solution.
-    ScoreCalculator::calculateScore(problem);
+    ScoreCalculator::score(problem);
 }
 
 void Solver::solve(QuadraticAssignmentProblem &problem,
-                   optimaru::DecomposedScoreCalculator<QuadraticAssignmentProblem> &calculator)
+                   optimaru::DecomposedObjective<QuadraticAssignmentProblem> &calculator)
 {
     requireConfig(config_);
     if (start(problem))
@@ -159,9 +159,9 @@ void Solver::solve(QuadraticAssignmentProblem &problem,
     requireBijection(problem);
     // Score the final solution with the caller's constraint assembly (custom
     // weights included) and leave the calculator primed on it, so
-    // constraintTotals() explains exactly this score.
-    calculator.resetWorkingSolution(problem);
-    problem.score = calculator.calculateScore();
+    // constraint_totals() explains exactly this score.
+    calculator.rebuild(problem);
+    problem.score = calculator.score();
 }
 
 }  // namespace qap

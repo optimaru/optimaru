@@ -80,11 +80,11 @@ int main(int argc, char **argv)
     SemiconductorSchedule schedule = buildDemo(12);
     ScoreCalculator::prepare(schedule);
     Solver::Config config;
-    config.spentLimit = std::chrono::milliseconds(static_cast<long long>(seconds * 1000));
-    config.randomSeed = 1;
+    config.time_limit = std::chrono::milliseconds(static_cast<long long>(seconds * 1000));
+    config.seed = 1;
     Solver(config).solve(schedule);
     std::printf("score %s, makespan %lld, weighted tardiness %lld, cycle time %lld\n",
-                schedule.score.toString().c_str(), static_cast<long long>(schedule.makespan),
+                schedule.score.str().c_str(), static_cast<long long>(schedule.makespan),
                 static_cast<long long>(schedule.totalWeightedTardiness),
                 static_cast<long long>(schedule.totalCycleTime));
     const RawTotals raw = ScoreCalculator::rawCosts(schedule);

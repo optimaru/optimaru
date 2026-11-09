@@ -6,9 +6,9 @@
 #include <utility>
 #include <vector>
 
-#include "optimaru/api/domain/solution_descriptor.hpp"
-#include "optimaru/api/score/buildin/hard_soft_score.hpp"
-#include "optimaru/api/score/level.hpp"
+#include "optimaru/solution_traits.hpp"
+#include "optimaru/score.hpp"
+#include "optimaru/levels.hpp"
 
 namespace ms
 {
@@ -17,7 +17,7 @@ namespace ms
 // Score
 // ---------------------------------------------------------------------------
 // The Java quickstart scores with HardMediumSoftScore; the engine provides
-// HardSoftScore(int64 hard, double soft). Mapping rule (also in the README):
+// Score(int64 hard, double soft). Mapping rule (also in the README):
 //
 //   hard = Java hard, unchanged (violation counts / grains; 0 == feasible)
 //   soft = -(javaMediumPenalty * kMediumScale + javaSoftPenalty)
@@ -35,12 +35,12 @@ namespace ms
 // decomposed calculator, which keeps a separate medium accumulator. A medium
 // constraint's weight is therefore in medium units (both medium components:
 // 1), never 1e6.
-using Score = optimaru::HardSoftScore;
+using Score = optimaru::Score;
 
 // The medium -> soft folding offset (see the Score comment above).
 constexpr double kMediumScale = 1e6;
 constexpr optimaru::MediumFold kMediumFold
-    = optimaru::MediumFold::intoSoft(kMediumScale);
+    = optimaru::MediumFold::into_soft(kMediumScale);
 
 // Java TimeGrain.GRAIN_LENGTH_IN_MINUTES.
 constexpr int kGrainLengthInMinutes = 15;
@@ -160,7 +160,7 @@ struct MeetingSchedule
     Score score;
 
     // Set once by ScoreCalculator::prepare; guards against rebuilding the
-    // derived tables on every calculateScore call.
+    // derived tables on every score call.
     bool prepared = false;
 
     // Filled by ScoreCalculator::prepare:
@@ -223,34 +223,34 @@ struct MeetingSchedule
 }  // namespace ms
 
 // ---------------------------------------------------------------------------
-// SolutionDescriptor specialization  (the @PlanningEntity/@PlanningVariable
+// SolutionTraits specialization  (the @PlanningEntity/@PlanningVariable
 // annotations of the C++ engine): entities are the meeting assignments, the
 // planning variable is MeetingAssignment::grainRoom, the value range is the
 // (timeGrain x room) grid — the composite of the Java entity's two
 // @PlanningVariable value ranges.
 // ---------------------------------------------------------------------------
-template <> struct optimaru::SolutionDescriptor<ms::MeetingSchedule>
+template <> struct optimaru::SolutionTraits<ms::MeetingSchedule>
 {
-    static constexpr optimaru::VariableKind kind
-        = optimaru::VariableKind::BASIC;
-    static int entityCount(const ms::MeetingSchedule &s)
+    static constexpr optimaru::Shape shape
+        = optimaru::Shape::Assignment;
+    static int entity_count(const ms::MeetingSchedule &s)
     {
         return static_cast<int>(s.meetingAssignments.size());
     }
-    static int valueCount(const ms::MeetingSchedule &s)
+    static int value_count(const ms::MeetingSchedule &s)
     {
         return s.grainRoomCount();
     }
-    static int getVariable(const ms::MeetingSchedule &s, int assignmentIndex)
+    static int value_of(const ms::MeetingSchedule &s, int assignmentIndex)
     {
         return s.meetingAssignments[assignmentIndex].grainRoom;
     }
     static void
-    setVariable(ms::MeetingSchedule &s, int assignmentIndex, int grainRoom)
+    assign(ms::MeetingSchedule &s, int assignmentIndex, int grainRoom)
     {
         s.meetingAssignments[assignmentIndex].grainRoom = grainRoom;
     }
-    static bool isPinned(const ms::MeetingSchedule &s, int assignmentIndex)
+    static bool is_pinned(const ms::MeetingSchedule &s, int assignmentIndex)
     {
         return s.meetingAssignments[assignmentIndex].pinned;
     }

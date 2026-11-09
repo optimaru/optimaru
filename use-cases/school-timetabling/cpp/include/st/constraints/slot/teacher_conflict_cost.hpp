@@ -20,7 +20,7 @@ struct TeacherConflictCost final : GroupableSlotConstraint
         : GroupableSlotConstraint("teacherConflictCost", weight, kDefaultLevel)
     {
     }
-    void onReset(const Timetable &table) override
+    void on_reset(const Timetable &table) override
     {
         detail::requirePrepared(table);
     }
@@ -39,8 +39,8 @@ struct TeacherConflictCost final : GroupableSlotConstraint
         }
         return static_cast<double>(pairs);
     }
-    bool supportsDelta() const override { return true; }
-    double deltaCost(const Timetable &table,
+    bool supports_delta() const override { return true; }
+    double delta_cost(const Timetable &table,
                      int /*unit*/,
                      const std::vector<int> &members,
                      int entity) const override

@@ -11,8 +11,8 @@
 #include <vector>
 
 #include "es/domain.hpp"
-#include "optimaru/api/score/calculator/decomposed_score_calculator.hpp"
-#include "optimaru/api/score/director/score_director.hpp"  // EnvironmentMode
+#include "optimaru/decomposed_objective.hpp"
+#include "optimaru/editor.hpp"  // ScoreChecks
 
 namespace es {
 
@@ -23,24 +23,24 @@ namespace es {
 class Solver {
 public:
     struct Config {
-        std::chrono::milliseconds spentLimit{std::chrono::seconds(30)};
+        std::chrono::milliseconds time_limit{std::chrono::seconds(30)};
 
-        // Stop early once bestScore >= bestScoreLimit. Default is above every
-        // achievable score, so it never fires (termination is by spentLimit).
-        Score bestScoreLimit{std::numeric_limits<std::int64_t>::max(),
+        // Stop early once bestScore >= target_score. Default is above every
+        // achievable score, so it never fires (termination is by time_limit).
+        Score target_score{std::numeric_limits<std::int64_t>::max(),
                              std::numeric_limits<double>::infinity()};
         // Optional early exits; 0 disables each criterion.
-        std::chrono::milliseconds unimprovedSpentLimit{0};
-        std::int64_t stepCountLimit = 0;
-        std::int64_t unimprovedStepCountLimit = 0;
+        std::chrono::milliseconds stall_time_limit{0};
+        std::int64_t step_limit = 0;
+        std::int64_t stall_step_limit = 0;
 
-        std::size_t lateAcceptanceSize = 400;
-        std::uint64_t randomSeed = 0;
+        std::size_t history_length = 400;
+        std::uint64_t seed = 0;
 
         // Fraction of the total time budget reserved for the post-local-search
-        // greedy hard-repair. Local search runs for spentLimit*(1-fraction) and
+        // greedy hard-repair. Local search runs for time_limit*(1-fraction) and
         // the repair gets the rest, so total wall time still respects
-        // spentLimit. Clamped to [0, 0.9).
+        // time_limit. Clamped to [0, 0.9).
         //
         // Default 0 (off): local search already returns its best-so-far — the
         // least-infeasible solution it found. The extra greedy pass was measured
@@ -51,20 +51,20 @@ public:
         // closes the gap.
         double greedyRepairBudgetFraction = 0.0;
 
-        // Independent parallel starts. Each worker receives randomSeed + i
+        // Independent parallel starts. Each worker receives seed + i
         // and the full wall-clock budget; the best solution wins. This is
         // generally more scalable than synchronizing candidate evaluation
-        // around one mutable incremental score director.
+        // around one mutable incremental score editor.
         // Only solve(schedule) honors this; solve(schedule, calculator) ignores
         // it and runs one search. Python goes through the calculator overload
         // and gets its parallel starts from separate processes instead (see
         // es_scheduling.models.solve_request).
         int parallelSolverCount = 1;
 
-        // FULL_ASSERT re-verifies the incremental score against a full
+        // ScoreChecks::Full re-verifies the incremental score against a full
         // recompute after every move (a debugging aid for the C++ tests;
         // orders of magnitude slower, not exposed to Python).
-        optimaru::EnvironmentMode environmentMode = optimaru::EnvironmentMode::NON_ASSERT;
+        optimaru::ScoreChecks score_checks = optimaru::ScoreChecks::Off;
 
         // Guided move selection (A: pick a skill-capable, available target
         // employee; B: bias the shift toward employees with hard violations).
@@ -75,7 +75,7 @@ public:
         // Adaptive ruin-and-recreate kicks when the search stagnates (the
         // engine's ALNS). Without this the late-acceptance search can lock into a local
         // optimum within milliseconds on small instances and never escape.
-        bool ruinRecreate = true;
+        bool ruin_recreate = true;
         std::int64_t ruinRecreateUnimprovedStepTrigger = 5000;
         double ruinRecreateMinRuinFraction = 0.10;
         double ruinRecreateMaxRuinFraction = 0.30;
@@ -86,7 +86,7 @@ public:
 
         // Destroy-and-repair as an ORDINARY acceptor-judged move, on top of
         // the stagnation kick above (engine
-        // RuinRecreateConfig::asMoveWeight). Probability that a step is a
+        // RuinRecreateSettings::as_move_weight). Probability that a step is a
         // small ruin + greedy repair instead of a sampled change/swap; a
         // rejected one is rolled back like any other move. It draws from the
         // same adaptive ruin-operator pool as the kick, so with
@@ -98,7 +98,7 @@ public:
         int ruinRecreateAsMoveMaxRuin = 12;
 
         // Best-improvement descent over one nearby shift pair (engine
-        // LocalSearchConfig::descentWeight): enumerate every employee for
+        // SearchSettings::descent_weight): enumerate every employee for
         // both shifts plus their swap, apply the best improving one, repeat
         // until the pair is locally optimal. Always improving, so it bypasses
         // the acceptor. Picks its first shift through the same violation
@@ -110,10 +110,10 @@ public:
         // positions or a timetable's slot x room grid. A sweep picked 0.02:
         // a clear gain on large rosters, a wash on small ones. Past ~0.05 the
         // descent starts starving the ordinary move mix and the gain shrinks.
-        double descentWeight = 0.02;
-        int descentMaxSweeps = 4;
+        double descent_weight = 0.02;
+        int descent_max_sweeps = 4;
 
-        // Temporal nearby selection (engine NearbySelectionConfig): distance
+        // Temporal nearby selection (engine NeighborSettings): distance
         // between two shifts is |start - start| in minutes, so swap partners,
         // descent pairs and the LNS related-ruin cluster stay inside the time
         // window where the pairwise hard constraints (overlap, one-per-day,
@@ -128,8 +128,8 @@ public:
         double nearbyShiftsProbability = 0.65;
 
         // BASIC move mix. Weights are relative; 0 disables a move.
-        double changeMoveWeight = 0.75;
-        double swapMoveWeight = 0.25;
+        double change_weight = 0.75;
+        double swap_weight = 0.25;
 
         // Employee-scheduling-specific BASIC operators registered through the
         // engine's custom move hooks. They complement the generic change/swap
@@ -147,7 +147,7 @@ public:
         // otherwise monopolize the selector after one reward. 0.30-0.40 is a
         // plateau in interleaved A/B runs across roster sizes. Re-measure if
         // move economics shift.
-        double customMoveProbability = 0.30;
+        double custom_move_probability = 0.30;
         bool employeeRuinMoves = true;
 
         // Allow the search to leave a shift UNASSIGNED (employeeIndex = -1).
@@ -161,18 +161,18 @@ public:
 
         // LIST move mix. Exposed for parity with the generic engine; employee
         // scheduling is BASIC, so these do not affect this domain.
-        double relocateMoveWeight = 0.5;
-        double listSwapMoveWeight = 0.3;
-        double twoOptMoveWeight = 0.2;
-        double orOptMoveWeight = 0.0;
-        double tailSwapMoveWeight = 0.0;
+        double relocate_weight = 0.5;
+        double list_swap_weight = 0.3;
+        double two_opt_weight = 0.2;
+        double or_opt_weight = 0.0;
+        double tail_swap_weight = 0.0;
 
-        std::function<void(std::int64_t, const Score&)> onNewBest;
+        std::function<void(std::int64_t, const Score&)> on_new_best;
         // Set by solve() on each parallel worker's copy, not by a caller (and
         // not bound to Python): the first worker that fails raises it, and the
         // other workers' engines stop at their next step instead of running out
         // their budget before the error reaches the caller.
-        std::shared_ptr<std::atomic<bool>> stopFlag;
+        std::shared_ptr<std::atomic<bool>> stop_flag;
     };
 
     Solver() = default;
@@ -185,14 +185,14 @@ public:
     // Solves with a caller-assembled plugin calculator (see es/constraints.hpp):
     // pick constraints and weights, then pass the assembly here. The same
     // guided move selection applies — violation guidance comes from the
-    // calculator's penalizedUnits(). The final schedule.score is computed by
+    // calculator's penalized_units(). The final schedule.score is computed by
     // THIS calculator (custom weights included), and the calculator is left
-    // primed on the final solution so constraintTotals() explains the score.
+    // primed on the final solution so constraint_totals() explains the score.
     // Structurally compatible delta constraints are grouped automatically;
     // unsupported constraints remain on the individual generic delta path.
     // Always one search: Config::parallelSolverCount is ignored here.
     void solve(EmployeeSchedule& schedule,
-               optimaru::DecomposedScoreCalculator<EmployeeSchedule>& calculator);
+               optimaru::DecomposedObjective<EmployeeSchedule>& calculator);
 
 private:
     Config config_;

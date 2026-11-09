@@ -4,7 +4,7 @@ The pybind11 package of the bin-packing C++ use case (`../cpp`). Puts every item
 one of n identical bins — `Item.bin` is the only planning variable (bin index, -1 =
 unassigned).
 
-Score (HardSoftScore), at the default weights (1 each):
+Score, at the default weights (1 each):
 
 - hard = -(load above capacity, per bin — `bin_capacity_cost`
   + items beyond the first of their colour, per bin — `color_conflict_cost`

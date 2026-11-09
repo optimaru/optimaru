@@ -27,9 +27,9 @@ struct RawCosts
 
 // Monolithic full recompute — the reference the incremental calculator and
 // the plugin assembly are checked against (in the tests and under
-// FULL_ASSERT).
+// ScoreChecks::Full).
 //
-// Constraints (HardSoftScore), the default assembly of alb/constraints.hpp at
+// Constraints (Score), the default assembly of alb/constraints.hpp at
 // the components' kDefaultWeight:
 //   hard 1  stationCapacityCost        per station, max(0, load - cycle time)
 //   hard 1  taskPrecedenceCost         arcs (b, a) with station(b) > station(a)
@@ -49,7 +49,7 @@ class ScoreCalculator
 public:
     // Full recompute at the default weights; stores problem.score. Runs
     // prepare() first if the problem has never been prepared.
-    static Score calculateScore(AssemblyLineBalancingProblem &problem);
+    static Score score(AssemblyLineBalancingProblem &problem);
 
     // The raw total of every default constraint (prepare() first if needed).
     static RawCosts rawCosts(AssemblyLineBalancingProblem &problem);

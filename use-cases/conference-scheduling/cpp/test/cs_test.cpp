@@ -3,8 +3,8 @@
 //   (a) every constraint verified in isolation against hand-computed
 //       breakdown units and spot-checked total scores
 //   (b) incremental score == full recompute across a long random walk driven
-//       through the engine's ScoreDirector protocol (before/set/after)
-//   (c) a random instance solved under EnvironmentMode::FULL_ASSERT
+//       through the engine's Editor protocol (before/set/after)
+//   (c) a random instance solved under ScoreChecks::ScoreChecks::Full
 //   (d) pinned talks keep their assignment through a solve; an easy instance
 //       reaches hard 0
 #include <chrono>
@@ -19,7 +19,7 @@
 #include "cs/incremental_calculator.hpp"
 #include "cs/score_calculator.hpp"
 #include "cs/solver.hpp"
-#include "optimaru/api/score/director/score_director.hpp"
+#include "optimaru/editor.hpp"
 
 using namespace cs;
 
@@ -59,7 +59,7 @@ void checkScore(const std::string &label,
     std::printf("  [%s] %-46s got=%s expected=%lldhard/%gsoft\n",
                 ok ? "PASS" : "FAIL",
                 label.c_str(),
-                actual.toString().c_str(),
+                actual.str().c_str(),
                 expectedHard,
                 expectedSoft);
     if (!ok)
@@ -579,7 +579,7 @@ void verifyConstraints()
         addTalk(c, "A", {0}, 0, 0);
         addTalk(c, "B", {0});  // unassigned, would conflict if placed
         checkScore("unassigned contributes nothing",
-                   ScoreCalculator::calculateScore(c),
+                   ScoreCalculator::score(c),
                    -6000,
                    0);
     }
@@ -590,7 +590,7 @@ void verifyConstraints()
         c.talks.back().pinned = true;
         addTalk(c, "B", {1}, 1, 0);
         checkScore("pinned talk still scored",
-                   ScoreCalculator::calculateScore(c),
+                   ScoreCalculator::score(c),
                    -60000,
                    0);
     }
@@ -704,7 +704,7 @@ ConferenceSchedule buildRandomInstance(int talkCount, std::uint64_t seed)
 
 // -------------------------------------------------------------------------
 // (b) Incremental score == full recompute across a random walk of change and
-// swap moves (including unassignments), driven through the ScoreDirector so
+// swap moves (including unassignments), driven through the Editor so
 // the before/set/after hook contract is exercised exactly like in the engine.
 // -------------------------------------------------------------------------
 void verifyIncremental()
@@ -713,12 +713,12 @@ void verifyIncremental()
     ConferenceSchedule c = buildRandomInstance(/*talkCount*/ 24, /*seed*/ 7);
 
     ConferenceSchedulingIncrementalScoreCalculator calc;
-    optimaru::ScoreDirector<ConferenceSchedule> director(c, calc);
+    optimaru::Editor<ConferenceSchedule> editor(c, calc);
     ConferenceSchedule shadow = c;
 
     std::mt19937_64 rng(123);
     const int talkCount = c.talkCount();
-    const int valueCount = c.slotRoomCount();
+    const int value_count = c.slotRoomCount();
     std::uniform_real_distribution<double> unit(0.0, 1.0);
 
     int mismatches = 0;
@@ -732,8 +732,8 @@ void verifyIncremental()
             const int talk = static_cast<int>(rng() % talkCount);
             const int value = (unit(rng) < 0.10)
                                   ? -1
-                                  : static_cast<int>(rng() % valueCount);
-            director.changeVariable(talk, value);
+                                  : static_cast<int>(rng() % value_count);
+            editor.assign(talk, value);
         }
         else
         {
@@ -742,14 +742,14 @@ void verifyIncremental()
             const int b = static_cast<int>(rng() % talkCount);
             const int va = c.talks[a].slotRoom;
             const int vb = c.talks[b].slotRoom;
-            director.changeVariable(a, vb);
-            director.changeVariable(b, va);
+            editor.assign(a, vb);
+            editor.assign(b, va);
         }
         // Full recompute on the same assignment.
         for (int i = 0; i < talkCount; ++i)
             shadow.talks[i].slotRoom = c.talks[i].slotRoom;
-        const Score full = ScoreCalculator::calculateScore(shadow);
-        const Score incremental = director.calculateScore();
+        const Score full = ScoreCalculator::score(shadow);
+        const Score incremental = editor.score();
         if (full.hard != incremental.hard
             || std::fabs(full.soft - incremental.soft) > 1e-9)
         {
@@ -757,8 +757,8 @@ void verifyIncremental()
             {
                 std::printf("  MISMATCH @step %d: incremental=%s full=%s\n",
                             step,
-                            incremental.toString().c_str(),
-                            full.toString().c_str());
+                            incremental.str().c_str(),
+                            full.str().c_str());
             }
         }
     }
@@ -769,9 +769,9 @@ void verifyIncremental()
 }
 
 // -------------------------------------------------------------------------
-// (c) FULL_ASSERT solve: the engine cross-checks the incremental score
+// (c) ScoreChecks::Full solve: the engine cross-checks the incremental score
 // against a full reset + recompute after every single move and throws
-// ScoreCorruptionError on any divergence.
+// ScoreMismatchError on any divergence.
 // -------------------------------------------------------------------------
 void verifyFullAssertSolve()
 {
@@ -779,10 +779,10 @@ void verifyFullAssertSolve()
     ConferenceSchedule c = buildRandomInstance(/*talkCount*/ 18, /*seed*/ 11);
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(2);
-    config.randomSeed = 3;
-    config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
-    // Kick early so the LNS ruin/recreate path also runs under FULL_ASSERT.
+    config.time_limit = std::chrono::seconds(2);
+    config.seed = 3;
+    config.score_checks = optimaru::ScoreChecks::Full;
+    // Kick early so the LNS ruin/recreate path also runs under ScoreChecks::Full.
     config.ruinRecreateUnimprovedStepTrigger = 200;
     config.ruinRecreatePolishSteps = 100;
 
@@ -794,7 +794,7 @@ void verifyFullAssertSolve()
         solver.solve(c);
         final = c.score;
     }
-    catch (const optimaru::ScoreCorruptionError &e)
+    catch (const optimaru::ScoreMismatchError &e)
     {
         corrupted = true;
         std::printf("  ScoreCorruptionError: %s\n", e.what());
@@ -802,7 +802,7 @@ void verifyFullAssertSolve()
     check(!corrupted, "2s FULL_ASSERT solve without score corruption");
     if (!corrupted)
     {
-        const Score recomputed = ScoreCalculator::calculateScore(c);
+        const Score recomputed = ScoreCalculator::score(c);
         check(final.hard == recomputed.hard
                   && std::fabs(final.soft - recomputed.soft) < 1e-9,
               "solver-reported score == full recompute");
@@ -827,8 +827,8 @@ void verifyPinnedSolve()
     c.talks[0].pinned = true;
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(1);
-    config.randomSeed = 5;
+    config.time_limit = std::chrono::seconds(1);
+    config.seed = 5;
     Solver solver(config);
     solver.solve(c);
 

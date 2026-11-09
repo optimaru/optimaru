@@ -8,8 +8,8 @@ that picks a crew member (`employee`) for every crew seat of a flight (`FlightAs
 
 ## Score mapping
 
-The Java original uses `HardSoftScore` (two integer levels), so it maps onto the engine's
-`HardSoftScore(int64 hard, double soft)` **as-is (identity)**. No level folding (no medium
+The Java original uses `Score` (two integer levels), so it maps onto the engine's
+`Score(int64 hard, double soft)` **as-is (identity)**. No level folding (no medium
 level). The default weights are exactly those of the Java `ConstraintProvider`:
 
 | Constraint (Python name) | C++ component | Default level | Default weight | Raw cost per employee (0 = no violation) |
@@ -73,7 +73,7 @@ start a pair, and all ties at the later end count. first/last also count all tie
 cd cpp
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j4
-./build/fcs_test         # per-constraint hand checks + random walk + FULL_ASSERT + pinned
+./build/fcs_test         # per-constraint hand checks + random walk + ScoreChecks::Full + pinned
 ./build/fcs_plugin_test  # plugin assembly == monolith, raw costs by hand, catalog, overrides
 ./build/fcs_demo 10   # reproduces the Java DemoDataGenerator scale, 10 s solve
 
@@ -87,7 +87,7 @@ seats, ~50 crew members) and reaches feasible (hard 0) within 10 s.
 
 ## Layout
 
-- `cpp/include/fcs/domain.hpp` — domain + `SolutionDescriptor` specialization
+- `cpp/include/fcs/domain.hpp` — domain + `SolutionTraits` specialization
   (including the pinned extension)
 - `cpp/include/fcs/constraints/` — one component per constraint:
   `required_skill_cost.hpp`, `flight_conflict_cost.hpp`,
@@ -179,12 +179,12 @@ engine is `cpp/include/fcs/solver.hpp` + `cpp/src/solver.cpp`.
 
 **Adding a move.** The engine already mixes change / swap moves
 (weights in `Solver::Config`). This use case relies on the engine's generic moves only; it has no domain move yet. A new move is a
-`optimaru::MoveOperator<…>` registered with `engine.addMoveOperator(...)` next
+`optimaru::MoveOperator<…>` registered with `engine.add_move_operator(...)` next
 to the engine construction in `cpp/src/solver.cpp`; a ruin for LNS is a
-`RuinOperator` registered with `engine.addRuinOperator(...)`.
+`RuinOperator` registered with `engine.add_ruin_operator(...)`.
 
 **Changing the construction heuristic.** Entities are placed in index order (First Fit). Set
-`engineConfig.constructionHeuristic.entityDifficulty` for First Fit
+`engineConfig.construction.difficulty` for First Fit
 Decreasing ordering, or pre-assign part of the solution in the domain
 solver's `solve` before the engine runs — the engine only fills what is still unassigned.
 

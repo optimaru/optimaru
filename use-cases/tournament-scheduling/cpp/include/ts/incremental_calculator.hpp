@@ -4,15 +4,15 @@
 #include <cstdint>
 #include <vector>
 
-#include "optimaru/api/score/calculator/incremental_score_calculator.hpp"
+#include "optimaru/objective.hpp"
 #include "ts/domain.hpp"
 
 namespace ts
 {
 
 // The tournament-scheduling implementation of the engine's
-// optimaru::IncrementalScoreCalculator — the C++ analog of implementing
-// Java's IncrementalScoreCalculator instead of a ConstraintProvider.
+// optimaru::Objective — the C++ analog of implementing
+// Java's Objective instead of a ConstraintProvider.
 //
 // Every constraint is a function of per-(team, day) occupancy counts and of
 // two load-balance aggregate triples (sum, sum of squares, item count), so a
@@ -30,21 +30,21 @@ namespace ts
 //     confrontations to pair (t, u) for every other team u — the O(teamCount)
 //     part — with the aggregates updated per touched pair.
 //
-// beforeVariableChanged retracts the assignment's contribution while `team`
-// still holds the OLD value; afterVariableChanged inserts the NEW value.
+// before_assign retracts the assignment's contribution while `team`
+// still holds the OLD value; after_assign inserts the NEW value.
 // Unassigned assignments (team == -1) contribute nothing, so the
 // construction heuristic can score partially initialized solutions. The
-// full-recompute reference is ScoreCalculator::calculateScore (checked in
-// the tests and under EnvironmentMode::FULL_ASSERT); both assemble the final
+// full-recompute reference is ScoreCalculator::score (checked in
+// the tests and under ScoreChecks::ScoreChecks::Full); both assemble the final
 // double through ScoreCalculator::combinedSoft, so the comparison is exact.
 class TournamentSchedulingIncrementalScoreCalculator final
-    : public optimaru::IncrementalScoreCalculator<TournamentSchedule>
+    : public optimaru::Objective<TournamentSchedule>
 {
 public:
-    void resetWorkingSolution(TournamentSchedule &workingSolution) override;
-    void beforeVariableChanged(int assignmentIndex) override;
-    void afterVariableChanged(int assignmentIndex) override;
-    Score calculateScore() override;
+    void rebuild(TournamentSchedule &solution) override;
+    void before_assign(int assignmentIndex) override;
+    void after_assign(int assignmentIndex) override;
+    Score score() override;
 
     // --- live state for the solver's guided moves (all O(1) reads) ---
     // The load-balance levels dominate this domain's score, so the custom
@@ -77,7 +77,7 @@ private:
     std::vector<std::int64_t> teamLoad_;  // team -> assignment count
     std::vector<std::int64_t> confCnt_;   // (t1, t2), t1 < t2 -> confrontations
 
-    // Running totals (counted positive; signs applied in calculateScore).
+    // Running totals (counted positive; signs applied in score).
     std::int64_t pairSum_ = 0;     // hard 1
     std::int64_t unavailHit_ = 0;  // hard 2
     std::int64_t balSum_ = 0;      // medium 3 aggregates

@@ -7,7 +7,7 @@ priority rank per operation, folded into one BASIC planning value per operation 
 (``rank * K + slot``); the C++ serial schedule-generation decoder turns it into the
 schedule (``assignments``), exactly like 0.1.x's Python decoder did.
 
-Score (HardSoftScore), at the default weights: hard = the sum of the 14 hard constraints,
+Score, at the default weights: hard = the sum of the 14 hard constraints,
 soft = preference + minimum batch fill + load imbalance + 10 x weighted tardiness + cycle
 time + makespan (see `semiconductor_scheduling.constraints`; ``constraint_info()`` lists
 every default level and weight).

@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- **Engine restructured; C++ API renamed.** The engine under
+  `include/optimaru/` no longer mirrors Timefold Solver's Java package layout
+  or names: the headers are a flat set of modules plus `search/`, functions
+  and members are snake_case, and the core types are renamed
+  (`HardSoftScore` → `Score`, `SolutionDescriptor` → `SolutionTraits` with
+  `Shape::{Assignment, Sequence, Chain}`, `IncrementalScoreCalculator` →
+  `Objective`, `DecomposedScoreCalculator` → `DecomposedObjective`,
+  `ScoreDirector` → `Editor`, `VariableListener` → `DerivedState`,
+  `SolverConfig` → `Settings` with `limits` / `construction` / `search`,
+  `EnvironmentMode::FULL_ASSERT` → `ScoreChecks::Full`). `SolverFactory` is
+  gone (construct `Solver<S>(settings)`), and `SolverManager` /
+  `SolutionManager` became the free functions `solve_in_background`,
+  `explain_score` and `rescore`. The termination criteria are one
+  `StopCondition` instead of a class per criterion. C++ code built on the
+  engine must be updated; the Python API, its config keys and the JSON
+  contracts are unchanged, and solves give identical results for the same
+  seed. NOTICE and every engine header now describe the engine's origin as
+  restructured from a port of Timefold Solver.
 - **Corrected license attribution.** NOTICE now states that the engine is
   derived from Timefold Solver (itself derived from OptaPlanner and OptaPy),
   lists every use case and benchmark harness derived from Timefold

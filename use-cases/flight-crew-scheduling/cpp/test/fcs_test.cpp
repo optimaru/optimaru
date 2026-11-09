@@ -5,8 +5,8 @@
 //       a violating (positive) and a clean (zero) case each (including the
 //       Java ConstraintProviderTest cases)
 //   (b) incremental score == full recompute across a long random walk driven
-//       through the engine's ScoreDirector protocol (before/set/after)
-//   (c) a small instance solved under EnvironmentMode::FULL_ASSERT
+//       through the engine's Editor protocol (before/set/after)
+//   (c) a small instance solved under ScoreChecks::ScoreChecks::Full
 //   (d) pinned assignments keep their employee through a solve
 #include <chrono>
 #include <cmath>
@@ -19,7 +19,7 @@
 #include "fcs/incremental_calculator.hpp"
 #include "fcs/score_calculator.hpp"
 #include "fcs/solver.hpp"
-#include "optimaru/api/score/director/score_director.hpp"
+#include "optimaru/editor.hpp"
 
 using namespace fcs;
 
@@ -45,7 +45,7 @@ void checkScore(const std::string &label,
     std::printf("  [%s] %-46s got=%s expected=%ldhard/%gsoft\n",
                 ok ? "PASS" : "FAIL",
                 label.c_str(),
-                actual.toString().c_str(),
+                actual.str().c_str(),
                 expectedHard,
                 expectedSoft);
     if (!ok)
@@ -117,7 +117,7 @@ void verifyConstraints()
         const int f = addFlight(s, 0, 0, 1, 60);
         addAssignment(s, f, 0, "1");
         checkScore("requiredSkillCost missing",
-                   ScoreCalculator::calculateScore(s),
+                   ScoreCalculator::score(s),
                    -100,
                    -1000);  // last assignment arrives at 1 != home 0
     }
@@ -126,7 +126,7 @@ void verifyConstraints()
         const int f = addFlight(s, 0, 0, 0, 60);
         addAssignment(s, f, 0, "Pilot");
         checkScore("requiredSkillCost held (zero, home round trip)",
-                   ScoreCalculator::calculateScore(s),
+                   ScoreCalculator::score(s),
                    0,
                    0);
     }
@@ -140,7 +140,7 @@ void verifyConstraints()
         addAssignment(s, addFlight(s, 0, 0, 0, 10), 0);
         addAssignment(s, addFlight(s, 0, 1, 0, 11), 0);
         checkScore("flightConflictCost overlapping pair",
-                   ScoreCalculator::calculateScore(s),
+                   ScoreCalculator::score(s),
                    -10,
                    0);
     }
@@ -152,7 +152,7 @@ void verifyConstraints()
         addAssignment(s, addFlight(s, 0, 20, 0, 100), 0);
         // transfers: groups {0},{1},{2} consecutive; arr airport 0 == dep 0.
         checkScore("flightConflictCost triple",
-                   ScoreCalculator::calculateScore(s),
+                   ScoreCalculator::score(s),
                    -30,
                    0);
     }
@@ -162,7 +162,7 @@ void verifyConstraints()
         addAssignment(s, addFlight(s, 0, 0, 0, 10), 0);
         addAssignment(s, addFlight(s, 0, 10, 0, 20), 0);
         checkScore("flightConflictCost touching = none (zero)",
-                   ScoreCalculator::calculateScore(s),
+                   ScoreCalculator::score(s),
                    0,
                    0);
     }
@@ -172,7 +172,7 @@ void verifyConstraints()
         addAssignment(s, addFlight(s, 0, 0, 0, 10), 0);
         addAssignment(s, addFlight(s, 0, 1, 0, 11), 1);
         checkScore("flightConflictCost different employees",
-                   ScoreCalculator::calculateScore(s),
+                   ScoreCalculator::score(s),
                    0,
                    0);
     }
@@ -188,7 +188,7 @@ void verifyConstraints()
         addAssignment(s, addFlight(s, 0, 11, 1, 12), 0);
         addAssignment(s, addFlight(s, 0, 13, 1, 14), 0);
         checkScore("transferBetweenTwoFlightsCost two broken (Java case)",
-                   ScoreCalculator::calculateScore(s),
+                   ScoreCalculator::score(s),
                    -2,
                    -1000);
     }
@@ -198,7 +198,7 @@ void verifyConstraints()
         addAssignment(s, addFlight(s, 0, 0, 1, 10), 0);
         addAssignment(s, addFlight(s, 1, 20, 0, 30), 0);
         checkScore("transferBetweenTwoFlightsCost connected (zero)",
-                   ScoreCalculator::calculateScore(s),
+                   ScoreCalculator::score(s),
                    0,
                    0);
     }
@@ -213,7 +213,7 @@ void verifyConstraints()
         addAssignment(s, addFlight(s, 2, 20, 0, 30), 0);
         addAssignment(s, addFlight(s, 2, 20, 0, 30), 0);
         checkScore("transfer tie on second group (2 pairs + conflict)",
-                   ScoreCalculator::calculateScore(s),
+                   ScoreCalculator::score(s),
                    -2 - 10,
                    0);
     }
@@ -229,7 +229,7 @@ void verifyConstraints()
         addAssignment(s, addFlight(s, 0, 0, 1, 10), 0);
         addAssignment(s, addFlight(s, 2, 20, 0, 30), 0);
         checkScore("transfer tie on first group suppresses pair",
-                   ScoreCalculator::calculateScore(s),
+                   ScoreCalculator::score(s),
                    -10,
                    0);
     }
@@ -244,7 +244,7 @@ void verifyConstraints()
             addFlight(s, 0, 5 * MINUTES_PER_DAY, 0, 5 * MINUTES_PER_DAY + 10),
             0);
         checkScore("employeeUnavailabilityCost at departure",
-                   ScoreCalculator::calculateScore(s),
+                   ScoreCalculator::score(s),
                    -10,
                    0);
     }
@@ -257,7 +257,7 @@ void verifyConstraints()
             addFlight(s, 0, 4 * MINUTES_PER_DAY, 0, 5 * MINUTES_PER_DAY + 10),
             0);
         checkScore("employeeUnavailabilityCost during flight",
-                   ScoreCalculator::calculateScore(s),
+                   ScoreCalculator::score(s),
                    -10,
                    0);
     }
@@ -270,7 +270,7 @@ void verifyConstraints()
             addFlight(s, 0, 6 * MINUTES_PER_DAY, 0, 6 * MINUTES_PER_DAY + 10),
             0);
         checkScore("employeeUnavailabilityCost available (zero)",
-                   ScoreCalculator::calculateScore(s),
+                   ScoreCalculator::score(s),
                    0,
                    0);
     }
@@ -296,7 +296,7 @@ void verifyConstraints()
         addAssignment(s, addFlight(s, 1, 1, 2, 10), 0);
         addAssignment(s, addFlight(s, 2, 0, 3, 10), 1);
         checkScore("first/last not home (Java case, combined)",
-                   ScoreCalculator::calculateScore(s),
+                   ScoreCalculator::score(s),
                    -32,
                    -4000);
     }
@@ -315,7 +315,7 @@ void verifyConstraints()
         addAssignment(s, addFlight(s, 1, 0, 2, 10), 1);
         addAssignment(s, addFlight(s, 2, 11, 1, 12), 1);
         checkScore("last not arriving home (Java case)",
-                   ScoreCalculator::calculateScore(s),
+                   ScoreCalculator::score(s),
                    0,
                    -2000);
     }
@@ -327,7 +327,7 @@ void verifyConstraints()
         const int f = addFlight(s, 1, 0, 1, 10);
         addAssignment(s, f, -1, "1");
         checkScore("unassigned contributes nothing",
-                   ScoreCalculator::calculateScore(s),
+                   ScoreCalculator::score(s),
                    0,
                    0);
     }
@@ -339,7 +339,7 @@ void verifyConstraints()
         addAssignment(s, f, 0, "1");
         s.flightAssignments.back().pinned = true;
         checkScore("pinned assignment still scored",
-                   ScoreCalculator::calculateScore(s),
+                   ScoreCalculator::score(s),
                    -100,
                    0);
     }
@@ -378,7 +378,7 @@ buildRandomInstance(int flightCount, int employeeCount, std::uint64_t seed)
 
 // -------------------------------------------------------------------------
 // (b) Incremental score == full recompute across a random walk of change and
-// swap moves (including unassignments), driven through the ScoreDirector so
+// swap moves (including unassignments), driven through the Editor so
 // the before/set/after hook contract is exercised exactly like in the engine.
 // -------------------------------------------------------------------------
 void verifyIncremental()
@@ -388,7 +388,7 @@ void verifyIncremental()
         = buildRandomInstance(/*flights*/ 18, /*employees*/ 8, /*seed*/ 7);
 
     FlightCrewIncrementalScoreCalculator calc;
-    optimaru::ScoreDirector<FlightCrewSchedule> director(s, calc);
+    optimaru::Editor<FlightCrewSchedule> editor(s, calc);
     FlightCrewSchedule shadow = s;
 
     std::mt19937_64 rng(123);
@@ -408,7 +408,7 @@ void verifyIncremental()
             const int value = (unit(rng) < 0.10)
                                   ? -1
                                   : static_cast<int>(rng() % employeeCount);
-            director.changeVariable(assignment, value);
+            editor.assign(assignment, value);
         }
         else
         {
@@ -417,8 +417,8 @@ void verifyIncremental()
             const int b = static_cast<int>(rng() % assignmentCount);
             const int va = s.flightAssignments[a].employee;
             const int vb = s.flightAssignments[b].employee;
-            director.changeVariable(a, vb);
-            director.changeVariable(b, va);
+            editor.assign(a, vb);
+            editor.assign(b, va);
         }
         // Full recompute on the same assignment.
         for (int i = 0; i < assignmentCount; ++i)
@@ -426,8 +426,8 @@ void verifyIncremental()
             shadow.flightAssignments[i].employee
                 = s.flightAssignments[i].employee;
         }
-        const Score full = ScoreCalculator::calculateScore(shadow);
-        const Score incremental = director.calculateScore();
+        const Score full = ScoreCalculator::score(shadow);
+        const Score incremental = editor.score();
         if (full.hard != incremental.hard
             || std::fabs(full.soft - incremental.soft) > 1e-9)
         {
@@ -435,8 +435,8 @@ void verifyIncremental()
             {
                 std::printf("  MISMATCH @step %d: incremental=%s full=%s\n",
                             step,
-                            incremental.toString().c_str(),
-                            full.toString().c_str());
+                            incremental.str().c_str(),
+                            full.str().c_str());
             }
         }
     }
@@ -447,9 +447,9 @@ void verifyIncremental()
 }
 
 // -------------------------------------------------------------------------
-// (c) FULL_ASSERT solve: the engine cross-checks the incremental score
+// (c) ScoreChecks::Full solve: the engine cross-checks the incremental score
 // against a full reset + recompute after every single move and throws
-// ScoreCorruptionError on any divergence.
+// ScoreMismatchError on any divergence.
 // -------------------------------------------------------------------------
 void verifyFullAssertSolve()
 {
@@ -458,10 +458,10 @@ void verifyFullAssertSolve()
         = buildRandomInstance(/*flights*/ 12, /*employees*/ 6, /*seed*/ 11);
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(2);
-    config.randomSeed = 3;
-    config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
-    // Kick early so the LNS ruin/recreate path also runs under FULL_ASSERT.
+    config.time_limit = std::chrono::seconds(2);
+    config.seed = 3;
+    config.score_checks = optimaru::ScoreChecks::Full;
+    // Kick early so the LNS ruin/recreate path also runs under ScoreChecks::Full.
     config.ruinRecreateUnimprovedStepTrigger = 200;
     config.ruinRecreatePolishSteps = 100;
 
@@ -473,7 +473,7 @@ void verifyFullAssertSolve()
         solver.solve(s);
         final = s.score;
     }
-    catch (const optimaru::ScoreCorruptionError &e)
+    catch (const optimaru::ScoreMismatchError &e)
     {
         corrupted = true;
         std::printf("  ScoreCorruptionError: %s\n", e.what());
@@ -481,7 +481,7 @@ void verifyFullAssertSolve()
     check(!corrupted, "2s FULL_ASSERT solve without score corruption");
     if (!corrupted)
     {
-        const Score recomputed = ScoreCalculator::calculateScore(s);
+        const Score recomputed = ScoreCalculator::score(s);
         check(final.hard == recomputed.hard
                   && std::fabs(final.soft - recomputed.soft) < 1e-9,
               "solver-reported score == full recompute");
@@ -502,8 +502,8 @@ void verifyPinnedSolve()
     s.flightAssignments[0].pinned = true;
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(1);
-    config.randomSeed = 5;
+    config.time_limit = std::chrono::seconds(1);
+    config.seed = 5;
     Solver solver(config);
     solver.solve(s);
 

@@ -1,14 +1,14 @@
 // Plugin-assembly (ta/constraints.hpp) tests, engine test/ style: check() + a
 // non-zero exit on any failure.
-//   (a) the default assembly on the engine's DecomposedScoreCalculator
+//   (a) the default assembly on the engine's DecomposedObjective
 //       reproduces the monolithic score bit-for-bit on 300 random list
 //       layouts (unassigned tasks included)
 //   (b) incremental score == full recompute across 3000 random LIST moves
-//       driven through the engine's ScoreDirector protocol (plugin path)
+//       driven through the engine's Editor protocol (plugin path)
 //   (c) partial assemblies: each component in isolation, hand-computed
 //   (d) weight / level / exponent overrides
-//   (e) constraintTotals() explains exactly the reported score
-//   (f) a 2-second solve(solution, calculator) under FULL_ASSERT
+//   (e) constraint_totals() explains exactly the reported score
+//   (f) a 2-second solve(solution, calculator) under ScoreChecks::Full
 //   (g) the medium level: the below-hard fold, hard() / soft() / weight on
 //       unassignedTasksCost, and a random walk with the medium term
 //       overridden (incremental == full recompute)
@@ -20,7 +20,7 @@
 //       an evaluated unit), the global's total shaped once, the literal
 //       formula refused at reset on hard and on the below-hard medium and
 //       kept on soft, incremental == a fresh recompute over a random LIST
-//       walk and a FULL_ASSERT solve with repeated, shifted components
+//       walk and a ScoreChecks::Full solve with repeated, shifted components
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -37,7 +37,7 @@
 #include "ta/domain.hpp"
 #include "ta/score_calculator.hpp"
 #include "ta/solver.hpp"
-#include "optimaru/api/score/director/score_director.hpp"
+#include "optimaru/editor.hpp"
 
 using namespace ta;
 
@@ -61,8 +61,8 @@ void checkScore(const std::string &label,
     std::printf("  [%s] %-44s got=%s expected=%s\n",
                 ok ? "PASS" : "FAIL",
                 label.c_str(),
-                actual.toString().c_str(),
-                expected.toString().c_str());
+                actual.str().c_str(),
+                expected.str().c_str());
     if (!ok)
         ++failures;
 }
@@ -162,8 +162,8 @@ buildRandomInstance(int taskCount, int employeeCount, unsigned seed)
 // the domain's Bendable levels.
 Score scoreWith(DecomposedCalculator &calculator, TaskAssigningSolution &s)
 {
-    calculator.resetWorkingSolution(s);
-    return fromEngineScore(calculator.calculateScore());
+    calculator.rebuild(s);
+    return fromEngineScore(calculator.score());
 }
 
 // -------------------------------------------------------------------------
@@ -197,15 +197,15 @@ void verifyAssemblyParity()
             solution.employees[list].tasks.push_back(t);
         }
         const Score plugin = scoreWith(calculator, solution);
-        const Score monolithic = ScoreCalculator::calculateScore(solution);
+        const Score monolithic = ScoreCalculator::score(solution);
         if (!(plugin == monolithic))
         {
             if (++mismatches <= 3)
             {
                 std::printf("  MISMATCH @round %d: plugin=%s monolithic=%s\n",
                             round,
-                            plugin.toString().c_str(),
-                            monolithic.toString().c_str());
+                            plugin.str().c_str(),
+                            monolithic.str().c_str());
             }
         }
     }
@@ -216,7 +216,7 @@ void verifyAssemblyParity()
 
 // -------------------------------------------------------------------------
 // (b) Incremental score == full recompute across a random walk of LIST
-// mutations, driven through the ScoreDirector so the plugin path's
+// mutations, driven through the Editor so the plugin path's
 // before/after hook contract is exercised exactly like in the engine.
 // -------------------------------------------------------------------------
 void verifyIncremental()
@@ -229,7 +229,7 @@ void verifyIncremental()
 
     DecomposedCalculator calculator;
     addDefaultConstraints(calculator);
-    optimaru::ScoreDirector<TaskAssigningSolution> director(solution,
+    optimaru::Editor<TaskAssigningSolution> editor(solution,
                                                             calculator);
 
     std::mt19937_64 rng(2024);
@@ -265,7 +265,7 @@ void verifyIncremental()
             const int list = static_cast<int>(rng() % employeeCount);
             const int position = static_cast<int>(
                 rng() % (solution.employees[list].tasks.size() + 1));
-            director.insertListElement(list, position, task);
+            editor.insert(list, position, task);
             taskList[task] = list;
         }
         else if (dice < 0.55)
@@ -273,7 +273,7 @@ void verifyIncremental()
             const int task = static_cast<int>(rng() % taskCount);
             if (taskList[task] < 0)
                 continue;
-            director.removeListElement(taskList[task],
+            editor.remove(taskList[task],
                                        indexWithin(taskList[task], task));
             taskList[task] = -1;
             unassigned.push_back(task);
@@ -283,12 +283,12 @@ void verifyIncremental()
             const int task = static_cast<int>(rng() % taskCount);
             if (taskList[task] < 0)
                 continue;
-            director.removeListElement(taskList[task],
+            editor.remove(taskList[task],
                                        indexWithin(taskList[task], task));
             const int list = static_cast<int>(rng() % employeeCount);
             const int position = static_cast<int>(
                 rng() % (solution.employees[list].tasks.size() + 1));
-            director.insertListElement(list, position, task);
+            editor.insert(list, position, task);
             taskList[task] = list;
         }
         else
@@ -302,11 +302,11 @@ void verifyIncremental()
             int last = static_cast<int>(rng() % size);
             if (first > last)
                 std::swap(first, last);
-            director.reverseListSegment(list, first, last);
+            editor.reverse(list, first, last);
         }
 
-        const optimaru::HardSoftScore incremental = director.calculateScore();
-        const optimaru::HardSoftScore full
+        const optimaru::Score incremental = editor.score();
+        const optimaru::Score full
             = ScoreCalculator::calculateEngineScore(solution);
         if (full.hard != incremental.hard
             || std::fabs(full.soft - incremental.soft) > 1e-9)
@@ -315,8 +315,8 @@ void verifyIncremental()
             {
                 std::printf("  MISMATCH @step %d: incremental=%s full=%s\n",
                             step,
-                            incremental.toString().c_str(),
-                            full.toString().c_str());
+                            incremental.str().c_str(),
+                            full.str().c_str());
             }
         }
     }
@@ -480,7 +480,7 @@ void verifyOverrides()
 }
 
 // -------------------------------------------------------------------------
-// (e) constraintTotals(): the per-constraint breakdown adds up to the score
+// (e) constraint_totals(): the per-constraint breakdown adds up to the score
 // the same assembly reports.
 // -------------------------------------------------------------------------
 void verifyConstraintTotals()
@@ -500,8 +500,8 @@ void verifyConstraintTotals()
 
     DecomposedCalculator calculator;
     addDefaultConstraints(calculator);
-    calculator.resetWorkingSolution(solution);
-    const optimaru::HardSoftScore score = calculator.calculateScore();
+    calculator.rebuild(solution);
+    const optimaru::Score score = calculator.score();
 
     // A medium total is in medium units (not multiplied by the fold), so it
     // is folded here the way the calculator folds its medium accumulator:
@@ -509,7 +509,7 @@ void verifyConstraintTotals()
     double hard = 0.0;
     double medium = 0.0;
     double soft = 0.0;
-    for (const optimaru::ConstraintTotal &total : calculator.constraintTotals())
+    for (const optimaru::ConstraintTotal &total : calculator.constraint_totals())
     {
         if (total.level == optimaru::Level::Hard)
             hard += total.cost;
@@ -525,13 +525,13 @@ void verifyConstraintTotals()
               && std::fabs(-soft - score.soft) < 1e-3,
           "per-constraint totals (medium folded below hard) sum to the "
           "reported score");
-    check(calculator.constraintTotals().size() == 6,
+    check(calculator.constraint_totals().size() == 6,
           "one total per assembled component");
     std::printf("\n");
 }
 
 // -------------------------------------------------------------------------
-// (f) FULL_ASSERT solve on the plugin path: the engine cross-checks the
+// (f) ScoreChecks::Full solve on the plugin path: the engine cross-checks the
 // incremental score against a full reset + recompute after every move.
 // -------------------------------------------------------------------------
 void verifyFullAssertSolve()
@@ -541,9 +541,9 @@ void verifyFullAssertSolve()
         = buildRandomInstance(/*taskCount*/ 20, /*employeeCount*/ 5, 11);
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(2);
-    config.randomSeed = 3;
-    config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+    config.time_limit = std::chrono::seconds(2);
+    config.seed = 3;
+    config.score_checks = optimaru::ScoreChecks::Full;
     config.ruinRecreateUnimprovedStepTrigger = 200;
     config.ruinRecreatePolishSteps = 100;
 
@@ -556,7 +556,7 @@ void verifyFullAssertSolve()
         Solver solver(config);
         solver.solve(solution, calculator);
     }
-    catch (const optimaru::ScoreCorruptionError &e)
+    catch (const optimaru::ScoreMismatchError &e)
     {
         corrupted = true;
         std::printf("  ScoreCorruptionError: %s\n", e.what());
@@ -564,7 +564,7 @@ void verifyFullAssertSolve()
     check(!corrupted, "2s FULL_ASSERT plugin solve without score corruption");
     if (!corrupted)
     {
-        const Score recomputed = ScoreCalculator::calculateScore(solution);
+        const Score recomputed = ScoreCalculator::score(solution);
         check(solution.score == recomputed,
               "plugin-reported score == monolithic full recompute");
         check(solution.score.soft0 == 0, "every task assigned after the solve");
@@ -599,20 +599,20 @@ void verifyMediumLevel()
     b.solution.employees[0].tasks.push_back(task);
     TaskAssigningSolution &s = b.solution;
 
-    const Score monolithic = ScoreCalculator::calculateScore(s);
+    const Score monolithic = ScoreCalculator::score(s);
     checkScore("monolith: 1 missing skill, 2 unassigned, 40^2, 40",
                monolithic,
                Score{-1, -2, -1600, -40});
     {
         DecomposedCalculator calculator;
         addDefaultConstraints(calculator);
-        calculator.resetWorkingSolution(s);
-        const optimaru::HardSoftScore engine = calculator.calculateScore();
+        calculator.rebuild(s);
+        const optimaru::Score engine = calculator.score();
         check(engine.hard == -(1 * kMissingSkillUnit + 2)
                   && engine.soft == -(1600.0 * 1e7 + 40.0),
               "default: engine.hard = hard * 10^9 + medium, soft = "
               "soft1 * 10^7 + soft2");
-        const auto levels = calculator.levelScores();
+        const auto levels = calculator.level_scores();
         check(levels.hard == -1 && levels.medium == -2.0
                   && levels.soft == -(1600.0 * 1e7 + 40.0),
               "levelScores() reports the three levels unfolded");
@@ -673,7 +673,7 @@ void verifyMediumIncremental()
         const int employeeCount = static_cast<int>(solution.employees.size());
         DecomposedCalculator calculator;
         variant.second().into(calculator);
-        optimaru::ScoreDirector<TaskAssigningSolution> director(solution,
+        optimaru::Editor<TaskAssigningSolution> editor(solution,
                                                                 calculator);
         std::mt19937_64 rng(77);
         std::vector<int> taskList(taskCount, -1);
@@ -688,7 +688,7 @@ void verifyMediumIncremental()
                     = solution.employees[taskList[task]].tasks;
                 const int position = static_cast<int>(
                     std::find(tasks.begin(), tasks.end(), task) - tasks.begin());
-                director.removeListElement(taskList[task], position);
+                editor.remove(taskList[task], position);
                 taskList[task] = -1;
             }
             if (rng() % 3 != 0)
@@ -696,15 +696,15 @@ void verifyMediumIncremental()
                 const int list = static_cast<int>(rng() % employeeCount);
                 const int position = static_cast<int>(
                     rng() % (solution.employees[list].tasks.size() + 1));
-                director.insertListElement(list, position, task);
+                editor.insert(list, position, task);
                 taskList[task] = list;
             }
-            const optimaru::HardSoftScore incremental = director.calculateScore();
+            const optimaru::Score incremental = editor.score();
             DecomposedCalculator fresh;
             variant.second().into(fresh);
-            fresh.resetWorkingSolution(solution);
-            const optimaru::HardSoftScore full = fresh.calculateScore();
-            if (fresh.levelScores().medium != 0.0)
+            fresh.rebuild(solution);
+            const optimaru::Score full = fresh.score();
+            if (fresh.level_scores().medium != 0.0)
                 ++mediumSteps;
             if (full.hard != incremental.hard
                 || std::fabs(full.soft - incremental.soft) > 1e-6)
@@ -721,7 +721,7 @@ void verifyMediumIncremental()
 // -------------------------------------------------------------------------
 // (h) Each component's raw cost on hand-built instances: one violating
 // (positive) case and one clean (zero) case per constraint, read through
-// constraintCosts() — the raw per-unit (per-employee; one total for the
+// constraint_costs() — the raw per-unit (per-employee; one total for the
 // global unassignedTasksCost) numbers before weight and level.
 // -------------------------------------------------------------------------
 std::vector<double> rawCosts(TaskAssigningSolution &solution,
@@ -729,12 +729,12 @@ std::vector<double> rawCosts(TaskAssigningSolution &solution,
 {
     DecomposedCalculator calculator;
     addDefaultConstraints(calculator);
-    calculator.resetWorkingSolution(solution);
-    calculator.calculateScore();
-    for (const auto &entry : calculator.constraintCosts())
+    calculator.rebuild(solution);
+    calculator.score();
+    for (const auto &entry : calculator.constraint_costs())
     {
         if (entry.name == name)
-            return entry.unitCosts;
+            return entry.unit_costs;
     }
     return {};
 }
@@ -867,13 +867,13 @@ bool rowIs(const optimaru::ConstraintInfo &row,
            const char *name,
            optimaru::Level level,
            double weight,
-           bool isGlobal = false)
+           bool is_global = false)
 {
-    return row.name == name && row.defaultLevel == Component::kDefaultLevel
-           && row.defaultWeight == Component::kDefaultWeight
-           && row.defaultLevel == level && row.defaultWeight == weight
-           && row.levelFlippable && !row.reward && row.isGlobal == isGlobal
-           && row.defaultEnabled;
+    return row.name == name && row.default_level == Component::kDefaultLevel
+           && row.default_weight == Component::kDefaultWeight
+           && row.default_level == level && row.default_weight == weight
+           && row.level_flippable && !row.reward && row.is_global == is_global
+           && row.default_enabled;
 }
 
 void verifyCatalog()
@@ -891,7 +891,7 @@ void verifyCatalog()
               && rowIs<MinorPriorityTaskEndTimeCost>(
                   rows[4], "minorPriorityTaskEndTimeCost", Level::Soft, 1.0)
               && rowIs<UnassignedTasksCost>(
-                  rows[5], "unassignedTasksCost", Level::Medium, 1.0, /*isGlobal*/ true),
+                  rows[5], "unassignedTasksCost", Level::Medium, 1.0, /*is_global*/ true),
           "info(): skills hard 1, makespan soft 1e7, priorities soft 4/2/1, "
           "unassigned medium 1 (global); all flippable, no reward, enabled");
     check(defaultConstraints().names()
@@ -920,7 +920,7 @@ void verifyCatalog()
 // -------------------------------------------------------------------------
 // (j) Repeated components and offsets. A repeat is a fresh copy of a
 // default component (another defaultConstraints(), the one name kept, its
-// knobs re-stated) appended with addInstances(), as the Python bindings
+// knobs re-stated) appended with add_instances(), as the Python bindings
 // build it from a pick list.
 // -------------------------------------------------------------------------
 ConstraintAssembly copyOf(const std::string &name)
@@ -948,44 +948,44 @@ TaskAssigningSolution repeatInstance()
     return b.solution;
 }
 
-optimaru::DecomposedScoreCalculator<TaskAssigningSolution>::LevelScores
+optimaru::DecomposedObjective<TaskAssigningSolution>::LevelScores
 levelsWith(ConstraintAssembly assembly, TaskAssigningSolution &s)
 {
     DecomposedCalculator calculator;
     std::move(assembly).into(calculator);
-    calculator.resetWorkingSolution(s);
-    calculator.calculateScore();
-    return calculator.levelScores();
+    calculator.rebuild(s);
+    calculator.score();
+    return calculator.level_scores();
 }
 
 ConstraintAssembly repeatedAssembly()
 {
     ConstraintAssembly assembly = defaultConstraints();
     assembly.offset("criticalPriorityTaskEndTimeCost", 30.0);
-    assembly.addInstances(std::move(copyOf("squaredMakespanCost")
+    assembly.add_instances(std::move(copyOf("squaredMakespanCost")
                                         .weight("squaredMakespanCost", 0.5)
                                         .offset("squaredMakespanCost", 1e6)
                                         .clip("squaredMakespanCost", false)));
     // The literal required-skill copy sits on soft: hard (and the below-hard
     // medium) refuse the literal formula with an offset (hard 0 must mean no
     // violation).
-    assembly.addInstances(std::move(copyOf("requiredSkillCost")
+    assembly.add_instances(std::move(copyOf("requiredSkillCost")
                                         .soft("requiredSkillCost")
                                         .weight("requiredSkillCost", 2.0)
                                         .offset("requiredSkillCost", 1.0)
                                         .clip("requiredSkillCost", false)));
-    assembly.addInstances(std::move(copyOf("requiredSkillCost")
+    assembly.add_instances(std::move(copyOf("requiredSkillCost")
                                         .weight("requiredSkillCost", 2.0)
                                         .offset("requiredSkillCost", 1.0)));
-    assembly.addInstances(std::move(copyOf("unassignedTasksCost")
+    assembly.add_instances(std::move(copyOf("unassignedTasksCost")
                                         .exponent("unassignedTasksCost", 2.0)
                                         .offset("unassignedTasksCost", 1.0)));
-    assembly.addInstances(std::move(copyOf("unassignedTasksCost")
+    assembly.add_instances(std::move(copyOf("unassignedTasksCost")
                                         .soft("unassignedTasksCost")
                                         .weight("unassignedTasksCost", 3.0)
                                         .offset("unassignedTasksCost", -2.0)
                                         .clip("unassignedTasksCost", false)));
-    assembly.addInstances(
+    assembly.add_instances(
         std::move(copyOf("minorPriorityTaskEndTimeCost")
                       .exponent("minorPriorityTaskEndTimeCost", 2.0)
                       .offset("minorPriorityTaskEndTimeCost", 10.0)));
@@ -998,23 +998,23 @@ void verifyRepeatsAndOffsets()
     {
         TaskAssigningSolution s = repeatInstance();
         ConstraintAssembly twice = copyOf("criticalPriorityTaskEndTimeCost");
-        twice.addInstances(
+        twice.add_instances(
             std::move(copyOf("criticalPriorityTaskEndTimeCost")
                           .weight("criticalPriorityTaskEndTimeCost", 0.5)
                           .exponent("criticalPriorityTaskEndTimeCost", 2.0)));
         DecomposedCalculator calculator;
         std::move(twice).into(calculator);
-        calculator.resetWorkingSolution(s);
-        calculator.calculateScore();
-        const auto levels = calculator.levelScores();
+        calculator.rebuild(s);
+        calculator.score();
+        const auto levels = calculator.level_scores();
         check(levels.hard == 0 && levels.medium == 0.0
                   && levels.soft == -(4.0 * 10 + 0.5 * 100),
               "4 x end + 0.5 x end^2 per employee: -90 soft");
-        const auto entries = calculator.constraintCosts();
-        check(entries.size() == 2 && entries[0].unitCosts == entries[1].unitCosts
-                  && entries[0].unitCosts == std::vector<double>{10, 0, 0}
+        const auto entries = calculator.constraint_costs();
+        check(entries.size() == 2 && entries[0].unit_costs == entries[1].unit_costs
+                  && entries[0].unit_costs == std::vector<double>{10, 0, 0}
                   && !entries[0].scoped && entries[1].weight == 0.5
-                  && entries[1].exponent == 2.0 && entries[1].defaultWeight == 4.0,
+                  && entries[1].exponent == 2.0 && entries[1].default_weight == 4.0,
               "two instances, the same raw costs, each with its own knobs");
     }
     {
@@ -1139,7 +1139,7 @@ void verifyRepeatsAndOffsets()
         const int employeeCount = static_cast<int>(solution.employees.size());
         DecomposedCalculator calculator;
         repeatedAssembly().into(calculator);
-        optimaru::ScoreDirector<TaskAssigningSolution> director(solution,
+        optimaru::Editor<TaskAssigningSolution> editor(solution,
                                                                 calculator);
         std::mt19937_64 rng(321);
         std::uniform_real_distribution<double> unit(0.0, 1.0);
@@ -1164,19 +1164,19 @@ void verifyRepeatsAndOffsets()
             const double dice = unit(rng);
             if (dice < 0.2 && taskList[task] >= 0)
             {
-                director.removeListElement(taskList[task],
+                editor.remove(taskList[task],
                                            indexWithin(taskList[task], task));
                 taskList[task] = -1;
             }
             else if (dice < 0.85)
             {
                 if (taskList[task] >= 0)
-                    director.removeListElement(taskList[task],
+                    editor.remove(taskList[task],
                                                indexWithin(taskList[task], task));
                 const int list = static_cast<int>(rng() % employeeCount);
                 const int position = static_cast<int>(
                     rng() % (solution.employees[list].tasks.size() + 1));
-                director.insertListElement(list, position, task);
+                editor.insert(list, position, task);
                 taskList[task] = list;
             }
             else
@@ -1190,18 +1190,18 @@ void verifyRepeatsAndOffsets()
                 int last = static_cast<int>(rng() % size);
                 if (first > last)
                     std::swap(first, last);
-                director.reverseListSegment(list, first, last);
+                editor.reverse(list, first, last);
             }
-            const optimaru::HardSoftScore incremental = director.calculateScore();
+            const optimaru::Score incremental = editor.score();
             TaskAssigningSolution shadow = solution;
             DecomposedCalculator fresh;
             repeatedAssembly().into(fresh);
-            fresh.resetWorkingSolution(shadow);
-            const optimaru::HardSoftScore full = fresh.calculateScore();
-            if (fresh.levelScores().medium != 0.0)
+            fresh.rebuild(shadow);
+            const optimaru::Score full = fresh.score();
+            if (fresh.level_scores().medium != 0.0)
                 ++mediumSteps;
             drift = std::max(drift, std::fabs(full.soft - incremental.soft));
-            if (!optimaru::scoresAgree(incremental, full))
+            if (!optimaru::scores_agree(incremental, full))
                 ++mismatches;
         }
         std::printf("    largest soft drift %.3g\n", drift);
@@ -1215,9 +1215,9 @@ void verifyRepeatsAndOffsets()
         TaskAssigningSolution solution
             = buildRandomInstance(/*taskCount*/ 20, /*employeeCount*/ 5, 11);
         Solver::Config config;
-        config.spentLimit = std::chrono::seconds(2);
-        config.randomSeed = 5;
-        config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+        config.time_limit = std::chrono::seconds(2);
+        config.seed = 5;
+        config.score_checks = optimaru::ScoreChecks::Full;
         config.ruinRecreateUnimprovedStepTrigger = 200;
         config.ruinRecreatePolishSteps = 100;
         DecomposedCalculator calculator;
@@ -1228,7 +1228,7 @@ void verifyRepeatsAndOffsets()
             Solver solver(config);
             solver.solve(solution, calculator);
         }
-        catch (const optimaru::ScoreCorruptionError &e)
+        catch (const optimaru::ScoreMismatchError &e)
         {
             corrupted = true;
             std::printf("  ScoreCorruptionError: %s\n", e.what());

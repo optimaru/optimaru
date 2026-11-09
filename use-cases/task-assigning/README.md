@@ -48,7 +48,7 @@ scored by default (`default_enabled`);
 (`kDefaultLevel` / `kDefaultWeight`).
 
 **Score mapping.** The engine scores three levels and this domain folds them into its
-`HardSoftScore` (`cpp/include/ta/domain.hpp`):
+`Score` (`cpp/include/ta/domain.hpp`):
 
 ```
 engine.hard = hard * 10^9 + medium     # medium = soft0: MediumFold::belowHard(10^9)
@@ -137,12 +137,12 @@ engine is `cpp/include/ta/solver.hpp` + `cpp/src/solver.cpp`.
 
 **Adding a move.** The engine already mixes relocate / swap / 2-opt / Or-opt / 2-opt\* tail swap moves
 (weights in `Solver::Config`). This use case relies on the engine's generic moves only; it has no domain move yet. A new move is a
-`optimaru::MoveOperator<…>` registered with `engine.addMoveOperator(...)` next
+`optimaru::MoveOperator<…>` registered with `engine.add_move_operator(...)` next
 to the engine construction in `cpp/src/solver.cpp`; a ruin for LNS is a
-`RuinOperator` registered with `engine.addRuinOperator(...)`.
+`RuinOperator` registered with `engine.add_ruin_operator(...)`.
 
 **Changing the construction heuristic.** Elements are placed by cheapest insertion in index order. Set
-`engineConfig.constructionHeuristic.entityDifficulty` for First Fit
+`engineConfig.construction.difficulty` for First Fit
 Decreasing ordering, or pre-assign part of the solution in the domain
 solver's `solve` before the engine runs — the engine only fills what is still unassigned.
 

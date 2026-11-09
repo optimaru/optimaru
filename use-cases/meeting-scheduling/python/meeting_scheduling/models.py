@@ -4,7 +4,7 @@ Mirrors `_core`'s Person/TimeGrain/Room/Meeting/MeetingAssignment/MeetingSchedul
 1:1. People/meetings/time grains/rooms are referenced by list index (instead of
 Java's object references). Meetings and assignments are 1:1 (the quickstart demo model).
 
-Score mapping (Java HardMediumSoftScore -> engine HardSoftScore):
+Score mapping (Java HardMediumSoftScore -> engine Score):
 ``score_hard`` is the Java hard as-is, ``score_soft`` is
 ``-(medium penalty * 1e6 + soft penalty)`` — folded with a 1e6 offset so medium
 (required+preferred / preferred attendance conflicts) always dominates soft::

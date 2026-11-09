@@ -7,25 +7,25 @@
 namespace st
 {
 
-void SchoolTimetablingIncrementalScoreCalculator::resetWorkingSolution(
-    Timetable &workingSolution)
+void SchoolTimetablingIncrementalScoreCalculator::rebuild(
+    Timetable &solution)
 {
-    ScoreCalculator::prepare(workingSolution);
-    table_ = &workingSolution;
-    tsCount_ = workingSolution.timeslotCount();
-    roomCount_ = workingSolution.roomCount();
+    ScoreCalculator::prepare(solution);
+    table_ = &solution;
+    tsCount_ = solution.timeslotCount();
+    roomCount_ = solution.roomCount();
 
-    slotRoomCnt_.assign(workingSolution.slotRoomCount(), 0);
+    slotRoomCnt_.assign(solution.slotRoomCount(), 0);
     teacherSlotCnt_.assign(
-        static_cast<std::size_t>(workingSolution.teacherCount) * tsCount_, 0);
+        static_cast<std::size_t>(solution.teacherCount) * tsCount_, 0);
     groupSlotCnt_.assign(
-        static_cast<std::size_t>(workingSolution.groupCount) * tsCount_, 0);
+        static_cast<std::size_t>(solution.groupCount) * tsCount_, 0);
     groupSubjectSlotCnt_.assign(
-        static_cast<std::size_t>(workingSolution.groupSubjectCount) * tsCount_,
+        static_cast<std::size_t>(solution.groupSubjectCount) * tsCount_,
         0);
-    teacherLessons_.assign(workingSolution.teacherCount, 0);
+    teacherLessons_.assign(solution.teacherCount, 0);
     teacherRoomCnt_.assign(
-        static_cast<std::size_t>(workingSolution.teacherCount) * roomCount_, 0);
+        static_cast<std::size_t>(solution.teacherCount) * roomCount_, 0);
 
     conflictPairs_ = 0;
     unavailable_ = 0;
@@ -33,10 +33,10 @@ void SchoolTimetablingIncrementalScoreCalculator::resetWorkingSolution(
     adjacentPairs_ = 0;
     subjectRepeat_ = 0;
 
-    assign_.assign(workingSolution.lessons.size(), -1);
-    for (int i = 0; i < static_cast<int>(workingSolution.lessons.size()); ++i)
+    assign_.assign(solution.lessons.size(), -1);
+    for (int i = 0; i < static_cast<int>(solution.lessons.size()); ++i)
     {
-        const int slotRoom = workingSolution.lessons[i].slotRoom;
+        const int slotRoom = solution.lessons[i].slotRoom;
         assign_[i] = slotRoom;
         if (slotRoom >= 0)
             insert(i, slotRoom);
@@ -143,7 +143,7 @@ void SchoolTimetablingIncrementalScoreCalculator::retract(int lessonIndex,
                    - teacherRoomCnt_[teacherRoomOffset(lesson.teacherId, room)];
 }
 
-void SchoolTimetablingIncrementalScoreCalculator::beforeVariableChanged(
+void SchoolTimetablingIncrementalScoreCalculator::before_assign(
     int lessonIndex)
 {
     const int old = assign_[lessonIndex];
@@ -152,7 +152,7 @@ void SchoolTimetablingIncrementalScoreCalculator::beforeVariableChanged(
     assign_[lessonIndex] = -1;
 }
 
-void SchoolTimetablingIncrementalScoreCalculator::afterVariableChanged(
+void SchoolTimetablingIncrementalScoreCalculator::after_assign(
     int lessonIndex)
 {
     const int now = table_->lessons[lessonIndex].slotRoom;  // the new value
@@ -161,7 +161,7 @@ void SchoolTimetablingIncrementalScoreCalculator::afterVariableChanged(
         insert(lessonIndex, now);  // now unassigned: nothing to insert
 }
 
-Score SchoolTimetablingIncrementalScoreCalculator::calculateScore()
+Score SchoolTimetablingIncrementalScoreCalculator::score()
 {
     Score score;
     score.hard = -(conflictPairs_ + unavailable_);

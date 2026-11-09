@@ -29,13 +29,13 @@ target_link_libraries(alb_demo PRIVATE alb_core)
 target_compile_options(alb_demo PRIVATE -Wall -Wextra)
 
 # Monolithic path: per-constraint hand checks, the ported construction,
-# incremental == full recompute on random moves, FULL_ASSERT solves.
+# incremental == full recompute on random moves, ScoreChecks::Full solves.
 add_executable(alb_test test/alb_test.cpp)
 target_link_libraries(alb_test PRIVATE alb_core)
 target_compile_options(alb_test PRIVATE -Wall -Wextra)
 
 # Plugin-assembly path (alb/constraints.hpp): the same score decomposed into
-# one component per constraint on the engine's DecomposedScoreCalculator,
+# one component per constraint on the engine's DecomposedObjective,
 # checked bit-for-bit against the monolithic calculators.
 add_executable(alb_plugin_test test/alb_plugin_test.cpp)
 target_link_libraries(alb_plugin_test PRIVATE alb_core)

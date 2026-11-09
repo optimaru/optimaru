@@ -59,12 +59,12 @@ int main(int argc, char **argv)
     KnapsackProblem problem = campingTrip();
 
     Solver::Config config;
-    config.spentLimit = std::chrono::milliseconds(static_cast<long long>(seconds * 1000.0));
-    config.randomSeed = 1;
+    config.time_limit = std::chrono::milliseconds(static_cast<long long>(seconds * 1000.0));
+    config.seed = 1;
     Solver solver(config);
     solver.solve(problem);
 
-    std::printf("Score: %s\n", problem.score.toString().c_str());
+    std::printf("Score: %s\n", problem.score.str().c_str());
     std::printf("Selected (weight %lld / %lld, value %lld):",
                 static_cast<long long>(problem.totalWeight()),
                 static_cast<long long>(problem.capacity),
@@ -79,11 +79,11 @@ int main(int argc, char **argv)
     // The same solution explained per constraint by the default assembly.
     DecomposedCalculator calculator;
     addDefaultConstraints(calculator);
-    calculator.resetWorkingSolution(problem);
-    calculator.calculateScore();
-    for (const optimaru::ConstraintTotal &total : calculator.constraintTotals())
+    calculator.rebuild(problem);
+    calculator.score();
+    for (const optimaru::ConstraintTotal &total : calculator.constraint_totals())
     {
-        std::printf("  %-26s %-4s %g\n", total.name.c_str(), optimaru::levelName(total.level),
+        std::printf("  %-26s %-4s %g\n", total.name.c_str(), optimaru::level_name(total.level),
                     total.cost);
     }
     return 0;

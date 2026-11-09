@@ -6,13 +6,13 @@
 #include <vector>
 
 #include "fp/domain.hpp"
-#include "optimaru/api/score/calculator/incremental_score_calculator.hpp"
+#include "optimaru/objective.hpp"
 
 namespace fp
 {
 
 // Incremental port of FoodPackagingConstraintProvider for the engine's LIST
-// hook protocol (beforeListChanged / afterListChanged). Every constraint of
+// hook protocol (before_list_edit / after_list_edit). Every constraint of
 // this quickstart decomposes per line once the shadow chain is known:
 //
 //   - per line l: lateness sums (hard maxEndTimeCost / medium
@@ -27,24 +27,24 @@ namespace fp
 //
 // A move touches at most a few lists; each hook retracts / re-derives ONE
 // line in O(list length + same-operator overlap work) instead of rescoring
-// the whole solution. The shadow chain is recomputed inside afterListChanged
+// the whole solution. The shadow chain is recomputed inside after_list_edit
 // (list-position based, exactly ScoreCalculator::updateShadowVariables'
-// semantics) rather than through a VariableListener, so the calculator stays
-// self-contained and multi-start safe (the engine's solveMultiStart does not
+// semantics) rather than through a DerivedState, so the calculator stays
+// self-contained and multi-start safe (the engine's solve_multistart does not
 // carry listeners into worker threads). The pool list (index lineCount) and
 // engine-unassigned jobs contribute only the medium unassigned penalty.
 class FoodPackagingIncrementalScoreCalculator final
-    : public optimaru::IncrementalScoreCalculator<PackagingSchedule>
+    : public optimaru::Objective<PackagingSchedule>
 {
 public:
-    void resetWorkingSolution(PackagingSchedule &workingSolution) override;
-    void beforeListChanged(int listIndex) override;
-    void afterListChanged(int listIndex) override;
-    optimaru::HardSoftScore calculateScore() override;
+    void rebuild(PackagingSchedule &solution) override;
+    void before_list_edit(int listIndex) override;
+    void after_list_edit(int listIndex) override;
+    optimaru::Score score() override;
 
     // The maintained score as the HardMediumSoft triple (for tests), at the
     // components' kDefaultWeight (see incremental_calculator.cpp).
-    Score currentScore() const;
+    Score current_score() const;
 
 private:
     struct LineState
@@ -60,7 +60,7 @@ private:
 
     // Re-derives the shadow chain of line l and its per-line sums, in place:
     // the caller's windows buffer is cleared and refilled so its capacity is
-    // reused across moves (afterListChanged runs millions of times per
+    // reused across moves (after_list_edit runs millions of times per
     // second; a fresh vector per call showed up as allocator time).
     void deriveLine(int l, LineState &state) const;
     // Java's overlapMinutes summed over every overlapping window pair of two

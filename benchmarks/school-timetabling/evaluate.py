@@ -104,8 +104,8 @@ def score_assignment(instance: dict, assignment: list[tuple[int, int]]) -> dict:
 
 
 def format_score(result: dict) -> str:
-    """The "Xhard/Ysoft" string, same as C++ ``HardSoftScore::toString`` / Java
-    ``HardSoftScore#toString``."""
+    """The "Xhard/Ysoft" string, same as the C++
+    ``Score::str()``."""
     return f"{result['hard']}hard/{result['soft']}soft"
 
 

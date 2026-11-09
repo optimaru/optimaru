@@ -8,13 +8,13 @@
 
 #include "bp/domain.hpp"
 #include "bp/score_calculator.hpp"
-#include "optimaru/api/score/calculator/incremental_score_calculator.hpp"
+#include "optimaru/objective.hpp"
 
 namespace bp
 {
 
 // The bin-packing implementation of the engine's
-// optimaru::IncrementalScoreCalculator.
+// optimaru::Objective.
 //
 // Every constraint is a function of per-bin aggregates, so a single variable
 // change is O(1) plus the moved item's conflict partners:
@@ -28,15 +28,15 @@ namespace bp
 //   - soft 4 (usedBinsCost): a bin switches on when its item count goes
 //     0 -> 1 and off when it drops back to 0.
 //
-// beforeVariableChanged retracts the item's contribution while `bin` still
-// holds the OLD value; afterVariableChanged inserts the NEW value. The
+// before_assign retracts the item's contribution while `bin` still
+// holds the OLD value; after_assign inserts the NEW value. The
 // calculator keeps its own copy of the assignment (`assign_`), so partner
 // lookups never depend on the order in which a compound move notifies.
 // Unassigned items (bin == -1) contribute nothing. The full-recompute
-// reference is ScoreCalculator::calculateScore (checked in the tests and
-// under EnvironmentMode::FULL_ASSERT).
+// reference is ScoreCalculator::score (checked in the tests and
+// under ScoreChecks::ScoreChecks::Full).
 class BinPackingIncrementalScoreCalculator final
-    : public optimaru::IncrementalScoreCalculator<BinPackingProblem>
+    : public optimaru::Objective<BinPackingProblem>
 {
 public:
     // Above this many (bin, colour class) cells the colour counts live in a
@@ -52,12 +52,12 @@ public:
     {
     }
 
-    void resetWorkingSolution(BinPackingProblem &workingSolution) override;
-    void beforeVariableChanged(int itemIndex) override;
-    void afterVariableChanged(int itemIndex) override;
-    Score calculateScore() override;
+    void rebuild(BinPackingProblem &solution) override;
+    void before_assign(int itemIndex) override;
+    void after_assign(int itemIndex) override;
+    Score score() override;
 
-    // The running raw totals calculateScore weighs; equal to
+    // The running raw totals score weighs; equal to
     // ScoreCalculator::rawCosts on the current assignment.
     RawCosts totals() const
     {
@@ -86,7 +86,7 @@ private:
     std::unordered_map<std::int64_t, int> colorCountMap_;
 
     // Running totals (all counted positive; signs/weights applied in
-    // calculateScore).
+    // score).
     std::int64_t overCapacity_ = 0;  // hard 1
     std::int64_t colorExcess_ = 0;   // hard 2
     std::int64_t conflicts_ = 0;     // hard 3

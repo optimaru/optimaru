@@ -9,8 +9,8 @@
 #include <utility>
 #include <vector>
 
-#include "optimaru/api/domain/solution_descriptor.hpp"
-#include "optimaru/api/score/buildin/hard_soft_score.hpp"
+#include "optimaru/solution_traits.hpp"
+#include "optimaru/score.hpp"
 
 namespace bp
 {
@@ -18,7 +18,7 @@ namespace bp
 // ---------------------------------------------------------------------------
 // Score
 // ---------------------------------------------------------------------------
-// HardSoftScore, exactly the engine's score type, so the mapping is the
+// Score, exactly the engine's score type, so the mapping is the
 // identity and there is no medium level (no optimaru::MediumFoldOf
 // specialization). At the default weights:
 //   hard = -(overload above capacity + extra same-colour items + conflict
@@ -26,7 +26,7 @@ namespace bp
 //   soft = -(bins in use)
 // The weights are the components' kDefaultWeight (bp/constraints/*.hpp); the
 // problem carries none (removed in 0.2.0).
-using Score = optimaru::HardSoftScore;
+using Score = optimaru::Score;
 
 // ---------------------------------------------------------------------------
 // Item  (@PlanningEntity)
@@ -149,26 +149,26 @@ struct BinPackingProblem
 }  // namespace bp
 
 // ---------------------------------------------------------------------------
-// SolutionDescriptor specialization: entities are items, the planning
+// SolutionTraits specialization: entities are items, the planning
 // variable is Item::bin, the value range is the n bins 0..n-1.
 // ---------------------------------------------------------------------------
-template <> struct optimaru::SolutionDescriptor<bp::BinPackingProblem>
+template <> struct optimaru::SolutionTraits<bp::BinPackingProblem>
 {
-    static constexpr optimaru::VariableKind kind
-        = optimaru::VariableKind::BASIC;
-    static int entityCount(const bp::BinPackingProblem &problem)
+    static constexpr optimaru::Shape shape
+        = optimaru::Shape::Assignment;
+    static int entity_count(const bp::BinPackingProblem &problem)
     {
         return problem.itemCount();
     }
-    static int valueCount(const bp::BinPackingProblem &problem)
+    static int value_count(const bp::BinPackingProblem &problem)
     {
         return problem.binCount();
     }
-    static int getVariable(const bp::BinPackingProblem &problem, int item)
+    static int value_of(const bp::BinPackingProblem &problem, int item)
     {
         return problem.items[item].bin;
     }
-    static void setVariable(bp::BinPackingProblem &problem, int item, int bin)
+    static void assign(bp::BinPackingProblem &problem, int item, int bin)
     {
         problem.items[item].bin = bin;
     }

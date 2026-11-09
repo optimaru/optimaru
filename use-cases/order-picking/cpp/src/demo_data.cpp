@@ -225,7 +225,7 @@ OrderPickingSolution buildDemoData(int trolleysCount,
                                    int bucketCount,
                                    int bucketCapacity,
                                    int ordersCount,
-                                   std::int64_t randomSeed)
+                                   std::int64_t seed)
 {
     // DemoDataGenerator.validateBucketCapacity.
     if (bucketCapacity < demoMaxProductSize())
@@ -239,7 +239,7 @@ OrderPickingSolution buildDemoData(int trolleysCount,
               "a trolley bucket. Please use a higher value");
     }
 
-    JavaRandom random(randomSeed);
+    JavaRandom random(seed);
     OrderPickingSolution solution;
 
     // START_LOCATION: shelving (A,1), LEFT side, row 0.

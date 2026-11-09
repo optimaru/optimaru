@@ -23,7 +23,7 @@ struct RestAfterConsecutiveWorkCost final : EsUnitConstraint {
                                           int restDays = 3)
         : EsUnitConstraint("restAfterConsecutiveWorkCost", weight, kDefaultLevel),
           workDays_(workDays), restDays_(restDays) {}
-    void onReset(const EmployeeSchedule& s) override {
+    void on_reset(const EmployeeSchedule& s) override {
         horizon_ = 0;
         day_.resize(s.shifts.size());
         for (std::size_t i = 0; i < s.shifts.size(); ++i) {

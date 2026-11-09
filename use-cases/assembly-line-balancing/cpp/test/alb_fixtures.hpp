@@ -42,7 +42,7 @@ inline const std::vector<std::string> kNames = {
     "workloadImbalanceCost",
 };
 
-// The ten raw totals by registry name (the keys of constraintCosts()).
+// The ten raw totals by registry name (the keys of constraint_costs()).
 inline std::map<std::string, double> namedTotals(const RawCosts &raw)
 {
     return {

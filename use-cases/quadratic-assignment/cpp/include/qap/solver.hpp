@@ -7,9 +7,9 @@
 #include <limits>
 #include <utility>
 
-#include "optimaru/api/score/calculator/decomposed_score_calculator.hpp"
-#include "optimaru/api/score/director/score_director.hpp"
-#include "optimaru/config/localsearch/decider/acceptor/local_search_acceptor_config.hpp"
+#include "optimaru/decomposed_objective.hpp"
+#include "optimaru/editor.hpp"
+#include "optimaru/settings.hpp"
 #include "qap/domain.hpp"
 
 namespace qap
@@ -35,43 +35,43 @@ public:
     {
         // Wall-clock budget. 0 stops before the first step: the solve then
         // returns its start (the identity, or the seed) unchanged.
-        std::chrono::milliseconds spentLimit{std::chrono::seconds(30)};
+        std::chrono::milliseconds time_limit{std::chrono::seconds(30)};
 
-        // Stop early once bestScore >= bestScoreLimit. Default is above every
+        // Stop early once bestScore >= target_score. Default is above every
         // achievable score, so it never fires.
-        Score bestScoreLimit{std::numeric_limits<std::int64_t>::max(), std::numeric_limits<double>::infinity()};
+        Score target_score{std::numeric_limits<std::int64_t>::max(), std::numeric_limits<double>::infinity()};
         // Optional early exits; 0 disables each criterion (so
-        // stepCountLimit = 0 means "no step limit", not "no search").
-        std::chrono::milliseconds unimprovedSpentLimit{0};
-        std::int64_t stepCountLimit = 0;
-        std::int64_t unimprovedStepCountLimit = 0;
+        // step_limit = 0 means "no step limit", not "no search").
+        std::chrono::milliseconds stall_time_limit{0};
+        std::int64_t step_limit = 0;
+        std::int64_t stall_step_limit = 0;
 
         // The local-search acceptor. Late acceptance by default; the history
         // length 0 (the default) = auto: clamp(8 * facility count, 400, 3200).
-        optimaru::AcceptorType acceptorType = optimaru::AcceptorType::LATE_ACCEPTANCE;
-        std::size_t lateAcceptanceSize = 0;
-        int entityTabuSize = 7;  // ENTITY_TABU
+        optimaru::AcceptanceRule rule = optimaru::AcceptanceRule::LateAcceptance;
+        std::size_t history_length = 0;
+        int tabu_tenure = 7;  // ENTITY_TABU
         // SIMULATED_ANNEALING's starting temperature (hard, soft). (0, 0), the
         // default, = auto: hard 0, soft = simulatedAnnealingTemperatureFraction
         // * |the start's soft score| (at least 1), the semiconductor-scheduling
         // rule. The engine's own default (0, 0) would make SA reject every
         // worsening swap, i.e. hill climbing. It cools to 0 over the time
-        // limit, or over stepCountLimit when that is further along.
-        Score simulatedAnnealingStartingTemperature{0, 0.0};
+        // limit, or over step_limit when that is further along.
+        Score start_temperature{0, 0.0};
         double simulatedAnnealingTemperatureFraction = 0.01;
-        std::uint64_t randomSeed = 0;
+        std::uint64_t seed = 0;
 
         // Independent parallel starts (the engine's multi-start): worker i
-        // searches its own copy of the start with randomSeed + i and the full
+        // searches its own copy of the start with seed + i and the full
         // budget; the best score wins. Ignored by the constraint-assembly
         // overload.
         int parallelSolverCount = 1;
 
-        // FULL_ASSERT re-verifies the incremental score against a full
+        // ScoreChecks::Full re-verifies the incremental score against a full
         // recompute after every move (debugging aid; much slower).
-        optimaru::EnvironmentMode environmentMode = optimaru::EnvironmentMode::NON_ASSERT;
+        optimaru::ScoreChecks score_checks = optimaru::ScoreChecks::Off;
 
-        std::function<void(std::int64_t, const Score &)> onNewBest;
+        std::function<void(std::int64_t, const Score &)> on_new_best;
     };
 
     Solver() = default;
@@ -88,11 +88,11 @@ public:
     // qap/constraints.hpp): pick components and weights, then pass the
     // assembly here. The same start and search apply. The final problem.score
     // is computed by THIS calculator and the calculator is left primed on the
-    // final solution, so constraintTotals() explains exactly that score.
+    // final solution, so constraint_totals() explains exactly that score.
     // Single-start: the caller-owned calculator cannot be cloned, so
     // parallelSolverCount is ignored.
     void solve(QuadraticAssignmentProblem &problem,
-               optimaru::DecomposedScoreCalculator<QuadraticAssignmentProblem> &calculator);
+               optimaru::DecomposedObjective<QuadraticAssignmentProblem> &calculator);
 
 private:
     Config config_;

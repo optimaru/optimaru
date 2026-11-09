@@ -44,7 +44,7 @@ public:
 
     // Data mode: scores schedule.assignments and stores score, makespan,
     // totalWeightedTardiness and totalCycleTime (scored = true).
-    static Score calculateScore(SemiconductorSchedule &schedule);
+    static Score score(SemiconductorSchedule &schedule);
     // Search mode: the score of the current planning values (full recompute).
     static Score searchStateScore(const SemiconductorSchedule &schedule);
 

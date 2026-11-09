@@ -10,9 +10,9 @@
 
 #include "sls/incremental_calculator.hpp"
 #include "sls/score_calculator.hpp"
-#include "optimaru/api/solver/solver.hpp"
-#include "optimaru/config/solver/solver_config.hpp"
-#include "optimaru/impl/solver/worker_threads.hpp"
+#include "optimaru/solver.hpp"
+#include "optimaru/settings.hpp"
+#include "optimaru/worker_threads.hpp"
 
 namespace sls
 {
@@ -25,37 +25,37 @@ namespace
 // single-start solve of exactly that schedule.
 void configureEngine(const Solver::Config &config,
                      LeagueSchedule &schedule,
-                     optimaru::SolverConfig &engineConfig)
+                     optimaru::Settings &engineConfig)
 {
-    engineConfig.randomSeed = config.randomSeed;
-    engineConfig.environmentMode = config.environmentMode;
-    engineConfig.multiStartCount = 1;
-    engineConfig.onNewBest = config.onNewBest;
-    engineConfig.termination.spentLimit = config.spentLimit;
-    engineConfig.termination.bestScoreLimit = config.bestScoreLimit;
-    engineConfig.termination.unimprovedSpentLimit = config.unimprovedSpentLimit;
-    engineConfig.termination.stepCountLimit = config.stepCountLimit;
-    engineConfig.termination.unimprovedStepCountLimit
-        = config.unimprovedStepCountLimit;
-    // lateAcceptanceSize 0 = auto-scale with the instance (see Config).
-    engineConfig.localSearch.acceptor.lateAcceptanceSize
-        = config.lateAcceptanceSize != 0
-              ? config.lateAcceptanceSize
+    engineConfig.seed = config.seed;
+    engineConfig.score_checks = config.score_checks;
+    engineConfig.parallel_starts = 1;
+    engineConfig.on_new_best = config.on_new_best;
+    engineConfig.limits.time_limit = config.time_limit;
+    engineConfig.limits.target_score = config.target_score;
+    engineConfig.limits.stall_time_limit = config.stall_time_limit;
+    engineConfig.limits.step_limit = config.step_limit;
+    engineConfig.limits.stall_step_limit
+        = config.stall_step_limit;
+    // history_length 0 = auto-scale with the instance (see Config).
+    engineConfig.search.acceptance.history_length
+        = config.history_length != 0
+              ? config.history_length
               : std::clamp<std::size_t>(
                     32 * schedule.matches.size(), 400, 3200);
-    engineConfig.localSearch.moveSelector.changeMoveWeight
-        = config.changeMoveWeight;
-    engineConfig.localSearch.moveSelector.swapMoveWeight
-        = config.swapMoveWeight;
-    auto &lns = engineConfig.localSearch.ruinRecreate;
-    lns.enabled = config.ruinRecreate;
-    lns.unimprovedStepTrigger = config.ruinRecreateUnimprovedStepTrigger;
-    lns.minRuinFraction = config.ruinRecreateMinRuinFraction;
-    lns.maxRuinFraction = config.ruinRecreateMaxRuinFraction;
-    lns.maxRuinCount = config.ruinRecreateMaxRuinCount;
-    lns.operatorDecay = config.ruinRecreateOperatorDecay;
+    engineConfig.search.moves.change_weight
+        = config.change_weight;
+    engineConfig.search.moves.swap_weight
+        = config.swap_weight;
+    auto &lns = engineConfig.search.ruin_recreate;
+    lns.enabled = config.ruin_recreate;
+    lns.unimproved_step_trigger = config.ruinRecreateUnimprovedStepTrigger;
+    lns.min_ruin_fraction = config.ruinRecreateMinRuinFraction;
+    lns.max_ruin_fraction = config.ruinRecreateMaxRuinFraction;
+    lns.max_ruin_count = config.ruinRecreateMaxRuinCount;
+    lns.operator_decay = config.ruinRecreateOperatorDecay;
     lns.rewards = config.ruinRecreateRewards;
-    lns.polishSteps = config.ruinRecreatePolishSteps;
+    lns.polish_steps = config.ruinRecreatePolishSteps;
 
     // Nearby selection (see Config::nearbySize): two matches are "near" when
     // they share a team — the only way two matches can directly trade travel
@@ -65,7 +65,7 @@ void configureEngine(const Solver::Config &config,
     if (config.nearbySize >= 0)
     {
         const LeagueSchedule *s = &schedule;
-        engineConfig.localSearch.nearby.distanceMeter = [s](int a, int b)
+        engineConfig.search.nearby.distance = [s](int a, int b)
         {
             const Match &x = s->matches[a];
             const Match &y = s->matches[b];
@@ -78,10 +78,10 @@ void configureEngine(const Solver::Config &config,
             return (shared ? 0.0 : 1.0e9) + venueGap;
         };
         // nearbySize 0 = auto (see Config): a match's whole shared-team set.
-        engineConfig.localSearch.nearby.size = config.nearbySize > 0
+        engineConfig.search.nearby.size = config.nearbySize > 0
                                                    ? config.nearbySize
                                                    : 4 * schedule.teamCount();
-        engineConfig.localSearch.nearby.probability = config.nearbyProbability;
+        engineConfig.search.nearby.probability = config.nearbyProbability;
     }
 }
 
@@ -92,7 +92,7 @@ void Solver::solve(LeagueSchedule &schedule)
     ScoreCalculator::prepare(schedule);  // intern pair ids / index tables
     if (schedule.matches.empty() || schedule.rounds.empty())
     {
-        ScoreCalculator::calculateScore(schedule);
+        ScoreCalculator::score(schedule);
         return;
     }
     if (config_.ruinRecreateRewards.size() != 4)
@@ -116,7 +116,7 @@ void Solver::solve(LeagueSchedule &schedule)
         auto stop = std::make_shared<std::atomic<bool>>(false);
         // A worker that cannot be started (std::system_error) stops and joins
         // the ones already running before the error is rethrown here.
-        optimaru::runWorkerThreads(
+        optimaru::run_worker_threads(
             workerCount, *stop,
             [this, &candidates, &failures, &stop](int i)
             {
@@ -124,11 +124,11 @@ void Solver::solve(LeagueSchedule &schedule)
                 {
                     Config workerConfig = config_;
                     workerConfig.parallelSolverCount = 1;
-                    workerConfig.stopFlag = stop;
-                    workerConfig.randomSeed
+                    workerConfig.stop_flag = stop;
+                    workerConfig.seed
                         += static_cast<std::uint64_t>(i);
                     if (i != 0)
-                        workerConfig.onNewBest = nullptr;
+                        workerConfig.on_new_best = nullptr;
                     Solver worker(std::move(workerConfig));
                     worker.solve(candidates[i]);
                 }
@@ -153,7 +153,7 @@ void Solver::solve(LeagueSchedule &schedule)
         return;
     }
 
-    optimaru::SolverConfig engineConfig;
+    optimaru::Settings engineConfig;
     configureEngine(config_, schedule, engineConfig);
 
     // The calculator of this (single-start) solve, created before the engine
@@ -170,24 +170,24 @@ void Solver::solve(LeagueSchedule &schedule)
     if (config_.costliestMatchSample > 1)
     {
         const int sample = config_.costliestMatchSample;
-        engineConfig.localSearch.entityRecommender
+        engineConfig.search.entity_hint
             = [&calculator, sample](std::mt19937_64 &rng) -> int
         { return calculator.costliestMatch(rng, sample); };
     }
 
     // Construction heuristic + late-acceptance local search (+ ALNS kicks).
     optimaru::Solver<LeagueSchedule> engine(std::move(engineConfig));
-    if (config_.stopFlag)
-        engine.adoptTerminateEarlyFlag(config_.stopFlag);
+    if (config_.stop_flag)
+        engine.share_stop_flag(config_.stop_flag);
     engine.solve(schedule, calculator);
 
     // The authoritative final score: a full recompute on the best solution.
-    schedule.score = ScoreCalculator::calculateScore(schedule);
+    schedule.score = ScoreCalculator::score(schedule);
 }
 
 void Solver::solve(
     LeagueSchedule &schedule,
-    optimaru::DecomposedScoreCalculator<LeagueSchedule> &calculator)
+    optimaru::DecomposedObjective<LeagueSchedule> &calculator)
 {
     ScoreCalculator::prepare(schedule);  // intern pair ids / index tables
     if (config_.ruinRecreateRewards.size() != 4)
@@ -201,19 +201,19 @@ void Solver::solve(
         // calculator's per-match travel costs, which a caller-assembled
         // plugin does not expose. The built-in move mix plus the ALNS kicks
         // remain.
-        optimaru::SolverConfig engineConfig;
+        optimaru::Settings engineConfig;
         configureEngine(config_, schedule, engineConfig);
         optimaru::Solver<LeagueSchedule> engine(std::move(engineConfig));
-        if (config_.stopFlag)
-            engine.adoptTerminateEarlyFlag(config_.stopFlag);
+        if (config_.stop_flag)
+            engine.share_stop_flag(config_.stop_flag);
         engine.solve(schedule, calculator);
     }
 
     // Score the final solution with the caller's constraint assembly (custom
     // weights included) and leave the calculator primed on it, so
-    // constraintTotals() explains exactly this score.
-    calculator.resetWorkingSolution(schedule);
-    schedule.score = calculator.calculateScore();
+    // constraint_totals() explains exactly this score.
+    calculator.rebuild(schedule);
+    schedule.score = calculator.score();
 }
 
 }  // namespace sls

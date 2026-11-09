@@ -39,8 +39,8 @@ print(cs.constraint_costs(schedule)["content_conflict_cost"]["costs"])  # raw, b
 
 ## Score mapping
 
-The Java original already uses `HardSoftScore`, so it maps identically onto the engine's
-`HardSoftScore(int64 hard, double soft)`: hard = minus the weighted violation-minute sum
+The Java original already uses `Score`, so it maps identically onto the engine's
+`Score(int64 hard, double soft)`: hard = minus the weighted violation-minute sum
 (0 == feasible), soft = weighted rewards (diversity) − penalties (preferences/conflicts)
 (always integer-valued, held in the engine's double field).
 

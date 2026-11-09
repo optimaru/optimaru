@@ -14,10 +14,10 @@
 #include "fab/incremental_calculator.hpp"
 #include "fab/moves/priority_swap.hpp"
 #include "fab/score_calculator.hpp"
-#include "optimaru/api/solver/solver.hpp"
-#include "optimaru/config/solver/solver_config.hpp"
-#include "optimaru/impl/localsearch/decider/acceptor/simulatedannealing/simulated_annealing_acceptor.hpp"
-#include "optimaru/impl/solver/worker_threads.hpp"
+#include "optimaru/solver.hpp"
+#include "optimaru/settings.hpp"
+#include "optimaru/search/acceptors.hpp"
+#include "optimaru/worker_threads.hpp"
 
 namespace fab
 {
@@ -69,7 +69,7 @@ void endSearch(SemiconductorSchedule &schedule)
     schedule.seedComplete = false;
     schedule.seedValues.clear();
     schedule.seedAssignments.clear();
-    ScoreCalculator::calculateScore(schedule);
+    ScoreCalculator::score(schedule);
 }
 
 namespace
@@ -101,7 +101,7 @@ void validate(const Solver::Config &config)
 
 // The change move's value: another machine for the row (rank kept), or a
 // small priority shift (machine kept). -1 = the engine's uniform draw.
-std::function<int(std::mt19937_64 &, int)> valueRecommender(const SemiconductorSchedule *working,
+std::function<int(std::mt19937_64 &, int)> value_hint(const SemiconductorSchedule *working,
                                                             double machineMoveProbability)
 {
     return [working, machineMoveProbability](std::mt19937_64 &rng, int row) -> int
@@ -136,60 +136,60 @@ std::function<int(std::mt19937_64 &, int)> valueRecommender(const SemiconductorS
 }  // namespace
 
 void Solver::runSingle(SemiconductorSchedule &schedule,
-                       optimaru::IncrementalScoreCalculator<SemiconductorSchedule> &calculator) const
+                       optimaru::Objective<SemiconductorSchedule> &calculator) const
 {
-    optimaru::SolverConfig engineConfig;
-    engineConfig.randomSeed = config_.randomSeed;
-    engineConfig.environmentMode = config_.environmentMode;
-    engineConfig.onNewBest = config_.onNewBest;
-    engineConfig.termination.spentLimit = config_.spentLimit;
-    engineConfig.termination.bestScoreLimit = config_.bestScoreLimit;
-    engineConfig.termination.unimprovedSpentLimit = config_.unimprovedSpentLimit;
-    engineConfig.termination.stepCountLimit = config_.stepCountLimit;
-    engineConfig.termination.unimprovedStepCountLimit = config_.unimprovedStepCountLimit;
+    optimaru::Settings engineConfig;
+    engineConfig.seed = config_.seed;
+    engineConfig.score_checks = config_.score_checks;
+    engineConfig.on_new_best = config_.on_new_best;
+    engineConfig.limits.time_limit = config_.time_limit;
+    engineConfig.limits.target_score = config_.target_score;
+    engineConfig.limits.stall_time_limit = config_.stall_time_limit;
+    engineConfig.limits.step_limit = config_.step_limit;
+    engineConfig.limits.stall_step_limit = config_.stall_step_limit;
 
-    auto &acceptor = engineConfig.localSearch.acceptor;
-    acceptor.acceptorType = config_.acceptorType;
-    acceptor.lateAcceptanceSize = config_.lateAcceptanceSize != 0
-                                      ? config_.lateAcceptanceSize
+    auto &acceptor = engineConfig.search.acceptance;
+    acceptor.rule = config_.rule;
+    acceptor.history_length = config_.history_length != 0
+                                      ? config_.history_length
                                       : std::clamp<std::size_t>(16 * schedule.rows.size(), 400, 3200);
-    acceptor.simulatedAnnealingStartingTemperature = config_.simulatedAnnealingStartingTemperature;
+    acceptor.start_temperature = config_.start_temperature;
 
-    engineConfig.localSearch.moveSelector.changeMoveWeight = config_.changeMoveWeight;
-    engineConfig.localSearch.moveSelector.swapMoveWeight = config_.swapMoveWeight;
-    engineConfig.localSearch.customMoveProbability = config_.customMoveProbability;
+    engineConfig.search.moves.change_weight = config_.change_weight;
+    engineConfig.search.moves.swap_weight = config_.swap_weight;
+    engineConfig.search.custom_move_probability = config_.custom_move_probability;
     // The schedule outlives the engine run: the recommender reads the
     // working values through it.
-    engineConfig.localSearch.valueRecommender = valueRecommender(&schedule, config_.machineMoveProbability);
+    engineConfig.search.value_hint = value_hint(&schedule, config_.machineMoveProbability);
 
-    auto &lns = engineConfig.localSearch.ruinRecreate;
-    lns.enabled = config_.ruinRecreate;
-    lns.unimprovedStepTrigger = config_.ruinRecreateUnimprovedStepTrigger;
-    lns.minRuinFraction = config_.ruinRecreateMinRuinFraction;
-    lns.maxRuinFraction = config_.ruinRecreateMaxRuinFraction;
-    lns.maxRuinCount = config_.ruinRecreateMaxRuinCount;
-    lns.operatorDecay = config_.ruinRecreateOperatorDecay;
+    auto &lns = engineConfig.search.ruin_recreate;
+    lns.enabled = config_.ruin_recreate;
+    lns.unimproved_step_trigger = config_.ruinRecreateUnimprovedStepTrigger;
+    lns.min_ruin_fraction = config_.ruinRecreateMinRuinFraction;
+    lns.max_ruin_fraction = config_.ruinRecreateMaxRuinFraction;
+    lns.max_ruin_count = config_.ruinRecreateMaxRuinCount;
+    lns.operator_decay = config_.ruinRecreateOperatorDecay;
     lns.rewards = config_.ruinRecreateRewards;
-    lns.polishSteps = config_.ruinRecreatePolishSteps;
+    lns.polish_steps = config_.ruinRecreatePolishSteps;
 
-    const bool autoTemperature = config_.acceptorType == optimaru::AcceptorType::SIMULATED_ANNEALING
-                                 && config_.simulatedAnnealingStartingTemperature.hard == 0
-                                 && config_.simulatedAnnealingStartingTemperature.soft == 0.0;
+    const bool autoTemperature = config_.rule == optimaru::AcceptanceRule::SimulatedAnnealing
+                                 && config_.start_temperature.hard == 0
+                                 && config_.start_temperature.soft == 0.0;
     optimaru::Solver<SemiconductorSchedule> engine(std::move(engineConfig));
-    if (config_.stopFlag)
-        engine.adoptTerminateEarlyFlag(config_.stopFlag);
+    if (config_.stop_flag)
+        engine.share_stop_flag(config_.stop_flag);
     if (autoTemperature)
     {
         const double fraction = config_.simulatedAnnealingTemperatureFraction;
-        engine.setAcceptorFactory(
-            [fraction](const optimaru::HardSoftScore &start) -> std::unique_ptr<optimaru::Acceptor>
+        engine.set_acceptor_factory(
+            [fraction](const optimaru::Score &start) -> std::unique_ptr<optimaru::Acceptor>
             {
                 const double soft = std::max(1.0, fraction * std::fabs(start.soft));
-                return std::make_unique<optimaru::SimulatedAnnealingAcceptor>(optimaru::HardSoftScore{0, soft});
+                return std::make_unique<optimaru::SimulatedAnnealing>(optimaru::Score{0, soft});
             });
     }
     if (config_.prioritySwapMoves)
-        engine.addMoveOperator(std::make_unique<PrioritySwapMove>());
+        engine.add_move_operator(std::make_unique<PrioritySwapMove>());
     engine.solve(schedule, calculator);
 }
 
@@ -228,7 +228,7 @@ void Solver::searchFromBegun(SemiconductorSchedule &schedule)
         auto stop = std::make_shared<std::atomic<bool>>(false);
         // A worker that cannot be started (std::system_error) stops and joins
         // the ones already running before the error is rethrown here.
-        optimaru::runWorkerThreads(
+        optimaru::run_worker_threads(
             workerCount, *stop,
             [this, &candidates, &scores, &failures, &stop](int i)
             {
@@ -236,10 +236,10 @@ void Solver::searchFromBegun(SemiconductorSchedule &schedule)
                 {
                     Config workerConfig = config_;
                     workerConfig.parallelSolverCount = 1;
-                    workerConfig.stopFlag = stop;
-                    workerConfig.randomSeed += static_cast<std::uint64_t>(i);
+                    workerConfig.stop_flag = stop;
+                    workerConfig.seed += static_cast<std::uint64_t>(i);
                     if (i != 0)
-                        workerConfig.onNewBest = nullptr;
+                        workerConfig.on_new_best = nullptr;
                     SemiconductorIncrementalScoreCalculator calculator;
                     SemiconductorSchedule &copy = candidates[static_cast<std::size_t>(i)];
                     Solver(std::move(workerConfig)).runSingle(copy, calculator);
@@ -273,7 +273,7 @@ void Solver::searchFromBegun(SemiconductorSchedule &schedule)
 }
 
 void Solver::solve(SemiconductorSchedule &schedule,
-                   optimaru::DecomposedScoreCalculator<SemiconductorSchedule> &calculator)
+                   optimaru::DecomposedObjective<SemiconductorSchedule> &calculator)
 {
     validate(config_);
     beginSearch(schedule);
@@ -290,8 +290,8 @@ void Solver::solve(SemiconductorSchedule &schedule,
     }
     // Score with the caller's assembly, in data mode, and leave the
     // calculator primed on the result.
-    calculator.resetWorkingSolution(schedule);
-    schedule.score = calculator.calculateScore();
+    calculator.rebuild(schedule);
+    schedule.score = calculator.score();
 }
 
 }  // namespace fab

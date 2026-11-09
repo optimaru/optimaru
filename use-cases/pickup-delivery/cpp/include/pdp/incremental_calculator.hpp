@@ -5,7 +5,7 @@
 #include <vector>
 
 #include "pdp/domain.hpp"
-#include "optimaru/api/score/calculator/incremental_score_calculator.hpp"
+#include "optimaru/objective.hpp"
 
 namespace pdp
 {
@@ -26,8 +26,8 @@ namespace pdp
 //    *request* instead, in pairPenalty_, and only the requests touching a
 //    changed list are recomputed.
 //
-// The bookkeeping that makes the second group work: beforeListChanged snapshots
-// the list's old membership, and afterListChanged compares it with the new one
+// The bookkeeping that makes the second group work: before_list_edit snapshots
+// the list's old membership, and after_list_edit compares it with the new one
 // to (a) mark every node that left as unassigned, (b) reindex every node that
 // stayed or arrived, and (c) recompute the coupling penalty of every request
 // on either side. A relocate touches two lists and therefore costs
@@ -37,18 +37,18 @@ namespace pdp
 // the insert hook pair a node is genuinely unassigned, and during an LNS ruin
 // many nodes stay unassigned across several score evaluations. Both read as
 // "half-assigned request", which is exactly what the reference implementation
-// reports for the same state — so FULL_ASSERT agrees at every step.
+// reports for the same state — so ScoreChecks::Full agrees at every step.
 class PdpIncrementalScoreCalculator final
-    : public optimaru::IncrementalScoreCalculator<PdpRoutePlan>
+    : public optimaru::Objective<PdpRoutePlan>
 {
 public:
-    void resetWorkingSolution(PdpRoutePlan &workingSolution) override;
-    void beforeListChanged(int listIndex) override;
-    void afterListChanged(int listIndex) override;
-    optimaru::HardSoftScore calculateScore() override;
+    void rebuild(PdpRoutePlan &solution) override;
+    void before_list_edit(int listIndex) override;
+    void after_list_edit(int listIndex) override;
+    optimaru::Score score() override;
 
     // The HardMediumSoft view of the current state.
-    Score currentScore() const;
+    Score current_score() const;
 
 private:
     struct RouteTerms
@@ -79,7 +79,7 @@ private:
 
     // Live node index: which list each node is in, and where. This is the
     // TRUE list index — the unassigned pool (vehicleCount_) included — so that
-    // afterListChanged can check ownership before releasing a node. -1 means
+    // after_list_edit can check ownership before releasing a node. -1 means
     // the node is in no list at all (transient, during an LNS ruin).
     std::vector<int> nodeList_;
     std::vector<int> nodePos_;
@@ -99,8 +99,8 @@ private:
     std::vector<int> pendingDeliveries_;
     std::vector<char> pendingMark_;
 
-    // Membership of the list currently between beforeListChanged and
-    // afterListChanged, so departures can be detected.
+    // Membership of the list currently between before_list_edit and
+    // after_list_edit, so departures can be detected.
     std::vector<int> oldMembers_;
 
     std::int64_t capacityTotal_ = 0;

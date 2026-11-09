@@ -90,9 +90,9 @@ PYBIND11_MODULE(_core, m)
              py::arg("soft") = 0.0)
         .def_readonly("hard", &Score::hard)
         .def_readonly("soft", &Score::soft)
-        .def("is_feasible", &Score::isFeasible)
-        .def("__str__", &Score::toString)
-        .def("__repr__", [](const Score &s) { return "<Score " + s.toString() + ">"; })
+        .def("is_feasible", &Score::feasible)
+        .def("__str__", &Score::str)
+        .def("__repr__", [](const Score &s) { return "<Score " + s.str() + ">"; })
         .def("__len__", [](const Score &) { return 2; })
         .def("__iter__", [](const Score &s) { return py::iter(py::make_tuple(s.hard, s.soft)); })
         .def("__getitem__",
@@ -328,11 +328,11 @@ PYBIND11_MODULE(_core, m)
             // The monolith knows the default picks only; a list (repeats and
             // offsets included) takes the assembly path.
             if (constraints.is_none())
-                return ScoreCalculator::calculateScore(schedule);
+                return ScoreCalculator::score(schedule);
             DecomposedCalculator calculator;
-            tfpy::applyConstraints([] { return defaultConstraints(); }, constraints).into(calculator);
-            calculator.resetWorkingSolution(schedule);
-            const Score score = calculator.calculateScore();
+            tfpy::apply_constraints([] { return defaultConstraints(); }, constraints).into(calculator);
+            calculator.rebuild(schedule);
+            const Score score = calculator.score();
             storeScore(schedule, score);
             return score;
         },
@@ -341,29 +341,29 @@ PYBIND11_MODULE(_core, m)
         "picked several times once per pick) and stores score, makespan, total_weighted_tardiness and "
         "total_cycle_time.");
 
-    py::enum_<optimaru::AcceptorType>(m, "AcceptorType", py::module_local())
-        .value("HILL_CLIMBING", optimaru::AcceptorType::HILL_CLIMBING)
-        .value("LATE_ACCEPTANCE", optimaru::AcceptorType::LATE_ACCEPTANCE)
-        .value("ENTITY_TABU", optimaru::AcceptorType::ENTITY_TABU)
-        .value("SIMULATED_ANNEALING", optimaru::AcceptorType::SIMULATED_ANNEALING)
-        .value("GREAT_DELUGE", optimaru::AcceptorType::GREAT_DELUGE)
-        .value("STEP_COUNTING_HILL_CLIMBING", optimaru::AcceptorType::STEP_COUNTING_HILL_CLIMBING)
-        .value("RECORD_TO_RECORD_TRAVEL", optimaru::AcceptorType::RECORD_TO_RECORD_TRAVEL);
+    py::enum_<optimaru::AcceptanceRule>(m, "AcceptorType", py::module_local())
+        .value("HILL_CLIMBING", optimaru::AcceptanceRule::HillClimbing)
+        .value("LATE_ACCEPTANCE", optimaru::AcceptanceRule::LateAcceptance)
+        .value("ENTITY_TABU", optimaru::AcceptanceRule::EntityTabu)
+        .value("SIMULATED_ANNEALING", optimaru::AcceptanceRule::SimulatedAnnealing)
+        .value("GREAT_DELUGE", optimaru::AcceptanceRule::GreatDeluge)
+        .value("STEP_COUNTING_HILL_CLIMBING", optimaru::AcceptanceRule::StepCountingHillClimbing)
+        .value("RECORD_TO_RECORD_TRAVEL", optimaru::AcceptanceRule::RecordToRecordTravel);
 
-    optimaru::python::bindConfigCopy(py::class_<Solver::Config>(m, "SolverConfig", py::module_local()))
+    optimaru::python::bind_config_copy(py::class_<Solver::Config>(m, "SolverConfig", py::module_local()))
         .def(py::init<>())
         .def_property(
-            "spent_limit_seconds", [](const Solver::Config &c) { return std::chrono::duration<double>(c.spentLimit).count(); },
+            "spent_limit_seconds", [](const Solver::Config &c) { return std::chrono::duration<double>(c.time_limit).count(); },
             [](Solver::Config &c, double s)
-            { c.spentLimit = optimaru::python::secondsToMillis(s, "spent_limit_seconds"); })
+            { c.time_limit = optimaru::python::seconds_to_millis(s, "spent_limit_seconds"); })
         .def_property(
             "unimproved_spent_limit_seconds",
-            [](const Solver::Config &c) { return std::chrono::duration<double>(c.unimprovedSpentLimit).count(); },
+            [](const Solver::Config &c) { return std::chrono::duration<double>(c.stall_time_limit).count(); },
             [](Solver::Config &c, double s)
-            { c.unimprovedSpentLimit = optimaru::python::secondsToMillis(s, "unimproved_spent_limit_seconds"); })
-        .def_readwrite("step_count_limit", &Solver::Config::stepCountLimit)
-        .def_readwrite("unimproved_step_count_limit", &Solver::Config::unimprovedStepCountLimit)
-        .def_readwrite("random_seed", &Solver::Config::randomSeed)
+            { c.stall_time_limit = optimaru::python::seconds_to_millis(s, "unimproved_spent_limit_seconds"); })
+        .def_readwrite("step_count_limit", &Solver::Config::step_limit)
+        .def_readwrite("unimproved_step_count_limit", &Solver::Config::stall_step_limit)
+        .def_readwrite("random_seed", &Solver::Config::seed)
         .def_property(
             "parallel_solver_count", [](const Solver::Config &c) { return c.parallelSolverCount; },
             [](Solver::Config &c, int count)
@@ -374,28 +374,28 @@ PYBIND11_MODULE(_core, m)
             })
         .def_property(
             "full_assert",
-            [](const Solver::Config &c) { return c.environmentMode == optimaru::EnvironmentMode::FULL_ASSERT; },
+            [](const Solver::Config &c) { return c.score_checks == optimaru::ScoreChecks::Full; },
             [](Solver::Config &c, bool on)
-            { c.environmentMode = on ? optimaru::EnvironmentMode::FULL_ASSERT : optimaru::EnvironmentMode::NON_ASSERT; })
-        .def_readwrite("acceptor_type", &Solver::Config::acceptorType)
+            { c.score_checks = on ? optimaru::ScoreChecks::Full : optimaru::ScoreChecks::Off; })
+        .def_readwrite("acceptor_type", &Solver::Config::rule)
         // 0 = auto: clamp(16 * operation rows, 400, 3200).
         .def_property(
-            "late_acceptance_size", [](const Solver::Config &c) { return c.lateAcceptanceSize; },
+            "late_acceptance_size", [](const Solver::Config &c) { return c.history_length; },
             [](Solver::Config &c, std::int64_t size)
             {
                 if (size < 0)
                     throw py::value_error("late_acceptance_size must be >= 0 (0 = auto)");
-                c.lateAcceptanceSize = static_cast<std::size_t>(size);
+                c.history_length = static_cast<std::size_t>(size);
             })
         .def_property(
             "simulated_annealing_starting_temperature",
             [](const Solver::Config &c)
             {
-                return py::make_tuple(c.simulatedAnnealingStartingTemperature.hard,
-                                      c.simulatedAnnealingStartingTemperature.soft);
+                return py::make_tuple(c.start_temperature.hard,
+                                      c.start_temperature.soft);
             },
             [](Solver::Config &c, std::pair<std::int64_t, double> hs)
-            { c.simulatedAnnealingStartingTemperature = Score{hs.first, hs.second}; })
+            { c.start_temperature = Score{hs.first, hs.second}; })
         // SIMULATED_ANNEALING with a (0, 0) starting temperature: soft
         // temperature = this fraction of the start's |soft| (hard 0).
         .def_property(
@@ -407,8 +407,8 @@ PYBIND11_MODULE(_core, m)
                     throw py::value_error("simulated_annealing_temperature_fraction must be > 0");
                 c.simulatedAnnealingTemperatureFraction = f;
             })
-        .def_readwrite("change_move_weight", &Solver::Config::changeMoveWeight)
-        .def_readwrite("swap_move_weight", &Solver::Config::swapMoveWeight)
+        .def_readwrite("change_move_weight", &Solver::Config::change_weight)
+        .def_readwrite("swap_move_weight", &Solver::Config::swap_weight)
         .def_property(
             "machine_move_probability", [](const Solver::Config &c) { return c.machineMoveProbability; },
             [](Solver::Config &c, double p)
@@ -418,8 +418,8 @@ PYBIND11_MODULE(_core, m)
                 c.machineMoveProbability = p;
             })
         .def_readwrite("priority_swap_moves", &Solver::Config::prioritySwapMoves)
-        .def_readwrite("custom_move_probability", &Solver::Config::customMoveProbability)
-        .def_readwrite("ruin_recreate", &Solver::Config::ruinRecreate)
+        .def_readwrite("custom_move_probability", &Solver::Config::custom_move_probability)
+        .def_readwrite("ruin_recreate", &Solver::Config::ruin_recreate)
         .def_readwrite("ruin_recreate_unimproved_step_trigger", &Solver::Config::ruinRecreateUnimprovedStepTrigger)
         .def_readwrite("ruin_recreate_min_ruin_fraction", &Solver::Config::ruinRecreateMinRuinFraction)
         .def_readwrite("ruin_recreate_max_ruin_fraction", &Solver::Config::ruinRecreateMaxRuinFraction)
@@ -438,11 +438,11 @@ PYBIND11_MODULE(_core, m)
         // at the first feasible schedule.
         .def_property(
             "best_score_limit",
-            [](const Solver::Config &c) { return py::make_tuple(c.bestScoreLimit.hard, c.bestScoreLimit.soft); },
-            [](Solver::Config &c, std::pair<std::int64_t, double> hs) { c.bestScoreLimit = Score{hs.first, hs.second}; })
+            [](const Solver::Config &c) { return py::make_tuple(c.target_score.hard, c.target_score.soft); },
+            [](Solver::Config &c, std::pair<std::int64_t, double> hs) { c.target_score = Score{hs.first, hs.second}; })
         // on_new_best(step, score) on every new best; the wrapper re-acquires
         // the GIL, so it is safe from the worker threads too.
-        .def_readwrite("on_new_best", &Solver::Config::onNewBest);
+        .def_readwrite("on_new_best", &Solver::Config::on_new_best);
 
     py::class_<Solver>(m, "Solver", py::module_local())
         .def(py::init<>())
@@ -459,7 +459,7 @@ PYBIND11_MODULE(_core, m)
             {
                 ScoreCalculator::prepare(schedule);
                 DecomposedCalculator calculator;
-                tfpy::applyConstraints([] { return defaultConstraints(); }, constraints).into(calculator);
+                tfpy::apply_constraints([] { return defaultConstraints(); }, constraints).into(calculator);
                 py::gil_scoped_release release;
                 solver.solve(schedule, calculator);
             },
@@ -469,7 +469,7 @@ PYBIND11_MODULE(_core, m)
     // constraint (a global constraint reports its total as one element) —
     // the input semiconductor_scheduling.constraints.score() turns into a
     // score. None = the default assembly; a pick list scores exactly those
-    // picks (applyConstraints), each entry carrying its pick's knobs, the
+    // picks (apply_constraints), each entry carrying its pick's knobs, the
     // k-th pick of a name keyed "<name>#<k>".
     m.def(
         "constraint_costs",
@@ -477,8 +477,8 @@ PYBIND11_MODULE(_core, m)
         {
             ScoreCalculator::prepare(schedule);
             DecomposedCalculator calculator;
-            tfpy::applyConstraints([] { return defaultConstraints(); }, constraints).into(calculator);
-            return tfpy::constraintCosts(calculator, schedule);
+            tfpy::apply_constraints([] { return defaultConstraints(); }, constraints).into(calculator);
+            return tfpy::constraint_costs(calculator, schedule);
         },
         py::arg("schedule"), py::arg("constraints") = py::none(),
         "Raw cost of every constraint on schedule.assignments, before weight/exponent/offset/level.");
@@ -491,7 +491,7 @@ PYBIND11_MODULE(_core, m)
             ScoreCalculator::prepare(schedule);
             RawItems items;
             ScoreCalculator::rawCosts(schedule, &items);
-            const std::vector<std::string> names = tfpy::constraintNames(defaultConstraints());
+            const std::vector<std::string> names = tfpy::constraint_names(defaultConstraints());
             py::dict out;
             for (std::size_t t = 0; t < names.size(); ++t)
                 out[py::str(names[t])] = py::cast(items[t]);
@@ -499,10 +499,10 @@ PYBIND11_MODULE(_core, m)
         },
         py::arg("schedule"), "Per-item raw costs of every constraint on schedule.assignments (0.1.x lists).");
 
-    m.def("list_constraints", [] { return tfpy::constraintNames(defaultConstraints()); },
+    m.def("list_constraints", [] { return tfpy::constraint_names(defaultConstraints()); },
           "Constraint names available to semiconductor_scheduling.constraints.");
 
-    tfpy::bindConstraintInfo(m, [] { return defaultConstraints(); });
+    tfpy::bind_constraint_info(m, [] { return defaultConstraints(); });
 
     // --- the decoder, for tests and tools ---------------------------------
     m.def(

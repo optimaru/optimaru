@@ -5,7 +5,7 @@ and modified; see the repository [NOTICE](../../NOTICE).
 
 Domain model, constraints and API details: [`python/`](python/README.md) and [`cpp/`](cpp/README.md).
 
-## Constraints (HardSoftScore — the engine score type as-is, no mapping)
+## Constraints (Score — the engine score type as-is, no mapping)
 
 | Constraint (Python name) | C++ component | Default level | Default weight | Raw cost per trolley (0 = no violation) |
 |---|---|---|---|---|
@@ -106,12 +106,12 @@ engine is `cpp/include/op/solver.hpp` + `cpp/src/solver.cpp`.
 
 **Adding a move.** The engine already mixes relocate / swap / 2-opt / Or-opt / 2-opt\* tail swap moves
 (weights in `Solver::Config`). `OrderConsolidateMove` (pulls an order's items onto one trolley) is defined in `cpp/src/solver.cpp` and registered there when `orderConsolidateMoves` is on — use it as the template. A new move is a
-`optimaru::MoveOperator<…>` registered with `engine.addMoveOperator(...)` next
+`optimaru::MoveOperator<…>` registered with `engine.add_move_operator(...)` next
 to the engine construction in `cpp/src/solver.cpp`; a ruin for LNS is a
-`RuinOperator` registered with `engine.addRuinOperator(...)`.
+`RuinOperator` registered with `engine.add_ruin_operator(...)`.
 
 **Changing the construction heuristic.** Elements are placed by cheapest insertion in index order. Set
-`engineConfig.constructionHeuristic.entityDifficulty` for First Fit
+`engineConfig.construction.difficulty` for First Fit
 Decreasing ordering, or pre-assign part of the solution in the domain
 solver's `solve` before the engine runs — the engine only fills what is still unassigned.
 

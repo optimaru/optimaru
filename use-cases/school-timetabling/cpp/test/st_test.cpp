@@ -2,11 +2,11 @@
 // any failure):
 //   (a) every constraint verified in isolation against hand-computed scores
 //   (b) incremental score == full recompute across a long random walk driven
-//       through the engine's ScoreDirector protocol (before/set/after)
-//   (c) a small instance solved under EnvironmentMode::FULL_ASSERT
+//       through the engine's Editor protocol (before/set/after)
+//   (c) a small instance solved under ScoreChecks::ScoreChecks::Full
 //   (d) pinned lessons keep their assignment through a solve
 //   (e) the two search strategies (best-improvement descent, destroy-repair as
-//       an ordinary move) under FULL_ASSERT, alone and together
+//       an ordinary move) under ScoreChecks::Full, alone and together
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -18,7 +18,7 @@
 #include "st/incremental_calculator.hpp"
 #include "st/score_calculator.hpp"
 #include "st/solver.hpp"
-#include "optimaru/api/score/director/score_director.hpp"
+#include "optimaru/editor.hpp"
 
 using namespace st;
 
@@ -44,7 +44,7 @@ void checkScore(const std::string &label,
     std::printf("  [%s] %-40s got=%s expected=%ldhard/%gsoft\n",
                 ok ? "PASS" : "FAIL",
                 label.c_str(),
-                actual.toString().c_str(),
+                actual.str().c_str(),
                 expectedHard,
                 expectedSoft);
     if (!ok)
@@ -99,7 +99,7 @@ void verifyConstraints()
         addLesson(t, "Math", "TA", "G1", 0, 0);
         addLesson(t, "English", "TB", "G2", 0, 0);
         checkScore(
-            "roomConflictCost pair", ScoreCalculator::calculateScore(t), -1, 0);
+            "roomConflictCost pair", ScoreCalculator::score(t), -1, 0);
     }
     // hard 1: three lessons in one cell -> C(3,2) = 3 pairs.
     {
@@ -108,7 +108,7 @@ void verifyConstraints()
         addLesson(t, "English", "TB", "G2", 0, 0);
         addLesson(t, "Science", "TC", "G3", 0, 0);
         checkScore("roomConflictCost triple",
-                   ScoreCalculator::calculateScore(t),
+                   ScoreCalculator::score(t),
                    -3,
                    0);
     }
@@ -120,7 +120,7 @@ void verifyConstraints()
         addLesson(t, "Math", "TA", "G1", 0, 0);
         addLesson(t, "English", "TA", "G2", 0, 1);
         checkScore("teacherConflictCost (+teacherRoomChangeCost)",
-                   ScoreCalculator::calculateScore(t),
+                   ScoreCalculator::score(t),
                    -1,
                    -1);
     }
@@ -131,7 +131,7 @@ void verifyConstraints()
         addLesson(t, "Math", "TA", "G1", 0, 0);
         addLesson(t, "English", "TB", "G1", 0, 1);
         checkScore(
-            "classConflictCost", ScoreCalculator::calculateScore(t), -1, 0);
+            "classConflictCost", ScoreCalculator::score(t), -1, 0);
     }
     // hard 4: teacherUnavailabilityCost — one lesson on a blocked timeslot.
     {
@@ -139,7 +139,7 @@ void verifyConstraints()
         t.teacherUnavailable["TA"] = {0};
         addLesson(t, "Math", "TA", "G1", 0, 0);
         checkScore("teacherUnavailabilityCost hit",
-                   ScoreCalculator::calculateScore(t),
+                   ScoreCalculator::score(t),
                    -1,
                    0);
     }
@@ -149,7 +149,7 @@ void verifyConstraints()
         t.teacherUnavailable["TA"] = {0};
         addLesson(t, "Math", "TA", "G1", 3, 0);
         checkScore("teacherUnavailabilityCost miss",
-                   ScoreCalculator::calculateScore(t),
+                   ScoreCalculator::score(t),
                    0,
                    0);
     }
@@ -160,7 +160,7 @@ void verifyConstraints()
         addLesson(t, "Math", "TA", "G1", 0, 0);
         addLesson(t, "Korean", "TA", "G2", 3, 1);
         checkScore("teacherRoomChangeCost differ",
-                   ScoreCalculator::calculateScore(t),
+                   ScoreCalculator::score(t),
                    0,
                    -1);
     }
@@ -169,7 +169,7 @@ void verifyConstraints()
         addLesson(t, "Math", "TA", "G1", 0, 0);
         addLesson(t, "Korean", "TA", "G2", 3, 0);
         checkScore("teacherRoomChangeCost same",
-                   ScoreCalculator::calculateScore(t),
+                   ScoreCalculator::score(t),
                    0,
                    0);
     }
@@ -181,7 +181,7 @@ void verifyConstraints()
             t, "Korean", "TA", "G2", 2, 0);  // periods 1 and 3: not adjacent
         addLesson(t, "English", "TA", "G3", 3, 1);
         checkScore("teacherRoomChangeCost [A,A,B]",
-                   ScoreCalculator::calculateScore(t),
+                   ScoreCalculator::score(t),
                    0,
                    -2);
     }
@@ -192,7 +192,7 @@ void verifyConstraints()
         addLesson(t, "Math", "TA", "G1", 0, 0);
         addLesson(t, "Korean", "TA", "G2", 1, 0);
         checkScore("teacherTimeEfficiencyCost adjacent",
-                   ScoreCalculator::calculateScore(t),
+                   ScoreCalculator::score(t),
                    0,
                    +1);
     }
@@ -202,7 +202,7 @@ void verifyConstraints()
         addLesson(t, "Math", "TA", "G1", 0, 0);
         addLesson(t, "Korean", "TA", "G2", 2, 0);
         checkScore("teacherTimeEfficiencyCost gap",
-                   ScoreCalculator::calculateScore(t),
+                   ScoreCalculator::score(t),
                    0,
                    0);
     }
@@ -213,7 +213,7 @@ void verifyConstraints()
         addLesson(t, "Math", "TA", "G1", 2, 0);
         addLesson(t, "Korean", "TA", "G2", 3, 0);
         checkScore("teacherTimeEfficiencyCost day border",
-                   ScoreCalculator::calculateScore(t),
+                   ScoreCalculator::score(t),
                    0,
                    0);
     }
@@ -224,7 +224,7 @@ void verifyConstraints()
         addLesson(t, "Math", "TA", "G1", 0, 0);
         addLesson(t, "Math", "TB", "G1", 1, 1);
         checkScore("classSubjectRepeatCost",
-                   ScoreCalculator::calculateScore(t),
+                   ScoreCalculator::score(t),
                    0,
                    -1);
     }
@@ -236,7 +236,7 @@ void verifyConstraints()
         addLesson(t, "Math", "TA", "G1", 0, 0);
         addLesson(t, "Math", "TA", "G1", 1, 0);
         checkScore("double period (teacherTimeEfficiencyCost + classSubjectRepeatCost)",
-                   ScoreCalculator::calculateScore(t),
+                   ScoreCalculator::score(t),
                    0,
                    0);
     }
@@ -249,7 +249,7 @@ void verifyConstraints()
         // Only the assigned lesson counts: teacherUnavailabilityCost -1,
         // nothing else.
         checkScore("unassigned contributes nothing",
-                   ScoreCalculator::calculateScore(t),
+                   ScoreCalculator::score(t),
                    -1,
                    0);
     }
@@ -260,7 +260,7 @@ void verifyConstraints()
         t.lessons.back().pinned = true;
         addLesson(t, "English", "TB", "G2", 0, 0);
         checkScore("pinned lesson still scored",
-                   ScoreCalculator::calculateScore(t),
+                   ScoreCalculator::score(t),
                    -1,
                    0);
     }
@@ -292,7 +292,7 @@ Timetable buildRandomInstance(int lessonCount, std::uint64_t seed)
 
 // -------------------------------------------------------------------------
 // (b) Incremental score == full recompute across a random walk of change and
-// swap moves (including unassignments), driven through the ScoreDirector so
+// swap moves (including unassignments), driven through the Editor so
 // the before/set/after hook contract is exercised exactly like in the engine.
 // -------------------------------------------------------------------------
 void verifyIncremental()
@@ -301,12 +301,12 @@ void verifyIncremental()
     Timetable t = buildRandomInstance(/*lessonCount*/ 24, /*seed*/ 7);
 
     SchoolTimetablingIncrementalScoreCalculator calc;
-    optimaru::ScoreDirector<Timetable> director(t, calc);
+    optimaru::Editor<Timetable> editor(t, calc);
     Timetable shadow = t;
 
     std::mt19937_64 rng(123);
     const int lessonCount = static_cast<int>(t.lessons.size());
-    const int valueCount = t.slotRoomCount();
+    const int value_count = t.slotRoomCount();
     std::uniform_real_distribution<double> unit(0.0, 1.0);
 
     int mismatches = 0;
@@ -320,8 +320,8 @@ void verifyIncremental()
             const int lesson = static_cast<int>(rng() % lessonCount);
             const int value = (unit(rng) < 0.10)
                                   ? -1
-                                  : static_cast<int>(rng() % valueCount);
-            director.changeVariable(lesson, value);
+                                  : static_cast<int>(rng() % value_count);
+            editor.assign(lesson, value);
         }
         else
         {
@@ -330,16 +330,16 @@ void verifyIncremental()
             const int b = static_cast<int>(rng() % lessonCount);
             const int va = t.lessons[a].slotRoom;
             const int vb = t.lessons[b].slotRoom;
-            director.changeVariable(a, vb);
-            director.changeVariable(b, va);
+            editor.assign(a, vb);
+            editor.assign(b, va);
         }
         // Full recompute on the same assignment.
         for (int i = 0; i < lessonCount; ++i)
         {
             shadow.lessons[i].slotRoom = t.lessons[i].slotRoom;
         }
-        const Score full = ScoreCalculator::calculateScore(shadow);
-        const Score incremental = director.calculateScore();
+        const Score full = ScoreCalculator::score(shadow);
+        const Score incremental = editor.score();
         if (full.hard != incremental.hard
             || std::fabs(full.soft - incremental.soft) > 1e-9)
         {
@@ -347,8 +347,8 @@ void verifyIncremental()
             {
                 std::printf("  MISMATCH @step %d: incremental=%s full=%s\n",
                             step,
-                            incremental.toString().c_str(),
-                            full.toString().c_str());
+                            incremental.str().c_str(),
+                            full.str().c_str());
             }
         }
     }
@@ -359,9 +359,9 @@ void verifyIncremental()
 }
 
 // -------------------------------------------------------------------------
-// (c) FULL_ASSERT solve: the engine cross-checks the incremental score
+// (c) ScoreChecks::Full solve: the engine cross-checks the incremental score
 // against a full reset + recompute after every single move and throws
-// ScoreCorruptionError on any divergence.
+// ScoreMismatchError on any divergence.
 // -------------------------------------------------------------------------
 void verifyFullAssertSolve()
 {
@@ -369,10 +369,10 @@ void verifyFullAssertSolve()
     Timetable t = buildRandomInstance(/*lessonCount*/ 18, /*seed*/ 11);
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(2);
-    config.randomSeed = 3;
-    config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
-    // Kick early so the LNS ruin/recreate path also runs under FULL_ASSERT.
+    config.time_limit = std::chrono::seconds(2);
+    config.seed = 3;
+    config.score_checks = optimaru::ScoreChecks::Full;
+    // Kick early so the LNS ruin/recreate path also runs under ScoreChecks::Full.
     config.ruinRecreateUnimprovedStepTrigger = 200;
     config.ruinRecreatePolishSteps = 100;
 
@@ -384,7 +384,7 @@ void verifyFullAssertSolve()
         solver.solve(t);
         final = t.score;
     }
-    catch (const optimaru::ScoreCorruptionError &e)
+    catch (const optimaru::ScoreMismatchError &e)
     {
         corrupted = true;
         std::printf("  ScoreCorruptionError: %s\n", e.what());
@@ -392,7 +392,7 @@ void verifyFullAssertSolve()
     check(!corrupted, "2s FULL_ASSERT solve without score corruption");
     if (!corrupted)
     {
-        const Score recomputed = ScoreCalculator::calculateScore(t);
+        const Score recomputed = ScoreCalculator::score(t);
         check(final.hard == recomputed.hard
                   && std::fabs(final.soft - recomputed.soft) < 1e-9,
               "solver-reported score == full recompute");
@@ -413,8 +413,8 @@ void verifyPinnedSolve()
     t.lessons[0].pinned = true;
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(1);
-    config.randomSeed = 5;
+    config.time_limit = std::chrono::seconds(1);
+    config.seed = 5;
     Solver solver(config);
     solver.solve(t);
 
@@ -464,10 +464,10 @@ void verifySearchStrategies()
         t.lessons[0].pinned = true;
 
         Solver::Config config;
-        config.spentLimit = std::chrono::seconds(2);
-        config.randomSeed = 3;
-        config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
-        config.descentWeight = testCase.descent;
+        config.time_limit = std::chrono::seconds(2);
+        config.seed = 3;
+        config.score_checks = optimaru::ScoreChecks::Full;
+        config.descent_weight = testCase.descent;
         config.ruinRecreateAsMoveWeight = testCase.drMove;
         config.ruinRecreateUnimprovedStepTrigger = 200;
         config.ruinRecreatePolishSteps = 100;
@@ -477,7 +477,7 @@ void verifySearchStrategies()
         {
             Solver(config).solve(t);
         }
-        catch (const optimaru::ScoreCorruptionError &e)
+        catch (const optimaru::ScoreMismatchError &e)
         {
             corrupted = true;
             std::printf("  ScoreCorruptionError: %s\n", e.what());
@@ -489,7 +489,7 @@ void verifySearchStrategies()
             if (lesson.slotRoom < 0)
                 allAssigned = false;
         }
-        const Score recomputed = ScoreCalculator::calculateScore(t);
+        const Score recomputed = ScoreCalculator::score(t);
         const bool matches
             = t.score.hard == recomputed.hard
               && std::fabs(t.score.soft - recomputed.soft) < 1e-9;

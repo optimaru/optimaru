@@ -105,7 +105,7 @@ void ScoreCalculator::prepare(MaxCutProblem &problem)
     requireSideVector(problem, problem.side, "side");
     requireSideVector(problem, problem.fixedSide, "fixed side");
     const int minimum = problem.minSize();
-    const int maximum = problem.maxSize();
+    const int maximum = problem.max_size();
     if (minimum < 0 || maximum < 0 || minimum > maximum || maximum > n)
     {
         invalid("partition size bounds must satisfy 0 <= min <= max <= vertex count (" + std::to_string(n)
@@ -198,7 +198,7 @@ RawCosts ScoreCalculator::rawCosts(const MaxCutProblem &problem)
             ++raw.different[a];
     }
     for (int s = 0; s < kSideCount; ++s)
-        raw.size[s] = std::max(0, problem.minSize() - count[s]) + std::max(0, count[s] - problem.maxSize());
+        raw.size[s] = std::max(0, problem.minSize() - count[s]) + std::max(0, count[s] - problem.max_size());
     raw.imbalance = std::abs(count[0] - count[1]);
     raw.cut = problem.cutWeight();
     return raw;
@@ -214,7 +214,7 @@ Score ScoreCalculator::scoreOf(const RawCosts &raw)
     return score;
 }
 
-Score ScoreCalculator::calculateScore(MaxCutProblem &problem)
+Score ScoreCalculator::score(MaxCutProblem &problem)
 {
     prepare(problem);
     problem.score = scoreOf(rawCosts(problem));

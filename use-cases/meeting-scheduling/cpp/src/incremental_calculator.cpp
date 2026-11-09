@@ -8,15 +8,15 @@
 namespace ms
 {
 
-void MeetingSchedulingIncrementalScoreCalculator::resetWorkingSolution(
-    MeetingSchedule &workingSolution)
+void MeetingSchedulingIncrementalScoreCalculator::rebuild(
+    MeetingSchedule &solution)
 {
-    ScoreCalculator::prepare(workingSolution);
-    schedule_ = &workingSolution;
-    span_ = workingSolution.occupancySpan;
-    roomCount_ = workingSolution.roomCount();
+    ScoreCalculator::prepare(solution);
+    schedule_ = &solution;
+    span_ = solution.occupancySpan;
+    roomCount_ = solution.roomCount();
 
-    const int personCount = static_cast<int>(workingSolution.people.size());
+    const int personCount = static_cast<int>(solution.people.size());
     roomGrainCnt_.assign(static_cast<std::size_t>(roomCount_) * span_, 0);
     personReqCnt_.assign(static_cast<std::size_t>(personCount) * span_, 0);
     personPrefCnt_.assign(static_cast<std::size_t>(personCount) * span_, 0);
@@ -38,30 +38,30 @@ void MeetingSchedulingIncrementalScoreCalculator::resetWorkingSolution(
     roomChangeCost_ = 0;
 
     const int assignmentCount
-        = static_cast<int>(workingSolution.meetingAssignments.size());
+        = static_cast<int>(solution.meetingAssignments.size());
     assign_.assign(assignmentCount, -1);
     posOf_.assign(assignmentCount, -1);
     roomOf_.assign(assignmentCount, -1);
 
-    const int grainCount = workingSolution.timeGrainCount();
+    const int grainCount = solution.timeGrainCount();
     dayOfPos_.resize(grainCount);
     minuteOfPos_.resize(grainCount);
     grainIndexOfPos_.resize(grainCount);
     for (int pos = 0; pos < grainCount; ++pos)
     {
-        const TimeGrain &grain = workingSolution.timeGrains[pos];
+        const TimeGrain &grain = solution.timeGrains[pos];
         dayOfPos_[pos] = grain.dayOfYear;
         minuteOfPos_[pos] = grain.startingMinuteOfDay;
         grainIndexOfPos_[pos] = grain.grainIndex;
     }
-    const int meetingCount = static_cast<int>(workingSolution.meetings.size());
+    const int meetingCount = static_cast<int>(solution.meetings.size());
     durationOf_.resize(meetingCount);
     for (int m = 0; m < meetingCount; ++m)
-        durationOf_[m] = workingSolution.meetings[m].durationInGrains;
+        durationOf_[m] = solution.meetings[m].durationInGrains;
 
     for (int i = 0; i < assignmentCount; ++i)
     {
-        const int grainRoom = workingSolution.meetingAssignments[i].grainRoom;
+        const int grainRoom = solution.meetingAssignments[i].grainRoom;
         assign_[i] = grainRoom;
         if (grainRoom >= 0)
             insert(i, grainRoom);
@@ -323,7 +323,7 @@ bool MeetingSchedulingIncrementalScoreCalculator::roomChangePairMatches(
     return secondStart - firstDuration - firstStart <= 2;
 }
 
-void MeetingSchedulingIncrementalScoreCalculator::beforeVariableChanged(
+void MeetingSchedulingIncrementalScoreCalculator::before_assign(
     int assignmentIndex)
 {
     const int old = assign_[assignmentIndex];
@@ -332,7 +332,7 @@ void MeetingSchedulingIncrementalScoreCalculator::beforeVariableChanged(
     assign_[assignmentIndex] = -1;
 }
 
-void MeetingSchedulingIncrementalScoreCalculator::afterVariableChanged(
+void MeetingSchedulingIncrementalScoreCalculator::after_assign(
     int assignmentIndex)
 {
     const int now
@@ -342,7 +342,7 @@ void MeetingSchedulingIncrementalScoreCalculator::afterVariableChanged(
         insert(assignmentIndex, now);  // still unassigned: nothing to insert
 }
 
-Score MeetingSchedulingIncrementalScoreCalculator::calculateScore()
+Score MeetingSchedulingIncrementalScoreCalculator::score()
 {
     // The default assembly's weights (the components' kDefaultWeight) and the
     // domain's medium fold, like ScoreCalculator::toScore.
@@ -364,7 +364,7 @@ Score MeetingSchedulingIncrementalScoreCalculator::calculateScore()
           + kSoftWeight<MeetingOverlapCost> * meetingOverlapCost_
           + kSoftWeight<LargerRoomCapacityCost> * largerRoomCapacityCost_
           + kSoftWeight<RoomChangeCost> * roomChangeCost_;
-    return kMediumFold.toEngine(
+    return kMediumFold.to_engine(
         -hard, -static_cast<double>(medium), -static_cast<double>(soft));
 }
 

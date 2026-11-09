@@ -84,7 +84,7 @@ schedule2 = PackagingScheduleModel.model_validate_json(text).to_core()
 
 ## Score semantics
 
-Java uses `HardMediumSoftScore` and the engine `HardSoftScore(int64, double)`, so the
+Java uses `HardMediumSoftScore` and the engine `Score(int64, double)`, so the
 mapping is `engine.soft = medium * 10^10 + soft` (the domain's medium fold; every
 `constraint_costs()` entry carries it as `medium_fold`, and
 `food_packaging.constraints.score()` returns the folded engine-level `(hard, soft)`).

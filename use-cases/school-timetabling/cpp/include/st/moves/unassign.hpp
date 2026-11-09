@@ -22,7 +22,7 @@ namespace st::canon
 // solution the search can never reach, and the run would come back with every
 // lesson placed and hard violations instead. The opposite direction needs no
 // operator: for an unassigned lesson the builtin change move sees oldValue ==
-// -1 and takes the valueRecommender's allowed slot.
+// -1 and takes the value_hint's allowed slot.
 //
 // Seeded on a hard-violating lesson when there is one, because that is where
 // unassigning pays: hard beats soft lexicographically, so dropping a lesson
@@ -42,7 +42,7 @@ public:
                std::mt19937_64 &rng,
                std::vector<int> &entities) override
     {
-        Timetable &table = ctx.director.workingSolution();
+        Timetable &table = ctx.editor.solution();
         const int lessonCount = static_cast<int>(table.lessons.size());
         int a = hotSource_->hotLesson(rng);
         for (int attempt = 0; attempt < 8 && !removable(table, a); ++attempt)
@@ -76,21 +76,21 @@ public:
                 return false;
         }
 
-        ctx.director.beginVariableChanges();
+        ctx.editor.begin_batch();
         for (const auto &[lesson, _] : last_)
-            ctx.director.changeVariable(lesson, -1);
-        ctx.director.endVariableChanges();
+            ctx.editor.assign(lesson, -1);
+        ctx.editor.end_batch();
         for (const auto &[lesson, _] : last_)
             entities.push_back(lesson);
         return true;
     }
 
-    void undoLast(optimaru::OperatorContext<Timetable> &ctx) override
+    void undo_last(optimaru::OperatorContext<Timetable> &ctx) override
     {
-        ctx.director.beginVariableChanges();
+        ctx.editor.begin_batch();
         for (const auto &[lesson, slot] : last_)
-            ctx.director.changeVariable(lesson, slot);
-        ctx.director.endVariableChanges();
+            ctx.editor.assign(lesson, slot);
+        ctx.editor.end_batch();
     }
 
 private:

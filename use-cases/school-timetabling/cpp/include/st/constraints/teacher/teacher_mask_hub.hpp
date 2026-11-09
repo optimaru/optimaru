@@ -37,7 +37,7 @@ public:
     void removeSubscriber() { --subscribers_; }
 
     void reset(const Timetable &table,
-               const std::vector<std::vector<int>> &membersPerUnit)
+               const std::vector<std::vector<int>> &members_per_unit)
     {
         if (skipResets_ > 0)
         {
@@ -78,9 +78,9 @@ public:
                 teacherIds_.push_back(teacher);
             teacherOff_[i + 1] = static_cast<int>(teacherIds_.size());
         }
-        for (std::size_t unit = 0; unit < membersPerUnit.size(); ++unit)
+        for (std::size_t unit = 0; unit < members_per_unit.size(); ++unit)
         {
-            for (int entity : membersPerUnit[unit])
+            for (int entity : members_per_unit[unit])
                 applyLesson(table,
                             static_cast<int>(unit),
                             entity,
@@ -89,7 +89,7 @@ public:
     }
 
     void
-    onMemberChanged(const Timetable &table, int unit, int entity, bool joined)
+    on_member_changed(const Timetable &table, int unit, int entity, bool joined)
     {
         if (skipEvents_ > 0)
         {
@@ -183,13 +183,13 @@ private:
 // is the member's kDefaultLevel (the knobs re-state it per instance).
 struct TeacherDayMaskConstraint : MemberChangeGlobalConstraint
 {
-    TeacherDayMaskConstraint(std::string constraintName,
+    TeacherDayMaskConstraint(std::string constraint_name,
                              double constraintWeight,
                              optimaru::Level constraintLevel,
                              TeacherMaskHub::Metric metric,
                              std::shared_ptr<TeacherMaskHub> hub)
         : MemberChangeGlobalConstraint(
-              std::move(constraintName), constraintWeight, constraintLevel),
+              std::move(constraint_name), constraintWeight, constraintLevel),
           metric_(metric),
           hub_(hub != nullptr ? std::move(hub)
                               : std::make_shared<TeacherMaskHub>())
@@ -202,18 +202,18 @@ struct TeacherDayMaskConstraint : MemberChangeGlobalConstraint
         = delete;
 
     void reset(const Timetable &table,
-               const std::vector<std::vector<int>> &membersPerUnit) override
+               const std::vector<std::vector<int>> &members_per_unit) override
     {
         detail::requirePrepared(table);
-        hub_->reset(table, membersPerUnit);
+        hub_->reset(table, members_per_unit);
     }
-    void onMemberChanged(const Timetable &table,
+    void on_member_changed(const Timetable &table,
                          int unit,
                          const std::vector<int> & /*members*/,
                          int entity,
                          bool joined) override
     {
-        hub_->onMemberChanged(table, unit, entity, joined);
+        hub_->on_member_changed(table, unit, entity, joined);
     }
     double cost() const override
     {
@@ -234,7 +234,7 @@ private:
 inline std::shared_ptr<TeacherMaskHub>
 sharedTeacherMaskHub(const DecomposedCalculator &calculator)
 {
-    for (const auto &global : calculator.globalConstraintList())
+    for (const auto &global : calculator.global_constraint_list())
     {
         const auto *member
             = dynamic_cast<const TeacherDayMaskConstraint *>(global.get());

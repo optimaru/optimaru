@@ -5,20 +5,20 @@
 namespace fab
 {
 
-void SemiconductorIncrementalScoreCalculator::resetWorkingSolution(SemiconductorSchedule &schedule)
+void SemiconductorIncrementalScoreCalculator::rebuild(SemiconductorSchedule &schedule)
 {
     ScoreCalculator::prepare(schedule);
     evaluator_.reset(schedule);
 }
 
-void SemiconductorIncrementalScoreCalculator::beforeVariableChanged(int /*row*/) {}
+void SemiconductorIncrementalScoreCalculator::before_assign(int /*row*/) {}
 
-void SemiconductorIncrementalScoreCalculator::afterVariableChanged(int row)
+void SemiconductorIncrementalScoreCalculator::after_assign(int row)
 {
     evaluator_.markChanged(row);
 }
 
-optimaru::HardSoftScore SemiconductorIncrementalScoreCalculator::calculateScore()
+optimaru::Score SemiconductorIncrementalScoreCalculator::score()
 {
     return ScoreCalculator::scoreOf(evaluator_.totals());
 }

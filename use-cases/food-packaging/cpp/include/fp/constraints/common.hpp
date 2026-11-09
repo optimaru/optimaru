@@ -9,8 +9,8 @@
 
 #include "fp/domain.hpp"
 #include "fp/score_calculator.hpp"
-#include "optimaru/api/score/calculator/constraint_assembly.hpp"
-#include "optimaru/api/score/calculator/decomposed_score_calculator.hpp"
+#include "optimaru/constraint_assembly.hpp"
+#include "optimaru/decomposed_objective.hpp"
 
 namespace fp
 {
@@ -20,7 +20,7 @@ namespace fp
 // ---------------------------------------------------------------------------
 // The five constraints of the reference food-packaging
 // FoodPackagingConstraintProvider, split into one small component each on the
-// engine's DecomposedScoreCalculator — an optional assembly path NEXT TO the
+// engine's DecomposedObjective — an optional assembly path NEXT TO the
 // monolithic FoodPackagingIncrementalScoreCalculator, which stays the tuned
 // default fast path.
 //
@@ -42,7 +42,7 @@ namespace fp
 // no delta contract is needed.
 //
 // Score levels: the quickstart scores with HardMediumSoftScore, which this
-// domain folds into the engine's HardSoftScore as
+// domain folds into the engine's Score as
 // `soft = medium * kMediumUnit + soft` (kMediumUnit = 10^10; kMediumFold and
 // the MediumFoldOf<PackagingSchedule> specialization in domain.hpp). The two
 // medium components (afterIdealEndTimeCost, unassignedJobsCost) declare
@@ -69,7 +69,7 @@ namespace fp
 // `exponent` / `offset` / `clip`, or by name through ConstraintAssembly
 // (weight / level / exponent / offset / clip; hard() / soft() are
 // level(Hard) / level(Soft)). A name may be held several times
-// (ConstraintAssembly::addInstances): each instance has its own knobs, its
+// (ConstraintAssembly::add_instances): each instance has its own knobs, its
 // level included, and the instances add up. Any component may take any of
 // the three levels: a medium component moved to hard / soft costs 1 hard /
 // 1 soft unit per raw unit, a hard or soft one moved to medium 1 medium unit,
@@ -78,19 +78,19 @@ namespace fp
 // scores bit-for-bit like them.
 //
 // Registry names are the struct names with a lower-case first letter
-// ("maxEndTimeCost"); Python sees them through pythonName()
+// ("maxEndTimeCost"); Python sees them through python_name()
 // ("max_end_time_cost").
 //
 // Cost sign convention (see decomposed_score_calculator.hpp): positive =
 // penalty, 0 = no violation; the calculator negates into the score. An
 // assembly of all five components at their default weights therefore scores
-// bit-for-bit like ScoreCalculator::calculateScore.
+// bit-for-bit like ScoreCalculator::score.
 //
 // Every component requires ScoreCalculator::prepare(schedule) to have run
 // (the solve() overload and the monolithic path both call it).
 
 using DecomposedCalculator
-    = optimaru::DecomposedScoreCalculator<PackagingSchedule>;
+    = optimaru::DecomposedObjective<PackagingSchedule>;
 using ConstraintAssembly = optimaru::ConstraintAssembly<PackagingSchedule>;
 using FpUnitConstraint = optimaru::UnitConstraint<PackagingSchedule>;
 using FpGlobalConstraint = optimaru::GlobalConstraint<PackagingSchedule>;
@@ -115,23 +115,23 @@ inline bool isPool(const PackagingSchedule &schedule, int unit)
 }
 
 // The base of the per-line components: a unit constraint that EVALUATES the
-// packaging lines and not the unassigned pool list (scopedUnits() = 0 ..
+// packaging lines and not the unassigned pool list (scoped_units() = 0 ..
 // lines - 1, set at reset). The pool's cost is 0 either way, so no score
 // changes; what the scope decides is where the literal offset formula
-// (clip = false) charges shapeCost(0 - offset): every line, an empty one
+// (clip = false) charges shape_cost(0 - offset): every line, an empty one
 // included, and never the pool, which is no line. constraint_costs() reports
 // the scope as "units", so the Python score() charges the same lines.
 struct PerLineConstraint : optimaru::UnitConstraint<PackagingSchedule>
 {
     using optimaru::UnitConstraint<PackagingSchedule>::UnitConstraint;
 
-    void onReset(const PackagingSchedule &schedule) override
+    void on_reset(const PackagingSchedule &schedule) override
     {
         requirePrepared(schedule);
         lines_.resize(static_cast<std::size_t>(schedule.lineCount()));
         std::iota(lines_.begin(), lines_.end(), 0);
     }
-    const std::vector<int> *scopedUnits() const override { return &lines_; }
+    const std::vector<int> *scoped_units() const override { return &lines_; }
 
 private:
     std::vector<int> lines_;

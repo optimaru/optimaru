@@ -1,14 +1,14 @@
 // Plugin-assembly (vrp/constraints.hpp) tests, engine test/ style: check() + a
 // non-zero exit on any failure.
-//   (a) the default assembly on the engine's DecomposedScoreCalculator
+//   (a) the default assembly on the engine's DecomposedObjective
 //       reproduces the monolithic score bit-for-bit on 300 random route
 //       layouts (unassigned visits included)
 //   (b) incremental score == full recompute across 1500 random LIST moves
-//       driven through the engine's ScoreDirector protocol (plugin path)
+//       driven through the engine's Editor protocol (plugin path)
 //   (c) partial assemblies: each component isolates its own term
 //   (d) weight / level overrides
-//   (e) constraintTotals() explains exactly the reported score
-//   (f) a 2-second solve(plan, calculator) under FULL_ASSERT
+//   (e) constraint_totals() explains exactly the reported score
+//   (f) a 2-second solve(plan, calculator) under ScoreChecks::Full
 //   (g) the assembly's move previews equal the applied score; a global
 //       without the preview contract switches previews off
 //   (h) a short time limit holds on the plugin path, whose previews cost
@@ -19,19 +19,19 @@
 //   (l) the medium level: fold, hard() / soft() / weight on
 //       unassignedVisitsCost, and incremental == full and previews ==
 //       applied score with those overrides
-//   (m) onNewBest on the plugin path reports the same levels as plan.score
+//   (m) on_new_best on the plugin path reports the same levels as plan.score
 //   (n) repeated components and the offset / clip knobs: a hand-calculated
 //       repeat (travel + 0.5 x travel^2), threshold / literal / negative
 //       offsets by hand (an idle vehicle counts in literal mode, the pool
 //       never does), the global's total shaped once, the literal formula
 //       refused on hard at reset and kept on soft and medium, incremental ==
 //       a fresh recompute over a random walk, every preview == the applied
-//       score under FULL_ASSERT and a FULL_ASSERT solve with repeated,
+//       score under ScoreChecks::Full and a ScoreChecks::Full solve with repeated,
 //       shifted components
 //   (o) negative thresholds (a fixed charge per non-zero vehicle, real-valued
-//       radius included): previews == applied score under FULL_ASSERT, a
-//       FULL_ASSERT solve, and after a 20000-step solve plan.score == a fresh
-//       recompute == the last (incremental) onNewBest report
+//       radius included): previews == applied score under ScoreChecks::Full, a
+//       ScoreChecks::Full solve, and after a 20000-step solve plan.score == a fresh
+//       recompute == the last (incremental) on_new_best report
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -46,7 +46,7 @@
 #include <utility>
 #include <vector>
 
-#include "optimaru/api/score/director/score_director.hpp"
+#include "optimaru/editor.hpp"
 #include "optimaru/testing/preview_parity.hpp"
 #include "vrp/constraints.hpp"
 #include "vrp/demo_data.hpp"
@@ -66,8 +66,8 @@ void check(bool ok, const std::string& label) {
 }
 
 Score scoreWith(DecomposedCalculator& calculator, VehicleRoutePlan& plan) {
-    calculator.resetWorkingSolution(plan);
-    return fromEngineScore(calculator.calculateScore());
+    calculator.rebuild(plan);
+    return fromEngineScore(calculator.score());
 }
 
 // Spreads every visit over the vehicles at random; `poolRate` of them go to
@@ -103,11 +103,11 @@ void verifyAssemblyParity() {
     for (int round = 0; round < rounds; ++round) {
         randomizeRoutes(plan, rng, /*poolRate=*/0.10);
         const Score plugin = scoreWith(calculator, plan);
-        const Score monolithic = ScoreCalculator::calculateScore(plan);
+        const Score monolithic = ScoreCalculator::score(plan);
         if (!(plugin == monolithic)) {
             if (++mismatches <= 3) {
                 std::printf("  MISMATCH @round %d: plugin=%s monolithic=%s\n", round,
-                            plugin.toString().c_str(), monolithic.toString().c_str());
+                            plugin.str().c_str(), monolithic.str().c_str());
             }
         }
     }
@@ -117,7 +117,7 @@ void verifyAssemblyParity() {
 
 // -------------------------------------------------------------------------
 // (b) Incremental score == full recompute across a random walk of LIST
-// mutations, driven through the ScoreDirector.
+// mutations, driven through the Editor.
 // -------------------------------------------------------------------------
 void verifyIncremental() {
     std::printf("== (b) Plugin incremental == full recompute ==\n");
@@ -126,32 +126,32 @@ void verifyIncremental() {
 
     DecomposedCalculator calculator;
     addDefaultConstraints(calculator);
-    optimaru::ScoreDirector<VehicleRoutePlan> director(plan, calculator);
+    optimaru::Editor<VehicleRoutePlan> editor(plan, calculator);
 
-    using Descriptor = optimaru::SolutionDescriptor<VehicleRoutePlan>;
+    using Descriptor = optimaru::SolutionTraits<VehicleRoutePlan>;
     std::mt19937_64 rng(3);
     int mismatches = 0;
     const int steps = 1500;
     for (int step = 0; step < steps; ++step) {
-        const int listCount = Descriptor::listCount(plan);
-        const int from = static_cast<int>(rng() % static_cast<std::uint64_t>(listCount));
-        if (Descriptor::listSize(plan, from) == 0) continue;
+        const int list_count = Descriptor::list_count(plan);
+        const int from = static_cast<int>(rng() % static_cast<std::uint64_t>(list_count));
+        if (Descriptor::list_size(plan, from) == 0) continue;
         const int position = static_cast<int>(
-                rng() % static_cast<std::uint64_t>(Descriptor::listSize(plan, from)));
-        const int element = Descriptor::getElement(plan, from, position);
-        director.removeListElement(from, position);
+                rng() % static_cast<std::uint64_t>(Descriptor::list_size(plan, from)));
+        const int element = Descriptor::element_at(plan, from, position);
+        editor.remove(from, position);
 
-        const int to = static_cast<int>(rng() % static_cast<std::uint64_t>(listCount));
-        const int insertAt = static_cast<int>(
-                rng() % static_cast<std::uint64_t>(Descriptor::listSize(plan, to) + 1));
-        director.insertListElement(to, insertAt, element);
+        const int to = static_cast<int>(rng() % static_cast<std::uint64_t>(list_count));
+        const int insert_at = static_cast<int>(
+                rng() % static_cast<std::uint64_t>(Descriptor::list_size(plan, to) + 1));
+        editor.insert(to, insert_at, element);
 
-        const Score incremental = fromEngineScore(director.calculateScore());
-        const Score full = ScoreCalculator::calculateScore(plan);
+        const Score incremental = fromEngineScore(editor.score());
+        const Score full = ScoreCalculator::score(plan);
         if (!(incremental == full)) {
             if (++mismatches <= 3) {
                 std::printf("  MISMATCH @step %d: incremental=%s full=%s\n", step,
-                            incremental.toString().c_str(), full.toString().c_str());
+                            incremental.str().c_str(), full.str().c_str());
             }
         }
     }
@@ -168,7 +168,7 @@ void verifyPartialAssemblies() {
     VehicleRoutePlan plan = buildRandomInstance(30, 4, /*seed=*/21);
     std::mt19937_64 rng(5);
     randomizeRoutes(plan, rng, /*poolRate=*/0.15);
-    const Score full = ScoreCalculator::calculateScore(plan);
+    const Score full = ScoreCalculator::score(plan);
 
     {
         DecomposedCalculator calculator;
@@ -227,7 +227,7 @@ void verifyOverrides() {
 }
 
 // -------------------------------------------------------------------------
-// (e) constraintTotals(): the per-constraint breakdown adds up.
+// (e) constraint_totals(): the per-constraint breakdown adds up.
 // -------------------------------------------------------------------------
 void verifyConstraintTotals() {
     std::printf("== (e) constraintTotals() explains the score ==\n");
@@ -238,14 +238,14 @@ void verifyConstraintTotals() {
     const std::size_t componentCount = defaultConstraints().size();
     DecomposedCalculator calculator;
     addDefaultConstraints(calculator);
-    calculator.resetWorkingSolution(plan);
-    const optimaru::HardSoftScore score = calculator.calculateScore();
+    calculator.rebuild(plan);
+    const optimaru::Score score = calculator.score();
 
     // A medium total is in medium units (not multiplied by the fold), so it
     // is folded here the way the calculator folds its medium accumulator.
     double hard = 0.0;
     double soft = 0.0;
-    for (const optimaru::ConstraintTotal& total : calculator.constraintTotals()) {
+    for (const optimaru::ConstraintTotal& total : calculator.constraint_totals()) {
         if (total.level == optimaru::Level::Hard)
             hard += total.cost;
         else if (total.level == optimaru::Level::Medium)
@@ -256,13 +256,13 @@ void verifyConstraintTotals() {
     check(std::fabs(-hard - static_cast<double>(score.hard)) < 1e-9
                   && std::fabs(-soft - score.soft) < 1e-3,
           "per-constraint totals sum to the reported score");
-    check(calculator.constraintTotals().size() == componentCount,
+    check(calculator.constraint_totals().size() == componentCount,
           "one total per assembled component");
     std::printf("\n");
 }
 
 // -------------------------------------------------------------------------
-// (f) FULL_ASSERT solve on the plugin path.
+// (f) ScoreChecks::Full solve on the plugin path.
 // -------------------------------------------------------------------------
 void verifyFullAssertSolve() {
     std::printf("== (f) FULL_ASSERT plugin solve ==\n");
@@ -270,9 +270,9 @@ void verifyFullAssertSolve() {
     plan.rebuildUnassignedPool();
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(2);
-    config.randomSeed = 3;
-    config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+    config.time_limit = std::chrono::seconds(2);
+    config.seed = 3;
+    config.score_checks = optimaru::ScoreChecks::Full;
     config.ruinRecreateUnimprovedStepTrigger = 200;
     config.ruinRecreatePolishSteps = 100;
 
@@ -283,13 +283,13 @@ void verifyFullAssertSolve() {
     try {
         Solver solver(config);
         solver.solve(plan, calculator);
-    } catch (const optimaru::ScoreCorruptionError& e) {
+    } catch (const optimaru::ScoreMismatchError& e) {
         corrupted = true;
         std::printf("  ScoreCorruptionError: %s\n", e.what());
     }
     check(!corrupted, "2s FULL_ASSERT plugin solve without score corruption");
     if (!corrupted) {
-        const Score recomputed = ScoreCalculator::calculateScore(plan);
+        const Score recomputed = ScoreCalculator::score(plan);
         check(plan.score == recomputed, "plugin-reported score == monolithic full recompute");
     }
     std::printf("\n");
@@ -306,7 +306,7 @@ void verifyFullAssertSolve() {
 struct PreviewlessGlobal final : VrpGlobalConstraint {
     PreviewlessGlobal() : VrpGlobalConstraint("previewless", 1.0, optimaru::Level::Soft) {}
     void reset(const VehicleRoutePlan&, const std::vector<std::vector<int>>&) override {}
-    void onUnitChanged(const VehicleRoutePlan&, int, const std::vector<int>&) override {}
+    void on_unit_changed(const VehicleRoutePlan&, int, const std::vector<int>&) override {}
     double cost() const override { return 0.0; }
 };
 
@@ -320,12 +320,12 @@ void verifyPreviews() {
     {
         DecomposedCalculator calculator;
         addDefaultConstraints(calculator);
-        optimaru::ScoreDirector<VehicleRoutePlan> director(plan, calculator);
+        optimaru::Editor<VehicleRoutePlan> editor(plan, calculator);
         const optimaru::testing::PreviewParity parity =
-                optimaru::testing::runPreviewParity(director, calculator, /*seed=*/5, /*trials=*/3000);
+                optimaru::testing::run_preview_parity(editor, calculator, /*seed=*/5, /*trials=*/3000);
         std::printf("    %d moves checked, %d previewed, %d declined\n", parity.checked,
                     parity.previewed, parity.declined);
-        check(parity.allEqual() && parity.previewed > 1000 && parity.declined == 0,
+        check(parity.all_equal() && parity.previewed > 1000 && parity.declined == 0,
               "default assembly: every preview served and equal to the applied score");
     }
     {
@@ -339,10 +339,10 @@ void verifyPreviews() {
             vehicle.fixedCost = 1000;
         }
         assembly.into(calculator);
-        optimaru::ScoreDirector<VehicleRoutePlan> director(plan, calculator);
+        optimaru::Editor<VehicleRoutePlan> editor(plan, calculator);
         const optimaru::testing::PreviewParity parity =
-                optimaru::testing::runPreviewParity(director, calculator, /*seed=*/6, /*trials=*/2000);
-        check(parity.allEqual() && parity.previewed > 500 && parity.declined == 0,
+                optimaru::testing::run_preview_parity(editor, calculator, /*seed=*/6, /*trials=*/2000);
+        check(parity.all_equal() && parity.previewed > 500 && parity.declined == 0,
               "assembly with route policies: every preview equal to the applied score");
         for (Vehicle& vehicle : plan.vehicles) {
             vehicle.maxStops = 0;
@@ -354,9 +354,9 @@ void verifyPreviews() {
         DecomposedCalculator calculator;
         addDefaultConstraints(calculator);
         calculator.emplace<PreviewlessGlobal>();
-        optimaru::ScoreDirector<VehicleRoutePlan> director(plan, calculator);
+        optimaru::Editor<VehicleRoutePlan> editor(plan, calculator);
         const optimaru::testing::PreviewParity parity =
-                optimaru::testing::runPreviewParity(director, calculator, /*seed=*/7, /*trials=*/300);
+                optimaru::testing::run_preview_parity(editor, calculator, /*seed=*/7, /*trials=*/300);
         check(parity.previewed == 0 && parity.declined > 0,
               "a global without the preview contract switches previews off");
     }
@@ -394,7 +394,7 @@ void verifyPiecewiseByHand() {
 
     DecomposedCalculator calculator;
     addDefaultConstraints(calculator);
-    calculator.resetWorkingSolution(plan);
+    calculator.rebuild(plan);
 
     // Vehicle 0 would hold: its own [0,2) forward, vehicle 1's [1,4) reversed,
     // pool visit 9, the detached visit 11, then its own [3,5).
@@ -402,12 +402,12 @@ void verifyPiecewiseByHand() {
             {0, 0, 2, false}, {1, 1, 4, true}, {pool, 0, 1, false}, {-1, 11, 12, false},
             {0, 3, 5, false}};
     const std::vector<int> written = {0, 1, 8, 7, 6, 9, 11, 3, 4};
-    const auto& constraints = calculator.unitConstraintList();
+    const auto& constraints = calculator.unit_constraint_list();
     int compared = 0;
     for (const auto& c : constraints) {
-        if (!c->supportsPiecewisePreview()) continue;
+        if (!c->supports_piecewise_preview()) continue;
         double piecewise = -1.0;
-        const bool answered = c->piecewiseCost(plan, 0, pieces, 5, piecewise);
+        const bool answered = c->piecewise_cost(plan, 0, pieces, 5, piecewise);
         const double walked = c->cost(plan, 0, written);
         check(answered && piecewise == walked,
               c->name + ": piecewise answer equals cost() of the written-out route");
@@ -416,18 +416,18 @@ void verifyPiecewiseByHand() {
     check(compared == 3, "three summed unit components compared");
     // The pool as a unit: every summed component costs it 0 from pieces too.
     for (const auto& c : constraints) {
-        if (!c->supportsPiecewisePreview()) continue;
+        if (!c->supports_piecewise_preview()) continue;
         double piecewise = -1.0;
-        check(c->piecewiseCost(plan, pool, pieces, 5, piecewise) && piecewise == 0.0,
+        check(c->piecewise_cost(plan, pool, pieces, 5, piecewise) && piecewise == 0.0,
               c->name + ": the pool costs nothing");
     }
     // The global: unrouted penalty with vehicle 0 holding the pieces.
-    for (const auto& g : calculator.globalConstraintList()) {
-        if (!g->supportsPiecewisePreview()) continue;
+    for (const auto& g : calculator.global_constraint_list()) {
+        if (!g->supports_piecewise_preview()) continue;
         std::vector<int> members1 = plan.vehicles[1].visitIndices;
         const optimaru::PreviewedUnit changes[1] = {{0, &written, pieces, 5}};
         double piecewise = -1.0;
-        const bool answered = g->piecewisePreviewCost(plan, changes, 1, piecewise);
+        const bool answered = g->piecewise_preview_cost(plan, changes, 1, piecewise);
         std::int64_t expected = 0;
         for (const Visit& visit : plan.visits) expected += visit.unassignedPenalty();
         for (int v : written) expected -= plan.visits[static_cast<std::size_t>(v)].unassignedPenalty();
@@ -440,11 +440,11 @@ void verifyPiecewiseByHand() {
     // answered; cost() on the written-out route then reports the minutes.
     {
         plan.visits[4].maxEndTime = 60;  // a minute after departure
-        calculator.resetWorkingSolution(plan);
+        calculator.rebuild(plan);
         for (const auto& c : constraints) {
             if (c->name != "maxEndTimeCost") continue;
             double piecewise = -1.0;
-            check(!c->piecewiseCost(plan, 0, pieces, 5, piecewise),
+            check(!c->piecewise_cost(plan, 0, pieces, 5, piecewise),
                   "lateness declines when the route may run late");
             check(c->cost(plan, 0, written) > 0.0, "... and cost() reports the lateness");
         }
@@ -452,11 +452,11 @@ void verifyPiecewiseByHand() {
     }
     {
         plan.visits[6].minStartTime = plan.vehicles[0].departureTime + 3600;  // waiting
-        calculator.resetWorkingSolution(plan);
+        calculator.rebuild(plan);
         for (const auto& c : constraints) {
             if (c->name != "maxEndTimeCost") continue;
             double piecewise = -1.0;
-            check(!c->piecewiseCost(plan, 0, pieces, 5, piecewise),
+            check(!c->piecewise_cost(plan, 0, pieces, 5, piecewise),
                   "lateness declines on a plan with waiting");
         }
         plan.visits[6].minStartTime = 0;
@@ -471,10 +471,10 @@ void verifyPiecewiseByHand() {
         wide.rebuildUnassignedPool();
         DecomposedCalculator onlyGlobal;
         defaultConstraints().only({"unassignedVisitsCost", "maxStopsCost"}).into(onlyGlobal);
-        optimaru::ScoreDirector<VehicleRoutePlan> director(wide, onlyGlobal);
+        optimaru::Editor<VehicleRoutePlan> editor(wide, onlyGlobal);
         const optimaru::testing::PreviewParity parity =
-                optimaru::testing::runPreviewParity(director, onlyGlobal, /*seed=*/8, 1500);
-        check(parity.allEqual() && parity.declined == 0 && parity.previewed > 500,
+                optimaru::testing::run_preview_parity(editor, onlyGlobal, /*seed=*/8, 1500);
+        check(parity.all_equal() && parity.declined == 0 && parity.previewed > 500,
               "global-only summed assembly: every preview equals the applied score");
     }
     std::printf("\n");
@@ -486,13 +486,13 @@ void verifyTimeLimitOnPluginPath() {
     plan.rebuildUnassignedPool();
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(1);
-    config.randomSeed = 1;
+    config.time_limit = std::chrono::seconds(1);
+    config.seed = 1;
     // The construction heuristic runs before the clock-reading phase and is
     // not what this test is about: time from its result (the first best).
     auto started = std::chrono::steady_clock::now();
     bool constructed = false;
-    config.onNewBest = [&](std::int64_t, const Score&) {
+    config.on_new_best = [&](std::int64_t, const Score&) {
         if (!constructed) {
             constructed = true;
             started = std::chrono::steady_clock::now();
@@ -562,10 +562,10 @@ std::vector<double> rawCosts(VehicleRoutePlan plan, const std::string& name) {
     plan.rebuildUnassignedPool();
     DecomposedCalculator calculator;
     addDefaultConstraints(calculator);
-    calculator.resetWorkingSolution(plan);
-    calculator.calculateScore();
-    for (const auto& entry : calculator.constraintCosts())
-        if (entry.name == name) return entry.unitCosts;
+    calculator.rebuild(plan);
+    calculator.score();
+    for (const auto& entry : calculator.constraint_costs())
+        if (entry.name == name) return entry.unit_costs;
     throw std::logic_error("no constraint " + name);
 }
 
@@ -671,11 +671,11 @@ void verifyRawCostsByHand() {
 // -------------------------------------------------------------------------
 template <typename Component>
 bool rowIs(const optimaru::ConstraintInfo& row, const char* name, optimaru::Level level,
-           double weight, bool isGlobal) {
-    return row.name == name && row.defaultLevel == Component::kDefaultLevel
-           && row.defaultWeight == Component::kDefaultWeight && row.defaultLevel == level
-           && row.defaultWeight == weight && row.levelFlippable && !row.reward
-           && row.isGlobal == isGlobal && row.defaultEnabled == (weight > 0.0);
+           double weight, bool is_global) {
+    return row.name == name && row.default_level == Component::kDefaultLevel
+           && row.default_weight == Component::kDefaultWeight && row.default_level == level
+           && row.default_weight == weight && row.level_flippable && !row.reward
+           && row.is_global == is_global && row.default_enabled == (weight > 0.0);
 }
 
 void verifyCatalog() {
@@ -714,13 +714,13 @@ void verifyCatalog() {
 // -------------------------------------------------------------------------
 // (l) The medium level: unassignedVisitsCost.
 // -------------------------------------------------------------------------
-optimaru::DecomposedScoreCalculator<VehicleRoutePlan>::LevelScores levelsWith(
+optimaru::DecomposedObjective<VehicleRoutePlan>::LevelScores levelsWith(
         ConstraintAssembly assembly, VehicleRoutePlan& plan) {
     DecomposedCalculator calculator;
     std::move(assembly).into(calculator);
-    calculator.resetWorkingSolution(plan);
-    calculator.calculateScore();
-    return calculator.levelScores();
+    calculator.rebuild(plan);
+    calculator.score();
+    return calculator.level_scores();
 }
 
 void verifyMediumLevel() {
@@ -730,21 +730,21 @@ void verifyMediumLevel() {
     VehicleRoutePlan plan = buildHandInstance();
     plan.vehicles[0].visitIndices = {0, 1};
     plan.rebuildUnassignedPool();
-    const Score monolithic = ScoreCalculator::calculateScore(plan);
+    const Score monolithic = ScoreCalculator::score(plan);
     check(monolithic.hard == 0 && monolithic.medium == -2 && monolithic.soft == -200,
           "the hand plan drops 2 medium minutes");
 
     {
         DecomposedCalculator calculator;
         addDefaultConstraints(calculator);
-        calculator.resetWorkingSolution(plan);
-        const optimaru::HardSoftScore engine = calculator.calculateScore();
+        calculator.rebuild(plan);
+        const optimaru::Score engine = calculator.score();
         check(engine.hard == 0 && engine.soft == -200.0 - 2.0 * static_cast<double>(kMediumUnit),
               "default: medium folded into soft x 10^9");
         check(engine.hard == toEngineScore(monolithic).hard
                       && engine.soft == toEngineScore(monolithic).soft,
               "default: the fold equals the monolithic Score adapter");
-        const auto levels = calculator.levelScores();
+        const auto levels = calculator.level_scores();
         check(levels.hard == 0 && levels.medium == -2.0 && levels.soft == -200.0,
               "levelScores() reports the unfolded levels");
     }
@@ -782,7 +782,7 @@ void verifyMediumLevel() {
 
 // Incremental == full recompute and every move preview == the applied score
 // with the medium term overridden: a random walk of list moves through the
-// ScoreDirector protocol, then the preview harness on the same assembly. The
+// Editor protocol, then the preview harness on the same assembly. The
 // LIST domain previews through the global's piecewise contract, so this is
 // the path a medium term takes in the engine's move evaluation.
 void verifyMediumIncremental() {
@@ -795,7 +795,7 @@ void verifyMediumIncremental() {
             {"with travelTimeCost on medium",
              [] { return defaultConstraints().level("travelTimeCost", optimaru::Level::Medium); }},
     };
-    using Descriptor = optimaru::SolutionDescriptor<VehicleRoutePlan>;
+    using Descriptor = optimaru::SolutionTraits<VehicleRoutePlan>;
     for (const auto& variant : variants) {
         VehicleRoutePlan plan = buildRandomInstance(30, 4, /*seed=*/17);
         std::mt19937_64 layout(23);
@@ -803,29 +803,29 @@ void verifyMediumIncremental() {
         plan.rebuildUnassignedPool();
         DecomposedCalculator calculator;
         variant.second().into(calculator);
-        optimaru::ScoreDirector<VehicleRoutePlan> director(plan, calculator);
+        optimaru::Editor<VehicleRoutePlan> editor(plan, calculator);
         std::mt19937_64 rng(41);
         int mismatches = 0;
         int mediumSteps = 0;
         for (int step = 0; step < 600; ++step) {
-            const int listCount = Descriptor::listCount(plan);
-            const int from = static_cast<int>(rng() % static_cast<std::uint64_t>(listCount));
-            if (Descriptor::listSize(plan, from) == 0) continue;
+            const int list_count = Descriptor::list_count(plan);
+            const int from = static_cast<int>(rng() % static_cast<std::uint64_t>(list_count));
+            if (Descriptor::list_size(plan, from) == 0) continue;
             const int position = static_cast<int>(
-                    rng() % static_cast<std::uint64_t>(Descriptor::listSize(plan, from)));
-            const int element = Descriptor::getElement(plan, from, position);
-            director.removeListElement(from, position);
-            const int to = static_cast<int>(rng() % static_cast<std::uint64_t>(listCount));
-            const int insertAt = static_cast<int>(
-                    rng() % static_cast<std::uint64_t>(Descriptor::listSize(plan, to) + 1));
-            director.insertListElement(to, insertAt, element);
+                    rng() % static_cast<std::uint64_t>(Descriptor::list_size(plan, from)));
+            const int element = Descriptor::element_at(plan, from, position);
+            editor.remove(from, position);
+            const int to = static_cast<int>(rng() % static_cast<std::uint64_t>(list_count));
+            const int insert_at = static_cast<int>(
+                    rng() % static_cast<std::uint64_t>(Descriptor::list_size(plan, to) + 1));
+            editor.insert(to, insert_at, element);
 
-            const optimaru::HardSoftScore incremental = director.calculateScore();
+            const optimaru::Score incremental = editor.score();
             DecomposedCalculator fresh;
             variant.second().into(fresh);
-            fresh.resetWorkingSolution(plan);
-            const optimaru::HardSoftScore full = fresh.calculateScore();
-            if (fresh.levelScores().medium != 0.0) ++mediumSteps;
+            fresh.rebuild(plan);
+            const optimaru::Score full = fresh.score();
+            if (fresh.level_scores().medium != 0.0) ++mediumSteps;
             if (incremental.hard != full.hard || std::fabs(incremental.soft - full.soft) > 1e-6)
                 ++mismatches;
         }
@@ -835,8 +835,8 @@ void verifyMediumIncremental() {
             check(mediumSteps > 0, variant.first + ": the walk visits medium states");
 
         const optimaru::testing::PreviewParity parity =
-                optimaru::testing::runPreviewParity(director, calculator, /*seed=*/9, /*trials=*/1500);
-        check(parity.allEqual() && parity.declined == 0 && parity.previewed > 500,
+                optimaru::testing::run_preview_parity(editor, calculator, /*seed=*/9, /*trials=*/1500);
+        check(parity.all_equal() && parity.declined == 0 && parity.previewed > 500,
               "unassignedVisitsCost " + variant.first
                       + ": every preview served and equal to the applied score");
     }
@@ -844,7 +844,7 @@ void verifyMediumIncremental() {
 }
 
 // -------------------------------------------------------------------------
-// (m) onNewBest on the plugin path reports the levels plan.score reports.
+// (m) on_new_best on the plugin path reports the levels plan.score reports.
 // -------------------------------------------------------------------------
 // With travelTimeCost at weight 10^7 the soft total passes 10^9, which a
 // decoded fold would split into medium + (soft mod 10^9). The last new best
@@ -855,11 +855,11 @@ void verifyPluginCallbackLevels() {
     plan.rebuildUnassignedPool();
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(10);
-    config.stepCountLimit = 3000;
-    config.randomSeed = 5;
+    config.time_limit = std::chrono::seconds(10);
+    config.step_limit = 3000;
+    config.seed = 5;
     std::vector<Score> reports;
-    config.onNewBest = [&](std::int64_t, const Score& best) { reports.push_back(best); };
+    config.on_new_best = [&](std::int64_t, const Score& best) { reports.push_back(best); };
 
     constexpr double kWeight = 1e7;
     DecomposedCalculator calculator;
@@ -869,7 +869,7 @@ void verifyPluginCallbackLevels() {
     check(!reports.empty(), "onNewBest fired");
     check(plan.score.soft <= -kMediumUnit, "the final soft total is 10^9 or more");
     check(!reports.empty() && reports.back() == plan.score,
-          "the last onNewBest score == plan.score (" + plan.score.toString() + ")");
+          "the last onNewBest score == plan.score (" + plan.score.str() + ")");
     // Folded back, the reports are the engine's successive bests: strictly
     // improving in its (hard, soft) order.
     bool improving = true;
@@ -884,7 +884,7 @@ void verifyPluginCallbackLevels() {
 // -------------------------------------------------------------------------
 // (n) Repeated components and offsets. A repeat is a fresh copy of a
 // default component (another defaultConstraints(), the one name kept, its
-// knobs re-stated) appended with addInstances(), as the Python bindings
+// knobs re-stated) appended with add_instances(), as the Python bindings
 // build it from a pick list.
 // -------------------------------------------------------------------------
 ConstraintAssembly copyOf(const std::string& name) {
@@ -921,26 +921,26 @@ ConstraintAssembly repeatedAssembly() {
     ConstraintAssembly assembly = defaultConstraints();
     assembly.offset("travelTimeCost", 3000.0).clip("travelTimeCost", false);
     assembly.offset("unassignedVisitsCost", 1.0);
-    assembly.addInstances(std::move(copyOf("travelTimeCost")
+    assembly.add_instances(std::move(copyOf("travelTimeCost")
                                             .weight("travelTimeCost", 0.001)
                                             .exponent("travelTimeCost", 2.0)
                                             .offset("travelTimeCost", 2000.0)));
     // The literal capacity copy sits on soft: hard refuses the literal
     // formula with an offset (hard 0 must mean no violation).
-    assembly.addInstances(std::move(copyOf("vehicleCapacityCost")
+    assembly.add_instances(std::move(copyOf("vehicleCapacityCost")
                                             .soft("vehicleCapacityCost")
                                             .weight("vehicleCapacityCost", 2.0)
                                             .offset("vehicleCapacityCost", 1.0)
                                             .clip("vehicleCapacityCost", false)));
-    assembly.addInstances(std::move(copyOf("vehicleCapacityCost")
+    assembly.add_instances(std::move(copyOf("vehicleCapacityCost")
                                             .weight("vehicleCapacityCost", 2.0)
                                             .offset("vehicleCapacityCost", 1.0)));
-    assembly.addInstances(std::move(copyOf("unassignedVisitsCost")
+    assembly.add_instances(std::move(copyOf("unassignedVisitsCost")
                                             .weight("unassignedVisitsCost", 2.0)
                                             .offset("unassignedVisitsCost", 3.0)
                                             .clip("unassignedVisitsCost", false)));
-    assembly.addInstances(std::move(copyOf("maxEndTimeCost").offset("maxEndTimeCost", -2.0)));
-    assembly.addInstances(std::move(copyOf("latencyCost")
+    assembly.add_instances(std::move(copyOf("maxEndTimeCost").offset("maxEndTimeCost", -2.0)));
+    assembly.add_instances(std::move(copyOf("latencyCost")
                                             .weight("latencyCost", 0.01)
                                             .offset("latencyCost", 5000.0)
                                             .clip("latencyCost", false)));
@@ -952,19 +952,19 @@ void verifyRepeatsAndOffsets() {
     {
         VehicleRoutePlan plan = repeatInstance();
         ConstraintAssembly assembly = copyOf("travelTimeCost");
-        assembly.addInstances(std::move(
+        assembly.add_instances(std::move(
                 copyOf("travelTimeCost").weight("travelTimeCost", 0.5).exponent("travelTimeCost", 2.0)));
         DecomposedCalculator calculator;
         assembly.into(calculator);
-        calculator.resetWorkingSolution(plan);
-        const optimaru::HardSoftScore score = calculator.calculateScore();
+        calculator.rebuild(plan);
+        const optimaru::Score score = calculator.score();
         check(score.hard == 0 && score.soft == -(600.0 + 0.5 * (200.0 * 200.0 + 400.0 * 400.0)),
               "travel + 0.5 x travel^2 per vehicle: -(600 + 100000) soft");
-        const auto entries = calculator.constraintCosts();
-        check(entries.size() == 2 && entries[0].unitCosts == entries[1].unitCosts
-                      && entries[0].unitCosts == std::vector<double>{200.0, 400.0, 0.0, 0.0}
+        const auto entries = calculator.constraint_costs();
+        check(entries.size() == 2 && entries[0].unit_costs == entries[1].unit_costs
+                      && entries[0].unit_costs == std::vector<double>{200.0, 400.0, 0.0, 0.0}
                       && entries[1].weight == 0.5 && entries[1].exponent == 2.0
-                      && entries[1].defaultWeight == 1.0,
+                      && entries[1].default_weight == 1.0,
               "two instances, the same raw costs, each with its own knobs");
         check(entries.size() == 2 && entries[0].scoped && entries[1].scoped
                       && entries[0].units == std::vector<int>{0, 1, 2}
@@ -1028,7 +1028,7 @@ void verifyRepeatsAndOffsets() {
         // The medium instances add up: 5 + 2 x 5.
         const auto twice = levelsOf(
                 std::move(copyOf("unassignedVisitsCost")
-                                  .addInstances(std::move(copyOf("unassignedVisitsCost")
+                                  .add_instances(std::move(copyOf("unassignedVisitsCost")
                                                                   .weight("unassignedVisitsCost", 2.0)))),
                 repeatInstance());
         check(twice.medium == -15.0, "a repeated medium pick: -5 - 10 medium");
@@ -1070,7 +1070,7 @@ void verifyRepeatsAndOffsets() {
                       == refusal("travelTimeCost"),
               "travel literal offset moved to hard afterwards: refused at reset");
         ConstraintAssembly repeated = copyOf("vehicleCapacityCost");
-        repeated.addInstances(std::move(copyOf("vehicleCapacityCost")
+        repeated.add_instances(std::move(copyOf("vehicleCapacityCost")
                                                 .offset("vehicleCapacityCost", 1.0)
                                                 .clip("vehicleCapacityCost", false)));
         check(resetRefusal(std::move(repeated)) == refusal("vehicleCapacityCost"),
@@ -1085,7 +1085,7 @@ void verifyRepeatsAndOffsets() {
               "allowed: a threshold offset or clip=false with offset 0 on hard, the literal "
               "offset on the into-soft medium");
     }
-    using Descriptor = optimaru::SolutionDescriptor<VehicleRoutePlan>;
+    using Descriptor = optimaru::SolutionTraits<VehicleRoutePlan>;
     {
         // Random walk: incremental == a fresh calculator of the same assembly.
         VehicleRoutePlan plan = buildRandomInstance(30, 4, /*seed=*/17);
@@ -1094,31 +1094,31 @@ void verifyRepeatsAndOffsets() {
         plan.rebuildUnassignedPool();
         DecomposedCalculator calculator;
         repeatedAssembly().into(calculator);
-        optimaru::ScoreDirector<VehicleRoutePlan> director(plan, calculator);
+        optimaru::Editor<VehicleRoutePlan> editor(plan, calculator);
         std::mt19937_64 rng(43);
         int mismatches = 0;
         double drift = 0.0;
         const int steps = 1500;
         for (int step = 0; step < steps; ++step) {
-            const int listCount = Descriptor::listCount(plan);
-            const int from = static_cast<int>(rng() % static_cast<std::uint64_t>(listCount));
-            if (Descriptor::listSize(plan, from) == 0) continue;
+            const int list_count = Descriptor::list_count(plan);
+            const int from = static_cast<int>(rng() % static_cast<std::uint64_t>(list_count));
+            if (Descriptor::list_size(plan, from) == 0) continue;
             const int position = static_cast<int>(
-                    rng() % static_cast<std::uint64_t>(Descriptor::listSize(plan, from)));
-            const int element = Descriptor::getElement(plan, from, position);
-            director.removeListElement(from, position);
-            const int to = static_cast<int>(rng() % static_cast<std::uint64_t>(listCount));
-            const int insertAt = static_cast<int>(
-                    rng() % static_cast<std::uint64_t>(Descriptor::listSize(plan, to) + 1));
-            director.insertListElement(to, insertAt, element);
+                    rng() % static_cast<std::uint64_t>(Descriptor::list_size(plan, from)));
+            const int element = Descriptor::element_at(plan, from, position);
+            editor.remove(from, position);
+            const int to = static_cast<int>(rng() % static_cast<std::uint64_t>(list_count));
+            const int insert_at = static_cast<int>(
+                    rng() % static_cast<std::uint64_t>(Descriptor::list_size(plan, to) + 1));
+            editor.insert(to, insert_at, element);
 
-            const optimaru::HardSoftScore incremental = director.calculateScore();
+            const optimaru::Score incremental = editor.score();
             DecomposedCalculator fresh;
             repeatedAssembly().into(fresh);
-            fresh.resetWorkingSolution(plan);
-            const optimaru::HardSoftScore full = fresh.calculateScore();
+            fresh.rebuild(plan);
+            const optimaru::Score full = fresh.score();
             drift = std::max(drift, std::fabs(full.soft - incremental.soft));
-            if (!optimaru::scoresAgree(incremental, full)) ++mismatches;
+            if (!optimaru::scores_agree(incremental, full)) ++mismatches;
         }
         std::printf("    largest soft drift %.3g\n", drift);
         check(mismatches == 0, std::to_string(steps)
@@ -1126,28 +1126,28 @@ void verifyRepeatsAndOffsets() {
                                          "incremental == fresh");
     }
     {
-        // Every preview == the applied score, re-checked under FULL_ASSERT.
+        // Every preview == the applied score, re-checked under ScoreChecks::Full.
         VehicleRoutePlan plan = buildRandomInstance(30, 4, /*seed=*/19);
         std::mt19937_64 layout(31);
         randomizeRoutes(plan, layout, /*poolRate=*/0.10);
         plan.rebuildUnassignedPool();
         DecomposedCalculator calculator;
         repeatedAssembly().into(calculator);
-        optimaru::ScoreDirector<VehicleRoutePlan> director(plan, calculator,
-                                                           optimaru::EnvironmentMode::FULL_ASSERT);
-        director.calculateScore();
+        optimaru::Editor<VehicleRoutePlan> editor(plan, calculator,
+                                                           optimaru::ScoreChecks::Full);
+        editor.score();
         optimaru::testing::PreviewParity parity;
         bool corrupted = false;
         try {
-            parity = optimaru::testing::runPreviewParity(director, calculator, /*seed=*/13,
+            parity = optimaru::testing::run_preview_parity(editor, calculator, /*seed=*/13,
                                                          /*trials=*/3000);
-        } catch (const optimaru::ScoreCorruptionError& error) {
+        } catch (const optimaru::ScoreMismatchError& error) {
             corrupted = true;
             std::printf("    %s\n", error.what());
         }
         std::printf("    %d moves checked, %d previewed, %d declined\n", parity.checked,
                     parity.previewed, parity.declined);
-        check(!corrupted && parity.allEqual() && parity.declined == 0 && parity.previewed > 1000,
+        check(!corrupted && parity.all_equal() && parity.declined == 0 && parity.previewed > 1000,
               "repeated, shifted components: every preview served and equal to the applied "
               "score (FULL_ASSERT)");
     }
@@ -1155,9 +1155,9 @@ void verifyRepeatsAndOffsets() {
         VehicleRoutePlan plan = buildRandomInstance(25, 4, /*seed=*/9);
         plan.rebuildUnassignedPool();
         Solver::Config config;
-        config.spentLimit = std::chrono::seconds(2);
-        config.randomSeed = 3;
-        config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+        config.time_limit = std::chrono::seconds(2);
+        config.seed = 3;
+        config.score_checks = optimaru::ScoreChecks::Full;
         config.ruinRecreateUnimprovedStepTrigger = 200;
         config.ruinRecreatePolishSteps = 100;
         DecomposedCalculator calculator;
@@ -1166,7 +1166,7 @@ void verifyRepeatsAndOffsets() {
         try {
             Solver solver(config);
             solver.solve(plan, calculator);
-        } catch (const optimaru::ScoreCorruptionError& e) {
+        } catch (const optimaru::ScoreMismatchError& e) {
             corrupted = true;
             std::printf("  ScoreCorruptionError: %s\n", e.what());
         }
@@ -1175,8 +1175,8 @@ void verifyRepeatsAndOffsets() {
         // leave fractions), exactly as the solver's levelScore does.
         const auto levels = levelsWith(repeatedAssembly(), plan);
         check(!corrupted && plan.score.hard == levels.hard
-                      && plan.score.medium == optimaru::roundScoreLevel(levels.medium, "medium")
-                      && plan.score.soft == optimaru::roundScoreLevel(levels.soft, "soft"),
+                      && plan.score.medium == optimaru::round_score_level(levels.medium, "medium")
+                      && plan.score.soft == optimaru::round_score_level(levels.soft, "soft"),
               "the reported levels == a fresh recompute of the same assembly");
     }
     std::printf("\n");
@@ -1190,7 +1190,7 @@ void verifyRepeatsAndOffsets() {
 // capacity threshold sits on hard. The calculator previews these instances
 // through cost() on the written-out route (never the shared sums) and costs
 // every applied route with cost(), so previews, the incremental score and a
-// fresh recompute agree; the last onNewBest report (the incremental score of
+// fresh recompute agree; the last on_new_best report (the incremental score of
 // the best solution) is plan.score (a fresh recompute of it).
 // -------------------------------------------------------------------------
 ConstraintAssembly negativeThresholdAssembly() {
@@ -1200,7 +1200,7 @@ ConstraintAssembly negativeThresholdAssembly() {
     assembly.weight("enclosingCircleRadiusCost", 0.01).offset("enclosingCircleRadiusCost", -60.0);
     assembly.weight("routeDurationCost", 0.001).offset("routeDurationCost", -60.0);
     assembly.offset("unassignedVisitsCost", -1.0);
-    assembly.addInstances(std::move(copyOf("travelTimeCost")
+    assembly.add_instances(std::move(copyOf("travelTimeCost")
                                             .weight("travelTimeCost", 1e-4)
                                             .exponent("travelTimeCost", 2.0)
                                             .offset("travelTimeCost", -30.0)));
@@ -1216,30 +1216,30 @@ void verifyNegativeThresholds() {
         plan.rebuildUnassignedPool();
         DecomposedCalculator calculator;
         negativeThresholdAssembly().into(calculator);
-        optimaru::ScoreDirector<VehicleRoutePlan> director(plan, calculator,
-                                                           optimaru::EnvironmentMode::FULL_ASSERT);
-        director.calculateScore();
+        optimaru::Editor<VehicleRoutePlan> editor(plan, calculator,
+                                                           optimaru::ScoreChecks::Full);
+        editor.score();
         optimaru::testing::PreviewParity parity;
         bool corrupted = false;
         try {
-            parity = optimaru::testing::runPreviewParity(director, calculator, /*seed=*/71,
+            parity = optimaru::testing::run_preview_parity(editor, calculator, /*seed=*/71,
                                                          /*trials=*/3000);
-        } catch (const optimaru::ScoreCorruptionError& error) {
+        } catch (const optimaru::ScoreMismatchError& error) {
             corrupted = true;
             std::printf("    %s\n", error.what());
         }
         std::printf("    %d moves checked, %d previewed, %d declined\n", parity.checked,
                     parity.previewed, parity.declined);
-        check(!corrupted && parity.allEqual() && parity.declined == 0 && parity.previewed > 1000,
+        check(!corrupted && parity.all_equal() && parity.declined == 0 && parity.previewed > 1000,
               "negative thresholds: every preview equal to the applied score (FULL_ASSERT)");
     }
     {
         VehicleRoutePlan plan = buildRandomInstance(30, 5, /*seed=*/23);
         plan.rebuildUnassignedPool();
         Solver::Config config;
-        config.spentLimit = std::chrono::seconds(2);
-        config.randomSeed = 11;
-        config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+        config.time_limit = std::chrono::seconds(2);
+        config.seed = 11;
+        config.score_checks = optimaru::ScoreChecks::Full;
         config.ruinRecreateUnimprovedStepTrigger = 200;
         config.ruinRecreatePolishSteps = 100;
         DecomposedCalculator calculator;
@@ -1247,7 +1247,7 @@ void verifyNegativeThresholds() {
         bool corrupted = false;
         try {
             Solver(config).solve(plan, calculator);
-        } catch (const optimaru::ScoreCorruptionError& e) {
+        } catch (const optimaru::ScoreMismatchError& e) {
             corrupted = true;
             std::printf("  ScoreCorruptionError: %s\n", e.what());
         }
@@ -1257,18 +1257,18 @@ void verifyNegativeThresholds() {
         VehicleRoutePlan plan = buildRandomInstance(30, 5, /*seed=*/23);
         plan.rebuildUnassignedPool();
         Solver::Config config;
-        config.spentLimit = std::chrono::seconds(10);
-        config.stepCountLimit = 20000;
-        config.randomSeed = 13;
+        config.time_limit = std::chrono::seconds(10);
+        config.step_limit = 20000;
+        config.seed = 13;
         std::vector<Score> reports;
-        config.onNewBest = [&](std::int64_t, const Score& best) { reports.push_back(best); };
+        config.on_new_best = [&](std::int64_t, const Score& best) { reports.push_back(best); };
         DecomposedCalculator calculator;
         negativeThresholdAssembly().into(calculator);
         Solver(config).solve(plan, calculator);
         const auto levels = levelsWith(negativeThresholdAssembly(), plan);
         check(plan.score.hard == levels.hard
-                      && plan.score.medium == optimaru::roundScoreLevel(levels.medium, "medium")
-                      && plan.score.soft == optimaru::roundScoreLevel(levels.soft, "soft"),
+                      && plan.score.medium == optimaru::round_score_level(levels.medium, "medium")
+                      && plan.score.soft == optimaru::round_score_level(levels.soft, "soft"),
               "20000 steps: plan.score == a fresh recompute of the same assembly");
         check(!reports.empty() && reports.back() == plan.score,
               "the last onNewBest report (incremental) == plan.score (fresh)");

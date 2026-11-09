@@ -44,9 +44,9 @@ constraint is flippable, none is a reward, all twelve are on by default. The old
 pair now defaults to weight 1 in medium units (was 1e6 on soft): `level="hard"` gives one hard
 unit per person-grain, `level="soft"` one soft unit (outside the fold).
 
-### Score mapping (HardMediumSoftScore → HardSoftScore)
+### Score mapping (HardMediumSoftScore → Score)
 
-The engine score is `HardSoftScore(hard int64, soft double)`, so Java's medium level
+The engine score is `Score(hard int64, soft double)`, so Java's medium level
 is folded into soft:
 
 ```

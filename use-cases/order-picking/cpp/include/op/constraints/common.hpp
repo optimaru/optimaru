@@ -6,8 +6,8 @@
 
 #include "op/domain.hpp"
 #include "op/score_calculator.hpp"
-#include "optimaru/api/score/calculator/constraint_assembly.hpp"
-#include "optimaru/api/score/calculator/decomposed_score_calculator.hpp"
+#include "optimaru/constraint_assembly.hpp"
+#include "optimaru/decomposed_objective.hpp"
 
 namespace op
 {
@@ -17,7 +17,7 @@ namespace op
 // ---------------------------------------------------------------------------
 // The four constraints of the reference order-picking
 // OrderPickingConstraintProvider, split into one small component each on the
-// engine's DecomposedScoreCalculator — an optional assembly path NEXT TO the
+// engine's DecomposedObjective — an optional assembly path NEXT TO the
 // monolithic OrderPickingIncrementalScoreCalculator, which stays the tuned
 // default fast path.
 //
@@ -56,7 +56,7 @@ namespace op
 // default assembly scores bit-for-bit like them.
 //
 // Registry names are the struct names with a lower-case first letter
-// ("trolleyCapacityCost"); Python sees them through pythonName()
+// ("trolleyCapacityCost"); Python sees them through python_name()
 // ("trolley_capacity_cost").
 //
 // Cost sign convention (see decomposed_score_calculator.hpp): positive =
@@ -64,10 +64,10 @@ namespace op
 // exception: it counts every (order, trolley) pair, so it is 0 only without
 // assigned picks); the calculator negates into the score. An assembly of all
 // four components at their default weights therefore scores bit-for-bit like
-// ScoreCalculator::calculateScore.
+// ScoreCalculator::score.
 
 using DecomposedCalculator
-    = optimaru::DecomposedScoreCalculator<OrderPickingSolution>;
+    = optimaru::DecomposedObjective<OrderPickingSolution>;
 using ConstraintAssembly = optimaru::ConstraintAssembly<OrderPickingSolution>;
 using OpUnitConstraint = optimaru::UnitConstraint<OrderPickingSolution>;
 using OpGlobalConstraint = optimaru::GlobalConstraint<OrderPickingSolution>;

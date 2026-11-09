@@ -6,8 +6,8 @@
 #include <numeric>
 #include <vector>
 
-#include "optimaru/api/score/calculator/constraint_assembly.hpp"
-#include "optimaru/api/score/calculator/decomposed_score_calculator.hpp"
+#include "optimaru/constraint_assembly.hpp"
+#include "optimaru/decomposed_objective.hpp"
 #include "vrp/domain.hpp"
 #include "vrp/score_calculator.hpp"
 
@@ -18,8 +18,8 @@ namespace vrp {
 // ---------------------------------------------------------------------------
 // The constraints of the reference vehicle-routing
 // VehicleRoutingConstraintProvider plus the optional route policies, one small
-// component each on the engine's DecomposedScoreCalculator -- an optional
-// assembly path NEXT TO ScoreCalculator::calculateScore, which stays the
+// component each on the engine's DecomposedObjective -- an optional
+// assembly path NEXT TO ScoreCalculator::score, which stays the
 // default path for the four core rules.
 //
 // Unit choice: with the LIST descriptor the calculator's unit is one LIST,
@@ -41,7 +41,7 @@ namespace vrp {
 // Naming: one header per component, named after its struct
 // (MaxTravelTimeCost -> max_travel_time_cost.hpp). The registry name is the
 // struct name with a lower-case first letter ("maxTravelTimeCost"); Python
-// sees it through pythonName() ("max_travel_time_cost"). Helpers that are not
+// sees it through python_name() ("max_travel_time_cost"). Helpers that are not
 // components live in route_sums.hpp (the shared prefix sums) and
 // route_geometry.hpp (the enclosing circle).
 //
@@ -49,14 +49,14 @@ namespace vrp {
 // kDefaultWeight / kDefaultLevel passed to the base constructor. They are
 // assembly-time metadata, not part of the cost. Override them per instance
 // with the constructor's weight argument or the mutable `level` / `weight` /
-// `exponent` / `offset` / `clip` (validated setters setWeight / setLevel /
-// setExponent / setOffset / setClip), or by name through ConstraintAssembly.
-// Read the level with `isHard()` or `level`. A name may be held several times
-// (ConstraintAssembly::addInstances): each instance has its own knobs and the
+// `exponent` / `offset` / `clip` (validated setters set_weight / set_level /
+// set_exponent / set_offset / set_clip), or by name through ConstraintAssembly.
+// Read the level with `is_hard()` or `level`. A name may be held several times
+// (ConstraintAssembly::add_instances): each instance has its own knobs and the
 // instances add up.
 //
 // Score levels: the quickstart scores with HardMediumSoftScore. The medium
-// level (unassignedVisitsCost) is folded into the engine's HardSoftScore by
+// level (unassignedVisitsCost) is folded into the engine's Score by
 // the calculator as `soft = medium * kMediumUnit + soft` (kMediumFold in
 // domain.hpp), so a medium weight is in medium units: weight 1 = one medium
 // unit per penalty minute. The opt-in objectives (enclosingCircleRadiusCost,
@@ -77,9 +77,9 @@ namespace vrp {
 // Cost sign convention (see decomposed_score_calculator.hpp): positive =
 // penalty, 0 = no violation; the calculator negates into the score. The
 // default assembly therefore scores bit-for-bit like
-// ScoreCalculator::calculateScore on a plan without route policies.
+// ScoreCalculator::score on a plan without route policies.
 
-using DecomposedCalculator = optimaru::DecomposedScoreCalculator<VehicleRoutePlan>;
+using DecomposedCalculator = optimaru::DecomposedObjective<VehicleRoutePlan>;
 using ConstraintAssembly = optimaru::ConstraintAssembly<VehicleRoutePlan>;
 using VrpUnitConstraint = optimaru::UnitConstraint<VehicleRoutePlan>;
 using VrpGlobalConstraint = optimaru::GlobalConstraint<VehicleRoutePlan>;
@@ -100,21 +100,21 @@ inline bool isPool(const VehicleRoutePlan& plan, int unit) {
 }
 
 // The base of every per-vehicle component: a unit constraint that EVALUATES
-// the vehicles and not the pool list (scopedUnits() = 0 .. vehicles - 1, set
+// the vehicles and not the pool list (scoped_units() = 0 .. vehicles - 1, set
 // at reset). The pool's cost is 0 either way, so no score changes; what the
 // scope decides is where the literal offset formula (clip = false) charges
-// shapeCost(0 - offset): every vehicle, an idle one included, and never the
+// shape_cost(0 - offset): every vehicle, an idle one included, and never the
 // pool, which is no vehicle. constraint_costs() reports the scope as
 // "units", so the Python score() charges the same vehicles. A component
-// that needs its own onReset() calls this one first.
+// that needs its own on_reset() calls this one first.
 struct PerVehicleConstraint : VrpUnitConstraint {
     using VrpUnitConstraint::VrpUnitConstraint;
 
-    void onReset(const VehicleRoutePlan& plan) override {
+    void on_reset(const VehicleRoutePlan& plan) override {
         vehicles_.resize(plan.vehicles.size());
         std::iota(vehicles_.begin(), vehicles_.end(), 0);
     }
-    const std::vector<int>* scopedUnits() const override { return &vehicles_; }
+    const std::vector<int>* scoped_units() const override { return &vehicles_; }
 
 private:
     std::vector<int> vehicles_;

@@ -7,8 +7,8 @@
 
 #include "fcs/domain.hpp"
 #include "fcs/score_calculator.hpp"
-#include "optimaru/api/score/calculator/constraint_assembly.hpp"
-#include "optimaru/api/score/calculator/decomposed_score_calculator.hpp"
+#include "optimaru/constraint_assembly.hpp"
+#include "optimaru/decomposed_objective.hpp"
 
 namespace fcs
 {
@@ -18,7 +18,7 @@ namespace fcs
 // ---------------------------------------------------------------------------
 // The six constraints of the reference flight-crew-scheduling
 // FlightCrewSchedulingConstraintProvider, split into one small component each
-// on the engine's DecomposedScoreCalculator — an optional assembly path NEXT
+// on the engine's DecomposedObjective — an optional assembly path NEXT
 // TO the monolithic FlightCrewSchedulingIncrementalScoreCalculator, which
 // stays the tuned default fast path.
 //
@@ -61,7 +61,7 @@ namespace fcs
 // in this domain.
 //
 // Registry names are the struct names with a lower-case first letter
-// ("requiredSkillCost"); Python sees them through pythonName()
+// ("requiredSkillCost"); Python sees them through python_name()
 // ("required_skill_cost").
 //
 // Cost sign convention (see decomposed_score_calculator.hpp): positive =
@@ -71,7 +71,7 @@ namespace fcs
 // (the solve() overload and the monolithic path both call it).
 
 using DecomposedCalculator
-    = optimaru::DecomposedScoreCalculator<FlightCrewSchedule>;
+    = optimaru::DecomposedObjective<FlightCrewSchedule>;
 using ConstraintAssembly = optimaru::ConstraintAssembly<FlightCrewSchedule>;
 using FcsUnitConstraint = optimaru::UnitConstraint<FlightCrewSchedule>;
 using FcsGlobalConstraint = optimaru::GlobalConstraint<FlightCrewSchedule>;
@@ -104,7 +104,7 @@ struct PerAssignmentConstraint : FcsUnitConstraint
                           int assignmentIndex,
                           int employeeIndex) const = 0;
 
-    void onReset(const FlightCrewSchedule &schedule) override
+    void on_reset(const FlightCrewSchedule &schedule) override
     {
         detail::requirePrepared(schedule);
     }
@@ -117,8 +117,8 @@ struct PerAssignmentConstraint : FcsUnitConstraint
             violations += violated(schedule, assignmentIndex, unit) ? 1 : 0;
         return static_cast<double>(violations);
     }
-    bool supportsDelta() const override { return true; }
-    double deltaCost(const FlightCrewSchedule &schedule,
+    bool supports_delta() const override { return true; }
+    double delta_cost(const FlightCrewSchedule &schedule,
                      int unit,
                      const std::vector<int> & /*members*/,
                      int entity) const override
@@ -142,7 +142,7 @@ struct ItineraryConstraint : FcsUnitConstraint
 
     virtual std::int64_t select(const ItineraryStats &stats) const = 0;
 
-    void onReset(const FlightCrewSchedule &schedule) override
+    void on_reset(const FlightCrewSchedule &schedule) override
     {
         detail::requirePrepared(schedule);
     }

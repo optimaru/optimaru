@@ -9,8 +9,8 @@
 #include <unordered_map>
 #include <vector>
 
-#include "optimaru/api/domain/solution_descriptor.hpp"
-#include "optimaru/api/score/buildin/hard_soft_score.hpp"
+#include "optimaru/solution_traits.hpp"
+#include "optimaru/score.hpp"
 
 namespace fab
 {
@@ -76,13 +76,13 @@ inline std::int64_t mul(std::int64_t a, std::int64_t b)
 
 }  // namespace checked
 
-// The engine's HardSoftScore as is: there is no medium level.
+// The engine's Score as is: there is no medium level.
 //   hard = -(sum of the 14 hard constraints' raw costs, weight 1 each)
 //   soft = -(machinePreferenceCost + minBatchSizeCost
 //            + machineLoadImbalanceCost + 10 * weightedTardinessCost
 //            + cycleTimeCost + makespanCost)
 // The weights are the components' kDefaultWeight (fab/constraints/*.hpp).
-using Score = optimaru::HardSoftScore;
+using Score = optimaru::Score;
 
 // [start, end), end > start.
 struct TimeWindow
@@ -225,7 +225,7 @@ struct OperationRow
 //   data mode (searching == false, the default): the score is that of
 //     `assignments` exactly as given (calculate_score / constraint_costs);
 //   search mode (searching == true, only inside Solver::solve and the tests
-//     that drive a ScoreDirector): the score is that of the decoded planning
+//     that drive a Editor): the score is that of the decoded planning
 //     values — or of `seedAssignments` as supplied while every row holds its
 //     seedValues and the seed was complete.
 struct SemiconductorSchedule
@@ -285,7 +285,7 @@ struct SemiconductorSchedule
     }
 
     // --- the composite value encoding (see OperationRow) ---
-    int valueCount() const { return rowCount() * maxOptionCount; }
+    int value_count() const { return rowCount() * maxOptionCount; }
     int valueOf(int rank, int slot) const { return rank * maxOptionCount + slot; }
     int rankOf(int value) const { return value / maxOptionCount; }
     int slotOf(int value) const { return value % maxOptionCount; }
@@ -325,28 +325,28 @@ struct SemiconductorSchedule
 }  // namespace fab
 
 // ---------------------------------------------------------------------------
-// SolutionDescriptor: entities are the operation rows, the planning variable
+// SolutionTraits: entities are the operation rows, the planning variable
 // is OperationRow::value, the value range is the (rank x slot) grid. No
-// engine pinning (see OperationRow). valueCount reads maxOptionCount, so
+// engine pinning (see OperationRow). value_count reads maxOptionCount, so
 // ScoreCalculator::prepare must have run (Solver::solve and every calculator
 // call it).
 // ---------------------------------------------------------------------------
-template <> struct optimaru::SolutionDescriptor<fab::SemiconductorSchedule>
+template <> struct optimaru::SolutionTraits<fab::SemiconductorSchedule>
 {
-    static constexpr optimaru::VariableKind kind = optimaru::VariableKind::BASIC;
-    static int entityCount(const fab::SemiconductorSchedule &s)
+    static constexpr optimaru::Shape shape = optimaru::Shape::Assignment;
+    static int entity_count(const fab::SemiconductorSchedule &s)
     {
         return s.rowCount();
     }
-    static int valueCount(const fab::SemiconductorSchedule &s)
+    static int value_count(const fab::SemiconductorSchedule &s)
     {
-        return s.valueCount();
+        return s.value_count();
     }
-    static int getVariable(const fab::SemiconductorSchedule &s, int row)
+    static int value_of(const fab::SemiconductorSchedule &s, int row)
     {
         return s.rows[static_cast<std::size_t>(row)].value;
     }
-    static void setVariable(fab::SemiconductorSchedule &s, int row, int value)
+    static void assign(fab::SemiconductorSchedule &s, int row, int value)
     {
         s.rows[static_cast<std::size_t>(row)].value = value;
     }

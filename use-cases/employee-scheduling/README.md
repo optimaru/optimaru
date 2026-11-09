@@ -60,8 +60,8 @@ engine is `cpp/include/es/solver.hpp` + `cpp/src/solver.cpp`.
 a smart change move, a window swap between two employees, a hot-employee ruin
 and an optional unassign move, all next to the engine construction in
 `cpp/src/solver.cpp`. A new move is a `optimaru::MoveOperator<…>` registered
-with `engine.addMoveOperator(...)` there; a ruin for LNS is a `RuinOperator`
-registered with `engine.addRuinOperator(...)`.
+with `engine.add_move_operator(...)` there; a ruin for LNS is a `RuinOperator`
+registered with `engine.add_ruin_operator(...)`.
 
 **Changing the construction heuristic.** `seedDayAwareInitialRoster` in
 `cpp/src/solver.cpp` places shifts day by day, scarce skills first; the engine's

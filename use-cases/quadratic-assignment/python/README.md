@@ -5,7 +5,7 @@ facility on every location — `Facility.location` is the only planning variable
 and the solver keeps the facilities a permutation of the locations (swap moves
 only).
 
-Score (HardSoftScore), at the default weights:
+Score, at the default weights:
 
 - hard = -(fixed locations not holding their facility + facilities at a forbidden
   location + demand above location capacities) — `pinned_assignments_cost`,

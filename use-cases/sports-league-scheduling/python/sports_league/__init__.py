@@ -13,7 +13,7 @@ in place::
              stop_at_first_feasible=True)
     print(schedule.score, schedule.assignment())
 
-Score (HardSoftScore), at the default weights: hard = -(team_conflict_cost +
+Score, at the default weights: hard = -(team_conflict_cost +
 consecutive_home_matches_cost + consecutive_away_matches_cost +
 repeat_match_on_next_day_cost), soft = -(the five *_hop_cost travel terms in km +
 1000 x workday_classic_matches_cost). `constraint_costs(schedule)` gives the raw cost of

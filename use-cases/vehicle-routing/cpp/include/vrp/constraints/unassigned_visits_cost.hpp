@@ -30,19 +30,19 @@ struct UnassignedVisitsCost final : detail::SummedGlobalConstraint {
         : SummedGlobalConstraint("unassignedVisitsCost", weight, kDefaultLevel) {}
 
     void resetWithSums(const VehicleRoutePlan& plan,
-                       const std::vector<std::vector<int>>& membersPerUnit) override {
+                       const std::vector<std::vector<int>>& members_per_unit) override {
         totalPenalty_ = 0;
         for (const Visit& visit : plan.visits) totalPenalty_ += visit.unassignedPenalty();
-        routedPerVehicle_.assign(membersPerUnit.size(), 0);
+        routedPerVehicle_.assign(members_per_unit.size(), 0);
         routedPenalty_ = 0;
-        for (std::size_t unit = 0; unit < membersPerUnit.size(); ++unit) {
+        for (std::size_t unit = 0; unit < members_per_unit.size(); ++unit) {
             if (detail::isPool(plan, static_cast<int>(unit))) continue;
-            routedPerVehicle_[unit] = penaltyOf(plan, membersPerUnit[unit]);
+            routedPerVehicle_[unit] = penaltyOf(plan, members_per_unit[unit]);
             routedPenalty_ += routedPerVehicle_[unit];
         }
     }
 
-    void onUnitChanged(const VehicleRoutePlan& plan, int unit,
+    void on_unit_changed(const VehicleRoutePlan& plan, int unit,
                        const std::vector<int>& members) override {
         // A visit sitting in the pool is unrouted, exactly like one in no list
         // at all, so the pool's own contents never count as routed.
@@ -58,8 +58,8 @@ struct UnassignedVisitsCost final : detail::SummedGlobalConstraint {
 
     // Preview contract: the routed penalty with each previewed vehicle's
     // candidate members in place of its current ones. O(touched visits).
-    bool supportsPreview() const override { return true; }
-    double previewCost(const VehicleRoutePlan& plan, const optimaru::PreviewedUnit* changes,
+    bool supports_preview() const override { return true; }
+    double preview_cost(const VehicleRoutePlan& plan, const optimaru::PreviewedUnit* changes,
                        int count) const override {
         std::int64_t routed = routedPenalty_;
         for (int i = 0; i < count; ++i) {
@@ -70,13 +70,13 @@ struct UnassignedVisitsCost final : detail::SummedGlobalConstraint {
         return static_cast<double>(totalPenalty_ - routed);
     }
     // The same from the shared penalty sums, O(pieces).
-    bool piecewisePreviewCost(const VehicleRoutePlan& plan, const optimaru::PreviewedUnit* changes,
+    bool piecewise_preview_cost(const VehicleRoutePlan& plan, const optimaru::PreviewedUnit* changes,
                               int count, double& out) const override {
         std::int64_t routed = routedPenalty_;
         for (int i = 0; i < count; ++i) {
             if (detail::isPool(plan, changes[i].unit)) continue;
             std::int64_t penalty = 0;
-            for (int p = 0; p < changes[i].pieceCount; ++p) {
+            for (int p = 0; p < changes[i].piece_count; ++p) {
                 penalty += sums_->penaltyOf(changes[i].pieces[p]);
             }
             routed += penalty - routedPerVehicle_[static_cast<std::size_t>(changes[i].unit)];

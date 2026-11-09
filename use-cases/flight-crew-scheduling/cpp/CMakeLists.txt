@@ -32,7 +32,7 @@ target_link_libraries(fcs_test PRIVATE fcs_core)
 target_compile_options(fcs_test PRIVATE -Wall -Wextra)
 
 # Plugin-assembly path (fcs/constraints.hpp): the same provider decomposed
-# into one component each on the engine's DecomposedScoreCalculator, checked
+# into one component each on the engine's DecomposedObjective, checked
 # bit-for-bit against the monolithic calculators.
 add_executable(fcs_plugin_test test/fcs_plugin_test.cpp)
 target_link_libraries(fcs_plugin_test PRIVATE fcs_core)

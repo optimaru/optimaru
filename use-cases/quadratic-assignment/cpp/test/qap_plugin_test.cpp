@@ -1,19 +1,19 @@
 // Plugin-assembly (qap/constraints.hpp) tests, engine test/ style: check() + a
 // non-zero exit on any failure.
-//   (a) the default assembly on the engine's DecomposedScoreCalculator
+//   (a) the default assembly on the engine's DecomposedObjective
 //       reproduces the monolithic score bit-for-bit on 500 random
 //       permutations and on partial / doubly-occupied assignments
 //   (b) incremental score == full recompute across 3000 random moves driven
-//       through the engine's ScoreDirector protocol (delta units and the
+//       through the engine's Editor protocol (delta units and the
 //       member-change globals), the per-constraint raw costs stay equal to a
 //       fresh reset, and every constraint is non-zero on some step
 //   (c) partial assemblies: removing one component removes exactly its term
 //   (d) weight / level / exponent overrides (units shape per location,
 //       globals shape their total)
-//   (e) constraintTotals() explains exactly the reported score;
-//       constraintCosts() layout (units: one entry per location in location
+//   (e) constraint_totals() explains exactly the reported score;
+//       constraint_costs() layout (units: one entry per location in location
 //       order; globals: one total)
-//   (f) a FULL_ASSERT solve(problem, calculator), default and overridden
+//   (f) a ScoreChecks::Full solve(problem, calculator), default and overridden
 //   (g) the registry names and their Python spelling
 //   (h) each component's raw cost, hand-calculated: a positive and a zero
 //       case per constraint (raw 0 = no violation)
@@ -25,7 +25,7 @@
 //       totals, the scoped side constraints charging only their evaluated
 //       locations ("units"), the literal formula refused on hard at reset
 //       and kept on soft, incremental == a fresh recompute over a random
-//       walk (accepted and undone moves) and a FULL_ASSERT solve with
+//       walk (accepted and undone moves) and a ScoreChecks::Full solve with
 //       repeated, shifted components on both levels
 #include <algorithm>
 #include <chrono>
@@ -39,7 +39,7 @@
 #include <string>
 #include <vector>
 
-#include "optimaru/api/score/director/score_director.hpp"
+#include "optimaru/editor.hpp"
 #include "optimaru/python/names.hpp"
 #include "qap/constraints.hpp"
 #include "qap/domain.hpp"
@@ -59,8 +59,8 @@ using Costs = std::vector<DecomposedCalculator::ConstraintCosts>;
 Score scoreWith(DecomposedCalculator &calculator, QuadraticAssignmentProblem &problem)
 {
     ScoreCalculator::prepare(problem);
-    calculator.resetWorkingSolution(problem);
-    return calculator.calculateScore();
+    calculator.rebuild(problem);
+    return calculator.score();
 }
 
 Score scoreWith(ConstraintAssembly assembly, QuadraticAssignmentProblem &problem)
@@ -86,9 +86,9 @@ std::vector<double> rawCosts(QuadraticAssignmentProblem &problem, const std::str
     DecomposedCalculator calculator;
     addDefaultConstraints(calculator);
     scoreWith(calculator, problem);
-    const Costs entries = calculator.constraintCosts();
+    const Costs entries = calculator.constraint_costs();
     const auto *entry = entryOf(entries, name);
-    return entry ? entry->unitCosts : std::vector<double>{};
+    return entry ? entry->unit_costs : std::vector<double>{};
 }
 
 double total(const std::vector<double> &costs)
@@ -134,14 +134,14 @@ void verifyAssemblyParity()
         DecomposedCalculator calculator;
         addDefaultConstraints(calculator);
         const Score plugin = scoreWith(calculator, p);
-        const Score monolithic = ScoreCalculator::calculateScore(p);
+        const Score monolithic = ScoreCalculator::score(p);
         if (!(plugin == monolithic) && ++mismatches <= 3)
         {
-            std::printf("  MISMATCH @round %d: plugin=%s monolithic=%s\n", round, plugin.toString().c_str(),
-                        monolithic.toString().c_str());
+            std::printf("  MISMATCH @round %d: plugin=%s monolithic=%s\n", round, plugin.str().c_str(),
+                        monolithic.str().c_str());
         }
         const ScoreCalculator::RawCosts raw = ScoreCalculator::rawCosts(p);
-        const Costs entries = calculator.constraintCosts();
+        const Costs entries = calculator.constraint_costs();
         const std::vector<double> expected{static_cast<double>(raw.pinnedAssignmentsCost),
                                            static_cast<double>(raw.forbiddenAssignmentsCost),
                                            static_cast<double>(raw.locationCapacityCost),
@@ -149,7 +149,7 @@ void verifyAssemblyParity()
                                            static_cast<double>(raw.flowDistanceCost)};
         for (std::size_t c = 0; c < entries.size(); ++c)
         {
-            if (total(entries[c].unitCosts) != expected[c])
+            if (total(entries[c].unit_costs) != expected[c])
                 ++rawMismatches;
         }
     }
@@ -181,7 +181,7 @@ void verifyIncremental()
         ScoreCalculator::prepare(p);
         DecomposedCalculator calculator;
         (shaped ? shapedAssembly() : defaultConstraints()).into(calculator);
-        optimaru::ScoreDirector<QuadraticAssignmentProblem> director(p, calculator);
+        optimaru::Editor<QuadraticAssignmentProblem> editor(p, calculator);
         std::uniform_int_distribution<int> facility(0, 11);
         std::uniform_int_distribution<int> kind(0, 9);
         for (int step = 0; step < 1000; ++step)
@@ -191,57 +191,57 @@ void verifyIncremental()
             const int what = kind(rng);
             const bool accept = (step % 3) != 0;
             const QuadraticAssignmentProblem before = p;
-            director.beginMoveEvaluation();
+            editor.begin_trial();
             if (what < 7)
             {
                 const int la = p.facilities[a].location;
                 const int lb = p.facilities[b].location;
-                director.beginVariableChanges();
-                director.changeVariable(a, lb);
-                director.changeVariable(b, la);
-                director.endVariableChanges();
+                editor.begin_batch();
+                editor.assign(a, lb);
+                editor.assign(b, la);
+                editor.end_batch();
             }
             else if (what < 9)
             {
-                director.changeVariable(a, p.facilities[a].location < 0 ? facility(rng) : -1);
+                editor.assign(a, p.facilities[a].location < 0 ? facility(rng) : -1);
             }
             else
             {
-                director.changeVariable(a, facility(rng));
+                editor.assign(a, facility(rng));
             }
-            director.calculateScore();
+            editor.score();
             if (!accept)
             {
                 // Undo like the engine: the inverse changes inside a rollback.
-                director.beginMoveRollback();
-                director.beginVariableChanges();
+                editor.begin_rollback();
+                editor.begin_batch();
                 for (int f = 0; f < p.facilityCount(); ++f)
                 {
                     if (p.facilities[f].location != before.facilities[f].location)
-                        director.changeVariable(f, before.facilities[f].location);
+                        editor.assign(f, before.facilities[f].location);
                 }
-                director.endVariableChanges();
+                editor.end_batch();
             }
-            director.endMoveEvaluation(accept);
-            const Score incremental = director.calculateScore();
-            const Costs live = calculator.constraintCosts();
+            editor.end_trial(accept);
+            const Score incremental = editor.score();
+            const Costs live = calculator.constraint_costs();
             DecomposedCalculator fresh;
             (shaped ? shapedAssembly() : defaultConstraints()).into(fresh);
             QuadraticAssignmentProblem copy = p;
             const Score full = scoreWith(fresh, copy);
-            const Costs reset = fresh.constraintCosts();
+            const Costs reset = fresh.constraint_costs();
             ++checks;
             if (!sameScore(incremental, full) && ++mismatches <= 3)
             {
                 std::printf("  MISMATCH round %d step %d: incremental=%s full=%s\n", round, step,
-                            incremental.toString().c_str(), full.toString().c_str());
+                            incremental.str().c_str(), full.str().c_str());
             }
             if (live.size() != names.size() || reset.size() != names.size())
                 ++rawMismatches;
             for (std::size_t c = 0; c < names.size() && c < live.size() && c < reset.size(); ++c)
             {
-                const auto &costs = reset[c].unitCosts;
-                if (live[c].name != names[c] || reset[c].name != names[c] || live[c].unitCosts != costs)
+                const auto &costs = reset[c].unit_costs;
+                if (live[c].name != names[c] || reset[c].name != names[c] || live[c].unit_costs != costs)
                     ++rawMismatches;
                 if (std::any_of(costs.begin(), costs.end(), [](double cost) { return cost != 0.0; }))
                     ++nonZero[c];
@@ -276,7 +276,7 @@ void verifyPartialAssemblies()
     for (const Case &c : cases)
     {
         check(sameScore(scoreWith(defaultConstraints().drop(c.name), p), c.expected),
-              std::string("without ") + c.name + ": " + c.expected.toString());
+              std::string("without ") + c.name + ": " + c.expected.str());
     }
     check(sameScore(scoreWith(defaultConstraints().only({"flowDistanceCost"}), p), {0, -22.0}),
           "only flowDistanceCost: 0hard/-22soft");
@@ -360,7 +360,7 @@ void verifyOverrides()
 }
 
 // -------------------------------------------------------------------------
-// (e) constraintTotals() / constraintCosts().
+// (e) constraint_totals() / constraint_costs().
 // -------------------------------------------------------------------------
 void verifyTotalsAndLayout()
 {
@@ -373,16 +373,16 @@ void verifyTotalsAndLayout()
     const Score score = scoreWith(calculator, p);
     double hard = 0.0;
     double soft = 0.0;
-    for (const auto &entry : calculator.constraintTotals())
-        (entry.isHard ? hard : soft) += entry.cost;
+    for (const auto &entry : calculator.constraint_totals())
+        (entry.is_hard ? hard : soft) += entry.cost;
     check(static_cast<std::int64_t>(-hard) == score.hard && std::fabs(-soft - score.soft) < 1e-9,
           "constraintTotals() sum to the score");
-    const Costs entries = calculator.constraintCosts();
+    const Costs entries = calculator.constraint_costs();
     bool layout = entries.size() == 5;
     for (std::size_t c = 0; layout && c < entries.size(); ++c)
     {
         const bool global = c >= 3;
-        layout = entries[c].isGlobal == global && entries[c].unitCosts.size() == (global ? 1u : 9u);
+        layout = entries[c].is_global == global && entries[c].unit_costs.size() == (global ? 1u : 9u);
     }
     check(layout, "units list one cost per location, globals one total");
     // Location order: the capacity list equals a by-hand per-location clamp.
@@ -399,12 +399,12 @@ void verifyTotalsAndLayout()
         }
         expected[l] = static_cast<double>(std::max<std::int64_t>(0, load - p.capacityOf[l]));
     }
-    check(entryOf(entries, "locationCapacityCost")->unitCosts == expected, "capacity costs are in location order");
+    check(entryOf(entries, "locationCapacityCost")->unit_costs == expected, "capacity costs are in location order");
     std::printf("\n");
 }
 
 // -------------------------------------------------------------------------
-// (f) FULL_ASSERT solve(problem, calculator).
+// (f) ScoreChecks::Full solve(problem, calculator).
 // -------------------------------------------------------------------------
 void verifyFullAssertSolve()
 {
@@ -416,10 +416,10 @@ void verifyFullAssertSolve()
         DecomposedCalculator calculator;
         (shaped ? shapedAssembly() : defaultConstraints()).into(calculator);
         Solver::Config config;
-        config.spentLimit = std::chrono::seconds(60);
-        config.stepCountLimit = 1500;
-        config.randomSeed = 3;
-        config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+        config.time_limit = std::chrono::seconds(60);
+        config.step_limit = 1500;
+        config.seed = 3;
+        config.score_checks = optimaru::ScoreChecks::Full;
         bool ok = true;
         try
         {
@@ -453,7 +453,7 @@ void verifyNames()
           "defaultConstraints() names, in catalog order");
     std::vector<std::string> python;
     for (const std::string &name : names)
-        python.push_back(optimaru::python::pythonName(name));
+        python.push_back(optimaru::python::python_name(name));
     check(python
               == std::vector<std::string>{"pinned_assignments_cost", "forbidden_assignments_cost",
                                           "location_capacity_cost", "assignment_cost", "flow_distance_cost"},
@@ -512,10 +512,10 @@ void verifyRawCostsByHand()
 template <typename Component>
 bool rowIs(const optimaru::ConstraintInfo &row, const char *name, optimaru::Level level, double weight, bool global)
 {
-    return row.name == name && row.defaultLevel == Component::kDefaultLevel
-           && row.defaultWeight == Component::kDefaultWeight && row.defaultLevel == level
-           && row.defaultWeight == weight && row.levelFlippable && !row.reward && row.isGlobal == global
-           && row.defaultEnabled;
+    return row.name == name && row.default_level == Component::kDefaultLevel
+           && row.default_weight == Component::kDefaultWeight && row.default_level == level
+           && row.default_weight == weight && row.level_flippable && !row.reward && row.is_global == global
+           && row.default_enabled;
 }
 
 bool throwsInvalid(const std::function<void()> &edit)
@@ -552,9 +552,9 @@ void verifyCatalog()
 // -------------------------------------------------------------------------
 // (j) Repeated components and offsets. A repeat is a fresh copy of a
 // default component (another defaultConstraints(), the one name kept, its
-// knobs re-stated) appended with addInstances(), as the Python bindings
+// knobs re-stated) appended with add_instances(), as the Python bindings
 // build it from a pick list. The three side constraints shape each location
-// they evaluate (their scopedUnits()), the two objectives their total.
+// they evaluate (their scoped_units()), the two objectives their total.
 // -------------------------------------------------------------------------
 ConstraintAssembly copyOf(const std::string &name)
 {
@@ -598,46 +598,46 @@ Score scoreOf(ConstraintAssembly assembly, QuadraticAssignmentProblem p)
 // hard side constraints sit on soft, next to a hard threshold copy.
 // `flowCopyOnHard` false keeps the hard threshold copy of the flow on soft,
 // for data with negative flows or distances, where the flow cannot be hard
-// (rawCostCanBeNegative).
+// (raw_cost_can_be_negative).
 ConstraintAssembly repeatedAssembly(bool flowCopyOnHard = true)
 {
     ConstraintAssembly assembly = defaultConstraints();
     assembly.offset("locationCapacityCost", 1.0);
     assembly.offset("flowDistanceCost", 50.0);
-    assembly.addInstances(std::move(copyOf("locationCapacityCost")
+    assembly.add_instances(std::move(copyOf("locationCapacityCost")
                                         .soft("locationCapacityCost")
                                         .offset("locationCapacityCost", 1.0)
                                         .clip("locationCapacityCost", false)));
-    assembly.addInstances(std::move(
+    assembly.add_instances(std::move(
         copyOf("pinnedAssignmentsCost").weight("pinnedAssignmentsCost", 1.5).offset("pinnedAssignmentsCost", 0.5)));
-    assembly.addInstances(std::move(copyOf("pinnedAssignmentsCost")
+    assembly.add_instances(std::move(copyOf("pinnedAssignmentsCost")
                                         .soft("pinnedAssignmentsCost")
                                         .weight("pinnedAssignmentsCost", 1.5)
                                         .offset("pinnedAssignmentsCost", 0.5)
                                         .clip("pinnedAssignmentsCost", false)));
-    assembly.addInstances(std::move(copyOf("forbiddenAssignmentsCost")
+    assembly.add_instances(std::move(copyOf("forbiddenAssignmentsCost")
                                         .exponent("forbiddenAssignmentsCost", 2.0)
                                         .offset("forbiddenAssignmentsCost", -1.0)));
-    assembly.addInstances(std::move(copyOf("locationCapacityCost")
+    assembly.add_instances(std::move(copyOf("locationCapacityCost")
                                         .weight("locationCapacityCost", 2.0)
                                         .exponent("locationCapacityCost", 2.0)
                                         .offset("locationCapacityCost", 2.0)));
-    assembly.addInstances(std::move(copyOf("assignmentCost")
+    assembly.add_instances(std::move(copyOf("assignmentCost")
                                         .weight("assignmentCost", 0.5)
                                         .offset("assignmentCost", -20.0)
                                         .clip("assignmentCost", false)));
-    assembly.addInstances(std::move(copyOf("flowDistanceCost")
+    assembly.add_instances(std::move(copyOf("flowDistanceCost")
                                         .weight("flowDistanceCost", 0.25)
                                         .exponent("flowDistanceCost", 1.5)
                                         .offset("flowDistanceCost", 100.0)
                                         .level("flowDistanceCost",
                                                flowCopyOnHard ? optimaru::Level::Hard : optimaru::Level::Soft)));
-    assembly.addInstances(std::move(copyOf("flowDistanceCost")
+    assembly.add_instances(std::move(copyOf("flowDistanceCost")
                                         .weight("flowDistanceCost", 0.25)
                                         .exponent("flowDistanceCost", 1.5)
                                         .offset("flowDistanceCost", 100.0)
                                         .clip("flowDistanceCost", false)));
-    assembly.addInstances(std::move(copyOf("forbiddenAssignmentsCost")
+    assembly.add_instances(std::move(copyOf("forbiddenAssignmentsCost")
                                         .soft("forbiddenAssignmentsCost")
                                         .weight("forbiddenAssignmentsCost", 2.0)
                                         .offset("forbiddenAssignmentsCost", 1.0)
@@ -651,17 +651,17 @@ void verifyRepeatsAndOffsets()
     {
         // flow 22 + 0.5 x 22^2 = 264.
         ConstraintAssembly assembly = copyOf("flowDistanceCost");
-        assembly.addInstances(std::move(
+        assembly.add_instances(std::move(
             copyOf("flowDistanceCost").weight("flowDistanceCost", 0.5).exponent("flowDistanceCost", 2.0)));
         QuadraticAssignmentProblem p = sideIdentity();
         DecomposedCalculator calculator;
         assembly.into(calculator);
         const Score score = scoreWith(calculator, p);
         check(score.hard == 0 && score.soft == -264.0, "flow + 0.5 x flow^2: -(22 + 242) soft");
-        const Costs entries = calculator.constraintCosts();
-        check(entries.size() == 2 && entries[0].unitCosts == entries[1].unitCosts
-                  && entries[0].unitCosts == std::vector<double>{22.0} && entries[1].weight == 0.5
-                  && entries[1].exponent == 2.0 && entries[1].defaultWeight == 1.0
+        const Costs entries = calculator.constraint_costs();
+        check(entries.size() == 2 && entries[0].unit_costs == entries[1].unit_costs
+                  && entries[0].unit_costs == std::vector<double>{22.0} && entries[1].weight == 0.5
+                  && entries[1].exponent == 2.0 && entries[1].default_weight == 1.0
                   && entries[0].name == entries[1].name,
               "two instances, the same raw total, each with its own knobs");
     }
@@ -669,7 +669,7 @@ void verifyRepeatsAndOffsets()
         // Each instance on its own level: the hard capacity [2, 0] next to a
         // soft repeat, 3 x (2 - 1) beyond its offset on L1.
         ConstraintAssembly assembly = copyOf("locationCapacityCost");
-        assembly.addInstances(std::move(copyOf("locationCapacityCost")
+        assembly.add_instances(std::move(copyOf("locationCapacityCost")
                                             .soft("locationCapacityCost")
                                             .weight("locationCapacityCost", 3.0)
                                             .offset("locationCapacityCost", 1.0)));
@@ -678,14 +678,14 @@ void verifyRepeatsAndOffsets()
         assembly.into(calculator);
         check(sameScore(scoreWith(calculator, p), {-2, -3.0}),
               "hard capacity + a soft repeat beyond 1: -2 hard / -3 soft");
-        const Costs entries = calculator.constraintCosts();
+        const Costs entries = calculator.constraint_costs();
         check(entries.size() == 2 && entries[0].level == optimaru::Level::Hard
-                  && entries[1].level == optimaru::Level::Soft && entries[1].defaultLevel == optimaru::Level::Hard,
+                  && entries[1].level == optimaru::Level::Soft && entries[1].default_level == optimaru::Level::Hard,
               "the repeat reports its own level, the default stays hard");
     }
     {
         ConstraintAssembly assembly = copyOf("locationCapacityCost");
-        assembly.addInstances(copyOf("locationCapacityCost"));
+        assembly.add_instances(copyOf("locationCapacityCost"));
         check(scoreOf(std::move(assembly), sideIdentity()).hard == -4, "capacity picked twice: 2 x 2");
     }
     {
@@ -758,11 +758,11 @@ void verifyRepeatsAndOffsets()
         defaultConstraints().into(calculator);
         QuadraticAssignmentProblem q = p;
         scoreWith(calculator, q);
-        const Costs entries = calculator.constraintCosts();
+        const Costs entries = calculator.constraint_costs();
         check(entries.size() == 5 && entries[0].scoped && entries[0].units == std::vector<int>{0}
                   && entries[1].scoped && entries[1].units == std::vector<int>{1} && entries[2].scoped
                   && entries[2].units == std::vector<int>{1} && !entries[3].scoped && !entries[4].scoped
-                  && entries[0].unitCosts.size() == 3,
+                  && entries[0].unit_costs.size() == 3,
               "constraintCosts(): pinned units [0], forbidden [1], capacity [1]; the objectives unscoped");
     }
     {
@@ -803,7 +803,7 @@ void verifyRepeatsAndOffsets()
                   == refusal("flowDistanceCost"),
               "flow literal offset moved to hard afterwards: refused at reset");
         ConstraintAssembly repeated = copyOf("pinnedAssignmentsCost");
-        repeated.addInstances(std::move(
+        repeated.add_instances(std::move(
             copyOf("pinnedAssignmentsCost").offset("pinnedAssignmentsCost", 1.0).clip("pinnedAssignmentsCost", false)));
         check(resetRefusal(std::move(repeated)) == refusal("pinnedAssignmentsCost"),
               "a hard literal repeat next to the default: refused at reset");
@@ -833,7 +833,7 @@ void verifyRepeatsAndOffsets()
             ScoreCalculator::prepare(p);
             DecomposedCalculator calculator;
             repeatedAssembly(!signedData).into(calculator);
-            optimaru::ScoreDirector<QuadraticAssignmentProblem> director(p, calculator);
+            optimaru::Editor<QuadraticAssignmentProblem> editor(p, calculator);
             std::uniform_int_distribution<int> facility(0, 11);
             std::uniform_int_distribution<int> kind(0, 9);
             for (int step = 0; step < 1000; ++step, ++checks)
@@ -843,47 +843,47 @@ void verifyRepeatsAndOffsets()
                 const int what = kind(rng);
                 const bool accept = (step % 3) != 0;
                 const QuadraticAssignmentProblem before = p;
-                director.beginMoveEvaluation();
+                editor.begin_trial();
                 if (what < 7)
                 {
                     const int la = p.facilities[a].location;
                     const int lb = p.facilities[b].location;
-                    director.beginVariableChanges();
-                    director.changeVariable(a, lb);
-                    director.changeVariable(b, la);
-                    director.endVariableChanges();
+                    editor.begin_batch();
+                    editor.assign(a, lb);
+                    editor.assign(b, la);
+                    editor.end_batch();
                 }
                 else if (what < 9)
                 {
-                    director.changeVariable(a, p.facilities[a].location < 0 ? facility(rng) : -1);
+                    editor.assign(a, p.facilities[a].location < 0 ? facility(rng) : -1);
                 }
                 else
                 {
-                    director.changeVariable(a, facility(rng));
+                    editor.assign(a, facility(rng));
                 }
-                director.calculateScore();
+                editor.score();
                 if (!accept)
                 {
-                    director.beginMoveRollback();
-                    director.beginVariableChanges();
+                    editor.begin_rollback();
+                    editor.begin_batch();
                     for (int f = 0; f < p.facilityCount(); ++f)
                     {
                         if (p.facilities[f].location != before.facilities[f].location)
-                            director.changeVariable(f, before.facilities[f].location);
+                            editor.assign(f, before.facilities[f].location);
                     }
-                    director.endVariableChanges();
+                    editor.end_batch();
                 }
-                director.endMoveEvaluation(accept);
-                const Score incremental = director.calculateScore();
+                editor.end_trial(accept);
+                const Score incremental = editor.score();
                 DecomposedCalculator fresh;
                 repeatedAssembly(!signedData).into(fresh);
                 QuadraticAssignmentProblem copy = p;
                 const Score full = scoreWith(fresh, copy);
                 drift = std::max(drift, std::fabs(full.soft - incremental.soft));
-                if (!optimaru::scoresAgree(incremental, full) && ++mismatches <= 3)
+                if (!optimaru::scores_agree(incremental, full) && ++mismatches <= 3)
                 {
                     std::printf("  MISMATCH round %d step %d: incremental=%s full=%s\n", round, step,
-                                incremental.toString().c_str(), full.toString().c_str());
+                                incremental.str().c_str(), full.str().c_str());
                 }
             }
         }
@@ -897,10 +897,10 @@ void verifyRepeatsAndOffsets()
         DecomposedCalculator calculator;
         repeatedAssembly(false).into(calculator);
         Solver::Config config;
-        config.spentLimit = std::chrono::seconds(60);
-        config.stepCountLimit = 1500;
-        config.randomSeed = 3;
-        config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+        config.time_limit = std::chrono::seconds(60);
+        config.step_limit = 1500;
+        config.seed = 3;
+        config.score_checks = optimaru::ScoreChecks::Full;
         bool ok = true;
         try
         {
@@ -914,7 +914,7 @@ void verifyRepeatsAndOffsets()
         DecomposedCalculator fresh;
         repeatedAssembly(false).into(fresh);
         QuadraticAssignmentProblem copy = p;
-        check(ok && p.isBijection() && p.score && optimaru::scoresAgree(*p.score, scoreWith(fresh, copy)),
+        check(ok && p.isBijection() && p.score && optimaru::scores_agree(*p.score, scoreWith(fresh, copy)),
               "FULL_ASSERT solve with repeated, shifted components: no corruption, a bijection, the "
               "score == a fresh recompute");
     }

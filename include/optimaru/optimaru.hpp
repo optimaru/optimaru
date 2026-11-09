@@ -1,27 +1,32 @@
 // SPDX-License-Identifier: Apache-2.0
-// Part of the optimaru engine, a modified derivative of Timefold Solver (Apache-2.0). See NOTICE.
+// Part of the optimaru engine; portions derive from Timefold Solver (Apache-2.0). See NOTICE.
 
 #ifndef OPTIMARU_OPTIMARU_HPP
 #define OPTIMARU_OPTIMARU_HPP
 
-// Umbrella header: everything a quickstart needs. The layout under
-// include/optimaru/ mirrors the upstream Java core's package structure
-// (api, config, impl, preview); see NOTICE.
+// Everything a use case needs:
+//   solution_traits.hpp     how the engine reads and writes a solution
+//   score.hpp, levels.hpp   the score and its levels
+//   objective.hpp, ...      incremental objectives (decomposed, weighted, chain)
+//   settings.hpp            what a solve is configured with
+//   solver.hpp              running a solve (background_solve.hpp: on a thread)
+//   explain.hpp             scoring and explaining a solution outside a solve
+//   search/                 the search itself: construction, local search,
+//                           acceptors, moves, ruins, strategies
 
-#include "optimaru/api/domain/solution_descriptor.hpp"
-#include "optimaru/api/domain/variable/variable_listener.hpp"
-#include "optimaru/api/score/buildin/hard_soft_score.hpp"
-#include "optimaru/api/score/calculator/chained_incremental_score_calculator.hpp"
-#include "optimaru/api/score/calculator/composite_incremental_score_calculator.hpp"
-#include "optimaru/api/score/calculator/decomposed_score_calculator.hpp"
-#include "optimaru/api/score/calculator/incremental_score_calculator.hpp"
-#include "optimaru/api/score/analysis/score_analysis.hpp"
-#include "optimaru/api/score/director/score_director.hpp"
-#include "optimaru/api/solver/solution_manager.hpp"
-#include "optimaru/api/solver/solver.hpp"
-#include "optimaru/api/solver/solver_factory.hpp"
-#include "optimaru/api/solver/solver_manager.hpp"
-#include "optimaru/config/solver/solver_config.hpp"
-#include "optimaru/preview/api/move/operators.hpp"
+#include "optimaru/solution_traits.hpp"
+#include "optimaru/derived_state.hpp"
+#include "optimaru/score.hpp"
+#include "optimaru/chain_objective.hpp"
+#include "optimaru/weighted_objective.hpp"
+#include "optimaru/decomposed_objective.hpp"
+#include "optimaru/objective.hpp"
+#include "optimaru/score_breakdown.hpp"
+#include "optimaru/editor.hpp"
+#include "optimaru/explain.hpp"
+#include "optimaru/solver.hpp"
+#include "optimaru/background_solve.hpp"
+#include "optimaru/settings.hpp"
+#include "optimaru/search/operators.hpp"
 
 #endif  // OPTIMARU_OPTIMARU_HPP

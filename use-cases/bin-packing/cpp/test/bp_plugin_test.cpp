@@ -1,11 +1,11 @@
 // Plugin-assembly (bp/constraints.hpp) tests, engine test/ style: check() + a
 // non-zero exit on any failure.
-//   (a) the default assembly on the engine's DecomposedScoreCalculator
+//   (a) the default assembly on the engine's DecomposedObjective
 //       reproduces the monolithic score bit-for-bit on 500 random
 //       assignments (unassigned items, colours, duplicated conflicts), and
 //       each constraint's unit costs sum to the monolith's raw total
 //   (b) incremental == full recompute across 5000 random moves driven
-//       through the engine's ScoreDirector protocol (plugin path), for the
+//       through the engine's Editor protocol (plugin path), for the
 //       default assembly and for one with exponents != 1 on the delta-path
 //       components and fractional hard weights: after every move the score
 //       and every unit cost equal a fresh assembly's, and every constraint
@@ -13,8 +13,8 @@
 //   (c) partial assemblies: removing one component removes exactly that term
 //   (d) weight / level / exponent overrides against hand calculation,
 //       including the documented per-bin exponent granularity
-//   (e) constraintTotals() explains exactly the reported score
-//   (f) solve(problem, calculator) under FULL_ASSERT, every component shaped
+//   (e) constraint_totals() explains exactly the reported score
+//   (f) solve(problem, calculator) under ScoreChecks::Full, every component shaped
 //       or re-weighted
 //   (g) the defaultConstraints() builder: named edits == by-hand assembly
 //   (h) each component's raw cost, hand-calculated: a positive and a zero
@@ -32,7 +32,7 @@
 //       offsets by hand (literal mode charges every bin 0..n-1, an empty one
 //       included; the global shapes its one count), the literal formula
 //       refused on hard at reset and kept on soft, incremental == a fresh
-//       recompute over random variable and macro moves, and a FULL_ASSERT
+//       recompute over random variable and macro moves, and a ScoreChecks::Full
 //       solve with repeated, shifted components
 #include <algorithm>
 #include <chrono>
@@ -52,7 +52,7 @@
 #include "bp/moves.hpp"
 #include "bp/score_calculator.hpp"
 #include "bp/solver.hpp"
-#include "optimaru/api/score/director/score_director.hpp"
+#include "optimaru/editor.hpp"
 
 using namespace bp;
 
@@ -119,19 +119,19 @@ void randomize(BinPackingProblem &p, std::mt19937_64 &rng, int bins, double unas
 Score scoreWith(DecomposedCalculator &calculator, BinPackingProblem &p)
 {
     ScoreCalculator::prepare(p);
-    calculator.resetWorkingSolution(p);
-    return calculator.calculateScore();
+    calculator.rebuild(p);
+    return calculator.score();
 }
 
 const char *const kConstraintNames[] = {"binCapacityCost", "colorConflictCost", "itemConflictCost",
                                         "usedBinsCost"};
 
 // The raw unit costs of every component, in assembly (catalog) order.
-std::vector<std::vector<double>> unitCosts(const DecomposedCalculator &calculator)
+std::vector<std::vector<double>> unit_costs(const DecomposedCalculator &calculator)
 {
     std::vector<std::vector<double>> costs;
-    for (const auto &entry : calculator.constraintCosts())
-        costs.push_back(entry.unitCosts);
+    for (const auto &entry : calculator.constraint_costs())
+        costs.push_back(entry.unit_costs);
     return costs;
 }
 
@@ -191,15 +191,15 @@ void verifyAssemblyParity()
         DecomposedCalculator calculator;
         addDefaultConstraints(calculator);
         const Score plugin = scoreWith(calculator, p);
-        const Score monolith = ScoreCalculator::calculateScore(p);
+        const Score monolith = ScoreCalculator::score(p);
         if (!sameScore(plugin, monolith) && ++mismatches <= 3)
         {
             std::printf("  MISMATCH trial %d: plugin=%s monolith=%s\n",
                         trial,
-                        plugin.toString().c_str(),
-                        monolith.toString().c_str());
+                        plugin.str().c_str(),
+                        monolith.str().c_str());
         }
-        if (sums(unitCosts(calculator)) != asList(ScoreCalculator::rawCosts(p)) && ++costMismatches <= 3)
+        if (sums(unit_costs(calculator)) != asList(ScoreCalculator::rawCosts(p)) && ++costMismatches <= 3)
             std::printf("  RAW COST MISMATCH trial %d\n", trial);
     }
     check(mismatches == 0, "500 random assignments, plugin == monolith");
@@ -219,7 +219,7 @@ void walkIncremental(bool shaped)
     ScoreCalculator::prepare(p);
     DecomposedCalculator calculator;
     assemble(calculator, shaped);
-    optimaru::ScoreDirector<BinPackingProblem> director(p, calculator);
+    optimaru::Editor<BinPackingProblem> editor(p, calculator);
     BinPackingProblem shadow = p;
     const int n = p.itemCount();
     std::uniform_real_distribution<double> unit(0.0, 1.0);
@@ -233,7 +233,7 @@ void walkIncremental(bool shaped)
         if (r < 0.6)
         {
             const int item = static_cast<int>(rng() % n);
-            director.changeVariable(item, unit(rng) < 0.1 ? -1 : static_cast<int>(rng() % 6));
+            editor.assign(item, unit(rng) < 0.1 ? -1 : static_cast<int>(rng() % 6));
         }
         else if (r < 0.9)
         {
@@ -241,39 +241,39 @@ void walkIncremental(bool shaped)
             const int b = static_cast<int>(rng() % n);
             const int va = p.items[a].bin;
             const int vb = p.items[b].bin;
-            director.beginVariableChanges();
-            director.changeVariable(a, vb);
-            director.changeVariable(b, va);
-            director.endVariableChanges();
+            editor.begin_batch();
+            editor.assign(a, vb);
+            editor.assign(b, va);
+            editor.end_batch();
         }
         else
         {
             const int from = static_cast<int>(rng() % 6);
             const int to = static_cast<int>(rng() % 6);
-            director.beginVariableChanges();
+            editor.begin_batch();
             for (int i = 0; i < n; ++i)
             {
                 if (p.items[i].bin == from)
-                    director.changeVariable(i, to);
+                    editor.assign(i, to);
             }
-            director.endVariableChanges();
+            editor.end_batch();
         }
         shadow.setAssignment(p.assignment());
         DecomposedCalculator fresh;
         assemble(fresh, shaped);
         const Score full = scoreWith(fresh, shadow);
-        const Score incremental = director.calculateScore();
+        const Score incremental = editor.score();
         // The default assembly must also match the monolith's full recompute.
-        const bool monolithAgrees = shaped || sameScore(full, ScoreCalculator::calculateScore(shadow));
+        const bool monolithAgrees = shaped || sameScore(full, ScoreCalculator::score(shadow));
         if ((!sameScore(full, incremental) || !monolithAgrees) && ++mismatches <= 3)
         {
             std::printf("  MISMATCH @step %d: incremental=%s full=%s\n",
                         step,
-                        incremental.toString().c_str(),
-                        full.toString().c_str());
+                        incremental.str().c_str(),
+                        full.str().c_str());
         }
-        const std::vector<std::vector<double>> costs = unitCosts(calculator);
-        const std::vector<std::vector<double>> expected = unitCosts(fresh);
+        const std::vector<std::vector<double>> costs = unit_costs(calculator);
+        const std::vector<std::vector<double>> expected = unit_costs(fresh);
         bool costsAgree = costs == expected;
         if (!shaped)
             costsAgree = costsAgree && sums(costs) == asList(ScoreCalculator::rawCosts(shadow));
@@ -345,7 +345,7 @@ void verifyPartialAssemblies()
         defaultConstraints().drop(c.dropped).into(calculator);
         const Score score = scoreWith(calculator, p);
         check(sameScore(score, Score{c.hard, c.soft}),
-              std::string("without ") + c.dropped + ": " + score.toString());
+              std::string("without ") + c.dropped + ": " + score.str());
     }
     std::printf("\n");
 }
@@ -421,7 +421,7 @@ void verifyOverrides()
 }
 
 // -------------------------------------------------------------------------
-// (e) constraintTotals()
+// (e) constraint_totals()
 // -------------------------------------------------------------------------
 void verifyConstraintTotals()
 {
@@ -434,16 +434,16 @@ void verifyConstraintTotals()
     const Score score = scoreWith(calculator, p);
     double hard = 0.0;
     double soft = 0.0;
-    for (const optimaru::ConstraintTotal &total : calculator.constraintTotals())
-        (total.isHard ? hard : soft) += total.cost;
+    for (const optimaru::ConstraintTotal &total : calculator.constraint_totals())
+        (total.is_hard ? hard : soft) += total.cost;
     check(std::fabs(-hard - static_cast<double>(score.hard)) < 1e-9 && std::fabs(-soft - score.soft) < 1e-9,
           "per-constraint totals sum to the reported score");
-    check(calculator.constraintTotals().size() == 4, "one total per assembled component");
+    check(calculator.constraint_totals().size() == 4, "one total per assembled component");
     std::printf("\n");
 }
 
 // -------------------------------------------------------------------------
-// (f) FULL_ASSERT plugin solve
+// (f) ScoreChecks::Full plugin solve
 // -------------------------------------------------------------------------
 void verifyFullAssertSolve()
 {
@@ -463,9 +463,9 @@ void verifyFullAssertSolve()
     DecomposedCalculator calculator;
     shaped().into(calculator);
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(2);
-    config.randomSeed = 3;
-    config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+    config.time_limit = std::chrono::seconds(2);
+    config.seed = 3;
+    config.score_checks = optimaru::ScoreChecks::Full;
     config.ruinRecreateUnimprovedStepTrigger = 200;
     config.ruinRecreatePolishSteps = 100;
     config.ruinRecreateAsMoveWeight = 0.05;
@@ -474,7 +474,7 @@ void verifyFullAssertSolve()
     {
         Solver(config).solve(p, calculator);
     }
-    catch (const optimaru::ScoreCorruptionError &e)
+    catch (const optimaru::ScoreMismatchError &e)
     {
         corrupted = true;
         std::printf("  ScoreCorruptionError: %s\n", e.what());
@@ -510,7 +510,7 @@ void verifyAssemblyBuilder()
 
     DecomposedCalculator byHand;
     auto capacity = std::make_unique<BinCapacityCost>();
-    capacity->setLevel(optimaru::Level::Soft);
+    capacity->set_level(optimaru::Level::Soft);
     byHand.add(std::move(capacity));
     byHand.emplace<ItemConflictCost>();
     byHand.emplace<UsedBinsCost>(4.0);
@@ -527,12 +527,12 @@ std::vector<double> rawCosts(BinPackingProblem p, const std::string &name)
     ScoreCalculator::prepare(p);
     DecomposedCalculator calculator;
     addDefaultConstraints(calculator);
-    calculator.resetWorkingSolution(p);
-    calculator.calculateScore();
-    for (const auto &entry : calculator.constraintCosts())
+    calculator.rebuild(p);
+    calculator.score();
+    for (const auto &entry : calculator.constraint_costs())
     {
         if (entry.name == name)
-            return entry.unitCosts;
+            return entry.unit_costs;
     }
     return {};
 }
@@ -610,10 +610,10 @@ bool throwsInvalid(const std::function<void()> &edit)
 template <typename Component>
 bool rowIs(const optimaru::ConstraintInfo &row, const char *name, optimaru::Level level, double weight, bool global)
 {
-    return row.name == name && row.defaultLevel == Component::kDefaultLevel
-           && row.defaultWeight == Component::kDefaultWeight && row.defaultLevel == level
-           && row.defaultWeight == weight && row.levelFlippable && !row.reward && row.isGlobal == global
-           && row.defaultEnabled;
+    return row.name == name && row.default_level == Component::kDefaultLevel
+           && row.default_weight == Component::kDefaultWeight && row.default_level == level
+           && row.default_weight == weight && row.level_flippable && !row.reward && row.is_global == global
+           && row.default_enabled;
 }
 
 void verifyCatalog()
@@ -649,10 +649,10 @@ void walkMacroMove(Move &move, const std::string &label, bool shaped)
     ScoreCalculator::prepare(p);
     DecomposedCalculator calculator;
     assemble(calculator, shaped);
-    optimaru::ScoreDirector<BinPackingProblem> director(p, calculator);
-    optimaru::NearbyNeighborhoods nearby;
+    optimaru::Editor<BinPackingProblem> editor(p, calculator);
+    optimaru::Neighborhoods nearby;
     std::vector<int> noLists;
-    optimaru::OperatorContext<BinPackingProblem> ctx{director, nearby, noLists, noLists};
+    optimaru::OperatorContext<BinPackingProblem> ctx{editor, nearby, noLists, noLists};
     BinPackingProblem shadow = p;
     const int n = p.itemCount();
     std::uniform_real_distribution<double> unit(0.0, 1.0);
@@ -663,7 +663,7 @@ void walkMacroMove(Move &move, const std::string &label, bool shaped)
         DecomposedCalculator fresh;
         assemble(fresh, shaped);
         const Score full = scoreWith(fresh, shadow);
-        return sameScore(director.calculateScore(), full) && unitCosts(calculator) == unitCosts(fresh);
+        return sameScore(editor.score(), full) && unit_costs(calculator) == unit_costs(fresh);
     };
 
     int applied = 0;
@@ -674,14 +674,14 @@ void walkMacroMove(Move &move, const std::string &label, bool shaped)
     {
         if (unit(rng) < 0.5)
         {
-            director.changeVariable(static_cast<int>(rng() % n), static_cast<int>(rng() % n));
+            editor.assign(static_cast<int>(rng() % n), static_cast<int>(rng() % n));
             continue;
         }
         entities.clear();
-        director.beginMoveEvaluation();
+        editor.begin_trial();
         if (!move.apply(ctx, rng, entities))
         {
-            director.endMoveEvaluation(false);
+            editor.end_trial(false);
             continue;
         }
         ++applied;
@@ -690,11 +690,11 @@ void walkMacroMove(Move &move, const std::string &label, bool shaped)
         const bool keep = unit(rng) < 0.5;
         if (!keep)
         {
-            director.beginMoveRollback();
-            move.undoLast(ctx);
+            editor.begin_rollback();
+            move.undo_last(ctx);
             ++undone;
         }
-        director.endMoveEvaluation(keep);
+        editor.end_trial(keep);
         if (!agrees())
             ++mismatches;
     }
@@ -719,7 +719,7 @@ void verifyMacroMoves()
 // -------------------------------------------------------------------------
 // (k) Repeated components and offsets. A repeat is a fresh copy of a
 // default component (another defaultConstraints(), the one name kept, its
-// knobs re-stated) appended with addInstances(), as the Python bindings
+// knobs re-stated) appended with add_instances(), as the Python bindings
 // build it from a pick list.
 // -------------------------------------------------------------------------
 ConstraintAssembly copyOf(const std::string &name)
@@ -748,28 +748,28 @@ ConstraintAssembly repeatedAssembly()
     ConstraintAssembly assembly = defaultConstraints();
     assembly.offset("binCapacityCost", 2.0);
     assembly.offset("usedBinsCost", 1.0).clip("usedBinsCost", false);
-    assembly.addInstances(
+    assembly.add_instances(
         std::move(copyOf("binCapacityCost").weight("binCapacityCost", 0.5).exponent("binCapacityCost", 2.0)));
-    assembly.addInstances(std::move(
+    assembly.add_instances(std::move(
         copyOf("colorConflictCost").weight("colorConflictCost", 3.0).offset("colorConflictCost", 0.5)));
-    assembly.addInstances(std::move(copyOf("colorConflictCost")
+    assembly.add_instances(std::move(copyOf("colorConflictCost")
                                         .soft("colorConflictCost")
                                         .weight("colorConflictCost", 3.0)
                                         .offset("colorConflictCost", 0.5)
                                         .clip("colorConflictCost", false)));
-    assembly.addInstances(std::move(copyOf("itemConflictCost")
+    assembly.add_instances(std::move(copyOf("itemConflictCost")
                                         .soft("itemConflictCost")
                                         .exponent("itemConflictCost", 2.0)
                                         .offset("itemConflictCost", -1.0)
                                         .clip("itemConflictCost", false)));
-    assembly.addInstances(
+    assembly.add_instances(
         std::move(copyOf("usedBinsCost").weight("usedBinsCost", 0.25).offset("usedBinsCost", 3.0)));
-    assembly.addInstances(std::move(copyOf("itemConflictCost")
+    assembly.add_instances(std::move(copyOf("itemConflictCost")
                                         .soft("itemConflictCost")
                                         .weight("itemConflictCost", 1.5)
                                         .offset("itemConflictCost", 1.0)
                                         .clip("itemConflictCost", false)));
-    assembly.addInstances(std::move(
+    assembly.add_instances(std::move(
         copyOf("usedBinsCost").hard("usedBinsCost").weight("usedBinsCost", 2.0).offset("usedBinsCost", 4.0)));
     return assembly;
 }
@@ -781,18 +781,18 @@ void verifyRepeatsAndOffsets()
         // everyTermPositive(), n = 4 bins: capacity [8, 0, 0, 0], colour
         // [1, 0, 0, 0], conflicts [1, 0, 0, 0], 2 bins used.
         ConstraintAssembly assembly = copyOf("usedBinsCost");
-        assembly.addInstances(
+        assembly.add_instances(
             std::move(copyOf("usedBinsCost").weight("usedBinsCost", 10.0).offset("usedBinsCost", 1.0)));
         BinPackingProblem p = everyTermPositive();
         DecomposedCalculator calculator;
         assembly.into(calculator);
         check(sameScore(scoreWith(calculator, p), Score{0, -12.0}), "used bins + 10 x (used - 1): -12 soft");
-        const auto entries = calculator.constraintCosts();
-        check(entries.size() == 2 && entries[0].unitCosts == entries[1].unitCosts && entries[1].weight == 10.0
-                  && entries[1].offset == 1.0 && entries[0].offset == 0.0 && entries[1].defaultWeight == 1.0,
+        const auto entries = calculator.constraint_costs();
+        check(entries.size() == 2 && entries[0].unit_costs == entries[1].unit_costs && entries[1].weight == 10.0
+                  && entries[1].offset == 1.0 && entries[0].offset == 0.0 && entries[1].default_weight == 1.0,
               "two global instances, the same count, each with its own knobs");
         ConstraintAssembly capacity = copyOf("binCapacityCost");
-        capacity.addInstances(
+        capacity.add_instances(
             std::move(copyOf("binCapacityCost").weight("binCapacityCost", 0.5).exponent("binCapacityCost", 2.0)));
         check(sameScore(scoreOf(std::move(capacity), everyTermPositive()), Score{-40, 0.0}),
               "capacity + 0.5 x capacity^2 per bin: -(8 + 32)");
@@ -801,21 +801,21 @@ void verifyRepeatsAndOffsets()
         // Each instance on its own level: the soft default bin count (2) next
         // to a hard repeat, 2 x (2 - 1) beyond its offset.
         ConstraintAssembly assembly = copyOf("usedBinsCost");
-        assembly.addInstances(std::move(
+        assembly.add_instances(std::move(
             copyOf("usedBinsCost").hard("usedBinsCost").weight("usedBinsCost", 2.0).offset("usedBinsCost", 1.0)));
         BinPackingProblem p = everyTermPositive();
         DecomposedCalculator calculator;
         assembly.into(calculator);
         check(sameScore(scoreWith(calculator, p), Score{-2, -2.0}),
               "soft bin count + a hard repeat beyond 1: -2 hard / -2 soft");
-        const auto entries = calculator.constraintCosts();
+        const auto entries = calculator.constraint_costs();
         check(entries.size() == 2 && entries[0].level == optimaru::Level::Soft
-                  && entries[1].level == optimaru::Level::Hard && entries[1].defaultLevel == optimaru::Level::Soft,
+                  && entries[1].level == optimaru::Level::Hard && entries[1].default_level == optimaru::Level::Soft,
               "the repeat reports its own level, the default stays soft");
         // The hard colour rule with a soft literal repeat: 0.5 x (x - 1) per
         // bin, 0 on bin 0 and -0.5 on each of the three others.
         ConstraintAssembly colour = copyOf("colorConflictCost");
-        colour.addInstances(std::move(copyOf("colorConflictCost")
+        colour.add_instances(std::move(copyOf("colorConflictCost")
                                           .soft("colorConflictCost")
                                           .weight("colorConflictCost", 0.5)
                                           .offset("colorConflictCost", 1.0)
@@ -904,7 +904,7 @@ void verifyRepeatsAndOffsets()
                   == refusal("usedBinsCost"),
               "used bins literal offset moved to hard afterwards: refused at reset");
         ConstraintAssembly repeated = copyOf("binCapacityCost");
-        repeated.addInstances(
+        repeated.add_instances(
             std::move(copyOf("binCapacityCost").offset("binCapacityCost", 3.0).clip("binCapacityCost", false)));
         check(resetRefusal(std::move(repeated)) == refusal("binCapacityCost"),
               "a hard literal repeat next to the default: refused at reset");
@@ -928,10 +928,10 @@ void verifyRepeatsAndOffsets()
         ScoreCalculator::prepare(p);
         DecomposedCalculator calculator;
         repeatedAssembly().into(calculator);
-        optimaru::ScoreDirector<BinPackingProblem> director(p, calculator);
-        optimaru::NearbyNeighborhoods nearby;
+        optimaru::Editor<BinPackingProblem> editor(p, calculator);
+        optimaru::Neighborhoods nearby;
         std::vector<int> noLists;
-        optimaru::OperatorContext<BinPackingProblem> ctx{director, nearby, noLists, noLists};
+        optimaru::OperatorContext<BinPackingProblem> ctx{editor, nearby, noLists, noLists};
         EmptyBinMove empty(3);
         RepackMove repack(3, 2);
         BinPackingProblem shadow = p;
@@ -947,11 +947,11 @@ void verifyRepeatsAndOffsets()
             DecomposedCalculator fresh;
             repeatedAssembly().into(fresh);
             const Score full = scoreWith(fresh, shadow);
-            const Score incremental = director.calculateScore();
+            const Score incremental = editor.score();
             drift = std::max(drift, std::fabs(full.soft - incremental.soft));
-            // The engine's FULL_ASSERT rule (scoresAgree): hard exact, soft
+            // The engine's ScoreChecks::Full rule (scores_agree): hard exact, soft
             // within 1e-6 (the fractional weights accumulate a few ulps).
-            return optimaru::scoresAgree(incremental, full);
+            return optimaru::scores_agree(incremental, full);
         };
         const int steps = 3000;
         for (int step = 0; step < steps; ++step)
@@ -960,7 +960,7 @@ void verifyRepeatsAndOffsets()
             if (r < 0.5)
             {
                 const int item = static_cast<int>(rng() % n);
-                director.changeVariable(item, unit(rng) < 0.1 ? -1 : static_cast<int>(rng() % 8));
+                editor.assign(item, unit(rng) < 0.1 ? -1 : static_cast<int>(rng() % 8));
             }
             else if (r < 0.7)
             {
@@ -968,10 +968,10 @@ void verifyRepeatsAndOffsets()
                 const int b = static_cast<int>(rng() % n);
                 const int va = p.items[a].bin;
                 const int vb = p.items[b].bin;
-                director.beginVariableChanges();
-                director.changeVariable(a, vb);
-                director.changeVariable(b, va);
-                director.endVariableChanges();
+                editor.begin_batch();
+                editor.assign(a, vb);
+                editor.assign(b, va);
+                editor.end_batch();
             }
             else
             {
@@ -979,14 +979,14 @@ void verifyRepeatsAndOffsets()
                 for (int i = 0; i < n; ++i)
                 {
                     if (p.items[i].bin < 0)
-                        director.changeVariable(i, static_cast<int>(rng() % n));
+                        editor.assign(i, static_cast<int>(rng() % n));
                 }
                 entities.clear();
-                director.beginMoveEvaluation();
+                editor.begin_trial();
                 const bool applied = r < 0.85 ? empty.apply(ctx, rng, entities) : repack.apply(ctx, rng, entities);
                 if (!applied)
                 {
-                    director.endMoveEvaluation(false);
+                    editor.end_trial(false);
                     continue;
                 }
                 ++macroApplied;
@@ -995,13 +995,13 @@ void verifyRepeatsAndOffsets()
                 const bool keep = unit(rng) < 0.5;
                 if (!keep)
                 {
-                    director.beginMoveRollback();
+                    editor.begin_rollback();
                     if (r < 0.85)
-                        empty.undoLast(ctx);
+                        empty.undo_last(ctx);
                     else
-                        repack.undoLast(ctx);
+                        repack.undo_last(ctx);
                 }
-                director.endMoveEvaluation(keep);
+                editor.end_trial(keep);
             }
             if (!agrees() && ++mismatches <= 3)
                 std::printf("  MISMATCH @step %d\n", step);
@@ -1017,9 +1017,9 @@ void verifyRepeatsAndOffsets()
         DecomposedCalculator calculator;
         repeatedAssembly().into(calculator);
         Solver::Config config;
-        config.spentLimit = std::chrono::seconds(2);
-        config.randomSeed = 5;
-        config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+        config.time_limit = std::chrono::seconds(2);
+        config.seed = 5;
+        config.score_checks = optimaru::ScoreChecks::Full;
         config.ruinRecreateUnimprovedStepTrigger = 200;
         config.ruinRecreatePolishSteps = 100;
         config.ruinRecreateAsMoveWeight = 0.05;
@@ -1028,7 +1028,7 @@ void verifyRepeatsAndOffsets()
         {
             Solver(config).solve(p, calculator);
         }
-        catch (const optimaru::ScoreCorruptionError &e)
+        catch (const optimaru::ScoreMismatchError &e)
         {
             corrupted = true;
             std::printf("  ScoreCorruptionError: %s\n", e.what());
@@ -1036,7 +1036,7 @@ void verifyRepeatsAndOffsets()
         check(!corrupted, "2s FULL_ASSERT solve with repeated, shifted components");
         DecomposedCalculator fresh;
         repeatedAssembly().into(fresh);
-        check(!corrupted && optimaru::scoresAgree(p.score, scoreWith(fresh, p)),
+        check(!corrupted && optimaru::scores_agree(p.score, scoreWith(fresh, p)),
               "the reported score == a fresh recompute of the same assembly");
     }
     std::printf("\n");

@@ -19,11 +19,11 @@ namespace detail {
 // what it would cost. A component whose cost sums per-visit quantities along
 // the route (load, service, driving between neighbours) answers from these
 // prefix sums in O(pieces) instead of writing the route out and walking it;
-// see UnitConstraint::piecewiseCost. The sums are the same ones the
+// see UnitConstraint::piecewise_cost. The sums are the same ones the
 // monolithic VehicleRoutingIncrementalScoreCalculator keeps, held once per
 // assembly: the components share this context through the engine's
 // shared-context mechanism, and the calculator tells it once per list change
-// through onListChanged(), however many components read it. A changed list is
+// through on_list_changed(), however many components read it. A changed list is
 // only marked then and rebuilt on the first preview that reads it, so phases
 // that never preview (construction, a repair's own insertions) pay nothing.
 //
@@ -63,7 +63,7 @@ struct RouteSumsContext final : optimaru::SharedConstraintContext {
 
     // The plan this solve scores. Called from every sharing component's
     // reset, unit and global alike, in whatever order the calculator resets
-    // them; the first call after the calculator's beginReset() marks every
+    // them; the first call after the calculator's begin_reset() marks every
     // list for rebuild (a reset follows every rejected compound move, so the
     // tables keep their storage), later ones are no-ops.
     void prepare(const VehicleRoutePlan& plan) {
@@ -84,7 +84,7 @@ struct RouteSumsContext final : optimaru::SharedConstraintContext {
         }
     }
 
-    void onListChanged(int list) override {
+    void on_list_changed(int list) override {
         if (list >= 0 && static_cast<std::size_t>(list) < dirty_.size()) {
             dirty_[static_cast<std::size_t>(list)] = 1;
         }
@@ -240,20 +240,20 @@ private:
 // A component that reads the shared sums: the shared-context plumbing once,
 // over either constraint base, so each component is its cost() and its
 // piecewise answer. Both bases prepare the context themselves at reset: a
-// unit component in onReset(), a global one in reset() before handing over
+// unit component in on_reset(), a global one in reset() before handing over
 // to resetWithSums().
 template <typename Base>
 struct WithRouteSums : Base {
     using Base::Base;
 
-    const char* sharedContextKey() const override { return RouteSumsContext::kKey; }
-    std::unique_ptr<optimaru::SharedConstraintContext> createSharedContext() const override {
+    const char* shared_context_key() const override { return RouteSumsContext::kKey; }
+    std::unique_ptr<optimaru::SharedConstraintContext> create_shared_context() const override {
         return std::make_unique<RouteSumsContext>();
     }
-    void bindSharedContext(optimaru::SharedConstraintContext& context) override {
+    void bind_shared_context(optimaru::SharedConstraintContext& context) override {
         sums_ = static_cast<RouteSumsContext*>(&context);
     }
-    bool supportsPiecewisePreview() const override { return true; }
+    bool supports_piecewise_preview() const override { return true; }
 
 protected:
     RouteSumsContext* sums_ = nullptr;
@@ -261,21 +261,21 @@ protected:
 
 struct SummedUnitConstraint : WithRouteSums<PerVehicleConstraint> {
     using WithRouteSums<PerVehicleConstraint>::WithRouteSums;
-    void onReset(const VehicleRoutePlan& plan) override {
-        PerVehicleConstraint::onReset(plan);  // the vehicles scope
+    void on_reset(const VehicleRoutePlan& plan) override {
+        PerVehicleConstraint::on_reset(plan);  // the vehicles scope
         this->sums_->prepare(plan);
     }
 };
 struct SummedGlobalConstraint : WithRouteSums<VrpGlobalConstraint> {
     using WithRouteSums<VrpGlobalConstraint>::WithRouteSums;
     void reset(const VehicleRoutePlan& plan,
-               const std::vector<std::vector<int>>& membersPerUnit) final {
+               const std::vector<std::vector<int>>& members_per_unit) final {
         this->sums_->prepare(plan);
-        resetWithSums(plan, membersPerUnit);
+        resetWithSums(plan, members_per_unit);
     }
     // reset() with the shared sums already prepared.
     virtual void resetWithSums(const VehicleRoutePlan& plan,
-                               const std::vector<std::vector<int>>& membersPerUnit) = 0;
+                               const std::vector<std::vector<int>>& members_per_unit) = 0;
 };
 
 }  // namespace detail

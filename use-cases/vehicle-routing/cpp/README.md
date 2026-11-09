@@ -28,8 +28,8 @@ cmake -B build && cmake --build build
 | `HaversineDrivingTimeCalculator`                            | `haversine.{hpp,cpp}` (identical formula)       |
 | `VehicleRoutingConstraintProvider` (4 constraints)          | `ScoreCalculator` (reference) + `VehicleRoutingIncrementalScoreCalculator` (live) |
 | Java engine: Construction Heuristic + Local Search          | `include/optimaru/`'s `optimaru::Solver`, wrapped by `Solver` |
-| `termination.spent-limit=30s`                               | `Solver::Config::spentLimit`                    |
-| test `best-score-limit=0hard/0medium/*soft`                 | `Solver::Config::bestScoreLimit = {0,0,min}`    |
+| `termination.spent-limit=30s`                               | `Solver::Config::time_limit`                    |
+| test `best-score-limit=0hard/0medium/*soft`                 | `Solver::Config::target_score = {0,0,min}`    |
 
 ### The four constraints
 
@@ -125,12 +125,12 @@ instances (see the benchmark) set it explicitly.
 
 ## Scoring: two implementations, checked against each other
 
-- `ScoreCalculator::calculateScore` — the full recompute, and the readable
+- `ScoreCalculator::score` — the full recompute, and the readable
   statement of the constraints. Authoritative: `Solver::solve` finishes with it.
 - `VehicleRoutingIncrementalScoreCalculator` — what the engine actually calls
   during search, maintaining per-route aggregates so a move costs
   O(route length) instead of O(instance).
 
 They must agree. `vrp_test` checks this directly over 400 random list moves,
-and `EnvironmentMode::FULL_ASSERT` re-verifies the incremental score against a
+and `ScoreChecks::Full` re-verifies the incremental score against a
 full recompute after *every* move (including the ruin & recreate path).

@@ -11,14 +11,13 @@
 #include <vector>
 
 #include "op/domain.hpp"
-#include "optimaru/api/score/calculator/decomposed_score_calculator.hpp"
-#include "optimaru/api/score/director/score_director.hpp"
+#include "optimaru/decomposed_objective.hpp"
+#include "optimaru/editor.hpp"
 
 namespace op
 {
 
-// Thin domain-side wrapper around the generic engine in include/optimaru/ — the C++
-// analog of the quickstart building a SolverFactory from a SolverConfig
+// Thin domain-side wrapper around the generic engine in include/optimaru/.
 // (following the school-timetabling Solver pattern,
 // LIST-kind edition). On top of the built-in list move mix (relocate / swap /
 // 2-opt / or-opt / tail swap) and the engine's adaptive ruin-and-recreate
@@ -32,32 +31,32 @@ public:
     {
         // Wall-clock budget, mirroring termination.spent-limit (30s in the
         // quickstart's application.properties).
-        std::chrono::milliseconds spentLimit{std::chrono::seconds(30)};
+        std::chrono::milliseconds time_limit{std::chrono::seconds(30)};
 
-        // Stop early once bestScore >= bestScoreLimit. Default is above every
-        // achievable score, so it never fires (termination is by spentLimit).
-        Score bestScoreLimit{std::numeric_limits<std::int64_t>::max(),
+        // Stop early once bestScore >= target_score. Default is above every
+        // achievable score, so it never fires (termination is by time_limit).
+        Score target_score{std::numeric_limits<std::int64_t>::max(),
                              std::numeric_limits<double>::infinity()};
         // Optional early exits; 0 disables each criterion.
-        std::chrono::milliseconds unimprovedSpentLimit{0};
-        std::int64_t stepCountLimit = 0;
-        std::int64_t unimprovedStepCountLimit = 0;
+        std::chrono::milliseconds stall_time_limit{0};
+        std::int64_t step_limit = 0;
+        std::int64_t stall_step_limit = 0;
 
         // Late-acceptance history length. 0 (the default) = auto:
         // clamp(4 * pickTaskCount, 200, 1600).
-        std::size_t lateAcceptanceSize = 0;
-        std::uint64_t randomSeed = 0;
+        std::size_t history_length = 0;
+        std::uint64_t seed = 0;
 
         // Independent parallel starts (the engine's multi-start): each worker
-        // receives randomSeed + i and the full wall-clock budget; the best
+        // receives seed + i and the full wall-clock budget; the best
         // solution wins.
         int parallelSolverCount = 1;
 
-        // FULL_ASSERT re-verifies the incremental score against a full
+        // ScoreChecks::Full re-verifies the incremental score against a full
         // recompute after every move (debugging aid; orders of magnitude
         // slower).
-        optimaru::EnvironmentMode environmentMode
-            = optimaru::EnvironmentMode::NON_ASSERT;
+        optimaru::ScoreChecks score_checks
+            = optimaru::ScoreChecks::Off;
 
         // Adaptive ruin-and-recreate kicks when the search stagnates (the
         // engine's ALNS) — lets the trolley assignment escape the local
@@ -69,7 +68,7 @@ public:
         // uninterrupted steps (measured on the 4x instance: trigger 5000
         // stalled at the step-703 record; 50000 kept both the kicks' order
         // diversification and the full descent).
-        bool ruinRecreate = true;
+        bool ruin_recreate = true;
         std::int64_t ruinRecreateUnimprovedStepTrigger = 50000;
         double ruinRecreateMinRuinFraction = 0.10;
         double ruinRecreateMaxRuinFraction = 0.30;
@@ -81,11 +80,11 @@ public:
         // LIST move mix. Weights are relative; 0 disables a move. Or-opt
         // (short-segment relocate) and tail swap (2-opt*) are on: both are
         // classic routing moves and this is a routing-shaped problem.
-        double relocateMoveWeight = 0.40;
-        double listSwapMoveWeight = 0.25;
-        double twoOptMoveWeight = 0.15;
-        double orOptMoveWeight = 0.10;
-        double tailSwapMoveWeight = 0.10;
+        double relocate_weight = 0.40;
+        double list_swap_weight = 0.25;
+        double two_opt_weight = 0.15;
+        double or_opt_weight = 0.10;
+        double tail_swap_weight = 0.10;
 
         // Warehouse-distance nearby selection: move partners are drawn from
         // the physically closest picks with this probability (the engine's
@@ -106,12 +105,12 @@ public:
         // between trolleys. See OrderConsolidateMove in solver.cpp.
         bool orderConsolidateMoves = true;
 
-        std::function<void(std::int64_t, const Score &)> onNewBest;
+        std::function<void(std::int64_t, const Score &)> on_new_best;
         // Set by solve() on each parallel worker's copy, not by a caller (and
         // not bound to Python): the first worker that fails raises it, and the
         // other workers' engines stop at their next step instead of running out
         // their budget before the error reaches the caller.
-        std::shared_ptr<std::atomic<bool>> stopFlag;
+        std::shared_ptr<std::atomic<bool>> stop_flag;
     };
 
     Solver() = default;
@@ -128,7 +127,7 @@ public:
     // included. Weights come from the assembly, NOT from the quickstart
     // defaults. The final solution.score is computed by THIS calculator and
     // the calculator is left primed on the final solution, so
-    // constraintTotals() explains exactly that score.
+    // constraint_totals() explains exactly that score.
     //
     // Two knobs do not apply on this path: parallelSolverCount (the
     // caller-owned calculator cannot be cloned across workers) and
@@ -136,7 +135,7 @@ public:
     // live per-(trolley, order) volume table).
     void solve(
         OrderPickingSolution &solution,
-        optimaru::DecomposedScoreCalculator<OrderPickingSolution> &calculator);
+        optimaru::DecomposedObjective<OrderPickingSolution> &calculator);
 
 private:
     Config config_;

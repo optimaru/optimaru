@@ -7,7 +7,7 @@ location capacities as hard constraints. One BASIC planning variable
 (`Facility.location`) per facility; the search only swaps two facilities'
 locations, so every state is a permutation.
 
-Score (HardSoftScore), at the default weights (all 1):
+Score, at the default weights (all 1):
   hard = -(pinned locations not holding their facility
            + facilities at a forbidden location
            + demand above location capacities)

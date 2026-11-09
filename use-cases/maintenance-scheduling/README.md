@@ -27,7 +27,7 @@ crewDate = startDateIndex * crewCount + crewIndex     # -1 == unassigned
 
 ## cpp/
 
-- `include/mnt/domain.hpp` — domain + `optimaru::SolutionDescriptor` specialization
+- `include/mnt/domain.hpp` — domain + `optimaru::SolutionTraits` specialization
 - `include/mnt/constraints/` — one component per constraint: `min_start_date_cost.hpp`,
   `max_end_date_cost.hpp`, `before_ideal_end_date_cost.hpp`, `after_ideal_end_date_cost.hpp`,
   `crew_conflict_cost.hpp`, `tag_conflict_cost.hpp` (+ `common.hpp`: the per-job and
@@ -92,8 +92,8 @@ mnt.solve(schedule, constraints=[
 `mnt.constraint_costs(schedule, picks)` keys the second pick `tag_conflict_cost#2`. The
 CP-SAT reference takes integral offsets.
 
-Score mapping: the Java original already uses `HardSoftScore`, so it maps 1:1 onto the
-engine's HardSoftScore(int64 hard, double soft), and the soft weights
+Score mapping: the Java original already uses `Score`, so it maps 1:1 onto the
+engine's Score(int64 hard, double soft), and the soft weights
 (1 / 1,000 / 1,000,000) are the original ones. The two pairwise constraints reduce to sums
 of C(n,2) over per-day occupancy counts (equivalent to summing pairwise overlapping days,
 since the intervals are contiguous) and are scored incrementally in O(job calendar length)
@@ -107,7 +107,7 @@ the score, but the solver never moves it.
 ```sh
 cd use-cases/maintenance-scheduling/cpp
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j4
-./build/mnt_test          # constraint hand checks + incremental==full + FULL_ASSERT
+./build/mnt_test          # constraint hand checks + incremental==full + ScoreChecks::Full
 ./build/mnt_plugin_test   # plugin assembly == monolith, raw costs by hand, catalog, overrides
 ./build/mnt_demo          # reproduces the Java demo (SMALL), 10 s, checks hard 0
 ./build/mnt_demo 15 --large
@@ -168,12 +168,12 @@ engine is `cpp/include/mnt/solver.hpp` + `cpp/src/solver.cpp`.
 
 **Adding a move.** The engine already mixes change / swap moves
 (weights in `Solver::Config`). This use case relies on the engine's generic moves only; it has no domain move yet. A new move is a
-`optimaru::MoveOperator<…>` registered with `engine.addMoveOperator(...)` next
+`optimaru::MoveOperator<…>` registered with `engine.add_move_operator(...)` next
 to the engine construction in `cpp/src/solver.cpp`; a ruin for LNS is a
-`RuinOperator` registered with `engine.addRuinOperator(...)`.
+`RuinOperator` registered with `engine.add_ruin_operator(...)`.
 
 **Changing the construction heuristic.** Entities are placed in index order (First Fit). Set
-`engineConfig.constructionHeuristic.entityDifficulty` for First Fit
+`engineConfig.construction.difficulty` for First Fit
 Decreasing ordering, or pre-assign part of the solution in the domain
 solver's `solve` before the engine runs — the engine only fills what is still unassigned.
 

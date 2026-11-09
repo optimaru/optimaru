@@ -11,10 +11,10 @@ namespace mnt
 // Port of the reference maintenance-scheduling
 // MaintenanceScheduleConstraintProvider.
 //
-// calculateScore does a full recompute — the reference the incremental
-// calculator is checked against (in the tests and under FULL_ASSERT).
+// score does a full recompute — the reference the incremental
+// calculator is checked against (in the tests and under ScoreChecks::Full).
 //
-// Constraints (HardSoftScore; day counts are CALENDAR days, exactly Java's
+// Constraints (Score; day counts are CALENDAR days, exactly Java's
 // ChronoUnit.DAYS.between on the [startDate, endDate) intervals), the default
 // assembly of mnt/constraints.hpp at the components' kDefaultWeight:
 //   hard 1. crewConflictCost        -1 per overlapping day per same-crew job
@@ -39,12 +39,12 @@ namespace mnt
 class ScoreCalculator
 {
 public:
-    static Score calculateScore(MaintenanceSchedule &schedule);
+    static Score score(MaintenanceSchedule &schedule);
 
     // Interns tags into dense ids, builds the start-date value range
     // (business days of the calendar), the endDate shadow table and the day
     // horizon. Idempotent (guarded by MaintenanceSchedule::prepared). Must
-    // run before scoring; calculateScore/solve call it.
+    // run before scoring; score/solve call it.
     static void prepare(MaintenanceSchedule &schedule);
 
     // Unordered pairs among n items: C(n, 2).

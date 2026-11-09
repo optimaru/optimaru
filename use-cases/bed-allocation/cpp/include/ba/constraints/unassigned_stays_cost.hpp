@@ -31,12 +31,12 @@ struct UnassignedStaysCost final : PerStayConstraint
         : PerStayConstraint("unassignedStaysCost", weight, kDefaultLevel)
     {
     }
-    void onReset(const BedPlan &plan) override
+    void on_reset(const BedPlan &plan) override
     {
-        PerStayConstraint::onReset(plan);
+        PerStayConstraint::on_reset(plan);
         sentinel_.assign(1, plan.noBedValue());
     }
-    const std::vector<int> *scopedUnits() const override { return &sentinel_; }
+    const std::vector<int> *scoped_units() const override { return &sentinel_; }
     double stayCost(const BedPlan &plan, int unit, int stayIndex) const override
     {
         if (unit != plan.noBedValue())

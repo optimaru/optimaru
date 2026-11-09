@@ -6,14 +6,14 @@
 #include <vector>
 
 #include "mnt/domain.hpp"
-#include "optimaru/api/score/calculator/incremental_score_calculator.hpp"
+#include "optimaru/objective.hpp"
 
 namespace mnt
 {
 
 // The maintenance-scheduling implementation of the engine's
-// optimaru::IncrementalScoreCalculator — the C++ analog of implementing
-// Java's IncrementalScoreCalculator instead of a ConstraintProvider.
+// optimaru::Objective — the C++ analog of implementing
+// Java's Objective instead of a ConstraintProvider.
 //
 // Every constraint is a function of per-day occupancy counts or of the job's
 // own dates, so a single variable change is O(span + |tags| * span) where
@@ -29,27 +29,27 @@ namespace mnt
 //     cells; a pair sharing k tags and overlapping d days is counted k*d
 //     times, exactly Java's intersection.size() * overlap.
 //
-// beforeVariableChanged retracts the job's contribution while crewDate still
-// holds the OLD value; afterVariableChanged inserts the NEW value.
+// before_assign retracts the job's contribution while crewDate still
+// holds the OLD value; after_assign inserts the NEW value.
 // Unassigned jobs (crewDate == -1) contribute nothing, so the construction
 // heuristic can score partially initialized solutions. The full-recompute
-// reference is ScoreCalculator::calculateScore (checked in the tests and
-// under EnvironmentMode::FULL_ASSERT).
+// reference is ScoreCalculator::score (checked in the tests and
+// under ScoreChecks::ScoreChecks::Full).
 class MaintenanceSchedulingIncrementalScoreCalculator final
-    : public optimaru::IncrementalScoreCalculator<MaintenanceSchedule>
+    : public optimaru::Objective<MaintenanceSchedule>
 {
 public:
-    void resetWorkingSolution(MaintenanceSchedule &workingSolution) override;
-    void beforeVariableChanged(int jobIndex) override;
-    void afterVariableChanged(int jobIndex) override;
-    Score calculateScore() override;
+    void rebuild(MaintenanceSchedule &solution) override;
+    void before_assign(int jobIndex) override;
+    void after_assign(int jobIndex) override;
+    Score score() override;
 
     // --- violation guidance (the school-timetabling hot-set pattern) ---
     // A "hot cell" is a (tag, day) pair currently occupied by two or more
     // jobs, i.e. one that contributes to the tagConflictCost term — at 1'000
     // per tag-day it is the dominant soft cost on every non-trivial instance.
     // The set is maintained in O(1) inside insert/retract (a counter crossing
-    // 2 in either direction) and lets the solver's entityRecommender seed
+    // 2 in either direction) and lets the solver's entity_hint seed
     // moves on jobs that are actually in conflict. Empty once
     // tagConflictCost is 0, so guidance switches itself off.
     bool hasHotTagCells() const { return !hotCells_.empty(); }
@@ -91,7 +91,7 @@ private:
     std::vector<int> tagDayCnt_;
 
     // Running totals (all counted positive; signs applied in
-    // calculateScore).
+    // score).
     std::int64_t crewOverlap_ = 0;        // hard 1 crewConflictCost (days)
     std::int64_t minStartViolation_ = 0;  // hard 2 minStartDateCost (days)
     std::int64_t maxEndViolation_ = 0;    // hard 3 maxEndDateCost (days)

@@ -14,9 +14,9 @@
 #include "st/moves/reassign.hpp"
 #include "st/moves/smart_class_swap.hpp"
 #include "st/moves/unassign.hpp"
-#include "optimaru/api/solver/solver.hpp"
-#include "optimaru/config/solver/solver_config.hpp"
-#include "optimaru/impl/solver/worker_threads.hpp"
+#include "optimaru/solver.hpp"
+#include "optimaru/settings.hpp"
+#include "optimaru/worker_threads.hpp"
 
 namespace st::canon
 {
@@ -41,39 +41,39 @@ struct GuidedSetup
 // solve() overload wires it separately.
 GuidedSetup configureEngine(const Solver::Config &config,
                             const Timetable &table,
-                            optimaru::SolverConfig &engineConfig)
+                            optimaru::Settings &engineConfig)
 {
-    engineConfig.randomSeed = config.randomSeed;
-    engineConfig.environmentMode = config.environmentMode;
-    engineConfig.onNewBest = config.onNewBest;
-    engineConfig.termination.spentLimit = config.spentLimit;
-    engineConfig.termination.bestScoreLimit = config.bestScoreLimit;
-    engineConfig.termination.unimprovedSpentLimit = config.unimprovedSpentLimit;
-    engineConfig.termination.stepCountLimit = config.stepCountLimit;
-    engineConfig.termination.unimprovedStepCountLimit
-        = config.unimprovedStepCountLimit;
-    // lateAcceptanceSize 0 = auto-scale with the instance (see Config).
-    engineConfig.localSearch.acceptor.lateAcceptanceSize
-        = config.lateAcceptanceSize != 0
-              ? config.lateAcceptanceSize
+    engineConfig.seed = config.seed;
+    engineConfig.score_checks = config.score_checks;
+    engineConfig.on_new_best = config.on_new_best;
+    engineConfig.limits.time_limit = config.time_limit;
+    engineConfig.limits.target_score = config.target_score;
+    engineConfig.limits.stall_time_limit = config.stall_time_limit;
+    engineConfig.limits.step_limit = config.step_limit;
+    engineConfig.limits.stall_step_limit
+        = config.stall_step_limit;
+    // history_length 0 = auto-scale with the instance (see Config).
+    engineConfig.search.acceptance.history_length
+        = config.history_length != 0
+              ? config.history_length
               : std::clamp<std::size_t>(4 * table.lessons.size(), 400, 3200);
-    engineConfig.localSearch.moveSelector.changeMoveWeight
-        = config.changeMoveWeight;
-    engineConfig.localSearch.moveSelector.swapMoveWeight
-        = config.swapMoveWeight;
-    auto &lns = engineConfig.localSearch.ruinRecreate;
-    lns.enabled = config.ruinRecreate;
-    lns.unimprovedStepTrigger = config.ruinRecreateUnimprovedStepTrigger;
-    lns.minRuinFraction = config.ruinRecreateMinRuinFraction;
-    lns.maxRuinFraction = config.ruinRecreateMaxRuinFraction;
-    lns.maxRuinCount = config.ruinRecreateMaxRuinCount;
-    lns.operatorDecay = config.ruinRecreateOperatorDecay;
+    engineConfig.search.moves.change_weight
+        = config.change_weight;
+    engineConfig.search.moves.swap_weight
+        = config.swap_weight;
+    auto &lns = engineConfig.search.ruin_recreate;
+    lns.enabled = config.ruin_recreate;
+    lns.unimproved_step_trigger = config.ruinRecreateUnimprovedStepTrigger;
+    lns.min_ruin_fraction = config.ruinRecreateMinRuinFraction;
+    lns.max_ruin_fraction = config.ruinRecreateMaxRuinFraction;
+    lns.max_ruin_count = config.ruinRecreateMaxRuinCount;
+    lns.operator_decay = config.ruinRecreateOperatorDecay;
     lns.rewards = config.ruinRecreateRewards;
-    lns.polishSteps = config.ruinRecreatePolishSteps;
-    lns.asMoveWeight = config.ruinRecreateAsMoveWeight;
-    lns.asMoveMaxRuin = config.ruinRecreateAsMoveMaxRuin;
-    engineConfig.localSearch.descentWeight = config.descentWeight;
-    engineConfig.localSearch.descentMaxSweeps = config.descentMaxSweeps;
+    lns.polish_steps = config.ruinRecreatePolishSteps;
+    lns.as_move_weight = config.ruinRecreateAsMoveWeight;
+    lns.as_move_max_ruin = config.ruinRecreateAsMoveMaxRuin;
+    engineConfig.search.descent_weight = config.descent_weight;
+    engineConfig.search.descent_max_sweeps = config.descent_max_sweeps;
 
     GuidedSetup setup;
 
@@ -95,7 +95,7 @@ GuidedSetup configureEngine(const Solver::Config &config,
     }
     const std::shared_ptr<std::vector<std::vector<int>>> &allowedSlots
         = setup.allowedSlots;
-    engineConfig.localSearch.valueRecommender
+    engineConfig.search.value_hint
         = [allowedSlots](std::mt19937_64 &rng, int lessonIndex) -> int
     {
         const std::vector<int> &slots = (*allowedSlots)[lessonIndex];
@@ -126,11 +126,11 @@ GuidedSetup configureEngine(const Solver::Config &config,
         for (const std::vector<int> &members : setup.lessonsOfClass)
             maxClassSize = std::max(maxClassSize, members.size());
         const std::shared_ptr<std::vector<int>> &classOf = setup.classOf;
-        engineConfig.localSearch.nearby.distanceMeter = [classOf](int a, int b)
+        engineConfig.search.nearby.distance = [classOf](int a, int b)
         { return (*classOf)[a] == (*classOf)[b] ? 0.0 : 1.0; };
-        engineConfig.localSearch.nearby.size
+        engineConfig.search.nearby.size
             = std::max(1, static_cast<int>(maxClassSize) - 1);
-        engineConfig.localSearch.nearby.probability
+        engineConfig.search.nearby.probability
             = config.sameClassNearbyProbability;
     }
 
@@ -153,7 +153,7 @@ GuidedSetup configureEngine(const Solver::Config &config,
                 + static_cast<double>(table.slotCount()
                                       - (*setup.allowedSlots)[i].size()));
     }
-    engineConfig.constructionHeuristic.entityDifficulty
+    engineConfig.construction.difficulty
         = [difficulty](int lessonIndex) { return (*difficulty)[lessonIndex]; };
 
     return setup;
@@ -166,7 +166,7 @@ void Solver::solve(Timetable &table)
     ScoreCalculator::prepare(table);  // normalize ids / derived tables
     if (table.lessons.empty() || table.slotCount() == 0)
     {
-        ScoreCalculator::calculateScore(table, config_.weights);
+        ScoreCalculator::score(table, config_.weights);
         return;
     }
     if (config_.ruinRecreateRewards.size() != 4)
@@ -190,7 +190,7 @@ void Solver::solve(Timetable &table)
         auto stop = std::make_shared<std::atomic<bool>>(false);
         // A worker that cannot be started (std::system_error) stops and joins
         // the ones already running before the error is rethrown here.
-        optimaru::runWorkerThreads(
+        optimaru::run_worker_threads(
             workerCount, *stop,
             [this, &candidates, &failures, &stop](int i)
             {
@@ -198,11 +198,11 @@ void Solver::solve(Timetable &table)
                 {
                     Config workerConfig = config_;
                     workerConfig.parallelSolverCount = 1;
-                    workerConfig.stopFlag = stop;
-                    workerConfig.randomSeed
+                    workerConfig.stop_flag = stop;
+                    workerConfig.seed
                         += static_cast<std::uint64_t>(i);
                     if (i != 0)
-                        workerConfig.onNewBest = nullptr;
+                        workerConfig.on_new_best = nullptr;
                     Solver worker(std::move(workerConfig));
                     worker.solve(candidates[i]);
                 }
@@ -227,7 +227,7 @@ void Solver::solve(Timetable &table)
         return;
     }
 
-    optimaru::SolverConfig engineConfig;
+    optimaru::Settings engineConfig;
     const GuidedSetup setup = configureEngine(config_, table, engineConfig);
 
     // The single calculator instance of this (single-start) solve. Created
@@ -242,7 +242,7 @@ void Solver::solve(Timetable &table)
     if (config_.hotLessonProbability > 0.0)
     {
         const double probability = config_.hotLessonProbability;
-        engineConfig.localSearch.entityRecommender
+        engineConfig.search.entity_hint
             = [&calculator, probability](std::mt19937_64 &rng) -> int
         {
             std::uniform_real_distribution<double> unit(0.0, 1.0);
@@ -254,11 +254,11 @@ void Solver::solve(Timetable &table)
 
     // Construction heuristic + late-acceptance local search (+ ALNS kicks).
     optimaru::Solver<Timetable> engine(std::move(engineConfig));
-    if (config_.stopFlag)
-        engine.adoptTerminateEarlyFlag(config_.stopFlag);
+    if (config_.stop_flag)
+        engine.share_stop_flag(config_.stop_flag);
     if (config_.smartClassSwapMoves)
     {
-        engine.addMoveOperator(
+        engine.add_move_operator(
             std::make_unique<
                 SmartClassSwapMove<CanonicalIncrementalScoreCalculator>>(
                 setup.lessonsOfClass,
@@ -270,17 +270,17 @@ void Solver::solve(Timetable &table)
     engine.solve(table, calculator);
 
     // The authoritative final score: a full recompute on the best solution.
-    table.score = ScoreCalculator::calculateScore(table, config_.weights);
+    table.score = ScoreCalculator::score(table, config_.weights);
 }
 
 void Solver::solve(Timetable &table,
-                   optimaru::DecomposedScoreCalculator<Timetable> &calculator)
+                   optimaru::DecomposedObjective<Timetable> &calculator)
 {
     ScoreCalculator::prepare(table);  // normalize ids / derived tables
     if (table.lessons.empty() || table.slotCount() == 0)
     {
-        calculator.resetWorkingSolution(table);
-        table.score = calculator.calculateScore();
+        calculator.rebuild(table);
+        table.score = calculator.score();
         return;
     }
     if (config_.ruinRecreateRewards.size() != 4)
@@ -289,7 +289,7 @@ void Solver::solve(Timetable &table,
             "ruinRecreateRewards must contain exactly 4 values");
     }
 
-    optimaru::SolverConfig engineConfig;
+    optimaru::Settings engineConfig;
     const GuidedSetup setup = configureEngine(config_, table, engineConfig);
 
     // Violation-guided entity selection, fed by the decomposed calculator's
@@ -299,7 +299,7 @@ void Solver::solve(Timetable &table,
     if (config_.hotLessonProbability > 0.0)
     {
         const double probability = config_.hotLessonProbability;
-        engineConfig.localSearch.entityRecommender
+        engineConfig.search.entity_hint
             = [&hotSource, probability](std::mt19937_64 &rng) -> int
         {
             std::uniform_real_distribution<double> unit(0.0, 1.0);
@@ -310,11 +310,11 @@ void Solver::solve(Timetable &table,
     }
 
     optimaru::Solver<Timetable> engine(std::move(engineConfig));
-    if (config_.stopFlag)
-        engine.adoptTerminateEarlyFlag(config_.stopFlag);
+    if (config_.stop_flag)
+        engine.share_stop_flag(config_.stop_flag);
     if (config_.smartClassSwapMoves)
     {
-        engine.addMoveOperator(
+        engine.add_move_operator(
             std::make_unique<SmartClassSwapMove<DecomposedHotSource>>(
                 setup.lessonsOfClass,
                 *setup.classOf,
@@ -327,12 +327,12 @@ void Solver::solve(Timetable &table,
     // always a hard loss.
     if (allowsUnassigned(calculator))
     {
-        engine.addMoveOperator(
+        engine.add_move_operator(
             std::make_unique<UnassignMove<DecomposedHotSource>>(&hotSource));
         // The way back in. Without it the search only ever drops (dropping is
         // guided by the hot lessons, re-placing is not) and the run ends with
         // far more unassigned than the instance requires.
-        engine.addMoveOperator(
+        engine.add_move_operator(
             std::make_unique<ReassignMove<DecomposedHotSource>>(
                 setup.allowedSlots, config_.reassignCandidates));
     }
@@ -340,9 +340,9 @@ void Solver::solve(Timetable &table,
 
     // Score the final solution with the caller's constraint assembly (custom
     // weights included) and leave the calculator primed on it, so
-    // constraintTotals() explains exactly this score (the es pattern).
-    calculator.resetWorkingSolution(table);
-    table.score = calculator.calculateScore();
+    // constraint_totals() explains exactly this score (the es pattern).
+    calculator.rebuild(table);
+    table.score = calculator.score();
 }
 
 }  // namespace st::canon

@@ -7,8 +7,8 @@
 #include <string>
 #include <vector>
 
-#include "optimaru/api/domain/solution_descriptor.hpp"
-#include "optimaru/api/score/buildin/hard_soft_score.hpp"
+#include "optimaru/solution_traits.hpp"
+#include "optimaru/score.hpp"
 
 namespace op
 {
@@ -16,12 +16,12 @@ namespace op
 // ---------------------------------------------------------------------------
 // Score
 // ---------------------------------------------------------------------------
-// The Java quickstart uses plain HardSoftScore (int levels): hard = missing
+// The Java quickstart uses plain Score (int levels): hard = missing
 // trolley buckets, soft = travel distance + 1000 * order-split count. The
-// engine's optimaru::HardSoftScore(int64 hard, double soft) holds both levels
+// engine's optimaru::Score(int64 hard, double soft) holds both levels
 // exactly (all penalties are integral counts/meters), so the mapping is 1:1 —
 // no level folding needed.
-using Score = optimaru::HardSoftScore;
+using Score = optimaru::Score;
 
 // ---------------------------------------------------------------------------
 // Warehouse  (static layout, port of org.acme.orderpicking.domain.Warehouse)
@@ -191,7 +191,7 @@ struct Order
 // (@PreviousElementShadowVariable) and nextPickTask
 // (@NextElementShadowVariable) — as indices, -1 standing in for null. They
 // are derived from the trolleys' pick lists by
-// ScoreCalculator::updateShadowVariables (calculateScore refreshes them, and
+// ScoreCalculator::updateShadowVariables (score refreshes them, and
 // Solver::solve leaves them consistent with the final solution).
 struct PickTask
 {
@@ -257,34 +257,34 @@ inline int calculateDistanceToTravel(const OrderPickingSolution &solution,
 }  // namespace op
 
 // ---------------------------------------------------------------------------
-// SolutionDescriptor specialization  (the C++ analog of the @PlanningEntity /
+// SolutionTraits specialization  (the C++ analog of the @PlanningEntity /
 // @PlanningListVariable annotations): the trolleys are the list owners, the
 // pick tasks are the elements. Every pick task appears in at most one
 // trolley's list; a task missing from all lists is unassigned (only during
 // construction — the quickstart does not allow unassigned values, and the
 // engine's moves keep every element assigned after the construction phase).
 // ---------------------------------------------------------------------------
-template <> struct optimaru::SolutionDescriptor<op::OrderPickingSolution>
+template <> struct optimaru::SolutionTraits<op::OrderPickingSolution>
 {
-    static constexpr optimaru::VariableKind kind = optimaru::VariableKind::LIST;
-    static int listCount(const op::OrderPickingSolution &s)
+    static constexpr optimaru::Shape shape = optimaru::Shape::Sequence;
+    static int list_count(const op::OrderPickingSolution &s)
     {
         return static_cast<int>(s.trolleys.size());
     }
-    static int elementCount(const op::OrderPickingSolution &s)
+    static int element_count(const op::OrderPickingSolution &s)
     {
         return static_cast<int>(s.pickTasks.size());
     }
-    static int listSize(const op::OrderPickingSolution &s, int listIndex)
+    static int list_size(const op::OrderPickingSolution &s, int listIndex)
     {
         return static_cast<int>(s.trolleys[listIndex].pickTaskIndices.size());
     }
     static int
-    getElement(const op::OrderPickingSolution &s, int listIndex, int position)
+    element_at(const op::OrderPickingSolution &s, int listIndex, int position)
     {
         return s.trolleys[listIndex].pickTaskIndices[position];
     }
-    static void insertElement(op::OrderPickingSolution &s,
+    static void insert_element(op::OrderPickingSolution &s,
                               int listIndex,
                               int position,
                               int element)
@@ -293,14 +293,14 @@ template <> struct optimaru::SolutionDescriptor<op::OrderPickingSolution>
         list.insert(list.begin() + position, element);
     }
     static int
-    removeElement(op::OrderPickingSolution &s, int listIndex, int position)
+    remove_element(op::OrderPickingSolution &s, int listIndex, int position)
     {
         auto &list = s.trolleys[listIndex].pickTaskIndices;
         const int element = list[position];
         list.erase(list.begin() + position);
         return element;
     }
-    static void reverseSegment(op::OrderPickingSolution &s,
+    static void reverse_segment(op::OrderPickingSolution &s,
                                int listIndex,
                                int first,
                                int last)

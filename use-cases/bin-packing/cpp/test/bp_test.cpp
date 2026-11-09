@@ -6,7 +6,7 @@
 //       components' kDefaultWeight (all 1)
 //   (b) incremental score == full recompute across a long random walk of
 //       change / swap / unassign moves driven through the engine's
-//       ScoreDirector protocol, with colours and (duplicated) conflicts:
+//       Editor protocol, with colours and (duplicated) conflicts:
 //       the score and each constraint's raw total after every move, every
 //       constraint non-zero during the walk; once with the flat colour
 //       counts and once with the hash-map fallback
@@ -15,7 +15,7 @@
 //   (d) zero budget: a complete gapped seed comes back unchanged; a plain
 //       solve ignores the input bins and is deterministic under a step
 //       limit; warmStart is cleared by every solve
-//   (e) a small coloured / conflicting instance solved under FULL_ASSERT,
+//   (e) a small coloured / conflicting instance solved under ScoreChecks::Full,
 //       with EmptyBinMove and the ALNS kicks on
 //   (f) the 20-item samples reach the 8-bin lower bound at 0hard
 //   (g) the parallel multi-start returns a consistent best solution
@@ -28,7 +28,7 @@
 //       every raw total equal a full recompute after each apply and each
 //       undo (no calculator reset in between), an undo restores the
 //       assignment exactly, RepackMove never adds a hard violation, and the
-//       same walk passes under a FULL_ASSERT director
+//       same walk passes under a ScoreChecks::Full editor
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -48,7 +48,7 @@
 #include "bp/moves.hpp"
 #include "bp/score_calculator.hpp"
 #include "bp/solver.hpp"
-#include "optimaru/api/score/director/score_director.hpp"
+#include "optimaru/editor.hpp"
 
 using namespace bp;
 
@@ -75,17 +75,17 @@ void checkScore(const std::string &label,
                 long expectedHard,
                 double expectedSoft)
 {
-    const Score full = ScoreCalculator::calculateScore(problem);
+    const Score full = ScoreCalculator::score(problem);
     BinPackingIncrementalScoreCalculator incremental;
-    incremental.resetWorkingSolution(problem);
-    const Score inc = incremental.calculateScore();
+    incremental.rebuild(problem);
+    const Score inc = incremental.score();
     const bool ok = full.hard == expectedHard && std::fabs(full.soft - expectedSoft) < 1e-9
                     && sameScore(full, inc);
     std::printf("  [%s] %-58s full=%s incremental=%s expected=%ldhard/%gsoft\n",
                 ok ? "PASS" : "FAIL",
                 label.c_str(),
-                full.toString().c_str(),
-                inc.toString().c_str(),
+                full.str().c_str(),
+                inc.str().c_str(),
                 expectedHard,
                 expectedSoft);
     if (!ok)
@@ -222,7 +222,7 @@ void walkIncremental(std::size_t maxFlatColorCells, const std::string &label)
 {
     BinPackingProblem p = randomInstance(30, 7, 4, 25);
     BinPackingIncrementalScoreCalculator calc(maxFlatColorCells);
-    optimaru::ScoreDirector<BinPackingProblem> director(p, calc);
+    optimaru::Editor<BinPackingProblem> editor(p, calc);
     BinPackingProblem shadow = p;
     check(calc.flatColorCounts() == (maxFlatColorCells != 0),
           label + ": the colour counts use the intended storage");
@@ -242,7 +242,7 @@ void walkIncremental(std::size_t maxFlatColorCells, const std::string &label)
             // ChangeMove; 10% of the time to unassigned (-1).
             const int item = static_cast<int>(rng() % n);
             const int bin = unit(rng) < 0.10 ? -1 : static_cast<int>(rng() % 6);
-            director.changeVariable(item, bin);
+            editor.assign(item, bin);
         }
         else if (r < 0.9)
         {
@@ -250,33 +250,33 @@ void walkIncremental(std::size_t maxFlatColorCells, const std::string &label)
             const int b = static_cast<int>(rng() % n);
             const int va = p.items[a].bin;
             const int vb = p.items[b].bin;
-            director.beginVariableChanges();
-            director.changeVariable(a, vb);
-            director.changeVariable(b, va);
-            director.endVariableChanges();
+            editor.begin_batch();
+            editor.assign(a, vb);
+            editor.assign(b, va);
+            editor.end_batch();
         }
         else
         {
             // Move a whole bin's items to another bin (EmptyBinMove's shape).
             const int from = static_cast<int>(rng() % 6);
             const int to = static_cast<int>(rng() % 6);
-            director.beginVariableChanges();
+            editor.begin_batch();
             for (int i = 0; i < n; ++i)
             {
                 if (p.items[i].bin == from)
-                    director.changeVariable(i, to);
+                    editor.assign(i, to);
             }
-            director.endVariableChanges();
+            editor.end_batch();
         }
         shadow.setAssignment(p.assignment());
-        const Score full = ScoreCalculator::calculateScore(shadow);
-        const Score incremental = director.calculateScore();
+        const Score full = ScoreCalculator::score(shadow);
+        const Score incremental = editor.score();
         if (!sameScore(full, incremental) && ++mismatches <= 3)
         {
             std::printf("  MISMATCH @step %d: incremental=%s full=%s\n",
                         step,
-                        incremental.toString().c_str(),
-                        full.toString().c_str());
+                        incremental.str().c_str(),
+                        full.str().c_str());
         }
         const std::vector<std::int64_t> expected = asList(ScoreCalculator::rawCosts(shadow));
         const std::vector<std::int64_t> running = asList(calc.totals());
@@ -361,7 +361,7 @@ void verifyConstruction()
 Solver::Config zeroBudget()
 {
     Solver::Config config;
-    config.spentLimit = std::chrono::milliseconds(0);
+    config.time_limit = std::chrono::milliseconds(0);
     return config;
 }
 
@@ -396,9 +396,9 @@ void verifyZeroBudgetAndWarmStart()
     }
     {
         Solver::Config config;
-        config.spentLimit = std::chrono::seconds(30);
-        config.stepCountLimit = 2000;
-        config.randomSeed = 5;
+        config.time_limit = std::chrono::seconds(30);
+        config.step_limit = 2000;
+        config.seed = 5;
         BinPackingProblem fresh = randomInstance(16, 3, 3, 6);
         for (Item &item : fresh.items)
             item.bin = -1;
@@ -421,7 +421,7 @@ void verifyZeroBudgetAndWarmStart()
 }
 
 // -------------------------------------------------------------------------
-// (e) FULL_ASSERT
+// (e) ScoreChecks::Full
 // -------------------------------------------------------------------------
 void verifyFullAssertSolve()
 {
@@ -430,10 +430,10 @@ void verifyFullAssertSolve()
     for (Item &item : p.items)
         item.bin = -1;
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(2);
-    config.randomSeed = 3;
-    config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
-    // Kick early so the LNS ruin/recreate path also runs under FULL_ASSERT.
+    config.time_limit = std::chrono::seconds(2);
+    config.seed = 3;
+    config.score_checks = optimaru::ScoreChecks::Full;
+    // Kick early so the LNS ruin/recreate path also runs under ScoreChecks::Full.
     config.ruinRecreateUnimprovedStepTrigger = 200;
     config.ruinRecreatePolishSteps = 100;
     config.ruinRecreateAsMoveWeight = 0.05;
@@ -442,7 +442,7 @@ void verifyFullAssertSolve()
     {
         Solver(config).solve(p);
     }
-    catch (const optimaru::ScoreCorruptionError &e)
+    catch (const optimaru::ScoreMismatchError &e)
     {
         corrupted = true;
         std::printf("  ScoreCorruptionError: %s\n", e.what());
@@ -451,7 +451,7 @@ void verifyFullAssertSolve()
     if (!corrupted)
     {
         const Score reported = p.score;
-        check(sameScore(reported, ScoreCalculator::calculateScore(p)),
+        check(sameScore(reported, ScoreCalculator::score(p)),
               "solver-reported score == full recompute");
         check(std::all_of(p.items.begin(), p.items.end(), [](const Item &item) { return item.bin >= 0; }),
               "every item assigned");
@@ -492,13 +492,13 @@ void verifySamples()
         for (const Item &item : p.items)
             total += item.weight;
         Solver::Config config;
-        config.spentLimit = std::chrono::seconds(5);
-        config.bestScoreLimit = Score{0, -8.0};
-        config.randomSeed = 7;
+        config.time_limit = std::chrono::seconds(5);
+        config.target_score = Score{0, -8.0};
+        config.seed = 7;
         Solver(config).solve(p);
         check(total == 746 && p.score.hard == 0 && p.binsUsed() == 8 && p.score.soft == -8.0,
               std::string(colored ? "web demo (colours + conflicts)" : "20 weights, capacity 100")
-                  + ": 0hard/-8soft, 8 bins (got " + p.score.toString() + ")");
+                  + ": 0hard/-8soft, 8 bins (got " + p.score.str() + ")");
         const std::vector<std::int64_t> loads = p.binLoads();
         check(loads.size() == 8 && std::all_of(loads.begin(), loads.end(), [](std::int64_t l) { return l > 0; }),
               "bin_loads has no gaps after the search (compacted)");
@@ -514,12 +514,12 @@ void verifyParallel()
     std::printf("== (g) parallel multi-start ==\n");
     BinPackingProblem p = twentyItems(true);
     Solver::Config config;
-    config.spentLimit = std::chrono::milliseconds(500);
+    config.time_limit = std::chrono::milliseconds(500);
     config.parallelSolverCount = 3;
-    config.randomSeed = 11;
+    config.seed = 11;
     Solver(config).solve(p);
     const Score reported = p.score;
-    check(sameScore(reported, ScoreCalculator::calculateScore(p)), "best worker's score == full recompute");
+    check(sameScore(reported, ScoreCalculator::score(p)), "best worker's score == full recompute");
     check(std::all_of(p.items.begin(), p.items.end(), [](const Item &item) { return item.bin >= 0; }),
           "every item assigned");
     std::printf("\n");
@@ -532,9 +532,9 @@ void verifyCompaction()
 {
     std::printf("== (h) compaction ==\n");
     BinPackingProblem p = randomInstance(20, 21, 3, 10);
-    const Score before = ScoreCalculator::calculateScore(p);
+    const Score before = ScoreCalculator::score(p);
     compactBins(p);
-    const Score after = ScoreCalculator::calculateScore(p);
+    const Score after = ScoreCalculator::score(p);
     check(sameScore(before, after), "compaction is score-neutral");
     int expected = 0;
     bool contiguous = true;
@@ -584,7 +584,7 @@ void verifyChecks()
               {
                   BinPackingProblem p = abcd({0, 0, 1, -1});
                   p.binCapacity = -3;
-                  ScoreCalculator::calculateScore(p);
+                  ScoreCalculator::score(p);
               },
               "bin_capacity must be positive"),
           "scoring refuses binCapacity <= 0");
@@ -595,7 +595,7 @@ void verifyChecks()
                   ScoreCalculator::prepare(p);
                   p.binCapacity = 0;  // edited after the lookups were built
                   BinPackingIncrementalScoreCalculator incremental;
-                  incremental.resetWorkingSolution(p);
+                  incremental.rebuild(p);
               },
               "bin_capacity must be positive"),
           "a capacity edited after prepare() is refused too");
@@ -604,7 +604,7 @@ void verifyChecks()
               {
                   BinPackingProblem p = abcd({-1, -1, -1, -1});
                   p.items[1].id = "A";
-                  ScoreCalculator::calculateScore(p);
+                  ScoreCalculator::score(p);
               },
               "item ids must be unique"),
           "a repeated id is refused");
@@ -613,7 +613,7 @@ void verifyChecks()
               {
                   BinPackingProblem p = abcd({-1, -1, -1, -1});
                   p.items[1].weight = 0;
-                  ScoreCalculator::calculateScore(p);
+                  ScoreCalculator::score(p);
               },
               "item weights must be positive"),
           "a weight <= 0 is refused");
@@ -622,7 +622,7 @@ void verifyChecks()
               {
                   BinPackingProblem p = abcd({-1, -1, -1, -1});
                   p.conflicts = {{"A", "Z"}};
-                  ScoreCalculator::calculateScore(p);
+                  ScoreCalculator::score(p);
               },
               "conflict endpoints"),
           "an unknown conflict endpoint is refused");
@@ -631,7 +631,7 @@ void verifyChecks()
               {
                   BinPackingProblem p = abcd({-1, -1, -1, -1});
                   p.conflicts = {{"A", "A"}};
-                  ScoreCalculator::calculateScore(p);
+                  ScoreCalculator::score(p);
               },
               "conflict endpoints"),
           "a self pair is refused");
@@ -639,7 +639,7 @@ void verifyChecks()
               []
               {
                   BinPackingProblem p = abcd({0, 0, 0, 4});
-                  ScoreCalculator::calculateScore(p);
+                  ScoreCalculator::score(p);
               },
               "item 'D' has bin 4, outside -1..3"),
           "a bin outside -1..n-1 is refused");
@@ -655,14 +655,14 @@ void verifyChecks()
 // (j) the macro moves
 // -------------------------------------------------------------------------
 // One step of the engine's move protocol around a MoveOperator: begin the
-// evaluation, apply, score, then keep it or roll it back with undoLast.
+// evaluation, apply, score, then keep it or roll it back with undo_last.
 struct MoveDriver
 {
-    explicit MoveDriver(optimaru::ScoreDirector<BinPackingProblem> &director)
-        : ctx{director, nearby, noLists, noLists}
+    explicit MoveDriver(optimaru::Editor<BinPackingProblem> &editor)
+        : ctx{editor, nearby, noLists, noLists}
     {
     }
-    optimaru::NearbyNeighborhoods nearby;  // empty: no distance meter
+    optimaru::Neighborhoods nearby;  // empty: no distance meter
     std::vector<int> noLists;              // BASIC: no element index
     optimaru::OperatorContext<BinPackingProblem> ctx;
     std::vector<int> entities;
@@ -699,24 +699,24 @@ void verifyMacroMovesByHand()
         };
         BinPackingProblem p = build();
         BinPackingIncrementalScoreCalculator calc;
-        optimaru::ScoreDirector<BinPackingProblem> director(p, calc);
-        MoveDriver driver(director);
+        optimaru::Editor<BinPackingProblem> editor(p, calc);
+        MoveDriver driver(editor);
         std::mt19937_64 rng(1);
         EmptyBinMove empty(1);
         check(empty.apply(driver.ctx, rng, driver.entities) && binsOf(p) == std::vector<int>{1, 1, 1, 2}
-                  && sameScore(director.calculateScore(), Score{-1, -2.0}),
+                  && sameScore(editor.score(), Score{-1, -2.0}),
               "EmptyBinMove (capacity only): A joins red B in bin 1 -> -1hard/-2soft");
 
         BinPackingProblem q = build();
         BinPackingIncrementalScoreCalculator calc2;
-        optimaru::ScoreDirector<BinPackingProblem> director2(q, calc2);
+        optimaru::Editor<BinPackingProblem> director2(q, calc2);
         MoveDriver driver2(director2);
         RepackMove repack(1, 0);
         check(repack.apply(driver2.ctx, rng, driver2.entities) && binsOf(q) == std::vector<int>{2, 1, 1, 2}
-                  && sameScore(director2.calculateScore(), Score{0, -2.0}),
+                  && sameScore(director2.score(), Score{0, -2.0}),
               "RepackMove (partners 0): A goes to bin 2, clear of red B -> 0hard/-2soft");
-        repack.undoLast(driver2.ctx);
-        check(binsOf(q) == std::vector<int>{0, 1, 1, 2} && sameScore(director2.calculateScore(), Score{0, -3.0}),
+        repack.undo_last(driver2.ctx);
+        check(binsOf(q) == std::vector<int>{0, 1, 1, 2} && sameScore(director2.score(), Score{0, -3.0}),
               "RepackMove undo restores the three bins");
     }
     {
@@ -730,8 +730,8 @@ void verifyMacroMovesByHand()
         // Either way bin 0 ends empty at 0hard/-2soft.
         BinPackingProblem p = conflictedTriple();
         BinPackingIncrementalScoreCalculator calc;
-        optimaru::ScoreDirector<BinPackingProblem> director(p, calc);
-        MoveDriver driver(director);
+        optimaru::Editor<BinPackingProblem> editor(p, calc);
+        MoveDriver driver(editor);
         std::mt19937_64 rng(5);
         RepackMove alone(1, 0);
         check(!alone.apply(driver.ctx, rng, driver.entities) && binsOf(p) == std::vector<int>{0, 1, 1, 2},
@@ -756,10 +756,10 @@ void verifyMacroMovesByHand()
                 ++viaBin2;
             else
                 resultsOk = false;
-            resultsOk = resultsOk && sameScore(director.calculateScore(), Score{0, -2.0});
-            withPartner.undoLast(driver.ctx);
+            resultsOk = resultsOk && sameScore(editor.score(), Score{0, -2.0});
+            withPartner.undo_last(driver.ctx);
             resultsOk = resultsOk && binsOf(p) == std::vector<int>{0, 1, 1, 2}
-                        && sameScore(director.calculateScore(), Score{0, -3.0});
+                        && sameScore(editor.score(), Score{0, -3.0});
         }
         check(viaBin1 > 0 && viaBin2 > 0 && resultsOk,
               "RepackMove (1 partner): empties bin 0 at 0hard/-2soft with either partner (bin 1 "
@@ -767,30 +767,30 @@ void verifyMacroMovesByHand()
 
         BinPackingProblem e = conflictedTriple();
         BinPackingIncrementalScoreCalculator calc2;
-        optimaru::ScoreDirector<BinPackingProblem> director2(e, calc2);
+        optimaru::Editor<BinPackingProblem> director2(e, calc2);
         MoveDriver driver2(director2);
         EmptyBinMove empty(1);
         check(empty.apply(driver2.ctx, rng, driver2.entities) && binsOf(e) == std::vector<int>{1, 1, 1, 2}
-                  && director2.calculateScore().hard == -1,
+                  && director2.score().hard == -1,
               "EmptyBinMove on the same state: A next to its partner B -> -1hard");
     }
 }
 
 // Random walk: ordinary change moves (to reach infeasible and lopsided
 // states) interleaved with the macro move, half of them kept and half rolled
-// back. NON_ASSERT checks against a shadow full recompute with no
-// calculator reset in between; FULL_ASSERT lets the director check every
-// score itself (a ScoreCorruptionError fails the walk).
+// back. ScoreChecks::Off checks against a shadow full recompute with no
+// calculator reset in between; ScoreChecks::Full lets the editor check every
+// score itself (a ScoreMismatchError fails the walk).
 template <typename Move>
 void walkMacroMove(Move &move,
                    const std::string &label,
-                   optimaru::EnvironmentMode mode,
+                   optimaru::ScoreChecks mode,
                    bool requireHardNoWorse)
 {
     BinPackingProblem p = randomInstance(40, 41, 5, 30);
     BinPackingIncrementalScoreCalculator calc;
-    optimaru::ScoreDirector<BinPackingProblem> director(p, calc, mode);
-    MoveDriver driver(director);
+    optimaru::Editor<BinPackingProblem> editor(p, calc, mode);
+    MoveDriver driver(editor);
     BinPackingProblem shadow = p;
     const int n = p.itemCount();
     std::mt19937_64 rng(97);
@@ -799,8 +799,8 @@ void walkMacroMove(Move &move,
     auto agrees = [&]() -> bool
     {
         shadow.setAssignment(p.assignment());
-        const Score full = ScoreCalculator::calculateScore(shadow);
-        return sameScore(director.calculateScore(), full)
+        const Score full = ScoreCalculator::score(shadow);
+        return sameScore(editor.score(), full)
                && asList(calc.totals()) == asList(ScoreCalculator::rawCosts(shadow));
     };
 
@@ -819,21 +819,21 @@ void walkMacroMove(Move &move,
             if (unit(rng) < 0.5)
             {
                 const int item = static_cast<int>(rng() % n);
-                director.changeVariable(item, static_cast<int>(rng() % n));
+                editor.assign(item, static_cast<int>(rng() % n));
                 if (!agrees())
                     ++mismatches;
                 continue;
             }
             const std::vector<int> before = p.assignment();
-            const Score beforeScore = director.calculateScore();
+            const Score beforeScore = editor.score();
             const bool allBinsUsed = p.binsUsed() == n;
             if (beforeScore.hard < 0)
                 ++infeasibleStarts;
             driver.entities.clear();
-            director.beginMoveEvaluation();
+            editor.begin_trial();
             if (!move.apply(driver.ctx, rng, driver.entities))
             {
-                director.endMoveEvaluation(false);
+                editor.end_trial(false);
                 if (p.assignment() != before)
                     ++badUndo;  // a declined move must leave everything as it was
                 continue;
@@ -841,28 +841,28 @@ void walkMacroMove(Move &move,
             ++applied;
             if (!agrees())
                 ++mismatches;
-            const Score afterScore = director.calculateScore();
+            const Score afterScore = editor.score();
             if (requireHardNoWorse && !allBinsUsed && afterScore.hard < beforeScore.hard)
                 ++hardWorse;
             const bool keep = unit(rng) < 0.5;
             if (!keep)
             {
-                director.beginMoveRollback();
-                move.undoLast(driver.ctx);
+                editor.begin_rollback();
+                move.undo_last(driver.ctx);
                 ++undone;
             }
             else
             {
                 ++kept;
             }
-            director.endMoveEvaluation(keep);
+            editor.end_trial(keep);
             if (!agrees())
                 ++mismatches;
             if (!keep && p.assignment() != before)
                 ++badUndo;
         }
     }
-    catch (const optimaru::ScoreCorruptionError &e)
+    catch (const optimaru::ScoreMismatchError &e)
     {
         corrupted = true;
         std::printf("  ScoreCorruptionError: %s\n", e.what());
@@ -882,10 +882,10 @@ void verifyMacroMoves()
 {
     std::printf("== (j) macro moves ==\n");
     verifyMacroMovesByHand();
-    for (const optimaru::EnvironmentMode mode :
-         {optimaru::EnvironmentMode::NON_ASSERT, optimaru::EnvironmentMode::FULL_ASSERT})
+    for (const optimaru::ScoreChecks mode :
+         {optimaru::ScoreChecks::Off, optimaru::ScoreChecks::Full})
     {
-        const std::string tag = mode == optimaru::EnvironmentMode::FULL_ASSERT ? " [FULL_ASSERT]" : "";
+        const std::string tag = mode == optimaru::ScoreChecks::Full ? " [FULL_ASSERT]" : "";
         EmptyBinMove empty(3);
         walkMacroMove(empty, "EmptyBinMove" + tag, mode, false);
         RepackMove repack(3, 2);

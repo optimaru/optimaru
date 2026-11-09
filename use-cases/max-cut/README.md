@@ -44,7 +44,7 @@ CP-SAT reference.
   not. `calculate_score` / `constraint_costs` refuse a partial partition
   (`ValueError`); `solve` fills it in.
 
-## Constraints (HardSoftScore — the engine score type as-is, no mapping)
+## Constraints (Score — the engine score type as-is, no mapping)
 
 | Constraint (Python name) | C++ component | Default level | Default weight | Raw cost (0 = no violation) |
 |---|---|---|---|---|
@@ -165,8 +165,8 @@ other C++ use cases.
 
 ## cpp/
 
-- `include/mc/domain.hpp` — domain + `optimaru::SolutionDescriptor` specialization
-  (with `isPinned` for fixed vertices) and the `-1` rules
+- `include/mc/domain.hpp` — domain + `optimaru::SolutionTraits` specialization
+  (with `is_pinned` for fixed vertices) and the `-1` rules
 - `include/mc/constraints/` — one component per constraint:
   `fixed_partition_cost.hpp`, `same_partition_pairs_cost.hpp`,
   `different_partition_pairs_cost.hpp`, `partition_size_bounds_cost.hpp`,
@@ -194,18 +194,18 @@ ctest --test-dir build/max-cut --output-on-failure --no-tests=error
 the incremental calculator, the edge cases (self-loops, parallel and zero-weight
 edges, self-pairs, one-sided bounds, the `-1` rules), incremental == full recompute
 over random flip / swap / unassign / batch moves (the score and every constraint's
-raw total after each move, each constraint non-zero during the walk), FULL_ASSERT
+raw total after each move, each constraint non-zero during the walk), ScoreChecks::Full
 solves (ALNS kicks and exact size), the exact-size contract, pinning under
 multi-start, a worker exception rethrown instead of terminating the process, the
 zero budget, an empty graph, brute-force optima, determinism and validation.
 `mc_plugin_test`: default assembly == monolith bit for bit (score and unit costs),
 plugin incremental == full recompute per constraint (with the opt-in imbalance
 switched on too), partial assemblies, overrides (exponent per side, per-side hard
-rounding), `constraintTotals()`, FULL_ASSERT plugin solves, the builder, raw costs
+rounding), `constraint_totals()`, ScoreChecks::Full plugin solves, the builder, raw costs
 by hand, the catalog and the reward guards, and repeated / shifted components (a
 hand-calculated repeat, threshold and literal offsets by hand per side and on the
 totals, the literal formula refused on hard at reset and kept on soft, incremental == a
-fresh recompute over a random walk, a FULL_ASSERT solve).
+fresh recompute over a random walk, a ScoreChecks::Full solve).
 
 ## Usage
 
@@ -281,7 +281,7 @@ The planning variable is **BASIC**; the domain solver that configures the engine
 `Solver::Config`) and runs ruin-and-recreate on stagnation (and, with
 `ruinRecreateAsMoveWeight > 0`, as an ordinary move — it moves a cluster of vertices
 chained by same-side pairs at once). A new move (a gain-guided Kernighan–Lin flip,
-say) is an `optimaru::MoveOperator<…>` registered with `engine.addMoveOperator(...)`
+say) is an `optimaru::MoveOperator<…>` registered with `engine.add_move_operator(...)`
 on every engine `cpp/src/solver.cpp` builds: the single start, each parallel worker
 in `searchInParallel()` and the constraint-assembly overload. Under exact size
 bounds a move must keep the side sizes.

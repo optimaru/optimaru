@@ -6,8 +6,8 @@
 
 #include "ks/domain.hpp"
 #include "ks/score_calculator.hpp"
-#include "optimaru/api/score/calculator/constraint_assembly.hpp"
-#include "optimaru/api/score/calculator/decomposed_score_calculator.hpp"
+#include "optimaru/constraint_assembly.hpp"
+#include "optimaru/decomposed_objective.hpp"
 
 namespace ks
 {
@@ -16,7 +16,7 @@ namespace ks
 // Plugin-style constraint components
 // ---------------------------------------------------------------------------
 // The seven knapsack constraints, one small component each on the engine's
-// DecomposedScoreCalculator — the assembly path NEXT TO the monolithic
+// DecomposedObjective — the assembly path NEXT TO the monolithic
 // KnapsackIncrementalScoreCalculator, which stays the default fast path.
 //
 // Unit choice: the BASIC descriptor's units are the two VALUES — unit 0 holds
@@ -24,7 +24,7 @@ namespace ks
 // neither). Every constraint is a function of the selected set as a whole
 // (a capacity, a count per group, a pair of items), so none decomposes per
 // unit: all seven are GlobalConstraints. Each keeps its aggregate up to date
-// from onMemberChanged (supportsMemberChange) and listens to unit 1 only — an
+// from on_member_changed (supports_member_change) and listens to unit 1 only — an
 // item joining unit 1 became selected, one leaving it stopped being selected
 // — so a flip costs O(1) or O(references of the item).
 //
@@ -47,13 +47,13 @@ namespace ks
 // kDefaultWeight / kDefaultLevel passed to the base constructor; they are
 // assembly-time metadata, not part of the cost. Override them per instance
 // with the constructor's weight argument or the validated setters
-// (setWeight / setLevel / setExponent), or by name through
+// (set_weight / set_level / set_exponent), or by name through
 // ConstraintAssembly. The canonical problem carries no weights: the
 // monolithic calculators read the same kDefaultWeight constants, which is why
 // the default assembly scores bit-for-bit like them.
 //
 // Registry names are the struct names with a lower-case first letter
-// ("knapsackCapacityCost"); Python sees them through pythonName()
+// ("knapsackCapacityCost"); Python sees them through python_name()
 // ("knapsack_capacity_cost").
 //
 // Cost sign convention (see decomposed_score_calculator.hpp): positive =
@@ -63,7 +63,7 @@ namespace ks
 // Every component requires ScoreCalculator::prepare(problem) to have run
 // (both solve() overloads and the monolithic path call it).
 
-using DecomposedCalculator = optimaru::DecomposedScoreCalculator<KnapsackProblem>;
+using DecomposedCalculator = optimaru::DecomposedObjective<KnapsackProblem>;
 using ConstraintAssembly = optimaru::ConstraintAssembly<KnapsackProblem>;
 using KsGlobalConstraint = optimaru::GlobalConstraint<KnapsackProblem>;
 
@@ -82,12 +82,12 @@ inline void requirePrepared(const KnapsackProblem &problem)
 // Selection flags of every item off the calculator's units (unit 1 = the
 // selected items); undecided and unselected items are both 0.
 inline std::vector<char> selectedFlags(const KnapsackProblem &problem,
-                                       const std::vector<std::vector<int>> &membersPerUnit)
+                                       const std::vector<std::vector<int>> &members_per_unit)
 {
     std::vector<char> selected(problem.items.size(), 0);
-    if (membersPerUnit.size() > static_cast<std::size_t>(kSelected))
+    if (members_per_unit.size() > static_cast<std::size_t>(kSelected))
     {
-        for (int item : membersPerUnit[kSelected])
+        for (int item : members_per_unit[kSelected])
             selected[item] = 1;
     }
     return selected;
@@ -99,9 +99,9 @@ struct SelectionConstraint : KsGlobalConstraint
 {
     using KsGlobalConstraint::KsGlobalConstraint;
 
-    bool supportsMemberChange() const final { return true; }
+    bool supports_member_change() const final { return true; }
 
-    void onMemberChanged(const KnapsackProblem &problem,
+    void on_member_changed(const KnapsackProblem &problem,
                          int unit,
                          const std::vector<int> & /*members*/,
                          int item,
@@ -111,9 +111,9 @@ struct SelectionConstraint : KsGlobalConstraint
             onSelectionChanged(problem, item, joined);
     }
 
-    // Never called (supportsMemberChange): every change arrives as a
+    // Never called (supports_member_change): every change arrives as a
     // join/leave above.
-    void onUnitChanged(const KnapsackProblem & /*problem*/,
+    void on_unit_changed(const KnapsackProblem & /*problem*/,
                        int /*unit*/,
                        const std::vector<int> & /*members*/) final
     {

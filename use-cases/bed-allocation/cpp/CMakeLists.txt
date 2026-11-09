@@ -32,7 +32,7 @@ target_link_libraries(ba_test PRIVATE ba_core)
 target_compile_options(ba_test PRIVATE -Wall -Wextra)
 
 # Plugin-assembly path (ba/constraints.hpp): the same provider decomposed into
-# one component each on the engine's DecomposedScoreCalculator, checked
+# one component each on the engine's DecomposedObjective, checked
 # bit-for-bit against the monolithic calculators.
 add_executable(ba_plugin_test test/ba_plugin_test.cpp)
 target_link_libraries(ba_plugin_test PRIVATE ba_core)

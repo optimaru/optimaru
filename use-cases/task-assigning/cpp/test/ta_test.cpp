@@ -5,9 +5,9 @@
 //       fixture set inconsistent explicit shadow values, the expectation is
 //       re-derived with consistent chained start times — same formulas)
 //   (b) incremental score == full recompute across a long random walk driven
-//       through the engine's ScoreDirector protocol (before/mutate/after),
+//       through the engine's Editor protocol (before/mutate/after),
 //       including unassigned tasks
-//   (c) a small instance solved under EnvironmentMode::FULL_ASSERT
+//   (c) a small instance solved under ScoreChecks::ScoreChecks::Full
 //   (d) the demo instance solves to hard 0 with every task assigned
 #include <algorithm>
 #include <chrono>
@@ -25,7 +25,7 @@
 #include "ta/incremental_calculator.hpp"
 #include "ta/score_calculator.hpp"
 #include "ta/solver.hpp"
-#include "optimaru/api/score/director/score_director.hpp"
+#include "optimaru/editor.hpp"
 
 using namespace ta;
 
@@ -49,8 +49,8 @@ void checkScore(const std::string &label,
     std::printf("  [%s] %-44s got=%s expected=%s\n",
                 ok ? "PASS" : "FAIL",
                 label.c_str(),
-                actual.toString().c_str(),
-                expected.toString().c_str());
+                actual.str().c_str(),
+                expected.str().c_str());
     if (!ok)
         ++failures;
 }
@@ -128,7 +128,7 @@ void verifyConstraints()
         const int t2 = b.addTask(1, {"3"}, Priority::CRITICAL, 1);
         const int t3 = b.addTask(1, {"5"}, Priority::CRITICAL, 1);
         b.assign(e, {t1, t2, t3});
-        ScoreCalculator::calculateScore(b.solution);
+        ScoreCalculator::score(b.solution);
         check(b.solution.score.hard == -3,
               "requiredSkillCost penalizes 3 (got "
                   + std::to_string(-b.solution.score.hard) + ")");
@@ -142,7 +142,7 @@ void verifyConstraints()
         b.addTask(1);
         const int t3 = b.addTask(1);
         b.assign(e, {t3});
-        ScoreCalculator::calculateScore(b.solution);
+        ScoreCalculator::score(b.solution);
         check(b.solution.score.soft0 == -2,
               "unassignedTasksCost penalizes 2 (got "
                   + std::to_string(-b.solution.score.soft0) + ")");
@@ -157,7 +157,7 @@ void verifyConstraints()
         const int t1 = b.addTask(10, {}, Priority::CRITICAL, 1);
         b.addTask(20, {}, Priority::MINOR, 2);
         b.assign(e, {t1});
-        ScoreCalculator::calculateScore(b.solution);
+        ScoreCalculator::score(b.solution);
         check(b.solution.score.soft2 == -44,
               "criticalPriorityTaskEndTimeCost penalizes 44 (got "
                   + std::to_string(-b.solution.score.soft2) + ")");
@@ -170,7 +170,7 @@ void verifyConstraints()
         const int t1 = b.addTask(10, {}, Priority::MAJOR, 1);
         b.addTask(20, {}, Priority::MINOR, 2);
         b.assign(e, {t1});
-        ScoreCalculator::calculateScore(b.solution);
+        ScoreCalculator::score(b.solution);
         check(b.solution.score.soft2 == -22,
               "majorPriorityTaskEndTimeCost penalizes 22 (got "
                   + std::to_string(-b.solution.score.soft2) + ")");
@@ -183,7 +183,7 @@ void verifyConstraints()
         const int t1 = b.addTask(10, {}, Priority::MINOR, 1);
         b.addTask(20, {}, Priority::MAJOR, 2);
         b.assign(e, {t1});
-        ScoreCalculator::calculateScore(b.solution);
+        ScoreCalculator::score(b.solution);
         check(b.solution.score.soft2 == -11,
               "minorPriorityTaskEndTimeCost penalizes 11 (got "
                   + std::to_string(-b.solution.score.soft2) + ")");
@@ -204,7 +204,7 @@ void verifyConstraints()
         const int t3 = b.addTask(1, {}, Priority::CRITICAL, 1);
         b.assign(e1, {t1, t2});
         b.assign(e2, {t3});
-        ScoreCalculator::calculateScore(b.solution);
+        ScoreCalculator::score(b.solution);
         check(b.solution.score.soft1 == -3725,
               "squaredMakespanCost penalizes 61^2 + 2^2 = 3725 (got "
                   + std::to_string(-b.solution.score.soft1) + ")");
@@ -222,7 +222,7 @@ void verifyConstraints()
         const int t1 = b.addTask(10, {}, Priority::MINOR, 0, 0);   // LOW x3
         const int t2 = b.addTask(10, {}, Priority::MINOR, 0, c1);  // NONE x4
         b.assign(e, {t1, t2});
-        ScoreCalculator::calculateScore(b.solution);
+        ScoreCalculator::score(b.solution);
         // t1: start 0, end 30. t2: start 30, end 70.
         check(b.solution.tasks[t1].startTime == 0
                   && b.solution.tasks[t2].startTime == 30
@@ -241,11 +241,11 @@ void verifyConstraints()
         const int t2 = b.addTask(20, {}, Priority::MINOR, 2);
         b.addTask(5, {}, Priority::MAJOR, 0);
         b.assign(e, {t1, t2});
-        const Score score = ScoreCalculator::calculateScore(b.solution);
+        const Score score = ScoreCalculator::score(b.solution);
         checkScore("all levels combined", score, {-1, -1, -961, -75});
         check(fromEngineScore(toEngineScore(score)) == score,
               "fromEngineScore(toEngineScore(s)) == s");
-        check(!score.isFeasible() && Score{0, -5, -100, -10}.isFeasible(),
+        check(!score.feasible() && Score{0, -5, -100, -10}.feasible(),
               "isFeasible depends on the hard level only");
         // Level priority survives the engine mapping.
         check(toEngineScore(Score{0, -1, 0, 0})
@@ -302,7 +302,7 @@ buildRandomInstance(int taskCount, int employeeCount, unsigned seed)
 
 // -------------------------------------------------------------------------
 // (b) Incremental == full recompute across a random walk of LIST mutations
-// through the ScoreDirector protocol.
+// through the Editor protocol.
 // -------------------------------------------------------------------------
 void verifyIncremental()
 {
@@ -313,7 +313,7 @@ void verifyIncremental()
     const int employeeCount = static_cast<int>(solution.employees.size());
 
     TaskAssigningIncrementalScoreCalculator calculator;
-    optimaru::ScoreDirector<TaskAssigningSolution> director(solution,
+    optimaru::Editor<TaskAssigningSolution> editor(solution,
                                                             calculator);
 
     std::mt19937_64 rng(2024);
@@ -351,7 +351,7 @@ void verifyIncremental()
             const int list = static_cast<int>(rng() % employeeCount);
             const int position = static_cast<int>(
                 rng() % (solution.employees[list].tasks.size() + 1));
-            director.insertListElement(list, position, task);
+            editor.insert(list, position, task);
             taskList[task] = list;
         }
         else if (dice < 0.55)
@@ -360,7 +360,7 @@ void verifyIncremental()
             const int task = static_cast<int>(rng() % taskCount);
             if (taskList[task] < 0)
                 continue;
-            director.removeListElement(taskList[task],
+            editor.remove(taskList[task],
                                        indexWithin(taskList[task], task));
             taskList[task] = -1;
             unassigned.push_back(task);
@@ -371,12 +371,12 @@ void verifyIncremental()
             const int task = static_cast<int>(rng() % taskCount);
             if (taskList[task] < 0)
                 continue;
-            director.removeListElement(taskList[task],
+            editor.remove(taskList[task],
                                        indexWithin(taskList[task], task));
             const int list = static_cast<int>(rng() % employeeCount);
             const int position = static_cast<int>(
                 rng() % (solution.employees[list].tasks.size() + 1));
-            director.insertListElement(list, position, task);
+            editor.insert(list, position, task);
             taskList[task] = list;
         }
         else
@@ -391,13 +391,13 @@ void verifyIncremental()
             int last = static_cast<int>(rng() % size);
             if (first > last)
                 std::swap(first, last);
-            director.reverseListSegment(list, first, last);
+            editor.reverse(list, first, last);
         }
 
-        const optimaru::HardSoftScore incremental = director.calculateScore();
+        const optimaru::Score incremental = editor.score();
         // Full recompute on the same lists (only rewrites shadow fields the
         // incremental calculator never reads).
-        const optimaru::HardSoftScore full
+        const optimaru::Score full
             = ScoreCalculator::calculateEngineScore(solution);
         if (full.hard != incremental.hard
             || std::fabs(full.soft - incremental.soft) > 1e-9)
@@ -406,8 +406,8 @@ void verifyIncremental()
             {
                 std::printf("  MISMATCH @step %d: incremental=%s full=%s\n",
                             step,
-                            incremental.toString().c_str(),
-                            full.toString().c_str());
+                            incremental.str().c_str(),
+                            full.str().c_str());
             }
         }
     }
@@ -418,9 +418,9 @@ void verifyIncremental()
 }
 
 // -------------------------------------------------------------------------
-// (c) FULL_ASSERT solve: the engine cross-checks the incremental score
+// (c) ScoreChecks::Full solve: the engine cross-checks the incremental score
 // against a full reset + recompute after every single move and throws
-// ScoreCorruptionError on any divergence.
+// ScoreMismatchError on any divergence.
 // -------------------------------------------------------------------------
 void verifyFullAssertSolve()
 {
@@ -429,10 +429,10 @@ void verifyFullAssertSolve()
         = buildRandomInstance(/*taskCount*/ 20, /*employeeCount*/ 5, 11);
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(2);
-    config.randomSeed = 3;
-    config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
-    // Kick early so the LNS ruin/recreate path also runs under FULL_ASSERT.
+    config.time_limit = std::chrono::seconds(2);
+    config.seed = 3;
+    config.score_checks = optimaru::ScoreChecks::Full;
+    // Kick early so the LNS ruin/recreate path also runs under ScoreChecks::Full.
     config.ruinRecreateUnimprovedStepTrigger = 200;
     config.ruinRecreatePolishSteps = 100;
 
@@ -444,7 +444,7 @@ void verifyFullAssertSolve()
         solver.solve(solution);
         finalScore = solution.score;
     }
-    catch (const optimaru::ScoreCorruptionError &e)
+    catch (const optimaru::ScoreMismatchError &e)
     {
         corrupted = true;
         std::printf("  ScoreCorruptionError: %s\n", e.what());
@@ -452,7 +452,7 @@ void verifyFullAssertSolve()
     check(!corrupted, "2s FULL_ASSERT solve without score corruption");
     if (!corrupted)
     {
-        const Score recomputed = ScoreCalculator::calculateScore(solution);
+        const Score recomputed = ScoreCalculator::score(solution);
         check(finalScore == recomputed,
               "solver-reported score == full recompute");
     }
@@ -469,8 +469,8 @@ void verifyFeasibleSolve()
     TaskAssigningSolution solution = demo::generateDemoData();
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(2);
-    config.randomSeed = 5;
+    config.time_limit = std::chrono::seconds(2);
+    config.seed = 5;
     Solver solver(config);
     solver.solve(solution);
 
@@ -521,17 +521,17 @@ void verifyFeasibleSolve()
 void verifyStopAtFirstFeasibleLimit()
 {
     std::printf("== stop_at_first_feasible's limit ==\n");
-    const optimaru::HardSoftScore limit
+    const optimaru::Score limit
         = toEngineScoreLimit(Score{0, 0, kNoLevelFloor, kNoLevelFloor});
     check(limit.hard == 0 && std::isinf(limit.soft) && limit.soft < 0.0,
           "(0, 0, INT64_MIN, INT64_MIN) -> engine limit (0, -inf)");
-    check(optimaru::HardSoftScore{0, -1e30} >= limit
+    check(optimaru::Score{0, -1e30} >= limit
               && toEngineScore(Score{0, 0, -(1LL << 40), -(1LL << 62)}) >= limit,
           "every skill met and every task assigned, any soft: reaches it");
     check(!(toEngineScore(Score{0, -1, 0, 0}) >= limit)
               && !(toEngineScore(Score{-1, 0, 0, 0}) >= limit),
           "an unassigned task or a missing skill does not");
-    const optimaru::HardSoftScore lax
+    const optimaru::Score lax
         = toEngineScoreLimit(Score{0, -2, kNoLevelFloor, 0});
     check(lax.hard == -2 && lax.soft == -std::numeric_limits<double>::infinity(),
           "soft0 keeps its floor (-2 unassigned) while soft1 has none");
