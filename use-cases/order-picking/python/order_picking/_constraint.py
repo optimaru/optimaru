@@ -53,7 +53,8 @@ Every spec takes the same five knobs, and only those:
                hard), because hard 0 must mean no violation.
 
 With ``offset=0`` both modes are the plain ``shape(x, exponent)``, so a spec
-that leaves the two new knobs alone scores exactly as before. Each unit (or a
+that leaves ``offset`` and ``clip`` at their defaults scores the plain
+``weight * shape(x, exponent)``. Each unit (or a
 global's total) then contributes ``weight * shape(x, exponent, offset,
 clip)``. The formula applies PER UNIT (per vehicle, per slot, ...), on every
 unit the constraint evaluates, raw 0 included; it is not one formula over the

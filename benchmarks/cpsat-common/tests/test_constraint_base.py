@@ -873,14 +873,14 @@ def test_duck_typed_picks_may_leave_offset_and_clip_unset():
     with pytest.raises(ValueError, match="cannot be hard"):
         score_costs(_tasks_only(costs_a()), [Literal()])
 
-    class OldPick:  # still carries the removed `hard` knob instead of `level`
+    class PickWithoutLevel:  # carries no `level` attribute
         name = "task_cost_cost"
         weight = None
         hard = False
         exponent = 1.0
 
     with pytest.raises(AttributeError, match="level"):
-        score_costs(_tasks_only(costs_a()), [OldPick()])
+        score_costs(_tasks_only(costs_a()), [PickWithoutLevel()])
 
 
 def test_shape_preserves_the_sign():
@@ -913,8 +913,9 @@ def test_a_spec_survives_copies_pickles_and_replace():
     assert pickle.loads(pickle.dumps(pick)) == pick
     assert copy.copy(pick) == pick and copy.deepcopy(pick) == pick
     assert dataclasses.replace(pick, weight=3.0) == DayPatternCost(3.0, "hard", 1.5, offset=1.0, pattern="A,OFF")
-    with pytest.raises(TypeError, match="unexpected keyword argument 'colour'"):
-        OverloadCost(colour="red")
+    for unknown in ({"colour": "red"}, {"hard": True}):
+        with pytest.raises(TypeError, match=f"unexpected keyword argument '{next(iter(unknown))}'"):
+            OverloadCost(**unknown)
     with pytest.raises(FrozenInstanceError):
         pick.weight = 1.0
 
