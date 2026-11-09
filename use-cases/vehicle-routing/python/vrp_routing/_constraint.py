@@ -336,7 +336,10 @@ def _default_level(entry: Mapping[str, Any]) -> str:
     when the costs were computed for the default selection or for picks that
     kept this constraint's level.
     """
-    return entry.get("default_level") or entry["level"]
+    level = entry.get("default_level") or entry.get("level")
+    if not level:
+        raise ValueError(f"constraint entry {entry.get('name', '?')!r} needs 'default_level' or 'level'")
+    return level
 
 
 def _default_weight(entry: Mapping[str, Any]) -> float:

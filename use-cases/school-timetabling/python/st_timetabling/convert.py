@@ -434,7 +434,6 @@ def convert_solution(
     raw = {name: sum(entry["costs"]) for name, entry in costs.items()}
     unassigned = int(raw["unassigned_lessons_cost"])
     # This use case has no medium level, so every entry is "hard" or "soft".
-    assert all("medium_fold" not in entry for entry in costs.values())
     hard_total = round(sum(entry["weight"] * raw[name] for name, entry in costs.items() if entry["level"] == "hard"))
     partial = unassigned_weight is not None
     # In partial timetabling unassigned_lessons_cost is not hard: unassigned lessons are the

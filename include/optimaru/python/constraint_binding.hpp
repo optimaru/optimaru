@@ -69,7 +69,7 @@ namespace py = pybind11;
 // DecomposedCalculator.add()), where an unread keyword would otherwise be
 // ignored: the level is the `level` knob.
 inline constexpr const char* kHardKeyword =
-        "unexpected keyword argument 'hard'; use level='hard' or level='soft' (level=None keeps "
+        "add() got an unexpected keyword argument 'hard'; use level='hard' or level='soft' (level=None keeps "
         "the default)";
 
 // Refuses a `hard` keyword with kHardKeyword; call it first on the **kwargs
