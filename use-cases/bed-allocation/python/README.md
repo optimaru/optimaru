@@ -93,7 +93,7 @@ level in effect. Any constraint may take any of the three levels, so
 `PreferredMaxRoomCapacityCost(level="medium")` charges one medium unit per night. A
 constraint may be picked several times; each pick is its own instance with
 its own knobs, its level included, the instances add up, and
-`constraint_costs(plan, picks)` (on the engine `BedPlan`) keys the k-th pick `<name>#<k>`.
+`constraint_costs(plan.to_core(), picks)` (it takes the engine `BedPlan`) keys the k-th pick `<name>#<k>`.
 
 `unassigned_stays_cost` defaults to weight 1 in medium units, and `level="soft"` demotes it
 to soft in the engine as well. The package re-exports `ConstraintInfo` /
