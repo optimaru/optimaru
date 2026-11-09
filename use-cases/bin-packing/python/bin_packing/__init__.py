@@ -1,7 +1,7 @@
 """Bin packing — Python wrapper of the C++ solver on the optimaru engine.
 
 Uniform-capacity one-dimensional bin packing with optional item colours and
-conflict pairs: one BASIC planning variable (`Item.bin`, a 0-based bin index,
+conflict pairs: one assignment-shape planning variable (`Item.bin`, a 0-based bin index,
 -1 = unassigned) puts every item in one of n identical bins.
 
 Score, at the default weights (1 each):

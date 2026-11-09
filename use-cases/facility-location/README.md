@@ -5,9 +5,9 @@ The Timefold Quickstarts `facility-location` example model
 (Java/Quarkus) ported, with modifications, onto this repository's C++ engine (`include/optimaru/`).
 The classic FLP: pick one facility for every consumer.
 
-## Domain (BASIC variable)
+## Domain (assignment shape)
 
-- `Consumer.facility` — the only planning variable. An index into `facilities`,
+- `Consumer.facility` — the only decision variable. An index into `facilities`,
   `-1` = unassigned (Java's `@PlanningVariable Facility facility` null).
 - `Facility` — a shadow entity with `@InverseRelationShadowVariable(consumers)` in Java,
   but here the score calculator maintains the aggregates (assigned demand, consumer
@@ -148,7 +148,7 @@ Consumers are matched by id. A consumer the solution leaves out is placed by the
 ## Extending
 
 Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-use-case).
-The planning variable is **BASIC**; the domain solver that configures the
+The solution has the **assignment** shape; the domain solver that configures the
 engine is `cpp/include/fl/solver.hpp` + `cpp/src/solver.cpp`.
 
 **Adding a move.** The engine already mixes change / swap moves

@@ -1,6 +1,6 @@
 """Facility location — Python wrapper of the C++ solver on the optimaru engine.
 
-A port of the facility-location example model: one BASIC planning variable
+A port of the facility-location example model: one assignment-shape planning variable
 (`Consumer.facility`, a facility index, -1 = unassigned) picks one facility
 per consumer.
 

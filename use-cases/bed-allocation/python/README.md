@@ -2,7 +2,7 @@
 
 The `bed-allocation` example model (Apache-2.0; see the repository NOTICE)
 (hospital bed allocation, PAS): the pybind11 package of the `../cpp` implementation ported
-onto the generic C++ engine in `include/optimaru/`. A BASIC-variable domain that picks one bed (Bed) per stay (Stay).
+onto the generic C++ engine in `include/optimaru/`. An assignment-shaped domain that picks one bed (Bed) per stay (Stay).
 
 ## Install / test
 
@@ -27,9 +27,9 @@ print([s.bed_id for s in result.stays][:5])
 Passing a hand-built `_core.BedPlan` solves it in place. For JSON serialization use
 `bed_allocation.models.BedPlanModel` (pydantic v2).
 
-## Domain and planning variables
+## Domain and decision variables
 
-`Stay.bed` is the only planning variable (engine BASIC encoding):
+`Stay.bed` is the only decision variable (the engine's assignment shape):
 
 | Value | Meaning |
 |---|---|

@@ -3,7 +3,7 @@
 The compiled module wraps the C++ domain in `use-cases/flight-crew-scheduling/cpp`,
 which imports the generic engine in `include/optimaru`.
 
-Domain: a BASIC-variable problem picking a crew member (employee index) for every crew
+Domain: a assignment-shaped problem picking a crew member (employee index) for every crew
 seat of a flight (FlightAssignment). Airport/employee/flight references are all list
 indices (the pydantic mirror `flight_crew.models` uses code/id string references).
 

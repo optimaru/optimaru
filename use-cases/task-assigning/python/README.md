@@ -2,7 +2,7 @@
 
 The `task-assigning` example model (Apache-2.0; see the repository NOTICE)
 (skill-based task assignment): the pybind11 package of the `../cpp` implementation ported onto
-the generic C++ engine in `include/optimaru/`. A **LIST variable** domain that fills an
+the generic C++ engine in `include/optimaru/`. A **sequence-shaped** domain that fills an
 ordered task list per employee (Employee) (Java's `@PlanningListVariable(allowsUnassignedValues = true)`).
 
 ## Install / test
@@ -29,9 +29,9 @@ for employee in result.employees:
 Passing a hand-built `_core.TaskAssigningSolution` solves it in place.
 For JSON serialization use `task_assigning.models.TaskAssigningSolutionModel` (pydantic v2).
 
-## Domain and planning variables
+## Domain and decision variables
 
-The planning variable is each `Employee.tasks` — the **ordered list** of task indices
+The decision variable is each `Employee.tasks` — the **ordered list** of task indices
 (ids in the model) the employee performs back to back. A task in no list is unassigned.
 Shadow values are derived by the same rules as the Java original's shadow variables:
 

@@ -123,7 +123,7 @@ component). Python reads them from `<package>.constraint_info()`, one
 ├── cpp/
 │   ├── CMakeLists.txt
 │   ├── include/<ns>/
-│   │   ├── domain.hpp                 problem facts, planning variable, Score,
+│   │   ├── domain.hpp                 problem facts, decision variable, Score,
 │   │   │                              SolutionTraits specialization
 │   │   ├── score_calculator.hpp       full (reference) score
 │   │   ├── incremental_calculator.hpp tuned incremental score (default path)
@@ -191,8 +191,8 @@ one); `step_count_limit = 0` means no limit, not zero steps.
 ### Adding a move
 
 The engine already mixes the generic moves for the variable kind: change /
-swap for BASIC variables; relocate / swap / 2-opt / Or-opt / 2-opt\* tail swap
-for LIST variables. Their weights are `Solver::Config` fields (exposed to
+swap for the assignment shape; relocate / swap / 2-opt / Or-opt / 2-opt\* tail swap
+for the sequence shape. Their weights are `Solver::Config` fields (exposed to
 Python as `*_move_weight`). A domain move is a
 `optimaru::MoveOperator<Solution>`
 ([`search/operators.hpp`](../include/optimaru/search/operators.hpp)):
@@ -201,11 +201,11 @@ Python as `*_move_weight`). A domain move is a
 class MyMove final : public optimaru::MoveOperator<MySolution> {
 public:
     const char* name() const override { return "myMove"; }
-    // Do ONE random move through ctx.director (never touch the solution
+    // Do ONE random move through ctx.editor (never touch the solution
     // directly), remember how to undo it, report the touched entity ids.
     bool apply(optimaru::OperatorContext<MySolution>& ctx, std::mt19937_64& rng,
                std::vector<int>& touched) override;
-    void undoLast(optimaru::OperatorContext<MySolution>& ctx) override;
+    void undo_last(optimaru::OperatorContext<MySolution>& ctx) override;
 };
 ```
 
@@ -227,7 +227,7 @@ move: it fails fast if the move leaves the incremental score stale.
 ### Adding or changing the construction heuristic
 
 The engine's construction heuristic assigns every still-unassigned entity
-(LIST: element) by cheapest insertion. Two levers:
+(sequence shape: element) by cheapest insertion. Two levers:
 
 1. **Order** — set `ConstructionSettings::difficulty` in the
    use case's engine config; entities are then placed in decreasing

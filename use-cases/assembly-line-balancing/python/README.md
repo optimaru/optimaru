@@ -1,7 +1,7 @@
 # assembly_line_balancing (Python)
 
 The pybind11 package of the assembly-line-balancing use case (`../cpp`). Puts every
-task on one station of a paced line — `Task.station` is the only planning variable
+task on one station of a paced line — `Task.station` is the only decision variable
 (station index, -1 = unassigned).
 
 Score, at the default weights:

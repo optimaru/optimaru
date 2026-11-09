@@ -11,7 +11,7 @@ maintenance. A C++ domain on top of the generic engine in `include/optimaru/` (l
 
 The Java original's `Job` has two planning variables — `crew` and `startDate`
 (a TimeGrain pattern excluding weekends) — plus the shadow variable `endDate`.
-The engine supports one BASIC int variable per entity, so it follows the
+The engine supports one assignment-shape int value per entity, so it follows the
 composite encoding pattern of school-timetabling:
 
 ```
@@ -163,7 +163,7 @@ Jobs are matched by id. A job the solution leaves out is placed by the construct
 ## Extending
 
 Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-use-case).
-The planning variable is **BASIC**; the domain solver that configures the
+The solution has the **assignment** shape; the domain solver that configures the
 engine is `cpp/include/mnt/solver.hpp` + `cpp/src/solver.cpp`.
 
 **Adding a move.** The engine already mixes change / swap moves

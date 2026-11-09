@@ -5,9 +5,9 @@ in the [Hexaly BPP template](https://www.hexaly.com/templates/bin-packing-proble
 with optional item colours and conflict pairs, on this repository's C++ engine
 (`include/optimaru/`).
 
-## Domain (BASIC variable)
+## Domain (assignment shape)
 
-- `Item.bin` — the only planning variable: a 0-based index into n identical bins
+- `Item.bin` — the only decision variable: a 0-based index into n identical bins
   (n = the item count, which always suffices), `-1` = unassigned. Every solve returns
   every item assigned; `-1` appears only in unsolved input.
 - `Item.weight` (> 0) and the problem's `bin_capacity` (> 0); `Item.color` (optional);
@@ -255,7 +255,7 @@ print(bp.solve(warm, time_limit_seconds=1.0, random_seed=42), warm.bin_loads())
 ## Extending
 
 Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-use-case).
-The planning variable is **BASIC**; the domain solver that configures the
+The solution has the **assignment** shape; the domain solver that configures the
 engine is `cpp/include/bp/solver.hpp` + `cpp/src/solver.cpp`.
 
 **Adding a move.** The engine already mixes change / swap moves (weights in

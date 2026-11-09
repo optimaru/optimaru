@@ -83,7 +83,7 @@ For finer control build `fab.SolverConfig()` and pass `config=`:
 | `late_acceptance_size` | 0 (= clamp(16 x rows, 400, 3200)) | for `LATE_ACCEPTANCE` |
 | `machine_move_probability` | 0.55 | share of change moves that switch a machine (else a priority shift of 1..8) |
 | `priority_swap_moves`, `custom_move_probability` | True, 0.45 | the priority swap of two operations, and its gate |
-| `change_move_weight`, `swap_move_weight` | 1, 0 | the engine's BASIC move mix |
+| `change_move_weight`, `swap_move_weight` | 1, 0 | the engine's assignment-shape move mix |
 | `ruin_recreate`, `ruin_recreate_*` | off | the engine's ALNS (a recreate decodes once per candidate value) |
 | `best_score_limit`, `full_assert`, `on_new_best` | | stop early, verify every move, `on_new_best(step, score)` |
 

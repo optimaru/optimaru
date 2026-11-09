@@ -3,7 +3,7 @@
 The compiled module wraps the C++ domain in `use-cases/task-assigning/cpp`,
 which imports the generic engine in `include/optimaru`.
 
-The planning variable is each `Employee.tasks` (LIST): the ordered list of task
+The planning variable is each `Employee.tasks` (sequence shape): the ordered list of task
 indices the employee performs back to back. A task in no list is unassigned
 (the Java original's `@PlanningListVariable(allowsUnassignedValues = true)`).
 The shadow values `Task.employee` (-1 == unassigned) / `Task.start_time` (-1 == null)
@@ -80,7 +80,7 @@ class TaskType:
     required_skills: list[str]
 
 class Task:
-    """Planning entity (LIST element): one task. task_type/customer are
+    """Planning entity (sequence element): one task. task_type/customer are
     indices into the solution lists."""
     def __init__(
         self,

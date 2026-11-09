@@ -3,7 +3,7 @@
 The compiled module wraps the C++ domain in `use-cases/project-job-scheduling/cpp`,
 which imports the generic engine in `include/optimaru`.
 
-The only planning variable is `Allocation.mode_delay` (BASIC int) — a composite
+The only planning variable is `Allocation.mode_delay` (assignment-shape int) — a composite
 encoding of the Java quickstart's two variables (executionMode, delay∈[0, delay_range_size))::
 
     -1                                  uninitialized (no resource use;
@@ -158,7 +158,7 @@ class ProjectJobSchedule:
     def max_mode_count(self) -> int: ...
     def allocation_count(self) -> int: ...
     def value_count(self) -> int:
-        """delay_range_size * max_mode_count (size of the BASIC value range)."""
+        """delay_range_size * max_mode_count (size of the assignment-shape value range)."""
     def encode_value(self, delay: int, mode_slot: int) -> int:
         """delay * max_mode_count + mode_slot. A job's mode index is always a
         valid slot."""

@@ -1,7 +1,7 @@
 """Type stubs for `bin_packing._core` — the bin-packing C++ solver.
 
 The problem is the planning solution: each item's `bin` (a 0-based bin index
-into the n identical bins, -1 == unassigned) is the single BASIC planning
+into the n identical bins, -1 == unassigned) is the single assignment-shape planning
 variable.
 
 Score (HardSoftScore, lexicographic), at the default weights (1 each): hard =
@@ -106,7 +106,7 @@ class SolverConfig:
     """Probability that a change move draws the item's new bin as the bin of a
     random other item (a bin in use) instead of uniformly over all n bins."""
     descent_weight: float
-    """BASIC best-improvement descent strategy weight. 0 = off."""
+    """Assignment-shape best-improvement descent strategy weight. 0 = off."""
     custom_move_probability: float
     """Gate on how often a step may draw one of the macro moves (EmptyBinMove,
     RepackMove); 1 = unrestricted."""

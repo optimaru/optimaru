@@ -3,7 +3,7 @@
 The compiled module wraps the C++ domain in `use-cases/bed-allocation/cpp`,
 which imports the generic engine in `include/optimaru`.
 
-The only planning variable is `Stay.bed` (BASIC int)::
+The only planning variable is `Stay.bed` (assignment-shape int)::
 
     -1                            uninitialized (no score contribution)
     0..bed_count()-1              real bed index

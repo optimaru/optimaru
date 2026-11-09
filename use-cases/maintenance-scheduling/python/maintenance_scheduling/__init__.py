@@ -2,7 +2,7 @@
 
 A port of the `maintenance-scheduling` example model: assigns maintenance jobs (Job)
 a crew and a start date (TimeGrain excluding weekends). The Java domain's two planning
-variables (crew, startDate) are composite-encoded into one engine BASIC variable::
+variables (crew, startDate) are composite-encoded into one engine assignment-shape variable::
 
     crew_date = start_date_index * crew_count + crew_index   # -1 == unassigned
 

@@ -3,7 +3,7 @@
 The `conference-scheduling` example model (Apache-2.0; see the repository NOTICE)
 C++ port (`../cpp`, namespace `cs`) for use from Python.
 Assigns every talk (`Talk`) a (timeslot, room) — `Talk.slot_room` is the
-planning variable (-1 = unassigned; the value is the composite encoding
+decision variable (-1 = unassigned; the value is the composite encoding
 `timeslot_index * room_count + room_index`, the same pattern as school-timetabling).
 
 ## Install / test
@@ -114,7 +114,7 @@ gone (`hard=` raises `TypeError`): `level` replaces it (`Level.HARD` / `Level.SO
 ### Value range replacement (the only semantic difference)
 
 Java restricts a Talk's value range to TalkType-compatible timeslots/rooms with
-`@ValueRangeProvider`. This engine's BASIC variable is one global (timeslot × room)
+`@ValueRangeProvider`. This engine's assignment variable is one global (timeslot × room)
 grid, so the port gets the same effect with the synthetic hard constraint
 `talk_type_incompatibility_cost` (100k × max(min,1), per incompatible slot/room) — it never fires
 on a solution that is feasible in Java, and the search is biased toward compatible

@@ -1,6 +1,6 @@
 """Flight crew scheduling — Python wrapper of the C++ solver on the optimaru engine.
 
-A port of the `flight-crew-scheduling` example model: a BASIC-variable problem
+A port of the `flight-crew-scheduling` example model: a assignment-shaped problem
 that picks a crew member (employee) for every crew seat of a flight (FlightAssignment).
 
 Constraints (Score), at the default weights (the Java ConstraintProvider's

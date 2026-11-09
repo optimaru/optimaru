@@ -72,16 +72,16 @@ config into a `optimaru::SolverConfig`. The engine then does:
    the best candidate through the same acceptor (late acceptance by default).
    It is enabled by `granularDescent` and controlled by
    `granularDescentMaxSegment`, `granularDescentCandidateRoutes`, and
-   `descentWeight`.
-   An ejection chain (`ejectionChainWeight`) covers what single moves
+   `descent_weight`.
+   An ejection chain (`ejection_chain_weight`) covers what single moves
    cannot reach on a tightly loaded fleet: it inserts an unassigned visit (or
    takes the best-soft relocation that breaks capacity), repairs the breach
    with strictly hard-improving relocations and swaps, and lets the acceptor
    judge the whole chain as one move.
-   An iterated local search (`iteratedLocalSearchWeight`) is the main engine
-   on large instances: ruin a few visits (`iteratedLocalSearchMinRuin` ..
+   An iterated local search (`iterated_local_search_weight`) is the main engine
+   on large instances: ruin a few visits (`iterated_local_search_min_ruin` ..
    `MaxRuin`), repair them, then descend with relocate / swap / 2-opt /
-   2-opt\* / CROSS (and Or-opt up to `iteratedLocalSearchMaxSegment`) around
+   2-opt\* / CROSS (and Or-opt up to `iterated_local_search_max_segment`) around
    every touched visit's nearby neighbours until the routes are locally
    optimal, and let the acceptor judge the local optimum. All of these
    strategies score candidates through the calculator's move previews
@@ -95,7 +95,7 @@ config into a `optimaru::SolverConfig`. The engine then does:
    on any constraint assembly.
 3. **Adaptive ruin & recreate (ALNS)** — destroy-and-repair runs as an
    acceptor-judged move (`ruinRecreateAsMoveWeight`). The unconditional
-   stagnation kick is available (`ruinRecreate = true`) but off by default:
+   stagnation kick is available (`ruin_recreate = true`) but off by default:
    on a tightly loaded fleet the kicked solution is one the search never
    recovers from, and the best stops moving (see `Solver::Config`).
 
@@ -104,12 +104,12 @@ four operator-selection schemes (roulette wheel, segmented roulette wheel,
 α-UCB, random), configurable acceptance criteria, and the ruin operators that
 matter on routing problems — SISR substring removal and whole-route removal
 alongside random / related / worst. Everything is on `Solver::Config`;
-`ruinRecreate = true` turns the stagnation kick on (off by default, see above).
+`ruin_recreate = true` turns the stagnation kick on (off by default, see above).
 
 ### Two design points worth knowing
 
 **The unassigned pool.** The quickstart sets `allowsUnassignedValues = true`,
-but the engine's LIST kind requires every element to live in exactly one list.
+but the engine's sequence-shape requires every element to live in exactly one list.
 So `VehicleRoutePlan` carries one extra virtual list at index
 `vehicles.size()` holding the unassigned visits. That is what makes assigning
 and unassigning ordinary relocate moves — with genuinely list-less elements the

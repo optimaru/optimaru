@@ -2,7 +2,7 @@
 solver.
 
 The problem is the planning solution: each consumer's `facility` (an index
-into `problem.facilities`, -1 == unassigned) is the single BASIC planning
+into `problem.facilities`, -1 == unassigned) is the single assignment-shape planning
 variable.
 
 Score (HardSoftScore, lexicographic), at the default weights: hard =
@@ -119,7 +119,7 @@ class SolverConfig:
     its value_recommender_keep nearest facilities instead of uniformly."""
     value_recommender_keep: int
     descent_weight: float
-    """BASIC best-improvement descent strategy: probability a step runs a
+    """Assignment-shape best-improvement descent strategy: probability a step runs a
     full nearby-pair descent (~2 * facility count evaluations per sweep)
     instead of one sampled move. 0 = off."""
     custom_move_probability: float

@@ -3,7 +3,7 @@
 The `sports-league-scheduling` example model (Apache-2.0; see the repository NOTICE)
 C++ port (`../cpp`, namespace `sls`) for use from Python.
 Assigns a round (`Round`) to every match (`Match`) of the league — `Match.round`
-is the planning variable (-1 = unassigned; the value is a position in the `rounds` list).
+is the decision variable (-1 = unassigned; the value is a position in the `rounds` list).
 
 ## Install / test
 

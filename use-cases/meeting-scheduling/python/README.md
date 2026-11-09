@@ -5,7 +5,7 @@ C++ port (`../cpp`, generic engine in `include/optimaru`) with pybind11
 bindings on top.
 
 Assigns each meeting a starting time grain (15-minute units) and a room. The Java
-entity's two planning variables (`startingTimeGrain`, `room`) become one BASIC variable
+entity's two planning variables (`startingTimeGrain`, `room`) become one assignment variable
 via the composite encoding `grain_room = time_grain_pos * room_count + room_index`
 (-1 == unassigned), and a meeting occupies `duration_in_grains` consecutive grains from
 its start — every overlap constraint is computed over that whole span.

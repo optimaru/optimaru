@@ -2,7 +2,7 @@
 C++ solver.
 
 The problem is the planning solution: each task's `station` (a station index,
--1 == unassigned) is the single BASIC planning variable. Stations are not
+-1 == unassigned) is the single assignment-shape planning variable. Stations are not
 bounded above by the facts; a solve freezes the value range at
 max(task count, 1 + max station) after its construction (`station_count`).
 
@@ -143,7 +143,7 @@ class SolverConfig:
     """Probability that a change move draws the task's new station from its current
     precedence / domain window instead of uniformly over all stations (0.5)."""
     descent_weight: float
-    """BASIC best-improvement descent strategy weight. 0 = off."""
+    """Assignment-shape best-improvement descent strategy weight. 0 = off."""
     custom_move_probability: float
     """Gate on how often a step may draw CloseStationMove; 1 = unrestricted."""
     close_station_moves: bool

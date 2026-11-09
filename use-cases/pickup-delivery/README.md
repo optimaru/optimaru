@@ -322,7 +322,7 @@ A vehicle's `pinned_stops` stay as the request has them: its route in the soluti
 ## Extending
 
 Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-use-case).
-The planning variable is **LIST**; the domain solver that configures the
+The solution has the **sequence** shape; the domain solver that configures the
 engine is `cpp/include/pdp/solver.hpp` + `cpp/src/solver.cpp`.
 
 **Adding a move.** The engine already mixes relocate / swap / 2-opt / Or-opt / 2-opt\* tail swap moves

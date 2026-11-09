@@ -28,7 +28,7 @@ The engine score is HardSoftScore(hard int, soft float), so medium is folded int
 soft: ``soft = -(medium penalty * MEDIUM_SCALE + raw soft penalty)``
 (MEDIUM_SCALE == 1e6; medium always dominates soft).
 
-The Java entity's two planning variables (startingTimeGrain, room) become one BASIC
+The Java entity's two planning variables (startingTimeGrain, room) become one assignment-shape
 variable via the composite encoding ``grain_room = time_grain_pos * room_count + room_index``
 (-1 == unassigned). A meeting occupies duration_in_grains consecutive grain indices
 from its start grain, and every overlap constraint is computed over that whole span.

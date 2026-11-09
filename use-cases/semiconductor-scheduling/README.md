@@ -17,7 +17,7 @@ the [IBM CP scheduling example library](https://www.ibm.com/docs/en/icos/22.2.0?
 and [Gurobi's modeling examples](https://github.com/Gurobi/modeling-examples).
 The implementation is original and does not depend on a commercial runtime.
 
-## Domain (BASIC variable, decoded schedule)
+## Domain (assignment shape, decoded schedule)
 
 - One **operation row** per (lot, route step), lot order then route order. Its planning
   value folds the two decisions of the search into one int:
@@ -257,7 +257,7 @@ relative order, but its start times are recomputed.
 ## Extending
 
 Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-use-case).
-The planning variable is **BASIC** (the composite rank x slot value); the domain solver is
+The solution has the **assignment** shape (the composite rank x slot value); the domain solver is
 `cpp/include/fab/solver.hpp` + `cpp/src/solver.cpp`.
 
 **Adding a move.** The change move's value comes from the value recommender in

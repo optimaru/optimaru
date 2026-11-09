@@ -57,7 +57,7 @@ Problems here are dicts, so `solve` takes the earlier `Timetable` dict directly 
 ## Extending
 
 Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-use-case).
-The planning variable is **BASIC**; the domain solver that configures the
+The solution has the **assignment** shape; the domain solver that configures the
 engine is `cpp/include/st/canonical_solver.hpp` + `cpp/src/canonical_solver.cpp` (the default canonical model; `solver.hpp` is the six-constraint quickstart model).
 
 **Adding a move.** The engine already mixes change / swap moves

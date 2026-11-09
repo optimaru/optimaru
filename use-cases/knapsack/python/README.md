@@ -1,7 +1,7 @@
 # knapsack (Python)
 
 The pybind11 package of the knapsack use case (`../cpp`). Chooses the items to
-carry — `Item.selected` is the only planning variable (1 = selected, 0 = not).
+carry — `Item.selected` is the only decision variable (1 = selected, 0 = not).
 
 Score, at the default weights:
 

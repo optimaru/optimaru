@@ -9,9 +9,9 @@ rule holds. The base formulation follows the official
 [`benchmarks/max-cut/cpsat`](../../benchmarks/max-cut/cpsat) holds the exact
 CP-SAT reference.
 
-## Domain (BASIC variable)
+## Domain (assignment shape)
 
-- The **side** of each vertex — the only planning variable: `0` or `1` (the value
+- The **side** of each vertex — the only decision variable: `0` or `1` (the value
   range is `{0, 1}`, so the engine's change move is a flip and its swap move
   exchanges a side-0 and a side-1 vertex). On the model it is `partition`
   (`{vertex: side}`); on the engine object `assignment()` / `set_assignment()`
@@ -274,7 +274,7 @@ print(warm.partition, warm.cut_weight)
 ## Extending
 
 Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-use-case).
-The planning variable is **BASIC**; the domain solver that configures the engine is
+The solution has the **assignment** shape; the domain solver that configures the engine is
 `cpp/include/mc/solver.hpp` + `cpp/src/solver.cpp`.
 
 **Adding a move.** The engine already mixes flip (change) and swap moves (weights in
@@ -294,7 +294,7 @@ Python reference-parity tests pin it.
 `cpp/include/mc/constraints/`:
 1. add `constraints/<subject>_cost.hpp` with `struct <Subject>Cost` — an
    `McUnitConstraint` when the cost decomposes per side (`cost(problem, side,
-   members)`, plus `deltaCost` when it is a sum of per-member / per-pair terms) or a
+   members)`, plus `delta_cost` when it is a sum of per-member / per-pair terms) or a
    `detail::MemberChangeConstraint` (a global told every join / leave) when it does
    not; positive raw cost = penalty, 0 = no violation — declaring
    `static constexpr double kDefaultWeight` and

@@ -58,7 +58,7 @@ score(raw), score(raw, [*others, ProjectDelayCost(weight=2)])        # re-priced
 - **Job** — SOURCE / STANDARD / SINK. One or more execution modes (duration + resource
   demand); SOURCE/SINK have one zero-duration mode.
 - **Allocation** (planning entity) — 1:1 with jobs. Java's two planning variables
-  `(executionMode, delay∈[0, 500))` are ported as one composite-encoded BASIC variable
+  `(executionMode, delay∈[0, 500))` are ported as one composite-encoded assignment variable
   `mode_delay = delay * max_mode_count + mode_slot`
   (real mode index = `mode_slot % the job's mode count`, -1 == uninitialized).
   SOURCE/SINK allocations are always pinned (Java's `@PlanningPin` + `setPinned`).

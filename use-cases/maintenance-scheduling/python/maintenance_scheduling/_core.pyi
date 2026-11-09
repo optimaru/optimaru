@@ -4,7 +4,7 @@ The compiled module wraps the C++ domain in `use-cases/maintenance-scheduling/cp
 which imports the generic engine in `include/optimaru`.
 
 The Java quickstart's two planning variables (crew, startDate) are composite-encoded
-into one BASIC int variable per entity (Job)::
+into one assignment-shape int variable per entity (Job)::
 
     crew_date = start_date_index * crew_count + crew_index   # -1 == unassigned
 

@@ -9,9 +9,9 @@ formulation follows the official
 [`benchmarks/assembly-line-balancing/cpsat`](../../benchmarks/assembly-line-balancing/cpsat)
 holds the exact CP-SAT reference.
 
-## Domain (BASIC variable)
+## Domain (assignment shape)
 
-- `Task.station` — the only planning variable: a station index (0-based), `-1` =
+- `Task.station` — the only decision variable: a station index (0-based), `-1` =
   unassigned. Stations are not bounded above by the facts: a solve freezes the
   value range at `max(task count, 1 + max station)` after its construction
   (`problem.station_count`; CP-SAT searches `0..n-1`).
@@ -224,7 +224,7 @@ print({task.id: task.station for task in warm.tasks}, warm.stations_used)
 ## Extending
 
 Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-use-case).
-The planning variable is **BASIC**; the domain solver that configures the engine is
+The solution has the **assignment** shape; the domain solver that configures the engine is
 `cpp/include/alb/solver.hpp` + `cpp/src/solver.cpp`.
 
 **Adding a move.** The engine already mixes change / swap moves (weights in

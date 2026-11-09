@@ -12,9 +12,9 @@ and Gurobi's public quadratic-assignment modeling examples.
 [`benchmarks/quadratic-assignment/cpsat`](../../benchmarks/quadratic-assignment/cpsat)
 holds the exact CP-SAT reference.
 
-## Domain (BASIC variable)
+## Domain (assignment shape)
 
-- `Facility.location` — the only planning variable: an index into `locations`,
+- `Facility.location` — the only decision variable: an index into `locations`,
   `-1` = unassigned. A `DecomposedObjective` unit is one location; its
   members are the facilities standing there.
 - The solver keeps the facilities a **permutation** of the locations: it starts
@@ -305,11 +305,11 @@ The checked-in local snapshot is [`bench/RESULTS.md`](../../benchmarks/quadratic
 ## Extending
 
 Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-use-case).
-The planning variable is **BASIC**; the domain solver that configures the engine is
+The solution has the **assignment** shape; the domain solver that configures the engine is
 `cpp/include/qap/solver.hpp` + `cpp/src/solver.cpp`.
 
-**Adding a move.** The engine runs swap moves only (`changeMoveWeight = 0`,
-`swapMoveWeight = 1` in `cpp/src/solver.cpp`). A new move must keep the
+**Adding a move.** The engine runs swap moves only (`change_weight = 0`,
+`swap_weight = 1` in `cpp/src/solver.cpp`). A new move must keep the
 permutation (a 3-cycle rotation, a best-partner swap): an
 `optimaru::MoveOperator<…>` registered with `engine.add_move_operator(...)` in
 `cpp/src/solver.cpp`, run under ScoreChecks::Full. Registered operators do not reach the

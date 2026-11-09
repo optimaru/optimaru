@@ -1,7 +1,7 @@
 # bin_packing (Python)
 
 The pybind11 package of the bin-packing C++ use case (`../cpp`). Puts every item in
-one of n identical bins — `Item.bin` is the only planning variable (bin index, -1 =
+one of n identical bins — `Item.bin` is the only decision variable (bin index, -1 =
 unassigned).
 
 Score, at the default weights (1 each):

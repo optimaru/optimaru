@@ -5,7 +5,7 @@ The Timefold Quickstarts `conference-scheduling` example model
 ported, with modifications,
 onto the C++ engine in `include/optimaru/`. Every talk (`Talk`) gets a timeslot
 and a room at once — Java's two `@PlanningVariable`s (timeslot, room) are encoded as
-one composite BASIC variable `slotRoom = timeslotIndex * roomCount + roomIndex`
+one composite assignment variable `slotRoom = timeslotIndex * roomCount + roomIndex`
 (the same pattern as school-timetabling).
 
 - `cpp/` — domain (`cs::ConferenceSchedule`), full-recompute
@@ -151,7 +151,7 @@ Two changed defaults / structures:
   gates); moves/s go up ~7-10x at scaled:200, which accounts for most of the quality gain
   in the table above, especially at 120/200.
 - **Automatic `ruinRecreateAsMoveWeight` default** — ruin & recreate also runs as an
-  ordinary move judged by the acceptor (engine `RuinRecreateSettings::asMoveWeight`). The
+  ordinary move judged by the acceptor (engine `RuinRecreateSettings::as_move_weight`). The
   default negative value = automatic `0.2 / slotRoomCount` (the budget-share rule of
   benchmarks/school-timetabling/RESULTS.md; 1.6e-3 for this domain's 126 cells). Sweeping
   the weight at scaled:120, 0.8e-3 / 3e-3 lose and only 1.6e-3 wins, so the rule value is
@@ -165,8 +165,8 @@ Knobs that were measured but stay off by default (bench key = config field):
   sampling. Wins hard 4-2 at scaled:120 but loses 1-5 at scaled:200 (the hot set is 70%+
   of talks, so the bias goes blunt); 45/60 tie. Too few data points for a per-size rule,
   so the default is 0. It does reach feasibility faster (84->19 ms at 60).
-- `descent=` / `descentWeight` — default 0 for the same reason as ST (not unmeasured: in ST
-  BASIC descent was weaker than as-move, and here as-move replaces it).
+- `descent=` / `descent_weight` — default 0 for the same reason as ST (not unmeasured: in ST
+  assignment-shape descent was weaker than as-move, and here as-move replaces it).
 - `la=` (`history_length`) — even after aggregation raised throughput 3-10x,
   480/2000 (@120) and 3200/6400 (@200) all failed to beat the automatic value
   `clamp(8 x talk, 800, 3200)`. Kept automatic.
@@ -216,7 +216,7 @@ Talks are matched by code. A talk the solution leaves out is placed by the const
 ## Extending
 
 Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-use-case).
-The planning variable is **BASIC**; the domain solver that configures the
+The solution has the **assignment** shape; the domain solver that configures the
 engine is `cpp/include/cs/solver.hpp` + `cpp/src/solver.cpp`.
 
 **Adding a move.** The engine already mixes change / swap moves

@@ -2,7 +2,7 @@
 
 The pybind11 package of the facility-location example-model port (`../cpp`).
 Picks one facility per consumer — `Consumer.facility` is the only
-planning variable (facility index, -1 = unassigned).
+decision variable (facility index, -1 = unassigned).
 
 Score, at the default weights:
 

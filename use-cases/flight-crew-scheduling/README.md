@@ -3,7 +3,7 @@
 The Timefold Quickstarts `flight-crew-scheduling` example model
 (Apache-2.0; see the repository [NOTICE](../../NOTICE))
 ported, with modifications,
-onto this repository's C++ engine (`include/optimaru/`). A **BASIC variable** problem
+onto this repository's C++ engine (`include/optimaru/`). An **assignment-shaped** problem
 that picks a crew member (`employee`) for every crew seat of a flight (`FlightAssignment`).
 
 ## Score mapping
@@ -174,7 +174,7 @@ Assignments are matched by id. An assignment the solution leaves out is placed b
 ## Extending
 
 Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-use-case).
-The planning variable is **BASIC**; the domain solver that configures the
+The solution has the **assignment** shape; the domain solver that configures the
 engine is `cpp/include/fcs/solver.hpp` + `cpp/src/solver.cpp`.
 
 **Adding a move.** The engine already mixes change / swap moves

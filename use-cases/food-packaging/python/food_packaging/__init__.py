@@ -2,8 +2,8 @@
 
 A port of the `food-packaging` example model: assigns packaging jobs (Job) to
 production lines (Line) in order. The Java domain's Line.jobs
-(@PlanningListVariable, allowsUnassignedValues=true) maps 1:1 onto the engine's LIST
-variable, and "unassigned" is an extra unassigned pool list exposed to the engine.
+(@PlanningListVariable, allowsUnassignedValues=true) maps 1:1 onto the engine's sequence
+shape, and "unassigned" is an extra unassigned pool list exposed to the engine.
 Java's shadow variable chain is derived from list positions::
 
     startCleaning(first job)  = line.start          # zero-length cleaning window

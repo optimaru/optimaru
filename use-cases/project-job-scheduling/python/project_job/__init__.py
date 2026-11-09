@@ -6,7 +6,7 @@ solver on the optimaru engine.
 `calculate_score` come from the compiled C++ core (`_core`).
 
 The Java quickstart's two planning variables (executionMode, delay∈[0, 500)) are
-ported as one composite-encoded BASIC variable `Allocation.mode_delay`::
+ported as one composite-encoded assignment-shape variable `Allocation.mode_delay`::
 
     -1                                  uninitialized (no resource use;
                                         dates pass through with delay 0/duration 0)

@@ -18,7 +18,7 @@ lines run by the same operator must not overlap.
 
 | Java | Port |
 |---|---|
-| `Line.jobs` `@PlanningListVariable(allowsUnassignedValues=true)` | engine LIST variable. Unassigned is an unassigned pool exposed to the engine as one more list |
+| `Line.jobs` `@PlanningListVariable(allowsUnassignedValues=true)` | the engine's sequence shape. Unassigned is an unassigned pool exposed to the engine as one more list |
 | `Line.operator` `@PlanningVariable` | reassigned by the solver wrapper with hill climbing between engine legs (alternating optimization) |
 | `Job` shadow chain (`startCleaning/startProduction/end`) | derived from list positions, O(length) incremental recompute per line |
 | `@PlanningPin` | structural pinning that hides the line's pinned prefix from the engine view |
@@ -151,7 +151,7 @@ Two things differ from the other use cases, on the default solve only (without `
 ## Extending
 
 Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-use-case).
-The planning variable is **LIST**; the domain solver that configures the
+The solution has the **sequence** shape; the domain solver that configures the
 engine is `cpp/include/fp/solver.hpp` + `cpp/src/solver.cpp`.
 
 **Adding a move.** The engine already mixes relocate / swap / 2-opt / Or-opt / 2-opt\* tail swap moves

@@ -413,9 +413,9 @@ class SolverConfig:
     descent_max_sweeps: int
     """Give up on a pair after this many improving passes (default 4)."""
     change_move_weight: float
-    """BASIC change move relative weight; 0 disables it."""
+    """Assignment-shape change move relative weight; 0 disables it."""
     swap_move_weight: float
-    """BASIC swap move relative weight; 0 disables it."""
+    """Assignment-shape swap move relative weight; 0 disables it."""
     nearby_shifts: bool
     """Temporal nearby selection (default True): bias swap partners, descent
     pairs and related-ruin clusters toward shifts whose start times are close,
@@ -457,15 +457,15 @@ class SolverConfig:
     setting an assignment back to unassigned, so coverage slots are optional
     rather than always filled."""
     relocate_move_weight: float
-    """LIST relocate move relative weight; unused by employee scheduling."""
+    """Sequence-shape relocate move relative weight; unused by employee scheduling."""
     list_swap_move_weight: float
-    """LIST swap move relative weight; unused by employee scheduling."""
+    """Sequence-shape swap move relative weight; unused by employee scheduling."""
     two_opt_move_weight: float
-    """LIST 2-opt move relative weight; unused by employee scheduling."""
+    """Sequence-shape 2-opt move relative weight; unused by employee scheduling."""
     or_opt_move_weight: float
-    """LIST Or-opt move relative weight; unused by employee scheduling."""
+    """Sequence-shape Or-opt move relative weight; unused by employee scheduling."""
     tail_swap_move_weight: float
-    """LIST 2-opt* tail-swap relative weight; unused by employee scheduling."""
+    """Sequence-shape 2-opt* tail-swap relative weight; unused by employee scheduling."""
     best_score_limit: tuple[int, float]
     """Stop early once bestScore >= (hard, soft), compared lexicographically.
     (0, -inf) stops at the first feasible solution. Default: unreachable."""

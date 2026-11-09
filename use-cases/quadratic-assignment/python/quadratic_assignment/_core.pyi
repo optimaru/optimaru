@@ -2,7 +2,7 @@
 solver.
 
 The problem is the planning solution: each facility's `location` (an index
-into `problem.locations`, -1 == unassigned) is the single BASIC planning
+into `problem.locations`, -1 == unassigned) is the single assignment-shape planning
 variable. The solver keeps the facilities a permutation of the locations
 (swap moves only).
 

@@ -4,7 +4,7 @@ The Timefold Quickstarts `sports-league-scheduling` example model
 (Apache-2.0; see the repository [NOTICE](../../NOTICE))
 ported, with modifications,
 onto the generic C++ engine in `include/optimaru/`. Assigns a round (`Round`) to
-every match (`Match`) of the league (one BASIC variable: `Match::round`).
+every match (`Match`) of the league (one assignment variable: `Match::round`).
 
 - `cpp/` — domain (`sls::LeagueSchedule`), full-recompute scorer, O(delta)
   incremental scorer, a thin solver wrapper (LA + ALNS), demo (`sls_demo`),
@@ -137,7 +137,7 @@ Matches are matched by id. A match the solution leaves out is placed by the cons
 ## Extending
 
 Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-use-case).
-The planning variable is **BASIC**; the domain solver that configures the
+The solution has the **assignment** shape; the domain solver that configures the
 engine is `cpp/include/sls/solver.hpp` + `cpp/src/solver.cpp`.
 
 **Adding a move.** The engine already mixes change / swap moves

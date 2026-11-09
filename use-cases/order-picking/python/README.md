@@ -9,7 +9,7 @@ Pick order items onto trolleys in a warehouse (5 shelf columns A-E x 3 rows, lef
 
 - **planning entity**: `Trolley` — `pick_task_indices` is the `@PlanningListVariable`
   (the list of `PickTask` indices the trolley picks, in visiting order).
-- **shadow variables**: `PickTask.trolley_index / previous_pick_task / next_pick_task`
+- **derived values**: `PickTask.trolley_index / previous_pick_task / next_pick_task`
   (Java's `@InverseRelationShadowVariable` / `@PreviousElementShadowVariable` /
   `@NextElementShadowVariable`) — derived from the lists and kept current by
   `calculate_score` / `solve`.
@@ -74,5 +74,5 @@ response = solve_request(OrderPickingRequest.model_validate(request_dict))
 print(response.feasible, response.distance_by_trolley)
 ```
 
-`SolverConfig` adjusts the engine knobs (time budget, LIST move weights, ALNS, nearby, ScoreChecks::Full,
+`SolverConfig` adjusts the engine knobs (time budget, sequence move weights, ALNS, nearby, ScoreChecks::Full,
 `parallel_solver_count` multistart, ...) — see `_core.pyi`.

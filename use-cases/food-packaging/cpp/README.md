@@ -6,7 +6,7 @@ engine). Files:
 - `include/fp/domain.hpp` — domain structs, the HardMediumSoft↔HardSoft score
   mapping (`kMediumUnit = 10^10`, declared once as `kMediumFold =
   MediumFold::intoSoft(10^10)` and registered with `MediumFoldOf<PackagingSchedule>`), the
-  LIST `SolutionTraits` specialization (including the position translation that hides
+  sequence-shape `SolutionTraits` specialization (including the position translation that hides
   the pinned prefix from the engine view)
 - `include/fp/constraints/*_cost.hpp` — one plugin component per constraint
   (`MaxEndTimeCost`, `AfterIdealEndTimeCost`, `SquaredMakespanCost`,
@@ -16,13 +16,13 @@ engine). Files:
   (`prepare` / `updateShadowVariables` / `score` / `analyze`, whose
   `ConstraintBreakdown` members carry the registry names; C++ only)
 - `include/fp/incremental_calculator.hpp` — incremental calculator on the before/after
-  LIST hooks, O(changed line length) (re-derives the shadow chain per line)
+  list hooks, O(changed line length) (re-derives the shadow chain per line)
 - `include/fp/solver.hpp` — engine wrapper. `Line.operator` (Java's second planning
   variable) is optimized alternately by hill climbing between engine legs
 - `src/demo_data.cpp` — the demo plant, modelled on the quickstart's demo and drawn
   from a seeded `std::mt19937_64` (seed 37; Monday 00:00 == minute 0)
 - `src/main.cpp` — runs the demo (default 10 s, non-zero exit when hard 0 is not reached)
-- `test/fp_test.cpp` — per-constraint hand-computed cases, 2000 random LIST moves
+- `test/fp_test.cpp` — per-constraint hand-computed cases, 2000 random sequence moves
   cross-checked incremental==full, ScoreChecks::Full solve, pinning/pool/operator/
   demo checks
 - `test/fp_plugin_test.cpp` — the plugin assembly == the monolith, plugin incremental ==

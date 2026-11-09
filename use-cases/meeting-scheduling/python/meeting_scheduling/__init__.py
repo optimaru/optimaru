@@ -2,7 +2,7 @@
 
 A port of the Java quickstart "meeting-scheduling": assigns meetings a starting time
 grain (15-minute units) and a room. The Java entity's two planning variables
-(startingTimeGrain, room) become one BASIC variable via the composite encoding
+(startingTimeGrain, room) become one assignment-shape variable via the composite encoding
 ``grain_room = time_grain_pos * room_count + room_index`` (-1 == unassigned).
 Constraints have the same semantics as the Java ConstraintProvider (5 hard + 2 medium +
 5 soft; HardMediumSoftScore is folded as ``soft = -(medium * MEDIUM_SCALE + raw soft)``,

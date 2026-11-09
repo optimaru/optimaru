@@ -3,7 +3,7 @@
 Place n facilities on n locations, one each, minimizing the flow between every
 pair of facilities times the distance between their locations (plus an optional
 direct facility-location cost), with pinned and forbidden placements and
-location capacities as hard constraints. One BASIC planning variable
+location capacities as hard constraints. One assignment-shape planning variable
 (`Facility.location`) per facility; the search only swaps two facilities'
 locations, so every state is a permutation.
 
