@@ -1,6 +1,6 @@
 # Facility Location
 
-The `facility-location` example model (Apache-2.0; see the repository NOTICE)
+The Timefold Quickstarts `facility-location` example model (Apache-2.0; see the repository [NOTICE](../../NOTICE))
 (Java/Quarkus) ported onto this repository's C++ engine (`include/optimaru/`).
 The classic FLP: pick one facility for every consumer.
 

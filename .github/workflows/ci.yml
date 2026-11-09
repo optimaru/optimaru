@@ -22,6 +22,8 @@ jobs:
         run: ctest --test-dir build --output-on-failure --no-tests=error
       - name: Constraint-spec base copies in sync
         run: python3 scripts/check_constraint_base.py --require-all
+      - name: Engine license headers present
+        run: python3 scripts/check_license_headers.py
 
   use-case-cpp:
     name: ${{ matrix.use_case }} (C++)

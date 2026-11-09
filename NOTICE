@@ -36,15 +36,28 @@ contributors.
 
 use-cases/pickup-delivery extends the vehicle-routing translation above and
 is likewise a derivative of the Timefold Quickstarts vehicle-routing example.
-The benchmark harnesses under benchmarks/ for the use cases listed above
-reproduce those quickstarts' demo data generators and constraint scoring and
-are derivatives of the same examples.
 
-Modification notice (Apache License 2.0, section 4(b)): every file in the
-directories named above has been changed from the Timefold originals. The
-originals were translated from Java into C++ and Python and then modified by
-The optimaru Authors; the changes are recorded in this repository's version
-history and in CHANGELOG.md.
+The following benchmark harnesses transcribe the corresponding quickstart's
+demo data generator or constraint scoring and are derivatives of the same
+examples:
+
+  benchmarks/bed-allocation
+  benchmarks/facility-location
+  benchmarks/flight-crew-scheduling
+  benchmarks/project-job-scheduling
+  benchmarks/school-timetabling
+  benchmarks/tournament-scheduling
+
+benchmarks/pickup-delivery and the shared runner benchmarks/cpsat-common are
+original to optimaru; the java.util.Random replica in the latter follows the
+algorithm documented in the Java API specification, not Timefold code.
+
+Modification notice (Apache License 2.0, section 4(b)): files in the
+directories named above that derive from the Timefold originals were
+translated from Java into C++ and Python and modified by The optimaru
+Authors; the changes are recorded in this repository's version history.
+Other files in those directories (for example bindings, build files, tests
+and constraints added by optimaru) are original to optimaru.
 
 optimaru is an independent implementation and is not affiliated with or
 endorsed by Timefold BV or Red Hat, Inc. "Timefold" is a trademark of

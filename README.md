@@ -277,7 +277,7 @@ version neither builds nor publishes on `main`; PRs always build.
 
 [Apache License 2.0](LICENSE). See [NOTICE](NOTICE) for attribution.
 
-The engine and 16 of the use cases are derived from Apache-2.0 works —
+The engine and several of the use cases are derived from Apache-2.0 works —
 [Timefold Solver](https://github.com/TimefoldAI/timefold-solver) and
 [Timefold Quickstarts](https://github.com/TimefoldAI/timefold-quickstarts) —
 translated into C++ and Python and modified; [NOTICE](NOTICE) lists exactly
