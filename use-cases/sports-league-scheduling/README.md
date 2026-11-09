@@ -1,6 +1,7 @@
 # Sports League Scheduling (C++ / Python)
 
-The Timefold Quickstarts `sports-league-scheduling` example model (Apache-2.0; see the repository [NOTICE](../../NOTICE))
+The Timefold Quickstarts `sports-league-scheduling` example model
+(Apache-2.0; see the repository [NOTICE](../../NOTICE))
 ported onto the generic C++ engine in `include/optimaru/`. Assigns a round (`Round`) to
 every match (`Match`) of the league (one BASIC variable: `Match::round`).
 

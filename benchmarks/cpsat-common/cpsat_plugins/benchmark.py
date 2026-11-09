@@ -399,7 +399,11 @@ def run_cli(case: BenchmarkCase, argv: Sequence[str] | None = None) -> int:
 
 
 class JavaRandom:
-    """Small java.util.Random replica used by deterministic demo adapters."""
+    """Small java.util.Random replica used by deterministic demo adapters.
+
+    Written from the 48-bit LCG specified in the ``java.util.Random`` API documentation,
+    not copied from Timefold or JDK source.
+    """
 
     _MULTIPLIER = 0x5DEECE66D
     _ADDEND = 0xB

@@ -1,6 +1,7 @@
 # Flight Crew Scheduling (C++ / Python)
 
-The Timefold Quickstarts `flight-crew-scheduling` example model (Apache-2.0; see the repository [NOTICE](../../NOTICE))
+The Timefold Quickstarts `flight-crew-scheduling` example model
+(Apache-2.0; see the repository [NOTICE](../../NOTICE))
 ported onto this repository's C++ engine (`include/optimaru/`). A **BASIC variable** problem
 that picks a crew member (`employee`) for every crew seat of a flight (`FlightAssignment`).
 

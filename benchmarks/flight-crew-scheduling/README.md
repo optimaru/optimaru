@@ -1,7 +1,7 @@
 # Flight crew scheduling benchmark
 
-Transcribes the Timefold Quickstarts `flight-crew-scheduling` example's demo data generator (Apache-2.0),
-with modifications; see the repository [NOTICE](../../NOTICE).
+Transcribes the Timefold Quickstarts `flight-crew-scheduling` example's
+demo data generator (Apache-2.0), with modifications; see the repository [NOTICE](../../NOTICE).
 
 The [`flight-crew-scheduling`](../../use-cases/flight-crew-scheduling) use case against **OR-Tools CP-SAT**
 ([`cpsat/`](cpsat), package `flight_crew_cpsat`). The CP-SAT model implements the

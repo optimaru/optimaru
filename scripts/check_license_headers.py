@@ -9,7 +9,13 @@ each file carries, as its first two lines::
 
     python3 scripts/check_license_headers.py     # exit 1 and list every file without it
 
-Run from anywhere; paths resolve against the repository root.
+The derivation line is applied to every engine file on purpose, including files that
+implement published algorithms or were added by optimaru: a conservative choice that
+NOTICE states. Use-case sources are out of scope; NOTICE and each use case's README
+give their notice per directory.
+
+A UTF-8 BOM and CRLF line endings are tolerated. Run from anywhere; paths resolve
+against the repository root.
 """
 
 from __future__ import annotations
@@ -33,9 +39,17 @@ def main() -> int:
             f"no engine headers found under {ENGINE.relative_to(ROOT)}", file=sys.stderr
         )
         return 1
-    missing = [p for p in files if not p.read_text(encoding="utf-8").startswith(HEADER)]
-    for path in missing:
-        print(f"missing license header: {path.relative_to(ROOT)}", file=sys.stderr)
+    expected = HEADER.splitlines()
+    missing = []
+    for path in files:
+        head = path.read_text(encoding="utf-8-sig").splitlines()[: len(expected)]
+        if head != expected:
+            missing.append((path, head[0] if head else ""))
+    for path, first in missing:
+        print(
+            f"missing license header: {path.relative_to(ROOT)} (first line: {first!r})",
+            file=sys.stderr,
+        )
     if missing:
         print(
             f"{len(missing)}/{len(files)} engine headers lack the header; see the docstring.",

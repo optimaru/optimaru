@@ -1,6 +1,7 @@
 # Conference Scheduling (C++ port)
 
-The Timefold Quickstarts `conference-scheduling` example model (Apache-2.0; see the repository [NOTICE](../../NOTICE))
+The Timefold Quickstarts `conference-scheduling` example model
+(Apache-2.0; see the repository [NOTICE](../../NOTICE))
 ported onto the C++ engine in `include/optimaru/`. Every talk (`Talk`) gets a timeslot
 and a room at once — Java's two `@PlanningVariable`s (timeslot, room) are encoded as
 one composite BASIC variable `slotRoom = timeslotIndex * roomCount + roomIndex`
