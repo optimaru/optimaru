@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Derived from Timefold Solver (Apache-2.0); modified by The optimaru Authors. See NOTICE.
+
 #ifndef OPTIMARU_IMPL_LOCALSEARCH_STRATEGY_RUIN_RECREATE_MOVE_HPP
 #define OPTIMARU_IMPL_LOCALSEARCH_STRATEGY_RUIN_RECREATE_MOVE_HPP
 

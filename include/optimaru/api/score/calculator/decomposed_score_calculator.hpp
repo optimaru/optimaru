@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Derived from Timefold Solver (Apache-2.0); modified by The optimaru Authors. See NOTICE.
+
 #ifndef OPTIMARU_API_SCORE_CALCULATOR_DECOMPOSED_SCORE_CALCULATOR_HPP
 #define OPTIMARU_API_SCORE_CALCULATOR_DECOMPOSED_SCORE_CALCULATOR_HPP
 

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Derived from Timefold Solver (Apache-2.0); modified by The optimaru Authors. See NOTICE.
+
 #ifndef OPTIMARU_IMPL_HEURISTIC_SELECTOR_MOVE_GENERIC_SELECT_ROULETTE_WHEEL_HPP
 #define OPTIMARU_IMPL_HEURISTIC_SELECTOR_MOVE_GENERIC_SELECT_ROULETTE_WHEEL_HPP
 
