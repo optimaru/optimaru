@@ -287,6 +287,13 @@ def test_unassigned_lessons_soft_weight_is_the_documented_constant():
 # ------------------------------------------------------------ repeated picks, offset / clip
 
 
+def test_default_costs_have_no_medium_level():
+    """convert.py sums the "hard" entries only, which relies on this."""
+    costs = canon.constraint_costs(_tiny_table())
+    assert costs
+    assert all(entry["level"] in ("hard", "soft") and "medium_fold" not in entry for entry in costs.values())
+
+
 def _tiny_table() -> "canon.Timetable":
     """1 day x 4 periods, one teacher and one class, lessons in periods 1 and 3.
 

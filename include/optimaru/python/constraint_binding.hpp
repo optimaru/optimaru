@@ -64,16 +64,16 @@ namespace py = pybind11;
 // python_name() (names.hpp) is the one mapping between the C++ registry name
 // and the Python name: facilityCapacityCost -> facility_capacity_cost.
 
-// The TypeError text for a `hard` keyword on a binding that reads its other
-// keywords as domain parameters (employee scheduling's
-// DecomposedCalculator.add()), where an unread keyword would otherwise be
-// ignored: the level is the `level` knob.
+// The TypeError text for a `hard` keyword on an add() binding that reads its
+// other keywords as domain parameters (employee scheduling's
+// DecomposedCalculator.add(), its only caller), where an unread keyword would
+// otherwise be ignored: the level is the `level` knob. The text names add().
 inline constexpr const char* kHardKeyword =
-        "unexpected keyword argument 'hard'; use level='hard' or level='soft' (level=None keeps "
+        "add() got an unexpected keyword argument 'hard'; use level='hard' or level='soft' (level=None keeps "
         "the default)";
 
 // Refuses a `hard` keyword with kHardKeyword; call it first on the **kwargs
-// of a binding that reads its keywords as domain parameters.
+// of an add() binding that reads its keywords as domain parameters.
 inline void refuse_hard_keyword(const py::kwargs& kwargs) {
     if (kwargs.contains("hard")) throw py::type_error(kHardKeyword);
 }

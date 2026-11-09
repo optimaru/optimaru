@@ -932,7 +932,7 @@ def test_worker_pairing_cost_share_and_avoid_modes():
 
 
 HARD_KEYWORD = (
-    "unexpected keyword argument 'hard'; use level='hard' or level='soft' (level=None keeps the default)"
+    "add() got an unexpected keyword argument 'hard'; use level='hard' or level='soft' (level=None keeps the default)"
 )
 
 
