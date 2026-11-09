@@ -151,7 +151,7 @@ def parse_instance(
 
 
 def load_augerat_instance(name: str, cache_dir: Path) -> CvrpInstance:
-    """One Augerat Set A instance (e.g. A-n32-k5), downloaded once and SHA-256 checked."""
+    """One Augerat Set A instance (e.g. A-n32-k5), cached only once its SHA-256 matches."""
     try:
         catalog_id, expected = AUGERAT_A[name]
     except KeyError as exc:
@@ -159,21 +159,20 @@ def load_augerat_instance(name: str, cache_dir: Path) -> CvrpInstance:
             f"unknown instance {name!r}; available: {', '.join(sorted(AUGERAT_A))}"
         ) from exc
     path = cache_dir / "cvrplib-a" / f"{name}.vrp"
-    if not path.exists():
-        path.parent.mkdir(parents=True, exist_ok=True)
-        request = urllib.request.Request(
-            CVRPLIB_INSTANCE_URL.format(catalog_id),
-            headers={"User-Agent": "optimaru-benchmark/1.0"},
-        )
-        with urllib.request.urlopen(request, timeout=60) as response:
-            payload = response.read()
-        partial = path.with_suffix(".vrp.part")
-        partial.write_bytes(payload)
-        partial.replace(path)
-    payload = path.read_bytes()
+    if path.exists() and hashlib.sha256(path.read_bytes()).hexdigest() == expected:
+        return parse_instance(path.read_text())
+    url = CVRPLIB_INSTANCE_URL.format(catalog_id)
+    request = urllib.request.Request(url, headers={"User-Agent": "optimaru-benchmark/1.0"})
+    with urllib.request.urlopen(request, timeout=60) as response:
+        payload = response.read()
     digest = hashlib.sha256(payload).hexdigest()
     if digest != expected:
-        raise ValueError(f"{name}.vrp checksum mismatch: {digest}")
+        # Nothing is cached: a transient error page must not stick.
+        raise ValueError(f"{name}.vrp checksum mismatch for {url}: {digest}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    partial = path.with_suffix(".vrp.part")
+    partial.write_bytes(payload)
+    partial.replace(path)
     return parse_instance(payload.decode())
 
 

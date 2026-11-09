@@ -214,8 +214,8 @@ public:
         // The ejection chain and the iterated local search need it: with it
         // off they decline every draw and only burn their share of the steps.
         bool drivingTimeNearby = true;
-        // A granular neighbourhood (Toth & Vigo 2003) of 50 nearest customers
-        // was the first candidate horizon for route-pair intensification.
+        // Granular neighbourhood (Toth & Vigo 2003); 50 nearest customers was
+        // the initial candidate horizon for route-pair intensification.
         // 25 (from 50) with the iterated local search: half the candidates
         // per visit for the descent and the repair, which bought more than
         // the lost reach on Set X (see iteratedLocalSearchWeight).

@@ -135,9 +135,9 @@ def load_suite(
     payloads: dict[str, str] = {}
     with tarfile.open(data_archive, "r:gz") as archive:
         for member in archive.getmembers():
-            instance = Path(member.name).stem.lower()
             if not member.isfile() or not member.name.lower().endswith(".dat"):
                 continue
+            instance = Path(member.name).stem.lower()
             if instance not in SUITE:
                 continue
             extracted = archive.extractfile(member)

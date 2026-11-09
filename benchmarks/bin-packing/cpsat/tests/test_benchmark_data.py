@@ -23,16 +23,36 @@ ORLIB_SAMPLE = """\
 
 
 def test_orlib_bpp_parser_maps_capacity_and_weights() -> None:
-    problems = parse_orlib_bpp(ORLIB_SAMPLE)
+    instances = parse_orlib_bpp(ORLIB_SAMPLE)
 
-    assert list(problems) == ["u3_00", "t3_00"]
-    assert problems["u3_00"].bin_capacity == 10
-    assert [item.weight for item in problems["u3_00"].items] == [4, 5, 6]
-    # One-decimal triplet sizes are scaled to integers with the capacity.
-    assert problems["t3_00"].bin_capacity == 1000
-    assert [item.weight for item in problems["t3_00"].items] == [334, 333, 333]
+    assert list(instances) == ["u3_00", "t3_00"]
+    assert instances["u3_00"].best_known_bins == 2
+    assert instances["t3_00"].best_known_bins == 1
+    # One scale per file: the one-decimal triplet sizes make it 10, and the
+    # integral instance of the same file shares that unit.
+    assert instances["u3_00"].problem.bin_capacity == 100
+    assert [item.weight for item in instances["u3_00"].problem.items] == [40, 50, 60]
+    assert instances["t3_00"].problem.bin_capacity == 1000
+    assert [item.weight for item in instances["t3_00"].problem.items] == [334, 333, 333]
+
+
+def test_orlib_bpp_parser_keeps_integral_files_unscaled() -> None:
+    instances = parse_orlib_bpp(ORLIB_SAMPLE.split(" t3_00")[0].replace("2\n", "1\n", 1))
+
+    assert instances["u3_00"].problem.bin_capacity == 10
+    assert [item.weight for item in instances["u3_00"].problem.items] == [4, 5, 6]
 
 
 def test_orlib_bpp_parser_rejects_a_truncated_file() -> None:
     with pytest.raises(ValueError):
         parse_orlib_bpp(ORLIB_SAMPLE.rsplit("\n", 2)[0])
+
+
+def test_orlib_bpp_parser_rejects_trailing_data() -> None:
+    with pytest.raises(ValueError, match="trailing data"):
+        parse_orlib_bpp(ORLIB_SAMPLE + "7\n")
+
+
+def test_orlib_bpp_parser_rejects_an_empty_file() -> None:
+    with pytest.raises(ValueError, match="empty"):
+        parse_orlib_bpp("")

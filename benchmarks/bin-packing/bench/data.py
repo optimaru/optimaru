@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import urllib.request
+from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
 
@@ -52,10 +53,49 @@ def _download(name: str, cache_dir: Path) -> Path:
     return destination
 
 
-def _problem(capacity: Decimal, weights: list[Decimal]) -> BinPackingProblemModel:
-    # The triplet files give one decimal digit (capacity 100.0); scale every
-    # value of an instance by the same power of ten so all stay integral.
-    digits = max(-value.as_tuple().exponent for value in (capacity, *weights))
+@dataclass(frozen=True)
+class OrlibInstance:
+    problem: BinPackingProblemModel
+    # The bin count of the best known solution, as the file states it.
+    best_known_bins: int
+
+
+def parse_orlib_bpp(payload: str) -> dict[str, OrlibInstance]:
+    """Parse an OR-Library bin-packing file into ``{instance id: instance}``.
+
+    Layout: the number of problems, then per problem its identifier, a line
+    with the bin capacity, the item count and the best known bin count, and
+    one item size per line. The triplet files give one decimal digit
+    (capacity 100.0); every value of a file is scaled by the same power of
+    ten, so all stay integral and all instances of a file share one unit.
+    """
+    tokens = payload.split()
+    if not tokens:
+        raise ValueError("empty OR-Library bin-packing file")
+    count = int(tokens[0])
+    cursor = 1
+    raw: list[tuple[str, Decimal, list[Decimal], int]] = []
+    for _ in range(count):
+        if cursor + 4 > len(tokens):
+            raise ValueError("truncated OR-Library bin-packing file")
+        name = tokens[cursor].lower()
+        capacity = Decimal(tokens[cursor + 1])
+        size = int(tokens[cursor + 2])
+        best_known = int(tokens[cursor + 3])
+        cursor += 4
+        weights = [Decimal(value) for value in tokens[cursor : cursor + size]]
+        if len(weights) != size:
+            raise ValueError(f"{name}: expected {size} item sizes, got {len(weights)}")
+        cursor += size
+        raw.append((name, capacity, weights, best_known))
+    if cursor != len(tokens):
+        raise ValueError("trailing data after the last OR-Library bin-packing problem")
+
+    digits = max(
+        -value.as_tuple().exponent
+        for _, capacity, weights, _ in raw
+        for value in (capacity, *weights)
+    )
     scale = 10 ** max(digits, 0)
 
     def scaled(value: Decimal) -> int:
@@ -64,47 +104,23 @@ def _problem(capacity: Decimal, weights: list[Decimal]) -> BinPackingProblemMode
             raise ValueError(f"value {value} is not integral after scaling by {scale}")
         return int(result)
 
-    return BinPackingProblemModel(
-        bin_capacity=scaled(capacity),
-        items=[
-            ItemModel(id=f"item-{index + 1}", weight=scaled(weight))
-            for index, weight in enumerate(weights)
-        ],
-    )
+    return {
+        name: OrlibInstance(
+            problem=BinPackingProblemModel(
+                bin_capacity=scaled(capacity),
+                items=[
+                    ItemModel(id=f"item-{index + 1}", weight=scaled(weight))
+                    for index, weight in enumerate(weights)
+                ],
+            ),
+            best_known_bins=best_known,
+        )
+        for name, capacity, weights, best_known in raw
+    }
 
 
-def parse_orlib_bpp(payload: str) -> dict[str, BinPackingProblemModel]:
-    """Parse an OR-Library bin-packing file into ``{instance id: problem}``.
-
-    Layout: the number of problems, then per problem its identifier, a line
-    with the bin capacity, the item count and the best known bin count, and
-    one item size per line.
-    """
-    tokens = payload.split()
-    if not tokens:
-        raise ValueError("empty OR-Library bin-packing file")
-    count = int(tokens[0])
-    cursor = 1
-    problems: dict[str, BinPackingProblemModel] = {}
-    for _ in range(count):
-        if cursor + 4 > len(tokens):
-            raise ValueError("truncated OR-Library bin-packing file")
-        name = tokens[cursor].lower()
-        capacity = Decimal(tokens[cursor + 1])
-        size = int(tokens[cursor + 2])
-        cursor += 4  # identifier, capacity, item count, best known bin count
-        weights = [Decimal(value) for value in tokens[cursor : cursor + size]]
-        if len(weights) != size:
-            raise ValueError(f"{name}: expected {size} item sizes, got {len(weights)}")
-        cursor += size
-        problems[name] = _problem(capacity, weights)
-    if cursor != len(tokens):
-        raise ValueError("trailing data after the last OR-Library bin-packing problem")
-    return problems
-
-
-def load_suite(cache_dir: Path) -> dict[str, BinPackingProblemModel]:
-    suite: dict[str, BinPackingProblemModel] = {}
+def load_suite(cache_dir: Path) -> dict[str, OrlibInstance]:
+    suite: dict[str, OrlibInstance] = {}
     for name in ORLIB_BPP_SHA256:
         suite.update(parse_orlib_bpp(_download(name, cache_dir).read_text("ascii")))
     return dict(sorted(suite.items()))

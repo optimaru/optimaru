@@ -120,18 +120,24 @@ def parse_instance(text: str, *, name: str = "instance") -> PdptwInstance:
 
 
 def _download(cache_dir: Path) -> bytes:
-    cache_dir.mkdir(parents=True, exist_ok=True)
     archive = cache_dir / "li-lim-pdp_100.zip"
-    if not archive.exists():
-        request = urllib.request.Request(
-            ARCHIVE_URL, headers={"User-Agent": "optimaru-benchmark/1.0"}
-        )
-        with urllib.request.urlopen(request, timeout=60) as response:
-            archive.write_bytes(response.read())
-    payload = archive.read_bytes()
+    if archive.exists():
+        payload = archive.read_bytes()
+        if hashlib.sha256(payload).hexdigest() == ARCHIVE_SHA256:
+            return payload
+    request = urllib.request.Request(
+        ARCHIVE_URL, headers={"User-Agent": "optimaru-benchmark/1.0"}
+    )
+    with urllib.request.urlopen(request, timeout=60) as response:
+        payload = response.read()
     digest = hashlib.sha256(payload).hexdigest()
     if digest != ARCHIVE_SHA256:
+        # Nothing is cached: a transient error page must not stick.
         raise ValueError(f"{archive.name} checksum mismatch: {digest}")
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    partial = archive.with_suffix(".zip.part")
+    partial.write_bytes(payload)
+    partial.replace(archive)
     return payload
 
 
