@@ -5,8 +5,8 @@
 - **Engine restructured; C++ API renamed.** The engine under
   `include/optimaru/` no longer mirrors Timefold Solver's Java package layout
   or names: the headers are grouped by role (`model/`, `score/`,
-  `construct/`, `accept/`, `select/`, `stop/`, `destroy/`, `repair/`,
-  `local/`, `search/`), functions and members are snake_case, and the core types are renamed
+  `construct/`, `accept/`, `select/`, `stop/`, `search/`, `moves/`,
+  `ruin_recreate/`), functions and members are snake_case, and the core types are renamed
   (`HardSoftScore` → `Score`, `SolutionDescriptor` → `SolutionTraits` with
   `Shape::{Assignment, Sequence, Chain}`, `IncrementalScoreCalculator` →
   `Objective`, `DecomposedScoreCalculator` → `DecomposedObjective`,

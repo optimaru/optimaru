@@ -12,7 +12,7 @@ namespace st::canon
 {
 
 // Moved verbatim out of canonical_solver.cpp — one operator per file, the
-// domain-side counterpart of the engine's destroy/ layout.
+// domain-side counterpart of the engine's ruin_recreate/ layout.
 
 // Unassign move (only registered when the assembly demotes
 // unassignedLessonsCost to soft): take one assigned lesson out of the

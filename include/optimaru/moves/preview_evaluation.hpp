@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // Part of the optimaru engine; portions derive from Timefold Solver (Apache-2.0). See NOTICE.
 
-#ifndef OPTIMARU_LOCAL_PREVIEW_EVALUATION_HPP
-#define OPTIMARU_LOCAL_PREVIEW_EVALUATION_HPP
+#ifndef OPTIMARU_MOVES_PREVIEW_EVALUATION_HPP
+#define OPTIMARU_MOVES_PREVIEW_EVALUATION_HPP
 
 #include "optimaru/model/editor.hpp"
 
@@ -43,4 +43,4 @@ Score evaluate_with_preview(Editor<Solution>& editor, Preview&& preview,
 
 }  // namespace optimaru
 
-#endif  // OPTIMARU_LOCAL_PREVIEW_EVALUATION_HPP
+#endif  // OPTIMARU_MOVES_PREVIEW_EVALUATION_HPP

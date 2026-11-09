@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // Part of the optimaru engine; portions derive from Timefold Solver (Apache-2.0). See NOTICE.
 
-#ifndef OPTIMARU_LOCAL_EJECTION_CHAIN_HPP
-#define OPTIMARU_LOCAL_EJECTION_CHAIN_HPP
+#ifndef OPTIMARU_MOVES_EJECTION_CHAIN_HPP
+#define OPTIMARU_MOVES_EJECTION_CHAIN_HPP
 
 #include <algorithm>
 #include <cassert>
@@ -13,7 +13,7 @@
 #include "optimaru/model/solution_traits.hpp"
 #include "optimaru/model/neighborhoods.hpp"
 #include "optimaru/model/element_index.hpp"
-#include "optimaru/local/list_move.hpp"
+#include "optimaru/moves/list_move.hpp"
 #include "optimaru/stop/stop_throttle.hpp"
 #include "optimaru/search/operators.hpp"
 
@@ -370,4 +370,4 @@ private:
 
 }  // namespace optimaru
 
-#endif  // OPTIMARU_LOCAL_EJECTION_CHAIN_HPP
+#endif  // OPTIMARU_MOVES_EJECTION_CHAIN_HPP

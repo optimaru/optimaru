@@ -15,7 +15,7 @@
 #include "optimaru/settings.hpp"
 #include "optimaru/model/neighborhoods.hpp"
 #include "optimaru/model/element_index.hpp"
-#include "optimaru/repair/greedy_repair.hpp"
+#include "optimaru/ruin_recreate/greedy_repair.hpp"
 #include "optimaru/testing/preview_parity.hpp"
 #include "vrp/demo_data.hpp"
 #include "vrp/domain.hpp"
@@ -338,7 +338,7 @@ void testAlnsBeatsPlainLocalSearch()
 
 // -------------------------------------------------------------------------
 // The four local search strategies,
-// each a MoveOperator plugin in core (local/ and search/):
+// each a MoveOperator plugin in core (moves/ and ruin_recreate/):
 // best-improvement granular descent over a nearby route pair,
 // destroy-and-repair as an ordinary acceptor-judged move (rather than only a
 // stagnation kick), emptying a whole route in one move, and the ejection

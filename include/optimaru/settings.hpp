@@ -193,7 +193,7 @@ struct RuinRecreateSettings {
     // Destroy-and-repair as an ORDINARY move, in addition to the stagnation
     // kick above: a small ruin is applied, repaired, scored, and UNDONE if the
     // acceptor rejects it. Implemented as a move operator plugin
-    // (search/ruin_recreate_move.hpp) drawn with this probability per step.
+    // (ruin_recreate/ruin_recreate_move.hpp) drawn with this probability per step.
     // The candidate is judged by the normal acceptance criterion. The kick
     // above is the opposite — rare and unconditional.
     // 0 disables it, which is the default.
@@ -249,7 +249,7 @@ struct SearchSettings {
     // Built-in search strategies
     // ---------------------------------------------------------------------
     // Neighbourhoods too expensive to fire every step, and too useful to leave
-    // out. Each is a MoveOperator in local/ or search/, one file
+    // out. Each is a MoveOperator in moves/ or ruin_recreate/, one file
     // per strategy, implementing the same interface a caller gets from
     // Solver::add_move_operator(); these weights are the probability that a step
     // draws that plugin instead of the ordinary move mix.
@@ -276,7 +276,7 @@ struct SearchSettings {
     // is locally optimal. The neighbourhood is per kind — LIST: two
     // geometrically nearby routes, every relocation between them, both
     // directions; BASIC: a nearby entity pair, every value of each entity plus
-    // the swap of the two. See local/descent.hpp.
+    // the swap of the two. See moves/descent.hpp.
     //
     // What the right weight is depends entirely on how big that neighbourhood
     // is, and for BASIC that is the size of the VALUE RANGE — one sweep costs
@@ -303,7 +303,7 @@ struct SearchSettings {
     // route_elimination: empty the smallest list into the others in one atomic
     // move, so the acceptor sees the net effect of losing its depot legs
     // rather than the uphill intermediates that relocating one element at a
-    // time creates. See search/route_elimination.hpp.
+    // time creates. See moves/route_elimination.hpp.
     double route_elimination_weight = 0.0;
     // Do not attempt lists longer than this — beyond a certain size the
     // reinsertion is both expensive and hopeless.
@@ -314,7 +314,7 @@ struct SearchSettings {
     // then apply strictly hard-improving relocations and swaps until the hard
     // score is back, and let the acceptor judge the whole chain. This reaches
     // the slack shifts a tightly packed instance needs, every one of which is
-    // uphill alone. See local/ejection_chain.hpp.
+    // uphill alone. See moves/ejection_chain.hpp.
     double ejection_chain_weight = 0.0;
     // Give up (and undo) after this many repair operations.
     int ejection_chain_max_steps = 24;
@@ -336,7 +336,7 @@ struct SearchSettings {
     // iteration only descends, so the construction result is a local optimum
     // before anything is perturbed. Needs nearby selection and a calculator
     // that serves previews; it declines every draw otherwise. See
-    // search/iterated_local_search.hpp.
+    // moves/iterated_local_search.hpp.
     double iterated_local_search_weight = 0.0;
     // Elements ruined per iteration, uniform in [min, max].
     int iterated_local_search_min_ruin = 5;

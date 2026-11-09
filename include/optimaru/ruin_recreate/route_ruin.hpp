@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // Part of the optimaru engine; portions derive from Timefold Solver (Apache-2.0). See NOTICE.
 
-#ifndef OPTIMARU_DESTROY_ROUTE_HPP
-#define OPTIMARU_DESTROY_ROUTE_HPP
+#ifndef OPTIMARU_RUIN_RECREATE_ROUTE_RUIN_HPP
+#define OPTIMARU_RUIN_RECREATE_ROUTE_RUIN_HPP
 
 #include <algorithm>
 #include <cstdint>
@@ -10,7 +10,7 @@
 #include <vector>
 
 #include "optimaru/model/solution_traits.hpp"
-#include "optimaru/destroy/random.hpp"
+#include "optimaru/ruin_recreate/random_ruin.hpp"
 #include "optimaru/search/operators.hpp"
 
 namespace optimaru {
@@ -74,4 +74,4 @@ private:
 
 }  // namespace optimaru
 
-#endif  // OPTIMARU_DESTROY_ROUTE_HPP
+#endif  // OPTIMARU_RUIN_RECREATE_ROUTE_RUIN_HPP

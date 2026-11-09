@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // Part of the optimaru engine; portions derive from Timefold Solver (Apache-2.0). See NOTICE.
 
-#ifndef OPTIMARU_LOCAL_MOVABLE_ENTITY_HPP
-#define OPTIMARU_LOCAL_MOVABLE_ENTITY_HPP
+#ifndef OPTIMARU_MOVES_MOVABLE_ENTITY_HPP
+#define OPTIMARU_MOVES_MOVABLE_ENTITY_HPP
 
 #include <random>
 
@@ -30,4 +30,4 @@ int movable_entity(const Solution& sol, int e, std::uniform_int_distribution<int
 
 }  // namespace optimaru
 
-#endif  // OPTIMARU_LOCAL_MOVABLE_ENTITY_HPP
+#endif  // OPTIMARU_MOVES_MOVABLE_ENTITY_HPP

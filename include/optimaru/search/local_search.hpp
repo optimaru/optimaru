@@ -16,23 +16,23 @@
 #include "optimaru/settings.hpp"
 #include "optimaru/model/neighborhoods.hpp"
 #include "optimaru/select/schemes.hpp"
-#include "optimaru/destroy/random.hpp"
-#include "optimaru/destroy/related.hpp"
-#include "optimaru/destroy/route.hpp"
-#include "optimaru/destroy/sisr.hpp"
-#include "optimaru/destroy/worst.hpp"
+#include "optimaru/ruin_recreate/random_ruin.hpp"
+#include "optimaru/ruin_recreate/related_ruin.hpp"
+#include "optimaru/ruin_recreate/route_ruin.hpp"
+#include "optimaru/ruin_recreate/sisr_ruin.hpp"
+#include "optimaru/ruin_recreate/worst_ruin.hpp"
 #include "optimaru/accept/acceptors.hpp"
 #include "optimaru/model/element_index.hpp"
-#include "optimaru/repair/greedy_repair.hpp"
-#include "optimaru/local/list_move.hpp"
-#include "optimaru/local/movable_entity.hpp"
+#include "optimaru/ruin_recreate/greedy_repair.hpp"
+#include "optimaru/moves/list_move.hpp"
+#include "optimaru/moves/movable_entity.hpp"
 #include "optimaru/model/snapshot.hpp"
-#include "optimaru/local/descent.hpp"
-#include "optimaru/local/ejection_chain.hpp"
-#include "optimaru/local/preview_evaluation.hpp"
-#include "optimaru/search/iterated_local_search.hpp"
-#include "optimaru/search/route_elimination.hpp"
-#include "optimaru/search/ruin_recreate_move.hpp"
+#include "optimaru/moves/descent.hpp"
+#include "optimaru/moves/ejection_chain.hpp"
+#include "optimaru/moves/preview_evaluation.hpp"
+#include "optimaru/moves/iterated_local_search.hpp"
+#include "optimaru/moves/route_elimination.hpp"
+#include "optimaru/ruin_recreate/ruin_recreate_move.hpp"
 #include "optimaru/stop/stop_condition.hpp"
 #include "optimaru/search/operators.hpp"
 
@@ -55,7 +55,7 @@ namespace optimaru {
 // Editor, read score(), and revert when rejected.
 //
 // Anything more elaborate than the random move mix above is a plugin, not a
-// branch in this file: the built-in strategies in local/ and search/ implement the
+// branch in this file: the built-in strategies in moves/ and ruin_recreate/ implement the
 // same MoveOperator interface a caller gets from Solver::add_move_operator(),
 // and compete for selection in one adaptive pool with them.
 template <typename Solution>
@@ -111,7 +111,7 @@ public:
                 config_.search.acceptance.rule ==
                         AcceptanceRule::SimulatedAnnealing;
         // The built-in ruins are plugins like any other: one file each in
-        // destroy/, registered ahead of the caller's operators so the
+        // ruin_recreate/, registered ahead of the caller's operators so the
         // adaptive selector sees a single uniform list.
         RandomRuin<Solution> random_ruin;
         RelatedRuin<Solution> related_ruin;

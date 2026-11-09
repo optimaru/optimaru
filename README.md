@@ -209,15 +209,16 @@ include/optimaru/
 │                           wheel, segmented roulette, alpha-UCB, uniform
 ├── stop/                   when a solve ends (StopCondition) and the throttle
 │                           long-running moves consult it through
-├── destroy/                ruin operators: random, related, worst, SISR, route
-├── repair/                 greedy / regret-k recreate
-├── local/                  in-place search: the sequence moves (list_move),
-│                           move previews, descent, ejection chain
-├── search/                 the step loop that combines them (local_search),
-│                           the plugin points (operators: MoveOperator /
-│                           RuinOperator), and the destroy-and-repair moves:
-│                           ruin-recreate as a move, iterated local search,
-│                           route elimination
+├── search/                 the step loop (local_search) and the plugin points
+│                           for custom operators (MoveOperator / RuinOperator)
+├── moves/                  every move the step loop draws: the sequence moves
+│                           (list_move) and their previews, descent, ejection
+│                           chain, iterated local search, route elimination
+├── ruin_recreate/          one destroy-and-repair unit: the ruin operators
+│                           (random, related, worst, SISR, route), the greedy /
+│                           regret-k recreate, and ruin_recreate_move, which
+│                           applies them as an ordinary move (the stagnation
+│                           kick uses the same parts)
 ├── python/                 pybind11 helpers: constraint specs ->
 │                           ConstraintAssembly, constraint_info(),
 │                           constraint_costs(), names, the level guard

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // Part of the optimaru engine; portions derive from Timefold Solver (Apache-2.0). See NOTICE.
 
-#ifndef OPTIMARU_DESTROY_REMOVAL_GAIN_HPP
-#define OPTIMARU_DESTROY_REMOVAL_GAIN_HPP
+#ifndef OPTIMARU_RUIN_RECREATE_REMOVAL_GAIN_HPP
+#define OPTIMARU_RUIN_RECREATE_REMOVAL_GAIN_HPP
 
 #include "optimaru/model/solution_traits.hpp"
 #include "optimaru/score/score.hpp"
@@ -45,4 +45,4 @@ int ruin_candidate_count(OperatorContext<Solution>& ctx) {
 
 }  // namespace optimaru
 
-#endif  // OPTIMARU_DESTROY_REMOVAL_GAIN_HPP
+#endif  // OPTIMARU_RUIN_RECREATE_REMOVAL_GAIN_HPP

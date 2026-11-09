@@ -10,7 +10,7 @@ namespace st::canon
 {
 
 // Moved verbatim out of canonical_solver.cpp — one operator per file, the
-// domain-side counterpart of the engine's destroy/ layout.
+// domain-side counterpart of the engine's ruin_recreate/ layout.
 
 // Violation guidance for the decomposed plugin path, shaped like the
 // monolithic calculator's hot hooks. A hot slot is a unit whose weighted

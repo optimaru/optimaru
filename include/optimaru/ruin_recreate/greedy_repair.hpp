@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // Part of the optimaru engine; portions derive from Timefold Solver (Apache-2.0). See NOTICE.
 
-#ifndef OPTIMARU_REPAIR_GREEDY_REPAIR_HPP
-#define OPTIMARU_REPAIR_GREEDY_REPAIR_HPP
+#ifndef OPTIMARU_RUIN_RECREATE_GREEDY_REPAIR_HPP
+#define OPTIMARU_RUIN_RECREATE_GREEDY_REPAIR_HPP
 
 #include <algorithm>
 #include <cstddef>
@@ -19,7 +19,7 @@
 #include "optimaru/construct/construction.hpp"
 #include "optimaru/model/neighborhoods.hpp"
 #include "optimaru/model/element_index.hpp"
-#include "optimaru/local/preview_evaluation.hpp"
+#include "optimaru/moves/preview_evaluation.hpp"
 
 namespace optimaru {
 
@@ -27,7 +27,7 @@ namespace optimaru {
 // GreedyRepair
 // ---------------------------------------------------------------------------
 // The destroy-and-repair half of the local search, factored out of
-// LocalSearch so that the strategies in local/ and search/ can use it
+// LocalSearch so that the moves in moves/ and ruin_recreate/ can use it
 // without reaching into local search: the LNS kick, destroy-repair-as-a-move and
 // route elimination all ruin a set and rebuild it the same way, and only the
 // local search used to own the machinery.
@@ -405,4 +405,4 @@ private:
 
 }  // namespace optimaru
 
-#endif  // OPTIMARU_REPAIR_GREEDY_REPAIR_HPP
+#endif  // OPTIMARU_RUIN_RECREATE_GREEDY_REPAIR_HPP

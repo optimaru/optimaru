@@ -10,9 +10,9 @@
 //   construct/  the initial solution
 //   accept/     acceptance rules          select/  adaptive operator selection
 //   stop/       when a solve ends
-//   destroy/    ruin operators            repair/  recreate
-//   local/      in-place moves and descents
-//   search/     the step loop that combines them, and the plugin points
+//   search/         the step loop, and the plugin points for custom operators
+//   moves/          every move the step loop can draw
+//   ruin_recreate/  ruin operators + recreate: one destroy-and-repair unit
 
 #include "optimaru/model/solution_traits.hpp"
 #include "optimaru/model/derived_state.hpp"

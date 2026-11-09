@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // Part of the optimaru engine; portions derive from Timefold Solver (Apache-2.0). See NOTICE.
 
-#ifndef OPTIMARU_SEARCH_ITERATED_LOCAL_SEARCH_HPP
-#define OPTIMARU_SEARCH_ITERATED_LOCAL_SEARCH_HPP
+#ifndef OPTIMARU_MOVES_ITERATED_LOCAL_SEARCH_HPP
+#define OPTIMARU_MOVES_ITERATED_LOCAL_SEARCH_HPP
 
 #include <algorithm>
 #include <cstdint>
@@ -14,8 +14,8 @@
 #include "optimaru/model/neighborhoods.hpp"
 #include "optimaru/select/scheme.hpp"
 #include "optimaru/model/element_index.hpp"
-#include "optimaru/repair/greedy_repair.hpp"
-#include "optimaru/local/list_move.hpp"
+#include "optimaru/ruin_recreate/greedy_repair.hpp"
+#include "optimaru/moves/list_move.hpp"
 #include "optimaru/stop/stop_throttle.hpp"
 #include "optimaru/model/snapshot.hpp"
 #include "optimaru/search/operators.hpp"
@@ -421,4 +421,4 @@ private:
 
 }  // namespace optimaru
 
-#endif  // OPTIMARU_SEARCH_ITERATED_LOCAL_SEARCH_HPP
+#endif  // OPTIMARU_MOVES_ITERATED_LOCAL_SEARCH_HPP

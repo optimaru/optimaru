@@ -121,7 +121,7 @@ public:
         int ruinRecreateMaxRuinCount = 60;
         std::int64_t ruinRecreatePolishSteps = 5000;
         // Search strategies registered as move operators from
-        // include/optimaru/local/ and search/.
+        // include/optimaru/moves/ and ruin_recreate/.
         // The weights are deliberately small: all three cost far more than one
         // sampled move (a descent sweep scans a whole list pair, the other two
         // run a repair), so they earn their keep at a few percent of steps and
