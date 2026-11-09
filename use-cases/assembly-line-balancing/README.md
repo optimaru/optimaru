@@ -3,9 +3,8 @@
 Simple assembly-line balancing (SALBP-1) with zoning and station domains, on
 this repository's C++ engine (`include/optimaru/`): put every task on one
 station of a paced line so that no station exceeds the cycle time, precedences
-run forward, and as few stations as possible are opened. The base SALBP-1
-formulation follows the official
-[Hexaly assembly-line balancing template](https://www.hexaly.com/docs/last/exampletour/assemblylinebalancing.html).
+run forward, and as few stations as possible are opened. The base model is
+the standard SALBP-1 formulation (Scholl 1999; Otto, Otto & Scholl 2013).
 [`benchmarks/assembly-line-balancing/cpsat`](../../benchmarks/assembly-line-balancing/cpsat)
 holds the exact CP-SAT reference.
 
@@ -267,7 +266,7 @@ pin its results.
 
 [`benchmarks/assembly-line-balancing`](../../benchmarks/assembly-line-balancing) compares this
 use case with OR-Tools CP-SAT: generated lines (`assembly_line_balancing_cpsat.benchmark`) and
-the public SALBP archive used by Hexaly (`bench/run_bench.py`, downloaded on demand and
+the public SALBP archive of Otto et al. (`bench/run_bench.py`, downloaded on demand and
 checksum-verified; results in [`bench/RESULTS.md`](../../benchmarks/assembly-line-balancing/bench/RESULTS.md)).
 
 ```sh

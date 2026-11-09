@@ -1,8 +1,7 @@
 # Bin packing
 
-Uniform-capacity one-dimensional bin packing, based on the compact model used
-in the [Hexaly BPP template](https://www.hexaly.com/templates/bin-packing-problem-bpp),
-with optional item colours and conflict pairs, on this repository's C++ engine
+Uniform-capacity one-dimensional bin packing, based on the standard
+item-to-bin assignment model (Martello & Toth 1990), with optional item colours and conflict pairs, on this repository's C++ engine
 (`include/optimaru/`).
 
 ## Domain (BASIC variable)
@@ -299,5 +298,5 @@ different heuristic is a different `constructBins` order or rule.
 ## Benchmark
 
 [`benchmarks/bin-packing`](../../benchmarks/bin-packing) compares this use case with
-OR-Tools CP-SAT on Hexaly's public instances (`bench/run_bench.py`) and on generated
+OR-Tools CP-SAT on Falkenauer's public uniform and triplet instances (`bench/run_bench.py`) and on generated
 ones (`python -m bin_packing_cpsat.benchmark`).

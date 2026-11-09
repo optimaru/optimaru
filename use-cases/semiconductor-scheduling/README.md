@@ -11,10 +11,9 @@ calculators and the solver; `python/` is the pybind11 package with the Pydantic
 models; [`benchmarks/semiconductor-scheduling/cpsat`](../../benchmarks/semiconductor-scheduling/cpsat)
 is the exact CP-SAT reference.
 
-The model combines patterns documented by the official
-[Hexaly Flexible Job Shop example](https://www.hexaly.com/docs/last/exampletour/flexiblejobshop.html),
-the [IBM CP scheduling example library](https://www.ibm.com/docs/en/icos/22.2.0?topic=programming-where-find-cp-examples),
-and [Gurobi's modeling examples](https://github.com/Gurobi/modeling-examples).
+The model combines standard patterns from the flexible job-shop scheduling
+literature (machine flexibility, Brucker & Schlie 1990) with the features of
+wafer-fab scheduling listed above.
 The implementation is original and does not depend on a commercial runtime.
 
 ## Domain (BASIC variable, decoded schedule)

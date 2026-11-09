@@ -9,6 +9,15 @@
   notice. Redistributors should ship the updated NOTICE. Every engine header
   now carries an SPDX identifier and a derivation line. No functional or
   behavioral changes.
+- **pybind11 license shipped.** The wheels and the sdist now include
+  pybind11's BSD-3-Clause license (`licenses/pybind11-LICENSE`), since every
+  compiled extension embeds pybind11 headers.
+- **Public benchmark data from the original sources.** The bin-packing
+  (Falkenauer, OR-Library), QAPLIB, Li & Lim (SINTEF) and Augerat CVRP
+  (CVRPLIB) benchmarks download their instances from those academic sources,
+  each file SHA-256 pinned. Use-case READMEs cite literature formulations
+  instead of third-party examples. The Augerat instance formerly reached as
+  `A-n44-k7` is `A-n44-k6`, its CVRPLIB name.
 
 ## 0.3.0
 

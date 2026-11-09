@@ -3,18 +3,46 @@
 from __future__ import annotations
 
 import hashlib
-import io
 import itertools
 import math
 import re
 import urllib.request
-import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
-# Augerat sets A/B/P with their optimum in the instance comment.
-ARCHIVE_URL = "https://www.hexaly.com/examples/cvrp.zip"
-ARCHIVE_SHA256 = "8deedef8bee61002c0a8b3c176a6f8d41db8a9b283ef51f9411776ae850c2474"
+# Augerat et al. (1995) Set A, downloaded file by file from CVRPLIB; each file
+# carries its optimum in the instance comment. CVRPLIB serves a single
+# instance by its numeric catalog id.
+CVRPLIB_INSTANCE_URL = "https://galgos.inf.puc-rio.br/cvrplib/index.php/en/download/instance/{}"
+AUGERAT_A = {
+    "A-n32-k5": (4, "2ebedd0631c4c56c08ba3b1476ac874a7d54cc448bd3795de534f43b2c099ce2"),
+    "A-n33-k5": (5, "35712de0054a0fbfd609d5cdb4ec638c39f7c181b6e39e3c8bf6f8e359b78aef"),
+    "A-n33-k6": (7, "4d01ebe9842743ee0c66f14ecb86ab9c84d3198b3280d0dbcc8a8d9a69f1592f"),
+    "A-n34-k5": (8, "393117f10a26d0e803a8206e7dd1157a67de2429d6b9fd2d60c070a98b7c73bb"),
+    "A-n36-k5": (9, "794360562d60d66a358eaf57721432b43318abba710f3c55f3240aef18e69b03"),
+    "A-n37-k5": (10, "8b3c9c86c6ec147d6699ef1a7e9b33d7d2637c6b8f254922ff3494d56efed3d0"),
+    "A-n37-k6": (11, "65615d1b371722c00089443548bff64a5b6385055eeac3ec6f0b5c8cc8c9bdab"),
+    "A-n38-k5": (12, "59a822563b0c59b86f0652e9249e6073cb1f22f19b30da45554ca47055e91051"),
+    "A-n39-k5": (13, "d3afcea200df090c673805d02d4f3c3fad84f4ebaee26a54edc28b30a72cbac9"),
+    "A-n39-k6": (14, "28b83a6afdaa1a2f1f6691313b8977ac3003201584ccb8387fa5ac91ee195cfe"),
+    "A-n44-k6": (15, "4303b6c5ad8c5f09901808bd72e7e8920cc81e4b1f725900cf9a63e0bfbb0bec"),
+    "A-n45-k6": (16, "b3e7a3290b732e2140aa180b0b8a83b4dcccc6297045af270c50f62edcb15f31"),
+    "A-n45-k7": (17, "ab22ac5adcd03923127d41c394fd32971ecae0a7d6854c148bfb430dc1b462de"),
+    "A-n46-k7": (18, "843d960f050ed93387dad6ead572f647a631ea90f1dc15879740c98ed7211060"),
+    "A-n48-k7": (19, "0457ce2d3921efb0e55b248517df2b77c061474fe120b9a07b382cc3a884845c"),
+    "A-n53-k7": (20, "7a22295b926b50f54ecca7da21924b942ef60949f7707b071936c7cdf3d9006c"),
+    "A-n54-k7": (21, "a85afa8f15544b168ce3413d759a5c4f5fbfef5e1f7ea0972839c2761c958438"),
+    "A-n55-k9": (22, "0ec4706e6efb69217bc11ea4942edd12626f4c41bd6e6b0227aff1035c8f6eda"),
+    "A-n60-k9": (23, "d60d067db572ee49d265be1f01f5f03b88bb8fb543308d96de1b913408a67de7"),
+    "A-n61-k9": (24, "210b68819f2f8b1a525b5415fa3559f3d23b90e119ef79a2f16d638f9ad884ab"),
+    "A-n62-k8": (25, "06c2ee55bb37e610d7772e93c1d92e0679f6baca5b878469a954d8da3eb803d5"),
+    "A-n63-k9": (26, "4bb0410d5e0cee22f9a0af7854b1e09652314e75acb48703250b33277b0a7033"),
+    "A-n63-k10": (27, "d837c6c264249b2c1bf643cdb113785bf3b0e6eb9596539d1cb705454a61724b"),
+    "A-n64-k9": (28, "1d690e428ea2de12f5996cf1e84aaa0508ec9977dfdb3d0c106e9006e9cc5124"),
+    "A-n65-k9": (29, "2f2768011d0dc41fb912ad3d4a8c34678334607bf0263cf4cd20b6c1b4ab4cd6"),
+    "A-n69-k9": (30, "7b9bd50d901639c15a9f4ff1cf38ccef7a5bf050697b4e6796ff07bc95920c64"),
+    "A-n80-k10": (31, "f74d5d9f8e24245d94cad53ac20892a70b554aa7559f9dfcd962c8f83a68a410"),
+}
 
 
 @dataclass(frozen=True)
@@ -122,34 +150,31 @@ def parse_instance(
     )
 
 
-def _download_archive(cache_dir: Path) -> bytes:
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    archive = cache_dir / "cvrp.zip"
-    if not archive.exists():
-        with urllib.request.urlopen(ARCHIVE_URL, timeout=60) as response:
-            archive.write_bytes(response.read())
-    payload = archive.read_bytes()
-    digest = hashlib.sha256(payload).hexdigest()
-    if digest != ARCHIVE_SHA256:
-        raise ValueError(f"cvrp.zip checksum mismatch: {digest}")
-    return payload
-
-
 def load_augerat_instance(name: str, cache_dir: Path) -> CvrpInstance:
-    """One Augerat instance (e.g. A-n32-k5) from the checksummed archive."""
-    with zipfile.ZipFile(io.BytesIO(_download_archive(cache_dir))) as archive:
-        member = f"cvrp/instances/{name}.vrp"
-        try:
-            return parse_instance(archive.read(member).decode())
-        except KeyError as exc:
-            available = sorted(
-                Path(item).stem
-                for item in archive.namelist()
-                if item.startswith("cvrp/instances/") and item.endswith(".vrp")
-            )
-            raise ValueError(
-                f"unknown instance {name!r}; available: {', '.join(available)}"
-            ) from exc
+    """One Augerat Set A instance (e.g. A-n32-k5), downloaded once and SHA-256 checked."""
+    try:
+        catalog_id, expected = AUGERAT_A[name]
+    except KeyError as exc:
+        raise ValueError(
+            f"unknown instance {name!r}; available: {', '.join(sorted(AUGERAT_A))}"
+        ) from exc
+    path = cache_dir / "cvrplib-a" / f"{name}.vrp"
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        request = urllib.request.Request(
+            CVRPLIB_INSTANCE_URL.format(catalog_id),
+            headers={"User-Agent": "optimaru-benchmark/1.0"},
+        )
+        with urllib.request.urlopen(request, timeout=60) as response:
+            payload = response.read()
+        partial = path.with_suffix(".vrp.part")
+        partial.write_bytes(payload)
+        partial.replace(path)
+    payload = path.read_bytes()
+    digest = hashlib.sha256(payload).hexdigest()
+    if digest != expected:
+        raise ValueError(f"{name}.vrp checksum mismatch: {digest}")
+    return parse_instance(payload.decode())
 
 
 def rescore(instance: CvrpInstance, routes: list[list[int]]) -> Rescore:

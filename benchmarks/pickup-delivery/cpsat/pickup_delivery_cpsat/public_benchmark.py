@@ -1,4 +1,4 @@
-"""Compare both backends on Li & Lim PDPTW instances (Hexaly bundle or synthetic)."""
+"""Compare both backends on Li & Lim PDPTW instances (SINTEF TOP archive or synthetic)."""
 
 from __future__ import annotations
 
@@ -35,13 +35,18 @@ from pdp_routing.models import (
     solve_request as solve_engine_request,
 )
 
-ARCHIVE_URL = "https://www.hexaly.com/examples/pdptw.zip"
-ARCHIVE_SHA256 = "d396d712e879edb73adcdaa420e2c13bcc6b086d83f790a404692faae49dd26e"
+# The 100-customer Li & Lim set as published on SINTEF's TOP benchmark page
+# (https://www.sintef.no/projectweb/top/pdptw/li-lim-benchmark/).
+ARCHIVE_URL = (
+    "https://www.sintef.no/contentassets/1338af68996841d3922bc8e87adc430c/pdp_100.zip"
+)
+ARCHIVE_SHA256 = "d106694e9e18cebc32b63c322e1000620238392c1b9d98d92de82ef7e4b43cd9"
+ARCHIVE_PREFIX = "pdp_100/"
 DEFAULT_INSTANCE = "lc101"
 # Li & Lim uses continuous Euclidean distance while both local solver
 # contracts are integral. Nearest-unit travel is the shared comparison metric;
 # the independently printed objective therefore is a documented projection,
-# not a claim of bit-identical floating-point distance to Hexaly.
+# not a claim of bit-identical floating-point distance to the published results.
 DISTANCE_SCALE = 1
 ENGINE_CONSTRAINTS = [
     vehicle_capacity_cost,
@@ -116,14 +121,17 @@ def parse_instance(text: str, *, name: str = "instance") -> PdptwInstance:
 
 def _download(cache_dir: Path) -> bytes:
     cache_dir.mkdir(parents=True, exist_ok=True)
-    archive = cache_dir / "pdptw.zip"
+    archive = cache_dir / "li-lim-pdp_100.zip"
     if not archive.exists():
-        with urllib.request.urlopen(ARCHIVE_URL, timeout=60) as response:
+        request = urllib.request.Request(
+            ARCHIVE_URL, headers={"User-Agent": "optimaru-benchmark/1.0"}
+        )
+        with urllib.request.urlopen(request, timeout=60) as response:
             archive.write_bytes(response.read())
     payload = archive.read_bytes()
     digest = hashlib.sha256(payload).hexdigest()
     if digest != ARCHIVE_SHA256:
-        raise ValueError(f"pdptw.zip checksum mismatch: {digest}")
+        raise ValueError(f"{archive.name} checksum mismatch: {digest}")
     return payload
 
 
@@ -192,14 +200,14 @@ def synthetic_instance(request_count: int, seed: int = 0) -> PdptwInstance:
 
 def load_instance(name: str, cache_dir: Path) -> PdptwInstance:
     with zipfile.ZipFile(io.BytesIO(_download(cache_dir))) as archive:
-        member = f"pdptw/instances/{name}.txt"
+        member = f"{ARCHIVE_PREFIX}{name}.txt"
         try:
             return parse_instance(archive.read(member).decode(), name=name)
         except KeyError as exc:
             available = sorted(
                 Path(item).stem
                 for item in archive.namelist()
-                if item.startswith("pdptw/instances/") and item.endswith(".txt")
+                if item.startswith(ARCHIVE_PREFIX) and item.endswith(".txt")
             )
             raise ValueError(
                 f"unknown instance {name!r}; available: {', '.join(available)}"

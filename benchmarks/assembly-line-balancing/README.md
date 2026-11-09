@@ -2,8 +2,8 @@
 
 The [`assembly-line-balancing`](../../use-cases/assembly-line-balancing) use case (the C++
 engine) against **OR-Tools CP-SAT** ([`cpsat/`](cpsat), package `assembly_line_balancing_cpsat`)
-on SALBP-1 instances (the Otto et al. SALBP archive from assembly-line-balancing.de, as used by
-Hexaly), downloaded on demand and checksum-verified ([`bench/data.py`](bench/data.py)). Both
+on SALBP-1 instances (the Otto et al. SALBP archive from assembly-line-balancing.de),
+downloaded on demand and checksum-verified ([`bench/data.py`](bench/data.py)). Both
 answers are rescored by the use case's own evaluator (`constraint_costs()`).
 
 The CP-SAT model is built from [external-solver](https://github.com/optimaru/external-solver) plugins, one per engine

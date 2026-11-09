@@ -13,7 +13,7 @@ SAMPLE = """\
 """
 
 
-def test_parse_and_scale_hexaly_pdptw() -> None:
+def test_parse_and_scale_li_lim_pdptw() -> None:
     instance = parse_instance(SAMPLE, name="tiny")
     assert len(instance.requests) == 1
     request, pairs = make_request(

@@ -12,7 +12,9 @@ description = "Metaheuristic optimization engine for routing, scheduling, timeta
 readme = "python/README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
-license-files = ["LICENSE", "NOTICE"]
+# The compiled extensions embed pybind11 headers (BSD-3-Clause); its license
+# ships with every wheel and the sdist.
+license-files = ["LICENSE", "NOTICE", "licenses/pybind11-LICENSE"]
 authors = [{ name = "optimaru" }]
 keywords = [
   "optimization", "combinatorial-optimization", "metaheuristics", "scheduling",

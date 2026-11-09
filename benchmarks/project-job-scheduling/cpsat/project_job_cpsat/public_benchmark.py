@@ -1,4 +1,4 @@
-"""Compare both backends on Hexaly's public Patterson RCPSP bundle."""
+"""Compare both backends on public RCPSP instances in Patterson format."""
 
 from __future__ import annotations
 
@@ -24,8 +24,12 @@ from project_job.models import (
     ResourceRequirementModel,
 )
 
+# Pat1-Pat5 of the RG30 set (Vanhoucke et al.), 30 activities and 4 renewable
+# resources each, in Patterson format. The original RCPLIB release is an 86 MB
+# archive whose older versions are withdrawn, so the benchmark pins this small
+# third-party re-packaging of the five instances instead.
 ARCHIVE_URL = "https://www.hexaly.com/examples/rcpsp.zip"
-ARCHIVE_SHA256 = "71c5012250ed5e2a7c02da701211144bb0a2b22935ae94e4a02bbb8d06b9f17b"
+ARCHIVE_SHA256 = "2b7f86ca818decdd001f1df42bae47ed7f9ec76c5f34f7fc3ecd7b134a8d3b86"
 DEFAULT_INSTANCE = "Pat1"
 
 
@@ -68,14 +72,17 @@ def parse_instance(text: str, *, name: str = "instance") -> RcpspInstance:
 
 def _download(cache_dir: Path) -> bytes:
     cache_dir.mkdir(parents=True, exist_ok=True)
-    archive = cache_dir / "rcpsp.zip"
+    archive = cache_dir / "rcpsp-rg30-pat1-5.zip"
     if not archive.exists():
-        with urllib.request.urlopen(ARCHIVE_URL, timeout=60) as response:
+        request = urllib.request.Request(
+            ARCHIVE_URL, headers={"User-Agent": "optimaru-benchmark/1.0"}
+        )
+        with urllib.request.urlopen(request, timeout=60) as response:
             archive.write_bytes(response.read())
     payload = archive.read_bytes()
     digest = hashlib.sha256(payload).hexdigest()
     if digest != ARCHIVE_SHA256:
-        raise ValueError(f"rcpsp.zip checksum mismatch: {digest}")
+        raise ValueError(f"{archive.name} checksum mismatch: {digest}")
     return payload
 
 

@@ -1,1 +1,1 @@
-"""Hexaly template benchmark adapter for bin packing."""
+"""Falkenauer instance benchmark adapter for bin packing."""

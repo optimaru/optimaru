@@ -71,7 +71,7 @@ def _run_cpsat(problem, seconds: float, seed: int, workers: int) -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Run our SALBP engines on the public dataset used by Hexaly."
+        description="Run our SALBP engines on the Otto et al. SALBP-1 benchmark archive."
     )
     parser.add_argument("--dataset", choices=DATASETS, default="large")
     parser.add_argument(
@@ -130,9 +130,6 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(results, indent=2))
         return 0
     print(f"SALBP {args.dataset} — {args.seconds:g}s per solver, seed {args.seed}")
-    print(
-        "Hexaly's published comparison uses the same large/very-large archive and a 60s budget."
-    )
     print(
         f"{'instance':<28} {'n':>5} {'solver':<9} {'stations':>9} {'BKS':>7} {'gap':>9} {'seconds':>9}"
     )

@@ -136,3 +136,6 @@ Apache-2.0. The engine and several use cases are derived from
 (both Apache-2.0); the wheel ships `LICENSE` and `NOTICE`, and the
 [NOTICE](https://github.com/optimaru/optimaru/blob/main/NOTICE) file lists the
 attribution. optimaru is not affiliated with or endorsed by Timefold BV.
+The compiled extensions are built with
+[pybind11](https://github.com/pybind/pybind11) (BSD-3-Clause), whose license
+ships in the wheel as `licenses/pybind11-LICENSE`.

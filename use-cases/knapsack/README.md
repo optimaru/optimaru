@@ -4,8 +4,7 @@ The 0/1 knapsack with multidimensional resources, mandatory and forbidden
 items, selection-group bounds and item dependencies, on this repository's C++
 engine (`include/optimaru/`): choose the items that maximize the total value
 while the selection fits the capacity and every side rule. The basic
-formulation follows the official
-[Hexaly knapsack template](https://www.hexaly.com/templates/knapsack-problem);
+formulation is the classic 0-1 knapsack problem (Martello & Toth 1990);
 the extra contracts expose common multiple-choice and multidimensional variants
 without changing the default instance format.
 [`benchmarks/knapsack/cpsat`](../../benchmarks/knapsack/cpsat) holds the exact

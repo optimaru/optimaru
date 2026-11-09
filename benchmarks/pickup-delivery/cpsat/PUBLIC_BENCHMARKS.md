@@ -1,17 +1,18 @@
 # PDPTW public comparison
 
-Source: Hexaly's Li & Lim archive
-(`https://www.hexaly.com/examples/pdptw.zip`). The local contracts use integer
+Source: the 100-customer Li & Lim set from SINTEF's TOP benchmark page
+(`https://www.sintef.no/projectweb/top/pdptw/li-lim-benchmark/`, archive
+`pdp_100.zip`, SHA-256 pinned). The local contracts use integer
 travel time, so continuous Euclidean edge lengths are projected to the nearest
 integer for both backends. The result is therefore a backend comparison on the
 same official coordinates and constraints, not a bit-identical reproduction
-of Hexaly's two-decimal objective.
+of the published two-decimal objective.
 
 Both local backends use the same comparison objective: assign every request,
 then minimize integral travel distance. Vehicle count is reported as a route
 diagnostic, but is not encoded as a giant fixed cost: that scalarization creates
-an artificial objective cliff for a local-search solver. Reproducing Hexaly's
-fleet-count-first objective requires a real lexicographic or two-stage solve.
+an artificial objective cliff for a local-search solver. Reproducing the
+benchmark's fleet-count-first objective requires a real lexicographic or two-stage solve.
 
 Fast comparison on the first ten request pairs:
 

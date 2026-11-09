@@ -1,7 +1,7 @@
 """Use-case-local engine/CP-SAT comparison on generated bin-packing instances.
 
 The formulation, deterministic comparison instances, and CLI entry point live
-together in this use-case package. The Hexaly BPP template instances run
+together in this use-case package. Falkenauer's public instances run
 through ``bench/run_bench.py`` (downloaded on demand); these instances need no
 download, so CI can smoke-test both solvers.
 """

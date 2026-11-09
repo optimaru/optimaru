@@ -69,7 +69,7 @@ def _run_cpsat(problem, seconds: float, seed: int, workers: int) -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Compare our solvers on the instances shipped by Hexaly's BPP template."
+        description="Compare our solvers on Falkenauer's uniform and triplet instances (OR-Library)."
     )
     parser.add_argument(
         "--instance",
@@ -123,10 +123,7 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(results, indent=2))
         return 0
     print(
-        f"Hexaly BPP template instances — {args.seconds:g}s per solver, seed {args.seed}"
-    )
-    print(
-        "These t/u files are not the BPPLIB GI collection used in Hexaly's 2024 benchmark article."
+        f"Falkenauer u/t instances (OR-Library) — {args.seconds:g}s per solver, seed {args.seed}"
     )
     print(
         f"{'instance':<12} {'items':>6} {'solver':<9} {'bins':>7} {'weight LB':>10} {'LB gap':>9} {'seconds':>9}"
