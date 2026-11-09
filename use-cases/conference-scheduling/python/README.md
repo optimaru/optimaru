@@ -19,7 +19,7 @@ uv run pytest -q
 ```python
 import conference_scheduling as cs
 
-schedule = cs.demo_conference()  # reproduces Java DemoDataGenerator (15 talks / 6 slots / 5 rooms)
+schedule = cs.demo_conference()  # the demo instance (15 talks / 6 slots / 5 rooms)
 cs.solve(schedule, time_limit_seconds=10.0, random_seed=42)
 print(schedule.score)  # e.g. 0hard/-54420soft
 print(cs.constraint_costs(schedule)["content_conflict_cost"]["costs"])  # raw, before the weight
@@ -122,6 +122,6 @@ cells by `compatible_value_probability` (default 0.9).
 
 ## Demo data
 
-`demo_conference()` reproduces the Java `DemoDataGenerator` exactly (down to the
-java.util.Random(0) tag draws): 2 Lab + 13 Breakout talks, 6 timeslots in a day,
+`demo_conference()` builds the demo conference, modelled on the quickstart's demo, with
+its tags drawn from a seeded `random.Random` (the same instance on every run): 2 Lab + 13 Breakout talks, 6 timeslots in a day,
 5 rooms, 12 speakers. A 10 s solve reaches hard 0.

@@ -226,8 +226,7 @@ PYBIND11_MODULE(_core, m)
           "Full recompute of the HardSoftScore (also stores schedule.score).");
     m.def("demo_data",
           &buildDemoData,
-          "The Java quickstart's DemoDataGenerator, reproduced draw-for-draw "
-          "with java.util.Random(0) (see ms/demo_data.hpp).");
+          "The demo instance (deterministic; see ms/demo_data.hpp).");
 
     optimaru::python::bind_config_copy(py::class_<Solver::Config>(m, "SolverConfig", py::module_local()))
         .def(py::init<>())

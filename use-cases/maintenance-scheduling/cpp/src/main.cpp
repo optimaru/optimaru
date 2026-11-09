@@ -1,4 +1,4 @@
-// Demo: reproduces the Java quickstart's DemoDataGenerator instance (SMALL
+// Demo: builds a demo instance (mnt/demo_data.hpp; SMALL
 // by default, LARGE with `--large`), solves it for N seconds (default 10)
 // and prints the per-crew schedule. Exits non-zero unless the solution is
 // feasible (0hard).

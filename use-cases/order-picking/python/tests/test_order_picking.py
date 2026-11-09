@@ -147,11 +147,11 @@ def test_distance_constraints_and_shadows():
 # ---------------------------------------------------------------------------
 
 
-def test_demo_data_matches_java_generator():
+def test_demo_data_shape():
     solution = op.build_demo_data()
     assert len(solution.trolleys) == 5
     assert len(solution.orders) == 8
-    assert len(solution.pick_tasks) == 114  # java.util.Random(37) replay
+    assert len(solution.pick_tasks) == 107  # seed 37
     assert all(t.bucket_count == 4 and t.bucket_capacity == 48000 for t in solution.trolleys)
     assert all(t.location.shelving_id == "(A,1)" for t in solution.trolleys)
     with pytest.raises(ValueError):

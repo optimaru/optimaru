@@ -65,7 +65,7 @@ below 1e6 — always the case on realistic instances. The fold is declared once 
 ```python
 import meeting_scheduling as ms
 
-schedule = ms.demo_data()  # reproduces Java DemoDataGenerator (24 meetings, 160 grains)
+schedule = ms.demo_data()  # the demo instance (24 meetings, 160 grains)
 result = ms.solve(schedule, time_limit_seconds=10.0, random_seed=42)
 raw = ms.constraint_costs(result)
 medium = sum(sum(e["costs"]) * e["weight"] for e in raw.values() if e["level"] == "medium")
@@ -124,9 +124,8 @@ uv run pytest -q
   `room_capacity_cost`, with room == null) score differently only in that state; on fully assigned solutions the
   semantics match exactly. In this port an unassigned (-1) entity contributes no score
   (engine contract).
-- `demo_data()` reproduces `java.util.Random(0)` and makes the same draws as the Java
-  demo, but pins the calendar dates to dayOfYear 200..203 (Java uses 4 days from
-  "tomorrow").
+- `demo_data()` is deterministic: its draws come from a seeded `std::mt19937_64` and the
+  calendar dates are pinned to dayOfYear 200..203.
 
 ## Solver defaults and quality bench (2026-08-18)
 

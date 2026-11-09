@@ -43,9 +43,8 @@ HOURS = [
 def _build(count_days: int, count_flights: int, seed: int) -> Any:
     """Structural transcription of the C++ demo's ``generateDemoData``.
 
-    Python's RNG stream differs from mt19937_64, so — like the C++ demo's own
-    note about java.util.Random — the instance matches the Java demo in scale
-    and distribution rather than bit-for-bit.
+    Python's RNG stream differs from mt19937_64, so the instance matches the
+    C++ demo in scale and distribution rather than bit-for-bit.
     """
     import flight_crew as fcs
 
@@ -148,7 +147,7 @@ def _build(count_days: int, count_flights: int, seed: int) -> Any:
 
 def instances() -> dict[str, Callable[[], Any]]:
     return {
-        # The Java demo's own scale: 6 airports, 5 days, 14 flights.
+        # The demo's scale: 6 airports, 5 days, 14 flights.
         "demo": lambda: _build(5, 14, seed=0),
         "medium": lambda: _build(7, 28, seed=1),
         "large": lambda: _build(10, 56, seed=2),

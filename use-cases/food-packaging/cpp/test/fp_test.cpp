@@ -16,7 +16,7 @@
 //       stand-in
 //   (e) operator-assignment helpers (Java's Line.operator variable, handled
 //       by the wrapper's alternating loop)
-//   (f) the Java demo instance (Random(37) replica) has the expected shape
+//   (f) the demo instance (seed 37) has the expected shape
 //       and reaches 0hard
 //   (g) HardMediumSoft <-> engine HardSoft mapping roundtrip (the domain's
 //       medium fold, into_soft(10^10)) + input validation errors
@@ -525,11 +525,11 @@ void verifyOperatorAssignment()
 }
 
 // -------------------------------------------------------------------------
-// (f) The Java demo instance: shape checks + a solve to 0hard.
+// (f) The demo instance: shape checks + a solve to 0hard.
 // -------------------------------------------------------------------------
 void verifyDemo()
 {
-    std::printf("== (f) Java demo instance (Random(37) replica) ==\n");
+    std::printf("== (f) demo instance (seed 37) ==\n");
     PackagingSchedule s = generateDemoData();
     check(static_cast<int>(s.products.size()) == 60,
           "60 products (10 ingredients x 6)");

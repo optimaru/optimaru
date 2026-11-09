@@ -19,8 +19,8 @@ Port: only the domain and constraints are implemented, on top of the generic eng
 - `include/op/incremental_calculator.hpp` — before/after_list_edit hooks for
   per-trolley O(list) incremental scoring (checked against full recompute under ScoreChecks::Full).
 - `include/op/solver.hpp` — engine wrapper (LIST move mix + ALNS + warehouse-distance nearby).
-- `src/demo_data.cpp` — reproduces the Java `DemoDataGenerator` (bit-identical
-  `java.util.Random(37)` replay: 37-product catalog, 8 orders, 5 trolleys x 4 buckets x 48000 cm3).
+- `src/demo_data.cpp` — the demo warehouse, modelled on the quickstart's demo and drawn
+  from a seeded `std::mt19937_64` (seed 37): 37-product catalog, 8 orders, 5 trolleys x 4 buckets x 48000 cm3).
 
 ## Build / run
 
@@ -29,5 +29,5 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j4
 ./build/op_test         # per-constraint hand checks + incremental==full + ScoreChecks::Full solve
 ./build/op_plugin_test  # plugin assembly == monolith, raw costs by hand, catalog, overrides
-./build/op_demo         # 10 s solve of the Java demo dataset, reaches feasible (hard 0)
+./build/op_demo         # 10 s solve of the demo warehouse, reaches feasible (hard 0)
 ```

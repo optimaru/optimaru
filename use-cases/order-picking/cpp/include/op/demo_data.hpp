@@ -8,12 +8,11 @@
 namespace op
 {
 
-// Reproduction of org.acme.orderpicking.bootstrap.DemoDataGenerator: the same
+// The demo warehouse, modelled on the quickstart's demo data: a
 // 37-product catalog (volumes in cm3, product-family shelving placement), the
-// same defaults (5 trolleys x 4 buckets x 60*40*20 cm3, 8 orders, start
-// location (A,1) LEFT row 0) and a bit-exact java.util.Random(37) stream, so
-// the generated instance is the very dataset the Java quickstart solves at
-// startup.
+// defaults of 5 trolleys x 4 buckets x 60*40*20 cm3, 8 orders, start
+// location (A,1) LEFT row 0. Orders are drawn from a seeded std::mt19937_64
+// (seed 37), so the instance is the same on every platform.
 //
 // Throws std::invalid_argument when bucketCapacity is smaller than the
 // largest product (DemoDataGenerator.validateBucketCapacity: the problem

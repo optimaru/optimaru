@@ -59,7 +59,7 @@ def _distinct_equipment(
 
 def _build(room_count: int, last_day: int, seed: int) -> Any:
     """Structural transcription of the C++ demo's ``generateDemoData``.
-    Python's RNG stream differs from mt19937_64, so this matches the Java demo
+    Python's RNG stream differs from mt19937_64, so this matches the C++ demo
     in scale and distribution rather than bit-for-bit."""
     import bed_allocation as ba
 

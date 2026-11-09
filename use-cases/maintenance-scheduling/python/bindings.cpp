@@ -279,9 +279,8 @@ PYBIND11_MODULE(_core, m)
         },
         py::arg("size") = "SMALL",
         py::arg("from_date") = py::none(),
-        "The Java DemoDataGenerator instance (bit-exact java.util.Random "
-        "replica). from_date defaults to the next Monday, like the Java "
-        "demo; pass a fixed Monday epoch day for reproducibility.");
+        "A demo instance (deterministic, seed 17). from_date defaults to "
+        "the next Monday; pass a fixed Monday epoch day for reproducibility.");
 
     py::class_<Solver::Config> config(m, "SolverConfig", py::module_local());
 

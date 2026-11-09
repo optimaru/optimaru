@@ -12,7 +12,7 @@ the raw per-constraint costs::
 
     import meeting_scheduling as ms
 
-    schedule = ms.demo_data()  # reproduces Java DemoDataGenerator (24 meetings)
+    schedule = ms.demo_data()  # the demo instance (24 meetings)
     result = ms.solve(schedule, time_limit_seconds=10.0, random_seed=42)
     print(result.score.hard, result.score.soft)
 

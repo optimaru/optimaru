@@ -6,6 +6,7 @@
 #include <set>
 #include <string>
 #include <vector>
+#include <random>
 
 namespace fp
 {
@@ -13,86 +14,38 @@ namespace fp
 namespace
 {
 
-// Bit-exact replica of java.util.Random (48-bit LCG): nextInt(bound),
-// nextLong() and the Java 17+ RandomGenerator default nextLong(bound), the
-// three methods the demo generator draws from.
-class JavaRandom
+// The demo generator's random draws: std::mt19937_64 with hand-written
+// bounded draws, so a seed gives the same instance with every standard
+// library (the std:: distributions are implementation-defined).
+class DemoRandom
 {
 public:
-    explicit JavaRandom(std::uint64_t seed)
-        : seed_((seed ^ kMultiplier) & kMask48)
+    explicit DemoRandom(std::uint64_t seed)
+        : engine_(seed)
     {
     }
 
-    std::int32_t nextInt(std::int32_t bound)
+    // Uniform in [0, bound), bound > 0.
+    int next_int(int bound)
     {
-        std::int32_t r = next(31);
-        const std::int32_t m = bound - 1;
-        if ((bound & m) == 0)  // power of two
-        {
-            r = static_cast<std::int32_t>((static_cast<std::int64_t>(bound) * r)
-                                          >> 31);
-        }
-        else
-        {
-            // Java: for (int u = r; u - (r = u % bound) + m < 0; u =
-            // next(31)); — the int32 overflow test, done here in 64 bits.
-            std::int32_t u = r;
-            r = u % bound;
-            while (static_cast<std::int64_t>(u) - r + m
-                   > std::numeric_limits<std::int32_t>::max())
-            {
-                u = next(31);
-                r = u % bound;
-            }
-        }
-        return r;
+        return static_cast<int>(engine_() % static_cast<std::uint64_t>(bound));
     }
 
-    std::int64_t nextLong()
+    // Uniform in [0, bound), bound > 0.
+    std::int64_t next_long(std::int64_t bound)
     {
-        // ((long) next(32) << 32) + next(32) — the second draw is a SIGNED
-        // 32-bit value, sign-extended before the addition.
-        const std::int64_t high = static_cast<std::int64_t>(next(32)) << 32;
-        return high + next(32);
+        return static_cast<std::int64_t>(engine_()
+                                         % static_cast<std::uint64_t>(bound));
     }
 
-    // RandomSupport.boundedNextLong (the RandomGenerator default method
-    // java.util.Random inherits): rejection sampling over nextLong() >>> 1.
-    std::int64_t nextLong(std::int64_t bound)
+    // Uniform in [0, 1).
+    double next_double()
     {
-        std::int64_t r = nextLong();
-        const std::int64_t m = bound - 1;
-        if ((bound & m) == 0)
-            return r & m;
-        std::int64_t u
-            = static_cast<std::int64_t>(static_cast<std::uint64_t>(r) >> 1);
-        r = u % bound;
-        // Java: u + m - r < 0 with wrapping int64 arithmetic.
-        while (static_cast<std::int64_t>(static_cast<std::uint64_t>(u)
-                                         + static_cast<std::uint64_t>(m)
-                                         - static_cast<std::uint64_t>(r))
-               < 0)
-        {
-            u = static_cast<std::int64_t>(static_cast<std::uint64_t>(nextLong())
-                                          >> 1);
-            r = u % bound;
-        }
-        return r;
+        return static_cast<double>(engine_() >> 11) * 0x1.0p-53;
     }
 
 private:
-    static constexpr std::uint64_t kMultiplier = 0x5DEECE66DULL;
-    static constexpr std::uint64_t kAddend = 0xBULL;
-    static constexpr std::uint64_t kMask48 = (1ULL << 48) - 1;
-
-    std::int32_t next(int bits)
-    {
-        seed_ = (seed_ * kMultiplier + kAddend) & kMask48;
-        return static_cast<std::int32_t>(seed_ >> (48 - bits));
-    }
-
-    std::uint64_t seed_;
+    std::mt19937_64 engine_;
 };
 
 const char *const kIngredients[] = {"Carrots",
@@ -135,7 +88,7 @@ PackagingSchedule generateDemoData(int lineCount, int jobCount)
 
     constexpr Minutes kMinutesPerDay = 24 * 60;
 
-    JavaRandom random(37);
+    DemoRandom random(37);
     PackagingSchedule solution;
     solution.fromMinute = 0;                  // START_DATE (a Monday)
     solution.toMinute = 14 * kMinutesPerDay;  // START_DATE.plusWeeks(2)
@@ -146,7 +99,7 @@ PackagingSchedule generateDemoData(int lineCount, int jobCount)
     for (int i = 0; i < kIngredientCount; ++i)
     {
         const std::string ingredient = kIngredients[i];
-        const int r = random.nextInt(kIngredientCount - 4);
+        const int r = random.next_int(kIngredientCount - 4);
         const std::string a = kIngredients[(i + r + 1) % kIngredientCount];
         const std::string b = kIngredients[(i + r + 2) % kIngredientCount];
         const std::string c = kIngredients[(i + r + 3) % kIngredientCount];
@@ -200,7 +153,7 @@ PackagingSchedule generateDemoData(int lineCount, int jobCount)
                       : (noCleaning
                              ? noCleaningMinutes
                              : cleaningMinutesMinimum
-                                   + random.nextInt(cleaningMinutesMaximum
+                                   + random.next_int(cleaningMinutesMaximum
                                                     - cleaningMinutesMinimum));
             solution.cleanupMinutes[static_cast<std::size_t>(previous)
                                         * productCount
@@ -223,25 +176,25 @@ PackagingSchedule generateDemoData(int lineCount, int jobCount)
     solution.jobs.reserve(jobCount);
     for (int i = 0; i < jobCount; ++i)
     {
-        const int productIndex = random.nextInt(productCount);
+        const int productIndex = random.next_int(productCount);
         Job job;
         job.id = std::to_string(i);
         job.name = demoProducts[productIndex].name;
         job.productIndex = productIndex;
         job.durationMinutes = jobDurationMinutesMinimum
-                              + random.nextLong(static_cast<std::int64_t>(
+                              + random.next_long(static_cast<std::int64_t>(
                                                     jobDurationMinutesMaximum)
                                                 - jobDurationMinutesMinimum);
         const int targetDayIndex = (i / lineCount)
                                    * averageCleaningAndJobDurationMinutes
                                    / (24 * 60);
         job.minStartTime = static_cast<Minutes>(
-                               random.nextInt(std::max(1, targetDayIndex - 2)))
+                               random.next_int(std::max(1, targetDayIndex - 2)))
                            * kMinutesPerDay;
         job.idealEndTime
-            = (targetDayIndex + random.nextLong(3)) * kMinutesPerDay + 16 * 60;
+            = (targetDayIndex + random.next_long(3)) * kMinutesPerDay + 16 * 60;
         job.maxEndTime
-            = job.idealEndTime + (1 + random.nextLong(3)) * kMinutesPerDay;
+            = job.idealEndTime + (1 + random.next_long(3)) * kMinutesPerDay;
         job.priority = 1;
         job.pinned = false;
         solution.jobs.push_back(std::move(job));

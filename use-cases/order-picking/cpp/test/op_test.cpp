@@ -464,7 +464,7 @@ void verifyDemoData()
                      == s.pickTasks[i].location.side
               && again.pickTasks[i].location.row == s.pickTasks[i].location.row;
     }
-    check(same, "generation is deterministic (java.util.Random(37) replay)");
+    check(same, "generation is deterministic (seed 37)");
 
     bool throws = false;
     try
@@ -510,7 +510,7 @@ void verifySolve()
     }
 
     // Plain solve on the full demo instance: must assign every pick exactly
-    // once and reach hard 0 (the Java demo dataset is comfortably feasible).
+    // once and reach hard 0 (the demo warehouse is comfortably feasible).
     {
         OrderPickingSolution s = buildDemoData();
         Solver::Config config;

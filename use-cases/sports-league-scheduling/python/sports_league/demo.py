@@ -1,14 +1,15 @@
-"""Reproduction of the Java quickstart DemoDataGenerator — 14 South American teams, 32 rounds, 182 matches.
+"""The demo league, modelled on the quickstart's demo: 14 South American teams, 32 rounds, 182 matches.
 
-The classic-match draw implements java.util.Random(0)'s 48-bit LCG exactly, giving a
-bit-identical instance to the Java/C++ demos. The only difference: Java picks weekend rounds
-with LocalDate.now(), while here round 0 is pinned to a Wednesday for determinism (the
-same as the C++ demo).
+The classic matches are drawn from a seeded ``random.Random``, so the instance is the same
+on every run (it is not the same draw as the C++ demo's). Round 0 is pinned to a Wednesday
+so the weekend rounds do not depend on today's date.
 """
+
+import random
 
 from ._core import LeagueSchedule, Match, Round, Team
 
-__all__ = ["JavaRandom", "demo_schedule"]
+__all__ = ["demo_schedule"]
 
 _TEAM_NAMES = [
     "Cruzeiro",
@@ -45,40 +46,18 @@ _DISTANCE_IN_KM = [
 ]
 
 _ROUNDS = 32
-# Java marks Saturdays/Sundays from LocalDate.now() as weekends; here round 0 is
-# pinned to a Wednesday (0=Mon .. 6=Sun).
+# Round 0 is pinned to a Wednesday (0=Mon .. 6=Sun), so the weekend rounds are fixed.
 _FIRST_ROUND_DAY_OF_WEEK = 2
 
 
-class JavaRandom:
-    """java.util.Random's 48-bit LCG (only nextInt(bound) is implemented)."""
-
-    _MULTIPLIER = 0x5DEECE66D
-    _ADDEND = 0xB
-    _MASK = (1 << 48) - 1
-
-    def __init__(self, seed: int) -> None:
-        self._seed = (seed ^ self._MULTIPLIER) & self._MASK
-
-    def _next(self, bits: int) -> int:
-        self._seed = (self._seed * self._MULTIPLIER + self._ADDEND) & self._MASK
-        return self._seed >> (48 - bits)
-
-    def next_int(self, bound: int) -> int:
-        if bound <= 0:
-            raise ValueError("bound must be positive")
-        if bound & -bound == bound:  # power of two
-            return (bound * self._next(31)) >> 31
-        while True:
-            bits = self._next(31)
-            val = bits % bound
-            if bits - val + (bound - 1) < 2**31:  # Java int overflow check
-                return val
+def _pick(rng: random.Random, n: int) -> int:
+    """An index in [0, n). Built on random(), whose output Python guarantees per seed."""
+    return int(rng.random() * n)
 
 
 def demo_schedule() -> LeagueSchedule:
-    """The same instance as Java DemoDataGenerator.generateDemoData()."""
-    random = JavaRandom(0)
+    """The demo instance (deterministic)."""
+    rng = random.Random(0)
 
     rounds = [Round(i, weekend_or_holiday=((_FIRST_ROUND_DAY_OF_WEEK + i) % 7) >= 5) for i in range(_ROUNDS)]
     teams = [Team(str(i + 1), name) for i, name in enumerate(_TEAM_NAMES)]
@@ -90,14 +69,14 @@ def demo_schedule() -> LeagueSchedule:
         if i != j
     ]
 
-    # 5% classic draw (Java applyRandomValue: pick the nextInt(size)-th remaining
-    # non-classic match and shrink size by one).
+    # 5% classic draw: pick the k-th remaining non-classic match, k uniform in
+    # [0, size), and shrink size by one.
     picks = int(len(matches) * 0.05)
     size = len(matches)
     for _ in range(picks):
         if size <= 0:
             break
-        skip = random.next_int(size)
+        skip = _pick(rng, size)
         for match in matches:
             if match.classic_match:
                 continue

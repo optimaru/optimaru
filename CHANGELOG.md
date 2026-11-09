@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **Demo instances drawn with the platform's own RNGs.** The demo generators of
+  conference, food-packaging, maintenance, meeting, order-picking, sports-league
+  and tournament scheduling no longer replicate `java.util.Random` draw for draw.
+  The C++ generators use `std::mt19937_64` (with hand-written bounded draws, so a
+  seed gives the same instance on every standard library) and the Python ones
+  `random.Random`. Each demo keeps its shape and scale and is still
+  deterministic, but the instances themselves are new (e.g.
+  `order_picking.build_demo_data()` now has 107 pick tasks instead of 114), so
+  scores on them differ from earlier releases. The affected benchmark rows are
+  re-measured.
 - **Engine restructured; C++ API renamed.** The engine under
   `include/optimaru/` no longer mirrors Timefold Solver's Java package layout
   or names: the headers are grouped by role (`model/`, `score/`,

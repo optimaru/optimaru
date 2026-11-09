@@ -10,8 +10,8 @@ one composite BASIC variable `slotRoom = timeslotIndex * roomCount + roomIndex`
 
 - `cpp/` — domain (`cs::ConferenceSchedule`), full-recompute
   `ScoreCalculator` (+ the C++ per-constraint `Breakdown`, one member per registry name),
-  O(delta) incremental calculator, ALNS solver wrapper, a demo reproducing the Java
-  `DemoDataGenerator` (`cs_demo`), tests (`cs_test`, `cs_plugin_test`).
+  O(delta) incremental calculator, ALNS solver wrapper, a demo modelled on the
+  quickstart's demo data (`cs_demo`), tests (`cs_test`, `cs_plugin_test`).
   `include/cs/constraints/` holds one component per constraint (`<subject>_cost.hpp`, plus
   `common.hpp`); `include/cs/constraints.hpp` assembles the default set
   (`defaultConstraints()`).

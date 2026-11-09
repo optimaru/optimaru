@@ -245,8 +245,8 @@ PYBIND11_MODULE(_core, m)
           &generateDemoData,
           py::arg("line_count") = 5,
           py::arg("job_count") = 100,
-          "The Java DemoDataGenerator instance (bit-exact java.util.Random "
-          "replica); minute 0 is the demo's Monday 00:00.");
+          "The demo plant (deterministic, seed 37); minute 0 is the demo's "
+          "Monday 00:00.");
 
     py::class_<Solver::Config> config(m, "SolverConfig", py::module_local());
 

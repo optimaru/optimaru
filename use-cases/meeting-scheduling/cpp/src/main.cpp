@@ -1,4 +1,4 @@
-// Meeting-scheduling demo: reproduces the Java quickstart's demo data (see
+// Meeting-scheduling demo: builds the demo instance (see
 // ms/demo_data.hpp), solves for N seconds (default 10) and prints the
 // resulting schedule. Exits non-zero unless the solution is feasible
 // (hard == 0).

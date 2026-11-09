@@ -239,8 +239,7 @@ PYBIND11_MODULE(_core, m)
           py::arg("bucket_capacity") = 60 * 40 * 20,
           py::arg("orders_count") = 8,
           py::arg("random_seed") = 37,
-          "The Java quickstart's DemoDataGenerator dataset (bit-exact "
-          "java.util.Random replay).");
+          "The demo warehouse (deterministic for a given random_seed).");
 
     optimaru::python::bind_config_copy(py::class_<Solver::Config>(m, "SolverConfig", py::module_local()))
         .def(py::init<>())

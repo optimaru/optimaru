@@ -59,7 +59,7 @@ uv run pytest -q
 ```python
 import order_picking as op
 
-solution = op.build_demo_data()   # Java DemoDataGenerator dataset (bit-identical Random(37) replay)
+solution = op.build_demo_data()   # the demo warehouse (deterministic, seed 37)
 op.solve(solution, time_limit_seconds=5.0, random_seed=0)
 print(solution.score)             # e.g. 0hard/-8652soft
 print(solution.routes())          # {trolley id: [pick task id, ...]}

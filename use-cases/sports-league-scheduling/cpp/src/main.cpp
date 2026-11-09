@@ -1,14 +1,13 @@
-// Demo: the quickstart's DemoDataGenerator reproduced in C++ — 14 South
+// Demo: the demo league, modelled on the quickstart's demo — 14 South
 // American teams, 32 rounds, 182 matches (every ordered pair), ~5% classic
-// matches picked with java.util.Random(0) exactly like the Java code plus the
-// symmetric closure. The only divergence: Java flags weekend rounds from
-// LocalDate.now(); this demo pins round 0 to a fixed Wednesday so the
-// instance is deterministic.
+// matches drawn from a seeded std::mt19937_64 plus the symmetric closure.
+// Round 0 is pinned to a Wednesday so the instance is deterministic.
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <string>
 #include <vector>
+#include <random>
 
 #include "sls/domain.hpp"
 #include "sls/score_calculator.hpp"
@@ -19,50 +18,42 @@ using namespace sls;
 namespace
 {
 
-// java.util.Random (48-bit LCG), enough for nextInt(bound) — reproduces the
-// quickstart's classic-match sampling bit for bit.
-class JavaRandom
+// The demo generator's random draws: std::mt19937_64 with hand-written
+// bounded draws, so a seed gives the same instance with every standard
+// library (the std:: distributions are implementation-defined).
+class DemoRandom
 {
 public:
-    explicit JavaRandom(std::int64_t seed)
-        : seed_((static_cast<std::uint64_t>(seed) ^ kMultiplier) & kMask)
+    explicit DemoRandom(std::uint64_t seed)
+        : engine_(seed)
     {
     }
 
-    int nextInt(int bound)
+    // Uniform in [0, bound), bound > 0.
+    int next_int(int bound)
     {
-        if ((bound & -bound) == bound)  // power of two
-        {
-            return static_cast<int>(
-                (static_cast<std::int64_t>(bound) * next(31)) >> 31);
-        }
-        int bits;
-        int val;
-        do
-        {
-            bits = next(31);
-            val = bits % bound;
-        } while (bits - val + (bound - 1) < 0);
-        return val;
+        return static_cast<int>(engine_() % static_cast<std::uint64_t>(bound));
+    }
+
+    // Uniform in [0, bound), bound > 0.
+    std::int64_t next_long(std::int64_t bound)
+    {
+        return static_cast<std::int64_t>(engine_()
+                                         % static_cast<std::uint64_t>(bound));
+    }
+
+    // Uniform in [0, 1).
+    double next_double()
+    {
+        return static_cast<double>(engine_() >> 11) * 0x1.0p-53;
     }
 
 private:
-    static constexpr std::uint64_t kMultiplier = 0x5DEECE66DULL;
-    static constexpr std::uint64_t kAddend = 0xBULL;
-    static constexpr std::uint64_t kMask = (1ULL << 48) - 1;
-
-    int next(int bits)
-    {
-        seed_ = (seed_ * kMultiplier + kAddend) & kMask;
-        return static_cast<int>(seed_ >> (48 - bits));
-    }
-
-    std::uint64_t seed_;
+    std::mt19937_64 engine_;
 };
 
 constexpr int ROUNDS = 32;
-// Java flags rounds landing on Saturday/Sunday of LocalDate.now(); the demo
-// pins round 0 to Wednesday (0=Mon .. 6=Sun) for determinism.
+// Round 0 is a Wednesday (0=Mon .. 6=Sun), so the weekend rounds are fixed.
 constexpr int FIRST_ROUND_DAY_OF_WEEK = 2;
 
 const int DISTANCE_IN_KM[14][14] = {
@@ -165,7 +156,7 @@ const char *TEAM_NAMES[14] = {"Cruzeiro",
 LeagueSchedule generateDemoData()
 {
     LeagueSchedule schedule;
-    JavaRandom random(0);
+    DemoRandom random(0);
 
     // Rounds: weekends flagged from the pinned first day of week.
     for (int i = 0; i < ROUNDS; ++i)
@@ -203,15 +194,14 @@ LeagueSchedule generateDemoData()
         }
     }
 
-    // 5% classic matches — the Java applyRandomValue loop with Random(0):
-    // pick the nextInt(size)-th non-classic match, `size` shrinking by one
-    // per pick.
+    // 5% classic matches: pick the k-th non-classic match, k uniform in
+    // [0, size), `size` shrinking by one per pick.
     const int classicPicks
         = static_cast<int>(schedule.matches.size() * 0.05);  // 9
     int size = static_cast<int>(schedule.matches.size());
     for (int pick = 0; pick < classicPicks && size > 0; ++pick, --size)
     {
-        int skip = random.nextInt(size);
+        int skip = random.next_int(size);
         for (Match &match : schedule.matches)
         {
             if (match.classicMatch)

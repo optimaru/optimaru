@@ -161,8 +161,7 @@ def calculate_score(schedule: MeetingSchedule) -> Score:
     """Full recalculation (also stored in schedule.score)."""
 
 def demo_data() -> MeetingSchedule:
-    """Reproduces Java DemoDataGenerator (the same draws as java.util.Random(0)):
-    20 people, 160 time grains, 3 rooms, 24 meetings."""
+    """The demo instance (deterministic): 20 people, 160 time grains, 3 rooms, 24 meetings."""
 
 class SolverConfig:
     """Engine settings (default: 30 s budget, late acceptance + ALNS)."""

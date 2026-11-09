@@ -4,11 +4,11 @@ from itertools import pairwise
 
 import maintenance_scheduling as mnt
 
-# Reproduce the Java demo instance on a fixed Monday (2021-02-01).
+# The demo instance on a fixed Monday (2021-02-01).
 MONDAY = 18659
 
 
-def test_demo_data_matches_java_shape():
+def test_demo_data_shape():
     small = mnt.generate_demo_data("SMALL", MONDAY)
     assert small.crew_count() == 3
     assert len(small.jobs) == 14

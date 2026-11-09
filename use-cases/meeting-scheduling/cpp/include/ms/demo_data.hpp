@@ -1,75 +1,65 @@
 #ifndef MS_DEMO_DATA_HPP
 #define MS_DEMO_DATA_HPP
 
-// Reproduction of the Java quickstart's DemoDataGenerator, shared by the C++
-// demo executable and the Python bindings. The generator mirrors the Java
-// code draw-for-draw with a java.util.Random(0)-compatible LCG, so the
-// resulting instance (durations, attendee draws) matches the Java demo
-// exactly. Only the calendar differs: Java derives dayOfYear from "tomorrow";
-// here the four days are fixed to dayOfYear 200..203 for reproducibility.
+// The demo instance, modelled on the quickstart's demo data and shared by the
+// C++ demo executable and the Python bindings. Durations and attendees are
+// drawn from a seeded std::mt19937_64, and the four days are fixed to
+// dayOfYear 200..203, so the instance is the same on every run and platform.
 
 #include <cstdint>
 #include <functional>
 #include <string>
 #include <vector>
+#include <random>
 
 #include "ms/domain.hpp"
 
 namespace ms
 {
 
-// java.util.Random: the 48-bit LCG, next(31) and nextInt(bound).
-class JavaRandom
+// The demo generator's random draws: std::mt19937_64 with hand-written
+// bounded draws, so a seed gives the same instance with every standard
+// library (the std:: distributions are implementation-defined).
+class DemoRandom
 {
 public:
-    explicit JavaRandom(std::uint64_t seed)
-        : seed_((seed ^ kMultiplier) & kMask)
+    explicit DemoRandom(std::uint64_t seed)
+        : engine_(seed)
     {
     }
 
-    int nextInt(int bound)
+    // Uniform in [0, bound), bound > 0.
+    int next_int(int bound)
     {
-        int r = next31();
-        const int m = bound - 1;
-        if ((bound & m) == 0)  // power of two
-        {
-            return static_cast<int>((static_cast<std::int64_t>(bound) * r)
-                                    >> 31);
-        }
-        // Rejection loop; the Java int-overflow test done in 64 bits.
-        int u = r;
-        r = u % bound;
-        while (static_cast<std::int64_t>(u) - r + m > 2147483647LL)
-        {
-            u = next31();
-            r = u % bound;
-        }
-        return r;
+        return static_cast<int>(engine_() % static_cast<std::uint64_t>(bound));
+    }
+
+    // Uniform in [0, bound), bound > 0.
+    std::int64_t next_long(std::int64_t bound)
+    {
+        return static_cast<std::int64_t>(engine_()
+                                         % static_cast<std::uint64_t>(bound));
+    }
+
+    // Uniform in [0, 1).
+    double next_double()
+    {
+        return static_cast<double>(engine_() >> 11) * 0x1.0p-53;
     }
 
 private:
-    static constexpr std::uint64_t kMultiplier = 0x5DEECE66DULL;
-    static constexpr std::uint64_t kAddend = 0xBULL;
-    static constexpr std::uint64_t kMask = (1ULL << 48) - 1;
-
-    int next31()
-    {
-        seed_ = (seed_ * kMultiplier + kAddend) & kMask;
-        return static_cast<int>(seed_ >> 17);
-    }
-
-    std::uint64_t seed_;
+    std::mt19937_64 engine_;
 };
 
 namespace demo_detail
 {
 
-// Java DemoDataGenerator::applyRandomValue: apply `consumer` to `count`
+// Apply `consumer` to `count`
 // random elements still matching `filter` (each drawn uniformly among the
 // remaining matches).
 inline void applyRandomValue(int count,
                              std::vector<Meeting> &meetings,
-                             JavaRandom &random,
+                             DemoRandom &random,
                              const std::function<bool(const Meeting &)> &filter,
                              const std::function<void(Meeting &)> &consumer)
 {
@@ -81,7 +71,7 @@ inline void applyRandomValue(int count,
     }
     for (int i = 0; i < count; ++i)
     {
-        int skip = size > 0 ? random.nextInt(size) : 0;
+        int skip = size > 0 ? random.next_int(size) : 0;
         for (Meeting &meeting : meetings)
         {
             if (!filter(meeting))
@@ -110,7 +100,7 @@ inline bool contains(const std::vector<int> &values, int value)
 
 }  // namespace demo_detail
 
-// Java DemoDataGenerator::generateDemoData with java.util.Random(0): 20
+// The demo instance (seed 0): 20
 // people, 4 days x 40 grains (08:00-17:45, grainIndex 1..160), 3 rooms
 // (30/20/16 seats), 24 meetings (10x8 + 7x12 + 7x16 grains) with the same
 // required/preferred attendee draws, one MeetingAssignment per meeting.
@@ -151,7 +141,7 @@ inline MeetingSchedule buildDemoData()
         "Reinvigorate multitasking",
     };
 
-    JavaRandom random(0);
+    DemoRandom random(0);
     MeetingSchedule schedule;
 
     // People (two draws per person: first name, then last name).
@@ -160,13 +150,13 @@ inline MeetingSchedule buildDemoData()
     static constexpr int kPersonCount = 20;
     for (int i = 0; i < kPersonCount; ++i)
     {
-        const std::string first = kFirstNames[random.nextInt(27)];
-        const std::string last = kLastNames[random.nextInt(20)];
+        const std::string first = kFirstNames[random.next_int(27)];
+        const std::string last = kLastNames[random.next_int(20)];
         schedule.people.push_back({std::to_string(i), first + " " + last});
     }
 
     // Time grains: 4 days x (08:00 .. 17:45 step 15) = 160, grainIndex 1..160
-    // like the Java generator's pre-incremented counter.
+    // (consecutive, 1-based).
     static constexpr int kFirstDayOfYear = 200;
     int count = 0;
     for (int day = 0; day < 4; ++day)
@@ -190,7 +180,7 @@ inline MeetingSchedule buildDemoData()
         Meeting meeting;
         meeting.id = std::to_string(i);
         meeting.topic = kTopics[i];
-        meeting.durationInGrains = 0;  // drawn below, like Java
+        meeting.durationInGrains = 0;  // drawn below
         schedule.meetings.push_back(meeting);
     }
 
@@ -218,7 +208,7 @@ inline MeetingSchedule buildDemoData()
     {
         do
         {
-            const int person = random.nextInt(kPersonCount);
+            const int person = random.next_int(kPersonCount);
             if (!demo_detail::contains(meeting.requiredAttendees, person))
                 meeting.requiredAttendees.push_back(person);
         } while (static_cast<int>(meeting.requiredAttendees.size()) < size);
@@ -247,7 +237,7 @@ inline MeetingSchedule buildDemoData()
     {
         do
         {
-            const int person = random.nextInt(kPersonCount);
+            const int person = random.next_int(kPersonCount);
             if (!demo_detail::contains(meeting.preferredAttendees, person)
                 && !demo_detail::contains(meeting.requiredAttendees, person))
             {

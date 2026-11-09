@@ -109,7 +109,7 @@ cd use-cases/maintenance-scheduling/cpp
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j4
 ./build/mnt_test          # constraint hand checks + incremental==full + ScoreChecks::Full
 ./build/mnt_plugin_test   # plugin assembly == monolith, raw costs by hand, catalog, overrides
-./build/mnt_demo          # reproduces the Java demo (SMALL), 10 s, checks hard 0
+./build/mnt_demo          # the SMALL demo instance, 10 s, checks hard 0
 ./build/mnt_demo 15 --large
 
 cd ../python
@@ -117,8 +117,8 @@ uv venv && uv pip install -e . pytest pydantic
 uv run pytest -q
 ```
 
-The demo data reproduces the Java `DemoDataGenerator` bit for bit with a
-`java.util.Random(17)` replica (SMALL: 3 crews/8 weeks/14 jobs, LARGE: 5 crews/16 weeks/
+The demo data is modelled on the quickstart's demo and drawn from a seeded
+`std::mt19937_64` (seed 17), so it is the same on every platform (SMALL: 3 crews/8 weeks/14 jobs, LARGE: 5 crews/16 weeks/
 48 jobs; starting next Monday). Both SMALL and LARGE reach hard 0 within seconds.
 
 ## Usage

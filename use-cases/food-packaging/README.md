@@ -102,7 +102,7 @@ global total).
 cd cpp && cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j4
 ./build/fp_test          # constraint hand checks + incremental==full + ScoreChecks::Full + demo feasible
 ./build/fp_plugin_test   # plugin assembly == monolith, raw costs by hand, catalog, medium knobs
-./build/fp_demo [sec]    # reproduces the Java demo (5 lines, 100 jobs), default 10 s
+./build/fp_demo [sec]    # the demo plant (5 lines, 100 jobs), default 10 s
 
 cd ../python && uv venv && uv pip install -e . pytest pydantic && uv run pytest -q
 ```

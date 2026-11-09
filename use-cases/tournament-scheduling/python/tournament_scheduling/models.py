@@ -11,13 +11,14 @@ Score mapping (Java HardMediumSoftBigDecimalScore -> engine Score):
 
     from tournament_scheduling.models import TournamentScheduleModel, demo_data
 
-    model = demo_data()                          # reproduces Java DemoDataGenerator
+    model = demo_data()                          # the demo instance
     clone = TournamentScheduleModel.model_validate_json(model.model_dump_json())
     schedule = clone.to_core()                   # pydantic -> engine
 
 `pydantic` is an optional dependency (`pip install tournament_scheduling[models]`).
 """
 
+import random
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from . import _core
@@ -159,40 +160,21 @@ class TournamentScheduleModel(BaseModel):
         )
 
 
-class _JavaRandom:
-    """Reproduction of java.util.Random (48-bit LCG) — the same random numbers as the Java demo data."""
-
-    _MULTIPLIER = 0x5DEECE66D
-    _ADDEND = 0xB
-    _MASK = (1 << 48) - 1
-
-    def __init__(self, seed: int) -> None:
-        self._seed = (seed ^ self._MULTIPLIER) & self._MASK
-
-    def _next(self, bits: int) -> int:
-        self._seed = (self._seed * self._MULTIPLIER + self._ADDEND) & self._MASK
-        return self._seed >> (48 - bits)
-
-    def next_int(self, bound: int) -> int:
-        if bound & (bound - 1) == 0:  # power of two
-            return (bound * self._next(31)) >> 31
-        while True:
-            bits = self._next(31)
-            val = bits % bound
-            if bits - val + (bound - 1) < 2**31:  # Java int overflow check
-                return val
+def _pick(rng: random.Random, n: int) -> int:
+    """An index in [0, n). Built on random(), whose output Python guarantees per seed."""
+    return int(rng.random() * n)
 
 
 def demo_data() -> TournamentScheduleModel:
-    """Reproduction of the Java quickstart DemoDataGenerator: 7 teams, 18 days x 4 slots = 72
-    assignments, 12 unavailable days (the same draws as java.util.Random(0))."""
-    random = _JavaRandom(0)
+    """The demo instance, modelled on the quickstart's demo: 7 teams, 18 days x 4 slots = 72
+    assignments, 12 unavailable days drawn from a seeded ``random.Random`` (deterministic)."""
+    rng = random.Random(0)
     teams = ["Maarten", "Geoffrey", "Lukas", "Chris", "Fred", "Radek", "Maciej"]
     day_count = 18
     penalties: list[UnavailabilityPenaltyModel] = []
     while len(penalties) < 12:
-        team = random.next_int(len(teams))
-        day = random.next_int(day_count)
+        team = _pick(rng, len(teams))
+        day = _pick(rng, day_count)
         if all(p.team != team or p.day != day for p in penalties):
             penalties.append(UnavailabilityPenaltyModel(team=team, day=day))
     assignments = [TeamAssignmentModel(id=d * 4 + i, day=d, index_in_day=i) for d in range(day_count) for i in range(4)]

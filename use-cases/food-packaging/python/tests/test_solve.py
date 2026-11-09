@@ -1,4 +1,4 @@
-"""Demo solve checks: the Java demo instance reaches feasible with a consistent
+"""Demo solve checks: the demo instance reaches feasible with a consistent
 assignment, and pinned jobs and the unassigned pool are respected."""
 
 import time
@@ -8,7 +8,7 @@ import pytest
 import food_packaging as fp
 
 
-def test_demo_data_matches_java_shape():
+def test_demo_data_shape():
     schedule = fp.generate_demo_data()
     assert len(schedule.products) == 60  # 10 ingredients x 6
     assert schedule.line_count() == 5

@@ -15,7 +15,7 @@ uv run pytest -q
 ```python
 import maintenance_scheduling as mnt
 
-schedule = mnt.generate_demo_data("SMALL")  # reproduces the Java demo
+schedule = mnt.generate_demo_data("SMALL")  # the demo instance
 mnt.solve(schedule, time_limit_seconds=10.0, random_seed=42)
 print(schedule.score, schedule.score.is_feasible())
 

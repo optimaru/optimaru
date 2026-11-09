@@ -6,6 +6,7 @@
 #include <limits>
 #include <utility>
 #include <vector>
+#include <random>
 
 namespace mnt
 {
@@ -13,59 +14,38 @@ namespace mnt
 namespace
 {
 
-// Bit-exact replica of java.util.Random (48-bit LCG), enough for the demo
-// generator: nextInt(bound) and nextDouble().
-class JavaRandom
+// The demo generator's random draws: std::mt19937_64 with hand-written
+// bounded draws, so a seed gives the same instance with every standard
+// library (the std:: distributions are implementation-defined).
+class DemoRandom
 {
 public:
-    explicit JavaRandom(std::uint64_t seed)
-        : seed_((seed ^ kMultiplier) & kMask48)
+    explicit DemoRandom(std::uint64_t seed)
+        : engine_(seed)
     {
     }
 
-    std::int32_t nextInt(std::int32_t bound)
+    // Uniform in [0, bound), bound > 0.
+    int next_int(int bound)
     {
-        std::int32_t r = next(31);
-        const std::int32_t m = bound - 1;
-        if ((bound & m) == 0)  // power of two
-        {
-            r = static_cast<std::int32_t>((static_cast<std::int64_t>(bound) * r)
-                                          >> 31);
-        }
-        else
-        {
-            // Java: for (int u = r; u - (r = u % bound) + m < 0; u =
-            // next(31)); — the int32 overflow test, done here in 64 bits.
-            std::int32_t u = r;
-            r = u % bound;
-            while (static_cast<std::int64_t>(u) - r + m
-                   > std::numeric_limits<std::int32_t>::max())
-            {
-                u = next(31);
-                r = u % bound;
-            }
-        }
-        return r;
+        return static_cast<int>(engine_() % static_cast<std::uint64_t>(bound));
     }
 
-    double nextDouble()
+    // Uniform in [0, bound), bound > 0.
+    std::int64_t next_long(std::int64_t bound)
     {
-        const std::int64_t high = static_cast<std::int64_t>(next(26)) << 27;
-        return static_cast<double>(high + next(27)) * 0x1.0p-53;
+        return static_cast<std::int64_t>(engine_()
+                                         % static_cast<std::uint64_t>(bound));
+    }
+
+    // Uniform in [0, 1).
+    double next_double()
+    {
+        return static_cast<double>(engine_() >> 11) * 0x1.0p-53;
     }
 
 private:
-    static constexpr std::uint64_t kMultiplier = 0x5DEECE66DULL;
-    static constexpr std::uint64_t kAddend = 0xBULL;
-    static constexpr std::uint64_t kMask48 = (1ULL << 48) - 1;
-
-    std::int32_t next(int bits)
-    {
-        seed_ = (seed_ * kMultiplier + kAddend) & kMask48;
-        return static_cast<std::int32_t>(seed_ >> (48 - bits));
-    }
-
-    std::uint64_t seed_;
+    std::mt19937_64 engine_;
 };
 
 const char *const kJobAreaNames[] = {"Downtown",
@@ -155,20 +135,20 @@ MaintenanceSchedule generateDemoData(DemoData demoData, std::int64_t fromDate)
     const int jobListSize = weekListSize * crewCount * 3 / 5;
     const int jobAreaTargetLimit = std::min(kJobTargetNameCount, crewCount * 2);
 
-    JavaRandom random(17);
+    DemoRandom random(17);
     for (int i = 0; i < jobListSize; ++i)
     {
         const std::string jobArea = kJobAreaNames[i / jobAreaTargetLimit];
         const std::string jobTarget = kJobTargetNames[i % jobAreaTargetLimit];
         // 1 day to 2 workweeks (1 workweek on average).
-        const int durationInDays = 1 + random.nextInt(10);
+        const int durationInDays = 1 + random.next_int(10);
         const int minMaxBetweenWorkdays
             = durationInDays + 5  // at least 5 days of flexibility
-              + random.nextInt(workdayTotal - (durationInDays + 5));
+              + random.next_int(workdayTotal - (durationInDays + 5));
         const int minWorkdayOffset
-            = random.nextInt(workdayTotal - minMaxBetweenWorkdays + 1);
+            = random.next_int(workdayTotal - minMaxBetweenWorkdays + 1);
         const int minIdealEndBetweenWorkdays
-            = minMaxBetweenWorkdays - 1 - random.nextInt(4);
+            = minMaxBetweenWorkdays - 1 - random.next_int(4);
         const std::int64_t minStartDate
             = plusBusinessDays(fromDate, minWorkdayOffset);
         const std::int64_t maxEndDate
@@ -184,7 +164,7 @@ MaintenanceSchedule generateDemoData(DemoData demoData, std::int64_t fromDate)
         job.maxEndDate = maxEndDate;
         job.idealEndDate = idealEndDate;
         job.tags.push_back(jobArea);
-        if (random.nextDouble() < 0.1)
+        if (random.next_double() < 0.1)
             job.tags.push_back("Subway");
         schedule.jobs.push_back(std::move(job));
     }

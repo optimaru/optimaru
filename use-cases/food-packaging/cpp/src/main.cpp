@@ -1,5 +1,5 @@
-// Demo: reproduces the Java quickstart's DemoDataGenerator instance (5
-// lines, 100 jobs, java.util.Random(37) replica), solves it for N seconds
+// Demo: builds the demo plant (5 lines, 100 jobs, seed 37; see
+// fp/demo_data.hpp), solves it for N seconds
 // (default 10) and prints the per-line schedule. Exits non-zero unless the
 // solution is feasible (0hard).
 #include <cstdio>

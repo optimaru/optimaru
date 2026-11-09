@@ -122,9 +122,8 @@ def plus_business_days(start_date: int, business_days: int) -> int:
     business_days while skipping weekends."""
 
 def generate_demo_data(size: str = "SMALL", from_date: int | None = None) -> MaintenanceSchedule:
-    """Java DemoDataGenerator instance (bit-identical java.util.Random(17)
-    reproduction). SMALL: 3 crews/8 weeks/14 jobs, LARGE: 5 crews/16 weeks/48 jobs.
-    from_date defaults to next Monday (as in the Java demo); for reproducible tests
+    """A demo instance (deterministic, seed 17). SMALL: 3 crews/8 weeks/14 jobs,
+    LARGE: 5 crews/16 weeks/48 jobs. from_date defaults to next Monday; for reproducible tests
     pass a fixed Monday epoch day."""
 
 class SolverConfig:

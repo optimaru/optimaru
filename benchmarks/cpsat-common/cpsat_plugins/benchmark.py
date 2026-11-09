@@ -396,33 +396,3 @@ def run_cli(case: BenchmarkCase, argv: Sequence[str] | None = None) -> int:
         print(render_console(results, args.seconds, args.workers, args.seed))
     # A broken instance is still reported above, but fails the run.
     return 1 if any("error" in result for result in results) else 0
-
-
-class JavaRandom:
-    """Small java.util.Random replica used by deterministic demo adapters.
-
-    Written from the 48-bit LCG specified in the ``java.util.Random`` API documentation,
-    not copied from Timefold or JDK source.
-    """
-
-    _MULTIPLIER = 0x5DEECE66D
-    _ADDEND = 0xB
-    _MASK = (1 << 48) - 1
-
-    def __init__(self, seed: int = 0) -> None:
-        self._seed = (seed ^ self._MULTIPLIER) & self._MASK
-
-    def _next(self, bits: int) -> int:
-        self._seed = (self._seed * self._MULTIPLIER + self._ADDEND) & self._MASK
-        return self._seed >> (48 - bits)
-
-    def next_int(self, bound: int) -> int:
-        if bound <= 0:
-            raise ValueError("bound must be positive")
-        if bound & -bound == bound:
-            return (bound * self._next(31)) >> 31
-        while True:
-            bits = self._next(31)
-            value = bits % bound
-            if bits - value + (bound - 1) < (1 << 31):
-                return value

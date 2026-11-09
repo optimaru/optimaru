@@ -11,7 +11,7 @@
 //       violation-guided entity selection reads it) == a brute-force
 //       recomputation, across the same kind of random walk
 //   (c) a small instance solved under ScoreChecks::ScoreChecks::Full
-//   (d) the SMALL Java demo instance reaches 0hard; pinned jobs keep their
+//   (d) the SMALL demo instance reaches 0hard; pinned jobs keep their
 //       assignment through a solve
 #include <algorithm>
 #include <chrono>
@@ -522,7 +522,7 @@ void verifyFullAssertSolve()
 }
 
 // -------------------------------------------------------------------------
-// (d) The Java SMALL demo instance (fixed Monday for reproducibility)
+// (d) The SMALL demo instance (fixed Monday for reproducibility)
 // reaches 0hard, and a pinned job keeps its assignment through a solve.
 // -------------------------------------------------------------------------
 void verifyDemoAndPinnedSolve()
@@ -530,7 +530,7 @@ void verifyDemoAndPinnedSolve()
     std::printf("== (d) SMALL demo reaches 0hard; pinning holds ==\n");
     MaintenanceSchedule s = generateDemoData(DemoData::SMALL, DAY_1);
     check(static_cast<int>(s.jobs.size()) == 14 && s.crewCount() == 3,
-          "SMALL demo: 3 crews, 14 jobs (Java jobListSize)");
+          "SMALL demo: 3 crews, 14 jobs");
     ScoreCalculator::prepare(s);
 
     // Pin job 0 to its earliest in-window start on Gamma crew.

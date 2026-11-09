@@ -1,6 +1,5 @@
-// Order-picking demo: reproduces the Java quickstart's DemoDataGenerator
-// startup dataset (5 trolleys x 4 buckets x 60x40x20cm, 8 orders over the 37
-// product catalog, java.util.Random(37)), solves it for a few seconds and
+// Order-picking demo: builds the demo warehouse (5 trolleys x 4 buckets x 60x40x20cm, 8 orders over the 37
+// product catalog, seed 37), solves it for a few seconds and
 // prints the trolley paths — the C++ analog of pressing "Solve" in the
 // quickstart's webapp.
 #include <cstdio>
@@ -19,7 +18,7 @@ int main()
 {
     OrderPickingSolution solution = buildDemoData();
 
-    std::printf("Order picking demo (Java quickstart dataset)\n");
+    std::printf("Order picking demo\n");
     std::printf("  trolleys: %d (buckets %d x %d cm3 each)\n",
                 static_cast<int>(solution.trolleys.size()),
                 solution.trolleys[0].bucketCount,

@@ -1,12 +1,13 @@
-// Tournament-scheduling demo: reproduces the Java quickstart's
-// DemoDataGenerator (7 teams, 18 days, 4 match slots per day, 12
-// unavailability penalties drawn with java.util.Random(0)) and solves it,
+// Tournament-scheduling demo: builds the demo tournament (7 teams, 18 days,
+// 4 match slots per day, 12 unavailability penalties drawn from a seeded
+// std::mt19937_64) and solves it,
 // asserting a feasible (0hard) schedule.
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <string>
 #include <vector>
+#include <random>
 
 #include "ts/domain.hpp"
 #include "ts/score_calculator.hpp"
@@ -21,52 +22,44 @@ constexpr int DAY_COUNT = 18;
 constexpr int ASSIGNMENTS_PER_DAY = 4;
 constexpr int UNAVAILABILITY_PENALTY_COUNT = 12;
 
-// Faithful replica of java.util.Random (48-bit LCG), so the demo's
-// unavailability penalties match the Java generator's Random(0) draw exactly.
-class JavaRandom
+// The demo generator's random draws: std::mt19937_64 with hand-written
+// bounded draws, so a seed gives the same instance with every standard
+// library (the std:: distributions are implementation-defined).
+class DemoRandom
 {
 public:
-    explicit JavaRandom(std::int64_t seed)
-        : seed_((static_cast<std::uint64_t>(seed) ^ kMultiplier) & kMask)
+    explicit DemoRandom(std::uint64_t seed)
+        : engine_(seed)
     {
     }
 
-    int nextInt(int bound)
+    // Uniform in [0, bound), bound > 0.
+    int next_int(int bound)
     {
-        // bound 7 / 18 are not powers of two: the rejection path of
-        // java.util.Random.nextInt(int).
-        if ((bound & -bound) == bound)  // power of two
-        {
-            return static_cast<int>(
-                (static_cast<std::int64_t>(bound) * next(31)) >> 31);
-        }
-        std::int64_t bits, val;
-        do
-        {
-            bits = next(31);
-            val = bits % bound;
-            // Java retries when `bits - val + (bound - 1)` overflows int32.
-        } while (bits - val + (bound - 1) >= (std::int64_t{1} << 31));
-        return static_cast<int>(val);
+        return static_cast<int>(engine_() % static_cast<std::uint64_t>(bound));
+    }
+
+    // Uniform in [0, bound), bound > 0.
+    std::int64_t next_long(std::int64_t bound)
+    {
+        return static_cast<std::int64_t>(engine_()
+                                         % static_cast<std::uint64_t>(bound));
+    }
+
+    // Uniform in [0, 1).
+    double next_double()
+    {
+        return static_cast<double>(engine_() >> 11) * 0x1.0p-53;
     }
 
 private:
-    std::int64_t next(int bits)
-    {
-        seed_ = (seed_ * kMultiplier + kAddend) & kMask;
-        return static_cast<std::int64_t>(seed_ >> (48 - bits));
-    }
-
-    static constexpr std::uint64_t kMultiplier = 0x5DEECE66DULL;
-    static constexpr std::uint64_t kAddend = 0xBULL;
-    static constexpr std::uint64_t kMask = (1ULL << 48) - 1;
-    std::uint64_t seed_;
+    std::mt19937_64 engine_;
 };
 
-// The Java DemoDataGenerator, verbatim: teams, days, penalties, assignments.
+// The demo instance: teams, days, penalties, assignments.
 TournamentSchedule generateDemoData()
 {
-    JavaRandom random(0);
+    DemoRandom random(0);
     TournamentSchedule schedule;
     schedule.teams = {{"Maarten"},
                       {"Geoffrey"},
@@ -81,8 +74,8 @@ TournamentSchedule generateDemoData()
     while (static_cast<int>(schedule.unavailabilityPenalties.size())
            < UNAVAILABILITY_PENALTY_COUNT)
     {
-        const int team = random.nextInt(schedule.teamCount());
-        const int day = random.nextInt(schedule.dayCount());
+        const int team = random.next_int(schedule.teamCount());
+        const int day = random.next_int(schedule.dayCount());
         bool duplicate = false;
         for (const UnavailabilityPenalty &penalty :
              schedule.unavailabilityPenalties)

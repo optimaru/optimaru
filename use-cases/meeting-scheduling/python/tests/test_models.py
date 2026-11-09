@@ -6,7 +6,7 @@ import meeting_scheduling as ms
 from meeting_scheduling.models import MeetingScheduleModel, demo_data
 
 
-def test_demo_data_matches_java_generator_shape():
+def test_demo_data_shape():
     model = demo_data()
     assert len(model.people) == 20
     assert len(model.time_grains) == 160  # 4 days x 40 (08:00-17:45, 15 min)
@@ -15,7 +15,7 @@ def test_demo_data_matches_java_generator_shape():
     assert len(model.meeting_assignments) == 24
     durations = sorted(m.duration_in_grains for m in model.meetings)
     assert durations == [8] * 10 + [12] * 7 + [16] * 7
-    # Grain indices are consecutive and 1-based like the Java generator.
+    # Grain indices are consecutive and 1-based.
     assert [g.grain_index for g in model.time_grains] == list(range(1, 161))
     # Required/preferred attendees are within the people index range, no duplicates within a meeting.
     for meeting in model.meetings:

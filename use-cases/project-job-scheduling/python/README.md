@@ -17,7 +17,7 @@ uv run pytest -q
 import project_job as pj
 from project_job.demo import generate_demo_data
 
-schedule = generate_demo_data()  # pydantic model (reproduces the Java demo)
+schedule = generate_demo_data()  # pydantic model (the demo instance)
 result = pj.solve(schedule, time_limit_seconds=10.0, random_seed=42)
 print(result.score_hard, result.score_medium, result.score_soft)
 for allocation in result.allocations:
@@ -125,5 +125,5 @@ instances). Rule details are in `../cpp/include/pjs/domain.hpp`.
   (the SOURCE/SINK convention of the Java demo).
 - **Allocation's sourceAllocation/sinkAllocation fields**: references unused by any Java
   constraint, so not ported (REST shape only).
-- **Demo data**: scale and distributions follow the Java `DemoDataGenerator`, but the
-  `java.util.Random(0)` stream itself is not reproduced.
+- **Demo data**: scale and distributions follow the quickstart's demo, drawn from a
+  seeded `random.Random`.

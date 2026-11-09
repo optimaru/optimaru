@@ -75,14 +75,14 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j4
 ./build/fcs_test         # per-constraint hand checks + random walk + ScoreChecks::Full + pinned
 ./build/fcs_plugin_test  # plugin assembly == monolith, raw costs by hand, catalog, overrides
-./build/fcs_demo 10   # reproduces the Java DemoDataGenerator scale, 10 s solve
+./build/fcs_demo 10   # the demo instance, 10 s solve
 
 cd ../python
 uv venv && uv pip install -e . pytest pydantic
 uv run pytest -q
 ```
 
-The demo generates the same scale as the Java demo (6 airports, 5 days, 14 flights, ~60
+The demo generates an instance at the scale of the quickstart's demo (6 airports, 5 days, 14 flights, ~60
 seats, ~50 crew members) and reaches feasible (hard 0) within 10 s.
 
 ## Layout
@@ -109,8 +109,8 @@ seats, ~50 crew members) and reaches feasible (hard 0) within 10 s.
 
 - Java `Airport.taxiTimeInMinutes` is a field no constraint or demo uses even in the
   original, so it was omitted.
-- The demo data uses the same generation logic and scale as Java, but the RNG differs
-  (std::mt19937_64 vs java.util.Random), so the instances are not byte-identical.
+- The demo data follows the quickstart's generation logic and scale, drawn from a seeded
+  `std::mt19937_64`.
 - `pinned` is an extension of this port (not in the original quickstart; the same pattern
   as the es/st ports).
 

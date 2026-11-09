@@ -1,7 +1,7 @@
 // Quality-benchmark driver for the C++ conference-scheduling port.
 //
 // Solves either (a) the demo instance (an exact copy of src/main.cpp's
-// generator, java.util.Random draws included) or (b) a deterministic scaled
+// generator, random draws included) or (b) a deterministic scaled
 // instance in the demo's shape (single-typed slots/rooms, so the synthetic
 // talkTypeIncompatibilityCost hard constraint dominates exactly like in the
 // demo) for a fixed wall-clock budget, then prints the best-score trajectory,
@@ -30,51 +30,38 @@ using namespace cs;
 namespace
 {
 
-// ---------------------------------------------------------------------------
-// java.util.Random (48-bit LCG) — copy of src/main.cpp's, so the "demo"
-// instance is bit-identical to the cs_demo binary's.
-// ---------------------------------------------------------------------------
-class JavaRandom
+// The demo generator's random draws: std::mt19937_64 with hand-written
+// bounded draws, so a seed gives the same instance with every standard
+// library (the std:: distributions are implementation-defined).
+class DemoRandom
 {
 public:
-    explicit JavaRandom(std::uint64_t seed)
-        : seed_((seed ^ 0x5DEECE66DULL) & MASK)
+    explicit DemoRandom(std::uint64_t seed)
+        : engine_(seed)
     {
     }
 
-    int nextInt(int bound)
+    // Uniform in [0, bound), bound > 0.
+    int next_int(int bound)
     {
-        int r = next(31);
-        const int m = bound - 1;
-        if ((bound & m) == 0)  // power of two
-        {
-            r = static_cast<int>((static_cast<std::int64_t>(bound) * r) >> 31);
-        }
-        else
-        {
-            int u = r;
-            r = u % bound;
-            while (static_cast<std::int32_t>(static_cast<std::uint32_t>(u)
-                                             - static_cast<std::uint32_t>(r)
-                                             + static_cast<std::uint32_t>(m))
-                   < 0)
-            {
-                u = next(31);
-                r = u % bound;
-            }
-        }
-        return r;
+        return static_cast<int>(engine_() % static_cast<std::uint64_t>(bound));
+    }
+
+    // Uniform in [0, bound), bound > 0.
+    std::int64_t next_long(std::int64_t bound)
+    {
+        return static_cast<std::int64_t>(engine_()
+                                         % static_cast<std::uint64_t>(bound));
+    }
+
+    // Uniform in [0, 1).
+    double next_double()
+    {
+        return static_cast<double>(engine_() >> 11) * 0x1.0p-53;
     }
 
 private:
-    static constexpr std::uint64_t MASK = (1ULL << 48) - 1;
-    std::uint64_t seed_;
-
-    int next(int bits)
-    {
-        seed_ = (seed_ * 0x5DEECE66DULL + 0xBULL) & MASK;
-        return static_cast<int>(seed_ >> (48 - bits));
-    }
+    std::mt19937_64 engine_;
 };
 
 constexpr int LAB = 0;
@@ -172,7 +159,7 @@ ConferenceSchedule buildDemoConference()
     }
     c.speakers.back().undesiredTimeslotTags = {"After lunch"};  // Beth Green
 
-    JavaRandom random(0);
+    DemoRandom random(0);
     auto addTalk = [&](const char *code,
                        const char *title,
                        int talkType,
@@ -187,11 +174,11 @@ ConferenceSchedule buildDemoConference()
         t.talkType = talkType;
         for (const std::string &name : speakers)
             t.speakers.push_back(speakerIndex(c, name));
-        t.themeTrackTags = {THEME_TAGS[random.nextInt(3)]};
-        t.sectorTags = {SECTOR_TAGS[random.nextInt(3)]};
-        t.audienceTypes = {AUDIENCE_TAGS[random.nextInt(3)]};
+        t.themeTrackTags = {THEME_TAGS[random.next_int(3)]};
+        t.sectorTags = {SECTOR_TAGS[random.next_int(3)]};
+        t.audienceTypes = {AUDIENCE_TAGS[random.next_int(3)]};
         t.audienceLevel = audienceLevel;
-        t.contentTags = {CONTENT_TAGS[random.nextInt(4)]};
+        t.contentTags = {CONTENT_TAGS[random.next_int(4)]};
         t.language = "en";
         t.favoriteCount = favoriteCount;
         t.crowdControlRisk = crowdControlRisk;
@@ -214,7 +201,7 @@ ConferenceSchedule buildDemoConference()
         "S11", "Talk Eleven", BREAKOUT, {"Dan Jones", "Elsa King"}, 1, 39, 0);
     addTalk("S12", "Talk Twelve", BREAKOUT, {"Flo Li", "Gus Poe"}, 3, 977, 0);
     c.talks[10].mutuallyExclusiveTalksTags
-        = {CONTENT_TAGS[random.nextInt(4)]};  // S11 (drawn after S12 in Java)
+        = {CONTENT_TAGS[random.next_int(4)]};  // S11
     addTalk("S13", "Talk Thirteen", BREAKOUT, {"Hugo Rye"}, 3, 494, 0);
     addTalk("S14", "Talk Fourteen", BREAKOUT, {"Ivy Smith"}, 3, 500, 0);
     addTalk("S15", "Talk Fifteen", BREAKOUT, {"Jay Watt"}, 2, 658, 0);

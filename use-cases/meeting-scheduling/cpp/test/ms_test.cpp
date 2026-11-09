@@ -543,13 +543,13 @@ void verifyPinnedAndDemoSolve()
     check(allAssigned, "every assignment assigned after the solve");
     check(s.score.hard == 0, "small instance reaches 0hard");
 
-    // Demo data: Java DemoDataGenerator reproduction, structural checks +
+    // Demo data: structural checks +
     // a short solve to feasibility (stop at first feasible).
     MeetingSchedule demo = buildDemoData();
     check(demo.people.size() == 20 && demo.timeGrains.size() == 160
               && demo.rooms.size() == 3 && demo.meetings.size() == 24
               && demo.meetingAssignments.size() == 24,
-          "demo data sizes match the Java generator");
+          "demo data sizes");
     int with8 = 0;
     int with12 = 0;
     int with16 = 0;

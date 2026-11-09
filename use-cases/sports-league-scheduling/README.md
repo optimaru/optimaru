@@ -25,7 +25,7 @@ every match (`Match`) of the league (one BASIC variable: `Match::round`).
 cd cpp && cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j4
 ./build/sls_test         # constraint hand checks + incremental==full over 3000 moves + ScoreChecks::Full solve
 ./build/sls_plugin_test  # plugin assembly == monolith, raw costs by hand, catalog, overrides
-./build/sls_demo 10      # reproduces the Java demo (14 teams/32 rounds/182 matches), 10 s solve, checks 0hard
+./build/sls_demo 10      # the demo league (14 teams/32 rounds/182 matches), 10 s solve, checks 0hard
 
 cd ../python && uv venv && uv pip install -e . pytest pydantic && uv run pytest -q
 ```

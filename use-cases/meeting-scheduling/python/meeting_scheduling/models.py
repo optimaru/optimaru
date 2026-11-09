@@ -11,7 +11,7 @@ Score mapping (Java HardMediumSoftScore -> engine Score):
 
     from meeting_scheduling.models import MeetingScheduleModel, demo_data
 
-    model = demo_data()                          # reproduces Java DemoDataGenerator
+    model = demo_data()                          # the demo instance
     clone = MeetingScheduleModel.model_validate_json(model.model_dump_json())
     schedule = clone.to_core()                   # pydantic -> engine
 
@@ -193,8 +193,7 @@ class MeetingScheduleModel(BaseModel):
 
 
 def demo_data() -> MeetingScheduleModel:
-    """Reproduces the Java quickstart DemoDataGenerator (the same draws as
-    java.util.Random(0); exposes C++ `ms::buildDemoData` as-is): 20 people, 160 time
+    """The demo instance (deterministic; exposes C++ `ms::buildDemoData` as-is): 20 people, 160 time
     grains (4 days x 40), 3 rooms (30/20/16 seats), 24 meetings (8/12/16 grains)."""
     return MeetingScheduleModel.from_core(_core.demo_data())
 

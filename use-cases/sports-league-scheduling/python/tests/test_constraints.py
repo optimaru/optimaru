@@ -103,6 +103,6 @@ def test_demo_schedule_shape():
     assert s.round_count() == 32
     assert s.match_count() == 14 * 13
     classic = sum(1 for m in s.matches if m.classic_match)
-    # 9 drawn + symmetric closure (deterministic via the java.util.Random(0) reproduction).
+    # 9 drawn + symmetric closure (deterministic: a seeded draw).
     assert classic == 18
     assert all(m.round == -1 for m in s.matches)

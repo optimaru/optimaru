@@ -127,9 +127,8 @@ Caveats (kept exactly as in the original):
 
 ## Demo
 
-`bed_allocation.demo.generate_demo_data()` reproduces the Java `DemoDataGenerator`:
+`bed_allocation.demo.generate_demo_data()` builds a demo instance modelled on the quickstart's demo:
 1 department (3 specialties), 10 rooms, all SAME_GENDER (13 beds), 28 nights, ~75
 sequential stays per room timeline, with the original's gender/age/equipment
-distributions. (The java.util.Random stream itself is not identical — distributions and
-scale are the reference.) The C++ demo (`build/bed-allocation/ba_demo`, built as shown in
+distributions, drawn from a seeded `random.Random`. The C++ demo (`build/bed-allocation/ba_demo`, built as shown in
 ../README.md) reaches hard 0 / medium 0 (everyone assigned) within 10 s.
