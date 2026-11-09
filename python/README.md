@@ -138,4 +138,4 @@ Apache-2.0. The engine and several use cases are derived from
 attribution. optimaru is not affiliated with or endorsed by Timefold BV.
 The compiled extensions are built with
 [pybind11](https://github.com/pybind/pybind11) (BSD-3-Clause), whose license
-ships in the wheel as `licenses/pybind11-LICENSE`.
+is reproduced at the end of NOTICE.
