@@ -48,7 +48,7 @@
   now carries an SPDX identifier and a derivation line. No functional or
   behavioral changes.
 - **pybind11 license shipped.** The wheels and the sdist now include
-  pybind11's BSD-3-Clause license (`licenses/pybind11-LICENSE`), since every
+  pybind11's BSD-3-Clause license (at the end of NOTICE), since every
   compiled extension embeds pybind11 headers.
 - **Public benchmark data from the original sources.** The bin-packing
   (Falkenauer, OR-Library), QAPLIB, Li & Lim (SINTEF) and Augerat CVRP

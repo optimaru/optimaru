@@ -13,8 +13,8 @@ readme = "python/README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
 # The compiled extensions embed pybind11 headers (BSD-3-Clause); its license
-# ships with every wheel and the sdist.
-license-files = ["LICENSE", "NOTICE", "licenses/pybind11-LICENSE"]
+# is reproduced at the end of NOTICE, which ships with every wheel and the sdist.
+license-files = ["LICENSE", "NOTICE"]
 authors = [{ name = "optimaru" }]
 keywords = [
   "optimization", "combinatorial-optimization", "metaheuristics", "scheduling",
