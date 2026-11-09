@@ -53,17 +53,15 @@ def test_solver_config_refuses_invalid_values(attribute, value):
         setattr(config, attribute, value)
 
 
-def test_the_sa_knobs_are_gone():
-    """0.2.0: the engine knobs replace the 0.1.x simulated-annealing ones."""
+def test_unknown_config_knobs_are_refused():
+    """SolverConfig carries the engine's knobs only."""
     config = max_cut.SolverConfig()
-    for old in ("max_iterations", "stagnation_limit", "temperature", "cooling_rate"):
-        assert not hasattr(config, old)
+    for unknown in ("max_iterations", "stagnation_limit", "temperature", "cooling_rate"):
+        assert not hasattr(config, unknown)
         with pytest.raises(AttributeError):
-            setattr(config, old, 1)
+            setattr(config, unknown, 1)
     with pytest.raises(TypeError):
         max_cut.SolverConfig(max_iterations=0)
-    for gone in ("anneal", "configure", "DEFAULTS", "score"):
-        assert not hasattr(max_cut, gone)
 
 
 def test_solve_on_the_engine_object_and_on_the_model_agree():
@@ -150,7 +148,7 @@ def test_a_raising_on_new_best_raises_from_solve(parallel_solver_count):
 def test_a_worker_thread_that_cannot_start_raises_instead_of_aborting():
     """Creating worker thread 1 fails (std::system_error, injected through the module's test
     seam): the worker already running is stopped and joined, and the error reaches the caller
-    at once. A joinable std::thread destroyed on that path used to call std::terminate."""
+    at once. A joinable std::thread destroyed on that path would call std::terminate."""
     import time
 
     from max_cut import _core
@@ -200,7 +198,7 @@ def test_the_server_flow_round_trips_with_a_reweighted_selection():
 
 
 def test_zero_budget_returns_the_start_partition():
-    """No warm start: vertex i on side i % 2, a fixed vertex on its side (0.1.x rule)."""
+    """No warm start: vertex i on side i % 2, a fixed vertex on its side (the default start)."""
     model = demo()
     max_cut.solve(model, time_limit_seconds=0)
     assert model.partition == {vertex: index % 2 for index, vertex in enumerate(model.vertices)}  # A fixed to 0
@@ -235,8 +233,8 @@ def test_inputs_of_the_wrong_type_are_refused():
 
 def test_stop_at_first_feasible_has_no_soft_floor(monkeypatch):
     """stop_at_first_feasible hands the engine best_score_limit (0, -inf): only the hard level
-    is compared, so no soft score, however low, misses the stop. The first 0.2.0 limit,
-    (0, -1e18), was never reached by a soft score below -1e18. A soft score that low cannot
+    is compared, so no soft score, however low, misses the stop. A finite limit such as
+    (0, -1e18) would never be reached by a soft score below -1e18. A soft score that low cannot
     be built here (its default soft terms are a reward (cut_weight_cost) and an opt-in term at
     weight 0), so the limit itself is checked; the stop is exercised end to end
     in the other packages' tests."""

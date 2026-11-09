@@ -175,10 +175,9 @@ def test_constraint_info_matches_the_raw_cost_metadata():
     assert list(raw) == NAMES
     for row in max_cut.constraint_info():
         entry = raw[row.name]
-        assert (entry["weight"], entry["level"], entry["hard"]) == (
+        assert (entry["weight"], entry["level"]) == (
             row.default_weight,
             row.default_level,
-            row.default_level == "hard",
         )
         assert (entry["level_flippable"], entry["reward"]) == (row.level_flippable, row.reward)
         is_global = row.name in ("partition_imbalance_cost", "cut_weight_cost")
@@ -211,7 +210,7 @@ def test_constraint_costs_match_the_hand_calculation():
 
 
 def test_units_shape_per_side_and_globals_their_total():
-    """0.2.0: the exponent shapes each side's cost (0.1.x shaped each vertex / pair term)."""
+    """The exponent shapes each side's cost, not each vertex / pair term."""
     problem = MaxCutProblemModel(
         vertices=["A", "B", "C", "D"],
         edges=[EdgeModel(source="A", target="D", weight=3)],
@@ -310,7 +309,7 @@ def test_the_reward_refuses_level_hard_on_every_path(level):
         ({"exponent": -1.0}, ValueError),
         ({"level": 1}, TypeError),
         ({"level": "firm"}, ValueError),
-        ({"hard": True}, TypeError),  # the removed knob is an unknown keyword
+        ({"hard": True}, TypeError),  # an unknown keyword
     ],
 )
 def test_specs_validate_their_knobs(kwargs, error):
@@ -360,19 +359,10 @@ def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
         PartitionSizeBoundsCost(**knobs)
 
 
-def test_unknown_and_old_names_are_refused():
-    """0.2.0 renamed the catalog; the 0.1.x names are unknown now (no aliases)."""
-    old_names = (
-        "fixed_partition",
-        "same_partition_pairs",
-        "different_partition_pairs",
-        "partition_size_bounds",
-        "partition_balance",
-        "maximize_cut_weight",
-    )
+def test_unknown_names_are_refused():
     raw = max_cut.constraint_costs(fixture_h())
-    for old in (*old_names, "cut_weight_costs"):
-        pick = SimpleNamespace(name=old, weight=None, level=None, exponent=1.0)
+    for unknown in ("fixed_partition", "cut_weight_costs"):
+        pick = SimpleNamespace(name=unknown, weight=None, level=None, exponent=1.0)
         with pytest.raises(ValueError, match="unknown constraint"):
             max_cut.solve(plain(), time_limit_seconds=0, constraints=[pick])
         with pytest.raises(ValueError, match="unknown constraint"):
@@ -389,9 +379,9 @@ def test_an_empty_pick_list_is_rejected():
 
 
 def test_naming_a_constraint_twice_scores_both_picks():
-    """Since 0.3.0 a constraint may be picked several times: each pick is scored on its own.
+    """A constraint may be picked several times: each pick is scored on its own.
 
-    The later pick no longer wins in silence, nor is it an error: both are
+    Neither pick wins in silence, nor is it an error: both are
     instances with their own knobs, and they add up."""
     picks = [CutWeightCost(), CutWeightCost(weight=2), PartitionSizeBoundsCost()]
     assert engine_score(fixture_h(), picks) == (-2, 2.0 + 2 * 2.0)
@@ -451,7 +441,7 @@ def test_fractional_hard_weights_round_per_side():
     picks = [PartitionSizeBoundsCost(weight=0.5)]
     assert score(raw, picks) == (-2, 0.0)
     assert engine_score(fixture_h(), picks) == (-2, 0.0)
-    assert score(raw, [PartitionSizeBoundsCost(weight=0.4)]) == (0, 0.0)  # 0.1.x: round(0.8) = -1
+    assert score(raw, [PartitionSizeBoundsCost(weight=0.4)]) == (0, 0.0)  # rounded per side, not round(0.8) = -1
 
 
 def test_score_is_additive_over_the_picked_constraints():
@@ -470,7 +460,7 @@ def test_score_equals_the_engine_for_the_default_assembly():
     assert (python.hard, python.soft) == (engine.hard, engine.soft)
 
 
-# --- 0.3.0: repeated picks and the offset / clip knobs ------------------------------
+# --- repeated picks and the offset / clip knobs ------------------------------
 
 
 def engine_solve(problem: MaxCutProblemModel, constraints) -> max_cut.MaxCutProblem:
@@ -580,8 +570,8 @@ def test_offsets_by_hand_on_both_paths(pick, expected):
     assert (engine.score.hard, engine.score.soft) == expected
 
 
-def test_offset_zero_reproduces_the_0_2_0_scores():
-    """offset 0 is the plain shaping in both modes, so every 0.2.0 selection scores the same."""
+def test_offset_zero_reproduces_the_plain_scores():
+    """offset 0 is the plain shaping in both modes, so a selection scores the same with offset 0."""
     plain_picks = [PartitionSizeBoundsCost(exponent=2), SamePartitionPairsCost(), CutWeightCost(exponent=1.5)]
     shifted_by_zero = [
         PartitionSizeBoundsCost(exponent=2, offset=0.0, clip=False),
@@ -680,7 +670,7 @@ def test_levels_by_hand_on_both_paths(picks, expected):
     raw = max_cut.constraint_costs(problem, picks)
     for pick, key in zip(picks, instance_keys(picks), strict=True):
         assert raw[key]["level"] == (pick.level or raw[key]["default_level"]), key
-        assert raw[key]["hard"] == (raw[key]["level"] == "hard"), key
+        assert "hard" not in raw[key], key
     assert score(raw, picks) == expected
     assert max_cut.calculate_score(problem, picks) == expected
     engine = engine_solve(problem, picks)
@@ -717,16 +707,11 @@ def test_a_level_must_be_a_level():
         engine_solve(fixture_h(), [PartitionSizeBoundsCost(), pick])
 
 
-def test_the_knob_was_renamed():
-    """0.3.0 replaced hard=True / hard=False by level="hard" / level="soft"; hard= is unknown."""
-    with pytest.raises(TypeError):
-        PartitionImbalanceCost(hard=True)
-    with pytest.raises(TypeError):
-        FixedPartitionCost(weight=None, hard=False)
+def test_a_level_name_equals_its_enum():
     assert PartitionImbalanceCost(level="hard") == PartitionImbalanceCost(level=Level.HARD)
 
 
-# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+# --- clip=False with an offset stays off the hard score -------------------------
 
 HARD_REFUSAL = (
     "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
@@ -793,7 +778,7 @@ def test_the_same_literal_pick_on_soft_is_accepted(offset):
     [
         (FixedPartitionCost(offset=3.0), (0, 0.0)),  # clip=True on hard: a threshold, a raw 0 stays 0
         (FixedPartitionCost(offset=-3.0), (-4, 0.0)),  # 1 + 3 on the violated side only
-        (SamePartitionPairsCost(clip=False), (-1, 0.0)),  # clip=False with offset 0: the 0.2.0 shaping
+        (SamePartitionPairsCost(clip=False), (-1, 0.0)),  # clip=False with offset 0: the plain shaping
         (SamePartitionPairsCost(offset=0.0, clip=False), (-1, 0.0)),
         (PartitionImbalanceCost(level="hard", weight=1, offset=1.0), (-1, 0.0)),  # 2 - 1
     ],

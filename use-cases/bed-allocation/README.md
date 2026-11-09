@@ -63,32 +63,17 @@ onto medium the same way (`PreferredMaxRoomCapacityCost(level="medium")` charges
 medium unit per night above the preferred capacity, in both solvers too), and a repeated
 pick carries its own level.
 
-**0.2.0:** the constraints were renamed to the unified `*_cost` names (old -> new):
-`same_bed_in_same_night` -> `bed_conflict_cost`, `female_in_male_room` ->
-`female_in_male_room_cost`, `male_in_female_room` -> `male_in_female_room_cost`,
-`different_gender_in_same_gender_room_in_same_night` -> `mixed_gender_room_cost`,
-`department_minimum_age` -> `department_min_age_cost`, `department_maximum_age` ->
-`department_max_age_cost`, `required_patient_equipment` -> `required_patient_equipment_cost`,
-`assign_every_patient_to_a_bed` -> `unassigned_stays_cost`,
-`preferred_maximum_room_capacity` -> `preferred_max_room_capacity_cost`,
-`department_specialty` -> `department_specialty_cost`,
-`department_specialty_not_first_priority` -> `department_specialty_priority_cost`,
-`preferred_patient_equipment` -> `preferred_patient_equipment_cost` (spec classes and
-module-level instances likewise, e.g. `SameBedInSameNight` / `same_bed_in_same_night` ->
-`BedConflictCost` / `bed_conflict_cost`; C++ structs, headers and registry names follow the
-same table). The old names are unknown now (no aliases). `unassigned_stays_cost` is a
-real medium constraint: its default weight is 1 medium unit (was a soft weight of 10^9),
-`level="soft"` now demotes it to soft in the engine too (it was a no-op), and `level="hard"`
-gives one hard unit per night. Raw costs and the default score are unchanged;
-`solve(..., constraints=...)` reports the levels the selection put the terms on.
+`unassigned_stays_cost` is a real medium constraint: `level="soft"` demotes it to soft and
+`level="hard"` gives one hard unit per night; `solve(..., constraints=...)` reports the
+levels the selection put the terms on.
 
-**0.3.0:** every constraint takes two more knobs, `offset` and `clip` (keyword-only), and
-may be picked several times. A raw cost `x` (per real bed for the per-bed constraints, on
+**Offsets and repeated picks.** Every constraint takes the knobs `weight`, `level`,
+`exponent` and, keyword-only, `offset` and `clip`, and may be picked several times. A raw cost `x` (per real bed for the per-bed constraints, on
 the one total for the global `mixed_gender_room_cost`) is shaped as
 `sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
 `(x - offset) ** exponent`, sign-preserving (`clip=False`, which charges every unit the
 constraint evaluates, a raw 0 included, and acts as a reward below the offset);
-`offset=0` is the 0.2.0 shaping. The per-bed constraints evaluate the real beds, an empty
+`offset=0` is the plain power shaping. The per-bed constraints evaluate the real beds, an empty
 one included, and never the "no bed" sentinel (it is no bed); `unassigned_stays_cost`
 evaluates the sentinel only. A `constraint_costs()` entry lists its evaluated units as
 `"units"`, and the literal offset charges exactly those. Both apply per evaluated unit, not

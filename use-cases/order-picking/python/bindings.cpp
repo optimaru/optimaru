@@ -229,7 +229,6 @@ PYBIND11_MODULE(_core, m)
         "Refresh the shadow variables and recompute the HardSoft score "
         "(also stores solution.score).");
 
-    // No ConstraintTotals / calculate_totals (removed in 0.2.0):
     // constraint_costs() is the only per-constraint surface.
 
     m.def("build_demo_data",

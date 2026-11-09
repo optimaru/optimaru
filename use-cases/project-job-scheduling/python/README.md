@@ -83,15 +83,10 @@ medium unit per day). Every spec also takes the
 keyword-only `offset=0.0` / `clip=True`, which shift the shaping of the one total
 (`clip=True` counts only what lies beyond the offset, `clip=False` shapes `x - offset` as it
 is, and is refused with an offset on hard, because hard 0 must mean no violation). A
-constraint may be picked several times (since 0.3.0); each pick is its own instance
+constraint may be picked several times; each pick is its own instance
 with its own knobs, its level included, the instances add up, and
 `constraint_costs(schedule, picks)` keys the
 k-th pick `<name>#<k>`: `score(raw, [MakespanCost(), MakespanCost(exponent=2, offset=40)])`.
-
-0.2.0 renamed them (`non_renewable_resource_capacity`, `renewable_resource_capacity`,
-`total_project_delay`, `total_makespan` before; classes `NonRenewableResourceCapacity`,
-`RenewableResourceCapacity`, `TotalProjectDelay`, `TotalMakespan`), and the medium default
-weight moved from 10^9 (soft) to 1 (medium units).
 
 ## Score mapping
 

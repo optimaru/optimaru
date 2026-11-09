@@ -42,8 +42,7 @@ inline DayIndex dayOf(Minutes m)
 // specialization). The Java FlightCrewSchedulingConstraintProvider weights
 // (100 / 10 / 1 / 10 hard, 1000 / 1000 soft) are the components'
 // kDefaultWeight (fcs/constraints/*_cost.hpp), declared there once; the
-// monolithic calculators read the same constants (before 0.2.0 they were
-// re-typed here as REQUIRED_SKILL_WEIGHT ... LAST_NOT_HOME_WEIGHT).
+// monolithic calculators read the same constants.
 using Score = optimaru::Score;
 
 // ---------------------------------------------------------------------------

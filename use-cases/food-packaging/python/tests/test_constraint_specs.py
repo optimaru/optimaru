@@ -196,14 +196,14 @@ def test_score_reweighting_is_linear_without_rescoring():
 
 
 def test_score_rejects_an_unknown_constraint_name():
-    """A spec with a wrong name (e.g. a renamed component) must not be silently ignored."""
+    """A spec with a wrong name must not be silently ignored."""
     raw, _ = _raw()
 
-    class Renamed(Constraint):
+    class Misnamed(Constraint):
         name = "definitely_not_a_constraint"
 
     with pytest.raises(ValueError, match="unknown constraint"):
-        score(raw, [Renamed()])
+        score(raw, [Misnamed()])
 
 
 # --- The catalog: constraint_info() -------------------------------------------
@@ -251,10 +251,9 @@ def test_constraint_info_matches_the_raw_cost_metadata():
     assert list(raw) == fp.list_constraints()
     for row in fp.constraint_info():
         entry = raw[row.name]
-        assert (entry["weight"], entry["level"], entry["hard"]) == (
+        assert (entry["weight"], entry["level"]) == (
             row.default_weight,
             row.default_level,
-            row.default_level == "hard",
         )
         assert (entry["level_flippable"], entry["reward"]) == (True, False)
         assert entry["global"] == (row.name in GLOBALS)
@@ -262,8 +261,8 @@ def test_constraint_info_matches_the_raw_cost_metadata():
         assert entry["medium_fold"] == {"kind": "into_soft", "unit": float(MEDIUM_UNIT)}
 
 
-def test_analyze_and_the_breakdown_are_gone():
-    """0.2.0: constraint_costs() is the only per-constraint surface (no second spelling)."""
+def test_constraint_costs_is_the_only_per_constraint_surface():
+    """No second spelling of the per-constraint costs is bound."""
     assert not hasattr(fp, "analyze") and not hasattr(fp._core, "analyze")
     assert not hasattr(fp, "ConstraintBreakdown") and not hasattr(fp._core, "ConstraintBreakdown")
 
@@ -338,7 +337,7 @@ def _one_job_one_line():
 
 
 def test_a_demoted_medium_constraint_is_soft_in_the_engine_too():
-    """level="soft" moves unassigned_jobs_cost to soft in the solver (it was a no-op before 0.2.0).
+    """level="soft" moves unassigned_jobs_cost to soft in the solver.
 
     As soft, 100 unassigned minutes are cheaper than a 10000 squared makespan, so the solver
     leaves the job out, and its minutes cost soft, not medium."""
@@ -450,27 +449,7 @@ def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
         UnassignedJobsCost(**knobs)
 
 
-# 0.2.0 migration: the pre-0.2.0 catalog names, which must be unknown now.
-OLD_NAMES = [
-    "max_end_date_time",
-    "ideal_end_date_time",
-    "minimize_makespan",
-    "operator_cleaning_conflict",
-    "maximize_jobs_assigned",
-]
-
-
-@pytest.mark.parametrize("old", OLD_NAMES)
-def test_old_names_are_gone(old):
-    """0.2.0 renamed the catalog; the pre-0.2.0 names are unknown now (no aliases)."""
-    pick = SimpleNamespace(name=old, weight=None, level=None, exponent=1.0)
-    with pytest.raises(ValueError, match="unknown constraint"):
-        fp.solve(build_schedule(), time_limit_seconds=0.05, constraints=[pick])
-    with pytest.raises(ValueError, match="unknown constraint"):
-        score(fp.constraint_costs(build_schedule()), [pick])
-
-
-# --- 0.3.0: repeated picks and the offset / clip knobs ------------------------------
+# --- repeated picks and the offset / clip knobs ------------------------------
 #
 # The hand instance is _hand_schedule(): line 0 runs J0 0..200 (ideal 200) and J1
 # 200..350 (ideal 250), line 1 is empty, a 50-minute job waits in the unassigned pool
@@ -504,9 +483,9 @@ REPEAT = [SquaredMakespanCost(), SquaredMakespanCost(weight=0.5, exponent=0.5)]
 
 
 def test_naming_a_constraint_twice_scores_both_picks():
-    """Since 0.3.0 a constraint may be picked several times: each pick is scored on its own.
+    """A constraint may be picked several times: each pick is scored on its own.
 
-    The later pick no longer wins in silence, nor is it an error: both are
+    Neither pick wins in silence, nor is it an error: both are
     instances with their own knobs, and they add up."""
     picks = [UnassignedJobsCost(), SquaredMakespanCost(weight=10), SquaredMakespanCost()]
     assert _zero_budget(_hand_schedule(), picks) == (0, -50 * MEDIUM_UNIT - 11 * 350**2)
@@ -641,8 +620,8 @@ def test_the_per_line_constraints_evaluate_the_lines_and_not_the_pool():
     assert _zero_budget(_hand_schedule(), [pick]) == (0, 4.0)
 
 
-def test_offset_zero_reproduces_the_0_2_0_scores():
-    """offset 0 is the plain shaping in both modes, so every 0.2.0 selection scores the same."""
+def test_offset_zero_reproduces_the_plain_scores():
+    """offset 0 is the plain shaping in both modes, so a selection scores the same with offset 0."""
     plain = [*get_constraints()[:-1], UnassignedJobsCost(exponent=2)]
     shifted = [type(spec)(exponent=spec.exponent, offset=0.0, clip=False) for spec in plain]
     raw, solved = _raw()
@@ -733,18 +712,16 @@ def test_core_refuses_an_unknown_level_like_the_python_base():
         fp.constraint_costs(build_schedule(), [pick])
 
 
-def test_the_knob_was_renamed():
-    """hard= is gone: a spec refuses it, and an old duck-typed pick that carries `hard` but
-    no `level` is refused on every path instead of running at the default level."""
-    with pytest.raises(TypeError):
-        MaxEndTimeCost(hard=True)
-    old = SimpleNamespace(name="max_end_time_cost", weight=None, hard=True, exponent=1.0)
+def test_a_pick_without_level_is_refused():
+    """A duck-typed pick without `level` is refused on every path instead of running at the
+    default level."""
+    pick = SimpleNamespace(name="max_end_time_cost", weight=None, exponent=1.0)
     with pytest.raises(AttributeError, match="level"):
-        fp.solve(build_schedule(), time_limit_seconds=0.1, constraints=[old])
+        fp.solve(build_schedule(), time_limit_seconds=0.1, constraints=[pick])
     with pytest.raises(AttributeError, match="level"):
-        fp.constraint_costs(build_schedule(), [old])
+        fp.constraint_costs(build_schedule(), [pick])
     with pytest.raises(AttributeError, match="level"):
-        score(fp.constraint_costs(build_schedule()), [old])
+        score(fp.constraint_costs(build_schedule()), [pick])
 
 
 @pytest.mark.parametrize(
@@ -810,7 +787,7 @@ def test_a_repeat_is_checked_on_its_own_level():
         score(fp.constraint_costs(_hand_schedule()), [MaxEndTimeCost(), pick])
 
 
-# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+# --- clip=False with an offset stays off the hard score -------------------------
 
 HARD_REFUSAL = (
     "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
@@ -886,7 +863,7 @@ def test_the_same_literal_pick_on_soft_is_accepted(offset):
         # _hand_schedule(): after_ideal [100, 0] minutes on the two lines, moved to hard.
         (AfterIdealEndTimeCost(level="hard", offset=40), (-60, 0.0)),  # clip=True on hard: a threshold
         (AfterIdealEndTimeCost(level="hard", offset=-10), (-110, 0.0)),  # adds 10 to the non-zero line only
-        (AfterIdealEndTimeCost(level="hard", clip=False), (-100, 0.0)),  # clip=False with offset 0: 0.2.0
+        (AfterIdealEndTimeCost(level="hard", clip=False), (-100, 0.0)),  # clip=False with offset 0: plain
         (AfterIdealEndTimeCost(level="hard", offset=0.0, clip=False), (-100, 0.0)),
         (MaxEndTimeCost(offset=-1), (0, 0.0)),  # no overrun: a threshold adds nothing to a raw 0
     ],

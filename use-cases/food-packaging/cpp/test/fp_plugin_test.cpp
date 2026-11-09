@@ -660,10 +660,9 @@ void verifyCatalog()
     check(throwsInvalid(
               [] { defaultConstraints().exponent("maxEndTimeCost", 0.0); }),
           "a non-positive exponent is refused");
-    // 0.2.0 migration: the pre-0.2.0 registry name has no alias.
     check(throwsInvalid(
-              [] { defaultConstraints().weight("maxEndDateTime", 2.0); }),
-          "a pre-0.2.0 registry name is unknown");
+              [] { defaultConstraints().weight("noSuchConstraint", 2.0); }),
+          "an unknown registry name is refused");
     std::printf("\n");
 }
 

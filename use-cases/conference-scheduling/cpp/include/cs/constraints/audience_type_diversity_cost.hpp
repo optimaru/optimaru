@@ -8,8 +8,8 @@ namespace cs
 
 // Soft, weight 1, REWARD (raw cost <= 0; never hard, not flippable):
 // audienceTypeDiversityCost — one timeslot serving audiences at once, weighed
-// by audience types times the slot duration. The arithmetic is kept from 0.1.x
-// on purpose (0.2.0 renames only): it rewards same-timeslot pairs that SHARE
+// by audience types times the slot duration. The arithmetic is kept on
+// purpose: it rewards same-timeslot pairs that SHARE
 // an audience type, not pairs of different audiences, despite the name.
 // Raw cost (one global total) = the sum of -(shared audience types x the
 // timeslot's duration) for each pair of talks in the same timeslot; 0 = no

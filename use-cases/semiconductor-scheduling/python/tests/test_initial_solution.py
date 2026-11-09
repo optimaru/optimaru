@@ -28,7 +28,7 @@ def _config(**fields) -> SolverConfig:
 
 
 def _no_search() -> SolverConfig:
-    """The zero-budget idiom: the solve returns its start (0.1.x: max_iterations=0)."""
+    """The zero-budget idiom: the solve returns its start."""
     return _config(spent_limit_seconds=0)
 
 

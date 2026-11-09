@@ -106,38 +106,6 @@ GLOBALS = {
     "location_imbalance_cost",
     "worker_pairing_cost",
 }
-#: The pre-0.2.0 names, all refused now.
-OLD_NAMES = [
-    "required_skill",
-    "unavailable_employee",
-    "overlapping_shift",
-    "one_shift_per_day",
-    "min_rest",
-    "undesired_day",
-    "desired_day",
-    "desired_shift",
-    "balance_assignments",
-    "max_consecutive_days",
-    "min_consecutive_days",
-    "max_consecutive_off",
-    "rest_after_consecutive_work",
-    "max_weekly_minutes",
-    "min_weekly_minutes",
-    "min_weekly_rest_days",
-    "unassigned_shift",
-    "balance_min_max_gap",
-    "balance_weekly_minutes_gap",
-    "shift_coverage",
-    "location_run",
-    "rest_after_location_run",
-    "location_run_gap",
-    "worker_location_count",
-    "day_pattern",
-    "target_days_off",
-    "worker_day_count_in_range",
-    "balance_location",
-    "worker_pair_same_shift",
-]
 
 
 def _assigned_roster(seed=5):
@@ -222,7 +190,7 @@ def test_returned_list_is_a_fresh_copy():
 
 
 def test_a_rule_may_repeat_with_other_parameters_or_the_same():
-    """Since 0.3.0 the "same parameters twice" refusal is gone: every pick is an instance."""
+    """A rule may repeat, with other parameters or the same ones: every pick is an instance."""
     picked = get_constraints([DayPatternCost(pattern="WORK,WORK"), DayPatternCost(pattern="OFF,OFF")])
     assert len(picked) == 2
     same = [DayPatternCost(pattern="WORK,WORK"), DayPatternCost(pattern="WORK,WORK")]
@@ -252,8 +220,7 @@ def test_constraint_info_reports_the_cpp_defaults():
 
 
 def test_the_documented_levels_match_the_engine():
-    """worker_location_count_cost and worker_day_count_in_range_cost are SOFT by
-    default (the C++ truth; older documentation said hard)."""
+    """worker_location_count_cost and worker_day_count_in_range_cost are SOFT by default."""
     rows = {row.name: row for row in es.constraint_info()}
     assert rows["worker_location_count_cost"].default_level == "soft"
     assert rows["worker_day_count_in_range_cost"].default_level == "soft"
@@ -294,7 +261,7 @@ def test_constraint_costs_metadata_matches_constraint_info():
         assert entry["name"] == name
         assert entry["weight"] == row.default_weight
         assert entry["level"] == row.default_level
-        assert entry["hard"] is (row.default_level == "hard")
+        assert "hard" not in entry
         assert entry["reward"] is row.reward
         assert entry["level_flippable"] is row.level_flippable
         assert entry["global"] is (name in GLOBALS)
@@ -491,10 +458,9 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks(knobs, message):
         ShiftOverlapCost(**knobs)
 
 
-@pytest.mark.parametrize("old", OLD_NAMES)
-def test_the_old_names_are_unknown(old):
-    with pytest.raises(ValueError, match=f"unknown constraint '{old}'; available: required_skill_cost, "):
-        es.DecomposedCalculator().add(old)
+def test_an_unknown_name_is_refused():
+    with pytest.raises(ValueError, match="unknown constraint 'required_skill'; available: required_skill_cost, "):
+        es.DecomposedCalculator().add("required_skill")
 
 
 def test_a_scope_is_a_parameter_of_unit_rules_and_shift_coverage_only():
@@ -522,7 +488,7 @@ def test_the_spec_bounds_are_checked(spec, fields):
 
 
 # ---------------------------------------------------------------------------
-# 0.3.0: repeated picks and the offset / clip knobs
+# Repeated picks and the offset / clip knobs
 # ---------------------------------------------------------------------------
 # The reference schedule's raw costs per employee (Worker 01..04): undesired
 # minutes [0, 480, 0, 0] (soft), desired minutes [-600, 0, 0, -239] (a soft
@@ -724,8 +690,8 @@ def test_add_takes_the_offset_and_clip_knobs():
         es.DecomposedCalculator().add("undesired_day_cost", 1.0, None, 1.0, 100.0)  # keyword-only
 
 
-def test_offset_zero_reproduces_the_0_2_0_scores():
-    """offset 0 is the plain shaping in both modes, so every 0.2.0 selection scores the same."""
+def test_offset_zero_reproduces_the_plain_scores():
+    """offset 0 is the plain shaping in both modes, so a selection scores the same with or without it."""
     plain = [*get_constraints(), UndesiredDayCost(exponent=2), DayPatternCost(pattern="WORK,WORK")]
     shifted = [
         *[type(spec)(offset=0.0, clip=False) for spec in get_constraints()],
@@ -789,7 +755,7 @@ def test_a_solve_with_repeated_and_shifted_picks_reports_the_mirror_score(picks)
 
 
 # ---------------------------------------------------------------------------
-# 0.3.0: clip=False with an offset stays off the hard score
+# clip=False with an offset stays off the hard score
 # ---------------------------------------------------------------------------
 
 HARD_REFUSAL = (
@@ -862,7 +828,7 @@ def test_the_same_literal_pick_on_soft_is_accepted(offset):
     [
         (EmployeeUnavailabilityCost(offset=0.5), (-480, 0.0)),  # clip=True on hard: a threshold, 479.5 -> 480
         (EmployeeUnavailabilityCost(offset=-0.5), (-481, 0.0)),  # adds 0.5 to the non-zero employee only
-        (EmployeeUnavailabilityCost(clip=False), (-480, 0.0)),  # clip=False with offset 0: the 0.2.0 shaping
+        (EmployeeUnavailabilityCost(clip=False), (-480, 0.0)),  # clip=False with offset 0: the plain shaping
         (MinRestCost(offset=0.0, clip=False), (0, 0.0)),
         (MinRestCost(offset=-5), (0, 0.0)),  # a threshold keeps a 0 at 0
     ],

@@ -37,8 +37,7 @@ namespace pjs
 // the end of this header hands the same constant to the decomposed
 // calculator, which keeps a separate medium accumulator. The medium
 // constraint's weight is therefore in medium units (projectDelayCost: 1),
-// never 10^9. (Before 0.2.0 the medium component carried 10^9 as its soft
-// weight.)
+// never 10^9.
 constexpr std::int64_t kMediumUnit = 1000000000LL;
 constexpr optimaru::MediumFold kMediumFold
     = optimaru::MediumFold::into_soft(static_cast<double>(kMediumUnit));

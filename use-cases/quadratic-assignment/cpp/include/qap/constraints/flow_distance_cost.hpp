@@ -11,7 +11,7 @@ namespace qap
 // Soft, weight 1: flowDistanceCost — the quadratic objective. Raw cost = sum
 // over assigned facilities a, b of flows[a][b] * distances[loc a][loc b],
 // including a == b (the diagonal term flows[a][a] * distances[l][l]); on a
-// bijection this is the 0.1.x sum over location pairs i, j of
+// bijection this is the sum over location pairs i, j of
 // distances[i][j] * flows[p_i][p_j]. One number for the whole assignment (a
 // GlobalConstraint, so the exponent shapes the total). Flows and distances are
 // not validated >= 0, so the total may be negative (scored as a bonus). When

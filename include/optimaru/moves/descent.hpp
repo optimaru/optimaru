@@ -53,11 +53,10 @@ namespace optimaru {
 // that cost is set by the VALUE RANGE and so the usable weight differs by two
 // orders of magnitude between domains (see SearchSettings::descent_weight).
 //
-// As a plugin this now goes through the acceptor like any other move, where
-// local search used to apply it directly on the grounds that it is improving by
-// construction. The outcome is the same — it only ever reports a strictly
-// improving result, and every acceptor takes those — but the invariant moved
-// from "bypasses the acceptor" to "relies on the acceptor accepting an
+// As a plugin this goes through the acceptor like any other move rather than
+// being applied directly on the grounds that it is improving by construction.
+// It only ever reports a strictly improving result, and every acceptor takes
+// those, so the invariant is "relies on the acceptor accepting an
 // improvement". Note also that an element relocated on more than one sweep
 // appears in `entities` more than once, which entity tabu tolerates.
 //

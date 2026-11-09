@@ -25,8 +25,8 @@ namespace bp
 // members are the items currently in it (order irrelevant). Capacity, colour
 // and conflict violations all decompose per bin, so they are UnitConstraints
 // (one cost per bin 0..n-1, an empty bin costs 0). usedBinsCost is a
-// GlobalConstraint instead: its exponent shapes the bin COUNT (count ** e, as
-// in 0.1.5), which per-bin units (sum of 1 ** e) could not express.
+// GlobalConstraint instead: its exponent shapes the bin COUNT (count ** e),
+// which per-bin units (sum of 1 ** e) could not express.
 //
 //   DecomposedCalculator calc;
 //   defaultConstraints()                     // the whole default set
@@ -45,8 +45,8 @@ namespace bp
 // assembly-time metadata, not part of the cost. Override them per instance
 // with the constructor's weight argument or the validated setters
 // (set_weight / set_level / set_exponent, or the mutable `level`), or by name
-// through ConstraintAssembly. The canonical problem carries no weights
-// (removed in 0.2.0): the monolithic calculators read the same
+// through ConstraintAssembly. The canonical problem carries no weights:
+// the monolithic calculators read the same
 // kDefaultWeight constants, which is why the default assembly scores
 // bit-for-bit like them.
 //

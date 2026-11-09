@@ -15,7 +15,7 @@ and solve changes it and `score` in place::
 Score: the 37 constraints at their default weights (the Java
 provider's), 17 hard and 20 soft; three of the soft ones (`*_diversity_cost`) are
 rewards. `constraint_costs(schedule)` gives every constraint's raw cost (the only
-per-constraint surface since 0.2.0, which removed `Breakdown`/`compute_breakdown`), and
+per-constraint surface), and
 `constraint_info()` lists every constraint with its default level and weight. Pick or
 re-weight constraints with `solve(..., constraints=...)` (see
 `conference_scheduling.constraints`).

@@ -19,9 +19,7 @@ and compares them. It runs build → cross-check gate → quality benchmark → 
 The shared logic is the original Java quickstart's six constraints
 (`room_conflict_cost` / `teacher_conflict_cost` / `class_conflict_cost` hard,
 `teacher_room_change_cost` / `teacher_time_efficiency_cost` (a reward) /
-`class_subject_repeat_cost` soft — before 0.2.0 roomConflict / teacherConflict
-/ studentGroupConflict, teacherRoomStability / teacherTimeEfficiency /
-studentGroupSubjectVariety). The `teacher_unavailability_cost` extension of
+`class_subject_repeat_cost` soft). The `teacher_unavailability_cost` extension of
 this repository's C++ domain gets empty data (`teacherUnavailable`) in these
 instances, so it contributes 0.
 
@@ -122,7 +120,7 @@ are CP-SAT model constraints, so on this path:
   an offset on hard is refused first, with the engine's message (hard 0 must mean no
   violation);
 - a constraint listed several times in `solve(constraints=...)` adds one objective term per
-  entry, each with its own knobs, its level included (0.3.0: `avoided_period_cost` once hard
+  entry, each with its own knobs, its level included (`avoided_period_cost` once hard
   and once soft forbids the avoided periods and still prices its soft repeat);
   `Timetable.penalties` reports each name's raw count once, and `registry.merge` keeps its
   replace-by-name semantics, like the engine's `Assembly`.

@@ -6,7 +6,7 @@ and travel minimization. Routes are open by default; a vehicle with
 `return_to_depot=True` also drives (and is timed) back to its home. The package
 shares `pdp_routing.models` with the C++ backend.
 
-## Constraints (0.2.0)
+## Constraints
 
 Each plugin in [`external_solver.pickup_delivery.constraints`](https://github.com/optimaru/external-solver/tree/main/src/external_solver/pickup_delivery/constraints.py) subclasses the engine spec of
 the same name (`pdp_routing.constraints`) and only builds its CP-SAT expression; the
@@ -28,7 +28,7 @@ engine's default in medium units.
   `required_vehicle_cost` have no CP-SAT plugin (engine-only); naming them here is an
   unknown-constraint error.
 
-**0.3.0: repeats, `offset` and `clip`.** A constraint may be picked several times (as
+**Repeats, `offset` and `clip`.** A constraint may be picked several times (as
 specs or as `{"name", "weight", "level", "offset", "clip"}` mappings): each pick builds its
 own terms with its own knobs, keyed `name`, `name#2`, … like the engine's
 `constraint_costs()`. Every plugin adds one term per engine unit — per vehicle, idle ones

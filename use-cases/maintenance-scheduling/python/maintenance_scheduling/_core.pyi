@@ -187,7 +187,7 @@ def constraint_costs(
 ) -> dict[str, dict[str, Any]]:
     """Raw cost of every constraint, before weight/exponent/offset/level rounding:
     {key: {"costs": [...], "weight": float, "exponent": float, "offset": float,
-    "clip": bool, "hard": bool, "global": bool, "level": "hard" | "medium" | "soft",
+    "clip": bool, "global": bool, "level": "hard" | "medium" | "soft",
     "reward": bool, "level_flippable": bool, "name": str, "label": str,
     "default_weight": float, "default_level": str}}. The four date rules list one
     cost per (start date, crew) cell, an empty cell included; the two global conflict

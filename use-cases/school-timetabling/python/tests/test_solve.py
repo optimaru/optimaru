@@ -153,7 +153,7 @@ def test_solve_weights_override(problem):
 
 
 def test_solve_weights_take_non_integer_values(problem):
-    """The fast path's soft weights are plain numbers now (the selection path never needed integers)."""
+    """The fast path's soft weights are plain numbers, as on the selection path."""
     result = st.solve(
         problem, time_limit_seconds=2.0, random_seed=3, stop_at_first_feasible=True, weights={"teacher_gap_cost": 2.5}
     )
@@ -217,7 +217,7 @@ def test_a_raising_on_new_best_raises_from_a_multi_start_solve(problem, mode):
 def test_a_worker_thread_that_cannot_start_raises_instead_of_aborting(problem, mode):
     """Creating worker thread 1 fails (std::system_error, injected through the module's test
     seam): the worker already running is stopped and joined, and the error reaches the caller
-    at once. A joinable std::thread destroyed on that path used to call std::terminate."""
+    at once. A joinable std::thread destroyed on that path would call std::terminate."""
     from st_timetabling import _core
 
     _core._fail_worker_thread_start(1)
@@ -235,7 +235,7 @@ def test_stop_at_first_feasible_stops_whatever_the_soft_total(problem):
 
     Every enabled soft penalty at weight 1e21 puts the soft score far below -1e18 at the
     first feasible solution: the solve still stops there instead of running its whole
-    30 s. The first 0.2.0 limit, (0, -1e18), was never reached by such a score.
+    30 s. A limit of (0, -1e18) would never be reached by such a score.
     """
     import dataclasses
     import time

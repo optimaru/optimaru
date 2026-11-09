@@ -11,10 +11,7 @@ Score, at the default weights (1 each):
   + listed conflict pairs sharing a bin — `item_conflict_cost`)
 - soft = -(bins in use) — `used_bins_cost`
 
-The problem carries no weights (removed in 0.2.0, together with the rename of
-`bin_capacity` / `color_compatibility` / `item_conflicts` / `minimize_bins` to
-`bin_capacity_cost` / `color_conflict_cost` / `item_conflict_cost` / `used_bins_cost`).
-Pick, re-weight or flip constraints with `bin_packing.constraints`, and read the
+The problem carries no weights. Pick, re-weight or flip constraints with `bin_packing.constraints`, and read the
 defaults with `bp.constraint_info()`:
 
 ```python
@@ -36,9 +33,7 @@ score(raw, [UsedBinsCost(), UsedBinsCost(weight=100, offset=10)])
 "soft", or `Level.HARD` / `Level.SOFT`; the domain has no medium level, so "medium" raises
 `ValueError`), `exponent` (1.0) and the keyword-only `offset` (0.0) / `clip` (True) are the
 knobs. The exponent shapes each bin's cost for the three per-bin constraints and the bin
-count for `used_bins_cost`; 0.1.x shaped colour excess per (bin, colour) and conflicts per
-pair, so only exponent != 1 scores change (totals and exponent-1 scores are identical).
-`offset` / `clip` (0.3.0) shift that shaping at the same granularity: `clip=True` counts
+count for `used_bins_cost`. `offset` / `clip` shift that shaping at the same granularity: `clip=True` counts
 only what lies beyond the offset, `clip=False` shapes `cost - offset` as it is, on every
 bin, an empty one included (per bin, not over the sum). That is refused on hard, where
 hard 0 must mean no violation: `ValueError: constraint 'bin_capacity_cost': clip=False with
@@ -52,8 +47,8 @@ uv sync --all-groups --all-extras   # builds the extension
 uv run pytest -q
 ```
 
-`tests/reference_bin_packing.py` is the frozen 0.1.x pure-Python scorer and
-construction; `tests/test_reference_parity.py` checks the C++ port against it.
+`tests/reference_bin_packing.py` is an independent pure-Python scorer and
+construction; `tests/test_reference_parity.py` checks the C++ domain against it.
 
 ## Usage
 
@@ -76,10 +71,8 @@ move mix, the bin-emptying macro moves `empty_bin_moves` / `empty_bin_candidates
 `repack_moves` / `repack_partner_bins` (see the use case README's
 [Search](../README.md#search)), `best_score_limit`, the
 `on_new_best(step, score)` callback, `full_assert`, ...), then call
-`bp.Solver(cfg).solve(problem)` or `bp.solve(problem, config=cfg)`. The 0.1.x
-simulated-annealing knobs (`max_iterations`, `stagnation_limit`, `temperature`,
-`cooling_rate`) are gone: zero budget is `spent_limit_seconds = 0`, a fixed number of
-steps is `step_count_limit`.
+`bp.Solver(cfg).solve(problem)` or `bp.solve(problem, config=cfg)`. Zero budget is
+`spent_limit_seconds = 0`, a fixed number of steps is `step_count_limit`.
 
 The JSON contract is `bin_packing.models`:
 

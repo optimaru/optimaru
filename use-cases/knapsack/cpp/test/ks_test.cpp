@@ -6,7 +6,7 @@
 //       (undecided) transitions on random instances using every fact: the
 //       score and every constraint's raw total after each move, and every
 //       constraint non-zero at some point of the walk
-//   (3) the greedy construction (the 0.1.x expectations, ties, fixed items)
+//   (3) the greedy construction (the reference expectations, ties, fixed items)
 //   (4) the solver: ScoreChecks::Full, brute-force optima, the zero budget with a
 //       seed, reproducibility under a step limit, multi-start, validation
 #include <chrono>

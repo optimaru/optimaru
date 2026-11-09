@@ -1,15 +1,15 @@
-"""The C++ port computes exactly what the 0.1.5 pure-Python package computed.
+"""The C++ domain computes exactly what the pure-Python reference computes.
 
-`reference_bin_packing` is the frozen 0.1.5 scorer and construction (an oracle,
+`reference_bin_packing` is an independent scorer and construction (an oracle,
 plain data in and out). On every sample — the web demo (`fixtures/web_demo.json`,
 a copy of the web app's sample) and the package's own test fixtures — and on
 seeded random instances and assignments, the C++ `constraint_costs` totals equal
-the oracle's per constraint (under the 0.2.0 names), the default score equals the
+the oracle's per constraint (under the engine names), the default score equals the
 oracle's, and the zero-budget construction returns the oracle's bins.
 
-The per-unit lists differ by design (0.2.0 lists every constraint per bin
-0..n-1; 0.1.5 listed capacity per bin 0..max bin, colour excess per (bin, colour)
-and conflicts per pair), so they are compared as totals; at exponent 1 the
+The per-unit lists differ by design (the engine lists every constraint per bin
+0..n-1; the reference lists capacity per bin 0..max bin, colour excess per
+(bin, colour) and conflicts per pair), so they are compared as totals; at exponent 1 the
 scores are identical.
 """
 
@@ -169,23 +169,23 @@ def test_exponent_one_scores_equal_for_any_selection():
         problem = _random_instance(rng)
         data = _with_bins(problem, _random_bins(len(problem["items"]), rng, 0.1))
         picked = rng.sample(list(SPEC_OF), rng.randrange(1, 5))
-        picks = [(old, rng.choice([None, 0, 1, 2, 5]), rng.choice([None, True, False])) for old in picked]
-        old = ref.score(ref.constraint_costs(Model.model_validate(data).model_dump()), [(*p, 1.0) for p in picks])
+        picks = [(name, rng.choice([None, 0, 1, 2, 5]), rng.choice([None, True, False])) for name in picked]
+        expected = ref.score(ref.constraint_costs(Model.model_validate(data).model_dump()), [(*p, 1.0) for p in picks])
         levels = {None: None, True: "hard", False: "soft"}
         specs = [SPEC_OF[name](weight=weight, level=levels[hard]) for name, weight, hard in picks]
-        new = score(bp.constraint_costs(Model.model_validate(data).to_core()), specs)
-        assert new == old
+        actual = score(bp.constraint_costs(Model.model_validate(data).to_core()), specs)
+        assert actual == expected
 
 
 @pytest.mark.parametrize("name", list(_samples()))
 def test_zero_budget_construction_matches_the_oracle(name):
-    """A zero-budget solve returns 0.1.5's best-fit construction (plain, or the completed seed)."""
+    """A zero-budget solve returns the reference's best-fit construction (plain, or the completed seed)."""
     problem = _samples()[name]
     for warm in (False, True):
         data = dict(problem, warm_start=warm)
         expected = ref.construct(Model.model_validate(data).model_dump())
         if max(expected, default=-1) >= len(data["items"]):
-            continue  # the 0.1.5 out-of-range bug; the port stays inside 0..n-1 (bp_test.cpp)
+            continue  # the reference leaves 0..n-1 here; the engine stays inside (bp_test.cpp)
         core = Model.model_validate(data).to_core()
         config = bp.SolverConfig()
         config.spent_limit_seconds = 0

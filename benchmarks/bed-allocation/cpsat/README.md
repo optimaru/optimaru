@@ -13,11 +13,10 @@ its default level and weight come from `bed_allocation.constraint_info()` (the C
 components' `kDefaultLevel` / `kDefaultWeight`), so `catalog()` equals the engine catalog.
 The objective levels are `("hard", "medium", "soft")`; `unassigned_stays_cost` is medium
 at weight 1, and `level="hard"`, `"medium"` or `"soft"` (or a `Level`) moves any pick onto
-that level with its weight in units of it, exactly like the engine (0.2.0: a demoted medium
-term used to stay on medium here). Not supported on CP-SAT: `exponent != 1` and
+that level with its weight in units of it, exactly like the engine. Not supported on CP-SAT: `exponent != 1` and
 non-integer weights (rejected).
 
-**0.3.0: repeats, `offset` and `clip`.** A constraint may be picked several times (as specs
+**Repeats, `offset` and `clip`.** A constraint may be picked several times (as specs
 or as `{"name", "weight", "level", "offset", "clip"}` mappings): each pick builds its own
 terms with its own knobs, its level included, keyed `name`, `name#2`, … like the engine's
 `constraint_costs()`. Every plugin adds one term per engine unit (per real bed, the "no

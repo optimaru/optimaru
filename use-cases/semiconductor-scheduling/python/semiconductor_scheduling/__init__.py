@@ -5,7 +5,7 @@ sequence-dependent setups, inter-tool transport, queue-time windows, maintenance
 auxiliary resources and pinned operations. The search state is one machine choice and one
 priority rank per operation, folded into one assignment-shape planning value per operation row
 (``rank * K + slot``); the C++ serial schedule-generation decoder turns it into the
-schedule (``assignments``), exactly like 0.1.x's Python decoder did.
+schedule (``assignments``).
 
 Score, at the default weights: hard = the sum of the 14 hard constraints,
 soft = preference + minimum batch fill + load imbalance + 10 x weighted tardiness + cycle
@@ -201,21 +201,20 @@ def constraint_costs(problem, constraints=None) -> dict:
     "level", ...}}`` — the input of `semiconductor_scheduling.constraints.score`. None = the
     default constraints; a pick list (as for `solve`) scores exactly those picks, each entry
     carrying its pick's knobs, the k-th pick of a name keyed ``"<name>#<k>"``. Every
-    constraint is global, so ``costs`` holds its total as one element (0.1.x returned
-    per-item lists; see `constraint_items`)."""
+    constraint is global, so ``costs`` holds its total as one element (the per-item
+    lists are `constraint_items`)."""
     core, _model = _core_of(problem)
     return _core.constraint_costs(core, constraints)
 
 
 def constraint_items(problem) -> dict[str, list[int]]:
     """The per-item raw costs of every constraint (one per lot, route pair, machine, window,
-    ...), in the 0.1.x item order: what 0.1.x's ``constraint_costs`` returned, under the
-    0.2.0 names. Their sums are the ``constraint_costs`` totals."""
+    ...). Their sums are the ``constraint_costs`` totals."""
     core, _model = _core_of(problem)
     return _core.constraint_items(core)
 
 
-# --- 0.1.x decoder entry points the tests use ---------------------------------------
+# --- decoder entry points the tests use ---------------------------------------------
 
 
 def _operation_rows(problem):

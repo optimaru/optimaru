@@ -38,7 +38,7 @@ Java.)
 The constraints and their defaults (level, weight in units of that level) live in the C++
 components; `constraint_info()` reports them, `list_constraints()` lists the names and
 `constraint_costs()` gives the raw per-constraint costs of a schedule (the only
-per-constraint surface since 0.2.0; `analyze()` was removed)::
+per-constraint surface)::
 
     {row.name: (row.default_level, row.default_weight) for row in fp.constraint_info()}
     # {'max_end_time_cost': ('hard', 1.0), ..., 'unassigned_jobs_cost': ('medium', 1.0)}

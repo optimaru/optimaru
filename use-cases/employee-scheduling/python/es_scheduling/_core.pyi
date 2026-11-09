@@ -270,8 +270,8 @@ class DecomposedCalculator:
                   level="hard")`` promotes it; ``add("min_rest_cost",
                   level="soft", weight=0.25)`` demotes it). The rewards
                   (desired_day_cost, desired_shift_cost) refuse "hard"; "medium"
-                  is refused (no medium level here), and the removed ``hard=``
-                  keyword raises TypeError.
+                  is refused (no medium level here), and ``hard=`` raises
+                  TypeError (the level is ``level=``).
         exponent: sign-preserving power shaping of the PER-EMPLOYEE cost:
                   contribution = weight * sign(c) * abs(c) ** exponent.
                   2.0 = squared, 3.0 = cubed — concentrated violations on one
@@ -316,7 +316,7 @@ def constraint_costs(
 ) -> dict[str, dict[str, Any]]:
     """Raw per-employee cost of every constraint instance, before
     weight/exponent/offset/level: {key: {"costs": [...], "weight": float,
-    "exponent": float, "offset": float, "clip": bool, "hard": bool, "global":
+    "exponent": float, "offset": float, "clip": bool, "global":
     bool, "level": "hard" | "medium" | "soft", "reward": bool,
     "level_flippable": bool, "name": str, "label": str, "default_weight":
     float, "default_level": str[, "units": [...]]}}.

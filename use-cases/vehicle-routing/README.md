@@ -100,12 +100,13 @@ so a soft total of 10^9 or more stays on soft in both.
 **Exponent.** It shapes each unit's raw cost before the weight: per vehicle for
 the unit constraints, on the single total for `unassigned_visits_cost`.
 
-**0.3.0:** every constraint takes two more knobs, `offset` and `clip` (keyword-only), and
-may be picked several times. A raw cost `x` (per vehicle, or the unassigned total) is
+**Offset, clip and repeats.** Every constraint takes the knobs `weight`, `level`,
+`exponent`, `offset` and `clip` (`offset` and `clip` keyword-only), and may be picked
+several times. A raw cost `x` (per vehicle, or the unassigned total) is
 shaped as `sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
 `(x - offset) ** exponent`, sign-preserving (`clip=False`, which lowers the penalty of
 every vehicle below the offset, an idle one included; the unassigned pool is no vehicle
-and is never charged); `offset=0` is the 0.2.0 shaping. Both apply per vehicle, not to the
+and is never charged); `offset=0` is the plain power. Both apply per vehicle, not to the
 total. `clip=False` with an offset is refused on hard (by default, every constraint the
 table lists as hard), because hard 0 must mean no violation; medium folds into soft here,
 so it takes the literal formula. Each pick is its own instance with its own knobs, and the
@@ -125,40 +126,15 @@ vrp.Solver(config).solve_with_constraints(plan, [
 `vrp.constraint_costs(plan, picks)` keys the second pick `travel_time_cost#2`; its
 per-vehicle entries list the vehicles they evaluate as `"units"`.
 
-**0.2.0.** Every constraint name ends in `_cost` (C++ struct, header file, registry
-name, Python spec class, module-level default instance and catalog name):
-
-| 0.1.x name | 0.2.0 name |
-| --- | --- |
-| `vehicle_capacity` / `VehicleCapacity` | `vehicle_capacity_cost` / `VehicleCapacityCost` |
-| `service_finished_after_max_end_time` / `ServiceFinishedAfterMaxEndTime` | `max_end_time_cost` / `MaxEndTimeCost` |
-| `maximize_visits_assigned` / `MaximizeVisitsAssigned` | `unassigned_visits_cost` / `UnassignedVisitsCost` |
-| `minimize_travel_time` / `MinimizeTravelTime` | `travel_time_cost` / `TravelTimeCost` |
-| `max_travel_time` / `MaxTravelTime` | `max_travel_time_cost` / `MaxTravelTimeCost` |
-| `max_route_duration` / `MaxRouteDuration` | `max_route_duration_cost` / `MaxRouteDurationCost` |
-| `vehicle_end_time` / `VehicleEndTime` | `vehicle_max_end_time_cost` / `VehicleMaxEndTimeCost` |
-| `max_stops` / `MaxStops` | `max_stops_cost` / `MaxStopsCost` |
-| `max_route_radius` / `MaxRouteRadius` | `max_route_radius_cost` / `MaxRouteRadiusCost` |
-| `minimize_enclosing_circle_radius` / `MinimizeEnclosingCircleRadius` | `enclosing_circle_radius_cost` / `EnclosingCircleRadiusCost` |
-| `min_capacity_utilization` / `MinCapacityUtilization` | `min_capacity_utilization_cost` / `MinCapacityUtilizationCost` |
-| `minimize_route_duration` / `MinimizeRouteDuration` | `route_duration_cost` / `RouteDurationCost` |
-| `minimize_latency` / `MinimizeLatency` | `latency_cost` / `LatencyCost` |
-| `vehicle_fixed_cost` / `VehicleFixedCost` | unchanged |
-
-`service_finished_after_max_end_time` aligns with the deadline family as
-`max_end_time_cost`, and the vehicle's own end bound becomes
-`vehicle_max_end_time_cost` so the two do not clash. The model FIELDS keep their
+**Names.** Every constraint name ends in `_cost` (C++ struct, header file, registry
+name, Python spec class, module-level default instance and catalog name), except
+`vehicle_fixed_cost`. `max_end_time_cost` is the visit deadline and
+`vehicle_max_end_time_cost` the vehicle's own end bound. The model FIELDS keep their plain
 names (`max_travel_time`, `max_route_duration`, `max_end_time`, `max_stops`,
-`max_route_radius_meters`, `min_load_ratio`, `fixed_cost`,
-`unassigned_penalty_minutes`). Other changes: `unassigned_visits_cost` defaults to
-weight 1 in medium units (it was 10^9 in soft units); `level="soft"` on it now demotes
-it to soft (it used to be a no-op relabel) and `level="hard"` charges 1 hard unit per
-penalty minute (it used to charge 10^9); the `enclosing_circle_radius_cost` default
-instance no longer passes `weight=0` (the C++ default is 0); `get_constraints()` and
-`score()` now refuse a constraint named twice, as the C++ solve path already did (0.3.0
-lifts that refusal again, see below);
-`constraint_info()` / `ConstraintInfo` are new.
-Raw costs and the default score are unchanged.
+`max_route_radius_meters`, `min_load_ratio`, `fixed_cost`, `unassigned_penalty_minutes`).
+`unassigned_visits_cost` defaults to weight 1 in medium units: `level="soft"` demotes it to
+soft and `level="hard"` charges 1 hard unit per penalty minute. `enclosing_circle_radius_cost`
+defaults to weight 0 (opt-in).
 
 ## Extending
 

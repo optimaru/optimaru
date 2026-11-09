@@ -13,7 +13,6 @@ namespace pjs
 // resource-unit-days, so 0 = no resource is over capacity on any day. A
 // capacity that refreshes daily, so this one is entirely about WHEN jobs run:
 // it reads the whole date chain. The exponent shapes the total.
-// 0.2.0 migration note: was renewableResourceCapacity.
 struct RenewableResourceCapacityCost final : ScheduleAggregateConstraint
 {
     static constexpr double kDefaultWeight = 1.0;

@@ -438,7 +438,8 @@ def test_a_required_request_may_run_late_on_its_own_vehicle_when_that_costs_less
 
 @pytest.mark.parametrize("seed", range(5))
 def test_a_pinned_stop_holds_when_breaking_it_would_save_more_lateness(seed):
-    # `b` is thousands of minutes late behind `a`, while one misplaced stop used to cost only 1000.
+    # `b` is thousands of minutes late behind `a`: swapping them would save far more
+    # lateness, but the pin must hold anyway.
     deliveries = [
         timed_request("a", opens=400000),
         timed_request("b", closes=1000, required="v"),

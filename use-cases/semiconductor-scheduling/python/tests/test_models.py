@@ -126,7 +126,7 @@ def _one_lot(priority: int, duration: int, **extra) -> SemiconductorScheduleMode
 
 
 def test_large_costs_are_exact_and_an_int64_overflow_raises():
-    """Tardiness = priority * lateness in exact int64 (0.1.x: Python ints); a product that
+    """Tardiness = priority * lateness in exact int64; a product that
     leaves int64 raises OverflowError instead of wrapping, on every scoring path."""
     model = _one_lot(2**30, 2**30)
     fab.calculate_score(model)

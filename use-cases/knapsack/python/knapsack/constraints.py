@@ -31,8 +31,7 @@ Every spec takes five knobs:
                ``Level.SOFT`` (or the names ``"hard"`` and ``"soft"``). This use
                case has no medium level: ``level="medium"`` raises ValueError.
                ``SelectedValueCost`` is a reward and always soft:
-               ``level="hard"`` raises ValueError. (``level`` replaced the
-               ``hard`` knob; ``hard=`` raises TypeError.)
+               ``level="hard"`` raises ValueError.
 - ``exponent`` sign-preserving power shaping: ``weight * sign(c) * |c| ** exponent``
                on each constraint's single total (every knapsack constraint is
                global), e.g. the summed resource overflow.

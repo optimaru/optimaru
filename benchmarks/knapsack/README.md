@@ -16,7 +16,7 @@ set. Exponents other than 1 and fractional weights are not supported on CP-SAT
 `level="medium"` is refused by both (`this use case has no medium level`), and
 `selected_value_cost` with `level="hard"` is refused as in the engine.
 
-**0.3.0:** a constraint may be picked several times (as specs or as
+A constraint may be picked several times (as specs or as
 `{"name", "weight", "level", "offset", "clip"}` mappings); each pick builds its own term with
 its own knobs, its level included. Every knapsack constraint is global and adds its single
 total as one term, so an integral `offset` shapes that total exactly as the engine does in

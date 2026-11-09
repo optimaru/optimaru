@@ -42,7 +42,7 @@ NAMES = [
 
 
 def side(assignment=None) -> QuadraticAssignmentProblemModel:
-    """The 0.1.x side-constraint fixture: L1<-F1, L2<-F2 breaks the pin (1), uses the forbidden
+    """The side-constraint fixture: L1<-F1, L2<-F2 breaks the pin (1), uses the forbidden
     pair (1), overloads L1 by 2, costs 7 + 8 = 15 directly and 22 in flow-distance."""
     return QuadraticAssignmentProblemModel(
         facilities=["F1", "F2"],
@@ -167,10 +167,9 @@ def test_constraint_info_matches_the_raw_cost_metadata():
     assert list(raw) == NAMES
     for row in qap.constraint_info():
         entry = raw[row.name]
-        assert (entry["weight"], entry["level"], entry["hard"]) == (
+        assert (entry["weight"], entry["level"]) == (
             row.default_weight,
             row.default_level,
-            row.default_level == "hard",
         )
         assert (entry["level_flippable"], entry["reward"]) == (row.level_flippable, row.reward)
         is_global = row.name in ("assignment_cost", "flow_distance_cost")
@@ -204,7 +203,7 @@ def test_constraint_costs_match_the_hand_calculation():
 
 
 def test_units_shape_per_location_and_globals_their_total():
-    """The exponent shapes each location of a side constraint and the total of an objective (as 0.1.x did)."""
+    """The exponent shapes each location of a side constraint and the total of an objective."""
     problem = three()
     problem.assignment = {"L1": "F1", "L2": "F2", "L3": "F3"}
     raw = qap.constraint_costs(problem)
@@ -295,7 +294,7 @@ def test_weights_steer_the_solve():
         ({"exponent": -1.0}, ValueError),
         ({"level": 1}, TypeError),
         ({"level": "firm"}, ValueError),
-        ({"hard": True}, TypeError),  # the removed knob is an unknown keyword
+        ({"hard": True}, TypeError),  # an unknown keyword
     ],
 )
 def test_specs_validate_their_knobs(kwargs, error):
@@ -345,18 +344,10 @@ def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
         LocationCapacityCost(**knobs)
 
 
-def test_unknown_and_old_names_are_refused():
-    """0.2.0 renamed the catalog; the 0.1.x names are unknown now (no aliases)."""
-    old_names = (
-        "fixed_assignments",
-        "forbidden_assignments",
-        "location_capacities",
-        "minimize_assignment_cost",
-        "minimize_flow_distance",
-    )
+def test_unknown_names_are_refused():
     raw = qap.constraint_costs(side())
-    for old in (*old_names, "fixed_assignments_cost", "flow_distance"):
-        pick = SimpleNamespace(name=old, weight=None, level=None, exponent=1.0)
+    for unknown in ("fixed_assignments_cost", "flow_distance"):
+        pick = SimpleNamespace(name=unknown, weight=None, level=None, exponent=1.0)
         with pytest.raises(ValueError, match="unknown constraint"):
             qap.solve(three(), time_limit_seconds=0, constraints=[pick])
         with pytest.raises(ValueError, match="unknown constraint"):
@@ -373,9 +364,9 @@ def test_an_empty_pick_list_is_rejected():
 
 
 def test_naming_a_constraint_twice_scores_both_picks():
-    """Since 0.3.0 a constraint may be picked several times: each pick is scored on its own.
+    """A constraint may be picked several times: each pick is scored on its own.
 
-    The later pick no longer wins in silence, nor is it an error: both are
+    The later pick does not replace the earlier one, nor is it an error: both are
     instances with their own knobs, and they add up."""
     picks = [FlowDistanceCost(), FlowDistanceCost(weight=2), LocationCapacityCost()]
     assert engine_score(side(), picks) == (-2, -(22 + 2 * 22))
@@ -455,7 +446,7 @@ def test_score_equals_the_engine_for_the_default_assembly():
     assert (python.hard, python.soft) == (engine.hard, engine.soft)
 
 
-# --- 0.3.0: repeated picks and the offset / clip knobs ------------------------------
+# --- repeated picks and the offset / clip knobs ------------------------------------
 
 
 def scoped() -> QuadraticAssignmentProblemModel:
@@ -607,8 +598,8 @@ def test_a_literal_offset_charges_only_the_evaluated_locations(spec):
     assert engine_score(problem, [spec(offset=2)]) == (0, 0.0)
 
 
-def test_offset_zero_reproduces_the_0_2_0_scores():
-    """offset 0 is the plain shaping in both modes, so every 0.2.0 selection scores the same."""
+def test_offset_zero_reproduces_the_plain_scores():
+    """offset 0 is the plain shaping in both modes, so a selection scores the same with or without it."""
     plain_picks = [LocationCapacityCost(exponent=2), PinnedAssignmentsCost(), FlowDistanceCost(exponent=1.5)]
     shifted_by_zero = [
         LocationCapacityCost(exponent=2, offset=0.0, clip=False),
@@ -705,7 +696,7 @@ def test_levels_by_hand_on_both_paths(picks, expected):
     raw = qap.constraint_costs(problem, picks)
     for pick, key in zip(picks, instance_keys(picks), strict=True):
         assert raw[key]["level"] == (pick.level or raw[key]["default_level"]), key
-        assert raw[key]["hard"] == (raw[key]["level"] == "hard"), key
+        assert "hard" not in raw[key], key
     assert score(raw, picks) == expected
     assert qap.calculate_score(problem, picks) == expected
     engine = engine_solve(problem, picks)
@@ -742,16 +733,7 @@ def test_a_level_must_be_a_level():
         engine_solve(side(), [LocationCapacityCost(), pick])
 
 
-def test_the_knob_was_renamed():
-    """0.3.0 replaced hard=True / hard=False by level="hard" / level="soft"; hard= is unknown."""
-    with pytest.raises(TypeError):
-        FlowDistanceCost(hard=True)
-    with pytest.raises(TypeError):
-        LocationCapacityCost(weight=None, hard=False)
-    assert FlowDistanceCost(level="hard") == FlowDistanceCost(level=Level.HARD)
-
-
-# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+# --- clip=False with an offset stays off the hard score -------------------------------
 
 HARD_REFUSAL = (
     "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
@@ -819,7 +801,7 @@ def test_the_same_literal_pick_on_soft_is_accepted(offset):
     [
         (LocationCapacityCost(offset=3.0), (0, 0.0)),  # clip=True on hard: a threshold, a raw 0 stays 0
         (LocationCapacityCost(offset=-3.0), (-5, 0.0)),  # 2 + 3 on L1 only
-        (PinnedAssignmentsCost(clip=False), (-1, 0.0)),  # clip=False with offset 0: the 0.2.0 shaping
+        (PinnedAssignmentsCost(clip=False), (-1, 0.0)),  # clip=False with offset 0: the plain shaping
         (PinnedAssignmentsCost(offset=0.0, clip=False), (-1, 0.0)),
         (FlowDistanceCost(level="hard", offset=20.0), (-2, 0.0)),  # 22 - 20
     ],

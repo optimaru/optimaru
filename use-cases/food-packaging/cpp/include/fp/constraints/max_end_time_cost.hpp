@@ -10,7 +10,7 @@ namespace fp
 // it must not miss (Job::maxEndTime). Raw cost per line = the sum over its
 // jobs of max(0, end - maxEndTime), so 0 = every job on the line ends by its
 // deadline. Unassigned jobs are silent here; unassignedJobsCost is the term
-// that prices them. 0.2.0 migration note: was maxEndDateTime.
+// that prices them.
 struct MaxEndTimeCost final : detail::PerLineConstraint
 {
     static constexpr double kDefaultWeight = 1.0;

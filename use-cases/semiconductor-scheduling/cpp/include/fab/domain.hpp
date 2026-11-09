@@ -32,7 +32,7 @@ namespace fab
 using Time = std::int64_t;
 
 // Checked int64 arithmetic for the times the decoder derives and the costs
-// the score terms sum. 0.1.x computed exact Python integers; a result outside
+// the score terms sum: a result outside
 // int64 throws std::overflow_error (OverflowError in Python) instead of
 // wrapping.
 namespace checked
@@ -127,7 +127,7 @@ struct Operation
     std::string family;  // recipe family: batching and setup transitions
     std::vector<MachineOption> eligibleMachines;
     // Indices into auxiliaryResources. Duplicates are kept: an operation
-    // listing a resource twice uses it twice (the 0.1.x semantics).
+    // listing a resource twice uses it twice.
     std::vector<int> requiredResources;
     Time minQueueTime = 0;  // minimum wait after this step
     std::optional<Time> maxQueueTime;  // maximum wait after this step
@@ -195,7 +195,7 @@ struct Assignment
 // OperationRow  (@PlanningEntity)
 // ---------------------------------------------------------------------------
 // One row per (lot, operation), lot order then route order. The planning
-// variable folds the two decisions of the 0.1.x search state into one int:
+// variable folds the two decisions of the search state into one int:
 //
 //   value = rank * K + slot     (K = maxOptionCount, the most eligible
 //                                machines of any operation)

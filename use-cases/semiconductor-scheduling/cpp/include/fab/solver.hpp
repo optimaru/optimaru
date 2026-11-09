@@ -61,7 +61,7 @@ public:
         // recompute after every move (debugging aid; much slower).
         optimaru::ScoreChecks score_checks = optimaru::ScoreChecks::Off;
 
-        // Acceptor: simulated annealing (the 0.1.x search was one too). With a
+        // Acceptor: simulated annealing. With a
         // (0, 0) starting temperature (the default) it is auto: hard 0 (a
         // hard-worse move is never taken) and soft
         // simulatedAnnealingTemperatureFraction * |the start's soft score|

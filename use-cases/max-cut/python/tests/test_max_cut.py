@@ -36,7 +36,7 @@ def _contract() -> MaxCutProblemModel:
 
 def test_partition_contract_costs_match_manual_values():
     costs = constraint_costs(_contract())
-    # 0.1.x listed one 0/1 term per fixed vertex / pair; 0.2.0 reports [side 0, side 1].
+    # The unit constraints report [side 0, side 1].
     assert sum(costs["fixed_partition_cost"]["costs"]) == 1
     assert sum(costs["same_partition_pairs_cost"]["costs"]) == 1
     assert sum(costs["different_partition_pairs_cost"]["costs"]) == 1
@@ -49,7 +49,7 @@ def test_partition_contract_costs_match_manual_values():
 
 
 def test_a_partial_partition_is_not_scored():
-    """0.2.0: scoring needs every vertex on a side (0.1.x scored a missing vertex as its own side)."""
+    """Scoring needs every vertex on a side."""
     problem = _contract()
     problem.partition = {"A": 0, "B": 1}
     with pytest.raises(ValueError, match="partition is partial"):

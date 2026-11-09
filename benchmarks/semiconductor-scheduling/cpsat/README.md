@@ -37,7 +37,7 @@ of runs on a machine, not only consecutive ones, so a setup matrix that breaks t
 inequality may exclude schedules the engine scores 0. Not supported on CP-SAT (refused):
 `exponent != 1` and non-integer weights.
 
-**0.3.0:** a constraint may be picked several times (as specs or as
+A constraint may be picked several times (as specs or as
 `{"name", "weight", "level", "offset", "clip"}` mappings); each pick is built on its own
 with its own knobs, its level included (a repeated structural pick posts its rule again and
 is checked with its own weight and level). A penalized pick may move to the other level

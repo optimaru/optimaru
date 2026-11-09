@@ -202,14 +202,14 @@ def test_score_reweighting_is_linear_without_rescoring():
 
 
 def test_score_rejects_an_unknown_constraint_name():
-    """A spec with a wrong name (e.g. a renamed component) must not be silently ignored."""
+    """A spec with a wrong name (e.g. a typo) must not be silently ignored."""
     raw, _ = _raw()
 
-    class Renamed(Constraint):
+    class Misnamed(Constraint):
         name = "definitely_not_a_constraint"
 
     with pytest.raises(ValueError, match="unknown constraint"):
-        score(raw, [Renamed()])
+        score(raw, [Misnamed()])
 
 
 # --- The catalog: constraint_info() -------------------------------------------
@@ -255,10 +255,9 @@ def test_constraint_info_matches_the_raw_cost_metadata():
     assert list(raw) == pjs.list_constraints()
     for row in pjs.constraint_info():
         entry = raw[row.name]
-        assert (entry["weight"], entry["level"], entry["hard"]) == (
+        assert (entry["weight"], entry["level"]) == (
             row.default_weight,
             row.default_level,
-            row.default_level == "hard",
         )
         assert (entry["level_flippable"], entry["reward"]) == (True, False)
         assert entry["global"] is True  # every project-job constraint is global
@@ -338,8 +337,8 @@ def _solve_late(picks):
 
 
 def test_the_solver_reports_the_level_the_selection_gives_the_medium_term():
-    """level="soft" moves project_delay_cost to soft in the solver (it was a no-op before
-    0.2.0); level="hard" makes it one hard unit per day (not 10^9)."""
+    """level="soft" moves project_delay_cost to soft in the solver; level="hard" makes it
+    one hard unit per day (not 10^9)."""
     others = [spec for spec in get_constraints() if spec.name != "project_delay_cost"]
     default = _solve_late(get_constraints())
     assert (default.score.hard, default.score.medium, default.score.soft) == (0, -2, -3)
@@ -520,26 +519,7 @@ def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
         ProjectDelayCost(**knobs)
 
 
-# 0.2.0 migration: the pre-0.2.0 catalog names, which must be unknown now.
-OLD_NAMES = [
-    "non_renewable_resource_capacity",
-    "renewable_resource_capacity",
-    "total_project_delay",
-    "total_makespan",
-]
-
-
-@pytest.mark.parametrize("old", OLD_NAMES)
-def test_old_names_are_gone(old):
-    """0.2.0 renamed the catalog; the pre-0.2.0 names are unknown now (no aliases)."""
-    pick = SimpleNamespace(name=old, weight=None, level=None, exponent=1.0)
-    with pytest.raises(ValueError, match="unknown constraint"):
-        pjs.solve(build_schedule(), time_limit_seconds=0.05, constraints=[pick])
-    with pytest.raises(ValueError, match="unknown constraint"):
-        score(pjs.constraint_costs(build_schedule()), [pick])
-
-
-# --- 0.3.0: repeated picks and the offset / clip knobs ------------------------------
+# --- repeated picks and the offset / clip knobs ------------------------------------
 #
 # The hand instance is _late_schedule(): one 3-day job, 2 days of project delay (medium),
 # makespan 3 (soft), no resource use. All four constraints are global, so a pick's
@@ -561,9 +541,9 @@ REPEAT = [MakespanCost(), MakespanCost(weight=2, exponent=2)]
 
 
 def test_naming_a_constraint_twice_scores_both_picks():
-    """Since 0.3.0 a constraint may be picked several times: each pick is scored on its own.
+    """A constraint may be picked several times: each pick is scored on its own.
 
-    The later pick no longer wins in silence, nor is it an error: both are
+    The later pick does not replace the earlier one, nor is it an error: both are
     instances with their own knobs, and they add up."""
     picks = [ProjectDelayCost(), MakespanCost(weight=10), MakespanCost()]
     assert _zero_budget(_late_schedule(), picks) == (0, -2 * MEDIUM_UNIT - 11 * 3)
@@ -669,8 +649,8 @@ def test_offsets_by_hand_on_both_paths(pick, expected):
     assert _zero_budget(_late_schedule(), [pick]) == expected
 
 
-def test_offset_zero_reproduces_the_0_2_0_scores():
-    """offset 0 is the plain shaping in both modes, so every 0.2.0 selection scores the same."""
+def test_offset_zero_reproduces_the_plain_scores():
+    """offset 0 is the plain shaping in both modes, so a selection scores the same with or without it."""
     plain = [*get_constraints()[:-1], MakespanCost(exponent=2)]
     shifted = [type(spec)(exponent=spec.exponent, offset=0.0, clip=False) for spec in plain]
     raw, solved = _raw()
@@ -760,18 +740,16 @@ def test_core_refuses_an_unknown_level_like_the_python_base():
         pjs.constraint_costs(_late_schedule(), [pick])
 
 
-def test_the_knob_was_renamed():
-    """hard= is gone: a spec refuses it, and an old duck-typed pick that carries `hard` but
-    no `level` is refused on every path instead of running at the default level."""
-    with pytest.raises(TypeError):
-        MakespanCost(hard=True)
-    old = SimpleNamespace(name="makespan_cost", weight=None, hard=True, exponent=1.0)
+def test_a_pick_without_level_is_refused():
+    """A duck-typed pick without `level` is refused on every path instead of running at the
+    default level."""
+    pick = SimpleNamespace(name="makespan_cost", weight=None, exponent=1.0)
     with pytest.raises(AttributeError, match="level"):
-        pjs.solve(build_schedule(), time_limit_seconds=0.1, constraints=[old])
+        pjs.solve(build_schedule(), time_limit_seconds=0.1, constraints=[pick])
     with pytest.raises(AttributeError, match="level"):
-        pjs.constraint_costs(_late_schedule(), [old])
+        pjs.constraint_costs(_late_schedule(), [pick])
     with pytest.raises(AttributeError, match="level"):
-        score(pjs.constraint_costs(_late_schedule()), [old])
+        score(pjs.constraint_costs(_late_schedule()), [pick])
 
 
 @pytest.mark.parametrize(
@@ -834,7 +812,7 @@ def test_a_repeat_is_checked_on_its_own_level():
         score(pjs.constraint_costs(_late_schedule()), [MakespanCost(), pick])
 
 
-# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+# --- clip=False with an offset stays off the hard score -------------------------------
 
 HARD_REFUSAL = (
     "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
@@ -910,7 +888,7 @@ def test_the_same_literal_pick_on_soft_is_accepted(offset):
         # _late_schedule(): the project delay total (2 days) moved to hard.
         (ProjectDelayCost(level="hard", offset=1), (-1, 0.0)),  # clip=True on hard: a threshold
         (ProjectDelayCost(level="hard", offset=-1), (-3, 0.0)),  # adds 1 to the non-zero total
-        (ProjectDelayCost(level="hard", clip=False), (-2, 0.0)),  # clip=False with offset 0: 0.2.0
+        (ProjectDelayCost(level="hard", clip=False), (-2, 0.0)),  # clip=False with offset 0: plain
         (ProjectDelayCost(level="hard", offset=0.0, clip=False), (-2, 0.0)),
         (RenewableResourceCapacityCost(offset=-1), (0, 0.0)),  # no overload: a threshold adds nothing to 0
     ],

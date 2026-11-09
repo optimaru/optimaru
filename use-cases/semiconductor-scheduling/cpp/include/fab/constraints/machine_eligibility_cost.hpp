@@ -11,7 +11,7 @@ namespace fab
 // order, route order) = 1 when it has no assignment, when no eligible option
 // names the assigned machine, or when the assignment's length differs from
 // that option's duration; else 0. With a machine listed twice among the
-// options the LAST one is read (the 0.1.x lookup). 0 = every operation is
+// options the LAST one is read (the reference lookup). 0 = every operation is
 // assigned to an eligible machine for exactly its duration.
 struct MachineEligibilityCost final : ScheduleViewConstraint
 {

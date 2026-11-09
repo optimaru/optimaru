@@ -91,25 +91,13 @@ constraint by default: `level="hard"` charges one hard unit per night, `level="s
 soft unit per night (outside the 10^9 fold), and an explicit weight is in units of the
 level in effect. Any constraint may take any of the three levels, so
 `PreferredMaxRoomCapacityCost(level="medium")` charges one medium unit per night. A
-constraint may be picked several times (since 0.3.0); each pick is its own instance with
+constraint may be picked several times; each pick is its own instance with
 its own knobs, its level included, the instances add up, and
 `constraint_costs(plan, picks)` keys the k-th pick `<name>#<k>`.
 
-**0.2.0:** every constraint was renamed to the unified `*_cost` names (old -> new:
-`same_bed_in_same_night` -> `bed_conflict_cost`, `female_in_male_room` ->
-`female_in_male_room_cost`, `male_in_female_room` -> `male_in_female_room_cost`,
-`different_gender_in_same_gender_room_in_same_night` -> `mixed_gender_room_cost`,
-`department_minimum_age` -> `department_min_age_cost`, `department_maximum_age` ->
-`department_max_age_cost`, `required_patient_equipment` -> `required_patient_equipment_cost`,
-`assign_every_patient_to_a_bed` -> `unassigned_stays_cost`,
-`preferred_maximum_room_capacity` -> `preferred_max_room_capacity_cost`,
-`department_specialty` -> `department_specialty_cost`,
-`department_specialty_not_first_priority` -> `department_specialty_priority_cost`,
-`preferred_patient_equipment` -> `preferred_patient_equipment_cost`; spec classes and
-module-level instances likewise). `unassigned_stays_cost` defaults to weight 1 in medium
-units (before: a soft weight of 10^9) and `level="soft"` now demotes it to soft in the
-engine as well. The package re-exports `ConstraintInfo` / `constraint_info()`. Raw costs
-and the default score are unchanged.
+`unassigned_stays_cost` defaults to weight 1 in medium units, and `level="soft"` demotes it
+to soft in the engine as well. The package re-exports `ConstraintInfo` /
+`constraint_info()`.
 
 Caveats (kept exactly as in the original):
 

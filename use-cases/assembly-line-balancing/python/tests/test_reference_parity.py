@@ -1,16 +1,15 @@
-"""The C++ port computes exactly what the 0.1.5 pure-Python package computed.
+"""The C++ domain computes exactly what the pure-Python reference computes.
 
-`reference_assembly_line_balancing` is the frozen 0.1.5 scorer and construction
+`reference_assembly_line_balancing` is an independent scorer and construction
 (an oracle, plain data in and out). On every sample — the web demo
 (`fixtures/web_demo.json`, a copy of the web app's sample) and the package's own
 test fixtures — and on seeded random instances, the C++ `constraint_costs`
-totals equal the oracle's per constraint (under the 0.2.0 names), the default
+totals equal the oracle's per constraint (under the engine names), the default
 score equals the oracle's, and the zero-budget construction returns the
 oracle's stations.
 
 Complete assignments are compared directly. A partial assignment differs by
-design (0.2.0 follows the engine convention: an unassigned task contributes
-nothing); it is compared against the oracle on the problem restricted to the
+design (the engine convention: an unassigned task contributes nothing); it is compared against the oracle on the problem restricted to the
 assigned tasks, which states that convention exactly.
 """
 
@@ -129,7 +128,7 @@ def _constructed(data: dict) -> list[int]:
 def test_every_sample_matches_the_oracle(name):
     problem = _samples()[name]
     rng = random.Random(f"parity:{name}")
-    states = [ref.construct(problem)]  # the 0.1.5 starting point
+    states = [ref.construct(problem)]  # the reference starting point
     if all(task.get("station", -1) >= 0 for task in problem["tasks"]):
         states.append([task["station"] for task in problem["tasks"]])  # the sample as given
     states += [_random_complete(problem, rng) for _ in range(40)]
@@ -224,13 +223,13 @@ def test_random_instances_match_the_oracle(seed):
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_scores_match_the_oracle_at_integer_weights(seed):
-    """score() re-prices like 0.1.5 score_costs at integer weights and exponent 1, whatever the levels."""
+    """score() re-prices like the reference score_costs at integer weights and exponent 1, whatever the levels."""
     rng = random.Random(1000 + seed)
     problem = _random_instance(rng)
     data = _with_stations(problem, _random_complete(problem, rng))
     raw = alb.constraint_costs(Model.model_validate(data).to_core())
-    old = ref.constraint_costs(Model.model_validate(data).model_dump())
-    by_old = {new: old_name for old_name, new in ref.RENAMED.items()}
+    reference_costs = ref.constraint_costs(Model.model_validate(data).model_dump())
+    reference_name = {new: ref_name for ref_name, new in ref.ENGINE_NAME.items()}
     specs = get_constraints()
     rng.shuffle(specs)
     picked: list[Constraint] = []
@@ -239,9 +238,9 @@ def test_scores_match_the_oracle_at_integer_weights(seed):
         level = rng.choice([None, "hard", "soft"])
         picked.append(type(spec)(weight=weight, level=level))
     expected = ref.score_costs(
-        old,
+        reference_costs,
         [
-            (by_old[spec.name], spec.weight, {None: None, "hard": True, "soft": False}[spec.level], 1.0)
+            (reference_name[spec.name], spec.weight, {None: None, "hard": True, "soft": False}[spec.level], 1.0)
             for spec in picked
         ],
     )
@@ -279,8 +278,8 @@ def test_fixture_h_matches_the_hand_calculation():
     assert _cpp_score(problem) == ref.default_score(problem) == (-10, -3.0)
 
 
-def test_the_unassigned_web_demo_now_scores_zero():
-    """0.1.5 charged the unassigned web demo -18hard (bounds 16, fixed 1, pairs 1); 0.2.0 charges nothing."""
+def test_the_unassigned_web_demo_scores_zero():
+    """The reference charges the unassigned web demo -18hard (bounds 16, fixed 1, pairs 1); the engine nothing."""
     problem = _samples()["web-demo"]
     assert ref.default_score(problem) == (-18, 0.0)
     assert _cpp_score(problem) == (0, 0.0)

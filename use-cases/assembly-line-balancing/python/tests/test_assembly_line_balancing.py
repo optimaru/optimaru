@@ -43,7 +43,6 @@ def test_zoning_and_station_domain_costs_match_manual_values():
     assert costs["same_station_groups_cost"] == [1]
     assert costs["different_station_pairs_cost"] == [0, 0]
     assert costs["task_precedence_cost"] == [1]
-    # The 0.1.5 per-task lists ([1, 0], [1, 0], [0, 1], ...) had the same totals.
     assert {name: sum(values) for name, values in costs.items()} == {
         "station_capacity_cost": 0,
         "task_precedence_cost": 1,

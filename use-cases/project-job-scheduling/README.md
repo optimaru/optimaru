@@ -66,24 +66,15 @@ engine and in the CP-SAT reference alike. Any other constraint may move onto med
 same way (`MakespanCost(level="medium")` charges one medium unit per day of the makespan,
 in both solvers too), and a repeated pick carries its own level.
 
-**0.2.0:** the constraints were renamed (`non_renewable_resource_capacity` ->
-`non_renewable_resource_capacity_cost`, `renewable_resource_capacity` ->
-`renewable_resource_capacity_cost`, `total_project_delay` -> `project_delay_cost`,
-`total_makespan` -> `makespan_cost`; the spec classes, module-level default instances, C++
-structs, headers and registry names follow: `TotalProjectDelay` -> `ProjectDelayCost`,
-`TotalMakespan` -> `MakespanCost`, ...). `makespan_cost` drops "total" because it is the
-latest end date (a max), not a total. `project_delay_cost` used to carry the fold as a soft
-weight of 10^9; now its default weight is 1 on the medium level and the fold belongs to the
-domain, so `level="hard"` costs 1 hard per day (was 10^9), `level="soft"` demotes it to soft in
-both solvers (it was a no-op in the engine), an explicit weight is in medium units (it used
-to replace the fold), and on CP-SAT `level="soft"` on a hard constraint now lands on soft (it
-landed on medium). Raw costs and the default score are unchanged.
+`makespan_cost` is the latest end date (a max), not a total. `project_delay_cost` defaults to
+weight 1 on the medium level; the fold belongs to the domain, so an explicit weight is in medium
+units, and `level="soft"` on a hard constraint lands on soft in both solvers.
 
-**0.3.0:** every constraint takes two more knobs, `offset` and `clip` (keyword-only), and
-may be picked several times. All four constraints are global, so each instance shapes its
+Besides `weight`, `level` and `exponent`, every constraint takes `offset` and `clip`
+(keyword-only), and may be picked several times. All four constraints are global, so each instance shapes its
 one total `x` once: `sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default)
 or `(x - offset) ** exponent`, sign-preserving (`clip=False`, which acts as a reward below
-the offset, e.g. a makespan under a target day); `offset=0` is the 0.2.0 shaping.
+the offset, e.g. a makespan under a target day); `offset=0` is the plain shaping.
 `clip=False` with an offset is refused on hard (the two resource constraints by default),
 because hard 0 must mean no violation; medium folds into soft here, so it takes the literal
 formula. Each pick is its own instance with its own knobs, and the instances add up:
@@ -96,7 +87,7 @@ pj.solve(core, constraints=[
 ```
 
 `pj.constraint_costs(core, picks)` keys the second pick `makespan_cost#2`. The domain
-`Score` keeps integer levels, so fractional weights round in `schedule.score` (as before);
+`Score` keeps integer levels, so fractional weights round in `schedule.score`;
 `constraints.score()` reports the exact engine value. The CP-SAT reference takes integral
 offsets on every constraint (one term per global total).
 

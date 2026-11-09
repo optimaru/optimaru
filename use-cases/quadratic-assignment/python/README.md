@@ -36,7 +36,7 @@ score(raw, [FlowDistanceCost(), FlowDistanceCost(weight=10, offset=1000)])
 ```
 
 The side constraints report one raw cost per location (location order) and the
-exponent (with `offset` / `clip`, 0.3.0) shapes each location they evaluate (their
+exponent (with `offset` / `clip`) shapes each location they evaluate (their
 `"units"`: the fixed, the forbidden-row and the capacitated locations), per location,
 not over the sum; the two objectives report one total each and the exponent shapes that
 total. `clip=False` with an offset is refused on hard, where hard 0 must mean no
@@ -50,21 +50,13 @@ repeat carries its own level. An objective whose data holds a negative entry (a 
 assignment cost, or a negative flow or distance) cannot be hard, because its total can be
 negative and would cancel a broken pin: `ValueError: constraint 'assignment_cost' can have
 a negative raw cost on this problem (a bonus) and cannot be hard`; its `constraint_costs()`
-entry carries `"signed": True`. These are the same terms 0.1.x shaped, so exponents score
-as before at the soft level. Hard contributions are rounded per location (0.1.x rounded
-the hard total once), which differs only when a hard constraint's
-weighted, shaped per-location value is fractional: a fractional hard weight, or an
-exponent != 1 on `location_capacity_cost` (costs `[2, 2]` at exponent 0.5 give
-`-2`; 0.1.x gave `-3`). 0.2.0 renamed every constraint (no aliases: `fixed_assignments` ->
-`pinned_assignments_cost`, `forbidden_assignments` -> `forbidden_assignments_cost`,
-`location_capacities` -> `location_capacity_cost`, `minimize_assignment_cost` ->
-`assignment_cost`, `minimize_flow_distance` -> `flow_distance_cost`), replaced the
-flat `{name: [terms]}` of `constraint_costs()` by the standard dict, refuses an
-assignment that puts one facility on two locations or names an unknown id (in
-`to_core()`, so also on a plain solve without `warm_start`), and replaced
-the simulated-annealing `SolverConfig` knobs (`max_iterations`, `stagnation_limit`,
-`temperature`, `cooling_rate`) by the engine's (`spent_limit_seconds`,
-`step_count_limit`, ...); see the [use-case README](../README.md#020).
+entry carries `"signed": True`. Hard contributions are rounded per location, which matters
+only when a hard constraint's weighted, shaped per-location value is fractional: a
+fractional hard weight, or an exponent != 1 on `location_capacity_cost` (costs `[2, 2]` at
+exponent 0.5 give `-2`). An assignment that puts one facility on two locations or names an
+unknown id is refused in `to_core()`, so also on a plain solve without `warm_start`. The
+`SolverConfig` is the engine's (`spent_limit_seconds`, `step_count_limit`, ...); see the
+[use-case README](../README.md#python-api).
 
 ## Install / test
 

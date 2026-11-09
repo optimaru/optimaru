@@ -10,7 +10,7 @@ namespace qap
 // a forbidden_assignments row forbids them. Raw cost per location = the number
 // of its facilities forbidden there (0 or 1 in a bijection), so 0 = no
 // forbidden pair is used. A pair listed twice counts once (the rows are a set),
-// exactly like the 0.1.x Python scorer and the CP-SAT reference.
+// exactly like the Python reference scorer and the CP-SAT reference.
 //
 // A pure sum of per-member terms, so the exact delta is one mask lookup.
 struct ForbiddenAssignmentsCost final : QapUnitConstraint

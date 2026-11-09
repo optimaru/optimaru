@@ -17,8 +17,7 @@ namespace ks
 // copy of the selection and re-evaluates the pairs of the flipped item,
 // O(the item's dependencies) per flip.
 //
-// One total (a global constraint): the exponent shapes the count (0.1.x
-// shaped each 0/1 pair; see the README).
+// One total (a global constraint): the exponent shapes the count.
 struct ItemDependencyCost final : detail::SelectionConstraint
 {
     static constexpr double kDefaultWeight = 1.0;

@@ -147,8 +147,7 @@ PYBIND11_MODULE(_core, m)
           &ScoreCalculator::score,
           py::arg("schedule"),
           "Full recompute of the score (also stores schedule.score).");
-    // No Breakdown / compute_breakdown (removed in 0.2.0): constraint_costs()
-    // is the only per-constraint surface.
+    // constraint_costs() is the only per-constraint surface.
 
     optimaru::python::bind_config_copy(py::class_<Solver::Config>(m, "SolverConfig", py::module_local()))
         .def(py::init<>())

@@ -213,7 +213,7 @@ class RequiredPatientEquipmentCost(Constraint):
 
     If the room lacks any required equipment, it is valued by the number of required
     equipment items the room **has** — exactly the semantics pinned by the quickstart's
-    unit test (so a room with none of the required equipment costs 0). Kept as is in 0.2.0."""
+    unit test (so a room with none of the required equipment costs 0)."""
 
     name = "required_patient_equipment_cost"
     label_en = "Required equipment"

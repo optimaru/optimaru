@@ -1984,7 +1984,7 @@ void testBackgroundSolveAndLimits() {
         check(final == fullScore(s), "job's final best score matches the returned solution");
     }
     {   // Assigning a new job over a running one stops and joins the old one
-        // first (it used to free the Solver its thread was still running).
+        // first, so the Solver its thread is running is never freed under it.
         TaskAssignment s1 = buildTaskInstance();
         TaskAssignment s2 = buildTaskInstance();
         optimaru::Settings config;

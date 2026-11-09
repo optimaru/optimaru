@@ -47,29 +47,18 @@ level in effect, so a medium weight is in medium units. Any other constraint may
 medium the same way (`ConfrontationCountImbalanceCost(level="medium")` charges one medium
 unit per raw unit of head-to-head unfairness), and a repeated pick carries its own level.
 
-**0.2.0:** the constraints were renamed (`one_assignment_per_date_per_team` ->
-`team_conflict_cost`, `unavailability_penalty` -> `team_unavailability_cost`,
-`fair_assignment_count_per_team` -> `assignment_count_imbalance_cost`,
-`evenly_confrontation_count` -> `confrontation_count_imbalance_cost`; the spec classes and
-the module-level default instances follow, e.g. `EvenlyConfrontationCount` /
-`evenly_confrontation_count` -> `ConfrontationCountImbalanceCost` /
-`confrontation_count_imbalance_cost`). The spec class `constraints.UnavailabilityPenalty` is
-now `TeamUnavailabilityCost`, so it no longer shares its name with the
-`UnavailabilityPenalty` fact (which, like `UnavailabilityPenaltyModel` and the
-`unavailability_penalties` field, keeps its name); the C++ component is
-`TeamUnavailabilityCost` (was `UnavailabilityPenaltyConstraint`). The medium constraint now
-defaults to weight 1 in medium units (was 1e6 on the soft level), so `level="hard"` charges 1
-hard per raw unit of unfairness (the total, rounded; was 1e6 per unit), `level="soft"` demotes
-it to soft at 1 per raw unit (was a no-op that kept the 1e6), and an explicit `weight` is in
-medium units (was plain soft units that dropped the fold). `constraint_info()` /
-`ConstraintInfo` are new. Raw costs and the default score are unchanged.
+The spec class `constraints.TeamUnavailabilityCost` does not share its name with the
+`UnavailabilityPenalty` fact (`UnavailabilityPenaltyModel`, the `unavailability_penalties`
+field). The medium constraint defaults to weight 1 in medium units, so `level="hard"`
+charges 1 hard per raw unit of unfairness (the total, rounded), `level="soft"` demotes it
+to soft at 1 per raw unit, and an explicit `weight` is in medium units.
 
-**0.3.0:** every constraint takes two more knobs, `offset` and `clip` (keyword-only), and
-may be picked several times. A raw cost `x` (per team for the two unit constraints, on the
+Every constraint takes the knobs `weight`, `level`, `exponent`, `offset` and `clip`
+(`offset` and `clip` keyword-only), and may be picked several times. A raw cost `x` (per team for the two unit constraints, on the
 one total for the two imbalance constraints) is shaped as `sign(x) * max(0, |x| - offset)
 ** exponent` (`clip=True`, the default) or `(x - offset) ** exponent`, sign-preserving
 (`clip=False`, which charges every unit the constraint evaluates, a raw 0 included, and acts
-as a reward below the offset); `offset=0` is the 0.2.0 shaping. `team_conflict_cost`
+as a reward below the offset); `offset=0` is the plain power. `team_conflict_cost`
 evaluates every team; `team_unavailability_cost` is scoped to the teams with an
 unavailability fact (its `constraint_costs()` entry lists them as `"units"`), so its
 literal offset charges those teams only. Both apply per team (or on an imbalance's total),

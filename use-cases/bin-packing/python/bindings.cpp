@@ -133,7 +133,7 @@ PYBIND11_MODULE(_core, m)
         // true = the next solve starts from the items' bins (a seed); every
         // solve clears it.
         .def_readwrite("warm_start", &BinPackingProblem::warmStart)
-        // No weight fields (removed in 0.2.0): weights come only from
+        // No weight fields: weights come only from
         // constraint selections; the defaults are the components'
         // kDefaultWeight, reported by constraint_info().
         .def_readonly("score", &BinPackingProblem::score)

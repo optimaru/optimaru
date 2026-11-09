@@ -601,9 +601,8 @@ void verifyMappingAndValidation()
             ok = ok && back == score;
         }
         check(ok, "HardMediumSoft <-> engine HardSoft roundtrip is exact");
-        // The fold is 10^10 (some pre-0.2.0 docs said 10^9; the value never
-        // was), and the MediumFold packing is bit-for-bit the old int64
-        // `medium * kMediumUnit + soft`.
+        // The fold is 10^10, and the MediumFold packing is bit-for-bit the
+        // int64 `medium * kMediumUnit + soft`.
         bool packed = kMediumFold.kind == optimaru::MediumFold::Kind::IntoSoft
                       && kMediumFold.unit == 1e10 && kMediumUnit == 10000000000LL
                       && optimaru::MediumFoldOf<PackagingSchedule>::value.unit

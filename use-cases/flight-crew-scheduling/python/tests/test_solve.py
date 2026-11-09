@@ -146,7 +146,7 @@ def test_a_raising_on_new_best_raises_from_a_multi_start_solve():
 def test_a_worker_thread_that_cannot_start_raises_instead_of_aborting():
     """Creating worker thread 1 fails (std::system_error, injected through the module's test
     seam): the worker already running is stopped and joined, and the error reaches the caller
-    at once. A joinable std::thread destroyed on that path used to call std::terminate."""
+    at once. A joinable std::thread destroyed on that path would call std::terminate."""
     from flight_crew import _core
 
     _core._fail_worker_thread_start(1)
@@ -161,8 +161,8 @@ def test_a_worker_thread_that_cannot_start_raises_instead_of_aborting():
 
 def test_stop_at_first_feasible_has_no_soft_floor(monkeypatch):
     """stop_at_first_feasible hands the engine best_score_limit (0, -inf): only the hard level
-    is compared, so no soft score, however low, misses the stop. The first 0.2.0 limit,
-    (0, -1e18), was never reached by a soft score below -1e18. A soft score that low cannot
+    is compared, so no soft score, however low, misses the stop. A finite limit such as
+    (0, -1e18) would never be reached by a soft score below -1e18. A soft score that low cannot
     be built here (its soft terms are 0 at the first feasible schedule of the test instance), so
     the limit itself is checked; the stop is exercised end to end
     in the other packages' tests."""

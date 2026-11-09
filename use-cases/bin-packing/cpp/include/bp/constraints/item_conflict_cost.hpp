@@ -8,13 +8,11 @@ namespace bp
 
 // Hard, weight 1: itemConflictCost — conflict pairs (must-separate items)
 // placed in one bin. Raw cost per bin = the listed pairs whose two items are
-// both in it; a pair listed twice (or reversed) counts per listing, as in
-// 0.1.5. 0 = every pair is apart (or has an unassigned item).
+// both in it; a pair listed twice (or reversed) counts per listing. 0 =
+// every pair is apart (or has an unassigned item).
 //
-// Unit granularity (0.2.0): the cost is per BIN. 0.1.5 listed one 0/1 entry
-// per pair; the totals are identical for every assignment (and so is the
-// score at exponent 1), but an exponent != 1 now shapes the bin's count: two
-// violated pairs in one bin at exponent 2 cost 4, not 1 + 1.
+// Unit granularity: the cost is per BIN, so an exponent != 1 shapes the
+// bin's count: two violated pairs in one bin at exponent 2 cost 4, not 1 + 1.
 //
 // Delta contract: a sum of pair terms, so the marginal cost of one member is
 // the number of its partners (with multiplicity) among the other members —

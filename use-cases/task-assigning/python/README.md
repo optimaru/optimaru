@@ -80,8 +80,7 @@ Outside that range:
   `OverflowError` instead of decoding to nonsense.
 - The `below_hard` fold leaves the hard level 1/10^9 of the int64 range: hard
   penalties above about 9.2x10^9 weighted units saturate at -(2^63 - 1). Keep
-  `RequiredSkillCost` at weight 1 (0.1.5's `NoMissingSkills` default 1e9 is now
-  the fold), and give a soft term made hard a small weight
+  `RequiredSkillCost` at weight 1 (the 10^9 between the levels is the fold), and give a soft term made hard a small weight
   (`SquaredMakespanCost(level="hard", weight=1)`).
 
 ## Constraints (same semantics as Java `TaskAssigningConstraintProvider`, 6 of them)
@@ -106,10 +105,9 @@ shift the shaping per employee (or on the global's total): `clip=True` counts on
 lies beyond the offset, `clip=False` shapes `x - offset` as it is. `clip=False` with an
 offset is refused on hard and on medium, which counts toward the hard score here, because
 hard 0 must mean no violation. A constraint may be
-picked several times (since 0.3.0); each pick is its own instance with its own knobs, its
+picked several times; each pick is its own instance with its own knobs, its
 level included, the instances add up, and `constraint_costs(solution, picks)` keys the k-th pick
-`<name>#<k>`. See the use-case README for the 0.2.0 renames (`no_missing_skills` ->
-`required_skill_cost`, ...).
+`<name>#<k>`.
 
 ## Caveats
 

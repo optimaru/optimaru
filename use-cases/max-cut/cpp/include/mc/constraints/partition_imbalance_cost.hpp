@@ -11,8 +11,7 @@ namespace mc
 
 // Soft, weight 0 (opt-in): partitionImbalanceCost — how far the two sides are
 // from equal size. Raw cost = |n0 - n1| (one total), so 0 = equal sides (or,
-// with an odd vertex count, never 0: at best 1). The same one-term list as
-// 0.1.x, so the exponent semantics are unchanged. Weight 0 keeps it out of
+// with an odd vertex count, never 0: at best 1). Weight 0 keeps it out of
 // the default score; pick it with a weight to balance the cut. Counts kept
 // from the joins / leaves: O(1).
 struct PartitionImbalanceCost final : detail::MemberChangeConstraint

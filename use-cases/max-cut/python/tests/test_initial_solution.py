@@ -112,7 +112,7 @@ def test_partial_seed_that_completes_to_the_wrong_size_is_accepted():
 
 
 def test_unbalanced_default_start_stays_infeasible_under_exact_size_bounds():
-    """Pins the 0.1.5 behaviour: with exact bounds even an unseeded solve keeps the start's sizes.
+    """Pins the exact-size contract: with exact bounds even an unseeded solve keeps the start's sizes.
 
     The fixed A on side 1 turns the ``i % 2`` start into 1 + 3, so the swap-only search
     cannot reach a feasible 2 + 2 partition (CP-SAT finds one); a right-size seed does.

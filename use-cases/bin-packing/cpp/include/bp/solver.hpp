@@ -103,7 +103,7 @@ public:
         // can cross, so without it the search rarely closes a bin.
         bool emptyBinMoves = true;
         // Both macro moves empty one of this many lightest non-empty bins
-        // (drawn uniformly; 1 = always the lightest, the 0.1.5 rule).
+        // (drawn uniformly; 1 = always the lightest).
         int emptyBinCandidates = 3;
 
         // RepackMove (bp/moves.hpp): empty a light bin together with 1 to

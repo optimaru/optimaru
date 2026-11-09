@@ -354,7 +354,7 @@ class canon:
         """Raw per-unit cost of every default constraint (or of the picked ones),
         before weight/exponent/offset/level, in list_constraints() order:
         {key: {"costs": [...], "weight": float, "exponent": float, "offset": float,
-        "clip": bool, "hard": bool, "global": bool, "level": "hard" | "medium" |
+        "clip": bool, "global": bool, "level": "hard" | "medium" |
         "soft", "reward": bool, "level_flippable": bool, "name": str, "label": str,
         "default_weight": float, "default_level": str}}. "costs" holds one value per
         slot for the per-slot constraints, one total for the others. A name picked

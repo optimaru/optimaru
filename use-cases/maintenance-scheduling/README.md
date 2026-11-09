@@ -57,28 +57,20 @@ components (`kDefaultLevel` / `kDefaultWeight`), and the CP-SAT benchmark reads 
 rows. `exponent` shapes the date rules per cell and the two global conflict rules on their
 single total. Unassigned jobs contribute nothing.
 
-**0.2.0:** the constraints were renamed with a `_cost` suffix (`min_start_date` ->
-`min_start_date_cost`, `max_end_date` -> `max_end_date_cost`, `before_ideal_end_date` ->
-`before_ideal_end_date_cost`, `after_ideal_end_date` -> `after_ideal_end_date_cost`,
-`crew_conflict` -> `crew_conflict_cost`, `tag_conflict` -> `tag_conflict_cost`; spec
-classes, default instances and C++ structs likewise, e.g. `CrewConflict` ->
-`CrewConflictCost`, registry `"crewConflict"` -> `"crewConflictCost"`). The suffix also
-separates the constraint names from the job fields `min_start_date` / `max_end_date`, which
-keep their names. The old names are not accepted any more (no aliases). The defaults are
-declared once, in the C++ components; the CP-SAT plugins no longer restate the 1,000,000 /
-1,000 weights. Raw costs and the default score are unchanged.
+The `_cost` suffix separates the constraint names from the job fields `min_start_date` /
+`max_end_date`. The defaults are declared once, in the C++ components.
 
-**0.3.0:** every constraint takes two more knobs, `offset` and `clip` (keyword-only), and
-may be picked several times. A raw cost `x` (per cell for the four date rules, the single
+Besides `weight`, `level` and `exponent`, every constraint takes `offset` and `clip`
+(keyword-only), and may be picked several times. A raw cost `x` (per cell for the four date rules, the single
 total for the two conflict rules — the granularity of `exponent`) is shaped as
 `sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
 `(x - offset) ** exponent`, sign-preserving (`clip=False`, which lowers the penalty of
 every cell below the offset, an empty one included: every crew on every start date);
-`offset=0` is the 0.2.0 shaping. Both apply per cell (or to a conflict rule's one total),
+`offset=0` is the plain shaping. Both apply per cell (or to a conflict rule's one total),
 not to the sum over the cells. `clip=False` with an offset is refused on hard (the two
 start/end date rules and `crew_conflict_cost` by default), because hard 0 must mean no
-violation. Each pick is its own instance with its own knobs, its level included (`level`
-replaced the `hard` knob; `hard=` raises `TypeError`), and the instances add up:
+violation. Each pick is its own instance with its own knobs, its level included, and the
+instances add up:
 
 ```python
 from maintenance_scheduling.constraints import TagConflictCost, get_constraints

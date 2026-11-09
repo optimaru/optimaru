@@ -221,14 +221,14 @@ def test_score_reweighting_is_linear_without_rescoring():
 
 
 def test_score_rejects_an_unknown_constraint_name():
-    """A spec with a wrong name (e.g. a renamed component) must not be silently ignored."""
+    """A spec with a wrong name must not be silently ignored."""
     raw, _ = _raw()
 
-    class Renamed(Constraint):
+    class Misnamed(Constraint):
         name = "definitely_not_a_constraint"
 
     with pytest.raises(ValueError, match="unknown constraint"):
-        score(raw, [Renamed()])
+        score(raw, [Misnamed()])
 
 
 @pytest.mark.parametrize(
@@ -275,9 +275,9 @@ def test_score_matches_the_engine_for_arbitrary_specs(specs):
 
 
 def test_naming_a_constraint_twice_scores_both_picks():
-    """Since 0.3.0 a constraint may be picked several times: each pick is scored on its own.
+    """A constraint may be picked several times: each pick is scored on its own.
 
-    The later pick no longer wins in silence, nor is it an error: both are
+    Neither pick wins in silence, nor is it an error: both are
     instances with their own knobs, and they add up."""
     picks = [RequiredSkillCost(), RequiredSkillCost(weight=10)]
     assert _zero_budget(picks) == (-(100 + 10), 0.0)  # X1's one unqualified seat, twice
@@ -328,10 +328,9 @@ def test_constraint_info_matches_the_raw_cost_metadata():
     assert list(raw) == fc.list_constraints()
     for row in fc.constraint_info():
         entry = raw[row.name]
-        assert (entry["weight"], entry["level"], entry["hard"]) == (
+        assert (entry["weight"], entry["level"]) == (
             row.default_weight,
             row.default_level,
-            row.default_level == "hard",
         )
         assert (entry["level_flippable"], entry["reward"], entry["global"]) == (True, False, False)
         assert (entry["name"], entry["label"]) == (row.name, "")  # one instance per name, no label
@@ -430,26 +429,6 @@ def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
         FlightConflictCost(**knobs)
 
 
-@pytest.mark.parametrize(
-    "old",
-    [
-        "required_skill",
-        "flight_conflict",
-        "transfer_between_two_flights",
-        "employee_unavailability",
-        "first_assignment_not_departing_from_home",
-        "last_assignment_not_arriving_at_home",
-    ],
-)
-def test_old_names_are_gone(old):
-    """0.2.0 renamed the catalog; the pre-0.2.0 names are unknown now (no aliases)."""
-    pick = SimpleNamespace(name=old, weight=None, level=None, exponent=1.0)
-    with pytest.raises(ValueError, match="unknown constraint"):
-        solve([pick])
-    with pytest.raises(ValueError, match="unknown constraint"):
-        score(fc.constraint_costs(build_schedule()), [pick])
-
-
 # --- Raw costs by hand ------------------------------------------------------------
 
 
@@ -499,7 +478,7 @@ def test_constraint_costs_match_every_constraint_by_hand():
         assert entry["costs"] == [0.0, 0.0, 0.0], name
 
 
-# --- 0.3.0: repeated picks and the offset / clip knobs ------------------------------
+# --- repeated picks and the offset / clip knobs ------------------------------
 
 
 def _hand_schedule():
@@ -625,8 +604,8 @@ def test_offsets_by_hand_on_both_paths(pick, expected):
     assert _zero_budget([pick]) == expected
 
 
-def test_offset_zero_reproduces_the_0_2_0_scores():
-    """offset 0 is the plain shaping in both modes, so every 0.2.0 selection scores the same."""
+def test_offset_zero_reproduces_the_plain_scores():
+    """offset 0 is the plain shaping in both modes, so a selection scores the same with offset 0."""
     plain = [RequiredSkillCost(), EmployeeUnavailabilityCost(exponent=2), LastAssignmentNotArrivingAtHomeCost()]
     shifted = [
         RequiredSkillCost(offset=0.0, clip=False),
@@ -733,12 +712,7 @@ def test_a_level_must_be_a_level():
         _zero_budget([FlightConflictCost(), pick])
 
 
-def test_the_knob_was_renamed():
-    with pytest.raises(TypeError):
-        FlightConflictCost(hard=True)
-
-
-# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+# --- clip=False with an offset stays off the hard score -------------------------
 
 HARD_REFUSAL = (
     "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
@@ -800,7 +774,7 @@ def test_the_same_literal_pick_on_soft_is_accepted(offset):
     [
         (RequiredSkillCost(offset=3.0), (0, 0.0)),  # clip=True on hard: a threshold
         (RequiredSkillCost(offset=-3.0), (-400, 0.0)),  # 100 x (1 + 3) on X1 only
-        (RequiredSkillCost(clip=False), (-100, 0.0)),  # clip=False with offset 0: the 0.2.0 shaping
+        (RequiredSkillCost(clip=False), (-100, 0.0)),  # clip=False with offset 0: the plain shaping
         (RequiredSkillCost(offset=0.0, clip=False), (-100, 0.0)),
     ],
 )

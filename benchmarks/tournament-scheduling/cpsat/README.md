@@ -72,7 +72,7 @@ inside int64; where the active count does not divide `scale`, the term is
   the engine and 1 in CP-SAT
   (`test_confrontations_count_once_per_shared_day_on_cpsat`).
 
-Repeats and offsets (0.3.0): a constraint picked several times (as specs or as
+Repeats and offsets: a constraint picked several times (as specs or as
 `{"name", "weight", "level", "offset", "clip"}` mappings) adds one set of terms per pick,
 with its own knobs, its level included. The two hard plugins add one term per team the
 engine evaluates (every team, or the teams with a fact for the scoped

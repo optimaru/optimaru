@@ -11,7 +11,7 @@ namespace fab
 // consecutive pair of assigned steps, max(0, transport(previous machine's
 // group, next machine's group) - (next start - previous end)); the last
 // transport_times entry wins, none = 0 (so a missing entry also charges a
-// route overlap, kept from 0.1.x). 0 = every transfer fits.
+// route overlap, on purpose). 0 = every transfer fits.
 struct MissingTransportTimeCost final : ScheduleViewConstraint
 {
     static constexpr double kDefaultWeight = 1.0;

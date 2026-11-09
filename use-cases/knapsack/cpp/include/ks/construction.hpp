@@ -8,7 +8,7 @@
 namespace ks
 {
 
-// The greedy construction (the 0.1.x `_greedy_selection`, kept exactly):
+// The greedy construction (the Python reference's `_greedy_selection`):
 // items in descending value / weight order — the density as a double, equal
 // densities in item order (a stable sort) — are taken while the selected
 // weight stays within the capacity. It looks at the weight capacity only.

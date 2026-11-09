@@ -387,7 +387,7 @@ class SemiconductorScheduleModel(BaseModel):
 # The engine keeps times in int64 and counts in int: refuse what would not fit instead of
 # failing obscurely in the conversion. The times the decoder derives and the costs the
 # scorer sums and multiplies are checked in C++ and raise OverflowError when they leave
-# int64 (0.1.x computed them as exact Python integers).
+# int64.
 _TIME_LIMIT = 2**62
 _COUNT_LIMIT = 2**31 - 1
 

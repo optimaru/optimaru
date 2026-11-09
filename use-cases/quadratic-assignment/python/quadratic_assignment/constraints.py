@@ -29,11 +29,10 @@ Every spec takes five knobs:
 - ``level``    ``None`` = the default level, otherwise ``Level.HARD`` or
                ``Level.SOFT`` (or the names ``"hard"`` and ``"soft"``). This use
                case has no medium level: ``level="medium"`` raises ValueError.
-               (``level`` replaced the ``hard`` knob; ``hard=`` raises TypeError.)
 - ``exponent`` sign-preserving power shaping ``weight * sign(c) * |c| ** exponent``:
                per location for the three side constraints (pinned, forbidden,
                capacity), on the single total for ``AssignmentCost`` and
-               ``FlowDistanceCost`` — exactly the terms 0.1.x shaped.
+               ``FlowDistanceCost``.
 - ``offset``   (keyword) shifts that shaping, per location or on the total;
                0.0 = none.
 - ``clip``     (keyword) ``True`` (the default) counts only what lies beyond the

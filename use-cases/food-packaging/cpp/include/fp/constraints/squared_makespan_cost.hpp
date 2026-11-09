@@ -10,7 +10,6 @@ namespace fp
 // stays busy, which is what balances work across lines instead of merely
 // shortening the total. Raw cost per line = (end of its last job - line
 // start)^2 in minutes^2; an empty line (and the unassigned pool) costs 0.
-// 0.2.0 migration note: was minimizeMakespan.
 //
 // The squaring lives in cost() rather than in `exponent` on purpose: the
 // exponent shapes the raw cost of a unit before the weight, and here the

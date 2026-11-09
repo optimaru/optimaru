@@ -10,8 +10,8 @@
 //       the score and each constraint's raw total after every move, every
 //       constraint non-zero during the walk; once with the flat colour
 //       counts and once with the hash-map fallback
-//   (c) the construction reproduces 0.1.5's best fit (plain, partial seed,
-//       gapped seed) and stays inside the value range where 0.1.5 did not
+//   (c) the construction's best fit (plain, partial seed, gapped seed), as the
+//       pure-Python reference builds it, staying inside the value range
 //   (d) zero budget: a complete gapped seed comes back unchanged; a plain
 //       solve ignores the input bins and is deterministic under a step
 //       limit; warmStart is cleared by every solve
@@ -103,7 +103,7 @@ Item makeItem(const std::string &id, std::int64_t weight, int bin = -1, const ch
     return item;
 }
 
-// C = 10, A8 B7 C3 D2 (the 0.1.5 hand-calculation fixture).
+// C = 10, A8 B7 C3 D2 (the hand-calculation fixture).
 BinPackingProblem abcd(const std::vector<int> &bins)
 {
     BinPackingProblem p;
@@ -313,7 +313,7 @@ void verifyIncremental()
 }
 
 // -------------------------------------------------------------------------
-// (c) construction == 0.1.5 best fit
+// (c) construction == best fit decreasing
 // -------------------------------------------------------------------------
 std::vector<int> constructed(BinPackingProblem p)
 {
@@ -326,14 +326,14 @@ void verifyConstruction()
 {
     std::printf("== (c) construction ==\n");
     check(constructed(abcd({-1, -1, -1, -1})) == std::vector<int>{0, 1, 1, 0},
-          "plain: A:0 B:1 C:1 D:0 (0.1.5)");
+          "plain: A:0 B:1 C:1 D:0");
     check(constructed(abcd({-1, 0, -1, 0})) == std::vector<int>{1, 0, 2, 0},
-          "partial seed {B:0, D:0}: A:1, C:2 (0.1.5)");
+          "partial seed {B:0, D:0}: A:1, C:2");
     check(constructed(abcd({3, -1, -1, -1})) == std::vector<int>{3, 0, 0, 3},
-          "gapped seed {A:3}: B:0, C:0, D:3 (0.1.5)");
+          "gapped seed {A:3}: B:0, C:0, D:3");
     {
-        // n = 2, A seeded at 1, B heavier than the capacity: 0.1.5 opened
-        // bin 2 (out of range); the port opens the lowest empty bin.
+        // n = 2, A seeded at 1, B heavier than the capacity: bin 2 would be
+        // out of range, so the construction opens the lowest empty bin.
         BinPackingProblem p;
         p.binCapacity = 5;
         p.items = {makeItem("A", 2, 1), makeItem("B", 9)};

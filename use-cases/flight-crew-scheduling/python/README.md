@@ -99,8 +99,3 @@ fc.solve(problem, constraints=[*get_constraints(),  # + 10 x (conflicts beyond t
 `fc.constraint_costs(schedule)` returns the raw per-employee costs and
 `flight_crew.constraints.score(costs, constraints)` rescores them in pure Python with the
 engine's arithmetic.
-
-**0.2.0:** every constraint name gained the `_cost` suffix (`required_skill` ->
-`required_skill_cost`, `RequiredSkill` -> `RequiredSkillCost`, the default instance
-`required_skill` -> `required_skill_cost`, and likewise for the other five); the old names
-are refused as unknown. Defaults, raw costs and scores are unchanged.

@@ -74,8 +74,8 @@ class MaxCutProblemModel(BaseModel):
         minimum = 0 if self.min_partition_size is None else self.min_partition_size
         if minimum > maximum or maximum > len(self.vertices):
             raise ValueError("partition size bounds must fit the vertex count")
-        # 0.2.0: the engine stores one side per vertex, so a partition entry must
-        # name a vertex and hold side 0 or 1 (0.1.x silently ignored the rest).
+        # The engine stores one side per vertex, so a partition entry must name
+        # a vertex and hold side 0 or 1.
         if stray := set(self.partition) - known:
             raise ValueError(f"partition references unknown vertices: {sorted(stray)}")
         if any(side not in (0, 1) for side in self.partition.values()):

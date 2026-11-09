@@ -53,7 +53,8 @@ Every spec takes the same five knobs, and only those:
                hard), because hard 0 must mean no violation.
 
 With ``offset=0`` both modes are the plain ``shape(x, exponent)``, so a spec
-that leaves the two new knobs alone scores exactly as before. Each unit (or a
+that leaves ``offset`` and ``clip`` at their defaults scores the plain
+``weight * shape(x, exponent)``. Each unit (or a
 global's total) then contributes ``weight * shape(x, exponent, offset,
 clip)``. The formula applies PER UNIT (per vehicle, per slot, ...), on every
 unit the constraint evaluates, raw 0 included; it is not one formula over the
@@ -76,7 +77,6 @@ instance of a name ``"<name>#<k>"`` (the first keeps the plain name), and
 
 import math
 import numbers
-import warnings
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, fields
 from enum import StrEnum
@@ -85,13 +85,6 @@ from typing import Any, ClassVar, NamedTuple
 __all__ = ["Constraint", "Level", "Score", "instance_keys", "score_costs", "select", "shape"]
 
 _KNOBS = ("weight", "level", "exponent", "offset", "clip")
-
-# The words every path that meets the removed knob uses: a spec (Constraint
-# below), employee-scheduling's JSON rules and DecomposedCalculator.add() of
-# employee scheduling and school timetabling (python::kHardRemoved in the
-# engine's constraint_binding.hpp).
-_HARD_REMOVED = "hard= was removed in optimaru 0.3.0; use level='hard' or level='soft' (level=None keeps the default)"
-
 
 class Level(StrEnum):
     """The score level a constraint is charged on. Hard dominates medium, medium dominates soft."""
@@ -115,9 +108,8 @@ class Constraint:
 
     ``offset`` and ``clip`` are keyword-only, so the positional order stays
     ``weight, level, exponent`` followed by a subclass's domain parameters.
-    ``hard=``, the knob ``level`` replaced in 0.3.0, raises a TypeError that
-    says so. A ``name`` must not contain ``#``, which ``constraint_costs()``
-    keys repeated picks with (``"<name>#<k>"``).
+    A ``name`` must not contain ``#``, which ``constraint_costs()`` keys
+    repeated picks with (``"<name>#<k>"``).
     """
 
     weight: float | None = None  # None = the component's default weight
@@ -131,14 +123,6 @@ class Constraint:
     label_ko: ClassVar[str] = ""
     description_en: ClassVar[str] = ""
     description_ko: ClassVar[str] = ""
-
-    def __new__(cls, *args: Any, **kwargs: Any):
-        # Ahead of the dataclass __init__, which would only say "unexpected
-        # keyword argument 'hard'". Unpickling and copying call __new__
-        # without arguments, so they are unaffected.
-        if "hard" in kwargs:
-            raise TypeError(_HARD_REMOVED)
-        return super().__new__(cls)
 
     def __init_subclass__(cls, *, abstract: bool = False, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -210,10 +194,7 @@ def _params_of(spec: Any) -> dict[str, Any]:
     return params() if callable(params) else {}
 
 
-_UNSET: Any = object()  # select()'s "repeatable not passed"
-
-
-def select(constraints: Iterable[Any] | None, defaults: Sequence[Any], *, repeatable: Any = _UNSET) -> list[Any]:
+def select(constraints: Iterable[Any] | None, defaults: Sequence[Any]) -> list[Any]:
     """The ``get_constraints`` contract: ``None`` = ``defaults``; a list replaces them.
 
     Only the listed constraints are scored. An empty list is an error, not
@@ -221,18 +202,7 @@ def select(constraints: Iterable[Any] | None, defaults: Sequence[Any], *, repeat
     appear several times: every pick is its own instance with its own knobs
     (and parameters), scored on its own, and the instances add up; identical
     picks count twice. The same rules as the C++ ``applyConstraints``.
-
-    ``repeatable`` is deprecated: since 0.3.0 every package accepts repeated
-    picks, so it changes nothing. Passing it, with any value, emits a
-    ``DeprecationWarning``; it will be removed.
     """
-    if repeatable is not _UNSET:
-        warnings.warn(
-            "select(repeatable=...) changes nothing since optimaru 0.3.0, where every constraint "
-            "may be picked several times, and will be removed; drop the argument",
-            DeprecationWarning,
-            stacklevel=2,
-        )
     if constraints is None:
         return list(defaults)
     picked = list(constraints)
@@ -362,11 +332,11 @@ def _default_level(entry: Mapping[str, Any]) -> str:
     """The level ``level=None`` means: the component's default level.
 
     ``constraint_costs()`` reports it as ``default_level``. An entry built
-    without it (by hand, or by an older package) falls back on ``level``,
-    which is the default only when the costs were computed for the default
-    selection or for picks that kept this constraint's level.
+    without it (by hand) falls back on ``level``, which is the default only
+    when the costs were computed for the default selection or for picks that
+    kept this constraint's level.
     """
-    return entry.get("default_level") or entry.get("level") or ("hard" if entry["hard"] else "soft")
+    return entry.get("default_level") or entry["level"]
 
 
 def _default_weight(entry: Mapping[str, Any]) -> float:
@@ -533,15 +503,16 @@ def score_costs(costs: Mapping[str, Mapping[str, Any]], constraints: Iterable[An
     medium in a below_hard domain; the level is the pick's, or the default.
     So is an entry marked ``"signed"`` (its raw cost can be negative on this
     problem although it is not a reward) on such a level.
-    It also needs costs from optimaru >= 0.3 (their entries carry
-    ``"clip"``): older costs do not say which units a constraint evaluates,
-    so scoring the literal formula from them raises ValueError.
+    It also needs entries that carry ``"clip"``, as ``constraint_costs()``
+    reports them: an entry without it (built by hand) does not say which
+    units a constraint evaluates, so scoring the literal formula from it
+    raises ValueError.
 
     A pick must carry ``name``, ``weight``, ``level`` and ``exponent``.
     ``offset`` and ``clip`` are optional and default to 0.0 and True. They
     only add shaping, and their defaults change nothing. A missing weight,
     level or exponent stays an AttributeError, because it is more likely a
-    mistake, e.g. an object still carrying ``hard``.
+    mistake than a request for the default.
 
     A numeric knob counts as the double ``float()`` makes of it, as the engine
     reads it: an offset of ``Fraction(1, 10**400)`` is 0.0 (no shift), and a
@@ -582,11 +553,11 @@ def score_costs(costs: Mapping[str, Mapping[str, Any]], constraints: Iterable[An
         level = _level(spec, entry)
         _check_literal_offset(spec.name, level, offset, clip, fold)
         if not clip and offset != 0.0 and "clip" not in entry:
-            # optimaru < 0.3 does not report a scoped constraint's "units", so
-            # these costs cannot say which units the literal formula charges.
+            # An entry without "clip" was not built by constraint_costs(), so
+            # it cannot say which units the literal formula charges.
             raise ValueError(
-                f"constraint {spec.name!r}: these costs come from optimaru < 0.3 and do not say which "
-                "units the constraint evaluates; recompute them with constraint_costs() before scoring "
+                f"constraint {spec.name!r}: these costs carry no 'clip' and do not say which "
+                "units the constraint evaluates; compute them with constraint_costs() before scoring "
                 "clip=False with an offset"
             )
         weight = _default_weight(entry) if weight is None else weight

@@ -5,8 +5,7 @@
 
 namespace es {
 
-// SOFT, weight 1 (the C++ default; pre-0.2.0 documentation that called it
-// hard was wrong): workerLocationCountCost. Per employee holding
+// SOFT, weight 1: workerLocationCountCost. Per employee holding
 // `workerSkill` (empty = all), the count of its non-pinned shifts at
 // `location` (empty = any) over the whole horizon, bounded to [minCount,
 // maxCount] (maxCount < 0 = no upper bound). Raw cost per employee = the

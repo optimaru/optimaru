@@ -18,7 +18,7 @@ and `level="hard"` promotes one to hard, in both solvers; `level="medium"` is re
 both (`this use case has no medium level`). Not supported on CP-SAT (refused):
 `exponent != 1` and non-integer weights.
 
-**0.3.0:** a constraint may be picked several times (as specs or as
+A constraint may be picked several times (as specs or as
 `{"name", "weight", "level", "offset", "clip"}` mappings); each pick builds its own terms
 with its own knobs, its level included. Every plugin adds one term per employee, an idle
 one included, so an integral `offset` shapes each employee exactly as the engine does in

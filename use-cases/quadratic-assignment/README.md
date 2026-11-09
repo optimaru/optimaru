@@ -61,14 +61,14 @@ cost on this problem (a bonus) and cannot be hard` (`constraint_costs()` marks i
 `quadratic_assignment.constraint_info()` reports exactly this table from the C++
 components (`kDefaultLevel` / `kDefaultWeight`).
 
-### 0.3.0
+### Offset, clip and repeated picks
 
-Every constraint takes two more knobs, `offset` and `clip` (keyword-only), and may be
-picked several times. The three side constraints shape each location they evaluate, the
+Besides `weight`, `level` and `exponent`, every constraint takes `offset` and `clip`
+(keyword-only), and may be picked several times. The three side constraints shape each location they evaluate, the
 two objectives their total `x`: `sign(x) * max(0, |x| - offset) ** exponent`
 (`clip=True`, the default) or `(x - offset) ** exponent`, sign-preserving (`clip=False`,
 which charges a location of raw 0 too and rewards one below the offset); `offset=0` is
-the 0.2.0 shaping. The side constraints are scoped: `pinned_assignments_cost` evaluates
+the plain shaping. The side constraints are scoped: `pinned_assignments_cost` evaluates
 the fixed locations, `forbidden_assignments_cost` the locations named by a forbidden row
 and `location_capacity_cost` the locations with a capacity, so a literal offset charges
 exactly those (`constraint_costs()` reports them as `"units"`). Both formulas apply per
@@ -76,8 +76,7 @@ evaluated location (or to the one total), not to the sum over the locations.
 `clip=False` with an offset is refused on hard (the three side constraints by default),
 because hard 0 must mean no violation: a location with slack would otherwise earn a hard
 reward that cancels another location's violation. Each pick is its own instance with its
-own knobs, its level included (`level` replaced the `hard` knob; `hard=` raises
-`TypeError`), and the instances add up:
+own knobs, its level included, and the instances add up:
 
 ```python
 qap.solve(problem, constraints=[
@@ -92,65 +91,41 @@ qap.solve(problem, constraints=[
 The CP-SAT reference takes the same picks (integral offsets; on an objective only while
 its data cannot make the total negative).
 
-### 0.2.0
+### Python API
 
-The package was a pure-Python reference (simulated annealing over
-`constraint_costs()`); it is now the C++ engine with pybind11 bindings, like the
-other C++ use cases.
+The package is the C++ engine with pybind11 bindings, like the other C++ use cases.
 
-- **Names** (no aliases): `fixed_assignments` -> `pinned_assignments_cost`,
-  `forbidden_assignments` -> `forbidden_assignments_cost`, `location_capacities` ->
-  `location_capacity_cost`, `minimize_assignment_cost` -> `assignment_cost`,
-  `minimize_flow_distance` -> `flow_distance_cost`; the spec classes and
-  module-level instances follow (`FixedAssignments` -> `PinnedAssignmentsCost`,
-  `ForbiddenAssignments` -> `ForbiddenAssignmentsCost`, `LocationCapacities` ->
-  `LocationCapacityCost`, `MinimizeAssignmentCost` -> `AssignmentCost`,
-  `MinimizeFlowDistance` -> `FlowDistanceCost`). The model fields
-  `fixed_assignments`, `forbidden_assignments`, `location_capacities` and
-  `assignment_costs` keep their names. The specs carry `label_en` / `label_ko` /
-  `description_en` / `description_ko` instead of `label`, and no `default_hard` /
-  `default_weight` (the defaults live in C++ only).
-- **Raw costs and the default score are unchanged** (each constraint's total for
-  every complete assignment, `total_cost` included). Changed by design:
-  - **exponent granularity: unchanged here.** The engine shapes a unit
-    constraint per unit and a global constraint's total; the per-location lists
-    hold exactly the non-zero terms 0.1.5 shaped (plus zeros) and the two
-    objectives were one total already, so every exponent scores as in 0.1.5 (at
-    the soft level; see the rounding note);
-  - hard contributions are rounded per location (0.1.5 rounded the hard total
-    once): different only when a hard constraint's weighted, shaped per-location
-    value is fractional — a fractional hard weight (two broken pins at weight 0.5:
-    `-2`, was `-1`), or an exponent != 1 on `location_capacity_cost` (costs
-    `[2, 2]` at exponent 0.5: `-2`, was `-3`);
-  - `constraint_costs()` returns the standard dict
-    `{name: {"costs", "weight", "exponent", "hard", "global", "level", "reward",
-    "level_flippable", "name", "label"}}`; `"costs"` lists the side constraints per
-    location in location order, zeros included (0.1.5: `fixed_assignments` per fixed
-    location, `forbidden_assignments` per assignment entry), and one total for the
-    objectives;
-  - an assignment that puts one facility on two locations, or names an unknown
-    id, cannot be represented: `to_core()` raises `ValueError` (0.1.5 scored a
-    facility on two locations, and an unknown location key as 0). This holds for
-    a plain `solve(model)` without `warm_start` too (0.1.5 ignored the assignment
-    there); on a model,
-    `calculate_score` / `constraint_costs` need every location (`ValueError`
-    naming the missing ones; 0.1.5 raised `KeyError`), while the engine object
-    scores a partial state;
-  - a constraint picked twice raised `ValueError` (since 0.3.0 each pick is its own
-    instance, see 0.3.0 above).
+- **Names**: `pinned_assignments_cost`, `forbidden_assignments_cost`,
+  `location_capacity_cost`, `assignment_cost`, `flow_distance_cost`, with the spec
+  classes `PinnedAssignmentsCost`, `ForbiddenAssignmentsCost`, `LocationCapacityCost`,
+  `AssignmentCost` and `FlowDistanceCost` and a module-level default instance of each.
+  The model fields are `fixed_assignments`, `forbidden_assignments`,
+  `location_capacities` and `assignment_costs`. The specs carry `label_en` /
+  `label_ko` / `description_en` / `description_ko`; the defaults live in C++ only.
+- **Scoring granularity**: the engine shapes a unit constraint per location and a
+  global constraint's total. Hard contributions are rounded per location, so a
+  fractional hard weight or an exponent != 1 on `location_capacity_cost` rounds each
+  location's weighted, shaped value (two broken pins at weight 0.5: `-2`; costs
+  `[2, 2]` at exponent 0.5: `-2`).
+- `constraint_costs()` returns the standard dict
+  `{name: {"costs", "weight", "exponent", "global", "level", "reward",
+  "level_flippable", "name", "label", ...}}`; `"costs"` lists the side constraints per
+  location in location order, zeros included, and one total for the objectives.
+- An assignment that puts one facility on two locations, or names an unknown id,
+  cannot be represented: `to_core()` raises `ValueError`, for a plain `solve(model)`
+  without `warm_start` too. On a model, `calculate_score` / `constraint_costs` need
+  every location (`ValueError` naming the missing ones), while the engine object
+  scores a partial state.
 - **`SolverConfig`** is the engine's (`spent_limit_seconds`,
   `unimproved_spent_limit_seconds`, `step_count_limit`,
   `unimproved_step_count_limit`, `random_seed`, `parallel_solver_count`,
   `acceptor_type`, `late_acceptance_size`, `entity_tabu_size`, `full_assert`,
-  `best_score_limit`, `on_new_best`), set by attribute. The simulated-annealing
-  knobs `max_iterations`, `stagnation_limit`, `temperature`, `cooling_rate`, the
-  keyword constructor and the `anneal` / `configure` helpers are gone. Zero budget
+  `best_score_limit`, `on_new_best`), set by attribute. Zero budget
   = `spent_limit_seconds = 0` (`step_count_limit = 0` means "no limit"); a bounded
-  search = `step_count_limit = N`. Without a time limit a solve now runs the 30 s
-  budget (0.1.5 stopped after 50 000 iterations). `on_new_best(step, score)`
-  (0.1.5: `on_new_best(state)`). Parallel starts are the engine's multi-start:
-  every worker starts from the same permutation with seed + i (0.1.5 perturbed the
-  start with 3k swaps and ran one chain).
+  search = `step_count_limit = N`. Without a time limit a solve runs the 30 s
+  budget. `on_new_best(step, score)` is called on each new best. Parallel starts are
+  the engine's multi-start: every worker starts from the same permutation with
+  seed + i.
 - **Acceptors.** `LATE_ACCEPTANCE` (the default) and the others work on swaps
   only, and no move perturbs a permutation (ruin-and-recreate would break the
   bijection). So late acceptance stops improving at a 2-swap local optimum: most
@@ -165,20 +140,16 @@ other C++ use cases.
   time limit generous enough for the step budget; once the clock leads, the
   run depends on timing. `ENTITY_TABU` accepts only non-worsening swaps (a hill
   climber), and `GREAT_DELUGE` keeps the start score as its water level.
-- `solve()` returns the engine `Score` (`.hard`, `.soft`, `is_feasible()`; 0.1.5:
-  a tuple) and takes the engine object or the model (written back in place).
+- `solve()` returns the engine `Score` (`.hard`, `.soft`, `is_feasible()`) and takes the engine object or the model (written back in place).
   `calculate_score(problem, constraints)` returns the engine `Score` for the
   defaults and a `constraints.Score(hard, soft)` named tuple for a selection.
-  `DEFAULTS` and the top-level `score` are gone (use `constraints.get_constraints()`
-  / `constraints.score()`). With `constraints=...` a solve is single-start
+  Use `constraints.get_constraints()` / `constraints.score()` for selections. With `constraints=...` a solve is single-start
   (`parallel_solver_count` is ignored), as in every C++ package.
 - `QuadraticAssignmentProblemModel.to_core()` / `from_core()` convert to and from
-  the real engine object (0.1.5: model copies); the JSON input/output schema is
-  unchanged. The engine object's `score` is None until it is scored
+  the real engine object. The engine object's `score` is None until it is scored
   (`calculate_score` or a solve); `from_core()` fills `score_hard` / `score_soft`
   only from a scored core (`total_cost` whenever the assignment is a bijection).
-- The CP-SAT reference counts a repeated forbidden row once, like the engine
-  (0.1.5's CP-SAT model counted it twice).
+- The CP-SAT reference counts a repeated forbidden row once, like the engine.
 
 ## cpp/
 
@@ -203,7 +174,7 @@ ctest --test-dir build/quadratic-assignment --output-on-failure --no-tests=error
 ./build/quadratic-assignment/qap_demo 2
 ```
 
-`qap_test`: hand-calculated scores (the 0.1.x fixtures), a positive and a zero case
+`qap_test`: hand-calculated scores, a positive and a zero case
 per constraint plus the edge cases (diagonal flow, repeated forbidden rows, a
 facility pinned twice, missing demand / capacity, negative costs, an empty pinned
 location), `prepare()` validation, incremental == full recompute (score and every

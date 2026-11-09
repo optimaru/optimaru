@@ -394,7 +394,7 @@ void verifyPinnedAndBoundUnderPressure()
     for (int seed = 0; seed < seeds; ++seed)
     {
         // Both pickups are pinned, the second one days late behind the first.
-        // Swapping them would save far more lateness than it used to cost.
+        // Swapping them would save far more lateness, but the pins must hold.
         PdpRoutePlan late = buildRandomInstance(2, 1, /*seed=*/23);
         const int first = late.deliveries[0].pickupNodeIndex;
         const int second = late.deliveries[1].pickupNodeIndex;

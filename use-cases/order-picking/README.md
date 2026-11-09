@@ -23,22 +23,14 @@ per-constraint surface: the travel distance is the sum of the two distance entri
 the (order, trolley) pair count the sum of `order_split_by_trolley_cost`
 (`models.solve_request` fills `total_distance` / `order_split_count` from it).
 
-**0.2.0:** the constraints were renamed (`required_number_of_buckets` ->
-`trolley_capacity_cost`, `minimize_distance_from_previous_pick_task` ->
-`distance_from_previous_pick_task_cost`, `minimize_distance_from_last_pick_task_to_path_origin` ->
-`distance_from_last_pick_task_to_path_origin_cost`, `minimize_order_split_by_trolley` ->
-`order_split_by_trolley_cost`; the spec classes, module-level default instances, C++
-structs/headers and registry names follow), and `ConstraintTotals` / `calculate_totals()`
-were removed from the Python API (use `constraint_costs()`; the old
-`order_split_by_trolley` total was weighted x1000, the raw cost is the pair count). The
-C++ `ConstraintTotals` members carry the registry names now and read the components'
-`kDefaultWeight`. Raw costs, weights, levels and the default score are unchanged.
+`order_split_by_trolley_cost`'s raw cost is the (order, trolley) pair count; its default
+weight is 1000.
 
-**0.3.0:** every constraint takes two more knobs, `offset` and `clip` (keyword-only), and
-may be picked several times. Each trolley's raw cost `x` is shaped as
+Besides `weight`, `level` and `exponent`, every constraint takes `offset` and `clip`
+(keyword-only), and may be picked several times. Each trolley's raw cost `x` is shaped as
 `sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
 `(x - offset) ** exponent`, sign-preserving (`clip=False`, which lowers the penalty of
-every trolley below the offset, an empty one included); `offset=0` is the 0.2.0 shaping.
+every trolley below the offset, an empty one included); `offset=0` is the plain shaping.
 Both apply per trolley, not to the total. `clip=False` with an offset is refused on hard
 (`trolley_capacity_cost` by default), because hard 0 must mean no violation. Each pick is
 its own instance with its own knobs, and the instances add up:

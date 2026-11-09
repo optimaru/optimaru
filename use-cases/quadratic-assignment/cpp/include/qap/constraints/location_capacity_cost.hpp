@@ -10,7 +10,7 @@ namespace qap
 // its capacity. Raw cost per location = max(0, summed demand of its facilities
 // - capacity) for a location with a capacity, 0 for one without (no limit);
 // a facility missing from facility_demands has demand 0. 0 = every location is
-// within its capacity. Same per-location value as the 0.1.x Python scorer, in
+// within its capacity. Same per-location value as the Python reference scorer, in
 // location order.
 //
 // No delta contract: the clamp makes it non-additive. cost() is O(members),

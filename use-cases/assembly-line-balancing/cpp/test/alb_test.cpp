@@ -5,7 +5,7 @@
 //       default score
 //   (b) edge cases: empty problem, empty middle stations, stations at or
 //       above the task count, absent limits, duplicate arcs, unassigned tasks
-//   (c) the construction ported from the 0.1.5 package (plain, seeds, fixed
+//   (c) the construction, as the pure-Python reference builds it (plain, seeds, fixed
 //       override, overflow past the task count, cycles)
 //   (d) incremental score and every maintained raw total == full recompute
 //       across a long random walk of change / swap / unassign / batch moves
@@ -195,7 +195,7 @@ void verifyEdgeCases()
 }
 
 // -------------------------------------------------------------------------
-// (c) The construction, ported from the 0.1.5 package.
+// (c) The construction, as the pure-Python reference builds it.
 // -------------------------------------------------------------------------
 AssemblyLineBalancingProblem threeTasks()
 {

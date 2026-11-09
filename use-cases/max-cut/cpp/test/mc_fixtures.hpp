@@ -60,14 +60,14 @@ inline MaxCutProblem fixtureH()
     return problem;
 }
 
-// The 0.1.x triangle: A-B 2, B-C 3, A-C 4. Sides 0, 1, 0 cut 5; the optimum
+// The triangle: A-B 2, B-C 3, A-C 4. Sides 0, 1, 0 cut 5; the optimum
 // is 7 (C alone).
 inline MaxCutProblem triangle()
 {
     return graph({"A", "B", "C"}, {{0, 1, 2}, {1, 2, 3}, {0, 2, 4}});
 }
 
-// The 0.1.x contract instance (test_max_cut.py): no edges, A0 B1 C1, A fixed
+// The contract instance (test_max_cut.py): no edges, A0 B1 C1, A fixed
 // to 1, same (A, B), different (B, C), bounds 1..2. Every pair / fixed cost
 // sums to 1, the size bounds to 0, the imbalance is 1 and the cut 0.
 inline MaxCutProblem contractInstance()

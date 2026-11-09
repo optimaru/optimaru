@@ -10,12 +10,11 @@
 //       A time limit in seconds (spent_limit_seconds,
 //       unimproved_spent_limit_seconds, ...) must be finite and >= 0, and at
 //       most kMaxTimeLimitSeconds (1e9 s, about 31.7 years), else
-//       ValueError. NaN, inf and huge finite limits used to reach
+//       ValueError. NaN, inf and huge finite limits would take
 //       duration_cast or the clock arithmetic out of range (undefined
-//       behaviour; inf, 1e16 or sys.maxsize read back as a negative or zero
-//       budget, so the solve stopped after construction), and only some
-//       packages refused a negative limit. 0 is a valid limit (construction
-//       only).
+//       behaviour; inf, 1e16 or sys.maxsize would read back as a negative or
+//       zero budget, so the solve would stop after construction). 0 is a
+//       valid limit (construction only).
 //
 //   bind_config_copy(py::class_<Config>(m, "SolverConfig", ...))
 //       SolverConfig.__copy__ / __deepcopy__ (the C++ copy, on_new_best

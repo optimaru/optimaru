@@ -53,35 +53,8 @@ NAMES = [
     "parallel_groups_cost",
 ]
 
-# Every spelling the constraints had before 0.2.0: the engine names, the
-# CP-SAT / server / DB names (bridged by the deleted CPSAT_ALIASES) and the
-# structural names the engine used to refuse.
-OLD_NAMES = [
-    "unassigned_lesson",
-    "weekly_period_counts",
-    "class_conflict",
-    "class_group_conflicts",
-    "teacher_conflict",
-    "teacher_conflicts",
-    "slot_not_allowed",
-    "room_capacity",
-    "course_daily_limit",
-    "daily_course_limits",
-    "block_adjacency",
-    "block_periods",
-    "teacher_load_limit",
-    "teacher_workload",
-    "teacher_consecutive_limit",
-    "teacher_consecutive_limits",
-    "teacher_gap",
-    "teacher_workday",
-    "teacher_free_day",
-    "class_gap",
-    "avoided_period",
-    "non_preferred_period",
-    "fixed_slots",
-    "parallel_groups",
-]
+# Near misses of the public names, none of which resolves.
+UNKNOWN_NAMES = ["teacher_gap", "fixed_slots", "class_gap_costs", "teacher_conflicts"]
 
 
 def test_get_constraints_defaults_to_the_full_registry():
@@ -115,7 +88,7 @@ def test_empty_list_is_rejected_not_treated_as_the_defaults():
 
 
 def test_a_constraint_picked_twice_scores_both_picks():
-    """Since 0.3.0 a list may name a constraint several times: one instance per pick."""
+    """A list may name a constraint several times: one instance per pick."""
     picks = [TeacherGapCost(), TeacherGapCost(weight=40)]
     assert get_constraints(picks) == picks
     assert canon.DecomposedCalculator(picks).score(_tiny_table()).soft == -(20 + 40) * 1  # one gap
@@ -200,7 +173,7 @@ def test_constraint_costs_metadata_matches_constraint_info(problem):
         assert entry["weight"] == row.default_weight
         assert entry["level_flippable"] == row.level_flippable
         assert entry["reward"] == row.reward
-        assert entry["hard"] == (row.default_level == "hard")
+        assert "hard" not in entry
 
 
 def test_weight_none_means_the_component_default(problem):
@@ -293,23 +266,16 @@ def test_the_structural_constraints_refuse_soft(problem, spec_class):
     assert costs[spec_class.name]["costs"] == [0.0]
 
 
-@pytest.mark.parametrize("old", OLD_NAMES)
-def test_the_old_names_are_unknown(old):
-    """One public name per constraint: neither the old engine nor the old CP-SAT/server spellings resolve."""
+@pytest.mark.parametrize("name", UNKNOWN_NAMES)
+def test_near_miss_names_are_unknown(name):
+    """One public name per constraint: no other spelling resolves."""
     with pytest.raises(ValueError, match="unknown constraint"):
-        canon.DecomposedCalculator().add(old)
+        canon.DecomposedCalculator().add(name)
     with pytest.raises(ValueError, match="unknown constraint"):
-        canon.DecomposedCalculator([SimpleNamespace(name=old, weight=None, level=None, exponent=1.0)])
+        canon.DecomposedCalculator([SimpleNamespace(name=name, weight=None, level=None, exponent=1.0)])
     with pytest.raises(ValueError, match="unknown constraint"):
-        Assembly().add(old)
-    assert old not in st.list_constraints()
-
-
-def test_the_alias_layer_is_gone():
-    for gone in ("CPSAT_ALIASES", "STRUCTURAL_IN_ENGINE", "ENGINE_ONLY", "resolve_name"):
-        assert not hasattr(st.constraints, gone)
-    for gone in ("compute_breakdown", "Breakdown"):
-        assert not hasattr(canon, gone)
+        Assembly().add(name)
+    assert name not in st.list_constraints()
 
 
 def test_unassigned_lessons_soft_weight_is_the_documented_constant():
@@ -318,7 +284,7 @@ def test_unassigned_lessons_soft_weight_is_the_documented_constant():
     assert (relaxed.weight, relaxed.level) == (10000.0, "soft")
 
 
-# ------------------------------------------------------- 0.3.0: repeated picks, offset / clip
+# ------------------------------------------------------------ repeated picks, offset / clip
 
 
 def _tiny_table() -> "canon.Timetable":
@@ -491,19 +457,12 @@ def test_medium_is_refused_on_every_path(problem, level):
         canon.DecomposedCalculator().add("teacher_gap_cost", level=level)
 
 
-HARD_REMOVED = (
-    "hard= was removed in optimaru 0.3.0; use level='hard' or level='soft' (level=None keeps the default)"
-)
-
-
-def test_the_hard_knob_is_gone():
-    """0.3.0 replaced hard= by level=; the old keyword names its replacement on both paths."""
-    with pytest.raises(TypeError) as raised:
+def test_an_unknown_keyword_is_refused():
+    """The level is the `level` knob; any other keyword is a TypeError on both paths."""
+    with pytest.raises(TypeError, match="unexpected keyword argument 'hard'"):
         TeacherGapCost(hard=True)
-    assert str(raised.value) == HARD_REMOVED
-    with pytest.raises(TypeError) as raised:
+    with pytest.raises(TypeError, match="unexpected keyword argument 'hard'"):
         canon.DecomposedCalculator().add("teacher_gap_cost", hard=True)
-    assert str(raised.value) == HARD_REMOVED
     with pytest.raises(TypeError, match="unexpected keyword argument 'colour'"):
         canon.DecomposedCalculator().add("teacher_gap_cost", colour="red")
     assert TeacherGapCost(level="hard") == TeacherGapCost(level=Level.HARD)
@@ -535,8 +494,8 @@ def test_assembly_keeps_replace_by_name_and_takes_the_new_knobs():
     assert len(get_constraints(repeated)) == 18
 
 
-def test_offset_zero_reproduces_the_0_2_0_scores(problem):
-    """offset 0 is the plain shaping in both modes, so every 0.2.0 selection scores the same."""
+def test_offset_zero_reproduces_the_plain_scores(problem):
+    """offset 0 is the plain shaping in both modes, so a selection scores the same with or without it."""
     converted = st.convert_problem(problem)
     st.inject_solution(converted, st.solve(problem, time_limit_seconds=1.0, random_seed=3)["lessons"])
     table = converted.table
@@ -589,7 +548,7 @@ def test_full_assert_solves_with_repeats_and_offsets(problem, picks):
     assert score(canon.constraint_costs(converted.table), picks) == python
 
 
-# ------------------------------------------- 0.3.0: clip=False with an offset stays off hard
+# ------------------------------------------------ clip=False with an offset stays off hard
 
 HARD_REFUSAL = (
     "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
@@ -670,7 +629,7 @@ def test_the_same_literal_pick_on_soft_is_accepted(offset):
         (TeacherConflictCost(offset=0.5), (0, 0.0)),  # clip=True on hard: a threshold keeps a 0 at 0
         (TeacherConflictCost(offset=-0.5), (0, 0.0)),
         (TeacherGapCost(level="hard", offset=-1), (-20 * 2, 0.0)),  # adds 1 to the non-zero total
-        (TeacherConflictCost(clip=False), (0, 0.0)),  # clip=False with offset 0: the 0.2.0 shaping
+        (TeacherConflictCost(clip=False), (0, 0.0)),  # clip=False with offset 0: the plain shaping
         (TeacherGapCost(level="hard", offset=0.0, clip=False), (-20, 0.0)),
         (FixedSlotsCost(offset=1), (0, 0.0)),
     ],

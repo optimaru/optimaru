@@ -41,12 +41,12 @@ cmake use-cases/employee-scheduling/cpp -B build/employee-scheduling && cmake --
 ctest --test-dir build/employee-scheduling
 ```
 
-**0.3.0:** a rule may be picked several times, with other options or knobs or with the
+A rule may be picked several times, with other options or knobs or with the
 same ones (every pick is its own instance, and the instances add up), and every rule
-takes two more keyword knobs, `offset` and `clip`, which shift the per-employee shaping
+takes the keyword knobs `offset` and `clip`, which shift the per-employee shaping
 (`UndesiredDayCost(offset=120)` counts only the minutes beyond two hours;
 `clip=False` shapes `cost - offset` as it is, and is refused with an offset on hard,
-because hard 0 must mean no violation). `offset=0` is the 0.2.0 shaping; see
+because hard 0 must mean no violation). `offset=0` is the plain power shaping; see
 [`python/`](python/README.md) for the knob table.
 
 ## Extending

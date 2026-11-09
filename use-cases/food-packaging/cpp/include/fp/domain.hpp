@@ -55,8 +55,7 @@ constexpr Minutes kNoTime = std::numeric_limits<std::int64_t>::min();
 // end of this header hands the same constant to the decomposed calculator,
 // which keeps a separate medium accumulator. A medium constraint's weight is
 // therefore in medium units (afterIdealEndTimeCost, unassignedJobsCost: 1),
-// never 10^10. (Before 0.2.0 the two medium components carried 10^10 as
-// their soft weight; some docs said 10^9, which was never the value.)
+// never 10^10.
 constexpr std::int64_t kMediumUnit = 10000000000LL;  // 10^10
 constexpr optimaru::MediumFold kMediumFold
     = optimaru::MediumFold::into_soft(static_cast<double>(kMediumUnit));
@@ -95,7 +94,7 @@ struct Score
 inline optimaru::Score toEngineScore(const Score &s)
 {
     // soft + medium * 10^10: for the integral levels of this domain the same
-    // value as the old int64 `medium * kMediumUnit + soft` (exact while
+    // value as the int64 `medium * kMediumUnit + soft` (exact while
     // |engine soft| < 2^53, see above).
     return kMediumFold.to_engine(s.hard,
                                 static_cast<double>(s.medium),

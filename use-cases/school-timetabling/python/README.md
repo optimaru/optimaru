@@ -147,10 +147,8 @@ Rules:
   `get_constraints`, where a name picked several times is one instance per
   pick, each with its own knobs (`canon.constraint_costs(table, picks)` keys the
   second `"<name>#2"`); `canon.DecomposedCalculator.add` adds another instance
-  too. **0.3.0** made both possible (repeats were a `ValueError` before) and
-  added `offset` / `clip`; `offset=0` is the 0.2.0 shaping. It also replaced
-  the `hard` knob by `level` (`hard=` raises `TypeError`), and each repeated
-  pick carries its own level: `[TeacherGapCost(), TeacherGapCost(level="hard",
+  too. Every pick also takes `offset` / `clip`; `offset=0` is the plain
+  shaping. Each repeated pick carries its own level: `[TeacherGapCost(), TeacherGapCost(level="hard",
   offset=2)]` charges every gap on soft and the gaps beyond two on hard.
 - The default assembly matches the monolithic score **bit for bit** (gated by
   `tests/test_constraints.py` and the C++ `canonical_plugin_test`).
@@ -193,34 +191,21 @@ Rules:
   the rest of the gap is the fixed cost of the generic assembly dispatch). This
   holds for partial assemblies and weight overrides too.
 
-## 0.2.0: one name per constraint
+## Names and weights
 
-- Every constraint has one public name, `<subject>_cost`, in every layer. The
-  old engine names (`unassigned_lesson`, `class_conflict`, `teacher_conflict`,
-  `slot_not_allowed`, `room_capacity`, `course_daily_limit`, `block_adjacency`,
-  `teacher_load_limit`, `teacher_consecutive_limit`, `teacher_gap`,
-  `teacher_workday`, `teacher_free_day`, `class_gap`, `avoided_period`,
-  `non_preferred_period`), the CP-SAT / server spellings bridged by the removed
-  `CPSAT_ALIASES` (`weekly_period_counts`, `class_group_conflicts`,
-  `teacher_conflicts`, `daily_course_limits`, `block_periods`,
-  `teacher_workload`, `teacher_consecutive_limits`) and the structural
-  `fixed_slots` / `parallel_groups` are unknown now. `CPSAT_ALIASES`,
-  `STRUCTURAL_IN_ENGINE`, `ENGINE_ONLY` and `resolve_name` are gone.
+- Every constraint has one public name, `<subject>_cost`, in every layer.
 - `fixed_slots_cost` and `parallel_groups_cost` are real components (always 0,
   hard, not flippable), so `list_constraints()` holds 17 names.
-- The C++ registry names are the struct names (`teacherGapCost`); the H/S
-  codes and display strings (`"S1 teacher gap"`) are gone, also from
-  `constraint_totals()`.
-- The canonical model carries no weights: `canon.Timetable.weights` is
-  removed; `weight=None` is the component default everywhere. The fast path's
-  `canon.ObjectiveWeights` / `SolverConfig.weights` / `solve(weights=)` /
-  `models.ObjectiveWeightsModel` are keyed by the soft constraint names
-  (`teacher_gap_cost`, ...) and take any finite number >= 0 (a bool, NaN,
-  infinity or a negative weight raises, as for a constraint pick's weight).
+- The C++ registry names are the struct names (`teacherGapCost`).
+- The canonical model carries no weights; `weight=None` is the component
+  default everywhere. The fast path's `canon.ObjectiveWeights` /
+  `SolverConfig.weights` / `solve(weights=)` / `models.ObjectiveWeightsModel`
+  are keyed by the soft constraint names (`teacher_gap_cost`, ...) and take
+  any finite number >= 0 (a bool, NaN, infinity or a negative weight raises,
+  as for a constraint pick's weight).
 - `Timetable.penalties` keys are the soft constraint names; partial
-  timetabling reports `unassigned_lessons_cost` (was `weekly_period_counts`).
-- `canon.Breakdown` and `canon.compute_breakdown` are removed:
-  `canon.constraint_costs(table)` is the per-constraint surface.
+  timetabling reports `unassigned_lessons_cost`.
+- `canon.constraint_costs(table)` is the per-constraint surface;
   `canon.default_calculator()` takes no weights.
 
 ## Canonical conversion (default mode)

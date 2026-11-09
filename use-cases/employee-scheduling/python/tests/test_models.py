@@ -393,7 +393,7 @@ def test_there_is_one_rule_model_per_spec_in_factory_order():
     for spec in SPEC_CLASSES:
         model = rule_model(spec)
         assert model.spec_class is spec
-        assert model.__name__ == f"{spec.__name__}Model"  # no "Rule" suffix in 0.2.0
+        assert model.__name__ == f"{spec.__name__}Model"  # no "Rule" suffix
         assert getattr(models, model.__name__) is model  # picklable by reference
         assert set(model.model_fields) == {"name", "weight", "level", "exponent", "offset", "clip", *spec().params()}
         assert model().to_spec() == spec()
@@ -425,8 +425,9 @@ def test_a_rule_may_repeat_with_other_parameters():
 @pytest.mark.parametrize(
     "rule",
     [
-        {"name": "required_skill"},  # a pre-0.2.0 name
-        {"name": "required_skill_cost", "policy": "hard"},  # the pre-0.2.0 level field
+        {"name": "required_skill"},  # an unknown name
+        {"name": "required_skill_cost", "policy": "hard"},  # an unknown field
+        {"name": "required_skill_cost", "hard": True},  # the level is `level`
         {"name": "max_consecutive_days_cost", "value": 0},  # below the spec's bound
         {"name": "desired_day_cost", "level": "hard"},  # a reward is never hard
         {"name": "shift_count_imbalance_cost", "worker_indices": [0]},  # no scope on this global
@@ -445,8 +446,9 @@ def test_a_rule_may_repeat_with_other_parameters():
         {"name": "required_skill_cost", "clip": "no"},
     ],
     ids=[
-        "old-name",
-        "policy",
+        "unknown-name",
+        "unknown-field",
+        "hard-key",
         "bound",
         "reward-hard",
         "global-scope",
@@ -488,7 +490,7 @@ def test_integral_json_knobs_stay_numbers():
 
 
 def test_no_generated_model_is_named_rule():
-    """The per-constraint JSON models end in "Model", never in "Rule" (0.1.5 names do not import)."""
+    """The per-constraint JSON models end in "Model", never in "Rule"."""
     assert not [name for name in dir(models) if name.endswith("CostRule")]
     with pytest.raises(ImportError):
         exec("from es_scheduling.models import AssignmentCostRule", {})
@@ -537,7 +539,7 @@ def test_an_empty_rule_list_is_refused():
     ids=["same-twice", "spec-and-json-twice", "other-knobs"],
 )
 def test_a_repeated_rule_is_one_instance_per_entry(rules):
-    """Since 0.3.0 the same rule may repeat with the same parameters: each entry is scored."""
+    """The same rule may repeat with the same parameters: each entry is scored."""
     model_input = _small_input(rules=rules)
     assert len(model_input.rules) == 2
     solution = solve_request(ScheduleRequest(timelimit=0.05, model_input=model_input))
@@ -613,7 +615,7 @@ def test_the_json_schema_carries_the_offset_and_clip_knobs():
     assert properties["clip"]["default"] is True and properties["clip"]["type"] == "boolean"
 
 
-# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+# --- clip=False with an offset stays off the hard score -------------------------------
 
 HARD_REFUSAL = (
     "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
@@ -651,26 +653,6 @@ def test_a_json_rule_refuses_the_literal_offset_on_hard(rule, offset):
     spec = model.spec_class(**{key: value for key, value in data.items() if key != "name"})
     # The spec itself is accepted until it is scored; a rule list refuses it.
     assert _validation_message(lambda: _small_input(rules=[spec])) == message
-
-
-@pytest.mark.parametrize(
-    "data",
-    [
-        {"name": "required_skill_cost", "hard": True},
-        {"name": "undesired_day_cost", "hard": False, "weight": 2},
-        {"name": "max_consecutive_days_cost", "value": 3, "hard": True},
-    ],
-    ids=["skill", "undesired", "max-days"],
-)
-def test_a_json_rule_names_the_replacement_of_hard(data):
-    """A JSON rule still carrying the removed "hard" key is refused in the words every path
-    uses (the spec's TypeError, DecomposedCalculator.add()), not "Extra inputs are not permitted"."""
-    message = (
-        "hard= was removed in optimaru 0.3.0; use level='hard' or level='soft' (level=None keeps the default)"
-    )
-    assert _validation_message(lambda: rule_model(data["name"]).model_validate(data)) == message
-    payload = {**_small_input().model_dump(), "rules": [data]}
-    assert _validation_message(lambda: SchedulingInput.model_validate(payload)) == message
 
 
 @pytest.mark.parametrize("offset", [120, -120])

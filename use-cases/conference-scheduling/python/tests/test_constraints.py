@@ -1,7 +1,7 @@
 """Constraint spot checks: re-verifies some hand-computed cases of the C++ tests (a) through the Python bindings.
 
 The raw costs come from `constraint_costs()` (every constraint is global: one total
-each), the only per-constraint surface since 0.2.0; the three rewards report their
+each), the only per-constraint surface; the three rewards report their
 total negated (raw <= 0).
 """
 

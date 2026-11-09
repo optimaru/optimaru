@@ -133,7 +133,7 @@ def _solved(constraints=None):
 
 
 def test_list_constraints_matches_the_spec_names():
-    """Names carried by specs must be names the core actually knows, in the 0.1.5 catalog order."""
+    """Names carried by specs must be names the core actually knows, in catalog order."""
     assert alb.list_constraints() == NAMES
     for spec in get_constraints():
         assert spec.name in alb.list_constraints()
@@ -262,10 +262,9 @@ def test_constraint_info_matches_the_raw_cost_metadata():
     assert list(raw) == alb.list_constraints()
     for row in alb.constraint_info():
         entry = raw[row.name]
-        assert (entry["weight"], entry["level"], entry["hard"]) == (
+        assert (entry["weight"], entry["level"]) == (
             row.default_weight,
             row.default_level,
-            row.default_level == "hard",
         )
         assert (entry["level_flippable"], entry["reward"]) == (True, False)
         assert entry["global"] == (row.name in GLOBALS)
@@ -343,30 +342,6 @@ def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
         UsedStationsCost(**knobs)
 
 
-@pytest.mark.parametrize(
-    "old",
-    [
-        "station_capacity",
-        "task_precedence",
-        "station_count_limit",
-        "task_station_bounds",
-        "fixed_task_stations",
-        "forbidden_task_stations",
-        "same_station_groups",
-        "different_station_pairs",
-        "minimize_stations",
-        "workload_balance",
-    ],
-)
-def test_old_names_are_gone(old):
-    """0.2.0 renamed the catalog; the pre-0.2.0 names are unknown now (no aliases)."""
-    pick = SimpleNamespace(name=old, weight=None, level=None, exponent=1.0)
-    with pytest.raises(ValueError, match="unknown constraint"):
-        alb.solve(build_problem(), config=_config(), constraints=[pick])
-    with pytest.raises(ValueError, match="unknown constraint"):
-        score(alb.constraint_costs(build_problem()), [pick])
-
-
 def test_constraint_costs_match_every_constraint_by_hand():
     """Fixture H, per station (V = 4: loads 3 / 5 / 0 / 6) and per global total."""
     costs = {name: entry["costs"] for name, entry in alb.constraint_costs(fixture_h()).items()}
@@ -386,15 +361,15 @@ def test_constraint_costs_match_every_constraint_by_hand():
 
 
 def test_exponent_shapes_per_station_and_global_totals():
-    """0.2.0: per-station constraints shape each station, globals their total."""
+    """Per-station constraints shape each station, globals their total."""
     raw = alb.constraint_costs(fixture_h())
-    # Pairs: 1 + 1 per station -> 1^2 + 1^2 = 2 (0.1.5 shaped per pair: also 2).
+    # Pairs: 1 + 1 per station -> 1^2 + 1^2 = 2.
     assert score(raw, [DifferentStationPairsCost(exponent=2.0)]).hard == -2
     # Bounds: B (1) on station 0, D (1) on station 3 -> 2.
     assert score(raw, [TaskStationBoundsCost(exponent=3.0)]).hard == -2
     # A global: used stations 3 -> 3^2 = 9.
     assert score(raw, [UsedStationsCost(exponent=2.0)]).soft == -9.0
-    # Same-station groups: the TOTAL is shaped (0.1.5 shaped per group).
+    # Same-station groups: the TOTAL is shaped.
     assert score(raw, [SameStationGroupsCost(exponent=2.0)]).hard == -1
     for spec in (MaxStationsCost, FixedTaskStationsCost, ForbiddenTaskStationsCost):
         assert score(raw, [spec(exponent=2.0)]).hard == -1
@@ -454,9 +429,9 @@ def test_score_is_additive_over_the_picked_constraints():
 
 
 def test_naming_a_constraint_twice_scores_both_picks():
-    """Since 0.3.0 a constraint may be picked several times: each pick is scored on its own.
+    """A constraint may be picked several times: each pick is scored on its own.
 
-    The later pick no longer wins in silence, nor is it an error: both are
+    The later pick does not win in silence, nor is it an error: both are
     instances with their own knobs, and they add up."""
     picks = [StationCapacityCost(), UsedStationsCost(weight=10), UsedStationsCost()]
     problem = _zero_budget_solve(fixture_h(), picks)
@@ -468,7 +443,7 @@ def test_naming_a_constraint_twice_scores_both_picks():
 
 
 def test_unassigned_tasks_contribute_nothing():
-    """0.2.0 follows the engine convention: a task at -1 is in no station, arc, pair or group."""
+    """The engine convention: a task at -1 is in no station, arc, pair or group."""
     problem = fixture_h()
     problem.set_assignment([-1, -1, -1, -1])
     raw = alb.constraint_costs(problem)
@@ -477,7 +452,7 @@ def test_unassigned_tasks_contribute_nothing():
     assert (score_.hard, score_.soft) == (0, 0.0)
 
 
-# --- 0.3.0: repeated picks and the offset / clip knobs ------------------------------
+# --- repeated picks and the offset / clip knobs ------------------------------------
 
 
 def _zero_budget_solve(problem, picks):
@@ -621,8 +596,8 @@ def test_the_scoped_constraints_report_and_charge_their_units_only():
         assert _engine([pick], _all_zero_scoped()) == expected
 
 
-def test_offset_zero_reproduces_the_0_2_0_scores():
-    """offset 0 is the plain shaping in both modes, so every 0.2.0 selection scores the same."""
+def test_offset_zero_reproduces_the_plain_scores():
+    """offset 0 is the plain shaping in both modes, so a selection scores the same with or without it."""
     plain = [*get_constraints()[:-1], WorkloadImbalanceCost(weight=2, exponent=2)]
     shifted = [type(spec)(offset=0.0, clip=bool(index % 2)) for index, spec in enumerate(get_constraints()[:-1])]
     shifted.append(WorkloadImbalanceCost(weight=2, exponent=2, offset=0, clip=False))
@@ -746,15 +721,7 @@ def test_a_level_must_be_a_level():
         _engine([UsedStationsCost(), pick])
 
 
-def test_the_knob_was_renamed():
-    """0.3.0 replaced hard=True / hard=False by level="hard" / level="soft"; hard= is unknown."""
-    with pytest.raises(TypeError):
-        UsedStationsCost(hard=True)
-    with pytest.raises(TypeError):
-        StationCapacityCost(weight=None, hard=False)
-
-
-# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+# --- clip=False with an offset stays off the hard score -------------------------------
 
 HARD_REFUSAL = (
     "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
@@ -819,7 +786,7 @@ def test_the_same_literal_pick_on_soft_is_accepted(offset):
     [
         (StationCapacityCost(offset=3.0), (0, 0.0)),  # clip=True on hard: a threshold
         (StationCapacityCost(offset=-3.0), (-4, 0.0)),  # 1 + 3 on station 3 only
-        (StationCapacityCost(clip=False), (-1, 0.0)),  # clip=False with offset 0: the 0.2.0 shaping
+        (StationCapacityCost(clip=False), (-1, 0.0)),  # clip=False with offset 0: the plain shaping
         (StationCapacityCost(offset=0.0, clip=False), (-1, 0.0)),
         (MaxStationsCost(offset=-3.0), (-4, 0.0)),
         (TaskPrecedenceCost(offset=-3.0), (-4, 0.0)),

@@ -21,7 +21,7 @@ raise `ValueError`); `level="soft"` / `level="hard"` moves a term to the soft / 
 level in both solvers, `level="medium"` is refused by both (`this use case has no medium
 level`), and `cut_weight_cost` with `level="hard"` is refused as in the engine.
 
-**0.3.0:** a constraint may be picked several times (as specs or as
+A constraint may be picked several times (as specs or as
 `{"name", "weight", "level", "offset", "clip"}` mappings); each pick builds its own terms with
 its own knobs, its level included. The four unit constraints add one term per side (side 0
 and side 1, a side of raw 0 included) and the imbalance and the cut one term for their

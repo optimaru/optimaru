@@ -84,7 +84,7 @@ inline double shape_cost(double cost, double exponent) {
 //
 // The formula applies per evaluated unit (per vehicle, per slot, ...), not
 // once over the total violation. offset = 0 is shape_cost(x, exponent) in both
-// modes, bit for bit (the 0.2.0 shaping). The Python mirror (_constraint.py
+// modes, bit for bit (the plain shaping). The Python mirror (_constraint.py
 // shape) is the same formula, step for step, so both give the same double.
 inline double shape_cost(double cost, double exponent, double offset, bool clip) {
     if (offset == 0.0) return shape_cost(cost, exponent);
@@ -1281,7 +1281,7 @@ private:
         bool is_hard;
         bool is_medium;
         // offset != 0: the shaping reads unit_offset_[c] / unit_clip_[c]. A flag
-        // in the entry's padding, so an unshifted assembly (every 0.2.0 one)
+        // in the entry's padding, so an unshifted assembly
         // keeps its 32-byte entries and its plain weighted_cost().
         bool shifted;
     };

@@ -13,7 +13,6 @@ namespace pjs
 // (or there is no SINK at all). One penalty for the whole schedule (the Java
 // groupBy(max)), not one per project, so shortening any project other than
 // the last one is free on this term. The exponent shapes that value.
-// 0.2.0 migration note: was totalMakespan.
 struct MakespanCost final : ScheduleAggregateConstraint
 {
     static constexpr double kDefaultWeight = 1.0;

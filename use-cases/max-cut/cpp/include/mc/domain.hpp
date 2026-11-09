@@ -68,7 +68,7 @@ struct VertexPair
 //     its second endpoint is not on the same side (so an unassigned second
 //     endpoint splits the pair, an unassigned first endpoint charges
 //     nothing).
-// On a complete partition every rule is the 0.1.x one.
+// On a complete partition every rule matches the Python reference.
 struct MaxCutProblem
 {
     // --- problem facts -----------------------------------------------------
@@ -126,7 +126,7 @@ struct MaxCutProblem
     int vertexCount() const { return static_cast<int>(vertexIds.size()); }
     int minSize() const { return minPartitionSize.value_or(0); }
     int max_size() const { return maxPartitionSize.value_or(vertexCount()); }
-    // The 0.1.x rule: both bounds given and equal.
+    // Exact size: both bounds given and equal.
     bool exactSize() const
     {
         return minPartitionSize.has_value() && maxPartitionSize.has_value()

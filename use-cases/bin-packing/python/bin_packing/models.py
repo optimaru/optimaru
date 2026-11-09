@@ -9,11 +9,9 @@ The canonical problem as JSON, mirroring `_core`'s Item / BinPackingProblem::
     bp.solve(problem, time_limit_seconds=5.0)
     solved = BinPackingProblemModel.from_core(problem)         # engine -> pydantic (+ outputs)
 
-The canonical problem carries no constraint weights (removed in 0.2.0): weights come
+The canonical problem carries no constraint weights (``extra="forbid"``): weights come
 only from constraint selections, and the defaults (1 each) are the C++ components'
-(``bin_packing.constraint_info()``). The 0.1.x fields ``capacity_weight``,
-``used_bin_weight``, ``color_weight`` and ``conflict_weight`` are refused
-(``extra="forbid"``).
+(``bin_packing.constraint_info()``).
 """
 
 from __future__ import annotations

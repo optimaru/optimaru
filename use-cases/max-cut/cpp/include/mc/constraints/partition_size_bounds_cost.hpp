@@ -12,9 +12,7 @@ namespace mc
 // Hard, weight 1: partitionSizeBoundsCost — the vertices a side has fewer
 // than min_partition_size or more than max_partition_size. Raw cost per side
 // u = max(0, min - n_u) + max(0, n_u - max) with n_u the side's size (min
-// defaults to 0, max to |V|), so 0 = both sides within the bounds. The same
-// two terms in the same order as 0.1.x, so the exponent semantics are
-// unchanged. The clamp is not additive per member, so there is no delta: a
+// defaults to 0, max to |V|), so 0 = both sides within the bounds. The clamp is not additive per member, so there is no delta: a
 // touched side is re-costed from scratch, which is O(1) (members.size()).
 struct PartitionSizeBoundsCost final : McUnitConstraint
 {

@@ -38,9 +38,9 @@ namespace mc
 //   cutWeightCost                -(weight of the edges between the sides)
 //
 // Consequences of the unit choice (the engine convention, see the package
-// README): the exponent shapes each side's cost (0.1.x shaped each 0/1 pair
-// or vertex term, where it had no effect), and a hard cost is rounded per
-// side. At exponent 1 and integral weights both are bit-identical to 0.1.x.
+// README): the exponent shapes each side's cost, not each 0/1 pair or vertex
+// term, and a hard cost is rounded per side. At exponent 1 and integral
+// weights both are bit-identical to the Python reference's per-term scoring.
 //
 //   DecomposedCalculator calc;
 //   defaultConstraints()                          // the whole default set

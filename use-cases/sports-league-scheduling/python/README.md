@@ -32,8 +32,8 @@ print(sum(sl.constraint_costs(schedule)["away_to_away_hop_cost"]["costs"]))  # r
 - `constraint_costs` — the raw cost of every constraint (one cost per round position
   for the three unit constraints, one total for the seven globals), before weight,
   exponent and level; `sports_league.constraints.score()` re-prices it in pure Python.
-  This is the only per-constraint surface (the 0.1.x `Breakdown` /
-  `compute_breakdown()` were removed in 0.2.0).
+  This is the per-constraint surface (e.g. the number of workday classic matches is
+  `sum(constraint_costs(s)["workday_classic_matches_cost"]["costs"])`).
 - `constraint_info` / `list_constraints` — the catalog (name, default level, default
   weight, flippable, reward, default_enabled), read off the C++ components.
 - Serialization is the pydantic v2 mirror in `sports_league.models`
@@ -91,14 +91,6 @@ one included (per round, not over the sum), and on a global's one total. It is r
 hard, where hard 0 must mean no violation: `ValueError: constraint 'team_conflict_cost':
 clip=False with a non-zero offset cannot be hard, because hard 0 must mean no violation;
 use clip=True (a threshold) or another level`. On soft it is allowed.
-
-**0.2.0:** the names gained the `_cost` suffix (`start_to_away_hop` ->
-`start_to_away_hop_cost`, ...), `matches_on_same_day` became `team_conflict_cost` and
-`classic_matches` became `workday_classic_matches_cost` (spec classes `MatchesOnSameDay` ->
-`TeamConflictCost`, `ClassicMatches` -> `WorkdayClassicMatchesCost`, the others gained a
-`Cost` suffix). `Breakdown` and `compute_breakdown()` were removed; read
-`constraint_costs()` instead (`Breakdown.classic_match_count` is
-`sum(constraint_costs(s)["workday_classic_matches_cost"]["costs"])`).
 
 Round adjacency is all based on `Round.index`, so with sparse indices (e.g. 0,1,4) the
 gap is treated as "no round" (the same as Java's `ifNotExists(Round)`).

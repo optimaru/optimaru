@@ -12,7 +12,7 @@ namespace mc
 // split. Raw cost per side u = the pairs whose FIRST endpoint is on side u
 // and whose second endpoint is not, so each split pair is charged once, to
 // its first endpoint's side, and 0 = every pair is together. The two sides
-// sum to the 0.1.x count of split pairs (0.1.x listed one 0/1 term per pair).
+// sum to the count of split pairs.
 // A self-pair is never split; a repeated pair counts once per entry.
 //
 // cost() is a pure function of (unit, members). delta_cost(e) =

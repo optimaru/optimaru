@@ -240,14 +240,14 @@ def test_score_reweighting_is_linear_without_rescoring():
 
 
 def test_score_rejects_an_unknown_constraint_name():
-    """A spec with a wrong name (e.g. a renamed component) must not be silently ignored."""
+    """A spec with a wrong name (e.g. a misspelled component) must not be silently ignored."""
     raw, _ = _raw()
 
-    class Renamed(Constraint):
+    class Misnamed(Constraint):
         name = "definitely_not_a_constraint"
 
     with pytest.raises(ValueError, match="unknown constraint"):
-        score(raw, [Renamed()])
+        score(raw, [Misnamed()])
 
 
 # --- The catalog: constraint_info() -------------------------------------------
@@ -300,10 +300,9 @@ def test_constraint_info_matches_the_raw_cost_metadata():
     assert list(raw) == ba.list_constraints()
     for row in ba.constraint_info():
         entry = raw[row.name]
-        assert (entry["weight"], entry["level"], entry["hard"]) == (
+        assert (entry["weight"], entry["level"]) == (
             row.default_weight,
             row.default_level,
-            row.default_level == "hard",
         )
         assert (entry["level_flippable"], entry["reward"]) == (True, False)
         assert entry["global"] == (row.name == "mixed_gender_room_cost")
@@ -350,7 +349,7 @@ def test_the_medium_level_folds_into_soft():
 
 
 def test_a_demoted_medium_constraint_is_soft_in_the_engine_too():
-    """level="soft" moves unassigned_stays_cost to soft in the solver (it was a no-op before 0.2.0).
+    """level="soft" moves unassigned_stays_cost to soft in the solver.
 
     Two overlapping 6-night stays for one bed: sharing costs 6000 hard, so one stay goes
     without a bed, and its nights now cost soft, not medium."""
@@ -456,34 +455,7 @@ def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
         UnassignedStaysCost(**knobs)
 
 
-# 0.2.0 migration: the pre-0.2.0 catalog names.
-OLD_NAMES = [
-    "same_bed_in_same_night",
-    "female_in_male_room",
-    "male_in_female_room",
-    "department_minimum_age",
-    "department_maximum_age",
-    "required_patient_equipment",
-    "assign_every_patient_to_a_bed",
-    "preferred_maximum_room_capacity",
-    "department_specialty",
-    "department_specialty_not_first_priority",
-    "preferred_patient_equipment",
-    "different_gender_in_same_gender_room_in_same_night",
-]
-
-
-@pytest.mark.parametrize("old", OLD_NAMES)
-def test_old_names_are_gone(old):
-    """0.2.0 renamed the catalog; the pre-0.2.0 names are unknown now (no aliases)."""
-    pick = SimpleNamespace(name=old, weight=None, level=None, exponent=1.0)
-    with pytest.raises(ValueError, match="unknown constraint"):
-        ba.solve(build_plan(), time_limit_seconds=0.05, constraints=[pick])
-    with pytest.raises(ValueError, match="unknown constraint"):
-        score(ba.constraint_costs(build_plan()), [pick])
-
-
-# --- 0.3.0: repeated picks and the offset / clip knobs ------------------------------
+# --- repeated picks and the offset / clip knobs ------------------------------------
 #
 # The hand instance is _hand_plan(): s0 in b0, s1 in b1 (6 nights each, both rooms above
 # the preferred capacity 1), b2 empty, s2 and s3 (12 nights) on the "no bed" sentinel.
@@ -514,9 +486,9 @@ REPEAT = [PreferredMaxRoomCapacityCost(), PreferredMaxRoomCapacityCost(weight=0.
 
 
 def test_naming_a_constraint_twice_scores_both_picks():
-    """Since 0.3.0 a constraint may be picked several times: each pick is scored on its own.
+    """A constraint may be picked several times: each pick is scored on its own.
 
-    The later pick no longer wins in silence, nor is it an error: both are
+    The later pick does not win in silence, nor is it an error: both are
     instances with their own knobs, and they add up."""
     picks = [BedConflictCost(), UnassignedStaysCost(), PreferredMaxRoomCapacityCost(weight=10), *REPEAT[:1]]
     assert _zero_budget(_hand_plan(), picks) == (0, -12 * MEDIUM_UNIT - (10 + 8) * 12)
@@ -697,8 +669,8 @@ def test_the_scopes_report_their_units():
         assert _zero_budget(copy, [pick]) == expected
 
 
-def test_offset_zero_reproduces_the_0_2_0_scores():
-    """offset 0 is the plain shaping in both modes, so every 0.2.0 selection scores the same."""
+def test_offset_zero_reproduces_the_plain_scores():
+    """offset 0 is the plain shaping in both modes, so a selection scores the same with or without it."""
     plain = [*get_constraints()[:-1], MixedGenderRoomCost(exponent=2)]
     shifted = [type(spec)(exponent=spec.exponent, offset=0.0, clip=False) for spec in plain]
     raw, solved = _raw()
@@ -795,18 +767,15 @@ def test_core_refuses_an_unknown_level_like_the_python_base():
         ba.constraint_costs(build_plan(), [pick])
 
 
-def test_the_knob_was_renamed():
-    """hard= is gone: a spec refuses it, and an old duck-typed pick that carries `hard` but
-    no `level` is refused on every path instead of running at the default level."""
-    with pytest.raises(TypeError):
-        BedConflictCost(hard=True)
-    old = SimpleNamespace(name="bed_conflict_cost", weight=None, hard=True, exponent=1.0)
+def test_a_pick_without_level_is_refused():
+    """A duck-typed pick without `level` is refused on every path instead of running at the default level."""
+    pick = SimpleNamespace(name="bed_conflict_cost", weight=None, exponent=1.0)
     with pytest.raises(AttributeError, match="level"):
-        ba.solve(build_plan(), time_limit_seconds=0.1, constraints=[old])
+        ba.solve(build_plan(), time_limit_seconds=0.1, constraints=[pick])
     with pytest.raises(AttributeError, match="level"):
-        ba.constraint_costs(build_plan(), [old])
+        ba.constraint_costs(build_plan(), [pick])
     with pytest.raises(AttributeError, match="level"):
-        score(ba.constraint_costs(build_plan()), [old])
+        score(ba.constraint_costs(build_plan()), [pick])
 
 
 @pytest.mark.parametrize(
@@ -874,7 +843,7 @@ def test_a_repeat_is_checked_on_its_own_level():
         score(ba.constraint_costs(_hand_plan()), [BedConflictCost(), pick])
 
 
-# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+# --- clip=False with an offset stays off the hard score -------------------------------
 
 HARD_REFUSAL = (
     "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
@@ -948,7 +917,7 @@ def test_the_same_literal_pick_on_soft_is_accepted(offset):
         # _mixed_room(): 9 mixed-gender nights, the global's one total.
         (MixedGenderRoomCost(offset=4), (-5000, 0.0)),  # clip=True on hard: a threshold
         (MixedGenderRoomCost(offset=-1), (-10000, 0.0)),  # a negative threshold adds 1 to the non-zero total
-        (MixedGenderRoomCost(clip=False), (-9000, 0.0)),  # clip=False with offset 0: the 0.2.0 shaping
+        (MixedGenderRoomCost(clip=False), (-9000, 0.0)),  # clip=False with offset 0: the plain shaping
         (MixedGenderRoomCost(offset=0.0, clip=False), (-9000, 0.0)),
         (BedConflictCost(offset=-1), (0, 0.0)),  # no conflict: a threshold adds nothing to a raw 0
     ],

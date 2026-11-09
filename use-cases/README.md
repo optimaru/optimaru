@@ -31,11 +31,10 @@ CP-SAT / Routing) never live here — they are in
 | [vehicle-routing](vehicle-routing) | `vrp_routing` |
 
 Every use case is a C++ domain on the optimaru engine with a pybind11 Python
-package; they all share one constraint contract (below). The six that started
-as pure-Python reference implementations (assembly-line-balancing,
-bin-packing, knapsack, max-cut, quadratic-assignment and
-semiconductor-scheduling) were ported in 0.2.0; each keeps its old Python
-scorer as `python/tests/reference_<package>.py`, an oracle the C++ costs are
+package; they all share one constraint contract (below). Six of them
+(assembly-line-balancing, bin-packing, knapsack, max-cut, quadratic-assignment
+and semiconductor-scheduling) also carry a pure-Python reference scorer as
+`python/tests/reference_<package>.py`, an independent oracle the C++ costs are
 tested against.
 
 ## Constraints: names and knobs

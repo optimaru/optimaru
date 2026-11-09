@@ -402,7 +402,7 @@ void verifyRawCostsByHand()
         const double expected = name == "usedStationsCost" ? 2.0 : 0.0;
         check(sum == expected, name + " on fixture Z: " + (expected == 0.0 ? "0" : "2 stations"));
     }
-    // The 0.1.5 test fixture (test_zoning_and_station_domain_costs_match_manual_values).
+    // The zoning fixture (as in test_zoning_and_station_domain_costs_match_manual_values).
     AssemblyLineBalancingProblem zoning;
     zoning.cycleTime = 5;
     zoning.maxStations = 1;
@@ -448,7 +448,7 @@ bool rowIs(const optimaru::ConstraintInfo &row, const char *name, optimaru::Leve
 void verifyCatalog()
 {
     std::printf("== (i) Catalog ==\n");
-    check(catalogNames() == kNames, "catalog order: the ten registry names, 0.1.5 catalog order");
+    check(catalogNames() == kNames, "catalog order: the ten registry names in catalog order");
     std::vector<std::string> sortedAssembly = defaultConstraints().names();
     std::vector<std::string> sortedCatalog = catalogNames();
     std::sort(sortedAssembly.begin(), sortedAssembly.end());

@@ -17,7 +17,7 @@ namespace ks
 // item's resources) per flip.
 //
 // One total (a global constraint): the exponent shapes the summed overflow,
-// not each resource's (0.1.x shaped each resource; see the package README).
+// not each resource's.
 struct ResourceCapacityCost final : detail::SelectionConstraint
 {
     static constexpr double kDefaultWeight = 1.0;

@@ -79,12 +79,12 @@ def _core_of(problem) -> KnapsackProblem:
 def constraint_costs(problem, constraints=None) -> dict[str, dict[str, Any]]:
     """Raw cost of every constraint, before weight / exponent / offset / level.
 
-    ``{key: {"costs": [total], "weight", "exponent", "offset", "clip", "hard", "global",
+    ``{key: {"costs": [total], "weight", "exponent", "offset", "clip", "global",
     "level", "reward", "level_flippable", "name", "label", ...}}``: None = the default
     constraints in `list_constraints()` order; a pick list (as for `solve`) scores exactly
     those picks, each entry carrying its pick's knobs, the k-th pick of a name keyed
-    ``"<name>#<k>"``. Every knapsack constraint is global, so ``costs`` holds one raw total
-    (0.1.x listed one term per resource / entry / group / pair). `constraints.score()`
+    ``"<name>#<k>"``. Every knapsack constraint is global, so ``costs`` holds one raw total.
+    `constraints.score()`
     turns it into a score.
     """
     return _constraint_costs(_core_of(problem), constraints)

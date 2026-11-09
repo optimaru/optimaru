@@ -14,7 +14,7 @@ namespace alb
 // with at least one task, CP-SAT's used[s]); 0 = no task is assigned.
 //
 // A global on purpose, not a per-station 0/1 unit: the exponent then shapes
-// the station count itself, as the 0.1.5 package's single element did.
+// the station count itself.
 // Member-change fast path: a station's first task opens it, its last one
 // closes it, O(1). A step function no single-task move can cross, which is
 // why the solver ships CloseStationMove.

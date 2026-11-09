@@ -1,21 +1,19 @@
-"""Frozen 0.1.x pure-Python scorer and decoder of semiconductor-scheduling: the TEST ORACLE.
+"""Pure-Python scorer and decoder of semiconductor-scheduling: the TEST ORACLE.
 
-This is the implementation the C++ port replaced (``semiconductor_scheduling/__init__.py``,
-``constraints.py`` and ``common.py`` of optimaru 0.1.x), kept verbatim in behaviour so
-``tests/test_reference_parity.py`` can prove that the C++ raw costs, the serial
-schedule-generation decoder and the seed conversion are unchanged. It is self-contained:
-it imports nothing from ``semiconductor_scheduling`` and reads its input by attribute only
-(any object shaped like ``SemiconductorScheduleModel`` works, the Pydantic model included).
-Never import it from the package; it is a test oracle, not an API.
+An independent reference implementation of the raw costs, the serial
+schedule-generation decoder and the seed conversion, so
+``tests/test_reference_parity.py`` can check the C++ implementation against it. It is
+self-contained: it imports nothing from ``semiconductor_scheduling`` and reads its input by
+attribute only (any object shaped like ``SemiconductorScheduleModel`` works, the Pydantic
+model included). Never import it from the package; it is a test oracle, not an API.
 
-Only three things differ from the original source, none of them in behaviour:
-- the constraint names are the 0.1.x catalog names (``OLD_NAMES``); ``NEW_NAMES`` maps them
-  to the 0.2.0 names in the same order;
-- ``construct`` (0.1.x ``_construct``) builds :class:`Assignment` records instead of
-  ``AssignmentModel`` objects (same fields), and copies pins with :func:`as_assignment`
-  instead of ``model_copy(deep=True)``;
-- ``score`` is the old ``common.score_costs`` with the 0.1.x defaults inlined (all hard
-  constraints weight 1, the soft ones weight 1 except weighted tardiness 10).
+Conventions:
+- the reference uses its own constraint names (``REFERENCE_NAMES``); ``ENGINE_NAMES``
+  lists the engine's names in the same order;
+- ``construct`` builds :class:`Assignment` records (the fields of an assignment) and copies
+  pins with :func:`as_assignment`;
+- ``score`` scores the default selection with the defaults inlined (all hard constraints
+  weight 1, the soft ones weight 1 except weighted tardiness 10).
 """
 
 from __future__ import annotations
@@ -25,7 +23,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from itertools import pairwise
 
-OLD_NAMES = [
+REFERENCE_NAMES = [
     "machine_eligibility",
     "lot_route_precedence",
     "machine_capacity",
@@ -48,8 +46,8 @@ OLD_NAMES = [
     "makespan",
 ]
 
-# The 0.2.0 names of the same constraints, in the same order.
-NEW_NAMES = [
+# The engine names of the same constraints, in the same order.
+ENGINE_NAMES = [
     "machine_eligibility_cost",
     "lot_route_precedence_cost",
     "machine_capacity_cost",
@@ -71,10 +69,10 @@ NEW_NAMES = [
     "cycle_time_cost",
     "makespan_cost",
 ]
-RENAME = dict(zip(OLD_NAMES, NEW_NAMES, strict=True))
+ENGINE_NAME = dict(zip(REFERENCE_NAMES, ENGINE_NAMES, strict=True))
 
-# The 0.1.x Constraint ClassVars: (default_hard, default_weight).
-DEFAULTS = {name: (True, 1.0) for name in OLD_NAMES[:14]} | {
+# The default level and weight of each constraint: (default_hard, default_weight).
+DEFAULTS = {name: (True, 1.0) for name in REFERENCE_NAMES[:14]} | {
     "machine_preference": (False, 1.0),
     "minimum_batch_fill": (False, 1.0),
     "machine_load_balance": (False, 1.0),
@@ -86,7 +84,7 @@ DEFAULTS = {name: (True, 1.0) for name in OLD_NAMES[:14]} | {
 
 @dataclass
 class Assignment:
-    """The fields of the 0.1.x AssignmentModel."""
+    """The fields of an assignment (AssignmentModel)."""
 
     lot_id: str
     operation_id: str
@@ -100,7 +98,7 @@ def as_assignment(item) -> Assignment:
     return Assignment(item.lot_id, item.operation_id, item.machine_id, item.start, item.end, item.batch_id)
 
 
-# --------------------------------------------------------------------------- scorer (0.1.x __init__.py)
+# --------------------------------------------------------------------------- scorer
 
 
 def _operation_rows(problem):
@@ -140,7 +138,7 @@ def _transport_map(problem) -> dict[tuple[str, str], int]:
 
 
 def constraint_costs(problem, assignments=None) -> dict[str, list[int]]:
-    """The 0.1.x ``constraint_costs``: per constraint (old names), the per-item raw costs.
+    """Per constraint (reference names), the per-item raw costs.
 
     ``assignments`` defaults to ``problem.assignments``.
     """
@@ -307,10 +305,10 @@ def constraint_costs(problem, assignments=None) -> dict[str, list[int]]:
 
 
 def score(costs: dict[str, list[int]]) -> tuple[int, float]:
-    """The 0.1.x ``score(costs)`` at the default selection: (hard, soft)."""
+    """The score of ``costs`` at the default selection: (hard, soft)."""
     hard = 0.0
     soft = 0.0
-    for name in OLD_NAMES:
+    for name in REFERENCE_NAMES:
         is_hard, weight = DEFAULTS[name]
         total = sum(math.copysign(abs(value) ** 1.0, value) for value in costs[name])
         if is_hard:
@@ -321,7 +319,7 @@ def score(costs: dict[str, list[int]]) -> tuple[int, float]:
     return -rounded_hard, -soft if soft else 0.0
 
 
-# --------------------------------------------------------------------------- decoder (0.1.x __init__.py)
+# --------------------------------------------------------------------------- decoder
 
 
 def _setup_duration(setup_by_key, machine, before: str, after: str) -> int:
@@ -400,7 +398,7 @@ def _earliest_start(
 
 
 def construct(problem, choices: list[int], ranks: list[int]) -> list[Assignment]:
-    """The 0.1.x ``_construct``: decode (choices, ranks) into assignments, batch ids included."""
+    """Decode (choices, ranks) into assignments, batch ids included."""
     machine_by_id = {machine.id: machine for machine in problem.machines}
     resource_by_id = {resource.id: resource for resource in problem.auxiliary_resources}
     setups = _setup_map(problem)
@@ -528,7 +526,7 @@ def construct(problem, choices: list[int], ranks: list[int]) -> list[Assignment]
 
 
 def seed_state(problem, choices: list[int]) -> tuple[list[int], list[int]]:
-    """The 0.1.x ``_seed_state(problem, _operation_rows(problem), choices)``."""
+    """The (choices, ranks) seed state of ``problem.assignments`` for ``choices``."""
     rows = _operation_rows(problem)
     assignment_by_key = {(item.lot_id, item.operation_id): item for item in problem.assignments}
     seeded = [assignment_by_key.get((lot.id, operation.id)) for lot, _position, operation in rows]
@@ -550,7 +548,7 @@ def seed_state(problem, choices: list[int]) -> tuple[list[int], list[int]]:
 
 
 def default_choices(problem) -> list[int]:
-    """The 0.1.x ``solve`` start: per row, argmin (preference_cost, duration), first index on ties."""
+    """The solve start: per row, argmin (preference_cost, duration), first index on ties."""
     return [
         min(
             range(len(operation.eligible_machines)),

@@ -404,7 +404,7 @@ void verifyPartialAssemblies()
 // (d) Metadata overrides: the level and the weight are assembly-time
 // metadata, not part of the cost. Every weight is in units of its level:
 // the 10^9 between a missing skill and an unassigned task is the domain's
-// medium fold, not part of requiredSkillCost's weight (0.2.0).
+// medium fold, not part of requiredSkillCost's weight.
 // -------------------------------------------------------------------------
 void verifyOverrides()
 {

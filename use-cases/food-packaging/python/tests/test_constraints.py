@@ -1,7 +1,7 @@
 """Constraint spot checks: re-verifies the hand-computed cases of the C++ tests through _core.
 
 Per-constraint values are read from `constraint_costs()` (the raw cost per unit, summed
-here), the only per-constraint surface since 0.2.0 (`analyze()` was removed)."""
+here), the only per-constraint surface."""
 
 import pytest
 

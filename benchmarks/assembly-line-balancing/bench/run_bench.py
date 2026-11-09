@@ -19,7 +19,7 @@ def _gap(value: int, reference: int | None) -> float | None:
 def _rescore(problem) -> int:
     """Stations used, re-scored by the engine's evaluator (raw costs at the default levels)."""
     costs = assembly_line_balancing.constraint_costs(problem)
-    hard = sum(sum(entry["costs"]) for entry in costs.values() if entry["hard"])
+    hard = sum(sum(entry["costs"]) for entry in costs.values() if entry["level"] == "hard")
     if hard != 0:
         raise AssertionError(f"infeasible SALBP result: raw hard cost {hard}")
     return int(costs["used_stations_cost"]["costs"][0])

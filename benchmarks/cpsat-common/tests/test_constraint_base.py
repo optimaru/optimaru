@@ -22,7 +22,6 @@ import importlib.util
 import pickle
 import struct
 import sys
-import warnings
 from dataclasses import FrozenInstanceError, dataclass
 from fractions import Fraction
 from pathlib import Path
@@ -97,9 +96,8 @@ def _entry(
         "costs": costs,
         "weight": weight,
         "exponent": 1.0,
-        "offset": 0.0,  # 0.3.0 costs always carry offset / clip
+        "offset": 0.0,  # constraint_costs() always reports offset / clip
         "clip": True,
-        "hard": level == "hard",
         "global": is_global,
         "level": level,
         "reward": reward,
@@ -324,9 +322,9 @@ def test_unset_knobs_mean_the_default_even_for_costs_of_another_selection():
     assert score_costs(costs, [ConflictCost(), OverloadCost()]) == (-3, -1000.0)
     # The first selection's knobs, stated explicitly, reproduce its score.
     assert score_costs(costs, [ConflictCost(weight=5.0, level="soft"), OverloadCost(level="hard")]) == (-1, -15.0)
-    # An entry without the default keys (hand-made, older package) reads level / weight.
-    legacy = {"conflict_cost": _entry([2.0, 1.0], level="soft", weight=5.0, name="conflict_cost")}
-    assert score_costs(legacy, [ConflictCost()]) == (0, -15.0)
+    # An entry without the default keys (hand-made) reads level / weight.
+    hand_made = {"conflict_cost": _entry([2.0, 1.0], level="soft", weight=5.0, name="conflict_cost")}
+    assert score_costs(hand_made, [ConflictCost()]) == (0, -15.0)
 
 
 def test_a_non_flippable_check_uses_the_default_level():
@@ -421,13 +419,13 @@ def test_select_contract():
     assert select(None, DEFAULTS) == list(DEFAULTS)
     with pytest.raises(ValueError, match="must not be empty"):
         select([], DEFAULTS)
-    # Since 0.3.0 a name may be picked several times: each pick is an instance.
+    # A name may be picked several times: each pick is an instance.
     picks = [ConflictCost(), ConflictCost(weight=2)]
     assert select(picks, DEFAULTS) == picks
     assert select([ConflictCost(), ConflictCost()], DEFAULTS) == [ConflictCost(), ConflictCost()]
 
 
-def test_the_two_new_knobs_are_keyword_only_and_default_to_the_0_2_0_shaping():
+def test_offset_and_clip_are_keyword_only_and_default_to_the_plain_shaping():
     spec = ConflictCost(2, None, 3.0)
     assert (spec.weight, spec.level, spec.exponent, spec.offset, spec.clip) == (2, None, 3.0, 0.0, True)
     with pytest.raises(TypeError):
@@ -443,26 +441,6 @@ def test_params_are_the_non_knob_fields():
         "worker_indices": None,
     }
     assert ConflictCost().params() == {}
-
-
-def test_repeatable_is_deprecated_and_changes_nothing():
-    """``repeatable`` changes nothing since 0.3.0: passing it, with any value, warns."""
-    first, second = (
-        DayPatternCost(pattern="A,OFF"),
-        DayPatternCost(pattern="B,OFF", worker_indices=(1,)),
-    )
-    same = DayPatternCost(pattern="A,OFF", weight=3)
-    for flag in (True, False, None):
-        with pytest.warns(DeprecationWarning, match=r"select\(repeatable=\.\.\.\) changes nothing since optimaru 0\.3\.0") as caught:
-            assert select([first, second], DEFAULTS, repeatable=flag) == [first, second]
-        assert caught[0].filename == __file__  # points at the caller
-        with pytest.warns(DeprecationWarning, match="will be removed"):
-            assert select([first, same], DEFAULTS, repeatable=flag) == [first, same]
-        with pytest.warns(DeprecationWarning):
-            assert select(None, DEFAULTS, repeatable=flag) == list(DEFAULTS)
-    with warnings.catch_warnings():
-        warnings.simplefilter("error")  # not passing it does not warn
-        assert select([first, same], DEFAULTS) == [first, same]
 
 
 @dataclass(frozen=True)
@@ -595,10 +573,10 @@ def test_shape_with_an_offset_threshold_and_literal():
 @pytest.mark.parametrize("cost", [-7.5, -1.0, -0.0, 0.0, 0.3, 1.0, 2.0, 17.25, 1e10])
 @pytest.mark.parametrize("exponent", [0.5, 1.0, 2.0, 3.0])
 @pytest.mark.parametrize("clip", [True, False])
-def test_offset_zero_is_the_0_2_0_shape_bit_for_bit(cost, exponent, clip):
-    old = cost if exponent == 1.0 or cost == 0.0 else (-((-cost) ** exponent) if cost < 0.0 else cost**exponent)
-    new = shape(cost, exponent, 0.0, clip)
-    assert struct.pack("<d", new) == struct.pack("<d", old)
+def test_offset_zero_is_the_plain_power_bit_for_bit(cost, exponent, clip):
+    plain = cost if exponent == 1.0 or cost == 0.0 else (-((-cost) ** exponent) if cost < 0.0 else cost**exponent)
+    shifted = shape(cost, exponent, 0.0, clip)
+    assert struct.pack("<d", shifted) == struct.pack("<d", plain)
 
 
 def _tasks_only(costs):
@@ -730,7 +708,7 @@ def test_the_literal_offset_is_refused_where_it_counts_toward_hard(pick, fold, m
         # clip=True on hard: conflict [2, 1, 0, 0] beyond 1 -> [1, 0, 0, 0].
         ([ConflictCost(offset=1.0)], None, (-1, 0.0)),
         ([ConflictCost(offset=-1.0)], None, (-5, 0.0)),  # [3, 2, 0, 0]
-        # clip=False with offset 0 on hard: the 0.2.0 shaping.
+        # clip=False with offset 0 on hard: the plain shaping.
         ([ConflictCost(clip=False)], None, (-3, 0.0)),
         ([ForbiddenWorkerCost(offset=0.0, clip=False)], INTO_SOFT, (-1, 0.0)),
         # clip=False with an offset on soft: [1, 0, -1, -1] and [3, 2, 1, 1].
@@ -754,21 +732,21 @@ def test_a_repeat_is_checked_on_its_own_level():
         score_costs(costs_a(), [ConflictCost(), ConflictCost(offset=1.0, clip=False)])
 
 
-def test_costs_from_before_0_3_cannot_score_the_literal_formula():
-    """An entry without "clip" (optimaru < 0.3) does not name a scoped constraint's units."""
+def test_costs_without_clip_cannot_score_the_literal_formula():
+    """An entry without "clip" (built by hand) does not name a scoped constraint's units."""
     old = {"task_cost_cost": _entry([15.0, 11.0, 0.0, 2.0], level="soft", name="task_cost_cost")}
     del old["task_cost_cost"]["offset"], old["task_cost_cost"]["clip"]
     with pytest.raises(ValueError) as refused:
         score_costs(old, [TaskCostCost(offset=5.0, clip=False)])
     assert str(refused.value) == (
-        "constraint 'task_cost_cost': these costs come from optimaru < 0.3 and do not say which units the "
-        "constraint evaluates; recompute them with constraint_costs() before scoring clip=False with an offset"
+        "constraint 'task_cost_cost': these costs carry no 'clip' and do not say which units the "
+        "constraint evaluates; compute them with constraint_costs() before scoring clip=False with an offset"
     )
     # Everything that does not depend on the evaluated units still scores.
     assert score_costs(old, [TaskCostCost()]) == (0, -28.0)
     assert score_costs(old, [TaskCostCost(offset=5.0)]) == (0, -16.0)
     assert score_costs(old, [TaskCostCost(clip=False)]) == (0, -28.0)
-    # 0.3.0 costs carry "clip" and score it: [10, 6, -5, -3].
+    # constraint_costs() entries carry "clip" and score it: [10, 6, -5, -3].
     assert score_costs(_tasks_only(costs_a()), [TaskCostCost(offset=5.0, clip=False)]) == (0, -8.0)
 
 
@@ -895,14 +873,14 @@ def test_duck_typed_picks_may_leave_offset_and_clip_unset():
     with pytest.raises(ValueError, match="cannot be hard"):
         score_costs(_tasks_only(costs_a()), [Literal()])
 
-    class OldPick:  # still carries the removed `hard` knob instead of `level`
+    class PickWithoutLevel:  # carries no `level` attribute
         name = "task_cost_cost"
         weight = None
         hard = False
         exponent = 1.0
 
     with pytest.raises(AttributeError, match="level"):
-        score_costs(_tasks_only(costs_a()), [OldPick()])
+        score_costs(_tasks_only(costs_a()), [PickWithoutLevel()])
 
 
 def test_shape_preserves_the_sign():
@@ -930,33 +908,14 @@ def test_a_level_is_a_string_for_json_selections():
     assert [level.value for level in Level] == ["hard", "medium", "soft"]
 
 
-HARD_REMOVED = (
-    "hard= was removed in optimaru 0.3.0; use level='hard' or level='soft' (level=None keeps the default)"
-)
-
-
-def test_the_old_knob_is_gone():
-    """hard= names its replacement instead of the dataclass's "unexpected keyword argument"."""
-    for kwargs in ({"hard": True}, {"hard": False}, {"weight": 2.0, "hard": True}):
-        with pytest.raises(TypeError) as raised:
-            OverloadCost(**kwargs)
-        assert str(raised.value) == HARD_REMOVED
-    with pytest.raises(TypeError) as raised:
-        DayPatternCost(3.0, "soft", pattern="A,OFF", hard=True)  # domain parameters too
-    assert str(raised.value) == HARD_REMOVED
-    with pytest.raises(TypeError, match="unexpected keyword argument 'colour'"):
-        OverloadCost(colour="red")  # any other unknown keyword keeps the dataclass's words
-
-
-def test_the_hard_refusal_leaves_the_dataclass_alone():
-    """__new__ only looks at the keywords: copies, pickles and replace() work as before."""
+def test_a_spec_survives_copies_pickles_and_replace():
     pick = DayPatternCost(2.0, "hard", 1.5, offset=1.0, pattern="A,OFF")
     assert pickle.loads(pickle.dumps(pick)) == pick
     assert copy.copy(pick) == pick and copy.deepcopy(pick) == pick
     assert dataclasses.replace(pick, weight=3.0) == DayPatternCost(3.0, "hard", 1.5, offset=1.0, pattern="A,OFF")
-    with pytest.raises(TypeError) as raised:
-        dataclasses.replace(pick, hard=True)
-    assert str(raised.value) == HARD_REMOVED
+    for unknown in ({"colour": "red"}, {"hard": True}):
+        with pytest.raises(TypeError, match=f"unexpected keyword argument '{next(iter(unknown))}'"):
+            OverloadCost(**unknown)
     with pytest.raises(FrozenInstanceError):
         pick.weight = 1.0
 

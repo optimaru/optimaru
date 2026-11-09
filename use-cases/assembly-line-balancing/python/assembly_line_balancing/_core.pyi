@@ -181,7 +181,7 @@ def constraint_costs(
 ) -> dict[str, dict[str, Any]]:
     """Raw cost of every constraint, before weight/exponent/offset/level, in
     list_constraints() order: {key: {"costs": [...], "weight": float, "exponent": float,
-    "offset": float, "clip": bool, "hard": bool, "global": bool,
+    "offset": float, "clip": bool, "global": bool,
     "level": "hard" | "medium" | "soft", "reward": bool, "level_flippable": bool,
     "name": str, "label": str, "default_weight": float, "default_level": str}}. "costs" has
     one entry per station (0 .. station_count - 1) for a per-station constraint and one total

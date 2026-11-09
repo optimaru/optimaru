@@ -114,13 +114,13 @@ the unit constraints, on the single total for the four globals.
 `squared_order_age_cost` squares per request inside its raw cost, so an exponent
 compounds it (exponent 2 gives a 4th power).
 
-**0.3.0:** every constraint takes two more knobs, `offset` and `clip` (keyword-only), and
-may be picked several times. A raw cost `x` (per vehicle, or a global's total) is shaped
+Besides `weight`, `level` and `exponent`, every constraint takes `offset` and `clip`
+(keyword-only), and may be picked several times. A raw cost `x` (per vehicle, or a global's total) is shaped
 as `sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
 `(x - offset) ** exponent`, sign-preserving (`clip=False`, which lowers the penalty of
 every evaluated unit below the offset, an idle vehicle included; the unassigned pool is no
 vehicle and only `required_vehicle_cost` and `squared_order_age_cost` evaluate it);
-`offset=0` is the 0.2.0 shaping. Both apply per evaluated unit, not to the total.
+`offset=0` is the plain shaping. Both apply per evaluated unit, not to the total.
 `clip=False` with an offset is refused on hard (by default, every constraint the table
 lists as hard), because hard 0 must mean no violation; medium folds into soft here, so it
 takes the literal formula. Each pick is its own instance with its own knobs, and the
@@ -139,44 +139,13 @@ pdp.Solver(config).solve_with_constraints(plan, [
 per-vehicle entries list the vehicles they evaluate as `"units"`. The CP-SAT reference
 takes integral offsets on every plugin; it refuses a non-integral one.
 
-**0.2.0.** Every constraint name ends in `_cost` (C++ struct, header file, registry
-name, Python spec class, module-level default instance and catalog name):
-
-| 0.1.x name | 0.2.0 name |
-| --- | --- |
-| `vehicle_capacity` / `VehicleCapacity` | `vehicle_capacity_cost` / `VehicleCapacityCost` |
-| `service_finished_after_max_end_time` / `ServiceFinishedAfterMaxEndTime` | `max_end_time_cost` / `MaxEndTimeCost` |
-| `minimize_travel_time` / `MinimizeTravelTime` | `travel_time_cost` / `TravelTimeCost` |
-| `max_travel_time` / `MaxTravelTime` | `max_travel_time_cost` / `MaxTravelTimeCost` |
-| `max_route_duration` / `MaxRouteDuration` | `max_route_duration_cost` / `MaxRouteDurationCost` |
-| `vehicle_end_time` / `VehicleEndTime` | `vehicle_max_end_time_cost` / `VehicleMaxEndTimeCost` |
-| `max_stops` / `MaxStops` | `max_stops_cost` / `MaxStopsCost` |
-| `max_route_radius` / `MaxRouteRadius` | `max_route_radius_cost` / `MaxRouteRadiusCost` |
-| `minimize_enclosing_circle_radius` / `MinimizeEnclosingCircleRadius` | `enclosing_circle_radius_cost` / `EnclosingCircleRadiusCost` |
-| `min_capacity_utilization` / `MinCapacityUtilization` | `min_capacity_utilization_cost` / `MinCapacityUtilizationCost` |
-| `minimize_route_duration` / `MinimizeRouteDuration` | `route_duration_cost` / `RouteDurationCost` |
-| `minimize_latency` / `MinimizeLatency` | `latency_cost` / `LatencyCost` |
-| `minimize_lateness` / `MinimizeLateness` | `squared_order_age_cost` / `SquaredOrderAgeCost` |
-| `vehicle_fixed_cost` / `VehicleFixedCost` | unchanged |
-| `pinned_stops` / `PinnedStops` | `pinned_stops_cost` / `PinnedStopsCost` |
-| `required_vehicle` / `RequiredVehicle` | `required_vehicle_cost` / `RequiredVehicleCost` |
-| `paired_request` / `PairedRequest` | `paired_request_cost` / `PairedRequestCost` |
-| `same_vehicle` / `SameVehicle` | `same_vehicle_cost` / `SameVehicleCost` |
-| `pickup_before_dropoff` / `PickupBeforeDropoff` | `pickup_before_dropoff_cost` / `PickupBeforeDropoffCost` |
-| `unassigned_requests` / `UnassignedRequests` | `unassigned_requests_cost` / `UnassignedRequestsCost` |
-
-`minimize_lateness` was never lateness past a due time: it is the squared order
-age, hence `squared_order_age_cost`. `service_finished_after_max_end_time` aligns
-with the deadline family as `max_end_time_cost`, and the vehicle's own end bound
-becomes `vehicle_max_end_time_cost` so the two do not clash. The model FIELDS keep
-their names (`max_stops`, `pinned_stops`, `required_vehicle`, `max_travel_time`,
-`max_route_duration`, `max_end_time`, `max_route_radius_meters`). Other changes:
-`unassigned_requests_cost` defaults to weight 1 in medium units (it was 10^9 in
-soft units), `level="soft"` on it now demotes it to soft in the engine as in CP-SAT
-(it used to be a no-op relabel), and `level="hard"` charges 1 hard unit per minute
-(it used to charge 10^9); the `enclosing_circle_radius_cost` default instance no
-longer passes `weight=0` (the C++ default is 0); `constraint_info()` /
-`ConstraintInfo` are new. Raw costs and the default score are unchanged.
+`squared_order_age_cost` is the squared order age, not lateness past a due time.
+`max_end_time_cost` bounds a request's service end, `vehicle_max_end_time_cost` a
+vehicle's own end. The model fields keep plain names (`max_stops`, `pinned_stops`,
+`required_vehicle`, `max_travel_time`, `max_route_duration`, `max_end_time`,
+`max_route_radius_meters`). `unassigned_requests_cost` defaults to weight 1 in medium
+units; `level="soft"` on it moves it to soft in the engine as in CP-SAT, and
+`level="hard"` charges 1 hard unit per minute.
 
 Routes are **open by default**: a vehicle ends its day at its last stop and the
 leg back home is neither driven nor added to the route end time. Set

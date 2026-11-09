@@ -9,8 +9,7 @@ namespace ba
 // Hard, weight 1000: bedConflictCost — two stays in one bed on the same
 // night. Raw cost per bed = the summed shared nights over every pair of its
 // stays, so 0 = no bed is double-booked on any night (the "no bed" sentinel
-// is never charged). 0.2.0 migration note: was sameBedInSameNight (the Java
-// quickstart's name).
+// is never charged). The Java quickstart calls it sameBedInSameNight.
 //
 // A sum over the pairs INSIDE one unit, so the exact delta of one stay
 // joining or leaving is its overlap with the other occupants.

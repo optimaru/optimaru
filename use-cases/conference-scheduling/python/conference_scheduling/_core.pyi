@@ -206,15 +206,14 @@ def constraint_costs(
 ) -> dict[str, dict[str, Any]]:
     """Raw cost of every constraint, before weight/exponent/offset/level: every
     constraint is global, so "costs" holds one total. {key: {"costs": [total],
-    "weight": float, "exponent": float, "offset": float, "clip": bool, "hard": bool,
+    "weight": float, "exponent": float, "offset": float, "clip": bool,
     "global": True, "level": "hard" | "soft", "reward": bool, "level_flippable": bool,
     "name": str, "label": str, "default_weight": float, "default_level": str}}.
     None = the default constraints; a pick list (as for solve) scores exactly those
     picks, each entry carrying its pick's knobs, the k-th pick of a name keyed
     "<name>#<k>" from the second on. The three *_diversity_cost rewards report a
     total <= 0 (reward=True, level_flippable=False). conference_scheduling.constraints.score()
-    turns it into a score. The only per-constraint surface (compute_breakdown() was
-    removed in 0.2.0)."""
+    turns it into a score. The only per-constraint surface."""
 
 class ConstraintInfo(NamedTuple):
     """One constraint-catalog row, read off the C++ default assembly."""

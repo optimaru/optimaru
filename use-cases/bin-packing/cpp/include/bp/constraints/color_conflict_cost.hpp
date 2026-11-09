@@ -12,10 +12,9 @@ namespace bp
 // beyond the first of its colour; items without a colour never count. 0 =
 // no bin holds two items of one colour.
 //
-// Unit granularity (0.2.0): the cost is per BIN. 0.1.5 listed one entry per
-// present (bin, colour); the totals are identical for every assignment (and
-// so is the score at exponent 1), but an exponent != 1 now shapes the bin's
-// sum: red x3 + blue x2 in one bin at exponent 2 is 3^2 = 9, not 2^2 + 1^2.
+// Unit granularity: the cost is per BIN, so an exponent != 1 shapes the
+// bin's sum: red x3 + blue x2 in one bin at exponent 2 is 3^2 = 9, not
+// 2^2 + 1^2.
 //
 // Delta contract: a member joining a bin changes max(0, n_c - 1) by exactly
 // 1 when another member already has its colour, else by 0 — so delta_cost is

@@ -79,10 +79,9 @@ def _core_of(problem) -> MaxCutProblem:
 def _complete_core_of(problem) -> MaxCutProblem:
     """The engine object of `problem`, refusing a partial partition.
 
-    0.1.x scored a vertex missing from `partition` as a side of its own (for the cut
-    and the pairs) and as side 0 (for the sizes); the engine stores -1 for it, which
-    has other rules. Rather than change numbers silently, scoring needs every vertex
-    on a side.
+    The engine stores -1 for a vertex missing from `partition`, which has its own
+    rules (it is in no side); rather than score such a partition in a way a caller may
+    not expect, scoring needs every vertex on a side.
     """
     core = _core_of(problem)
     if not core.is_complete():
@@ -98,13 +97,12 @@ def _complete_core_of(problem) -> MaxCutProblem:
 def constraint_costs(problem, constraints=None) -> dict[str, dict[str, Any]]:
     """Raw cost of every constraint, before weight / exponent / offset / level.
 
-    ``{key: {"costs": [...], "weight", "exponent", "offset", "clip", "hard", "global",
+    ``{key: {"costs": [...], "weight", "exponent", "offset", "clip", "global",
     "level", "reward", "level_flippable", "name", "label", ...}}``: None = the default
     constraints in `list_constraints()` order; a pick list (as for `solve`) scores exactly
     those picks, each entry carrying its pick's knobs, the k-th pick of a name keyed
     ``"<name>#<k>"``. The four unit constraints (fixed, same-side, different-side, size
-    bounds) report ``[side 0, side 1]`` (0.1.x listed one 0/1 term per fixed vertex / pair;
-    the sums are equal); the imbalance and the cut one total each. `constraints.score()`
+    bounds) report ``[side 0, side 1]``; the imbalance and the cut one total each. `constraints.score()`
     turns it into a score. Raises ValueError on a partial partition.
     """
     return _constraint_costs(_complete_core_of(problem), constraints)
@@ -143,7 +141,7 @@ def solve(
     ``solve`` -> ``from_core()``) or the pydantic model (converted, solved, and the partition,
     cut weight, score and ``warm_start=False`` written back into it).
 
-    The start partition is the 0.1.x one: vertex i takes side ``i % 2``, a fixed vertex its
+    The start partition: vertex i takes side ``i % 2``, a fixed vertex its
     fixed side, and with ``warm_start`` the given partition overrides both (see
     `with_initial_solution`). Under exact size bounds (``min_partition_size ==
     max_partition_size``) the search only swaps sides, so the start's side sizes are kept.

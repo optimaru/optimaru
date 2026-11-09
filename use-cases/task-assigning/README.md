@@ -69,38 +69,27 @@ one medium unit per squared minute, counted in the engine's hard level below the
 skills and rounded per employee like a hard term, and a repeated pick carries its own level.
 A selection without the medium constraint still folds the hard level by 10^9.
 
-**0.2.0:** the constraints were renamed — `no_missing_skills` -> `required_skill_cost`,
-`minimize_unassigned_tasks` -> `unassigned_tasks_cost`, `minimize_makespan` ->
-`squared_makespan_cost` (it is the sum of squared end times, not the makespan max),
-`{critical,major,minor}_priority_task_end_time` -> `..._cost`; the classes
-(`NoMissingSkills` -> `RequiredSkillCost`, `MinimizeUnassignedTasks` -> `UnassignedTasksCost`,
-`MinimizeMakespan` -> `SquaredMakespanCost`, `*PriorityTaskEndTime` ->
-`*PriorityTaskEndTimeCost`), the C++ components and registry names
-(`noMissingSkills` -> `requiredSkillCost`, ...) and the module-level default instances follow
-(no aliases). `unassigned_tasks_cost` is now a **medium** constraint (it was hard at weight
-1); `required_skill_cost`'s default weight is now **1** (it was 10^9: the 10^9 moved into
-the below-hard medium fold). Raw costs and the default score are unchanged. What changes
-is an explicit weight or level in the engine: a weight on `required_skill_cost`, or on a
+`squared_makespan_cost` is the sum of squared end times, not the makespan max.
+`unassigned_tasks_cost` is a **medium** constraint and `required_skill_cost`'s default
+weight is **1**: the 10^9 between a missing skill and an unassigned task is the below-hard
+medium fold, not part of a weight. An explicit weight on `required_skill_cost`, or on a
 constraint made hard with `level="hard"`, is in hard units (one hard unit = 10^9 engine
-units: `RequiredSkillCost(weight=1)` was 1 engine unit per missing skill and is now 10^9;
-`CriticalPriorityTaskEndTimeCost(level="hard")` lands in the Bendable hard level, where it
-used to decode as soft0); `RequiredSkillCost(level="soft")` is 1 soft unit per missing skill
-(was 10^9). `UnassignedTasksCost(level="soft")` still scores one soft unit per task in the
-engine. CP-SAT scores on the same three levels (`("hard", "medium", "soft")`) instead of
-`hard, soft0, soft1, soft2`: the Bendable soft[1]-over-soft[2] order is carried by
-`squared_makespan_cost`'s default weight 10^7 on the one soft level, as in the engine. There
-`UnassignedTasksCost(level="soft")` now demotes to soft (it was a no-op on soft0), and
-`RequiredSkillCost(level="soft")` now lands on the soft level (one soft unit per missing
-skill, as in the engine); before, CP-SAT moved it to soft0. The folded CP-SAT objective no
-longer fits one int64 for the demo, so CP-SAT optimizes the three levels one after another
+units: `RequiredSkillCost(weight=1)` is 10^9 engine units per missing skill, and
+`CriticalPriorityTaskEndTimeCost(level="hard")` lands in the Bendable hard level);
+`RequiredSkillCost(level="soft")` is 1 soft unit per missing skill, and
+`UnassignedTasksCost(level="soft")` one soft unit per task. CP-SAT scores on the same three
+levels (`("hard", "medium", "soft")`): the Bendable soft[1]-over-soft[2] order is carried by
+`squared_makespan_cost`'s default weight 10^7 on the one soft level, as in the engine, and
+a pick moved to soft lands on the soft level there too. The folded CP-SAT objective does
+not fit one int64 for the demo, so CP-SAT optimizes the three levels one after another
 (cpsat-common's staged solve).
 
-**0.3.0:** every constraint takes two more knobs, `offset` and `clip` (keyword-only), and
-may be picked several times. A raw cost `x` (per employee for the five unit constraints, on
+Every constraint takes the knobs `weight`, `level`, `exponent`, `offset` and `clip`
+(`offset` and `clip` keyword-only), and may be picked several times. A raw cost `x` (per employee for the five unit constraints, on
 the one total for `unassigned_tasks_cost`) is shaped as `sign(x) * max(0, |x| - offset) **
 exponent` (`clip=True`, the default) or `(x - offset) ** exponent`, sign-preserving
 (`clip=False`, which charges every employee, an idle one included, and acts as a reward
-below the offset); `offset=0` is the 0.2.0 shaping. Both apply per employee (or on the
+below the offset); `offset=0` is the plain power. Both apply per employee (or on the
 global's total), not to the total violation. `clip=False` with an offset is refused on hard
 (`required_skill_cost` by default) and on medium (`unassigned_tasks_cost` by default),
 because medium folds below hard here, so it counts toward the hard score, and hard 0 must

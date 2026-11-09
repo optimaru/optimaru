@@ -13,7 +13,7 @@ namespace fp
 // constraint's registry name (fp/constraints/<subject>_cost.hpp) and holds
 // that constraint's raw cost summed over its units, the same total
 // constraint_costs() reports per name. toScore() applies each component's
-// kDefaultWeight (score_calculator.cpp). Not bound to Python: since 0.2.0
+// kDefaultWeight (score_calculator.cpp). Not bound to Python:
 // constraint_costs() is the one per-constraint surface there.
 struct ConstraintBreakdown
 {

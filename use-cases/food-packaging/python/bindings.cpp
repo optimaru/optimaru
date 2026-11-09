@@ -410,9 +410,8 @@ PYBIND11_MODULE(_core, m)
     // carries the domain's medium fold (into_soft, 10^10), which score()
     // applies. None = the default assembly; a pick list scores exactly those
     // picks (apply_constraints), each entry carrying its pick's knobs, the
-    // k-th pick of a name keyed "<name>#<k>". Since 0.2.0 this is the only
-    // per-constraint surface (analyze() and ConstraintBreakdown are no longer
-    // bound).
+    // k-th pick of a name keyed "<name>#<k>". This is the only
+    // per-constraint surface (ConstraintBreakdown is not bound).
     m.def(
         "constraint_costs",
         [](PackagingSchedule &schedule, const py::object &constraints)

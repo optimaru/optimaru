@@ -121,7 +121,7 @@ PYBIND11_MODULE(_core, m)
                        &FacilityLocationProblem::southWestCorner)
         .def_readwrite("north_east_corner",
                        &FacilityLocationProblem::northEastCorner)
-        // No weight fields (removed in 0.2.0): weights come only from
+        // No weight fields: weights come only from
         // constraint selections; the defaults are the components'
         // kDefaultWeight, reported by constraint_info().
         .def_readonly("score", &FacilityLocationProblem::score)

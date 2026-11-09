@@ -58,7 +58,7 @@ struct Item
     std::int64_t weight = 1;
     std::int64_t value = 0;
     // Consumption per resource id; ids without a declared Resource are
-    // ignored (as the 0.1.x package did).
+    // ignored (as in the Python reference).
     std::map<std::string, std::int64_t> resourceUsage;
     // Indices of the items that must be selected with this one (the model's
     // `requires`, a C++20 keyword). Duplicates are separate dependencies; a

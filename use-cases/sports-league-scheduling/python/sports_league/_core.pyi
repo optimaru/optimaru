@@ -177,7 +177,7 @@ def constraint_costs(
 ) -> dict[str, dict[str, Any]]:
     """Per-constraint **raw** costs — before weight/exponent/offset/level rounding:
     {key: {"costs": [...], "weight": float, "exponent": float, "offset": float,
-    "clip": bool, "hard": bool, "global": bool, "level": "hard" | "medium" | "soft",
+    "clip": bool, "global": bool, "level": "hard" | "medium" | "soft",
     "reward": bool, "level_flippable": bool, "name": str, "label": str,
     "default_weight": float, "default_level": str}}. The three unit constraints
     report one cost per round position, an empty round included, the seven globals
@@ -185,8 +185,7 @@ def constraint_costs(
     scores exactly those picks, each entry carrying its pick's knobs, the k-th pick
     of a name keyed "<name>#<k>" from the second on.
     `sports_league.constraints.score()` takes these and produces a score. This is
-    the only per-constraint surface (the 0.1.x Breakdown / compute_breakdown are
-    gone)."""
+    the only per-constraint surface."""
 
 class ConstraintInfo(NamedTuple):
     """One constraint-catalog row, read off the C++ default assembly."""

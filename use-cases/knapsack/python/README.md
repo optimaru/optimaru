@@ -32,7 +32,7 @@ score(raw, [MandatoryItemsCost(), MandatoryItemsCost(exponent=2, offset=1)])
 ```
 
 Every knapsack constraint is global: `constraint_costs()` reports one raw total per
-constraint and `exponent` (with `offset` / `clip`, 0.3.0) shapes that total, a raw 0
+constraint and `exponent` (with `offset` / `clip`) shapes that total, a raw 0
 included. `clip=False` with an offset is refused on hard, where hard 0 must mean no
 violation: `ValueError: constraint 'mandatory_items_cost': clip=False with a non-zero offset
 cannot be hard, because hard 0 must mean no violation; use clip=True (a threshold) or
@@ -40,13 +40,10 @@ another level`. On soft (and on the soft reward) it is allowed.
 `constraint_costs(problem, picks)` scores a pick list, the second pick of a name keyed
 `<name>#2`. `level` is None (the default level), "hard" or "soft" (or `Level.HARD` /
 `Level.SOFT`); the domain has no medium level, so "medium" raises `ValueError`, and a
-repeat carries its own level. 0.2.0 renamed every constraint (no
-aliases), replaced the per-term lists of `constraint_costs()` by the standard dict,
-shapes each constraint's total instead of each term, rounds hard per constraint, refuses
-`level="hard"` on the reward, and replaced the simulated-annealing `SolverConfig` knobs
-(`max_iterations`, `stagnation_limit`, `temperature`, `cooling_rate`) by the engine's
+repeat carries its own level. Hard contributions are rounded per constraint, the reward
+refuses `level="hard"`, and `SolverConfig` carries the engine's knobs
 (`spent_limit_seconds`, `step_count_limit`, ...); see the
-[use-case README](../README.md#020).
+[use-case README](../README.md#python-api).
 
 ## Install / test
 

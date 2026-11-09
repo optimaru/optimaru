@@ -84,7 +84,7 @@ PYBIND11_MODULE(_core, m)
     m.doc() = "Semiconductor fab scheduling — optimaru engine-backed C++ wrapper exposed to Python";
 
     // (hard, soft), lexicographic. Also a 2-tuple: iterable, indexable and
-    // comparable with Scores and (hard, soft) pairs, like 0.1.x's NamedTuple.
+    // comparable with Scores and (hard, soft) pairs, like a NamedTuple.
     py::class_<Score>(m, "Score", py::module_local())
         .def(py::init([](std::int64_t hard, double soft) { return Score{hard, soft}; }), py::arg("hard") = 0,
              py::arg("soft") = 0.0)
@@ -483,7 +483,7 @@ PYBIND11_MODULE(_core, m)
         py::arg("schedule"), py::arg("constraints") = py::none(),
         "Raw cost of every constraint on schedule.assignments, before weight/exponent/offset/level.");
 
-    // The 0.1.x per-item lists (one item per lot, pair, machine, window, ...).
+    // The per-item lists (one item per lot, pair, machine, window, ...).
     m.def(
         "constraint_items",
         [](SemiconductorSchedule &schedule)
@@ -497,7 +497,7 @@ PYBIND11_MODULE(_core, m)
                 out[py::str(names[t])] = py::cast(items[t]);
             return out;
         },
-        py::arg("schedule"), "Per-item raw costs of every constraint on schedule.assignments (0.1.x lists).");
+        py::arg("schedule"), "Per-item raw costs of every constraint on schedule.assignments (one list per constraint).");
 
     m.def("list_constraints", [] { return tfpy::constraint_names(defaultConstraints()); },
           "Constraint names available to semiconductor_scheduling.constraints.");

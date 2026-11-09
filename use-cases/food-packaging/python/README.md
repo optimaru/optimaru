@@ -53,16 +53,14 @@ score(raw), score(raw, [*others, UnassignedJobsCost(weight=2)])            # re-
 | `operator_cleaning_conflict_cost` | hard, 1 | overlapping cleaning minutes on lines of one operator (global) |
 | `unassigned_jobs_cost` | medium, 1 | production minutes of jobs on no line (global) |
 
-0.2.0 renamed them (`max_end_date_time`, `operator_cleaning_conflict`,
-`ideal_end_date_time`, `maximize_jobs_assigned`, `minimize_makespan` before) and removed
-`fp.analyze()` / `ConstraintBreakdown`; `constraint_costs()` is the per-constraint surface.
+`constraint_costs()` is the per-constraint surface.
 
 Every spec takes `weight=None`, `level=None` (the default level, otherwise a `Level` or its
 name: any constraint may take any of the three levels), `exponent=1.0` and the
 keyword-only `offset=0.0` / `clip=True` (`clip=True` counts only what lies beyond the
 offset, `clip=False` shapes `x - offset` as it is, per line or on a global's total, and is
-refused with an offset on hard, because hard 0 must mean no violation). Since
-0.3.0 a constraint may be picked several times; each pick is its own instance with its own
+refused with an offset on hard, because hard 0 must mean no violation). A
+constraint may be picked several times; each pick is its own instance with its own
 knobs, its level included, the instances add up, and `constraint_costs(schedule, picks)`
 keys the k-th pick `<name>#<k>`:
 

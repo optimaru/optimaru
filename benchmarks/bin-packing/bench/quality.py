@@ -1,11 +1,12 @@
 """Search-quality regression check on generated instances (no download needed).
 
-The 0.2.0 review (finding SQ-1) found the C++ search 1-2 bins behind the 0.1.5
-pure-Python annealing on instances with colours and conflicts: EmptyBinMove checks
-the capacity only, so emptying a bin into the others nearly always broke a colour
-or a conflict, and late acceptance rejected the move. RepackMove fixed that. This
-script keeps the review's instances and, with ``--check``, fails when the engine
-uses more bins than 0.1.5 did on one of them or ends infeasible anywhere.
+A search review (finding SQ-1) found the C++ search 1-2 bins behind a pure-Python
+simulated-annealing baseline on instances with colours and conflicts: EmptyBinMove
+checks the capacity only, so emptying a bin into the others nearly always broke a
+colour or a conflict, and late acceptance rejected the move. RepackMove closes that
+gap. This script keeps the review's instances and, with ``--check``, fails when the
+engine uses more bins than the recorded baseline on one of them or ends infeasible
+anywhere.
 
     uv run --project cpsat python -m bench.quality --seconds 2 --seeds 1,2,3 --check
     uv run --project cpsat python -m bench.quality --extra --seconds 10   # the full table
@@ -41,13 +42,13 @@ WEB_DEMO = (
     / "web_demo.json"
 )
 
-# Generator seeds: 20261031 is the review's instance; 11, 22 and 33 are the ones it
-# used to show that the gap is not specific to one instance.
+# Generator seeds: 20261031 is the review's instance; 11, 22 and 33 are the ones that
+# show the gap is not specific to one instance.
 REVIEW_SEEDS = {"sq1": 20261031, "g11": 11, "g22": 22, "g33": 33}
 
-# 0.1.5 (optimaru 0.1.5 from PyPI, its pure-Python annealing), seeds 1-3 at 2 s and
-# 10 s: the most bins it used on each coloured review instance. --check fails above.
-BINS_0_1_5 = {"sq1": 44, "g11": 43, "g22": 45, "g33": 43}
+# The recorded baseline (the pure-Python simulated annealing, seeds 1-3 at 2 s and
+# 10 s): the most bins it used on each coloured review instance. --check fails above.
+BASELINE_BINS = {"sq1": 44, "g11": 43, "g22": 45, "g33": 43}
 
 
 def review_instance(
@@ -190,7 +191,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--check",
         action="store_true",
-        help="fail when a review run uses more bins than 0.1.5",
+        help="fail when a review run uses more bins than the recorded baseline",
     )
     parser.add_argument("--json", action="store_true", dest="as_json")
     args = parser.parse_args(argv)
@@ -205,7 +206,7 @@ def main(argv: list[str] | None = None) -> int:
                 "items": len(data["items"]),
                 "conflicts": len(data["conflicts"]),
                 "lower_bound": lower_bound(data),
-                "bins_0_1_5": BINS_0_1_5.get(name),
+                "baseline_bins": BASELINE_BINS.get(name),
                 "runs": [run(data, args.seconds, seed) for seed in seeds],
             }
         )
@@ -217,14 +218,14 @@ def main(argv: list[str] | None = None) -> int:
             f"Generated instances - {args.seconds:g}s per run, one thread, seeds {args.seeds}"
         )
         print(
-            f"{'instance':<17} {'items':>5} {'LB':>4} {'0.1.5':>6}  bins per seed (* = hard < 0)"
+            f"{'instance':<17} {'items':>5} {'LB':>4} {'base':>6}  bins per seed (* = hard < 0)"
         )
         for result in results:
             bins = ", ".join(
                 f"{r['bins']}{'*' if r['hard'] < 0 else ''}" for r in result["runs"]
             )
             reference = (
-                result["bins_0_1_5"] if result["bins_0_1_5"] is not None else "-"
+                result["baseline_bins"] if result["baseline_bins"] is not None else "-"
             )
             print(
                 f"{result['instance']:<17} {result['items']:>5} {result['lower_bound']:>4} {reference!s:>6}  {bins}"
@@ -238,11 +239,11 @@ def main(argv: list[str] | None = None) -> int:
                 if r["hard"] < 0:
                     failed.append(f"{where}: infeasible ({r['hard']}hard)")
                 elif (
-                    result["bins_0_1_5"] is not None
-                    and r["bins"] > result["bins_0_1_5"]
+                    result["baseline_bins"] is not None
+                    and r["bins"] > result["baseline_bins"]
                 ):
                     failed.append(
-                        f"{where}: {r['bins']} bins, 0.1.5 used {result['bins_0_1_5']}"
+                        f"{where}: {r['bins']} bins, the baseline used {result['baseline_bins']}"
                     )
     for line in failed:
         print("FAIL", line, file=sys.stderr)

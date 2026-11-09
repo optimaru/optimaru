@@ -107,7 +107,7 @@ void verifyHandCalculated()
         const RawCosts raw = ScoreCalculator::rawCosts(p);
         check(raw.fixedTotal() == 1 && raw.sameTotal() == 1 && raw.differentTotal() == 1 && raw.sizeTotal() == 0
                   && raw.imbalance == 1 && raw.cut == 0,
-              "the 0.1.x contract instance: fixed / same / different 1 each, size 0, imbalance 1, cut 0");
+              "the contract instance: fixed / same / different 1 each, size 0, imbalance 1, cut 0");
         expectScore(p, -3, 0.0, "contract instance score");
     }
     {
@@ -317,7 +317,7 @@ void verifySolver()
     }
     {
         // Exact size: a seed of the right size and one of the wrong size keep
-        // their sizes (the 0.1.x contract), the wrong one its hard penalty.
+        // their sizes (the exact-size contract), the wrong one its hard penalty.
         MaxCutProblem right = graph({"A", "B", "C", "D"}, {{0, 1, 2}, {1, 2, 3}, {2, 3, 4}});
         right.minPartitionSize = right.maxPartitionSize = 2;
         MaxCutProblem wrong = right;

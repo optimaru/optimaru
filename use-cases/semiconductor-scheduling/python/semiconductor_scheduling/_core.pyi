@@ -299,7 +299,7 @@ def constraint_costs(
 ) -> dict[str, dict[str, Any]]:
     """Raw cost of every constraint on schedule.assignments, before
     weight/exponent/offset/level: {key: {"costs": [total], "weight": float,
-    "exponent": float, "offset": float, "clip": bool, "hard": bool, "global": True,
+    "exponent": float, "offset": float, "clip": bool, "global": True,
     "level": "hard" | "soft", "reward": bool, "level_flippable": bool, "name": str,
     "label": str, "default_weight": float, "default_level": str}}, "level" being the
     level in effect (the pick's, or the default) and "hard" the same as level == "hard".
@@ -309,7 +309,7 @@ def constraint_costs(
     second on. semiconductor_scheduling.constraints.score() turns it into a score."""
 
 def constraint_items(schedule: SemiconductorSchedule) -> dict[str, list[int]]:
-    """Per-item raw costs (0.1.x lists: one item per lot, route pair, machine, window, ...)."""
+    """Per-item raw costs (one item per lot, route pair, machine, window, ...)."""
 
 class ConstraintInfo(NamedTuple):
     """One constraint-catalog row, read off the C++ default assembly."""

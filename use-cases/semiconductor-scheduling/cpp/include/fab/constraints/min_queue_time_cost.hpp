@@ -10,7 +10,7 @@ namespace fab
 // between consecutive route steps. Raw cost per lot: for each consecutive
 // pair of assigned steps, max(0, previous min_queue_time - (next start -
 // previous end)). With min_queue_time 0 this also charges a route overlap,
-// which lotRoutePrecedenceCost counts too (kept from 0.1.x). 0 = every hold
+// which lotRoutePrecedenceCost counts too (on purpose). 0 = every hold
 // time is respected.
 struct MinQueueTimeCost final : ScheduleViewConstraint
 {

@@ -25,7 +25,7 @@ namespace bp
 //            pairs sharing a bin)
 //   soft = -(bins in use)
 // The weights are the components' kDefaultWeight (bp/constraints/*.hpp); the
-// problem carries none (removed in 0.2.0).
+// problem carries none.
 using Score = optimaru::Score;
 
 // ---------------------------------------------------------------------------
@@ -56,10 +56,10 @@ struct BinPackingProblem
     std::int64_t binCapacity = 0;  // the capacity of every (identical) bin
     std::vector<Item> items;
     // Item-id pairs that must not share a bin. Listed as given: a duplicated
-    // or reversed pair counts once per listing (as in 0.1.5).
+    // or reversed pair counts once per listing.
     std::vector<std::pair<std::string, std::string>> conflicts;
 
-    // No constraint weights here (removed in 0.2.0): the defaults are the
+    // No constraint weights here: the defaults are the
     // components' kDefaultWeight (every one is 1), and a caller re-weights
     // through a constraint assembly instead.
 
@@ -107,7 +107,7 @@ struct BinPackingProblem
     }
 
     // [] when no item is assigned, else the load of every bin 0..max bin
-    // (an empty bin in between shows as 0), as in 0.1.5.
+    // (an empty bin in between shows as 0).
     std::vector<std::int64_t> binLoads() const
     {
         int top = -1;

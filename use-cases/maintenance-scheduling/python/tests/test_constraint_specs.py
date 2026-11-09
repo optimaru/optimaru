@@ -213,10 +213,9 @@ def test_constraint_info_matches_the_raw_cost_metadata():
     global_names = {"crew_conflict_cost", "tag_conflict_cost"}
     for row in mnt.constraint_info():
         entry = raw[row.name]
-        assert (entry["weight"], entry["level"], entry["hard"]) == (
+        assert (entry["weight"], entry["level"]) == (
             row.default_weight,
             row.default_level,
-            row.default_level == "hard",
         )
         assert (entry["level_flippable"], entry["reward"]) == (True, False)
         assert entry["global"] == (row.name in global_names)
@@ -316,27 +315,6 @@ def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
         mnt.solve(build_schedule(), time_limit_seconds=0.1, constraints=[pick])
     with pytest.raises(TypeError, match=re.escape(message)):
         TagConflictCost(**knobs)
-
-
-def test_old_names_are_gone():
-    """0.2.0 renamed the catalog; the pre-0.2.0 names are unknown now (no aliases)."""
-    for old in (
-        "min_start_date",
-        "max_end_date",
-        "before_ideal_end_date",
-        "after_ideal_end_date",
-        "crew_conflict",
-        "tag_conflict",
-    ):
-
-        class Old:
-            name = old
-            weight = None
-            level = None
-            exponent = 1.0
-
-        with pytest.raises(ValueError, match="unknown constraint"):
-            mnt.solve(build_schedule(), time_limit_seconds=0.1, constraints=[Old()])
 
 
 def _schedule_of(jobs_and_assignments):
@@ -511,20 +489,20 @@ def test_score_reweighting_is_linear_without_rescoring():
 
 
 def test_score_rejects_an_unknown_constraint_name():
-    """A spec with a wrong name (e.g. a renamed component) must not be silently ignored."""
+    """A spec with a wrong name must not be silently ignored."""
     raw, _ = _raw()
 
-    class Renamed(Constraint):
+    class Misnamed(Constraint):
         name = "definitely_not_a_constraint"
 
     with pytest.raises(ValueError, match="unknown constraint"):
-        score(raw, [Renamed()])
+        score(raw, [Misnamed()])
 
 
 def test_naming_a_constraint_twice_scores_both_picks():
-    """Since 0.3.0 a constraint may be picked several times: each pick is scored on its own.
+    """A constraint may be picked several times: each pick is scored on its own.
 
-    The later pick no longer wins in silence, nor is it an error: both are
+    Neither pick wins in silence, nor is it an error: both are
     instances with their own knobs, and they add up."""
     picks = [CrewConflictCost(), TagConflictCost(weight=10), TagConflictCost()]
     schedule = _zero_budget_solve(_two_jobs(), picks)
@@ -533,7 +511,7 @@ def test_naming_a_constraint_twice_scores_both_picks():
     assert get_constraints([CrewConflictCost(), CrewConflictCost()]) == [CrewConflictCost(), CrewConflictCost()]
 
 
-# --- 0.3.0: repeated picks and the offset / clip knobs ------------------------------
+# --- repeated picks and the offset / clip knobs ------------------------------
 
 
 def _two_jobs():
@@ -668,8 +646,8 @@ def test_offsets_by_hand_on_both_paths(pick, expected):
     assert _engine([pick]) == expected
 
 
-def test_offset_zero_reproduces_the_0_2_0_scores():
-    """offset 0 is the plain shaping in both modes, so every 0.2.0 selection scores the same."""
+def test_offset_zero_reproduces_the_plain_scores():
+    """offset 0 is the plain shaping in both modes, so a selection scores the same with offset 0."""
     plain = [*get_constraints()[:5], TagConflictCost(exponent=2)]
     shifted = [
         MinStartDateCost(offset=0.0, clip=False),
@@ -800,15 +778,7 @@ def test_a_level_must_be_a_level():
         _engine([TagConflictCost(), pick])
 
 
-def test_the_knob_was_renamed():
-    """0.3.0 replaced hard=True / hard=False by level="hard" / level="soft"; hard= is unknown."""
-    with pytest.raises(TypeError):
-        TagConflictCost(hard=True)
-    with pytest.raises(TypeError):
-        TagConflictCost(weight=None, hard=False)
-
-
-# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+# --- clip=False with an offset stays off the hard score -------------------------
 
 HARD_REFUSAL = (
     "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
@@ -869,7 +839,7 @@ def test_the_same_literal_pick_on_soft_is_accepted(offset):
     [
         (MinStartDateCost(offset=3.0), (0, 0.0)),  # clip=True on hard: a threshold
         (MinStartDateCost(offset=-3.0), (-5, 0.0)),  # 2 + 3 on a's cell only
-        (MinStartDateCost(clip=False), (-2, 0.0)),  # clip=False with offset 0: the 0.2.0 shaping
+        (MinStartDateCost(clip=False), (-2, 0.0)),  # clip=False with offset 0: the plain shaping
         (MinStartDateCost(offset=0.0, clip=False), (-2, 0.0)),
         (CrewConflictCost(offset=3.0), (0, 0.0)),
         (CrewConflictCost(offset=0, clip=False), (-2, 0.0)),

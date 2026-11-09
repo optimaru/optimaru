@@ -23,17 +23,13 @@ Every spec takes five knobs:
 
 - ``weight``   linear multiplier on the constraint cost. ``None`` = the component
                default (1 for every bin-packing constraint). The problem carries no
-               weights (the 0.1.x ``capacity_weight`` / ``used_bin_weight`` /
-               ``color_weight`` / ``conflict_weight`` fields are gone);
-               ``bp.constraint_info()`` reports the defaults.
+               weights; ``bp.constraint_info()`` reports the defaults.
 - ``level``    ``None`` = the default level, otherwise ``Level.HARD`` or
                ``Level.SOFT`` (or the names ``"hard"`` and ``"soft"``). This use
                case has no medium level: ``level="medium"`` raises ValueError.
 - ``exponent`` sign-preserving power shaping: ``weight * sign(c) * |c| ** exponent``.
                Applied per BIN for the three per-bin constraints, and on the bin
-               count for UsedBinsCost. (0.1.x shaped colour excess per
-               (bin, colour) and conflicts per pair; the totals and every
-               exponent-1 score are unchanged.)
+               count for UsedBinsCost.
 - ``offset``   (keyword) shifts that shaping, at the same granularity; 0.0 = none.
 - ``clip``     (keyword) ``True`` (the default) counts only what lies beyond the
                offset, ``max(0, c - offset) ** exponent``; ``False`` shapes

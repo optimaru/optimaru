@@ -25,7 +25,7 @@ CP-SAT reference.
   `max_partition_size` (inclusive bounds on EACH side; None = 0 / |V|).
 - `warm_start` — start from `partition`; vertices it leaves out take the default
   start. A plain solve ignores the input partition. Every solve resets it.
-- Start partition (the 0.1.x rule): vertex `i` on side `i % 2`, a fixed vertex
+- Start partition: vertex `i` on side `i % 2`, a fixed vertex
   on its fixed side, a warm-start partition over both.
 - **Exact size** (`min_partition_size == max_partition_size`, both given): the
   search only swaps sides (change moves, ruin-and-recreate and descent are
@@ -33,7 +33,7 @@ CP-SAT reference.
   partition are kept — a seed of the wrong size keeps that size and its hard
   penalty. This holds for an unseeded solve too: when fixed vertices unbalance
   the `i % 2` start, the result stays infeasible even if a feasible partition
-  exists (as in 0.1.5); seed a partition of the right size with
+  exists; seed a partition of the right size with
   `with_initial_solution` instead. With fewer than two free vertices there is no
   search.
 - An unassigned vertex (`-1`, transient in the engine's ruin-and-recreate or set
@@ -65,21 +65,22 @@ in `solve`, `calculate_score`, `constraints.score()` and the CP-SAT reference �
 its level cannot change. `max_cut.constraint_info()` reports exactly this table from
 the C++ components (`kDefaultLevel` / `kDefaultWeight`).
 
-### 0.3.0
+### Knobs: exponent, offset, clip, repeats
 
-Every constraint takes two more knobs, `offset` and `clip` (keyword-only), and may be
-picked several times. The four unit constraints shape each side's raw cost `x`, the
-imbalance and the cut their single total: `sign(x) * max(0, |x| - offset) ** exponent`
-(`clip=True`, the default) or `(x - offset) ** exponent`, sign-preserving (`clip=False`,
-which charges both sides, a side of raw 0 included, and rewards a side below the
-offset); `offset=0` is the 0.2.0 shaping. Both apply per side (or to the one total), not
-to the sum over the sides. `clip=False` with an offset is refused on hard (the four unit
-constraints by default), because hard 0 must mean no violation: a clean side would
-otherwise earn a hard reward that cancels the other side's violation. On the
-`cut_weight_cost` reward (raw `-cut`) a threshold offset rewards only the cut beyond it
-and a literal one adds `offset` to the reward. Each pick is its own instance with its own
-knobs, its level included (`level` replaced the `hard` knob; `hard=` raises `TypeError`),
-and the instances add up:
+Every constraint takes `weight`, `level` and `exponent`, plus `offset` and `clip`
+(keyword-only), and may be picked several times. The four unit constraints shape each
+side's raw cost `x`, the imbalance and the cut their single total:
+`sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
+`(x - offset) ** exponent`, sign-preserving (`clip=False`, which charges both sides, a side
+of raw 0 included, and rewards a side below the offset); `offset=0` is the plain shaping.
+Both apply per side (or to the one total), not to the sum over the sides, so three fixed
+vertices off their side on side 0 cost `3 ** 2 = 9` at `exponent=2`. Hard contributions
+are rounded per side (size bounds `[1, 1]` at weight 0.4: `0`). `clip=False` with an
+offset is refused on hard (the four unit constraints by default), because hard 0 must mean
+no violation: a clean side would otherwise earn a hard reward that cancels the other side's
+violation. On the `cut_weight_cost` reward (raw `-cut`) a threshold offset rewards only the
+cut beyond it and a literal one adds `offset` to the reward. Each pick is its own instance
+with its own knobs, its level included, and the instances add up:
 
 ```python
 max_cut.solve(problem, constraints=[
@@ -90,77 +91,35 @@ max_cut.solve(problem, constraints=[
 ])
 ```
 
-`max_cut.constraint_costs(problem, picks)` scores a pick list and keys the second pick
-`partition_imbalance_cost#2`; every entry reports its `offset`, `clip` and the `level` in
-effect. The CP-SAT reference takes the same picks (integral offsets).
+`max_cut.constraint_costs(problem, picks)` returns
+`{name: {"costs", "weight", "exponent", "offset", "clip", "global", "level", "reward",
+"level_flippable", "name", "label", ...}}`, with `[side 0, side 1]` for the four unit
+constraints and one total for the two globals; it keys the second pick
+`partition_imbalance_cost#2` and reports every entry's `offset`, `clip` and the `level` in
+effect. `calculate_score` and `constraint_costs` raise `ValueError` on a partial
+partition (`solve` fills it in), and the model refuses `partition` entries for unknown
+vertices and sides other than 0 / 1. The CP-SAT reference takes the same picks (integral
+offsets; it rejects an exponent other than 1).
 
-### 0.2.0
+### Python API
 
-The package was a pure-Python reference (simulated annealing over
-`constraint_costs()`); it is now the C++ engine with pybind11 bindings, like the
-other C++ use cases.
-
-- **Names** (no aliases): `fixed_partition` -> `fixed_partition_cost`,
-  `same_partition_pairs` -> `same_partition_pairs_cost`,
-  `different_partition_pairs` -> `different_partition_pairs_cost`,
-  `partition_size_bounds` -> `partition_size_bounds_cost`, `partition_balance` ->
-  `partition_imbalance_cost`, `maximize_cut_weight` -> `cut_weight_cost`; the spec
-  classes and module-level instances follow (`PartitionBalance` ->
-  `PartitionImbalanceCost`, `MaximizeCutWeight` -> `CutWeightCost`, every other
-  class gains `Cost`). The model fields `fixed_partition`, `same_partition_pairs`
-  and `different_partition_pairs` keep their names. The specs carry `label_en` /
-  `label_ko` / `description_en` / `description_ko` instead of `label`, and no
-  `default_hard` / `default_weight` (the defaults live in C++ only).
-- **Raw costs and the default score are unchanged** (each constraint's total for
-  every complete partition; `cut_weight_cost` keeps its reward semantics: the
-  triangle `0, 1, 0` still scores `0hard/5soft`). Changed by design:
-  - **exponent granularity**: the engine shapes each unit's cost. 0.1.5 listed
-    one 0/1 term per fixed vertex / same-side pair / different-side pair (so the
-    exponent had no effect); 0.2.0 counts them per side, so three fixed vertices
-    off their side on side 0 cost `3 ** 2 = 9` at `exponent=2` (0.1.5: 3). The
-    size bounds keep their two per-side terms and the imbalance and the cut their
-    single total, so their exponent semantics are unchanged. Identical at exponent
-    1 (CP-SAT rejects any other exponent);
-  - hard contributions are rounded per side (0.1.5 rounded the hard total once):
-    different only for fractional hard weights (size bounds `[1, 1]` at weight
-    0.4: `0`, was `-1`);
-  - `constraint_costs()` returns the standard dict
-    `{name: {"costs", "weight", "exponent", "hard", "global", "level", "reward",
-    "level_flippable", "name", "label"}}`, with `[side 0, side 1]` for the four
-    unit constraints and one total for the two globals (0.1.5:
-    `{name: [one term per fixed vertex | pair | side | total]}`);
-  - `calculate_score` and `constraint_costs` raise `ValueError` on a **partial
-    partition** (0.1.5 scored a missing vertex as a side of its own for the cut
-    and the pairs and as side 0 for the sizes); `solve` still fills it in;
-  - the model refuses `partition` entries for unknown vertices and sides other
-    than 0 / 1 (0.1.5 ignored them);
-  - `cut_weight_cost` with `level="hard"` raises `ValueError` (0.1.5 scored a
-    positive hard score);
-  - a constraint picked twice raised `ValueError` (since 0.3.0 each pick is its own
-    instance, see 0.3.0 above).
 - **`SolverConfig`** is the engine's (the other C++ packages' knobs:
   `spent_limit_seconds`, `step_count_limit`, `unimproved_*`, `random_seed`,
   `parallel_solver_count`, `late_acceptance_size`, `full_assert`, `ruin_recreate*`,
   `change/swap_move_weight`, `descent_weight`, `best_score_limit`, `on_new_best`),
-  set by attribute. The simulated-annealing knobs `max_iterations`,
-  `stagnation_limit`, `temperature`, `cooling_rate`, the keyword constructor and
-  the `anneal` / `configure` helpers are gone. Zero budget =
-  `spent_limit_seconds = 0` (`step_count_limit = 0` means "no limit"); a bounded
-  search = `step_count_limit = N`. Without a time limit a solve now runs the 30 s
-  budget (0.1.5 stopped after 50 000 iterations). `on_new_best(step, score)`
-  (0.1.5: `on_new_best(state)`). Multi-start runs independent engine searches
-  from the same start (0.1.5 perturbed each start).
-- `solve()` returns the engine `Score` (`.hard`, `.soft`, `is_feasible()`; 0.1.5:
-  a tuple) and takes the engine object or the model (written back in place).
-  `calculate_score(problem, constraints)` returns the engine `Score` for the
-  defaults and a `constraints.Score(hard, soft)` named tuple for a selection.
-  `DEFAULTS` and the top-level `score` are gone (use `constraints.get_constraints()`
-  / `constraints.score()`). With `constraints=...` a solve is single-start
+  set by attribute. Zero budget = `spent_limit_seconds = 0` (`step_count_limit = 0`
+  means "no limit"); a bounded search = `step_count_limit = N`. Without a time limit a
+  solve runs the 30 s budget. `on_new_best(step, score)`. Multi-start runs independent
+  engine searches from the same start.
+- `solve()` returns the engine `Score` (`.hard`, `.soft`, `is_feasible()`) and takes the
+  engine object or the model (written back in place). `calculate_score(problem,
+  constraints)` returns the engine `Score` for the defaults and a
+  `constraints.Score(hard, soft)` named tuple for a selection; `constraints.score()`
+  re-prices raw costs. With `constraints=...` a solve is single-start
   (`parallel_solver_count` is ignored), as in every C++ package.
-- `MaxCutProblemModel.to_core()` / `from_core()` convert to and from the real
-  engine object (0.1.5: model copies; `from_core` reports `cut_weight` and the
-  score once the core was scored, and lists `fixed_partition` in vertex order);
-  the JSON input/output schema is unchanged.
+- `MaxCutProblemModel.to_core()` / `from_core()` convert to and from the real engine
+  object; `from_core` reports `cut_weight` and the score once the core was scored, and
+  lists `fixed_partition` in vertex order.
 
 ## cpp/
 
@@ -176,7 +135,7 @@ other C++ use cases.
 - `score_calculator` — `prepare()` (validation + CSR adjacency / pair incidence)
   and the full recompute (the reference, `rawCosts()`)
 - `incremental_calculator` — O(degree + pair degree of the vertex) per move
-- `solver` — engine wrapper (the 0.1.x start partition + Late Acceptance over flip /
+- `solver` — engine wrapper (the alternating start partition + Late Acceptance over flip /
   swap moves + adaptive ruin & recreate; swaps only under exact size bounds;
   independent parallel starts on worker threads, an exception in one of them is
   rethrown by `solve()`)
@@ -286,7 +245,7 @@ in `searchInParallel()` and the constraint-assembly overload. Under exact size
 bounds a move must keep the side sizes.
 
 **Changing the construction heuristic.** `construct()` in `cpp/src/solver.cpp` gives
-every vertex a side before the engine starts (the 0.1.x alternating start); the
+every vertex a side before the engine starts (the alternating start); the
 Python reference-parity tests pin it.
 
 **Adding a hard or soft cost.** One file per constraint under

@@ -64,7 +64,7 @@ namespace qap
 // penalty, 0 = no violation; the calculator negates into the score. The
 // objectives are not validated >= 0 (flows, distances and direct costs are
 // plain integers), so they may be negative: a negative total is scored as a
-// bonus, exactly like the 0.1.x Python scorer did. On data with a negative
+// bonus, exactly like the Python reference scorer. On data with a negative
 // entry such an objective cannot move to hard (raw_cost_can_be_negative; the
 // calculator refuses it at reset), since a negative hard total would cancel
 // a violation of the side constraints.

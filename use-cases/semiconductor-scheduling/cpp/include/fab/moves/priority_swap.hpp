@@ -13,7 +13,7 @@ namespace fab
 // ---------------------------------------------------------------------------
 // PrioritySwapMove — exchange the decode priorities of two operations
 // ---------------------------------------------------------------------------
-// The 0.1.x search's second neighbour: swap the ranks of two rows and keep
+// The search's second neighbour: swap the ranks of two rows and keep
 // both machine choices (both slots). It prefers rows of different lots,
 // whose ranks compete at the same decode steps; a row of the same lot is
 // the fallback. A pair with equal ranks is no move.

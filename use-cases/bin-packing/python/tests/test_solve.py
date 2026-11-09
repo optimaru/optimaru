@@ -106,12 +106,9 @@ def test_solver_config_refuses_bad_values(attribute, value):
         setattr(bp.SolverConfig(), attribute, value)
 
 
-def test_the_simulated_annealing_knobs_are_gone():
-    config = bp.SolverConfig()
-    for old in ("max_iterations", "stagnation_limit", "temperature", "cooling_rate"):
-        assert not hasattr(config, old)
+def test_solver_config_takes_no_constructor_arguments():
     with pytest.raises(TypeError):
-        bp.SolverConfig(max_iterations=0)
+        bp.SolverConfig(spent_limit_seconds=0)
 
 
 def test_a_raising_on_new_best_stops_every_parallel_worker():
@@ -131,7 +128,7 @@ def test_a_raising_on_new_best_stops_every_parallel_worker():
 def test_a_worker_thread_that_cannot_start_raises_instead_of_aborting():
     """Creating worker thread 1 fails (std::system_error, injected through the module's test
     seam): the worker already running is stopped and joined, and the error reaches the caller
-    at once. A joinable std::thread destroyed on that path used to call std::terminate."""
+    at once. A joinable std::thread destroyed on that path would call std::terminate."""
     import time
 
     from bin_packing import _core
@@ -147,11 +144,11 @@ def test_a_worker_thread_that_cannot_start_raises_instead_of_aborting():
 
 
 def coloured_instance(seed: int = 20261031, count: int = 120) -> bp.BinPackingProblem:
-    """The 0.2.0 review's coloured instance (SQ-1): weights 10..60 on capacity 100, about
-    40% of the items in one of 4 colours, 10 conflict pairs. Seed 20261031 has a weight
-    lower bound of 43 bins (4288 / 100); 0.1.5 used 44."""
+    """A coloured instance: weights 10..60 on capacity 100, about 40% of the items in one
+    of 4 colours, 10 conflict pairs. Seed 20261031 has a weight lower bound of 43 bins
+    (4288 / 100)."""
     rng = random.Random(seed)
-    for _ in range(60):  # the review recipe's burn-in, kept so the instance is the same
+    for _ in range(60):  # a burn-in, kept so the instance stays the same
         rng.randint(1, 10)
     for j in range(1, 60):
         rng.sample(range(j), min(j, rng.choice([0, 1, 1, 2])))
@@ -170,8 +167,8 @@ def coloured_instance(seed: int = 20261031, count: int = 120) -> bp.BinPackingPr
 
 
 def test_repack_moves_close_the_bins_colours_and_conflicts_keep_open():
-    """EmptyBinMove alone (the 0.2.0 search before RepackMove) ends at 45-46 bins on this
-    instance at 2-30 s, 0.1.5 at 44; with RepackMove the step-limited search gets there."""
+    """EmptyBinMove alone ends at 45-46 bins on this instance at 2-30 s; with RepackMove the
+    step-limited search gets to 44 or fewer."""
     bins = {}
     for repack in (True, False):
         problem = coloured_instance()
@@ -210,7 +207,7 @@ def test_stop_at_first_feasible_stops_whatever_the_soft_total():
 
     Every enabled soft penalty at weight 1e21 puts the soft score far below -1e18 at the
     first feasible solution: the solve still stops there instead of running its whole
-    30 s. The first 0.2.0 limit, (0, -1e18), was never reached by such a score.
+    30 s. A limit of (0, -1e18) would never be reached by such a score.
     """
     import dataclasses
     import time

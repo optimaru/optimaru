@@ -208,7 +208,7 @@ def constraint_costs(
     """Raw per-employee cost of every constraint (one total for the global
     unassigned_tasks_cost), before weight/exponent/offset/level:
     {key: {"costs": [...], "weight": float, "exponent": float, "offset": float,
-    "clip": bool, "hard": bool, "global": bool, "level": "hard" | "medium" | "soft",
+    "clip": bool, "global": bool, "level": "hard" | "medium" | "soft",
     "reward": bool, "level_flippable": bool, "name": str, "label": str,
     "default_weight": float, "default_level": str,
     "medium_fold": {"kind": "below_hard", "unit": 1e9}}}. Every employee is a unit the

@@ -47,20 +47,24 @@ reference — and its level cannot change.
 `knapsack.constraint_info()` reports exactly this table from the C++ components
 (`kDefaultLevel` / `kDefaultWeight`).
 
-### 0.3.0
+### Knobs: exponent, offset, clip, repeats
 
-Every constraint takes two more knobs, `offset` and `clip` (keyword-only), and may be
-picked several times. Every knapsack constraint is global, so the offset shapes its single
-raw total `x`: `sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
-`(x - offset) ** exponent`, sign-preserving (`clip=False`, which charges a total of 0 too
-and rewards a total below the offset); `offset=0` is the 0.2.0 shaping. Both apply to that
-one total, a raw 0 included. `clip=False` with an offset is refused on hard (the six
-penalties by default), because hard 0 must mean no violation: a fitting capacity total
-would otherwise turn into a hard reward that cancels another constraint's overflow. On the
-`selected_value_cost` reward (raw `-value`) a threshold offset rewards only the value
-beyond it and a literal one adds `offset` to the reward. Each pick is its own instance with
-its own knobs, its level included (`level` replaced the `hard` knob; `hard=` raises
-`TypeError`), and the instances add up:
+Every constraint takes `weight`, `level` and `exponent`, plus `offset` and `clip`
+(keyword-only), and may be picked several times. Every knapsack constraint is global, so
+the knobs shape its single raw total `x`: `sign(x) * max(0, |x| - offset) ** exponent`
+(`clip=True`, the default) or `(x - offset) ** exponent`, sign-preserving (`clip=False`,
+which charges a total of 0 too and rewards a total below the offset); `offset=0` is the
+plain shaping. The exponent therefore shapes the summed overflow of
+`resource_capacity_cost` / `selection_group_bounds_cost` and the count of
+`mandatory_items_cost`, `forbidden_items_cost` and `item_dependency_cost` (3 missing
+mandatory items with `exponent=2` cost 9). Hard contributions are rounded per constraint
+(two constraints at weight 0.5 with one violation each: `-2`). `clip=False` with an offset
+is refused on hard (the six penalties by default), because hard 0 must mean no violation: a
+fitting capacity total would otherwise turn into a hard reward that cancels another
+constraint's overflow. On the `selected_value_cost` reward (raw `-value`) a threshold
+offset rewards only the value beyond it and a literal one adds `offset` to the reward.
+Each pick is its own instance with its own knobs, its level included, and the instances
+add up:
 
 ```python
 knapsack.solve(problem, constraints=[
@@ -71,76 +75,33 @@ knapsack.solve(problem, constraints=[
 ])
 ```
 
-`knapsack.constraint_costs(problem, picks)` scores a pick list and keys the second pick
-`resource_capacity_cost#2`; every entry reports its `offset`, `clip` and the `level` in
-effect. The CP-SAT reference takes the same picks (integral offsets).
+`knapsack.constraint_costs(problem, picks)` returns
+`{name: {"costs", "weight", "exponent", "offset", "clip", "global", "level", "reward",
+"level_flippable", "name", "label", ...}}` with one total per constraint in `"costs"`,
+keys the second pick `resource_capacity_cost#2`, and reports every entry's `offset`, `clip`
+and the `level` in effect. The CP-SAT reference takes the same picks (integral offsets; it
+rejects an exponent other than 1).
 
-### 0.2.0
+### Python API
 
-The package was a pure-Python reference (simulated annealing over
-`constraint_costs()`); it is now the C++ engine with pybind11 bindings, like the
-other C++ use cases.
-
-- **Names** (no aliases): `capacity` -> `knapsack_capacity_cost`,
-  `resource_capacities` -> `resource_capacity_cost`, `mandatory_items` ->
-  `mandatory_items_cost`, `forbidden_items` -> `forbidden_items_cost`,
-  `selection_group_bounds` -> `selection_group_bounds_cost`, `item_dependencies`
-  -> `item_dependency_cost`, `maximize_value` -> `selected_value_cost`; the spec
-  classes and module-level instances follow (`Capacity` -> `KnapsackCapacityCost`,
-  `ResourceCapacities` -> `ResourceCapacityCost`, `ItemDependencies` ->
-  `ItemDependencyCost`, `MaximizeValue` -> `SelectedValueCost`, every other class
-  gains `Cost`). The model fields `capacity`, `resource_capacities`,
-  `mandatory_items` and `forbidden_items` keep their names. The specs carry
-  `label_en` / `label_ko` / `description_en` / `description_ko` instead of `label`,
-  and no `default_hard` / `default_weight` (the defaults live in C++ only).
-- **Raw costs and the default score are unchanged** (each constraint's total for
-  every selection; `selected_value_cost` keeps its reward semantics: `(-1, 17.0)`
-  stays `(-1, 17.0)`). Changed by design:
-  - **exponent granularity**: the engine shapes a global constraint's total.
-    0.1.5 shaped every term, so `resource_capacity_cost` and
-    `selection_group_bounds_cost` are now shaped on the summed overflow /
-    violation (0.1.5: per resource / per group), and `mandatory_items_cost`,
-    `forbidden_items_cost` and `item_dependency_cost` on their count (0.1.5 shaped
-    each 0/1 entry, so the exponent had no effect: 3 missing mandatory items with
-    `exponent=2` cost 9 now, 3 before). `knapsack_capacity_cost` and
-    `selected_value_cost` were one term already and are unchanged. Identical at
-    exponent 1 (CP-SAT rejects any other exponent);
-  - hard contributions are rounded per constraint (0.1.5 rounded the hard total
-    once): different only for fractional hard weights (two constraints at weight
-    0.5 with one violation each: `-2`, was `-1`);
-  - `constraint_costs()` returns the standard dict
-    `{name: {"costs", "weight", "exponent", "hard", "global", "level", "reward",
-    "level_flippable", "name", "label"}}` with one total per constraint in
-    `"costs"` (0.1.5: `{name: [one term per resource | entry | group | pair]}`);
-  - `selected_value_cost` with `level="hard"` raises `ValueError` (0.1.5 scored a
-    positive hard score);
-  - a constraint picked twice raised `ValueError` (0.1.5 counted it twice; since
-    0.3.0 each pick is scored again).
 - **`SolverConfig`** is the engine's (the other C++ packages' knobs:
   `spent_limit_seconds`, `step_count_limit`, `unimproved_*`, `random_seed`,
   `parallel_solver_count`, `late_acceptance_size`, `full_assert`, `ruin_recreate*`,
   `change/swap_move_weight`, `descent_weight`, `nearby_probability` /
-  `nearby_size`, `best_score_limit`, `on_new_best`), set by attribute. The
-  simulated-annealing knobs `max_iterations`, `stagnation_limit`, `temperature`,
-  `cooling_rate`, the keyword constructor and the `anneal` / `configure` /
-  `_greedy_selection` helpers are gone. Zero budget = `spent_limit_seconds = 0`
-  (`step_count_limit = 0` means "no limit"); a bounded search =
-  `step_count_limit = N`. Without a time limit a solve now runs the 30 s budget
-  (0.1.5 stopped after 50 000 iterations). `on_new_best(step, score)` (0.1.5:
-  `on_new_best(state)`).
-- `solve()` returns the engine `Score` (`.hard`, `.soft`, `is_feasible()`; 0.1.5:
-  a tuple) and takes the engine object or the model (written back in place).
-  `calculate_score(problem, constraints)` returns the engine `Score` for the
-  defaults and a `constraints.Score(hard, soft)` named tuple for a selection.
-  `DEFAULTS` and the top-level `score` are gone (use `constraints.get_constraints()`
-  / `constraints.score()`). With `constraints=...` a solve is single-start
+  `nearby_size`, `best_score_limit`, `on_new_best`), set by attribute. Zero budget =
+  `spent_limit_seconds = 0` (`step_count_limit = 0` means "no limit"); a bounded search =
+  `step_count_limit = N`. Without a time limit a solve runs the 30 s budget.
+  `on_new_best(step, score)`.
+- `solve()` returns the engine `Score` (`.hard`, `.soft`, `is_feasible()`) and takes the
+  engine object or the model (written back in place). `calculate_score(problem,
+  constraints)` returns the engine `Score` for the defaults and a
+  `constraints.Score(hard, soft)` named tuple for a selection; `constraints.score()`
+  re-prices raw costs. With `constraints=...` a solve is single-start
   (`parallel_solver_count` is ignored), as in every C++ package.
-- `KnapsackProblemModel.to_core()` / `from_core()` convert to and from the real
-  engine object (0.1.5: model copies); the JSON input/output schema is unchanged.
-  `from_core()` returns each item's `resource_usage` with its keys sorted (the
-  engine keeps it in a map; the dict compares equal, 0.1.5 kept the input order).
-  `solve(model)` writes only the selection and the results back, so the model
-  keeps its own order.
+- `KnapsackProblemModel.to_core()` / `from_core()` convert to and from the real engine
+  object. `from_core()` returns each item's `resource_usage` with its keys sorted (the
+  engine keeps it in a map). `solve(model)` writes only the selection and the results
+  back, so the model keeps its own order.
 
 ## cpp/
 
@@ -152,8 +113,9 @@ other C++ use cases.
   `selected_value_cost.hpp` (+ `common.hpp`: the aliases and the unit-1
   `SelectionConstraint` base); `include/ks/constraints.hpp` assembles the default
   set (`defaultConstraints()`, also the catalog order)
-- `construction` — the 0.1.5 greedy, ported exactly (stable descending
-  value / weight order, weight capacity only; decided items kept)
+- `construction` — the greedy construction (stable descending value / weight order,
+  weight capacity only; decided items kept), matching the Python reference
+  (`python/tests/reference_knapsack.py`)
 - `score_calculator` — `prepare()` (validation + derived indexes) and the full
   recompute (the reference)
 - `incremental_calculator` — O(resources + groups + dependencies of the item) per flip
@@ -256,7 +218,7 @@ operators do not reach the engine's multi-start threads, so a solver that regist
 one runs its own worker threads (see facility-location's `CloseFacilityMove`).
 
 **Changing the construction heuristic.** `cpp/src/construction.cpp` decides every item
-before the engine starts. It is the 0.1.5 greedy, ported exactly; `ks_test` and the
+before the engine starts. It is the reference's greedy; `ks_test` and the
 Python reference-parity tests pin its results (and `with_initial_solution` uses it).
 
 **Adding a hard or soft cost.** One file per constraint under
