@@ -1,9 +1,9 @@
 optimaru
 Copyright 2026 The optimaru Authors
 
-Paths below refer to the source repository, https://github.com/optimaru/optimaru;
-in the Python distribution each use-cases/<name> is the subpackage
-optimaru.<name with dashes as underscores>.
+Paths below refer to the source repository,
+https://github.com/optimaru/optimaru; in the Python distribution each
+use-cases/<name> is the subpackage optimaru.<name with dashes as underscores>.
 
 This product includes software derived from Timefold Solver
 (https://github.com/TimefoldAI/timefold-solver), which is licensed under the
@@ -17,8 +17,9 @@ modifications, of the Timefold Solver core: its architecture, package and
 directory layout, class names, API and local-search framework are derived
 from the Java originals. Some engine files instead implement algorithms
 from the published literature or were written by optimaru (for example SISR
-ruin-and-recreate and adaptive operator selection); every engine file
-carries the same derivation header regardless.
+ruin-and-recreate and adaptive operator selection). Every engine file
+carries the same header, which states that it is part of this modified,
+derived engine.
 
 The domain models, constraint definitions and, where applicable, demo data
 of the following use cases are C++ and Python translations, with

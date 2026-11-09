@@ -5,14 +5,15 @@ The engine under ``include/optimaru/`` is derived from Timefold Solver (see NOTI
 each file carries, as its first two lines::
 
     // SPDX-License-Identifier: Apache-2.0
-    // Derived from Timefold Solver (Apache-2.0); modified by The optimaru Authors. See NOTICE.
+    // Part of the optimaru engine, a modified derivative of Timefold Solver (Apache-2.0). See NOTICE.
 
     python3 scripts/check_license_headers.py     # exit 1 and list every file without it
 
-The derivation line is applied to every engine file on purpose, including files that
-implement published algorithms or were added by optimaru: a deliberately conservative
-choice (over-attribution is the safe side). Use-case sources are out of scope; NOTICE
-and each use case's README give their notice per directory.
+The second line is applied to every engine file on purpose. It speaks of the engine as a
+whole (a modified derivative of Timefold Solver, the section 4(b) notice), so it holds for
+files that implement published algorithms or were added by optimaru as well as for those
+translated from Timefold Solver. Use-case sources are out of scope; NOTICE and each use
+case's README give their notice per directory.
 
 A UTF-8 BOM and CRLF line endings are tolerated. Run from anywhere; paths resolve
 against the repository root.
@@ -27,7 +28,7 @@ ROOT = Path(__file__).resolve().parent.parent
 ENGINE = ROOT / "include" / "optimaru"
 HEADER = (
     "// SPDX-License-Identifier: Apache-2.0\n"
-    "// Derived from Timefold Solver (Apache-2.0); modified by The optimaru Authors. See NOTICE.\n"
+    "// Part of the optimaru engine, a modified derivative of Timefold Solver (Apache-2.0). See NOTICE.\n"
 )
 SUFFIXES = {".hpp", ".h", ".hh", ".hxx", ".ipp", ".inl", ".tpp", ".cpp", ".cc", ".cxx"}
 

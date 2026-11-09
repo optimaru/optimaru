@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Derived from Timefold Solver (Apache-2.0); modified by The optimaru Authors. See NOTICE.
+// Part of the optimaru engine, a modified derivative of Timefold Solver (Apache-2.0). See NOTICE.
 
 #ifndef OPTIMARU_CONFIG_SOLVER_SOLVER_CONFIG_HPP
 #define OPTIMARU_CONFIG_SOLVER_SOLVER_CONFIG_HPP
