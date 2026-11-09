@@ -21,7 +21,7 @@ import conference_scheduling as cs
 
 schedule = cs.demo_conference()  # the demo instance (15 talks / 6 slots / 5 rooms)
 cs.solve(schedule, time_limit_seconds=10.0, random_seed=42)
-print(schedule.score)  # e.g. 0hard/-54420soft
+print(schedule.score)  # e.g. 0hard/-57990soft
 print(cs.constraint_costs(schedule)["content_conflict_cost"]["costs"])  # raw, before the weight
 ```
 
@@ -62,7 +62,7 @@ soft: `theme_track_conflict_cost` `theme_track_room_change_cost` `sector_conflic
 `speaker_makespan_cost` (-20)
 
 The full table (C++ component, default level and weight, raw cost) is in the
-[use-case README](../README.md#constraints-hardsoftscore--the-engine-score-type-as-is);
+[use-case README](../README.md#constraints-score--the-engine-score-type-as-is);
 `cs.constraint_info()` reports the same defaults. Pick, re-weight or flip constraints
 with `conference_scheduling.constraints`:
 

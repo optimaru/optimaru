@@ -5,7 +5,7 @@ The [`quadratic-assignment`](../../use-cases/quadratic-assignment) use case agai
 same constraints under the same names and units — one external-solver `ConstraintPlugin` per
 constraint ([`external_solver.quadratic_assignment.constraints`](https://github.com/optimaru/external-solver/tree/main/src/external_solver/quadratic_assignment/constraints.py)), each a subclass of the domain spec with its
 defaults read from `quadratic_assignment.constraint_info()` — so both answers are rescored by the use
-case's own evaluator. `cpsat/tests/test_constraint_parity.py` pins every permutation of small
+case's own evaluator. external-solver's [`tests/quadratic_assignment/test_constraint_parity.py`](https://github.com/optimaru/external-solver/tree/main/tests/quadratic_assignment/test_constraint_parity.py) pins every permutation of small
 feature-rich instances (and 100 random ones of a 6-facility instance) and checks that each constraint's
 CP-SAT term equals the engine's `constraint_costs()` total (0 exactly when the engine reports no
 violation), and that the CP-SAT optimum equals the brute-force optimum of the engine's score, per
@@ -48,7 +48,7 @@ cannot be hard`.
 ```sh
 cd benchmarks/quadratic-assignment/cpsat
 uv sync --all-groups --all-extras
-uv run pytest -q                                       # CP-SAT model + engine parity tests
+uv run pytest -q                                       # benchmark harness tests
 uv run quadratic-assignment-compare --seconds 10 --workers 8   # engine vs CP-SAT table (--markdown, --json)
 ```
 

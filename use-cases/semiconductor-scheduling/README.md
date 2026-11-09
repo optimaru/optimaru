@@ -8,8 +8,9 @@ frozen assignments for replanning, minimum hold times and maximum lot cycle
 times. It runs on this repository's C++ engine (`include/optimaru/`):
 `cpp/` holds the domain, the decoder, the 20 constraint components, the
 calculators and the solver; `python/` is the pybind11 package with the Pydantic
-models; [`benchmarks/semiconductor-scheduling/cpsat`](../../benchmarks/semiconductor-scheduling/cpsat)
-is the exact CP-SAT reference.
+models. The exact CP-SAT reference is external-solver's `external_solver.semiconductor_scheduling`;
+[`benchmarks/semiconductor-scheduling/cpsat`](../../benchmarks/semiconductor-scheduling/cpsat)
+holds the engine vs CP-SAT comparison.
 
 The model combines standard patterns from the flexible job-shop scheduling
 literature (machine flexibility, Brucker & Schlie 1990) with the features of
@@ -111,7 +112,8 @@ constraints; its twelve structural ones refuse an offset like a weight or a leve
   `unimproved_*`, `random_seed`, `parallel_solver_count`, `acceptor_type`,
   `simulated_annealing_starting_temperature`, `simulated_annealing_temperature_fraction`,
   `late_acceptance_size`, `machine_move_probability`, `priority_swap_moves`,
-  `custom_move_probability`, `ruin_recreate*`, `best_score_limit`, `full_assert`,
+  `custom_move_probability`, `change_move_weight`, `swap_move_weight`, `ruin_recreate*`,
+  `best_score_limit`, `full_assert`,
   `on_new_best`); `on_new_best` is called with `(step, Score)`. `spent_limit_seconds=0`
   returns the start as is.
 - **Search**: the engine's simulated annealing over the decoded state (auto temperature:
@@ -255,8 +257,8 @@ assign.
 4. the Python spec in `python/semiconductor_scheduling/constraints.py`
    (`class <Subject>Cost(Constraint)` with `name`, `label_en/ko`, `description_en/ko`, a
    module-level instance and a place in `_DEFAULTS`);
-5. its CP-SAT plugin in
-   [`benchmarks/semiconductor-scheduling/cpsat`](../../benchmarks/semiconductor-scheduling/cpsat)
+5. its CP-SAT plugin in external-solver's
+   [`external_solver.semiconductor_scheduling.constraints`](https://github.com/optimaru/external-solver/tree/main/src/external_solver/semiconductor_scheduling/constraints.py)
    with a parity case.
 
 ## Benchmark

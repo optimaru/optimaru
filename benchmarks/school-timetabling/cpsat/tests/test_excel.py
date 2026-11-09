@@ -1,4 +1,4 @@
-"""Comcigan Excel import / assignment inspection / export."""
+"""Teacher-load workbook import / assignment inspection / export."""
 
 import csv
 import io
@@ -45,7 +45,7 @@ def solved(imported):
 
 def test_sample_workbook_imports_without_warnings(imported):
     assert imported.warnings == []
-    assert imported.basics.school_name == "Comcigan Middle School"
+    assert imported.basics.school_name == "Sample Middle School"
     assert imported.basics.school_year == 2026
     assert imported.basics.classes_per_grade == {1: 3, 2: 3, 3: 3}
 
@@ -136,7 +136,7 @@ def test_missing_header_column_is_reported():
 
 
 def test_capacity_mismatch_becomes_a_warning():
-    """When the load total differs from the periods per weekday, warn up front like Comcigan."""
+    """When the load total differs from the periods per weekday, warn up front."""
     source = _minimal_workbook(
         **{
             SHEET_BASICS: [["1학년 학급수", 1]],

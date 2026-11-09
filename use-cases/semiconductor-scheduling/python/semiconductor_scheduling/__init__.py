@@ -197,7 +197,7 @@ def calculate_score(problem, constraints=None) -> Score:
 
 def constraint_costs(problem, constraints=None) -> dict:
     """Raw cost of every constraint on ``problem.assignments``:
-    ``{key: {"costs": [total], "weight", "exponent", "offset", "clip", "hard", "global",
+    ``{key: {"costs": [total], "weight", "exponent", "offset", "clip", "global",
     "level", ...}}`` — the input of `semiconductor_scheduling.constraints.score`. None = the
     default constraints; a pick list (as for `solve`) scores exactly those picks, each entry
     carrying its pick's knobs, the k-th pick of a name keyed ``"<name>#<k>"``. Every

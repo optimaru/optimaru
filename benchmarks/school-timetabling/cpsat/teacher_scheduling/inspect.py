@@ -1,16 +1,14 @@
-"""Assignment inspection — a timetable quality report matching Comcigan's "search and adjust assignments" screen.
+"""Assignment inspection — a timetable quality report.
 
-For each search condition Comcigan shows "how many teachers have a problem",
-and clicking an item jumps to that teacher/day. This computes the same search
-conditions and returns, per condition,
+For each search condition it counts how many teachers have a problem and
+lists the affected teachers/days. It returns, per condition,
 
     (condition id, name, problem count, affected items)
 
 `validate.validate_timetable` looks at hard violations (things that must not
 happen); this looks at "scheduled, but worth touching up".
 
-There is no filter hiding unavoidable items like Comcigan's "problems only"
-search; the caller decides from `severity`.
+There is no filter hiding unavoidable items; the caller decides from `severity`.
 """
 
 from __future__ import annotations
@@ -30,7 +28,7 @@ Severity = Literal["error", "warning", "info"]
 
 
 class InspectOptions(BaseModel):
-    """Search criteria. Matches Comcigan's "move and search criteria" panel."""
+    """Search criteria."""
 
     lunch_after_period: int | None = Field(
         default=4, ge=1, description="Period right before lunch. None skips the lunch check"
@@ -158,7 +156,7 @@ def _unassigned(index: _Index, _: InspectOptions) -> InspectionItem:
 
 
 def _same_subject_twice_a_day(index: _Index, _: InspectOptions) -> InspectionItem:
-    """Comcigan's "same subject per weekday" — a class has the same subject twice or more in one day."""
+    """Same subject per weekday — a class has the same subject twice or more in one day."""
     findings = []
     for (class_id, day, subject_id), count in sorted(index.class_subject_day.items()):
         if count < 2:
@@ -259,7 +257,7 @@ def _consecutive(index: _Index, options: InspectOptions, length: int, item_id: s
 
 
 def _lunch_adjacent(index: _Index, options: InspectOptions) -> InspectionItem:
-    """Consecutive lessons across lunch (Comcigan's "consecutive around lunch")."""
+    """Consecutive lessons across lunch."""
     if options.lunch_after_period is None:
         return InspectionItem(id="lunch_adjacent", name="Consecutive around lunch", severity="info", count=0)
     before, after = options.lunch_after_period, options.lunch_after_period + 1
@@ -330,7 +328,7 @@ def _class_gaps(index: _Index, _: InspectOptions) -> InspectionItem:
 
 
 def _workload_spread(index: _Index, options: InspectOptions) -> InspectionItem:
-    """Comcigan's "teacher load balance" — teachers whose periods per weekday vary a lot."""
+    """Teacher load balance — teachers whose periods per weekday vary a lot."""
     findings = []
     for teacher in index.problem.teachers:
         per_day = [len(index.teacher_periods.get((teacher.id, day), set())) for day in index.problem.calendar.days]

@@ -45,5 +45,5 @@ included, since they stay hard; medium folds into soft, as in the engine, so it 
 literal formula.
 
 `catalog()` lists the plugins in `list_constraints()` order;
-`tests/test_solve.py::test_cpsat_defaults_are_the_engine_defaults` keeps it equal to
+external-solver's `tests/pickup_delivery/test_solve.py::test_cpsat_defaults_are_the_engine_defaults` keeps it equal to
 the engine's `constraint_info()` rows.

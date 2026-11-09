@@ -240,15 +240,16 @@ Python reference-parity tests pin its results (and `with_initial_solution` uses 
    `description_en` / `description_ko` to `python/knapsack/constraints.py` (plus its
    module-level default instance); callers then pick, reweight or flip it:
    `constraints=[..., MyRuleCost(weight=5, level="hard")]`;
-5. mirror it in the CP-SAT model in
-   [`benchmarks/knapsack/cpsat`](../../benchmarks/knapsack/cpsat) (a plugin subclassing
-   the spec; defaults come from `constraint_info()`), with an exact encoding so
-   `test_constraint_parity.py` can pin selections.
+5. mirror it in the CP-SAT model, `external_solver.knapsack` in
+   [external-solver](https://github.com/optimaru/external-solver) (a plugin subclassing the
+   spec; defaults come from `constraint_info()`), with an exact encoding so its
+   `tests/knapsack/test_constraint_parity.py` can pin selections;
+   [`benchmarks/knapsack/cpsat`](../../benchmarks/knapsack/cpsat) runs it against this engine.
 
 ## Benchmark
 
 [`benchmarks/knapsack`](../../benchmarks/knapsack) compares this use case with OR-Tools
 CP-SAT on the same instances, rescored by the same evaluator.
 
-Latest run (10 s per solver, 3 instances): best score by the engine on 2, CP-SAT on 3
+Latest run (30 s per solver, 3 instances): best score by the engine on 2, CP-SAT on 3
 (ties count for each). Full table: [benchmarks/knapsack/README.md](../../benchmarks/knapsack/README.md#results).

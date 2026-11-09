@@ -18,7 +18,7 @@ uv run pytest -q
 import bed_allocation as ba
 from bed_allocation.demo import generate_demo_data
 
-plan = generate_demo_data()          # pydantic BedPlanModel (1 department, 10 rooms, 13 beds, ~75 stays)
+plan = generate_demo_data()          # pydantic BedPlanModel (1 department, 10 rooms, 13 beds, 80 stays)
 result = ba.solve(plan, time_limit_seconds=10.0, random_seed=42)
 print(result.score_hard, result.score_medium, result.score_soft)
 print([s.bed_id for s in result.stays][:5])
@@ -93,7 +93,7 @@ level in effect. Any constraint may take any of the three levels, so
 `PreferredMaxRoomCapacityCost(level="medium")` charges one medium unit per night. A
 constraint may be picked several times; each pick is its own instance with
 its own knobs, its level included, the instances add up, and
-`constraint_costs(plan, picks)` keys the k-th pick `<name>#<k>`.
+`constraint_costs(plan, picks)` (on the engine `BedPlan`) keys the k-th pick `<name>#<k>`.
 
 `unassigned_stays_cost` defaults to weight 1 in medium units, and `level="soft"` demotes it
 to soft in the engine as well. The package re-exports `ConstraintInfo` /
@@ -116,7 +116,7 @@ Caveats (kept exactly as in the original):
 ## Demo
 
 `bed_allocation.demo.generate_demo_data()` builds a demo instance modelled on the quickstart's demo:
-1 department (3 specialties), 10 rooms, all SAME_GENDER (13 beds), 28 nights, ~75
-sequential stays per room timeline, with the original's gender/age/equipment
+1 department (3 specialties), 10 rooms, all SAME_GENDER (13 beds), 28 nights, 80 stays
+(the default seed) laid out sequentially along each room's timeline, with the original's gender/age/equipment
 distributions, drawn from a seeded `random.Random`. The C++ demo (`build/bed-allocation/ba_demo`, built as shown in
 ../README.md) reaches hard 0 / medium 0 (everyone assigned) within 10 s.

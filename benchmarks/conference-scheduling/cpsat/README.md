@@ -1,7 +1,10 @@
 # conference-scheduling-cpsat
 
 CP-SAT alternative exposing the conference constraint provider as a selectable
-catalog. Passing `constraints` replaces the default catalog.
+catalog. Passing `constraints` replaces the default catalog. The model is
+`external_solver.conference_scheduling` from
+[external-solver](https://github.com/optimaru/external-solver); this project runs it
+against the engine in this checkout.
 
 Each plugin subclasses the engine's spec (`conference_scheduling.constraints`) and only
 builds its CP-SAT terms; the default levels and weights, the reward flags and the

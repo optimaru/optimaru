@@ -1,13 +1,16 @@
 # Semiconductor fab scheduling CP-SAT
 
-OR-Tools CP-SAT reference for the canonical `semiconductor_scheduling.models` contract.
+OR-Tools CP-SAT reference for the canonical `semiconductor_scheduling.models` contract:
+external-solver's `external_solver.semiconductor_scheduling`. This package holds the engine
+vs CP-SAT comparison; importing it points external-solver at the engine in this checkout.
 An interval model: per operation a start and an end, and per eligible machine an optional
 interval of that option's duration (for a machine listed twice, the LAST option — the one
 the engine scores); exactly one option is chosen. The returned schedule (batch ids per
 machine, family and start) is re-scored by the C++ engine with the same selection.
 
 ```python
-from semiconductor_scheduling_cpsat import solve
+import semiconductor_scheduling_cpsat  # noqa: F401 - use the engine in this checkout
+from external_solver.semiconductor_scheduling import solve
 
 solution = solve(problem, time_limit_seconds=10, random_seed=0, num_workers=8)
 ```
@@ -53,8 +56,10 @@ refused with the engine's message when the objective is built, before that check
 
 ## Tests
 
-`tests/test_parity.py`: on fixtures with every operation fixed (`_fixed_assignments`) and
-one constraint selected, a penalized plugin's objective term (`_proxy_score`) equals the
+`tests/test_benchmark.py` checks the comparison harness. The parity tests live in
+external-solver, `tests/semiconductor_scheduling/test_parity.py`: on fixtures with every
+operation fixed (`_fixed_assignments`) and one constraint selected, a penalized plugin's
+objective term (`_proxy_score`) equals the
 engine's raw cost and a structural plugin accepts the schedule exactly when the engine's
 raw cost is 0 — a positive and a zero fixture per constraint (cycle time and makespan are
 positive whenever every operation is assigned). Plus the catalog parity, a demotion scored

@@ -1,6 +1,8 @@
 # Flight crew CP-SAT
 
-CP-SAT backend for the canonical flight-crew model. It optimizes skills,
+CP-SAT backend for the canonical flight-crew model, `external_solver.flight_crew_scheduling`
+from [external-solver](https://github.com/optimaru/external-solver); this project runs it
+against the engine in this checkout. It optimizes skills,
 availability, overlapping duties, chronological airport transfers, home-base
 starts/ends, and pinned assignments. The engine evaluator supplies the final
 reported score.

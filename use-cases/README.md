@@ -107,11 +107,12 @@ component). Python reads them from `<package>.constraint_info()`, one
   rules its factory accepts; its defaults are the `default_enabled` rows.
 - `constraint_costs(solution, constraints=None)` reports every selected
   constraint's raw costs as `{key: {costs, weight, exponent, offset, clip,
-  hard, global, level, reward, level_flippable, name, label, default_weight,
+  global, level, reward, level_flippable, name, label, default_weight,
   default_level}}` (`weight` / `level` / `exponent` / `offset` / `clip` are the
-  pick's knobs, `default_*` what `None` means, `hard` is `level == "hard"`). The
-  key of the first pick of a name is the name, the k-th is `name#k`, in pick
-  order; a scoped constraint also lists the units it evaluates as `units`.
+  pick's knobs, `default_*` what `None` means). The key of the first pick of a
+  name is the name, the k-th is `name#k`, in pick order; a scoped constraint
+  also lists the units it evaluates as `units`, and a domain with a medium
+  level adds `medium_fold`.
 - `constraints.score(costs, picks)` re-prices them in pure Python with the
   engine's arithmetic.
 
@@ -167,6 +168,8 @@ The contract is the same everywhere:
 
 - A complete solution skips construction: the search starts exactly from it.
 - A partial solution keeps what it gives, and only what it leaves out is constructed.
+  Quadratic assignment is the exception: its search only swaps, so it refuses a
+  partial assignment.
 - A solve's result is accepted back, even a hard-infeasible one. The exceptions are
   pickup-delivery, which refuses a route with a broken pickup and dropoff pair, and
   school timetabling, which refuses a course placed twice at one time.
@@ -174,8 +177,9 @@ The contract is the same everywhere:
   raise `ValueError`.
 - `with_initial_solution` returns a new problem and leaves its input untouched.
 - Pinned parts are problem facts. Most use cases keep the problem's value and
-  ignore what the solution says. Food packaging, pickup-delivery, max-cut and
-  school timetabling raise `ValueError` when the solution contradicts them.
+  ignore what the solution says. Employee scheduling, food packaging,
+  pickup-delivery, max-cut and school timetabling raise `ValueError` when the
+  solution contradicts them.
 - A seed is used once: a result edited and solved again starts from construction
   unless you pass it through `with_initial_solution` again.
 
@@ -291,8 +295,12 @@ and exponent are defaults the caller can override per solve, together with
    come from `constraint_info()`.
 6. **Tests and benchmark parity** — a hand-calculated positive and zero case
    in `<ns>_plugin_test`, full-vs-incremental and monolith-vs-plugin parity,
-   and the same cost in the CP-SAT model under `benchmarks/<slug>/cpsat` (a
-   plugin subclassing the spec) so the comparison stays like for like.
+   and the same cost in the CP-SAT model (a plugin subclassing the spec), so
+   the comparison stays like for like. The CP-SAT models live in
+   [external-solver](https://github.com/optimaru/external-solver)
+   (`external_solver.<package>`); `benchmarks/<slug>/cpsat` only runs them
+   against this checkout. School timetabling's CP-SAT model is the exception
+   and stays in `benchmarks/school-timetabling/cpsat`.
 
 ## Building the Python packages standalone
 

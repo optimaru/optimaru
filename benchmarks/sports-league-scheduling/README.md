@@ -3,13 +3,13 @@
 The [`sports-league-scheduling`](../../use-cases/sports-league-scheduling) use case against **OR-Tools CP-SAT**
 ([`cpsat/`](cpsat), package `sports_league_cpsat`). The CP-SAT model implements the
 same constraints under the same names and units, so both answers are
-rescored by the use case's own evaluator; parity tests in `cpsat/tests`
-keep the two cost definitions identical.
+rescored by the use case's own evaluator; external-solver's parity tests
+(`tests/sports_league_scheduling/test_solve.py`) keep the two cost definitions identical.
 
 ```sh
 cd benchmarks/sports-league-scheduling/cpsat
 uv sync --all-groups --all-extras      # builds the engine extension too
-uv run pytest -q                       # CP-SAT model + parity tests
+uv run pytest -q                       # benchmark harness tests
 uv run sports-league-compare --seconds 10 --workers 8   # engine vs CP-SAT (--markdown, --json)
 ```
 

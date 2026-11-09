@@ -142,6 +142,12 @@ class SolverConfig:
     two_opt_move_weight: float
     or_opt_move_weight: float
     tail_swap_move_weight: float
+    nearby_probability: float
+    """Bias swap partners and relocate insertion points toward cheap-changeover
+    neighbors (the cleanup matrix) with this probability; 0.8 by default, 0 = off
+    (uniform selection)."""
+    nearby_size: int
+    """Neighbors kept per job for nearby selection (10 by default)."""
     best_score_limit: tuple[int, float]
     on_new_best: Callable[[int, Score], None] | None
     """Progress callback (steps, best score). The score has the same three levels as the

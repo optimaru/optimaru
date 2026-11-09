@@ -38,6 +38,6 @@ modes; a fractional offset is refused (`offset must be an integer for CP-SAT`).
 `clip=False` with an offset is refused on hard with the engine's message (`constraint
 'renewable_resource_capacity_cost': clip=False with a non-zero offset cannot be hard,
 ...`); medium folds into soft, as in the engine, so it takes the literal formula.
-`tests/test_solve.py` pins every mode and delay of a two-project instance and checks
+External-solver's `tests/project_job_scheduling/test_solve.py` pins every mode and delay of a two-project instance and checks
 that the CP-SAT objective, the engine's own score and `project_job.constraints.score()`
 agree per level under repeated, shifted and re-levelled picks.

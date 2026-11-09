@@ -1,7 +1,5 @@
 """Exporting a timetable — the NEIS bulk file (CSV) and printable Excel.
 
-Matches Comcigan's "print" menu.
-
 - `neis_bundle()`   : the NEIS bulk file. One CSV per class.
 - `timetable_workbook()` : Excel with the overall / class / teacher / special-room timetables.
 
@@ -195,7 +193,7 @@ def neis_bundle(
                     )
             writer.writerow(row)
 
-        # The name rule Comcigan uses: 기초시간표(<school year>-<semester>,<grade>-<class>).csv
+        # The NEIS per-class file name rule: 기초시간표(<school year>-<semester>,<grade>-<class>).csv
         number = _class_number(group.name, group.id)
         name = f"기초시간표({options.school_year}-{options.semester},{group.grade}-{number}).csv"
         text = buffer.getvalue()

@@ -127,8 +127,9 @@ vrp.Solver(config).solve_with_constraints(plan, [
 per-vehicle entries list the vehicles they evaluate as `"units"`.
 
 **Names.** Every constraint name ends in `_cost` (C++ struct, header file, registry
-name, Python spec class, module-level default instance and catalog name), except
-`vehicle_fixed_cost`. `max_end_time_cost` is the visit deadline and
+name, Python spec class, module-level default instance and catalog name); in
+`vehicle_fixed_cost` that ending is the rule's own subject (the vehicle's fixed cost),
+not an added suffix. `max_end_time_cost` is the visit deadline and
 `vehicle_max_end_time_cost` the vehicle's own end bound. The model FIELDS keep their plain
 names (`max_travel_time`, `max_route_duration`, `max_end_time`, `max_stops`,
 `max_route_radius_meters`, `min_load_ratio`, `fixed_cost`, `unassigned_penalty_minutes`).

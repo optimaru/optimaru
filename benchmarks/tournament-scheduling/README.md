@@ -18,7 +18,7 @@ pin both down: [`cpsat/README.md`](cpsat/README.md#constraints-and-parity-with-t
 ```sh
 cd benchmarks/tournament-scheduling/cpsat
 uv sync --all-groups --all-extras      # builds the engine extension too
-uv run pytest -q                       # CP-SAT model + parity tests
+uv run pytest -q                       # benchmark harness tests
 uv run tournament-scheduling-compare --seconds 10 --workers 8   # engine vs CP-SAT (--markdown, --json)
 ```
 

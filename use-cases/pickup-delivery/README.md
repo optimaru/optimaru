@@ -330,10 +330,10 @@ enclosing-circle helpers in `route_geometry.hpp`):
    `description_en` / `description_ko` to `python/pdp_routing/constraints.py` (plus its
    module-level default instance); callers then pick, reweight or flip it:
    `constraints=[..., MyRuleCost(weight=5, level="hard")]`;
-5. mirror it in the CP-SAT model in
-   [`benchmarks/pickup-delivery/cpsat`](../../benchmarks/pickup-delivery/cpsat) (a plugin
-   subclassing the spec; defaults come from `constraint_info()`) so the benchmark stays like
-   for like.
+5. mirror it in the CP-SAT model, `external_solver.pickup_delivery` in
+   [external-solver](https://github.com/optimaru/external-solver) (a plugin subclassing the
+   spec; defaults come from `constraint_info()`), so the benchmark in
+   [`benchmarks/pickup-delivery/cpsat`](../../benchmarks/pickup-delivery/cpsat) stays like for like.
 
 ## Benchmark
 

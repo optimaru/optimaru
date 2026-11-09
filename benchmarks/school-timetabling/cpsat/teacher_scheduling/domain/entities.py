@@ -1,6 +1,6 @@
 """The basic entities that make up a timetabling problem.
 
-Terms follow the practice of Korean middle/high-school timetabling (Comcigan and the like).
+Terms follow the practice of Korean middle/high-school timetabling.
 - Class (ClassGroup): a group of students that moves together, e.g. grade 1 class 3
 - Course: a lesson that is the unit of assignment, e.g. "grade 1 class 3 / Math / Kim / 4 periods a week"
 - Block: periods that must be joined as consecutive periods

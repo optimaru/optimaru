@@ -17,7 +17,8 @@ holds their pybind11 bindings (`tournament_scheduling._core`) and the pydantic m
 `tournament_scheduling.constraint_info()` returns exactly these rows (`ConstraintInfo`:
 `name`, `default_level`, `default_weight`, `level_flippable`, `reward`, `default_enabled`),
 read off the C++ components' `kDefaultLevel` / `kDefaultWeight`;
-`constraint_costs(schedule)` returns the raw per-unit costs (a team for the two hard
+`constraint_costs(schedule)` (a `_core.TournamentSchedule`; convert a model with `to_core()`)
+returns the raw per-unit costs (a team for the two hard
 constraints, one total for the two imbalance constraints) with that metadata and the
 domain's `medium_fold` (`{"kind": "into_soft", "unit": 1e6}`) on every entry.
 `tournament_scheduling.constraints` holds one spec per row (`TeamConflictCost`, ...) and the

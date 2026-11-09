@@ -9,7 +9,7 @@ subclass of the domain spec of the same name (`RoomConflictCost`, `OvertimeCost`
 carrying only `build()`; the registry lists them in `list_constraints()` order. The
 default level and weight of every plugin come from the engine's
 `meeting_scheduling.constraint_info()`, so `catalog()` equals the engine catalog
-(`tests/test_solve.py`).
+(external-solver's `tests/meeting_scheduling/test_solve.py`).
 
 - The two medium constraints (`required_and_preferred_attendance_conflict_cost`,
   `preferred_attendance_conflict_cost`) sit on the CP-SAT medium level at weight 1, like

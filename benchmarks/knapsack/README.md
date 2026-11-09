@@ -6,7 +6,7 @@ same constraints under the same names and units — one external-solver
 `ConstraintPlugin` per constraint ([`external_solver.knapsack.constraints`](https://github.com/optimaru/external-solver/tree/main/src/external_solver/knapsack/constraints.py)), each a
 subclass of the domain spec with its defaults read from
 `knapsack.constraint_info()` — so both answers are rescored by the use case's
-own evaluator. `cpsat/tests/test_constraint_parity.py` pins every selection of
+own evaluator. External-solver's `tests/knapsack/test_constraint_parity.py` pins every selection of
 small instances (and 200 random ones of a 10-item instance) and checks that each
 constraint's CP-SAT term equals the engine's `constraint_costs()` total (0 exactly
 when the engine reports no violation), and that the CP-SAT optimum equals the
@@ -27,7 +27,7 @@ objective is built.
 ```sh
 cd benchmarks/knapsack/cpsat
 uv sync --all-groups --all-extras
-uv run pytest -q                       # CP-SAT model + engine parity tests
+uv run pytest -q                       # comparison smoke tests (model tests: external-solver)
 uv run knapsack-compare --seconds 10 --workers 8   # engine vs CP-SAT table (--markdown, --json)
 ```
 

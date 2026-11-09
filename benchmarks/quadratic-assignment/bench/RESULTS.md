@@ -4,7 +4,7 @@ Measured on 2026-11-04 with the C++ engine on an Apple M4 Max (16 logical CPUs),
 process, seed 1, 30 s per instance. The solve budget excludes archive download and parsing.
 The solution is re-scored by `quadratic_assignment.constraint_costs`.
 
-| instance | tasks | solver | budget | objective | QAPLIB BKS | gap |
+| instance | facilities | solver | budget | objective | QAPLIB BKS | gap |
 | --- | ---: | --- | ---: | ---: | ---: | ---: |
 | `nug30` | 30 | engine | 30 s | 6,256 | 6,124 | 2.16% |
 | `lipa30a` | 30 | engine | 30 s | 13,403 | 13,178 | 1.71% |

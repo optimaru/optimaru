@@ -96,6 +96,7 @@ fc.solve(problem, constraints=[*get_constraints(),  # + 10 x (conflicts beyond t
                                FlightConflictCost(weight=10, exponent=2, offset=1)])
 ```
 
-`fc.constraint_costs(schedule)` returns the raw per-employee costs and
+`fc.constraint_costs(schedule)` returns the raw per-employee costs of an engine
+`FlightCrewSchedule` (`problem.to_core()` for a model) and
 `flight_crew.constraints.score(costs, constraints)` rescores them in pure Python with the
 engine's arithmetic.

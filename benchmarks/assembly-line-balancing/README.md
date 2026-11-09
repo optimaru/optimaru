@@ -10,7 +10,8 @@ The CP-SAT model is built from [external-solver](https://github.com/optimaru/ext
 constraint ([`external_solver.assembly_line_balancing.constraints`](https://github.com/optimaru/external-solver/tree/main/src/external_solver/assembly_line_balancing/constraints.py), subclassing the domain specs; the
 defaults come from the engine's `constraint_info()`). Every encoding is exact, so the same
 assignment gives the same raw cost per constraint in both solvers
-(`cpsat/tests/test_constraint_parity.py` pins every assignment of small instances).
+(external-solver's `tests/assembly_line_balancing/test_constraint_parity.py` pins every
+assignment of small instances).
 `level="soft"` / `level="hard"` moves a term to the soft / hard level in both solvers, and
 `level="medium"` is refused by both (`this use case has no medium level`). Not supported on
 CP-SAT: `exponent != 1` and non-integer weights (refused).
@@ -28,7 +29,7 @@ objective is built.
 ```sh
 cd benchmarks/assembly-line-balancing/cpsat
 uv sync --all-groups --all-extras
-uv run pytest -q tests
+uv run pytest -q tests     # comparison runner and SALBP parser (the model tests live in external-solver)
 uv run python -m assembly_line_balancing_cpsat.benchmark --seconds 10     # generated lines, no download
 cd .. && uv run --project cpsat python -m bench.run_bench --seconds 60   # the SALBP archive
 ```

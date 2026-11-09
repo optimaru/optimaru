@@ -1,12 +1,15 @@
 # Facility location CP-SAT
 
 OR-Tools CP-SAT alternative for the canonical `facility_location.models`
-contract.  It assigns every consumer, minimizes capacity overflow first, then
+contract, `external_solver.facility_location` from
+[external-solver](https://github.com/optimaru/external-solver); this project runs it
+against the engine in this checkout.  It assigns every consumer, minimizes capacity overflow first, then
 minimizes the engine's weighted setup and distance cost.  The final assignment
 is re-scored by the shared C++ evaluator before it is returned.
 
 ```python
-from facility_location_cpsat import solve
+import facility_location_cpsat  # noqa: F401 - points external_solver at the checkout engine
+from external_solver.facility_location import solve
 
 solution = solve(problem, time_limit_seconds=10, random_seed=0)
 ```

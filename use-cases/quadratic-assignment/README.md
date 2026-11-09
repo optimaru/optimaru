@@ -7,8 +7,9 @@ their locations, plus an optional direct facility-location cost, with pinned and
 forbidden placements and facility-demand / location-capacity compatibility as
 hard constraints. The objective is the Koopmans-Beckmann (1957) formulation of the quadratic
 assignment problem.
+The exact CP-SAT reference is external-solver's `external_solver.quadratic_assignment`;
 [`benchmarks/quadratic-assignment/cpsat`](../../benchmarks/quadratic-assignment/cpsat)
-holds the exact CP-SAT reference.
+holds the engine vs CP-SAT comparison.
 
 ## Domain (assignment shape)
 
@@ -307,10 +308,11 @@ full bijection.
    `python/quadratic_assignment/constraints.py` (plus its module-level default
    instance); callers then pick, reweight or flip it:
    `constraints=[..., MyRuleCost(weight=5, level="hard")]`;
-5. mirror it in the CP-SAT model in
-   [`benchmarks/quadratic-assignment/cpsat`](../../benchmarks/quadratic-assignment/cpsat)
+5. mirror it in the CP-SAT model in external-solver's
+   [`external_solver.quadratic_assignment.constraints`](https://github.com/optimaru/external-solver/tree/main/src/external_solver/quadratic_assignment/constraints.py)
    (a plugin subclassing the spec; defaults come from `constraint_info()`), with an
-   exact encoding so `test_constraint_parity.py` can pin permutations.
+   exact encoding so external-solver's `tests/quadratic_assignment/test_constraint_parity.py`
+   can pin permutations.
 
 ## Benchmark
 

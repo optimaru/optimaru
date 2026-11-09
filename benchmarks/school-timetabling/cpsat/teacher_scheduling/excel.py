@@ -1,10 +1,9 @@
-"""Comcigan-format teacher load workbook (Excel) -> TimetableProblem.
+"""Korean teacher load workbook (Excel) -> TimetableProblem.
 
-Reads the workbook layout that Comcigan's (컴시간, a timetabling tool widely
-used in Korean schools) "import teacher load table" accepts, as is. The goal is
-to let a school upload the file it already uses, so the only mandatory load
-sheet is Comcigan's own `교사별시수표` (teacher load table); what Comcigan
-collects on separate screens (periods per weekday / basics / subject register /
+Reads a teacher load table layout common in Korean schools, as is. The goal
+is to let a school upload the file it already uses, so the only mandatory load
+sheet is the `교사별시수표` (teacher load table); what timetabling tools
+usually collect on separate screens (periods per weekday / basics / subject register /
 special rooms / special operations) comes in optional sheets.
 
 The sheet names, column headers and keywords below are the Korean labels of
@@ -14,7 +13,7 @@ Sheets
 ------
 - `기본사항`     (basics, required) school name / school year / classes per grade
 - `요일별시수`   (periods per weekday, required) grade x weekday -> periods
-- `교사별시수표` (teacher load table, required) Comcigan's original layout
+- `교사별시수표` (teacher load table, required) the layout schools already keep
 - `과목`         (subjects, optional) special room / co-teaching / preferred and
                  avoided periods per short subject name
 - `특별실`       (special rooms, optional) room name + type
@@ -48,7 +47,7 @@ SHEET_SUBJECTS = "과목"  # subjects
 SHEET_ROOMS = "특별실"  # special rooms
 SHEET_SPECIAL = "특별작업"  # special operations
 
-# Comcigan writes weekdays as one Korean syllable: 월 Mon, 화 Tue, 수 Wed, 목 Thu, 금 Fri, 토 Sat.
+# The workbook writes weekdays as one Korean syllable: 월 Mon, 화 Tue, 수 Wed, 목 Thu, 금 Fri, 토 Sat.
 _DAY_BY_LABEL = dict(zip("월화수목금토", Weekday, strict=True))
 _GRADE_RE = re.compile(r"(\d+)\s*학년")  # "<n>학년" = grade n
 # Accepts "월1", "월 1교시" and "월요일 1교시" (Mon 1 / Mon period 1 / Monday period 1).
@@ -61,7 +60,7 @@ class ExcelFormatError(ValueError):
 
 @dataclass
 class SchoolBasics:
-    """School metadata, matching Comcigan's "basics" screen."""
+    """School metadata (the `기본사항` sheet)."""
 
     school_name: str = ""
     school_year: int | None = None
@@ -241,7 +240,7 @@ class _LoadRow:
 
 
 def _read_load_table(rows: list[list[Any]]) -> tuple[list[_LoadRow], dict[int, int]]:
-    """Reads Comcigan's original layout; returns the rows and the highest class number per grade.
+    """Reads the original load table layout; returns the rows and the highest class number per grade.
 
     The header has two rows — grade labels ('1학년/2학년/3학년', merged cells) on top,
     class numbers below. openpyxl gives a merged cell's value only to its first
@@ -289,7 +288,7 @@ def _read_load_table(rows: list[list[Any]]) -> tuple[list[_LoadRow], dict[int, i
     for row in rows[header_index + 2 :]:
         if not row:
             continue
-        # Comcigan rule: the data ends at the first row without a row number.
+        # Layout rule: the data ends at the first row without a row number.
         if order_column is not None and _as_int(row[order_column] if order_column < len(row) else None) is None:
             break
         official = _norm(row[columns["정식과목명"]]) if columns["정식과목명"] < len(row) else ""
@@ -363,7 +362,7 @@ def _build_class_groups(
             groups.append(
                 ClassGroup(
                     id=_class_id(grade, number),
-                    # Comcigan's class name ("<grade>학년 <n>반" = grade g, class n): the special-operations
+                    # The workbook's class name ("<grade>학년 <n>반" = grade g, class n): the special-operations
                     # sheet and the NEIS export refer to classes by this exact name.
                     name=f"{grade}학년 {number}반",
                     grade=grade,
@@ -587,7 +586,7 @@ def build_problem(
 
 
 def _warn_on_capacity(problem: TimetableProblem, class_id_by_name: dict[str, str], warnings: list[str]) -> None:
-    """Early warning matching Comcigan's "periods per weekday total == load table total" check."""
+    """Early warning when the periods per weekday total differs from the load table total."""
     for group in problem.class_groups:
         available = sum(
             1

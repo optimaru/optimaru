@@ -269,15 +269,16 @@ Python reference-parity tests pin it.
    `description_en` / `description_ko` to `python/max_cut/constraints.py` (plus its
    module-level default instance); callers then pick, reweight or flip it:
    `constraints=[..., MyRuleCost(weight=5, level="hard")]`;
-5. mirror it in the CP-SAT model in
-   [`benchmarks/max-cut/cpsat`](../../benchmarks/max-cut/cpsat) (a plugin subclassing
-   the spec; defaults come from `constraint_info()`), with an exact encoding so
-   `test_constraint_parity.py` can pin partitions.
+5. mirror it in the CP-SAT model, `external_solver.max_cut` in
+   [external-solver](https://github.com/optimaru/external-solver) (a plugin subclassing the
+   spec; defaults come from `constraint_info()`), with an exact encoding so its
+   `tests/max_cut/test_constraint_parity.py` can pin partitions;
+   [`benchmarks/max-cut/cpsat`](../../benchmarks/max-cut/cpsat) runs it against this engine.
 
 ## Benchmark
 
 [`benchmarks/max-cut`](../../benchmarks/max-cut) compares this use case with OR-Tools
 CP-SAT on the same instances, rescored by the same evaluator.
 
-Latest run (30 s per solver, 3 instances): best score by the engine on 3, CP-SAT on 2
+Latest run (30 s per solver, 3 instances): best score by the engine on 1, CP-SAT on 3
 (ties count for each). Full table: [benchmarks/max-cut/README.md](../../benchmarks/max-cut/README.md#results).

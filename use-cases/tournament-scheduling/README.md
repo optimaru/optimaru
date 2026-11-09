@@ -22,7 +22,7 @@ result = ts.solve(schedule, time_limit_seconds=5.0, random_seed=42)
 print(result.score_hard, result.score_soft)
 ```
 
-`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, a full `config` (`tournament_scheduling.SolverConfig`) and `constraints` (see below).
+`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`, `on_new_best`, a full `config` (`tournament_scheduling.SolverConfig`) and `constraints` (see below).
 
 ## Constraints
 
@@ -74,7 +74,8 @@ ts.solve(schedule, constraints=[
 ])
 ```
 
-`ts.constraint_costs(schedule, picks)` keys the second pick
+`ts.constraint_costs(schedule.to_core(), picks)` (it takes the engine object, not the
+pydantic model) keys the second pick
 `confrontation_count_imbalance_cost#2`. CP-SAT takes integral offsets on the two hard
 constraints (one term per evaluated team); its imbalance surrogates have no raw-identical
 total to shift, so it refuses an offset on them (the engine takes it).
@@ -137,10 +138,10 @@ solver's `solve` before the engine runs — the engine only fills what is still 
    `description_en` / `description_ko` to `python/tournament_scheduling/constraints.py` (plus
    its module-level default instance); callers then pick, reweight or flip it:
    `constraints=get_constraints([..., MyRuleCost(weight=5, level="hard")])`;
-5. mirror it in the CP-SAT model in
-   [`benchmarks/tournament-scheduling/cpsat`](../../benchmarks/tournament-scheduling/cpsat) (a plugin
+5. mirror it in the CP-SAT model in external-solver's
+   [`external_solver.tournament_scheduling.constraints`](https://github.com/optimaru/external-solver/tree/main/src/external_solver/tournament_scheduling/constraints.py) (a plugin
    subclassing the spec; defaults come from `constraint_info()`) so the benchmark stays like
-   for like, and state there whether its CP-SAT term is raw-identical to the engine's.
+   for like, and state in [`benchmarks/tournament-scheduling/cpsat`](../../benchmarks/tournament-scheduling/cpsat) whether its CP-SAT term is raw-identical to the engine's.
 
 ## Benchmark
 
