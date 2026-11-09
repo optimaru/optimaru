@@ -18,7 +18,7 @@ solution = solve(problem, time_limit_seconds=10, random_seed=0, num_workers=8)
 ## Constraints
 
 Every constraint is an external-solver `ConstraintPlugin` subclass of the domain spec of the
-same name ([`external_solver.semiconductor_scheduling.constraints`](https://github.com/optimaru/external-solver/tree/main/src/external_solver/semiconductor_scheduling/constraints.py)); default levels and weights
+same name ([`external_solver.semiconductor_scheduling.constraints`](https://github.com/optimaru/external-solver/blob/v0.1.0/src/external_solver/semiconductor_scheduling/constraints.py)); default levels and weights
 come from `semiconductor_scheduling.constraint_info()`, and the catalog equals it.
 
 - **Structural (12)**: `machine_eligibility_cost` (the variable layout),

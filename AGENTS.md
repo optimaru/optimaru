@@ -9,7 +9,7 @@
 - optimaru.com documents this engine. When a change alters public API, defaults, constraint names, counts, install commands or benchmark results, say in the PR that the homepage needs an update (its `check:docs` script compares its docs data with the installed `optimaru`).
 - Changing `version` in `pyproject.toml` publishes: on merge to `main`, `wheels.yml` builds the wheels, uploads them to PyPI and tags the release. Never change it unless the owner asks for a release.
 - Open a PR for every change, read the claude-review comment, apply the reasonable suggestions, and merge it yourself once the latest review has nothing important left. Do not wait to ask. Releases are the owner's.
-- On this Mac, export `SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk` for native builds (the default SDK fails to link).
+- macOS: if native builds fail to link with the default SDK, point `SDKROOT` at an older installed SDK (`ls /Library/Developer/CommandLineTools/SDKs/`; `xcrun --show-sdk-path` shows the default) for both the cmake and the `uv sync` builds.
 - Engine tests: `cmake -B build && cmake --build build -j && ctest --test-dir build`. Also `python3 scripts/check_constraint_base.py --require-all` and `python3 scripts/check_license_headers.py`.
 - Use-case tests: `cd use-cases/<slug>/python && uv sync --all-groups --all-extras && uv run pytest -q`. `uv sync` keeps a stale extension after C++ edits; run `uv sync --reinstall` (or `--reinstall-package <package>`) after touching `bindings.cpp`, headers or `cpp/src`.
 - Benchmark projects are `uv` projects (`benchmarks/<slug>/cpsat`, `benchmarks/vehicle-routing`); run their smoke tests with `uv run pytest -q` there. Do not commit downloaded instances or raw results.

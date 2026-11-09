@@ -130,7 +130,8 @@ solver's `solve` before the engine runs — the engine only fills what is still 
 5. mirror it in the CP-SAT model, `external_solver.order_picking` in
    [external-solver](https://github.com/optimaru/external-solver) (a plugin subclassing the
    spec; defaults come from `constraint_info()`), so the benchmark in
-   [`benchmarks/order-picking/cpsat`](../../benchmarks/order-picking/cpsat) stays like for like.
+   [`benchmarks/order-picking/cpsat`](../../benchmarks/order-picking/cpsat)
+   stays like for like.
 
 ## Benchmark
 

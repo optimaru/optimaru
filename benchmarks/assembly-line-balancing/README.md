@@ -7,7 +7,7 @@ downloaded on demand and checksum-verified ([`bench/data.py`](bench/data.py)). B
 answers are rescored by the use case's own evaluator (`constraint_costs()`).
 
 The CP-SAT model is built from [external-solver](https://github.com/optimaru/external-solver) plugins, one per engine
-constraint ([`external_solver.assembly_line_balancing.constraints`](https://github.com/optimaru/external-solver/tree/main/src/external_solver/assembly_line_balancing/constraints.py), subclassing the domain specs; the
+constraint ([`external_solver.assembly_line_balancing.constraints`](https://github.com/optimaru/external-solver/blob/v0.1.0/src/external_solver/assembly_line_balancing/constraints.py), subclassing the domain specs; the
 defaults come from the engine's `constraint_info()`). Every encoding is exact, so the same
 assignment gives the same raw cost per constraint in both solvers
 (external-solver's `tests/assembly_line_balancing/test_constraint_parity.py` pins every

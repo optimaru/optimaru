@@ -33,7 +33,7 @@ medium fold (`medium_fold="below_hard"`, read off `constraint_costs()`), so `cli
 with an offset is refused on hard and on medium with the engine's messages (`constraint
 'required_skill_cost': clip=False with a non-zero offset cannot be hard, ...` and
 `constraint 'unassigned_tasks_cost': clip=False with a non-zero offset cannot be medium
-here, ...`). external-solver's `tests/task_assigning/test_solve.py` pins several layouts and checks
+here, ...`). External-solver's `tests/task_assigning/test_solve.py` pins several layouts and checks
 that the CP-SAT objective, `task_assigning.constraints.score()` and (wherever every task
 is assigned) the engine's own score agree per level under repeated, shifted and
 re-levelled picks.

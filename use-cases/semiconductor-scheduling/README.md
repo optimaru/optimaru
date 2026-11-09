@@ -258,7 +258,7 @@ assign.
    (`class <Subject>Cost(Constraint)` with `name`, `label_en/ko`, `description_en/ko`, a
    module-level instance and a place in `_DEFAULTS`);
 5. its CP-SAT plugin in external-solver's
-   [`external_solver.semiconductor_scheduling.constraints`](https://github.com/optimaru/external-solver/tree/main/src/external_solver/semiconductor_scheduling/constraints.py)
+   [`external_solver.semiconductor_scheduling.constraints`](https://github.com/optimaru/external-solver/blob/v0.1.0/src/external_solver/semiconductor_scheduling/constraints.py)
    with a parity case.
 
 ## Benchmark

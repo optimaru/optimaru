@@ -3,7 +3,7 @@
 CP-SAT alternative with independently selectable bucket, travel and order
 consolidation plugins.
 
-The plugins ([`external_solver.order_picking.constraints`](https://github.com/optimaru/external-solver/tree/main/src/external_solver/order_picking/constraints.py)) subclass the domain specs of
+The plugins ([`external_solver.order_picking.constraints`](https://github.com/optimaru/external-solver/blob/v0.1.0/src/external_solver/order_picking/constraints.py)) subclass the domain specs of
 the same name (`TrolleyCapacityCost`, `DistanceFromPreviousPickTaskCost`,
 `DistanceFromLastPickTaskToPathOriginCost`, `OrderSplitByTrolleyCost`, in
 `list_constraints()` order). Their default level and weight come from the

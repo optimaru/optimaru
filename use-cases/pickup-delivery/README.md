@@ -333,7 +333,8 @@ enclosing-circle helpers in `route_geometry.hpp`):
 5. mirror it in the CP-SAT model, `external_solver.pickup_delivery` in
    [external-solver](https://github.com/optimaru/external-solver) (a plugin subclassing the
    spec; defaults come from `constraint_info()`), so the benchmark in
-   [`benchmarks/pickup-delivery/cpsat`](../../benchmarks/pickup-delivery/cpsat) stays like for like.
+   [`benchmarks/pickup-delivery/cpsat`](../../benchmarks/pickup-delivery/cpsat)
+   stays like for like.
 
 ## Benchmark
 

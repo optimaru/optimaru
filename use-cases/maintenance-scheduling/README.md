@@ -192,7 +192,8 @@ solver's `solve` before the engine runs — the engine only fills what is still 
 5. mirror it in the CP-SAT model, `external_solver.maintenance_scheduling` in
    [external-solver](https://github.com/optimaru/external-solver) (a plugin subclassing the
    spec; defaults come from `constraint_info()`), so the benchmark in
-   [`benchmarks/maintenance-scheduling/cpsat`](../../benchmarks/maintenance-scheduling/cpsat) stays like for like.
+   [`benchmarks/maintenance-scheduling/cpsat`](../../benchmarks/maintenance-scheduling/cpsat)
+   stays like for like.
 
 ## Benchmark
 
