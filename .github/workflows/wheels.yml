@@ -6,8 +6,8 @@
 #     breaks is caught before the merge;
 #   - on a push to main whose version has no `v<version>` tag yet, it builds and
 #     publishes;
-#   - `workflow_dispatch` builds on demand without publishing (for example
-#     after editing this workflow).
+#   - `workflow_dispatch` builds on demand (for example after editing this
+#     workflow); run on main with an untagged version, it also publishes.
 #
 # Publishing:
 #   1. uploads the sdist + wheels to PyPI, then
@@ -63,8 +63,8 @@ jobs:
           else
             exists=false
           fi
-          # Publish only for a push to main with a version that has no tag yet.
-          if [ "${GITHUB_EVENT_NAME}" = "push" ] && [ "${GITHUB_REF}" = "refs/heads/main" ] && [ "${exists}" = "false" ]; then
+          # Publish only from main (push or manual run) with a version that has no tag yet.
+          if { [ "${GITHUB_EVENT_NAME}" = "push" ] || [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; } && [ "${GITHUB_REF}" = "refs/heads/main" ] && [ "${exists}" = "false" ]; then
             release=true
           else
             release=false
