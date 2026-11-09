@@ -15,7 +15,7 @@ namespace st::canon
 {
 
 // Moved verbatim out of canonical_solver.cpp — one operator per file, the
-// domain-side counterpart of the engine's generic/ruin layout.
+// domain-side counterpart of the engine's destroy/ layout.
 
 // Smart same-class swap (a SmartChangeMove-style pattern): pick a seed lesson —
 // preferring one involved in a hard violation while any exists — evaluate the

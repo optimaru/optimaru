@@ -45,7 +45,7 @@
 #include "es/domain.hpp"
 #include "es/score_calculator.hpp"
 #include "es/solver.hpp"
-#include "optimaru/editor.hpp"
+#include "optimaru/model/editor.hpp"
 #include "optimaru/worker_threads.hpp"
 #include "optimaru/python/names.hpp"
 

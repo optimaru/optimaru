@@ -9,7 +9,7 @@
 #include "es/incremental_calculator.hpp"
 #include "es/score_calculator.hpp"
 #include "es/solver.hpp"
-#include "optimaru/editor.hpp"
+#include "optimaru/model/editor.hpp"
 
 using namespace es;
 

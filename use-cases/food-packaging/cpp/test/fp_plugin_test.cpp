@@ -43,7 +43,7 @@
 #include "fp/domain.hpp"
 #include "fp/score_calculator.hpp"
 #include "fp/solver.hpp"
-#include "optimaru/editor.hpp"
+#include "optimaru/model/editor.hpp"
 
 using namespace fp;
 

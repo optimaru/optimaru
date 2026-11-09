@@ -19,7 +19,7 @@
 #include "fcs/incremental_calculator.hpp"
 #include "fcs/score_calculator.hpp"
 #include "fcs/solver.hpp"
-#include "optimaru/editor.hpp"
+#include "optimaru/model/editor.hpp"
 
 using namespace fcs;
 

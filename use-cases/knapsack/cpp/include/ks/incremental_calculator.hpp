@@ -6,7 +6,7 @@
 
 #include "ks/domain.hpp"
 #include "ks/score_calculator.hpp"
-#include "optimaru/objective.hpp"
+#include "optimaru/score/objective.hpp"
 
 namespace ks
 {

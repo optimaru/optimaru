@@ -37,7 +37,7 @@
 #include "alb/score_calculator.hpp"
 #include "alb/solver.hpp"
 #include "alb_fixtures.hpp"
-#include "optimaru/editor.hpp"
+#include "optimaru/model/editor.hpp"
 
 using namespace alb;
 using namespace alb_test;

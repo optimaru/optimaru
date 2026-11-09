@@ -8,9 +8,9 @@
 #include <string>
 #include <vector>
 
-#include "optimaru/solution_traits.hpp"
-#include "optimaru/score.hpp"
-#include "optimaru/levels.hpp"
+#include "optimaru/model/solution_traits.hpp"
+#include "optimaru/score/score.hpp"
+#include "optimaru/score/levels.hpp"
 
 namespace ta
 {

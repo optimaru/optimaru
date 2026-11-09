@@ -2,7 +2,7 @@
 #define TA_SCORE_CALCULATOR_HPP
 
 #include "ta/domain.hpp"
-#include "optimaru/score.hpp"
+#include "optimaru/score/score.hpp"
 
 namespace ta
 {

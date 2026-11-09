@@ -174,51 +174,55 @@ benchmarks/cpsat-common/  comparison runner; points external-solver at this chec
 
 ```
 include/optimaru/
-├── optimaru.hpp               umbrella include for consumers
-├── solution_traits.hpp        SolutionTraits, Shape (Assignment | Sequence | Chain),
-│                              pinning, chain link encoding
-├── derived_state.hpp          values derived from the decisions
-├── score.hpp                  Score, ScoreChecks, ScoreMismatchError
-├── levels.hpp                 Level (hard / medium / soft), MediumFold
-├── objective.hpp              Objective: the incremental scoring contract
-├── chain_objective.hpp        ChainObjective, for chain-shaped solutions
-├── weighted_objective.hpp     named components, weighted sum
-├── decomposed_objective.hpp   per-unit and global constraint plugins
-├── constraint_assembly.hpp    default constraint set: weight / level /
-│                              exponent / offset / clip / drop by name,
-│                              repeated instances, info() catalog
-├── score_breakdown.hpp        ScoreBreakdown / ConstraintScore
-├── editor.hpp                 Editor: every write to the solution, bracketed
-│                              by the objective's hooks
-├── settings.hpp               Settings, Limits, AcceptanceSettings, MoveMix,
-│                              NeighborSettings, RuinRecreateSettings, ...
-├── stop_condition.hpp         when a solve ends
-├── solver.hpp                 Solver: construction, local search, multi-start
-├── background_solve.hpp       solve_in_background / BackgroundSolve
-├── explain.hpp                explain_score / rescore
-├── chain_view.hpp             the list view a chain solve runs on
-├── worker_threads.hpp         thread start-up / shutdown for parallel pools
-├── search/
-│   ├── construction.hpp       first fit (decreasing), cheapest insertion
-│   ├── local_search.hpp       step loop, sampled moves, ruin-and-recreate kicks
-│   ├── acceptors.hpp          Acceptor and the seven built-in rules
-│   ├── list_move.hpp          the sequence moves every strategy previews /
-│   │                          applies / undoes
-│   ├── element_index.hpp      element -> (list, position)
-│   ├── snapshot.hpp           whole and list-wise restore
-│   ├── neighborhoods.hpp      k-nearest-neighbour lists
-│   ├── greedy_repair.hpp      ruin and regret-k recreate
-│   ├── operators.hpp          MoveOperator / RuinOperator plugin points
-│   ├── ruin/                  one ruin operator per file
-│   ├── selection/             MoveOutcome + roulette / segmented / alpha-UCB /
-│   │                          uniform schemes; schemes.hpp = umbrella + factory
-│   └── strategy/              Descent, EjectionChain, IteratedLocalSearch,
-│                              RouteElimination, RuinRecreateMove
-├── python/                    pybind11 helpers: constraint specs ->
-│                              ConstraintAssembly, constraint_info(),
-│                              constraint_costs(), names, the level guard
-└── testing/preview_parity.hpp move-preview vs applied-score harness for a use
-                               case's objective tests
+├── optimaru.hpp            umbrella include for consumers
+├── solver.hpp              Solver: construction, then search; multi-start
+├── background_solve.hpp    solve_in_background / BackgroundSolve
+├── explain.hpp             explain_score / rescore
+├── settings.hpp            Settings, Limits, AcceptanceSettings, MoveMix,
+│                           NeighborSettings, RuinRecreateSettings, ...
+├── worker_threads.hpp      thread start-up / shutdown for parallel pools
+├── model/                  the solution as the engine sees it
+│   ├── solution_traits.hpp SolutionTraits, Shape (Assignment | Sequence | Chain),
+│   │                       pinning, chain link encoding
+│   ├── derived_state.hpp   values derived from the decisions
+│   ├── editor.hpp          every write, bracketed by the objective's hooks
+│   ├── chain_view.hpp      the list view a chain solve runs on
+│   ├── element_index.hpp   element -> (list, position)
+│   ├── snapshot.hpp        whole and list-wise restore
+│   └── neighborhoods.hpp   k-nearest-neighbour lists
+├── score/                  scoring
+│   ├── score.hpp           Score, ScoreChecks, ScoreMismatchError
+│   ├── levels.hpp          Level (hard / medium / soft), MediumFold
+│   ├── objective.hpp       Objective: the incremental scoring contract
+│   ├── chain_objective.hpp, weighted_objective.hpp
+│   ├── decomposed_objective.hpp   per-unit and global constraint plugins
+│   ├── constraint_assembly.hpp    default constraint set: weight / level /
+│   │                              exponent / offset / clip / drop by name,
+│   │                              repeated instances, info() catalog
+│   └── breakdown.hpp       ScoreBreakdown / ConstraintScore
+├── construct/              the initial solution: first fit (decreasing),
+│                           cheapest insertion
+├── accept/                 Acceptor and one file per rule: hill climbing, late
+│                           acceptance, entity tabu, simulated annealing, great
+│                           deluge, step counting, record-to-record travel
+├── select/                 adaptive operator selection: MoveOutcome, roulette
+│                           wheel, segmented roulette, alpha-UCB, uniform
+├── stop/                   when a solve ends (StopCondition) and the throttle
+│                           long-running moves consult it through
+├── destroy/                ruin operators: random, related, worst, SISR, route
+├── repair/                 greedy / regret-k recreate
+├── local/                  in-place search: the sequence moves (list_move),
+│                           move previews, descent, ejection chain
+├── search/                 the step loop that combines them (local_search),
+│                           the plugin points (operators: MoveOperator /
+│                           RuinOperator), and the destroy-and-repair moves:
+│                           ruin-recreate as a move, iterated local search,
+│                           route elimination
+├── python/                 pybind11 helpers: constraint specs ->
+│                           ConstraintAssembly, constraint_info(),
+│                           constraint_costs(), names, the level guard
+└── testing/                preview-vs-applied-score harness for a use case's
+                            objective tests
 ```
 
 `optimaru::` is one flat namespace apart from the `optimaru::testing` and

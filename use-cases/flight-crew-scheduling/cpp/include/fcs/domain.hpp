@@ -6,8 +6,8 @@
 #include <string>
 #include <vector>
 
-#include "optimaru/solution_traits.hpp"
-#include "optimaru/score.hpp"
+#include "optimaru/model/solution_traits.hpp"
+#include "optimaru/score/score.hpp"
 
 namespace fcs
 {

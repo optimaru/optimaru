@@ -10,9 +10,9 @@
 #include <random>
 #include <vector>
 
-#include "optimaru/solution_traits.hpp"
-#include "optimaru/objective.hpp"
-#include "optimaru/editor.hpp"
+#include "optimaru/model/solution_traits.hpp"
+#include "optimaru/score/objective.hpp"
+#include "optimaru/model/editor.hpp"
 
 namespace optimaru::testing {
 

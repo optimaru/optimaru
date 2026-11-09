@@ -11,8 +11,8 @@
 #include <vector>
 
 #include "op/domain.hpp"
-#include "optimaru/decomposed_objective.hpp"
-#include "optimaru/editor.hpp"
+#include "optimaru/score/decomposed_objective.hpp"
+#include "optimaru/model/editor.hpp"
 
 namespace op
 {

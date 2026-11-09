@@ -3,7 +3,7 @@
 
 #include "fab/domain.hpp"
 #include "fab/evaluator.hpp"
-#include "optimaru/objective.hpp"
+#include "optimaru/score/objective.hpp"
 
 namespace fab
 {

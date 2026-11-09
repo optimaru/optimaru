@@ -6,7 +6,7 @@
 #include <vector>
 
 #include "fp/domain.hpp"
-#include "optimaru/objective.hpp"
+#include "optimaru/score/objective.hpp"
 
 namespace fp
 {

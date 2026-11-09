@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <vector>
 
-#include "optimaru/objective.hpp"
+#include "optimaru/score/objective.hpp"
 #include "ts/domain.hpp"
 
 namespace ts

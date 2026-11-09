@@ -8,7 +8,7 @@
 
 #include "bp/domain.hpp"
 #include "bp/score_calculator.hpp"
-#include "optimaru/objective.hpp"
+#include "optimaru/score/objective.hpp"
 
 namespace bp
 {

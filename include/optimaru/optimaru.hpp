@@ -4,25 +4,25 @@
 #ifndef OPTIMARU_OPTIMARU_HPP
 #define OPTIMARU_OPTIMARU_HPP
 
-// Everything a use case needs:
-//   solution_traits.hpp     how the engine reads and writes a solution
-//   score.hpp, levels.hpp   the score and its levels
-//   objective.hpp, ...      incremental objectives (decomposed, weighted, chain)
-//   settings.hpp            what a solve is configured with
-//   solver.hpp              running a solve (background_solve.hpp: on a thread)
-//   explain.hpp             scoring and explaining a solution outside a solve
-//   search/                 the search itself: construction, local search,
-//                           acceptors, moves, ruins, strategies
+// Everything a use case needs. The directories:
+//   model/      how the engine reads and writes a solution
+//   score/      the score, its levels and the incremental objectives
+//   construct/  the initial solution
+//   accept/     acceptance rules          select/  adaptive operator selection
+//   stop/       when a solve ends
+//   destroy/    ruin operators            repair/  recreate
+//   local/      in-place moves and descents
+//   search/     the step loop that combines them, and the plugin points
 
-#include "optimaru/solution_traits.hpp"
-#include "optimaru/derived_state.hpp"
-#include "optimaru/score.hpp"
-#include "optimaru/chain_objective.hpp"
-#include "optimaru/weighted_objective.hpp"
-#include "optimaru/decomposed_objective.hpp"
-#include "optimaru/objective.hpp"
-#include "optimaru/score_breakdown.hpp"
-#include "optimaru/editor.hpp"
+#include "optimaru/model/solution_traits.hpp"
+#include "optimaru/model/derived_state.hpp"
+#include "optimaru/score/score.hpp"
+#include "optimaru/score/chain_objective.hpp"
+#include "optimaru/score/weighted_objective.hpp"
+#include "optimaru/score/decomposed_objective.hpp"
+#include "optimaru/score/objective.hpp"
+#include "optimaru/score/breakdown.hpp"
+#include "optimaru/model/editor.hpp"
 #include "optimaru/explain.hpp"
 #include "optimaru/solver.hpp"
 #include "optimaru/background_solve.hpp"

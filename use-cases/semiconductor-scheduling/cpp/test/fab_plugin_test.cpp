@@ -32,7 +32,7 @@
 #include "fab/score_calculator.hpp"
 #include "fab/solver.hpp"
 #include "fab_test_support.hpp"
-#include "optimaru/editor.hpp"
+#include "optimaru/model/editor.hpp"
 
 using namespace fab;
 using namespace fabtest;

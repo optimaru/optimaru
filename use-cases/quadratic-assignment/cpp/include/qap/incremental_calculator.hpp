@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <vector>
 
-#include "optimaru/objective.hpp"
+#include "optimaru/score/objective.hpp"
 #include "qap/domain.hpp"
 #include "qap/score_calculator.hpp"
 

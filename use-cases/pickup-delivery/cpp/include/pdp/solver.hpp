@@ -12,10 +12,10 @@
 #include <vector>
 
 #include "pdp/domain.hpp"
-#include "optimaru/decomposed_objective.hpp"
-#include "optimaru/editor.hpp"
+#include "optimaru/score/decomposed_objective.hpp"
+#include "optimaru/model/editor.hpp"
 #include "optimaru/settings.hpp"
-#include "optimaru/search/selection/schemes.hpp"
+#include "optimaru/select/schemes.hpp"
 
 namespace pdp
 {

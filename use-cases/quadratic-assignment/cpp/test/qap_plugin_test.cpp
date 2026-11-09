@@ -39,7 +39,7 @@
 #include <string>
 #include <vector>
 
-#include "optimaru/editor.hpp"
+#include "optimaru/model/editor.hpp"
 #include "optimaru/python/names.hpp"
 #include "qap/constraints.hpp"
 #include "qap/domain.hpp"

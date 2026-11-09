@@ -5,7 +5,7 @@
 #include <vector>
 
 #include "ba/domain.hpp"
-#include "optimaru/objective.hpp"
+#include "optimaru/score/objective.hpp"
 
 namespace ba
 {

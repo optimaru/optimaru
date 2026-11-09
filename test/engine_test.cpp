@@ -19,7 +19,7 @@
 #include <utility>
 #include <vector>
 
-#include "optimaru/constraint_assembly.hpp"
+#include "optimaru/score/constraint_assembly.hpp"
 #include "optimaru/worker_threads.hpp"
 #include "optimaru/testing/preview_parity.hpp"
 #include "optimaru/optimaru.hpp"

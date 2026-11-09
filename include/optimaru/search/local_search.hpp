@@ -11,29 +11,29 @@
 #include <random>
 #include <vector>
 
-#include "optimaru/solution_traits.hpp"
-#include "optimaru/editor.hpp"
+#include "optimaru/model/solution_traits.hpp"
+#include "optimaru/model/editor.hpp"
 #include "optimaru/settings.hpp"
-#include "optimaru/search/neighborhoods.hpp"
-#include "optimaru/search/selection/schemes.hpp"
-#include "optimaru/search/ruin/random.hpp"
-#include "optimaru/search/ruin/related.hpp"
-#include "optimaru/search/ruin/route.hpp"
-#include "optimaru/search/ruin/sisr.hpp"
-#include "optimaru/search/ruin/worst.hpp"
-#include "optimaru/search/acceptors.hpp"
-#include "optimaru/search/element_index.hpp"
-#include "optimaru/search/greedy_repair.hpp"
-#include "optimaru/search/list_move.hpp"
-#include "optimaru/search/movable_entity.hpp"
-#include "optimaru/search/snapshot.hpp"
-#include "optimaru/search/strategy/descent.hpp"
-#include "optimaru/search/strategy/ejection_chain.hpp"
-#include "optimaru/search/preview_evaluation.hpp"
-#include "optimaru/search/strategy/iterated_local_search.hpp"
-#include "optimaru/search/strategy/route_elimination.hpp"
-#include "optimaru/search/strategy/ruin_recreate_move.hpp"
-#include "optimaru/stop_condition.hpp"
+#include "optimaru/model/neighborhoods.hpp"
+#include "optimaru/select/schemes.hpp"
+#include "optimaru/destroy/random.hpp"
+#include "optimaru/destroy/related.hpp"
+#include "optimaru/destroy/route.hpp"
+#include "optimaru/destroy/sisr.hpp"
+#include "optimaru/destroy/worst.hpp"
+#include "optimaru/accept/acceptors.hpp"
+#include "optimaru/model/element_index.hpp"
+#include "optimaru/repair/greedy_repair.hpp"
+#include "optimaru/local/list_move.hpp"
+#include "optimaru/local/movable_entity.hpp"
+#include "optimaru/model/snapshot.hpp"
+#include "optimaru/local/descent.hpp"
+#include "optimaru/local/ejection_chain.hpp"
+#include "optimaru/local/preview_evaluation.hpp"
+#include "optimaru/search/iterated_local_search.hpp"
+#include "optimaru/search/route_elimination.hpp"
+#include "optimaru/search/ruin_recreate_move.hpp"
+#include "optimaru/stop/stop_condition.hpp"
 #include "optimaru/search/operators.hpp"
 
 namespace optimaru {
@@ -55,7 +55,7 @@ namespace optimaru {
 // Editor, read score(), and revert when rejected.
 //
 // Anything more elaborate than the random move mix above is a plugin, not a
-// branch in this file: the built-in strategies under strategy/ implement the
+// branch in this file: the built-in strategies in local/ and search/ implement the
 // same MoveOperator interface a caller gets from Solver::add_move_operator(),
 // and compete for selection in one adaptive pool with them.
 template <typename Solution>
@@ -110,8 +110,8 @@ public:
                 static_cast<bool>(acceptor_factory_) ||
                 config_.search.acceptance.rule ==
                         AcceptanceRule::SimulatedAnnealing;
-        // The built-in ruins are plugins like any other: one file each under
-        // generic/ruin/, registered ahead of the caller's operators so the
+        // The built-in ruins are plugins like any other: one file each in
+        // destroy/, registered ahead of the caller's operators so the
         // adaptive selector sees a single uniform list.
         RandomRuin<Solution> random_ruin;
         RelatedRuin<Solution> related_ruin;
@@ -401,7 +401,7 @@ private:
     // repair_, which holds a reference to it.
     ElementIndex<Solution> index_;
     // Ruin & repair, shared by the stagnation kick here and the strategies
-    // under strategy/ that do the same thing as an ordinary move.
+    // in search/ that do the same thing as an ordinary move.
     GreedyRepair<Solution> repair_;
     std::uniform_real_distribution<double> unit_{0.0, 1.0};
 

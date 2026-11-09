@@ -17,7 +17,7 @@
 
 #include "es/incremental_calculator.hpp"
 #include "es/score_calculator.hpp"
-#include "optimaru/editor.hpp"
+#include "optimaru/model/editor.hpp"
 #include "optimaru/solver.hpp"
 #include "optimaru/worker_threads.hpp"
 

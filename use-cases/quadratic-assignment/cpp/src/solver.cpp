@@ -9,7 +9,7 @@
 
 #include "optimaru/solver.hpp"
 #include "optimaru/settings.hpp"
-#include "optimaru/search/acceptors.hpp"
+#include "optimaru/accept/acceptors.hpp"
 #include "qap/incremental_calculator.hpp"
 #include "qap/score_calculator.hpp"
 

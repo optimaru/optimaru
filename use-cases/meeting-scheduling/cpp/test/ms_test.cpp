@@ -20,7 +20,7 @@
 #include "ms/incremental_calculator.hpp"
 #include "ms/score_calculator.hpp"
 #include "ms/solver.hpp"
-#include "optimaru/editor.hpp"
+#include "optimaru/model/editor.hpp"
 
 using namespace ms;
 

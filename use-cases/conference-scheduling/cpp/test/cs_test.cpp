@@ -19,7 +19,7 @@
 #include "cs/incremental_calculator.hpp"
 #include "cs/score_calculator.hpp"
 #include "cs/solver.hpp"
-#include "optimaru/editor.hpp"
+#include "optimaru/model/editor.hpp"
 
 using namespace cs;
 

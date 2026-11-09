@@ -12,8 +12,8 @@
 
 #include "st/canonical_domain.hpp"
 #include "st/objective_weights.hpp"
-#include "optimaru/decomposed_objective.hpp"
-#include "optimaru/editor.hpp"
+#include "optimaru/score/decomposed_objective.hpp"
+#include "optimaru/model/editor.hpp"
 
 namespace st::canon
 {

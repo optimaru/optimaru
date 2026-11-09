@@ -9,8 +9,8 @@
 #include "fab/domain.hpp"
 #include "fab/evaluator.hpp"
 #include "fab/score_terms.hpp"
-#include "optimaru/constraint_assembly.hpp"
-#include "optimaru/decomposed_objective.hpp"
+#include "optimaru/score/constraint_assembly.hpp"
+#include "optimaru/score/decomposed_objective.hpp"
 
 namespace fab
 {

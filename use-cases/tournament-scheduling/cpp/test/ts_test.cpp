@@ -15,7 +15,7 @@
 #include <string>
 #include <vector>
 
-#include "optimaru/editor.hpp"
+#include "optimaru/model/editor.hpp"
 #include "ts/domain.hpp"
 #include "ts/incremental_calculator.hpp"
 #include "ts/score_calculator.hpp"

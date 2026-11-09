@@ -40,7 +40,7 @@
 #include "op/domain.hpp"
 #include "op/score_calculator.hpp"
 #include "op/solver.hpp"
-#include "optimaru/editor.hpp"
+#include "optimaru/model/editor.hpp"
 #include "optimaru/testing/preview_parity.hpp"
 
 using namespace op;

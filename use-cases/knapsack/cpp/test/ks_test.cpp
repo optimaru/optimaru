@@ -26,7 +26,7 @@
 #include "ks/score_calculator.hpp"
 #include "ks/solver.hpp"
 #include "ks_fixtures.hpp"
-#include "optimaru/editor.hpp"
+#include "optimaru/model/editor.hpp"
 
 using namespace ks;
 using namespace ks_test;

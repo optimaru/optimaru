@@ -14,18 +14,18 @@
 #include <utility>
 #include <vector>
 
-#include "optimaru/solution_traits.hpp"
-#include "optimaru/score.hpp"
-#include "optimaru/chain_objective.hpp"
-#include "optimaru/objective.hpp"
-#include "optimaru/editor.hpp"
-#include "optimaru/chain_view.hpp"
+#include "optimaru/model/solution_traits.hpp"
+#include "optimaru/score/score.hpp"
+#include "optimaru/score/chain_objective.hpp"
+#include "optimaru/score/objective.hpp"
+#include "optimaru/model/editor.hpp"
+#include "optimaru/model/chain_view.hpp"
 #include "optimaru/settings.hpp"
-#include "optimaru/search/construction.hpp"
-#include "optimaru/search/neighborhoods.hpp"
+#include "optimaru/construct/construction.hpp"
+#include "optimaru/model/neighborhoods.hpp"
 #include "optimaru/search/local_search.hpp"
-#include "optimaru/search/acceptors.hpp"
-#include "optimaru/stop_condition.hpp"
+#include "optimaru/accept/acceptors.hpp"
+#include "optimaru/stop/stop_condition.hpp"
 #include "optimaru/worker_threads.hpp"
 #include "optimaru/search/operators.hpp"
 
@@ -37,7 +37,7 @@ namespace optimaru {
 // Runs one solve:
 //   1. construction: everything unassigned gets its best placement (first
 //      fit / first fit decreasing / cheapest insertion), see
-//      search/construction.hpp;
+//      construct/construction.hpp;
 //   2. local search: one sampled move per step judged by an Acceptor, with
 //      the built-in strategies and optional ruin-and-recreate kicks, see
 //      search/local_search.hpp;

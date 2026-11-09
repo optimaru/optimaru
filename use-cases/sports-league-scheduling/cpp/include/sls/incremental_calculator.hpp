@@ -7,7 +7,7 @@
 #include <vector>
 
 #include "sls/domain.hpp"
-#include "optimaru/objective.hpp"
+#include "optimaru/score/objective.hpp"
 
 namespace sls
 {

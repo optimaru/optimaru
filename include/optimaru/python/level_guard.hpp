@@ -17,8 +17,8 @@
 #include <string>
 #include <string_view>
 
-#include "optimaru/constraint_assembly.hpp"
-#include "optimaru/decomposed_objective.hpp"
+#include "optimaru/score/constraint_assembly.hpp"
+#include "optimaru/score/decomposed_objective.hpp"
 
 namespace optimaru {
 namespace python {

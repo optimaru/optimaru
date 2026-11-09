@@ -25,7 +25,7 @@
 #include "ta/incremental_calculator.hpp"
 #include "ta/score_calculator.hpp"
 #include "ta/solver.hpp"
-#include "optimaru/editor.hpp"
+#include "optimaru/model/editor.hpp"
 
 using namespace ta;
 

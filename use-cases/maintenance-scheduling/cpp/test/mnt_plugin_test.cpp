@@ -37,7 +37,7 @@
 #include "mnt/domain.hpp"
 #include "mnt/score_calculator.hpp"
 #include "mnt/solver.hpp"
-#include "optimaru/editor.hpp"
+#include "optimaru/model/editor.hpp"
 
 using namespace mnt;
 

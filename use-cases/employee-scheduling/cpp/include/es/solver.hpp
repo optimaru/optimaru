@@ -11,8 +11,8 @@
 #include <vector>
 
 #include "es/domain.hpp"
-#include "optimaru/decomposed_objective.hpp"
-#include "optimaru/editor.hpp"  // ScoreChecks
+#include "optimaru/score/decomposed_objective.hpp"
+#include "optimaru/model/editor.hpp"  // ScoreChecks
 
 namespace es {
 

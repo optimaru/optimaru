@@ -8,11 +8,11 @@
 #include <random>
 #include <vector>
 
-#include "optimaru/search/neighborhoods.hpp"
-#include "optimaru/editor.hpp"
-// The plugin point only, never the search/selection/schemes.hpp umbrella: that
+#include "optimaru/model/neighborhoods.hpp"
+#include "optimaru/model/editor.hpp"
+// The plugin point only, never the select/schemes.hpp umbrella: that
 // one includes the localsearch config, which would close a cycle back here.
-#include "optimaru/search/selection/scheme.hpp"
+#include "optimaru/select/scheme.hpp"
 
 namespace optimaru {
 

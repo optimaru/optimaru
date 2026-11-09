@@ -20,7 +20,7 @@
 #include "pjs/incremental_calculator.hpp"
 #include "pjs/score_calculator.hpp"
 #include "pjs/solver.hpp"
-#include "optimaru/editor.hpp"
+#include "optimaru/model/editor.hpp"
 
 using namespace pjs;
 

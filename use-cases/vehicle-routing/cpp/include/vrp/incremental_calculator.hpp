@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <vector>
 
-#include "optimaru/objective.hpp"
+#include "optimaru/score/objective.hpp"
 #include "vrp/domain.hpp"
 
 namespace vrp

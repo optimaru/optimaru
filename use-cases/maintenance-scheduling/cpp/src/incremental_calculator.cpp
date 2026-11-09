@@ -10,7 +10,7 @@
 #include "mnt/constraints/min_start_date_cost.hpp"
 #include "mnt/constraints/tag_conflict_cost.hpp"
 #include "mnt/score_calculator.hpp"
-#include "optimaru/levels.hpp"
+#include "optimaru/score/levels.hpp"
 
 namespace mnt
 {

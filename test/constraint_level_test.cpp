@@ -78,8 +78,8 @@
 #include <utility>
 #include <vector>
 
-#include "optimaru/constraint_assembly.hpp"
-#include "optimaru/decomposed_objective.hpp"
+#include "optimaru/score/constraint_assembly.hpp"
+#include "optimaru/score/decomposed_objective.hpp"
 #include "optimaru/python/level_guard.hpp"
 #include "optimaru/python/names.hpp"
 #include "optimaru/testing/preview_parity.hpp"

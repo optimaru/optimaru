@@ -6,7 +6,7 @@
 
 #include "fcs/domain.hpp"
 #include "fcs/score_calculator.hpp"
-#include "optimaru/objective.hpp"
+#include "optimaru/score/objective.hpp"
 
 namespace fcs
 {

@@ -5,7 +5,7 @@
 #include <vector>
 
 #include "pdp/domain.hpp"
-#include "optimaru/objective.hpp"
+#include "optimaru/score/objective.hpp"
 
 namespace pdp
 {

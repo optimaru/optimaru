@@ -11,11 +11,11 @@
 #include <string>
 #include <vector>
 
-#include "optimaru/editor.hpp"
+#include "optimaru/model/editor.hpp"
 #include "optimaru/settings.hpp"
-#include "optimaru/search/neighborhoods.hpp"
-#include "optimaru/search/element_index.hpp"
-#include "optimaru/search/greedy_repair.hpp"
+#include "optimaru/model/neighborhoods.hpp"
+#include "optimaru/model/element_index.hpp"
+#include "optimaru/repair/greedy_repair.hpp"
 #include "optimaru/testing/preview_parity.hpp"
 #include "vrp/demo_data.hpp"
 #include "vrp/domain.hpp"
@@ -338,7 +338,7 @@ void testAlnsBeatsPlainLocalSearch()
 
 // -------------------------------------------------------------------------
 // The four local search strategies,
-// each a MoveOperator plugin in core (impl/localsearch/strategy/):
+// each a MoveOperator plugin in core (local/ and search/):
 // best-improvement granular descent over a nearby route pair,
 // destroy-and-repair as an ordinary acceptor-judged move (rather than only a
 // stagnation kick), emptying a whole route in one move, and the ejection

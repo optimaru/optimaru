@@ -48,7 +48,7 @@
 #include "st/canonical_incremental_calculator.hpp"
 #include "st/canonical_score_calculator.hpp"
 #include "st/canonical_solver.hpp"
-#include "optimaru/editor.hpp"
+#include "optimaru/model/editor.hpp"
 
 using namespace st::canon;
 

@@ -8,8 +8,8 @@
 
 #include "pjs/domain.hpp"
 #include "pjs/score_calculator.hpp"
-#include "optimaru/constraint_assembly.hpp"
-#include "optimaru/decomposed_objective.hpp"
+#include "optimaru/score/constraint_assembly.hpp"
+#include "optimaru/score/decomposed_objective.hpp"
 
 namespace pjs
 {

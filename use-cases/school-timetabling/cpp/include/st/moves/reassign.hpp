@@ -14,7 +14,7 @@ namespace st::canon
 {
 
 // Moved verbatim out of canonical_solver.cpp — one operator per file, the
-// domain-side counterpart of the engine's generic/ruin layout.
+// domain-side counterpart of the engine's destroy/ layout.
 
 // Re-assign move — the way back in, and the reason partial solving converges
 // at all (only registered together with UnassignMove).

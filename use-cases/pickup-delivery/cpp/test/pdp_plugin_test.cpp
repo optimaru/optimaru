@@ -45,7 +45,7 @@
 #include "pdp/domain.hpp"
 #include "pdp/score_calculator.hpp"
 #include "pdp/solver.hpp"
-#include "optimaru/editor.hpp"
+#include "optimaru/model/editor.hpp"
 #include "optimaru/testing/preview_parity.hpp"
 
 using namespace pdp;

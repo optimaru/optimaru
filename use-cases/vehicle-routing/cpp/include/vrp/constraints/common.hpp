@@ -6,8 +6,8 @@
 #include <numeric>
 #include <vector>
 
-#include "optimaru/constraint_assembly.hpp"
-#include "optimaru/decomposed_objective.hpp"
+#include "optimaru/score/constraint_assembly.hpp"
+#include "optimaru/score/decomposed_objective.hpp"
 #include "vrp/domain.hpp"
 #include "vrp/score_calculator.hpp"
 

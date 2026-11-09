@@ -50,7 +50,7 @@
 #include <utility>
 #include <vector>
 
-#include "optimaru/constraint_assembly.hpp"
+#include "optimaru/score/constraint_assembly.hpp"
 #include "optimaru/worker_threads.hpp"
 #include "optimaru/python/level_guard.hpp"
 #include "optimaru/python/names.hpp"

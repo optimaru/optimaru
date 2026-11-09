@@ -23,7 +23,7 @@
 #include "op/incremental_calculator.hpp"
 #include "op/score_calculator.hpp"
 #include "op/solver.hpp"
-#include "optimaru/editor.hpp"
+#include "optimaru/model/editor.hpp"
 
 using namespace op;
 

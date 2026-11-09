@@ -8,7 +8,7 @@
 
 #include "st/canonical_domain.hpp"
 #include "st/objective_weights.hpp"
-#include "optimaru/objective.hpp"
+#include "optimaru/score/objective.hpp"
 
 namespace st::canon
 {

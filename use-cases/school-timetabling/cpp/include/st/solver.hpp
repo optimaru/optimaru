@@ -9,7 +9,7 @@
 #include <vector>
 
 #include "st/domain.hpp"
-#include "optimaru/editor.hpp"
+#include "optimaru/model/editor.hpp"
 
 namespace st
 {

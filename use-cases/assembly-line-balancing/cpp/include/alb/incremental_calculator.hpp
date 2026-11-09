@@ -8,7 +8,7 @@
 
 #include "alb/domain.hpp"
 #include "alb/score_calculator.hpp"
-#include "optimaru/objective.hpp"
+#include "optimaru/score/objective.hpp"
 
 namespace alb
 {

@@ -4,9 +4,9 @@
 #ifndef OPTIMARU_EXPLAIN_HPP
 #define OPTIMARU_EXPLAIN_HPP
 
-#include "optimaru/score_breakdown.hpp"
-#include "optimaru/weighted_objective.hpp"
-#include "optimaru/objective.hpp"
+#include "optimaru/score/breakdown.hpp"
+#include "optimaru/score/weighted_objective.hpp"
+#include "optimaru/score/objective.hpp"
 
 namespace optimaru {
 

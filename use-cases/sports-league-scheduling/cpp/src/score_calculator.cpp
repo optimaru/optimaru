@@ -7,7 +7,7 @@
 #include <vector>
 
 #include "sls/constraints.hpp"
-#include "optimaru/levels.hpp"
+#include "optimaru/score/levels.hpp"
 
 namespace sls
 {

@@ -7,7 +7,7 @@
 #include <cstddef>
 #include <stdexcept>
 #include <string>
-#include "optimaru/levels.hpp"
+#include "optimaru/score/levels.hpp"
 
 namespace st::canon
 {
