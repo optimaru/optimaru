@@ -10,8 +10,9 @@ modifications, of the Timefold Solver core: its architecture, package and
 directory layout, class names, API and local-search algorithms are derived
 from the Java originals.
 
-The domain models, constraint definitions and demo data of the following use
-cases are C++ and Python translations, with modifications, of the
+The domain models, constraint definitions and, where applicable, demo data
+of the following use cases are C++ and Python translations, with
+modifications, of the
 corresponding examples in Timefold Quickstarts
 (https://github.com/TimefoldAI/timefold-quickstarts), licensed under the
 Apache License, Version 2.0. Timefold Quickstarts is a derivative work of

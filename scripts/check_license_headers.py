@@ -23,7 +23,7 @@ HEADER = (
     "// SPDX-License-Identifier: Apache-2.0\n"
     "// Derived from Timefold Solver (Apache-2.0); modified by The optimaru Authors. See NOTICE.\n"
 )
-SUFFIXES = {".hpp", ".h"}
+SUFFIXES = {".hpp", ".h", ".hh", ".hxx", ".ipp", ".inl", ".tpp", ".cpp", ".cc", ".cxx"}
 
 
 def main() -> int:

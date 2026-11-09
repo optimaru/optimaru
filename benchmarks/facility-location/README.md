@@ -1,5 +1,8 @@
 # Facility location benchmark
 
+Transcribes the Timefold Quickstarts `facility-location` example's demo data generator (Apache-2.0),
+with modifications; see the repository [NOTICE](../../NOTICE).
+
 The [`facility-location`](../../use-cases/facility-location) use case against **OR-Tools CP-SAT**
 ([`cpsat/`](cpsat), package `facility_location_cpsat`). The CP-SAT model implements the
 same constraints under the same names and units, so both answers are

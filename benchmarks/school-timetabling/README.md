@@ -1,5 +1,8 @@
 # School timetabling benchmark
 
+Transcribes the Timefold Quickstarts `school-timetabling` example's constraint scoring (Apache-2.0),
+with modifications; see the repository [NOTICE](../../NOTICE).
+
 A harness that solves the same instances with the engine and OR-Tools CP-SAT
 and compares them. It runs build → cross-check gate → quality benchmark → table.
 
